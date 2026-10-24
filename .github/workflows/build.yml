@@ -1,0 +1,42 @@
+﻿name: Build Unsigned iOS IPA
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build-ipa:
+    runs-on: macos-15
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Generate Xcode Project
+        run: |
+          brew install xcodegen
+          xcodegen generate
+
+      - name: Compile Unsigned iOS App
+        run: |
+          xcodebuild build \
+            -project ApexNav.xcodeproj \
+            -scheme ApexNav \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Package .app into Sideloadly .ipa
+        run: |
+          mkdir -p Payload
+          cp -r build/Build/Products/Release-iphoneos/ApexNav.app Payload/
+          zip -r ApexNav.ipa Payload
+
+      - name: Upload ApexNav.ipa Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ApexNav-IPA
+          path: ApexNav.ipa

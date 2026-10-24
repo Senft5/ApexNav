@@ -1,0 +1,24 @@
+﻿name: ApexNav
+options:
+  bundleIdPrefix: com.senft
+  deploymentTarget:
+    iOS: "17.0"
+targets:
+  ApexNav:
+    type: application
+    platform: iOS
+    sources:
+      - path: ApexNavApp.swift
+    info:
+      path: Info.plist
+      properties:
+        CFBundleDisplayName: "APEX NAV"
+        UILaunchScreen: {}
+        NSLocationWhenInUseUsageDescription: "Required for live turn-by-turn navigation and road-feel mapping."
+        NSLocationAlwaysAndWhenInUseUsageDescription: "Required for live turn-by-turn navigation and road-feel mapping."
+        NSMotionUsageDescription: "Required to paint live G-load and surface feel onto the road map."
+        UIBackgroundModes:
+          - location
+          - audio
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
