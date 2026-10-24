@@ -1,0 +1,35 @@
+﻿{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "definitions": {
+    "RawSensorFrame": {
+      "type": "object",
+      "required": ["t_sec", "ax", "ay", "az", "gx", "gy", "gz", "v_mps", "lat", "lon"],
+      "properties": {
+        "t_sec": { "type": "number" },
+        "ax": { "type": "number" },
+        "ay": { "type": "number" },
+        "az": { "type": "number" },
+        "gx": { "type": "number" },
+        "gy": { "type": "number" },
+        "gz": { "type": "number" },
+        "v_mps": { "type": "number" },
+        "lat": { "type": "number" },
+        "lon": { "type": "number" }
+      }
+    },
+    "RoadSegment5m": {
+      "type": "object",
+      "required": ["segment_index", "distance_m", "lat", "lon", "camber_deg", "crest_vertical_g", "roughness_rms", "engagement_score"],
+      "properties": {
+        "segment_index": { "type": "integer" },
+        "distance_m": { "type": "number" },
+        "lat": { "type": "number" },
+        "lon": { "type": "number" },
+        "camber_deg": { "type": "number" },
+        "crest_vertical_g": { "type": "number" },
+        "roughness_rms": { "type": "number" },
+        "engagement_score": { "type": "number" }
+      }
+    }
+  }
+}
