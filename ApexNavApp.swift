@@ -1,4 +1,4 @@
-﻿import SwiftUI
+import SwiftUI
 import MapKit
 import CoreLocation
 import CoreMotion
@@ -38,7 +38,7 @@ final class NavTelemetryEngine: NSObject, ObservableObject, CLLocationManagerDel
     private let motionManager = CMMotionManager()
     private let synth = AVSpeechSynthesizer()
 
-    @Published var cameraPosition: MapCameraPosition = .userLocation(pitched: true, followsHeading: true)
+    @Published var cameraPosition: MapCameraPosition = .userLocation(followsHeading: true, fallback: .automatic)
     @Published var userLocation: CLLocation?
     @Published var activeRoute: MKRoute?
     @Published var routeSteps: [MKRoute.Step] = []
@@ -61,6 +61,13 @@ final class NavTelemetryEngine: NSObject, ObservableObject, CLLocationManagerDel
     private var startTime: TimeInterval = Date().timeIntervalSince1970
     @Published var exportedCSVURL: URL?
 
+    // 3x3 SO(3) Mount-to-Vehicle Rotation Matrix rows (ISO 8855: +X forward, +Y left, +Z up)
+    private var rX: (Double, Double, Double) = (0.0, 1.0, 0.0)
+    private var rY: (Double, Double, Double) = (-1.0, 0.0, 0.0)
+    private var rZ: (Double, Double, Double) = (0.0, 0.0, 1.0)
+    private var latestGravity: (Double, Double, Double) = (0.0, 0.0, -1.0)
+    private var awaitingForwardPullLock: Bool = false
+
     override init() {
         super.init()
         locManager.delegate = self
@@ -72,19 +79,49 @@ final class NavTelemetryEngine: NSObject, ObservableObject, CLLocationManagerDel
         startIMUPipeline()
     }
 
+    private func dot3(_ a: (Double, Double, Double), _ b: (Double, Double, Double)) -> Double {
+        a.0 * b.0 + a.1 * b.1 + a.2 * b.2
+    }
+
+    private func cross3(_ a: (Double, Double, Double), _ b: (Double, Double, Double)) -> (Double, Double, Double) {
+        (a.1 * b.2 - a.2 * b.1, a.2 * b.0 - a.0 * b.2, a.0 * b.1 - a.1 * b.0)
+    }
+
+    private func norm3(_ v: (Double, Double, Double)) -> (Double, Double, Double) {
+        let mag = sqrt(max(1e-9, dot3(v, v)))
+        return (v.0 / mag, v.1 / mag, v.2 / mag)
+    }
+
     func startIMUPipeline() {
         guard motionManager.isDeviceMotionAvailable else { return }
         motionManager.deviceMotionUpdateInterval = 1.0 / 60.0
         motionManager.startDeviceMotionUpdates(to: .main) { [weak self] motion, _ in
             guard let self = self, let m = motion else { return }
-            let ax = m.userAcceleration.x
-            let ay = m.userAcceleration.y
-            let az = m.userAcceleration.z
-            let yawRate = m.rotationRate.z
+            self.latestGravity = (m.gravity.x, m.gravity.y, m.gravity.z)
+            let rawA = (m.userAcceleration.x, m.userAcceleration.y, m.userAcceleration.z)
+            let rawW = (m.rotationRate.x, m.rotationRate.y, m.rotationRate.z)
 
-            self.latG = 0.8 * self.latG + 0.2 * ax
-            self.lonG = 0.8 * self.lonG + 0.2 * ay
-            self.vertBumpG = abs(az)
+            if self.awaitingForwardPullLock {
+                let pullMag = sqrt(self.dot3(rawA, rawA))
+                let gyroMag = sqrt(self.dot3(rawW, rawW))
+                if pullMag > 0.12 && gyroMag < 0.15 {
+                    let dotZ = self.dot3(rawA, self.rZ)
+                    let projX = (rawA.0 - dotZ * self.rZ.0, rawA.1 - dotZ * self.rZ.1, rawA.2 - dotZ * self.rZ.2)
+                    self.rX = self.norm3(projX)
+                    self.rY = self.norm3(self.cross3(self.rZ, self.rX))
+                    self.awaitingForwardPullLock = false
+                    self.speak("Forward axis locked.")
+                }
+            }
+
+            let axVeh = self.dot3(self.rX, rawA)
+            let ayVeh = self.dot3(self.rY, rawA)
+            let azVeh = self.dot3(self.rZ, rawA)
+            let yawRate = self.dot3(self.rZ, rawW)
+
+            self.lonG = 0.8 * self.lonG + 0.2 * axVeh
+            self.latG = 0.8 * self.latG + 0.2 * ayVeh
+            self.vertBumpG = abs(azVeh)
 
             let vMps = max(0.0, self.userLocation?.speed ?? 0.0)
             let kinematicG = (vMps * yawRate) / 9.80665
@@ -101,7 +138,16 @@ final class NavTelemetryEngine: NSObject, ObservableObject, CLLocationManagerDel
     }
 
     func zeroMountCalibration() {
-        speak("IMU calibrated.")
+        // CoreMotion gravity points downward (-Z_veh); normal reaction force (+Z_veh) is -gravity
+        let upVec = (-latestGravity.0, -latestGravity.1, -latestGravity.2)
+        rZ = norm3(upVec)
+        // Construct initial orthogonal X/Y in plane perpendicular to rZ until forward pull refines X
+        let seedForward = abs(rZ.1) < 0.9 ? (0.0, 1.0, 0.0) : (0.0, 0.0, -1.0)
+        let dotZ = dot3(seedForward, rZ)
+        rX = norm3((seedForward.0 - dotZ * rZ.0, seedForward.1 - dotZ * rZ.1, seedForward.2 - dotZ * rZ.2))
+        rY = norm3(cross3(rZ, rX))
+        awaitingForwardPullLock = true
+        speak("Vertical locked. Accelerate straight to lock forward axis.")
     }
 
     nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
@@ -185,7 +231,7 @@ final class NavTelemetryEngine: NSObject, ObservableObject, CLLocationManagerDel
                     self.distanceToNextTurn = String(format: "%.0f ft", first.distance * 3.28084)
                     self.speak("Stage locked. \(first.instructions)")
                 }
-                self.cameraPosition = .userLocation(pitched: true, followsHeading: true)
+                self.cameraPosition = .userLocation(followsHeading: true, fallback: .automatic)
             }
         }
     }
