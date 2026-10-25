@@ -70,6 +70,18 @@ docs/SOCIAL.md.
   cockpit boots; IPA build on every push.
 - Tests: `pytest tests -v` → 35 passed; `swift test --package-path ApexKit` → 5 passed.
 
+- [x] **Rally pace-note grammar** (McRae 1-6, per the owner's guide): +/- within a band, Square /
+  Acute / Hairpin, long/short, tightens/opens, over crest, caution ladder (care → triple caution,
+  scored from approach speed ratio, blind entry, tightening, off-camber, crest), and chaining:
+  "into"/"and" for notes < 25/60 m apart, otherwise the rally distance ("Left 4 minus long, 150").
+  Python + JS at parity. Not done (no data to support them honestly): cut/don't cut, jump, water.
+- [x] **Camera rig**: spring-damper follow on its own 60 fps loop; look-ahead position, bearing aimed
+  2-4 s down the road (whips into corners), zoom/pitch breathe with speed. Steady / Dynamic / Whip.
+- [x] **Voice**: Co-driver (best installed voice, British first, distances read "one-fifty") and Jarvis
+  (robot voice where installed, chirps, machine-speak readout). Native iOS picks Premium/Enhanced voices.
+- [x] Simulator UI test fixed: the cockpit was booting; the test queried text that WebKit hides inside
+  the map region. Now asserts RUN/ROUTE controls and a live pace note.
+
 ### Active bugs / limitations
 - Ramp loops (cloverleafs) read as "Switchbacks"; needs Valhalla road class to veto motorway links.
 - Sight offset M is a constant 4 m; landcover (forest vs field) should set it per corner.
