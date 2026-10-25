@@ -42,6 +42,8 @@ SIGHT_MAX_M = 400.0          # beyond this, sight no longer constrains a car
 CAMBER_CLIP_RAD = 0.15
 
 SECTOR_LENGTH_M = 500.0
+SECTOR_CONTEXT_S = 30.0      # sector features read over +-30 s of reference-lap time
+TOWN_LIMIT_MPS = 15.7        # posted limit <= 35 mph -> town transit
 
 # IMU hazard thresholds (manifesto section 4 for the spike value)
 SPIKE_PEAK_G = 0.35
@@ -362,11 +364,6 @@ def detect_hazards(dist_m, crest_g, roughness_rms_g, vert_peak_g=None) -> list[d
     return hazards
 
 
-def _saturate(x: float, scale: float) -> float:
-    """0 -> 0, scale -> 63, 3*scale -> 95 (smooth, bounded 0-100)."""
-    return 100.0 * (1.0 - math.exp(-max(0.0, x) / scale))
-
-
 def alpr_counts_by_sector(lat, lon, sector_ids, alpr_nodes) -> dict[int, int]:
     """Number of ALPR cameras within ALPR_RADIUS_M of each sector's path."""
     counts: dict[int, int] = {int(s): 0 for s in np.unique(sector_ids)}
@@ -385,44 +382,44 @@ def alpr_counts_by_sector(lat, lon, sector_ids, alpr_nodes) -> dict[int, int]:
     return counts
 
 
-def score_sectors(dist_m, kappa, corners, grade_pct, camber_rad, speed_mps,
-                  roughness_rms_g, hazards, alpr_counts=None) -> list[dict]:
-    """Aggregate 5 m bins into SECTOR_LENGTH_M sectors scored 0-100 on TECH/FLOW/SURF/CLEAR.
+def score_sectors(dist_m, corners, camber_rad, roughness_rms_g, hazards, lap, sight_m,
+                  limit_mps=None, alpr_counts=None) -> list[dict]:
+    """Sectors of SECTOR_LENGTH_M scored 0-100 on TECH/FLOW/SURF/CLEAR plus an archetype.
 
-    CLEAR is None unless ALPR data was supplied -- unknown is never shown as safe.
+    TECH and FLOW come from the reference lap (core/reference_lap.py), read over a
+    +-SECTOR_CONTEXT_S window of simulated driving around each sector so per-minute
+    rates are stable. CLEAR is None unless ALPR data was supplied -- unknown is never
+    shown as safe.
     """
+    from core import reference_lap as rl  # local: reference_lap builds on this module
+
     dist_m = np.asarray(dist_m, dtype=float)
-    k = np.abs(np.asarray(kappa, dtype=float))
     sector_ids = (dist_m // SECTOR_LENGTH_M).astype(int)
-    by_apex = {}
-    for c in corners:
-        by_apex.setdefault(int(sector_ids[c["apex"]]), []).append(c)
+    t = lap["t"]
     haz_by_sector = {}
     for h in hazards:
         haz_by_sector.setdefault(int(sector_ids[h["index"]]), []).append(h)
 
     sectors = []
     for sid in np.unique(sector_ids):
-        m = sector_ids == sid
-        length_km = max(0.05, (dist_m[m][-1] - dist_m[m][0] + 5.0) / 1000.0)
-        cs = by_apex.get(int(sid), [])
-        hairpins = sum(1 for c in cs if c["severity"] == "HP")
-        tight = sum(1 for c in cs if c["severity"] == "HP" or c["severity"] <= 3)
-        sweepers = sum(1 for c in cs if c["severity"] != "HP" and c["severity"] >= 4)
+        idx = np.flatnonzero(sector_ids == sid)
+        lo, hi = int(idx[0]), int(idx[-1]) + 1
+        tc = 0.5 * (t[lo] + t[hi - 1])
+        wlo = min(lo, int(np.searchsorted(t, tc - SECTOR_CONTEXT_S)))
+        whi = max(hi, int(np.searchsorted(t, tc + SECTOR_CONTEXT_S)))
+        f = rl.window_features(lap, corners, sight_m, wlo, whi)
+        axes = rl.axis_scores(f)
 
-        tech = (_saturate(len(cs) / length_km, 6.0) * 0.45
-                + _saturate(float(np.std(k)) * 1000.0, 6.0) * 0.25
-                + _saturate(tight + 2 * hairpins, 3.0) * 0.20
-                + _saturate(float(np.std(grade_pct[m])), 3.0) * 0.10)
+        bank_frac = float(np.mean(np.asarray(camber_rad)[lo:hi] > math.radians(2.0)))
+        flow = 0.9 * axes["flow"] + 10.0 * min(1.0, bank_frac * 4.0)
 
-        sp = speed_mps[m]
-        moving = sp[sp > 2.0]
-        continuity = 1.0 - min(1.0, float(np.std(moving) / np.mean(moving))) if len(moving) > 3 else 0.0
-        bank_frac = float(np.mean(camber_rad[m] > math.radians(2.0)))
-        sweep_frac = sweepers / len(cs) if cs else 0.0
-        flow = 100.0 * (0.45 * continuity + 0.35 * sweep_frac + 0.20 * min(1.0, bank_frac * 4.0))
+        town = False
+        if limit_mps is not None:
+            lim = np.asarray(limit_mps, dtype=float)[lo:hi]
+            known = lim[np.isfinite(lim)]
+            town = len(known) > 0 and float(np.mean(known <= TOWN_LIMIT_MPS)) > 0.5
 
-        rough = roughness_rms_g[m]
+        rough = np.asarray(roughness_rms_g)[lo:hi]
         haz = haz_by_sector.get(int(sid), [])
         surf = 100.0 - 300.0 * max(0.0, float(np.mean(rough)) - 0.03) - 12.0 * len(haz)
 
@@ -430,17 +427,18 @@ def score_sectors(dist_m, kappa, corners, grade_pct, camber_rad, speed_mps,
         if alpr_counts is not None:
             clear = 100.0 - 45.0 * alpr_counts.get(int(sid), 0)
 
-        idx = np.flatnonzero(m)
         sectors.append({
             "id": int(sid),
-            "start_index": int(idx[0]),
-            "end_index": int(idx[-1]),
-            "start_m": float(dist_m[idx[0]]),
-            "end_m": float(dist_m[idx[-1]]),
-            "corners": len(cs),
-            "tech": int(round(np.clip(tech, 0, 100))),
+            "start_index": lo,
+            "end_index": hi - 1,
+            "start_m": float(dist_m[lo]),
+            "end_m": float(dist_m[hi - 1]),
+            "corners": sum(1 for c in corners if lo <= c["apex"] < hi),
+            "archetype": rl.archetype(f, town),
+            "tech": axes["tech"],
             "flow": int(round(np.clip(flow, 0, 100))),
             "surf": int(round(np.clip(surf, 0, 100))),
             "clear": None if clear is None else int(round(np.clip(clear, 0, 100))),
+            "features": {k: round(float(v), 3) for k, v in f.items()},
         })
     return sectors

@@ -98,19 +98,19 @@ def test_steadily_broken_pavement_is_not_a_stream_of_bumps():
 
 
 def test_sector_clear_is_unknown_without_alpr_data():
+    from core import reference_lap as rl
     lat, lon = path_from_legs(STAGE)
     kappa, ds = rd.compute_curvature(lat, lon)
     n = len(lat)
     dist = np.arange(n) * 5.0
-    args = (dist, kappa, rd.detect_corners(kappa, ds), np.zeros(n), np.zeros(n),
-            np.full(n, 20.0), np.full(n, 0.05), [])
+    sight = rd.sight_distance_m(lat, lon)
+    corners = rd.detect_corners(kappa, ds)
+    lap = rl.simulate(kappa, ds, sight)
+    args = (dist, corners, np.zeros(n), np.full(n, 0.05), [], lap, sight)
     sectors = rd.score_sectors(*args)
     assert all(s["clear"] is None for s in sectors)
     assert all(0 <= s[k] <= 100 for s in sectors for k in ("tech", "flow", "surf"))
-    with_corners = [s for s in sectors if s["corners"]]
-    without = [s for s in sectors if not s["corners"]]
-    assert with_corners and without
-    assert min(s["tech"] for s in with_corners) > max(s["tech"] for s in without)
+    assert all(s["archetype"] in rl.ARCHETYPES for s in sectors)
 
     sids = (dist // rd.SECTOR_LENGTH_M).astype(int)
     cam = {"lat": float(lat[150]), "lon": float(lon[150])}

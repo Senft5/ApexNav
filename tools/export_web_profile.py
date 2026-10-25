@@ -28,6 +28,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
+from core import reference_lap as rl  # noqa: E402
 from core import road_dna as rd  # noqa: E402
 from core.kinematics import ingest_sensor_logger_drive  # noqa: E402
 
@@ -150,8 +151,11 @@ def profile_segments(seg: pd.DataFrame, alpr_nodes=None) -> tuple[pd.DataFrame, 
     alpr_counts = None
     if alpr_nodes is not None:
         alpr_counts = rd.alpr_counts_by_sector(lat, lon, (dist // rd.SECTOR_LENGTH_M).astype(int), alpr_nodes)
-    sectors = rd.score_sectors(dist, kappa, corners, seg["grade_pct"].to_numpy(float), camber,
-                               speed_mps, rough, hazards, alpr_counts)
+    limit_mps = seg["limit_kph"].to_numpy(float) / 3.6 if "limit_kph" in seg else None
+    lap = rl.simulate(kappa, ds, seg["sight_m"].to_numpy(), camber, rough,
+                      seg["elevation_m"].to_numpy(float), limit_mps)
+    sectors = rd.score_sectors(dist, corners, camber, rough, hazards, lap, seg["sight_m"].to_numpy(),
+                               limit_mps, alpr_counts)
     for s in sectors:
         s["start_m"] = round(s["start_m"], 1)
         s["end_m"] = round(s["end_m"], 1)
