@@ -14,6 +14,7 @@ web/voice.js turns structured pace notes into token sequences and plays them.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -68,6 +69,38 @@ def codriver_vocabulary() -> dict[str, str]:
     v["sys:cruise"] = "Cruise. Hazards only."
     v["sys:test"] = "Co-driver ready."
     return v
+
+
+def phrase_key(tokens) -> str:
+    """Whole-phrase clips are keyed by their token run joined with '+'; web/voice.js plays the
+    longest run it has a clip for and falls back to single tokens."""
+    return "+".join(tokens)
+
+
+def phrase_text(tokens, vocab) -> str:
+    """One natural sentence for a token run: commas before cautions and distances."""
+    out = ""
+    for t in tokens:
+        w = vocab[t]
+        if not out:
+            out = w
+        elif t.startswith(("caution:", "dist:")):
+            out += ", " + w
+        else:
+            out += " " + w
+    return out[0].upper() + out[1:] + "."
+
+
+def unit_phrases(vocab) -> list[list[str]]:
+    """Every head with each single modifier: the unit the ear hears as one call."""
+    heads = [t for t in vocab if t.startswith("head:")]
+    mods = [t for t in vocab if t.startswith("mod:")]
+    return [[h, m] for h in heads for m in mods]
+
+
+def route_phrases() -> list[list[str]]:
+    path = os.path.join(ROOT, "tools", "route_calls.json")
+    return json.load(open(path, encoding="utf-8")) if os.path.exists(path) else []
 
 
 def jarvis_vocabulary() -> dict[str, str]:
@@ -199,6 +232,46 @@ def build(voice_id: str, ref: str = None) -> dict:
     return manifest
 
 
+# Units worth rendering first for the slow cloned engine (most common modifiers).
+CORE_MODS = ("mod:banked", "mod:long", "mod:off-camber")
+
+
+def build_phrases(voice_id: str, ref: str = None, tier: str = "calls") -> None:
+    """Add whole-phrase clips to an existing bank. tier: calls (exact calls of the shipped
+    routes), core (+ heads x banked/long/off-camber), units (+ every head x modifier)."""
+    cfg = VOICES[voice_id]
+    vocab = codriver_vocabulary()
+    mpath = os.path.join(OUT, voice_id, "manifest.json")
+    manifest = json.load(open(mpath, encoding="utf-8"))
+    wanted = list(route_phrases())
+    units = unit_phrases(vocab)
+    if tier in ("core", "units"):
+        wanted += [u for u in units if tier == "units" or u[1] in CORE_MODS]
+    seen, todo = set(), []
+    for toks in wanted:
+        k = phrase_key(toks)
+        if k not in seen and k not in manifest["tokens"] and all(t in vocab for t in toks):
+            seen.add(k)
+            todo.append(toks)
+    if cfg["engine"] == "chatterbox":
+        engine, expect = ChatterboxEngine(ref), {}
+    else:
+        engine, expect = KokoroEngine(cfg["lang"]), None
+    for n, toks in enumerate(todo, 1):
+        k, text = phrase_key(toks), phrase_text(toks, vocab)
+        if expect is None:
+            audio = trim(engine.render(text, cfg["kokoro_voice"], cfg["speed"]))
+        else:
+            want = sum(manifest["tokens"][t]["dur"] for t in toks if t in manifest["tokens"])
+            audio = trim(engine.render(text, expect_s=want * 0.9 if want else None))
+        fname = "p_" + hashlib.sha1(k.encode()).hexdigest()[:12] + ".m4a"
+        encode_m4a(audio, os.path.join(OUT, voice_id, fname))
+        manifest["tokens"][k] = {"file": fname, "dur": round(len(audio) / SR, 3), "text": text}
+        with open(mpath, "w", encoding="utf-8") as f:       # resumable: written after every clip
+            json.dump(manifest, f, indent=1)
+        print(f"  {voice_id}: [{n}/{len(todo)}] {text}", flush=True)
+
+
 def write_index() -> None:
     voices = []
     for vid in sorted(os.listdir(OUT)):
@@ -214,13 +287,17 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--voice", choices=sorted(VOICES))
     ap.add_argument("--all", action="store_true", help="every Kokoro voice (cloned voices need --voice and --ref)")
+    ap.add_argument("--phrases", choices=["calls", "core", "units"], help="add whole-phrase clips to an existing bank")
     ap.add_argument("--ref", help="reference recording for a cloned voice (keep it out of git)")
     args = ap.parse_args(argv)
     ids = sorted(v for v in VOICES if VOICES[v]["engine"] == "kokoro") if args.all else [args.voice] if args.voice else []
     if not ids:
         ap.error("--voice ID or --all")
     for vid in ids:
-        build(vid, args.ref)
+        if args.phrases:
+            build_phrases(vid, args.ref, args.phrases)
+        else:
+            build(vid, args.ref)
     write_index()
     return 0
 
