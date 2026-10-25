@@ -233,6 +233,25 @@
             <p class="note"><a href="analysis.html" style="color:inherit">Drive analysis: compare passes corner by corner →</a></p>
           </section>
           <section>
+            <h3>Co-driver voice</h3>
+            <div class="row" id="voiceList">
+              <button class="ink-btn" data-voice="codriver">CO-DRIVER</button>
+              <button class="ink-btn" data-voice="jarvis">JARVIS</button>
+              <button class="ink-btn" id="voiceTestBtn">TEST</button>
+            </div>
+            <div class="row" style="margin-top:6px"><select class="field" id="voiceSelect"></select></div>
+            <p class="note">Co-driver picks the most natural voice on this device (on iPhone, download an Enhanced or Premium English voice in Settings → Accessibility → Spoken Content for the best result). Jarvis is deliberately robotic.</p>
+          </section>
+          <section>
+            <h3>Camera feel</h3>
+            <div class="row" id="camList">
+              <button class="ink-btn" data-cam="steady">STEADY</button>
+              <button class="ink-btn" data-cam="dynamic">DYNAMIC</button>
+              <button class="ink-btn" data-cam="whip">WHIP</button>
+            </div>
+            <p class="note">How hard the map leans into corners ahead of the car.</p>
+          </section>
+          <section>
             <h3>Cockpit theme</h3>
             <div class="themes" id="themeList"></div>
           </section>
@@ -293,11 +312,13 @@
       const sight = Core.sightDistanceM(rs.lat, rs.lon);
       const env = Core.brakingEnvelopeMps(kappa, ds, null, null, undefined, sight);
       const dist = rs.lat.map((_, i) => i * 5);
-      const events = Core.detectCorners(kappa, ds).map(c => {
+      const events = Core.annotateCautions(Core.detectCorners(kappa, ds), env, sight).map(c => {
         const t = Core.paceNoteText(c);
         return { type: 'corner', code: t.code, call: t.call, index: c.apex, dist_m: dist[c.apex], lat: rs.lat[c.apex], lon: rs.lon[c.apex],
-                 radius_m: c.radius_m, apex_mph: c.apex_mps * MPH, dir: c.dir, severity: c.severity, turn_rad: Math.abs(c.turn_rad), mods: c.mods };
+                 start_m: dist[c.start], end_m: dist[c.end], radius_m: c.radius_m, apex_mph: c.apex_mps * MPH, dir: c.dir,
+                 severity: c.severity, grade: c.grade, shape: c.shape, caution: c.caution, turn_rad: Math.abs(c.turn_rad), mods: c.mods };
       });
+      Core.linkNotes(events);
       return {
         id, name, kind: 'route', subtitle: 'Geometry only · not yet profiled',
         lat: rs.lat, lon: rs.lon, dist, elev: null, speedMps: null, latG: null, lonG: null, camberDeg: null,
@@ -315,19 +336,21 @@
     const state = {
       mode: 'replay', playing: false, rate: 1, cursorM: 0, cursorIdx: 0, follow: true, bearing: 0,
       live: null, liveAt: 0, spiritedAt: -Infinity, spoken: new Set(), tapToRoute: false,
-      theme: 'stage',
+      theme: 'stage', camFeel: 'dynamic', voiceStyle: 'codriver', voiceName: '',
       toggles: { stage: false, voice: true, lpr: true, dna: false, night: false }
     };
     try {
       const saved = JSON.parse(localStorage.getItem('apex.prefs') || 'null');
-      if (saved) { Object.assign(state.toggles, saved.toggles || {}); if (saved.theme) state.theme = saved.theme; }
+      if (saved) { Object.assign(state.toggles, saved.toggles || {}); if (saved.theme) state.theme = saved.theme; if (saved.camFeel) state.camFeel = saved.camFeel; if (saved.voiceStyle) state.voiceStyle = saved.voiceStyle; if (saved.voiceName != null) state.voiceName = saved.voiceName; }
     } catch (_) {}
     if (params.has('night')) state.toggles.night = params.get('night') === '1';
     if (params.has('theme')) state.theme = params.get('theme');
+    if (params.has('cam')) state.camFeel = params.get('cam');
+    if (params.has('voice')) state.voiceStyle = params.get('voice');
 
     let look = Themes.apply(state.theme, state.toggles.night);
     let cluster = Inst.mountCluster($('cluster'), look.theme);
-    function savePrefs() { try { localStorage.setItem('apex.prefs', JSON.stringify({ theme: state.theme, toggles: state.toggles })); } catch (_) {} }
+    function savePrefs() { try { localStorage.setItem('apex.prefs', JSON.stringify({ theme: state.theme, camFeel: state.camFeel, voiceStyle: state.voiceStyle, voiceName: state.voiceName, toggles: state.toggles })); } catch (_) {} }
     function applyTheme() {
       look = Themes.apply(state.theme, state.toggles.night);
       cluster = Inst.mountCluster($('cluster'), look.theme);
@@ -532,7 +555,69 @@
     });
     map.once('idle', () => document.querySelectorAll('.maplibregl-ctrl-attrib').forEach(a => a.classList.remove('maplibregl-compact-show')));
     map.on('dragstart', () => { state.follow = false; $('recenterBtn').classList.add('show'); });
-    $('recenterBtn').addEventListener('click', () => { state.follow = true; $('recenterBtn').classList.remove('show'); render(true); });
+    $('recenterBtn').addEventListener('click', () => { state.follow = true; $('recenterBtn').classList.remove('show'); resetCamera(); render(true); });
+
+    // =======================================================================
+    // 4b. CAMERA RIG — spring-damper follow on its own 60 fps loop.
+    //     Position chases a speed-scaled look-ahead point; bearing aims at the road
+    //     2-4 s ahead, so the view swings into a corner before the car does and settles
+    //     with a slight overshoot (the "whip"). Zoom and pitch breathe with speed.
+    // =======================================================================
+    const CAM_FEEL = {
+      steady:  { wPos: 3.6, zPos: 1.00, wBear: 1.5, zBear: 1.00, lead: 0.8, ahead: 1.6 },
+      dynamic: { wPos: 3.0, zPos: 0.90, wBear: 2.4, zBear: 0.70, lead: 1.0, ahead: 2.4 },
+      whip:    { wPos: 2.6, zPos: 0.78, wBear: 3.4, zBear: 0.52, lead: 1.3, ahead: 3.6 }
+    };
+    const cam = { ready: false };
+    let vehicle = null;
+    const clamp01 = (x) => Math.max(0, Math.min(1, x));
+    function setVehicle(v, snap) { vehicle = v; if (snap || !cam.ready) resetCamera(); }
+    function aheadPoint(m) {
+      if (vehicle.onTrack) { const s = sample(track, state.cursorM + m); return [s.lat, s.lon]; }
+      const b = vehicle.bearing * Math.PI / 180;
+      return [vehicle.lat + m * Math.cos(b) / 110540, vehicle.lon + m * Math.sin(b) / (111320 * Math.cos(vehicle.lat * Math.PI / 180))];
+    }
+    function camTargets() {
+      const f = CAM_FEEL[state.camFeel] || CAM_FEEL.dynamic, v = vehicle.vMps;
+      const [cLat, cLon] = aheadPoint(Math.max(15, Math.min(90, v * f.lead)));
+      const [bLat, bLon] = aheadPoint(Math.max(35, Math.min(200, v * f.ahead)));
+      const brg = vehicle.onTrack ? bearingDeg(vehicle.lat, vehicle.lon, bLat, bLon) : vehicle.bearing;
+      return { lat: cLat, lon: cLon, bearing: brg, zoom: 16.4 - 1.8 * clamp01((v - 8) / 30), pitch: 42 + 12 * clamp01(v / 35) };
+    }
+    function resetCamera() {
+      if (!vehicle) return;
+      const t = camTargets();
+      Object.assign(cam, { ready: true, lat: t.lat, lon: t.lon, bearing: t.bearing, zoom: t.zoom, pitch: t.pitch,
+        vLat: 0, vLon: 0, vBear: 0, vZoom: 0, vPitch: 0,
+        pLat: vehicle.lat, pLon: vehicle.lon, pBear: vehicle.bearing, pvLat: 0, pvLon: 0, pvBear: 0 });
+    }
+    function spring(x, v, target, w, z, dt) {
+      const a = w * w * (target - x) - 2 * z * w * v;
+      v += a * dt;
+      return [x + v * dt, v];
+    }
+    let camLast = 0;
+    function cameraFrame(ts) {
+      requestAnimationFrame(cameraFrame);
+      const dt = Math.min(0.05, (ts - (camLast || ts)) / 1000);
+      camLast = ts;
+      if (!vehicle || !cam.ready || dt <= 0) return;
+      // Puck: fast critically-damped glide so 10 Hz GPS reads as continuous motion.
+      [cam.pLat, cam.pvLat] = spring(cam.pLat, cam.pvLat, vehicle.lat, 14, 1, dt);
+      [cam.pLon, cam.pvLon] = spring(cam.pLon, cam.pvLon, vehicle.lon, 14, 1, dt);
+      [cam.pBear, cam.pvBear] = spring(cam.pBear, cam.pvBear, cam.pBear + angleDelta(cam.pBear, vehicle.bearing), 10, 1, dt);
+      puck.setLngLat([cam.pLon, cam.pLat]).setRotation(cam.pBear);
+      if (!state.follow) return;
+      const f = CAM_FEEL[state.camFeel] || CAM_FEEL.dynamic, t = camTargets();
+      [cam.lat, cam.vLat] = spring(cam.lat, cam.vLat, t.lat, f.wPos, f.zPos, dt);
+      [cam.lon, cam.vLon] = spring(cam.lon, cam.vLon, t.lon, f.wPos, f.zPos, dt);
+      [cam.bearing, cam.vBear] = spring(cam.bearing, cam.vBear, cam.bearing + angleDelta(cam.bearing, t.bearing), f.wBear, f.zBear, dt);
+      [cam.zoom, cam.vZoom] = spring(cam.zoom, cam.vZoom, t.zoom, 1.2, 1, dt);
+      [cam.pitch, cam.vPitch] = spring(cam.pitch, cam.vPitch, t.pitch, 1.2, 1, dt);
+      map.jumpTo({ center: [cam.lon, cam.lat], bearing: (cam.bearing % 360 + 360) % 360, zoom: cam.zoom, pitch: cam.pitch });
+    }
+    requestAnimationFrame(cameraFrame);
+
     function loadTrackOnMap() {
       if (!mapReady || !track) return;
       map.getSource('apex-route-src').setData(routeGeoJSON(track));
@@ -583,23 +668,91 @@
     const isSpirited = () => state.toggles.stage || performance.now() - state.spiritedAt < 30000;
     const noteworthyInCruise = (e) => e.type === 'alpr' || (e.type === 'bump' && e.severity_g >= 0.45);
 
+    // -------------------------------------------------------------------------
+    // Voice: "codriver" (most natural voice installed, read like a real co-driver) or
+    // "jarvis" (cartoonishly robotic: robot voice where installed, chirps, machine-speak).
+    // -------------------------------------------------------------------------
     const speech = { busy: false, queue: [] };
+    const NUM_WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
+    const TENS = { 30: 'thirty', 40: 'forty', 50: 'fifty', 60: 'sixty', 70: 'seventy', 80: 'eighty' };
+    // Co-drivers say "one-fifty", "two hundred", "thirty" — never "one hundred and fifty".
+    function codriverDistance(d) {
+      if (TENS[d]) return TENS[d];
+      const h = Math.floor(d / 100), r = d % 100;
+      if (r === 0) return `${NUM_WORDS[h]} hundred`;
+      return `${NUM_WORDS[h]}-${TENS[r] || (r === 20 ? 'twenty' : String(r))}`;
+    }
+    function spokenText(text) {
+      if (state.voiceStyle !== 'jarvis') {
+        return text.replace(/, (\d{2,3})$/, (_, d) => `, ${codriverDistance(parseInt(d, 10))}`);
+      }
+      // Jarvis: deadpan machine readout, digits one by one, each chained note on its own.
+      const digits = (n) => String(n).split('').map(c => NUM_WORDS[+c] || c).join(' ');
+      let tail = '';
+      text = text.replace(/, (\d{2,3})$/, (_, d) => { tail = ` Distance: ${digits(d)} meters.`; return ''; });
+      const piece = (p) => {
+        let out = p.trim()
+          .replace(/^(Left|Right) (\d)( minus| plus)?/i, (_, dir, n, g) => `Corner: ${dir.toLowerCase()}. Severity: ${NUM_WORDS[+n]}${g ? ', ' + g.trim() : ''}.`)
+          .replace(/^(Left|Right) hairpin/i, (_, dir) => `Corner: ${dir.toLowerCase()}. Classification: hairpin.`)
+          .replace(/^(Square|Acute) (left|right)/i, (_, k, dir) => `Corner: ${dir}. Classification: ${k.toLowerCase()}.`)
+          .replace(/(double caution|triple caution|caution|care)/, (m) => ` Warning: ${m}.`);
+        if (/^(Bump|Crest|Dip|Camera)/.test(out)) out = `Hazard detected. ${out}.`;
+        const MOD = '(?:long|short|tightens|opens|banked|off-camber|over crest)';
+        return out.replace(new RegExp(`\\. (${MOD}(?: ${MOD})*)`), (_, m) => `. Modifiers: ${m.match(new RegExp(MOD, 'g')).join(', ')}.`)
+          .replace(/[.,]?,\s*Warning/g, '. Warning').replace(/\.\s*\./g, '.').replace(/\s+/g, ' ').trim();
+      };
+      const parts = text.split(/ (into|and) (?=Left|Right|Square|Acute|Bump|Crest|Dip|Camera)/);
+      let out = piece(parts[0]);
+      for (let i = 1; i < parts.length; i += 2) out += ` Sequence ${parts[i] === 'into' ? 'immediate' : 'linked'}. ${piece(parts[i + 1])}`;
+      return out + tail;
+    }
+    let audioCtx = null;
+    function chirp() {
+      try {
+        audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+        const t0 = audioCtx.currentTime;
+        [[880, 0], [1320, 0.07], [990, 0.14]].forEach(([f, dt]) => {
+          const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+          o.type = 'square'; o.frequency.value = f;
+          g.gain.setValueAtTime(0.0001, t0 + dt); g.gain.exponentialRampToValueAtTime(0.06, t0 + dt + 0.01);
+          g.gain.exponentialRampToValueAtTime(0.0001, t0 + dt + 0.06);
+          o.connect(g); g.connect(audioCtx.destination); o.start(t0 + dt); o.stop(t0 + dt + 0.07);
+        });
+      } catch (_) {}
+    }
+    // Rank installed voices: neural/premium first, British English (the co-driver accent), then any English.
+    function pickVoice(style) {
+      const voices = ('speechSynthesis' in window) ? speechSynthesis.getVoices() : [];
+      if (state.voiceName) { const v = voices.find(x => x.name === state.voiceName); if (v) return v; }
+      if (style === 'jarvis') {
+        const robot = voices.find(v => /Zarvox|Trinoids|Fred|Ralph|Cellos|robot/i.test(v.name));
+        if (robot) return robot;
+      }
+      const score = (v) => (/natural|neural|premium|enhanced|online/i.test(v.name) ? 10 : 0) + (/^en-GB/i.test(v.lang) ? 4 : 0) +
+        (/^en/i.test(v.lang) ? 2 : 0) + (/Google UK English Male|Daniel|Arthur|Ryan|Thomas|Oliver/i.test(v.name) ? 3 : 0) - (v.localService === false && !/natural|online/i.test(v.name) ? 0 : 0);
+      return voices.filter(v => /^en/i.test(v.lang)).sort((a, b) => score(b) - score(a))[0] || null;
+    }
     function say(text, force) {
       if (!text || (!state.toggles.voice && !force)) return;
+      const style = state.voiceStyle;
+      const spoken = spokenText(text);
+      if (style === 'jarvis') chirp();
       const native = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex;
-      if (native) { try { native.postMessage({ cmd: 'speak', text, force: !!force }); } catch (_) {} return; }
+      if (native) { try { native.postMessage({ cmd: 'speak', text: spoken, force: !!force, style }); } catch (_) {} return; }
       if (!('speechSynthesis' in window)) return;
       if (force) { speechSynthesis.cancel(); speech.queue.length = 0; speech.busy = false; }
-      speech.queue.push(text);
+      speech.queue.push(spoken);
       if (speech.queue.length > 2) speech.queue.splice(0, speech.queue.length - 2);
       pumpSpeech();
     }
     function pumpSpeech() {
       if (speech.busy || !speech.queue.length) return;
       const u = new SpeechSynthesisUtterance(speech.queue.shift());
-      const v = speechSynthesis.getVoices().find(x => /en-GB/.test(x.lang));
-      if (v) u.voice = v;
-      u.rate = 1.08;
+      const v = pickVoice(state.voiceStyle);
+      if (v) { u.voice = v; u.lang = v.lang; }
+      const robotVoice = v && /Zarvox|Trinoids|Fred|Ralph|Cellos|robot/i.test(v.name);
+      if (state.voiceStyle === 'jarvis') { u.rate = robotVoice ? 1.0 : 0.92; u.pitch = robotVoice ? 1.0 : 0.15; }
+      else { u.rate = 1.12; u.pitch = 1.0; }
       speech.busy = true;
       u.onend = u.onerror = () => { speech.busy = false; pumpSpeech(); };
       speechSynthesis.speak(u);
@@ -610,6 +763,22 @@
       if (e.type === 'alpr') return 'OSM / DeFlock ALPR camera';
       return `Measured ${e.severity_g.toFixed(2)} g · single pass, unverified`;
     }
+    const linkLabel = (e) => (!e.link ? '' : (e.link === 'into' || e.link === 'and') ? ` · ${e.link.toUpperCase()}` : ` · ${e.link} m to next`);
+
+    // Co-driver reading: the note, then "into"/"and" + the next note when it follows at once,
+    // otherwise the distance to it ("Left 4 minus long, 150"). Chained notes are not called twice.
+    function chainedCall(e, ev, spirited) {
+      let text = e.call, cur = e;
+      for (let hops = 0; hops < 2 && (cur.link === 'into' || cur.link === 'and'); hops++) {
+        const next = ev[ev.indexOf(cur) + 1];
+        if (!next || (next.type === 'corner' && !spirited)) break;
+        text += ` ${cur.link} ${next.call}`;
+        state.spoken.add(`${track.id}:${next.type}:${next.index}`);
+        cur = next;
+      }
+      if (cur.link && cur.link !== 'into' && cur.link !== 'and') text += `, ${cur.link}`;
+      return text;
+    }
 
     function updateNotes(vMps, live) {
       const ev = allEvents().filter(e => e.dist_m >= state.cursorM - 5 && (e.type !== 'alpr' || state.toggles.lpr)).sort((a, b) => a.dist_m - b.dist_m);
@@ -617,7 +786,7 @@
       const shown = ev.filter(e => spirited || noteworthyInCruise(e) || e.type !== 'corner').filter(e => e.dist_m - state.cursorM <= 3000).slice(0, 3);
       const notes = shown.map(e => {
         const d = distLabel(e.dist_m - state.cursorM);
-        return { type: e.type, code: e.code, call: e.call, sub: subFor(e), dist: d.n, unit: d.u, distM: e.dist_m - state.cursorM,
+        return { type: e.type, code: e.code, call: e.call, sub: subFor(e) + linkLabel(e), dist: d.n, unit: d.u, distM: e.dist_m - state.cursorM,
                  dir: e.dir, severity: e.severity, turnRad: e.turn_rad, mods: e.mods || [] };
       });
       notes.quietText = track ? `${track.name} · ${spirited ? 'stage notes' : 'cruise: hazards and LPR only'}` : 'Open the route book';
@@ -632,8 +801,7 @@
         if (state.spoken.has(key) || d < 10) continue;
         state.spoken.add(key);
         if (e.type === 'corner' ? !spirited : !(spirited || noteworthyInCruise(e))) continue;
-        const L = distLabel(d);
-        say(d > 90 ? `${e.call}, ${L.n} ${L.u === 'FT' ? 'feet' : 'miles'}` : e.call, false);
+        say(chainedCall(e, ev, spirited), false);
       }
     }
 
@@ -662,9 +830,8 @@
       state.cursorIdx = idx;
       if (latG != null && (Math.abs(latG) > 0.30 || Math.abs(lonG) > 0.35)) state.spiritedAt = performance.now();
 
-      state.bearing = snap ? bearing : (state.bearing + angleDelta(state.bearing, bearing) * 0.15 + 360) % 360;
-      puck.setLngLat([lon, lat]).setRotation(state.bearing);
-      if (state.follow && (snap || state.playing || live)) map.jumpTo({ center: [lon, lat], bearing: state.bearing, pitch: 45, ...(snap ? { zoom: Math.max(map.getZoom(), 14.6) } : {}) });
+      state.bearing = bearing;
+      setVehicle({ lat, lon, bearing, vMps: vMps || 0, onTrack: !!track && idx >= 0 }, snap);
 
       const at = (arr) => (idx >= 0 && arr && arr[idx] != null ? arr[idx] : null);
       const sight = at(track && track.sightM);
@@ -902,6 +1069,24 @@
       }
     }
 
+    function renderVoiceList() {
+      document.querySelectorAll('[data-voice]').forEach(b => b.classList.toggle('on', b.dataset.voice === state.voiceStyle));
+      const sel = $('voiceSelect');
+      const voices = ('speechSynthesis' in window) ? speechSynthesis.getVoices().filter(v => /^en/i.test(v.lang)) : [];
+      sel.innerHTML = '';
+      sel.add(new Option(`Automatic (${(pickVoice(state.voiceStyle) || { name: 'device default' }).name})`, ''));
+      voices.forEach(v => sel.add(new Option(`${v.name} · ${v.lang}`, v.name)));
+      sel.value = state.voiceName || '';
+      sel.style.display = voices.length ? '' : 'none';
+    }
+    document.querySelectorAll('[data-voice]').forEach(b => b.addEventListener('click', () => { state.voiceStyle = b.dataset.voice; state.voiceName = ''; renderVoiceList(); savePrefs(); }));
+    $('voiceSelect').addEventListener('change', (e) => { state.voiceName = e.target.value; savePrefs(); renderVoiceList(); });
+    $('voiceTestBtn').addEventListener('click', () => say('Left 4 minus long tightens, care, 150', true));
+    if ('speechSynthesis' in window) speechSynthesis.onvoiceschanged = renderVoiceList;
+    renderVoiceList();
+    function renderCamList() { document.querySelectorAll('[data-cam]').forEach(b => b.classList.toggle('on', b.dataset.cam === state.camFeel)); }
+    document.querySelectorAll('[data-cam]').forEach(b => b.addEventListener('click', () => { state.camFeel = b.dataset.cam; renderCamList(); savePrefs(); }));
+    renderCamList();
     $('playBtn').addEventListener('click', () => { setPlaying(!state.playing); if (state.playing && track) say(`${track.name}.`, true); });
     $('rateBtn').addEventListener('click', () => {
       const rates = [1, 2, 4, 8];

@@ -138,12 +138,13 @@ def profile_segments(seg: pd.DataFrame, alpr_nodes=None) -> tuple[pd.DataFrame, 
 
     kappa, ds = rd.compute_curvature(lat, lon)
     seg["sight_m"] = rd.sight_distance_m(lat, lon, seg["elevation_m"].to_numpy(float))
-    seg["target_mph"] = rd.braking_envelope_mps(kappa, ds, camber, rough,
-                                                sight_m=seg["sight_m"].to_numpy()) * rd.MPS_TO_MPH
+    env_mps = rd.braking_envelope_mps(kappa, ds, camber, rough, sight_m=seg["sight_m"].to_numpy())
+    seg["target_mph"] = env_mps * rd.MPS_TO_MPH
     # Manoeuvres at walking pace (driveways, parking) are not road character.
     speed_mps = seg["speed_mph"].to_numpy(float) / rd.MPS_TO_MPH
     corners = [c for c in rd.detect_corners(kappa, ds, camber, crest, rough)
                if speed_mps[c["apex"]] >= MIN_CORNER_SPEED_MPS]
+    corners = rd.annotate_cautions(corners, env_mps, seg["sight_m"].to_numpy())
     # Below walking pace the phone is being handled, not reading the road.
     hazards = [h for h in rd.detect_hazards(dist, crest, rough, peak)
                if speed_mps[h["index"]] >= MIN_CORNER_SPEED_MPS]
@@ -172,13 +173,16 @@ def profile_segments(seg: pd.DataFrame, alpr_nodes=None) -> tuple[pd.DataFrame, 
                        "end_m": round(float(dist[c["end"]]), 1),
                        "radius_m": round(c["radius_m"], 1),
                        "apex_mph": round(c["apex_mps"] * rd.MPS_TO_MPH, 1),
-                       "dir": c["dir"], "severity": c["severity"],
+                       "dir": c["dir"], "severity": c["severity"], "grade": c["grade"],
+                       "shape": c["shape"], "caution": c["caution"],
                        "turn_rad": round(abs(c["turn_rad"]), 3), "mods": c["mods"]})
     for h in hazards:
         code, call = HAZARD_CALLS[h["type"]]
         events.append({"type": h["type"], "code": code, "call": call, **at(h["index"]),
+                       "start_m": round(float(dist[h["index"]]), 1), "end_m": round(float(dist[h["index"]]), 1),
                        "severity_g": round(h["severity_g"], 3)})
-    events.sort(key=lambda e: e["dist_m"])
+    events.sort(key=lambda e: e["start_m"])
+    rd.link_notes(events)
     return seg, sectors, events
 
 

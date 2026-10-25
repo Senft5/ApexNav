@@ -15,6 +15,14 @@
   const HAIRPIN_MAX_RADIUS_M = 30;
   const MIN_RADIUS_M = 8;
   const LONG_TURN_RAD = 100 * Math.PI / 180;
+  const LONG_ARC_M = 90, SHORT_ARC_M = 20;
+  const ACUTE_TURN_RAD = 105 * Math.PI / 180, ACUTE_MAX_RADIUS_M = 25;
+  const SQUARE_TURN_RAD = 75 * Math.PI / 180, SQUARE_MAX_RADIUS_M = 25;
+  const GRADE_EDGE = 0.25;
+  const CAUTION_WORDS = ['', 'care', 'caution', 'double caution', 'triple caution'];
+  const APPROACH_CAP_MPS = 27;
+  const LINK_INTO_M = 25, LINK_AND_M = 60, LINK_MAX_M = 500;
+  const RALLY_DISTANCES = [30, 40, 50, 60, 70, 80, 100, 120, 150, 200, 250, 300, 350, 400, 450, 500];
   const SEVERITY_RADIUS_M = [25, 40, 65, 100, 160, 260];
   const MU_EFF_DEFAULT = 0.60;
   const BRAKE_DECEL_MPS2 = 0.5 * G_STD;
@@ -222,7 +230,23 @@
       const sev = hairpin ? 'HP' : severityForRadius(radius);
       if (sev === null) continue;
 
+      // McRae shapes beyond the 1-6 scale, then +/- within a band.
+      let arc = 0;
+      for (let q = start; q <= end; q++) arc += ds[q];
+      let shape = null;
+      if (hairpin) shape = 'hairpin';
+      else if (radius < ACUTE_MAX_RADIUS_M && Math.abs(turn) >= ACUTE_TURN_RAD) shape = 'acute';
+      else if (radius < SQUARE_MAX_RADIUS_M && Math.abs(turn) >= SQUARE_TURN_RAD) shape = 'square';
+      let grade = '';
+      if (shape === null) {
+        const loB = sev === 1 ? MIN_RADIUS_M : SEVERITY_RADIUS_M[sev - 2];
+        const frac = (radius - loB) / (SEVERITY_RADIUS_M[sev - 1] - loB);
+        grade = frac < GRADE_EDGE ? '-' : (frac > 1 - GRADE_EDGE ? '+' : '');
+      }
+
       const mods = [];
+      if (!hairpin && (Math.abs(turn) >= LONG_TURN_RAD || arc >= LONG_ARC_M)) mods.push('long');
+      else if (shape === null && arc < SHORT_ARC_M) mods.push('short');
       const mid = Math.floor((start + end) / 2);
       if (end - start >= 4) {
         const r1 = 1 / Math.max(maxAbs(kappa, start, mid), 1e-6);
@@ -230,7 +254,6 @@
         if (r2 < 0.7 * r1) mods.push('tightens');
         else if (r1 < 0.7 * r2) mods.push('opens');
       }
-      if (!hairpin && Math.abs(turn) >= LONG_TURN_RAD) mods.push('long');
 
       let phi = 0;
       if (camberRad) {
@@ -248,6 +271,7 @@
         start, apex, end,
         dir: sgn > 0 ? 'L' : 'R',
         severity: sev,
+        grade, shape, arc_m: arc,
         turn_rad: turn,
         radius_m: radius,
         apex_mps: apexSpeedMps(radius, phi, m),
@@ -259,10 +283,54 @@
 
   function paceNoteText(c) {
     const word = c.dir === 'L' ? 'Left' : 'Right';
-    const code = `${c.dir}${c.severity}`;
-    let call = c.severity === 'HP' ? `${word} hairpin` : `${word} ${c.severity}`;
-    if (c.mods.length) call += ' ' + c.mods.join(', ');
+    let code, call;
+    if (c.severity === 'HP' || c.shape === 'hairpin') { code = `${c.dir}HP`; call = `${word} hairpin`; }
+    else if (c.shape === 'square') { code = `${c.dir}SQ`; call = `Square ${word.toLowerCase()}`; }
+    else if (c.shape === 'acute') { code = `${c.dir}AC`; call = `Acute ${word.toLowerCase()}`; }
+    else {
+      const g = c.grade || '';
+      code = `${c.dir}${c.severity}${g}`;
+      call = `${word} ${c.severity}` + (g === '-' ? ' minus' : g === '+' ? ' plus' : '');
+    }
+    if (c.mods.length) call += ' ' + c.mods.join(' ');
+    if (c.caution) call += ', ' + CAUTION_WORDS[c.caution];
     return { code, call };
+  }
+
+  function annotateCautions(corners, env, sight) {
+    for (const c of corners) {
+      const lo = Math.max(0, c.start - 30);
+      let vApp = 0;
+      for (let q = lo; q <= c.start; q++) vApp = Math.max(vApp, env[q]);
+      vApp = Math.min(vApp, APPROACH_CAP_MPS);
+      const ratio = vApp / Math.max(c.apex_mps, 1);
+      let score = ratio >= 3 ? 2 : (ratio >= 2 ? 1 : 0);
+      const vc = c.apex_mps;
+      if (sight[c.start] < 0.5 * (vc * REACTION_S + vc * vc / (2 * BRAKE_DECEL_MPS2))) score += 1;
+      for (const m of ['tightens', 'off-camber', 'over crest']) if (c.mods.includes(m)) score += 1;
+      c.caution = Math.min(score, 4);
+    }
+    return corners;
+  }
+
+  function rallyDistance(gap) {
+    let best = RALLY_DISTANCES[0];
+    for (const d of RALLY_DISTANCES) if (Math.abs(d - gap) < Math.abs(best - gap)) best = d;
+    return best;
+  }
+
+  // Chain notes as a co-driver reads them: "into"/"and" when the next follows at once,
+  // otherwise the distance to it. notes sorted by start_m, each with start_m/end_m.
+  function linkNotes(notes) {
+    notes.forEach((n, i) => {
+      n.link = null;
+      if (i + 1 === notes.length) return;
+      const gap = notes[i + 1].start_m - n.end_m;
+      if (gap < LINK_INTO_M) n.link = 'into';
+      else if (gap < LINK_AND_M) n.link = 'and';
+      else if (gap <= LINK_MAX_M) n.link = String(rallyDistance(gap));
+    });
+    return notes;
   }
 
   // Index of the nearest path sample to (lat, lon), searching around a hint index.
@@ -374,7 +442,7 @@
     G_STD, MPS_TO_MPH, ALPR_RADIUS_M,
     movingAverage, gradient, unwrap, localXY, resamplePolyline,
     computeCurvature, apexSpeedMps, effectiveMu, brakingEnvelopeMps, sightDistanceM, sightSpeedMps, SIGHT_MAX_M,
-    severityForRadius, detectCorners, paceNoteText, nearestIndex
+    severityForRadius, detectCorners, paceNoteText, annotateCautions, linkNotes, rallyDistance, nearestIndex
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.ApexCore = api;

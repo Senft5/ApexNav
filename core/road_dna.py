@@ -27,6 +27,19 @@ HAIRPIN_TURN_RAD = math.radians(135.0)
 HAIRPIN_MAX_RADIUS_M = 30.0
 MIN_RADIUS_M = 8.0           # tighter than any car can turn: GPS jitter, not road
 LONG_TURN_RAD = math.radians(100.0)
+LONG_ARC_M = 90.0            # a corner this long is called "long" whatever its turn
+SHORT_ARC_M = 20.0           # ...and this brief is "short"
+ACUTE_TURN_RAD = math.radians(105.0)
+ACUTE_MAX_RADIUS_M = 25.0
+SQUARE_TURN_RAD = math.radians(75.0)
+SQUARE_MAX_RADIUS_M = 25.0      # "equal to 1 or worse" (the 1 band)
+GRADE_EDGE = 0.25            # outer quarter of a severity band earns "-" (tighter) or "+" (opener)
+CAUTION_WORDS = ("", "care", "caution", "double caution", "triple caution")
+APPROACH_CAP_MPS = 27.0      # approach speed for caution scoring is the sim cruise, not the envelope
+LINK_INTO_M = 25.0           # gap to the next note below which the call chains with "into"
+LINK_AND_M = 60.0            # ...or "and"
+LINK_MAX_M = 500.0           # beyond this no distance is called
+RALLY_DISTANCES = (30, 40, 50, 60, 70, 80, 100, 120, 150, 200, 250, 300, 350, 400, 450, 500)
 
 # Rally severity by minimum radius: 1 = tightest, 6 = barely a bend. Above the last
 # bound the bend is not called at all.
@@ -265,7 +278,26 @@ def detect_corners(kappa, ds, camber_rad=None, crest_g=None, roughness_rms_g=Non
         if sev is None:
             continue
 
+        # McRae shapes beyond the 1-6 scale, then +/- within a band.
+        arc = float(np.sum(ds[seg]))
+        shape = None
+        if hairpin:
+            shape = "hairpin"
+        elif radius < ACUTE_MAX_RADIUS_M and abs(turn) >= ACUTE_TURN_RAD:
+            shape = "acute"
+        elif radius < SQUARE_MAX_RADIUS_M and abs(turn) >= SQUARE_TURN_RAD:
+            shape = "square"
+        grade = ""
+        if shape is None:
+            lo_b = MIN_RADIUS_M if sev == 1 else SEVERITY_RADIUS_M[sev - 2]
+            frac = (radius - lo_b) / (SEVERITY_RADIUS_M[sev - 1] - lo_b)
+            grade = "-" if frac < GRADE_EDGE else ("+" if frac > 1.0 - GRADE_EDGE else "")
+
         mods = []
+        if not hairpin and (abs(turn) >= LONG_TURN_RAD or arc >= LONG_ARC_M):
+            mods.append("long")
+        elif shape is None and arc < SHORT_ARC_M:
+            mods.append("short")
         mid = (start + end) // 2
         if end - start >= 4:
             r1 = 1.0 / max(float(np.max(np.abs(k[start:mid + 1]))), 1e-6)
@@ -274,8 +306,6 @@ def detect_corners(kappa, ds, camber_rad=None, crest_g=None, roughness_rms_g=Non
                 mods.append("tightens")
             elif r1 < 0.7 * r2:
                 mods.append("opens")
-        if not hairpin and abs(turn) >= LONG_TURN_RAD:
-            mods.append("long")
 
         phi = 0.0
         if camber_rad is not None:
@@ -294,6 +324,9 @@ def detect_corners(kappa, ds, camber_rad=None, crest_g=None, roughness_rms_g=Non
             "end": int(end),
             "dir": "L" if sgn > 0 else "R",
             "severity": sev,
+            "grade": grade,
+            "shape": shape,
+            "arc_m": arc,
             "turn_rad": turn,
             "radius_m": radius,
             "apex_mps": float(apex_speed_mps(radius, phi, mu)),
@@ -303,14 +336,66 @@ def detect_corners(kappa, ds, camber_rad=None, crest_g=None, roughness_rms_g=Non
 
 
 def pace_note_text(corner: dict) -> tuple[str, str]:
-    """(short code, spoken call) e.g. ('L4', 'Left 4 tightens, over crest')."""
+    """(short code, spoken call) in McRae order, e.g. ('L4-', 'Left 4 minus long tightens, caution')."""
     word = "Left" if corner["dir"] == "L" else "Right"
-    sev = corner["severity"]
-    code = f"{corner['dir']}{sev}"
-    call = f"{word} hairpin" if sev == "HP" else f"{word} {sev}"
+    shape = corner.get("shape")
+    if corner["severity"] == "HP" or shape == "hairpin":
+        code, call = f"{corner['dir']}HP", f"{word} hairpin"
+    elif shape == "square":
+        code, call = f"{corner['dir']}SQ", f"Square {word.lower()}"
+    elif shape == "acute":
+        code, call = f"{corner['dir']}AC", f"Acute {word.lower()}"
+    else:
+        grade = corner.get("grade", "")
+        code = f"{corner['dir']}{corner['severity']}{grade}"
+        call = f"{word} {corner['severity']}" + {"-": " minus", "+": " plus"}.get(grade, "")
     if corner["mods"]:
-        call += " " + ", ".join(corner["mods"])
+        call += " " + " ".join(corner["mods"])
+    level = corner.get("caution", 0)
+    if level:
+        call += ", " + CAUTION_WORDS[level]
     return code, call
+
+
+def annotate_cautions(corners: list, envelope_mps, sight_m) -> list:
+    """Caution ladder 0-4 (care, caution, double, triple) from what makes a corner bite:
+    a fast approach for its speed, a blind entry, tightening, off-camber, a crest."""
+    env = np.asarray(envelope_mps, dtype=float)
+    sight = np.asarray(sight_m, dtype=float)
+    for c in corners:
+        lo = max(0, c["start"] - 30)                                   # 150 m approach
+        v_app = min(float(np.max(env[lo:c["start"] + 1])), APPROACH_CAP_MPS)
+        ratio = v_app / max(c["apex_mps"], 1.0)
+        score = 2 if ratio >= 3.0 else (1 if ratio >= 2.0 else 0)
+        vc = c["apex_mps"]
+        if sight[c["start"]] < 0.5 * (vc * REACTION_S + vc * vc / (2.0 * BRAKE_DECEL_MPS2)):
+            score += 1                                                 # can't see half of a stop
+        score += sum(1 for m in ("tightens", "off-camber", "over crest") if m in c["mods"])
+        c["caution"] = min(score, 4)
+    return corners
+
+
+def rally_distance(gap_m: float) -> int:
+    """Nearest call distance from the rally ladder (30 ... 500)."""
+    return min(RALLY_DISTANCES, key=lambda d: abs(d - gap_m))
+
+
+def link_notes(notes: list) -> list:
+    """Chain consecutive notes the way a co-driver reads them: "into" / "and" when the next
+    note follows almost at once, otherwise the distance to it ("Left 4, 150").
+    notes: sorted by start_m, each with start_m and end_m. Sets note["link"]."""
+    for i, n in enumerate(notes):
+        n["link"] = None
+        if i + 1 == len(notes):
+            continue
+        gap = notes[i + 1]["start_m"] - n["end_m"]
+        if gap < LINK_INTO_M:
+            n["link"] = "into"
+        elif gap < LINK_AND_M:
+            n["link"] = "and"
+        elif gap <= LINK_MAX_M:
+            n["link"] = str(rally_distance(gap))
+    return notes
 
 
 # ---------------------------------------------------------------------------

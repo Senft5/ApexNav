@@ -22,8 +22,10 @@ if (inp.resample) ({ lat, lon } = core.resamplePolyline(lat, lon, 5));
 const { kappa, ds } = core.computeCurvature(lat, lon);
 const sight = core.sightDistanceM(lat, lon, inp.elev);
 const env = core.brakingEnvelopeMps(kappa, ds, inp.camber, inp.rough, undefined, sight);
-const corners = core.detectCorners(kappa, ds, inp.camber, inp.crest, inp.rough)
+const corners = core.annotateCautions(core.detectCorners(kappa, ds, inp.camber, inp.crest, inp.rough), env, sight)
   .map(c => Object.assign(c, { text: core.paceNoteText(c) }));
+const notes = core.linkNotes(corners.map(c => ({ start_m: c.start * 5, end_m: c.end * 5 })));
+corners.forEach((c, i) => { c.link = notes[i].link; });
 process.stdout.write(JSON.stringify({ lat, kappa: Array.from(kappa), sight: Array.from(sight), env: Array.from(env), corners }));
 """
 
@@ -48,14 +50,17 @@ def _assert_parity(lat, lon, camber=None, crest=None, rough=None, resample=False
     kappa, ds = rd.compute_curvature(lat, lon)
     sight = rd.sight_distance_m(lat, lon, elev)
     env = rd.braking_envelope_mps(kappa, ds, camber, rough, sight_m=sight)
-    corners = rd.detect_corners(kappa, ds, camber, crest, rough)
+    corners = rd.annotate_cautions(rd.detect_corners(kappa, ds, camber, crest, rough), env, sight)
+    links = rd.link_notes([{"start_m": c["start"] * 5.0, "end_m": c["end"] * 5.0} for c in corners])
     np.testing.assert_allclose(js["kappa"], kappa, atol=1e-9)
     np.testing.assert_allclose(js["sight"], sight, atol=1e-9)
     np.testing.assert_allclose(js["env"], env, rtol=1e-9)
     assert len(js["corners"]) == len(corners)
-    for a, b in zip(js["corners"], corners):
-        assert (a["start"], a["apex"], a["end"], a["dir"], a["severity"], a["mods"]) == \
-               (b["start"], b["apex"], b["end"], b["dir"], b["severity"], b["mods"])
+    for a, b, ln in zip(js["corners"], corners, links):
+        assert (a["start"], a["apex"], a["end"], a["dir"], a["severity"], a["mods"], a["grade"], a["shape"], a["caution"]) == \
+               (b["start"], b["apex"], b["end"], b["dir"], b["severity"], b["mods"], b["grade"], b["shape"], b["caution"])
+        assert a["link"] == ln["link"]
+        assert a["arc_m"] == pytest.approx(b["arc_m"], rel=1e-9)
         assert a["apex_mps"] == pytest.approx(b["apex_mps"], rel=1e-9)
         assert tuple(a["text"].values()) == rd.pace_note_text(b)
     return corners

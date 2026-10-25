@@ -162,3 +162,31 @@ def test_sight_speed_and_envelope_respect_sightline():
     short = np.full(100, 60.0)
     env = rd.braking_envelope_mps(kappa, ds, sight_m=short)
     assert np.allclose(env, rd.sight_speed_mps(60.0))
+
+
+def test_pace_note_grammar_shapes_and_grades():
+    def call(legs):
+        _, _, cs = _corners(legs)
+        return [rd.pace_note_text(c) for c in cs]
+    assert call([("straight", 200.0), ("arc", 12.0, 90.0), ("straight", 200.0)]) == [("LSQ", "Square left")]
+    assert call([("straight", 200.0), ("arc", 18.0, -120.0), ("straight", 200.0)])[0][1].startswith("Acute right")
+    # 4 band is 65-100 m: 70 m sits in its tight quarter -> "4 minus", 95 m in its open quarter -> "4 plus"
+    assert call([("straight", 200.0), ("arc", 70.0, 60.0), ("straight", 200.0)])[0][0] == "L4-"
+    assert call([("straight", 200.0), ("arc", 96.0, 60.0), ("straight", 200.0)])[0][0] == "L4+"
+    assert "long" in call([("straight", 200.0), ("arc", 120.0, 70.0), ("straight", 200.0)])[0][1]
+
+
+def test_caution_ladder_and_note_chaining():
+    lat, lon = path_from_legs([("straight", 600.0), ("arc", 15.0, 180.0), ("straight", 15.0),
+                               ("arc", 50.0, -60.0), ("straight", 150.0), ("arc", 60.0, 60.0), ("straight", 300.0)])
+    kappa, ds = rd.compute_curvature(lat, lon)
+    sight = rd.sight_distance_m(lat, lon)
+    env = rd.braking_envelope_mps(kappa, ds, sight_m=sight)
+    cs = rd.annotate_cautions(rd.detect_corners(kappa, ds), env, sight)
+    assert cs[0]["shape"] == "hairpin" and cs[0]["caution"] >= 2      # hairpin after a long straight
+    assert "caution" in rd.pace_note_text(cs[0])[1]
+    notes = rd.link_notes([{"start_m": c["start"] * 5.0, "end_m": c["end"] * 5.0} for c in cs])
+    assert notes[0]["link"] in ("into", "and")                         # 15 m later: chained
+    assert notes[1]["link"] == str(rd.rally_distance(notes[2]["start_m"] - notes[1]["end_m"]))
+    assert notes[-1]["link"] is None
+    assert rd.rally_distance(140.0) == 150 and rd.rally_distance(33.0) == 30

@@ -189,16 +189,18 @@ final class ApexScriptBridge: NSObject, WKScriptMessageHandler {
         var command: String?
         var speechText: String?
         var interruptSpeech = false
+        var speechStyle = "codriver"
         if let text = body as? String {
             command = text
         } else if let dict = body as? [String: Any] {
             command = (dict["cmd"] as? String) ?? (dict["command"] as? String) ?? (dict["type"] as? String)
             speechText = dict["text"] as? String
             interruptSpeech = (dict["force"] as? Bool) ?? false
+            speechStyle = (dict["style"] as? String) ?? "codriver"
         }
         guard let cmd = command else { return }
         if cmd == "speak", let phrase = speechText {
-            shell?.speakCoDriver(phrase, interrupt: interruptSpeech)
+            shell?.speakCoDriver(phrase, interrupt: interruptSpeech, style: speechStyle)
             return
         }
         shell?.handleCommand(cmd)
@@ -507,20 +509,50 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         }
     }
 
-    func speakCoDriver(_ phrase: String, interrupt: Bool = false) {
-        speak(phrase, interrupt: interrupt)
+    func speakCoDriver(_ phrase: String, interrupt: Bool = false, style: String = "codriver") {
+        speak(phrase, interrupt: interrupt, style: style)
     }
 
-    private func speak(_ phrase: String, interrupt: Bool = false) {
+    private static let robotVoiceNames = ["Zarvox", "Trinoids", "Fred", "Ralph", "Cellos"]
+
+    /// Co-driver: the highest-quality English voice installed (Premium > Enhanced > default),
+    /// British first. Jarvis: a novelty robot voice when the device has one.
+    private static func voice(for style: String) -> AVSpeechSynthesisVoice? {
+        let all = AVSpeechSynthesisVoice.speechVoices()
+        if style == "jarvis", let robot = all.first(where: { robotVoiceNames.contains($0.name) }) {
+            return robot
+        }
+        func rank(_ v: AVSpeechSynthesisVoice) -> Int {
+            let quality: Int
+            switch v.quality {
+            case .premium: quality = 30
+            case .enhanced: quality = 20
+            default: quality = 0
+            }
+            let accent = v.language.hasPrefix("en-GB") ? 4 : (v.language.hasPrefix("en") ? 2 : -100)
+            return quality + accent
+        }
+        return all.filter { $0.language.hasPrefix("en") && !robotVoiceNames.contains($0.name) }.max { rank($0) < rank($1) }
+            ?? AVSpeechSynthesisVoice(language: "en-GB")
+    }
+
+    private func speak(_ phrase: String, interrupt: Bool = false, style: String = "codriver") {
         // AVSpeechSynthesizer queues utterances itself; only a forced call cuts in.
         // (The web cockpit decides which notes are still worth calling.)
         if interrupt && synth.isSpeaking {
             synth.stopSpeaking(at: .word)
         }
         let utterance = AVSpeechUtterance(string: phrase)
-        utterance.voice = AVSpeechSynthesisVoice(language: "en-GB") ?? AVSpeechSynthesisVoice(language: "en-US")
-        utterance.rate = 0.51
-        utterance.pitchMultiplier = 0.98
+        let voice = Self.voice(for: style)
+        utterance.voice = voice
+        if style == "jarvis" {
+            let isRobot = voice.map { Self.robotVoiceNames.contains($0.name) } ?? false
+            utterance.rate = isRobot ? 0.48 : 0.44
+            utterance.pitchMultiplier = isRobot ? 1.0 : 0.55
+        } else {
+            utterance.rate = 0.54
+            utterance.pitchMultiplier = 1.0
+        }
         synth.speak(utterance)
     }
 }
