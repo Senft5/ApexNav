@@ -138,8 +138,29 @@ docs/SOCIAL.md.
 - Chatterbox truncates single-word prompts ("tightens" rendered as 0.24 s). Render tokens inside a
   carrier sentence and cut by word timestamps, or render whole note chains.
 
+## Session 2026-10-25 (f): navigation, busy states, best-road loops
+### Completed
+- [x] **Tab bar** (ROUTE · DRIVES · ANALYSIS · SETUP) replaces the single ROUTE key. The panel shows one
+  view at a time; tapping the open tab, the map behind it (scrim) or swiping it right closes it.
+  `index.html?view=route|drives|setup` opens a view; analysis.html carries the same tab bar.
+- [x] **Busy state** on loop and GO buttons: label shows the phase (ROADS > SCORING > ROUTING n/N >
+  PROFILING), a progress bar and a sweep; sibling loop buttons are disabled while one builds.
+- [x] **Best-road loops** (`web/stages.js`, ROAD_INTELLIGENCE §7.2): decodes OpenFreeMap vector tiles
+  (z13, transportation layer) around the start, joins clipped pieces into strokes, scores each stroke's
+  best 2–10 km window with the core corner detector (good corners/km, −1/3 corner per junction, rejects
+  windows that curl back on themselves, e.g. cemetery/park drives), chains 1–4 stages by bearing to fit
+  the distance, and routes them through Valhalla (≤ 10 locations on the public server). One circle loop
+  is routed as a baseline; the best by corners/km, retracing and length wins. Measured on the Dry Ridge
+  start: 15 mi → 46 good corners (circle 46 on a longer loop), 30 mi → 66 (circle 16), 45 mi → 101 (circle 62).
+  Tests: `tests/test_stages.py` (synthetic roads, no network).
+### Active bugs / limitations
+- Loops can run 20–25 % short or long of the target (connector estimate is 1.6 × crow-fly).
+- A stage reached by a dead end produces an out-and-back spur (seen: 6 % retraced on a 30 mi loop).
+- OpenMapTiles `minor` mixes unclassified and residential; the junction penalty is the only filter.
+- Overpass is unreachable from the cloud sandbox, so the ALPR layer could not be tested here.
+
 ## Exact Next Task
-1. Confirm on iPhone that the voice picker now changes the voice (scheme-handler fix).
-2. Add a `--engine chatterbox --ref` path to `tools/voicebank.py` (fix single-word truncation),
-   build the owner's voice bank, and add it to the picker.
-3. Stage discovery (ROAD_INTELLIGENCE §7.2).
+1. Owner: try best-road loops on the phone; report any loop that feels wrong (spurs, town streets).
+2. Owner's cloned voice bank: add `--engine chatterbox --ref` to `tools/voicebank.py`, rendering
+   each token inside a carrier sentence (Chatterbox truncates single words), then add it to the picker.
+3. Loops: penalise dead-end stage access, and calibrate connector length from routed results.

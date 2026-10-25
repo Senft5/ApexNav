@@ -11,6 +11,7 @@
   <script src="vendor/maplibre-gl.js"></script>
   <script src="vendor/maplibre-contour.min.js"></script>
   <script src="apex_core.js"></script>
+  <script src="stages.js"></script>
   <script src="themes.js"></script>
   <script src="instruments.js"></script>
   <script src="voice.js"></script>
@@ -248,7 +249,7 @@
               <button class="ink-btn" data-loop-mi="30">30 MI</button>
               <button class="ink-btn" data-loop-mi="45">45 MI</button>
             </div>
-            <p class="note">Valhalla routes these avoiding highways. Choosing roads by Stage DNA (docs/ROAD_INTELLIGENCE.md §7) is the next routing step.</p>
+            <p class="note">Loops are stitched from the best roads nearby: every road around you is scored from map geometry (corners per km, few junctions), the best stretches are chained to fit the distance, and the result is checked against a plain loop. Geometry only until driven.</p>
           </section>
           <section data-panel="drives">
             <h3>Profiled drives</h3>
@@ -1078,6 +1079,7 @@
       const res = await fetch(`${VALHALLA}/route`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
         locations: points.map((p, i) => {
           const end = i === 0 || i === points.length - 1;
+          if (!end && p.shaping) return { lat: p.lat, lon: p.lon, type: 'through', radius: 25 };   // stay on the stage
           return { lat: p.lat, lon: p.lon, type: end ? 'break' : 'through', ...(throughRoadsOnly && !end ? { radius: 2500, search_filter: filter } : {}) };
         }),
         costing: 'auto', costing_options: { auto: { use_highways: 0.15, use_tolls: 0.3 } } }) });
@@ -1187,17 +1189,26 @@
       try { await buildLoop(miles, ui); } finally { loopBusy = false; ui.done(); }
     }
     async function buildLoop(miles, ui) {
-      const c = here();
-      toast(`Building ${miles} mi loops...`);
-      ui.step('ROUTING 0/3', 0.08);
+      const c = here(), targetKm = miles * 1.609344;
+      toast(`Finding the best roads for a ${miles} mi loop...`);
+      // 1. Stage discovery: score every road around the start from the map's own vector tiles.
+      let plans = [];
+      try {
+        const radiusKm = Math.min(14, Math.max(5, targetKm / 4.2));
+        const stages = await ApexStages.discover(c, radiusKm, (phase, f) => ui.step(phase === 'tiles' ? 'ROADS' : 'SCORING', 0.05 + 0.3 * f));
+        plans = ApexStages.plans(c, stages, targetKm, 3);
+      } catch (_) { /* no tiles: fall back to circle loops below */ }
+      // 2. Route each stage plan, plus one circle loop as a baseline, and keep the best result.
+      const jobs = plans.map(p => ({ kind: 'stages', plan: p, pts: ApexStages.waypoints(c, p), through: false }));
+      jobs.push({ kind: 'circle', pts: loopWaypoints(c, miles, Math.random() * 2 * Math.PI), through: true });
       let settled = 0;
-      const base = Math.random() * 2 * Math.PI;
-      const tries = [0, 2 * Math.PI / 3, 4 * Math.PI / 3].map(async (off, k) => {
-        const coords = await valhallaRoute(loopWaypoints(c, miles, base + off), true)
-          .finally(() => { settled++; ui.step(`ROUTING ${settled}/3`, 0.08 + 0.72 * settled / 3); });
+      ui.step(`ROUTING 0/${jobs.length}`, 0.38);
+      const tries = jobs.map(async (job) => {
+        const coords = await valhallaRoute(job.pts, job.through)
+          .finally(() => { settled++; ui.step(`ROUTING ${settled}/${jobs.length}`, 0.38 + 0.5 * settled / jobs.length); });
         const rs = Core.removeSpurs(coords.map(p => p[1]), coords.map(p => p[0]));
         const t = trackFromPolyline(rs.lat.map((la, i) => [rs.lon[i], la]), `loop_${miles}`, `${miles} mi loop`);
-        return { t, ...scoreLoop(t, miles), spursCut: rs.removed };
+        return { t, job, ...scoreLoop(t, miles), spursCut: rs.removed };
       });
       const done = (await Promise.allSettled(tries)).filter(r => r.status === 'fulfilled').map(r => r.value);
       if (!done.length) { toast('Loop routing failed. Check your connection.'); return; }
@@ -1205,8 +1216,11 @@
       const best = done[0];
       ui.step('PROFILING', 0.92);
       await buildRoute(null, `loop_${miles}`, `${miles} mi loop`, best.t);
-      toast(`${miles} mi loop: ${best.km.toFixed(1)} km, ${best.good} good corners, ${Math.round(best.retraced * 100)}% retraced (best of ${done.length})`);
+      const how = best.job.kind === 'stages' ? `${best.job.plan.legs.length} best-road stages` : 'circle fallback';
+      toast(`${miles} mi loop: ${(best.km / 1.609344).toFixed(1)} mi, ${best.good} good corners, ${Math.round(best.retraced * 100)}% retraced · ${how} (best of ${done.length})`);
+      window.apexDebug && (window.apexDebug.lastLoop = done.map(d => ({ kind: d.job.kind, score: d.score, km: d.km, good: d.good, retraced: d.retraced })));
     }
+
 
     // =======================================================================
     // 10. UI WIRING
