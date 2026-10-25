@@ -40,6 +40,10 @@
   const shareHighlight = (h, category) => call('POST', '/api/highlights', { name: h.name, category, lat: h.lat, lon: h.lon });
   const rateHighlight = (id, stars, visited = false) => call('POST', `/api/highlights/${encodeURIComponent(id.replace(/^srv_/, ''))}/rating`, { stars, visited });
 
-  const api = { highlightsNear, shareHighlight, rateHighlight, member, pushSegments, sharedWithMe, adopt, shareSegment, friends, removeRemote, toServer, fromServer };
+  /** Publishes one pass; the server delivers it only to friends/crews you granted (Account). Safe to repeat. */
+  const publishScore = (segmentId, score, timeS, day) => call('POST', '/api/board', { segment_id: segmentId, driver_score: Math.round(score), time_s: timeS == null ? null : Math.max(1, Math.round(timeS)), driven_on: day });
+  const board = async (canonId) => (await call('GET', `/api/board/${encodeURIComponent(canonId)}`)) || [];
+
+  const api = { publishScore, board, highlightsNear, shareHighlight, rateHighlight, member, pushSegments, sharedWithMe, adopt, shareSegment, friends, removeRemote, toServer, fromServer };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexSync = api;
 })(typeof window !== 'undefined' ? window : globalThis);

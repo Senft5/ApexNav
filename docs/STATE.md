@@ -218,14 +218,15 @@ docs/SOCIAL.md.
 - [x] Highlights end to end: API (`backend/src/highlights.ts`), planner bonus (`applyHighlights` in web/stages.js), route-panel toggle + strength, Account panel in web/index.html (sign-in, invite, handle, friends, per-friend sharing, points, road-data toggle, export, delete).
 - [x] Web segment sync (`web/sync.js`, used by analysis.html): segments get a decimated geometry on save, upload when signed in (idempotent by local id), friends' shared segments can be adopted, the active segment can be shared with a friend. Checked with Playwright against mocked APIs.
 - [x] Highlights sync (`web/sync.js` + index.html): SHARE button on your spots (kind picker), planner merges members' shared spots near the start (4 s timeout, offline = yours only, no double counting within 60 m).
+- [x] Friends board on the analysis page: best pass per synced segment is published (server delivers only to granted friends/crews); the active segment shows the board. Checked against mocked APIs.
 - [x] **68 backend tests** (privacy, auth, highlights, contribute, nightly, account) + 53 pytest.
 ### Active bugs / limitations
 - **Cloudflare "Workers Builds: apexnav" preview build fails on PR commits** while all GitHub Actions pass; a clean-checkout `wrangler deploy --dry-run` succeeds. Docs say a D1 binding needs only Editor access, so a token problem is unlikely. Need the build log text (dashboard > apexnav > Builds). Production deploy of main after merge may fail; the previous deployment stays live.
-- Not built yet: phone-side contributor (map-match a drive to OSM way ids, build bins, upload), web sync of board scores (`/api/board`) and a UI to rate shared highlights, read side (serve merged `road_bins` to the phone), convoy, R2 backups.
+- Not built yet: phone-side contributor (map-match a drive to OSM way ids, build bins, upload), a UI to rate shared highlights, read side (serve merged `road_bins` to the phone), convoy, R2 backups.
 - `npm ci` needs `--legacy-peer-deps` (Cloudflare test plugin vs wrangler peers).
 
 ## Exact Next Task
 1. Owner: Google client + Worker secrets; then sign in at the site and make the first invites.
 2. Get the Workers Builds log and fix the preview/production build; merge PR #10.
-3. Web sync of board scores and highlights (segments done); phone-side contributor; read side for road_bins; convoy (Durable Objects).
+3. Rating UI for shared highlights (segments, boards, highlight sharing done); phone-side contributor; read side for road_bins; convoy (Durable Objects).
 4. Voice (on hold): in-app enrollment design in docs/VOICE.md; replace the espeak-ng dependency.

@@ -116,7 +116,7 @@
       </div>
       <div class="grid2">
         <div class="panel"><h2>Your segments</h2><div class="seglist" id="segList"></div><p class="note" style="margin-top:8px">Segments are your custom stretches. Every drive that covers one, in the same direction, is ranked on it by Driver Score. Leaderboards with friends and crews come with accounts.</p></div>
-        <div class="panel" id="segSyncPanel" hidden><h2>Friends and sync</h2><div class="note" id="segSyncNote"></div><div id="segShared"></div><div class="row" id="segShareRow" style="margin-top:8px"></div></div>
+        <div class="panel" id="segSyncPanel" hidden><h2>Friends and sync</h2><div class="note" id="segSyncNote"></div><div id="segShared"></div><div class="row" id="segShareRow" style="margin-top:8px"></div><h2 style="margin-top:12px">Friends board</h2><div class="scroll"><table id="segBoard"></table></div></div>
       <div class="panel"><h2 id="segTitle">Passes</h2><div id="segChart"></div><div class="scroll"><table id="segTable"></table></div></div>
       </div>
     </section>
@@ -358,6 +358,17 @@
         b.onclick = async () => { b.disabled = true; const a = await ApexSync.adopt(r); if (a) { segs.push(a); saveSegs(segs); renderSegments(); syncSegments(); } else b.disabled = false; };
         box.appendChild(b);
       }
+      // publish my best pass on each synced segment (reaches only friends/crews I granted), then show the friends board for the active one
+      for (const s of segs.filter(x => x.synced)) {
+        const best = passesFor(s).filter(x => x.p.score != null && /^\d{4}-\d{2}-\d{2}/.test(x.d.date)).sort((p, q) => q.p.score - p.p.score)[0];
+        if (best) await ApexSync.publishScore(s.id, best.p.score, best.p.time_s, best.d.date.slice(0, 10));
+      }
+      const act = segs.find(s => s.id === activeSeg), bt = $('segBoard');
+      const rows = act && act.synced ? await ApexSync.board(act.origin || act.id) : [];
+      bt.innerHTML = rows.length ? '<tr><th class="l">#</th><th class="l">Driver</th><th>Driver Score</th><th>Time</th></tr>' + rows.map((r, i) =>
+        `<tr class="${r.mine ? 'best' : ''}"><td class="l">${i + 1}</td><td class="l"><b></b></td><td><span class="score">${r.driver_score}</span></td><td>${r.time_s == null ? '--' : mmss(r.time_s)}</td></tr>`).join('') : '';
+      bt.querySelectorAll('tr b').forEach((b, i) => { b.textContent = rows[i].mine ? 'You' : '@' + (rows[i].handle || '?'); });
+      if (act && act.synced && rows.length < 2) bt.innerHTML = '<tr><td class="l"><span class="note">No friends on this segment yet. Friends appear once they share scores with you (Account) and have driven it.</span></td></tr>';
       const row = $('segShareRow'); row.innerHTML = '';
       const seg = segs.find(s => s.id === activeSeg);
       if (seg && seg.synced) {
