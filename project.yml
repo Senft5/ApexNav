@@ -1,4 +1,4 @@
-﻿name: ApexNav
+name: ApexNav
 options:
   bundleIdPrefix: com.senft
   deploymentTarget:
@@ -9,6 +9,8 @@ targets:
     platform: iOS
     sources:
       - path: ApexNavApp.swift
+      - path: pebble_ridge_3d.json
+        buildPhase: resources
     info:
       path: Info.plist
       properties:
