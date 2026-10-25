@@ -1,6 +1,6 @@
 # Render the cloned voice on your own PC (RTX 5080, Windows)
 
-You need: Git, Python 3.11 or 3.12 on PATH, an NVIDIA driver that supports CUDA 12.8 (any 2025+ driver does).
+You need: Git (the setup script installs Python 3.11 and ffmpeg itself), an NVIDIA driver that supports CUDA 12.8 (any 2025+ driver does).
 
 1. `git clone https://github.com/Senft5/ApexNav` (or `git pull`), then `git checkout claude/lucid-pascal-82cnud`.
 2. `powershell -ExecutionPolicy Bypass -File tools\local\setup_windows.ps1`
