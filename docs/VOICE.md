@@ -9,8 +9,8 @@
    `caution`, `link`) into a token sequence and stitches the clips with WebAudio — the way rally
    games do it. Works offline, starts instantly, sounds identical in Safari, the iOS app and
    (later) CarPlay.
-2. **Live synthesis (names, routes)** — the same model runs in the browser via kokoro-js
-   (ONNX, quantised WASM, ~90 MB one-time download, cached). Known phrases (a route's name) are
+2. **Live synthesis (names, routes)** — the same model runs in the browser via transformers.js
+   (ONNX, quantised WASM, ~90 MB one-time download, cached); text becomes phonemes in `web/g2p.js`, not espeak-ng. Known phrases (a route's name) are
    pre-rendered in the background when the route loads; a phrase that isn't ready within 1.5 s
    falls back to the device voice so pace notes are never delayed. Toggle: LIVE in the route book.
 3. **Jarvis** — a machine-speak vocabulary rendered with a deep Kokoro voice, played through a
@@ -118,9 +118,7 @@ speaker similarity is within 0.05 of Chatterbox, word error rate is no worse, an
 "as good or better".
 
 ## Licences to check before charging for the app
-- kokoro-js depends on the `phonemizer` npm package (declared Apache-2.0) built on **espeak-ng (GPL-3.0)**.
-  The pace-note vocabulary is closed, so a precomputed phoneme lexicon (misaki, offline) would keep
-  espeak-ng out of the shipped app. Verify with a lawyer's eyes, not only with npm metadata.
+- espeak-ng (GPL-3.0) is no longer loaded by the web app: see "Removing espeak-ng (GPL)" below.
 - Chatterbox: MIT; its output carries an inaudible Perth watermark. Clone only voices whose owners consented.
 
 ## Known limits
@@ -128,3 +126,66 @@ speaker similarity is within 0.05 of Chatterbox, word error rate is no worse, an
   phrases cover ~30% of calls as one clip, ~70% as at most two. The Kokoro voices close the gap live.
 - Per-clip loudness is peak-normalised, so clips from different renders can differ in level; an LUFS
   pass over the banks would hide more seams.
+
+## Removing espeak-ng (GPL)
+**Done (2026-10-25): the shipped LIVE path no longer contains GPL code.** Verified by reading package sources, not npm metadata alone.
+
+**What was wrong.** `kokoro-js@1.2.1` is Apache-2.0 (https://registry.npmjs.org/kokoro-js/1.2.1) but depends on
+`phonemizer@^1.2.1` (https://github.com/xenova/phonemizer.js, declared Apache-2.0, README: "Simple text to phones converter using
+eSpeak NG"), and the jsDelivr build we loaded (`dist/kokoro.web.js`, 2.1 MB) **inlines** that espeak-ng WebAssembly build: it
+contains `espeak-ng-data`, the emscripten `espeak_VOICE_*` bindings and transformers.js 3.5.1. espeak-ng: "released under the GPL
+version 3 or later" (https://github.com/espeak-ng/espeak-ng/blob/master/README.md, COPYING = GNU GPL v3). So skipping kokoro-js's
+phonemiser at runtime (e.g. calling `generate_from_ids` ourselves) would **not** have been enough: loading `kokoro.web.js` at all
+ships the GPL code to the browser.
+
+**What ships now** (`web/voice.js`, behind the same LIVE toggle):
+| Piece | Licence (checked in the source) |
+|---|---|
+| `@huggingface/transformers@3.5.1` `dist/transformers.min.js` from jsDelivr, run directly (StyleTextToSpeech2Model + AutoTokenizer) | Apache-2.0 (https://github.com/huggingface/transformers.js/blob/3.5.1/LICENSE); bundle scanned: no espeak/phonemizer. Deps: onnxruntime-web MIT, @huggingface/jinja MIT; onnxruntime-web deps long Apache-2.0, platform MIT, protobufjs BSD-3-Clause, flatbuffers Apache-2.0, guid-typescript ISC (npm registry). `sharp`/`onnxruntime-node` are excluded from the browser build (`browser` field). |
+| Kokoro-82M v1.0 ONNX q8 + voice packs, `onnx-community/Kokoro-82M-v1.0-ONNX` pinned at revision `1939ad2a` | Apache-2.0 (model card) |
+| `web/g2p.js`: our JS port of misaki's English dictionary G2P (hexgrad/misaki `en.py`) | ours, port of Apache-2.0 code |
+| `web/g2p/en_{gb,us}_lexicon.json`: misaki 0.9.4 `us/gb_gold.json` + `_silver.json` (PyPI wheel, sha256-pinned in `tools/g2p_export.py`) | Apache-2.0 (https://github.com/hexgrad/misaki/blob/main/LICENSE; PyPI metadata). The repo does not say how the dictionaries were made. |
+| `web/g2p/en_{gb,us}_fallback.safetensors`: `PeterReid/graphemes_to_phonemes_en_{gb,us}`, the 1+1-layer BART (0.75 M params) that misaki itself uses as its non-espeak fallback (`misaki/en.py` `FallbackNetwork`), unmodified, revisions pinned | Apache-2.0 (model card metadata only; no LICENSE file in the repo). Trained on misaki's gold/silver dictionaries plus regular plurals found in a text corpus (its `english_to_phonemes.py`). |
+
+The kokoro-js "glue" (pick the style vector by token count, call the model) is ~10 lines rewritten in `voice.js`.
+
+**How text becomes phonemes.** Kokoro v1.0 was trained on misaki phonemes (diphthongs as `A I O Q W Y`, `ᵊ`, flap `T`), so
+misaki's own path is the right target (kokoro-js fed espeak IPA instead). `g2p.js` ports misaki's lookup: gold, then silver,
+case variants, `-s/-ed/-ing` stemming, hyphenated compounds with misaki's stress demotion, context words (*the/to/a/an/in*),
+numbers (cardinal, ordinal, year), then the BART for anything unknown. It runs the BART in plain JS (no runtime). Not ported: the
+spaCy tagger (heteronyms take the dictionary default), currency. Extensions: road abbreviations (Hwy, Pkwy, Rd, Mt, St→Saint before a
+name / Street otherwise), `I-40` → "I 40", ALL-CAPS before a number spelled out (US 129), and `web/g2p/places.json`, a hand-written
+list for names the fallback gets wrong. A phrase with a word nobody can voice is not rendered (device voice instead).
+
+**Measured** (`tools/g2p_compare.py`; Python misaki + espeak-ng used offline as a ruler only, never shipped). Reference "espeak" =
+misaki dictionary + espeak fallback, i.e. what the pre-rendered banks used. 1,436 random US Census place names
+(2023 Gazetteer, public domain), 50 driving roads, 10 pace calls; phoneme error rate (PER) = character edit distance / length.
+| | GB | US |
+|---|---|---|
+| JS BART vs Python BART, 1,472 single words | 100 % identical | 100 % identical |
+| JS vs Python misaki+BART, place names | 99.3 % exact (rest: our St.→Saint) | 99.3 % exact (same) |
+| pace calls vs espeak reference | 10/10 identical | 10/10 identical |
+| roads vs espeak reference | 70 % exact, PER 5.8 % | 76 % exact, PER 5.3 % |
+| place names vs espeak reference | 62 % exact, PER 9.7 % | 65 % exact, PER 8.3 % |
+Half the place names (739/1,436) contain a word outside the dictionaries; every difference from espeak sits in those words. Neither
+side is ground truth: espeak says Ocoee `ˈɑkO` (wrong; it is oh-KOH-ee), BART `OkˈOi`; BART said Mulholland `mˌʌlhˈɑnt` and
+British Tellico `tɛlˈiːkQ` (both wrong), now fixed in `places.json`. Dictionary words (all pace-note vocabulary) are identical.
+
+**End to end, in a browser.** Headless Chromium in this container ran the real `voice.js` + `g2p.js` (George and Michael, 5 phrases
+each: Tail of the Dragon, Deals Gap to Cherohala Skyway, a full call with caution and distance, Nantahala Gorge/Tellico Plains,
+Square right into left three tightens). Whisper small.en transcribed the browser renders and Python Kokoro's espeak-based renders of
+the same texts **identically on all 10** (both e.g. "Deals Gap to Cherahala Skyway", "Tale of the Dragon", "tightens" heard as
+"Titans"/"times" in both). Nobody has listened yet; Whisper agreement is intelligibility, not quality.
+
+**Speed: background only.** Model load ~7.5 s, then 6–10 s per short phrase here (headless, 4 cores); the coordinator measured
+10–17 s per phrase on a desktop-class CPU (~6 s model load), and threads via cross-origin isolation only brought that to 8–13 s.
+So live synthesis is only viable as **background prefetch of route names and whole calls at route load**, never mid-drive; the
+1.5 s `speakLive` timeout already falls back to the bank/device voice. Phones will be slower; unmeasured.
+
+**Download.** LIVE now also fetches one accent's G2P data: lexicon 5.2–5.6 MB (~1.4 MB gzip) + BART 3 MB, cached.
+
+**Remaining risks (for a lawyer, not settled here).** (1) The misaki dictionaries' provenance is undocumented; if any entries were
+produced with espeak-ng, the GPL position of program *output* is generally favourable but is a legal question. (2) The BART card
+declares Apache-2.0 only in metadata. (3) Apache-2.0 requires shipping the licence text and notices: `web/g2p/LICENSE-APACHE-2.0.txt`,
+THIRD_PARTY_NOTICES.md. Fallback if any of this fails review: drop LIVE for the commercial build and rely on the pre-rendered banks +
+the device voice; nothing else depends on it.

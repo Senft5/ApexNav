@@ -6,7 +6,9 @@ Check each licence before redistributing a build; some notices must ship inside 
 | Component | Used for | Licence |
 |---|---|---|
 | Kokoro-82M (hexgrad) and voice packs | stock co-driver voices, source voice for conversion | Apache-2.0 |
-| kokoro-js | in-browser speech synthesis | Apache-2.0 (depends on `phonemizer`/espeak-ng, GPL-3.0: see below) |
+| transformers.js 3.5.1 (Hugging Face), loaded from jsDelivr | running Kokoro in the browser (LIVE) | Apache-2.0; bundles onnxruntime-web (MIT) |
+| misaki 0.9.4 (hexgrad): G2P method and en gold/silver dictionaries (`web/g2p/`, ported in `web/g2p.js`) | text to phonemes for LIVE | Apache-2.0 |
+| graphemes_to_phonemes_en_us / _en_gb (Peter Reid, Hugging Face), `web/g2p/*_fallback.safetensors` | phonemes for unknown words | Apache-2.0 (model card) |
 | kNN-VC, WavLM, HiFi-GAN (bshall, Microsoft, Jungil Kong) | converting the owner's voice | MIT |
 | Chatterbox (Resemble AI) | experimental voice clone (not shipped) | MIT |
 | MapLibre GL JS | map rendering | BSD-3-Clause |
@@ -16,7 +18,9 @@ Check each licence before redistributing a build; some notices must ship inside 
 | Nominatim (OpenStreetMap) | address search | ODbL; usage policy applies |
 | Fonts (Barlow Condensed, IBM Plex, Inter Tight) | UI | SIL OFL 1.1 |
 
-## Open issue before charging for or closing the app
-kokoro-js depends on an espeak-ng WebAssembly build (GPL-3.0) for text-to-phoneme conversion. For a
-proprietary app, replace it with a precomputed phoneme lexicon for the closed pace-note vocabulary
-(generated offline with misaki), or confirm the licence position with a lawyer. See docs/VOICE.md.
+## espeak-ng (GPL-3.0): removed from the shipped app
+Earlier builds loaded kokoro-js, whose web bundle inlines an espeak-ng WebAssembly build (GPL-3.0). Since 2026-10-25 the
+web app loads transformers.js directly and phonemises with `web/g2p.js` (misaki dictionaries + BART fallback, Apache-2.0);
+no espeak-ng code or data is shipped (guarded by `tests/test_g2p.py`). espeak-ng is still used offline by the Python bank
+tools (`tools/voicebank.py`, `tools/g2p_compare.py`) to render audio and measure; only their audio output ships.
+Apache-2.0 text: `web/g2p/LICENSE-APACHE-2.0.txt`. Open questions for a lawyer: docs/VOICE.md "Removing espeak-ng (GPL)".

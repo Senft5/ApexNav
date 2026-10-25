@@ -152,10 +152,14 @@
   }
 
   // ---- live synthesis for dynamic phrases (drive names, routes) ------------
-  // Same open model as the banks (Kokoro-82M via kokoro-js, ONNX/WASM), loaded lazily the
-  // first time a phrase isn't in the bank; until it's ready the caller falls back.
-  const KOKORO_JS = 'https://cdn.jsdelivr.net/npm/kokoro-js@1.2.1/dist/kokoro.web.js';
+  // Same open model as the banks (Kokoro-82M, ONNX q8 on WASM) run with transformers.js, loaded lazily
+  // the first time a phrase isn't in the bank; until it's ready the caller falls back. No espeak-ng (GPL):
+  // kokoro-js is NOT loaded (its web bundle inlines espeak-ng); text becomes phonemes in web/g2p.js
+  // (misaki dictionaries + misaki's BART fallback, Apache-2.0) and goes to the model as token ids.
+  // See docs/VOICE.md "Removing espeak-ng (GPL)".
+  const TRANSFORMERS_JS = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.5.1/dist/transformers.min.js';
   const KOKORO_MODEL = 'onnx-community/Kokoro-82M-v1.0-ONNX';
+  const KOKORO_REV = '1939ad2a8e416c0acfeecc08a694d14ef25f2231';
   let tts = null, ttsLoading = null, ttsError = null;
   const phraseCache = new Map();
   function liveState() { return tts ? 'ready' : ttsLoading ? 'loading' : ttsError ? 'error' : 'idle'; }
@@ -163,11 +167,46 @@
     if (tts || ttsLoading) return ttsLoading;
     // Quantised WASM (~90 MB, cached by the browser). The WebGPU build needs the ~320 MB fp32
     // model, too heavy for a phone; phrases are pre-rendered instead so speed rarely matters.
-    ttsLoading = import(KOKORO_JS)
-      .then(m => m.KokoroTTS.from_pretrained(KOKORO_MODEL, { dtype: 'q8', device: 'wasm' }))
+    ttsLoading = import(TRANSFORMERS_JS)
+      .then(T => Promise.all([
+        T.StyleTextToSpeech2Model.from_pretrained(KOKORO_MODEL, { revision: KOKORO_REV, dtype: 'q8', device: 'wasm' }),
+        T.AutoTokenizer.from_pretrained(KOKORO_MODEL, { revision: KOKORO_REV }),
+      ]).then(([model, tokenizer]) => ({ T, model, tokenizer })))
       .then(t => { tts = t; ttsLoading = null; return t; })
       .catch(e => { ttsError = e; ttsLoading = null; return null; });
     return ttsLoading;
+  }
+  // Kokoro voice packs: 510 style vectors of 256 floats, picked by phoneme count (as kokoro-js does).
+  const stylePacks = new Map();
+  function stylePack(voice) {
+    if (stylePacks.has(voice)) return stylePacks.get(voice);
+    const url = `https://huggingface.co/${KOKORO_MODEL}/resolve/${KOKORO_REV}/voices/${voice}.bin`;
+    const p = (async () => {
+      let cache = null;
+      try { cache = await caches.open('kokoro-voices'); const hit = await cache.match(url); if (hit) return new Float32Array(await hit.arrayBuffer()); } catch (_) {}
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`voice ${voice}`);
+      const buf = await res.arrayBuffer();
+      try { if (cache) await cache.put(url, new Response(buf.slice(0))); } catch (_) {}
+      return new Float32Array(buf);
+    })();
+    stylePacks.set(voice, p);
+    p.catch(() => stylePacks.delete(voice));
+    return p;
+  }
+  const accentOf = (voice) => (voice[0] === 'b' ? 'gb' : 'us');
+  // Text -> phonemes -> audio. Throws if a word can't be phonemised (caller falls back to the device voice).
+  async function synthesize(text, voice, speed) {
+    const g2p = await root.ApexG2P.load(accentOf(voice));
+    const { phonemes, unknown } = g2p.phonemize(text);
+    if (!phonemes || unknown.length) throw new Error(`g2p: ${unknown.join(' ') || 'empty'}`);
+    const { T, model, tokenizer } = tts;
+    const { input_ids } = tokenizer(phonemes, { truncation: true });
+    const n = input_ids.dims.at(-1);
+    const off = 256 * Math.min(Math.max(n - 2, 0), 509);
+    const style = (await stylePack(voice)).slice(off, off + 256);
+    const { waveform } = await model({ input_ids, style: new T.Tensor('float32', style, [1, 256]), speed: new T.Tensor('float32', [speed], [1]) });
+    return { audio: waveform.data, sampling_rate: 24000 };
   }
   async function playBuffer(buf) {
     const c = audio();
@@ -189,12 +228,13 @@
     const key = `${bankId}|${text}`;
     if (phraseCache.has(key)) return phraseCache.get(key);
     const voice = bank.kokoro_voice, speed = bank.speed || 1;
-    const p = renderChain = renderChain.then(async () => {
-      const out = await tts.generate(text, { voice, speed });
+    const p = renderChain.then(async () => {
+      const out = await synthesize(text, voice, speed);
       const buf = audio().createBuffer(1, out.audio.length, out.sampling_rate);
       buf.copyToChannel(out.audio, 0);
       return buf;
     });
+    renderChain = p.catch(() => null); // one failed phrase must not block the ones queued after it
     phraseCache.set(key, p);
     p.then(() => ready.add(key), () => phraseCache.delete(key));
     return p;
@@ -221,7 +261,7 @@
     if (!bank || !bank.kokoro_voice) return false;
     if (!tts) { warmLive(); return false; }
     const pending = render(text);
-    const buf = await Promise.race([pending, new Promise(r => setTimeout(() => r(null), maxWaitMs))]);
+    const buf = await Promise.race([pending.catch(() => null), new Promise(r => setTimeout(() => r(null), maxWaitMs))]);
     if (!buf) return false;
     await playBuffer(buf);
     return true;
@@ -231,5 +271,5 @@
     try { return (await (await fetch('voices/index.json')).json()).voices; } catch (_) { return []; }
   }
 
-  root.ApexVoice = { load, play, tokensFor, cover, joins, playWhole, voices, speakLive, prefetch, warmLive, liveState, unlock: audio, get bank() { return bank; } };
+  root.ApexVoice = { load, play, tokensFor, cover, joins, playWhole, voices, speakLive, prefetch, warmLive, liveState, renderLive: render, unlock: audio, get bank() { return bank; } };
 })(window);

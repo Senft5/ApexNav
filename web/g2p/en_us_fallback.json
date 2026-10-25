@@ -1,0 +1,8 @@
+{
+ "source": "https://huggingface.co/PeterReid/graphemes_to_phonemes_en_us @ a5631b285d18d59483c32c0c3379cb9fac924f4b (Apache-2.0), unmodified",
+ "license": "Apache-2.0",
+ "grapheme_chars": "____AIOWYbdfhijklmnpstuvwz'-.BCDEFGHJKLMNPQRSTUVXZacegoqrxy",
+ "phoneme_chars": "____AIOWYbdfhijklmnpstuvwzæðŋɑɔəɛɜɡɪɹɾʃʊʌʒʔʤʧˈˌθᵊᵻ",
+ "d_model": 128,
+ "max_position_embeddings": 64
+}
