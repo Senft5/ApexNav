@@ -226,6 +226,7 @@ docs/SOCIAL.md.
 - [x] Analysis page redesign, step 1: new **DRIVE** tab (default) in `web/drive_view.js`: summary strip, speed-coloured plan map with numbered corners, aligned lanes (speed, lateral g, brake/throttle g, elevation) with corner bands, scrub by pointer/arrow keys, zoom (all, 2 mi, 0.5 mi, 0.15 mi) with pan, corner list that jumps to the corner. Mobile-first; drawn at real pixel width. Fixed a `45:60` time-format bug (also in the segments table). Checked in a browser at phone and desktop widths.
 - [x] Analysis step 2: **Road feel lane** on the Drive tab (members only): banking bars and roughness line from `/api/roads` along the drive, gaps shown as gaps (unknown, not zero); readout adds banking/roughness/passes. `ApexContributor.measuredSeries`. Verified in a browser with mocked Valhalla/Overpass/roads replies (mock data only, never shipped).
 - [x] Analysis step 3: corner list on the Drive tab compares each corner against your best-scoring other drive on the same road (`Core.compareDrives`, needs >= 30% shared road and 3 clean corners); stopped corners excluded; net seconds shown in the heading and per corner. Checked with the two shipped examples.
+- [x] Analysis step 4: "This road over time" on the Drive tab: every drive sharing >= 30% of the road, score chart by date, per-drive net corner seconds vs the one you are viewing, change in points first to latest.
 - [x] **76 backend tests** (privacy, auth, highlights, contribute, nightly, account) + 53 pytest.
 ### Active bugs / limitations
 - **Cloudflare "Workers Builds: apexnav" preview build fails on PR commits** while all GitHub Actions pass; a clean-checkout `wrangler deploy --dry-run` succeeds. Docs say a D1 binding needs only Editor access, so a token problem is unlikely. Need the build log text (dashboard > apexnav > Builds). Production deploy of main after merge may fail; the previous deployment stays live.
@@ -236,5 +237,5 @@ docs/SOCIAL.md.
 ## Exact Next Task
 1. Owner: Google client + Worker secrets; then sign in at the site and make the first invites.
 2. Get the Workers Builds log and fix the preview/production build; merge PR #10.
-3. Analysis step 4: progress per road over time (same road across drives), and tidy History/Compare tabs to match the Drive tab's look. Then reward measured-good (banked, smooth) stretches too once there is enough real data to calibrate; verify the contributor against live Valhalla/Overpass with a real recording; convoy (Durable Objects).
+3. Analysis polish: tidy History/Compare tabs to match the Drive tab; keyboard/screen-reader pass; empty states. Then reward measured-good (banked, smooth) stretches too once there is enough real data to calibrate; verify the contributor against live Valhalla/Overpass with a real recording; convoy (Durable Objects).
 4. Voice (on hold): in-app enrollment design in docs/VOICE.md; replace the espeak-ng dependency.

@@ -109,6 +109,7 @@
     <section id="tab-drive" style="display:grid;gap:14px">
       <div class="row"><select id="dvPick" aria-label="Choose a drive" style="flex:1;min-width:200px"></select><span class="note" id="dvNote"></span></div>
       <div id="dvRoot"></div>
+      <div class="panel" id="dvRoad" hidden><h2>This road over time</h2><div id="dvRoadChart"></div><div class="scroll"><table id="dvRoadTable"></table></div></div>
     </section>
 
     <!-- ============================ HISTORY ============================ -->
@@ -554,9 +555,30 @@
         if (r.overlap_m >= 0.3 * d.dist[d.dist.length - 1] && r.matched_corners >= 3) { reference = { name: o.name, score: o.ds.score, corners: r.corners }; break; }
       }
       dvView = ApexDriveView.mount($('dvRoot'), d, { Core, C, MPH, reference });
+      renderRoadHistory(d);
       loadRoadFeel(d, dvView);
       $('dvNote').textContent = d.source === 'imported' ? 'imported recording' : 'shipped example';
     }
+    // Every drive that shares at least 30% of this drive's road, oldest to newest: is the driving getting better on this road?
+    function renderRoadHistory(d) {
+      const panel = $('dvRoad'), len = d.dist[d.dist.length - 1];
+      const same = drives.filter(o => o === d || (o.ds.score != null && Core.compareDrives(d, o).overlap_m >= 0.3 * len)).sort((p, q) => (p.date < q.date ? -1 : 1));
+      if (same.length < 2) { panel.hidden = true; return; }
+      panel.hidden = false;
+      const W = 760, H = 150, L = 40, R = 14, T = 12, B = 24, sc = same.filter(x => x.ds.score != null);
+      const X = (i) => L + (sc.length < 2 ? 0.5 : i / (sc.length - 1)) * (W - L - R), Y = (v) => T + (1 - v / 1000) * (H - T - B);
+      const grid = [0, 500, 1000].map(v => `<line x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}" stroke="${C.rule}"/><text x="${L - 6}" y="${Y(v) + 3}" text-anchor="end" font-size="10" fill="${C.panelDim}">${v}</text>`).join('');
+      const line = sc.map((x, i) => `${i ? 'L' : 'M'}${X(i).toFixed(1)} ${Y(x.ds.score).toFixed(1)}`).join('');
+      const dots = sc.map((x, i) => `<circle cx="${X(i)}" cy="${Y(x.ds.score)}" r="${x === d ? 7 : 4.5}" fill="${x === d ? C.accent : C.panel}" stroke="${C.accent}" stroke-width="2"/><text x="${X(i)}" y="${H - 7}" text-anchor="middle" font-size="10" fill="${C.panelDim}">${x.date.slice(5, 10)}</text>`).join('');
+      $('dvRoadChart').innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Driver Score on this road over time">${grid}<path d="${line}" fill="none" stroke="${C.accent}" stroke-width="2"/>${dots}</svg>`;
+      const first = sc[0], last = sc[sc.length - 1], gain = last.ds.score - first.ds.score;
+      $('dvRoadTable').innerHTML = '<tr><th class="l">Drive</th><th>Driver Score</th><th>Corners</th><th class="l">vs this drive</th></tr>' + same.map(o => {
+        const r = o === d ? null : Core.compareDrives(d, o);
+        return `<tr class="${o === d ? 'best' : ''}"><td class="l"><b></b><span class="sub">${dateLabel(o)}</span></td><td><span class="score">${o.ds.score ?? '--'}</span></td><td>${o.ds.corners}</td><td class="l">${o === d ? 'this drive' : r.matched_corners ? `${fmtS(r.corner_delta_s)} on ${r.matched_corners} corners (positive = it was slower)` : '--'}</td></tr>`;
+      }).join('') + `<tr><td class="l" colspan="4"><span class="note">${sc.length > 1 ? `Driver Score ${gain >= 0 ? 'up' : 'down'} ${Math.abs(gain)} points from the first to the latest drive on this road.` : ''}</span></td></tr>`;
+      $('dvRoadTable').querySelectorAll('tr td.l b').forEach((b, i) => { if (same[i]) b.textContent = same[i].name; });
+    }
+
     // Road feel from members (banking, roughness) along the drive; members only, silent offline. Cached per drive for the session.
     const feelCache = new Map();
     async function loadRoadFeel(d, view) {
