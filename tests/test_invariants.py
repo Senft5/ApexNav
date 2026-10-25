@@ -1,6 +1,7 @@
 import os
 import numpy as np
 import pandas as pd
+import pytest
 from scipy.spatial.transform import Rotation
 from core.kinematics import (
     compute_mount_rotation_matrix,
@@ -8,6 +9,12 @@ from core.kinematics import (
     ingest_sensor_logger_drive,
     G_STD,
 )
+from tests.synthetic import write_sensor_logger_export
+
+# Raw Sensor Logger exports are large personal recordings and are not committed.
+# Drop them in the repo root to run the real-drive invariants locally.
+PEBBLE_ZIP = '10069_Pebble_Ridge_Ln-2026-10-24_19-06-33.zip'
+DRY_ZIP = 'Dry_Ridge_Rd-2026-10-25_01-50-26.zip'
 
 def test_crooked_mount_and_camber_recovery():
     true_R_veh_to_phone = Rotation.from_euler('xyz', [25, -15, 18], degrees=True).as_matrix()
@@ -37,11 +44,27 @@ def test_crooked_mount_and_camber_recovery():
     assert 'elevation_m' in nodes.columns
     assert 'grade_pct' in nodes.columns
 
+def test_sensor_logger_ingestion_end_to_end(tmp_path):
+    true_R_veh_to_phone = Rotation.from_euler('xyz', [-70, 10, 95], degrees=True).as_matrix()
+    write_sensor_logger_export(str(tmp_path), true_R_veh_to_phone)
+    raw_df, R, segments = ingest_sensor_logger_drive(str(tmp_path))
+
+    np.testing.assert_allclose(R, true_R_veh_to_phone.T, atol=0.02)
+    assert np.isclose(np.linalg.det(R), 1.0, atol=1e-6)
+    # ~1.27 km cruise + pull -> 5 m bins, contiguous, flat & straight road
+    assert 240 <= len(segments) <= 270
+    assert set(np.diff(segments['segment_index'])) == {1}
+    assert segments['camber_deg'].notna().all()
+    assert np.abs(segments['camber_deg']).max() < 0.5
+    assert np.abs(segments['lat_g']).max() < 0.02
+    assert segments['vert_peak_g'].max() < 0.35
+    assert 10.0 <= segments['elevation_m'].max() - segments['elevation_m'].min() <= 13.0
+
+
 def test_real_sensor_logger_pebble_ridge_ingestion():
-    zip_path = '10069_Pebble_Ridge_Ln-2026-10-24_19-06-33.zip'
-    fixture_dir = 'tests/fixtures/pebble_ridge_drive'
-    src = zip_path if os.path.exists(zip_path) else fixture_dir
-    raw_df, R, segments = ingest_sensor_logger_drive(src)
+    if not os.path.exists(PEBBLE_ZIP):
+        pytest.skip(f'raw log {PEBBLE_ZIP} not present')
+    raw_df, R, segments = ingest_sensor_logger_drive(PEBBLE_ZIP)
 
     # Verify SO(3) orthogonality & right-handedness
     np.testing.assert_allclose(R @ R.T, np.eye(3), atol=1e-6)
@@ -53,10 +76,9 @@ def test_real_sensor_logger_pebble_ridge_ingestion():
     assert elev_span > 100.0
 
 def test_real_sensor_logger_dry_ridge_ingestion():
-    zip_path = 'Dry_Ridge_Rd-2026-10-25_01-50-26.zip'
-    if not os.path.exists(zip_path):
-        return
-    raw_df, R, segments = ingest_sensor_logger_drive(zip_path)
+    if not os.path.exists(DRY_ZIP):
+        pytest.skip(f'raw log {DRY_ZIP} not present')
+    raw_df, R, segments = ingest_sensor_logger_drive(DRY_ZIP)
     np.testing.assert_allclose(R @ R.T, np.eye(3), atol=1e-6)
     assert np.isclose(np.linalg.det(R), 1.0, atol=1e-6)
     assert len(segments) > 10000
