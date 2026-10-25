@@ -91,7 +91,7 @@
     .tabbar svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
     .tabbar a.on { color: var(--accent); }
     .tabbar a.on::before { content: ""; position: absolute; top: -1px; left: 22%; right: 22%; height: 2px; background: var(--accent); }
-    @media (max-width: 760px) { .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } .grid2 { grid-template-columns: 1fr; } }
+    @media (max-width: 760px) { .wide { display: none; } .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } .grid2 { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
@@ -294,20 +294,21 @@
         c(`${(totalKm / 1.609344).toFixed(0)} mi`, 'Profiled', `${drives.length} drives`);
 
       // trend
-      const W = 760, H = 180, L = 40, R = 12, T = 12, B = 26;
+      const W = Math.max(300, Math.round($('trend').clientWidth || 760)), H = 180, L = 40, R = 22, T = 12, B = 26;   // drawn at the real width so labels stay readable
       const pts = scored.map((d, i) => [L + (scored.length < 2 ? 0.5 : i / (scored.length - 1)) * (W - L - R), T + (1 - d.ds.score / 1000) * (H - T - B), d]);
       const grid = [0, 250, 500, 750, 1000].map(v => { const y = T + (1 - v / 1000) * (H - T - B); return `<line x1="${L}" x2="${W - R}" y1="${y}" y2="${y}" stroke="${C.rule}"/><text x="${L - 6}" y="${y + 3}" text-anchor="end" font-size="10" fill="${C.panelDim}">${v}</text>`; }).join('');
       const line = pts.map((p, i) => `${i ? 'L' : 'M'}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join('');
       const dots = pts.map(p => `<circle cx="${p[0]}" cy="${p[1]}" r="5" fill="${C.accent}"/><text x="${p[0]}" y="${H - 8}" text-anchor="middle" font-size="10" fill="${C.panelDim}">${p[2].date.slice(5, 10)}</text>`).join('');
-      $('trend').innerHTML = `<svg viewBox="0 0 ${W} ${H}">${grid}<path d="${line}" fill="none" stroke="${C.accent}" stroke-width="2"/>${dots}</svg>`;
+      if (!scored.length) { $('trend').innerHTML = '<p class="note">No scored drives yet. Import a recording below, or open the cockpit and record one; a drive needs a few clean corners to get a Driver Score.</p>'; }
+      else $('trend').innerHTML = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Driver Score over time">${grid}<path d="${line}" fill="none" stroke="${C.accent}" stroke-width="2"/>${dots}</svg>`;
 
       const rows = drives.slice().reverse().map(d => `<tr>
         <td class="l"><b>${d.name}</b><span class="sub">${dateLabel(d)} · ${d.source}</span></td>
         <td>${(d.km / 1.609344).toFixed(1)} mi</td>
-        <td>${d.ds.corners}</td>
+        <td class="wide">${d.ds.corners}</td>
         <td><span class="score">${d.ds.score ?? '--'}</span></td>
-        <td class="l">${bars(d.ds.components)}</td></tr>`).join('');
-      $('historyTable').innerHTML = `<tr><th class="l">Drive</th><th>Distance</th><th>Corners scored</th><th>Driver Score</th><th class="l">Components</th></tr>${rows}`;
+        <td class="l wide">${bars(d.ds.components)}</td></tr>`).join('');
+      $('historyTable').innerHTML = !drives.length ? '<tr><td class="l" colspan="5"><span class="note">No drives yet.</span></td></tr>' : `<tr><th class="l">Drive</th><th>Distance</th><th class="wide">Corners scored</th><th>Driver Score</th><th class="l wide">Components</th></tr>${rows}`;
     }
 
     $('importFile').addEventListener('change', async (e) => {
@@ -495,7 +496,7 @@
         c(`${(r.overlap_m / 1609.344).toFixed(1)} mi`, 'Shared road', `${A.name} ∩ ${B.name}`) +
         c(`${r.matched_corners} / ${A.corners.length}`, 'Corners compared', 'clean passes, no stops') +
         c(fmtS(r.matched_corners ? r.corner_delta_s : null), 'Corner time B vs A', 'sum over compared corners', cls(r.corner_delta_s)) +
-        c(fmtS(r.overlap_delta_s), 'Whole shared road', 'includes stops and traffic', cls(r.overlap_delta_s));
+        c(fmtS(r.overlap_delta_s), 'Whole shared road', 'includes stops and traffic, so not a driving verdict');
       // plan
       const { x, y } = Core.localXY(A.lat, A.lon);
       let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
@@ -598,6 +599,7 @@
       document.querySelectorAll('#tabs button').forEach(x => { x.classList.toggle('on', x === b); x.setAttribute('aria-selected', x === b ? 'true' : 'false'); x.tabIndex = x === b ? 0 : -1; });
       for (const t of ['drive', 'history', 'segments', 'compare']) $(`tab-${t}`).hidden = t !== b.dataset.tab;
       if (b.dataset.tab === 'segments') renderSegStrip();
+      if (b.dataset.tab === 'history') renderHistory();
     }));
     $('tabs').addEventListener('keydown', (e) => {                    // arrow keys move between tabs
       const tabs = [...document.querySelectorAll('#tabs button')], i = tabs.indexOf(document.activeElement);
