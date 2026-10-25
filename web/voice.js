@@ -76,6 +76,22 @@
     return out;
   }
 
+  // Whole-phrase clips ("head+mod", a full call) are keyed by their tokens joined with '+'.
+  // Cover the sequence with the longest clips the bank has; single words only fill the gaps.
+  const MAX_RUN = 10;
+  function cover(tokens) {
+    const out = [];
+    for (let i = 0; i < tokens.length;) {
+      let hit = 0;
+      for (let len = Math.min(MAX_RUN, tokens.length - i); len >= 2 && !hit; len--) {
+        if (bank.tokens[tokens.slice(i, i + len).join('+')]) hit = len;
+      }
+      out.push(hit ? tokens.slice(i, i + hit).join('+') : tokens[i]);
+      i += hit || 1;
+    }
+    return out;
+  }
+
   // ---- playback ---------------------------------------------------------------
   function robotChain(c) {
     // Ring modulator (metallic), short comb (tin can), hard clip (crunch).
@@ -112,6 +128,7 @@
   // Plays tokens; resolves true when finished, false if the bank can't voice them (caller falls back).
   async function play(tokens) {
     if (!bank) return false;
+    tokens = cover(tokens);
     if (tokens.some(t => !bank.tokens[t])) return false;
     const bufs = await Promise.all(tokens.map(buffer));
     if (bufs.some(b => !b)) return false;
@@ -167,6 +184,7 @@
   }
   // Render (or reuse) a phrase in the active bank's voice; one render at a time.
   let renderChain = Promise.resolve();
+  const ready = new Set();
   function render(text) {
     const key = `${bankId}|${text}`;
     if (phraseCache.has(key)) return phraseCache.get(key);
@@ -178,9 +196,19 @@
       return buf;
     });
     phraseCache.set(key, p);
-    p.catch(() => phraseCache.delete(key));
+    p.then(() => ready.add(key), () => phraseCache.delete(key));
     return p;
   }
+  // A call the bank can only voice by joining clips is rendered whole (same open model) at route
+  // load; this plays that render if it is ready now. Never waits: pace notes are time-critical.
+  async function playWhole(text) {
+    if (!bank || bank.engine !== 'kokoro') return false;
+    const key = `${bankId}|${text}`;
+    if (!ready.has(key)) return false;
+    await playBuffer(await phraseCache.get(key));
+    return true;
+  }
+  const joins = (tokens) => cover(tokens).length - 1;
   // Pre-render phrases we know are coming (route names) so they're instant when needed.
   async function prefetch(texts) {
     if (!bank || !bank.kokoro_voice) return;
@@ -203,5 +231,5 @@
     try { return (await (await fetch('voices/index.json')).json()).voices; } catch (_) { return []; }
   }
 
-  root.ApexVoice = { load, play, tokensFor, voices, speakLive, prefetch, warmLive, liveState, unlock: audio, get bank() { return bank; } };
+  root.ApexVoice = { load, play, tokensFor, cover, joins, playWhole, voices, speakLive, prefetch, warmLive, liveState, unlock: audio, get bank() { return bank; } };
 })(window);

@@ -850,6 +850,9 @@
         if (state.voiceId !== 'device' && window.ApexVoice) {
           await ApexVoice.load(state.voiceId);
           const tokens = item.chain ? ApexVoice.tokensFor(item.chain, ApexVoice.bank.style) : item.sysToken ? [item.sysToken] : null;
+          // A call the bank can only voice by joining clips plays as one whole render when the
+          // route-load prefetch has it; the join is the audible seam we are avoiding.
+          if (tokens && ApexVoice.joins(tokens) > 0 && state.liveVoice && await ApexVoice.playWhole(spokenTextFor(item.text, ApexVoice.bank.style))) { speech.busy = false; pumpSpeech(); return; }
           if (tokens && await ApexVoice.play(tokens)) { speech.busy = false; pumpSpeech(); return; }
           // Not in the bank (drive names, route summaries): synthesise live with the same model.
           if (state.liveVoice && await ApexVoice.speakLive(spokenTextFor(item.text, ApexVoice.bank.style))) { speech.busy = false; pumpSpeech(); return; }
@@ -1012,7 +1015,23 @@
       fetchAlpr(t);
       // Names are known now: pre-render them in the co-driver's own voice.
       if (state.liveVoice && state.voiceId !== 'device' && window.ApexVoice) {
-        ApexVoice.load(state.voiceId).then(() => ApexVoice.prefetch([spokenTextFor(`${t.name}.`, ApexVoice.bank.style)])).catch(() => {});
+        ApexVoice.load(state.voiceId).then(() => {
+          const style = ApexVoice.bank.style, texts = [spokenTextFor(`${t.name}.`, style)];
+          // Every call of the route that the bank cannot play as a single clip, in driving order.
+          if (ApexVoice.bank.engine === 'kokoro' && style !== 'jarvis') {
+            const ev = t.events.slice().sort((a, b) => a.dist_m - b.dist_m);
+            for (const e of ev) {
+              if (e.type === 'alpr') continue;
+              const chain = [e]; let cur = e;
+              for (let h = 0; h < 2 && (cur.link === 'into' || cur.link === 'and'); h++) {
+                const nx = ev[ev.indexOf(cur) + 1]; if (!nx) break; chain.push(nx); cur = nx;
+              }
+              const voiced = chain.map((n, i) => (i === chain.length - 1 && (n.link === 'into' || n.link === 'and')) ? { ...n, link: null } : n);
+              if (ApexVoice.joins(ApexVoice.tokensFor(voiced, style)) > 0) texts.push(spokenTextFor(voiced.map((n, i) => (i ? `${voiced[i - 1].link} ` : '') + n.call).join(' ') + (cur.link && cur.link !== 'into' && cur.link !== 'and' ? `, ${cur.link}` : ''), style));
+            }
+          }
+          ApexVoice.prefetch(texts);
+        }).catch(() => {});
       }
       resumeFollow();
       render(true);

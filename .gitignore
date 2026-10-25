@@ -8,3 +8,5 @@ ApexKit/.build/
 TestResults.xcresult/
 voice_test/
 web/voices/own/
+train_own/
+.venv-voice/

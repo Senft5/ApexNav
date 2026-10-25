@@ -14,8 +14,10 @@ web/voice.js turns structured pace notes into token sequences and plays them.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
+import shutil
 import re
 import subprocess
 import sys
@@ -70,6 +72,38 @@ def codriver_vocabulary() -> dict[str, str]:
     return v
 
 
+def phrase_key(tokens) -> str:
+    """Whole-phrase clips are keyed by their token run joined with '+'; web/voice.js plays the
+    longest run it has a clip for and falls back to single tokens."""
+    return "+".join(tokens)
+
+
+def phrase_text(tokens, vocab) -> str:
+    """One natural sentence for a token run: commas before cautions and distances."""
+    out = ""
+    for t in tokens:
+        w = vocab[t]
+        if not out:
+            out = w
+        elif t.startswith(("caution:", "dist:")):
+            out += ", " + w
+        else:
+            out += " " + w
+    return out[0].upper() + out[1:] + "."
+
+
+def unit_phrases(vocab) -> list[list[str]]:
+    """Every head with each single modifier: the unit the ear hears as one call."""
+    heads = [t for t in vocab if t.startswith("head:")]
+    mods = [t for t in vocab if t.startswith("mod:")]
+    return [[h, m] for h in heads for m in mods]
+
+
+def route_phrases() -> list[list[str]]:
+    path = os.path.join(ROOT, "tools", "route_calls.json")
+    return json.load(open(path, encoding="utf-8")) if os.path.exists(path) else []
+
+
 def jarvis_vocabulary() -> dict[str, str]:
     """Deadpan machine-speak building blocks."""
     v = {f"num:{i}": NUM[i] for i in range(10)}
@@ -117,11 +151,13 @@ class ChatterboxEngine:
     token ends in punctuation and is re-rendered (new sample) when it comes out much shorter
     than the same token in a Kokoro bank."""
 
-    def __init__(self, ref_wav: str):
+    def __init__(self, ref_wav: str, device: str = None):
         import torch
         from chatterbox.tts import ChatterboxTTS
         torch.manual_seed(7)
-        self.model = ChatterboxTTS.from_pretrained(device="cpu")
+        device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        print(f"  chatterbox on {device}", flush=True)
+        self.model = ChatterboxTTS.from_pretrained(device=device)
         self.model.prepare_conditionals(ref_wav, exaggeration=0.5)
         self.sr = self.model.sr
 
@@ -163,7 +199,7 @@ def encode_m4a(audio: np.ndarray, path: str) -> None:
     peak = max(1e-6, float(np.max(np.abs(audio))))
     pcm = (np.clip(audio / peak * 0.89, -1, 1) * 32767).astype("<i2").tobytes()   # -1 dBFS peak
     subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-f", "s16le", "-ar", str(SR), "-ac", "1", "-i", "-",
-                    "-c:a", "aac", "-b:a", "56k", "-movflags", "+faststart", path], input=pcm, check=True)
+                    "-c:a", "aac", "-strict", "-2", "-b:a", "56k", "-movflags", "+faststart", path], input=pcm, check=True)
 
 
 def build(voice_id: str, ref: str = None) -> dict:
@@ -199,6 +235,65 @@ def build(voice_id: str, ref: str = None) -> dict:
     return manifest
 
 
+# Units worth rendering first for the slow cloned engine (most common modifiers).
+CORE_MODS = ("mod:banked", "mod:long", "mod:off-camber")
+
+
+def merge_recorded(voice_id: str, recorded_dir: str) -> int:
+    """Copy real recordings (tools/split_recording.py output) into a bank; they win over renders."""
+    mpath = os.path.join(OUT, voice_id, "manifest.json")
+    manifest = json.load(open(mpath, encoding="utf-8"))
+    rec = json.load(open(os.path.join(recorded_dir, "recorded_keep.json"), encoding="utf-8"))
+    for key, v in rec.items():
+        shutil.copy(os.path.join(recorded_dir, v["file"]), os.path.join(OUT, voice_id, v["file"]))
+        manifest["tokens"][key] = {"file": v["file"], "dur": v["dur"], "text": v["text"], "src": "recording"}
+    with open(mpath, "w", encoding="utf-8") as f:
+        json.dump(manifest, f, indent=1)
+    return len(rec)
+
+
+def build_phrases(voice_id: str, ref: str = None, tier: str = "calls", recorded: str = None) -> None:
+    """Add whole-phrase clips to an existing bank. tier: calls (exact calls of the shipped
+    routes), core (+ heads x banked/long/off-camber), units (+ every head x modifier),
+    mined (+ the runs tools/mine_phrases.py found most valuable on real routes)."""
+    cfg = VOICES[voice_id]
+    vocab = codriver_vocabulary()
+    mpath = os.path.join(OUT, voice_id, "manifest.json")
+    if recorded:
+        print(f"  {voice_id}: merged {merge_recorded(voice_id, recorded)} real recordings", flush=True)
+    manifest = json.load(open(mpath, encoding="utf-8"))
+    wanted = list(route_phrases())
+    units = unit_phrases(vocab)
+    if tier == "mined":
+        mp = os.path.join(ROOT, "tools", "mined_phrases.json")
+        wanted += json.load(open(mp, encoding="utf-8")) if os.path.exists(mp) else []
+    if tier in ("core", "units"):
+        wanted += [u for u in units if tier == "units" or u[1] in CORE_MODS]
+    seen, todo = set(), []
+    for toks in wanted:
+        k = phrase_key(toks)
+        if k not in seen and k not in manifest["tokens"] and all(t in vocab for t in toks):
+            seen.add(k)
+            todo.append(toks)
+    if cfg["engine"] == "chatterbox":
+        engine, expect = ChatterboxEngine(ref), {}
+    else:
+        engine, expect = KokoroEngine(cfg["lang"]), None
+    for n, toks in enumerate(todo, 1):
+        k, text = phrase_key(toks), phrase_text(toks, vocab)
+        if expect is None:
+            audio = trim(engine.render(text, cfg["kokoro_voice"], cfg["speed"]))
+        else:
+            want = sum(manifest["tokens"][t]["dur"] for t in toks if t in manifest["tokens"])
+            audio = trim(engine.render(text, expect_s=want * 0.9 if want else None))
+        fname = "p_" + hashlib.sha1(k.encode()).hexdigest()[:12] + ".m4a"
+        encode_m4a(audio, os.path.join(OUT, voice_id, fname))
+        manifest["tokens"][k] = {"file": fname, "dur": round(len(audio) / SR, 3), "text": text}
+        with open(mpath, "w", encoding="utf-8") as f:       # resumable: written after every clip
+            json.dump(manifest, f, indent=1)
+        print(f"  {voice_id}: [{n}/{len(todo)}] {text}", flush=True)
+
+
 def write_index() -> None:
     voices = []
     for vid in sorted(os.listdir(OUT)):
@@ -214,13 +309,18 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--voice", choices=sorted(VOICES))
     ap.add_argument("--all", action="store_true", help="every Kokoro voice (cloned voices need --voice and --ref)")
+    ap.add_argument("--phrases", choices=["calls", "core", "units", "mined"], help="add whole-phrase clips to an existing bank")
+    ap.add_argument("--recorded", help="dir with recorded_keep.json from tools/split_recording.py")
     ap.add_argument("--ref", help="reference recording for a cloned voice (keep it out of git)")
     args = ap.parse_args(argv)
     ids = sorted(v for v in VOICES if VOICES[v]["engine"] == "kokoro") if args.all else [args.voice] if args.voice else []
     if not ids:
         ap.error("--voice ID or --all")
     for vid in ids:
-        build(vid, args.ref)
+        if args.phrases:
+            build_phrases(vid, args.ref, args.phrases, args.recorded)
+        else:
+            build(vid, args.ref)
     write_index()
     return 0
 

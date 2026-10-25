@@ -1,0 +1,434 @@
+{
+ "head:R1++mod:off-camber+caution:1+link:and+hazard:bump+dist:120": {
+  "file": "r_f7f4de3c30ef.m4a",
+  "dur": 3.057,
+  "text": "Right one plus off camber, care and Bump, one twenty.",
+  "match": 0.95,
+  "src": "recording",
+  "verify": 1.0
+ },
+ "hazard:bump+dist:120": {
+  "file": "r_eda2ba31a7a5.m4a",
+  "dur": 1.194,
+  "text": "Bump, one twenty.",
+  "match": 1.0,
+  "src": "recording",
+  "verify": 1.0
+ },
+ "head:R2-+mod:off-camber+caution:1+dist:200": {
+  "file": "r_f8abd6dfe583.m4a",
+  "dur": 2.727,
+  "text": "Right two minus off camber, care, two hundred.",
+  "match": 1.0,
+  "src": "recording",
+  "verify": 0.88
+ },
+ "head:LAC+mod:long+caution:1": {
+  "file": "r_a4919cfc4013.m4a",
+  "dur": 1.519,
+  "text": "Acute left long, care.",
+  "match": 1.0,
+  "src": "recording",
+  "verify": 0.75
+ },
+ "hazard:dip+dist:400": {
+  "file": "r_53e70fc14bdf.m4a",
+  "dur": 0.994,
+  "text": "Dip, four hundred.",
+  "match": 1.0,
+  "src": "recording",
+  "verify": 1.0
+ },
+ "head:L5-+dist:120": {
+  "file": "r_a28e92d54524.m4a",
+  "dur": 1.713,
+  "text": "Left five minus, one twenty.",
+  "match": 1.0,
+  "src": "recording",
+  "verify": 1.0
+ },
+ "head:R3-+dist:100": {
+  "file": "r_3c36b0ddbae6.m4a",
+  "dur": 1.704,
+  "text": "Right three minus, one hundred.",
+  "match": 1.0,
+  "src": "recording",
+  "verify": 1.0
+ },
+ "head:L4+mod:opens+mod:over crest+caution:1+link:into+hazard:crest+dist:150": {
+  "file": "r_39c1143c3d28.m4a",
+  "dur": 3.259,
+  "text": "Left four opens over crest, care into Crest, one fifty.",
+  "match": 0.9,
+  "src": "recording",
+  "verify": 0.8
+ },
+ "hazard:crest+dist:150": {
+  "file": "r_9e50b417d02a.m4a",
+  "dur": 1.228,
+  "text": "Crest, one fifty.",
+  "match": 1.0,
+  "src": "recording",
+  "verify": 1.0
+ },
+ "hazard:dip+dist:100": {
+  "file": "r_d0df839e92a8.m4a",
+  "dur": 1.331,
+  "text": "Dip, one hundred.",
+  "match": 1.0,
+  "src": "recording",
+  "verify": 1.0
+ },
+ "hazard:crest+dist:300": {
+  "file": "r_4cfc3d05c19a.m4a",
+  "dur": 1.331,
+  "text": "Crest, three hundred.",
+  "match": 1.0,
+  "src": "recording",
+  "verify": 1.0
+ },
+ "head:LSQ+mod:off-camber+caution:2": {
+  "file": "r_38fd9bf099a2.m4a",
+  "dur": 1.952,
+  "text": "Square left off camber, caution.",
+  "match": 1.0,
+  "src": "recording",
+  "verify": 1.0
+ },
+ "hazard:crest+dist:250": {
+  "file": "r_648299dee0b3.m4a",
+  "dur": 1.241,
+  "text": "Crest, two fifty.",
+  "match": 1.0,
+  "src": "recording",
+  "verify": 1.0
+ },
+ "head:R4+mod:tightens+caution:1+dist:100": {
+  "file": "r_9950c9a47913.m4a",
+  "dur": 2.102,
+  "text": "Right four tightens, care, one hundred.",
+  "match": 1.0,
+  "src": "recording",
+  "verify": 0.83
+ },
+ "head:L2++dist:450": {
+  "file": "r_897d007f4ff6.m4a",
+  "dur": 3.415,
+  "text": "Left two plus, four fifty.",
+  "match": 1.0,
+  "src": "recording",
+  "verify": 1.0
+ },
+ "head:R4+mod:long+dist:150": {
+  "file": "r_c7cb304a865d.m4a",
+  "dur": 1.477,
+  "text": "Right four long, one fifty.",
+  "match": 1.0,
+  "src": "recording",
+  "verify": 0.8
+ },
+ "hazard:bump+dist:150": {
+  "file": "r_106612d8ca2d.m4a",
+  "dur": 1.648,
+  "text": "Bump, one fifty.",
+  "match": 1.0,
+  "src": "recording",
+  "verify": 1.0
+ },
+ "hazard:crest+link:and+hazard:dip+dist:150": {
+  "file": "r_815a79d72d0d.m4a",
+  "dur": 1.796,
+  "text": "Crest and Dip, one fifty.",
+  "match": 1.0,
+  "src": "recording",
+  "verify": 1.0
+ },
+ "hazard:dip+dist:150": {
+  "file": "r_4d25c3a9fce0.m4a",
+  "dur": 1.121,
+  "text": "Dip, one fifty.",
+  "match": 1.0,
+  "src": "recording",
+  "verify": 0.67
+ },
+ "hazard:crest+dist:120": {
+  "file": "r_3f323d523baf.m4a",
+  "dur": 1.6,
+  "text": "Crest, one twenty.",
+  "match": 1.0,
+  "src": "recording",
+  "verify": 1.0
+ },
+ "hazard:crest+dist:400": {
+  "file": "r_3d8f28b7e546.m4a",
+  "dur": 1.22,
+  "text": "Crest, four hundred.",
+  "match": 1.0,
+  "src": "recording",
+  "verify": 1.0
+ },
+ "head:R5-+mod:banked+dist:120": {
+  "file": "r_aff3881c0f94.m4a",
+  "dur": 2.401,
+  "text": "Right five minus banked, one twenty.",
+  "match": 1.0,
+  "src": "recording",
+  "verify": 1.0
+ },
+ "hazard:bump+dist:250": {
+  "file": "r_e8385b367340.m4a",
+  "dur": 1.145,
+  "text": "Bump, two fifty.",
+  "match": 1.0,
+  "src": "recording",
+  "verify": 1.0
+ },
+ "head:L4-+link:and+head:R2++mod:tightens+caution:1+dist:80": {
+  "file": "r_12b983271fd8.m4a",
+  "dur": 3.742,
+  "text": "Left four minus and Right two plus tightens, care, eighty.",
+  "match": 1.0,
+  "src": "recording",
+  "verify": 0.9
+ },
+ "head:R2++mod:tightens+caution:1+dist:80": {
+  "file": "r_5f633a9cd471.m4a",
+  "dur": 2.311,
+  "text": "Right two plus tightens, care, eighty.",
+  "match": 1.0,
+  "src": "recording",
+  "verify": 0.67
+ },
+ "head:L2+mod:banked": {
+  "file": "r_ffdd61068b58.m4a",
+  "dur": 0.842,
+  "text": "Left two banked.",
+  "match": 1.0,
+  "src": "recording",
+  "verify": 0.67
+ },
+ "head:R5-+mod:banked+dist:100": {
+  "file": "r_7bab1b40a816.m4a",
+  "dur": 2.076,
+  "text": "Right five minus banked, one hundred.",
+  "match": 1.0,
+  "src": "recording",
+  "verify": 0.83
+ },
+ "head:L4++mod:long+mod:banked+dist:450": {
+  "file": "r_9c5b9f88dbd4.m4a",
+  "dur": 2.7,
+  "text": "Left four plus long banked, four fifty.",
+  "match": 1.0,
+  "src": "recording",
+  "verify": 0.88
+ },
+ "head:LSQ+caution:1+dist:200": {
+  "file": "r_63c4b9c2a180.m4a",
+  "dur": 2.459,
+  "text": "Square left, care, two hundred.",
+  "match": 1.0,
+  "src": "recording",
+  "verify": 1.0
+ },
+ "hazard:bump+dist:350": {
+  "file": "r_614064d9c639.m4a",
+  "dur": 1.306,
+  "text": "Bump, three fifty.",
+  "match": 1.0,
+  "src": "recording",
+  "verify": 0.67
+ },
+ "head:R6++mod:long+mod:banked+caution:1+dist:120": {
+  "file": "r_78a0fcfb39dd.m4a",
+  "dur": 2.604,
+  "text": "Right six plus long banked, care, one twenty.",
+  "match": 1.0,
+  "src": "recording",
+  "verify": 1.0
+ },
+ "head:L5+mod:banked+caution:1+dist:60": {
+  "file": "r_63b73aba5c28.m4a",
+  "dur": 2.62,
+  "text": "Left five banked, care, sixty.",
+  "match": 1.0,
+  "src": "recording",
+  "verify": 1.0
+ },
+ "head:LSQ+caution:1+dist:150": {
+  "file": "r_2471d9c8a3f2.m4a",
+  "dur": 2.296,
+  "text": "Square left, care, one fifty.",
+  "match": 1.0,
+  "src": "recording",
+  "verify": 1.0
+ },
+ "head:L1+mod:banked+caution:1+link:into+head:L2+mod:long+mod:opens+mod:banked+link:and+head:R2-": {
+  "file": "r_bdb06caaf83f.m4a",
+  "dur": 4.72,
+  "text": "Left one banked, care into Left two long opens banked and Right two minus.",
+  "match": 1.0,
+  "src": "recording",
+  "verify": 1.0
+ },
+ "head:L2+mod:long+mod:opens+mod:banked+link:and+head:R2-+link:into+head:L3++mod:long+mod:banked": {
+  "file": "r_12b9a90660cc.m4a",
+  "dur": 6.369,
+  "text": "Left two long opens banked and Right two minus into Left three plus long banked.",
+  "match": 1.0,
+  "src": "recording",
+  "verify": 1.0
+ },
+ "head:R2-+link:into+head:L3++mod:long+mod:banked+link:into+hazard:bump+dist:80": {
+  "file": "r_dc4919e35009.m4a",
+  "dur": 4.049,
+  "text": "Right two minus into Left three plus long banked into Bump, eighty.",
+  "match": 1.0,
+  "src": "recording",
+  "verify": 0.92
+ },
+ "head:L3++mod:long+mod:banked+link:into+hazard:bump+dist:80": {
+  "file": "r_78077b2fea9f.m4a",
+  "dur": 2.41,
+  "text": "Left three plus long banked into Bump, eighty.",
+  "match": 1.0,
+  "src": "recording",
+  "verify": 0.88
+ },
+ "hazard:bump+dist:80": {
+  "file": "r_ca8b70f80941.m4a",
+  "dur": 1.3,
+  "text": "Bump, eighty.",
+  "match": 1.0,
+  "src": "recording",
+  "verify": 1.0
+ },
+ "head:RSQ+mod:long+dist:250": {
+  "file": "r_7d2778c6f6b2.m4a",
+  "dur": 2.16,
+  "text": "Square right long, two fifty.",
+  "match": 1.0,
+  "src": "recording",
+  "verify": 1.0
+ },
+ "hazard:crest+dist:450": {
+  "file": "r_48aef6a5bf9d.m4a",
+  "dur": 1.56,
+  "text": "Crest, four fifty.",
+  "match": 1.0,
+  "src": "recording",
+  "verify": 1.0
+ },
+ "head:L1++caution:1+link:into+head:R3-": {
+  "file": "r_fa2265d4e3b3.m4a",
+  "dur": 2.94,
+  "text": "Left one plus, care into Right three minus.",
+  "match": 1.0,
+  "src": "recording",
+  "verify": 1.0
+ },
+ "head:L2++link:into+head:RSQ+mod:off-camber+caution:1+dist:450": {
+  "file": "r_74018fec091e.m4a",
+  "dur": 4.08,
+  "text": "Left two plus into Square right off camber, care, four fifty.",
+  "match": 1.0,
+  "src": "recording",
+  "verify": 0.96
+ },
+ "head:RSQ+mod:off-camber+caution:1+dist:450": {
+  "file": "r_7e05edc31730.m4a",
+  "dur": 3.0,
+  "text": "Square right off camber, care, four fifty.",
+  "match": 1.0,
+  "src": "recording",
+  "verify": 0.71
+ },
+ "head:LSQ+caution:1+link:and+head:R3+mod:long+mod:banked+dist:120": {
+  "file": "r_da248c65bed0.m4a",
+  "dur": 3.2,
+  "text": "Square left, care and Right three long banked, one twenty.",
+  "match": 1.0,
+  "src": "recording",
+  "verify": 0.9
+ },
+ "head:R3+mod:long+mod:banked+dist:120": {
+  "file": "r_23b42280517b.m4a",
+  "dur": 2.36,
+  "text": "Right three long banked, one twenty.",
+  "match": 1.0,
+  "src": "recording",
+  "verify": 0.83
+ },
+ "head:RSQ+caution:1+dist:150": {
+  "file": "r_ef3fb45acd3f.m4a",
+  "dur": 1.918,
+  "text": "Square right, care, one fifty.",
+  "match": 1.0,
+  "src": "recording",
+  "verify": 1.0
+ },
+ "hazard:dip+link:and+hazard:crest": {
+  "file": "r_20afb8511f79.m4a",
+  "dur": 1.298,
+  "text": "Dip and Crest.",
+  "match": 1.0,
+  "src": "recording",
+  "verify": 1.0
+ },
+ "head:R2+dist:300": {
+  "file": "r_de3e926a0fbe.m4a",
+  "dur": 1.861,
+  "text": "Right two, three hundred.",
+  "match": 1.0,
+  "src": "recording",
+  "verify": 0.75
+ },
+ "hazard:bump+dist:500": {
+  "file": "r_5819e82b0108.m4a",
+  "dur": 1.56,
+  "text": "Bump, five hundred.",
+  "match": 1.0,
+  "src": "recording",
+  "verify": 1.0
+ },
+ "head:LAC+mod:long+caution:1+dist:400": {
+  "file": "r_87a6e30fc4f5.m4a",
+  "dur": 2.257,
+  "text": "Acute left long, care, four hundred.",
+  "match": 1.0,
+  "src": "recording",
+  "verify": 1.0
+ },
+ "head:R3+mod:banked": {
+  "file": "r_f5e1c29a0ef0.m4a",
+  "dur": 1.344,
+  "text": "Right three banked.",
+  "match": 1.0,
+  "src": "recording",
+  "verify": 0.67
+ },
+ "head:L4+mod:over crest+caution:1+link:into+hazard:crest+dist:150": {
+  "file": "r_6185d4cf64c7.m4a",
+  "dur": 2.634,
+  "text": "Left four over crest, care into Crest, one fifty.",
+  "match": 1.0,
+  "src": "recording",
+  "verify": 0.74
+ },
+ "hazard:dip+dist:120": {
+  "file": "r_d71de5a86e9f.m4a",
+  "dur": 1.66,
+  "text": "Dip, one twenty.",
+  "match": 1.0,
+  "src": "recording",
+  "verify": 0.67
+ },
+ "head:LSQ+caution:1+dist:450": {
+  "file": "r_54ff28cb1827.m4a",
+  "dur": 2.292,
+  "text": "Square left, care, four fifty.",
+  "match": 1.0,
+  "src": "recording",
+  "verify": 1.0
+ }
+}
