@@ -15,10 +15,22 @@
   const HAIRPIN_MAX_RADIUS_M = 30;
   const MIN_RADIUS_M = 8;
   const LONG_TURN_RAD = 100 * Math.PI / 180;
+  const LONG_ARC_M = 90, SHORT_ARC_M = 20;
+  const ACUTE_TURN_RAD = 105 * Math.PI / 180, ACUTE_MAX_RADIUS_M = 25;
+  const SQUARE_TURN_RAD = 75 * Math.PI / 180, SQUARE_MAX_RADIUS_M = 25;
+  const GRADE_EDGE = 0.25;
+  const CAUTION_WORDS = ['', 'care', 'caution', 'double caution', 'triple caution'];
+  const APPROACH_CAP_MPS = 27;
+  const LINK_INTO_M = 25, LINK_AND_M = 60, LINK_MAX_M = 500;
+  const RALLY_DISTANCES = [30, 40, 50, 60, 70, 80, 100, 120, 150, 200, 250, 300, 350, 400, 450, 500];
   const SEVERITY_RADIUS_M = [25, 40, 65, 100, 160, 260];
   const MU_EFF_DEFAULT = 0.60;
   const BRAKE_DECEL_MPS2 = 0.5 * G_STD;
-  const V_CAP_MPS = 31.3;
+  const REACTION_S = 1.5;
+  const EYE_HEIGHT_M = 1.08;
+  const OBJECT_HEIGHT_M = 0.60;
+  const SIGHT_OFFSET_M = 4.0;
+  const SIGHT_MAX_M = 400.0;
   const CAMBER_CLIP_RAD = 0.15;
   const CREST_UNWEIGHT_G = -0.08;
   const ALPR_RADIUS_M = 60;
@@ -123,12 +135,47 @@
     return mu * (1 - Math.max(0, Math.min(0.30, (roughG - 0.08) / 0.30)));
   }
 
-  function brakingEnvelopeMps(kappa, ds, camberRad = null, roughG = null, mu = MU_EFF_DEFAULT) {
+  // Geometric sight distance ahead of each sample (see core/road_dna.sight_distance_m).
+  function sightDistanceM(lat, lon, elevation = null, offsetM = SIGHT_OFFSET_M) {
+    const n = lat.length, out = new Float64Array(n).fill(SIGHT_MAX_M);
+    if (n < 3) return out;
+    const { x, y } = localXY(lat, lon);
+    const xs = movingAverage(x, SMOOTH_WINDOW), ys = movingAverage(y, SMOOTH_WINDOW);
+    const s = new Float64Array(n);
+    for (let i = 1; i < n; i++) s[i] = s[i - 1] + Math.hypot(xs[i] - xs[i - 1], ys[i] - ys[i - 1]);
+    let end = 0;
+    for (let i = 0; i < n - 2; i++) {
+      while (end < n && s[end] <= s[i] + SIGHT_MAX_M) end++;
+      const eye = elevation ? elevation[i] + EYE_HEIGHT_M : 0;
+      for (let j = i + 2; j < end; j++) {
+        const cx = xs[j] - xs[i], cy = ys[j] - ys[i];
+        const chord = Math.max(Math.hypot(cx, cy), 1e-6);
+        let blocked = false;
+        for (let k = i + 1; k < j && !blocked; k++) {
+          const off = Math.abs(cx * (ys[k] - ys[i]) - cy * (xs[k] - xs[i])) / chord;
+          if (off > offsetM) blocked = true;
+          else if (elevation) {
+            const line = eye + (elevation[j] + OBJECT_HEIGHT_M - eye) * ((s[k] - s[i]) / (s[j] - s[i]));
+            if (elevation[k] > line) blocked = true;
+          }
+        }
+        if (blocked) { out[i] = Math.min(SIGHT_MAX_M, s[j - 1] - s[i]); break; }
+      }
+    }
+    return out;
+  }
+
+  function sightSpeedMps(sightM, reactionS = REACTION_S, decel = BRAKE_DECEL_MPS2) {
+    return decel * (-reactionS + Math.sqrt(reactionS * reactionS + 2 * sightM / decel));
+  }
+
+  function brakingEnvelopeMps(kappa, ds, camberRad = null, roughG = null, mu = MU_EFF_DEFAULT, sightM = null) {
     const n = kappa.length, v = new Float64Array(n);
     for (let i = 0; i < n; i++) {
       const r = 1 / Math.max(Math.abs(kappa[i]), 1e-6);
       const m = effectiveMu(roughG ? roughG[i] : null, mu);
-      v[i] = Math.min(apexSpeedMps(r, camberRad ? camberRad[i] : 0, m), V_CAP_MPS);
+      const sight = sightM ? sightM[i] : SIGHT_MAX_M;
+      v[i] = Math.min(apexSpeedMps(r, camberRad ? camberRad[i] : 0, m), sightSpeedMps(sight));
     }
     for (let i = n - 2; i >= 0; i--) {
       v[i] = Math.min(v[i], Math.sqrt(v[i + 1] * v[i + 1] + 2 * BRAKE_DECEL_MPS2 * ds[i]));
@@ -183,7 +230,23 @@
       const sev = hairpin ? 'HP' : severityForRadius(radius);
       if (sev === null) continue;
 
+      // McRae shapes beyond the 1-6 scale, then +/- within a band.
+      let arc = 0;
+      for (let q = start; q <= end; q++) arc += ds[q];
+      let shape = null;
+      if (hairpin) shape = 'hairpin';
+      else if (radius < ACUTE_MAX_RADIUS_M && Math.abs(turn) >= ACUTE_TURN_RAD) shape = 'acute';
+      else if (radius < SQUARE_MAX_RADIUS_M && Math.abs(turn) >= SQUARE_TURN_RAD) shape = 'square';
+      let grade = '';
+      if (shape === null) {
+        const loB = sev === 1 ? MIN_RADIUS_M : SEVERITY_RADIUS_M[sev - 2];
+        const frac = (radius - loB) / (SEVERITY_RADIUS_M[sev - 1] - loB);
+        grade = frac < GRADE_EDGE ? '-' : (frac > 1 - GRADE_EDGE ? '+' : '');
+      }
+
       const mods = [];
+      if (!hairpin && (Math.abs(turn) >= LONG_TURN_RAD || arc >= LONG_ARC_M)) mods.push('long');
+      else if (shape === null && arc < SHORT_ARC_M) mods.push('short');
       const mid = Math.floor((start + end) / 2);
       if (end - start >= 4) {
         const r1 = 1 / Math.max(maxAbs(kappa, start, mid), 1e-6);
@@ -191,7 +254,6 @@
         if (r2 < 0.7 * r1) mods.push('tightens');
         else if (r1 < 0.7 * r2) mods.push('opens');
       }
-      if (!hairpin && Math.abs(turn) >= LONG_TURN_RAD) mods.push('long');
 
       let phi = 0;
       if (camberRad) {
@@ -209,6 +271,7 @@
         start, apex, end,
         dir: sgn > 0 ? 'L' : 'R',
         severity: sev,
+        grade, shape, arc_m: arc,
         turn_rad: turn,
         radius_m: radius,
         apex_mps: apexSpeedMps(radius, phi, m),
@@ -220,10 +283,54 @@
 
   function paceNoteText(c) {
     const word = c.dir === 'L' ? 'Left' : 'Right';
-    const code = `${c.dir}${c.severity}`;
-    let call = c.severity === 'HP' ? `${word} hairpin` : `${word} ${c.severity}`;
-    if (c.mods.length) call += ' ' + c.mods.join(', ');
+    let code, call;
+    if (c.severity === 'HP' || c.shape === 'hairpin') { code = `${c.dir}HP`; call = `${word} hairpin`; }
+    else if (c.shape === 'square') { code = `${c.dir}SQ`; call = `Square ${word.toLowerCase()}`; }
+    else if (c.shape === 'acute') { code = `${c.dir}AC`; call = `Acute ${word.toLowerCase()}`; }
+    else {
+      const g = c.grade || '';
+      code = `${c.dir}${c.severity}${g}`;
+      call = `${word} ${c.severity}` + (g === '-' ? ' minus' : g === '+' ? ' plus' : '');
+    }
+    if (c.mods.length) call += ' ' + c.mods.join(' ');
+    if (c.caution) call += ', ' + CAUTION_WORDS[c.caution];
     return { code, call };
+  }
+
+  function annotateCautions(corners, env, sight) {
+    for (const c of corners) {
+      const lo = Math.max(0, c.start - 30);
+      let vApp = 0;
+      for (let q = lo; q <= c.start; q++) vApp = Math.max(vApp, env[q]);
+      vApp = Math.min(vApp, APPROACH_CAP_MPS);
+      const ratio = vApp / Math.max(c.apex_mps, 1);
+      let score = ratio >= 3 ? 2 : (ratio >= 2 ? 1 : 0);
+      const vc = c.apex_mps;
+      if (sight[c.start] < 0.5 * (vc * REACTION_S + vc * vc / (2 * BRAKE_DECEL_MPS2))) score += 1;
+      for (const m of ['tightens', 'off-camber', 'over crest']) if (c.mods.includes(m)) score += 1;
+      c.caution = Math.min(score, 4);
+    }
+    return corners;
+  }
+
+  function rallyDistance(gap) {
+    let best = RALLY_DISTANCES[0];
+    for (const d of RALLY_DISTANCES) if (Math.abs(d - gap) < Math.abs(best - gap)) best = d;
+    return best;
+  }
+
+  // Chain notes as a co-driver reads them: "into"/"and" when the next follows at once,
+  // otherwise the distance to it. notes sorted by start_m, each with start_m/end_m.
+  function linkNotes(notes) {
+    notes.forEach((n, i) => {
+      n.link = null;
+      if (i + 1 === notes.length) return;
+      const gap = notes[i + 1].start_m - n.end_m;
+      if (gap < LINK_INTO_M) n.link = 'into';
+      else if (gap < LINK_AND_M) n.link = 'and';
+      else if (gap <= LINK_MAX_M) n.link = String(rallyDistance(gap));
+    });
+    return notes;
   }
 
   // Index of the nearest path sample to (lat, lon), searching around a hint index.
@@ -240,11 +347,102 @@
     return { index: best, distM: Math.sqrt(bestD) };
   }
 
+  // -------------------------------------------------------------------------
+  // Drive analysis — port of core/drive_analysis.py (parity-tested).
+  // -------------------------------------------------------------------------
+  const MATCH_RADIUS_M = 20, SEARCH_WINDOW = 400, BRAKE_G = -0.15, BRAKE_LOOKBACK = 40, DELTA_STRIDE = 5, STOPPED_MPS = 2.5;
+
+  function elapsedS(v, ds = 5) {
+    const t = new Float64Array(v.length);
+    for (let i = 1; i < v.length; i++) t[i] = t[i - 1] + ds / Math.max(v[i - 1], 0.5);
+    return t;
+  }
+  function nearestIndexWin(lat, lon, pathLat, pathLon, hint = -1, window = SEARCH_WINDOW) {
+    const n = pathLat.length, lo = hint >= 0 ? Math.max(0, hint - window) : 0, hi = hint >= 0 ? Math.min(n, hint + window) : n;
+    const c = Math.cos(lat * Math.PI / 180);
+    let best = lo, bestD = Infinity;
+    for (let i = lo; i < hi; i++) {
+      const dx = (pathLon[i] - lon) * 111320 * c, dy = (pathLat[i] - lat) * 110540, d = dx * dx + dy * dy;
+      if (d < bestD) { bestD = d; best = i; }
+    }
+    return [best, Math.sqrt(bestD)];
+  }
+  function cornerMetrics(v, lonG, latG, start, end, apex, apexMps) {
+    let iMin = start;
+    for (let i = start; i <= end; i++) if (v[i] < v[iMin]) iMin = i;
+    let time = 0;
+    for (let i = start; i < end; i++) time += 5 / Math.max(v[i], 0.5);
+    time += 5 / Math.max(v[end], 0.5);
+    const lo = Math.max(0, apex - BRAKE_LOOKBACK);
+    let brakeM = null, i = apex;
+    while (i > lo && lonG[i] < BRAKE_G) i--;
+    if (i < apex) brakeM = (apex - i) * 5;
+    else { for (let k = lo; k <= apex; k++) if (lonG[k] < BRAKE_G) { brakeM = (apex - k) * 5; break; } }
+    let peakBrake = 0;
+    for (let k = lo; k <= apex; k++) peakBrake = Math.min(peakBrake, lonG[k]);
+    let peakLat = 0, jerk2 = 0, nj = 0;
+    for (let k = start; k <= end; k++) {
+      peakLat = Math.max(peakLat, Math.abs(latG[k]));
+      if (k < end) { const j = (latG[k + 1] - latG[k]) / (5 / Math.max(v[k], 0.5)); jerk2 += j * j; nj++; }
+    }
+    return { time_s: time, entry_mps: v[start], min_mps: v[iMin], exit_mps: v[end], min_offset_m: (iMin - apex) * 5,
+             brake_m: brakeM, peak_brake_g: peakBrake, peak_lat_g: peakLat, envelope_use: v[iMin] / Math.max(apexMps, 0.5),
+             smoothness_gps: Math.sqrt(nj ? jerk2 / nj : 0) };
+  }
+  function matchWindow(a, start, end, b, hint = -1) {
+    let [bs, d1] = nearestIndexWin(a.lat[start], a.lon[start], b.lat, b.lon, hint);
+    if (d1 > MATCH_RADIUS_M) { [bs, d1] = nearestIndexWin(a.lat[start], a.lon[start], b.lat, b.lon, -1); if (d1 > MATCH_RADIUS_M) return null; }
+    const [be, d2] = nearestIndexWin(a.lat[end], a.lon[end], b.lat, b.lon, bs, 2 * (end - start) + 20);
+    if (d2 > MATCH_RADIUS_M || be <= bs) return null;
+    const ratio = (be - bs) / Math.max(1, end - start);
+    return ratio >= 0.7 && ratio <= 1.3 ? [bs, be] : null;
+  }
+  function compareDrives(a, b) {
+    const corners = [];
+    let hint = -1;
+    for (const c of a.corners) {
+      const ma = cornerMetrics(a.speed_mps, a.lon_g, a.lat_g, c.start, c.end, c.apex, c.apex_mps);
+      const w = matchWindow(a, c.start, c.end, b, hint);
+      let mb = null;
+      if (w) {
+        const [bs, be] = w;
+        hint = be;
+        const bApex = bs + Math.round((c.apex - c.start) * (be - bs) / Math.max(1, c.end - c.start));
+        mb = cornerMetrics(b.speed_mps, b.lon_g, b.lat_g, bs, be, bApex, c.apex_mps);
+      }
+      const stopped = ma.min_mps < STOPPED_MPS || (mb !== null && mb.min_mps < STOPPED_MPS);
+      corners.push({ code: c.code, call: c.call, apex: c.apex, a: ma, b: mb, stopped, delta_s: mb ? mb.time_s - ma.time_s : null });
+    }
+    const ta = elapsedS(a.speed_mps), tb = elapsedS(b.speed_mps), curve = [];
+    let overlapBins = 0, runA0 = null, runB0 = null, runTotal = 0, runLast = 0, prevJ = -1;
+    for (let i = 0; i < a.lat.length; i += DELTA_STRIDE) {
+      let [j, d] = nearestIndexWin(a.lat[i], a.lon[i], b.lat, b.lon, prevJ);
+      if (d > MATCH_RADIUS_M && prevJ >= 0) [j, d] = nearestIndexWin(a.lat[i], a.lon[i], b.lat, b.lon, -1);
+      const sameWay = prevJ < 0 || j >= prevJ;
+      if (d <= MATCH_RADIUS_M && sameWay) {
+        if (runA0 === null) { runA0 = i; runB0 = j; }
+        runLast = (tb[j] - tb[runB0]) - (ta[i] - ta[runA0]);
+        curve.push([i * 5, runLast]);
+        overlapBins += DELTA_STRIDE;
+        prevJ = j;
+      } else {
+        if (runA0 !== null) { curve.push([i * 5, null]); runTotal += runLast; runLast = 0; }
+        runA0 = runB0 = null;
+        prevJ = d <= MATCH_RADIUS_M ? j : -1;
+      }
+    }
+    runTotal += runA0 !== null ? runLast : 0;
+    const matched = corners.filter(c => c.delta_s !== null && !c.stopped);
+    return { corners, overlap_m: overlapBins * 5, matched_corners: matched.length,
+             corner_delta_s: matched.reduce((s, c) => s + c.delta_s, 0), overlap_delta_s: runTotal, delta_curve: curve };
+  }
+
   const api = {
+    compareDrives, cornerMetrics, elapsedS,
     G_STD, MPS_TO_MPH, ALPR_RADIUS_M,
     movingAverage, gradient, unwrap, localXY, resamplePolyline,
-    computeCurvature, apexSpeedMps, effectiveMu, brakingEnvelopeMps,
-    severityForRadius, detectCorners, paceNoteText, nearestIndex
+    computeCurvature, apexSpeedMps, effectiveMu, brakingEnvelopeMps, sightDistanceM, sightSpeedMps, SIGHT_MAX_M,
+    severityForRadius, detectCorners, paceNoteText, annotateCautions, linkNotes, rallyDistance, nearestIndex
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.ApexCore = api;

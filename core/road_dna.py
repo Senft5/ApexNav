@@ -27,6 +27,19 @@ HAIRPIN_TURN_RAD = math.radians(135.0)
 HAIRPIN_MAX_RADIUS_M = 30.0
 MIN_RADIUS_M = 8.0           # tighter than any car can turn: GPS jitter, not road
 LONG_TURN_RAD = math.radians(100.0)
+LONG_ARC_M = 90.0            # a corner this long is called "long" whatever its turn
+SHORT_ARC_M = 20.0           # ...and this brief is "short"
+ACUTE_TURN_RAD = math.radians(105.0)
+ACUTE_MAX_RADIUS_M = 25.0
+SQUARE_TURN_RAD = math.radians(75.0)
+SQUARE_MAX_RADIUS_M = 25.0      # "equal to 1 or worse" (the 1 band)
+GRADE_EDGE = 0.25            # outer quarter of a severity band earns "-" (tighter) or "+" (opener)
+CAUTION_WORDS = ("", "care", "caution", "double caution", "triple caution")
+APPROACH_CAP_MPS = 27.0      # approach speed for caution scoring is the sim cruise, not the envelope
+LINK_INTO_M = 25.0           # gap to the next note below which the call chains with "into"
+LINK_AND_M = 60.0            # ...or "and"
+LINK_MAX_M = 500.0           # beyond this no distance is called
+RALLY_DISTANCES = (30, 40, 50, 60, 70, 80, 100, 120, 150, 200, 250, 300, 350, 400, 450, 500)
 
 # Rally severity by minimum radius: 1 = tightest, 6 = barely a bend. Above the last
 # bound the bend is not called at all.
@@ -34,13 +47,21 @@ SEVERITY_RADIUS_M = (25.0, 40.0, 65.0, 100.0, 160.0, 260.0)
 
 MU_EFF_DEFAULT = 0.60        # sane spirited street lateral grip, not a track limit
 BRAKE_DECEL_MPS2 = 0.5 * G_STD
-V_CAP_MPS = 31.3             # 70 mph: envelope ceiling on straights (never suggest more)
+REACTION_S = 1.5             # alert driver; AASHTO design uses 2.5 s for the general public
+EYE_HEIGHT_M = 1.08          # AASHTO stopping-sight geometry
+OBJECT_HEIGHT_M = 0.60
+SIGHT_OFFSET_M = 4.0         # lateral clearance to obstructions (wooded verge, conservative)
+SIGHT_MAX_M = 400.0          # beyond this, sight no longer constrains a car
 CAMBER_CLIP_RAD = 0.15
 
 SECTOR_LENGTH_M = 500.0
+SECTOR_CONTEXT_S = 30.0      # sector features read over +-30 s of reference-lap time
+TOWN_LIMIT_MPS = 15.7        # posted limit <= 35 mph -> town transit
 
 # IMU hazard thresholds (manifesto section 4 for the spike value)
 SPIKE_PEAK_G = 0.35
+SPIKE_CONTRAST = 6.0         # impact must exceed 6x the surrounding road's roughness
+SPIKE_BACKGROUND_BINS = 41   # ~200 m rolling median of 5 m roughness RMS
 ROUGH_RMS_FALLBACK_G = 0.25  # 5 m RMS proxy when per-bin peak is unavailable
 CREST_UNWEIGHT_G = -0.08
 DIP_COMPRESS_G = 0.10
@@ -137,19 +158,70 @@ def effective_mu(roughness_rms_g=None, mu_eff: float = MU_EFF_DEFAULT):
     return mu_eff * (1.0 - np.clip((r - 0.08) / 0.30, 0.0, 0.30))
 
 
+def sight_distance_m(lat_deg, lon_deg, elevation_m=None, offset_m: float = SIGHT_OFFSET_M) -> np.ndarray:
+    """Geometric sight distance ahead of each sample (m), capped at SIGHT_MAX_M.
+
+    Target j is visible from i when the straight sightline between them
+      * horizontally stays within offset_m of every path point in between (anything
+        further off the road -- trees, banks, buildings -- is assumed to block), and
+      * vertically clears the road surface from eye height to object height (crests).
+    Sight ends at the first target that fails either test.
+    """
+    x, y = local_xy_m(lat_deg, lon_deg)
+    n = len(x)
+    out = np.full(n, SIGHT_MAX_M)
+    if n < 3:
+        return out
+    xs = moving_average(x, SMOOTH_WINDOW)
+    ys = moving_average(y, SMOOTH_WINDOW)
+    s = np.concatenate([[0.0], np.cumsum(np.hypot(np.diff(xs), np.diff(ys)))])
+    z = None if elevation_m is None else np.asarray(elevation_m, dtype=float)
+    for i in range(n - 2):
+        end = int(np.searchsorted(s, s[i] + SIGHT_MAX_M, side="right"))
+        js = np.arange(i + 2, end)
+        if len(js) == 0:
+            continue
+        ks = np.arange(i + 1, end - 1)
+        # blocked[j, k]: k strictly between i and j obstructs the sightline i -> j
+        cx, cy = xs[js] - xs[i], ys[js] - ys[i]
+        chord = np.maximum(np.hypot(cx, cy), 1e-6)
+        px, py = xs[ks] - xs[i], ys[ks] - ys[i]
+        between = ks[None, :] < js[:, None]
+        off = np.abs(cx[:, None] * py[None, :] - cy[:, None] * px[None, :]) / chord[:, None]
+        blocked = between & (off > offset_m)
+        if z is not None:
+            eye = z[i] + EYE_HEIGHT_M
+            frac = (s[ks][None, :] - s[i]) / (s[js] - s[i])[:, None]
+            line = eye + (z[js][:, None] + OBJECT_HEIGHT_M - eye) * frac
+            blocked |= between & (z[ks][None, :] > line)
+        hit = np.flatnonzero(blocked.any(axis=1))
+        if len(hit):
+            out[i] = min(SIGHT_MAX_M, s[js[hit[0]] - 1] - s[i])
+    return out
+
+
+def sight_speed_mps(sight_m, reaction_s: float = REACTION_S, decel_mps2: float = BRAKE_DECEL_MPS2):
+    """Fastest speed that still stops within the visible road: v t_r + v^2 / (2 a) = S."""
+    S = np.asarray(sight_m, dtype=float)
+    return decel_mps2 * (-reaction_s + np.sqrt(reaction_s ** 2 + 2.0 * S / decel_mps2))
+
+
 def braking_envelope_mps(kappa, ds, camber_rad=None, roughness_rms_g=None,
-                         mu_eff: float = MU_EFF_DEFAULT) -> np.ndarray:
+                         mu_eff: float = MU_EFF_DEFAULT, sight_m=None) -> np.ndarray:
     """Max speed at each sample so the driver can still slow for every corner ahead.
 
-    Local limit from apex_speed_mps on |kappa|, then a backward pass with constant
-    deceleration BRAKE_DECEL_MPS2: v[i] <= sqrt(v[i+1]^2 + 2 a ds).
+    Local limit = min(corner limit apex_speed_mps on |kappa|, stopping-sight limit),
+    then a backward pass with constant deceleration BRAKE_DECEL_MPS2:
+    v[i] <= sqrt(v[i+1]^2 + 2 a ds). No policy cap: without sight data the ceiling is
+    the stopping-sight speed for SIGHT_MAX_M.
     """
     k = np.abs(np.asarray(kappa, dtype=float))
     n = len(k)
     phi = np.zeros(n) if camber_rad is None else np.asarray(camber_rad, dtype=float)
     mu = effective_mu(roughness_rms_g, mu_eff)
     radius = 1.0 / np.maximum(k, 1e-6)
-    v = np.minimum(apex_speed_mps(radius, phi, mu), V_CAP_MPS)
+    sight = np.full(n, SIGHT_MAX_M) if sight_m is None else np.asarray(sight_m, dtype=float)
+    v = np.minimum(apex_speed_mps(radius, phi, mu), sight_speed_mps(sight))
     for i in range(n - 2, -1, -1):
         v[i] = min(v[i], math.sqrt(v[i + 1] ** 2 + 2.0 * BRAKE_DECEL_MPS2 * ds[i]))
     return v
@@ -206,7 +278,26 @@ def detect_corners(kappa, ds, camber_rad=None, crest_g=None, roughness_rms_g=Non
         if sev is None:
             continue
 
+        # McRae shapes beyond the 1-6 scale, then +/- within a band.
+        arc = float(np.sum(ds[seg]))
+        shape = None
+        if hairpin:
+            shape = "hairpin"
+        elif radius < ACUTE_MAX_RADIUS_M and abs(turn) >= ACUTE_TURN_RAD:
+            shape = "acute"
+        elif radius < SQUARE_MAX_RADIUS_M and abs(turn) >= SQUARE_TURN_RAD:
+            shape = "square"
+        grade = ""
+        if shape is None:
+            lo_b = MIN_RADIUS_M if sev == 1 else SEVERITY_RADIUS_M[sev - 2]
+            frac = (radius - lo_b) / (SEVERITY_RADIUS_M[sev - 1] - lo_b)
+            grade = "-" if frac < GRADE_EDGE else ("+" if frac > 1.0 - GRADE_EDGE else "")
+
         mods = []
+        if not hairpin and (abs(turn) >= LONG_TURN_RAD or arc >= LONG_ARC_M):
+            mods.append("long")
+        elif shape is None and arc < SHORT_ARC_M:
+            mods.append("short")
         mid = (start + end) // 2
         if end - start >= 4:
             r1 = 1.0 / max(float(np.max(np.abs(k[start:mid + 1]))), 1e-6)
@@ -215,8 +306,6 @@ def detect_corners(kappa, ds, camber_rad=None, crest_g=None, roughness_rms_g=Non
                 mods.append("tightens")
             elif r1 < 0.7 * r2:
                 mods.append("opens")
-        if not hairpin and abs(turn) >= LONG_TURN_RAD:
-            mods.append("long")
 
         phi = 0.0
         if camber_rad is not None:
@@ -235,6 +324,9 @@ def detect_corners(kappa, ds, camber_rad=None, crest_g=None, roughness_rms_g=Non
             "end": int(end),
             "dir": "L" if sgn > 0 else "R",
             "severity": sev,
+            "grade": grade,
+            "shape": shape,
+            "arc_m": arc,
             "turn_rad": turn,
             "radius_m": radius,
             "apex_mps": float(apex_speed_mps(radius, phi, mu)),
@@ -244,14 +336,66 @@ def detect_corners(kappa, ds, camber_rad=None, crest_g=None, roughness_rms_g=Non
 
 
 def pace_note_text(corner: dict) -> tuple[str, str]:
-    """(short code, spoken call) e.g. ('L4', 'Left 4 tightens, over crest')."""
+    """(short code, spoken call) in McRae order, e.g. ('L4-', 'Left 4 minus long tightens, caution')."""
     word = "Left" if corner["dir"] == "L" else "Right"
-    sev = corner["severity"]
-    code = f"{corner['dir']}{sev}"
-    call = f"{word} hairpin" if sev == "HP" else f"{word} {sev}"
+    shape = corner.get("shape")
+    if corner["severity"] == "HP" or shape == "hairpin":
+        code, call = f"{corner['dir']}HP", f"{word} hairpin"
+    elif shape == "square":
+        code, call = f"{corner['dir']}SQ", f"Square {word.lower()}"
+    elif shape == "acute":
+        code, call = f"{corner['dir']}AC", f"Acute {word.lower()}"
+    else:
+        grade = corner.get("grade", "")
+        code = f"{corner['dir']}{corner['severity']}{grade}"
+        call = f"{word} {corner['severity']}" + {"-": " minus", "+": " plus"}.get(grade, "")
     if corner["mods"]:
-        call += " " + ", ".join(corner["mods"])
+        call += " " + " ".join(corner["mods"])
+    level = corner.get("caution", 0)
+    if level:
+        call += ", " + CAUTION_WORDS[level]
     return code, call
+
+
+def annotate_cautions(corners: list, envelope_mps, sight_m) -> list:
+    """Caution ladder 0-4 (care, caution, double, triple) from what makes a corner bite:
+    a fast approach for its speed, a blind entry, tightening, off-camber, a crest."""
+    env = np.asarray(envelope_mps, dtype=float)
+    sight = np.asarray(sight_m, dtype=float)
+    for c in corners:
+        lo = max(0, c["start"] - 30)                                   # 150 m approach
+        v_app = min(float(np.max(env[lo:c["start"] + 1])), APPROACH_CAP_MPS)
+        ratio = v_app / max(c["apex_mps"], 1.0)
+        score = 2 if ratio >= 3.0 else (1 if ratio >= 2.0 else 0)
+        vc = c["apex_mps"]
+        if sight[c["start"]] < 0.5 * (vc * REACTION_S + vc * vc / (2.0 * BRAKE_DECEL_MPS2)):
+            score += 1                                                 # can't see half of a stop
+        score += sum(1 for m in ("tightens", "off-camber", "over crest") if m in c["mods"])
+        c["caution"] = min(score, 4)
+    return corners
+
+
+def rally_distance(gap_m: float) -> int:
+    """Nearest call distance from the rally ladder (30 ... 500)."""
+    return min(RALLY_DISTANCES, key=lambda d: abs(d - gap_m))
+
+
+def link_notes(notes: list) -> list:
+    """Chain consecutive notes the way a co-driver reads them: "into" / "and" when the next
+    note follows almost at once, otherwise the distance to it ("Left 4, 150").
+    notes: sorted by start_m, each with start_m and end_m. Sets note["link"]."""
+    for i, n in enumerate(notes):
+        n["link"] = None
+        if i + 1 == len(notes):
+            continue
+        gap = notes[i + 1]["start_m"] - n["end_m"]
+        if gap < LINK_INTO_M:
+            n["link"] = "into"
+        elif gap < LINK_AND_M:
+            n["link"] = "and"
+        elif gap <= LINK_MAX_M:
+            n["link"] = str(rally_distance(gap))
+    return notes
 
 
 # ---------------------------------------------------------------------------
@@ -272,14 +416,26 @@ def _peak_events(values: np.ndarray, mask: np.ndarray, dist_m: np.ndarray, pick_
     return picks
 
 
+def _rolling_median(values: np.ndarray, window: int) -> np.ndarray:
+    """Centered rolling median; edges use the samples that exist."""
+    half = window // 2
+    n = len(values)
+    return np.array([np.median(values[max(0, i - half):min(n, i + half + 1)]) for i in range(n)])
+
+
 def detect_hazards(dist_m, crest_g, roughness_rms_g, vert_peak_g=None) -> list[dict]:
     """Bumps (vertical spike), crests (unweighting) and dips (compression) from measured IMU."""
     dist_m = np.asarray(dist_m, dtype=float)
     crest = np.asarray(crest_g, dtype=float)
     hazards = []
     if vert_peak_g is not None:
+        # A pothole is an event that stands out from the road around it; steadily
+        # broken pavement is SURF's job, not a stream of bump calls.
         peak = np.asarray(vert_peak_g, dtype=float)
-        for i in _peak_events(peak, peak > SPIKE_PEAK_G, dist_m, True):
+        rough = np.asarray(roughness_rms_g, dtype=float)
+        background = _rolling_median(rough, SPIKE_BACKGROUND_BINS)
+        is_spike = (peak > SPIKE_PEAK_G) & (peak > SPIKE_CONTRAST * background)
+        for i in _peak_events(peak, is_spike, dist_m, True):
             hazards.append({"index": i, "type": "bump", "severity_g": float(peak[i])})
     else:
         rough = np.asarray(roughness_rms_g, dtype=float)
@@ -291,11 +447,6 @@ def detect_hazards(dist_m, crest_g, roughness_rms_g, vert_peak_g=None) -> list[d
         hazards.append({"index": i, "type": "dip", "severity_g": float(crest[i])})
     hazards.sort(key=lambda h: h["index"])
     return hazards
-
-
-def _saturate(x: float, scale: float) -> float:
-    """0 -> 0, scale -> 63, 3*scale -> 95 (smooth, bounded 0-100)."""
-    return 100.0 * (1.0 - math.exp(-max(0.0, x) / scale))
 
 
 def alpr_counts_by_sector(lat, lon, sector_ids, alpr_nodes) -> dict[int, int]:
@@ -316,44 +467,44 @@ def alpr_counts_by_sector(lat, lon, sector_ids, alpr_nodes) -> dict[int, int]:
     return counts
 
 
-def score_sectors(dist_m, kappa, corners, grade_pct, camber_rad, speed_mps,
-                  roughness_rms_g, hazards, alpr_counts=None) -> list[dict]:
-    """Aggregate 5 m bins into SECTOR_LENGTH_M sectors scored 0-100 on TECH/FLOW/SURF/CLEAR.
+def score_sectors(dist_m, corners, camber_rad, roughness_rms_g, hazards, lap, sight_m,
+                  limit_mps=None, alpr_counts=None) -> list[dict]:
+    """Sectors of SECTOR_LENGTH_M scored 0-100 on TECH/FLOW/SURF/CLEAR plus an archetype.
 
-    CLEAR is None unless ALPR data was supplied -- unknown is never shown as safe.
+    TECH and FLOW come from the reference lap (core/reference_lap.py), read over a
+    +-SECTOR_CONTEXT_S window of simulated driving around each sector so per-minute
+    rates are stable. CLEAR is None unless ALPR data was supplied -- unknown is never
+    shown as safe.
     """
+    from core import reference_lap as rl  # local: reference_lap builds on this module
+
     dist_m = np.asarray(dist_m, dtype=float)
-    k = np.abs(np.asarray(kappa, dtype=float))
     sector_ids = (dist_m // SECTOR_LENGTH_M).astype(int)
-    by_apex = {}
-    for c in corners:
-        by_apex.setdefault(int(sector_ids[c["apex"]]), []).append(c)
+    t = lap["t"]
     haz_by_sector = {}
     for h in hazards:
         haz_by_sector.setdefault(int(sector_ids[h["index"]]), []).append(h)
 
     sectors = []
     for sid in np.unique(sector_ids):
-        m = sector_ids == sid
-        length_km = max(0.05, (dist_m[m][-1] - dist_m[m][0] + 5.0) / 1000.0)
-        cs = by_apex.get(int(sid), [])
-        hairpins = sum(1 for c in cs if c["severity"] == "HP")
-        tight = sum(1 for c in cs if c["severity"] == "HP" or c["severity"] <= 3)
-        sweepers = sum(1 for c in cs if c["severity"] != "HP" and c["severity"] >= 4)
+        idx = np.flatnonzero(sector_ids == sid)
+        lo, hi = int(idx[0]), int(idx[-1]) + 1
+        tc = 0.5 * (t[lo] + t[hi - 1])
+        wlo = min(lo, int(np.searchsorted(t, tc - SECTOR_CONTEXT_S)))
+        whi = max(hi, int(np.searchsorted(t, tc + SECTOR_CONTEXT_S)))
+        f = rl.window_features(lap, corners, sight_m, wlo, whi)
+        axes = rl.axis_scores(f)
 
-        tech = (_saturate(len(cs) / length_km, 6.0) * 0.45
-                + _saturate(float(np.std(k)) * 1000.0, 6.0) * 0.25
-                + _saturate(tight + 2 * hairpins, 3.0) * 0.20
-                + _saturate(float(np.std(grade_pct[m])), 3.0) * 0.10)
+        bank_frac = float(np.mean(np.asarray(camber_rad)[lo:hi] > math.radians(2.0)))
+        flow = 0.9 * axes["flow"] + 10.0 * min(1.0, bank_frac * 4.0)
 
-        sp = speed_mps[m]
-        moving = sp[sp > 2.0]
-        continuity = 1.0 - min(1.0, float(np.std(moving) / np.mean(moving))) if len(moving) > 3 else 0.0
-        bank_frac = float(np.mean(camber_rad[m] > math.radians(2.0)))
-        sweep_frac = sweepers / len(cs) if cs else 0.0
-        flow = 100.0 * (0.45 * continuity + 0.35 * sweep_frac + 0.20 * min(1.0, bank_frac * 4.0))
+        town = False
+        if limit_mps is not None:
+            lim = np.asarray(limit_mps, dtype=float)[lo:hi]
+            known = lim[np.isfinite(lim)]
+            town = len(known) > 0 and float(np.mean(known <= TOWN_LIMIT_MPS)) > 0.5
 
-        rough = roughness_rms_g[m]
+        rough = np.asarray(roughness_rms_g)[lo:hi]
         haz = haz_by_sector.get(int(sid), [])
         surf = 100.0 - 300.0 * max(0.0, float(np.mean(rough)) - 0.03) - 12.0 * len(haz)
 
@@ -361,17 +512,18 @@ def score_sectors(dist_m, kappa, corners, grade_pct, camber_rad, speed_mps,
         if alpr_counts is not None:
             clear = 100.0 - 45.0 * alpr_counts.get(int(sid), 0)
 
-        idx = np.flatnonzero(m)
         sectors.append({
             "id": int(sid),
-            "start_index": int(idx[0]),
-            "end_index": int(idx[-1]),
-            "start_m": float(dist_m[idx[0]]),
-            "end_m": float(dist_m[idx[-1]]),
-            "corners": len(cs),
-            "tech": int(round(np.clip(tech, 0, 100))),
+            "start_index": lo,
+            "end_index": hi - 1,
+            "start_m": float(dist_m[lo]),
+            "end_m": float(dist_m[hi - 1]),
+            "corners": sum(1 for c in corners if lo <= c["apex"] < hi),
+            "archetype": rl.archetype(f, town),
+            "tech": axes["tech"],
             "flow": int(round(np.clip(flow, 0, 100))),
             "surf": int(round(np.clip(surf, 0, 100))),
             "clear": None if clear is None else int(round(np.clip(clear, 0, 100))),
+            "features": {k: round(float(v), 3) for k, v in f.items()},
         })
     return sectors

@@ -31,5 +31,67 @@ value and rebuilt the stack on a tested headless core.
 - Shipped exports predate `vert_peak_g`, so their bumps use the 5 m RMS > 0.25 g proxy. Re-export from the raw zips to get true spike peaks.
 - OSRM demo server and Overpass are rate-limited public services; fine for prototyping only.
 
+## Session 2026-10-25 (b): re-export from raw Sensor Logger logs
+- [x] Raw zips for both drives supplied (kept local, gitignored: they contain precise home-start GPS). `pytest tests -v` → **18 passed, 0 skipped**; the two real-drive invariants run for the first time.
+- [x] Both drives re-exported from raw with true per-bin spike data (`vert_peak_g`).
+- [x] Found: a single 100 Hz sample > 0.35 g fired 101 "bumps" on Dry Ridge (one per ~570 m) — mostly phone-mount rattle, plus phone handling at the start/end of each recording. Fixed in core: spike = peak 50 ms RMS of the >8 Hz band, and must exceed 6x the surrounding ~200 m roughness (steadily broken pavement is SURF's job). Exporter ignores hazards below 2.5 m/s. Now Pebble Ridge 7 bumps, Dry Ridge 21.
+- [x] Camber now averages only cornering samples (previous session's fix) — median turn-relative bank on Pebble Ridge reads +2.9°, not the diluted +0.4°.
+
+### Active bug: single-pass bumps are not repeatable
+Dry Ridge re-drives 100 % of the Pebble Ridge route, yet only 1 of 7 Pebble bumps (at 18,410 m) reappears within 8 m on the second pass. Wheel-path differences explain some misses, but single-pass bump detections must be treated as unverified.
+
+## Session 2026-10-25 (c): road intelligence, themes, analysis, Swift testing
+Direction from the owner: themes A/B/C/AB as native components; no fixed speed cap (show
+posted limit + sightline speed); Swift truly tested; plan social; drive analysis; road
+scoring and routing must be the core advantage. Full design: docs/ROAD_INTELLIGENCE.md,
+docs/SOCIAL.md.
+
+- [x] **Sightline physics, no cap**: geometric sight distance (curve chord clearance M = 4 m +
+  crest ray-cast on elevation) and stopping-sight speed; envelope = min(corner, sight).
+  Posted limits from OSM via Valhalla map matching (exporter + cockpit routes). Dial shows
+  PACE, SIGHT and LIMIT separately.
+- [x] **Reference lap scoring (`core/reference_lap.py`)**: simulate a sane driver in a car
+  profile (braking envelope, sim cruise, power/drag/grade acceleration); TECH/FLOW from
+  per-minute experience (engagement, cadence regularity, esses transitions, braking per
+  cornering load, dead time, vertical events, hairpins, blind corners); archetypes
+  (Switchbacks, Esses, Technical, Rollercoaster, Flowing sweepers, Fast open, Town,
+  Connector). Archetype ordering tests on synthetic roads.
+- [x] **Themes (`web/themes.js`, `web/instruments.js`)**: Stage (AB, default), Roadbook (A,
+  tulip roadbook boxes, printed gauges), Instrument (B, flat graphite), Telemetry (C, race
+  dash with pace lights). Day/night per theme; picker in the route book.
+- [x] **Routing**: Valhalla with highways de-prioritised (OSRM fallback), limits per sample.
+- [x] **Drive analysis (`core/drive_analysis.py`, `web/analysis.html`)**: per-corner time,
+  entry/min/exit, brake point, peak g, envelope use, apex offset, smoothness; B measured over
+  A's stretch by location; cumulative delta; stops flagged and excluded. JS parity on real drives.
+- [x] **Swift**: `core/live_pipeline.py` specifies the causal live pipeline; `ApexKit` (SwiftPM,
+  no UIKit) implements it and replays `ApexKit/Tests/Fixtures/live_fixture.json` to 1e-9
+  (passes on Linux here). `ApexNavApp.swift` delegates all live math to ApexKit.
+  CI: ApexKit on Linux + macOS; simulator UI test launches the app and checks the web
+  cockpit boots; IPA build on every push.
+- Tests: `pytest tests -v` → 35 passed; `swift test --package-path ApexKit` → 5 passed.
+
+- [x] **Rally pace-note grammar** (McRae 1-6, per the owner's guide): +/- within a band, Square /
+  Acute / Hairpin, long/short, tightens/opens, over crest, caution ladder (care → triple caution,
+  scored from approach speed ratio, blind entry, tightening, off-camber, crest), and chaining:
+  "into"/"and" for notes < 25/60 m apart, otherwise the rally distance ("Left 4 minus long, 150").
+  Python + JS at parity. Not done (no data to support them honestly): cut/don't cut, jump, water.
+- [x] **Camera rig**: spring-damper follow on its own 60 fps loop; look-ahead position, bearing aimed
+  2-4 s down the road (whips into corners), zoom/pitch breathe with speed. Steady / Dynamic / Whip.
+- [x] **Voice**: Co-driver (best installed voice, British first, distances read "one-fifty") and Jarvis
+  (robot voice where installed, chirps, machine-speak readout). Native iOS picks Premium/Enhanced voices.
+- [x] Simulator UI test fixed: the cockpit was booting; the test queried text that WebKit hides inside
+  the map region. Now asserts RUN/ROUTE controls and a live pace note.
+
+### Active bugs / limitations
+- Ramp loops (cloverleafs) read as "Switchbacks"; needs Valhalla road class to veto motorway links.
+- Sight offset M is a constant 4 m; landcover (forest vs field) should set it per corner.
+- Single-pass bumps are unverified (1 of 7 repeat); multi-pass store still to build.
+- Route scoring (archetypes/axes) exists only in Python; routes in the browser get corners,
+  sight and envelope but no Stage DNA until the reference lap is ported to JS.
+- Loop routing still uses circle waypoints; stage discovery + chaining (ROAD_INTELLIGENCE §7) not built.
+- Pages not enabled yet (owner: Settings → Pages → main / root).
+
 ## Exact Next Task
-Re-export both drives from the raw Sensor Logger zips (`python tools/export_web_profile.py <zip> --name ...`) so bumps use true `vert_peak_g`. Then start the CarPlay `CPMapTemplate` extension: project the pace-note strip and PACE bug onto the head unit, fed by the same `window.apex` frame contract.
+**Stage discovery** (ROAD_INTELLIGENCE §7.2 step 1): port `reference_lap` to `web/apex_core.js`
+at parity, then score road lines from the OpenFreeMap `transportation` layer + Terrarium DEM
+in the visible area and chain the best stages through Valhalla for loops.

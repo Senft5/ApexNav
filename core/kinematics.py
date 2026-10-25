@@ -36,6 +36,10 @@ def profile_drive_dataframe(df: pd.DataFrame, R: np.ndarray, fs_hz: float = 100.
     b_high, a_high = butter(2, 8.0 / nyq, btype='high')
     crest_g = filtfilt(b_low, a_low, az_v) / G_STD
     rough_g = filtfilt(b_high, a_high, az_v) / G_STD
+    # Impact strength = 50 ms RMS of the >8 Hz band: a single 100 Hz sample mostly
+    # measures phone-mount rattle, a real pothole hit lasts tens of milliseconds.
+    spike_win = max(1, int(round(0.05 * fs_hz)))
+    spike_g = np.sqrt(pd.Series(rough_g ** 2).rolling(spike_win, center=True, min_periods=1).mean().to_numpy())
 
     horiz_g = np.hypot(ax_v, ay_v) / G_STD
     yaw_jerk = np.abs(np.gradient(omega_z, 1.0 / fs_hz))
@@ -58,7 +62,7 @@ def profile_drive_dataframe(df: pd.DataFrame, R: np.ndarray, fs_hz: float = 100.
         'camber_deg': camber_deg,
         'crest_vertical_g': crest_g,
         'roughness_sq': rough_g ** 2,
-        'vert_peak_g': np.abs(rough_g),
+        'vert_peak_g': spike_g,
         'engagement_score': engagement
     })
 

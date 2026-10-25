@@ -1,11 +1,55 @@
-﻿name: Build Unsigned iOS IPA
+name: iOS Build & Simulator Tests
 
 on:
   push:
-    branches: [ "main", "master" ]
+  pull_request:
   workflow_dispatch:
 
 jobs:
+  apexkit-macos:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: ApexKit unit + parity tests (macOS)
+        run: swift test --package-path ApexKit
+
+  simulator-tests:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generate Xcode project
+        run: |
+          brew install xcodegen
+          xcodegen generate
+      - name: Pick an iPhone simulator
+        id: sim
+        run: |
+          UDID=$(xcrun simctl list devices available -j | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; print(next(x['udid'] for k,v in d.items() if 'iOS' in k for x in v if x['name'].startswith('iPhone')))")
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+          xcrun simctl boot "$UDID" || true
+          xcrun simctl privacy "$UDID" grant location com.senft.ApexNav || true
+          xcrun simctl location "$UDID" set 39.2575,-84.6015 || true
+      - name: Build and run UI tests on the simulator
+        run: |
+          xcodebuild test \
+            -project ApexNav.xcodeproj \
+            -scheme ApexNav \
+            -destination "id=${{ steps.sim.outputs.udid }}" \
+            -resultBundlePath TestResults.xcresult
+      - name: Export screenshots
+        if: always()
+        run: |
+          mkdir -p shots
+          xcrun xcresulttool export attachments --path TestResults.xcresult --output-path shots || true
+          ls -la shots || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: simulator-results
+          path: |
+            TestResults.xcresult
+            shots
+
   build-ipa:
     runs-on: macos-15
     steps:

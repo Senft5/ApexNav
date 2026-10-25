@@ -3,6 +3,9 @@ options:
   bundleIdPrefix: com.senft
   deploymentTarget:
     iOS: "17.0"
+packages:
+  ApexKit:
+    path: ApexKit
 targets:
   ApexNav:
     type: application
@@ -12,6 +15,8 @@ targets:
       - path: web
         type: folder
         buildPhase: resources
+    dependencies:
+      - package: ApexKit
     info:
       path: Info.plist
       properties:
@@ -25,3 +30,22 @@ targets:
           - audio
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true
+  ApexNavUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: UITests
+    dependencies:
+      - target: ApexNav
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+schemes:
+  ApexNav:
+    build:
+      targets:
+        ApexNav: all
+        ApexNavUITests: [test]
+    test:
+      targets:
+        - ApexNavUITests
