@@ -26,9 +26,7 @@
     const state = { i: 0, v0: 0, v1: n - 1 };
     const head = el('div', 'dv-head'), mapBox = el('div', 'dv-map'), lanes = el('div', 'dv-lanes'), read = el('div', 'dv-read'), list = el('div', 'dv-list');
     const stat = (v, label) => `<div class="dv-stat"><b>${v}</b><span>${label}</span></div>`;
-    head.innerHTML = stat(d.ds && d.ds.score != null ? d.ds.score : '--', 'Score') + stat(`${(S.km / 1.609344).toFixed(1)} mi`, 'Distance') + stat(fmtT(S.duration_s), 'Time')
-      + stat(`${Math.round(S.top_mps * MPH)} mph`, 'Top speed') + stat(S.peak_lat_g != null ? `${S.peak_lat_g.toFixed(2)} g` : '--', 'Peak lateral')
-      + stat(S.peak_brake_g != null ? `${S.peak_brake_g.toFixed(2)} g` : '--', 'Peak braking') + stat(S.climb_m != null ? `${Math.round(S.climb_m * 3.28084)} ft` : '--', 'Climb') + stat(d.corners.length, 'Corners');
+    head.innerHTML = stat(d.ds && d.ds.score != null ? d.ds.score : '--', 'Score') + stat(`${(S.km / 1.609344).toFixed(1)} mi`, 'Distance') + stat(fmtT(S.duration_s), 'Time') + stat(d.corners.length, 'Corners');
     root_.append(head, el('div', 'dv-grid'));
     const grid = root_.lastChild; grid.append(mapBox, el('div', 'dv-right'));
     const zoom = el('div', 'dv-zoom'); grid.lastChild.append(zoom, lanes, read);
@@ -62,9 +60,9 @@
     // ---- lanes -----------------------------------------------------------------------------------------------------
     let W = 0, geo = null;
     const LANES = [
-      { id: 'speed', label: 'SPEED', h: 84, get: (i) => d.speed_mps[i] * MPH, lo: 0, hi: Math.ceil(vmax * MPH / 10) * 10, unit: 'mph', fill: true },
-      { id: 'lat', label: 'LATERAL G', h: 70, get: (i) => (d.lat_g ? d.lat_g[i] : null), sym: true, unit: 'g' },
-      { id: 'lon', label: 'BRAKE / THROTTLE G', h: 70, get: (i) => (d.lon_g ? d.lon_g[i] : null), sym: true, unit: 'g' },
+      { id: 'speed', label: 'Speed', h: 84, get: (i) => d.speed_mps[i] * MPH, lo: 0, hi: Math.ceil(vmax * MPH / 10) * 10, unit: 'mph', fill: true },
+      { id: 'lat', label: 'Cornering g', h: 70, get: (i) => (d.lat_g ? d.lat_g[i] : null), sym: true, unit: 'g' },
+      { id: 'lon', label: 'Brake and throttle g', h: 70, get: (i) => (d.lon_g ? d.lon_g[i] : null), sym: true, unit: 'g' },
     ];
     for (const L of LANES) {
       if (L.sym) { let m = 0.25; for (let i = 0; i < n; i++) { const v = L.get(i); if (finite(v)) m = Math.max(m, Math.abs(v)); } L.hi = Math.ceil(m * 10) / 10; L.lo = -L.hi; }
@@ -81,7 +79,7 @@
       for (const L of LANES) {
         const top = yTop + LH, h = L.h, Y = (v) => top + h - ((v - L.lo) / (L.hi - L.lo)) * h;
         geo.lanes.push({ top, h });
-        svg += `<text x="${LM}" y="${yTop + 12}" font-size="10" letter-spacing="1.4" fill="${C.panelDim}">${L.label}</text>`;
+        svg += `<text x="${LM}" y="${yTop + 12}" font-size="11" fill="${C.panelDim}">${L.label}</text>`;
         svg += `<text x="${W - RM}" y="${yTop + 12}" text-anchor="end" font-size="10" fill="${C.panelDim}">${L.sym ? `±${L.hi.toFixed(1)} g` : `${L.hi} mph`}</text>`;
         svg += `<line x1="${LM}" x2="${W - RM}" y1="${top + h}" y2="${top + h}" stroke="${C.rule}"/>`;
         if (L.sym) svg += `<line x1="${LM}" x2="${W - RM}" y1="${Y(0)}" y2="${Y(0)}" stroke="${C.rule}" stroke-dasharray="3 4"/>`;
