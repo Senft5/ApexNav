@@ -12,6 +12,7 @@
   <script src="instruments.js"></script>
   <script src="sync.js"></script>
   <script src="contributor.js"></script>
+  <script src="drive_view.js"></script>
   <script src="data/dry_ridge.js"></script>
   <script src="data/pebble_ridge.js"></script>
   <style>
@@ -57,6 +58,24 @@
     .scroll { overflow-x: auto; }
     .strip { position: relative; cursor: crosshair; touch-action: none; border: 1px solid var(--rule); }
     .strip .sel { position: absolute; top: 0; bottom: 0; background: var(--accent); opacity: 0.22; pointer-events: none; }
+    /* Drive view */
+    .dv-head { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: var(--rule); border: 1px solid var(--rule); }
+    .dv-stat { background: var(--panel); padding: 10px 12px; display: grid; gap: 2px; }
+    .dv-stat b { font-family: var(--font-num); font-size: 22px; font-weight: 700; }
+    .dv-stat span, .dv-read span { font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--panel-dim); }
+    .dv-grid { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 14px; align-items: start; }
+    .dv-map { border: 1px solid var(--rule); padding: 8px; position: sticky; top: 12px; } .dv-right { display: grid; gap: 10px; min-width: 0; }
+    .dv-legend { display: flex; align-items: center; gap: 8px; font-size: 10px; color: var(--panel-dim); margin-top: 6px; } .dv-legend i { flex: 1; height: 4px; }
+    .dv-lanes { border: 1px solid var(--rule); padding: 6px 0; min-width: 0; } .dv-lanes svg { height: auto; max-width: 100%; }
+    .dv-read { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; background: var(--rule); border: 1px solid var(--rule); position: sticky; bottom: 58px; }
+    .dv-read > div { background: var(--panel); padding: 8px 10px; display: grid; gap: 2px; } .dv-read b { font-family: var(--font-num); font-size: 16px; }
+    .dv-zoom { display: flex; gap: 6px; flex-wrap: wrap; } .dv-z { font: inherit; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; height: 30px; min-width: 44px; padding: 0 10px; background: transparent; color: var(--panel-dim); border: 1px solid var(--rule); cursor: pointer; } .dv-z.on { color: var(--panel); background: var(--panel-ink); border-color: var(--panel-ink); }
+    .dv-corners { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 6px; }
+    .dv-corner { display: grid; grid-template-columns: 24px 1fr auto; gap: 2px 8px; align-items: baseline; text-align: left; padding: 8px 10px; border: 1px solid var(--rule); background: transparent; color: inherit; font: inherit; cursor: pointer; }
+    .dv-corner.on { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
+    .dv-corner b { font-family: var(--font-num); color: var(--signal); } .dv-call { font-weight: 700; font-size: 14px; } .dv-v { font-family: var(--font-num); font-size: 13px; }
+    .dv-d { grid-column: 2 / 4; font-size: 11px; color: var(--panel-dim); }
+    @media (max-width: 760px) { .dv-head { grid-template-columns: repeat(2, minmax(0, 1fr)); } .dv-grid { grid-template-columns: 1fr; } }
     .seglist { display: grid; gap: 6px; }
     .seg { text-align: left; border: 1px solid var(--rule); padding: 10px 12px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; cursor: pointer; background: transparent; color: inherit; font: inherit; }
     .seg.on { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
@@ -78,15 +97,22 @@
     <header>
       <h1>Drive Analysis<small>Private · your drives stay on this device</small></h1>
       <div class="tabs" id="tabs">
-        <button data-tab="history" class="on">HISTORY</button>
+        <button data-tab="drive" class="on">DRIVE</button>
+        <button data-tab="history">HISTORY</button>
         <button data-tab="segments">SEGMENTS</button>
         <button data-tab="compare">COMPARE</button>
       </div>
       <a href="index.html">← Cockpit</a>
     </header>
 
+    <!-- ============================ DRIVE ============================ -->
+    <section id="tab-drive" style="display:grid;gap:14px">
+      <div class="row"><select id="dvPick" aria-label="Choose a drive" style="flex:1;min-width:200px"></select><span class="note" id="dvNote"></span></div>
+      <div id="dvRoot"></div>
+    </section>
+
     <!-- ============================ HISTORY ============================ -->
-    <section id="tab-history" class="grid" style="display:grid;gap:14px">
+    <section id="tab-history" class="grid" hidden style="display:grid;gap:14px">
       <div class="cards" id="historyCards"></div>
       <div class="panel"><h2>Driver Score over time</h2><div id="trend"></div></div>
       <div class="panel">
@@ -241,7 +267,7 @@
     const mph = (v) => (v == null ? '--' : Math.round(v * MPH));
     const ft = (m) => (m == null ? '--' : `${Math.round(m * 3.28084)}`);
     const dateLabel = (d) => (d.date ? d.date.slice(0, 16).replace('T', ' ') : '--');
-    const mmss = (s) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`;
+    const mmss = (s) => { const t = Math.round(s); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; };
     function bars(comp) {
       if (!comp) return '<span class="note">no clean corners</span>';
       const b = (k, label) => `<div class="bar">${label} ${Math.round(comp[k] * 100)}<i><u style="width:${Math.round(comp[k] * 100)}%"></u></i></div>`;
@@ -511,10 +537,25 @@
     }
 
     // ---------------------------------------------------------------------
-    function renderAll() { renderHistory(); renderSegments(); renderCompareSelectors(); renderCompare(); syncSegments(); renderContribute(); }
+    // DRIVE tab: the newest drive by default, any drive from the picker.
+    let dvView = null;
+    function renderDrive() {
+      const pick = $('dvPick'), keep = pick.value; pick.innerHTML = '';
+      const list = drives.slice().reverse();
+      list.forEach(d => pick.add(new Option(`${d.name} · ${dateLabel(d)}`, d.id)));
+      if (!list.length) { $('dvRoot').innerHTML = '<p class="note">No drives yet. Record one with the phone app and import it from History, or open the cockpit to try a shipped drive.</p>'; return; }
+      pick.value = list.some(d => d.id === keep) ? keep : list[0].id;
+      const d = drives.find(x => x.id === pick.value);
+      if (dvView) dvView.destroy();
+      dvView = ApexDriveView.mount($('dvRoot'), d, { Core, C, MPH });
+      $('dvNote').textContent = d.source === 'imported' ? 'imported recording' : 'shipped example';
+    }
+    $('dvPick').addEventListener('change', renderDrive);
+    function renderAll() {
+      renderDrive(); renderHistory(); renderSegments(); renderCompareSelectors(); renderCompare(); syncSegments(); renderContribute(); }
     document.querySelectorAll('#tabs button').forEach(b => b.addEventListener('click', () => {
       document.querySelectorAll('#tabs button').forEach(x => x.classList.toggle('on', x === b));
-      for (const t of ['history', 'segments', 'compare']) $(`tab-${t}`).hidden = t !== b.dataset.tab;
+      for (const t of ['drive', 'history', 'segments', 'compare']) $(`tab-${t}`).hidden = t !== b.dataset.tab;
       if (b.dataset.tab === 'segments') renderSegStrip();
     }));
     if (params.get('tab')) document.querySelector(`#tabs [data-tab="${params.get('tab')}"]`)?.click();

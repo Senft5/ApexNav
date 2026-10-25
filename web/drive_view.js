@@ -1,0 +1,173 @@
+// Drive view: one drive read at a glance. A plan map coloured by speed, three aligned lanes (speed, lateral g, braking/throttle g) with
+// the corners marked, and a scrubber that ties them together. Pure DOM/SVG, drawn at the real pixel width so text stays crisp on a phone.
+// Colours come from the active theme (ApexThemes), units are converted only here for display (CLAUDE.md section 3).
+(function (root) {
+  const NS = 'http://www.w3.org/2000/svg';
+  const G = 9.80665;
+  const el = (tag, cls, html) => { const n = document.createElement(tag); if (cls) n.className = cls; if (html != null) n.innerHTML = html; return n; };
+  const fmtT = (s) => { const t = Math.round(s); return t >= 3600 ? `${Math.floor(t / 3600)}:${String(Math.floor(t / 60) % 60).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}` : `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; };
+  const finite = (v) => typeof v === 'number' && Number.isFinite(v);
+
+  /** Summary numbers for the header strip; null where the drive has no such data. */
+  function summarize(d, Core) {
+    const t = Core.elapsedS(d.speed_mps), n = d.lat.length;
+    const mx = (a) => { let m = -Infinity; for (const v of a || []) if (finite(v)) m = Math.max(m, Math.abs(v)); return m === -Infinity ? null : m; };
+    let gain = null;
+    if (d.elev) { gain = 0; for (let i = 1; i < n; i++) { const dz = d.elev[i] - d.elev[i - 1]; if (dz > 0 && dz < 5) gain += dz; } }
+    return { km: d.dist[n - 1] / 1000, duration_s: t[n - 1], top_mps: Math.max(...d.speed_mps), peak_lat_g: mx(d.lat_g), peak_brake_g: d.lon_g ? Math.max(0, -Math.min(...d.lon_g.filter(finite))) : null, climb_m: gain };
+  }
+
+  function mount(root_, d, o) {
+    const { Core, C, MPH } = o;
+    root_.innerHTML = '';
+    const n = d.lat.length, T = Core.elapsedS(d.speed_mps), S = summarize(d, Core);
+    const state = { i: 0, v0: 0, v1: n - 1 };
+    const head = el('div', 'dv-head'), mapBox = el('div', 'dv-map'), lanes = el('div', 'dv-lanes'), read = el('div', 'dv-read'), list = el('div', 'dv-list');
+    const stat = (v, label) => `<div class="dv-stat"><b>${v}</b><span>${label}</span></div>`;
+    head.innerHTML = stat(d.ds && d.ds.score != null ? d.ds.score : '--', 'Driver Score') + stat(`${(S.km / 1.609344).toFixed(1)} mi`, 'Distance') + stat(fmtT(S.duration_s), 'Time')
+      + stat(`${Math.round(S.top_mps * MPH)} mph`, 'Top speed') + stat(S.peak_lat_g != null ? `${S.peak_lat_g.toFixed(2)} g` : '--', 'Peak lateral')
+      + stat(S.peak_brake_g != null ? `${S.peak_brake_g.toFixed(2)} g` : '--', 'Peak braking') + stat(S.climb_m != null ? `${Math.round(S.climb_m * 3.28084)} ft` : '--', 'Climb') + stat(d.corners.length, 'Corners');
+    root_.append(head, el('div', 'dv-grid'));
+    const grid = root_.lastChild; grid.append(mapBox, el('div', 'dv-right'));
+    const zoom = el('div', 'dv-zoom'); grid.lastChild.append(zoom, lanes, read);
+    root_.append(list);
+
+    // ---- plan map ------------------------------------------------------------------------------------------------
+    const { x, y } = Core.localXY(d.lat, d.lon);
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    for (let i = 0; i < n; i++) { x0 = Math.min(x0, x[i]); x1 = Math.max(x1, x[i]); y0 = Math.min(y0, y[i]); y1 = Math.max(y1, y[i]); }
+    const MW = 360, pad = 16, ms = (MW - 2 * pad) / Math.max(x1 - x0, y1 - y0, 1), MH = Math.round((y1 - y0) * ms + 2 * pad);
+    const P = (i) => [pad + (x[i] - x0) * ms, MH - pad - (y[i] - y0) * ms];
+    const vmax = Math.max(...d.speed_mps) || 1;
+    const lerp = (a, b, t) => Math.round(a + (b - a) * t);
+    const hex = (h) => [1, 3, 5].map(k => parseInt(h.slice(k, k + 2), 16));
+    const asHex = (v, f) => (typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v) ? v : f);
+    const slow = hex(asHex(C.panelDim, '#8A94A6')), fast = hex(asHex(C.accent, '#FF5A1F'));
+    const colorAt = (v) => { const t = Math.pow(v / vmax, 1.4); return `rgb(${lerp(slow[0], fast[0], t)},${lerp(slow[1], fast[1], t)},${lerp(slow[2], fast[2], t)})`; };
+    let segs = '';
+    const stepM = Math.max(1, Math.floor(n / 500));
+    for (let i = 0; i + stepM < n + stepM; i += stepM) {
+      const j = Math.min(n - 1, i + stepM); if (j === i) break;
+      const [ax, ay] = P(i), [bx, by] = P(j);
+      segs += `<line x1="${ax.toFixed(1)}" y1="${ay.toFixed(1)}" x2="${bx.toFixed(1)}" y2="${by.toFixed(1)}" stroke="${colorAt(d.speed_mps[i])}" stroke-width="3.5" stroke-linecap="round"/>`;
+    }
+    let placed = [];
+    const marks = d.corners.map((c, k) => { const [px, py] = P(c.apex); if (placed.some(([qx, qy]) => Math.hypot(qx - px, qy - py) < 13)) return `<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="2.2" fill="${C.signal}"/>`; placed.push([px, py]); return `<g data-k="${k}" style="cursor:pointer"><circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="8" fill="${C.panel}" stroke="${C.signal}" stroke-width="1.6"/><text x="${px.toFixed(1)}" y="${(py + 3.2).toFixed(1)}" text-anchor="middle" font-size="9" font-weight="700" fill="${C.panelInk}">${k + 1}</text></g>`; }).join('');
+    mapBox.innerHTML = `<svg viewBox="0 0 ${MW} ${MH}" role="img" aria-label="Route map coloured by speed">${segs}<polyline id="dvWin" fill="none" stroke="${C.panelInk}" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" opacity="0.28"/>${marks}<circle id="dvDot" r="6" fill="${C.accent}" stroke="${C.panel}" stroke-width="2"/></svg>
+      <div class="dv-legend"><span>slow</span><i style="background:linear-gradient(90deg,${colorAt(0)},${colorAt(vmax)})"></i><span>${Math.round(vmax * MPH)} mph</span></div>`;
+    const dot = mapBox.querySelector('#dvDot');
+
+    // ---- lanes -----------------------------------------------------------------------------------------------------
+    let W = 0, geo = null;
+    const LANES = [
+      { id: 'speed', label: 'SPEED', h: 84, get: (i) => d.speed_mps[i] * MPH, lo: 0, hi: Math.ceil(vmax * MPH / 10) * 10, unit: 'mph', fill: true },
+      { id: 'lat', label: 'LATERAL G', h: 70, get: (i) => (d.lat_g ? d.lat_g[i] : null), sym: true, unit: 'g' },
+      { id: 'lon', label: 'BRAKE / THROTTLE G', h: 70, get: (i) => (d.lon_g ? d.lon_g[i] : null), sym: true, unit: 'g' },
+    ];
+    for (const L of LANES) {
+      if (L.sym) { let m = 0.25; for (let i = 0; i < n; i++) { const v = L.get(i); if (finite(v)) m = Math.max(m, Math.abs(v)); } L.hi = Math.ceil(m * 10) / 10; L.lo = -L.hi; }
+    }
+    const hasElev = !!d.elev;
+    function draw() {
+      W = Math.max(280, lanes.clientWidth || 600);
+      const LM = 8, RM = 8, LH = 18;                                        // label row above each lane
+      const v0 = state.v0, v1 = state.v1, X = (i) => LM + ((i - v0) / (v1 - v0)) * (W - LM - RM);
+      let yTop = 0, svg = '';
+      geo = { X, LM, RM, lanes: [] };
+      const step = Math.max(1, Math.floor((v1 - v0) / (W * 1.2)));
+      for (const L of LANES) {
+        const top = yTop + LH, h = L.h, Y = (v) => top + h - ((v - L.lo) / (L.hi - L.lo)) * h;
+        geo.lanes.push({ top, h });
+        svg += `<text x="${LM}" y="${yTop + 12}" font-size="10" letter-spacing="1.4" fill="${C.panelDim}">${L.label}</text>`;
+        svg += `<text x="${W - RM}" y="${yTop + 12}" text-anchor="end" font-size="10" fill="${C.panelDim}">${L.sym ? `±${L.hi.toFixed(1)} g` : `${L.hi} mph`}</text>`;
+        svg += `<line x1="${LM}" x2="${W - RM}" y1="${top + h}" y2="${top + h}" stroke="${C.rule}"/>`;
+        if (L.sym) svg += `<line x1="${LM}" x2="${W - RM}" y1="${Y(0)}" y2="${Y(0)}" stroke="${C.rule}" stroke-dasharray="3 4"/>`;
+        // corner bands behind the trace
+        for (const c of d.corners) if (c.end >= v0 && c.start <= v1) svg += `<rect x="${X(c.start).toFixed(1)}" y="${top}" width="${Math.max(2, X(c.end) - X(c.start)).toFixed(1)}" height="${h}" fill="${C.signal}" opacity="0.09"/>`;
+        let p = '', started = false, pts = [];
+        for (let i = v0; i <= v1; i += step) { const v = L.get(i); if (!finite(v)) { started = false; continue; } p += `${started ? 'L' : 'M'}${X(i).toFixed(1)} ${Y(v).toFixed(1)}`; started = true; pts.push([i, v]); }
+        if (L.fill && pts.length) svg += `<path d="${p} L${X(pts[pts.length - 1][0]).toFixed(1)} ${top + h} L${X(pts[0][0]).toFixed(1)} ${top + h} Z" fill="${C.accent}" opacity="0.14"/>`;
+        if (L.sym && pts.length) {
+          const base = Y(0), area = pts.map(([i, v], k) => `${k ? 'L' : 'M'}${X(i).toFixed(1)} ${Y(v).toFixed(1)}`).join('') + `L${X(pts[pts.length - 1][0]).toFixed(1)} ${base}L${X(pts[0][0]).toFixed(1)} ${base}Z`;
+          svg += `<path d="${area}" fill="${C.accent}" opacity="0.16"/>`;
+        }
+        svg += p ? `<path d="${p}" fill="none" stroke="${L.id === 'speed' ? C.panelInk : C.accent}" stroke-width="1.6" stroke-linejoin="round"/>` : `<text x="${LM}" y="${top + h / 2}" font-size="11" fill="${C.panelDim}">not recorded</text>`;
+        yTop = top + h + 10;
+      }
+      if (hasElev) {                                                       // faint elevation profile along the bottom
+        let lo = Infinity, hi = -Infinity; for (const v of d.elev) { lo = Math.min(lo, v); hi = Math.max(hi, v); }
+        const top = yTop + LH, h = 40, span = Math.max(10, hi - lo);
+        svg += `<text x="${LM}" y="${yTop + 12}" font-size="10" letter-spacing="1.4" fill="${C.panelDim}">ELEVATION</text><text x="${W - RM}" y="${yTop + 12}" text-anchor="end" font-size="10" fill="${C.panelDim}">${Math.round(lo * 3.28084)}-${Math.round(hi * 3.28084)} ft</text>`;
+        let p = ''; for (let i = v0; i <= v1; i += step) p += `${i > v0 ? 'L' : 'M'}${X(i).toFixed(1)} ${(top + h - ((d.elev[i] - lo) / span) * h).toFixed(1)}`;
+        svg += `<path d="${p} L${X(v1).toFixed(1)} ${top + h} L${X(v0).toFixed(1)} ${top + h} Z" fill="${C.rule}"/>`;
+        geo.lanes.push({ top, h }); yTop = top + h + 6;
+      }
+      // numbered corner flags on top of the first lane
+      let lastFx = -99;
+      d.corners.forEach((c, k) => { if (c.apex < v0 || c.apex > v1) return; const fx = X(c.apex); if (fx - lastFx < 16) { svg += `<line x1="${fx.toFixed(1)}" x2="${fx.toFixed(1)}" y1="${geo.lanes[0].top}" y2="${geo.lanes[0].top + 5}" stroke="${C.signal}"/>`; return; } lastFx = fx; svg += `<text x="${fx.toFixed(1)}" y="${geo.lanes[0].top + 10}" text-anchor="middle" font-size="9" font-weight="700" fill="${C.signal}">${k + 1}</text>`; });
+      svg += `<line id="dvHair" x1="0" x2="0" y1="${LH}" y2="${yTop}" stroke="${C.panelInk}" stroke-width="1.2" opacity="0.85"/>`;
+      geo.H = yTop;
+      const win = mapBox.querySelector('#dvWin');                          // the zoomed stretch, outlined on the map
+      if (win) { let pts = ''; if (v1 - v0 < n - 1) for (let i = v0; i <= v1; i += Math.max(1, Math.floor((v1 - v0) / 120))) pts += P(i).map((q) => q.toFixed(1)).join(',') + ' '; win.setAttribute('points', pts); }
+      lanes.innerHTML = `<svg width="${W}" height="${yTop}" viewBox="0 0 ${W} ${yTop}" style="touch-action:none;cursor:crosshair" role="img" aria-label="Speed, lateral and longitudinal g along the drive">${svg}</svg>`;
+      move(state.i);
+    }
+    const cornerAt = (i) => d.corners.findIndex((c) => i >= c.start && i <= c.end);
+    function move(i) {
+      i = Math.max(0, Math.min(n - 1, Math.round(i))); state.i = i;
+      const hair = lanes.querySelector('#dvHair'); if (hair && geo) { const gx = geo.X(i); hair.setAttribute('x1', gx); hair.setAttribute('x2', gx); hair.style.display = i < state.v0 || i > state.v1 ? 'none' : ''; }
+      const [px, py] = P(i); dot.setAttribute('cx', px); dot.setAttribute('cy', py);
+      const k = cornerAt(i), c = k >= 0 ? d.corners[k] : null;
+      const cell = (label, v) => `<div><b>${v}</b><span>${label}</span></div>`;
+      read.innerHTML = cell('Distance', `${(d.dist[i] / 1609.344).toFixed(2)} mi`) + cell('Time', fmtT(T[i])) + cell('Speed', `${Math.round(d.speed_mps[i] * MPH)} mph`)
+        + cell('Lateral', d.lat_g && finite(d.lat_g[i]) ? `${d.lat_g[i] >= 0 ? 'L ' : 'R '}${Math.abs(d.lat_g[i]).toFixed(2)} g` : '--')
+        + cell('Brake / throttle', d.lon_g && finite(d.lon_g[i]) ? `${d.lon_g[i] < 0 ? 'brake ' : 'accel '}${Math.abs(d.lon_g[i]).toFixed(2)} g` : '--')
+        + cell(c ? `Corner ${k + 1}` : 'Corner', c ? `${c.call || c.code}` : '--');
+      list.querySelectorAll('.dv-corner').forEach((r, q) => r.classList.toggle('on', q === k));
+    }
+    // pointer scrubbing on the lanes and taps on map corners
+    let drag = false;
+    const idxFromEvent = (e) => { const r = lanes.getBoundingClientRect(); const f = Math.max(0, Math.min(1, (e.clientX - r.left - geo.LM) / (W - geo.LM - geo.RM))); return state.v0 + f * (state.v1 - state.v0); };
+    lanes.addEventListener('pointerdown', (e) => { drag = true; lanes.setPointerCapture(e.pointerId); move(idxFromEvent(e)); });
+    lanes.addEventListener('pointermove', (e) => { if (drag || e.pointerType === 'mouse') move(idxFromEvent(e)); });
+    lanes.addEventListener('pointerup', () => { drag = false; });
+    lanes.addEventListener('keydown', (e) => { if (e.key === 'ArrowRight') move(state.i + 5); if (e.key === 'ArrowLeft') move(state.i - 5); });
+    lanes.tabIndex = 0;
+    mapBox.addEventListener('click', (e) => { const g = e.target.closest('[data-k]'); if (g) move(d.corners[+g.dataset.k].apex); });
+
+    // ---- corner list -----------------------------------------------------------------------------------------------
+    list.innerHTML = '<h2>Corners</h2>';
+    const grid2 = el('div', 'dv-corners');
+    d.corners.forEach((c, k) => {
+      const r = el('button', 'dv-corner');
+      r.innerHTML = `<b>${k + 1}</b><span class="dv-call">${(c.call || c.code || '').toString()}</span><span class="dv-v">${Math.round(c.apex_mps * MPH)} mph</span><span class="dv-d">${(d.dist[c.apex] / 1609.344).toFixed(2)} mi</span>`;
+      r.onclick = () => { if (zoomM) setZoom(zoomM, c.apex); move(c.apex); lanes.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); };
+      grid2.append(r);
+    });
+    if (!d.corners.length) grid2.append(el('p', 'note', 'No corners detected on this drive.'));
+    list.append(grid2);
+
+    // Zoom: the lanes show the whole drive, or a window around the cursor (a corner pick recentres it).
+    const ZOOMS = [['ALL', 0], ['2 MI', 2 * 1609.344], ['0.5 MI', 0.5 * 1609.344], ['0.15 MI', 0.15 * 1609.344]];
+    let zoomM = 0;
+    function setZoom(m, center = state.i) {
+      zoomM = m;
+      if (!m) { state.v0 = 0; state.v1 = n - 1; }
+      else { const half = Math.max(20, Math.round(m / 5 / 2)); state.v0 = Math.max(0, Math.min(n - 1 - 2 * half, center - half)); state.v1 = Math.min(n - 1, state.v0 + 2 * half); }
+      zoom.querySelectorAll('button').forEach((b) => b.classList.toggle('on', +b.dataset.m === m));
+      draw();
+    }
+    ZOOMS.forEach(([label, m]) => { const b = el('button', 'dv-z', label); b.dataset.m = m; b.onclick = () => setZoom(m); zoom.append(b); });
+    const pan = (dir) => { if (zoomM) setZoom(zoomM, Math.round((state.v0 + state.v1) / 2 + dir * (state.v1 - state.v0) * 0.6)); };
+    const prev = el('button', 'dv-z', '◀'), next = el('button', 'dv-z', '▶'); prev.setAttribute('aria-label', 'Earlier'); next.setAttribute('aria-label', 'Later');
+    prev.onclick = () => pan(-1); next.onclick = () => pan(1); zoom.append(prev, next);
+    zoom.firstChild.classList.add('on');
+    draw();
+    const ro = new ResizeObserver(() => { if (Math.abs((lanes.clientWidth || 0) - W) > 2) draw(); });
+    ro.observe(lanes);
+    return { move, destroy() { ro.disconnect(); }, summary: S };
+  }
+
+  const api = { mount, summarize };
+  if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexDriveView = api;
+})(typeof window !== 'undefined' ? window : globalThis);

@@ -223,6 +223,7 @@ docs/SOCIAL.md.
 - [x] Read side: `GET /api/roads?ways=a,b,c` (members only, max 50 ways) returns merged per-bin numbers (n, camber, roughness, crest; null = unmeasured), no contributor info. The phone does not use it for scoring yet.
 - [x] Measured-data preview: when a route is opened, members see how much of it other members have measured (coverage, roughness, banked km, passes). `ApexContributor.measuredAlong` (match -> way geometry -> `/api/roads`), 2 more tests. Not wired into loop *scoring*: stage tiles carry no OSM way ids, so scoring by measured data needs a matched candidate route (next step).
 - [x] Loop choice uses member data: among the top 3 candidate loops, measured roughness (same scale as core `effective_mu`) can cost up to 6 points; unmeasured roads are neutral. Members only, 12 s timeout, falls back silently.
+- [x] Analysis page redesign, step 1: new **DRIVE** tab (default) in `web/drive_view.js`: summary strip, speed-coloured plan map with numbered corners, aligned lanes (speed, lateral g, brake/throttle g, elevation) with corner bands, scrub by pointer/arrow keys, zoom (all, 2 mi, 0.5 mi, 0.15 mi) with pan, corner list that jumps to the corner. Mobile-first; drawn at real pixel width. Fixed a `45:60` time-format bug (also in the segments table). Checked in a browser at phone and desktop widths.
 - [x] **76 backend tests** (privacy, auth, highlights, contribute, nightly, account) + 53 pytest.
 ### Active bugs / limitations
 - **Cloudflare "Workers Builds: apexnav" preview build fails on PR commits** while all GitHub Actions pass; a clean-checkout `wrangler deploy --dry-run` succeeds. Docs say a D1 binding needs only Editor access, so a token problem is unlikely. Need the build log text (dashboard > apexnav > Builds). Production deploy of main after merge may fail; the previous deployment stays live.
@@ -233,5 +234,5 @@ docs/SOCIAL.md.
 ## Exact Next Task
 1. Owner: Google client + Worker secrets; then sign in at the site and make the first invites.
 2. Get the Workers Builds log and fix the preview/production build; merge PR #10.
-3. Reward measured-good (banked, smooth) stretches too once there is enough real data to calibrate; verify the contributor against live Valhalla/Overpass with a real recording; convoy (Durable Objects).
+3. Analysis step 2: road-feel lane on the drive view (measured banking/roughness from `/api/roads`), per-corner time/score vs your best pass, progress per road. Then reward measured-good (banked, smooth) stretches too once there is enough real data to calibrate; verify the contributor against live Valhalla/Overpass with a real recording; convoy (Durable Objects).
 4. Voice (on hold): in-app enrollment design in docs/VOICE.md; replace the espeak-ng dependency.
