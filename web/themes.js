@@ -12,26 +12,26 @@
   'use strict';
 
   const FONTS = {
-    roadbook: { ui: '"Barlow Condensed", "Arial Narrow", sans-serif', num: '"Barlow Condensed", "Arial Narrow", sans-serif' },
-    instrument: { ui: '"Inter Tight", "Helvetica Neue", Arial, sans-serif', num: '"Inter Tight", "Helvetica Neue", Arial, sans-serif' },
+    roadbook: { ui: '"Inter Tight", "Helvetica Neue", Arial, sans-serif', num: '"Barlow Condensed", "Arial Narrow", sans-serif' },
+    instrument: { ui: '"Inter Tight", "Helvetica Neue", Arial, sans-serif', num: '"Barlow Condensed", "Arial Narrow", sans-serif' },
     telemetry: { ui: '"IBM Plex Sans Condensed", "Arial Narrow", sans-serif', num: '"IBM Plex Mono", ui-monospace, monospace' }
   };
 
   const THEMES = {
     stage: {
-      id: 'stage', label: 'Stage', tag: 'AB', blurb: 'Precision instruments with roadbook tulips over the topo stage map.',
+      id: 'stage', label: 'Instruments', tag: 'AB', blurb: 'Dark dash over the map.',
       fonts: FONTS.instrument, cluster: 'dials', notes: 'tulip', gauge: 'engraved',
       day: {
         stage: '#F4EFE6', ink: '#1E1D1A', dim: '#7A7266', route: '#B5532B', routeCasing: '#F4EFE6',
         panel: '#141413', panelInk: '#ECE6DA', panelDim: '#8D867A', rule: '#2E2C28', accent: '#E8743B',
         signal: '#D9411E', amber: '#E89B3C', calm: '#FFF8EA',
-        face: '#0F0F0E', faceInk: '#ECE6DA', faceDim: '#5E5A52'
+        face: '#0F0F0E', faceInk: '#ECE6DA', faceDim: '#5E5A52', hair: '#2E2C28', gain: '#6FBF7F'
       },
       night: {
         stage: '#111210', ink: '#EAE3D2', dim: '#8E8676', route: '#E89B3C', routeCasing: '#111210',
         panel: '#0C0C0B', panelInk: '#EAE3D2', panelDim: '#7F796D', rule: '#24231F', accent: '#E89B3C',
         signal: '#D9411E', amber: '#E89B3C', calm: '#EAE3D2',
-        face: '#0A0A09', faceInk: '#EAE3D2', faceDim: '#4E4A43'
+        face: '#0A0A09', faceInk: '#EAE3D2', faceDim: '#4E4A43', hair: '#24231F', gain: '#6FBF7F'
       },
       map: {
         day: { bg: '#F4EFE6', water: '#C9D2CC', waterLine: '#9FB0AA', land: '#E9E2D2', wood: '#DCD8BF', road: '#FFFDF8', roadMinor: '#FFFFFF', casing: '#B9AE98', label: '#3B3833', halo: '#F4EFE6', boundary: '#C8BEA9', contour: '#3B3833', shadow: '#6B6B3A', highlight: '#FBF8F0', accentShade: '#8A8455' },
@@ -40,19 +40,19 @@
     },
 
     roadbook: {
-      id: 'roadbook', label: 'Roadbook', tag: 'A', blurb: 'Ink on paper. Tulip diagrams and printed gauges, like a rally co-driver\'s book.',
+      id: 'roadbook', label: 'Road book', tag: 'A', blurb: 'Paper and red ink.',
       fonts: FONTS.roadbook, cluster: 'dials', notes: 'roadbook', gauge: 'printed',
       day: {
         stage: '#F2EBDD', ink: '#1C1A17', dim: '#6F675A', route: '#C8102E', routeCasing: '#F2EBDD',
         panel: '#EDE4D3', panelInk: '#1C1A17', panelDim: '#6F675A', rule: '#1C1A17', accent: '#C8102E',
         signal: '#C8102E', amber: '#B8741A', calm: '#1C1A17',
-        face: '#F6F0E4', faceInk: '#1C1A17', faceDim: '#9A9080'
+        face: '#F6F0E4', faceInk: '#1C1A17', faceDim: '#9A9080', hair: '#CFC4AE', gain: '#2E6B3F'
       },
       night: {
         stage: '#1A1814', ink: '#EDE4D3', dim: '#9A9080', route: '#E24A4A', routeCasing: '#1A1814',
         panel: '#151310', panelInk: '#EDE4D3', panelDim: '#8C8373', rule: '#EDE4D3', accent: '#E24A4A',
         signal: '#E24A4A', amber: '#D9A24A', calm: '#EDE4D3',
-        face: '#1A1814', faceInk: '#EDE4D3', faceDim: '#6A6255'
+        face: '#1A1814', faceInk: '#EDE4D3', faceDim: '#6A6255', hair: '#2E2A23', gain: '#6FBF7F'
       },
       map: {
         day: { bg: '#F2EBDD', water: '#CFD8D3', waterLine: '#7F9A9A', land: '#EFE7D8', wood: '#E3DCC5', road: '#FFFFFF', roadMinor: '#FFFFFF', casing: '#1C1A17', label: '#1C1A17', halo: '#F2EBDD', boundary: '#8C8373', contour: '#8B6B4A', shadow: '#A08F6E', highlight: '#FFFFFF', accentShade: '#B59E78' },
@@ -67,13 +67,13 @@
         stage: '#ECEAE6', ink: '#161616', dim: '#77736C', route: '#FF5A1F', routeCasing: '#ECEAE6',
         panel: '#161616', panelInk: '#F2F0EC', panelDim: '#8A8780', rule: '#2C2C2C', accent: '#FF5A1F',
         signal: '#FF5A1F', amber: '#F2B33D', calm: '#FFFFFF',
-        face: '#101010', faceInk: '#F2F0EC', faceDim: '#55534F'
+        face: '#101010', faceInk: '#F2F0EC', faceDim: '#55534F', hair: '#2C2C2C', gain: '#6FBF7F'
       },
       night: {
         stage: '#141414', ink: '#F2F0EC', dim: '#8A8780', route: '#FF5A1F', routeCasing: '#141414',
         panel: '#0D0D0D', panelInk: '#F2F0EC', panelDim: '#7A7772', rule: '#232323', accent: '#FF5A1F',
         signal: '#FF5A1F', amber: '#F2B33D', calm: '#F2F0EC',
-        face: '#0A0A0A', faceInk: '#F2F0EC', faceDim: '#45433F'
+        face: '#0A0A0A', faceInk: '#F2F0EC', faceDim: '#45433F', hair: '#232323', gain: '#6FBF7F'
       },
       map: {
         day: { bg: '#ECEAE6', water: '#CFD6DA', waterLine: '#A9B4BA', land: '#E4E1DC', wood: '#DADBD0', road: '#FFFFFF', roadMinor: '#FBFBFA', casing: '#C2BEB6', label: '#3A3936', halo: '#ECEAE6', boundary: '#C9C5BD', contour: '#9A968F', shadow: '#8E8A82', highlight: '#FFFFFF', accentShade: '#B4B0A8' },
@@ -88,7 +88,7 @@
         stage: '#0B0D0F', ink: '#E8ECEF', dim: '#7D868F', route: '#E8ECEF', routeCasing: '#0B0D0F',
         panel: '#07090A', panelInk: '#E8ECEF', panelDim: '#6B747C', rule: '#1C2126', accent: '#F2B33D',
         signal: '#F85149', amber: '#F2B33D', calm: '#3FB950',
-        face: '#0B0D0F', faceInk: '#E8ECEF', faceDim: '#3A424A'
+        face: '#0B0D0F', faceInk: '#E8ECEF', faceDim: '#3A424A', hair: '#1C2126', gain: '#3FB950'
       },
       map: {
         day: { bg: '#0B0D0F', water: '#0D1A22', waterLine: '#1B2C36', land: '#0E1114', wood: '#0F1311', road: '#2A2F35', roadMinor: '#1D2126', casing: '#07090A', label: '#8A939B', halo: '#0B0D0F', boundary: '#1C2126', contour: '#1E252C', shadow: '#000000', highlight: '#1A2026', accentShade: '#05070A' }
@@ -98,9 +98,9 @@
   THEMES.telemetry.night = THEMES.telemetry.day;      // a race dash is already a night display
   THEMES.telemetry.map.night = THEMES.telemetry.map.day;
 
-  const ORDER = ['stage', 'roadbook', 'instrument', 'telemetry'];
+  const ORDER = ['roadbook', 'stage'];          // the picker offers two looks; instrument/telemetry remain loadable from saved prefs
 
-  function get(id) { return THEMES[id] || THEMES.stage; }
+  function get(id) { return THEMES[id] || THEMES.roadbook; }
 
   function apply(id, night) {
     const t = get(id);
