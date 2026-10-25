@@ -1,0 +1,401 @@
+{
+ "id": "emma",
+ "name": "Emma",
+ "style": "codriver",
+ "engine": "kokoro",
+ "kokoro_voice": "bf_emma",
+ "speed": 1.08,
+ "license": "Kokoro-82M, Apache-2.0 (hexgrad/Kokoro-82M)",
+ "tokens": {
+  "head:L1": {
+   "file": "head_L1.m4a",
+   "dur": 0.704,
+   "text": "Left one"
+  },
+  "head:L1-": {
+   "file": "head_L1m.m4a",
+   "dur": 1.101,
+   "text": "Left one minus"
+  },
+  "head:L1+": {
+   "file": "head_L1p.m4a",
+   "dur": 1.048,
+   "text": "Left one plus"
+  },
+  "head:L2": {
+   "file": "head_L2.m4a",
+   "dur": 0.645,
+   "text": "Left two"
+  },
+  "head:L2-": {
+   "file": "head_L2m.m4a",
+   "dur": 1.036,
+   "text": "Left two minus"
+  },
+  "head:L2+": {
+   "file": "head_L2p.m4a",
+   "dur": 0.954,
+   "text": "Left two plus"
+  },
+  "head:L3": {
+   "file": "head_L3.m4a",
+   "dur": 0.733,
+   "text": "Left three"
+  },
+  "head:L3-": {
+   "file": "head_L3m.m4a",
+   "dur": 1.117,
+   "text": "Left three minus"
+  },
+  "head:L3+": {
+   "file": "head_L3p.m4a",
+   "dur": 1.037,
+   "text": "Left three plus"
+  },
+  "head:L4": {
+   "file": "head_L4.m4a",
+   "dur": 0.674,
+   "text": "Left four"
+  },
+  "head:L4-": {
+   "file": "head_L4m.m4a",
+   "dur": 1.087,
+   "text": "Left four minus"
+  },
+  "head:L4+": {
+   "file": "head_L4p.m4a",
+   "dur": 1.004,
+   "text": "Left four plus"
+  },
+  "head:L5": {
+   "file": "head_L5.m4a",
+   "dur": 0.699,
+   "text": "Left five"
+  },
+  "head:L5-": {
+   "file": "head_L5m.m4a",
+   "dur": 1.187,
+   "text": "Left five minus"
+  },
+  "head:L5+": {
+   "file": "head_L5p.m4a",
+   "dur": 1.123,
+   "text": "Left five plus"
+  },
+  "head:L6": {
+   "file": "head_L6.m4a",
+   "dur": 0.68,
+   "text": "Left six"
+  },
+  "head:L6-": {
+   "file": "head_L6m.m4a",
+   "dur": 1.141,
+   "text": "Left six minus"
+  },
+  "head:L6+": {
+   "file": "head_L6p.m4a",
+   "dur": 1.047,
+   "text": "Left six plus"
+  },
+  "head:LHP": {
+   "file": "head_LHP.m4a",
+   "dur": 0.848,
+   "text": "Left hairpin"
+  },
+  "head:LSQ": {
+   "file": "head_LSQ.m4a",
+   "dur": 0.696,
+   "text": "Square left"
+  },
+  "head:LAC": {
+   "file": "head_LAC.m4a",
+   "dur": 0.795,
+   "text": "Acute left"
+  },
+  "head:R1": {
+   "file": "head_R1.m4a",
+   "dur": 0.664,
+   "text": "Right one"
+  },
+  "head:R1-": {
+   "file": "head_R1m.m4a",
+   "dur": 1.064,
+   "text": "Right one minus"
+  },
+  "head:R1+": {
+   "file": "head_R1p.m4a",
+   "dur": 1.026,
+   "text": "Right one plus"
+  },
+  "head:R2": {
+   "file": "head_R2.m4a",
+   "dur": 0.671,
+   "text": "Right two"
+  },
+  "head:R2-": {
+   "file": "head_R2m.m4a",
+   "dur": 1.046,
+   "text": "Right two minus"
+  },
+  "head:R2+": {
+   "file": "head_R2p.m4a",
+   "dur": 1.002,
+   "text": "Right two plus"
+  },
+  "head:R3": {
+   "file": "head_R3.m4a",
+   "dur": 0.713,
+   "text": "Right three"
+  },
+  "head:R3-": {
+   "file": "head_R3m.m4a",
+   "dur": 1.113,
+   "text": "Right three minus"
+  },
+  "head:R3+": {
+   "file": "head_R3p.m4a",
+   "dur": 1.048,
+   "text": "Right three plus"
+  },
+  "head:R4": {
+   "file": "head_R4.m4a",
+   "dur": 0.669,
+   "text": "Right four"
+  },
+  "head:R4-": {
+   "file": "head_R4m.m4a",
+   "dur": 1.065,
+   "text": "Right four minus"
+  },
+  "head:R4+": {
+   "file": "head_R4p.m4a",
+   "dur": 0.994,
+   "text": "Right four plus"
+  },
+  "head:R5": {
+   "file": "head_R5.m4a",
+   "dur": 0.682,
+   "text": "Right five"
+  },
+  "head:R5-": {
+   "file": "head_R5m.m4a",
+   "dur": 1.186,
+   "text": "Right five minus"
+  },
+  "head:R5+": {
+   "file": "head_R5p.m4a",
+   "dur": 1.087,
+   "text": "Right five plus"
+  },
+  "head:R6": {
+   "file": "head_R6.m4a",
+   "dur": 0.697,
+   "text": "Right six"
+  },
+  "head:R6-": {
+   "file": "head_R6m.m4a",
+   "dur": 1.121,
+   "text": "Right six minus"
+  },
+  "head:R6+": {
+   "file": "head_R6p.m4a",
+   "dur": 1.075,
+   "text": "Right six plus"
+  },
+  "head:RHP": {
+   "file": "head_RHP.m4a",
+   "dur": 0.854,
+   "text": "Right hairpin"
+  },
+  "head:RSQ": {
+   "file": "head_RSQ.m4a",
+   "dur": 0.692,
+   "text": "Square right"
+  },
+  "head:RAC": {
+   "file": "head_RAC.m4a",
+   "dur": 0.803,
+   "text": "Acute right"
+  },
+  "mod:long": {
+   "file": "mod_long.m4a",
+   "dur": 0.423,
+   "text": "long"
+  },
+  "mod:short": {
+   "file": "mod_short.m4a",
+   "dur": 0.43,
+   "text": "short"
+  },
+  "mod:tightens": {
+   "file": "mod_tightens.m4a",
+   "dur": 0.589,
+   "text": "tightens"
+  },
+  "mod:opens": {
+   "file": "mod_opens.m4a",
+   "dur": 0.562,
+   "text": "opens"
+  },
+  "mod:banked": {
+   "file": "mod_banked.m4a",
+   "dur": 0.53,
+   "text": "banked"
+  },
+  "mod:off-camber": {
+   "file": "mod_off_camber.m4a",
+   "dur": 0.708,
+   "text": "off camber"
+  },
+  "mod:over crest": {
+   "file": "mod_over_crest.m4a",
+   "dur": 0.79,
+   "text": "over crest"
+  },
+  "caution:1": {
+   "file": "caution_1.m4a",
+   "dur": 0.371,
+   "text": "care"
+  },
+  "caution:2": {
+   "file": "caution_2.m4a",
+   "dur": 0.521,
+   "text": "caution"
+  },
+  "caution:3": {
+   "file": "caution_3.m4a",
+   "dur": 0.895,
+   "text": "double caution"
+  },
+  "caution:4": {
+   "file": "caution_4.m4a",
+   "dur": 0.91,
+   "text": "triple caution"
+  },
+  "link:into": {
+   "file": "link_into.m4a",
+   "dur": 0.455,
+   "text": "into"
+  },
+  "link:and": {
+   "file": "link_and.m4a",
+   "dur": 0.369,
+   "text": "and"
+  },
+  "dist:30": {
+   "file": "dist_30.m4a",
+   "dur": 0.537,
+   "text": "thirty"
+  },
+  "dist:40": {
+   "file": "dist_40.m4a",
+   "dur": 0.542,
+   "text": "forty"
+  },
+  "dist:50": {
+   "file": "dist_50.m4a",
+   "dur": 0.518,
+   "text": "fifty"
+  },
+  "dist:60": {
+   "file": "dist_60.m4a",
+   "dur": 0.551,
+   "text": "sixty"
+  },
+  "dist:70": {
+   "file": "dist_70.m4a",
+   "dur": 0.563,
+   "text": "seventy"
+  },
+  "dist:80": {
+   "file": "dist_80.m4a",
+   "dur": 0.478,
+   "text": "eighty"
+  },
+  "dist:100": {
+   "file": "dist_100.m4a",
+   "dur": 0.805,
+   "text": "one hundred"
+  },
+  "dist:120": {
+   "file": "dist_120.m4a",
+   "dur": 0.786,
+   "text": "one twenty"
+  },
+  "dist:150": {
+   "file": "dist_150.m4a",
+   "dur": 0.742,
+   "text": "one fifty"
+  },
+  "dist:200": {
+   "file": "dist_200.m4a",
+   "dur": 0.783,
+   "text": "two hundred"
+  },
+  "dist:250": {
+   "file": "dist_250.m4a",
+   "dur": 0.708,
+   "text": "two fifty"
+  },
+  "dist:300": {
+   "file": "dist_300.m4a",
+   "dur": 0.806,
+   "text": "three hundred"
+  },
+  "dist:350": {
+   "file": "dist_350.m4a",
+   "dur": 0.774,
+   "text": "three fifty"
+  },
+  "dist:400": {
+   "file": "dist_400.m4a",
+   "dur": 0.848,
+   "text": "four hundred"
+  },
+  "dist:450": {
+   "file": "dist_450.m4a",
+   "dur": 0.764,
+   "text": "four fifty"
+  },
+  "dist:500": {
+   "file": "dist_500.m4a",
+   "dur": 0.836,
+   "text": "five hundred"
+  },
+  "hazard:bump": {
+   "file": "hazard_bump.m4a",
+   "dur": 0.402,
+   "text": "Bump"
+  },
+  "hazard:crest": {
+   "file": "hazard_crest.m4a",
+   "dur": 0.521,
+   "text": "Crest"
+  },
+  "hazard:dip": {
+   "file": "hazard_dip.m4a",
+   "dur": 0.423,
+   "text": "Dip"
+  },
+  "hazard:alpr": {
+   "file": "hazard_alpr.m4a",
+   "dur": 0.476,
+   "text": "Camera"
+  },
+  "sys:stage": {
+   "file": "sys_stage.m4a",
+   "dur": 1.418,
+   "text": "Stage mode. Full notes."
+  },
+  "sys:cruise": {
+   "file": "sys_cruise.m4a",
+   "dur": 1.269,
+   "text": "Cruise. Hazards only."
+  },
+  "sys:test": {
+   "file": "sys_test.m4a",
+   "dur": 1.033,
+   "text": "Co-driver ready."
+  }
+ }
+}

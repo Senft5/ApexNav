@@ -13,6 +13,7 @@
   <script src="apex_core.js"></script>
   <script src="themes.js"></script>
   <script src="instruments.js"></script>
+  <script src="voice.js"></script>
   <script src="data/dry_ridge.js"></script>
   <script src="data/pebble_ridge.js"></script>
   <style>
@@ -235,12 +236,13 @@
           <section>
             <h3>Co-driver voice</h3>
             <div class="row" id="voiceList">
-              <button class="ink-btn" data-voice="codriver">CO-DRIVER</button>
-              <button class="ink-btn" data-voice="jarvis">JARVIS</button>
+              <span id="voiceCards" style="display:contents"></span>
+              <button class="ink-btn" data-voice="device">DEVICE</button>
               <button class="ink-btn" id="voiceTestBtn">TEST</button>
+              <button class="ink-btn" id="liveVoiceBtn">LIVE</button>
             </div>
             <div class="row" style="margin-top:6px"><select class="field" id="voiceSelect"></select></div>
-            <p class="note">Co-driver picks the most natural voice on this device (on iPhone, download an Enhanced or Premium English voice in Settings → Accessibility → Spoken Content for the best result). Jarvis is deliberately robotic.</p>
+            <p class="note">George, Daniel and Emma are rendered with the open Kokoro-82M model (Apache-2.0); pace notes work offline. LIVE also runs the model in the browser for names and routes (one-time ~90 MB download, then cached). Jarvis is the same model through a cartoon-robot effect. DEVICE uses this phone's own voices.</p>
           </section>
           <section>
             <h3>Camera feel</h3>
@@ -301,7 +303,7 @@
         subtitle: [d.date ? d.date.slice(0, 10) : '', d.device || ''].filter(Boolean).join(' · '),
         lat: col('lat'), lon: col('lon'), dist: col('distance_m'), elev: col('elevation_m'),
         speedMps: col('speed_mph', 1 / MPH), latG: col('lat_g'), lonG: col('lon_g'), camberDeg: col('camber_deg'),
-        envMps: col('target_mph', 1 / MPH), sightM: col('sight_m'), limitMps: col('limit_kph', 1 / 3.6),
+        envMps: col('target_mph', 1 / MPH), sightM: col('sight_m'), limitMps: col('limit_kph', 1 / 3.6), roughG: col('roughness_rms'),
         events: d.events.map(e => ({ ...e })), sectors: d.sectors, sectorM: d.sector_m || 500, alpr: null
       };
     }
@@ -322,7 +324,7 @@
       return {
         id, name, kind: 'route', subtitle: 'Geometry only · not yet profiled',
         lat: rs.lat, lon: rs.lon, dist, elev: null, speedMps: null, latG: null, lonG: null, camberDeg: null,
-        envMps: Array.from(env), sightM: Array.from(sight), limitMps: null,
+        envMps: Array.from(env), sightM: Array.from(sight), limitMps: null, kappa: Array.from(kappa), roughG: null,
         events, sectors: null, sectorM: 500, alpr: null
       };
     }
@@ -336,21 +338,22 @@
     const state = {
       mode: 'replay', playing: false, rate: 1, cursorM: 0, cursorIdx: 0, follow: true, bearing: 0,
       live: null, liveAt: 0, spiritedAt: -Infinity, spoken: new Set(), tapToRoute: false,
-      theme: 'stage', camFeel: 'dynamic', voiceStyle: 'codriver', voiceName: '',
+      theme: 'stage', camFeel: 'dynamic', voiceId: 'george', liveVoice: true, voiceStyle: 'codriver', voiceName: '',
       toggles: { stage: false, voice: true, lpr: true, dna: false, night: false }
     };
     try {
       const saved = JSON.parse(localStorage.getItem('apex.prefs') || 'null');
-      if (saved) { Object.assign(state.toggles, saved.toggles || {}); if (saved.theme) state.theme = saved.theme; if (saved.camFeel) state.camFeel = saved.camFeel; if (saved.voiceStyle) state.voiceStyle = saved.voiceStyle; if (saved.voiceName != null) state.voiceName = saved.voiceName; }
+      if (saved) { Object.assign(state.toggles, saved.toggles || {}); if (saved.theme) state.theme = saved.theme; if (saved.camFeel) state.camFeel = saved.camFeel; if (saved.voiceId) state.voiceId = saved.voiceId; if (saved.liveVoice != null) state.liveVoice = saved.liveVoice; if (saved.voiceName != null) state.voiceName = saved.voiceName; }
     } catch (_) {}
     if (params.has('night')) state.toggles.night = params.get('night') === '1';
     if (params.has('theme')) state.theme = params.get('theme');
     if (params.has('cam')) state.camFeel = params.get('cam');
-    if (params.has('voice')) state.voiceStyle = params.get('voice');
+    if (params.has('voice')) state.voiceId = params.get('voice');
+    state.voiceStyle = state.voiceId === 'jarvis' ? 'jarvis' : 'codriver';
 
     let look = Themes.apply(state.theme, state.toggles.night);
     let cluster = Inst.mountCluster($('cluster'), look.theme);
-    function savePrefs() { try { localStorage.setItem('apex.prefs', JSON.stringify({ theme: state.theme, camFeel: state.camFeel, voiceStyle: state.voiceStyle, voiceName: state.voiceName, toggles: state.toggles })); } catch (_) {} }
+    function savePrefs() { try { localStorage.setItem('apex.prefs', JSON.stringify({ theme: state.theme, camFeel: state.camFeel, voiceId: state.voiceId, liveVoice: state.liveVoice, voiceName: state.voiceName, toggles: state.toggles })); } catch (_) {} }
     function applyTheme() {
       look = Themes.apply(state.theme, state.toggles.night);
       cluster = Inst.mountCluster($('cluster'), look.theme);
@@ -554,55 +557,76 @@
       });
     });
     map.once('idle', () => document.querySelectorAll('.maplibregl-ctrl-attrib').forEach(a => a.classList.remove('maplibregl-compact-show')));
-    map.on('dragstart', () => { state.follow = false; $('recenterBtn').classList.add('show'); });
-    $('recenterBtn').addEventListener('click', () => { state.follow = true; $('recenterBtn').classList.remove('show'); resetCamera(); render(true); });
+    $('recenterBtn').addEventListener('click', () => { resumeFollow(); render(false); });
 
     // =======================================================================
-    // 4b. CAMERA RIG — spring-damper follow on its own 60 fps loop.
-    //     Position chases a speed-scaled look-ahead point; bearing aims at the road
-    //     2-4 s ahead, so the view swings into a corner before the car does and settles
-    //     with a slight overshoot (the "whip"). Zoom and pitch breathe with speed.
+    // 4b. CAMERA RIG — a chase cam that reacts to the car and the road, on its own 60 fps loop.
+    //   * springs: position chases a speed-scaled look-ahead point; bearing aims 2-4 s down the
+    //     road (swings into corners before the car does) and settles with an overshoot
+    //   * sway: swings wide in proportion to lateral g, so the car sits on the inside
+    //   * brake/throttle: pitch dips and zoom tightens under braking, pulls out under power
+    //   * road texture: shake from measured pavement roughness, a kick at recorded bumps
+    //   * override: any touch pauses follow; it glides back after FOLLOW_RESUME_S of no touch
     // =======================================================================
     const CAM_FEEL = {
-      steady:  { wPos: 3.6, zPos: 1.00, wBear: 1.5, zBear: 1.00, lead: 0.8, ahead: 1.6 },
-      dynamic: { wPos: 3.0, zPos: 0.90, wBear: 2.4, zBear: 0.70, lead: 1.0, ahead: 2.4 },
-      whip:    { wPos: 2.6, zPos: 0.78, wBear: 3.4, zBear: 0.52, lead: 1.3, ahead: 3.6 }
+      steady:  { wPos: 3.4, zPos: 1.00, wBear: 1.8, zBear: 0.95, lead: 0.8, ahead: 1.8, sway: 0.0, punch: 0.3, shake: 0.25 },
+      dynamic: { wPos: 3.0, zPos: 0.80, wBear: 3.0, zBear: 0.55, lead: 1.0, ahead: 2.6, sway: 1.0, punch: 1.0, shake: 1.0 },
+      whip:    { wPos: 2.6, zPos: 0.65, wBear: 4.2, zBear: 0.42, lead: 1.3, ahead: 3.6, sway: 1.6, punch: 1.5, shake: 1.5 }
     };
+    const FOLLOW_RESUME_S = 6;
     const cam = { ready: false };
     let vehicle = null;
     const clamp01 = (x) => Math.max(0, Math.min(1, x));
+    const clampS = (x, a) => Math.max(-a, Math.min(a, x));
     function setVehicle(v, snap) { vehicle = v; if (snap || !cam.ready) resetCamera(); }
+    function offsetPoint(lat, lon, bearingDegs, m) {
+      const b = bearingDegs * Math.PI / 180;
+      return [lat + m * Math.cos(b) / 110540, lon + m * Math.sin(b) / (111320 * Math.cos(lat * Math.PI / 180))];
+    }
     function aheadPoint(m) {
       if (vehicle.onTrack) { const s = sample(track, state.cursorM + m); return [s.lat, s.lon]; }
-      const b = vehicle.bearing * Math.PI / 180;
-      return [vehicle.lat + m * Math.cos(b) / 110540, vehicle.lon + m * Math.sin(b) / (111320 * Math.cos(vehicle.lat * Math.PI / 180))];
+      return offsetPoint(vehicle.lat, vehicle.lon, vehicle.bearing, m);
     }
     function camTargets() {
       const f = CAM_FEEL[state.camFeel] || CAM_FEEL.dynamic, v = vehicle.vMps;
-      const [cLat, cLon] = aheadPoint(Math.max(15, Math.min(90, v * f.lead)));
+      let [cLat, cLon] = aheadPoint(Math.max(15, Math.min(90, v * f.lead)));
       const [bLat, bLon] = aheadPoint(Math.max(35, Math.min(200, v * f.ahead)));
       const brg = vehicle.onTrack ? bearingDeg(vehicle.lat, vehicle.lon, bLat, bLon) : vehicle.bearing;
-      return { lat: cLat, lon: cLon, bearing: brg, zoom: 16.4 - 1.8 * clamp01((v - 8) / 30), pitch: 42 + 12 * clamp01(v / 35) };
+      // Swing wide: +lat (left turn) pushes the view to the right of the heading.
+      const lat = vehicle.latG || 0, lon = vehicle.lonG || 0;
+      [cLat, cLon] = offsetPoint(cLat, cLon, brg + 90, clampS(lat / 0.6, 1) * 16 * f.sway);
+      const brake = clamp01(-lon / 0.5), power = clamp01(lon / 0.35);
+      return {
+        lat: cLat, lon: cLon, bearing: brg,
+        zoom: 16.4 - 1.8 * clamp01((v - 8) / 30) + f.punch * (0.35 * brake - 0.3 * power),
+        pitch: 42 + 12 * clamp01(v / 35) + f.punch * 5 * brake
+      };
     }
-    function resetCamera() {
+    function resetCamera(fromMap = false) {
       if (!vehicle) return;
       const t = camTargets();
-      Object.assign(cam, { ready: true, lat: t.lat, lon: t.lon, bearing: t.bearing, zoom: t.zoom, pitch: t.pitch,
-        vLat: 0, vLon: 0, vBear: 0, vZoom: 0, vPitch: 0,
-        pLat: vehicle.lat, pLon: vehicle.lon, pBear: vehicle.bearing, pvLat: 0, pvLon: 0, pvBear: 0 });
+      const c = fromMap ? map.getCenter() : null;
+      Object.assign(cam, {
+        ready: true,
+        lat: c ? c.lat : t.lat, lon: c ? c.lng : t.lon, bearing: fromMap ? map.getBearing() : t.bearing,
+        zoom: fromMap ? map.getZoom() : t.zoom, pitch: fromMap ? map.getPitch() : t.pitch,
+        vLat: 0, vLon: 0, vBear: 0, vZoom: 0, vPitch: 0, kick: 0,
+        ...(fromMap ? {} : { pLat: vehicle.lat, pLon: vehicle.lon, pBear: vehicle.bearing, pvLat: 0, pvLon: 0, pvBear: 0 })
+      });
     }
     function spring(x, v, target, w, z, dt) {
       const a = w * w * (target - x) - 2 * z * w * v;
       v += a * dt;
       return [x + v * dt, v];
     }
-    let camLast = 0;
+    // Smooth pseudo-noise (incommensurate sines) for road texture.
+    const texture = (t, seed) => Math.sin(t * 43.1 + seed) * 0.5 + Math.sin(t * 71.7 + seed * 2.3) * 0.3 + Math.sin(t * 97.3 + seed * 4.1) * 0.2;
+    let camLast = 0, lastBumpKey = '';
     function cameraFrame(ts) {
       requestAnimationFrame(cameraFrame);
       const dt = Math.min(0.05, (ts - (camLast || ts)) / 1000);
       camLast = ts;
       if (!vehicle || !cam.ready || dt <= 0) return;
-      // Puck: fast critically-damped glide so 10 Hz GPS reads as continuous motion.
       [cam.pLat, cam.pvLat] = spring(cam.pLat, cam.pvLat, vehicle.lat, 14, 1, dt);
       [cam.pLon, cam.pvLon] = spring(cam.pLon, cam.pvLon, vehicle.lon, 14, 1, dt);
       [cam.pBear, cam.pvBear] = spring(cam.pBear, cam.pvBear, cam.pBear + angleDelta(cam.pBear, vehicle.bearing), 10, 1, dt);
@@ -612,11 +636,55 @@
       [cam.lat, cam.vLat] = spring(cam.lat, cam.vLat, t.lat, f.wPos, f.zPos, dt);
       [cam.lon, cam.vLon] = spring(cam.lon, cam.vLon, t.lon, f.wPos, f.zPos, dt);
       [cam.bearing, cam.vBear] = spring(cam.bearing, cam.vBear, cam.bearing + angleDelta(cam.bearing, t.bearing), f.wBear, f.zBear, dt);
-      [cam.zoom, cam.vZoom] = spring(cam.zoom, cam.vZoom, t.zoom, 1.2, 1, dt);
-      [cam.pitch, cam.vPitch] = spring(cam.pitch, cam.vPitch, t.pitch, 1.2, 1, dt);
-      map.jumpTo({ center: [cam.lon, cam.lat], bearing: (cam.bearing % 360 + 360) % 360, zoom: cam.zoom, pitch: cam.pitch });
+      [cam.zoom, cam.vZoom] = spring(cam.zoom, cam.vZoom, t.zoom, 2.0, 0.8, dt);
+      [cam.pitch, cam.vPitch] = spring(cam.pitch, cam.vPitch, t.pitch, 2.0, 0.8, dt);
+
+      // Road texture: measured roughness (g RMS) sets a fine shake; a recorded bump within 15 m kicks it.
+      const bump = track && allEvents().find(e => e.type === 'bump' && Math.abs(e.dist_m - state.cursorM) < 15);
+      const key = bump ? `${bump.index}` : '';
+      if (bump && key !== lastBumpKey) cam.kick = Math.min(1.5, bump.severity_g * 2.2);
+      lastBumpKey = key;
+      cam.kick *= Math.exp(-dt * 6);
+      const amp = f.shake * (clamp01((vehicle.rough || 0) / 0.25) * 0.6 + cam.kick) * clamp01(vehicle.vMps / 6);
+      const tt = ts / 1000;
+      const [sLat, sLon] = offsetPoint(cam.lat, cam.lon, cam.bearing + 90, amp * 1.2 * texture(tt, 1));
+      map.jumpTo({
+        center: [sLon, sLat],
+        bearing: ((cam.bearing + amp * 0.5 * texture(tt, 7)) % 360 + 360) % 360,
+        zoom: cam.zoom, pitch: Math.max(0, Math.min(60, cam.pitch + amp * 0.9 * texture(tt, 13)))
+      });
     }
     requestAnimationFrame(cameraFrame);
+
+    // Manual override: any user gesture pauses follow; it resumes FOLLOW_RESUME_S after the last touch.
+    let resumeTimer = null, resumeTick = null;
+    function pauseFollow() {
+      state.follow = false;
+      clearTimeout(resumeTimer); clearInterval(resumeTick);
+      $('recenterBtn').classList.add('show');
+      $('recenterBtn').textContent = 'FOLLOW';
+    }
+    function scheduleResume() {
+      clearTimeout(resumeTimer); clearInterval(resumeTick);
+      let left = FOLLOW_RESUME_S;
+      $('recenterBtn').textContent = `FOLLOW IN ${left}`;
+      resumeTick = setInterval(() => { left -= 1; if (left > 0) $('recenterBtn').textContent = `FOLLOW IN ${left}`; }, 1000);
+      resumeTimer = setTimeout(resumeFollow, FOLLOW_RESUME_S * 1000);
+    }
+    function resumeFollow() {
+      clearTimeout(resumeTimer); clearInterval(resumeTick);
+      resetCamera(true);          // glide back from wherever the user left the view
+      state.follow = true;
+      $('recenterBtn').classList.remove('show');
+    }
+    // Pause on first contact: the follow loop's jumpTo would otherwise cancel the gesture.
+    const mapEl = map.getCanvasContainer();
+    let touching = 0;
+    mapEl.addEventListener('pointerdown', () => { touching++; pauseFollow(); }, { capture: true });
+    window.addEventListener('pointerup', () => { if (touching) { touching = 0; if (!state.follow) scheduleResume(); } });
+    window.addEventListener('pointercancel', () => { if (touching) { touching = 0; if (!state.follow) scheduleResume(); } });
+    let wheelIdle = null;
+    mapEl.addEventListener('wheel', () => { pauseFollow(); clearTimeout(wheelIdle); wheelIdle = setTimeout(scheduleResume, 250); }, { capture: true, passive: true });
 
     function loadTrackOnMap() {
       if (!mapReady || !track) return;
@@ -682,6 +750,11 @@
       if (r === 0) return `${NUM_WORDS[h]} hundred`;
       return `${NUM_WORDS[h]}-${TENS[r] || (r === 20 ? 'twenty' : String(r))}`;
     }
+    function spokenTextFor(text, style) {
+      const keep = state.voiceStyle;
+      state.voiceStyle = style;
+      try { return spokenText(text); } finally { state.voiceStyle = keep; }
+    }
     function spokenText(text) {
       if (state.voiceStyle !== 'jarvis') {
         return text.replace(/, (\d{2,3})$/, (_, d) => `, ${codriverDistance(parseInt(d, 10))}`);
@@ -732,28 +805,42 @@
         (/^en/i.test(v.lang) ? 2 : 0) + (/Google UK English Male|Daniel|Arthur|Ryan|Thomas|Oliver/i.test(v.name) ? 3 : 0) - (v.localService === false && !/natural|online/i.test(v.name) ? 0 : 0);
       return voices.filter(v => /^en/i.test(v.lang)).sort((a, b) => score(b) - score(a))[0] || null;
     }
-    function say(text, force) {
+    // say(): pace notes (chain) and fixed phrases (sysToken) play from the open-model voice bank;
+    // anything the bank can't voice (drive names...) falls back to the device voice.
+    function say(text, force, chain = null, sysToken = null) {
       if (!text || (!state.toggles.voice && !force)) return;
-      const style = state.voiceStyle;
-      const spoken = spokenText(text);
-      if (style === 'jarvis') chirp();
-      const native = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex;
-      if (native) { try { native.postMessage({ cmd: 'speak', text: spoken, force: !!force, style }); } catch (_) {} return; }
-      if (!('speechSynthesis' in window)) return;
-      if (force) { speechSynthesis.cancel(); speech.queue.length = 0; speech.busy = false; }
-      speech.queue.push(spoken);
+      if (force) { if ('speechSynthesis' in window) speechSynthesis.cancel(); speech.queue.length = 0; }
+      speech.queue.push({ text, chain, sysToken });
       if (speech.queue.length > 2) speech.queue.splice(0, speech.queue.length - 2);
       pumpSpeech();
     }
-    function pumpSpeech() {
+    async function pumpSpeech() {
       if (speech.busy || !speech.queue.length) return;
-      const u = new SpeechSynthesisUtterance(speech.queue.shift());
+      const item = speech.queue.shift();
+      speech.busy = true;
+      try {
+        if (state.voiceId !== 'device' && window.ApexVoice) {
+          await ApexVoice.load(state.voiceId);
+          const tokens = item.chain ? ApexVoice.tokensFor(item.chain, ApexVoice.bank.style) : item.sysToken ? [item.sysToken] : null;
+          if (tokens && await ApexVoice.play(tokens)) { speech.busy = false; pumpSpeech(); return; }
+          // Not in the bank (drive names, route summaries): synthesise live with the same model.
+          if (state.liveVoice && await ApexVoice.speakLive(spokenTextFor(item.text, ApexVoice.bank.style))) { speech.busy = false; pumpSpeech(); return; }
+        }
+      } catch (_) { /* fall back to the device voice */ }
+      deviceSpeak(spokenText(item.text));
+    }
+    function deviceSpeak(spoken) {
+      const style = state.voiceStyle;
+      if (style === 'jarvis') chirp();
+      const native = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex;
+      if (native) { try { native.postMessage({ cmd: 'speak', text: spoken, force: false, style }); } catch (_) {} speech.busy = false; pumpSpeech(); return; }
+      if (!('speechSynthesis' in window)) { speech.busy = false; return; }
+      const u = new SpeechSynthesisUtterance(spoken);
       const v = pickVoice(state.voiceStyle);
       if (v) { u.voice = v; u.lang = v.lang; }
       const robotVoice = v && /Zarvox|Trinoids|Fred|Ralph|Cellos|robot/i.test(v.name);
       if (state.voiceStyle === 'jarvis') { u.rate = robotVoice ? 1.0 : 0.92; u.pitch = robotVoice ? 1.0 : 0.15; }
       else { u.rate = 1.12; u.pitch = 1.0; }
-      speech.busy = true;
       u.onend = u.onerror = () => { speech.busy = false; pumpSpeech(); };
       speechSynthesis.speak(u);
     }
@@ -769,15 +856,19 @@
     // otherwise the distance to it ("Left 4 minus long, 150"). Chained notes are not called twice.
     function chainedCall(e, ev, spirited) {
       let text = e.call, cur = e;
+      const chain = [e];
       for (let hops = 0; hops < 2 && (cur.link === 'into' || cur.link === 'and'); hops++) {
         const next = ev[ev.indexOf(cur) + 1];
         if (!next || (next.type === 'corner' && !spirited)) break;
         text += ` ${cur.link} ${next.call}`;
         state.spoken.add(`${track.id}:${next.type}:${next.index}`);
+        chain.push(next);
         cur = next;
       }
       if (cur.link && cur.link !== 'into' && cur.link !== 'and') text += `, ${cur.link}`;
-      return text;
+      // The last note's link is "into"/"and" only if the chain was cut short; don't voice a dangling link.
+      const voiced = chain.map((n, i) => (i === chain.length - 1 && (n.link === 'into' || n.link === 'and')) ? { ...n, link: null } : n);
+      return { text, chain: voiced };
     }
 
     function updateNotes(vMps, live) {
@@ -801,7 +892,8 @@
         if (state.spoken.has(key) || d < 10) continue;
         state.spoken.add(key);
         if (e.type === 'corner' ? !spirited : !(spirited || noteworthyInCruise(e))) continue;
-        say(chainedCall(e, ev, spirited), false);
+        const call = chainedCall(e, ev, spirited);
+        say(call.text, false, call.chain);
       }
     }
 
@@ -831,7 +923,9 @@
       if (latG != null && (Math.abs(latG) > 0.30 || Math.abs(lonG) > 0.35)) state.spiritedAt = performance.now();
 
       state.bearing = bearing;
-      setVehicle({ lat, lon, bearing, vMps: vMps || 0, onTrack: !!track && idx >= 0 }, snap);
+      const rough = live ? state.live.roughness_rms : (idx >= 0 && track.roughG ? track.roughG[idx] : 0);
+      const simLat = state.mode === 'sim' && idx >= 0 && vMps ? vMps * vMps * (track.kappa ? track.kappa[idx] : 0) / Core.G_STD : null;
+      setVehicle({ lat, lon, bearing, vMps: vMps || 0, onTrack: !!track && idx >= 0, latG: latG != null ? latG : simLat, lonG: lonG || 0, rough }, snap);
 
       const at = (arr) => (idx >= 0 && arr && arr[idx] != null ? arr[idx] : null);
       const sight = at(track && track.sightM);
@@ -871,7 +965,7 @@
       $('playBtn').classList.toggle('on', state.playing);
       if (state.playing) {
         if (state.cursorM >= totalM() - 1) state.cursorM = 0;
-        state.follow = true; $('recenterBtn').classList.remove('show');
+        if (!state.follow) resumeFollow();
         lastTs = 0; if (!raf) raf = requestAnimationFrame(tick);
       }
     }
@@ -888,7 +982,11 @@
       renderDriveList();
       loadTrackOnMap();
       fetchAlpr(t);
-      state.follow = true; $('recenterBtn').classList.remove('show');
+      // Names are known now: pre-render them in the co-driver's own voice.
+      if (state.liveVoice && state.voiceId !== 'device' && window.ApexVoice) {
+        ApexVoice.load(state.voiceId).then(() => ApexVoice.prefetch([spokenTextFor(`${t.name}.`, ApexVoice.bank.style)])).catch(() => {});
+      }
+      resumeFollow();
       render(true);
     }
 
@@ -947,9 +1045,14 @@
       }
       return out;
     }
-    async function valhallaRoute(points) {
+    async function valhallaRoute(points, throughRoadsOnly = false) {
+      // Loop waypoints snap only to through roads (tertiary..primary), never cul-de-sacs or motorways.
+      const filter = { min_road_class: 'tertiary', max_road_class: 'primary', exclude_ramp: true };
       const res = await fetch(`${VALHALLA}/route`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
-        locations: points.map((p, i) => ({ lat: p.lat, lon: p.lon, type: i === 0 || i === points.length - 1 ? 'break' : 'through' })),
+        locations: points.map((p, i) => {
+          const end = i === 0 || i === points.length - 1;
+          return { lat: p.lat, lon: p.lon, type: end ? 'break' : 'through', ...(throughRoadsOnly && !end ? { radius: 2500, search_filter: filter } : {}) };
+        }),
         costing: 'auto', costing_options: { auto: { use_highways: 0.15, use_tolls: 0.3 } } }) });
       const json = await res.json();
       if (!json.trip) throw new Error(json.error || 'no route');
@@ -986,18 +1089,21 @@
       if (track) { const s = sample(track, state.cursorM); return { lat: s.lat, lon: s.lon }; }
       const c = map.getCenter(); return { lat: c.lat, lon: c.lng };
     }
-    async function buildRoute(points, id, name) {
-      toast(`Routing ${name}...`);
-      let coords = null;
-      try { coords = await valhallaRoute(points); } catch (_) { try { coords = await osrmRoute(points); } catch (err) { toast(`Routing failed: ${err.message}. Check your connection.`); return; } }
-      const t = trackFromPolyline(coords, id, name);
+    async function buildRoute(points, id, name, prebuilt = null) {
+      let t = prebuilt;
+      if (!t) {
+        toast(`Routing ${name}...`);
+        let coords = null;
+        try { coords = await valhallaRoute(points); } catch (_) { try { coords = await osrmRoute(points); } catch (err) { toast(`Routing failed: ${err.message}. Check your connection.`); return; } }
+        t = trackFromPolyline(coords, id, name);
+      }
       const i = drives.findIndex(d => d.id === id);
       if (i >= 0) drives.splice(i, 1);
       drives.unshift(t);
       closeSheet();
       activate(t, 0);
       attachLimits(t);
-      toast(`${name}: ${(totalM() / 1609.344).toFixed(1)} mi, ${t.events.length} corners called from map geometry`);
+      if (!prebuilt) toast(`${name}: ${(totalM() / 1609.344).toFixed(1)} mi, ${t.events.length} corners called from map geometry`);
     }
     const routeTo = (lat, lon, name) => buildRoute([here(), { lat, lon }], 'route_dest', name);
     async function routeToQuery(q) {
@@ -1009,16 +1115,42 @@
         routeTo(parseFloat(items[0].lat), parseFloat(items[0].lon), `To ${items[0].display_name.split(',')[0]}`);
       } catch (_) { toast('Search unavailable. Use TAP MAP TO ROUTE.'); }
     }
-    function loop(miles) {
-      const c = here();
+    // Loops: three candidate circles through the start, waypoints snapped to through roads,
+    // spurs cut, then the candidate with the best road character wins (a first step toward
+    // stage chaining, docs/ROAD_INTELLIGENCE.md section 7).
+    function loopWaypoints(c, miles, heading) {
       const rKm = (miles * 1.609344) / (2 * Math.PI * 1.35);
       const kmLat = 110.54, kmLon = 111.32 * Math.cos(c.lat * Math.PI / 180);
-      const heading = Math.random() * 2 * Math.PI;
       const center = { lat: c.lat + rKm * Math.cos(heading) / kmLat, lon: c.lon + rKm * Math.sin(heading) / kmLon };
       const pts = [c];
       for (const k of [1, 2, 3]) { const a = heading + Math.PI + k * Math.PI / 2; pts.push({ lat: center.lat + rKm * Math.cos(a) / kmLat, lon: center.lon + rKm * Math.sin(a) / kmLon }); }
       pts.push(c);
-      return buildRoute(pts, `loop_${miles}`, `${miles} mi loop`);
+      return pts;
+    }
+    function scoreLoop(t, miles) {
+      const km = totalOf(t) / 1000, targetKm = miles * 1.609344;
+      const good = t.events.filter(e => e.type === 'corner' && e.severity !== 'HP' && e.severity >= 2 && e.severity <= 5).length;
+      const retraced = Core.retracedShare(t.lat, t.lon);
+      const lengthErr = Math.abs(km - targetKm) / targetKm;
+      return { score: good / Math.max(1, km) * 10 - retraced * 60 - lengthErr * 25, good, retraced, km };
+    }
+    const totalOf = (t) => t.dist[t.dist.length - 1];
+    async function loop(miles) {
+      const c = here();
+      toast(`Building ${miles} mi loops...`);
+      const base = Math.random() * 2 * Math.PI;
+      const tries = [0, 2 * Math.PI / 3, 4 * Math.PI / 3].map(async (off, k) => {
+        const coords = await valhallaRoute(loopWaypoints(c, miles, base + off), true);
+        const rs = Core.removeSpurs(coords.map(p => p[1]), coords.map(p => p[0]));
+        const t = trackFromPolyline(rs.lat.map((la, i) => [rs.lon[i], la]), `loop_${miles}`, `${miles} mi loop`);
+        return { t, ...scoreLoop(t, miles), spursCut: rs.removed };
+      });
+      const done = (await Promise.allSettled(tries)).filter(r => r.status === 'fulfilled').map(r => r.value);
+      if (!done.length) { toast('Loop routing failed. Check your connection.'); return; }
+      done.sort((a, b) => b.score - a.score);
+      const best = done[0];
+      await buildRoute(null, `loop_${miles}`, `${miles} mi loop`, best.t);
+      toast(`${miles} mi loop: ${best.km.toFixed(1)} km, ${best.good} good corners, ${Math.round(best.retraced * 100)}% retraced (best of ${done.length})`);
     }
 
     // =======================================================================
@@ -1069,21 +1201,60 @@
       }
     }
 
+    // Voice picker: open-model banks (web/voices/index.json) + the device's own voice.
+    let bankVoices = [];
     function renderVoiceList() {
-      document.querySelectorAll('[data-voice]').forEach(b => b.classList.toggle('on', b.dataset.voice === state.voiceStyle));
+      const cards = $('voiceCards');
+      cards.innerHTML = '';
+      for (const v of bankVoices) {
+        const btn = document.createElement('button');
+        btn.className = 'ink-btn';
+        btn.dataset.voice = v.id;
+        btn.textContent = v.name.toUpperCase();
+        btn.title = v.license;
+        cards.appendChild(btn);
+      }
+      document.querySelectorAll('[data-voice]').forEach(b => {
+        b.classList.toggle('on', b.dataset.voice === state.voiceId);
+        b.onclick = () => {
+          state.voiceId = b.dataset.voice; state.voiceStyle = state.voiceId === 'jarvis' ? 'jarvis' : 'codriver';
+          renderVoiceList(); savePrefs();
+          if (window.ApexVoice) ApexVoice.unlock();
+          say('Co-driver ready.', true, null, state.voiceId === 'jarvis' ? 'w:test' : 'sys:test');
+        };
+      });
       const sel = $('voiceSelect');
       const voices = ('speechSynthesis' in window) ? speechSynthesis.getVoices().filter(v => /^en/i.test(v.lang)) : [];
       sel.innerHTML = '';
       sel.add(new Option(`Automatic (${(pickVoice(state.voiceStyle) || { name: 'device default' }).name})`, ''));
       voices.forEach(v => sel.add(new Option(`${v.name} · ${v.lang}`, v.name)));
       sel.value = state.voiceName || '';
-      sel.style.display = voices.length ? '' : 'none';
+      sel.style.display = state.voiceId === 'device' && voices.length ? '' : 'none';
     }
-    document.querySelectorAll('[data-voice]').forEach(b => b.addEventListener('click', () => { state.voiceStyle = b.dataset.voice; state.voiceName = ''; renderVoiceList(); savePrefs(); }));
+    function renderLive() {
+      const st = window.ApexVoice ? ApexVoice.liveState() : 'idle';
+      $('liveVoiceBtn').classList.toggle('on', state.liveVoice);
+      $('liveVoiceBtn').textContent = !state.liveVoice ? 'LIVE OFF' : st === 'ready' ? 'LIVE READY' : st === 'loading' ? 'LIVE LOADING' : st === 'error' ? 'LIVE FAILED' : 'LIVE ON';
+    }
+    $('liveVoiceBtn').addEventListener('click', () => {
+      state.liveVoice = !state.liveVoice; savePrefs();
+      if (state.liveVoice && window.ApexVoice) ApexVoice.warmLive().then(renderLive);
+      renderLive();
+    });
+    setInterval(renderLive, 1500);
+    renderLive();
     $('voiceSelect').addEventListener('change', (e) => { state.voiceName = e.target.value; savePrefs(); renderVoiceList(); });
-    $('voiceTestBtn').addEventListener('click', () => say('Left 4 minus long tightens, care, 150', true));
+    $('voiceTestBtn').addEventListener('click', () => {
+      if (window.ApexVoice) ApexVoice.unlock();
+      const demo = [{ type: 'corner', dir: 'L', severity: 4, grade: '-', shape: null, mods: ['long', 'tightens'], caution: 1, link: 'into' },
+                    { type: 'corner', dir: 'R', severity: 2, grade: '', shape: null, mods: [], caution: 0, link: '150' }];
+      say('Left 4 minus long tightens, care into Right 2, 150', true, demo);
+    });
     if ('speechSynthesis' in window) speechSynthesis.onvoiceschanged = renderVoiceList;
+    if (window.ApexVoice) ApexVoice.voices().then(v => { bankVoices = v; renderVoiceList(); });
     renderVoiceList();
+    // Browsers only allow audio after a user gesture: unlock WebAudio on the first touch.
+    document.addEventListener('pointerdown', () => { if (window.ApexVoice) ApexVoice.unlock(); }, { once: true, capture: true });
     function renderCamList() { document.querySelectorAll('[data-cam]').forEach(b => b.classList.toggle('on', b.dataset.cam === state.camFeel)); }
     document.querySelectorAll('[data-cam]').forEach(b => b.addEventListener('click', () => { state.camFeel = b.dataset.cam; renderCamList(); savePrefs(); }));
     renderCamList();
@@ -1099,7 +1270,7 @@
       if (!track || state.mode === 'live') return;
       const r = scrubber.getBoundingClientRect();
       state.cursorM = Math.max(0, Math.min(1, (x - r.left) / r.width)) * totalM();
-      state.spoken.clear(); state.follow = true; $('recenterBtn').classList.remove('show');
+      state.spoken.clear(); resumeFollow();
       render(true);
     }
     scrubber.addEventListener('pointerdown', (e) => { scrubbing = true; scrubber.setPointerCapture(e.pointerId); scrubTo(e.clientX); });
@@ -1116,7 +1287,11 @@
         if (state.toggles.dna && track && !track.sectors) toast('Stage DNA needs a profiled drive; this route is geometry only.');
       }
       if (k === 'lpr') updatePins();
-      if (k === 'stage') say(state.toggles.stage ? 'Stage mode. Full notes.' : 'Cruise. Hazards only.', true);
+      if (k === 'stage') {
+        const jar = state.voiceId === 'jarvis';
+        say(state.toggles.stage ? 'Stage mode. Full notes.' : 'Cruise. Hazards only.', true, null,
+            state.toggles.stage ? (jar ? 'w:stage' : 'sys:stage') : (jar ? 'w:cruise' : 'sys:cruise'));
+      }
       savePrefs();
       render(true);
     }));
@@ -1129,7 +1304,7 @@
       live(frame) {
         if (!frame || !frame.has_fix || !Number.isFinite(frame.lat) || !Number.isFinite(frame.lon)) return;
         state.live = frame; state.liveAt = performance.now();
-        if (state.mode !== 'live') { setPlaying(false); setMode('live'); state.follow = true; render(true); } else render(false);
+        if (state.mode !== 'live') { setPlaying(false); setMode('live'); resumeFollow(); render(true); } else render(false);
       },
       onNative(msg) { if (msg && msg.type === 'recordingSaved') toast(`Saved ${msg.segments} road segments to ${msg.file}`); }
     };

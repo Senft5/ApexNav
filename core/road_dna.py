@@ -25,6 +25,12 @@ CORNER_MIN_TURN_RAD = math.radians(20.0)
 CORNER_MERGE_GAP = 3         # samples; same-direction runs closer than this merge
 HAIRPIN_TURN_RAD = math.radians(135.0)
 HAIRPIN_MAX_RADIUS_M = 30.0
+HAIRPIN_COMPACT = 1.8        # a hairpin is one arc: length <= 1.8 x turn x radius
+SPLIT_RATIO = 0.5            # a curvature valley this far below both peaks splits a run in two
+SPLIT_MIN_TURN_RAD = math.radians(45.0)   # ...when both halves are real turns, not GPS wobble
+SPLIT_CORE_EDGE = 0.7        # cut the tight core where curvature falls to 70 % of its peak
+HAIRPIN_CORE_SHARE = 0.64    # a hairpin does >= 64 % of its turning in its tight core; a junction
+                             # square that runs on into the next road's bend does far less
 MIN_RADIUS_M = 8.0           # tighter than any car can turn: GPS jitter, not road
 LONG_TURN_RAD = math.radians(100.0)
 LONG_ARC_M = 90.0            # a corner this long is called "long" whatever its turn
@@ -260,8 +266,43 @@ def detect_corners(kappa, ds, camber_rad=None, crest_g=None, roughness_rms_g=Non
             runs.append([i, j, int(sign[i])])
         i = j + 1
 
+    # Two same-direction corners close together (a jog: left at one junction, left at the
+    # next) merge into one run; split it wherever curvature dips into a valley between peaks.
+    def split(a: int, b: int) -> list:
+        if b - a < 6:
+            return [(a, b)]
+        m = min(range(a + 2, b - 1), key=lambda q: abs(k[q]))
+        left, right = float(np.max(np.abs(k[a:m + 1]))), float(np.max(np.abs(k[m:b + 1])))
+        if abs(k[m]) < SPLIT_RATIO * min(left, right):
+            lt, rt = float(np.sum(k[a:m + 1] * ds[a:m + 1])), float(np.sum(k[m + 1:b + 1] * ds[m + 1:b + 1]))
+            if abs(lt) >= SPLIT_MIN_TURN_RAD and abs(rt) >= SPLIT_MIN_TURN_RAD:
+                return split(a, m) + split(m + 1, b)
+        # Hairpin-sized turn that isn't one tight arc: split off the tight core
+        # ("square left into left 2", not "left hairpin").
+        turn_ab = float(np.sum(k[a:b + 1] * ds[a:b + 1]))
+        if abs(turn_ab) >= HAIRPIN_TURN_RAD:
+            ap = a + int(np.argmax(np.abs(k[a:b + 1])))
+            peak = abs(float(k[ap]))
+            core = np.abs(k[a:b + 1]) >= 0.5 * peak
+            share = float(np.sum((k[a:b + 1] * ds[a:b + 1])[core])) / turn_ab
+            if share < HAIRPIN_CORE_SHARE:
+                lo, hi = ap, ap
+                while lo > a and abs(k[lo - 1]) >= SPLIT_CORE_EDGE * peak:
+                    lo -= 1
+                while hi < b and abs(k[hi + 1]) >= SPLIT_CORE_EDGE * peak:
+                    hi += 1
+                before = float(np.sum(k[a:lo] * ds[a:lo]))
+                after = float(np.sum(k[hi + 1:b + 1] * ds[hi + 1:b + 1]))
+                if abs(after) >= abs(before) and abs(after) >= SPLIT_MIN_TURN_RAD:
+                    return split(a, hi) + split(hi + 1, b)
+                if abs(before) >= SPLIT_MIN_TURN_RAD:
+                    return split(a, lo - 1) + split(lo, b)
+        return [(a, b)]
+
+    pieces = [(a2, b2, sgn) for a, b, sgn in runs for a2, b2 in split(a, b)]
+
     corners = []
-    for start, end, sgn in runs:
+    for start, end, sgn in pieces:
         seg = slice(start, end + 1)
         turn = float(np.sum(k[seg] * ds[seg]))
         if abs(turn) < CORNER_MIN_TURN_RAD:
@@ -273,7 +314,11 @@ def detect_corners(kappa, ds, camber_rad=None, crest_g=None, roughness_rms_g=Non
         radius = 1.0 / max(float(np.mean(np.abs(k[lo:hi + 1]))), 1e-6)
         if radius < MIN_RADIUS_M:
             continue
-        hairpin = abs(turn) >= HAIRPIN_TURN_RAD and radius < HAIRPIN_MAX_RADIUS_M
+        # Compactness on the arc's core (|kappa| >= half the apex), not the smoothed tails.
+        core = np.abs(k[seg]) >= 0.5 * abs(float(k[apex]))
+        core_arc = float(np.sum(ds[seg][core]))
+        hairpin = (abs(turn) >= HAIRPIN_TURN_RAD and radius < HAIRPIN_MAX_RADIUS_M
+                   and core_arc <= HAIRPIN_COMPACT * abs(turn) * radius)
         sev = "HP" if hairpin else severity_for_radius(radius)
         if sev is None:
             continue

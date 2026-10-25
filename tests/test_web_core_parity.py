@@ -136,3 +136,18 @@ def test_parity_drive_analysis_on_real_overlapping_drives():
             for k, v in cp[side].items():
                 assert cj[side][k] == (None if v is None else pytest.approx(v, rel=1e-9, abs=1e-9)), k
     assert len(js["delta_curve"]) == len(py["delta_curve"])
+
+
+def test_remove_spurs_cuts_dead_end_out_and_back():
+    lat, lon = path_from_legs([("straight", 300.0)])
+    # out-and-back spur: 80 m east and back, inserted at sample 30
+    spur_lat = [lat[30]] * 17
+    spur_lon = [lon[30] + (min(k, 16 - k) * 10.0) / (111320.0 * math.cos(math.radians(lat[30]))) for k in range(17)]
+    lat2 = np.concatenate([lat[:30], spur_lat, lat[31:]])
+    lon2 = np.concatenate([lon[:30], spur_lon, lon[31:]])
+    runner = "const c=require(process.argv[1]);const d=JSON.parse(require('fs').readFileSync(0,'utf8'));" \
+             "process.stdout.write(JSON.stringify(c.removeSpurs(d.lat,d.lon)));"
+    out = subprocess.run([NODE, "-e", runner, os.path.abspath("web/apex_core.js")],
+                         input=json.dumps({"lat": lat2.tolist(), "lon": lon2.tolist()}), capture_output=True, text=True, check=True)
+    r = json.loads(out.stdout)
+    assert r["removed"] >= 15 and len(r["lat"]) <= len(lat) + 1

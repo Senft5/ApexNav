@@ -13,6 +13,11 @@
   const CORNER_MERGE_GAP = 3;
   const HAIRPIN_TURN_RAD = 135 * Math.PI / 180;
   const HAIRPIN_MAX_RADIUS_M = 30;
+  const HAIRPIN_COMPACT = 1.8;
+  const SPLIT_RATIO = 0.5;
+  const SPLIT_MIN_TURN_RAD = 45 * Math.PI / 180;
+  const HAIRPIN_CORE_SHARE = 0.64;
+  const SPLIT_CORE_EDGE = 0.7;
   const MIN_RADIUS_M = 8;
   const LONG_TURN_RAD = 100 * Math.PI / 180;
   const LONG_ARC_M = 90, SHORT_ARC_M = 20;
@@ -211,8 +216,43 @@
       i = j + 1;
     }
 
+    // Two same-direction corners close together merge into one run; split at curvature valleys.
+    function split(a, b) {
+      if (b - a < 6) return [[a, b]];
+      let m = a + 2;
+      for (let q = a + 2; q < b - 1; q++) if (Math.abs(kappa[q]) < Math.abs(kappa[m])) m = q;
+      const left = maxAbs(kappa, a, m), right = maxAbs(kappa, m, b);
+      if (Math.abs(kappa[m]) < SPLIT_RATIO * Math.min(left, right)) {
+        let lt = 0, rt = 0;
+        for (let q = a; q <= m; q++) lt += kappa[q] * ds[q];
+        for (let q = m + 1; q <= b; q++) rt += kappa[q] * ds[q];
+        if (Math.abs(lt) >= SPLIT_MIN_TURN_RAD && Math.abs(rt) >= SPLIT_MIN_TURN_RAD) return split(a, m).concat(split(m + 1, b));
+      }
+      // Hairpin-sized turn that isn't one tight arc: split off the tight core.
+      let turnAB = 0, ap = a;
+      for (let q = a; q <= b; q++) { turnAB += kappa[q] * ds[q]; if (Math.abs(kappa[q]) > Math.abs(kappa[ap])) ap = q; }
+      if (Math.abs(turnAB) >= HAIRPIN_TURN_RAD) {
+        const peak = Math.abs(kappa[ap]);
+        let coreTurn = 0;
+        for (let q = a; q <= b; q++) if (Math.abs(kappa[q]) >= 0.5 * peak) coreTurn += kappa[q] * ds[q];
+        if (coreTurn / turnAB < HAIRPIN_CORE_SHARE) {
+          let lo = ap, hi = ap;
+          while (lo > a && Math.abs(kappa[lo - 1]) >= SPLIT_CORE_EDGE * peak) lo--;
+          while (hi < b && Math.abs(kappa[hi + 1]) >= SPLIT_CORE_EDGE * peak) hi++;
+          let before = 0, after = 0;
+          for (let q = a; q < lo; q++) before += kappa[q] * ds[q];
+          for (let q = hi + 1; q <= b; q++) after += kappa[q] * ds[q];
+          if (Math.abs(after) >= Math.abs(before) && Math.abs(after) >= SPLIT_MIN_TURN_RAD) return split(a, hi).concat(split(hi + 1, b));
+          if (Math.abs(before) >= SPLIT_MIN_TURN_RAD) return split(a, lo - 1).concat(split(lo, b));
+        }
+      }
+      return [[a, b]];
+    }
+    const pieces = [];
+    for (const [a, b, sgn] of runs) for (const [a2, b2] of split(a, b)) pieces.push([a2, b2, sgn]);
+
     const corners = [];
-    for (const [start, end, sgn] of runs) {
+    for (const [start, end, sgn] of pieces) {
       let turn = 0, apex = start;
       for (let q = start; q <= end; q++) {
         turn += kappa[q] * ds[q];
@@ -226,7 +266,10 @@
       for (let q = lo; q <= hi; q++) kSum += Math.abs(kappa[q]);
       const radius = 1 / Math.max(kSum / (hi - lo + 1), 1e-6);
       if (radius < MIN_RADIUS_M) continue;
-      const hairpin = Math.abs(turn) >= HAIRPIN_TURN_RAD && radius < HAIRPIN_MAX_RADIUS_M;
+      // Compactness on the arc's core (|kappa| >= half the apex), not the smoothed tails.
+      let coreArc = 0;
+      for (let q = start; q <= end; q++) if (Math.abs(kappa[q]) >= 0.5 * Math.abs(kappa[apex])) coreArc += ds[q];
+      const hairpin = Math.abs(turn) >= HAIRPIN_TURN_RAD && radius < HAIRPIN_MAX_RADIUS_M && coreArc <= HAIRPIN_COMPACT * Math.abs(turn) * radius;
       const sev = hairpin ? 'HP' : severityForRadius(radius);
       if (sev === null) continue;
 
@@ -437,7 +480,45 @@
              corner_delta_s: matched.reduce((s, c) => s + c.delta_s, 0), overlap_delta_s: runTotal, delta_curve: curve };
   }
 
+  // -------------------------------------------------------------------------
+  // Route hygiene: cut out-and-back spurs (route returns to the same point within
+  // 2 km after wandering > 40 m away), the signature of a waypoint snapped into a dead end.
+  // -------------------------------------------------------------------------
+  function removeSpurs(lat, lon, { closeM = 12, wanderM = 40, minSpan = 8, maxSpan = 400 } = {}) {
+    const c = Math.cos(lat[0] * Math.PI / 180);
+    const d = (i, j) => Math.hypot((lon[i] - lon[j]) * 111320 * c, (lat[i] - lat[j]) * 110540);
+    const keep = [];
+    let i = 0;
+    while (i < lat.length) {
+      keep.push(i);
+      let cut = -1;
+      for (let j = Math.min(lat.length - 1, i + maxSpan); j >= i + minSpan; j--) {
+        if (d(i, j) >= closeM) continue;
+        let far = 0;
+        for (let k = i + 1; k < j; k++) far = Math.max(far, d(i, k));
+        if (far > wanderM) { cut = j; break; }
+      }
+      i = cut > 0 ? cut + 1 : i + 1;
+    }
+    return { lat: keep.map(k => lat[k]), lon: keep.map(k => lon[k]), removed: lat.length - keep.length };
+  }
+
+  // How much of a route retraces itself (share of samples within 12 m of a point >= 300 m earlier).
+  function retracedShare(lat, lon) {
+    const c = Math.cos(lat[0] * Math.PI / 180);
+    let re = 0, n = 0;
+    for (let i = 0; i < lat.length; i += 2) {
+      n++;
+      for (let j = 0; j < i - 60; j += 2) {
+        const dx = (lon[i] - lon[j]) * 111320 * c, dy = (lat[i] - lat[j]) * 110540;
+        if (dx * dx + dy * dy < 144) { re++; break; }
+      }
+    }
+    return n ? re / n : 0;
+  }
+
   const api = {
+    removeSpurs, retracedShare,
     compareDrives, cornerMetrics, elapsedS,
     G_STD, MPS_TO_MPH, ALPR_RADIUS_M,
     movingAverage, gradient, unwrap, localXY, resamplePolyline,
