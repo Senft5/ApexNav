@@ -20,6 +20,7 @@ Regardless of how the phone is mounted in the cabin, all aligned chassis telemet
 1. Before starting any task, read `/docs/STATE.md` and `/docs/ARCHITECTURE.md`.
 2. After ANY edit to `/core` math or signal processing (or `web/apex_core.js`, its parity-tested port), run the deterministic CLI test suite:
    `pytest tests -v`
+   After ANY edit to live sensor math (`core/live_pipeline.py` or `ApexKit/`), regenerate the fixture with `python tools/make_live_fixture.py` and run `swift test --package-path ApexKit`.
 3. Never ship placeholder or synthesized road data as if it were measured. Unknown stays unknown (`null`, `--`).
 4. For iOS / CarPlay changes, verify `project.yml` and `.github/workflows/build.yml` remain valid for cloud `xcodegen` compilation.
 5. Before concluding an agent session, update `/docs/STATE.md` with completed milestones, active bugs, and the exact next task.
