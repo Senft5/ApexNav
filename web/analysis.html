@@ -11,6 +11,7 @@
   <script src="themes.js"></script>
   <script src="instruments.js"></script>
   <script src="sync.js"></script>
+  <script src="contributor.js"></script>
   <script src="data/dry_ridge.js"></script>
   <script src="data/pebble_ridge.js"></script>
   <style>
@@ -116,7 +117,8 @@
       </div>
       <div class="grid2">
         <div class="panel"><h2>Your segments</h2><div class="seglist" id="segList"></div><p class="note" style="margin-top:8px">Segments are your custom stretches. Every drive that covers one, in the same direction, is ranked on it by Driver Score. Leaderboards with friends and crews come with accounts.</p></div>
-        <div class="panel" id="segSyncPanel" hidden><h2>Friends and sync</h2><div class="note" id="segSyncNote"></div><div id="segShared"></div><div class="row" id="segShareRow" style="margin-top:8px"></div><h2 style="margin-top:12px">Friends board</h2><div class="scroll"><table id="segBoard"></table></div></div>
+        <div class="panel" id="contribPanel" hidden><h2>Share road data</h2><p class="note" id="contribNote"></p><div id="contribList" style="display:grid;gap:6px"></div></div>
+      <div class="panel" id="segSyncPanel" hidden><h2>Friends and sync</h2><div class="note" id="segSyncNote"></div><div id="segShared"></div><div class="row" id="segShareRow" style="margin-top:8px"></div><h2 style="margin-top:12px">Friends board</h2><div class="scroll"><table id="segBoard"></table></div></div>
       <div class="panel"><h2 id="segTitle">Passes</h2><div id="segChart"></div><div class="scroll"><table id="segTable"></table></div></div>
       </div>
     </section>
@@ -218,7 +220,9 @@
       return {
         id: 'rec_' + fileName.replace(/\W+/g, '_'), name: fileName.replace(/\.csv$/i, ''), date, source: 'imported',
         lat: cols.lat, lon: cols.lon, dist: cols.distance_m || cols.lat.map((_, i) => i * 5), speed_mps: cols.speed_mph.map(v => v / MPH),
-        lon_g: cols.lon_g, lat_g: cols.lat_g, elev: cols.elevation_m || null, events: prof.events
+        lon_g: cols.lon_g, lat_g: cols.lat_g, elev: cols.elevation_m || null, events: prof.events,
+        camber: cols.camber_deg ? cols.camber_deg.map(v => (Number.isFinite(v) ? v : null)) : null, rough: cols.roughness_rms ? cols.roughness_rms.map(v => (Number.isFinite(v) ? v : null)) : null,
+        crest: cols.crest_vertical_g ? cols.crest_vertical_g.map(v => (Number.isFinite(v) ? v : null)) : null, kappa: Array.from(Core.computeCurvature(cols.lat, cols.lon).kappa)
       };
     }
 
@@ -382,6 +386,30 @@
       }
     }
 
+    // Road-data contribution: bins of banking, roughness and crests per road, never your path, speed or time (docs/BACKEND.md section 3).
+    async function renderContribute() {
+      const panel = $('contribPanel'), list = $('contribList'); list.innerHTML = '';
+      if (!window.ApexSync || !window.ApexContributor || !(await ApexSync.member())) { panel.hidden = true; return; }
+      const ready = drives.filter(d => d.source === 'imported' && ApexContributor.eligible(d) && !d.contributed);
+      panel.hidden = false;
+      const on = await ApexSync.contributionEnabled();
+      $('contribNote').textContent = !on ? 'Off. Turn on ROAD DATA in Account on the main page to take part. Earns points: 3x for the first to map a road, 2x second, 1x after.'
+        : ready.length ? 'Recent drives you can share. The first and last kilometre of each drive and small residential roads are left out.' : 'No recent drives to share (drives must be under two weeks old and recorded with the phone app).';
+      if (!on) return;
+      for (const d of ready) {
+        const b = document.createElement('button'); b.className = 'btn'; b.textContent = `SHARE ${d.name} · ${dateLabel(d)}`;
+        b.onclick = async () => {
+          b.disabled = true; b.textContent = 'MATCHING ROADS...';
+          try {
+            const r = await ApexContributor.contributeDrive(d, ApexSync.contribute);
+            if (r.sent) { d.contributed = true; await storeDrive(d); }
+            b.textContent = r.skipped ? r.skipped : r.sent ? `SHARED ${r.sent} road${r.sent === 1 ? '' : 's'}` : r.built ? 'NOTHING NEW TO ADD' : 'NO USABLE ROADS (all too short, private, or unmatched)';
+          } catch (err) { b.disabled = false; b.textContent = `RETRY (${err.message})`; }
+        };
+        list.appendChild(b);
+      }
+    }
+
     function passesFor(seg) {
       return drives.map(d => ({ d, p: Core.segmentPass(seg, d) })).filter(x => x.p);
     }
@@ -483,7 +511,7 @@
     }
 
     // ---------------------------------------------------------------------
-    function renderAll() { renderHistory(); renderSegments(); renderCompareSelectors(); renderCompare(); syncSegments(); }
+    function renderAll() { renderHistory(); renderSegments(); renderCompareSelectors(); renderCompare(); syncSegments(); renderContribute(); }
     document.querySelectorAll('#tabs button').forEach(b => b.addEventListener('click', () => {
       document.querySelectorAll('#tabs button').forEach(x => x.classList.toggle('on', x === b));
       for (const t of ['history', 'segments', 'compare']) $(`tab-${t}`).hidden = t !== b.dataset.tab;

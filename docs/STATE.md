@@ -219,10 +219,12 @@ docs/SOCIAL.md.
 - [x] Web segment sync (`web/sync.js`, used by analysis.html): segments get a decimated geometry on save, upload when signed in (idempotent by local id), friends' shared segments can be adopted, the active segment can be shared with a friend. Checked with Playwright against mocked APIs.
 - [x] Highlights sync (`web/sync.js` + index.html): SHARE button on your spots (kind picker), planner merges members' shared spots near the start (4 s timeout, offline = yours only, no double counting within 60 m).
 - [x] Friends board on the analysis page: best pass per synced segment is published (server delivers only to granted friends/crews); the active segment shows the board. Checked against mocked APIs.
+- [x] Phone-side contributor (`web/contributor.js`, 9 pytest tests): Valhalla `trace_attributes` map-matching -> OSM way ids, Overpass way geometry, bins counted from the way's first node, direction from travel along the way; trims 1 km at both ends, skips residential/service roads, unknown roughness leaves the bin out, unknown camber stays null; uploads via `/api/contribute`. Analysis page has a "Share road data" panel for recent imported drives. **Not yet verified against the live Valhalla/Overpass servers or with a real recording** (the container's network is restricted); the shell is tested with a fake fetch.
 - [x] **68 backend tests** (privacy, auth, highlights, contribute, nightly, account) + 53 pytest.
 ### Active bugs / limitations
 - **Cloudflare "Workers Builds: apexnav" preview build fails on PR commits** while all GitHub Actions pass; a clean-checkout `wrangler deploy --dry-run` succeeds. Docs say a D1 binding needs only Editor access, so a token problem is unlikely. Need the build log text (dashboard > apexnav > Builds). Production deploy of main after merge may fail; the previous deployment stays live.
-- Not built yet: phone-side contributor (map-match a drive to OSM way ids, build bins, upload),  read side (serve merged `road_bins` to the phone), convoy, R2 backups.
+- Contributor limits: only drives imported after this change keep the roughness/crest/curvature columns; older stored drives are not eligible. Public Valhalla/Overpass servers are rate limited, so a self-hosted matcher may be needed past a handful of users.
+- Not built yet:  read side (serve merged `road_bins` to the phone), convoy, R2 backups.
 - `npm ci` needs `--legacy-peer-deps` (Cloudflare test plugin vs wrangler peers).
 
 ## Exact Next Task

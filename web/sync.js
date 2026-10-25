@@ -44,6 +44,16 @@
   const publishScore = (segmentId, score, timeS, day) => call('POST', '/api/board', { segment_id: segmentId, driver_score: Math.round(score), time_s: timeS == null ? null : Math.max(1, Math.round(timeS)), driven_on: day });
   const board = async (canonId) => (await call('GET', `/api/board/${encodeURIComponent(canonId)}`)) || [];
 
-  const api = { publishScore, board, highlightsNear, shareHighlight, rateHighlight, member, pushSegments, sharedWithMe, adopt, shareSegment, friends, removeRemote, toServer, fromServer };
+  /** Uploads one road contribution. true = accepted, false = skipped (already contributed / rejected), 'stop' = not enabled or rate limited. */
+  async function contribute(c) {
+    try {
+      const r = await fetch('/api/contribute', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json', 'x-apexnav': '1' },
+        body: JSON.stringify({ way_id: c.way_id, dir: c.dir, driven_on: c.driven_on, bins: c.bins }) });
+      return r.status === 202 ? true : r.status === 403 || r.status === 429 ? 'stop' : false;
+    } catch (_) { return 'stop'; }
+  }
+  const contributionEnabled = async () => { const e = await call('GET', '/api/me/export'); return !!(e && e.member && e.member.contribute); };
+
+  const api = { contribute, contributionEnabled, publishScore, board, highlightsNear, shareHighlight, rateHighlight, member, pushSegments, sharedWithMe, adopt, shareSegment, friends, removeRemote, toServer, fromServer };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexSync = api;
 })(typeof window !== 'undefined' ? window : globalThis);
