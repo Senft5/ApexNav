@@ -7,4 +7,3 @@ ApexKit/.build/
 *.xcodeproj/
 TestResults.xcresult/
 voice_test/
-web/voices/own/
