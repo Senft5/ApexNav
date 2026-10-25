@@ -1397,6 +1397,15 @@
       }
       const add = el('input', { className: 'field', placeholder: 'Add a friend by handle', autocomplete: 'off' });
       body.append(el('div', { className: 'row' }, add, btn('REQUEST', async () => { await apiCall('POST', '/api/friends/request', { handle: add.value.trim().toLowerCase() }); add.value = ''; toast('If that member exists, they have your request.'); redo(); })));
+      // road-data contribution (off by default), points, and the person's own data
+      const [pts, mem] = await Promise.all([apiCall('GET', '/api/points').then(jsonOf), Promise.resolve(me)]);
+      if (pts) body.append(el('div', { className: 'note', textContent: `Octane: ${pts.total} points` + (pts.board && pts.board.length ? ` · top: ${pts.board.slice(0, 3).map(r => `@${r.handle} ${r.total}`).join(', ')}` : '') }));
+      const contribOn = !!(await apiCall('GET', '/api/me/export').then(jsonOf))?.member?.contribute;
+      const cb = btn(contribOn ? 'ROAD DATA: SHARING' : 'ROAD DATA: OFF', async () => { await apiCall('PUT', '/api/me/contribute', { on: !contribOn }); redo(); });
+      cb.classList.toggle('on', contribOn); body.append(cb, el('div', { className: 'note', textContent: 'Optional. Shares anonymous road numbers (banking, roughness, crests), never where you went or how fast. Earns points: 3x for the first to map a road, 2x second, 1x after.' }));
+      body.append(el('div', { className: 'row' },
+        btn('DOWNLOAD MY DATA', async () => { const r = await apiCall('GET', '/api/me/export'); const blob = new Blob([JSON.stringify(await r.json(), null, 2)], { type: 'application/json' }); const a = el('a', { href: URL.createObjectURL(blob), download: 'apexnav-my-data.json' }); document.body.append(a); a.click(); a.remove(); }),
+        btn('DELETE ACCOUNT', async () => { if (prompt('This erases your account, friends, shared results and highlights from the server. Type DELETE to confirm.') === 'DELETE') { await apiCall('DELETE', '/api/me', { confirm: 'DELETE' }); redo(); } })));
       const invOut = el('div', { className: 'note' });
       body.append(el('div', { className: 'row' }, btn('CREATE INVITE', async () => { const r = await apiCall('POST', '/api/invites'); const j = await jsonOf(r); invOut.textContent = r.ok ? j.url : 'Could not create an invite.'; })), invOut);
       body.append(btn('SIGN OUT', async () => { await apiCall('POST', '/api/auth/logout'); redo(); }));

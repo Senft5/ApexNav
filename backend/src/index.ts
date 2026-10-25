@@ -8,6 +8,7 @@ import {
   blockUser, boardFor, crewCreate, crewInvite, crewJoin, crewLeave, crewList, friendAccept, friendList, friendRequest,
   myGrants, publish, removePair, setGrant, setHandle,
 } from "./social";
+import { deleteAccount, exportMyData } from "./account";
 import { contribute, setContribute } from "./contribute";
 import { nightlyMerge, pointsFor } from "./nightly";
 import { highlightCreate, highlightDelete, highlightList, highlightRate, highlightReport } from "./highlights";
@@ -30,6 +31,8 @@ on("GET", "/api/me", async (req, env) => {
 });
 on("POST", "/api/invites/redeem", async (req, env) => { await redeemInvite(env, await requireUser(req, env), req); return noContent(); });
 on("POST", "/api/invites", async (req, env) => json(await createInvite(env, await requireMember(req, env), req), 201));
+on("GET", "/api/me/export", async (req, env) => json(await exportMyData(env, await requireMember(req, env))));
+on("DELETE", "/api/me", async (req, env) => deleteAccount(env, await requireMember(req, env), req));
 on("PUT", "/api/me/handle", async (req, env) => { await setHandle(env, await requireMember(req, env), req); return noContent(); });
 
 on("PUT", "/api/me/contribute", async (req, env) => { await setContribute(env, await requireMember(req, env), req); return noContent(); });

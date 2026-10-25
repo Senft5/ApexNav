@@ -62,7 +62,7 @@ Implemented in `backend/src/{auth,social,segments}.ts`, one router in `index.ts`
 - Unfriend, block, leave crew, revoke grant: the grants and published entries between those people are deleted in the same transaction.
 - Friend requests answer identically for unknown, non-member and real handles (no handle enumeration). The requester cannot accept their own request.
 - Invites and sessions are stored as SHA-256 hashes; an invite works once, expires after 7 days, and is redeemed atomically.
-- Verified by `backend/test/*.test.ts` (64 tests; each privacy rule was checked by temporarily reintroducing the bug and seeing the test fail).
+- Verified by `backend/test/*.test.ts` (68 tests; each privacy rule was checked by temporarily reintroducing the bug and seeing the test fail).
 
 ## 7. Auth: Google sign-in, no library
 `/api/auth/google/start` → Google (authorization-code flow, PKCE S256, `state`, `nonce`) → `/api/auth/google/callback`: exchanges the code
@@ -111,6 +111,6 @@ points 3×/2×/1× per direction of each road; time sharing opt-in per friend an
 - Remaining tests to write when the pieces exist: ingest window/backdating/ranking, nightly merge, account deletion cascade + export, highlights rate limits.
 
 ## 12. Status and build order
-Built: migrations 0001–0003 (live), auth, invites, friends, blocks, crews, grants, boards, segments (with sharing), highlights API, **road-data intake** (`POST /api/contribute`, opt-in `PUT /api/me/contribute`: date window, ranges, contiguity, km/hour caps, hashed one-per-road dedupe), **nightly rank/merge/points** and `GET /api/points` (own weekly totals + a handle/total board), 64 tests, CI job, Worker wiring + cron.
+Built: migrations 0001–0003 (live), auth, invites, friends, blocks, crews, grants, boards, segments (with sharing), highlights API, **road-data intake** (`POST /api/contribute`, opt-in `PUT /api/me/contribute`: date window, ranges, contiguity, km/hour caps, hashed one-per-road dedupe), **nightly rank/merge/points** and `GET /api/points` (own weekly totals + a handle/total board), **account export + deletion** (`GET /api/me/export`, `DELETE /api/me` with `{confirm:"DELETE"}`: erases everything tied to the person, dissolves crews they own, removes what others held about them; merged road data is anonymous and stays), 68 tests, CI job, Worker wiring + cron.
 Next: (1) owner sets the Google secrets, `OWNER_EMAIL` and `PEPPER`; (2) web sync (IndexedDB → `/api/segments`, `/api/board`, `/api/highlights`) and a phone-side contributor that builds bins from a profiled drive;
-(3) account deletion + data export; (4) read side: serve merged `road_bins` to the phone and feed measured data into stage scoring; (5) convoy.
+(3) read side: serve merged `road_bins` to the phone and feed measured data into stage scoring; (5) convoy.
