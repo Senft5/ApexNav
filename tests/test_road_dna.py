@@ -88,6 +88,15 @@ def test_hazards_come_only_from_measured_imu():
     assert rd.detect_hazards(dist, np.zeros(400), rough, np.full(400, 0.1)) == []
 
 
+def test_steadily_broken_pavement_is_not_a_stream_of_bumps():
+    dist = np.arange(400) * 5.0
+    rough = np.full(400, 0.09)              # rough road everywhere
+    peak = np.full(400, 0.40)               # every bin over 0.35 g
+    peak[200] = 0.95                        # one real impact
+    hz = rd.detect_hazards(dist, np.zeros(400), rough, peak)
+    assert [(h["type"], h["index"]) for h in hz] == [("bump", 200)]
+
+
 def test_sector_clear_is_unknown_without_alpr_data():
     lat, lon = path_from_legs(STAGE)
     kappa, ds = rd.compute_curvature(lat, lon)

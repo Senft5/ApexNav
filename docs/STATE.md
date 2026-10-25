@@ -31,5 +31,17 @@ value and rebuilt the stack on a tested headless core.
 - Shipped exports predate `vert_peak_g`, so their bumps use the 5 m RMS > 0.25 g proxy. Re-export from the raw zips to get true spike peaks.
 - OSRM demo server and Overpass are rate-limited public services; fine for prototyping only.
 
+## Session 2026-10-25 (b): re-export from raw Sensor Logger logs
+- [x] Raw zips for both drives supplied (kept local, gitignored: they contain precise home-start GPS). `pytest tests -v` → **18 passed, 0 skipped**; the two real-drive invariants run for the first time.
+- [x] Both drives re-exported from raw with true per-bin spike data (`vert_peak_g`).
+- [x] Found: a single 100 Hz sample > 0.35 g fired 101 "bumps" on Dry Ridge (one per ~570 m) — mostly phone-mount rattle, plus phone handling at the start/end of each recording. Fixed in core: spike = peak 50 ms RMS of the >8 Hz band, and must exceed 6x the surrounding ~200 m roughness (steadily broken pavement is SURF's job). Exporter ignores hazards below 2.5 m/s. Now Pebble Ridge 7 bumps, Dry Ridge 21.
+- [x] Camber now averages only cornering samples (previous session's fix) — median turn-relative bank on Pebble Ridge reads +2.9°, not the diluted +0.4°.
+
+### Active bug: single-pass bumps are not repeatable
+Dry Ridge re-drives 100 % of the Pebble Ridge route, yet only 1 of 7 Pebble bumps (at 18,410 m) reappears within 8 m on the second pass. Wheel-path differences explain some misses, but single-pass bump detections must be treated as unverified.
+
 ## Exact Next Task
+**Multi-pass hazard verification**: snap hazards from every drive onto shared 5 m road bins; a bump is `verified` once seen on >= 2 passes (and decays if later passes over the same bin see nothing). The co-driver calls only verified bumps in cruise; unverified ones show as faint pins. Then the CarPlay `CPMapTemplate` extension.
+
+## Previous Next Task (superseded)
 Re-export both drives from the raw Sensor Logger zips (`python tools/export_web_profile.py <zip> --name ...`) so bumps use true `vert_peak_g`. Then start the CarPlay `CPMapTemplate` extension: project the pace-note strip and PACE bug onto the head unit, fed by the same `window.apex` frame contract.

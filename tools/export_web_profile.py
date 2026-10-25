@@ -106,7 +106,9 @@ def profile_segments(seg: pd.DataFrame, alpr_nodes=None) -> tuple[pd.DataFrame, 
     speed_mps = seg["speed_mph"].to_numpy(float) / rd.MPS_TO_MPH
     corners = [c for c in rd.detect_corners(kappa, ds, camber, crest, rough)
                if speed_mps[c["apex"]] >= MIN_CORNER_SPEED_MPS]
-    hazards = rd.detect_hazards(dist, crest, rough, peak)
+    # Below walking pace the phone is being handled, not reading the road.
+    hazards = [h for h in rd.detect_hazards(dist, crest, rough, peak)
+               if speed_mps[h["index"]] >= MIN_CORNER_SPEED_MPS]
 
     alpr_counts = None
     if alpr_nodes is not None:

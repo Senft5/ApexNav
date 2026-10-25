@@ -41,6 +41,8 @@ SECTOR_LENGTH_M = 500.0
 
 # IMU hazard thresholds (manifesto section 4 for the spike value)
 SPIKE_PEAK_G = 0.35
+SPIKE_CONTRAST = 6.0         # impact must exceed 6x the surrounding road's roughness
+SPIKE_BACKGROUND_BINS = 41   # ~200 m rolling median of 5 m roughness RMS
 ROUGH_RMS_FALLBACK_G = 0.25  # 5 m RMS proxy when per-bin peak is unavailable
 CREST_UNWEIGHT_G = -0.08
 DIP_COMPRESS_G = 0.10
@@ -272,14 +274,26 @@ def _peak_events(values: np.ndarray, mask: np.ndarray, dist_m: np.ndarray, pick_
     return picks
 
 
+def _rolling_median(values: np.ndarray, window: int) -> np.ndarray:
+    """Centered rolling median; edges use the samples that exist."""
+    half = window // 2
+    n = len(values)
+    return np.array([np.median(values[max(0, i - half):min(n, i + half + 1)]) for i in range(n)])
+
+
 def detect_hazards(dist_m, crest_g, roughness_rms_g, vert_peak_g=None) -> list[dict]:
     """Bumps (vertical spike), crests (unweighting) and dips (compression) from measured IMU."""
     dist_m = np.asarray(dist_m, dtype=float)
     crest = np.asarray(crest_g, dtype=float)
     hazards = []
     if vert_peak_g is not None:
+        # A pothole is an event that stands out from the road around it; steadily
+        # broken pavement is SURF's job, not a stream of bump calls.
         peak = np.asarray(vert_peak_g, dtype=float)
-        for i in _peak_events(peak, peak > SPIKE_PEAK_G, dist_m, True):
+        rough = np.asarray(roughness_rms_g, dtype=float)
+        background = _rolling_median(rough, SPIKE_BACKGROUND_BINS)
+        is_spike = (peak > SPIKE_PEAK_G) & (peak > SPIKE_CONTRAST * background)
+        for i in _peak_events(peak, is_spike, dist_m, True):
             hazards.append({"index": i, "type": "bump", "severity_g": float(peak[i])})
     else:
         rough = np.asarray(roughness_rms_g, dtype=float)
