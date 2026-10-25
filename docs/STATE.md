@@ -231,7 +231,7 @@ docs/SOCIAL.md.
 - [x] History/Compare polish: score chart drawn at real width (readable on phones), drives table drops secondary columns on narrow screens, empty states for no drives, Compare's whole-road delta no longer coloured as a verdict.
 - [x] **76 backend tests** (privacy, auth, highlights, contribute, nightly, account) + 53 pytest.
 ### Active bugs / limitations
-- **Cloudflare "Workers Builds: apexnav" preview build fails on PR commits** while all GitHub Actions pass; a clean-checkout `wrangler deploy --dry-run` succeeds. Docs say a D1 binding needs only Editor access, so a token problem is unlikely. Need the build log text (dashboard > apexnav > Builds). Production deploy of main after merge may fail; the previous deployment stays live.
+- **Cloudflare preview build** failed because `wrangler preview` (the default preview command) requires a `previews` block in `wrangler.jsonc`. Fixed: added `previews.d1_databases` pointing at a separate empty `apexnav-preview-db` (id 9103ab07-..., migrations 0001-0003 applied), so previews never touch production data. Verify the next PR build is green. Any future migration must be applied to BOTH databases. Production deploys (`wrangler deploy`) were never affected by this error.
 - Contributor limits: only drives imported after this change keep the roughness/crest/curvature columns; older stored drives are not eligible. Public Valhalla/Overpass servers are rate limited, so a self-hosted matcher may be needed past a handful of users.
 - Not built yet:  convoy, R2 backups.
 - `npm ci` needs `--legacy-peer-deps` (Cloudflare test plugin vs wrangler peers).

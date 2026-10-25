@@ -76,7 +76,7 @@ Google setup (owner, free): Google Cloud console → OAuth consent screen (Exter
 | Piece | Choice |
 |---|---|
 | Web app + API | One Cloudflare Worker `apexnav` (`wrangler.jsonc`): static files from `web/`, `/api/*` to `backend/src/index.ts`. Live at https://apexnav.senftns.workers.dev/ |
-| Database | D1 `apexnav-db` (US East). Migrations in `backend/migrations`; applied through the Cloudflare connection; CI runs the same SQL in tests |
+| Database | D1 `apexnav-db` (US East); previews use a separate empty `apexnav-preview-db` (`previews` block in wrangler.jsonc; apply every migration to both). Migrations in `backend/migrations`; applied through the Cloudflare connection; CI runs the same SQL in tests |
 | Nightly job | Cron `17 7 * * *` UTC (`backend/src/nightly.ts`): waits until 14 days after a road's earliest drive, then ranks by drive date, merges `ingest_pending` into `road_bins` (running mean/variance), writes `points_ledger` (3x/2x/1x), discards replays, freezes the slots with the user cleared |
 | Convoy (later) | Durable Objects + WebSockets |
 | Photos, routing tiles, backups | R2 (free allowance, no download fees) |
