@@ -145,7 +145,7 @@
         </div>
       </div>
       <div class="grid2">
-        <div class="panel"><h2>Your segments</h2><div class="seglist" id="segList"></div><p class="note" style="margin-top:8px">Segments are your custom stretches. Every drive that covers one, in the same direction, is ranked on it by Driver Score. Leaderboards with friends and crews come with accounts.</p></div>
+        <div class="panel"><h2>Your segments</h2><div class="seglist" id="segList"></div><p class="note" style="margin-top:8px">Segments are your custom stretches. Every drive that covers one, in the same direction, is ranked on it by Driver Score. Sign in (Account on the main page) to back them up and compare with friends.</p></div>
         <div class="panel" id="contribPanel" hidden><h2>Share road data</h2><p class="note" id="contribNote"></p><div id="contribList" style="display:grid;gap:6px"></div></div>
       <div class="panel" id="segSyncPanel" hidden><h2>Friends and sync</h2><div class="note" id="segSyncNote"></div><div id="segShared"></div><div class="row" id="segShareRow" style="margin-top:8px"></div><h2 style="margin-top:12px">Friends board</h2><div class="scroll"><table id="segBoard"></table></div></div>
       <div class="panel"><h2 id="segTitle">Passes</h2><div id="segChart"></div><div class="scroll"><table id="segTable"></table></div></div>
@@ -460,6 +460,7 @@
         list.appendChild(b);
       }
       const seg = segs.find(s => s.id === activeSeg);
+      $('segTitle').parentElement.hidden = !seg;                           // nothing to show until a segment exists
       if (!seg) { $('segTable').innerHTML = ''; $('segChart').innerHTML = ''; $('segTitle').textContent = 'Passes'; return; }
       $('segTitle').textContent = `Passes · ${seg.name}`;
       const passes = passesFor(seg).sort((a, b) => (b.p.score ?? -1) - (a.p.score ?? -1));
