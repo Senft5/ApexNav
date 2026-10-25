@@ -4296,6 +4296,196 @@
    "file": "p_a1e999c73f93.m4a",
    "dur": 2.157,
    "text": "Left four plus long, one hundred."
+  },
+  "head:L3+dist:450": {
+   "file": "p_c20f95ff65e8.m4a",
+   "dur": 1.63,
+   "text": "Left three, four fifty."
+  },
+  "head:R4++dist:400": {
+   "file": "p_9bd3b7206e32.m4a",
+   "dur": 1.913,
+   "text": "Right four plus, four hundred."
+  },
+  "head:RAC+mod:long+mod:tightens+caution:2": {
+   "file": "p_a8befb9b4a58.m4a",
+   "dur": 2.305,
+   "text": "Acute right long tightens, caution."
+  },
+  "head:RSQ+dist:100": {
+   "file": "p_4d227266fa84.m4a",
+   "dur": 1.553,
+   "text": "Square right, one hundred."
+  },
+  "mod:tightens+caution:1+link:and": {
+   "file": "p_c16d3c47201e.m4a",
+   "dur": 1.417,
+   "text": "Tightens, care and."
+  },
+  "head:L5-+mod:long+mod:tightens+caution:1": {
+   "file": "p_a552e7795810.m4a",
+   "dur": 2.354,
+   "text": "Left five minus long tightens, care."
+  },
+  "head:L3-+link:and": {
+   "file": "p_655440ccc8f2.m4a",
+   "dur": 1.51,
+   "text": "Left three minus and."
+  },
+  "mod:long+caution:1+dist:450": {
+   "file": "p_1c71da745357.m4a",
+   "dur": 1.565,
+   "text": "Long, care, four fifty."
+  },
+  "caution:1+dist:400": {
+   "file": "p_f7579237fd82.m4a",
+   "dur": 1.173,
+   "text": "Care, four hundred."
+  },
+  "head:L3+link:into+head:R4": {
+   "file": "p_26b2985beb8e.m4a",
+   "dur": 1.748,
+   "text": "Left three into Right four."
+  },
+  "head:R5+mod:long+mod:opens": {
+   "file": "p_91639a268356.m4a",
+   "dur": 1.664,
+   "text": "Right five long opens."
+  },
+  "head:L1+caution:1+link:into": {
+   "file": "p_d8bd678cbd73.m4a",
+   "dur": 1.517,
+   "text": "Left one, care into."
+  },
+  "mod:opens+link:and": {
+   "file": "p_af50396b6a12.m4a",
+   "dur": 1.046,
+   "text": "Opens and."
+  },
+  "link:and+head:L3+": {
+   "file": "p_45948563aa20.m4a",
+   "dur": 1.359,
+   "text": "And Left three plus."
+  },
+  "head:R3++dist:80": {
+   "file": "p_be6e5317f65c.m4a",
+   "dur": 1.7,
+   "text": "Right three plus, eighty."
+  },
+  "head:L3++mod:long+link:and": {
+   "file": "p_be9c62cc808c.m4a",
+   "dur": 1.666,
+   "text": "Left three plus long and."
+  },
+  "mod:opens+dist:70": {
+   "file": "p_aaab9b7d122a.m4a",
+   "dur": 1.29,
+   "text": "Opens, seventy."
+  },
+  "head:L3++mod:long+link:into": {
+   "file": "p_11853736185a.m4a",
+   "dur": 1.936,
+   "text": "Left three plus long into."
+  },
+  "link:into+head:LHP": {
+   "file": "p_8a67513716c1.m4a",
+   "dur": 1.532,
+   "text": "Into Left hairpin."
+  },
+  "head:L3+link:into+head:R3": {
+   "file": "p_1588523c8506.m4a",
+   "dur": 1.753,
+   "text": "Left three into Right three."
+  },
+  "head:R3+mod:long+dist:300": {
+   "file": "p_0fd9d79ddc6e.m4a",
+   "dur": 1.907,
+   "text": "Right three long, three hundred."
+  },
+  "head:RAC+mod:long+caution:1+dist:300": {
+   "file": "p_1953f0e04efc.m4a",
+   "dur": 2.274,
+   "text": "Acute right long, care, three hundred."
+  },
+  "head:L5+link:and": {
+   "file": "p_5565de18a710.m4a",
+   "dur": 1.141,
+   "text": "Left five and."
+  },
+  "head:R5-+mod:tightens+caution:1": {
+   "file": "p_592ccf4614f2.m4a",
+   "dur": 2.035,
+   "text": "Right five minus tightens, care."
+  },
+  "head:L5-+mod:tightens+caution:1": {
+   "file": "p_bbf379043ecf.m4a",
+   "dur": 2.082,
+   "text": "Left five minus tightens, care."
+  },
+  "mod:long+mod:opens+link:into": {
+   "file": "p_8816c3979bf5.m4a",
+   "dur": 1.641,
+   "text": "Long opens into."
+  },
+  "head:R2++dist:150": {
+   "file": "p_266a63d15d94.m4a",
+   "dur": 1.937,
+   "text": "Right two plus, one fifty."
+  },
+  "head:L2+link:into+head:RAC+mod:long": {
+   "file": "p_74969cc48610.m4a",
+   "dur": 2.013,
+   "text": "Left two into Acute right long."
+  },
+  "caution:1+dist:120": {
+   "file": "p_5a30e06180be.m4a",
+   "dur": 1.306,
+   "text": "Care, one twenty."
+  },
+  "head:L2+link:and": {
+   "file": "p_75bcb0ceab20.m4a",
+   "dur": 1.071,
+   "text": "Left two and."
+  },
+  "head:RAC+mod:long+link:into+head:L3": {
+   "file": "p_cf20765a5366.m4a",
+   "dur": 2.066,
+   "text": "Acute right long into Left three."
+  },
+  "link:and+head:L3+link:into": {
+   "file": "p_01254400ec73.m4a",
+   "dur": 1.335,
+   "text": "And Left three into."
+  },
+  "link:into+head:R3-+link:and": {
+   "file": "p_fbd80a177812.m4a",
+   "dur": 1.915,
+   "text": "Into Right three minus and."
+  },
+  "head:RSQ+link:into": {
+   "file": "p_07f576f23f42.m4a",
+   "dur": 1.347,
+   "text": "Square right into."
+  },
+  "head:RHP+mod:opens+caution:1": {
+   "file": "p_d31ce9d1aa24.m4a",
+   "dur": 1.806,
+   "text": "Right hairpin opens, care."
+  },
+  "mod:long+link:into+head:RSQ": {
+   "file": "p_a173de09dee0.m4a",
+   "dur": 1.441,
+   "text": "Long into Square right."
+  },
+  "head:LSQ+dist:150": {
+   "file": "p_5cae4f28b5f5.m4a",
+   "dur": 1.639,
+   "text": "Square left, one fifty."
+  },
+  "head:RHP+mod:opens+dist:60": {
+   "file": "p_3c288e9e8055.m4a",
+   "dur": 1.992,
+   "text": "Right hairpin opens, sixty."
   }
  }
 }
