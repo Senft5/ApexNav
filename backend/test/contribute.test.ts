@@ -110,6 +110,18 @@ describe("POST /api/contribute (real time)", () => {
     expect(r.crest_peak).toBeCloseTo(2);
   });
 
+  it("a missing crest stays unknown and never erases a measured one", async () => {
+    const [a, b] = [await makeUser("alice"), await makeUser("bob")]; await optIn(a, b);
+    await ok(post(a, { drive_id: "drive-alice-1", bins: bins().map((x) => ({ ...x, crest: null })) }));
+    expect((await q<{ crest_peak: number | null }>("SELECT crest_peak FROM road_bins WHERE bin_idx = 5")).crest_peak).toBeNull();
+    await ok(post(b, { drive_id: "drive-bob-001", bins: bins().map((x) => ({ ...x, crest: 0.5 })) }));
+    expect((await q<{ crest_peak: number }>("SELECT crest_peak FROM road_bins WHERE bin_idx = 5")).crest_peak).toBeCloseTo(0.5);
+    const c = await makeUser("carol"); await optIn(c);
+    await ok(post(c, { drive_id: "drive-carol-01", bins: bins().map((x) => ({ ...x, crest: null })) }));
+    expect((await q<{ crest_peak: number; n: number }>("SELECT crest_peak, n FROM road_bins WHERE bin_idx = 5"))).toMatchObject({ n: 3 });
+    expect((await q<{ crest_peak: number }>("SELECT crest_peak FROM road_bins WHERE bin_idx = 5")).crest_peak).toBeCloseTo(0.5);
+  });
+
   it("stores no coordinates, times or user ids with the road numbers", async () => {
     const a = await makeUser("alice"); await optIn(a); await ok(post(a));
     const rows = JSON.stringify((await env.DB.prepare("SELECT * FROM road_bins").all()).results);

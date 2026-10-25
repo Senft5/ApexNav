@@ -158,3 +158,82 @@ def test_drive_id_is_stable_and_valid(result):
     assert ids[0] == ids[1] and ids[0] != ids[2]
     import re
     assert all(re.fullmatch(r"[A-Za-z0-9_-]{8,64}", i) for i in ids)
+
+
+LIVE = r"""
+const C = require(process.argv[1] + '/web/contributor.js');
+const Core = require(process.argv[1] + '/web/apex_core.js');
+const lat0 = 35.0, lon0 = -83.0, mLon = 111320 * Math.cos(lat0 * Math.PI / 180);
+const way = [[lat0, lon0], [lat0, lon0 + 12000 / mLon]];              // a 12 km straight way
+const N = 1200;                                                       // 6 km driven = 1200 rows of 5 m
+const row = (i) => ({ lat: lat0 + 3 / 110540, lon: lon0 + (i * 5) / mLon, roughness_rms: 0.1 });
+const fake = (state) => async (url, init) => {
+  if (url.includes('trace_attributes')) {
+    if (state.failTimes > 0) { state.failTimes--; return { ok: false, status: 429, json: async () => ({}) }; }
+    const sh = JSON.parse(init.body).shape; state.matches++;
+    return { ok: true, json: async () => ({ edges: [{ way_id: 77, road_class: 'tertiary' }], matched_points: sh.map(() => ({ type: 'matched', edge_index: 0 })) }) };
+  }
+  state.overpass++;
+  return { ok: true, json: async () => ({ elements: [{ type: 'way', id: 77, geometry: way.map(([la, lo]) => ({ lat: la, lon: lo })) }] }) };
+};
+const out = {};
+(async () => {
+  // 1. normal streaming drive
+  { const st = { matches: 0, overpass: 0, failTimes: 0 }, posts = [], statuses = [];
+    const live = C.createLive({ Core, fetch: fake(st), driveId: 'd_live_test_01', drivenOn: '2026-10-25', post: async (c) => { posts.push(c); return true; }, onStatus: (s) => statuses.push(s.state) });
+    for (let i = 0; i < N; i++) { live.push(row(i)); if (i % 50 === 0) await new Promise((r) => setTimeout(r, 0)); }
+    const stats = await live.finish();
+    const bins = posts.flatMap((p) => p.bins.map((b) => b.i)), lo = Math.min(...bins), hi = Math.max(...bins);
+    out.normal = { posts: posts.length, lo, hi, n: bins.length, unique: new Set(bins).size, overpass: st.overpass, ids: [...new Set(posts.map((p) => p.drive_id))], crest: [...new Set(posts.flatMap((p) => p.bins.map((b) => b.crest)))], keys: Object.keys(posts[0]).sort().join(), km: stats.km, firstState: statuses[0] }; }
+  // 2. failures are retried, rows are not lost
+  { const st = { matches: 0, overpass: 0, failTimes: 1 }, posts = []; let t = 0;
+    const live = C.createLive({ Core, fetch: fake(st), driveId: 'd_live_test_02', drivenOn: '2026-10-25', retryMs: 1000, now: () => t, post: async (c) => { posts.push(c); return true; } });
+    for (let i = 0; i < N; i++) live.push(row(i));
+    await live.finish(); out.afterFail = { posts: posts.length, error: !!live.stats().error };
+    t += 2000; live.push(row(N)); await live.finish(); out.afterRetry = { posts: posts.length, error: !!live.stats().error }; }
+  // 3. the server refusing stops everything
+  { const st = { matches: 0, overpass: 0, failTimes: 0 }; let calls = 0;
+    const live = C.createLive({ Core, fetch: fake(st), driveId: 'd_live_test_03', drivenOn: '2026-10-25', post: async () => { calls++; return 'stop'; } });
+    for (let i = 0; i < N; i++) live.push(row(i));
+    await live.finish(); out.stopped = { stopped: live.stats().stopped, calls }; }
+  // 4. a short drive sends nothing at all
+  { const st = { matches: 0, overpass: 0, failTimes: 0 }, posts = [];
+    const live = C.createLive({ Core, fetch: fake(st), driveId: 'd_live_test_04', drivenOn: '2026-10-25', post: async (c) => { posts.push(c); return true; } });
+    for (let i = 0; i < 380; i++) live.push(row(i));          // 1.9 km: first km and last km stay private, only 0 rows remain
+    await live.finish(); out.short = { posts: posts.length, matches: st.matches }; }
+  console.log(JSON.stringify(out));
+})();
+"""
+
+
+@pytest.fixture(scope="module")
+def live():
+    root = str(__import__("pathlib").Path(__file__).resolve().parents[1])
+    p = subprocess.run([NODE, "-e", LIVE, root], capture_output=True, text=True, timeout=120)
+    assert p.returncode == 0, p.stderr
+    return json.loads(p.stdout)
+
+
+def test_live_never_sends_first_or_last_km(live):
+    n = live["normal"]
+    assert n["lo"] >= 200 - 1 and n["hi"] <= 1200 - 200 + 1          # rows 0-199 and the last 200 rows never leave the phone
+    assert n["n"] == n["unique"] and n["n"] >= 780                    # about 800 settled rows, none sent twice
+    assert n["ids"] == ["d_live_test_01"] and n["keys"] == "bins,dir,drive_id,driven_on,way_id"
+    assert n["overpass"] == 1 and n["firstState"] == "on"             # way geometry fetched once, then cached
+
+
+def test_live_unknown_crest_is_null_not_zero(live):
+    assert live["normal"]["crest"] == [None]
+
+
+def test_live_retries_after_a_failed_match(live):
+    assert live["afterFail"] == {"posts": 0, "error": True}
+    assert live["afterRetry"]["posts"] >= 1 and live["afterRetry"]["error"] is False
+
+
+def test_live_stops_when_the_server_refuses(live):
+    assert live["stopped"]["stopped"] is True and live["stopped"]["calls"] == 1
+
+
+def test_live_short_drive_sends_nothing(live):
+    assert live["short"] == {"posts": 0, "matches": 0}
