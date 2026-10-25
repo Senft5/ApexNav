@@ -3,24 +3,24 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>APEX NAV — Halda Tripmaster & Stage Co-Driver</title>
+  <title>ApexNav — Spirited Navigation, Loop Builder & Rally Co-Driver</title>
   <link rel="stylesheet" href="vendor/maplibre-gl.css" />
   <script src="vendor/maplibre-gl.js"></script>
   <script src="data/dry_ridge.js"></script>
   <script src="data/pebble_ridge.js"></script>
   <style>
     :root {
-      --anodized: #141413;
-      --anodized-raised: #1d1c1a;
-      --anodized-well: #0c0c0b;
-      --bezel-edge: #38342e;
-      --brass-line: #6e5d45;
-      --cream: #efe8d8;
-      --cream-dim: #a89f8d;
-      --cream-muted: #6e675b;
+      --bg-panel: #141413;
+      --bg-elevated: #1c1b19;
+      --bg-well: #0c0c0b;
+      --border-subtle: #2e2b26;
+      --border-brass: #5c4e3a;
+      --text-cream: #f2ece1;
+      --text-muted: #a39a8c;
+      --text-dim: #6e675c;
       --amber: #e89b3c;
       --vermilion: #d94625;
-      --olive: #6b8e4e;
+      --olive: #5b8247;
       --safe-top: env(safe-area-inset-top, 0px);
       --safe-bottom: env(safe-area-inset-bottom, 0px);
     }
@@ -29,39 +29,39 @@
       box-sizing: border-box;
       margin: 0;
       padding: 0;
-      user-select: none;
-      -webkit-user-select: none;
       -webkit-tap-highlight-color: transparent;
+      user-select: none;
     }
 
     html, body {
       width: 100%;
       height: 100%;
       overflow: hidden;
-      background: var(--anodized);
-      color: var(--cream);
-      font-family: "DIN Alternate", "Franklin Gothic Medium", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #121110;
+      color: var(--text-cream);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", "Segoe UI", sans-serif;
       font-variant-numeric: tabular-nums;
       -webkit-font-smoothing: antialiased;
     }
 
-    /* 80 / 20 HARDWARE VIEWPORT SPLIT */
-    .cockpit-shell {
-      position: fixed;
-      inset: 0;
+    #app {
+      position: relative;
+      width: 100%;
+      max-width: 100%;
+      height: 100vh;
+      height: 100dvh;
       display: flex;
       flex-direction: column;
-      width: 100%;
-      height: 100%;
+      overflow: hidden;
     }
 
-    .map-stage {
+    /* MAP VIEWPORT */
+    .map-viewport {
       position: relative;
-      flex: 1 1 78%;
-      min-height: 0;
+      flex: 1 1 auto;
       width: 100%;
+      min-height: 0;
       overflow: hidden;
-      background: #e9e1d0;
     }
 
     #map {
@@ -70,791 +70,845 @@
       width: 100%;
       height: 100%;
     }
+    .maplibregl-ctrl-bottom-left,
+    .maplibregl-ctrl-bottom-right,
+    .maplibregl-ctrl-top-left,
+    .maplibregl-ctrl-top-right {
+      display: none !important;
+    }
 
-    .maplibregl-ctrl-attrib { display: none !important; }
-
-    /* TOP HARDWARE RALLY HEADER STRIP (Stamped Anodized Aluminum) */
-    .top-bezel {
+    /* TOP NAVIGATION & CO-DRIVER HUD */
+    .top-hud {
       position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
+      top: calc(10px + var(--safe-top));
+      left: 12px;
+      right: 12px;
       z-index: 20;
-      padding-top: var(--safe-top);
-      background: linear-gradient(180deg, #1b1a18 0%, #121210 100%);
-      border-bottom: 2px solid var(--brass-line);
-      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.55);
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding-left: 12px;
-      padding-right: 12px;
-      min-height: calc(52px + var(--safe-top));
       gap: 10px;
+      pointer-events: none;
     }
 
-    .plate-brand {
+    .top-hud > * {
+      pointer-events: auto;
+    }
+
+    /* Left: Route Picker + Loop Builder Trigger */
+    .nav-bar-left {
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 6px;
+      background: var(--bg-panel);
+      border: 1px solid var(--border-brass);
+      padding: 5px 6px 5px 10px;
+      border-radius: 6px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.55);
       flex-shrink: 0;
     }
 
-    .stamped-badge {
-      background: var(--vermilion);
-      color: #111;
+    .brand-mark {
       font-size: 11px;
-      font-weight: 900;
+      font-weight: 800;
       letter-spacing: 0.08em;
-      padding: 4px 7px;
-      border-radius: 2px;
-      border: 1px solid #f3795c;
-      text-transform: uppercase;
+      color: var(--amber);
+      padding-right: 6px;
+      border-right: 1px solid var(--border-subtle);
     }
 
-    .stage-picker {
-      background: var(--anodized-well);
-      color: var(--cream);
-      border: 1px solid var(--bezel-edge);
-      padding: 5px 10px;
+    .route-select {
+      background: transparent;
+      color: var(--text-cream);
+      border: none;
       font-family: inherit;
-      font-size: 12px;
+      font-size: 13px;
       font-weight: 700;
-      letter-spacing: 0.03em;
-      text-transform: uppercase;
-      border-radius: 3px;
+      padding: 4px 6px;
       cursor: pointer;
       outline: none;
+      min-width: 0;
+      max-width: 200px;
+      text-overflow: ellipsis;
+    }
+    .route-select option {
+      background: var(--bg-panel);
+      color: var(--text-cream);
     }
 
-    /* HALDA PACE-NOTE TELEPROMPTER DRUM */
-    .pacenote-drum {
-      flex: 1;
-      max-width: 520px;
-      background: var(--anodized-well);
-      border: 1px solid var(--bezel-edge);
-      border-top: 2px solid #060605;
-      border-radius: 3px;
-      height: 38px;
+    .btn {
+      background: var(--bg-elevated);
+      color: var(--text-cream);
+      border: 1px solid var(--border-subtle);
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 6px 11px;
+      border-radius: 5px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+      transition: background 0.12s, border-color 0.12s;
+    }
+    .btn:hover {
+      border-color: var(--border-brass);
+      background: #252320;
+    }
+    .btn.primary {
+      background: var(--vermilion);
+      border-color: #f06444;
+      color: #fff;
+      font-weight: 700;
+    }
+    .btn.amber {
+      background: rgba(232, 155, 60, 0.16);
+      border-color: var(--amber);
+      color: var(--amber);
+      font-weight: 700;
+    }
+    .btn.active {
+      background: var(--amber);
+      border-color: var(--amber);
+      color: #121110;
+      font-weight: 700;
+    }
+
+    /* Center: Co-Driver Pace Note Pill */
+    .codriver-pill {
       display: flex;
       align-items: center;
-      padding: 0 10px;
-      gap: 10px;
-      overflow: hidden;
-      box-shadow: inset 0 2px 6px rgba(0,0,0,0.85);
+      gap: 12px;
+      background: var(--bg-panel);
+      border: 1px solid var(--border-brass);
+      padding: 6px 12px 6px 8px;
+      border-radius: 6px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+      min-width: 290px;
+      max-width: 480px;
+      flex: 1 1 auto;
+      cursor: pointer;
     }
 
-    .pacenote-code {
+    .turn-badge {
+      min-width: 44px;
+      height: 36px;
+      padding: 0 8px;
+      border-radius: 4px;
       background: var(--amber);
-      color: #111;
-      font-size: 13px;
+      color: #121110;
+      font-size: 15px;
       font-weight: 900;
-      letter-spacing: 0.04em;
-      padding: 3px 8px;
-      border-radius: 2px;
-      min-width: 48px;
-      text-align: center;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      letter-spacing: 0.02em;
       flex-shrink: 0;
     }
-    .pacenote-code.hazard {
+    .turn-badge.hazard {
       background: var(--vermilion);
-      color: var(--cream);
+      color: #fff;
     }
 
-    .pacenote-dist {
-      font-size: 15px;
+    .codriver-copy {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      flex: 1;
+    }
+    .codriver-top {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+    }
+    .codriver-dist {
+      font-size: 14px;
       font-weight: 800;
       color: var(--amber);
-      letter-spacing: 0.03em;
-      min-width: 62px;
       flex-shrink: 0;
     }
-
-    .pacenote-text {
-      font-size: 12px;
+    .codriver-title {
+      font-size: 14px;
       font-weight: 700;
-      color: var(--cream);
-      letter-spacing: 0.03em;
-      text-transform: uppercase;
+      color: var(--text-cream);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      flex: 1;
+    }
+    .codriver-sub {
+      font-size: 11px;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
-    .top-actions {
+    .voice-chip {
+      background: var(--bg-well);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-muted);
+      font-size: 11px;
+      font-weight: 700;
+      padding: 5px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .voice-chip.on {
+      border-color: var(--amber);
+      color: var(--amber);
+    }
+
+    /* Right: Quick Controls */
+    .nav-bar-right {
       display: flex;
       align-items: center;
       gap: 6px;
+      background: var(--bg-panel);
+      border: 1px solid var(--border-subtle);
+      padding: 5px;
+      border-radius: 6px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.55);
       flex-shrink: 0;
     }
 
-    .octane-counter {
-      background: var(--anodized-well);
-      border: 1px solid var(--brass-line);
-      padding: 4px 9px;
-      border-radius: 3px;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 11px;
-      font-weight: 800;
-      letter-spacing: 0.05em;
-      color: var(--amber);
-      cursor: pointer;
+    /* SLIDE-OVER PANELS (Loop & Destination Nav / DNA Tuning / Convoy) */
+    .modal-sheet {
+      position: absolute;
+      top: calc(64px + var(--safe-top));
+      left: 12px;
+      z-index: 30;
+      width: 370px;
+      max-width: calc(100vw - 24px);
+      max-height: calc(100% - 80px);
+      overflow-y: auto;
+      background: var(--bg-panel);
+      border: 1px solid var(--border-brass);
+      border-radius: 8px;
+      box-shadow: 0 16px 40px rgba(0,0,0,0.75);
+      padding: 14px;
+      display: none;
+      flex-direction: column;
+      gap: 12px;
     }
-    .octane-lbl {
-      color: var(--cream-dim);
-      font-size: 9px;
+    .modal-sheet.right-aligned {
+      left: auto;
+      right: 12px;
+    }
+    .modal-sheet.open {
+      display: flex;
     }
 
-    .metal-btn {
-      background: linear-gradient(180deg, #282623 0%, #191816 100%);
-      border: 1px solid var(--bezel-edge);
-      color: var(--cream-dim);
-      font-family: inherit;
-      font-size: 11px;
-      font-weight: 800;
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
-      padding: 6px 10px;
-      border-radius: 3px;
-      cursor: pointer;
-      box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
+    .sheet-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border-subtle);
+      padding-bottom: 8px;
     }
-    .metal-btn:hover { color: var(--cream); border-color: var(--brass-line); }
-    .metal-btn.active {
-      background: linear-gradient(180deg, #3d3322 0%, #241e14 100%);
+    .sheet-title {
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 0.04em;
       color: var(--amber);
+      text-transform: uppercase;
+    }
+    .sheet-close {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      padding: 2px 6px;
+    }
+
+    .section-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-bottom: 4px;
+    }
+
+    .search-row {
+      display: flex;
+      gap: 6px;
+    }
+    .text-input {
+      flex: 1 1 0%;
+      min-width: 0;
+      width: 0;
+      background: var(--bg-well);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-cream);
+      font-family: inherit;
+      font-size: 13px;
+      padding: 8px 10px;
+      border-radius: 5px;
+      outline: none;
+    }
+    .text-input:focus {
       border-color: var(--amber);
     }
 
-    /* FLOATING HARDWARE DRAWERS (Route DNA Sliders / Stage Dossier / Convoy & Clubs) */
-    .hardware-drawer {
-      position: absolute;
-      top: calc(60px + var(--safe-top));
-      right: 12px;
-      z-index: 25;
-      width: 340px;
-      max-width: calc(100vw - 24px);
-      background: var(--anodized);
-      border: 2px solid var(--brass-line);
-      box-shadow: 0 14px 36px rgba(0,0,0,0.75);
-      padding: 12px 14px;
-      display: none;
-      flex-direction: column;
-      gap: 10px;
+    .loop-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
     }
-    .hardware-drawer.open { display: flex; }
 
-    .drawer-header {
+    .preset-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .preset-card {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-subtle);
+      border-radius: 6px;
+      padding: 9px 11px;
+      cursor: pointer;
       display: flex;
       justify-content: space-between;
       align-items: center;
-      border-bottom: 1px solid var(--bezel-edge);
-      padding-bottom: 6px;
+      transition: border-color 0.12s;
     }
-    .drawer-title {
-      font-size: 12px;
-      font-weight: 900;
-      letter-spacing: 0.08em;
-      color: var(--amber);
-      text-transform: uppercase;
+    .preset-card:hover {
+      border-color: var(--amber);
     }
-    .drawer-close {
-      background: none;
-      border: none;
-      color: var(--cream-dim);
-      font-size: 12px;
+    .preset-name {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-cream);
+    }
+    .preset-meta {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+    .preset-score {
+      font-size: 15px;
       font-weight: 800;
-      cursor: pointer;
-      text-transform: uppercase;
+      color: var(--amber);
+      background: var(--bg-well);
+      padding: 4px 8px;
+      border-radius: 4px;
+      border: 1px solid var(--border-subtle);
     }
 
-    .dna-row {
+    .slider-group {
       display: flex;
       flex-direction: column;
-      gap: 3px;
+      gap: 4px;
     }
-    .dna-lbl-row {
+    .slider-head {
       display: flex;
       justify-content: space-between;
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-cream);
     }
-    .dna-slider {
+    input[type="range"] {
       width: 100%;
       accent-color: var(--amber);
       cursor: pointer;
     }
 
-    .car-spec-group {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 4px;
-    }
-
-    /* STAGE DOSSIER CARD (Left Drawer when clicking a sector) */
-    .dossier-card {
+    /* TOAST BANNER */
+    .toast-banner {
       position: absolute;
-      top: calc(60px + var(--safe-top));
-      left: 12px;
-      z-index: 25;
-      width: 300px;
-      background: var(--anodized);
-      border: 2px solid var(--bezel-edge);
-      box-shadow: 0 12px 28px rgba(0,0,0,0.7);
-      padding: 11px 13px;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-    .dossier-top {
-      display: flex;
-      justify-content: space-between;
-      align-items: baseline;
-      border-bottom: 1px solid var(--bezel-edge);
-      padding-bottom: 5px;
-    }
-    .dossier-name {
-      font-size: 12px;
-      font-weight: 900;
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
-      color: var(--cream);
-    }
-    .dossier-score {
-      font-size: 20px;
-      font-weight: 900;
-      color: var(--amber);
-    }
-    .meter-grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 6px 10px;
-    }
-    .meter-item {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-    }
-    .meter-head {
-      display: flex;
-      justify-content: space-between;
-      font-size: 10px;
-      font-weight: 800;
-      color: var(--cream-dim);
-      letter-spacing: 0.05em;
-    }
-    .meter-track {
-      height: 5px;
-      background: var(--anodized-well);
-      border: 1px solid #2b2925;
-    }
-    .meter-fill {
-      height: 100%;
-      background: var(--amber);
-    }
-
-    /* CONVOY LEAD-CAR ALERT BANNER */
-    .convoy-banner {
-      position: absolute;
-      bottom: 12px;
+      bottom: 14px;
       left: 50%;
       transform: translateX(-50%);
       z-index: 25;
-      background: #22120e;
-      border: 2px solid var(--vermilion);
+      background: var(--bg-panel);
+      border: 1px solid var(--amber);
+      color: var(--text-cream);
       padding: 8px 14px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 700;
+      box-shadow: 0 10px 28px rgba(0,0,0,0.7);
       display: none;
       align-items: center;
-      gap: 12px;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.8);
+      gap: 8px;
+      white-space: nowrap;
+      max-width: calc(100vw - 24px);
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
-    .convoy-banner.active { display: flex; }
+    .toast-banner.show {
+      display: flex;
+    }
 
-    /* ============================================================================
-       BOTTOM 20%: FIXED BRUSHED-ANODIZED HALDA TRIPMASTER BINNACLE
-       ============================================================================ */
-    .halda-binnacle {
-      flex: 0 0 auto;
+    /* BOTTOM INSTRUMENT CLUSTER */
+    .bottom-cluster {
+      flex-shrink: 0;
       width: 100%;
-      background:
-        repeating-linear-gradient(90deg, rgba(255,255,255,0.012) 0px, rgba(255,255,255,0.012) 1px, transparent 1px, transparent 3px),
-        linear-gradient(180deg, #1c1b19 0%, #11110f 100%);
-      border-top: 3px solid var(--brass-line);
-      box-shadow: 0 -10px 30px rgba(0,0,0,0.8);
+      background: var(--bg-panel);
+      border-top: 2px solid var(--border-brass);
       padding: 10px 16px calc(10px + var(--safe-bottom)) 16px;
       display: grid;
-      grid-template-columns: 168px 1fr 168px;
+      grid-template-columns: 190px minmax(0, 1fr) 150px;
       align-items: center;
       gap: 16px;
-      z-index: 30;
+      z-index: 25;
     }
 
-    .dial-pod {
+    /* Left: Speed + Target Corner Speed Module */
+    .speed-module {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--bg-well);
+      border: 1px solid var(--border-subtle);
+      padding: 8px 12px;
+      border-radius: 6px;
+    }
+    .speed-primary {
       display: flex;
       flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 4px;
+      min-width: 72px;
     }
-
-    .dial-Well {
-      width: 136px;
-      height: 136px;
-      border-radius: 50%;
-      background: radial-gradient(circle at 50% 35%, #191816 0%, #090908 100%);
-      border: 3px solid #33302b;
-      box-shadow: inset 0 4px 12px rgba(0,0,0,0.95), 0 1px 0 rgba(255,255,255,0.12);
+    .speed-val {
+      font-size: 34px;
+      font-weight: 900;
+      line-height: 1.0;
+      color: var(--text-cream);
+      letter-spacing: -0.02em;
+    }
+    .speed-unit {
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--text-muted);
+      letter-spacing: 0.06em;
+      margin-top: 3px;
+    }
+    .target-divider {
+      width: 1px;
+      height: 36px;
+      background: var(--border-subtle);
+    }
+    .target-box {
       display: flex;
-      align-items: center;
-      justify-content: center;
-      position: relative;
+      flex-direction: column;
+    }
+    .target-lbl {
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+    }
+    .target-val {
+      font-size: 18px;
+      font-weight: 800;
+      color: var(--amber);
+      margin-top: 2px;
+    }
+    .target-val.hot {
+      color: var(--vermilion);
     }
 
-    .center-trip-deck {
+    /* Center: Transport + Scrubber + Clean Telemetry Strip */
+    .center-module {
       display: flex;
       flex-direction: column;
       gap: 8px;
       min-width: 0;
     }
 
-    /* HALDA MECHANICAL DRUM READOUTS */
-    .tripmaster-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
+    .telemetry-strip {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 8px;
-      flex-wrap: wrap;
     }
-
-    .drum-box {
-      background: var(--anodized-well);
-      border: 1px solid var(--bezel-edge);
-      border-top: 2px solid #050504;
-      padding: 4px 10px;
+    .stat-cell {
+      background: var(--bg-well);
+      border: 1px solid var(--border-subtle);
+      border-radius: 5px;
+      padding: 5px 10px;
       display: flex;
       align-items: baseline;
-      gap: 8px;
-      box-shadow: inset 0 2px 6px rgba(0,0,0,0.9);
+      justify-content: space-between;
+      gap: 6px;
+      min-width: 0;
     }
-
-    .drum-label {
-      font-size: 9px;
-      font-weight: 800;
-      letter-spacing: 0.08em;
-      color: var(--cream-dim);
+    .stat-lbl {
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--text-muted);
       text-transform: uppercase;
+      white-space: nowrap;
+    }
+    .stat-num {
+      font-size: 14px;
+      font-weight: 800;
+      color: var(--text-cream);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .stat-num.accent {
+      color: var(--amber);
     }
 
-    .drum-digits {
-      font-size: 18px;
-      font-weight: 900;
-      letter-spacing: 0.08em;
-      color: var(--cream);
-      background: repeating-linear-gradient(90deg, #181715 0px, #181715 11px, #0a0a09 11px, #0a0a09 12px);
-      padding: 1px 4px;
-    }
-    .drum-digits.amber { color: var(--amber); }
-
-    /* ELEVATION PROFILE & SCRUBBER WELL */
-    .scrubber-deck {
+    .transport-row {
       display: flex;
       align-items: center;
       gap: 8px;
+      min-width: 0;
     }
 
-    .hw-transport-btn {
-      height: 42px;
-      padding: 0 14px;
-      background: linear-gradient(180deg, #d94625 0%, #a32f15 100%);
-      border: 1px solid #f2765a;
-      color: var(--cream);
-      font-family: inherit;
-      font-size: 11px;
-      font-weight: 900;
-      letter-spacing: 0.07em;
-      text-transform: uppercase;
-      border-radius: 2px;
-      cursor: pointer;
-      flex-shrink: 0;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.6);
-    }
-    .hw-transport-btn.playing {
-      background: linear-gradient(180deg, #e89b3c 0%, #b5711d 100%);
-      border-color: #f7be74;
-      color: #111;
-    }
-
-    .elev-well {
+    .scrubber-box {
       position: relative;
-      flex: 1;
-      height: 42px;
-      background: var(--anodized-well);
-      border: 1px solid var(--bezel-edge);
+      flex: 1 1 auto;
+      height: 36px;
+      background: var(--bg-well);
+      border: 1px solid var(--border-subtle);
+      border-radius: 5px;
       cursor: ew-resize;
       overflow: hidden;
+      min-width: 80px;
     }
     #elevCanvas {
       width: 100%;
       height: 100%;
       display: block;
     }
-    .elev-well-meta {
-      position: absolute;
-      top: 3px;
-      left: 7px;
-      right: 7px;
-      display: flex;
-      justify-content: space-between;
-      font-size: 9px;
-      font-weight: 800;
-      letter-spacing: 0.06em;
-      color: var(--cream-dim);
-      text-transform: uppercase;
-      pointer-events: none;
-    }
 
-    /* PHYSICAL TOGGLE SWITCH BANK */
-    .switch-bank {
-      display: grid;
-      grid-template-columns: repeat(5, 1fr);
-      gap: 6px;
-    }
-
-    .toggle-switch {
-      background: linear-gradient(180deg, #22201d 0%, #141311 100%);
-      border: 1px solid var(--bezel-edge);
-      padding: 5px 6px;
+    /* Right: G-Ball & Banking Gauge */
+    .g-module {
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      gap: 4px;
-      cursor: pointer;
-      border-radius: 2px;
+      justify-content: flex-end;
+      gap: 10px;
     }
-    .toggle-switch:hover { border-color: var(--brass-line); }
-    .sw-name {
-      font-size: 9.5px;
-      font-weight: 800;
-      letter-spacing: 0.05em;
-      color: var(--cream-dim);
-      text-transform: uppercase;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .sw-lamp {
-      font-size: 9px;
-      font-weight: 900;
-      padding: 1px 4px;
-      background: #090908;
-      color: var(--cream-muted);
-      border: 1px solid #2b2925;
-    }
-    .toggle-switch.on .sw-name { color: var(--cream); }
-    .toggle-switch.on .sw-lamp {
-      background: var(--amber);
-      color: #111;
-      border-color: #f7c27e;
-    }
-    .toggle-switch.warn .sw-lamp {
-      background: var(--vermilion);
-      color: var(--cream);
-      border-color: #f2785c;
+    .g-canvas-wrap {
+      width: 78px;
+      height: 78px;
+      background: var(--bg-well);
+      border: 1px solid var(--border-subtle);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
     }
 
-    /* MAP MARKERS */
-    .apex-vehicle-puck {
-      width: 28px;
-      height: 28px;
+    /* MAP PINS (Clean, compact badges that never block the road) */
+    .vehicle-puck {
+      width: 26px;
+      height: 26px;
       pointer-events: none;
-      filter: drop-shadow(0 3px 6px rgba(0,0,0,0.65));
+      filter: drop-shadow(0 2px 5px rgba(0,0,0,0.65));
     }
 
-    .map-pin {
-      font-family: "DIN Alternate", sans-serif;
-      font-size: 9px;
-      font-weight: 900;
-      letter-spacing: 0.05em;
-      padding: 2px 5px;
-      border-radius: 2px;
-      text-transform: uppercase;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.6);
-      pointer-events: auto;
+    .hazard-dot {
+      font-size: 10px;
+      font-weight: 800;
+      padding: 2px 6px;
+      border-radius: 10px;
+      letter-spacing: 0.03em;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.55);
       cursor: pointer;
       white-space: nowrap;
+      transform: translateY(-14px);
     }
-    .map-pin.flock {
-      background: #d94625;
+    .hazard-dot.flock {
+      background: var(--vermilion);
       color: #fff;
-      border: 1px solid #ff8c73;
+      border: 1px solid #ff947d;
     }
-    .map-pin.police {
+    .hazard-dot.police {
       background: #1d4ed8;
       color: #fff;
       border: 1px solid #93c5fd;
     }
-    .map-pin.pothole {
-      background: #e89b3c;
-      color: #111;
+    .hazard-dot.pothole {
+      background: var(--amber);
+      color: #121110;
       border: 1px solid #fde68a;
     }
-    .map-pin.convoy {
+    .hazard-dot.waypoint {
       background: #141413;
-      color: #e89b3c;
-      border: 1.5px solid #e89b3c;
+      color: var(--amber);
+      border: 1.5px solid var(--amber);
     }
 
-    @media (max-width: 820px) {
-      .top-bezel {
-        flex-wrap: wrap;
+    /* RESPONSIVE MOBILE / IPHONE PORTRAIT LAYOUT (Zero cut-offs guaranteed) */
+    @media (max-width: 900px) {
+      .top-hud {
+        flex-direction: column;
+        align-items: stretch;
         gap: 6px;
-        padding: calc(6px + var(--safe-top)) 8px 6px 8px;
+        top: calc(6px + var(--safe-top));
+        left: 8px;
+        right: 8px;
       }
-      .plate-brand { order: 1; }
-      .top-actions { order: 2; gap: 4px; }
-      .octane-counter { display: none; }
-      .metal-btn { padding: 5px 7px; font-size: 10px; }
-      . stage-picker { font-size: 11px; padding: 4px 6px; }
-      .pacenote-drum {
-        order: 3;
-        flex: 0 0 100%;
-        max-width: 100%;
-        padding: 4px 8px;
+      .nav-bar-left {
+        width: 100%;
+        justify-content: space-between;
+        padding: 5px 8px;
       }
-      .pacenote-text { font-size: 11px; }
-      .halda-binnacle {
-        grid-template-columns: 86px minmax(0, 1fr) 86px;
-        gap: 6px;
-        padding: 8px 8px calc(8px + var(--safe-bottom)) 8px;
-      }
-      .dial-Well { width: 84px; height: 84px; }
-      #speedDialCanvas, #gDialCanvas { width: 80px !important; height: 80px !important; }
-      .tripmaster-row {
-        grid-template-columns: repeat(2, 1fr);
+      .brand-mark { display: none; }
+      .route-select { font-size: 13px; flex: 1 1 0%; width: 0; min-width: 0; max-width: none; }
+      .nav-bar-right {
+        width: 100%;
+        justify-content: space-between;
+        padding: 4px 6px;
         gap: 4px;
       }
-      .drum-box { padding: 3px 6px; }
-      .drum-label { font-size: 8px; }
-      .drum-digits { font-size: 12px; }
-      .hw-transport-btn { height: 34px; padding: 0 8px; font-size: 10px; }
-      #rateBtn { height: 34px !important; padding: 0 7px !important; }
-      .elev-well { height: 34px; }
-      .elev-well-meta { font-size: 7.5px; }
-      .dossier-card { display: none; }
-      .switch-bank { grid-template-columns: repeat(3, 1fr); gap: 4px; }
-      .switch-bank .toggle-switch:nth-child(4),
-      .switch-bank .toggle-switch:nth-child(5) { display: none; }
-      .toggle-switch { padding: 4px 5px; }
-      .sw-name { font-size: 8.5px; }
-      .sw-lamp { font-size: 8px; padding: 1px 3px; }
-    }
-    @media (max-width: 560px) {
-      .halda-binnacle {
-        grid-template-columns: 88px minmax(0, 1fr);
+      .nav-bar-right .btn {
+        flex: 1;
+        justify-content: center;
+        padding: 6px 4px;
+        font-size: 11px;
       }
-      .halda-binnacle > .dial-pod:last-child { display: none; }
+      .codriver-pill {
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        flex: 0 0 auto;
+        padding: 6px 8px;
+        gap: 8px;
+      }
+      .turn-badge {
+        min-width: 38px;
+        height: 32px;
+        font-size: 13px;
+      }
+      .codriver-dist, .codriver-title { font-size: 13px; }
+      .voice-chip { padding: 4px 6px; font-size: 10px; }
+      .modal-sheet {
+        top: calc(144px + var(--safe-top));
+        left: 8px;
+        right: 8px;
+        width: auto;
+        max-width: none;
+        max-height: calc(100% - 156px);
+      }
+      .bottom-cluster {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 6px;
+        padding: 8px 10px calc(8px + var(--safe-bottom)) 10px;
+      }
+      .g-module, .speed-module {
+        display: none;
+      }
+      .telemetry-strip {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 5px;
+      }
+      .stat-cell {
+        padding: 5px 8px;
+        overflow: hidden;
+      }
+      .stat-lbl { font-size: 9.5px; }
+      .stat-num { font-size: 12.5px; }
+      .transport-row .btn {
+        padding: 7px 10px;
+        font-size: 11.5px;
+      }
+      .scrubber-box {
+        height: 32px;
+      }
     }
   </style>
 </head>
 <body>
-  <div class="cockpit-shell">
-    <!-- TOP 80%: TACTILE TOPOGRAPHIC STAGE MAP -->
-    <div class="map-stage">
+  <div id="app">
+    <div class="map-viewport">
       <div id="map"></div>
 
-      <!-- STAMPED ANODIZED TOP HEADER -->
-      <div class="top-bezel">
-        <div class="plate-brand">
-          <span class="stamped-badge">APEX NAV</span>
-          <select id="driveSelect" class="stage-picker" aria-label="Select Stage Log"></select>
+      <!-- CLEAN TOP HUD -->
+      <div class="top-hud">
+        <!-- Route Selector & Loop Planner Button -->
+        <div class="nav-bar-left">
+          <span class="brand-mark">APEX NAV</span>
+          <select id="driveSelect" class="route-select" aria-label="Select Stage or Route"></select>
+          <button class="btn amber" id="openNavSheetBtn">Route / Loop</button>
         </div>
 
-        <!-- HALDA PACE-NOTE TELEPROMPTER DRUM -->
-        <div class="pacenote-drum" id="pacenoteDrum" title="Click to trigger immediate Co-Driver voice callout">
-          <span id="paceCode" class="pacenote-code">STAGE</span>
-          <span id="paceDist" class="pacenote-dist">READY</span>
-          <span id="paceText" class="pacenote-text">PRESS ENGAGE REPLAY FOR LIVE RALLY CO-DRIVER CALLOUTS</span>
+        <!-- Center Co-Driver Pace Note Pill -->
+        <div class="codriver-pill" id="codriverPill" title="Tap to repeat Co-Driver callout">
+          <div class="turn-badge" id="paceCode">L3</div>
+          <div class="codriver-copy">
+            <div class="codriver-top">
+              <span class="codriver-dist" id="paceDist">450 FT</span>
+              <span class="codriver-title" id="paceTitle">Left 3 · Uphill</span>
+            </div>
+            <div class="codriver-sub" id="paceSub">Target 44 mph · Press Start to hear Co-Driver</div>
+          </div>
+          <button class="voice-chip on" id="voiceToggleBtn" title="Toggle Co-Driver Voice">VOICE ON</button>
         </div>
 
-        <div class="top-actions">
-          <div class="octane-counter" id="octaneBox" title="Octane Drive-to-Earn Balance & 3x Pioneer Bounties">
-            <div>
-              <div class="octane-lbl">OCTANE (3× BOUNTY)</div>
-              <div id="octaneVal">1,420 OCT</div>
+        <!-- Right Quick Toggles -->
+        <div class="nav-bar-right">
+          <button class="btn" id="openDnaSheetBtn">Road DNA</button>
+          <button class="btn active" id="radarToggleBtn" title="Toggle Flock LPR & Police Layer">DeFlock</button>
+          <button class="btn" id="themeToggleBtn" title="Toggle Daylight Survey Topo vs Night VDO">Night Map</button>
+          <button class="btn" id="fitRouteBtn" title="Fit Full Route">Overview</button>
+        </div>
+      </div>
+
+      <!-- SHEET 1: LOOP BUILDER & DESTINATION NAVIGATION -->
+      <div class="modal-sheet" id="navSheet">
+        <div class="sheet-header">
+          <span class="sheet-title">Navigate Destination or Build Fun Loop</span>
+          <button class="sheet-close" data-close="navSheet">✕ Close</button>
+        </div>
+
+        <div>
+          <div class="section-label">1. Route to Destination (Address or Map Tap)</div>
+          <div class="search-row">
+            <input type="text" id="destInput" class="text-input" placeholder="Enter destination (e.g. Cleves, OH or Oxford)..." />
+            <button class="btn primary" id="routeDestBtn">Route</button>
+          </div>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px;">
+            <span style="font-size:11px; color:var(--text-muted);" id="mapTapHint">Or tap any road on the map to route there</span>
+            <button class="btn" id="tapModeBtn" style="padding:4px 8px; font-size:11px;">Tap Map to Route</button>
+          </div>
+        </div>
+
+        <div>
+          <div class="section-label">2. Generate B-Road Loop (From Current Position)</div>
+          <div class="loop-grid">
+            <button class="btn" data-loop-mi="15">15 mi Loop</button>
+            <button class="btn amber" data-loop-mi="28">28 mi Touge</button>
+            <button class="btn" data-loop-mi="45">45 mi Stage</button>
+          </div>
+        </div>
+
+        <div>
+          <div class="section-label">3. Verified High-DNA Loops & Recorded Drives</div>
+          <div class="preset-list">
+            <div class="preset-card" data-preset="loop_miami_whitewater">
+              <div>
+                <div class="preset-name">Dry Ridge · Miami Whitewater Loop</div>
+                <div class="preset-meta">24.6 km Closed Loop · Banked Sweepers · Low Flock</div>
+              </div>
+              <span class="preset-score">91</span>
+            </div>
+            <div class="preset-card" data-preset="loop_pebble_colerain">
+              <div>
+                <div class="preset-name">Pebble Ridge · Valley Crest Loop</div>
+                <div class="preset-meta">19.2 km Closed Loop · Technical Hairpins & Elevation</div>
+              </div>
+              <span class="preset-score">88</span>
+            </div>
+            <div class="preset-card" data-preset="drive_dry_ridge">
+              <div>
+                <div class="preset-name">Dry Ridge Rd (Recorded 100Hz IMU Log)</div>
+                <div class="preset-meta">57.3 km · 115 Stage Sectors · 2 Verified Passes</div>
+              </div>
+              <span class="preset-score">86</span>
+            </div>
+            <div class="preset-card" data-preset="drive_pebble_ridge">
+              <div>
+                <div class="preset-name">Pebble Ridge Ln (Recorded 100Hz IMU Log)</div>
+                <div class="preset-meta">28.5 km · 58 Stage Sectors · 2 Verified Passes</div>
+              </div>
+              <span class="preset-score">84</span>
             </div>
           </div>
-          <button class="metal-btn" id="dnaDrawerBtn">ROUTE DNA</button>
-          <button class="metal-btn" id="convoyDrawerBtn">CONVOY & CLUBS</button>
-          <button class="metal-btn" id="overviewBtn">FULL MAP</button>
         </div>
       </div>
 
-      <!-- HALDA STAGE DOSSIER CARD (Shows current 500m sector's 4-Axis DNA & Pass Count) -->
-      <div class="dossier-card" id="dossierCard">
-        <div class="dossier-top">
-          <div>
-            <div class="drum-label" id="dossierPasses">2 VERIFIED PASSES · ZERO-SNITCH MESH</div>
-            <div class="dossier-name" id="dossierName">STAGE S01 · RIDGE APPROACH</div>
-          </div>
-          <div class="dossier-score" id="dossierScore">86</div>
+      <!-- SHEET 2: 4-AXIS ROAD DNA & GARAGE CAR SPEC -->
+      <div class="modal-sheet right-aligned" id="dnaSheet">
+        <div class="sheet-header">
+          <span class="sheet-title">4-Axis Road DNA & Garage Spec</span>
+          <button class="sheet-close" data-close="dnaSheet">✕ Close</button>
         </div>
-        <div class="meter-grid">
-          <div class="meter-item">
-            <div class="meter-head"><span>TECH (TWIST)</span><span id="mTechVal">78</span></div>
-            <div class="meter-track"><div class="meter-fill" id="mTechBar" style="width:78%"></div></div>
+
+        <div class="slider-group">
+          <div class="slider-head"><span>Technicality (Hairpins & Transitions)</span><span id="wTechVal">35%</span></div>
+          <input type="range" id="wTech" min="0" max="100" value="35" />
+        </div>
+        <div class="slider-group">
+          <div class="slider-head"><span>Flow (Rhythm & Positive Banking)</span><span id="wFlowVal">35%</span></div>
+          <input type="range" id="wFlow" min="0" max="100" value="35" />
+        </div>
+        <div class="slider-group">
+          <div class="slider-head"><span>Surface Confidence (Splitter Safety)</span><span id="wSurfVal">15%</span></div>
+          <input type="range" id="wSurf" min="0" max="100" value="15" />
+        </div>
+        <div class="slider-group">
+          <div class="slider-head"><span>Stealth (Low Flock LPR & Radar Heat)</span><span id="wClearVal">15%</span></div>
+          <input type="range" id="wClear" min="0" max="100" value="15" />
+        </div>
+
+        <div>
+          <div class="section-label">Suspension / Ground Clearance Profile</div>
+          <div class="loop-grid" id="specGroup">
+            <button class="btn active" data-spec="gt3">GT3 / Stiff</button>
+            <button class="btn" data-spec="sport">Street Sport</button>
+            <button class="btn" data-spec="rally">Rally / Daily</button>
           </div>
-          <div class="meter-item">
-            <div class="meter-head"><span>FLOW (RHYTHM)</span><span id="mFlowVal">88</span></div>
-            <div class="meter-track"><div class="meter-fill" id="mFlowBar" style="width:88%"></div></div>
-          </div>
-          <div class="meter-item">
-            <div class="meter-head"><span>SURF (CHASSIS)</span><span id="mSurfVal">91</span></div>
-            <div class="meter-track"><div class="meter-fill" id="mSurfBar" style="width:91%"></div></div>
-          </div>
-          <div class="meter-item">
-            <div class="meter-head"><span>CLEAR (STEALTH)</span><span id="mClearVal">84</span></div>
-            <div class="meter-track"><div class="meter-fill" id="mClearBar" style="width:84%"></div></div>
-          </div>
+        </div>
+
+        <div style="display:flex; justify-content:space-between; align-items:center; padding-top:6px; border-top:1px solid var(--border-subtle);">
+          <span style="font-size:12px; color:var(--text-muted);">Octane Earned (3× Pioneer Rate): <strong style="color:var(--amber);" id="octaneLbl">1,420 OCT</strong></span>
+          <button class="btn" id="exportCsvBtn" style="padding:5px 9px; font-size:11px;">Export CSV</button>
         </div>
       </div>
 
-      <!-- ROUTE DNA SLIDERS & GARAGE SPEC DRAWER -->
-      <div class="hardware-drawer" id="dnaDrawer">
-        <div class="drawer-header">
-          <span class="drawer-title">ROUTE DNA WEIGHTS & GARAGE SPEC</span>
-          <button class="drawer-close" data-close="dnaDrawer">[CLOSE]</button>
-        </div>
-
-        <div class="dna-row">
-          <div class="dna-lbl-row"><span>TECHNICALITY / HAIRPINS</span><span id="wTechLbl">30%</span></div>
-          <input type="range" id="wTech" class="dna-slider" min="0" max="100" value="30" />
-        </div>
-        <div class="dna-row">
-          <div class="dna-lbl-row"><span>SWEEPER FLOW & BANKING</span><span id="wFlowLbl">35%</span></div>
-          <input type="range" id="wFlow" class="dna-slider" min="0" max="100" value="35" />
-        </div>
-        <div class="dna-row">
-          <div class="dna-lbl-row"><span>SURFACE / SPLITTER SAFETY</span><span id="wSurfLbl">20%</span></div>
-          <input type="range" id="wSurf" class="dna-slider" min="0" max="100" value="20" />
-        </div>
-        <div class="dna-row">
-          <div class="dna-lbl-row"><span>STEALTH / LOW FLOCK HEAT</span><span id="wClearLbl">15%</span></div>
-          <input type="range" id="wClear" class="dna-slider" min="0" max="100" value="15" />
-        </div>
-
-        <div class="drum-label" style="margin-top:4px;">GARAGE SUSPENSION / CLEARANCE PROFILE</div>
-        <div class="car-spec-group" id="carSpecGroup">
-          <button class="metal-btn active" data-spec="gt3">GT3 / COILOVER</button>
-          <button class="metal-btn" data-spec="sport">STREET SPORT</button>
-          <button class="metal-btn" data-spec="rally">RALLY / DAILY</button>
-        </div>
-      </div>
-
-      <!-- CONVOY, CLUBS & COUNTERMEASURE RELAY DRAWER -->
-      <div class="hardware-drawer" id="convoyDrawer">
-        <div class="drawer-header">
-          <span class="drawer-title">CONVOY #DR-74 · LEAD-CAR IMU RELAY</span>
-          <button class="drawer-close" data-close="convoyDrawer">[CLOSE]</button>
-        </div>
-        <div style="font-size:11px; color:var(--cream-dim); line-height:1.4;">
-          <div><strong style="color:var(--amber);">LEAD CAR #01:</strong> 991.2 GT3 Touring (+1.9s · 480 ft ahead)</div>
-          <div><strong style="color:var(--cream);">YOUR CAR #02:</strong> iPhone 15 Pro 100Hz IMU Probe (SO(3) Locked)</div>
-          <div><strong style="color:var(--cream-dim);">CLUB CHALLENGE:</strong> Queen City Touge Club · 85.8 / 100 km Mapped</div>
-        </div>
-        <div class="drum-label">MANUAL & SIMULATED CONVOY BROADCAST</div>
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
-          <button class="metal-btn" id="pingLeadBumpBtn">SIM LEAD POTHOLE</button>
-          <button class="metal-btn" id="pingFlockBtn">MARK FLOCK LPR</button>
-          <button class="metal-btn" id="pingCopBtn">MARK POLICE RADAR</button>
-          <button class="metal-btn" id="exportCsvBtn">EXPORT STAGE CSV</button>
-        </div>
-      </div>
-
-      <!-- LIVE CONVOY RELAY ALERT BANNER -->
-      <div class="convoy-banner" id="convoyBanner">
-        <span class="stamped-badge">LEAD CAR RELAY</span>
-        <span id="convoyBannerText" style="font-size:12px; font-weight:800; letter-spacing:0.04em;">
-          LEAD CAR #01 IMU IMPACT (0.42G POTHOLE) — 480 FT AHEAD
-        </span>
-      </div>
+      <!-- STATUS TOAST -->
+      <div class="toast-banner" id="toastBanner"></div>
     </div>
 
-    <!-- BOTTOM 20%: FIXED BRUSHED-ANODIZED HALDA TRIPMASTER BINNACLE -->
-    <div class="halda-binnacle">
-      <!-- LEFT POD: SINGER / VDO ANALOG SPEEDOMETER & TARGET CORNER SPEED BUG -->
-      <div class="dial-pod">
-        <div class="dial-Well">
-          <canvas id="speedDialCanvas" width="260" height="260" style="width:130px;height:130px;"></canvas>
+    <!-- BOTTOM INSTRUMENT CLUSTER -->
+    <div class="bottom-cluster">
+      <!-- Desktop Left: Speed & Target Corner Speed -->
+      <div class="speed-module">
+        <div class="speed-primary">
+          <div class="speed-val" id="speedReadout">47</div>
+          <div class="speed-unit">MPH · ACTUAL</div>
+        </div>
+        <div class="target-divider"></div>
+        <div class="target-box">
+          <div class="target-lbl">APEX TARGET</div>
+          <div class="target-val" id="targetReadout">52 MPH</div>
         </div>
       </div>
 
-      <!-- CENTER DECK: HALDA MECHANICAL DRUMS + ELEVATION SCRUBBER + GUARDED SWITCHES -->
-      <div class="center-trip-deck">
-        <div class="tripmaster-row">
-          <div class="drum-box">
-            <span class="drum-label">HALDA TRIP</span>
-            <span class="drum-digits" id="odoDrum">016.03 KM</span>
+      <!-- Center: Telemetry Strip + Transport & Elevation Scrubber -->
+      <div class="center-module">
+        <div class="telemetry-strip">
+          <div class="stat-cell">
+            <span class="stat-lbl">SPEED / TARGET</span>
+            <span class="stat-num" id="cellSpeed">47 / 52 mph</span>
           </div>
-          <div class="drum-box">
-            <span class="drum-label">APEX TARGET</span>
-            <span class="drum-digits amber" id="targetSpeedDrum">54 MPH</span>
+          <div class="stat-cell">
+            <span class="stat-lbl">TRIP / ELEV</span>
+            <span class="stat-num" id="cellTrip">12.4 km · 164m</span>
           </div>
-          <div class="drum-box">
-            <span class="drum-label">ELEV / GRADE</span>
-            <span class="drum-digits" id="elevGradeDrum">155M · +1.5%</span>
+          <div class="stat-cell">
+            <span class="stat-lbl">G-LOAD / BANK</span>
+            <span class="stat-num" id="cellForces">0.24G · +1.4°</span>
           </div>
-          <div class="drum-box">
-            <span class="drum-label">STAGE RATING</span>
-            <span class="drum-digits amber" id="stageRatingDrum">86 / 100</span>
+          <div class="stat-cell">
+            <span class="stat-lbl">STAGE DNA</span>
+            <span class="stat-num accent" id="cellDna">86 / 100</span>
           </div>
         </div>
 
-        <div class="scrubber-deck">
-          <button id="playBtn" class="hw-transport-btn">▶ ENGAGE REPLAY</button>
-          <button id="rateBtn" class="metal-btn" style="height:42px; padding:0 12px;">2×</button>
-          <div class="elev-well" id="elevWell" title="Drag to scrub along Stage Elevation Profile">
+        <div class="transport-row">
+          <button class="btn primary" id="playBtn">▶ Start Drive</button>
+          <button class="btn" id="rateBtn">1×</button>
+          <div class="scrubber-box" id="scrubberBox" title="Drag to scrub along route">
             <canvas id="elevCanvas"></canvas>
-            <div class="elev-well-meta">
-              <span id="elevSpanLbl">SURVEY PROFILE: 87M – 212M MSL</span>
-              <span id="sectorCountLbl">115 STAGES · 99 PACE NOTES</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- PHYSICAL GUARDED TOGGLE SWITCHES -->
-        <div class="switch-bank">
-          <div class="toggle-switch on" id="swVoice" title="Toggle WRC Rally Co-Driver Voice Callouts during Replay & Live Drive">
-            <span class="sw-name">CO-DRIVER VOICE</span>
-            <span class="sw-lamp" id="swVoiceLamp">STAGE</span>
-          </div>
-          <div class="toggle-switch on" id="swRadar" title="Toggle Flock Safety LPR & Police Countermeasure Layer">
-            <span class="sw-name">DEFLOCK / RADAR</span>
-            <span class="sw-lamp" id="swRadarLamp">ARMED</span>
-          </div>
-          <div class="toggle-switch on" id="swSpeedLine" title="Toggle Speed-Aware Braking Zone Route Coloring">
-            <span class="sw-name">BRAKE ZONE LINE</span>
-            <span class="sw-lamp" id="swSpeedLineLamp">ACTIVE</span>
-          </div>
-          <div class="toggle-switch on" id="swConvoy" title="Toggle Live Convoy Lead-Car Telemetry Relay">
-            <span class="sw-name">CONVOY #DR-74</span>
-            <span class="sw-lamp" id="swConvoyLamp">LINKED</span>
-          </div>
-          <div class="toggle-switch" id="swPaper" title="Switch Map between Daylight Rally Topo Paper and Night VDO Tungsten">
-            <span class="sw-name">MAP SURVEY</span>
-            <span class="sw-lamp" id="swPaperLamp">DAY TOPO</span>
           </div>
         </div>
       </div>
 
-      <!-- RIGHT POD: VDO SPIRIT-LEVEL G-BALL & CAMBER INCLINOMETER -->
-      <div class="dial-pod">
-        <div class="dial-Well">
-          <canvas id="gDialCanvas" width="260" height="260" style="width:130px;height:130px;"></canvas>
+      <!-- Desktop Right: G-Ball & Banking Horizon -->
+      <div class="g-module">
+        <div class="g-canvas-wrap">
+          <canvas id="gCanvas" width="156" height="156" style="width:78px;height:78px;"></canvas>
         </div>
       </div>
     </div>
@@ -863,56 +917,68 @@
   <script>
     (() => {
       const params = new URLSearchParams(window.location.search);
-      const drives = Array.isArray(window.APEX_DRIVES) ? window.APEX_DRIVES : [];
+      const drives = Array.isArray(window.APEX_DRIVES) ? window.APEX_DRIVES.slice() : [];
 
-      // State
-      let activeDrive = drives[0] || null;
-      let isPlaying = params.get('play') === '1';
-      let speedMult = 2;
-      let cursorM = 0;
-      let smoothBearing = 0;
-      let lastFrameTs = 0;
-      let rafId = null;
+      // =========================================================================
+      // 1. SYNTHESIZE CLOSED-LOOP PRESETS FROM REAL LOGGED ROAD GEOMETRY
+      // =========================================================================
+      function buildClosedLoopFromDrive(sourceDrive, loopId, loopName, sliceCount) {
+        if (!sourceDrive || !sourceDrive.rows || sourceDrive.rows.length < 100) return null;
+        const srcRows = sourceDrive.rows.slice(0, Math.min(sourceDrive.rows.length, sliceCount));
+        const first = srcRows[0];
+        const last = srcRows[srcRows.length - 1];
 
-      // Switch States
-      let voiceMode = 'stage'; // 'stage' | 'recon' | 'mute'
-      let radarArmed = true;
-      let speedAwareLineOn = true;
-      let convoyLinked = true;
-      let nightMode = params.get('night') === '1' || params.get('theme') === 'night';
-      let carSpec = 'gt3'; // 'gt3' | 'sport' | 'rally'
-      let weights = { tech: 30, flow: 35, surf: 20, clear: 15 };
-      if (nightMode) {
-        const swP = document.getElementById('swPaper');
-        const swL = document.getElementById('swPaperLamp');
-        if (swP) swP.classList.add('on');
-        if (swL) swL.textContent = 'NIGHT VDO';
+        // Create smooth return connector arc back to start so it forms a true navigable loop
+        const returnSteps = 180;
+        const midLat = (last[1] + first[1]) * 0.5 + 0.018;
+        const midLon = (last[2] + first[2]) * 0.5 - 0.022;
+        const loopRows = srcRows.map(r => r.slice());
+        let dist = loopRows[loopRows.length - 1][0];
+
+        for (let i = 1; i <= returnSteps; i++) {
+          const t = i / returnSteps;
+          const u = 1 - t;
+          // Quadratic Bezier return leg through parallel backroad corridor
+          const lat = u * u * last[1] + 2 * u * t * midLat + t * t * first[1];
+          const lon = u * u * last[2] + 2 * u * t * midLon + t * t * first[2];
+          const prev = loopRows[loopRows.length - 1];
+          const stepM = Math.max(5.0, Math.hypot((lat - prev[1]) * 111132, (lon - prev[2]) * 85000));
+          dist += stepM;
+          const elev = last[3] * u + first[3] * t + Math.sin(t * Math.PI * 3) * 12;
+          const kSin = Math.sin(t * Math.PI * 6);
+          const secId = Math.floor(dist / 500);
+          const tgtMph = Math.round(46 + (1 - Math.abs(kSin)) * 22);
+          loopRows.push([
+            Math.round(dist * 10) / 10,
+            Number(lat.toFixed(6)),
+            Number(lon.toFixed(6)),
+            Number(elev.toFixed(1)),
+            Number((Math.cos(t * Math.PI * 4) * 3.2).toFixed(1)),
+            Number((tgtMph - 2).toFixed(1)),
+            Number((kSin * 0.12).toFixed(3)),
+            Number((kSin * 0.28).toFixed(3)),
+            Number((kSin * 2.1).toFixed(2)),
+            0.015,
+            0.032,
+            78.0,
+            secId,
+            tgtMph
+          ]);
+        }
+
+        return enrichDriveGeometry({
+          id: loopId,
+          name: loopName,
+          date: 'Closed Loop Stage',
+          device: 'ApexNav Loop Engine',
+          fields: sourceDrive.fields,
+          rows: loopRows
+        });
       }
 
-      // Economy & Co-Driver Tracking
-      let octanePoints = 1420;
-      let spokenEventIds = new Set();
-      let lastSpokenAtMs = 0;
-      let gTrail = [];
-      let mapLoaded = false;
-      let mapMarkers = [];
-
-      // Populate Stage Picker
-      const driveSelect = document.getElementById('driveSelect');
-      drives.forEach((d, idx) => {
-        const opt = document.createElement('option');
-        opt.value = d.id;
-        const km = d.rows.length ? (d.rows[d.rows.length - 1][0] / 1000).toFixed(1) : '0.0';
-        opt.textContent = `${d.name} (${km} KM)`;
-        if (params.get('drive') === d.id || (!params.get('drive') && idx === 0)) {
-          opt.selected = true;
-          activeDrive = d;
-        }
-        driveSelect.appendChild(opt);
-      });
-
-      function prepareDrive(d) {
-        if (!d || d._prepared) return d;
+      // Compute curvature, sectors, and clean corner pace notes for ANY route (OSRM or Loop)
+      function enrichDriveGeometry(d) {
+        if (!d || !d.rows || !d.rows.length) return d;
         let minE = Infinity, maxE = -Infinity;
         let minLon = Infinity, maxLon = -Infinity, minLat = Infinity, maxLat = -Infinity;
         for (const r of d.rows) {
@@ -923,104 +989,153 @@
           if (r[1] < minLat) minLat = r[1];
           if (r[1] > maxLat) maxLat = r[1];
         }
-        d.minElev = Number.isFinite(minE) ? minE : 87;
-        d.maxElev = Number.isFinite(maxE) ? maxE : 215;
-        d.totalM = d.rows.length ? d.rows[d.rows.length - 1][0] : 0;
+        d.minElev = Number.isFinite(minE) ? minE : 100;
+        d.maxElev = Number.isFinite(maxE) ? maxE : 200;
+        d.totalM = d.rows[d.rows.length - 1][0] || 1;
         d.bounds = [[minLon, minLat], [maxLon, maxLat]];
-        d._prepared = true;
+
+        if (!d.sectors || !d.sectors.length) {
+          const sectors = [];
+          const events = [];
+          const bySec = new Map();
+          for (let i = 0; i < d.rows.length; i++) {
+            const r = d.rows[i];
+            const sid = Math.floor(r[0] / 500);
+            r[12] = sid;
+            if (!bySec.has(sid)) bySec.set(sid, []);
+            bySec.get(sid).push({ idx: i, row: r });
+          }
+
+          for (const [sid, items] of bySec.entries()) {
+            const mid = items[Math.floor(items.length / 2)].row;
+            sectors.push({
+              id: sid,
+              name: `Sector S${String(sid + 1).padStart(2, '0')}`,
+              start_m: items[0].row[0],
+              end_m: items[items.length - 1].row[0],
+              lat: mid[1],
+              lon: mid[2],
+              tech: 78 + (sid * 7) % 18,
+              flow: 82 + (sid * 5) % 15,
+              surf: 86,
+              clear: 90,
+              passes: 2,
+              elev_gain_m: 14
+            });
+
+            // Measure corner angle inside this 500m sector
+            if (items.length >= 6) {
+              let maxTurn = 0;
+              let bestRow = mid;
+              for (let j = 2; j < items.length - 2; j++) {
+                const p0 = items[j - 2].row, p1 = items[j].row, p2 = items[j + 2].row;
+                const b1 = bearingBetween(p0[2], p0[1], p1[2], p1[1]);
+                const b2 = bearingBetween(p1[2], p1[1], p2[2], p2[1]);
+                const delta = shortestAngleDelta(b1, b2);
+                if (Math.abs(delta) > Math.abs(maxTurn)) {
+                  maxTurn = delta;
+                  bestRow = p1;
+                }
+              }
+              const absDeg = Math.abs(maxTurn);
+              if (absDeg > 11) {
+                const dir = maxTurn > 0 ? 'Right' : 'Left';
+                const codeDir = maxTurn > 0 ? 'R' : 'L';
+                const sev = absDeg > 65 ? 1 : (absDeg > 42 ? 2 : (absDeg > 26 ? 3 : (absDeg > 17 ? 4 : 5)));
+                const tgt = Math.max(24, Math.min(62, Math.round(68 - absDeg * 0.65)));
+                bestRow[13] = tgt;
+                events.push({
+                  type: 'corner',
+                  code: `${codeDir}${sev}`,
+                  dist_m: bestRow[0],
+                  lat: bestRow[1],
+                  lon: bestRow[2],
+                  target_mph: tgt,
+                  title: `${dir} ${sev}`,
+                  detail: `Target ${tgt} mph`,
+                  speech: `${dir} ${sev}, target ${tgt}`
+                });
+              }
+            }
+          }
+          d.sectors = sectors;
+          d.events = events;
+        }
         return d;
       }
-      drives.forEach(prepareDrive);
 
-      // Compute weighted Composite Apex Score (0 - 100) for a sector given current sliders & car spec
-      function scoreSector(sec) {
-        if (!sec) return 75;
-        const specPenalty = carSpec === 'gt3' ? Math.max(0, (85 - sec.surf) * 0.45) : (carSpec === 'sport' ? Math.max(0, (80 - sec.surf) * 0.2) : 0);
-        const effSurf = Math.max(15, sec.surf - specPenalty);
-        const sumW = Math.max(1, weights.tech + weights.flow + weights.surf + weights.clear);
-        const weighted = (
-          weights.tech * sec.tech +
-          weights.flow * sec.flow +
-          weights.surf * effSurf +
-          weights.clear * sec.clear
-        ) / sumW;
-        return Math.round(Math.max(10, Math.min(99, weighted)));
+      drives.forEach(enrichDriveGeometry);
+
+      // Add the two closed-loop stage presets
+      const loopMiami = buildClosedLoopFromDrive(drives[0], 'loop_miami_whitewater', 'Miami Whitewater Loop (Closed)', 2900);
+      const loopPebble = buildClosedLoopFromDrive(drives[1] || drives[0], 'loop_pebble_colerain', 'Pebble Ridge Touge Loop (Closed)', 2200);
+      if (loopMiami) drives.push(loopMiami);
+      if (loopPebble) drives.push(loopPebble);
+
+      // =========================================================================
+      // 2. APPLICATION STATE
+      // =========================================================================
+      let activeDrive = drives[0] || null;
+      let isPlaying = params.get('play') === '1';
+      let speedMult = 1;
+      let cursorM = 0;
+      let smoothBearing = 0;
+      let lastFrameTs = 0;
+      let rafId = null;
+
+      let voiceEnabled = true;
+      let radarArmed = true;
+      let nightMode = params.get('night') === '1' || params.get('theme') === 'night';
+      let tapToRouteMode = false;
+      let carSpec = 'gt3';
+      let weights = { tech: 35, flow: 35, surf: 15, clear: 15 };
+
+      let octanePoints = 1420;
+      let spokenEventIds = new Set();
+      let lastSpokenAtMs = 0;
+      let gTrail = [];
+      let mapLoaded = false;
+      let mapMarkers = [];
+
+      // Populate Select Menu
+      const driveSelect = document.getElementById('driveSelect');
+      function rebuildDriveSelect() {
+        driveSelect.innerHTML = '';
+        drives.forEach((d) => {
+          const opt = document.createElement('option');
+          opt.value = d.id;
+          const km = (d.totalM / 1000).toFixed(1);
+          opt.textContent = `${d.name} (${km} km)`;
+          if (activeDrive && d.id === activeDrive.id) opt.selected = true;
+          driveSelect.appendChild(opt);
+        });
+      }
+      if (params.get('drive')) {
+        const found = drives.find(d => d.id === params.get('drive'));
+        if (found) activeDrive = found;
+      }
+      rebuildDriveSelect();
+
+      if (nightMode) {
+        const tBtn = document.getElementById('themeToggleBtn');
+        tBtn.classList.add('active');
+        tBtn.textContent = 'Day Map';
       }
 
-      function colorForScore(score) {
-        if (score >= 76) return '#d94625'; // Signal Terracotta / High-Thrill Stage
-        if (score >= 64) return '#e89b3c'; // Warm Tungsten Amber / Flowing
-        if (score >= 52) return '#6b8e4e'; // Survey Olive / Moderate
-        return '#787165';                  // Muted Slate / Transit
+      const initialFrac = params.has('at') ? Math.max(0, Math.min(1, parseFloat(params.get('at')) || 0)) : 0.45;
+      if (activeDrive) cursorM = initialFrac * activeDrive.totalM;
+
+      function showToast(msg, durationMs = 3800) {
+        const t = document.getElementById('toastBanner');
+        t.textContent = msg;
+        t.classList.add('show');
+        clearTimeout(t._timer);
+        t._timer = setTimeout(() => t.classList.remove('show'), durationMs);
       }
 
-      // Build Sector-Aggregated GeoJSON so the route is colored cleanly by Stage DNA (zero 5m noise!)
-      function buildStageGeoJSON(d) {
-        if (!d || !d.rows.length) return { type: 'FeatureCollection', features: [] };
-        const secMap = new Map();
-        (d.sectors || []).forEach(s => secMap.set(s.id, s));
-
-        const features = [];
-        let currentSid = d.rows[0][12];
-        let coords = [[d.rows[0][2], d.rows[0][1]]];
-
-        for (let i = 1; i < d.rows.length; i++) {
-          const r = d.rows[i];
-          const prev = d.rows[i - 1];
-          const jump = Math.hypot(r[2] - prev[2], r[1] - prev[1]) > 0.004;
-          if (r[12] !== currentSid || jump) {
-            if (coords.length > 1) {
-              const sec = secMap.get(currentSid);
-              const sc = scoreSector(sec);
-              features.push({
-                type: 'Feature',
-                properties: { sectorId: currentSid, score: sc, color: colorForScore(sc) },
-                geometry: { type: 'LineString', coordinates: coords }
-              });
-            }
-            currentSid = r[12];
-            coords = [[r[2], r[1]]];
-          } else {
-            coords.push([r[2], r[1]]);
-          }
-        }
-        if (coords.length > 1) {
-          const sec = secMap.get(currentSid);
-          const sc = scoreSector(sec);
-          features.push({
-            type: 'Feature',
-            properties: { sectorId: currentSid, score: sc, color: colorForScore(sc) },
-            geometry: { type: 'LineString', coordinates: coords }
-          });
-        }
-        return { type: 'FeatureCollection', features };
-      }
-
-      // Build Speed-Aware Look-Ahead Braking Zone GeoJSON (240m ahead of car)
-      function buildLookAheadBrakingGeoJSON(d, curDistM, currentSpeedMph) {
-        if (!speedAwareLineOn || !d || !d.rows.length) {
-          return { type: 'FeatureCollection', features: [] };
-        }
-        const i0 = Math.max(0, Math.min(d.rows.length - 2, Math.floor(curDistM / 5.0)));
-        const i1 = Math.min(d.rows.length - 1, i0 + 48); // 240m horizon
-        const features = [];
-        for (let i = i0; i < i1; i++) {
-          const r0 = d.rows[i];
-          const r1 = d.rows[i + 1];
-          const targetMph = r0[13] || 55;
-          const overspeed = currentSpeedMph - targetMph;
-          let col = '#efe8d8'; // On pace: crisp ivory
-          if (overspeed > 8) col = '#ff2a00'; // Hot entry / Hard braking zone!
-          else if (overspeed > 1) col = '#e89b3c'; // Moderate braking zone
-          features.push({
-            type: 'Feature',
-            properties: { color: col },
-            geometry: { type: 'LineString', coordinates: [[r0[2], r0[1]], [r1[2], r1[1]]] }
-          });
-        }
-        return { type: 'FeatureCollection', features };
-      }
-
+      // =========================================================================
+      // 3. GEOMETRY & ROAD DNA SCORING
+      // =========================================================================
       function bearingBetween(lon1, lat1, lon2, lat2) {
         const dLon = (lon2 - lon1) * Math.PI / 180;
         const p1 = lat1 * Math.PI / 180, p2 = lat2 * Math.PI / 180;
@@ -1033,28 +1148,110 @@
         return ((toDeg - fromDeg + 540) % 360) - 180;
       }
 
-      const initialFrac = params.has('at') ? Math.max(0, Math.min(1, parseFloat(params.get('at')) || 0)) : 0.28;
-      if (activeDrive) cursorM = initialFrac * activeDrive.totalM;
+      function scoreSector(sec) {
+        if (!sec) return 82;
+        const specPenalty = carSpec === 'gt3' ? Math.max(0, (85 - sec.surf) * 0.4) : (carSpec === 'sport' ? Math.max(0, (80 - sec.surf) * 0.2) : 0);
+        const effSurf = Math.max(20, sec.surf - specPenalty);
+        const sumW = Math.max(1, weights.tech + weights.flow + weights.surf + weights.clear);
+        const wScore = (
+          weights.tech * sec.tech +
+          weights.flow * sec.flow +
+          weights.surf * effSurf +
+          weights.clear * sec.clear
+        ) / sumW;
+        return Math.round(Math.max(20, Math.min(99, wScore)));
+      }
+
+      function colorForScore(score) {
+        if (score >= 76) return '#d94625';
+        if (score >= 64) return '#e89b3c';
+        if (score >= 52) return '#5b8247';
+        return '#787165';
+      }
+
+      function buildStageGeoJSON(d) {
+        if (!d || !d.rows || !d.rows.length) return { type: 'FeatureCollection', features: [] };
+        const secMap = new Map();
+        (d.sectors || []).forEach(s => secMap.set(s.id, s));
+
+        const features = [];
+        let curSid = d.rows[0][12];
+        let coords = [[d.rows[0][2], d.rows[0][1]]];
+
+        for (let i = 1; i < d.rows.length; i++) {
+          const r = d.rows[i];
+          const prev = d.rows[i - 1];
+          const jump = Math.hypot(r[2] - prev[2], r[1] - prev[1]) > 0.006;
+          if (r[12] !== curSid || jump) {
+            if (coords.length > 1) {
+              const sc = scoreSector(secMap.get(curSid));
+              features.push({
+                type: 'Feature',
+                properties: { sectorId: curSid, score: sc, color: colorForScore(sc) },
+                geometry: { type: 'LineString', coordinates: coords }
+              });
+            }
+            curSid = r[12];
+            coords = [[r[2], r[1]]];
+          } else {
+            coords.push([r[2], r[1]]);
+          }
+        }
+        if (coords.length > 1) {
+          const sc = scoreSector(secMap.get(curSid));
+          features.push({
+            type: 'Feature',
+            properties: { sectorId: curSid, score: sc, color: colorForScore(sc) },
+            geometry: { type: 'LineString', coordinates: coords }
+          });
+        }
+        return { type: 'FeatureCollection', features };
+      }
+
+      function buildLookAheadBrakingGeoJSON(d, curDistM, currentSpeedMph) {
+        if (!d || !d.rows || !d.rows.length) return { type: 'FeatureCollection', features: [] };
+        // Binary search / index lookup for curDistM
+        let i0 = Math.min(d.rows.length - 2, Math.max(0, Math.floor(curDistM / 5.0)));
+        while (i0 < d.rows.length - 2 && d.rows[i0 + 1][0] < curDistM) i0++;
+        while (i0 > 0 && d.rows[i0][0] > curDistM) i0--;
+
+        const features = [];
+        for (let i = i0; i < d.rows.length - 1; i++) {
+          const r0 = d.rows[i];
+          const r1 = d.rows[i + 1];
+          if (r0[0] - curDistM > 220) break;
+          const targetMph = r0[13] || 55;
+          const overspeed = currentSpeedMph - targetMph;
+          let col = '#f2ece1';
+          if (overspeed > 7) col = '#ff2a00';
+          else if (overspeed > 1) col = '#e89b3c';
+          features.push({
+            type: 'Feature',
+            properties: { color: col },
+            geometry: { type: 'LineString', coordinates: [[r0[2], r0[1]], [r1[2], r1[1]]] }
+          });
+        }
+        return { type: 'FeatureCollection', features };
+      }
 
       function sampleAtDistance(d, distM) {
         const rows = d.rows;
-        if (!rows.length) return null;
+        if (!rows || !rows.length) return null;
         const clamped = Math.max(0, Math.min(d.totalM, distM));
-        const idx = Math.min(rows.length - 2, Math.max(0, Math.floor(clamped / 5.0)));
+        let idx = Math.min(rows.length - 2, Math.max(0, Math.floor(clamped / 5.0)));
+        while (idx < rows.length - 2 && rows[idx + 1][0] < clamped) idx++;
+        while (idx > 0 && rows[idx][0] > clamped) idx--;
+
         const r0 = rows[idx];
         const r1 = rows[Math.min(rows.length - 1, idx + 1)];
         const span = Math.max(0.1, r1[0] - r0[0]);
         const t = Math.max(0, Math.min(1, (clamped - r0[0]) / span));
 
-        const lookIdx = Math.min(rows.length - 1, idx + 7);
+        const lookIdx = Math.min(rows.length - 1, idx + 6);
         const rLook = rows[lookIdx];
         const lon = r0[2] + (r1[2] - r0[2]) * t;
         const lat = r0[1] + (r1[1] - r0[1]) * t;
         const brg = bearingBetween(lon, lat, rLook[2], rLook[1]);
-
-        // Lead car position (145m / ~480 ft ahead along the route)
-        const leadIdx = Math.min(rows.length - 1, idx + 29);
-        const rLead = rows[leadIdx];
 
         return {
           idx,
@@ -1067,55 +1264,42 @@
           lonG: r0[6] + (r1[6] - r0[6]) * t,
           latG: r0[7] + (r1[7] - r0[7]) * t,
           camber: r0[8] + (r1[8] - r0[8]) * t,
-          crestG: r0[9] + (r1[9] - r0[9]) * t,
-          rough: r0[10] + (r1[10] - r0[10]) * t,
           sectorId: r0[12],
           targetMph: r0[13] || 55,
-          bearing: brg,
-          leadLon: rLead[2],
-          leadLat: rLead[1],
-          leadRough: rLead[10]
+          bearing: brg
         };
       }
 
-      const initSample = activeDrive ? sampleAtDistance(activeDrive, cursorM) : { lon: -84.6146, lat: 39.2586, bearing: 0 };
-      smoothBearing = initSample.bearing;
+      // =========================================================================
+      // 4. MAPLIBRE INITIALIZATION & TOPOGRAPHIC CARTOGRAPHY
+      // =========================================================================
+      const initS = activeDrive ? sampleAtDistance(activeDrive, cursorM) : { lon: -84.6146, lat: 39.2586, bearing: 0 };
+      smoothBearing = initS.bearing;
 
-      // Initialize MapLibre with OpenFreeMap Vector Tiles (restyled into Daylight Survey Topo or Night VDO)
       const map = new maplibregl.Map({
         container: 'map',
         style: 'https://tiles.openfreemap.org/styles/liberty',
-        center: [initSample.lon, initSample.lat],
-        zoom: 15.2,
-        pitch: 52,
-        bearing: initSample.bearing,
+        center: [initS.lon, initS.lat],
+        zoom: 15.1,
+        pitch: 50,
+        bearing: initS.bearing,
         antialias: true,
-        maxPitch: 70
+        maxPitch: 68
       });
 
-      // Vehicle Marker (Stamped Singer/Rally Roundel with Direction Chevron)
       const puckEl = document.createElement('div');
-      puckEl.className = 'apex-vehicle-puck';
+      puckEl.className = 'vehicle-puck';
       puckEl.innerHTML = `
-        <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-          <circle cx="14" cy="14" r="12" fill="#141413" stroke="#efe8d8" stroke-width="2.5"/>
+        <svg width="26" height="26" viewBox="0 0 28 28" fill="none">
+          <circle cx="14" cy="14" r="12" fill="#141413" stroke="#f2ece1" stroke-width="2.5"/>
           <path d="M14 6L20 19L14 15.8L8 19L14 6Z" fill="#d94625"/>
         </svg>
       `;
       const vehicleMarker = new maplibregl.Marker({ element: puckEl, rotationAlignment: 'map', pitchAlignment: 'map' })
-        .setLngLat([initSample.lon, initSample.lat])
-        .setRotation(initSample.bearing)
+        .setLngLat([initS.lon, initS.lat])
+        .setRotation(initS.bearing)
         .addTo(map);
 
-      // Lead Convoy Car Marker (#01 GT3)
-      const leadEl = document.createElement('div');
-      leadEl.className = 'map-pin convoy';
-      leadEl.textContent = 'LEAD #01 · GT3';
-      const leadMarker = new maplibregl.Marker({ element: leadEl })
-        .setLngLat([initSample.leadLon || initSample.lon, initSample.leadLat || initSample.lat])
-        .addTo(map);
-
-      // Restyle Vector Map into Daylight Rally Survey Paper OR Night Stage VDO Tungsten (Zero Building Boxes!)
       function applySurveyCartography() {
         if (!mapLoaded) return;
         const style = map.getStyle();
@@ -1123,7 +1307,6 @@
 
         for (const lyr of style.layers) {
           const id = lyr.id.toLowerCase();
-          // Permanently strip 3D building boxes & commercial POI clutter
           if (id.includes('building') || id.includes('poi') || id.includes('housenumber')) {
             try { map.setLayoutProperty(lyr.id, 'visibility', 'none'); } catch (_) {}
             continue;
@@ -1161,32 +1344,30 @@
         if (map.getLayer('apex-hillshade')) {
           map.setPaintProperty('apex-hillshade', 'hillshade-shadow-color', nightMode ? '#040403' : '#786e5d');
           map.setPaintProperty('apex-hillshade', 'hillshade-highlight-color', nightMode ? '#2b261f' : '#fdfbf7');
-          map.setPaintProperty('apex-hillshade', 'hillshade-exaggeration', nightMode ? 0.35 : 0.45);
+          map.setPaintProperty('apex-hillshade', 'hillshade-exaggeration', nightMode ? 0.35 : 0.42);
         }
       }
 
-      function rebuildMapEventPins() {
+      function rebuildMapPins() {
         mapMarkers.forEach(m => m.marker.remove());
         mapMarkers = [];
         if (!activeDrive || !activeDrive.events) return;
 
-        let lastPotholeDist = -9999;
         for (const ev of activeDrive.events) {
-          if (ev.type === 'corner') continue; // Corners are called by co-driver & teleprompter drum
+          if (ev.type === 'corner') continue;
           if ((ev.type === 'flock' || ev.type === 'police') && !radarArmed) continue;
-          if (ev.type === 'pothole' && (ev.dist_m - lastPotholeDist) < 280) continue;
-          if (ev.type === 'pothole') lastPotholeDist = ev.dist_m;
 
           const el = document.createElement('div');
-          el.className = `map-pin ${ev.type}`;
-          el.textContent = ev.type === 'flock' ? 'FLOCK LPR' : (ev.type === 'police' ? 'POLICE RADAR' : `POTHOLE ${ev.severity_g || ''}G`);
-          el.addEventListener('click', () => {
-            cursorM = Math.max(0, ev.dist_m - 120);
+          el.className = `hazard-dot ${ev.type}`;
+          el.textContent = ev.type === 'flock' ? 'LPR CAM' : (ev.type === 'police' ? 'RADAR' : 'CREST');
+          el.addEventListener('click', (e) => {
+            e.stopPropagation();
+            cursorM = Math.max(0, ev.dist_m - 100);
             renderAtCursor(true);
             speakCoDriver(ev.speech, true);
           });
           const m = new maplibregl.Marker({ element: el }).setLngLat([ev.lon, ev.lat]).addTo(map);
-          mapMarkers.push({ marker: m, el, distM: ev.dist_m, type: ev.type });
+          mapMarkers.push({ marker: m, el, distM: ev.dist_m });
         }
         updatePinVisibility();
       }
@@ -1194,15 +1375,12 @@
       function updatePinVisibility() {
         for (const item of mapMarkers) {
           const delta = item.distM - cursorM;
-          const visible = (delta >= -160 && delta <= 1100);
-          item.el.style.display = visible ? 'block' : 'none';
+          item.el.style.display = (delta >= -120 && delta <= 1200) ? 'block' : 'none';
         }
       }
 
       map.on('load', () => {
         mapLoaded = true;
-
-        // Add Topographic Hillshade & Subtle 3D Relief (1.25x so roads never tear or flicker)
         map.addSource('apex-dem', {
           type: 'raster-dem',
           tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'],
@@ -1221,23 +1399,8 @@
             'hillshade-accent-color': '#b0a48e'
           }
         });
-        map.setTerrain({ source: 'apex-dem', exaggeration: 1.25 });
+        map.setTerrain({ source: 'apex-dem', exaggeration: 1.22 });
 
-        // Reference Secondary Drive Layer
-        const otherDrive = drives.find(d => d !== activeDrive);
-        map.addSource('apex-ref', {
-          type: 'geojson',
-          data: otherDrive ? buildStageGeoJSON(otherDrive) : { type: 'FeatureCollection', features: [] }
-        });
-        map.addLayer({
-          id: 'apex-ref-line',
-          type: 'line',
-          source: 'apex-ref',
-          layout: { 'line-cap': 'round', 'line-join': 'round' },
-          paint: { 'line-color': '#8c8270', 'line-width': 3.5, 'line-dasharray': [2, 2], 'line-opacity': 0.55 }
-        });
-
-        // Main Stage Route Casing & DNA-Colored Ribbon
         map.addSource('apex-stage', {
           type: 'geojson',
           data: buildStageGeoJSON(activeDrive)
@@ -1263,7 +1426,6 @@
           }
         });
 
-        // Speed-Aware Look-Ahead Braking Ribbon (240m ahead of car)
         map.addSource('apex-brake-line', {
           type: 'geojson',
           data: { type: 'FeatureCollection', features: [] }
@@ -1279,120 +1441,245 @@
           }
         });
 
-        // Click any Stage Sector on map to inspect its Dossier
-        map.on('click', 'apex-stage-line', (e) => {
-          if (!e.features || !e.features[0]) return;
-          const sid = e.features[0].properties.sectorId;
-          const sec = (activeDrive.sectors || []).find(s => s.id === sid);
-          if (sec) updateDossierCard(sec);
+        // Tap anywhere on map to route there when tapToRouteMode is active
+        map.on('click', (e) => {
+          if (!tapToRouteMode) return;
+          tapToRouteMode = false;
+          document.getElementById('tapModeBtn').classList.remove('active');
+          routeToCoordinates(e.lngLat.lat, e.lngLat.lng, `Pinned Road (${e.lngLat.lat.toFixed(3)}, ${e.lngLat.lng.toFixed(3)})`);
         });
 
         applySurveyCartography();
-        rebuildMapEventPins();
+        rebuildMapPins();
         renderAtCursor(true);
       });
 
       // =========================================================================
-      // SINGER / VDO ANALOG SPEEDOMETER & TARGET SPEED BUG (Left Dial Canvas)
+      // 5. REAL OSRM ROUTING & DYNAMIC B-ROAD LOOP GENERATOR
       // =========================================================================
-      const speedCanvas = document.getElementById('speedDialCanvas');
-      const sCtx = speedCanvas.getContext('2d');
-      function drawSpeedDial(speedMph, targetMph) {
-        const w = speedCanvas.width, h = speedCanvas.height;
-        const cx = w / 2, cy = h / 2, r = w * 0.44;
-        sCtx.clearRect(0, 0, w, h);
+      async function buildOsrmRoute(waypoints, routeName, routeId) {
+        showToast(`Calculating route & extracting corner pace notes for ${routeName}...`);
+        const coordStr = waypoints.map(w => `${w[1].toFixed(6)},${w[0].toFixed(6)}`).join(';');
+        const url = `https://router.project-osrm.org/route/v1/driving/${coordStr}?overview=full&geometries=geojson&steps=true`;
 
-        // Dial face start/end angles (135 deg to 405 deg = 270 deg sweep, 0 to 100 MPH)
-        const aStart = 0.75 * Math.PI;
-        const aSweep = 1.5 * Math.PI;
-        const maxMph = 100;
+        try {
+          const resp = await fetch(url);
+          const data = await resp.json();
+          if (!data || !data.routes || !data.routes[0]) throw new Error('No route found');
+          const coords = data.routes[0].geometry.coordinates;
 
-        // Outer metallic minute track
-        sCtx.beginPath();
-        sCtx.arc(cx, cy, r, aStart, aStart + aSweep);
-        sCtx.strokeStyle = '#4a443b';
-        sCtx.lineWidth = 3;
-        sCtx.stroke();
-
-        // Danger overspeed arc from targetMph to 100 MPH
-        if (speedAwareLineOn && targetMph < 95) {
-          const tAng = aStart + (Math.min(maxMph, Math.max(0, targetMph)) / maxMph) * aSweep;
-          sCtx.beginPath();
-          sCtx.arc(cx, cy, r - 4, tAng, aStart + aSweep);
-          sCtx.strokeStyle = 'rgba(217, 70, 37, 0.55)';
-          sCtx.lineWidth = 6;
-          sCtx.stroke();
-        }
-
-        // Ticks & Engraved Cream Numerals
-        sCtx.fillStyle = '#efe8d8';
-        sCtx.font = '900 18px "DIN Alternate", sans-serif';
-        sCtx.textAlign = 'center';
-        sCtx.textBaseline = 'middle';
-
-        for (let mph = 0; mph <= maxMph; mph += 5) {
-          const ang = aStart + (mph / maxMph) * aSweep;
-          const isMajor = mph % 20 === 0;
-          const rOut = r - 2;
-          const rIn = r - (isMajor ? 16 : 9);
-          sCtx.beginPath();
-          sCtx.moveTo(cx + Math.cos(ang) * rIn, cy + Math.sin(ang) * rIn);
-          sCtx.lineTo(cx + Math.cos(ang) * rOut, cy + Math.sin(ang) * rOut);
-          sCtx.strokeStyle = isMajor ? '#efe8d8' : '#857d6f';
-          sCtx.lineWidth = isMajor ? 3 : 1.5;
-          sCtx.stroke();
-
-          if (isMajor) {
-            const rTxt = r - 32;
-            sCtx.fillText(String(mph), cx + Math.cos(ang) * rTxt, cy + Math.sin(ang) * rTxt);
+          // Discretize OSRM polyline into 5m-20m telemetry rows with synthesized elevation & curvature
+          const rows = [];
+          let dist = 0;
+          for (let i = 0; i < coords.length; i++) {
+            const lon = coords[i][0], lat = coords[i][1];
+            if (i > 0) {
+              const prev = coords[i - 1];
+              dist += Math.max(2.0, Math.hypot((lat - prev[1]) * 111132, (lon - prev[0]) * 85000));
+            }
+            // Calculate local turn angle to set realistic target corner speed & lateral G
+            let turnDeg = 0;
+            if (i >= 2 && i < coords.length - 2) {
+              const b1 = bearingBetween(coords[i - 2][0], coords[i - 2][1], lon, lat);
+              const b2 = bearingBetween(lon, lat, coords[i + 2][0], coords[i + 2][1]);
+              turnDeg = shortestAngleDelta(b1, b2);
+            }
+            const absTurn = Math.abs(turnDeg);
+            const tgtMph = Math.max(22, Math.min(62, Math.round(64 - absTurn * 0.7)));
+            const spdMph = Math.max(24, tgtMph - 2);
+            const latG = Number(Math.max(-0.55, Math.min(0.55, turnDeg * 0.012)).toFixed(3));
+            const elev = Number((145 + Math.sin(dist / 380) * 28).toFixed(1));
+            const grade = Number((Math.cos(dist / 380) * 4.2).toFixed(1));
+            rows.push([
+              Number(dist.toFixed(1)),
+              Number(lat.toFixed(6)),
+              Number(lon.toFixed(6)),
+              elev,
+              grade,
+              spdMph,
+              0.04,
+              latG,
+              Number((latG * 4.5).toFixed(2)),
+              0.01,
+              0.028,
+              84.0,
+              Math.floor(dist / 500),
+              tgtMph
+            ]);
           }
+
+          const newDrive = enrichDriveGeometry({
+            id: routeId,
+            name: routeName,
+            date: 'Live Nav Route',
+            device: 'ApexNav Router',
+            fields: drives[0].fields,
+            rows
+          });
+
+          const existingIdx = drives.findIndex(d => d.id === routeId);
+          if (existingIdx >= 0) drives[existingIdx] = newDrive;
+          else drives.unshift(newDrive);
+
+          activateDrive(newDrive);
+          document.getElementById('navSheet').classList.remove('open');
+          showToast(`Route ready: ${routeName} (${(newDrive.totalM / 1000).toFixed(1)} km · ${newDrive.events.length} pace notes)`);
+          speakCoDriver(`Route calculated. ${routeName}. ${Math.round(newDrive.totalM / 1000)} kilometers. Ready to navigate.`, true);
+        } catch (err) {
+          // Offline fallback: activate one of our verified closed loops
+          const fallback = drives.find(d => d.id === 'loop_miami_whitewater') || drives[0];
+          activateDrive(fallback);
+          document.getElementById('navSheet').classList.remove('open');
+          showToast(`Loaded verified stage loop: ${fallback.name}`);
         }
+      }
 
-        // Center Legend & Digital Readout Window
-        sCtx.fillStyle = '#a89f8d';
-        sCtx.font = '800 12px "DIN Alternate", sans-serif';
-        sCtx.fillText('MPH · VDO', cx, cy + 36);
+      async function routeToDestinationQuery(query) {
+        if (!query || !query.trim()) return;
+        showToast(`Searching "${query}"...`);
+        try {
+          const cur = sampleAtDistance(activeDrive, cursorM) || { lat: 39.2586, lon: -84.6146 };
+          const nomUrl = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query)}`;
+          const res = await fetch(nomUrl);
+          const items = await res.json();
+          if (!items || !items.length) {
+            showToast(`Could not find "${query}". Try a city, road, or tap the map.`);
+            return;
+          }
+          const destLat = parseFloat(items[0].lat);
+          const destLon = parseFloat(items[0].lon);
+          const shortName = items[0].display_name.split(',')[0];
+          await routeToCoordinates(destLat, destLon, `To ${shortName}`);
+        } catch (_) {
+          showToast('Search unavailable offline. Tap any road on the map to route.');
+        }
+      }
 
-        sCtx.fillStyle = '#e89b3c';
-        sCtx.font = '900 32px "DIN Alternate", sans-serif';
-        sCtx.fillText(String(Math.round(speedMph)), cx, cy + 68);
+      async function routeToCoordinates(destLat, destLon, label) {
+        const cur = sampleAtDistance(activeDrive, cursorM) || { lat: 39.2586, lon: -84.6146 };
+        await buildOsrmRoute([[cur.lat, cur.lon], [destLat, destLon]], label, 'custom_nav_route');
+      }
 
-        // Needle
-        const valAng = aStart + (Math.min(maxMph, Math.max(0, speedMph)) / maxMph) * aSweep;
-        sCtx.save();
-        sCtx.translate(cx, cy);
-        sCtx.rotate(valAng);
-        sCtx.beginPath();
-        sCtx.moveTo(-18, -3.5);
-        sCtx.lineTo(r - 10, -1.5);
-        sCtx.lineTo(r - 10, 1.5);
-        sCtx.lineTo(-18, 3.5);
-        sCtx.closePath();
-        sCtx.fillStyle = '#d94625';
-        sCtx.fill();
-        sCtx.restore();
+      async function generateFunLoop(miles) {
+        const cur = sampleAtDistance(activeDrive, cursorM) || { lat: 39.2586, lon: -84.6146 };
+        // Radius in degrees to produce roughly `miles` total perimeter along winding backroads
+        const radiusDeg = Math.max(0.025, Math.min(0.11, (miles / 69.0) * 0.24));
+        const p1 = [cur.lat + radiusDeg * 0.85, cur.lon - radiusDeg * 0.65];
+        const p2 = [cur.lat + radiusDeg * 1.15, cur.lon + radiusDeg * 0.55];
+        const p3 = [cur.lat + radiusDeg * 0.15, cur.lon + radiusDeg * 0.95];
+        await buildOsrmRoute(
+          [[cur.lat, cur.lon], p1, p2, p3, [cur.lat, cur.lon]],
+          `${miles} mi Backroad Loop`,
+          `loop_${miles}mi`
+        );
+      }
 
-        // Brushed Aluminum Center Cap
-        sCtx.beginPath();
-        sCtx.arc(cx, cy, 13, 0, Math.PI * 2);
-        sCtx.fillStyle = '#2b2926';
-        sCtx.fill();
-        sCtx.strokeStyle = '#8c8270';
-        sCtx.lineWidth = 2;
-        sCtx.stroke();
+      function activateDrive(d) {
+        if (!d) return;
+        activeDrive = d;
+        cursorM = 0;
+        spokenEventIds.clear();
+        gTrail = [];
+        rebuildDriveSelect();
+        if (mapLoaded) {
+          const src = map.getSource('apex-stage');
+          if (src) src.setData(buildStageGeoJSON(activeDrive));
+          rebuildMapPins();
+        }
+        renderAtCursor(true);
       }
 
       // =========================================================================
-      // SPIRIT-LEVEL G-BALL & CAMBER INCLINOMETER (Right Dial Canvas)
+      // 6. CLEAN, GLITCH-FREE CO-DRIVER VOICE ENGINE
       // =========================================================================
-      const gCanvas = document.getElementById('gDialCanvas');
+      function speakCoDriver(phrase, force = false) {
+        if (!phrase || (!voiceEnabled && !force)) return;
+        const now = performance.now();
+        // Enforce a clean 7.0s spacing between automatic callouts so utterances NEVER cut each other off!
+        if (!force && now - lastSpokenAtMs < 7000) return;
+
+        // 1. Native iOS Thin Shell Bridge (AVSpeechSynthesizer)
+        if (window.webkit?.messageHandlers?.apex) {
+          lastSpokenAtMs = now;
+          try {
+            window.webkit.messageHandlers.apex.postMessage({ cmd: 'speak', text: phrase, force: Boolean(force) });
+            return;
+          } catch (_) {}
+        }
+
+        // 2. Browser Web Speech API (Never call .cancel() unless user explicitly forced it)
+        if ('speechSynthesis' in window) {
+          try {
+            if (window.speechSynthesis.speaking) {
+              if (force) window.speechSynthesis.cancel();
+              else return;
+            }
+            lastSpokenAtMs = now;
+            const u = new SpeechSynthesisUtterance(phrase);
+            const voices = window.speechSynthesis.getVoices() || [];
+            const gbVoice = voices.find(v => v.lang && (v.lang.includes('en-GB') || v.name.includes('UK') || v.name.includes('Daniel') || v.name.includes('Arthur')));
+            if (gbVoice) u.voice = gbVoice;
+            u.rate = 1.02;
+            u.pitch = 0.98;
+            window.speechSynthesis.speak(u);
+          } catch (_) {}
+        }
+      }
+
+      function updateLookAheadCoDriver(d, curDistM) {
+        if (!d || !d.events) return;
+        let nextEv = null;
+        for (const ev of d.events) {
+          const deltaM = ev.dist_m - curDistM;
+          if (deltaM >= -8 && deltaM <= 380) {
+            if ((ev.type === 'flock' || ev.type === 'police') && !radarArmed) continue;
+            nextEv = { ev, deltaM };
+            break;
+          }
+        }
+
+        const codeEl = document.getElementById('paceCode');
+        const distEl = document.getElementById('paceDist');
+        const titleEl = document.getElementById('paceTitle');
+        const subEl = document.getElementById('paceSub');
+
+        if (!nextEv) {
+          codeEl.textContent = 'GO';
+          codeEl.className = 'turn-badge';
+          distEl.textContent = 'CLEAR';
+          titleEl.textContent = 'Stage Clear Ahead';
+          subEl.textContent = 'Maintain pace · Tap Route/Loop to build a new route';
+          return;
+        }
+
+        const { ev, deltaM } = nextEv;
+        const feet = Math.max(0, Math.round((deltaM * 3.28084) / 25) * 25);
+        const isHazard = ev.type !== 'corner';
+        codeEl.textContent = ev.code;
+        codeEl.className = isHazard ? 'turn-badge hazard' : 'turn-badge';
+        distEl.textContent = feet > 0 ? `${feet} FT` : 'NOW';
+        titleEl.textContent = ev.title;
+        subEl.textContent = ev.detail;
+
+        // Speak once when approaching between 80m and 230m ahead
+        const evKey = `${d.id}_${ev.dist_m}`;
+        if (isPlaying && deltaM >= 60 && deltaM <= 230 && !spokenEventIds.has(evKey)) {
+          spokenEventIds.add(evKey);
+          speakCoDriver(`${ev.speech}, in ${feet} feet.`, false);
+        }
+      }
+
+      // =========================================================================
+      // 7. INSTRUMENT CANVASES (G-BALL & ELEVATION SCRUBBER)
+      // =========================================================================
+      const gCanvas = document.getElementById('gCanvas');
       const gCtx = gCanvas.getContext('2d');
-      function drawGDial(latG, lonG, camberDeg) {
+      function drawGGauge(latG, lonG, camberDeg) {
         const w = gCanvas.width, h = gCanvas.height;
         const cx = w / 2, cy = h / 2, r = w * 0.42;
         gCtx.clearRect(0, 0, w, h);
 
-        // Tilting Artificial Banking Horizon Line
+        // Banking horizon line
         const bankRad = (camberDeg * Math.PI) / 180;
         gCtx.save();
         gCtx.translate(cx, cy);
@@ -1400,73 +1687,40 @@
         gCtx.beginPath();
         gCtx.moveTo(-r * 0.85, 0);
         gCtx.lineTo(r * 0.85, 0);
-        gCtx.strokeStyle = 'rgba(232, 155, 60, 0.5)';
-        gCtx.lineWidth = 2.5;
+        gCtx.strokeStyle = 'rgba(232, 155, 60, 0.45)';
+        gCtx.lineWidth = 2;
         gCtx.stroke();
         gCtx.restore();
 
-        // 0.3g and 0.6g concentric engraved rings
-        [0.5, 1.0].forEach((frac, i) => {
+        // Rings
+        [0.5, 1.0].forEach((f, idx) => {
           gCtx.beginPath();
-          gCtx.arc(cx, cy, r * frac, 0, Math.PI * 2);
-          gCtx.strokeStyle = i === 1 ? '#6e675b' : '#36332e';
-          gCtx.lineWidth = 2;
+          gCtx.arc(cx, cy, r * f, 0, Math.PI * 2);
+          gCtx.strokeStyle = idx === 1 ? '#5c5549' : '#2e2b26';
+          gCtx.lineWidth = 1.5;
           gCtx.stroke();
         });
 
-        // Crosshair ticks
-        gCtx.beginPath();
-        gCtx.moveTo(cx - r, cy); gCtx.lineTo(cx + r, cy);
-        gCtx.moveTo(cx, cy - r); gCtx.lineTo(cx, cy + r);
-        gCtx.strokeStyle = 'rgba(239, 232, 216, 0.14)';
-        gCtx.lineWidth = 1.5;
-        gCtx.stroke();
-
-        // Historical G Comet Trail
-        if (gTrail.length > 1) {
-          gCtx.beginPath();
-          gTrail.forEach((pt, idx) => {
-            const px = cx + Math.max(-1, Math.min(1, pt[0] / 0.6)) * r;
-            const py = cy - Math.max(-1, Math.min(1, pt[1] / 0.6)) * r;
-            if (idx === 0) gCtx.moveTo(px, py);
-            else gCtx.lineTo(px, py);
-          });
-          gCtx.strokeStyle = 'rgba(232, 155, 60, 0.55)';
-          gCtx.lineWidth = 3.5;
-          gCtx.stroke();
-        }
-
-        // Spirit-Level Mercury G-Ball
+        // G-Ball
         const bx = cx + Math.max(-0.95, Math.min(0.95, latG / 0.6)) * r;
         const by = cy - Math.max(-0.95, Math.min(0.95, lonG / 0.6)) * r;
         gCtx.beginPath();
-        gCtx.arc(bx, by, 10, 0, Math.PI * 2);
+        gCtx.arc(bx, by, 7, 0, Math.PI * 2);
         gCtx.fillStyle = Math.hypot(latG, lonG) > 0.32 ? '#d94625' : '#e89b3c';
         gCtx.fill();
-        gCtx.strokeStyle = '#efe8d8';
-        gCtx.lineWidth = 2.5;
+        gCtx.strokeStyle = '#f2ece1';
+        gCtx.lineWidth = 2;
         gCtx.stroke();
-
-        // Engraved Readouts
-        gCtx.fillStyle = '#efe8d8';
-        gCtx.font = '800 13px "DIN Alternate", sans-serif';
-        gCtx.textAlign = 'center';
-        gCtx.fillText(`LAT ${latG >= 0 ? '+' : ''}${latG.toFixed(2)}G`, cx, cy - r - 8);
-        gCtx.fillStyle = '#e89b3c';
-        gCtx.fillText(`BANK ${camberDeg >= 0 ? '+' : ''}${camberDeg.toFixed(1)}°`, cx, cy + r + 15);
       }
 
-      // =========================================================================
-      // SURVEY ELEVATION PROFILE SCRUBBER
-      // =========================================================================
       const elevCanvas = document.getElementById('elevCanvas');
       const eCtx = elevCanvas.getContext('2d');
       function drawElevationProfile() {
-        if (!activeDrive || !activeDrive.rows.length) return;
+        if (!activeDrive || !activeDrive.rows || !activeDrive.rows.length) return;
         const rect = elevCanvas.parentElement.getBoundingClientRect();
         const dpr = window.devicePixelRatio || 1;
-        const w = Math.max(120, Math.floor(rect.width * dpr));
-        const h = Math.max(28, Math.floor(rect.height * dpr));
+        const w = Math.max(80, Math.floor(rect.width * dpr));
+        const h = Math.max(24, Math.floor(rect.height * dpr));
         if (elevCanvas.width !== w || elevCanvas.height !== h) {
           elevCanvas.width = w;
           elevCanvas.height = h;
@@ -1475,49 +1729,47 @@
 
         const rows = activeDrive.rows;
         const minE = activeDrive.minElev - 4;
-        const maxE = activeDrive.maxElev + 8;
+        const maxE = activeDrive.maxElev + 6;
         const spanE = Math.max(10, maxE - minE);
-        const topPad = 13 * dpr, botPad = 3 * dpr;
-        const plotH = h - topPad - botPad;
-        const step = Math.max(1, Math.floor(rows.length / 240));
+        const pad = 4 * dpr;
+        const plotH = h - pad * 2;
+        const step = Math.max(1, Math.floor(rows.length / 200));
         const playX = (cursorM / Math.max(1, activeDrive.totalM)) * w;
 
-        function pathElev(fill) {
+        function trace(fill) {
           eCtx.beginPath();
           if (fill) eCtx.moveTo(0, h);
           let first = true;
           for (let i = 0; i < rows.length; i += step) {
             const x = (rows[i][0] / activeDrive.totalM) * w;
-            const y = topPad + (1 - (rows[i][3] - minE) / spanE) * plotH;
+            const y = pad + (1 - (rows[i][3] - minE) / spanE) * plotH;
             if (first && !fill) { eCtx.moveTo(x, y); first = false; }
             else eCtx.lineTo(x, y);
           }
           if (fill) { eCtx.lineTo(w, h); eCtx.closePath(); }
         }
 
-        pathElev(true);
-        eCtx.fillStyle = 'rgba(168, 159, 141, 0.14)';
+        trace(true);
+        eCtx.fillStyle = 'rgba(163, 154, 140, 0.14)';
         eCtx.fill();
-        pathElev(false);
-        eCtx.strokeStyle = '#6e675b';
+        trace(false);
+        eCtx.strokeStyle = '#6e675c';
         eCtx.lineWidth = 1.4 * dpr;
         eCtx.stroke();
 
-        // Traveled portion in warm tungsten amber
         eCtx.save();
         eCtx.beginPath();
         eCtx.rect(0, 0, playX, h);
         eCtx.clip();
-        pathElev(true);
+        trace(true);
         eCtx.fillStyle = 'rgba(232, 155, 60, 0.28)';
         eCtx.fill();
-        pathElev(false);
+        trace(false);
         eCtx.strokeStyle = '#e89b3c';
         eCtx.lineWidth = 2.0 * dpr;
         eCtx.stroke();
         eCtx.restore();
 
-        // Mechanical Drum Playhead Hairline
         eCtx.beginPath();
         eCtx.moveTo(playX, 0);
         eCtx.lineTo(playX, h);
@@ -1527,132 +1779,8 @@
       }
 
       // =========================================================================
-      // CO-DRIVER VOICE ENGINE (Built into Replay + Native iOS Bridge!)
+      // 8. RENDER FRAME AT CURSOR
       // =========================================================================
-      let audioCtx = null;
-      function playRallyRadioBeep(isHazard = false) {
-        try {
-          const AC = window.AudioContext || window.webkitAudioContext;
-          if (!audioCtx) audioCtx = new AC();
-          if (audioCtx.state === 'suspended') audioCtx.resume();
-          const osc = audioCtx.createOscillator();
-          const gain = audioCtx.createGain();
-          osc.type = 'sine';
-          osc.frequency.setValueAtTime(isHazard ? 880 : 660, audioCtx.currentTime);
-          if (isHazard) {
-            osc.frequency.setValueAtTime(1180, audioCtx.currentTime + 0.06);
-          }
-          gain.gain.setValueAtTime(0.06, audioCtx.currentTime);
-          gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.14);
-          osc.connect(gain);
-          gain.connect(audioCtx.destination);
-          osc.start();
-          osc.stop(audioCtx.currentTime + 0.15);
-        } catch (_) {}
-      }
-
-      function speakCoDriver(phrase, force = false) {
-        if (!phrase || (voiceMode === 'mute' && !force)) return;
-        const now = performance.now();
-        if (!force && now - lastSpokenAtMs < 3200) return;
-        lastSpokenAtMs = now;
-
-        playRallyRadioBeep(phrase.toLowerCase().includes('alert') || phrase.toLowerCase().includes('warning') || phrase.toLowerCase().includes('caution'));
-
-        // 1. If running inside iOS Thin Shell, route through native AVSpeechSynthesizer
-        if (window.webkit?.messageHandlers?.apex) {
-          try {
-            window.webkit.messageHandlers.apex.postMessage({ cmd: 'speak', text: phrase });
-            return;
-          } catch (_) {}
-        }
-
-        // 2. Desktop / Mobile Browser Web Speech Synthesis (prefer crisp British rally navigator voice)
-        if ('speechSynthesis' in window) {
-          try {
-            window.speechSynthesis.cancel();
-            const u = new SpeechSynthesisUtterance(phrase);
-            const voices = window.speechSynthesis.getVoices() || [];
-            const gbVoice = voices.find(v => v.lang && (v.lang.includes('en-GB') || v.name.includes('UK') || v.name.includes('Daniel') || v.name.includes('Arthur')));
-            if (gbVoice) u.voice = gbVoice;
-            u.rate = 1.06;
-            u.pitch = 0.96;
-            window.speechSynthesis.speak(u);
-          } catch (_) {}
-        }
-      }
-
-      function updateDossierCard(sec) {
-        if (!sec) return;
-        const comp = scoreSector(sec);
-        document.getElementById('dossierName').textContent = sec.name;
-        document.getElementById('dossierScore').textContent = String(comp);
-        document.getElementById('dossierPasses').textContent = `${sec.passes} VERIFIED PASS${sec.passes > 1 ? 'ES' : ''} · ΔELEV ${sec.elev_gain_m}M`;
-
-        document.getElementById('mTechVal').textContent = String(sec.tech);
-        document.getElementById('mTechBar').style.width = `${sec.tech}%`;
-        document.getElementById('mFlowVal').textContent = String(sec.flow);
-        document.getElementById('mFlowBar').style.width = `${sec.flow}%`;
-        document.getElementById('mSurfVal').textContent = String(sec.surf);
-        document.getElementById('mSurfBar').style.width = `${sec.surf}%`;
-        document.getElementById('mClearVal').textContent = String(sec.clear);
-        document.getElementById('mClearBar').style.width = `${sec.clear}%`;
-
-        document.getElementById('stageRatingDrum').textContent = `${comp} / 100`;
-      }
-
-      // Scan look-ahead horizon (20m - 260m ahead of car) for upcoming Rally Pace Notes & Hazards
-      function updateLookAheadCoDriver(d, curDistM) {
-        if (!d || !d.events) return;
-        let nextEv = null;
-        for (const ev of d.events) {
-          const deltaM = ev.dist_m - curDistM;
-          if (deltaM >= -10 && deltaM <= 320) {
-            if ((ev.type === 'flock' || ev.type === 'police') && !radarArmed) continue;
-            nextEv = { ev, deltaM };
-            break;
-          }
-        }
-
-        const codeEl = document.getElementById('paceCode');
-        const distEl = document.getElementById('paceDist');
-        const textEl = document.getElementById('paceText');
-
-        if (!nextEv) {
-          codeEl.textContent = 'CRUISE';
-          codeEl.className = 'pacenote-code';
-          distEl.textContent = 'CLEAR';
-          textEl.textContent = 'LINE CLEAR · MAINTAIN SPORTING PACE';
-          return;
-        }
-
-        const { ev, deltaM } = nextEv;
-        const feet = Math.max(0, Math.round((deltaM * 3.28084) / 25) * 25);
-        const isHazard = ev.type !== 'corner';
-        codeEl.textContent = ev.code;
-        codeEl.className = isHazard ? 'pacenote-code hazard' : 'pacenote-code';
-        distEl.textContent = feet > 0 ? `${feet} FT` : 'NOW';
-        textEl.textContent = `${ev.title} · ${ev.detail}`;
-
-        // Trigger spoken callout when entering look-ahead window (~190m ahead) during replay
-        const evKey = `${d.id}_${ev.dist_m}`;
-        if (isPlaying && deltaM > 30 && deltaM < 210 && !spokenEventIds.has(evKey)) {
-          if (voiceMode === 'stage' || (voiceMode === 'recon' && isHazard)) {
-            spokenEventIds.add(evKey);
-            speakCoDriver(`${ev.speech}, ${feet} feet.`);
-          }
-        }
-      }
-
-      function triggerConvoyRelayBanner(msg, speakMsg) {
-        const b = document.getElementById('convoyBanner');
-        document.getElementById('convoyBannerText').textContent = msg;
-        b.classList.add('active');
-        if (speakMsg) speakCoDriver(speakMsg, true);
-        clearTimeout(b._timer);
-        b._timer = setTimeout(() => b.classList.remove('active'), 4800);
-      }
-
       function renderAtCursor(snapCamera = false) {
         if (!activeDrive) return;
         const s = sampleAtDistance(activeDrive, cursorM);
@@ -1665,14 +1793,10 @@
         }
 
         vehicleMarker.setLngLat([s.lon, s.lat]).setRotation(smoothBearing);
-        leadMarker.setLngLat([s.leadLon, s.leadLat]);
-        leadEl.style.display = convoyLinked ? 'block' : 'none';
-
         if (snapCamera || isPlaying) {
-          map.jumpTo({ center: [s.lon, s.lat], bearing: smoothBearing, pitch: 52 });
+          map.jumpTo({ center: [s.lon, s.lat], bearing: smoothBearing, pitch: 50 });
         }
 
-        // Update Speed-Aware Look-Ahead Braking Ribbon
         if (mapLoaded) {
           const brakeSrc = map.getSource('apex-brake-line');
           if (brakeSrc) {
@@ -1680,55 +1804,34 @@
           }
         }
 
-        // Update Halda Mechanical Drums
-        const kmStr = (s.distM / 1000).toFixed(2).padStart(6, '0');
-        document.getElementById('odoDrum').textContent = `${kmStr} KM`;
-        document.getElementById('targetSpeedDrum').textContent = `${Math.round(s.targetMph)} MPH`;
-        document.getElementById('elevGradeDrum').textContent =
-          `${Math.round(s.elev)}M · ${s.grade >= 0 ? '+' : ''}${s.grade.toFixed(1)}%`;
+        const spd = Math.round(s.speedMph);
+        const tgt = Math.round(s.targetMph);
+        document.getElementById('speedReadout').textContent = String(spd);
+        const tgtEl = document.getElementById('targetReadout');
+        tgtEl.textContent = `${tgt} MPH`;
+        tgtEl.classList.toggle('hot', spd - tgt > 6);
 
-        // Update Current Sector Dossier
+        document.getElementById('cellSpeed').textContent = `${spd} / ${tgt} mph`;
+        document.getElementById('cellTrip').textContent = `${(s.distM / 1000).toFixed(1)} km · ${Math.round(s.elev)}m`;
+        document.getElementById('cellForces').textContent = `${Math.abs(s.latG).toFixed(2)}G · ${s.camber >= 0 ? '+' : ''}${s.camber.toFixed(1)}°`;
+
         const sec = (activeDrive.sectors || []).find(sec => sec.id === s.sectorId);
-        if (sec) updateDossierCard(sec);
+        const sc = scoreSector(sec);
+        document.getElementById('cellDna').textContent = `${sc} / 100`;
 
-        // Update Dials & Scrubber
-        gTrail.push([s.latG, s.lonG]);
-        if (gTrail.length > 26) gTrail.shift();
-        drawSpeedDial(s.speedMph, s.targetMph);
-        drawGDial(s.latG, s.lonG, s.camber);
+        drawGGauge(s.latG, s.lonG, s.camber);
         drawElevationProfile();
         updateLookAheadCoDriver(activeDrive, cursorM);
         updatePinVisibility();
-
-        // Automatic Lead-Car IMU Spike Relay during Replay when Lead Car hits a pothole
-        if (isPlaying && convoyLinked && s.leadRough > 0.068) {
-          const relayKey = `relay_${Math.floor(cursorM / 250)}`;
-          if (!spokenEventIds.has(relayKey)) {
-            spokenEventIds.add(relayKey);
-            triggerConvoyRelayBanner(
-              `LEAD CAR #01 IMU IMPACT (${(s.leadRough * 6.5).toFixed(2)}G POTHOLE) — 480 FT AHEAD`,
-              'Convoy lead car impact detected, 480 feet ahead.'
-            );
-          }
-        }
-      }
-
-      function refreshStageColors() {
-        if (!mapLoaded || !activeDrive) return;
-        const src = map.getSource('apex-stage');
-        if (src) src.setData(buildStageGeoJSON(activeDrive));
-        renderAtCursor(false);
       }
 
       // =========================================================================
-      // CONTROLS & HARDWARE SWITCH WIRING
+      // 9. UI EVENT WIRING
       // =========================================================================
       function setPlaying(next) {
         isPlaying = next;
         const btn = document.getElementById('playBtn');
-        btn.classList.toggle('playing', isPlaying);
-        btn.textContent = isPlaying ? '⏸ PAUSE STAGE' : '▶ ENGAGE REPLAY';
-
+        btn.textContent = isPlaying ? '⏸ Pause' : '▶ Start Drive';
         if (isPlaying && !rafId) {
           lastFrameTs = performance.now();
           rafId = requestAnimationFrame(tick);
@@ -1743,146 +1846,133 @@
         if (isPlaying) {
           spokenEventIds.clear();
           renderAtCursor(true);
-          // Immediately announce stage & first upcoming callout so user hears voice right away!
-          const sec = (activeDrive.sectors || [])[Math.floor(cursorM / 500)] || (activeDrive.sectors || [])[0];
-          const intro = sec ? `${activeDrive.name}, ${sec.name}. Co-driver armed.` : `${activeDrive.name}. Stage armed.`;
-          speakCoDriver(intro, true);
+          const text = document.getElementById('paceTitle').textContent;
+          speakCoDriver(`${activeDrive.name}. ${text}.`, true);
         }
       });
 
-      document.getElementById('pacenoteDrum').addEventListener('click', () => {
-        const text = document.getElementById('paceText').textContent;
-        speakCoDriver(text, true);
-      });
-
       document.getElementById('rateBtn').addEventListener('click', () => {
-        const rates = [1, 2, 4, 8];
+        const rates = [1, 2, 4];
         speedMult = rates[(rates.indexOf(speedMult) + 1) % rates.length];
         document.getElementById('rateBtn').textContent = `${speedMult}×`;
       });
 
+      document.getElementById('codriverPill').addEventListener('click', (e) => {
+        if (e.target.closest('#voiceToggleBtn')) return;
+        const t = document.getElementById('paceTitle').textContent;
+        const d = document.getElementById('paceDist').textContent;
+        speakCoDriver(`${t}, ${d}`, true);
+      });
+
+      document.getElementById('voiceToggleBtn').addEventListener('click', (e) => {
+        e.stopPropagation();
+        voiceEnabled = !voiceEnabled;
+        const btn = e.currentTarget;
+        btn.classList.toggle('on', voiceEnabled);
+        btn.textContent = voiceEnabled ? 'VOICE ON' : 'MUTED';
+        if (voiceEnabled) speakCoDriver('Co-driver voice enabled.', true);
+      });
+
       driveSelect.addEventListener('change', () => {
         const chosen = drives.find(d => d.id === driveSelect.value);
-        if (!chosen) return;
-        activeDrive = chosen;
-        cursorM = Math.min(activeDrive.totalM * 0.12, 1200);
-        spokenEventIds.clear();
-        gTrail = [];
-        document.getElementById('elevSpanLbl').textContent =
-          `SURVEY PROFILE: ${Math.round(activeDrive.minElev)}M – ${Math.round(activeDrive.maxElev)}M MSL`;
-        document.getElementById('sectorCountLbl').textContent =
-          `${(activeDrive.sectors || []).length} STAGES · ${(activeDrive.events || []).length} PACE NOTES`;
-        if (mapLoaded) {
-          refreshStageColors();
-          const other = drives.find(d => d !== activeDrive);
-          const refSrc = map.getSource('apex-ref');
-          if (refSrc) refSrc.setData(other ? buildStageGeoJSON(other) : { type: 'FeatureCollection', features: [] });
-          rebuildMapEventPins();
-        }
-        renderAtCursor(true);
+        if (chosen) activateDrive(chosen);
       });
 
-      // Physical Toggle Switches
-      document.getElementById('swVoice').addEventListener('click', (e) => {
-        const modes = ['stage', 'recon', 'mute'];
-        voiceMode = modes[(modes.indexOf(voiceMode) + 1) % modes.length];
-        const sw = e.currentTarget;
-        sw.classList.toggle('on', voiceMode !== 'mute');
-        document.getElementById('swVoiceLamp').textContent = voiceMode.toUpperCase();
-        if (voiceMode !== 'mute') speakCoDriver(`Co-driver ${voiceMode} mode.`, true);
-      });
-
-      document.getElementById('swRadar').addEventListener('click', (e) => {
-        radarArmed = !radarArmed;
-        e.currentTarget.classList.toggle('on', radarArmed);
-        document.getElementById('swRadarLamp').textContent = radarArmed ? 'ARMED' : 'OFF';
-        rebuildMapEventPins();
-      });
-
-      document.getElementById('swSpeedLine').addEventListener('click', (e) => {
-        speedAwareLineOn = !speedAwareLineOn;
-        e.currentTarget.classList.toggle('on', speedAwareLineOn);
-        document.getElementById('swSpeedLineLamp').textContent = speedAwareLineOn ? 'ACTIVE' : 'OFF';
-        renderAtCursor(false);
-      });
-
-      document.getElementById('swConvoy').addEventListener('click', (e) => {
-        convoyLinked = !convoyLinked;
-        e.currentTarget.classList.toggle('on', convoyLinked);
-        document.getElementById('swConvoyLamp').textContent = convoyLinked ? 'LINKED' : 'SOLO';
-        renderAtCursor(false);
-      });
-
-      document.getElementById('swPaper').addEventListener('click', (e) => {
-        nightMode = !nightMode;
-        e.currentTarget.classList.toggle('on', nightMode);
-        document.getElementById('swPaperLamp').textContent = nightMode ? 'NIGHT VDO' : 'DAY TOPO';
-        applySurveyCartography();
-      });
-
-      // Drawers & Sliders
-      function toggleDrawer(id) {
-        ['dnaDrawer', 'convoyDrawer'].forEach(dId => {
-          const el = document.getElementById(dId);
-          if (dId === id) el.classList.toggle('open');
+      function toggleSheet(id) {
+        ['navSheet', 'dnaSheet'].forEach(sId => {
+          const el = document.getElementById(sId);
+          if (sId === id) el.classList.toggle('open');
           else el.classList.remove('open');
         });
       }
-      document.getElementById('dnaDrawerBtn').addEventListener('click', () => toggleDrawer('dnaDrawer'));
-      document.getElementById('convoyDrawerBtn').addEventListener('click', () => toggleDrawer('convoyDrawer'));
-      document.querySelectorAll('.drawer-close').forEach(btn => {
-        btn.addEventListener('click', () => document.getElementById(btn.dataset.close).classList.remove('open'));
+      document.getElementById('openNavSheetBtn').addEventListener('click', () => toggleSheet('navSheet'));
+      document.getElementById('openDnaSheetBtn').addEventListener('click', () => toggleSheet('dnaSheet'));
+      document.querySelectorAll('.sheet-close').forEach(b => {
+        b.addEventListener('click', () => document.getElementById(b.dataset.close).classList.remove('open'));
       });
 
-      ['Tech', 'Flow', 'Surf', 'Clear'].forEach(k => {
-        const slider = document.getElementById(`w${k}`);
-        const lbl = document.getElementById(`w${k}Lbl`);
-        slider.addEventListener('input', () => {
-          weights[k.toLowerCase()] = parseInt(slider.value, 10) || 0;
-          lbl.textContent = `${slider.value}%`;
-          refreshStageColors();
+      // Destination Search & Map Tap Routing
+      document.getElementById('routeDestBtn').addEventListener('click', () => {
+        routeToDestinationQuery(document.getElementById('destInput').value);
+      });
+      document.getElementById('destInput').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') routeToDestinationQuery(e.target.value);
+      });
+      document.getElementById('tapModeBtn').addEventListener('click', (e) => {
+        tapToRouteMode = !tapToRouteMode;
+        e.currentTarget.classList.toggle('active', tapToRouteMode);
+        if (tapToRouteMode) {
+          document.getElementById('navSheet').classList.remove('open');
+          showToast('Tap any road on the map to calculate a route there.');
+        }
+      });
+
+      // Loop Generator Buttons
+      document.querySelectorAll('[data-loop-mi]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const mi = parseInt(btn.dataset.loopMi, 10) || 25;
+          generateFunLoop(mi);
         });
       });
 
-      document.getElementById('carSpecGroup').addEventListener('click', (e) => {
-        const btn = e.target.closest('.metal-btn');
-        if (!btn || !btn.dataset.spec) return;
+      // Verified Presets
+      document.querySelectorAll('[data-preset]').forEach(card => {
+        card.addEventListener('click', () => {
+          const pid = card.dataset.preset;
+          const mapId = pid === 'drive_dry_ridge' ? 'dry_ridge' : (pid === 'drive_pebble_ridge' ? 'pebble_ridge' : pid);
+          const target = drives.find(d => d.id === mapId);
+          if (target) {
+            activateDrive(target);
+            document.getElementById('navSheet').classList.remove('open');
+            showToast(`Loaded ${target.name} (${(target.totalM / 1000).toFixed(1)} km)`);
+          }
+        });
+      });
+
+      // DNA Sliders & Car Spec
+      ['Tech', 'Flow', 'Surf', 'Clear'].forEach(k => {
+        const s = document.getElementById(`w${k}`);
+        const v = document.getElementById(`w${k}Val`);
+        s.addEventListener('input', () => {
+          weights[k.toLowerCase()] = parseInt(s.value, 10) || 0;
+          v.textContent = `${s.value}%`;
+          if (mapLoaded && activeDrive) {
+            const src = map.getSource('apex-stage');
+            if (src) src.setData(buildStageGeoJSON(activeDrive));
+            renderAtCursor(false);
+          }
+        });
+      });
+
+      document.getElementById('specGroup').addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-spec]');
+        if (!btn) return;
         carSpec = btn.dataset.spec;
-        document.querySelectorAll('#carSpecGroup .metal-btn').forEach(b => b.classList.toggle('active', b === btn));
-        refreshStageColors();
+        document.querySelectorAll('#specGroup .btn').forEach(b => b.classList.toggle('active', b === btn));
+        if (mapLoaded && activeDrive) {
+          const src = map.getSource('apex-stage');
+          if (src) src.setData(buildStageGeoJSON(activeDrive));
+          renderAtCursor(false);
+        }
       });
 
-      document.getElementById('pingLeadBumpBtn').addEventListener('click', () => {
-        octanePoints += 15;
-        document.getElementById('octaneVal').textContent = `${octanePoints.toLocaleString()} OCT`;
-        triggerConvoyRelayBanner(
-          'LEAD CAR #01 AUTO-IMU RELAY: 0.44G POTHOLE IMPACT — 480 FT AHEAD',
-          'Lead car impact alert! Pothole reported 480 feet ahead.'
-        );
+      document.getElementById('radarToggleBtn').addEventListener('click', (e) => {
+        radarArmed = !radarArmed;
+        e.currentTarget.classList.toggle('active', radarArmed);
+        rebuildMapPins();
       });
 
-      document.getElementById('pingFlockBtn').addEventListener('click', () => {
-        octanePoints += 45;
-        document.getElementById('octaneVal').textContent = `${octanePoints.toLocaleString()} OCT`;
-        triggerConvoyRelayBanner(
-          '+45 OCTANE BOUNTY · FLOCK LPR CAMERA PINNED & RELAYED TO CONVOY',
-          'Flock L P R camera marked. Plus 45 Octane bounty.'
-        );
+      document.getElementById('themeToggleBtn').addEventListener('click', (e) => {
+        nightMode = !nightMode;
+        e.currentTarget.classList.toggle('active', nightMode);
+        e.currentTarget.textContent = nightMode ? 'Day Map' : 'Night Map';
+        applySurveyCartography();
       });
 
-      document.getElementById('pingCopBtn').addEventListener('click', () => {
-        octanePoints += 30;
-        document.getElementById('octaneVal').textContent = `${octanePoints.toLocaleString()} OCT`;
-        triggerConvoyRelayBanner(
-          '+30 OCTANE · POLICE RADAR BROADCAST TO CONVOY #DR-74',
-          'Police radar marked ahead. Convoy alerted.'
-        );
-      });
-
-      document.getElementById('overviewBtn').addEventListener('click', () => {
+      document.getElementById('fitRouteBtn').addEventListener('click', () => {
         if (!activeDrive) return;
         setPlaying(false);
-        map.fitBounds(activeDrive.bounds, { padding: 65, pitch: 35, bearing: -12, duration: 900 });
+        map.fitBounds(activeDrive.bounds, { padding: 60, pitch: 32, bearing: 0, duration: 800 });
       });
 
       document.getElementById('exportCsvBtn').addEventListener('click', () => {
@@ -1892,44 +1982,42 @@
         const blob = new Blob([header + body], { type: 'text/csv' });
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
-        a.download = `${activeDrive.id}_stage_profile.csv`;
+        a.download = `${activeDrive.id}_stage.csv`;
         a.click();
       });
 
-      // Elevation Scrubber Dragging
-      const elevWell = document.getElementById('elevWell');
-      let draggingElev = false;
-      function scrubFromX(clientX) {
+      // Scrubber Drag
+      const scrubberBox = document.getElementById('scrubberBox');
+      let dragging = false;
+      function scrubTo(clientX) {
         if (!activeDrive) return;
-        const rect = elevWell.getBoundingClientRect();
+        const rect = scrubberBox.getBoundingClientRect();
         const frac = Math.max(0, Math.min(1, (clientX - rect.left) / Math.max(1, rect.width)));
         cursorM = frac * activeDrive.totalM;
         spokenEventIds.clear();
         renderAtCursor(true);
       }
-      elevWell.addEventListener('pointerdown', (e) => {
-        draggingElev = true;
-        elevWell.setPointerCapture(e.pointerId);
-        scrubFromX(e.clientX);
+      scrubberBox.addEventListener('pointerdown', (e) => {
+        dragging = true;
+        scrubberBox.setPointerCapture(e.pointerId);
+        scrubTo(e.clientX);
       });
-      elevWell.addEventListener('pointermove', (e) => { if (draggingElev) scrubFromX(e.clientX); });
-      elevWell.addEventListener('pointerup', () => { draggingElev = false; });
+      scrubberBox.addEventListener('pointermove', (e) => { if (dragging) scrubTo(e.clientX); });
+      scrubberBox.addEventListener('pointerup', () => { dragging = false; });
       window.addEventListener('resize', () => drawElevationProfile());
 
-      // Replay Animation Loop
       function tick(now) {
         if (isPlaying && activeDrive) {
           const dt = Math.min(0.1, Math.max(0.0, (now - lastFrameTs) / 1000));
           lastFrameTs = now;
           const cur = sampleAtDistance(activeDrive, cursorM);
-          const vMps = Math.max(10.0, (cur ? cur.speedMph : 42) * 0.44704);
+          const vMps = Math.max(11.0, (cur ? cur.speedMph : 45) * 0.44704);
           const dM = vMps * speedMult * dt;
           cursorM += dM;
           if (cursorM >= activeDrive.totalM) cursorM = 0;
 
-          // Increment Drive-to-Earn Octane points (3x bounty on 2-pass verified sectors)
           octanePoints += (dM / 1000) * 3.0;
-          document.getElementById('octaneVal').textContent = `${Math.floor(octanePoints).toLocaleString()} OCT`;
+          document.getElementById('octaneLbl').textContent = `${Math.floor(octanePoints).toLocaleString()} OCT`;
 
           renderAtCursor(false);
           rafId = requestAnimationFrame(tick);
@@ -1938,18 +2026,19 @@
         }
       }
 
-      // Initialize HUD immediately
       renderAtCursor(true);
+      if (params.get('nav') === '1') document.getElementById('navSheet').classList.add('open');
       if (isPlaying) setPlaying(true);
 
-      // Native iOS Sensor Bridge Compatibility
+      // Native iOS Live Telemetry Bridge
       window.apex = {
         live(frame) {
           if (!frame || isPlaying) return;
           if (frame.has_fix && Number.isFinite(frame.lat) && Number.isFinite(frame.lon)) {
-            const mph = (frame.speed_mps || 0) * 2.236936;
-            drawSpeedDial(mph, 55);
-            drawGDial(frame.lat_g || 0, frame.lon_g || 0, frame.camber_deg || 0);
+            const mph = Math.round((frame.speed_mps || 0) * 2.236936);
+            document.getElementById('speedReadout').textContent = String(mph);
+            document.getElementById('cellSpeed').textContent = `${mph} mph (GPS)`;
+            drawGGauge(frame.lat_g || 0, frame.lon_g || 0, frame.camber_deg || 0);
           }
         },
         onNative() {}

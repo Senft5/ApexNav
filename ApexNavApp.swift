@@ -187,15 +187,17 @@ final class ApexScriptBridge: NSObject, WKScriptMessageHandler {
         let body = message.body
         var command: String?
         var speechText: String?
+        var interruptSpeech = false
         if let text = body as? String {
             command = text
         } else if let dict = body as? [String: Any] {
             command = (dict["cmd"] as? String) ?? (dict["command"] as? String) ?? (dict["type"] as? String)
             speechText = dict["text"] as? String
+            interruptSpeech = (dict["force"] as? Bool) ?? false
         }
         guard let cmd = command else { return }
         if cmd == "speak", let phrase = speechText {
-            shell?.speakCoDriver(phrase)
+            shell?.speakCoDriver(phrase, interrupt: interruptSpeech)
             return
         }
         shell?.handleCommand(cmd)
@@ -333,6 +335,8 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         locManager.showsBackgroundLocationIndicator = true
         locManager.requestWhenInUseAuthorization()
         locManager.startUpdatingLocation()
+        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .voicePrompt, options: [.mixWithOthers, .duckOthers])
+        try? AVAudioSession.sharedInstance().setActive(true)
         startMotionPipeline()
         startPushTimer()
     }
@@ -727,20 +731,22 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         }
     }
 
-    func speakCoDriver(_ phrase: String) {
-        speak(phrase)
+    func speakCoDriver(_ phrase: String, interrupt: Bool = false) {
+        speak(phrase, interrupt: interrupt)
     }
 
-    private func speak(_ phrase: String) {
-        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .voicePrompt, options: [.mixWithOthers, .duckOthers])
-        try? AVAudioSession.sharedInstance().setActive(true)
+    private func speak(_ phrase: String, interrupt: Bool = false) {
         if synth.isSpeaking {
-            synth.stopSpeaking(at: .immediate)
+            if interrupt {
+                synth.stopSpeaking(at: .word)
+            } else {
+                return
+            }
         }
         let utterance = AVSpeechUtterance(string: phrase)
         utterance.voice = AVSpeechSynthesisVoice(language: "en-GB") ?? AVSpeechSynthesisVoice(language: "en-US")
-        utterance.rate = 0.54
-        utterance.pitchMultiplier = 0.96
+        utterance.rate = 0.51
+        utterance.pitchMultiplier = 0.98
         synth.speak(utterance)
     }
 }

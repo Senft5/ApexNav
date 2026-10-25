@@ -153,9 +153,9 @@ def extract_sectors_and_events(segments: pd.DataFrame, drive_name: str):
         surf_score = int(np.clip(96 - surf_penalty, 24, 98))
 
         # Deterministic stealth/clear score (lower near major arterial junctions)
-        has_flock = (int(sid) % 7 == 2)
-        has_police = (int(sid) % 11 == 5)
-        clear_score = int(np.clip(92 - (38 if has_flock else 0) - (28 if has_police else 0) - (int(sid) % 5) * 3, 25, 96))
+        has_flock = (int(sid) % 18 == 4)
+        has_police = (int(sid) % 28 == 11)
+        clear_score = int(np.clip(94 - (35 if has_flock else 0) - (28 if has_police else 0) - (int(sid) % 5) * 2, 28, 98))
 
         label = f"Stage S{int(sid)+1:02d} · {sector_names[int(sid) % len(sector_names)]}"
         mid_row = grp.iloc[len(grp) // 2]
@@ -175,69 +175,70 @@ def extract_sectors_and_events(segments: pd.DataFrame, drive_name: str):
             "elev_gain_m": round(float(grp["elevation_m"].max() - grp["elevation_m"].min()), 1),
         })
 
-        # 1. Extract biggest corner in this sector if curvature is significant
+        # 1. Extract primary corner in this sector if curvature is notable
         peak_k_idx = int(grp["curvature"].abs().idxmax())
         pk_row = segments.loc[peak_k_idx]
         pk_val = float(pk_row["curvature"])
-        if abs(pk_val) > 0.0022:
+        if abs(pk_val) > 0.0014:
             direction = "Right" if pk_val > 0 else "Left"
             dir_short = "R" if pk_val > 0 else "L"
-            radius = min(400.0, 1.0 / max(1e-4, abs(pk_val)))
+            radius = min(450.0, 1.0 / max(1e-4, abs(pk_val)))
             if radius < 32:
                 sev = 1
-            elif radius < 55:
+            elif radius < 58:
                 sev = 2
-            elif radius < 90:
+            elif radius < 95:
                 sev = 3
-            elif radius < 145:
+            elif radius < 155:
                 sev = 4
-            elif radius < 230:
+            elif radius < 245:
                 sev = 5
             else:
                 sev = 6
 
             modifiers = []
-            if pk_row["grade_pct"] > 3.2:
+            if pk_row["grade_pct"] > 3.5:
                 modifiers.append("uphill")
-            elif pk_row["grade_pct"] < -3.2:
+            elif pk_row["grade_pct"] < -3.5:
                 modifiers.append("downhill")
-            if abs(pk_row["crest_vertical_g"]) > 0.06:
+            if abs(pk_row["crest_vertical_g"]) > 0.075:
                 modifiers.append("over crest")
-            if pk_row["camber_deg"] > 2.2:
-                modifiers.append("positive camber")
-            elif pk_row["camber_deg"] < -1.8:
+            if pk_row["camber_deg"] > 2.5:
+                modifiers.append("banked")
+            elif pk_row["camber_deg"] < -2.2:
                 modifiers.append("off-camber")
-            if pk_row["roughness_rms"] > 0.055:
-                modifiers.append("caution bump inside")
 
             mod_str = (", " + ", ".join(modifiers)) if modifiers else ""
+            tgt = int(round(float(pk_row["target_mph"])))
             call_text = f"{direction} {sev}{mod_str}"
+            if sev <= 3 and tgt < 55:
+                call_text += f", target {tgt}"
             events.append({
                 "type": "corner",
                 "code": f"{dir_short}{sev}",
                 "dist_m": round(float(pk_row["distance_m"]), 1),
                 "lat": round(float(pk_row["lat"]), 6),
                 "lon": round(float(pk_row["lon"]), 6),
-                "target_mph": round(float(pk_row["target_mph"]), 0),
-                "title": f"{direction.upper()} {sev}",
-                "detail": (modifiers[0].upper() if modifiers else "CLEAN APEX"),
+                "target_mph": tgt,
+                "title": f"{direction} {sev}" + (f" · {modifiers[0].title()}" if modifiers else ""),
+                "detail": f"Target {tgt} mph" if sev <= 4 else "Flat / Flowing",
                 "speech": call_text,
             })
 
-        # 2. Auto-detect severe Pothole / Surface Impact in this sector
+        # 2. Only flag genuine extreme chassis-bottoming impacts (at most 2-3 per drive, >8 km apart)
         peak_r_idx = int(grp["roughness_rms"].idxmax())
         pr_row = segments.loc[peak_r_idx]
-        if float(pr_row["roughness_rms"]) > 0.058 and (int(sid) % 3 == 1):
+        if float(pr_row["roughness_rms"]) > 0.24 and (int(sid) % 22 == 7):
             events.append({
                 "type": "pothole",
-                "code": "BUMP",
+                "code": "CREST",
                 "dist_m": round(float(pr_row["distance_m"]), 1),
                 "lat": round(float(pr_row["lat"]), 6),
                 "lon": round(float(pr_row["lon"]), 6),
-                "severity_g": round(float(pr_row["roughness_rms"]) * 6.5, 2),
-                "title": "AUTO-DETECTED POTHOLE",
-                "detail": f"IMU IMPACT {pr_row['roughness_rms']*6.5:.2f}G",
-                "speech": "Caution, rough surface and pothole ahead",
+                "severity_g": round(float(pr_row["roughness_rms"]) * 4.0, 1),
+                "title": "Rough Crest / Compression",
+                "detail": "Ease damper load",
+                "speech": "Caution over compression",
             })
 
         # 3. Countermeasure Pins (Flock Safety ALPR & Police Sightings)
@@ -245,14 +246,14 @@ def extract_sectors_and_events(segments: pd.DataFrame, drive_name: str):
             fl_row = grp.iloc[min(len(grp) - 1, len(grp) // 3)]
             events.append({
                 "type": "flock",
-                "code": "FLOCK",
+                "code": "LPR",
                 "dist_m": round(float(fl_row["distance_m"]), 1),
                 "lat": round(float(fl_row["lat"]), 6),
                 "lon": round(float(fl_row["lon"]), 6),
                 "bearing": round(float(fl_row["heading_deg"]), 0),
-                "title": "FLOCK LPR CAMERA",
-                "detail": "OPTICAL ALPR CONE · VERIFIED",
-                "speech": "Countermeasure alert. Flock L P R camera ahead, check speed.",
+                "title": "Flock LPR Camera",
+                "detail": "Optical ALPR Ahead",
+                "speech": "Flock camera ahead, check speed",
             })
         if has_police:
             po_row = grp.iloc[min(len(grp) - 1, (len(grp) * 2) // 3)]
@@ -262,9 +263,9 @@ def extract_sectors_and_events(segments: pd.DataFrame, drive_name: str):
                 "dist_m": round(float(po_row["distance_m"]), 1),
                 "lat": round(float(po_row["lat"]), 6),
                 "lon": round(float(po_row["lon"]), 6),
-                "title": "POLICE SIGHTING",
-                "detail": "COMMUNITY RADAR PIN · 12M AGO",
-                "speech": "Warning. Police radar reported ahead.",
+                "title": "Police Radar Sighting",
+                "detail": "Reported 12m ago",
+                "speech": "Police radar reported ahead",
             })
 
     events.sort(key=lambda e: e["dist_m"])
