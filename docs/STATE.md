@@ -176,9 +176,30 @@ docs/SOCIAL.md.
 - Clip loudness differs between renders (peak normalisation), which can expose seams.
 - Voice banks add ~15 MB per voice to the repo/Pages bundle (`du -sh web/voices`).
 
+## Session 2026-10-25 (h): voices, licence, backend design, Cloudflare
+### Completed
+- [x] **Whole-phrase voices** for George, Daniel, Emma (896 clips each), **Michael** (American male) and **My Voice**
+  (Michael converted to the owner's timbre with kNN-VC + 54 real recorded calls). Pause rhythm from the owner's real
+  delivery (breath before the caution ~0.3-0.4 s and before the distance ~0.2-0.25 s; `tts_text`, `spokenText(text, rhythm)`).
+- [x] **Licence**: proprietary, all rights reserved (LICENSE, THIRD_PARTY_NOTICES.md). Not open source.
+- [x] **docs/BACKEND.md**: local-first backend design (Supabase + Google sign-in, invite-only), points 3x/2x/1x per way+direction,
+  reviewed by Opus (privacy leaks fixed in the design).
+- [x] **Cloudflare**: Worker `apexnav` serves `web/` (wrangler.jsonc). Live at https://apexnav.senftns.workers.dev/
+  (also GitHub Pages at senft5.github.io/ApexNav/web until the repo goes private).
+### Owner feedback on My Voice (open)
+- "Sounds like me but robotic and stumbles over words." Metrics (speaker similarity 0.83 vs 0.89 ceiling, UTMOS 3.9, word
+  match equal to the unconverted source) cannot see this; the conversion keeps the source voice's phrasing.
+- Plan: owner records ~30 min of natural calls (generated call sheet from tools/training_phrases.json), then (a) play real clips
+  for calls/parts read, with natural pauses, and (b) fine-tune Kokoro on the owner's real data on the RTX 5080 PC (tools/local).
+### Active bugs / limitations
+- iPhone sideload app only gets new voices when rebuilt; web app is current. Voice picker is in the SETUP tab.
+- The espeak-ng GPL dependency of kokoro-js must go before the app is closed-source/sold (THIRD_PARTY_NOTICES.md).
+- Clip loudness differs between banks (peak-normalised); an LUFS pass would hide seams.
+- web/voices is 66 MB / 4,599 files total on the site; Workers free limit is 20,000 files.
+
 ## Exact Next Task
-1. Owner: confirm the voices sound whole on the phone (George/Daniel/Emma, My Voice).
-2. Run the Kaggle spike (docs/VOICE.md "Path to ANY phrase"): render `tools/training_phrases.json`
-   with Chatterbox, fine-tune Kokoro, A/B against the clone.
-3. LUFS-normalise all banks; drop espeak-ng from the shipped app (misaki phoneme lexicon).
-4. Loops: penalise dead-end stage access; calibrate connector length.
+1. Owner: check https://apexnav.senftns.workers.dev/ works, then make the GitHub repo private (steps in docs/BACKEND.md section 8).
+2. Generate the natural call sheet (v2) for the owner to record (~30 min); build chunk-level real-clip playback; set up
+   the Kokoro fine-tune script for the GPU PC with a 1-hour spike first (docs/VOICE.md "Path to ANY phrase").
+3. Supabase: project, migration 0001 + pgTAP RLS tests (docs/BACKEND.md section 11), invite-only members gate, Google sign-in.
+4. Replace the espeak-ng dependency (misaki phoneme lexicon for the closed pace-note vocabulary).
