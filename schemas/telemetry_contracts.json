@@ -3,35 +3,217 @@
   "definitions": {
     "RawSensorFrame": {
       "type": "object",
-      "required": ["t_sec", "ax", "ay", "az", "gx", "gy", "gz", "v_mps", "lat", "lon"],
+      "required": [
+        "t_sec",
+        "ax",
+        "ay",
+        "az",
+        "gx",
+        "gy",
+        "gz",
+        "v_mps",
+        "lat",
+        "lon"
+      ],
       "properties": {
-        "t_sec": { "type": "number" },
-        "ax": { "type": "number" },
-        "ay": { "type": "number" },
-        "az": { "type": "number" },
-        "gx": { "type": "number" },
-        "gy": { "type": "number" },
-        "gz": { "type": "number" },
-        "v_mps": { "type": "number" },
-        "lat": { "type": "number" },
-        "lon": { "type": "number" },
-        "alt_m": { "type": "number" }
+        "t_sec": {
+          "type": "number"
+        },
+        "ax": {
+          "type": "number"
+        },
+        "ay": {
+          "type": "number"
+        },
+        "az": {
+          "type": "number"
+        },
+        "gx": {
+          "type": "number"
+        },
+        "gy": {
+          "type": "number"
+        },
+        "gz": {
+          "type": "number"
+        },
+        "v_mps": {
+          "type": "number"
+        },
+        "lat": {
+          "type": "number"
+        },
+        "lon": {
+          "type": "number"
+        },
+        "alt_m": {
+          "type": "number"
+        }
       }
     },
     "RoadSegment5m": {
       "type": "object",
-      "required": ["segment_index", "distance_m", "lat", "lon", "elevation_m", "grade_pct", "camber_deg", "crest_vertical_g", "roughness_rms", "engagement_score"],
+      "required": [
+        "segment_index",
+        "distance_m",
+        "lat",
+        "lon",
+        "elevation_m",
+        "grade_pct",
+        "camber_deg",
+        "crest_vertical_g",
+        "roughness_rms",
+        "engagement_score"
+      ],
       "properties": {
-        "segment_index": { "type": "integer" },
-        "distance_m": { "type": "number" },
-        "lat": { "type": "number" },
-        "lon": { "type": "number" },
-        "elevation_m": { "type": "number" },
-        "grade_pct": { "type": "number" },
-        "camber_deg": { "type": "number" },
-        "crest_vertical_g": { "type": "number" },
-        "roughness_rms": { "type": "number" },
-        "engagement_score": { "type": "number" }
+        "segment_index": {
+          "type": "integer"
+        },
+        "distance_m": {
+          "type": "number"
+        },
+        "lat": {
+          "type": "number"
+        },
+        "lon": {
+          "type": "number"
+        },
+        "elevation_m": {
+          "type": "number"
+        },
+        "grade_pct": {
+          "type": "number"
+        },
+        "camber_deg": {
+          "type": "number",
+          "description": "Turn-relative banking: + = banked into the corner, - = off-camber. 0 where not cornering (unobservable)."
+        },
+        "crest_vertical_g": {
+          "type": "number"
+        },
+        "roughness_rms": {
+          "type": "number"
+        },
+        "engagement_score": {
+          "type": "number"
+        },
+        "vert_peak_g": {
+          "type": "number",
+          "description": "Peak |>8 Hz vertical| in the bin, g. Pothole/bump spike source (>0.35 g)."
+        },
+        "target_mph": {
+          "type": "number",
+          "description": "Braking envelope from core/road_dna.py (mu_eff 0.60, 0.5 g decel, 70 mph cap)."
+        }
+      }
+    },
+    "RoadEvent": {
+      "type": "object",
+      "required": [
+        "type",
+        "code",
+        "call",
+        "index",
+        "dist_m",
+        "lat",
+        "lon"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "corner",
+            "bump",
+            "crest",
+            "dip",
+            "alpr"
+          ]
+        },
+        "code": {
+          "type": "string",
+          "description": "L1-L6/R1-R6/LHP/RHP, BUMP, CREST, DIP, LPR"
+        },
+        "call": {
+          "type": "string",
+          "description": "Spoken pace note, e.g. \"Left 4 tightens, over crest\""
+        },
+        "index": {
+          "type": "integer"
+        },
+        "dist_m": {
+          "type": "number"
+        },
+        "lat": {
+          "type": "number"
+        },
+        "lon": {
+          "type": "number"
+        },
+        "radius_m": {
+          "type": "number"
+        },
+        "apex_mph": {
+          "type": "number"
+        },
+        "severity_g": {
+          "type": "number"
+        }
+      },
+      "description": "Every event is measured (IMU) or derived from geometry/OSM. alpr events come only from OpenStreetMap surveillance:type=ALPR."
+    },
+    "StageSector": {
+      "type": "object",
+      "required": [
+        "id",
+        "start_index",
+        "end_index",
+        "tech",
+        "flow",
+        "surf",
+        "clear"
+      ],
+      "properties": {
+        "id": {
+          "type": "integer"
+        },
+        "start_index": {
+          "type": "integer"
+        },
+        "end_index": {
+          "type": "integer"
+        },
+        "start_m": {
+          "type": "number"
+        },
+        "end_m": {
+          "type": "number"
+        },
+        "corners": {
+          "type": "integer"
+        },
+        "tech": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "flow": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "surf": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "clear": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 100,
+          "description": "null = no ALPR data; never treated as clear"
+        }
       }
     }
   }

@@ -736,12 +736,10 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
     }
 
     private func speak(_ phrase: String, interrupt: Bool = false) {
-        if synth.isSpeaking {
-            if interrupt {
-                synth.stopSpeaking(at: .word)
-            } else {
-                return
-            }
+        // AVSpeechSynthesizer queues utterances itself; only a forced call cuts in.
+        // (The web cockpit decides which notes are still worth calling.)
+        if interrupt && synth.isSpeaking {
+            synth.stopSpeaking(at: .word)
         }
         let utterance = AVSpeechUtterance(string: phrase)
         utterance.voice = AVSpeechSynthesisVoice(language: "en-GB") ?? AVSpeechSynthesisVoice(language: "en-US")

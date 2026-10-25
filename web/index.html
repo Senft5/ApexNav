@@ -3,2047 +3,1183 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>ApexNav — Spirited Navigation, Loop Builder & Rally Co-Driver</title>
+  <title>ApexNav Cockpit</title>
   <link rel="stylesheet" href="vendor/maplibre-gl.css" />
   <script src="vendor/maplibre-gl.js"></script>
+  <script src="vendor/maplibre-contour.min.js"></script>
+  <script src="apex_core.js"></script>
   <script src="data/dry_ridge.js"></script>
   <script src="data/pebble_ridge.js"></script>
   <style>
+    /* ---------------------------------------------------------------------
+       Tokens. Day = Rally Topo Paper, Night = VDO Phosphor (PHILOSOPHY.md 1).
+       The binnacle is the same anodised bezel in both.
+       --------------------------------------------------------------------- */
     :root {
-      --bg-panel: #141413;
-      --bg-elevated: #1c1b19;
-      --bg-well: #0c0c0b;
-      --border-subtle: #2e2b26;
-      --border-brass: #5c4e3a;
-      --text-cream: #f2ece1;
-      --text-muted: #a39a8c;
-      --text-dim: #6e675c;
-      --amber: #e89b3c;
-      --vermilion: #d94625;
-      --olive: #5b8247;
+      --paper: #F4EFE6;
+      --paper-ink: #2B2824;
+      --paper-dim: #7A7266;
+      --route: #B5532B;
+      --route-casing: #F4EFE6;
+      --contour: #3B3833;
+      --olive: #6B6B3A;
+      --signal: #D9411E;
+      --amber: #E89B3C;
+      --cream: #EAE3D2;
+      --obsidian: #111210;
+      --bezel: #161615;
+      --bezel-hi: #24231F;
+      --bezel-edge: #3A3832;
+      --engrave: #9A9384;
+      --dial-face: #0E0E0D;
+      --dial-ink: #EAE3D2;
+      --lamp-off: #3A2A22;
       --safe-top: env(safe-area-inset-top, 0px);
       --safe-bottom: env(safe-area-inset-bottom, 0px);
+      --dial: clamp(100px, 14.5dvh, 172px);
+    }
+    :root[data-theme="night"] {
+      --paper: #111210;
+      --paper-ink: #EAE3D2;
+      --paper-dim: #8E8676;
+      --route: #E89B3C;
+      --route-casing: #111210;
+      --contour: #2E2C27;
     }
 
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-      -webkit-tap-highlight-color: transparent;
-      user-select: none;
-    }
-
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
     html, body {
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-      background: #121110;
-      color: var(--text-cream);
-      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", "Segoe UI", sans-serif;
-      font-variant-numeric: tabular-nums;
-      -webkit-font-smoothing: antialiased;
+      width: 100%; height: 100%; overflow: hidden;
+      background: var(--bezel); color: var(--paper-ink);
+      font-family: "DIN Alternate", "Bahnschrift", "Barlow Semi Condensed", "Helvetica Neue", Arial, sans-serif;
+      font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; user-select: none;
     }
+    button { font: inherit; color: inherit; background: none; border: none; cursor: pointer; }
 
-    #app {
-      position: relative;
-      width: 100%;
-      max-width: 100%;
-      height: 100vh;
-      height: 100dvh;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
+    #app { display: grid; grid-template-rows: minmax(0, 1fr) auto; height: 100vh; height: 100dvh; }
 
-    /* MAP VIEWPORT */
-    .map-viewport {
-      position: relative;
-      flex: 1 1 auto;
-      width: 100%;
-      min-height: 0;
-      overflow: hidden;
-    }
+    /* ------------------------------ STAGE MAP ------------------------------ */
+    .stage { position: relative; min-height: 0; background: var(--paper); overflow: hidden; }
+    #map { position: absolute; inset: 0; }
+    .maplibregl-ctrl-top-left, .maplibregl-ctrl-top-right, .maplibregl-ctrl-bottom-left { display: none !important; }
+    .maplibregl-ctrl-bottom-right { opacity: 0.8; }
+    .maplibregl-ctrl-attrib { font-size: 10px; }
 
-    #map {
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
+    /* Pace-note strip: an opaque bezel bar bolted to the top edge, not a floating card. */
+    .note-strip {
+      position: absolute; top: 0; left: 0; right: 0; z-index: 5;
+      padding: calc(6px + var(--safe-top)) 10px 6px;
+      display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center;
+      background: var(--bezel); border-bottom: 2px solid var(--bezel-edge); color: var(--cream);
     }
-    .maplibregl-ctrl-bottom-left,
-    .maplibregl-ctrl-bottom-right,
-    .maplibregl-ctrl-top-left,
-    .maplibregl-ctrl-top-right {
-      display: none !important;
+    .note-code {
+      min-width: 58px; height: 44px; padding: 0 8px; display: grid; place-items: center;
+      border: 2px solid var(--amber); color: var(--amber); font-size: 24px; font-weight: 800; letter-spacing: 0.02em;
     }
+    .note-code.hazard { border-color: var(--signal); color: var(--signal); }
+    .note-code.quiet { border-color: var(--bezel-edge); color: var(--engrave); }
+    .note-text { min-width: 0; }
+    .note-call { font-size: 19px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-transform: uppercase; letter-spacing: 0.03em; }
+    .note-sub { font-size: 12px; color: var(--engrave); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: 0.06em; text-transform: uppercase; margin-top: 2px; }
+    .note-dist { text-align: right; font-size: 22px; font-weight: 800; color: var(--cream); white-space: nowrap; }
+    .note-dist small { display: block; font-size: 10px; font-weight: 600; color: var(--engrave); letter-spacing: 0.1em; }
 
-    /* TOP NAVIGATION & CO-DRIVER HUD */
-    .top-hud {
-      position: absolute;
-      top: calc(10px + var(--safe-top));
-      left: 12px;
-      right: 12px;
-      z-index: 20;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-      pointer-events: none;
+    .stage-plate {
+      position: absolute; left: 10px; bottom: 10px; z-index: 4; display: flex; gap: 6px; align-items: stretch;
     }
+    .plate {
+      background: var(--bezel); color: var(--cream); border: 1px solid var(--bezel-edge);
+      padding: 6px 10px; font-size: 11px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
+    }
+    .plate.mode-live { color: var(--obsidian); background: var(--amber); border-color: var(--amber); }
+    .plate.btn:active { background: var(--bezel-hi); }
+    #recenterBtn { display: none; }
+    #recenterBtn.show { display: block; }
 
-    .top-hud > * {
-      pointer-events: auto;
+    .toast {
+      position: absolute; left: 50%; top: calc(70px + var(--safe-top)); transform: translateX(-50%); z-index: 6;
+      max-width: calc(100% - 32px); background: var(--bezel); color: var(--cream); border: 1px solid var(--amber);
+      padding: 8px 12px; font-size: 12px; font-weight: 600; letter-spacing: 0.04em; display: none;
     }
+    .toast.show { display: block; }
 
-    /* Left: Route Picker + Loop Builder Trigger */
-    .nav-bar-left {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      background: var(--bg-panel);
-      border: 1px solid var(--border-brass);
-      padding: 5px 6px 5px 10px;
-      border-radius: 6px;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.55);
-      flex-shrink: 0;
+    .pin {
+      font-size: 9px; font-weight: 800; letter-spacing: 0.1em; padding: 2px 5px; border: 1.5px solid;
+      background: var(--bezel); white-space: nowrap; cursor: pointer;
     }
+    .pin.alpr { color: var(--signal); border-color: var(--signal); }
+    .pin.bump { color: var(--amber); border-color: var(--amber); }
+    .pin.crest, .pin.dip { color: var(--cream); border-color: var(--engrave); }
+    .puck { width: 26px; height: 26px; }
 
-    .brand-mark {
-      font-size: 11px;
-      font-weight: 800;
-      letter-spacing: 0.08em;
-      color: var(--amber);
-      padding-right: 6px;
-      border-right: 1px solid var(--border-subtle);
+    /* ------------------------------ BINNACLE ------------------------------- */
+    .binnacle {
+      position: relative; z-index: 2; color: var(--cream);
+      padding: 6px 10px calc(8px + var(--safe-bottom));
+      background:
+        repeating-linear-gradient(90deg, rgba(255,255,255,0.018) 0 1px, rgba(0,0,0,0.02) 1px 3px),
+        linear-gradient(180deg, var(--bezel-hi), var(--bezel) 30%, #10100F);
+      border-top: 2px solid var(--bezel-edge);
+      display: grid; gap: 6px;
+      grid-template-columns: var(--dial) minmax(0, 1fr) var(--dial);
+      grid-template-areas: "scrub scrub scrub" "speed center g" "switches switches switches";
     }
+    .engrave { font-size: 9px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: var(--engrave); }
 
-    .route-select {
-      background: transparent;
-      color: var(--text-cream);
-      border: none;
-      font-family: inherit;
-      font-size: 13px;
-      font-weight: 700;
-      padding: 4px 6px;
-      cursor: pointer;
-      outline: none;
-      min-width: 0;
-      max-width: 200px;
-      text-overflow: ellipsis;
+    .scrub { grid-area: scrub; display: grid; grid-template-columns: auto auto minmax(0, 1fr); gap: 6px; align-items: center; }
+    .key {
+      height: 28px; min-width: 40px; padding: 0 10px; font-size: 11px; font-weight: 800; letter-spacing: 0.12em;
+      background: linear-gradient(180deg, #2C2B27, #1A1A18); border: 1px solid var(--bezel-edge); color: var(--cream);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 1px 0 #000;
     }
-    .route-select option {
-      background: var(--bg-panel);
-      color: var(--text-cream);
-    }
+    .key:active { background: #121211; box-shadow: inset 0 1px 3px #000; }
+    .key.on { color: var(--amber); }
+    .scrubber { position: relative; height: 28px; background: var(--dial-face); border: 1px solid var(--bezel-edge); cursor: ew-resize; touch-action: none; }
+    .scrubber canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
 
-    .btn {
-      background: var(--bg-elevated);
-      color: var(--text-cream);
-      border: 1px solid var(--border-subtle);
-      font-family: inherit;
-      font-size: 12px;
-      font-weight: 600;
-      padding: 6px 11px;
-      border-radius: 5px;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      white-space: nowrap;
-      transition: background 0.12s, border-color 0.12s;
-    }
-    .btn:hover {
-      border-color: var(--border-brass);
-      background: #252320;
-    }
-    .btn.primary {
-      background: var(--vermilion);
-      border-color: #f06444;
-      color: #fff;
-      font-weight: 700;
-    }
-    .btn.amber {
-      background: rgba(232, 155, 60, 0.16);
-      border-color: var(--amber);
-      color: var(--amber);
-      font-weight: 700;
-    }
-    .btn.active {
-      background: var(--amber);
-      border-color: var(--amber);
-      color: #121110;
-      font-weight: 700;
-    }
+    .dial { width: var(--dial); height: var(--dial); align-self: center; }
+    .dial svg { width: 100%; height: 100%; display: block; }
+    #speedDial { grid-area: speed; }
+    #gDial { grid-area: g; }
 
-    /* Center: Co-Driver Pace Note Pill */
-    .codriver-pill {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      background: var(--bg-panel);
-      border: 1px solid var(--border-brass);
-      padding: 6px 12px 6px 8px;
-      border-radius: 6px;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.6);
-      min-width: 290px;
-      max-width: 480px;
-      flex: 1 1 auto;
-      cursor: pointer;
-    }
+    .center { grid-area: center; min-width: 0; display: grid; align-content: center; justify-items: center; gap: 8px; }
+    .odo { display: grid; justify-items: center; gap: 3px; }
+    .drums { display: flex; gap: 2px; padding: 3px; background: #050505; border: 1px solid var(--bezel-edge); box-shadow: inset 0 2px 4px #000; }
+    .drum { --h: clamp(20px, 3.3dvh, 30px); width: calc(var(--h) * 0.68); height: var(--h); overflow: hidden; background: #0B0B0A; position: relative; }
+    .drum::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,0.65), transparent 30%, transparent 70%, rgba(0,0,0,0.65)); pointer-events: none; }
+    .drum.tenth { background: var(--cream); }
+    .drum.tenth .digit { color: #111; }
+    .strip { will-change: transform; }
+    .digit { height: var(--h); line-height: var(--h); text-align: center; font-size: calc(var(--h) * 0.78); font-weight: 700; color: var(--cream); }
+    .odo-meta { display: flex; gap: 8px; align-items: baseline; }
 
-    .turn-badge {
-      min-width: 44px;
-      height: 36px;
-      padding: 0 8px;
-      border-radius: 4px;
-      background: var(--amber);
-      color: #121110;
-      font-size: 15px;
-      font-weight: 900;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      letter-spacing: 0.02em;
-      flex-shrink: 0;
-    }
-    .turn-badge.hazard {
-      background: var(--vermilion);
-      color: #fff;
-    }
+    .dna { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; width: min(100%, 260px); }
+    .dna .engrave { letter-spacing: 0.06em; font-size: 8px; }
+    .dna-cell { display: grid; gap: 2px; justify-items: center; }
+    .dna-bar { width: 100%; height: 5px; background: #050505; border: 1px solid var(--bezel-edge); }
+    .dna-bar i { display: block; height: 100%; width: 0; background: var(--amber); }
+    .dna-val { font-size: 13px; font-weight: 800; }
 
-    .codriver-copy {
-      display: flex;
-      flex-direction: column;
-      min-width: 0;
-      flex: 1;
+    .switches { grid-area: switches; display: flex; justify-content: space-between; align-items: end; gap: 4px; }
+    .toggle { display: grid; justify-items: center; gap: 3px; min-width: 46px; }
+    .toggle .lamp { width: 6px; height: 6px; border-radius: 50%; background: var(--lamp-off); }
+    .toggle.on .lamp { background: var(--signal); box-shadow: 0 0 6px var(--signal); }
+    .toggle .lever { width: 16px; height: 22px; position: relative; }
+    .toggle .lever::before { content: ""; position: absolute; left: 1px; right: 1px; bottom: 0; height: 10px; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #8B877C, #2A2925 70%); }
+    .toggle .lever::after {
+      content: ""; position: absolute; left: 5px; width: 6px; height: 18px; bottom: 5px; border-radius: 3px;
+      background: linear-gradient(90deg, #6F6B61, #E6E1D5 45%, #77736A); transform-origin: 50% 100%; transform: rotate(28deg);
+      transition: transform 0.12s;
     }
-    .codriver-top {
-      display: flex;
-      align-items: baseline;
-      gap: 8px;
-    }
-    .codriver-dist {
-      font-size: 14px;
-      font-weight: 800;
-      color: var(--amber);
-      flex-shrink: 0;
-    }
-    .codriver-title {
-      font-size: 14px;
-      font-weight: 700;
-      color: var(--text-cream);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .codriver-sub {
-      font-size: 11px;
-      color: var(--text-muted);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
+    .toggle.on .lever::after { transform: rotate(-28deg); }
+    .route-key { height: 34px; padding: 0 14px; }
 
-    .voice-chip {
-      background: var(--bg-well);
-      border: 1px solid var(--border-subtle);
-      color: var(--text-muted);
-      font-size: 11px;
-      font-weight: 700;
-      padding: 5px 8px;
-      border-radius: 4px;
-      cursor: pointer;
-      flex-shrink: 0;
-    }
-    .voice-chip.on {
-      border-color: var(--amber);
-      color: var(--amber);
-    }
-
-    /* Right: Quick Controls */
-    .nav-bar-right {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      background: var(--bg-panel);
-      border: 1px solid var(--border-subtle);
-      padding: 5px;
-      border-radius: 6px;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.55);
-      flex-shrink: 0;
-    }
-
-    /* SLIDE-OVER PANELS (Loop & Destination Nav / DNA Tuning / Convoy) */
-    .modal-sheet {
-      position: absolute;
-      top: calc(64px + var(--safe-top));
-      left: 12px;
-      z-index: 30;
-      width: 370px;
-      max-width: calc(100vw - 24px);
-      max-height: calc(100% - 80px);
-      overflow-y: auto;
-      background: var(--bg-panel);
-      border: 1px solid var(--border-brass);
-      border-radius: 8px;
-      box-shadow: 0 16px 40px rgba(0,0,0,0.75);
-      padding: 14px;
-      display: none;
-      flex-direction: column;
-      gap: 12px;
-    }
-    .modal-sheet.right-aligned {
-      left: auto;
-      right: 12px;
-    }
-    .modal-sheet.open {
-      display: flex;
-    }
-
-    .sheet-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      border-bottom: 1px solid var(--border-subtle);
-      padding-bottom: 8px;
-    }
-    .sheet-title {
-      font-size: 13px;
-      font-weight: 800;
-      letter-spacing: 0.04em;
-      color: var(--amber);
-      text-transform: uppercase;
-    }
-    .sheet-close {
-      background: none;
-      border: none;
-      color: var(--text-muted);
-      font-size: 12px;
-      font-weight: 700;
-      cursor: pointer;
-      padding: 2px 6px;
-    }
-
-    .section-label {
-      font-size: 11px;
-      font-weight: 700;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-      margin-bottom: 4px;
-    }
-
-    .search-row {
-      display: flex;
-      gap: 6px;
-    }
-    .text-input {
-      flex: 1 1 0%;
-      min-width: 0;
-      width: 0;
-      background: var(--bg-well);
-      border: 1px solid var(--border-subtle);
-      color: var(--text-cream);
-      font-family: inherit;
-      font-size: 13px;
-      padding: 8px 10px;
-      border-radius: 5px;
-      outline: none;
-    }
-    .text-input:focus {
-      border-color: var(--amber);
-    }
-
-    .loop-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 6px;
-    }
-
-    .preset-list {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-    .preset-card {
-      background: var(--bg-elevated);
-      border: 1px solid var(--border-subtle);
-      border-radius: 6px;
-      padding: 9px 11px;
-      cursor: pointer;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      transition: border-color 0.12s;
-    }
-    .preset-card:hover {
-      border-color: var(--amber);
-    }
-    .preset-name {
-      font-size: 13px;
-      font-weight: 700;
-      color: var(--text-cream);
-    }
-    .preset-meta {
-      font-size: 11px;
-      color: var(--text-muted);
-      margin-top: 2px;
-    }
-    .preset-score {
-      font-size: 15px;
-      font-weight: 800;
-      color: var(--amber);
-      background: var(--bg-well);
-      padding: 4px 8px;
-      border-radius: 4px;
-      border: 1px solid var(--border-subtle);
-    }
-
-    .slider-group {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
-    .slider-head {
-      display: flex;
-      justify-content: space-between;
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--text-cream);
-    }
-    input[type="range"] {
-      width: 100%;
-      accent-color: var(--amber);
-      cursor: pointer;
-    }
-
-    /* TOAST BANNER */
-    .toast-banner {
-      position: absolute;
-      bottom: 14px;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 25;
-      background: var(--bg-panel);
-      border: 1px solid var(--amber);
-      color: var(--text-cream);
-      padding: 8px 14px;
-      border-radius: 6px;
-      font-size: 12px;
-      font-weight: 700;
-      box-shadow: 0 10px 28px rgba(0,0,0,0.7);
-      display: none;
-      align-items: center;
-      gap: 8px;
-      white-space: nowrap;
-      max-width: calc(100vw - 24px);
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .toast-banner.show {
-      display: flex;
-    }
-
-    /* BOTTOM INSTRUMENT CLUSTER */
-    .bottom-cluster {
-      flex-shrink: 0;
-      width: 100%;
-      background: var(--bg-panel);
-      border-top: 2px solid var(--border-brass);
-      padding: 10px 16px calc(10px + var(--safe-bottom)) 16px;
-      display: grid;
-      grid-template-columns: 190px minmax(0, 1fr) 150px;
-      align-items: center;
-      gap: 16px;
-      z-index: 25;
-    }
-
-    /* Left: Speed + Target Corner Speed Module */
-    .speed-module {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      background: var(--bg-well);
-      border: 1px solid var(--border-subtle);
-      padding: 8px 12px;
-      border-radius: 6px;
-    }
-    .speed-primary {
-      display: flex;
-      flex-direction: column;
-      min-width: 72px;
-    }
-    .speed-val {
-      font-size: 34px;
-      font-weight: 900;
-      line-height: 1.0;
-      color: var(--text-cream);
-      letter-spacing: -0.02em;
-    }
-    .speed-unit {
-      font-size: 10px;
-      font-weight: 700;
-      color: var(--text-muted);
-      letter-spacing: 0.06em;
-      margin-top: 3px;
-    }
-    .target-divider {
-      width: 1px;
-      height: 36px;
-      background: var(--border-subtle);
-    }
-    .target-box {
-      display: flex;
-      flex-direction: column;
-    }
-    .target-lbl {
-      font-size: 10px;
-      font-weight: 700;
-      color: var(--text-muted);
-      text-transform: uppercase;
-    }
-    .target-val {
-      font-size: 18px;
-      font-weight: 800;
-      color: var(--amber);
-      margin-top: 2px;
-    }
-    .target-val.hot {
-      color: var(--vermilion);
-    }
-
-    /* Center: Transport + Scrubber + Clean Telemetry Strip */
-    .center-module {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      min-width: 0;
-    }
-
-    .telemetry-strip {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 8px;
-    }
-    .stat-cell {
-      background: var(--bg-well);
-      border: 1px solid var(--border-subtle);
-      border-radius: 5px;
-      padding: 5px 10px;
-      display: flex;
-      align-items: baseline;
-      justify-content: space-between;
-      gap: 6px;
-      min-width: 0;
-    }
-    .stat-lbl {
-      font-size: 10px;
-      font-weight: 700;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      white-space: nowrap;
-    }
-    .stat-num {
-      font-size: 14px;
-      font-weight: 800;
-      color: var(--text-cream);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .stat-num.accent {
-      color: var(--amber);
-    }
-
-    .transport-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      min-width: 0;
-    }
-
-    .scrubber-box {
-      position: relative;
-      flex: 1 1 auto;
-      height: 36px;
-      background: var(--bg-well);
-      border: 1px solid var(--border-subtle);
-      border-radius: 5px;
-      cursor: ew-resize;
-      overflow: hidden;
-      min-width: 80px;
-    }
-    #elevCanvas {
-      width: 100%;
-      height: 100%;
-      display: block;
-    }
-
-    /* Right: G-Ball & Banking Gauge */
-    .g-module {
-      display: flex;
-      align-items: center;
-      justify-content: flex-end;
-      gap: 10px;
-    }
-    .g-canvas-wrap {
-      width: 78px;
-      height: 78px;
-      background: var(--bg-well);
-      border: 1px solid var(--border-subtle);
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-    }
-
-    /* MAP PINS (Clean, compact badges that never block the road) */
-    .vehicle-puck {
-      width: 26px;
-      height: 26px;
-      pointer-events: none;
-      filter: drop-shadow(0 2px 5px rgba(0,0,0,0.65));
-    }
-
-    .hazard-dot {
-      font-size: 10px;
-      font-weight: 800;
-      padding: 2px 6px;
-      border-radius: 10px;
-      letter-spacing: 0.03em;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.55);
-      cursor: pointer;
-      white-space: nowrap;
-      transform: translateY(-14px);
-    }
-    .hazard-dot.flock {
-      background: var(--vermilion);
-      color: #fff;
-      border: 1px solid #ff947d;
-    }
-    .hazard-dot.police {
-      background: #1d4ed8;
-      color: #fff;
-      border: 1px solid #93c5fd;
-    }
-    .hazard-dot.pothole {
-      background: var(--amber);
-      color: #121110;
-      border: 1px solid #fde68a;
-    }
-    .hazard-dot.waypoint {
-      background: #141413;
-      color: var(--amber);
-      border: 1.5px solid var(--amber);
-    }
-
-    /* RESPONSIVE MOBILE / IPHONE PORTRAIT LAYOUT (Zero cut-offs guaranteed) */
-    @media (max-width: 900px) {
-      .top-hud {
-        flex-direction: column;
-        align-items: stretch;
-        gap: 6px;
-        top: calc(6px + var(--safe-top));
-        left: 8px;
-        right: 8px;
+    @media (min-width: 820px) {
+      :root { --dial: clamp(132px, 19dvh, 188px); }
+      .binnacle {
+        grid-template-columns: var(--dial) minmax(0, 1fr) minmax(0, 1fr) var(--dial);
+        grid-template-areas: "scrub scrub scrub scrub" "speed center switches g";
+        column-gap: 18px;
       }
-      .nav-bar-left {
-        width: 100%;
-        justify-content: space-between;
-        padding: 5px 8px;
-      }
-      .brand-mark { display: none; }
-      .route-select { font-size: 13px; flex: 1 1 0%; width: 0; min-width: 0; max-width: none; }
-      .nav-bar-right {
-        width: 100%;
-        justify-content: space-between;
-        padding: 4px 6px;
-        gap: 4px;
-      }
-      .nav-bar-right .btn {
-        flex: 1;
-        justify-content: center;
-        padding: 6px 4px;
-        font-size: 11px;
-      }
-      .codriver-pill {
-        width: 100%;
-        max-width: 100%;
-        min-width: 0;
-        flex: 0 0 auto;
-        padding: 6px 8px;
-        gap: 8px;
-      }
-      .turn-badge {
-        min-width: 38px;
-        height: 32px;
-        font-size: 13px;
-      }
-      .codriver-dist, .codriver-title { font-size: 13px; }
-      .voice-chip { padding: 4px 6px; font-size: 10px; }
-      .modal-sheet {
-        top: calc(144px + var(--safe-top));
-        left: 8px;
-        right: 8px;
-        width: auto;
-        max-width: none;
-        max-height: calc(100% - 156px);
-      }
-      .bottom-cluster {
-        grid-template-columns: minmax(0, 1fr);
-        gap: 6px;
-        padding: 8px 10px calc(8px + var(--safe-bottom)) 10px;
-      }
-      .g-module, .speed-module {
-        display: none;
-      }
-      .telemetry-strip {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 5px;
-      }
-      .stat-cell {
-        padding: 5px 8px;
-        overflow: hidden;
-      }
-      .stat-lbl { font-size: 9.5px; }
-      .stat-num { font-size: 12.5px; }
-      .transport-row .btn {
-        padding: 7px 10px;
-        font-size: 11.5px;
-      }
-      .scrubber-box {
-        height: 32px;
-      }
+      .switches { flex-wrap: wrap; align-content: center; justify-content: center; gap: 10px 14px; }
     }
+
+    /* ------------------------------ ROUTE BOOK ----------------------------- */
+    .sheet {
+      position: absolute; z-index: 10; top: 0; bottom: 0; right: 0; width: min(420px, 100%);
+      background: var(--paper); color: var(--paper-ink); border-left: 2px solid var(--bezel-edge);
+      transform: translateX(105%); transition: transform 0.18s ease-out;
+      display: flex; flex-direction: column; padding-top: var(--safe-top);
+    }
+    .sheet.open { transform: none; }
+    .sheet header { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; background: var(--bezel); color: var(--cream); }
+    .sheet header h2 { font-size: 14px; letter-spacing: 0.18em; text-transform: uppercase; }
+    .sheet .body { overflow-y: auto; padding: 14px 16px 24px; display: grid; gap: 18px; }
+    .sheet h3 { font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--paper-dim); margin-bottom: 8px; }
+    .sheet p.note { font-size: 12px; color: var(--paper-dim); line-height: 1.45; margin-top: 6px; }
+    .row { display: flex; gap: 6px; }
+    .field {
+      flex: 1; min-width: 0; height: 38px; padding: 0 10px; font: inherit; font-size: 15px;
+      background: transparent; color: var(--paper-ink); border: 1.5px solid var(--paper-ink); user-select: text;
+    }
+    .ink-btn { height: 38px; padding: 0 14px; border: 1.5px solid var(--paper-ink); font-size: 12px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; }
+    .ink-btn.solid { background: var(--paper-ink); color: var(--paper); }
+    .ink-btn.on { background: var(--route); border-color: var(--route); color: var(--paper); }
+    .drive-card { text-align: left; width: 100%; padding: 10px 12px; border: 1.5px solid var(--paper-ink); display: grid; gap: 3px; }
+    .drive-card.active { border-color: var(--route); box-shadow: inset 4px 0 0 var(--route); }
+    .drive-card b { font-size: 15px; }
+    .drive-card span { font-size: 12px; color: var(--paper-dim); }
+    .sources { font-size: 11px; color: var(--paper-dim); line-height: 1.5; }
   </style>
 </head>
 <body>
   <div id="app">
-    <div class="map-viewport">
+    <section class="stage">
       <div id="map"></div>
 
-      <!-- CLEAN TOP HUD -->
-      <div class="top-hud">
-        <!-- Route Selector & Loop Planner Button -->
-        <div class="nav-bar-left">
-          <span class="brand-mark">APEX NAV</span>
-          <select id="driveSelect" class="route-select" aria-label="Select Stage or Route"></select>
-          <button class="btn amber" id="openNavSheetBtn">Route / Loop</button>
+      <div class="note-strip" id="noteStrip">
+        <div class="note-code quiet" id="noteCode">--</div>
+        <div class="note-text">
+          <div class="note-call" id="noteCall">No route loaded</div>
+          <div class="note-sub" id="noteSub">Open the route book</div>
         </div>
+        <div class="note-dist" id="noteDist"></div>
+      </div>
 
-        <!-- Center Co-Driver Pace Note Pill -->
-        <div class="codriver-pill" id="codriverPill" title="Tap to repeat Co-Driver callout">
-          <div class="turn-badge" id="paceCode">L3</div>
-          <div class="codriver-copy">
-            <div class="codriver-top">
-              <span class="codriver-dist" id="paceDist">450 FT</span>
-              <span class="codriver-title" id="paceTitle">Left 3 · Uphill</span>
+      <div class="stage-plate">
+        <div class="plate" id="modePlate">REPLAY</div>
+        <button class="plate btn" id="recenterBtn">RECENTER</button>
+      </div>
+      <div class="toast" id="toast"></div>
+
+      <aside class="sheet" id="routeSheet" aria-label="Route book">
+        <header>
+          <h2>Route Book</h2>
+          <button class="key" id="closeSheetBtn">CLOSE</button>
+        </header>
+        <div class="body">
+          <section>
+            <h3>Destination</h3>
+            <div class="row">
+              <input class="field" id="destInput" placeholder="Town, road or address" autocomplete="off" />
+              <button class="ink-btn solid" id="destGoBtn">GO</button>
             </div>
-            <div class="codriver-sub" id="paceSub">Target 44 mph · Press Start to hear Co-Driver</div>
-          </div>
-          <button class="voice-chip on" id="voiceToggleBtn" title="Toggle Co-Driver Voice">VOICE ON</button>
-        </div>
-
-        <!-- Right Quick Toggles -->
-        <div class="nav-bar-right">
-          <button class="btn" id="openDnaSheetBtn">Road DNA</button>
-          <button class="btn active" id="radarToggleBtn" title="Toggle Flock LPR & Police Layer">DeFlock</button>
-          <button class="btn" id="themeToggleBtn" title="Toggle Daylight Survey Topo vs Night VDO">Night Map</button>
-          <button class="btn" id="fitRouteBtn" title="Fit Full Route">Overview</button>
-        </div>
-      </div>
-
-      <!-- SHEET 1: LOOP BUILDER & DESTINATION NAVIGATION -->
-      <div class="modal-sheet" id="navSheet">
-        <div class="sheet-header">
-          <span class="sheet-title">Navigate Destination or Build Fun Loop</span>
-          <button class="sheet-close" data-close="navSheet">✕ Close</button>
-        </div>
-
-        <div>
-          <div class="section-label">1. Route to Destination (Address or Map Tap)</div>
-          <div class="search-row">
-            <input type="text" id="destInput" class="text-input" placeholder="Enter destination (e.g. Cleves, OH or Oxford)..." />
-            <button class="btn primary" id="routeDestBtn">Route</button>
-          </div>
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px;">
-            <span style="font-size:11px; color:var(--text-muted);" id="mapTapHint">Or tap any road on the map to route there</span>
-            <button class="btn" id="tapModeBtn" style="padding:4px 8px; font-size:11px;">Tap Map to Route</button>
-          </div>
-        </div>
-
-        <div>
-          <div class="section-label">2. Generate B-Road Loop (From Current Position)</div>
-          <div class="loop-grid">
-            <button class="btn" data-loop-mi="15">15 mi Loop</button>
-            <button class="btn amber" data-loop-mi="28">28 mi Touge</button>
-            <button class="btn" data-loop-mi="45">45 mi Stage</button>
-          </div>
-        </div>
-
-        <div>
-          <div class="section-label">3. Verified High-DNA Loops & Recorded Drives</div>
-          <div class="preset-list">
-            <div class="preset-card" data-preset="loop_miami_whitewater">
-              <div>
-                <div class="preset-name">Dry Ridge · Miami Whitewater Loop</div>
-                <div class="preset-meta">24.6 km Closed Loop · Banked Sweepers · Low Flock</div>
-              </div>
-              <span class="preset-score">91</span>
+            <div class="row" style="margin-top:6px">
+              <button class="ink-btn" id="tapRouteBtn">TAP MAP TO ROUTE</button>
             </div>
-            <div class="preset-card" data-preset="loop_pebble_colerain">
-              <div>
-                <div class="preset-name">Pebble Ridge · Valley Crest Loop</div>
-                <div class="preset-meta">19.2 km Closed Loop · Technical Hairpins & Elevation</div>
-              </div>
-              <span class="preset-score">88</span>
+          </section>
+          <section>
+            <h3>Loop from here</h3>
+            <div class="row">
+              <button class="ink-btn" data-loop-mi="15">15 MI</button>
+              <button class="ink-btn" data-loop-mi="30">30 MI</button>
+              <button class="ink-btn" data-loop-mi="45">45 MI</button>
             </div>
-            <div class="preset-card" data-preset="drive_dry_ridge">
-              <div>
-                <div class="preset-name">Dry Ridge Rd (Recorded 100Hz IMU Log)</div>
-                <div class="preset-meta">57.3 km · 115 Stage Sectors · 2 Verified Passes</div>
-              </div>
-              <span class="preset-score">86</span>
-            </div>
-            <div class="preset-card" data-preset="drive_pebble_ridge">
-              <div>
-                <div class="preset-name">Pebble Ridge Ln (Recorded 100Hz IMU Log)</div>
-                <div class="preset-meta">28.5 km · 58 Stage Sectors · 2 Verified Passes</div>
-              </div>
-              <span class="preset-score">84</span>
-            </div>
-          </div>
+            <p class="note">Routed over real roads through three waypoints on a circle. Roads are not yet chosen for character; that needs crowdsourced Stage DNA.</p>
+          </section>
+          <section>
+            <h3>Profiled drives</h3>
+            <div id="driveList" style="display:grid;gap:6px"></div>
+            <p class="note">Recorded with a phone IMU. Corners, bumps, crests and dips are measured; nothing is placeholder.</p>
+          </section>
+          <section class="sources">
+            <h3>Sources</h3>
+            Map &copy; OpenStreetMap contributors via OpenFreeMap. Terrain: AWS Terrarium DEM. Routing: OSRM demo server.
+            Geocoding: Nominatim. ALPR cameras: OpenStreetMap <code>surveillance:type=ALPR</code> (DeFlock) via Overpass.
+          </section>
         </div>
+      </aside>
+    </section>
+
+    <section class="binnacle" id="binnacle">
+      <div class="scrub">
+        <button class="key" id="playBtn">RUN</button>
+        <button class="key" id="rateBtn">1X</button>
+        <div class="scrubber" id="scrubber"><canvas id="scrubCanvas"></canvas></div>
       </div>
 
-      <!-- SHEET 2: 4-AXIS ROAD DNA & GARAGE CAR SPEC -->
-      <div class="modal-sheet right-aligned" id="dnaSheet">
-        <div class="sheet-header">
-          <span class="sheet-title">4-Axis Road DNA & Garage Spec</span>
-          <button class="sheet-close" data-close="dnaSheet">✕ Close</button>
-        </div>
+      <div class="dial" id="speedDial"></div>
 
-        <div class="slider-group">
-          <div class="slider-head"><span>Technicality (Hairpins & Transitions)</span><span id="wTechVal">35%</span></div>
-          <input type="range" id="wTech" min="0" max="100" value="35" />
+      <div class="center">
+        <div class="odo">
+          <div class="drums" id="drums"></div>
+          <div class="odo-meta"><span class="engrave">TRIP MI</span><span class="engrave" id="odoTotal"></span></div>
         </div>
-        <div class="slider-group">
-          <div class="slider-head"><span>Flow (Rhythm & Positive Banking)</span><span id="wFlowVal">35%</span></div>
-          <input type="range" id="wFlow" min="0" max="100" value="35" />
-        </div>
-        <div class="slider-group">
-          <div class="slider-head"><span>Surface Confidence (Splitter Safety)</span><span id="wSurfVal">15%</span></div>
-          <input type="range" id="wSurf" min="0" max="100" value="15" />
-        </div>
-        <div class="slider-group">
-          <div class="slider-head"><span>Stealth (Low Flock LPR & Radar Heat)</span><span id="wClearVal">15%</span></div>
-          <input type="range" id="wClear" min="0" max="100" value="15" />
-        </div>
-
-        <div>
-          <div class="section-label">Suspension / Ground Clearance Profile</div>
-          <div class="loop-grid" id="specGroup">
-            <button class="btn active" data-spec="gt3">GT3 / Stiff</button>
-            <button class="btn" data-spec="sport">Street Sport</button>
-            <button class="btn" data-spec="rally">Rally / Daily</button>
-          </div>
-        </div>
-
-        <div style="display:flex; justify-content:space-between; align-items:center; padding-top:6px; border-top:1px solid var(--border-subtle);">
-          <span style="font-size:12px; color:var(--text-muted);">Octane Earned (3× Pioneer Rate): <strong style="color:var(--amber);" id="octaneLbl">1,420 OCT</strong></span>
-          <button class="btn" id="exportCsvBtn" style="padding:5px 9px; font-size:11px;">Export CSV</button>
-        </div>
+        <div class="dna" id="dna"></div>
       </div>
 
-      <!-- STATUS TOAST -->
-      <div class="toast-banner" id="toastBanner"></div>
-    </div>
-
-    <!-- BOTTOM INSTRUMENT CLUSTER -->
-    <div class="bottom-cluster">
-      <!-- Desktop Left: Speed & Target Corner Speed -->
-      <div class="speed-module">
-        <div class="speed-primary">
-          <div class="speed-val" id="speedReadout">47</div>
-          <div class="speed-unit">MPH · ACTUAL</div>
-        </div>
-        <div class="target-divider"></div>
-        <div class="target-box">
-          <div class="target-lbl">APEX TARGET</div>
-          <div class="target-val" id="targetReadout">52 MPH</div>
-        </div>
+      <div class="switches">
+        <button class="toggle" data-toggle="stage"><span class="lamp"></span><span class="lever"></span><span class="engrave">STAGE</span></button>
+        <button class="toggle" data-toggle="voice"><span class="lamp"></span><span class="lever"></span><span class="engrave">VOICE</span></button>
+        <button class="toggle" data-toggle="lpr"><span class="lamp"></span><span class="lever"></span><span class="engrave">LPR</span></button>
+        <button class="toggle" data-toggle="dna"><span class="lamp"></span><span class="lever"></span><span class="engrave">DNA</span></button>
+        <button class="toggle" data-toggle="night"><span class="lamp"></span><span class="lever"></span><span class="engrave">NIGHT</span></button>
+        <button class="key route-key" id="openSheetBtn">ROUTE</button>
       </div>
 
-      <!-- Center: Telemetry Strip + Transport & Elevation Scrubber -->
-      <div class="center-module">
-        <div class="telemetry-strip">
-          <div class="stat-cell">
-            <span class="stat-lbl">SPEED / TARGET</span>
-            <span class="stat-num" id="cellSpeed">47 / 52 mph</span>
-          </div>
-          <div class="stat-cell">
-            <span class="stat-lbl">TRIP / ELEV</span>
-            <span class="stat-num" id="cellTrip">12.4 km · 164m</span>
-          </div>
-          <div class="stat-cell">
-            <span class="stat-lbl">G-LOAD / BANK</span>
-            <span class="stat-num" id="cellForces">0.24G · +1.4°</span>
-          </div>
-          <div class="stat-cell">
-            <span class="stat-lbl">STAGE DNA</span>
-            <span class="stat-num accent" id="cellDna">86 / 100</span>
-          </div>
-        </div>
-
-        <div class="transport-row">
-          <button class="btn primary" id="playBtn">▶ Start Drive</button>
-          <button class="btn" id="rateBtn">1×</button>
-          <div class="scrubber-box" id="scrubberBox" title="Drag to scrub along route">
-            <canvas id="elevCanvas"></canvas>
-          </div>
-        </div>
-      </div>
-
-      <!-- Desktop Right: G-Ball & Banking Horizon -->
-      <div class="g-module">
-        <div class="g-canvas-wrap">
-          <canvas id="gCanvas" width="156" height="156" style="width:78px;height:78px;"></canvas>
-        </div>
-      </div>
-    </div>
+      <div class="dial" id="gDial"></div>
+    </section>
   </div>
 
   <script>
-    (() => {
-      const params = new URLSearchParams(window.location.search);
-      const drives = Array.isArray(window.APEX_DRIVES) ? window.APEX_DRIVES.slice() : [];
-
-      // =========================================================================
-      // 1. SYNTHESIZE CLOSED-LOOP PRESETS FROM REAL LOGGED ROAD GEOMETRY
-      // =========================================================================
-      function buildClosedLoopFromDrive(sourceDrive, loopId, loopName, sliceCount) {
-        if (!sourceDrive || !sourceDrive.rows || sourceDrive.rows.length < 100) return null;
-        const srcRows = sourceDrive.rows.slice(0, Math.min(sourceDrive.rows.length, sliceCount));
-        const first = srcRows[0];
-        const last = srcRows[srcRows.length - 1];
-
-        // Create smooth return connector arc back to start so it forms a true navigable loop
-        const returnSteps = 180;
-        const midLat = (last[1] + first[1]) * 0.5 + 0.018;
-        const midLon = (last[2] + first[2]) * 0.5 - 0.022;
-        const loopRows = srcRows.map(r => r.slice());
-        let dist = loopRows[loopRows.length - 1][0];
-
-        for (let i = 1; i <= returnSteps; i++) {
-          const t = i / returnSteps;
-          const u = 1 - t;
-          // Quadratic Bezier return leg through parallel backroad corridor
-          const lat = u * u * last[1] + 2 * u * t * midLat + t * t * first[1];
-          const lon = u * u * last[2] + 2 * u * t * midLon + t * t * first[2];
-          const prev = loopRows[loopRows.length - 1];
-          const stepM = Math.max(5.0, Math.hypot((lat - prev[1]) * 111132, (lon - prev[2]) * 85000));
-          dist += stepM;
-          const elev = last[3] * u + first[3] * t + Math.sin(t * Math.PI * 3) * 12;
-          const kSin = Math.sin(t * Math.PI * 6);
-          const secId = Math.floor(dist / 500);
-          const tgtMph = Math.round(46 + (1 - Math.abs(kSin)) * 22);
-          loopRows.push([
-            Math.round(dist * 10) / 10,
-            Number(lat.toFixed(6)),
-            Number(lon.toFixed(6)),
-            Number(elev.toFixed(1)),
-            Number((Math.cos(t * Math.PI * 4) * 3.2).toFixed(1)),
-            Number((tgtMph - 2).toFixed(1)),
-            Number((kSin * 0.12).toFixed(3)),
-            Number((kSin * 0.28).toFixed(3)),
-            Number((kSin * 2.1).toFixed(2)),
-            0.015,
-            0.032,
-            78.0,
-            secId,
-            tgtMph
-          ]);
-        }
-
-        return enrichDriveGeometry({
-          id: loopId,
-          name: loopName,
-          date: 'Closed Loop Stage',
-          device: 'ApexNav Loop Engine',
-          fields: sourceDrive.fields,
-          rows: loopRows
-        });
-      }
-
-      // Compute curvature, sectors, and clean corner pace notes for ANY route (OSRM or Loop)
-      function enrichDriveGeometry(d) {
-        if (!d || !d.rows || !d.rows.length) return d;
-        let minE = Infinity, maxE = -Infinity;
-        let minLon = Infinity, maxLon = -Infinity, minLat = Infinity, maxLat = -Infinity;
-        for (const r of d.rows) {
-          if (r[3] < minE) minE = r[3];
-          if (r[3] > maxE) maxE = r[3];
-          if (r[2] < minLon) minLon = r[2];
-          if (r[2] > maxLon) maxLon = r[2];
-          if (r[1] < minLat) minLat = r[1];
-          if (r[1] > maxLat) maxLat = r[1];
-        }
-        d.minElev = Number.isFinite(minE) ? minE : 100;
-        d.maxElev = Number.isFinite(maxE) ? maxE : 200;
-        d.totalM = d.rows[d.rows.length - 1][0] || 1;
-        d.bounds = [[minLon, minLat], [maxLon, maxLat]];
-
-        if (!d.sectors || !d.sectors.length) {
-          const sectors = [];
-          const events = [];
-          const bySec = new Map();
-          for (let i = 0; i < d.rows.length; i++) {
-            const r = d.rows[i];
-            const sid = Math.floor(r[0] / 500);
-            r[12] = sid;
-            if (!bySec.has(sid)) bySec.set(sid, []);
-            bySec.get(sid).push({ idx: i, row: r });
-          }
-
-          for (const [sid, items] of bySec.entries()) {
-            const mid = items[Math.floor(items.length / 2)].row;
-            sectors.push({
-              id: sid,
-              name: `Sector S${String(sid + 1).padStart(2, '0')}`,
-              start_m: items[0].row[0],
-              end_m: items[items.length - 1].row[0],
-              lat: mid[1],
-              lon: mid[2],
-              tech: 78 + (sid * 7) % 18,
-              flow: 82 + (sid * 5) % 15,
-              surf: 86,
-              clear: 90,
-              passes: 2,
-              elev_gain_m: 14
-            });
-
-            // Measure corner angle inside this 500m sector
-            if (items.length >= 6) {
-              let maxTurn = 0;
-              let bestRow = mid;
-              for (let j = 2; j < items.length - 2; j++) {
-                const p0 = items[j - 2].row, p1 = items[j].row, p2 = items[j + 2].row;
-                const b1 = bearingBetween(p0[2], p0[1], p1[2], p1[1]);
-                const b2 = bearingBetween(p1[2], p1[1], p2[2], p2[1]);
-                const delta = shortestAngleDelta(b1, b2);
-                if (Math.abs(delta) > Math.abs(maxTurn)) {
-                  maxTurn = delta;
-                  bestRow = p1;
-                }
-              }
-              const absDeg = Math.abs(maxTurn);
-              if (absDeg > 11) {
-                const dir = maxTurn > 0 ? 'Right' : 'Left';
-                const codeDir = maxTurn > 0 ? 'R' : 'L';
-                const sev = absDeg > 65 ? 1 : (absDeg > 42 ? 2 : (absDeg > 26 ? 3 : (absDeg > 17 ? 4 : 5)));
-                const tgt = Math.max(24, Math.min(62, Math.round(68 - absDeg * 0.65)));
-                bestRow[13] = tgt;
-                events.push({
-                  type: 'corner',
-                  code: `${codeDir}${sev}`,
-                  dist_m: bestRow[0],
-                  lat: bestRow[1],
-                  lon: bestRow[2],
-                  target_mph: tgt,
-                  title: `${dir} ${sev}`,
-                  detail: `Target ${tgt} mph`,
-                  speech: `${dir} ${sev}, target ${tgt}`
-                });
-              }
-            }
-          }
-          d.sectors = sectors;
-          d.events = events;
-        }
-        return d;
-      }
-
-      drives.forEach(enrichDriveGeometry);
-
-      // Add the two closed-loop stage presets
-      const loopMiami = buildClosedLoopFromDrive(drives[0], 'loop_miami_whitewater', 'Miami Whitewater Loop (Closed)', 2900);
-      const loopPebble = buildClosedLoopFromDrive(drives[1] || drives[0], 'loop_pebble_colerain', 'Pebble Ridge Touge Loop (Closed)', 2200);
-      if (loopMiami) drives.push(loopMiami);
-      if (loopPebble) drives.push(loopPebble);
-
-      // =========================================================================
-      // 2. APPLICATION STATE
-      // =========================================================================
-      let activeDrive = drives[0] || null;
-      let isPlaying = params.get('play') === '1';
-      let speedMult = 1;
-      let cursorM = 0;
-      let smoothBearing = 0;
-      let lastFrameTs = 0;
-      let rafId = null;
-
-      let voiceEnabled = true;
-      let radarArmed = true;
-      let nightMode = params.get('night') === '1' || params.get('theme') === 'night';
-      let tapToRouteMode = false;
-      let carSpec = 'gt3';
-      let weights = { tech: 35, flow: 35, surf: 15, clear: 15 };
-
-      let octanePoints = 1420;
-      let spokenEventIds = new Set();
-      let lastSpokenAtMs = 0;
-      let gTrail = [];
-      let mapLoaded = false;
-      let mapMarkers = [];
-
-      // Populate Select Menu
-      const driveSelect = document.getElementById('driveSelect');
-      function rebuildDriveSelect() {
-        driveSelect.innerHTML = '';
-        drives.forEach((d) => {
-          const opt = document.createElement('option');
-          opt.value = d.id;
-          const km = (d.totalM / 1000).toFixed(1);
-          opt.textContent = `${d.name} (${km} km)`;
-          if (activeDrive && d.id === activeDrive.id) opt.selected = true;
-          driveSelect.appendChild(opt);
-        });
-      }
-      if (params.get('drive')) {
-        const found = drives.find(d => d.id === params.get('drive'));
-        if (found) activeDrive = found;
-      }
-      rebuildDriveSelect();
-
-      if (nightMode) {
-        const tBtn = document.getElementById('themeToggleBtn');
-        tBtn.classList.add('active');
-        tBtn.textContent = 'Day Map';
-      }
-
-      const initialFrac = params.has('at') ? Math.max(0, Math.min(1, parseFloat(params.get('at')) || 0)) : 0.45;
-      if (activeDrive) cursorM = initialFrac * activeDrive.totalM;
-
-      function showToast(msg, durationMs = 3800) {
-        const t = document.getElementById('toastBanner');
-        t.textContent = msg;
-        t.classList.add('show');
-        clearTimeout(t._timer);
-        t._timer = setTimeout(() => t.classList.remove('show'), durationMs);
-      }
-
-      // =========================================================================
-      // 3. GEOMETRY & ROAD DNA SCORING
-      // =========================================================================
-      function bearingBetween(lon1, lat1, lon2, lat2) {
-        const dLon = (lon2 - lon1) * Math.PI / 180;
-        const p1 = lat1 * Math.PI / 180, p2 = lat2 * Math.PI / 180;
-        const y = Math.sin(dLon) * Math.cos(p2);
-        const x = Math.cos(p1) * Math.sin(p2) - Math.sin(p1) * Math.cos(p2) * Math.cos(dLon);
-        return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
-      }
-
-      function shortestAngleDelta(fromDeg, toDeg) {
-        return ((toDeg - fromDeg + 540) % 360) - 180;
-      }
-
-      function scoreSector(sec) {
-        if (!sec) return 82;
-        const specPenalty = carSpec === 'gt3' ? Math.max(0, (85 - sec.surf) * 0.4) : (carSpec === 'sport' ? Math.max(0, (80 - sec.surf) * 0.2) : 0);
-        const effSurf = Math.max(20, sec.surf - specPenalty);
-        const sumW = Math.max(1, weights.tech + weights.flow + weights.surf + weights.clear);
-        const wScore = (
-          weights.tech * sec.tech +
-          weights.flow * sec.flow +
-          weights.surf * effSurf +
-          weights.clear * sec.clear
-        ) / sumW;
-        return Math.round(Math.max(20, Math.min(99, wScore)));
-      }
-
-      function colorForScore(score) {
-        if (score >= 76) return '#d94625';
-        if (score >= 64) return '#e89b3c';
-        if (score >= 52) return '#5b8247';
-        return '#787165';
-      }
-
-      function buildStageGeoJSON(d) {
-        if (!d || !d.rows || !d.rows.length) return { type: 'FeatureCollection', features: [] };
-        const secMap = new Map();
-        (d.sectors || []).forEach(s => secMap.set(s.id, s));
-
-        const features = [];
-        let curSid = d.rows[0][12];
-        let coords = [[d.rows[0][2], d.rows[0][1]]];
-
-        for (let i = 1; i < d.rows.length; i++) {
-          const r = d.rows[i];
-          const prev = d.rows[i - 1];
-          const jump = Math.hypot(r[2] - prev[2], r[1] - prev[1]) > 0.006;
-          if (r[12] !== curSid || jump) {
-            if (coords.length > 1) {
-              const sc = scoreSector(secMap.get(curSid));
-              features.push({
-                type: 'Feature',
-                properties: { sectorId: curSid, score: sc, color: colorForScore(sc) },
-                geometry: { type: 'LineString', coordinates: coords }
-              });
-            }
-            curSid = r[12];
-            coords = [[r[2], r[1]]];
-          } else {
-            coords.push([r[2], r[1]]);
-          }
-        }
-        if (coords.length > 1) {
-          const sc = scoreSector(secMap.get(curSid));
-          features.push({
-            type: 'Feature',
-            properties: { sectorId: curSid, score: sc, color: colorForScore(sc) },
-            geometry: { type: 'LineString', coordinates: coords }
-          });
-        }
-        return { type: 'FeatureCollection', features };
-      }
-
-      function buildLookAheadBrakingGeoJSON(d, curDistM, currentSpeedMph) {
-        if (!d || !d.rows || !d.rows.length) return { type: 'FeatureCollection', features: [] };
-        // Binary search / index lookup for curDistM
-        let i0 = Math.min(d.rows.length - 2, Math.max(0, Math.floor(curDistM / 5.0)));
-        while (i0 < d.rows.length - 2 && d.rows[i0 + 1][0] < curDistM) i0++;
-        while (i0 > 0 && d.rows[i0][0] > curDistM) i0--;
-
-        const features = [];
-        for (let i = i0; i < d.rows.length - 1; i++) {
-          const r0 = d.rows[i];
-          const r1 = d.rows[i + 1];
-          if (r0[0] - curDistM > 220) break;
-          const targetMph = r0[13] || 55;
-          const overspeed = currentSpeedMph - targetMph;
-          let col = '#f2ece1';
-          if (overspeed > 7) col = '#ff2a00';
-          else if (overspeed > 1) col = '#e89b3c';
-          features.push({
-            type: 'Feature',
-            properties: { color: col },
-            geometry: { type: 'LineString', coordinates: [[r0[2], r0[1]], [r1[2], r1[1]]] }
-          });
-        }
-        return { type: 'FeatureCollection', features };
-      }
-
-      function sampleAtDistance(d, distM) {
-        const rows = d.rows;
-        if (!rows || !rows.length) return null;
-        const clamped = Math.max(0, Math.min(d.totalM, distM));
-        let idx = Math.min(rows.length - 2, Math.max(0, Math.floor(clamped / 5.0)));
-        while (idx < rows.length - 2 && rows[idx + 1][0] < clamped) idx++;
-        while (idx > 0 && rows[idx][0] > clamped) idx--;
-
-        const r0 = rows[idx];
-        const r1 = rows[Math.min(rows.length - 1, idx + 1)];
-        const span = Math.max(0.1, r1[0] - r0[0]);
-        const t = Math.max(0, Math.min(1, (clamped - r0[0]) / span));
-
-        const lookIdx = Math.min(rows.length - 1, idx + 6);
-        const rLook = rows[lookIdx];
-        const lon = r0[2] + (r1[2] - r0[2]) * t;
-        const lat = r0[1] + (r1[1] - r0[1]) * t;
-        const brg = bearingBetween(lon, lat, rLook[2], rLook[1]);
-
-        return {
-          idx,
-          distM: clamped,
-          lat,
-          lon,
-          elev: r0[3] + (r1[3] - r0[3]) * t,
-          grade: r0[4] + (r1[4] - r0[4]) * t,
-          speedMph: r0[5] + (r1[5] - r0[5]) * t,
-          lonG: r0[6] + (r1[6] - r0[6]) * t,
-          latG: r0[7] + (r1[7] - r0[7]) * t,
-          camber: r0[8] + (r1[8] - r0[8]) * t,
-          sectorId: r0[12],
-          targetMph: r0[13] || 55,
-          bearing: brg
-        };
-      }
-
-      // =========================================================================
-      // 4. MAPLIBRE INITIALIZATION & TOPOGRAPHIC CARTOGRAPHY
-      // =========================================================================
-      const initS = activeDrive ? sampleAtDistance(activeDrive, cursorM) : { lon: -84.6146, lat: 39.2586, bearing: 0 };
-      smoothBearing = initS.bearing;
-
-      const map = new maplibregl.Map({
-        container: 'map',
-        style: 'https://tiles.openfreemap.org/styles/liberty',
-        center: [initS.lon, initS.lat],
-        zoom: 15.1,
-        pitch: 50,
-        bearing: initS.bearing,
-        antialias: true,
-        maxPitch: 68
-      });
-
-      const puckEl = document.createElement('div');
-      puckEl.className = 'vehicle-puck';
-      puckEl.innerHTML = `
-        <svg width="26" height="26" viewBox="0 0 28 28" fill="none">
-          <circle cx="14" cy="14" r="12" fill="#141413" stroke="#f2ece1" stroke-width="2.5"/>
-          <path d="M14 6L20 19L14 15.8L8 19L14 6Z" fill="#d94625"/>
-        </svg>
-      `;
-      const vehicleMarker = new maplibregl.Marker({ element: puckEl, rotationAlignment: 'map', pitchAlignment: 'map' })
-        .setLngLat([initS.lon, initS.lat])
-        .setRotation(initS.bearing)
-        .addTo(map);
-
-      function applySurveyCartography() {
-        if (!mapLoaded) return;
-        const style = map.getStyle();
-        if (!style || !style.layers) return;
-
-        for (const lyr of style.layers) {
-          const id = lyr.id.toLowerCase();
-          if (id.includes('building') || id.includes('poi') || id.includes('housenumber')) {
-            try { map.setLayoutProperty(lyr.id, 'visibility', 'none'); } catch (_) {}
-            continue;
-          }
-          try {
-            if (lyr.type === 'background') {
-              map.setPaintProperty(lyr.id, 'background-color', nightMode ? '#121110' : '#ede5d4');
-            } else if (lyr.type === 'fill') {
-              if (id.includes('water')) {
-                map.setPaintProperty(lyr.id, 'fill-color', nightMode ? '#0a0d12' : '#b8c5c2');
-              } else if (id.includes('park') || id.includes('wood') || id.includes('forest') || id.includes('landcover') || id.includes('landuse')) {
-                map.setPaintProperty(lyr.id, 'fill-color', nightMode ? '#171815' : '#dfd7c4');
-                map.setPaintProperty(lyr.id, 'fill-opacity', 0.65);
-              }
-            } else if (lyr.type === 'line' && !id.startsWith('apex-')) {
-              if (id.includes('water')) {
-                map.setPaintProperty(lyr.id, 'line-color', nightMode ? '#141c24' : '#9eb0ad');
-              } else if (id.includes('boundary')) {
-                map.setPaintProperty(lyr.id, 'line-color', nightMode ? '#2b2824' : '#c4baa6');
-              } else if (id.includes('road') || id.includes('transportation') || id.includes('highway') || id.includes('bridge')) {
-                if (id.includes('casing')) {
-                  map.setPaintProperty(lyr.id, 'line-color', nightMode ? '#080807' : '#aba08c');
-                } else {
-                  map.setPaintProperty(lyr.id, 'line-color', nightMode ? '#2b2823' : '#fbf8f1');
-                }
-              }
-            } else if (lyr.type === 'symbol') {
-              map.setPaintProperty(lyr.id, 'text-color', nightMode ? '#c7bda8' : '#3d3830');
-              map.setPaintProperty(lyr.id, 'text-halo-color', nightMode ? '#121110' : '#f4efe4');
-              map.setPaintProperty(lyr.id, 'text-halo-width', 1.5);
-            }
-          } catch (_) {}
-        }
-
-        if (map.getLayer('apex-hillshade')) {
-          map.setPaintProperty('apex-hillshade', 'hillshade-shadow-color', nightMode ? '#040403' : '#786e5d');
-          map.setPaintProperty('apex-hillshade', 'hillshade-highlight-color', nightMode ? '#2b261f' : '#fdfbf7');
-          map.setPaintProperty('apex-hillshade', 'hillshade-exaggeration', nightMode ? 0.35 : 0.42);
-        }
-      }
-
-      function rebuildMapPins() {
-        mapMarkers.forEach(m => m.marker.remove());
-        mapMarkers = [];
-        if (!activeDrive || !activeDrive.events) return;
-
-        for (const ev of activeDrive.events) {
-          if (ev.type === 'corner') continue;
-          if ((ev.type === 'flock' || ev.type === 'police') && !radarArmed) continue;
-
-          const el = document.createElement('div');
-          el.className = `hazard-dot ${ev.type}`;
-          el.textContent = ev.type === 'flock' ? 'LPR CAM' : (ev.type === 'police' ? 'RADAR' : 'CREST');
-          el.addEventListener('click', (e) => {
-            e.stopPropagation();
-            cursorM = Math.max(0, ev.dist_m - 100);
-            renderAtCursor(true);
-            speakCoDriver(ev.speech, true);
-          });
-          const m = new maplibregl.Marker({ element: el }).setLngLat([ev.lon, ev.lat]).addTo(map);
-          mapMarkers.push({ marker: m, el, distM: ev.dist_m });
-        }
-        updatePinVisibility();
-      }
-
-      function updatePinVisibility() {
-        for (const item of mapMarkers) {
-          const delta = item.distM - cursorM;
-          item.el.style.display = (delta >= -120 && delta <= 1200) ? 'block' : 'none';
-        }
-      }
-
-      map.on('load', () => {
-        mapLoaded = true;
-        map.addSource('apex-dem', {
-          type: 'raster-dem',
-          tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'],
-          tileSize: 256,
-          encoding: 'terrarium',
-          maxzoom: 15
-        });
-        map.addLayer({
-          id: 'apex-hillshade',
-          type: 'hillshade',
-          source: 'apex-dem',
-          paint: {
-            'hillshade-exaggeration': 0.42,
-            'hillshade-shadow-color': '#786e5d',
-            'hillshade-highlight-color': '#fdfbf7',
-            'hillshade-accent-color': '#b0a48e'
-          }
-        });
-        map.setTerrain({ source: 'apex-dem', exaggeration: 1.22 });
-
-        map.addSource('apex-stage', {
-          type: 'geojson',
-          data: buildStageGeoJSON(activeDrive)
-        });
-        map.addLayer({
-          id: 'apex-stage-casing',
-          type: 'line',
-          source: 'apex-stage',
-          layout: { 'line-cap': 'round', 'line-join': 'round' },
-          paint: {
-            'line-color': '#141413',
-            'line-width': ['interpolate', ['linear'], ['zoom'], 10, 6.5, 16, 11.5]
-          }
-        });
-        map.addLayer({
-          id: 'apex-stage-line',
-          type: 'line',
-          source: 'apex-stage',
-          layout: { 'line-cap': 'round', 'line-join': 'round' },
-          paint: {
-            'line-color': ['get', 'color'],
-            'line-width': ['interpolate', ['linear'], ['zoom'], 10, 4.0, 16, 7.0]
-          }
-        });
-
-        map.addSource('apex-brake-line', {
-          type: 'geojson',
-          data: { type: 'FeatureCollection', features: [] }
-        });
-        map.addLayer({
-          id: 'apex-brake-layer',
-          type: 'line',
-          source: 'apex-brake-line',
-          layout: { 'line-cap': 'round', 'line-join': 'round' },
-          paint: {
-            'line-color': ['get', 'color'],
-            'line-width': ['interpolate', ['linear'], ['zoom'], 11, 4.5, 16, 8.5]
-          }
-        });
-
-        // Tap anywhere on map to route there when tapToRouteMode is active
-        map.on('click', (e) => {
-          if (!tapToRouteMode) return;
-          tapToRouteMode = false;
-          document.getElementById('tapModeBtn').classList.remove('active');
-          routeToCoordinates(e.lngLat.lat, e.lngLat.lng, `Pinned Road (${e.lngLat.lat.toFixed(3)}, ${e.lngLat.lng.toFixed(3)})`);
-        });
-
-        applySurveyCartography();
-        rebuildMapPins();
-        renderAtCursor(true);
-      });
-
-      // =========================================================================
-      // 5. REAL OSRM ROUTING & DYNAMIC B-ROAD LOOP GENERATOR
-      // =========================================================================
-      async function buildOsrmRoute(waypoints, routeName, routeId) {
-        showToast(`Calculating route & extracting corner pace notes for ${routeName}...`);
-        const coordStr = waypoints.map(w => `${w[1].toFixed(6)},${w[0].toFixed(6)}`).join(';');
-        const url = `https://router.project-osrm.org/route/v1/driving/${coordStr}?overview=full&geometries=geojson&steps=true`;
-
-        try {
-          const resp = await fetch(url);
-          const data = await resp.json();
-          if (!data || !data.routes || !data.routes[0]) throw new Error('No route found');
-          const coords = data.routes[0].geometry.coordinates;
-
-          // Discretize OSRM polyline into 5m-20m telemetry rows with synthesized elevation & curvature
-          const rows = [];
-          let dist = 0;
-          for (let i = 0; i < coords.length; i++) {
-            const lon = coords[i][0], lat = coords[i][1];
-            if (i > 0) {
-              const prev = coords[i - 1];
-              dist += Math.max(2.0, Math.hypot((lat - prev[1]) * 111132, (lon - prev[0]) * 85000));
-            }
-            // Calculate local turn angle to set realistic target corner speed & lateral G
-            let turnDeg = 0;
-            if (i >= 2 && i < coords.length - 2) {
-              const b1 = bearingBetween(coords[i - 2][0], coords[i - 2][1], lon, lat);
-              const b2 = bearingBetween(lon, lat, coords[i + 2][0], coords[i + 2][1]);
-              turnDeg = shortestAngleDelta(b1, b2);
-            }
-            const absTurn = Math.abs(turnDeg);
-            const tgtMph = Math.max(22, Math.min(62, Math.round(64 - absTurn * 0.7)));
-            const spdMph = Math.max(24, tgtMph - 2);
-            const latG = Number(Math.max(-0.55, Math.min(0.55, turnDeg * 0.012)).toFixed(3));
-            const elev = Number((145 + Math.sin(dist / 380) * 28).toFixed(1));
-            const grade = Number((Math.cos(dist / 380) * 4.2).toFixed(1));
-            rows.push([
-              Number(dist.toFixed(1)),
-              Number(lat.toFixed(6)),
-              Number(lon.toFixed(6)),
-              elev,
-              grade,
-              spdMph,
-              0.04,
-              latG,
-              Number((latG * 4.5).toFixed(2)),
-              0.01,
-              0.028,
-              84.0,
-              Math.floor(dist / 500),
-              tgtMph
-            ]);
-          }
-
-          const newDrive = enrichDriveGeometry({
-            id: routeId,
-            name: routeName,
-            date: 'Live Nav Route',
-            device: 'ApexNav Router',
-            fields: drives[0].fields,
-            rows
-          });
-
-          const existingIdx = drives.findIndex(d => d.id === routeId);
-          if (existingIdx >= 0) drives[existingIdx] = newDrive;
-          else drives.unshift(newDrive);
-
-          activateDrive(newDrive);
-          document.getElementById('navSheet').classList.remove('open');
-          showToast(`Route ready: ${routeName} (${(newDrive.totalM / 1000).toFixed(1)} km · ${newDrive.events.length} pace notes)`);
-          speakCoDriver(`Route calculated. ${routeName}. ${Math.round(newDrive.totalM / 1000)} kilometers. Ready to navigate.`, true);
-        } catch (err) {
-          // Offline fallback: activate one of our verified closed loops
-          const fallback = drives.find(d => d.id === 'loop_miami_whitewater') || drives[0];
-          activateDrive(fallback);
-          document.getElementById('navSheet').classList.remove('open');
-          showToast(`Loaded verified stage loop: ${fallback.name}`);
-        }
-      }
-
-      async function routeToDestinationQuery(query) {
-        if (!query || !query.trim()) return;
-        showToast(`Searching "${query}"...`);
-        try {
-          const cur = sampleAtDistance(activeDrive, cursorM) || { lat: 39.2586, lon: -84.6146 };
-          const nomUrl = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query)}`;
-          const res = await fetch(nomUrl);
-          const items = await res.json();
-          if (!items || !items.length) {
-            showToast(`Could not find "${query}". Try a city, road, or tap the map.`);
-            return;
-          }
-          const destLat = parseFloat(items[0].lat);
-          const destLon = parseFloat(items[0].lon);
-          const shortName = items[0].display_name.split(',')[0];
-          await routeToCoordinates(destLat, destLon, `To ${shortName}`);
-        } catch (_) {
-          showToast('Search unavailable offline. Tap any road on the map to route.');
-        }
-      }
-
-      async function routeToCoordinates(destLat, destLon, label) {
-        const cur = sampleAtDistance(activeDrive, cursorM) || { lat: 39.2586, lon: -84.6146 };
-        await buildOsrmRoute([[cur.lat, cur.lon], [destLat, destLon]], label, 'custom_nav_route');
-      }
-
-      async function generateFunLoop(miles) {
-        const cur = sampleAtDistance(activeDrive, cursorM) || { lat: 39.2586, lon: -84.6146 };
-        // Radius in degrees to produce roughly `miles` total perimeter along winding backroads
-        const radiusDeg = Math.max(0.025, Math.min(0.11, (miles / 69.0) * 0.24));
-        const p1 = [cur.lat + radiusDeg * 0.85, cur.lon - radiusDeg * 0.65];
-        const p2 = [cur.lat + radiusDeg * 1.15, cur.lon + radiusDeg * 0.55];
-        const p3 = [cur.lat + radiusDeg * 0.15, cur.lon + radiusDeg * 0.95];
-        await buildOsrmRoute(
-          [[cur.lat, cur.lon], p1, p2, p3, [cur.lat, cur.lon]],
-          `${miles} mi Backroad Loop`,
-          `loop_${miles}mi`
-        );
-      }
-
-      function activateDrive(d) {
-        if (!d) return;
-        activeDrive = d;
-        cursorM = 0;
-        spokenEventIds.clear();
-        gTrail = [];
-        rebuildDriveSelect();
-        if (mapLoaded) {
-          const src = map.getSource('apex-stage');
-          if (src) src.setData(buildStageGeoJSON(activeDrive));
-          rebuildMapPins();
-        }
-        renderAtCursor(true);
-      }
-
-      // =========================================================================
-      // 6. CLEAN, GLITCH-FREE CO-DRIVER VOICE ENGINE
-      // =========================================================================
-      function speakCoDriver(phrase, force = false) {
-        if (!phrase || (!voiceEnabled && !force)) return;
-        const now = performance.now();
-        // Enforce a clean 7.0s spacing between automatic callouts so utterances NEVER cut each other off!
-        if (!force && now - lastSpokenAtMs < 7000) return;
-
-        // 1. Native iOS Thin Shell Bridge (AVSpeechSynthesizer)
-        if (window.webkit?.messageHandlers?.apex) {
-          lastSpokenAtMs = now;
-          try {
-            window.webkit.messageHandlers.apex.postMessage({ cmd: 'speak', text: phrase, force: Boolean(force) });
-            return;
-          } catch (_) {}
-        }
-
-        // 2. Browser Web Speech API (Never call .cancel() unless user explicitly forced it)
-        if ('speechSynthesis' in window) {
-          try {
-            if (window.speechSynthesis.speaking) {
-              if (force) window.speechSynthesis.cancel();
-              else return;
-            }
-            lastSpokenAtMs = now;
-            const u = new SpeechSynthesisUtterance(phrase);
-            const voices = window.speechSynthesis.getVoices() || [];
-            const gbVoice = voices.find(v => v.lang && (v.lang.includes('en-GB') || v.name.includes('UK') || v.name.includes('Daniel') || v.name.includes('Arthur')));
-            if (gbVoice) u.voice = gbVoice;
-            u.rate = 1.02;
-            u.pitch = 0.98;
-            window.speechSynthesis.speak(u);
-          } catch (_) {}
-        }
-      }
-
-      function updateLookAheadCoDriver(d, curDistM) {
-        if (!d || !d.events) return;
-        let nextEv = null;
-        for (const ev of d.events) {
-          const deltaM = ev.dist_m - curDistM;
-          if (deltaM >= -8 && deltaM <= 380) {
-            if ((ev.type === 'flock' || ev.type === 'police') && !radarArmed) continue;
-            nextEv = { ev, deltaM };
-            break;
-          }
-        }
-
-        const codeEl = document.getElementById('paceCode');
-        const distEl = document.getElementById('paceDist');
-        const titleEl = document.getElementById('paceTitle');
-        const subEl = document.getElementById('paceSub');
-
-        if (!nextEv) {
-          codeEl.textContent = 'GO';
-          codeEl.className = 'turn-badge';
-          distEl.textContent = 'CLEAR';
-          titleEl.textContent = 'Stage Clear Ahead';
-          subEl.textContent = 'Maintain pace · Tap Route/Loop to build a new route';
-          return;
-        }
-
-        const { ev, deltaM } = nextEv;
-        const feet = Math.max(0, Math.round((deltaM * 3.28084) / 25) * 25);
-        const isHazard = ev.type !== 'corner';
-        codeEl.textContent = ev.code;
-        codeEl.className = isHazard ? 'turn-badge hazard' : 'turn-badge';
-        distEl.textContent = feet > 0 ? `${feet} FT` : 'NOW';
-        titleEl.textContent = ev.title;
-        subEl.textContent = ev.detail;
-
-        // Speak once when approaching between 80m and 230m ahead
-        const evKey = `${d.id}_${ev.dist_m}`;
-        if (isPlaying && deltaM >= 60 && deltaM <= 230 && !spokenEventIds.has(evKey)) {
-          spokenEventIds.add(evKey);
-          speakCoDriver(`${ev.speech}, in ${feet} feet.`, false);
-        }
-      }
-
-      // =========================================================================
-      // 7. INSTRUMENT CANVASES (G-BALL & ELEVATION SCRUBBER)
-      // =========================================================================
-      const gCanvas = document.getElementById('gCanvas');
-      const gCtx = gCanvas.getContext('2d');
-      function drawGGauge(latG, lonG, camberDeg) {
-        const w = gCanvas.width, h = gCanvas.height;
-        const cx = w / 2, cy = h / 2, r = w * 0.42;
-        gCtx.clearRect(0, 0, w, h);
-
-        // Banking horizon line
-        const bankRad = (camberDeg * Math.PI) / 180;
-        gCtx.save();
-        gCtx.translate(cx, cy);
-        gCtx.rotate(bankRad);
-        gCtx.beginPath();
-        gCtx.moveTo(-r * 0.85, 0);
-        gCtx.lineTo(r * 0.85, 0);
-        gCtx.strokeStyle = 'rgba(232, 155, 60, 0.45)';
-        gCtx.lineWidth = 2;
-        gCtx.stroke();
-        gCtx.restore();
-
-        // Rings
-        [0.5, 1.0].forEach((f, idx) => {
-          gCtx.beginPath();
-          gCtx.arc(cx, cy, r * f, 0, Math.PI * 2);
-          gCtx.strokeStyle = idx === 1 ? '#5c5549' : '#2e2b26';
-          gCtx.lineWidth = 1.5;
-          gCtx.stroke();
-        });
-
-        // G-Ball
-        const bx = cx + Math.max(-0.95, Math.min(0.95, latG / 0.6)) * r;
-        const by = cy - Math.max(-0.95, Math.min(0.95, lonG / 0.6)) * r;
-        gCtx.beginPath();
-        gCtx.arc(bx, by, 7, 0, Math.PI * 2);
-        gCtx.fillStyle = Math.hypot(latG, lonG) > 0.32 ? '#d94625' : '#e89b3c';
-        gCtx.fill();
-        gCtx.strokeStyle = '#f2ece1';
-        gCtx.lineWidth = 2;
-        gCtx.stroke();
-      }
-
-      const elevCanvas = document.getElementById('elevCanvas');
-      const eCtx = elevCanvas.getContext('2d');
-      function drawElevationProfile() {
-        if (!activeDrive || !activeDrive.rows || !activeDrive.rows.length) return;
-        const rect = elevCanvas.parentElement.getBoundingClientRect();
-        const dpr = window.devicePixelRatio || 1;
-        const w = Math.max(80, Math.floor(rect.width * dpr));
-        const h = Math.max(24, Math.floor(rect.height * dpr));
-        if (elevCanvas.width !== w || elevCanvas.height !== h) {
-          elevCanvas.width = w;
-          elevCanvas.height = h;
-        }
-        eCtx.clearRect(0, 0, w, h);
-
-        const rows = activeDrive.rows;
-        const minE = activeDrive.minElev - 4;
-        const maxE = activeDrive.maxElev + 6;
-        const spanE = Math.max(10, maxE - minE);
-        const pad = 4 * dpr;
-        const plotH = h - pad * 2;
-        const step = Math.max(1, Math.floor(rows.length / 200));
-        const playX = (cursorM / Math.max(1, activeDrive.totalM)) * w;
-
-        function trace(fill) {
-          eCtx.beginPath();
-          if (fill) eCtx.moveTo(0, h);
-          let first = true;
-          for (let i = 0; i < rows.length; i += step) {
-            const x = (rows[i][0] / activeDrive.totalM) * w;
-            const y = pad + (1 - (rows[i][3] - minE) / spanE) * plotH;
-            if (first && !fill) { eCtx.moveTo(x, y); first = false; }
-            else eCtx.lineTo(x, y);
-          }
-          if (fill) { eCtx.lineTo(w, h); eCtx.closePath(); }
-        }
-
-        trace(true);
-        eCtx.fillStyle = 'rgba(163, 154, 140, 0.14)';
-        eCtx.fill();
-        trace(false);
-        eCtx.strokeStyle = '#6e675c';
-        eCtx.lineWidth = 1.4 * dpr;
-        eCtx.stroke();
-
-        eCtx.save();
-        eCtx.beginPath();
-        eCtx.rect(0, 0, playX, h);
-        eCtx.clip();
-        trace(true);
-        eCtx.fillStyle = 'rgba(232, 155, 60, 0.28)';
-        eCtx.fill();
-        trace(false);
-        eCtx.strokeStyle = '#e89b3c';
-        eCtx.lineWidth = 2.0 * dpr;
-        eCtx.stroke();
-        eCtx.restore();
-
-        eCtx.beginPath();
-        eCtx.moveTo(playX, 0);
-        eCtx.lineTo(playX, h);
-        eCtx.strokeStyle = '#d94625';
-        eCtx.lineWidth = 2.2 * dpr;
-        eCtx.stroke();
-      }
-
-      // =========================================================================
-      // 8. RENDER FRAME AT CURSOR
-      // =========================================================================
-      function renderAtCursor(snapCamera = false) {
-        if (!activeDrive) return;
-        const s = sampleAtDistance(activeDrive, cursorM);
-        if (!s) return;
-
-        if (snapCamera) {
-          smoothBearing = s.bearing;
-        } else {
-          smoothBearing = (smoothBearing + shortestAngleDelta(smoothBearing, s.bearing) * 0.14 + 360) % 360;
-        }
-
-        vehicleMarker.setLngLat([s.lon, s.lat]).setRotation(smoothBearing);
-        if (snapCamera || isPlaying) {
-          map.jumpTo({ center: [s.lon, s.lat], bearing: smoothBearing, pitch: 50 });
-        }
-
-        if (mapLoaded) {
-          const brakeSrc = map.getSource('apex-brake-line');
-          if (brakeSrc) {
-            brakeSrc.setData(buildLookAheadBrakingGeoJSON(activeDrive, cursorM, s.speedMph));
-          }
-        }
-
-        const spd = Math.round(s.speedMph);
-        const tgt = Math.round(s.targetMph);
-        document.getElementById('speedReadout').textContent = String(spd);
-        const tgtEl = document.getElementById('targetReadout');
-        tgtEl.textContent = `${tgt} MPH`;
-        tgtEl.classList.toggle('hot', spd - tgt > 6);
-
-        document.getElementById('cellSpeed').textContent = `${spd} / ${tgt} mph`;
-        document.getElementById('cellTrip').textContent = `${(s.distM / 1000).toFixed(1)} km · ${Math.round(s.elev)}m`;
-        document.getElementById('cellForces').textContent = `${Math.abs(s.latG).toFixed(2)}G · ${s.camber >= 0 ? '+' : ''}${s.camber.toFixed(1)}°`;
-
-        const sec = (activeDrive.sectors || []).find(sec => sec.id === s.sectorId);
-        const sc = scoreSector(sec);
-        document.getElementById('cellDna').textContent = `${sc} / 100`;
-
-        drawGGauge(s.latG, s.lonG, s.camber);
-        drawElevationProfile();
-        updateLookAheadCoDriver(activeDrive, cursorM);
-        updatePinVisibility();
-      }
-
-      // =========================================================================
-      // 9. UI EVENT WIRING
-      // =========================================================================
-      function setPlaying(next) {
-        isPlaying = next;
-        const btn = document.getElementById('playBtn');
-        btn.textContent = isPlaying ? '⏸ Pause' : '▶ Start Drive';
-        if (isPlaying && !rafId) {
-          lastFrameTs = performance.now();
-          rafId = requestAnimationFrame(tick);
-        } else if (!isPlaying && rafId) {
-          cancelAnimationFrame(rafId);
-          rafId = null;
-        }
-      }
-
-      document.getElementById('playBtn').addEventListener('click', () => {
-        setPlaying(!isPlaying);
-        if (isPlaying) {
-          spokenEventIds.clear();
-          renderAtCursor(true);
-          const text = document.getElementById('paceTitle').textContent;
-          speakCoDriver(`${activeDrive.name}. ${text}.`, true);
-        }
-      });
-
-      document.getElementById('rateBtn').addEventListener('click', () => {
-        const rates = [1, 2, 4];
-        speedMult = rates[(rates.indexOf(speedMult) + 1) % rates.length];
-        document.getElementById('rateBtn').textContent = `${speedMult}×`;
-      });
-
-      document.getElementById('codriverPill').addEventListener('click', (e) => {
-        if (e.target.closest('#voiceToggleBtn')) return;
-        const t = document.getElementById('paceTitle').textContent;
-        const d = document.getElementById('paceDist').textContent;
-        speakCoDriver(`${t}, ${d}`, true);
-      });
-
-      document.getElementById('voiceToggleBtn').addEventListener('click', (e) => {
-        e.stopPropagation();
-        voiceEnabled = !voiceEnabled;
-        const btn = e.currentTarget;
-        btn.classList.toggle('on', voiceEnabled);
-        btn.textContent = voiceEnabled ? 'VOICE ON' : 'MUTED';
-        if (voiceEnabled) speakCoDriver('Co-driver voice enabled.', true);
-      });
-
-      driveSelect.addEventListener('change', () => {
-        const chosen = drives.find(d => d.id === driveSelect.value);
-        if (chosen) activateDrive(chosen);
-      });
-
-      function toggleSheet(id) {
-        ['navSheet', 'dnaSheet'].forEach(sId => {
-          const el = document.getElementById(sId);
-          if (sId === id) el.classList.toggle('open');
-          else el.classList.remove('open');
-        });
-      }
-      document.getElementById('openNavSheetBtn').addEventListener('click', () => toggleSheet('navSheet'));
-      document.getElementById('openDnaSheetBtn').addEventListener('click', () => toggleSheet('dnaSheet'));
-      document.querySelectorAll('.sheet-close').forEach(b => {
-        b.addEventListener('click', () => document.getElementById(b.dataset.close).classList.remove('open'));
-      });
-
-      // Destination Search & Map Tap Routing
-      document.getElementById('routeDestBtn').addEventListener('click', () => {
-        routeToDestinationQuery(document.getElementById('destInput').value);
-      });
-      document.getElementById('destInput').addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') routeToDestinationQuery(e.target.value);
-      });
-      document.getElementById('tapModeBtn').addEventListener('click', (e) => {
-        tapToRouteMode = !tapToRouteMode;
-        e.currentTarget.classList.toggle('active', tapToRouteMode);
-        if (tapToRouteMode) {
-          document.getElementById('navSheet').classList.remove('open');
-          showToast('Tap any road on the map to calculate a route there.');
-        }
-      });
-
-      // Loop Generator Buttons
-      document.querySelectorAll('[data-loop-mi]').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const mi = parseInt(btn.dataset.loopMi, 10) || 25;
-          generateFunLoop(mi);
-        });
-      });
-
-      // Verified Presets
-      document.querySelectorAll('[data-preset]').forEach(card => {
-        card.addEventListener('click', () => {
-          const pid = card.dataset.preset;
-          const mapId = pid === 'drive_dry_ridge' ? 'dry_ridge' : (pid === 'drive_pebble_ridge' ? 'pebble_ridge' : pid);
-          const target = drives.find(d => d.id === mapId);
-          if (target) {
-            activateDrive(target);
-            document.getElementById('navSheet').classList.remove('open');
-            showToast(`Loaded ${target.name} (${(target.totalM / 1000).toFixed(1)} km)`);
-          }
-        });
-      });
-
-      // DNA Sliders & Car Spec
-      ['Tech', 'Flow', 'Surf', 'Clear'].forEach(k => {
-        const s = document.getElementById(`w${k}`);
-        const v = document.getElementById(`w${k}Val`);
-        s.addEventListener('input', () => {
-          weights[k.toLowerCase()] = parseInt(s.value, 10) || 0;
-          v.textContent = `${s.value}%`;
-          if (mapLoaded && activeDrive) {
-            const src = map.getSource('apex-stage');
-            if (src) src.setData(buildStageGeoJSON(activeDrive));
-            renderAtCursor(false);
-          }
-        });
-      });
-
-      document.getElementById('specGroup').addEventListener('click', (e) => {
-        const btn = e.target.closest('[data-spec]');
-        if (!btn) return;
-        carSpec = btn.dataset.spec;
-        document.querySelectorAll('#specGroup .btn').forEach(b => b.classList.toggle('active', b === btn));
-        if (mapLoaded && activeDrive) {
-          const src = map.getSource('apex-stage');
-          if (src) src.setData(buildStageGeoJSON(activeDrive));
-          renderAtCursor(false);
-        }
-      });
-
-      document.getElementById('radarToggleBtn').addEventListener('click', (e) => {
-        radarArmed = !radarArmed;
-        e.currentTarget.classList.toggle('active', radarArmed);
-        rebuildMapPins();
-      });
-
-      document.getElementById('themeToggleBtn').addEventListener('click', (e) => {
-        nightMode = !nightMode;
-        e.currentTarget.classList.toggle('active', nightMode);
-        e.currentTarget.textContent = nightMode ? 'Day Map' : 'Night Map';
-        applySurveyCartography();
-      });
-
-      document.getElementById('fitRouteBtn').addEventListener('click', () => {
-        if (!activeDrive) return;
-        setPlaying(false);
-        map.fitBounds(activeDrive.bounds, { padding: 60, pitch: 32, bearing: 0, duration: 800 });
-      });
-
-      document.getElementById('exportCsvBtn').addEventListener('click', () => {
-        if (!activeDrive) return;
-        const header = activeDrive.fields.join(',') + '\n';
-        const body = activeDrive.rows.map(r => r.join(',')).join('\n');
-        const blob = new Blob([header + body], { type: 'text/csv' });
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = `${activeDrive.id}_stage.csv`;
-        a.click();
-      });
-
-      // Scrubber Drag
-      const scrubberBox = document.getElementById('scrubberBox');
-      let dragging = false;
-      function scrubTo(clientX) {
-        if (!activeDrive) return;
-        const rect = scrubberBox.getBoundingClientRect();
-        const frac = Math.max(0, Math.min(1, (clientX - rect.left) / Math.max(1, rect.width)));
-        cursorM = frac * activeDrive.totalM;
-        spokenEventIds.clear();
-        renderAtCursor(true);
-      }
-      scrubberBox.addEventListener('pointerdown', (e) => {
-        dragging = true;
-        scrubberBox.setPointerCapture(e.pointerId);
-        scrubTo(e.clientX);
-      });
-      scrubberBox.addEventListener('pointermove', (e) => { if (dragging) scrubTo(e.clientX); });
-      scrubberBox.addEventListener('pointerup', () => { dragging = false; });
-      window.addEventListener('resize', () => drawElevationProfile());
-
-      function tick(now) {
-        if (isPlaying && activeDrive) {
-          const dt = Math.min(0.1, Math.max(0.0, (now - lastFrameTs) / 1000));
-          lastFrameTs = now;
-          const cur = sampleAtDistance(activeDrive, cursorM);
-          const vMps = Math.max(11.0, (cur ? cur.speedMph : 45) * 0.44704);
-          const dM = vMps * speedMult * dt;
-          cursorM += dM;
-          if (cursorM >= activeDrive.totalM) cursorM = 0;
-
-          octanePoints += (dM / 1000) * 3.0;
-          document.getElementById('octaneLbl').textContent = `${Math.floor(octanePoints).toLocaleString()} OCT`;
-
-          renderAtCursor(false);
-          rafId = requestAnimationFrame(tick);
-        } else {
-          rafId = null;
-        }
-      }
-
-      renderAtCursor(true);
-      if (params.get('nav') === '1') document.getElementById('navSheet').classList.add('open');
-      if (isPlaying) setPlaying(true);
-
-      // Native iOS Live Telemetry Bridge
-      window.apex = {
-        live(frame) {
-          if (!frame || isPlaying) return;
-          if (frame.has_fix && Number.isFinite(frame.lat) && Number.isFinite(frame.lon)) {
-            const mph = Math.round((frame.speed_mps || 0) * 2.236936);
-            document.getElementById('speedReadout').textContent = String(mph);
-            document.getElementById('cellSpeed').textContent = `${mph} mph (GPS)`;
-            drawGGauge(frame.lat_g || 0, frame.lon_g || 0, frame.camber_deg || 0);
-          }
-        },
-        onNative() {}
+  (() => {
+    'use strict';
+    const Core = window.ApexCore;
+    const MPH = Core.MPS_TO_MPH;
+    const params = new URLSearchParams(location.search);
+    const $ = (id) => document.getElementById(id);
+
+    // =======================================================================
+    // 1. TRACKS — one shape for profiled drives and geometry-only routes.
+    //    Profiled drives come from tools/export_web_profile.py (core/road_dna.py);
+    //    routes are derived here by apex_core.js, the parity-tested port.
+    // =======================================================================
+    function trackFromDrive(d) {
+      const f = Object.fromEntries(d.fields.map((name, i) => [name, i]));
+      const col = (name) => (name in f ? d.rows.map(r => r[f[name]]) : null);
+      return {
+        id: d.id, name: d.name, kind: 'drive',
+        subtitle: [d.date ? d.date.slice(0, 10) : '', d.device || ''].filter(Boolean).join(' · '),
+        lat: col('lat'), lon: col('lon'), dist: col('distance_m'),
+        elev: col('elevation_m'), speedMps: col('speed_mph').map(v => v / MPH),
+        latG: col('lat_g'), lonG: col('lon_g'), camberDeg: col('camber_deg'),
+        envMps: col('target_mph').map(v => v / MPH),
+        events: d.events.map(e => ({ ...e })), sectors: d.sectors, sectorM: d.sector_m || 500,
+        alpr: null
       };
-    })();
+    }
+
+    function trackFromPolyline(coords, id, name) {
+      const rs = Core.resamplePolyline(coords.map(c => c[1]), coords.map(c => c[0]), 5);
+      const { kappa, ds } = Core.computeCurvature(rs.lat, rs.lon);
+      const env = Core.brakingEnvelopeMps(kappa, ds);
+      const dist = rs.lat.map((_, i) => i * 5);
+      const events = Core.detectCorners(kappa, ds).map(c => {
+        const t = Core.paceNoteText(c);
+        return {
+          type: 'corner', code: t.code, call: t.call, index: c.apex, dist_m: dist[c.apex],
+          lat: rs.lat[c.apex], lon: rs.lon[c.apex], radius_m: c.radius_m, apex_mph: c.apex_mps * MPH
+        };
+      });
+      return {
+        id, name, kind: 'route', subtitle: 'Geometry only · not yet profiled',
+        lat: rs.lat, lon: rs.lon, dist, elev: null, speedMps: null, latG: null, lonG: null, camberDeg: null,
+        envMps: Array.from(env), events, sectors: null, sectorM: 500, alpr: null
+      };
+    }
+
+    const drives = (window.APEX_DRIVES || []).map(trackFromDrive);
+    let track = null;
+
+    // =======================================================================
+    // 2. STATE
+    // =======================================================================
+    const state = {
+      mode: 'replay',              // replay | sim | live
+      playing: false, rate: 1,
+      cursorM: 0, cursorIdx: 0,
+      follow: true, bearing: 0,
+      live: null, liveAt: 0,
+      spiritedAt: -Infinity,
+      toggles: { stage: false, voice: true, lpr: true, dna: false, night: params.get('night') === '1' },
+      spoken: new Set(), tapToRoute: false
+    };
+    try {
+      const saved = JSON.parse(localStorage.getItem('apex.toggles') || 'null');
+      if (saved) Object.assign(state.toggles, saved, params.has('night') ? { night: params.get('night') === '1' } : {});
+    } catch (_) {}
+
+    // =======================================================================
+    // 3. SAMPLING
+    // =======================================================================
+    function indexAt(t, m) {
+      let i = Math.max(0, Math.min(t.dist.length - 2, Math.floor(m / 5)));
+      while (i < t.dist.length - 2 && t.dist[i + 1] <= m) i++;
+      while (i > 0 && t.dist[i] > m) i--;
+      return i;
+    }
+    function lerpAt(arr, i, f) { return arr ? arr[i] + (arr[Math.min(arr.length - 1, i + 1)] - arr[i]) * f : null; }
+    function sample(t, m) {
+      const total = t.dist[t.dist.length - 1];
+      m = Math.max(0, Math.min(total, m));
+      const i = indexAt(t, m);
+      const span = Math.max(0.01, t.dist[i + 1] - t.dist[i]);
+      const f = Math.max(0, Math.min(1, (m - t.dist[i]) / span));
+      const j = Math.min(t.lat.length - 1, i + 6);
+      return {
+        i, m, lat: lerpAt(t.lat, i, f), lon: lerpAt(t.lon, i, f),
+        bearing: bearingDeg(t.lat[i], t.lon[i], t.lat[j], t.lon[j]),
+        speedMps: lerpAt(t.speedMps, i, f), latG: lerpAt(t.latG, i, f), lonG: lerpAt(t.lonG, i, f),
+        camberDeg: lerpAt(t.camberDeg, i, f), envMps: lerpAt(t.envMps, i, f)
+      };
+    }
+    function bearingDeg(lat1, lon1, lat2, lon2) {
+      const p1 = lat1 * Math.PI / 180, p2 = lat2 * Math.PI / 180, dl = (lon2 - lon1) * Math.PI / 180;
+      const y = Math.sin(dl) * Math.cos(p2);
+      const x = Math.cos(p1) * Math.sin(p2) - Math.sin(p1) * Math.cos(p2) * Math.cos(dl);
+      return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+    }
+    const angleDelta = (a, b) => ((b - a + 540) % 360) - 180;
+    const totalM = () => (track ? track.dist[track.dist.length - 1] : 0);
+
+    // =======================================================================
+    // 4. MAP — topo paper / VDO phosphor restyle of OpenFreeMap + DEM contours
+    // =======================================================================
+    const map = new maplibregl.Map({
+      container: 'map', style: 'https://tiles.openfreemap.org/styles/liberty',
+      center: [-84.70, 39.24], zoom: 14.6, pitch: 45, maxPitch: 60,
+      attributionControl: { compact: true }, fadeDuration: 0
+    });
+    let mapReady = false;
+    window.apexDebug = { map, get track() { return track; } };
+    const DEM_URL = 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png';
+    let demSource = null;
+    try {
+      demSource = new mlcontour.DemSource({ url: DEM_URL, encoding: 'terrarium', maxzoom: 13, worker: true });
+      demSource.setupMaplibre(maplibregl);
+    } catch (_) { demSource = null; }
+
+    const puckEl = document.createElement('div');
+    puckEl.className = 'puck';
+    puckEl.innerHTML = '<svg viewBox="0 0 26 26" width="26" height="26"><circle cx="13" cy="13" r="11" fill="#161615" stroke="#EAE3D2" stroke-width="2"/><path d="M13 5 L19 18 L13 14.8 L7 18 Z" fill="#D9411E"/></svg>';
+    const puck = new maplibregl.Marker({ element: puckEl, rotationAlignment: 'map', pitchAlignment: 'map' })
+      .setLngLat([-84.70, 39.24]).addTo(map);
+
+    function cssVar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+
+    function restyleBasemap() {
+      if (!mapReady) return;
+      const night = state.toggles.night;
+      const P = {
+        bg: night ? '#111210' : '#F4EFE6', water: night ? '#0B0E10' : '#C9D2CC', waterLine: night ? '#1A2228' : '#9FB0AA',
+        land: night ? '#141512' : '#E9E2D2', wood: night ? '#151712' : '#DCD8BF',
+        road: night ? '#EAE3D2' : '#FFFDF8', roadMinor: night ? '#4A463E' : '#FFFFFF', casing: night ? '#111210' : '#B9AE98',
+        label: night ? '#CFC6B2' : '#3B3833', halo: night ? '#111210' : '#F4EFE6', boundary: night ? '#2F2C27' : '#C8BEA9'
+      };
+      for (const lyr of map.getStyle().layers) {
+        const id = lyr.id.toLowerCase();
+        if (id.startsWith('apex-')) continue;
+        const set = (k, v) => { try { map.setPaintProperty(lyr.id, k, v); } catch (_) {} };
+        if (/building|poi|housenumber|aeroway|ferry/.test(id)) { try { map.setLayoutProperty(lyr.id, 'visibility', 'none'); } catch (_) {} continue; }
+        if (lyr.type === 'background') set('background-color', P.bg);
+        else if (lyr.type === 'fill') {
+          if (id.includes('water')) set('fill-color', P.water);
+          else if (/wood|forest|park|grass|scrub|wetland/.test(id)) { set('fill-color', P.wood); set('fill-opacity', 0.7); }
+          else { set('fill-color', P.land); set('fill-opacity', 0.5); }
+          set('fill-outline-color', 'rgba(0,0,0,0)');
+        } else if (lyr.type === 'line') {
+          if (id.includes('water')) set('line-color', P.waterLine);
+          else if (id.includes('boundary')) set('line-color', P.boundary);
+          else if (/road|transportation|highway|bridge|tunnel|street|path/.test(id)) {
+            const minor = /minor|service|track|path|street|residential/.test(id);
+            set('line-color', id.includes('casing') ? P.casing : (minor ? P.roadMinor : P.road));
+          } else if (/rail/.test(id)) set('line-color', P.boundary);
+        } else if (lyr.type === 'symbol') {
+          set('text-color', P.label); set('text-halo-color', P.halo); set('text-halo-width', 1.4);
+          set('icon-opacity', 0);
+        }
+      }
+      const has = (id) => map.getLayer(id);
+      if (has('apex-hillshade')) {
+        map.setPaintProperty('apex-hillshade', 'hillshade-shadow-color', night ? '#050504' : '#6B6B3A');
+        map.setPaintProperty('apex-hillshade', 'hillshade-highlight-color', night ? '#1E1D19' : '#FBF8F0');
+        map.setPaintProperty('apex-hillshade', 'hillshade-accent-color', night ? '#0B0B0A' : '#8A8455');
+        map.setPaintProperty('apex-hillshade', 'hillshade-exaggeration', night ? 0.3 : 0.38);
+      }
+      if (has('apex-contours')) map.setPaintProperty('apex-contours', 'line-color', night ? '#3A372F' : '#3B3833');
+      if (has('apex-contour-labels')) {
+        map.setPaintProperty('apex-contour-labels', 'text-color', night ? '#6E685B' : '#3B3833');
+        map.setPaintProperty('apex-contour-labels', 'text-halo-color', P.bg);
+      }
+      if (has('apex-route-casing')) map.setPaintProperty('apex-route-casing', 'line-color', P.bg);
+      if (has('apex-route')) map.setPaintProperty('apex-route', 'line-color', night ? '#E89B3C' : '#B5532B');
+    }
+
+    function addApexLayers() {
+      const firstSymbol = (map.getStyle().layers.find(l => l.type === 'symbol') || {}).id;
+      const demTiles = demSource ? demSource.sharedDemProtocolUrl : DEM_URL;
+      map.addSource('apex-dem', { type: 'raster-dem', tiles: [demTiles], tileSize: 256, encoding: 'terrarium', maxzoom: 13 });
+      map.addLayer({ id: 'apex-hillshade', type: 'hillshade', source: 'apex-dem', paint: {} }, firstSymbol);
+      if (demSource) {
+        map.addSource('apex-contour-src', {
+          type: 'vector', maxzoom: 15,
+          tiles: [demSource.contourProtocolUrl({
+            multiplier: 3.28084,
+            thresholds: { 11: [200, 1000], 12: [100, 500], 13: [50, 250], 14: [20, 100], 15: [10, 50] },
+            elevationKey: 'ele', levelKey: 'level', contourLayer: 'contours'
+          })]
+        });
+        map.addLayer({
+          id: 'apex-contours', type: 'line', source: 'apex-contour-src', 'source-layer': 'contours',
+          paint: { 'line-width': ['match', ['get', 'level'], 1, 0.9, 0.45], 'line-opacity': ['match', ['get', 'level'], 1, 0.55, 0.32] }
+        }, firstSymbol);
+        map.addLayer({
+          id: 'apex-contour-labels', type: 'symbol', source: 'apex-contour-src', 'source-layer': 'contours',
+          filter: ['>', ['get', 'level'], 0],
+          layout: { 'symbol-placement': 'line', 'text-size': 9, 'text-field': ['concat', ['number-format', ['get', 'ele'], {}], "'"], 'text-font': ['Noto Sans Regular'] },
+          paint: { 'text-halo-width': 1.2 }
+        });
+      }
+      map.addSource('apex-route-src', { type: 'geojson', data: emptyFC() });
+      map.addLayer({ id: 'apex-route-casing', type: 'line', source: 'apex-route-src',
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: { 'line-width': ['interpolate', ['linear'], ['zoom'], 10, 6, 16, 13] } });
+      map.addLayer({ id: 'apex-route', type: 'line', source: 'apex-route-src',
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: { 'line-width': ['interpolate', ['linear'], ['zoom'], 10, 3, 16, 7] } });
+      map.addLayer({ id: 'apex-dna', type: 'line', source: 'apex-route-src', filter: ['has', 'dna'],
+        layout: { 'line-cap': 'butt', 'line-join': 'round', visibility: 'none' },
+        paint: { 'line-color': ['get', 'dna'], 'line-width': ['interpolate', ['linear'], ['zoom'], 10, 3, 16, 7] } });
+      map.addSource('apex-ribbon-src', { type: 'geojson', data: emptyFC() });
+      map.addLayer({ id: 'apex-ribbon', type: 'line', source: 'apex-ribbon-src',
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: { 'line-color': ['get', 'c'], 'line-width': ['interpolate', ['linear'], ['zoom'], 10, 4, 16, 9] } });
+    }
+
+    const emptyFC = () => ({ type: 'FeatureCollection', features: [] });
+
+    // Route as whole-sector LineStrings (>= 500 m) — never 5 m confetti.
+    function routeGeoJSON(t) {
+      const features = [];
+      const coords = (a, b) => { const c = []; for (let i = a; i <= b; i++) c.push([t.lon[i], t.lat[i]]); return c; };
+      if (!t.sectors) return { type: 'FeatureCollection', features: [{ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: coords(0, t.lat.length - 1) } }] };
+      for (const s of t.sectors) {
+        const end = Math.min(t.lat.length - 1, s.end_index + 1);
+        features.push({ type: 'Feature', properties: { dna: dnaColor(dnaComposite(s)) }, geometry: { type: 'LineString', coordinates: coords(s.start_index, end) } });
+      }
+      return { type: 'FeatureCollection', features };
+    }
+    function dnaComposite(s) {
+      const v = [s.tech, s.flow, s.surf];
+      if (s.clear != null) v.push(s.clear);
+      return v.reduce((a, b) => a + b, 0) / v.length;
+    }
+    function dnaColor(score) {
+      // Ordinal terracotta ramp on paper; amber ramp at night. Higher = more worth driving.
+      const night = state.toggles.night;
+      const day = ['#C9BFA9', '#D39A6A', '#C2683A', '#9C3B1C'];
+      const nig = ['#4A463E', '#8F6A3A', '#C9852F', '#F0A848'];
+      const ramp = night ? nig : day;
+      return ramp[score >= 70 ? 3 : score >= 58 ? 2 : score >= 46 ? 1 : 0];
+    }
+
+    // Braking ribbon: next 300 m coloured by current speed vs the braking envelope there.
+    let lastRibbonAt = 0;
+    function updateRibbon(vMps, fromIdx, force) {
+      if (!mapReady) return;
+      const now = performance.now();
+      if (!force && now - lastRibbonAt < 90) return;
+      lastRibbonAt = now;
+      const src = map.getSource('apex-ribbon-src');
+      if (!track || vMps == null || fromIdx < 0) { src.setData(emptyFC()); return; }
+      const night = state.toggles.night;
+      const calm = night ? '#EAE3D2' : '#FFF8EA';
+      const features = [];
+      let run = null;
+      const stop = Math.min(track.lat.length - 1, fromIdx + 60);
+      for (let i = fromIdx; i <= stop; i++) {
+        const env = track.envMps[i];
+        const c = vMps > env + 0.5 ? '#D9411E' : (vMps > env - 3 ? '#E89B3C' : calm);
+        const pt = [track.lon[i], track.lat[i]];
+        if (!run || run.c !== c) {
+          if (run) run.coords.push(pt);
+          run = { c, coords: run ? [run.coords[run.coords.length - 1], pt] : [pt] };
+          features.push(run);
+        } else run.coords.push(pt);
+      }
+      src.setData({ type: 'FeatureCollection', features: features.filter(r => r.coords.length > 1).map(r => ({
+        type: 'Feature', properties: { c: r.c }, geometry: { type: 'LineString', coordinates: r.coords }
+      })) });
+    }
+
+    // Hazard + ALPR pins (only within the look-ahead window to keep the stage clean).
+    let pins = [];
+    function rebuildPins() {
+      pins.forEach(p => p.marker.remove());
+      pins = [];
+      if (!track) return;
+      for (const e of allEvents()) {
+        if (e.type === 'corner') continue;
+        const el = document.createElement('div');
+        el.className = `pin ${e.type}`;
+        el.textContent = e.code;
+        el.addEventListener('click', (ev) => { ev.stopPropagation(); say(`${e.call}.`, true); });
+        pins.push({ e, el, marker: new maplibregl.Marker({ element: el }).setLngLat([e.lon, e.lat]).addTo(map) });
+      }
+      updatePins();
+    }
+    function updatePins() {
+      for (const p of pins) {
+        const d = p.e.dist_m - state.cursorM;
+        const visible = d > -150 && d < 2500 && (p.e.type !== 'alpr' || state.toggles.lpr);
+        p.el.style.display = visible ? 'block' : 'none';
+      }
+    }
+
+    map.on('load', () => {
+      mapReady = true;
+      addApexLayers();
+      restyleBasemap();
+      applyDnaToggle();
+      if (track) loadTrackOnMap();
+      map.on('click', (e) => {
+        if (!state.tapToRoute) return;
+        state.tapToRoute = false;
+        $('tapRouteBtn').classList.remove('on');
+        routeTo(e.lngLat.lat, e.lngLat.lng, `Pin ${e.lngLat.lat.toFixed(3)}, ${e.lngLat.lng.toFixed(3)}`);
+      });
+    });
+    // Keep attribution collapsed to its (i) button so it never covers the stage plates.
+    map.once('idle', () => document.querySelectorAll('.maplibregl-ctrl-attrib').forEach(a => a.classList.remove('maplibregl-compact-show')));
+    map.on('dragstart', () => { state.follow = false; $('recenterBtn').classList.add('show'); });
+    $('recenterBtn').addEventListener('click', () => { state.follow = true; $('recenterBtn').classList.remove('show'); render(true); });
+
+    function loadTrackOnMap() {
+      if (!mapReady || !track) return;
+      map.getSource('apex-route-src').setData(routeGeoJSON(track));
+      rebuildPins();
+    }
+
+    // =======================================================================
+    // 5. INSTRUMENTS — SVG dials, drum odometer, DNA bars, scrubber
+    // =======================================================================
+    const SVGNS = 'http://www.w3.org/2000/svg';
+    function el(tag, attrs, parent) {
+      const n = document.createElementNS(SVGNS, tag);
+      for (const k in attrs) n.setAttribute(k, attrs[k]);
+      if (parent) parent.appendChild(n);
+      return n;
+    }
+    function bezelFace(svg) {
+      const defs = el('defs', {}, svg);
+      const g = el('radialGradient', { id: svg.id + 'Ring', cx: '35%', cy: '30%', r: '80%' }, defs);
+      el('stop', { offset: '0', 'stop-color': '#8C877B' }, g);
+      el('stop', { offset: '0.5', 'stop-color': '#3A3832' }, g);
+      el('stop', { offset: '1', 'stop-color': '#171715' }, g);
+      el('circle', { cx: 100, cy: 100, r: 99, fill: `url(#${svg.id}Ring)` }, svg);
+      el('circle', { cx: 100, cy: 100, r: 92, fill: '#0E0E0D' }, svg);
+    }
+
+    const SPEED_MAX = 120;
+    const speedAngle = (mph) => 135 + 270 * Math.max(0, Math.min(SPEED_MAX, mph)) / SPEED_MAX;
+    const polar = (r, deg) => [100 + r * Math.cos(deg * Math.PI / 180), 100 + r * Math.sin(deg * Math.PI / 180)];
+
+    const speedSvg = el('svg', { viewBox: '0 0 200 200', id: 'speedSvg' });
+    $('speedDial').appendChild(speedSvg);
+    bezelFace(speedSvg);
+    for (let v = 0; v <= SPEED_MAX; v += 5) {
+      const major = v % 20 === 0, mid = v % 10 === 0;
+      const a = speedAngle(v), [x1, y1] = polar(88, a), [x2, y2] = polar(major ? 74 : (mid ? 79 : 83), a);
+      el('line', { x1, y1, x2, y2, stroke: '#EAE3D2', 'stroke-width': major ? 2.6 : (mid ? 1.6 : 1) }, speedSvg);
+      if (major) {
+        const [tx, ty] = polar(61, a);
+        const t = el('text', { x: tx, y: ty + 5, 'text-anchor': 'middle', fill: '#EAE3D2', 'font-size': 15, 'font-weight': 700 }, speedSvg);
+        t.textContent = v;
+      }
+    }
+    el('text', { x: 100, y: 138, 'text-anchor': 'middle', fill: '#9A9384', 'font-size': 10, 'letter-spacing': 2, 'font-weight': 700 }, speedSvg).textContent = 'MPH';
+    const paceText = el('text', { x: 100, y: 160, 'text-anchor': 'middle', fill: '#D9411E', 'font-size': 12, 'font-weight': 800, 'letter-spacing': 1 }, speedSvg);
+    const bug = el('path', { d: 'M 100 15 L 94 4 L 106 4 Z', fill: '#D9411E', transform: 'rotate(0 100 100)' }, speedSvg);
+    const needle = el('g', {}, speedSvg);
+    el('path', { d: 'M 96 100 L 100 20 L 104 100 Z', fill: '#EAE3D2' }, needle);
+    el('circle', { cx: 100, cy: 100, r: 9, fill: '#2A2925', stroke: '#6F6B61', 'stroke-width': 1.5 }, speedSvg);
+
+    function setSpeedDial(mph, paceMph) {
+      const live = mph != null;
+      needle.setAttribute('transform', `rotate(${speedAngle(live ? mph : 0) + 90} 100 100)`);
+      needle.firstChild.setAttribute('fill', live && paceMph != null && mph > paceMph + 1 ? '#D9411E' : '#EAE3D2');
+      if (paceMph != null) {
+        bug.style.display = '';
+        bug.setAttribute('transform', `rotate(${speedAngle(paceMph) + 90} 100 100)`);
+        paceText.textContent = `PACE ${Math.round(paceMph)}`;
+      } else { bug.style.display = 'none'; paceText.textContent = ''; }
+    }
+
+    const gSvg = el('svg', { viewBox: '0 0 200 200', id: 'gSvg' });
+    $('gDial').appendChild(gSvg);
+    bezelFace(gSvg);
+    const G_SCALE = 70 / 0.8; // 0.8 g at r = 70
+    [0.25, 0.5, 0.75].forEach(gv => el('circle', { cx: 100, cy: 100, r: gv * G_SCALE, fill: 'none', stroke: gv === 0.5 ? '#5A564C' : '#2E2C27', 'stroke-width': 1.2 }, gSvg));
+    el('line', { x1: 30, y1: 100, x2: 170, y2: 100, stroke: '#2E2C27', 'stroke-width': 1 }, gSvg);
+    el('line', { x1: 100, y1: 30, x2: 100, y2: 170, stroke: '#2E2C27', 'stroke-width': 1 }, gSvg);
+    el('text', { x: 100, y: 46, 'text-anchor': 'middle', fill: '#9A9384', 'font-size': 9, 'letter-spacing': 2, 'font-weight': 700 }, gSvg).textContent = 'BRAKE';
+    el('text', { x: 100, y: 125, 'text-anchor': 'middle', fill: '#5A564C', 'font-size': 8, 'font-weight': 700 }, gSvg).textContent = '0.5';
+    // Inclinometer arc (bank / camber), bottom of the dial: +-10 deg
+    for (let d = -10; d <= 10; d += 2.5) {
+      const a = 90 - d * 3, [x1, y1] = polar(90, a), [x2, y2] = polar(d % 5 === 0 ? 82 : 86, a);
+      el('line', { x1, y1, x2, y2, stroke: d === 0 ? '#EAE3D2' : '#6F6B61', 'stroke-width': d === 0 ? 2 : 1 }, gSvg);
+    }
+    const bankNeedle = el('path', { d: 'M 100 186 L 96 176 L 104 176 Z', fill: '#E89B3C' }, gSvg);
+    const bankText = el('text', { x: 100, y: 166, 'text-anchor': 'middle', fill: '#E89B3C', 'font-size': 11, 'font-weight': 800 }, gSvg);
+    const ballTrail = el('polyline', { points: '', fill: 'none', stroke: '#E89B3C', 'stroke-opacity': 0.35, 'stroke-width': 2 }, gSvg);
+    const ball = el('circle', { cx: 100, cy: 100, r: 8, fill: '#E89B3C', stroke: '#EAE3D2', 'stroke-width': 1.5 }, gSvg);
+    const trail = [];
+
+    // Spirit-level ball: shows felt force, so it rolls OUT of a turn and FORWARD under braking.
+    // ISO 8855: +lat_g = left turn -> ball right; -lon_g = braking -> ball up.
+    function setGDial(latG, lonG, camberDeg) {
+      const known = latG != null && lonG != null;
+      ball.setAttribute('fill', known ? (Math.hypot(latG, lonG) > 0.45 ? '#D9411E' : '#E89B3C') : '#3A3832');
+      let x = 100, y = 100;
+      if (known) {
+        const clamp = Math.min(1, 0.9 / Math.max(1e-6, Math.hypot(latG, lonG)));  // pin at 0.9 g rim
+        x = 100 + latG * G_SCALE * clamp;
+        y = 100 + lonG * G_SCALE * clamp;
+        trail.push(`${x.toFixed(1)},${y.toFixed(1)}`);
+        if (trail.length > 24) trail.shift();
+      } else trail.length = 0;
+      ball.setAttribute('cx', x); ball.setAttribute('cy', y);
+      ballTrail.setAttribute('points', trail.join(' '));
+      if (camberDeg != null) {
+        const d = Math.max(-10, Math.min(10, camberDeg));
+        bankNeedle.style.display = '';
+        bankNeedle.setAttribute('transform', `rotate(${-d * 3} 100 100)`);
+        bankText.textContent = `BANK ${camberDeg >= 0 ? '+' : ''}${camberDeg.toFixed(1)}°`;
+      } else { bankNeedle.style.display = 'none'; bankText.textContent = ''; }
+    }
+
+    // Halda-style rolling drums: 3 whole-mile drums + a cream tenths drum.
+    const DRUMS = [100, 10, 1, 0.1];
+    const drumStrips = DRUMS.map((unit) => {
+      const d = document.createElement('div');
+      d.className = 'drum' + (unit === 0.1 ? ' tenth' : '');
+      const s = document.createElement('div');
+      s.className = 'strip';
+      for (let k = 0; k <= 10; k++) { const g = document.createElement('div'); g.className = 'digit'; g.textContent = k % 10; s.appendChild(g); }
+      d.appendChild(s);
+      $('drums').appendChild(d);
+      return s;
+    });
+    function setOdometer(miles) {
+      const tenths = Math.max(0, miles * 10);
+      const units = [1000, 100, 10, 1];
+      drumStrips.forEach((strip, i) => {
+        const u = units[i];
+        const val = tenths / u;
+        let digit = Math.floor(val) % 10;
+        let roll = 0;
+        if (u === 1) roll = val - Math.floor(val);
+        else {
+          const below = tenths % u;          // carry rolls in over the last tenth below
+          if (below > u - 1) roll = below - (u - 1);
+        }
+        strip.style.transform = `translateY(${-(digit + roll) * (100 / 11)}%)`;
+      });
+    }
+
+    const DNA_KEYS = ['tech', 'flow', 'surf', 'clear'];
+    const dnaCells = {};
+    for (const k of DNA_KEYS) {
+      const c = document.createElement('div');
+      c.className = 'dna-cell';
+      c.innerHTML = `<span class="dna-val">--</span><div class="dna-bar"><i></i></div><span class="engrave">${k}</span>`;
+      $('dna').appendChild(c);
+      dnaCells[k] = { val: c.querySelector('.dna-val'), bar: c.querySelector('i') };
+    }
+    function setDna(sector) {
+      for (const k of DNA_KEYS) {
+        const v = sector ? sector[k] : null;
+        dnaCells[k].val.textContent = v == null ? '--' : String(v);
+        dnaCells[k].bar.style.width = v == null ? '0%' : `${v}%`;
+      }
+    }
+    function sectorAt(i) {
+      if (!track || !track.sectors) return null;
+      return track.sectors.find(s => i >= s.start_index && i <= s.end_index) || null;
+    }
+
+    const scrubCanvas = $('scrubCanvas');
+    const sctx = scrubCanvas.getContext('2d');
+    function drawScrubber() {
+      const r = scrubCanvas.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+      const w = Math.max(10, Math.round(r.width * dpr)), h = Math.max(10, Math.round(r.height * dpr));
+      if (scrubCanvas.width !== w || scrubCanvas.height !== h) { scrubCanvas.width = w; scrubCanvas.height = h; }
+      sctx.clearRect(0, 0, w, h);
+      if (!track) return;
+      const n = track.dist.length, T = totalM(), step = Math.max(1, Math.floor(n / w));
+      const xOf = (m) => (m / T) * w;
+      if (track.elev) {
+        let lo = Infinity, hi = -Infinity;
+        for (const e of track.elev) { lo = Math.min(lo, e); hi = Math.max(hi, e); }
+        const span = Math.max(10, hi - lo);
+        sctx.beginPath(); sctx.moveTo(0, h);
+        for (let i = 0; i < n; i += step) sctx.lineTo(xOf(track.dist[i]), h - 2 * dpr - ((track.elev[i] - lo) / span) * (h - 6 * dpr));
+        sctx.lineTo(w, h); sctx.closePath(); sctx.fillStyle = '#2A2925'; sctx.fill();
+      }
+      // Pace profile = braking envelope (what the road allows), the same for every car on equal grip.
+      sctx.beginPath();
+      for (let i = 0; i < n; i += step) {
+        const y = h - 2 * dpr - (track.envMps[i] / 32) * (h - 4 * dpr);
+        i === 0 ? sctx.moveTo(xOf(track.dist[i]), y) : sctx.lineTo(xOf(track.dist[i]), y);
+      }
+      sctx.strokeStyle = '#6F6B61'; sctx.lineWidth = 1.2 * dpr; sctx.stroke();
+      for (const e of allEvents()) {
+        if (e.type === 'corner' && (e.code.includes('HP') || /[LR][12]$/.test(e.code))) {
+          sctx.fillStyle = '#E89B3C'; sctx.fillRect(xOf(e.dist_m) - dpr, 0, 2 * dpr, 4 * dpr);
+        } else if (e.type === 'alpr' && state.toggles.lpr) {
+          sctx.fillStyle = '#D9411E'; sctx.fillRect(xOf(e.dist_m) - dpr, h - 5 * dpr, 2 * dpr, 5 * dpr);
+        }
+      }
+      const px = xOf(state.cursorM);
+      sctx.fillStyle = '#D9411E'; sctx.fillRect(px - 1.5 * dpr, 0, 3 * dpr, h);
+    }
+
+    // =======================================================================
+    // 6. CO-DRIVER — quiet in cruise, full pace notes when spirited or STAGE
+    // =======================================================================
+    const allEvents = () => (track ? track.events.concat(track.alpr || []) : []);
+    function feet(m) {
+      const ft = m * 3.28084;
+      if (ft >= 1000) return { n: (m / 1609.344).toFixed(1), u: 'MI' };
+      return { n: String(Math.max(0, Math.round(ft / 50) * 50)), u: 'FT' };
+    }
+    const isSpirited = () => state.toggles.stage || performance.now() - state.spiritedAt < 30000;
+    function noteworthyInCruise(e) {
+      return e.type === 'alpr' || (e.type === 'bump' && e.severity_g >= 0.30);
+    }
+
+    const speech = { busy: false, queue: [] };
+    function say(text, force) {
+      if (!text || (!state.toggles.voice && !force)) return;
+      const native = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex;
+      if (native) { try { native.postMessage({ cmd: 'speak', text, force: !!force }); } catch (_) {} return; }
+      if (!('speechSynthesis' in window)) return;
+      if (force) { speechSynthesis.cancel(); speech.queue.length = 0; speech.busy = false; }
+      speech.queue.push(text);
+      if (speech.queue.length > 2) speech.queue.splice(0, speech.queue.length - 2);
+      pumpSpeech();
+    }
+    function pumpSpeech() {
+      if (speech.busy || !speech.queue.length) return;
+      const u = new SpeechSynthesisUtterance(speech.queue.shift());
+      const v = speechSynthesis.getVoices().find(x => /en-GB/.test(x.lang));
+      if (v) u.voice = v;
+      u.rate = 1.08;
+      speech.busy = true;
+      u.onend = u.onerror = () => { speech.busy = false; pumpSpeech(); };
+      speechSynthesis.speak(u);
+    }
+
+    function updateNotes(vMps, live) {
+      const ev = allEvents().filter(e => e.dist_m >= state.cursorM - 5 && (e.type !== 'alpr' || state.toggles.lpr))
+        .sort((a, b) => a.dist_m - b.dist_m);
+      const spirited = isSpirited();
+      const next = ev.find(e => spirited || noteworthyInCruise(e) || e.type !== 'corner') || null;
+      const codeEl = $('noteCode');
+      if (!next || next.dist_m - state.cursorM > 3000) {
+        codeEl.className = 'note-code quiet'; codeEl.textContent = '--';
+        $('noteCall').textContent = track ? 'Clear' : 'No route loaded';
+        $('noteSub').textContent = track ? `${track.name} · ${spirited ? 'stage notes' : 'cruise: hazards and LPR only'}` : 'Open the route book';
+        $('noteDist').innerHTML = '';
+      } else {
+        const d = next.dist_m - state.cursorM, f = feet(d);
+        const hazard = next.type !== 'corner';
+        codeEl.className = 'note-code' + (hazard ? ' hazard' : '');
+        codeEl.textContent = next.code;
+        $('noteCall').textContent = next.call;
+        $('noteSub').textContent = next.type === 'corner'
+          ? `Radius ${Math.round(next.radius_m)} m · apex ${Math.round(next.apex_mph)} mph`
+          : (next.type === 'alpr' ? 'OSM / DeFlock ALPR camera' : `Measured ${next.severity_g.toFixed(2)} g`);
+        $('noteDist').innerHTML = `${f.n}<small>${f.u}</small>`;
+      }
+
+      // Call each note once, ~5 s ahead (60-250 m), only while moving.
+      if (!(state.playing || live) || vMps == null) return;
+      const lead = Math.max(60, Math.min(250, vMps * 5));
+      for (const e of ev) {
+        const d = e.dist_m - state.cursorM;
+        if (d > lead) break;
+        const key = `${track.id}:${e.type}:${e.index}`;
+        if (state.spoken.has(key) || d < 10) continue;
+        state.spoken.add(key);
+        if (e.type === 'corner' ? !spirited : !(spirited || noteworthyInCruise(e))) continue;
+        say(d > 90 ? `${e.call}, ${feet(d).n} ${feet(d).u === 'FT' ? 'feet' : 'miles'}` : e.call, false);
+      }
+    }
+
+    // =======================================================================
+    // 7. RENDER LOOP — replay (recorded), sim (route at envelope), live (native)
+    // =======================================================================
+    function render(snap) {
+      let lat, lon, bearing, vMps, latG, lonG, camber, env;
+      const live = state.mode === 'live' && state.live;
+      if (live) {
+        const L = state.live;
+        lat = L.lat; lon = L.lon; vMps = L.speed_mps; latG = L.lat_g; lonG = L.lon_g; camber = L.camber_deg;
+        bearing = L.course_deg != null ? L.course_deg : state.bearing;
+        if (track) {
+          const hit = Core.nearestIndex(lat, lon, track.lat, track.lon, state.cursorIdx, 600);
+          if (hit.distM < 40) { state.cursorIdx = hit.index; state.cursorM = track.dist[hit.index]; env = track.envMps[hit.index]; }
+          else { state.cursorIdx = -1; }
+        }
+      } else if (track) {
+        const s = sample(track, state.cursorM);
+        state.cursorIdx = s.i;
+        lat = s.lat; lon = s.lon; bearing = s.bearing; env = s.envMps;
+        vMps = state.mode === 'sim' ? simSpeed(s) : s.speedMps;
+        latG = s.latG; lonG = s.lonG; camber = s.camberDeg;
+      } else return;
+
+      if (latG != null && (Math.abs(latG) > 0.30 || Math.abs(lonG) > 0.35)) state.spiritedAt = performance.now();
+
+      state.bearing = snap ? bearing : (state.bearing + angleDelta(state.bearing, bearing) * 0.15 + 360) % 360;
+      puck.setLngLat([lon, lat]).setRotation(state.bearing);
+      if (state.follow && (snap || state.playing || live)) {
+        map.jumpTo({ center: [lon, lat], bearing: state.bearing, pitch: 45, ...(snap ? { zoom: Math.max(map.getZoom(), 14.6) } : {}) });
+      }
+
+      setSpeedDial(vMps != null ? vMps * MPH : null, env != null ? env * MPH : null);
+      setGDial(latG, lonG, camber);
+      setOdometer(state.cursorM / 1609.344);
+      setDna(sectorAt(state.cursorIdx));
+      updateRibbon(vMps, state.cursorIdx, snap);
+      updatePins();
+      updateNotes(vMps, live);
+      drawScrubber();
+    }
+
+    const simSpeed = (s) => Math.min(27, Math.max(6, s.envMps * 0.92));
+
+    let lastTs = 0, raf = null;
+    function tick(ts) {
+      raf = null;
+      if (!state.playing || !track || state.mode === 'live') return;
+      const dt = Math.min(0.1, (ts - (lastTs || ts)) / 1000);
+      lastTs = ts;
+      const s = sample(track, state.cursorM);
+      const v = state.mode === 'sim' ? simSpeed(s) : Math.max(2, s.speedMps);
+      state.cursorM += v * state.rate * dt;
+      if (state.cursorM >= totalM()) { state.cursorM = totalM(); setPlaying(false); }
+      render(false);
+      raf = requestAnimationFrame(tick);
+    }
+    function setPlaying(on) {
+      state.playing = on && !!track && state.mode !== 'live';
+      $('playBtn').textContent = state.playing ? 'HOLD' : 'RUN';
+      $('playBtn').classList.toggle('on', state.playing);
+      if (state.playing) {
+        if (state.cursorM >= totalM() - 1) state.cursorM = 0;
+        state.follow = true; $('recenterBtn').classList.remove('show');
+        lastTs = 0; if (!raf) raf = requestAnimationFrame(tick);
+      }
+    }
+    function setMode(mode) {
+      state.mode = mode;
+      const plate = $('modePlate');
+      plate.textContent = { replay: 'REPLAY', sim: 'SIM · NOT DRIVEN', live: 'LIVE' }[mode];
+      plate.classList.toggle('mode-live', mode === 'live');
+    }
+
+    function activate(t, startM = 0) {
+      track = t;
+      state.cursorM = Math.max(0, Math.min(totalM(), startM));
+      state.spoken.clear();
+      trail.length = 0;
+      if (state.mode !== 'live') setMode(t.kind === 'drive' ? 'replay' : 'sim');
+      $('odoTotal').textContent = `OF ${(totalM() / 1609.344).toFixed(1)}`;
+      renderDriveList();
+      loadTrackOnMap();
+      fetchAlpr(t);
+      state.follow = true; $('recenterBtn').classList.remove('show');
+      render(true);
+    }
+
+    // =======================================================================
+    // 8. ALPR — real cameras from OpenStreetMap (DeFlock) via Overpass
+    // =======================================================================
+    const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter', 'https://overpass.private.coffee/api/interpreter'];
+    async function fetchAlpr(t) {
+      if (t.alpr) { attachAlpr(t, t.alprNodes); return; }
+      let s = Infinity, w = Infinity, n = -Infinity, e = -Infinity;
+      for (let i = 0; i < t.lat.length; i++) { s = Math.min(s, t.lat[i]); n = Math.max(n, t.lat[i]); w = Math.min(w, t.lon[i]); e = Math.max(e, t.lon[i]); }
+      const bbox = [s - 0.005, w - 0.005, n + 0.005, e + 0.005].map(v => v.toFixed(4)).join(',');
+      const cacheKey = `apex.alpr.${bbox}`;
+      try {
+        const c = JSON.parse(localStorage.getItem(cacheKey) || 'null');
+        if (c && Date.now() - c.at < 7 * 864e5) { attachAlpr(t, c.nodes); return; }
+      } catch (_) {}
+      const q = `[out:json][timeout:25];(node["surveillance:type"="ALPR"](${bbox});node["man_made"="surveillance"]["surveillance:type"="ALPR"](${bbox}););out body;`;
+      for (const url of OVERPASS) {
+        try {
+          const res = await fetch(url, { method: 'POST', body: 'data=' + encodeURIComponent(q), headers: { 'Content-Type': 'application/x-www-form-urlencoded' } });
+          if (!res.ok) continue;
+          const json = await res.json();
+          const nodes = (json.elements || []).filter(x => x.type === 'node').map(x => ({ lat: x.lat, lon: x.lon, id: x.id }));
+          try { localStorage.setItem(cacheKey, JSON.stringify({ at: Date.now(), nodes })); } catch (_) {}
+          attachAlpr(t, nodes);
+          return;
+        } catch (_) { /* try next mirror */ }
+      }
+      if (track === t) toast('LPR camera data unavailable (Overpass unreachable). Absence of pins is NOT clearance.');
+    }
+    function attachAlpr(t, nodes) {
+      t.alprNodes = nodes;
+      t.alpr = [];
+      const counts = new Map();
+      for (const node of nodes) {
+        const hit = Core.nearestIndex(node.lat, node.lon, t.lat, t.lon, -1);
+        if (hit.distM > Core.ALPR_RADIUS_M) continue;
+        t.alpr.push({ type: 'alpr', code: 'LPR', call: 'Camera', index: hit.index, dist_m: t.dist[hit.index], lat: node.lat, lon: node.lon });
+        if (t.sectors) {
+          const sid = Math.floor(t.dist[hit.index] / t.sectorM);
+          counts.set(sid, (counts.get(sid) || 0) + 1);
+        }
+      }
+      // Same rule as core/road_dna.score_sectors: -45 per camera within ALPR_RADIUS_M.
+      if (t.sectors) for (const sec of t.sectors) sec.clear = Math.max(0, 100 - 45 * (counts.get(sec.id) || 0));
+      if (track === t) { loadTrackOnMap(); render(false); toast(`${t.alpr.length} LPR camera${t.alpr.length === 1 ? '' : 's'} on route (OSM / DeFlock)`); }
+    }
+
+    // =======================================================================
+    // 9. ROUTING — Nominatim + OSRM (real roads; geometry only until profiled)
+    // =======================================================================
+    function here() {
+      if (state.live) return { lat: state.live.lat, lon: state.live.lon };
+      if (track) { const s = sample(track, state.cursorM); return { lat: s.lat, lon: s.lon }; }
+      const c = map.getCenter(); return { lat: c.lat, lon: c.lng };
+    }
+    async function osrm(points, id, name) {
+      toast(`Routing ${name}...`);
+      const coords = points.map(p => `${p.lon.toFixed(6)},${p.lat.toFixed(6)}`).join(';');
+      try {
+        const res = await fetch(`https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`);
+        const json = await res.json();
+        if (!json.routes || !json.routes[0]) throw new Error(json.message || 'no route');
+        const t = trackFromPolyline(json.routes[0].geometry.coordinates, id, name);
+        const i = drives.findIndex(d => d.id === id);
+        if (i >= 0) drives.splice(i, 1);
+        drives.unshift(t);
+        closeSheet();
+        activate(t, 0);
+        toast(`${name}: ${(totalM() / 1609.344).toFixed(1)} mi, ${t.events.length} corners called from map geometry`);
+      } catch (err) {
+        toast(`Routing failed: ${err.message}. Check your connection.`);
+      }
+    }
+    function routeTo(lat, lon, name) { return osrm([here(), { lat, lon }], 'route_dest', name); }
+    async function routeToQuery(q) {
+      if (!q.trim()) return;
+      toast(`Searching ${q}...`);
+      try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`);
+        const items = await res.json();
+        if (!items.length) { toast(`No match for "${q}"`); return; }
+        routeTo(parseFloat(items[0].lat), parseFloat(items[0].lon), `To ${items[0].display_name.split(',')[0]}`);
+      } catch (_) { toast('Search unavailable. Use TAP MAP TO ROUTE.'); }
+    }
+    function loop(miles) {
+      const c = here();
+      // A circle through the start point; road distance runs ~1.35x its perimeter.
+      const rKm = (miles * 1.609344) / (2 * Math.PI * 1.35);
+      const kmLat = 110.54, kmLon = 111.32 * Math.cos(c.lat * Math.PI / 180);
+      const heading = Math.random() * 2 * Math.PI;   // new loop direction each time
+      const center = { lat: c.lat + rKm * Math.cos(heading) / kmLat, lon: c.lon + rKm * Math.sin(heading) / kmLon };
+      const pts = [c];
+      for (const k of [1, 2, 3]) {
+        const a = heading + Math.PI + k * Math.PI / 2;
+        pts.push({ lat: center.lat + rKm * Math.cos(a) / kmLat, lon: center.lon + rKm * Math.sin(a) / kmLon });
+      }
+      pts.push(c);
+      return osrm(pts, `loop_${miles}`, `${miles} mi loop`);
+    }
+
+    // =======================================================================
+    // 10. UI WIRING
+    // =======================================================================
+    function toast(msg) {
+      const t = $('toast');
+      t.textContent = msg; t.classList.add('show');
+      clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 4200);
+    }
+    function openSheet() { $('routeSheet').classList.add('open'); }
+    function closeSheet() { $('routeSheet').classList.remove('open'); }
+    $('openSheetBtn').addEventListener('click', openSheet);
+    $('closeSheetBtn').addEventListener('click', closeSheet);
+    $('destGoBtn').addEventListener('click', () => routeToQuery($('destInput').value));
+    $('destInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') routeToQuery(e.target.value); });
+    $('tapRouteBtn').addEventListener('click', (e) => {
+      state.tapToRoute = !state.tapToRoute;
+      e.currentTarget.classList.toggle('on', state.tapToRoute);
+      if (state.tapToRoute) { closeSheet(); toast('Tap the map where you want to go.'); }
+    });
+    document.querySelectorAll('[data-loop-mi]').forEach(b => b.addEventListener('click', () => loop(parseInt(b.dataset.loopMi, 10))));
+
+    function renderDriveList() {
+      const list = $('driveList');
+      list.innerHTML = '';
+      for (const d of drives) {
+        const b = document.createElement('button');
+        b.className = 'drive-card' + (track && d.id === track.id ? ' active' : '');
+        const corners = d.events.filter(e => e.type === 'corner').length;
+        const bumps = d.events.filter(e => e.type === 'bump').length;
+        const mi = (d.dist[d.dist.length - 1] / 1609.344).toFixed(1);
+        b.innerHTML = `<b></b><span></span>`;
+        b.querySelector('b').textContent = d.name;
+        b.querySelector('span').textContent = `${mi} mi · ${corners} corners${d.kind === 'drive' ? ` · ${bumps} bumps` : ''} · ${d.subtitle}`;
+        b.addEventListener('click', () => { closeSheet(); activate(d, 0); });
+        list.appendChild(b);
+      }
+    }
+
+    $('playBtn').addEventListener('click', () => {
+      setPlaying(!state.playing);
+      if (state.playing && track) say(`${track.name}.`, true);
+    });
+    $('rateBtn').addEventListener('click', () => {
+      const rates = [1, 2, 4, 8];
+      state.rate = rates[(rates.indexOf(state.rate) + 1) % rates.length];
+      $('rateBtn').textContent = `${state.rate}X`;
+    });
+
+    const scrubber = $('scrubber');
+    let scrubbing = false;
+    function scrubTo(x) {
+      if (!track || state.mode === 'live') return;
+      const r = scrubber.getBoundingClientRect();
+      state.cursorM = Math.max(0, Math.min(1, (x - r.left) / r.width)) * totalM();
+      state.spoken.clear();
+      state.follow = true; $('recenterBtn').classList.remove('show');
+      render(true);
+    }
+    scrubber.addEventListener('pointerdown', (e) => { scrubbing = true; scrubber.setPointerCapture(e.pointerId); scrubTo(e.clientX); });
+    scrubber.addEventListener('pointermove', (e) => { if (scrubbing) scrubTo(e.clientX); });
+    scrubber.addEventListener('pointerup', () => { scrubbing = false; });
+
+    function applyToggles() {
+      document.querySelectorAll('[data-toggle]').forEach(b => b.classList.toggle('on', !!state.toggles[b.dataset.toggle]));
+      document.documentElement.dataset.theme = state.toggles.night ? 'night' : 'day';
+      try { localStorage.setItem('apex.toggles', JSON.stringify(state.toggles)); } catch (_) {}
+    }
+    function applyDnaToggle() {
+      if (!mapReady) return;
+      map.setLayoutProperty('apex-dna', 'visibility', state.toggles.dna ? 'visible' : 'none');
+    }
+    document.querySelectorAll('[data-toggle]').forEach(b => b.addEventListener('click', () => {
+      const k = b.dataset.toggle;
+      state.toggles[k] = !state.toggles[k];
+      applyToggles();
+      if (k === 'night') { restyleBasemap(); if (track) loadTrackOnMap(); }
+      if (k === 'dna') { applyDnaToggle(); if (state.toggles.dna && track && !track.sectors) toast('Stage DNA needs a profiled drive; this route is geometry only.'); }
+      if (k === 'lpr') { updatePins(); drawScrubber(); }
+      if (k === 'stage') say(state.toggles.stage ? 'Stage mode. Full notes.' : 'Cruise. Hazards only.', true);
+      render(false);
+    }));
+    window.addEventListener('resize', drawScrubber);
+
+    // =======================================================================
+    // 11. NATIVE BRIDGE (ApexNavApp.swift pushes window.apex.live every 0.1 s)
+    // =======================================================================
+    window.apex = {
+      live(frame) {
+        if (!frame || !frame.has_fix || !Number.isFinite(frame.lat) || !Number.isFinite(frame.lon)) return;
+        state.live = frame; state.liveAt = performance.now();
+        if (state.mode !== 'live') { setPlaying(false); setMode('live'); state.follow = true; render(true); }
+        else render(false);
+      },
+      onNative(msg) {
+        if (msg && msg.type === 'recordingSaved') toast(`Saved ${msg.segments} road segments to ${msg.file}`);
+      }
+    };
+    setInterval(() => {
+      if (state.mode === 'live' && performance.now() - state.liveAt > 5000) {
+        state.live = null; setMode(track && track.kind === 'route' ? 'sim' : 'replay'); toast('GPS lost: back to replay');
+      }
+    }, 1000);
+
+    // =======================================================================
+    // 12. BOOT
+    // =======================================================================
+    applyToggles();
+    renderDriveList();
+    setSpeedDial(null, null); setGDial(null, null, null); setOdometer(0); setDna(null);
+    const first = drives.find(d => d.id === params.get('drive')) || drives[0];
+    if (first) {
+      const at = params.has('at') ? parseFloat(params.get('at')) || 0 : 0;
+      activate(first, at * (first.dist[first.dist.length - 1]));
+      if (params.get('play') === '1') setPlaying(true);
+    } else openSheet();
+    if (params.get('book') === '1') openSheet();
+  })();
   </script>
 </body>
 </html>

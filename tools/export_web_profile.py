@@ -1,6 +1,14 @@
-"""Export a Sensor Logger drive into a compact JS data file for the ApexNav cockpit,
-including macro 500m Road DNA Sectors (TECH, FLOW, SURF, CLEAR), auto-detected IMU
-pothole/crest hazards, speed-aware corner apex speeds, and WRC rally pace notes.
+"""Export a profiled drive into a compact JS data file for the ApexNav cockpit.
+
+Every number in the output is either measured (IMU / GPS / barometer) or derived from
+measurements by core/road_dna.py. Nothing is invented: no placeholder hazards, no
+deterministic "camera every N sectors", no made-up sector names. CLEAR stays null
+unless real ALPR positions are supplied with --alpr (an OSM/DeFlock JSON export).
+
+  # from a raw Sensor Logger recording
+  python tools/export_web_profile.py drive.zip --name "Dry Ridge Rd"
+  # re-derive events/sectors for an already exported file (raw log not needed)
+  python tools/export_web_profile.py --reprofile web/data/dry_ridge.js
 """
 from __future__ import annotations
 
@@ -19,11 +27,10 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from core.kinematics import ingest_sensor_logger_drive, G_STD  # noqa: E402
+from core import road_dna as rd  # noqa: E402
+from core.kinematics import ingest_sensor_logger_drive  # noqa: E402
 
-# (field, decimals) — order defines the column layout of every 5m row:
-# [0:dist_m, 1:lat, 2:lon, 3:elev_m, 4:grade_pct, 5:speed_mph, 6:lon_g, 7:lat_g,
-#  8:camber_deg, 9:crest_g, 10:rough_rms, 11:eng, 12:sector_id, 13:target_mph]
+# (field, decimals) — column layout of every 5 m row. The cockpit indexes by name.
 FIELDS = [
     ("distance_m", 1),
     ("lat", 6),
@@ -36,14 +43,18 @@ FIELDS = [
     ("camber_deg", 1),
     ("crest_vertical_g", 3),
     ("roughness_rms", 4),
+    ("vert_peak_g", 3),
     ("engagement_score", 2),
-    ("sector_id", 0),
     ("target_mph", 1),
 ]
 
-SEGMENT_M = 5.0
-GRADE_WINDOW_M = 50.0
-SECTOR_LENGTH_M = 500.0
+MIN_CORNER_SPEED_MPS = 2.5
+
+HAZARD_CALLS = {
+    "bump": ("BUMP", "Bump"),
+    "crest": ("CREST", "Crest"),
+    "dip": ("DIP", "Dip"),
+}
 
 
 def slugify(text: str) -> str:
@@ -62,10 +73,9 @@ def read_metadata(source: str) -> dict:
     except Exception:
         return {}
     meta = {"device": str(row.get("device name", "") or "")}
-    epoch_ms = row.get("recording epoch time")
-    tz = row.get("recording timezone")
     try:
-        stamp = pd.Timestamp(int(epoch_ms), unit="ms", tz="UTC")
+        stamp = pd.Timestamp(int(row.get("recording epoch time")), unit="ms", tz="UTC")
+        tz = row.get("recording timezone")
         if isinstance(tz, str) and tz:
             stamp = stamp.tz_convert(tz)
         meta["date"] = stamp.isoformat()
@@ -74,229 +84,92 @@ def read_metadata(source: str) -> dict:
     return meta
 
 
-def compute_geometry_and_targets(segments: pd.DataFrame) -> pd.DataFrame:
-    """Compute smoothed grade, road curvature kappa (1/m), and speed-aware target_mph."""
-    out = segments.sort_values("distance_m").reset_index(drop=True).copy()
-    win = max(3, int(round(GRADE_WINDOW_M / SEGMENT_M)) | 1)
-    elev_s = out["elevation_m"].rolling(win, center=True, min_periods=1).mean()
-    dist = out["distance_m"].to_numpy(dtype=float)
-
-    if len(out) > 2:
-        d_elev = np.gradient(elev_s.to_numpy(), np.maximum(1.0, dist))
-        grade = pd.Series(np.clip(d_elev * 100.0, -35.0, 35.0))
-        out["grade_pct"] = grade.rolling(win, center=True, min_periods=1).mean().to_numpy()
-    else:
-        out["grade_pct"] = 0.0
-    out["elevation_m"] = elev_s.to_numpy()
-
-    # Local planar coordinates in meters for heading & curvature extraction
-    lat = out["lat"].to_numpy(dtype=float)
-    lon = out["lon"].to_numpy(dtype=float)
-    lat0 = np.radians(np.mean(lat))
-    x_m = (lon - lon[0]) * 111320.0 * np.cos(lat0)
-    y_m = (lat - lat[0]) * 110540.0
-
-    dx = pd.Series(np.gradient(x_m)).rolling(5, center=True, min_periods=1).mean().to_numpy()
-    dy = pd.Series(np.gradient(y_m)).rolling(5, center=True, min_periods=1).mean().to_numpy()
-    ds = np.maximum(2.5, np.hypot(dx, dy))
-    heading_rad = np.unwrap(np.arctan2(dx, dy))  # 0 = North, +pi/2 = East
-    d_heading = pd.Series(np.gradient(heading_rad)).rolling(5, center=True, min_periods=1).mean().to_numpy()
-    curvature = d_heading / ds  # signed 1/m (+ = right turn, - = left turn)
-    out["curvature"] = curvature
-    out["heading_deg"] = (np.degrees(heading_rad) + 360.0) % 360.0
-
-    # Look-ahead maximum curvature over the next 85m (17 segments) for speed-aware braking line
-    abs_k = pd.Series(np.abs(curvature))
-    look_k = abs_k.rolling(17, min_periods=1).max().shift(-12).fillna(abs_k).to_numpy()
-    radius_m = 1.0 / np.maximum(1e-4, look_k)
-    camber_rad = np.radians(np.clip(out["camber_deg"].to_numpy(dtype=float), -8.0, 12.0))
-    rough = out["roughness_rms"].to_numpy(dtype=float)
-    mu_eff = np.clip(0.42 - rough * 1.2 + np.maximum(0.0, np.tan(camber_rad) * 0.5), 0.24, 0.55)
-    v_target_mps = np.sqrt(np.clip(radius_m * G_STD * mu_eff, 36.0, 1600.0))
-    out["target_mph"] = np.clip(v_target_mps * 2.236936, 18.0, 85.0)
-    return out
+def load_web_profile(path: str) -> dict:
+    text = open(path, encoding="utf-8").read()
+    return json.loads(text[text.index("push(") + 5:text.rindex(");")])
 
 
-def extract_sectors_and_events(segments: pd.DataFrame, drive_name: str):
-    """Aggregate 5m segments into 500m Road DNA Sectors and extract Rally Pace Notes & Hazards."""
-    dist = segments["distance_m"].to_numpy(dtype=float)
-    sector_ids = (dist // SECTOR_LENGTH_M).astype(int)
-    segments["sector_id"] = sector_ids
+def profile_segments(seg: pd.DataFrame, alpr_nodes=None) -> tuple[pd.DataFrame, list, list]:
+    """Run road_dna over 5 m segments -> (segments + target_mph, sectors, events)."""
+    seg = seg.sort_values("distance_m").reset_index(drop=True)
+    lat = seg["lat"].to_numpy(float)
+    lon = seg["lon"].to_numpy(float)
+    dist = seg["distance_m"].to_numpy(float)
+    camber = np.radians(seg["camber_deg"].to_numpy(float))
+    crest = seg["crest_vertical_g"].to_numpy(float)
+    rough = seg["roughness_rms"].to_numpy(float)
+    peak = seg["vert_peak_g"].to_numpy(float) if "vert_peak_g" in seg else None
 
-    sector_names = [
-        "Ridge Approach", "Creek Valley Run", "Switchback Ascent", "Highland Sweeper",
-        "Timberline Crest", "Gorge Technical", "Overlook Straight", "Chicane Complex",
-        "Hollow Descent", "Backcountry Link", "Summit Hairpins", "Riverbend Flow"
-    ]
+    kappa, ds = rd.compute_curvature(lat, lon)
+    seg["target_mph"] = rd.braking_envelope_mps(kappa, ds, camber, rough) * rd.MPS_TO_MPH
+    # Manoeuvres at walking pace (driveways, parking) are not road character.
+    speed_mps = seg["speed_mph"].to_numpy(float) / rd.MPS_TO_MPH
+    corners = [c for c in rd.detect_corners(kappa, ds, camber, crest, rough)
+               if speed_mps[c["apex"]] >= MIN_CORNER_SPEED_MPS]
+    hazards = rd.detect_hazards(dist, crest, rough, peak)
 
-    sectors = []
+    alpr_counts = None
+    if alpr_nodes is not None:
+        alpr_counts = rd.alpr_counts_by_sector(lat, lon, (dist // rd.SECTOR_LENGTH_M).astype(int), alpr_nodes)
+    sectors = rd.score_sectors(dist, kappa, corners, seg["grade_pct"].to_numpy(float), camber,
+                               speed_mps, rough, hazards, alpr_counts)
+    for s in sectors:
+        s["start_m"] = round(s["start_m"], 1)
+        s["end_m"] = round(s["end_m"], 1)
+
+    def at(i):
+        return {"index": int(i), "dist_m": round(float(dist[i]), 1),
+                "lat": round(float(lat[i]), 6), "lon": round(float(lon[i]), 6)}
+
     events = []
-
-    for sid, grp in segments.groupby("sector_id"):
-        s_start = float(grp["distance_m"].iloc[0])
-        s_end = float(grp["distance_m"].iloc[-1])
-        k_abs = np.abs(grp["curvature"].to_numpy(dtype=float))
-        grade_abs = np.abs(grp["grade_pct"].to_numpy(dtype=float))
-        lat_g_abs = np.abs(grp["lat_g"].to_numpy(dtype=float))
-        camber = grp["camber_deg"].to_numpy(dtype=float)
-        rough = grp["roughness_rms"].to_numpy(dtype=float)
-        crest = np.abs(grp["crest_vertical_g"].to_numpy(dtype=float))
-
-        # 4-Axis Road DNA Scores (0 - 100)
-        tech_raw = np.percentile(k_abs, 90) * 6500.0 + np.std(k_abs) * 9000.0 + np.mean(grade_abs) * 2.8
-        tech_score = int(np.clip(28 + tech_raw, 18, 98))
-
-        flow_raw = np.mean(lat_g_abs) * 210.0 + np.maximum(0.0, np.mean(camber)) * 6.5 + (1.0 - np.std(grp["speed_mph"]) / 25.0) * 32.0
-        flow_score = int(np.clip(35 + flow_raw, 22, 97))
-
-        surf_penalty = np.mean(rough) * 680.0 + np.max(rough) * 240.0 + np.max(crest) * 95.0
-        surf_score = int(np.clip(96 - surf_penalty, 24, 98))
-
-        # Deterministic stealth/clear score (lower near major arterial junctions)
-        has_flock = (int(sid) % 18 == 4)
-        has_police = (int(sid) % 28 == 11)
-        clear_score = int(np.clip(94 - (35 if has_flock else 0) - (28 if has_police else 0) - (int(sid) % 5) * 2, 28, 98))
-
-        label = f"Stage S{int(sid)+1:02d} · {sector_names[int(sid) % len(sector_names)]}"
-        mid_row = grp.iloc[len(grp) // 2]
-
-        sectors.append({
-            "id": int(sid),
-            "name": label,
-            "start_m": round(s_start, 1),
-            "end_m": round(s_end, 1),
-            "lat": round(float(mid_row["lat"]), 6),
-            "lon": round(float(mid_row["lon"]), 6),
-            "tech": tech_score,
-            "flow": flow_score,
-            "surf": surf_score,
-            "clear": clear_score,
-            "passes": 2 if (int(sid) % 2 == 0) else 1,
-            "elev_gain_m": round(float(grp["elevation_m"].max() - grp["elevation_m"].min()), 1),
-        })
-
-        # 1. Extract primary corner in this sector if curvature is notable
-        peak_k_idx = int(grp["curvature"].abs().idxmax())
-        pk_row = segments.loc[peak_k_idx]
-        pk_val = float(pk_row["curvature"])
-        if abs(pk_val) > 0.0014:
-            direction = "Right" if pk_val > 0 else "Left"
-            dir_short = "R" if pk_val > 0 else "L"
-            radius = min(450.0, 1.0 / max(1e-4, abs(pk_val)))
-            if radius < 32:
-                sev = 1
-            elif radius < 58:
-                sev = 2
-            elif radius < 95:
-                sev = 3
-            elif radius < 155:
-                sev = 4
-            elif radius < 245:
-                sev = 5
-            else:
-                sev = 6
-
-            modifiers = []
-            if pk_row["grade_pct"] > 3.5:
-                modifiers.append("uphill")
-            elif pk_row["grade_pct"] < -3.5:
-                modifiers.append("downhill")
-            if abs(pk_row["crest_vertical_g"]) > 0.075:
-                modifiers.append("over crest")
-            if pk_row["camber_deg"] > 2.5:
-                modifiers.append("banked")
-            elif pk_row["camber_deg"] < -2.2:
-                modifiers.append("off-camber")
-
-            mod_str = (", " + ", ".join(modifiers)) if modifiers else ""
-            tgt = int(round(float(pk_row["target_mph"])))
-            call_text = f"{direction} {sev}{mod_str}"
-            if sev <= 3 and tgt < 55:
-                call_text += f", target {tgt}"
-            events.append({
-                "type": "corner",
-                "code": f"{dir_short}{sev}",
-                "dist_m": round(float(pk_row["distance_m"]), 1),
-                "lat": round(float(pk_row["lat"]), 6),
-                "lon": round(float(pk_row["lon"]), 6),
-                "target_mph": tgt,
-                "title": f"{direction} {sev}" + (f" · {modifiers[0].title()}" if modifiers else ""),
-                "detail": f"Target {tgt} mph" if sev <= 4 else "Flat / Flowing",
-                "speech": call_text,
-            })
-
-        # 2. Only flag genuine extreme chassis-bottoming impacts (at most 2-3 per drive, >8 km apart)
-        peak_r_idx = int(grp["roughness_rms"].idxmax())
-        pr_row = segments.loc[peak_r_idx]
-        if float(pr_row["roughness_rms"]) > 0.24 and (int(sid) % 22 == 7):
-            events.append({
-                "type": "pothole",
-                "code": "CREST",
-                "dist_m": round(float(pr_row["distance_m"]), 1),
-                "lat": round(float(pr_row["lat"]), 6),
-                "lon": round(float(pr_row["lon"]), 6),
-                "severity_g": round(float(pr_row["roughness_rms"]) * 4.0, 1),
-                "title": "Rough Crest / Compression",
-                "detail": "Ease damper load",
-                "speech": "Caution over compression",
-            })
-
-        # 3. Countermeasure Pins (Flock Safety ALPR & Police Sightings)
-        if has_flock:
-            fl_row = grp.iloc[min(len(grp) - 1, len(grp) // 3)]
-            events.append({
-                "type": "flock",
-                "code": "LPR",
-                "dist_m": round(float(fl_row["distance_m"]), 1),
-                "lat": round(float(fl_row["lat"]), 6),
-                "lon": round(float(fl_row["lon"]), 6),
-                "bearing": round(float(fl_row["heading_deg"]), 0),
-                "title": "Flock LPR Camera",
-                "detail": "Optical ALPR Ahead",
-                "speech": "Flock camera ahead, check speed",
-            })
-        if has_police:
-            po_row = grp.iloc[min(len(grp) - 1, (len(grp) * 2) // 3)]
-            events.append({
-                "type": "police",
-                "code": "RADAR",
-                "dist_m": round(float(po_row["distance_m"]), 1),
-                "lat": round(float(po_row["lat"]), 6),
-                "lon": round(float(po_row["lon"]), 6),
-                "title": "Police Radar Sighting",
-                "detail": "Reported 12m ago",
-                "speech": "Police radar reported ahead",
-            })
-
+    for c in corners:
+        code, call = rd.pace_note_text(c)
+        events.append({"type": "corner", "code": code, "call": call, **at(c["apex"]),
+                       "start_m": round(float(dist[c["start"]]), 1),
+                       "end_m": round(float(dist[c["end"]]), 1),
+                       "radius_m": round(c["radius_m"], 1),
+                       "apex_mph": round(c["apex_mps"] * rd.MPS_TO_MPH, 1)})
+    for h in hazards:
+        code, call = HAZARD_CALLS[h["type"]]
+        events.append({"type": h["type"], "code": code, "call": call, **at(h["index"]),
+                       "severity_g": round(h["severity_g"], 3)})
     events.sort(key=lambda e: e["dist_m"])
-    return sectors, events
+    return seg, sectors, events
 
 
-def build_payload(source: str, name: str, drive_id: str) -> dict:
-    _raw, R, segments = ingest_sensor_logger_drive(source)
-    segments = compute_geometry_and_targets(segments)
-    segments = segments.replace([np.inf, -np.inf], np.nan).dropna(subset=["lat", "lon"]).fillna(0.0)
-    sectors, events = extract_sectors_and_events(segments, name)
-
+def build_payload(seg: pd.DataFrame, meta: dict, alpr_nodes=None) -> dict:
+    seg = seg.replace([np.inf, -np.inf], np.nan).dropna(subset=["lat", "lon"]).fillna(0.0)
+    seg, sectors, events = profile_segments(seg, alpr_nodes)
+    fields = [(f, d) for f, d in FIELDS if f in seg.columns]
     cols = []
-    for field, decimals in FIELDS:
-        vals = np.round(segments[field].to_numpy(dtype=float), decimals)
-        cols.append([int(v) if decimals == 0 or float(v).is_integer() else float(v) for v in vals])
-    rows = [list(r) for r in zip(*cols)]
-
-    meta = read_metadata(source)
+    for field, decimals in fields:
+        vals = np.round(seg[field].to_numpy(dtype=float), decimals)
+        cols.append([int(v) if float(v).is_integer() else float(v) for v in vals])
     return {
-        "id": drive_id,
-        "name": name,
-        "date": meta.get("date", ""),
-        "device": meta.get("device", ""),
-        "mount_R": np.round(R, 4).tolist(),
-        "segment_m": SEGMENT_M,
-        "fields": [f for f, _ in FIELDS],
+        **meta,
+        "segment_m": 5.0,
+        "sector_m": rd.SECTOR_LENGTH_M,
+        "fields": [f for f, _ in fields],
         "sectors": sectors,
         "events": events,
-        "rows": rows,
+        "rows": [list(r) for r in zip(*cols)],
     }
+
+
+def from_sensor_logger(source: str, name: str, drive_id: str) -> tuple[pd.DataFrame, dict]:
+    _raw, R, seg = ingest_sensor_logger_drive(source)
+    seg["elevation_m"], seg["grade_pct"] = rd.smooth_elevation_and_grade(
+        seg["distance_m"].to_numpy(float), seg["elevation_m"].to_numpy(float))
+    meta = read_metadata(source)
+    return seg, {"id": drive_id, "name": name, "date": meta.get("date", ""),
+                 "device": meta.get("device", ""), "mount_R": np.round(R, 4).tolist()}
+
+
+def from_web_profile(path: str) -> tuple[pd.DataFrame, dict]:
+    d = load_web_profile(path)
+    seg = pd.DataFrame(d["rows"], columns=d["fields"])
+    meta = {k: d[k] for k in ("id", "name", "date", "device", "mount_R") if k in d}
+    return seg, meta
 
 
 def write_js(payload: dict, out_path: str) -> None:
@@ -312,23 +185,32 @@ def write_js(payload: dict, out_path: str) -> None:
 
 
 def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("source", help="Sensor Logger export (.zip or extracted directory)")
-    ap.add_argument("--name", required=True, help='Display name, e.g. "Dry Ridge Rd"')
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("source", nargs="?", help="Sensor Logger export (.zip or extracted directory)")
+    ap.add_argument("--reprofile", metavar="JS", help="Re-derive an existing web/data/*.js in place")
+    ap.add_argument("--name", help='Display name, e.g. "Dry Ridge Rd"')
     ap.add_argument("--id", help="Stable drive id")
     ap.add_argument("--out", help="Output .js path")
+    ap.add_argument("--alpr", help="JSON list of {lat, lon} ALPR cameras (e.g. from OSM/DeFlock)")
     args = ap.parse_args(argv)
 
-    drive_id = args.id or slugify(args.name)
-    out = args.out or os.path.join(ROOT, "web", "data", f"{drive_id}.js")
-    payload = build_payload(args.source, args.name, drive_id)
+    alpr = json.load(open(args.alpr, encoding="utf-8")) if args.alpr else None
+    if args.reprofile:
+        seg, meta = from_web_profile(args.reprofile)
+        out = args.out or args.reprofile
+    elif args.source and args.name:
+        drive_id = args.id or slugify(args.name)
+        seg, meta = from_sensor_logger(args.source, args.name, drive_id)
+        out = args.out or os.path.join(ROOT, "web", "data", f"{drive_id}.js")
+    else:
+        ap.error("give a Sensor Logger source with --name, or --reprofile FILE")
+
+    payload = build_payload(seg, meta, alpr)
     write_js(payload, out)
-    rows = payload["rows"]
-    km = rows[-1][0] / 1000.0 if rows else 0.0
-    print(
-        f"Wrote {out}: {len(rows)} segments ({km:.2f} km), "
-        f"{len(payload['sectors'])} stages, {len(payload['events'])} pace/hazard events"
-    )
+    kinds = pd.Series([e["type"] for e in payload["events"]]).value_counts().to_dict()
+    km = payload["rows"][-1][0] / 1000.0 if payload["rows"] else 0.0
+    print(f"Wrote {out}: {len(payload['rows'])} segments ({km:.2f} km), "
+          f"{len(payload['sectors'])} sectors, events {kinds}")
     return 0
 
 

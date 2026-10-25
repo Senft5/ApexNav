@@ -25,9 +25,11 @@ def profile_drive_dataframe(df: pd.DataFrame, R: np.ndarray, fs_hz: float = 100.
     omega_z = veh_gyro[:, 2]
     v_mps = df['v_mps'].to_numpy()
 
+    # Turn-relative banking: + = road banked into the corner, - = off-camber. Only
+    # observable while cornering; NaN elsewhere so straights don't dilute bin means.
     a_kin_y = v_mps * omega_z
     sin_camber = np.clip((np.abs(a_kin_y) - np.abs(ay_v)) / G_STD, -0.5, 0.5)
-    camber_deg = np.where(np.abs(a_kin_y) > 1.5, np.degrees(np.arcsin(sin_camber)), 0.0)
+    camber_deg = np.where(np.abs(a_kin_y) > 1.5, np.degrees(np.arcsin(sin_camber)), np.nan)
 
     nyq = 0.5 * fs_hz
     b_low, a_low = butter(2, 1.0 / nyq, btype='low')
@@ -56,6 +58,7 @@ def profile_drive_dataframe(df: pd.DataFrame, R: np.ndarray, fs_hz: float = 100.
         'camber_deg': camber_deg,
         'crest_vertical_g': crest_g,
         'roughness_sq': rough_g ** 2,
+        'vert_peak_g': np.abs(rough_g),
         'engagement_score': engagement
     })
 
@@ -70,8 +73,10 @@ def profile_drive_dataframe(df: pd.DataFrame, R: np.ndarray, fs_hz: float = 100.
         camber_deg=('camber_deg', 'mean'),
         crest_vertical_g=('crest_vertical_g', 'mean'),
         roughness_rms=('roughness_sq', lambda x: float(np.sqrt(np.mean(x)))),
+        vert_peak_g=('vert_peak_g', 'max'),
         engagement_score=('engagement_score', 'mean')
     )
+    grouped['camber_deg'] = grouped['camber_deg'].fillna(0.0)
 
     if len(grouped) > 1:
         d_elev = np.gradient(grouped['elevation_m'].to_numpy())
