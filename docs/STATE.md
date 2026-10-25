@@ -222,15 +222,16 @@ docs/SOCIAL.md.
 - [x] Phone-side contributor (`web/contributor.js`, 9 pytest tests): Valhalla `trace_attributes` map-matching -> OSM way ids, Overpass way geometry, bins counted from the way's first node, direction from travel along the way; trims 1 km at both ends, skips residential/service roads, unknown roughness leaves the bin out, unknown camber stays null; uploads via `/api/contribute`. Analysis page has a "Share road data" panel for recent imported drives. **Not yet verified against the live Valhalla/Overpass servers or with a real recording** (the container's network is restricted); the shell is tested with a fake fetch.
 - [x] Read side: `GET /api/roads?ways=a,b,c` (members only, max 50 ways) returns merged per-bin numbers (n, camber, roughness, crest; null = unmeasured), no contributor info. The phone does not use it for scoring yet.
 - [x] Measured-data preview: when a route is opened, members see how much of it other members have measured (coverage, roughness, banked km, passes). `ApexContributor.measuredAlong` (match -> way geometry -> `/api/roads`), 2 more tests. Not wired into loop *scoring*: stage tiles carry no OSM way ids, so scoring by measured data needs a matched candidate route (next step).
+- [x] Loop choice uses member data: among the top 3 candidate loops, measured roughness (same scale as core `effective_mu`) can cost up to 6 points; unmeasured roads are neutral. Members only, 12 s timeout, falls back silently.
 - [x] **76 backend tests** (privacy, auth, highlights, contribute, nightly, account) + 53 pytest.
 ### Active bugs / limitations
 - **Cloudflare "Workers Builds: apexnav" preview build fails on PR commits** while all GitHub Actions pass; a clean-checkout `wrangler deploy --dry-run` succeeds. Docs say a D1 binding needs only Editor access, so a token problem is unlikely. Need the build log text (dashboard > apexnav > Builds). Production deploy of main after merge may fail; the previous deployment stays live.
 - Contributor limits: only drives imported after this change keep the roughness/crest/curvature columns; older stored drives are not eligible. Public Valhalla/Overpass servers are rate limited, so a self-hosted matcher may be needed past a handful of users.
-- Not built yet:  measured data in loop scoring (route preview done), convoy, R2 backups.
+- Not built yet:  convoy, R2 backups.
 - `npm ci` needs `--legacy-peer-deps` (Cloudflare test plugin vs wrangler peers).
 
 ## Exact Next Task
 1. Owner: Google client + Worker secrets; then sign in at the site and make the first invites.
 2. Get the Workers Builds log and fix the preview/production build; merge PR #10.
-3. Use measured data to rank candidate loops (match each candidate, prefer measured-good); verify the contributor against live Valhalla/Overpass with a real recording; convoy (Durable Objects).
+3. Reward measured-good (banked, smooth) stretches too once there is enough real data to calibrate; verify the contributor against live Valhalla/Overpass with a real recording; convoy (Durable Objects).
 4. Voice (on hold): in-app enrollment design in docs/VOICE.md; replace the espeak-ng dependency.

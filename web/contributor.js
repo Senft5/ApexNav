@@ -170,6 +170,16 @@
              roughness: rough.length ? mean(rough) : null, bankedKm: banked * BIN_M / 1000, avgPasses: covered ? passes / covered : null };
   }
 
-  const api = { measuredAlong, summarize, locate, buildContributions, matchDrive, fetchWays, contributeDrive, eligible, project, cumulative, SKIP_CLASSES };
+  /**
+   * Gentle score adjustment for a candidate loop from member measurements. Only measured roughness moves the score (a rough stretch is a real
+   * penalty up to 6 points at full coverage); unmeasured roads are neutral, never penalised, so a route no one has driven is not disadvantaged.
+   */
+  function measuredAdjust(m) {
+    if (!m || m.roughness == null || !(m.coverage > 0)) return 0;
+    const rough = Math.max(0, Math.min(1, (m.roughness - 0.08) / 0.30));       // same scale as core effective_mu: fine at 0.08 g rms, fully rough at 0.38 g
+    return -6 * Math.min(1, m.coverage * 2) * rough;
+  }
+
+  const api = { measuredAdjust, measuredAlong, summarize, locate, buildContributions, matchDrive, fetchWays, contributeDrive, eligible, project, cumulative, SKIP_CLASSES };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexContributor = api;
 })(typeof window !== 'undefined' ? window : globalThis);

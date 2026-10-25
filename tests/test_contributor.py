@@ -37,6 +37,7 @@ out.eligible = [C.eligible({ rough: [1], kappa: [1], date: '2026-10-20T10:00' },
 // payload contains only the allowed keys
 out.keys = Object.keys(a[0]).sort().join() + '|' + Object.keys(a[0].bins[0]).sort().join();
 // network shell with a fake fetch: Valhalla trace_attributes + Overpass, then upload
+out.adjust = [C.measuredAdjust(null), C.measuredAdjust({ roughness: null, coverage: 1 }), C.measuredAdjust({ roughness: 0.05, coverage: 1 }), C.measuredAdjust({ roughness: 0.6, coverage: 1 }), C.measuredAdjust({ roughness: 0.6, coverage: 0.1 }), C.measuredAdjust({ roughness: 0.23, coverage: 0.5 })];
 (async () => {
   // measured data along a route: way 77 direction 0 has bins 200..399 merged from 3 passes, one banked stretch, one unmeasured-camber stretch
   const roads = { 77: { 0: { i: Array.from({ length: 200 }, (_, j) => 200 + j), n: Array(200).fill(3), cam: Array.from({ length: 200 }, (_, j) => (j < 40 ? 5 : j < 60 ? null : 1)), rough: Array(200).fill(0.1), crest: Array(200).fill(0.2) } } };
@@ -134,3 +135,9 @@ def test_measured_is_per_direction_and_network_path(result):
     assert result["reverseRoute"]["coveredKm"] == 0                  # data is for the other direction
     assert result["lookupIds"] == [77] and result["viaNetwork"]["coveredKm"] > 0.9
     assert result["signedOut"] is None
+
+
+def test_measured_adjustment_is_gentle_and_never_rewards_or_punishes_the_unknown(result):
+    none, unknown_rough, smooth, rough_full, rough_little, mid = result["adjust"]
+    assert none == 0 and unknown_rough == 0 and smooth == 0
+    assert rough_full == pytest.approx(-6) and -6 < rough_little < 0 and mid == pytest.approx(-3)

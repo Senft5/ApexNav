@@ -1280,6 +1280,18 @@
       const done = (await Promise.allSettled(tries)).filter(r => r.status === 'fulfilled').map(r => r.value);
       if (!done.length) { toast('Loop routing failed. Check your connection.'); return; }
       done.sort((a, b) => b.score - a.score);
+      // Members: let what others measured break ties among the top few (a rough road costs up to 6 points; unmeasured roads are neutral).
+      if (window.ApexSync && window.ApexContributor && done.length > 1 && await ApexSync.member()) {
+        ui.step('CHECKING MEMBER DATA', 0.9);
+        await Promise.all(done.slice(0, 3).map(async (d) => {
+          try {
+            const m = await Promise.race([ApexContributor.measuredAlong(d.t, async (ids) => { const r = await apiCall('GET', `/api/roads?ways=${ids.join(',')}`); return r.ok ? r.json() : null; }),
+                                          new Promise(r => setTimeout(() => r(null), 12000))]);
+            d.t.measured = m; d.score += ApexContributor.measuredAdjust(m);
+          } catch (_) { /* offline or slow: keep the unadjusted score */ }
+        }));
+        done.sort((a, b) => b.score - a.score);
+      }
       const best = done[0];
       ui.step('PROFILING', 0.92);
       await buildRoute(null, `loop_${miles}`, `${miles} mi loop`, best.t);
