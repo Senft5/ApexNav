@@ -1636,7 +1636,7 @@
     // =======================================================================
     // 10b. DRIVE MODE (web): real GPS + motion, recorded to this device. REPLAY plays a saved drive; the two never mix.
     // =======================================================================
-    const drive = { sensors: null, rec: null, status: null, frames: 0 };
+    const drive = { sensors: null, rec: null, status: null, frames: 0, live: null, liveIdx: 0, share: 'off', shareKm: 0, shareErr: null };
     function paintModeSwitch() {
       const on = state.mode === 'live';
       $('modeReplay').classList.toggle('on', !on); $('modeReplay').setAttribute('aria-pressed', String(!on));
@@ -1648,26 +1648,53 @@
       bits.push(s.gps === 'on' ? '<b>GPS</b>' : s.gps === 'denied' ? 'GPS BLOCKED' : s.gps === 'weak' ? 'GPS WEAK' : s.gps === 'error' ? 'GPS ERROR' : 'WAITING FOR GPS');
       bits.push(s.motion === 'on' ? '<b>MOTION</b>' : s.motion === 'denied' ? 'MOTION OFF (blocked)' : s.motion === 'unavailable' ? 'NO MOTION SENSOR' : 'MOTION...');
       if (r && r.samples > 0) bits.push(`<b>REC</b> ${(r.km / 1.609344).toFixed(2)} mi`);
+      if (drive.share === 'on') bits.push(drive.shareErr ? 'SHARING (retrying)' : `<b>SHARING</b> ${drive.shareKm.toFixed(1)} km`);
+      else if (drive.share === 'stopped') bits.push('SHARING PAUSED');
+      else if (drive.share === 'off-member') bits.push('SHARING OFF');
       if (s.wake === 'unavailable') bits.push('keep screen on');
       $('driveStat').innerHTML = bits.join(' · ') + (s.message ? `<br><span style="letter-spacing:0">${s.message}</span>` : '');
+    }
+    // Road data streams while you drive when you are a member with ROAD DATA on: settled stretches only (never the first or last km).
+    function feedLive() {
+      const L = drive.live, r = drive.rec; if (!L || !r) return;
+      while (drive.liveIdx < r.rows.length) { const x = r.rows[drive.liveIdx++]; L.push({ lat: x.lat, lon: x.lon, roughness_rms: x.roughness_rms }); }
+    }
+    async function startLiveSharing() {
+      const rec = drive.rec;
+      try {
+        if (!window.ApexSync || !window.ApexContributor || !(await ApexSync.member())) return;
+        if (!(await ApexSync.contributionEnabled())) { drive.share = 'off-member'; paintDriveStat(); return; }
+        if (drive.rec !== rec) return;                                       // the drive ended while we were checking
+        const day = new Date(), pad = (n) => String(n).padStart(2, '0');
+        drive.live = ApexContributor.createLive({
+          Core, fetch: window.fetch.bind(window), post: ApexSync.contribute,
+          driveId: ApexContributor.driveIdFor({ id: `live_${Date.now()}`, date: day.toISOString() }),
+          drivenOn: day.toISOString().slice(0, 10),
+          onStatus: (s) => { drive.share = s.state === 'stopped' ? 'stopped' : 'on'; drive.shareKm = s.km; drive.shareErr = s.error; if (s.error) console.warn('road data sharing:', s.error); paintDriveStat(); },
+        });
+        drive.share = 'on'; feedLive(); paintDriveStat();
+      } catch (_) { /* sharing is optional: the drive itself is unaffected */ }
     }
     async function enterDrive() {
       if (state.mode === 'live' && drive.sensors) return;
       if (state.mode === 'live') return;                                   // native app is feeding frames already
       setPlaying(false);
       drive.rec = new ApexSensors.Recorder(); drive.status = { gps: 'waiting', motion: 'off', wake: 'off', message: '' }; drive.frames = 0;
+      drive.live = null; drive.liveIdx = 0; drive.share = 'off'; drive.shareKm = 0; drive.shareErr = null;
       setMode('live'); paintModeSwitch(); paintDriveStat();
       try {
         drive.sensors = await ApexSensors.start({
           onStatus: (s) => { drive.status = s; paintDriveStat(); },
-          onFrame: (fr) => { if (!fr.has_fix) return; drive.frames++; drive.rec.add(fr); window.apex.live(fr); paintDriveStat(); },
+          onFrame: (fr) => { if (!fr.has_fix) return; drive.frames++; drive.rec.add(fr); feedLive(); window.apex.live(fr); paintDriveStat(); },
         });
+        startLiveSharing();
       } catch (e) { toast(e.message || 'Could not start GPS.'); leaveDrive(false); }
     }
     async function leaveDrive(save) {
-      const rec = drive.rec, sensors = drive.sensors;
-      drive.sensors = null; drive.rec = null;
+      const rec = drive.rec, sensors = drive.sensors, live = drive.live;
+      drive.sensors = null; drive.rec = null; drive.live = null; drive.share = 'off';
       if (sensors) sensors.stop();
+      const shared = live ? await live.finish() : null;
       state.live = null;
       setMode(track && track.kind === 'route' ? 'sim' : 'replay'); paintModeSwitch(); render(true);
       if (save && rec && rec.km >= 0.3 && rec.samples >= 60) {
@@ -1675,8 +1702,9 @@
           const when = new Date(rec.startedAt || Date.now()), pad = (n) => String(n).padStart(2, '0');
           const stamp = `${when.getFullYear()}${pad(when.getMonth() + 1)}${pad(when.getDate())}_${pad(when.getHours())}${pad(when.getMinutes())}${pad(when.getSeconds())}`;
           const d = ApexRecording.parse(Core, rec.toCsv(), `web_${stamp}.csv`, { source: 'web-gps', date: `${when.getFullYear()}-${pad(when.getMonth() + 1)}-${pad(when.getDate())}T${pad(when.getHours())}:${pad(when.getMinutes())}`, name: `Drive ${when.toLocaleDateString()} ${pad(when.getHours())}:${pad(when.getMinutes())}` });
+          if (shared && shared.chunks > 0) d.contributed = true;                // streamed already: the analysis page must not send it again
           await ApexRecording.store(d);
-          toast(`Saved ${(rec.km / 1.609344).toFixed(1)} mi. Open ANALYSIS to see it.`);
+          toast(`Saved ${(rec.km / 1.609344).toFixed(1)} mi.` + (shared && shared.km > 0 ? ` Shared ${shared.km.toFixed(1)} km of road data.` : '') + ' Open ANALYSIS to see it.');
         } catch (e) { toast(`Could not save the drive: ${e.message}`); }
       } else if (save && rec && rec.samples > 0) toast('Too short to save (under 0.3 km).');
     }
