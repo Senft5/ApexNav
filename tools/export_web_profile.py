@@ -171,7 +171,9 @@ def profile_segments(seg: pd.DataFrame, alpr_nodes=None) -> tuple[pd.DataFrame, 
                        "start_m": round(float(dist[c["start"]]), 1),
                        "end_m": round(float(dist[c["end"]]), 1),
                        "radius_m": round(c["radius_m"], 1),
-                       "apex_mph": round(c["apex_mps"] * rd.MPS_TO_MPH, 1)})
+                       "apex_mph": round(c["apex_mps"] * rd.MPS_TO_MPH, 1),
+                       "dir": c["dir"], "severity": c["severity"],
+                       "turn_rad": round(abs(c["turn_rad"]), 3), "mods": c["mods"]})
     for h in hazards:
         code, call = HAZARD_CALLS[h["type"]]
         events.append({"type": h["type"], "code": code, "call": call, **at(h["index"]),

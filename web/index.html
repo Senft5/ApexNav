@@ -4,249 +4,219 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>ApexNav Cockpit</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=Inter+Tight:wght@400;500;600;700;800&display=swap" />
   <link rel="stylesheet" href="vendor/maplibre-gl.css" />
   <script src="vendor/maplibre-gl.js"></script>
   <script src="vendor/maplibre-contour.min.js"></script>
   <script src="apex_core.js"></script>
+  <script src="themes.js"></script>
+  <script src="instruments.js"></script>
   <script src="data/dry_ridge.js"></script>
   <script src="data/pebble_ridge.js"></script>
   <style>
-    /* ---------------------------------------------------------------------
-       Tokens. Day = Rally Topo Paper, Night = VDO Phosphor (PHILOSOPHY.md 1).
-       The binnacle is the same anodised bezel in both.
-       --------------------------------------------------------------------- */
-    :root {
-      --paper: #F4EFE6;
-      --paper-ink: #2B2824;
-      --paper-dim: #7A7266;
-      --route: #B5532B;
-      --route-casing: #F4EFE6;
-      --contour: #3B3833;
-      --olive: #6B6B3A;
-      --signal: #D9411E;
-      --amber: #E89B3C;
-      --cream: #EAE3D2;
-      --obsidian: #111210;
-      --bezel: #161615;
-      --bezel-hi: #24231F;
-      --bezel-edge: #3A3832;
-      --engrave: #9A9384;
-      --dial-face: #0E0E0D;
-      --dial-ink: #EAE3D2;
-      --lamp-off: #3A2A22;
-      --safe-top: env(safe-area-inset-top, 0px);
-      --safe-bottom: env(safe-area-inset-bottom, 0px);
-      --dial: clamp(100px, 14.5dvh, 172px);
-    }
-    :root[data-theme="night"] {
-      --paper: #111210;
-      --paper-ink: #EAE3D2;
-      --paper-dim: #8E8676;
-      --route: #E89B3C;
-      --route-casing: #111210;
-      --contour: #2E2C27;
-    }
-
+    :root { --safe-top: env(safe-area-inset-top, 0px); --safe-bottom: env(safe-area-inset-bottom, 0px); --dial: clamp(104px, 15dvh, 180px); }
     * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-    html, body {
-      width: 100%; height: 100%; overflow: hidden;
-      background: var(--bezel); color: var(--paper-ink);
-      font-family: "DIN Alternate", "Bahnschrift", "Barlow Semi Condensed", "Helvetica Neue", Arial, sans-serif;
-      font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; user-select: none;
-    }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: var(--panel); color: var(--panel-ink);
+      font-family: var(--font-ui); font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; user-select: none; }
     button { font: inherit; color: inherit; background: none; border: none; cursor: pointer; }
+    #app { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; height: 100vh; height: 100dvh; }
 
-    #app { display: grid; grid-template-rows: minmax(0, 1fr) auto; height: 100vh; height: 100dvh; }
+    /* ---------------- pace-note strip ---------------- */
+    .notes { background: var(--panel); color: var(--panel-ink); padding: calc(6px + var(--safe-top)) 10px 6px; border-bottom: 1px solid var(--rule); min-height: 64px; }
+    .note-quiet { display: flex; gap: 10px; align-items: baseline; padding: 10px 2px; }
+    .note-quiet b { font-size: 20px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+    .note-quiet span { font-size: 12px; color: var(--panel-dim); text-transform: uppercase; letter-spacing: 0.08em; }
+    .tulip { width: 100%; height: 100%; display: block; }
+    .pn { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 12px; align-items: center; }
+    .pn-tulip { width: 54px; height: 54px; }
+    .pn-code { min-width: 62px; height: 50px; display: grid; place-items: center; font-family: var(--font-num); font-size: 26px; font-weight: 800; color: var(--accent); border: 1.5px solid var(--accent); }
+    .pn.hazard .pn-code { color: var(--signal); border-color: var(--signal); }
+    .pn-call { font-size: 20px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pn-sub { font-size: 12px; color: var(--panel-dim); letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+    .pn-dist { text-align: right; font-family: var(--font-num); }
+    .pn-dist b { font-size: 26px; font-weight: 700; display: block; line-height: 1; }
+    .pn-dist small, .rb-dist small { font-size: 10px; color: var(--panel-dim); letter-spacing: 0.12em; }
+    .pn-next { width: 34px; display: grid; justify-items: center; gap: 1px; opacity: 0.8; }
+    .pn-next .tulip { width: 30px; height: 30px; }
+    .pn-next small { font-size: 9px; color: var(--panel-dim); }
+    .notes-roadbook { display: grid; grid-template-columns: 1.25fr 1fr 1fr; gap: 0; padding-left: 0; padding-right: 0; }
+    .rb-box { display: grid; grid-template-columns: auto 46px minmax(0, 1fr); gap: 6px; align-items: center; padding: 2px 8px; border-left: 1.5px solid var(--rule); min-width: 0; }
+    .rb-box:first-child { border-left: none; }
+    .rb-box:not(.now) { opacity: 0.62; }
+    @media (max-width: 520px) { .notes-roadbook { grid-template-columns: 1.4fr 1fr; } .rb-box:nth-child(3) { display: none; } }
+    .rb-dist { font-family: var(--font-num); text-align: right; }
+    .rb-dist b { display: block; font-size: 22px; line-height: 1; font-weight: 700; }
+    .rb-tulip { width: 46px; height: 46px; }
+    .rb-call { min-width: 0; }
+    .rb-call b { display: block; font-size: 20px; font-weight: 800; color: var(--accent); line-height: 1; }
+    .rb-call span { display: block; font-size: 11px; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: 0.04em; }
+    .tm-note { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; }
+    .tm-code { font-family: var(--font-num); font-size: 30px; font-weight: 600; color: var(--amber); min-width: 66px; }
+    .tm-note.hazard .tm-code { color: var(--signal); }
+    .tm-call { font-size: 17px; font-weight: 700; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tm-count { height: 4px; background: var(--rule); margin-top: 6px; }
+    .tm-count i { display: block; height: 100%; background: var(--amber); }
+    .tm-dist { font-family: var(--font-num); font-size: 24px; }
+    .tm-next { font-family: var(--font-num); font-size: 11px; color: var(--panel-dim); margin-top: 3px; }
 
-    /* ------------------------------ STAGE MAP ------------------------------ */
-    .stage { position: relative; min-height: 0; background: var(--paper); overflow: hidden; }
+    /* ---------------- stage map ---------------- */
+    .stage { position: relative; min-height: 0; background: var(--stage); overflow: hidden; }
     #map { position: absolute; inset: 0; }
     .maplibregl-ctrl-top-left, .maplibregl-ctrl-top-right, .maplibregl-ctrl-bottom-left { display: none !important; }
-    .maplibregl-ctrl-bottom-right { opacity: 0.8; }
     .maplibregl-ctrl-attrib { font-size: 10px; }
-
-    /* Pace-note strip: an opaque bezel bar bolted to the top edge, not a floating card. */
-    .note-strip {
-      position: absolute; top: 0; left: 0; right: 0; z-index: 5;
-      padding: calc(6px + var(--safe-top)) 10px 6px;
-      display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center;
-      background: var(--bezel); border-bottom: 2px solid var(--bezel-edge); color: var(--cream);
-    }
-    .note-code {
-      min-width: 58px; height: 44px; padding: 0 8px; display: grid; place-items: center;
-      border: 2px solid var(--amber); color: var(--amber); font-size: 24px; font-weight: 800; letter-spacing: 0.02em;
-    }
-    .note-code.hazard { border-color: var(--signal); color: var(--signal); }
-    .note-code.quiet { border-color: var(--bezel-edge); color: var(--engrave); }
-    .note-text { min-width: 0; }
-    .note-call { font-size: 19px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-transform: uppercase; letter-spacing: 0.03em; }
-    .note-sub { font-size: 12px; color: var(--engrave); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: 0.06em; text-transform: uppercase; margin-top: 2px; }
-    .note-dist { text-align: right; font-size: 22px; font-weight: 800; color: var(--cream); white-space: nowrap; }
-    .note-dist small { display: block; font-size: 10px; font-weight: 600; color: var(--engrave); letter-spacing: 0.1em; }
-
-    .stage-plate {
-      position: absolute; left: 10px; bottom: 10px; z-index: 4; display: flex; gap: 6px; align-items: stretch;
-    }
-    .plate {
-      background: var(--bezel); color: var(--cream); border: 1px solid var(--bezel-edge);
-      padding: 6px 10px; font-size: 11px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
-    }
-    .plate.mode-live { color: var(--obsidian); background: var(--amber); border-color: var(--amber); }
-    .plate.btn:active { background: var(--bezel-hi); }
-    #recenterBtn { display: none; }
-    #recenterBtn.show { display: block; }
-
-    .toast {
-      position: absolute; left: 50%; top: calc(70px + var(--safe-top)); transform: translateX(-50%); z-index: 6;
-      max-width: calc(100% - 32px); background: var(--bezel); color: var(--cream); border: 1px solid var(--amber);
-      padding: 8px 12px; font-size: 12px; font-weight: 600; letter-spacing: 0.04em; display: none;
-    }
+    .plates { position: absolute; left: 10px; bottom: 10px; z-index: 4; display: flex; gap: 6px; }
+    .plate { background: var(--panel); color: var(--panel-ink); border: 1px solid var(--rule); padding: 6px 10px; font-size: 11px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; }
+    .plate.live { background: var(--accent); color: var(--panel); border-color: var(--accent); }
+    #recenterBtn { display: none; } #recenterBtn.show { display: block; }
+    .toast { position: absolute; left: 50%; top: 12px; transform: translateX(-50%); z-index: 6; max-width: calc(100% - 32px);
+      background: var(--panel); color: var(--panel-ink); border: 1px solid var(--accent); padding: 8px 12px; font-size: 12px; font-weight: 600; display: none; }
     .toast.show { display: block; }
-
-    .pin {
-      font-size: 9px; font-weight: 800; letter-spacing: 0.1em; padding: 2px 5px; border: 1.5px solid;
-      background: var(--bezel); white-space: nowrap; cursor: pointer;
-    }
+    .pin { font-size: 9px; font-weight: 800; letter-spacing: 0.1em; padding: 2px 5px; border: 1.5px solid; background: var(--panel); white-space: nowrap; cursor: pointer; font-family: var(--font-ui); }
     .pin.alpr { color: var(--signal); border-color: var(--signal); }
     .pin.bump { color: var(--amber); border-color: var(--amber); }
-    .pin.crest, .pin.dip { color: var(--cream); border-color: var(--engrave); }
+    .pin.crest, .pin.dip { color: var(--panel-ink); border-color: var(--panel-dim); }
     .puck { width: 26px; height: 26px; }
 
-    /* ------------------------------ BINNACLE ------------------------------- */
-    .binnacle {
-      position: relative; z-index: 2; color: var(--cream);
-      padding: 6px 10px calc(8px + var(--safe-bottom));
-      background:
-        repeating-linear-gradient(90deg, rgba(255,255,255,0.018) 0 1px, rgba(0,0,0,0.02) 1px 3px),
-        linear-gradient(180deg, var(--bezel-hi), var(--bezel) 30%, #10100F);
-      border-top: 2px solid var(--bezel-edge);
-      display: grid; gap: 6px;
-      grid-template-columns: var(--dial) minmax(0, 1fr) var(--dial);
-      grid-template-areas: "scrub scrub scrub" "speed center g" "switches switches switches";
-    }
-    .engrave { font-size: 9px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: var(--engrave); }
-
-    .scrub { grid-area: scrub; display: grid; grid-template-columns: auto auto minmax(0, 1fr); gap: 6px; align-items: center; }
-    .key {
-      height: 28px; min-width: 40px; padding: 0 10px; font-size: 11px; font-weight: 800; letter-spacing: 0.12em;
-      background: linear-gradient(180deg, #2C2B27, #1A1A18); border: 1px solid var(--bezel-edge); color: var(--cream);
-      box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 1px 0 #000;
-    }
-    .key:active { background: #121211; box-shadow: inset 0 1px 3px #000; }
-    .key.on { color: var(--amber); }
-    .scrubber { position: relative; height: 28px; background: var(--dial-face); border: 1px solid var(--bezel-edge); cursor: ew-resize; touch-action: none; }
+    /* ---------------- binnacle ---------------- */
+    .binnacle { background: var(--panel); color: var(--panel-ink); border-top: 1px solid var(--rule); padding: 6px 10px calc(8px + var(--safe-bottom)); display: grid; gap: 6px; }
+    .transport { display: grid; grid-template-columns: auto auto minmax(0, 1fr); gap: 6px; align-items: center; }
+    .key { height: 28px; min-width: 42px; padding: 0 10px; font-size: 11px; font-weight: 700; letter-spacing: 0.12em; border: 1px solid var(--rule); color: var(--panel-ink); background: transparent; }
+    .key.on { color: var(--accent); border-color: var(--accent); }
+    .scrubber { position: relative; height: 28px; border: 1px solid var(--rule); cursor: ew-resize; touch-action: none; }
     .scrubber canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
 
-    .dial { width: var(--dial); height: var(--dial); align-self: center; }
-    .dial svg { width: 100%; height: 100%; display: block; }
-    #speedDial { grid-area: speed; }
-    #gDial { grid-area: g; }
+    .cluster-dials { display: grid; grid-template-columns: var(--dial) minmax(0, 1fr) var(--dial); gap: 8px; align-items: center; }
+    .dial { width: var(--dial); height: var(--dial); }
+    .dial-svg { width: 100%; height: 100%; display: block; }
+    .dial-num { font-family: var(--font-num); font-size: 15px; font-weight: 600; fill: var(--face-ink); }
+    .dial-label { font-size: 9px; font-weight: 700; letter-spacing: 2px; fill: var(--face-dim); }
+    .dial-tiny { font-size: 8px; fill: var(--face-dim); }
+    .dial-digital { font-family: var(--font-num); font-size: 22px; font-weight: 700; fill: var(--face-ink); }
+    .dial-digital.small { font-size: 11px; fill: var(--accent); }
+    .gauge-printed .dial-num { font-size: 17px; font-weight: 700; }
+    .cluster-center { min-width: 0; display: grid; gap: 7px; justify-items: center; align-content: center; }
+    .readouts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; width: min(100%, 250px); }
+    .ro { display: grid; justify-items: center; gap: 1px; padding: 3px 0; border: 1px solid var(--rule); }
+    .ro b { font-family: var(--font-num); font-size: 17px; font-weight: 700; line-height: 1.1; }
+    .ro span { font-size: 8px; font-weight: 700; letter-spacing: 0.14em; color: var(--panel-dim); }
+    .ro-limit { background: var(--panel-ink); color: var(--panel); border-color: var(--panel-ink); }
+    .ro-limit span { color: var(--panel); opacity: 0.7; }
+    .ro-pace b { color: var(--accent); }
+    .odo { display: grid; justify-items: center; gap: 2px; }
+    .odo-digits { display: flex; gap: 1px; font-family: var(--font-num); font-size: 22px; font-weight: 700; line-height: 1; }
+    .odo.boxed .dg { border: 1.5px solid var(--panel-ink); padding: 1px 3px; min-width: 18px; text-align: center; }
+    .odo.boxed .dg:last-child { background: var(--panel-ink); color: var(--panel); }
+    .odo-meta { display: flex; gap: 8px; font-size: 8px; font-weight: 700; letter-spacing: 0.16em; color: var(--panel-dim); }
+    .dna { width: min(100%, 250px); display: grid; gap: 4px; }
+    .dna-arch { text-align: center; font-size: 11px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); min-height: 13px; }
+    .dna-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+    .dna-cell { display: grid; justify-items: center; gap: 2px; }
+    .dna-cell b { font-family: var(--font-num); font-size: 13px; font-weight: 700; }
+    .dna-bar { width: 100%; height: 3px; background: var(--rule); display: block; }
+    .dna-bar u { display: block; height: 100%; background: var(--accent); text-decoration: none; }
+    .dna-cell span { font-size: 8px; letter-spacing: 0.08em; color: var(--panel-dim); font-weight: 700; }
 
-    .center { grid-area: center; min-width: 0; display: grid; align-content: center; justify-items: center; gap: 8px; }
-    .odo { display: grid; justify-items: center; gap: 3px; }
-    .drums { display: flex; gap: 2px; padding: 3px; background: #050505; border: 1px solid var(--bezel-edge); box-shadow: inset 0 2px 4px #000; }
-    .drum { --h: clamp(20px, 3.3dvh, 30px); width: calc(var(--h) * 0.68); height: var(--h); overflow: hidden; background: #0B0B0A; position: relative; }
-    .drum::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,0.65), transparent 30%, transparent 70%, rgba(0,0,0,0.65)); pointer-events: none; }
-    .drum.tenth { background: var(--cream); }
-    .drum.tenth .digit { color: #111; }
-    .strip { will-change: transform; }
-    .digit { height: var(--h); line-height: var(--h); text-align: center; font-size: calc(var(--h) * 0.78); font-weight: 700; color: var(--cream); }
-    .odo-meta { display: flex; gap: 8px; align-items: baseline; }
+    .cluster-telemetry { display: grid; gap: 6px; }
+    .tm-lights { display: grid; grid-template-columns: repeat(15, 1fr); gap: 3px; }
+    .tm-lights i { height: 6px; background: var(--rule); }
+    .tm-lights i.green { background: #3FB950; } .tm-lights i.amber { background: #F2B33D; } .tm-lights i.red { background: #F85149; }
+    .tm-main { display: grid; grid-template-columns: auto minmax(0, 1fr) 64px; gap: 10px; align-items: center; }
+    .tm-speed { display: grid; justify-items: end; font-family: var(--font-num); }
+    .tm-speed b { font-size: 48px; font-weight: 600; line-height: 0.9; min-width: 3ch; text-align: right; }
+    .tm-speed span { font-size: 9px; color: var(--panel-dim); letter-spacing: 0.14em; }
+    .tm-scale { display: grid; gap: 3px; }
+    .tm-track { position: relative; height: 18px; background: var(--rule); }
+    .tm-fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--panel-ink); opacity: 0.85; }
+    .tm-mark { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; }
+    .tm-mark span { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); font-size: 8px; font-weight: 700; letter-spacing: 0.08em; white-space: nowrap; }
+    .tm-mark.pace { background: #F2B33D; } .tm-mark.pace span { color: #F2B33D; }
+    .tm-mark.sight { background: #58A6FF; top: 9px; } .tm-mark.sight span { color: #58A6FF; top: 22px; }
+    .tm-mark.limit { background: #E8ECEF; } .tm-mark.limit span { color: #E8ECEF; top: 22px; }
+    .tm-ticks { display: flex; justify-content: space-between; font-family: var(--font-num); font-size: 9px; color: var(--panel-dim); margin-top: 16px; }
+    .tm-g svg { width: 64px; height: 64px; display: block; }
+    .tm-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: var(--rule); border: 1px solid var(--rule); }
+    .tm-cell { background: var(--panel); padding: 3px 6px; display: grid; }
+    .tm-cell span { font-size: 8px; color: var(--panel-dim); letter-spacing: 0.1em; }
+    .tm-cell b { font-family: var(--font-num); font-size: 15px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tm-dna { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+    .tm-dna-cell { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 4px; align-items: center; font-size: 9px; color: var(--panel-dim); }
+    .tm-dna-cell i { height: 6px; background: var(--rule); display: block; }
+    .tm-dna-cell u { display: block; height: 100%; text-decoration: none; }
+    .tm-dna-cell u.hi { background: #3FB950; } .tm-dna-cell u.mid { background: #F2B33D; } .tm-dna-cell u.lo { background: #F85149; }
+    .tm-dna-cell b { font-family: var(--font-num); color: var(--panel-ink); font-size: 11px; }
 
-    .dna { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; width: min(100%, 260px); }
-    .dna .engrave { letter-spacing: 0.06em; font-size: 8px; }
-    .dna-cell { display: grid; gap: 2px; justify-items: center; }
-    .dna-bar { width: 100%; height: 5px; background: #050505; border: 1px solid var(--bezel-edge); }
-    .dna-bar i { display: block; height: 100%; width: 0; background: var(--amber); }
-    .dna-val { font-size: 13px; font-weight: 800; }
-
-    .switches { grid-area: switches; display: flex; justify-content: space-between; align-items: end; gap: 4px; }
-    .toggle { display: grid; justify-items: center; gap: 3px; min-width: 46px; }
-    .toggle .lamp { width: 6px; height: 6px; border-radius: 50%; background: var(--lamp-off); }
-    .toggle.on .lamp { background: var(--signal); box-shadow: 0 0 6px var(--signal); }
-    .toggle .lever { width: 16px; height: 22px; position: relative; }
-    .toggle .lever::before { content: ""; position: absolute; left: 1px; right: 1px; bottom: 0; height: 10px; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #8B877C, #2A2925 70%); }
-    .toggle .lever::after {
-      content: ""; position: absolute; left: 5px; width: 6px; height: 18px; bottom: 5px; border-radius: 3px;
-      background: linear-gradient(90deg, #6F6B61, #E6E1D5 45%, #77736A); transform-origin: 50% 100%; transform: rotate(28deg);
-      transition: transform 0.12s;
-    }
-    .toggle.on .lever::after { transform: rotate(-28deg); }
+    .switches { display: flex; justify-content: space-between; align-items: center; gap: 4px; }
+    .sw { display: grid; justify-items: center; gap: 4px; min-width: 44px; padding: 4px 2px; }
+    .sw i { width: 30px; height: 14px; border: 1.5px solid var(--panel-dim); position: relative; display: block; }
+    .sw i::after { content: ""; position: absolute; top: 2px; left: 2px; width: 8px; height: 7px; background: var(--panel-dim); transition: left 0.12s; }
+    .sw.on i { border-color: var(--accent); }
+    .sw.on i::after { left: 17px; background: var(--accent); }
+    .sw span { font-size: 9px; font-weight: 700; letter-spacing: 0.14em; color: var(--panel-dim); }
+    .sw.on span { color: var(--panel-ink); }
     .route-key { height: 34px; padding: 0 14px; }
 
+    /* Roadbook binnacle reads as the printed page */
+    [data-theme="roadbook"] .key, [data-theme="roadbook"] .ro, [data-theme="roadbook"] .scrubber { border-width: 1.5px; }
+    [data-theme="roadbook"] .notes { border-bottom: 2px solid var(--rule); }
+    [data-theme="roadbook"] .binnacle { border-top: 2px solid var(--rule); }
+
     @media (min-width: 820px) {
-      :root { --dial: clamp(132px, 19dvh, 188px); }
-      .binnacle {
-        grid-template-columns: var(--dial) minmax(0, 1fr) minmax(0, 1fr) var(--dial);
-        grid-template-areas: "scrub scrub scrub scrub" "speed center switches g";
-        column-gap: 18px;
-      }
-      .switches { flex-wrap: wrap; align-content: center; justify-content: center; gap: 10px 14px; }
+      :root { --dial: clamp(128px, 17dvh, 180px); }
+      .binnacle { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "transport transport" "cluster switches"; column-gap: 20px; }
+      .transport { grid-area: transport; } #cluster { grid-area: cluster; }
+      .switches { grid-area: switches; display: grid; grid-template-columns: repeat(3, auto); gap: 8px 10px; align-content: center; justify-items: center; }
+      .switches .route-key { grid-column: span 1; }
+      .cluster-dials { grid-template-columns: var(--dial) minmax(220px, 300px) var(--dial); justify-content: center; }
     }
 
-    /* ------------------------------ ROUTE BOOK ----------------------------- */
-    .sheet {
-      position: absolute; z-index: 10; top: 0; bottom: 0; right: 0; width: min(420px, 100%);
-      background: var(--paper); color: var(--paper-ink); border-left: 2px solid var(--bezel-edge);
-      transform: translateX(105%); transition: transform 0.18s ease-out;
-      display: flex; flex-direction: column; padding-top: var(--safe-top);
-    }
+    /* ---------------- route book ---------------- */
+    .sheet { position: absolute; z-index: 10; top: 0; bottom: 0; right: 0; width: min(420px, 100%); background: var(--panel); color: var(--panel-ink);
+      border-left: 1px solid var(--rule); transform: translateX(105%); transition: transform 0.18s ease-out; display: flex; flex-direction: column; }
     .sheet.open { transform: none; }
-    .sheet header { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; background: var(--bezel); color: var(--cream); }
+    .sheet header { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; border-bottom: 1px solid var(--rule); }
     .sheet header h2 { font-size: 14px; letter-spacing: 0.18em; text-transform: uppercase; }
-    .sheet .body { overflow-y: auto; padding: 14px 16px 24px; display: grid; gap: 18px; }
-    .sheet h3 { font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--paper-dim); margin-bottom: 8px; }
-    .sheet p.note { font-size: 12px; color: var(--paper-dim); line-height: 1.45; margin-top: 6px; }
-    .row { display: flex; gap: 6px; }
-    .field {
-      flex: 1; min-width: 0; height: 38px; padding: 0 10px; font: inherit; font-size: 15px;
-      background: transparent; color: var(--paper-ink); border: 1.5px solid var(--paper-ink); user-select: text;
-    }
-    .ink-btn { height: 38px; padding: 0 14px; border: 1.5px solid var(--paper-ink); font-size: 12px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; }
-    .ink-btn.solid { background: var(--paper-ink); color: var(--paper); }
-    .ink-btn.on { background: var(--route); border-color: var(--route); color: var(--paper); }
-    .drive-card { text-align: left; width: 100%; padding: 10px 12px; border: 1.5px solid var(--paper-ink); display: grid; gap: 3px; }
-    .drive-card.active { border-color: var(--route); box-shadow: inset 4px 0 0 var(--route); }
-    .drive-card b { font-size: 15px; }
-    .drive-card span { font-size: 12px; color: var(--paper-dim); }
-    .sources { font-size: 11px; color: var(--paper-dim); line-height: 1.5; }
+    .sheet .body { overflow-y: auto; padding: 14px 16px 24px; display: grid; gap: 20px; }
+    .sheet h3 { font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--panel-dim); margin-bottom: 8px; }
+    .sheet p.note { font-size: 12px; color: var(--panel-dim); line-height: 1.45; margin-top: 6px; }
+    .row { display: flex; gap: 6px; flex-wrap: wrap; }
+    .field { flex: 1; min-width: 0; height: 38px; padding: 0 10px; font: inherit; font-size: 15px; background: transparent; color: var(--panel-ink); border: 1px solid var(--panel-dim); user-select: text; }
+    .ink-btn { height: 38px; padding: 0 14px; border: 1px solid var(--panel-dim); font-size: 12px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; }
+    .ink-btn.solid { background: var(--panel-ink); color: var(--panel); border-color: var(--panel-ink); }
+    .ink-btn.on { background: var(--accent); border-color: var(--accent); color: var(--panel); }
+    .card { text-align: left; width: 100%; padding: 10px 12px; border: 1px solid var(--rule); display: grid; gap: 3px; }
+    .card.active { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
+    .card b { font-size: 15px; }
+    .card span { font-size: 12px; color: var(--panel-dim); }
+    .themes { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .themes .card b::before { content: attr(data-tag); font-size: 10px; margin-right: 6px; color: var(--accent); letter-spacing: 0.1em; }
+    .sources { font-size: 11px; color: var(--panel-dim); line-height: 1.5; }
+    .sources a { color: inherit; }
   </style>
 </head>
 <body>
   <div id="app">
+    <div class="notes" id="notes"></div>
+
     <section class="stage">
       <div id="map"></div>
-
-      <div class="note-strip" id="noteStrip">
-        <div class="note-code quiet" id="noteCode">--</div>
-        <div class="note-text">
-          <div class="note-call" id="noteCall">No route loaded</div>
-          <div class="note-sub" id="noteSub">Open the route book</div>
-        </div>
-        <div class="note-dist" id="noteDist"></div>
-      </div>
-
-      <div class="stage-plate">
+      <div class="plates">
         <div class="plate" id="modePlate">REPLAY</div>
-        <button class="plate btn" id="recenterBtn">RECENTER</button>
+        <button class="plate" id="recenterBtn">RECENTER</button>
       </div>
       <div class="toast" id="toast"></div>
 
-      <aside class="sheet" id="routeSheet" aria-label="Route book">
-        <header>
-          <h2>Route Book</h2>
-          <button class="key" id="closeSheetBtn">CLOSE</button>
-        </header>
+      <aside class="sheet" id="sheet" aria-label="Route book">
+        <header><h2>Route Book</h2><button class="key" id="closeSheetBtn">CLOSE</button></header>
         <div class="body">
           <section>
-            <h3>Destination</h3>
+            <h3>Destination · spirited routing</h3>
             <div class="row">
               <input class="field" id="destInput" placeholder="Town, road or address" autocomplete="off" />
               <button class="ink-btn solid" id="destGoBtn">GO</button>
             </div>
-            <div class="row" style="margin-top:6px">
-              <button class="ink-btn" id="tapRouteBtn">TAP MAP TO ROUTE</button>
-            </div>
+            <div class="row" style="margin-top:6px"><button class="ink-btn" id="tapRouteBtn">TAP MAP TO ROUTE</button></div>
           </section>
           <section>
             <h3>Loop from here</h3>
@@ -255,96 +225,84 @@
               <button class="ink-btn" data-loop-mi="30">30 MI</button>
               <button class="ink-btn" data-loop-mi="45">45 MI</button>
             </div>
-            <p class="note">Routed over real roads through three waypoints on a circle. Roads are not yet chosen for character; that needs crowdsourced Stage DNA.</p>
+            <p class="note">Valhalla routes these avoiding highways. Choosing roads by Stage DNA (docs/ROAD_INTELLIGENCE.md §7) is the next routing step.</p>
           </section>
           <section>
             <h3>Profiled drives</h3>
             <div id="driveList" style="display:grid;gap:6px"></div>
-            <p class="note">Recorded with a phone IMU. Corners, bumps, crests and dips are measured; nothing is placeholder.</p>
+            <p class="note"><a href="analysis.html" style="color:inherit">Drive analysis: compare passes corner by corner →</a></p>
+          </section>
+          <section>
+            <h3>Cockpit theme</h3>
+            <div class="themes" id="themeList"></div>
           </section>
           <section class="sources">
             <h3>Sources</h3>
-            Map &copy; OpenStreetMap contributors via OpenFreeMap. Terrain: AWS Terrarium DEM. Routing: OSRM demo server.
-            Geocoding: Nominatim. ALPR cameras: OpenStreetMap <code>surveillance:type=ALPR</code> (DeFlock) via Overpass.
+            Map &copy; OpenStreetMap contributors via OpenFreeMap. Terrain: AWS Terrarium DEM. Routing, map matching and posted limits: Valhalla (FOSSGIS). Geocoding: Nominatim. ALPR: OpenStreetMap <code>surveillance:type=ALPR</code> (DeFlock) via Overpass.
           </section>
         </div>
       </aside>
     </section>
 
     <section class="binnacle" id="binnacle">
-      <div class="scrub">
+      <div class="transport">
         <button class="key" id="playBtn">RUN</button>
         <button class="key" id="rateBtn">1X</button>
         <div class="scrubber" id="scrubber"><canvas id="scrubCanvas"></canvas></div>
       </div>
-
-      <div class="dial" id="speedDial"></div>
-
-      <div class="center">
-        <div class="odo">
-          <div class="drums" id="drums"></div>
-          <div class="odo-meta"><span class="engrave">TRIP MI</span><span class="engrave" id="odoTotal"></span></div>
-        </div>
-        <div class="dna" id="dna"></div>
-      </div>
-
+      <div id="cluster"></div>
       <div class="switches">
-        <button class="toggle" data-toggle="stage"><span class="lamp"></span><span class="lever"></span><span class="engrave">STAGE</span></button>
-        <button class="toggle" data-toggle="voice"><span class="lamp"></span><span class="lever"></span><span class="engrave">VOICE</span></button>
-        <button class="toggle" data-toggle="lpr"><span class="lamp"></span><span class="lever"></span><span class="engrave">LPR</span></button>
-        <button class="toggle" data-toggle="dna"><span class="lamp"></span><span class="lever"></span><span class="engrave">DNA</span></button>
-        <button class="toggle" data-toggle="night"><span class="lamp"></span><span class="lever"></span><span class="engrave">NIGHT</span></button>
+        <button class="sw" data-toggle="stage"><i></i><span>STAGE</span></button>
+        <button class="sw" data-toggle="voice"><i></i><span>VOICE</span></button>
+        <button class="sw" data-toggle="lpr"><i></i><span>LPR</span></button>
+        <button class="sw" data-toggle="dna"><i></i><span>DNA</span></button>
+        <button class="sw" data-toggle="night"><i></i><span>NIGHT</span></button>
         <button class="key route-key" id="openSheetBtn">ROUTE</button>
       </div>
-
-      <div class="dial" id="gDial"></div>
     </section>
   </div>
 
   <script>
   (() => {
     'use strict';
-    const Core = window.ApexCore;
+    const Core = window.ApexCore, Themes = window.ApexThemes, Inst = window.ApexInstruments;
     const MPH = Core.MPS_TO_MPH;
     const params = new URLSearchParams(location.search);
     const $ = (id) => document.getElementById(id);
 
     // =======================================================================
     // 1. TRACKS — one shape for profiled drives and geometry-only routes.
-    //    Profiled drives come from tools/export_web_profile.py (core/road_dna.py);
-    //    routes are derived here by apex_core.js, the parity-tested port.
+    //    Physics comes from core/road_dna.py exports or its parity-tested JS port.
     // =======================================================================
     function trackFromDrive(d) {
       const f = Object.fromEntries(d.fields.map((name, i) => [name, i]));
-      const col = (name) => (name in f ? d.rows.map(r => r[f[name]]) : null);
+      const col = (name, scale = 1) => (name in f ? d.rows.map(r => (r[f[name]] == null ? null : r[f[name]] * scale)) : null);
       return {
         id: d.id, name: d.name, kind: 'drive',
         subtitle: [d.date ? d.date.slice(0, 10) : '', d.device || ''].filter(Boolean).join(' · '),
-        lat: col('lat'), lon: col('lon'), dist: col('distance_m'),
-        elev: col('elevation_m'), speedMps: col('speed_mph').map(v => v / MPH),
-        latG: col('lat_g'), lonG: col('lon_g'), camberDeg: col('camber_deg'),
-        envMps: col('target_mph').map(v => v / MPH),
-        events: d.events.map(e => ({ ...e })), sectors: d.sectors, sectorM: d.sector_m || 500,
-        alpr: null
+        lat: col('lat'), lon: col('lon'), dist: col('distance_m'), elev: col('elevation_m'),
+        speedMps: col('speed_mph', 1 / MPH), latG: col('lat_g'), lonG: col('lon_g'), camberDeg: col('camber_deg'),
+        envMps: col('target_mph', 1 / MPH), sightM: col('sight_m'), limitMps: col('limit_kph', 1 / 3.6),
+        events: d.events.map(e => ({ ...e })), sectors: d.sectors, sectorM: d.sector_m || 500, alpr: null
       };
     }
 
     function trackFromPolyline(coords, id, name) {
       const rs = Core.resamplePolyline(coords.map(c => c[1]), coords.map(c => c[0]), 5);
       const { kappa, ds } = Core.computeCurvature(rs.lat, rs.lon);
-      const env = Core.brakingEnvelopeMps(kappa, ds);
+      const sight = Core.sightDistanceM(rs.lat, rs.lon);
+      const env = Core.brakingEnvelopeMps(kappa, ds, null, null, undefined, sight);
       const dist = rs.lat.map((_, i) => i * 5);
       const events = Core.detectCorners(kappa, ds).map(c => {
         const t = Core.paceNoteText(c);
-        return {
-          type: 'corner', code: t.code, call: t.call, index: c.apex, dist_m: dist[c.apex],
-          lat: rs.lat[c.apex], lon: rs.lon[c.apex], radius_m: c.radius_m, apex_mph: c.apex_mps * MPH
-        };
+        return { type: 'corner', code: t.code, call: t.call, index: c.apex, dist_m: dist[c.apex], lat: rs.lat[c.apex], lon: rs.lon[c.apex],
+                 radius_m: c.radius_m, apex_mph: c.apex_mps * MPH, dir: c.dir, severity: c.severity, turn_rad: Math.abs(c.turn_rad), mods: c.mods };
       });
       return {
         id, name, kind: 'route', subtitle: 'Geometry only · not yet profiled',
         lat: rs.lat, lon: rs.lon, dist, elev: null, speedMps: null, latG: null, lonG: null, camberDeg: null,
-        envMps: Array.from(env), events, sectors: null, sectorM: 500, alpr: null
+        envMps: Array.from(env), sightM: Array.from(sight), limitMps: null,
+        events, sectors: null, sectorM: 500, alpr: null
       };
     }
 
@@ -352,22 +310,34 @@
     let track = null;
 
     // =======================================================================
-    // 2. STATE
+    // 2. STATE + THEME
     // =======================================================================
     const state = {
-      mode: 'replay',              // replay | sim | live
-      playing: false, rate: 1,
-      cursorM: 0, cursorIdx: 0,
-      follow: true, bearing: 0,
-      live: null, liveAt: 0,
-      spiritedAt: -Infinity,
-      toggles: { stage: false, voice: true, lpr: true, dna: false, night: params.get('night') === '1' },
-      spoken: new Set(), tapToRoute: false
+      mode: 'replay', playing: false, rate: 1, cursorM: 0, cursorIdx: 0, follow: true, bearing: 0,
+      live: null, liveAt: 0, spiritedAt: -Infinity, spoken: new Set(), tapToRoute: false,
+      theme: 'stage',
+      toggles: { stage: false, voice: true, lpr: true, dna: false, night: false }
     };
     try {
-      const saved = JSON.parse(localStorage.getItem('apex.toggles') || 'null');
-      if (saved) Object.assign(state.toggles, saved, params.has('night') ? { night: params.get('night') === '1' } : {});
+      const saved = JSON.parse(localStorage.getItem('apex.prefs') || 'null');
+      if (saved) { Object.assign(state.toggles, saved.toggles || {}); if (saved.theme) state.theme = saved.theme; }
     } catch (_) {}
+    if (params.has('night')) state.toggles.night = params.get('night') === '1';
+    if (params.has('theme')) state.theme = params.get('theme');
+
+    let look = Themes.apply(state.theme, state.toggles.night);
+    let cluster = Inst.mountCluster($('cluster'), look.theme);
+    function savePrefs() { try { localStorage.setItem('apex.prefs', JSON.stringify({ theme: state.theme, toggles: state.toggles })); } catch (_) {} }
+    function applyTheme() {
+      look = Themes.apply(state.theme, state.toggles.night);
+      cluster = Inst.mountCluster($('cluster'), look.theme);
+      document.querySelectorAll('[data-toggle]').forEach(b => b.classList.toggle('on', !!state.toggles[b.dataset.toggle]));
+      restyleBasemap();
+      if (track) loadTrackOnMap();
+      renderThemeList();
+      savePrefs();
+      render(false);
+    }
 
     // =======================================================================
     // 3. SAMPLING
@@ -378,64 +348,52 @@
       while (i > 0 && t.dist[i] > m) i--;
       return i;
     }
-    function lerpAt(arr, i, f) { return arr ? arr[i] + (arr[Math.min(arr.length - 1, i + 1)] - arr[i]) * f : null; }
+    function lerpAt(arr, i, f) {
+      if (!arr || arr[i] == null) return null;
+      const b = arr[Math.min(arr.length - 1, i + 1)];
+      return b == null ? arr[i] : arr[i] + (b - arr[i]) * f;
+    }
     function sample(t, m) {
       const total = t.dist[t.dist.length - 1];
       m = Math.max(0, Math.min(total, m));
       const i = indexAt(t, m);
-      const span = Math.max(0.01, t.dist[i + 1] - t.dist[i]);
-      const f = Math.max(0, Math.min(1, (m - t.dist[i]) / span));
+      const f = Math.max(0, Math.min(1, (m - t.dist[i]) / Math.max(0.01, t.dist[i + 1] - t.dist[i])));
       const j = Math.min(t.lat.length - 1, i + 6);
       return {
-        i, m, lat: lerpAt(t.lat, i, f), lon: lerpAt(t.lon, i, f),
-        bearing: bearingDeg(t.lat[i], t.lon[i], t.lat[j], t.lon[j]),
-        speedMps: lerpAt(t.speedMps, i, f), latG: lerpAt(t.latG, i, f), lonG: lerpAt(t.lonG, i, f),
-        camberDeg: lerpAt(t.camberDeg, i, f), envMps: lerpAt(t.envMps, i, f)
+        i, m, lat: lerpAt(t.lat, i, f), lon: lerpAt(t.lon, i, f), bearing: bearingDeg(t.lat[i], t.lon[i], t.lat[j], t.lon[j]),
+        speedMps: lerpAt(t.speedMps, i, f), latG: lerpAt(t.latG, i, f), lonG: lerpAt(t.lonG, i, f), camberDeg: lerpAt(t.camberDeg, i, f)
       };
     }
     function bearingDeg(lat1, lon1, lat2, lon2) {
       const p1 = lat1 * Math.PI / 180, p2 = lat2 * Math.PI / 180, dl = (lon2 - lon1) * Math.PI / 180;
-      const y = Math.sin(dl) * Math.cos(p2);
-      const x = Math.cos(p1) * Math.sin(p2) - Math.sin(p1) * Math.cos(p2) * Math.cos(dl);
-      return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+      return (Math.atan2(Math.sin(dl) * Math.cos(p2), Math.cos(p1) * Math.sin(p2) - Math.sin(p1) * Math.cos(p2) * Math.cos(dl)) * 180 / Math.PI + 360) % 360;
     }
     const angleDelta = (a, b) => ((b - a + 540) % 360) - 180;
     const totalM = () => (track ? track.dist[track.dist.length - 1] : 0);
 
     // =======================================================================
-    // 4. MAP — topo paper / VDO phosphor restyle of OpenFreeMap + DEM contours
+    // 4. MAP — theme-driven restyle of OpenFreeMap + DEM hillshade/contours
     // =======================================================================
-    const map = new maplibregl.Map({
-      container: 'map', style: 'https://tiles.openfreemap.org/styles/liberty',
-      center: [-84.70, 39.24], zoom: 14.6, pitch: 45, maxPitch: 60,
-      attributionControl: { compact: true }, fadeDuration: 0
-    });
+    const map = new maplibregl.Map({ container: 'map', style: 'https://tiles.openfreemap.org/styles/liberty',
+      center: [-84.70, 39.24], zoom: 14.6, pitch: 45, maxPitch: 60, attributionControl: { compact: true }, fadeDuration: 0 });
+    window.apexDebug = { map, get track() { return track; }, state };
     let mapReady = false;
-    window.apexDebug = { map, get track() { return track; } };
     const DEM_URL = 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png';
     let demSource = null;
-    try {
-      demSource = new mlcontour.DemSource({ url: DEM_URL, encoding: 'terrarium', maxzoom: 13, worker: true });
-      demSource.setupMaplibre(maplibregl);
-    } catch (_) { demSource = null; }
+    try { demSource = new mlcontour.DemSource({ url: DEM_URL, encoding: 'terrarium', maxzoom: 13, worker: true }); demSource.setupMaplibre(maplibregl); } catch (_) { demSource = null; }
 
     const puckEl = document.createElement('div');
     puckEl.className = 'puck';
-    puckEl.innerHTML = '<svg viewBox="0 0 26 26" width="26" height="26"><circle cx="13" cy="13" r="11" fill="#161615" stroke="#EAE3D2" stroke-width="2"/><path d="M13 5 L19 18 L13 14.8 L7 18 Z" fill="#D9411E"/></svg>';
-    const puck = new maplibregl.Marker({ element: puckEl, rotationAlignment: 'map', pitchAlignment: 'map' })
-      .setLngLat([-84.70, 39.24]).addTo(map);
-
-    function cssVar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+    const puck = new maplibregl.Marker({ element: puckEl, rotationAlignment: 'map', pitchAlignment: 'map' }).setLngLat([-84.70, 39.24]).addTo(map);
+    function drawPuck() {
+      const c = look.colors;
+      puckEl.innerHTML = `<svg viewBox="0 0 26 26" width="26" height="26"><circle cx="13" cy="13" r="11" fill="${c.panel}" stroke="${c.panelInk}" stroke-width="2"/><path d="M13 5 L19 18 L13 14.8 L7 18 Z" fill="${c.accent}"/></svg>`;
+    }
 
     function restyleBasemap() {
+      drawPuck();
       if (!mapReady) return;
-      const night = state.toggles.night;
-      const P = {
-        bg: night ? '#111210' : '#F4EFE6', water: night ? '#0B0E10' : '#C9D2CC', waterLine: night ? '#1A2228' : '#9FB0AA',
-        land: night ? '#141512' : '#E9E2D2', wood: night ? '#151712' : '#DCD8BF',
-        road: night ? '#EAE3D2' : '#FFFDF8', roadMinor: night ? '#4A463E' : '#FFFFFF', casing: night ? '#111210' : '#B9AE98',
-        label: night ? '#CFC6B2' : '#3B3833', halo: night ? '#111210' : '#F4EFE6', boundary: night ? '#2F2C27' : '#C8BEA9'
-      };
+      const P = look.map, C = look.colors;
       for (const lyr of map.getStyle().layers) {
         const id = lyr.id.toLowerCase();
         if (id.startsWith('apex-')) continue;
@@ -454,96 +412,68 @@
             const minor = /minor|service|track|path|street|residential/.test(id);
             set('line-color', id.includes('casing') ? P.casing : (minor ? P.roadMinor : P.road));
           } else if (/rail/.test(id)) set('line-color', P.boundary);
-        } else if (lyr.type === 'symbol') {
-          set('text-color', P.label); set('text-halo-color', P.halo); set('text-halo-width', 1.4);
-          set('icon-opacity', 0);
-        }
+        } else if (lyr.type === 'symbol') { set('text-color', P.label); set('text-halo-color', P.halo); set('text-halo-width', 1.4); set('icon-opacity', 0); }
       }
       const has = (id) => map.getLayer(id);
       if (has('apex-hillshade')) {
-        map.setPaintProperty('apex-hillshade', 'hillshade-shadow-color', night ? '#050504' : '#6B6B3A');
-        map.setPaintProperty('apex-hillshade', 'hillshade-highlight-color', night ? '#1E1D19' : '#FBF8F0');
-        map.setPaintProperty('apex-hillshade', 'hillshade-accent-color', night ? '#0B0B0A' : '#8A8455');
-        map.setPaintProperty('apex-hillshade', 'hillshade-exaggeration', night ? 0.3 : 0.38);
+        map.setPaintProperty('apex-hillshade', 'hillshade-shadow-color', P.shadow);
+        map.setPaintProperty('apex-hillshade', 'hillshade-highlight-color', P.highlight);
+        map.setPaintProperty('apex-hillshade', 'hillshade-accent-color', P.accentShade);
+        map.setPaintProperty('apex-hillshade', 'hillshade-exaggeration', 0.36);
       }
-      if (has('apex-contours')) map.setPaintProperty('apex-contours', 'line-color', night ? '#3A372F' : '#3B3833');
-      if (has('apex-contour-labels')) {
-        map.setPaintProperty('apex-contour-labels', 'text-color', night ? '#6E685B' : '#3B3833');
-        map.setPaintProperty('apex-contour-labels', 'text-halo-color', P.bg);
-      }
-      if (has('apex-route-casing')) map.setPaintProperty('apex-route-casing', 'line-color', P.bg);
-      if (has('apex-route')) map.setPaintProperty('apex-route', 'line-color', night ? '#E89B3C' : '#B5532B');
+      if (has('apex-contours')) map.setPaintProperty('apex-contours', 'line-color', P.contour);
+      if (has('apex-contour-labels')) { map.setPaintProperty('apex-contour-labels', 'text-color', P.contour); map.setPaintProperty('apex-contour-labels', 'text-halo-color', P.bg); }
+      if (has('apex-route-casing')) map.setPaintProperty('apex-route-casing', 'line-color', C.routeCasing);
+      if (has('apex-route')) map.setPaintProperty('apex-route', 'line-color', C.route);
     }
 
     function addApexLayers() {
       const firstSymbol = (map.getStyle().layers.find(l => l.type === 'symbol') || {}).id;
-      const demTiles = demSource ? demSource.sharedDemProtocolUrl : DEM_URL;
-      map.addSource('apex-dem', { type: 'raster-dem', tiles: [demTiles], tileSize: 256, encoding: 'terrarium', maxzoom: 13 });
+      map.addSource('apex-dem', { type: 'raster-dem', tiles: [demSource ? demSource.sharedDemProtocolUrl : DEM_URL], tileSize: 256, encoding: 'terrarium', maxzoom: 13 });
       map.addLayer({ id: 'apex-hillshade', type: 'hillshade', source: 'apex-dem', paint: {} }, firstSymbol);
       if (demSource) {
-        map.addSource('apex-contour-src', {
-          type: 'vector', maxzoom: 15,
-          tiles: [demSource.contourProtocolUrl({
-            multiplier: 3.28084,
-            thresholds: { 11: [200, 1000], 12: [100, 500], 13: [50, 250], 14: [20, 100], 15: [10, 50] },
-            elevationKey: 'ele', levelKey: 'level', contourLayer: 'contours'
-          })]
-        });
-        map.addLayer({
-          id: 'apex-contours', type: 'line', source: 'apex-contour-src', 'source-layer': 'contours',
-          paint: { 'line-width': ['match', ['get', 'level'], 1, 0.9, 0.45], 'line-opacity': ['match', ['get', 'level'], 1, 0.55, 0.32] }
-        }, firstSymbol);
-        map.addLayer({
-          id: 'apex-contour-labels', type: 'symbol', source: 'apex-contour-src', 'source-layer': 'contours',
-          filter: ['>', ['get', 'level'], 0],
+        map.addSource('apex-contour-src', { type: 'vector', maxzoom: 15, tiles: [demSource.contourProtocolUrl({
+          multiplier: 3.28084, thresholds: { 11: [200, 1000], 12: [100, 500], 13: [50, 250], 14: [20, 100], 15: [10, 50] },
+          elevationKey: 'ele', levelKey: 'level', contourLayer: 'contours' })] });
+        map.addLayer({ id: 'apex-contours', type: 'line', source: 'apex-contour-src', 'source-layer': 'contours',
+          paint: { 'line-width': ['match', ['get', 'level'], 1, 0.9, 0.45], 'line-opacity': ['match', ['get', 'level'], 1, 0.55, 0.32] } }, firstSymbol);
+        map.addLayer({ id: 'apex-contour-labels', type: 'symbol', source: 'apex-contour-src', 'source-layer': 'contours', filter: ['>', ['get', 'level'], 0],
           layout: { 'symbol-placement': 'line', 'text-size': 9, 'text-field': ['concat', ['number-format', ['get', 'ele'], {}], "'"], 'text-font': ['Noto Sans Regular'] },
-          paint: { 'text-halo-width': 1.2 }
-        });
+          paint: { 'text-halo-width': 1.2 } });
       }
       map.addSource('apex-route-src', { type: 'geojson', data: emptyFC() });
-      map.addLayer({ id: 'apex-route-casing', type: 'line', source: 'apex-route-src',
-        layout: { 'line-cap': 'round', 'line-join': 'round' },
-        paint: { 'line-width': ['interpolate', ['linear'], ['zoom'], 10, 6, 16, 13] } });
-      map.addLayer({ id: 'apex-route', type: 'line', source: 'apex-route-src',
-        layout: { 'line-cap': 'round', 'line-join': 'round' },
-        paint: { 'line-width': ['interpolate', ['linear'], ['zoom'], 10, 3, 16, 7] } });
-      map.addLayer({ id: 'apex-dna', type: 'line', source: 'apex-route-src', filter: ['has', 'dna'],
-        layout: { 'line-cap': 'butt', 'line-join': 'round', visibility: 'none' },
-        paint: { 'line-color': ['get', 'dna'], 'line-width': ['interpolate', ['linear'], ['zoom'], 10, 3, 16, 7] } });
+      const width = (a, b) => ['interpolate', ['linear'], ['zoom'], 10, a, 16, b];
+      map.addLayer({ id: 'apex-route-casing', type: 'line', source: 'apex-route-src', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-width': width(6, 13) } });
+      map.addLayer({ id: 'apex-route', type: 'line', source: 'apex-route-src', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-width': width(3, 7) } });
+      map.addLayer({ id: 'apex-dna', type: 'line', source: 'apex-route-src', filter: ['has', 'dna'], layout: { 'line-cap': 'butt', 'line-join': 'round', visibility: 'none' },
+        paint: { 'line-color': ['get', 'dna'], 'line-width': width(3, 7) } });
       map.addSource('apex-ribbon-src', { type: 'geojson', data: emptyFC() });
-      map.addLayer({ id: 'apex-ribbon', type: 'line', source: 'apex-ribbon-src',
-        layout: { 'line-cap': 'round', 'line-join': 'round' },
-        paint: { 'line-color': ['get', 'c'], 'line-width': ['interpolate', ['linear'], ['zoom'], 10, 4, 16, 9] } });
+      map.addLayer({ id: 'apex-ribbon', type: 'line', source: 'apex-ribbon-src', layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: { 'line-color': ['get', 'c'], 'line-width': width(4, 9) } });
     }
-
     const emptyFC = () => ({ type: 'FeatureCollection', features: [] });
 
-    // Route as whole-sector LineStrings (>= 500 m) — never 5 m confetti.
-    function routeGeoJSON(t) {
-      const features = [];
-      const coords = (a, b) => { const c = []; for (let i = a; i <= b; i++) c.push([t.lon[i], t.lat[i]]); return c; };
-      if (!t.sectors) return { type: 'FeatureCollection', features: [{ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: coords(0, t.lat.length - 1) } }] };
-      for (const s of t.sectors) {
-        const end = Math.min(t.lat.length - 1, s.end_index + 1);
-        features.push({ type: 'Feature', properties: { dna: dnaColor(dnaComposite(s)) }, geometry: { type: 'LineString', coordinates: coords(s.start_index, end) } });
-      }
-      return { type: 'FeatureCollection', features };
+    function mixHex(a, b, t) {
+      const p = (h) => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+      const A = p(a), B = p(b);
+      return '#' + A.map((v, i) => Math.round(v + (B[i] - v) * t).toString(16).padStart(2, '0')).join('');
     }
     function dnaComposite(s) {
       const v = [s.tech, s.flow, s.surf];
       if (s.clear != null) v.push(s.clear);
       return v.reduce((a, b) => a + b, 0) / v.length;
     }
-    function dnaColor(score) {
-      // Ordinal terracotta ramp on paper; amber ramp at night. Higher = more worth driving.
-      const night = state.toggles.night;
-      const day = ['#C9BFA9', '#D39A6A', '#C2683A', '#9C3B1C'];
-      const nig = ['#4A463E', '#8F6A3A', '#C9852F', '#F0A848'];
-      const ramp = night ? nig : day;
-      return ramp[score >= 70 ? 3 : score >= 58 ? 2 : score >= 46 ? 1 : 0];
+    // Sector colour = the theme's route colour faded toward the stage by how worth driving it is.
+    const dnaColor = (score) => mixHex(look.colors.stage, look.colors.route, [0.2, 0.45, 0.72, 1][score >= 70 ? 3 : score >= 58 ? 2 : score >= 46 ? 1 : 0]);
+
+    function routeGeoJSON(t) {
+      const coords = (a, b) => { const c = []; for (let i = a; i <= b; i++) c.push([t.lon[i], t.lat[i]]); return c; };
+      if (!t.sectors) return { type: 'FeatureCollection', features: [{ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: coords(0, t.lat.length - 1) } }] };
+      return { type: 'FeatureCollection', features: t.sectors.map(s => ({ type: 'Feature', properties: { dna: dnaColor(dnaComposite(s)) },
+        geometry: { type: 'LineString', coordinates: coords(s.start_index, Math.min(t.lat.length - 1, s.end_index + 1)) } })) };
     }
 
-    // Braking ribbon: next 300 m coloured by current speed vs the braking envelope there.
+    // Braking ribbon: next 300 m coloured by current speed vs the envelope there.
     let lastRibbonAt = 0;
     function updateRibbon(vMps, fromIdx, force) {
       if (!mapReady) return;
@@ -552,27 +482,19 @@
       lastRibbonAt = now;
       const src = map.getSource('apex-ribbon-src');
       if (!track || vMps == null || fromIdx < 0) { src.setData(emptyFC()); return; }
-      const night = state.toggles.night;
-      const calm = night ? '#EAE3D2' : '#FFF8EA';
-      const features = [];
+      const C = look.colors, features = [];
       let run = null;
       const stop = Math.min(track.lat.length - 1, fromIdx + 60);
       for (let i = fromIdx; i <= stop; i++) {
         const env = track.envMps[i];
-        const c = vMps > env + 0.5 ? '#D9411E' : (vMps > env - 3 ? '#E89B3C' : calm);
+        const c = vMps > env + 0.5 ? C.signal : (vMps > env - 3 ? C.amber : C.calm);
         const pt = [track.lon[i], track.lat[i]];
-        if (!run || run.c !== c) {
-          if (run) run.coords.push(pt);
-          run = { c, coords: run ? [run.coords[run.coords.length - 1], pt] : [pt] };
-          features.push(run);
-        } else run.coords.push(pt);
+        if (!run || run.c !== c) { const prev = run ? run.coords[run.coords.length - 1] : null; if (run) run.coords.push(pt); run = { c, coords: prev ? [prev, pt] : [pt] }; features.push(run); }
+        else run.coords.push(pt);
       }
-      src.setData({ type: 'FeatureCollection', features: features.filter(r => r.coords.length > 1).map(r => ({
-        type: 'Feature', properties: { c: r.c }, geometry: { type: 'LineString', coordinates: r.coords }
-      })) });
+      src.setData({ type: 'FeatureCollection', features: features.filter(r => r.coords.length > 1).map(r => ({ type: 'Feature', properties: { c: r.c }, geometry: { type: 'LineString', coordinates: r.coords } })) });
     }
 
-    // Hazard + ALPR pins (only within the look-ahead window to keep the stage clean).
     let pins = [];
     function rebuildPins() {
       pins.forEach(p => p.marker.remove());
@@ -591,8 +513,7 @@
     function updatePins() {
       for (const p of pins) {
         const d = p.e.dist_m - state.cursorM;
-        const visible = d > -150 && d < 2500 && (p.e.type !== 'alpr' || state.toggles.lpr);
-        p.el.style.display = visible ? 'block' : 'none';
+        p.el.style.display = d > -150 && d < 2500 && (p.e.type !== 'alpr' || state.toggles.lpr) ? 'block' : 'none';
       }
     }
 
@@ -600,7 +521,7 @@
       mapReady = true;
       addApexLayers();
       restyleBasemap();
-      applyDnaToggle();
+      map.setLayoutProperty('apex-dna', 'visibility', state.toggles.dna ? 'visible' : 'none');
       if (track) loadTrackOnMap();
       map.on('click', (e) => {
         if (!state.tapToRoute) return;
@@ -609,11 +530,9 @@
         routeTo(e.lngLat.lat, e.lngLat.lng, `Pin ${e.lngLat.lat.toFixed(3)}, ${e.lngLat.lng.toFixed(3)}`);
       });
     });
-    // Keep attribution collapsed to its (i) button so it never covers the stage plates.
     map.once('idle', () => document.querySelectorAll('.maplibregl-ctrl-attrib').forEach(a => a.classList.remove('maplibregl-compact-show')));
     map.on('dragstart', () => { state.follow = false; $('recenterBtn').classList.add('show'); });
     $('recenterBtn').addEventListener('click', () => { state.follow = true; $('recenterBtn').classList.remove('show'); render(true); });
-
     function loadTrackOnMap() {
       if (!mapReady || !track) return;
       map.getSource('apex-route-src').setData(routeGeoJSON(track));
@@ -621,202 +540,48 @@
     }
 
     // =======================================================================
-    // 5. INSTRUMENTS — SVG dials, drum odometer, DNA bars, scrubber
+    // 5. SCRUBBER (pace profile = braking envelope, elevation behind it)
     // =======================================================================
-    const SVGNS = 'http://www.w3.org/2000/svg';
-    function el(tag, attrs, parent) {
-      const n = document.createElementNS(SVGNS, tag);
-      for (const k in attrs) n.setAttribute(k, attrs[k]);
-      if (parent) parent.appendChild(n);
-      return n;
-    }
-    function bezelFace(svg) {
-      const defs = el('defs', {}, svg);
-      const g = el('radialGradient', { id: svg.id + 'Ring', cx: '35%', cy: '30%', r: '80%' }, defs);
-      el('stop', { offset: '0', 'stop-color': '#8C877B' }, g);
-      el('stop', { offset: '0.5', 'stop-color': '#3A3832' }, g);
-      el('stop', { offset: '1', 'stop-color': '#171715' }, g);
-      el('circle', { cx: 100, cy: 100, r: 99, fill: `url(#${svg.id}Ring)` }, svg);
-      el('circle', { cx: 100, cy: 100, r: 92, fill: '#0E0E0D' }, svg);
-    }
-
-    const SPEED_MAX = 120;
-    const speedAngle = (mph) => 135 + 270 * Math.max(0, Math.min(SPEED_MAX, mph)) / SPEED_MAX;
-    const polar = (r, deg) => [100 + r * Math.cos(deg * Math.PI / 180), 100 + r * Math.sin(deg * Math.PI / 180)];
-
-    const speedSvg = el('svg', { viewBox: '0 0 200 200', id: 'speedSvg' });
-    $('speedDial').appendChild(speedSvg);
-    bezelFace(speedSvg);
-    for (let v = 0; v <= SPEED_MAX; v += 5) {
-      const major = v % 20 === 0, mid = v % 10 === 0;
-      const a = speedAngle(v), [x1, y1] = polar(88, a), [x2, y2] = polar(major ? 74 : (mid ? 79 : 83), a);
-      el('line', { x1, y1, x2, y2, stroke: '#EAE3D2', 'stroke-width': major ? 2.6 : (mid ? 1.6 : 1) }, speedSvg);
-      if (major) {
-        const [tx, ty] = polar(61, a);
-        const t = el('text', { x: tx, y: ty + 5, 'text-anchor': 'middle', fill: '#EAE3D2', 'font-size': 15, 'font-weight': 700 }, speedSvg);
-        t.textContent = v;
-      }
-    }
-    el('text', { x: 100, y: 138, 'text-anchor': 'middle', fill: '#9A9384', 'font-size': 10, 'letter-spacing': 2, 'font-weight': 700 }, speedSvg).textContent = 'MPH';
-    const paceText = el('text', { x: 100, y: 160, 'text-anchor': 'middle', fill: '#D9411E', 'font-size': 12, 'font-weight': 800, 'letter-spacing': 1 }, speedSvg);
-    const bug = el('path', { d: 'M 100 15 L 94 4 L 106 4 Z', fill: '#D9411E', transform: 'rotate(0 100 100)' }, speedSvg);
-    const needle = el('g', {}, speedSvg);
-    el('path', { d: 'M 96 100 L 100 20 L 104 100 Z', fill: '#EAE3D2' }, needle);
-    el('circle', { cx: 100, cy: 100, r: 9, fill: '#2A2925', stroke: '#6F6B61', 'stroke-width': 1.5 }, speedSvg);
-
-    function setSpeedDial(mph, paceMph) {
-      const live = mph != null;
-      needle.setAttribute('transform', `rotate(${speedAngle(live ? mph : 0) + 90} 100 100)`);
-      needle.firstChild.setAttribute('fill', live && paceMph != null && mph > paceMph + 1 ? '#D9411E' : '#EAE3D2');
-      if (paceMph != null) {
-        bug.style.display = '';
-        bug.setAttribute('transform', `rotate(${speedAngle(paceMph) + 90} 100 100)`);
-        paceText.textContent = `PACE ${Math.round(paceMph)}`;
-      } else { bug.style.display = 'none'; paceText.textContent = ''; }
-    }
-
-    const gSvg = el('svg', { viewBox: '0 0 200 200', id: 'gSvg' });
-    $('gDial').appendChild(gSvg);
-    bezelFace(gSvg);
-    const G_SCALE = 70 / 0.8; // 0.8 g at r = 70
-    [0.25, 0.5, 0.75].forEach(gv => el('circle', { cx: 100, cy: 100, r: gv * G_SCALE, fill: 'none', stroke: gv === 0.5 ? '#5A564C' : '#2E2C27', 'stroke-width': 1.2 }, gSvg));
-    el('line', { x1: 30, y1: 100, x2: 170, y2: 100, stroke: '#2E2C27', 'stroke-width': 1 }, gSvg);
-    el('line', { x1: 100, y1: 30, x2: 100, y2: 170, stroke: '#2E2C27', 'stroke-width': 1 }, gSvg);
-    el('text', { x: 100, y: 46, 'text-anchor': 'middle', fill: '#9A9384', 'font-size': 9, 'letter-spacing': 2, 'font-weight': 700 }, gSvg).textContent = 'BRAKE';
-    el('text', { x: 100, y: 125, 'text-anchor': 'middle', fill: '#5A564C', 'font-size': 8, 'font-weight': 700 }, gSvg).textContent = '0.5';
-    // Inclinometer arc (bank / camber), bottom of the dial: +-10 deg
-    for (let d = -10; d <= 10; d += 2.5) {
-      const a = 90 - d * 3, [x1, y1] = polar(90, a), [x2, y2] = polar(d % 5 === 0 ? 82 : 86, a);
-      el('line', { x1, y1, x2, y2, stroke: d === 0 ? '#EAE3D2' : '#6F6B61', 'stroke-width': d === 0 ? 2 : 1 }, gSvg);
-    }
-    const bankNeedle = el('path', { d: 'M 100 186 L 96 176 L 104 176 Z', fill: '#E89B3C' }, gSvg);
-    const bankText = el('text', { x: 100, y: 166, 'text-anchor': 'middle', fill: '#E89B3C', 'font-size': 11, 'font-weight': 800 }, gSvg);
-    const ballTrail = el('polyline', { points: '', fill: 'none', stroke: '#E89B3C', 'stroke-opacity': 0.35, 'stroke-width': 2 }, gSvg);
-    const ball = el('circle', { cx: 100, cy: 100, r: 8, fill: '#E89B3C', stroke: '#EAE3D2', 'stroke-width': 1.5 }, gSvg);
-    const trail = [];
-
-    // Spirit-level ball: shows felt force, so it rolls OUT of a turn and FORWARD under braking.
-    // ISO 8855: +lat_g = left turn -> ball right; -lon_g = braking -> ball up.
-    function setGDial(latG, lonG, camberDeg) {
-      const known = latG != null && lonG != null;
-      ball.setAttribute('fill', known ? (Math.hypot(latG, lonG) > 0.45 ? '#D9411E' : '#E89B3C') : '#3A3832');
-      let x = 100, y = 100;
-      if (known) {
-        const clamp = Math.min(1, 0.9 / Math.max(1e-6, Math.hypot(latG, lonG)));  // pin at 0.9 g rim
-        x = 100 + latG * G_SCALE * clamp;
-        y = 100 + lonG * G_SCALE * clamp;
-        trail.push(`${x.toFixed(1)},${y.toFixed(1)}`);
-        if (trail.length > 24) trail.shift();
-      } else trail.length = 0;
-      ball.setAttribute('cx', x); ball.setAttribute('cy', y);
-      ballTrail.setAttribute('points', trail.join(' '));
-      if (camberDeg != null) {
-        const d = Math.max(-10, Math.min(10, camberDeg));
-        bankNeedle.style.display = '';
-        bankNeedle.setAttribute('transform', `rotate(${-d * 3} 100 100)`);
-        bankText.textContent = `BANK ${camberDeg >= 0 ? '+' : ''}${camberDeg.toFixed(1)}°`;
-      } else { bankNeedle.style.display = 'none'; bankText.textContent = ''; }
-    }
-
-    // Halda-style rolling drums: 3 whole-mile drums + a cream tenths drum.
-    const DRUMS = [100, 10, 1, 0.1];
-    const drumStrips = DRUMS.map((unit) => {
-      const d = document.createElement('div');
-      d.className = 'drum' + (unit === 0.1 ? ' tenth' : '');
-      const s = document.createElement('div');
-      s.className = 'strip';
-      for (let k = 0; k <= 10; k++) { const g = document.createElement('div'); g.className = 'digit'; g.textContent = k % 10; s.appendChild(g); }
-      d.appendChild(s);
-      $('drums').appendChild(d);
-      return s;
-    });
-    function setOdometer(miles) {
-      const tenths = Math.max(0, miles * 10);
-      const units = [1000, 100, 10, 1];
-      drumStrips.forEach((strip, i) => {
-        const u = units[i];
-        const val = tenths / u;
-        let digit = Math.floor(val) % 10;
-        let roll = 0;
-        if (u === 1) roll = val - Math.floor(val);
-        else {
-          const below = tenths % u;          // carry rolls in over the last tenth below
-          if (below > u - 1) roll = below - (u - 1);
-        }
-        strip.style.transform = `translateY(${-(digit + roll) * (100 / 11)}%)`;
-      });
-    }
-
-    const DNA_KEYS = ['tech', 'flow', 'surf', 'clear'];
-    const dnaCells = {};
-    for (const k of DNA_KEYS) {
-      const c = document.createElement('div');
-      c.className = 'dna-cell';
-      c.innerHTML = `<span class="dna-val">--</span><div class="dna-bar"><i></i></div><span class="engrave">${k}</span>`;
-      $('dna').appendChild(c);
-      dnaCells[k] = { val: c.querySelector('.dna-val'), bar: c.querySelector('i') };
-    }
-    function setDna(sector) {
-      for (const k of DNA_KEYS) {
-        const v = sector ? sector[k] : null;
-        dnaCells[k].val.textContent = v == null ? '--' : String(v);
-        dnaCells[k].bar.style.width = v == null ? '0%' : `${v}%`;
-      }
-    }
-    function sectorAt(i) {
-      if (!track || !track.sectors) return null;
-      return track.sectors.find(s => i >= s.start_index && i <= s.end_index) || null;
-    }
-
-    const scrubCanvas = $('scrubCanvas');
-    const sctx = scrubCanvas.getContext('2d');
+    const scrubCanvas = $('scrubCanvas'), sctx = scrubCanvas.getContext('2d');
     function drawScrubber() {
       const r = scrubCanvas.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
       const w = Math.max(10, Math.round(r.width * dpr)), h = Math.max(10, Math.round(r.height * dpr));
       if (scrubCanvas.width !== w || scrubCanvas.height !== h) { scrubCanvas.width = w; scrubCanvas.height = h; }
       sctx.clearRect(0, 0, w, h);
       if (!track) return;
-      const n = track.dist.length, T = totalM(), step = Math.max(1, Math.floor(n / w));
-      const xOf = (m) => (m / T) * w;
+      const C = look.colors, n = track.dist.length, T = totalM(), step = Math.max(1, Math.floor(n / w)), xOf = (m) => (m / T) * w;
       if (track.elev) {
         let lo = Infinity, hi = -Infinity;
         for (const e of track.elev) { lo = Math.min(lo, e); hi = Math.max(hi, e); }
         const span = Math.max(10, hi - lo);
         sctx.beginPath(); sctx.moveTo(0, h);
         for (let i = 0; i < n; i += step) sctx.lineTo(xOf(track.dist[i]), h - 2 * dpr - ((track.elev[i] - lo) / span) * (h - 6 * dpr));
-        sctx.lineTo(w, h); sctx.closePath(); sctx.fillStyle = '#2A2925'; sctx.fill();
+        sctx.lineTo(w, h); sctx.closePath(); sctx.fillStyle = C.rule; sctx.fill();
       }
-      // Pace profile = braking envelope (what the road allows), the same for every car on equal grip.
       sctx.beginPath();
       for (let i = 0; i < n; i += step) {
-        const y = h - 2 * dpr - (track.envMps[i] / 32) * (h - 4 * dpr);
+        const y = h - 2 * dpr - Math.min(1, track.envMps[i] / 56) * (h - 4 * dpr);
         i === 0 ? sctx.moveTo(xOf(track.dist[i]), y) : sctx.lineTo(xOf(track.dist[i]), y);
       }
-      sctx.strokeStyle = '#6F6B61'; sctx.lineWidth = 1.2 * dpr; sctx.stroke();
+      sctx.strokeStyle = C.panelDim; sctx.lineWidth = 1.2 * dpr; sctx.stroke();
       for (const e of allEvents()) {
-        if (e.type === 'corner' && (e.code.includes('HP') || /[LR][12]$/.test(e.code))) {
-          sctx.fillStyle = '#E89B3C'; sctx.fillRect(xOf(e.dist_m) - dpr, 0, 2 * dpr, 4 * dpr);
-        } else if (e.type === 'alpr' && state.toggles.lpr) {
-          sctx.fillStyle = '#D9411E'; sctx.fillRect(xOf(e.dist_m) - dpr, h - 5 * dpr, 2 * dpr, 5 * dpr);
-        }
+        if (e.type === 'corner' && (e.severity === 'HP' || e.severity <= 2)) { sctx.fillStyle = C.accent; sctx.fillRect(xOf(e.dist_m) - dpr, 0, 2 * dpr, 4 * dpr); }
+        else if (e.type === 'alpr' && state.toggles.lpr) { sctx.fillStyle = C.signal; sctx.fillRect(xOf(e.dist_m) - dpr, h - 5 * dpr, 2 * dpr, 5 * dpr); }
       }
-      const px = xOf(state.cursorM);
-      sctx.fillStyle = '#D9411E'; sctx.fillRect(px - 1.5 * dpr, 0, 3 * dpr, h);
+      sctx.fillStyle = C.signal; sctx.fillRect(xOf(state.cursorM) - 1.5 * dpr, 0, 3 * dpr, h);
     }
 
     // =======================================================================
     // 6. CO-DRIVER — quiet in cruise, full pace notes when spirited or STAGE
     // =======================================================================
     const allEvents = () => (track ? track.events.concat(track.alpr || []) : []);
-    function feet(m) {
+    function distLabel(m) {
       const ft = m * 3.28084;
       if (ft >= 1000) return { n: (m / 1609.344).toFixed(1), u: 'MI' };
       return { n: String(Math.max(0, Math.round(ft / 50) * 50)), u: 'FT' };
     }
     const isSpirited = () => state.toggles.stage || performance.now() - state.spiritedAt < 30000;
-    function noteworthyInCruise(e) {
-      return e.type === 'alpr' || (e.type === 'bump' && e.severity_g >= 0.30);
-    }
+    const noteworthyInCruise = (e) => e.type === 'alpr' || (e.type === 'bump' && e.severity_g >= 0.45);
 
     const speech = { busy: false, queue: [] };
     function say(text, force) {
@@ -840,30 +605,24 @@
       speechSynthesis.speak(u);
     }
 
-    function updateNotes(vMps, live) {
-      const ev = allEvents().filter(e => e.dist_m >= state.cursorM - 5 && (e.type !== 'alpr' || state.toggles.lpr))
-        .sort((a, b) => a.dist_m - b.dist_m);
-      const spirited = isSpirited();
-      const next = ev.find(e => spirited || noteworthyInCruise(e) || e.type !== 'corner') || null;
-      const codeEl = $('noteCode');
-      if (!next || next.dist_m - state.cursorM > 3000) {
-        codeEl.className = 'note-code quiet'; codeEl.textContent = '--';
-        $('noteCall').textContent = track ? 'Clear' : 'No route loaded';
-        $('noteSub').textContent = track ? `${track.name} · ${spirited ? 'stage notes' : 'cruise: hazards and LPR only'}` : 'Open the route book';
-        $('noteDist').innerHTML = '';
-      } else {
-        const d = next.dist_m - state.cursorM, f = feet(d);
-        const hazard = next.type !== 'corner';
-        codeEl.className = 'note-code' + (hazard ? ' hazard' : '');
-        codeEl.textContent = next.code;
-        $('noteCall').textContent = next.call;
-        $('noteSub').textContent = next.type === 'corner'
-          ? `Radius ${Math.round(next.radius_m)} m · apex ${Math.round(next.apex_mph)} mph`
-          : (next.type === 'alpr' ? 'OSM / DeFlock ALPR camera' : `Measured ${next.severity_g.toFixed(2)} g`);
-        $('noteDist').innerHTML = `${f.n}<small>${f.u}</small>`;
-      }
+    function subFor(e) {
+      if (e.type === 'corner') return `Radius ${Math.round(e.radius_m)} m · apex ${Math.round(e.apex_mph)} mph`;
+      if (e.type === 'alpr') return 'OSM / DeFlock ALPR camera';
+      return `Measured ${e.severity_g.toFixed(2)} g · single pass, unverified`;
+    }
 
-      // Call each note once, ~5 s ahead (60-250 m), only while moving.
+    function updateNotes(vMps, live) {
+      const ev = allEvents().filter(e => e.dist_m >= state.cursorM - 5 && (e.type !== 'alpr' || state.toggles.lpr)).sort((a, b) => a.dist_m - b.dist_m);
+      const spirited = isSpirited();
+      const shown = ev.filter(e => spirited || noteworthyInCruise(e) || e.type !== 'corner').filter(e => e.dist_m - state.cursorM <= 3000).slice(0, 3);
+      const notes = shown.map(e => {
+        const d = distLabel(e.dist_m - state.cursorM);
+        return { type: e.type, code: e.code, call: e.call, sub: subFor(e), dist: d.n, unit: d.u, distM: e.dist_m - state.cursorM,
+                 dir: e.dir, severity: e.severity, turnRad: e.turn_rad, mods: e.mods || [] };
+      });
+      notes.quietText = track ? `${track.name} · ${spirited ? 'stage notes' : 'cruise: hazards and LPR only'}` : 'Open the route book';
+      Inst.renderNotes($('notes'), look.theme, notes);
+
       if (!(state.playing || live) || vMps == null) return;
       const lead = Math.max(60, Math.min(250, vMps * 5));
       for (const e of ev) {
@@ -873,15 +632,18 @@
         if (state.spoken.has(key) || d < 10) continue;
         state.spoken.add(key);
         if (e.type === 'corner' ? !spirited : !(spirited || noteworthyInCruise(e))) continue;
-        say(d > 90 ? `${e.call}, ${feet(d).n} ${feet(d).u === 'FT' ? 'feet' : 'miles'}` : e.call, false);
+        const L = distLabel(d);
+        say(d > 90 ? `${e.call}, ${L.n} ${L.u === 'FT' ? 'feet' : 'miles'}` : e.call, false);
       }
     }
 
     // =======================================================================
     // 7. RENDER LOOP — replay (recorded), sim (route at envelope), live (native)
     // =======================================================================
+    function sectorAt(i) { return track && track.sectors ? track.sectors.find(s => i >= s.start_index && i <= s.end_index) || null : null; }
+    let lastNotesAt = 0;
     function render(snap) {
-      let lat, lon, bearing, vMps, latG, lonG, camber, env;
+      let lat, lon, bearing, vMps, latG, lonG, camber, idx = -1;
       const live = state.mode === 'live' && state.live;
       if (live) {
         const L = state.live;
@@ -889,36 +651,39 @@
         bearing = L.course_deg != null ? L.course_deg : state.bearing;
         if (track) {
           const hit = Core.nearestIndex(lat, lon, track.lat, track.lon, state.cursorIdx, 600);
-          if (hit.distM < 40) { state.cursorIdx = hit.index; state.cursorM = track.dist[hit.index]; env = track.envMps[hit.index]; }
-          else { state.cursorIdx = -1; }
+          if (hit.distM < 40) { idx = hit.index; state.cursorM = track.dist[idx]; }
         }
       } else if (track) {
         const s = sample(track, state.cursorM);
-        state.cursorIdx = s.i;
-        lat = s.lat; lon = s.lon; bearing = s.bearing; env = s.envMps;
-        vMps = state.mode === 'sim' ? simSpeed(s) : s.speedMps;
+        idx = s.i; lat = s.lat; lon = s.lon; bearing = s.bearing;
+        vMps = state.mode === 'sim' ? simSpeed(idx) : s.speedMps;
         latG = s.latG; lonG = s.lonG; camber = s.camberDeg;
-      } else return;
-
+      } else { cluster.update({ speedMph: null }); return; }
+      state.cursorIdx = idx;
       if (latG != null && (Math.abs(latG) > 0.30 || Math.abs(lonG) > 0.35)) state.spiritedAt = performance.now();
 
       state.bearing = snap ? bearing : (state.bearing + angleDelta(state.bearing, bearing) * 0.15 + 360) % 360;
       puck.setLngLat([lon, lat]).setRotation(state.bearing);
-      if (state.follow && (snap || state.playing || live)) {
-        map.jumpTo({ center: [lon, lat], bearing: state.bearing, pitch: 45, ...(snap ? { zoom: Math.max(map.getZoom(), 14.6) } : {}) });
-      }
+      if (state.follow && (snap || state.playing || live)) map.jumpTo({ center: [lon, lat], bearing: state.bearing, pitch: 45, ...(snap ? { zoom: Math.max(map.getZoom(), 14.6) } : {}) });
 
-      setSpeedDial(vMps != null ? vMps * MPH : null, env != null ? env * MPH : null);
-      setGDial(latG, lonG, camber);
-      setOdometer(state.cursorM / 1609.344);
-      setDna(sectorAt(state.cursorIdx));
-      updateRibbon(vMps, state.cursorIdx, snap);
+      const at = (arr) => (idx >= 0 && arr && arr[idx] != null ? arr[idx] : null);
+      const sight = at(track && track.sightM);
+      const limit = at(track && track.limitMps);
+      cluster.update({
+        speedMph: vMps != null ? vMps * MPH : null,
+        paceMph: at(track && track.envMps) != null ? at(track.envMps) * MPH : null,
+        sightMph: sight != null ? Core.sightSpeedMps(sight) * MPH : null,
+        limitMph: limit != null ? limit * MPH : null,
+        latG, lonG, camberDeg: camber,
+        tripMi: state.cursorM / 1609.344, totalMi: track ? totalM() / 1609.344 : null,
+        sector: sectorAt(idx), routeOnly: track && track.kind === 'route'
+      });
+      updateRibbon(vMps, idx, snap);
       updatePins();
-      updateNotes(vMps, live);
-      drawScrubber();
+      const now = performance.now();
+      if (snap || now - lastNotesAt > 150) { lastNotesAt = now; updateNotes(vMps, live); drawScrubber(); }
     }
-
-    const simSpeed = (s) => Math.min(27, Math.max(6, s.envMps * 0.92));
+    const simSpeed = (i) => Math.max(6, Math.min(track.envMps[i] * 0.92, track.limitMps && track.limitMps[i] ? track.limitMps[i] * 1.1 : 27));
 
     let lastTs = 0, raf = null;
     function tick(ts) {
@@ -927,7 +692,7 @@
       const dt = Math.min(0.1, (ts - (lastTs || ts)) / 1000);
       lastTs = ts;
       const s = sample(track, state.cursorM);
-      const v = state.mode === 'sim' ? simSpeed(s) : Math.max(2, s.speedMps);
+      const v = state.mode === 'sim' ? simSpeed(s.i) : Math.max(2, s.speedMps);
       state.cursorM += v * state.rate * dt;
       if (state.cursorM >= totalM()) { state.cursorM = totalM(); setPlaying(false); }
       render(false);
@@ -945,18 +710,14 @@
     }
     function setMode(mode) {
       state.mode = mode;
-      const plate = $('modePlate');
-      plate.textContent = { replay: 'REPLAY', sim: 'SIM · NOT DRIVEN', live: 'LIVE' }[mode];
-      plate.classList.toggle('mode-live', mode === 'live');
+      $('modePlate').textContent = { replay: 'REPLAY', sim: 'SIM · NOT DRIVEN', live: 'LIVE' }[mode];
+      $('modePlate').classList.toggle('live', mode === 'live');
     }
-
     function activate(t, startM = 0) {
       track = t;
       state.cursorM = Math.max(0, Math.min(totalM(), startM));
       state.spoken.clear();
-      trail.length = 0;
       if (state.mode !== 'live') setMode(t.kind === 'drive' ? 'replay' : 'sim');
-      $('odoTotal').textContent = `OF ${(totalM() / 1609.344).toFixed(1)}`;
       renderDriveList();
       loadTrackOnMap();
       fetchAlpr(t);
@@ -969,41 +730,33 @@
     // =======================================================================
     const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter', 'https://overpass.private.coffee/api/interpreter'];
     async function fetchAlpr(t) {
-      if (t.alpr) { attachAlpr(t, t.alprNodes); return; }
+      if (t.alpr) return;
       let s = Infinity, w = Infinity, n = -Infinity, e = -Infinity;
       for (let i = 0; i < t.lat.length; i++) { s = Math.min(s, t.lat[i]); n = Math.max(n, t.lat[i]); w = Math.min(w, t.lon[i]); e = Math.max(e, t.lon[i]); }
       const bbox = [s - 0.005, w - 0.005, n + 0.005, e + 0.005].map(v => v.toFixed(4)).join(',');
       const cacheKey = `apex.alpr.${bbox}`;
-      try {
-        const c = JSON.parse(localStorage.getItem(cacheKey) || 'null');
-        if (c && Date.now() - c.at < 7 * 864e5) { attachAlpr(t, c.nodes); return; }
-      } catch (_) {}
+      try { const c = JSON.parse(localStorage.getItem(cacheKey) || 'null'); if (c && Date.now() - c.at < 7 * 864e5) { attachAlpr(t, c.nodes); return; } } catch (_) {}
       const q = `[out:json][timeout:25];(node["surveillance:type"="ALPR"](${bbox});node["man_made"="surveillance"]["surveillance:type"="ALPR"](${bbox}););out body;`;
       for (const url of OVERPASS) {
         try {
           const res = await fetch(url, { method: 'POST', body: 'data=' + encodeURIComponent(q), headers: { 'Content-Type': 'application/x-www-form-urlencoded' } });
           if (!res.ok) continue;
-          const json = await res.json();
-          const nodes = (json.elements || []).filter(x => x.type === 'node').map(x => ({ lat: x.lat, lon: x.lon, id: x.id }));
+          const nodes = ((await res.json()).elements || []).filter(x => x.type === 'node').map(x => ({ lat: x.lat, lon: x.lon, id: x.id }));
           try { localStorage.setItem(cacheKey, JSON.stringify({ at: Date.now(), nodes })); } catch (_) {}
           attachAlpr(t, nodes);
           return;
-        } catch (_) { /* try next mirror */ }
+        } catch (_) { /* next mirror */ }
       }
       if (track === t) toast('LPR camera data unavailable (Overpass unreachable). Absence of pins is NOT clearance.');
     }
     function attachAlpr(t, nodes) {
-      t.alprNodes = nodes;
       t.alpr = [];
       const counts = new Map();
       for (const node of nodes) {
         const hit = Core.nearestIndex(node.lat, node.lon, t.lat, t.lon, -1);
         if (hit.distM > Core.ALPR_RADIUS_M) continue;
         t.alpr.push({ type: 'alpr', code: 'LPR', call: 'Camera', index: hit.index, dist_m: t.dist[hit.index], lat: node.lat, lon: node.lon });
-        if (t.sectors) {
-          const sid = Math.floor(t.dist[hit.index] / t.sectorM);
-          counts.set(sid, (counts.get(sid) || 0) + 1);
-        }
+        if (t.sectors) { const sid = Math.floor(t.dist[hit.index] / t.sectorM); counts.set(sid, (counts.get(sid) || 0) + 1); }
       }
       // Same rule as core/road_dna.score_sectors: -45 per camera within ALPR_RADIUS_M.
       if (t.sectors) for (const sec of t.sectors) sec.clear = Math.max(0, 100 - 45 * (counts.get(sec.id) || 0));
@@ -1011,68 +764,102 @@
     }
 
     // =======================================================================
-    // 9. ROUTING — Nominatim + OSRM (real roads; geometry only until profiled)
+    // 9. ROUTING — Valhalla (highways de-prioritised) + posted limits; OSRM fallback
     // =======================================================================
+    const VALHALLA = 'https://valhalla1.openstreetmap.de';
+    function decodePolyline6(str) {
+      const out = []; let i = 0, lat = 0, lon = 0;
+      while (i < str.length) {
+        for (const which of [0, 1]) {
+          let shift = 0, result = 0, b;
+          do { b = str.charCodeAt(i++) - 63; result |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
+          const d = (result & 1) ? ~(result >> 1) : (result >> 1);
+          if (which === 0) lat += d; else lon += d;
+        }
+        out.push([lon / 1e6, lat / 1e6]);
+      }
+      return out;
+    }
+    async function valhallaRoute(points) {
+      const res = await fetch(`${VALHALLA}/route`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+        locations: points.map((p, i) => ({ lat: p.lat, lon: p.lon, type: i === 0 || i === points.length - 1 ? 'break' : 'through' })),
+        costing: 'auto', costing_options: { auto: { use_highways: 0.15, use_tolls: 0.3 } } }) });
+      const json = await res.json();
+      if (!json.trip) throw new Error(json.error || 'no route');
+      return json.trip.legs.flatMap((leg, i) => decodePolyline6(leg.shape).slice(i ? 1 : 0));
+    }
+    async function osrmRoute(points) {
+      const coords = points.map(p => `${p.lon.toFixed(6)},${p.lat.toFixed(6)}`).join(';');
+      const json = await (await fetch(`https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`)).json();
+      if (!json.routes || !json.routes[0]) throw new Error(json.message || 'no route');
+      return json.routes[0].geometry.coordinates;
+    }
+    // OSM maxspeed per sample via Valhalla map matching (same as tools/export_web_profile.py).
+    async function attachLimits(t) {
+      const stride = 4, idx = [];
+      for (let i = 0; i < t.lat.length; i += stride) idx.push(i);
+      if (idx[idx.length - 1] !== t.lat.length - 1) idx.push(t.lat.length - 1);
+      try {
+        const res = await fetch(`${VALHALLA}/trace_attributes`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+          shape: idx.map(i => ({ lat: t.lat[i], lon: t.lon[i] })), costing: 'auto', shape_match: 'map_snap',
+          filters: { attributes: ['edge.speed_limit', 'matched.edge_index'], action: 'include' } }) });
+        const json = await res.json();
+        const edges = json.edges || [];
+        t.limitMps = new Array(t.lat.length).fill(null);
+        (json.matched_points || []).forEach((mp, k) => {
+          const e = edges[mp.edge_index];
+          const v = e && typeof e.speed_limit === 'number' ? e.speed_limit / 3.6 : null;
+          for (let i = idx[k]; i < (idx[k + 1] ?? t.lat.length); i++) t.limitMps[i] = v;
+        });
+        if (track === t) render(false);
+      } catch (_) { /* unknown stays unknown */ }
+    }
     function here() {
       if (state.live) return { lat: state.live.lat, lon: state.live.lon };
       if (track) { const s = sample(track, state.cursorM); return { lat: s.lat, lon: s.lon }; }
       const c = map.getCenter(); return { lat: c.lat, lon: c.lng };
     }
-    async function osrm(points, id, name) {
+    async function buildRoute(points, id, name) {
       toast(`Routing ${name}...`);
-      const coords = points.map(p => `${p.lon.toFixed(6)},${p.lat.toFixed(6)}`).join(';');
-      try {
-        const res = await fetch(`https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`);
-        const json = await res.json();
-        if (!json.routes || !json.routes[0]) throw new Error(json.message || 'no route');
-        const t = trackFromPolyline(json.routes[0].geometry.coordinates, id, name);
-        const i = drives.findIndex(d => d.id === id);
-        if (i >= 0) drives.splice(i, 1);
-        drives.unshift(t);
-        closeSheet();
-        activate(t, 0);
-        toast(`${name}: ${(totalM() / 1609.344).toFixed(1)} mi, ${t.events.length} corners called from map geometry`);
-      } catch (err) {
-        toast(`Routing failed: ${err.message}. Check your connection.`);
-      }
+      let coords = null;
+      try { coords = await valhallaRoute(points); } catch (_) { try { coords = await osrmRoute(points); } catch (err) { toast(`Routing failed: ${err.message}. Check your connection.`); return; } }
+      const t = trackFromPolyline(coords, id, name);
+      const i = drives.findIndex(d => d.id === id);
+      if (i >= 0) drives.splice(i, 1);
+      drives.unshift(t);
+      closeSheet();
+      activate(t, 0);
+      attachLimits(t);
+      toast(`${name}: ${(totalM() / 1609.344).toFixed(1)} mi, ${t.events.length} corners called from map geometry`);
     }
-    function routeTo(lat, lon, name) { return osrm([here(), { lat, lon }], 'route_dest', name); }
+    const routeTo = (lat, lon, name) => buildRoute([here(), { lat, lon }], 'route_dest', name);
     async function routeToQuery(q) {
       if (!q.trim()) return;
       toast(`Searching ${q}...`);
       try {
-        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`);
-        const items = await res.json();
+        const items = await (await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`)).json();
         if (!items.length) { toast(`No match for "${q}"`); return; }
         routeTo(parseFloat(items[0].lat), parseFloat(items[0].lon), `To ${items[0].display_name.split(',')[0]}`);
       } catch (_) { toast('Search unavailable. Use TAP MAP TO ROUTE.'); }
     }
     function loop(miles) {
       const c = here();
-      // A circle through the start point; road distance runs ~1.35x its perimeter.
       const rKm = (miles * 1.609344) / (2 * Math.PI * 1.35);
       const kmLat = 110.54, kmLon = 111.32 * Math.cos(c.lat * Math.PI / 180);
-      const heading = Math.random() * 2 * Math.PI;   // new loop direction each time
+      const heading = Math.random() * 2 * Math.PI;
       const center = { lat: c.lat + rKm * Math.cos(heading) / kmLat, lon: c.lon + rKm * Math.sin(heading) / kmLon };
       const pts = [c];
-      for (const k of [1, 2, 3]) {
-        const a = heading + Math.PI + k * Math.PI / 2;
-        pts.push({ lat: center.lat + rKm * Math.cos(a) / kmLat, lon: center.lon + rKm * Math.sin(a) / kmLon });
-      }
+      for (const k of [1, 2, 3]) { const a = heading + Math.PI + k * Math.PI / 2; pts.push({ lat: center.lat + rKm * Math.cos(a) / kmLat, lon: center.lon + rKm * Math.sin(a) / kmLon }); }
       pts.push(c);
-      return osrm(pts, `loop_${miles}`, `${miles} mi loop`);
+      return buildRoute(pts, `loop_${miles}`, `${miles} mi loop`);
     }
 
     // =======================================================================
     // 10. UI WIRING
     // =======================================================================
-    function toast(msg) {
-      const t = $('toast');
-      t.textContent = msg; t.classList.add('show');
-      clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 4200);
-    }
-    function openSheet() { $('routeSheet').classList.add('open'); }
-    function closeSheet() { $('routeSheet').classList.remove('open'); }
+    function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 4200); }
+    const openSheet = () => $('sheet').classList.add('open');
+    const closeSheet = () => $('sheet').classList.remove('open');
     $('openSheetBtn').addEventListener('click', openSheet);
     $('closeSheetBtn').addEventListener('click', closeSheet);
     $('destGoBtn').addEventListener('click', () => routeToQuery($('destInput').value));
@@ -1089,62 +876,66 @@
       list.innerHTML = '';
       for (const d of drives) {
         const b = document.createElement('button');
-        b.className = 'drive-card' + (track && d.id === track.id ? ' active' : '');
+        b.className = 'card' + (track && d.id === track.id ? ' active' : '');
         const corners = d.events.filter(e => e.type === 'corner').length;
-        const bumps = d.events.filter(e => e.type === 'bump').length;
         const mi = (d.dist[d.dist.length - 1] / 1609.344).toFixed(1);
-        b.innerHTML = `<b></b><span></span>`;
+        b.innerHTML = '<b></b><span></span>';
         b.querySelector('b').textContent = d.name;
-        b.querySelector('span').textContent = `${mi} mi · ${corners} corners${d.kind === 'drive' ? ` · ${bumps} bumps` : ''} · ${d.subtitle}`;
+        b.querySelector('span').textContent = `${mi} mi · ${corners} corners · ${d.subtitle}`;
         b.addEventListener('click', () => { closeSheet(); activate(d, 0); });
         list.appendChild(b);
       }
     }
+    function renderThemeList() {
+      const list = $('themeList');
+      list.innerHTML = '';
+      for (const id of Themes.ORDER) {
+        const t = Themes.get(id);
+        const b = document.createElement('button');
+        b.className = 'card' + (id === state.theme ? ' active' : '');
+        b.innerHTML = '<b></b><span></span>';
+        b.querySelector('b').textContent = t.label;
+        b.querySelector('b').dataset.tag = t.tag;
+        b.querySelector('span').textContent = t.blurb;
+        b.addEventListener('click', () => { state.theme = id; applyTheme(); });
+        list.appendChild(b);
+      }
+    }
 
-    $('playBtn').addEventListener('click', () => {
-      setPlaying(!state.playing);
-      if (state.playing && track) say(`${track.name}.`, true);
-    });
+    $('playBtn').addEventListener('click', () => { setPlaying(!state.playing); if (state.playing && track) say(`${track.name}.`, true); });
     $('rateBtn').addEventListener('click', () => {
       const rates = [1, 2, 4, 8];
       state.rate = rates[(rates.indexOf(state.rate) + 1) % rates.length];
       $('rateBtn').textContent = `${state.rate}X`;
     });
-
     const scrubber = $('scrubber');
     let scrubbing = false;
     function scrubTo(x) {
       if (!track || state.mode === 'live') return;
       const r = scrubber.getBoundingClientRect();
       state.cursorM = Math.max(0, Math.min(1, (x - r.left) / r.width)) * totalM();
-      state.spoken.clear();
-      state.follow = true; $('recenterBtn').classList.remove('show');
+      state.spoken.clear(); state.follow = true; $('recenterBtn').classList.remove('show');
       render(true);
     }
     scrubber.addEventListener('pointerdown', (e) => { scrubbing = true; scrubber.setPointerCapture(e.pointerId); scrubTo(e.clientX); });
     scrubber.addEventListener('pointermove', (e) => { if (scrubbing) scrubTo(e.clientX); });
     scrubber.addEventListener('pointerup', () => { scrubbing = false; });
 
-    function applyToggles() {
-      document.querySelectorAll('[data-toggle]').forEach(b => b.classList.toggle('on', !!state.toggles[b.dataset.toggle]));
-      document.documentElement.dataset.theme = state.toggles.night ? 'night' : 'day';
-      try { localStorage.setItem('apex.toggles', JSON.stringify(state.toggles)); } catch (_) {}
-    }
-    function applyDnaToggle() {
-      if (!mapReady) return;
-      map.setLayoutProperty('apex-dna', 'visibility', state.toggles.dna ? 'visible' : 'none');
-    }
     document.querySelectorAll('[data-toggle]').forEach(b => b.addEventListener('click', () => {
       const k = b.dataset.toggle;
       state.toggles[k] = !state.toggles[k];
-      applyToggles();
-      if (k === 'night') { restyleBasemap(); if (track) loadTrackOnMap(); }
-      if (k === 'dna') { applyDnaToggle(); if (state.toggles.dna && track && !track.sectors) toast('Stage DNA needs a profiled drive; this route is geometry only.'); }
-      if (k === 'lpr') { updatePins(); drawScrubber(); }
+      b.classList.toggle('on', state.toggles[k]);
+      if (k === 'night') { applyTheme(); return; }
+      if (k === 'dna' && mapReady) {
+        map.setLayoutProperty('apex-dna', 'visibility', state.toggles.dna ? 'visible' : 'none');
+        if (state.toggles.dna && track && !track.sectors) toast('Stage DNA needs a profiled drive; this route is geometry only.');
+      }
+      if (k === 'lpr') updatePins();
       if (k === 'stage') say(state.toggles.stage ? 'Stage mode. Full notes.' : 'Cruise. Hazards only.', true);
-      render(false);
+      savePrefs();
+      render(true);
     }));
-    window.addEventListener('resize', drawScrubber);
+    window.addEventListener('resize', () => render(true));
 
     // =======================================================================
     // 11. NATIVE BRIDGE (ApexNavApp.swift pushes window.apex.live every 0.1 s)
@@ -1153,12 +944,9 @@
       live(frame) {
         if (!frame || !frame.has_fix || !Number.isFinite(frame.lat) || !Number.isFinite(frame.lon)) return;
         state.live = frame; state.liveAt = performance.now();
-        if (state.mode !== 'live') { setPlaying(false); setMode('live'); state.follow = true; render(true); }
-        else render(false);
+        if (state.mode !== 'live') { setPlaying(false); setMode('live'); state.follow = true; render(true); } else render(false);
       },
-      onNative(msg) {
-        if (msg && msg.type === 'recordingSaved') toast(`Saved ${msg.segments} road segments to ${msg.file}`);
-      }
+      onNative(msg) { if (msg && msg.type === 'recordingSaved') toast(`Saved ${msg.segments} road segments to ${msg.file}`); }
     };
     setInterval(() => {
       if (state.mode === 'live' && performance.now() - state.liveAt > 5000) {
@@ -1169,16 +957,18 @@
     // =======================================================================
     // 12. BOOT
     // =======================================================================
-    applyToggles();
+    document.querySelectorAll('[data-toggle]').forEach(b => b.classList.toggle('on', !!state.toggles[b.dataset.toggle]));
+    drawPuck();
     renderDriveList();
-    setSpeedDial(null, null); setGDial(null, null, null); setOdometer(0); setDna(null);
+    renderThemeList();
     const first = drives.find(d => d.id === params.get('drive')) || drives[0];
     if (first) {
       const at = params.has('at') ? parseFloat(params.get('at')) || 0 : 0;
-      activate(first, at * (first.dist[first.dist.length - 1]));
+      activate(first, at * first.dist[first.dist.length - 1]);
       if (params.get('play') === '1') setPlaying(true);
     } else openSheet();
     if (params.get('book') === '1') openSheet();
+    if (document.fonts) document.fonts.ready.then(() => render(true));
   })();
   </script>
 </body>
