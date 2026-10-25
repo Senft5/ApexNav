@@ -225,17 +225,20 @@
       html('span', '', c, label);
       return v;
     };
-    const limit = cell('LIMIT', 'ro-limit');
-    const sight = cell('SIGHT');
-    const pace = cell('PACE', 'ro-pace');
-    return (d) => { limit.textContent = fmt(d.limitMph); sight.textContent = fmt(d.sightMph); pace.textContent = fmt(d.paceMph); };
+    const limit = cell('Limit', 'ro-limit');
+    const road = cell('Road', 'ro-pace');                      // the speed the road allows right now: the lower of corner pace and sightline
+    return (d) => {
+      limit.textContent = fmt(d.limitMph);
+      const both = [d.paceMph, d.sightMph].filter(v => Number.isFinite(v));
+      road.textContent = fmt(both.length ? Math.min(...both) : null);
+    };
   }
 
   function odometer(parent, boxed) {
     const o = html('div', 'odo' + (boxed ? ' boxed' : ''), parent);
     const digits = html('div', 'odo-digits', o);
     const meta = html('div', 'odo-meta', o);
-    html('span', '', meta, 'TRIP MI');
+    html('span', '', meta, 'Trip mi');
     const total = html('span', '', meta, '');
     return (d) => {
       const s = Math.max(0, d.tripMi || 0).toFixed(1).padStart(5, '0');
@@ -244,7 +247,7 @@
         digits.innerHTML = '';
         for (const ch of s) html('span', ch === '.' ? 'dot' : 'dg', digits, ch);
       }
-      total.textContent = d.totalMi != null ? `OF ${d.totalMi.toFixed(1)}` : '';
+      total.textContent = d.totalMi != null ? `of ${d.totalMi.toFixed(1)}` : '';
     };
   }
 
@@ -279,7 +282,7 @@
     const sp = html('div', 'dial dial-speed', el);
     const center = html('div', 'cluster-center', el);
     const gg = html('div', 'dial dial-g', el);
-    const u = [speedDial(sp, printed), readouts(center), odometer(center, printed), dnaBars(center), gDial(gg, printed)];
+    const u = [speedDial(sp, printed), readouts(center), odometer(center, printed), gDial(gg, printed)];
     return { update: (d) => u.forEach(f => f(d)) };
   }
 

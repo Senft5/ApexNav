@@ -25,7 +25,7 @@
   <script src="data/dry_ridge.js"></script>
   <script src="data/pebble_ridge.js"></script>
   <style>
-    :root { --safe-top: env(safe-area-inset-top, 0px); --safe-bottom: env(safe-area-inset-bottom, 0px); --dial: clamp(104px, 15dvh, 180px); }
+    :root { --safe-top: env(safe-area-inset-top, 0px); --safe-bottom: env(safe-area-inset-bottom, 0px); --dial: clamp(88px, 12dvh, 150px); }
     * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
     html, body { width: 100%; height: 100%; overflow: hidden; background: var(--panel); color: var(--panel-ink);
       font-family: var(--font-ui); font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; user-select: none; }
@@ -109,8 +109,8 @@
     .dial-digital { font-family: var(--font-num); font-size: 22px; font-weight: 700; fill: var(--face-ink); }
     .dial-digital.small { font-size: 11px; fill: var(--accent); }
     .gauge-printed .dial-num { font-size: 17px; font-weight: 700; }
-    .cluster-center { min-width: 0; display: grid; gap: 7px; justify-items: center; align-content: center; }
-    .readouts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; width: min(100%, 250px); }
+    .cluster-center { min-width: 0; display: grid; gap: 4px; justify-items: center; align-content: center; }
+    .readouts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; width: min(100%, 250px); }
     .ro { display: grid; justify-items: center; gap: 1px; padding: 3px 0; border: 1px solid var(--rule); }
     .ro b { font-family: var(--font-num); font-size: 17px; font-weight: 700; line-height: 1.1; }
     .ro span { font-size: 11px; font-weight: 600; color: var(--panel-dim); }
@@ -160,7 +160,7 @@
     .tm-dna-cell u.hi { background: #3FB950; } .tm-dna-cell u.mid { background: #F2B33D; } .tm-dna-cell u.lo { background: #F85149; }
     .tm-dna-cell b { font-family: var(--font-num); color: var(--panel-ink); font-size: 11px; }
 
-    .switches { display: flex; justify-content: space-between; align-items: center; gap: 4px; }
+    .switches { display: flex; justify-content: space-between; align-items: flex-start; gap: 4px; flex-wrap: wrap; }
     .sw { display: grid; justify-items: center; gap: 4px; min-width: 44px; padding: 4px 2px; }
     .sw i { width: 30px; height: 14px; border: 1.5px solid var(--panel-dim); position: relative; display: block; }
     .sw i::after { content: ""; position: absolute; top: 2px; left: 2px; width: 8px; height: 7px; background: var(--panel-dim); transition: left 0.12s; }
@@ -213,6 +213,8 @@
     /* Menu views (Route / Drives / Setup) get the whole screen above the tab bar: the gauge cluster belongs to the map view only. */
     #app.sheet-open .binnacle > :not(.tabbar) { display: none !important; }
     #app.sheet-open .notes { visibility: hidden; height: 0; min-height: 0; padding: 0; border: 0; overflow: hidden; }
+    #app.idle .notes { visibility: hidden; height: 0; min-height: 0; padding: 0; border: 0; overflow: hidden; }
+    #app.idle #transport, #app.idle #cluster { display: none; }
     .scrim { position: absolute; inset: 0; z-index: 9; display: none; background: rgba(0,0,0,0.18); }
     .scrim.show { display: block; }
     .sheet [data-panel] { display: none; }
@@ -311,6 +313,16 @@
             <div id="accountBody" class="stack-12"></div>
           </section>
           <section data-panel="setup">
+            <h3>While you drive</h3>
+<div class="switches" id="switchRow">
+        <button class="sw" data-toggle="stage"><i></i><span>Full notes</span></button>
+        <button class="sw" data-toggle="voice"><i></i><span>Voice</span></button>
+        <button class="sw" data-toggle="lpr"><i></i><span>Cameras</span></button>
+        <button class="sw" data-toggle="dna"><i></i><span>Road scores</span></button>
+        <button class="sw" data-toggle="night"><i></i><span>Night</span></button>
+      </div>
+          </section>
+          <section data-panel="setup">
             <h3>Voice</h3>
             <div class="row" id="voiceList">
               <span id="voiceCards" style="display:contents"></span>
@@ -350,7 +362,6 @@
       </div>
       <div id="startBlock">
         <button class="btn-record" id="startDrive"><i></i>Start drive</button>
-        <div class="start-links"><button class="linkbtn" id="planLink">Plan a route</button><button class="linkbtn" id="replayLink">Watch a replay</button></div>
       </div>
       <div class="transport" id="transport">
         <button class="key" id="playBtn">Run</button>
@@ -358,13 +369,6 @@
         <div class="scrubber" id="scrubber"><canvas id="scrubCanvas"></canvas></div>
       </div>
       <div id="cluster"></div>
-      <div class="switches">
-        <button class="sw" data-toggle="stage"><i></i><span>Full notes</span></button>
-        <button class="sw" data-toggle="voice"><i></i><span>Voice</span></button>
-        <button class="sw" data-toggle="lpr"><i></i><span>Cameras</span></button>
-        <button class="sw" data-toggle="dna"><i></i><span>Road scores</span></button>
-        <button class="sw" data-toggle="night"><i></i><span>Night</span></button>
-      </div>
       <nav class="tabbar" id="tabbar" aria-label="Views">
         <button class="tab on" data-view="map"><svg viewBox="0 0 24 24"><path d="M12 3l6 15-6-3-6 3z"/></svg><span>Map</span></button>
         <button class="tab" data-view="route"><svg viewBox="0 0 24 24"><path d="M5 20c0-5 5-5 7-8s1-6 6-8"/><circle cx="5" cy="20" r="1.6"/><path d="M17 3l2 1-2 1"/></svg><span>Plan</span></button>
@@ -1001,7 +1005,9 @@
     }
 
     function updateNotes(vMps, live) {
-      const ev = allEvents().filter(e => e.dist_m >= state.cursorM - 5 && (e.type !== 'alpr' || state.toggles.lpr)).sort((a, b) => a.dist_m - b.dist_m);
+      // Driving somewhere that is not on the loaded route: its calls (and its stale trip distance) must never be read out as if they were this road.
+      const offRoute = live && state.cursorIdx < 0;
+      const ev = offRoute ? [] : allEvents().filter(e => e.dist_m >= state.cursorM - 5 && (e.type !== 'alpr' || state.toggles.lpr)).sort((a, b) => a.dist_m - b.dist_m);
       const spirited = isSpirited();
       const shown = ev.filter(e => spirited || noteworthyInCruise(e) || e.type !== 'corner').filter(e => e.dist_m - state.cursorM <= 3000).slice(0, 3);
       const notes = shown.map(e => {
@@ -1009,7 +1015,7 @@
         return { type: e.type, code: e.code, call: e.call, sub: subFor(e) + linkLabel(e), dist: d.n, unit: d.u, distM: e.dist_m - state.cursorM,
                  dir: e.dir, severity: e.severity, turnRad: e.turn_rad, mods: e.mods || [] };
       });
-      notes.quietText = track ? `${track.name} · ${spirited ? 'stage notes' : 'cruise: hazards and LPR only'}` : 'Open the route book';
+      notes.quietText = offRoute ? 'Driving · no route loaded' : track ? `${track.name} · ${spirited ? 'Full notes' : 'Quiet · bumps and cameras only'}` : 'Plan a route for notes';
       Inst.renderNotes($('notes'), look.theme, notes);
 
       if (!(state.playing || live) || vMps == null) return;
@@ -1065,7 +1071,7 @@
         sightMph: sight != null ? Core.sightSpeedMps(sight) * MPH : null,
         limitMph: limit != null ? limit * MPH : null,
         latG, lonG, camberDeg: camber,
-        tripMi: state.cursorM / 1609.344, totalMi: track ? totalM() / 1609.344 : null,
+        tripMi: live && idx < 0 ? (drive.rec ? drive.rec.km / 1.609344 : 0) : state.cursorM / 1609.344, totalMi: track && !(live && idx < 0) ? totalM() / 1609.344 : null,
         sector: sectorAt(idx), routeOnly: track && track.kind === 'route'
       });
       updateRibbon(vMps, idx, snap);
@@ -1098,11 +1104,19 @@
         lastTs = 0; if (!raf) raf = requestAnimationFrame(tick);
       }
     }
+    // Idle = nothing playing and not driving: just the map, Start drive and the tabs. A replay or a route preview wakes the gauges and the notes.
+    let replayOn = false, booting = true;
+    function paintIdle() {
+      const idle = !replayOn && state.mode !== 'live';
+      $('app').classList.toggle('idle', idle);
+      $('modePlate').hidden = idle || (state.mode === 'live' && !!drive.sensors);
+      $('modePlate').setAttribute('role', replayOn && state.mode !== 'live' ? 'button' : 'status');
+    }
     function setMode(mode) {
       state.mode = mode;
-      $('modePlate').textContent = { replay: `Replay${track && track.name ? ' · ' + track.name : ''}`, sim: 'Preview', live: 'Drive' }[mode];
+      $('modePlate').textContent = { replay: `Replay${track && track.name ? ' · ' + track.name : ''} ×`, sim: 'Preview ×', live: 'Drive' }[mode];
       $('modePlate').classList.toggle('live', mode === 'live');
-      $('modePlate').hidden = mode === 'live' && !!drive.sensors;                          // the REPLAY | DRIVE switch already says replay/live; keep the label for the 'not driven' simulation warning
+      paintIdle();                          // the REPLAY | DRIVE switch already says replay/live; keep the label for the 'not driven' simulation warning
     }
     // Names are known now: pre-render them in the co-driver's own voice (only when the owner turned Speak-road-names / LIVE on).
     function prefetchNames(t) {
@@ -1127,6 +1141,7 @@
     }
     }
     function activate(t, startM = 0) {
+      if (!booting) { replayOn = true; }
       track = t;
       state.cursorM = Math.max(0, Math.min(totalM(), startM));
       state.spoken.clear();
@@ -1179,7 +1194,7 @@
           return;
         } catch (_) { /* next mirror */ }
       }
-      if (track === t) toast('Camera map offline. No pins doesn\'t mean no cameras.');
+      if (track === t && replayOn) toast('Camera map offline. No pins doesn\'t mean no cameras.');
     }
     function attachAlpr(t, nodes) {
       t.alpr = [];
@@ -1826,7 +1841,7 @@
       if (sensors) sensors.stop();
       const shared = live ? await live.finish() : null;
       state.live = null;
-      setMode(track && track.kind === 'route' ? 'sim' : 'replay'); paintModeSwitch(); render(true);
+      replayOn = false; setMode(track && track.kind === 'route' ? 'sim' : 'replay'); paintModeSwitch(); render(true);
       if (save && rec && rec.km >= 0.3 && rec.samples >= 60) {
         try {
           const when = new Date(rec.startedAt || Date.now()), pad = (n) => String(n).padStart(2, '0');
@@ -1847,8 +1862,7 @@
     $('permGo').addEventListener('click', () => { flag('apex.permsExplained', '1'); $('permSheet').classList.remove('show'); enterDrive(); });
     $('permNo').addEventListener('click', () => $('permSheet').classList.remove('show'));
     $('startDrive').addEventListener('click', startDrive);
-    $('planLink').addEventListener('click', () => showView('route'));
-    $('replayLink').addEventListener('click', () => { showView('route'); const d = $('driveList'); if (d && d.scrollIntoView) d.scrollIntoView({ block: 'center' }); });
+    $('modePlate').addEventListener('click', () => { if (state.mode === 'live' || !replayOn) return; replayOn = false; setPlaying(false); paintIdle(); });
     $('driveEnd').addEventListener('click', () => leaveDrive(true));
 
     // =======================================================================
@@ -1909,8 +1923,10 @@
     if (first) {
       const at = params.has('at') ? parseFloat(params.get('at')) || 0 : 0;
       activate(first, at * first.dist[first.dist.length - 1]);
+      replayOn = ['drive', 'play', 'at'].some(k => params.has(k));
+      booting = false; paintIdle();
       if (params.get('play') === '1') setPlaying(true);
-    } else openSheet('route');
+    } else { booting = false; openSheet('route'); }
     if (params.get('book') === '1') openSheet('route');
     if (VIEW_TITLES[params.get('view')]) openSheet(params.get('view')); else if (params.get('view') === 'drives') openSheet('route');
     if (document.fonts) document.fonts.ready.then(() => render(true));
