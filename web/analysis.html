@@ -547,7 +547,13 @@
       pick.value = list.some(d => d.id === keep) ? keep : list[0].id;
       const d = drives.find(x => x.id === pick.value);
       if (dvView) dvView.destroy();
-      dvView = ApexDriveView.mount($('dvRoot'), d, { Core, C, MPH });
+      // reference = the best-scoring other drive that shares enough road with this one
+      let reference = null;
+      for (const o of drives.filter(x => x !== d && x.ds.score != null).sort((p, q) => q.ds.score - p.ds.score)) {
+        const r = Core.compareDrives(d, o);
+        if (r.overlap_m >= 0.3 * d.dist[d.dist.length - 1] && r.matched_corners >= 3) { reference = { name: o.name, score: o.ds.score, corners: r.corners }; break; }
+      }
+      dvView = ApexDriveView.mount($('dvRoot'), d, { Core, C, MPH, reference });
       loadRoadFeel(d, dvView);
       $('dvNote').textContent = d.source === 'imported' ? 'imported recording' : 'shipped example';
     }

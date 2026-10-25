@@ -18,7 +18,9 @@
   }
 
   function mount(root_, d, o) {
-    const { Core, C, MPH } = o;
+    const { Core, C, MPH } = o, ref = o.reference || null;        // ref: { name, score, corners[] } from Core.compareDrives(this, best other drive)
+    const lost = (k) => { const r = ref && ref.corners[k]; return r && r.delta_s != null && !r.stopped ? -r.delta_s : null; };   // seconds this pass was slower than the reference
+    const fmtD = (s) => (s == null ? '--' : `${s > 0.005 ? '+' : s < -0.005 ? '−' : ''}${Math.abs(s).toFixed(2)} s`);
     root_.innerHTML = '';
     const n = d.lat.length, T = Core.elapsedS(d.speed_mps), S = summarize(d, Core);
     const state = { i: 0, v0: 0, v1: n - 1 };
@@ -137,7 +139,7 @@
       read.innerHTML = cell('Distance', `${(d.dist[i] / 1609.344).toFixed(2)} mi`) + cell('Time', fmtT(T[i])) + cell('Speed', `${Math.round(d.speed_mps[i] * MPH)} mph`)
         + cell('Lateral', d.lat_g && finite(d.lat_g[i]) ? `${d.lat_g[i] >= 0 ? 'L ' : 'R '}${Math.abs(d.lat_g[i]).toFixed(2)} g` : '--')
         + cell('Brake / throttle', d.lon_g && finite(d.lon_g[i]) ? `${d.lon_g[i] < 0 ? 'brake ' : 'accel '}${Math.abs(d.lon_g[i]).toFixed(2)} g` : '--')
-        + cell(c ? `Corner ${k + 1}` : 'Corner', c ? `${c.call || c.code}` : '--')
+        + cell(c ? `Corner ${k + 1}` : 'Corner', c ? `${c.call || c.code}` : '--') + (ref ? cell('vs other drive', c ? fmtD(lost(k)) : '--') : '')
         + (feel ? cell('Banking (members)', finite(feel.cam[i]) ? `${feel.cam[i].toFixed(1)}°` : '--') + cell('Roughness (members)', finite(feel.rough[i]) ? `${feel.rough[i].toFixed(2)} g` : '--') + cell('Passes', feel.n[i] != null ? feel.n[i] : '--') : '');
       list.querySelectorAll('.dv-corner').forEach((r, q) => r.classList.toggle('on', q === k));
     }
@@ -152,11 +154,13 @@
     mapBox.addEventListener('click', (e) => { const g = e.target.closest('[data-k]'); if (g) move(d.corners[+g.dataset.k].apex); });
 
     // ---- corner list -----------------------------------------------------------------------------------------------
-    list.innerHTML = '<h2>Corners</h2>';
+    let net = null;
+    if (ref) { const ks = d.corners.map((_, k) => lost(k)).filter((x) => x != null); net = ks.length ? ks.reduce((s, x) => s + x, 0) : null; }
+    list.innerHTML = `<h2>Corners${ref ? ` · compared with ${ref.name} (score ${ref.score}), your best other drive on this road` : ''}</h2>` + (ref ? `<p class="note" style="margin-bottom:8px">${net == null ? 'No clean corners to compare.' : `Over the ${d.corners.map((_, k) => lost(k)).filter((x) => x != null).length} corners both drives took cleanly, this drive was <b class="${net > 0.05 ? 'loss' : net < -0.05 ? 'gain' : ''}">${fmtD(net)}</b> ${net > 0 ? 'slower' : 'faster'}. Stops and traffic are left out.`}</p>` : '');
     const grid2 = el('div', 'dv-corners');
     d.corners.forEach((c, k) => {
       const r = el('button', 'dv-corner');
-      r.innerHTML = `<b>${k + 1}</b><span class="dv-call">${(c.call || c.code || '').toString()}</span><span class="dv-v">${Math.round(c.apex_mps * MPH)} mph</span><span class="dv-d">${(d.dist[c.apex] / 1609.344).toFixed(2)} mi</span>`;
+      r.innerHTML = `<b>${k + 1}</b><span class="dv-call">${(c.call || c.code || '').toString()}</span><span class="dv-v">${Math.round(c.apex_mps * MPH)} mph</span><span class="dv-d">${(d.dist[c.apex] / 1609.344).toFixed(2)} mi${ref ? ` · <em class="${lost(k) == null ? '' : lost(k) > 0.05 ? 'loss' : lost(k) < -0.05 ? 'gain' : ''}">${fmtD(lost(k))}</em>` : ''}</span>`;
       r.onclick = () => { if (zoomM) setZoom(zoomM, c.apex); move(c.apex); lanes.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); };
       grid2.append(r);
     });
