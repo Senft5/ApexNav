@@ -3,10 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>ApexNav Cockpit</title>
+  <title>ApexNav</title>
+  <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="brand/icon-180.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=Inter+Tight:wght@400;500;600;700;800&display=swap" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter+Tight:wght@400;500;600&display=swap" />
   <link rel="stylesheet" href="vendor/maplibre-gl.css" />
   <script src="vendor/maplibre-gl.js"></script>
   <script src="vendor/maplibre-contour.min.js"></script>
@@ -33,21 +35,21 @@
     /* ---------------- pace-note strip ---------------- */
     .notes { background: var(--panel); color: var(--panel-ink); padding: calc(6px + var(--safe-top)) 10px 6px; border-bottom: 1px solid var(--rule); min-height: 64px; }
     .note-quiet { display: flex; gap: 10px; align-items: baseline; padding: 10px 2px; }
-    .note-quiet b { font-size: 20px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
-    .note-quiet span { font-size: 12px; color: var(--panel-dim); text-transform: uppercase; letter-spacing: 0.08em; }
+    .note-quiet b { font-size: 20px; font-weight: 700; }
+    .note-quiet span { font-size: 13px; color: var(--panel-dim); }
     .tulip { width: 100%; height: 100%; display: block; }
     .pn { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 12px; align-items: center; }
     .pn-tulip { width: 54px; height: 54px; }
     .pn-code { min-width: 62px; height: 50px; display: grid; place-items: center; font-family: var(--font-num); font-size: 26px; font-weight: 800; color: var(--accent); border: 1.5px solid var(--accent); }
     .pn.hazard .pn-code { color: var(--signal); border-color: var(--signal); }
     .pn-call { font-size: 20px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .pn-sub { font-size: 12px; color: var(--panel-dim); letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+    .pn-sub { font-size: 13px; color: var(--panel-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
     .pn-dist { text-align: right; font-family: var(--font-num); }
     .pn-dist b { font-size: 26px; font-weight: 700; display: block; line-height: 1; }
-    .pn-dist small, .rb-dist small { font-size: 10px; color: var(--panel-dim); letter-spacing: 0.12em; }
+    .pn-dist small, .rb-dist small { font-size: 11px; color: var(--panel-dim); }
     .pn-next { width: 34px; display: grid; justify-items: center; gap: 1px; opacity: 0.8; }
     .pn-next .tulip { width: 30px; height: 30px; }
-    .pn-next small { font-size: 9px; color: var(--panel-dim); }
+    .pn-next small { font-size: 11px; color: var(--panel-dim); }
     .notes-roadbook { display: grid; grid-template-columns: 1.25fr 1fr 1fr; gap: 0; padding-left: 0; padding-right: 0; }
     .rb-box { display: grid; grid-template-columns: auto 46px minmax(0, 1fr); gap: 6px; align-items: center; padding: 2px 8px; border-left: 1.5px solid var(--rule); min-width: 0; }
     .rb-box:first-child { border-left: none; }
@@ -74,28 +76,26 @@
     .maplibregl-ctrl-top-left, .maplibregl-ctrl-top-right, .maplibregl-ctrl-bottom-left { display: none !important; }
     .maplibregl-ctrl-attrib { font-size: 10px; }
     .plates { position: absolute; left: 10px; bottom: 10px; z-index: 4; display: flex; gap: 6px; }
-    .plate { background: var(--panel); color: var(--panel-ink); border: 1px solid var(--rule); padding: 6px 10px; font-size: 11px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; }
+    .plate { background: var(--panel); color: var(--panel-ink); border: 1px solid var(--rule); padding: 8px 12px; font-size: 13px; font-weight: 600; min-height: 36px; }
     .plate.live { background: var(--accent); color: var(--panel); border-color: var(--accent); }
     #recenterBtn { display: none; } #recenterBtn.show { display: block; }
     .toast { position: absolute; left: 50%; top: 12px; transform: translateX(-50%); z-index: 6; max-width: calc(100% - 32px);
       background: var(--panel); color: var(--panel-ink); border: 1px solid var(--accent); padding: 8px 12px; font-size: 12px; font-weight: 600; display: none; }
     .toast.show { display: block; }
-    .pin { font-size: 9px; font-weight: 800; letter-spacing: 0.1em; padding: 2px 5px; border: 1.5px solid; background: var(--panel); white-space: nowrap; cursor: pointer; font-family: var(--font-ui); }
+    .pin { font-size: 11px; font-weight: 800; letter-spacing: 0.1em; padding: 2px 5px; border: 1.5px solid; background: var(--panel); white-space: nowrap; cursor: pointer; font-family: var(--font-ui); }
     .pin.alpr { color: var(--signal); border-color: var(--signal); }
     .pin.bump { color: var(--amber); border-color: var(--amber); }
     .pin.crest, .pin.dip { color: var(--panel-ink); border-color: var(--panel-dim); }
     .puck { width: 26px; height: 26px; }
 
     /* ---------------- binnacle ---------------- */
-    .binnacle { background: var(--panel); color: var(--panel-ink); border-top: 1px solid var(--rule); padding: 6px 10px calc(8px + var(--safe-bottom)); display: grid; gap: 6px; }
+    .binnacle { background: var(--panel); color: var(--panel-ink); border-top: 1px solid var(--rule); padding: 6px 10px calc(8px + var(--safe-bottom)); display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
     .transport { display: grid; grid-template-columns: auto auto minmax(0, 1fr); gap: 6px; align-items: center; }
-    .modesw { display: inline-flex; border: 1px solid var(--rule); background: var(--panel); }
-    .modesw button { font: inherit; font-size: 11px; font-weight: 700; letter-spacing: 0.12em; padding: 7px 12px; background: transparent; color: var(--panel-dim); border: none; cursor: pointer; }
-    .modesw button.on { background: var(--panel-ink); color: var(--panel); }
     .drivebar { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--rule); }
-    .dbstat { font-size: 11px; letter-spacing: 0.08em; color: var(--panel-ink); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .dbstat { font-size: 13px; line-height: 1.35; color: var(--panel-ink); min-width: 0; flex: 1; }
+    #driveEnd { flex: none; background: var(--panel-ink); color: var(--panel); border-color: var(--panel-ink); font-size: 15px; padding: 0 16px; }
     .dbstat b { color: var(--accent); }
-    .key { height: 28px; min-width: 42px; padding: 0 10px; font-size: 11px; font-weight: 700; letter-spacing: 0.12em; border: 1px solid var(--rule); color: var(--panel-ink); background: transparent; }
+    .key { height: 44px; min-width: 44px; padding: 0 12px; font-size: 13px; font-weight: 600; border: 1px solid var(--rule); color: var(--panel-ink); background: transparent; }
     .key.on { color: var(--accent); border-color: var(--accent); }
     .scrubber { position: relative; height: 28px; border: 1px solid var(--rule); cursor: ew-resize; touch-action: none; }
     .scrubber canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
@@ -104,8 +104,8 @@
     .dial { width: var(--dial); height: var(--dial); }
     .dial-svg { width: 100%; height: 100%; display: block; }
     .dial-num { font-family: var(--font-num); font-size: 15px; font-weight: 600; fill: var(--face-ink); }
-    .dial-label { font-size: 9px; font-weight: 700; letter-spacing: 2px; fill: var(--face-dim); }
-    .dial-tiny { font-size: 8px; fill: var(--face-dim); }
+    .dial-label { font-size: 11px; font-weight: 700; letter-spacing: 2px; fill: var(--face-dim); }
+    .dial-tiny { font-size: 11px; fill: var(--face-dim); }
     .dial-digital { font-family: var(--font-num); font-size: 22px; font-weight: 700; fill: var(--face-ink); }
     .dial-digital.small { font-size: 11px; fill: var(--accent); }
     .gauge-printed .dial-num { font-size: 17px; font-weight: 700; }
@@ -113,7 +113,7 @@
     .readouts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; width: min(100%, 250px); }
     .ro { display: grid; justify-items: center; gap: 1px; padding: 3px 0; border: 1px solid var(--rule); }
     .ro b { font-family: var(--font-num); font-size: 17px; font-weight: 700; line-height: 1.1; }
-    .ro span { font-size: 8px; font-weight: 700; letter-spacing: 0.14em; color: var(--panel-dim); }
+    .ro span { font-size: 11px; font-weight: 600; color: var(--panel-dim); }
     .ro-limit { background: var(--panel-ink); color: var(--panel); border-color: var(--panel-ink); }
     .ro-limit span { color: var(--panel); opacity: 0.7; }
     .ro-pace b { color: var(--accent); }
@@ -121,15 +121,15 @@
     .odo-digits { display: flex; gap: 1px; font-family: var(--font-num); font-size: 22px; font-weight: 700; line-height: 1; }
     .odo.boxed .dg { border: 1.5px solid var(--panel-ink); padding: 1px 3px; min-width: 18px; text-align: center; }
     .odo.boxed .dg:last-child { background: var(--panel-ink); color: var(--panel); }
-    .odo-meta { display: flex; gap: 8px; font-size: 8px; font-weight: 700; letter-spacing: 0.16em; color: var(--panel-dim); }
+    .odo-meta { display: flex; gap: 8px; font-size: 11px; font-weight: 600; color: var(--panel-dim); }
     .dna { width: min(100%, 250px); display: grid; gap: 4px; }
-    .dna-arch { text-align: center; font-size: 11px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); min-height: 13px; }
+    .dna-arch { text-align: center; font-size: 13px; font-weight: 600; color: var(--panel-ink); min-height: 13px; }
     .dna-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
     .dna-cell { display: grid; justify-items: center; gap: 2px; }
     .dna-cell b { font-family: var(--font-num); font-size: 13px; font-weight: 700; }
     .dna-bar { width: 100%; height: 3px; background: var(--rule); display: block; }
     .dna-bar u { display: block; height: 100%; background: var(--accent); text-decoration: none; }
-    .dna-cell span { font-size: 8px; letter-spacing: 0.08em; color: var(--panel-dim); font-weight: 700; }
+    .dna-cell span { font-size: 11px; color: var(--panel-dim); font-weight: 700; }
 
     .cluster-telemetry { display: grid; gap: 6px; }
     .tm-lights { display: grid; grid-template-columns: repeat(15, 1fr); gap: 3px; }
@@ -166,7 +166,7 @@
     .sw i::after { content: ""; position: absolute; top: 2px; left: 2px; width: 8px; height: 7px; background: var(--panel-dim); transition: left 0.12s; }
     .sw.on i { border-color: var(--accent); }
     .sw.on i::after { left: 17px; background: var(--accent); }
-    .sw span { font-size: 9px; font-weight: 700; letter-spacing: 0.14em; color: var(--panel-dim); }
+    .sw span { font-size: 11px; font-weight: 600; color: var(--panel-dim); }
     .sw.on span { color: var(--panel-ink); }
     .route-key { height: 34px; padding: 0 14px; }
 
@@ -183,6 +183,27 @@
       .cluster-dials { grid-template-columns: var(--dial) minmax(220px, 300px) var(--dial); justify-content: center; }
     }
 
+    /* ---------------- start drive + first-run + permission sheets ---------------- */
+    .btn-record { width: 100%; height: 52px; background: var(--accent); color: var(--stage); border: none; font-size: 18px; font-weight: 700; font-family: var(--font-ui); display: flex; align-items: center; justify-content: center; gap: 10px; }
+    .btn-record i { width: 12px; height: 12px; border-radius: 50%; background: currentColor; }
+    .btn-record.end { background: var(--panel-ink); color: var(--panel); }
+    .start-links { display: flex; justify-content: center; gap: 20px; margin-top: 2px; }
+    .linkbtn { font: inherit; font-size: 15px; font-weight: 500; color: var(--panel-ink); text-decoration: underline; min-height: 44px; padding: 0 4px; background: none; border: none; }
+    .overlay { position: fixed; inset: 0; z-index: 40; background: var(--panel); color: var(--panel-ink); display: none; flex-direction: column; padding: 24px 24px calc(24px + env(safe-area-inset-bottom)); overflow-y: auto; }
+    .overlay.show { display: flex; }
+    .overlay.dim { background: rgba(0,0,0,0.5); justify-content: flex-end; padding: 0; }
+    .overlay .card-sheet { background: var(--panel); color: var(--panel-ink); border-top: 2px solid var(--rule); padding: 24px 24px calc(24px + env(safe-area-inset-bottom)); display: grid; gap: 12px; }
+    .overlay h1 { font-family: var(--font-num); font-size: 36px; line-height: 1.05; font-weight: 800; }
+    .overlay h2 { font-family: var(--font-num); font-size: 28px; font-weight: 700; }
+    .overlay p { font-size: 15px; line-height: 1.45; color: var(--panel-dim); }
+    .overlay .stack { display: grid; gap: 12px; margin-top: auto; }
+    .overlay .grow { flex: 1; display: grid; align-content: center; gap: 16px; }
+    .perm { display: grid; grid-template-columns: 96px 1fr; gap: 4px 12px; font-size: 15px; border-top: 1px solid var(--hair, var(--panel-dim)); padding-top: 12px; }
+    .perm b { font-weight: 600; }
+    .perm span { color: var(--panel-dim); }
+    .badge { display: inline-block; min-width: 18px; height: 18px; border-radius: 9px; background: var(--accent); color: var(--stage); font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; padding: 0 5px; position: absolute; top: 4px; left: calc(50% + 6px); }
+    .mt-8 { margin-top: 8px; } .stack-8 { display: grid; gap: 8px; } .stack-12 { display: grid; gap: 12px; }
+
     /* ---------------- route book ---------------- */
     .sheet { position: absolute; z-index: 10; top: 0; bottom: 0; right: 0; width: min(420px, 100%); background: var(--panel); color: var(--panel-ink);
       border-left: 1px solid var(--rule); transform: translateX(105%); transition: transform 0.18s ease-out; display: flex; flex-direction: column; }
@@ -191,16 +212,17 @@
     [hidden] { display: none !important; }
     /* Menu views (Route / Drives / Setup) get the whole screen above the tab bar: the gauge cluster belongs to the map view only. */
     #app.sheet-open .binnacle > :not(.tabbar) { display: none !important; }
+    #app.sheet-open .notes { visibility: hidden; height: 0; min-height: 0; padding: 0; border: 0; overflow: hidden; }
     .scrim { position: absolute; inset: 0; z-index: 9; display: none; background: rgba(0,0,0,0.18); }
     .scrim.show { display: block; }
     .sheet [data-panel] { display: none; }
-    .sheet[data-view="route"] [data-panel~="route"], .sheet[data-view="drives"] [data-panel~="drives"],
+    .sheet[data-view="route"] [data-panel~="route"], .sheet[data-view="crew"] [data-panel~="crew"],
     .sheet[data-view="setup"] [data-panel~="setup"] { display: block; }
 
     /* ---------------- tab bar (switch views; tapping the open tab closes it) ---------------- */
-    .tabbar { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-top: 1px solid var(--rule); margin: 2px -10px 0; padding: 0 6px; }
-    .tab { height: 44px; display: grid; grid-template-rows: 20px auto; justify-items: center; align-content: center; gap: 2px; color: var(--panel-dim);
-      font-size: 9px; font-weight: 700; letter-spacing: 0.16em; position: relative; }
+    .tabbar { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); border-top: 1px solid var(--rule); margin: 2px -10px 0; padding: 0 6px; }
+    .tab { height: 52px; display: grid; grid-template-rows: 20px auto; justify-items: center; align-content: center; gap: 2px; color: var(--panel-dim);
+      font-size: 11px; font-weight: 600; position: relative; }
     .tab svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
     .tab.on { color: var(--accent); }
     .tab.on::before { content: ""; position: absolute; top: -1px; left: 22%; right: 22%; height: 2px; background: var(--accent); }
@@ -208,28 +230,24 @@
     /* ---------------- busy buttons (loop / search in progress) ---------------- */
     .ink-btn.busy { position: relative; overflow: hidden; color: var(--panel); background: var(--panel-dim); border-color: var(--panel-dim); pointer-events: none; }
     .ink-btn.busy::after { content: ""; position: absolute; left: 0; bottom: 0; height: 3px; width: var(--progress, 0%); background: var(--accent); transition: width 0.3s ease-out; }
-    .ink-btn.busy::before { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.22), transparent);
-      transform: translateX(-100%); animation: sweep 1.1s linear infinite; }
-    .ink-btn[disabled] { opacity: 0.45; pointer-events: none; }
-    @keyframes sweep { to { transform: translateX(100%); } }
-    .sheet header { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; border-bottom: 1px solid var(--rule); }
-    .sheet header h2 { font-size: 14px; letter-spacing: 0.18em; text-transform: uppercase; }
+        .ink-btn[disabled] { opacity: 0.45; pointer-events: none; }
+    .sheet header { display: flex; justify-content: space-between; align-items: center; padding: calc(14px + var(--safe-top)) 16px 14px; border-bottom: 1px solid var(--rule); }
+    .sheet header h2 { font-size: 22px; font-weight: 700; font-family: var(--font-num); }
     .sheet .body { overflow-y: auto; padding: 14px 16px 24px; display: grid; gap: 20px; }
-    .sheet h3 { font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--panel-dim); margin-bottom: 8px; }
+    .sheet h3 { font-size: 18px; font-weight: 700; font-family: var(--font-num); border-top: 1px solid var(--hair, var(--panel-dim)); padding-top: 12px; margin-bottom: 8px; }
     .sheet p.note.err { color: var(--accent); }
-    .sheet p.note { font-size: 12px; color: var(--panel-dim); line-height: 1.45; margin-top: 6px; }
+    .sheet p.note { font-size: 13px; color: var(--panel-dim); line-height: 1.45; margin-top: 6px; }
     .row { display: flex; gap: 6px; flex-wrap: wrap; }
-    .field { flex: 1; min-width: 0; height: 38px; padding: 0 10px; font: inherit; font-size: 15px; background: transparent; color: var(--panel-ink); border: 1px solid var(--panel-dim); user-select: text; }
-    .ink-btn { height: 38px; padding: 0 14px; border: 1px solid var(--panel-dim); font-size: 12px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; }
+    .field { flex: 1; min-width: 0; height: 44px; padding: 0 10px; font: inherit; font-size: 15px; background: transparent; color: var(--panel-ink); border: 1px solid var(--panel-dim); user-select: text; }
+    .ink-btn { height: 44px; padding: 0 16px; border: 1.5px solid var(--panel-ink); font-size: 15px; font-weight: 600; font-family: var(--font-ui); }
     .ink-btn.solid { background: var(--panel-ink); color: var(--panel); border-color: var(--panel-ink); }
-    .ink-btn.on { background: var(--accent); border-color: var(--accent); color: var(--panel); }
+    .ink-btn.on { background: var(--panel-ink); border-color: var(--panel-ink); color: var(--panel); }
     .card { text-align: left; width: 100%; padding: 10px 12px; border: 1px solid var(--rule); display: grid; gap: 3px; }
     .card.active { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
     .card b { font-size: 15px; }
-    .card span { font-size: 12px; color: var(--panel-dim); }
+    .card span { font-size: 13px; color: var(--panel-dim); }
     .themes { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-    .themes .card b::before { content: attr(data-tag); font-size: 10px; margin-right: 6px; color: var(--accent); letter-spacing: 0.1em; }
-    .sources { font-size: 11px; color: var(--panel-dim); line-height: 1.5; }
+        .sources { font-size: 11px; color: var(--panel-dim); line-height: 1.5; }
     .sources a { color: inherit; }
   </style>
 </head>
@@ -240,91 +258,86 @@
     <section class="stage">
       <div id="map"></div>
       <div class="plates">
-        <div class="modesw" role="group" aria-label="Mode">
-          <button id="modeReplay" class="on" aria-pressed="true">REPLAY</button>
-          <button id="modeDrive" aria-pressed="false">DRIVE</button>
-        </div>
-        <div class="plate" id="modePlate">REPLAY</div>
-        <button class="plate" id="recenterBtn">RECENTER</button>
+        <div class="plate" id="modePlate" role="status">Replay</div>
+        <button class="plate" id="recenterBtn">Recenter</button>
+        <button class="plate" id="settingsBtn" aria-label="Settings">Settings</button>
       </div>
       <div class="toast" id="toast"></div>
 
       <div class="scrim" id="scrim"></div>
       <aside class="sheet" id="sheet" aria-label="Menu" data-view="route">
-        <header><h2 id="sheetTitle">Route</h2><button class="key" id="closeSheetBtn" aria-label="Close menu">CLOSE</button></header>
+        <header><h2 id="sheetTitle">Plan</h2></header>
         <div class="body">
           <section data-panel="route">
-            <h3>Destination · spirited routing</h3>
+            <h3>Where to</h3>
             <div class="row">
               <input class="field" id="destInput" placeholder="Town, road or address" autocomplete="off" />
-              <button class="ink-btn solid" id="destGoBtn">GO</button>
+              <button class="ink-btn solid" id="destGoBtn">Go</button>
             </div>
-            <div class="row" style="margin-top:6px"><button class="ink-btn" id="tapRouteBtn">TAP MAP TO ROUTE</button></div>
+            <div class="row mt-8"><button class="ink-btn" id="tapRouteBtn">Tap the map</button></div>
           </section>
           <section data-panel="route">
             <h3>Loop from here</h3>
             <div class="row">
-              <button class="ink-btn" data-loop-mi="15">15 MI</button>
-              <button class="ink-btn" data-loop-mi="30">30 MI</button>
-              <button class="ink-btn" data-loop-mi="45">45 MI</button>
+              <button class="ink-btn" data-loop-mi="15">15 mi</button>
+              <button class="ink-btn" data-loop-mi="30">30 mi</button>
+              <button class="ink-btn" data-loop-mi="45">45 mi</button>
             </div>
-            <p class="note">Loops are stitched from the best roads nearby: every road around you is scored from map geometry (corners per km, few junctions), the best stretches are chained to fit the distance, and the result is checked against a plain loop. Geometry only until driven.</p>
+            <p class="note">Loops pick the twistiest roads near you. Map only until someone drives them.</p>
           </section>
           <section data-panel="route">
-            <h3>Highlights · scenic stops</h3>
+            <h3>Spots</h3>
             <div class="row">
-              <button class="ink-btn" id="hlToggleBtn">HIGHLIGHTS OFF</button>
-              <label class="ink-btn" style="display:inline-flex;align-items:center;gap:8px">PULL <input type="range" id="hlStrength" min="0.5" max="2" step="0.5" value="1" style="width:90px" /></label>
+              <button class="ink-btn" id="hlToggleBtn">Spots off</button>
+              <label class="ink-btn" style="display:inline-flex;align-items:center;gap:8px">Detour <input type="range" id="hlStrength" min="0.5" max="2" step="0.5" value="1" style="width:90px" /></label>
             </div>
             <div class="row" style="margin-top:6px;flex-wrap:wrap">
-              <input class="field" id="hlName" style="flex:1 1 100%" placeholder="Name this spot (adds at your position)" autocomplete="off" />
+              <input class="field" id="hlName" style="flex:1 1 100%" placeholder="Name this spot (saved where you are)" autocomplete="off" />
               <select class="field" id="hlStars" aria-label="Your rating in stars" style="flex:0 0 70px"><option>5</option><option>4</option><option>3</option></select>
               <select class="field" id="hlCat" style="flex:0 0 120px" aria-label="Kind of spot"><option value="overlook">Overlook</option><option value="photo">Photo</option><option value="bridge">Bridge</option><option value="water">Water</option><option value="cafe">Cafe</option><option value="trailhead">Trailhead</option><option value="landmark">Landmark</option><option value="other">Other</option></select>
-              <button class="ink-btn" id="hlAddBtn">ADD</button>
+              <button class="ink-btn" id="hlAddBtn">Add spot</button>
             </div>
             <div id="hlList" style="display:grid;gap:4px;margin-top:6px"></div>
             <div id="hlNearby" style="display:grid;gap:4px;margin-top:6px"></div>
-            <p class="note">When on, loops lean toward roads that pass a highlight you rate 3 stars or more. They can tip the choice between two good roads; they never make a dull road win. Yours stay on this phone until you press SHARE; shared spots are rated by other members and your name is never shown.</p>
+            <p class="note">Loops lean toward spots you rate 3★ or more. Your spots stay on this phone until you share one.</p>
           </section>
-          <section data-panel="drives">
-            <h3>Profiled drives</h3>
+          <section data-panel="route">
+            <h3>Replay a drive</h3>
             <div id="driveList" style="display:grid;gap:6px"></div>
             <p class="note" id="measuredNote" hidden></p>
-            <div class="row" style="margin-top:10px"><a class="ink-btn solid" href="analysis.html" style="display:inline-flex;align-items:center;text-decoration:none">OPEN DRIVE ANALYSIS →</a></div>
+            <div class="row mt-8"><a class="ink-btn" href="analysis.html" style="display:inline-flex;align-items:center;text-decoration:none">Open your log</a></div>
           </section>
-          <section data-panel="setup" id="accountSection" hidden>
-            <h3>Account · friends</h3>
-            <div id="accountBody" style="display:grid;gap:8px"></div>
-            <p class="note">Optional. Everything works without an account. Nothing is shared with anyone unless you switch it on for that friend, one at a time.</p>
+          <section data-panel="crew" id="accountSection">
+            <div id="accountBody" class="stack-12"></div>
           </section>
           <section data-panel="setup">
-            <h3>Co-driver voice</h3>
+            <h3>Voice</h3>
             <div class="row" id="voiceList">
               <span id="voiceCards" style="display:contents"></span>
-              <button class="ink-btn" data-voice="device">DEVICE</button>
-              <button class="ink-btn" id="voiceTestBtn">TEST</button>
-              <button class="ink-btn" id="liveVoiceBtn">LIVE</button>
+              <button class="ink-btn" data-voice="device">Phone voice</button>
+              <button class="ink-btn" id="voiceTestBtn">▶ Sample</button>
+              <button class="ink-btn" id="liveVoiceBtn">Speak road names</button>
             </div>
             <div class="row" style="margin-top:6px"><select class="field" id="voiceSelect"></select></div>
             <p class="note" id="liveNote" role="status" aria-live="polite"></p>
-            <p class="note">George, Daniel and Emma are rendered with the open Kokoro-82M model (Apache-2.0); pace notes work offline. LIVE also runs the model in the browser for names and routes (one-time ~90 MB download, then cached). Jarvis is the same model through a cartoon-robot effect. DEVICE uses this phone's own voices.</p>
+            <p class="note">Who reads your notes. Works offline.</p>
           </section>
           <section data-panel="setup">
-            <h3>Camera feel</h3>
+            <h3>Map motion</h3>
             <div class="row" id="camList">
-              <button class="ink-btn" data-cam="steady">STEADY</button>
-              <button class="ink-btn" data-cam="dynamic">DYNAMIC</button>
-              <button class="ink-btn" data-cam="whip">WHIP</button>
+              <button class="ink-btn" data-cam="steady">Steady</button>
+              <button class="ink-btn" data-cam="dynamic">Lean</button>
+              <button class="ink-btn" data-cam="whip">Whip</button>
             </div>
-            <p class="note">How hard the map leans into corners ahead of the car.</p>
+            <p class="note">How far the map leans into corners ahead.</p>
           </section>
           <section data-panel="setup">
-            <h3>Cockpit theme</h3>
+            <h3>Look</h3>
             <div class="themes" id="themeList"></div>
           </section>
           <section class="sources" data-panel="setup">
             <h3>Sources</h3>
-            Map &copy; OpenStreetMap contributors via OpenFreeMap. Terrain: AWS Terrarium DEM. Routing, map matching and posted limits: Valhalla (FOSSGIS). Geocoding: Nominatim. ALPR: OpenStreetMap <code>surveillance:type=ALPR</code> (DeFlock) via Overpass.
+            Map &copy; OpenStreetMap contributors via OpenFreeMap. Terrain: AWS Terrarium DEM. Routing, map matching and posted limits: Valhalla (FOSSGIS). Geocoding: Nominatim. Plate-reading cameras: OpenStreetMap (<code>surveillance:type=ALPR</code>, DeFlock) via Overpass. Voices: Kokoro-82M (Apache-2.0).
           </section>
         </div>
       </aside>
@@ -332,29 +345,65 @@
 
     <section class="binnacle" id="binnacle">
       <div class="drivebar" id="driveBar" hidden>
-        <div class="dbstat" id="driveStat" role="status" aria-live="polite">Starting GPS...</div>
-        <button class="key" id="driveEnd">END DRIVE</button>
+        <div class="dbstat" id="driveStat" role="status" aria-live="polite">Finding GPS…</div>
+        <button class="key" id="driveEnd">End drive</button>
+      </div>
+      <div id="startBlock">
+        <button class="btn-record" id="startDrive"><i></i>Start drive</button>
+        <div class="start-links"><button class="linkbtn" id="planLink">Plan a route</button><button class="linkbtn" id="replayLink">Watch a replay</button></div>
       </div>
       <div class="transport" id="transport">
-        <button class="key" id="playBtn">RUN</button>
+        <button class="key" id="playBtn">Run</button>
         <button class="key" id="rateBtn">1X</button>
         <div class="scrubber" id="scrubber"><canvas id="scrubCanvas"></canvas></div>
       </div>
       <div id="cluster"></div>
       <div class="switches">
-        <button class="sw" data-toggle="stage"><i></i><span>STAGE</span></button>
-        <button class="sw" data-toggle="voice"><i></i><span>VOICE</span></button>
-        <button class="sw" data-toggle="lpr"><i></i><span>LPR</span></button>
-        <button class="sw" data-toggle="dna"><i></i><span>DNA</span></button>
-        <button class="sw" data-toggle="night"><i></i><span>NIGHT</span></button>
+        <button class="sw" data-toggle="stage"><i></i><span>Full notes</span></button>
+        <button class="sw" data-toggle="voice"><i></i><span>Voice</span></button>
+        <button class="sw" data-toggle="lpr"><i></i><span>Cameras</span></button>
+        <button class="sw" data-toggle="dna"><i></i><span>Road scores</span></button>
+        <button class="sw" data-toggle="night"><i></i><span>Night</span></button>
       </div>
       <nav class="tabbar" id="tabbar" aria-label="Views">
-        <button class="tab" data-view="route"><svg viewBox="0 0 24 24"><path d="M5 20c0-5 5-5 7-8s1-6 6-8"/><circle cx="5" cy="20" r="1.6"/><path d="M17 3l2 1-2 1"/></svg><span>ROUTE</span></button>
-        <button class="tab" data-view="drives"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg><span>DRIVES</span></button>
-        <button class="tab" data-view="analysis"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>ANALYSIS</span></button>
-        <button class="tab" data-view="setup"><svg viewBox="0 0 24 24"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg><span>SETUP</span></button>
+        <button class="tab on" data-view="map"><svg viewBox="0 0 24 24"><path d="M12 3l6 15-6-3-6 3z"/></svg><span>Map</span></button>
+        <button class="tab" data-view="route"><svg viewBox="0 0 24 24"><path d="M5 20c0-5 5-5 7-8s1-6 6-8"/><circle cx="5" cy="20" r="1.6"/><path d="M17 3l2 1-2 1"/></svg><span>Plan</span></button>
+        <button class="tab" data-view="log"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg><span>Log</span></button>
+        <button class="tab" data-view="stages"><svg viewBox="0 0 24 24"><path d="M12 3v18M7 7h10M7 17h10"/></svg><span>Stages</span></button>
+        <button class="tab" data-view="crew" id="crewTab"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.2"/><path d="M3 20c0-3.5 2.7-6 6-6s6 2.5 6 6M15.5 14.2c2.6 0 5 1.8 5 5"/></svg><span>Crew</span></button>
       </nav>
     </section>
+  </div>
+
+
+  <div class="overlay" id="onboard" role="dialog" aria-modal="true" aria-label="Welcome to ApexNav">
+    <div class="grow" data-step="1">
+      <img src="brand/logo.svg" alt="ApexNav" width="220" style="max-width:70%">
+      <h1>Your co-driver for the long way home.</h1>
+      <p>Calls every corner and scores how cleanly you drove it.</p>
+    </div>
+    <div class="grow" data-step="2" hidden>
+      <h2>Pick your co-driver</h2>
+      <div class="stack-8" id="obVoices"></div>
+    </div>
+    <div class="grow" data-step="3" hidden>
+      <h2>Driving with friends?</h2>
+      <p>ApexNav is invite-only. Sign in to see their stages and boards.</p>
+      <a class="ink-btn solid" href="/api/auth/google/start" style="display:flex;align-items:center;justify-content:center;text-decoration:none">Sign in with Google</a>
+    </div>
+    <div class="stack">
+      <button class="ink-btn solid" id="obNext" style="height:48px">Get started</button>
+      <button class="linkbtn" id="obAlt">Watch a replay</button>
+    </div>
+  </div>
+  <div class="overlay dim" id="permSheet" role="dialog" aria-modal="true" aria-label="Before your first drive">
+    <div class="card-sheet">
+      <h2>Before your first drive</h2>
+      <div class="perm"><b>Location</b><span>to call corners ahead</span><b>Motion</b><span>to feel bumps and surface</span><b>Screen on</b><span>while you drive</span></div>
+      <p>Your drive stays on this phone.</p>
+      <button class="ink-btn solid" id="permGo" style="height:48px">Allow and start</button>
+      <button class="linkbtn" id="permNo">Not now</button>
+    </div>
   </div>
 
   <script>
@@ -396,7 +445,7 @@
       });
       Core.linkNotes(events);
       return {
-        id, name, kind: 'route', subtitle: 'Geometry only · not yet profiled',
+        id, name, kind: 'route', subtitle: 'Map only · not yet driven',
         lat: rs.lat, lon: rs.lon, dist, elev: null, speedMps: null, latG: null, lonG: null, camberDeg: null,
         envMps: Array.from(env), sightM: Array.from(sight), limitMps: null, kappa: Array.from(kappa), roughG: null,
         events, sectors: null, sectorM: 500, alpr: null
@@ -412,12 +461,12 @@
     const state = {
       mode: 'replay', playing: false, rate: 1, cursorM: 0, cursorIdx: 0, follow: true, bearing: 0,
       live: null, liveAt: 0, spiritedAt: -Infinity, spoken: new Set(), tapToRoute: false,
-      theme: 'stage', camFeel: 'dynamic', voiceId: 'george', liveVoice: false, voiceStyle: 'codriver', voiceName: '', hlOn: false, hlStrength: 1,
+      theme: 'roadbook', camFeel: 'dynamic', voiceId: 'george', liveVoice: false, voiceStyle: 'codriver', voiceName: '', hlOn: false, hlStrength: 1,
       toggles: { stage: false, voice: true, lpr: true, dna: false, night: false }
     };
     try {
       const saved = JSON.parse(localStorage.getItem('apex.prefs') || 'null');
-      if (saved) { Object.assign(state.toggles, saved.toggles || {}); if (saved.theme) state.theme = saved.theme; if (saved.camFeel) state.camFeel = saved.camFeel; if (saved.voiceId) state.voiceId = saved.voiceId; if (saved.liveVoice != null && saved.liveVoiceV >= 2) state.liveVoice = saved.liveVoice; /* saves from before v2 defaulted to ON and started a 90 MB download unasked */ if (saved.voiceName != null) state.voiceName = saved.voiceName; if (saved.hlOn != null) state.hlOn = !!saved.hlOn; if (saved.hlStrength > 0) state.hlStrength = saved.hlStrength; }
+      if (saved) { Object.assign(state.toggles, saved.toggles || {}); if (saved.theme && saved.themeV === 2) state.theme = saved.theme; if (saved.camFeel) state.camFeel = saved.camFeel; if (saved.voiceId) state.voiceId = saved.voiceId; if (saved.liveVoice != null && saved.liveVoiceV >= 2) state.liveVoice = saved.liveVoice; /* saves from before v2 defaulted to ON and started a 90 MB download unasked */ if (saved.voiceName != null) state.voiceName = saved.voiceName; if (saved.hlOn != null) state.hlOn = !!saved.hlOn; if (saved.hlStrength > 0) state.hlStrength = saved.hlStrength; }
     } catch (_) {}
     if (params.has('night')) state.toggles.night = params.get('night') === '1';
     if (params.has('theme')) state.theme = params.get('theme');
@@ -427,7 +476,7 @@
 
     let look = Themes.apply(state.theme, state.toggles.night);
     let cluster = Inst.mountCluster($('cluster'), look.theme);
-    function savePrefs() { try { localStorage.setItem('apex.prefs', JSON.stringify({ theme: state.theme, camFeel: state.camFeel, voiceId: state.voiceId, liveVoice: state.liveVoice, liveVoiceV: 2, voiceName: state.voiceName, hlOn: state.hlOn, hlStrength: state.hlStrength, toggles: state.toggles })); } catch (_) {} }
+    function savePrefs() { try { localStorage.setItem('apex.prefs', JSON.stringify({ theme: state.theme, themeV: 2, camFeel: state.camFeel, voiceId: state.voiceId, liveVoice: state.liveVoice, liveVoiceV: 2, voiceName: state.voiceName, hlOn: state.hlOn, hlStrength: state.hlStrength, toggles: state.toggles })); } catch (_) {} }
     function applyTheme() {
       look = Themes.apply(state.theme, state.toggles.night);
       cluster = Inst.mountCluster($('cluster'), look.theme);
@@ -1051,9 +1100,9 @@
     }
     function setMode(mode) {
       state.mode = mode;
-      $('modePlate').textContent = { replay: 'REPLAY', sim: 'SIM · NOT DRIVEN', live: 'LIVE' }[mode];
+      $('modePlate').textContent = { replay: `Replay${track && track.name ? ' · ' + track.name : ''}`, sim: 'Preview', live: 'Drive' }[mode];
       $('modePlate').classList.toggle('live', mode === 'live');
-      $('modePlate').hidden = mode !== 'sim';                          // the REPLAY | DRIVE switch already says replay/live; keep the label for the 'not driven' simulation warning
+      $('modePlate').hidden = mode === 'live' && !!drive.sensors;                          // the REPLAY | DRIVE switch already says replay/live; keep the label for the 'not driven' simulation warning
     }
     // Names are known now: pre-render them in the co-driver's own voice (only when the owner turned Speak-road-names / LIVE on).
     function prefetchNames(t) {
@@ -1130,7 +1179,7 @@
           return;
         } catch (_) { /* next mirror */ }
       }
-      if (track === t) toast('LPR camera data unavailable (Overpass unreachable). Absence of pins is NOT clearance.');
+      if (track === t) toast('Camera map offline. No pins doesn\'t mean no cameras.');
     }
     function attachAlpr(t, nodes) {
       t.alpr = [];
@@ -1143,7 +1192,7 @@
       }
       // Same rule as core/road_dna.score_sectors: -45 per camera within ALPR_RADIUS_M.
       if (t.sectors) for (const sec of t.sectors) sec.clear = Math.max(0, 100 - 45 * (counts.get(sec.id) || 0));
-      if (track === t) { loadTrackOnMap(); render(false); toast(`${t.alpr.length} LPR camera${t.alpr.length === 1 ? '' : 's'} on route (OSM / DeFlock)`); }
+      if (track === t) { loadTrackOnMap(); render(false); toast(`${t.alpr.length} plate-reading camera${t.alpr.length === 1 ? '' : 's'} on this route`); }
     }
 
     // =======================================================================
@@ -1211,9 +1260,9 @@
     async function buildRoute(points, id, name, prebuilt = null) {
       let t = prebuilt;
       if (!t) {
-        toast(`Routing ${name}...`);
+        toast(`Finding roads to ${name}…`);
         let coords = null;
-        try { coords = await valhallaRoute(points); } catch (_) { try { coords = await osrmRoute(points); } catch (err) { toast(`Routing failed: ${err.message}. Check your connection.`); return; } }
+        try { coords = await valhallaRoute(points); } catch (_) { try { coords = await osrmRoute(points); } catch (err) { toast('Couldn\'t build the route. Check signal and try again.'); return; } }
         t = trackFromPolyline(coords, id, name);
       }
       const i = drives.findIndex(d => d.id === id);
@@ -1222,7 +1271,7 @@
       closeSheet();
       activate(t, 0);
       attachLimits(t);
-      if (!prebuilt) toast(`${name}: ${(totalM() / 1609.344).toFixed(1)} mi, ${t.events.length} corners called from map geometry`);
+      if (!prebuilt) toast(`${name} · ${(totalM() / 1609.344).toFixed(1)} mi · ${t.events.length} corners`);
     }
     const routeTo = (lat, lon, name) => buildRoute([here(), { lat, lon }], 'route_dest', name);
     async function routeToQuery(q) {
@@ -1232,13 +1281,13 @@
       try { await searchAndRoute(q, ui); } finally { ui.done(); }
     }
     async function searchAndRoute(q, ui) {
-      toast(`Searching ${q}...`);
+      toast(`Searching for ${q}…`);
       try {
         const items = await (await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`)).json();
         if (!items.length) { toast(`No match for "${q}"`); return; }
         ui.step('ROUTING', 0.7);
         await routeTo(parseFloat(items[0].lat), parseFloat(items[0].lon), `To ${items[0].display_name.split(',')[0]}`);
-      } catch (_) { toast('Search unavailable. Use TAP MAP TO ROUTE.'); }
+      } catch (_) { toast('Search is offline. Tap the map instead.'); }
     }
     // Loops: three candidate circles through the start, waypoints snapped to through roads,
     // spurs cut, then the candidate with the best road character wins (a first step toward
@@ -1280,7 +1329,7 @@
     }
     async function buildLoop(miles, ui) {
       const c = here(), targetKm = miles * 1.609344;
-      toast(`Finding the best roads for a ${miles} mi loop...`);
+      toast(`Finding roads · ${miles} mi loop`);
       // 1. Stage discovery: score every road around the start from the map's own vector tiles.
       let plans = [];
       try {
@@ -1303,7 +1352,7 @@
         return { t, job, ...scoreLoop(t, miles), spursCut: rs.removed };
       });
       const done = (await Promise.allSettled(tries)).filter(r => r.status === 'fulfilled').map(r => r.value);
-      if (!done.length) { toast('Loop routing failed. Check your connection.'); return; }
+      if (!done.length) { toast('Couldn\'t build a loop. Check signal and try again.'); return; }
       done.sort((a, b) => b.score - a.score);
       // Members: let what others measured break ties among the top few (a rough road costs up to 6 points; unmeasured roads are neutral).
       if (window.ApexSync && window.ApexContributor && done.length > 1 && await ApexSync.member()) {
@@ -1321,7 +1370,7 @@
       ui.step('PROFILING', 0.92);
       await buildRoute(null, `loop_${miles}`, `${miles} mi loop`, best.t);
       const how = best.job.kind === 'stages' ? `${best.job.plan.legs.length} best-road stages` : 'circle fallback';
-      toast(`${miles} mi loop: ${(best.km / 1.609344).toFixed(1)} mi, ${best.good} good corners, ${Math.round(best.retraced * 100)}% retraced · ${how} (best of ${done.length})`);
+      toast(`${miles} mi loop · ${(best.km / 1.609344).toFixed(1)} mi · ${best.good} good corners`);
       window.apexDebug && (window.apexDebug.lastLoop = done.map(d => ({ kind: d.job.kind, score: d.score, km: d.km, good: d.good, retraced: d.retraced })));
     }
 
@@ -1332,22 +1381,24 @@
     function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 4200); }
     // Views: ROUTE / DRIVES / SETUP open the side panel; tapping the open tab again, the map
     // behind it, or swiping it right closes it. ANALYSIS is its own page.
-    const VIEW_TITLES = { route: 'Route', drives: 'Drives', setup: 'Setup' };
+    const VIEW_TITLES = { route: 'Plan', crew: 'Crew', setup: 'Settings' };
     let view = null;
     function showView(v) {
-      if (v === 'analysis') { location.href = 'analysis.html'; return; }
+      if (v === 'log') { location.href = 'analysis.html?tab=history'; return; }
+      if (v === 'stages') { location.href = 'analysis.html?tab=segments'; return; }
+      if (v === 'map') v = null;
       view = v;
       const sheet = $('sheet');
       if (v) { sheet.dataset.view = v; $('sheetTitle').textContent = VIEW_TITLES[v]; sheet.querySelector('.body').scrollTop = 0; }
       sheet.classList.toggle('open', !!v);
       $('app').classList.toggle('sheet-open', !!v);
       $('scrim').classList.toggle('show', !!v);
-      document.querySelectorAll('#tabbar .tab').forEach(t => t.classList.toggle('on', t.dataset.view === v));
+      document.querySelectorAll('#tabbar .tab').forEach(t => t.classList.toggle('on', v ? t.dataset.view === v : t.dataset.view === 'map'));
     }
     const openSheet = (v = view || 'route') => showView(v);
     const closeSheet = () => showView(null);
     document.querySelectorAll('#tabbar .tab').forEach(t => t.addEventListener('click', () => showView(view === t.dataset.view ? null : t.dataset.view)));
-    $('closeSheetBtn').addEventListener('click', closeSheet);
+    $('settingsBtn').addEventListener('click', () => showView(view === 'setup' ? null : 'setup'));
     $('scrim').addEventListener('click', closeSheet);
     (() => {   // swipe the panel right to close
       const sheet = $('sheet');
@@ -1413,64 +1464,142 @@
     const jsonOf = async (r) => { try { return await r.json(); } catch (_) { return null; } };
     const el = (tag, props = {}, ...kids) => { const n = Object.assign(document.createElement(tag), props); n.append(...kids); return n; };
     const btn = (label, onclick, cls = 'ink-btn') => el('button', { className: cls, textContent: label, onclick });
+    const copyText = async (text, ok) => { try { await navigator.clipboard.writeText(text); toast(ok); } catch (_) { window.prompt('Copy this link', text); } };
+    const section = (title) => el('div', { className: 'stack-8' }, el('h3', { textContent: title }));
+    const switchRow = (label, on, change) => { const b = el('button', { className: 'ink-btn' + (on ? ' on' : ''), textContent: `${label}: ${on ? 'On' : 'Off'}`, onclick: change }); b.setAttribute('aria-pressed', String(!!on)); return b; };
     async function renderAccount() {
-      const sec = $('accountSection'), body = $('accountBody');
+      const body = $('accountBody');
       let me = null;
       try { const r = await apiCall('GET', '/api/me'); if (r.ok && (r.headers.get('content-type') || '').includes('json')) me = await r.json(); } catch (_) {}
-      if (!me) { sec.hidden = true; return; }
-      sec.hidden = false; body.innerHTML = '';
+      body.innerHTML = '';
       const redo = () => renderAccount();
+      const badge = $('crewTab').querySelector('.badge'); if (badge) badge.remove();
+      const params2 = new URLSearchParams(location.search);
+      if (!me) {
+        body.append(el('h3', { textContent: 'Crew' }), el('p', { className: 'note', textContent: 'Friends and boards need a connection to the ApexNav server. Everything else works offline.' }));
+        return;
+      }
+      const inviteFromLink = params2.get('invite'), crewFromLink = params2.get('crew'), addFromLink = params2.get('add');
+      try { if (inviteFromLink) sessionStorage.setItem('apex.invite', inviteFromLink); if (crewFromLink) sessionStorage.setItem('apex.crew', crewFromLink); if (addFromLink) sessionStorage.setItem('apex.add', addFromLink.toLowerCase()); } catch (_) {}
+      const stash = (k) => { try { return sessionStorage.getItem(k) || ''; } catch (_) { return ''; } };
+      const unstash = (k) => { try { sessionStorage.removeItem(k); } catch (_) {} };
       if (!me.signed_in) {
-        const inviteFromLink = new URLSearchParams(location.search).get('invite');
-        if (inviteFromLink) { try { sessionStorage.setItem('apex.invite', inviteFromLink); } catch (_) {} }
-        body.append(btn('SIGN IN WITH GOOGLE', () => { location.href = '/api/auth/google/start'; }, 'ink-btn solid'));
+        body.append(el('img', { src: 'brand/logo.svg', alt: 'ApexNav', width: 200, style: 'max-width:60%' }),
+          el('h3', { textContent: 'Crew' }),
+          el('p', { className: 'note', textContent: 'ApexNav is invite-only. Sign in to add friends, share scores and join boards. Nothing is shared unless you switch it on.' }),
+          el('a', { className: 'ink-btn solid', href: '/api/auth/google/start', textContent: 'Sign in with Google', style: 'display:flex;align-items:center;justify-content:center;text-decoration:none' }));
+        if (inviteFromLink || crewFromLink || addFromLink) { showView('crew'); }
         return;
       }
       if (!me.member) {
-        const saved = (() => { try { return sessionStorage.getItem('apex.invite') || ''; } catch (_) { return ''; } })();
-        const inp = el('input', { className: 'field', placeholder: 'Invite code', value: saved, autocomplete: 'off' });
-        body.append(el('div', { className: 'note', textContent: 'You are signed in. Ask a member for an invite to see friends.' }), el('div', { className: 'row' }, inp,
-          btn('JOIN', async () => { const r = await apiCall('POST', '/api/invites/redeem', { token: inp.value.trim() }); if (r.ok) { try { sessionStorage.removeItem('apex.invite'); } catch (_) {} redo(); } else toast('That invite is not valid.'); }, 'ink-btn solid')));
-        body.append(btn('SIGN OUT', async () => { await apiCall('POST', '/api/auth/logout'); redo(); }));
+        const inp = el('input', { className: 'field', placeholder: 'Paste your invite', value: stash('apex.invite'), autocomplete: 'off', 'aria-label': 'Invite' });
+        const join = async () => {
+          const raw = inp.value.trim(), token = (raw.match(/invite=([A-Za-z0-9_-]+)/) || [null, raw])[1];
+          const r = await apiCall('POST', '/api/invites/redeem', { token });
+          if (r.ok) { unstash('apex.invite'); toast('You\'re in. You and the person who invited you are now friends.'); redo(); } else toast('That invite didn\'t work. Ask for a new one.');
+        };
+        body.append(el('h3', { textContent: 'Crew' }), el('p', { className: 'note', textContent: 'ApexNav is invite-only. Paste your invite.' }), el('div', { className: 'row' }, inp, btn('Join', join, 'ink-btn solid')),
+          btn('Sign out', async () => { await apiCall('POST', '/api/auth/logout'); redo(); }, 'linkbtn'));
+        if (stash('apex.invite')) join();
         return;
       }
       if (!me.handle) {
-        const inp = el('input', { className: 'field', placeholder: 'Pick a handle (letters, numbers, _)', autocomplete: 'off' });
-        body.append(el('div', { className: 'row' }, inp, btn('SAVE', async () => { const r = await apiCall('PUT', '/api/me/handle', { handle: inp.value }); if (r.ok) redo(); else toast(r.status === 409 ? 'That handle is taken.' : 'Use 3-20 letters, numbers or _.'); }, 'ink-btn solid')));
+        const inp = el('input', { className: 'field', placeholder: 'Pick a handle', autocomplete: 'off', autocapitalize: 'none', 'aria-label': 'Handle' });
+        body.append(el('h3', { textContent: 'Pick a handle' }), el('p', { className: 'note', textContent: 'Friends find you by it. 3 to 20 letters, numbers or _.' }),
+          el('div', { className: 'row' }, inp, btn('Save', async () => { const r = await apiCall('PUT', '/api/me/handle', { handle: inp.value }); if (r.ok) redo(); else toast(r.status === 409 ? 'That handle is taken.' : 'Use 3 to 20 letters, numbers or _.'); }, 'ink-btn solid')));
         return;
       }
-      body.append(el('div', { className: 'note', textContent: `Signed in as @${me.handle}` }));
-      const [fr, gr] = await Promise.all([apiCall('GET', '/api/friends').then(jsonOf), apiCall('GET', '/api/grants').then(jsonOf)]);
-      const grants = new Map((Array.isArray(gr) ? gr : []).filter(g => g.audience_type === 'friend').map(g => [g.audience_id, g]));
-      for (const f of Array.isArray(fr) ? fr : []) {
-        const row = el('div', { className: 'card' }), name = el('b', { textContent: `@${f.handle || '?'}` });
-        const line = el('div', { className: 'row' });
-        if (f.status === 'pending') {
-          line.append(f.incoming ? btn('ACCEPT', async () => { await apiCall('POST', '/api/friends/accept', { user_id: f.id }); redo(); }, 'ink-btn solid') : el('span', { textContent: 'waiting for them' }),
-                      btn('REMOVE', async () => { await apiCall('DELETE', `/api/friends/${f.id}`); redo(); }));
-        } else {
-          const g = grants.get(f.id) || { share_scores: 0, share_times: 0 };
-          const put = async (scores, times) => { await apiCall('PUT', '/api/grants', { audience_type: 'friend', audience_id: f.id, share_scores: scores, share_times: times }); redo(); };
-          const b1 = btn(g.share_scores ? 'SHARING SCORES' : 'SHARE SCORES', () => put(!g.share_scores, false)); b1.classList.toggle('on', !!g.share_scores);
-          const b2 = btn(g.share_times ? 'SHARING TIMES' : 'SHARE TIMES', () => put(true, !g.share_times)); b2.classList.toggle('on', !!g.share_times);
-          line.append(b1, b2, btn('UNFRIEND', async () => { if (confirm(`Unfriend @${f.handle}? This also stops all sharing.`)) { await apiCall('DELETE', `/api/friends/${f.id}`); redo(); } }));
-        }
-        row.append(name, line); body.append(row);
+      if (me.requests > 0) { const b = el('span', { className: 'badge', textContent: String(me.requests) }); b.setAttribute('aria-label', `${me.requests} friend requests`); $('crewTab').append(b); }
+      const [fr, gr, pts, ex, crews] = await Promise.all([apiCall('GET', '/api/friends').then(jsonOf), apiCall('GET', '/api/grants').then(jsonOf), apiCall('GET', '/api/points').then(jsonOf),
+        apiCall('GET', '/api/me/export').then(jsonOf), apiCall('GET', '/api/crews').then(jsonOf)]);
+      const friends = Array.isArray(fr) ? fr : [], grants = new Map((Array.isArray(gr) ? gr : []).map(g => [g.audience_type + ':' + g.audience_id, g]));
+      const putGrant = async (type, id, scores, times) => { await apiCall('PUT', '/api/grants', { audience_type: type, audience_id: id, share_scores: scores, share_times: times }); redo(); };
+
+      // you
+      const you = section('You');
+      you.append(el('div', { className: 'row', style: 'align-items:baseline;gap:12px' }, el('b', { textContent: `@${me.handle}`, style: 'font-size:22px;font-family:var(--font-num)' }),
+        el('span', { className: 'note', textContent: pts ? `${pts.total} points` : '' })));
+      const invOut = el('p', { className: 'note' });
+      you.append(el('div', { className: 'row' },
+        btn('Invite someone', async () => { const r = await apiCall('POST', '/api/invites'); const j = await jsonOf(r); if (r.ok) copyText(j.url, 'Invite link copied. They\'ll be your friend the moment they join.'); else toast('Couldn\'t make an invite. Try again.'); }, 'ink-btn solid'),
+        btn('Share my handle', () => copyText(`${location.origin}/?add=${me.handle}`, 'Link copied. Anyone who opens it can ask to be your friend.'))), invOut);
+      body.append(you);
+
+      // requests waiting on you
+      const incoming = friends.filter(f => f.status === 'pending' && f.incoming);
+      if (incoming.length) {
+        const sec = section(`Requests · ${incoming.length}`);
+        for (const f of incoming) sec.append(el('div', { className: 'row', style: 'align-items:center' }, el('b', { textContent: `@${f.handle || '?'}`, style: 'flex:1' }),
+          btn('Accept', async () => { await apiCall('POST', '/api/friends/accept', { user_id: f.id }); toast(`You and @${f.handle} are friends. Choose what to share below.`); redo(); }, 'ink-btn solid'),
+          btn('Decline', async () => { await apiCall('DELETE', `/api/friends/${f.id}`); redo(); })));
+        body.append(sec);
       }
-      const add = el('input', { className: 'field', placeholder: 'Add a friend by handle', autocomplete: 'off' });
-      body.append(el('div', { className: 'row' }, add, btn('REQUEST', async () => { await apiCall('POST', '/api/friends/request', { handle: add.value.trim().toLowerCase() }); add.value = ''; toast('If that member exists, they have your request.'); redo(); })));
-      // road-data contribution (off by default), points, and the person's own data
-      const [pts, mem] = await Promise.all([apiCall('GET', '/api/points').then(jsonOf), Promise.resolve(me)]);
-      if (pts) body.append(el('div', { className: 'note', textContent: `Octane: ${pts.total} points` + (pts.board && pts.board.length ? ` · top: ${pts.board.slice(0, 3).map(r => `@${r.handle} ${r.total}`).join(', ')}` : '') }));
-      const contribOn = !!(await apiCall('GET', '/api/me/export').then(jsonOf))?.member?.contribute;
-      const cb = btn(contribOn ? 'ROAD DATA: SHARING' : 'ROAD DATA: OFF', async () => { await apiCall('PUT', '/api/me/contribute', { on: !contribOn }); redo(); });
-      cb.classList.toggle('on', contribOn); body.append(cb, el('div', { className: 'note', textContent: 'Optional. Shares anonymous road numbers (banking, roughness, crests), never where you went or how fast. Earns points: 3x for the first to map a road, 2x second, 1x after.' }));
-      body.append(el('div', { className: 'row' },
-        btn('DOWNLOAD MY DATA', async () => { const r = await apiCall('GET', '/api/me/export'); const blob = new Blob([JSON.stringify(await r.json(), null, 2)], { type: 'application/json' }); const a = el('a', { href: URL.createObjectURL(blob), download: 'apexnav-my-data.json' }); document.body.append(a); a.click(); a.remove(); }),
-        btn('DELETE ACCOUNT', async () => { if (prompt('This erases your account, friends, shared results and highlights from the server. Type DELETE to confirm.') === 'DELETE') { await apiCall('DELETE', '/api/me', { confirm: 'DELETE' }); redo(); } })));
-      const invOut = el('div', { className: 'note' });
-      body.append(el('div', { className: 'row' }, btn('CREATE INVITE', async () => { const r = await apiCall('POST', '/api/invites'); const j = await jsonOf(r); invOut.textContent = r.ok ? j.url : 'Could not create an invite.'; })), invOut);
-      body.append(btn('SIGN OUT', async () => { await apiCall('POST', '/api/auth/logout'); redo(); }));
+
+      // friends
+      const fsec = section('Friends');
+      const accepted = friends.filter(f => f.status === 'accepted'), waiting = friends.filter(f => f.status === 'pending' && !f.incoming);
+      if (!accepted.length && !waiting.length) fsec.append(el('p', { className: 'note', textContent: 'No friends yet. Invite someone, or add a member by handle.' }));
+      for (const f of accepted) {
+        const g = grants.get('friend:' + f.id) || { share_scores: 0, share_times: 0 }, card = el('div', { className: 'card' });
+        card.append(el('b', { textContent: `@${f.handle || '?'}` }),
+          el('div', { className: 'row' }, switchRow('Scores', g.share_scores, () => putGrant('friend', f.id, !g.share_scores, g.share_scores ? g.share_times : false)),
+            switchRow('Times', g.share_times, () => putGrant('friend', f.id, true, !g.share_times))),
+          el('span', { textContent: g.share_scores ? (g.share_times ? `@${f.handle} sees your scores and times.` : `@${f.handle} sees your scores.`) : `@${f.handle} sees nothing of yours yet.` }),
+          btn('Unfriend', async () => { if (confirm(`Unfriend @${f.handle}? This also stops all sharing.`)) { await apiCall('DELETE', `/api/friends/${f.id}`); redo(); } }, 'linkbtn'));
+        fsec.append(card);
+      }
+      for (const f of waiting) fsec.append(el('div', { className: 'row', style: 'align-items:center' }, el('span', { style: 'flex:1', textContent: `@${f.handle || '?'} · request sent` }), btn('Cancel', async () => { await apiCall('DELETE', `/api/friends/${f.id}`); redo(); }, 'linkbtn')));
+      const add = el('input', { className: 'field', placeholder: 'Add by handle', autocomplete: 'off', autocapitalize: 'none', 'aria-label': 'Friend handle', value: stash('apex.add') });
+      const sendRequest = async () => {
+        const h = add.value.trim().replace(/^@/, '').toLowerCase(); if (!h) return;
+        const r = await apiCall('POST', '/api/friends/request', { handle: h }); unstash('apex.add'); add.value = '';
+        toast(r.ok ? `Request sent. @${h} sees it if they're a member.` : 'Couldn\'t send that. Try again.'); redo();
+      };
+      fsec.append(el('div', { className: 'row' }, add, btn('Send request', sendRequest)));
+      body.append(fsec);
+      if (stash('apex.add') && add.value && !accepted.some(f => f.handle === add.value) ) { add.focus(); }
+
+      // crews
+      const csec = section('Crews');
+      const crewList = Array.isArray(crews) ? crews : [];
+      if (crewFromLink || stash('apex.crew')) {
+        const tok = crewFromLink || stash('apex.crew'); unstash('apex.crew');
+        const r = await apiCall('POST', '/api/crews/join', { token: tok }); toast(r.ok ? 'You joined the crew.' : 'That crew invite didn\'t work. Ask for a new one.'); if (r.ok) { redo(); return; }
+      }
+      if (!crewList.length) csec.append(el('p', { className: 'note', textContent: 'A crew is a named group of friends for a weekend run or a club.' }));
+      for (const c of crewList) {
+        const g = grants.get('crew:' + c.id) || { share_scores: 0, share_times: 0 }, card = el('div', { className: 'card' });
+        card.append(el('b', { textContent: c.name }), el('span', { textContent: `${c.members} ${c.members === 1 ? 'member' : 'members'}` }),
+          el('div', { className: 'row' }, switchRow('Scores', g.share_scores, () => putGrant('crew', c.id, !g.share_scores, g.share_scores ? g.share_times : false)),
+            switchRow('Times', g.share_times, () => putGrant('crew', c.id, true, !g.share_times))),
+          el('div', { className: 'row' }, btn('Invite to crew', async () => { const r = await apiCall('POST', `/api/crews/${c.id}/invite`); const j = await jsonOf(r); if (r.ok) copyText(`${location.origin}/?crew=${j.token}`, 'Crew link copied.'); else toast('Only a crew\'s owner can invite.'); }),
+            btn('Leave', async () => { if (confirm(`Leave ${c.name}?`)) { await apiCall('DELETE', `/api/crews/${c.id}/membership`); redo(); } }, 'linkbtn')));
+        csec.append(card);
+      }
+      const cname = el('input', { className: 'field', placeholder: 'New crew name', autocomplete: 'off', maxLength: 40, 'aria-label': 'Crew name' });
+      csec.append(el('div', { className: 'row' }, cname, btn('Create', async () => { if (!cname.value.trim()) return; const r = await apiCall('POST', '/api/crews', { name: cname.value.trim() }); if (r.ok) redo(); else toast('Couldn\'t create the crew.'); })));
+      body.append(csec);
+
+      // points board
+      if (pts && pts.board && pts.board.length) {
+        const bsec = section('Points board');
+        pts.board.slice(0, 10).forEach((r, k) => bsec.append(el('div', { className: 'row', style: 'justify-content:space-between' }, el('span', { textContent: `${k + 1}  @${r.handle}` }), el('b', { textContent: String(r.total) }))));
+        body.append(bsec);
+      }
+
+      // road feel + account
+      const contribOn = !!ex?.member?.contribute;
+      const dsec = section('Road feel');
+      dsec.append(switchRow('Share road feel', contribOn, async () => { await apiCall('PUT', '/api/me/contribute', { on: !contribOn }); redo(); }),
+        el('p', { className: 'note', textContent: 'Banking, bumps and surface. Never where you went or how fast. First to map a road earns 3×.' }));
+      body.append(dsec);
+      const asec = section('Account');
+      asec.append(el('div', { className: 'row' },
+        btn('Download my data', async () => { const r = await apiCall('GET', '/api/me/export'); const blob = new Blob([JSON.stringify(await r.json(), null, 2)], { type: 'application/json' }); const a = el('a', { href: URL.createObjectURL(blob), download: 'apexnav-my-data.json' }); a.click(); }),
+        btn('Sign out', async () => { await apiCall('POST', '/api/auth/logout'); redo(); })),
+        btn('Delete account', async () => { if (prompt('This erases your account, friends, shared results and spots from the server. Type DELETE to confirm.') === 'DELETE') { await apiCall('DELETE', '/api/me', { confirm: 'DELETE' }); redo(); } }, 'linkbtn'));
+      asec.lastChild.style.color = 'var(--accent)';
+      body.append(asec);
     }
 
     // Highlights (local for now): [{id, name, lat, lon, rating}] in localStorage; the server list joins later (docs/BACKEND.md section 9).
@@ -1485,7 +1614,7 @@
     function loadHighlights() { try { return JSON.parse(localStorage.getItem('apex.highlights') || '[]'); } catch (_) { return []; } }
     function saveHighlights(list) { try { localStorage.setItem('apex.highlights', JSON.stringify(list)); } catch (_) {} }
     function renderHighlights() {
-      $('hlToggleBtn').textContent = state.hlOn ? 'HIGHLIGHTS ON' : 'HIGHLIGHTS OFF';
+      $('hlToggleBtn').textContent = state.hlOn ? 'Spots on' : 'Spots off';
       $('hlToggleBtn').classList.toggle('on', state.hlOn);
       $('hlStrength').value = state.hlStrength;
       const list = $('hlList'); list.innerHTML = '';
@@ -1496,13 +1625,13 @@
         x.onclick = () => { saveHighlights(loadHighlights().filter(v => v.id !== h.id)); renderHighlights(); };
         row.append(t);
         if (!h.shared && window.ApexSync) {
-          const sh = document.createElement('button'); sh.className = 'ink-btn'; sh.style.height = '28px'; sh.textContent = 'SHARE'; sh.hidden = true;
+          const sh = document.createElement('button'); sh.className = 'ink-btn'; sh.style.height = '28px'; sh.textContent = 'Share'; sh.hidden = true;
           ApexSync.member().then(m => { sh.hidden = !m; });
           sh.onclick = async () => {
             sh.disabled = true;
             const ok = await ApexSync.shareHighlight(h, h.category || 'other');
             if (ok) { saveHighlights(loadHighlights().map(v => v.id === h.id ? { ...v, shared: true } : v)); renderHighlights(); toast('Shared. Other members can now rate it.'); }
-            else { sh.disabled = false; toast('Could not share it (maybe one already exists within 40 m, or the daily limit is reached).'); }
+            else { sh.disabled = false; toast('Not shared. There\'s already a spot here, or you\'ve hit today\'s limit.'); }
           };
           row.append(sh);
         } else if (h.shared) { const tag = document.createElement('span'); tag.className = 'note'; tag.textContent = 'shared'; row.append(tag); }
@@ -1520,7 +1649,7 @@
         row.append(t);
         if (!s.mine) for (const n of [1, 3, 5]) {
           const b = document.createElement('button'); b.className = 'ink-btn'; b.style.height = '28px'; b.textContent = `${n}★`; b.setAttribute('aria-label', `Rate ${s.name} ${n} stars`);
-          b.onclick = async () => { toast((await ApexSync.rateHighlight(s.id, n)) ? 'Thanks, rated.' : 'Could not rate it.'); renderNearbyHighlights(); };
+          b.onclick = async () => { toast((await ApexSync.rateHighlight(s.id, n)) ? 'Rated.' : 'Couldn\'t rate it. Try again.'); renderNearbyHighlights(); };
           row.append(b);
         }
         box.append(row);
@@ -1532,7 +1661,7 @@
       const name = $('hlName').value.trim(); if (!name) { toast('Name the spot first.'); return; }
       const p = here();
       saveHighlights(loadHighlights().concat({ id: String(Date.now()), name: name.slice(0, 60), lat: p.lat, lon: p.lon, rating: parseInt($('hlStars').value, 10), category: $('hlCat').value }));
-      $('hlName').value = ''; renderHighlights(); toast(`Added ${name} at your position.`);
+      $('hlName').value = ''; renderHighlights(); toast(`Spot saved · ${name}`);
     });
 
     // Voice picker: open-model banks (web/voices/index.json) + the device's own voice.
@@ -1544,7 +1673,7 @@
         const btn = document.createElement('button');
         btn.className = 'ink-btn';
         btn.dataset.voice = v.id;
-        btn.textContent = v.name.toUpperCase();
+        btn.textContent = v.name;
         btn.title = v.license;
         cards.appendChild(btn);
       }
@@ -1568,7 +1697,7 @@
     function renderLive() {
       const st = window.ApexVoice ? ApexVoice.liveState() : 'idle';
       $('liveVoiceBtn').classList.toggle('on', state.liveVoice);
-      $('liveVoiceBtn').textContent = !state.liveVoice ? 'LIVE OFF' : st === 'ready' ? 'LIVE READY' : st === 'loading' ? 'LIVE LOADING' : st === 'error' ? 'LIVE FAILED' : 'LIVE ON';
+      $('liveVoiceBtn').textContent = !state.liveVoice ? 'Speak road names: off' : st === 'ready' ? 'Speak road names: ready' : st === 'loading' ? 'Speak road names: loading' : st === 'error' ? 'Speak road names: failed' : 'Speak road names: on';
       const info = window.ApexVoice ? ApexVoice.liveInfo() : { text: '' };
       const note = $('liveNote'); if (note) { note.textContent = state.liveVoice ? info.text : 'Off. Road and route names use the recorded voice or your phone voice.'; note.classList.toggle('err', !!(state.liveVoice && info.error)); }
     }
@@ -1620,12 +1749,12 @@
       if (k === 'night') { applyTheme(); return; }
       if (k === 'dna' && mapReady) {
         map.setLayoutProperty('apex-dna', 'visibility', state.toggles.dna ? 'visible' : 'none');
-        if (state.toggles.dna && track && !track.sectors) toast('Stage DNA needs a profiled drive; this route is geometry only.');
+        if (state.toggles.dna && track && !track.sectors) toast('Road scores appear after this road is driven.');
       }
       if (k === 'lpr') updatePins();
       if (k === 'stage') {
         const jar = state.voiceId === 'jarvis';
-        say(state.toggles.stage ? 'Stage mode. Full notes.' : 'Cruise. Hazards only.', true, null,
+        say(state.toggles.stage ? 'Full notes.' : 'Quiet. Hazards only.', true, null,
             state.toggles.stage ? (jar ? 'w:stage' : 'sys:stage') : (jar ? 'w:cruise' : 'sys:cruise'));
       }
       savePrefs();
@@ -1639,20 +1768,19 @@
     const drive = { sensors: null, rec: null, status: null, frames: 0, live: null, liveIdx: 0, share: 'off', shareKm: 0, shareErr: null };
     function paintModeSwitch() {
       const on = state.mode === 'live';
-      $('modeReplay').classList.toggle('on', !on); $('modeReplay').setAttribute('aria-pressed', String(!on));
-      $('modeDrive').classList.toggle('on', on); $('modeDrive').setAttribute('aria-pressed', String(on));
-      $('driveBar').hidden = !on; $('transport').hidden = on;
+      $('driveBar').hidden = !on; $('transport').hidden = on; $('startBlock').hidden = on;
+      if (on) $('app').classList.remove('sheet-open');
     }
     function paintDriveStat() {
       const s = drive.status || {}, r = drive.rec, bits = [];
-      bits.push(s.gps === 'on' ? '<b>GPS</b>' : s.gps === 'denied' ? 'GPS BLOCKED' : s.gps === 'weak' ? 'GPS WEAK' : s.gps === 'error' ? 'GPS ERROR' : 'WAITING FOR GPS');
-      bits.push(s.motion === 'on' ? '<b>MOTION</b>' : s.motion === 'denied' ? 'MOTION OFF (blocked)' : s.motion === 'unavailable' ? 'NO MOTION SENSOR' : 'MOTION...');
-      if (r && r.samples > 0) bits.push(`<b>REC</b> ${(r.km / 1.609344).toFixed(2)} mi`);
-      if (drive.share === 'on') bits.push(drive.shareErr ? 'SHARING (retrying)' : `<b>SHARING</b> ${drive.shareKm.toFixed(1)} km`);
-      else if (drive.share === 'stopped') bits.push('SHARING PAUSED');
-      else if (drive.share === 'off-member') bits.push('SHARING OFF');
-      if (s.wake === 'unavailable') bits.push('keep screen on');
-      $('driveStat').innerHTML = bits.join(' · ') + (s.message ? `<br><span style="letter-spacing:0">${s.message}</span>` : '');
+      bits.push(s.gps === 'on' ? '<b>GPS</b>' : s.gps === 'denied' ? 'Location is off' : s.gps === 'weak' ? 'Weak GPS · keep the sky in view' : s.gps === 'error' ? 'GPS error' : 'Finding GPS…');
+      bits.push(s.motion === 'on' ? '<b>Motion</b>' : s.motion === 'denied' || s.motion === 'unavailable' ? 'No motion · surface not recorded' : 'Motion…');
+      if (r && r.samples > 0) bits.push(`<b>● Rec</b> ${(r.km / 1.609344).toFixed(2)} mi`);
+      if (drive.share === 'on') bits.push(drive.shareErr ? 'Sharing · retrying' : `<b>Sharing</b> ${(drive.shareKm / 1.609344).toFixed(1)} mi`);
+      else if (drive.share === 'stopped') bits.push('Sharing paused');
+      else if (drive.share === 'off-member') bits.push('Sharing off');
+      if (s.wake === 'unavailable') bits.push('Keep the screen on');
+      $('driveStat').innerHTML = bits.join(' · ') + (s.message ? `<br><span>${s.message}</span>` : '');
     }
     // Road data streams while you drive when you are a member with ROAD DATA on: settled stretches only (never the first or last km).
     function feedLive() {
@@ -1688,7 +1816,7 @@
           onFrame: (fr) => { if (!fr.has_fix) return; drive.frames++; drive.rec.add(fr); feedLive(); window.apex.live(fr); paintDriveStat(); },
         });
         startLiveSharing();
-      } catch (e) { toast(e.message || 'Could not start GPS.'); leaveDrive(false); }
+      } catch (e) { toast(e.message || 'Couldn\'t start GPS.'); leaveDrive(false); }
     }
     async function leaveDrive(save) {
       const rec = drive.rec, sensors = drive.sensors, live = drive.live;
@@ -1704,13 +1832,50 @@
           const d = ApexRecording.parse(Core, rec.toCsv(), `web_${stamp}.csv`, { source: 'web-gps', date: `${when.getFullYear()}-${pad(when.getMonth() + 1)}-${pad(when.getDate())}T${pad(when.getHours())}:${pad(when.getMinutes())}`, name: `Drive ${when.toLocaleDateString()} ${pad(when.getHours())}:${pad(when.getMinutes())}` });
           if (shared && shared.chunks > 0) d.contributed = true;                // streamed already: the analysis page must not send it again
           await ApexRecording.store(d);
-          toast(`Saved ${(rec.km / 1.609344).toFixed(1)} mi.` + (shared && shared.km > 0 ? ` Shared ${shared.km.toFixed(1)} km of road data.` : '') + ' Open ANALYSIS to see it.');
+          toast(`Drive saved · ${(rec.km / 1.609344).toFixed(1)} mi.` + (shared && shared.km > 0 ? ` Shared ${(shared.km / 1.609344).toFixed(1)} mi of road feel.` : '') + ' See it in Log.');
         } catch (e) { toast(`Could not save the drive: ${e.message}`); }
-      } else if (save && rec && rec.samples > 0) toast('Too short to save (under 0.3 km).');
+      } else if (save && rec && rec.samples > 0) toast('Too short to save. Drives under 0.2 mi are dropped.');
     }
-    $('modeDrive').addEventListener('click', enterDrive);
-    $('modeReplay').addEventListener('click', () => { if (state.mode === 'live' && drive.sensors) leaveDrive(true); else if (state.mode === 'live') { state.live = null; setMode(track && track.kind === 'route' ? 'sim' : 'replay'); paintModeSwitch(); render(true); } });
+    const flag = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (_) {} return null; };
+    function startDrive() {
+      if (state.mode === 'live') return;
+      if (flag('apex.permsExplained')) { enterDrive(); return; }
+      const sheet = $('permSheet'); sheet.classList.add('show'); $('permGo').focus();
+    }
+    $('permGo').addEventListener('click', () => { flag('apex.permsExplained', '1'); $('permSheet').classList.remove('show'); enterDrive(); });
+    $('permNo').addEventListener('click', () => $('permSheet').classList.remove('show'));
+    $('startDrive').addEventListener('click', startDrive);
+    $('planLink').addEventListener('click', () => showView('route'));
+    $('replayLink').addEventListener('click', () => { showView('route'); const d = $('driveList'); if (d && d.scrollIntoView) d.scrollIntoView({ block: 'center' }); });
     $('driveEnd').addEventListener('click', () => leaveDrive(true));
+
+    // =======================================================================
+    // 10c. FIRST RUN: three screens, shown once. No permissions here (they are asked at the first Start drive).
+    // =======================================================================
+    function runOnboarding() {
+      const ob = $('onboard'); let step = 1;
+      const steps = [...ob.querySelectorAll('[data-step]')];
+      const paint = () => {
+        steps.forEach(n => { n.hidden = Number(n.dataset.step) !== step; });
+        $('obNext').textContent = step === 1 ? 'Get started' : step === 2 ? 'Next' : 'Done';
+        $('obAlt').textContent = step === 1 ? 'Watch a replay' : step === 3 ? 'Not now' : '';
+        $('obAlt').hidden = step === 2;
+        if (step === 2) {
+          const list = $('obVoices'); list.innerHTML = '';
+          for (const v of bankVoices.concat([{ id: 'device', name: 'Phone voice' }]).filter(v => v.id !== 'jarvis')) {
+            const b = document.createElement('button'); b.className = 'ink-btn' + (v.id === state.voiceId ? ' on' : ''); b.textContent = `▶  ${v.name}`;
+            b.addEventListener('click', () => { state.voiceId = v.id; state.voiceStyle = 'codriver'; savePrefs(); renderVoiceList(); if (window.ApexVoice) ApexVoice.unlock(); say('Left 4 tightens, one-fifty.', true, null, 'sys:test'); paint(); });
+            list.append(b);
+          }
+        }
+      };
+      const finish = () => { flag('apex.onboarded', '1'); ob.classList.remove('show'); };
+      $('obNext').onclick = () => { if (step < 3) { step++; paint(); } else finish(); };
+      $('obAlt').onclick = () => { if (step === 1) finish(); else if (step === 3) finish(); };
+      ob.classList.add('show'); paint(); $('obNext').focus();
+    }
+    if (!flag('apex.onboarded') && !['invite', 'crew', 'add', 'drive', 'play', 'at', 'theme'].some(k => params.has(k))) runOnboarding();
+    else if (!flag('apex.onboarded')) flag('apex.onboarded', '1');
 
     // =======================================================================
     // 11. NATIVE BRIDGE (ApexNavApp.swift pushes window.apex.live every 0.1 s)
@@ -1725,7 +1890,7 @@
     };
     setInterval(() => {
       if (state.mode === 'live' && !drive.sensors && performance.now() - state.liveAt > 5000) {
-        state.live = null; setMode(track && track.kind === 'route' ? 'sim' : 'replay'); paintModeSwitch(); toast('GPS lost: back to replay');
+        state.live = null; setMode(track && track.kind === 'route' ? 'sim' : 'replay'); paintModeSwitch(); toast('GPS lost. Back to the replay.');
       }
     }, 1000);
 

@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 444 100" width="444" height="100" role="img" aria-label="ApexNav">
+  <!-- ApexNav wordmark: tulip mark + APEX (heavy) NAV (light), monoline caps drawn as paths
+       (no font file). Ink uses currentColor; the apex dot uses the CSS variable brand-accent, then the app accent. -->
+  <style>.apex{fill:var(--brand-accent,var(--accent,#C8102E))}</style>
+  <defs><clipPath id="cap"><rect x="0" y="26" width="444" height="48"/></clipPath></defs>
+  <circle cx="34" cy="84" r="8" fill="currentColor"/>
+  <path d="M34 84 V52 Q34 26 62 21.5" fill="none" stroke="currentColor" stroke-width="9"/>
+  <path d="M60 9 L88 18 L63 34 Z" fill="currentColor"/>
+  <circle class="apex" cx="51" cy="43" r="6.5"/>
+  <g clip-path="url(#cap)" fill="none" stroke="currentColor" stroke-linejoin="miter" stroke-miterlimit="10">
+    <g stroke-width="8.5">
+      <path d="M118 78 L135 22 L152 78 M124 59 H146"/>
+      <path d="M168.25 78 V30 H184 Q198 30 198 41.5 Q198 53 184 53 H168.25"/>
+      <path d="M244 30 H214.25 V70 H244 M214.25 50 H238"/>
+      <path d="M258 20 L290 80 M290 20 L258 80"/>
+    </g>
+    <g stroke-width="4.5">
+      <path d="M310.25 78 V22 L334.75 78 V22"/>
+      <path d="M350 78 L367 22 L384 78 M356 59 H378"/>
+      <path d="M396 22 L413 78 L430 22"/>
+    </g>
+  </g>
+</svg>

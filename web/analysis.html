@@ -3,10 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>Drive Analysis</title>
+  <title>ApexNav · Log</title>
+  <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="brand/icon-180.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=Inter+Tight:wght@400;500;600;700;800&display=swap" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter+Tight:wght@400;500;600&display=swap" />
   <script src="apex_core.js"></script>
   <script src="themes.js"></script>
   <script src="instruments.js"></script>
@@ -185,8 +187,8 @@
     'use strict';
     const Core = window.ApexCore, Inst = window.ApexInstruments, MPH = Core.MPS_TO_MPH;
     const $ = (id) => document.getElementById(id);
-    let prefs = { theme: 'stage', toggles: { night: false } };
-    try { prefs = Object.assign(prefs, JSON.parse(localStorage.getItem('apex.prefs') || 'null') || {}); } catch (_) {}
+    let prefs = { theme: 'roadbook', toggles: { night: false } };
+    try { prefs = Object.assign(prefs, JSON.parse(localStorage.getItem('apex.prefs') || 'null') || {}); if (prefs.themeV !== 2) prefs.theme = 'roadbook'; } catch (_) {}
     const params = new URLSearchParams(location.search);
     const look = window.ApexThemes.apply(params.get('theme') || prefs.theme, params.has('night') ? params.get('night') === '1' : !!(prefs.toggles && prefs.toggles.night));
     const C = look.colors;
