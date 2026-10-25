@@ -301,7 +301,7 @@
         subtitle: [d.date ? d.date.slice(0, 10) : '', d.device || ''].filter(Boolean).join(' · '),
         lat: col('lat'), lon: col('lon'), dist: col('distance_m'), elev: col('elevation_m'),
         speedMps: col('speed_mph', 1 / MPH), latG: col('lat_g'), lonG: col('lon_g'), camberDeg: col('camber_deg'),
-        envMps: col('target_mph', 1 / MPH), sightM: col('sight_m'), limitMps: col('limit_kph', 1 / 3.6),
+        envMps: col('target_mph', 1 / MPH), sightM: col('sight_m'), limitMps: col('limit_kph', 1 / 3.6), roughG: col('roughness_rms'),
         events: d.events.map(e => ({ ...e })), sectors: d.sectors, sectorM: d.sector_m || 500, alpr: null
       };
     }
@@ -322,7 +322,7 @@
       return {
         id, name, kind: 'route', subtitle: 'Geometry only · not yet profiled',
         lat: rs.lat, lon: rs.lon, dist, elev: null, speedMps: null, latG: null, lonG: null, camberDeg: null,
-        envMps: Array.from(env), sightM: Array.from(sight), limitMps: null,
+        envMps: Array.from(env), sightM: Array.from(sight), limitMps: null, kappa: Array.from(kappa), roughG: null,
         events, sectors: null, sectorM: 500, alpr: null
       };
     }
@@ -554,55 +554,76 @@
       });
     });
     map.once('idle', () => document.querySelectorAll('.maplibregl-ctrl-attrib').forEach(a => a.classList.remove('maplibregl-compact-show')));
-    map.on('dragstart', () => { state.follow = false; $('recenterBtn').classList.add('show'); });
-    $('recenterBtn').addEventListener('click', () => { state.follow = true; $('recenterBtn').classList.remove('show'); resetCamera(); render(true); });
+    $('recenterBtn').addEventListener('click', () => { resumeFollow(); render(false); });
 
     // =======================================================================
-    // 4b. CAMERA RIG — spring-damper follow on its own 60 fps loop.
-    //     Position chases a speed-scaled look-ahead point; bearing aims at the road
-    //     2-4 s ahead, so the view swings into a corner before the car does and settles
-    //     with a slight overshoot (the "whip"). Zoom and pitch breathe with speed.
+    // 4b. CAMERA RIG — a chase cam that reacts to the car and the road, on its own 60 fps loop.
+    //   * springs: position chases a speed-scaled look-ahead point; bearing aims 2-4 s down the
+    //     road (swings into corners before the car does) and settles with an overshoot
+    //   * sway: swings wide in proportion to lateral g, so the car sits on the inside
+    //   * brake/throttle: pitch dips and zoom tightens under braking, pulls out under power
+    //   * road texture: shake from measured pavement roughness, a kick at recorded bumps
+    //   * override: any touch pauses follow; it glides back after FOLLOW_RESUME_S of no touch
     // =======================================================================
     const CAM_FEEL = {
-      steady:  { wPos: 3.6, zPos: 1.00, wBear: 1.5, zBear: 1.00, lead: 0.8, ahead: 1.6 },
-      dynamic: { wPos: 3.0, zPos: 0.90, wBear: 2.4, zBear: 0.70, lead: 1.0, ahead: 2.4 },
-      whip:    { wPos: 2.6, zPos: 0.78, wBear: 3.4, zBear: 0.52, lead: 1.3, ahead: 3.6 }
+      steady:  { wPos: 3.4, zPos: 1.00, wBear: 1.8, zBear: 0.95, lead: 0.8, ahead: 1.8, sway: 0.0, punch: 0.3, shake: 0.25 },
+      dynamic: { wPos: 3.0, zPos: 0.80, wBear: 3.0, zBear: 0.55, lead: 1.0, ahead: 2.6, sway: 1.0, punch: 1.0, shake: 1.0 },
+      whip:    { wPos: 2.6, zPos: 0.65, wBear: 4.2, zBear: 0.42, lead: 1.3, ahead: 3.6, sway: 1.6, punch: 1.5, shake: 1.5 }
     };
+    const FOLLOW_RESUME_S = 6;
     const cam = { ready: false };
     let vehicle = null;
     const clamp01 = (x) => Math.max(0, Math.min(1, x));
+    const clampS = (x, a) => Math.max(-a, Math.min(a, x));
     function setVehicle(v, snap) { vehicle = v; if (snap || !cam.ready) resetCamera(); }
+    function offsetPoint(lat, lon, bearingDegs, m) {
+      const b = bearingDegs * Math.PI / 180;
+      return [lat + m * Math.cos(b) / 110540, lon + m * Math.sin(b) / (111320 * Math.cos(lat * Math.PI / 180))];
+    }
     function aheadPoint(m) {
       if (vehicle.onTrack) { const s = sample(track, state.cursorM + m); return [s.lat, s.lon]; }
-      const b = vehicle.bearing * Math.PI / 180;
-      return [vehicle.lat + m * Math.cos(b) / 110540, vehicle.lon + m * Math.sin(b) / (111320 * Math.cos(vehicle.lat * Math.PI / 180))];
+      return offsetPoint(vehicle.lat, vehicle.lon, vehicle.bearing, m);
     }
     function camTargets() {
       const f = CAM_FEEL[state.camFeel] || CAM_FEEL.dynamic, v = vehicle.vMps;
-      const [cLat, cLon] = aheadPoint(Math.max(15, Math.min(90, v * f.lead)));
+      let [cLat, cLon] = aheadPoint(Math.max(15, Math.min(90, v * f.lead)));
       const [bLat, bLon] = aheadPoint(Math.max(35, Math.min(200, v * f.ahead)));
       const brg = vehicle.onTrack ? bearingDeg(vehicle.lat, vehicle.lon, bLat, bLon) : vehicle.bearing;
-      return { lat: cLat, lon: cLon, bearing: brg, zoom: 16.4 - 1.8 * clamp01((v - 8) / 30), pitch: 42 + 12 * clamp01(v / 35) };
+      // Swing wide: +lat (left turn) pushes the view to the right of the heading.
+      const lat = vehicle.latG || 0, lon = vehicle.lonG || 0;
+      [cLat, cLon] = offsetPoint(cLat, cLon, brg + 90, clampS(lat / 0.6, 1) * 16 * f.sway);
+      const brake = clamp01(-lon / 0.5), power = clamp01(lon / 0.35);
+      return {
+        lat: cLat, lon: cLon, bearing: brg,
+        zoom: 16.4 - 1.8 * clamp01((v - 8) / 30) + f.punch * (0.35 * brake - 0.3 * power),
+        pitch: 42 + 12 * clamp01(v / 35) + f.punch * 5 * brake
+      };
     }
-    function resetCamera() {
+    function resetCamera(fromMap = false) {
       if (!vehicle) return;
       const t = camTargets();
-      Object.assign(cam, { ready: true, lat: t.lat, lon: t.lon, bearing: t.bearing, zoom: t.zoom, pitch: t.pitch,
-        vLat: 0, vLon: 0, vBear: 0, vZoom: 0, vPitch: 0,
-        pLat: vehicle.lat, pLon: vehicle.lon, pBear: vehicle.bearing, pvLat: 0, pvLon: 0, pvBear: 0 });
+      const c = fromMap ? map.getCenter() : null;
+      Object.assign(cam, {
+        ready: true,
+        lat: c ? c.lat : t.lat, lon: c ? c.lng : t.lon, bearing: fromMap ? map.getBearing() : t.bearing,
+        zoom: fromMap ? map.getZoom() : t.zoom, pitch: fromMap ? map.getPitch() : t.pitch,
+        vLat: 0, vLon: 0, vBear: 0, vZoom: 0, vPitch: 0, kick: 0,
+        ...(fromMap ? {} : { pLat: vehicle.lat, pLon: vehicle.lon, pBear: vehicle.bearing, pvLat: 0, pvLon: 0, pvBear: 0 })
+      });
     }
     function spring(x, v, target, w, z, dt) {
       const a = w * w * (target - x) - 2 * z * w * v;
       v += a * dt;
       return [x + v * dt, v];
     }
-    let camLast = 0;
+    // Smooth pseudo-noise (incommensurate sines) for road texture.
+    const texture = (t, seed) => Math.sin(t * 43.1 + seed) * 0.5 + Math.sin(t * 71.7 + seed * 2.3) * 0.3 + Math.sin(t * 97.3 + seed * 4.1) * 0.2;
+    let camLast = 0, lastBumpKey = '';
     function cameraFrame(ts) {
       requestAnimationFrame(cameraFrame);
       const dt = Math.min(0.05, (ts - (camLast || ts)) / 1000);
       camLast = ts;
       if (!vehicle || !cam.ready || dt <= 0) return;
-      // Puck: fast critically-damped glide so 10 Hz GPS reads as continuous motion.
       [cam.pLat, cam.pvLat] = spring(cam.pLat, cam.pvLat, vehicle.lat, 14, 1, dt);
       [cam.pLon, cam.pvLon] = spring(cam.pLon, cam.pvLon, vehicle.lon, 14, 1, dt);
       [cam.pBear, cam.pvBear] = spring(cam.pBear, cam.pvBear, cam.pBear + angleDelta(cam.pBear, vehicle.bearing), 10, 1, dt);
@@ -612,11 +633,55 @@
       [cam.lat, cam.vLat] = spring(cam.lat, cam.vLat, t.lat, f.wPos, f.zPos, dt);
       [cam.lon, cam.vLon] = spring(cam.lon, cam.vLon, t.lon, f.wPos, f.zPos, dt);
       [cam.bearing, cam.vBear] = spring(cam.bearing, cam.vBear, cam.bearing + angleDelta(cam.bearing, t.bearing), f.wBear, f.zBear, dt);
-      [cam.zoom, cam.vZoom] = spring(cam.zoom, cam.vZoom, t.zoom, 1.2, 1, dt);
-      [cam.pitch, cam.vPitch] = spring(cam.pitch, cam.vPitch, t.pitch, 1.2, 1, dt);
-      map.jumpTo({ center: [cam.lon, cam.lat], bearing: (cam.bearing % 360 + 360) % 360, zoom: cam.zoom, pitch: cam.pitch });
+      [cam.zoom, cam.vZoom] = spring(cam.zoom, cam.vZoom, t.zoom, 2.0, 0.8, dt);
+      [cam.pitch, cam.vPitch] = spring(cam.pitch, cam.vPitch, t.pitch, 2.0, 0.8, dt);
+
+      // Road texture: measured roughness (g RMS) sets a fine shake; a recorded bump within 15 m kicks it.
+      const bump = track && allEvents().find(e => e.type === 'bump' && Math.abs(e.dist_m - state.cursorM) < 15);
+      const key = bump ? `${bump.index}` : '';
+      if (bump && key !== lastBumpKey) cam.kick = Math.min(1.5, bump.severity_g * 2.2);
+      lastBumpKey = key;
+      cam.kick *= Math.exp(-dt * 6);
+      const amp = f.shake * (clamp01((vehicle.rough || 0) / 0.25) * 0.6 + cam.kick) * clamp01(vehicle.vMps / 6);
+      const tt = ts / 1000;
+      const [sLat, sLon] = offsetPoint(cam.lat, cam.lon, cam.bearing + 90, amp * 1.2 * texture(tt, 1));
+      map.jumpTo({
+        center: [sLon, sLat],
+        bearing: ((cam.bearing + amp * 0.5 * texture(tt, 7)) % 360 + 360) % 360,
+        zoom: cam.zoom, pitch: Math.max(0, Math.min(60, cam.pitch + amp * 0.9 * texture(tt, 13)))
+      });
     }
     requestAnimationFrame(cameraFrame);
+
+    // Manual override: any user gesture pauses follow; it resumes FOLLOW_RESUME_S after the last touch.
+    let resumeTimer = null, resumeTick = null;
+    function pauseFollow() {
+      state.follow = false;
+      clearTimeout(resumeTimer); clearInterval(resumeTick);
+      $('recenterBtn').classList.add('show');
+      $('recenterBtn').textContent = 'FOLLOW';
+    }
+    function scheduleResume() {
+      clearTimeout(resumeTimer); clearInterval(resumeTick);
+      let left = FOLLOW_RESUME_S;
+      $('recenterBtn').textContent = `FOLLOW IN ${left}`;
+      resumeTick = setInterval(() => { left -= 1; if (left > 0) $('recenterBtn').textContent = `FOLLOW IN ${left}`; }, 1000);
+      resumeTimer = setTimeout(resumeFollow, FOLLOW_RESUME_S * 1000);
+    }
+    function resumeFollow() {
+      clearTimeout(resumeTimer); clearInterval(resumeTick);
+      resetCamera(true);          // glide back from wherever the user left the view
+      state.follow = true;
+      $('recenterBtn').classList.remove('show');
+    }
+    // Pause on first contact: the follow loop's jumpTo would otherwise cancel the gesture.
+    const mapEl = map.getCanvasContainer();
+    let touching = 0;
+    mapEl.addEventListener('pointerdown', () => { touching++; pauseFollow(); }, { capture: true });
+    window.addEventListener('pointerup', () => { if (touching) { touching = 0; if (!state.follow) scheduleResume(); } });
+    window.addEventListener('pointercancel', () => { if (touching) { touching = 0; if (!state.follow) scheduleResume(); } });
+    let wheelIdle = null;
+    mapEl.addEventListener('wheel', () => { pauseFollow(); clearTimeout(wheelIdle); wheelIdle = setTimeout(scheduleResume, 250); }, { capture: true, passive: true });
 
     function loadTrackOnMap() {
       if (!mapReady || !track) return;
@@ -831,7 +896,9 @@
       if (latG != null && (Math.abs(latG) > 0.30 || Math.abs(lonG) > 0.35)) state.spiritedAt = performance.now();
 
       state.bearing = bearing;
-      setVehicle({ lat, lon, bearing, vMps: vMps || 0, onTrack: !!track && idx >= 0 }, snap);
+      const rough = live ? state.live.roughness_rms : (idx >= 0 && track.roughG ? track.roughG[idx] : 0);
+      const simLat = state.mode === 'sim' && idx >= 0 && vMps ? vMps * vMps * (track.kappa ? track.kappa[idx] : 0) / Core.G_STD : null;
+      setVehicle({ lat, lon, bearing, vMps: vMps || 0, onTrack: !!track && idx >= 0, latG: latG != null ? latG : simLat, lonG: lonG || 0, rough }, snap);
 
       const at = (arr) => (idx >= 0 && arr && arr[idx] != null ? arr[idx] : null);
       const sight = at(track && track.sightM);
@@ -871,7 +938,7 @@
       $('playBtn').classList.toggle('on', state.playing);
       if (state.playing) {
         if (state.cursorM >= totalM() - 1) state.cursorM = 0;
-        state.follow = true; $('recenterBtn').classList.remove('show');
+        if (!state.follow) resumeFollow();
         lastTs = 0; if (!raf) raf = requestAnimationFrame(tick);
       }
     }
@@ -888,7 +955,7 @@
       renderDriveList();
       loadTrackOnMap();
       fetchAlpr(t);
-      state.follow = true; $('recenterBtn').classList.remove('show');
+      resumeFollow();
       render(true);
     }
 
@@ -1133,7 +1200,7 @@
       if (!track || state.mode === 'live') return;
       const r = scrubber.getBoundingClientRect();
       state.cursorM = Math.max(0, Math.min(1, (x - r.left) / r.width)) * totalM();
-      state.spoken.clear(); state.follow = true; $('recenterBtn').classList.remove('show');
+      state.spoken.clear(); resumeFollow();
       render(true);
     }
     scrubber.addEventListener('pointerdown', (e) => { scrubbing = true; scrubber.setPointerCapture(e.pointerId); scrubTo(e.clientX); });
@@ -1163,7 +1230,7 @@
       live(frame) {
         if (!frame || !frame.has_fix || !Number.isFinite(frame.lat) || !Number.isFinite(frame.lon)) return;
         state.live = frame; state.liveAt = performance.now();
-        if (state.mode !== 'live') { setPlaying(false); setMode('live'); state.follow = true; render(true); } else render(false);
+        if (state.mode !== 'live') { setPlaying(false); setMode('live'); resumeFollow(); render(true); } else render(false);
       },
       onNative(msg) { if (msg && msg.type === 'recordingSaved') toast(`Saved ${msg.segments} road segments to ${msg.file}`); }
     };
