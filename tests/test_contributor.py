@@ -18,7 +18,7 @@ const drive = (n, rev = false) => {
   for (let i = 0; i < n; i++) { const x = (rev ? n - 1 - i : i) * 5; lat.push(lat0 + 3 / 110540); lon.push(lon0 + x / mLon); }
   return { lat, lon, camber: lat.map((_, i) => (i % 7 === 0 ? null : 4)), rough: lat.map(() => 0.2), crest: lat.map((_, i) => 0.1 + (i % 10) / 100), kappa: lat.map(() => 0.01) };
 };
-const run = (d, m, w = { 77: way }, extra = {}) => C.buildContributions({ drive: d, match: m, ways: w, drivenOn: '2026-10-20', ...extra });
+const run = (d, m, w = { 77: way }, extra = {}) => C.buildContributions({ drive: d, match: m, ways: w, drivenOn: '2026-10-20', driveId: 'drive_test_0001', ...extra });
 const out = {};
 const d = drive(1000);                                           // 5 km drive on a 6 km way
 const m = d.lat.map(() => ({ way: 77, cls: 'tertiary' }));
@@ -34,6 +34,7 @@ out.trimmed = a[0].bins.length;
 out.offRoad = run({ ...d, lat: d.lat.map((v) => v + 200 / 110540) }, m).length;
 out.noRough = run({ ...d, rough: d.rough.map(() => null) }, m).length;
 out.eligible = [C.eligible({ rough: [1], kappa: [1], date: '2026-10-20T10:00' }, Date.parse('2026-10-25')), C.eligible({ rough: [1], kappa: [1], date: '2026-09-01T10:00' }, Date.parse('2026-10-25')), C.eligible({ date: '2026-10-24' }, Date.parse('2026-10-25'))];
+out.driveIds = [C.driveIdFor({ id: 'rec_Dry Ridge.csv', date: '2026-10-22T09:00' }), C.driveIdFor({ id: 'rec_Dry Ridge.csv', date: '2026-10-22T09:00' }), C.driveIdFor({ id: 'x', date: '' })];
 // payload contains only the allowed keys
 out.keys = Object.keys(a[0]).sort().join() + '|' + Object.keys(a[0].bins[0]).sort().join();
 // network shell with a fake fetch: Valhalla trace_attributes + Overpass, then upload
@@ -110,14 +111,14 @@ def test_eligibility_window(result):
 
 
 def test_payload_has_no_coordinates_or_times(result):
-    assert result["keys"] == "bins,dir,driven_on,way_id|cam,crest,i,k,rough"
+    assert result["keys"] == "bins,dir,drive_id,driven_on,way_id|cam,crest,i,k,rough"
 
 
 def test_network_shell_matches_fetches_and_uploads_bins_only(result):
     sh = result["shell"]
     assert sh["res"] == {"built": 1, "sent": 1} and sh["posted"] == 1
     assert sh["valhalla"] == 1 and sh["overpass"] == 1
-    assert sh["keys"] == "bins,dir,driven_on,way_id"
+    assert sh["keys"] == "bins,dir,drive_id,driven_on,way_id"
 
 
 def test_server_refusal_stops_uploading(result):
@@ -150,3 +151,10 @@ def test_series_marks_unmeasured_samples_null(result):
     assert s["known"] == 180                                      # bins 200..399 measured, but camber is unknown for 20 of them
     assert s["unknownRough"] == 800                               # roughness known for exactly the 200 measured bins
     assert s["n"] == 3 and 195 <= s["first"] <= 205
+
+
+def test_drive_id_is_stable_and_valid(result):
+    ids = result["driveIds"]
+    assert ids[0] == ids[1] and ids[0] != ids[2]
+    import re
+    assert all(re.fullmatch(r"[A-Za-z0-9_-]{8,64}", i) for i in ids)

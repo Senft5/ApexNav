@@ -36,7 +36,7 @@
    * ways:  { [wayId]: [[lat, lon], ...] } OSM geometry, bins count from the way's first node
    * Returns contributions in the /api/contribute shape. Samples within trimM of either end are dropped (hides where a trip starts and ends).
    */
-  function buildContributions({ drive, match, ways, drivenOn, trimM = 1000 }) {
+  function buildContributions({ drive, match, ways, drivenOn, driveId, trimM = 1000 }) {
     const trim = Math.round(trimM / BIN_M), out = [], best = new Map();
     for (const run of locate({ drive, match, ways, from: trim, to: drive.lat.length - trim })) {   // keep the longest run per (way, direction)
       const byBin = new Map();
@@ -55,7 +55,7 @@
       const span = bins[bins.length - 1].i - bins[0].i + 1;
       if (bins.length / span < 0.8) continue;                          // would be rejected as scattered
       const key = `${run.way}|${run.dir}`;
-      if (!best.has(key) || best.get(key).bins.length < bins.length) best.set(key, { way_id: run.way, dir: run.dir, driven_on: drivenOn, bins: bins.slice(0, MAX_BINS) });
+      if (!best.has(key) || best.get(key).bins.length < bins.length) best.set(key, { way_id: run.way, dir: run.dir, driven_on: drivenOn, drive_id: driveId, bins: bins.slice(0, MAX_BINS) });
     }
     return [...best.values()];
   }
@@ -121,6 +121,8 @@
     return ways;
   }
 
+  /** Stable per drive so a retried upload is recognised as the same drive (server: one payout per person per road). */
+  const driveIdFor = (d) => ('d_' + String(d.id || d.date || 'drive').replace(/[^A-Za-z0-9_-]/g, '_') + '_' + String(d.date || '').replace(/[^0-9]/g, '')).slice(0, 64).padEnd(8, '_');
   const ageDays = (iso, now) => (now - Date.parse(iso)) / 86400_000;
   /** True when a drive is recent enough for the server's 14-day window and has the columns we need. */
   const eligible = (d, now = Date.now()) => !!(d && d.rough && d.kappa && d.date && ageDays(d.date, now) <= MAX_AGE_DAYS && ageDays(d.date, now) >= -1);
@@ -131,7 +133,7 @@
     const match = await matchDrive(drive, opts.fetch);
     const ids = [...new Set(match.filter((m) => m && m.way != null).map((m) => m.way))];
     const ways = await fetchWays(ids, opts.fetch);
-    const list = buildContributions({ drive, match, ways, drivenOn: drive.date.slice(0, 10), trimM: opts.trimM });
+    const list = buildContributions({ drive, match, ways, drivenOn: drive.date.slice(0, 10), driveId: driveIdFor(drive), trimM: opts.trimM });
     let sent = 0;
     for (const c of list) {
       const r = await post(c);
@@ -197,6 +199,6 @@
     return -6 * Math.min(1, m.coverage * 2) * rough;
   }
 
-  const api = { measuredSeries, seriesFrom, measuredAdjust, measuredAlong, summarize, locate, buildContributions, matchDrive, fetchWays, contributeDrive, eligible, project, cumulative, SKIP_CLASSES };
+  const api = { driveIdFor, measuredSeries, seriesFrom, measuredAdjust, measuredAlong, summarize, locate, buildContributions, matchDrive, fetchWays, contributeDrive, eligible, project, cumulative, SKIP_CLASSES };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexContributor = api;
 })(typeof window !== 'undefined' ? window : globalThis);

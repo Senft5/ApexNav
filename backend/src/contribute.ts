@@ -1,20 +1,23 @@
-// Crowd road data intake (docs/BACKEND.md sections 3-4). Bins only, never a trace. Uploads wait in ingest_pending
-// until the nightly job (nightly.ts) ranks and merges them. Nothing here ever returns another person's data.
+// Crowd road data intake, in real time (docs/BACKEND.md sections 3-4). Bins only, never a trace. A phone streams a drive as chunks
+// (a run of 5 m bins on one road); each chunk is merged into the per-bin statistics immediately and earns points immediately.
+// Nothing here ever returns another person's data.
 import { Env, HttpError, body } from "./util";
 import type { Viewer } from "./auth";
+import { isoWeek } from "./points";
 
-export const LIMITS = { maxBins: 2000, minBins: 20, maxAgeDays: 14, kmPerDay: 600, kmPerWeek: 1500, uploadsPerHour: 30, minCoverage: 0.8 };
+export const LIMITS = { maxBins: 2000, minBins: 20, maxAgeDays: 14, kmPerDay: 600, kmPerWeek: 1500, uploadsPerHour: 300, minCoverage: 0.8 };
 const BIN_KM = 0.005;
 
 export interface Bin { i: number; cam: number | null; rough: number; crest: number; k: number }
-export interface Contribution { wayId: number; dir: 0 | 1; drivenOn: string; bins: Bin[]; km: number }
+export interface Contribution { wayId: number; dir: 0 | 1; drivenOn: string; driveId: string; bins: Bin[]; km: number }
 
 const isNum = (v: unknown, lo: number, hi: number): v is number => typeof v === "number" && Number.isFinite(v) && v >= lo && v <= hi;
 const bad = (why: string) => new HttpError(400, why);
 
 /** Pure validation: shape, ranges, date window, contiguous coverage. Throws HttpError(400). */
 export function validateContribution(raw: Record<string, unknown>, nowMs = Date.now()): Contribution {
-  const wayId = raw.way_id, dir = raw.dir, day = raw.driven_on, bins = raw.bins;
+  const wayId = raw.way_id, dir = raw.dir, day = raw.driven_on, bins = raw.bins, driveId = raw.drive_id;
+  if (typeof driveId !== "string" || !/^[A-Za-z0-9_-]{8,64}$/.test(driveId)) throw bad("bad_drive_id");
   if (typeof wayId !== "number" || !Number.isSafeInteger(wayId) || wayId < 1) throw bad("bad_way_id");
   if (dir !== 0 && dir !== 1) throw bad("bad_dir");
   if (typeof day !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(day)) throw bad("bad_driven_on");
@@ -39,13 +42,15 @@ export function validateContribution(raw: Record<string, unknown>, nowMs = Date.
   }
   const lo = Math.min(...seen), hi = Math.max(...seen);
   if (out.length / (hi - lo + 1) < LIMITS.minCoverage) throw bad("not_contiguous");   // real drives cover a run of the road, not scattered bins
-  return { wayId, dir, drivenOn: day, bins: out, km: out.length * BIN_KM };
+  return { wayId, dir, drivenOn: day, driveId, bins: out, km: out.length * BIN_KM };
 }
 
-async function dedupeHash(env: Env, userId: string, wayId: number, dir: number): Promise<Uint8Array> {
+const MULTIPLIER = [3, 2] as const;                 // first and second person to map a road+direction; then 1x
+
+async function hmac(env: Env, text: string): Promise<Uint8Array> {
   if (!env.PEPPER) throw new HttpError(503, "contribute_not_configured");
   const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(env.PEPPER), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-  return new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(`${userId}|${wayId}|${dir}`)));
+  return new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(text)));
 }
 
 export async function setContribute(env: Env, v: Viewer, req: Request): Promise<void> {
@@ -54,29 +59,76 @@ export async function setContribute(env: Env, v: Viewer, req: Request): Promise<
   await env.DB.prepare("UPDATE members SET contribute = ? WHERE user_id = ?").bind(on ? 1 : 0, v.id).run();
 }
 
-export async function contribute(env: Env, v: Viewer, req: Request): Promise<{ accepted: true; bins: number }> {
+/** Merges one bin into road_bins in a single atomic statement (Welford running mean / variance, computed from the old row). */
+function mergeBin(env: Env, wayId: number, dir: number, b: Bin): D1PreparedStatement {
+  return env.DB.prepare(
+    `INSERT INTO road_bins (way_id, dir, bin_idx, n, camber_mean, camber_m2, camber_n, rough_mean, rough_m2, crest_peak)
+     VALUES (?1, ?2, ?3, 1, ?4, CASE WHEN ?4 IS NULL THEN NULL ELSE 0 END, CASE WHEN ?4 IS NULL THEN 0 ELSE 1 END, ?5, 0, ?6)
+     ON CONFLICT (way_id, dir, bin_idx) DO UPDATE SET
+       camber_mean = CASE WHEN ?4 IS NULL THEN camber_mean WHEN camber_n = 0 OR camber_mean IS NULL THEN ?4 ELSE camber_mean + (?4 - camber_mean) / (camber_n + 1) END,
+       camber_m2   = CASE WHEN ?4 IS NULL THEN camber_m2 WHEN camber_n = 0 OR camber_mean IS NULL THEN 0
+                          ELSE camber_m2 + (?4 - camber_mean) * (?4 - (camber_mean + (?4 - camber_mean) / (camber_n + 1))) END,
+       camber_n    = camber_n + (?4 IS NOT NULL),
+       rough_mean  = rough_mean + (?5 - rough_mean) / (n + 1),
+       rough_m2    = COALESCE(rough_m2, 0) + (?5 - rough_mean) * (?5 - (rough_mean + (?5 - rough_mean) / (n + 1))),
+       crest_peak  = COALESCE(crest_peak, ?6) + (?6 - COALESCE(crest_peak, ?6)) / (n + 1),
+       n           = n + 1`,
+  ).bind(wayId, dir, b.i, b.cam, b.rough, b.crest);
+}
+
+/**
+ * Who earns what for this chunk. The first person to upload a road+direction gets 3x, the second 2x, everyone after 1x (km x multiplier).
+ * Points are earned on a person's FIRST drive on a road only (later drives still improve the data, they just do not pay again).
+ * A drive's later chunks keep the multiplier its first chunk earned. Returns 0 when nothing is owed.
+ */
+async function multiplierFor(env: Env, userId: string, c: Contribution): Promise<number> {
+  const holder = await hmac(env, `p|${userId}|${c.wayId}|${c.dir}`), drive = await hmac(env, `d|${userId}|${c.driveId}`);
+  const slot = await env.DB.prepare("SELECT slot FROM rank_slots WHERE way_id = ? AND dir = ? AND holder = ?").bind(c.wayId, c.dir, holder.buffer).first<{ slot: number }>();
+  const seen = await env.DB.prepare("SELECT d FROM seen WHERE h = ?").bind(holder.buffer).first<{ d: ArrayBuffer | null }>();
+  if (seen) {
+    const same = seen.d && new Uint8Array(seen.d).every((v, i) => v === drive[i]) && new Uint8Array(seen.d).length === drive.length;
+    return same ? (slot ? MULTIPLIER[slot.slot - 1] : 1) : 0;                          // another drive of the same road already paid
+  }
+  let mult = 1;
+  for (let s = 1; s <= MULTIPLIER.length; s++) {                                       // the primary key makes the claim atomic
+    const r = await env.DB.prepare("INSERT OR IGNORE INTO rank_slots (way_id, dir, slot, user_id, driven_on, holder) VALUES (?, ?, ?, NULL, ?, ?)")
+      .bind(c.wayId, c.dir, s, c.drivenOn, holder.buffer).run();
+    if (r.meta.changes) { mult = MULTIPLIER[s - 1]; break; }
+  }
+  await env.DB.prepare("INSERT OR IGNORE INTO seen (h, d) VALUES (?, ?)").bind(holder.buffer, drive.buffer).run();
+  return mult;
+}
+
+export async function contribute(env: Env, v: Viewer, req: Request): Promise<{ accepted: true; bins: number; duplicate?: true }> {
   const opted = await env.DB.prepare("SELECT contribute FROM members WHERE user_id = ?").bind(v.id).first<{ contribute: number }>();
   if (!opted?.contribute) throw new HttpError(403, "contribution_not_enabled");
   const c = validateContribution(await body<Record<string, unknown>>(req));
 
-  const q = (sql: string, ...a: unknown[]) => env.DB.prepare(sql).bind(...a).first<{ s: number }>();
-  const hour = await q("SELECT COUNT(*) AS s FROM ingest_pending WHERE user_id = ? AND received_at > datetime('now', '-1 hour')", v.id);
-  if ((hour?.s ?? 0) >= LIMITS.uploadsPerHour) throw new HttpError(429, "rate_limited");
-  const day = await q("SELECT COALESCE(SUM(km), 0) AS s FROM ingest_pending WHERE user_id = ? AND driven_on = ?", v.id, c.drivenOn);
-  if ((day?.s ?? 0) + c.km > LIMITS.kmPerDay) throw new HttpError(429, "daily_km_cap");
-  const week = await q("SELECT COALESCE(SUM(km), 0) AS s FROM ingest_pending WHERE user_id = ? AND received_at > datetime('now', '-7 days')", v.id);
-  if ((week?.s ?? 0) + c.km > LIMITS.kmPerWeek) throw new HttpError(429, "weekly_km_cap");
+  // the same chunk sent twice (a retry after a dropped connection) is acknowledged but merged once
+  const lo = Math.min(...c.bins.map((b) => b.i)), hi = Math.max(...c.bins.map((b) => b.i));
+  const chunk = await hmac(env, `c|${v.id}|${c.driveId}|${c.wayId}|${c.dir}|${lo}|${hi}`);
+  if (await env.DB.prepare("SELECT 1 FROM seen WHERE h = ?").bind(chunk.buffer).first()) return { accepted: true, bins: c.bins.length, duplicate: true };
 
-  // one contribution per person per way+direction, ever: the hash is how we know without keeping a readable who-drove-what list
-  const h = await dedupeHash(env, v.id, c.wayId, c.dir);
-  const packed = JSON.stringify({ i: c.bins.map((b) => b.i), cam: c.bins.map((b) => b.cam), rough: c.bins.map((b) => b.rough), crest: c.bins.map((b) => b.crest), k: c.bins.map((b) => b.k) });
-  try {
-    await env.DB.batch([
-      env.DB.prepare("INSERT INTO seen (h) VALUES (?)").bind(h.buffer),
-      env.DB.prepare("INSERT INTO ingest_pending (user_id, way_id, dir, driven_on, km, bins) VALUES (?, ?, ?, ?, ?, ?)").bind(v.id, c.wayId, c.dir, c.drivenOn, c.km, packed),
-    ]);
-  } catch {
-    throw new HttpError(409, "already_contributed");
+  const now = new Date(), hourKey = now.toISOString().slice(0, 13);
+  const sum = (sql: string, ...a: unknown[]) => env.DB.prepare(sql).bind(...a).first<{ u: number; k: number }>();
+  const hour = await sum("SELECT COALESCE(SUM(uploads), 0) AS u, 0 AS k FROM upload_counts WHERE user_id = ? AND bucket = ?", v.id, hourKey);
+  if ((hour?.u ?? 0) >= LIMITS.uploadsPerHour) throw new HttpError(429, "rate_limited");
+  const day = await sum("SELECT 0 AS u, COALESCE(SUM(km), 0) AS k FROM upload_counts WHERE user_id = ? AND bucket >= ?", v.id, new Date(now.getTime() - 86400_000).toISOString().slice(0, 13));
+  if ((day?.k ?? 0) + c.km > LIMITS.kmPerDay) throw new HttpError(429, "daily_km_cap");
+  const week = await sum("SELECT 0 AS u, COALESCE(SUM(km), 0) AS k FROM upload_counts WHERE user_id = ? AND bucket >= ?", v.id, new Date(now.getTime() - 7 * 86400_000).toISOString().slice(0, 13));
+  if ((week?.k ?? 0) + c.km > LIMITS.kmPerWeek) throw new HttpError(429, "weekly_km_cap");
+
+  const mult = await multiplierFor(env, v.id, c);
+  const stmts: D1PreparedStatement[] = [
+    env.DB.prepare("INSERT INTO seen (h) VALUES (?)").bind(chunk.buffer),                                  // fails (409 below) if a parallel copy won the race
+    ...c.bins.map((b) => mergeBin(env, c.wayId, c.dir, b)),
+    env.DB.prepare("INSERT INTO upload_counts (user_id, bucket, uploads, km) VALUES (?1, ?2, 1, ?3) ON CONFLICT (user_id, bucket) DO UPDATE SET uploads = uploads + 1, km = km + ?3").bind(v.id, hourKey, c.km),
+    env.DB.prepare("DELETE FROM upload_counts WHERE bucket < ?").bind(new Date(now.getTime() - 8 * 86400_000).toISOString().slice(0, 13)),
+  ];
+  if (mult > 0) {
+    stmts.push(env.DB.prepare("INSERT INTO points_ledger (user_id, iso_week, octane) VALUES (?1, ?2, ?3) ON CONFLICT (user_id, iso_week) DO UPDATE SET octane = octane + ?3")
+      .bind(v.id, isoWeek(now.getTime()), c.km * mult));
   }
+  try { await env.DB.batch(stmts); } catch { return { accepted: true, bins: c.bins.length, duplicate: true }; }
   return { accepted: true, bins: c.bins.length };
 }

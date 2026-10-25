@@ -28,21 +28,18 @@ drive → phone profiles it (core/ApexKit, offline) → [opt-in + online] → bi
       → phone downloads merged values for roads it drives (cached, versioned)
 ```
 - Contributing is opt-in per account (default off). Without it nothing leaves the phone.
+- **Real time (owner decision 2026-10-25):** no holding period and no nightly job. A drive streams as chunks (a run of 5 m bins on one road); each chunk is merged into `road_bins` and paid in the same request. A retried chunk is recognised and merged once.
 - Client trims a random 0.5–1.5 km at each end of a trip, skips residential/service ways, spreads one trip's upload over days.
 - **Small-group caveat:** with under 20 users, "at least k contributors" hides little. `min_contributors` is a setting (friends phase: 1,
   data visible to signed-in members only). Raise to 3 before any public launch.
 
 ## 4. Points ("Octane")
 - **km of newly mapped road × multiplier, per road segment and direction** (one OSM way, one direction): **1st 3×, 2nd 2×, then 1×.**
-- Order is by **drive date**, so an offline phone keeps its place. Slots re-sort by `(driven_on, received_at)` for 14 days after the
-  first drive, then freeze. One account, one rank per way and direction. The second contributor also verifies the first.
-- Totals land in `points_ledger` when a road's group freezes (so a brand-new road's points arrive 14 days after the first drive). Public: points only, never who was first.
-- Anti-cheat (no device attestation exists, so cheap checks): per-bin curvature must correlate with the claimed OSM polyline and cover
-  ≥ 60% of the way; 600 km/day and 1,500 km/week caps; 30 uploads/hour; `driven_on` within 14 days of upload; replays across accounts
-  (per-bin vectors correlating > 0.98 with a pending upload) are quarantined; first place stays provisional until a different member's data agrees.
+- Order is by **arrival**: the first person to upload a road+direction gets 3x, the second 2x, everyone after 1x. A person earns points on their **first drive** on a road only (later drives still improve the data). All chunks of one drive keep the multiplier its first chunk earned. Points land immediately; public: totals only, never who was first. An offline phone that uploads late simply ranks later.
+- Anti-cheat (no device attestation exists, so cheap checks): value ranges and contiguity checks, 600 km/day and 1,500 km/week caps, 300 uploads/hour, `driven_on` within 14 days of upload. The cross-account replay check was removed with the holding period (nothing to compare against); with an invite-only group of friends that risk is accepted. Privacy: the server keeps no coordinates, no times beyond the day, and `rank_slots`/`seen` hold only HMAC values keyed by a server secret.
 
 ## 5. Data model (backend/migrations, D1 = SQLite)
-Applied to the production database `apexnav-db`: **0001_init.sql**, **0002_segment_sharing.sql** and **0003_camber_count.sql**.
+Applied to both `apexnav-db` and `apexnav-preview-db`: **0001_init.sql**, **0002_segment_sharing.sql**, **0003_camber_count.sql**, **0004_realtime_ingest.sql**.
 
 | Group | Tables |
 |---|---|
@@ -77,7 +74,7 @@ Google setup (owner, free): Google Cloud console → OAuth consent screen (Exter
 |---|---|
 | Web app + API | One Cloudflare Worker `apexnav` (`wrangler.jsonc`): static files from `web/`, `/api/*` to `backend/src/index.ts`. Live at https://apexnav.senftns.workers.dev/ |
 | Database | D1 `apexnav-db` (US East); previews use a separate empty `apexnav-preview-db` (`previews` block in wrangler.jsonc; apply every migration to both). Migrations in `backend/migrations`; applied through the Cloudflare connection; CI runs the same SQL in tests |
-| Nightly job | Cron `17 7 * * *` UTC (`backend/src/nightly.ts`): waits until 14 days after a road's earliest drive, then ranks by drive date, merges `ingest_pending` into `road_bins` (running mean/variance), writes `points_ledger` (3x/2x/1x), discards replays, freezes the slots with the user cleared |
+| Merging | In the upload request (`backend/src/contribute.ts`): one atomic SQL upsert per bin (running mean/variance), points written immediately. No cron, no nightly job. |
 | Convoy (later) | Durable Objects + WebSockets |
 | Photos, routing tiles, backups | R2 (free allowance, no download fees) |
 | CI | `.github/workflows/core-tests.yml` job `backend`: type check, vitest, `wrangler deploy --dry-run` |
@@ -111,6 +108,6 @@ points 3×/2×/1× per direction of each road; time sharing opt-in per friend an
 - Remaining tests to write when the pieces exist: ingest window/backdating/ranking, nightly merge, account deletion cascade + export, highlights rate limits.
 
 ## 12. Status and build order
-Built: migrations 0001–0003 (live), auth, invites, friends, blocks, crews, grants, boards, segments (with sharing), highlights API, **road-data intake** (`POST /api/contribute`, opt-in `PUT /api/me/contribute`: date window, ranges, contiguity, km/hour caps, hashed one-per-road dedupe), **nightly rank/merge/points** and `GET /api/points` (own weekly totals + a handle/total board), **account export + deletion** (`GET /api/me/export`, `DELETE /api/me` with `{confirm:"DELETE"}`: erases everything tied to the person, dissolves crews they own, removes what others held about them; merged road data is anonymous and stays), 76 tests, CI job, Worker wiring + cron.
+Built: migrations 0001–0003 (live), auth, invites, friends, blocks, crews, grants, boards, segments (with sharing), highlights API, **real-time road-data intake** (`POST /api/contribute`, opt-in `PUT /api/me/contribute`: ranges, contiguity, km/hour caps, idempotent chunks, merge and 3x/2x/1x points in the same request) and `GET /api/points` (own weekly totals + a handle/total board), **account export + deletion** (`GET /api/me/export`, `DELETE /api/me` with `{confirm:"DELETE"}`: erases everything tied to the person, dissolves crews they own, removes what others held about them; merged road data is anonymous and stays), 76 tests, CI job, Worker wiring + cron.
 Phone side: `web/contributor.js` (map-match with Valhalla, way geometry from Overpass, bin by arc length along the way; spec in section 3). Next: (1) owner sets the Google secrets, `OWNER_EMAIL` and `PEPPER`; (2) web sync (IndexedDB → `/api/segments`, `/api/board`, `/api/highlights`) and a phone-side contributor that builds bins from a profiled drive;
 (3) read side: serve merged `road_bins` to the phone and feed measured data into stage scoring; (5) convoy.

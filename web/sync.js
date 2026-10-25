@@ -49,7 +49,7 @@
   async function contribute(c) {
     try {
       const r = await fetch('/api/contribute', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json', 'x-apexnav': '1' },
-        body: JSON.stringify({ way_id: c.way_id, dir: c.dir, driven_on: c.driven_on, bins: c.bins }) });
+        body: JSON.stringify({ way_id: c.way_id, dir: c.dir, driven_on: c.driven_on, drive_id: c.drive_id, bins: c.bins }) });
       return r.status === 202 ? true : r.status === 403 || r.status === 429 ? 'stop' : false;
     } catch (_) { return 'stop'; }
   }

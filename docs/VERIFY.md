@@ -37,9 +37,8 @@ What is unverified: Valhalla `trace_attributes` map-matching, Overpass way geome
 3. Web analysis page → **HISTORY → IMPORT RECORDING** (the file must be imported after this build; older imports lack the roughness columns). Drive tab should show the drive.
 4. Main page → Account → turn **ROAD DATA** on. Analysis page → Drive tab: a **Share road data** panel appears → press SHARE on the drive.
    Good: "SHARED n roads". Bad: "NO USABLE ROADS" (everything too short/private/unmatched) or a matching error in the button text.
-5. **Prove it landed:** Cloudflare dashboard → D1 → `apexnav-db` → Console → `SELECT way_id, dir, km, driven_on FROM ingest_pending;` — you should see one row per road. (Rows wait 14 days before they merge and earn points; that is by design.)
-6. **Road-feel lane:** needs merged data, which appears after the 14-day hold. To test sooner, run in the D1 console (only on your own test data): `UPDATE ingest_pending SET driven_on = date('now','-20 day');` then let the nightly job run (it fires at 07:17 UTC; I am not certain the dashboard offers a manual run button, so if you want it sooner tell me and I will add a members-only admin endpoint to run it once). Afterwards `SELECT COUNT(*) FROM road_bins;` should be > 0, and reopening the Drive tab for that drive should show the **ROAD FEEL · MEMBERS** lane and a "Measured by members" line on the cockpit route panel.
-   (If you test this way, delete your test rows afterwards: `DELETE FROM road_bins; DELETE FROM rank_slots; DELETE FROM seen;` while there is no real data yet.)
+5. **Prove it landed (no waiting any more):** Cloudflare dashboard → D1 → `apexnav-db` → Console → `SELECT way_id, dir, COUNT(*) AS bins, MAX(n) AS passes FROM road_bins GROUP BY way_id, dir;` — one row per road you drove. `SELECT * FROM points_ledger;` shows your points (3x if you were first on a road).
+6. **Road-feel lane:** reopen the Drive tab for that drive; the **ROAD FEEL · MEMBERS** lane and the cockpit's "Measured by members" line now show your own data immediately. (If you want to clear your test data afterwards: `DELETE FROM road_bins; DELETE FROM rank_slots; DELETE FROM seen; DELETE FROM points_ledger; DELETE FROM upload_counts;` while there is no real data yet.)
 Report back: the two curl results (or errors) and what the Share button said.
 
 ## 3. Screen reader (about 10 minutes)

@@ -10,7 +10,7 @@ import {
 } from "./social";
 import { deleteAccount, exportMyData } from "./account";
 import { contribute, setContribute } from "./contribute";
-import { nightlyMerge, pointsFor } from "./nightly";
+import { pointsFor } from "./points";
 import { roadBins } from "./roads";
 import { highlightCreate, highlightDelete, highlightList, highlightRate, highlightReport } from "./highlights";
 import { segmentAdopt, segmentCreate, segmentDelete, segmentList, segmentShare, segmentsSharedWithMe } from "./segments";
@@ -74,10 +74,6 @@ on("POST", "/api/board", async (req, env) => json(await publish(env, await requi
 on("GET", "/api/board/:canon", async (req, env, m) => json(await boardFor(env, await requireMember(req, env), m.groups!.canon)));
 
 export default {
-  /** Cron trigger (wrangler.jsonc "triggers"): rank, merge and score the staged contributions. */
-  async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
-    ctx.waitUntil(nightlyMerge(env));
-  },
   async fetch(req: Request, env: Env): Promise<Response> {
     try {
       const url = new URL(req.url);
