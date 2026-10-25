@@ -13,6 +13,8 @@
   <script src="apex_core.js"></script>
   <script src="stages.js"></script>
   <script src="sync.js"></script>
+  <script src="sensors.js"></script>
+  <script src="recording.js"></script>
   <script src="contributor.js"></script>
   <script src="themes.js"></script>
   <script src="instruments.js"></script>
@@ -86,6 +88,12 @@
     /* ---------------- binnacle ---------------- */
     .binnacle { background: var(--panel); color: var(--panel-ink); border-top: 1px solid var(--rule); padding: 6px 10px calc(8px + var(--safe-bottom)); display: grid; gap: 6px; }
     .transport { display: grid; grid-template-columns: auto auto minmax(0, 1fr); gap: 6px; align-items: center; }
+    .modesw { display: inline-flex; border: 1px solid var(--rule); background: var(--panel); }
+    .modesw button { font: inherit; font-size: 11px; font-weight: 700; letter-spacing: 0.12em; padding: 7px 12px; background: transparent; color: var(--panel-dim); border: none; cursor: pointer; }
+    .modesw button.on { background: var(--panel-ink); color: var(--panel); }
+    .drivebar { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--rule); }
+    .dbstat { font-size: 11px; letter-spacing: 0.08em; color: var(--panel-ink); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .dbstat b { color: var(--accent); }
     .key { height: 28px; min-width: 42px; padding: 0 10px; font-size: 11px; font-weight: 700; letter-spacing: 0.12em; border: 1px solid var(--rule); color: var(--panel-ink); background: transparent; }
     .key.on { color: var(--accent); border-color: var(--accent); }
     .scrubber { position: relative; height: 28px; border: 1px solid var(--rule); cursor: ew-resize; touch-action: none; }
@@ -228,6 +236,10 @@
     <section class="stage">
       <div id="map"></div>
       <div class="plates">
+        <div class="modesw" role="group" aria-label="Mode">
+          <button id="modeReplay" class="on" aria-pressed="true">REPLAY</button>
+          <button id="modeDrive" aria-pressed="false">DRIVE</button>
+        </div>
         <div class="plate" id="modePlate">REPLAY</div>
         <button class="plate" id="recenterBtn">RECENTER</button>
       </div>
@@ -314,7 +326,11 @@
     </section>
 
     <section class="binnacle" id="binnacle">
-      <div class="transport">
+      <div class="drivebar" id="driveBar" hidden>
+        <div class="dbstat" id="driveStat" role="status" aria-live="polite">Starting GPS...</div>
+        <button class="key" id="driveEnd">END DRIVE</button>
+      </div>
+      <div class="transport" id="transport">
         <button class="key" id="playBtn">RUN</button>
         <button class="key" id="rateBtn">1X</button>
         <div class="scrubber" id="scrubber"><canvas id="scrubCanvas"></canvas></div>
@@ -1606,19 +1622,70 @@
     window.addEventListener('resize', () => render(true));
 
     // =======================================================================
+    // 10b. DRIVE MODE (web): real GPS + motion, recorded to this device. REPLAY plays a saved drive; the two never mix.
+    // =======================================================================
+    const drive = { sensors: null, rec: null, status: null, frames: 0 };
+    function paintModeSwitch() {
+      const on = state.mode === 'live';
+      $('modeReplay').classList.toggle('on', !on); $('modeReplay').setAttribute('aria-pressed', String(!on));
+      $('modeDrive').classList.toggle('on', on); $('modeDrive').setAttribute('aria-pressed', String(on));
+      $('driveBar').hidden = !on; $('transport').hidden = on;
+    }
+    function paintDriveStat() {
+      const s = drive.status || {}, r = drive.rec, bits = [];
+      bits.push(s.gps === 'on' ? '<b>GPS</b>' : s.gps === 'denied' ? 'GPS BLOCKED' : s.gps === 'weak' ? 'GPS WEAK' : s.gps === 'error' ? 'GPS ERROR' : 'WAITING FOR GPS');
+      bits.push(s.motion === 'on' ? '<b>MOTION</b>' : s.motion === 'denied' ? 'MOTION OFF (blocked)' : s.motion === 'unavailable' ? 'NO MOTION SENSOR' : 'MOTION...');
+      if (r && r.samples > 0) bits.push(`<b>REC</b> ${(r.km / 1.609344).toFixed(2)} mi`);
+      if (s.wake === 'unavailable') bits.push('keep screen on');
+      $('driveStat').innerHTML = bits.join(' · ') + (s.message ? `<br><span style="letter-spacing:0">${s.message}</span>` : '');
+    }
+    async function enterDrive() {
+      if (state.mode === 'live' && drive.sensors) return;
+      if (state.mode === 'live') return;                                   // native app is feeding frames already
+      setPlaying(false);
+      drive.rec = new ApexSensors.Recorder(); drive.status = { gps: 'waiting', motion: 'off', wake: 'off', message: '' }; drive.frames = 0;
+      setMode('live'); paintModeSwitch(); paintDriveStat();
+      try {
+        drive.sensors = await ApexSensors.start({
+          onStatus: (s) => { drive.status = s; paintDriveStat(); },
+          onFrame: (fr) => { if (!fr.has_fix) return; drive.frames++; drive.rec.add(fr); window.apex.live(fr); paintDriveStat(); },
+        });
+      } catch (e) { toast(e.message || 'Could not start GPS.'); leaveDrive(false); }
+    }
+    async function leaveDrive(save) {
+      const rec = drive.rec, sensors = drive.sensors;
+      drive.sensors = null; drive.rec = null;
+      if (sensors) sensors.stop();
+      state.live = null;
+      setMode(track && track.kind === 'route' ? 'sim' : 'replay'); paintModeSwitch(); render(true);
+      if (save && rec && rec.km >= 0.3 && rec.samples >= 60) {
+        try {
+          const when = new Date(rec.startedAt || Date.now()), pad = (n) => String(n).padStart(2, '0');
+          const stamp = `${when.getFullYear()}${pad(when.getMonth() + 1)}${pad(when.getDate())}_${pad(when.getHours())}${pad(when.getMinutes())}${pad(when.getSeconds())}`;
+          const d = ApexRecording.parse(Core, rec.toCsv(), `web_${stamp}.csv`, { source: 'web-gps', date: `${when.getFullYear()}-${pad(when.getMonth() + 1)}-${pad(when.getDate())}T${pad(when.getHours())}:${pad(when.getMinutes())}`, name: `Drive ${when.toLocaleDateString()} ${pad(when.getHours())}:${pad(when.getMinutes())}` });
+          await ApexRecording.store(d);
+          toast(`Saved ${(rec.km / 1.609344).toFixed(1)} mi. Open ANALYSIS to see it.`);
+        } catch (e) { toast(`Could not save the drive: ${e.message}`); }
+      } else if (save && rec && rec.samples > 0) toast('Too short to save (under 0.3 km).');
+    }
+    $('modeDrive').addEventListener('click', enterDrive);
+    $('modeReplay').addEventListener('click', () => { if (state.mode === 'live' && drive.sensors) leaveDrive(true); else if (state.mode === 'live') { state.live = null; setMode(track && track.kind === 'route' ? 'sim' : 'replay'); paintModeSwitch(); render(true); } });
+    $('driveEnd').addEventListener('click', () => leaveDrive(true));
+
+    // =======================================================================
     // 11. NATIVE BRIDGE (ApexNavApp.swift pushes window.apex.live every 0.1 s)
     // =======================================================================
     window.apex = {
       live(frame) {
         if (!frame || !frame.has_fix || !Number.isFinite(frame.lat) || !Number.isFinite(frame.lon)) return;
         state.live = frame; state.liveAt = performance.now();
-        if (state.mode !== 'live') { setPlaying(false); setMode('live'); resumeFollow(); render(true); } else render(false);
+        if (state.mode !== 'live') { setPlaying(false); setMode('live'); paintModeSwitch(); resumeFollow(); render(true); } else render(false);
       },
       onNative(msg) { if (msg && msg.type === 'recordingSaved') toast(`Saved ${msg.segments} road segments to ${msg.file}`); }
     };
     setInterval(() => {
-      if (state.mode === 'live' && performance.now() - state.liveAt > 5000) {
-        state.live = null; setMode(track && track.kind === 'route' ? 'sim' : 'replay'); toast('GPS lost: back to replay');
+      if (state.mode === 'live' && !drive.sensors && performance.now() - state.liveAt > 5000) {
+        state.live = null; setMode(track && track.kind === 'route' ? 'sim' : 'replay'); paintModeSwitch(); toast('GPS lost: back to replay');
       }
     }, 1000);
 
