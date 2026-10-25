@@ -228,13 +228,34 @@
     };
   }
 
-  async function discover(c, radiusKm, onProgress) {
+  // ---- highlights: user-added scenic points, rated 1-5, that pull a loop toward the stages that pass them ------------
+  // A stage within HIGHLIGHT_NEAR_KM of a highlight gains up to +HIGHLIGHT_MAX_POINTS "good corner equivalents" per 5-star
+  // highlight, scaled by the owner's strength setting (0 = off, 1 = normal, 2 = strong), and capped per stage so a viewpoint
+  // can tip the choice between two good roads but can never make a dull road beat a great one.
+  const HIGHLIGHT_NEAR_KM = 0.3, HIGHLIGHT_MAX_POINTS = 3, HIGHLIGHT_STAGE_CAP = 6;
+  function applyHighlights(stages, highlights, strength = 1) {
+    if (!highlights || !highlights.length || !(strength > 0)) return stages;
+    for (const s of stages) {
+      let bonus = 0; const near = [];
+      for (const h of highlights) {
+        const liking = Math.max(0, ((h.rating ?? 3) - 2.5) / 2.5);        // 2.5 stars or less: no pull, never a push away
+        if (!liking) continue;
+        let d = Infinity;
+        for (let i = 0; i < s.lat.length; i += 4) d = Math.min(d, kmBetween({ lat: h.lat, lon: h.lon }, { lat: s.lat[i], lon: s.lon[i] }));
+        if (d <= HIGHLIGHT_NEAR_KM) { bonus += liking * HIGHLIGHT_MAX_POINTS * strength; near.push(h.name || 'highlight'); }
+      }
+      if (bonus) { s.bonus = Math.min(HIGHLIGHT_STAGE_CAP * strength, bonus); s.score += s.bonus; s.highlights = near; }
+    }
+    return stages.sort((a, b) => b.score - a.score);
+  }
+
+  async function discover(c, radiusKm, onProgress, opts = {}) {
     const pieces = await roadPieces(c, radiusKm, (d, n) => onProgress && onProgress('tiles', d / n));
     onProgress && onProgress('scoring', 1);
     const { strokes: all, ends } = strokes(pieces);
     const stages = all.map(st => bestWindow(st, ends, pieces)).filter(Boolean);
     stages.sort((a, b) => b.score - a.score);
-    return stages;
+    return applyHighlights(stages, opts.highlights, opts.strength);
   }
 
   // ---- chaining ---------------------------------------------------------------
@@ -320,5 +341,5 @@
     return pts;
   }
 
-  root.ApexStages = { decodeLayer, discover, plans, waypoints, strokes, bestWindow, roadPieces };
+  root.ApexStages = { decodeLayer, discover, applyHighlights, plans, waypoints, strokes, bestWindow, roadPieces };
 })(typeof window !== 'undefined' ? window : globalThis);

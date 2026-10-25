@@ -176,9 +176,73 @@ docs/SOCIAL.md.
 - Clip loudness differs between renders (peak normalisation), which can expose seams.
 - Voice banks add ~15 MB per voice to the repo/Pages bundle (`du -sh web/voices`).
 
+## Session 2026-10-25 (h): voices, licence, backend design, Cloudflare
+### Completed
+- [x] **Whole-phrase voices** for George, Daniel, Emma (896 clips each), **Michael** (American male) and **My Voice**
+  (Michael converted to the owner's timbre with kNN-VC + 54 real recorded calls). Pause rhythm from the owner's real
+  delivery (breath before the caution ~0.3-0.4 s and before the distance ~0.2-0.25 s; `tts_text`, `spokenText(text, rhythm)`).
+- [x] **Licence**: proprietary, all rights reserved (LICENSE, THIRD_PARTY_NOTICES.md). Not open source.
+- [x] **docs/BACKEND.md**: local-first backend design (Supabase + Google sign-in, invite-only), points 3x/2x/1x per way+direction,
+  reviewed by Opus (privacy leaks fixed in the design).
+- [x] **Cloudflare**: Worker `apexnav` serves `web/` (wrangler.jsonc). Live at https://apexnav.senftns.workers.dev/
+  (also GitHub Pages at senft5.github.io/ApexNav/web until the repo goes private).
+### Owner feedback on My Voice (open)
+- "Sounds like me but robotic and stumbles over words." Metrics (speaker similarity 0.83 vs 0.89 ceiling, UTMOS 3.9, word
+  match equal to the unconverted source) cannot see this; the conversion keeps the source voice's phrasing.
+- Plan: owner records ~30 min of natural calls (generated call sheet from tools/training_phrases.json), then (a) play real clips
+  for calls/parts read, with natural pauses, and (b) fine-tune Kokoro on the owner's real data on the RTX 5080 PC (tools/local).
+### Active bugs / limitations
+- iPhone sideload app only gets new voices when rebuilt; web app is current. Voice picker is in the SETUP tab.
+- The espeak-ng GPL dependency of kokoro-js must go before the app is closed-source/sold (THIRD_PARTY_NOTICES.md).
+- Clip loudness differs between banks (peak-normalised); an LUFS pass would hide seams.
+- web/voices is 66 MB / 4,599 files total on the site; Workers free limit is 20,000 files.
+
+## Session 2026-10-25 (i): Cloudflare backend foundation
+### Decisions (owner)
+- All-Cloudflare backend (Workers + D1), not Supabase. Google sign-in, invite-only, US only, under 20 users, all rights reserved.
+- In-app voice enrollment (a short guided recording inside the app), not a giant call sheet. Voice work is **on hold**.
+- Highlights (user scenic points, rated, optional routing bonus), points 3x/2x/1x per direction of each road.
+### Completed
+- [x] D1 database `apexnav-db` created in the owner's Cloudflare account; migrations 0001 + 0002 applied (22 + 1 tables).
+- [x] `backend/` Worker: Google OIDC sign-in (PKCE/state/nonce), sessions, invites, members gate, friends/blocks/crews,
+  opt-in grants, boards, segments with sharing. **29 tests** (privacy rules from the Opus review; mutation-checked).
+- [x] `wrangler.jsonc`: Worker serves `web/` and routes `/api/*` to `backend/src`; verified locally (`wrangler dev`) and by dry run.
+- [x] CI job `backend` (tsc, vitest, wrangler dry-run). docs/BACKEND.md rewritten for Cloudflare.
+### Owner to do
+- Create the Google OAuth client and set Worker secrets `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `OWNER_EMAIL`, `PEPPER` (docs/BACKEND.md section 7).
+### Completed (later in session (i))
+- [x] Migration 0003 (`road_bins.camber_n`) applied live. 22+ tables.
+- [x] `POST /api/contribute` + `PUT /api/me/contribute`: opt-in, date window, ranges, contiguity, hour/day/week caps, hashed one-per-road dedupe.
+- [x] Nightly cron (`backend/src/nightly.ts`): 14-day hold, rank by drive date, replay discard, Welford merge into `road_bins`, points 3x/2x/1x in `points_ledger`; `GET /api/points`.
+- [x] `GET /api/me/export` and `DELETE /api/me` (`{confirm:"DELETE"}`); audiences named by handle, never by other users' ids.
+- [x] Highlights end to end: API (`backend/src/highlights.ts`), planner bonus (`applyHighlights` in web/stages.js), route-panel toggle + strength, Account panel in web/index.html (sign-in, invite, handle, friends, per-friend sharing, points, road-data toggle, export, delete).
+- [x] Web segment sync (`web/sync.js`, used by analysis.html): segments get a decimated geometry on save, upload when signed in (idempotent by local id), friends' shared segments can be adopted, the active segment can be shared with a friend. Checked with Playwright against mocked APIs.
+- [x] Highlights sync (`web/sync.js` + index.html): SHARE button on your spots (kind picker), planner merges members' shared spots near the start (4 s timeout, offline = yours only, no double counting within 60 m).
+- [x] Friends board on the analysis page: best pass per synced segment is published (server delivers only to granted friends/crews); the active segment shows the board. Checked against mocked APIs.
+- [x] Phone-side contributor (`web/contributor.js`, 9 pytest tests): Valhalla `trace_attributes` map-matching -> OSM way ids, Overpass way geometry, bins counted from the way's first node, direction from travel along the way; trims 1 km at both ends, skips residential/service roads, unknown roughness leaves the bin out, unknown camber stays null; uploads via `/api/contribute`. Analysis page has a "Share road data" panel for recent imported drives. **Not yet verified against the live Valhalla/Overpass servers or with a real recording** (the container's network is restricted); the shell is tested with a fake fetch.
+- [x] Read side: `GET /api/roads?ways=a,b,c` (members only, max 50 ways) returns merged per-bin numbers (n, camber, roughness, crest; null = unmeasured), no contributor info. The phone does not use it for scoring yet.
+- [x] Measured-data preview: when a route is opened, members see how much of it other members have measured (coverage, roughness, banked km, passes). `ApexContributor.measuredAlong` (match -> way geometry -> `/api/roads`), 2 more tests. Not wired into loop *scoring*: stage tiles carry no OSM way ids, so scoring by measured data needs a matched candidate route (next step).
+- [x] Loop choice uses member data: among the top 3 candidate loops, measured roughness (same scale as core `effective_mu`) can cost up to 6 points; unmeasured roads are neutral. Members only, 12 s timeout, falls back silently.
+- [x] Analysis page redesign, step 1: new **DRIVE** tab (default) in `web/drive_view.js`: summary strip, speed-coloured plan map with numbered corners, aligned lanes (speed, lateral g, brake/throttle g, elevation) with corner bands, scrub by pointer/arrow keys, zoom (all, 2 mi, 0.5 mi, 0.15 mi) with pan, corner list that jumps to the corner. Mobile-first; drawn at real pixel width. Fixed a `45:60` time-format bug (also in the segments table). Checked in a browser at phone and desktop widths.
+- [x] Analysis step 2: **Road feel lane** on the Drive tab (members only): banking bars and roughness line from `/api/roads` along the drive, gaps shown as gaps (unknown, not zero); readout adds banking/roughness/passes. `ApexContributor.measuredSeries`. Verified in a browser with mocked Valhalla/Overpass/roads replies (mock data only, never shipped).
+- [x] Analysis step 3: corner list on the Drive tab compares each corner against your best-scoring other drive on the same road (`Core.compareDrives`, needs >= 30% shared road and 3 clean corners); stopped corners excluded; net seconds shown in the heading and per corner. Checked with the two shipped examples.
+- [x] Analysis step 4: "This road over time" on the Drive tab: every drive sharing >= 30% of the road, score chart by date, per-drive net corner seconds vs the one you are viewing, change in points first to latest.
+- [x] Analysis accessibility pass: tablist/tab/tabpanel roles with arrow/Home/End keys, labelled selects and inputs, focus-visible outline, reduced-motion respected, the drive scrubber is a keyboard slider (arrows, Shift = 10x, Home/End) with spoken position and speed, labelled zoom and corner buttons. Checked by keyboard in a browser. Not yet tried with a real screen reader.
+- [x] History/Compare polish: score chart drawn at real width (readable on phones), drives table drops secondary columns on narrow screens, empty states for no drives, Compare's whole-road delta no longer coloured as a verdict.
+- [x] **Real-time road data (owner decision):** no 14-day hold, no nightly job, no cron. `POST /api/contribute` takes `drive_id` and merges each chunk immediately (atomic SQL upsert per bin), pays 3x/2x/1x by arrival order on a person's first drive on a road, ignores retried chunks. Migration 0004 applied to both D1 databases. Cross-account replay check removed (documented). 74 backend tests. Phone side sends `drive_id`; STREAMING from a live drive is the next piece (needs the web drive mode below).
+- [x] Cloudflare preview builds now pass (the `previews` block fix; verified on commit 9893072, preview URL https://claude-lucid-pascal-82cnud-apexnav.senftns.workers.dev).
+- [x] **Web DRIVE mode** (owner report: the web app never asked for sensors, had no separate modes): REPLAY | DRIVE switch in the cockpit. DRIVE (tap-initiated, so iOS permission prompts work) starts GPS (`watchPosition`, high accuracy), motion (`devicemotion`, iOS permission) and a screen wake lock (`web/sensors.js`); status bar shows GPS/MOTION/REC and plain-language errors. Honest limits: lateral/longitudinal g are DERIVED from the GPS track (not IMU) and labelled source `web-gps`; roughness comes from the accelerometer (orientation independent); camber is never claimed (blank). Recording is 5 m samples, saved to IndexedDB on END DRIVE (>= 0.3 km) via the shared `web/recording.js`, and appears in ANALYSIS. Tests: `tests/test_sensors.py` (sign/size of g on circles and straights, blanks, roughness, 5 m CSV). Browser-tested with emulated GPS and motion events (headless Chromium). NOT yet tested on a real phone.
+- [ ] Live contribution streaming from DRIVE mode (chunks every ~500 m with a 1 km lag) is NOT built yet; web-recorded drives can be shared afterwards from the analysis page like any other recording.
+- [x] Live voice measured: Kokoro q8 on wasm takes 10-17 s per short phrase on a desktop-class CPU (8-13 s with threads), so it cannot serve mid-drive calls on a phone; it only works as background pre-rendering of route names. The UI still says only 'LIVE FAILED' without a reason, and needs honest status text (open).
+- [x] **76 backend tests** (privacy, auth, highlights, contribute, nightly, account) + 53 pytest.
+### Active bugs / limitations
+- **Cloudflare preview build (FIXED, kept for history)** failed because `wrangler preview` (the default preview command) requires a `previews` block in `wrangler.jsonc`. Fixed: added `previews.d1_databases` pointing at a separate empty `apexnav-preview-db` (id 9103ab07-..., migrations 0001-0003 applied), so previews never touch production data. Verify the next PR build is green. Any future migration must be applied to BOTH databases. Production deploys (`wrangler deploy`) were never affected by this error.
+- Contributor limits: only drives imported after this change keep the roughness/crest/curvature columns; older stored drives are not eligible. Public Valhalla/Overpass servers are rate limited, so a self-hosted matcher may be needed past a handful of users.
+- Not built yet:  convoy, R2 backups.
+- `npm ci` needs `--legacy-peer-deps` (Cloudflare test plugin vs wrangler peers).
+
 ## Exact Next Task
-1. Owner: confirm the voices sound whole on the phone (George/Daniel/Emma, My Voice).
-2. Run the Kaggle spike (docs/VOICE.md "Path to ANY phrase"): render `tools/training_phrases.json`
-   with Chatterbox, fine-tune Kokoro, A/B against the clone.
-3. LUFS-normalise all banks; drop espeak-ng from the shipped app (misaki phoneme lexicon).
-4. Loops: penalise dead-end stage access; calibrate connector length.
+1. Owner: Google client + Worker secrets; then sign in at the site and make the first invites.
+2. Get the Workers Builds log and fix the preview/production build; merge PR #10.
+3. Live contribution streaming from DRIVE mode; honest LIVE voice status (explain slow/failed, default off on phones); try DRIVE mode on a real phone; espeak-ng removal (voice agent, see docs/VOICE.md when it finishes). Then reward measured-good (banked, smooth) stretches too once there is enough real data to calibrate; verify the contributor against live Valhalla/Overpass with a real recording; convoy (Durable Objects).
+4. Voice (on hold): in-app enrollment design in docs/VOICE.md; replace the espeak-ng dependency.

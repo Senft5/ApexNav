@@ -1,5 +1,9 @@
-# Cloudflare Pages: headers for apexnav.pages.dev
+# Headers for the Cloudflare Worker's static assets (wrangler.jsonc assets.directory).
+# No full Content-Security-Policy yet: the app uses inline scripts and several third-party map/route/model hosts; framing is blocked now.
 /*
+  Strict-Transport-Security: max-age=31536000
+  X-Frame-Options: DENY
+  Content-Security-Policy: frame-ancestors 'none'
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: geolocation=(self), accelerometer=(self), gyroscope=(self), camera=(), microphone=()

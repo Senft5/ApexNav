@@ -12,6 +12,10 @@
   <script src="vendor/maplibre-contour.min.js"></script>
   <script src="apex_core.js"></script>
   <script src="stages.js"></script>
+  <script src="sync.js"></script>
+  <script src="sensors.js"></script>
+  <script src="recording.js"></script>
+  <script src="contributor.js"></script>
   <script src="themes.js"></script>
   <script src="instruments.js"></script>
   <script src="voice.js"></script>
@@ -84,6 +88,12 @@
     /* ---------------- binnacle ---------------- */
     .binnacle { background: var(--panel); color: var(--panel-ink); border-top: 1px solid var(--rule); padding: 6px 10px calc(8px + var(--safe-bottom)); display: grid; gap: 6px; }
     .transport { display: grid; grid-template-columns: auto auto minmax(0, 1fr); gap: 6px; align-items: center; }
+    .modesw { display: inline-flex; border: 1px solid var(--rule); background: var(--panel); }
+    .modesw button { font: inherit; font-size: 11px; font-weight: 700; letter-spacing: 0.12em; padding: 7px 12px; background: transparent; color: var(--panel-dim); border: none; cursor: pointer; }
+    .modesw button.on { background: var(--panel-ink); color: var(--panel); }
+    .drivebar { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--rule); }
+    .dbstat { font-size: 11px; letter-spacing: 0.08em; color: var(--panel-ink); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .dbstat b { color: var(--accent); }
     .key { height: 28px; min-width: 42px; padding: 0 10px; font-size: 11px; font-weight: 700; letter-spacing: 0.12em; border: 1px solid var(--rule); color: var(--panel-ink); background: transparent; }
     .key.on { color: var(--accent); border-color: var(--accent); }
     .scrubber { position: relative; height: 28px; border: 1px solid var(--rule); cursor: ew-resize; touch-action: none; }
@@ -177,6 +187,7 @@
       border-left: 1px solid var(--rule); transform: translateX(105%); transition: transform 0.18s ease-out; display: flex; flex-direction: column; }
     .sheet.open { transform: none; }
     .sheet.dragging { transition: none; }
+    .sheet [hidden] { display: none !important; }
     .scrim { position: absolute; inset: 0; z-index: 9; display: none; background: rgba(0,0,0,0.18); }
     .scrim.show { display: block; }
     .sheet [data-panel] { display: none; }
@@ -225,6 +236,10 @@
     <section class="stage">
       <div id="map"></div>
       <div class="plates">
+        <div class="modesw" role="group" aria-label="Mode">
+          <button id="modeReplay" class="on" aria-pressed="true">REPLAY</button>
+          <button id="modeDrive" aria-pressed="false">DRIVE</button>
+        </div>
         <div class="plate" id="modePlate">REPLAY</div>
         <button class="plate" id="recenterBtn">RECENTER</button>
       </div>
@@ -251,10 +266,32 @@
             </div>
             <p class="note">Loops are stitched from the best roads nearby: every road around you is scored from map geometry (corners per km, few junctions), the best stretches are chained to fit the distance, and the result is checked against a plain loop. Geometry only until driven.</p>
           </section>
+          <section data-panel="route">
+            <h3>Highlights · scenic stops</h3>
+            <div class="row">
+              <button class="ink-btn" id="hlToggleBtn">HIGHLIGHTS OFF</button>
+              <label class="ink-btn" style="display:inline-flex;align-items:center;gap:8px">PULL <input type="range" id="hlStrength" min="0.5" max="2" step="0.5" value="1" style="width:90px" /></label>
+            </div>
+            <div class="row" style="margin-top:6px;flex-wrap:wrap">
+              <input class="field" id="hlName" style="flex:1 1 100%" placeholder="Name this spot (adds at your position)" autocomplete="off" />
+              <select class="field" id="hlStars" aria-label="Your rating in stars" style="flex:0 0 70px"><option>5</option><option>4</option><option>3</option></select>
+              <select class="field" id="hlCat" style="flex:0 0 120px" aria-label="Kind of spot"><option value="overlook">Overlook</option><option value="photo">Photo</option><option value="bridge">Bridge</option><option value="water">Water</option><option value="cafe">Cafe</option><option value="trailhead">Trailhead</option><option value="landmark">Landmark</option><option value="other">Other</option></select>
+              <button class="ink-btn" id="hlAddBtn">ADD</button>
+            </div>
+            <div id="hlList" style="display:grid;gap:4px;margin-top:6px"></div>
+            <div id="hlNearby" style="display:grid;gap:4px;margin-top:6px"></div>
+            <p class="note">When on, loops lean toward roads that pass a highlight you rate 3 stars or more. They can tip the choice between two good roads; they never make a dull road win. Yours stay on this phone until you press SHARE; shared spots are rated by other members and your name is never shown.</p>
+          </section>
           <section data-panel="drives">
             <h3>Profiled drives</h3>
             <div id="driveList" style="display:grid;gap:6px"></div>
+            <p class="note" id="measuredNote" hidden></p>
             <div class="row" style="margin-top:10px"><a class="ink-btn solid" href="analysis.html" style="display:inline-flex;align-items:center;text-decoration:none">OPEN DRIVE ANALYSIS →</a></div>
+          </section>
+          <section data-panel="setup" id="accountSection" hidden>
+            <h3>Account · friends</h3>
+            <div id="accountBody" style="display:grid;gap:8px"></div>
+            <p class="note">Optional. Everything works without an account. Nothing is shared with anyone unless you switch it on for that friend, one at a time.</p>
           </section>
           <section data-panel="setup">
             <h3>Co-driver voice</h3>
@@ -289,7 +326,11 @@
     </section>
 
     <section class="binnacle" id="binnacle">
-      <div class="transport">
+      <div class="drivebar" id="driveBar" hidden>
+        <div class="dbstat" id="driveStat" role="status" aria-live="polite">Starting GPS...</div>
+        <button class="key" id="driveEnd">END DRIVE</button>
+      </div>
+      <div class="transport" id="transport">
         <button class="key" id="playBtn">RUN</button>
         <button class="key" id="rateBtn">1X</button>
         <div class="scrubber" id="scrubber"><canvas id="scrubCanvas"></canvas></div>
@@ -366,12 +407,12 @@
     const state = {
       mode: 'replay', playing: false, rate: 1, cursorM: 0, cursorIdx: 0, follow: true, bearing: 0,
       live: null, liveAt: 0, spiritedAt: -Infinity, spoken: new Set(), tapToRoute: false,
-      theme: 'stage', camFeel: 'dynamic', voiceId: 'george', liveVoice: true, voiceStyle: 'codriver', voiceName: '',
+      theme: 'stage', camFeel: 'dynamic', voiceId: 'george', liveVoice: true, voiceStyle: 'codriver', voiceName: '', hlOn: false, hlStrength: 1,
       toggles: { stage: false, voice: true, lpr: true, dna: false, night: false }
     };
     try {
       const saved = JSON.parse(localStorage.getItem('apex.prefs') || 'null');
-      if (saved) { Object.assign(state.toggles, saved.toggles || {}); if (saved.theme) state.theme = saved.theme; if (saved.camFeel) state.camFeel = saved.camFeel; if (saved.voiceId) state.voiceId = saved.voiceId; if (saved.liveVoice != null) state.liveVoice = saved.liveVoice; if (saved.voiceName != null) state.voiceName = saved.voiceName; }
+      if (saved) { Object.assign(state.toggles, saved.toggles || {}); if (saved.theme) state.theme = saved.theme; if (saved.camFeel) state.camFeel = saved.camFeel; if (saved.voiceId) state.voiceId = saved.voiceId; if (saved.liveVoice != null) state.liveVoice = saved.liveVoice; if (saved.voiceName != null) state.voiceName = saved.voiceName; if (saved.hlOn != null) state.hlOn = !!saved.hlOn; if (saved.hlStrength > 0) state.hlStrength = saved.hlStrength; }
     } catch (_) {}
     if (params.has('night')) state.toggles.night = params.get('night') === '1';
     if (params.has('theme')) state.theme = params.get('theme');
@@ -381,7 +422,7 @@
 
     let look = Themes.apply(state.theme, state.toggles.night);
     let cluster = Inst.mountCluster($('cluster'), look.theme);
-    function savePrefs() { try { localStorage.setItem('apex.prefs', JSON.stringify({ theme: state.theme, camFeel: state.camFeel, voiceId: state.voiceId, liveVoice: state.liveVoice, voiceName: state.voiceName, toggles: state.toggles })); } catch (_) {} }
+    function savePrefs() { try { localStorage.setItem('apex.prefs', JSON.stringify({ theme: state.theme, camFeel: state.camFeel, voiceId: state.voiceId, liveVoice: state.liveVoice, voiceName: state.voiceName, hlOn: state.hlOn, hlStrength: state.hlStrength, toggles: state.toggles })); } catch (_) {} }
     function applyTheme() {
       look = Themes.apply(state.theme, state.toggles.night);
       cluster = Inst.mountCluster($('cluster'), look.theme);
@@ -1016,6 +1057,7 @@
       renderDriveList();
       loadTrackOnMap();
       fetchAlpr(t);
+      showMeasured(t);
       // Names are known now: pre-render them in the co-driver's own voice.
       if (state.liveVoice && state.voiceId !== 'device' && window.ApexVoice) {
         ApexVoice.load(state.voiceId).then(() => {
@@ -1044,6 +1086,23 @@
     // 8. ALPR — real cameras from OpenStreetMap (DeFlock) via Overpass
     // =======================================================================
     const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter', 'https://overpass.private.coffee/api/interpreter'];
+    // What other members have measured along this route (banking, roughness). Members only; silent when signed out or offline.
+    async function showMeasured(t) {
+      const note = $('measuredNote'); note.hidden = true;
+      if (!window.ApexSync || !window.ApexContributor || !t.lat || t.lat.length < 40 || !(await ApexSync.member())) return;
+      if (t.measured === undefined) {
+        try { t.measured = await ApexContributor.measuredAlong(t, async (ids) => { const r = await apiCall('GET', `/api/roads?ways=${ids.join(',')}`); return r.ok ? r.json() : null; }); }
+        catch (_) { t.measured = null; }
+      }
+      const m = t.measured;
+      if (!m || track !== t) return;
+      note.hidden = false;
+      note.textContent = m.coveredKm < 0.05
+        ? 'No member measurements on this route yet. Drive it with road data sharing on to be the first (3x points).'
+        : `Measured by members: ${m.coveredKm.toFixed(1)} of ${m.km.toFixed(1)} km (${Math.round(m.coverage * 100)}%)` +
+          (m.roughness != null ? ` · roughness ${m.roughness.toFixed(2)}` : '') + (m.bankedKm >= 0.05 ? ` · ${m.bankedKm.toFixed(1)} km banked` : '') +
+          (m.avgPasses != null ? ` · ${m.avgPasses.toFixed(1)} passes on average` : '');
+    }
     async function fetchAlpr(t) {
       if (t.alpr) return;
       let s = Infinity, w = Infinity, n = -Infinity, e = -Infinity;
@@ -1217,7 +1276,9 @@
       let plans = [];
       try {
         const radiusKm = Math.min(14, Math.max(5, targetKm / 4.2));
-        const stages = await ApexStages.discover(c, radiusKm, (phase, f) => ui.step(phase === 'tiles' ? 'ROADS' : 'SCORING', 0.05 + 0.3 * f));
+        const hls = state.hlOn ? await allHighlights(c) : [];
+        const stages = await ApexStages.discover(c, radiusKm, (phase, f) => ui.step(phase === 'tiles' ? 'ROADS' : 'SCORING', 0.05 + 0.3 * f),
+          state.hlOn ? { highlights: hls, strength: state.hlStrength } : {});
         plans = ApexStages.plans(c, stages, targetKm, 3);
       } catch (_) { /* no tiles: fall back to circle loops below */ }
       // 2. Route each stage plan, plus one circle loop as a baseline, and keep the best result.
@@ -1235,6 +1296,18 @@
       const done = (await Promise.allSettled(tries)).filter(r => r.status === 'fulfilled').map(r => r.value);
       if (!done.length) { toast('Loop routing failed. Check your connection.'); return; }
       done.sort((a, b) => b.score - a.score);
+      // Members: let what others measured break ties among the top few (a rough road costs up to 6 points; unmeasured roads are neutral).
+      if (window.ApexSync && window.ApexContributor && done.length > 1 && await ApexSync.member()) {
+        ui.step('CHECKING MEMBER DATA', 0.9);
+        await Promise.all(done.slice(0, 3).map(async (d) => {
+          try {
+            const m = await Promise.race([ApexContributor.measuredAlong(d.t, async (ids) => { const r = await apiCall('GET', `/api/roads?ways=${ids.join(',')}`); return r.ok ? r.json() : null; }),
+                                          new Promise(r => setTimeout(() => r(null), 12000))]);
+            d.t.measured = m; d.score += ApexContributor.measuredAdjust(m);
+          } catch (_) { /* offline or slow: keep the unadjusted score */ }
+        }));
+        done.sort((a, b) => b.score - a.score);
+      }
       const best = done[0];
       ui.step('PROFILING', 0.92);
       await buildRoute(null, `loop_${miles}`, `${miles} mi loop`, best.t);
@@ -1322,6 +1395,135 @@
         list.appendChild(b);
       }
     }
+
+    // Account (optional; docs/BACKEND.md). The panel only appears when /api answers, so the app stays fully local without it.
+    async function apiCall(method, path, body) {
+      return fetch(path, { method, credentials: 'same-origin', headers: { 'content-type': 'application/json', 'x-apexnav': '1' }, body: body === undefined ? undefined : JSON.stringify(body) });
+    }
+    const jsonOf = async (r) => { try { return await r.json(); } catch (_) { return null; } };
+    const el = (tag, props = {}, ...kids) => { const n = Object.assign(document.createElement(tag), props); n.append(...kids); return n; };
+    const btn = (label, onclick, cls = 'ink-btn') => el('button', { className: cls, textContent: label, onclick });
+    async function renderAccount() {
+      const sec = $('accountSection'), body = $('accountBody');
+      let me = null;
+      try { const r = await apiCall('GET', '/api/me'); if (r.ok && (r.headers.get('content-type') || '').includes('json')) me = await r.json(); } catch (_) {}
+      if (!me) { sec.hidden = true; return; }
+      sec.hidden = false; body.innerHTML = '';
+      const redo = () => renderAccount();
+      if (!me.signed_in) {
+        const inviteFromLink = new URLSearchParams(location.search).get('invite');
+        if (inviteFromLink) { try { sessionStorage.setItem('apex.invite', inviteFromLink); } catch (_) {} }
+        body.append(btn('SIGN IN WITH GOOGLE', () => { location.href = '/api/auth/google/start'; }, 'ink-btn solid'));
+        return;
+      }
+      if (!me.member) {
+        const saved = (() => { try { return sessionStorage.getItem('apex.invite') || ''; } catch (_) { return ''; } })();
+        const inp = el('input', { className: 'field', placeholder: 'Invite code', value: saved, autocomplete: 'off' });
+        body.append(el('div', { className: 'note', textContent: 'You are signed in. Ask a member for an invite to see friends.' }), el('div', { className: 'row' }, inp,
+          btn('JOIN', async () => { const r = await apiCall('POST', '/api/invites/redeem', { token: inp.value.trim() }); if (r.ok) { try { sessionStorage.removeItem('apex.invite'); } catch (_) {} redo(); } else toast('That invite is not valid.'); }, 'ink-btn solid')));
+        body.append(btn('SIGN OUT', async () => { await apiCall('POST', '/api/auth/logout'); redo(); }));
+        return;
+      }
+      if (!me.handle) {
+        const inp = el('input', { className: 'field', placeholder: 'Pick a handle (letters, numbers, _)', autocomplete: 'off' });
+        body.append(el('div', { className: 'row' }, inp, btn('SAVE', async () => { const r = await apiCall('PUT', '/api/me/handle', { handle: inp.value }); if (r.ok) redo(); else toast(r.status === 409 ? 'That handle is taken.' : 'Use 3-20 letters, numbers or _.'); }, 'ink-btn solid')));
+        return;
+      }
+      body.append(el('div', { className: 'note', textContent: `Signed in as @${me.handle}` }));
+      const [fr, gr] = await Promise.all([apiCall('GET', '/api/friends').then(jsonOf), apiCall('GET', '/api/grants').then(jsonOf)]);
+      const grants = new Map((Array.isArray(gr) ? gr : []).filter(g => g.audience_type === 'friend').map(g => [g.audience_id, g]));
+      for (const f of Array.isArray(fr) ? fr : []) {
+        const row = el('div', { className: 'card' }), name = el('b', { textContent: `@${f.handle || '?'}` });
+        const line = el('div', { className: 'row' });
+        if (f.status === 'pending') {
+          line.append(f.incoming ? btn('ACCEPT', async () => { await apiCall('POST', '/api/friends/accept', { user_id: f.id }); redo(); }, 'ink-btn solid') : el('span', { textContent: 'waiting for them' }),
+                      btn('REMOVE', async () => { await apiCall('DELETE', `/api/friends/${f.id}`); redo(); }));
+        } else {
+          const g = grants.get(f.id) || { share_scores: 0, share_times: 0 };
+          const put = async (scores, times) => { await apiCall('PUT', '/api/grants', { audience_type: 'friend', audience_id: f.id, share_scores: scores, share_times: times }); redo(); };
+          const b1 = btn(g.share_scores ? 'SHARING SCORES' : 'SHARE SCORES', () => put(!g.share_scores, false)); b1.classList.toggle('on', !!g.share_scores);
+          const b2 = btn(g.share_times ? 'SHARING TIMES' : 'SHARE TIMES', () => put(true, !g.share_times)); b2.classList.toggle('on', !!g.share_times);
+          line.append(b1, b2, btn('UNFRIEND', async () => { if (confirm(`Unfriend @${f.handle}? This also stops all sharing.`)) { await apiCall('DELETE', `/api/friends/${f.id}`); redo(); } }));
+        }
+        row.append(name, line); body.append(row);
+      }
+      const add = el('input', { className: 'field', placeholder: 'Add a friend by handle', autocomplete: 'off' });
+      body.append(el('div', { className: 'row' }, add, btn('REQUEST', async () => { await apiCall('POST', '/api/friends/request', { handle: add.value.trim().toLowerCase() }); add.value = ''; toast('If that member exists, they have your request.'); redo(); })));
+      // road-data contribution (off by default), points, and the person's own data
+      const [pts, mem] = await Promise.all([apiCall('GET', '/api/points').then(jsonOf), Promise.resolve(me)]);
+      if (pts) body.append(el('div', { className: 'note', textContent: `Octane: ${pts.total} points` + (pts.board && pts.board.length ? ` · top: ${pts.board.slice(0, 3).map(r => `@${r.handle} ${r.total}`).join(', ')}` : '') }));
+      const contribOn = !!(await apiCall('GET', '/api/me/export').then(jsonOf))?.member?.contribute;
+      const cb = btn(contribOn ? 'ROAD DATA: SHARING' : 'ROAD DATA: OFF', async () => { await apiCall('PUT', '/api/me/contribute', { on: !contribOn }); redo(); });
+      cb.classList.toggle('on', contribOn); body.append(cb, el('div', { className: 'note', textContent: 'Optional. Shares anonymous road numbers (banking, roughness, crests), never where you went or how fast. Earns points: 3x for the first to map a road, 2x second, 1x after.' }));
+      body.append(el('div', { className: 'row' },
+        btn('DOWNLOAD MY DATA', async () => { const r = await apiCall('GET', '/api/me/export'); const blob = new Blob([JSON.stringify(await r.json(), null, 2)], { type: 'application/json' }); const a = el('a', { href: URL.createObjectURL(blob), download: 'apexnav-my-data.json' }); document.body.append(a); a.click(); a.remove(); }),
+        btn('DELETE ACCOUNT', async () => { if (prompt('This erases your account, friends, shared results and highlights from the server. Type DELETE to confirm.') === 'DELETE') { await apiCall('DELETE', '/api/me', { confirm: 'DELETE' }); redo(); } })));
+      const invOut = el('div', { className: 'note' });
+      body.append(el('div', { className: 'row' }, btn('CREATE INVITE', async () => { const r = await apiCall('POST', '/api/invites'); const j = await jsonOf(r); invOut.textContent = r.ok ? j.url : 'Could not create an invite.'; })), invOut);
+      body.append(btn('SIGN OUT', async () => { await apiCall('POST', '/api/auth/logout'); redo(); }));
+    }
+
+    // Highlights (local for now): [{id, name, lat, lon, rating}] in localStorage; the server list joins later (docs/BACKEND.md section 9).
+    // Planning uses your own spots plus members' shared ones near the start (offline: just yours). A shared spot you already added is not counted twice.
+    async function allHighlights(c) {
+      const mine = loadHighlights();
+      if (!window.ApexSync) return mine;
+      const shared = await Promise.race([ApexSync.highlightsNear(c), new Promise(r => setTimeout(() => r([]), 4000))]);
+      const near = (a, b) => Math.hypot((a.lat - b.lat) * 111000, (a.lon - b.lon) * 91000) < 60;
+      return mine.concat(shared.filter(s => !mine.some(m => near(m, s))));
+    }
+    function loadHighlights() { try { return JSON.parse(localStorage.getItem('apex.highlights') || '[]'); } catch (_) { return []; } }
+    function saveHighlights(list) { try { localStorage.setItem('apex.highlights', JSON.stringify(list)); } catch (_) {} }
+    function renderHighlights() {
+      $('hlToggleBtn').textContent = state.hlOn ? 'HIGHLIGHTS ON' : 'HIGHLIGHTS OFF';
+      $('hlToggleBtn').classList.toggle('on', state.hlOn);
+      $('hlStrength').value = state.hlStrength;
+      const list = $('hlList'); list.innerHTML = '';
+      for (const h of loadHighlights()) {
+        const row = document.createElement('div'); row.className = 'row'; row.style.cssText = 'justify-content:space-between;align-items:center;font-size:13px';
+        const t = document.createElement('span'); t.textContent = `${'★'.repeat(h.rating)} ${h.name}`;
+        const x = document.createElement('button'); x.className = 'ink-btn'; x.style.height = '28px'; x.textContent = '×'; x.setAttribute('aria-label', `Remove ${h.name}`);
+        x.onclick = () => { saveHighlights(loadHighlights().filter(v => v.id !== h.id)); renderHighlights(); };
+        row.append(t);
+        if (!h.shared && window.ApexSync) {
+          const sh = document.createElement('button'); sh.className = 'ink-btn'; sh.style.height = '28px'; sh.textContent = 'SHARE'; sh.hidden = true;
+          ApexSync.member().then(m => { sh.hidden = !m; });
+          sh.onclick = async () => {
+            sh.disabled = true;
+            const ok = await ApexSync.shareHighlight(h, h.category || 'other');
+            if (ok) { saveHighlights(loadHighlights().map(v => v.id === h.id ? { ...v, shared: true } : v)); renderHighlights(); toast('Shared. Other members can now rate it.'); }
+            else { sh.disabled = false; toast('Could not share it (maybe one already exists within 40 m, or the daily limit is reached).'); }
+          };
+          row.append(sh);
+        } else if (h.shared) { const tag = document.createElement('span'); tag.className = 'note'; tag.textContent = 'shared'; row.append(tag); }
+        row.append(x); list.appendChild(row);
+      }
+    }
+    // Members' shared spots near you, each rateable once signed in (the author can't rate their own; the server enforces it).
+    async function renderNearbyHighlights() {
+      const box = $('hlNearby'); box.innerHTML = '';
+      if (!window.ApexSync || !(await ApexSync.member())) return;
+      const list = await ApexSync.highlightsNear(here());
+      for (const s of list.slice(0, 8)) {
+        const row = document.createElement('div'); row.className = 'row'; row.style.cssText = 'justify-content:space-between;align-items:center;font-size:13px';
+        const t = document.createElement('span'); t.textContent = `${s.rating.toFixed(1)}★ ${s.name} (${s.ratings})`;
+        row.append(t);
+        if (!s.mine) for (const n of [1, 3, 5]) {
+          const b = document.createElement('button'); b.className = 'ink-btn'; b.style.height = '28px'; b.textContent = `${n}★`; b.setAttribute('aria-label', `Rate ${s.name} ${n} stars`);
+          b.onclick = async () => { toast((await ApexSync.rateHighlight(s.id, n)) ? 'Thanks, rated.' : 'Could not rate it.'); renderNearbyHighlights(); };
+          row.append(b);
+        }
+        box.append(row);
+      }
+    }
+    $('hlToggleBtn').addEventListener('click', () => { state.hlOn = !state.hlOn; savePrefs(); renderHighlights(); if (state.hlOn) renderNearbyHighlights(); });
+    $('hlStrength').addEventListener('input', (e) => { state.hlStrength = parseFloat(e.target.value); savePrefs(); });
+    $('hlAddBtn').addEventListener('click', () => {
+      const name = $('hlName').value.trim(); if (!name) { toast('Name the spot first.'); return; }
+      const p = here();
+      saveHighlights(loadHighlights().concat({ id: String(Date.now()), name: name.slice(0, 60), lat: p.lat, lon: p.lon, rating: parseInt($('hlStars').value, 10), category: $('hlCat').value }));
+      $('hlName').value = ''; renderHighlights(); toast(`Added ${name} at your position.`);
+    });
 
     // Voice picker: open-model banks (web/voices/index.json) + the device's own voice.
     let bankVoices = [];
@@ -1420,19 +1622,70 @@
     window.addEventListener('resize', () => render(true));
 
     // =======================================================================
+    // 10b. DRIVE MODE (web): real GPS + motion, recorded to this device. REPLAY plays a saved drive; the two never mix.
+    // =======================================================================
+    const drive = { sensors: null, rec: null, status: null, frames: 0 };
+    function paintModeSwitch() {
+      const on = state.mode === 'live';
+      $('modeReplay').classList.toggle('on', !on); $('modeReplay').setAttribute('aria-pressed', String(!on));
+      $('modeDrive').classList.toggle('on', on); $('modeDrive').setAttribute('aria-pressed', String(on));
+      $('driveBar').hidden = !on; $('transport').hidden = on;
+    }
+    function paintDriveStat() {
+      const s = drive.status || {}, r = drive.rec, bits = [];
+      bits.push(s.gps === 'on' ? '<b>GPS</b>' : s.gps === 'denied' ? 'GPS BLOCKED' : s.gps === 'weak' ? 'GPS WEAK' : s.gps === 'error' ? 'GPS ERROR' : 'WAITING FOR GPS');
+      bits.push(s.motion === 'on' ? '<b>MOTION</b>' : s.motion === 'denied' ? 'MOTION OFF (blocked)' : s.motion === 'unavailable' ? 'NO MOTION SENSOR' : 'MOTION...');
+      if (r && r.samples > 0) bits.push(`<b>REC</b> ${(r.km / 1.609344).toFixed(2)} mi`);
+      if (s.wake === 'unavailable') bits.push('keep screen on');
+      $('driveStat').innerHTML = bits.join(' · ') + (s.message ? `<br><span style="letter-spacing:0">${s.message}</span>` : '');
+    }
+    async function enterDrive() {
+      if (state.mode === 'live' && drive.sensors) return;
+      if (state.mode === 'live') return;                                   // native app is feeding frames already
+      setPlaying(false);
+      drive.rec = new ApexSensors.Recorder(); drive.status = { gps: 'waiting', motion: 'off', wake: 'off', message: '' }; drive.frames = 0;
+      setMode('live'); paintModeSwitch(); paintDriveStat();
+      try {
+        drive.sensors = await ApexSensors.start({
+          onStatus: (s) => { drive.status = s; paintDriveStat(); },
+          onFrame: (fr) => { if (!fr.has_fix) return; drive.frames++; drive.rec.add(fr); window.apex.live(fr); paintDriveStat(); },
+        });
+      } catch (e) { toast(e.message || 'Could not start GPS.'); leaveDrive(false); }
+    }
+    async function leaveDrive(save) {
+      const rec = drive.rec, sensors = drive.sensors;
+      drive.sensors = null; drive.rec = null;
+      if (sensors) sensors.stop();
+      state.live = null;
+      setMode(track && track.kind === 'route' ? 'sim' : 'replay'); paintModeSwitch(); render(true);
+      if (save && rec && rec.km >= 0.3 && rec.samples >= 60) {
+        try {
+          const when = new Date(rec.startedAt || Date.now()), pad = (n) => String(n).padStart(2, '0');
+          const stamp = `${when.getFullYear()}${pad(when.getMonth() + 1)}${pad(when.getDate())}_${pad(when.getHours())}${pad(when.getMinutes())}${pad(when.getSeconds())}`;
+          const d = ApexRecording.parse(Core, rec.toCsv(), `web_${stamp}.csv`, { source: 'web-gps', date: `${when.getFullYear()}-${pad(when.getMonth() + 1)}-${pad(when.getDate())}T${pad(when.getHours())}:${pad(when.getMinutes())}`, name: `Drive ${when.toLocaleDateString()} ${pad(when.getHours())}:${pad(when.getMinutes())}` });
+          await ApexRecording.store(d);
+          toast(`Saved ${(rec.km / 1.609344).toFixed(1)} mi. Open ANALYSIS to see it.`);
+        } catch (e) { toast(`Could not save the drive: ${e.message}`); }
+      } else if (save && rec && rec.samples > 0) toast('Too short to save (under 0.3 km).');
+    }
+    $('modeDrive').addEventListener('click', enterDrive);
+    $('modeReplay').addEventListener('click', () => { if (state.mode === 'live' && drive.sensors) leaveDrive(true); else if (state.mode === 'live') { state.live = null; setMode(track && track.kind === 'route' ? 'sim' : 'replay'); paintModeSwitch(); render(true); } });
+    $('driveEnd').addEventListener('click', () => leaveDrive(true));
+
+    // =======================================================================
     // 11. NATIVE BRIDGE (ApexNavApp.swift pushes window.apex.live every 0.1 s)
     // =======================================================================
     window.apex = {
       live(frame) {
         if (!frame || !frame.has_fix || !Number.isFinite(frame.lat) || !Number.isFinite(frame.lon)) return;
         state.live = frame; state.liveAt = performance.now();
-        if (state.mode !== 'live') { setPlaying(false); setMode('live'); resumeFollow(); render(true); } else render(false);
+        if (state.mode !== 'live') { setPlaying(false); setMode('live'); paintModeSwitch(); resumeFollow(); render(true); } else render(false);
       },
       onNative(msg) { if (msg && msg.type === 'recordingSaved') toast(`Saved ${msg.segments} road segments to ${msg.file}`); }
     };
     setInterval(() => {
-      if (state.mode === 'live' && performance.now() - state.liveAt > 5000) {
-        state.live = null; setMode(track && track.kind === 'route' ? 'sim' : 'replay'); toast('GPS lost: back to replay');
+      if (state.mode === 'live' && !drive.sensors && performance.now() - state.liveAt > 5000) {
+        state.live = null; setMode(track && track.kind === 'route' ? 'sim' : 'replay'); paintModeSwitch(); toast('GPS lost: back to replay');
       }
     }, 1000);
 
@@ -1443,6 +1696,8 @@
     drawPuck();
     renderDriveList();
     renderThemeList();
+    renderHighlights(); renderNearbyHighlights();
+    renderAccount();
     const first = drives.find(d => d.id === params.get('drive')) || drives[0];
     if (first) {
       const at = params.has('at') ? parseFloat(params.get('at')) || 0 : 0;

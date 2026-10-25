@@ -59,6 +59,32 @@ real clip vs own voice 0.89 (ceiling) | stock Kokoro US voices 0.50–0.65 | con
 sounded British to the owner). Conversion runs ~0.6 s per second of speech on 4 CPU cores. Reference audio stays
 local (`--ref-wav`), only converted clips are published. Possible phone path: ONNX WavLM-Base + kNN + HiFi-GAN.
 
+## In-app voice enrollment (design only; owner put voice work on hold)
+Goal (owner, 2026-10-25): any user records a short guided session inside the app and the co-driver speaks in their voice from then on, with every phrase
+generated whole. No giant call sheet, no server-side training, nothing about the voice leaves the phone.
+
+**Flow.** Setup → Co-driver voice → *Use my voice*:
+1. Consent screen: "Only record your own voice. It stays on this phone." (Chatterbox/other models that clone are not used; this is conversion of our own TTS.)
+2. Check the room: 3 s of silence measures noise (needs roughly 25 dB below speech), then a level meter coaches distance and warns on clipping or a loud fan.
+3. About 4 minutes of **ordinary reading**, 20–25 short lines, one at a time, big text, auto-advancing on silence. The lines are everyday sentences chosen for sound coverage
+   (all English phonemes in several contexts) with the pace-note words woven in naturally ("banked", "crest", "tightens", numbers). Resumable; can be extended later.
+4. Build (about a minute, once): the voice is made on the phone and a short sample plays: "Left four, long, into square right. Care." Keep / re-record.
+5. Delete my voice: one button erases the recording and the voice.
+
+**How the voice is made (kNN-VC, MIT).** The app already speaks every call as one whole sentence with its fast built-in voice. A small model turns each 20 ms of that speech
+into the closest 20 ms of the user's own recording. So the words and rhythm come from the app's voice and the sound of it comes from the user's real audio. More recorded speech means a
+better match (we measured the owner's 5.7 min at 0.83 speaker similarity against a 0.89 ceiling); extra sessions can be added at any time.
+- Needs on the phone: WavLM (feature extractor), a nearest-neighbour search over the user's recording (a few minutes of audio is ~17k vectors), and a vocoder. The research
+  checkpoint is WavLM-Large (1.2 GB): too heavy; the spike below tests WavLM-Base+ (~95M parameters, ~100 MB quantised) exported to ONNX and run with ONNX Runtime Web (WASM/WebGPU).
+- Timing: our CPU measurement was ~0.6 s of compute per second of speech with the Large model; a route's calls (~300) are converted in the background at route load and cached, never mid-drive.
+- Known limit, from the owner's listening: the conversion keeps the source voice's phrasing, so it can sound like "me, but a computer talking". Measurements cannot see this. The best-sounding
+  path remains a voice **fine-tuned** on the owner's real speech (Kokoro, on a GPU); in-app enrollment is the zero-setup path that works for every user.
+
+**Spike (1 day, when voice work resumes).** Pass if all hold: (a) WavLM-Base+ ONNX q8 converts a 3 s call in under 3 s on an iPhone 12-class device; (b) speaker similarity with the Base+ model is within 0.05 of
+the Large model on the owner's recording; (c) the owner calls it "clearly me" on 10 held-out calls. If it fails, enrollment stays a desktop/PC feature (tools/vc_bank.py) and users get stock voices on the phone.
+
+**Rules.** Only the signed-in person's own recording; no uploading of voice audio ever; the converted clips and the reference both live in the browser's IndexedDB; no sharing of voices between accounts.
+
 ## Real recordings (docs/VOICE_SCRIPT.md)
 `tools/make_voice_script.py` writes a script; the owner reads it; `tools/split_recording.py` cuts it:
 Whisper word timestamps -> fuzzy alignment of every script line -> cut at the quietest point between
