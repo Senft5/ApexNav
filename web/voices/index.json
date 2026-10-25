@@ -1,0 +1,28 @@
+{
+ "voices": [
+  {
+   "id": "daniel",
+   "name": "Daniel",
+   "style": "codriver",
+   "license": "Kokoro-82M, Apache-2.0 (hexgrad/Kokoro-82M)"
+  },
+  {
+   "id": "emma",
+   "name": "Emma",
+   "style": "codriver",
+   "license": "Kokoro-82M, Apache-2.0 (hexgrad/Kokoro-82M)"
+  },
+  {
+   "id": "george",
+   "name": "George",
+   "style": "codriver",
+   "license": "Kokoro-82M, Apache-2.0 (hexgrad/Kokoro-82M)"
+  },
+  {
+   "id": "jarvis",
+   "name": "Jarvis",
+   "style": "jarvis",
+   "license": "Kokoro-82M, Apache-2.0 (hexgrad/Kokoro-82M)"
+  }
+ ]
+}

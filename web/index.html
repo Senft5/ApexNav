@@ -13,6 +13,7 @@
   <script src="apex_core.js"></script>
   <script src="themes.js"></script>
   <script src="instruments.js"></script>
+  <script src="voice.js"></script>
   <script src="data/dry_ridge.js"></script>
   <script src="data/pebble_ridge.js"></script>
   <style>
@@ -235,12 +236,13 @@
           <section>
             <h3>Co-driver voice</h3>
             <div class="row" id="voiceList">
-              <button class="ink-btn" data-voice="codriver">CO-DRIVER</button>
-              <button class="ink-btn" data-voice="jarvis">JARVIS</button>
+              <span id="voiceCards" style="display:contents"></span>
+              <button class="ink-btn" data-voice="device">DEVICE</button>
               <button class="ink-btn" id="voiceTestBtn">TEST</button>
+              <button class="ink-btn" id="liveVoiceBtn">LIVE</button>
             </div>
             <div class="row" style="margin-top:6px"><select class="field" id="voiceSelect"></select></div>
-            <p class="note">Co-driver picks the most natural voice on this device (on iPhone, download an Enhanced or Premium English voice in Settings → Accessibility → Spoken Content for the best result). Jarvis is deliberately robotic.</p>
+            <p class="note">George, Daniel and Emma are rendered with the open Kokoro-82M model (Apache-2.0); pace notes work offline. LIVE also runs the model in the browser for names and routes (one-time ~90 MB download, then cached). Jarvis is the same model through a cartoon-robot effect. DEVICE uses this phone's own voices.</p>
           </section>
           <section>
             <h3>Camera feel</h3>
@@ -336,21 +338,22 @@
     const state = {
       mode: 'replay', playing: false, rate: 1, cursorM: 0, cursorIdx: 0, follow: true, bearing: 0,
       live: null, liveAt: 0, spiritedAt: -Infinity, spoken: new Set(), tapToRoute: false,
-      theme: 'stage', camFeel: 'dynamic', voiceStyle: 'codriver', voiceName: '',
+      theme: 'stage', camFeel: 'dynamic', voiceId: 'george', liveVoice: true, voiceStyle: 'codriver', voiceName: '',
       toggles: { stage: false, voice: true, lpr: true, dna: false, night: false }
     };
     try {
       const saved = JSON.parse(localStorage.getItem('apex.prefs') || 'null');
-      if (saved) { Object.assign(state.toggles, saved.toggles || {}); if (saved.theme) state.theme = saved.theme; if (saved.camFeel) state.camFeel = saved.camFeel; if (saved.voiceStyle) state.voiceStyle = saved.voiceStyle; if (saved.voiceName != null) state.voiceName = saved.voiceName; }
+      if (saved) { Object.assign(state.toggles, saved.toggles || {}); if (saved.theme) state.theme = saved.theme; if (saved.camFeel) state.camFeel = saved.camFeel; if (saved.voiceId) state.voiceId = saved.voiceId; if (saved.liveVoice != null) state.liveVoice = saved.liveVoice; if (saved.voiceName != null) state.voiceName = saved.voiceName; }
     } catch (_) {}
     if (params.has('night')) state.toggles.night = params.get('night') === '1';
     if (params.has('theme')) state.theme = params.get('theme');
     if (params.has('cam')) state.camFeel = params.get('cam');
-    if (params.has('voice')) state.voiceStyle = params.get('voice');
+    if (params.has('voice')) state.voiceId = params.get('voice');
+    state.voiceStyle = state.voiceId === 'jarvis' ? 'jarvis' : 'codriver';
 
     let look = Themes.apply(state.theme, state.toggles.night);
     let cluster = Inst.mountCluster($('cluster'), look.theme);
-    function savePrefs() { try { localStorage.setItem('apex.prefs', JSON.stringify({ theme: state.theme, camFeel: state.camFeel, voiceStyle: state.voiceStyle, voiceName: state.voiceName, toggles: state.toggles })); } catch (_) {} }
+    function savePrefs() { try { localStorage.setItem('apex.prefs', JSON.stringify({ theme: state.theme, camFeel: state.camFeel, voiceId: state.voiceId, liveVoice: state.liveVoice, voiceName: state.voiceName, toggles: state.toggles })); } catch (_) {} }
     function applyTheme() {
       look = Themes.apply(state.theme, state.toggles.night);
       cluster = Inst.mountCluster($('cluster'), look.theme);
@@ -747,6 +750,11 @@
       if (r === 0) return `${NUM_WORDS[h]} hundred`;
       return `${NUM_WORDS[h]}-${TENS[r] || (r === 20 ? 'twenty' : String(r))}`;
     }
+    function spokenTextFor(text, style) {
+      const keep = state.voiceStyle;
+      state.voiceStyle = style;
+      try { return spokenText(text); } finally { state.voiceStyle = keep; }
+    }
     function spokenText(text) {
       if (state.voiceStyle !== 'jarvis') {
         return text.replace(/, (\d{2,3})$/, (_, d) => `, ${codriverDistance(parseInt(d, 10))}`);
@@ -797,28 +805,42 @@
         (/^en/i.test(v.lang) ? 2 : 0) + (/Google UK English Male|Daniel|Arthur|Ryan|Thomas|Oliver/i.test(v.name) ? 3 : 0) - (v.localService === false && !/natural|online/i.test(v.name) ? 0 : 0);
       return voices.filter(v => /^en/i.test(v.lang)).sort((a, b) => score(b) - score(a))[0] || null;
     }
-    function say(text, force) {
+    // say(): pace notes (chain) and fixed phrases (sysToken) play from the open-model voice bank;
+    // anything the bank can't voice (drive names...) falls back to the device voice.
+    function say(text, force, chain = null, sysToken = null) {
       if (!text || (!state.toggles.voice && !force)) return;
-      const style = state.voiceStyle;
-      const spoken = spokenText(text);
-      if (style === 'jarvis') chirp();
-      const native = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex;
-      if (native) { try { native.postMessage({ cmd: 'speak', text: spoken, force: !!force, style }); } catch (_) {} return; }
-      if (!('speechSynthesis' in window)) return;
-      if (force) { speechSynthesis.cancel(); speech.queue.length = 0; speech.busy = false; }
-      speech.queue.push(spoken);
+      if (force) { if ('speechSynthesis' in window) speechSynthesis.cancel(); speech.queue.length = 0; }
+      speech.queue.push({ text, chain, sysToken });
       if (speech.queue.length > 2) speech.queue.splice(0, speech.queue.length - 2);
       pumpSpeech();
     }
-    function pumpSpeech() {
+    async function pumpSpeech() {
       if (speech.busy || !speech.queue.length) return;
-      const u = new SpeechSynthesisUtterance(speech.queue.shift());
+      const item = speech.queue.shift();
+      speech.busy = true;
+      try {
+        if (state.voiceId !== 'device' && window.ApexVoice) {
+          await ApexVoice.load(state.voiceId);
+          const tokens = item.chain ? ApexVoice.tokensFor(item.chain, ApexVoice.bank.style) : item.sysToken ? [item.sysToken] : null;
+          if (tokens && await ApexVoice.play(tokens)) { speech.busy = false; pumpSpeech(); return; }
+          // Not in the bank (drive names, route summaries): synthesise live with the same model.
+          if (state.liveVoice && await ApexVoice.speakLive(spokenTextFor(item.text, ApexVoice.bank.style))) { speech.busy = false; pumpSpeech(); return; }
+        }
+      } catch (_) { /* fall back to the device voice */ }
+      deviceSpeak(spokenText(item.text));
+    }
+    function deviceSpeak(spoken) {
+      const style = state.voiceStyle;
+      if (style === 'jarvis') chirp();
+      const native = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex;
+      if (native) { try { native.postMessage({ cmd: 'speak', text: spoken, force: false, style }); } catch (_) {} speech.busy = false; pumpSpeech(); return; }
+      if (!('speechSynthesis' in window)) { speech.busy = false; return; }
+      const u = new SpeechSynthesisUtterance(spoken);
       const v = pickVoice(state.voiceStyle);
       if (v) { u.voice = v; u.lang = v.lang; }
       const robotVoice = v && /Zarvox|Trinoids|Fred|Ralph|Cellos|robot/i.test(v.name);
       if (state.voiceStyle === 'jarvis') { u.rate = robotVoice ? 1.0 : 0.92; u.pitch = robotVoice ? 1.0 : 0.15; }
       else { u.rate = 1.12; u.pitch = 1.0; }
-      speech.busy = true;
       u.onend = u.onerror = () => { speech.busy = false; pumpSpeech(); };
       speechSynthesis.speak(u);
     }
@@ -834,15 +856,19 @@
     // otherwise the distance to it ("Left 4 minus long, 150"). Chained notes are not called twice.
     function chainedCall(e, ev, spirited) {
       let text = e.call, cur = e;
+      const chain = [e];
       for (let hops = 0; hops < 2 && (cur.link === 'into' || cur.link === 'and'); hops++) {
         const next = ev[ev.indexOf(cur) + 1];
         if (!next || (next.type === 'corner' && !spirited)) break;
         text += ` ${cur.link} ${next.call}`;
         state.spoken.add(`${track.id}:${next.type}:${next.index}`);
+        chain.push(next);
         cur = next;
       }
       if (cur.link && cur.link !== 'into' && cur.link !== 'and') text += `, ${cur.link}`;
-      return text;
+      // The last note's link is "into"/"and" only if the chain was cut short; don't voice a dangling link.
+      const voiced = chain.map((n, i) => (i === chain.length - 1 && (n.link === 'into' || n.link === 'and')) ? { ...n, link: null } : n);
+      return { text, chain: voiced };
     }
 
     function updateNotes(vMps, live) {
@@ -866,7 +892,8 @@
         if (state.spoken.has(key) || d < 10) continue;
         state.spoken.add(key);
         if (e.type === 'corner' ? !spirited : !(spirited || noteworthyInCruise(e))) continue;
-        say(chainedCall(e, ev, spirited), false);
+        const call = chainedCall(e, ev, spirited);
+        say(call.text, false, call.chain);
       }
     }
 
@@ -955,6 +982,10 @@
       renderDriveList();
       loadTrackOnMap();
       fetchAlpr(t);
+      // Names are known now: pre-render them in the co-driver's own voice.
+      if (state.liveVoice && state.voiceId !== 'device' && window.ApexVoice) {
+        ApexVoice.load(state.voiceId).then(() => ApexVoice.prefetch([spokenTextFor(`${t.name}.`, ApexVoice.bank.style)])).catch(() => {});
+      }
       resumeFollow();
       render(true);
     }
@@ -1170,21 +1201,60 @@
       }
     }
 
+    // Voice picker: open-model banks (web/voices/index.json) + the device's own voice.
+    let bankVoices = [];
     function renderVoiceList() {
-      document.querySelectorAll('[data-voice]').forEach(b => b.classList.toggle('on', b.dataset.voice === state.voiceStyle));
+      const cards = $('voiceCards');
+      cards.innerHTML = '';
+      for (const v of bankVoices) {
+        const btn = document.createElement('button');
+        btn.className = 'ink-btn';
+        btn.dataset.voice = v.id;
+        btn.textContent = v.name.toUpperCase();
+        btn.title = v.license;
+        cards.appendChild(btn);
+      }
+      document.querySelectorAll('[data-voice]').forEach(b => {
+        b.classList.toggle('on', b.dataset.voice === state.voiceId);
+        b.onclick = () => {
+          state.voiceId = b.dataset.voice; state.voiceStyle = state.voiceId === 'jarvis' ? 'jarvis' : 'codriver';
+          renderVoiceList(); savePrefs();
+          if (window.ApexVoice) ApexVoice.unlock();
+          say('Co-driver ready.', true, null, state.voiceId === 'jarvis' ? 'w:test' : 'sys:test');
+        };
+      });
       const sel = $('voiceSelect');
       const voices = ('speechSynthesis' in window) ? speechSynthesis.getVoices().filter(v => /^en/i.test(v.lang)) : [];
       sel.innerHTML = '';
       sel.add(new Option(`Automatic (${(pickVoice(state.voiceStyle) || { name: 'device default' }).name})`, ''));
       voices.forEach(v => sel.add(new Option(`${v.name} · ${v.lang}`, v.name)));
       sel.value = state.voiceName || '';
-      sel.style.display = voices.length ? '' : 'none';
+      sel.style.display = state.voiceId === 'device' && voices.length ? '' : 'none';
     }
-    document.querySelectorAll('[data-voice]').forEach(b => b.addEventListener('click', () => { state.voiceStyle = b.dataset.voice; state.voiceName = ''; renderVoiceList(); savePrefs(); }));
+    function renderLive() {
+      const st = window.ApexVoice ? ApexVoice.liveState() : 'idle';
+      $('liveVoiceBtn').classList.toggle('on', state.liveVoice);
+      $('liveVoiceBtn').textContent = !state.liveVoice ? 'LIVE OFF' : st === 'ready' ? 'LIVE READY' : st === 'loading' ? 'LIVE LOADING' : st === 'error' ? 'LIVE FAILED' : 'LIVE ON';
+    }
+    $('liveVoiceBtn').addEventListener('click', () => {
+      state.liveVoice = !state.liveVoice; savePrefs();
+      if (state.liveVoice && window.ApexVoice) ApexVoice.warmLive().then(renderLive);
+      renderLive();
+    });
+    setInterval(renderLive, 1500);
+    renderLive();
     $('voiceSelect').addEventListener('change', (e) => { state.voiceName = e.target.value; savePrefs(); renderVoiceList(); });
-    $('voiceTestBtn').addEventListener('click', () => say('Left 4 minus long tightens, care, 150', true));
+    $('voiceTestBtn').addEventListener('click', () => {
+      if (window.ApexVoice) ApexVoice.unlock();
+      const demo = [{ type: 'corner', dir: 'L', severity: 4, grade: '-', shape: null, mods: ['long', 'tightens'], caution: 1, link: 'into' },
+                    { type: 'corner', dir: 'R', severity: 2, grade: '', shape: null, mods: [], caution: 0, link: '150' }];
+      say('Left 4 minus long tightens, care into Right 2, 150', true, demo);
+    });
     if ('speechSynthesis' in window) speechSynthesis.onvoiceschanged = renderVoiceList;
+    if (window.ApexVoice) ApexVoice.voices().then(v => { bankVoices = v; renderVoiceList(); });
     renderVoiceList();
+    // Browsers only allow audio after a user gesture: unlock WebAudio on the first touch.
+    document.addEventListener('pointerdown', () => { if (window.ApexVoice) ApexVoice.unlock(); }, { once: true, capture: true });
     function renderCamList() { document.querySelectorAll('[data-cam]').forEach(b => b.classList.toggle('on', b.dataset.cam === state.camFeel)); }
     document.querySelectorAll('[data-cam]').forEach(b => b.addEventListener('click', () => { state.camFeel = b.dataset.cam; renderCamList(); savePrefs(); }));
     renderCamList();
@@ -1217,7 +1287,11 @@
         if (state.toggles.dna && track && !track.sectors) toast('Stage DNA needs a profiled drive; this route is geometry only.');
       }
       if (k === 'lpr') updatePins();
-      if (k === 'stage') say(state.toggles.stage ? 'Stage mode. Full notes.' : 'Cruise. Hazards only.', true);
+      if (k === 'stage') {
+        const jar = state.voiceId === 'jarvis';
+        say(state.toggles.stage ? 'Stage mode. Full notes.' : 'Cruise. Hazards only.', true, null,
+            state.toggles.stage ? (jar ? 'w:stage' : 'sys:stage') : (jar ? 'w:cruise' : 'sys:cruise'));
+      }
       savePrefs();
       render(true);
     }));
