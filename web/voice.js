@@ -160,7 +160,7 @@
   const TRANSFORMERS_JS = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.5.1/dist/transformers.min.js';
   const KOKORO_MODEL = 'onnx-community/Kokoro-82M-v1.0-ONNX';
   const KOKORO_REV = '1939ad2a8e416c0acfeecc08a694d14ef25f2231';
-  let tts = null, ttsLoading = null, ttsError = null, ttsStage = 'idle';
+  let tts = null, ttsLoading = null, ttsError = null, ttsStage = 'idle', ttsFailedAt = 'idle';
   const files = new Map();                              // model files being downloaded: name -> { loaded, total }
   let pendingRenders = 0, doneRenders = 0;
   const phraseCache = new Map();
@@ -177,7 +177,10 @@
     const st = liveState();
     let loaded = 0, total = 0; for (const f of files.values()) { loaded += f.loaded; total += f.total; }
     const pct = total > 0 ? Math.min(99, Math.round(100 * loaded / total)) : null;
-    if (st === 'error') return { state: st, text: friendlyError(ttsError), error: true };
+    if (st === 'error') {                              // the plain sentence first, then the exact failure so a bug report is actionable
+      const raw = String((ttsError && ttsError.message) || ttsError || '').replace(/\s+/g, ' ').slice(0, 140);
+      return { state: st, text: `${friendlyError(ttsError)} Tap to retry. [${ttsFailedAt === 'library' ? 'engine' : 'model'}: ${raw || 'no message'}]`, error: true };
+    }
     if (st === 'loading') return { state: st, text: ttsStage === 'library' ? 'Loading the voice engine...' : `Downloading the voice${pct != null ? ` · ${pct}%` : '...'} (about 90 MB, once)` };
     if (st === 'ready') return { state: st, text: pendingRenders > 0 ? `Preparing names · ${doneRenders} of ${doneRenders + pendingRenders} done (about 10 s each)` : `Ready · ${doneRenders} name${doneRenders === 1 ? '' : 's'} prepared` };
     return { state: st, text: 'Off. Road and route names use the recorded voice or your phone voice.' };
@@ -197,7 +200,7 @@
         T.AutoTokenizer.from_pretrained(KOKORO_MODEL, { revision: KOKORO_REV }),
       ]).then(([model, tokenizer]) => ({ T, model, tokenizer })))
       .then(t => { tts = t; ttsLoading = null; return t; })
-      .catch(e => { ttsError = e; ttsLoading = null; return null; });
+      .catch(e => { ttsError = e; ttsFailedAt = ttsStage; ttsLoading = null; console.error('Live voice failed while', ttsStage, e); return null; });
     return ttsLoading;
   }
   // Kokoro voice packs: 510 style vectors of 256 floats, picked by phoneme count (as kokoro-js does).
