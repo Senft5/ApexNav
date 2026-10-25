@@ -177,6 +177,7 @@
       border-left: 1px solid var(--rule); transform: translateX(105%); transition: transform 0.18s ease-out; display: flex; flex-direction: column; }
     .sheet.open { transform: none; }
     .sheet.dragging { transition: none; }
+    .sheet [hidden] { display: none !important; }
     .scrim { position: absolute; inset: 0; z-index: 9; display: none; background: rgba(0,0,0,0.18); }
     .scrim.show { display: block; }
     .sheet [data-panel] { display: none; }
@@ -269,6 +270,11 @@
             <h3>Profiled drives</h3>
             <div id="driveList" style="display:grid;gap:6px"></div>
             <div class="row" style="margin-top:10px"><a class="ink-btn solid" href="analysis.html" style="display:inline-flex;align-items:center;text-decoration:none">OPEN DRIVE ANALYSIS →</a></div>
+          </section>
+          <section data-panel="setup" id="accountSection" hidden>
+            <h3>Account · friends</h3>
+            <div id="accountBody" style="display:grid;gap:8px"></div>
+            <p class="note">Optional. Everything works without an account. Nothing is shared with anyone unless you switch it on for that friend, one at a time.</p>
           </section>
           <section data-panel="setup">
             <h3>Co-driver voice</h3>
@@ -1338,6 +1344,64 @@
       }
     }
 
+    // Account (optional; docs/BACKEND.md). The panel only appears when /api answers, so the app stays fully local without it.
+    async function apiCall(method, path, body) {
+      return fetch(path, { method, credentials: 'same-origin', headers: { 'content-type': 'application/json', 'x-apexnav': '1' }, body: body === undefined ? undefined : JSON.stringify(body) });
+    }
+    const jsonOf = async (r) => { try { return await r.json(); } catch (_) { return null; } };
+    const el = (tag, props = {}, ...kids) => { const n = Object.assign(document.createElement(tag), props); n.append(...kids); return n; };
+    const btn = (label, onclick, cls = 'ink-btn') => el('button', { className: cls, textContent: label, onclick });
+    async function renderAccount() {
+      const sec = $('accountSection'), body = $('accountBody');
+      let me = null;
+      try { const r = await apiCall('GET', '/api/me'); if (r.ok && (r.headers.get('content-type') || '').includes('json')) me = await r.json(); } catch (_) {}
+      if (!me) { sec.hidden = true; return; }
+      sec.hidden = false; body.innerHTML = '';
+      const redo = () => renderAccount();
+      if (!me.signed_in) {
+        const inviteFromLink = new URLSearchParams(location.search).get('invite');
+        if (inviteFromLink) { try { sessionStorage.setItem('apex.invite', inviteFromLink); } catch (_) {} }
+        body.append(btn('SIGN IN WITH GOOGLE', () => { location.href = '/api/auth/google/start'; }, 'ink-btn solid'));
+        return;
+      }
+      if (!me.member) {
+        const saved = (() => { try { return sessionStorage.getItem('apex.invite') || ''; } catch (_) { return ''; } })();
+        const inp = el('input', { className: 'field', placeholder: 'Invite code', value: saved, autocomplete: 'off' });
+        body.append(el('div', { className: 'note', textContent: 'You are signed in. Ask a member for an invite to see friends.' }), el('div', { className: 'row' }, inp,
+          btn('JOIN', async () => { const r = await apiCall('POST', '/api/invites/redeem', { token: inp.value.trim() }); if (r.ok) { try { sessionStorage.removeItem('apex.invite'); } catch (_) {} redo(); } else toast('That invite is not valid.'); }, 'ink-btn solid')));
+        body.append(btn('SIGN OUT', async () => { await apiCall('POST', '/api/auth/logout'); redo(); }));
+        return;
+      }
+      if (!me.handle) {
+        const inp = el('input', { className: 'field', placeholder: 'Pick a handle (letters, numbers, _)', autocomplete: 'off' });
+        body.append(el('div', { className: 'row' }, inp, btn('SAVE', async () => { const r = await apiCall('PUT', '/api/me/handle', { handle: inp.value }); if (r.ok) redo(); else toast(r.status === 409 ? 'That handle is taken.' : 'Use 3-20 letters, numbers or _.'); }, 'ink-btn solid')));
+        return;
+      }
+      body.append(el('div', { className: 'note', textContent: `Signed in as @${me.handle}` }));
+      const [fr, gr] = await Promise.all([apiCall('GET', '/api/friends').then(jsonOf), apiCall('GET', '/api/grants').then(jsonOf)]);
+      const grants = new Map((gr || []).filter(g => g.audience_type === 'friend').map(g => [g.audience_id, g]));
+      for (const f of fr || []) {
+        const row = el('div', { className: 'card' }), name = el('b', { textContent: `@${f.handle || '?'}` });
+        const line = el('div', { className: 'row' });
+        if (f.status === 'pending') {
+          line.append(f.incoming ? btn('ACCEPT', async () => { await apiCall('POST', '/api/friends/accept', { user_id: f.id }); redo(); }, 'ink-btn solid') : el('span', { textContent: 'waiting for them' }),
+                      btn('REMOVE', async () => { await apiCall('DELETE', `/api/friends/${f.id}`); redo(); }));
+        } else {
+          const g = grants.get(f.id) || { share_scores: 0, share_times: 0 };
+          const put = async (scores, times) => { await apiCall('PUT', '/api/grants', { audience_type: 'friend', audience_id: f.id, share_scores: scores, share_times: times }); redo(); };
+          const b1 = btn(g.share_scores ? 'SHARING SCORES' : 'SHARE SCORES', () => put(!g.share_scores, false)); b1.classList.toggle('on', !!g.share_scores);
+          const b2 = btn(g.share_times ? 'SHARING TIMES' : 'SHARE TIMES', () => put(true, !g.share_times)); b2.classList.toggle('on', !!g.share_times);
+          line.append(b1, b2, btn('UNFRIEND', async () => { if (confirm(`Unfriend @${f.handle}? This also stops all sharing.`)) { await apiCall('DELETE', `/api/friends/${f.id}`); redo(); } }));
+        }
+        row.append(name, line); body.append(row);
+      }
+      const add = el('input', { className: 'field', placeholder: 'Add a friend by handle', autocomplete: 'off' });
+      body.append(el('div', { className: 'row' }, add, btn('REQUEST', async () => { await apiCall('POST', '/api/friends/request', { handle: add.value.trim().toLowerCase() }); add.value = ''; toast('If that member exists, they have your request.'); redo(); })));
+      const invOut = el('div', { className: 'note' });
+      body.append(el('div', { className: 'row' }, btn('CREATE INVITE', async () => { const r = await apiCall('POST', '/api/invites'); const j = await jsonOf(r); invOut.textContent = r.ok ? j.url : 'Could not create an invite.'; })), invOut);
+      body.append(btn('SIGN OUT', async () => { await apiCall('POST', '/api/auth/logout'); redo(); }));
+    }
+
     // Highlights (local for now): [{id, name, lat, lon, rating}] in localStorage; the server list joins later (docs/BACKEND.md section 9).
     function loadHighlights() { try { return JSON.parse(localStorage.getItem('apex.highlights') || '[]'); } catch (_) { return []; } }
     function saveHighlights(list) { try { localStorage.setItem('apex.highlights', JSON.stringify(list)); } catch (_) {} }
@@ -1484,6 +1548,7 @@
     renderDriveList();
     renderThemeList();
     renderHighlights();
+    renderAccount();
     const first = drives.find(d => d.id === params.get('drive')) || drives[0];
     if (first) {
       const at = params.has('at') ? parseFloat(params.get('at')) || 0 : 0;
