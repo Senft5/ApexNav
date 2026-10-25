@@ -1717,7 +1717,9 @@
       const note = $('liveNote'); if (note) { note.textContent = state.liveVoice ? info.text : 'Off. Road and route names use the recorded voice or your phone voice.'; note.classList.toggle('err', !!(state.liveVoice && info.error)); }
     }
     $('liveVoiceBtn').addEventListener('click', () => {
-      state.liveVoice = !state.liveVoice; savePrefs();
+      const retry = state.liveVoice && window.ApexVoice && ApexVoice.liveState() === 'error';   // a failed load: tapping again tries again instead of switching off
+      if (!retry) state.liveVoice = !state.liveVoice;
+      savePrefs();
       if (state.liveVoice && window.ApexVoice) ApexVoice.warmLive().then(() => { renderLive(); if (track) prefetchNames(track); });
       renderLive();
     });
