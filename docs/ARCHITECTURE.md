@@ -25,6 +25,12 @@ The JS file is a line-for-line port used by the browser/iOS cockpit for live OSR
 - **Hazards** (recorded drives only): bump = per-bin peak > 0.35 g (or 5 m RMS > 0.25 g for older exports without a peak), crest < −0.08 g, dip > +0.10 g; clusters ≥ 150 m apart.
 - **Stage DNA** per 500 m sector, 0–100: TECH (corner density, $\sigma(\kappa)$, tight corners/hairpins, grade variation), FLOW (speed continuity, sweeper share, banked share), SURF (mean roughness, hazard count), CLEAR (−45 per OSM ALPR camera within 60 m; **null when no ALPR data** — unknown is never shown as clear).
 
+## 3b. Reference Lap, Live Pipeline, Analysis
+- `core/reference_lap.py` — simulated sane driver per car profile; all TECH/FLOW features and archetypes are read from it (docs/ROAD_INTELLIGENCE.md).
+- `core/live_pipeline.py` — causal 100 Hz pipeline the phone runs; Swift `ApexKit` is held to it by a generated fixture.
+- `core/drive_analysis.py` — private corner-by-corner pass comparison; JS port in `web/apex_core.js`.
+- Web shell: `web/index.html` (cockpit), `web/analysis.html`, `web/themes.js` (theme registry), `web/instruments.js` (renderers).
+
 ## 4. Data Honesty
 Everything the cockpit shows is measured, derived from measurements, or fetched from a named open source (OSM/DeFlock ALPR via Overpass, OSRM, Nominatim). Geometry-only routes are labelled `SIM · NOT DRIVEN` and show `--` for anything that needs an IMU. A failed ALPR fetch says so instead of implying no cameras.
 

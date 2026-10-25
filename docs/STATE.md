@@ -40,8 +40,46 @@ value and rebuilt the stack on a tested headless core.
 ### Active bug: single-pass bumps are not repeatable
 Dry Ridge re-drives 100 % of the Pebble Ridge route, yet only 1 of 7 Pebble bumps (at 18,410 m) reappears within 8 m on the second pass. Wheel-path differences explain some misses, but single-pass bump detections must be treated as unverified.
 
-## Exact Next Task
-**Multi-pass hazard verification**: snap hazards from every drive onto shared 5 m road bins; a bump is `verified` once seen on >= 2 passes (and decays if later passes over the same bin see nothing). The co-driver calls only verified bumps in cruise; unverified ones show as faint pins. Then the CarPlay `CPMapTemplate` extension.
+## Session 2026-10-25 (c): road intelligence, themes, analysis, Swift testing
+Direction from the owner: themes A/B/C/AB as native components; no fixed speed cap (show
+posted limit + sightline speed); Swift truly tested; plan social; drive analysis; road
+scoring and routing must be the core advantage. Full design: docs/ROAD_INTELLIGENCE.md,
+docs/SOCIAL.md.
 
-## Previous Next Task (superseded)
-Re-export both drives from the raw Sensor Logger zips (`python tools/export_web_profile.py <zip> --name ...`) so bumps use true `vert_peak_g`. Then start the CarPlay `CPMapTemplate` extension: project the pace-note strip and PACE bug onto the head unit, fed by the same `window.apex` frame contract.
+- [x] **Sightline physics, no cap**: geometric sight distance (curve chord clearance M = 4 m +
+  crest ray-cast on elevation) and stopping-sight speed; envelope = min(corner, sight).
+  Posted limits from OSM via Valhalla map matching (exporter + cockpit routes). Dial shows
+  PACE, SIGHT and LIMIT separately.
+- [x] **Reference lap scoring (`core/reference_lap.py`)**: simulate a sane driver in a car
+  profile (braking envelope, sim cruise, power/drag/grade acceleration); TECH/FLOW from
+  per-minute experience (engagement, cadence regularity, esses transitions, braking per
+  cornering load, dead time, vertical events, hairpins, blind corners); archetypes
+  (Switchbacks, Esses, Technical, Rollercoaster, Flowing sweepers, Fast open, Town,
+  Connector). Archetype ordering tests on synthetic roads.
+- [x] **Themes (`web/themes.js`, `web/instruments.js`)**: Stage (AB, default), Roadbook (A,
+  tulip roadbook boxes, printed gauges), Instrument (B, flat graphite), Telemetry (C, race
+  dash with pace lights). Day/night per theme; picker in the route book.
+- [x] **Routing**: Valhalla with highways de-prioritised (OSRM fallback), limits per sample.
+- [x] **Drive analysis (`core/drive_analysis.py`, `web/analysis.html`)**: per-corner time,
+  entry/min/exit, brake point, peak g, envelope use, apex offset, smoothness; B measured over
+  A's stretch by location; cumulative delta; stops flagged and excluded. JS parity on real drives.
+- [x] **Swift**: `core/live_pipeline.py` specifies the causal live pipeline; `ApexKit` (SwiftPM,
+  no UIKit) implements it and replays `ApexKit/Tests/Fixtures/live_fixture.json` to 1e-9
+  (passes on Linux here). `ApexNavApp.swift` delegates all live math to ApexKit.
+  CI: ApexKit on Linux + macOS; simulator UI test launches the app and checks the web
+  cockpit boots; IPA build on every push.
+- Tests: `pytest tests -v` → 35 passed; `swift test --package-path ApexKit` → 5 passed.
+
+### Active bugs / limitations
+- Ramp loops (cloverleafs) read as "Switchbacks"; needs Valhalla road class to veto motorway links.
+- Sight offset M is a constant 4 m; landcover (forest vs field) should set it per corner.
+- Single-pass bumps are unverified (1 of 7 repeat); multi-pass store still to build.
+- Route scoring (archetypes/axes) exists only in Python; routes in the browser get corners,
+  sight and envelope but no Stage DNA until the reference lap is ported to JS.
+- Loop routing still uses circle waypoints; stage discovery + chaining (ROAD_INTELLIGENCE §7) not built.
+- Pages not enabled yet (owner: Settings → Pages → main / root).
+
+## Exact Next Task
+**Stage discovery** (ROAD_INTELLIGENCE §7.2 step 1): port `reference_lap` to `web/apex_core.js`
+at parity, then score road lines from the OpenFreeMap `transportation` layer + Terrarium DEM
+in the visible area and chain the best stages through Valhalla for loops.
