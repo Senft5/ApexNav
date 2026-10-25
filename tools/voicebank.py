@@ -151,11 +151,13 @@ class ChatterboxEngine:
     token ends in punctuation and is re-rendered (new sample) when it comes out much shorter
     than the same token in a Kokoro bank."""
 
-    def __init__(self, ref_wav: str):
+    def __init__(self, ref_wav: str, device: str = None):
         import torch
         from chatterbox.tts import ChatterboxTTS
         torch.manual_seed(7)
-        self.model = ChatterboxTTS.from_pretrained(device="cpu")
+        device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        print(f"  chatterbox on {device}", flush=True)
+        self.model = ChatterboxTTS.from_pretrained(device=device)
         self.model.prepare_conditionals(ref_wav, exaggeration=0.5)
         self.sr = self.model.sr
 
