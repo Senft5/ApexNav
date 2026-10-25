@@ -69,6 +69,8 @@ def main() -> int:
     ap.add_argument("--recorded", help="dir with recorded_keep.json: real clips override converted ones")
     ap.add_argument("--topk", type=int, default=4)
     args = ap.parse_args()
+    args.ref_wav = os.path.abspath(args.ref_wav)     # load_model() changes directory
+    args.recorded = os.path.abspath(args.recorded) if args.recorded else None
     import torch
     import torchaudio
     torch.set_num_threads(os.cpu_count() or 4)

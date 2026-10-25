@@ -476,124 +476,124 @@
    "src": "vc"
   },
   "head:R1++mod:off-camber+caution:1+link:and+hazard:bump+dist:120": {
-   "file": "p_f7f4de3c30ef.m4a",
-   "dur": 3.381,
+   "file": "r_f7f4de3c30ef.m4a",
+   "dur": 3.057,
    "text": "Right one plus off camber, care and Bump, one twenty.",
-   "src": "vc"
+   "src": "recording"
   },
   "hazard:bump+dist:120": {
-   "file": "p_eda2ba31a7a5.m4a",
-   "dur": 1.158,
+   "file": "r_eda2ba31a7a5.m4a",
+   "dur": 1.194,
    "text": "Bump, one twenty.",
-   "src": "vc"
+   "src": "recording"
   },
   "head:R2-+mod:off-camber+caution:1+dist:200": {
-   "file": "p_f8abd6dfe583.m4a",
-   "dur": 2.831,
+   "file": "r_f8abd6dfe583.m4a",
+   "dur": 2.727,
    "text": "Right two minus off camber, care, two hundred.",
-   "src": "vc"
+   "src": "recording"
   },
   "head:LAC+mod:long+caution:1": {
-   "file": "p_a4919cfc4013.m4a",
-   "dur": 1.657,
+   "file": "r_a4919cfc4013.m4a",
+   "dur": 1.519,
    "text": "Acute left long, care.",
-   "src": "vc"
+   "src": "recording"
   },
   "hazard:dip+dist:400": {
-   "file": "p_53e70fc14bdf.m4a",
-   "dur": 1.175,
+   "file": "r_53e70fc14bdf.m4a",
+   "dur": 0.994,
    "text": "Dip, four hundred.",
-   "src": "vc"
+   "src": "recording"
   },
   "head:L5-+dist:120": {
-   "file": "p_a28e92d54524.m4a",
-   "dur": 2.029,
+   "file": "r_a28e92d54524.m4a",
+   "dur": 1.713,
    "text": "Left five minus, one twenty.",
-   "src": "vc"
+   "src": "recording"
   },
   "head:R3-+dist:100": {
-   "file": "p_3c36b0ddbae6.m4a",
-   "dur": 1.798,
+   "file": "r_3c36b0ddbae6.m4a",
+   "dur": 1.704,
    "text": "Right three minus, one hundred.",
-   "src": "vc"
+   "src": "recording"
   },
   "head:L4+mod:opens+mod:over crest+caution:1+link:into+hazard:crest+dist:150": {
-   "file": "p_39c1143c3d28.m4a",
-   "dur": 3.798,
+   "file": "r_39c1143c3d28.m4a",
+   "dur": 3.259,
    "text": "Left four opens over crest, care into Crest, one fifty.",
-   "src": "vc"
+   "src": "recording"
   },
   "hazard:crest+dist:150": {
-   "file": "p_9e50b417d02a.m4a",
-   "dur": 1.239,
+   "file": "r_9e50b417d02a.m4a",
+   "dur": 1.228,
    "text": "Crest, one fifty.",
-   "src": "vc"
+   "src": "recording"
   },
   "hazard:dip+dist:100": {
-   "file": "p_d0df839e92a8.m4a",
-   "dur": 1.121,
+   "file": "r_d0df839e92a8.m4a",
+   "dur": 1.331,
    "text": "Dip, one hundred.",
-   "src": "vc"
+   "src": "recording"
   },
   "hazard:crest+dist:300": {
-   "file": "p_4cfc3d05c19a.m4a",
-   "dur": 1.263,
+   "file": "r_4cfc3d05c19a.m4a",
+   "dur": 1.331,
    "text": "Crest, three hundred.",
-   "src": "vc"
+   "src": "recording"
   },
   "head:LSQ+mod:off-camber+caution:2": {
-   "file": "p_38fd9bf099a2.m4a",
-   "dur": 1.954,
+   "file": "r_38fd9bf099a2.m4a",
+   "dur": 1.952,
    "text": "Square left off camber, caution.",
-   "src": "vc"
+   "src": "recording"
   },
   "hazard:crest+dist:250": {
-   "file": "p_648299dee0b3.m4a",
-   "dur": 1.232,
+   "file": "r_648299dee0b3.m4a",
+   "dur": 1.241,
    "text": "Crest, two fifty.",
-   "src": "vc"
+   "src": "recording"
   },
   "head:R4+mod:tightens+caution:1+dist:100": {
-   "file": "p_9950c9a47913.m4a",
-   "dur": 2.355,
+   "file": "r_9950c9a47913.m4a",
+   "dur": 2.102,
    "text": "Right four tightens, care, one hundred.",
-   "src": "vc"
+   "src": "recording"
   },
   "head:L2++dist:450": {
-   "file": "p_897d007f4ff6.m4a",
-   "dur": 1.763,
+   "file": "r_897d007f4ff6.m4a",
+   "dur": 3.415,
    "text": "Left two plus, four fifty.",
-   "src": "vc"
+   "src": "recording"
   },
   "head:R4+mod:long+dist:150": {
-   "file": "p_c7cb304a865d.m4a",
-   "dur": 1.661,
+   "file": "r_c7cb304a865d.m4a",
+   "dur": 1.477,
    "text": "Right four long, one fifty.",
-   "src": "vc"
+   "src": "recording"
   },
   "hazard:bump+dist:150": {
-   "file": "p_106612d8ca2d.m4a",
-   "dur": 1.154,
+   "file": "r_106612d8ca2d.m4a",
+   "dur": 1.648,
    "text": "Bump, one fifty.",
-   "src": "vc"
+   "src": "recording"
   },
   "hazard:crest+link:and+hazard:dip+dist:150": {
-   "file": "p_815a79d72d0d.m4a",
-   "dur": 1.739,
+   "file": "r_815a79d72d0d.m4a",
+   "dur": 1.796,
    "text": "Crest and Dip, one fifty.",
-   "src": "vc"
+   "src": "recording"
   },
   "hazard:dip+dist:150": {
-   "file": "p_4d25c3a9fce0.m4a",
-   "dur": 1.21,
+   "file": "r_4d25c3a9fce0.m4a",
+   "dur": 1.121,
    "text": "Dip, one fifty.",
-   "src": "vc"
+   "src": "recording"
   },
   "hazard:crest+dist:120": {
-   "file": "p_3f323d523baf.m4a",
-   "dur": 1.282,
+   "file": "r_3f323d523baf.m4a",
+   "dur": 1.6,
    "text": "Crest, one twenty.",
-   "src": "vc"
+   "src": "recording"
   },
   "hazard:dip+link:and+hazard:crest+dist:150": {
    "file": "p_2d79e7fad7a3.m4a",
@@ -602,82 +602,82 @@
    "src": "vc"
   },
   "hazard:crest+dist:400": {
-   "file": "p_3d8f28b7e546.m4a",
-   "dur": 1.243,
+   "file": "r_3d8f28b7e546.m4a",
+   "dur": 1.22,
    "text": "Crest, four hundred.",
-   "src": "vc"
+   "src": "recording"
   },
   "head:R5-+mod:banked+dist:120": {
-   "file": "p_aff3881c0f94.m4a",
-   "dur": 2.252,
+   "file": "r_aff3881c0f94.m4a",
+   "dur": 2.401,
    "text": "Right five minus banked, one twenty.",
-   "src": "vc"
+   "src": "recording"
   },
   "hazard:bump+dist:250": {
-   "file": "p_e8385b367340.m4a",
-   "dur": 1.124,
+   "file": "r_e8385b367340.m4a",
+   "dur": 1.145,
    "text": "Bump, two fifty.",
-   "src": "vc"
+   "src": "recording"
   },
   "head:L4-+link:and+head:R2++mod:tightens+caution:1+dist:80": {
-   "file": "p_12b983271fd8.m4a",
-   "dur": 3.509,
+   "file": "r_12b983271fd8.m4a",
+   "dur": 3.742,
    "text": "Left four minus and Right two plus tightens, care, eighty.",
-   "src": "vc"
+   "src": "recording"
   },
   "head:R2++mod:tightens+caution:1+dist:80": {
-   "file": "p_5f633a9cd471.m4a",
-   "dur": 2.282,
+   "file": "r_5f633a9cd471.m4a",
+   "dur": 2.311,
    "text": "Right two plus tightens, care, eighty.",
-   "src": "vc"
+   "src": "recording"
   },
   "head:L2+mod:banked": {
-   "file": "p_ffdd61068b58.m4a",
-   "dur": 0.971,
+   "file": "r_ffdd61068b58.m4a",
+   "dur": 0.842,
    "text": "Left two banked.",
-   "src": "vc"
+   "src": "recording"
   },
   "head:R5-+mod:banked+dist:100": {
-   "file": "p_7bab1b40a816.m4a",
-   "dur": 2.128,
+   "file": "r_7bab1b40a816.m4a",
+   "dur": 2.076,
    "text": "Right five minus banked, one hundred.",
-   "src": "vc"
+   "src": "recording"
   },
   "head:L4++mod:long+mod:banked+dist:450": {
-   "file": "p_9c5b9f88dbd4.m4a",
-   "dur": 2.402,
+   "file": "r_9c5b9f88dbd4.m4a",
+   "dur": 2.7,
    "text": "Left four plus long banked, four fifty.",
-   "src": "vc"
+   "src": "recording"
   },
   "head:LSQ+caution:1+dist:200": {
-   "file": "p_63c4b9c2a180.m4a",
-   "dur": 1.922,
+   "file": "r_63c4b9c2a180.m4a",
+   "dur": 2.459,
    "text": "Square left, care, two hundred.",
-   "src": "vc"
+   "src": "recording"
   },
   "hazard:bump+dist:350": {
-   "file": "p_614064d9c639.m4a",
-   "dur": 1.153,
+   "file": "r_614064d9c639.m4a",
+   "dur": 1.306,
    "text": "Bump, three fifty.",
-   "src": "vc"
+   "src": "recording"
   },
   "head:R6++mod:long+mod:banked+caution:1+dist:120": {
-   "file": "p_78a0fcfb39dd.m4a",
-   "dur": 2.933,
+   "file": "r_78a0fcfb39dd.m4a",
+   "dur": 2.604,
    "text": "Right six plus long banked, care, one twenty.",
-   "src": "vc"
+   "src": "recording"
   },
   "head:L5+mod:banked+caution:1+dist:60": {
-   "file": "p_63b73aba5c28.m4a",
-   "dur": 2.213,
+   "file": "r_63b73aba5c28.m4a",
+   "dur": 2.62,
    "text": "Left five banked, care, sixty.",
-   "src": "vc"
+   "src": "recording"
   },
   "head:LSQ+caution:1+dist:150": {
-   "file": "p_2471d9c8a3f2.m4a",
-   "dur": 1.983,
+   "file": "r_2471d9c8a3f2.m4a",
+   "dur": 2.296,
    "text": "Square left, care, one fifty.",
-   "src": "vc"
+   "src": "recording"
   },
   "hazard:bump+dist:450": {
    "file": "p_462e1a1815fe.m4a",
@@ -686,130 +686,130 @@
    "src": "vc"
   },
   "head:L1+mod:banked+caution:1+link:into+head:L2+mod:long+mod:opens+mod:banked+link:and+head:R2-": {
-   "file": "p_bdb06caaf83f.m4a",
-   "dur": 4.461,
+   "file": "r_bdb06caaf83f.m4a",
+   "dur": 4.72,
    "text": "Left one banked, care into Left two long opens banked and Right two minus.",
-   "src": "vc"
+   "src": "recording"
   },
   "head:L2+mod:long+mod:opens+mod:banked+link:and+head:R2-+link:into+head:L3++mod:long+mod:banked": {
-   "file": "p_12b9a90660cc.m4a",
-   "dur": 4.444,
+   "file": "r_12b9a90660cc.m4a",
+   "dur": 6.369,
    "text": "Left two long opens banked and Right two minus into Left three plus long banked.",
-   "src": "vc"
+   "src": "recording"
   },
   "head:R2-+link:into+head:L3++mod:long+mod:banked+link:into+hazard:bump+dist:80": {
-   "file": "p_dc4919e35009.m4a",
-   "dur": 3.959,
+   "file": "r_dc4919e35009.m4a",
+   "dur": 4.049,
    "text": "Right two minus into Left three plus long banked into Bump, eighty.",
-   "src": "vc"
+   "src": "recording"
   },
   "head:L3++mod:long+mod:banked+link:into+hazard:bump+dist:80": {
-   "file": "p_78077b2fea9f.m4a",
-   "dur": 2.783,
+   "file": "r_78077b2fea9f.m4a",
+   "dur": 2.41,
    "text": "Left three plus long banked into Bump, eighty.",
-   "src": "vc"
+   "src": "recording"
   },
   "hazard:bump+dist:80": {
-   "file": "p_ca8b70f80941.m4a",
-   "dur": 0.755,
+   "file": "r_ca8b70f80941.m4a",
+   "dur": 1.3,
    "text": "Bump, eighty.",
-   "src": "vc"
+   "src": "recording"
   },
   "head:RSQ+mod:long+dist:250": {
-   "file": "p_7d2778c6f6b2.m4a",
-   "dur": 1.735,
+   "file": "r_7d2778c6f6b2.m4a",
+   "dur": 2.16,
    "text": "Square right long, two fifty.",
-   "src": "vc"
+   "src": "recording"
   },
   "hazard:crest+dist:450": {
-   "file": "p_48aef6a5bf9d.m4a",
-   "dur": 1.242,
+   "file": "r_48aef6a5bf9d.m4a",
+   "dur": 1.56,
    "text": "Crest, four fifty.",
-   "src": "vc"
+   "src": "recording"
   },
   "head:L1++caution:1+link:into+head:R3-": {
-   "file": "p_fa2265d4e3b3.m4a",
-   "dur": 2.851,
+   "file": "r_fa2265d4e3b3.m4a",
+   "dur": 2.94,
    "text": "Left one plus, care into Right three minus.",
-   "src": "vc"
+   "src": "recording"
   },
   "head:L2++link:into+head:RSQ+mod:off-camber+caution:1+dist:450": {
-   "file": "p_74018fec091e.m4a",
-   "dur": 3.898,
+   "file": "r_74018fec091e.m4a",
+   "dur": 4.08,
    "text": "Left two plus into Square right off camber, care, four fifty.",
-   "src": "vc"
+   "src": "recording"
   },
   "head:RSQ+mod:off-camber+caution:1+dist:450": {
-   "file": "p_7e05edc31730.m4a",
-   "dur": 2.701,
+   "file": "r_7e05edc31730.m4a",
+   "dur": 3.0,
    "text": "Square right off camber, care, four fifty.",
-   "src": "vc"
+   "src": "recording"
   },
   "head:LSQ+caution:1+link:and+head:R3+mod:long+mod:banked+dist:120": {
-   "file": "p_da248c65bed0.m4a",
-   "dur": 3.373,
+   "file": "r_da248c65bed0.m4a",
+   "dur": 3.2,
    "text": "Square left, care and Right three long banked, one twenty.",
-   "src": "vc"
+   "src": "recording"
   },
   "head:R3+mod:long+mod:banked+dist:120": {
-   "file": "p_23b42280517b.m4a",
-   "dur": 2.082,
+   "file": "r_23b42280517b.m4a",
+   "dur": 2.36,
    "text": "Right three long banked, one twenty.",
-   "src": "vc"
+   "src": "recording"
   },
   "head:RSQ+caution:1+dist:150": {
-   "file": "p_ef3fb45acd3f.m4a",
-   "dur": 1.944,
+   "file": "r_ef3fb45acd3f.m4a",
+   "dur": 1.918,
    "text": "Square right, care, one fifty.",
-   "src": "vc"
+   "src": "recording"
   },
   "hazard:dip+link:and+hazard:crest": {
-   "file": "p_20afb8511f79.m4a",
-   "dur": 0.893,
+   "file": "r_20afb8511f79.m4a",
+   "dur": 1.298,
    "text": "Dip and Crest.",
-   "src": "vc"
+   "src": "recording"
   },
   "head:R2+dist:300": {
-   "file": "p_de3e926a0fbe.m4a",
-   "dur": 1.408,
+   "file": "r_de3e926a0fbe.m4a",
+   "dur": 1.861,
    "text": "Right two, three hundred.",
-   "src": "vc"
+   "src": "recording"
   },
   "hazard:bump+dist:500": {
-   "file": "p_5819e82b0108.m4a",
-   "dur": 1.12,
+   "file": "r_5819e82b0108.m4a",
+   "dur": 1.56,
    "text": "Bump, five hundred.",
-   "src": "vc"
+   "src": "recording"
   },
   "head:LAC+mod:long+caution:1+dist:400": {
-   "file": "p_87a6e30fc4f5.m4a",
-   "dur": 2.343,
+   "file": "r_87a6e30fc4f5.m4a",
+   "dur": 2.257,
    "text": "Acute left long, care, four hundred.",
-   "src": "vc"
+   "src": "recording"
   },
   "head:R3+mod:banked": {
-   "file": "p_f5e1c29a0ef0.m4a",
-   "dur": 0.969,
+   "file": "r_f5e1c29a0ef0.m4a",
+   "dur": 1.344,
    "text": "Right three banked.",
-   "src": "vc"
+   "src": "recording"
   },
   "head:L4+mod:over crest+caution:1+link:into+hazard:crest+dist:150": {
-   "file": "p_6185d4cf64c7.m4a",
-   "dur": 3.368,
+   "file": "r_6185d4cf64c7.m4a",
+   "dur": 2.634,
    "text": "Left four over crest, care into Crest, one fifty.",
-   "src": "vc"
+   "src": "recording"
   },
   "hazard:dip+dist:120": {
-   "file": "p_d71de5a86e9f.m4a",
-   "dur": 1.195,
+   "file": "r_d71de5a86e9f.m4a",
+   "dur": 1.66,
    "text": "Dip, one twenty.",
-   "src": "vc"
+   "src": "recording"
   },
   "head:LSQ+caution:1+dist:450": {
-   "file": "p_54ff28cb1827.m4a",
-   "dur": 2.041,
+   "file": "r_54ff28cb1827.m4a",
+   "dur": 2.292,
    "text": "Square left, care, four fifty.",
-   "src": "vc"
+   "src": "recording"
   },
   "mod:long+mod:tightens+caution:1": {
    "file": "p_cadf79146b67.m4a",
@@ -4505,6 +4505,882 @@
    "file": "p_3128b94af704.m4a",
    "dur": 1.229,
    "text": "Left hairpin opens.",
+   "src": "vc"
+  },
+  "head:LHP+mod:banked": {
+   "file": "p_092f74ff1465.m4a",
+   "dur": 1.191,
+   "text": "Left hairpin banked.",
+   "src": "vc"
+  },
+  "head:LHP+mod:off-camber": {
+   "file": "p_6f6324a89068.m4a",
+   "dur": 1.449,
+   "text": "Left hairpin off camber.",
+   "src": "vc"
+  },
+  "head:LHP+mod:over crest": {
+   "file": "p_ca564bf99f5c.m4a",
+   "dur": 1.393,
+   "text": "Left hairpin over crest.",
+   "src": "vc"
+  },
+  "head:LSQ+mod:long": {
+   "file": "p_8770b4496e96.m4a",
+   "dur": 1.031,
+   "text": "Square left long.",
+   "src": "vc"
+  },
+  "head:LSQ+mod:short": {
+   "file": "p_fc175e95dd93.m4a",
+   "dur": 0.986,
+   "text": "Square left short.",
+   "src": "vc"
+  },
+  "head:LSQ+mod:tightens": {
+   "file": "p_9b133da5a2b9.m4a",
+   "dur": 1.112,
+   "text": "Square left tightens.",
+   "src": "vc"
+  },
+  "head:LSQ+mod:opens": {
+   "file": "p_cf762e729e68.m4a",
+   "dur": 1.209,
+   "text": "Square left opens.",
+   "src": "vc"
+  },
+  "head:LSQ+mod:banked": {
+   "file": "p_89b4102312d8.m4a",
+   "dur": 1.1,
+   "text": "Square left banked.",
+   "src": "vc"
+  },
+  "head:LSQ+mod:off-camber": {
+   "file": "p_bcbdedce1287.m4a",
+   "dur": 1.312,
+   "text": "Square left off camber.",
+   "src": "vc"
+  },
+  "head:LSQ+mod:over crest": {
+   "file": "p_a3116fc815fd.m4a",
+   "dur": 1.315,
+   "text": "Square left over crest.",
+   "src": "vc"
+  },
+  "head:LAC+mod:short": {
+   "file": "p_64b9a6a0874e.m4a",
+   "dur": 1.055,
+   "text": "Acute left short.",
+   "src": "vc"
+  },
+  "head:LAC+mod:tightens": {
+   "file": "p_f91391304e59.m4a",
+   "dur": 1.186,
+   "text": "Acute left tightens.",
+   "src": "vc"
+  },
+  "head:LAC+mod:opens": {
+   "file": "p_68e0b6929fa0.m4a",
+   "dur": 1.223,
+   "text": "Acute left opens.",
+   "src": "vc"
+  },
+  "head:LAC+mod:banked": {
+   "file": "p_ecf107308f44.m4a",
+   "dur": 1.151,
+   "text": "Acute left banked.",
+   "src": "vc"
+  },
+  "head:LAC+mod:off-camber": {
+   "file": "p_436efa5b9ed4.m4a",
+   "dur": 1.379,
+   "text": "Acute left off camber.",
+   "src": "vc"
+  },
+  "head:LAC+mod:over crest": {
+   "file": "p_d1df105c66b3.m4a",
+   "dur": 1.354,
+   "text": "Acute left over crest.",
+   "src": "vc"
+  },
+  "head:R1+mod:long": {
+   "file": "p_05f675546830.m4a",
+   "dur": 0.844,
+   "text": "Right one long.",
+   "src": "vc"
+  },
+  "head:R1+mod:short": {
+   "file": "p_0936e3b75bbc.m4a",
+   "dur": 0.927,
+   "text": "Right one short.",
+   "src": "vc"
+  },
+  "head:R1+mod:tightens": {
+   "file": "p_6d6dccc1c5d6.m4a",
+   "dur": 1.101,
+   "text": "Right one tightens.",
+   "src": "vc"
+  },
+  "head:R1+mod:opens": {
+   "file": "p_aa653fb3f635.m4a",
+   "dur": 1.059,
+   "text": "Right one opens.",
+   "src": "vc"
+  },
+  "head:R1+mod:banked": {
+   "file": "p_a0af75572abc.m4a",
+   "dur": 0.998,
+   "text": "Right one banked.",
+   "src": "vc"
+  },
+  "head:R1+mod:off-camber": {
+   "file": "p_a2903124e545.m4a",
+   "dur": 1.169,
+   "text": "Right one off camber.",
+   "src": "vc"
+  },
+  "head:R1+mod:over crest": {
+   "file": "p_2286d39808bc.m4a",
+   "dur": 1.317,
+   "text": "Right one over crest.",
+   "src": "vc"
+  },
+  "head:R1-+mod:long": {
+   "file": "p_a7da45b88899.m4a",
+   "dur": 1.196,
+   "text": "Right one minus long.",
+   "src": "vc"
+  },
+  "head:R1-+mod:short": {
+   "file": "p_cf466f850957.m4a",
+   "dur": 1.188,
+   "text": "Right one minus short.",
+   "src": "vc"
+  },
+  "head:R1-+mod:tightens": {
+   "file": "p_51f96fcf6008.m4a",
+   "dur": 1.399,
+   "text": "Right one minus tightens.",
+   "src": "vc"
+  },
+  "head:R1-+mod:opens": {
+   "file": "p_a2620708ee63.m4a",
+   "dur": 1.366,
+   "text": "Right one minus opens.",
+   "src": "vc"
+  },
+  "head:R1-+mod:banked": {
+   "file": "p_c10e96ea3a81.m4a",
+   "dur": 1.367,
+   "text": "Right one minus banked.",
+   "src": "vc"
+  },
+  "head:R1-+mod:off-camber": {
+   "file": "p_6ccaac45fde4.m4a",
+   "dur": 1.499,
+   "text": "Right one minus off camber.",
+   "src": "vc"
+  },
+  "head:R1-+mod:over crest": {
+   "file": "p_d5294fb3bca7.m4a",
+   "dur": 1.582,
+   "text": "Right one minus over crest.",
+   "src": "vc"
+  },
+  "head:R1++mod:long": {
+   "file": "p_c4b439307c13.m4a",
+   "dur": 1.141,
+   "text": "Right one plus long.",
+   "src": "vc"
+  },
+  "head:R1++mod:short": {
+   "file": "p_511334c12ea2.m4a",
+   "dur": 1.09,
+   "text": "Right one plus short.",
+   "src": "vc"
+  },
+  "head:R1++mod:tightens": {
+   "file": "p_6a306d061bef.m4a",
+   "dur": 1.302,
+   "text": "Right one plus tightens.",
+   "src": "vc"
+  },
+  "head:R1++mod:opens": {
+   "file": "p_58b57e2e5ae4.m4a",
+   "dur": 1.308,
+   "text": "Right one plus opens.",
+   "src": "vc"
+  },
+  "head:R1++mod:banked": {
+   "file": "p_e6052dd437c2.m4a",
+   "dur": 1.271,
+   "text": "Right one plus banked.",
+   "src": "vc"
+  },
+  "head:R1++mod:off-camber": {
+   "file": "p_f39ad01e87fa.m4a",
+   "dur": 1.45,
+   "text": "Right one plus off camber.",
+   "src": "vc"
+  },
+  "head:R1++mod:over crest": {
+   "file": "p_810349e393e6.m4a",
+   "dur": 1.488,
+   "text": "Right one plus over crest.",
+   "src": "vc"
+  },
+  "head:R2+mod:short": {
+   "file": "p_30252bb4223a.m4a",
+   "dur": 0.822,
+   "text": "Right two short.",
+   "src": "vc"
+  },
+  "head:R2+mod:tightens": {
+   "file": "p_1dfe467b8983.m4a",
+   "dur": 1.048,
+   "text": "Right two tightens.",
+   "src": "vc"
+  },
+  "head:R2+mod:opens": {
+   "file": "p_e1447b7088ec.m4a",
+   "dur": 1.023,
+   "text": "Right two opens.",
+   "src": "vc"
+  },
+  "head:R2+mod:banked": {
+   "file": "p_5eb8dcd25a03.m4a",
+   "dur": 0.961,
+   "text": "Right two banked.",
+   "src": "vc"
+  },
+  "head:R2+mod:off-camber": {
+   "file": "p_48924a42cd5d.m4a",
+   "dur": 1.156,
+   "text": "Right two off camber.",
+   "src": "vc"
+  },
+  "head:R2+mod:over crest": {
+   "file": "p_9e7e171985a4.m4a",
+   "dur": 1.188,
+   "text": "Right two over crest.",
+   "src": "vc"
+  },
+  "head:R2-+mod:short": {
+   "file": "p_6bd44cf376d3.m4a",
+   "dur": 1.127,
+   "text": "Right two minus short.",
+   "src": "vc"
+  },
+  "head:R2-+mod:tightens": {
+   "file": "p_37eff231d62a.m4a",
+   "dur": 1.367,
+   "text": "Right two minus tightens.",
+   "src": "vc"
+  },
+  "head:R2-+mod:opens": {
+   "file": "p_7760348b18b5.m4a",
+   "dur": 1.345,
+   "text": "Right two minus opens.",
+   "src": "vc"
+  },
+  "head:R2-+mod:banked": {
+   "file": "p_292d005bd6c9.m4a",
+   "dur": 1.277,
+   "text": "Right two minus banked.",
+   "src": "vc"
+  },
+  "head:R2-+mod:off-camber": {
+   "file": "p_de0391643610.m4a",
+   "dur": 1.499,
+   "text": "Right two minus off camber.",
+   "src": "vc"
+  },
+  "head:R2-+mod:over crest": {
+   "file": "p_77fc48659da2.m4a",
+   "dur": 1.496,
+   "text": "Right two minus over crest.",
+   "src": "vc"
+  },
+  "head:R2++mod:long": {
+   "file": "p_1f588222b761.m4a",
+   "dur": 1.182,
+   "text": "Right two plus long.",
+   "src": "vc"
+  },
+  "head:R2++mod:short": {
+   "file": "p_3e88310b7d3b.m4a",
+   "dur": 1.062,
+   "text": "Right two plus short.",
+   "src": "vc"
+  },
+  "head:R2++mod:tightens": {
+   "file": "p_f2ca8ff11289.m4a",
+   "dur": 1.304,
+   "text": "Right two plus tightens.",
+   "src": "vc"
+  },
+  "head:R2++mod:opens": {
+   "file": "p_fa66b7816fe1.m4a",
+   "dur": 1.276,
+   "text": "Right two plus opens.",
+   "src": "vc"
+  },
+  "head:R2++mod:banked": {
+   "file": "p_187c7de8029f.m4a",
+   "dur": 1.109,
+   "text": "Right two plus banked.",
+   "src": "vc"
+  },
+  "head:R2++mod:off-camber": {
+   "file": "p_006b8a309498.m4a",
+   "dur": 1.42,
+   "text": "Right two plus off camber.",
+   "src": "vc"
+  },
+  "head:R2++mod:over crest": {
+   "file": "p_d6c2bcf3d9df.m4a",
+   "dur": 1.44,
+   "text": "Right two plus over crest.",
+   "src": "vc"
+  },
+  "head:R3+mod:short": {
+   "file": "p_9a3bbecf41df.m4a",
+   "dur": 0.867,
+   "text": "Right three short.",
+   "src": "vc"
+  },
+  "head:R3+mod:tightens": {
+   "file": "p_243b6adb3848.m4a",
+   "dur": 1.108,
+   "text": "Right three tightens.",
+   "src": "vc"
+  },
+  "head:R3+mod:off-camber": {
+   "file": "p_02bad3e92806.m4a",
+   "dur": 1.222,
+   "text": "Right three off camber.",
+   "src": "vc"
+  },
+  "head:R3+mod:over crest": {
+   "file": "p_f2e5c037a31d.m4a",
+   "dur": 1.262,
+   "text": "Right three over crest.",
+   "src": "vc"
+  },
+  "head:R3-+mod:short": {
+   "file": "p_fe8cc2832212.m4a",
+   "dur": 1.167,
+   "text": "Right three minus short.",
+   "src": "vc"
+  },
+  "head:R3-+mod:tightens": {
+   "file": "p_0137ec42f7c2.m4a",
+   "dur": 1.418,
+   "text": "Right three minus tightens.",
+   "src": "vc"
+  },
+  "head:R3-+mod:opens": {
+   "file": "p_203c3b39baf6.m4a",
+   "dur": 1.403,
+   "text": "Right three minus opens.",
+   "src": "vc"
+  },
+  "head:R3-+mod:banked": {
+   "file": "p_d3bef0681838.m4a",
+   "dur": 1.346,
+   "text": "Right three minus banked.",
+   "src": "vc"
+  },
+  "head:R3-+mod:off-camber": {
+   "file": "p_a67502c8bddb.m4a",
+   "dur": 1.53,
+   "text": "Right three minus off camber.",
+   "src": "vc"
+  },
+  "head:R3-+mod:over crest": {
+   "file": "p_9d4cd33ad98a.m4a",
+   "dur": 1.542,
+   "text": "Right three minus over crest.",
+   "src": "vc"
+  },
+  "head:R3++mod:short": {
+   "file": "p_25aecc804027.m4a",
+   "dur": 1.108,
+   "text": "Right three plus short.",
+   "src": "vc"
+  },
+  "head:R3++mod:tightens": {
+   "file": "p_2ed3f3801693.m4a",
+   "dur": 1.354,
+   "text": "Right three plus tightens.",
+   "src": "vc"
+  },
+  "head:R3++mod:opens": {
+   "file": "p_00b3c3d3e632.m4a",
+   "dur": 1.321,
+   "text": "Right three plus opens.",
+   "src": "vc"
+  },
+  "head:R3++mod:banked": {
+   "file": "p_5a887a551da1.m4a",
+   "dur": 1.273,
+   "text": "Right three plus banked.",
+   "src": "vc"
+  },
+  "head:R3++mod:off-camber": {
+   "file": "p_02d6f69a64f0.m4a",
+   "dur": 1.508,
+   "text": "Right three plus off camber.",
+   "src": "vc"
+  },
+  "head:R3++mod:over crest": {
+   "file": "p_7a28512badf9.m4a",
+   "dur": 1.502,
+   "text": "Right three plus over crest.",
+   "src": "vc"
+  },
+  "head:R4+mod:short": {
+   "file": "p_b215bf1b666e.m4a",
+   "dur": 0.93,
+   "text": "Right four short.",
+   "src": "vc"
+  },
+  "head:R4+mod:tightens": {
+   "file": "p_be38287965ac.m4a",
+   "dur": 1.103,
+   "text": "Right four tightens.",
+   "src": "vc"
+  },
+  "head:R4+mod:opens": {
+   "file": "p_d80119041252.m4a",
+   "dur": 1.068,
+   "text": "Right four opens.",
+   "src": "vc"
+  },
+  "head:R4+mod:banked": {
+   "file": "p_ce53d1c1110b.m4a",
+   "dur": 0.982,
+   "text": "Right four banked.",
+   "src": "vc"
+  },
+  "head:R4+mod:off-camber": {
+   "file": "p_126b189a3ab8.m4a",
+   "dur": 1.237,
+   "text": "Right four off camber.",
+   "src": "vc"
+  },
+  "head:R4+mod:over crest": {
+   "file": "p_cf006b29edc6.m4a",
+   "dur": 1.257,
+   "text": "Right four over crest.",
+   "src": "vc"
+  },
+  "head:R4-+mod:short": {
+   "file": "p_cfe73c5bd0fb.m4a",
+   "dur": 1.167,
+   "text": "Right four minus short.",
+   "src": "vc"
+  },
+  "head:R4-+mod:tightens": {
+   "file": "p_5b5f67e91ccb.m4a",
+   "dur": 1.457,
+   "text": "Right four minus tightens.",
+   "src": "vc"
+  },
+  "head:R4-+mod:opens": {
+   "file": "p_38068c1b676c.m4a",
+   "dur": 1.41,
+   "text": "Right four minus opens.",
+   "src": "vc"
+  },
+  "head:R4-+mod:banked": {
+   "file": "p_3c3010497f71.m4a",
+   "dur": 1.37,
+   "text": "Right four minus banked.",
+   "src": "vc"
+  },
+  "head:R4-+mod:off-camber": {
+   "file": "p_72805efa43b0.m4a",
+   "dur": 1.611,
+   "text": "Right four minus off camber.",
+   "src": "vc"
+  },
+  "head:R4-+mod:over crest": {
+   "file": "p_3749b6353869.m4a",
+   "dur": 1.569,
+   "text": "Right four minus over crest.",
+   "src": "vc"
+  },
+  "head:R4++mod:short": {
+   "file": "p_b3d1d7c33c77.m4a",
+   "dur": 1.063,
+   "text": "Right four plus short.",
+   "src": "vc"
+  },
+  "head:R4++mod:tightens": {
+   "file": "p_55f66c057c45.m4a",
+   "dur": 1.306,
+   "text": "Right four plus tightens.",
+   "src": "vc"
+  },
+  "head:R4++mod:opens": {
+   "file": "p_8a3518c7b540.m4a",
+   "dur": 1.355,
+   "text": "Right four plus opens.",
+   "src": "vc"
+  },
+  "head:R4++mod:banked": {
+   "file": "p_5cebb09151f8.m4a",
+   "dur": 1.226,
+   "text": "Right four plus banked.",
+   "src": "vc"
+  },
+  "head:R4++mod:off-camber": {
+   "file": "p_5a15cb76985d.m4a",
+   "dur": 1.438,
+   "text": "Right four plus off camber.",
+   "src": "vc"
+  },
+  "head:R4++mod:over crest": {
+   "file": "p_382ca82865d3.m4a",
+   "dur": 1.485,
+   "text": "Right four plus over crest.",
+   "src": "vc"
+  },
+  "head:R5+mod:short": {
+   "file": "p_cab56df3c529.m4a",
+   "dur": 0.893,
+   "text": "Right five short.",
+   "src": "vc"
+  },
+  "head:R5+mod:tightens": {
+   "file": "p_816af1365468.m4a",
+   "dur": 1.158,
+   "text": "Right five tightens.",
+   "src": "vc"
+  },
+  "head:R5+mod:opens": {
+   "file": "p_4ad431602a5a.m4a",
+   "dur": 1.141,
+   "text": "Right five opens.",
+   "src": "vc"
+  },
+  "head:R5+mod:banked": {
+   "file": "p_6ca1116f87e6.m4a",
+   "dur": 1.068,
+   "text": "Right five banked.",
+   "src": "vc"
+  },
+  "head:R5+mod:off-camber": {
+   "file": "p_662001af1db8.m4a",
+   "dur": 1.24,
+   "text": "Right five off camber.",
+   "src": "vc"
+  },
+  "head:R5+mod:over crest": {
+   "file": "p_56e7747d8625.m4a",
+   "dur": 1.264,
+   "text": "Right five over crest.",
+   "src": "vc"
+  },
+  "head:R5-+mod:short": {
+   "file": "p_748a2d5e159c.m4a",
+   "dur": 1.268,
+   "text": "Right five minus short.",
+   "src": "vc"
+  },
+  "head:R5-+mod:tightens": {
+   "file": "p_1eac0f227cee.m4a",
+   "dur": 1.501,
+   "text": "Right five minus tightens.",
+   "src": "vc"
+  },
+  "head:R5-+mod:opens": {
+   "file": "p_f4392e907c3d.m4a",
+   "dur": 1.485,
+   "text": "Right five minus opens.",
+   "src": "vc"
+  },
+  "head:R5-+mod:banked": {
+   "file": "p_046070b24ad7.m4a",
+   "dur": 1.373,
+   "text": "Right five minus banked.",
+   "src": "vc"
+  },
+  "head:R5-+mod:off-camber": {
+   "file": "p_b1f8e306e1ef.m4a",
+   "dur": 1.646,
+   "text": "Right five minus off camber.",
+   "src": "vc"
+  },
+  "head:R5-+mod:over crest": {
+   "file": "p_80da57cbb3c7.m4a",
+   "dur": 1.617,
+   "text": "Right five minus over crest.",
+   "src": "vc"
+  },
+  "head:R5++mod:short": {
+   "file": "p_1c857402499a.m4a",
+   "dur": 1.207,
+   "text": "Right five plus short.",
+   "src": "vc"
+  },
+  "head:R5++mod:tightens": {
+   "file": "p_34ef96695ad1.m4a",
+   "dur": 1.448,
+   "text": "Right five plus tightens.",
+   "src": "vc"
+  },
+  "head:R5++mod:opens": {
+   "file": "p_4bf34618452d.m4a",
+   "dur": 1.419,
+   "text": "Right five plus opens.",
+   "src": "vc"
+  },
+  "head:R5++mod:banked": {
+   "file": "p_717e5fc6224b.m4a",
+   "dur": 1.374,
+   "text": "Right five plus banked.",
+   "src": "vc"
+  },
+  "head:R5++mod:off-camber": {
+   "file": "p_08315a3c7b1c.m4a",
+   "dur": 1.599,
+   "text": "Right five plus off camber.",
+   "src": "vc"
+  },
+  "head:R5++mod:over crest": {
+   "file": "p_e11e91ae60c5.m4a",
+   "dur": 1.527,
+   "text": "Right five plus over crest.",
+   "src": "vc"
+  },
+  "head:R6+mod:long": {
+   "file": "p_04123b79acc6.m4a",
+   "dur": 0.98,
+   "text": "Right six long.",
+   "src": "vc"
+  },
+  "head:R6+mod:short": {
+   "file": "p_b374bb2ea1d3.m4a",
+   "dur": 0.899,
+   "text": "Right six short.",
+   "src": "vc"
+  },
+  "head:R6+mod:tightens": {
+   "file": "p_4ebe2316db94.m4a",
+   "dur": 1.083,
+   "text": "Right six tightens.",
+   "src": "vc"
+  },
+  "head:R6+mod:opens": {
+   "file": "p_2b42c1587324.m4a",
+   "dur": 1.079,
+   "text": "Right six opens.",
+   "src": "vc"
+  },
+  "head:R6+mod:banked": {
+   "file": "p_3c2af14ea70d.m4a",
+   "dur": 1.039,
+   "text": "Right six banked.",
+   "src": "vc"
+  },
+  "head:R6+mod:off-camber": {
+   "file": "p_70fc1694a233.m4a",
+   "dur": 1.323,
+   "text": "Right six off camber.",
+   "src": "vc"
+  },
+  "head:R6+mod:over crest": {
+   "file": "p_cc24abb256c7.m4a",
+   "dur": 1.315,
+   "text": "Right six over crest.",
+   "src": "vc"
+  },
+  "head:R6-+mod:short": {
+   "file": "p_ad2a6440d054.m4a",
+   "dur": 1.242,
+   "text": "Right six minus short.",
+   "src": "vc"
+  },
+  "head:R6-+mod:tightens": {
+   "file": "p_f6fcf6a72a29.m4a",
+   "dur": 1.477,
+   "text": "Right six minus tightens.",
+   "src": "vc"
+  },
+  "head:R6-+mod:opens": {
+   "file": "p_3f51ddc6f032.m4a",
+   "dur": 1.44,
+   "text": "Right six minus opens.",
+   "src": "vc"
+  },
+  "head:R6-+mod:banked": {
+   "file": "p_d64dfde2b7dc.m4a",
+   "dur": 1.271,
+   "text": "Right six minus banked.",
+   "src": "vc"
+  },
+  "head:R6-+mod:off-camber": {
+   "file": "p_47a93a380513.m4a",
+   "dur": 1.676,
+   "text": "Right six minus off camber.",
+   "src": "vc"
+  },
+  "head:R6-+mod:over crest": {
+   "file": "p_ea0d289fc936.m4a",
+   "dur": 1.649,
+   "text": "Right six minus over crest.",
+   "src": "vc"
+  },
+  "head:R6++mod:long": {
+   "file": "p_dd270e0cd229.m4a",
+   "dur": 1.218,
+   "text": "Right six plus long.",
+   "src": "vc"
+  },
+  "head:R6++mod:short": {
+   "file": "p_f157eb6a4f9d.m4a",
+   "dur": 1.237,
+   "text": "Right six plus short.",
+   "src": "vc"
+  },
+  "head:R6++mod:tightens": {
+   "file": "p_15599c62bfdf.m4a",
+   "dur": 1.403,
+   "text": "Right six plus tightens.",
+   "src": "vc"
+  },
+  "head:R6++mod:opens": {
+   "file": "p_bb0b0f532bde.m4a",
+   "dur": 1.362,
+   "text": "Right six plus opens.",
+   "src": "vc"
+  },
+  "head:R6++mod:banked": {
+   "file": "p_30c78bcedb1d.m4a",
+   "dur": 1.212,
+   "text": "Right six plus banked.",
+   "src": "vc"
+  },
+  "head:R6++mod:off-camber": {
+   "file": "p_040d35817815.m4a",
+   "dur": 1.575,
+   "text": "Right six plus off camber.",
+   "src": "vc"
+  },
+  "head:R6++mod:over crest": {
+   "file": "p_9d168bb95bc1.m4a",
+   "dur": 1.611,
+   "text": "Right six plus over crest.",
+   "src": "vc"
+  },
+  "head:RHP+mod:long": {
+   "file": "p_868f99aab6b4.m4a",
+   "dur": 1.102,
+   "text": "Right hairpin long.",
+   "src": "vc"
+  },
+  "head:RHP+mod:short": {
+   "file": "p_5addfba23d83.m4a",
+   "dur": 1.011,
+   "text": "Right hairpin short.",
+   "src": "vc"
+  },
+  "head:RHP+mod:tightens": {
+   "file": "p_785f15508772.m4a",
+   "dur": 1.228,
+   "text": "Right hairpin tightens.",
+   "src": "vc"
+  },
+  "head:RHP+mod:banked": {
+   "file": "p_bd3411f0997d.m4a",
+   "dur": 1.181,
+   "text": "Right hairpin banked.",
+   "src": "vc"
+  },
+  "head:RHP+mod:off-camber": {
+   "file": "p_003a66933700.m4a",
+   "dur": 1.37,
+   "text": "Right hairpin off camber.",
+   "src": "vc"
+  },
+  "head:RHP+mod:over crest": {
+   "file": "p_22dc8cf1f21b.m4a",
+   "dur": 1.414,
+   "text": "Right hairpin over crest.",
+   "src": "vc"
+  },
+  "head:RSQ+mod:short": {
+   "file": "p_8761222043b4.m4a",
+   "dur": 1.053,
+   "text": "Square right short.",
+   "src": "vc"
+  },
+  "head:RSQ+mod:tightens": {
+   "file": "p_9230e2d346b1.m4a",
+   "dur": 1.139,
+   "text": "Square right tightens.",
+   "src": "vc"
+  },
+  "head:RSQ+mod:opens": {
+   "file": "p_4dca74ef4a0c.m4a",
+   "dur": 1.179,
+   "text": "Square right opens.",
+   "src": "vc"
+  },
+  "head:RSQ+mod:banked": {
+   "file": "p_930b41aee9b7.m4a",
+   "dur": 1.064,
+   "text": "Square right banked.",
+   "src": "vc"
+  },
+  "head:RSQ+mod:off-camber": {
+   "file": "p_03ec43e1e146.m4a",
+   "dur": 1.241,
+   "text": "Square right off camber.",
+   "src": "vc"
+  },
+  "head:RSQ+mod:over crest": {
+   "file": "p_35ddde9b6ad5.m4a",
+   "dur": 1.267,
+   "text": "Square right over crest.",
+   "src": "vc"
+  },
+  "head:RAC+mod:short": {
+   "file": "p_c701204956ab.m4a",
+   "dur": 1.013,
+   "text": "Acute right short.",
+   "src": "vc"
+  },
+  "head:RAC+mod:tightens": {
+   "file": "p_a5d1f5449f5f.m4a",
+   "dur": 1.146,
+   "text": "Acute right tightens.",
+   "src": "vc"
+  },
+  "head:RAC+mod:opens": {
+   "file": "p_2ca7a209cf5c.m4a",
+   "dur": 1.223,
+   "text": "Acute right opens.",
+   "src": "vc"
+  },
+  "head:RAC+mod:banked": {
+   "file": "p_d74d6f322fa7.m4a",
+   "dur": 1.112,
+   "text": "Acute right banked.",
+   "src": "vc"
+  },
+  "head:RAC+mod:off-camber": {
+   "file": "p_83a2683656a7.m4a",
+   "dur": 1.369,
+   "text": "Acute right off camber.",
+   "src": "vc"
+  },
+  "head:RAC+mod:over crest": {
+   "file": "p_c3af8b351a14.m4a",
+   "dur": 1.378,
+   "text": "Acute right over crest.",
    "src": "vc"
   }
  }

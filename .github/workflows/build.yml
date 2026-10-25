@@ -1,8 +1,12 @@
 name: iOS Build & Simulator Tests
 
+# macOS minutes count 10x on a private repo (2,000 free minutes a month), so skip the iOS jobs for changes
+# that cannot affect the app: docs, tests, tools, and voice clips.
 on:
   push:
+    paths-ignore: ['docs/**', 'tests/**', 'tools/**', 'web/voices/**', '**.md', 'LICENSE']
   pull_request:
+    paths-ignore: ['docs/**', 'tests/**', 'tools/**', 'web/voices/**', '**.md', 'LICENSE']
   workflow_dispatch:
 
 jobs:
