@@ -9,6 +9,7 @@ import {
   myGrants, publish, removePair, setGrant, setHandle,
 } from "./social";
 import { contribute, setContribute } from "./contribute";
+import { nightlyMerge, pointsFor } from "./nightly";
 import { highlightCreate, highlightDelete, highlightList, highlightRate, highlightReport } from "./highlights";
 import { segmentAdopt, segmentCreate, segmentDelete, segmentList, segmentShare, segmentsSharedWithMe } from "./segments";
 
@@ -33,6 +34,8 @@ on("PUT", "/api/me/handle", async (req, env) => { await setHandle(env, await req
 
 on("PUT", "/api/me/contribute", async (req, env) => { await setContribute(env, await requireMember(req, env), req); return noContent(); });
 on("POST", "/api/contribute", async (req, env) => json(await contribute(env, await requireMember(req, env), req), 202));
+
+on("GET", "/api/points", async (req, env) => json(await pointsFor(env, (await requireMember(req, env)).id)));
 
 on("POST", "/api/friends/request", async (req, env) => { await friendRequest(env, await requireMember(req, env), req); return json({ ok: true }, 202); });
 on("GET", "/api/friends", async (req, env) => json(await friendList(env, await requireMember(req, env))));
@@ -66,6 +69,10 @@ on("POST", "/api/board", async (req, env) => json(await publish(env, await requi
 on("GET", "/api/board/:canon", async (req, env, m) => json(await boardFor(env, await requireMember(req, env), m.groups!.canon)));
 
 export default {
+  /** Cron trigger (wrangler.jsonc "triggers"): rank, merge and score the staged contributions. */
+  async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    ctx.waitUntil(nightlyMerge(env));
+  },
   async fetch(req: Request, env: Env): Promise<Response> {
     try {
       const url = new URL(req.url);

@@ -1,6 +1,7 @@
 import { env, exports } from "cloudflare:workers";
 import m1 from "../migrations/0001_init.sql?raw";
 import m2 from "../migrations/0002_segment_sharing.sql?raw";
+import m3 from "../migrations/0003_camber_count.sql?raw";
 import { sha256hex } from "../src/util";
 
 export const ORIGIN = "https://apexnav.test";
@@ -19,7 +20,7 @@ export async function freshDb(): Promise<void> {
     await env.DB.batch(tables.map((t) => env.DB.prepare(`DELETE FROM ${t.name}`)));
     return;
   }
-  await env.DB.batch([...splitSql(m1), ...splitSql(m2)].map((s) => env.DB.prepare(s)));
+  await env.DB.batch([...splitSql(m1), ...splitSql(m2), ...splitSql(m3)].map((s) => env.DB.prepare(s)));
 }
 
 export interface TestUser { id: string; handle: string; token: string }

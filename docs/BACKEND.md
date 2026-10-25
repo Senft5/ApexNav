@@ -36,13 +36,13 @@ drive → phone profiles it (core/ApexKit, offline) → [opt-in + online] → bi
 - **km of newly mapped road × multiplier, per road segment and direction** (one OSM way, one direction): **1st 3×, 2nd 2×, then 1×.**
 - Order is by **drive date**, so an offline phone keeps its place. Slots re-sort by `(driven_on, received_at)` for 14 days after the
   first drive, then freeze. One account, one rank per way and direction. The second contributor also verifies the first.
-- Totals are published weekly (`points_ledger`); public: points only, never who was first.
+- Totals land in `points_ledger` when a road's group freezes (so a brand-new road's points arrive 14 days after the first drive). Public: points only, never who was first.
 - Anti-cheat (no device attestation exists, so cheap checks): per-bin curvature must correlate with the claimed OSM polyline and cover
   ≥ 60% of the way; 600 km/day and 1,500 km/week caps; 30 uploads/hour; `driven_on` within 14 days of upload; replays across accounts
   (per-bin vectors correlating > 0.98 with a pending upload) are quarantined; first place stays provisional until a different member's data agrees.
 
 ## 5. Data model (backend/migrations, D1 = SQLite)
-Applied to the production database `apexnav-db`: **0001_init.sql** and **0002_segment_sharing.sql**.
+Applied to the production database `apexnav-db`: **0001_init.sql**, **0002_segment_sharing.sql** and **0003_camber_count.sql**.
 
 | Group | Tables |
 |---|---|
@@ -62,7 +62,7 @@ Implemented in `backend/src/{auth,social,segments}.ts`, one router in `index.ts`
 - Unfriend, block, leave crew, revoke grant: the grants and published entries between those people are deleted in the same transaction.
 - Friend requests answer identically for unknown, non-member and real handles (no handle enumeration). The requester cannot accept their own request.
 - Invites and sessions are stored as SHA-256 hashes; an invite works once, expires after 7 days, and is redeemed atomically.
-- Verified by `backend/test/*.test.ts` (36 tests; each privacy rule was checked by temporarily reintroducing the bug and seeing the test fail).
+- Verified by `backend/test/*.test.ts` (64 tests; each privacy rule was checked by temporarily reintroducing the bug and seeing the test fail).
 
 ## 7. Auth: Google sign-in, no library
 `/api/auth/google/start` → Google (authorization-code flow, PKCE S256, `state`, `nonce`) → `/api/auth/google/callback`: exchanges the code
@@ -77,7 +77,7 @@ Google setup (owner, free): Google Cloud console → OAuth consent screen (Exter
 |---|---|
 | Web app + API | One Cloudflare Worker `apexnav` (`wrangler.jsonc`): static files from `web/`, `/api/*` to `backend/src/index.ts`. Live at https://apexnav.senftns.workers.dev/ |
 | Database | D1 `apexnav-db` (US East). Migrations in `backend/migrations`; applied through the Cloudflare connection; CI runs the same SQL in tests |
-| Nightly job | A Worker cron trigger freezes rank slots, merges `ingest_pending` into `road_bins`, writes `points_ledger` (not built) |
+| Nightly job | Cron `17 7 * * *` UTC (`backend/src/nightly.ts`): waits until 14 days after a road's earliest drive, then ranks by drive date, merges `ingest_pending` into `road_bins` (running mean/variance), writes `points_ledger` (3x/2x/1x), discards replays, freezes the slots with the user cleared |
 | Convoy (later) | Durable Objects + WebSockets |
 | Photos, routing tiles, backups | R2 (free allowance, no download fees) |
 | CI | `.github/workflows/core-tests.yml` job `backend`: type check, vitest, `wrangler deploy --dry-run` |
@@ -111,6 +111,6 @@ points 3×/2×/1× per direction of each road; time sharing opt-in per friend an
 - Remaining tests to write when the pieces exist: ingest window/backdating/ranking, nightly merge, account deletion cascade + export, highlights rate limits.
 
 ## 12. Status and build order
-Built: migrations 0001–0002 (live), auth, invites, friends, blocks, crews, grants, boards, segments (with sharing), highlights API (create, bbox list, rate, report, delete), 36 tests, CI job, Worker wiring.
-Next: (1) owner sets the Google secrets and `OWNER_EMAIL`; (2) web account panel and sync (IndexedDB → `/api/segments`, `/api/board`); (3) web highlights sync (the planner bonus and local list are built);
-(4) ingest + nightly merge + points; (5) account deletion + data export; (6) convoy.
+Built: migrations 0001–0003 (live), auth, invites, friends, blocks, crews, grants, boards, segments (with sharing), highlights API, **road-data intake** (`POST /api/contribute`, opt-in `PUT /api/me/contribute`: date window, ranges, contiguity, km/hour caps, hashed one-per-road dedupe), **nightly rank/merge/points** and `GET /api/points` (own weekly totals + a handle/total board), 64 tests, CI job, Worker wiring + cron.
+Next: (1) owner sets the Google secrets, `OWNER_EMAIL` and `PEPPER`; (2) web sync (IndexedDB → `/api/segments`, `/api/board`, `/api/highlights`) and a phone-side contributor that builds bins from a profiled drive;
+(3) account deletion + data export; (4) read side: serve merged `road_bins` to the phone and feed measured data into stage scoring; (5) convoy.
