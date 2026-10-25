@@ -947,9 +947,14 @@
       }
       return out;
     }
-    async function valhallaRoute(points) {
+    async function valhallaRoute(points, throughRoadsOnly = false) {
+      // Loop waypoints snap only to through roads (tertiary..primary), never cul-de-sacs or motorways.
+      const filter = { min_road_class: 'tertiary', max_road_class: 'primary', exclude_ramp: true };
       const res = await fetch(`${VALHALLA}/route`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
-        locations: points.map((p, i) => ({ lat: p.lat, lon: p.lon, type: i === 0 || i === points.length - 1 ? 'break' : 'through' })),
+        locations: points.map((p, i) => {
+          const end = i === 0 || i === points.length - 1;
+          return { lat: p.lat, lon: p.lon, type: end ? 'break' : 'through', ...(throughRoadsOnly && !end ? { radius: 2500, search_filter: filter } : {}) };
+        }),
         costing: 'auto', costing_options: { auto: { use_highways: 0.15, use_tolls: 0.3 } } }) });
       const json = await res.json();
       if (!json.trip) throw new Error(json.error || 'no route');
@@ -986,18 +991,21 @@
       if (track) { const s = sample(track, state.cursorM); return { lat: s.lat, lon: s.lon }; }
       const c = map.getCenter(); return { lat: c.lat, lon: c.lng };
     }
-    async function buildRoute(points, id, name) {
-      toast(`Routing ${name}...`);
-      let coords = null;
-      try { coords = await valhallaRoute(points); } catch (_) { try { coords = await osrmRoute(points); } catch (err) { toast(`Routing failed: ${err.message}. Check your connection.`); return; } }
-      const t = trackFromPolyline(coords, id, name);
+    async function buildRoute(points, id, name, prebuilt = null) {
+      let t = prebuilt;
+      if (!t) {
+        toast(`Routing ${name}...`);
+        let coords = null;
+        try { coords = await valhallaRoute(points); } catch (_) { try { coords = await osrmRoute(points); } catch (err) { toast(`Routing failed: ${err.message}. Check your connection.`); return; } }
+        t = trackFromPolyline(coords, id, name);
+      }
       const i = drives.findIndex(d => d.id === id);
       if (i >= 0) drives.splice(i, 1);
       drives.unshift(t);
       closeSheet();
       activate(t, 0);
       attachLimits(t);
-      toast(`${name}: ${(totalM() / 1609.344).toFixed(1)} mi, ${t.events.length} corners called from map geometry`);
+      if (!prebuilt) toast(`${name}: ${(totalM() / 1609.344).toFixed(1)} mi, ${t.events.length} corners called from map geometry`);
     }
     const routeTo = (lat, lon, name) => buildRoute([here(), { lat, lon }], 'route_dest', name);
     async function routeToQuery(q) {
@@ -1009,16 +1017,42 @@
         routeTo(parseFloat(items[0].lat), parseFloat(items[0].lon), `To ${items[0].display_name.split(',')[0]}`);
       } catch (_) { toast('Search unavailable. Use TAP MAP TO ROUTE.'); }
     }
-    function loop(miles) {
-      const c = here();
+    // Loops: three candidate circles through the start, waypoints snapped to through roads,
+    // spurs cut, then the candidate with the best road character wins (a first step toward
+    // stage chaining, docs/ROAD_INTELLIGENCE.md section 7).
+    function loopWaypoints(c, miles, heading) {
       const rKm = (miles * 1.609344) / (2 * Math.PI * 1.35);
       const kmLat = 110.54, kmLon = 111.32 * Math.cos(c.lat * Math.PI / 180);
-      const heading = Math.random() * 2 * Math.PI;
       const center = { lat: c.lat + rKm * Math.cos(heading) / kmLat, lon: c.lon + rKm * Math.sin(heading) / kmLon };
       const pts = [c];
       for (const k of [1, 2, 3]) { const a = heading + Math.PI + k * Math.PI / 2; pts.push({ lat: center.lat + rKm * Math.cos(a) / kmLat, lon: center.lon + rKm * Math.sin(a) / kmLon }); }
       pts.push(c);
-      return buildRoute(pts, `loop_${miles}`, `${miles} mi loop`);
+      return pts;
+    }
+    function scoreLoop(t, miles) {
+      const km = totalOf(t) / 1000, targetKm = miles * 1.609344;
+      const good = t.events.filter(e => e.type === 'corner' && e.severity !== 'HP' && e.severity >= 2 && e.severity <= 5).length;
+      const retraced = Core.retracedShare(t.lat, t.lon);
+      const lengthErr = Math.abs(km - targetKm) / targetKm;
+      return { score: good / Math.max(1, km) * 10 - retraced * 60 - lengthErr * 25, good, retraced, km };
+    }
+    const totalOf = (t) => t.dist[t.dist.length - 1];
+    async function loop(miles) {
+      const c = here();
+      toast(`Building ${miles} mi loops...`);
+      const base = Math.random() * 2 * Math.PI;
+      const tries = [0, 2 * Math.PI / 3, 4 * Math.PI / 3].map(async (off, k) => {
+        const coords = await valhallaRoute(loopWaypoints(c, miles, base + off), true);
+        const rs = Core.removeSpurs(coords.map(p => p[1]), coords.map(p => p[0]));
+        const t = trackFromPolyline(rs.lat.map((la, i) => [rs.lon[i], la]), `loop_${miles}`, `${miles} mi loop`);
+        return { t, ...scoreLoop(t, miles), spursCut: rs.removed };
+      });
+      const done = (await Promise.allSettled(tries)).filter(r => r.status === 'fulfilled').map(r => r.value);
+      if (!done.length) { toast('Loop routing failed. Check your connection.'); return; }
+      done.sort((a, b) => b.score - a.score);
+      const best = done[0];
+      await buildRoute(null, `loop_${miles}`, `${miles} mi loop`, best.t);
+      toast(`${miles} mi loop: ${best.km.toFixed(1)} km, ${best.good} good corners, ${Math.round(best.retraced * 100)}% retraced (best of ${done.length})`);
     }
 
     // =======================================================================

@@ -190,3 +190,23 @@ def test_caution_ladder_and_note_chaining():
     assert notes[1]["link"] == str(rd.rally_distance(notes[2]["start_m"] - notes[1]["end_m"]))
     assert notes[-1]["link"] is None
     assert rd.rally_distance(140.0) == 150 and rd.rally_distance(33.0) == 30
+
+
+def test_two_left_squares_are_not_one_hairpin():
+    # A left at one junction and another left 30 m later (a jog) must read as two squares.
+    for gap in (25.0, 30.0, 40.0):
+        _, _, cs = _corners([("straight", 200.0), ("arc", 12.0, 90.0), ("straight", gap),
+                             ("arc", 12.0, 90.0), ("straight", 200.0)])
+        codes = [rd.pace_note_text(c)[0] for c in cs]
+        assert codes == ["LSQ", "LSQ"], (gap, codes)
+    # ...while a real hairpin stays a hairpin.
+    _, _, cs = _corners([("straight", 200.0), ("arc", 15.0, 180.0), ("straight", 200.0)])
+    assert [rd.pace_note_text(c)[0] for c in cs] == ["LHP"]
+
+
+def test_junction_square_running_into_a_bend_is_not_a_hairpin():
+    # Turning off one road onto another that bends straight away (US 27 -> Dry Ridge Rd).
+    for r_sq, r_bend in ((12.0, 40.0), (15.0, 60.0), (20.0, 50.0)):
+        _, _, cs = _corners([("straight", 200.0), ("arc", r_sq, 90.0), ("arc", r_bend, 80.0), ("straight", 200.0)])
+        codes = [rd.pace_note_text(c)[0] for c in cs]
+        assert "LHP" not in codes and codes[0] == "LSQ" and len(codes) == 2, (r_sq, r_bend, codes)
