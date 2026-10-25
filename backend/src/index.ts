@@ -8,6 +8,7 @@ import {
   blockUser, boardFor, crewCreate, crewInvite, crewJoin, crewLeave, crewList, friendAccept, friendList, friendRequest,
   myGrants, publish, removePair, setGrant, setHandle,
 } from "./social";
+import { highlightCreate, highlightDelete, highlightList, highlightRate, highlightReport } from "./highlights";
 import { segmentAdopt, segmentCreate, segmentDelete, segmentList, segmentShare, segmentsSharedWithMe } from "./segments";
 
 type Handler = (req: Request, env: Env, m: RegExpMatchArray) => Promise<Response>;
@@ -50,6 +51,12 @@ on("GET", "/api/segments/shared", async (req, env) => json(await segmentsSharedW
 on("POST", "/api/segments/adopt", async (req, env) => json(await segmentAdopt(env, await requireMember(req, env), req), 201));
 on("DELETE", "/api/segments/:id", async (req, env, m) => { await segmentDelete(env, await requireMember(req, env), m.groups!.id); return noContent(); });
 on("POST", "/api/segments/:id/share", async (req, env, m) => { await segmentShare(env, await requireMember(req, env), m.groups!.id, req); return noContent(); });
+
+on("POST", "/api/highlights", async (req, env) => json(await highlightCreate(env, await requireMember(req, env), req), 201));
+on("GET", "/api/highlights", async (req, env) => json(await highlightList(env, await requireMember(req, env), new URL(req.url))));
+on("POST", "/api/highlights/:id/rating", async (req, env, m) => { await highlightRate(env, await requireMember(req, env), m.groups!.id, req); return noContent(); });
+on("POST", "/api/highlights/:id/report", async (req, env, m) => { await highlightReport(env, await requireMember(req, env), m.groups!.id, req); return noContent(); });
+on("DELETE", "/api/highlights/:id", async (req, env, m) => { await highlightDelete(env, await requireMember(req, env), m.groups!.id); return noContent(); });
 
 on("POST", "/api/board", async (req, env) => json(await publish(env, await requireMember(req, env), req)));
 on("GET", "/api/board/:canon", async (req, env, m) => json(await boardFor(env, await requireMember(req, env), m.groups!.canon)));

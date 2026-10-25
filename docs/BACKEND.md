@@ -62,7 +62,7 @@ Implemented in `backend/src/{auth,social,segments}.ts`, one router in `index.ts`
 - Unfriend, block, leave crew, revoke grant: the grants and published entries between those people are deleted in the same transaction.
 - Friend requests answer identically for unknown, non-member and real handles (no handle enumeration). The requester cannot accept their own request.
 - Invites and sessions are stored as SHA-256 hashes; an invite works once, expires after 7 days, and is redeemed atomically.
-- Verified by `backend/test/*.test.ts` (29 tests; each privacy rule was checked by temporarily reintroducing the bug and seeing the test fail).
+- Verified by `backend/test/*.test.ts` (36 tests; each privacy rule was checked by temporarily reintroducing the bug and seeing the test fail).
 
 ## 7. Auth: Google sign-in, no library
 `/api/auth/google/start` → Google (authorization-code flow, PKCE S256, `state`, `nonce`) → `/api/auth/google/callback`: exchanges the code
@@ -92,6 +92,8 @@ On the free plan a private repo gets 2,000 Actions minutes a month and macOS cou
 User-added scenic points, rated by members, that can pull a route toward them (toggle + strength slider in the route panel).
 - Lookup is a **bounding-box query** (`lat`/`lon` indexes) around the route, filtered by distance on the phone; no spatial extension needed at this scale.
   If it outgrows that, highlights is a small table to move to a PostGIS database.
+- Built (`backend/src/highlights.ts`): members only; author never returned; 10 new per day and 200 per person; duplicates within 40 m refused; US coordinates only;
+  score = (sum of stars + 6) / (ratings + 2) so one account cannot pin a spot at 5.0; the author cannot rate their own; three different reporters hide a spot.
 - Author is never shown. Members only, rate-limited, report button. "Visited" on a rating is proved by the rater's own drive passing within ~150 m
   (decided on the phone; the server never sees the trace). Highlights at a user's own start points are never offered (home privacy).
 - Routing: the loop planner (web/stages.js) adds a bonus to stages near a highlight, scaled by rating and capped by a detour limit.
@@ -109,6 +111,6 @@ points 3×/2×/1× per direction of each road; time sharing opt-in per friend an
 - Remaining tests to write when the pieces exist: ingest window/backdating/ranking, nightly merge, account deletion cascade + export, highlights rate limits.
 
 ## 12. Status and build order
-Built: migrations 0001–0002 (live), auth, invites, friends, blocks, crews, grants, boards, segments (with sharing), 29 tests, CI job, Worker wiring.
-Next: (1) owner sets the Google secrets and `OWNER_EMAIL`; (2) web account panel and sync (IndexedDB → `/api/segments`, `/api/board`); (3) highlights API + planner bonus;
+Built: migrations 0001–0002 (live), auth, invites, friends, blocks, crews, grants, boards, segments (with sharing), highlights API (create, bbox list, rate, report, delete), 36 tests, CI job, Worker wiring.
+Next: (1) owner sets the Google secrets and `OWNER_EMAIL`; (2) web account panel and sync (IndexedDB → `/api/segments`, `/api/board`); (3) web highlights sync (the planner bonus and local list are built);
 (4) ingest + nightly merge + points; (5) account deletion + data export; (6) convoy.
