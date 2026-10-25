@@ -186,12 +186,18 @@ final class ApexScriptBridge: NSObject, WKScriptMessageHandler {
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
         let body = message.body
         var command: String?
+        var speechText: String?
         if let text = body as? String {
             command = text
         } else if let dict = body as? [String: Any] {
             command = (dict["cmd"] as? String) ?? (dict["command"] as? String) ?? (dict["type"] as? String)
+            speechText = dict["text"] as? String
         }
         guard let cmd = command else { return }
+        if cmd == "speak", let phrase = speechText {
+            shell?.speakCoDriver(phrase)
+            return
+        }
         shell?.handleCommand(cmd)
     }
 }
@@ -721,9 +727,20 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         }
     }
 
+    func speakCoDriver(_ phrase: String) {
+        speak(phrase)
+    }
+
     private func speak(_ phrase: String) {
+        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .voicePrompt, options: [.mixWithOthers, .duckOthers])
+        try? AVAudioSession.sharedInstance().setActive(true)
+        if synth.isSpeaking {
+            synth.stopSpeaking(at: .immediate)
+        }
         let utterance = AVSpeechUtterance(string: phrase)
-        utterance.rate = 0.53
+        utterance.voice = AVSpeechSynthesisVoice(language: "en-GB") ?? AVSpeechSynthesisVoice(language: "en-US")
+        utterance.rate = 0.54
+        utterance.pitchMultiplier = 0.96
         synth.speak(utterance)
     }
 }
