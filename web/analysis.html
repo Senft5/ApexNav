@@ -15,63 +15,121 @@
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { background: var(--panel); color: var(--panel-ink); font-family: var(--font-ui); font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; }
-    main { max-width: 1180px; margin: 0 auto; padding: calc(14px + env(safe-area-inset-top, 0px)) 16px 40px; display: grid; gap: 18px; }
-    header { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; justify-content: space-between; border-bottom: 1px solid var(--rule); padding-bottom: 12px; }
+    main { max-width: 1180px; margin: 0 auto; padding: calc(14px + env(safe-area-inset-top, 0px)) 16px 48px; display: grid; gap: 18px; }
+    header { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; justify-content: space-between; border-bottom: 1px solid var(--rule); padding-bottom: 12px; }
     h1 { font-size: 22px; letter-spacing: 0.08em; text-transform: uppercase; }
     h1 small { display: block; font-size: 11px; color: var(--panel-dim); letter-spacing: 0.14em; margin-top: 4px; }
     h2 { font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--panel-dim); margin-bottom: 8px; }
     a { color: inherit; }
-    .pick { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; font-size: 12px; }
-    select, button { font: inherit; font-size: 13px; height: 34px; padding: 0 10px; background: transparent; color: var(--panel-ink); border: 1px solid var(--panel-dim); }
-    button { cursor: pointer; font-weight: 700; letter-spacing: 0.1em; }
-    .tag { font-weight: 800; letter-spacing: 0.1em; }
-    .tag.a { color: var(--panel-ink); } .tag.b { color: var(--accent); }
+    .tabs { display: flex; gap: 0; border: 1px solid var(--rule); }
+    .tabs button { font: inherit; font-size: 12px; font-weight: 700; letter-spacing: 0.14em; padding: 9px 14px; background: transparent; color: var(--panel-dim); border: none; cursor: pointer; }
+    .tabs button.on { color: var(--panel); background: var(--panel-ink); }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; font-size: 12px; }
+    select, input, button.btn { font: inherit; font-size: 13px; height: 34px; padding: 0 10px; background: transparent; color: var(--panel-ink); border: 1px solid var(--panel-dim); }
+    button.btn { cursor: pointer; font-weight: 700; letter-spacing: 0.1em; }
+    button.btn.solid { background: var(--panel-ink); color: var(--panel); border-color: var(--panel-ink); }
+    .panel { border: 1px solid var(--rule); padding: 12px; min-width: 0; }
+    .note { font-size: 12px; color: var(--panel-dim); line-height: 1.5; }
+    .grid2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 12px; }
+    svg { display: block; width: 100%; height: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th { font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--panel-dim); text-align: right; padding: 6px; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+    td { padding: 8px 6px; border-bottom: 1px solid var(--rule); text-align: right; font-family: var(--font-num); white-space: nowrap; vertical-align: middle; }
+    th.l, td.l { text-align: left; }
+    td .sub { display: block; font-size: 11px; color: var(--panel-dim); font-family: var(--font-ui); }
+    tr.stopped td { opacity: 0.55; }
+    tr.best td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+    .score { font-family: var(--font-num); font-weight: 700; font-size: 26px; }
+    .score.big { font-size: 44px; line-height: 1; }
+    .bars { display: grid; grid-template-columns: repeat(5, minmax(46px, 1fr)); gap: 6px; min-width: 260px; }
+    .bar { display: grid; gap: 2px; font-size: 8px; letter-spacing: 0.1em; color: var(--panel-dim); text-align: left; font-family: var(--font-ui); }
+    .bar i { display: block; height: 5px; background: var(--rule); }
+    .bar u { display: block; height: 100%; background: var(--accent); text-decoration: none; }
+    .bar.legal u { background: var(--panel-ink); }
     .cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
     .card { border: 1px solid var(--rule); padding: 10px 12px; display: grid; gap: 3px; }
-    .card b { font-family: var(--font-num); font-size: 26px; font-weight: 700; }
+    .card b { font-family: var(--font-num); font-size: 24px; font-weight: 700; }
     .card span { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--panel-dim); }
     .card em { font-style: normal; font-size: 11px; color: var(--panel-dim); }
     .gain { color: #3FB950; } .loss { color: var(--signal); }
-    .grid2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 12px; }
-    .panel { border: 1px solid var(--rule); padding: 10px; min-width: 0; }
-    svg { display: block; width: 100%; height: auto; }
-    table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    th { font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--panel-dim); text-align: right; padding: 6px 6px; border-bottom: 1px solid var(--rule); white-space: nowrap; }
-    th:first-child, td:first-child, th:nth-child(2), td:nth-child(2) { text-align: left; }
-    td { padding: 7px 6px; border-bottom: 1px solid var(--rule); text-align: right; font-family: var(--font-num); white-space: nowrap; }
-    td .sub { display: block; font-size: 11px; color: var(--panel-dim); }
-    tr.stopped td { opacity: 0.55; }
     .tul { width: 34px; height: 34px; display: inline-block; vertical-align: middle; }
     .scroll { overflow-x: auto; }
-    .note { font-size: 12px; color: var(--panel-dim); line-height: 1.5; }
+    .strip { position: relative; cursor: crosshair; touch-action: none; border: 1px solid var(--rule); }
+    .strip .sel { position: absolute; top: 0; bottom: 0; background: var(--accent); opacity: 0.22; pointer-events: none; }
+    .seglist { display: grid; gap: 6px; }
+    .seg { text-align: left; border: 1px solid var(--rule); padding: 10px 12px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; cursor: pointer; background: transparent; color: inherit; font: inherit; }
+    .seg.on { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
+    .seg b { font-size: 15px; } .seg span { font-size: 12px; color: var(--panel-dim); }
+    [hidden] { display: none !important; }
     @media (max-width: 760px) { .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } .grid2 { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
   <main>
     <header>
-      <h1>Drive Analysis<small>Private · your passes only · nothing leaves this device</small></h1>
-      <div class="pick">
-        <span class="tag a">A</span><select id="selA"></select>
-        <button id="swapBtn">SWAP</button>
-        <span class="tag b">B</span><select id="selB"></select>
-        <a href="index.html">Cockpit →</a>
+      <h1>Drive Analysis<small>Private · your drives stay on this device</small></h1>
+      <div class="tabs" id="tabs">
+        <button data-tab="history" class="on">HISTORY</button>
+        <button data-tab="segments">SEGMENTS</button>
+        <button data-tab="compare">COMPARE</button>
       </div>
+      <a href="index.html">Cockpit →</a>
     </header>
 
-    <section class="cards" id="cards"></section>
-
-    <section class="grid2">
-      <div class="panel"><h2>Road · corners numbered</h2><div id="plan"></div></div>
-      <div class="panel"><h2>Time delta B vs A along the road · speed A</h2><div id="chart"></div>
-        <p class="note">Below zero: B was ahead. Breaks are where B left A's road; the delta restarts on the next shared stretch.</p></div>
+    <!-- ============================ HISTORY ============================ -->
+    <section id="tab-history" class="grid" style="display:grid;gap:14px">
+      <div class="cards" id="historyCards"></div>
+      <div class="panel"><h2>Driver Score over time</h2><div id="trend"></div></div>
+      <div class="panel">
+        <h2>Drives</h2>
+        <div class="scroll"><table id="historyTable"></table></div>
+        <div class="row" style="margin-top:10px">
+          <label class="btn" style="display:inline-flex;align-items:center;cursor:pointer">IMPORT RECORDING (.csv)<input type="file" id="importFile" accept=".csv,text/csv" hidden /></label>
+          <span class="note">CSV files saved by the ApexNav iPhone app (record → share). Profiled in your browser, stored on this device.</span>
+        </div>
+      </div>
+      <p class="note">Driver Score (0-1000) rates technique, never time or speed: <b>pace</b> = corner minimum speed as a share of its sane grip limit (full credit from 85 % to 100 %, falling steeply beyond — overdriving never scores), <b>smoothness</b> = how gently lateral load builds per metre, <b>braking</b> = no hard braking after the apex, <b>consistency</b> = even commitment corner to corner. <b>Legality</b> multiplies the total: time more than 10 mph over the posted limit lowers it.</p>
     </section>
 
-    <section class="panel">
-      <h2>Corner by corner (A's corners, B measured over the same stretch)</h2>
-      <div class="scroll"><table id="table"></table></div>
-      <p class="note" style="margin-top:8px">Greyed rows include a stop (below 2.5 m/s): the time there measures waiting, so they are left out of the corner total.
-      Envelope use = minimum speed ÷ the corner's grip limit at μ 0.60. Brake = distance before the apex where braking (&lt; −0.15 g) began.</p>
+    <!-- ============================ SEGMENTS ============================ -->
+    <section id="tab-segments" hidden style="display:grid;gap:14px">
+      <div class="panel">
+        <h2>Create a segment</h2>
+        <div class="row" style="margin-bottom:8px">
+          <select id="segDrive"></select>
+          <span class="note">Drag across the profile to mark a stretch, then name it.</span>
+        </div>
+        <div class="strip" id="segStrip"><div class="sel" id="segSel" hidden></div><div id="segStripSvg"></div></div>
+        <div class="row" style="margin-top:8px">
+          <input id="segName" placeholder="Segment name, e.g. Dry Ridge climb" style="flex:1;min-width:200px" />
+          <button class="btn solid" id="segSave">SAVE SEGMENT</button>
+          <span class="note" id="segInfo"></span>
+        </div>
+      </div>
+      <div class="grid2">
+        <div class="panel"><h2>Your segments</h2><div class="seglist" id="segList"></div><p class="note" style="margin-top:8px">Segments are your custom stretches. Every drive that covers one, in the same direction, is ranked on it by Driver Score. Leaderboards with friends and crews come with accounts.</p></div>
+        <div class="panel"><h2 id="segTitle">Passes</h2><div id="segChart"></div><div class="scroll"><table id="segTable"></table></div></div>
+      </div>
+    </section>
+
+    <!-- ============================ COMPARE ============================ -->
+    <section id="tab-compare" hidden style="display:grid;gap:14px">
+      <div class="row">
+        <b>A</b><select id="selA"></select>
+        <button class="btn" id="swapBtn">SWAP</button>
+        <b style="color:var(--accent)">B</b><select id="selB"></select>
+      </div>
+      <section class="cards" id="cards"></section>
+      <section class="grid2">
+        <div class="panel"><h2>Road · corners numbered</h2><div id="plan"></div></div>
+        <div class="panel"><h2>Time delta B vs A along the road · speed A</h2><div id="chart"></div>
+          <p class="note">Below zero: B was ahead. Breaks are where B left A's road; the delta restarts on the next shared stretch.</p></div>
+      </section>
+      <section class="panel">
+        <h2>Corner by corner (A's corners, B measured over the same stretch)</h2>
+        <div class="scroll"><table id="table"></table></div>
+        <p class="note" style="margin-top:8px">Greyed rows include a stop (below 2.5 m/s) and are left out of the corner total. Envelope use = minimum speed ÷ the corner's grip limit. Brake = distance before the apex where braking began.</p>
+      </section>
     </section>
   </main>
 
@@ -86,127 +144,322 @@
     const look = window.ApexThemes.apply(params.get('theme') || prefs.theme, params.has('night') ? params.get('night') === '1' : !!(prefs.toggles && prefs.toggles.night));
     const C = look.colors;
 
-    const drives = (window.APEX_DRIVES || []).map(d => {
+    // ---------------------------------------------------------------------
+    // Drive library: shipped profiles + recordings imported into IndexedDB
+    // ---------------------------------------------------------------------
+    function fromExport(d) {
       const f = Object.fromEntries(d.fields.map((n, i) => [n, i]));
-      const col = (n, s = 1) => d.rows.map(r => r[f[n]] * s);
+      const col = (n, s = 1) => (n in f ? d.rows.map(r => (r[f[n]] == null ? null : r[f[n]] * s)) : null);
       return {
-        id: d.id, name: d.name, date: (d.date || '').slice(0, 10),
-        lat: col('lat'), lon: col('lon'), speed_mps: col('speed_mph', 1 / MPH), lon_g: col('lon_g'), lat_g: col('lat_g'),
-        corners: d.events.filter(e => e.type === 'corner').map(e => ({
-          start: Math.round(e.start_m / 5), end: Math.round(e.end_m / 5), apex: e.index, apex_mps: e.apex_mph / MPH,
-          code: e.code, call: e.call, dir: e.dir, severity: e.severity, turn_rad: e.turn_rad, mods: e.mods || [] }))
+        id: d.id, name: d.name, date: d.date || '', source: 'profiled',
+        lat: col('lat'), lon: col('lon'), dist: col('distance_m'), speed_mps: col('speed_mph', 1 / MPH),
+        lon_g: col('lon_g'), lat_g: col('lat_g'), limit_mps: col('limit_kph', 1 / 3.6), elev: col('elevation_m'),
+        events: d.events.filter(e => e.type === 'corner')
       };
-    });
-    if (drives.length < 2) { $('cards').innerHTML = '<p class="note">Analysis needs two profiled drives.</p>'; return; }
+    }
+    function cornersOf(d) {
+      return d.events.map(e => ({ start: Math.round(e.start_m / 5), end: Math.round(e.end_m / 5), apex: e.index, apex_mps: e.apex_mph / MPH,
+        code: e.code, call: e.call, dir: e.dir, severity: e.severity, turn_rad: e.turn_rad, mods: e.mods || [] }));
+    }
+    function finish(d) {
+      d.corners = cornersOf(d);
+      d.km = d.dist[d.dist.length - 1] / 1000;
+      d.ds = Core.driverScore(d.speed_mps, d.lon_g, d.lat_g, d.corners, d.limit_mps);
+      return d;
+    }
 
-    for (const sel of [$('selA'), $('selB')]) for (const d of drives) sel.add(new Option(`${d.name} · ${d.date}`, d.id));
-    $('selA').value = params.get('a') || drives[0].id;
-    $('selB').value = params.get('b') || drives.find(d => d.id !== $('selA').value).id;
-    $('selA').onchange = $('selB').onchange = run;
-    $('swapBtn').onclick = () => { const a = $('selA').value; $('selA').value = $('selB').value; $('selB').value = a; run(); };
+    // IndexedDB store for imported recordings (they can be several MB; localStorage is too small).
+    const DB = { db: null };
+    function idb() {
+      if (DB.db) return Promise.resolve(DB.db);
+      return new Promise((res, rej) => {
+        const r = indexedDB.open('apexnav', 1);
+        r.onupgradeneeded = () => r.result.createObjectStore('drives', { keyPath: 'id' });
+        r.onsuccess = () => { DB.db = r.result; res(DB.db); };
+        r.onerror = () => rej(r.error);
+      });
+    }
+    async function storedDrives() {
+      try {
+        const db = await idb();
+        return await new Promise((res) => { const q = db.transaction('drives').objectStore('drives').getAll(); q.onsuccess = () => res(q.result || []); q.onerror = () => res([]); });
+      } catch (_) { return []; }
+    }
+    async function storeDrive(d) {
+      const db = await idb();
+      await new Promise((res, rej) => { const t = db.transaction('drives', 'readwrite'); t.objectStore('drives').put(d); t.oncomplete = res; t.onerror = () => rej(t.error); });
+    }
 
+    // ApexDrive CSV (ApexNavApp.swift): segment_index,distance_m,lat,lon,elevation_m,speed_mph,lon_g,lat_g,camber_deg,...
+    function parseRecording(text, fileName) {
+      const lines = text.trim().split(/\r?\n/);
+      const head = lines[0].split(',').map(s => s.trim());
+      const cols = Object.fromEntries(head.map(h => [h, []]));
+      for (const line of lines.slice(1)) { const v = line.split(','); head.forEach((h, i) => cols[h].push(parseFloat(v[i]))); }
+      for (const need of ['lat', 'lon', 'speed_mph', 'lon_g', 'lat_g']) if (!cols[need]) throw new Error(`missing column ${need}`);
+      const prof = Core.profileRecording(cols);
+      const stamp = (fileName.match(/(\d{8})_(\d{6})/) || []);
+      const date = stamp.length ? `${stamp[1].slice(0, 4)}-${stamp[1].slice(4, 6)}-${stamp[1].slice(6, 8)}T${stamp[2].slice(0, 2)}:${stamp[2].slice(2, 4)}` : new Date().toISOString();
+      return {
+        id: 'rec_' + fileName.replace(/\W+/g, '_'), name: fileName.replace(/\.csv$/i, ''), date, source: 'imported',
+        lat: cols.lat, lon: cols.lon, dist: cols.distance_m || cols.lat.map((_, i) => i * 5), speed_mps: cols.speed_mph.map(v => v / MPH),
+        lon_g: cols.lon_g, lat_g: cols.lat_g, limit_mps: null, elev: cols.elevation_m || null, events: prof.events
+      };
+    }
+
+    // OSM maxspeed per sample via Valhalla map matching (same as the cockpit and the exporter).
+    const VALHALLA = 'https://valhalla1.openstreetmap.de';
+    async function postedLimits(lat, lon) {
+      const stride = 4, idx = [];
+      for (let i = 0; i < lat.length; i += stride) idx.push(i);
+      if (idx[idx.length - 1] !== lat.length - 1) idx.push(lat.length - 1);
+      try {
+        const res = await fetch(`${VALHALLA}/trace_attributes`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+          shape: idx.map(i => ({ lat: lat[i], lon: lon[i] })), costing: 'auto', shape_match: 'map_snap',
+          filters: { attributes: ['edge.speed_limit', 'matched.edge_index'], action: 'include' } }) });
+        const json = await res.json();
+        const edges = json.edges || [], out = new Array(lat.length).fill(null);
+        (json.matched_points || []).forEach((mp, k) => {
+          const e = edges[mp.edge_index];
+          const v = e && typeof e.speed_limit === 'number' ? e.speed_limit / 3.6 : null;
+          for (let i = idx[k]; i < (idx[k + 1] ?? lat.length); i++) out[i] = v;
+        });
+        return out.some(v => v != null) ? out : null;
+      } catch (_) { return null; }   // unknown stays unknown
+    }
+
+    let drives = [];
+    async function loadDrives() {
+      const shipped = (window.APEX_DRIVES || []).map(fromExport);
+      const stored = await storedDrives();
+      drives = shipped.concat(stored).map(finish).sort((a, b) => (a.date < b.date ? -1 : 1));
+    }
+
+    // ---------------------------------------------------------------------
+    // Shared helpers
+    // ---------------------------------------------------------------------
     const fmtS = (s) => (s == null ? '--' : `${s > 0 ? '+' : ''}${s.toFixed(2)} s`);
     const cls = (s) => (s == null || Math.abs(s) < 0.05 ? '' : s < 0 ? 'gain' : 'loss');
     const mph = (v) => (v == null ? '--' : Math.round(v * MPH));
     const ft = (m) => (m == null ? '--' : `${Math.round(m * 3.28084)}`);
-
-    function run() {
-      const A = drives.find(d => d.id === $('selA').value), B = drives.find(d => d.id === $('selB').value);
-      const r = Core.compareDrives(A, B);
-      cards(A, B, r);
-      plan(A, r);
-      chart(A, r);
-      table(A, r);
+    const dateLabel = (d) => (d.date ? d.date.slice(0, 16).replace('T', ' ') : '--');
+    const mmss = (s) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`;
+    function bars(comp) {
+      if (!comp) return '<span class="note">no clean corners</span>';
+      const b = (k, label, extra = '') => comp[k] == null
+        ? `<div class="bar ${extra}" title="no posted limits known for this drive">${label} --<i></i></div>`
+        : `<div class="bar ${extra}">${label} ${Math.round(comp[k] * 100)}<i><u style="width:${Math.round(comp[k] * 100)}%"></u></i></div>`;
+      return `<div class="bars">${b('pace', 'PACE')}${b('smoothness', 'SMOOTH')}${b('braking', 'BRAKING')}${b('consistency', 'CONSIST')}${b('legality', 'LEGAL', 'legal')}</div>`;
     }
 
-    function cards(A, B, r) {
+    // ---------------------------------------------------------------------
+    // HISTORY
+    // ---------------------------------------------------------------------
+    function renderHistory() {
+      const scored = drives.filter(d => d.ds.score != null);
+      const best = scored.reduce((m, d) => (!m || d.ds.score > m.ds.score ? d : m), null);
+      const avg = scored.length ? Math.round(scored.reduce((s, d) => s + d.ds.score, 0) / scored.length) : null;
+      const totalKm = drives.reduce((s, d) => s + d.km, 0);
+      const latest = scored[scored.length - 1];
+      const c = (v, label, extra) => `<div class="card"><b>${v}</b><span>${label}</span>${extra ? `<em>${extra}</em>` : ''}</div>`;
+      $('historyCards').innerHTML =
+        c(latest ? latest.ds.score : '--', 'Latest Driver Score', latest ? latest.name : '') +
+        c(avg ?? '--', 'Average', `${scored.length} scored drives`) +
+        c(best ? best.ds.score : '--', 'Best', best ? best.name : '') +
+        c(`${(totalKm / 1.609344).toFixed(0)} mi`, 'Profiled', `${drives.length} drives`);
+
+      // trend
+      const W = 760, H = 180, L = 40, R = 12, T = 12, B = 26;
+      const pts = scored.map((d, i) => [L + (scored.length < 2 ? 0.5 : i / (scored.length - 1)) * (W - L - R), T + (1 - d.ds.score / 1000) * (H - T - B), d]);
+      const grid = [0, 250, 500, 750, 1000].map(v => { const y = T + (1 - v / 1000) * (H - T - B); return `<line x1="${L}" x2="${W - R}" y1="${y}" y2="${y}" stroke="${C.rule}"/><text x="${L - 6}" y="${y + 3}" text-anchor="end" font-size="10" fill="${C.panelDim}">${v}</text>`; }).join('');
+      const line = pts.map((p, i) => `${i ? 'L' : 'M'}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join('');
+      const dots = pts.map(p => `<circle cx="${p[0]}" cy="${p[1]}" r="5" fill="${C.accent}"/><text x="${p[0]}" y="${H - 8}" text-anchor="middle" font-size="10" fill="${C.panelDim}">${p[2].date.slice(5, 10)}</text>`).join('');
+      $('trend').innerHTML = `<svg viewBox="0 0 ${W} ${H}">${grid}<path d="${line}" fill="none" stroke="${C.accent}" stroke-width="2"/>${dots}</svg>`;
+
+      const rows = drives.slice().reverse().map(d => `<tr>
+        <td class="l"><b>${d.name}</b><span class="sub">${dateLabel(d)} · ${d.source}${d.limit_mps ? '' : ' · no limit data'}</span></td>
+        <td>${(d.km / 1.609344).toFixed(1)} mi</td>
+        <td>${d.ds.corners}</td>
+        <td><span class="score">${d.ds.score ?? '--'}</span></td>
+        <td class="l">${bars(d.ds.components)}</td></tr>`).join('');
+      $('historyTable').innerHTML = `<tr><th class="l">Drive</th><th>Distance</th><th>Corners scored</th><th>Driver Score</th><th class="l">Components</th></tr>${rows}`;
+    }
+
+    $('importFile').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      try {
+        const d = parseRecording(await file.text(), file.name);
+        d.limit_mps = await postedLimits(d.lat, d.lon);
+        await storeDrive(d);
+        await loadDrives();
+        renderAll();
+      } catch (err) { alert(`Could not import ${file.name}: ${err.message}`); }
+      e.target.value = '';
+    });
+
+    // ---------------------------------------------------------------------
+    // SEGMENTS (custom stretches, stored locally; ranked by Driver Score)
+    // ---------------------------------------------------------------------
+    const loadSegs = () => { try { return JSON.parse(localStorage.getItem('apex.segments') || '[]'); } catch (_) { return []; } };
+    const saveSegs = (s) => { try { localStorage.setItem('apex.segments', JSON.stringify(s)); } catch (_) {} };
+    let segs = loadSegs(), activeSeg = segs[0] ? segs[0].id : null, sel = null;
+
+    function renderSegStrip() {
+      const d = drives.find(x => x.id === $('segDrive').value);
+      if (!d) return;
+      const W = 1000, H = 110, n = d.lat.length, step = Math.max(1, Math.floor(n / 600));
+      const vmax = Math.max(...d.speed_mps) || 1;
+      let sp = '', el = '';
+      const ex = d.elev, emin = ex ? Math.min(...ex) : 0, espan = ex ? Math.max(10, Math.max(...ex) - emin) : 1;
+      for (let i = 0; i < n; i += step) {
+        const x = (i / (n - 1)) * W;
+        sp += `${i ? 'L' : 'M'}${x.toFixed(1)} ${(H - 8 - (d.speed_mps[i] / vmax) * (H - 20)).toFixed(1)}`;
+        if (ex) el += `${i ? 'L' : 'M'}${x.toFixed(1)} ${(H - 4 - ((ex[i] - emin) / espan) * (H - 30)).toFixed(1)}`;
+      }
+      const ticks = d.corners.map(c => `<line x1="${(c.apex / (n - 1)) * W}" x2="${(c.apex / (n - 1)) * W}" y1="0" y2="8" stroke="${C.accent}" stroke-width="2"/>`).join('');
+      $('segStripSvg').innerHTML = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="height:110px">${ex ? `<path d="${el} L${W} ${H} L0 ${H} Z" fill="${C.rule}"/>` : ''}<path d="${sp}" fill="none" stroke="${C.panelInk}" stroke-width="1.2" opacity="0.8"/>${ticks}</svg>`;
+      drawSel();
+    }
+    function drawSel() {
+      const box = $('segSel');
+      if (!sel) { box.hidden = true; $('segInfo').textContent = ''; return; }
+      const d = drives.find(x => x.id === $('segDrive').value), n = d.lat.length;
+      const [a, b] = sel[0] < sel[1] ? sel : [sel[1], sel[0]];
+      box.hidden = false;
+      box.style.left = `${(a / (n - 1)) * 100}%`; box.style.width = `${((b - a) / (n - 1)) * 100}%`;
+      const corners = d.corners.filter(c => c.start >= a && c.end <= b).length;
+      $('segInfo').textContent = `${((b - a) * 5 / 1609.344).toFixed(2)} mi · ${corners} corners`;
+    }
+    (() => {
+      const strip = $('segStrip');
+      let dragging = false;
+      const idxAt = (x) => { const d = drives.find(v => v.id === $('segDrive').value); const r = strip.getBoundingClientRect(); return Math.round(Math.max(0, Math.min(1, (x - r.left) / r.width)) * (d.lat.length - 1)); };
+      strip.addEventListener('pointerdown', (e) => { dragging = true; strip.setPointerCapture(e.pointerId); const i = idxAt(e.clientX); sel = [i, i]; drawSel(); });
+      strip.addEventListener('pointermove', (e) => { if (dragging) { sel[1] = idxAt(e.clientX); drawSel(); } });
+      strip.addEventListener('pointerup', () => { dragging = false; });
+    })();
+    $('segDrive').addEventListener('change', () => { sel = null; renderSegStrip(); });
+    $('segSave').addEventListener('click', () => {
+      const d = drives.find(x => x.id === $('segDrive').value);
+      if (!d || !sel) { $('segInfo').textContent = 'Drag across the profile first.'; return; }
+      const [a, b] = sel[0] < sel[1] ? sel : [sel[1], sel[0]];
+      if (b - a < 40) { $('segInfo').textContent = 'Make it at least 200 m long.'; return; }
+      const seg = { id: 'seg_' + Date.now(), name: $('segName').value.trim() || `${d.name} ${((a * 5) / 1609.344).toFixed(1)}-${((b * 5) / 1609.344).toFixed(1)} mi`,
+                    lat0: d.lat[a], lon0: d.lon[a], lat1: d.lat[b], lon1: d.lon[b], length_m: (b - a) * 5, from: d.id };
+      segs.push(seg); saveSegs(segs); activeSeg = seg.id; sel = null; $('segName').value = '';
+      renderSegments();
+    });
+
+    function passesFor(seg) {
+      return drives.map(d => ({ d, p: Core.segmentPass(seg, d) })).filter(x => x.p);
+    }
+    function renderSegments() {
+      $('segDrive').innerHTML = '';
+      drives.forEach(d => $('segDrive').add(new Option(`${d.name} · ${dateLabel(d)}`, d.id)));
+      renderSegStrip();
+      const list = $('segList');
+      list.innerHTML = segs.length ? '' : '<p class="note">No segments yet. Mark one on the profile above.</p>';
+      for (const s of segs) {
+        const passes = passesFor(s), best = passes.reduce((m, x) => (x.p.score != null && (m == null || x.p.score > m) ? x.p.score : m), null);
+        const b = document.createElement('button');
+        b.className = 'seg' + (s.id === activeSeg ? ' on' : '');
+        b.innerHTML = `<b></b><span class="score" style="font-size:20px">${best ?? '--'}</span><span></span><span>best</span>`;
+        b.querySelector('b').textContent = s.name;
+        b.querySelectorAll('span')[1].textContent = `${(s.length_m / 1609.344).toFixed(2)} mi · ${passes.length} pass${passes.length === 1 ? '' : 'es'}`;
+        b.onclick = () => { activeSeg = s.id; renderSegments(); };
+        list.appendChild(b);
+      }
+      const seg = segs.find(s => s.id === activeSeg);
+      if (!seg) { $('segTable').innerHTML = ''; $('segChart').innerHTML = ''; $('segTitle').textContent = 'Passes'; return; }
+      $('segTitle').textContent = `Passes · ${seg.name}`;
+      const passes = passesFor(seg).sort((a, b) => (b.p.score ?? -1) - (a.p.score ?? -1));
+      const bestTime = Math.min(...passes.map(x => x.p.time_s));
+      $('segTable').innerHTML = `<tr><th class="l">#</th><th class="l">Pass</th><th>Driver Score</th><th class="l">Components</th><th>Time (private)</th></tr>` +
+        passes.map((x, i) => `<tr class="${i === 0 ? 'best' : ''}"><td class="l">${i + 1}</td><td class="l"><b>${x.d.name}</b><span class="sub">${dateLabel(x.d)}</span></td>
+          <td><span class="score">${x.p.score ?? '--'}</span></td><td class="l">${bars(x.p.components)}</td>
+          <td>${mmss(x.p.time_s)}<span class="sub">${x.p.time_s === bestTime ? 'quickest' : '+' + (x.p.time_s - bestTime).toFixed(1) + ' s'}</span></td></tr>`).join('') +
+        (passes.length ? '' : '<tr><td class="l" colspan="5"><span class="note">No drive covers this segment in its direction yet.</span></td></tr>');
+      const byDate = passes.slice().sort((a, b) => (a.d.date < b.d.date ? -1 : 1)).filter(x => x.p.score != null);
+      const W = 600, H = 120, L = 34, T = 10, B = 22;
+      const pts = byDate.map((x, i) => [L + (byDate.length < 2 ? 0.5 : i / (byDate.length - 1)) * (W - L - 10), T + (1 - x.p.score / 1000) * (H - T - B), x]);
+      $('segChart').innerHTML = byDate.length ? `<svg viewBox="0 0 ${W} ${H}">${[0, 500, 1000].map(v => { const y = T + (1 - v / 1000) * (H - T - B); return `<line x1="${L}" x2="${W - 10}" y1="${y}" y2="${y}" stroke="${C.rule}"/><text x="${L - 5}" y="${y + 3}" text-anchor="end" font-size="10" fill="${C.panelDim}">${v}</text>`; }).join('')}
+        <path d="${pts.map((p, i) => `${i ? 'L' : 'M'}${p[0]} ${p[1]}`).join('')}" fill="none" stroke="${C.accent}" stroke-width="2"/>${pts.map(p => `<circle cx="${p[0]}" cy="${p[1]}" r="4.5" fill="${C.accent}"/>`).join('')}</svg>` : '';
+    }
+
+    // ---------------------------------------------------------------------
+    // COMPARE (corner by corner between two passes)
+    // ---------------------------------------------------------------------
+    function renderCompareSelectors() {
+      for (const s of [$('selA'), $('selB')]) { const keep = s.value; s.innerHTML = ''; drives.forEach(d => s.add(new Option(`${d.name} · ${dateLabel(d)}`, d.id))); if (keep) s.value = keep; }
+      if (!$('selA').value && drives[0]) $('selA').value = drives[0].id;
+      if ((!$('selB').value || $('selB').value === $('selA').value) && drives[1]) $('selB').value = drives.find(d => d.id !== $('selA').value).id;
+    }
+    $('selA').onchange = $('selB').onchange = () => renderCompare();
+    $('swapBtn').onclick = () => { const a = $('selA').value; $('selA').value = $('selB').value; $('selB').value = a; renderCompare(); };
+
+    function renderCompare() {
+      const A = drives.find(d => d.id === $('selA').value), B = drives.find(d => d.id === $('selB').value);
+      if (!A || !B || A === B) { $('cards').innerHTML = '<p class="note">Pick two different drives.</p>'; return; }
+      const r = Core.compareDrives(A, B);
       const c = (v, label, extra, k = '') => `<div class="card"><b class="${k}">${v}</b><span>${label}</span>${extra ? `<em>${extra}</em>` : ''}</div>`;
       $('cards').innerHTML =
         c(`${(r.overlap_m / 1609.344).toFixed(1)} mi`, 'Shared road', `${A.name} ∩ ${B.name}`) +
         c(`${r.matched_corners} / ${A.corners.length}`, 'Corners compared', 'clean passes, no stops') +
         c(fmtS(r.matched_corners ? r.corner_delta_s : null), 'Corner time B vs A', 'sum over compared corners', cls(r.corner_delta_s)) +
         c(fmtS(r.overlap_delta_s), 'Whole shared road', 'includes stops and traffic', cls(r.overlap_delta_s));
-    }
-
-    function plan(A, r) {
+      // plan
       const { x, y } = Core.localXY(A.lat, A.lon);
       let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
       for (let i = 0; i < x.length; i++) { x0 = Math.min(x0, x[i]); x1 = Math.max(x1, x[i]); y0 = Math.min(y0, y[i]); y1 = Math.max(y1, y[i]); }
       const W = 400, pad = 14, s = (W - 2 * pad) / Math.max(x1 - x0, y1 - y0, 1), H = Math.round((y1 - y0) * s + 2 * pad);
       const P = (i) => [pad + (x[i] - x0) * s, H - pad - (y[i] - y0) * s];
       const step = Math.max(1, Math.floor(x.length / 900));
-      let d = '';
-      for (let i = 0; i < x.length; i += step) d += (i ? 'L' : 'M') + P(i).map(v => v.toFixed(1)).join(' ');
-      let marks = '';
-      r.corners.forEach((c, k) => {
-        const [px, py] = P(c.apex);
-        const col = c.stopped || c.delta_s == null ? C.panelDim : c.delta_s < 0 ? '#3FB950' : C.signal;
-        marks += `<circle cx="${px}" cy="${py}" r="7" fill="${C.panel}" stroke="${col}" stroke-width="2"/><text x="${px}" y="${py + 3.5}" text-anchor="middle" font-size="9" font-weight="700" fill="${C.panelInk}">${k + 1}</text>`;
-      });
-      $('plan').innerHTML = `<svg viewBox="0 0 ${W} ${H}"><path d="${d}" fill="none" stroke="${C.route}" stroke-width="2.5" stroke-linejoin="round"/>${marks}</svg>`;
-    }
-
-    function chart(A, r) {
-      const W = 760, H = 260, L = 46, R = 10, T = 12, mid = 150, bottom = H - 22;
-      const total = (A.lat.length - 1) * 5;
-      const X = (m) => L + (m / total) * (W - L - R);
+      let dpath = '';
+      for (let i = 0; i < x.length; i += step) dpath += (i ? 'L' : 'M') + P(i).map(v => v.toFixed(1)).join(' ');
+      const marks = r.corners.map((cc, k) => { const [px, py] = P(cc.apex); const col = cc.stopped || cc.delta_s == null ? C.panelDim : cc.delta_s < 0 ? '#3FB950' : C.signal;
+        return `<circle cx="${px}" cy="${py}" r="7" fill="${C.panel}" stroke="${col}" stroke-width="2"/><text x="${px}" y="${py + 3.5}" text-anchor="middle" font-size="9" font-weight="700" fill="${C.panelInk}">${k + 1}</text>`; }).join('');
+      $('plan').innerHTML = `<svg viewBox="0 0 ${W} ${H}"><path d="${dpath}" fill="none" stroke="${C.route}" stroke-width="2.5" stroke-linejoin="round"/>${marks}</svg>`;
+      // delta chart
+      const CW = 760, CH = 260, CL = 46, CR = 10, CT = 12, mid = 150, bottom = CH - 22, total = (A.lat.length - 1) * 5;
+      const X = (m) => CL + (m / total) * (CW - CL - CR);
       const vals = r.delta_curve.filter(p => p[1] != null).map(p => p[1]);
       const lim = Math.max(2, ...vals.map(Math.abs));
-      const Yd = (v) => T + (mid - T) / 2 - (v / lim) * ((mid - T) / 2 - 4);
+      const Yd = (v) => CT + (mid - CT) / 2 - (v / lim) * ((mid - CT) / 2 - 4);
       let path = '', pen = false;
-      for (const [m, v] of r.delta_curve) {
-        if (v == null) { pen = false; continue; }
-        path += (pen ? 'L' : 'M') + X(m).toFixed(1) + ' ' + Yd(v).toFixed(1); pen = true;
-      }
-      const vmax = Math.max(...A.speed_mps) * MPH;
-      const Ys = (v) => bottom - (v * MPH / vmax) * (bottom - mid - 10);
+      for (const [m, v] of r.delta_curve) { if (v == null) { pen = false; continue; } path += (pen ? 'L' : 'M') + X(m).toFixed(1) + ' ' + Yd(v).toFixed(1); pen = true; }
+      const vmax = Math.max(...A.speed_mps) * MPH, Ys = (v) => bottom - (v * MPH / vmax) * (bottom - mid - 10);
       let sp = '';
-      const step = Math.max(1, Math.floor(A.speed_mps.length / 700));
-      for (let i = 0; i < A.speed_mps.length; i += step) sp += (i ? 'L' : 'M') + X(i * 5).toFixed(1) + ' ' + Ys(A.speed_mps[i]).toFixed(1);
-      let bands = '';
-      r.corners.forEach((c, k) => {
-        const a = A.corners[k];
-        bands += `<rect x="${X(a.start * 5)}" y="${T}" width="${Math.max(1.5, X(a.end * 5) - X(a.start * 5))}" height="${bottom - T}" fill="${C.accent}" opacity="0.13"/>` +
-                 `<text x="${X(a.apex * 5)}" y="${bottom + 14}" text-anchor="middle" font-size="9" fill="${C.panelDim}">${k + 1}</text>`;
-      });
-      const zero = Yd(0);
-      $('chart').innerHTML = `<svg viewBox="0 0 ${W} ${H}">
-        ${bands}
-        <line x1="${L}" x2="${W - R}" y1="${zero}" y2="${zero}" stroke="${C.panelDim}" stroke-width="0.8"/>
-        <text x="${L - 6}" y="${Yd(lim) + 4}" text-anchor="end" font-size="10" fill="${C.panelDim}">+${lim.toFixed(0)}s</text>
-        <text x="${L - 6}" y="${zero + 3}" text-anchor="end" font-size="10" fill="${C.panelDim}">0</text>
-        <text x="${L - 6}" y="${Yd(-lim) + 4}" text-anchor="end" font-size="10" fill="${C.panelDim}">−${lim.toFixed(0)}s</text>
-        <path d="${path}" fill="none" stroke="${C.accent}" stroke-width="2"/>
-        <line x1="${L}" x2="${W - R}" y1="${mid}" y2="${mid}" stroke="${C.rule}"/>
-        <path d="${sp}" fill="none" stroke="${C.panelInk}" stroke-width="1.2" opacity="0.8"/>
-        <text x="${L - 6}" y="${Ys(vmax / MPH) + 4}" text-anchor="end" font-size="10" fill="${C.panelDim}">${Math.round(vmax)}</text>
-        <text x="${L - 6}" y="${bottom}" text-anchor="end" font-size="10" fill="${C.panelDim}">0 mph</text>
-      </svg>`;
-    }
-
-    function table(A, r) {
-      const head = '<tr><th>#</th><th>Corner</th><th>Time A</th><th>Time B</th><th>Δ B−A</th><th>Entry A/B</th><th>Min A/B</th><th>Exit A/B</th><th>Brake ft A/B</th><th>Peak lat g</th><th>Envelope use</th><th>Apex offset ft</th></tr>';
-      const rows = r.corners.map((c, k) => {
-        const a = c.a, b = c.b, n = A.corners[k];
+      const st = Math.max(1, Math.floor(A.speed_mps.length / 700));
+      for (let i = 0; i < A.speed_mps.length; i += st) sp += (i ? 'L' : 'M') + X(i * 5).toFixed(1) + ' ' + Ys(A.speed_mps[i]).toFixed(1);
+      const bands = r.corners.map((cc, k) => { const a = A.corners[k]; return `<rect x="${X(a.start * 5)}" y="${CT}" width="${Math.max(1.5, X(a.end * 5) - X(a.start * 5))}" height="${bottom - CT}" fill="${C.accent}" opacity="0.13"/>`; }).join('');
+      $('chart').innerHTML = `<svg viewBox="0 0 ${CW} ${CH}">${bands}<line x1="${CL}" x2="${CW - CR}" y1="${Yd(0)}" y2="${Yd(0)}" stroke="${C.panelDim}" stroke-width="0.8"/>
+        <text x="${CL - 6}" y="${Yd(lim) + 4}" text-anchor="end" font-size="10" fill="${C.panelDim}">+${lim.toFixed(0)}s</text><text x="${CL - 6}" y="${Yd(-lim) + 4}" text-anchor="end" font-size="10" fill="${C.panelDim}">−${lim.toFixed(0)}s</text>
+        <path d="${path}" fill="none" stroke="${C.accent}" stroke-width="2"/><line x1="${CL}" x2="${CW - CR}" y1="${mid}" y2="${mid}" stroke="${C.rule}"/>
+        <path d="${sp}" fill="none" stroke="${C.panelInk}" stroke-width="1.2" opacity="0.8"/></svg>`;
+      // table
+      const head = '<tr><th>#</th><th class="l">Corner</th><th>Time A</th><th>Time B</th><th>Δ B−A</th><th>Entry A/B</th><th>Min A/B</th><th>Exit A/B</th><th>Brake ft A/B</th><th>Peak lat g</th><th>Envelope use</th></tr>';
+      $('table').innerHTML = head + r.corners.map((cc, k) => {
+        const a = cc.a, b = cc.b, n = A.corners[k];
         const tul = Inst.tulipSVG({ type: 'corner', dir: n.dir, severity: n.severity, turnRad: n.turn_rad, mods: n.mods }, C.panelInk, C.accent).replace('class="tulip"', 'class="tul"');
         const pair = (fa, fb) => `${fa}<span class="sub">${b ? fb : '--'}</span>`;
-        return `<tr class="${c.stopped ? 'stopped' : ''}">
-          <td>${k + 1}</td>
-          <td>${tul} <b>${c.code}</b> <span class="sub">${c.call}${c.stopped ? ' · stop' : ''}</span></td>
-          <td>${a.time_s.toFixed(2)}</td><td>${b ? b.time_s.toFixed(2) : '--'}</td>
-          <td class="${c.stopped ? '' : cls(c.delta_s)}">${fmtS(c.delta_s)}</td>
-          <td>${pair(mph(a.entry_mps), b && mph(b.entry_mps))}</td>
-          <td>${pair(mph(a.min_mps), b && mph(b.min_mps))}</td>
-          <td>${pair(mph(a.exit_mps), b && mph(b.exit_mps))}</td>
-          <td>${pair(ft(a.brake_m), b && ft(b.brake_m))}</td>
-          <td>${pair(a.peak_lat_g.toFixed(2), b && b.peak_lat_g.toFixed(2))}</td>
-          <td>${pair(Math.round(a.envelope_use * 100) + '%', b && Math.round(b.envelope_use * 100) + '%')}</td>
-          <td>${pair(ft(a.min_offset_m), b && ft(b.min_offset_m))}</td></tr>`;
+        return `<tr class="${cc.stopped ? 'stopped' : ''}"><td>${k + 1}</td><td class="l">${tul} <b>${cc.code}</b> <span class="sub">${cc.call}${cc.stopped ? ' · stop' : ''}</span></td>
+          <td>${a.time_s.toFixed(2)}</td><td>${b ? b.time_s.toFixed(2) : '--'}</td><td class="${cc.stopped ? '' : cls(cc.delta_s)}">${fmtS(cc.delta_s)}</td>
+          <td>${pair(mph(a.entry_mps), b && mph(b.entry_mps))}</td><td>${pair(mph(a.min_mps), b && mph(b.min_mps))}</td><td>${pair(mph(a.exit_mps), b && mph(b.exit_mps))}</td>
+          <td>${pair(ft(a.brake_m), b && ft(b.brake_m))}</td><td>${pair(a.peak_lat_g.toFixed(2), b && b.peak_lat_g.toFixed(2))}</td>
+          <td>${pair(Math.round(a.envelope_use * 100) + '%', b && Math.round(b.envelope_use * 100) + '%')}</td></tr>`;
       }).join('');
-      $('table').innerHTML = head + rows;
     }
 
-    run();
+    // ---------------------------------------------------------------------
+    function renderAll() { renderHistory(); renderSegments(); renderCompareSelectors(); renderCompare(); }
+    document.querySelectorAll('#tabs button').forEach(b => b.addEventListener('click', () => {
+      document.querySelectorAll('#tabs button').forEach(x => x.classList.toggle('on', x === b));
+      for (const t of ['history', 'segments', 'compare']) $(`tab-${t}`).hidden = t !== b.dataset.tab;
+      if (b.dataset.tab === 'segments') renderSegStrip();
+    }));
+    if (params.get('tab')) document.querySelector(`#tabs [data-tab="${params.get('tab')}"]`)?.click();
+    loadDrives().then(renderAll);
   })();
   </script>
 </body>

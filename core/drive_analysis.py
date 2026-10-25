@@ -20,6 +20,9 @@ BRAKE_G = -0.15              # a_lon below this counts as braking
 BRAKE_LOOKBACK = 40          # search 200 m before the apex for the brake point
 DELTA_STRIDE = 5             # delta curve every 25 m
 STOPPED_MPS = 2.5            # below this through a corner, the time measures waiting, not driving
+PACE_TARGET = 0.85           # Driver Score: full pace credit from 85 % of the corner's sane grip limit...
+PACE_CEILING = 1.0           # ...held to 100 %, then falling steeply: overdriving is never rewarded
+OVER_LIMIT_MPS = 4.47        # 10 mph over the posted limit counts against legality
 
 
 def elapsed_s(speed_mps, ds: float = 5.0) -> np.ndarray:
@@ -152,3 +155,84 @@ def compare(a: dict, b: dict) -> dict:
         "overlap_delta_s": run_total,
         "delta_curve": curve,
     }
+
+
+# ---------------------------------------------------------------------------
+# Driver Score: an obfuscated 0-1000 rating of technique, never of time or speed.
+# ---------------------------------------------------------------------------
+
+def _pace_credit(use: float) -> float:
+    if use <= PACE_TARGET:
+        return max(0.0, use / PACE_TARGET)
+    if use <= PACE_CEILING:
+        return 1.0
+    return max(0.0, 1.0 - 4.0 * (use - PACE_CEILING))     # 125 % of the limit earns nothing
+
+
+def driver_score(speed_mps, lon_g, lat_g, corners, limit_mps=None, lo: int = 0, hi=None) -> dict:
+    """Score the driving between bins [lo, hi). corners: [{start, end, apex, apex_mps}].
+
+    pace 40 %, smoothness 25 %, braking discipline 15 %, consistency 20 %, all multiplied by
+    legality (share of distance > 10 mph over the posted limit; None, multiplying as 1, when no
+    posted limits are known). score None when no clean corners.
+    """
+    v = np.asarray(speed_mps, dtype=float)
+    lon = np.asarray(lon_g, dtype=float)
+    hi = len(v) if hi is None else hi
+    uses, pace, smooth, brake = [], [], [], []
+    for c in corners:
+        if c["start"] < lo or c["end"] >= hi:
+            continue
+        m = corner_metrics(v, lon_g, lat_g, c["start"], c["end"], c["apex"], c["apex_mps"])
+        if m["min_mps"] < STOPPED_MPS:
+            continue
+        uses.append(m["envelope_use"])
+        pace.append(_pace_credit(m["envelope_use"]))
+        # Smoothness per metre of road (speed-invariant): how abruptly lateral load changes.
+        lat = np.asarray(lat_g, dtype=float)[c["start"]:c["end"] + 1]
+        step = float(np.sqrt(np.mean(np.diff(lat) ** 2))) if len(lat) > 1 else 0.0
+        smooth.append(math.exp(-step / 0.15))
+        late = max(0.0, -float(np.min(lon[c["apex"]:c["end"] + 1])))       # braking after the apex
+        brake.append(1.0 - min(1.0, max(0.0, (late - 0.10) / 0.30)))
+    if not uses:
+        return {"score": None, "corners": 0, "components": None}
+    consistency = 1.0 - min(1.0, float(np.std(uses)) / 0.25)
+    legality = None                      # unknown without posted limits: shown as --, multiplies as 1
+    if limit_mps is not None:
+        lim = np.asarray(limit_mps, dtype=float)[lo:hi]
+        known = np.isfinite(lim) & (lim > 0)
+        if known.any():
+            over = float(np.mean(v[lo:hi][known] > lim[known] + OVER_LIMIT_MPS))
+            legality = 1.0 - min(0.6, over * 3.0)
+    comp = {"pace": float(np.mean(pace)), "smoothness": float(np.mean(smooth)),
+            "braking": float(np.mean(brake)), "consistency": consistency, "legality": legality}
+    raw = 0.40 * comp["pace"] + 0.25 * comp["smoothness"] + 0.15 * comp["braking"] + 0.20 * comp["consistency"]
+    return {"score": int(round(1000.0 * raw * (1.0 if legality is None else legality))), "corners": len(uses),
+            "components": {k: None if val is None else round(val, 4) for k, val in comp.items()}}
+
+
+def segment_window(seg: dict, drive: dict):
+    """Bins [lo, hi] where a drive passes a user segment {lat0, lon0, lat1, lon1, length_m}
+    from start to end in that direction, or None."""
+    i0, d0 = nearest_index(seg["lat0"], seg["lon0"], drive["lat"], drive["lon"], -1)
+    if d0 > MATCH_RADIUS_M:
+        return None
+    span = int(seg["length_m"] / 5.0)
+    i1, d1 = nearest_index(seg["lat1"], seg["lon1"], drive["lat"], drive["lon"], i0 + span, max(40, span // 2))
+    if d1 > MATCH_RADIUS_M or i1 <= i0:
+        return None
+    if not 0.7 <= (i1 - i0) / max(1, span) <= 1.3:
+        return None
+    return i0, i1
+
+
+def segment_pass(seg: dict, drive: dict):
+    """Time and Driver Score of one drive over a segment (private: the time stays on-device)."""
+    w = segment_window(seg, drive)
+    if w is None:
+        return None
+    lo, hi = w
+    t = elapsed_s(drive["speed_mps"])
+    ds = driver_score(drive["speed_mps"], drive["lon_g"], drive["lat_g"], drive["corners"],
+                      drive.get("limit_mps"), lo, hi + 1)
+    return {"lo": lo, "hi": hi, "time_s": float(t[hi] - t[lo]), **ds}

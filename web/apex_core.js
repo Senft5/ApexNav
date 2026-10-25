@@ -517,7 +517,90 @@
     return n ? re / n : 0;
   }
 
+  // Driver Score — port of core/drive_analysis.driver_score (parity-tested).
+  const PACE_TARGET = 0.85, PACE_CEILING = 1.0, OVER_LIMIT_MPS = 4.47;
+  function paceCredit(u) {
+    if (u <= PACE_TARGET) return Math.max(0, u / PACE_TARGET);
+    if (u <= PACE_CEILING) return 1;
+    return Math.max(0, 1 - 4 * (u - PACE_CEILING));
+  }
+  function std(a) { const m = a.reduce((x, y) => x + y, 0) / a.length; return Math.sqrt(a.reduce((x, y) => x + (y - m) * (y - m), 0) / a.length); }
+  function driverScore(v, lonG, latG, corners, limitMps = null, lo = 0, hi = null) {
+    hi = hi === null ? v.length : hi;
+    const uses = [], pace = [], smooth = [], brake = [];
+    for (const c of corners) {
+      if (c.start < lo || c.end >= hi) continue;
+      const m = cornerMetrics(v, lonG, latG, c.start, c.end, c.apex, c.apex_mps);
+      if (m.min_mps < STOPPED_MPS) continue;
+      uses.push(m.envelope_use);
+      pace.push(paceCredit(m.envelope_use));
+      // Smoothness per metre of road (speed-invariant): how abruptly lateral load changes.
+      let sq = 0, nd = 0;
+      for (let q = c.start; q < c.end; q++) { const dl = latG[q + 1] - latG[q]; sq += dl * dl; nd++; }
+      smooth.push(Math.exp(-(nd ? Math.sqrt(sq / nd) : 0) / 0.15));
+      let mn = Infinity;
+      for (let q = c.apex; q <= c.end; q++) mn = Math.min(mn, lonG[q]);
+      const late = Math.max(0, -mn);
+      brake.push(1 - Math.min(1, Math.max(0, (late - 0.10) / 0.30)));
+    }
+    if (!uses.length) return { score: null, corners: 0, components: null };
+    const mean = (a) => a.reduce((x, y) => x + y, 0) / a.length;
+    const consistency = 1 - Math.min(1, std(uses) / 0.25);
+    let legality = null;   // unknown without posted limits: shown as --, multiplies as 1
+    if (limitMps) {
+      let known = 0, over = 0;
+      for (let i = lo; i < hi; i++) { const L = limitMps[i]; if (L != null && isFinite(L) && L > 0) { known++; if (v[i] > L + OVER_LIMIT_MPS) over++; } }
+      if (known) legality = 1 - Math.min(0.6, (over / known) * 3);
+    }
+    const comp = { pace: mean(pace), smoothness: mean(smooth), braking: mean(brake), consistency, legality };
+    const raw = 0.40 * comp.pace + 0.25 * comp.smoothness + 0.15 * comp.braking + 0.20 * comp.consistency;
+    const r4 = (x) => Math.round(x * 1e4) / 1e4;
+    return { score: Math.round(1000 * raw * (legality == null ? 1 : legality)), corners: uses.length,
+             components: Object.fromEntries(Object.entries(comp).map(([k, x]) => [k, x == null ? null : r4(x)])) };
+  }
+  function segmentWindow(seg, d) {
+    const [i0, d0] = nearestIndexWin(seg.lat0, seg.lon0, d.lat, d.lon, -1);
+    if (d0 > MATCH_RADIUS_M) return null;
+    const span = Math.floor(seg.length_m / 5);
+    const [i1, d1] = nearestIndexWin(seg.lat1, seg.lon1, d.lat, d.lon, i0 + span, Math.max(40, Math.floor(span / 2)));
+    if (d1 > MATCH_RADIUS_M || i1 <= i0) return null;
+    const ratio = (i1 - i0) / Math.max(1, span);
+    return ratio >= 0.7 && ratio <= 1.3 ? [i0, i1] : null;
+  }
+  function segmentPass(seg, d) {
+    const w = segmentWindow(seg, d);
+    if (!w) return null;
+    const [lo, hi] = w, t = elapsedS(d.speed_mps);
+    return { lo, hi, time_s: t[hi] - t[lo], ...driverScore(d.speed_mps, d.lon_g, d.lat_g, d.corners, d.limit_mps || null, lo, hi + 1) };
+  }
+
+  // Profile a raw 5 m recording (the iOS app's ApexDrive CSV) in the browser with the same
+  // geometry/envelope/corner pipeline tools/export_web_profile.py uses. Hazards and sectors need
+  // the offline pipeline (multi-pass + reference lap) and are left out.
+  const MIN_CORNER_SPEED_MPS = 2.5;
+  function profileRecording(cols) {
+    const { lat, lon } = cols, n = lat.length;
+    const { kappa, ds } = computeCurvature(lat, lon);
+    const camber = cols.camber_deg ? cols.camber_deg.map(d => d * Math.PI / 180) : null;
+    const sight = sightDistanceM(lat, lon, cols.elevation_m || null);
+    const env = brakingEnvelopeMps(kappa, ds, camber, cols.roughness_rms || null, undefined, sight);
+    const speed = cols.speed_mph.map(v => v / MPS_TO_MPH);
+    const corners = annotateCautions(detectCorners(kappa, ds, camber, cols.crest_vertical_g || null, cols.roughness_rms || null)
+      .filter(c => speed[c.apex] >= MIN_CORNER_SPEED_MPS), env, sight);
+    const dist = cols.distance_m || lat.map((_, i) => i * 5);
+    const events = corners.map(c => {
+      const t = paceNoteText(c);
+      return { type: 'corner', code: t.code, call: t.call, index: c.apex, dist_m: dist[c.apex], start_m: dist[c.start], end_m: dist[c.end],
+               lat: lat[c.apex], lon: lon[c.apex], radius_m: c.radius_m, apex_mph: c.apex_mps * MPS_TO_MPH, dir: c.dir,
+               severity: c.severity, grade: c.grade, shape: c.shape, caution: c.caution, turn_rad: Math.abs(c.turn_rad), mods: c.mods };
+    });
+    linkNotes(events);
+    return { events, envMps: Array.from(env), sightM: Array.from(sight), n };
+  }
+
   const api = {
+    profileRecording,
+    driverScore, segmentPass, segmentWindow,
     removeSpurs, retracedShare,
     compareDrives, cornerMetrics, elapsedS,
     G_STD, MPS_TO_MPH, ALPR_RADIUS_M,

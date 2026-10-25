@@ -49,3 +49,42 @@ def test_stops_are_flagged_and_left_out_of_totals():
     r = da.compare(_drive(), _drive(stop_at=90))
     assert r["corners"][0]["stopped"] is True
     assert r["matched_corners"] == 0 and r["corner_delta_s"] == 0.0
+
+
+def _score(d, limit=None, scale=1.0):
+    return da.driver_score(d["speed_mps"] * scale, d["lon_g"], d["lat_g"], d["corners"], limit)
+
+
+def test_driver_score_never_rewards_overdriving():
+    d = _drive()
+    apex = d["corners"][0]["apex_mps"]
+    s85 = _score(d, scale=0.85 * apex / 14.0)["score"]    # corner min speed at 85 % of the grip limit
+    s100 = _score(d, scale=1.00 * apex / 14.0)["score"]
+    s120 = _score(d, scale=1.20 * apex / 14.0)["score"]
+    s60 = _score(d, scale=0.60 * apex / 14.0)["score"]
+    assert s85 == s100, "full credit anywhere from 85 % to 100 % of the limit (and speed-invariant smoothness)"
+    assert s120 < s85 and s60 < s85, "beyond the limit scores lower than staying inside it"
+
+
+def test_driver_score_penalises_speeding_and_jerk():
+    d = _drive()
+    n = len(d["lat"])
+    clean = _score(d, limit=np.full(n, 30.0))["score"]
+    speeding = _score(d, limit=np.full(n, 10.0))["score"]             # posted 22 mph, driving 56
+    assert speeding < clean * 0.5
+    jerky = dict(d, lat_g=d["lat_g"] + 0.3 * np.sin(np.arange(n)))      # sawing at the wheel
+    assert _score(jerky)["components"]["smoothness"] < _score(d)["components"]["smoothness"]
+    assert _score(dict(d, corners=[]))["score"] is None
+    # No posted limits known: legality is unknown, never a perfect mark.
+    assert _score(d)["components"]["legality"] is None
+    assert _score(d, limit=np.full(n, np.nan))["components"]["legality"] is None
+    assert _score(d)["score"] == clean
+
+
+def test_segment_pass_finds_the_stretch_and_scores_it():
+    d = _drive()
+    seg = {"lat0": d["lat"][60], "lon0": d["lon"][60], "lat1": d["lat"][120], "lon1": d["lon"][120], "length_m": 60 * 5.0}
+    p = da.segment_pass(seg, d)
+    assert p is not None and (p["lo"], p["hi"]) == (60, 120) and p["score"] is not None
+    back = {"lat0": seg["lat1"], "lon0": seg["lon1"], "lat1": seg["lat0"], "lon1": seg["lon0"], "length_m": seg["length_m"]}
+    assert da.segment_pass(back, d) is None, "a pass the other way is a different segment"

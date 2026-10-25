@@ -28,8 +28,9 @@ The JS file is a line-for-line port used by the browser/iOS cockpit for live OSR
 ## 3b. Reference Lap, Live Pipeline, Analysis
 - `core/reference_lap.py` — simulated sane driver per car profile; all TECH/FLOW features and archetypes are read from it (docs/ROAD_INTELLIGENCE.md).
 - `core/live_pipeline.py` — causal 100 Hz pipeline the phone runs; Swift `ApexKit` is held to it by a generated fixture.
-- `core/drive_analysis.py` — private corner-by-corner pass comparison; JS port in `web/apex_core.js`.
-- Web shell: `web/index.html` (cockpit), `web/analysis.html`, `web/themes.js` (theme registry), `web/instruments.js` (renderers).
+- `core/drive_analysis.py` — private corner-by-corner pass comparison, Driver Score (0–1000) and custom
+  segment passes; JS port in `web/apex_core.js` (plus `profileRecording` for app CSVs), parity-tested.
+- Web shell: `web/index.html` (cockpit), `web/analysis.html` (history / segments / compare), `web/themes.js` (theme registry), `web/instruments.js` (renderers).
 
 ## 4. Data Honesty
 Everything the cockpit shows is measured, derived from measurements, or fetched from a named open source (OSM/DeFlock ALPR via Overpass, OSRM, Nominatim). Geometry-only routes are labelled `SIM · NOT DRIVEN` and show `--` for anything that needs an IMU. A failed ALPR fetch says so instead of implying no cameras.
