@@ -26,7 +26,7 @@
     const state = { i: 0, v0: 0, v1: n - 1 };
     const head = el('div', 'dv-head'), mapBox = el('div', 'dv-map'), lanes = el('div', 'dv-lanes'), read = el('div', 'dv-read'), list = el('div', 'dv-list');
     const stat = (v, label) => `<div class="dv-stat"><b>${v}</b><span>${label}</span></div>`;
-    head.innerHTML = stat(d.ds && d.ds.score != null ? d.ds.score : '--', 'Driver Score') + stat(`${(S.km / 1.609344).toFixed(1)} mi`, 'Distance') + stat(fmtT(S.duration_s), 'Time')
+    head.innerHTML = stat(d.ds && d.ds.score != null ? d.ds.score : '--', 'Score') + stat(`${(S.km / 1.609344).toFixed(1)} mi`, 'Distance') + stat(fmtT(S.duration_s), 'Time')
       + stat(`${Math.round(S.top_mps * MPH)} mph`, 'Top speed') + stat(S.peak_lat_g != null ? `${S.peak_lat_g.toFixed(2)} g` : '--', 'Peak lateral')
       + stat(S.peak_brake_g != null ? `${S.peak_brake_g.toFixed(2)} g` : '--', 'Peak braking') + stat(S.climb_m != null ? `${Math.round(S.climb_m * 3.28084)} ft` : '--', 'Climb') + stat(d.corners.length, 'Corners');
     root_.append(head, el('div', 'dv-grid'));

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180" width="180" height="180" role="img" aria-label="ApexNav">
+  <!-- App icon master. Full-bleed square: iOS and Android apply their own corner masks.
+       Road book night paper + ink, rally red apex. Rasterise to PNG for apple-touch-icon. -->
+  <rect width="180" height="180" fill="#1A1814"/>
+  <g transform="translate(21.6 30) scale(1.2)">
+    <circle cx="34" cy="84" r="8" fill="#EDE4D3"/>
+    <path d="M34 84 V52 Q34 26 62 21.5" fill="none" stroke="#EDE4D3" stroke-width="9"/>
+    <path d="M60 9 L88 18 L63 34 Z" fill="#EDE4D3"/>
+    <circle cx="51" cy="43" r="6.5" fill="#E24A4A"/>
+  </g>
+</svg>
