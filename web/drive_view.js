@@ -68,6 +68,7 @@
       if (L.sym) { let m = 0.25; for (let i = 0; i < n; i++) { const v = L.get(i); if (finite(v)) m = Math.max(m, Math.abs(v)); } L.hi = Math.ceil(m * 10) / 10; L.lo = -L.hi; }
     }
     const hasElev = !!d.elev;
+    let feel = null;                                                       // member-measured road feel along this drive (setRoadFeel)
     function draw() {
       W = Math.max(280, lanes.clientWidth || 600);
       const LM = 8, RM = 8, LH = 18;                                        // label row above each lane
@@ -93,6 +94,20 @@
         }
         svg += p ? `<path d="${p}" fill="none" stroke="${L.id === 'speed' ? C.panelInk : C.accent}" stroke-width="1.6" stroke-linejoin="round"/>` : `<text x="${LM}" y="${top + h / 2}" font-size="11" fill="${C.panelDim}">not recorded</text>`;
         yTop = top + h + 10;
+      }
+      if (feel) {                                                          // what members measured on these roads; gaps are unknown, not zero
+        const top = yTop + LH, h = 56, covered = feel.cam.filter((v) => v != null).length;
+        svg += `<text x="${LM}" y="${yTop + 12}" font-size="10" letter-spacing="1.4" fill="${C.panelDim}">ROAD FEEL · MEMBERS</text><text x="${W - RM}" y="${yTop + 12}" text-anchor="end" font-size="10" fill="${C.panelDim}">${covered ? `banking ±8° · roughness` : 'no member data on this road yet'}</text>`;
+        svg += `<line x1="${LM}" x2="${W - RM}" y1="${top + h / 2}" y2="${top + h / 2}" stroke="${C.rule}" stroke-dasharray="3 4"/><line x1="${LM}" x2="${W - RM}" y1="${top + h}" y2="${top + h}" stroke="${C.rule}"/>`;
+        const cs = Math.max(1, Math.floor((v1 - v0) / (W * 1.2)));
+        let bars = '', rp = '', rs = false;
+        for (let i = v0; i <= v1; i += cs) {
+          const cm = feel.cam[i], rf = feel.rough[i];
+          if (finite(cm)) { const hh = Math.min(1, Math.abs(cm) / 8) * (h / 2); bars += `<rect x="${X(i).toFixed(1)}" y="${(cm >= 0 ? top + h / 2 - hh : top + h / 2).toFixed(1)}" width="${Math.max(1, (W - LM - RM) / ((v1 - v0) / cs)).toFixed(1)}" height="${hh.toFixed(1)}" fill="${C.accent}" opacity="0.55"/>`; }
+          if (finite(rf)) { rp += `${rs ? 'L' : 'M'}${X(i).toFixed(1)} ${(top + h - Math.min(1, rf / 0.4) * h).toFixed(1)}`; rs = true; } else rs = false;
+        }
+        svg += bars + (rp ? `<path d="${rp}" fill="none" stroke="${C.signal}" stroke-width="1.4"/>` : '');
+        geo.lanes.push({ top, h }); yTop = top + h + 10;
       }
       if (hasElev) {                                                       // faint elevation profile along the bottom
         let lo = Infinity, hi = -Infinity; for (const v of d.elev) { lo = Math.min(lo, v); hi = Math.max(hi, v); }
@@ -122,7 +137,8 @@
       read.innerHTML = cell('Distance', `${(d.dist[i] / 1609.344).toFixed(2)} mi`) + cell('Time', fmtT(T[i])) + cell('Speed', `${Math.round(d.speed_mps[i] * MPH)} mph`)
         + cell('Lateral', d.lat_g && finite(d.lat_g[i]) ? `${d.lat_g[i] >= 0 ? 'L ' : 'R '}${Math.abs(d.lat_g[i]).toFixed(2)} g` : '--')
         + cell('Brake / throttle', d.lon_g && finite(d.lon_g[i]) ? `${d.lon_g[i] < 0 ? 'brake ' : 'accel '}${Math.abs(d.lon_g[i]).toFixed(2)} g` : '--')
-        + cell(c ? `Corner ${k + 1}` : 'Corner', c ? `${c.call || c.code}` : '--');
+        + cell(c ? `Corner ${k + 1}` : 'Corner', c ? `${c.call || c.code}` : '--')
+        + (feel ? cell('Banking (members)', finite(feel.cam[i]) ? `${feel.cam[i].toFixed(1)}°` : '--') + cell('Roughness (members)', finite(feel.rough[i]) ? `${feel.rough[i].toFixed(2)} g` : '--') + cell('Passes', feel.n[i] != null ? feel.n[i] : '--') : '');
       list.querySelectorAll('.dv-corner').forEach((r, q) => r.classList.toggle('on', q === k));
     }
     // pointer scrubbing on the lanes and taps on map corners
@@ -165,7 +181,8 @@
     draw();
     const ro = new ResizeObserver(() => { if (Math.abs((lanes.clientWidth || 0) - W) > 2) draw(); });
     ro.observe(lanes);
-    return { move, destroy() { ro.disconnect(); }, summary: S };
+    function setRoadFeel(series) { feel = series; draw(); }
+    return { move, setRoadFeel, destroy() { ro.disconnect(); }, summary: S };
   }
 
   const api = { mount, summarize };

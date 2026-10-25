@@ -49,6 +49,7 @@ out.adjust = [C.measuredAdjust(null), C.measuredAdjust({ roughness: null, covera
     ? { ok: true, json: async () => ({ edges: [{ way_id: 77, road_class: 'tertiary' }], matched_points: JSON.parse(init.body).shape.map(() => ({ type: 'matched', edge_index: 0 })) }) }
     : { ok: true, json: async () => ({ elements: [{ type: 'way', id: 77, geometry: way.map(([la, lo]) => ({ lat: la, lon: lo })) }] }) };
   const viaNet = await C.measuredAlong(rt, async (ids) => { out.lookupIds = ids; return roads; }, { fetch: fk });
+  out.series = (() => { const s = C.seriesFrom(C.locate({ drive: rt, match: rm, ways: { 77: way } }), roads, 1000); return { len: s.cam.length, known: s.cam.filter((v) => v != null).length, unknownRough: s.rough.filter((v) => v == null).length, first: s.cam.findIndex((v) => v != null), n: s.n.find((v) => v != null) }; })();
   out.viaNetwork = viaNet && { coveredKm: Math.round(viaNet.coveredKm * 100) / 100, banked: viaNet.bankedKm };
   out.signedOut = await C.measuredAlong(rt, async () => null, { fetch: fk });
   const calls = [];
@@ -141,3 +142,11 @@ def test_measured_adjustment_is_gentle_and_never_rewards_or_punishes_the_unknown
     none, unknown_rough, smooth, rough_full, rough_little, mid = result["adjust"]
     assert none == 0 and unknown_rough == 0 and smooth == 0
     assert rough_full == pytest.approx(-6) and -6 < rough_little < 0 and mid == pytest.approx(-3)
+
+
+def test_series_marks_unmeasured_samples_null(result):
+    s = result["series"]
+    assert s["len"] == 1000
+    assert s["known"] == 180                                      # bins 200..399 measured, but camber is unknown for 20 of them
+    assert s["unknownRough"] == 800                               # roughness known for exactly the 200 measured bins
+    assert s["n"] == 3 and 195 <= s["first"] <= 205

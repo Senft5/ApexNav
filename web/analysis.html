@@ -548,7 +548,18 @@
       const d = drives.find(x => x.id === pick.value);
       if (dvView) dvView.destroy();
       dvView = ApexDriveView.mount($('dvRoot'), d, { Core, C, MPH });
+      loadRoadFeel(d, dvView);
       $('dvNote').textContent = d.source === 'imported' ? 'imported recording' : 'shipped example';
+    }
+    // Road feel from members (banking, roughness) along the drive; members only, silent offline. Cached per drive for the session.
+    const feelCache = new Map();
+    async function loadRoadFeel(d, view) {
+      if (!window.ApexSync || !window.ApexContributor || !d.lat || d.lat.length < 40 || !(await ApexSync.member())) return;
+      if (!feelCache.has(d.id)) {
+        feelCache.set(d.id, ApexContributor.measuredSeries(d, async (ids) => { const r = await fetch(`/api/roads?ways=${ids.join(',')}`, { credentials: 'same-origin', headers: { 'x-apexnav': '1' } }); return r.ok ? r.json() : null; }).catch(() => null));
+      }
+      const s = await feelCache.get(d.id);
+      if (s && dvView === view) view.setRoadFeel(s);
     }
     $('dvPick').addEventListener('change', renderDrive);
     function renderAll() {

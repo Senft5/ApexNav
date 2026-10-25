@@ -153,6 +153,23 @@
     if (!roads) return null;
     return summarize(locate({ drive: route, match, ways }), roads, route.lat.length);
   }
+  /** Per-sample measured series along a route: { cam[], rough[], n[] } with null where no member has measured that 5 m. */
+  function seriesFrom(runs, roads, total) {
+    const cam = new Array(total).fill(null), rough = new Array(total).fill(null), n = new Array(total).fill(null);
+    for (const run of runs) {
+      const d = roads[run.way] && roads[run.way][run.dir]; if (!d) continue;
+      const idx = new Map(d.i.map((b, j) => [b, j]));
+      for (const p of run.pts) { const j = idx.get(p.bin); if (j == null) continue; cam[p.i] = d.cam[j]; rough[p.i] = d.rough[j]; n[p.i] = d.n[j]; }
+    }
+    return { cam, rough, n };
+  }
+  async function measuredSeries(route, lookup, opts = {}) {
+    const match = await matchDrive(route, opts.fetch);
+    const ids = [...new Set(match.filter((m) => m && m.way != null).map((m) => m.way))].slice(0, 50);
+    if (!ids.length) return null;
+    const [ways, roads] = await Promise.all([fetchWays(ids, opts.fetch), lookup(ids)]);
+    return roads ? seriesFrom(locate({ drive: route, match, ways }), roads, route.lat.length) : null;
+  }
   function summarize(runs, roads, total) {
     let covered = 0, located = 0, passes = 0, rough = [], banked = 0;
     for (const run of runs) {
@@ -180,6 +197,6 @@
     return -6 * Math.min(1, m.coverage * 2) * rough;
   }
 
-  const api = { measuredAdjust, measuredAlong, summarize, locate, buildContributions, matchDrive, fetchWays, contributeDrive, eligible, project, cumulative, SKIP_CLASSES };
+  const api = { measuredSeries, seriesFrom, measuredAdjust, measuredAlong, summarize, locate, buildContributions, matchDrive, fetchWays, contributeDrive, eligible, project, cumulative, SKIP_CLASSES };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexContributor = api;
 })(typeof window !== 'undefined' ? window : globalThis);
