@@ -216,6 +216,7 @@
     .sheet header h2 { font-size: 14px; letter-spacing: 0.18em; text-transform: uppercase; }
     .sheet .body { overflow-y: auto; padding: 14px 16px 24px; display: grid; gap: 20px; }
     .sheet h3 { font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--panel-dim); margin-bottom: 8px; }
+    .sheet p.note.err { color: var(--accent); }
     .sheet p.note { font-size: 12px; color: var(--panel-dim); line-height: 1.45; margin-top: 6px; }
     .row { display: flex; gap: 6px; flex-wrap: wrap; }
     .field { flex: 1; min-width: 0; height: 38px; padding: 0 10px; font: inherit; font-size: 15px; background: transparent; color: var(--panel-ink); border: 1px solid var(--panel-dim); user-select: text; }
@@ -305,6 +306,7 @@
               <button class="ink-btn" id="liveVoiceBtn">LIVE</button>
             </div>
             <div class="row" style="margin-top:6px"><select class="field" id="voiceSelect"></select></div>
+            <p class="note" id="liveNote" role="status" aria-live="polite"></p>
             <p class="note">George, Daniel and Emma are rendered with the open Kokoro-82M model (Apache-2.0); pace notes work offline. LIVE also runs the model in the browser for names and routes (one-time ~90 MB download, then cached). Jarvis is the same model through a cartoon-robot effect. DEVICE uses this phone's own voices.</p>
           </section>
           <section data-panel="setup">
@@ -410,12 +412,12 @@
     const state = {
       mode: 'replay', playing: false, rate: 1, cursorM: 0, cursorIdx: 0, follow: true, bearing: 0,
       live: null, liveAt: 0, spiritedAt: -Infinity, spoken: new Set(), tapToRoute: false,
-      theme: 'stage', camFeel: 'dynamic', voiceId: 'george', liveVoice: true, voiceStyle: 'codriver', voiceName: '', hlOn: false, hlStrength: 1,
+      theme: 'stage', camFeel: 'dynamic', voiceId: 'george', liveVoice: false, voiceStyle: 'codriver', voiceName: '', hlOn: false, hlStrength: 1,
       toggles: { stage: false, voice: true, lpr: true, dna: false, night: false }
     };
     try {
       const saved = JSON.parse(localStorage.getItem('apex.prefs') || 'null');
-      if (saved) { Object.assign(state.toggles, saved.toggles || {}); if (saved.theme) state.theme = saved.theme; if (saved.camFeel) state.camFeel = saved.camFeel; if (saved.voiceId) state.voiceId = saved.voiceId; if (saved.liveVoice != null) state.liveVoice = saved.liveVoice; if (saved.voiceName != null) state.voiceName = saved.voiceName; if (saved.hlOn != null) state.hlOn = !!saved.hlOn; if (saved.hlStrength > 0) state.hlStrength = saved.hlStrength; }
+      if (saved) { Object.assign(state.toggles, saved.toggles || {}); if (saved.theme) state.theme = saved.theme; if (saved.camFeel) state.camFeel = saved.camFeel; if (saved.voiceId) state.voiceId = saved.voiceId; if (saved.liveVoice != null && saved.liveVoiceV >= 2) state.liveVoice = saved.liveVoice; /* saves from before v2 defaulted to ON and started a 90 MB download unasked */ if (saved.voiceName != null) state.voiceName = saved.voiceName; if (saved.hlOn != null) state.hlOn = !!saved.hlOn; if (saved.hlStrength > 0) state.hlStrength = saved.hlStrength; }
     } catch (_) {}
     if (params.has('night')) state.toggles.night = params.get('night') === '1';
     if (params.has('theme')) state.theme = params.get('theme');
@@ -425,7 +427,7 @@
 
     let look = Themes.apply(state.theme, state.toggles.night);
     let cluster = Inst.mountCluster($('cluster'), look.theme);
-    function savePrefs() { try { localStorage.setItem('apex.prefs', JSON.stringify({ theme: state.theme, camFeel: state.camFeel, voiceId: state.voiceId, liveVoice: state.liveVoice, voiceName: state.voiceName, hlOn: state.hlOn, hlStrength: state.hlStrength, toggles: state.toggles })); } catch (_) {} }
+    function savePrefs() { try { localStorage.setItem('apex.prefs', JSON.stringify({ theme: state.theme, camFeel: state.camFeel, voiceId: state.voiceId, liveVoice: state.liveVoice, liveVoiceV: 2, voiceName: state.voiceName, hlOn: state.hlOn, hlStrength: state.hlStrength, toggles: state.toggles })); } catch (_) {} }
     function applyTheme() {
       look = Themes.apply(state.theme, state.toggles.night);
       cluster = Inst.mountCluster($('cluster'), look.theme);
@@ -1053,6 +1055,28 @@
       $('modePlate').classList.toggle('live', mode === 'live');
       $('modePlate').hidden = mode !== 'sim';                          // the REPLAY | DRIVE switch already says replay/live; keep the label for the 'not driven' simulation warning
     }
+    // Names are known now: pre-render them in the co-driver's own voice (only when the owner turned Speak-road-names / LIVE on).
+    function prefetchNames(t) {
+    if (state.liveVoice && state.voiceId !== 'device' && window.ApexVoice) {
+      ApexVoice.load(state.voiceId).then(() => {
+        const style = ApexVoice.bank.style, texts = [spokenTextFor(`${t.name}.`, style)];
+        // Every call of the route that the bank cannot play as a single clip, in driving order.
+        if (ApexVoice.bank.engine === 'kokoro' && style !== 'jarvis') {
+          const ev = t.events.slice().sort((a, b) => a.dist_m - b.dist_m);
+          for (const e of ev) {
+            if (e.type === 'alpr') continue;
+            const chain = [e]; let cur = e;
+            for (let h = 0; h < 2 && (cur.link === 'into' || cur.link === 'and'); h++) {
+              const nx = ev[ev.indexOf(cur) + 1]; if (!nx) break; chain.push(nx); cur = nx;
+            }
+            const voiced = chain.map((n, i) => (i === chain.length - 1 && (n.link === 'into' || n.link === 'and')) ? { ...n, link: null } : n);
+            if (ApexVoice.joins(ApexVoice.tokensFor(voiced, style)) > 0) texts.push(spokenTextFor(voiced.map((n, i) => (i ? `${voiced[i - 1].link} ` : '') + n.call).join(' ') + (cur.link && cur.link !== 'into' && cur.link !== 'and' ? `, ${cur.link}` : ''), style));
+          }
+        }
+        ApexVoice.prefetch(texts);
+      }).catch(() => {});
+    }
+    }
     function activate(t, startM = 0) {
       track = t;
       state.cursorM = Math.max(0, Math.min(totalM(), startM));
@@ -1062,26 +1086,7 @@
       loadTrackOnMap();
       fetchAlpr(t);
       showMeasured(t);
-      // Names are known now: pre-render them in the co-driver's own voice.
-      if (state.liveVoice && state.voiceId !== 'device' && window.ApexVoice) {
-        ApexVoice.load(state.voiceId).then(() => {
-          const style = ApexVoice.bank.style, texts = [spokenTextFor(`${t.name}.`, style)];
-          // Every call of the route that the bank cannot play as a single clip, in driving order.
-          if (ApexVoice.bank.engine === 'kokoro' && style !== 'jarvis') {
-            const ev = t.events.slice().sort((a, b) => a.dist_m - b.dist_m);
-            for (const e of ev) {
-              if (e.type === 'alpr') continue;
-              const chain = [e]; let cur = e;
-              for (let h = 0; h < 2 && (cur.link === 'into' || cur.link === 'and'); h++) {
-                const nx = ev[ev.indexOf(cur) + 1]; if (!nx) break; chain.push(nx); cur = nx;
-              }
-              const voiced = chain.map((n, i) => (i === chain.length - 1 && (n.link === 'into' || n.link === 'and')) ? { ...n, link: null } : n);
-              if (ApexVoice.joins(ApexVoice.tokensFor(voiced, style)) > 0) texts.push(spokenTextFor(voiced.map((n, i) => (i ? `${voiced[i - 1].link} ` : '') + n.call).join(' ') + (cur.link && cur.link !== 'into' && cur.link !== 'and' ? `, ${cur.link}` : ''), style));
-            }
-          }
-          ApexVoice.prefetch(texts);
-        }).catch(() => {});
-      }
+      prefetchNames(t);
       resumeFollow();
       render(true);
     }
@@ -1564,10 +1569,12 @@
       const st = window.ApexVoice ? ApexVoice.liveState() : 'idle';
       $('liveVoiceBtn').classList.toggle('on', state.liveVoice);
       $('liveVoiceBtn').textContent = !state.liveVoice ? 'LIVE OFF' : st === 'ready' ? 'LIVE READY' : st === 'loading' ? 'LIVE LOADING' : st === 'error' ? 'LIVE FAILED' : 'LIVE ON';
+      const info = window.ApexVoice ? ApexVoice.liveInfo() : { text: '' };
+      const note = $('liveNote'); if (note) { note.textContent = state.liveVoice ? info.text : 'Off. Road and route names use the recorded voice or your phone voice.'; note.classList.toggle('err', !!(state.liveVoice && info.error)); }
     }
     $('liveVoiceBtn').addEventListener('click', () => {
       state.liveVoice = !state.liveVoice; savePrefs();
-      if (state.liveVoice && window.ApexVoice) ApexVoice.warmLive().then(renderLive);
+      if (state.liveVoice && window.ApexVoice) ApexVoice.warmLive().then(() => { renderLive(); if (track) prefetchNames(track); });
       renderLive();
     });
     setInterval(renderLive, 1500);

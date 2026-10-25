@@ -160,16 +160,40 @@
   const TRANSFORMERS_JS = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.5.1/dist/transformers.min.js';
   const KOKORO_MODEL = 'onnx-community/Kokoro-82M-v1.0-ONNX';
   const KOKORO_REV = '1939ad2a8e416c0acfeecc08a694d14ef25f2231';
-  let tts = null, ttsLoading = null, ttsError = null;
+  let tts = null, ttsLoading = null, ttsError = null, ttsStage = 'idle';
+  const files = new Map();                              // model files being downloaded: name -> { loaded, total }
+  let pendingRenders = 0, doneRenders = 0;
   const phraseCache = new Map();
   function liveState() { return tts ? 'ready' : ttsLoading ? 'loading' : ttsError ? 'error' : 'idle'; }
+  const friendlyError = (e) => {
+    const m = String((e && e.message) || e || '');
+    if (/fetch|network|load failed|NetworkError/i.test(m)) return "Couldn't download the voice. Check your signal and try again.";
+    if (/memory|alloc|out of/i.test(m)) return 'This phone ran out of memory loading the voice.';
+    if (/WebAssembly|wasm/i.test(m)) return "This browser can't run the voice engine.";
+    return m.slice(0, 120) || 'Unknown error.';
+  };
+  /** What the UI should say: { state, text }. Never leaves the user guessing why names are not being spoken. */
+  function liveInfo() {
+    const st = liveState();
+    let loaded = 0, total = 0; for (const f of files.values()) { loaded += f.loaded; total += f.total; }
+    const pct = total > 0 ? Math.min(99, Math.round(100 * loaded / total)) : null;
+    if (st === 'error') return { state: st, text: friendlyError(ttsError), error: true };
+    if (st === 'loading') return { state: st, text: ttsStage === 'library' ? 'Loading the voice engine...' : `Downloading the voice${pct != null ? ` · ${pct}%` : '...'} (about 90 MB, once)` };
+    if (st === 'ready') return { state: st, text: pendingRenders > 0 ? `Preparing names · ${doneRenders} of ${doneRenders + pendingRenders} done (about 10 s each)` : `Ready · ${doneRenders} name${doneRenders === 1 ? '' : 's'} prepared` };
+    return { state: st, text: 'Off. Road and route names use the recorded voice or your phone voice.' };
+  }
   function warmLive() {
     if (tts || ttsLoading) return ttsLoading;
     // Quantised WASM (~90 MB, cached by the browser). The WebGPU build needs the ~320 MB fp32
     // model, too heavy for a phone; phrases are pre-rendered instead so speed rarely matters.
+    ttsStage = 'library'; ttsError = null;
+    const onProgress = (p) => {                       // transformers.js reports per file: { status:'progress', file, loaded, total }
+      ttsStage = 'model';
+      if (p && p.file && p.total) files.set(p.file, { loaded: p.loaded || 0, total: p.total });
+    };
     ttsLoading = import(TRANSFORMERS_JS)
       .then(T => Promise.all([
-        T.StyleTextToSpeech2Model.from_pretrained(KOKORO_MODEL, { revision: KOKORO_REV, dtype: 'q8', device: 'wasm' }),
+        T.StyleTextToSpeech2Model.from_pretrained(KOKORO_MODEL, { revision: KOKORO_REV, dtype: 'q8', device: 'wasm', progress_callback: onProgress }),
         T.AutoTokenizer.from_pretrained(KOKORO_MODEL, { revision: KOKORO_REV }),
       ]).then(([model, tokenizer]) => ({ T, model, tokenizer })))
       .then(t => { tts = t; ttsLoading = null; return t; })
@@ -228,6 +252,7 @@
     const key = `${bankId}|${text}`;
     if (phraseCache.has(key)) return phraseCache.get(key);
     const voice = bank.kokoro_voice, speed = bank.speed || 1;
+    pendingRenders++;
     const p = renderChain.then(async () => {
       const out = await synthesize(text, voice, speed);
       const buf = audio().createBuffer(1, out.audio.length, out.sampling_rate);
@@ -236,7 +261,7 @@
     });
     renderChain = p.catch(() => null); // one failed phrase must not block the ones queued after it
     phraseCache.set(key, p);
-    p.then(() => ready.add(key), () => phraseCache.delete(key));
+    p.then(() => { ready.add(key); doneRenders++; }, () => phraseCache.delete(key)).finally(() => { pendingRenders--; });
     return p;
   }
   // A call the bank can only voice by joining clips is rendered whole (same open model) at route
@@ -271,5 +296,5 @@
     try { return (await (await fetch('voices/index.json')).json()).voices; } catch (_) { return []; }
   }
 
-  root.ApexVoice = { load, play, tokensFor, cover, joins, playWhole, voices, speakLive, prefetch, warmLive, liveState, renderLive: render, unlock: audio, get bank() { return bank; } };
+  root.ApexVoice = { load, play, tokensFor, cover, joins, playWhole, voices, speakLive, prefetch, warmLive, liveState, liveInfo, renderLive: render, unlock: audio, get bank() { return bank; } };
 })(window);
