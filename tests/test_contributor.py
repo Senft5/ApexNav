@@ -38,6 +38,18 @@ out.eligible = [C.eligible({ rough: [1], kappa: [1], date: '2026-10-20T10:00' },
 out.keys = Object.keys(a[0]).sort().join() + '|' + Object.keys(a[0].bins[0]).sort().join();
 // network shell with a fake fetch: Valhalla trace_attributes + Overpass, then upload
 (async () => {
+  // measured data along a route: way 77 direction 0 has bins 200..399 merged from 3 passes, one banked stretch, one unmeasured-camber stretch
+  const roads = { 77: { 0: { i: Array.from({ length: 200 }, (_, j) => 200 + j), n: Array(200).fill(3), cam: Array.from({ length: 200 }, (_, j) => (j < 40 ? 5 : j < 60 ? null : 1)), rough: Array(200).fill(0.1), crest: Array(200).fill(0.2) } } };
+  const rt = drive(1000), rm = rt.lat.map(() => ({ way: 77, cls: 'tertiary' }));
+  out.measured = C.summarize(C.locate({ drive: rt, match: rm, ways: { 77: way } }), roads, 1000);
+  out.unknownRoad = C.summarize(C.locate({ drive: rt, match: rm, ways: { 77: way } }), {}, 1000);
+  out.reverseRoute = C.summarize(C.locate({ drive: drive(1000, true), match: rm, ways: { 77: way } }), roads, 1000);
+  const fk = async (url, init) => url.includes('trace_attributes')
+    ? { ok: true, json: async () => ({ edges: [{ way_id: 77, road_class: 'tertiary' }], matched_points: JSON.parse(init.body).shape.map(() => ({ type: 'matched', edge_index: 0 })) }) }
+    : { ok: true, json: async () => ({ elements: [{ type: 'way', id: 77, geometry: way.map(([la, lo]) => ({ lat: la, lon: lo })) }] }) };
+  const viaNet = await C.measuredAlong(rt, async (ids) => { out.lookupIds = ids; return roads; }, { fetch: fk });
+  out.viaNetwork = viaNet && { coveredKm: Math.round(viaNet.coveredKm * 100) / 100, banked: viaNet.bankedKm };
+  out.signedOut = await C.measuredAlong(rt, async () => null, { fetch: fk });
   const calls = [];
   const fake = async (url, init) => {
     calls.push(url);
@@ -108,3 +120,17 @@ def test_network_shell_matches_fetches_and_uploads_bins_only(result):
 
 def test_server_refusal_stops_uploading(result):
     assert result["stopped"] == {"built": 1, "sent": 0}
+
+
+def test_measured_along_route_reports_coverage_and_never_zero_fills(result):
+    m = result["measured"]
+    assert m["coveredKm"] == pytest.approx(1.0, abs=0.02) and m["roughness"] == pytest.approx(0.1)
+    assert m["avgPasses"] == 3 and m["bankedKm"] == pytest.approx(0.2, abs=0.02)
+    u = result["unknownRoad"]
+    assert u["coveredKm"] == 0 and u["roughness"] is None and u["avgPasses"] is None      # nothing measured -> unknown, not zero
+
+
+def test_measured_is_per_direction_and_network_path(result):
+    assert result["reverseRoute"]["coveredKm"] == 0                  # data is for the other direction
+    assert result["lookupIds"] == [77] and result["viaNetwork"]["coveredKm"] > 0.9
+    assert result["signedOut"] is None

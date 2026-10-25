@@ -37,30 +37,10 @@
    * Returns contributions in the /api/contribute shape. Samples within trimM of either end are dropped (hides where a trip starts and ends).
    */
   function buildContributions({ drive, match, ways, drivenOn, trimM = 1000 }) {
-    const n = drive.lat.length, trim = Math.round(trimM / BIN_M), out = [];
-    const runs = [];                                                   // consecutive samples on one way
-    for (let i = trim; i < n - trim; i++) {
-      const m = match[i];
-      if (!m || m.way == null || SKIP_CLASSES.has(m.cls)) continue;
-      const last = runs[runs.length - 1];
-      if (last && last.way === m.way && last.end === i - 1) { last.end = i; last.idx.push(i); } else runs.push({ way: m.way, end: i, idx: [i] });
-    }
-    const best = new Map();                                            // keep the longest run per (way, direction)
-    for (const run of runs) {
-      const poly = ways[run.way];
-      if (!poly || poly.length < 2 || run.idx.length < MIN_BINS) continue;
-      const cum = cumulative(poly);
-      const pts = run.idx.map((i) => ({ i, ...project(poly, drive.lat[i], drive.lon[i], cum) }));
-      if (pts.filter((p) => p.d > MAX_OFF_ROAD_M).length > pts.length * 0.1) continue;          // match did not really follow this way
-      const fwd = pts[pts.length - 1].off - pts[0].off;
-      if (Math.abs(fwd) < MIN_BINS * BIN_M * 0.5) continue;
-      const dir = fwd > 0 ? 0 : 1;
+    const trim = Math.round(trimM / BIN_M), out = [], best = new Map();
+    for (const run of locate({ drive, match, ways, from: trim, to: drive.lat.length - trim })) {   // keep the longest run per (way, direction)
       const byBin = new Map();
-      for (const p of pts) {
-        if (p.d > MAX_OFF_ROAD_M) continue;
-        const b = Math.floor(p.off / BIN_M);
-        (byBin.get(b) ?? byBin.set(b, []).get(b)).push(p.i);
-      }
+      for (const p of run.pts) (byBin.get(p.bin) ?? byBin.set(p.bin, []).get(p.bin)).push(p.i);
       const bins = [];
       for (const [b, ids] of [...byBin].sort((x, y) => x[0] - y[0])) {
         const rough = ids.map((i) => drive.rough[i]).filter(finite);
@@ -74,10 +54,36 @@
       if (bins.length < MIN_BINS) continue;
       const span = bins[bins.length - 1].i - bins[0].i + 1;
       if (bins.length / span < 0.8) continue;                          // would be rejected as scattered
-      const key = `${run.way}|${dir}`;
-      if (!best.has(key) || best.get(key).bins.length < bins.length) best.set(key, { way_id: run.way, dir, driven_on: drivenOn, bins: bins.slice(0, MAX_BINS) });
+      const key = `${run.way}|${run.dir}`;
+      if (!best.has(key) || best.get(key).bins.length < bins.length) best.set(key, { way_id: run.way, dir: run.dir, driven_on: drivenOn, bins: bins.slice(0, MAX_BINS) });
     }
     return [...best.values()];
+  }
+
+  /**
+   * Places each matched sample on its OSM way: runs of consecutive samples on one way, with the direction of travel along the way's own
+   * node order and each sample's bin index (5 m of arc length from the way's first node). Skips private-feeling classes, runs shorter than
+   * 20 samples, runs that do not follow the way, and ways without geometry. Shared by contributing and by looking up measured data.
+   */
+  function locate({ drive, match, ways, from = 0, to = drive.lat.length }) {
+    const runs = [], out = [];
+    for (let i = from; i < to; i++) {
+      const m = match[i];
+      if (!m || m.way == null || SKIP_CLASSES.has(m.cls)) continue;
+      const last = runs[runs.length - 1];
+      if (last && last.way === m.way && last.end === i - 1) { last.end = i; last.idx.push(i); } else runs.push({ way: m.way, end: i, idx: [i] });
+    }
+    for (const run of runs) {
+      const poly = ways[run.way];
+      if (!poly || poly.length < 2 || run.idx.length < MIN_BINS) continue;
+      const cum = cumulative(poly);
+      const pts = run.idx.map((i) => ({ i, ...project(poly, drive.lat[i], drive.lon[i], cum) }));
+      if (pts.filter((p) => p.d > MAX_OFF_ROAD_M).length > pts.length * 0.1) continue;          // match did not really follow this way
+      const fwd = pts[pts.length - 1].off - pts[0].off;
+      if (Math.abs(fwd) < MIN_BINS * BIN_M * 0.5) continue;
+      out.push({ way: run.way, dir: fwd > 0 ? 0 : 1, pts: pts.filter((p) => p.d <= MAX_OFF_ROAD_M).map((p) => ({ i: p.i, bin: Math.floor(p.off / BIN_M) })) });
+    }
+    return out;
   }
 
   // ---- network shell -------------------------------------------------------------------------------------------------------
@@ -135,6 +141,35 @@
     return { built: list.length, sent };
   }
 
-  const api = { buildContributions, matchDrive, fetchWays, contributeDrive, eligible, project, cumulative, SKIP_CLASSES };
+  /**
+   * What the crowd has measured along a planned route. Matches it, looks up /api/roads for the ways it uses, and returns coverage and averages.
+   * `lookup(wayIds)` returns the /api/roads JSON (or null when signed out). Unknown stays unknown: no data means null, not zero.
+   */
+  async function measuredAlong(route, lookup, opts = {}) {
+    const match = await matchDrive(route, opts.fetch);
+    const ids = [...new Set(match.filter((m) => m && m.way != null).map((m) => m.way))].slice(0, 50);
+    if (!ids.length) return null;
+    const [ways, roads] = await Promise.all([fetchWays(ids, opts.fetch), lookup(ids)]);
+    if (!roads) return null;
+    return summarize(locate({ drive: route, match, ways }), roads, route.lat.length);
+  }
+  function summarize(runs, roads, total) {
+    let covered = 0, located = 0, passes = 0, rough = [], banked = 0;
+    for (const run of runs) {
+      const d = roads[run.way] && roads[run.way][run.dir], idx = d ? new Map(d.i.map((b, j) => [b, j])) : null;
+      for (const p of run.pts) {
+        located++;
+        const j = idx && idx.get(p.bin);
+        if (j == null) continue;
+        covered++; passes += d.n[j];
+        if (finite(d.rough[j])) rough.push(d.rough[j]);
+        if (finite(d.cam[j]) && Math.abs(d.cam[j]) >= 3) banked++;
+      }
+    }
+    return { km: total * BIN_M / 1000, coveredKm: covered * BIN_M / 1000, coverage: total ? covered / total : 0, located: located / (total || 1),
+             roughness: rough.length ? mean(rough) : null, bankedKm: banked * BIN_M / 1000, avgPasses: covered ? passes / covered : null };
+  }
+
+  const api = { measuredAlong, summarize, locate, buildContributions, matchDrive, fetchWays, contributeDrive, eligible, project, cumulative, SKIP_CLASSES };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexContributor = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -13,6 +13,7 @@
   <script src="apex_core.js"></script>
   <script src="stages.js"></script>
   <script src="sync.js"></script>
+  <script src="contributor.js"></script>
   <script src="themes.js"></script>
   <script src="instruments.js"></script>
   <script src="voice.js"></script>
@@ -272,6 +273,7 @@
           <section data-panel="drives">
             <h3>Profiled drives</h3>
             <div id="driveList" style="display:grid;gap:6px"></div>
+            <p class="note" id="measuredNote" hidden></p>
             <div class="row" style="margin-top:10px"><a class="ink-btn solid" href="analysis.html" style="display:inline-flex;align-items:center;text-decoration:none">OPEN DRIVE ANALYSIS →</a></div>
           </section>
           <section data-panel="setup" id="accountSection" hidden>
@@ -1039,6 +1041,7 @@
       renderDriveList();
       loadTrackOnMap();
       fetchAlpr(t);
+      showMeasured(t);
       // Names are known now: pre-render them in the co-driver's own voice.
       if (state.liveVoice && state.voiceId !== 'device' && window.ApexVoice) {
         ApexVoice.load(state.voiceId).then(() => {
@@ -1067,6 +1070,23 @@
     // 8. ALPR — real cameras from OpenStreetMap (DeFlock) via Overpass
     // =======================================================================
     const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter', 'https://overpass.private.coffee/api/interpreter'];
+    // What other members have measured along this route (banking, roughness). Members only; silent when signed out or offline.
+    async function showMeasured(t) {
+      const note = $('measuredNote'); note.hidden = true;
+      if (!window.ApexSync || !window.ApexContributor || !t.lat || t.lat.length < 40 || !(await ApexSync.member())) return;
+      if (t.measured === undefined) {
+        try { t.measured = await ApexContributor.measuredAlong(t, async (ids) => { const r = await apiCall('GET', `/api/roads?ways=${ids.join(',')}`); return r.ok ? r.json() : null; }); }
+        catch (_) { t.measured = null; }
+      }
+      const m = t.measured;
+      if (!m || track !== t) return;
+      note.hidden = false;
+      note.textContent = m.coveredKm < 0.05
+        ? 'No member measurements on this route yet. Drive it with road data sharing on to be the first (3x points).'
+        : `Measured by members: ${m.coveredKm.toFixed(1)} of ${m.km.toFixed(1)} km (${Math.round(m.coverage * 100)}%)` +
+          (m.roughness != null ? ` · roughness ${m.roughness.toFixed(2)}` : '') + (m.bankedKm >= 0.05 ? ` · ${m.bankedKm.toFixed(1)} km banked` : '') +
+          (m.avgPasses != null ? ` · ${m.avgPasses.toFixed(1)} passes on average` : '');
+    }
     async function fetchAlpr(t) {
       if (t.alpr) return;
       let s = Infinity, w = Infinity, n = -Infinity, e = -Infinity;

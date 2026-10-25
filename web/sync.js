@@ -1,6 +1,7 @@
 // Optional server sync for segments (docs/BACKEND.md). Everything works without it: when /api does not answer or the
 // person is not a signed-in member, these calls resolve to null and local data is untouched.
 (function (root) {
+  const list = (v) => (Array.isArray(v) ? v : []);
   const call = async (method, path, body) => {
     try {
       const r = await fetch(path, { method, credentials: 'same-origin', headers: { 'content-type': 'application/json', 'x-apexnav': '1' }, body: body === undefined ? undefined : JSON.stringify(body) });
@@ -26,23 +27,23 @@
     }
     return sent;
   }
-  const sharedWithMe = async () => ((await call('GET', '/api/segments/shared')) || []).map((r) => ({ ...fromServer(r), from_handle: r.from_handle }));
+  const sharedWithMe = async () => list(await call('GET', '/api/segments/shared')).map((r) => ({ ...fromServer(r), from_handle: r.from_handle }));
   async function adopt(seg) { const r = await call('POST', '/api/segments/adopt', { segment_id: seg.origin || seg.id }); return r && r.id ? { ...seg, id: r.id, synced: true } : null; }
   const shareSegment = (id, audienceType, audienceId) => call('POST', `/api/segments/${encodeURIComponent(id)}/share`, { audience_type: audienceType, audience_id: audienceId });
-  const friends = async () => ((await call('GET', '/api/friends')) || []).filter((f) => f.status === 'accepted');
+  const friends = async () => list(await call('GET', '/api/friends')).filter((f) => f.status === 'accepted');
   const removeRemote = (id) => call('DELETE', `/api/segments/${encodeURIComponent(id)}`);
 
   /** Shared highlights in a box around a point (about 0.25 degrees each way); [] when offline. Scores are shrunk toward 3 stars by the server. */
   async function highlightsNear(c, deg = 0.25) {
     const r = await call('GET', `/api/highlights?bbox=${[c.lat - deg, c.lon - deg, c.lat + deg, c.lon + deg].map((v) => v.toFixed(5)).join(',')}`);
-    return (r || []).map((h) => ({ id: 'srv_' + h.id, name: h.name, lat: h.lat, lon: h.lon, rating: h.score, ratings: h.ratings, server: true, mine: !!h.mine }));
+    return list(r).map((h) => ({ id: 'srv_' + h.id, name: h.name, lat: h.lat, lon: h.lon, rating: h.score, ratings: h.ratings, server: true, mine: !!h.mine }));
   }
   const shareHighlight = (h, category) => call('POST', '/api/highlights', { name: h.name, category, lat: h.lat, lon: h.lon });
   const rateHighlight = (id, stars, visited = false) => call('POST', `/api/highlights/${encodeURIComponent(id.replace(/^srv_/, ''))}/rating`, { stars, visited });
 
   /** Publishes one pass; the server delivers it only to friends/crews you granted (Account). Safe to repeat. */
   const publishScore = (segmentId, score, timeS, day) => call('POST', '/api/board', { segment_id: segmentId, driver_score: Math.round(score), time_s: timeS == null ? null : Math.max(1, Math.round(timeS)), driven_on: day });
-  const board = async (canonId) => (await call('GET', `/api/board/${encodeURIComponent(canonId)}`)) || [];
+  const board = async (canonId) => list(await call('GET', `/api/board/${encodeURIComponent(canonId)}`));
 
   /** Uploads one road contribution. true = accepted, false = skipped (already contributed / rejected), 'stop' = not enabled or rate limited. */
   async function contribute(c) {
