@@ -173,12 +173,11 @@ def test_parity_driver_score_and_segments_on_real_drives():
     seg = {"lat0": a["lat"][6000], "lon0": a["lon"][6000], "lat1": a["lat"][6400], "lon1": a["lon"][6400], "length_m": 2000.0}
     py = []
     for d in drives:
-        lim = np.array([np.nan if v is None else v for v in d["limit_mps"]])
-        py.append({"score": da.driver_score(np.array(d["speed_mps"]), np.array(d["lon_g"]), np.array(d["lat_g"]), d["corners"], lim),
-                   "seg": da.segment_pass(seg, {**d, "limit_mps": lim, "speed_mps": np.array(d["speed_mps"]),
+        py.append({"score": da.driver_score(np.array(d["speed_mps"]), np.array(d["lon_g"]), np.array(d["lat_g"]), d["corners"]),
+                   "seg": da.segment_pass(seg, {**d, "speed_mps": np.array(d["speed_mps"]),
                                                  "lon_g": np.array(d["lon_g"]), "lat_g": np.array(d["lat_g"])})})
     runner = ("const c=require(process.argv[1]);const {drives,seg}=JSON.parse(require('fs').readFileSync(0,'utf8'));"
-              "process.stdout.write(JSON.stringify(drives.map(d=>({score:c.driverScore(d.speed_mps,d.lon_g,d.lat_g,d.corners,d.limit_mps),"
+              "process.stdout.write(JSON.stringify(drives.map(d=>({score:c.driverScore(d.speed_mps,d.lon_g,d.lat_g,d.corners),"
               "seg:c.segmentPass(seg,d)}))));")
     out = subprocess.run([NODE, "-e", runner, os.path.abspath("web/apex_core.js")], input=json.dumps({"drives": drives, "seg": seg}),
                          capture_output=True, text=True, check=True)

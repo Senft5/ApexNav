@@ -59,17 +59,34 @@ Per corner (matched across drives by location, ROAD_INTELLIGENCE corner detectio
 - **Delta**: per-corner time gained/lost vs the other pass, and cumulative delta along
   the road (the classic lap-analysis chart).
 
-### Recommendation on leaderboards
-Public time leaderboards for public-road corners are where this category gets into
-trouble: they reward speed on shared roads, contradict zero-snitch (a leaderboard *is* a
-public record of how fast someone drove), and create legal exposure for the platform.
-Strava has faced exactly this with downhill road segments. Proposal: analysis is private
-and friend-to-friend only; anything public ranks **technique** relative to the reference
-lap (smoothness, consistency, line), never absolute time. Your call — this is a product
-decision, not an engineering one.
+### Leaderboards (decided)
+- **Segments** are user-made stretches (built: `web/analysis.html` SEGMENTS). Passes are
+  ranked by **Driver Score**: technique only (pace as a share of the corner's grip limit,
+  smoothness, braking, consistency). Speed limits and legality never enter it. A perfect
+  score means driving at each corner's limit, which is a closed-track figure, not a goal for
+  public roads.
+- **Corner and segment times** are shared only by explicit opt-in, **per friend and per
+  crew**, each one granted on its own. Nothing is shared by default, nothing is public, and
+  revoking a grant removes your times from that board.
+- No public time leaderboards. Strava has faced exactly this with downhill road segments.
 
-## 4. Backend sketch
-- Auth: passkeys; no email required.
+## 4. Backend (zero budget)
+**Recommendation: Supabase free tier.** It is hosted Postgres with PostGIS, auth and
+row-level security in one place, with no server for us to keep patched.
+- Security comes from **row-level security on every table**: a row of times is readable
+  only by its owner and the friends or crews in its grant list. The app holds only the
+  public anon key, and the policies do the enforcing. Policies are versioned SQL in the
+  repo with tests.
+- Auth: email magic link plus passkeys. No password store. Sign in with Apple waits for a
+  developer account.
+- The free tier pauses a project after a week with no traffic. A free scheduled GitHub
+  Action pings it daily. Check the current free-tier limits when signing up, since they
+  change.
+- Exit plan: it is plain Postgres, so `pg_dump` moves it anywhere (self-hosted, Neon).
+- Fallback if Supabase stops being free: Cloudflare Workers + D1 (free tier, no PostGIS;
+  spatial lookup through H3 cell ids stored as columns).
+- Store: road bins keyed by (OSM way id, direction, 5 m index), with
+  H3 cells for spatial lookup.
 - Store: Postgres + PostGIS; road bins keyed by (OSM way id, direction, 5 m index), with
   H3 cells for spatial lookup.
 - Aggregation jobs: Bayesian hazard posteriors, corner deviation medians, roughness spectra.
@@ -77,7 +94,7 @@ decision, not an engineering one.
   no per-user trace storage.
 
 ## 5. Build order
-1. Drive analysis page on local data (both shipped drives overlap 100 %) **[building now]**
+1. Drive analysis page on local data: history, segments, compare **[built]**
 2. Multi-drive local store + Bayesian hazard verification (works on-device first)
 3. Garage / car profile → reference lap
 4. Backend: bin upload + aggregation, road pages

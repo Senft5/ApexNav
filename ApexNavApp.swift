@@ -3,6 +3,7 @@ import WebKit
 import CoreLocation
 import CoreMotion
 import AVFoundation
+import UniformTypeIdentifiers
 import ApexKit
 
 // =====================================================================================
@@ -71,6 +72,35 @@ enum ApexWebBundle {
     static var indexURL: URL? {
         Bundle.main.url(forResource: "index", withExtension: "html", subdirectory: "web")
     }
+    /// The cockpit is served as apexnav://app/... instead of file://: WebKit's fetch() refuses
+    /// file URLs, which silently broke the voice banks (every voice fell back to the device TTS).
+    static let scheme = "apexnav"
+    static let entryURL = URL(string: "\(scheme)://app/index.html")!
+}
+
+/// Serves files from the bundled web/ folder for the apexnav:// scheme.
+final class ApexBundleSchemeHandler: NSObject, WKURLSchemeHandler {
+    private let root: URL
+    init(root: URL) { self.root = root.standardizedFileURL }
+
+    func webView(_ webView: WKWebView, start task: WKURLSchemeTask) {
+        guard let url = task.request.url else { return }
+        let rel = url.path.hasPrefix("/") ? String(url.path.dropFirst()) : url.path
+        let file = root.appendingPathComponent(rel.isEmpty ? "index.html" : rel).standardizedFileURL
+        guard file.path.hasPrefix(root.path), let data = try? Data(contentsOf: file) else {
+            task.didFailWithError(URLError(.fileDoesNotExist))
+            return
+        }
+        let mime = UTType(filenameExtension: file.pathExtension)?.preferredMIMEType ?? "application/octet-stream"
+        let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: "HTTP/1.1",
+                                       headerFields: ["Content-Type": mime, "Content-Length": "\(data.count)",
+                                                      "Access-Control-Allow-Origin": "*"])!
+        task.didReceive(response)
+        task.didReceive(data)
+        task.didFinish()
+    }
+
+    func webView(_ webView: WKWebView, stop task: WKURLSchemeTask) {}
 }
 
 struct CSVShareItem: Identifiable {
@@ -135,6 +165,8 @@ struct ApexCockpitWebView: UIViewRepresentable {
         config.userContentController = contentController
         config.allowsInlineMediaPlayback = true
         config.mediaTypesRequiringUserActionForPlayback = []
+        config.setURLSchemeHandler(ApexBundleSchemeHandler(root: indexURL.deletingLastPathComponent()),
+                                   forURLScheme: ApexWebBundle.scheme)
         Self.enableLocalFileAccess(config)
 
         let webView = WKWebView(frame: .zero, configuration: config)
@@ -152,7 +184,7 @@ struct ApexCockpitWebView: UIViewRepresentable {
         webView.navigationDelegate = context.coordinator
 
         shell.attach(webView: webView)
-        webView.loadFileURL(indexURL, allowingReadAccessTo: indexURL.deletingLastPathComponent())
+        webView.load(URLRequest(url: ApexWebBundle.entryURL))
         return webView
     }
 

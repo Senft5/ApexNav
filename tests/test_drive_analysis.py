@@ -51,8 +51,8 @@ def test_stops_are_flagged_and_left_out_of_totals():
     assert r["matched_corners"] == 0 and r["corner_delta_s"] == 0.0
 
 
-def _score(d, limit=None, scale=1.0):
-    return da.driver_score(d["speed_mps"] * scale, d["lon_g"], d["lat_g"], d["corners"], limit)
+def _score(d, scale=1.0):
+    return da.driver_score(d["speed_mps"] * scale, d["lon_g"], d["lat_g"], d["corners"])
 
 
 def test_driver_score_never_rewards_overdriving():
@@ -66,19 +66,15 @@ def test_driver_score_never_rewards_overdriving():
     assert s120 < s85 and s60 < s85, "beyond the limit scores lower than staying inside it"
 
 
-def test_driver_score_penalises_speeding_and_jerk():
+def test_driver_score_penalises_jerk_and_ignores_limits():
     d = _drive()
     n = len(d["lat"])
-    clean = _score(d, limit=np.full(n, 30.0))["score"]
-    speeding = _score(d, limit=np.full(n, 10.0))["score"]             # posted 22 mph, driving 56
-    assert speeding < clean * 0.5
+    # Technique only: posted limits are not an input, and no legality component exists.
+    assert "limit_mps" not in da.driver_score.__code__.co_varnames
+    assert set(_score(d)["components"]) == {"pace", "smoothness", "braking", "consistency"}
     jerky = dict(d, lat_g=d["lat_g"] + 0.3 * np.sin(np.arange(n)))      # sawing at the wheel
     assert _score(jerky)["components"]["smoothness"] < _score(d)["components"]["smoothness"]
     assert _score(dict(d, corners=[]))["score"] is None
-    # No posted limits known: legality is unknown, never a perfect mark.
-    assert _score(d)["components"]["legality"] is None
-    assert _score(d, limit=np.full(n, np.nan))["components"]["legality"] is None
-    assert _score(d)["score"] == clean
 
 
 def test_segment_pass_finds_the_stretch_and_scores_it():

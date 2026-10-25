@@ -244,6 +244,24 @@ Our own routing graph with the fun score baked into edge costs (Valhalla/GraphHo
 custom costing, self-hosted), so the optimiser sees every road, not just discovered
 stages.
 
+### 7.4 On-device routing (zero budget, no routing server)
+Yes, routing can run on the phone. It removes the hosting cost, works with no signal (the
+places these roads run), and keeps every route private.
+- **Engine**: Valhalla (MIT, C++) builds for iOS and Android and reads a tile directory
+  offline. It is the same engine and request JSON the web cockpit already uses, so the
+  routing code does not change, only the URL.
+- **Data**: free OpenStreetMap extracts (Geofabrik, per state). A free GitHub Actions job
+  builds Valhalla tiles monthly, keeps drivable roads only, and publishes one archive per
+  region as a GitHub Release asset. The app downloads the regions you drive, like offline
+  maps: expect a few hundred MB per US state (to be measured on the first build).
+- **Our scoring in the graph**: because we build the tiles ourselves, per-edge fun scores
+  from stage discovery can be written in at build time. That is 7.3 without a server.
+- **Browser**: Valhalla can be compiled to WebAssembly, but state-sized tiles are too heavy
+  for a web page. The web cockpit stays on the public demo server, and that is fine for
+  a prototype. The native apps route on device.
+- Elevation (Terrarium DEM) and vector tiles are also static files and can be cached per
+  region the same way.
+
 ---
 
 ## 8. Build order
