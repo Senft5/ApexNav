@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Drive Analysis</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=Inter+Tight:wght@400;500;600;700;800&display=swap" />
+  <script src="apex_core.js"></script>
+  <script src="themes.js"></script>
+  <script src="instruments.js"></script>
+  <script src="data/dry_ridge.js"></script>
+  <script src="data/pebble_ridge.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { background: var(--panel); color: var(--panel-ink); font-family: var(--font-ui); font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; }
+    main { max-width: 1180px; margin: 0 auto; padding: calc(14px + env(safe-area-inset-top, 0px)) 16px 40px; display: grid; gap: 18px; }
+    header { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; justify-content: space-between; border-bottom: 1px solid var(--rule); padding-bottom: 12px; }
+    h1 { font-size: 22px; letter-spacing: 0.08em; text-transform: uppercase; }
+    h1 small { display: block; font-size: 11px; color: var(--panel-dim); letter-spacing: 0.14em; margin-top: 4px; }
+    h2 { font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--panel-dim); margin-bottom: 8px; }
+    a { color: inherit; }
+    .pick { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; font-size: 12px; }
+    select, button { font: inherit; font-size: 13px; height: 34px; padding: 0 10px; background: transparent; color: var(--panel-ink); border: 1px solid var(--panel-dim); }
+    button { cursor: pointer; font-weight: 700; letter-spacing: 0.1em; }
+    .tag { font-weight: 800; letter-spacing: 0.1em; }
+    .tag.a { color: var(--panel-ink); } .tag.b { color: var(--accent); }
+    .cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+    .card { border: 1px solid var(--rule); padding: 10px 12px; display: grid; gap: 3px; }
+    .card b { font-family: var(--font-num); font-size: 26px; font-weight: 700; }
+    .card span { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--panel-dim); }
+    .card em { font-style: normal; font-size: 11px; color: var(--panel-dim); }
+    .gain { color: #3FB950; } .loss { color: var(--signal); }
+    .grid2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 12px; }
+    .panel { border: 1px solid var(--rule); padding: 10px; min-width: 0; }
+    svg { display: block; width: 100%; height: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th { font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--panel-dim); text-align: right; padding: 6px 6px; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+    th:first-child, td:first-child, th:nth-child(2), td:nth-child(2) { text-align: left; }
+    td { padding: 7px 6px; border-bottom: 1px solid var(--rule); text-align: right; font-family: var(--font-num); white-space: nowrap; }
+    td .sub { display: block; font-size: 11px; color: var(--panel-dim); }
+    tr.stopped td { opacity: 0.55; }
+    .tul { width: 34px; height: 34px; display: inline-block; vertical-align: middle; }
+    .scroll { overflow-x: auto; }
+    .note { font-size: 12px; color: var(--panel-dim); line-height: 1.5; }
+    @media (max-width: 760px) { .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } .grid2 { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Drive Analysis<small>Private · your passes only · nothing leaves this device</small></h1>
+      <div class="pick">
+        <span class="tag a">A</span><select id="selA"></select>
+        <button id="swapBtn">SWAP</button>
+        <span class="tag b">B</span><select id="selB"></select>
+        <a href="index.html">Cockpit →</a>
+      </div>
+    </header>
+
+    <section class="cards" id="cards"></section>
+
+    <section class="grid2">
+      <div class="panel"><h2>Road · corners numbered</h2><div id="plan"></div></div>
+      <div class="panel"><h2>Time delta B vs A along the road · speed A</h2><div id="chart"></div>
+        <p class="note">Below zero: B was ahead. Breaks are where B left A's road; the delta restarts on the next shared stretch.</p></div>
+    </section>
+
+    <section class="panel">
+      <h2>Corner by corner (A's corners, B measured over the same stretch)</h2>
+      <div class="scroll"><table id="table"></table></div>
+      <p class="note" style="margin-top:8px">Greyed rows include a stop (below 2.5 m/s): the time there measures waiting, so they are left out of the corner total.
+      Envelope use = minimum speed ÷ the corner's grip limit at μ 0.60. Brake = distance before the apex where braking (&lt; −0.15 g) began.</p>
+    </section>
+  </main>
+
+  <script>
+  (() => {
+    'use strict';
+    const Core = window.ApexCore, Inst = window.ApexInstruments, MPH = Core.MPS_TO_MPH;
+    const $ = (id) => document.getElementById(id);
+    let prefs = { theme: 'stage', toggles: { night: false } };
+    try { prefs = Object.assign(prefs, JSON.parse(localStorage.getItem('apex.prefs') || 'null') || {}); } catch (_) {}
+    const params = new URLSearchParams(location.search);
+    const look = window.ApexThemes.apply(params.get('theme') || prefs.theme, params.has('night') ? params.get('night') === '1' : !!(prefs.toggles && prefs.toggles.night));
+    const C = look.colors;
+
+    const drives = (window.APEX_DRIVES || []).map(d => {
+      const f = Object.fromEntries(d.fields.map((n, i) => [n, i]));
+      const col = (n, s = 1) => d.rows.map(r => r[f[n]] * s);
+      return {
+        id: d.id, name: d.name, date: (d.date || '').slice(0, 10),
+        lat: col('lat'), lon: col('lon'), speed_mps: col('speed_mph', 1 / MPH), lon_g: col('lon_g'), lat_g: col('lat_g'),
+        corners: d.events.filter(e => e.type === 'corner').map(e => ({
+          start: Math.round(e.start_m / 5), end: Math.round(e.end_m / 5), apex: e.index, apex_mps: e.apex_mph / MPH,
+          code: e.code, call: e.call, dir: e.dir, severity: e.severity, turn_rad: e.turn_rad, mods: e.mods || [] }))
+      };
+    });
+    if (drives.length < 2) { $('cards').innerHTML = '<p class="note">Analysis needs two profiled drives.</p>'; return; }
+
+    for (const sel of [$('selA'), $('selB')]) for (const d of drives) sel.add(new Option(`${d.name} · ${d.date}`, d.id));
+    $('selA').value = params.get('a') || drives[0].id;
+    $('selB').value = params.get('b') || drives.find(d => d.id !== $('selA').value).id;
+    $('selA').onchange = $('selB').onchange = run;
+    $('swapBtn').onclick = () => { const a = $('selA').value; $('selA').value = $('selB').value; $('selB').value = a; run(); };
+
+    const fmtS = (s) => (s == null ? '--' : `${s > 0 ? '+' : ''}${s.toFixed(2)} s`);
+    const cls = (s) => (s == null || Math.abs(s) < 0.05 ? '' : s < 0 ? 'gain' : 'loss');
+    const mph = (v) => (v == null ? '--' : Math.round(v * MPH));
+    const ft = (m) => (m == null ? '--' : `${Math.round(m * 3.28084)}`);
+
+    function run() {
+      const A = drives.find(d => d.id === $('selA').value), B = drives.find(d => d.id === $('selB').value);
+      const r = Core.compareDrives(A, B);
+      cards(A, B, r);
+      plan(A, r);
+      chart(A, r);
+      table(A, r);
+    }
+
+    function cards(A, B, r) {
+      const c = (v, label, extra, k = '') => `<div class="card"><b class="${k}">${v}</b><span>${label}</span>${extra ? `<em>${extra}</em>` : ''}</div>`;
+      $('cards').innerHTML =
+        c(`${(r.overlap_m / 1609.344).toFixed(1)} mi`, 'Shared road', `${A.name} ∩ ${B.name}`) +
+        c(`${r.matched_corners} / ${A.corners.length}`, 'Corners compared', 'clean passes, no stops') +
+        c(fmtS(r.matched_corners ? r.corner_delta_s : null), 'Corner time B vs A', 'sum over compared corners', cls(r.corner_delta_s)) +
+        c(fmtS(r.overlap_delta_s), 'Whole shared road', 'includes stops and traffic', cls(r.overlap_delta_s));
+    }
+
+    function plan(A, r) {
+      const { x, y } = Core.localXY(A.lat, A.lon);
+      let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+      for (let i = 0; i < x.length; i++) { x0 = Math.min(x0, x[i]); x1 = Math.max(x1, x[i]); y0 = Math.min(y0, y[i]); y1 = Math.max(y1, y[i]); }
+      const W = 400, pad = 14, s = (W - 2 * pad) / Math.max(x1 - x0, y1 - y0, 1), H = Math.round((y1 - y0) * s + 2 * pad);
+      const P = (i) => [pad + (x[i] - x0) * s, H - pad - (y[i] - y0) * s];
+      const step = Math.max(1, Math.floor(x.length / 900));
+      let d = '';
+      for (let i = 0; i < x.length; i += step) d += (i ? 'L' : 'M') + P(i).map(v => v.toFixed(1)).join(' ');
+      let marks = '';
+      r.corners.forEach((c, k) => {
+        const [px, py] = P(c.apex);
+        const col = c.stopped || c.delta_s == null ? C.panelDim : c.delta_s < 0 ? '#3FB950' : C.signal;
+        marks += `<circle cx="${px}" cy="${py}" r="7" fill="${C.panel}" stroke="${col}" stroke-width="2"/><text x="${px}" y="${py + 3.5}" text-anchor="middle" font-size="9" font-weight="700" fill="${C.panelInk}">${k + 1}</text>`;
+      });
+      $('plan').innerHTML = `<svg viewBox="0 0 ${W} ${H}"><path d="${d}" fill="none" stroke="${C.route}" stroke-width="2.5" stroke-linejoin="round"/>${marks}</svg>`;
+    }
+
+    function chart(A, r) {
+      const W = 760, H = 260, L = 46, R = 10, T = 12, mid = 150, bottom = H - 22;
+      const total = (A.lat.length - 1) * 5;
+      const X = (m) => L + (m / total) * (W - L - R);
+      const vals = r.delta_curve.filter(p => p[1] != null).map(p => p[1]);
+      const lim = Math.max(2, ...vals.map(Math.abs));
+      const Yd = (v) => T + (mid - T) / 2 - (v / lim) * ((mid - T) / 2 - 4);
+      let path = '', pen = false;
+      for (const [m, v] of r.delta_curve) {
+        if (v == null) { pen = false; continue; }
+        path += (pen ? 'L' : 'M') + X(m).toFixed(1) + ' ' + Yd(v).toFixed(1); pen = true;
+      }
+      const vmax = Math.max(...A.speed_mps) * MPH;
+      const Ys = (v) => bottom - (v * MPH / vmax) * (bottom - mid - 10);
+      let sp = '';
+      const step = Math.max(1, Math.floor(A.speed_mps.length / 700));
+      for (let i = 0; i < A.speed_mps.length; i += step) sp += (i ? 'L' : 'M') + X(i * 5).toFixed(1) + ' ' + Ys(A.speed_mps[i]).toFixed(1);
+      let bands = '';
+      r.corners.forEach((c, k) => {
+        const a = A.corners[k];
+        bands += `<rect x="${X(a.start * 5)}" y="${T}" width="${Math.max(1.5, X(a.end * 5) - X(a.start * 5))}" height="${bottom - T}" fill="${C.accent}" opacity="0.13"/>` +
+                 `<text x="${X(a.apex * 5)}" y="${bottom + 14}" text-anchor="middle" font-size="9" fill="${C.panelDim}">${k + 1}</text>`;
+      });
+      const zero = Yd(0);
+      $('chart').innerHTML = `<svg viewBox="0 0 ${W} ${H}">
+        ${bands}
+        <line x1="${L}" x2="${W - R}" y1="${zero}" y2="${zero}" stroke="${C.panelDim}" stroke-width="0.8"/>
+        <text x="${L - 6}" y="${Yd(lim) + 4}" text-anchor="end" font-size="10" fill="${C.panelDim}">+${lim.toFixed(0)}s</text>
+        <text x="${L - 6}" y="${zero + 3}" text-anchor="end" font-size="10" fill="${C.panelDim}">0</text>
+        <text x="${L - 6}" y="${Yd(-lim) + 4}" text-anchor="end" font-size="10" fill="${C.panelDim}">−${lim.toFixed(0)}s</text>
+        <path d="${path}" fill="none" stroke="${C.accent}" stroke-width="2"/>
+        <line x1="${L}" x2="${W - R}" y1="${mid}" y2="${mid}" stroke="${C.rule}"/>
+        <path d="${sp}" fill="none" stroke="${C.panelInk}" stroke-width="1.2" opacity="0.8"/>
+        <text x="${L - 6}" y="${Ys(vmax / MPH) + 4}" text-anchor="end" font-size="10" fill="${C.panelDim}">${Math.round(vmax)}</text>
+        <text x="${L - 6}" y="${bottom}" text-anchor="end" font-size="10" fill="${C.panelDim}">0 mph</text>
+      </svg>`;
+    }
+
+    function table(A, r) {
+      const head = '<tr><th>#</th><th>Corner</th><th>Time A</th><th>Time B</th><th>Δ B−A</th><th>Entry A/B</th><th>Min A/B</th><th>Exit A/B</th><th>Brake ft A/B</th><th>Peak lat g</th><th>Envelope use</th><th>Apex offset ft</th></tr>';
+      const rows = r.corners.map((c, k) => {
+        const a = c.a, b = c.b, n = A.corners[k];
+        const tul = Inst.tulipSVG({ type: 'corner', dir: n.dir, severity: n.severity, turnRad: n.turn_rad, mods: n.mods }, C.panelInk, C.accent).replace('class="tulip"', 'class="tul"');
+        const pair = (fa, fb) => `${fa}<span class="sub">${b ? fb : '--'}</span>`;
+        return `<tr class="${c.stopped ? 'stopped' : ''}">
+          <td>${k + 1}</td>
+          <td>${tul} <b>${c.code}</b> <span class="sub">${c.call}${c.stopped ? ' · stop' : ''}</span></td>
+          <td>${a.time_s.toFixed(2)}</td><td>${b ? b.time_s.toFixed(2) : '--'}</td>
+          <td class="${c.stopped ? '' : cls(c.delta_s)}">${fmtS(c.delta_s)}</td>
+          <td>${pair(mph(a.entry_mps), b && mph(b.entry_mps))}</td>
+          <td>${pair(mph(a.min_mps), b && mph(b.min_mps))}</td>
+          <td>${pair(mph(a.exit_mps), b && mph(b.exit_mps))}</td>
+          <td>${pair(ft(a.brake_m), b && ft(b.brake_m))}</td>
+          <td>${pair(a.peak_lat_g.toFixed(2), b && b.peak_lat_g.toFixed(2))}</td>
+          <td>${pair(Math.round(a.envelope_use * 100) + '%', b && Math.round(b.envelope_use * 100) + '%')}</td>
+          <td>${pair(ft(a.min_offset_m), b && ft(b.min_offset_m))}</td></tr>`;
+      }).join('');
+      $('table').innerHTML = head + rows;
+    }
+
+    run();
+  })();
+  </script>
+</body>
+</html>

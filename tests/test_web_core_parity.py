@@ -92,3 +92,42 @@ def test_parity_on_real_logged_drive():
     _assert_parity(rows[:, f["lat"]], rows[:, f["lon"]], np.radians(rows[:, f["camber_deg"]]),
                    rows[:, f["crest_vertical_g"]], rows[:, f["roughness_rms"]], elev=rows[:, f["elevation_m"]])
     assert math.isfinite(rows[:, f["lat"]].sum())
+
+
+def test_parity_drive_analysis_on_real_overlapping_drives():
+    from core import drive_analysis as da
+    paths = ["web/data/pebble_ridge.js", "web/data/dry_ridge.js"]
+    if not all(os.path.exists(p) for p in paths):
+        pytest.skip("no shipped drive data")
+
+    def load(path):
+        text = open(path, encoding="utf-8").read()
+        d = json.loads(text[text.index("push(") + 5:text.rindex(");")])
+        f = {name: i for i, name in enumerate(d["fields"])}
+        rows = np.array([[r[f[k]] for k in ("lat", "lon", "speed_mph", "lon_g", "lat_g")] for r in d["rows"]], dtype=float)
+        corners = [{"start": int(round(e["start_m"] / 5)), "end": int(round(e["end_m"] / 5)), "apex": e["index"],
+                    "apex_mps": e["apex_mph"] / 2.2369362921, "code": e["code"], "call": e["call"]}
+                   for e in d["events"] if e["type"] == "corner"]
+        return {"lat": rows[:, 0], "lon": rows[:, 1], "speed_mps": rows[:, 2] / 2.2369362921,
+                "lon_g": rows[:, 3], "lat_g": rows[:, 4], "corners": corners}
+
+    a, b = load(paths[0]), load(paths[1])
+    py = da.compare(a, b)
+    js_in = {k: (v.tolist() if hasattr(v, "tolist") else v) for k, v in a.items()}, \
+            {k: (v.tolist() if hasattr(v, "tolist") else v) for k, v in b.items()}
+    runner = "const c=require(process.argv[1]);const [a,b]=JSON.parse(require('fs').readFileSync(0,'utf8'));" \
+             "process.stdout.write(JSON.stringify(c.compareDrives(a,b)));"
+    out = subprocess.run([NODE, "-e", runner, os.path.abspath("web/apex_core.js")], input=json.dumps(js_in),
+                         capture_output=True, text=True, check=True)
+    js = json.loads(out.stdout)
+    assert js["matched_corners"] == py["matched_corners"] and js["overlap_m"] == py["overlap_m"]
+    assert js["corner_delta_s"] == pytest.approx(py["corner_delta_s"], abs=1e-9)
+    assert js["overlap_delta_s"] == pytest.approx(py["overlap_delta_s"], abs=1e-6)
+    for cj, cp in zip(js["corners"], py["corners"]):
+        assert cj["stopped"] == cp["stopped"] and (cj["b"] is None) == (cp["b"] is None)
+        for side in ("a", "b"):
+            if cp[side] is None:
+                continue
+            for k, v in cp[side].items():
+                assert cj[side][k] == (None if v is None else pytest.approx(v, rel=1e-9, abs=1e-9)), k
+    assert len(js["delta_curve"]) == len(py["delta_curve"])
