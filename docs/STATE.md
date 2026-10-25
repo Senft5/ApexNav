@@ -197,9 +197,25 @@ docs/SOCIAL.md.
 - Clip loudness differs between banks (peak-normalised); an LUFS pass would hide seams.
 - web/voices is 66 MB / 4,599 files total on the site; Workers free limit is 20,000 files.
 
+## Session 2026-10-25 (i): Cloudflare backend foundation
+### Decisions (owner)
+- All-Cloudflare backend (Workers + D1), not Supabase. Google sign-in, invite-only, US only, under 20 users, all rights reserved.
+- In-app voice enrollment (a short guided recording inside the app), not a giant call sheet. Voice work is **on hold**.
+- Highlights (user scenic points, rated, optional routing bonus), points 3x/2x/1x per direction of each road.
+### Completed
+- [x] D1 database `apexnav-db` created in the owner's Cloudflare account; migrations 0001 + 0002 applied (22 + 1 tables).
+- [x] `backend/` Worker: Google OIDC sign-in (PKCE/state/nonce), sessions, invites, members gate, friends/blocks/crews,
+  opt-in grants, boards, segments with sharing. **29 tests** (privacy rules from the Opus review; mutation-checked).
+- [x] `wrangler.jsonc`: Worker serves `web/` and routes `/api/*` to `backend/src`; verified locally (`wrangler dev`) and by dry run.
+- [x] CI job `backend` (tsc, vitest, wrangler dry-run). docs/BACKEND.md rewritten for Cloudflare.
+### Owner to do
+- Create the Google OAuth client and set Worker secrets `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `OWNER_EMAIL`, `PEPPER` (docs/BACKEND.md section 7).
+### Active bugs / limitations
+- Not built yet: ingest + nightly merge + points, highlights API, account deletion/export, web account panel, convoy.
+- `npm ci` needs `--legacy-peer-deps` (Cloudflare test plugin vs wrangler peers).
+
 ## Exact Next Task
-1. Owner: check https://apexnav.senftns.workers.dev/ works, then make the GitHub repo private (steps in docs/BACKEND.md section 8).
-2. Generate the natural call sheet (v2) for the owner to record (~30 min); build chunk-level real-clip playback; set up
-   the Kokoro fine-tune script for the GPU PC with a 1-hour spike first (docs/VOICE.md "Path to ANY phrase").
-3. Supabase: project, migration 0001 + pgTAP RLS tests (docs/BACKEND.md section 11), invite-only members gate, Google sign-in.
-4. Replace the espeak-ng dependency (misaki phoneme lexicon for the closed pace-note vocabulary).
+1. Owner: Google client + Worker secrets; then sign in at the site and make the first invites.
+2. Web account panel + sync (IndexedDB -> /api/segments, /api/board); highlights planner bonus (offline) then highlights API.
+3. Ingest + nightly merge + points; account deletion/export; convoy (Durable Objects).
+4. Voice (on hold): in-app enrollment design in docs/VOICE.md; replace the espeak-ng dependency.

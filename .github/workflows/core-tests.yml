@@ -29,3 +29,23 @@ jobs:
           swift-version: "6.0"
       - name: ApexKit parity tests vs core/live_pipeline.py (Linux)
         run: swift test --package-path ApexKit
+
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      # --legacy-peer-deps: the Cloudflare test plugin and wrangler peers disagree on @cloudflare/workers-types
+      - run: npm ci --legacy-peer-deps --no-audit --no-fund
+      - name: Type check
+        run: npx tsc --noEmit
+      - name: Privacy and auth tests (the review's pgTAP list, as API tests)
+        run: npx vitest run
+      - name: The Worker still bundles with its bindings (dry run, no deploy)
+        working-directory: .
+        run: backend/node_modules/.bin/wrangler deploy --dry-run --outdir /tmp/wr_out

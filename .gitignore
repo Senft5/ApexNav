@@ -10,3 +10,6 @@ voice_test/
 web/voices/own/
 train_own/
 .venv-voice/
+backend/node_modules/
+.wrangler/
+backend/.wrangler/

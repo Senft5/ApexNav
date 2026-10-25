@@ -1,0 +1,8 @@
+{
+  // Used only by vitest: the same Worker, a throw-away local D1, test secrets.
+  "name": "apexnav-test",
+  "main": "./src/index.ts",
+  "compatibility_date": "2026-10-19",
+  "d1_databases": [{ "binding": "DB", "database_name": "apexnav-test", "database_id": "00000000-0000-0000-0000-000000000000" }],
+  "vars": { "GOOGLE_CLIENT_ID": "test-client", "GOOGLE_CLIENT_SECRET": "test-secret", "OWNER_EMAIL": "owner@example.test", "PEPPER": "test-pepper", "PUBLIC_ORIGIN": "https://apexnav.test" }
+}
