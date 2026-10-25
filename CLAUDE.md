@@ -1,7 +1,7 @@
 ﻿# APEX NAV — UNIVERSAL AGENT CONTEXT & OPERATING RULES
 
 ## 1. Project Mission
-ApexNav is an open, zero-subscription spirited driving navigation and crowdsourced physical road-profiling platform for iOS (CarPlay) and Android (Android Auto). Instead of relying solely on 2D map geometry splines, ApexNav turns every driver's smartphone into a 100Hz Inertial Measurement Unit (IMU) probe to map how a road physically feels (true banking/camber, vertical crest unweighting, pavement roughness, and corner flow confidence) into 5.0-meter spatial micro-segments, while dynamically syncing audio DSP parameters to driver workload and look-ahead road geometry.
+ApexNav is a proprietary (all rights reserved, see LICENSE), zero-subscription spirited driving navigation and crowdsourced physical road-profiling platform for iOS (CarPlay) and Android (Android Auto). Instead of relying solely on 2D map geometry splines, ApexNav turns every driver's smartphone into a 100Hz Inertial Measurement Unit (IMU) probe to map how a road physically feels (true banking/camber, vertical crest unweighting, pavement roughness, and corner flow confidence) into 5.0-meter spatial micro-segments, while dynamically syncing audio DSP parameters to driver workload and look-ahead road geometry.
 
 ## 2. Core Architectural Pattern: Headless Core + Thin Shells
 - **Headless Physics & DSP Core (`/core`)**: All 3D coordinate alignment, Kalman filtering, camber extraction, frequency separation (FFT/Butterworth), and audio parameter mapping MUST live in pure, platform-agnostic code (`/core/kinematics.py` for rapid prototyping and verification; `/core/cpp` for native mobile compilation).

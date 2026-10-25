@@ -781,11 +781,14 @@
     function spokenTextFor(text, style) {
       const keep = state.voiceStyle;
       state.voiceStyle = style;
-      try { return spokenText(text); } finally { state.voiceStyle = keep; }
+      try { return spokenText(text, true); } finally { state.voiceStyle = keep; }
     }
-    function spokenText(text) {
+    // rhythm: for the open-model voices only (device TTS would read the dots aloud). A co-driver runs a
+    // chunk together and breathes before the caution and before the distance (tools/voicebank.py tts_text).
+    function spokenText(text, rhythm = false) {
       if (state.voiceStyle !== 'jarvis') {
-        return text.replace(/, (\d{2,3})$/, (_, d) => `, ${codriverDistance(parseInt(d, 10))}`);
+        const spoken = text.replace(/, (\d{2,3})$/, (_, d) => `${rhythm ? ' ...' : ','} ${codriverDistance(parseInt(d, 10))}`);
+        return rhythm ? spoken.replace(/, (care|caution|double caution|triple caution)\b/g, ' ..... $1') : spoken;
       }
       // Jarvis: deadpan machine readout, digits one by one, each chained note on its own.
       const digits = (n) => String(n).split('').map(c => NUM_WORDS[+c] || c).join(' ');

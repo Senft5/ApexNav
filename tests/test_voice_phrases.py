@@ -22,6 +22,15 @@ def test_phrase_text_reads_as_one_sentence():
     assert vb.phrase_text(["head:RSQ", "link:into", "head:L3"], v) == "Square right into Left three."
 
 
+def test_tts_text_breathes_before_caution_and_distance_only():
+    v = vb.codriver_vocabulary()
+    assert vb.tts_text(["head:L4-", "mod:long"], v) == "Left four minus long."
+    assert vb.tts_text(["head:L4-", "mod:long", "caution:1", "dist:150"], v) == "Left four minus long ..... care ... one fifty."
+    # a chunk joined by "into" runs together, as the owner says it
+    assert vb.tts_text(["head:RSQ", "link:into", "head:L3"], v) == "Square right into Left three."
+    assert "," not in vb.tts_text(["head:L4-", "caution:2", "link:and", "head:R2", "dist:80"], v)
+
+
 def test_rally_numbers_are_spoken_like_a_codriver():
     assert sr.words_of("120") == ["one", "twenty"]
     assert sr.words_of("450") == ["four", "fifty"]

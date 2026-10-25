@@ -23,6 +23,18 @@
    "name": "Jarvis",
    "style": "jarvis",
    "license": "Kokoro-82M, Apache-2.0 (hexgrad/Kokoro-82M)"
+  },
+  {
+   "id": "me",
+   "name": "My Voice",
+   "style": "codriver",
+   "license": "Kokoro-82M (Apache-2.0) converted to the owner's consented voice with kNN-VC (MIT)"
+  },
+  {
+   "id": "michael",
+   "name": "Michael",
+   "style": "codriver",
+   "license": "Kokoro-82M, Apache-2.0 (hexgrad/Kokoro-82M)"
   }
  ]
 }

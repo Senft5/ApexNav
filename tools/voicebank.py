@@ -92,6 +92,25 @@ def phrase_text(tokens, vocab) -> str:
     return out[0].upper() + out[1:] + "."
 
 
+def tts_text(tokens, vocab) -> str:
+    """What the speech model is given. A co-driver runs a chunk together ("Left four opens over
+    crest into right two") and breathes before the caution (~0.3-0.4 s) and before the distance
+    (~0.2-0.25 s), measured on the owner's real recordings. Runs of dots are the longest pause
+    Kokoro will make inside one sentence; commas give it under 0.1 s, which sounds like a run-on."""
+    out = ""
+    for t in tokens:
+        w = vocab[t]
+        if not out:
+            out = w
+        elif t.startswith("caution:"):
+            out += " ..... " + w
+        elif t.startswith("dist:"):
+            out += " ... " + w
+        else:
+            out += " " + w
+    return out[0].upper() + out[1:] + "."
+
+
 def unit_phrases(vocab) -> list[list[str]]:
     """Every head with each single modifier: the unit the ear hears as one call."""
     heads = [t for t in vocab if t.startswith("head:")]
@@ -130,9 +149,12 @@ VOICES = {
     "jarvis": {"name": "Jarvis", "style": "jarvis", "engine": "kokoro", "kokoro_voice": "am_onyx", "lang": "a", "speed": 0.95},
     # Cloned from the owner's consented sample (--ref, kept out of git). Live phrases (names)
     # can't run Chatterbox in a browser, so they use the closest Kokoro voice.
-    "own": {"name": "My Voice", "style": "codriver", "engine": "chatterbox", "kokoro_voice": "am_michael", "lang": "a", "speed": 1.0},
+    "michael": {"name": "Michael", "style": "codriver", "engine": "kokoro", "kokoro_voice": "am_michael", "lang": "a", "speed": 1.0},
+    "me": {"name": "My Voice", "style": "codriver", "engine": "vc", "kokoro_voice": "am_michael", "lang": "a", "speed": 1.0},
+    "own": {"name": "My Voice (clone)", "style": "codriver", "engine": "chatterbox", "kokoro_voice": "am_michael", "lang": "a", "speed": 1.0},
 }
 LICENSES = {"kokoro": "Kokoro-82M, Apache-2.0 (hexgrad/Kokoro-82M)",
+            "vc": "Kokoro-82M (Apache-2.0) converted to the owner's consented voice with kNN-VC (MIT)",
             "chatterbox": "Chatterbox, MIT (resemble-ai/chatterbox); clone of a consented sample, Perth-watermarked"}
 
 
@@ -252,7 +274,7 @@ def merge_recorded(voice_id: str, recorded_dir: str) -> int:
     return len(rec)
 
 
-def build_phrases(voice_id: str, ref: str = None, tier: str = "calls", recorded: str = None) -> None:
+def build_phrases(voice_id: str, ref: str = None, tier: str = "calls", recorded: str = None, redo: bool = False) -> None:
     """Add whole-phrase clips to an existing bank. tier: calls (exact calls of the shipped
     routes), core (+ heads x banked/long/off-camber), units (+ every head x modifier),
     mined (+ the runs tools/mine_phrases.py found most valuable on real routes)."""
@@ -262,9 +284,16 @@ def build_phrases(voice_id: str, ref: str = None, tier: str = "calls", recorded:
     if recorded:
         print(f"  {voice_id}: merged {merge_recorded(voice_id, recorded)} real recordings", flush=True)
     manifest = json.load(open(mpath, encoding="utf-8"))
+    if redo:    # drop every phrase clip (keys with several tokens) and render them again
+        for k in [k for k, v in manifest["tokens"].items() if "src" not in v and k.count(":") > 1]:   # multi-token keys
+            try:
+                os.remove(os.path.join(OUT, voice_id, manifest["tokens"][k]["file"]))
+            except OSError:
+                pass
+            del manifest["tokens"][k]
     wanted = list(route_phrases())
     units = unit_phrases(vocab)
-    if tier == "mined":
+    if tier in ("mined", "units"):   # units is a superset: mined runs + every head x modifier
         mp = os.path.join(ROOT, "tools", "mined_phrases.json")
         wanted += json.load(open(mp, encoding="utf-8")) if os.path.exists(mp) else []
     if tier in ("core", "units"):
@@ -282,7 +311,7 @@ def build_phrases(voice_id: str, ref: str = None, tier: str = "calls", recorded:
     for n, toks in enumerate(todo, 1):
         k, text = phrase_key(toks), phrase_text(toks, vocab)
         if expect is None:
-            audio = trim(engine.render(text, cfg["kokoro_voice"], cfg["speed"]))
+            audio = trim(engine.render(tts_text(toks, vocab), cfg["kokoro_voice"], cfg["speed"]))
         else:
             want = sum(manifest["tokens"][t]["dur"] for t in toks if t in manifest["tokens"])
             audio = trim(engine.render(text, expect_s=want * 0.9 if want else None))
@@ -310,6 +339,7 @@ def main(argv=None) -> int:
     ap.add_argument("--voice", choices=sorted(VOICES))
     ap.add_argument("--all", action="store_true", help="every Kokoro voice (cloned voices need --voice and --ref)")
     ap.add_argument("--phrases", choices=["calls", "core", "units", "mined"], help="add whole-phrase clips to an existing bank")
+    ap.add_argument("--redo", action="store_true", help="re-render every phrase clip (e.g. after changing tts_text)")
     ap.add_argument("--recorded", help="dir with recorded_keep.json from tools/split_recording.py")
     ap.add_argument("--ref", help="reference recording for a cloned voice (keep it out of git)")
     args = ap.parse_args(argv)
@@ -318,7 +348,7 @@ def main(argv=None) -> int:
         ap.error("--voice ID or --all")
     for vid in ids:
         if args.phrases:
-            build_phrases(vid, args.ref, args.phrases, args.recorded)
+            build_phrases(vid, args.ref, args.phrases, args.recorded, args.redo)
         else:
             build(vid, args.ref)
     write_index()

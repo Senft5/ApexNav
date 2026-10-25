@@ -77,7 +77,7 @@ row-level security in one place, with no server for us to keep patched.
   only by its owner and the friends or crews in its grant list. The app holds only the
   public anon key, and the policies do the enforcing. Policies are versioned SQL in the
   repo with tests.
-- Auth: email magic link plus passkeys. No password store. Sign in with Apple waits for a
+- Auth: Google sign-in + email link, invite-only (docs/BACKEND.md; supersedes passkeys). Sign in with Apple waits for a
   developer account.
 - The free tier pauses a project after a week with no traffic. A free scheduled GitHub
   Action pings it daily. Check the current free-tier limits when signing up, since they
