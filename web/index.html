@@ -187,7 +187,9 @@
       border-left: 1px solid var(--rule); transform: translateX(105%); transition: transform 0.18s ease-out; display: flex; flex-direction: column; }
     .sheet.open { transform: none; }
     .sheet.dragging { transition: none; }
-    .sheet [hidden] { display: none !important; }
+    [hidden] { display: none !important; }
+    /* Menu views (Route / Drives / Setup) get the whole screen above the tab bar: the gauge cluster belongs to the map view only. */
+    #app.sheet-open .binnacle > :not(.tabbar) { display: none !important; }
     .scrim { position: absolute; inset: 0; z-index: 9; display: none; background: rgba(0,0,0,0.18); }
     .scrim.show { display: block; }
     .sheet [data-panel] { display: none; }
@@ -1048,6 +1050,7 @@
       state.mode = mode;
       $('modePlate').textContent = { replay: 'REPLAY', sim: 'SIM · NOT DRIVEN', live: 'LIVE' }[mode];
       $('modePlate').classList.toggle('live', mode === 'live');
+      $('modePlate').hidden = mode !== 'sim';                          // the REPLAY | DRIVE switch already says replay/live; keep the label for the 'not driven' simulation warning
     }
     function activate(t, startM = 0) {
       track = t;
@@ -1331,6 +1334,7 @@
       const sheet = $('sheet');
       if (v) { sheet.dataset.view = v; $('sheetTitle').textContent = VIEW_TITLES[v]; sheet.querySelector('.body').scrollTop = 0; }
       sheet.classList.toggle('open', !!v);
+      $('app').classList.toggle('sheet-open', !!v);
       $('scrim').classList.toggle('show', !!v);
       document.querySelectorAll('#tabbar .tab').forEach(t => t.classList.toggle('on', t.dataset.view === v));
     }
