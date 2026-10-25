@@ -12,6 +12,7 @@
   <script src="vendor/maplibre-contour.min.js"></script>
   <script src="apex_core.js"></script>
   <script src="stages.js"></script>
+  <script src="sync.js"></script>
   <script src="themes.js"></script>
   <script src="instruments.js"></script>
   <script src="voice.js"></script>
@@ -261,10 +262,11 @@
             <div class="row" style="margin-top:6px">
               <input class="field" id="hlName" placeholder="Name this spot (adds at your position)" autocomplete="off" />
               <select class="field" id="hlStars" style="flex:0 0 70px"><option>5</option><option>4</option><option>3</option></select>
+              <select class="field" id="hlCat" style="flex:0 0 96px" aria-label="Kind of spot"><option value="overlook">Overlook</option><option value="photo">Photo</option><option value="bridge">Bridge</option><option value="water">Water</option><option value="cafe">Cafe</option><option value="trailhead">Trailhead</option><option value="landmark">Landmark</option><option value="other">Other</option></select>
               <button class="ink-btn" id="hlAddBtn">ADD</button>
             </div>
             <div id="hlList" style="display:grid;gap:4px;margin-top:6px"></div>
-            <p class="note">When on, loops lean toward roads that pass a highlight you rate 3 stars or more. They can tip the choice between two good roads; they never make a dull road win. Yours stay on this phone until accounts are connected.</p>
+            <p class="note">When on, loops lean toward roads that pass a highlight you rate 3 stars or more. They can tip the choice between two good roads; they never make a dull road win. Yours stay on this phone until you press SHARE; shared spots are rated by other members and your name is never shown.</p>
           </section>
           <section data-panel="drives">
             <h3>Profiled drives</h3>
@@ -1237,8 +1239,9 @@
       let plans = [];
       try {
         const radiusKm = Math.min(14, Math.max(5, targetKm / 4.2));
+        const hls = state.hlOn ? await allHighlights(c) : [];
         const stages = await ApexStages.discover(c, radiusKm, (phase, f) => ui.step(phase === 'tiles' ? 'ROADS' : 'SCORING', 0.05 + 0.3 * f),
-          state.hlOn ? { highlights: loadHighlights(), strength: state.hlStrength } : {});
+          state.hlOn ? { highlights: hls, strength: state.hlStrength } : {});
         plans = ApexStages.plans(c, stages, targetKm, 3);
       } catch (_) { /* no tiles: fall back to circle loops below */ }
       // 2. Route each stage plan, plus one circle loop as a baseline, and keep the best result.
@@ -1379,8 +1382,8 @@
       }
       body.append(el('div', { className: 'note', textContent: `Signed in as @${me.handle}` }));
       const [fr, gr] = await Promise.all([apiCall('GET', '/api/friends').then(jsonOf), apiCall('GET', '/api/grants').then(jsonOf)]);
-      const grants = new Map((gr || []).filter(g => g.audience_type === 'friend').map(g => [g.audience_id, g]));
-      for (const f of fr || []) {
+      const grants = new Map((Array.isArray(gr) ? gr : []).filter(g => g.audience_type === 'friend').map(g => [g.audience_id, g]));
+      for (const f of Array.isArray(fr) ? fr : []) {
         const row = el('div', { className: 'card' }), name = el('b', { textContent: `@${f.handle || '?'}` });
         const line = el('div', { className: 'row' });
         if (f.status === 'pending') {
@@ -1412,6 +1415,14 @@
     }
 
     // Highlights (local for now): [{id, name, lat, lon, rating}] in localStorage; the server list joins later (docs/BACKEND.md section 9).
+    // Planning uses your own spots plus members' shared ones near the start (offline: just yours). A shared spot you already added is not counted twice.
+    async function allHighlights(c) {
+      const mine = loadHighlights();
+      if (!window.ApexSync) return mine;
+      const shared = await Promise.race([ApexSync.highlightsNear(c), new Promise(r => setTimeout(() => r([]), 4000))]);
+      const near = (a, b) => Math.hypot((a.lat - b.lat) * 111000, (a.lon - b.lon) * 91000) < 60;
+      return mine.concat(shared.filter(s => !mine.some(m => near(m, s))));
+    }
     function loadHighlights() { try { return JSON.parse(localStorage.getItem('apex.highlights') || '[]'); } catch (_) { return []; } }
     function saveHighlights(list) { try { localStorage.setItem('apex.highlights', JSON.stringify(list)); } catch (_) {} }
     function renderHighlights() {
@@ -1424,7 +1435,19 @@
         const t = document.createElement('span'); t.textContent = `${'★'.repeat(h.rating)} ${h.name}`;
         const x = document.createElement('button'); x.className = 'ink-btn'; x.style.height = '28px'; x.textContent = '×'; x.setAttribute('aria-label', `Remove ${h.name}`);
         x.onclick = () => { saveHighlights(loadHighlights().filter(v => v.id !== h.id)); renderHighlights(); };
-        row.append(t, x); list.appendChild(row);
+        row.append(t);
+        if (!h.shared && window.ApexSync) {
+          const sh = document.createElement('button'); sh.className = 'ink-btn'; sh.style.height = '28px'; sh.textContent = 'SHARE'; sh.hidden = true;
+          ApexSync.member().then(m => { sh.hidden = !m; });
+          sh.onclick = async () => {
+            sh.disabled = true;
+            const ok = await ApexSync.shareHighlight(h, h.category || 'other');
+            if (ok) { saveHighlights(loadHighlights().map(v => v.id === h.id ? { ...v, shared: true } : v)); renderHighlights(); toast('Shared. Other members can now rate it.'); }
+            else { sh.disabled = false; toast('Could not share it (maybe one already exists within 40 m, or the daily limit is reached).'); }
+          };
+          row.append(sh);
+        } else if (h.shared) { const tag = document.createElement('span'); tag.className = 'note'; tag.textContent = 'shared'; row.append(tag); }
+        row.append(x); list.appendChild(row);
       }
     }
     $('hlToggleBtn').addEventListener('click', () => { state.hlOn = !state.hlOn; savePrefs(); renderHighlights(); });
@@ -1432,7 +1455,7 @@
     $('hlAddBtn').addEventListener('click', () => {
       const name = $('hlName').value.trim(); if (!name) { toast('Name the spot first.'); return; }
       const p = here();
-      saveHighlights(loadHighlights().concat({ id: String(Date.now()), name: name.slice(0, 60), lat: p.lat, lon: p.lon, rating: parseInt($('hlStars').value, 10) }));
+      saveHighlights(loadHighlights().concat({ id: String(Date.now()), name: name.slice(0, 60), lat: p.lat, lon: p.lon, rating: parseInt($('hlStars').value, 10), category: $('hlCat').value }));
       $('hlName').value = ''; renderHighlights(); toast(`Added ${name} at your position.`);
     });
 

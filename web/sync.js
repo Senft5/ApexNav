@@ -32,6 +32,14 @@
   const friends = async () => ((await call('GET', '/api/friends')) || []).filter((f) => f.status === 'accepted');
   const removeRemote = (id) => call('DELETE', `/api/segments/${encodeURIComponent(id)}`);
 
-  const api = { member, pushSegments, sharedWithMe, adopt, shareSegment, friends, removeRemote, toServer, fromServer };
+  /** Shared highlights in a box around a point (about 0.25 degrees each way); [] when offline. Scores are shrunk toward 3 stars by the server. */
+  async function highlightsNear(c, deg = 0.25) {
+    const r = await call('GET', `/api/highlights?bbox=${[c.lat - deg, c.lon - deg, c.lat + deg, c.lon + deg].map((v) => v.toFixed(5)).join(',')}`);
+    return (r || []).map((h) => ({ id: 'srv_' + h.id, name: h.name, lat: h.lat, lon: h.lon, rating: h.score, ratings: h.ratings, server: true, mine: !!h.mine }));
+  }
+  const shareHighlight = (h, category) => call('POST', '/api/highlights', { name: h.name, category, lat: h.lat, lon: h.lon });
+  const rateHighlight = (id, stars, visited = false) => call('POST', `/api/highlights/${encodeURIComponent(id.replace(/^srv_/, ''))}/rating`, { stars, visited });
+
+  const api = { highlightsNear, shareHighlight, rateHighlight, member, pushSegments, sharedWithMe, adopt, shareSegment, friends, removeRemote, toServer, fromServer };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexSync = api;
 })(typeof window !== 'undefined' ? window : globalThis);
