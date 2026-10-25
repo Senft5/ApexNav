@@ -1,1057 +1,729 @@
 import SwiftUI
-import MapKit
 import WebKit
 import CoreLocation
 import CoreMotion
 import AVFoundation
 
+// =====================================================================================
+// APEX NAV — iOS THIN SHELL
+//
+// The entire cockpit UI (map, HUD, controls) lives in ONE shared web bundle:
+//   web/index.html (+ web/vendor/maplibre-gl.js|css, web/data/*.js)
+// copied into the app bundle as a folder reference. This file only:
+//   1. renders that bundle full-screen in a WKWebView, and
+//   2. ingests native sensors (CoreLocation, CoreMotion, CMAltimeter), aligns them into the
+//      ISO 8855 vehicle frame, records 5.0 m road-feel segments, and pushes a live frame to
+//      JavaScript every 0.1 s via `window.apex.live(<json>)`.
+//
+// JS -> native: window.webkit.messageHandlers.apex.postMessage("calibrate" | "startRecording"
+//               | "stopRecording" | "toggleRecording")  (or {cmd: "..."}).
+// native -> JS: window.APEX_EMBED = true (documentStart),
+//               window.apex.live(frame) every 0.1 s after the page finished loading,
+//               window.apex.onNative({type: "recordingSaved", file, segments}) after export.
+//
+// Units: everything internal is SI / ISO 8855 (+X fwd, +Y left, +Z up; m/s^2, rad, rad/s).
+// Conversion to display units (G, degrees, mph) happens ONLY at serialization.
+// =====================================================================================
+
 @main
 struct ApexNavApp: App {
     var body: some Scene {
         WindowGroup {
-            CockpitNavigationView()
+            ApexShellRootView()
                 .preferredColorScheme(.dark)
         }
     }
 }
 
-enum ColorMetricMode: String, CaseIterable {
-    case feel = "FEEL & G"
-    case elevation = "3D ELEV"
-    case grade = "GRADE %"
-    case camber = "BANK φ"
-    case roughness = "ROUGH"
+// MARK: - Root View
+
+struct ApexShellRootView: View {
+    @StateObject private var shell = ApexSensorShell()
+
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            if let indexURL = ApexWebBundle.indexURL {
+                ApexCockpitWebView(shell: shell, indexURL: indexURL)
+                    .ignoresSafeArea()
+            } else {
+                VStack(spacing: 10) {
+                    Text("APEX NAV")
+                        .font(.system(size: 22, weight: .black, design: .monospaced))
+                        .foregroundStyle(.white)
+                    Text("Cockpit bundle missing: web/index.html")
+                        .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(.gray)
+                }
+            }
+        }
+        .statusBarHidden(true)
+        .persistentSystemOverlays(.hidden)
+        .sheet(item: $shell.shareItem) { item in
+            ActivityShareSheet(items: [item.url])
+        }
+        .onAppear { UIApplication.shared.isIdleTimerDisabled = true }
+    }
 }
 
-struct RoadFeelSegment: Identifiable {
+enum ApexWebBundle {
+    static var indexURL: URL? {
+        Bundle.main.url(forResource: "index", withExtension: "html", subdirectory: "web")
+    }
+}
+
+struct CSVShareItem: Identifiable {
     let id = UUID()
-    let index: Int
-    let distanceM: Double
-    let lat: Double
-    let lon: Double
-    let elevationM: Double
-    let gradePct: Double
-    let speedMPH: Double
-    let lonG: Double
-    let latG: Double
-    let camberDeg: Double
-    let crestG: Double
-    let roughnessRMS: Double
-    let engagement: Double
+    let url: URL
+}
 
-    var combinedG: Double { hypot(lonG, latG) }
+struct ActivityShareSheet: UIViewControllerRepresentable {
+    let items: [URL]
 
-    func hexColor(mode: ColorMetricMode) -> String {
-        switch mode {
-        case .elevation:
-            let norm = max(0.0, min(1.0, (elevationM - 92.5) / (215.5 - 92.5)))
-            if norm > 0.75 { return "#ff2a54" }
-            if norm > 0.50 { return "#ff9100" }
-            if norm > 0.25 { return "#00e5ff" }
-            return "#00f57a"
-        case .grade:
-            let g = abs(gradePct)
-            if g > 6.0 { return "#ff2a54" }
-            if g > 3.0 { return "#ff9100" }
-            return "#00e5ff"
-        case .camber:
-            let c = abs(camberDeg)
-            if c > 4.0 { return "#00e5ff" }
-            if c > 2.0 { return "#b388ff" }
-            return "#00f57a"
-        case .roughness:
-            if roughnessRMS > 0.12 { return "#ff2a54" }
-            if roughnessRMS > 0.06 { return "#ff9100" }
-            return "#00f57a"
-        case .feel:
-            if combinedG > 0.32 || roughnessRMS > 0.14 { return "#ff2a54" }
-            if combinedG > 0.18 || abs(camberDeg) > 2.5 { return "#ff9100" }
-            return "#00f57a"
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+}
+
+// MARK: - Full-Screen Web Cockpit
+
+struct ApexCockpitWebView: UIViewRepresentable {
+    let shell: ApexSensorShell
+    let indexURL: URL
+
+    @MainActor
+    final class Coordinator: NSObject, WKNavigationDelegate {
+        let shell: ApexSensorShell
+
+        init(shell: ApexSensorShell) {
+            self.shell = shell
+        }
+
+        func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+            shell.webDidStartLoading()
+        }
+
+        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            shell.webDidFinishLoading()
+        }
+
+        func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+            shell.webDidStartLoading()
+            webView.reload()
+        }
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(shell: shell)
+    }
+
+    func makeUIView(context: Context) -> WKWebView {
+        let contentController = WKUserContentController()
+        let embedFlag = WKUserScript(
+            source: "window.APEX_EMBED = true; window.APEX_PLATFORM = 'ios';",
+            injectionTime: .atDocumentStart,
+            forMainFrameOnly: true
+        )
+        contentController.addUserScript(embedFlag)
+        // WKUserContentController retains its handlers strongly; the bridge only holds the shell weakly.
+        contentController.add(ApexScriptBridge(shell: shell), name: "apex")
+
+        let config = WKWebViewConfiguration()
+        config.userContentController = contentController
+        config.allowsInlineMediaPlayback = true
+        config.mediaTypesRequiringUserActionForPlayback = []
+        Self.enableLocalFileAccess(config)
+
+        let webView = WKWebView(frame: .zero, configuration: config)
+        webView.isOpaque = false
+        webView.backgroundColor = .black
+        webView.scrollView.backgroundColor = .black
+        webView.scrollView.contentInsetAdjustmentBehavior = .never
+        webView.scrollView.isScrollEnabled = false
+        webView.scrollView.bounces = false
+        webView.scrollView.alwaysBounceVertical = false
+        webView.scrollView.alwaysBounceHorizontal = false
+        webView.allowsLinkPreview = false
+        webView.allowsBackForwardNavigationGestures = false
+        webView.isInspectable = true
+        webView.navigationDelegate = context.coordinator
+
+        shell.attach(webView: webView)
+        webView.loadFileURL(indexURL, allowingReadAccessTo: indexURL.deletingLastPathComponent())
+        return webView
+    }
+
+    func updateUIView(_ uiView: WKWebView, context: Context) {}
+
+    static func dismantleUIView(_ uiView: WKWebView, coordinator: Coordinator) {
+        uiView.configuration.userContentController.removeScriptMessageHandler(forName: "apex")
+    }
+
+    /// Lets bundled pages XHR/fetch sibling files (e.g. local styles/glyphs) from a file:// origin.
+    /// Uses KVC on WebKit's private setters, guarded by `responds(to:)` so it can never throw.
+    @MainActor
+    private static func enableLocalFileAccess(_ config: WKWebViewConfiguration) {
+        if config.preferences.responds(to: Selector(("_setAllowFileAccessFromFileURLs:"))) {
+            config.preferences.setValue(true, forKey: "allowFileAccessFromFileURLs")
+        }
+        if config.responds(to: Selector(("_setAllowUniversalAccessFromFileURLs:"))) {
+            config.setValue(true, forKey: "allowUniversalAccessFromFileURLs")
         }
     }
 }
 
+/// Weak proxy so WKUserContentController -> handler does not retain the sensor shell.
 @MainActor
-final class NavTelemetryEngine: NSObject, ObservableObject, CLLocationManagerDelegate {
+final class ApexScriptBridge: NSObject, WKScriptMessageHandler {
+    weak var shell: ApexSensorShell?
+
+    init(shell: ApexSensorShell) {
+        self.shell = shell
+    }
+
+    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        let body = message.body
+        var command: String?
+        if let text = body as? String {
+            command = text
+        } else if let dict = body as? [String: Any] {
+            command = (dict["cmd"] as? String) ?? (dict["command"] as? String) ?? (dict["type"] as? String)
+        }
+        guard let cmd = command else { return }
+        shell?.handleCommand(cmd)
+    }
+}
+
+// MARK: - Small SI Math Helpers
+
+struct Vec3 {
+    var x: Double
+    var y: Double
+    var z: Double
+
+    static let zero = Vec3(x: 0.0, y: 0.0, z: 0.0)
+
+    func dot(_ o: Vec3) -> Double { x * o.x + y * o.y + z * o.z }
+
+    func cross(_ o: Vec3) -> Vec3 {
+        Vec3(x: y * o.z - z * o.y, y: z * o.x - x * o.z, z: x * o.y - y * o.x)
+    }
+
+    var magnitude: Double { sqrt(max(0.0, dot(self))) }
+
+    func scaled(_ s: Double) -> Vec3 { Vec3(x: x * s, y: y * s, z: z * s) }
+
+    func plus(_ o: Vec3) -> Vec3 { Vec3(x: x + o.x, y: y + o.y, z: z + o.z) }
+
+    func minus(_ o: Vec3) -> Vec3 { Vec3(x: x - o.x, y: y - o.y, z: z - o.z) }
+
+    func normalized() -> Vec3 {
+        let mag = sqrt(max(1e-12, dot(self)))
+        return Vec3(x: x / mag, y: y / mag, z: z / mag)
+    }
+
+    /// Removes the component along unit vector `axis`.
+    func rejecting(_ axis: Vec3) -> Vec3 { minus(axis.scaled(dot(axis))) }
+}
+
+/// Sendable snapshot of a CLLocation so delegate callbacks never ship non-Sendable objects across actors.
+struct GPSFix: Sendable {
+    let lat: Double
+    let lon: Double
+    let altitudeM: Double
+    let horizontalAccuracyM: Double
+    let verticalAccuracyM: Double
+    let speedMps: Double
+    let courseDeg: Double
+}
+
+enum MountCalibrationState: String {
+    case locked
+    case awaitingPull
+    case `default`
+}
+
+// MARK: - Native Sensor Shell (CoreLocation + CoreMotion + CMAltimeter)
+
+@MainActor
+final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelegate {
+    static let gStd: Double = 9.80665
+    static let segmentLengthM: Double = 5.0
+    private static let mountDefaultsKey = "apex.mountRotationRows.v1"
+
+    @Published var shareItem: CSVShareItem?
+
     private let locManager = CLLocationManager()
     private let motionManager = CMMotionManager()
     private let altimeter = CMAltimeter()
     private let synth = AVSpeechSynthesizer()
 
-    @Published var userLocation: CLLocation?
-    @Published var nextInstruction: String = "PEBBLE RIDGE 3D STAGE LOADED"
-    @Published var distanceToNextTurn: String = "28.5 KM"
-    @Published var voicePaceNotesEnabled: Bool = true
-    @Published var colorMode: ColorMetricMode = .feel
-    @Published var use3DTerrainWebEngine: Bool = true
+    // Web bridge
+    private weak var webView: WKWebView?
+    private var webReady = false
+    private var pushTimer: Timer?
 
-    // Live vs Replay State
-    @Published var isReplayingLog: Bool = false
-    @Published var replayIndex: Int = 120
-    @Published var replaySpeedMultiplier: Int = 2
-    @Published var isRecordingFeel: Bool = false
-    @Published var flyOverviewTrigger: Int = 0
+    // GPS state
+    private var hasFix = false
+    private var latDeg: Double = 0.0
+    private var lonDeg: Double = 0.0
+    private var speedMps: Double = 0.0
+    private var courseDeg: Double?
 
-    // Telemetry Readouts
-    @Published var speedMPH: Double = 0.0
-    @Published var elevationM: Double = 205.9
-    @Published var gradePct: Double = 0.0
-    @Published var lonG: Double = 0.0
-    @Published var latG: Double = 0.0
-    @Published var peakG: Double = 0.0
-    @Published var vertBumpG: Double = 0.0
-    @Published var crestG: Double = 0.0
-    @Published var camberDeg: Double = 0.0
-    @Published var engagementScore: Double = 0.0
-    @Published var currentLat: Double = 39.258576
-    @Published var currentLon: Double = -84.614591
-    @Published var currentBearing: Double = -35.0
-
-    // G-Meter Historical Comet Trail
-    @Published var gTrail: [(Double, Double)] = []
-
-    // Loaded Pebble Ridge 5m 3D Profile + Live Painted Segments
-    @Published var pebbleSegments: [RoadFeelSegment] = []
-    @Published var liveSegments: [RoadFeelSegment] = []
-    @Published var rawJSONString: String = "[]"
-
-    private var baseGPSAltitude: Double?
+    // Elevation fusion: elevation = relativeBaroM + baroOffsetM (offset slowly trimmed toward GPS MSL altitude)
+    private let baroAvailable = CMAltimeter.isRelativeAltitudeAvailable()
     private var relativeBaroM: Double = 0.0
-    private var lastNodeLocation: CLLocation?
-    private var lastNodeElevationM: Double?
-    private var totalDistanceM: Double = 0.0
-    private var replayTimer: Timer?
-    private var csvLines: [String] = ["segment_index,distance_m,lat,lon,elevation_m,grade_pct,speed_mph,lon_g,lat_g,camber_deg,crest_vertical_g,roughness_rms,engagement_score"]
-    @Published var exportedCSVURL: URL?
+    private var baroOffsetM: Double?
+    private var gpsOnlyAltitudeM: Double?
 
-    // 3x3 SO(3) Mount-to-Vehicle Rotation Matrix rows (Solved from Pebble Ridge iPhone 15 Pro log by default)
-    private var rX: (Double, Double, Double) = (0.1159, 0.2998, -0.9469)
-    private var rY: (Double, Double, Double) = (-0.9927, 0.0029, -0.1206)
-    private var rZ: (Double, Double, Double) = (-0.0334, 0.9540, 0.2980)
-    private var latestGravity: (Double, Double, Double) = (0.0, -0.95, -0.30)
-    private var awaitingForwardPullLock: Bool = false
-    @Published var mountStatusText: String = "SO(3) LOCKED"
+    // 5.0 m arc-length odometer (always running so live grade is available; recording just persists nodes)
+    private var odoPrevLat: Double?
+    private var odoPrevLon: Double?
+    private var odoPrevElev: Double?
+    private var odoSinceNodeM: Double = 0.0
+    private var lastNodeElevationM: Double?
+    private var gradePct: Double = 0.0
+
+    // 3x3 SO(3) mount-to-vehicle rotation rows (default solved from Pebble Ridge iPhone 15 Pro log)
+    private var rX = Vec3(x: 0.1159, y: 0.2998, z: -0.9469)
+    private var rY = Vec3(x: -0.9927, y: 0.0029, z: -0.1206)
+    private var rZ = Vec3(x: -0.0334, y: 0.9540, z: 0.2980)
+    private var latestGravityG = Vec3(x: 0.0, y: -0.95, z: -0.30)   // CoreMotion gravity, phone frame, in g (points DOWN)
+    private var calibration: MountCalibrationState = .default
+    private var pullAccum = Vec3.zero
+    private var pullSamples: Int = 0
+
+    // Vehicle-frame IMU state (SI)
+    private var lastMotionTimestamp: Double?
+    private var lonAccMps2: Double = 0.0      // +X forward
+    private var latAccMps2: Double = 0.0      // +Y left
+    private var yawRateRadS: Double = 0.0     // about +Z up (left turn positive)
+    private var crestAccMps2: Double = 0.0    // < 1 Hz vertical (dynamic, gravity removed)
+    private var hpVert: Double = 0.0          // > 8 Hz vertical
+    private var lastAzVeh: Double = 0.0
+    private var roughMeanSq: Double = 0.0     // live EMA of hpVert^2 (m/s^2)^2
+    private var segRoughSumSq: Double = 0.0
+    private var segRoughCount: Int = 0
+    private var camberRad: Double = 0.0
+    private var engagement: Double = 0.0
+
+    // Recording
+    private var isRecording = false
+    private var recordedSegments: Int = 0
+    private static let csvHeader = "segment_index,distance_m,lat,lon,elevation_m,speed_mph,lon_g,lat_g,camber_deg,crest_vertical_g,roughness_rms,engagement_score,grade_pct"
+    private var csvLines: [String] = [ApexSensorShell.csvHeader]
 
     override init() {
         super.init()
-        loadBundledPebbleRidgeDrive()
+        restorePersistedMount()
         locManager.delegate = self
         locManager.desiredAccuracy = kCLLocationAccuracyBestForNavigation
-        locManager.distanceFilter = 2.0
+        locManager.distanceFilter = kCLDistanceFilterNone
+        locManager.activityType = .automotiveNavigation
+        locManager.pausesLocationUpdatesAutomatically = false
+        locManager.allowsBackgroundLocationUpdates = true   // UIBackgroundModes: location is declared in project.yml
+        locManager.showsBackgroundLocationIndicator = true
         locManager.requestWhenInUseAuthorization()
         locManager.startUpdatingLocation()
-        locManager.startUpdatingHeading()
-        startIMUPipeline()
-        startReplayTimer()
+        startMotionPipeline()
+        startPushTimer()
     }
 
-    private func loadBundledPebbleRidgeDrive() {
-        guard let url = Bundle.main.url(forResource: "pebble_ridge_3d", withExtension: "json"),
-              let data = try? Data(contentsOf: url),
-              let str = String(data: data, encoding: .utf8),
-              let arr = try? JSONSerialization.jsonObject(with: data) as? [[Double]] else {
-            return
-        }
-        self.rawJSONString = str
-        var loaded: [RoadFeelSegment] = []
-        loaded.reserveCapacity(arr.count)
-        for (idx, r) in arr.enumerated() where r.count >= 12 {
-            loaded.append(RoadFeelSegment(
-                index: idx,
-                distanceM: r[0],
-                lat: r[1],
-                lon: r[2],
-                elevationM: r[3],
-                gradePct: r[4],
-                speedMPH: r[5],
-                lonG: r[6],
-                latG: r[7],
-                camberDeg: r[8],
-                crestG: r[9],
-                roughnessRMS: r[10],
-                engagement: r[11]
-            ))
-        }
-        self.pebbleSegments = loaded
-        if loaded.count > 120 {
-            applySegmentToHUD(loaded[120], nextSeg: loaded[123])
-        }
+    // MARK: Web bridge
+
+    func attach(webView: WKWebView) {
+        self.webView = webView
+        webReady = false
     }
 
-    private func startReplayTimer() {
-        replayTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
-            Task { @MainActor in
-                guard let self = self, self.isReplayingLog, self.pebbleSegments.count > 5 else { return }
-                self.replayIndex = (self.replayIndex + self.replaySpeedMultiplier) % (self.pebbleSegments.count - 4)
-                let seg = self.pebbleSegments[self.replayIndex]
-                let nextSeg = self.pebbleSegments[min(self.pebbleSegments.count - 1, self.replayIndex + 3)]
-                self.applySegmentToHUD(seg, nextSeg: nextSeg)
+    func webDidStartLoading() {
+        webReady = false
+    }
+
+    func webDidFinishLoading() {
+        webReady = true
+        pushLiveFrame()
+    }
+
+    func handleCommand(_ command: String) {
+        switch command {
+        case "calibrate":
+            zeroMountCalibration()
+        case "startRecording":
+            startRecording()
+        case "stopRecording":
+            stopRecordingAndExport()
+        case "toggleRecording":
+            if isRecording { stopRecordingAndExport() } else { startRecording() }
+        default:
+            break
+        }
+        pushLiveFrame()
+    }
+
+    private func startPushTimer() {
+        let timer = Timer(timeInterval: 0.1, repeats: true) { [weak self] _ in
+            guard let self else { return }
+            MainActor.assumeIsolated {
+                self.pushLiveFrame()
             }
         }
+        RunLoop.main.add(timer, forMode: .common)
+        pushTimer = timer
     }
 
-    func scrubToFraction(_ frac: Double) {
-        guard !pebbleSegments.isEmpty else { return }
-        let idx = max(0, min(pebbleSegments.count - 2, Int(frac * Double(pebbleSegments.count - 2))))
-        replayIndex = idx
-        let seg = pebbleSegments[idx]
-        let nextSeg = pebbleSegments[min(pebbleSegments.count - 1, idx + 2)]
-        applySegmentToHUD(seg, nextSeg: nextSeg)
+    private func evaluate(_ js: String) {
+        guard webReady, let wv = webView else { return }
+        wv.evaluateJavaScript(js, completionHandler: nil)
     }
 
-    private func applySegmentToHUD(_ seg: RoadFeelSegment, nextSeg: RoadFeelSegment) {
-        currentLat = seg.lat
-        currentLon = seg.lon
-        currentBearing = Self.bearingBetween(lat1: seg.lat, lon1: seg.lon, lat2: nextSeg.lat, lon2: nextSeg.lon)
-        speedMPH = seg.speedMPH
-        elevationM = seg.elevationM
-        gradePct = seg.gradePct
-        lonG = seg.lonG
-        latG = seg.latG
-        camberDeg = seg.camberDeg
-        crestG = seg.crestG
-        vertBumpG = seg.roughnessRMS
-        engagementScore = seg.engagement
-        peakG = max(peakG, seg.combinedG)
-        appendGTrail(latG: seg.latG, lonG: seg.lonG)
-
-        distanceToNextTurn = String(format: "%.1f KM", seg.distanceM / 1000.0)
-        nextInstruction = String(format: "ELEV %.0fm • GRADE %+.1f%% • BANK %+.1f°", seg.elevationM, seg.gradePct, seg.camberDeg)
+    /// Serializes the live frame. Display conversions happen here only:
+    /// lat_g / lon_g in G (= m/s^2 / 9.80665), camber in degrees, roughness_rms in G RMS (>8 Hz vertical),
+    /// speed in m/s, course in degrees true, elevation in m, grade in %.
+    private func pushLiveFrame() {
+        guard webReady, webView != nil else { return }
+        let elevation = currentElevationM()
+        let json = "{"
+            + "\"lat\":\(Self.num(hasFix ? latDeg : nil, 7)),"
+            + "\"lon\":\(Self.num(hasFix ? lonDeg : nil, 7)),"
+            + "\"speed_mps\":\(Self.num(speedMps, 2)),"
+            + "\"course_deg\":\(Self.num(courseDeg, 1)),"
+            + "\"elevation_m\":\(Self.num(elevation, 2)),"
+            + "\"grade_pct\":\(Self.num(gradePct, 2)),"
+            + "\"lat_g\":\(Self.num(latAccMps2 / Self.gStd, 3)),"
+            + "\"lon_g\":\(Self.num(lonAccMps2 / Self.gStd, 3)),"
+            + "\"camber_deg\":\(Self.num(camberRad * 180.0 / Double.pi, 2)),"
+            + "\"roughness_rms\":\(Self.num(sqrt(max(0.0, roughMeanSq)) / Self.gStd, 4)),"
+            + "\"recording\":\(isRecording ? "true" : "false"),"
+            + "\"calibration\":\"\(calibration.rawValue)\","
+            + "\"has_fix\":\(hasFix ? "true" : "false"),"
+            + "\"segments\":\(recordedSegments)"
+            + "}"
+        evaluate("window.apex && window.apex.live && window.apex.live(\(json)); void 0;")
     }
 
-    private func appendGTrail(latG: Double, lonG: Double) {
-        gTrail.append((latG, lonG))
-        if gTrail.count > 40 {
-            gTrail.removeFirst(gTrail.count - 40)
-        }
+    private static func num(_ value: Double?, _ digits: Int) -> String {
+        guard let v = value, v.isFinite else { return "null" }
+        return String(format: "%.\(digits)f", v)
     }
 
-    static func bearingBetween(lat1: Double, lon1: Double, lat2: Double, lon2: Double) -> Double {
-        let dLon = (lon2 - lon1) * .pi / 180.0
-        let p1 = lat1 * .pi / 180.0
-        let p2 = lat2 * .pi / 180.0
-        let y = sin(dLon) * cos(p2)
-        let x = cos(p1) * sin(p2) - sin(p1) * cos(p2) * cos(dLon)
-        let brg = atan2(y, x) * 180.0 / .pi
-        return (brg + 360.0).truncatingRemainder(dividingBy: 360.0)
-    }
-
-    private func dot3(_ a: (Double, Double, Double), _ b: (Double, Double, Double)) -> Double {
-        a.0 * b.0 + a.1 * b.1 + a.2 * b.2
-    }
-
-    private func cross3(_ a: (Double, Double, Double), _ b: (Double, Double, Double)) -> (Double, Double, Double) {
-        (a.1 * b.2 - a.2 * b.1, a.2 * b.0 - a.0 * b.2, a.0 * b.1 - a.1 * b.0)
-    }
-
-    private func norm3(_ v: (Double, Double, Double)) -> (Double, Double, Double) {
-        let mag = sqrt(max(1e-9, dot3(v, v)))
-        return (v.0 / mag, v.1 / mag, v.2 / mag)
-    }
-
-    func startIMUPipeline() {
-        if CMAltimeter.isRelativeAltitudeAvailable() {
-            altimeter.startRelativeAltitudeUpdates(to: .main) { [weak self] data, _ in
-                guard let self = self, let d = data else { return }
-                self.relativeBaroM = d.relativeAltitude.doubleValue
-            }
-        }
-        guard motionManager.isDeviceMotionAvailable else { return }
-        motionManager.deviceMotionUpdateInterval = 1.0 / 60.0
-        motionManager.startDeviceMotionUpdates(to: .main) { [weak self] motion, _ in
-            guard let self = self, let m = motion, !self.isReplayingLog else { return }
-            self.latestGravity = (m.gravity.x, m.gravity.y, m.gravity.z)
-            let rawA = (-m.userAcceleration.x, -m.userAcceleration.y, -m.userAcceleration.z)
-            let rawW = (m.rotationRate.x, m.rotationRate.y, m.rotationRate.z)
-
-            if self.awaitingForwardPullLock {
-                let pullMag = sqrt(self.dot3(rawA, rawA))
-                let gyroMag = sqrt(self.dot3(rawW, rawW))
-                if pullMag > 0.12 && gyroMag < 0.15 {
-                    let dotZ = self.dot3(rawA, self.rZ)
-                    let projX = (rawA.0 - dotZ * self.rZ.0, rawA.1 - dotZ * self.rZ.1, rawA.2 - dotZ * self.rZ.2)
-                    self.rX = self.norm3(projX)
-                    self.rY = self.norm3(self.cross3(self.rZ, self.rX))
-                    self.awaitingForwardPullLock = false
-                    self.mountStatusText = "SO(3) LOCKED"
-                    self.speak("Forward axis locked.")
-                }
-            }
-
-            let axVeh = self.dot3(self.rX, rawA)
-            let ayVeh = self.dot3(self.rY, rawA)
-            let azVeh = self.dot3(self.rZ, rawA)
-            let yawRate = self.dot3(self.rZ, rawW)
-
-            self.lonG = 0.82 * self.lonG + 0.18 * axVeh
-            self.latG = 0.82 * self.latG + 0.18 * ayVeh
-            self.crestG = 0.92 * self.crestG + 0.08 * azVeh
-            self.vertBumpG = abs(azVeh - self.crestG)
-
-            let vMps = max(0.0, self.userLocation?.speed ?? 0.0)
-            let kinematicG = (vMps * yawRate) / 9.80665
-            if abs(kinematicG) > 0.12 {
-                let diff = max(-0.45, min(0.45, abs(kinematicG) - abs(self.latG)))
-                self.camberDeg = 0.8 * self.camberDeg + 0.2 * (asin(diff) * 180.0 / .pi)
-            } else {
-                self.camberDeg *= 0.92
-            }
-
-            let totalG = hypot(self.latG, self.lonG)
-            self.peakG = max(self.peakG, totalG)
-            self.engagementScore = min(1.0, (totalG / 0.75) * 0.75 + (self.vertBumpG / 0.45) * 0.25)
-            self.appendGTrail(latG: self.latG, lonG: self.lonG)
-        }
-    }
-
-    func zeroMountCalibration() {
-        let upVec = (-latestGravity.0, -latestGravity.1, -latestGravity.2)
-        rZ = norm3(upVec)
-        let seedForward = abs(rZ.1) < 0.9 ? (0.0, 1.0, 0.0) : (0.0, 0.0, -1.0)
-        let dotZ = dot3(seedForward, rZ)
-        rX = norm3((seedForward.0 - dotZ * rZ.0, seedForward.1 - dotZ * rZ.1, seedForward.2 - dotZ * rZ.2))
-        rY = norm3(cross3(rZ, rX))
-        awaitingForwardPullLock = true
-        mountStatusText = "WAIT PULL..."
-        peakG = 0.0
-        speak("Vertical locked. Accelerate straight to lock forward axis.")
-    }
+    // MARK: CoreLocation
 
     nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let loc = locations.last else { return }
+        let fix = GPSFix(
+            lat: loc.coordinate.latitude,
+            lon: loc.coordinate.longitude,
+            altitudeM: loc.altitude,
+            horizontalAccuracyM: loc.horizontalAccuracy,
+            verticalAccuracyM: loc.verticalAccuracy,
+            speedMps: loc.speed,
+            courseDeg: loc.course
+        )
         Task { @MainActor in
-            self.userLocation = loc
-            guard !self.isReplayingLog else { return }
-            if self.baseGPSAltitude == nil && loc.verticalAccuracy >= 0 {
-                self.baseGPSAltitude = loc.altitude
-            }
-            self.elevationM = (self.baseGPSAltitude ?? loc.altitude) + self.relativeBaroM
-            self.speedMPH = max(0.0, loc.speed * 2.23694)
-            self.currentLat = loc.coordinate.latitude
-            self.currentLon = loc.coordinate.longitude
-            if loc.course >= 0 {
-                self.currentBearing = loc.course
-            }
-            if self.isRecordingFeel {
-                self.recordAndPaintRoadSlice(at: loc)
-            }
+            self.ingest(fix: fix)
         }
     }
 
-    private func recordAndPaintRoadSlice(at loc: CLLocation) {
-        if let prev = lastNodeLocation {
-            let dDist = loc.distance(from: prev)
-            if dDist >= 5.0 {
-                totalDistanceM += dDist
-                if let prevElev = lastNodeElevationM {
-                    gradePct = max(-35.0, min(35.0, ((elevationM - prevElev) / dDist) * 100.0))
-                }
-                let idx = liveSegments.count
-                let seg = RoadFeelSegment(
-                    index: idx,
-                    distanceM: totalDistanceM,
-                    lat: loc.coordinate.latitude,
-                    lon: loc.coordinate.longitude,
-                    elevationM: elevationM,
-                    gradePct: gradePct,
-                    speedMPH: speedMPH,
-                    lonG: lonG,
-                    latG: latG,
-                    camberDeg: camberDeg,
-                    crestG: crestG,
-                    roughnessRMS: vertBumpG,
-                    engagement: engagementScore
-                )
-                liveSegments.append(seg)
-                csvLines.append(String(format: "%d,%.1f,%.6f,%.6f,%.1f,%.1f,%.1f,%.3f,%.3f,%.1f,%.3f,%.3f,%.2f",
-                                       idx, totalDistanceM, seg.lat, seg.lon, seg.elevationM, seg.gradePct,
-                                       seg.speedMPH, seg.lonG, seg.latG, seg.camberDeg, seg.crestG, seg.roughnessRMS, seg.engagement))
-                lastNodeLocation = loc
-                lastNodeElevationM = elevationM
+    nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        Task { @MainActor in
+            self.locManager.startUpdatingLocation()
+        }
+    }
+
+    private func ingest(fix: GPSFix) {
+        guard fix.horizontalAccuracyM >= 0 else { return }
+        hasFix = true
+        latDeg = fix.lat
+        lonDeg = fix.lon
+        if fix.speedMps >= 0 { speedMps = fix.speedMps }
+        if fix.courseDeg >= 0 { courseDeg = fix.courseDeg }
+
+        // Baro + GPS elevation fusion (barometer = smooth relative shape, GPS = absolute MSL anchor)
+        if fix.verticalAccuracyM > 0 {
+            let gpsAnchor = fix.altitudeM - relativeBaroM
+            if let offset = baroOffsetM {
+                let k = 0.02 * min(1.0, 8.0 / max(fix.verticalAccuracyM, 1.0))
+                baroOffsetM = offset + k * (gpsAnchor - offset)
+            } else {
+                baroOffsetM = gpsAnchor
             }
-        } else {
-            lastNodeLocation = loc
-            lastNodeElevationM = elevationM
-        }
-    }
-
-    func toggleRecordingAndExportIfStopped() {
-        if isRecordingFeel {
-            isRecordingFeel = false
-            let fileName = "ApexDrive_3D_\(Int(Date().timeIntervalSince1970)).csv"
-            let url = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent(fileName)
-            try? csvLines.joined(separator: "\n").write(to: url, atomically: true, encoding: .utf8)
-            exportedCSVURL = url
-            speak("3D telemetry log saved.")
-        } else {
-            isReplayingLog = false
-            lastNodeLocation = userLocation
-            lastNodeElevationM = elevationM
-            isRecordingFeel = true
-            speak("Mapping 5 meter 3D road feel.")
-        }
-    }
-
-    func speak(_ phrase: String) {
-        guard voicePaceNotesEnabled else { return }
-        let utterance = AVSpeechUtterance(string: phrase)
-        utterance.rate = 0.53
-        synth.speak(utterance)
-    }
-}
-
-// MARK: - True 3D Terrain DEM & Extruded Telemetry Ribbon Engine (MapLibre WebGL)
-struct Terrain3DWebMapView: UIViewRepresentable {
-    @ObservedObject var engine: NavTelemetryEngine
-
-    final class Coordinator: NSObject, WKNavigationDelegate {
-        var isLoaded = false
-        var lastReplayIdx: Int = -1
-        var lastLat: Double = 0
-        var lastLon: Double = 0
-        var lastColorMode: ColorMetricMode = .feel
-        var lastFlyTrigger: Int = 0
-        var lastLiveCount: Int = 0
-    }
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator()
-    }
-
-    func makeUIView(context: Context) -> WKWebView {
-        let config = WKWebViewConfiguration()
-        config.allowsInlineMediaPlayback = true
-        let webView = WKWebView(frame: .zero, configuration: config)
-        webView.isOpaque = false
-        webView.backgroundColor = UIColor(red: 0.03, green: 0.04, blue: 0.06, alpha: 1.0)
-        webView.scrollView.isScrollEnabled = false
-        webView.navigationDelegate = context.coordinator
-
-        let html = Self.build3DTerrainHTML(pebbleJSON: engine.rawJSONString)
-        webView.loadHTMLString(html, baseURL: URL(string: "https://unpkg.com"))
-        return webView
-    }
-
-    func updateUIView(_ webView: WKWebView, context: Context) {
-        guard context.coordinator.isLoaded else { return }
-
-        if context.coordinator.lastColorMode != engine.colorMode {
-            context.coordinator.lastColorMode = engine.colorMode
-            let modeStr: String
-            switch engine.colorMode {
-            case .feel: modeStr = "feel"
-            case .elevation: modeStr = "elevation"
-            case .grade: modeStr = "grade"
-            case .camber: modeStr = "camber"
-            case .roughness: modeStr = "roughness"
+            if let prev = gpsOnlyAltitudeM {
+                gpsOnlyAltitudeM = prev + 0.2 * (fix.altitudeM - prev)
+            } else {
+                gpsOnlyAltitudeM = fix.altitudeM
             }
-            webView.evaluateJavaScript("window.setApexColorMode && window.setApexColorMode('\(modeStr)');", completionHandler: nil)
         }
 
-        if context.coordinator.lastFlyTrigger != engine.flyOverviewTrigger {
-            context.coordinator.lastFlyTrigger = engine.flyOverviewTrigger
-            webView.evaluateJavaScript("window.flyApexOverview && window.flyApexOverview();", completionHandler: nil)
+        advanceOdometer(fix: fix)
+    }
+
+    private func currentElevationM() -> Double? {
+        if baroAvailable, let offset = baroOffsetM {
+            return relativeBaroM + offset
+        }
+        return gpsOnlyAltitudeM
+    }
+
+    /// Walks the polyline between consecutive fixes and emits a node every 5.0 m of arc length
+    /// (interpolating position/elevation), so fast driving at 1 Hz GPS still yields true 5 m bins.
+    private func advanceOdometer(fix: GPSFix) {
+        let elev = currentElevationM()
+        guard fix.horizontalAccuracyM <= 30.0 else { return }
+        guard let pLat = odoPrevLat, let pLon = odoPrevLon else {
+            resetOdometer(lat: fix.lat, lon: fix.lon, elev: elev)
+            return
+        }
+        let legM = CLLocation(latitude: pLat, longitude: pLon)
+            .distance(from: CLLocation(latitude: fix.lat, longitude: fix.lon))
+        if legM > 250.0 {
+            // GPS jump / resume after gap: restart the odometer instead of painting a fake straight line
+            resetOdometer(lat: fix.lat, lon: fix.lon, elev: elev)
+            return
+        }
+        if fix.speedMps >= 0 && fix.speedMps < 0.8 {
+            // Stationary jitter: don't accumulate fake distance
+            odoPrevLat = fix.lat
+            odoPrevLon = fix.lon
+            odoPrevElev = elev
             return
         }
 
-        if engine.liveSegments.count != context.coordinator.lastLiveCount, let latest = engine.liveSegments.last {
-            context.coordinator.lastLiveCount = engine.liveSegments.count
-            let prev = engine.liveSegments.count > 1 ? engine.liveSegments[engine.liveSegments.count - 2] : latest
-            let col = latest.hexColor(mode: engine.colorMode)
-            let h = max(4.0, (latest.elevationM - 88.0) * 0.85 + latest.combinedG * 45.0)
-            webView.evaluateJavaScript("window.appendLiveSegment && window.appendLiveSegment(\(prev.lon),\(prev.lat),\(latest.lon),\(latest.lat),'\(col)',\(h));", completionHandler: nil)
-        }
-
-        let dLat = abs(engine.currentLat - context.coordinator.lastLat)
-        let dLon = abs(engine.currentLon - context.coordinator.lastLon)
-        if dLat > 1e-7 || dLon > 1e-7 || context.coordinator.lastReplayIdx != engine.replayIndex {
-            context.coordinator.lastLat = engine.currentLat
-            context.coordinator.lastLon = engine.currentLon
-            context.coordinator.lastReplayIdx = engine.replayIndex
-            webView.evaluateJavaScript(
-                "window.updateApexCamera && window.updateApexCamera(\(engine.currentLon), \(engine.currentLat), \(engine.currentBearing));",
-                completionHandler: nil
-            )
-        }
-    }
-
-    static func build3DTerrainHTML(pebbleJSON: String) -> String {
-        return """
-        <!DOCTYPE html>
-        <html>
-        <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-        <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
-        <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
-        <style>
-          html, body, #map { margin: 0; padding: 0; width: 100%; height: 100%; background: #06080c; overflow: hidden; }
-          .maplibregl-ctrl-attrib { display: none !important; }
-        </style>
-        </head>
-        <body>
-        <div id="map"></div>
-        <script>
-        const RAW = \(pebbleJSON);
-        const MIN_ELEV = 92.5, MAX_ELEV = 215.5;
-        let colorMode = 'feel';
-
-        const startLon = RAW.length > 120 ? RAW[120][2] : -84.61459;
-        const startLat = RAW.length > 120 ? RAW[120][1] : 39.25858;
-
-        const map = new maplibregl.Map({
-          container: 'map',
-          style: {
-            version: 8,
-            sources: {
-              'carto-dark': {
-                type: 'raster',
-                tiles: ['https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png'],
-                tileSize: 256
-              },
-              'terrain-dem': {
-                type: 'raster-dem',
-                tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'],
-                tileSize: 256,
-                encoding: 'terrarium',
-                maxzoom: 15
-              },
-              'hillshade-dem': {
-                type: 'raster-dem',
-                tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'],
-                tileSize: 256,
-                encoding: 'terrarium',
-                maxzoom: 15
-              }
-            },
-            layers: [
-              { id: 'dark-base', type: 'raster', source: 'carto-dark', paint: { 'raster-opacity': 0.92, 'raster-contrast': 0.25 } },
-              {
-                id: 'hills',
-                type: 'hillshade',
-                source: 'hillshade-dem',
-                paint: {
-                  'hillshade-exaggeration': 0.82,
-                  'hillshade-shadow-color': '#000000',
-                  'hillshade-highlight-color': '#00e5ff',
-                  'hillshade-accent-color': '#00f57a'
-                }
-              }
-            ],
-            terrain: { source: 'terrain-dem', exaggeration: 2.3 }
-          },
-          center: [startLon, startLat],
-          zoom: 16.2,
-          pitch: 68,
-          bearing: -35,
-          antialias: true,
-          maxPitch: 82
-        });
-
-        const puck = document.createElement('div');
-        puck.style.cssText = 'width:20px;height:20px;border-radius:50%;background:#00e5ff;border:3px solid #fff;box-shadow:0 0 20px #00e5ff;';
-        const marker = new maplibregl.Marker({ element: puck }).setLngLat([startLon, startLat]).addTo(map);
-
-        function colorForRow(r, mode) {
-          const elev = r[3], grade = r[4], lonG = r[6], latG = r[7], camber = r[8], rough = r[10];
-          if (mode === 'elevation') {
-            const n = Math.max(0, Math.min(1, (elev - MIN_ELEV) / (MAX_ELEV - MIN_ELEV)));
-            return n > 0.75 ? '#ff2a54' : (n > 0.5 ? '#ff9100' : (n > 0.25 ? '#00e5ff' : '#00f57a'));
-          }
-          if (mode === 'grade') {
-            const g = Math.abs(grade);
-            return g > 6.0 ? '#ff2a54' : (g > 3.0 ? '#ff9100' : '#00e5ff');
-          }
-          if (mode === 'camber') {
-            const c = Math.abs(camber);
-            return c > 4.0 ? '#00e5ff' : (c > 2.0 ? '#b388ff' : '#00f57a');
-          }
-          if (mode === 'roughness') {
-            return rough > 0.12 ? '#ff2a54' : (rough > 0.06 ? '#ff9100' : '#00f57a');
-          }
-          const combG = Math.hypot(lonG, latG);
-          return (combG > 0.32 || rough > 0.14) ? '#ff2a54' : ((combG > 0.18 || Math.abs(camber) > 2.5) ? '#ff9100' : '#00f57a');
-        }
-
-        function buildGeo(mode) {
-          const walls = [], lines = [];
-          const hw = 0.000045;
-          for (let i = 0; i < RAW.length - 1; i++) {
-            const r0 = RAW[i], r1 = RAW[i + 1];
-            const lon0 = r0[2], lat0 = r0[1], lon1 = r1[2], lat1 = r1[1];
-            const dLon = lon1 - lon0, dLat = lat1 - lat0;
-            const len = Math.hypot(dLon, dLat);
-            if (len < 1e-7 || len > 0.005) continue;
-            const col = colorForRow(r0, mode);
-            lines.push({
-              type: 'Feature',
-              properties: { color: col },
-              geometry: { type: 'LineString', coordinates: [[lon0, lat0], [lon1, lat1]] }
-            });
-            const nx = (-dLat / len) * hw, ny = (dLon / len) * hw;
-            const h = Math.max(4, (r0[3] - 88.0) * 0.85 + Math.hypot(r0[6], r0[7]) * 45.0);
-            walls.push({
-              type: 'Feature',
-              properties: { color: col, height: h },
-              geometry: {
-                type: 'Polygon',
-                coordinates: [[[lon0-nx, lat0-ny],[lon1-nx, lat1-ny],[lon1+nx, lat1+ny],[lon0+nx, lat0+ny],[lon0-nx, lat0-ny]]]
-              }
-            });
-          }
-          return {
-            walls: { type: 'FeatureCollection', features: walls },
-            lines: { type: 'FeatureCollection', features: lines }
-          };
-        }
-
-        let liveGeo = { walls: [], lines: [] };
-
-        map.on('load', () => {
-          const geo = buildGeo(colorMode);
-          map.addSource('walls', { type: 'geojson', data: geo.walls });
-          map.addLayer({
-            id: 'walls-3d',
-            type: 'fill-extrusion',
-            source: 'walls',
-            paint: {
-              'fill-extrusion-color': ['get', 'color'],
-              'fill-extrusion-height': ['get', 'height'],
-              'fill-extrusion-base': 0,
-              'fill-extrusion-opacity': 0.82
-            }
-          });
-          map.addSource('lines', { type: 'geojson', data: geo.lines });
-          map.addLayer({
-            id: 'lines-center',
-            type: 'line',
-            source: 'lines',
-            layout: { 'line-cap': 'round', 'line-join': 'round' },
-            paint: { 'line-color': ['get', 'color'], 'line-width': 4, 'line-opacity': 0.95 }
-          });
-        });
-
-        window.updateApexCamera = function(lon, lat, brg) {
-          marker.setLngLat([lon, lat]);
-          map.easeTo({ center: [lon, lat], bearing: brg, pitch: 68, duration: 95 });
-        };
-
-        window.setApexColorMode = function(mode) {
-          colorMode = mode;
-          const geo = buildGeo(mode);
-          const sw = map.getSource('walls'), sl = map.getSource('lines');
-          if (sw) sw.setData(geo.walls);
-          if (sl) sl.setData(geo.lines);
-        };
-
-        window.flyApexOverview = function() {
-          if (!RAW.length) return;
-          let minLon = 180, maxLon = -180, minLat = 90, maxLat = -90;
-          for (let i = 0; i < RAW.length; i++) {
-            const lat = RAW[i][1], lon = RAW[i][2];
-            if (lon < minLon) minLon = lon;
-            if (lon > maxLon) maxLon = lon;
-            if (lat < minLat) minLat = lat;
-            if (lat > maxLat) maxLat = lat;
-          }
-          map.fitBounds([[minLon, minLat], [maxLon, maxLat]], { padding: 60, pitch: 58, bearing: -25, duration: 1000 });
-        };
-        </script>
-        </body>
-        </html>
-        """
-    }
-}
-
-extension Terrain3DWebMapView.Coordinator {
-    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        isLoaded = true
-    }
-}
-
-// MARK: - Stripped Offline 72°-Pitched 3D Chase Map (Zero Apple Maps POI Clutter)
-struct PitchedOffline3DMapView: UIViewRepresentable {
-    @ObservedObject var engine: NavTelemetryEngine
-
-    func makeUIView(context: Context) -> MKMapView {
-        let mapView = MKMapView(frame: .zero)
-        mapView.overrideUserInterfaceStyle = .dark
-        let config = MKStandardMapConfiguration(elevationStyle: .realistic, emphasisStyle: .muted)
-        config.pointOfInterestFilter = .excludingAll
-        config.showsTraffic = false
-        mapView.preferredConfiguration = config
-        mapView.isPitchEnabled = true
-        mapView.isRotateEnabled = true
-        mapView.showsCompass = false
-        return mapView
-    }
-
-    func updateUIView(_ mapView: MKMapView, context: Context) {
-        let center = CLLocationCoordinate2D(latitude: engine.currentLat, longitude: engine.currentLon)
-        let cam = MKMapCamera(lookingAtCenter: center, fromDistance: 260, pitch: 72, heading: engine.currentBearing)
-        mapView.setCamera(cam, animated: true)
-    }
-}
-
-// MARK: - Bespoke Motorsport Instrument Cluster & 3D Cockpit View
-struct CockpitNavigationView: View {
-    @StateObject private var engine = NavTelemetryEngine()
-
-    var body: some View {
-        ZStack {
-            // 1. Full-Bleed 3D Terrain & Extruded Road-Feel Viewport
-            if engine.use3DTerrainWebEngine {
-                Terrain3DWebMapView(engine: engine)
-                    .ignoresSafeArea()
+        let step = Self.segmentLengthM
+        let legRoughRMS = segRoughCount > 0 ? sqrt(segRoughSumSq / Double(segRoughCount)) : sqrt(max(0.0, roughMeanSq))
+        var s = step - odoSinceNodeM
+        var emitted = false
+        while s <= legM && legM > 0 {
+            let t = s / legM
+            let nLat = pLat + (fix.lat - pLat) * t
+            let nLon = pLon + (fix.lon - pLon) * t
+            var nElev: Double?
+            if let e0 = odoPrevElev, let e1 = elev {
+                nElev = e0 + (e1 - e0) * t
             } else {
-                PitchedOffline3DMapView(engine: engine)
-                    .ignoresSafeArea()
+                nElev = elev
             }
-
-            // 2. Top & Bottom Motorsport Vignette Gradients (keeps center windshield unobstructed)
-            VStack {
-                LinearGradient(colors: [Color.black.opacity(0.85), Color.clear], startPoint: .top, endPoint: .bottom)
-                    .frame(height: 110)
-                Spacer()
-                LinearGradient(colors: [Color.clear, Color.black.opacity(0.92)], startPoint: .top, endPoint: .bottom)
-                    .frame(height: 270)
-            }
-            .ignoresSafeArea()
-            .allowsHitTesting(false)
-
-            // 3. Sleek Carbon-Glass Motorsport HUD
-            VStack(spacing: 8) {
-                // TOP TELEMETRY RIBBON
-                HStack(spacing: 10) {
-                    // Dynamic Corner / Stage Badge
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 10)
-                            .fill(Color(red: 0.0, green: 0.96, blue: 0.48))
-                            .frame(width: 42, height: 42)
-                        Text("3D")
-                            .font(.system(size: 16, weight: .black, design: .monospaced))
-                            .foregroundStyle(.black)
-                    }
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack(spacing: 6) {
-                            Text(engine.distanceToNextTurn)
-                                .font(.system(size: 16, weight: .black, design: .monospaced))
-                                .foregroundStyle(Color(red: 0.0, green: 0.96, blue: 0.48))
-                            Text(engine.mountStatusText)
-                                .font(.system(size: 9, weight: .heavy, design: .monospaced))
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Color.cyan.opacity(0.2))
-                                .foregroundStyle(.cyan)
-                                .clipShape(RoundedRectangle(cornerRadius: 4))
-                        }
-                        Text(engine.nextInstruction)
-                            .font(.system(size: 11, weight: .bold, design: .monospaced))
-                            .foregroundStyle(.white.opacity(0.9))
-                            .lineLimit(1)
-                    }
-
-                    Spacer()
-
-                    // Color Metric Cycle Button
-                    Button {
-                        let all = ColorMetricMode.allCases
-                        if let idx = all.firstIndex(of: engine.colorMode) {
-                            engine.colorMode = all[(idx + 1) % all.count]
-                        }
-                    } label: {
-                        Text(engine.colorMode.rawValue)
-                            .font(.system(size: 10, weight: .black, design: .monospaced))
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 8)
-                            .background(Color.cyan.opacity(0.18))
-                            .foregroundStyle(.cyan)
-                            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.cyan.opacity(0.45), lineWidth: 1))
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
-                    }
-
-                    // 3D Overview Button
-                    Button {
-                        engine.isReplayingLog = false
-                        engine.flyOverviewTrigger += 1
-                    } label: {
-                        Image(systemName: "cube.transparent.fill")
-                            .font(.system(size: 14, weight: .bold))
-                            .padding(8)
-                            .background(Color.purple.opacity(0.25))
-                            .foregroundStyle(.purple)
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
-                    }
-
-                    // Audio Pace Notes Toggle
-                    Button {
-                        engine.voicePaceNotesEnabled.toggle()
-                    } label: {
-                        Image(systemName: engine.voicePaceNotesEnabled ? "waveform" : "speaker.slash.fill")
-                            .font(.system(size: 14, weight: .bold))
-                            .padding(8)
-                            .background(Color.white.opacity(0.12))
-                            .foregroundStyle(engine.voicePaceNotesEnabled ? .green : .gray)
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
-                    }
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(Color(red: 0.05, green: 0.07, blue: 0.10).opacity(0.88))
-                .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.white.opacity(0.14), lineWidth: 1))
-                .clipShape(RoundedRectangle(cornerRadius: 14))
-
-                Spacer()
-
-                // BOTTOM MOTORSPORT INSTRUMENT CLUSTER
-                VStack(spacing: 8) {
-                    // Row 1: Speed + Artificial Banking Horizon | Multi-Ring G-Scope | 6-Cell Telemetry Matrix
-                    HStack(spacing: 12) {
-                        // Left: Speedometer + Live Artificial Roll/Pitch Horizon
-                        VStack(spacing: 4) {
-                            Text(String(format: "%.0f", engine.speedMPH))
-                                .font(.system(size: 34, weight: .black, design: .monospaced))
-                                .foregroundStyle(.white)
-                            Text("MPH")
-                                .font(.system(size: 9, weight: .heavy, design: .monospaced))
-                                .foregroundStyle(.gray)
-
-                            // Artificial Banking & Grade Horizon Canvas
-                            Canvas { ctx, size in
-                                let midX = size.width / 2
-                                let midY = size.height / 2 + CGFloat(engine.gradePct * 0.8)
-                                let rad = CGFloat(engine.camberDeg * .pi / 180.0)
-                                let dx = cos(rad) * (size.width * 0.44)
-                                let dy = sin(rad) * (size.width * 0.44)
-
-                                var horizon = Path()
-                                horizon.move(to: CGPoint(x: midX - dx, y: midY - dy))
-                                horizon.addLine(to: CGPoint(x: midX + dx, y: midY + dy))
-                                ctx.stroke(horizon, with: .color(.cyan), lineWidth: 2.2)
-
-                                var centerTick = Path()
-                                centerTick.move(to: CGPoint(x: midX - 6, y: size.height / 2))
-                                centerTick.addLine(to: CGPoint(x: midX + 6, y: size.height / 2))
-                                ctx.stroke(centerTick, with: .color(.white.opacity(0.4)), lineWidth: 1)
-                            }
-                            .frame(width: 68, height: 22)
-                            .background(Color.black.opacity(0.5))
-                            .clipShape(RoundedRectangle(cornerRadius: 5))
-                        }
-                        .frame(width: 74)
-
-                        // Center: Multi-Ring Friction Circle Scope with Historical G-Trail
-                        ZStack {
-                            Canvas { ctx, size in
-                                let c = CGPoint(x: size.width / 2, y: size.height / 2)
-                                let maxR = min(size.width, size.height) * 0.46
-
-                                // Crosshairs
-                                var ch = Path()
-                                ch.move(to: CGPoint(x: 4, y: c.y))
-                                ch.addLine(to: CGPoint(x: size.width - 4, y: c.y))
-                                ch.move(to: CGPoint(x: c.x, y: 4))
-                                ch.addLine(to: CGPoint(x: c.x, y: size.height - 4))
-                                ctx.stroke(ch, with: .color(.white.opacity(0.12)), lineWidth: 1)
-
-                                // 0.33G, 0.66G, 1.0G concentric rings
-                                for frac in [0.35, 0.7, 1.0] {
-                                    let r = maxR * CGFloat(frac)
-                                    let rect = CGRect(x: c.x - r, y: c.y - r, width: r * 2, height: r * 2)
-                                    ctx.stroke(Path(ellipseIn: rect), with: .color(.white.opacity(frac == 1.0 ? 0.28 : 0.14)), lineWidth: 1)
-                                }
-
-                                // Historical G-Vector Comet Trail
-                                if engine.gTrail.count > 1 {
-                                    var trail = Path()
-                                    for (i, pt) in engine.gTrail.enumerated() {
-                                        let px = c.x + CGFloat(max(-0.95, min(0.95, pt.0 / 0.85))) * maxR
-                                        let py = c.y - CGFloat(max(-0.95, min(0.95, pt.1 / 0.85))) * maxR
-                                        if i == 0 { trail.move(to: CGPoint(x: px, y: py)) }
-                                        else { trail.addLine(to: CGPoint(x: px, y: py)) }
-                                    }
-                                    ctx.stroke(trail, with: .color(.cyan.opacity(0.65)), lineWidth: 2.0)
-                                }
-
-                                // Active G Vector Dot
-                                let gx = c.x + CGFloat(max(-0.95, min(0.95, engine.latG / 0.85))) * maxR
-                                let gy = c.y - CGFloat(max(-0.95, min(0.95, engine.lonG / 0.85))) * maxR
-                                let mag = hypot(engine.latG, engine.lonG)
-                                let dotColor: Color = mag > 0.35 ? .red : (mag > 0.20 ? .orange : .green)
-                                let dotRect = CGRect(x: gx - 5.5, y: gy - 5.5, width: 11, height: 11)
-                                ctx.fill(Path(ellipseIn: dotRect), with: .color(dotColor))
-                            }
-                        }
-                        .frame(width: 78, height: 78)
-
-                        // Right: 6-Cell Motorsport Telemetry Matrix
-                        VStack(alignment: .leading, spacing: 5) {
-                            HStack {
-                                Text("LAT").foregroundStyle(.gray)
-                                Text(String(format: "%+.2fG", engine.latG)).foregroundStyle(.green)
-                                Spacer()
-                                Text("BANK φ").foregroundStyle(.gray)
-                                Text(String(format: "%+.1f°", engine.camberDeg)).foregroundStyle(.cyan)
-                            }
-                            HStack {
-                                Text("ELEV").foregroundStyle(.gray)
-                                Text(String(format: "%.1fm", engine.elevationM)).foregroundStyle(.purple)
-                                Spacer()
-                                Text("GRADE").foregroundStyle(.gray)
-                                Text(String(format: "%+.1f%%", engine.gradePct)).foregroundStyle(.orange)
-                            }
-                            HStack {
-                                Text("CREST").foregroundStyle(.gray)
-                                Text(String(format: "%+.2fG", engine.crestG)).foregroundStyle(.white)
-                                Spacer()
-                                Text("PEAK").foregroundStyle(.gray)
-                                Text(String(format: "%.2fG", engine.peakG)).foregroundStyle(.red)
-                            }
-                        }
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
-                    }
-
-                    // Row 2: Interactive 3D Elevation & Terrain Scrubber Canvas (92.8m – 215.3m MSL)
-                    GeometryReader { geo in
-                        ZStack(alignment: .topLeading) {
-                            Canvas { ctx, size in
-                                let segs = engine.pebbleSegments
-                                guard segs.count > 2 else { return }
-                                let minE = 92.5, maxE = 215.5
-                                let step = max(1, segs.count / 180)
-
-                                var fillPath = Path()
-                                fillPath.move(to: CGPoint(x: 0, y: size.height))
-                                var strokePath = Path()
-
-                                var first = true
-                                for i in stride(from: 0, to: segs.count, by: step) {
-                                    let x = (CGFloat(i) / CGFloat(segs.count - 1)) * size.width
-                                    let norm = CGFloat((segs[i].elevationM - minE) / (maxE - minE))
-                                    let y = size.height - 4 - norm * (size.height - 16)
-                                    fillPath.addLine(to: CGPoint(x: x, y: y))
-                                    if first {
-                                        strokePath.move(to: CGPoint(x: x, y: y))
-                                        first = false
-                                    } else {
-                                        strokePath.addLine(to: CGPoint(x: x, y: y))
-                                    }
-                                }
-                                fillPath.addLine(to: CGPoint(x: size.width, y: size.height))
-                                fillPath.closeSubpath()
-
-                                ctx.fill(fillPath, with: .linearGradient(
-                                    Gradient(colors: [Color.cyan.opacity(0.45), Color.green.opacity(0.05)]),
-                                    startPoint: .zero,
-                                    endPoint: CGPoint(x: 0, y: size.height)
-                                ))
-                                ctx.stroke(strokePath, with: .color(.cyan), lineWidth: 1.8)
-
-                                // Active Scrubber Playhead
-                                let playX = (CGFloat(engine.replayIndex) / CGFloat(max(1, segs.count - 1))) * size.width
-                                var cursor = Path()
-                                cursor.move(to: CGPoint(x: playX, y: 0))
-                                cursor.addLine(to: CGPoint(x: playX, y: size.height))
-                                ctx.stroke(cursor, with: .color(.orange), lineWidth: 2.0)
-                            }
-                            .background(Color.black.opacity(0.55))
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
-                            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.white.opacity(0.12), lineWidth: 1))
-                            .gesture(
-                                DragGesture(minimumDistance: 0)
-                                    .onChanged { val in
-                                        let frac = max(0.0, min(1.0, Double(val.location.x / max(1.0, geo.size.width))))
-                                        engine.scrubToFraction(frac)
-                                    }
-                            )
-
-                            HStack {
-                                Text("3D ELEVATION PROFILE (93m–215m • DRAG TO SCRUB)")
-                                Spacer()
-                                Text("NODE #\(engine.replayIndex)/\(engine.pebbleSegments.count)")
-                            }
-                            .font(.system(size: 8.5, weight: .heavy, design: .monospaced))
-                            .foregroundStyle(.white.opacity(0.72))
-                            .padding(.horizontal, 6)
-                            .padding(.top, 3)
-                            .allowsHitTesting(false)
-                        }
-                    }
-                    .frame(height: 50)
-
-                    // Row 3: Compact Motorsport Action Bar
-                    HStack(spacing: 8) {
-                        Button {
-                            engine.isReplayingLog.toggle()
-                        } label: {
-                            Text(engine.isReplayingLog ? "⏸ PAUSE 3D LOG" : "▶ REPLAY PEBBLE RIDGE")
-                                .font(.system(size: 11, weight: .black, design: .monospaced))
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 10)
-                                .background(engine.isReplayingLog ? Color.orange : Color(red: 0.0, green: 0.96, blue: 0.48))
-                                .foregroundStyle(.black)
-                                .clipShape(RoundedRectangle(cornerRadius: 9))
-                        }
-
-                        Button {
-                            let mults = [1, 2, 5, 10]
-                            if let idx = mults.firstIndex(of: engine.replaySpeedMultiplier) {
-                                engine.replaySpeedMultiplier = mults[(idx + 1) % mults.count]
-                            }
-                        } label: {
-                            Text("\(engine.replaySpeedMultiplier)x")
-                                .font(.system(size: 11, weight: .black, design: .monospaced))
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 10)
-                                .background(Color.white.opacity(0.12))
-                                .foregroundStyle(.cyan)
-                                .clipShape(RoundedRectangle(cornerRadius: 9))
-                        }
-
-                        Button {
-                            engine.toggleRecordingAndExportIfStopped()
-                        } label: {
-                            Text(engine.isRecordingFeel ? "■ SAVE" : "● LIVE REC")
-                                .font(.system(size: 11, weight: .black, design: .monospaced))
-                                .padding(.horizontal, 11)
-                                .padding(.vertical, 10)
-                                .background(engine.isRecordingFeel ? Color.red : Color.white.opacity(0.14))
-                                .foregroundStyle(.white)
-                                .clipShape(RoundedRectangle(cornerRadius: 9))
-                        }
-
-                        Button {
-                            engine.zeroMountCalibration()
-                        } label: {
-                            Text("ZERO")
-                                .font(.system(size: 11, weight: .black, design: .monospaced))
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 10)
-                                .background(Color.white.opacity(0.12))
-                                .foregroundStyle(.white)
-                                .clipShape(RoundedRectangle(cornerRadius: 9))
-                        }
-
-                        if let csvURL = engine.exportedCSVURL {
-                            ShareLink(item: csvURL) {
-                                Image(systemName: "square.and.arrow.up")
-                                    .font(.system(size: 13, weight: .bold))
-                                    .padding(10)
-                                    .background(Color.cyan)
-                                    .foregroundStyle(.black)
-                                    .clipShape(RoundedRectangle(cornerRadius: 9))
-                            }
-                        }
-                    }
-                }
-                .padding(12)
-                .background(Color(red: 0.05, green: 0.07, blue: 0.10).opacity(0.90))
-                .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(0.15), lineWidth: 1))
-                .clipShape(RoundedRectangle(cornerRadius: 16))
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
+            emitNode(lat: nLat, lon: nLon, elevationM: nElev, roughRMSMps2: legRoughRMS)
+            emitted = true
+            s += step
         }
-        .onAppear { UIApplication.shared.isIdleTimerDisabled = true }
+        odoSinceNodeM = legM - (s - step)
+        if emitted {
+            segRoughSumSq = 0.0
+            segRoughCount = 0
+        }
+        odoPrevLat = fix.lat
+        odoPrevLon = fix.lon
+        odoPrevElev = elev
+    }
+
+    private func resetOdometer(lat: Double, lon: Double, elev: Double?) {
+        odoPrevLat = lat
+        odoPrevLon = lon
+        odoPrevElev = elev
+        odoSinceNodeM = 0.0
+        lastNodeElevationM = elev
+    }
+
+    private func emitNode(lat: Double, lon: Double, elevationM: Double?, roughRMSMps2: Double) {
+        if let e = elevationM, let prev = lastNodeElevationM {
+            let rawGrade = max(-35.0, min(35.0, ((e - prev) / Self.segmentLengthM) * 100.0))
+            gradePct = 0.6 * gradePct + 0.4 * rawGrade
+        }
+        lastNodeElevationM = elevationM
+
+        guard isRecording else { return }
+        let idx = recordedSegments
+        let row = String(
+            format: "%d,%.1f,%.7f,%.7f,%.2f,%.2f,%.4f,%.4f,%.2f,%.4f,%.4f,%.3f,%.2f",
+            idx,
+            Double(idx) * Self.segmentLengthM,
+            lat,
+            lon,
+            elevationM ?? 0.0,
+            speedMps * 2.2369362921,
+            lonAccMps2 / Self.gStd,
+            latAccMps2 / Self.gStd,
+            camberRad * 180.0 / Double.pi,
+            crestAccMps2 / Self.gStd,
+            roughRMSMps2 / Self.gStd,
+            engagement,
+            gradePct
+        )
+        csvLines.append(row)
+        recordedSegments += 1
+    }
+
+    // MARK: CoreMotion (100 Hz) + CMAltimeter
+
+    private func startMotionPipeline() {
+        if baroAvailable {
+            altimeter.startRelativeAltitudeUpdates(to: .main) { [weak self] data, _ in
+                guard let self, let d = data else { return }
+                let rel = d.relativeAltitude.doubleValue
+                MainActor.assumeIsolated {
+                    self.relativeBaroM = rel
+                }
+            }
+        }
+        guard motionManager.isDeviceMotionAvailable else { return }
+        motionManager.deviceMotionUpdateInterval = 1.0 / 100.0
+        motionManager.startDeviceMotionUpdates(to: .main) { [weak self] motion, _ in
+            guard let self, let m = motion else { return }
+            let gravity = Vec3(x: m.gravity.x, y: m.gravity.y, z: m.gravity.z)
+            // CoreMotion userAcceleration is reported with the opposite sign of proper (specific-force)
+            // acceleration, so negate it and convert g -> m/s^2.
+            let accel = Vec3(x: -m.userAcceleration.x, y: -m.userAcceleration.y, z: -m.userAcceleration.z)
+                .scaled(ApexSensorShell.gStd)
+            let gyro = Vec3(x: m.rotationRate.x, y: m.rotationRate.y, z: m.rotationRate.z)
+            let timestamp = m.timestamp
+            MainActor.assumeIsolated {
+                self.ingestMotion(gravityG: gravity, accelMps2: accel, gyroRadS: gyro, timestamp: timestamp)
+            }
+        }
+    }
+
+    private static func alpha(dt: Double, tau: Double) -> Double {
+        1.0 - exp(-dt / tau)
+    }
+
+    private func ingestMotion(gravityG: Vec3, accelMps2 a: Vec3, gyroRadS w: Vec3, timestamp: Double) {
+        latestGravityG = gravityG
+        var dt = 0.01
+        if let last = lastMotionTimestamp {
+            dt = max(0.001, min(0.1, timestamp - last))
+        }
+        lastMotionTimestamp = timestamp
+
+        if calibration == .awaitingPull {
+            updateForwardPullLock(accel: a, gyro: w)
+        }
+
+        // Phone frame -> ISO 8855 vehicle frame: v_veh = R * v_phone
+        let axVeh = rX.dot(a)
+        let ayVeh = rY.dot(a)
+        let azVeh = rZ.dot(a)
+        let yaw = rZ.dot(w)
+
+        let aHoriz = Self.alpha(dt: dt, tau: 0.15)
+        lonAccMps2 += aHoriz * (axVeh - lonAccMps2)
+        latAccMps2 += aHoriz * (ayVeh - latAccMps2)
+        yawRateRadS += aHoriz * (yaw - yawRateRadS)
+
+        // < 1.0 Hz crest / compression band
+        crestAccMps2 += Self.alpha(dt: dt, tau: 1.0 / (2.0 * Double.pi * 1.0)) * (azVeh - crestAccMps2)
+
+        // > 8.0 Hz pavement roughness band (first-order high-pass)
+        let rc = 1.0 / (2.0 * Double.pi * 8.0)
+        let beta = rc / (rc + dt)
+        hpVert = beta * (hpVert + azVeh - lastAzVeh)
+        lastAzVeh = azVeh
+        let sq = hpVert * hpVert
+        roughMeanSq += Self.alpha(dt: dt, tau: 0.5) * (sq - roughMeanSq)
+        segRoughSumSq += sq
+        segRoughCount += 1
+
+        // True camber phi from a_y = v*w_z*cos(phi) - g*sin(phi) (same gating/clip as core/kinematics.py)
+        let aKin = speedMps * yawRateRadS
+        if abs(aKin) > 1.5 {
+            let sinPhi = max(-0.5, min(0.5, (abs(aKin) - abs(latAccMps2)) / Self.gStd))
+            camberRad += Self.alpha(dt: dt, tau: 0.3) * (asin(sinPhi) - camberRad)
+        } else {
+            camberRad -= Self.alpha(dt: dt, tau: 0.6) * camberRad
+        }
+
+        let combinedG = hypot(latAccMps2, lonAccMps2) / Self.gStd
+        let roughG = sqrt(max(0.0, roughMeanSq)) / Self.gStd
+        engagement = min(1.0, (combinedG / 0.75) * 0.75 + (roughG / 0.45) * 0.25)
+    }
+
+    // MARK: SO(3) mount calibration
+
+    /// Vertical lock: +Z_veh = -gravity (CoreMotion gravity points down). Forward axis is seeded and then
+    /// refined by the next sustained straight-line pull (forward-pull X-lock).
+    func zeroMountCalibration() {
+        rZ = latestGravityG.scaled(-1.0).normalized()
+        let seed = abs(rZ.y) < 0.9 ? Vec3(x: 0.0, y: 1.0, z: 0.0) : Vec3(x: 0.0, y: 0.0, z: -1.0)
+        rX = seed.rejecting(rZ).normalized()
+        rY = rZ.cross(rX).normalized()
+        pullAccum = .zero
+        pullSamples = 0
+        calibration = .awaitingPull
+        speak("Vertical locked. Accelerate straight to lock forward axis.")
+    }
+
+    private func updateForwardPullLock(accel a: Vec3, gyro w: Vec3) {
+        let horizontal = a.rejecting(rZ)
+        let pullMag = horizontal.magnitude
+        let gyroMag = w.magnitude
+        let consistent = pullSamples == 0 || horizontal.dot(pullAccum) > 0
+        if pullMag > 1.2 && gyroMag < 0.15 && consistent {
+            pullAccum = pullAccum.plus(horizontal)
+            pullSamples += 1
+            if pullSamples >= 30 {
+                rX = pullAccum.rejecting(rZ).normalized()
+                rY = rZ.cross(rX).normalized()
+                calibration = .locked
+                pullAccum = .zero
+                pullSamples = 0
+                persistMount()
+                speak("Forward axis locked.")
+            }
+        } else if pullMag < 0.5 {
+            pullAccum = .zero
+            pullSamples = 0
+        }
+    }
+
+    private func persistMount() {
+        let rows = [rX.x, rX.y, rX.z, rY.x, rY.y, rY.z, rZ.x, rZ.y, rZ.z]
+        UserDefaults.standard.set(rows, forKey: Self.mountDefaultsKey)
+    }
+
+    private func restorePersistedMount() {
+        guard let rows = UserDefaults.standard.array(forKey: Self.mountDefaultsKey) as? [Double],
+              rows.count == 9,
+              rows.allSatisfy({ $0.isFinite }) else { return }
+        rX = Vec3(x: rows[0], y: rows[1], z: rows[2])
+        rY = Vec3(x: rows[3], y: rows[4], z: rows[5])
+        rZ = Vec3(x: rows[6], y: rows[7], z: rows[8])
+        calibration = .locked
+    }
+
+    // MARK: Recording / export
+
+    func startRecording() {
+        guard !isRecording else { return }
+        csvLines = [Self.csvHeader]
+        recordedSegments = 0
+        isRecording = true
+        speak("Mapping 5 meter road feel.")
+    }
+
+    func stopRecordingAndExport() {
+        guard isRecording else { return }
+        isRecording = false
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyyMMdd_HHmmss"
+        let fileName = "ApexDrive_\(formatter.string(from: Date())).csv"
+        guard let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else { return }
+        let url = docs.appendingPathComponent(fileName)
+        do {
+            try (csvLines.joined(separator: "\n") + "\n").write(to: url, atomically: true, encoding: .utf8)
+            shareItem = CSVShareItem(url: url)
+            evaluate("window.apex && window.apex.onNative && window.apex.onNative({type:'recordingSaved',file:'\(fileName)',segments:\(recordedSegments)}); void 0;")
+            speak("Road feel log saved.")
+        } catch {
+            evaluate("window.apex && window.apex.onNative && window.apex.onNative({type:'recordingFailed'}); void 0;")
+        }
+    }
+
+    private func speak(_ phrase: String) {
+        let utterance = AVSpeechUtterance(string: phrase)
+        utterance.rate = 0.53
+        synth.speak(utterance)
     }
 }

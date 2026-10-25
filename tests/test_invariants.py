@@ -51,3 +51,14 @@ def test_real_sensor_logger_pebble_ridge_ingestion():
     assert len(segments) > 3000
     elev_span = segments['elevation_m'].max() - segments['elevation_m'].min()
     assert elev_span > 100.0
+
+def test_real_sensor_logger_dry_ridge_ingestion():
+    zip_path = 'Dry_Ridge_Rd-2026-10-25_01-50-26.zip'
+    if not os.path.exists(zip_path):
+        return
+    raw_df, R, segments = ingest_sensor_logger_drive(zip_path)
+    np.testing.assert_allclose(R @ R.T, np.eye(3), atol=1e-6)
+    assert np.isclose(np.linalg.det(R), 1.0, atol=1e-6)
+    assert len(segments) > 10000
+    elev_span = segments['elevation_m'].max() - segments['elevation_m'].min()
+    assert elev_span > 110.0

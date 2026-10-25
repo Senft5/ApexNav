@@ -1,14 +1,14 @@
 # APEX NAV — CURRENT AGENT HANDOFF STATE
 
 ## Completed Milestones
-- [x] Single-file iOS SwiftUI + MapKit prototype (`ApexNavApp.swift`) with 3D pitched follow camera, destination search, random backroad loop generator, spoken pace notes, live 5m road-feel trail polyline painting, Barometer+GPS 3D elevation & road grade (%) HUD, G-meter HUD, and CSV drive logger.
-- [x] Automated GitHub Actions macOS `.ipa` build pipeline (`.github/workflows/build.yml` + `project.yml`) verified passing and `ApexNav.ipa` downloaded locally.
-- [x] Ported full 3x3 $SO(3)$ orthogonal mount rotation calibration matrix (`zeroMountCalibration()`) to `ApexNavApp.swift`.
-- [x] Real-world Sensor Logger drive log (`10069_Pebble_Ridge_Ln-2026-10-24_19-06-33.zip`, 147,333 100Hz samples, 28.5 km, 92.8m–215.3m 3D elevation) ingested via `ingest_sensor_logger_drive()` in `/core/kinematics.py`, auto-solving $\mathbf{R} \in SO(3)$ and generating 5,701 5.0m 3D road-feel segments (`pebble_ridge_5m_profile.csv`).
-- [x] 3D Elevation & Terrain Cockpit (`index.html` + `pebble_ridge_data.js`) with AWS Terrarium 3D DEM terrain mesh, 3D hillshade, 3D extruded telemetry curtain (`fill-extrusion`), interactive elevation profile scrubber, and full Pebble Ridge replay.
-- [x] Headless Python kinematics reference core (`/core/kinematics.py`) + invariant verification test suite (`/tests/test_invariants.py` passing both synthetic and real Pebble Ridge drive invariants).
-- [x] Subsystem JSON schema contracts (`/schemas/telemetry_contracts.json` updated with `elevation_m` and `grade_pct`).
+- [x] Product-grade unified 3D Cockpit (`web/index.html` + `web/vendor/maplibre-gl.*` + `tools/export_web_profile.py`) using verified keyless OpenFreeMap dark vector tiles, Esri World Imagery satellite hybrid toggle, AWS Terrarium 3D DEM terrain mesh (`1.5x` exaggeration + subtle hillshade), and draped 5m route ribbons with perceptual color ramps (G-Load, Elevation, Grade %, Camber $\phi$, Surface Roughness).
+- [x] Native iOS Thin Shell (`ApexNavApp.swift` + `project.yml` bundling `web/` folder reference) rendering the shared `web/index.html` cockpit full-screen via `WKWebView` and streaming 100Hz `CoreMotion` + `CMAltimeter` + `CoreLocation` telemetry at 10Hz via `window.apex.live(frame)`.
+- [x] Two real-world Sensor Logger drive logs ingested and verified:
+  - **Dry Ridge Rd** (`Dry_Ridge_Rd-2026-10-25_01-50-26.zip` $\to$ `web/data/dry_ridge.js`): 287,422 100Hz IMU samples (`48.0 min`), **11,451** 5.0m segments (`57.25 km`), `87.0m–212.0m` 3D elevation.
+  - **Pebble Ridge Ln** (`10069_Pebble_Ridge_Ln-2026-10-24_19-06-33.zip` $\to$ `web/data/pebble_ridge.js`): 147,333 100Hz IMU samples (`24.6 min`), **5,701** 5.0m segments (`28.50 km`), `92.8m–215.3m` 3D elevation.
+  - **Multi-Pass Repeatability Verified**: 6,211 overlapping 5.0m segments (`31.05 km` of repeated roads) between the two drives achieve a 3D elevation correlation of $r = 0.9956$ (`2.22m` mean absolute deviation).
+- [x] Headless Python kinematics reference core (`/core/kinematics.py`) + invariant verification test suite (`/tests/test_invariants.py` passing all 3 synthetic + real drive tests).
 
 ## Immediate Next Tasks for Active Agent
-1. **CarPlay Dashboard Extension**: Add a `WidgetKit` / `CPTemplateApplicationScene` target to `project.yml` for head-unit projection.
-2. **Multi-Pass Road Mesh Aggregation**: Aggregate multiple drives over the same 5m spatial segments to compute confidence intervals on true road camber $\phi$ and vertical crest unweighting.
+1. **Multi-Pass Road Mesh Fusion Layer**: Fuse overlapping 5m segments from `dry_ridge.js` and `pebble_ridge.js` into a consensus road-feel mesh with per-segment pass count and confidence intervals.
+2. **CarPlay Dashboard Extension**: Add a `WidgetKit` / `CPTemplateApplicationScene` target to `project.yml` for head-unit projection.
