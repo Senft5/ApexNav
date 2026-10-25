@@ -241,17 +241,27 @@ docs/SOCIAL.md.
 - Not built yet:  convoy, R2 backups.
 - `npm ci` needs `--legacy-peer-deps` (Cloudflare test plugin vs wrangler peers).
 
-## Session 2026-10-25 (j): espeak-ng (GPL) removal, work in progress
-- [x] `web/g2p.js` (new, no GPL): JS port of misaki's English dictionary G2P (Apache-2.0 data) + misaki's own BART
-  fallback for unknown words, run in plain JS. Data in `web/g2p/` built by `tools/g2p_export.py` (pinned misaki 0.9.4 wheel
-  sha256, pinned Hugging Face revisions).
-- [x] Measured offline (`tools/g2p_compare.py`, misaki+espeak only as a measuring tool): JS fallback is bit-identical to the
-  Python BART on 1,472 place-name words (both accents); JS vs Python misaki+BART on 1,436 US place names 99.1% exact.
-- **WIP / not yet done:** `web/g2p.js` is NOT wired into `web/voice.js` yet (LIVE still loads kokoro-js, which bundles
-  espeak-ng); no pytest yet; docs/VOICE.md and THIRD_PARTY_NOTICES.md not yet updated. In progress in this session.
+## Session 2026-10-25 (j): espeak-ng (GPL) removed from the shipped LIVE voice
+- [x] Found: `kokoro-js@1.2.1/dist/kokoro.web.js` (what LIVE loaded) inlines the espeak-ng WASM build via `phonemizer`; so the
+  whole bundle had to go, not just its phonemiser. Evidence and licences with URLs: docs/VOICE.md "Removing espeak-ng (GPL)".
+- [x] `web/voice.js` LIVE now loads transformers.js 3.5.1 directly (Apache-2.0) + Kokoro-82M v1.0 ONNX q8 (revision pinned) and
+  feeds it phonemes from the new `web/g2p.js`: JS port of misaki's English dictionary G2P + misaki's BART fallback for unknown
+  words run in plain JS. Data in `web/g2p/` (`tools/g2p_export.py`, sha/revision pinned) + `web/g2p/places.json` (hand-written
+  names the fallback gets wrong: Mulholland, Tellico so far). A failed phrase no longer blocks the render queue.
+- [x] Measured (`tools/g2p_compare.py`, misaki+espeak only as an offline ruler): JS BART = Python BART on 1,472 words; JS = Python
+  misaki+BART on 99.3 % of 1,436 US place names (rest = our St.→Saint); pace calls identical to the espeak reference; place names
+  62–65 % exact vs espeak (PER 8–10 %), all in out-of-dictionary words, neither side ground truth.
+- [x] Browser end to end (headless Chromium, George + Michael, 5 phrases): Whisper transcripts identical to Python espeak-based renders
+  on 10/10. Load ~7.5 s, 6–10 s per phrase here; coordinator measured 10–17 s (8–13 s with threads) → background prefetch only.
+- [x] `tests/test_g2p.py` (5 tests): 28 phrases against verified phonemes (GB + US), fallback parity, Kokoro vocabulary, and a guard
+  that nothing under web/ loads kokoro-js / phonemizer / espeak-ng.
+### Unverified
+- Nobody has listened to the new LIVE renders; not tried on a real phone or in the iOS WKWebView (WASM + 9 MB extra G2P download).
+- misaki dictionary provenance undocumented; BART licence only in model-card metadata: lawyer review before charging.
+- Heteronyms use the dictionary default (no POS tagger); `places.json` entries are agent-written, not checked by ear.
 
 ## Exact Next Task
 1. Owner: Google client + Worker secrets; then sign in at the site and make the first invites.
 2. Get the Workers Builds log and fix the preview/production build; merge PR #10.
-3. Live contribution streaming from DRIVE mode; honest LIVE voice status (explain slow/failed, default off on phones); try DRIVE mode on a real phone; espeak-ng removal (voice agent, see docs/VOICE.md when it finishes). Then reward measured-good (banked, smooth) stretches too once there is enough real data to calibrate; verify the contributor against live Valhalla/Overpass with a real recording; convoy (Durable Objects).
-4. Voice (on hold): in-app enrollment design in docs/VOICE.md; replace the espeak-ng dependency.
+3. Live contribution streaming from DRIVE mode; honest LIVE voice status (explain slow/failed, default off on phones); try DRIVE mode on a real phone; LIVE voice: owner listens to a few live renders (route names) and adds mispronounced names to web/g2p/places.json; try LIVE on a phone. Then reward measured-good (banked, smooth) stretches too once there is enough real data to calibrate; verify the contributor against live Valhalla/Overpass with a real recording; convoy (Durable Objects).
+4. Voice (on hold): in-app enrollment design in docs/VOICE.md. (espeak-ng dependency removed; lawyer check of misaki/BART provenance before charging.)

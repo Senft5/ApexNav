@@ -12,14 +12,14 @@
 // See docs/VOICE.md "Removing espeak-ng (GPL)" and tests/test_g2p.py.
 (function (root) {
   'use strict';
-  const PRIMARY = 'ˈ', SECONDARY = 'ˌ';
-  const VOWELS = new Set('AIOQWYaiuæɑɒɔəɛɜɪʊʌᵻ');
-  const CONSONANTS = new Set('bdfhjklmnpstvwzðŋɡɹɾʃʒʤʧθ');
-  const DIPHTHONGS = new Set('AIOQWYʤʧ');
-  const PUNCTS = new Set(';:,.!?—…"“”');
-  const NON_QUOTE_PUNCTS = new Set(';:,.!?—…');
-  const JUNKS = new Set("',-._‘’/");
-  const US_TAUS = new Set('AIOWYiuæɑəɛɪɹʊʌ');
+  const PRIMARY = '\u02c8', SECONDARY = '\u02cc';
+  const VOWELS = new Set('AIOQWYaiu\u00e6\u0251\u0252\u0254\u0259\u025b\u025c\u026a\u028a\u028c\u1d7b');
+  const CONSONANTS = new Set('bdfhjklmnpstvwz\u00f0\u014b\u0261\u0279\u027e\u0283\u0292\u02a4\u02a7\u03b8');
+  const DIPHTHONGS = new Set('AIOQWY\u02a4\u02a7');
+  const PUNCTS = new Set(';:,.!?\u2014\u2026"\u201c\u201d');
+  const NON_QUOTE_PUNCTS = new Set(';:,.!?\u2014\u2026');
+  const JUNKS = new Set("',-._\u2018\u2019/");
+  const US_TAUS = new Set('AIOWYiu\u00e6\u0251\u0259\u025b\u026a\u0279\u028a\u028c');
   const SYMBOLS = { '%': 'percent', '&': 'and', '+': 'plus', '@': 'at' };
   const ORDINALS = new Set(['st', 'nd', 'rd', 'th']);
   const isAlpha = (s) => s.length > 0 && /^\p{L}+$/u.test(s);
@@ -83,7 +83,7 @@
 
   // ---- lexicon (misaki Lexicon, untagged) --------------------------------------
   class Lexicon {
-    constructor(data, british) { this.g = data.gold; this.s = data.silver; this.british = british; }
+    constructor(data, british, places) { this.g = data.gold; this.s = data.silver; this.british = british; this.places = places || {}; }
     // misaki grow_dictionary: "word" also answers "Word" and "Word" also answers "word"; exact keys win.
     static get(d, w) {
       if (Object.prototype.hasOwnProperty.call(d, w)) return d[w];
@@ -106,16 +106,16 @@
       const core = word.replace(/^\.+|\.+$/g, '');
       if (core.includes('.') && isAlpha(word.replaceAll('.', '')) && Math.max(...word.split('.').map(s => s.length)) < 3) return this.getNNP(word);
       if (tag === 'NNP') return [null, null];
-      if (word === 'a' || word === 'A') return ['ɐ', 4];
+      if (word === 'a' || word === 'A') return ['\u0250', 4];
       if (word === 'am' || word === 'Am' || word === 'AM') {
         if (ctx.futureVowel == null || word !== 'am' || (stress && stress > 0)) return [this.gold('am'), 4];
-        return ['ɐm', 4];
+        return ['\u0250m', 4];
       }
-      if (word === 'an' || word === 'An' || word === 'AN') return ['ɐn', 4];
+      if (word === 'an' || word === 'An' || word === 'AN') return ['\u0250n', 4];
       if (word === 'I') return [`${SECONDARY}I`, 4];
-      if (word === 'to' || word === 'To') return [ctx.futureVowel == null ? this.gold('to') : ctx.futureVowel ? 'tʊ' : 'tə', 4];
-      if (word === 'in' || word === 'In') return [(ctx.futureVowel == null ? PRIMARY : '') + 'ɪn', 4];
-      if (word === 'the' || word === 'The') return [ctx.futureVowel === true ? 'ði' : 'ðə', 4];
+      if (word === 'to' || word === 'To') return [ctx.futureVowel == null ? this.gold('to') : ctx.futureVowel ? 't\u028a' : 't\u0259', 4];
+      if (word === 'in' || word === 'In') return [(ctx.futureVowel == null ? PRIMARY : '') + '\u026an', 4];
+      if (word === 'the' || word === 'The') return [ctx.futureVowel === true ? '\u00f0i' : '\u00f0\u0259', 4];
       if (/^vs\.?$/i.test(word)) return this.lookup('versus', null, null, ctx);
       return [null, null];
     }
@@ -144,7 +144,7 @@
       }
       return [applyStress(ps, stress), rating];
     }
-    _s(st) { if (!st) return null; const c = st.at(-1); return 'ptkfθ'.includes(c) ? st + 's' : 'szʃʒʧʤ'.includes(c) ? st + (this.british ? 'ɪ' : 'ᵻ') + 'z' : st + 'z'; }
+    _s(st) { if (!st) return null; const c = st.at(-1); return 'ptkf\u03b8'.includes(c) ? st + 's' : 'sz\u0283\u0292\u02a7\u02a4'.includes(c) ? st + (this.british ? '\u026a' : '\u1d7b') + 'z' : st + 'z'; }
     stemS(word, tag, stress, ctx) {
       if (word.length < 3 || !word.endsWith('s')) return [null, null];
       let stem;
@@ -158,12 +158,12 @@
     _ed(st) {
       if (!st) return null;
       const c = st.at(-1);
-      if ('pkfθʃsʧ'.includes(c)) return st + 't';
-      if (c === 'd') return st + (this.british ? 'ɪ' : 'ᵻ') + 'd';
+      if ('pkf\u03b8\u0283s\u02a7'.includes(c)) return st + 't';
+      if (c === 'd') return st + (this.british ? '\u026a' : '\u1d7b') + 'd';
       if (c !== 't') return st + 'd';
-      if (this.british || st.length < 2) return st + 'ɪd';
-      if (US_TAUS.has(st.at(-2))) return st.slice(0, -1) + 'ɾᵻd';
-      return st + 'ᵻd';
+      if (this.british || st.length < 2) return st + '\u026ad';
+      if (US_TAUS.has(st.at(-2))) return st.slice(0, -1) + '\u027e\u1d7bd';
+      return st + '\u1d7bd';
     }
     stemEd(word, tag, stress, ctx) {
       if (word.length < 4 || !word.endsWith('d')) return [null, null];
@@ -176,9 +176,9 @@
     }
     _ing(st) {
       if (!st) return null;
-      if (this.british) { if ('əː'.includes(st.at(-1))) return null; }
-      else if (st.length > 1 && st.at(-1) === 't' && US_TAUS.has(st.at(-2))) return st.slice(0, -1) + 'ɾɪŋ';
-      return st + 'ɪŋ';
+      if (this.british) { if ('\u0259\u02d0'.includes(st.at(-1))) return null; }
+      else if (st.length > 1 && st.at(-1) === 't' && US_TAUS.has(st.at(-2))) return st.slice(0, -1) + '\u027e\u026a\u014b';
+      return st + '\u026a\u014b';
     }
     stemIng(word, tag, stress, ctx) {
       if (word.length < 5 || !word.endsWith('ing')) return [null, null];
@@ -191,6 +191,8 @@
       return [this._ing(p), r];
     }
     getWord(word, tag, stress, ctx) {
+      // App place-name lexicon (web/g2p/places.json): hand-written names the fallback gets wrong.
+      if (Object.prototype.hasOwnProperty.call(this.places, word)) return [this.places[word], 5];
       const sc = this.specialCase(word, tag, stress, ctx);
       if (sc[0] != null) return sc;
       const wl = lower(word);
@@ -232,7 +234,7 @@
     }
     // misaki Lexicon.__call__
     word(text, tag, ctx) {
-      let word = text.replace(/[‘’]/g, "'").normalize('NFKC');
+      let word = text.replace(/[\u2018\u2019]/g, "'").normalize('NFKC');
       const stress = word === lower(word) ? null : word === upper(word) ? 2 : 0.5;
       const [ps] = this.getWord(word, tag, stress, ctx);
       if (ps != null) return ps;
@@ -347,23 +349,29 @@
   // ---- text -> tokens (spaCy-free stand-in for misaki's tokenize/retokenize) -----
   const ABBREV = { Hwy: 'Highway', Pkwy: 'Parkway', Rd: 'Road', Ave: 'Avenue', Blvd: 'Boulevard', Mt: 'Mount', Ln: 'Lane', Fwy: 'Freeway', Expy: 'Expressway', Tpke: 'Turnpike' };
   function normalize(text) {
-    return text.replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/\(/g, '“').replace(/\)/g, '”').replace(/[–]/g, '-')
+    return text.replace(/[\u2018\u2019]/g, "'").replace(/[\u201c\u201d]/g, '"').replace(/\(/g, '\u201c').replace(/\)/g, '\u201d').replace(/[\u2013]/g, '-')
       .replace(/\b(Hwy|Pkwy|Rd|Ave|Blvd|Mt|Ln|Fwy|Expy|Tpke)\b\.?/g, (_, a) => ABBREV[a])
       .replace(/\bSt\b\.?(?= [A-Z][a-z])/g, 'Saint').replace(/\bSt\b\.?/g, 'Street').replace(/\bDr\b\.?(?=\s*[,.;]|\s*$)/g, 'Drive')
       .replace(/\b([A-Z]{1,3})-(\d{1,4})\b/g, '$1 $2')
       .replace(/(?<=\d),(?=\d{3}\b)/g, '').replace(/[^\S\n]+/g, ' ').replace(/\s*\n\s*/g, ' ').trim();
   }
-  const SUBTOKEN = /^['‘’]+|\p{Lu}(?=\p{Lu}\p{Ll})|(?:^-)?(?:\d?[,.]?\d)+|[-_]+|['‘’]{2,}|\p{L}*?(?:['‘’]\p{L})*?\p{Ll}(?=\p{Lu})|\p{L}+(?:['‘’]\p{L})*|[^-_\p{L}'‘’\d]|['‘’]+$/gu;
+  const SUBTOKEN = /^['\u2018\u2019]+|\p{Lu}(?=\p{Lu}\p{Ll})|(?:^-)?(?:\d?[,.]?\d)+|[-_]+|['\u2018\u2019]{2,}|\p{L}*?(?:['\u2018\u2019]\p{L})*?\p{Ll}(?=\p{Lu})|\p{L}+(?:['\u2018\u2019]\p{L})*|[^-_\p{L}'\u2018\u2019\d]|['\u2018\u2019]+$/gu;
   const subtokenize = (w) => [...w.matchAll(SUBTOKEN)].map(m => m[0]).filter(Boolean);
-  const EDGE = /^[;:,.!?—…"“”]+|[;:,.!?—…"“”]+$/g;
+  const EDGE = /^[;:,.!?\u2014\u2026"\u201c\u201d]+|[;:,.!?\u2014\u2026"\u201c\u201d]+$/g;
   function tokenize(text) {
     const toks = [];
     for (const m of text.matchAll(/(\S+)(\s*)/g)) {
       const chunk = m[1], ws = m[2] ? ' ' : '';
-      const lead = chunk.match(/^[;:,.!?—…"“”]+/), trail = chunk.match(/[;:,.!?—…"“”]+$/);
+      const lead = chunk.match(/^[;:,.!?\u2014\u2026"\u201c\u201d]+/);
+      let trail = chunk.match(/[;:,.!?\u2014\u2026"\u201c\u201d]+$/);
       if (lead && lead[0] === chunk) { toks.push({ punct: true, text: chunk, ws }); continue; }
-      if (chunk === '-' || chunk === '--') { toks.push({ punct: true, text: '—', ws }); continue; }
-      const core = chunk.replace(EDGE, '');
+      if (chunk === '-' || chunk === '--') { toks.push({ punct: true, text: '\u2014', ws }); continue; }
+      let core = chunk.replace(EDGE, '');
+      // initials keep their dot ("H.", "J.F."), as spaCy does: the dot is silent there.
+      if (trail && trail[0].startsWith('.') && /^(?:[A-Za-z]\.)*[A-Za-z]$/.test(core)) {
+        core += '.'; trail[0] = trail[0].slice(1);
+        if (!trail[0]) trail = null;
+      }
       if (lead) toks.push({ punct: true, text: lead[0], ws: '' });
       toks.push({ text: core, ws: trail ? '' : ws });
       if (trail) toks.push({ punct: true, text: trail[0], ws });
@@ -399,8 +407,9 @@
     for (const [, , i] of idx) w[i].ps = applyStress(w[i].ps, -0.5);
   }
 
-  function create({ lexicon, british, fallback = null, fallbackMeta = null }) {
-    const lex = new Lexicon(lexicon, !!british);
+  function create({ lexicon, british, fallback = null, fallbackMeta = null, places = null }) {
+    const acc = british ? 'gb' : 'us';
+    const lex = new Lexicon(lexicon, !!british, places && Object.fromEntries(Object.entries(places.words || {}).filter(([, v]) => v[acc]).map(([k, v]) => [k, v[acc]])));
     const bart = fallback && fallbackMeta ? new Bart(fallback, fallbackMeta) : null;
     const fb = (text) => bart ? bart.phonemize(text) : null;
     // Returns { phonemes, oov: [words voiced by the fallback], unknown: [words not voiced at all] }.
@@ -454,7 +463,7 @@
         ctx = tokenContext(ctx, tk.ps, tk.text);
       }
       // Kokoro v1.0 tokens: flap as T, glottal stop as t (misaki, version != 2.0).
-      const phonemes = toks.map(t => (t.ps || '').replaceAll('ɾ', 'T').replaceAll('ʔ', 't') + t.ws).join('').trim();
+      const phonemes = toks.map(t => (t.ps || '').replaceAll('\u027e', 'T').replaceAll('\u0294', 't') + t.ws).join('').trim();
       return { phonemes, oov, unknown };
     }
     return { phonemize, word: (w) => lex.word(w, null, { futureVowel: null, futureTo: false }), fallback: fb, british: !!british };
@@ -468,7 +477,8 @@
       fetch(`${base}en_${accent}_lexicon.json`).then(r => { if (!r.ok) throw new Error('g2p lexicon'); return r.json(); }),
       fetch(`${base}en_${accent}_fallback.safetensors`).then(r => { if (!r.ok) throw new Error('g2p fallback'); return r.arrayBuffer(); }),
       fetch(`${base}en_${accent}_fallback.json`).then(r => { if (!r.ok) throw new Error('g2p fallback meta'); return r.json(); }),
-    ]).then(([lexicon, fallback, fallbackMeta]) => create({ lexicon, british: accent === 'gb', fallback, fallbackMeta }));
+      fetch(`${base}places.json`).then(r => r.ok ? r.json() : null).catch(() => null),
+    ]).then(([lexicon, fallback, fallbackMeta, places]) => create({ lexicon, british: accent === 'gb', fallback, fallbackMeta, places }));
     cache.set(accent, p);
     p.catch(() => cache.delete(accent));
     return p;

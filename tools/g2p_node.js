@@ -6,7 +6,8 @@ const G = require(path.join(repo, 'web/g2p.js'));
 const d = path.join(repo, 'web/g2p');
 const buf = fs.readFileSync(path.join(d, `en_${acc}_fallback.safetensors`));
 const g = G.create({ lexicon: JSON.parse(fs.readFileSync(path.join(d, `en_${acc}_lexicon.json`))), british: acc === 'gb',
-  fallback: buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.length), fallbackMeta: JSON.parse(fs.readFileSync(path.join(d, `en_${acc}_fallback.json`))) });
+  fallback: buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.length), fallbackMeta: JSON.parse(fs.readFileSync(path.join(d, `en_${acc}_fallback.json`))),
+  places: process.env.G2P_NO_PLACES ? null : JSON.parse(fs.readFileSync(path.join(d, 'places.json'))) });
 const texts = JSON.parse(fs.readFileSync(0, 'utf8'));
 const mode = process.argv[4] || 'phrase';
 const out = texts.map(t => mode === 'fallback' ? g.fallback(t) : g.phonemize(t));

@@ -1,0 +1,7 @@
+{
+ "about": "ApexNav place-name lexicon for web/g2p.js, checked before the misaki dictionaries. Hand-written in misaki phonemes (docs/VOICE.md, misaki EN_PHONES.md) for names the BART fallback gets wrong. Exact word match, case-sensitive. Each entry must be checked by ear before it ships to users; 'checked' says who did.",
+ "words": {
+  "Mulholland": {"us": "mʌlhˈɑlənd", "gb": "mʌlhˈɒlənd", "checked": "agent, from the common pronunciation mul-HOL-and; not yet heard"},
+  "Tellico": {"us": "tˈɛlɪkˌO", "gb": "tˈɛlɪkˌQ", "checked": "agent, TELL-ih-coh as used in Tellico Plains TN; not yet heard"}
+ }
+}

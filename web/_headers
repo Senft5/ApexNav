@@ -17,3 +17,6 @@
 
 /data/*
   Cache-Control: public, max-age=3600
+
+/g2p/*
+  Cache-Control: public, max-age=604800

@@ -21,6 +21,7 @@ import subprocess
 import sys
 
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+NOPLACES = {**os.environ, "G2P_NO_PLACES": "1"}  # measure the misaki port alone, not the app place list
 
 # Driving roads and places a US user will name (hand-picked; mostly out of the dictionary).
 ROADS = ["Tail of the Dragon", "Deals Gap", "Cherohala Skyway", "Blue Ridge Parkway", "Moonshiner 28",
@@ -119,7 +120,7 @@ def main():
             ref_es = [g_es(t)[0].strip() for t in items]
             ref_bt = [g_bt(t)[0].strip() for t in items]
             js = json.loads(subprocess.run(["node", f"{REPO}/tools/g2p_node.js", REPO, acc], input=json.dumps(items),
-                                           capture_output=True, text=True, check=True).stdout)
+                                           capture_output=True, text=True, check=True, env=NOPLACES).stdout)
             js = [r["phonemes"] for r in js]
             report[f"{acc}/{name}"] = {"js_vs_ref_bart": stats(ref_bt, js), "js_vs_ref_espeak": stats(ref_es, js),
                                        "ref_bart_vs_ref_espeak": stats(ref_es, ref_bt)}
@@ -127,7 +128,7 @@ def main():
                 words = sorted({w for t in items for w in t.split() if re.fullmatch(r"[A-Za-z]+", w)})[:1500]
                 pyb = [bart.word(w) for w in words]
                 jsb = json.loads(subprocess.run(["node", f"{REPO}/tools/g2p_node.js", REPO, acc, "fallback"],
-                                                input=json.dumps(words), capture_output=True, text=True, check=True).stdout)
+                                                input=json.dumps(words), capture_output=True, text=True, check=True, env=NOPLACES).stdout)
                 report[f"{acc}/fallback_words"] = {"js_bart_vs_py_bart": stats(pyb, jsb)}
             if args.out:
                 with open(f"{args.out}.{acc}.{name}.json", "w") as f:
