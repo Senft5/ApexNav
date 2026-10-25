@@ -241,6 +241,15 @@ docs/SOCIAL.md.
 - Not built yet:  convoy, R2 backups.
 - `npm ci` needs `--legacy-peer-deps` (Cloudflare test plugin vs wrangler peers).
 
+## Session 2026-10-25 (j): espeak-ng (GPL) removal, work in progress
+- [x] `web/g2p.js` (new, no GPL): JS port of misaki's English dictionary G2P (Apache-2.0 data) + misaki's own BART
+  fallback for unknown words, run in plain JS. Data in `web/g2p/` built by `tools/g2p_export.py` (pinned misaki 0.9.4 wheel
+  sha256, pinned Hugging Face revisions).
+- [x] Measured offline (`tools/g2p_compare.py`, misaki+espeak only as a measuring tool): JS fallback is bit-identical to the
+  Python BART on 1,472 place-name words (both accents); JS vs Python misaki+BART on 1,436 US place names 99.1% exact.
+- **WIP / not yet done:** `web/g2p.js` is NOT wired into `web/voice.js` yet (LIVE still loads kokoro-js, which bundles
+  espeak-ng); no pytest yet; docs/VOICE.md and THIRD_PARTY_NOTICES.md not yet updated. In progress in this session.
+
 ## Exact Next Task
 1. Owner: Google client + Worker secrets; then sign in at the site and make the first invites.
 2. Get the Workers Builds log and fix the preview/production build; merge PR #10.
