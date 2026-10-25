@@ -55,7 +55,7 @@
     }
     let placed = [];
     const marks = d.corners.map((c, k) => { const [px, py] = P(c.apex); if (placed.some(([qx, qy]) => Math.hypot(qx - px, qy - py) < 13)) return `<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="2.2" fill="${C.signal}"/>`; placed.push([px, py]); return `<g data-k="${k}" style="cursor:pointer"><circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="8" fill="${C.panel}" stroke="${C.signal}" stroke-width="1.6"/><text x="${px.toFixed(1)}" y="${(py + 3.2).toFixed(1)}" text-anchor="middle" font-size="9" font-weight="700" fill="${C.panelInk}">${k + 1}</text></g>`; }).join('');
-    mapBox.innerHTML = `<svg viewBox="0 0 ${MW} ${MH}" role="img" aria-label="Route map coloured by speed">${segs}<polyline id="dvWin" fill="none" stroke="${C.panelInk}" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" opacity="0.28"/>${marks}<circle id="dvDot" r="6" fill="${C.accent}" stroke="${C.panel}" stroke-width="2"/></svg>
+    mapBox.innerHTML = `<svg viewBox="0 0 ${MW} ${MH}" role="img" aria-label="Route map coloured by speed, ${d.corners.length} corners">${segs}<polyline id="dvWin" fill="none" stroke="${C.panelInk}" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" opacity="0.28"/>${marks}<circle id="dvDot" r="6" fill="${C.accent}" stroke="${C.panel}" stroke-width="2"/></svg>
       <div class="dv-legend"><span>slow</span><i style="background:linear-gradient(90deg,${colorAt(0)},${colorAt(vmax)})"></i><span>${Math.round(vmax * MPH)} mph</span></div>`;
     const dot = mapBox.querySelector('#dvDot');
 
@@ -133,6 +133,7 @@
     function move(i) {
       i = Math.max(0, Math.min(n - 1, Math.round(i))); state.i = i;
       const hair = lanes.querySelector('#dvHair'); if (hair && geo) { const gx = geo.X(i); hair.setAttribute('x1', gx); hair.setAttribute('x2', gx); hair.style.display = i < state.v0 || i > state.v1 ? 'none' : ''; }
+      lanes.setAttribute('aria-valuenow', i); lanes.setAttribute('aria-valuetext', `${(d.dist[i] / 1609.344).toFixed(2)} miles, ${Math.round(d.speed_mps[i] * MPH)} miles per hour`);
       const [px, py] = P(i); dot.setAttribute('cx', px); dot.setAttribute('cy', py);
       const k = cornerAt(i), c = k >= 0 ? d.corners[k] : null;
       const cell = (label, v) => `<div><b>${v}</b><span>${label}</span></div>`;
@@ -149,8 +150,8 @@
     lanes.addEventListener('pointerdown', (e) => { drag = true; lanes.setPointerCapture(e.pointerId); move(idxFromEvent(e)); });
     lanes.addEventListener('pointermove', (e) => { if (drag || e.pointerType === 'mouse') move(idxFromEvent(e)); });
     lanes.addEventListener('pointerup', () => { drag = false; });
-    lanes.addEventListener('keydown', (e) => { if (e.key === 'ArrowRight') move(state.i + 5); if (e.key === 'ArrowLeft') move(state.i - 5); });
-    lanes.tabIndex = 0;
+    lanes.addEventListener('keydown', (e) => { const big = e.shiftKey ? 50 : 5; if (e.key === 'ArrowRight') { e.preventDefault(); move(state.i + big); } if (e.key === 'ArrowLeft') { e.preventDefault(); move(state.i - big); } if (e.key === 'Home') move(state.v0); if (e.key === 'End') move(state.v1); });
+    lanes.tabIndex = 0; lanes.setAttribute('role', 'slider'); lanes.setAttribute('aria-label', 'Position along the drive'); lanes.setAttribute('aria-valuemin', 0); lanes.setAttribute('aria-valuemax', n - 1);
     mapBox.addEventListener('click', (e) => { const g = e.target.closest('[data-k]'); if (g) move(d.corners[+g.dataset.k].apex); });
 
     // ---- corner list -----------------------------------------------------------------------------------------------
@@ -159,7 +160,7 @@
     list.innerHTML = `<h2>Corners${ref ? ` · compared with ${ref.name} (score ${ref.score}), your best other drive on this road` : ''}</h2>` + (ref ? `<p class="note" style="margin-bottom:8px">${net == null ? 'No clean corners to compare.' : `Over the ${d.corners.map((_, k) => lost(k)).filter((x) => x != null).length} corners both drives took cleanly, this drive was <b class="${net > 0.05 ? 'loss' : net < -0.05 ? 'gain' : ''}">${fmtD(net)}</b> ${net > 0 ? 'slower' : 'faster'}. Stops and traffic are left out.`}</p>` : '');
     const grid2 = el('div', 'dv-corners');
     d.corners.forEach((c, k) => {
-      const r = el('button', 'dv-corner');
+      const r = el('button', 'dv-corner'); r.setAttribute('aria-label', `Corner ${k + 1}: ${c.call || c.code}, apex ${Math.round(c.apex_mps * MPH)} miles per hour`);
       r.innerHTML = `<b>${k + 1}</b><span class="dv-call">${(c.call || c.code || '').toString()}</span><span class="dv-v">${Math.round(c.apex_mps * MPH)} mph</span><span class="dv-d">${(d.dist[c.apex] / 1609.344).toFixed(2)} mi${ref ? ` · <em class="${lost(k) == null ? '' : lost(k) > 0.05 ? 'loss' : lost(k) < -0.05 ? 'gain' : ''}">${fmtD(lost(k))}</em>` : ''}</span>`;
       r.onclick = () => { if (zoomM) setZoom(zoomM, c.apex); move(c.apex); lanes.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); };
       grid2.append(r);
@@ -177,7 +178,7 @@
       zoom.querySelectorAll('button').forEach((b) => b.classList.toggle('on', +b.dataset.m === m));
       draw();
     }
-    ZOOMS.forEach(([label, m]) => { const b = el('button', 'dv-z', label); b.dataset.m = m; b.onclick = () => setZoom(m); zoom.append(b); });
+    ZOOMS.forEach(([label, m]) => { const b = el('button', 'dv-z', label); b.dataset.m = m; b.onclick = () => setZoom(m); b.setAttribute('aria-label', label === 'ALL' ? 'Zoom: whole drive' : `Zoom: ${label.toLowerCase()} window`); zoom.append(b); });
     const pan = (dir) => { if (zoomM) setZoom(zoomM, Math.round((state.v0 + state.v1) / 2 + dir * (state.v1 - state.v0) * 0.6)); };
     const prev = el('button', 'dv-z', '◀'), next = el('button', 'dv-z', '▶'); prev.setAttribute('aria-label', 'Earlier'); next.setAttribute('aria-label', 'Later');
     prev.onclick = () => pan(-1); next.onclick = () => pan(1); zoom.append(prev, next);

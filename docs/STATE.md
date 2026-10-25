@@ -227,6 +227,7 @@ docs/SOCIAL.md.
 - [x] Analysis step 2: **Road feel lane** on the Drive tab (members only): banking bars and roughness line from `/api/roads` along the drive, gaps shown as gaps (unknown, not zero); readout adds banking/roughness/passes. `ApexContributor.measuredSeries`. Verified in a browser with mocked Valhalla/Overpass/roads replies (mock data only, never shipped).
 - [x] Analysis step 3: corner list on the Drive tab compares each corner against your best-scoring other drive on the same road (`Core.compareDrives`, needs >= 30% shared road and 3 clean corners); stopped corners excluded; net seconds shown in the heading and per corner. Checked with the two shipped examples.
 - [x] Analysis step 4: "This road over time" on the Drive tab: every drive sharing >= 30% of the road, score chart by date, per-drive net corner seconds vs the one you are viewing, change in points first to latest.
+- [x] Analysis accessibility pass: tablist/tab/tabpanel roles with arrow/Home/End keys, labelled selects and inputs, focus-visible outline, reduced-motion respected, the drive scrubber is a keyboard slider (arrows, Shift = 10x, Home/End) with spoken position and speed, labelled zoom and corner buttons. Checked by keyboard in a browser. Not yet tried with a real screen reader.
 - [x] **76 backend tests** (privacy, auth, highlights, contribute, nightly, account) + 53 pytest.
 ### Active bugs / limitations
 - **Cloudflare "Workers Builds: apexnav" preview build fails on PR commits** while all GitHub Actions pass; a clean-checkout `wrangler deploy --dry-run` succeeds. Docs say a D1 binding needs only Editor access, so a token problem is unlikely. Need the build log text (dashboard > apexnav > Builds). Production deploy of main after merge may fail; the previous deployment stays live.
@@ -237,5 +238,5 @@ docs/SOCIAL.md.
 ## Exact Next Task
 1. Owner: Google client + Worker secrets; then sign in at the site and make the first invites.
 2. Get the Workers Builds log and fix the preview/production build; merge PR #10.
-3. Analysis polish: tidy History/Compare tabs to match the Drive tab; keyboard/screen-reader pass; empty states. Then reward measured-good (banked, smooth) stretches too once there is enough real data to calibrate; verify the contributor against live Valhalla/Overpass with a real recording; convoy (Durable Objects).
+3. Analysis polish: tidy History/Compare tabs to match the Drive tab; try a real screen reader; empty states. Then reward measured-good (banked, smooth) stretches too once there is enough real data to calibrate; verify the contributor against live Valhalla/Overpass with a real recording; convoy (Durable Objects).
 4. Voice (on hold): in-app enrollment design in docs/VOICE.md; replace the espeak-ng dependency.
