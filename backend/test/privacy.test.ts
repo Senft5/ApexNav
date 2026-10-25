@@ -222,6 +222,35 @@ describe("invites", () => {
     expect((await api(other, "GET", "/api/friends")).status).toBe(403);
   });
 
+  it("redeeming an invite makes you friends with whoever invited you, with sharing still off", async () => {
+    const owner = await makeUser("owner"), newbie = await makeUser("newbie", false);
+    const { token } = (await (await ok(api(owner, "POST", "/api/invites"))).json()) as { token: string };
+    await ok(api(newbie, "POST", "/api/invites/redeem", { token }));
+    const mine = (await (await ok(api(newbie, "GET", "/api/friends"))).json()) as { handle: string; status: string }[];
+    expect(mine).toEqual([expect.objectContaining({ handle: "owner", status: "accepted" })]);
+    expect(await (await ok(api(owner, "GET", "/api/friends"))).json()).toEqual([expect.objectContaining({ handle: "newbie", status: "accepted" })]);
+    expect(await (await ok(api(newbie, "GET", "/api/grants"))).json()).toEqual([]);                 // nothing is shared by default
+    expect(await (await ok(api(owner, "GET", "/api/grants"))).json()).toEqual([]);
+    const seg = await makeSegment(owner);
+    await ok(api(owner, "POST", "/api/board", { segment_id: seg, driver_score: 700, driven_on: "2026-10-20" }));
+    expect(await (await ok(api(newbie, "GET", `/api/board/${seg}`))).json()).toEqual([]);          // friends, but they see nothing until a grant exists
+  });
+
+  it("an invite completes a friend request that was already waiting", async () => {
+    const owner = await makeUser("owner"), newbie = await makeUser("newbie", false);
+    const { token } = (await (await ok(api(owner, "POST", "/api/invites"))).json()) as { token: string };
+    await ok(api(newbie, "POST", "/api/invites/redeem", { token }));
+    await ok(api(newbie, "POST", "/api/friends/request", { handle: "owner" }));                       // already friends: harmless
+    expect(((await (await ok(api(owner, "GET", "/api/friends"))).json()) as unknown[]).length).toBe(1);
+  });
+
+  it("the number of waiting friend requests is on /api/me", async () => {
+    const [a, b] = [await makeUser("alice"), await makeUser("bob")];
+    await ok(api(b, "POST", "/api/friends/request", { handle: "alice" }));
+    expect(((await (await ok(api(a, "GET", "/api/me"))).json()) as { requests: number }).requests).toBe(1);
+    expect(((await (await ok(api(b, "GET", "/api/me"))).json()) as { requests: number }).requests).toBe(0);
+  });
+
   it("an expired invite is refused", async () => {
     const owner = await makeUser("owner"), newbie = await makeUser("newbie", false);
     const { token } = (await (await ok(api(owner, "POST", "/api/invites"))).json()) as { token: string };

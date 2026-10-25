@@ -28,7 +28,11 @@ on("POST", "/api/auth/logout", (req, env) => logout(req, env));
 
 on("GET", "/api/me", async (req, env) => {
   const v = await viewer(req, env);
-  return v ? json({ signed_in: true, id: v.id, handle: v.handle, name: v.displayName, member: v.member }) : json({ signed_in: false });
+  if (!v) return json({ signed_in: false });
+  // incoming friend requests: lets the app show a badge on the Crew tab without a second call
+  const waiting = v.member ? await env.DB.prepare(
+    "SELECT COUNT(*) AS n FROM friendships WHERE status = 'pending' AND requested_by != ?1 AND (user_a = ?1 OR user_b = ?1)").bind(v.id).first<{ n: number }>() : null;
+  return json({ signed_in: true, id: v.id, handle: v.handle, name: v.displayName, member: v.member, requests: waiting?.n ?? 0 });
 });
 on("POST", "/api/invites/redeem", async (req, env) => { await redeemInvite(env, await requireUser(req, env), req); return noContent(); });
 on("POST", "/api/invites", async (req, env) => json(await createInvite(env, await requireMember(req, env), req), 201));
