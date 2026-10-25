@@ -151,3 +151,63 @@ def test_remove_spurs_cuts_dead_end_out_and_back():
                          input=json.dumps({"lat": lat2.tolist(), "lon": lon2.tolist()}), capture_output=True, text=True, check=True)
     r = json.loads(out.stdout)
     assert r["removed"] >= 15 and len(r["lat"]) <= len(lat) + 1
+
+
+def test_parity_driver_score_and_segments_on_real_drives():
+    from core import drive_analysis as da
+    paths = ["web/data/pebble_ridge.js", "web/data/dry_ridge.js"]
+    if not all(os.path.exists(p) for p in paths):
+        pytest.skip("no shipped drive data")
+    drives = []
+    for path in paths:
+        text = open(path, encoding="utf-8").read()
+        d = json.loads(text[text.index("push(") + 5:text.rindex(");")])
+        f = {name: i for i, name in enumerate(d["fields"])}
+        col = lambda k: [r[f[k]] for r in d["rows"]]
+        lim = [None if v is None else v / 3.6 for v in col("limit_kph")]
+        drives.append({"lat": col("lat"), "lon": col("lon"), "speed_mps": [v / 2.2369362921 for v in col("speed_mph")],
+                       "lon_g": col("lon_g"), "lat_g": col("lat_g"), "limit_mps": lim,
+                       "corners": [{"start": int(round(e["start_m"] / 5)), "end": int(round(e["end_m"] / 5)), "apex": e["index"],
+                                    "apex_mps": e["apex_mph"] / 2.2369362921} for e in d["events"] if e["type"] == "corner"]})
+    a = drives[1]
+    seg = {"lat0": a["lat"][6000], "lon0": a["lon"][6000], "lat1": a["lat"][6400], "lon1": a["lon"][6400], "length_m": 2000.0}
+    py = []
+    for d in drives:
+        lim = np.array([np.nan if v is None else v for v in d["limit_mps"]])
+        py.append({"score": da.driver_score(np.array(d["speed_mps"]), np.array(d["lon_g"]), np.array(d["lat_g"]), d["corners"], lim),
+                   "seg": da.segment_pass(seg, {**d, "limit_mps": lim, "speed_mps": np.array(d["speed_mps"]),
+                                                 "lon_g": np.array(d["lon_g"]), "lat_g": np.array(d["lat_g"])})})
+    runner = ("const c=require(process.argv[1]);const {drives,seg}=JSON.parse(require('fs').readFileSync(0,'utf8'));"
+              "process.stdout.write(JSON.stringify(drives.map(d=>({score:c.driverScore(d.speed_mps,d.lon_g,d.lat_g,d.corners,d.limit_mps),"
+              "seg:c.segmentPass(seg,d)}))));")
+    out = subprocess.run([NODE, "-e", runner, os.path.abspath("web/apex_core.js")], input=json.dumps({"drives": drives, "seg": seg}),
+                         capture_output=True, text=True, check=True)
+    for j, p in zip(json.loads(out.stdout), py):
+        assert j["score"]["score"] == p["score"]["score"]
+        assert j["score"]["components"] == p["score"]["components"]
+        assert (j["seg"] is None) == (p["seg"] is None)
+        if p["seg"]:
+            assert (j["seg"]["lo"], j["seg"]["hi"], j["seg"]["score"]) == (p["seg"]["lo"], p["seg"]["hi"], p["seg"]["score"])
+            assert j["seg"]["time_s"] == pytest.approx(p["seg"]["time_s"], rel=1e-9)
+
+
+def test_browser_profiler_matches_the_exporter_on_a_real_drive():
+    """Same input to both: the exporter's profile_segments and apex_core.profileRecording."""
+    import pandas as pd
+    from tools.export_web_profile import profile_segments
+    path = "web/data/dry_ridge.js"
+    if not os.path.exists(path):
+        pytest.skip("no shipped drive data")
+    text = open(path, encoding="utf-8").read()
+    d = json.loads(text[text.index("push(") + 5:text.rindex(");")])
+    seg = pd.DataFrame(d["rows"], columns=d["fields"]).fillna(0.0)
+    _, _, events = profile_segments(seg.copy())
+    py = [(e["code"], e["call"], e["index"], e["link"]) for e in events if e["type"] == "corner"]
+    cols = {k: seg[k].tolist() for k in ("distance_m", "lat", "lon", "elevation_m", "speed_mph", "camber_deg",
+                                         "crest_vertical_g", "roughness_rms")}
+    runner = ("const c=require(process.argv[1]);const cols=JSON.parse(require('fs').readFileSync(0,'utf8'));"
+              "process.stdout.write(JSON.stringify(c.profileRecording(cols).events.map(e=>[e.code,e.call,e.index])));")
+    out = subprocess.run([NODE, "-e", runner, os.path.abspath("web/apex_core.js")], input=json.dumps(cols),
+                         capture_output=True, text=True, check=True)
+    js = [tuple(j) for j in json.loads(out.stdout)]
+    assert js == [p[:3] for p in py]

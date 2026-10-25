@@ -88,8 +88,35 @@ docs/SOCIAL.md.
 - Single-pass bumps are unverified (1 of 7 repeat); multi-pass store still to build.
 - Route scoring (archetypes/axes) exists only in Python; routes in the browser get corners,
   sight and envelope but no Stage DNA until the reference lap is ported to JS.
-- Loop routing still uses circle waypoints; stage discovery + chaining (ROAD_INTELLIGENCE §7) not built.
-- Pages not enabled yet (owner: Settings → Pages → main / root).
+- Loop routing uses snapped circle waypoints (best of 3); stage discovery + chaining (ROAD_INTELLIGENCE §7) not built.
+
+## Session 2026-10-25 (d): loops, squares, camera, open-model voices, Driver Score history
+### Completed
+- [x] **Loops**: waypoints snapped to tertiary–primary through-roads (Valhalla `search_filter`),
+  dead-end spurs removed (`removeSpurs`), best of 3 candidates by retraced share. 0 U-turns in 4 trials.
+- [x] **Square vs hairpin**: valley split + core-share split; two left squares at a junction are no
+  longer one hairpin (tests `test_two_left_squares_are_not_one_hairpin`, `..._junction_square_...`).
+- [x] **Camera**: spring-damper chase rig (sway with lat g, brake dive, zoom punch, road-texture shake),
+  feel steady/dynamic/whip; touching the map pauses follow, "FOLLOW IN 6" then glides back.
+- [x] **Voices**: Kokoro-82M (Apache-2.0) voice banks George/Daniel/Emma/Jarvis stitched from structured
+  notes; live dynamic phrases via kokoro-js (WASM q8) with prefetch, device-TTS fallback after 1.5 s.
+  See docs/VOICE.md. Cloning engine (Chatterbox) planned, needs a consented sample.
+- [x] **Driver Score** (`core/drive_analysis.driver_score`, JS `driverScore`): 0–1000, pace 40 /
+  smoothness 25 / braking 15 / consistency 20, × legality. Legality is `None` (shown `--`, multiplies
+  as 1) when no posted limits are known — never a perfect mark by default.
+- [x] **Segments** (`segment_window`/`segment_pass`): custom stretches, direction-checked, length ratio 0.7–1.3.
+- [x] **Browser profiler** (`profileRecording`) matches `tools/export_web_profile.profile_segments`
+  exactly on identical input (parity test).
+- [x] **web/analysis.html rebuilt**: HISTORY (every drive, Driver Score, component bars, trend),
+  SEGMENTS (drag a range on any drive, name it, every pass ranked by Driver Score, time private),
+  COMPARE (corner by corner, kept). Imports ApexDrive CSVs from the iPhone app, profiles them in the
+  browser, fetches posted limits via Valhalla, stores in IndexedDB. Verified with Playwright (import,
+  segment create, persistence across reload, no console errors).
+
+### Active bugs / limitations
+- Segments and imported drives live only on the device (localStorage / IndexedDB) until accounts exist.
+- Friend/crew leaderboards, profiles, route sharing: designed (docs/SOCIAL.md), no backend chosen yet.
+- Valhalla/OSRM demo servers are not for production traffic.
 
 ## Exact Next Task
 **Stage discovery** (ROAD_INTELLIGENCE §7.2 step 1): port `reference_lap` to `web/apex_core.js`
