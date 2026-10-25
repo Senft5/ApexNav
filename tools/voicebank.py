@@ -199,7 +199,7 @@ def encode_m4a(audio: np.ndarray, path: str) -> None:
     peak = max(1e-6, float(np.max(np.abs(audio))))
     pcm = (np.clip(audio / peak * 0.89, -1, 1) * 32767).astype("<i2").tobytes()   # -1 dBFS peak
     subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-f", "s16le", "-ar", str(SR), "-ac", "1", "-i", "-",
-                    "-c:a", "aac", "-b:a", "56k", "-movflags", "+faststart", path], input=pcm, check=True)
+                    "-c:a", "aac", "-strict", "-2", "-b:a", "56k", "-movflags", "+faststart", path], input=pcm, check=True)
 
 
 def build(voice_id: str, ref: str = None) -> dict:
