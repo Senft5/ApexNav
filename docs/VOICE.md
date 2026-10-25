@@ -42,6 +42,23 @@ Stitched single words were audibly choppy, so every bank now plays **whole-phras
 - `My Voice` (Chatterbox clone + the owner's real recordings) cannot render live, so it relies on the
   pre-rendered phrases above; its real recordings (`src: "recording"`) win over renders.
 
+## Rhythm: why it did not "flow" (measured on the owner's real calls)
+Stock TTS reads a call as one run-on at ~3.1–3.4 words/s with no pauses. The owner chunks a call at 2.7
+words/s: chunks run together ("Left four opens over crest into right two") and they breathe
+**before the caution (0.29–0.43 s) and before the distance (0.18–0.25 s)**, nowhere else (51 clips,
+Whisper word timings, `scratchpad` analysis in STATE). Kokoro commas give <0.1 s; a run of dots gives ~0.24 s
+inside one sentence. `tts_text()` (Python) and `spokenText(text, rhythm)` (app) put `.....` before the caution
+and `...` before the distance; everything else is spoken unpunctuated. Device TTS never gets the dots.
+
+## My Voice: voice conversion, not zero-shot cloning
+Chatterbox gave "a voice like me, not me" and cannot run on a phone. Now: Kokoro **Michael** (American male;
+a British source leaked its accent) speaks each whole call; **kNN-VC** (MIT, WavLM + HiFi-GAN) replaces every
+20 ms frame by the nearest frames of the owner's own recording, then the owner's 54 real calls override the
+converted ones. `tools/vc_bank.py`. Held-out calls, Resemblyzer speaker similarity to the owner:
+real clip vs own voice 0.89 (ceiling) | stock Kokoro US voices 0.50–0.65 | converted Michael 0.86 (George, British,
+sounded British to the owner). Conversion runs ~0.6 s per second of speech on 4 CPU cores. Reference audio stays
+local (`--ref-wav`), only converted clips are published. Possible phone path: ONNX WavLM-Base + kNN + HiFi-GAN.
+
 ## Real recordings (docs/VOICE_SCRIPT.md)
 `tools/make_voice_script.py` writes a script; the owner reads it; `tools/split_recording.py` cuts it:
 Whisper word timestamps -> fuzzy alignment of every script line -> cut at the quietest point between

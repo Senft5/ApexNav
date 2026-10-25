@@ -293,7 +293,7 @@ def build_phrases(voice_id: str, ref: str = None, tier: str = "calls", recorded:
             del manifest["tokens"][k]
     wanted = list(route_phrases())
     units = unit_phrases(vocab)
-    if tier == "mined":
+    if tier in ("mined", "units"):   # units is a superset: mined runs + every head x modifier
         mp = os.path.join(ROOT, "tools", "mined_phrases.json")
         wanted += json.load(open(mp, encoding="utf-8")) if os.path.exists(mp) else []
     if tier in ("core", "units"):
