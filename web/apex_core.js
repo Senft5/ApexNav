@@ -518,14 +518,14 @@
   }
 
   // Driver Score — port of core/drive_analysis.driver_score (parity-tested).
-  const PACE_TARGET = 0.85, PACE_CEILING = 1.0, OVER_LIMIT_MPS = 4.47;
+  const PACE_TARGET = 0.85, PACE_CEILING = 1.0;
   function paceCredit(u) {
     if (u <= PACE_TARGET) return Math.max(0, u / PACE_TARGET);
     if (u <= PACE_CEILING) return 1;
     return Math.max(0, 1 - 4 * (u - PACE_CEILING));
   }
   function std(a) { const m = a.reduce((x, y) => x + y, 0) / a.length; return Math.sqrt(a.reduce((x, y) => x + (y - m) * (y - m), 0) / a.length); }
-  function driverScore(v, lonG, latG, corners, limitMps = null, lo = 0, hi = null) {
+  function driverScore(v, lonG, latG, corners, lo = 0, hi = null) {
     hi = hi === null ? v.length : hi;
     const uses = [], pace = [], smooth = [], brake = [];
     for (const c of corners) {
@@ -546,17 +546,11 @@
     if (!uses.length) return { score: null, corners: 0, components: null };
     const mean = (a) => a.reduce((x, y) => x + y, 0) / a.length;
     const consistency = 1 - Math.min(1, std(uses) / 0.25);
-    let legality = null;   // unknown without posted limits: shown as --, multiplies as 1
-    if (limitMps) {
-      let known = 0, over = 0;
-      for (let i = lo; i < hi; i++) { const L = limitMps[i]; if (L != null && isFinite(L) && L > 0) { known++; if (v[i] > L + OVER_LIMIT_MPS) over++; } }
-      if (known) legality = 1 - Math.min(0.6, (over / known) * 3);
-    }
-    const comp = { pace: mean(pace), smoothness: mean(smooth), braking: mean(brake), consistency, legality };
+    const comp = { pace: mean(pace), smoothness: mean(smooth), braking: mean(brake), consistency };
     const raw = 0.40 * comp.pace + 0.25 * comp.smoothness + 0.15 * comp.braking + 0.20 * comp.consistency;
     const r4 = (x) => Math.round(x * 1e4) / 1e4;
-    return { score: Math.round(1000 * raw * (legality == null ? 1 : legality)), corners: uses.length,
-             components: Object.fromEntries(Object.entries(comp).map(([k, x]) => [k, x == null ? null : r4(x)])) };
+    return { score: Math.round(1000 * raw), corners: uses.length,
+             components: Object.fromEntries(Object.entries(comp).map(([k, x]) => [k, r4(x)])) };
   }
   function segmentWindow(seg, d) {
     const [i0, d0] = nearestIndexWin(seg.lat0, seg.lon0, d.lat, d.lon, -1);
@@ -571,7 +565,7 @@
     const w = segmentWindow(seg, d);
     if (!w) return null;
     const [lo, hi] = w, t = elapsedS(d.speed_mps);
-    return { lo, hi, time_s: t[hi] - t[lo], ...driverScore(d.speed_mps, d.lon_g, d.lat_g, d.corners, d.limit_mps || null, lo, hi + 1) };
+    return { lo, hi, time_s: t[hi] - t[lo], ...driverScore(d.speed_mps, d.lon_g, d.lat_g, d.corners, lo, hi + 1) };
   }
 
   // Profile a raw 5 m recording (the iOS app's ApexDrive CSV) in the browser with the same

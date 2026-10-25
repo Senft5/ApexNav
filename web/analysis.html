@@ -41,11 +41,10 @@
     tr.best td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
     .score { font-family: var(--font-num); font-weight: 700; font-size: 26px; }
     .score.big { font-size: 44px; line-height: 1; }
-    .bars { display: grid; grid-template-columns: repeat(5, minmax(46px, 1fr)); gap: 6px; min-width: 260px; }
+    .bars { display: grid; grid-template-columns: repeat(4, minmax(50px, 1fr)); gap: 6px; min-width: 220px; }
     .bar { display: grid; gap: 2px; font-size: 8px; letter-spacing: 0.1em; color: var(--panel-dim); text-align: left; font-family: var(--font-ui); }
     .bar i { display: block; height: 5px; background: var(--rule); }
     .bar u { display: block; height: 100%; background: var(--accent); text-decoration: none; }
-    .bar.legal u { background: var(--panel-ink); }
     .cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
     .card { border: 1px solid var(--rule); padding: 10px 12px; display: grid; gap: 3px; }
     .card b { font-family: var(--font-num); font-size: 24px; font-weight: 700; }
@@ -88,7 +87,7 @@
           <span class="note">CSV files saved by the ApexNav iPhone app (record → share). Profiled in your browser, stored on this device.</span>
         </div>
       </div>
-      <p class="note">Driver Score (0-1000) rates technique, never time or speed: <b>pace</b> = corner minimum speed as a share of its sane grip limit (full credit from 85 % to 100 %, falling steeply beyond — overdriving never scores), <b>smoothness</b> = how gently lateral load builds per metre, <b>braking</b> = no hard braking after the apex, <b>consistency</b> = even commitment corner to corner. <b>Legality</b> multiplies the total: time more than 10 mph over the posted limit lowers it.</p>
+      <p class="note">Driver Score (0-1000) rates technique, never time or speed: <b>pace</b> = corner minimum speed as a share of its sane grip limit (full credit from 85 % to 100 %, falling steeply beyond — overdriving never scores), <b>smoothness</b> = how gently lateral load builds per metre, <b>braking</b> = no hard braking after the apex, <b>consistency</b> = even commitment corner to corner. Speed limits never enter it. A perfect score means driving right at each corner's limit — a closed-track figure, not something to chase on public roads.</p>
     </section>
 
     <!-- ============================ SEGMENTS ============================ -->
@@ -153,7 +152,7 @@
       return {
         id: d.id, name: d.name, date: d.date || '', source: 'profiled',
         lat: col('lat'), lon: col('lon'), dist: col('distance_m'), speed_mps: col('speed_mph', 1 / MPH),
-        lon_g: col('lon_g'), lat_g: col('lat_g'), limit_mps: col('limit_kph', 1 / 3.6), elev: col('elevation_m'),
+        lon_g: col('lon_g'), lat_g: col('lat_g'), elev: col('elevation_m'),
         events: d.events.filter(e => e.type === 'corner')
       };
     }
@@ -164,7 +163,7 @@
     function finish(d) {
       d.corners = cornersOf(d);
       d.km = d.dist[d.dist.length - 1] / 1000;
-      d.ds = Core.driverScore(d.speed_mps, d.lon_g, d.lat_g, d.corners, d.limit_mps);
+      d.ds = Core.driverScore(d.speed_mps, d.lon_g, d.lat_g, d.corners);
       return d;
     }
 
@@ -203,29 +202,8 @@
       return {
         id: 'rec_' + fileName.replace(/\W+/g, '_'), name: fileName.replace(/\.csv$/i, ''), date, source: 'imported',
         lat: cols.lat, lon: cols.lon, dist: cols.distance_m || cols.lat.map((_, i) => i * 5), speed_mps: cols.speed_mph.map(v => v / MPH),
-        lon_g: cols.lon_g, lat_g: cols.lat_g, limit_mps: null, elev: cols.elevation_m || null, events: prof.events
+        lon_g: cols.lon_g, lat_g: cols.lat_g, elev: cols.elevation_m || null, events: prof.events
       };
-    }
-
-    // OSM maxspeed per sample via Valhalla map matching (same as the cockpit and the exporter).
-    const VALHALLA = 'https://valhalla1.openstreetmap.de';
-    async function postedLimits(lat, lon) {
-      const stride = 4, idx = [];
-      for (let i = 0; i < lat.length; i += stride) idx.push(i);
-      if (idx[idx.length - 1] !== lat.length - 1) idx.push(lat.length - 1);
-      try {
-        const res = await fetch(`${VALHALLA}/trace_attributes`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
-          shape: idx.map(i => ({ lat: lat[i], lon: lon[i] })), costing: 'auto', shape_match: 'map_snap',
-          filters: { attributes: ['edge.speed_limit', 'matched.edge_index'], action: 'include' } }) });
-        const json = await res.json();
-        const edges = json.edges || [], out = new Array(lat.length).fill(null);
-        (json.matched_points || []).forEach((mp, k) => {
-          const e = edges[mp.edge_index];
-          const v = e && typeof e.speed_limit === 'number' ? e.speed_limit / 3.6 : null;
-          for (let i = idx[k]; i < (idx[k + 1] ?? lat.length); i++) out[i] = v;
-        });
-        return out.some(v => v != null) ? out : null;
-      } catch (_) { return null; }   // unknown stays unknown
     }
 
     let drives = [];
@@ -246,10 +224,8 @@
     const mmss = (s) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`;
     function bars(comp) {
       if (!comp) return '<span class="note">no clean corners</span>';
-      const b = (k, label, extra = '') => comp[k] == null
-        ? `<div class="bar ${extra}" title="no posted limits known for this drive">${label} --<i></i></div>`
-        : `<div class="bar ${extra}">${label} ${Math.round(comp[k] * 100)}<i><u style="width:${Math.round(comp[k] * 100)}%"></u></i></div>`;
-      return `<div class="bars">${b('pace', 'PACE')}${b('smoothness', 'SMOOTH')}${b('braking', 'BRAKING')}${b('consistency', 'CONSIST')}${b('legality', 'LEGAL', 'legal')}</div>`;
+      const b = (k, label) => `<div class="bar">${label} ${Math.round(comp[k] * 100)}<i><u style="width:${Math.round(comp[k] * 100)}%"></u></i></div>`;
+      return `<div class="bars">${b('pace', 'PACE')}${b('smoothness', 'SMOOTH')}${b('braking', 'BRAKING')}${b('consistency', 'CONSIST')}</div>`;
     }
 
     // ---------------------------------------------------------------------
@@ -277,7 +253,7 @@
       $('trend').innerHTML = `<svg viewBox="0 0 ${W} ${H}">${grid}<path d="${line}" fill="none" stroke="${C.accent}" stroke-width="2"/>${dots}</svg>`;
 
       const rows = drives.slice().reverse().map(d => `<tr>
-        <td class="l"><b>${d.name}</b><span class="sub">${dateLabel(d)} · ${d.source}${d.limit_mps ? '' : ' · no limit data'}</span></td>
+        <td class="l"><b>${d.name}</b><span class="sub">${dateLabel(d)} · ${d.source}</span></td>
         <td>${(d.km / 1.609344).toFixed(1)} mi</td>
         <td>${d.ds.corners}</td>
         <td><span class="score">${d.ds.score ?? '--'}</span></td>
@@ -290,7 +266,6 @@
       if (!file) return;
       try {
         const d = parseRecording(await file.text(), file.name);
-        d.limit_mps = await postedLimits(d.lat, d.lon);
         await storeDrive(d);
         await loadDrives();
         renderAll();

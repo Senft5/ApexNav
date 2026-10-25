@@ -118,7 +118,28 @@ docs/SOCIAL.md.
 - Friend/crew leaderboards, profiles, route sharing: designed (docs/SOCIAL.md), no backend chosen yet.
 - Valhalla/OSRM demo servers are not for production traffic.
 
+## Session 2026-10-25 (e): owner decisions, iOS voice fix, voice clone test
+### Decisions (owner)
+- Driver Score is technique only: **legality removed from the score and from the app**. A perfect
+  score is a closed-track figure, not a public-road goal. Posted limits stay on the cockpit as information.
+- Friend/crew time sharing: **opt-in per friend and per crew**, never public (docs/SOCIAL.md).
+- Backend: zero budget, so Supabase free tier with row-level security; fallback Cloudflare D1 (docs/SOCIAL.md §4).
+- No Apple developer account yet: CarPlay is deferred. Android priority is low.
+- Routing: on device with Valhalla offline tiles built by free CI (ROAD_INTELLIGENCE §7.4).
+### Completed
+- [x] Driver Score without legality (Python + JS parity, tests updated); analysis page shows 4 components.
+- [x] **iOS voice bug**: the WKWebView loaded file://, and WebKit's fetch() refuses file URLs, so the voice
+  banks never loaded and every voice fell back to AVSpeech. The cockpit is now served from
+  `apexnav://app/` by `ApexBundleSchemeHandler`. Needs on-device confirmation.
+- [x] Chatterbox (MIT) installed at /opt/cbx (py3.11, torch 2.6 CPU, `setuptools<81` for the Perth
+  watermarker). The owner's consented sample (in-recording consent at 0–8 s) cloned; test clip sent.
+  The sample and the clip are kept out of git (`voice_test/` is gitignored).
+### Active bugs
+- Chatterbox truncates single-word prompts ("tightens" rendered as 0.24 s). Render tokens inside a
+  carrier sentence and cut by word timestamps, or render whole note chains.
+
 ## Exact Next Task
-**Stage discovery** (ROAD_INTELLIGENCE §7.2 step 1): port `reference_lap` to `web/apex_core.js`
-at parity, then score road lines from the OpenFreeMap `transportation` layer + Terrarium DEM
-in the visible area and chain the best stages through Valhalla for loops.
+1. Confirm on iPhone that the voice picker now changes the voice (scheme-handler fix).
+2. Add a `--engine chatterbox --ref` path to `tools/voicebank.py` (fix single-word truncation),
+   build the owner's voice bank, and add it to the picker.
+3. Stage discovery (ROAD_INTELLIGENCE §7.2).

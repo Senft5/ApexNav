@@ -6,3 +6,4 @@ ApexKit/.build/
 .swiftpm/
 *.xcodeproj/
 TestResults.xcresult/
+voice_test/
