@@ -11,6 +11,7 @@
   <script src="vendor/maplibre-gl.js"></script>
   <script src="vendor/maplibre-contour.min.js"></script>
   <script src="apex_core.js"></script>
+  <script src="stages.js"></script>
   <script src="themes.js"></script>
   <script src="instruments.js"></script>
   <script src="voice.js"></script>
@@ -168,7 +169,6 @@
       .binnacle { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "transport transport" "cluster switches"; column-gap: 20px; }
       .transport { grid-area: transport; } #cluster { grid-area: cluster; }
       .switches { grid-area: switches; display: grid; grid-template-columns: repeat(3, auto); gap: 8px 10px; align-content: center; justify-items: center; }
-      .switches .route-key { grid-column: span 1; }
       .cluster-dials { grid-template-columns: var(--dial) minmax(220px, 300px) var(--dial); justify-content: center; }
     }
 
@@ -176,6 +176,28 @@
     .sheet { position: absolute; z-index: 10; top: 0; bottom: 0; right: 0; width: min(420px, 100%); background: var(--panel); color: var(--panel-ink);
       border-left: 1px solid var(--rule); transform: translateX(105%); transition: transform 0.18s ease-out; display: flex; flex-direction: column; }
     .sheet.open { transform: none; }
+    .sheet.dragging { transition: none; }
+    .scrim { position: absolute; inset: 0; z-index: 9; display: none; background: rgba(0,0,0,0.18); }
+    .scrim.show { display: block; }
+    .sheet [data-panel] { display: none; }
+    .sheet[data-view="route"] [data-panel~="route"], .sheet[data-view="drives"] [data-panel~="drives"],
+    .sheet[data-view="setup"] [data-panel~="setup"] { display: block; }
+
+    /* ---------------- tab bar (switch views; tapping the open tab closes it) ---------------- */
+    .tabbar { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-top: 1px solid var(--rule); margin: 2px -10px 0; padding: 0 6px; }
+    .tab { height: 44px; display: grid; grid-template-rows: 20px auto; justify-items: center; align-content: center; gap: 2px; color: var(--panel-dim);
+      font-size: 9px; font-weight: 700; letter-spacing: 0.16em; position: relative; }
+    .tab svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    .tab.on { color: var(--accent); }
+    .tab.on::before { content: ""; position: absolute; top: -1px; left: 22%; right: 22%; height: 2px; background: var(--accent); }
+
+    /* ---------------- busy buttons (loop / search in progress) ---------------- */
+    .ink-btn.busy { position: relative; overflow: hidden; color: var(--panel); background: var(--panel-dim); border-color: var(--panel-dim); pointer-events: none; }
+    .ink-btn.busy::after { content: ""; position: absolute; left: 0; bottom: 0; height: 3px; width: var(--progress, 0%); background: var(--accent); transition: width 0.3s ease-out; }
+    .ink-btn.busy::before { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.22), transparent);
+      transform: translateX(-100%); animation: sweep 1.1s linear infinite; }
+    .ink-btn[disabled] { opacity: 0.45; pointer-events: none; }
+    @keyframes sweep { to { transform: translateX(100%); } }
     .sheet header { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; border-bottom: 1px solid var(--rule); }
     .sheet header h2 { font-size: 14px; letter-spacing: 0.18em; text-transform: uppercase; }
     .sheet .body { overflow-y: auto; padding: 14px 16px 24px; display: grid; gap: 20px; }
@@ -208,10 +230,11 @@
       </div>
       <div class="toast" id="toast"></div>
 
-      <aside class="sheet" id="sheet" aria-label="Route book">
-        <header><h2>Route Book</h2><button class="key" id="closeSheetBtn">CLOSE</button></header>
+      <div class="scrim" id="scrim"></div>
+      <aside class="sheet" id="sheet" aria-label="Menu" data-view="route">
+        <header><h2 id="sheetTitle">Route</h2><button class="key" id="closeSheetBtn" aria-label="Close menu">CLOSE</button></header>
         <div class="body">
-          <section>
+          <section data-panel="route">
             <h3>Destination · spirited routing</h3>
             <div class="row">
               <input class="field" id="destInput" placeholder="Town, road or address" autocomplete="off" />
@@ -219,21 +242,21 @@
             </div>
             <div class="row" style="margin-top:6px"><button class="ink-btn" id="tapRouteBtn">TAP MAP TO ROUTE</button></div>
           </section>
-          <section>
+          <section data-panel="route">
             <h3>Loop from here</h3>
             <div class="row">
               <button class="ink-btn" data-loop-mi="15">15 MI</button>
               <button class="ink-btn" data-loop-mi="30">30 MI</button>
               <button class="ink-btn" data-loop-mi="45">45 MI</button>
             </div>
-            <p class="note">Valhalla routes these avoiding highways. Choosing roads by Stage DNA (docs/ROAD_INTELLIGENCE.md §7) is the next routing step.</p>
+            <p class="note">Loops are stitched from the best roads nearby: every road around you is scored from map geometry (corners per km, few junctions), the best stretches are chained to fit the distance, and the result is checked against a plain loop. Geometry only until driven.</p>
           </section>
-          <section>
+          <section data-panel="drives">
             <h3>Profiled drives</h3>
             <div id="driveList" style="display:grid;gap:6px"></div>
-            <p class="note"><a href="analysis.html" style="color:inherit">Drive analysis: compare passes corner by corner →</a></p>
+            <div class="row" style="margin-top:10px"><a class="ink-btn solid" href="analysis.html" style="display:inline-flex;align-items:center;text-decoration:none">OPEN DRIVE ANALYSIS →</a></div>
           </section>
-          <section>
+          <section data-panel="setup">
             <h3>Co-driver voice</h3>
             <div class="row" id="voiceList">
               <span id="voiceCards" style="display:contents"></span>
@@ -244,7 +267,7 @@
             <div class="row" style="margin-top:6px"><select class="field" id="voiceSelect"></select></div>
             <p class="note">George, Daniel and Emma are rendered with the open Kokoro-82M model (Apache-2.0); pace notes work offline. LIVE also runs the model in the browser for names and routes (one-time ~90 MB download, then cached). Jarvis is the same model through a cartoon-robot effect. DEVICE uses this phone's own voices.</p>
           </section>
-          <section>
+          <section data-panel="setup">
             <h3>Camera feel</h3>
             <div class="row" id="camList">
               <button class="ink-btn" data-cam="steady">STEADY</button>
@@ -253,11 +276,11 @@
             </div>
             <p class="note">How hard the map leans into corners ahead of the car.</p>
           </section>
-          <section>
+          <section data-panel="setup">
             <h3>Cockpit theme</h3>
             <div class="themes" id="themeList"></div>
           </section>
-          <section class="sources">
+          <section class="sources" data-panel="setup">
             <h3>Sources</h3>
             Map &copy; OpenStreetMap contributors via OpenFreeMap. Terrain: AWS Terrarium DEM. Routing, map matching and posted limits: Valhalla (FOSSGIS). Geocoding: Nominatim. ALPR: OpenStreetMap <code>surveillance:type=ALPR</code> (DeFlock) via Overpass.
           </section>
@@ -278,8 +301,13 @@
         <button class="sw" data-toggle="lpr"><i></i><span>LPR</span></button>
         <button class="sw" data-toggle="dna"><i></i><span>DNA</span></button>
         <button class="sw" data-toggle="night"><i></i><span>NIGHT</span></button>
-        <button class="key route-key" id="openSheetBtn">ROUTE</button>
       </div>
+      <nav class="tabbar" id="tabbar" aria-label="Views">
+        <button class="tab" data-view="route"><svg viewBox="0 0 24 24"><path d="M5 20c0-5 5-5 7-8s1-6 6-8"/><circle cx="5" cy="20" r="1.6"/><path d="M17 3l2 1-2 1"/></svg><span>ROUTE</span></button>
+        <button class="tab" data-view="drives"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg><span>DRIVES</span></button>
+        <button class="tab" data-view="analysis"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>ANALYSIS</span></button>
+        <button class="tab" data-view="setup"><svg viewBox="0 0 24 24"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg><span>SETUP</span></button>
+      </nav>
     </section>
   </div>
 
@@ -1051,6 +1079,7 @@
       const res = await fetch(`${VALHALLA}/route`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
         locations: points.map((p, i) => {
           const end = i === 0 || i === points.length - 1;
+          if (!end && p.shaping) return { lat: p.lat, lon: p.lon, type: 'through', radius: 25 };   // stay on the stage
           return { lat: p.lat, lon: p.lon, type: end ? 'break' : 'through', ...(throughRoadsOnly && !end ? { radius: 2500, search_filter: filter } : {}) };
         }),
         costing: 'auto', costing_options: { auto: { use_highways: 0.15, use_tolls: 0.3 } } }) });
@@ -1107,12 +1136,18 @@
     }
     const routeTo = (lat, lon, name) => buildRoute([here(), { lat, lon }], 'route_dest', name);
     async function routeToQuery(q) {
-      if (!q.trim()) return;
+      if (!q.trim() || $('destGoBtn').classList.contains('busy')) return;
+      const ui = busy($('destGoBtn'));
+      ui.step('FINDING', 0.3);
+      try { await searchAndRoute(q, ui); } finally { ui.done(); }
+    }
+    async function searchAndRoute(q, ui) {
       toast(`Searching ${q}...`);
       try {
         const items = await (await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`)).json();
         if (!items.length) { toast(`No match for "${q}"`); return; }
-        routeTo(parseFloat(items[0].lat), parseFloat(items[0].lon), `To ${items[0].display_name.split(',')[0]}`);
+        ui.step('ROUTING', 0.7);
+        await routeTo(parseFloat(items[0].lat), parseFloat(items[0].lon), `To ${items[0].display_name.split(',')[0]}`);
       } catch (_) { toast('Search unavailable. Use TAP MAP TO ROUTE.'); }
     }
     // Loops: three candidate circles through the start, waypoints snapped to through roads,
@@ -1135,32 +1170,97 @@
       return { score: good / Math.max(1, km) * 10 - retraced * 60 - lengthErr * 25, good, retraced, km };
     }
     const totalOf = (t) => t.dist[t.dist.length - 1];
-    async function loop(miles) {
-      const c = here();
-      toast(`Building ${miles} mi loops...`);
-      const base = Math.random() * 2 * Math.PI;
-      const tries = [0, 2 * Math.PI / 3, 4 * Math.PI / 3].map(async (off, k) => {
-        const coords = await valhallaRoute(loopWaypoints(c, miles, base + off), true);
+    // Busy state on the button that started a slow request: label, progress bar, sweep;
+    // sibling buttons are disabled so a second tap can't start a second build.
+    function busy(btn, group = []) {
+      const label = btn.textContent;
+      btn.classList.add('busy');
+      group.forEach(b => { if (b !== btn) b.disabled = true; });
+      return {
+        step(text, frac) { btn.textContent = text; btn.style.setProperty('--progress', `${Math.round(frac * 100)}%`); },
+        done() { btn.classList.remove('busy'); btn.textContent = label; btn.style.removeProperty('--progress'); group.forEach(b => { b.disabled = false; }); },
+      };
+    }
+    let loopBusy = false;
+    async function loop(miles, btn) {
+      if (loopBusy) return;
+      loopBusy = true;
+      const ui = btn ? busy(btn, [...document.querySelectorAll('[data-loop-mi]')]) : { step() {}, done() {} };
+      try { await buildLoop(miles, ui); } finally { loopBusy = false; ui.done(); }
+    }
+    async function buildLoop(miles, ui) {
+      const c = here(), targetKm = miles * 1.609344;
+      toast(`Finding the best roads for a ${miles} mi loop...`);
+      // 1. Stage discovery: score every road around the start from the map's own vector tiles.
+      let plans = [];
+      try {
+        const radiusKm = Math.min(14, Math.max(5, targetKm / 4.2));
+        const stages = await ApexStages.discover(c, radiusKm, (phase, f) => ui.step(phase === 'tiles' ? 'ROADS' : 'SCORING', 0.05 + 0.3 * f));
+        plans = ApexStages.plans(c, stages, targetKm, 3);
+      } catch (_) { /* no tiles: fall back to circle loops below */ }
+      // 2. Route each stage plan, plus one circle loop as a baseline, and keep the best result.
+      const jobs = plans.map(p => ({ kind: 'stages', plan: p, pts: ApexStages.waypoints(c, p), through: false }));
+      jobs.push({ kind: 'circle', pts: loopWaypoints(c, miles, Math.random() * 2 * Math.PI), through: true });
+      let settled = 0;
+      ui.step(`ROUTING 0/${jobs.length}`, 0.38);
+      const tries = jobs.map(async (job) => {
+        const coords = await valhallaRoute(job.pts, job.through)
+          .finally(() => { settled++; ui.step(`ROUTING ${settled}/${jobs.length}`, 0.38 + 0.5 * settled / jobs.length); });
         const rs = Core.removeSpurs(coords.map(p => p[1]), coords.map(p => p[0]));
         const t = trackFromPolyline(rs.lat.map((la, i) => [rs.lon[i], la]), `loop_${miles}`, `${miles} mi loop`);
-        return { t, ...scoreLoop(t, miles), spursCut: rs.removed };
+        return { t, job, ...scoreLoop(t, miles), spursCut: rs.removed };
       });
       const done = (await Promise.allSettled(tries)).filter(r => r.status === 'fulfilled').map(r => r.value);
       if (!done.length) { toast('Loop routing failed. Check your connection.'); return; }
       done.sort((a, b) => b.score - a.score);
       const best = done[0];
+      ui.step('PROFILING', 0.92);
       await buildRoute(null, `loop_${miles}`, `${miles} mi loop`, best.t);
-      toast(`${miles} mi loop: ${best.km.toFixed(1)} km, ${best.good} good corners, ${Math.round(best.retraced * 100)}% retraced (best of ${done.length})`);
+      const how = best.job.kind === 'stages' ? `${best.job.plan.legs.length} best-road stages` : 'circle fallback';
+      toast(`${miles} mi loop: ${(best.km / 1.609344).toFixed(1)} mi, ${best.good} good corners, ${Math.round(best.retraced * 100)}% retraced · ${how} (best of ${done.length})`);
+      window.apexDebug && (window.apexDebug.lastLoop = done.map(d => ({ kind: d.job.kind, score: d.score, km: d.km, good: d.good, retraced: d.retraced })));
     }
+
 
     // =======================================================================
     // 10. UI WIRING
     // =======================================================================
     function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 4200); }
-    const openSheet = () => $('sheet').classList.add('open');
-    const closeSheet = () => $('sheet').classList.remove('open');
-    $('openSheetBtn').addEventListener('click', openSheet);
+    // Views: ROUTE / DRIVES / SETUP open the side panel; tapping the open tab again, the map
+    // behind it, or swiping it right closes it. ANALYSIS is its own page.
+    const VIEW_TITLES = { route: 'Route', drives: 'Drives', setup: 'Setup' };
+    let view = null;
+    function showView(v) {
+      if (v === 'analysis') { location.href = 'analysis.html'; return; }
+      view = v;
+      const sheet = $('sheet');
+      if (v) { sheet.dataset.view = v; $('sheetTitle').textContent = VIEW_TITLES[v]; sheet.querySelector('.body').scrollTop = 0; }
+      sheet.classList.toggle('open', !!v);
+      $('scrim').classList.toggle('show', !!v);
+      document.querySelectorAll('#tabbar .tab').forEach(t => t.classList.toggle('on', t.dataset.view === v));
+    }
+    const openSheet = (v = view || 'route') => showView(v);
+    const closeSheet = () => showView(null);
+    document.querySelectorAll('#tabbar .tab').forEach(t => t.addEventListener('click', () => showView(view === t.dataset.view ? null : t.dataset.view)));
     $('closeSheetBtn').addEventListener('click', closeSheet);
+    $('scrim').addEventListener('click', closeSheet);
+    (() => {   // swipe the panel right to close
+      const sheet = $('sheet');
+      let x0 = null, y0 = 0, dx = 0;
+      sheet.addEventListener('touchstart', (e) => { x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; dx = 0; }, { passive: true });
+      sheet.addEventListener('touchmove', (e) => {
+        if (x0 == null) return;
+        dx = e.touches[0].clientX - x0;
+        if (Math.abs(e.touches[0].clientY - y0) > Math.abs(dx) && !sheet.classList.contains('dragging')) { x0 = null; return; }
+        if (dx > 8) { sheet.classList.add('dragging'); sheet.style.transform = `translateX(${dx}px)`; }
+      }, { passive: true });
+      sheet.addEventListener('touchend', () => {
+        sheet.classList.remove('dragging'); sheet.style.transform = '';
+        if (x0 != null && dx > 80) closeSheet();
+        x0 = null;
+      });
+    })();
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && view) closeSheet(); });
     $('destGoBtn').addEventListener('click', () => routeToQuery($('destInput').value));
     $('destInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') routeToQuery(e.target.value); });
     $('tapRouteBtn').addEventListener('click', (e) => {
@@ -1168,7 +1268,7 @@
       e.currentTarget.classList.toggle('on', state.tapToRoute);
       if (state.tapToRoute) { closeSheet(); toast('Tap the map where you want to go.'); }
     });
-    document.querySelectorAll('[data-loop-mi]').forEach(b => b.addEventListener('click', () => loop(parseInt(b.dataset.loopMi, 10))));
+    document.querySelectorAll('[data-loop-mi]').forEach(b => b.addEventListener('click', () => loop(parseInt(b.dataset.loopMi, 10), b)));
 
     function renderDriveList() {
       const list = $('driveList');
@@ -1326,8 +1426,9 @@
       const at = params.has('at') ? parseFloat(params.get('at')) || 0 : 0;
       activate(first, at * first.dist[first.dist.length - 1]);
       if (params.get('play') === '1') setPlaying(true);
-    } else openSheet();
-    if (params.get('book') === '1') openSheet();
+    } else openSheet('route');
+    if (params.get('book') === '1') openSheet('route');
+    if (VIEW_TITLES[params.get('view')]) openSheet(params.get('view'));
     if (document.fonts) document.fonts.ready.then(() => render(true));
   })();
   </script>

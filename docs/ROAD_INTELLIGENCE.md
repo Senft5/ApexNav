@@ -217,7 +217,7 @@ preferences ("I love esses, hate switchbacks") add a multiplicative bonus.
   penalise re-using a road in the same direction.
 - **Explore**: "best stages within 30 min of here".
 
-### 7.2 Architecture: stage discovery + stage chaining
+### 7.2 Architecture: stage discovery + stage chaining **[first version built: web/stages.js]**
 We do not need our own routing engine to start. We need to know *which roads are
 worth driving*; a commodity router (Valhalla) connects them.
 

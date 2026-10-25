@@ -94,8 +94,12 @@ VOICES = {
     "daniel": {"name": "Daniel", "style": "codriver", "engine": "kokoro", "kokoro_voice": "bm_daniel", "lang": "b", "speed": 1.08},
     "emma": {"name": "Emma", "style": "codriver", "engine": "kokoro", "kokoro_voice": "bf_emma", "lang": "b", "speed": 1.08},
     "jarvis": {"name": "Jarvis", "style": "jarvis", "engine": "kokoro", "kokoro_voice": "am_onyx", "lang": "a", "speed": 0.95},
+    # Cloned from the owner's consented sample (--ref, kept out of git). Live phrases (names)
+    # can't run Chatterbox in a browser, so they use the closest Kokoro voice.
+    "own": {"name": "My Voice", "style": "codriver", "engine": "chatterbox", "kokoro_voice": "am_michael", "lang": "a", "speed": 1.0},
 }
-LICENSES = {"kokoro": "Kokoro-82M, Apache-2.0 (hexgrad/Kokoro-82M)"}
+LICENSES = {"kokoro": "Kokoro-82M, Apache-2.0 (hexgrad/Kokoro-82M)",
+            "chatterbox": "Chatterbox, MIT (resemble-ai/chatterbox); clone of a consented sample, Perth-watermarked"}
 
 
 class KokoroEngine:
@@ -106,6 +110,34 @@ class KokoroEngine:
     def render(self, text: str, voice: str, speed: float) -> np.ndarray:
         parts = [np.asarray(a, dtype=np.float32) for _, _, a in self.pipe(text, voice=voice, speed=speed)]
         return np.concatenate(parts) if parts else np.zeros(1, dtype=np.float32)
+
+
+class ChatterboxEngine:
+    """Zero-shot clone from a reference clip. Chatterbox clips bare single words short, so each
+    token ends in punctuation and is re-rendered (new sample) when it comes out much shorter
+    than the same token in a Kokoro bank."""
+
+    def __init__(self, ref_wav: str):
+        import torch
+        from chatterbox.tts import ChatterboxTTS
+        torch.manual_seed(7)
+        self.model = ChatterboxTTS.from_pretrained(device="cpu")
+        self.model.prepare_conditionals(ref_wav, exaggeration=0.5)
+        self.sr = self.model.sr
+
+    def render(self, text: str, voice: str = None, speed: float = 1.0, expect_s: float = None) -> np.ndarray:
+        prompt = text if text[-1] in ".!?:" else text + "."
+        best = None
+        for _ in range(3):
+            a = self.model.generate(prompt, cfg_weight=0.5, exaggeration=0.5).squeeze(0).numpy().astype(np.float32)
+            if self.sr != SR:
+                a = np.interp(np.arange(0, len(a), self.sr / SR), np.arange(len(a)), a).astype(np.float32)
+            dur = len(trim(a)) / SR
+            if best is None or dur > best[1]:
+                best = (a, dur)
+            if expect_s is None or 0.6 * expect_s <= dur <= 2.0 * expect_s:
+                return a
+        return best[0]
 
 
 def trim(audio: np.ndarray, threshold_db: float = -42.0, pad_s: float = 0.015) -> np.ndarray:
@@ -134,15 +166,27 @@ def encode_m4a(audio: np.ndarray, path: str) -> None:
                     "-c:a", "aac", "-b:a", "56k", "-movflags", "+faststart", path], input=pcm, check=True)
 
 
-def build(voice_id: str) -> dict:
+def build(voice_id: str, ref: str = None) -> dict:
     cfg = VOICES[voice_id]
     vocab = jarvis_vocabulary() if cfg["style"] == "jarvis" else codriver_vocabulary()
-    engine = KokoroEngine(cfg["lang"])
+    expect = {}
+    if cfg["engine"] == "chatterbox":
+        if not ref:
+            raise SystemExit(f"{voice_id} is a cloned voice: pass --ref sample.wav (a consented recording)")
+        engine = ChatterboxEngine(ref)
+        george = os.path.join(OUT, "george", "manifest.json")   # expected token lengths
+        if os.path.exists(george):
+            expect = {k: v["dur"] for k, v in json.load(open(george, encoding="utf-8"))["tokens"].items()}
+    else:
+        engine = KokoroEngine(cfg["lang"])
     out_dir = os.path.join(OUT, voice_id)
     os.makedirs(out_dir, exist_ok=True)
     tokens = {}
     for token, text in vocab.items():
-        audio = trim(engine.render(text, cfg["kokoro_voice"], cfg["speed"]))
+        if cfg["engine"] == "chatterbox":
+            audio = trim(engine.render(text, expect_s=expect.get(token)))
+        else:
+            audio = trim(engine.render(text, cfg["kokoro_voice"], cfg["speed"]))
         fname = safe_name(token) + ".m4a"
         encode_m4a(audio, os.path.join(out_dir, fname))
         tokens[token] = {"file": fname, "dur": round(len(audio) / SR, 3), "text": text}
@@ -169,13 +213,14 @@ def write_index() -> None:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--voice", choices=sorted(VOICES))
-    ap.add_argument("--all", action="store_true")
+    ap.add_argument("--all", action="store_true", help="every Kokoro voice (cloned voices need --voice and --ref)")
+    ap.add_argument("--ref", help="reference recording for a cloned voice (keep it out of git)")
     args = ap.parse_args(argv)
-    ids = sorted(VOICES) if args.all else [args.voice] if args.voice else []
+    ids = sorted(v for v in VOICES if VOICES[v]["engine"] == "kokoro") if args.all else [args.voice] if args.voice else []
     if not ids:
         ap.error("--voice ID or --all")
     for vid in ids:
-        build(vid)
+        build(vid, args.ref)
     write_index()
     return 0
 
