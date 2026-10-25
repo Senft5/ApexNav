@@ -1910,7 +1910,7 @@
       if (params.get('play') === '1') setPlaying(true);
     } else openSheet('route');
     if (params.get('book') === '1') openSheet('route');
-    if (VIEW_TITLES[params.get('view')]) openSheet(params.get('view'));
+    if (VIEW_TITLES[params.get('view')]) openSheet(params.get('view')); else if (params.get('view') === 'drives') openSheet('route');
     if (document.fonts) document.fonts.ready.then(() => render(true));
   })();
   </script>

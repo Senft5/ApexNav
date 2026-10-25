@@ -23,23 +23,23 @@
     html, body { background: var(--panel); color: var(--panel-ink); font-family: var(--font-ui); font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; }
     main { max-width: 1180px; margin: 0 auto; padding: calc(14px + env(safe-area-inset-top, 0px)) 16px calc(80px + env(safe-area-inset-bottom, 0px)); display: grid; gap: 18px; }
     header { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; justify-content: space-between; border-bottom: 1px solid var(--rule); padding-bottom: 12px; }
-    h1 { font-size: 22px; letter-spacing: 0.08em; text-transform: uppercase; }
-    h1 small { display: block; font-size: 11px; color: var(--panel-dim); letter-spacing: 0.14em; margin-top: 4px; }
-    h2 { font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--panel-dim); margin-bottom: 8px; }
+    h1 { font-size: 28px; font-weight: 700; font-family: var(--font-num); }
+    h1 small { display: block; font-size: 13px; font-weight: 400; font-family: var(--font-ui); color: var(--panel-dim); margin-top: 4px; }
+    h2 { font-size: 18px; font-weight: 700; font-family: var(--font-num); margin-bottom: 8px; }
     a { color: inherit; }
     .tabs { display: flex; gap: 0; border: 1px solid var(--rule); }
-    .tabs button { font: inherit; font-size: 12px; font-weight: 700; letter-spacing: 0.14em; padding: 9px 14px; background: transparent; color: var(--panel-dim); border: none; cursor: pointer; }
+    .tabs button { font: inherit; font-size: 15px; font-weight: 600; padding: 9px 14px; background: transparent; color: var(--panel-dim); border: none; cursor: pointer; }
     .tabs button.on { color: var(--panel); background: var(--panel-ink); }
     .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; font-size: 12px; }
     select, input, button.btn { font: inherit; font-size: 13px; height: 34px; padding: 0 10px; background: transparent; color: var(--panel-ink); border: 1px solid var(--panel-dim); }
-    button.btn { cursor: pointer; font-weight: 700; letter-spacing: 0.1em; }
+    button.btn { cursor: pointer; font-weight: 600; font-size: 15px; }
     button.btn.solid { background: var(--panel-ink); color: var(--panel); border-color: var(--panel-ink); }
     .panel { border: 1px solid var(--rule); padding: 12px; min-width: 0; }
     .note { font-size: 12px; color: var(--panel-dim); line-height: 1.5; }
     .grid2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 12px; }
     svg { display: block; width: 100%; height: auto; }
     table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    th { font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--panel-dim); text-align: right; padding: 6px; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+    th { font-size: 11px; font-weight: 600; color: var(--panel-dim); text-align: right; padding: 6px; border-bottom: 1px solid var(--rule); white-space: nowrap; }
     td { padding: 8px 6px; border-bottom: 1px solid var(--rule); text-align: right; font-family: var(--font-num); white-space: nowrap; vertical-align: middle; }
     th.l, td.l { text-align: left; }
     td .sub { display: block; font-size: 11px; color: var(--panel-dim); font-family: var(--font-ui); }
@@ -48,13 +48,13 @@
     .score { font-family: var(--font-num); font-weight: 700; font-size: 26px; }
     .score.big { font-size: 44px; line-height: 1; }
     .bars { display: grid; grid-template-columns: repeat(4, minmax(50px, 1fr)); gap: 6px; min-width: 220px; }
-    .bar { display: grid; gap: 2px; font-size: 8px; letter-spacing: 0.1em; color: var(--panel-dim); text-align: left; font-family: var(--font-ui); }
+    .bar { display: grid; gap: 2px; font-size: 11px; color: var(--panel-dim); text-align: left; font-family: var(--font-ui); }
     .bar i { display: block; height: 5px; background: var(--rule); }
     .bar u { display: block; height: 100%; background: var(--accent); text-decoration: none; }
     .cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
     .card { border: 1px solid var(--rule); padding: 10px 12px; display: grid; gap: 3px; }
     .card b { font-family: var(--font-num); font-size: 24px; font-weight: 700; }
-    .card span { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--panel-dim); }
+    .card span { font-size: 13px; color: var(--panel-dim); }
     .card em { font-style: normal; font-size: 11px; color: var(--panel-dim); }
     .gain { color: #3FB950; } .loss { color: var(--signal); }
     .tul { width: 34px; height: 34px; display: inline-block; vertical-align: middle; }
@@ -65,7 +65,7 @@
     .dv-head { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: var(--rule); border: 1px solid var(--rule); }
     .dv-stat { background: var(--panel); padding: 10px 12px; display: grid; gap: 2px; }
     .dv-stat b { font-family: var(--font-num); font-size: 22px; font-weight: 700; }
-    .dv-stat span, .dv-read span { font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--panel-dim); }
+    .dv-stat span, .dv-read span { font-size: 11px; color: var(--panel-dim); }
     .dv-grid { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 14px; align-items: start; }
     .dv-map { border: 1px solid var(--rule); padding: 8px; position: sticky; top: 12px; } .dv-right { display: grid; gap: 10px; min-width: 0; }
     .dv-legend { display: flex; align-items: center; gap: 8px; font-size: 10px; color: var(--panel-dim); margin-top: 6px; } .dv-legend i { flex: 1; height: 4px; }
@@ -87,10 +87,10 @@
     @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; animation: none !important; transition: none !important; } }
     [hidden] { display: none !important; }
     /* Same tab bar as the cockpit: ANALYSIS is this page, the others return to the cockpit view. */
-    .tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+    .tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
       background: var(--panel); border-top: 1px solid var(--rule); padding: 0 6px env(safe-area-inset-bottom, 0px); }
-    .tabbar a { height: 50px; display: grid; grid-template-rows: 20px auto; justify-items: center; align-content: center; gap: 2px; color: var(--panel-dim);
-      font-size: 9px; font-weight: 700; letter-spacing: 0.16em; text-decoration: none; position: relative; }
+    .tabbar a { height: 52px; display: grid; grid-template-rows: 20px auto; justify-items: center; align-content: center; gap: 2px; color: var(--panel-dim);
+      font-size: 11px; font-weight: 600; text-decoration: none; position: relative; }
     .tabbar svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
     .tabbar a.on { color: var(--accent); }
     .tabbar a.on::before { content: ""; position: absolute; top: -1px; left: 22%; right: 22%; height: 2px; background: var(--accent); }
@@ -100,14 +100,14 @@
 <body>
   <main>
     <header>
-      <h1>Drive Analysis<small>Private · your drives stay on this device</small></h1>
-      <div class="tabs" id="tabs" role="tablist" aria-label="Analysis views">
-        <button data-tab="drive" role="tab" id="tabbtn-drive" aria-controls="tab-drive" aria-selected="true" class="on">DRIVE</button>
-        <button data-tab="history" role="tab" id="tabbtn-history" aria-controls="tab-history" aria-selected="false">HISTORY</button>
-        <button data-tab="segments" role="tab" id="tabbtn-segments" aria-controls="tab-segments" aria-selected="false">SEGMENTS</button>
-        <button data-tab="compare" role="tab" id="tabbtn-compare" aria-controls="tab-compare" aria-selected="false">COMPARE</button>
+      <h1>Log<small>Your drives stay on this phone.</small></h1>
+      <div class="tabs" id="tabs" role="tablist" aria-label="Log views">
+        <button data-tab="drive" role="tab" id="tabbtn-drive" aria-controls="tab-drive" aria-selected="true" class="on">Drive</button>
+        <button data-tab="history" role="tab" id="tabbtn-history" aria-controls="tab-history" aria-selected="false">Log</button>
+        <button data-tab="segments" role="tab" id="tabbtn-segments" aria-controls="tab-segments" aria-selected="false">Stages</button>
+        <button data-tab="compare" role="tab" id="tabbtn-compare" aria-controls="tab-compare" aria-selected="false">Compare</button>
       </div>
-      <a href="index.html">← Cockpit</a>
+      <a href="index.html">‹ Map</a>
     </header>
 
     <!-- ============================ DRIVE ============================ -->
@@ -120,7 +120,7 @@
     <!-- ============================ HISTORY ============================ -->
     <section id="tab-history" role="tabpanel" aria-labelledby="tabbtn-history" class="grid" hidden style="display:grid;gap:14px">
       <div class="cards" id="historyCards"></div>
-      <div class="panel"><h2>Driver Score over time</h2><div id="trend"></div></div>
+      <div class="panel"><h2>Score over time</h2><div id="trend"></div></div>
       <div class="panel">
         <h2>Drives</h2>
         <div class="scroll"><table id="historyTable"></table></div>
@@ -129,13 +129,13 @@
           <span class="note">CSV files saved by the ApexNav iPhone app (record → share). Profiled in your browser, stored on this device.</span>
         </div>
       </div>
-      <p class="note">Driver Score (0-1000) rates technique, never time or speed: <b>pace</b> = corner minimum speed as a share of its sane grip limit (full credit from 85 % to 100 %, falling steeply beyond — overdriving never scores), <b>smoothness</b> = how gently lateral load builds per metre, <b>braking</b> = no hard braking after the apex, <b>consistency</b> = even commitment corner to corner. Speed limits never enter it. A perfect score means driving right at each corner's limit — a closed-track figure, not something to chase on public roads.</p>
+      <p class="note">Score (0-1000) rates technique, never time or speed: <b>pace</b> = corner minimum speed as a share of its sane grip limit (full credit from 85 % to 100 %, falling steeply beyond — overdriving never scores), <b>smoothness</b> = how gently lateral load builds per metre, <b>braking</b> = no hard braking after the apex, <b>consistency</b> = even commitment corner to corner. Speed limits never enter it. A perfect score means driving right at each corner's limit — a closed-track figure, not something to chase on public roads.</p>
     </section>
 
     <!-- ============================ SEGMENTS ============================ -->
     <section id="tab-segments" role="tabpanel" aria-labelledby="tabbtn-segments" hidden style="display:grid;gap:14px">
       <div class="panel">
-        <h2>Create a segment</h2>
+        <h2>New stage</h2>
         <div class="row" style="margin-bottom:8px">
           <select id="segDrive" aria-label="Drive to mark a segment on"></select>
           <span class="note">Drag across the profile to mark a stretch, then name it.</span>
@@ -148,9 +148,9 @@
         </div>
       </div>
       <div class="grid2">
-        <div class="panel"><h2>Your segments</h2><div class="seglist" id="segList"></div><p class="note" style="margin-top:8px">Segments are your custom stretches. Every drive that covers one, in the same direction, is ranked on it by Driver Score. Sign in (Account on the main page) to back them up and compare with friends.</p></div>
+        <div class="panel"><h2>Your stages</h2><div class="seglist" id="segList"></div><p class="note" style="margin-top:8px">Mark a stretch you drive often. Every run gets a score.</p></div>
         <div class="panel" id="contribPanel" hidden><h2>Share road data</h2><p class="note" id="contribNote"></p><div id="contribList" style="display:grid;gap:6px"></div></div>
-      <div class="panel" id="segSyncPanel" hidden><h2>Friends and sync</h2><div class="note" id="segSyncNote"></div><div id="segShared"></div><div class="row" id="segShareRow" style="margin-top:8px"></div><h2 style="margin-top:12px">Friends board</h2><div class="scroll"><table id="segBoard"></table></div></div>
+      <div class="panel" id="segSyncPanel" hidden><h2>Friends and sync</h2><div class="note" id="segSyncNote"></div><div id="segShared"></div><div class="row" id="segShareRow" style="margin-top:8px"></div><h2 style="margin-top:12px">Board</h2><div class="scroll"><table id="segBoard"></table></div></div>
       <div class="panel"><h2 id="segTitle">Passes</h2><div id="segChart"></div><div class="scroll"><table id="segTable"></table></div></div>
       </div>
     </section>
@@ -176,10 +176,11 @@
     </section>
   </main>
   <nav class="tabbar" aria-label="Views">
-    <a href="index.html?view=route"><svg viewBox="0 0 24 24"><path d="M5 20c0-5 5-5 7-8s1-6 6-8"/><circle cx="5" cy="20" r="1.6"/><path d="M17 3l2 1-2 1"/></svg><span>ROUTE</span></a>
-    <a href="index.html?view=drives"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg><span>DRIVES</span></a>
-    <a href="analysis.html" class="on" aria-current="page"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>ANALYSIS</span></a>
-    <a href="index.html?view=setup"><svg viewBox="0 0 24 24"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg><span>SETUP</span></a>
+    <a href="index.html"><svg viewBox="0 0 24 24"><path d="M12 3l6 15-6-3-6 3z"/></svg><span>Map</span></a>
+    <a href="index.html?view=route"><svg viewBox="0 0 24 24"><path d="M5 20c0-5 5-5 7-8s1-6 6-8"/><circle cx="5" cy="20" r="1.6"/><path d="M17 3l2 1-2 1"/></svg><span>Plan</span></a>
+    <a href="analysis.html?tab=history" id="navLog"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg><span>Log</span></a>
+    <a href="analysis.html?tab=segments" id="navStages"><svg viewBox="0 0 24 24"><path d="M12 3v18M7 7h10M7 17h10"/></svg><span>Stages</span></a>
+    <a href="index.html?view=crew"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.2"/><path d="M3 20c0-3.5 2.7-6 6-6s6 2.5 6 6M15.5 14.2c2.6 0 5 1.8 5 5"/></svg><span>Crew</span></a>
   </nav>
 
   <script>
@@ -255,7 +256,7 @@
       const latest = scored[scored.length - 1];
       const c = (v, label, extra) => `<div class="card"><b>${v}</b><span>${label}</span>${extra ? `<em>${extra}</em>` : ''}</div>`;
       $('historyCards').innerHTML =
-        c(latest ? latest.ds.score : '--', 'Latest Driver Score', latest ? latest.name : '') +
+        c(latest ? latest.ds.score : '--', 'Latest score', latest ? latest.name : '') +
         c(avg ?? '--', 'Average', `${scored.length} scored drives`) +
         c(best ? best.ds.score : '--', 'Best', best ? best.name : '') +
         c(`${(totalKm / 1.609344).toFixed(0)} mi`, 'Profiled', `${drives.length} drives`);
@@ -266,8 +267,8 @@
       const grid = [0, 250, 500, 750, 1000].map(v => { const y = T + (1 - v / 1000) * (H - T - B); return `<line x1="${L}" x2="${W - R}" y1="${y}" y2="${y}" stroke="${C.rule}"/><text x="${L - 6}" y="${y + 3}" text-anchor="end" font-size="10" fill="${C.panelDim}">${v}</text>`; }).join('');
       const line = pts.map((p, i) => `${i ? 'L' : 'M'}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join('');
       const dots = pts.map(p => `<circle cx="${p[0]}" cy="${p[1]}" r="5" fill="${C.accent}"/><text x="${p[0]}" y="${H - 8}" text-anchor="middle" font-size="10" fill="${C.panelDim}">${p[2].date.slice(5, 10)}</text>`).join('');
-      if (!scored.length) { $('trend').innerHTML = '<p class="note">No scored drives yet. Import a recording below, or open the cockpit and record one; a drive needs a few clean corners to get a Driver Score.</p>'; }
-      else $('trend').innerHTML = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Driver Score over time">${grid}<path d="${line}" fill="none" stroke="${C.accent}" stroke-width="2"/>${dots}</svg>`;
+      if (!scored.length) { $('trend').innerHTML = '<p class="note">No scored drives yet. Import a recording below, or open the cockpit and record one; a drive needs a few clean corners to get a Score.</p>'; }
+      else $('trend').innerHTML = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Score over time">${grid}<path d="${line}" fill="none" stroke="${C.accent}" stroke-width="2"/>${dots}</svg>`;
 
       const rows = drives.slice().reverse().map(d => `<tr>
         <td class="l"><b>${d.name}</b><span class="sub">${dateLabel(d)} · ${d.source}</span></td>
@@ -275,7 +276,7 @@
         <td class="wide">${d.ds.corners}</td>
         <td><span class="score">${d.ds.score ?? '--'}</span></td>
         <td class="l wide">${bars(d.ds.components)}</td></tr>`).join('');
-      $('historyTable').innerHTML = !drives.length ? '<tr><td class="l" colspan="5"><span class="note">No drives yet.</span></td></tr>' : `<tr><th class="l">Drive</th><th>Distance</th><th class="wide">Corners scored</th><th>Driver Score</th><th class="l wide">Components</th></tr>${rows}`;
+      $('historyTable').innerHTML = !drives.length ? '<tr><td class="l" colspan="5"><span class="note">No drives yet.</span></td></tr>' : `<tr><th class="l">Drive</th><th>Distance</th><th class="wide">Corners scored</th><th>Score</th><th class="l wide">Components</th></tr>${rows}`;
     }
 
     $('importFile').addEventListener('change', async (e) => {
@@ -291,7 +292,7 @@
     });
 
     // ---------------------------------------------------------------------
-    // SEGMENTS (custom stretches, stored locally; ranked by Driver Score)
+    // SEGMENTS (custom stretches, stored locally; ranked by Score)
     // ---------------------------------------------------------------------
     const loadSegs = () => { try { return JSON.parse(localStorage.getItem('apex.segments') || '[]'); } catch (_) { return []; } };
     const saveSegs = (s) => { try { localStorage.setItem('apex.segments', JSON.stringify(s)); } catch (_) {} };
@@ -350,7 +351,7 @@
       if (!window.ApexSync || !(await ApexSync.member())) { panel.hidden = true; return; }
       panel.hidden = false;
       const sent = await ApexSync.pushSegments(segs); saveSegs(segs);
-      $('segSyncNote').textContent = sent ? `Uploaded ${sent} segment${sent === 1 ? '' : 's'}. Only the stretch itself is stored, never your drives.` : 'Your segments are backed up. Scores are shared only with friends you choose (Account).';
+      $('segSyncNote').textContent = sent ? `Uploaded ${sent} segment${sent === 1 ? '' : 's'}. Only the stretch itself is stored, never your drives.` : 'Your stages are backed up. Scores are shared only with friends you choose (Account).';
       const box = $('segShared'); box.innerHTML = '';
       const have = new Set(segs.map(s => s.origin || s.id));
       for (const r of (await ApexSync.sharedWithMe()).filter(r => !have.has(r.origin || r.id))) {
@@ -366,7 +367,7 @@
       }
       const act = segs.find(s => s.id === activeSeg), bt = $('segBoard');
       const rows = act && act.synced ? await ApexSync.board(act.origin || act.id) : [];
-      bt.innerHTML = rows.length ? '<tr><th class="l">#</th><th class="l">Driver</th><th>Driver Score</th><th>Time</th></tr>' + rows.map((r, i) =>
+      bt.innerHTML = rows.length ? '<tr><th class="l">#</th><th class="l">Driver</th><th>Score</th><th>Time</th></tr>' + rows.map((r, i) =>
         `<tr class="${r.mine ? 'best' : ''}"><td class="l">${i + 1}</td><td class="l"><b></b></td><td><span class="score">${r.driver_score}</span></td><td>${r.time_s == null ? '--' : mmss(r.time_s)}</td></tr>`).join('') : '';
       bt.querySelectorAll('tr b').forEach((b, i) => { b.textContent = rows[i].mine ? 'You' : '@' + (rows[i].handle || '?'); });
       if (act && act.synced && rows.length < 2) bt.innerHTML = '<tr><td class="l"><span class="note">No friends on this segment yet. Friends appear once they share scores with you (Account) and have driven it.</span></td></tr>';
@@ -432,7 +433,7 @@
       $('segTitle').textContent = `Passes · ${seg.name}`;
       const passes = passesFor(seg).sort((a, b) => (b.p.score ?? -1) - (a.p.score ?? -1));
       const bestTime = Math.min(...passes.map(x => x.p.time_s));
-      $('segTable').innerHTML = `<tr><th class="l">#</th><th class="l">Pass</th><th>Driver Score</th><th class="l">Components</th><th>Time (private)</th></tr>` +
+      $('segTable').innerHTML = `<tr><th class="l">#</th><th class="l">Run</th><th>Score</th><th class="l">Components</th><th>Time (private)</th></tr>` +
         passes.map((x, i) => `<tr class="${i === 0 ? 'best' : ''}"><td class="l">${i + 1}</td><td class="l"><b>${x.d.name}</b><span class="sub">${dateLabel(x.d)}</span></td>
           <td><span class="score">${x.p.score ?? '--'}</span></td><td class="l">${bars(x.p.components)}</td>
           <td>${mmss(x.p.time_s)}<span class="sub">${x.p.time_s === bestTime ? 'quickest' : '+' + (x.p.time_s - bestTime).toFixed(1) + ' s'}</span></td></tr>`).join('') +
@@ -541,12 +542,12 @@
       const grid = [0, 500, 1000].map(v => `<line x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}" stroke="${C.rule}"/><text x="${L - 6}" y="${Y(v) + 3}" text-anchor="end" font-size="10" fill="${C.panelDim}">${v}</text>`).join('');
       const line = sc.map((x, i) => `${i ? 'L' : 'M'}${X(i).toFixed(1)} ${Y(x.ds.score).toFixed(1)}`).join('');
       const dots = sc.map((x, i) => `<circle cx="${X(i)}" cy="${Y(x.ds.score)}" r="${x === d ? 7 : 4.5}" fill="${x === d ? C.accent : C.panel}" stroke="${C.accent}" stroke-width="2"/><text x="${X(i)}" y="${H - 7}" text-anchor="middle" font-size="10" fill="${C.panelDim}">${x.date.slice(5, 10)}</text>`).join('');
-      $('dvRoadChart').innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Driver Score on this road over time">${grid}<path d="${line}" fill="none" stroke="${C.accent}" stroke-width="2"/>${dots}</svg>`;
+      $('dvRoadChart').innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Score on this road over time">${grid}<path d="${line}" fill="none" stroke="${C.accent}" stroke-width="2"/>${dots}</svg>`;
       const first = sc[0], last = sc[sc.length - 1], gain = last.ds.score - first.ds.score;
-      $('dvRoadTable').innerHTML = '<tr><th class="l">Drive</th><th>Driver Score</th><th>Corners</th><th class="l">vs this drive</th></tr>' + same.map(o => {
+      $('dvRoadTable').innerHTML = '<tr><th class="l">Drive</th><th>Score</th><th>Corners</th><th class="l">vs this drive</th></tr>' + same.map(o => {
         const r = o === d ? null : Core.compareDrives(d, o);
         return `<tr class="${o === d ? 'best' : ''}"><td class="l"><b></b><span class="sub">${dateLabel(o)}</span></td><td><span class="score">${o.ds.score ?? '--'}</span></td><td>${o.ds.corners}</td><td class="l">${o === d ? 'this drive' : r.matched_corners ? `${fmtS(r.corner_delta_s)} on ${r.matched_corners} corners (positive = it was slower)` : '--'}</td></tr>`;
-      }).join('') + `<tr><td class="l" colspan="4"><span class="note">${sc.length > 1 ? `Driver Score ${gain >= 0 ? 'up' : 'down'} ${Math.abs(gain)} points from the first to the latest drive on this road.` : ''}</span></td></tr>`;
+      }).join('') + `<tr><td class="l" colspan="4"><span class="note">${sc.length > 1 ? `Score ${gain >= 0 ? 'up' : 'down'} ${Math.abs(gain)} points from the first to the latest drive on this road.` : ''}</span></td></tr>`;
       $('dvRoadTable').querySelectorAll('tr td.l b').forEach((b, i) => { if (same[i]) b.textContent = same[i].name; });
     }
 
@@ -565,6 +566,7 @@
       renderDrive(); renderHistory(); renderSegments(); renderCompareSelectors(); renderCompare(); syncSegments(); renderContribute(); }
     document.querySelectorAll('#tabs button').forEach(b => b.addEventListener('click', () => {
       document.querySelectorAll('#tabs button').forEach(x => { x.classList.toggle('on', x === b); x.setAttribute('aria-selected', x === b ? 'true' : 'false'); x.tabIndex = x === b ? 0 : -1; });
+      $('navLog').classList.toggle('on', b.dataset.tab === 'history' || b.dataset.tab === 'drive'); $('navStages').classList.toggle('on', b.dataset.tab === 'segments');
       for (const t of ['drive', 'history', 'segments', 'compare']) $(`tab-${t}`).hidden = t !== b.dataset.tab;
       if (b.dataset.tab === 'segments') renderSegStrip();
       if (b.dataset.tab === 'history') renderHistory();
@@ -577,7 +579,7 @@
       nx.click(); nx.focus();
     });
     document.querySelectorAll('#tabs button').forEach((x) => { x.tabIndex = x.classList.contains('on') ? 0 : -1; });
-    if (params.get('tab')) document.querySelector(`#tabs [data-tab="${params.get('tab')}"]`)?.click();
+    if (params.get('tab')) document.querySelector(`#tabs [data-tab="${params.get('tab')}"]`)?.click(); else $('navLog').classList.add('on');
     loadDrives().then(renderAll);
   })();
   </script>
