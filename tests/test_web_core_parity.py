@@ -20,10 +20,11 @@ const inp = JSON.parse(require('fs').readFileSync(0, 'utf8'));
 let lat = inp.lat, lon = inp.lon;
 if (inp.resample) ({ lat, lon } = core.resamplePolyline(lat, lon, 5));
 const { kappa, ds } = core.computeCurvature(lat, lon);
-const env = core.brakingEnvelopeMps(kappa, ds, inp.camber, inp.rough);
+const sight = core.sightDistanceM(lat, lon, inp.elev);
+const env = core.brakingEnvelopeMps(kappa, ds, inp.camber, inp.rough, undefined, sight);
 const corners = core.detectCorners(kappa, ds, inp.camber, inp.crest, inp.rough)
   .map(c => Object.assign(c, { text: core.paceNoteText(c) }));
-process.stdout.write(JSON.stringify({ lat, kappa: Array.from(kappa), env: Array.from(env), corners }));
+process.stdout.write(JSON.stringify({ lat, kappa: Array.from(kappa), sight: Array.from(sight), env: Array.from(env), corners }));
 """
 
 
@@ -34,19 +35,22 @@ def _run_js(payload: dict) -> dict:
     return json.loads(out.stdout)
 
 
-def _assert_parity(lat, lon, camber=None, crest=None, rough=None, resample=False):
+def _assert_parity(lat, lon, camber=None, crest=None, rough=None, resample=False, elev=None):
     payload = {"lat": list(map(float, lat)), "lon": list(map(float, lon)), "resample": resample,
                "camber": None if camber is None else list(map(float, camber)),
                "crest": None if crest is None else list(map(float, crest)),
-               "rough": None if rough is None else list(map(float, rough))}
+               "rough": None if rough is None else list(map(float, rough)),
+               "elev": None if elev is None else list(map(float, elev))}
     js = _run_js(payload)
     if resample:
         lat, lon = rd.resample_polyline(lat, lon, 5.0)
         np.testing.assert_allclose(js["lat"], lat, atol=1e-10)
     kappa, ds = rd.compute_curvature(lat, lon)
-    env = rd.braking_envelope_mps(kappa, ds, camber, rough)
+    sight = rd.sight_distance_m(lat, lon, elev)
+    env = rd.braking_envelope_mps(kappa, ds, camber, rough, sight_m=sight)
     corners = rd.detect_corners(kappa, ds, camber, crest, rough)
     np.testing.assert_allclose(js["kappa"], kappa, atol=1e-9)
+    np.testing.assert_allclose(js["sight"], sight, atol=1e-9)
     np.testing.assert_allclose(js["env"], env, rtol=1e-9)
     assert len(js["corners"]) == len(corners)
     for a, b in zip(js["corners"], corners):
@@ -86,5 +90,5 @@ def test_parity_on_real_logged_drive():
     f = {name: i for i, name in enumerate(d["fields"])}
     rows = np.array(d["rows"][:2500], dtype=float)
     _assert_parity(rows[:, f["lat"]], rows[:, f["lon"]], np.radians(rows[:, f["camber_deg"]]),
-                   rows[:, f["crest_vertical_g"]], rows[:, f["roughness_rms"]])
+                   rows[:, f["crest_vertical_g"]], rows[:, f["roughness_rms"]], elev=rows[:, f["elevation_m"]])
     assert math.isfinite(rows[:, f["lat"]].sum())

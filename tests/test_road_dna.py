@@ -70,7 +70,7 @@ def test_braking_envelope_brakes_before_and_respects_apex():
     assert env[apex] == pytest.approx(rd.apex_speed_mps(1.0 / abs(kappa[apex])), rel=1e-9)
     approach = env[apex - 30:apex + 1]
     assert np.all(np.diff(approach) <= 1e-9), "envelope must fall monotonically into the corner"
-    assert env[5] == pytest.approx(rd.V_CAP_MPS)
+    assert env[5] == pytest.approx(rd.sight_speed_mps(rd.SIGHT_MAX_M)), "no policy cap: straight = sight limit"
     decel = (np.diff(env[apex - 20:apex + 1] ** 2) / (2 * ds[apex - 20:apex]))
     assert np.all(-decel <= rd.BRAKE_DECEL_MPS2 + 1e-6)
 
@@ -127,3 +127,38 @@ def test_shipped_drive_data_has_no_fabricated_events(path):
     allowed = {"corner", "bump", "crest", "dip"}
     assert {e["type"] for e in payload["events"]} <= allowed
     assert all(s["clear"] is None for s in payload["sectors"]), "CLEAR needs real ALPR data"
+
+
+def test_sight_distance_on_a_curve_matches_chord_geometry():
+    lat, lon = path_from_legs([("straight", 200.0), ("arc", 50.0, 180.0), ("straight", 200.0)])
+    sight = rd.sight_distance_m(lat, lon)
+    mid = 40 + int(round(math.pi * 50 / 2 / 5))           # middle of the arc
+    expected = 2 * 50 * math.acos((50 - rd.SIGHT_OFFSET_M) / 50)   # ~40 m
+    assert sight[mid] == pytest.approx(expected, abs=8.0)
+    # 25 m in, the view runs down the 175 m of straight and a little way into the bend
+    assert 175 < sight[5] < 230
+
+
+def test_sight_distance_over_a_crest_and_flat():
+    n = 300
+    lat, lon = path_from_legs([("straight", (n - 1) * 5.0)])
+    flat = rd.sight_distance_m(lat, lon, np.zeros(n))
+    assert np.all(flat[:200] == rd.SIGHT_MAX_M)
+    s = np.arange(n) * 5.0
+    crest = 8.0 - ((s - 750.0) / 60.0) ** 2              # sharp crest at 750 m
+    crest = np.maximum(crest, -40.0)
+    sight = rd.sight_distance_m(lat, lon, crest)
+    before = int(700 / 5)
+    assert sight[before] < 150, "a sharp crest 50 m ahead must hide the road beyond"
+    assert sight[int(400 / 5)] > sight[before]
+
+
+def test_sight_speed_and_envelope_respect_sightline():
+    assert rd.sight_speed_mps(0.0) == pytest.approx(0.0)
+    v = float(rd.sight_speed_mps(100.0))
+    assert v * rd.REACTION_S + v * v / (2 * rd.BRAKE_DECEL_MPS2) == pytest.approx(100.0)
+    kappa = np.zeros(100)
+    ds = np.full(100, 5.0)
+    short = np.full(100, 60.0)
+    env = rd.braking_envelope_mps(kappa, ds, sight_m=short)
+    assert np.allclose(env, rd.sight_speed_mps(60.0))

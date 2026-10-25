@@ -34,7 +34,11 @@ SEVERITY_RADIUS_M = (25.0, 40.0, 65.0, 100.0, 160.0, 260.0)
 
 MU_EFF_DEFAULT = 0.60        # sane spirited street lateral grip, not a track limit
 BRAKE_DECEL_MPS2 = 0.5 * G_STD
-V_CAP_MPS = 31.3             # 70 mph: envelope ceiling on straights (never suggest more)
+REACTION_S = 1.5             # alert driver; AASHTO design uses 2.5 s for the general public
+EYE_HEIGHT_M = 1.08          # AASHTO stopping-sight geometry
+OBJECT_HEIGHT_M = 0.60
+SIGHT_OFFSET_M = 4.0         # lateral clearance to obstructions (wooded verge, conservative)
+SIGHT_MAX_M = 400.0          # beyond this, sight no longer constrains a car
 CAMBER_CLIP_RAD = 0.15
 
 SECTOR_LENGTH_M = 500.0
@@ -139,19 +143,70 @@ def effective_mu(roughness_rms_g=None, mu_eff: float = MU_EFF_DEFAULT):
     return mu_eff * (1.0 - np.clip((r - 0.08) / 0.30, 0.0, 0.30))
 
 
+def sight_distance_m(lat_deg, lon_deg, elevation_m=None, offset_m: float = SIGHT_OFFSET_M) -> np.ndarray:
+    """Geometric sight distance ahead of each sample (m), capped at SIGHT_MAX_M.
+
+    Target j is visible from i when the straight sightline between them
+      * horizontally stays within offset_m of every path point in between (anything
+        further off the road -- trees, banks, buildings -- is assumed to block), and
+      * vertically clears the road surface from eye height to object height (crests).
+    Sight ends at the first target that fails either test.
+    """
+    x, y = local_xy_m(lat_deg, lon_deg)
+    n = len(x)
+    out = np.full(n, SIGHT_MAX_M)
+    if n < 3:
+        return out
+    xs = moving_average(x, SMOOTH_WINDOW)
+    ys = moving_average(y, SMOOTH_WINDOW)
+    s = np.concatenate([[0.0], np.cumsum(np.hypot(np.diff(xs), np.diff(ys)))])
+    z = None if elevation_m is None else np.asarray(elevation_m, dtype=float)
+    for i in range(n - 2):
+        end = int(np.searchsorted(s, s[i] + SIGHT_MAX_M, side="right"))
+        js = np.arange(i + 2, end)
+        if len(js) == 0:
+            continue
+        ks = np.arange(i + 1, end - 1)
+        # blocked[j, k]: k strictly between i and j obstructs the sightline i -> j
+        cx, cy = xs[js] - xs[i], ys[js] - ys[i]
+        chord = np.maximum(np.hypot(cx, cy), 1e-6)
+        px, py = xs[ks] - xs[i], ys[ks] - ys[i]
+        between = ks[None, :] < js[:, None]
+        off = np.abs(cx[:, None] * py[None, :] - cy[:, None] * px[None, :]) / chord[:, None]
+        blocked = between & (off > offset_m)
+        if z is not None:
+            eye = z[i] + EYE_HEIGHT_M
+            frac = (s[ks][None, :] - s[i]) / (s[js] - s[i])[:, None]
+            line = eye + (z[js][:, None] + OBJECT_HEIGHT_M - eye) * frac
+            blocked |= between & (z[ks][None, :] > line)
+        hit = np.flatnonzero(blocked.any(axis=1))
+        if len(hit):
+            out[i] = min(SIGHT_MAX_M, s[js[hit[0]] - 1] - s[i])
+    return out
+
+
+def sight_speed_mps(sight_m, reaction_s: float = REACTION_S, decel_mps2: float = BRAKE_DECEL_MPS2):
+    """Fastest speed that still stops within the visible road: v t_r + v^2 / (2 a) = S."""
+    S = np.asarray(sight_m, dtype=float)
+    return decel_mps2 * (-reaction_s + np.sqrt(reaction_s ** 2 + 2.0 * S / decel_mps2))
+
+
 def braking_envelope_mps(kappa, ds, camber_rad=None, roughness_rms_g=None,
-                         mu_eff: float = MU_EFF_DEFAULT) -> np.ndarray:
+                         mu_eff: float = MU_EFF_DEFAULT, sight_m=None) -> np.ndarray:
     """Max speed at each sample so the driver can still slow for every corner ahead.
 
-    Local limit from apex_speed_mps on |kappa|, then a backward pass with constant
-    deceleration BRAKE_DECEL_MPS2: v[i] <= sqrt(v[i+1]^2 + 2 a ds).
+    Local limit = min(corner limit apex_speed_mps on |kappa|, stopping-sight limit),
+    then a backward pass with constant deceleration BRAKE_DECEL_MPS2:
+    v[i] <= sqrt(v[i+1]^2 + 2 a ds). No policy cap: without sight data the ceiling is
+    the stopping-sight speed for SIGHT_MAX_M.
     """
     k = np.abs(np.asarray(kappa, dtype=float))
     n = len(k)
     phi = np.zeros(n) if camber_rad is None else np.asarray(camber_rad, dtype=float)
     mu = effective_mu(roughness_rms_g, mu_eff)
     radius = 1.0 / np.maximum(k, 1e-6)
-    v = np.minimum(apex_speed_mps(radius, phi, mu), V_CAP_MPS)
+    sight = np.full(n, SIGHT_MAX_M) if sight_m is None else np.asarray(sight_m, dtype=float)
+    v = np.minimum(apex_speed_mps(radius, phi, mu), sight_speed_mps(sight))
     for i in range(n - 2, -1, -1):
         v[i] = min(v[i], math.sqrt(v[i + 1] ** 2 + 2.0 * BRAKE_DECEL_MPS2 * ds[i]))
     return v

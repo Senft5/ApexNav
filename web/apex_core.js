@@ -18,7 +18,11 @@
   const SEVERITY_RADIUS_M = [25, 40, 65, 100, 160, 260];
   const MU_EFF_DEFAULT = 0.60;
   const BRAKE_DECEL_MPS2 = 0.5 * G_STD;
-  const V_CAP_MPS = 31.3;
+  const REACTION_S = 1.5;
+  const EYE_HEIGHT_M = 1.08;
+  const OBJECT_HEIGHT_M = 0.60;
+  const SIGHT_OFFSET_M = 4.0;
+  const SIGHT_MAX_M = 400.0;
   const CAMBER_CLIP_RAD = 0.15;
   const CREST_UNWEIGHT_G = -0.08;
   const ALPR_RADIUS_M = 60;
@@ -123,12 +127,47 @@
     return mu * (1 - Math.max(0, Math.min(0.30, (roughG - 0.08) / 0.30)));
   }
 
-  function brakingEnvelopeMps(kappa, ds, camberRad = null, roughG = null, mu = MU_EFF_DEFAULT) {
+  // Geometric sight distance ahead of each sample (see core/road_dna.sight_distance_m).
+  function sightDistanceM(lat, lon, elevation = null, offsetM = SIGHT_OFFSET_M) {
+    const n = lat.length, out = new Float64Array(n).fill(SIGHT_MAX_M);
+    if (n < 3) return out;
+    const { x, y } = localXY(lat, lon);
+    const xs = movingAverage(x, SMOOTH_WINDOW), ys = movingAverage(y, SMOOTH_WINDOW);
+    const s = new Float64Array(n);
+    for (let i = 1; i < n; i++) s[i] = s[i - 1] + Math.hypot(xs[i] - xs[i - 1], ys[i] - ys[i - 1]);
+    let end = 0;
+    for (let i = 0; i < n - 2; i++) {
+      while (end < n && s[end] <= s[i] + SIGHT_MAX_M) end++;
+      const eye = elevation ? elevation[i] + EYE_HEIGHT_M : 0;
+      for (let j = i + 2; j < end; j++) {
+        const cx = xs[j] - xs[i], cy = ys[j] - ys[i];
+        const chord = Math.max(Math.hypot(cx, cy), 1e-6);
+        let blocked = false;
+        for (let k = i + 1; k < j && !blocked; k++) {
+          const off = Math.abs(cx * (ys[k] - ys[i]) - cy * (xs[k] - xs[i])) / chord;
+          if (off > offsetM) blocked = true;
+          else if (elevation) {
+            const line = eye + (elevation[j] + OBJECT_HEIGHT_M - eye) * ((s[k] - s[i]) / (s[j] - s[i]));
+            if (elevation[k] > line) blocked = true;
+          }
+        }
+        if (blocked) { out[i] = Math.min(SIGHT_MAX_M, s[j - 1] - s[i]); break; }
+      }
+    }
+    return out;
+  }
+
+  function sightSpeedMps(sightM, reactionS = REACTION_S, decel = BRAKE_DECEL_MPS2) {
+    return decel * (-reactionS + Math.sqrt(reactionS * reactionS + 2 * sightM / decel));
+  }
+
+  function brakingEnvelopeMps(kappa, ds, camberRad = null, roughG = null, mu = MU_EFF_DEFAULT, sightM = null) {
     const n = kappa.length, v = new Float64Array(n);
     for (let i = 0; i < n; i++) {
       const r = 1 / Math.max(Math.abs(kappa[i]), 1e-6);
       const m = effectiveMu(roughG ? roughG[i] : null, mu);
-      v[i] = Math.min(apexSpeedMps(r, camberRad ? camberRad[i] : 0, m), V_CAP_MPS);
+      const sight = sightM ? sightM[i] : SIGHT_MAX_M;
+      v[i] = Math.min(apexSpeedMps(r, camberRad ? camberRad[i] : 0, m), sightSpeedMps(sight));
     }
     for (let i = n - 2; i >= 0; i--) {
       v[i] = Math.min(v[i], Math.sqrt(v[i + 1] * v[i + 1] + 2 * BRAKE_DECEL_MPS2 * ds[i]));
@@ -243,7 +282,7 @@
   const api = {
     G_STD, MPS_TO_MPH, ALPR_RADIUS_M,
     movingAverage, gradient, unwrap, localXY, resamplePolyline,
-    computeCurvature, apexSpeedMps, effectiveMu, brakingEnvelopeMps,
+    computeCurvature, apexSpeedMps, effectiveMu, brakingEnvelopeMps, sightDistanceM, sightSpeedMps, SIGHT_MAX_M,
     severityForRadius, detectCorners, paceNoteText, nearestIndex
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
