@@ -17,6 +17,7 @@ import argparse
 import hashlib
 import json
 import os
+import shutil
 import re
 import subprocess
 import sys
@@ -236,15 +237,34 @@ def build(voice_id: str, ref: str = None) -> dict:
 CORE_MODS = ("mod:banked", "mod:long", "mod:off-camber")
 
 
-def build_phrases(voice_id: str, ref: str = None, tier: str = "calls") -> None:
+def merge_recorded(voice_id: str, recorded_dir: str) -> int:
+    """Copy real recordings (tools/split_recording.py output) into a bank; they win over renders."""
+    mpath = os.path.join(OUT, voice_id, "manifest.json")
+    manifest = json.load(open(mpath, encoding="utf-8"))
+    rec = json.load(open(os.path.join(recorded_dir, "recorded_keep.json"), encoding="utf-8"))
+    for key, v in rec.items():
+        shutil.copy(os.path.join(recorded_dir, v["file"]), os.path.join(OUT, voice_id, v["file"]))
+        manifest["tokens"][key] = {"file": v["file"], "dur": v["dur"], "text": v["text"], "src": "recording"}
+    with open(mpath, "w", encoding="utf-8") as f:
+        json.dump(manifest, f, indent=1)
+    return len(rec)
+
+
+def build_phrases(voice_id: str, ref: str = None, tier: str = "calls", recorded: str = None) -> None:
     """Add whole-phrase clips to an existing bank. tier: calls (exact calls of the shipped
-    routes), core (+ heads x banked/long/off-camber), units (+ every head x modifier)."""
+    routes), core (+ heads x banked/long/off-camber), units (+ every head x modifier),
+    mined (+ the runs tools/mine_phrases.py found most valuable on real routes)."""
     cfg = VOICES[voice_id]
     vocab = codriver_vocabulary()
     mpath = os.path.join(OUT, voice_id, "manifest.json")
+    if recorded:
+        print(f"  {voice_id}: merged {merge_recorded(voice_id, recorded)} real recordings", flush=True)
     manifest = json.load(open(mpath, encoding="utf-8"))
     wanted = list(route_phrases())
     units = unit_phrases(vocab)
+    if tier == "mined":
+        mp = os.path.join(ROOT, "tools", "mined_phrases.json")
+        wanted += json.load(open(mp, encoding="utf-8")) if os.path.exists(mp) else []
     if tier in ("core", "units"):
         wanted += [u for u in units if tier == "units" or u[1] in CORE_MODS]
     seen, todo = set(), []
@@ -287,7 +307,8 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--voice", choices=sorted(VOICES))
     ap.add_argument("--all", action="store_true", help="every Kokoro voice (cloned voices need --voice and --ref)")
-    ap.add_argument("--phrases", choices=["calls", "core", "units"], help="add whole-phrase clips to an existing bank")
+    ap.add_argument("--phrases", choices=["calls", "core", "units", "mined"], help="add whole-phrase clips to an existing bank")
+    ap.add_argument("--recorded", help="dir with recorded_keep.json from tools/split_recording.py")
     ap.add_argument("--ref", help="reference recording for a cloned voice (keep it out of git)")
     args = ap.parse_args(argv)
     ids = sorted(v for v in VOICES if VOICES[v]["engine"] == "kokoro") if args.all else [args.voice] if args.voice else []
@@ -295,7 +316,7 @@ def main(argv=None) -> int:
         ap.error("--voice ID or --all")
     for vid in ids:
         if args.phrases:
-            build_phrases(vid, args.ref, args.phrases)
+            build_phrases(vid, args.ref, args.phrases, args.recorded)
         else:
             build(vid, args.ref)
     write_index()

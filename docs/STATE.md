@@ -159,11 +159,26 @@ docs/SOCIAL.md.
 - OpenMapTiles `minor` mixes unclassified and residential; the junction penalty is the only filter.
 - Overpass is unreachable from the cloud sandbox, so the ALPR layer could not be tested here.
 
+## Session 2026-10-25 (g): whole-phrase voices, real recording, Opus consults
+### Decisions
+- Stitched words are audible to the owner: **whole phrases wherever possible** for every voice.
+- The owner's voice is **published** (My Voice, id `own`) with their consent.
+- Opus is consulted for architecture questions (two consults this session: phrase architecture, runtime clone).
+### Completed
+- [x] Phrase-aware playback (`ApexVoice.cover`/`joins`/`playWhole`), phrase rendering (`--phrases`),
+  mined phrase list from 1,586 real calls, real-recording splitter, recording script, 4,000 training phrases.
+- [x] Kokoro voices: whole-call prefetch at route load (renders calls the bank can only join).
+- [x] Owner's real recording: 54 of 56 shipped calls cut from the read-through and verified;
+  the clone was rebuilt from the clean Part A reference.
+- [x] Tests: `tests/test_voice_phrases.py` (51 passing).
+### Active bugs / limitations
+- The clone cannot speak brand-new phrases whole; see docs/VOICE.md "Path to ANY phrase" (Kaggle fine-tune).
+- Clip loudness differs between renders (peak normalisation), which can expose seams.
+- Voice banks add ~15 MB per voice to the repo/Pages bundle (`du -sh web/voices`).
+
 ## Exact Next Task
-1. Owner: try best-road loops on the phone; report any loop that feels wrong (spurs, town streets).
-2. Owner's cloned voice bank ("own", My Voice) is **built locally** (`/opt/cbx/bin/python tools/voicebank.py
-   --voice own --ref voice_test/ref.wav`, ~35 min CPU; truncation fixed by punctuation + length check
-   against George, one retry needed). `web/voices/own/` and the reference are gitignored. Waiting on the
-   owner: publish the clips (public repo/Pages) or wait until the repo is private. To publish: remove
-   `web/voices/own/` from .gitignore and rerun `write_index()` so index.json lists it.
-3. Loops: penalise dead-end stage access, and calibrate connector length from routed results.
+1. Owner: confirm the voices sound whole on the phone (George/Daniel/Emma, My Voice).
+2. Run the Kaggle spike (docs/VOICE.md "Path to ANY phrase"): render `tools/training_phrases.json`
+   with Chatterbox, fine-tune Kokoro, A/B against the clone.
+3. LUFS-normalise all banks; drop espeak-ng from the shipped app (misaki phoneme lexicon).
+4. Loops: penalise dead-end stage access; calibrate connector length.

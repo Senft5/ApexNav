@@ -184,6 +184,7 @@
   }
   // Render (or reuse) a phrase in the active bank's voice; one render at a time.
   let renderChain = Promise.resolve();
+  const ready = new Set();
   function render(text) {
     const key = `${bankId}|${text}`;
     if (phraseCache.has(key)) return phraseCache.get(key);
@@ -195,9 +196,19 @@
       return buf;
     });
     phraseCache.set(key, p);
-    p.catch(() => phraseCache.delete(key));
+    p.then(() => ready.add(key), () => phraseCache.delete(key));
     return p;
   }
+  // A call the bank can only voice by joining clips is rendered whole (same open model) at route
+  // load; this plays that render if it is ready now. Never waits: pace notes are time-critical.
+  async function playWhole(text) {
+    if (!bank || bank.engine !== 'kokoro') return false;
+    const key = `${bankId}|${text}`;
+    if (!ready.has(key)) return false;
+    await playBuffer(await phraseCache.get(key));
+    return true;
+  }
+  const joins = (tokens) => cover(tokens).length - 1;
   // Pre-render phrases we know are coming (route names) so they're instant when needed.
   async function prefetch(texts) {
     if (!bank || !bank.kokoro_voice) return;
@@ -220,5 +231,5 @@
     try { return (await (await fetch('voices/index.json')).json()).voices; } catch (_) { return []; }
   }
 
-  root.ApexVoice = { load, play, tokensFor, cover, voices, speakLive, prefetch, warmLive, liveState, unlock: audio, get bank() { return bank; } };
+  root.ApexVoice = { load, play, tokensFor, cover, joins, playWhole, voices, speakLive, prefetch, warmLive, liveState, unlock: audio, get bank() { return bank; } };
 })(window);

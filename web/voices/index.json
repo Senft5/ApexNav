@@ -23,12 +23,6 @@
    "name": "Jarvis",
    "style": "jarvis",
    "license": "Kokoro-82M, Apache-2.0 (hexgrad/Kokoro-82M)"
-  },
-  {
-   "id": "own",
-   "name": "My Voice",
-   "style": "codriver",
-   "license": "Chatterbox, MIT (resemble-ai/chatterbox); clone of a consented sample, Perth-watermarked"
   }
  ]
 }
