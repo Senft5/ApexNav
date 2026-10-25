@@ -210,12 +210,20 @@ docs/SOCIAL.md.
 - [x] CI job `backend` (tsc, vitest, wrangler dry-run). docs/BACKEND.md rewritten for Cloudflare.
 ### Owner to do
 - Create the Google OAuth client and set Worker secrets `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `OWNER_EMAIL`, `PEPPER` (docs/BACKEND.md section 7).
+### Completed (later in session (i))
+- [x] Migration 0003 (`road_bins.camber_n`) applied live. 22+ tables.
+- [x] `POST /api/contribute` + `PUT /api/me/contribute`: opt-in, date window, ranges, contiguity, hour/day/week caps, hashed one-per-road dedupe.
+- [x] Nightly cron (`backend/src/nightly.ts`): 14-day hold, rank by drive date, replay discard, Welford merge into `road_bins`, points 3x/2x/1x in `points_ledger`; `GET /api/points`.
+- [x] `GET /api/me/export` and `DELETE /api/me` (`{confirm:"DELETE"}`); audiences named by handle, never by other users' ids.
+- [x] Highlights end to end: API (`backend/src/highlights.ts`), planner bonus (`applyHighlights` in web/stages.js), route-panel toggle + strength, Account panel in web/index.html (sign-in, invite, handle, friends, per-friend sharing, points, road-data toggle, export, delete).
+- [x] **68 backend tests** (privacy, auth, highlights, contribute, nightly, account) + 53 pytest.
 ### Active bugs / limitations
-- Not built yet: ingest + nightly merge + points, highlights API, account deletion/export, web account panel, convoy.
+- **Cloudflare "Workers Builds: apexnav" preview build fails on PR commits** while all GitHub Actions pass; a clean-checkout `wrangler deploy --dry-run` succeeds. Docs say a D1 binding needs only Editor access, so a token problem is unlikely. Need the build log text (dashboard > apexnav > Builds). Production deploy of main after merge may fail; the previous deployment stays live.
+- Not built yet: phone-side contributor (map-match a drive to OSM way ids, build bins, upload), web sync (IndexedDB -> /api/segments, /api/board, /api/highlights), read side (serve merged `road_bins` to the phone), convoy, R2 backups.
 - `npm ci` needs `--legacy-peer-deps` (Cloudflare test plugin vs wrangler peers).
 
 ## Exact Next Task
 1. Owner: Google client + Worker secrets; then sign in at the site and make the first invites.
-2. Web account panel + sync (IndexedDB -> /api/segments, /api/board); highlights planner bonus (offline) then highlights API.
-3. Ingest + nightly merge + points; account deletion/export; convoy (Durable Objects).
+2. Get the Workers Builds log and fix the preview/production build; merge PR #10.
+3. Web sync (IndexedDB -> /api/segments, /api/board, /api/highlights); phone-side contributor; read side for road_bins; convoy (Durable Objects).
 4. Voice (on hold): in-app enrollment design in docs/VOICE.md; replace the espeak-ng dependency.
