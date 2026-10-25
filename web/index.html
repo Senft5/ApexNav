@@ -260,10 +260,10 @@
               <button class="ink-btn" id="hlToggleBtn">HIGHLIGHTS OFF</button>
               <label class="ink-btn" style="display:inline-flex;align-items:center;gap:8px">PULL <input type="range" id="hlStrength" min="0.5" max="2" step="0.5" value="1" style="width:90px" /></label>
             </div>
-            <div class="row" style="margin-top:6px">
-              <input class="field" id="hlName" placeholder="Name this spot (adds at your position)" autocomplete="off" />
-              <select class="field" id="hlStars" style="flex:0 0 70px"><option>5</option><option>4</option><option>3</option></select>
-              <select class="field" id="hlCat" style="flex:0 0 96px" aria-label="Kind of spot"><option value="overlook">Overlook</option><option value="photo">Photo</option><option value="bridge">Bridge</option><option value="water">Water</option><option value="cafe">Cafe</option><option value="trailhead">Trailhead</option><option value="landmark">Landmark</option><option value="other">Other</option></select>
+            <div class="row" style="margin-top:6px;flex-wrap:wrap">
+              <input class="field" id="hlName" style="flex:1 1 100%" placeholder="Name this spot (adds at your position)" autocomplete="off" />
+              <select class="field" id="hlStars" aria-label="Your rating in stars" style="flex:0 0 70px"><option>5</option><option>4</option><option>3</option></select>
+              <select class="field" id="hlCat" style="flex:0 0 120px" aria-label="Kind of spot"><option value="overlook">Overlook</option><option value="photo">Photo</option><option value="bridge">Bridge</option><option value="water">Water</option><option value="cafe">Cafe</option><option value="trailhead">Trailhead</option><option value="landmark">Landmark</option><option value="other">Other</option></select>
               <button class="ink-btn" id="hlAddBtn">ADD</button>
             </div>
             <div id="hlList" style="display:grid;gap:4px;margin-top:6px"></div>
