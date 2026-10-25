@@ -222,11 +222,11 @@ docs/SOCIAL.md.
 - [x] **68 backend tests** (privacy, auth, highlights, contribute, nightly, account) + 53 pytest.
 ### Active bugs / limitations
 - **Cloudflare "Workers Builds: apexnav" preview build fails on PR commits** while all GitHub Actions pass; a clean-checkout `wrangler deploy --dry-run` succeeds. Docs say a D1 binding needs only Editor access, so a token problem is unlikely. Need the build log text (dashboard > apexnav > Builds). Production deploy of main after merge may fail; the previous deployment stays live.
-- Not built yet: phone-side contributor (map-match a drive to OSM way ids, build bins, upload), a UI to rate shared highlights, read side (serve merged `road_bins` to the phone), convoy, R2 backups.
+- Not built yet: phone-side contributor (map-match a drive to OSM way ids, build bins, upload),  read side (serve merged `road_bins` to the phone), convoy, R2 backups.
 - `npm ci` needs `--legacy-peer-deps` (Cloudflare test plugin vs wrangler peers).
 
 ## Exact Next Task
 1. Owner: Google client + Worker secrets; then sign in at the site and make the first invites.
 2. Get the Workers Builds log and fix the preview/production build; merge PR #10.
-3. Rating UI for shared highlights (segments, boards, highlight sharing done); phone-side contributor; read side for road_bins; convoy (Durable Objects).
+3. (Segments, boards, highlight sharing and rating UI are done.) phone-side contributor; read side for road_bins; convoy (Durable Objects).
 4. Voice (on hold): in-app enrollment design in docs/VOICE.md; replace the espeak-ng dependency.
