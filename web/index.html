@@ -251,6 +251,20 @@
             </div>
             <p class="note">Loops are stitched from the best roads nearby: every road around you is scored from map geometry (corners per km, few junctions), the best stretches are chained to fit the distance, and the result is checked against a plain loop. Geometry only until driven.</p>
           </section>
+          <section data-panel="route">
+            <h3>Highlights · scenic stops</h3>
+            <div class="row">
+              <button class="ink-btn" id="hlToggleBtn">HIGHLIGHTS OFF</button>
+              <label class="ink-btn" style="display:inline-flex;align-items:center;gap:8px">PULL <input type="range" id="hlStrength" min="0.5" max="2" step="0.5" value="1" style="width:90px" /></label>
+            </div>
+            <div class="row" style="margin-top:6px">
+              <input class="field" id="hlName" placeholder="Name this spot (adds at your position)" autocomplete="off" />
+              <select class="field" id="hlStars" style="flex:0 0 70px"><option>5</option><option>4</option><option>3</option></select>
+              <button class="ink-btn" id="hlAddBtn">ADD</button>
+            </div>
+            <div id="hlList" style="display:grid;gap:4px;margin-top:6px"></div>
+            <p class="note">When on, loops lean toward roads that pass a highlight you rate 3 stars or more. They can tip the choice between two good roads; they never make a dull road win. Yours stay on this phone until accounts are connected.</p>
+          </section>
           <section data-panel="drives">
             <h3>Profiled drives</h3>
             <div id="driveList" style="display:grid;gap:6px"></div>
@@ -366,12 +380,12 @@
     const state = {
       mode: 'replay', playing: false, rate: 1, cursorM: 0, cursorIdx: 0, follow: true, bearing: 0,
       live: null, liveAt: 0, spiritedAt: -Infinity, spoken: new Set(), tapToRoute: false,
-      theme: 'stage', camFeel: 'dynamic', voiceId: 'george', liveVoice: true, voiceStyle: 'codriver', voiceName: '',
+      theme: 'stage', camFeel: 'dynamic', voiceId: 'george', liveVoice: true, voiceStyle: 'codriver', voiceName: '', hlOn: false, hlStrength: 1,
       toggles: { stage: false, voice: true, lpr: true, dna: false, night: false }
     };
     try {
       const saved = JSON.parse(localStorage.getItem('apex.prefs') || 'null');
-      if (saved) { Object.assign(state.toggles, saved.toggles || {}); if (saved.theme) state.theme = saved.theme; if (saved.camFeel) state.camFeel = saved.camFeel; if (saved.voiceId) state.voiceId = saved.voiceId; if (saved.liveVoice != null) state.liveVoice = saved.liveVoice; if (saved.voiceName != null) state.voiceName = saved.voiceName; }
+      if (saved) { Object.assign(state.toggles, saved.toggles || {}); if (saved.theme) state.theme = saved.theme; if (saved.camFeel) state.camFeel = saved.camFeel; if (saved.voiceId) state.voiceId = saved.voiceId; if (saved.liveVoice != null) state.liveVoice = saved.liveVoice; if (saved.voiceName != null) state.voiceName = saved.voiceName; if (saved.hlOn != null) state.hlOn = !!saved.hlOn; if (saved.hlStrength > 0) state.hlStrength = saved.hlStrength; }
     } catch (_) {}
     if (params.has('night')) state.toggles.night = params.get('night') === '1';
     if (params.has('theme')) state.theme = params.get('theme');
@@ -381,7 +395,7 @@
 
     let look = Themes.apply(state.theme, state.toggles.night);
     let cluster = Inst.mountCluster($('cluster'), look.theme);
-    function savePrefs() { try { localStorage.setItem('apex.prefs', JSON.stringify({ theme: state.theme, camFeel: state.camFeel, voiceId: state.voiceId, liveVoice: state.liveVoice, voiceName: state.voiceName, toggles: state.toggles })); } catch (_) {} }
+    function savePrefs() { try { localStorage.setItem('apex.prefs', JSON.stringify({ theme: state.theme, camFeel: state.camFeel, voiceId: state.voiceId, liveVoice: state.liveVoice, voiceName: state.voiceName, hlOn: state.hlOn, hlStrength: state.hlStrength, toggles: state.toggles })); } catch (_) {} }
     function applyTheme() {
       look = Themes.apply(state.theme, state.toggles.night);
       cluster = Inst.mountCluster($('cluster'), look.theme);
@@ -1217,7 +1231,8 @@
       let plans = [];
       try {
         const radiusKm = Math.min(14, Math.max(5, targetKm / 4.2));
-        const stages = await ApexStages.discover(c, radiusKm, (phase, f) => ui.step(phase === 'tiles' ? 'ROADS' : 'SCORING', 0.05 + 0.3 * f));
+        const stages = await ApexStages.discover(c, radiusKm, (phase, f) => ui.step(phase === 'tiles' ? 'ROADS' : 'SCORING', 0.05 + 0.3 * f),
+          state.hlOn ? { highlights: loadHighlights(), strength: state.hlStrength } : {});
         plans = ApexStages.plans(c, stages, targetKm, 3);
       } catch (_) { /* no tiles: fall back to circle loops below */ }
       // 2. Route each stage plan, plus one circle loop as a baseline, and keep the best result.
@@ -1322,6 +1337,31 @@
         list.appendChild(b);
       }
     }
+
+    // Highlights (local for now): [{id, name, lat, lon, rating}] in localStorage; the server list joins later (docs/BACKEND.md section 9).
+    function loadHighlights() { try { return JSON.parse(localStorage.getItem('apex.highlights') || '[]'); } catch (_) { return []; } }
+    function saveHighlights(list) { try { localStorage.setItem('apex.highlights', JSON.stringify(list)); } catch (_) {} }
+    function renderHighlights() {
+      $('hlToggleBtn').textContent = state.hlOn ? 'HIGHLIGHTS ON' : 'HIGHLIGHTS OFF';
+      $('hlToggleBtn').classList.toggle('on', state.hlOn);
+      $('hlStrength').value = state.hlStrength;
+      const list = $('hlList'); list.innerHTML = '';
+      for (const h of loadHighlights()) {
+        const row = document.createElement('div'); row.className = 'row'; row.style.cssText = 'justify-content:space-between;align-items:center;font-size:13px';
+        const t = document.createElement('span'); t.textContent = `${'★'.repeat(h.rating)} ${h.name}`;
+        const x = document.createElement('button'); x.className = 'ink-btn'; x.style.height = '28px'; x.textContent = '×'; x.setAttribute('aria-label', `Remove ${h.name}`);
+        x.onclick = () => { saveHighlights(loadHighlights().filter(v => v.id !== h.id)); renderHighlights(); };
+        row.append(t, x); list.appendChild(row);
+      }
+    }
+    $('hlToggleBtn').addEventListener('click', () => { state.hlOn = !state.hlOn; savePrefs(); renderHighlights(); });
+    $('hlStrength').addEventListener('input', (e) => { state.hlStrength = parseFloat(e.target.value); savePrefs(); });
+    $('hlAddBtn').addEventListener('click', () => {
+      const name = $('hlName').value.trim(); if (!name) { toast('Name the spot first.'); return; }
+      const p = here();
+      saveHighlights(loadHighlights().concat({ id: String(Date.now()), name: name.slice(0, 60), lat: p.lat, lon: p.lon, rating: parseInt($('hlStars').value, 10) }));
+      $('hlName').value = ''; renderHighlights(); toast(`Added ${name} at your position.`);
+    });
 
     // Voice picker: open-model banks (web/voices/index.json) + the device's own voice.
     let bankVoices = [];
@@ -1443,6 +1483,7 @@
     drawPuck();
     renderDriveList();
     renderThemeList();
+    renderHighlights();
     const first = drives.find(d => d.id === params.get('drive')) || drives[0];
     if (first) {
       const at = params.has('at') ? parseFloat(params.get('at')) || 0 : 0;
