@@ -49,11 +49,11 @@
         const crest = ids.map((i) => drive.crest && drive.crest[i]).filter(finite);
         const k = ids.map((i) => drive.kappa[i]).filter((v) => finite(v) && Math.abs(v) <= 0.2);
         bins.push({ i: b, cam: cam.length ? +mean(cam).toFixed(2) : null, rough: +Math.min(1.5, mean(rough)).toFixed(3),
-                    crest: +Math.min(3, crest.length ? Math.max(...crest) : 0).toFixed(3), k: +(k.length ? mean(k) : 0).toFixed(5) });
+                    crest: crest.length ? +Math.min(3, Math.max(...crest)).toFixed(3) : null, k: +(k.length ? mean(k) : 0).toFixed(5) });
       }
       if (bins.length < MIN_BINS) continue;
       const span = bins[bins.length - 1].i - bins[0].i + 1;
-      if (bins.length / span < 0.8) continue;                          // would be rejected as scattered
+      if (bins.length / span < 0.6) continue;                          // scattered, not a run (5 m samples on 5 m bins can skip a bin now and then: about 75% is normal worst case)
       const key = `${run.way}|${run.dir}`;
       if (!best.has(key) || best.get(key).bins.length < bins.length) best.set(key, { way_id: run.way, dir: run.dir, driven_on: drivenOn, drive_id: driveId, bins: bins.slice(0, MAX_BINS) });
     }
@@ -127,6 +127,66 @@
   /** True when a drive is recent enough for the server's 14-day window and has the columns we need. */
   const eligible = (d, now = Date.now()) => !!(d && d.rough && d.kappa && d.date && ageDays(d.date, now) <= MAX_AGE_DAYS && ageDays(d.date, now) >= -1);
 
+
+  /**
+   * Streams a drive to /api/contribute while it is being driven (owner decision: real time, no holding period).
+   * Rows arrive one per 5 m. Every `chunk` rows the settled part of the drive is matched, turned into bins and posted.
+   * Privacy: the first `skip` rows (about 1 km) are never sent and the last `lag` rows (about 1 km) are never sent, so where a trip starts and ends
+   * stays on the phone; the server also never receives coordinates. Failures keep the rows and retry later; a refusal (opt-out, rate limit) stops it.
+   */
+  function createLive({ Core, post, fetch: fetchFn, driveId, drivenOn, chunk = 100, lag = 200, skip = 200, ctx = 20, retryMs = 30000, now = Date.now, onStatus }) {
+    const A = { lat: [], lon: [], rough: [], camber: [], crest: [] };
+    const wayCache = {};
+    let done = 0, busy = false, stopped = false, retryAt = 0, bins = 0, chunks = 0, error = null;
+    const status = () => { if (onStatus) onStatus({ state: stopped ? 'stopped' : error ? 'retrying' : 'on', km: bins * BIN_M / 1000, chunks, error }); };
+    async function run() {
+      if (busy || stopped || now() < retryAt) return;
+      const n = A.lat.length, from = Math.max(done, skip), to = n - lag;
+      if (to - from < chunk) return;
+      busy = true;
+      try {
+        const lo = Math.max(0, from - ctx), hi = Math.min(n, to + ctx);
+        const slice = { lat: A.lat.slice(lo, hi), lon: A.lon.slice(lo, hi), rough: A.rough.slice(lo, hi), camber: A.camber.slice(lo, hi), crest: A.crest.slice(lo, hi) };
+        slice.kappa = Array.from(Core.computeCurvature(slice.lat, slice.lon).kappa);
+        const match = await matchDrive(slice, fetchFn);
+        for (let i = 0; i < match.length; i++) if (i < from - lo || i >= to - lo) match[i] = null;      // context only helps the matcher
+        const need = [...new Set(match.filter((m) => m && m.way != null).map((m) => m.way))].filter((id) => !wayCache[id]);
+        if (need.length) Object.assign(wayCache, await fetchWays(need, fetchFn));
+        const list = buildContributions({ drive: slice, match, ways: wayCache, drivenOn, driveId, trimM: 0 });
+        for (const c of list) {
+          const r = await post(c);
+          if (r === 'stop') { stopped = true; break; }
+          if (r === true) { bins += c.bins.length; chunks++; }
+        }
+        done = to; error = null;
+      } catch (e) { error = e.message || String(e); retryAt = now() + retryMs; }
+      finally { busy = false; status(); }
+    }
+    return {
+      /** One 5 m row from the recorder: { lat, lon, roughness_rms, camber_deg? , crest? }. Never blocks. */
+      push(row) {
+        A.lat.push(row.lat); A.lon.push(row.lon);
+        A.rough.push(Number.isFinite(row.roughness_rms) ? row.roughness_rms : null);
+        A.camber.push(Number.isFinite(row.camber_deg) ? row.camber_deg : null);
+        A.crest.push(Number.isFinite(row.crest) ? row.crest : null);
+        if (A.lat.length - Math.max(done, skip) - lag >= chunk) run();
+      },
+      stats: () => ({ km: bins * BIN_M / 1000, chunks, stopped, error, rows: A.lat.length }),
+      /** Drive ended: nothing more is sent (the last km stays private). Resolves when an in-flight chunk settles. */
+      async finish() {
+        for (let i = 0; i < 60; i++) {                                    // settle the in-flight chunk, then send any settled rows still waiting
+          if (busy) { await new Promise((r) => setTimeout(r, 50)); continue; }
+          const n = A.lat.length;
+          if (stopped || error || n - lag - Math.max(done, skip) < chunk) break;
+          await run();
+        }
+        return this.stats();
+      },
+      /** For tests and for retrying after reconnecting. */
+      run,
+    };
+  }
+
   /** Full pipeline for one drive. `post(contribution)` returns a Response-like or null. Returns { built, sent, skipped }. */
   async function contributeDrive(drive, post, opts = {}) {
     if (!eligible(drive, opts.now)) return { built: 0, sent: 0, skipped: 'drive is too old or lacks roughness data' };
@@ -199,6 +259,6 @@
     return -6 * Math.min(1, m.coverage * 2) * rough;
   }
 
-  const api = { driveIdFor, measuredSeries, seriesFrom, measuredAdjust, measuredAlong, summarize, locate, buildContributions, matchDrive, fetchWays, contributeDrive, eligible, project, cumulative, SKIP_CLASSES };
+  const api = { createLive, driveIdFor, measuredSeries, seriesFrom, measuredAdjust, measuredAlong, summarize, locate, buildContributions, matchDrive, fetchWays, contributeDrive, eligible, project, cumulative, SKIP_CLASSES };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexContributor = api;
 })(typeof window !== 'undefined' ? window : globalThis);

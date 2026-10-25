@@ -5,10 +5,10 @@ import { Env, HttpError, body } from "./util";
 import type { Viewer } from "./auth";
 import { isoWeek } from "./points";
 
-export const LIMITS = { maxBins: 2000, minBins: 20, maxAgeDays: 14, kmPerDay: 600, kmPerWeek: 1500, uploadsPerHour: 300, minCoverage: 0.8 };
+export const LIMITS = { maxBins: 2000, minBins: 20, maxAgeDays: 14, kmPerDay: 600, kmPerWeek: 1500, uploadsPerHour: 300, minCoverage: 0.6 };
 const BIN_KM = 0.005;
 
-export interface Bin { i: number; cam: number | null; rough: number; crest: number; k: number }
+export interface Bin { i: number; cam: number | null; rough: number; crest: number | null; k: number }
 export interface Contribution { wayId: number; dir: 0 | 1; drivenOn: string; driveId: string; bins: Bin[]; km: number }
 
 const isNum = (v: unknown, lo: number, hi: number): v is number => typeof v === "number" && Number.isFinite(v) && v >= lo && v <= hi;
@@ -36,9 +36,10 @@ export function validateContribution(raw: Record<string, unknown>, nowMs = Date.
     const cam = b.cam === null || b.cam === undefined ? null : b.cam;
     if (cam !== null && !isNum(cam, -15, 15)) throw bad("bad_camber");
     if (!isNum(b.rough, 0, 1.5)) throw bad("bad_roughness");
-    if (!isNum(b.crest, 0, 3)) throw bad("bad_crest");
+    const crest = b.crest === null || b.crest === undefined ? null : b.crest;        // a phone with no crest sensor says so
+    if (crest !== null && !isNum(crest, 0, 3)) throw bad("bad_crest");
     if (!isNum(b.k, -0.2, 0.2)) throw bad("bad_curvature");          // radius under 5 m is not a road
-    out.push({ i, cam, rough: b.rough, crest: b.crest, k: b.k });
+    out.push({ i, cam, rough: b.rough, crest, k: b.k });
   }
   const lo = Math.min(...seen), hi = Math.max(...seen);
   if (out.length / (hi - lo + 1) < LIMITS.minCoverage) throw bad("not_contiguous");   // real drives cover a run of the road, not scattered bins
@@ -71,7 +72,7 @@ function mergeBin(env: Env, wayId: number, dir: number, b: Bin): D1PreparedState
        camber_n    = camber_n + (?4 IS NOT NULL),
        rough_mean  = rough_mean + (?5 - rough_mean) / (n + 1),
        rough_m2    = COALESCE(rough_m2, 0) + (?5 - rough_mean) * (?5 - (rough_mean + (?5 - rough_mean) / (n + 1))),
-       crest_peak  = COALESCE(crest_peak, ?6) + (?6 - COALESCE(crest_peak, ?6)) / (n + 1),
+       crest_peak  = CASE WHEN ?6 IS NULL THEN crest_peak ELSE COALESCE(crest_peak, ?6) + (?6 - COALESCE(crest_peak, ?6)) / (n + 1) END,
        n           = n + 1`,
   ).bind(wayId, dir, b.i, b.cam, b.rough, b.crest);
 }
