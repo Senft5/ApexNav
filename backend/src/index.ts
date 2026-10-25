@@ -11,6 +11,7 @@ import {
 import { deleteAccount, exportMyData } from "./account";
 import { contribute, setContribute } from "./contribute";
 import { nightlyMerge, pointsFor } from "./nightly";
+import { roadBins } from "./roads";
 import { highlightCreate, highlightDelete, highlightList, highlightRate, highlightReport } from "./highlights";
 import { segmentAdopt, segmentCreate, segmentDelete, segmentList, segmentShare, segmentsSharedWithMe } from "./segments";
 
@@ -38,6 +39,7 @@ on("PUT", "/api/me/handle", async (req, env) => { await setHandle(env, await req
 on("PUT", "/api/me/contribute", async (req, env) => { await setContribute(env, await requireMember(req, env), req); return noContent(); });
 on("POST", "/api/contribute", async (req, env) => json(await contribute(env, await requireMember(req, env), req), 202));
 
+on("GET", "/api/roads", async (req, env) => { await requireMember(req, env); return json(await roadBins(env, new URL(req.url))); });
 on("GET", "/api/points", async (req, env) => json(await pointsFor(env, (await requireMember(req, env)).id)));
 
 on("POST", "/api/friends/request", async (req, env) => { await friendRequest(env, await requireMember(req, env), req); return json({ ok: true }, 202); });
