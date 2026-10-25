@@ -2,7 +2,7 @@
 // No library: the id_token is received directly from Google's token endpoint over TLS, so per the OIDC spec its
 // signature need not be re-verified; we still check iss, aud, exp, nonce and email_verified.
 import {
-  Env, HttpError, b64urlDecode, body, cookie, getCookie, randomToken, sha256b64url, sha256hex, sqlTime, str,
+  Env, HttpError, b64urlDecode, body, cookie, getCookie, pair, randomToken, sha256b64url, sha256hex, sqlTime, str,
 } from "./util";
 
 export const SESSION_COOKIE = "__Host-ax_session";
@@ -148,4 +148,11 @@ export async function redeemInvite(env: Env, v: Viewer, req: Request): Promise<v
   ).bind(v.id, hash).first<{ created_by: string }>();
   if (!used) throw new HttpError(400, "invalid_invite");
   await env.DB.prepare("INSERT OR IGNORE INTO members (user_id, invited_by) VALUES (?, ?)").bind(v.id, used.created_by).run();
+  // An invite is two people agreeing to meet: the inviter made the link for this person, the invitee accepted it. They start as friends
+  // (sharing is still off until each of them turns it on, per friend).
+  const [x, y] = pair(v.id, used.created_by);
+  await env.DB.prepare(
+    `INSERT INTO friendships (user_a, user_b, status, requested_by) VALUES (?, ?, 'accepted', ?)
+     ON CONFLICT (user_a, user_b) DO UPDATE SET status = 'accepted'`,
+  ).bind(x, y, used.created_by).run();
 }
