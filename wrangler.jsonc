@@ -1,0 +1,8 @@
+{
+  // Cloudflare Workers static assets: serve only web/ (never the repo root, which holds .git and local data).
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "apexnav",
+  "compatibility_date": "2026-10-19",
+  "observability": { "enabled": true },
+  "assets": { "directory": "./web" }
+}
