@@ -4,9 +4,9 @@ name: iOS Build & Simulator Tests
 # that cannot affect the app: docs, tests, tools, and voice clips.
 on:
   push:
-    paths-ignore: ['docs/**', 'tests/**', 'tools/**', 'web/voices/**', '**.md', 'LICENSE']
+    paths-ignore: ['docs/**', 'tests/**', 'tools/**', 'web/voices/**', '**.md', 'LICENSE', 'wrangler.jsonc']
   pull_request:
-    paths-ignore: ['docs/**', 'tests/**', 'tools/**', 'web/voices/**', '**.md', 'LICENSE']
+    paths-ignore: ['docs/**', 'tests/**', 'tools/**', 'web/voices/**', '**.md', 'LICENSE', 'wrangler.jsonc']
   workflow_dispatch:
 
 jobs:

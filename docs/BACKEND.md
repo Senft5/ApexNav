@@ -103,7 +103,7 @@ cannot read a friend-only entry; revoking a grant removes the entry; nobody can 
 ## 8. Deployment and distribution
 | Piece | Choice | Why |
 |---|---|---|
-| Web app | **Cloudflare Pages** at `apexnav.pages.dev` (free). Output directory `web/`, no build step. | Free, works with private repos, headers via `web/_headers`. GitHub Pages stops serving a private repo on the free plan. |
+| Web app | **Cloudflare** (Workers static assets, free) from `wrangler.jsonc`: serves only `web/`, no build step. URL is `apexnav.<account>.workers.dev` (the owner's Cloudflare project was created as a Worker, not Pages). | Free, works with private repos, headers via `web/_headers`. GitHub Pages stops serving a private repo on the free plan. |
 | Database/auth | Supabase free tier; migrations in `supabase/migrations`, applied by CI | Plain Postgres, no lock-in |
 | Edge logic | Supabase Edge Functions (ingest, points) | Keeps writes server-side |
 | Routing tiles (later) | Cloudflare R2 (free allowance, no download fees) | Per-state Valhalla tiles for on-device routing |
