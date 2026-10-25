@@ -161,6 +161,9 @@ docs/SOCIAL.md.
 
 ## Exact Next Task
 1. Owner: try best-road loops on the phone; report any loop that feels wrong (spurs, town streets).
-2. Owner's cloned voice bank: add `--engine chatterbox --ref` to `tools/voicebank.py`, rendering
-   each token inside a carrier sentence (Chatterbox truncates single words), then add it to the picker.
+2. Owner's cloned voice bank ("own", My Voice) is **built locally** (`/opt/cbx/bin/python tools/voicebank.py
+   --voice own --ref voice_test/ref.wav`, ~35 min CPU; truncation fixed by punctuation + length check
+   against George, one retry needed). `web/voices/own/` and the reference are gitignored. Waiting on the
+   owner: publish the clips (public repo/Pages) or wait until the repo is private. To publish: remove
+   `web/voices/own/` from .gitignore and rerun `write_index()` so index.json lists it.
 3. Loops: penalise dead-end stage access, and calibrate connector length from routed results.
