@@ -10,6 +10,7 @@
   <script src="apex_core.js"></script>
   <script src="themes.js"></script>
   <script src="instruments.js"></script>
+  <script src="sync.js"></script>
   <script src="data/dry_ridge.js"></script>
   <script src="data/pebble_ridge.js"></script>
   <style>
@@ -115,7 +116,8 @@
       </div>
       <div class="grid2">
         <div class="panel"><h2>Your segments</h2><div class="seglist" id="segList"></div><p class="note" style="margin-top:8px">Segments are your custom stretches. Every drive that covers one, in the same direction, is ranked on it by Driver Score. Leaderboards with friends and crews come with accounts.</p></div>
-        <div class="panel"><h2 id="segTitle">Passes</h2><div id="segChart"></div><div class="scroll"><table id="segTable"></table></div></div>
+        <div class="panel" id="segSyncPanel" hidden><h2>Friends and sync</h2><div class="note" id="segSyncNote"></div><div id="segShared"></div><div class="row" id="segShareRow" style="margin-top:8px"></div></div>
+      <div class="panel"><h2 id="segTitle">Passes</h2><div id="segChart"></div><div class="scroll"><table id="segTable"></table></div></div>
       </div>
     </section>
 
@@ -335,10 +337,39 @@
       const [a, b] = sel[0] < sel[1] ? sel : [sel[1], sel[0]];
       if (b - a < 40) { $('segInfo').textContent = 'Make it at least 200 m long.'; return; }
       const seg = { id: 'seg_' + Date.now(), name: $('segName').value.trim() || `${d.name} ${((a * 5) / 1609.344).toFixed(1)}-${((b * 5) / 1609.344).toFixed(1)} mi`,
-                    lat0: d.lat[a], lon0: d.lon[a], lat1: d.lat[b], lon1: d.lon[b], length_m: (b - a) * 5, from: d.id };
+                    lat0: d.lat[a], lon0: d.lon[a], lat1: d.lat[b], lon1: d.lon[b], length_m: (b - a) * 5, from: d.id,
+                    geom: JSON.stringify(Array.from({ length: Math.min(60, b - a + 1) }, (_, k) => { const i = a + Math.round(k * (b - a) / (Math.min(60, b - a + 1) - 1)); return [+d.lat[i].toFixed(6), +d.lon[i].toFixed(6)]; })) };
       segs.push(seg); saveSegs(segs); activeSeg = seg.id; sel = null; $('segName').value = '';
-      renderSegments();
+      renderSegments(); syncSegments();
     });
+
+    // Optional server sync (sync.js): segments upload when signed in; friends' shared segments can be adopted; the active one can be shared.
+    async function syncSegments() {
+      const panel = $('segSyncPanel');
+      if (!window.ApexSync || !(await ApexSync.member())) { panel.hidden = true; return; }
+      panel.hidden = false;
+      const sent = await ApexSync.pushSegments(segs); saveSegs(segs);
+      $('segSyncNote').textContent = sent ? `Uploaded ${sent} segment${sent === 1 ? '' : 's'}. Only the stretch itself is stored, never your drives.` : 'Your segments are backed up. Scores are shared only with friends you choose (Account).';
+      const box = $('segShared'); box.innerHTML = '';
+      const have = new Set(segs.map(s => s.origin || s.id));
+      for (const r of (await ApexSync.sharedWithMe()).filter(r => !have.has(r.origin || r.id))) {
+        const b = document.createElement('button'); b.className = 'btn';
+        b.textContent = `ADOPT "${r.name}" from @${r.from_handle}`;
+        b.onclick = async () => { b.disabled = true; const a = await ApexSync.adopt(r); if (a) { segs.push(a); saveSegs(segs); renderSegments(); syncSegments(); } else b.disabled = false; };
+        box.appendChild(b);
+      }
+      const row = $('segShareRow'); row.innerHTML = '';
+      const seg = segs.find(s => s.id === activeSeg);
+      if (seg && seg.synced) {
+        const fr = await ApexSync.friends();
+        if (fr.length) {
+          const sel2 = document.createElement('select'); fr.forEach(f => sel2.add(new Option('@' + f.handle, f.id)));
+          const go = document.createElement('button'); go.className = 'btn'; go.textContent = 'SHARE SEGMENT';
+          go.onclick = async () => { go.textContent = (await ApexSync.shareSegment(seg.id, 'friend', sel2.value)) ? 'SHARED' : 'FAILED'; };
+          row.append(sel2, go);
+        }
+      }
+    }
 
     function passesFor(seg) {
       return drives.map(d => ({ d, p: Core.segmentPass(seg, d) })).filter(x => x.p);
@@ -356,7 +387,7 @@
         b.innerHTML = `<b></b><span class="score" style="font-size:20px">${best ?? '--'}</span><span></span><span>best</span>`;
         b.querySelector('b').textContent = s.name;
         b.querySelectorAll('span')[1].textContent = `${(s.length_m / 1609.344).toFixed(2)} mi · ${passes.length} pass${passes.length === 1 ? '' : 'es'}`;
-        b.onclick = () => { activeSeg = s.id; renderSegments(); };
+        b.onclick = () => { activeSeg = s.id; renderSegments(); syncSegments(); };
         list.appendChild(b);
       }
       const seg = segs.find(s => s.id === activeSeg);
@@ -441,7 +472,7 @@
     }
 
     // ---------------------------------------------------------------------
-    function renderAll() { renderHistory(); renderSegments(); renderCompareSelectors(); renderCompare(); }
+    function renderAll() { renderHistory(); renderSegments(); renderCompareSelectors(); renderCompare(); syncSegments(); }
     document.querySelectorAll('#tabs button').forEach(b => b.addEventListener('click', () => {
       document.querySelectorAll('#tabs button').forEach(x => x.classList.toggle('on', x === b));
       for (const t of ['history', 'segments', 'compare']) $(`tab-${t}`).hidden = t !== b.dataset.tab;
