@@ -469,6 +469,19 @@
     }
 
     const drives = (window.APEX_DRIVES || []).map(trackFromDrive);
+    let savedDriveIds = new Set();
+    let refreshDriveVersion = 0;
+    async function refreshSavedDrives() {
+      const version = ++refreshDriveVersion;
+      const saved = await ApexRecording.all();
+      if (version !== refreshDriveVersion) return;
+      const records = saved.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+      const ids = new Set(records.map(d => d.id));
+      const others = drives.filter(d => !savedDriveIds.has(d.id) && !ids.has(d.id));
+      drives.splice(0, drives.length, ...records.map(ApexRecording.toTrack), ...others);
+      savedDriveIds = ids;
+      renderDriveList();
+    }
     let track = null;
 
     // =======================================================================
@@ -646,12 +659,13 @@
       if (!force && now - lastRibbonAt < 90) return;
       lastRibbonAt = now;
       const src = map.getSource('apex-ribbon-src');
-      if (!track || vMps == null || fromIdx < 0) { src.setData(emptyFC()); return; }
+      if (!track || !track.envMps || vMps == null || fromIdx < 0) { src.setData(emptyFC()); return; }
       const C = look.colors, features = [];
       let run = null;
       const stop = Math.min(track.lat.length - 1, fromIdx + 60);
       for (let i = fromIdx; i <= stop; i++) {
         const env = track.envMps[i];
+        if (!Number.isFinite(env)) { run = null; continue; }
         const c = vMps > env + 0.5 ? C.signal : (vMps > env - 3 ? C.amber : C.calm);
         const pt = [track.lon[i], track.lat[i]];
         if (!run || run.c !== c) { const prev = run ? run.coords[run.coords.length - 1] : null; if (run) run.coords.push(pt); run = { c, coords: prev ? [prev, pt] : [pt] }; features.push(run); }
@@ -851,9 +865,13 @@
         sctx.lineTo(w, h); sctx.closePath(); sctx.fillStyle = C.rule; sctx.fill();
       }
       sctx.beginPath();
+      let envelopeRun = false;
       for (let i = 0; i < n; i += step) {
-        const y = h - 2 * dpr - Math.min(1, track.envMps[i] / 56) * (h - 4 * dpr);
-        i === 0 ? sctx.moveTo(xOf(track.dist[i]), y) : sctx.lineTo(xOf(track.dist[i]), y);
+        const env = track.envMps && track.envMps[i];
+        if (!Number.isFinite(env)) { envelopeRun = false; continue; }
+        const y = h - 2 * dpr - Math.min(1, env / 56) * (h - 4 * dpr);
+        envelopeRun ? sctx.lineTo(xOf(track.dist[i]), y) : sctx.moveTo(xOf(track.dist[i]), y);
+        envelopeRun = true;
       }
       sctx.strokeStyle = C.panelDim; sctx.lineWidth = 1.2 * dpr; sctx.stroke();
       for (const e of allEvents()) {
@@ -1415,6 +1433,7 @@
       if (v === 'stages') { location.href = 'analysis.html?tab=segments'; return; }
       if (v === 'map') v = null;
       view = v;
+      if (v === 'route') refreshSavedDrives();
       const sheet = $('sheet');
       if (v) { sheet.dataset.view = v; $('sheetTitle').textContent = VIEW_TITLES[v]; sheet.querySelector('.body').scrollTop = 0; }
       sheet.classList.toggle('open', !!v);
@@ -1861,6 +1880,7 @@
           const d = ApexRecording.parse(Core, rec.toCsv(), `web_${stamp}.csv`, { source: 'web-gps', date: `${when.getFullYear()}-${pad(when.getMonth() + 1)}-${pad(when.getDate())}T${pad(when.getHours())}:${pad(when.getMinutes())}`, name: `Drive ${when.toLocaleDateString()} ${pad(when.getHours())}:${pad(when.getMinutes())}` });
           if (shared && shared.chunks > 0) d.contributed = true;                // streamed already: the analysis page must not send it again
           await ApexRecording.store(d);
+          await refreshSavedDrives();
           toast(`Drive saved · ${(rec.km / 1.609344).toFixed(1)} mi.` + (shared && shared.km > 0 ? ` Shared ${(shared.km / 1.609344).toFixed(1)} mi of road feel.` : '') + ' See it in Log.');
         } catch (e) { toast(`Could not save the drive: ${e.message}`); }
       } else if (save && rec && rec.samples > 0) toast('Too short to save. Drives under 0.2 mi are dropped.');
@@ -1931,16 +1951,20 @@
     renderThemeList();
     renderHighlights(); renderNearbyHighlights();
     renderAccount();
-    const first = drives.find(d => d.id === params.get('drive')) || drives[0];
-    if (first) {
-      const at = params.has('at') ? parseFloat(params.get('at')) || 0 : 0;
-      activate(first, at * first.dist[first.dist.length - 1]);
-      replayOn = ['drive', 'play', 'at'].some(k => params.has(k));
-      booting = false; paintIdle();
-      if (params.get('play') === '1') setPlaying(true);
-    } else { booting = false; openSheet('route'); }
-    if (params.get('book') === '1') openSheet('route');
-    if (VIEW_TITLES[params.get('view')]) openSheet(params.get('view')); else if (params.get('view') === 'drives') openSheet('route');
+    async function bootDrives() {
+      await refreshSavedDrives();
+      const first = drives.find(d => d.id === params.get('drive')) || drives.find(d => !savedDriveIds.has(d.id)) || drives[0];
+      if (first) {
+        const at = params.has('at') ? parseFloat(params.get('at')) || 0 : 0;
+        activate(first, at * first.dist[first.dist.length - 1]);
+        replayOn = ['drive', 'play', 'at'].some(k => params.has(k));
+        booting = false; paintIdle();
+        if (params.get('play') === '1') setPlaying(true);
+      } else { booting = false; openSheet('route'); }
+      if (params.get('book') === '1') openSheet('route');
+      if (VIEW_TITLES[params.get('view')]) openSheet(params.get('view')); else if (params.get('view') === 'drives') openSheet('route');
+    }
+    bootDrives();
     if (document.fonts) document.fonts.ready.then(() => render(true));
   })();
   </script>

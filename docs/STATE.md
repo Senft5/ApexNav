@@ -267,8 +267,20 @@ docs/SOCIAL.md.
 - misaki dictionary provenance undocumented; BART licence only in model-card metadata: lawyer review before charging.
 - Heteronyms use the dictionary default (no POS tagger); `places.json` entries are agent-written, not checked by ear.
 
+## Session 2026-10-25 (k): continue screens-rework, saved-drive replay
+- Reviewed remote branches: `claude/screens-rework` (PR #21) is the active screen work; `claude/brand-direction` is the earlier design proposal.
+- Closed PR #21's documented replay gap: Plan now loads saved/imported IndexedDB recordings, newest first, refreshes when opened and after saving, and resolves saved-drive URL links before activating playback.
+- Shared recording adapter keeps missing road scores, camera data, speed limits and older recordings' unavailable envelopes unknown. New recordings retain the profiler's envelope and sight-distance arrays.
+- Verification: `python -X utf8 -m pytest tests -q`: 97 passed, 2 skipped (unavailable raw logs). Default Windows encoding caused existing Unicode tests to fail; UTF-8 mode passes. Browser verified persisted-recording list, URL selection and running replay using a copy of shipped drive data, removed afterwards.
+- Follow-up review fixed a crash in the ribbon and scrubber for legacy recordings without envelopes; missing bins now break the drawn line instead of implying zero. Added `tests/test_recording_replay.py` covering real parser output, legacy replay renderers and missing-bin gaps.
+- Verification after review: `python -X utf8 -m pytest tests -q`: 98 passed, 2 skipped (private raw logs unavailable). Browser played a persisted legacy recording with Road/Limit unknown. Real-phone sensors/audio, iOS compilation and production deployment remain unverified.
+- Follow-up prepared on `claude/screens-rework` for PR #21; check the remote PR for CI results.
+
+## Workspace relocation
+- Permanent checkout: `C:/Users/senft/Projects/ApexNav`; verified working files, HEAD, index entries and local diffs. Original scratch checkout retained as a recovery copy.
+- T3 project root now points to the permanent checkout. Continue implementation there; this existing thread may retain its original scratch binding.
+
 ## Exact Next Task
-1. Owner: Google client + Worker secrets; then sign in at the site and make the first invites.
-2. Get the Workers Builds log and fix the preview/production build; merge PR #10.
-3. Live contribution streaming from DRIVE mode; honest LIVE voice status (explain slow/failed, default off on phones); try DRIVE mode on a real phone; LIVE voice: owner listens to a few live renders (route names) and adds mispronounced names to web/g2p/places.json; try LIVE on a phone. Then reward measured-good (banked, smooth) stretches too once there is enough real data to calibrate; verify the contributor against live Valhalla/Overpass with a real recording; convoy (Durable Objects).
-4. Voice (on hold): in-app enrollment design in docs/VOICE.md. (espeak-ng dependency removed; lawyer check of misaki/BART provenance before charging.)
+1. Review and publish the saved-drive replay follow-up on PR #21, then verify CI and the mobile Plan/Log/Replay flow before merging.
+2. Try DRIVE recording and live contribution on a real phone; listen to LIVE route-name renders and correct pronunciations as needed.
+3. Continue the remaining brand checklist in docs/BRAND.md, preserving owner decisions on legacy theme/voice removal.
