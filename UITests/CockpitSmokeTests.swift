@@ -21,11 +21,21 @@ final class CockpitSmokeTests: XCTestCase {
 
         let web = app.webViews.firstMatch
         XCTAssertTrue(web.waitForExistence(timeout: 30), "WKWebView never appeared")
-        // The idle cockpit is the map, the red Start drive button and the five tabs (web/index.html).
-        // (Text inside the MapLibre region is not exposed to accessibility, so assert on these.)
-        XCTAssertTrue(web.buttons["Start drive"].waitForExistence(timeout: 45), "cockpit JS did not boot")
-        for tab in ["Map", "Plan", "Log", "Stages", "Crew"] {
-            XCTAssertTrue(web.buttons[tab].exists, "tab \(tab) missing")
+
+        // First launch displays the onboarding dialog on a fresh install. Dismiss if present.
+        let watchReplay = web.buttons["Watch a replay"]
+        let getStarted = web.buttons["Get started"]
+        if watchReplay.waitForExistence(timeout: 5) {
+            watchReplay.tap()
+        } else if getStarted.waitForExistence(timeout: 2) {
+            getStarted.tap()
+        }
+
+        // The five tabs exist in every cockpit state. "Start drive" does not: the native shell feeds live frames as soon as
+        // the simulator has a location, and a live cockpit shows End drive instead. (MapLibre text is not exposed to accessibility.)
+        XCTAssertTrue(web.buttons["Plan"].waitForExistence(timeout: 45), "cockpit JS did not boot")
+        for tab in ["Map", "Log", "Stages", "Crew"] {
+            XCTAssertTrue(web.buttons[tab].waitForExistence(timeout: 5), "tab \(tab) missing")
         }
 
         let shot = XCTAttachment(screenshot: app.screenshot())

@@ -50,9 +50,22 @@
       lat: cols.lat, lon: cols.lon, dist: cols.distance_m || cols.lat.map((_, i) => i * 5), speed_mps: cols.speed_mph.map((v) => v / MPH),
       lon_g: prepared.lon_g, lat_g: prepared.lat_g, elev: cols.elevation_m && cols.elevation_m.some(Number.isFinite) ? cols.elevation_m : null, events: prof.events,
       camber: nul(cols.camber_deg), rough: nul(cols.roughness_rms), crest: nul(cols.crest_vertical_g), kappa: Array.from(Core.computeCurvature(cols.lat, cols.lon).kappa),
+      envMps: nul(prof.envMps), sightM: nul(prof.sightM),
     };
   }
 
-  const api = { all, store, remove, parse };
+  // Adapt the shared Log record without inventing missing road measurements.
+  function toTrack(d) {
+    return {
+      id: d.id, name: d.name, kind: 'drive',
+      subtitle: [d.date ? d.date.slice(0, 10) : '', d.source === 'web-gps' ? 'Phone GPS' : 'Imported'].filter(Boolean).join(' · '),
+      lat: d.lat, lon: d.lon, dist: d.dist, elev: d.elev,
+      speedMps: d.speed_mps, latG: d.lat_g, lonG: d.lon_g, camberDeg: d.camber || null,
+      roughG: d.rough || null, envMps: d.envMps || null, sightM: d.sightM || null, limitMps: null,
+      events: d.events.map(e => ({ ...e })), sectors: null, sectorM: 500, alpr: null,
+    };
+  }
+
+  const api = { all, store, remove, parse, toTrack };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexRecording = api;
 })(typeof window !== 'undefined' ? window : globalThis);

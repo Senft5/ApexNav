@@ -31,7 +31,7 @@
     .tabs button { font: inherit; font-size: 15px; font-weight: 600; padding: 9px 14px; background: transparent; color: var(--panel-dim); border: none; cursor: pointer; }
     .tabs button.on { color: var(--panel); background: var(--panel-ink); }
     .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; font-size: 12px; }
-    select, input, button.btn { font: inherit; font-size: 13px; height: 34px; padding: 0 10px; background: transparent; color: var(--panel-ink); border: 1px solid var(--panel-dim); }
+    select, input, button.btn, a.btn { font: inherit; font-size: 15px; height: 44px; padding: 0 10px; background: transparent; color: var(--panel-ink); border: 1px solid var(--panel-dim); }
     button.btn { cursor: pointer; font-weight: 600; font-size: 15px; }
     button.btn.solid { background: var(--panel-ink); color: var(--panel); border-color: var(--panel-ink); }
     .panel { border: 1px solid var(--rule); padding: 12px; min-width: 0; }
@@ -86,6 +86,14 @@
     :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; animation: none !important; transition: none !important; } }
     [hidden] { display: none !important; }
+    .tabs { display: none !important; }
+    details.more { border-top: 1px solid var(--rule); margin-top: 12px; }
+    details.more summary { min-height: 44px; display: flex; align-items: center; font-size: 15px; font-weight: 600; cursor: pointer; list-style: none; }
+    details.more summary::-webkit-details-marker { display: none; }
+    details.more summary::after { content: "+"; margin-left: auto; font-size: 20px; }
+    details.more[open] summary::after { content: "–"; }
+    tr.row-link { cursor: pointer; }
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; }
     /* Same tab bar as the cockpit: ANALYSIS is this page, the others return to the cockpit view. */
     .tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
       background: var(--panel); border-top: 1px solid var(--rule); padding: 0 6px env(safe-area-inset-bottom, 0px); }
@@ -100,19 +108,24 @@
 <body>
   <main>
     <header>
-      <h1>Log<small>Your drives stay on this phone.</small></h1>
+      <h1 id="pageTitle">Log<small id="pageSub">Your drives stay on this phone.</small></h1>
       <div class="tabs" id="tabs" role="tablist" aria-label="Log views">
         <button data-tab="drive" role="tab" id="tabbtn-drive" aria-controls="tab-drive" aria-selected="true" class="on">Drive</button>
         <button data-tab="history" role="tab" id="tabbtn-history" aria-controls="tab-history" aria-selected="false">Log</button>
         <button data-tab="segments" role="tab" id="tabbtn-segments" aria-controls="tab-segments" aria-selected="false">Stages</button>
         <button data-tab="compare" role="tab" id="tabbtn-compare" aria-controls="tab-compare" aria-selected="false">Compare</button>
       </div>
-      <a href="index.html">‹ Map</a>
+      <a href="#" id="backLink" hidden>‹ Log</a>
     </header>
 
     <!-- ============================ DRIVE ============================ -->
     <section id="tab-drive" role="tabpanel" aria-labelledby="tabbtn-drive" style="display:grid;gap:14px">
       <div class="row"><select id="dvPick" aria-label="Choose a drive" style="flex:1;min-width:200px"></select><span class="note" id="dvNote"></span></div>
+      <div class="actions">
+        <button class="btn" id="dvReplay">Replay on map</button>
+        <button class="btn" id="dvCompare">Compare with…</button>
+        <button class="btn" id="dvShare">Share drive</button>
+      </div>
       <div id="dvRoot"></div>
       <div class="panel" id="dvRoad" hidden><h2>This road over time</h2><div id="dvRoadChart"></div><div class="scroll"><table id="dvRoadTable"></table></div></div>
     </section>
@@ -120,56 +133,53 @@
     <!-- ============================ HISTORY ============================ -->
     <section id="tab-history" role="tabpanel" aria-labelledby="tabbtn-history" class="grid" hidden style="display:grid;gap:14px">
       <div class="cards" id="historyCards"></div>
-      <div class="panel"><h2>Score over time</h2><div id="trend"></div></div>
+      <div class="panel" id="trendPanel" hidden><h2>Score over time</h2><div id="trend"></div></div>
       <div class="panel">
-        <h2>Drives</h2>
+        <div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0">Drives</h2>
+          <label class="btn" style="display:inline-flex;align-items:center;cursor:pointer">Import .csv<input type="file" id="importFile" accept=".csv,text/csv" aria-label="Import a recording" hidden /></label></div>
         <div class="scroll"><table id="historyTable"></table></div>
-        <div class="row" style="margin-top:10px">
-          <label class="btn" style="display:inline-flex;align-items:center;cursor:pointer">IMPORT RECORDING (.csv)<input type="file" id="importFile" accept=".csv,text/csv" aria-label="Import a recording" hidden /></label>
-          <span class="note">CSV files saved by the ApexNav iPhone app (record → share). Profiled in your browser, stored on this device.</span>
-        </div>
       </div>
-      <p class="note">Score (0-1000) rates technique, never time or speed: <b>pace</b> = corner minimum speed as a share of its sane grip limit (full credit from 85 % to 100 %, falling steeply beyond — overdriving never scores), <b>smoothness</b> = how gently lateral load builds per metre, <b>braking</b> = no hard braking after the apex, <b>consistency</b> = even commitment corner to corner. Speed limits never enter it. A perfect score means driving right at each corner's limit — a closed-track figure, not something to chase on public roads.</p>
+      <details class="more"><summary>How Score works</summary>
+        <p class="note">Score rates how you drive the corners, not how fast. <b>Pace</b>: corner speed against its safe grip limit, full credit from 85 % to 100 %. <b>Smooth</b>: how gently cornering load builds. <b>Brakes</b>: no hard braking after the apex. <b>Rhythm</b>: even commitment from corner to corner. Speed limits never enter it. 1000 is a closed-course number, not something to chase on public roads.</p></details>
     </section>
 
     <!-- ============================ SEGMENTS ============================ -->
     <section id="tab-segments" role="tabpanel" aria-labelledby="tabbtn-segments" hidden style="display:grid;gap:14px">
-      <div class="panel">
-        <h2>New stage</h2>
+      <div class="grid2">
+        <div class="panel"><h2>Your stages</h2><div class="seglist" id="segList"></div></div>
+        <div class="panel" id="contribPanel" hidden><h2>Share road data</h2><p class="note" id="contribNote"></p><div id="contribList" style="display:grid;gap:6px"></div></div>
+      <div class="panel" id="segSyncPanel" hidden><h2>Friends and sync</h2><div class="note" id="segSyncNote"></div><div id="segShared"></div><div class="row" id="segShareRow" style="margin-top:8px"></div><h2 style="margin-top:12px">Board</h2><div class="scroll"><table id="segBoard"></table></div></div>
+      <div class="panel"><h2 id="segTitle">Runs</h2><div id="segChart"></div><div class="scroll"><table id="segTable"></table></div></div>
+      </div>
+      <details class="more" id="newStage"><summary>New stage</summary>
         <div class="row" style="margin-bottom:8px">
-          <select id="segDrive" aria-label="Drive to mark a segment on"></select>
+          <select id="segDrive" aria-label="Drive to mark a stage on"></select>
           <span class="note">Drag across the profile to mark a stretch, then name it.</span>
         </div>
         <div class="strip" id="segStrip"><div class="sel" id="segSel" hidden></div><div id="segStripSvg"></div></div>
         <div class="row" style="margin-top:8px">
-          <input id="segName" aria-label="Segment name" placeholder="Segment name, e.g. Dry Ridge climb" style="flex:1;min-width:200px" />
-          <button class="btn solid" id="segSave">SAVE SEGMENT</button>
+          <input id="segName" aria-label="Stage name" placeholder="Name this stage, e.g. Dry Ridge climb" style="flex:1;min-width:200px" />
+          <button class="btn solid" id="segSave">Save stage</button>
           <span class="note" id="segInfo"></span>
         </div>
-      </div>
-      <div class="grid2">
-        <div class="panel"><h2>Your stages</h2><div class="seglist" id="segList"></div><p class="note" style="margin-top:8px">Mark a stretch you drive often. Every run gets a score.</p></div>
-        <div class="panel" id="contribPanel" hidden><h2>Share road data</h2><p class="note" id="contribNote"></p><div id="contribList" style="display:grid;gap:6px"></div></div>
-      <div class="panel" id="segSyncPanel" hidden><h2>Friends and sync</h2><div class="note" id="segSyncNote"></div><div id="segShared"></div><div class="row" id="segShareRow" style="margin-top:8px"></div><h2 style="margin-top:12px">Board</h2><div class="scroll"><table id="segBoard"></table></div></div>
-      <div class="panel"><h2 id="segTitle">Passes</h2><div id="segChart"></div><div class="scroll"><table id="segTable"></table></div></div>
-      </div>
+      </details>
     </section>
 
     <!-- ============================ COMPARE ============================ -->
     <section id="tab-compare" role="tabpanel" aria-labelledby="tabbtn-compare" hidden style="display:grid;gap:14px">
       <div class="row">
-        <b>A</b><select id="selA" aria-label="Drive A"></select>
+        <b>This drive</b><select id="selA" aria-label="Drive A"></select>
         <button class="btn" id="swapBtn">SWAP</button>
-        <b style="color:var(--accent)">B</b><select id="selB" aria-label="Drive B"></select>
+        <b style="color:var(--accent)">vs</b><select id="selB" aria-label="Compare with"></select>
       </div>
       <section class="cards" id="cards"></section>
       <section class="grid2">
-        <div class="panel"><h2>Road · corners numbered</h2><div id="plan"></div></div>
-        <div class="panel"><h2>Time delta B vs A along the road · speed A</h2><div id="chart"></div>
-          <p class="note">Below zero: B was ahead. Breaks are where B left A's road; the delta restarts on the next shared stretch.</p></div>
+        <div class="panel"><h2>Road</h2><div id="plan"></div></div>
+        <div class="panel"><h2>Gap along the road</h2><div id="chart"></div>
+          <p class="note">Below the line, the other drive was ahead. Gaps restart where the roads part.</p></div>
       </section>
       <section class="panel">
-        <h2>Corner by corner (A's corners, B measured over the same stretch)</h2>
+        <h2>Corner by corner</h2>
         <div class="scroll"><table id="table"></table></div>
         <p class="note" style="margin-top:8px">Greyed rows include a stop (below 2.5 m/s) and are left out of the corner total. Envelope use = minimum speed ÷ the corner's grip limit. Brake = distance before the apex where braking began.</p>
       </section>
@@ -242,7 +252,7 @@
     function bars(comp) {
       if (!comp) return '<span class="note">no clean corners</span>';
       const b = (k, label) => `<div class="bar">${label} ${Math.round(comp[k] * 100)}<i><u style="width:${Math.round(comp[k] * 100)}%"></u></i></div>`;
-      return `<div class="bars">${b('pace', 'PACE')}${b('smoothness', 'SMOOTH')}${b('braking', 'BRAKING')}${b('consistency', 'CONSIST')}</div>`;
+      return `<div class="bars">${b('pace', 'Pace')}${b('smoothness', 'Smooth')}${b('braking', 'Brakes')}${b('consistency', 'Rhythm')}</div>`;
     }
 
     // ---------------------------------------------------------------------
@@ -256,10 +266,9 @@
       const latest = scored[scored.length - 1];
       const c = (v, label, extra) => `<div class="card"><b>${v}</b><span>${label}</span>${extra ? `<em>${extra}</em>` : ''}</div>`;
       $('historyCards').innerHTML =
-        c(latest ? latest.ds.score : '--', 'Latest score', latest ? latest.name : '') +
-        c(avg ?? '--', 'Average', `${scored.length} scored drives`) +
-        c(best ? best.ds.score : '--', 'Best', best ? best.name : '') +
-        c(`${(totalKm / 1.609344).toFixed(0)} mi`, 'Profiled', `${drives.length} drives`);
+        c(latest ? latest.ds.score : '--', 'Latest', latest ? latest.name : '') +
+        c(best ? best.ds.score : '--', 'Best', best ? best.name : '');
+      $('trendPanel').hidden = scored.length < 3;
 
       // trend
       const W = Math.max(300, Math.round($('trend').clientWidth || 760)), H = 180, L = 40, R = 22, T = 12, B = 26;   // drawn at the real width so labels stay readable
@@ -267,11 +276,11 @@
       const grid = [0, 250, 500, 750, 1000].map(v => { const y = T + (1 - v / 1000) * (H - T - B); return `<line x1="${L}" x2="${W - R}" y1="${y}" y2="${y}" stroke="${C.rule}"/><text x="${L - 6}" y="${y + 3}" text-anchor="end" font-size="10" fill="${C.panelDim}">${v}</text>`; }).join('');
       const line = pts.map((p, i) => `${i ? 'L' : 'M'}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join('');
       const dots = pts.map(p => `<circle cx="${p[0]}" cy="${p[1]}" r="5" fill="${C.accent}"/><text x="${p[0]}" y="${H - 8}" text-anchor="middle" font-size="10" fill="${C.panelDim}">${p[2].date.slice(5, 10)}</text>`).join('');
-      if (!scored.length) { $('trend').innerHTML = '<p class="note">No scored drives yet. Import a recording below, or open the cockpit and record one; a drive needs a few clean corners to get a Score.</p>'; }
+      if (!scored.length) { $('trend').innerHTML = '<p class="note">No scored drives yet. Import a recording, or start a drive on the map; a drive needs a few clean corners to get a Score.</p>'; }
       else $('trend').innerHTML = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Score over time">${grid}<path d="${line}" fill="none" stroke="${C.accent}" stroke-width="2"/>${dots}</svg>`;
 
-      const rows = drives.slice().reverse().map(d => `<tr>
-        <td class="l"><b>${d.name}</b><span class="sub">${dateLabel(d)} · ${d.source}</span></td>
+      const rows = drives.slice().reverse().map(d => `<tr class="row-link" data-drive="${d.id}" tabindex="0" role="link" aria-label="Open ${d.name}">
+        <td class="l"><b>${d.name}</b><span class="sub">${dateLabel(d)}</span></td>
         <td>${(d.km / 1.609344).toFixed(1)} mi</td>
         <td class="wide">${d.ds.corners}</td>
         <td><span class="score">${d.ds.score ?? '--'}</span></td>
@@ -279,6 +288,8 @@
       $('historyTable').innerHTML = !drives.length ? '<tr><td class="l" colspan="5"><span class="note">No drives yet.</span></td></tr>' : `<tr><th class="l">Drive</th><th>Distance</th><th class="wide">Corners scored</th><th>Score</th><th class="l wide">Components</th></tr>${rows}`;
     }
 
+    $('historyTable').addEventListener('click', (e) => { const r = e.target.closest('tr[data-drive]'); if (r) openDrive(r.dataset.drive); });
+    $('historyTable').addEventListener('keydown', (e) => { const r = e.target.closest('tr[data-drive]'); if (r && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openDrive(r.dataset.drive); } });
     $('importFile').addEventListener('change', async (e) => {
       const file = e.target.files[0];
       if (!file) return;
@@ -351,7 +362,7 @@
       if (!window.ApexSync || !(await ApexSync.member())) { panel.hidden = true; return; }
       panel.hidden = false;
       const sent = await ApexSync.pushSegments(segs); saveSegs(segs);
-      $('segSyncNote').textContent = sent ? `Uploaded ${sent} segment${sent === 1 ? '' : 's'}. Only the stretch itself is stored, never your drives.` : 'Your stages are backed up. Scores are shared only with friends you choose (Account).';
+      $('segSyncNote').textContent = sent ? `Backed up ${sent} stage${sent === 1 ? '' : 's'}. Only the stretch itself is stored, never your drives.` : 'Your stages are backed up. Scores are shared only with friends you choose (Account).';
       const box = $('segShared'); box.innerHTML = '';
       const have = new Set(segs.map(s => s.origin || s.id));
       for (const r of (await ApexSync.sharedWithMe()).filter(r => !have.has(r.origin || r.id))) {
@@ -370,15 +381,15 @@
       bt.innerHTML = rows.length ? '<tr><th class="l">#</th><th class="l">Driver</th><th>Score</th><th>Time</th></tr>' + rows.map((r, i) =>
         `<tr class="${r.mine ? 'best' : ''}"><td class="l">${i + 1}</td><td class="l"><b></b></td><td><span class="score">${r.driver_score}</span></td><td>${r.time_s == null ? '--' : mmss(r.time_s)}</td></tr>`).join('') : '';
       bt.querySelectorAll('tr b').forEach((b, i) => { b.textContent = rows[i].mine ? 'You' : '@' + (rows[i].handle || '?'); });
-      if (act && act.synced && rows.length < 2) bt.innerHTML = '<tr><td class="l"><span class="note">No friends on this segment yet. Friends appear once they share scores with you (Account) and have driven it.</span></td></tr>';
+      if (act && act.synced && rows.length < 2) bt.innerHTML = '<tr><td class="l"><span class="note">No friends on this stage yet. Friends appear once they share scores with you (Account) and have driven it.</span></td></tr>';
       const row = $('segShareRow'); row.innerHTML = '';
       const seg = segs.find(s => s.id === activeSeg);
       if (seg && seg.synced) {
         const fr = await ApexSync.friends();
         if (fr.length) {
           const sel2 = document.createElement('select'); fr.forEach(f => sel2.add(new Option('@' + f.handle, f.id)));
-          const go = document.createElement('button'); go.className = 'btn'; go.textContent = 'SHARE SEGMENT';
-          go.onclick = async () => { go.textContent = (await ApexSync.shareSegment(seg.id, 'friend', sel2.value)) ? 'SHARED' : 'FAILED'; };
+          const go = document.createElement('button'); go.className = 'btn'; go.textContent = 'Share stage';
+          go.onclick = async () => { go.textContent = (await ApexSync.shareSegment(seg.id, 'friend', sel2.value)) ? 'Shared' : 'Failed. Try again'; };
           row.append(sel2, go);
         }
       }
@@ -401,7 +412,7 @@
           try {
             const r = await ApexContributor.contributeDrive(d, ApexSync.contribute);
             if (r.sent) { d.contributed = true; await storeDrive(d); }
-            b.textContent = r.skipped ? r.skipped : r.sent ? `SHARED ${r.sent} road${r.sent === 1 ? '' : 's'}` : r.built ? 'NOTHING NEW TO ADD' : 'NO USABLE ROADS (all too short, private, or unmatched)';
+            b.textContent = r.skipped ? r.skipped : r.sent ? `Shared ${r.sent} road${r.sent === 1 ? '' : 's'}` : r.built ? 'Nothing new to share' : 'No usable roads. They were too short, private or unmatched.';
           } catch (err) { b.disabled = false; b.textContent = `RETRY (${err.message})`; }
         };
         list.appendChild(b);
@@ -416,7 +427,7 @@
       drives.forEach(d => $('segDrive').add(new Option(`${d.name} · ${dateLabel(d)}`, d.id)));
       renderSegStrip();
       const list = $('segList');
-      list.innerHTML = segs.length ? '' : '<p class="note">No segments yet. Mark one on the profile above.</p>';
+      list.innerHTML = segs.length ? '' : '<p class="note">No stages yet. Open “New stage” below and mark a stretch you drive often.</p>';
       for (const s of segs) {
         const passes = passesFor(s), best = passes.reduce((m, x) => (x.p.score != null && (m == null || x.p.score > m) ? x.p.score : m), null);
         const b = document.createElement('button');
@@ -437,7 +448,7 @@
         passes.map((x, i) => `<tr class="${i === 0 ? 'best' : ''}"><td class="l">${i + 1}</td><td class="l"><b>${x.d.name}</b><span class="sub">${dateLabel(x.d)}</span></td>
           <td><span class="score">${x.p.score ?? '--'}</span></td><td class="l">${bars(x.p.components)}</td>
           <td>${mmss(x.p.time_s)}<span class="sub">${x.p.time_s === bestTime ? 'quickest' : '+' + (x.p.time_s - bestTime).toFixed(1) + ' s'}</span></td></tr>`).join('') +
-        (passes.length ? '' : '<tr><td class="l" colspan="5"><span class="note">No drive covers this segment in its direction yet.</span></td></tr>');
+        (passes.length ? '' : '<tr><td class="l" colspan="5"><span class="note">No drive covers this stage in its direction yet.</span></td></tr>');
       const byDate = passes.slice().sort((a, b) => (a.d.date < b.d.date ? -1 : 1)).filter(x => x.p.score != null);
       const W = 600, H = 120, L = 34, T = 10, B = 22;
       const pts = byDate.map((x, i) => [L + (byDate.length < 2 ? 0.5 : i / (byDate.length - 1)) * (W - L - 10), T + (1 - x.p.score / 1000) * (H - T - B), x]);
@@ -464,8 +475,7 @@
       $('cards').innerHTML =
         c(`${(r.overlap_m / 1609.344).toFixed(1)} mi`, 'Shared road', `${A.name} ∩ ${B.name}`) +
         c(`${r.matched_corners} / ${A.corners.length}`, 'Corners compared', 'clean passes, no stops') +
-        c(fmtS(r.matched_corners ? r.corner_delta_s : null), 'Corner time B vs A', 'sum over compared corners', cls(r.corner_delta_s)) +
-        c(fmtS(r.overlap_delta_s), 'Whole shared road', 'includes stops and traffic, so not a driving verdict');
+        c(fmtS(r.matched_corners ? r.corner_delta_s : null), 'Gap over the corners', `${B.name} against this drive`, cls(r.corner_delta_s));
       // plan
       const { x, y } = Core.localXY(A.lat, A.lon);
       let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
@@ -516,7 +526,7 @@
       const pick = $('dvPick'), keep = pick.value; pick.innerHTML = '';
       const list = drives.slice().reverse();
       list.forEach(d => pick.add(new Option(`${d.name} · ${dateLabel(d)}`, d.id)));
-      if (!list.length) { $('dvRoot').innerHTML = '<p class="note">No drives yet. Record one with the phone app and import it from History, or open the cockpit to try a shipped drive.</p>'; return; }
+      if (!list.length) { $('dvRoot').innerHTML = '<p class="note">No drives yet. Start a drive on the map, or import a recording from the Log.</p>'; return; }
       pick.value = list.some(d => d.id === keep) ? keep : list[0].id;
       const d = drives.find(x => x.id === pick.value);
       if (dvView) dvView.destroy();
@@ -564,11 +574,46 @@
     $('dvPick').addEventListener('change', renderDrive);
     function renderAll() {
       renderDrive(); renderHistory(); renderSegments(); renderCompareSelectors(); renderCompare(); syncSegments(); renderContribute(); }
+    const TITLES = { drive: ['', ''], history: ['Log', 'Your drives stay on this phone.'], segments: ['Stages', 'A stretch you drive often. Every run gets a score.'], compare: ['Compare', ''] };
+    function setHeader(tab) {
+      const t = TITLES[tab] || ['Log', '']; const cur = drives.find(d => d.id === $('dvPick').value);
+      const title = tab === 'drive' && cur ? cur.name : t[0], sub = tab === 'drive' && cur ? dateLabel(cur) : t[1];
+      $('pageTitle').innerHTML = `${title}${sub ? `<small>${sub}</small>` : ''}`;
+      $('backLink').hidden = tab === 'history' || tab === 'segments';
+      $('backLink').textContent = tab === 'compare' ? '‹ Drive' : '‹ Log';
+      $('backLink').dataset.to = tab === 'compare' ? 'drive' : 'history';
+    }
+    $('newStage').addEventListener('toggle', () => { if ($('newStage').open) renderSegStrip(); });
+    function showTab(t) { document.querySelector(`#tabs [data-tab="${t}"]`).click(); }
+    function openDrive(id) { $('dvPick').value = id; renderDrive(); showTab('drive'); window.scrollTo(0, 0); }
+    $('backLink').addEventListener('click', (e) => { e.preventDefault(); showTab($('backLink').dataset.to); });
+    $('dvReplay').addEventListener('click', () => {
+      const id = $('dvPick').value;
+      if (id) location.href = 'index.html?drive=' + encodeURIComponent(id) + '&play=1';
+    });
+    $('dvShare').addEventListener('click', async () => {
+      const id = $('dvPick').value, d = drives.find(x => x.id === id);
+      if (!d) return;
+      const score = d.ds && d.ds.score != null ? 'Score ' + d.ds.score + '/1000' : '';
+      const mi = (d.dist[d.dist.length - 1] / 1609.344).toFixed(1) + ' mi';
+      const text = d.name + ' · ' + [score, mi].filter(Boolean).join(' · ');
+      const url = location.origin + '/?drive=' + encodeURIComponent(d.id);
+      if (navigator.share) {
+        try { await navigator.share({ title: 'ApexNav Drive', text, url }); return; } catch (e) { if (e.name === 'AbortError') return; }
+      }
+      try { await navigator.clipboard.writeText(text + ' ' + url); alert('Drive summary copied to clipboard.'); } catch (_) { window.prompt('Copy drive link', text + ' ' + url); }
+    });
+    $('dvCompare').addEventListener('click', () => {
+      const id = $('dvPick').value; $('selA').value = id;
+      if ($('selB').value === id || !$('selB').value) { const o = drives.find(d => d.id !== id); if (o) $('selB').value = o.id; }
+      renderCompare(); showTab('compare');
+    });
     document.querySelectorAll('#tabs button').forEach(b => b.addEventListener('click', () => {
       document.querySelectorAll('#tabs button').forEach(x => { x.classList.toggle('on', x === b); x.setAttribute('aria-selected', x === b ? 'true' : 'false'); x.tabIndex = x === b ? 0 : -1; });
       $('navLog').classList.toggle('on', b.dataset.tab === 'history' || b.dataset.tab === 'drive'); $('navStages').classList.toggle('on', b.dataset.tab === 'segments');
       for (const t of ['drive', 'history', 'segments', 'compare']) $(`tab-${t}`).hidden = t !== b.dataset.tab;
-      if (b.dataset.tab === 'segments') renderSegStrip();
+      setHeader(b.dataset.tab);
+      if (b.dataset.tab === 'segments') { if (!segs.length) $('newStage').open = true; renderSegStrip(); }
       if (b.dataset.tab === 'history') renderHistory();
     }));
     $('tabs').addEventListener('keydown', (e) => {                    // arrow keys move between tabs
