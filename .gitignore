@@ -13,3 +13,4 @@ train_own/
 backend/node_modules/
 .wrangler/
 backend/.wrangler/
+.worker/

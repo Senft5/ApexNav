@@ -287,3 +287,16 @@ docs/SOCIAL.md.
 1. Review and publish the saved-drive replay follow-up on PR #21, then verify CI and the mobile Plan/Log/Replay flow before merging.
 2. Try DRIVE recording and live contribution on a real phone; listen to LIVE route-name renders and correct pronunciations as needed.
 3. Continue the remaining brand checklist in docs/BRAND.md, preserving owner decisions on legacy theme/voice removal.
+
+## Session 2026-10-26 (m): local GPU worker + 30-minute review loop
+- [x] PR #21 merged (`5d15d94`); its late simulator failure was on superseded commit `054f811`, `main` CI is green.
+- [x] `tools/local_worker.py`: dispatches a coding job to OpenCode 1.19.4 + Ollama (`qwen3-coder:30b`, 32k context,
+  ~86 tok/s on the RTX 5080 with 1/3 on CPU) in its own clone `../ApexNav-worker/<id>` (not a git worktree: OpenCode
+  edits the main checkout from a worktree, seen on the first test job and reverted). Runs detached, then pytest, writes
+  `.worker/jobs/<id>/job.json`; flags `escaped` if the main checkout changed. Worker cannot push (OpenCode permissions).
+  Replaces the earlier whole-file-rewrite bridge (4096-token output cap truncated big files).
+- [x] `docs/LOOP.md` (one review tick) and `docs/WORKER_QUEUE.md` (brand §7 items for the worker). Owner approved merging
+  to `main` on green CI and wants the loop never to pause itself.
+- [x] First job `brand-21a` (`.dv-z` 44 px): the worker made exactly the two requested edits, tests green.
+### Next
+1. Loop thread runs docs/LOOP.md every 30 min, starting with brand-21a's PR.
