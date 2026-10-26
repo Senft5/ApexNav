@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>ApexNav · Log</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="brand/icon-180.png" />
@@ -19,6 +19,8 @@
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { background: var(--panel); color: var(--panel-ink); font-family: var(--font-ui); font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; }
+    /* The page scrolls inside body: the iOS shell disables the web view's own scroll view (the map page must not rubber-band). */
+    html { height: 100%; overflow: hidden; } body { height: 100%; overflow-y: auto; overscroll-behavior-y: none; -webkit-overflow-scrolling: touch; }
     main { max-width: 1180px; margin: 0 auto; padding: calc(14px + env(safe-area-inset-top, 0px)) 16px calc(80px + env(safe-area-inset-bottom, 0px)); display: grid; gap: 18px; }
     h2 { font-size: 18px; font-weight: 700; font-family: var(--font-num); margin-bottom: 8px; }
     a { color: inherit; }
@@ -613,9 +615,13 @@
       if (t === 'segments') { if (!segs.length) $('newStage').open = true; renderSegStrip(); }
       if (t === 'history') renderHistory();
     }
-    document.querySelectorAll('a.back').forEach(a => a.addEventListener('click', (e) => { e.preventDefault(); showTab(a.dataset.to); window.scrollTo(0, 0); }));
+    document.querySelectorAll('a.back').forEach(a => a.addEventListener('click', (e) => { e.preventDefault(); showTab(a.dataset.to); toTop(); }));
     const TAB_ALIAS = { log: 'history', stages: 'segments' };
-    function openDrive(id) { $('dvPick').value = id; renderDrive(); showTab('drive'); window.scrollTo(0, 0); }
+    // The page scrolls inside <body> (the iOS shell turns off the web view's own scrolling), so reset both.
+    function toTop() { document.body.scrollTop = 0; window.scrollTo(0, 0); }
+    // iOS ignores user-scalable=no: cancel Safari's page-zoom gesture (charts and maps use their own touch handling).
+    document.addEventListener('gesturestart', (e) => e.preventDefault(), { passive: false });
+    function openDrive(id) { $('dvPick').value = id; renderDrive(); showTab('drive'); toTop(); }
     $('dvReplay').addEventListener('click', () => {
       const id = $('dvPick').value;
       if (id) location.href = 'index.html?drive=' + encodeURIComponent(id) + '&play=1';
@@ -647,7 +653,7 @@
       $('selA').value = id;
       const o = bestOther(d);
       if (o) $('selB').value = o.id;
-      renderCompare(); showTab('compare'); window.scrollTo(0, 0);
+      renderCompare(); showTab('compare'); toTop();
     });
     {
       const q = params.get('tab'), t = TAB_ALIAS[q] || q;

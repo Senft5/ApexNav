@@ -180,6 +180,10 @@ struct ApexCockpitWebView: UIViewRepresentable {
         webView.scrollView.bounces = false
         webView.scrollView.alwaysBounceVertical = false
         webView.scrollView.alwaysBounceHorizontal = false
+        // Never zoom the app itself: the pages scroll in their own containers and the map pinch-zooms inside MapLibre.
+        webView.scrollView.minimumZoomScale = 1
+        webView.scrollView.maximumZoomScale = 1
+        webView.scrollView.pinchGestureRecognizer?.isEnabled = false
         webView.allowsLinkPreview = false
         webView.allowsBackForwardNavigationGestures = false
         webView.isInspectable = true

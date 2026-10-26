@@ -2235,6 +2235,8 @@
     // The app (ApexNavApp.swift) pushes a frame every 0.1 s from launch, driving or not. Its frames always update the
     // position (idle puck, Plan, Night); they take over the screen only while a drive runs (Start drive → End drive).
     // In a browser, frames come from the web sensors during a drive (or from tests) and go straight to live mode.
+    // iOS ignores user-scalable=no: cancel Safari's page-zoom gesture. MapLibre's pinch uses touch events and keeps working.
+    document.addEventListener('gesturestart', (e) => e.preventDefault(), { passive: false });
     window.apex = {
       live(frame) {
         if (!frame || !frame.has_fix || !Number.isFinite(frame.lat) || !Number.isFinite(frame.lon)) return;
