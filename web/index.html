@@ -1354,7 +1354,7 @@
       return { score: good / Math.max(1, km) * 10 - retraced * 60 - lengthErr * 25, good, retraced, km };
     }
     const totalOf = (t) => t.dist[t.dist.length - 1];
-    // Busy state on the button that started a slow request: label, progress bar, sweep;
+    // Busy state on the button that started a slow request: label and progress bar;
     // sibling buttons are disabled so a second tap can't start a second build.
     function busy(btn, group = []) {
       const label = btn.textContent;
