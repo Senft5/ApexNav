@@ -16,6 +16,7 @@
   <script src="stages.js"></script>
   <script src="sync.js"></script>
   <script src="sensors.js"></script>
+  <script src="reroute.js"></script>
   <script src="recording.js"></script>
   <script src="contributor.js"></script>
   <script src="themes.js"></script>
@@ -500,6 +501,9 @@
       theme: 'roadbook', camFeel: 'dynamic', voiceId: 'george', liveVoice: false, voiceStyle: 'codriver', voiceName: '', hlOn: false, hlStrength: 1,
       toggles: { stage: false, voice: true, lpr: true, dna: false, night: false }
     };
+    // Off route in live mode: web/reroute.js decides, reroute() (ROUTING) rebuilds the plan.
+    const rerouter = new ApexReroute.RerouteMonitor();
+    const routeWatch = { note: null, frame: null, bestM: 0 };   // strip text while off route; last frame fed; furthest progress
     try {
       const saved = JSON.parse(localStorage.getItem('apex.prefs') || 'null');
       if (saved) { Object.assign(state.toggles, saved.toggles || {}); if (saved.theme && saved.themeV === 2) state.theme = saved.theme; if (saved.camFeel) state.camFeel = saved.camFeel; if (saved.voiceId) state.voiceId = saved.voiceId; if (saved.liveVoice != null && saved.liveVoiceV >= 2) state.liveVoice = saved.liveVoice; /* saves from before v2 defaulted to ON and started a 90 MB download unasked */ if (saved.voiceName != null) state.voiceName = saved.voiceName; if (saved.hlOn != null) state.hlOn = !!saved.hlOn; if (saved.hlStrength > 0) state.hlStrength = saved.hlStrength; }
@@ -1053,7 +1057,7 @@
         return { type: e.type, code: e.code, call: e.call, sub: subFor(e) + linkLabel(e), dist: d.n, unit: d.u, distM: e.dist_m - state.cursorM,
                  dir: e.dir, severity: e.severity, turnRad: e.turn_rad, mods: e.mods || [] };
       });
-      notes.quietText = offRoute ? 'Driving · no route loaded' : track ? `${track.name} · ${spirited ? 'Full notes' : 'Quiet · bumps and cameras only'}` : 'Plan a route for notes';
+      notes.quietText = offRoute ? (!track ? 'Driving · no route loaded' : offRouteText()) : track ? `${track.name} · ${spirited ? 'Full notes' : 'Quiet · bumps and cameras only'}` : 'Plan a route for notes';
       Inst.renderNotes($('notes'), look.theme, notes);
 
       if (!(state.playing || live) || vMps == null) return;
@@ -1083,8 +1087,10 @@
         lat = L.lat; lon = L.lon; vMps = L.speed_mps; latG = L.lat_g; lonG = L.lon_g; camber = L.camber_deg;
         bearing = L.course_deg != null ? L.course_deg : state.bearing;
         if (track) {
-          const hit = Core.nearestIndex(lat, lon, track.lat, track.lon, state.cursorIdx, 600);
-          if (hit.distM < 40) { idx = hit.index; state.cursorM = track.dist[idx]; }
+          // Off route the rejoin can be anywhere on the route, so search all of it (hint -1).
+          const hit = Core.nearestIndex(lat, lon, track.lat, track.lon, rerouter.off ? -1 : state.cursorIdx, 600);
+          if (L !== routeWatch.frame) { routeWatch.frame = L; feedRerouter(L, hit); }
+          if (hit.distM < 40 && !rerouter.off) { idx = hit.index; state.cursorM = track.dist[idx]; }
         }
       } else if (track) {
         const s = sample(track, state.cursorM);
@@ -1183,6 +1189,7 @@
       track = t;
       state.cursorM = Math.max(0, Math.min(totalM(), startM));
       state.spoken.clear();
+      rerouter.routeChanged(); routeWatch.note = null; routeWatch.frame = null; routeWatch.bestM = 0;
       if (state.mode !== 'live') setMode(t.kind === 'drive' ? 'replay' : 'sim');
       renderDriveList();
       loadTrackOnMap();
@@ -1332,6 +1339,7 @@
         t = trackFromPolyline(coords, id, name);
         t.request = request;
       }
+      if (t.request) for (const v of t.request.via) v.distM = t.dist[Core.nearestIndex(v.lat, v.lon, t.lat, t.lon, -1).index];
       const i = drives.findIndex(d => d.id === id);
       if (i >= 0) drives.splice(i, 1);
       drives.unshift(t);
@@ -1371,6 +1379,34 @@
         const request = { from: from.label === null ? null : { lat: from.lat, lon: from.lon }, to: { lat: to.lat, lon: to.lon }, via: [] };
         await buildRoute([from, to], 'route_dest', `To ${to.label || 'current location'}`, null, request);
       } catch (err) { toast(err.message); } finally { ui.done(); }
+    }
+    // Live off-route handling. Notes, pace and trip distance stay blank while off route (render
+    // gives no index); the old route stays drawn until the new one arrives.
+    function feedRerouter(L, hit) {
+      const near = hit.distM < 40;
+      const r = rerouter.update({ t: Date.now(), distToRouteM: hit.distM, accuracyM: Number.isFinite(L.accuracy_m) ? L.accuracy_m : null,
+                                  speedMps: L.speed_mps, progressM: near ? track.dist[hit.index] : null });
+      if (!r.off && near) routeWatch.bestM = Math.max(routeWatch.bestM, track.dist[hit.index]);
+      if (r.backOn) { routeWatch.note = null; say('Back on route'); }
+      if (r.request) reroute(track);
+    }
+    const offRouteText = () => routeWatch.note || (rerouter.reason === 'wrong_way' ? 'Wrong way' : 'Off route');
+    async function reroute(t) {
+      const req = t.request, L = state.live;
+      if (!req || !L) { routeWatch.note = 'Off route'; return; }   // a recorded drive has no plan to rebuild
+      const failed = () => { routeWatch.note = 'Off route · no signal to reroute'; rerouter.requestFailed(Date.now()); };
+      if (navigator.onLine === false) { failed(); return; }
+      routeWatch.note = 'Rerouting…';
+      say('Rerouting');
+      // From here through the via points still ahead (a loop's next unpassed waypoint, then the rest) to the destination.
+      const ahead = req.via.filter(v => v.distM == null || v.distM > routeWatch.bestM).map(v => ({ lat: v.lat, lon: v.lon }));
+      const points = [{ lat: L.lat, lon: L.lon }, ...ahead, req.to];
+      let coords;
+      try { coords = await valhallaRoute(points); } catch (_) { try { coords = await osrmRoute(points); } catch (_) { failed(); return; } }
+      if (track !== t || state.mode !== 'live') return;           // the driver loaded something else meanwhile
+      const nt = trackFromPolyline(coords, t.id, t.name);
+      nt.request = { from: null, to: req.to, via: ahead };
+      await buildRoute(null, t.id, t.name, nt);                     // activate() resets the monitor for the new route
     }
     // Loops: three candidate circles through the start, waypoints snapped to through roads,
     // spurs cut, then the candidate with the best road character wins (a first step toward
@@ -1452,6 +1488,7 @@
         done.sort((a, b) => b.score - a.score);
       }
       const best = done[0];
+      best.t.request = { from: null, to: { lat: c.lat, lon: c.lon }, via: best.job.pts.slice(1, -1).map(p => ({ lat: p.lat, lon: p.lon })) };
       ui.step('PROFILING', 0.92);
       await buildRoute(null, `loop_${miles}`, `${miles} mi loop`, best.t);
       const how = best.job.kind === 'stages' ? `${best.job.plan.legs.length} best-road stages` : 'circle fallback';

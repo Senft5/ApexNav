@@ -277,6 +277,7 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
 
     // GPS state
     private var hasFix = false
+    private var accuracyM: Double? = nil   // horizontal, metres; the web's off-route test widens with it
     private var latDeg: Double = 0.0
     private var lonDeg: Double = 0.0
     private var speedMps: Double = 0.0
@@ -370,6 +371,7 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         let json = "{"
             + "\"lat\":\(Self.num(hasFix ? latDeg : nil, 7)),"
             + "\"lon\":\(Self.num(hasFix ? lonDeg : nil, 7)),"
+            + "\"accuracy_m\":\(Self.num(hasFix ? accuracyM : nil, 1)),"
             + "\"speed_mps\":\(Self.num(speedMps, 2)),"
             + "\"course_deg\":\(Self.num(courseDeg, 1)),"
             + "\"elevation_m\":\(Self.num(fusion.elevationM, 2)),"
@@ -418,6 +420,7 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
     private func ingest(fix: GPSFix) {
         guard fix.horizontalAccuracyM >= 0 else { return }
         hasFix = true
+        accuracyM = fix.horizontalAccuracyM
         latDeg = fix.lat
         lonDeg = fix.lon
         if fix.speedMps >= 0 { speedMps = fix.speedMps }
