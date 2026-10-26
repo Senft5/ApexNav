@@ -18,13 +18,16 @@ yourself in less time than the brief takes.
 
 | Tier | Models (`providerInstanceId` / `model`) | Give it |
 |---|---|---|
-| **fast** | `claudeAgent` / `claude-haiku-5-5` (effort `low`); `antigravity` / `gemini-3.8-flash-medium`; `codex` / `gpt-6-luna` (`reasoningEffort` `low`) | Read and report ("list every place index.html does X, with line numbers"), CI log triage, mechanical sweeps across many files, tests from a written behaviour list, docs drafts, checking a PR against the brand rules. |
-| **mid** | `claudeAgent` / `claude-sonnet-5-5` (effort `medium`); `codex` / `gpt-6-sol` (`reasoningEffort` `medium`); `antigravity` / `gemini-4-argon-medium` | A feature or bug fix with a clear brief and acceptance check: UI wiring, new screens, From/To-style changes, refactors within web/, a test suite for new logic. |
+| **fast** | `codex` / `gpt-6-luna` (`reasoningEffort` `low`); `antigravity` / `gemini-3.8-flash-medium`; last resort `claudeAgent` / `claude-haiku-5-5` (effort `low`) | Read and report ("list every place index.html does X, with line numbers"), CI log triage, mechanical sweeps across many files, tests from a written behaviour list, docs drafts, checking a PR against the brand rules. |
+| **mid** | `codex` / `gpt-6-sol` (`reasoningEffort` `medium`); `antigravity` / `gemini-4-argon-medium`; last resort `claudeAgent` / `claude-sonnet-5-5` (effort `medium`) | A feature or bug fix with a clear brief and acceptance check: UI wiring, new screens, From/To-style changes, refactors within web/, a test suite for new logic. |
 | **local** | `pi` / `ollama/qwen3-coder:30b` (owner's RTX 5080, free, 32k context, slow) | Only jobs where its output is much larger than the brief and a machine checks it: generate test cases, a repetitive sweep with a grep-able pattern, boilerplate. One file or a pattern, never "understand index.html" (2000 lines overflow its context). One job at a time (one GPU). |
 | **top** (you) | the loop thread | Architecture and design, `/core` math, `web/apex_core.js` parity, ApexKit and live sensor math, data-honesty questions, deciding what to build, writing briefs, reviewing every delegate's diff, merging. |
 
-Within a tier, prefer Claude, then spread to Codex and Antigravity so no single subscription
-runs out; if a provider errors or reports a usage limit, use another model of the same tier. If a
+Within a tier, prefer **non-Claude** models (owner 2026-10-26): the Claude subscription is kept
+for the loop's own design and review. Alternate Codex and Antigravity; use a Claude model only
+when both report a usage limit or error, and say so in the tick report. Keep your own work
+lean: for a `top` item write the design and hand the build to mid rather than coding it
+yourself, unless it is `/core` math, parity, ApexKit or smaller than its brief. If a
 model above is missing from `orchestrator_capabilities`, take the nearest one of that tier.
 Escalate a job one tier after one failed attempt; do not retry the same tier twice. Never use the
 T3 **OpenCode** provider for the local model: T3 injects its orchestration tools there and the
