@@ -220,16 +220,22 @@
     const box = html('div', 'readouts', parent);
     const cell = (label, cls) => {
       const c = html('div', 'ro ' + (cls || ''), box);
-      const v = html('b', '', c, '--');
+      const value = html('div', 'ro-value', c);
+      const v = html('b', '', value, '--');
       html('span', '', c, label);
-      return v;
+      return { value, v };
     };
     const limit = cell('Limit', 'ro-limit');
-    const road = cell('Road', 'ro-pace');                      // the speed the road allows right now: the lower of corner pace and sightline
+    const road = cell('Road', 'ro-pace');
+    const eye = svg('svg', { viewBox: '0 0 24 24', width: 12, height: 12, class: 'ro-eye', 'aria-hidden': 'true' }, road.value);
+    svg('path', { d: 'M2 12 Q12 2 22 12 Q12 22 2 12 Z', fill: 'none', stroke: 'currentColor', 'stroke-width': 2 }, eye);
+    svg('circle', { cx: 12, cy: 12, r: 3, fill: 'currentColor' }, eye);
+    eye.style.display = 'none';
     return (d) => {
-      limit.textContent = fmt(d.limitMph);
+      limit.v.textContent = fmt(d.limitMph);
       const both = [d.paceMph, d.sightMph].filter(v => Number.isFinite(v));
-      road.textContent = fmt(both.length ? Math.min(...both) : null);
+      road.v.textContent = fmt(both.length ? Math.min(...both) : null);
+      eye.style.display = both.length === 2 && d.sightMph < d.paceMph ? '' : 'none';
     };
   }
 
@@ -282,6 +288,12 @@
     const center = html('div', 'cluster-center', el);
     const gg = html('div', 'dial dial-g', el);
     const u = [speedDial(sp, printed), readouts(center), odometer(center, printed), gDial(gg, printed)];
+    // Keep the road type below Trip; a route without sector data has no known type.
+    const roadType = html('div', 'dna-arch', center, '--');
+    u.push(d => {
+      const type = d.sector && d.sector.archetype;
+      roadType.textContent = type === 'Flowing sweepers' ? 'Sweepers' : type === 'Fast open' ? 'Fast & open' : (type || '--');
+    });
     return { update: (d) => u.forEach(f => f(d)) };
   }
 
