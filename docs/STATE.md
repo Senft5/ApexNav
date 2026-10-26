@@ -280,6 +280,9 @@ docs/SOCIAL.md.
 - Permanent checkout: `C:/Users/senft/Projects/ApexNav`; verified working files, HEAD, index entries and local diffs. Original scratch checkout retained as a recovery copy.
 - T3 project root now points to the permanent checkout. Continue implementation there; this existing thread may retain its original scratch binding.
 
+## Full-width panels
+- Owner feedback: Plan left a strip of map visible on wider phones. Removed the 420 px panel width cap and side border; Plan, Crew and Settings now fill the area above navigation.
+
 ## Exact Next Task
 1. Review and publish the saved-drive replay follow-up on PR #21, then verify CI and the mobile Plan/Log/Replay flow before merging.
 2. Try DRIVE recording and live contribution on a real phone; listen to LIVE route-name renders and correct pronunciations as needed.

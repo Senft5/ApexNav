@@ -213,8 +213,8 @@
     .mt-8 { margin-top: 8px; } .stack-8 { display: grid; gap: 8px; } .stack-12 { display: grid; gap: 12px; }
 
     /* ---------------- route book ---------------- */
-    .sheet { position: absolute; z-index: 10; top: 0; bottom: 0; right: 0; width: min(420px, 100%); background: var(--panel); color: var(--panel-ink);
-      border-left: 1px solid var(--rule); transform: translateX(105%); transition: transform 0.18s ease-out; display: flex; flex-direction: column; }
+    .sheet { position: absolute; z-index: 10; top: 0; bottom: 0; right: 0; left: 0; width: 100%; background: var(--panel); color: var(--panel-ink);
+      transform: translateX(105%); transition: transform 0.18s ease-out; display: flex; flex-direction: column; }
     .sheet.open { transform: none; }
     .sheet.dragging { transition: none; }
     [hidden] { display: none !important; }
