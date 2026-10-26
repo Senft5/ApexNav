@@ -317,6 +317,7 @@ docs/SOCIAL.md.
 - [x] brand-23 (#42): iOS app icon: `Assets.xcassets/AppIcon.appiconset` with the 1024 px brand icon (single-size, RGB, no alpha), listed in project.yml with `ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon`; verified by the cloud xcodegen build.
 - [x] brand-16 (#45): after a route or loop is built the Plan sheet shows a route card (name, distance · corners · road type, Twist/Flow/Surface bars, cameras, road-feel coverage; `--` where unknown, "Road feel after first drive" when none) with Drive it (start drive on it) and Preview (sim); never opened in live mode, so reroutes don't pop it. Spots note per §2; Plan busy labels sentence case.
 - [x] brand-5b (#46): Night Auto = dark between sunset and sunrise at the live fix / track position / last GPS fix (`web/sun.js`, NOAA approximation, −0.833° altitude; `tests/test_sun.py` within 5 min of published times, polar day/night); no position → system dark-mode setting; rechecked every minute. Terrain blocking the horizon is not modelled.
+- [x] brand-9 (#47): cockpit Log/Stages tabs open `analysis.html?tab=log|stages`; Settings plate is a 44 px gear (aria-label Settings); the Plan sheet's "Replay a drive" list is gone: drives (bundled and saved) replay from the Log's drive detail, Dry Ridge also from Start drive's "Watch a replay".
 ### Next
 1. Loop thread runs docs/LOOP.md every 30 min, starting with brand-21a's PR.
 2. Owner priority after brand-17: routing from the real position, From/To, off-route detection and reroute (docs/WORKER_QUEUE.md route-1..5).

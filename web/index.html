@@ -79,6 +79,8 @@
     .maplibregl-ctrl-attrib { font-size: 10px; }
     .plates { position: absolute; left: 10px; bottom: 10px; z-index: 4; display: flex; gap: 6px; }
     .plate { background: var(--panel); color: var(--panel-ink); border: 1px solid var(--rule); padding: 8px 12px; font-size: 13px; font-weight: 600; min-height: 36px; }
+    .plate.gear { width: 44px; height: 44px; min-height: 44px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+    .plate.gear svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; }
     .plate.live { background: var(--accent); color: var(--panel); border-color: var(--accent); }
     #recenterBtn { display: none; } #recenterBtn.show { display: block; }
     .toast { position: absolute; left: 50%; top: 12px; transform: translateX(-50%); z-index: 6; max-width: calc(100% - 32px);
@@ -284,7 +286,7 @@
       <div class="plates">
         <div class="plate" id="modePlate" role="status">Replay</div>
         <button class="plate" id="recenterBtn">Recenter</button>
-        <button class="plate" id="settingsBtn" aria-label="Settings">Settings</button>
+        <button class="plate gear" id="settingsBtn" aria-label="Settings"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2.5l1.6 2.6 3-.7.9 3 3 .9-.7 3 2.6 1.6-2.6 1.6.7 3-3 .9-.9 3-3-.7-1.6 2.6-1.6-2.6-3 .7-.9-3-3-.9.7-3L2.5 12l2.6-1.6-.7-3 3-.9.9-3 3 .7z"/></svg></button>
       </div>
       <div class="toast" id="toast"></div>
 
@@ -347,10 +349,7 @@
             <div id="hlNearby" class="stack-8 mt-8"></div>
           </section>
           <section data-panel="route">
-            <h3>Replay a drive</h3>
-            <div id="driveList" class="stack-8"></div>
             <p class="note" id="measuredNote" hidden></p>
-            <div class="row mt-8"><a class="ink-btn" href="analysis.html" style="display:inline-flex;align-items:center;text-decoration:none">Open your log</a></div>
           </section>
           <section data-panel="crew" id="accountSection">
             <div id="accountBody" class="stack-12"></div>
@@ -529,7 +528,6 @@
       const others = drives.filter(d => !savedDriveIds.has(d.id) && !ids.has(d.id));
       drives.splice(0, drives.length, ...records.map(ApexRecording.toTrack), ...others);
       savedDriveIds = ids;
-      renderDriveList();
     }
     let track = null;
 
@@ -1269,7 +1267,6 @@
       state.spoken.clear();
       rerouter.routeChanged(); routeWatch.note = null; routeWatch.frame = null; routeWatch.bestM = 0;
       if (state.mode !== 'live') setMode(t.kind === 'drive' ? 'replay' : 'sim');
-      renderDriveList();
       loadTrackOnMap();
       fetchAlpr(t);
       showMeasured(t);
@@ -1631,8 +1628,8 @@
     const VIEW_TITLES = { route: 'Plan', crew: 'Crew', setup: 'Settings' };
     let view = null;
     function showView(v) {
-      if (v === 'log') { location.href = 'analysis.html?tab=history'; return; }
-      if (v === 'stages') { location.href = 'analysis.html?tab=segments'; return; }
+      if (v === 'log') { location.href = 'analysis.html?tab=log'; return; }
+      if (v === 'stages') { location.href = 'analysis.html?tab=stages'; return; }
       if (v === 'map') v = null;
       view = v;
       if (v === 'route') refreshSavedDrives();
@@ -1695,21 +1692,6 @@
       render(true);
     });
 
-    function renderDriveList() {
-      const list = $('driveList');
-      list.innerHTML = '';
-      for (const d of drives) {
-        const b = document.createElement('button');
-        b.className = 'card' + (track && d.id === track.id ? ' active' : '');
-        const corners = d.events.filter(e => e.type === 'corner').length;
-        const mi = (d.dist[d.dist.length - 1] / 1609.344).toFixed(1);
-        b.innerHTML = '<b></b><span></span>';
-        b.querySelector('b').textContent = d.name;
-        b.querySelector('span').textContent = `${mi} mi · ${corners} corners · ${d.subtitle}`;
-        b.addEventListener('click', () => { closeSheet(); activate(d, 0); });
-        list.appendChild(b);
-      }
-    }
     function renderThemeList() {
       const list = $('themeList');
       list.innerHTML = '';
@@ -2258,7 +2240,6 @@
     // =======================================================================
     paintSwitches();
     drawPuck();
-    renderDriveList();
     renderThemeList();
     renderHighlights(); renderNearbyHighlights();
     renderAccount();
