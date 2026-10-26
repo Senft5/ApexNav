@@ -30,7 +30,9 @@ Checkout: `C:/Users/senft/Projects/ApexNav`. Never work in the scratch copies.
      `<id>-r2` (at most two retries). After that, do it yourself if it is small, or set the item
      to `dropped (reason)`.
    - **Harmful** (touches core math, invents data, breaks parity): discard, set `dropped`.
-5. **Worker idle, nothing to review**: take the first `todo` in docs/WORKER_QUEUE.md. Read
+5. **Worker idle, nothing to review**: take the first `todo` in docs/WORKER_QUEUE.md (the
+   Priority section comes first; a `reviewer` item there you implement yourself, and the worker
+   may take the next `worker` item meanwhile). Read
    the code first; if it is already done, set `dropped (already done)` and take the next.
    Write a precise task to `.worker/tasks/<id>.md`: exact file, selectors/functions, old and
    new strings, what must not change. The local model does well with one file and an exact
