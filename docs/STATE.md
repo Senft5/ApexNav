@@ -332,3 +332,17 @@ docs/SOCIAL.md.
 - 2026-10-26: worker dispatch moved to the T3 **Pi** provider (Pi 1.4.0, `~/.pi/agent/models.json` → Ollama). Probes: Pi did a 3-step bash task and a grep-then-edit in web/index.html exactly, no T3 tool calls, own worktree. The T3 OpenCode provider failed the same probe (called T3 orchestration tools, launched a stray thread); `tools/local_worker.py` stays as the fallback.
 - 2026-10-26: loop reorganised into tiers (docs/LOOP.md): top (loop thread) designs/reviews and does core math; mid (Sonnet 5.5 / GPT sol / Gemini Argon) and fast (Haiku 5.5 / Gemini Flash / GPT luna) get short briefs, never line-by-line edits; local Pi only for high-output, machine-checked jobs. Reason: line-level specs for the local model were bigger than the diffs (route-2: 6.3 KB spec for +50/-24).
 - 2026-10-26: owner wants Opus usage saved for high-level review: delegates prefer Codex / Antigravity, Claude models only as a last resort; top items get a design + a mid build (docs/LOOP.md).
+
+## Session 2026-10-26: Road book only (themes-2)
+### Completed
+- [x] Removed the Instruments/Stage theme, Settings theme picker, and Stage-only pace-note strip renderer and CSS. Road book's tulips and shared dial cluster remain.
+- [x] Saved and URL theme ids `stage`, `instrument`, `telemetry`, and unknown ids resolve to Road book. Notes mode and the Stages feature are unchanged.
+- [x] `python -X utf8 -m pytest tests -q`: 118 passed, 2 skipped. Headless Edge loaded day and night with saved `theme: 'stage'`; both rendered Road book dials, the matching Night setting, and no picker.
+
+### Active bugs / limitations
+- Browser check did not cover a physical phone or the full Auto sunset transition. Edge held its temporary test profile briefly after exit, so that cleanup step reported a Windows file permission error; the day/night assertions had passed.
+
+### Exact next task
+- Reviewer verification: 119 passed, 2 skipped; added a deterministic Node regression for retired/unknown ids (including inherited object keys) and day/night palette application. All ids now resolve directly to the only theme.
+- Loop status: themes-2 reviewed and opened as PR #62, awaiting CI before merge. stages-1 is running on Antigravity Flash Medium (separate quota from exhausted Argon); no local-worker jobs, Ollama running. Main core, Pages and iOS CI all passed.
+- Exact next task: merge themes-2 only after CI is green, then dispatch plan-suggest; review stages-1 independently. Verify Night Auto and cockpit on a physical phone during the owner's iOS test.

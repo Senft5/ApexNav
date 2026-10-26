@@ -1,4 +1,4 @@
-// ApexInstruments — theme-driven renderers for the binnacle and the pace-note strip.
+// ApexInstruments — Road book renderers for the binnacle and pace-note strip.
 // Flat vector only: precision comes from linework and type, never from fake materials.
 //
 //   mountCluster(el, theme) -> { update(d) }   d = { speedMph, paceMph, sightMph, limitMph,
@@ -84,40 +84,22 @@
       html('span', '', q, notes.quietText || '');
       return;
     }
-    if (theme.notes === 'roadbook') {
-      // Roadbook page: up to three boxes, distance | tulip | note, like the printed book.
-      notes.slice(0, 3).forEach((n, i) => {
-        const box = html('div', 'rb-box' + (i === 0 ? ' now' : ''), el);
-        const d = html('div', 'rb-dist', box);
-        html('b', '', d, n.dist);
-        html('small', '', d, n.unit);
-        const t = html('div', 'rb-tulip', box);
-        t.innerHTML = tulipSVG(n, ink, n.type === 'corner' ? accent : signal);
-        const c = html('div', 'rb-call', box);
-        if (n.type !== 'corner' && n.code.toLowerCase() !== n.call.toLowerCase()) html('b', '', c, n.code);
-        html('span', '', c, n.call);
-      });
-      return;
-    }
-    // 'tulip' (stage)
-    const n = notes[0];
-    const row = html('div', 'pn' + (n.type !== 'corner' ? ' hazard' : ''), el);
-    const t = html('div', 'pn-tulip', row);
-    t.innerHTML = tulipSVG(n, ink, n.type === 'corner' ? accent : signal);
-    const txt = html('div', 'pn-text', row);
-    html('div', 'pn-call', txt, n.call);
-    html('div', 'pn-sub', txt, n.sub);
-    const d = html('div', 'pn-dist', row);
-    html('b', '', d, n.dist);
-    html('small', '', d, n.unit);
-    if (notes[1]) {
-      const nx = html('div', 'pn-next', row);
-      nx.innerHTML = tulipSVG(notes[1], css('--panel-dim'), css('--panel-dim'));
-    }
+    // Road book page: up to three boxes, distance | tulip | note.
+    notes.slice(0, 3).forEach((n, i) => {
+      const box = html('div', 'rb-box' + (i === 0 ? ' now' : ''), el);
+      const d = html('div', 'rb-dist', box);
+      html('b', '', d, n.dist);
+      html('small', '', d, n.unit);
+      const t = html('div', 'rb-tulip', box);
+      t.innerHTML = tulipSVG(n, ink, n.type === 'corner' ? accent : signal);
+      const c = html('div', 'rb-call', box);
+      if (n.type !== 'corner' && n.code.toLowerCase() !== n.call.toLowerCase()) html('b', '', c, n.code);
+      html('span', '', c, n.call);
+    });
   }
 
   // -------------------------------------------------------------------------
-  // Dial cluster (stage / roadbook)
+  // Dial cluster
   // -------------------------------------------------------------------------
   const ang = (mph) => 135 + 270 * Math.max(0, Math.min(SPEED_MAX, mph)) / SPEED_MAX;
   const polar = (r, deg) => [100 + r * Math.cos(deg * Math.PI / 180), 100 + r * Math.sin(deg * Math.PI / 180)];

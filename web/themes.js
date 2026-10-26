@@ -1,38 +1,16 @@
-// ApexThemes — cockpit themes as first-class components.
+// ApexThemes — Road book cockpit palette.
 //
 // A theme owns: colour tokens (day + night), typography, the basemap palette, which
 // cluster renders the binnacle, and how pace notes are drawn. The app never
 // hardcodes a colour; it asks the active theme.
 //
 //   roadbook   (A) FIA rally roadbook: ink on paper, tulip pace notes, printed gauges
-//   stage      (AB) instrument cluster + roadbook tulips over the topo stage map
 (function (root) {
   'use strict';
 
   const FONT = { ui: '"Inter Tight", "Helvetica Neue", Arial, sans-serif', num: '"Barlow Condensed", "Arial Narrow", sans-serif' };
 
   const THEMES = {
-    stage: {
-      id: 'stage', label: 'Instruments', tag: 'AB', blurb: 'Dark dash over the map.',
-      fonts: FONT, cluster: 'dials', notes: 'tulip', gauge: 'engraved',
-      day: {
-        stage: '#F4EFE6', ink: '#1E1D1A', dim: '#7A7266', route: '#B5532B', routeCasing: '#F4EFE6',
-        panel: '#141413', panelInk: '#ECE6DA', panelDim: '#8D867A', rule: '#2E2C28', accent: '#E8743B',
-        signal: '#D9411E', amber: '#E89B3C', calm: '#FFF8EA',
-        face: '#0F0F0E', faceInk: '#ECE6DA', faceDim: '#5E5A52', hair: '#2E2C28', gain: '#6FBF7F'
-      },
-      night: {
-        stage: '#111210', ink: '#EAE3D2', dim: '#8E8676', route: '#E89B3C', routeCasing: '#111210',
-        panel: '#0C0C0B', panelInk: '#EAE3D2', panelDim: '#7F796D', rule: '#24231F', accent: '#E89B3C',
-        signal: '#D9411E', amber: '#E89B3C', calm: '#EAE3D2',
-        face: '#0A0A09', faceInk: '#EAE3D2', faceDim: '#4E4A43', hair: '#24231F', gain: '#6FBF7F'
-      },
-      map: {
-        day: { bg: '#F4EFE6', water: '#C9D2CC', waterLine: '#9FB0AA', land: '#E9E2D2', wood: '#DCD8BF', road: '#FFFDF8', roadMinor: '#FFFFFF', casing: '#B9AE98', label: '#3B3833', halo: '#F4EFE6', boundary: '#C8BEA9', contour: '#3B3833', shadow: '#6B6B3A', highlight: '#FBF8F0', accentShade: '#8A8455' },
-        night: { bg: '#111210', water: '#0B0E10', waterLine: '#1A2228', land: '#141512', wood: '#151712', road: '#EAE3D2', roadMinor: '#4A463E', casing: '#111210', label: '#CFC6B2', halo: '#111210', boundary: '#2F2C27', contour: '#3A372F', shadow: '#050504', highlight: '#1E1D19', accentShade: '#0B0B0A' }
-      }
-    },
-
     roadbook: {
       id: 'roadbook', label: 'Road book', tag: 'A', blurb: 'Paper and red ink.',
       fonts: FONT, cluster: 'dials', notes: 'roadbook', gauge: 'printed',
@@ -54,12 +32,7 @@
       }
     }
   };
-  const ORDER = ['roadbook', 'stage'];
-
-  // Saved prefs from before the Instrument and Telemetry themes were removed land on Stage.
-  const RETIRED = { instrument: 'stage', telemetry: 'stage' };
-
-  function get(id) { return THEMES[RETIRED[id] || id] || THEMES.roadbook; }
+  function get() { return THEMES.roadbook; }
 
   function apply(id, night) {
     const t = get(id);
@@ -73,5 +46,5 @@
     return { theme: t, colors: c, map: night ? t.map.night : t.map.day };
   }
 
-  root.ApexThemes = { THEMES, ORDER, get, apply };
+  root.ApexThemes = { THEMES, get, apply };
 })(window);
