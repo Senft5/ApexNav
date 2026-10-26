@@ -298,5 +298,6 @@ docs/SOCIAL.md.
 - [x] `docs/LOOP.md` (one review tick) and `docs/WORKER_QUEUE.md` (brand §7 items for the worker). Owner approved merging
   to `main` on green CI and wants the loop never to pause itself.
 - [x] First job `brand-21a` (`.dv-z` 44 px): the worker made exactly the two requested edits, tests green.
+- [x] Loop tick 1: brand-21a reviewed, rebased on #22, merged as #23; `local_worker.py` `changed_files` no longer drops the first path's first character.
 ### Next
 1. Loop thread runs docs/LOOP.md every 30 min, starting with brand-21a's PR.

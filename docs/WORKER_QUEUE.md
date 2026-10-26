@@ -10,7 +10,7 @@ Statuses: `todo`, `active`, `merged (#PR)`, `dropped (reason)`.
 
 | id | status | files | task |
 |---|---|---|---|
-| brand-21a | active | web/analysis.html | `.dv-z` zoom buttons 30 → 44 px high, drop their letter-spacing (inputs are already 44 px). First worker job, run by hand to prove the pipeline. |
+| brand-21a | merged (#23) | web/analysis.html | `.dv-z` zoom buttons 30 → 44 px high, drop their letter-spacing (inputs are already 44 px). First worker job, run by hand to prove the pipeline. |
 | brand-21b | todo | web/index.html | Delete `.ink-btn.busy::before` and `@keyframes sweep` (and only the code that exists solely to drive the sweep); keep the busy label and progress bar. `.ink-btn.on` = ink fill, not accent. |
 | brand-17 | todo | web/index.html, web/instruments.js | Pace-note strip text per §7 item 17: `subFor()` returns `R 42 m · 31 mph` for corners, `Driven once` / `Confirmed` for hazards, `Camera` for cameras; the next-note mini tulip drops its repeated code label; Roadbook boxes show the code only when it differs from the call. |
 | brand-18 | todo | web/drive_view.js | Corner label collisions per §7 item 18: draw a corner number only if it is ≥ 18 px from every already drawn label, else a 4 px dot; same for the Compare plan map. |
