@@ -284,9 +284,9 @@ docs/SOCIAL.md.
 - Owner feedback: Plan left a strip of map visible on wider phones. Removed the 420 px panel width cap and side border; Plan, Crew and Settings now fill the area above navigation.
 
 ## Exact Next Task
-1. Review and publish the saved-drive replay follow-up on PR #21, then verify CI and the mobile Plan/Log/Replay flow before merging.
-2. Try DRIVE recording and live contribution on a real phone; listen to LIVE route-name renders and correct pronunciations as needed.
-3. Continue the remaining brand checklist in docs/BRAND.md, preserving owner decisions on legacy theme/voice removal.
+1. Owner on a real phone: plan a route from the real position, drive off it and back (reroute, "Back on route"), a Night Auto switch at sunset, DRIVE recording and live contribution; listen to LIVE road-name renders and fix pronunciations.
+2. Owner decisions pending: BRAND §7 item 19 (delete the Instrument and Telemetry themes) and the Jarvis voice removal in item 22. Nothing else in BRAND §7 is open.
+3. Loop: docs/WORKER_QUEUE.md (route-6: wrong-way and Dry Ridge in tools/sim_offroute.mjs).
 
 ## Session 2026-10-26 (m): local GPU worker + 30-minute review loop
 - [x] PR #21 merged (`5d15d94`); its late simulator failure was on superseded commit `054f811`, `main` CI is green.
