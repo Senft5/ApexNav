@@ -12,11 +12,15 @@ targets:
     platform: iOS
     sources:
       - path: ApexNavApp.swift
+      - path: Assets.xcassets      # AppIcon: web/brand/icon-1024.png (single-size iOS icon)
       - path: web
         type: folder
         buildPhase: resources
     dependencies:
       - package: ApexKit
+    settings:
+      base:
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     info:
       path: Info.plist
       properties:
