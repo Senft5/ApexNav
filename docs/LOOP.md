@@ -36,7 +36,9 @@ Checkout: `C:/Users/senft/Projects/ApexNav`. Never work in the scratch copies.
    the code first; if it is already done, set `dropped (already done)` and take the next.
    Write a precise task to `.worker/tasks/<id>.md`: exact file, selectors/functions, old and
    new strings, what must not change. The local model does well with one file and an exact
-   spec, and badly with "per §7". Dispatch:
+   spec, and badly with "per §7". For a file over ~400 lines (web/index.html is 2000) give the
+   read windows (`offset`/`limit`) for each edit: a whole-file read overflows its 32k context and it
+   forgets the task (brand-17 and route-1 both failed that way). Dispatch:
    `python tools/local_worker.py dispatch --id <id> --task-file .worker/tasks/<id>.md --files <file>`.
 6. **CI failed on a loop PR**: fix it on the branch yourself or close the PR and set `dropped`.
    PRs that only touch `web/` skip the iOS jobs; they run on `main` after the merge. After each
