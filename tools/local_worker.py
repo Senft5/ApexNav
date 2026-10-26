@@ -219,7 +219,7 @@ def cmd_run(args):
     changed = git("status", "--porcelain", cwd=wt).splitlines()
     job.update(status=status, finished_at=now(), tests_passed=tests.returncode == 0,
                tests_tail=(tests.stdout.strip().splitlines() or [""])[-1],
-               changed_files=[line[3:] for line in changed],
+               changed_files=[line.split(maxsplit=1)[1] for line in changed],
                diffstat=git("diff", "--stat", cwd=wt))
     if status == "done" and not changed:
         job["status"] = "no_changes"
