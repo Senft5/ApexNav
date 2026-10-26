@@ -20,13 +20,25 @@
   function mount(root_, d, o) {
     const { Core, C, MPH } = o, ref = o.reference || null;        // ref: { name, score, corners[] } from Core.compareDrives(this, best other drive)
     const lost = (k) => { const r = ref && ref.corners[k]; return r && r.delta_s != null && !r.stopped ? -r.delta_s : null; };   // seconds this pass was slower than the reference
-    const fmtD = (s) => (s == null ? '--' : `${s > 0.005 ? '+' : s < -0.005 ? '−' : ''}${Math.abs(s).toFixed(2)} s`);
+    const fmtD = (s) => (s == null ? '--' : `${s > 0.005 ? '+' : s < -0.005 ? '\u2212' : ''}${Math.abs(s).toFixed(2)} s`);
     root_.innerHTML = '';
     const n = d.lat.length, T = Core.elapsedS(d.speed_mps), S = summarize(d, Core);
     const state = { i: 0, v0: 0, v1: n - 1 };
     const head = el('div', 'dv-head'), mapBox = el('div', 'dv-map'), lanes = el('div', 'dv-lanes'), read = el('div', 'dv-read'), list = el('div', 'dv-list');
-    const stat = (v, label) => `<div class="dv-stat"><b>${v}</b><span>${label}</span></div>`;
-    head.innerHTML = stat(d.ds && d.ds.score != null ? d.ds.score : '--', 'Score') + stat(`${(S.km / 1.609344).toFixed(1)} mi`, 'Distance') + stat(fmtT(S.duration_s), 'Time') + stat(d.corners.length, 'Corners');
+    read.hidden = true;
+    const showRead = () => { read.hidden = false; };
+    const ds = d.ds || (Core && Core.driverScore ? Core.driverScore(d.speed_mps, d.lon_g, d.lat_g, d.corners) : null);
+    const comp = ds && ds.components;
+    const scoreVal = ds && finite(ds.score) ? ds.score : '--';
+    const bar = (k, label) => {
+      const v = comp && finite(comp[k]) ? Math.round(comp[k] * 100) : null;
+      return `<div class="bar">${label} ${v != null ? v : '--'}<i><u style="width:${v != null ? v : 0}%"></u></i></div>`;
+    };
+    const mi = finite(S.km) ? `${(S.km / 1.609344).toFixed(1)} mi` : '--';
+    const dur = finite(S.duration_s) ? fmtT(S.duration_s) : '--';
+    head.innerHTML = `<div class="dv-score"><b class="score big">${scoreVal}</b> <small>/1000</small></div>`
+      + `<div class="bars">${bar('pace', 'Pace')}${bar('smoothness', 'Smooth')}${bar('braking', 'Brakes')}${bar('consistency', 'Rhythm')}</div>`
+      + `<div class="dv-meta">${mi} \u00b7 ${dur} \u00b7 ${d.corners.length} corners</div>`;
     root_.append(head, el('div', 'dv-grid'));
     const grid = root_.lastChild; grid.append(mapBox, el('div', 'dv-right'));
     const zoom = el('div', 'dv-zoom'); grid.lastChild.append(zoom, lanes, read);
@@ -80,7 +92,7 @@
         const top = yTop + LH, h = L.h, Y = (v) => top + h - ((v - L.lo) / (L.hi - L.lo)) * h;
         geo.lanes.push({ top, h });
         svg += `<text x="${LM}" y="${yTop + 12}" font-size="11" fill="${C.panelDim}">${L.label}</text>`;
-        svg += `<text x="${W - RM}" y="${yTop + 12}" text-anchor="end" font-size="10" fill="${C.panelDim}">${L.sym ? `±${L.hi.toFixed(1)} g` : `${L.hi} mph`}</text>`;
+        svg += `<text x="${W - RM}" y="${yTop + 12}" text-anchor="end" font-size="10" fill="${C.panelDim}">${L.sym ? `\u00b1${L.hi.toFixed(1)} g` : `${L.hi} mph`}</text>`;
         svg += `<line x1="${LM}" x2="${W - RM}" y1="${top + h}" y2="${top + h}" stroke="${C.rule}"/>`;
         if (L.sym) svg += `<line x1="${LM}" x2="${W - RM}" y1="${Y(0)}" y2="${Y(0)}" stroke="${C.rule}" stroke-dasharray="3 4"/>`;
         // corner bands behind the trace
@@ -97,7 +109,7 @@
       }
       if (feel) {                                                          // what members measured on these roads; gaps are unknown, not zero
         const top = yTop + LH, h = 56, covered = feel.cam.filter((v) => v != null).length;
-        svg += `<text x="${LM}" y="${yTop + 12}" font-size="10" letter-spacing="1.4" fill="${C.panelDim}">ROAD FEEL · MEMBERS</text><text x="${W - RM}" y="${yTop + 12}" text-anchor="end" font-size="10" fill="${C.panelDim}">${covered ? `banking ±8° · roughness` : 'no member data on this road yet'}</text>`;
+        svg += `<text x="${LM}" y="${yTop + 12}" font-size="11" fill="${C.panelDim}">Road feel</text><text x="${W - RM}" y="${yTop + 12}" text-anchor="end" font-size="10" fill="${C.panelDim}">${covered ? `banking \u00b18\u00b0 \u00b7 roughness` : 'no member data on this road yet'}</text>`;
         svg += `<line x1="${LM}" x2="${W - RM}" y1="${top + h / 2}" y2="${top + h / 2}" stroke="${C.rule}" stroke-dasharray="3 4"/><line x1="${LM}" x2="${W - RM}" y1="${top + h}" y2="${top + h}" stroke="${C.rule}"/>`;
         const cs = Math.max(1, Math.floor((v1 - v0) / (W * 1.2)));
         let bars = '', rp = '', rs = false;
@@ -112,7 +124,7 @@
       if (hasElev) {                                                       // faint elevation profile along the bottom
         let lo = Infinity, hi = -Infinity; for (const v of d.elev) { lo = Math.min(lo, v); hi = Math.max(hi, v); }
         const top = yTop + LH, h = 40, span = Math.max(10, hi - lo);
-        svg += `<text x="${LM}" y="${yTop + 12}" font-size="10" letter-spacing="1.4" fill="${C.panelDim}">ELEVATION</text><text x="${W - RM}" y="${yTop + 12}" text-anchor="end" font-size="10" fill="${C.panelDim}">${Math.round(lo * 3.28084)}-${Math.round(hi * 3.28084)} ft</text>`;
+        svg += `<text x="${LM}" y="${yTop + 12}" font-size="11" fill="${C.panelDim}">Elevation</text><text x="${W - RM}" y="${yTop + 12}" text-anchor="end" font-size="10" fill="${C.panelDim}">${Math.round(lo * 3.28084)}-${Math.round(hi * 3.28084)} ft</text>`;
         let p = ''; for (let i = v0; i <= v1; i += step) p += `${i > v0 ? 'L' : 'M'}${X(i).toFixed(1)} ${(top + h - ((d.elev[i] - lo) / span) * h).toFixed(1)}`;
         svg += `<path d="${p} L${X(v1).toFixed(1)} ${top + h} L${X(v0).toFixed(1)} ${top + h} Z" fill="${C.rule}"/>`;
         geo.lanes.push({ top, h }); yTop = top + h + 6;
@@ -139,27 +151,27 @@
         + cell('Lateral', d.lat_g && finite(d.lat_g[i]) ? `${d.lat_g[i] >= 0 ? 'L ' : 'R '}${Math.abs(d.lat_g[i]).toFixed(2)} g` : '--')
         + cell('Brake / throttle', d.lon_g && finite(d.lon_g[i]) ? `${d.lon_g[i] < 0 ? 'brake ' : 'accel '}${Math.abs(d.lon_g[i]).toFixed(2)} g` : '--')
         + cell(c ? `Corner ${k + 1}` : 'Corner', c ? `${c.call || c.code}` : '--') + (ref ? cell('vs other drive', c ? fmtD(lost(k)) : '--') : '')
-        + (feel ? cell('Banking (members)', finite(feel.cam[i]) ? `${feel.cam[i].toFixed(1)}°` : '--') + cell('Roughness (members)', finite(feel.rough[i]) ? `${feel.rough[i].toFixed(2)} g` : '--') + cell('Passes', feel.n[i] != null ? feel.n[i] : '--') : '');
+        + (feel ? cell('Banking (members)', finite(feel.cam[i]) ? `${feel.cam[i].toFixed(1)}\u00b0` : '--') + cell('Roughness (members)', finite(feel.rough[i]) ? `${feel.rough[i].toFixed(2)} g` : '--') + cell('Passes', feel.n[i] != null ? feel.n[i] : '--') : '');
       list.querySelectorAll('.dv-corner').forEach((r, q) => r.classList.toggle('on', q === k));
     }
     // pointer scrubbing on the lanes and taps on map corners
     let drag = false;
     const idxFromEvent = (e) => { const r = lanes.getBoundingClientRect(); const f = Math.max(0, Math.min(1, (e.clientX - r.left - geo.LM) / (W - geo.LM - geo.RM))); return state.v0 + f * (state.v1 - state.v0); };
-    lanes.addEventListener('pointerdown', (e) => { drag = true; lanes.setPointerCapture(e.pointerId); move(idxFromEvent(e)); });
-    lanes.addEventListener('pointermove', (e) => { if (drag || e.pointerType === 'mouse') move(idxFromEvent(e)); });
+    lanes.addEventListener('pointerdown', (e) => { drag = true; if (lanes.setPointerCapture && e.pointerId != null) lanes.setPointerCapture(e.pointerId); showRead(); move(idxFromEvent(e)); });
+    lanes.addEventListener('pointermove', (e) => { if (drag || e.pointerType === 'mouse') { showRead(); move(idxFromEvent(e)); } });
     lanes.addEventListener('pointerup', () => { drag = false; });
-    lanes.addEventListener('keydown', (e) => { const big = e.shiftKey ? 50 : 5; if (e.key === 'ArrowRight') { e.preventDefault(); move(state.i + big); } if (e.key === 'ArrowLeft') { e.preventDefault(); move(state.i - big); } if (e.key === 'Home') move(state.v0); if (e.key === 'End') move(state.v1); });
+    lanes.addEventListener('keydown', (e) => { const big = e.shiftKey ? 50 : 5; if (e.key === 'ArrowRight') { e.preventDefault(); showRead(); move(state.i + big); } if (e.key === 'ArrowLeft') { e.preventDefault(); showRead(); move(state.i - big); } if (e.key === 'Home') { showRead(); move(state.v0); } if (e.key === 'End') { showRead(); move(state.v1); } });
     lanes.tabIndex = 0; lanes.setAttribute('role', 'slider'); lanes.setAttribute('aria-label', 'Position along the drive'); lanes.setAttribute('aria-valuemin', 0); lanes.setAttribute('aria-valuemax', n - 1);
     mapBox.addEventListener('click', (e) => { const g = e.target.closest('[data-k]'); if (g) move(d.corners[+g.dataset.k].apex); });
 
     // ---- corner list -----------------------------------------------------------------------------------------------
     let net = null;
     if (ref) { const ks = d.corners.map((_, k) => lost(k)).filter((x) => x != null); net = ks.length ? ks.reduce((s, x) => s + x, 0) : null; }
-    list.innerHTML = `<h2>Corners${ref ? ` · compared with ${ref.name} (score ${ref.score}), your best other drive on this road` : ''}</h2>` + (ref ? `<p class="note" style="margin-bottom:8px">${net == null ? 'No clean corners to compare.' : `Over the ${d.corners.map((_, k) => lost(k)).filter((x) => x != null).length} corners both drives took cleanly, this drive was <b class="${net > 0.05 ? 'loss' : net < -0.05 ? 'gain' : ''}">${fmtD(net)}</b> ${net > 0 ? 'slower' : 'faster'}. Stops and traffic are left out.`}</p>` : '');
+    list.innerHTML = `<h2>Corners${ref ? ` \u00b7 compared with ${ref.name} (score ${ref.score}), your best other drive on this road` : ''}</h2>` + (ref ? `<p class="note" style="margin-bottom:8px">${net == null ? 'No clean corners to compare.' : `Over the ${d.corners.map((_, k) => lost(k)).filter((x) => x != null).length} corners both drives took cleanly, this drive was <b class="${net > 0.05 ? 'loss' : net < -0.05 ? 'gain' : ''}">${fmtD(net)}</b> ${net > 0 ? 'slower' : 'faster'}. Stops and traffic are left out.`}</p>` : '');
     const grid2 = el('div', 'dv-corners');
     d.corners.forEach((c, k) => {
       const r = el('button', 'dv-corner'); r.setAttribute('aria-label', `Corner ${k + 1}: ${c.call || c.code}, apex ${Math.round(c.apex_mps * MPH)} miles per hour`);
-      r.innerHTML = `<b>${k + 1}</b><span class="dv-call">${(c.call || c.code || '').toString()}</span><span class="dv-v">${Math.round(c.apex_mps * MPH)} mph</span><span class="dv-d">${(d.dist[c.apex] / 1609.344).toFixed(2)} mi${ref ? ` · <em class="${lost(k) == null ? '' : lost(k) > 0.05 ? 'loss' : lost(k) < -0.05 ? 'gain' : ''}">${fmtD(lost(k))}</em>` : ''}</span>`;
+      r.innerHTML = `<b>${k + 1}</b><span class="dv-call">${(c.call || c.code || '').toString()}</span><span class="dv-v">${Math.round(c.apex_mps * MPH)} mph</span><span class="dv-d">${(d.dist[c.apex] / 1609.344).toFixed(2)} mi${ref ? ` \u00b7 <em class="${lost(k) == null ? '' : lost(k) > 0.05 ? 'loss' : lost(k) < -0.05 ? 'gain' : ''}">${fmtD(lost(k))}</em>` : ''}</span>`;
       r.onclick = () => { if (zoomM) setZoom(zoomM, c.apex); move(c.apex); lanes.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); };
       grid2.append(r);
     });
@@ -167,7 +179,7 @@
     list.append(grid2);
 
     // Zoom: the lanes show the whole drive, or a window around the cursor (a corner pick recentres it).
-    const ZOOMS = [['ALL', 0], ['2 MI', 2 * 1609.344], ['0.5 MI', 0.5 * 1609.344], ['0.15 MI', 0.15 * 1609.344]];
+    const ZOOMS = [['All', 0], ['2 mi', 2 * 1609.344], ['0.5 mi', 0.5 * 1609.344], ['0.15 mi', 0.15 * 1609.344]];
     let zoomM = 0;
     function setZoom(m, center = state.i) {
       zoomM = m;
@@ -176,9 +188,9 @@
       zoom.querySelectorAll('button').forEach((b) => b.classList.toggle('on', +b.dataset.m === m));
       draw();
     }
-    ZOOMS.forEach(([label, m]) => { const b = el('button', 'dv-z', label); b.dataset.m = m; b.onclick = () => setZoom(m); b.setAttribute('aria-label', label === 'ALL' ? 'Zoom: whole drive' : `Zoom: ${label.toLowerCase()} window`); zoom.append(b); });
-    const pan = (dir) => { if (zoomM) setZoom(zoomM, Math.round((state.v0 + state.v1) / 2 + dir * (state.v1 - state.v0) * 0.6)); };
-    const prev = el('button', 'dv-z', '◀'), next = el('button', 'dv-z', '▶'); prev.setAttribute('aria-label', 'Earlier'); next.setAttribute('aria-label', 'Later');
+    ZOOMS.forEach(([label, m]) => { const b = el('button', 'dv-z', label); b.dataset.m = m; b.onclick = () => { showRead(); setZoom(m); }; b.setAttribute('aria-label', label === 'All' ? 'Zoom: whole drive' : `Zoom: ${label.toLowerCase()} window`); zoom.append(b); });
+    const pan = (dir) => { showRead(); if (zoomM) setZoom(zoomM, Math.round((state.v0 + state.v1) / 2 + dir * (state.v1 - state.v0) * 0.6)); };
+    const prev = el('button', 'dv-z', '\u25c0'), next = el('button', 'dv-z', '\u25b6'); prev.setAttribute('aria-label', 'Earlier'); next.setAttribute('aria-label', 'Later');
     prev.onclick = () => pan(-1); next.onclick = () => pan(1); zoom.append(prev, next);
     zoom.firstChild.classList.add('on');
     draw();
