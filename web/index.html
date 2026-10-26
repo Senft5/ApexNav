@@ -482,7 +482,8 @@
       };
     }
 
-    const drives = (window.APEX_DRIVES || []).map(trackFromDrive);
+    // Bundled recordings are demos (Watch a replay), never the person's own drives.
+    const drives = (window.APEX_DRIVES || []).map(trackFromDrive).map((t) => Object.assign(t, { demo: true }));
     let savedDriveIds = new Set();
     let refreshDriveVersion = 0;
     async function refreshSavedDrives() {
@@ -1200,7 +1201,7 @@
     }
     function setMode(mode) {
       state.mode = mode;
-      $('modePlate').textContent = { replay: `Replay${track && track.name ? ' · ' + track.name : ''} ×`, sim: 'Preview ×', live: 'Drive ● Rec' }[mode];
+      $('modePlate').textContent = { replay: `Replay${track && track.demo ? ' · Demo' : ''}${track && track.name ? ' · ' + track.name : ''} ×`, sim: 'Preview ×', live: 'Drive ● Rec' }[mode];
       $('modePlate').classList.toggle('live', mode === 'live');
       paintIdle();
     }
@@ -2035,7 +2036,8 @@
     // =======================================================================
     // 10b. DRIVE MODE (web): real GPS + motion, recorded to this device. REPLAY plays a saved drive; the two never mix.
     // =======================================================================
-    const drive = { sensors: null, rec: null, status: null, frames: 0, live: null, liveIdx: 0, share: 'off', shareKm: 0, shareErr: null };
+    const drive = { sensors: null, rec: null, status: null, frames: 0, live: null, liveIdx: 0, share: 'off', shareKm: 0, shareErr: null, native: false };
+    const NATIVE_SHELL = !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex);
     function paintModeSwitch() {
       const on = state.mode === 'live';
       $('driveBar').hidden = !on; $('transport').hidden = on; $('startBlock').hidden = on;
@@ -2100,6 +2102,14 @@
       setPlaying(false);
       drive.rec = new ApexSensors.Recorder(); drive.status = { gps: 'waiting', motion: 'off', wake: 'off', message: '' }; drive.frames = 0;
       drive.live = null; drive.liveIdx = 0; drive.share = 'off'; drive.shareKm = 0; drive.shareErr = null;
+      if (NATIVE_SHELL) {   // the app's own GPS and IMU feed window.apex.live; no browser sensors to start
+        drive.native = true;
+        drive.status = { gps: performance.now() - state.liveAt < 5000 && state.live ? 'on' : 'waiting', motion: 'on', wake: 'on', message: '' };
+        setPlaying(false); setMode('live'); paintModeSwitch(); resumeFollow(); paintDriveStat();
+        if (state.live) render(true);
+        startLiveSharing();
+        return;
+      }
       setMode('live'); paintModeSwitch(); paintDriveStat();
       try {
         const sensors = await ApexSensors.start({
@@ -2135,7 +2145,7 @@
     async function leaveDrive(save) {
       driveActive = false;
       const rec = drive.rec, sensors = drive.sensors, live = drive.live;
-      drive.sensors = null; drive.rec = null; drive.live = null; drive.share = 'off';
+      drive.sensors = null; drive.rec = null; drive.live = null; drive.share = 'off'; drive.native = false;
       if (sensors) sensors.stop();
       state.live = null;
       refreshAutoNight();
@@ -2216,11 +2226,21 @@
     // =======================================================================
     // 11. NATIVE BRIDGE (ApexNavApp.swift pushes window.apex.live every 0.1 s)
     // =======================================================================
+    // The app (ApexNavApp.swift) pushes a frame every 0.1 s from launch, driving or not. Its frames always update the
+    // position (idle puck, Plan, Night); they take over the screen only while a drive runs (Start drive → End drive).
+    // In a browser, frames come from the web sensors during a drive (or from tests) and go straight to live mode.
     window.apex = {
       live(frame) {
         if (!frame || !frame.has_fix || !Number.isFinite(frame.lat) || !Number.isFinite(frame.lon)) return;
-        state.live = frame; state.liveAt = performance.now();
         state.lastPosition = { lat: frame.lat, lon: frame.lon };
+        if (NATIVE_SHELL && !driveActive) { showIdleFix(frame); return; }
+        state.live = frame; state.liveAt = performance.now();
+        if (drive.native && drive.rec) {
+          drive.frames++; drive.rec.add(frame); feedLive();
+          const gps = Number.isFinite(frame.accuracy_m) && frame.accuracy_m > ApexSensors.MAX_ACCURACY_M ? 'weak' : 'on';
+          if (drive.status.gps !== gps) drive.status.gps = gps;
+          paintDriveStat();
+        }
         const entering = state.mode !== 'live';
         if (entering) { setPlaying(false); setMode('live'); paintModeSwitch(); resumeFollow(); }
         refreshAutoNight();
@@ -2228,7 +2248,20 @@
       },
       onNative(msg) { if (msg && msg.type === 'recordingSaved') toast(`Saved ${msg.segments} road segments to ${msg.file}`); }
     };
+    let idleSnapped = false;
+    function showIdleFix(frame) {
+      refreshAutoNight();
+      if (replayOn || state.mode === 'live') return;   // a replay or preview owns the map
+      setVehicle({ lat: frame.lat, lon: frame.lon, bearing: Number.isFinite(frame.course_deg) ? frame.course_deg : state.bearing,
+                   vMps: Number.isFinite(frame.speed_mps) ? frame.speed_mps : 0, onTrack: false, latG: null, lonG: 0, rough: 0 }, !idleSnapped);
+      idleSnapped = true;
+    }
     setInterval(() => {
+      // A native drive keeps going through a GPS gap (tunnel): say so instead of dropping back to the replay.
+      if (drive.native && performance.now() - state.liveAt > 5000) {
+        if (drive.status && drive.status.gps !== 'waiting') { drive.status.gps = 'waiting'; paintDriveStat(); }
+        return;
+      }
       if (state.mode === 'live' && !drive.sensors && performance.now() - state.liveAt > 5000) {
         state.live = null; setMode(track && track.kind === 'route' ? 'sim' : 'replay'); paintModeSwitch(); toast('GPS lost. Back to the replay.');
         refreshAutoNight();
@@ -2245,14 +2278,15 @@
     renderAccount();
     async function bootDrives() {
       await refreshSavedDrives();
-      const first = drives.find(d => d.id === params.get('drive')) || drives.find(d => !savedDriveIds.has(d.id)) || drives[0];
+      // Only a drive the URL asks for (Log → Replay, Watch a replay links); otherwise the map starts idle at your position.
+      const first = params.has('drive') ? drives.find(d => d.id === params.get('drive')) : null;
       if (first) {
         const at = params.has('at') ? parseFloat(params.get('at')) || 0 : 0;
         if (!replayOn) activate(first, at * first.dist[first.dist.length - 1]);
         replayOn = replayOn || ['drive', 'play', 'at'].some(k => params.has(k));
         booting = false; paintIdle();
         if (params.get('play') === '1') setPlaying(true);
-      } else { booting = false; openSheet('route'); }
+      } else { booting = false; paintIdle(); }
       if (params.get('book') === '1') openSheet('route');
       if (VIEW_TITLES[params.get('view')]) openSheet(params.get('view')); else if (params.get('view') === 'drives') openSheet('route');
     }
