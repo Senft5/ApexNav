@@ -174,6 +174,9 @@
     .sheet .sw { display: flex; flex-direction: row-reverse; justify-content: space-between; align-items: center; width: 100%; min-height: 48px; padding: 0; border-top: 1px solid var(--hair, var(--panel-dim)); }
     .sheet .sw span { font-size: 15px; font-weight: 500; color: var(--panel-ink); }
     .sw.on span { color: var(--panel-ink); }
+    .sw-cycle { min-height: 44px; }
+    .sw-cycle b { min-width: 30px; font-size: 11px; font-weight: 700; color: var(--accent); }
+    .sheet .sw-cycle b { font-size: 15px; font-weight: 600; }
     .route-key { height: 34px; padding: 0 14px; }
 
     /* Roadbook binnacle reads as the printed page */
@@ -338,11 +341,10 @@
           <section data-panel="setup">
             <h3>While you drive</h3>
 <div class="switches" id="switchRow">
-        <button class="sw" data-toggle="stage"><i></i><span>Full notes (otherwise quiet on easy roads)</span></button>
+        <button class="sw sw-cycle" data-cycle="notesMode" aria-label="Notes"><b></b><span>Notes</span></button>
         <button class="sw" data-toggle="voice"><i></i><span>Voice</span></button>
         <button class="sw" data-toggle="lpr"><i></i><span>Cameras</span></button>
-        <button class="sw" data-toggle="dna"><i></i><span>Road scores</span></button>
-        <button class="sw" data-toggle="night"><i></i><span>Night</span></button>
+        <button class="sw sw-cycle" data-cycle="nightMode" aria-label="Night"><b></b><span>Night</span></button>
       </div>
           </section>
           <section data-panel="setup">
@@ -521,16 +523,31 @@
       mode: 'replay', playing: false, rate: 1, cursorM: 0, cursorIdx: 0, follow: true, bearing: 0,
       live: null, liveAt: 0, spiritedAt: -Infinity, spoken: new Set(), tapToRoute: false,
       theme: 'roadbook', camFeel: 'dynamic', voiceId: 'george', liveVoice: false, voiceStyle: 'codriver', voiceName: '', hlOn: false, hlStrength: 1,
-      toggles: { stage: false, voice: true, lpr: true, dna: false, night: false }
+      notesMode: 'auto', nightMode: 'auto',   // Notes: auto | full | quiet. Night: auto (system dark mode) | on | off
+      toggles: { stage: false, voice: true, lpr: true, dna: false, night: false }   // stage and night are derived from the two modes; analysis.html reads toggles.night
     };
+    const NOTES_MODES = ['auto', 'full', 'quiet'], NIGHT_MODES = ['auto', 'on', 'off'];
+    const MODE_LABEL = { auto: 'Auto', full: 'Full', quiet: 'Quiet', on: 'On', off: 'Off' };
+    const darkQuery = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+    const isNight = () => state.nightMode === 'on' || (state.nightMode === 'auto' && !!(darkQuery && darkQuery.matches));
+    function syncDerivedToggles() { state.toggles.stage = state.notesMode === 'full'; state.toggles.night = isNight(); }
     // Off route in live mode: web/reroute.js decides, reroute() (ROUTING) rebuilds the plan.
     const rerouter = new ApexReroute.RerouteMonitor();
     const routeWatch = { note: null, frame: null, bestM: 0 };   // strip text while off route; last frame fed; furthest progress
     try {
       const saved = JSON.parse(localStorage.getItem('apex.prefs') || 'null');
-      if (saved) { Object.assign(state.toggles, saved.toggles || {}); if (saved.theme && saved.themeV === 2) state.theme = saved.theme; if (saved.camFeel) state.camFeel = saved.camFeel; if (saved.voiceId) state.voiceId = saved.voiceId; if (saved.liveVoice != null && saved.liveVoiceV >= 2) state.liveVoice = saved.liveVoice; /* saves from before v2 defaulted to ON and started a 90 MB download unasked */ if (saved.voiceName != null) state.voiceName = saved.voiceName; if (saved.hlOn != null) state.hlOn = !!saved.hlOn; if (saved.hlStrength > 0) state.hlStrength = saved.hlStrength; }
+      if (saved) {
+        Object.assign(state.toggles, saved.toggles || {});
+        state.toggles.dna = false;   // the Road scores switch is gone (BRAND §7 item 5); a stored "on" must not leave the layer stuck on
+        // Old saves only have toggles.stage / toggles.night: stage true = Full, false = Auto; night true = On, false = Off (a saved false was a choice, not unset).
+        state.notesMode = NOTES_MODES.includes(saved.notesMode) ? saved.notesMode : (saved.toggles && saved.toggles.stage ? 'full' : 'auto');
+        state.nightMode = NIGHT_MODES.includes(saved.nightMode) ? saved.nightMode : (saved.toggles && saved.toggles.night ? 'on' : saved.toggles && 'night' in saved.toggles ? 'off' : 'auto');
+      }
+      if (saved) { if (saved.theme && saved.themeV === 2) state.theme = saved.theme; if (saved.camFeel) state.camFeel = saved.camFeel; if (saved.voiceId) state.voiceId = saved.voiceId; if (saved.liveVoice != null && saved.liveVoiceV >= 2) state.liveVoice = saved.liveVoice; /* saves from before v2 defaulted to ON and started a 90 MB download unasked */ if (saved.voiceName != null) state.voiceName = saved.voiceName; if (saved.hlOn != null) state.hlOn = !!saved.hlOn; if (saved.hlStrength > 0) state.hlStrength = saved.hlStrength; }
     } catch (_) {}
-    if (params.has('night')) state.toggles.night = params.get('night') === '1';
+    if (params.has('night')) state.nightMode = params.get('night') === '1' ? 'on' : params.get('night') === 'auto' ? 'auto' : 'off';
+    if (params.has('notes') && NOTES_MODES.includes(params.get('notes'))) state.notesMode = params.get('notes');
+    syncDerivedToggles();
     if (params.has('theme')) state.theme = params.get('theme');
     if (params.has('cam')) state.camFeel = params.get('cam');
     if (params.has('voice')) state.voiceId = params.get('voice');
@@ -538,11 +555,16 @@
 
     let look = Themes.apply(state.theme, state.toggles.night);
     let cluster = Inst.mountCluster($('cluster'), look.theme);
-    function savePrefs() { try { localStorage.setItem('apex.prefs', JSON.stringify({ theme: state.theme, themeV: 2, camFeel: state.camFeel, voiceId: state.voiceId, liveVoice: state.liveVoice, liveVoiceV: 2, voiceName: state.voiceName, hlOn: state.hlOn, hlStrength: state.hlStrength, toggles: state.toggles })); } catch (_) {} }
+    function savePrefs() { try { localStorage.setItem('apex.prefs', JSON.stringify({ theme: state.theme, themeV: 2, camFeel: state.camFeel, voiceId: state.voiceId, liveVoice: state.liveVoice, liveVoiceV: 2, voiceName: state.voiceName, hlOn: state.hlOn, hlStrength: state.hlStrength, notesMode: state.notesMode, nightMode: state.nightMode, toggles: state.toggles })); } catch (_) {} }
+    function paintSwitches() {
+      document.querySelectorAll('[data-toggle]').forEach(b => b.classList.toggle('on', !!state.toggles[b.dataset.toggle]));
+      document.querySelectorAll('[data-cycle]').forEach(b => { const v = state[b.dataset.cycle]; b.querySelector('b').textContent = MODE_LABEL[v]; b.setAttribute('aria-label', `${b.querySelector('span').textContent}: ${MODE_LABEL[v]}`); });
+    }
     function applyTheme() {
+      syncDerivedToggles();
       look = Themes.apply(state.theme, state.toggles.night);
       cluster = Inst.mountCluster($('cluster'), look.theme);
-      document.querySelectorAll('[data-toggle]').forEach(b => b.classList.toggle('on', !!state.toggles[b.dataset.toggle]));
+      paintSwitches();
       restyleBasemap();
       if (track) loadTrackOnMap();
       renderThemeList();
@@ -924,7 +946,8 @@
       if (ft >= 1000) return { n: (m / 1609.344).toFixed(1), u: 'MI' };
       return { n: String(Math.max(0, Math.round(ft / 50) * 50)), u: 'FT' };
     }
-    const isSpirited = () => state.toggles.stage || performance.now() - state.spiritedAt < 30000;
+    // Auto: wake on hard driving. Full: always awake. Quiet: never wake, so only cameras and severe bumps are called.
+    const isSpirited = () => state.notesMode === 'full' || (state.notesMode === 'auto' && performance.now() - state.spiritedAt < 30000);
     const noteworthyInCruise = (e) => e.type === 'alpr' || (e.type === 'bump' && e.severity_g >= 0.45);
 
     // -------------------------------------------------------------------------
@@ -1911,20 +1934,23 @@
       const k = b.dataset.toggle;
       state.toggles[k] = !state.toggles[k];
       b.classList.toggle('on', state.toggles[k]);
-      if (k === 'night') { applyTheme(); return; }
-      if (k === 'dna' && mapReady) {
-        map.setLayoutProperty('apex-dna', 'visibility', state.toggles.dna ? 'visible' : 'none');
-        if (state.toggles.dna && track && !track.sectors) toast('Road scores appear after this road is driven.');
-      }
       if (k === 'lpr') updatePins();
-      if (k === 'stage') {
-        const jar = state.voiceId === 'jarvis';
-        say(state.toggles.stage ? 'Full notes.' : 'Quiet. Hazards only.', true, null,
-            state.toggles.stage ? (jar ? 'w:stage' : 'sys:stage') : (jar ? 'w:cruise' : 'sys:cruise'));
-      }
       savePrefs();
       render(true);
     }));
+    document.querySelectorAll('[data-cycle]').forEach(b => b.addEventListener('click', () => {
+      const k = b.dataset.cycle, order = k === 'notesMode' ? NOTES_MODES : NIGHT_MODES;
+      state[k] = order[(order.indexOf(state[k]) + 1) % order.length];
+      if (k === 'nightMode') { applyTheme(); return; }
+      syncDerivedToggles(); paintSwitches();
+      const jar = state.voiceId === 'jarvis', full = state.notesMode === 'full';
+      // The voice bank has clips for "Full notes." and "Quiet. Hazards only."; Auto has none, so it is shown, not spoken.
+      if (state.notesMode !== 'auto') say(full ? 'Full notes.' : 'Quiet. Hazards only.', true, null, full ? (jar ? 'w:stage' : 'sys:stage') : (jar ? 'w:cruise' : 'sys:cruise'));
+      savePrefs();
+      render(true);
+    }));
+    // Night Auto follows the system dark-mode setting live.
+    if (darkQuery) darkQuery.addEventListener('change', () => { if (state.nightMode === 'auto') applyTheme(); });
     window.addEventListener('resize', () => render(true));
 
     // =======================================================================
@@ -2127,7 +2153,7 @@
     // =======================================================================
     // 12. BOOT
     // =======================================================================
-    document.querySelectorAll('[data-toggle]').forEach(b => b.classList.toggle('on', !!state.toggles[b.dataset.toggle]));
+    paintSwitches();
     drawPuck();
     renderDriveList();
     renderThemeList();
