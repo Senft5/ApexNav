@@ -9,7 +9,7 @@ on:
     branches: [main]
     paths-ignore: ['docs/**', 'tests/**', 'tools/**', 'web/voices/**', '**.md', 'LICENSE', 'wrangler.jsonc']
   pull_request:
-    paths: ['ApexNavApp.swift', 'ApexKit/**', 'UITests/**', 'project.yml', '.github/workflows/build.yml']
+    paths: ['ApexNavApp.swift', 'Assets.xcassets/**', 'ApexKit/**', 'UITests/**', 'project.yml', '.github/workflows/build.yml']
   workflow_dispatch:
 
 concurrency:

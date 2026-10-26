@@ -43,5 +43,5 @@ shows "Driving · no route loaded" and never reroutes.
 | brand-9 | mid | todo | web/index.html, web/analysis.html | §7 item 9 remainder: Log/Stages tabs open `analysis.html?tab=log` / `?tab=stages` (analysis.html accepts both, old names still work); Settings plate is a gear glyph with an aria-label; "Replay a drive" leaves Plan. After brand-log and brand-16. |
 | brand-25 | mid | todo | web/index.html, web/sync.js, web/analysis.html | §7 item 25 remainder: crew detail with its member list; Board filter chips "Friends / <crew>". After brand-9. |
 | brand-1 | mid | todo | web/index.html, web/analysis.html, web/drive_view.js | §7 item 1 remainder: §2 rows 3, 4, 7 ([View] button), 10, 15, 16 verbatim. Last, after the other index/analysis items. |
-| brand-23 | top | todo | project.yml, ApexNav assets | §7 item 23 remainder: wire web/brand/icon-1024.png as the iOS AppIcon (asset catalog + project.yml), verify the cloud xcodegen build. |
+| brand-23 | top | merged (#42) | project.yml, ApexNav assets | §7 item 23 remainder: wire web/brand/icon-1024.png as the iOS AppIcon (asset catalog + project.yml), verify the cloud xcodegen build. |
 | brand-17b | — | dropped (no data) | web/index.html | §7 item 17 "Confirmed" hazard label: nothing in the data marks a hazard as confirmed; every hazard reads "Driven once" until multi-pass confirmation exists. |
