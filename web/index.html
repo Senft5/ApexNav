@@ -1516,7 +1516,8 @@
       if (r.request) reroute(track);
     }
     // Farther than 40 m but not yet confirmed by the monitor (its 5 s hold): notes are blank, but don't call it off route yet.
-    const offRouteText = () => routeWatch.note || (!rerouter.off ? 'Checking route…' : rerouter.reason === 'wrong_way' ? 'Wrong way' : 'Off route');
+    const offRouteText = () => rerouter.reason === 'wrong_way' ? (routeWatch.note && routeWatch.note.endsWith('no signal to reroute') ? 'Wrong way · no signal to reroute' : 'Wrong way')
+                                                       : routeWatch.note || (!rerouter.off ? 'Checking route…' : 'Off route');
     async function reroute(t) {
       const req = t.request, L = state.live;
       if (!req || !L) { routeWatch.note = 'Off route'; return; }   // a recorded drive has no plan to rebuild
