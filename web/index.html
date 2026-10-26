@@ -17,6 +17,7 @@
   <script src="sync.js"></script>
   <script src="sensors.js"></script>
   <script src="reroute.js"></script>
+  <script src="sun.js"></script>
   <script src="recording.js"></script>
   <script src="contributor.js"></script>
   <script src="themes.js"></script>
@@ -537,15 +538,27 @@
     // =======================================================================
     const state = {
       mode: 'replay', playing: false, rate: 1, cursorM: 0, cursorIdx: 0, follow: true, bearing: 0,
-      live: null, liveAt: 0, spiritedAt: -Infinity, spoken: new Set(), tapToRoute: false,
+      live: null, liveAt: 0, lastPosition: null, spiritedAt: -Infinity, spoken: new Set(), tapToRoute: false,
       theme: 'roadbook', camFeel: 'dynamic', voiceId: 'george', liveVoice: false, voiceStyle: 'codriver', voiceName: '', hlOn: false, hlStrength: 1,
-      notesMode: 'auto', nightMode: 'auto',   // Notes: auto | full | quiet. Night: auto (system dark mode) | on | off
+      notesMode: 'auto', nightMode: 'auto',   // Notes: auto | full | quiet. Night: auto (sunset/sunrise) | on | off
       toggles: { stage: false, voice: true, lpr: true, dna: false, night: false }   // stage and night are derived from the two modes; analysis.html reads toggles.night
     };
     const NOTES_MODES = ['auto', 'full', 'quiet'], NIGHT_MODES = ['auto', 'on', 'off'];
     const MODE_LABEL = { auto: 'Auto', full: 'Full', quiet: 'Quiet', on: 'On', off: 'Off' };
     const darkQuery = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
-    const isNight = () => state.nightMode === 'on' || (state.nightMode === 'auto' && !!(darkQuery && darkQuery.matches));
+    function nightPosition() {
+      if (state.mode === 'live' && state.live && Number.isFinite(state.live.lat) && Number.isFinite(state.live.lon)) return state.live;
+      if (track) {
+        const p = sample(track, state.cursorM);
+        if (p && Number.isFinite(p.lat) && Number.isFinite(p.lon)) return p;
+      }
+      return state.lastPosition;
+    }
+    function isNight() {
+      if (state.nightMode !== 'auto') return state.nightMode === 'on';
+      const p = nightPosition();
+      return p ? ApexSun.isDark(new Date(), p.lat, p.lon) : !!(darkQuery && darkQuery.matches);
+    }
     function syncDerivedToggles() { state.toggles.stage = state.notesMode === 'full'; state.toggles.night = isNight(); }
     // Off route in live mode: web/reroute.js decides, reroute() (ROUTING) rebuilds the plan.
     const rerouter = new ApexReroute.RerouteMonitor();
@@ -586,6 +599,9 @@
       renderThemeList();
       savePrefs();
       render(false);
+    }
+    function refreshAutoNight() {
+      if (state.nightMode === 'auto' && isNight() !== state.toggles.night) applyTheme();
     }
 
     // =======================================================================
@@ -1249,6 +1265,7 @@
       if (!booting) { replayOn = true; }
       track = t;
       state.cursorM = Math.max(0, Math.min(totalM(), startM));
+      refreshAutoNight();
       state.spoken.clear();
       rerouter.routeChanged(); routeWatch.note = null; routeWatch.frame = null; routeWatch.bestM = 0;
       if (state.mode !== 'live') setMode(t.kind === 'drive' ? 'replay' : 'sim');
@@ -1387,7 +1404,7 @@
       return new Promise((resolve) => {
         if (!navigator.geolocation) { resolve(null); return; }
         navigator.geolocation.getCurrentPosition(
-          (p) => resolve({ lat: p.coords.latitude, lon: p.coords.longitude }),
+          (p) => { state.lastPosition = { lat: p.coords.latitude, lon: p.coords.longitude }; refreshAutoNight(); resolve(state.lastPosition); },
           () => resolve(null),
           { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 });
       });
@@ -2028,8 +2045,9 @@
       savePrefs();
       render(true);
     }));
-    // Night Auto follows the system dark-mode setting live.
-    if (darkQuery) darkQuery.addEventListener('change', () => { if (state.nightMode === 'auto') applyTheme(); });
+    // Without a position, Auto follows the system setting. Recheck solar time each minute.
+    if (darkQuery) darkQuery.addEventListener('change', refreshAutoNight);
+    setInterval(refreshAutoNight, 60000);
     window.addEventListener('resize', () => render(true));
 
     // =======================================================================
@@ -2138,6 +2156,7 @@
       drive.sensors = null; drive.rec = null; drive.live = null; drive.share = 'off';
       if (sensors) sensors.stop();
       state.live = null;
+      refreshAutoNight();
       replayOn = false; setMode(track && track.kind === 'route' ? 'sim' : 'replay'); paintModeSwitch(); render(true);
       if (save && rec && rec.km >= 0.3 && rec.samples >= 60) {
         try {
@@ -2219,13 +2238,18 @@
       live(frame) {
         if (!frame || !frame.has_fix || !Number.isFinite(frame.lat) || !Number.isFinite(frame.lon)) return;
         state.live = frame; state.liveAt = performance.now();
-        if (state.mode !== 'live') { setPlaying(false); setMode('live'); paintModeSwitch(); resumeFollow(); render(true); } else render(false);
+        state.lastPosition = { lat: frame.lat, lon: frame.lon };
+        const entering = state.mode !== 'live';
+        if (entering) { setPlaying(false); setMode('live'); paintModeSwitch(); resumeFollow(); }
+        refreshAutoNight();
+        render(entering);
       },
       onNative(msg) { if (msg && msg.type === 'recordingSaved') toast(`Saved ${msg.segments} road segments to ${msg.file}`); }
     };
     setInterval(() => {
       if (state.mode === 'live' && !drive.sensors && performance.now() - state.liveAt > 5000) {
         state.live = null; setMode(track && track.kind === 'route' ? 'sim' : 'replay'); paintModeSwitch(); toast('GPS lost. Back to the replay.');
+        refreshAutoNight();
       }
     }, 1000);
 
