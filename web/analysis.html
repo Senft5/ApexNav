@@ -22,14 +22,8 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { background: var(--panel); color: var(--panel-ink); font-family: var(--font-ui); font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; }
     main { max-width: 1180px; margin: 0 auto; padding: calc(14px + env(safe-area-inset-top, 0px)) 16px calc(80px + env(safe-area-inset-bottom, 0px)); display: grid; gap: 18px; }
-    header { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; justify-content: space-between; border-bottom: 1px solid var(--rule); padding-bottom: 12px; }
-    h1 { font-size: 28px; font-weight: 700; font-family: var(--font-num); }
-    h1 small { display: block; font-size: 13px; font-weight: 400; font-family: var(--font-ui); color: var(--panel-dim); margin-top: 4px; }
     h2 { font-size: 18px; font-weight: 700; font-family: var(--font-num); margin-bottom: 8px; }
     a { color: inherit; }
-    .tabs { display: flex; gap: 0; border: 1px solid var(--rule); }
-    .tabs button { font: inherit; font-size: 15px; font-weight: 600; padding: 9px 14px; background: transparent; color: var(--panel-dim); border: none; cursor: pointer; }
-    .tabs button.on { color: var(--panel); background: var(--panel-ink); }
     .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; font-size: 12px; }
     select, input, button.btn, a.btn { font: inherit; font-size: 15px; height: 44px; padding: 0 10px; background: transparent; color: var(--panel-ink); border: 1px solid var(--panel-dim); }
     button.btn { cursor: pointer; font-weight: 600; font-size: 15px; }
@@ -56,7 +50,7 @@
     .card b { font-family: var(--font-num); font-size: 24px; font-weight: 700; }
     .card span { font-size: 13px; color: var(--panel-dim); }
     .card em { font-style: normal; font-size: 11px; color: var(--panel-dim); }
-    .gain { color: #3FB950; } .loss { color: var(--signal); }
+    .gain { color: var(--gain); } .loss { color: var(--signal); }
     .tul { width: 34px; height: 34px; display: inline-block; vertical-align: middle; }
     .scroll { overflow-x: auto; }
     .strip { position: relative; cursor: crosshair; touch-action: none; border: 1px solid var(--rule); }
@@ -89,7 +83,9 @@
     :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; animation: none !important; transition: none !important; } }
     [hidden] { display: none !important; }
-    .tabs { display: none !important; }
+    a.back { display: inline-flex; align-items: center; min-height: 44px; font-size: 15px; font-weight: 600; text-decoration: none; color: var(--panel-dim); }
+    .bar-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+    label.btn { display: inline-flex; align-items: center; cursor: pointer; }
     details.more { border-top: 1px solid var(--rule); margin-top: 12px; }
     details.more summary { min-height: 44px; display: flex; align-items: center; font-size: 15px; font-weight: 600; cursor: pointer; list-style: none; }
     details.more summary::-webkit-details-marker { display: none; }
@@ -110,19 +106,9 @@
 </head>
 <body>
   <main>
-    <header>
-      <h1 id="pageTitle">Log<small id="pageSub">Your drives stay on this phone.</small></h1>
-      <div class="tabs" id="tabs" role="tablist" aria-label="Log views">
-        <button data-tab="drive" role="tab" id="tabbtn-drive" aria-controls="tab-drive" aria-selected="true" class="on">Drive</button>
-        <button data-tab="history" role="tab" id="tabbtn-history" aria-controls="tab-history" aria-selected="false">Log</button>
-        <button data-tab="segments" role="tab" id="tabbtn-segments" aria-controls="tab-segments" aria-selected="false">Stages</button>
-        <button data-tab="compare" role="tab" id="tabbtn-compare" aria-controls="tab-compare" aria-selected="false">Compare</button>
-      </div>
-      <a href="#" id="backLink" hidden>‹ Log</a>
-    </header>
-
     <!-- ============================ DRIVE ============================ -->
-    <section id="tab-drive" role="tabpanel" aria-labelledby="tabbtn-drive" class="stack-12">
+    <section id="tab-drive" class="stack-12" hidden>
+      <div><a href="#" class="back" data-to="history">‹ Log</a></div>
       <div class="row"><select id="dvPick" aria-label="Choose a drive" style="flex:1;min-width:200px"></select><span class="note" id="dvNote"></span></div>
       <div class="actions">
         <button class="btn" id="dvReplay">Replay on map</button>
@@ -134,24 +120,22 @@
     </section>
 
     <!-- ============================ HISTORY ============================ -->
-    <section id="tab-history" role="tabpanel" aria-labelledby="tabbtn-history" class="grid stack-12" hidden>
+    <section id="tab-history" class="stack-12">
       <div class="cards" id="historyCards"></div>
       <div class="panel" id="trendPanel" hidden><h2>Score over time</h2><div id="trend"></div></div>
-      <div class="panel">
-        <div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0">Drives</h2>
-          <label class="btn" style="display:inline-flex;align-items:center;cursor:pointer">Import .csv<input type="file" id="importFile" accept=".csv,text/csv" aria-label="Import a recording" hidden /></label></div>
-        <div class="scroll"><table id="historyTable"></table></div>
-      </div>
+      <div class="bar-top"><span></span>
+        <label class="btn">Import .csv<input type="file" id="importFile" accept=".csv,text/csv" aria-label="Import a recording" hidden /></label></div>
+      <div class="panel"><div class="scroll"><table id="historyTable"></table></div></div>
       <details class="more"><summary>How Score works</summary>
         <p class="note">Score rates how you drive the corners, not how fast. <b>Pace</b>: corner speed against its safe grip limit, full credit from 85 % to 100 %. <b>Smooth</b>: how gently cornering load builds. <b>Brakes</b>: no hard braking after the apex. <b>Rhythm</b>: even commitment from corner to corner. Speed limits never enter it. 1000 is a closed-course number, not something to chase on public roads.</p></details>
     </section>
 
     <!-- ============================ SEGMENTS ============================ -->
-    <section id="tab-segments" role="tabpanel" aria-labelledby="tabbtn-segments" hidden class="stack-12">
+    <section id="tab-segments" hidden class="stack-12">
       <div class="grid2">
         <div class="panel"><h2>Your stages</h2><div class="seglist" id="segList"></div></div>
         <div class="panel" id="contribPanel" hidden><h2>Share road data</h2><p class="note" id="contribNote"></p><div id="contribList" class="stack-8"></div></div>
-      <div class="panel" id="segSyncPanel" hidden><h2>Friends and sync</h2><div class="note" id="segSyncNote"></div><div id="segShared"></div><div class="row mt-8" id="segShareRow"></div><h2 class="mt-8">Board</h2><div class="scroll"><table id="segBoard"></table></div></div>
+      <div class="panel" id="segSyncPanel" hidden><h2>Board</h2><div class="scroll"><table id="segBoard"></table></div><div class="row mt-8" id="segShareRow"></div><div id="segShared" class="stack-8 mt-8"></div><div class="note mt-8" id="segSyncNote"></div></div>
       <div class="panel"><h2 id="segTitle">Runs</h2><div id="segChart"></div><div class="scroll"><table id="segTable"></table></div></div>
       </div>
       <details class="more" id="newStage"><summary>New stage</summary>
@@ -169,10 +153,11 @@
     </section>
 
     <!-- ============================ COMPARE ============================ -->
-    <section id="tab-compare" role="tabpanel" aria-labelledby="tabbtn-compare" hidden class="stack-12">
+    <section id="tab-compare" hidden class="stack-12">
+      <div><a href="#" class="back" data-to="drive">‹ Drive</a></div>
       <div class="row">
         <b>This drive</b><select id="selA" aria-label="Drive A"></select>
-        <button class="btn" id="swapBtn">SWAP</button>
+        <button class="btn" id="swapBtn">Swap</button>
         <b style="color:var(--accent)">vs</b><select id="selB" aria-label="Compare with"></select>
       </div>
       <section class="cards" id="cards"></section>
@@ -191,8 +176,8 @@
   <nav class="tabbar" aria-label="Views">
     <a href="index.html"><svg viewBox="0 0 24 24"><path d="M12 3l6 15-6-3-6 3z"/></svg><span>Map</span></a>
     <a href="index.html?view=route"><svg viewBox="0 0 24 24"><path d="M5 20c0-5 5-5 7-8s1-6 6-8"/><circle cx="5" cy="20" r="1.6"/><path d="M17 3l2 1-2 1"/></svg><span>Plan</span></a>
-    <a href="analysis.html?tab=history" id="navLog"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg><span>Log</span></a>
-    <a href="analysis.html?tab=segments" id="navStages"><svg viewBox="0 0 24 24"><path d="M12 3v18M7 7h10M7 17h10"/></svg><span>Stages</span></a>
+    <a href="analysis.html?tab=log" id="navLog"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg><span>Log</span></a>
+    <a href="analysis.html?tab=stages" id="navStages"><svg viewBox="0 0 24 24"><path d="M12 3v18M7 7h10M7 17h10"/></svg><span>Stages</span></a>
     <a href="index.html?view=crew"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.2"/><path d="M3 20c0-3.5 2.7-6 6-6s6 2.5 6 6M15.5 14.2c2.6 0 5 1.8 5 5"/></svg><span>Crew</span></a>
   </nav>
 
@@ -374,7 +359,7 @@
         b.onclick = async () => { b.disabled = true; const a = await ApexSync.adopt(r); if (a) { segs.push(a); saveSegs(segs); renderSegments(); syncSegments(); } else b.disabled = false; };
         box.appendChild(b);
       }
-      // publish my best pass on each synced segment (reaches only friends/crews I granted), then show the friends board for the active one
+      // publish my best run on each synced segment (reaches only friends/crews I granted), then show the friends board for the active one
       for (const s of segs.filter(x => x.synced)) {
         const best = passesFor(s).filter(x => x.p.score != null && /^\d{4}-\d{2}-\d{2}/.test(x.d.date)).sort((p, q) => q.p.score - p.p.score)[0];
         if (best) await ApexSync.publishScore(s.id, best.p.score, best.p.time_s, best.d.date.slice(0, 10));
@@ -437,14 +422,14 @@
         b.className = 'seg' + (s.id === activeSeg ? ' on' : '');
         b.innerHTML = `<b></b><span class="score" style="font-size:20px">${best ?? '--'}</span><span></span><span>best</span>`;
         b.querySelector('b').textContent = s.name;
-        b.querySelectorAll('span')[1].textContent = `${(s.length_m / 1609.344).toFixed(2)} mi · ${passes.length} pass${passes.length === 1 ? '' : 'es'}`;
+        b.querySelectorAll('span')[1].textContent = `${(s.length_m / 1609.344).toFixed(2)} mi · ${passes.length} run${passes.length === 1 ? '' : 's'}`;
         b.onclick = () => { activeSeg = s.id; renderSegments(); syncSegments(); };
         list.appendChild(b);
       }
       const seg = segs.find(s => s.id === activeSeg);
       $('segTitle').parentElement.hidden = !seg;                           // nothing to show until a segment exists
-      if (!seg) { $('segTable').innerHTML = ''; $('segChart').innerHTML = ''; $('segTitle').textContent = 'Passes'; return; }
-      $('segTitle').textContent = `Passes · ${seg.name}`;
+      if (!seg) { $('segTable').innerHTML = ''; $('segChart').innerHTML = ''; $('segTitle').textContent = 'Runs'; return; }
+      $('segTitle').textContent = `Runs · ${seg.name}`;
       const passes = passesFor(seg).sort((a, b) => (b.p.score ?? -1) - (a.p.score ?? -1));
       const bestTime = Math.min(...passes.map(x => x.p.time_s));
       $('segTable').innerHTML = `<tr><th class="l">#</th><th class="l">Run</th><th>Score</th><th class="l">Components</th><th>Time (private)</th></tr>` +
@@ -489,7 +474,7 @@
       let dpath = '';
       for (let i = 0; i < x.length; i += step) dpath += (i ? 'L' : 'M') + P(i).map(v => v.toFixed(1)).join(' ');
       const placed = [];   // a corner number only where it clears every drawn number by 18 px, else a dot
-      const marks = r.corners.map((cc, k) => { const [px, py] = P(cc.apex); const col = cc.stopped || cc.delta_s == null ? C.panelDim : cc.delta_s < 0 ? '#3FB950' : C.signal;
+      const marks = r.corners.map((cc, k) => { const [px, py] = P(cc.apex); const col = cc.stopped || cc.delta_s == null ? C.panelDim : cc.delta_s < 0 ? C.gain : C.signal;
         if (placed.some(([qx, qy]) => Math.hypot(qx - px, qy - py) < 18)) return `<circle cx="${px}" cy="${py}" r="2" fill="${col}"/>`; placed.push([px, py]);
         return `<circle cx="${px}" cy="${py}" r="7" fill="${C.panel}" stroke="${col}" stroke-width="2"/><text x="${px}" y="${py + 3.5}" text-anchor="middle" font-size="9" font-weight="700" fill="${C.panelInk}">${k + 1}</text>`; }).join('');
       $('plan').innerHTML = `<svg viewBox="0 0 ${W} ${H}"><path d="${dpath}" fill="none" stroke="${C.route}" stroke-width="2.5" stroke-linejoin="round"/>${marks}</svg>`;
@@ -579,19 +564,19 @@
     $('dvPick').addEventListener('change', renderDrive);
     function renderAll() {
       renderDrive(); renderHistory(); renderSegments(); renderCompareSelectors(); renderCompare(); syncSegments(); renderContribute(); }
-    const TITLES = { drive: ['', ''], history: ['Log', 'Your drives stay on this phone.'], segments: ['Stages', 'A stretch you drive often. Every run gets a score.'], compare: ['Compare', ''] };
-    function setHeader(tab) {
-      const t = TITLES[tab] || ['Log', '']; const cur = drives.find(d => d.id === $('dvPick').value);
-      const title = tab === 'drive' && cur ? cur.name : t[0], sub = tab === 'drive' && cur ? dateLabel(cur) : t[1];
-      $('pageTitle').innerHTML = `${title}${sub ? `<small>${sub}</small>` : ''}`;
-      $('backLink').hidden = tab === 'history' || tab === 'segments';
-      $('backLink').textContent = tab === 'compare' ? '‹ Drive' : '‹ Log';
-      $('backLink').dataset.to = tab === 'compare' ? 'drive' : 'history';
-    }
     $('newStage').addEventListener('toggle', () => { if ($('newStage').open) renderSegStrip(); });
-    function showTab(t) { document.querySelector(`#tabs [data-tab="${t}"]`).click(); }
+    // One view at a time: drives list (default), drive detail, stages, compare. No inner tab row.
+    let view = 'history';
+    function showTab(t) {
+      view = t;
+      for (const v of ['drive', 'history', 'segments', 'compare']) $(`tab-${v}`).hidden = v !== t;
+      $('navLog').classList.toggle('on', t !== 'segments'); $('navStages').classList.toggle('on', t === 'segments');
+      if (t === 'segments') { if (!segs.length) $('newStage').open = true; renderSegStrip(); }
+      if (t === 'history') renderHistory();
+    }
+    document.querySelectorAll('a.back').forEach(a => a.addEventListener('click', (e) => { e.preventDefault(); showTab(a.dataset.to); window.scrollTo(0, 0); }));
+    const TAB_ALIAS = { log: 'history', stages: 'segments' };
     function openDrive(id) { $('dvPick').value = id; renderDrive(); showTab('drive'); window.scrollTo(0, 0); }
-    $('backLink').addEventListener('click', (e) => { e.preventDefault(); showTab($('backLink').dataset.to); });
     $('dvReplay').addEventListener('click', () => {
       const id = $('dvPick').value;
       if (id) location.href = 'index.html?drive=' + encodeURIComponent(id) + '&play=1';
@@ -608,28 +593,27 @@
       }
       try { await navigator.clipboard.writeText(text + ' ' + url); alert('Drive summary copied to clipboard.'); } catch (_) { window.prompt('Copy drive link', text + ' ' + url); }
     });
+    // Compare with…: this drive against the best other drive on the same road (Core.compareDrives decides what shares a road).
+    function bestOther(d) {
+      let pick = null;
+      for (const o of drives.filter(x => x !== d && x.ds.score != null).sort((p, q) => q.ds.score - p.ds.score)) {
+        const r = Core.compareDrives(d, o);
+        if (r.overlap_m >= 0.3 * d.dist[d.dist.length - 1] && r.matched_corners >= 3) { pick = o; break; }
+      }
+      return pick || drives.find(x => x !== d) || null;
+    }
     $('dvCompare').addEventListener('click', () => {
-      const id = $('dvPick').value; $('selA').value = id;
-      if ($('selB').value === id || !$('selB').value) { const o = drives.find(d => d.id !== id); if (o) $('selB').value = o.id; }
-      renderCompare(); showTab('compare');
+      const id = $('dvPick').value, d = drives.find(x => x.id === id);
+      if (!d) return;
+      $('selA').value = id;
+      const o = bestOther(d);
+      if (o) $('selB').value = o.id;
+      renderCompare(); showTab('compare'); window.scrollTo(0, 0);
     });
-    document.querySelectorAll('#tabs button').forEach(b => b.addEventListener('click', () => {
-      document.querySelectorAll('#tabs button').forEach(x => { x.classList.toggle('on', x === b); x.setAttribute('aria-selected', x === b ? 'true' : 'false'); x.tabIndex = x === b ? 0 : -1; });
-      $('navLog').classList.toggle('on', b.dataset.tab === 'history' || b.dataset.tab === 'drive'); $('navStages').classList.toggle('on', b.dataset.tab === 'segments');
-      for (const t of ['drive', 'history', 'segments', 'compare']) $(`tab-${t}`).hidden = t !== b.dataset.tab;
-      setHeader(b.dataset.tab);
-      if (b.dataset.tab === 'segments') { if (!segs.length) $('newStage').open = true; renderSegStrip(); }
-      if (b.dataset.tab === 'history') renderHistory();
-    }));
-    $('tabs').addEventListener('keydown', (e) => {                    // arrow keys move between tabs
-      const tabs = [...document.querySelectorAll('#tabs button')], i = tabs.indexOf(document.activeElement);
-      if (i < 0 || !['ArrowRight', 'ArrowLeft', 'Home', 'End'].includes(e.key)) return;
-      e.preventDefault();
-      const nx = tabs[e.key === 'Home' ? 0 : e.key === 'End' ? tabs.length - 1 : (i + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length];
-      nx.click(); nx.focus();
-    });
-    document.querySelectorAll('#tabs button').forEach((x) => { x.tabIndex = x.classList.contains('on') ? 0 : -1; });
-    if (params.get('tab')) document.querySelector(`#tabs [data-tab="${params.get('tab')}"]`)?.click(); else $('navLog').classList.add('on');
+    {
+      const q = params.get('tab'), t = TAB_ALIAS[q] || q;
+      showTab(['drive', 'history', 'segments', 'compare'].includes(t) ? t : 'history');
+    }
     loadDrives().then(renderAll);
   })();
   </script>
