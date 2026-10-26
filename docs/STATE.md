@@ -286,7 +286,7 @@ docs/SOCIAL.md.
 ## Exact Next Task
 1. Owner on a real phone: plan a route from the real position, drive off it and back (reroute, "Back on route"), a Night Auto switch at sunset, DRIVE recording and live contribution; listen to LIVE road-name renders and fix pronunciations.
 2. Owner decisions 2026-10-26: one theme only (item 19 approved, queued as themes-1); keep the Jarvis voice.
-3. Loop: work the "owner's iOS test" section of docs/WORKER_QUEUE.md first (iOS app cannot reach the Worker from apexnav://, Log scroll, pinch zoom, idle GPS, End drive / bundled drives), then live ETA (eta-1) and traffic avoidance via MapKit on iOS (traffic-1), pins, highlight dialog, Plan suggestions, Stages redesign, Log friends.
+3. Loop: work the "owner's iOS test" section of docs/WORKER_QUEUE.md first (iOS app cannot reach the Worker from apexnav://, Log scroll, pinch zoom, idle GPS, End drive / bundled drives), then live ETA (eta-1) and traffic on the current route detected via MapKit on iOS, then switch to the next most fun route around it (traffic-1), pins, highlight dialog, Plan suggestions, Stages redesign, Log friends.
 
 ## Session 2026-10-26 (m): local GPU worker + 30-minute review loop
 - [x] PR #21 merged (`5d15d94`); its late simulator failure was on superseded commit `054f811`, `main` CI is green.
