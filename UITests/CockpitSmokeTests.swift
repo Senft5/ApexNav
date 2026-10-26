@@ -31,11 +31,10 @@ final class CockpitSmokeTests: XCTestCase {
             getStarted.tap()
         }
 
-        // The idle cockpit is the map, the red Start drive button and the five tabs (web/index.html).
-        // (Text inside the MapLibre region is not exposed to accessibility, so assert on these.)
-        let startDrive = web.buttons["Start drive"]
-        XCTAssertTrue(startDrive.waitForExistence(timeout: 45), "cockpit JS did not boot")
-        for tab in ["Map", "Plan", "Log", "Stages", "Crew"] {
+        // The five tabs exist in every cockpit state. "Start drive" does not: the native shell feeds live frames as soon as
+        // the simulator has a location, and a live cockpit shows End drive instead. (MapLibre text is not exposed to accessibility.)
+        XCTAssertTrue(web.buttons["Plan"].waitForExistence(timeout: 45), "cockpit JS did not boot")
+        for tab in ["Map", "Log", "Stages", "Crew"] {
             XCTAssertTrue(web.buttons[tab].waitForExistence(timeout: 5), "tab \(tab) missing")
         }
 
