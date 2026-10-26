@@ -300,3 +300,4 @@ docs/SOCIAL.md.
 - [x] First job `brand-21a` (`.dv-z` 44 px): the worker made exactly the two requested edits, tests green.
 ### Next
 1. Loop thread runs docs/LOOP.md every 30 min, starting with brand-21a's PR.
+2. Owner priority after brand-17: routing from the real position, From/To, off-route detection and reroute (docs/WORKER_QUEUE.md route-1..5).
