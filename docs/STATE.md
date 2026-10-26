@@ -305,3 +305,4 @@ docs/SOCIAL.md.
 ### Next
 1. Loop thread runs docs/LOOP.md every 30 min, starting with brand-21a's PR.
 2. Owner priority after brand-17: routing from the real position, From/To, off-route detection and reroute (docs/WORKER_QUEUE.md route-1..5).
+- 2026-10-26: worker dispatch moved to the T3 **Pi** provider (Pi 1.4.0, `~/.pi/agent/models.json` → Ollama). Probes: Pi did a 3-step bash task and a grep-then-edit in web/index.html exactly, no T3 tool calls, own worktree. The T3 OpenCode provider failed the same probe (called T3 orchestration tools, launched a stray thread); `tools/local_worker.py` stays as the fallback.

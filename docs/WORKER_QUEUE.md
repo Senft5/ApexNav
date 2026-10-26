@@ -1,8 +1,8 @@
 # Worker queue
 
 The 30-minute review loop takes the first `todo` item, checks it is still needed, writes a
-precise task (exact file, selectors, strings) and dispatches it to the local worker with
-`python tools/local_worker.py dispatch`. The loop updates the status here when it merges or
+precise task (exact file, selectors, strings) and dispatches it to the local worker (Pi on
+Ollama as a T3 delegated task; see docs/LOOP.md). The loop updates the status here when it merges or
 drops an item. Item numbers refer to docs/BRAND.md §7. Items 19 and the Jarvis removal in 22
 delete owner-visible features and need the owner's yes first; they are not queued.
 
