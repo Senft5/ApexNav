@@ -1,91 +1,102 @@
 # Review loop (one tick)
 
-The owner's GPU does the bulk coding: `qwen3-coder:30b` on Ollama, driven by the **Pi** coding
-agent as a T3 delegated task (each job in its own T3 worktree). A frontier model runs this
-procedure every 30 minutes, and early when a worker task finishes (T3 wakes this thread) or CI
-changes on a PR it opened. The owner has approved merging to `main` once CI is green (the app
-is unreleased; every merge is one squash commit, so `git revert` undoes it). The loop does not
-pause itself; when stuck it skips the item.
-
-Fallback: if `orchestrator_capabilities` shows the `pi` provider with a constraint (not
-installed, disabled), dispatch through `tools/local_worker.py` (OpenCode CLI in a clone,
-webhook wake-up) exactly as before; its commands are at the end of this file. Do not use the T3
-**OpenCode** provider: T3 injects its orchestration tools there and the 30B model calls them
-(launched a stray thread in testing). Pi keeps MCP tools out of the model's tool list.
+The loop thread (top tier, currently Claude Opus) is the architect and reviewer. It does design,
+`/core` math, parity and anything subtle itself, and hands the rest to cheaper models as T3
+delegated tasks: a **fast** tier, a **mid** tier, and the owner's **local** GPU. It reviews every
+diff before it merges. It runs every 30 minutes and early when a delegated task finishes (T3
+wakes this thread) or CI changes on a PR it opened. The owner has approved merging to `main`
+once CI is green (the app is unreleased; every merge is one squash commit, so `git revert`
+undoes it). The loop never pauses itself; when stuck on an item it skips it.
 
 Checkout: `C:/Users/senft/Projects/ApexNav`. Never work in the scratch copies.
 
+## Tiers
+Pick the cheapest tier that can do the job **from a short brief**. A brief is a goal, the files,
+the constraints and an acceptance check, in one or two paragraphs. Never write old/new lines for
+a delegate: if the change can only be described line by line, it is small enough to make
+yourself in less time than the brief takes.
+
+| Tier | Models (`providerInstanceId` / `model`) | Give it |
+|---|---|---|
+| **fast** | `claudeAgent` / `claude-haiku-5-5` (effort `low`); `antigravity` / `gemini-3.8-flash-medium`; `codex` / `gpt-6-luna` (`reasoningEffort` `low`) | Read and report ("list every place index.html does X, with line numbers"), CI log triage, mechanical sweeps across many files, tests from a written behaviour list, docs drafts, checking a PR against the brand rules. |
+| **mid** | `claudeAgent` / `claude-sonnet-5-5` (effort `medium`); `codex` / `gpt-6-sol` (`reasoningEffort` `medium`); `antigravity` / `gemini-4-argon-medium` | A feature or bug fix with a clear brief and acceptance check: UI wiring, new screens, From/To-style changes, refactors within web/, a test suite for new logic. |
+| **local** | `pi` / `ollama/qwen3-coder:30b` (owner's RTX 5080, free, 32k context, slow) | Only jobs where its output is much larger than the brief and a machine checks it: generate test cases, a repetitive sweep with a grep-able pattern, boilerplate. One file or a pattern, never "understand index.html" (2000 lines overflow its context). One job at a time (one GPU). |
+| **top** (you) | the loop thread | Architecture and design, `/core` math, `web/apex_core.js` parity, ApexKit and live sensor math, data-honesty questions, deciding what to build, writing briefs, reviewing every delegate's diff, merging. |
+
+Within a tier, prefer Claude, then spread to Codex and Antigravity so no single subscription
+runs out; if a provider errors or reports a usage limit, use another model of the same tier. If a
+model above is missing from `orchestrator_capabilities`, take the nearest one of that tier.
+Escalate a job one tier after one failed attempt; do not retry the same tier twice. Never use the
+T3 **OpenCode** provider for the local model: T3 injects its orchestration tools there and the
+30B model calls them (it launched a stray thread in testing). Pi keeps MCP tools away from it.
+
+Several delegates may run at once if their files do not overlap: at most 3 cloud tasks plus 1
+local. Two tasks that touch the same file go one after the other.
+
+## Delegating
+`delegate_task` with `target {providerInstanceId, model, options}`, `isolation: "worktree"`
+(it starts from the main checkout's current commit, so pull first), `mode: "async"`,
+`title: "<tier> <id>"`, `clientRequestId: "<id>-<n>"`. Record each in `.worker/tasks.json`
+(gitignored): `{id, tier, model, taskId, childThreadId, files, startedAt}`. Then end the tick.
+
+Brief template:
+```
+You are working on ApexNav (your current directory is its checkout). Read CLAUDE.md first.
+Goal (<id>): <what and why, one paragraph>
+Files: <files you expect to change>; do not touch core/, web/apex_core.js or ApexKit/ unless named.
+Constraints: <brand/honesty rules that apply>; unknown data stays unknown (null / --).
+Done when: <acceptance check, e.g. a test that must pass, a behaviour in the browser>.
+Do not commit, push or open PRs. Do not start other threads or tasks. Never ask questions;
+make the reasonable choice and say so. When done run `python -X utf8 -m pytest tests -q`, fix
+what you broke, and reply with what you changed, file by file, and anything you were unsure of.
+```
+For the local tier add: "For files over 400 lines, find the spot with grep and read only the
+lines around it."
+
 ## Each tick
-1. `git checkout main && git pull --ff-only` (the worker's worktree starts from this commit).
-   If the main checkout has changes you did not make, leave them alone.
-2. Find the worker job: `.worker/pi/<id>.json` holds `{id, taskId, childThreadId}` for the job
-   you dispatched (`.worker/` is gitignored). Also run `python tools/local_worker.py jobs` for
-   any job left from the CLI fallback and handle it the old way. If Ollama is down, start it
+1. `git checkout main && git pull --ff-only`. If the main checkout has changes you did not
+   make, leave them alone.
+2. Read `.worker/tasks.json`; `task_status` each entry. Older entries may still be in
+   `.worker/pi/<id>.json` (tier local); handle them the same way and delete the file after. Also
+   `python tools/local_worker.py jobs` in case the CLI fallback left a job. If Ollama is down, start it
    (`Start-Process "$env:LOCALAPPDATA\Programs\Ollama\ollama app.exe"`) and say so.
-3. **Job running** (`task_status` workState `working`): nothing to do; end the tick. Never
-   wait on the worker. One job at a time: the GPU cannot run two.
-4. **Job finished**: `task_status` gives the worker's summary; `t3_thread_read(childThreadId)`
-   gives `thread.worktreePath` and `branch`. In that worktree run `git status` and `git diff`
-   and review against the task, CLAUDE.md and docs/BRAND.md. Check `git status` in the main
-   checkout too: anything there that the job touched means it escaped; revert those files and
-   treat the job as wrong. Then one of:
-   - **Good or nearly good**: in the worktree `git switch -c worker/<id>`, commit the worker's
-     change, `git pull --rebase origin main`, make small fixes yourself, run
-     `python -X utf8 -m pytest tests -q` there, set the item to `merged (#PR)` in
-     docs/WORKER_QUEUE.md and add one line to docs/STATE.md (amend into the commit), push
-     `worker/<id>`, open a PR to `main`, `link_pull_request`, `watch_pull_request`. When CI is
-     green, `gh pr merge --squash --delete-branch`.
-   - **Wrong but salvageable**: redispatch with a sharper task as `<id>-r2` (at most two
-     retries). After that, do it yourself if it is small, or set the item to `dropped (reason)`.
-   - **Harmful** (touches core math, invents data, breaks parity): set `dropped`.
-   Afterwards remove the worktree: `git worktree remove --force <path>` and delete its `t3/…`
-   branch; if Windows says the folder is locked, leave the folder (git has forgotten it) and
-   move on. Delete `.worker/pi/<id>.json`.
-5. **Worker idle, nothing to review**: take the first `todo` in docs/WORKER_QUEUE.md (the
-   Priority section comes first; a `reviewer` item there you implement yourself, and the worker
-   may take the next `worker` item meanwhile). Read the code first; if it is already done, set
-   `dropped (already done)` and take the next. Write a precise task: exact file,
-   selectors/functions, old and new strings, what must not change. The local model does well
-   with one file and an exact spec, and badly with "per §7". For a file over ~400 lines
-   (web/index.html is 2000) say "find it with grep, then read only N lines around it": a
-   whole-file read overflows its 32k context and it forgets the task (brand-17 and route-1 both
-   failed that way). Dispatch with `delegate_task`:
-   `target {providerInstanceId: "pi", model: "ollama/qwen3-coder:30b"}`, `isolation: "worktree"`,
-   `mode: "async"`, `title: "worker <id>"`, `clientRequestId: "worker-<id>"`, and the task text
-   below with the spec filled in. Write `.worker/pi/<id>.json` with the returned `taskId` and
-   `childThreadId`, then end the tick.
+3. **Each finished task**: read its summary; `t3_thread_read(childThreadId)` gives
+   `thread.worktreePath`. In that worktree `git status` and `git diff`; review against the brief,
+   CLAUDE.md and docs/BRAND.md. `git status` the main checkout too: anything there the task
+   touched means it escaped; revert those files and treat the task as failed. Then:
+   - **Good or nearly good**: in the worktree `git switch -c work/<id>`, commit, `git pull
+     --rebase origin main`, make small fixes yourself, `python -X utf8 -m pytest tests -q`, set
+     the item to `merged (#PR)` in docs/WORKER_QUEUE.md and add one line to docs/STATE.md
+     (amend), push, open a PR to `main`, `link_pull_request`, `watch_pull_request`. Merge with
+     `gh pr merge --squash --delete-branch` when CI is green.
+   - **Wrong**: escalate one tier with a brief that says what went wrong. After a mid-tier
+     failure, do it yourself or set `dropped (reason)`.
+   - **Harmful** (core math, invented data, broken parity): set `dropped`, note why.
+   Then `git worktree remove --force <path>` and delete its `t3/…` branch (if Windows says the
+   folder is locked, leave the folder; git has forgotten it). Remove the entry from
+   `.worker/tasks.json`.
+4. **Start new work** while slots are free: take `todo` items from docs/WORKER_QUEUE.md in order
+   (Priority section first). Read enough code to confirm the item is still needed (else
+   `dropped (already done)`). Use the item's `tier` unless you see a reason to change it; a `top`
+   item you do yourself on a `claude/<id>` branch, splitting off fast/mid sub-tasks where that
+   helps (e.g. a fast task to map the code, or a mid task for the UI half of a design you wrote).
+5. **CI failed on a loop PR**: fix it on the branch yourself (or delegate the fix to mid with the
+   log) or close the PR and set `dropped`. PRs that only touch `web/` skip the iOS jobs; they run
+   on `main` after the merge. After each merge check `gh run list --branch main --limit 3`; if
+   iOS failed there, fixing it comes before any queue item.
+6. **Queue empty**: add items from docs/BRAND.md §7 and docs/STATE.md "Exact Next Task", each
+   with a tier. Never queue for delegates: `/core` math, `web/apex_core.js` parity, ApexKit, or
+   deleting owner-visible features without the owner's yes (BRAND §7 item 19, the Jarvis voice).
+7. Report in one or two lines. Lead with big events: a merge, a CI failure, a failed delegate,
+   tests red on `main`.
 
-   Worker task text:
-   ```
-   You are the local coding worker for the ApexNav repository (your current directory is its
-   checkout). Read CLAUDE.md first.
-   Task <id>: <spec>
-   Files you may edit: <files>
-   Rules: smallest change that does the task; small in-place edits, never rewrite a whole file;
-   do not touch core/, web/apex_core.js or ApexKit/ unless the task names them; do not commit,
-   push or create branches; unknown data stays unknown (null / --), never invent road data; use
-   only your coding tools (read, bash, edit, write, grep, find, ls); never ask questions.
-   When done run `python -X utf8 -m pytest tests -q`, fix any failure you caused, then reply
-   with what you changed, file by file, and anything you were unsure about, and stop.
-   ```
-6. **CI failed on a loop PR**: fix it on the branch yourself or close the PR and set `dropped`.
-   PRs that only touch `web/` skip the iOS jobs; they run on `main` after the merge. After each
-   merge check `gh run list --branch main --limit 3`; if iOS failed there, fixing it is the next
-   job, before any queue item.
-7. **Queue empty**: add items from docs/BRAND.md §7 and docs/STATE.md "Exact Next Task" that
-   suit the worker (mechanical, one or two files, testable). Never queue: `/core` math,
-   `web/apex_core.js` parity changes, ApexKit, deleting owner-visible features without the
-   owner's yes (BRAND §7 item 19, the Jarvis voice), anything that shows unmeasured data as
-   measured.
-8. Report in one or two lines. Lead with big events: a merge, a CI failure, a crash, tests red on
-   `main`.
-
-CLAUDE.md still applies: `pytest tests -v` after any `/core` or `web/apex_core.js` edit, the
-fixture + `swift test` after live sensor math edits, `project.yml` and the iOS workflow stay
+CLAUDE.md applies to every tier: `pytest tests -v` after any `/core` or `web/apex_core.js` edit,
+the fixture + `swift test` after live sensor math edits, `project.yml` and the iOS workflow stay
 valid.
 
-## CLI fallback (`tools/local_worker.py`)
+## CLI fallback for the local tier (`tools/local_worker.py`)
+Only if the `pi` provider shows a constraint in `orchestrator_capabilities`.
 `dispatch --id <id> --task-file .worker/tasks/<id>.md --files <file>`, `jobs`, `show <id>`,
 `discard <id>`. Jobs run in a clone at `../ApexNav-worker/<id>` and report through
-`.worker/jobs/<id>/job.json`; status `escaped` means it wrote into the main checkout. Review
-and merge as in step 4, using the clone instead of a worktree, then `discard <id>`.
+`.worker/jobs/<id>/job.json`; status `escaped` means it wrote into the main checkout. A webhook
+wakes the loop when a job ends. Review and merge as in step 3, then `discard <id>`.
