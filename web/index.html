@@ -96,7 +96,7 @@
     .dbstat { font-size: 13px; line-height: 1.35; color: var(--panel-ink); min-width: 0; flex: 1; }
     #driveEnd { flex: none; background: var(--panel-ink); color: var(--panel); border-color: var(--panel-ink); font-size: 15px; padding: 0 16px; }
     .dbstat b { color: var(--accent); }
-    .key { height: 44px; min-width: 44px; padding: 0 12px; font-size: 13px; font-weight: 600; border: 1px solid var(--rule); color: var(--panel-ink); background: transparent; }
+    .key { height: 44px; min-width: 44px; padding: 0 12px; font-size: 15px; font-weight: 600; border: 1px solid var(--rule); color: var(--panel-ink); background: transparent; }
     .key.on { color: var(--accent); border-color: var(--accent); }
     .scrubber { position: relative; height: 28px; border: 1px solid var(--rule); cursor: ew-resize; touch-action: none; }
     .scrubber canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
@@ -171,8 +171,8 @@
     .sw.on i::after { left: 17px; background: var(--accent); }
     .sw span { font-size: 11px; font-weight: 600; color: var(--panel-dim); }
     #switchRow { display: grid; gap: 0; }
-    #switchRow .sw { display: flex; flex-direction: row-reverse; justify-content: space-between; align-items: center; min-height: 48px; padding: 0; border-top: 1px solid var(--hair, var(--panel-dim)); }
-    #switchRow .sw span { font-size: 15px; font-weight: 500; color: var(--panel-ink); }
+    .sheet .sw { display: flex; flex-direction: row-reverse; justify-content: space-between; align-items: center; width: 100%; min-height: 48px; padding: 0; border-top: 1px solid var(--hair, var(--panel-dim)); }
+    .sheet .sw span { font-size: 15px; font-weight: 500; color: var(--panel-ink); }
     .sw.on span { color: var(--panel-ink); }
     .route-key { height: 34px; padding: 0 14px; }
 
@@ -193,7 +193,7 @@
     .btn-record { width: 100%; height: 52px; background: var(--accent); color: var(--stage); border: none; font-size: 18px; font-weight: 700; font-family: var(--font-ui); display: flex; align-items: center; justify-content: center; gap: 10px; }
     .btn-record i { width: 12px; height: 12px; border-radius: 50%; background: currentColor; }
     .btn-record.end { background: var(--panel-ink); color: var(--panel); }
-    .start-links { display: flex; justify-content: center; gap: 20px; margin-top: 2px; }
+    .start-links { display: flex; justify-content: center; align-items: center; gap: 8px; margin-top: 2px; }
     .linkbtn { font: inherit; font-size: 15px; font-weight: 500; color: var(--panel-ink); text-decoration: underline; min-height: 44px; padding: 0 4px; background: none; border: none; }
     .overlay { position: fixed; inset: 0; z-index: 40; background: var(--panel); color: var(--panel-ink); display: none; flex-direction: column; padding: 24px 24px calc(24px + env(safe-area-inset-bottom)); overflow-y: auto; }
     .overlay.show { display: flex; }
@@ -243,7 +243,7 @@
     /* ---------------- busy buttons (loop / search in progress) ---------------- */
     .ink-btn.busy { position: relative; overflow: hidden; color: var(--panel); background: var(--panel-dim); border-color: var(--panel-dim); pointer-events: none; }
     .ink-btn.busy::after { content: ""; position: absolute; left: 0; bottom: 0; height: 3px; width: var(--progress, 0%); background: var(--accent); transition: width 0.3s ease-out; }
-        .ink-btn[disabled] { opacity: 0.45; pointer-events: none; }
+        .ink-btn[disabled], .btn-record[disabled] { opacity: 0.45; pointer-events: none; }
     .sheet header { display: flex; justify-content: space-between; align-items: center; padding: calc(14px + var(--safe-top)) 16px 14px; border-bottom: 1px solid var(--rule); }
     .sheet header h2 { font-size: 22px; font-weight: 700; font-family: var(--font-num); }
     .sheet .body { overflow-y: auto; padding: 14px 16px 24px; display: grid; gap: 20px; }
@@ -254,7 +254,7 @@
     .plan-fields { display: grid; gap: 6px; } .plan-fields .ink-btn { min-width: 64px; }
     .field { flex: 1; min-width: 0; height: 44px; padding: 0 10px; font: inherit; font-size: 15px; background: transparent; color: var(--panel-ink); border: 1px solid var(--panel-dim); user-select: text; }
     .ink-btn { height: 44px; padding: 0 16px; border: 1.5px solid var(--panel-ink); font-size: 15px; font-weight: 600; font-family: var(--font-ui); }
-    .ink-btn.solid { background: var(--panel-ink); color: var(--panel); border-color: var(--panel-ink); }
+    .ink-btn.solid { height: 48px; background: var(--panel-ink); color: var(--panel); border-color: var(--panel-ink); }
     .ink-btn.on { background: var(--panel-ink); border-color: var(--panel-ink); color: var(--panel); }
     .card { text-align: left; width: 100%; padding: 10px 12px; border: 1px solid var(--rule); display: grid; gap: 3px; }
     .card.active { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
@@ -353,8 +353,7 @@
             </div>
             <div class="row mt-8"><select class="field" id="voiceSelect"></select></div>
             <div class="row mt-8"><button class="ink-btn" id="voiceTestBtn">▶ Sample</button></div>
-            <h3 style="margin-top:16px">Speak road names</h3>
-            <div class="row"><button class="ink-btn" id="liveVoiceBtn">Speak road names</button></div>
+            <button class="sw mt-8" id="liveVoiceBtn" role="switch" aria-checked="false"><i></i><span>Speak road names</span></button>
             <p class="note" id="liveNote" role="status" aria-live="polite"></p>
           </section>
           <section data-panel="setup">
@@ -384,6 +383,7 @@
       </div>
       <div id="startBlock">
         <button class="btn-record" id="startDrive" aria-label="Start drive"><i></i>Start drive</button>
+        <div class="start-links"><button class="linkbtn" id="planLink">Plan a route</button><span aria-hidden="true"> · </span><button class="linkbtn" id="replayLink">Watch a replay</button></div>
       </div>
       <div class="transport" id="transport">
         <button class="key" id="playBtn">Run</button>
@@ -404,7 +404,27 @@
 
   <div class="overlay" id="onboard" role="dialog" aria-modal="true" aria-label="Welcome to ApexNav">
     <div class="grow" data-step="1">
-      <img src="brand/logo.svg" alt="ApexNav" width="220" style="max-width:70%">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 444 100" width="220" height="50" style="max-width:70%;height:auto" role="img" aria-label="ApexNav">
+        <style>.apex{fill:var(--brand-accent,var(--accent,#C8102E))}</style>
+        <defs><clipPath id="cap"><rect x="0" y="26" width="444" height="48"/></clipPath></defs>
+        <circle cx="34" cy="84" r="8" fill="currentColor"/>
+        <path d="M34 84 V52 Q34 26 62 21.5" fill="none" stroke="currentColor" stroke-width="9"/>
+        <path d="M60 9 L88 18 L63 34 Z" fill="currentColor"/>
+        <circle class="apex" cx="51" cy="43" r="6.5"/>
+        <g clip-path="url(#cap)" fill="none" stroke="currentColor" stroke-linejoin="miter" stroke-miterlimit="10">
+          <g stroke-width="8.5">
+            <path d="M118 78 L135 22 L152 78 M124 59 H146"/>
+            <path d="M168.25 78 V30 H184 Q198 30 198 41.5 Q198 53 184 53 H168.25"/>
+            <path d="M244 30 H214.25 V70 H244 M214.25 50 H238"/>
+            <path d="M258 20 L290 80 M290 20 L258 80"/>
+          </g>
+          <g stroke-width="4.5">
+            <path d="M310.25 78 V22 L334.75 78 V22"/>
+            <path d="M350 78 L367 22 L384 78 M356 59 H378"/>
+            <path d="M396 22 L413 78 L430 22"/>
+          </g>
+        </g>
+      </svg>
       <h1>Your co-driver for the long way home.</h1>
       <p>Calls every corner and scores how cleanly you drove it.</p>
     </div>
@@ -418,16 +438,16 @@
       <a class="ink-btn solid" href="/api/auth/google/start" style="display:flex;align-items:center;justify-content:center;text-decoration:none">Sign in with Google</a>
     </div>
     <div class="stack">
-      <button class="ink-btn solid" id="obNext" style="height:48px">Get started</button>
+      <button class="ink-btn solid" id="obNext">Get started</button>
       <button class="linkbtn" id="obAlt">Watch a replay</button>
     </div>
   </div>
   <div class="overlay dim" id="permSheet" role="dialog" aria-modal="true" aria-label="Before your first drive">
     <div class="card-sheet">
       <h2>Before your first drive</h2>
-      <div class="perm"><b>Location</b><span>to call corners ahead</span><b>Motion</b><span>to feel bumps and surface</span><b>Screen on</b><span>while you drive</span></div>
-      <p>Your drive stays on this phone.</p>
-      <button class="ink-btn solid" id="permGo" style="height:48px">Allow and start</button>
+      <div class="perm"><b>Location</b><span id="permLoc">to call corners ahead</span><b>Motion</b><span id="permMot">to feel bumps and surface</span><b>Screen on</b><span>while you drive</span></div>
+      <p id="permNote">Your drive stays on this phone.</p>
+      <button class="ink-btn solid" id="permGo">Allow and start</button>
       <button class="linkbtn" id="permNo">Not now</button>
     </div>
   </div>
@@ -1155,14 +1175,14 @@
     function paintIdle() {
       const idle = !replayOn && state.mode !== 'live';
       $('app').classList.toggle('idle', idle);
-      $('modePlate').hidden = idle || (state.mode === 'live' && !!drive.sensors);
+      $('modePlate').hidden = idle;
       $('modePlate').setAttribute('role', replayOn && state.mode !== 'live' ? 'button' : 'status');
     }
     function setMode(mode) {
       state.mode = mode;
-      $('modePlate').textContent = { replay: `Replay${track && track.name ? ' · ' + track.name : ''} ×`, sim: 'Preview ×', live: 'Drive' }[mode];
+      $('modePlate').textContent = { replay: `Replay${track && track.name ? ' · ' + track.name : ''} ×`, sim: 'Preview ×', live: 'Drive ● Rec' }[mode];
       $('modePlate').classList.toggle('live', mode === 'live');
-      paintIdle();                          // the REPLAY | DRIVE switch already says replay/live; keep the label for the 'not driven' simulation warning
+      paintIdle();
     }
     // Names are known now: pre-render them in the co-driver's own voice (only when the owner turned Speak-road-names / LIVE on).
     function prefetchNames(t) {
@@ -1832,9 +1852,17 @@
     function renderLive() {
       const st = window.ApexVoice ? ApexVoice.liveState() : 'idle';
       $('liveVoiceBtn').classList.toggle('on', state.liveVoice);
-      $('liveVoiceBtn').textContent = !state.liveVoice ? 'Speak road names: off' : st === 'ready' ? 'Speak road names: ready' : st === 'loading' ? 'Speak road names: loading' : st === 'error' ? 'Speak road names: failed' : 'Speak road names: on';
+      $('liveVoiceBtn').setAttribute('aria-checked', String(!!state.liveVoice));
       const info = window.ApexVoice ? ApexVoice.liveInfo() : { text: '' };
-      const note = $('liveNote'); if (note) { note.textContent = state.liveVoice ? info.text : 'Off. Road and route names use the recorded voice or your phone voice.'; note.classList.toggle('err', !!(state.liveVoice && info.error)); }
+      const note = $('liveNote');
+      if (note) {
+        note.textContent = !state.liveVoice ? 'Off. Road and route names use the recorded voice or your phone voice.'
+          : st === 'error' ? `Failed · ${info.text}`
+          : st === 'loading' ? (info.text || 'Loading…')
+          : st === 'ready' ? (info.text || 'Ready')
+          : 'Loading…';
+        note.classList.toggle('err', !!(state.liveVoice && (st === 'error' || info.error)));
+      }
     }
     $('liveVoiceBtn').addEventListener('click', () => {
       const retry = state.liveVoice && window.ApexVoice && ApexVoice.liveState() === 'error';   // a failed load: tapping again tries again instead of switching off
@@ -1908,16 +1936,35 @@
       $('driveBar').hidden = !on; $('transport').hidden = on; $('startBlock').hidden = on;
       if (on) $('app').classList.remove('sheet-open');
     }
+    // In the iOS app the switch lives under the app, not Safari.
+    const LOC_DENIED_TEXT = `Location is off. Settings → ${window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex ? 'ApexNav' : 'Safari'} → Location → Allow`;
+    const MOT_DENIED_TEXT = 'No motion · surface not recorded';
+    let locDenied = false, motDenied = false;
+    function paintPerms() {
+      $('startDrive').disabled = locDenied;
+      $('permGo').disabled = locDenied;
+      $('permLoc').textContent = locDenied ? LOC_DENIED_TEXT : 'to call corners ahead';
+      $('permLoc').style.color = locDenied ? 'var(--accent)' : '';
+      $('permMot').textContent = motDenied ? MOT_DENIED_TEXT : 'to feel bumps and surface';
+      $('permNote').textContent = locDenied ? LOC_DENIED_TEXT : motDenied ? MOT_DENIED_TEXT : 'Your drive stays on this phone.';
+      $('permNote').style.color = locDenied ? 'var(--accent)' : '';
+    }
+    if (navigator.permissions && navigator.permissions.query) {
+      navigator.permissions.query({ name: 'geolocation' }).then((p) => {
+        const sync = () => { locDenied = p.state === 'denied'; paintPerms(); };
+        sync(); p.onchange = sync;
+      }).catch(() => {});
+    }
     function paintDriveStat() {
       const s = drive.status || {}, r = drive.rec, bits = [];
-      bits.push(s.gps === 'on' ? '<b>GPS</b>' : s.gps === 'denied' ? 'Location is off' : s.gps === 'weak' ? 'Weak GPS · keep the sky in view' : s.gps === 'error' ? 'GPS error' : 'Finding GPS…');
-      bits.push(s.motion === 'on' ? '<b>Motion</b>' : s.motion === 'denied' || s.motion === 'unavailable' ? 'No motion · surface not recorded' : 'Motion…');
+      bits.push(s.gps === 'on' ? '<b>GPS</b>' : s.gps === 'denied' ? LOC_DENIED_TEXT : s.gps === 'weak' ? 'Weak GPS · keep the sky in view' : s.gps === 'error' ? 'GPS error' : 'Finding GPS…');
+      bits.push(s.motion === 'on' ? '<b>Motion</b>' : s.motion === 'denied' || s.motion === 'unavailable' ? MOT_DENIED_TEXT : 'Motion…');
       if (r && r.samples > 0) bits.push(`<b>● Rec</b> ${(r.km / 1.609344).toFixed(2)} mi`);
       if (drive.share === 'on') bits.push(drive.shareErr ? 'Sharing · retrying' : `<b>Sharing</b> ${(drive.shareKm / 1.609344).toFixed(1)} mi`);
       else if (drive.share === 'stopped') bits.push('Sharing paused');
       else if (drive.share === 'off-member') bits.push('Sharing off');
       if (s.wake === 'unavailable') bits.push('Keep the screen on');
-      $('driveStat').innerHTML = bits.join(' · ') + (s.message ? `<br><span>${s.message}</span>` : '');
+      $('driveStat').innerHTML = bits.join(' · ') + (s.message && s.gps !== 'denied' ? `<br><span>${s.message}</span>` : '');
     }
     // Road data streams while you drive when you are a member with ROAD DATA on: settled stretches only (never the first or last km).
     function feedLive() {
@@ -1951,7 +1998,20 @@
       setMode('live'); paintModeSwitch(); paintDriveStat();
       try {
         const sensors = await ApexSensors.start({
-          onStatus: (s) => { drive.status = s; paintDriveStat(); },
+          onStatus: (s) => {
+            drive.status = s;
+            if (s.motion === 'denied' || s.motion === 'unavailable') motDenied = true;
+            else if (s.motion === 'on') motDenied = false;
+            if (s.gps === 'denied') {
+              locDenied = true; paintPerms();
+              leaveDrive(false);
+              $('permSheet').classList.add('show');
+              return;
+            }
+            if (s.gps === 'on' || s.gps === 'weak') locDenied = false;
+            paintPerms();
+            paintDriveStat();
+          },
           onFrame: (fr) => { if (!fr.has_fix) return; drive.frames++; drive.rec.add(fr); feedLive(); window.apex.live(fr); paintDriveStat(); },
         });
         if (!driveActive || state.mode !== 'live') {
@@ -2000,14 +2060,22 @@
       }
     }
     const flag = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (_) {} return null; };
+    function watchDryRidge() {
+      const d = drives.find(x => x.id === 'dry_ridge') || drives.find(x => x.kind === 'drive') || drives[0];
+      if (!d) return;
+      booting = false; replayOn = true; closeSheet(); activate(d, 0);
+    }
     function startDrive() {
-      if (state.mode === 'live') return;
+      if (state.mode === 'live' || locDenied) return;
       if (flag('apex.permsExplained')) { enterDrive(); return; }
+      paintPerms();
       const sheet = $('permSheet'); sheet.classList.add('show'); $('permGo').focus();
     }
-    $('permGo').addEventListener('click', () => { flag('apex.permsExplained', '1'); $('permSheet').classList.remove('show'); enterDrive(); });
+    $('permGo').addEventListener('click', () => { if (locDenied) return; flag('apex.permsExplained', '1'); $('permSheet').classList.remove('show'); enterDrive(); });
     $('permNo').addEventListener('click', () => $('permSheet').classList.remove('show'));
     $('startDrive').addEventListener('click', startDrive);
+    $('planLink').addEventListener('click', () => showView('route'));
+    $('replayLink').addEventListener('click', watchDryRidge);
     $('modePlate').addEventListener('click', () => { if (state.mode === 'live' || !replayOn) return; replayOn = false; setPlaying(false); paintIdle(); });
     $('driveEnd').addEventListener('click', () => leaveDrive(true));
 
@@ -2019,8 +2087,8 @@
       const steps = [...ob.querySelectorAll('[data-step]')];
       const paint = () => {
         steps.forEach(n => { n.hidden = Number(n.dataset.step) !== step; });
-        $('obNext').textContent = step === 1 ? 'Get started' : step === 2 ? 'Next' : 'Done';
-        $('obAlt').textContent = step === 1 ? 'Watch a replay' : step === 3 ? 'Not now' : '';
+        $('obNext').textContent = step === 1 ? 'Get started' : step === 2 ? 'Next' : 'Not now';
+        $('obAlt').textContent = 'Watch a replay';
         $('obAlt').hidden = step === 2;
         if (step === 2) {
           const list = $('obVoices'); list.innerHTML = '';
@@ -2033,7 +2101,7 @@
       };
       const finish = () => { flag('apex.onboarded', '1'); ob.classList.remove('show'); };
       $('obNext').onclick = () => { if (step < 3) { step++; paint(); } else finish(); };
-      $('obAlt').onclick = () => { if (step === 1) finish(); else if (step === 3) finish(); };
+      $('obAlt').onclick = () => { finish(); watchDryRidge(); };
       ob.classList.add('show'); paint(); $('obNext').focus();
     }
     if (!flag('apex.onboarded') && !window.APEX_EMBED && !['invite', 'crew', 'add', 'drive', 'play', 'at', 'theme'].some(k => params.has(k))) runOnboarding();
@@ -2070,8 +2138,8 @@
       const first = drives.find(d => d.id === params.get('drive')) || drives.find(d => !savedDriveIds.has(d.id)) || drives[0];
       if (first) {
         const at = params.has('at') ? parseFloat(params.get('at')) || 0 : 0;
-        activate(first, at * first.dist[first.dist.length - 1]);
-        replayOn = ['drive', 'play', 'at'].some(k => params.has(k));
+        if (!replayOn) activate(first, at * first.dist[first.dist.length - 1]);
+        replayOn = replayOn || ['drive', 'play', 'at'].some(k => params.has(k));
         booting = false; paintIdle();
         if (params.get('play') === '1') setPlaying(true);
       } else { booting = false; openSheet('route'); }
