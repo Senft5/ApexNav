@@ -248,6 +248,7 @@
     .sheet p.note.err { color: var(--accent); }
     .sheet p.note { font-size: 13px; color: var(--panel-dim); line-height: 1.45; margin-top: 6px; }
     .row { display: flex; gap: 6px; flex-wrap: wrap; }
+    .plan-fields { display: grid; gap: 6px; } .plan-fields .ink-btn { min-width: 64px; }
     .field { flex: 1; min-width: 0; height: 44px; padding: 0 10px; font: inherit; font-size: 15px; background: transparent; color: var(--panel-ink); border: 1px solid var(--panel-dim); user-select: text; }
     .ink-btn { height: 44px; padding: 0 16px; border: 1.5px solid var(--panel-ink); font-size: 15px; font-weight: 600; font-family: var(--font-ui); }
     .ink-btn.solid { background: var(--panel-ink); color: var(--panel); border-color: var(--panel-ink); }
@@ -280,9 +281,15 @@
         <div class="body">
           <section data-panel="route">
             <h3>Where to</h3>
-            <div class="row">
-              <input class="field" id="destInput" placeholder="Town, road or address" autocomplete="off" />
-              <button class="ink-btn solid" id="destGoBtn">Go</button>
+            <div class="plan-fields">
+              <div class="row">
+                <input class="field" id="fromInput" placeholder="Current location" aria-label="From" autocomplete="off" />
+                <button class="ink-btn" id="swapBtn" aria-label="Swap From and To">Swap</button>
+              </div>
+              <div class="row">
+                <input class="field" id="destInput" placeholder="Town, road or address" aria-label="To" autocomplete="off" />
+                <button class="ink-btn solid" id="destGoBtn">Go</button>
+              </div>
             </div>
             <button class="linkbtn" id="tapRouteBtn">Or tap the map</button>
           </section>
@@ -706,7 +713,8 @@
         if (!state.tapToRoute) return;
         state.tapToRoute = false;
         $('tapRouteBtn').classList.remove('on');
-        routeTo(e.lngLat.lat, e.lngLat.lng, `Pin ${e.lngLat.lat.toFixed(3)}, ${e.lngLat.lng.toFixed(3)}`);
+        $(state.planField || 'destInput').value = `${e.lngLat.lat.toFixed(5)}, ${e.lngLat.lng.toFixed(5)}`;
+        routeToQuery();
       });
     });
     map.once('idle', () => document.querySelectorAll('.maplibregl-ctrl-attrib').forEach(a => a.classList.remove('maplibregl-compact-show')));
@@ -1315,13 +1323,14 @@
       });
     }
     const NO_FIX = 'Couldn\'t get your location. Type a start or tap the map.';
-    async function buildRoute(points, id, name, prebuilt = null) {
+    async function buildRoute(points, id, name, prebuilt = null, request = null) {
       let t = prebuilt;
       if (!t) {
         toast(`Finding roads to ${name}…`);
         let coords = null;
         try { coords = await valhallaRoute(points); } catch (_) { try { coords = await osrmRoute(points); } catch (err) { toast('Couldn\'t build the route. Check signal and try again.'); return; } }
         t = trackFromPolyline(coords, id, name);
+        t.request = request;
       }
       const i = drives.findIndex(d => d.id === id);
       if (i >= 0) drives.splice(i, 1);
@@ -1331,25 +1340,37 @@
       attachLimits(t);
       if (!prebuilt) toast(`${name} · ${(totalM() / 1609.344).toFixed(1)} mi · ${t.events.length} corners`);
     }
-    async function routeTo(lat, lon, name) {
-      const from = await locate();
-      if (!from) { toast(NO_FIX); return; }
-      await buildRoute([from, { lat, lon }], 'route_dest', name);
+    // Plan fields: empty = the phone's position (locate()), "lat, lon" = that point, anything else =
+    // the first Nominatim match. Errors carry the toast text.
+    const COORDS = /^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/;
+    async function resolvePlace(q) {
+      if (!q.trim()) {
+        const p = await locate();
+        if (!p) throw new Error(NO_FIX);
+        return { lat: p.lat, lon: p.lon, label: null };
+      }
+      const m = q.match(COORDS);
+      if (m) return { lat: parseFloat(m[1]), lon: parseFloat(m[2]), label: `Pin ${parseFloat(m[1]).toFixed(3)}, ${parseFloat(m[2]).toFixed(3)}` };
+      let items;
+      try { items = await (await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`)).json(); }
+      catch (_) { throw new Error('Search is offline. Tap the map instead.'); }
+      if (!items.length) throw new Error(`No match for "${q}"`);
+      return { lat: parseFloat(items[0].lat), lon: parseFloat(items[0].lon), label: items[0].display_name.split(',')[0] };
     }
-    async function routeToQuery(q) {
-      if (!q.trim() || $('destGoBtn').classList.contains('busy')) return;
+    async function routeToQuery() {
+      const fromQ = $('fromInput').value, toQ = $('destInput').value;
+      if ((!fromQ.trim() && !toQ.trim()) || $('destGoBtn').classList.contains('busy')) return;
       const ui = busy($('destGoBtn'));
       ui.step('FINDING', 0.3);
-      try { await searchAndRoute(q, ui); } finally { ui.done(); }
-    }
-    async function searchAndRoute(q, ui) {
-      toast(`Searching for ${q}…`);
       try {
-        const items = await (await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`)).json();
-        if (!items.length) { toast(`No match for "${q}"`); return; }
+        toast('Searching…');
+        const from = await resolvePlace(fromQ);
+        const to = await resolvePlace(toQ);
         ui.step('ROUTING', 0.7);
-        await routeTo(parseFloat(items[0].lat), parseFloat(items[0].lon), `To ${items[0].display_name.split(',')[0]}`);
-      } catch (_) { toast('Search is offline. Tap the map instead.'); }
+        // Kept on the track so a reroute can rebuild it; from: null = the phone's position.
+        const request = { from: from.label === null ? null : { lat: from.lat, lon: from.lon }, to: { lat: to.lat, lon: to.lon }, via: [] };
+        await buildRoute([from, to], 'route_dest', `To ${to.label || 'current location'}`, null, request);
+      } catch (err) { toast(err.message); } finally { ui.done(); }
     }
     // Loops: three candidate circles through the start, waypoints snapped to through roads,
     // spurs cut, then the candidate with the best road character wins (a first step toward
@@ -1482,12 +1503,16 @@
       });
     })();
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && view) closeSheet(); });
-    $('destGoBtn').addEventListener('click', () => routeToQuery($('destInput').value));
-    $('destInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') routeToQuery(e.target.value); });
+    $('destGoBtn').addEventListener('click', () => routeToQuery());
+    ['fromInput', 'destInput'].forEach(id => {
+      $(id).addEventListener('keydown', (e) => { if (e.key === 'Enter') routeToQuery(); });
+      $(id).addEventListener('focus', () => { state.planField = id; });
+    });
+    $('swapBtn').addEventListener('click', () => { const f = $('fromInput'), t = $('destInput'); [f.value, t.value] = [t.value, f.value]; });
     $('tapRouteBtn').addEventListener('click', (e) => {
       state.tapToRoute = !state.tapToRoute;
       e.currentTarget.classList.toggle('on', state.tapToRoute);
-      if (state.tapToRoute) { closeSheet(); toast('Tap the map where you want to go.'); }
+      if (state.tapToRoute) { closeSheet(); toast(state.planField === 'fromInput' ? 'Tap the map where you want to start.' : 'Tap the map where you want to go.'); }
     });
     document.querySelectorAll('[data-loop-mi]').forEach(b => b.addEventListener('click', () => loop(parseInt(b.dataset.loopMi, 10), b)));
 
