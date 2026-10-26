@@ -16,8 +16,6 @@
   <script src="recording.js"></script>
   <script src="contributor.js"></script>
   <script src="drive_view.js"></script>
-  <script src="data/dry_ridge.js"></script>
-  <script src="data/pebble_ridge.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { background: var(--panel); color: var(--panel-ink); font-family: var(--font-ui); font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; }
@@ -194,18 +192,8 @@
     const C = look.colors;
 
     // ---------------------------------------------------------------------
-    // Drive library: shipped profiles + recordings imported into IndexedDB
+    // Drive library: the person's recordings in IndexedDB
     // ---------------------------------------------------------------------
-    function fromExport(d) {
-      const f = Object.fromEntries(d.fields.map((n, i) => [n, i]));
-      const col = (n, s = 1) => (n in f ? d.rows.map(r => (r[f[n]] == null ? null : r[f[n]] * s)) : null);
-      return {
-        id: d.id, name: d.name, date: d.date || '', source: 'profiled',
-        lat: col('lat'), lon: col('lon'), dist: col('distance_m'), speed_mps: col('speed_mph', 1 / MPH),
-        lon_g: col('lon_g'), lat_g: col('lat_g'), elev: col('elevation_m'),
-        events: d.events.filter(e => e.type === 'corner')
-      };
-    }
     function cornersOf(d) {
       return d.events.map(e => ({ start: Math.round(e.start_m / 5), end: Math.round(e.end_m / 5), apex: e.index, apex_mps: e.apex_mph / MPH,
         code: e.code, call: e.call, dir: e.dir, severity: e.severity, turn_rad: e.turn_rad, mods: e.mods || [] }));
@@ -224,9 +212,9 @@
 
     let drives = [];
     async function loadDrives() {
-      const shipped = (window.APEX_DRIVES || []).map(fromExport);
+      // Only the person's own recordings. The bundled ones are the cockpit's "Watch a replay" demo, not their drives.
       const stored = await storedDrives();
-      drives = shipped.concat(stored).map(finish).sort((a, b) => (a.date < b.date ? -1 : 1));
+      drives = stored.map(finish).sort((a, b) => (a.date < b.date ? -1 : 1));
     }
 
     // ---------------------------------------------------------------------
