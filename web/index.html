@@ -263,6 +263,12 @@
     .card.active { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
     .card b { font-size: 15px; }
     .card span { font-size: 13px; color: var(--panel-dim); }
+    .bars { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+    .bar { display: grid; gap: 2px; font-size: 11px; color: var(--panel-dim); font-family: var(--font-ui); }
+    .bar b { color: var(--panel-ink); font-family: var(--font-num); font-weight: 700; }
+    .bar i { display: block; height: 5px; background: var(--rule); }
+    .bar u { display: block; height: 100%; background: var(--accent); text-decoration: none; }
+    .route-meta { font-size: 15px; font-weight: 600; color: var(--panel-ink); }
     .themes { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
         .sources { font-size: 11px; color: var(--panel-dim); line-height: 1.5; }
     .sources a { color: inherit; }
@@ -308,9 +314,19 @@
             </div>
             <p class="note">Loops pick the twistiest roads near you. Map only until someone drives them.</p>
           </section>
+          <section data-panel="route" id="routeCard" hidden>
+            <h3 id="routeCardName"></h3>
+            <p class="route-meta" id="routeCardMeta"></p>
+            <div class="bars mt-8" id="routeCardBars"></div>
+            <p class="note" id="routeCardSub"></p>
+            <div class="row mt-8">
+              <button class="ink-btn solid" id="routeDriveBtn">Drive it</button>
+              <button class="ink-btn" id="routePreviewBtn">Preview</button>
+            </div>
+          </section>
           <section data-panel="route">
             <h3>Spots</h3>
-            <p class="note" style="margin:0 0 8px">Scenic stops. Loops can detour past the ones you rate 3★ or more.</p>
+            <p class="note" style="margin:0 0 8px">Loops lean toward spots you rate 3★ or more. Your spots stay on this phone until you share one.</p>
             <div class="row" id="detourList" role="group" aria-label="Detour">
               <button class="ink-btn" data-detour="0">Off</button>
               <button class="ink-btn" data-detour="0.5">Little</button>
@@ -609,7 +625,7 @@
     // =======================================================================
     const map = new maplibregl.Map({ container: 'map', style: 'https://tiles.openfreemap.org/styles/liberty',
       center: [-84.70, 39.24], zoom: 14.6, pitch: 45, maxPitch: 60, attributionControl: { compact: true }, fadeDuration: 0 });
-    window.apexDebug = { map, get track() { return track; }, state };
+    window.apexDebug = { map, get track() { return track; }, state, drives, buildRoute: (...a) => buildRoute(...a), renderRouteCard: (...a) => renderRouteCard(...a) };
     let mapReady = false;
     const DEM_URL = 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png';
     let demSource = null;
@@ -1258,6 +1274,7 @@
         catch (_) { t.measured = null; }
       }
       const m = t.measured;
+      if (t === plannedRoute) renderRouteCard(t);
       if (!m || track !== t) return;
       note.hidden = false;
       note.textContent = m.coveredKm < 0.05
@@ -1297,6 +1314,7 @@
       }
       // Same rule as core/road_dna.score_sectors: -45 per camera within ALPR_RADIUS_M.
       if (t.sectors) for (const sec of t.sectors) sec.clear = Math.max(0, 100 - 45 * (counts.get(sec.id) || 0));
+      if (t === plannedRoute) renderRouteCard(t);
       if (track === t) { loadTrackOnMap(); render(false); toast(`${t.alpr.length} plate-reading camera${t.alpr.length === 1 ? '' : 's'} on this route`); }
     }
 
@@ -1375,6 +1393,48 @@
       });
     }
     const NO_FIX = 'Couldn\'t get your location. Type a start or tap the map.';
+    let plannedRoute = null;
+    function normRoadType(type) {
+      return type === 'Flowing sweepers' ? 'Sweepers' : type === 'Fast open' ? 'Fast & open' : (type || '--');
+    }
+    function roadTypeOf(t) {
+      if (t && t.archetype) return normRoadType(t.archetype);
+      if (!t || !Array.isArray(t.sectors) || !t.sectors.length) return '--';
+      const spirited = t.sectors.filter(s => s && s.archetype && s.archetype !== 'Connector' && s.archetype !== 'Town');
+      const pool = spirited.length ? spirited : t.sectors.filter(s => s && s.archetype);
+      if (!pool.length) return '--';
+      const counts = new Map();
+      for (const s of pool) counts.set(s.archetype, (counts.get(s.archetype) || 0) + 1);
+      return normRoadType([...counts.entries()].sort((a, b) => b[1] - a[1])[0][0]);
+    }
+    function renderRouteCard(t = plannedRoute) {
+      const card = $('routeCard');
+      if (!t) { card.hidden = true; return; }
+      plannedRoute = t;
+      card.hidden = false;
+      $('routeCardName').textContent = t.name || '--';
+      const hasDist = Array.isArray(t.dist) && t.dist.length > 0 && Number.isFinite(t.dist[t.dist.length - 1]);
+      const mi = hasDist ? `${(t.dist[t.dist.length - 1] / 1609.344).toFixed(1)} mi` : '--';
+      const corners = Array.isArray(t.events) ? `${t.events.filter(e => e.type === 'corner').length} corners` : '--';
+      $('routeCardMeta').textContent = `${mi} · ${corners} · ${roadTypeOf(t)}`;
+      const avgSector = (k) => {
+        if (!Array.isArray(t.sectors) || !t.sectors.length) return null;
+        const vals = t.sectors.map(s => s && s[k]).filter(Number.isFinite);
+        return vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) : null;
+      };
+      const bars = [['Twist', avgSector('tech')], ['Flow', avgSector('flow')], ['Surface', avgSector('surf')]];
+      $('routeCardBars').innerHTML = bars.map(([label, v]) =>
+        `<div class="bar"><span>${label} <b>${v != null ? v : '--'}</b></span><i><u style="width:${v != null ? v : 0}%"></u></i></div>`
+      ).join('');
+      const cams = Array.isArray(t.alpr) ? t.alpr.length : '--';
+      const mCov = t.measured && Number.isFinite(t.measured.coverage) && t.measured.coverage > 0
+        ? Math.round(t.measured.coverage * 100)
+        : (Array.isArray(t.roughG) && t.roughG.length && t.roughG.some(Number.isFinite))
+          ? Math.round(t.roughG.filter(Number.isFinite).length / t.roughG.length * 100)
+          : null;
+      const feel = mCov != null && mCov > 0 ? `Road feel ${mCov}% driven` : 'Road feel after first drive';
+      $('routeCardSub').textContent = `Cameras ${cams} · ${feel}`;
+    }
     async function buildRoute(points, id, name, prebuilt = null, request = null) {
       let t = prebuilt;
       if (!t) {
@@ -1388,8 +1448,10 @@
       const i = drives.findIndex(d => d.id === id);
       if (i >= 0) drives.splice(i, 1);
       drives.unshift(t);
-      closeSheet();
+      plannedRoute = t;
       activate(t, 0);
+      renderRouteCard(t);
+      if (state.mode !== 'live') openSheet('route');
       attachLimits(t);
       if (!prebuilt) toast(`${name} · ${(totalM() / 1609.344).toFixed(1)} mi · ${t.events.length} corners`);
     }
@@ -1414,12 +1476,12 @@
       const fromQ = $('fromInput').value, toQ = $('destInput').value;
       if ((!fromQ.trim() && !toQ.trim()) || $('destGoBtn').classList.contains('busy')) return;
       const ui = busy($('destGoBtn'));
-      ui.step('FINDING', 0.3);
+      ui.step('Finding…', 0.3);
       try {
         toast('Searching…');
         const from = await resolvePlace(fromQ);
         const to = await resolvePlace(toQ);
-        ui.step('ROUTING', 0.7);
+        ui.step('Routing…', 0.7);
         // Kept on the track so a reroute can rebuild it; from: null = the phone's position.
         const request = { from: from.label === null ? null : { lat: from.lat, lon: from.lon }, to: { lat: to.lat, lon: to.lon }, via: [] };
         await buildRoute([from, to], 'route_dest', `To ${to.label || 'current location'}`, null, request);
@@ -1502,7 +1564,7 @@
       try {
         const radiusKm = Math.min(14, Math.max(5, targetKm / 4.2));
         const hls = state.hlOn ? await allHighlights(c) : [];
-        const stages = await ApexStages.discover(c, radiusKm, (phase, f) => ui.step(phase === 'tiles' ? 'ROADS' : 'SCORING', 0.05 + 0.3 * f),
+        const stages = await ApexStages.discover(c, radiusKm, (phase, f) => ui.step(phase === 'tiles' ? 'Finding roads' : 'Scoring roads', 0.05 + 0.3 * f),
           state.hlOn ? { highlights: hls, strength: state.hlStrength } : {});
         plans = ApexStages.plans(c, stages, targetKm, 3);
       } catch (_) { /* no tiles: fall back to circle loops below */ }
@@ -1510,10 +1572,10 @@
       const jobs = plans.map(p => ({ kind: 'stages', plan: p, pts: ApexStages.waypoints(c, p), through: false }));
       jobs.push({ kind: 'circle', pts: loopWaypoints(c, miles, Math.random() * 2 * Math.PI), through: true });
       let settled = 0;
-      ui.step(`ROUTING 0/${jobs.length}`, 0.38);
+      ui.step(`Routing · 0 of ${jobs.length}`, 0.38);
       const tries = jobs.map(async (job) => {
         const coords = await valhallaRoute(job.pts, job.through)
-          .finally(() => { settled++; ui.step(`ROUTING ${settled}/${jobs.length}`, 0.38 + 0.5 * settled / jobs.length); });
+          .finally(() => { settled++; ui.step(`Routing · ${settled} of ${jobs.length}`, 0.38 + 0.5 * settled / jobs.length); });
         const rs = Core.removeSpurs(coords.map(p => p[1]), coords.map(p => p[0]));
         const t = trackFromPolyline(rs.lat.map((la, i) => [rs.lon[i], la]), `loop_${miles}`, `${miles} mi loop`);
         return { t, job, ...scoreLoop(t, miles), spursCut: rs.removed };
@@ -1523,7 +1585,7 @@
       done.sort((a, b) => b.score - a.score);
       // Members: let what others measured break ties among the top few (a rough road costs up to 6 points; unmeasured roads are neutral).
       if (window.ApexSync && window.ApexContributor && done.length > 1 && await ApexSync.member()) {
-        ui.step('CHECKING MEMBER DATA', 0.9);
+        ui.step('Checking road feel', 0.9);
         await Promise.all(done.slice(0, 3).map(async (d) => {
           try {
             const m = await Promise.race([ApexContributor.measuredAlong(d.t, async (ids) => { const r = await apiCall('GET', `/api/roads?ways=${ids.join(',')}`); return r.ok ? r.json() : null; }),
@@ -1535,7 +1597,7 @@
       }
       const best = done[0];
       best.t.request = { from: null, to: { lat: c.lat, lon: c.lon }, via: best.job.pts.slice(1, -1).map(p => ({ lat: p.lat, lon: p.lon })) };
-      ui.step('PROFILING', 0.92);
+      ui.step('Building route', 0.92);
       await buildRoute(null, `loop_${miles}`, `${miles} mi loop`, best.t);
       const how = best.job.kind === 'stages' ? `${best.job.plan.legs.length} best-road stages` : 'circle fallback';
       toast(`${miles} mi loop · ${(best.km / 1.609344).toFixed(1)} mi · ${best.good} good corners`);
@@ -1598,6 +1660,23 @@
       if (state.tapToRoute) { closeSheet(); toast(state.planField === 'fromInput' ? 'Tap the map where you want to start.' : 'Tap the map where you want to go.'); }
     });
     document.querySelectorAll('[data-loop-mi]').forEach(b => b.addEventListener('click', () => loop(parseInt(b.dataset.loopMi, 10), b)));
+    $('routeDriveBtn').addEventListener('click', () => {
+      if (!plannedRoute) return;
+      booting = false;
+      if (track !== plannedRoute) activate(plannedRoute, 0);
+      closeSheet();
+      startDrive();
+    });
+    $('routePreviewBtn').addEventListener('click', () => {
+      if (!plannedRoute) return;
+      booting = false;
+      replayOn = true;
+      closeSheet();
+      if (track !== plannedRoute) activate(plannedRoute, 0);
+      setMode('sim');
+      setPlaying(true);
+      render(true);
+    });
 
     function renderDriveList() {
       const list = $('driveList');
@@ -1797,11 +1876,11 @@
       for (const h of loadHighlights()) {
         const row = document.createElement('div'); row.className = 'row'; row.style.cssText = 'justify-content:space-between;align-items:center;font-size:13px';
         const t = document.createElement('span'); t.textContent = `${'★'.repeat(h.rating)} ${h.name}`;
-        const x = document.createElement('button'); x.className = 'ink-btn'; x.style.height = '28px'; x.textContent = '×'; x.setAttribute('aria-label', `Remove ${h.name}`);
+        const x = document.createElement('button'); x.className = 'ink-btn'; x.textContent = '×'; x.setAttribute('aria-label', `Remove ${h.name}`);
         x.onclick = () => { saveHighlights(loadHighlights().filter(v => v.id !== h.id)); renderHighlights(); };
         row.append(t);
         if (!h.shared && window.ApexSync) {
-          const sh = document.createElement('button'); sh.className = 'ink-btn'; sh.style.height = '28px'; sh.textContent = 'Share'; sh.hidden = true;
+          const sh = document.createElement('button'); sh.className = 'ink-btn'; sh.textContent = 'Share'; sh.hidden = true;
           ApexSync.member().then(m => { sh.hidden = !m; });
           sh.onclick = async () => {
             sh.disabled = true;
@@ -1824,7 +1903,7 @@
         const t = document.createElement('span'); t.textContent = `${s.rating.toFixed(1)}★ ${s.name} (${s.ratings})`;
         row.append(t);
         if (!s.mine) for (const n of [1, 3, 5]) {
-          const b = document.createElement('button'); b.className = 'ink-btn'; b.style.height = '28px'; b.textContent = `${n}★`; b.setAttribute('aria-label', `Rate ${s.name} ${n} stars`);
+          const b = document.createElement('button'); b.className = 'ink-btn'; b.textContent = `${n}★`; b.setAttribute('aria-label', `Rate ${s.name} ${n} stars`);
           b.onclick = async () => { toast((await ApexSync.rateHighlight(s.id, n)) ? 'Rated.' : 'Couldn\'t rate it. Try again.'); renderNearbyHighlights(); };
           row.append(b);
         }
