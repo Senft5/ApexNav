@@ -304,6 +304,7 @@ docs/SOCIAL.md.
 - [x] route-1 (#28): Plan, map-tap and Loop routes start from `locate()` (live fix, else one high-accuracy GPS fix) and never from the map centre; no fix → toast, no route. `here()` is unchanged for its other callers. Real-phone check: iOS WKWebView may ask for location once for the page.
 - [x] route-3 (#30): `web/reroute.js` `RerouteMonitor`, pure off-route state machine (off > max(40 m, 2x accuracy) for 5 s while moving, back under 25 m, wrong way at -100 m progress, one request per episode, 20 s cooldown, 20/40/80/120 s failure backoff, a GPS gap breaks the run). `tests/test_reroute.py` 9 tests. Not wired yet (route-4).
 - [x] route-2 (#31): Plan has From (empty = current location) + To, a Swap button, `lat, lon` accepted in either field; "Or tap the map" fills the last focused field; each route keeps `t.request = { from, to, via }` (from null = phone position) for rerouting.
+- [x] brand-18 (#33): Drive and Compare plan maps draw a corner number only ≥ 18 px from every drawn number, else a 4 px dot. Local tier (Pi + qwen): first try passed Pi's `edit` `edits` array as a string and wandered off; the retry did 3 of 4 edits, the loop added the Compare check.
 ### Next
 1. Loop thread runs docs/LOOP.md every 30 min, starting with brand-21a's PR.
 2. Owner priority after brand-17: routing from the real position, From/To, off-route detection and reroute (docs/WORKER_QUEUE.md route-1..5).
