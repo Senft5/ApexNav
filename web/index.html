@@ -368,6 +368,7 @@
           </section>
           <section data-panel="setup">
             <h3>Voice</h3>
+            <p class="note" style="margin:0 0 8px">Who reads your notes. Works offline.</p>
             <div class="row" id="voiceList">
               <span id="voiceCards" style="display:contents"></span>
               <button class="ink-btn" data-voice="device">Phone voice</button>
@@ -1295,10 +1296,10 @@
       if (!m || track !== t) return;
       note.hidden = false;
       note.textContent = m.coveredKm < 0.05
-        ? 'No member measurements on this route yet. Drive it with road data sharing on to be the first (3x points).'
+        ? 'No member measurements on this route yet. Drive it with Share road feel on to be the first (3× points).'
         : `Measured by members: ${m.coveredKm.toFixed(1)} of ${m.km.toFixed(1)} km (${Math.round(m.coverage * 100)}%)` +
           (m.roughness != null ? ` · roughness ${m.roughness.toFixed(2)}` : '') + (m.bankedKm >= 0.05 ? ` · ${m.bankedKm.toFixed(1)} km banked` : '') +
-          (m.avgPasses != null ? ` · ${m.avgPasses.toFixed(1)} passes on average` : '');
+          (m.avgPasses != null ? ` · ${m.avgPasses.toFixed(1)} runs on average` : '');
     }
     async function fetchAlpr(t) {
       if (t.alpr) return;
@@ -1625,7 +1626,11 @@
     // =======================================================================
     // 10. UI WIRING
     // =======================================================================
-    function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 4200); }
+    function toast(msg, action) {
+      const t = $('toast'); t.textContent = msg;
+      if (action) { const a = document.createElement('a'); a.href = action.href; a.textContent = action.label; a.style.cssText = 'margin-left:10px;color:var(--accent);text-decoration:underline'; t.append(a); }
+      t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), action ? 7000 : 4200);
+    }
     // Views: ROUTE / DRIVES / SETUP open the side panel; tapping the open tab again, the map
     // behind it, or swiping it right closes it. ANALYSIS is its own page.
     const VIEW_TITLES = { route: 'Plan', crew: 'Crew', setup: 'Settings' };
@@ -2178,7 +2183,7 @@
           const d = ApexRecording.parse(Core, rec.toCsv(), `web_${stamp}.csv`, { source: 'web-gps', date: `${when.getFullYear()}-${pad(when.getMonth() + 1)}-${pad(when.getDate())}T${pad(when.getHours())}:${pad(when.getMinutes())}`, name: `Drive ${when.toLocaleDateString()} ${pad(when.getHours())}:${pad(when.getMinutes())}` });
           await ApexRecording.store(d);
           await refreshSavedDrives();
-          toast(`Drive saved · ${(rec.km / 1.609344).toFixed(1)} mi. See it in Log.`);
+          toast(`Drive saved · ${(rec.km / 1.609344).toFixed(1)} mi`, { label: 'View', href: `analysis.html?tab=drive&drive=${encodeURIComponent(d.id)}` });
           if (live) {
             live.finish().then(async (shared) => {
               if (shared && shared.chunks > 0) {

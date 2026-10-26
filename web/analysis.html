@@ -132,9 +132,10 @@
 
     <!-- ============================ SEGMENTS ============================ -->
     <section id="tab-segments" hidden class="stack-12">
+      <p class="note">Every run gets a score.</p>
       <div class="grid2">
         <div class="panel"><h2>Your stages</h2><div class="seglist" id="segList"></div></div>
-        <div class="panel" id="contribPanel" hidden><h2>Share road data</h2><p class="note" id="contribNote"></p><div id="contribList" class="stack-8"></div></div>
+        <div class="panel" id="contribPanel" hidden><h2>Share road feel</h2><p class="note" id="contribNote"></p><div id="contribList" class="stack-8"></div></div>
       <div class="panel" id="segSyncPanel" hidden><h2>Board</h2><div class="row" id="segBoardFilter" role="group" aria-label="Board filter"></div><div class="scroll mt-8"><table id="segBoard"></table></div><div class="row mt-8" id="segShareRow"></div><div id="segShared" class="stack-8 mt-8"></div><div class="note mt-8" id="segSyncNote"></div></div>
       <div class="panel"><h2 id="segTitle">Runs</h2><div id="segChart"></div><div class="scroll"><table id="segTable"></table></div></div>
       </div>
@@ -356,7 +357,7 @@
       const have = new Set(segs.map(s => s.origin || s.id));
       for (const r of (await ApexSync.sharedWithMe()).filter(r => !have.has(r.origin || r.id))) {
         const b = document.createElement('button'); b.className = 'btn';
-        b.textContent = `ADOPT "${r.name}" from @${r.from_handle}`;
+        b.textContent = `Add “${r.name}” from @${r.from_handle}`;
         b.onclick = async () => { b.disabled = true; const a = await ApexSync.adopt(r); if (a) { segs.push(a); saveSegs(segs); renderSegments(); syncSegments(); } else b.disabled = false; };
         box.appendChild(b);
       }
@@ -440,13 +441,13 @@
       const ready = drives.filter(d => d.source !== 'profiled' && ApexContributor.eligible(d) && !d.contributed);
       panel.hidden = false;
       const on = await ApexSync.contributionEnabled();
-      $('contribNote').textContent = !on ? 'Off. Turn on ROAD DATA in Account on the main page to take part. Earns points: 3x for the first to map a road, 2x second, 1x after.'
+      $('contribNote').textContent = !on ? 'Off. Turn on Share road feel in Crew to take part. First to map a road earns 3×, second 2×, then 1×.'
         : ready.length ? 'Recent drives you can share. The first and last kilometre of each drive and small residential roads are left out.' : 'No recent drives to share (drives must be under two weeks old and recorded with the phone app).';
       if (!on) return;
       for (const d of ready) {
-        const b = document.createElement('button'); b.className = 'btn'; b.textContent = `SHARE ${d.name} · ${dateLabel(d)}`;
+        const b = document.createElement('button'); b.className = 'btn'; b.textContent = `Share ${d.name} · ${dateLabel(d)}`;
         b.onclick = async () => {
-          b.disabled = true; b.textContent = 'MATCHING ROADS...';
+          b.disabled = true; b.textContent = 'Matching roads…';
           try {
             const r = await ApexContributor.contributeDrive(d, ApexSync.contribute);
             if (r.sent) { d.contributed = true; await storeDrive(d); }
@@ -465,7 +466,7 @@
       drives.forEach(d => $('segDrive').add(new Option(`${d.name} · ${dateLabel(d)}`, d.id)));
       renderSegStrip();
       const list = $('segList');
-      list.innerHTML = segs.length ? '' : '<p class="note">No stages yet. Open “New stage” below and mark a stretch you drive often.</p>';
+      list.innerHTML = segs.length ? '' : '<p class="note">Mark a stretch you drive often. Every run gets a score.</p>';
       for (const s of segs) {
         const passes = passesFor(s), best = passes.reduce((m, x) => (x.p.score != null && (m == null || x.p.score > m) ? x.p.score : m), null);
         const b = document.createElement('button');
@@ -664,7 +665,7 @@
       const q = params.get('tab'), t = TAB_ALIAS[q] || q;
       showTab(['drive', 'history', 'segments', 'compare'].includes(t) ? t : 'history');
     }
-    loadDrives().then(renderAll);
+    loadDrives().then(() => { renderAll(); const want = params.get('drive'); if (want && drives.some(x => x.id === want)) openDrive(want); });
   })();
   </script>
 </body>

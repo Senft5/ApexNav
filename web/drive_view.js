@@ -151,7 +151,7 @@
         + cell('Lateral', d.lat_g && finite(d.lat_g[i]) ? `${d.lat_g[i] >= 0 ? 'L ' : 'R '}${Math.abs(d.lat_g[i]).toFixed(2)} g` : '--')
         + cell('Brake / throttle', d.lon_g && finite(d.lon_g[i]) ? `${d.lon_g[i] < 0 ? 'brake ' : 'accel '}${Math.abs(d.lon_g[i]).toFixed(2)} g` : '--')
         + cell(c ? `Corner ${k + 1}` : 'Corner', c ? `${c.call || c.code}` : '--') + (ref ? cell('vs other drive', c ? fmtD(lost(k)) : '--') : '')
-        + (feel ? cell('Banking (members)', finite(feel.cam[i]) ? `${feel.cam[i].toFixed(1)}\u00b0` : '--') + cell('Roughness (members)', finite(feel.rough[i]) ? `${feel.rough[i].toFixed(2)} g` : '--') + cell('Passes', feel.n[i] != null ? feel.n[i] : '--') : '');
+        + (feel ? cell('Banking', finite(feel.cam[i]) ? `${feel.cam[i].toFixed(1)}\u00b0` : '--') + cell('Roughness', finite(feel.rough[i]) ? `${feel.rough[i].toFixed(2)} g` : '--') + cell('Runs', feel.n[i] != null ? feel.n[i] : '--') : '');
       list.querySelectorAll('.dv-corner').forEach((r, q) => r.classList.toggle('on', q === k));
     }
     // pointer scrubbing on the lanes and taps on map corners
