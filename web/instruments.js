@@ -271,7 +271,7 @@
     }
     return (d) => {
       const s = d.sector;
-      arch.textContent = s && s.archetype ? s.archetype : (d.routeOnly ? 'Geometry only' : '');
+      arch.textContent = s && s.archetype ? s.archetype : (d.routeOnly ? 'Map only' : '');
       for (const k in cells) {
         const val = s ? s[k] : null;
         cells[k].v.textContent = val == null ? '--' : val;
@@ -355,7 +355,7 @@
         cLon.textContent = d.lonG == null ? '--' : d.lonG.toFixed(2);
         cBank.textContent = d.camberDeg == null ? '--' : d.camberDeg.toFixed(1);
         cTrip.textContent = `${(d.tripMi || 0).toFixed(1)}/${d.totalMi != null ? d.totalMi.toFixed(1) : '--'}`;
-        cArch.textContent = d.sector && d.sector.archetype ? d.sector.archetype : (d.routeOnly ? 'Geometry only' : '--');
+        cArch.textContent = d.sector && d.sector.archetype ? d.sector.archetype : (d.routeOnly ? 'Map only' : '--');
         if (d.latG != null && d.lonG != null) {
           gdot.setAttribute('cx', 50 + Math.max(-1, Math.min(1, d.latG / 0.8)) * 40);
           gdot.setAttribute('cy', 50 + Math.max(-1, Math.min(1, d.lonG / 0.8)) * 40);
