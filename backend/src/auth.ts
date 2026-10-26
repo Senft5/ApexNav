@@ -13,9 +13,22 @@ export interface Viewer { id: string; email: string; handle: string | null; disp
 
 const origin = (req: Request, env: Env) => env.PUBLIC_ORIGIN ?? new URL(req.url).origin;
 
+/** The iOS shell serves the pages from this origin (ApexNavApp.swift, custom scheme). It cannot carry the
+ *  session cookie across origins, so it sends the session token as `Authorization: Bearer`. */
+export const APP_ORIGIN = "apexnav://app";
+const APP_CALLBACK = "apexnav://auth";
+const APP_CODE_S = 120;
+
+/** Bearer token from the app, if any. Same tokens and sessions table as the cookie. */
+function bearer(req: Request): string | null {
+  const m = /^Bearer ([A-Za-z0-9_-]{20,200})$/.exec(req.headers.get("authorization") ?? "");
+  return m ? m[1] : null;
+}
+const sessionToken = (req: Request) => bearer(req) ?? getCookie(req, SESSION_COOKIE);
+
 // ---- sessions ----------------------------------------------------------------------------------
 export async function viewer(req: Request, env: Env): Promise<Viewer | null> {
-  const token = getCookie(req, SESSION_COOKIE);
+  const token = sessionToken(req);
   if (!token) return null;
   const row = await env.DB.prepare(
     `SELECT u.id, u.email, u.handle, u.display_name AS displayName, (m.user_id IS NOT NULL) AS member
@@ -46,16 +59,20 @@ async function startSession(env: Env, userId: string): Promise<string> {
 }
 
 export async function logout(req: Request, env: Env): Promise<Response> {
-  const token = getCookie(req, SESSION_COOKIE);
+  const token = sessionToken(req);
   if (token) await env.DB.prepare("DELETE FROM sessions WHERE id_hash = ?").bind(await sha256hex(token)).run();
   return new Response(null, { status: 204, headers: { "set-cookie": cookie(SESSION_COOKIE, "", 0) } });
 }
 
-/** State-changing requests must come from our own pages: same Origin and a custom header (cookie is SameSite=Lax too). */
+/** State-changing requests must come from our own pages: same Origin and a custom header (cookie is SameSite=Lax too).
+ *  The app's origin is allowed only with a bearer token (a browser never attaches one by itself, so no CSRF), or
+ *  for the sign-in code exchange, which carries its own proof (the PKCE verifier). */
 export function csrfCheck(req: Request, env: Env): void {
   if (req.method === "GET" || req.method === "HEAD") return;
   const o = req.headers.get("origin");
-  if (!o || o !== origin(req, env)) throw new HttpError(403, "bad_origin");
+  if (o === APP_ORIGIN) {
+    if (!bearer(req) && new URL(req.url).pathname !== "/api/auth/app/exchange") throw new HttpError(403, "bad_origin");
+  } else if (!o || o !== origin(req, env)) throw new HttpError(403, "bad_origin");
   if (req.headers.get("x-apexnav") !== "1") throw new HttpError(403, "missing_header");
 }
 
@@ -63,6 +80,9 @@ export function csrfCheck(req: Request, env: Env): void {
 export async function googleStart(req: Request, env: Env): Promise<Response> {
   if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) throw new HttpError(503, "google_not_configured");
   const state = randomToken(16), verifier = randomToken(32), nonce = randomToken(16);
+  // App sign-in (ASWebAuthenticationSession): the app sends the base64url sha256 of its own verifier.
+  const challenge = new URL(req.url).searchParams.get("app_challenge") ?? "";
+  if (challenge && !/^[A-Za-z0-9_-]{43}$/.test(challenge)) throw new HttpError(400, "bad_challenge");
   const q = new URLSearchParams({
     client_id: env.GOOGLE_CLIENT_ID, redirect_uri: `${origin(req, env)}/api/auth/google/callback`, response_type: "code",
     scope: "openid email profile", state, nonce, code_challenge: await sha256b64url(verifier), code_challenge_method: "S256",
@@ -70,7 +90,7 @@ export async function googleStart(req: Request, env: Env): Promise<Response> {
   });
   return new Response(null, {
     status: 302,
-    headers: { location: `https://accounts.google.com/o/oauth2/v2/auth?${q}`, "set-cookie": cookie(OAUTH_COOKIE, `${state}.${verifier}.${nonce}`, 600) },
+    headers: { location: `https://accounts.google.com/o/oauth2/v2/auth?${q}`, "set-cookie": cookie(OAUTH_COOKIE, `${state}.${verifier}.${nonce}${challenge ? `.${challenge}` : ""}`, 600) },
   });
 }
 
@@ -87,7 +107,7 @@ export async function googleCallback(req: Request, env: Env): Promise<Response> 
   if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) throw new HttpError(503, "google_not_configured");
   const url = new URL(req.url);
   const saved = (getCookie(req, OAUTH_COOKIE) ?? "").split(".");
-  const [state, verifier, nonce] = saved;
+  const [state, verifier, nonce, appChallenge] = saved;
   if (!state || !verifier || !nonce || url.searchParams.get("state") !== state) throw new HttpError(400, "bad_state");
   const code = url.searchParams.get("code");
   if (!code) throw new HttpError(400, "no_code");
@@ -108,11 +128,30 @@ export async function googleCallback(req: Request, env: Env): Promise<Response> 
   checkClaims(claims, env.GOOGLE_CLIENT_ID, nonce);
 
   const userId = await upsertGoogleUser(env, claims.sub!, claims.email!, claims.name ?? null);
+  if (appChallenge) {   // the app: hand back a short-lived single-use code, never the session itself
+    const code = randomToken(32);
+    await env.DB.prepare("INSERT INTO app_auth_codes (code_hash, user_id, challenge, expires_at) VALUES (?, ?, ?, ?)")
+      .bind(await sha256hex(code), userId, appChallenge, sqlTime(Date.now() + APP_CODE_S * 1000)).run();
+    return new Response(null, { status: 302, headers: { location: `${APP_CALLBACK}?code=${code}`, "set-cookie": cookie(OAUTH_COOKIE, "", 0) } });
+  }
   const token = await startSession(env, userId);
   const headers = new Headers({ location: "/" });
   headers.append("set-cookie", cookie(SESSION_COOKIE, token, SESSION_DAYS * 86400));
   headers.append("set-cookie", cookie(OAUTH_COOKIE, "", 0));
   return new Response(null, { status: 302, headers });
+}
+
+/** The app trades its one-time code and PKCE verifier for a session token (sent back as a bearer token from then on). */
+export async function appExchange(req: Request, env: Env): Promise<Response> {
+  const b = await body<{ code?: unknown; verifier?: unknown }>(req);
+  const code = str(b.code, "code", 20, 200), verifier = str(b.verifier, "verifier", 43, 128);
+  const hash = await sha256hex(code);
+  const row = await env.DB.prepare("SELECT user_id, challenge FROM app_auth_codes WHERE code_hash = ? AND expires_at > datetime('now')")
+    .bind(hash).first<{ user_id: string; challenge: string }>();
+  await env.DB.prepare("DELETE FROM app_auth_codes WHERE code_hash = ? OR expires_at <= datetime('now')").bind(hash).run();   // single use
+  if (!row || (await sha256b64url(verifier)) !== row.challenge) throw new HttpError(401, "bad_code");
+  return new Response(JSON.stringify({ token: await startSession(env, row.user_id) }),
+    { status: 200, headers: { "content-type": "application/json", "cache-control": "no-store" } });
 }
 
 /** Creates or finds the user. The owner (OWNER_EMAIL secret) is let in automatically when nobody is a member yet. */

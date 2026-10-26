@@ -595,7 +595,7 @@
     async function loadRoadFeel(d, view) {
       if (!window.ApexSync || !window.ApexContributor || !d.lat || d.lat.length < 40 || !(await ApexSync.member())) return;
       if (!feelCache.has(d.id)) {
-        feelCache.set(d.id, ApexContributor.measuredSeries(d, async (ids) => { const r = await fetch(`/api/roads?ways=${ids.join(',')}`, { credentials: 'same-origin', headers: { 'x-apexnav': '1' } }); return r.ok ? r.json() : null; }).catch(() => null));
+        feelCache.set(d.id, ApexContributor.measuredSeries(d, async (ids) => { const r = await ApexSync.apiFetch(`/api/roads?ways=${ids.join(',')}`); return r.ok ? r.json() : null; }).catch(() => null));
       }
       const s = await feelCache.get(d.id);
       if (s && dvView === view) view.setRoadFeel(s);

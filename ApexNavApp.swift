@@ -4,6 +4,8 @@ import CoreLocation
 import CoreMotion
 import AVFoundation
 import UniformTypeIdentifiers
+import AuthenticationServices
+import CryptoKit
 import ApexKit
 
 // =====================================================================================
@@ -257,7 +259,7 @@ struct GPSFix: Sendable {
 // core/live_pipeline.py by ApexKit's tests.
 
 @MainActor
-final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelegate {
+final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelegate, ASWebAuthenticationPresentationContextProviding {
     static let gStd = ApexKit.gStd
     private static let mountDefaultsKey = "apex.mountRotationRows.v1"
     // Default mount solved from the Pebble Ridge iPhone 15 Pro log; replaced by the first calibration.
@@ -341,6 +343,9 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
             stopRecordingAndExport()
         case "toggleRecording":
             if isRecording { stopRecordingAndExport() } else { startRecording() }
+        case "signIn":
+            startSignIn()
+            return
         default:
             break
         }
@@ -356,6 +361,70 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         }
         RunLoop.main.add(timer, forMode: .common)
         pushTimer = timer
+    }
+
+    // MARK: Sign-in (Google refuses OAuth inside an embedded web view)
+    // The system sheet runs the Worker's Google flow with a PKCE challenge; the Worker's callback redirects to
+    // apexnav://auth?code=... (single use, 2 min); the shell trades code + verifier for a session token and hands it to
+    // the page, which sends it as a bearer token. No secrets in the bundle.
+    private static let apiBase = URL(string: "https://apexnav.senftns.workers.dev")!
+    private var authSession: ASWebAuthenticationSession?
+
+    private static func b64url(_ data: Data) -> String {
+        data.base64EncodedString().replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+    }
+
+    private func startSignIn() {
+        guard authSession == nil else { return }
+        var bytes = [UInt8](repeating: 0, count: 32)
+        guard SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes) == errSecSuccess else { signInFailed("error"); return }
+        let verifier = Self.b64url(Data(bytes))
+        let challenge = Self.b64url(Data(SHA256.hash(data: Data(verifier.utf8))))
+        var comps = URLComponents(url: Self.apiBase.appendingPathComponent("api/auth/google/start"), resolvingAgainstBaseURL: false)!
+        comps.queryItems = [URLQueryItem(name: "app_challenge", value: challenge)]
+        let session = ASWebAuthenticationSession(url: comps.url!, callbackURLScheme: ApexWebBundle.scheme) { [weak self] url, error in
+            Task { @MainActor in
+                guard let self else { return }
+                self.authSession = nil
+                if let err = error as? ASWebAuthenticationSessionError, err.code == .canceledLogin { self.signInFailed("cancelled"); return }
+                guard let url, let code = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?
+                        .first(where: { $0.name == "code" })?.value else { self.signInFailed("error"); return }
+                await self.exchange(code: code, verifier: verifier)
+            }
+        }
+        session.presentationContextProvider = self
+        authSession = session
+        if !session.start() { authSession = nil; signInFailed("error") }
+    }
+
+    private func exchange(code: String, verifier: String) async {
+        var req = URLRequest(url: Self.apiBase.appendingPathComponent("api/auth/app/exchange"))
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "content-type")
+        req.setValue("1", forHTTPHeaderField: "x-apexnav")
+        req.setValue("\(ApexWebBundle.scheme)://app", forHTTPHeaderField: "origin")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: ["code": code, "verifier": verifier])
+        do {
+            let (data, resp) = try await URLSession.shared.data(for: req)
+            guard (resp as? HTTPURLResponse)?.statusCode == 200,
+                  let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let token = obj["token"] as? String,
+                  token.range(of: "^[A-Za-z0-9_-]{20,200}$", options: .regularExpression) != nil else { signInFailed("error"); return }
+            evaluate("window.apex && window.apex.onNative && window.apex.onNative({type:'session',token:'\(token)'}); void 0;")
+        } catch {
+            signInFailed("offline")
+        }
+    }
+
+    private func signInFailed(_ reason: String) {
+        evaluate("window.apex && window.apex.onNative && window.apex.onNative({type:'signInFailed',reason:'\(reason)'}); void 0;")
+    }
+
+    nonisolated func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
+        MainActor.assumeIsolated {
+            UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.keyWindow }.first ?? ASPresentationAnchor()
+        }
     }
 
     private func evaluate(_ js: String) {

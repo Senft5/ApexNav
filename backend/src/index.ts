@@ -1,7 +1,7 @@
 // ApexNav API Worker. Static files are served by Cloudflare's asset layer; only /api/* reaches this code
 // (wrangler.jsonc: assets.run_worker_first). Phones never talk to the database directly.
 import {
-  csrfCheck, createInvite, googleCallback, googleStart, logout, redeemInvite, requireMember, requireUser, viewer,
+  APP_ORIGIN, appExchange, csrfCheck, createInvite, googleCallback, googleStart, logout, redeemInvite, requireMember, requireUser, viewer,
 } from "./auth";
 import { Env, HttpError, json } from "./util";
 import {
@@ -25,6 +25,7 @@ on("GET", "/api/health", async () => json({ ok: true }));
 on("GET", "/api/auth/google/start", (req, env) => googleStart(req, env));
 on("GET", "/api/auth/google/callback", (req, env) => googleCallback(req, env));
 on("POST", "/api/auth/logout", (req, env) => logout(req, env));
+on("POST", "/api/auth/app/exchange", (req, env) => appExchange(req, env));
 
 on("GET", "/api/me", async (req, env) => {
   const v = await viewer(req, env);
@@ -78,8 +79,28 @@ on("DELETE", "/api/highlights/:id", async (req, env, m) => { await highlightDele
 on("POST", "/api/board", async (req, env) => json(await publish(env, await requireMember(req, env), req)));
 on("GET", "/api/board/:canon", async (req, env, m) => json(await boardFor(env, await requireMember(req, env), m.groups!.canon)));
 
+// CORS for the iOS shell only (pages at apexnav://app call this Worker cross-origin with a bearer token).
+// No credentials: cookies never cross; any other origin gets no CORS headers at all.
+const APP_CORS: Record<string, string> = {
+  "access-control-allow-origin": APP_ORIGIN, "access-control-allow-methods": "GET, POST, PUT, DELETE",
+  "access-control-allow-headers": "authorization, content-type, x-apexnav", "access-control-max-age": "600", vary: "Origin",
+};
+function withAppCors(res: Response): Response {
+  const headers = new Headers(res.headers);
+  for (const [k, v] of Object.entries(APP_CORS)) headers.set(k, v);
+  return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
+}
+
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
+    const fromApp = req.headers.get("origin") === APP_ORIGIN;
+    if (req.method === "OPTIONS") return fromApp ? new Response(null, { status: 204, headers: APP_CORS }) : new Response(null, { status: 405 });
+    const res = await handle(req, env);
+    return fromApp ? withAppCors(res) : res;
+  },
+};
+
+async function handle(req: Request, env: Env): Promise<Response> {
     try {
       const url = new URL(req.url);
       for (const [method, re, handler] of routes) {
@@ -96,5 +117,4 @@ export default {
       console.error(e);
       return json({ error: "server_error" }, 500);
     }
-  },
-};
+}
