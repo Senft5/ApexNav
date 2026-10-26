@@ -1510,7 +1510,12 @@
     const jsonOf = async (r) => { try { return await r.json(); } catch (_) { return null; } };
     const el = (tag, props = {}, ...kids) => { const n = Object.assign(document.createElement(tag), props); n.append(...kids); return n; };
     const btn = (label, onclick, cls = 'ink-btn') => el('button', { className: cls, textContent: label, onclick });
-    const copyText = async (text, ok) => { try { await navigator.clipboard.writeText(text); toast(ok); } catch (_) { window.prompt('Copy this link', text); } };
+    const copyText = async (text, ok, title = 'ApexNav') => {
+      if (navigator.share) {
+        try { await navigator.share({ title, text, url: text.startsWith('http') ? text : undefined }); return; } catch (e) { if (e.name === 'AbortError') return; }
+      }
+      try { await navigator.clipboard.writeText(text); toast(ok); } catch (_) { window.prompt('Copy this link', text); }
+    };
     const section = (title) => el('div', { className: 'stack-8' }, el('h3', { textContent: title }));
     const switchRow = (label, on, change) => { const b = el('button', { className: 'ink-btn' + (on ? ' on' : ''), textContent: `${label}: ${on ? 'On' : 'Off'}`, onclick: change }); b.setAttribute('aria-pressed', String(!!on)); return b; };
     async function renderAccount() {
@@ -1851,26 +1856,38 @@
         drive.share = 'on'; feedLive(); paintDriveStat();
       } catch (_) { /* sharing is optional: the drive itself is unaffected */ }
     }
+    let driveActive = false;
     async function enterDrive() {
       if (state.mode === 'live' && drive.sensors) return;
-      if (state.mode === 'live') return;                                   // native app is feeding frames already
+      if (state.mode === 'live' || driveActive) return;                                   // native app is feeding frames already or start is pending
+      driveActive = true;
       setPlaying(false);
       drive.rec = new ApexSensors.Recorder(); drive.status = { gps: 'waiting', motion: 'off', wake: 'off', message: '' }; drive.frames = 0;
       drive.live = null; drive.liveIdx = 0; drive.share = 'off'; drive.shareKm = 0; drive.shareErr = null;
       setMode('live'); paintModeSwitch(); paintDriveStat();
       try {
-        drive.sensors = await ApexSensors.start({
+        const sensors = await ApexSensors.start({
           onStatus: (s) => { drive.status = s; paintDriveStat(); },
           onFrame: (fr) => { if (!fr.has_fix) return; drive.frames++; drive.rec.add(fr); feedLive(); window.apex.live(fr); paintDriveStat(); },
         });
+        if (!driveActive || state.mode !== 'live') {
+          sensors.stop();
+          return;
+        }
+        drive.sensors = sensors;
         startLiveSharing();
-      } catch (e) { toast(e.message || 'Couldn\'t start GPS.'); leaveDrive(false); }
+      } catch (e) {
+        if (driveActive && state.mode === 'live') {
+          toast(e.message || 'Couldn\'t start GPS.');
+          leaveDrive(false);
+        }
+      }
     }
     async function leaveDrive(save) {
+      driveActive = false;
       const rec = drive.rec, sensors = drive.sensors, live = drive.live;
       drive.sensors = null; drive.rec = null; drive.live = null; drive.share = 'off';
       if (sensors) sensors.stop();
-      const shared = live ? await live.finish() : null;
       state.live = null;
       replayOn = false; setMode(track && track.kind === 'route' ? 'sim' : 'replay'); paintModeSwitch(); render(true);
       if (save && rec && rec.km >= 0.3 && rec.samples >= 60) {
@@ -1878,12 +1895,25 @@
           const when = new Date(rec.startedAt || Date.now()), pad = (n) => String(n).padStart(2, '0');
           const stamp = `${when.getFullYear()}${pad(when.getMonth() + 1)}${pad(when.getDate())}_${pad(when.getHours())}${pad(when.getMinutes())}${pad(when.getSeconds())}`;
           const d = ApexRecording.parse(Core, rec.toCsv(), `web_${stamp}.csv`, { source: 'web-gps', date: `${when.getFullYear()}-${pad(when.getMonth() + 1)}-${pad(when.getDate())}T${pad(when.getHours())}:${pad(when.getMinutes())}`, name: `Drive ${when.toLocaleDateString()} ${pad(when.getHours())}:${pad(when.getMinutes())}` });
-          if (shared && shared.chunks > 0) d.contributed = true;                // streamed already: the analysis page must not send it again
           await ApexRecording.store(d);
           await refreshSavedDrives();
-          toast(`Drive saved · ${(rec.km / 1.609344).toFixed(1)} mi.` + (shared && shared.km > 0 ? ` Shared ${(shared.km / 1.609344).toFixed(1)} mi of road feel.` : '') + ' See it in Log.');
+          toast(`Drive saved · ${(rec.km / 1.609344).toFixed(1)} mi. See it in Log.`);
+          if (live) {
+            live.finish().then(async (shared) => {
+              if (shared && shared.chunks > 0) {
+                d.contributed = true;
+                await ApexRecording.store(d);
+                if (shared.km > 0) toast(`Shared ${(shared.km / 1.609344).toFixed(1)} mi of road feel.`);
+              }
+            }).catch(() => {});
+          }
         } catch (e) { toast(`Could not save the drive: ${e.message}`); }
-      } else if (save && rec && rec.samples > 0) toast('Too short to save. Drives under 0.2 mi are dropped.');
+      } else if (save && rec && rec.samples > 0) {
+        toast('Too short to save. Drives under 0.2 mi are dropped.');
+        if (live) live.finish().catch(() => {});
+      } else if (live) {
+        live.finish().catch(() => {});
+      }
     }
     const flag = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (_) {} return null; };
     function startDrive() {

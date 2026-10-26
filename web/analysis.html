@@ -121,7 +121,11 @@
     <!-- ============================ DRIVE ============================ -->
     <section id="tab-drive" role="tabpanel" aria-labelledby="tabbtn-drive" style="display:grid;gap:14px">
       <div class="row"><select id="dvPick" aria-label="Choose a drive" style="flex:1;min-width:200px"></select><span class="note" id="dvNote"></span></div>
-      <div class="actions"><button class="btn" id="dvCompare">Compare with…</button></div>
+      <div class="actions">
+        <button class="btn" id="dvReplay">Replay on map</button>
+        <button class="btn" id="dvCompare">Compare with…</button>
+        <button class="btn" id="dvShare">Share drive</button>
+      </div>
       <div id="dvRoot"></div>
       <div class="panel" id="dvRoad" hidden><h2>This road over time</h2><div id="dvRoadChart"></div><div class="scroll"><table id="dvRoadTable"></table></div></div>
     </section>
@@ -583,6 +587,22 @@
     function showTab(t) { document.querySelector(`#tabs [data-tab="${t}"]`).click(); }
     function openDrive(id) { $('dvPick').value = id; renderDrive(); showTab('drive'); window.scrollTo(0, 0); }
     $('backLink').addEventListener('click', (e) => { e.preventDefault(); showTab($('backLink').dataset.to); });
+    $('dvReplay').addEventListener('click', () => {
+      const id = $('dvPick').value;
+      if (id) location.href = 'index.html?drive=' + encodeURIComponent(id) + '&play=1';
+    });
+    $('dvShare').addEventListener('click', async () => {
+      const id = $('dvPick').value, d = drives.find(x => x.id === id);
+      if (!d) return;
+      const score = d.ds && d.ds.score != null ? 'Score ' + d.ds.score + '/1000' : '';
+      const mi = (d.dist[d.dist.length - 1] / 1609.344).toFixed(1) + ' mi';
+      const text = d.name + ' · ' + [score, mi].filter(Boolean).join(' · ');
+      const url = location.origin + '/?drive=' + encodeURIComponent(d.id);
+      if (navigator.share) {
+        try { await navigator.share({ title: 'ApexNav Drive', text, url }); return; } catch (e) { if (e.name === 'AbortError') return; }
+      }
+      try { await navigator.clipboard.writeText(text + ' ' + url); alert('Drive summary copied to clipboard.'); } catch (_) { window.prompt('Copy drive link', text + ' ' + url); }
+    });
     $('dvCompare').addEventListener('click', () => {
       const id = $('dvPick').value; $('selA').value = id;
       if ($('selB').value === id || !$('selB').value) { const o = drives.find(d => d.id !== id); if (o) $('selB').value = o.id; }
