@@ -1,9 +1,9 @@
-// Browser simulation of live-mode rerouting (route-5). Drives web/index.html in headless Edge/Chrome
+// Browser simulation of live-mode rerouting (route-6). Drives web/index.html in headless Edge/Chrome
 // with a simulated 1 Hz GPS track pushed through window.apex.live(), and reports what the pace-note
-// strip showed, and when, for: leaving a route, rejoining it, GPS jitter, and a failed / successful /
-// real reroute request.
+// strip showed, and when, for: leaving a route, rejoining it, driving the route backwards,
+// GPS jitter, and a failed / successful / real reroute request.
 //
-// Run:   node tools/sim_offroute.mjs [--drive pebble_ridge] [--browser <path to msedge/chrome>] [--json]
+// Run:   node tools/sim_offroute.mjs [--drive pebble_ridge|dry_ridge | --all-drives] [--browser <path>] [--json]
 // Needs: Node >= 22 (global WebSocket + fetch) and Edge or Chrome installed. No npm packages: it speaks the
 //        DevTools protocol directly, serves web/ itself, and uses a throwaway browser profile in the OS temp dir.
 // Time:  Date.now is replaced by a virtual clock advanced 1000 ms per frame, so "5 s" is exact and the run
@@ -19,7 +19,8 @@ import { fileURLToPath } from 'node:url';
 
 const WEB = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'web');
 const arg = (k, d) => { const i = process.argv.indexOf(k); return i >= 0 ? process.argv[i + 1] : d; };
-const DRIVE = arg('--drive', 'pebble_ridge');
+const driveArg = arg('--drive', 'pebble_ridge');
+const DRIVES = process.argv.includes('--all-drives') ? ['pebble_ridge', 'dry_ridge'] : [driveArg];
 const AS_JSON = process.argv.includes('--json');
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
@@ -76,10 +77,15 @@ function offset(p, leftM) {
 function lcg(seed) { let x = seed; return () => (x = (x * 1664525 + 1013904223) >>> 0) / 4294967296; }
 
 const SNAP = `(() => { const n = document.getElementById('notes');
-  return { strip: n.innerText.replace(/\\s+/g, ' ').trim().replace(/^Clear /, ''), orig: !!(apexDebug.track && apexDebug.track.__orig), cursorIdx: apexDebug.state.cursorIdx, track: apexDebug.track && apexDebug.track.id, mode: apexDebug.state.mode,
+  const t = apexDebug.track, l = apexDebug.state.live;
+  const match = t && l ? ApexCore.nearestIndex(l.lat, l.lon, t.lat, t.lon, -1, 600) : null;
+  return { strip: n.innerText.replace(/\\s+/g, ' ').trim().replace(/^Clear /, ''), orig: !!(t && t.__orig), cursorIdx: apexDebug.state.cursorIdx, cursorM: apexDebug.state.cursorM,
+           matchedM: match ? t.dist[match.index] : null,
+           notesBlank: !!n.querySelector('.note-quiet') && !n.querySelector('.pn, .rb-box, .tm-note'), track: apexDebug.track && apexDebug.track.id, mode: apexDebug.state.mode,
            toast: document.getElementById('toast').innerText.trim() }; })()`;
 
 async function main() {
+  if (DRIVES.some(d => !['pebble_ridge', 'dry_ridge'].includes(d))) { console.error(`Unknown drive: ${driveArg}`); process.exit(2); }
   const browserPath = findBrowser();
   if (!browserPath) { console.error('No Edge/Chrome found; pass --browser <path>. Nothing was exercised.'); process.exit(2); }
   const srv = await serve();
@@ -126,7 +132,11 @@ async function main() {
     };
 
     const results = [];
-    const record = (scenario, check, status, detail) => { results.push({ scenario, check, status, detail }); if (!AS_JSON) console.log(`${status.padEnd(4)} [${scenario}] ${check}: ${detail}`); };
+    let currentDrive;
+    const record = (scenario, check, status, detail) => { scenario = `${currentDrive}: ${scenario}`; results.push({ scenario, check, status, detail }); if (!AS_JSON) console.log(`${status.padEnd(4)} [${scenario}] ${check}: ${detail}`); };
+
+    for (const DRIVE of DRIVES) {
+    currentDrive = DRIVE;
 
     async function load() {
       await cdp.send('Page.navigate', { url: `${base}/index.html?drive=${DRIVE}` });
@@ -276,6 +286,42 @@ async function main() {
       const log = await stripLog();
       const bad = rows.find(r => isOffText(r.strip)) || log.find(l => isOffText(l.text));
       record(name, '80 s of +-30 m jitter at 15 m/s never triggers off route', !bad && routerHits.length === 0 ? 'PASS' : 'FAIL', bad ? `off-route text "${bad.strip || bad.text}"` : `strip stayed "${rows[rows.length - 1].strip.slice(0, 50)}"; router requests ${routerHits.length}`);
+    }
+
+    // ---------- 6. A U-turn stays on the road but drops progress by 100 m.
+    {
+      const name = 'wrong way, stub router';
+      routerMode = 'stub'; routerHits = []; routerDelayMs = 7000;
+      const tr = await load();
+      stubTrack = tr.lon.map((lo, i) => [lo, tr.lat[i]]);
+      await cdp.eval(`apexDebug.track.request = { from: null, to: { lat: ${tr.lat.at(-1)}, lon: ${tr.lon.at(-1)} }, via: [] }`);
+      // Use the same clear part of the selected road as the drift tests. Forty seconds forward
+      // gives the monitor a stable best; 20 seconds backwards is enough to cross the threshold.
+      const side = chooseSide(tr), startS = side.startS;
+      const rows = [];
+      for (let k = 0; k < 60; k++) {
+        const s = startS + (k < 40 ? k : 80 - k) * SPEED;
+        const p = pointAt(tr, s);
+        rows.push(await feed(k, p.lat, p.lon, p.brg * 180 / Math.PI + (k < 40 ? 0 : 180)));
+      }
+      const forward = rows.slice(0, 40), reverse = rows.slice(40);
+      const best = Math.max(...rows.slice(0, 41).map(r => r.matchedM)); // the U-turn fix is the farthest point
+      const threshold = reverse.find(r => best - r.matchedM >= 100);
+      const wrong = reverse.find(r => r.strip.includes('Wrong way'));
+      const early = rows.find(r => r.k < 40 && isOffText(r.strip)) || reverse.find(r => best - r.matchedM < 100 && isOffText(r.strip));
+      record(name, '40 s forward then U-turn at 15 m/s', !early && forward.every(r => r.cursorIdx >= 0) ? 'PASS' : 'FAIL',
+        early ? `early off-route text at k=${early.k}: "${early.strip}"; best ${best.toFixed(0)} m` : `forward best ${best.toFixed(0)} m; reverse fixes ${reverse.length}`);
+      record(name, 'Wrong way begins at 100 m lost progress, never before', threshold && wrong && wrong.k === threshold.k ? 'PASS' : 'FAIL',
+        `threshold k=${threshold?.k ?? 'never'} (lost ${threshold ? (best - threshold.matchedM).toFixed(0) : '--'} m); first Wrong way k=${wrong?.k ?? 'never'}; first off-route text k=${early?.k ?? 'none'}`);
+      const offRows = threshold ? reverse.filter(r => r.k >= threshold.k) : [];
+      record(name, 'pace notes blank throughout wrong-way episode', offRows.length && offRows.every(r => r.notesBlank && r.cursorIdx < 0 && r.strip === 'Wrong way') ? 'PASS' : 'FAIL',
+        `bad frames: ${offRows.filter(r => !r.notesBlank || r.cursorIdx >= 0 || r.strip !== 'Wrong way').map(r => `k=${r.k} "${r.strip}" cursor=${r.cursorIdx}`).join(' ; ') || 'none'}`);
+      const routing = routerHits.filter(h => /\/route(?:\/|$)/.test(h.url));
+      const says = (await spoken()).filter(s => /Rerouting/.test(s.text));
+      record(name, 'exactly one reroute request for the episode', routing.length === 2 && says.length === 1 ? 'PASS' : 'FAIL',
+        `router HTTP attempts ${routing.length} (Valhalla then OSRM stub), Rerouting spoken ${says.length}; request times ${routing.map(h => secs(h.vt)).join(', ')}`);
+      routerDelayMs = 0;
+    }
     }
 
     if (AS_JSON) console.log(JSON.stringify(results, null, 1));

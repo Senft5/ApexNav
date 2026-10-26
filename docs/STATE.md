@@ -286,7 +286,7 @@ docs/SOCIAL.md.
 ## Exact Next Task
 1. Owner on a real phone: plan a route from the real position, drive off it and back (reroute, "Back on route"), a Night Auto switch at sunset, DRIVE recording and live contribution; listen to LIVE road-name renders and fix pronunciations.
 2. Owner decisions pending: BRAND §7 item 19 (delete the Instrument and Telemetry themes) and the Jarvis voice removal in item 22. Nothing else in BRAND §7 is open.
-3. Loop: docs/WORKER_QUEUE.md (route-6: wrong-way and Dry Ridge in tools/sim_offroute.mjs).
+3. Loop: queue empty apart from the owner items above; refill from new owner requests.
 
 ## Session 2026-10-26 (m): local GPU worker + 30-minute review loop
 - [x] PR #21 merged (`5d15d94`); its late simulator failure was on superseded commit `054f811`, `main` CI is green.
@@ -320,6 +320,7 @@ docs/SOCIAL.md.
 - [x] brand-9 (#47): cockpit Log/Stages tabs open `analysis.html?tab=log|stages`; Settings plate is a 44 px gear (aria-label Settings); the Plan sheet's "Replay a drive" list is gone: drives (bundled and saved) replay from the Log's drive detail, Dry Ridge also from Start drive's "Watch a replay".
 - [x] brand-25 (#48): Crew rows expand to a detail with the member list (new `GET /api/crews/:id/members`: members only, 404 otherwise, blocked users hidden both ways; privacy test extended), invite and share switches; stage Board has Friends / <crew> filter chips; Delete account is a red text button.
 - [x] brand-1 (#49): BRAND §2 rows 1–16 verbatim (new: Settings voice note, "Drive saved" toast with [View] → `analysis.html?tab=drive&drive=<id>`, Stages subtitle/empty state); "Share road feel" everywhere; SHARE/ADOPT/MATCHING ROADS sentence case (adopt → Add); Passes → Runs; member labels per §3 (Banking, Roughness under Road feel); road-type fallback "Map only"; router/service names only in Settings → Sources.
+- [x] route-6 (#51): `node tools/sim_offroute.mjs --all-drives` adds a wrong-way scenario (U-turn after 40 s: "Wrong way" exactly at 100 m lost progress, one reroute request, notes blank) and runs everything on Dry Ridge too: 56/56 pass (2026-10-26). Fix: a pending "Rerouting…" note no longer hides "Wrong way"; offline it reads "Wrong way · no signal to reroute".
 ### Next
 1. Loop thread runs docs/LOOP.md every 30 min, starting with brand-21a's PR.
 2. Owner priority after brand-17: routing from the real position, From/To, off-route detection and reroute (docs/WORKER_QUEUE.md route-1..5).
