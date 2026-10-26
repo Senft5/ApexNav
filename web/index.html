@@ -1302,6 +1302,19 @@
       if (track) { const s = sample(track, state.cursorM); return { lat: s.lat, lon: s.lon }; }
       const c = map.getCenter(); return { lat: c.lat, lon: c.lng };
     }
+    // Route planning starts from the phone's real position: the live fix while driving, else one
+    // GPS fix. Never the map centre: a route from the wrong start is worse than none.
+    function locate() {
+      if (state.live) return Promise.resolve({ lat: state.live.lat, lon: state.live.lon });
+      return new Promise((resolve) => {
+        if (!navigator.geolocation) { resolve(null); return; }
+        navigator.geolocation.getCurrentPosition(
+          (p) => resolve({ lat: p.coords.latitude, lon: p.coords.longitude }),
+          () => resolve(null),
+          { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 });
+      });
+    }
+    const NO_FIX = 'Couldn\'t get your location. Type a start or tap the map.';
     async function buildRoute(points, id, name, prebuilt = null) {
       let t = prebuilt;
       if (!t) {
@@ -1318,7 +1331,11 @@
       attachLimits(t);
       if (!prebuilt) toast(`${name} · ${(totalM() / 1609.344).toFixed(1)} mi · ${t.events.length} corners`);
     }
-    const routeTo = (lat, lon, name) => buildRoute([here(), { lat, lon }], 'route_dest', name);
+    async function routeTo(lat, lon, name) {
+      const from = await locate();
+      if (!from) { toast(NO_FIX); return; }
+      await buildRoute([from, { lat, lon }], 'route_dest', name);
+    }
     async function routeToQuery(q) {
       if (!q.trim() || $('destGoBtn').classList.contains('busy')) return;
       const ui = busy($('destGoBtn'));
@@ -1373,7 +1390,9 @@
       try { await buildLoop(miles, ui); } finally { loopBusy = false; ui.done(); }
     }
     async function buildLoop(miles, ui) {
-      const c = here(), targetKm = miles * 1.609344;
+      const c = await locate();
+      if (!c) { toast(NO_FIX); return; }
+      const targetKm = miles * 1.609344;
       toast(`Finding roads · ${miles} mi loop`);
       // 1. Stage discovery: score every road around the start from the map's own vector tiles.
       let plans = [];

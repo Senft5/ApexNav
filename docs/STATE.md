@@ -301,6 +301,7 @@ docs/SOCIAL.md.
 - [x] Loop tick 1: brand-21a reviewed, rebased on #22, merged as #23; `local_worker.py` `changed_files` no longer drops the first path's first character.
 - [x] brand-17 (#26): pace-note sub line `R 42 m · 31 mph` / `Driven once` / `Camera`; no code under the next-note tulip; Roadbook boxes show the code only for hazards whose code is not the call (worker r2 did instruments.js after r1 wandered off with two files; subFor done by the loop).
 - [x] Worker: whole-file reads of web/index.html overflow qwen3-coder's 32k context (brand-17, route-1 lost the task; route-1 invented a `lastKnownLocation` fallback, discarded). Prompt now forbids reading >400-line files whole; LOOP.md says to give read windows. Webhook wake-ups were 403 (relay CDN blocks the Python-urllib agent); `notify()` sends its own User-Agent.
+- [x] route-1 (#28): Plan, map-tap and Loop routes start from `locate()` (live fix, else one high-accuracy GPS fix) and never from the map centre; no fix → toast, no route. `here()` is unchanged for its other callers. Real-phone check: iOS WKWebView may ask for location once for the page.
 ### Next
 1. Loop thread runs docs/LOOP.md every 30 min, starting with brand-21a's PR.
 2. Owner priority after brand-17: routing from the real position, From/To, off-route detection and reroute (docs/WORKER_QUEUE.md route-1..5).
