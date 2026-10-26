@@ -39,6 +39,9 @@ Checkout: `C:/Users/senft/Projects/ApexNav`. Never work in the scratch copies.
    spec, and badly with "per §7". Dispatch:
    `python tools/local_worker.py dispatch --id <id> --task-file .worker/tasks/<id>.md --files <file>`.
 6. **CI failed on a loop PR**: fix it on the branch yourself or close the PR and set `dropped`.
+   PRs that only touch `web/` skip the iOS jobs; they run on `main` after the merge. After each
+   merge check `gh run list --branch main --limit 3`; if iOS failed there, fixing it is the next
+   job, before any queue item.
 7. **Queue empty**: add items from docs/BRAND.md §7 and docs/STATE.md "Exact Next Task" that
    suit the worker (mechanical, one or two files, testable). Never queue: `/core` math,
    `web/apex_core.js` parity changes, ApexKit, deleting owner-visible features without the

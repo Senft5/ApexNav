@@ -1,13 +1,20 @@
 name: iOS Build & Simulator Tests
 
-# macOS minutes count 10x on a private repo (2,000 free minutes a month), so skip the iOS jobs for changes
-# that cannot affect the app: docs, tests, tools, and voice clips.
+# macOS minutes count 10x on a private repo (2,000 free minutes a month) and the simulator run is slow.
+# Pull requests run the iOS jobs only when native code changes; web-only PRs skip them. Every merge to
+# main runs them for anything that ships in the app (web/ is bundled), so a web change that breaks the
+# iOS shell shows up on main right after merge. Run by hand any time with workflow_dispatch.
 on:
   push:
+    branches: [main]
     paths-ignore: ['docs/**', 'tests/**', 'tools/**', 'web/voices/**', '**.md', 'LICENSE', 'wrangler.jsonc']
   pull_request:
-    paths-ignore: ['docs/**', 'tests/**', 'tools/**', 'web/voices/**', '**.md', 'LICENSE', 'wrangler.jsonc']
+    paths: ['ApexNavApp.swift', 'ApexKit/**', 'UITests/**', 'project.yml', '.github/workflows/build.yml']
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   apexkit-macos:
