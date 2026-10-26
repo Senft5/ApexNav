@@ -299,7 +299,7 @@ docs/SOCIAL.md.
   to `main` on green CI and wants the loop never to pause itself.
 - [x] First job `brand-21a` (`.dv-z` 44 px): the worker made exactly the two requested edits, tests green.
 - [x] Loop tick 1: brand-21a reviewed, rebased on #22, merged as #23; `local_worker.py` `changed_files` no longer drops the first path's first character.
-- [x] brand-17 (#24): pace-note sub line `R 42 m · 31 mph` / `Driven once` / `Camera`; no code under the next-note tulip; Roadbook boxes show the code only for hazards whose code is not the call (worker r2 did instruments.js after r1 wandered off with two files; subFor done by the loop).
+- [x] brand-17 (#26): pace-note sub line `R 42 m · 31 mph` / `Driven once` / `Camera`; no code under the next-note tulip; Roadbook boxes show the code only for hazards whose code is not the call (worker r2 did instruments.js after r1 wandered off with two files; subFor done by the loop).
 ### Next
 1. Loop thread runs docs/LOOP.md every 30 min, starting with brand-21a's PR.
 2. Owner priority after brand-17: routing from the real position, From/To, off-route detection and reroute (docs/WORKER_QUEUE.md route-1..5).
