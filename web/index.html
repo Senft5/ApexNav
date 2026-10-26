@@ -49,7 +49,6 @@
     .pn-dist small, .rb-dist small { font-size: 11px; color: var(--panel-dim); }
     .pn-next { width: 34px; display: grid; justify-items: center; gap: 1px; opacity: 0.8; }
     .pn-next .tulip { width: 30px; height: 30px; }
-    .pn-next small { font-size: 11px; color: var(--panel-dim); }
     .notes-roadbook { display: grid; grid-template-columns: 1.25fr 1fr 1fr; gap: 0; padding-left: 0; padding-right: 0; }
     .rb-box { display: grid; grid-template-columns: auto 46px minmax(0, 1fr); gap: 6px; align-items: center; padding: 2px 8px; border-left: 1.5px solid var(--rule); min-width: 0; }
     .rb-box:first-child { border-left: none; }
@@ -61,6 +60,7 @@
     .rb-call { min-width: 0; }
     .rb-call b { display: block; font-size: 20px; font-weight: 800; color: var(--accent); line-height: 1; }
     .rb-call span { display: block; font-size: 11px; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: 0.04em; }
+    .rb-call span:first-child { font-size: 16px; font-weight: 800; line-height: 1.1; }
     .tm-note { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; }
     .tm-code { font-family: var(--font-num); font-size: 30px; font-weight: 600; color: var(--amber); min-width: 66px; }
     .tm-note.hazard .tm-code { color: var(--signal); }
@@ -1009,9 +1009,9 @@
     }
 
     function subFor(e) {
-      if (e.type === 'corner') return `Radius ${Math.round(e.radius_m)} m · apex ${Math.round(e.apex_mph)} mph`;
-      if (e.type === 'alpr') return 'OSM / DeFlock ALPR camera';
-      return `Measured ${e.severity_g.toFixed(2)} g · single pass, unverified`;
+      if (e.type === 'corner') return `R ${Math.round(e.radius_m)} m · ${Math.round(e.apex_mph)} mph`;
+      if (e.type === 'alpr') return 'Camera';
+      return 'Driven once';
     }
     const linkLabel = (e) => (!e.link ? '' : (e.link === 'into' || e.link === 'and') ? ` · ${e.link.toUpperCase()}` : ` · ${e.link} m to next`);
 

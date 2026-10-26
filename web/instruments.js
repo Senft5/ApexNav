@@ -94,7 +94,7 @@
         const t = html('div', 'rb-tulip', box);
         t.innerHTML = tulipSVG(n, ink, n.type === 'corner' ? accent : signal);
         const c = html('div', 'rb-call', box);
-        html('b', '', c, n.code);
+        if (n.type !== 'corner' && n.code.toLowerCase() !== n.call.toLowerCase()) html('b', '', c, n.code);
         html('span', '', c, n.call);
       });
       return;
@@ -129,7 +129,6 @@
     if (notes[1] && theme.notes === 'tulip') {
       const nx = html('div', 'pn-next', row);
       nx.innerHTML = tulipSVG(notes[1], css('--panel-dim'), css('--panel-dim'));
-      html('small', '', nx, notes[1].code);
     }
   }
 
