@@ -108,6 +108,14 @@ points 3×/2×/1× per direction of each road; time sharing opt-in per friend an
 - Remaining tests to write when the pieces exist: ingest window/backdating/ranking, nightly merge, account deletion cascade + export, highlights rate limits.
 
 ## 12. Status and build order
-Built: migrations 0001–0003 (live), auth, invites, friends, blocks, crews, grants, boards, segments (with sharing), highlights API, **real-time road-data intake** (`POST /api/contribute`, opt-in `PUT /api/me/contribute`: ranges, contiguity, km/hour caps, idempotent chunks, merge and 3x/2x/1x points in the same request) and `GET /api/points` (own weekly totals + a handle/total board), **account export + deletion** (`GET /api/me/export`, `DELETE /api/me` with `{confirm:"DELETE"}`: erases everything tied to the person, dissolves crews they own, removes what others held about them; merged road data is anonymous and stays), 76 tests, CI job, Worker wiring + cron.
+Built: migrations 0001–0005 (live; 0005 = `app_auth_codes`, applied 2026-10-26 with `wrangler d1 execute --file` to both databases, since `d1_migrations` only records 0001), auth, invites, friends, blocks, crews, grants, boards, segments (with sharing), highlights API, **real-time road-data intake** (`POST /api/contribute`, opt-in `PUT /api/me/contribute`: ranges, contiguity, km/hour caps, idempotent chunks, merge and 3x/2x/1x points in the same request) and `GET /api/points` (own weekly totals + a handle/total board), **account export + deletion** (`GET /api/me/export`, `DELETE /api/me` with `{confirm:"DELETE"}`: erases everything tied to the person, dissolves crews they own, removes what others held about them; merged road data is anonymous and stays), 76 tests, CI job, Worker wiring + cron.
 Phone side: `web/contributor.js` (map-match with Valhalla, way geometry from Overpass, bin by arc length along the way; spec in section 3). Next: (1) owner sets the Google secrets, `OWNER_EMAIL` and `PEPPER`; (2) web sync (IndexedDB → `/api/segments`, `/api/board`, `/api/highlights`) and a phone-side contributor that builds bins from a profiled drive;
 (3) read side: serve merged `road_bins` to the phone and feed measured data into stage scoring; (5) convoy.
+
+## iOS app access (ios-api, 2026-10-26)
+The app serves `web/` from `apexnav://app`, so `/api` is cross-origin to the Worker. `web/sync.js` `ApexSync.apiFetch` sends
+`https://apexnav.senftns.workers.dev` + path with `Authorization: Bearer <session token>` in the app and the same-origin cookie on the web.
+The Worker answers CORS only for `Origin: apexnav://app` (no credentials); writes from that origin need the bearer token (no cookie CSRF path).
+Sign-in: Google refuses embedded web views, so the shell opens `ASWebAuthenticationSession` on `/api/auth/google/start?app_challenge=<S256 of verifier>`;
+the callback redirects to `apexnav://auth?code=…` (single use, 2 min, stored hashed in `app_auth_codes`) and the shell trades
+`{code, verifier}` at `POST /api/auth/app/exchange` for a session token, handed to the page (`onNative({type:'session'})`, kept in localStorage).

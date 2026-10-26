@@ -1682,9 +1682,15 @@
     }
 
     // Account (optional; docs/BACKEND.md). The panel only appears when /api answers, so the app stays fully local without it.
+    // Through ApexSync.apiFetch: same-origin cookie on the web, the Worker with a bearer token in the iOS app.
     async function apiCall(method, path, body) {
-      return fetch(path, { method, credentials: 'same-origin', headers: { 'content-type': 'application/json', 'x-apexnav': '1' }, body: body === undefined ? undefined : JSON.stringify(body) });
+      return ApexSync.apiFetch(path, { method, headers: { 'content-type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
     }
+    // "Sign in with Google" links: the app signs in through the native shell instead of following the link.
+    document.addEventListener('click', (e) => {
+      const a = e.target.closest && e.target.closest('a[href="/api/auth/google/start"]');
+      if (a && ApexSync.inApp) { e.preventDefault(); ApexSync.signIn(); }
+    });
     const jsonOf = async (r) => { try { return await r.json(); } catch (_) { return null; } };
     const el = (tag, props = {}, ...kids) => { const n = Object.assign(document.createElement(tag), props); n.append(...kids); return n; };
     const btn = (label, onclick, cls = 'ink-btn') => el('button', { className: cls, textContent: label, onclick });
@@ -1729,7 +1735,7 @@
           if (r.ok) { unstash('apex.invite'); toast('You\'re in. You and the person who invited you are now friends.'); redo(); } else toast('That invite didn\'t work. Ask for a new one.');
         };
         body.append(el('h3', { textContent: 'Crew' }), el('p', { className: 'note', textContent: 'ApexNav is invite-only. Paste your invite.' }), el('div', { className: 'row' }, inp, btn('Join', join, 'ink-btn solid')),
-          btn('Sign out', async () => { await apiCall('POST', '/api/auth/logout'); redo(); }, 'linkbtn'));
+          btn('Sign out', async () => { await apiCall('POST', '/api/auth/logout'); ApexSync.setSession(null); redo(); }, 'linkbtn'));
         if (stash('apex.invite')) join();
         return;
       }
@@ -1854,7 +1860,7 @@
       const asec = section('Account');
       asec.append(el('div', { className: 'row' },
         btn('Download my data', async () => { const r = await apiCall('GET', '/api/me/export'); const blob = new Blob([JSON.stringify(await r.json(), null, 2)], { type: 'application/json' }); const a = el('a', { href: URL.createObjectURL(blob), download: 'apexnav-my-data.json' }); a.click(); }),
-        btn('Sign out', async () => { await apiCall('POST', '/api/auth/logout'); redo(); })),
+        btn('Sign out', async () => { await apiCall('POST', '/api/auth/logout'); ApexSync.setSession(null); redo(); })),
         btn('Delete account', async () => { if (prompt('This erases your account, friends, shared results and spots from the server. Type DELETE to confirm.') === 'DELETE') { await apiCall('DELETE', '/api/me', { confirm: 'DELETE' }); redo(); } }, 'danger-btn'));
       body.append(asec);
     }
@@ -2246,7 +2252,12 @@
         refreshAutoNight();
         render(entering);
       },
-      onNative(msg) { if (msg && msg.type === 'recordingSaved') toast(`Saved ${msg.segments} road segments to ${msg.file}`); }
+      onNative(msg) {
+        if (msg && msg.type === 'recordingSaved') toast(`Saved ${msg.segments} road segments to ${msg.file}`);
+        // App sign-in finished in the native shell: keep the session token and redraw whatever shows account state.
+        if (msg && msg.type === 'session' && msg.token) { ApexSync.setSession(msg.token); toast('Signed in.'); location.reload(); }
+        if (msg && msg.type === 'signInFailed' && msg.reason !== 'cancelled') toast('Couldn\'t sign in. Check signal and try again.');
+      }
     };
     let idleSnapped = false;
     function showIdleFix(frame) {

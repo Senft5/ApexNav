@@ -2,9 +2,29 @@
 // person is not a signed-in member, these calls resolve to null and local data is untouched.
 (function (root) {
   const list = (v) => (Array.isArray(v) ? v : []);
+  // The iOS app serves these pages from apexnav://app, so /api is the Worker, cross-origin, and the session travels as a
+  // bearer token the shell obtained through ASWebAuthenticationSession (stored in this origin's localStorage, never in
+  // the bundle). On the web it is same-origin with the session cookie.
+  const IN_APP = typeof location !== 'undefined' && location.protocol === 'apexnav:';
+  const API_BASE = IN_APP ? 'https://apexnav.senftns.workers.dev' : '';
+  const TOKEN_KEY = 'apex.session';
+  const token = () => { try { return IN_APP ? localStorage.getItem(TOKEN_KEY) : null; } catch (_) { return null; } };
+  function setSession(t) { try { if (t) localStorage.setItem(TOKEN_KEY, t); else localStorage.removeItem(TOKEN_KEY); } catch (_) {} }
+  /** fetch() for /api/* from either shell. Rejects when offline, like fetch. */
+  function apiFetch(path, init = {}) {
+    const headers = { 'x-apexnav': '1', ...(init.headers || {}) };
+    const t = token();
+    if (t) headers.authorization = 'Bearer ' + t;
+    return fetch(API_BASE + path, { ...init, headers, credentials: IN_APP ? 'omit' : 'same-origin' });
+  }
+  /** Google sign-in: the web follows the Worker's redirect; the app asks the native shell (Google refuses embedded web views). */
+  function signIn() {
+    const native = IN_APP && root.webkit && root.webkit.messageHandlers && root.webkit.messageHandlers.apex;
+    if (native) native.postMessage({ cmd: 'signIn' }); else location.href = '/api/auth/google/start';
+  }
   const call = async (method, path, body) => {
     try {
-      const r = await fetch(path, { method, credentials: 'same-origin', headers: { 'content-type': 'application/json', 'x-apexnav': '1' }, body: body === undefined ? undefined : JSON.stringify(body) });
+      const r = await apiFetch(path, { method, headers: { 'content-type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
       if (!r.ok) return null;
       return r.status === 204 ? {} : await r.json();
     } catch (_) { return null; }
@@ -50,13 +70,13 @@
   /** Uploads one road contribution. true = accepted, false = skipped (already contributed / rejected), 'stop' = not enabled or rate limited. */
   async function contribute(c) {
     try {
-      const r = await fetch('/api/contribute', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json', 'x-apexnav': '1' },
+      const r = await apiFetch('/api/contribute', { method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ way_id: c.way_id, dir: c.dir, driven_on: c.driven_on, drive_id: c.drive_id, bins: c.bins }) });
       return r.status === 202 ? true : r.status === 403 || r.status === 429 ? 'stop' : false;
     } catch (_) { return 'stop'; }
   }
   const contributionEnabled = async () => { const e = await call('GET', '/api/me/export'); return !!(e && e.member && e.member.contribute); };
 
-  const api = { contribute, contributionEnabled, publishScore, board, highlightsNear, shareHighlight, rateHighlight, member, pushSegments, sharedWithMe, adopt, shareSegment, friends, crews, crewMembers, removeRemote, toServer, fromServer };
+  const api = { inApp: IN_APP, apiFetch, signIn, setSession, contribute, contributionEnabled, publishScore, board, highlightsNear, shareHighlight, rateHighlight, member, pushSegments, sharedWithMe, adopt, shareSegment, friends, crews, crewMembers, removeRemote, toServer, fromServer };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexSync = api;
 })(typeof window !== 'undefined' ? window : globalThis);
