@@ -40,15 +40,7 @@
     .note-quiet b { font-size: 20px; font-weight: 700; }
     .note-quiet span { font-size: 13px; color: var(--panel-dim); }
     .tulip { width: 100%; height: 100%; display: block; }
-    .pn { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 12px; align-items: center; }
-    .pn-tulip { width: 54px; height: 54px; }
-    .pn-call { font-size: 20px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .pn-sub { font-size: 13px; color: var(--panel-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
-    .pn-dist { text-align: right; font-family: var(--font-num); }
-    .pn-dist b { font-size: 26px; font-weight: 700; display: block; line-height: 1; }
-    .pn-dist small, .rb-dist small { font-size: 11px; color: var(--panel-dim); }
-    .pn-next { width: 34px; display: grid; justify-items: center; gap: 1px; opacity: 0.8; }
-    .pn-next .tulip { width: 30px; height: 30px; }
+    .rb-dist small { font-size: 11px; color: var(--panel-dim); }
     .notes-roadbook { display: grid; grid-template-columns: 1.25fr 1fr 1fr; gap: 0; padding-left: 0; padding-right: 0; }
     .rb-box { display: grid; grid-template-columns: auto 46px minmax(0, 1fr); gap: 6px; align-items: center; padding: 2px 8px; border-left: 1.5px solid var(--rule); min-width: 0; }
     .rb-box:first-child { border-left: none; }
@@ -245,8 +237,7 @@
     .bar i { display: block; height: 5px; background: var(--rule); }
     .bar u { display: block; height: 100%; background: var(--accent); text-decoration: none; }
     .route-meta { font-size: 15px; font-weight: 600; color: var(--panel-ink); }
-    .themes { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-        .sources { font-size: 11px; color: var(--panel-dim); line-height: 1.5; }
+    .sources { font-size: 11px; color: var(--panel-dim); line-height: 1.5; }
     .sources a { color: inherit; }
   </style>
 </head>
@@ -348,10 +339,6 @@
               <button class="ink-btn" data-cam="whip">Whip</button>
             </div>
             <p class="note">How far the map leans into corners ahead.</p>
-          </section>
-          <section data-panel="setup">
-            <h3>Look</h3>
-            <div class="themes" id="themeList"></div>
           </section>
           <section class="sources" data-panel="setup">
             <details class="more"><summary>Sources and licences</summary><p class="note">Map &copy; OpenStreetMap contributors via OpenFreeMap. Terrain: AWS Terrarium DEM. Routing, map matching and posted limits: Valhalla (FOSSGIS). Geocoding: Nominatim. Plate-reading cameras: OpenStreetMap (<code>surveillance:type=ALPR</code>, DeFlock) via Overpass. Voices: Kokoro-82M (Apache-2.0).</p></details>
@@ -587,7 +574,6 @@
       paintSwitches();
       restyleBasemap();
       if (track) loadTrackOnMap();
-      renderThemeList();
       savePrefs();
       render(false);
     }
@@ -1785,22 +1771,6 @@
       render(true);
     });
 
-    function renderThemeList() {
-      const list = $('themeList');
-      list.innerHTML = '';
-      for (const id of Themes.ORDER) {
-        const t = Themes.get(id);
-        const b = document.createElement('button');
-        b.className = 'card' + (id === state.theme ? ' active' : '');
-        b.innerHTML = '<b></b><span></span>';
-        b.querySelector('b').textContent = t.label;
-        b.querySelector('b').dataset.tag = t.tag;
-        b.querySelector('span').textContent = t.blurb;
-        b.addEventListener('click', () => { state.theme = id; applyTheme(); });
-        list.appendChild(b);
-      }
-    }
-
     // Account (optional; docs/BACKEND.md). The panel only appears when /api answers, so the app stays fully local without it.
     // Through ApexSync.apiFetch: same-origin cookie on the web, the Worker with a bearer token in the iOS app.
     async function apiCall(method, path, body) {
@@ -2440,7 +2410,6 @@
     // =======================================================================
     paintSwitches();
     drawPuck();
-    renderThemeList();
     renderHighlights(); renderNearbyHighlights();
     renderAccount();
     async function bootDrives() {
