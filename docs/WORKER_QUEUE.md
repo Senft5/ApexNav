@@ -4,12 +4,33 @@ The review loop (docs/LOOP.md) takes `todo` items in order, confirms each is sti
 either does it itself (`top`) or delegates it with a short brief to the tier named here
 (`fast`, `mid`, `local`; models are listed in docs/LOOP.md). The tier is a starting point; the
 loop may change it and escalates a failed attempt one tier. Item numbers refer to
-docs/BRAND.md §7. Items 19 and the Jarvis removal in 22 delete owner-visible features and need
-the owner's yes first; they are not queued.
+docs/BRAND.md §7. Owner 2026-10-26: item 19 (one theme) is approved (themes-1); the Jarvis voice
+stays, so the Jarvis removal in item 22 is cancelled.
 
 Statuses: `todo`, `active`, `merged (#35)`, `dropped (reason)`.
 
-## Priority: routing (owner request 2026-10-26; before any brand item)
+## Priority: owner's iOS test (2026-10-26; before everything else)
+The owner installed the IPA and reported these. Do the `ios-*` bugs first, in order. Findings so far
+(loop, from the code): the app serves web/ from the custom scheme `apexnav://app/`, so every
+relative `/api/*` call (sync.js, Crew, Board, sign-in) goes to the bundle, not to the Worker at
+https://apexnav.senftns.workers.dev, hence "needs a server connection" (not a Cloudflare outage).
+`ApexNavApp.swift` sets `webView.scrollView.isScrollEnabled = false`, and analysis.html scrolls the
+document, so the Log detail cannot scroll; iOS ignores `user-scalable=no`, so pinch zooms the page.
+
+| id | tier | status | files | task |
+|---|---|---|---|---|
+| ios-api | top | todo | web/sync.js, web/index.html, web/analysis.html, ApexNavApp.swift, backend/src | The app must reach the Worker from `apexnav://`. Design it: one API base (`location.origin` on the web, the Worker URL in the app), CORS for the app origin on `/api/*`, and sign-in that works in a WKWebView (Google blocks OAuth in embedded web views: use `ASWebAuthenticationSession` in the shell and hand a session token back, or similar); no secrets in the bundle. Offline stays offline (`--`, honest messages). Done when Crew, Board and Share road feel work in the simulator against a preview Worker. |
+| ios-scroll-zoom | top | todo | ApexNavApp.swift, web/analysis.html | Log detail scrolls on iOS (let pages scroll in their own container or re-enable the scroll view only where needed, no rubber band on the map page); pinch never zooms the app (disable the scroll view's zoom: min/max zoom 1, and `gesturestart` preventDefault in the pages). Map pinch-zoom inside MapLibre keeps working. |
+| ios-gps | top | todo | ApexNavApp.swift, web/index.html | The idle map says "Finding GPS…" forever on iOS while routing works. Find why the idle map gets no fix (native frames only flow while driving? WKWebView geolocation not granted?) and fix it so the map shows and follows the phone's position when idle; denied/weak states keep their honest wording. |
+| ios-drive | top | todo | web/index.html | On the iOS build the End drive button does nothing and a bundled test drive is running/listed as if it were the owner's. Find out which (a replay auto-started? a live drive the button can't stop?) and fix: End drive always ends whatever is running; the bundled drives (window.APEX_DRIVES) are not shown as the user's drives; keep one clearly labelled demo for "Watch a replay". Then check replay on the map works. |
+| themes-1 | mid | todo | web/themes.js, web/index.html, web/instruments.js | BRAND §7 item 19, owner said yes 2026-10-26: the current theme is the only one; delete the Instrument and Telemetry themes and their picker. The Jarvis voice STAYS (owner 2026-10-26); do not remove it. |
+| pin-1 | mid | todo | web/index.html | Long-press (≈500 ms, touch and mouse; not on pinch/pan) on the map drops a pin with a small sheet: place name (reverse geocode, `--` if none), "Go here" (sets Plan To and routes from current location), "Start from here", "Add via", "Save as highlight". Replaces the current highlight dialog (see hl-1). |
+| hl-1 | mid | todo | web/index.html | Redo the add-highlight dialog: opened from a dropped pin or the current position; name, category chips, rating as 5 tap targets (44 px), Save / Cancel; BRAND.md look and copy. After pin-1 (same file). |
+| plan-suggest | mid | todo | web/index.html | Plan From/To show place suggestions while typing (debounced 300 ms, ≥ 3 chars, up to 5 rows with name + area, biased to the current position). Public Nominatim forbids search-as-you-type: use Photon (photon.komoot.io) for suggestions and keep Nominatim for the final geocode; credit both in Settings → Sources. Offline: no list, typing still works. |
+| stages-1 | top | todo | web/analysis.html, web/stages.js | Owner finds Stages convoluted. Top: write a simpler design (one list of stages near you with your best and the board leader, tap for the board; creating a stage from a drive in one step) into docs/BRAND.md, then hand the build to mid. |
+| log-friends | mid | todo | web/analysis.html | After ios-api. The Log shows friends' activity and leaderboards: a "Friends" section with their recent runs on stages you share and your rank against them; empty and signed-out states honest. |
+
+## Routing (owner request 2026-10-26)
 Do these in order.
 Today `here()` (web/index.html, ROUTING section) uses live GPS only while driving and otherwise
 the replay cursor or the **map centre**; Plan has one "Where to" field; off route the cockpit just
