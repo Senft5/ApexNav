@@ -201,6 +201,9 @@
     .btn-record.end { background: var(--panel-ink); color: var(--panel); }
     .start-links { display: flex; justify-content: center; align-items: center; gap: 8px; margin-top: 2px; }
     .linkbtn { font: inherit; font-size: 15px; font-weight: 500; color: var(--panel-ink); text-decoration: underline; min-height: 44px; padding: 0 4px; background: none; border: none; }
+    .danger-btn { font: inherit; font-size: 15px; font-weight: 600; color: var(--accent); text-decoration: none; min-height: 44px; padding: 0 4px; background: none; border: none; text-align: left; justify-self: start; }
+    .crew-row { width: 100%; min-height: 44px; display: flex; justify-content: space-between; align-items: center; gap: 8px; text-align: left; }
+    .crew-detail { border-top: 1px solid var(--hair, var(--panel-dim)); padding-top: 8px; margin-top: 4px; }
     .overlay { position: fixed; inset: 0; z-index: 40; background: var(--panel); color: var(--panel-ink); display: none; flex-direction: column; padding: 24px 24px calc(24px + env(safe-area-inset-bottom)); overflow-y: auto; }
     .overlay.show { display: flex; }
     .overlay.dim { background: rgba(0,0,0,0.5); justify-content: flex-end; padding: 0; }
@@ -1723,6 +1726,7 @@
     };
     const section = (title) => el('div', { className: 'stack-8' }, el('h3', { textContent: title }));
     const switchRow = (label, on, change) => { const b = el('button', { className: 'ink-btn' + (on ? ' on' : ''), textContent: `${label}: ${on ? 'On' : 'Off'}`, onclick: change }); b.setAttribute('aria-pressed', String(!!on)); return b; };
+    let openCrewId = null;
     async function renderAccount() {
       const body = $('accountBody');
       let me = null;
@@ -1767,7 +1771,7 @@
       }
       if (me.requests > 0) { const b = el('span', { className: 'badge', textContent: String(me.requests) }); b.setAttribute('aria-label', `${me.requests} friend requests`); $('crewTab').append(b); }
       const [fr, gr, pts, ex, crews] = await Promise.all([apiCall('GET', '/api/friends').then(jsonOf), apiCall('GET', '/api/grants').then(jsonOf), apiCall('GET', '/api/points').then(jsonOf),
-        apiCall('GET', '/api/me/export').then(jsonOf), apiCall('GET', '/api/crews').then(jsonOf)]);
+        apiCall('GET', '/api/me/export').then(jsonOf), window.ApexSync && ApexSync.crews ? ApexSync.crews() : apiCall('GET', '/api/crews').then(jsonOf)]);
       const friends = Array.isArray(fr) ? fr : [], grants = new Map((Array.isArray(gr) ? gr : []).map(g => [g.audience_type + ':' + g.audience_id, g]));
       const putGrant = async (type, id, scores, times) => { await apiCall('PUT', '/api/grants', { audience_type: type, audience_id: id, share_scores: scores, share_times: times }); redo(); };
 
@@ -1825,11 +1829,39 @@
       if (!crewList.length) csec.append(el('p', { className: 'note', textContent: 'A crew is a named group of friends for a weekend run or a club.' }));
       for (const c of crewList) {
         const g = grants.get('crew:' + c.id) || { share_scores: 0, share_times: 0 }, card = el('div', { className: 'card' });
-        card.append(el('b', { textContent: c.name }), el('span', { textContent: `${c.members} ${c.members === 1 ? 'member' : 'members'}` }),
+        const count = typeof c.members === 'number' ? c.members : Array.isArray(c.members) ? c.members.length : 0;
+        const chev = el('span', { textContent: `${count} ${count === 1 ? 'member' : 'members'} \u203a` });
+        const head = el('button', { className: 'crew-row' }, el('b', { textContent: c.name }), chev);
+        const mbox = el('div', { className: 'stack-8' });
+        const detail = el('div', { className: 'crew-detail stack-8', hidden: openCrewId !== c.id },
+          mbox,
           el('div', { className: 'row' }, switchRow('Scores', g.share_scores, () => putGrant('crew', c.id, !g.share_scores, g.share_scores ? g.share_times : false)),
             switchRow('Times', g.share_times, () => putGrant('crew', c.id, true, !g.share_times))),
+          el('span', { textContent: g.share_scores ? (g.share_times ? `${c.name} sees your scores and times.` : `${c.name} sees your scores.`) : `${c.name} sees nothing of yours yet.` }),
           el('div', { className: 'row' }, btn('Invite to crew', async () => { const r = await apiCall('POST', `/api/crews/${c.id}/invite`); const j = await jsonOf(r); if (r.ok) copyText(`${location.origin}/?crew=${j.token}`, 'Crew link copied.'); else toast('Only a crew\'s owner can invite.'); }),
-            btn('Leave', async () => { if (confirm(`Leave ${c.name}?`)) { await apiCall('DELETE', `/api/crews/${c.id}/membership`); redo(); } }, 'linkbtn')));
+            btn('Leave', async () => { if (confirm(`Leave ${c.name}?`)) { if (openCrewId === c.id) openCrewId = null; await apiCall('DELETE', `/api/crews/${c.id}/membership`); redo(); } }, 'linkbtn')));
+        const loadMembers = async () => {
+          mbox.innerHTML = '';
+          let list = Array.isArray(c.member_list) ? c.member_list : Array.isArray(c.members) ? c.members : null;
+          if (!list) list = window.ApexSync && ApexSync.crewMembers ? await ApexSync.crewMembers(c.id) : await apiCall('GET', `/api/crews/${encodeURIComponent(c.id)}/members`).then(jsonOf);
+          const mems = Array.isArray(list) ? list : [];
+          // You are always on your own crew's list, so an empty one means the request failed.
+          if (!mems.length) { mbox.append(el('p', { className: 'note', textContent: "Couldn't load members. Check signal." })); return; }
+          for (const m of mems) {
+            const label = typeof m === 'string' ? (m.startsWith('@') ? m : '@' + m) : (m.handle ? '@' + m.handle : (m.name || ''));
+            const sub = typeof m === 'object' && m ? [m.handle && m.name ? m.name : '', m.role === 'owner' ? 'Owner' : ''].filter(Boolean).join(' \u00b7 ') : '';
+            mbox.append(el('div', { className: 'row', style: 'justify-content:space-between;align-items:center' }, el('b', { textContent: label }), sub ? el('span', { className: 'note', textContent: sub }) : ''));
+          }
+        };
+        const setOpen = (on) => {
+          detail.hidden = !on;
+          head.setAttribute('aria-expanded', String(on));
+          chev.textContent = `${count} ${count === 1 ? 'member' : 'members'} ${on ? '\u25be' : '\u203a'}`;
+          if (on) loadMembers();
+        };
+        head.onclick = () => { const open = detail.hidden; openCrewId = open ? c.id : null; setOpen(open); };
+        setOpen(openCrewId === c.id);
+        card.append(head, detail);
         csec.append(card);
       }
       const cname = el('input', { className: 'field', placeholder: 'New crew name', autocomplete: 'off', maxLength: 40, 'aria-label': 'Crew name' });
@@ -1853,8 +1885,7 @@
       asec.append(el('div', { className: 'row' },
         btn('Download my data', async () => { const r = await apiCall('GET', '/api/me/export'); const blob = new Blob([JSON.stringify(await r.json(), null, 2)], { type: 'application/json' }); const a = el('a', { href: URL.createObjectURL(blob), download: 'apexnav-my-data.json' }); a.click(); }),
         btn('Sign out', async () => { await apiCall('POST', '/api/auth/logout'); redo(); })),
-        btn('Delete account', async () => { if (prompt('This erases your account, friends, shared results and spots from the server. Type DELETE to confirm.') === 'DELETE') { await apiCall('DELETE', '/api/me', { confirm: 'DELETE' }); redo(); } }, 'linkbtn'));
-      asec.lastChild.style.color = 'var(--accent)';
+        btn('Delete account', async () => { if (prompt('This erases your account, friends, shared results and spots from the server. Type DELETE to confirm.') === 'DELETE') { await apiCall('DELETE', '/api/me', { confirm: 'DELETE' }); redo(); } }, 'danger-btn'));
       body.append(asec);
     }
 

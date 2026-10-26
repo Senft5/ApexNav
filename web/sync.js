@@ -31,6 +31,8 @@
   async function adopt(seg) { const r = await call('POST', '/api/segments/adopt', { segment_id: seg.origin || seg.id }); return r && r.id ? { ...seg, id: r.id, synced: true } : null; }
   const shareSegment = (id, audienceType, audienceId) => call('POST', `/api/segments/${encodeURIComponent(id)}/share`, { audience_type: audienceType, audience_id: audienceId });
   const friends = async () => list(await call('GET', '/api/friends')).filter((f) => f.status === 'accepted');
+  const crews = async () => list(await call('GET', '/api/crews'));
+  const crewMembers = async (id) => list(await call('GET', `/api/crews/${encodeURIComponent(id)}/members`));
   const removeRemote = (id) => call('DELETE', `/api/segments/${encodeURIComponent(id)}`);
 
   /** Shared highlights in a box around a point (about 0.25 degrees each way); [] when offline. Scores are shrunk toward 3 stars by the server. */
@@ -55,6 +57,6 @@
   }
   const contributionEnabled = async () => { const e = await call('GET', '/api/me/export'); return !!(e && e.member && e.member.contribute); };
 
-  const api = { contribute, contributionEnabled, publishScore, board, highlightsNear, shareHighlight, rateHighlight, member, pushSegments, sharedWithMe, adopt, shareSegment, friends, removeRemote, toServer, fromServer };
+  const api = { contribute, contributionEnabled, publishScore, board, highlightsNear, shareHighlight, rateHighlight, member, pushSegments, sharedWithMe, adopt, shareSegment, friends, crews, crewMembers, removeRemote, toServer, fromServer };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexSync = api;
 })(typeof window !== 'undefined' ? window : globalThis);

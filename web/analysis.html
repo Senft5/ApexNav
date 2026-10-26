@@ -27,7 +27,7 @@
     .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; font-size: 12px; }
     select, input, button.btn, a.btn { font: inherit; font-size: 15px; height: 44px; padding: 0 10px; background: transparent; color: var(--panel-ink); border: 1px solid var(--panel-dim); }
     button.btn { cursor: pointer; font-weight: 600; font-size: 15px; }
-    button.btn.solid { background: var(--panel-ink); color: var(--panel); border-color: var(--panel-ink); }
+    button.btn.solid, button.btn.on { background: var(--panel-ink); color: var(--panel); border-color: var(--panel-ink); }
     .panel { border: 1px solid var(--rule); padding: 12px; min-width: 0; }
     .note { font-size: 12px; color: var(--panel-dim); line-height: 1.5; }
     .grid2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 12px; }
@@ -135,7 +135,7 @@
       <div class="grid2">
         <div class="panel"><h2>Your stages</h2><div class="seglist" id="segList"></div></div>
         <div class="panel" id="contribPanel" hidden><h2>Share road data</h2><p class="note" id="contribNote"></p><div id="contribList" class="stack-8"></div></div>
-      <div class="panel" id="segSyncPanel" hidden><h2>Board</h2><div class="scroll"><table id="segBoard"></table></div><div class="row mt-8" id="segShareRow"></div><div id="segShared" class="stack-8 mt-8"></div><div class="note mt-8" id="segSyncNote"></div></div>
+      <div class="panel" id="segSyncPanel" hidden><h2>Board</h2><div class="row" id="segBoardFilter" role="group" aria-label="Board filter"></div><div class="scroll mt-8"><table id="segBoard"></table></div><div class="row mt-8" id="segShareRow"></div><div id="segShared" class="stack-8 mt-8"></div><div class="note mt-8" id="segSyncNote"></div></div>
       <div class="panel"><h2 id="segTitle">Runs</h2><div id="segChart"></div><div class="scroll"><table id="segTable"></table></div></div>
       </div>
       <details class="more" id="newStage"><summary>New stage</summary>
@@ -295,7 +295,8 @@
     // ---------------------------------------------------------------------
     const loadSegs = () => { try { return JSON.parse(localStorage.getItem('apex.segments') || '[]'); } catch (_) { return []; } };
     const saveSegs = (s) => { try { localStorage.setItem('apex.segments', JSON.stringify(s)); } catch (_) {} };
-    let segs = loadSegs(), activeSeg = segs[0] ? segs[0].id : null, sel = null;
+    let segs = loadSegs(), activeSeg = segs[0] ? segs[0].id : null, sel = null, boardFilter = 'friends';
+    const crewMembersCache = new Map();
 
     function renderSegStrip() {
       const d = drives.find(x => x.id === $('segDrive').value);
@@ -364,16 +365,65 @@
         const best = passesFor(s).filter(x => x.p.score != null && /^\d{4}-\d{2}-\d{2}/.test(x.d.date)).sort((p, q) => q.p.score - p.p.score)[0];
         if (best) await ApexSync.publishScore(s.id, best.p.score, best.p.time_s, best.d.date.slice(0, 10));
       }
-      const act = segs.find(s => s.id === activeSeg), bt = $('segBoard');
-      const rows = act && act.synced ? await ApexSync.board(act.origin || act.id) : [];
-      bt.innerHTML = rows.length ? '<tr><th class="l">#</th><th class="l">Driver</th><th>Score</th><th>Time</th></tr>' + rows.map((r, i) =>
-        `<tr class="${r.mine ? 'best' : ''}"><td class="l">${i + 1}</td><td class="l"><b></b></td><td><span class="score">${r.driver_score}</span></td><td>${r.time_s == null ? '--' : mmss(r.time_s)}</td></tr>`).join('') : '';
-      bt.querySelectorAll('tr b').forEach((b, i) => { b.textContent = rows[i].mine ? 'You' : '@' + (rows[i].handle || '?'); });
-      if (act && act.synced && rows.length < 2) bt.innerHTML = '<tr><td class="l"><span class="note">No friends on this stage yet. Friends appear once they share scores with you (Account) and have driven it.</span></td></tr>';
+      const act = segs.find(s => s.id === activeSeg), bt = $('segBoard'), bf = $('segBoardFilter');
+      const [fr, crewList, rows] = await Promise.all([
+        ApexSync.friends(),
+        ApexSync.crews ? ApexSync.crews() : Promise.resolve([]),
+        act && act.synced ? ApexSync.board(act.origin || act.id) : Promise.resolve([]),
+      ]);
+      if (boardFilter !== 'friends' && !crewList.some(c => 'crew:' + c.id === boardFilter)) boardFilter = 'friends';
+      const drawBoard = async () => {
+        bf.innerHTML = '';
+        const chips = [{ key: 'friends', label: 'Friends' }, ...crewList.map(c => ({ key: 'crew:' + c.id, label: c.name }))];
+        for (const ch of chips) {
+          const b = document.createElement('button');
+          b.className = 'btn' + (boardFilter === ch.key ? ' on' : '');
+          b.setAttribute('aria-pressed', String(boardFilter === ch.key));
+          b.textContent = ch.label;
+          b.onclick = () => { boardFilter = ch.key; drawBoard(); };
+          bf.appendChild(b);
+        }
+        if (!act || !act.synced) { bt.innerHTML = ''; return; }
+        let filtered = rows;
+        if (boardFilter === 'friends') {
+          if (fr.length || crewList.length) {
+            const fIds = new Set(fr.map(f => f.id).filter(Boolean));
+            const fHandles = new Set(fr.map(f => (f.handle || '').toLowerCase()).filter(Boolean));
+            filtered = rows.filter(r => r.mine || (r.user_id && fIds.has(r.user_id)) || (r.handle && fHandles.has(String(r.handle).toLowerCase())));
+          }
+          if (!filtered.some(r => !r.mine) && filtered.length < 2) {
+            bt.innerHTML = '<tr><td class="l"><span class="note">No friends on this stage yet. Friends appear once they share scores with you (Account) and have driven it.</span></td></tr>';
+            return;
+          }
+        } else {
+          const crew = crewList.find(c => 'crew:' + c.id === boardFilter);
+          let mems = crew && (Array.isArray(crew.member_list) ? crew.member_list : Array.isArray(crew.members) ? crew.members : null);
+          if (!mems && crew) {
+            if (!crewMembersCache.has(crew.id)) crewMembersCache.set(crew.id, ApexSync.crewMembers ? await ApexSync.crewMembers(crew.id) : []);
+            mems = crewMembersCache.get(crew.id) || [];
+          }
+          const handles = new Set(), ids = new Set();
+          for (const m of mems || []) {
+            if (typeof m === 'string') handles.add(m.replace(/^@/, '').toLowerCase());
+            else if (m && typeof m === 'object') {
+              if (m.handle) handles.add(String(m.handle).replace(/^@/, '').toLowerCase());
+              if (m.user_id || m.id) ids.add(m.user_id || m.id);
+            }
+          }
+          filtered = rows.filter(r => (r.handle && handles.has(String(r.handle).toLowerCase())) || (r.user_id && ids.has(r.user_id)) || (r.mine && (mems || []).some(m => m && m.mine)));
+          if (!filtered.some(r => !r.mine)) {
+            bt.innerHTML = '<tr><td class="l"><span class="note">No runs from this crew yet</span></td></tr>';
+            return;
+          }
+        }
+        bt.innerHTML = '<tr><th class="l">#</th><th class="l">Driver</th><th>Score</th><th>Time</th></tr>' + filtered.map((r, i) =>
+          `<tr class="${r.mine ? 'best' : ''}"><td class="l">${i + 1}</td><td class="l"><b></b></td><td><span class="score">${r.driver_score}</span></td><td>${r.time_s == null ? '--' : mmss(r.time_s)}</td></tr>`).join('');
+        bt.querySelectorAll('tr b').forEach((b, i) => { b.textContent = filtered[i].mine ? 'You' : '@' + (filtered[i].handle || '?'); });
+      };
+      await drawBoard();
       const row = $('segShareRow'); row.innerHTML = '';
       const seg = segs.find(s => s.id === activeSeg);
       if (seg && seg.synced) {
-        const fr = await ApexSync.friends();
         if (fr.length) {
           const sel2 = document.createElement('select'); fr.forEach(f => sel2.add(new Option('@' + f.handle, f.id)));
           const go = document.createElement('button'); go.className = 'btn'; go.textContent = 'Share stage';
