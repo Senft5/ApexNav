@@ -373,7 +373,7 @@
         <button class="key" id="driveEnd">End drive</button>
       </div>
       <div id="startBlock">
-        <button class="btn-record" id="startDrive"><i></i>Start drive</button>
+        <button class="btn-record" id="startDrive" aria-label="Start drive"><i></i>Start drive</button>
       </div>
       <div class="transport" id="transport">
         <button class="key" id="playBtn">Run</button>
@@ -382,11 +382,11 @@
       </div>
       <div id="cluster"></div>
       <nav class="tabbar" id="tabbar" aria-label="Views">
-        <button class="tab on" data-view="map"><svg viewBox="0 0 24 24"><path d="M12 3l6 15-6-3-6 3z"/></svg><span>Map</span></button>
-        <button class="tab" data-view="route"><svg viewBox="0 0 24 24"><path d="M5 20c0-5 5-5 7-8s1-6 6-8"/><circle cx="5" cy="20" r="1.6"/><path d="M17 3l2 1-2 1"/></svg><span>Plan</span></button>
-        <button class="tab" data-view="log"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg><span>Log</span></button>
-        <button class="tab" data-view="stages"><svg viewBox="0 0 24 24"><path d="M12 3v18M7 7h10M7 17h10"/></svg><span>Stages</span></button>
-        <button class="tab" data-view="crew" id="crewTab"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.2"/><path d="M3 20c0-3.5 2.7-6 6-6s6 2.5 6 6M15.5 14.2c2.6 0 5 1.8 5 5"/></svg><span>Crew</span></button>
+        <button class="tab on" data-view="map" aria-label="Map"><svg viewBox="0 0 24 24"><path d="M12 3l6 15-6-3-6 3z"/></svg><span>Map</span></button>
+        <button class="tab" data-view="route" aria-label="Plan"><svg viewBox="0 0 24 24"><path d="M5 20c0-5 5-5 7-8s1-6 6-8"/><circle cx="5" cy="20" r="1.6"/><path d="M17 3l2 1-2 1"/></svg><span>Plan</span></button>
+        <button class="tab" data-view="log" aria-label="Log"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg><span>Log</span></button>
+        <button class="tab" data-view="stages" aria-label="Stages"><svg viewBox="0 0 24 24"><path d="M12 3v18M7 7h10M7 17h10"/></svg><span>Stages</span></button>
+        <button class="tab" data-view="crew" id="crewTab" aria-label="Crew"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.2"/><path d="M3 20c0-3.5 2.7-6 6-6s6 2.5 6 6M15.5 14.2c2.6 0 5 1.8 5 5"/></svg><span>Crew</span></button>
       </nav>
     </section>
   </div>
@@ -1952,7 +1952,7 @@
       $('obAlt').onclick = () => { if (step === 1) finish(); else if (step === 3) finish(); };
       ob.classList.add('show'); paint(); $('obNext').focus();
     }
-    if (!flag('apex.onboarded') && !['invite', 'crew', 'add', 'drive', 'play', 'at', 'theme'].some(k => params.has(k))) runOnboarding();
+    if (!flag('apex.onboarded') && !window.APEX_EMBED && !['invite', 'crew', 'add', 'drive', 'play', 'at', 'theme'].some(k => params.has(k))) runOnboarding();
     else if (!flag('apex.onboarded')) flag('apex.onboarded', '1');
 
     // =======================================================================
