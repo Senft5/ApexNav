@@ -18,9 +18,11 @@ Checkout: `C:/Users/senft/Projects/ApexNav`. Never work in the scratch copies.
    `main_checkout_status` that the job touched, then treat the job as wrong.
 4. **Job finished** (`done`, `failed`, `timeout`, `crashed`, `no_changes`): run `show <id>` and
    review the diff against the task, CLAUDE.md and docs/BRAND.md. Then one of:
-   - **Good or nearly good**: make small fixes yourself in the job's clone, run
+   - **Good or nearly good**: in the job's clone, commit the worker's change, then
+     `git pull --rebase origin main` (main may have moved since dispatch). Make small fixes
+     yourself, run
      `python -X utf8 -m pytest tests -q` there, set the item to `merged (#PR)` in
-     docs/WORKER_QUEUE.md and add one line to docs/STATE.md in the same commit, commit,
+     docs/WORKER_QUEUE.md and add one line to docs/STATE.md (amend into the commit),
      push `worker/<id>`, open a PR to `main`, call `link_pull_request` and
      `watch_pull_request`. When CI is green, `gh pr merge --squash --delete-branch`, then
      `local_worker.py discard <id>` (deletes the clone; the PR keeps the history).
