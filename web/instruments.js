@@ -99,41 +99,25 @@
       });
       return;
     }
+    // 'tulip' (stage)
     const n = notes[0];
-    if (theme.notes === 'telemetry') {
-      const row = html('div', 'tm-note' + (n.type !== 'corner' ? ' hazard' : ''), el);
-      html('div', 'tm-code', row, n.code);
-      const mid = html('div', 'tm-mid', row);
-      html('div', 'tm-call', mid, n.call);
-      const bar = html('div', 'tm-count', mid);
-      const fill = html('i', '', bar);
-      fill.style.width = `${Math.max(0, Math.min(100, 100 - (n.distM / 300) * 100))}%`;
-      html('div', 'tm-dist', row, `${n.dist}${n.unit}`);
-      if (notes[1]) html('div', 'tm-next', el, `then ${notes[1].code} ${notes[1].dist}${notes[1].unit}`);
-      return;
-    }
-    // 'tulip' (stage) and 'type' (instrument)
     const row = html('div', 'pn' + (n.type !== 'corner' ? ' hazard' : ''), el);
-    if (theme.notes === 'tulip') {
-      const t = html('div', 'pn-tulip', row);
-      t.innerHTML = tulipSVG(n, ink, n.type === 'corner' ? accent : signal);
-    } else {
-      html('div', 'pn-code', row, n.code);
-    }
+    const t = html('div', 'pn-tulip', row);
+    t.innerHTML = tulipSVG(n, ink, n.type === 'corner' ? accent : signal);
     const txt = html('div', 'pn-text', row);
     html('div', 'pn-call', txt, n.call);
     html('div', 'pn-sub', txt, n.sub);
     const d = html('div', 'pn-dist', row);
     html('b', '', d, n.dist);
     html('small', '', d, n.unit);
-    if (notes[1] && theme.notes === 'tulip') {
+    if (notes[1]) {
       const nx = html('div', 'pn-next', row);
       nx.innerHTML = tulipSVG(notes[1], css('--panel-dim'), css('--panel-dim'));
     }
   }
 
   // -------------------------------------------------------------------------
-  // Dial cluster (stage / roadbook / instrument)
+  // Dial cluster (stage / roadbook)
   // -------------------------------------------------------------------------
   const ang = (mph) => 135 + 270 * Math.max(0, Math.min(SPEED_MAX, mph)) / SPEED_MAX;
   const polar = (r, deg) => [100 + r * Math.cos(deg * Math.PI / 180), 100 + r * Math.sin(deg * Math.PI / 180)];
@@ -297,82 +281,8 @@
     return { update: (d) => u.forEach(f => f(d)) };
   }
 
-  // -------------------------------------------------------------------------
-  // Telemetry cluster (C)
-  // -------------------------------------------------------------------------
-  function mountTelemetry(el) {
-    el.innerHTML = '';
-    el.className = 'cluster cluster-telemetry';
-    const lights = html('div', 'tm-lights', el);
-    const leds = Array.from({ length: 15 }, () => html('i', '', lights));
-    const main = html('div', 'tm-main', el);
-    const spd = html('div', 'tm-speed', main);
-    const spdV = html('b', '', spd, '--');
-    html('span', '', spd, 'MPH');
-    const scale = html('div', 'tm-scale', main);
-    const track = html('div', 'tm-track', scale);
-    const fill = html('i', 'tm-fill', track);
-    const mk = (cls, label) => { const m = html('div', 'tm-mark ' + cls, track); html('span', '', m, label); return m; };
-    const mPace = mk('pace', 'PACE'), mSight = mk('sight', 'SIGHT'), mLimit = mk('limit', 'LIMIT');
-    const ticks = html('div', 'tm-ticks', scale);
-    for (let v = 0; v <= SPEED_MAX; v += 20) html('span', '', ticks, v);
-    const gbox = html('div', 'tm-g', main);
-    const gs = svg('svg', { viewBox: '0 0 100 100' }, gbox);
-    [20, 40].forEach(r => svg('circle', { cx: 50, cy: 50, r, fill: 'none', stroke: 'var(--rule)', 'stroke-width': 1 }, gs));
-    svg('line', { x1: 6, y1: 50, x2: 94, y2: 50, stroke: 'var(--rule)' }, gs);
-    svg('line', { x1: 50, y1: 6, x2: 50, y2: 94, stroke: 'var(--rule)' }, gs);
-    const gdot = svg('circle', { cx: 50, cy: 50, r: 5, fill: 'var(--amber)' }, gs);
-
-    const grid = html('div', 'tm-grid', el);
-    const cell = (label) => { const c = html('div', 'tm-cell', grid); html('span', '', c, label); return html('b', '', c, '--'); };
-    const cLimit = cell('LIMIT'), cSight = cell('SIGHT'), cPace = cell('PACE'), cLat = cell('LAT G'),
-      cLon = cell('LON G'), cBank = cell('BANK °'), cTrip = cell('TRIP MI'), cArch = cell('SECTOR');
-    const dna = html('div', 'tm-dna', el);
-    const bars = {};
-    for (const k of ['tech', 'flow', 'surf', 'clear']) {
-      const c = html('div', 'tm-dna-cell', dna);
-      html('span', '', c, k.toUpperCase());
-      const b = html('i', '', c);
-      const f = html('u', '', b);
-      const v = html('b', '', c, '--');
-      bars[k] = { f, v };
-    }
-    const pos = (mph) => `${Math.max(0, Math.min(100, (mph / SPEED_MAX) * 100))}%`;
-    const place = (m, mph) => { if (mph == null || !isFinite(mph)) m.style.display = 'none'; else { m.style.display = ''; m.style.left = pos(mph); } };
-    return {
-      update(d) {
-        const v = d.speedMph;
-        spdV.textContent = fmt(v);
-        fill.style.width = v == null ? '0' : pos(v);
-        place(mPace, d.paceMph); place(mSight, d.sightMph); place(mLimit, d.limitMph);
-        const ratio = v != null && d.paceMph ? v / d.paceMph : 0;
-        const lit = Math.round(Math.min(1, ratio) * leds.length);
-        leds.forEach((l, i) => {
-          l.className = i < lit ? (ratio > 1 ? 'red' : i >= leds.length * 0.85 ? 'amber' : 'green') : '';
-        });
-        cLimit.textContent = fmt(d.limitMph); cSight.textContent = fmt(d.sightMph); cPace.textContent = fmt(d.paceMph);
-        cLat.textContent = d.latG == null ? '--' : d.latG.toFixed(2);
-        cLon.textContent = d.lonG == null ? '--' : d.lonG.toFixed(2);
-        cBank.textContent = d.camberDeg == null ? '--' : d.camberDeg.toFixed(1);
-        cTrip.textContent = `${(d.tripMi || 0).toFixed(1)}/${d.totalMi != null ? d.totalMi.toFixed(1) : '--'}`;
-        cArch.textContent = d.sector && d.sector.archetype ? d.sector.archetype : (d.routeOnly ? 'Map only' : '--');
-        if (d.latG != null && d.lonG != null) {
-          gdot.setAttribute('cx', 50 + Math.max(-1, Math.min(1, d.latG / 0.8)) * 40);
-          gdot.setAttribute('cy', 50 + Math.max(-1, Math.min(1, d.lonG / 0.8)) * 40);
-          gdot.setAttribute('fill', 'var(--amber)');
-        } else { gdot.setAttribute('cx', 50); gdot.setAttribute('cy', 50); gdot.setAttribute('fill', 'var(--rule)'); }
-        for (const k in bars) {
-          const val = d.sector ? d.sector[k] : null;
-          bars[k].v.textContent = val == null ? '--' : val;
-          bars[k].f.style.width = val == null ? '0' : `${val}%`;
-          bars[k].f.className = val == null ? '' : val >= 70 ? 'hi' : val >= 45 ? 'mid' : 'lo';
-        }
-      }
-    };
-  }
-
   function mountCluster(el, theme) {
-    return theme.cluster === 'telemetry' ? mountTelemetry(el, theme) : mountDials(el, theme);
+    return mountDials(el, theme);
   }
 
   root.ApexInstruments = { mountCluster, renderNotes, tulipSVG, SPEED_MAX };
