@@ -48,6 +48,9 @@ Files you may edit: {files}
 
 Rules:
 - Make the smallest change that does the task. Use small in-place edits; never rewrite a whole file.
+- Never read a file over 400 lines whole (it overflows your context and you lose this task): search for
+  the strings the task names, then read with offset and limit around them.
+- Do only what the task says. No new fallbacks, state fields or helper functions it does not ask for.
 - Do not touch core/, web/apex_core.js or ApexKit/ unless the task names them.
 - Do not commit, push, or create branches. The reviewer does that.
 - Unknown data stays unknown (null / --). Never invent road data.
@@ -237,7 +240,9 @@ def notify(job):
         return
     body = json.dumps({k: job.get(k) for k in ("id", "status", "tests_passed", "tests_tail")}).encode()
     req = urllib.request.Request(hook.read_text(encoding="utf-8").strip(), data=body,
-                                 headers={"Content-Type": "application/json"}, method="POST")
+                                 headers={"Content-Type": "application/json",
+                                          # The relay's CDN answers 403 to the default Python-urllib agent.
+                                          "User-Agent": "apexnav-local-worker/1"}, method="POST")
     try:
         urllib.request.urlopen(req, timeout=15).close()
     except Exception as e:  # noqa: BLE001 - the 30-minute tick still picks the job up
