@@ -98,6 +98,16 @@ export const crewList = (env: Env, v: Viewer) => all<{ id: string; name: string;
   `SELECT c.id, c.name, m.role, (SELECT COUNT(*) FROM crew_members x WHERE x.crew_id = c.id) AS members
      FROM crews c JOIN crew_members m ON m.crew_id = c.id WHERE m.user_id = ? ORDER BY c.name`, v.id);
 
+export async function crewMembers(env: Env, v: Viewer, crewId: string) {
+  if (!(await isCrewMember(env, crewId, v.id))) throw new HttpError(404, "no_crew");
+  return all<{ handle: string | null; name: string | null; role: string; mine: number }>(env,
+    `SELECT u.handle, u.display_name AS name, m.role, (m.user_id = ?2) AS mine
+       FROM crew_members m JOIN users u ON u.id = m.user_id
+      WHERE m.crew_id = ?1
+        AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker = ?2 AND b.blocked = m.user_id) OR (b.blocker = m.user_id AND b.blocked = ?2))
+      ORDER BY m.role DESC, u.handle`, crewId, v.id);
+}
+
 export async function crewInvite(env: Env, v: Viewer, crewId: string): Promise<{ token: string }> {
   const crew = await first<{ owner: string }>(env, "SELECT owner FROM crews WHERE id = ?", crewId);
   if (!crew || crew.owner !== v.id) throw new HttpError(404, "no_crew");

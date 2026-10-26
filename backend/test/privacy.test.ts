@@ -11,7 +11,7 @@ const board = async (u: Parameters<typeof api>[0], canon: string) => (await (awa
 describe("access gates", () => {
   it("signed-out users get 401 and non-members get 403 on every shared-data route", async () => {
     const outsider = await makeUser("outsider", false);
-    for (const [m, p] of [["GET", "/api/friends"], ["GET", "/api/segments"], ["GET", "/api/crews"], ["GET", "/api/grants"], ["GET", "/api/board/x"]] as const) {
+    for (const [m, p] of [["GET", "/api/friends"], ["GET", "/api/segments"], ["GET", "/api/crews"], ["GET", "/api/crews/x/members"], ["GET", "/api/grants"], ["GET", "/api/board/x"]] as const) {
       expect((await api(null, m, p)).status).toBe(401);
       expect((await api(outsider, m, p)).status).toBe(403);
     }
@@ -151,6 +151,9 @@ describe("crews", () => {
     const crew = ((await (await ok(api(a, "POST", "/api/crews", { name: "Ridge Runners" }))).json()) as { id: string }).id;
     const tok = ((await (await ok(api(a, "POST", `/api/crews/${crew}/invite`))).json()) as { token: string }).token;
     await ok(api(b, "POST", "/api/crews/join", { token: tok }));
+    const mems = (await (await ok(api(b, "GET", `/api/crews/${crew}/members`))).json()) as { handle: string; role: string }[];
+    expect(mems.map((m) => m.handle)).toEqual(["alice", "bob"]);
+    expect((await api(c, "GET", `/api/crews/${crew}/members`)).status).toBe(404);
     const seg = await makeSegment(a);
     await ok(api(a, "PUT", "/api/grants", { audience_type: "crew", audience_id: crew, share_scores: true }));
     await ok(api(a, "POST", "/api/board", { segment_id: seg, driver_score: 750, driven_on: "2026-10-20" }));
@@ -158,6 +161,7 @@ describe("crews", () => {
     expect(await board(c, seg)).toEqual([]);
     await ok(api(b, "DELETE", `/api/crews/${crew}/membership`));
     expect(await board(b, seg)).toEqual([]);
+    expect((await api(b, "GET", `/api/crews/${crew}/members`)).status).toBe(404);
   });
 
   it("nobody can join a crew without a valid invite, and only the owner can create one", async () => {
