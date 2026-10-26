@@ -7,7 +7,7 @@ loop may change it and escalates a failed attempt one tier. Item numbers refer t
 docs/BRAND.md §7. Items 19 and the Jarvis removal in 22 delete owner-visible features and need
 the owner's yes first; they are not queued.
 
-Statuses: `todo`, `active`, `merged (#PR)`, `dropped (reason)`.
+Statuses: `todo`, `active`, `merged (#35)`, `dropped (reason)`.
 
 ## Priority: routing (owner request 2026-10-26; before any brand item)
 Do these in order.
@@ -33,4 +33,4 @@ shows "Driving · no route loaded" and never reroutes.
 | brand-18 | local | merged (#33) | web/drive_view.js | Corner label collisions per §7 item 18: draw a corner number only if it is ≥ 18 px from every already drawn label, else a 4 px dot; same for the Compare plan map. |
 | brand-12 | mid | todo | web/drive_view.js | Drive summary hierarchy per §7 item 12 (score 44 px with `/1000` and the four part bars under it; one distance · time · corners line; remove Top speed, Peak lateral, Peak braking, Climb tiles from the summary only; hide the scrub readout until the first scrub). |
 | brand-24a | local | todo | web/index.html | Replace inline `style="…"` spacing with `.mt-8`, `.stack-8`, `.stack-12` utilities on the 4 px grid (define them once in the page CSS). Spacing only; no visual change beyond rounding to the grid. |
-| brand-24b | local | todo | web/analysis.html | Same as brand-24a for the analysis page. |
+| brand-24b | local | merged (#35) | web/analysis.html | Same as brand-24a for the analysis page. |

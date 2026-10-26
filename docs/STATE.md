@@ -306,6 +306,7 @@ docs/SOCIAL.md.
 - [x] route-2 (#31): Plan has From (empty = current location) + To, a Swap button, `lat, lon` accepted in either field; "Or tap the map" fills the last focused field; each route keeps `t.request = { from, to, via }` (from null = phone position) for rerouting.
 - [x] brand-18 (#33): Drive and Compare plan maps draw a corner number only ≥ 18 px from every drawn number, else a 4 px dot. Local tier (Pi + qwen): first try passed Pi's `edit` `edits` array as a string and wandered off; the retry did 3 of 4 edits, the loop added the Compare check.
 - [x] route-4 (#34): live mode feeds `RerouteMonitor` once per frame; off route the match searches the whole route, notes/pace/trip stay blank, the strip says Off route / Wrong way / Rerouting… / Off route · no signal to reroute; a request rebuilds from the fix through the vias still ahead (loops: their waypoints, back to the start) to `request.to`, old route kept until the new one arrives; voice "Rerouting" / "Back on route". Native frames now carry `accuracy_m`. Not yet driven or browser-tested (route-5).
+- [x] brand-24b (#35): analysis.html spacing utilities `.mt-8`, `.stack-8`, `.stack-12`; 8 inline styles replaced (14 px stacks round to 12). Local tier did it but wrote a second `class` attribute on 4 elements (browsers drop it); loop merged them.
 ### Next
 1. Loop thread runs docs/LOOP.md every 30 min, starting with brand-21a's PR.
 2. Owner priority after brand-17: routing from the real position, From/To, off-route detection and reroute (docs/WORKER_QUEUE.md route-1..5).
