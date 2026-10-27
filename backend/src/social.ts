@@ -1,6 +1,6 @@
 // Friends, blocks, crews, grants and boards. Every function takes the verified viewer; there is no endpoint that
 // takes a user id for "whose data to read". Privacy rules (docs/BACKEND.md section 11) are enforced here and tested.
-import { Env, HANDLE_RE, HttpError, body, pair, randomToken, sha256hex, sqlTime, str } from "./util";
+import { Env, HANDLE_RE, HttpError, body, num, pair, randomToken, sha256hex, sqlTime, str } from "./util";
 import type { Viewer } from "./auth";
 
 const run = (env: Env, sql: string, ...args: unknown[]) => env.DB.prepare(sql).bind(...args).run();
@@ -82,21 +82,76 @@ export async function blockUser(env: Env, v: Viewer, req: Request): Promise<void
 }
 
 // ---- crews ---------------------------------------------------------------------------------------
+// ---- crews: like groups. Private (the default) = invite link only. Public = listed for people nearby by its area, which the
+// owner picks (a name and a point rounded to 0.1 degree, about 11 km); non-members see name, about, area and member count only.
+const AREA_STEP = 0.1;
+const roundArea = (x: number) => Math.round(x / AREA_STEP) * AREA_STEP;
+interface CrewBody { name?: unknown; visibility?: unknown; about?: unknown; area?: { name?: unknown; lat?: unknown; lon?: unknown } | null }
+interface CrewSettings { visibility: "private" | "public"; about: string | null; area_name: string | null; area_lat: number | null; area_lon: number | null }
+function crewSettings(b: CrewBody): CrewSettings {
+  const visibility = b.visibility === "public" ? "public" : b.visibility === undefined || b.visibility === "private" ? "private" : null;
+  if (!visibility) throw new HttpError(400, "bad_visibility");
+  const about = b.about === undefined || b.about === null || b.about === "" ? null : str(b.about, "about", 1, 200);
+  if (visibility === "private") return { visibility, about, area_name: null, area_lat: null, area_lon: null };
+  if (!b.area || typeof b.area !== "object") throw new HttpError(400, "public_needs_area");
+  return { visibility, about, area_name: str(b.area.name, "area.name", 2, 60),
+           area_lat: roundArea(num(b.area.lat, "area.lat", -85, 85)), area_lon: roundArea(num(b.area.lon, "area.lon", -180, 180)) };
+}
+
 export async function crewCreate(env: Env, v: Viewer, req: Request): Promise<{ id: string }> {
-  const { name } = await body<{ name?: string }>(req);
+  const b = await body<CrewBody>(req);
+  const name = str(b.name, "name", 2, 40), set = crewSettings(b);
   const n = await first<{ n: number }>(env, "SELECT COUNT(*) AS n FROM crew_members WHERE user_id = ?", v.id);
   if ((n?.n ?? 0) >= 10) throw new HttpError(429, "too_many_crews");
   const id = crypto.randomUUID();
   await env.DB.batch([
-    env.DB.prepare("INSERT INTO crews (id, name, owner) VALUES (?, ?, ?)").bind(id, str(name, "name", 2, 40), v.id),
+    env.DB.prepare("INSERT INTO crews (id, name, owner, visibility, about, area_name, area_lat, area_lon) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+      .bind(id, name, v.id, set.visibility, set.about, set.area_name, set.area_lat, set.area_lon),
     env.DB.prepare("INSERT INTO crew_members (crew_id, user_id, role) VALUES (?, ?, 'owner')").bind(id, v.id),
   ]);
   return { id };
 }
 
-export const crewList = (env: Env, v: Viewer) => all<{ id: string; name: string; role: string; members: number }>(env,
-  `SELECT c.id, c.name, m.role, (SELECT COUNT(*) FROM crew_members x WHERE x.crew_id = c.id) AS members
+/** Owner only: rename, describe, or switch between private and public (with an area). */
+export async function crewUpdate(env: Env, v: Viewer, crewId: string, req: Request): Promise<void> {
+  const crew = await first<{ owner: string; name: string }>(env, "SELECT owner, name FROM crews WHERE id = ?", crewId);
+  if (!crew || crew.owner !== v.id) throw new HttpError(404, "no_crew");
+  const b = await body<CrewBody>(req);
+  const set = crewSettings(b), name = b.name === undefined ? crew.name : str(b.name, "name", 2, 40);
+  await run(env, "UPDATE crews SET name = ?, visibility = ?, about = ?, area_name = ?, area_lat = ?, area_lon = ? WHERE id = ?",
+    name, set.visibility, set.about, set.area_name, set.area_lat, set.area_lon, crewId);
+}
+
+export const crewList = (env: Env, v: Viewer) => all<{ id: string; name: string; role: string; members: number; visibility: string; about: string | null; area_name: string | null }>(env,
+  `SELECT c.id, c.name, m.role, c.visibility, c.about, c.area_name, (SELECT COUNT(*) FROM crew_members x WHERE x.crew_id = c.id) AS members
      FROM crews c JOIN crew_members m ON m.crew_id = c.id WHERE m.user_id = ? ORDER BY c.name`, v.id);
+
+/** Public crews near a point (about 55 km), nearest first; not ones you are in, none whose owner you blocked or who blocked you. */
+export async function crewDiscover(env: Env, v: Viewer, url: URL) {
+  const lat = num(Number(url.searchParams.get("lat")), "lat", -85, 85), lon = num(Number(url.searchParams.get("lon")), "lon", -180, 180);
+  const dLat = 0.5, dLon = 0.5 / Math.max(0.2, Math.cos(lat * Math.PI / 180));
+  const rows = await all<{ id: string; name: string; about: string | null; area_name: string; area_lat: number; area_lon: number; members: number }>(env,
+    `SELECT c.id, c.name, c.about, c.area_name, c.area_lat, c.area_lon, (SELECT COUNT(*) FROM crew_members x WHERE x.crew_id = c.id) AS members
+       FROM crews c
+      WHERE c.visibility = 'public' AND c.area_lat BETWEEN ?1 AND ?2 AND c.area_lon BETWEEN ?3 AND ?4
+        AND NOT EXISTS (SELECT 1 FROM crew_members m WHERE m.crew_id = c.id AND m.user_id = ?5)
+        AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker = ?5 AND b.blocked = c.owner) OR (b.blocker = c.owner AND b.blocked = ?5))
+      LIMIT 50`, lat - dLat, lat + dLat, lon - dLon, lon + dLon, v.id);
+  const km = (r: { area_lat: number; area_lon: number }) => Math.hypot((r.area_lat - lat) * 111.2, (r.area_lon - lon) * 111.32 * Math.cos(lat * Math.PI / 180));
+  return rows.map((r) => ({ id: r.id, name: r.name, about: r.about, area_name: r.area_name, members: r.members, km: Math.round(km(r)) }))
+    .sort((a, b) => a.km - b.km).slice(0, 12);
+}
+
+/** Join a public crew without an invite (a private one still needs its link). */
+export async function crewJoinPublic(env: Env, v: Viewer, crewId: string): Promise<{ id: string }> {
+  const crew = await first<{ visibility: string; owner: string }>(env, "SELECT visibility, owner FROM crews WHERE id = ?", crewId);
+  if (!crew || crew.visibility !== "public") throw new HttpError(404, "no_crew");
+  if (await first(env, "SELECT 1 FROM blocks WHERE (blocker = ?1 AND blocked = ?2) OR (blocker = ?2 AND blocked = ?1)", v.id, crew.owner)) throw new HttpError(404, "no_crew");
+  const n = await first<{ n: number }>(env, "SELECT COUNT(*) AS n FROM crew_members WHERE user_id = ?", v.id);
+  if ((n?.n ?? 0) >= 10) throw new HttpError(429, "too_many_crews");
+  await run(env, "INSERT OR IGNORE INTO crew_members (crew_id, user_id) VALUES (?, ?)", crewId, v.id);
+  return { id: crewId };
+}
 
 export async function crewMembers(env: Env, v: Viewer, crewId: string) {
   if (!(await isCrewMember(env, crewId, v.id))) throw new HttpError(404, "no_crew");

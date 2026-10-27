@@ -5,7 +5,7 @@ import {
 } from "./auth";
 import { Env, HttpError, json } from "./util";
 import {
-  blockUser, boardFor, crewCreate, crewInvite, crewJoin, crewLeave, crewList, crewMembers, friendAccept, friendList, friendRequest,
+  blockUser, boardFor, crewCreate, crewDiscover, crewInvite, crewJoin, crewJoinPublic, crewLeave, crewList, crewMembers, crewUpdate, friendAccept, friendList, friendRequest,
   myGrants, publish, removePair, setGrant, setHandle,
 } from "./social";
 import { deleteAccount, exportMyData } from "./account";
@@ -58,6 +58,9 @@ on("GET", "/api/crews", async (req, env) => json(await crewList(env, await requi
 on("GET", "/api/crews/:id/members", async (req, env, m) => json(await crewMembers(env, await requireMember(req, env), m.groups!.id)));
 on("POST", "/api/crews/join", async (req, env) => json(await crewJoin(env, await requireMember(req, env), req)));
 on("POST", "/api/crews/:id/invite", async (req, env, m) => json(await crewInvite(env, await requireMember(req, env), m.groups!.id), 201));
+on("GET", "/api/crews/discover", async (req, env) => json(await crewDiscover(env, await requireMember(req, env), new URL(req.url))));
+on("PUT", "/api/crews/:id", async (req, env, m) => { await crewUpdate(env, await requireMember(req, env), m.groups!.id, req); return noContent(); });
+on("POST", "/api/crews/:id/join", async (req, env, m) => json(await crewJoinPublic(env, await requireMember(req, env), m.groups!.id)));
 on("DELETE", "/api/crews/:id/membership", async (req, env, m) => { await crewLeave(env, await requireMember(req, env), m.groups!.id); return noContent(); });
 
 on("GET", "/api/grants", async (req, env) => json(await myGrants(env, await requireMember(req, env))));
