@@ -66,10 +66,10 @@
     .dv-meta { font-size: 13px; color: var(--panel-dim); font-variant-numeric: tabular-nums; }
     .dv-read span { font-size: 11px; color: var(--panel-dim); }
     .dv-grid { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 14px; align-items: start; }
-    .dv-map { border: 1px solid var(--rule); padding: 8px; position: sticky; top: 12px; } .dv-right { display: grid; gap: 10px; min-width: 0; }
+    .dv-map { border: 1px solid var(--rule); padding: 8px; position: sticky; top: 12px; background: var(--panel); z-index: 2; } .dv-right { display: grid; gap: 10px; min-width: 0; }
     .dv-legend { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--panel-dim); margin-top: 8px; } .dv-legend i { flex: 1; height: 4px; }
     .dv-lanes { border: 1px solid var(--rule); padding: 6px 0; min-width: 0; } .dv-lanes svg { height: auto; max-width: 100%; }
-    .dv-read { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; background: var(--rule); border: 1px solid var(--rule); position: sticky; bottom: 58px; }
+    .dv-read { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; background: var(--rule); border: 1px solid var(--rule); position: sticky; bottom: calc(56px + env(safe-area-inset-bottom, 0px)); z-index: 3; }
     .dv-read > div { background: var(--panel); padding: 8px 10px; display: grid; gap: 2px; } .dv-read b { font-family: var(--font-num); font-size: 16px; }
     .dv-zoom { display: flex; gap: 6px; flex-wrap: wrap; } .dv-z { font: inherit; font-size: 11px; font-weight: 700; height: 44px; min-width: 44px; padding: 0 10px; background: transparent; color: var(--panel-dim); border: 1px solid var(--rule); cursor: pointer; } .dv-z.on { color: var(--panel); background: var(--panel-ink); border-color: var(--panel-ink); } .mt-8 { margin-top: 8px; } .stack-8 { display: grid; gap: 8px; } .stack-12 { display: grid; gap: 12px; }
     .dv-corners { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 6px; }
@@ -77,10 +77,12 @@
     .dv-corner.on { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
     .dv-corner b { font-family: var(--font-num); color: var(--signal); } .dv-call { font-weight: 700; font-size: 14px; } .dv-v { font-family: var(--font-num); font-size: 13px; }
     .dv-d { grid-column: 2 / 4; font-size: 11px; color: var(--panel-dim); }
-    @media (max-width: 760px) { .dv-grid { grid-template-columns: 1fr; } }
+    /* One column on a phone: the map scrolls with the page (pinned, it covered everything scrolling under it). */
+    @media (max-width: 760px) { .dv-grid { grid-template-columns: 1fr; } .dv-map { position: static; } }
     .seglist { display: grid; gap: 6px; }
     .seg { text-align: left; border: 1px solid var(--rule); padding: 10px 12px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; cursor: pointer; background: transparent; color: inherit; font: inherit; }
     .seg.on { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
+    .stages-h { font-size: 22px; font-weight: 700; font-family: var(--font-num); }
     .seg b { font-size: 15px; } .seg span { font-size: 12px; color: var(--panel-dim); }
     :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; animation: none !important; transition: none !important; } }
@@ -134,14 +136,13 @@
 
     <!-- ============================ SEGMENTS ============================ -->
     <section id="tab-segments" hidden class="stack-12">
-      <p class="note">Every run gets a score.</p>
-      <div class="grid2">
-        <div class="panel"><h2>Your stages</h2><div class="seglist" id="segList"></div></div>
-        <div class="panel" id="contribPanel" hidden><h2>Share road feel</h2><p class="note" id="contribNote"></p><div id="contribList" class="stack-8"></div></div>
+      <div class="bar-top"><h2 class="stages-h">Stages</h2><button class="btn solid" id="newStageBtn">New stage</button></div>
+      <div class="seglist" id="segList"></div>
+      <div class="grid2" id="segDetail" hidden>
       <div class="panel" id="segSyncPanel" hidden><h2>Board</h2><div class="row" id="segBoardFilter" role="group" aria-label="Board filter"></div><div class="scroll mt-8"><table id="segBoard"></table></div><div class="row mt-8" id="segShareRow"></div><div id="segShared" class="stack-8 mt-8"></div><div class="note mt-8" id="segSyncNote"></div></div>
       <div class="panel"><h2 id="segTitle">Runs</h2><div id="segChart"></div><div class="scroll"><table id="segTable"></table></div></div>
       </div>
-      <details class="more" id="newStage"><summary>New stage</summary>
+      <details class="more" id="newStage"><summary>New stage from a drive</summary>
         <div class="row" style="margin-bottom:8px">
           <select id="segDrive" aria-label="Drive to mark a stage on"></select>
           <span class="note">Drag across the profile to mark a stretch, then name it.</span>
@@ -152,6 +153,9 @@
           <button class="btn solid" id="segSave">Save stage</button>
           <span class="note" id="segInfo"></span>
         </div>
+      </details>
+      <details class="more"><summary>Share older drives</summary>
+        <div class="panel" id="contribPanel" hidden><p class="note" id="contribNote"></p><div id="contribList" class="stack-8"></div></div>
       </details>
     </section>
 
@@ -289,7 +293,7 @@
     // ---------------------------------------------------------------------
     const loadSegs = () => { try { return JSON.parse(localStorage.getItem('apex.segments') || '[]'); } catch (_) { return []; } };
     const saveSegs = (s) => { try { localStorage.setItem('apex.segments', JSON.stringify(s)); } catch (_) {} };
-    let segs = loadSegs(), activeSeg = segs[0] ? segs[0].id : null, sel = null, boardFilter = 'friends';
+    let segs = loadSegs(), activeSeg = null, sel = null, boardFilter = 'friends';   // the list first; a tapped stage opens its board
     const crewMembersCache = new Map();
 
     function renderSegStrip() {
@@ -451,6 +455,7 @@
       }
     }
 
+    $('newStageBtn').onclick = () => { const d = $('newStage'); d.open = true; d.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
     function passesFor(seg) {
       return drives.map(d => ({ d, p: Core.segmentPass(seg, d) })).filter(x => x.p);
     }
@@ -459,7 +464,7 @@
       drives.forEach(d => $('segDrive').add(new Option(`${d.name} · ${dateLabel(d)}`, d.id)));
       renderSegStrip();
       const list = $('segList');
-      list.innerHTML = segs.length ? '' : '<p class="note">Mark a stretch you drive often. Every run gets a score.</p>';
+      list.innerHTML = segs.length ? '' : '<p class="note">No stages yet. A stage is a stretch you drive often; every run on it gets a score. Tap New stage and mark one on a drive.</p>';
       for (const s of segs) {
         const passes = passesFor(s), best = passes.reduce((m, x) => (x.p.score != null && (m == null || x.p.score > m) ? x.p.score : m), null);
         const b = document.createElement('button');
@@ -467,11 +472,12 @@
         b.innerHTML = `<b></b><span class="score" style="font-size:20px">${best ?? '--'}</span><span></span><span>best</span>`;
         b.querySelector('b').textContent = s.name;
         b.querySelectorAll('span')[1].textContent = `${(s.length_m / 1609.344).toFixed(2)} mi · ${passes.length} run${passes.length === 1 ? '' : 's'}`;
-        b.onclick = () => { activeSeg = s.id; renderSegments(); syncSegments(); };
+        b.onclick = () => { activeSeg = activeSeg === s.id ? null : s.id; renderSegments(); syncSegments(); };
         list.appendChild(b);
       }
       const seg = segs.find(s => s.id === activeSeg);
-      $('segTitle').parentElement.hidden = !seg;                           // nothing to show until a segment exists
+      $('segDetail').hidden = !seg;                                         // board and runs only for the stage you tapped
+      $('segTitle').parentElement.hidden = !seg;
       if (!seg) { $('segTable').innerHTML = ''; $('segChart').innerHTML = ''; $('segTitle').textContent = 'Runs'; return; }
       $('segTitle').textContent = `Runs · ${seg.name}`;
       const passes = passesFor(seg).sort((a, b) => (b.p.score ?? -1) - (a.p.score ?? -1));
