@@ -167,7 +167,7 @@ let analyzed = false;
 let activated = null;
 let fallbackCalls = 0;
 global.fetch = async () => new Promise(() => {});
-const build = new Function('valhallaRoute', 'osrmRoute', 'trackFromPolyline', 'Core', 'drives', 'activate', 'renderRouteCard', 'state', 'openSheet', 'attachLimits', 'totalM', 'toast',
+const build = new Function('valhallaRoute', 'osrmRoute', 'trackFromPolyline', 'Core', 'drives', 'activate', 'renderRouteCard', 'state', 'openPlan', 'attachLimits', 'totalM', 'toast',
   'let plannedRoute = null; return (' + source + ')')(
   () => loading.json('https://isolated.test', {}, 5),
   async () => { fallbackCalls++; return [[-84, 39], [-83.99, 39]]; },
