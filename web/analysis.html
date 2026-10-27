@@ -13,6 +13,7 @@
   <script src="themes.js"></script>
   <script src="instruments.js"></script>
   <script src="sync.js"></script>
+  <script src="format.js"></script>
   <script src="recording.js"></script>
   <script src="contributor.js"></script>
   <script src="drive_view.js"></script>
@@ -217,7 +218,7 @@
     async function loadDrives() {
       // Only the person's own recordings. The bundled ones are the cockpit's "Watch a replay" demo, not their drives.
       const stored = await storedDrives();
-      drives = stored.map(finish).sort((a, b) => (a.date < b.date ? -1 : 1));
+      drives = stored.map((d) => finish({ ...d, name: ApexFormat.driveName(d.name) })).sort((a, b) => (a.date < b.date ? -1 : 1));
     }
 
     // ---------------------------------------------------------------------
@@ -227,7 +228,7 @@
     const cls = (s) => (s == null || Math.abs(s) < 0.05 ? '' : s < 0 ? 'gain' : 'loss');
     const mph = (v) => (v == null ? '--' : Math.round(v * MPH));
     const ft = (m) => (m == null ? '--' : `${Math.round(m * 3.28084)}`);
-    const dateLabel = (d) => (d.date ? d.date.slice(0, 16).replace('T', ' ') : '--');
+    const dateLabel = (d) => ApexFormat.dateTime(d.date);
     const mmss = (s) => { const t = Math.round(s); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; };
     function bars(comp) {
       if (!comp) return '<span class="note">no clean corners</span>';
