@@ -33,7 +33,7 @@ final class CockpitSmokeTests: XCTestCase {
 
         // The five tabs exist in every cockpit state. "Start drive" does not: the native shell feeds live frames as soon as
         // the simulator has a location, and a live cockpit shows End drive instead. (MapLibre text is not exposed to accessibility.)
-        XCTAssertTrue(web.buttons["Plan"].waitForExistence(timeout: 45), "cockpit JS did not boot")
+        XCTAssertTrue(web.buttons["Settings"].waitForExistence(timeout: 45), "cockpit JS did not boot")
         for tab in ["Map", "Log", "Stages", "Crew"] {
             XCTAssertTrue(web.buttons[tab].waitForExistence(timeout: 5), "tab \(tab) missing")
         }
