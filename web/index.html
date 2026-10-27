@@ -1908,19 +1908,42 @@
         .sort((a, b) => a.km - b.km).slice(0, 5)
         .map(p => ({ ...p, kind: [`${p.km < 16 ? (p.km / 1.609344).toFixed(1) : Math.round(p.km / 1.609344)} mi`, p.area].filter(Boolean).join(' · ') }));
     }
-    let suggestTimer = null, suggestSeq = 0;
+    // In the app, Apple's place search (the shell's MKLocalSearchCompleter: knows house numbers, no key) answers instead;
+    // coordinates are asked only for the row tapped. No answer in 4 s: Photon.
+    const nativePlace = { waiting: new Map(), next: 1 };
+    function askNative(msg, timeoutMs) {
+      return new Promise((resolve) => {
+        const id = nativePlace.next++;
+        const timer = setTimeout(() => { nativePlace.waiting.delete(id); resolve(null); }, timeoutMs);
+        nativePlace.waiting.set(id, (reply) => { clearTimeout(timer); nativePlace.waiting.delete(id); resolve(reply); });
+        try { window.webkit.messageHandlers.apex.postMessage({ ...msg, id }); } catch (_) { clearTimeout(timer); nativePlace.waiting.delete(id); resolve(null); }
+      });
+    }
+    function nativePlaceReply(msg) { const done = nativePlace.waiting.get(msg.id); if (done) done(msg); }
+    async function appleSuggest(q) {
+      const c0 = map.getCenter(), near = state.lastPosition || { lat: c0.lat, lon: c0.lng };
+      const reply = await askNative({ cmd: 'placeComplete', q, lat: near.lat, lon: near.lon }, 4000);
+      if (!reply || reply.failed || !Array.isArray(reply.items)) return null;
+      return reply.items.map((it, index) => ({ label: it.title, kind: it.subtitle || 'Place', apple: { id: reply.id, index } }));
+    }
+    async function appleResolve(p) {
+      const reply = await askNative({ cmd: 'placeResolve', index: p.apple.index }, 8000);
+      return reply && Number.isFinite(reply.lat) && Number.isFinite(reply.lon) ? { lat: reply.lat, lon: reply.lon } : null;
+    }
+    let suggestTimer = null, suggestSeq = 0, shownRows = { q: '', rows: [] };
     $('destInput').addEventListener('input', () => { clearTimeout(suggestTimer); suggestTimer = setTimeout(renderPlaces, 300); });
     async function renderPlaces() {
       const q = $('destInput').value.trim(), seq = ++suggestSeq, box = $('placeList');
       let rows, empty = '';
       if (q.length >= 3 && !COORDS.test(q)) {
-        try { rows = await photonSuggest(q); } catch (_) { rows = []; empty = 'No suggestions offline. Press Go to search.'; }
+        try { rows = (IN_APP_SHELL && await appleSuggest(q)) || await photonSuggest(q); } catch (_) { rows = []; empty = 'No suggestions offline. Press Go to search.'; }
         if (seq !== suggestSeq) return;                                  // a newer keystroke won
         if (!rows.length && !empty) empty = 'No matches nearby. Press Go to search everywhere.';
       } else {
         rows = [...recentPlaces().map(p => ({ ...p, kind: 'Recent' })),
                 ...loadHighlights().filter(h => Number.isFinite(h.lat) && Number.isFinite(h.lon)).map(h => ({ label: h.name || 'Spot', lat: h.lat, lon: h.lon, kind: 'Spot' }))].slice(0, 8);
       }
+      shownRows = { q, rows: empty ? [] : rows };
       if (empty) { const n = document.createElement('p'); n.className = 'note'; n.textContent = empty; box.replaceChildren(n); box.hidden = false; return; }
       box.replaceChildren(...rows.map(p => {
         const b = document.createElement('button'); b.className = 'place';
@@ -1937,6 +1960,11 @@
       const ui = planBusy();
       ui.step('Routing…', 0.5);
       try {
+        if (!Number.isFinite(p.lat) && p.apple) {                       // an Apple suggestion: its coordinates now
+          const at = await appleResolve(p);
+          if (!at) throw new Error('Couldn\'t find that place. Try another.');
+          p = { ...p, ...at };
+        }
         const from = await resolvePlace($('fromInput').value);
         const request = { from: from.label === null ? null : { lat: from.lat, lon: from.lon }, to: { lat: p.lat, lon: p.lon }, via: [] };
         await buildRoute([from, { lat: p.lat, lon: p.lon, label: p.label }], 'route_dest', `To ${p.label}`, null, request);
@@ -2002,7 +2030,12 @@
       else if (view) closeSheet();
     });
     ['fromInput', 'destInput'].forEach(id => {
-      $(id).addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); routeToQuery(); } });
+      $(id).addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter') return;
+        e.preventDefault(); e.target.blur();
+        const top = id === 'destInput' && shownRows.q === $('destInput').value.trim() && shownRows.rows[0];
+        if (top) routeToPlace(top); else routeToQuery();
+      });
       $(id).addEventListener('focus', () => { state.planField = id; });
     });
     $('swapBtn').addEventListener('click', () => { const f = $('fromInput'), t = $('destInput'); [f.value, t.value] = [t.value, f.value]; });
@@ -2683,6 +2716,7 @@
         render(entering);
       },
       onNative(msg) {
+        if (msg && (msg.type === 'placeSuggestions' || msg.type === 'placeResolved')) { nativePlaceReply(msg); return; }
         if (msg && msg.type === 'recordingSaved') toast(`Saved ${msg.segments} road segments to ${msg.file}`);
         // App sign-in finished in the native shell: keep the session token and redraw whatever shows account state.
         if (msg && msg.type === 'session' && msg.token) { ApexSync.setSession(msg.token); toast('Signed in.'); location.reload(); }
