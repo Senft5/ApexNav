@@ -70,6 +70,14 @@ describe("validateContribution (pure rules)", () => {
     expect(() => validateContribution(upload({ bins: bins().map((x) => ({ ...x, k: 0.5 })) }))).toThrow("bad_curvature");
   });
 
+  it("keeps a measured straight road (k = 0) distinct from unknown curvature", () => {
+    expect(validateContribution(upload({ bins: bins().map((x) => ({ ...x, k: 0 })) })).bins.every((x) => x.k === 0)).toBe(true);
+  });
+
+  it.each([undefined, "0", Number.NaN, Number.POSITIVE_INFINITY])("rejects missing or invalid curvature %s", (curvature) => {
+    expect(() => validateContribution(upload({ bins: bins().map((x) => ({ ...x, k: curvature })) }))).toThrow();
+  });
+
   it("accepts a good run and computes its length", () => {
     const c = validateContribution(upload());
     expect(c.km).toBeCloseTo(0.3);
