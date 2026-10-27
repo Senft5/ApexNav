@@ -18,6 +18,7 @@
   <script src="sensors.js"></script>
   <script src="reroute.js"></script>
   <script src="sun.js"></script>
+  <script src="format.js"></script>
   <script src="recording.js"></script>
   <script src="contributor.js"></script>
   <script src="themes.js"></script>
@@ -161,7 +162,6 @@
     .btn-record { width: 100%; height: 52px; background: var(--accent); color: var(--stage); border: none; font-size: 18px; font-weight: 700; font-family: var(--font-ui); display: flex; align-items: center; justify-content: center; gap: 10px; }
     .btn-record i { width: 12px; height: 12px; border-radius: 50%; background: currentColor; }
     .btn-record.end { background: var(--panel-ink); color: var(--panel); }
-    .start-links { display: flex; justify-content: center; align-items: center; gap: 8px; margin-top: 2px; }
     .linkbtn { font: inherit; font-size: 15px; font-weight: 500; color: var(--panel-ink); text-decoration: underline; min-height: 44px; padding: 0 4px; background: none; border: none; }
     .danger-btn { font: inherit; font-size: 15px; font-weight: 600; color: var(--accent); text-decoration: none; min-height: 44px; padding: 0 4px; background: none; border: none; text-align: left; justify-self: start; }
     .crew-row { width: 100%; min-height: 44px; display: flex; justify-content: space-between; align-items: center; gap: 8px; text-align: left; }
@@ -196,6 +196,11 @@
     #app.sheet-open .binnacle > :not(.tabbar) { display: none !important; }
     #app.sheet-open .notes { visibility: hidden; height: 0; min-height: 0; padding: 0; border: 0; overflow: hidden; }
     #app.idle .notes { visibility: hidden; height: 0; min-height: 0; padding: 0; border: 0; overflow: hidden; }
+    /* With the notes bar hidden the stage reaches the top of the screen: keep toasts clear of the notch / Dynamic Island. */
+    #app.idle .toast, #app.sheet-open .toast { top: calc(12px + var(--safe-top)); }
+    /* Plan / Crew / Settings: only the tab bar is left in the binnacle, so its own top rule would double the tab bar's. */
+    #app.sheet-open .binnacle { border-top: 0; padding-top: 0; }
+    #app.sheet-open .tabbar { margin-top: 0; }
     #app.idle #transport, #app.idle #cluster { display: none; }
     .scrim { position: absolute; inset: 0; z-index: 9; display: none; background: rgba(0,0,0,0.18); }
     .scrim.show { display: block; }
@@ -379,7 +384,6 @@
       </div>
       <div id="startBlock">
         <button class="btn-record" id="startDrive" aria-label="Start drive"><i></i>Start drive</button>
-        <div class="start-links"><button class="linkbtn" id="planLink">Plan a route</button><span aria-hidden="true"> · </span><button class="linkbtn" id="replayLink">Watch a replay</button></div>
       </div>
       <div class="transport" id="transport">
         <button class="key" id="playBtn">Run</button>
@@ -2284,7 +2288,7 @@
         try {
           const when = new Date(rec.startedAt || Date.now()), pad = (n) => String(n).padStart(2, '0');
           const stamp = `${when.getFullYear()}${pad(when.getMonth() + 1)}${pad(when.getDate())}_${pad(when.getHours())}${pad(when.getMinutes())}${pad(when.getSeconds())}`;
-          const d = ApexRecording.parse(Core, rec.toCsv(), `web_${stamp}.csv`, { source: 'web-gps', date: `${when.getFullYear()}-${pad(when.getMonth() + 1)}-${pad(when.getDate())}T${pad(when.getHours())}:${pad(when.getMinutes())}`, name: `Drive ${when.toLocaleDateString()} ${pad(when.getHours())}:${pad(when.getMinutes())}` });
+          const d = ApexRecording.parse(Core, rec.toCsv(), `web_${stamp}.csv`, { source: 'web-gps', date: `${when.getFullYear()}-${pad(when.getMonth() + 1)}-${pad(when.getDate())}T${pad(when.getHours())}:${pad(when.getMinutes())}`, name: `Drive ${when.toLocaleDateString()} ${ApexFormat.clock12(when.getHours(), when.getMinutes())}` });
           await ApexRecording.store(d);
           await refreshSavedDrives();
           toast(`Drive saved · ${(rec.km / 1.609344).toFixed(1)} mi`, { label: 'View', href: `analysis.html?tab=drive&drive=${encodeURIComponent(d.id)}` });
@@ -2320,8 +2324,6 @@
     $('permGo').addEventListener('click', () => { if (locDenied) return; flag('apex.permsExplained', '1'); $('permSheet').classList.remove('show'); enterDrive(); });
     $('permNo').addEventListener('click', () => $('permSheet').classList.remove('show'));
     $('startDrive').addEventListener('click', startDrive);
-    $('planLink').addEventListener('click', () => showView('route'));
-    $('replayLink').addEventListener('click', watchDryRidge);
     $('modePlate').addEventListener('click', () => { if (state.mode === 'live' || !replayOn) return; replayOn = false; setPlaying(false); paintIdle(); });
     $('driveEnd').addEventListener('click', () => leaveDrive(true));
 
