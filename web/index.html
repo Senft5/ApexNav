@@ -1299,7 +1299,7 @@
           if (L !== routeWatch.frame) { routeWatch.frame = L; feedRerouter(L, hit); }
           if (hit.distM < 40 && !rerouter.off) { idx = hit.index; state.cursorM = track.dist[idx]; }
         }
-      } else if (track) {
+      } else if (track && replayOn) {
         const s = sample(track, state.cursorM);
         idx = s.i; lat = s.lat; lon = s.lon; bearing = s.bearing;
         vMps = state.mode === 'sim' ? simSpeed(idx) : s.speedMps;
@@ -1392,8 +1392,8 @@
       }).catch(() => {});
     }
     }
-    function activate(t, startM = 0) {
-      if (!booting) { replayOn = true; }
+    function activate(t, startM = 0, { quiet = false } = {}) {
+      if (!booting && !quiet) { replayOn = true; }
       track = t;
       state.cursorM = Math.max(0, Math.min(totalM(), startM));
       refreshAutoNight();
@@ -1628,12 +1628,38 @@
       if (i >= 0) drives.splice(i, 1);
       drives.unshift(t);
       plannedRoute = t;
-      activate(t, 0);
+      activate(t, 0, { quiet: state.mode !== 'live' });
       renderRouteCard(t);
       persistPlanned(t);
       openPlan(false);
+      markDestination(t);
+      if (state.mode !== 'live' && !booting) lockOnDestination(t);
       attachLimits(t);
       if (!prebuilt) toast(`${name} · ${(totalM() / 1609.344).toFixed(1)} mi · ${t.events.length} corners`);
+    }
+    // A route just found: pin its destination and show it, so you can check you are routing to the right place. FOLLOW
+    // (or Start drive) goes back to your position. A loop has no destination: show the whole loop instead.
+    let destMarker = null;
+    function markDestination(t) {
+      if (destMarker) { destMarker.remove(); destMarker = null; }
+      if (!t || !Array.isArray(t.lat) || !t.lat.length) return null;
+      const to = t.request && t.request.to ? t.request.to : { lat: t.lat[t.lat.length - 1], lon: t.lon[t.lon.length - 1] };
+      const el = document.createElement('div'); el.className = 'dropped-pin'; el.setAttribute('aria-label', 'Destination');
+      destMarker = new maplibregl.Marker({ element: el }).setLngLat([to.lon, to.lat]).addTo(map);
+      return to;
+    }
+    function lockOnDestination(t) {
+      const to = destMarker ? destMarker.getLngLat() : null;
+      if (!to) return;
+      pauseFollow();
+      const bottom = ($('planBar').offsetHeight || 60) + 24;
+      if (String(t.id || '').startsWith('loop_')) {
+        let w = 180, e = -180, so = 90, n = -90;
+        for (let i = 0; i < t.lat.length; i += 10) { w = Math.min(w, t.lon[i]); e = Math.max(e, t.lon[i]); so = Math.min(so, t.lat[i]); n = Math.max(n, t.lat[i]); }
+        map.fitBounds([[w, so], [e, n]], { padding: { top: 60, left: 40, right: 60, bottom }, pitch: 0, bearing: 0, duration: 1200 });
+      } else {
+        map.flyTo({ center: [to.lng, to.lat], zoom: 15.5, pitch: 0, bearing: 0, duration: 1400, padding: { top: 0, left: 0, right: 0, bottom } });
+      }
     }
     // Plan fields: empty = the phone's position (locate()), "lat, lon" = that point, anything else =
     // the first Nominatim match. Errors carry the toast text.
@@ -1835,6 +1861,7 @@
     // ✕ on the route bar: back to Where to? and the idle map.
     function clearPlanned() {
       plannedRoute = null;
+      markDestination(null);
       try { sessionStorage.removeItem(PLANNED); } catch (_) {}
       $('destInput').value = '';
       renderRouteCard(null);
@@ -1843,6 +1870,7 @@
         if (mapReady) { map.getSource('apex-route-src').setData(emptyFC()); map.getSource('apex-ribbon-src').setData(emptyFC()); }
         rebuildPins(); paintIdle(); render(true);
       }
+      resumeFollow();
     }
     $('planClear').addEventListener('click', clearPlanned);
     $('routeBar').addEventListener('click', () => openPlan(!$('planPanel').classList.contains('open')));
@@ -2544,7 +2572,7 @@
         if (state.live) render(true);
         return;                                                              // road data: the app-open sharer (ambient) covers drives too
       }
-      setMode('live'); paintModeSwitch(); paintDriveStat();
+      setMode('live'); paintModeSwitch(); paintDriveStat(); resumeFollow();
       try {
         const sensors = await ApexSensors.start({
           onStatus: (s) => {
