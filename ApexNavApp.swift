@@ -266,8 +266,6 @@ struct GPSFix: Sendable {
 final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelegate, ASWebAuthenticationPresentationContextProviding {
     static let gStd = ApexKit.gStd
     private static let mountDefaultsKey = "apex.mountRotationRows.v1"
-    // Default mount solved from the Pebble Ridge iPhone 15 Pro log; replaced by the first calibration.
-    private static let defaultMountRows = [0.1159, 0.2998, -0.9469, -0.9927, 0.0029, -0.1206, -0.0334, 0.9540, 0.2980]
 
     @Published var shareItem: CSVShareItem?
 
@@ -303,8 +301,7 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
 
     override init() {
         super.init()
-        pipeline.mount = MountCalibrator(rows: Self.defaultMountRows)
-        pipeline.mount.state = .default
+        pipeline.mount = MountCalibrator()   // unknown until gravity settles; a mount saved from an earlier drive is reused only if gravity agrees
         restorePersistedMount()
         locManager.delegate = self
         locManager.desiredAccuracy = kCLLocationAccuracyBestForNavigation
@@ -452,6 +449,7 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
             + "\"lat_g\":\(Self.num(pipeline.latAccMps2 / Self.gStd, 3)),"
             + "\"lon_g\":\(Self.num(pipeline.lonAccMps2 / Self.gStd, 3)),"
             + "\"camber_deg\":\(Self.num(pipeline.camberRad * 180.0 / Double.pi, 2)),"
+            + "\"crest_vertical_g\":\(Self.num(pipeline.crestAccMps2 / Self.gStd, 3)),"
             + "\"roughness_rms\":\(Self.num(pipeline.roughRMSMps2 / Self.gStd, 4)),"
             + "\"recording\":\(isRecording ? "true" : "false"),"
             + "\"calibration\":\"\(pipeline.mount.state.rawValue)\","
@@ -560,18 +558,17 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
 
     private func ingestMotion(gravityG: Vec3, accelMps2 a: Vec3, gyroRadS w: Vec3, timestamp: Double) {
         latestGravityG = gravityG
-        let wasAwaitingPull = pipeline.mount.state == .awaitingPull
-        pipeline.step(accel: a, gyro: w, timestamp: timestamp, speedMps: speedMps)
-        if wasAwaitingPull && pipeline.mount.state == .locked {
-            persistMount()
-            speak("Forward axis locked.")
-        }
+        // Calibration is automatic and continuous (ApexKit.MountCalibrator): gravity gives the vertical, GPS speed and
+        // turns give forward, a moved phone drops back to unknown. Silent; the frame's "calibration" field shows the state.
+        let wasLocked = pipeline.mount.state == .locked
+        pipeline.step(accel: a, gyro: w, timestamp: timestamp, speedMps: speedMps, gravityG: gravityG)
+        if !wasLocked && pipeline.mount.state == .locked { persistMount() }
     }
 
     // MARK: SO(3) mount calibration
 
-    /// Vertical lock: +Z_veh = -gravity. Forward axis is seeded and then refined by the next
-    /// sustained straight-line pull (forward-pull X-lock), inside ApexKit.
+    /// Manual vertical lock (the "calibrate" message): +Z_veh = -gravity now. Not needed in normal use, the
+    /// calibration is automatic; forward follows from driving, inside ApexKit.
     func zeroMountCalibration() {
         pipeline.mount.lockVertical(gravityG: latestGravityG)
         speak("Vertical locked. Accelerate straight to lock forward axis.")
@@ -585,7 +582,7 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         guard let rows = UserDefaults.standard.array(forKey: Self.mountDefaultsKey) as? [Double],
               rows.count == 9,
               rows.allSatisfy({ $0.isFinite }) else { return }
-        pipeline.mount = MountCalibrator(rows: rows)
+        pipeline.mount.restore(rows: rows)
     }
 
     // MARK: Recording / export

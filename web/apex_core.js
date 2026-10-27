@@ -130,13 +130,14 @@
     return { kappa, ds };
   }
 
+  // Unknown camber (null/NaN, e.g. a blank CSV cell) is flat and unknown roughness is full grip, as when the whole column is missing.
   function apexSpeedMps(radiusM, camberRad = 0, mu = MU_EFF_DEFAULT) {
-    const phi = Math.max(-CAMBER_CLIP_RAD, Math.min(CAMBER_CLIP_RAD, camberRad));
+    const phi = Number.isFinite(camberRad) ? Math.max(-CAMBER_CLIP_RAD, Math.min(CAMBER_CLIP_RAD, camberRad)) : 0;
     return Math.sqrt(Math.max(0, radiusM * G_STD * (mu + Math.tan(phi))));
   }
 
   function effectiveMu(roughG, mu = MU_EFF_DEFAULT) {
-    if (roughG == null) return mu;
+    if (roughG == null || !Number.isFinite(roughG)) return mu;
     return mu * (1 - Math.max(0, Math.min(0.30, (roughG - 0.08) / 0.30)));
   }
 
@@ -529,7 +530,10 @@
     hi = hi === null ? v.length : hi;
     const uses = [], pace = [], smooth = [], brake = [];
     for (const c of corners) {
-      if (c.start < lo || c.end >= hi) continue;
+      if (c.start < lo || c.end >= hi || !Number.isFinite(c.apex_mps)) continue;
+      let known = true;                                                 // a corner with a speed gap (blank GPS speed) is left out, not scored as NaN
+      for (let q = c.start; q <= c.end; q++) if (!Number.isFinite(v[q])) { known = false; break; }
+      if (!known) continue;
       const m = cornerMetrics(v, lonG, latG, c.start, c.end, c.apex, c.apex_mps);
       if (m.min_mps < STOPPED_MPS) continue;
       uses.push(m.envelope_use);

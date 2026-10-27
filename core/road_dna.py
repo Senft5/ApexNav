@@ -152,16 +152,18 @@ def apex_speed_mps(radius_m, camber_rad=0.0, mu_eff: float = MU_EFF_DEFAULT):
     Small-angle form of the banked-curve limit; it omits the 1/(1 - mu tan phi) term,
     which makes it slightly conservative on positive banking.
     """
-    phi = np.clip(camber_rad, -CAMBER_CLIP_RAD, CAMBER_CLIP_RAD)
+    # Unknown camber (NaN, e.g. a blank CSV cell) is flat, as when the whole column is missing.
+    phi = np.clip(np.nan_to_num(np.asarray(camber_rad, dtype=float), nan=0.0), -CAMBER_CLIP_RAD, CAMBER_CLIP_RAD)
     return np.sqrt(np.maximum(0.0, np.asarray(radius_m, dtype=float) * G_STD * (mu_eff + np.tan(phi))))
 
 
 def effective_mu(roughness_rms_g=None, mu_eff: float = MU_EFF_DEFAULT):
-    """Derate grip on broken pavement: up to -30 % as 5 m RMS goes 0.08 g -> 0.38 g."""
+    """Derate grip on broken pavement: up to -30 % as 5 m RMS goes 0.08 g -> 0.38 g. Unknown (NaN) keeps full grip."""
     if roughness_rms_g is None:
         return mu_eff
     r = np.asarray(roughness_rms_g, dtype=float)
-    return mu_eff * (1.0 - np.clip((r - 0.08) / 0.30, 0.0, 0.30))
+    mu = np.where(np.isfinite(r), mu_eff * (1.0 - np.clip((r - 0.08) / 0.30, 0.0, 0.30)), mu_eff)
+    return float(mu) if mu.ndim == 0 else mu
 
 
 def sight_distance_m(lat_deg, lon_deg, elevation_m=None, offset_m: float = SIGHT_OFFSET_M) -> np.ndarray:

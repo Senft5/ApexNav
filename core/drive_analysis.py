@@ -180,7 +180,9 @@ def driver_score(speed_mps, lon_g, lat_g, corners, lo: int = 0, hi=None) -> dict
     hi = len(v) if hi is None else hi
     uses, pace, smooth, brake = [], [], [], []
     for c in corners:
-        if c["start"] < lo or c["end"] >= hi:
+        if c["start"] < lo or c["end"] >= hi or not math.isfinite(c["apex_mps"]):
+            continue
+        if not np.all(np.isfinite(v[c["start"]:c["end"] + 1])):    # a speed gap (blank GPS speed) leaves the corner out, not NaN
             continue
         m = corner_metrics(v, lon_g, lat_g, c["start"], c["end"], c["apex"], c["apex_mps"])
         if m["min_mps"] < STOPPED_MPS:

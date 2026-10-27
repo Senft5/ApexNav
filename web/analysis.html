@@ -204,11 +204,12 @@
       d.corners = cornersOf(d);
       d.km = d.dist[d.dist.length - 1] / 1000;
       d.ds = Core.driverScore(d.speed_mps, d.lon_g, d.lat_g, d.corners);
+      if (!Number.isFinite(d.ds.score)) d.ds = { ...d.ds, score: null };   // unknown shows as --, never NaN
       return d;
     }
 
     // Recordings live in IndexedDB, shared with the cockpit (web/recording.js).
-    const storedDrives = () => ApexRecording.all();
+    const storedDrives = async () => (await ApexRecording.all()).map((d) => ApexRecording.repair(Core, d));
     const storeDrive = (d) => ApexRecording.store(d);
     const parseRecording = (text, fileName) => ApexRecording.parse(Core, text, fileName);
 

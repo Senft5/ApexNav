@@ -54,6 +54,19 @@
     };
   }
 
+  /**
+   * Drives saved before 2026-10-26 have NaN corner limits (blank camber cells poisoned the envelope), so their score was NaN.
+   * Profiles such a record again from its own stored columns; a healthy record is returned unchanged.
+   */
+  function repair(Core, d) {
+    if (!d || !Array.isArray(d.events) || d.events.every((e) => e.type !== 'corner' || Number.isFinite(e.apex_mph))) return d;
+    const nan = (a) => (a ? a.map((v) => (v == null ? NaN : v)) : undefined);
+    const prof = Core.profileRecording({ lat: d.lat, lon: d.lon, distance_m: d.dist, speed_mph: d.speed_mps.map((v) => v * MPH), lon_g: d.lon_g, lat_g: d.lat_g,
+      camber_deg: nan(d.camber), roughness_rms: nan(d.rough), crest_vertical_g: nan(d.crest), elevation_m: d.elev || undefined });
+    const nul = (a) => a.map((v) => (Number.isFinite(v) ? v : null));
+    return { ...d, events: prof.events, envMps: nul(prof.envMps), sightM: nul(prof.sightM) };
+  }
+
   // Adapt the shared Log record without inventing missing road measurements.
   function toTrack(d) {
     return {
@@ -66,6 +79,6 @@
     };
   }
 
-  const api = { all, store, remove, parse, toTrack };
+  const api = { all, store, remove, parse, repair, toTrack };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexRecording = api;
 })(typeof window !== 'undefined' ? window : globalThis);

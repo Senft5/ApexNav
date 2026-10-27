@@ -132,34 +132,53 @@
    * Streams a drive to /api/contribute while it is being driven (owner decision: real time, no holding period).
    * Rows arrive one per 5 m. Every `chunk` rows the settled part of the drive is matched, turned into bins and posted.
    * Privacy: the first `skip` rows (about 1 km) are never sent and the last `lag` rows (about 1 km) are never sent, so where a trip starts and ends
-   * stays on the phone; the server also never receives coordinates. Failures keep the rows and retry later; a refusal (opt-out, rate limit) stops it.
+   * stays on the phone; the server also never receives coordinates. Failures (matching, offline, server errors) keep the rows or the built
+   * chunks and resend the same payloads later with backoff; only a refusal (signed out, opted out) stops it.
    */
-  function createLive({ Core, post, fetch: fetchFn, driveId, drivenOn, chunk = 100, lag = 200, skip = 200, ctx = 20, retryMs = 30000, now = Date.now, onStatus }) {
+  function createLive({ Core, post, fetch: fetchFn, driveId, drivenOn, chunk = 100, lag = 200, skip = 200, ctx = 20, retryMs = 30000, maxRetryMs = 300000, now = Date.now, onStatus }) {
     const A = { lat: [], lon: [], rough: [], camber: [], crest: [] };
-    const wayCache = {};
-    let done = 0, busy = false, stopped = false, retryAt = 0, bins = 0, chunks = 0, error = null;
-    const status = () => { if (onStatus) onStatus({ state: stopped ? 'stopped' : error ? 'retrying' : 'on', km: bins * BIN_M / 1000, chunks, error }); };
-    async function run() {
+    const wayCache = {}, HOLD = MIN_BINS + 5;
+    let done = 0, busy = false, stopped = false, retryAt = 0, fails = 0, bins = 0, chunks = 0, error = null, pending = [];
+    const status = () => { if (onStatus) onStatus({ state: stopped ? 'stopped' : error ? 'retrying' : 'on', km: bins * BIN_M / 1000, chunks, pending: pending.length, error }); };
+    /**
+     * Where this chunk should end so no road piece is cut too short to send (the server needs 20 bins per piece). A road that is still
+     * running at the chunk's end keeps its last HOLD rows for the next chunk; a road that started inside the chunk waits whole for the next one.
+     */
+    function settledEnd(match, lf, lt) {
+      const w = match[lt - 1] && match[lt - 1].way;
+      if (w == null) return lt;
+      let i = lt - 1;
+      while (i > lf && match[i - 1] && match[i - 1].way === w) i--;
+      return i === lf ? lt - HOLD : i;
+    }
+    /** final: the drive ended, so send whatever is settled (at least a short road piece) without holding rows back for a next chunk. */
+    async function run(final = false) {
       if (busy || stopped || now() < retryAt) return;
       const n = A.lat.length, from = Math.max(done, skip), to = n - lag;
-      if (to - from < chunk) return;
+      if (!pending.length && to - from < (final ? MIN_BINS : chunk)) return;
       busy = true;
       try {
-        const lo = Math.max(0, from - ctx), hi = Math.min(n, to + ctx);
-        const slice = { lat: A.lat.slice(lo, hi), lon: A.lon.slice(lo, hi), rough: A.rough.slice(lo, hi), camber: A.camber.slice(lo, hi), crest: A.crest.slice(lo, hi) };
-        slice.kappa = Array.from(Core.computeCurvature(slice.lat, slice.lon).kappa);
-        const match = await matchDrive(slice, fetchFn);
-        for (let i = 0; i < match.length; i++) if (i < from - lo || i >= to - lo) match[i] = null;      // context only helps the matcher
-        const need = [...new Set(match.filter((m) => m && m.way != null).map((m) => m.way))].filter((id) => !wayCache[id]);
-        if (need.length) Object.assign(wayCache, await fetchWays(need, fetchFn));
-        const list = buildContributions({ drive: slice, match, ways: wayCache, drivenOn, driveId, trimM: 0 });
-        for (const c of list) {
-          const r = await post(c);
-          if (r === 'stop') { stopped = true; break; }
-          if (r === true) { bins += c.bins.length; chunks++; }
+        if (!pending.length) {
+          const lo = Math.max(0, from - ctx), hi = Math.min(n, to + ctx);
+          const slice = { lat: A.lat.slice(lo, hi), lon: A.lon.slice(lo, hi), rough: A.rough.slice(lo, hi), camber: A.camber.slice(lo, hi), crest: A.crest.slice(lo, hi) };
+          slice.kappa = Array.from(Core.computeCurvature(slice.lat, slice.lon).kappa);
+          const match = await matchDrive(slice, fetchFn);
+          const end = final ? to : lo + settledEnd(match, from - lo, to - lo);
+          for (let i = 0; i < match.length; i++) if (i < from - lo || i >= end - lo) match[i] = null;     // context only helps the matcher
+          const need = [...new Set(match.filter((m) => m && m.way != null).map((m) => m.way))].filter((id) => !wayCache[id]);
+          if (need.length) Object.assign(wayCache, await fetchWays(need, fetchFn));
+          pending = buildContributions({ drive: slice, match, ways: wayCache, drivenOn, driveId, trimM: 0 });
+          done = end;
         }
-        done = to; error = null;
-      } catch (e) { error = e.message || String(e); retryAt = now() + retryMs; }
+        while (pending.length) {                                         // a failed post keeps the exact payload, so a resend is merged once
+          const r = await post(pending[0]);
+          if (r === 'stop') { stopped = true; pending = []; break; }
+          if (r === 'retry') throw new Error('upload failed · will retry');
+          if (r === true) { bins += pending[0].bins.length; chunks++; }
+          pending.shift();
+        }
+        error = null; fails = 0;
+      } catch (e) { error = e.message || String(e); fails++; retryAt = now() + Math.min(maxRetryMs, retryMs * 2 ** (fails - 1)); }
       finally { busy = false; status(); }
     }
     return {
@@ -169,16 +188,16 @@
         A.rough.push(Number.isFinite(row.roughness_rms) ? row.roughness_rms : null);
         A.camber.push(Number.isFinite(row.camber_deg) ? row.camber_deg : null);
         A.crest.push(Number.isFinite(row.crest) ? row.crest : null);
-        if (A.lat.length - Math.max(done, skip) - lag >= chunk) run();
+        if (pending.length || A.lat.length - Math.max(done, skip) - lag >= chunk) run();
       },
-      stats: () => ({ km: bins * BIN_M / 1000, chunks, stopped, error, rows: A.lat.length }),
-      /** Drive ended: nothing more is sent (the last km stays private). Resolves when an in-flight chunk settles. */
+      stats: () => ({ km: bins * BIN_M / 1000, chunks, stopped, error, pending: pending.length, rows: A.lat.length }),
+      /** Drive ended: the settled rest is sent, nothing after it (the last km stays private). Resolves when an in-flight chunk settles. */
       async finish() {
         for (let i = 0; i < 60; i++) {                                    // settle the in-flight chunk, then send any settled rows still waiting
           if (busy) { await new Promise((r) => setTimeout(r, 50)); continue; }
-          const n = A.lat.length;
-          if (stopped || error || n - lag - Math.max(done, skip) < chunk) break;
-          await run();
+          const n = A.lat.length, rest = n - lag - Math.max(done, skip);
+          if (stopped || error || (!pending.length && rest < MIN_BINS)) break;
+          await run(!pending.length && rest < chunk);
         }
         return this.stats();
       },
