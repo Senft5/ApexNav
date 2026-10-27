@@ -68,8 +68,13 @@
     .plate.gear svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; }
     .plate.live { background: var(--accent); color: var(--panel); border-color: var(--accent); }
     /* ---------------- plan: a pull-up sheet over the map (collapsed bar: Where to? + Start) ---------------- */
+    /* The sheet is always its full height; collapsed it sits below the stage edge with only the bar showing, so opening is a
+       slide (and follows the finger while dragged), never a jump. */
     .plan { position: absolute; left: 0; right: 0; bottom: 0; z-index: 5; background: var(--panel); color: var(--panel-ink); border-top: 1px solid var(--rule);
-      display: flex; flex-direction: column; max-height: 78%; }
+      display: flex; flex-direction: column; height: min(78%, 620px); transform: translateY(calc(100% - var(--plan-bar, 62px)));
+      transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1); will-change: transform; box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.18); }
+    .plan.open { transform: none; }
+    .plan.dragging { transition: none; }
     [data-theme="roadbook"] .plan { border-top-width: 2px; }
     .plan-bar { display: flex; gap: 8px; align-items: center; padding: 8px 10px; touch-action: none; }
     .plan-bar::before { content: ""; position: absolute; top: 3px; left: 50%; width: 36px; height: 3px; margin-left: -18px; background: var(--panel-dim); opacity: 0.5; }
@@ -80,9 +85,22 @@
     .plan-search input::placeholder { color: var(--panel-dim); }
     .plan-search input::-webkit-search-cancel-button { -webkit-appearance: none; }
     .plan-cancel { flex: none; padding: 0 4px; font-size: 15px; }
-    .plan:not(.open) .plan-cancel, .plan.open .btn-start { display: none; }
-    .plan-body { display: none; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding: 4px 16px 20px; gap: 20px; }
-    .plan.open .plan-body { display: grid; }
+    .plan:not(.open) .plan-cancel, .plan.open .btn-start, .plan.open .plan-clear { display: none; }
+    .plan.routed .plan-search, .plan:not(.routed) .route-bar, .plan:not(.routed) .plan-clear, .plan.routed .plan-search-section { display: none; }
+    .route-bar { flex: 1; min-width: 0; height: 44px; display: grid; align-content: center; text-align: left; padding: 0 2px; }
+    .route-bar b { font-size: 16px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .route-bar span { font-size: 12px; color: var(--panel-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .plan-clear, .icon-btn { flex: none; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; color: var(--panel-dim); }
+    .plan-clear svg, .icon-btn svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    .plan-body { display: grid; align-content: start; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding: 2px 16px 20px; gap: 16px; flex: 1; min-height: 0; }
+    .from-row { display: flex; gap: 4px; align-items: center; }
+    .from-row .field { height: 40px; border-color: var(--hair, var(--panel-dim)); }
+    .plan-status { font-size: 12px; color: var(--panel-dim); min-height: 0; margin: 4px 2px 0; }
+    .plan-status:empty { display: none; }
+    .plan-links { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+    .loop-row { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--panel-dim); }
+    .chip { min-width: 40px; height: 32px; padding: 0 10px; border: 1px solid var(--panel-dim); color: var(--panel-ink); font-size: 13px; font-weight: 600; }
+    .chip.busy { color: var(--panel); background: var(--panel-dim); }
     .place-list { display: grid; margin-top: 8px; }
     .place { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: baseline; min-height: 44px; padding: 8px 2px; border-top: 1px solid var(--hair, var(--panel-dim)); text-align: left; }
     .place b { font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -90,17 +108,19 @@
     .place-list .note { margin: 8px 2px 0; }
     #app.live .plan, #app.sheet-open .plan { display: none; }
     #app:not(.live) .plates { bottom: 72px; }
-    #app.plan-open .plates, #app.plan-open .edge-tab, #app.plan-open .edge-panel { display: none; }
+    #app.plan-open .plates, #app.plan-open .edge { display: none; }
     /* ---------------- while-you-drive switches: an edge tab that slides a small panel over the map ---------------- */
-    .edge-tab { position: absolute; right: 0; top: 40%; z-index: 4; width: 40px; height: 52px; background: var(--panel); color: var(--panel-ink);
-      border: 1px solid var(--rule); border-right: 0; display: flex; align-items: center; justify-content: center; }
+    .edge { position: absolute; right: 0; top: 38%; z-index: 4; display: flex; align-items: flex-start;
+      transform: translateX(var(--edge-w, 236px)); transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1); }
+    .edge.open { transform: none; }
+    .edge-tab { flex: none; width: 40px; height: 52px; background: var(--panel); color: var(--panel-ink);
+      border: 1px solid var(--rule); border-right: 0; display: flex; align-items: center; justify-content: center; box-shadow: -4px 4px 12px rgba(0, 0, 0, 0.18); }
     .edge-tab svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
     .edge-tab[aria-expanded="true"] { color: var(--accent); }
-    .edge-panel { position: absolute; right: 40px; top: 40%; z-index: 4; width: min(240px, calc(100% - 64px)); background: var(--panel); color: var(--panel-ink);
-      border: 1px solid var(--rule); padding: 8px 12px 4px; transform: translateX(calc(100% + 48px)); transition: transform 0.18s ease-out; }
-    .edge-panel.open { transform: none; }
+    .edge-panel { width: 236px; background: var(--panel); color: var(--panel-ink); border: 1px solid var(--rule); border-right: 0;
+      padding: 8px 14px 4px; box-shadow: -8px 8px 24px rgba(0, 0, 0, 0.22); }
     .edge-panel h3 { font-size: 12px; font-weight: 700; color: var(--panel-dim); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 2px; }
-    #app.sheet-open .edge-tab, #app.sheet-open .edge-panel { display: none; }
+    #app.sheet-open .edge { display: none; }
     #recenterBtn { display: none; } #recenterBtn.show { display: block; }
     .toast { position: absolute; left: 50%; top: 12px; transform: translateX(-50%); z-index: 6; max-width: calc(100% - 32px);
       background: var(--panel); color: var(--panel-ink); border: 1px solid var(--accent); padding: 8px 12px; font-size: 12px; font-weight: 600; display: none; }
@@ -200,6 +220,21 @@
     .linkbtn { font: inherit; font-size: 15px; font-weight: 500; color: var(--panel-ink); text-decoration: underline; min-height: 44px; padding: 0 4px; background: none; border: none; }
     .danger-btn { font: inherit; font-size: 15px; font-weight: 600; color: var(--accent); text-decoration: none; min-height: 44px; padding: 0 4px; background: none; border: none; text-align: left; justify-self: start; }
     .crew-row { width: 100%; min-height: 44px; display: flex; justify-content: space-between; align-items: center; gap: 8px; text-align: left; }
+    /* Crews as tiles (two across); an open tile spans the row with its details. */
+    .crew-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    .crew-tiles .card { padding: 10px; min-height: 84px; align-content: start; }
+    .crew-tiles .card.open { grid-column: 1 / -1; }
+    .crew-tile-head { width: 100%; display: grid; gap: 3px; text-align: left; min-height: 44px; align-content: start; }
+    .crew-tile-head b { font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .crew-tile-head span { font-size: 12px; color: var(--panel-dim); }
+    .crew-tile-head em { font-style: normal; font-size: 12px; color: var(--panel-dim); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    /* Friends: a side pop-up over the Crew sheet. */
+    .side-pop { position: fixed; top: 0; right: 0; bottom: 0; width: min(360px, 88vw); z-index: 30; background: var(--panel); color: var(--panel-ink);
+      border-left: 1px solid var(--rule); box-shadow: -12px 0 32px rgba(0, 0, 0, 0.3); padding: calc(14px + var(--safe-top)) 16px calc(24px + var(--safe-bottom));
+      overflow-y: auto; display: grid; gap: 16px; align-content: start; transform: translateX(105%); transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1); }
+    .side-pop.open { transform: none; }
+    .side-pop-head { display: flex; justify-content: space-between; align-items: center; }
+    .side-pop-head h3 { border: 0; padding: 0; margin: 0; }
     .crew-detail { border-top: 1px solid var(--hair, var(--panel-dim)); padding-top: 8px; margin-top: 4px; }
     .overlay { position: fixed; inset: 0; z-index: 40; background: var(--panel); color: var(--panel-ink); display: none; flex-direction: column; padding: 24px 24px calc(24px + env(safe-area-inset-bottom)); overflow-y: auto; }
     .overlay.show { display: flex; }
@@ -297,27 +332,23 @@
         <div class="plan-bar" id="planBar">
           <label class="plan-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5"/></svg>
             <input id="destInput" type="search" placeholder="Where to?" aria-label="Where to" aria-controls="planBody" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="go" /></label>
+          <button class="route-bar" id="routeBar" aria-label="Route details"><b id="routeBarName">--</b><span id="routeBarMeta"></span></button>
           <button class="btn-start" id="startDrive" aria-label="Start drive"><i></i>Start</button>
+          <button class="plan-clear" id="planClear" aria-label="Clear route"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
           <button class="linkbtn plan-cancel" id="planCancel">Cancel</button>
         </div>
         <div class="plan-body" id="planBody">
-            <section>
-              <div class="row">
+            <section class="plan-search-section">
+              <div class="from-row">
                 <input class="field" id="fromInput" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="go" placeholder="From: current location" aria-label="From" autocomplete="off" />
-                <button class="ink-btn" id="swapBtn" aria-label="Swap From and To">Swap</button>
-                <button class="ink-btn solid" id="destGoBtn">Go</button>
+                <button class="icon-btn" id="swapBtn" aria-label="Swap From and To"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4v16M4 8l4-4 4 4M16 20V4M12 16l4 4 4-4"/></svg></button>
               </div>
+              <p class="plan-status" id="planStatus" role="status" aria-live="polite"></p>
               <div class="place-list" id="placeList" hidden></div>
-              <button class="linkbtn" id="tapRouteBtn">Or tap the map</button>
-            </section>
-            <section>
-              <h3>Loop from here</h3>
-              <div class="row">
-                <button class="ink-btn" data-loop-mi="15">15 mi</button>
-                <button class="ink-btn" data-loop-mi="30">30 mi</button>
-                <button class="ink-btn" data-loop-mi="45">45 mi</button>
+              <div class="plan-links">
+                <button class="linkbtn" id="tapRouteBtn">Tap the map</button>
+                <span class="loop-row"><span>Loop</span><button class="chip" data-loop-mi="15">15</button><button class="chip" data-loop-mi="30">30</button><button class="chip" data-loop-mi="45">45 mi</button></span>
               </div>
-              <p class="note">Loops pick the twistiest roads near you. Map only until someone drives them.</p>
             </section>
             <section id="routeCard" hidden>
               <h3 id="routeCardName"></h3>
@@ -330,23 +361,11 @@
               </div>
             </section>
             <section>
-              <h3>Spots</h3>
-              <p class="note" style="margin:0 0 8px">Loops lean toward spots you rate 3★ or more. Your spots stay on this phone until you share one.</p>
-              <div class="row" id="detourList" role="group" aria-label="Detour">
-                <button class="ink-btn" data-detour="0">Off</button>
-                <button class="ink-btn" data-detour="0.5">Little</button>
-                <button class="ink-btn" data-detour="1">Some</button>
-                <button class="ink-btn" data-detour="2">More</button>
-              </div>
-              <button class="linkbtn" id="hlOpenBtn">Add a spot here</button>
-              <div id="hlList" class="stack-8 mt-8"></div>
-              <div id="hlNearby" class="stack-8 mt-8"></div>
-            </section>
-            <section>
               <p class="note" id="measuredNote" hidden></p>
             </section>
         </div>
       </section>
+      <div class="edge" id="swEdge">
       <button class="edge-tab" id="swTab" aria-label="While you drive" aria-expanded="false" aria-controls="swPanel"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg></button>
       <div class="edge-panel" id="swPanel" role="group" aria-label="While you drive">
         <h3>While you drive</h3>
@@ -355,6 +374,7 @@
         <button class="sw" data-toggle="voice"><i></i><span>Voice</span></button>
         <button class="sw" data-toggle="lpr"><i></i><span>Cameras</span></button>
         <button class="sw sw-cycle" data-cycle="nightMode" aria-label="Night"><b></b><span>Night</span></button>
+      </div>
       </div>
       </div>
       <div class="scrim" id="scrim"></div>
@@ -367,6 +387,19 @@
           <section data-panel="setup">
             <h3>Road data</h3>
             <p class="note" id="ambientNote" role="status" aria-live="polite">--</p>
+          </section>
+        <section data-panel="setup">
+            <h3>Spots</h3>
+            <p class="note" style="margin:0 0 8px">Loops lean toward spots you rate 3★ or more. Your spots stay on this phone until you share one.</p>
+            <div class="row" id="detourList" role="group" aria-label="Detour">
+              <button class="ink-btn" data-detour="0">Off</button>
+              <button class="ink-btn" data-detour="0.5">Little</button>
+              <button class="ink-btn" data-detour="1">Some</button>
+              <button class="ink-btn" data-detour="2">More</button>
+            </div>
+            <button class="linkbtn" id="hlOpenBtn">Add a spot here</button>
+            <div id="hlList" class="stack-8 mt-8"></div>
+            <div id="hlNearby" class="stack-8 mt-8"></div>
           </section>
           <section data-panel="setup">
             <h3>Voice</h3>
@@ -676,18 +709,13 @@
     // iOS can drop the map's WebGL context under memory pressure (e.g. after building a long route): the page keeps running but
     // the map goes black. MapLibre recovers if WebKit restores the context; if it doesn't within 4 s, reload the page and plan the
     // same route again. Never during a drive: the recording lives in this page.
-    const GL_RESTORE = 'apex.glRestoreRoute';
     let glTimer = null;
     map.on('webglcontextlost', () => {
       clearTimeout(glTimer);
       toast('Map graphics reset · restoring…');
       glTimer = setTimeout(() => {
         if (state.mode === 'live') { toast('Map display lost · your drive is still recording'); return; }
-        try {
-          const t = track && track.kind === 'route' && track.request ? track : null;
-          if (t) sessionStorage.setItem(GL_RESTORE, JSON.stringify({ id: t.id, name: t.name, request: t.request }));
-        } catch (_) { /* nothing to restore: the map still comes back */ }
-        location.reload();
+        location.reload();                                                   // the planned route is kept (restorePlanned)
       }, 4000);
     });
     map.on('webglcontextrestored', () => { clearTimeout(glTimer); map.triggerRepaint(); });
@@ -703,14 +731,6 @@
         showIdleFix({ lat: c.latitude, lon: c.longitude, course_deg: Number.isFinite(c.heading) ? c.heading : NaN, speed_mps: Number.isFinite(c.speed) ? c.speed : 0 });
       }, () => {}, { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 });
     });
-    map.once('load', () => setTimeout(async () => {
-      let saved = null;
-      try { saved = JSON.parse(sessionStorage.getItem(GL_RESTORE) || 'null'); sessionStorage.removeItem(GL_RESTORE); } catch (_) { saved = null; }
-      if (!saved || !saved.request || !saved.request.to) return;
-      const req = saved.request, from = req.from || await locate();
-      if (!from) { toast('Map restored · plan the route again'); return; }
-      await buildRoute([from, ...req.via, req.to], saved.id, saved.name, null, req);
-    }, 0));
     const DEM_URL = 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png';
     let demSource = null;
     try { demSource = new mlcontour.DemSource({ url: DEM_URL, encoding: 'terrarium', maxzoom: 13, worker: true }); demSource.setupMaplibre(maplibregl); } catch (_) { demSource = null; }
@@ -1188,22 +1208,32 @@
       if (speech.queue.length > 2) speech.queue.splice(0, speech.queue.length - 2);
       pumpSpeech();
     }
+    // In the app the shell owns the audio route (car stereo, CarPlay audio, Bluetooth): tell it while a web voice clip plays.
+    function voiceBracket(on) {
+      const native = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex;
+      if (native) { try { native.postMessage(on ? 'voiceBegin' : 'voiceEnd'); } catch (_) {} }
+    }
     async function pumpSpeech() {
       if (speech.busy || !speech.queue.length) return;
       const item = speech.queue.shift();
       speech.busy = true;
+      let played = false;
       try {
         if (state.voiceId !== 'device' && window.ApexVoice) {
           await ApexVoice.load(state.voiceId);
           const tokens = item.chain ? ApexVoice.tokensFor(item.chain, ApexVoice.bank.style) : item.sysToken ? [item.sysToken] : null;
-          // A call the bank can only voice by joining clips plays as one whole render when the
-          // route-load prefetch has it; the join is the audible seam we are avoiding.
-          if (tokens && ApexVoice.joins(tokens) > 0 && state.liveVoice && await ApexVoice.playWhole(spokenTextFor(item.text, ApexVoice.bank.style))) { speech.busy = false; pumpSpeech(); return; }
-          if (tokens && await ApexVoice.play(tokens)) { speech.busy = false; pumpSpeech(); return; }
-          // Not in the bank (drive names, route summaries): synthesise live with the same model.
-          if (state.liveVoice && await ApexVoice.speakLive(spokenTextFor(item.text, ApexVoice.bank.style))) { speech.busy = false; pumpSpeech(); return; }
+          voiceBracket(true);
+          try {
+            // A call the bank can only voice by joining clips plays as one whole render when the
+            // route-load prefetch has it; the join is the audible seam we are avoiding.
+            if (tokens && ApexVoice.joins(tokens) > 0 && state.liveVoice) played = await ApexVoice.playWhole(spokenTextFor(item.text, ApexVoice.bank.style));
+            if (!played && tokens) played = await ApexVoice.play(tokens);
+            // Not in the bank (drive names, route summaries): synthesise live with the same model.
+            if (!played && state.liveVoice) played = await ApexVoice.speakLive(spokenTextFor(item.text, ApexVoice.bank.style));
+          } finally { voiceBracket(false); }
         }
       } catch (_) { /* fall back to the device voice */ }
+      if (played) { speech.busy = false; pumpSpeech(); return; }
       deviceSpeak(spokenText(item.text));
     }
     function deviceSpeak(spoken) {
@@ -1294,7 +1324,7 @@
           if (L !== routeWatch.frame) { routeWatch.frame = L; feedRerouter(L, hit); }
           if (hit.distM < 40 && !rerouter.off) { idx = hit.index; state.cursorM = track.dist[idx]; }
         }
-      } else if (track) {
+      } else if (track && replayOn) {
         const s = sample(track, state.cursorM);
         idx = s.i; lat = s.lat; lon = s.lon; bearing = s.bearing;
         vMps = state.mode === 'sim' ? simSpeed(idx) : s.speedMps;
@@ -1387,8 +1417,8 @@
       }).catch(() => {});
     }
     }
-    function activate(t, startM = 0) {
-      if (!booting) { replayOn = true; }
+    function activate(t, startM = 0, { quiet = false } = {}) {
+      if (!booting && !quiet) { replayOn = true; }
       track = t;
       state.cursorM = Math.max(0, Math.min(totalM(), startM));
       refreshAutoNight();
@@ -1561,6 +1591,11 @@
     function renderRouteCard(t = plannedRoute) {
       const card = $('routeCard');
       $('planPanel').classList.toggle('routed', !!t);
+      if (t) {
+        const mi = Array.isArray(t.dist) && t.dist.length ? `${(t.dist[t.dist.length - 1] / 1609.344).toFixed(1)} mi` : '--';
+        $('routeBarName').textContent = t.name || 'Route';
+        $('routeBarMeta').textContent = [mi, Array.isArray(t.events) ? `${t.events.filter(e => e.type === 'corner').length} corners` : ''].filter(Boolean).join(' · ');
+      }
       if (!t) { card.hidden = true; return; }
       plannedRoute = t;
       card.hidden = false;
@@ -1587,6 +1622,23 @@
       const feel = mCov != null && mCov > 0 ? `Road feel ${mCov}% driven` : 'Road feel after first drive';
       $('routeCardSub').textContent = `Cameras ${cams} · ${feel}`;
     }
+    // Log and Stages are another page, so coming back to Map reloads this one: keep the planned route for the session and
+    // rebuild it here from its own geometry (no router call, works offline). Also what a reload after a lost map restores.
+    const PLANNED = 'apex.plannedRoute';
+    function persistPlanned(t) {
+      try {
+        const coords = t.lat.map((la, i) => [+t.lon[i].toFixed(6), +la.toFixed(6)]);
+        sessionStorage.setItem(PLANNED, JSON.stringify({ id: t.id, name: t.name, request: t.request || null, coords }));
+      } catch (_) { /* too big or storage off: the route just won't survive a page change */ }
+    }
+    async function restorePlanned() {
+      let saved = null;
+      try { saved = JSON.parse(sessionStorage.getItem(PLANNED) || 'null'); } catch (_) { saved = null; }
+      if (!saved || !Array.isArray(saved.coords) || saved.coords.length < 2) return;
+      const t = await trackFromPolyline(saved.coords, saved.id, saved.name);
+      t.request = saved.request;
+      await buildRoute(null, saved.id, saved.name, t);
+    }
     async function buildRoute(points, id, name, prebuilt = null, request = null) {
       let t = prebuilt;
       if (!t) {
@@ -1601,11 +1653,38 @@
       if (i >= 0) drives.splice(i, 1);
       drives.unshift(t);
       plannedRoute = t;
-      activate(t, 0);
+      activate(t, 0, { quiet: state.mode !== 'live' });
       renderRouteCard(t);
-      if (state.mode !== 'live') openPlan(true);
+      persistPlanned(t);
+      openPlan(false);
+      markDestination(t);
+      if (state.mode !== 'live' && !booting) lockOnDestination(t);
       attachLimits(t);
       if (!prebuilt) toast(`${name} · ${(totalM() / 1609.344).toFixed(1)} mi · ${t.events.length} corners`);
+    }
+    // A route just found: pin its destination and show it, so you can check you are routing to the right place. FOLLOW
+    // (or Start drive) goes back to your position. A loop has no destination: show the whole loop instead.
+    let destMarker = null;
+    function markDestination(t) {
+      if (destMarker) { destMarker.remove(); destMarker = null; }
+      if (!t || !Array.isArray(t.lat) || !t.lat.length) return null;
+      const to = t.request && t.request.to ? t.request.to : { lat: t.lat[t.lat.length - 1], lon: t.lon[t.lon.length - 1] };
+      const el = document.createElement('div'); el.className = 'dropped-pin'; el.setAttribute('aria-label', 'Destination');
+      destMarker = new maplibregl.Marker({ element: el }).setLngLat([to.lon, to.lat]).addTo(map);
+      return to;
+    }
+    function lockOnDestination(t) {
+      const to = destMarker ? destMarker.getLngLat() : null;
+      if (!to) return;
+      pauseFollow();
+      const bottom = ($('planBar').offsetHeight || 60) + 24;
+      if (String(t.id || '').startsWith('loop_')) {
+        let w = 180, e = -180, so = 90, n = -90;
+        for (let i = 0; i < t.lat.length; i += 10) { w = Math.min(w, t.lon[i]); e = Math.max(e, t.lon[i]); so = Math.min(so, t.lat[i]); n = Math.max(n, t.lat[i]); }
+        map.fitBounds([[w, so], [e, n]], { padding: { top: 60, left: 40, right: 60, bottom }, pitch: 0, bearing: 0, duration: 1200 });
+      } else {
+        map.flyTo({ center: [to.lng, to.lat], zoom: 15.5, pitch: 0, bearing: 0, duration: 1400, padding: { top: 0, left: 0, right: 0, bottom } });
+      }
     }
     // Plan fields: empty = the phone's position (locate()), "lat, lon" = that point, anything else =
     // the first Nominatim match. Errors carry the toast text.
@@ -1626,8 +1705,8 @@
     }
     async function routeToQuery() {
       const fromQ = $('fromInput').value, toQ = $('destInput').value;
-      if ((!fromQ.trim() && !toQ.trim()) || $('destGoBtn').classList.contains('busy')) return;
-      const ui = busy($('destGoBtn'));
+      if ((!fromQ.trim() && !toQ.trim()) || $('planPanel').classList.contains('busy')) return;
+      const ui = planBusy();
       ui.step('Finding…', 0.3);
       try {
         toast('Searching…');
@@ -1773,12 +1852,13 @@
     // Views: ROUTE / DRIVES / SETUP open the side panel; tapping the open tab again, the map
     // behind it, or swiping it right closes it. ANALYSIS is its own page.
     const VIEW_TITLES = { crew: 'Crew', setup: 'Settings' };
-    let view = null;
+    let view = null, friendsOpen = false;                                  // friendsOpen: the Crew sheet's friends pop-up
     function showView(v) {
       if (v === 'log') { location.href = 'analysis.html?tab=log'; return; }
       if (v === 'stages') { location.href = 'analysis.html?tab=stages'; return; }
       if (v === 'route') { showView(null); openPlan(true); return; }
       if (v === 'map') v = null;
+      if (v !== 'crew') { friendsOpen = false; document.querySelectorAll('.side-pop.open').forEach(n => n.classList.remove('open')); }
       view = v;
       if (v) openPlan(false);
       const sheet = $('sheet');
@@ -1791,27 +1871,68 @@
     const openSheet = (v = view || 'route') => showView(v);
     // Plan: the bar is always there (not while driving); tap it, or drag it up, for From / To, places, loops and the route card.
     function openPlan(open) {
-      $('planPanel').classList.toggle('open', open);
+      const panel = $('planPanel');
+      panel.style.setProperty('--plan-bar', `${$('planBar').offsetHeight + 2}px`);
+      panel.classList.toggle('open', open);
       $('app').classList.toggle('plan-open', open);
       $('destInput').setAttribute('aria-expanded', String(open));
-      if (open) { refreshSavedDrives(); renderPlaces(); $('planBody').scrollTop = 0; }
+      if (open) { refreshSavedDrives(); if (!panel.classList.contains('routed')) renderPlaces(); $('planBody').scrollTop = 0; closeEdge(); }
+      else { $('destInput').blur(); $('fromInput').blur(); }                 // closing puts the keyboard away
     }
+    // Routing progress shows under From (the old Go button carried it).
+    function planBusy() {
+      const panel = $('planPanel'); panel.classList.add('busy');
+      return { step(text) { $('planStatus').textContent = text; }, done() { panel.classList.remove('busy'); $('planStatus').textContent = ''; } };
+    }
+    // ✕ on the route bar: back to Where to? and the idle map.
+    function clearPlanned() {
+      plannedRoute = null;
+      markDestination(null);
+      try { sessionStorage.removeItem(PLANNED); } catch (_) {}
+      $('destInput').value = '';
+      renderRouteCard(null);
+      if (track && track.kind === 'route' && state.mode !== 'live') {
+        setPlaying(false); replayOn = false; track = null;
+        if (mapReady) { map.getSource('apex-route-src').setData(emptyFC()); map.getSource('apex-ribbon-src').setData(emptyFC()); }
+        rebuildPins(); paintIdle(); render(true);
+      }
+      resumeFollow();
+    }
+    $('planClear').addEventListener('click', clearPlanned);
+    $('routeBar').addEventListener('click', () => openPlan(!$('planPanel').classList.contains('open')));
     $('destInput').addEventListener('focus', () => { if (!$('planPanel').classList.contains('open')) openPlan(true); });
-    $('planCancel').addEventListener('click', () => { $('destInput').blur(); $('fromInput').blur(); openPlan(false); });
+    $('planCancel').addEventListener('click', () => openPlan(false));
     {
-      let y0 = null;
-      $('planBar').addEventListener('pointerdown', (e) => { y0 = e.clientY; });
-      $('planBar').addEventListener('pointerup', (e) => {
+      const panel = $('planPanel');
+      let y0 = null, base = 0, moved = false, t0 = 0;
+      const collapsedY = () => panel.offsetHeight - $('planBar').offsetHeight - 2;
+      $('planBar').addEventListener('pointerdown', (e) => { y0 = e.clientY; t0 = performance.now(); moved = false; base = panel.classList.contains('open') ? 0 : collapsedY(); });
+      window.addEventListener('pointermove', (e) => {
         if (y0 == null) return;
-        const dy = e.clientY - y0; y0 = null;
-        if (dy < -30) openPlan(true); else if (dy > 30) openPlan(false);
+        const dy = e.clientY - y0;
+        if (!moved && Math.abs(dy) < 8) return;                         // a tap, not a drag
+        moved = true; panel.classList.add('dragging');
+        panel.style.transform = `translateY(${Math.max(0, Math.min(collapsedY(), base + dy))}px)`;
       });
+      const release = (e) => {
+        if (y0 == null) return;
+        const dy = e.clientY - y0, fast = Math.abs(dy) / Math.max(1, performance.now() - t0) > 0.5; y0 = null;
+        panel.classList.remove('dragging'); panel.style.transform = '';
+        if (!moved) return;
+        const open = panel.classList.contains('open');
+        openPlan(open ? !(dy > 80 || (fast && dy > 20)) : (dy < -80 || (fast && dy < -20)));
+      };
+      window.addEventListener('pointerup', release);
+      window.addEventListener('pointercancel', release);
     }
+    // While-you-drive switches: the tab and its panel slide in together; tapping the map closes them.
+    function closeEdge() { $('swEdge').classList.remove('open'); $('swTab').setAttribute('aria-expanded', 'false'); }
     $('swTab').addEventListener('click', () => {
-      const open = !$('swPanel').classList.contains('open');
-      $('swPanel').classList.toggle('open', open);
+      const open = !$('swEdge').classList.contains('open');
+      $('swEdge').classList.toggle('open', open);
       $('swTab').setAttribute('aria-expanded', String(open));
     });
+    map.on('click', closeEdge);
     // Places to go without typing: recent destinations, then saved spots.
     const RECENT_PLACES = 'apex.recentPlaces';
     function recentPlaces() { try { return JSON.parse(localStorage.getItem(RECENT_PLACES) || '[]'); } catch (_) { return []; } }
@@ -1821,29 +1942,62 @@
     }
     // Typing in Where to? suggests places near you. Photon is OpenStreetMap search built for search-as-you-type (public
     // Nominatim forbids it, and stays for the final geocode). Offline: no list; typing and Go still work.
+    // Near first: Photon's lat/lon is only a soft bias (it happily returns Malaysia), so ask inside a box about 150 km
+    // around you (the phone's position, else the map's centre); only when nothing is there, ask everywhere. Nearest first.
     async function photonSuggest(q) {
-      const near = state.lastPosition, bias = near ? `&lat=${near.lat.toFixed(3)}&lon=${near.lon.toFixed(3)}` : '';
-      const j = await RouteLoading.json(`https://photon.komoot.io/api/?limit=5&lang=en&q=${encodeURIComponent(q)}${bias}`, {}, 6000);
-      return (j.features || []).map(f => {
+      const c0 = map.getCenter(), near = state.lastPosition || { lat: c0.lat, lon: c0.lng };
+      const ask = async (extra) => (await RouteLoading.json(`https://photon.komoot.io/api/?limit=10&lang=en&q=${encodeURIComponent(q)}`
+        + `&lat=${near.lat.toFixed(3)}&lon=${near.lon.toFixed(3)}${extra}`, {}, 6000)).features || [];
+      const dLat = 1.4, dLon = 1.4 / Math.max(0.2, Math.cos(near.lat * Math.PI / 180));
+      let feats = await ask(`&bbox=${(near.lon - dLon).toFixed(3)},${(near.lat - dLat).toFixed(3)},${(near.lon + dLon).toFixed(3)},${(near.lat + dLat).toFixed(3)}`);
+      if (!feats.length) feats = await ask('');
+      const km = (lat, lon) => Math.hypot((lat - near.lat) * 111.2, (lon - near.lon) * 111.32 * Math.cos(near.lat * Math.PI / 180));
+      return feats.map(f => {
         const p = f.properties || {}, c = (f.geometry || {}).coordinates || [];
         const name = p.name || [p.housenumber, p.street].filter(Boolean).join(' ') || q;
-        return { label: name, lat: c[1], lon: c[0], kind: [p.city || p.town || p.village || p.county, p.state].filter(x => x && x !== name).join(', ') || 'Place' };
+        const area = [p.city || p.town || p.village || p.county, p.state].filter(x => x && x !== name).join(', ');
+        return { label: name, lat: c[1], lon: c[0], area, km: km(c[1], c[0]) };
       }).filter((p, i, all) => Number.isFinite(p.lat) && Number.isFinite(p.lon)
-        && all.findIndex(o => o.label === p.label && o.kind === p.kind) === i);   // one row per place (OSM can hold a node and an area)
+        && all.findIndex(o => o.label === p.label && o.area === p.area) === i)   // one row per place (OSM can hold a node and an area)
+        .sort((a, b) => a.km - b.km).slice(0, 5)
+        .map(p => ({ ...p, kind: [`${p.km < 16 ? (p.km / 1.609344).toFixed(1) : Math.round(p.km / 1.609344)} mi`, p.area].filter(Boolean).join(' · ') }));
     }
-    let suggestTimer = null, suggestSeq = 0;
+    // In the app, Apple's place search (the shell's MKLocalSearchCompleter: knows house numbers, no key) answers instead;
+    // coordinates are asked only for the row tapped. No answer in 4 s: Photon.
+    const nativePlace = { waiting: new Map(), next: 1 };
+    function askNative(msg, timeoutMs) {
+      return new Promise((resolve) => {
+        const id = nativePlace.next++;
+        const timer = setTimeout(() => { nativePlace.waiting.delete(id); resolve(null); }, timeoutMs);
+        nativePlace.waiting.set(id, (reply) => { clearTimeout(timer); nativePlace.waiting.delete(id); resolve(reply); });
+        try { window.webkit.messageHandlers.apex.postMessage({ ...msg, id }); } catch (_) { clearTimeout(timer); nativePlace.waiting.delete(id); resolve(null); }
+      });
+    }
+    function nativePlaceReply(msg) { const done = nativePlace.waiting.get(msg.id); if (done) done(msg); }
+    async function appleSuggest(q) {
+      const c0 = map.getCenter(), near = state.lastPosition || { lat: c0.lat, lon: c0.lng };
+      const reply = await askNative({ cmd: 'placeComplete', q, lat: near.lat, lon: near.lon }, 4000);
+      if (!reply || reply.failed || !Array.isArray(reply.items)) return null;
+      return reply.items.map((it, index) => ({ label: it.title, kind: it.subtitle || 'Place', apple: { id: reply.id, index } }));
+    }
+    async function appleResolve(p) {
+      const reply = await askNative({ cmd: 'placeResolve', index: p.apple.index }, 8000);
+      return reply && Number.isFinite(reply.lat) && Number.isFinite(reply.lon) ? { lat: reply.lat, lon: reply.lon } : null;
+    }
+    let suggestTimer = null, suggestSeq = 0, shownRows = { q: '', rows: [] };
     $('destInput').addEventListener('input', () => { clearTimeout(suggestTimer); suggestTimer = setTimeout(renderPlaces, 300); });
     async function renderPlaces() {
       const q = $('destInput').value.trim(), seq = ++suggestSeq, box = $('placeList');
       let rows, empty = '';
       if (q.length >= 3 && !COORDS.test(q)) {
-        try { rows = await photonSuggest(q); } catch (_) { rows = []; empty = 'No suggestions offline. Press Go to search.'; }
+        try { rows = (IN_APP_SHELL && await appleSuggest(q)) || await photonSuggest(q); } catch (_) { rows = []; empty = 'No suggestions offline. Press Go to search.'; }
         if (seq !== suggestSeq) return;                                  // a newer keystroke won
         if (!rows.length && !empty) empty = 'No matches nearby. Press Go to search everywhere.';
       } else {
         rows = [...recentPlaces().map(p => ({ ...p, kind: 'Recent' })),
                 ...loadHighlights().filter(h => Number.isFinite(h.lat) && Number.isFinite(h.lon)).map(h => ({ label: h.name || 'Spot', lat: h.lat, lon: h.lon, kind: 'Spot' }))].slice(0, 8);
       }
+      shownRows = { q, rows: empty ? [] : rows };
       if (empty) { const n = document.createElement('p'); n.className = 'note'; n.textContent = empty; box.replaceChildren(n); box.hidden = false; return; }
       box.replaceChildren(...rows.map(p => {
         const b = document.createElement('button'); b.className = 'place';
@@ -1855,11 +2009,16 @@
       box.hidden = !rows.length;
     }
     async function routeToPlace(p) {
-      if ($('destGoBtn').classList.contains('busy')) return;
+      if ($('planPanel').classList.contains('busy')) return;
       $('destInput').value = p.label;
-      const ui = busy($('destGoBtn'));
+      const ui = planBusy();
       ui.step('Routing…', 0.5);
       try {
+        if (!Number.isFinite(p.lat) && p.apple) {                       // an Apple suggestion: its coordinates now
+          const at = await appleResolve(p);
+          if (!at) throw new Error('Couldn\'t find that place. Try another.');
+          p = { ...p, ...at };
+        }
         const from = await resolvePlace($('fromInput').value);
         const request = { from: from.label === null ? null : { lat: from.lat, lon: from.lon }, to: { lat: p.lat, lon: p.lon }, via: [] };
         await buildRoute([from, { lat: p.lat, lon: p.lon, label: p.label }], 'route_dest', `To ${p.label}`, null, request);
@@ -1924,9 +2083,13 @@
       else if ($('pinOverlay').classList.contains('show')) closePin();
       else if (view) closeSheet();
     });
-    $('destGoBtn').addEventListener('click', () => routeToQuery());
     ['fromInput', 'destInput'].forEach(id => {
-      $(id).addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); routeToQuery(); } });
+      $(id).addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter') return;
+        e.preventDefault(); e.target.blur();
+        const top = id === 'destInput' && shownRows.q === $('destInput').value.trim() && shownRows.rows[0];
+        if (top) routeToPlace(top); else routeToQuery();
+      });
       $(id).addEventListener('focus', () => { state.planField = id; });
     });
     $('swapBtn').addEventListener('click', () => { const f = $('fromInput'), t = $('destInput'); [f.value, t.value] = [t.value, f.value]; });
@@ -1976,6 +2139,7 @@
     const section = (title) => el('div', { className: 'stack-8' }, el('h3', { textContent: title }));
     const switchRow = (label, on, change) => { const b = el('button', { className: 'ink-btn' + (on ? ' on' : ''), textContent: `${label}: ${on ? 'On' : 'Off'}`, onclick: change }); b.setAttribute('aria-pressed', String(!!on)); return b; };
     let openCrewId = null;
+    const crewNear = () => { if (state.lastPosition) return state.lastPosition; const c = map.getCenter(); return { lat: c.lat, lon: c.lng }; };
     async function renderAccount() {
       const body = $('accountBody');
       let me = null;
@@ -2034,6 +2198,15 @@
         btn('Share my handle', () => copyText(`${location.origin}/?add=${me.handle}`, 'Link copied. Anyone who opens it can ask to be your friend.'))), invOut);
       body.append(you);
 
+      // friends: a side pop-up (owner decision), opened from the button under You; new requests light it up
+      if (stash('apex.add')) friendsOpen = true;
+      const fpop = el('aside', { className: 'side-pop' + (friendsOpen ? ' open' : '') });
+      fpop.setAttribute('aria-label', 'Friends');
+      const closePop = () => { friendsOpen = false; fpop.classList.remove('open'); };
+      fpop.append(el('div', { className: 'side-pop-head' }, el('h3', { textContent: 'Friends' }), btn('Done', closePop, 'linkbtn')));
+      const nFriends = friends.filter(f => f.status === 'accepted').length, nReq = friends.filter(f => f.status === 'pending' && f.incoming).length;
+      you.append(el('div', { className: 'row' }, btn(`Friends · ${nFriends}${nReq ? ` · ${nReq} new` : ''}`, () => { friendsOpen = true; fpop.classList.add('open'); }, nReq ? 'ink-btn solid' : 'ink-btn')));
+
       // requests waiting on you
       const incoming = friends.filter(f => f.status === 'pending' && f.incoming);
       if (incoming.length) {
@@ -2041,7 +2214,7 @@
         for (const f of incoming) sec.append(el('div', { className: 'row', style: 'align-items:center' }, el('b', { textContent: `@${f.handle || '?'}`, style: 'flex:1' }),
           btn('Accept', async () => { await apiCall('POST', '/api/friends/accept', { user_id: f.id }); toast(`You and @${f.handle} are friends. Choose what to share below.`); redo(); }, 'ink-btn solid'),
           btn('Decline', async () => { await apiCall('DELETE', `/api/friends/${f.id}`); redo(); })));
-        body.append(sec);
+        fpop.append(sec);
       }
 
       // friends
@@ -2065,7 +2238,7 @@
         toast(r.ok ? `Request sent. @${h} sees it if they're a member.` : 'Couldn\'t send that. Try again.'); redo();
       };
       fsec.append(el('div', { className: 'row' }, add, btn('Send request', sendRequest)));
-      body.append(fsec);
+      fpop.append(fsec);
       if (stash('apex.add') && add.value && !accepted.some(f => f.handle === add.value) ) { add.focus(); }
 
       // crews
@@ -2075,18 +2248,36 @@
         const tok = crewFromLink || stash('apex.crew'); unstash('apex.crew');
         const r = await apiCall('POST', '/api/crews/join', { token: tok }); toast(r.ok ? 'You joined the crew.' : 'That crew invite didn\'t work. Ask for a new one.'); if (r.ok) { redo(); return; }
       }
-      if (!crewList.length) csec.append(el('p', { className: 'note', textContent: 'A crew is a named group of friends for a weekend run or a club.' }));
+      if (!crewList.length) csec.append(el('p', { className: 'note', textContent: 'A crew is a group for a club or a weekend run. You can be in several. Make one below, or join one near you.' }));
+      const tiles = el('div', { className: 'crew-tiles' });
       for (const c of crewList) {
         const g = grants.get('crew:' + c.id) || { share_scores: 0, share_times: 0 }, card = el('div', { className: 'card' });
         const count = typeof c.members === 'number' ? c.members : Array.isArray(c.members) ? c.members.length : 0;
-        const chev = el('span', { textContent: `${count} ${count === 1 ? 'member' : 'members'} \u203a` });
-        const head = el('button', { className: 'crew-row' }, el('b', { textContent: c.name }), chev);
+        const kind = c.visibility === 'public' ? `Public${c.area_name ? ' · ' + c.area_name : ''}` : 'Private';
+        const chev = el('span', { textContent: `${count} ${count === 1 ? 'member' : 'members'} · ${kind}` });
+        const head = el('button', { className: 'crew-tile-head' }, el('b', { textContent: c.name }), chev);
+        if (c.about) head.append(el('em', { textContent: c.about }));
+        // owner: switch between private (invite link) and public (people nearby can find it; needs an area name)
+        const ownerBox = el('div', { className: 'stack-8' });
+        if (c.role === 'owner') {
+          if (c.visibility === 'public') ownerBox.append(btn('Make private', async () => { const r = await apiCall('PUT', `/api/crews/${c.id}`, { visibility: 'private', about: c.about || '' }); if (r.ok) redo(); else toast('Couldn\'t change that. Try again.'); }, 'linkbtn'));
+          else {
+            const areaIn = el('input', { className: 'field', placeholder: 'Area people nearby will see, e.g. Robbinsville', maxLength: 60, autocomplete: 'off' });
+            ownerBox.append(el('div', { className: 'row' }, areaIn, btn('Make public', async () => {
+              const near = crewNear(), name = areaIn.value.trim();
+              if (name.length < 2) { toast('Name the area people nearby will see.'); return; }
+              const r = await apiCall('PUT', `/api/crews/${c.id}`, { visibility: 'public', about: c.about || '', area: { name, lat: near.lat, lon: near.lon } });
+              if (r.ok) { toast(`${c.name} is public. People near ${name} can find and join it.`); redo(); } else toast('Couldn\'t change that. Try again.');
+            })));
+          }
+        }
         const mbox = el('div', { className: 'stack-8' });
         const detail = el('div', { className: 'crew-detail stack-8', hidden: openCrewId !== c.id },
           mbox,
           el('div', { className: 'row' }, switchRow('Scores', g.share_scores, () => putGrant('crew', c.id, !g.share_scores, g.share_scores ? g.share_times : false)),
             switchRow('Times', g.share_times, () => putGrant('crew', c.id, true, !g.share_times))),
           el('span', { textContent: g.share_scores ? (g.share_times ? `${c.name} sees your scores and times.` : `${c.name} sees your scores.`) : `${c.name} sees nothing of yours yet.` }),
+          ownerBox,
           el('div', { className: 'row' }, btn('Invite to crew', async () => { const r = await apiCall('POST', `/api/crews/${c.id}/invite`); const j = await jsonOf(r); if (r.ok) copyText(`${location.origin}/?crew=${j.token}`, 'Crew link copied.'); else toast('Only a crew\'s owner can invite.'); }),
             btn('Leave', async () => { if (confirm(`Leave ${c.name}?`)) { if (openCrewId === c.id) openCrewId = null; await apiCall('DELETE', `/api/crews/${c.id}/membership`); redo(); } }, 'linkbtn')));
         const loadMembers = async () => {
@@ -2104,18 +2295,50 @@
         };
         const setOpen = (on) => {
           detail.hidden = !on;
+          card.classList.toggle('open', on);
           head.setAttribute('aria-expanded', String(on));
-          chev.textContent = `${count} ${count === 1 ? 'member' : 'members'} ${on ? '\u25be' : '\u203a'}`;
           if (on) loadMembers();
         };
         head.onclick = () => { const open = detail.hidden; openCrewId = open ? c.id : null; setOpen(open); };
         setOpen(openCrewId === c.id);
         card.append(head, detail);
-        csec.append(card);
+        tiles.append(card);
       }
+      if (crewList.length) csec.append(tiles);
+      // new crew: private (invite link) or public (findable nearby by an area you name)
       const cname = el('input', { className: 'field', placeholder: 'New crew name', autocomplete: 'off', maxLength: 40, 'aria-label': 'Crew name' });
-      csec.append(el('div', { className: 'row' }, cname, btn('Create', async () => { if (!cname.value.trim()) return; const r = await apiCall('POST', '/api/crews', { name: cname.value.trim() }); if (r.ok) redo(); else toast('Couldn\'t create the crew.'); })));
+      const cvis = el('select', { className: 'field' }, new Option('Private: invite link only', 'private'), new Option('Public: people nearby can find it', 'public'));
+      const carea = el('input', { className: 'field', placeholder: 'Area people nearby will see, e.g. Robbinsville', maxLength: 60, autocomplete: 'off', hidden: true });
+      cvis.onchange = () => { carea.hidden = cvis.value !== 'public'; };
+      csec.append(cvis, carea);
+      csec.append(el('div', { className: 'row' }, cname, btn('Create', async () => {
+        if (!cname.value.trim()) return;
+        const pub = cvis.value === 'public', near = crewNear();
+        if (pub && carea.value.trim().length < 2) { toast('Name the area people nearby will see.'); return; }
+        const r = await apiCall('POST', '/api/crews', pub ? { name: cname.value.trim(), visibility: 'public', area: { name: carea.value.trim(), lat: near.lat, lon: near.lon } } : { name: cname.value.trim() }); if (r.ok) redo(); else toast('Couldn\'t create the crew.'); })));
       body.append(csec);
+
+      // public crews near you: tiles with Join (only name, area and size are shown; members stay private)
+      const nsec = section('Crews near you');
+      const near = crewNear();
+      const found = await apiCall('GET', `/api/crews/discover?lat=${near.lat.toFixed(2)}&lon=${near.lon.toFixed(2)}`).then(jsonOf).catch(() => null);
+      const nearby = Array.isArray(found) ? found : [];
+      if (!nearby.length) nsec.append(el('p', { className: 'note', textContent: found ? 'No public crews near you yet. Make yours public so people nearby can find it.' : 'Couldn\'t look for crews nearby. Check signal.' }));
+      else {
+        const ntiles = el('div', { className: 'crew-tiles' });
+        for (const c of nearby) {
+          const t = el('div', { className: 'card' });
+          t.append(el('div', { className: 'crew-tile-head' }, el('b', { textContent: c.name }),
+            el('span', { textContent: `${c.members} ${c.members === 1 ? 'member' : 'members'} · ${c.area_name}${Number.isFinite(c.km) ? ` · ${Math.max(1, Math.round(c.km / 1.609344))} mi` : ''}` }),
+            ...(c.about ? [el('em', { textContent: c.about })] : [])),
+            btn('Join', async () => { const r = await apiCall('POST', `/api/crews/${c.id}/join`); if (r.ok) { toast(`You joined ${c.name}.`); openCrewId = c.id; redo(); } else toast(r.status === 429 ? 'You\'re in 10 crews already.' : 'Couldn\'t join. Try again.'); }, 'ink-btn solid'));
+          ntiles.append(t);
+        }
+        nsec.append(ntiles);
+      }
+      body.append(nsec);
+      document.querySelectorAll('.side-pop').forEach(n => n.remove());       // one pop-up; on the page, not inside the sliding sheet
+      document.body.append(fpop);
 
       // points board
       if (pts && pts.board && pts.board.length) {
@@ -2468,7 +2691,7 @@
         if (state.live) render(true);
         return;                                                              // road data: the app-open sharer (ambient) covers drives too
       }
-      setMode('live'); paintModeSwitch(); paintDriveStat();
+      setMode('live'); paintModeSwitch(); paintDriveStat(); resumeFollow();
       try {
         const sensors = await ApexSensors.start({
           onStatus: (s) => {
@@ -2607,6 +2830,7 @@
         render(entering);
       },
       onNative(msg) {
+        if (msg && (msg.type === 'placeSuggestions' || msg.type === 'placeResolved')) { nativePlaceReply(msg); return; }
         if (msg && msg.type === 'recordingSaved') toast(`Saved ${msg.segments} road segments to ${msg.file}`);
         // App sign-in finished in the native shell: keep the session token and redraw whatever shows account state.
         if (msg && msg.type === 'session' && msg.token) { ApexSync.setSession(msg.token); toast('Signed in.'); location.reload(); }
@@ -2650,7 +2874,12 @@
         replayOn = replayOn || ['drive', 'play', 'at'].some(k => params.has(k));
         booting = false; paintIdle();
         if (params.get('play') === '1') setPlaying(true);
-      } else { booting = false; paintIdle(); }
+      } else {
+        // Back from Log / Stages (or after a reload): the planned route returns, quietly (booting: no preview), without
+        // waiting for the map, which draws it whenever it finishes loading.
+        await restorePlanned().catch(() => {});
+        booting = false; paintIdle();
+      }
       if (params.get('book') === '1' || params.get('view') === 'route' || params.get('view') === 'drives') openPlan(true);
       if (VIEW_TITLES[params.get('view')]) openSheet(params.get('view'));
     }

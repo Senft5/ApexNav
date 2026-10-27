@@ -1,5 +1,12 @@
 # APEX NAV — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-10-27: morning-commute push (owner goal: everything discussed, in production)
+- Merged: #73 (nearby suggestions; route kept across tab switches; smooth pull-up sheet; route bar with Start/✕; routes start quiet with a destination pin and fly-to, follow paused until Start drive or FOLLOW; Apple MKLocalSearchCompleter place search in the app, Photon on web; voice audio to Bluetooth/CarPlay: .playback/.voicePrompt + .duckOthers/.interruptSpokenAudioAndMixWithOthers, active only while a prompt plays, web clips bracket with voiceBegin/voiceEnd).
+- #75 (polish): drive log on a phone no longer has the sticky map scrolling over content; readout above the tab bar + home indicator; keyboard ‹ › Done bar removed (runtime subclass of WKContentView); Stages is one list, tap a stage for board and runs, New stage button, sharing older drives folded away.
+- Crews (this PR): migration 0007 (crews.visibility/about/area_name/area_lat/area_lon, area rounded to 0.1°) applied by hand to apexnav-db and apexnav-preview-db on 2026-10-27; PUT /api/crews/:id (owner settings), GET /api/crews/discover?lat&lon (public crews within ~55 km, no members/owner/exact point, blocks respected), POST /api/crews/:id/join (public only). Crew sheet: your crews as tiles (open one for details, owner can make public/private), Crews near you with Join, create private or public with an area name, friends in a side pop-up (button shows new requests).
+- Not verified on a phone: car audio routing, Apple search, quiet destination view, crews against the real server (checked with stubbed API responses in the browser).
+- Still to do: traffic as a fun penalty (iOS-only, MapKit); real-phone pass on everything above.
+
 ## Session 2026-10-27: navigation redesign and app-open road sharing
 - #69 restored #66's cockpit fixes, which my resolution of #65's merge conflict (`git checkout --ours web/index.html`) had dropped from main. Lesson: never take a whole side of a conflicted file; merge hunks.
 - #70 (navigation, owner decisions): tabs Map · Log · Stages · Crew · Settings; Plan is a pull-up sheet over the map ("Where to?" + compact Start; recent places and saved spots to route without typing); Notes/Voice/Cameras/Night on an edge tab over the map; no cog. In the app `locate()` uses the shell's GPS frames (no WKWebView location prompt every launch). Web idle map follows browser GPS and starts at the last known position, not a fixed demo road. No selecting UI text / callouts; 16 px fields. Map canvas follows its container size.

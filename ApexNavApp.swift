@@ -5,6 +5,7 @@ import CoreMotion
 import AVFoundation
 import UniformTypeIdentifiers
 import AuthenticationServices
+import MapKit
 import CryptoKit
 import ApexKit
 
@@ -246,6 +247,16 @@ final class ApexScriptBridge: NSObject, WKScriptMessageHandler {
             shell?.speakCoDriver(phrase, interrupt: interruptSpeech, style: speechStyle)
             return
         }
+        if let dict = body as? [String: Any], let id = (dict["id"] as? NSNumber)?.intValue {
+            if cmd == "placeComplete", let q = dict["q"] as? String {
+                shell?.placeComplete(query: q, lat: (dict["lat"] as? NSNumber)?.doubleValue, lon: (dict["lon"] as? NSNumber)?.doubleValue, id: id)
+                return
+            }
+            if cmd == "placeResolve", let index = (dict["index"] as? NSNumber)?.intValue {
+                shell?.placeResolve(index: index, id: id)
+                return
+            }
+        }
         shell?.handleCommand(cmd)
     }
 }
@@ -317,8 +328,8 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         locManager.showsBackgroundLocationIndicator = true
         locManager.requestWhenInUseAuthorization()
         locManager.startUpdatingLocation()
-        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .voicePrompt, options: [.mixWithOthers, .duckOthers])
-        try? AVAudioSession.sharedInstance().setActive(true)
+        configureVoiceSession()
+        synth.delegate = self
         startMotionPipeline()
         startPushTimer()
     }
@@ -363,6 +374,14 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
             if isRecording { stopRecordingAndExport() } else { startRecording() }
         case "signIn":
             startSignIn()
+            return
+        case "voiceBegin":                                    // the web cockpit is about to play a voice clip
+            webVoiceActive = true
+            beginVoice()
+            return
+        case "voiceEnd":
+            webVoiceActive = false
+            endVoiceIfIdle()
             return
         default:
             break
@@ -443,6 +462,59 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         MainActor.assumeIsolated {
             UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.keyWindow }.first ?? ASPresentationAnchor()
         }
+    }
+
+    // MARK: Apple place search (MapKit, free, no key): suggestions while typing, coordinates only for the one tapped
+
+    private let placeCompleter = MKLocalSearchCompleter()
+    private var placeQueryId = 0
+    private var placeResults: [MKLocalSearchCompletion] = []
+
+    /// Where to? typing: Apple suggestions around the phone (about 150 km), answered with window.apex.onNative({type:'placeSuggestions'}).
+    func placeComplete(query: String, lat: Double?, lon: Double?, id: Int) {
+        placeQueryId = id
+        if placeCompleter.delegate == nil {
+            placeCompleter.delegate = self
+            placeCompleter.resultTypes = [.address, .pointOfInterest]
+        }
+        if let lat, let lon, lat.isFinite, lon.isFinite {
+            placeCompleter.region = MKCoordinateRegion(center: CLLocationCoordinate2D(latitude: lat, longitude: lon),
+                                                       latitudinalMeters: 150_000, longitudinalMeters: 150_000)
+        }
+        let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        if q.isEmpty { placeResults = []; sendPlaceSuggestions([], failed: false); return }
+        placeCompleter.queryFragment = q
+    }
+
+    fileprivate func placeResultsUpdated(failed: Bool) {
+        placeResults = failed ? [] : Array(placeCompleter.results.prefix(6))
+        sendPlaceSuggestions(placeResults.map { ($0.title, $0.subtitle) }, failed: failed)
+    }
+
+    private func sendPlaceSuggestions(_ items: [(String, String)], failed: Bool) {
+        let payload: [String: Any] = ["type": "placeSuggestions", "id": placeQueryId, "failed": failed,
+                                      "items": items.map { ["title": $0.0, "subtitle": $0.1] }]
+        guard let data = try? JSONSerialization.data(withJSONObject: payload), let json = String(data: data, encoding: .utf8) else { return }
+        evaluate("window.apex && window.apex.onNative && window.apex.onNative(\(json)); void 0;")
+    }
+
+    /// The suggestion the driver tapped: one MKLocalSearch for its coordinates, answered with {type:'placeResolved'}.
+    func placeResolve(index: Int, id: Int) {
+        guard index >= 0, index < placeResults.count else { sendPlaceResolved(id: id, lat: nil, lon: nil, name: nil); return }
+        MKLocalSearch(request: MKLocalSearch.Request(completion: placeResults[index])).start { [weak self] response, _ in
+            guard let self else { return }
+            let item = response?.mapItems.first
+            let lat = item?.placemark.coordinate.latitude, lon = item?.placemark.coordinate.longitude, name = item?.name
+            Task { @MainActor in self.sendPlaceResolved(id: id, lat: lat, lon: lon, name: name) }
+        }
+    }
+
+    private func sendPlaceResolved(id: Int, lat: Double?, lon: Double?, name: String?) {
+        var payload: [String: Any] = ["type": "placeResolved", "id": id]
+        if let lat, let lon, lat.isFinite, lon.isFinite { payload["lat"] = lat; payload["lon"] = lon }
+        if let name { payload["name"] = name }
+        guard let data = try? JSONSerialization.data(withJSONObject: payload), let json = String(data: data, encoding: .utf8) else { return }
+        evaluate("window.apex && window.apex.onNative && window.apex.onNative(\(json)); void 0;")
     }
 
     private func evaluate(_ js: String) {
@@ -658,12 +730,35 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
             ?? AVSpeechSynthesisVoice(language: "en-GB")
     }
 
+    // MARK: Voice audio: car stereo, CarPlay audio, Bluetooth
+    // A navigation app's prompts: .playback + .voicePrompt, ducking music and pausing podcasts only while a prompt plays.
+    // The session is active only while speaking: an always-active session kept the car's music ducked, and many head units
+    // switch to the phone's Bluetooth stream (or raise CarPlay audio) only when the app starts audio. The web cockpit's
+    // voice clips (WebAudio) share this session and bracket themselves with voiceBegin / voiceEnd.
+    private var webVoiceActive = false
+
+    private func configureVoiceSession() {
+        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .voicePrompt,
+                                                         options: [.duckOthers, .interruptSpokenAudioAndMixWithOthers])
+    }
+
+    private func beginVoice() {
+        configureVoiceSession()                                // WebKit may have changed the category for its own media
+        try? AVAudioSession.sharedInstance().setActive(true)
+    }
+
+    fileprivate func endVoiceIfIdle() {
+        guard !synth.isSpeaking, !webVoiceActive else { return }
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    }
+
     private func speak(_ phrase: String, interrupt: Bool = false, style: String = "codriver") {
         // AVSpeechSynthesizer queues utterances itself; only a forced call cuts in.
         // (The web cockpit decides which notes are still worth calling.)
         if interrupt && synth.isSpeaking {
             synth.stopSpeaking(at: .word)
         }
+        beginVoice()
         let utterance = AVSpeechUtterance(string: phrase)
         let voice = Self.voice(for: style)
         utterance.voice = voice
@@ -697,5 +792,25 @@ extension WKWebView {
             noBar = made
         }
         if let noBar { object_setClass(content, noBar) }
+    }
+}
+
+extension ApexSensorShell: MKLocalSearchCompleterDelegate {
+    nonisolated func completerDidUpdateResults(_ completer: MKLocalSearchCompleter) {
+        Task { @MainActor in self.placeResultsUpdated(failed: false) }
+    }
+
+    nonisolated func completer(_ completer: MKLocalSearchCompleter, didFailWithError error: Error) {
+        Task { @MainActor in self.placeResultsUpdated(failed: true) }
+    }
+}
+
+extension ApexSensorShell: AVSpeechSynthesizerDelegate {
+    nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
+        Task { @MainActor in self.endVoiceIfIdle() }
+    }
+
+    nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
+        Task { @MainActor in self.endVoiceIfIdle() }
     }
 }
