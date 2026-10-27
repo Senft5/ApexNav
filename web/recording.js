@@ -71,7 +71,7 @@
   // Adapt the shared Log record without inventing missing road measurements.
   function toTrack(d) {
     return {
-      id: d.id, name: d.name, kind: 'drive',
+      id: d.id, name: root.ApexFormat ? root.ApexFormat.driveName(d.name) : d.name, kind: 'drive',
       subtitle: [d.date ? d.date.slice(0, 10) : '', d.source === 'web-gps' ? 'Phone GPS' : 'Imported'].filter(Boolean).join(' · '),
       lat: d.lat, lon: d.lon, dist: d.dist, elev: d.elev,
       speedMps: d.speed_mps, latG: d.lat_g, lonG: d.lon_g, camberDeg: d.camber || null,
