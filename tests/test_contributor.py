@@ -31,6 +31,8 @@ out.unmatched = run(d, d.lat.map(() => null)).length;
 out.noGeom = run(d, m, {}).length;
 out.short = run(drive(300), drive(300).lat.map(() => ({ way: 77, cls: 'tertiary' })), { 77: way }, { trimM: 100 }).length;   // 100 samples inside trim -> 100-40 = 60 bins is ok
 out.trimmed = a[0].bins.length;
+// crest: signed vertical g in, peak unweighting out (0 when the bin never went light, capped at 3 g)
+out.crest = [0.1, -0.12, -4].map((v) => run({ ...d, crest: d.lat.map(() => v) }, m)[0].bins[5].crest);
 out.offRoad = run({ ...d, lat: d.lat.map((v) => v + 200 / 110540) }, m).length;
 out.noRough = run({ ...d, rough: d.rough.map(() => null) }, m).length;
 out.eligible = [C.eligible({ rough: [1], kappa: [1], date: '2026-10-20T10:00' }, Date.parse('2026-10-25')), C.eligible({ rough: [1], kappa: [1], date: '2026-09-01T10:00' }, Date.parse('2026-10-25')), C.eligible({ date: '2026-10-24' }, Date.parse('2026-10-25'))];
@@ -151,6 +153,10 @@ def test_series_marks_unmeasured_samples_null(result):
     assert s["known"] == 180                                      # bins 200..399 measured, but camber is unknown for 20 of them
     assert s["unknownRough"] == 800                               # roughness known for exactly the 200 measured bins
     assert s["n"] == 3 and 195 <= s["first"] <= 205
+
+
+def test_crest_bins_carry_the_peak_unweighting(result):
+    assert result["crest"] == [0, 0.12, 3]
 
 
 def test_drive_id_is_stable_and_valid(result):

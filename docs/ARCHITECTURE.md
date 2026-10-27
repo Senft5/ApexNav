@@ -14,7 +14,7 @@ The above is the offline batch solve for a recorded drive. **On the phone the ca
 - **Moved phone**: vertical off by > 15° or rotation off the vertical > 0.5 rad/s for 0.5 s drops to `default` (mounting after the drive starts, remounting mid-drive, picking it up). A phone turned about the vertical, invisible to gravity, is caught when 3+ consecutive evidence samples (weight ≥ 6) disagree with $\hat{\mathbf{x}}$ by > 45°, or consistency falls below 0.3: back to `awaitingPull` and relearned.
 - A mount saved from an earlier drive is reused only if the settled vertical matches it within 8°.
 
-Camber and crest are recorded only while `locked`. Camber is shared; crest is not yet: the phone's crest is signed vertical g (− = unweighting), the server accepts 0..3, and its `crest_peak` running mean divides by every pass, including passes without crest. Both need fixing (a crest count column) before crest is uploaded.
+Camber and crest are recorded and shared only while `locked`. The phone's crest is signed vertical g (− = going light); a shared bin carries its peak unweighting, $\max(0, -\min(	ext{crest}))$ capped at 3 g, and the server's `crest_peak` is the mean over the passes that measured it (`crest_n`, migration 0006). Dips (+) stay on the phone for now.
 
 ## 2. Physical Road Profiling (Decoupling Car/Driver from Asphalt)
 - **True Camber / Banking Extraction ($\phi$)** — stored *turn-relative* (`camber_deg` + = banked into the corner, − = off-camber; only observable while cornering, bins on straights read 0): Compares kinematic centripetal acceleration ($v \cdot \omega_z$) against measured lateral accelerometer load ($a_{y,\text{veh}}$):

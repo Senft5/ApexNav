@@ -2207,11 +2207,10 @@
       $('driveStat').innerHTML = bits.join(' · ') + (s.message && s.gps !== 'denied' ? `<br><span>${s.message}</span>` : '');
     }
     // Road data streams while you drive when you are a member with ROAD DATA on: settled stretches only (never the first or last km).
-    // Camber goes up when the recorder kept it (calibrated mount). Crest stays on the phone until the server's crest merge counts
-    // only passes that measured it and agrees on its sign (docs/ARCHITECTURE.md §1, after the calibration states).
+    // Camber and crest go up when the recorder kept them (calibrated mount).
     function feedLive() {
       const L = drive.live, r = drive.rec; if (!L || !r) return;
-      while (drive.liveIdx < r.rows.length) { const x = r.rows[drive.liveIdx++]; L.push({ lat: x.lat, lon: x.lon, roughness_rms: x.roughness_rms, camber_deg: x.camber_deg }); }
+      while (drive.liveIdx < r.rows.length) { const x = r.rows[drive.liveIdx++]; L.push({ lat: x.lat, lon: x.lon, roughness_rms: x.roughness_rms, camber_deg: x.camber_deg, crest: x.crest_vertical_g }); }
     }
     async function startLiveSharing() {
       const rec = drive.rec;
