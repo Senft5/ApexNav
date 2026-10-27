@@ -364,6 +364,10 @@
             <div id="accountBody" class="stack-12"></div>
           </section>
           <section data-panel="setup">
+            <h3>Road data</h3>
+            <p class="note" id="ambientNote" role="status" aria-live="polite">--</p>
+          </section>
+          <section data-panel="setup">
             <h3>Voice</h3>
             <p class="note" style="margin:0 0 8px">Who reads your notes. Works offline.</p>
             <div class="row" id="voiceList">
@@ -2353,7 +2357,8 @@
       bits.push(s.gps === 'on' ? '<b>GPS</b>' : s.gps === 'denied' ? LOC_DENIED_TEXT : s.gps === 'weak' ? 'Weak GPS · keep the sky in view' : s.gps === 'error' ? 'GPS error' : 'Finding GPS…');
       bits.push(s.motion === 'on' ? '<b>Motion</b>' : s.motion === 'denied' || s.motion === 'unavailable' ? MOT_DENIED_TEXT : 'Motion…');
       if (r && r.samples > 0) bits.push(`<b>● Rec</b> ${(r.km / 1.609344).toFixed(2)} mi`);
-      if (drive.share === 'on') bits.push(drive.shareErr ? 'Sharing · retrying' : `<b>Sharing</b> ${(drive.shareKm / 1.609344).toFixed(1)} mi`);
+      if (NATIVE_SHELL) { const a = ambientStats(); if (a) bits.push(a.error ? 'Sharing · retrying' : a.paused ? 'Sharing paused' : `<b>Sharing</b> ${(a.km / 1.609344).toFixed(1)} mi`); }
+      else if (drive.share === 'on') bits.push(drive.shareErr ? 'Sharing · retrying' : `<b>Sharing</b> ${(drive.shareKm / 1.609344).toFixed(1)} mi`);
       else if (drive.share === 'stopped') bits.push('Sharing paused');
       else if (drive.share === 'off-member') bits.push('Sharing off');
       if (s.wake === 'unavailable') bits.push('Keep the screen on');
@@ -2368,6 +2373,46 @@
       const L = drive.live, r = drive.rec; if (!L || !r) return;
       while (drive.liveIdx < r.rows.length) { const x = r.rows[drive.liveIdx++]; L.push({ lat: x.lat, lon: x.lon, roughness_rms: x.roughness_rms, camber_deg: x.camber_deg, crest: x.crest_vertical_g }); }
     }
+    // Road data whenever the app is open and the phone is mounted (calibration locked), not only during a drive
+    // (owner 2026-10-26). Trips, privacy trims and gaps: ApexContributor.createAmbient. Members with ROAD DATA on only.
+    const ambient = { sharer: null, allowed: null, checkedAt: -Infinity, checking: false, mounted: false };
+    function ambientStats() { return ambient.sharer ? ambient.sharer.stats() : null; }
+    function paintAmbient() {
+      const note = $('ambientNote'); if (!note) return;
+      const a = ambientStats(), mi = a ? `${(a.km / 1.609344).toFixed(1)} mi shared since the app opened` : '';
+      note.textContent = !NATIVE_SHELL ? 'Shared while you drive (the app also shares whenever the phone is mounted).'
+        : ambient.allowed === false ? 'Off. Sign in and turn on Road data in Crew to share.'
+        : !ambient.mounted ? 'Waiting for the phone to be calibrated in its mount.'
+        : a && a.paused ? 'Paused: the server refused. Trying again in a few minutes.'
+        : a && a.error ? `Retrying (${a.error}). ${mi}`
+        : `Sharing while the phone is mounted. ${mi || 'Starts once you move.'} The first and last km of every trip stay on this phone.`;
+    }
+    async function checkAmbientAllowed() {
+      if (ambient.checking || performance.now() - ambient.checkedAt < 600000) return;
+      ambient.checking = true;
+      try { ambient.allowed = !!(window.ApexSync && await ApexSync.member() && await ApexSync.contributionEnabled()); }
+      catch (_) { ambient.allowed = null; }
+      finally { ambient.checking = false; ambient.checkedAt = performance.now(); paintAmbient(); }
+      if (ambient.allowed === false && ambient.sharer) ambient.sharer.stop();
+    }
+    function feedAmbient(frame) {
+      ambient.mounted = frame.calibration === 'locked';
+      if (!window.ApexContributor || !window.ApexSensors) return;
+      if (ambient.mounted) checkAmbientAllowed();
+      if (!ambient.allowed) return;
+      if (!ambient.sharer) {
+        ambient.sharer = ApexContributor.createAmbient({
+          makeRecorder: () => new ApexSensors.Recorder(),
+          makeLive: () => { const day = new Date(); return ApexContributor.createLive({ Core, fetch: window.fetch.bind(window), post: ApexSync.contribute,
+            driveId: ApexContributor.driveIdFor({ id: `app_${Date.now()}`, date: day.toISOString() }), drivenOn: day.toISOString().slice(0, 10) }); },
+          onStatus: () => { paintAmbient(); if (state.mode === 'live') paintDriveStat(); },
+        });
+      }
+      ambient.sharer.frame(frame);
+    }
+    window.addEventListener('pagehide', () => { if (ambient.sharer) ambient.sharer.stop(); });
+    setInterval(paintAmbient, 5000);
+    paintAmbient();
     async function startLiveSharing() {
       const rec = drive.rec;
       try {
@@ -2397,8 +2442,7 @@
         drive.status = { gps: performance.now() - state.liveAt < 5000 && state.live ? 'on' : 'waiting', motion: 'on', wake: 'on', message: '' };
         setPlaying(false); setMode('live'); paintModeSwitch(); resumeFollow(); paintDriveStat();
         if (state.live) render(true);
-        startLiveSharing();
-        return;
+        return;                                                              // road data: the app-open sharer (ambient) covers drives too
       }
       setMode('live'); paintModeSwitch(); paintDriveStat();
       try {
@@ -2523,6 +2567,7 @@
       live(frame) {
         if (!frame || !frame.has_fix || !Number.isFinite(frame.lat) || !Number.isFinite(frame.lon)) return;
         state.lastPosition = { lat: frame.lat, lon: frame.lon }; state.lastPositionAt = performance.now();
+        if (NATIVE_SHELL) feedAmbient(frame);
         if (NATIVE_SHELL && !driveActive) { showIdleFix(frame); return; }
         state.live = frame; state.liveAt = performance.now();
         if (drive.native && drive.rec) {

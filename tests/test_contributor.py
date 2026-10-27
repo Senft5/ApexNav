@@ -293,3 +293,70 @@ def test_live_stops_when_the_server_refuses(live):
 
 def test_live_short_drive_sends_nothing(live):
     assert live["short"] == {"posts": 0, "matches": 0}
+
+
+AMBIENT = r"""
+const C = require(process.argv[1] + '/web/contributor.js');
+const S = require(process.argv[1] + '/web/sensors.js');
+const lat0 = 35.0, lon0 = -83.0, mLon = 111320 * Math.cos(lat0 * Math.PI / 180);
+function harness(opts = {}) {
+  let t = 0; const lives = [];
+  const amb = C.createAmbient({
+    now: () => t,
+    makeRecorder: () => new S.Recorder(),
+    makeLive: () => {
+      const L = { rows: 0, finished: false, refuse: !!opts.refuse,
+        push() { L.rows++; }, stats: () => ({ km: L.rows * 0.005, stopped: L.refuse && L.rows > 5, error: null }),
+        finish: async () => { L.finished = true; return { km: L.rows * 0.005, stopped: L.refuse }; } };
+      lives.push(L); return L;
+    },
+  });
+  let x = 0;
+  const drive = (secs, { speed = 20, calibration = 'locked', jump = 0 } = {}) => {
+    x += jump;
+    for (let i = 0; i < secs * 10; i++) {
+      t += 100; x += speed * 0.1;
+      amb.frame({ has_fix: true, lat: lat0, lon: lon0 + x / mLon, speed_mps: speed, calibration, roughness_rms: 0.1, camber_deg: 2, crest_vertical_g: -0.1 });
+    }
+  };
+  const pause = (secs) => { t += secs * 1000; };
+  return { amb, lives, drive, pause };
+}
+const out = {};
+(async () => {
+  { const h = harness(); h.drive(30, { calibration: 'default' }); out.unlocked = h.lives.length; }
+  { const h = harness(); h.drive(30); out.locked = { trips: h.lives.length, rows: h.lives[0].rows, active: h.amb.stats().active }; }
+  { const h = harness(); h.drive(20); h.pause(30); h.drive(20); await new Promise((r) => setTimeout(r, 0));
+    out.gap = { trips: h.lives.length, firstFinished: h.lives[0].finished }; }
+  { const h = harness(); h.drive(20); h.drive(200, { speed: 0 }); h.drive(20); await new Promise((r) => setTimeout(r, 0));
+    out.stop = { trips: h.lives.length, firstFinished: h.lives[0].finished }; }
+  { const h = harness(); h.drive(10); h.drive(10, { jump: 2000 }); out.jump = h.lives.length; }
+  { const h = harness(); h.drive(10); h.drive(5, { calibration: 'default' }); h.drive(10); out.relock = h.lives.length; }
+  { const h = harness({ refuse: true }); h.drive(30); await new Promise((r) => setTimeout(r, 0)); h.drive(30); out.refused = { trips: h.lives.length, paused: h.amb.stats().paused }; }
+  console.log(JSON.stringify(out));
+})();
+"""
+
+
+@pytest.fixture(scope="module")
+def ambient():
+    root = str(__import__("pathlib").Path(__file__).resolve().parents[1])
+    p = subprocess.run([NODE, "-e", AMBIENT, root], capture_output=True, text=True, timeout=120)
+    assert p.returncode == 0, p.stderr
+    return json.loads(p.stdout)
+
+
+def test_ambient_shares_only_with_a_mounted_phone(ambient):
+    assert ambient["unlocked"] == 0                                    # not calibrated: nothing is recorded or sent
+    assert ambient["locked"]["trips"] == 1 and ambient["locked"]["rows"] >= 100 and ambient["locked"]["active"]
+
+
+def test_ambient_cuts_trips_so_each_keeps_its_ends_private(ambient):
+    assert ambient["gap"] == {"trips": 2, "firstFinished": True}       # app in the background
+    assert ambient["stop"] == {"trips": 2, "firstFinished": True}      # parked for minutes
+    assert ambient["jump"] == 2                                        # position jump
+    assert ambient["relock"] == 2                                      # remounted
+
+
+def test_ambient_pauses_after_a_refusal(ambient):
+    assert ambient["refused"] == {"trips": 1, "paused": True}
