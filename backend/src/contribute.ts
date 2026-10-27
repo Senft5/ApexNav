@@ -8,6 +8,7 @@ import { isoWeek } from "./points";
 export const LIMITS = { maxBins: 2000, minBins: 20, maxAgeDays: 14, kmPerDay: 600, kmPerWeek: 1500, uploadsPerHour: 300, minCoverage: 0.6 };
 const BIN_KM = 0.005;
 
+/** crest: the bin's peak unweighting in g (0 = none, 1 = weightless over the top), null when the phone did not measure it. */
 export interface Bin { i: number; cam: number | null; rough: number; crest: number | null; k: number }
 export interface Contribution { wayId: number; dir: 0 | 1; drivenOn: string; driveId: string; bins: Bin[]; km: number }
 
@@ -63,8 +64,8 @@ export async function setContribute(env: Env, v: Viewer, req: Request): Promise<
 /** Merges one bin into road_bins in a single atomic statement (Welford running mean / variance, computed from the old row). */
 function mergeBin(env: Env, wayId: number, dir: number, b: Bin): D1PreparedStatement {
   return env.DB.prepare(
-    `INSERT INTO road_bins (way_id, dir, bin_idx, n, camber_mean, camber_m2, camber_n, rough_mean, rough_m2, crest_peak)
-     VALUES (?1, ?2, ?3, 1, ?4, CASE WHEN ?4 IS NULL THEN NULL ELSE 0 END, CASE WHEN ?4 IS NULL THEN 0 ELSE 1 END, ?5, 0, ?6)
+    `INSERT INTO road_bins (way_id, dir, bin_idx, n, camber_mean, camber_m2, camber_n, rough_mean, rough_m2, crest_peak, crest_n)
+     VALUES (?1, ?2, ?3, 1, ?4, CASE WHEN ?4 IS NULL THEN NULL ELSE 0 END, CASE WHEN ?4 IS NULL THEN 0 ELSE 1 END, ?5, 0, ?6, CASE WHEN ?6 IS NULL THEN 0 ELSE 1 END)
      ON CONFLICT (way_id, dir, bin_idx) DO UPDATE SET
        camber_mean = CASE WHEN ?4 IS NULL THEN camber_mean WHEN camber_n = 0 OR camber_mean IS NULL THEN ?4 ELSE camber_mean + (?4 - camber_mean) / (camber_n + 1) END,
        camber_m2   = CASE WHEN ?4 IS NULL THEN camber_m2 WHEN camber_n = 0 OR camber_mean IS NULL THEN 0
@@ -72,7 +73,8 @@ function mergeBin(env: Env, wayId: number, dir: number, b: Bin): D1PreparedState
        camber_n    = camber_n + (?4 IS NOT NULL),
        rough_mean  = rough_mean + (?5 - rough_mean) / (n + 1),
        rough_m2    = COALESCE(rough_m2, 0) + (?5 - rough_mean) * (?5 - (rough_mean + (?5 - rough_mean) / (n + 1))),
-       crest_peak  = CASE WHEN ?6 IS NULL THEN crest_peak ELSE COALESCE(crest_peak, ?6) + (?6 - COALESCE(crest_peak, ?6)) / (n + 1) END,
+       crest_peak  = CASE WHEN ?6 IS NULL THEN crest_peak WHEN crest_n = 0 OR crest_peak IS NULL THEN ?6 ELSE crest_peak + (?6 - crest_peak) / (crest_n + 1) END,
+       crest_n     = crest_n + (?6 IS NOT NULL),
        n           = n + 1`,
   ).bind(wayId, dir, b.i, b.cam, b.rough, b.crest);
 }

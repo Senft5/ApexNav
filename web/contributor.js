@@ -49,7 +49,8 @@
         const crest = ids.map((i) => drive.crest && drive.crest[i]).filter(finite);
         const k = ids.map((i) => drive.kappa[i]).filter((v) => finite(v) && Math.abs(v) <= 0.2);
         bins.push({ i: b, cam: cam.length ? +mean(cam).toFixed(2) : null, rough: +Math.min(1.5, mean(rough)).toFixed(3),
-                    crest: crest.length ? +Math.min(3, Math.max(...crest)).toFixed(3) : null, k: +(k.length ? mean(k) : 0).toFixed(5) });
+                    // crest: the phone's signed vertical g (- = going light); the server keeps the peak unweighting, 0..3 g
+                    crest: crest.length ? +Math.min(3, Math.max(0, -Math.min(...crest))).toFixed(3) : null, k: +(k.length ? mean(k) : 0).toFixed(5) });
       }
       if (bins.length < MIN_BINS) continue;
       const span = bins[bins.length - 1].i - bins[0].i + 1;
