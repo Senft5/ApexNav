@@ -17,13 +17,10 @@ final class LiveFixtureTests: XCTestCase {
 
     func runPipeline(_ check: (Int, IMUPipeline) -> Void) {
         let t = doubles("t"), speed = doubles("speed")
-        let accel = rows("accel"), gyro = rows("gyro")
-        let gravity = Vec3(doubles("gravity_g"))
-        let calibrateAt = (Self.fixture["calibrate_at_index"] as! NSNumber).intValue
+        let accel = rows("accel"), gyro = rows("gyro"), gravity = rows("gravity")
         var pipe = IMUPipeline()
         for i in 0..<t.count {
-            if i == calibrateAt { pipe.mount.lockVertical(gravityG: gravity) }
-            pipe.step(accel: Vec3(accel[i]), gyro: Vec3(gyro[i]), timestamp: t[i], speedMps: speed[i])
+            pipe.step(accel: Vec3(accel[i]), gyro: Vec3(gyro[i]), timestamp: t[i], speedMps: speed[i], gravityG: Vec3(gravity[i]))
             check(i, pipe)
         }
     }
@@ -48,23 +45,26 @@ final class LiveFixtureTests: XCTestCase {
             let idx = (row[0] as! NSNumber).intValue
             states[idx] = (row[1] as! String, row.dropFirst(2).map { ($0 as! NSNumber).doubleValue })
         }
-        var final = MountCalibrator()
+        var final = MountCalibrator(), beforeRemount = MountCalibrator()
         runPipeline { i, pipe in
             if let (state, rows) = states[i] {
                 XCTAssertEqual(pipe.mount.state.rawValue, state, "sample \(i)")
-                for (a, b) in zip(pipe.mount.rows, rows) { XCTAssertEqual(a, b, accuracy: 1e-12) }
+                for (a, b) in zip(pipe.mount.rows, rows) { XCTAssertEqual(a, b, accuracy: 1e-9) }
             }
+            if i == 3000 { beforeRemount = pipe.mount }
             final = pipe.mount
         }
-        // Physics, not just parity: rows must equal the true vehicle->phone rotation transposed.
-        let truth = rows("true_veh_to_phone")
-        XCTAssertEqual(final.state, .locked)
-        for r in 0..<3 { for c in 0..<3 { XCTAssertEqual(final.rows[r * 3 + c], truth[c][r], accuracy: 1e-6) } }
+        // Physics, not just parity: solved by itself (no tap), before and after the remount, rows = true rotation transposed.
+        for (mount, key) in [(beforeRemount, "true_veh_to_phone"), (final, "true_veh_to_phone_after_remount")] {
+            let truth = rows(key)
+            XCTAssertEqual(mount.state, .locked, key)
+            for r in 0..<3 { for c in 0..<3 { XCTAssertEqual(mount.rows[r * 3 + c], truth[c][r], accuracy: 1e-3, key) } }
+        }
     }
 
     func testCamberReadsTheBankInTheTurn() {
         var samples: [Double] = []
-        runPipeline { i, pipe in if (1800..<2150).contains(i) { samples.append(pipe.camberRad) } }
+        runPipeline { i, pipe in if (1800..<2550).contains(i) { samples.append(pipe.camberRad) } }
         let meanDeg = samples.reduce(0, +) / Double(samples.count) * 180 / .pi
         XCTAssertEqual(meanDeg, 4.0, accuracy: 0.3)   // fixture banks the turn at 4 degrees
     }

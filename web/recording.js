@@ -42,16 +42,30 @@
     const zeroFill = (a) => a.map((v) => (Number.isFinite(v) ? v : 0));
     const prepared = { ...cols, lon_g: zeroFill(cols.lon_g), lat_g: zeroFill(cols.lat_g) };
     const prof = Core.profileRecording(prepared);
+    const gKnown = cols.lat_g.map((v, i) => (Number.isFinite(v) && Number.isFinite(cols.lon_g[i]) ? 1 : 0));
     const stamp = (fileName.match(/(\d{8})_(\d{6})/) || []);
     const date = meta.date || (stamp.length ? `${stamp[1].slice(0, 4)}-${stamp[1].slice(4, 6)}-${stamp[1].slice(6, 8)}T${stamp[2].slice(0, 2)}:${stamp[2].slice(2, 4)}` : new Date().toISOString());
     const nul = (a) => (a ? a.map((v) => (Number.isFinite(v) ? v : null)) : null);
     return {
       id: meta.id || ('rec_' + fileName.replace(/\W+/g, '_')), name: meta.name || fileName.replace(/\.csv$/i, ''), date, source: meta.source || 'imported',
       lat: cols.lat, lon: cols.lon, dist: cols.distance_m || cols.lat.map((_, i) => i * 5), speed_mps: cols.speed_mph.map((v) => v / MPH),
-      lon_g: prepared.lon_g, lat_g: prepared.lat_g, elev: cols.elevation_m && cols.elevation_m.some(Number.isFinite) ? cols.elevation_m : null, events: prof.events,
+      lon_g: prepared.lon_g, lat_g: prepared.lat_g, g_known: gKnown.every(Boolean) ? null : gKnown, elev: cols.elevation_m && cols.elevation_m.some(Number.isFinite) ? cols.elevation_m : null, events: prof.events,
       camber: nul(cols.camber_deg), rough: nul(cols.roughness_rms), crest: nul(cols.crest_vertical_g), kappa: Array.from(Core.computeCurvature(cols.lat, cols.lon).kappa),
       envMps: nul(prof.envMps), sightM: nul(prof.sightM),
     };
+  }
+
+  /**
+   * Drives saved before 2026-10-26 have NaN corner limits (blank camber cells poisoned the envelope), so their score was NaN.
+   * Profiles such a record again from its own stored columns; a healthy record is returned unchanged.
+   */
+  function repair(Core, d) {
+    if (!d || !Array.isArray(d.events) || d.events.every((e) => e.type !== 'corner' || Number.isFinite(e.apex_mph))) return d;
+    const nan = (a) => (a ? a.map((v) => (v == null ? NaN : v)) : undefined);
+    const prof = Core.profileRecording({ lat: d.lat, lon: d.lon, distance_m: d.dist, speed_mph: d.speed_mps.map((v) => v * MPH), lon_g: d.lon_g, lat_g: d.lat_g,
+      camber_deg: nan(d.camber), roughness_rms: nan(d.rough), crest_vertical_g: nan(d.crest), elevation_m: d.elev || undefined });
+    const nul = (a) => a.map((v) => (Number.isFinite(v) ? v : null));
+    return { ...d, events: prof.events, envMps: nul(prof.envMps), sightM: nul(prof.sightM) };
   }
 
   // Adapt the shared Log record without inventing missing road measurements.
@@ -66,6 +80,10 @@
     };
   }
 
-  const api = { all, store, remove, parse, toTrack };
+  /** Corners whose g is measured all the way through (g_known: 1 = measured, 0 = blank and zero-filled); unknown g is never scored as smooth. */
+  const scorableCorners = (d, corners) => (!d.g_known ? corners
+    : corners.filter((c) => { for (let q = c.start; q <= c.end; q++) if (!d.g_known[q]) return false; return true; }));
+
+  const api = { all, store, remove, parse, repair, scorableCorners, toTrack };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexRecording = api;
 })(typeof window !== 'undefined' ? window : globalThis);

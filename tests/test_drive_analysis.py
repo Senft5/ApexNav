@@ -84,3 +84,14 @@ def test_segment_pass_finds_the_stretch_and_scores_it():
     assert p is not None and (p["lo"], p["hi"]) == (60, 120) and p["score"] is not None
     back = {"lat0": seg["lat1"], "lon0": seg["lon1"], "lat1": seg["lat0"], "lon1": seg["lon0"], "length_m": seg["length_m"]}
     assert da.segment_pass(back, d) is None, "a pass the other way is a different segment"
+
+
+def test_driver_score_leaves_out_corners_with_unknown_speed_or_limit():
+    d = _drive()
+    whole = _score(d)["score"]
+    gap = dict(d, speed_mps=d["speed_mps"].copy())
+    gap["speed_mps"][85] = np.nan                       # a blank GPS speed inside the only corner
+    assert da.driver_score(gap["speed_mps"], gap["lon_g"], gap["lat_g"], gap["corners"])["score"] is None
+    nolimit = [dict(d["corners"][0], apex_mps=float("nan"))]
+    assert da.driver_score(d["speed_mps"], d["lon_g"], d["lat_g"], nolimit)["score"] is None
+    assert whole is not None

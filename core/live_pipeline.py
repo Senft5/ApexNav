@@ -43,8 +43,25 @@ def haversine_m(lat1, lon1, lat2, lon2) -> float:
     return 2.0 * EARTH_RADIUS_M * math.asin(min(1.0, math.sqrt(h)))
 
 
+def _angle(a, b) -> float:
+    """Angle between two (not necessarily unit) vectors, radians."""
+    return math.atan2(_mag(_cross(a, b)), _dot(a, b))
+
+
 # ---------------------------------------------------------------------------
-# Mount calibration: vertical lock from gravity, forward lock from a straight pull
+# Mount calibration: automatic and continuous
+#
+#   default       no trusted phone-to-car rotation (start, handheld, remounting): outputs are unknown
+#   awaitingPull  vertical known (from steady gravity), forward not yet
+#   locked        vertical and forward known
+#
+# Vertical: once CoreMotion gravity has held still in the phone for SETTLE_S (no rotation other than about
+# the vertical, which is the car yawing), +Z_veh = -mean(gravity) over that window; while mounted it follows
+# slow trim changes. A sustained gravity swing or off-vertical rotation means the phone was moved: back to
+# default until it settles again. Forward: over each GPS speed interval the mean horizontal acceleration is
+# compared with GPS dv/dt (straight lines: throttle and braking both count, with their sign) and with v * yaw
+# (turns: centripetal acceleration points left of forward). Consistent evidence locks X and keeps refining it;
+# evidence that stops agreeing (a phone turned about the vertical) drops back to awaitingPull.
 # ---------------------------------------------------------------------------
 @dataclass
 class MountCalibrator:
@@ -52,39 +69,166 @@ class MountCalibrator:
     ry: tuple = (0.0, 1.0, 0.0)
     rz: tuple = (0.0, 0.0, 1.0)
     state: str = "default"              # default | awaitingPull | locked
-    pull_accum: tuple = (0.0, 0.0, 0.0)
-    pull_samples: int = 0
+    persisted: bool = False             # rows came from a saved mount: reuse them if gravity agrees
+    g_fast: tuple | None = None         # gravity, phone frame, g (points down)
+    g_slow: tuple | None = None
+    off_axis_rate: float = 0.0          # low-passed |gyro| not about the vertical, rad/s
+    settled_s: float = 0.0
+    settled_sum: tuple = (0.0, 0.0, 0.0)
+    moved_s: float = 0.0
+    iv_t: float = 0.0                   # current GPS speed interval
+    iv_h: tuple = (0.0, 0.0, 0.0)
+    iv_yaw: float = 0.0
+    iv_v0: float | None = None
+    ev_a: tuple = (0.0, 0.0, 0.0)       # forward evidence: sum of (a_ref * horizontal accel) * T
+    ev_w: float = 0.0                   # sum of a_ref^2 * T
+    ev_n: int = 0
+    dis_w: float = 0.0                  # consecutive evidence disagreeing with the locked X
+    dis_n: int = 0
 
-    PULL_MIN_MPS2 = 1.2
-    PULL_RESET_MPS2 = 0.5
-    PULL_MAX_GYRO = 0.15
-    PULL_SAMPLES = 30
+    G_FAST_TAU = 0.1
+    G_SLOW_TAU = 0.8
+    OFF_AXIS_TAU = 0.2
+    SETTLE_ANGLE = math.radians(3.0)
+    SETTLE_RATE = 0.15
+    SETTLE_S = 2.0
+    REMOUNT_ANGLE = math.radians(15.0)
+    REMOUNT_RATE = 0.5
+    REMOUNT_S = 0.5
+    TRIM_TAU = 30.0
+    PERSIST_MATCH = math.radians(8.0)
+    IV_MIN_S = 0.8
+    IV_MAX_S = 3.0
+    EV_TAU = 90.0
+    MIN_SPEED = 3.0
+    LON_MIN = 0.5
+    LAT_MIN = 1.0
+    LON_GATE = 0.5                      # |dv/dt| below this for turn evidence
+    LAT_GATE = 0.7                      # |v * yaw| below this for straight-line evidence
+    A_MAX = 8.0                         # beyond what a car does: a GPS speed jump after a dropout, not evidence
+    W_LOCK = 6.0
+    N_LOCK = 3
+    Q_LOCK = 0.7
+    Q_LOST = 0.3
+    DISAGREE_COS = math.cos(math.radians(45.0))
+
+    def restore(self, rows) -> None:
+        """A mount saved from an earlier drive: used as the starting frame, trusted only once gravity confirms it."""
+        self.rx, self.ry, self.rz = tuple(rows[0:3]), tuple(rows[3:6]), tuple(rows[6:9])
+        self.state, self.persisted = "default", True
 
     def lock_vertical(self, gravity_g) -> None:
-        """+Z_veh = -gravity (CoreMotion gravity points down); seed X, await the pull."""
-        self.rz = _norm(_scale(gravity_g, -1.0))
+        """Manual vertical lock (+Z_veh = -gravity) now; forward follows from driving."""
+        self._set_vertical(_norm(_scale(gravity_g, -1.0)))
+        self.persisted = False
+        self._reset_evidence()
+
+    def _set_vertical(self, up) -> None:
+        self.rz = up
         seed = (0.0, 1.0, 0.0) if abs(self.rz[1]) < 0.9 else (0.0, 0.0, -1.0)
         self.rx = _norm(_reject(seed, self.rz))
         self.ry = _norm(_cross(self.rz, self.rx))
-        self.pull_accum, self.pull_samples = (0.0, 0.0, 0.0), 0
         self.state = "awaitingPull"
 
-    def feed_pull(self, accel, gyro) -> bool:
-        """Accumulate a straight forward pull; returns True on the sample that locks X."""
-        h = _reject(accel, self.rz)
-        consistent = self.pull_samples == 0 or _dot(h, self.pull_accum) > 0
-        if _mag(h) > self.PULL_MIN_MPS2 and _mag(gyro) < self.PULL_MAX_GYRO and consistent:
-            self.pull_accum = _add(self.pull_accum, h)
-            self.pull_samples += 1
-            if self.pull_samples >= self.PULL_SAMPLES:
-                self.rx = _norm(_reject(self.pull_accum, self.rz))
-                self.ry = _norm(_cross(self.rz, self.rx))
-                self.state = "locked"
-                self.pull_accum, self.pull_samples = (0.0, 0.0, 0.0), 0
-                return True
-        elif _mag(h) < self.PULL_RESET_MPS2:
-            self.pull_accum, self.pull_samples = (0.0, 0.0, 0.0), 0
-        return False
+    def _reset_evidence(self) -> None:
+        self.ev_a, self.ev_w, self.ev_n = (0.0, 0.0, 0.0), 0.0, 0
+        self.dis_w, self.dis_n = 0.0, 0
+        self.iv_t, self.iv_h, self.iv_yaw, self.iv_v0 = 0.0, (0.0, 0.0, 0.0), 0.0, None
+
+    def observe(self, accel, gyro, gravity_g, dt: float, speed_mps: float) -> None:
+        """One 100 Hz sample. gravity_g None (no attitude) leaves the vertical as it is."""
+        if gravity_g is not None:
+            self._track_gravity(gyro, gravity_g, dt)
+        if self.state != "default":
+            self._forward_evidence(accel, gyro, dt, speed_mps)
+
+    def _track_gravity(self, gyro, g, dt: float) -> None:
+        if self.g_fast is None:
+            self.g_fast, self.g_slow = g, g
+        self.g_fast = _add(self.g_fast, _scale(_sub(g, self.g_fast), alpha(dt, self.G_FAST_TAU)))
+        self.g_slow = _add(self.g_slow, _scale(_sub(g, self.g_slow), alpha(dt, self.G_SLOW_TAU)))
+        up = _norm(_scale(self.g_fast, -1.0))
+        self.off_axis_rate += alpha(dt, self.OFF_AXIS_TAU) * (_mag(_reject(gyro, up)) - self.off_axis_rate)
+        steady = _angle(self.g_fast, self.g_slow) < self.SETTLE_ANGLE and self.off_axis_rate < self.SETTLE_RATE
+        if steady:
+            self.settled_s += dt
+            self.settled_sum = _add(self.settled_sum, _scale(g, dt))
+        else:
+            self.settled_s, self.settled_sum = 0.0, (0.0, 0.0, 0.0)
+        if self.state == "default":
+            if self.settled_s >= self.SETTLE_S:
+                self._settle_vertical()
+            return
+        moved = _angle(up, self.rz) > self.REMOUNT_ANGLE or self.off_axis_rate > self.REMOUNT_RATE
+        self.moved_s = self.moved_s + dt if moved else 0.0
+        if self.moved_s >= self.REMOUNT_S:
+            self.state, self.persisted, self.moved_s = "default", False, 0.0
+            self._reset_evidence()
+            return
+        if steady:                                   # follow slow trim of the mount (and of the road on average)
+            self.rz = _norm(_add(self.rz, _scale(_sub(up, self.rz), alpha(dt, self.TRIM_TAU))))
+            self.rx = _norm(_reject(self.rx, self.rz))
+            self.ry = _norm(_cross(self.rz, self.rx))
+
+    def _settle_vertical(self) -> None:
+        up = _norm(_scale(self.settled_sum, -1.0))
+        if self.persisted and _angle(up, self.rz) < self.PERSIST_MATCH:
+            self.rz = up
+            self.rx = _norm(_reject(self.rx, up))
+            self.ry = _norm(_cross(up, self.rx))
+            self.state = "locked"
+        else:
+            self._set_vertical(up)
+        self.persisted, self.moved_s = False, 0.0
+        self._reset_evidence()
+
+    def _forward_evidence(self, accel, gyro, dt: float, v: float) -> None:
+        if self.iv_v0 is None:
+            self.iv_v0 = v
+        self.iv_h = _add(self.iv_h, _scale(_reject(accel, self.rz), dt))
+        self.iv_yaw += _dot(self.rz, gyro) * dt
+        self.iv_t += dt
+        if not ((v != self.iv_v0 and self.iv_t >= self.IV_MIN_S) or self.iv_t >= self.IV_MAX_S):
+            return
+        T, v0 = self.iv_t, self.iv_v0
+        h = _scale(self.iv_h, 1.0 / T)
+        a_lon = (v - v0) / T
+        v_bar = 0.5 * (v + v0)
+        a_lat = v_bar * (self.iv_yaw / T)
+        self.iv_t, self.iv_h, self.iv_yaw, self.iv_v0 = 0.0, (0.0, 0.0, 0.0), 0.0, v
+        if not (v_bar >= self.MIN_SPEED and abs(a_lon) <= self.A_MAX and abs(a_lat) <= self.A_MAX):
+            return
+        if abs(a_lon) >= self.LON_MIN and abs(a_lat) < self.LAT_GATE:
+            sample, weight = _scale(h, a_lon * T), a_lon * a_lon * T
+        elif abs(a_lat) >= self.LAT_MIN and abs(a_lon) < self.LON_GATE:
+            sample, weight = _scale(_cross(h, self.rz), a_lat * T), a_lat * a_lat * T     # h ~ a_lat * Y, Y x Z = X
+        else:
+            return
+        if self.state == "locked":                   # a phone turned about the vertical: gravity cannot see it, the evidence can
+            s_h = _reject(sample, self.rz)
+            if _dot(s_h, self.rx) >= self.DISAGREE_COS * _mag(s_h):
+                self.dis_w, self.dis_n = 0.0, 0
+            else:
+                self.dis_w += weight
+                self.dis_n += 1
+                if self.dis_n >= self.N_LOCK and self.dis_w >= self.W_LOCK:
+                    self.state = "awaitingPull"
+                    self._reset_evidence()
+        decay = math.exp(-T / self.EV_TAU)
+        self.ev_a = _add(_scale(self.ev_a, decay), sample)
+        self.ev_w = self.ev_w * decay + weight
+        self.ev_n += 1
+        if self.ev_n < self.N_LOCK or self.ev_w < self.W_LOCK:
+            return
+        a_h = _reject(self.ev_a, self.rz)
+        q = _mag(a_h) / self.ev_w
+        if q >= self.Q_LOCK:
+            self.rx = _norm(a_h)
+            self.ry = _norm(_cross(self.rz, self.rx))
+            self.state = "locked"
+        elif q < self.Q_LOST and self.state == "locked":
+            self.state = "awaitingPull"
+            self._reset_evidence()
 
     def rows(self):
         return [list(self.rx), list(self.ry), list(self.rz)]
@@ -109,15 +253,15 @@ class IMUPipeline:
     camber: float = 0.0         # turn-relative bank, rad
     engagement: float = 0.0
 
-    def step(self, accel, gyro, timestamp: float, speed_mps: float) -> None:
-        """accel: proper acceleration with gravity removed, phone frame, m/s^2; gyro rad/s."""
+    def step(self, accel, gyro, timestamp: float, speed_mps: float, gravity_g=None) -> None:
+        """accel: proper acceleration with gravity removed, phone frame, m/s^2; gyro rad/s; gravity_g: CoreMotion
+        gravity, phone frame, g (points down), or None; speed_mps: latest GPS speed (held between fixes)."""
         dt = 0.01
         if self.last_t is not None:
             dt = max(0.001, min(0.1, timestamp - self.last_t))
         self.last_t = timestamp
 
-        if self.mount.state == "awaitingPull":
-            self.mount.feed_pull(accel, gyro)
+        self.mount.observe(accel, gyro, gravity_g, dt, speed_mps)
 
         m = self.mount
         ax, ay, az = _dot(m.rx, accel), _dot(m.ry, accel), _dot(m.rz, accel)

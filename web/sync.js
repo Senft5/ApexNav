@@ -67,13 +67,17 @@
   const publishScore = (segmentId, score, timeS, day) => call('POST', '/api/board', { segment_id: segmentId, driver_score: Math.round(score), time_s: timeS == null ? null : Math.max(1, Math.round(timeS)), driven_on: day });
   const board = async (canonId) => list(await call('GET', `/api/board/${encodeURIComponent(canonId)}`));
 
-  /** Uploads one road contribution. true = accepted, false = skipped (already contributed / rejected), 'stop' = not enabled or rate limited. */
+  /**
+   * Uploads one road contribution. true = accepted, false = rejected (bad data: never resend), 'stop' = signed out or not enabled,
+   * 'retry' = offline, rate limited or a server error (resend the same payload later; the server merges a repeated chunk once).
+   */
   async function contribute(c) {
+    let r;
     try {
-      const r = await apiFetch('/api/contribute', { method: 'POST', headers: { 'content-type': 'application/json' },
+      r = await apiFetch('/api/contribute', { method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ way_id: c.way_id, dir: c.dir, driven_on: c.driven_on, drive_id: c.drive_id, bins: c.bins }) });
-      return r.status === 202 ? true : r.status === 403 || r.status === 429 ? 'stop' : false;
-    } catch (_) { return 'stop'; }
+    } catch (_) { return 'retry'; }
+    return r.status === 202 ? true : r.status === 401 || r.status === 403 ? 'stop' : r.status === 429 || r.status >= 500 ? 'retry' : false;
   }
   const contributionEnabled = async () => { const e = await call('GET', '/api/me/export'); return !!(e && e.member && e.member.contribute); };
 

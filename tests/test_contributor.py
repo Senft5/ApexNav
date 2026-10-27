@@ -201,6 +201,31 @@ const out = {};
     const live = C.createLive({ Core, fetch: fake(st), driveId: 'd_live_test_04', drivenOn: '2026-10-25', post: async (c) => { posts.push(c); return true; } });
     for (let i = 0; i < 380; i++) live.push(row(i));          // 1.9 km: first km and last km stay private, only 0 rows remain
     await live.finish(); out.short = { posts: posts.length, matches: st.matches }; }
+  // 5. a network blip or server error keeps the chunk and resends the same payload; sharing never stops
+  { const st = { matches: 0, overpass: 0, failTimes: 0 }, calls = [], ok = []; let t = 0, blips = 2;
+    const live = C.createLive({ Core, fetch: fake(st), driveId: 'd_live_test_05', drivenOn: '2026-10-25', retryMs: 1000, now: () => t,
+      post: async (c) => { calls.push(JSON.stringify(c)); if (blips-- > 0) return 'retry'; ok.push(c); return true; } });
+    for (let i = 0; i < N; i++) { live.push(row(i)); if (i % 50 === 0) { await new Promise((r) => setTimeout(r, 0)); t += 1500; } }
+    const stats = await live.finish(), bins = ok.flatMap((p) => p.bins.map((b) => b.i));
+    out.blip = { stopped: stats.stopped, resentSame: calls[0] === calls[1] && calls[1] === calls[2], n: bins.length, unique: new Set(bins).size, pending: stats.pending, error: stats.error }; }
+  // 6. a road change next to a chunk edge loses no road piece (old code dropped the 15-row piece on either side of the edge at row 700)
+  for (const split of [685, 715]) {
+    const S = split * 5, ways = { 77: [[lat0, lon0], [lat0, lon0 + S / mLon]], 78: [[lat0, lon0 + S / mLon], [lat0, lon0 + 12000 / mLon]] };
+    const two = async (url, init) => {
+      if (url.includes('trace_attributes')) {
+        const sh = JSON.parse(init.body).shape;
+        return { ok: true, json: async () => ({ edges: [{ way_id: 77, road_class: 'tertiary' }, { way_id: 78, road_class: 'tertiary' }],
+          matched_points: sh.map((p) => ({ type: 'matched', edge_index: (p.lon - lon0) * mLon < S ? 0 : 1 })) }) };
+      }
+      return { ok: true, json: async () => ({ elements: Object.entries(ways).map(([id, g]) => ({ type: 'way', id: +id, geometry: g.map(([la, lo]) => ({ lat: la, lon: lo })) })) }) };
+    };
+    const posts = [];
+    const live = C.createLive({ Core, fetch: two, driveId: 'd_live_test_06', drivenOn: '2026-10-25', post: async (c) => { posts.push(c); return true; } });
+    for (let i = 0; i < N; i++) { live.push(row(i)); if (i % 50 === 0) await new Promise((r) => setTimeout(r, 0)); }
+    await live.finish();
+    const keys = posts.flatMap((p) => p.bins.map((b) => p.way_id + ':' + b.i)), on = (w) => posts.filter((p) => p.way_id === w).flatMap((p) => p.bins.map((b) => b.i));
+    out['split' + split] = { n: keys.length, unique: new Set(keys).size, max77: Math.max(...on(77)), min78: Math.min(...on(78)) };
+  }
   console.log(JSON.stringify(out));
 })();
 """
@@ -220,6 +245,20 @@ def test_live_never_sends_first_or_last_km(live):
     assert n["n"] == n["unique"] and n["n"] >= 780                    # about 800 settled rows, none sent twice
     assert n["ids"] == ["d_live_test_01"] and n["keys"] == "bins,dir,drive_id,driven_on,way_id"
     assert n["overpass"] == 1 and n["firstState"] == "on"             # way geometry fetched once, then cached
+
+
+def test_live_network_blip_resends_instead_of_stopping(live):
+    b = live["blip"]
+    assert b["stopped"] is False and b["error"] is None and b["pending"] == 0
+    assert b["resentSame"]                                            # the failed chunk went out again unchanged (the server merges it once)
+    assert b["n"] == b["unique"] and b["n"] >= 780                    # nothing lost, nothing sent twice
+
+
+@pytest.mark.parametrize("split", [685, 715])
+def test_live_road_change_at_a_chunk_edge_loses_nothing(live, split):
+    s = live[f"split{split}"]
+    assert s["n"] == s["unique"] and s["n"] >= 780
+    assert s["max77"] >= split - 2 and s["min78"] <= 2                # both roads are sent right up to where they meet
 
 
 def test_live_unknown_crest_is_null_not_zero(live):

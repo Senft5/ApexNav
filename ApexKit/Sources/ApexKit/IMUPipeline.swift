@@ -18,13 +18,14 @@ public struct IMUPipeline: Sendable {
 
     public init() {}
 
-    /// accel: proper acceleration with gravity removed, phone frame, m/s^2. gyro: rad/s.
-    public mutating func step(accel a: Vec3, gyro w: Vec3, timestamp: Double, speedMps: Double) {
+    /// accel: proper acceleration with gravity removed, phone frame, m/s^2. gyro: rad/s. gravityG: CoreMotion gravity,
+    /// phone frame, g (points down), or nil. speedMps: latest GPS speed (held between fixes).
+    public mutating func step(accel a: Vec3, gyro w: Vec3, timestamp: Double, speedMps: Double, gravityG: Vec3? = nil) {
         var dt = 0.01
         if let last = lastTimestamp { dt = max(0.001, min(0.1, timestamp - last)) }
         lastTimestamp = timestamp
 
-        if mount.state == .awaitingPull { mount.feedPull(accel: a, gyro: w) }
+        mount.observe(accel: a, gyro: w, gravityG: gravityG, dt: dt, speedMps: speedMps)
 
         let ax = mount.rX.dot(a), ay = mount.rY.dot(a), az = mount.rZ.dot(a)
         let yaw = mount.rZ.dot(w)

@@ -210,3 +210,19 @@ def test_junction_square_running_into_a_bend_is_not_a_hairpin():
         _, _, cs = _corners([("straight", 200.0), ("arc", r_sq, 90.0), ("arc", r_bend, 80.0), ("straight", 200.0)])
         codes = [rd.pace_note_text(c)[0] for c in cs]
         assert "LHP" not in codes and codes[0] == "LSQ" and len(codes) == 2, (r_sq, r_bend, codes)
+
+
+def test_unknown_camber_and_roughness_cells_are_treated_as_missing_not_nan():
+    # A web/iOS recording leaves camber_deg blank (NaN) on every row and roughness blank now and then; that used to make the whole
+    # envelope and every corner's apex speed NaN, which turned the drive score into NaN.
+    kappa, ds, _ = _corners(STAGE)
+    n = len(kappa)
+    rough = np.full(n, 0.1)
+    rough_gaps = rough.copy()
+    rough_gaps[::9] = np.nan
+    env = rd.braking_envelope_mps(kappa, ds, np.full(n, np.nan), rough_gaps)
+    assert np.all(np.isfinite(env))
+    np.testing.assert_allclose(env, rd.braking_envelope_mps(kappa, ds, None, np.where(np.isnan(rough_gaps), 0.08, rough)), rtol=1e-12)
+    corners = rd.detect_corners(kappa, ds, np.full(n, np.nan), None, np.full(n, np.nan))
+    assert corners and all(np.isfinite(c["apex_mps"]) for c in corners)
+    assert [c["apex_mps"] for c in corners] == pytest.approx([c["apex_mps"] for c in rd.detect_corners(kappa, ds)], rel=1e-12)

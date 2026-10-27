@@ -505,7 +505,7 @@
       const records = saved.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
       const ids = new Set(records.map(d => d.id));
       const others = drives.filter(d => !savedDriveIds.has(d.id) && !ids.has(d.id));
-      drives.splice(0, drives.length, ...records.map(ApexRecording.toTrack), ...others);
+      drives.splice(0, drives.length, ...records.map((d) => ApexRecording.toTrack(ApexRecording.repair(Core, d))), ...others);
       savedDriveIds = ids;
     }
     let track = null;
@@ -2201,12 +2201,17 @@
       else if (drive.share === 'stopped') bits.push('Sharing paused');
       else if (drive.share === 'off-member') bits.push('Sharing off');
       if (s.wake === 'unavailable') bits.push('Keep the screen on');
+      // The app's mount calibration (ApexKit): until locked, g, camber and crest are recorded as unknown
+      if (s.calibration === 'default') bits.push('Calibrating · leave the phone in its mount');
+      else if (s.calibration === 'awaitingPull') bits.push('Calibrating · drive normally');
       $('driveStat').innerHTML = bits.join(' · ') + (s.message && s.gps !== 'denied' ? `<br><span>${s.message}</span>` : '');
     }
     // Road data streams while you drive when you are a member with ROAD DATA on: settled stretches only (never the first or last km).
+    // Camber goes up when the recorder kept it (calibrated mount). Crest stays on the phone until the server's crest merge counts
+    // only passes that measured it and agrees on its sign (docs/ARCHITECTURE.md §1, after the calibration states).
     function feedLive() {
       const L = drive.live, r = drive.rec; if (!L || !r) return;
-      while (drive.liveIdx < r.rows.length) { const x = r.rows[drive.liveIdx++]; L.push({ lat: x.lat, lon: x.lon, roughness_rms: x.roughness_rms }); }
+      while (drive.liveIdx < r.rows.length) { const x = r.rows[drive.liveIdx++]; L.push({ lat: x.lat, lon: x.lon, roughness_rms: x.roughness_rms, camber_deg: x.camber_deg }); }
     }
     async function startLiveSharing() {
       const rec = drive.rec;
@@ -2371,6 +2376,7 @@
           drive.frames++; drive.rec.add(frame); feedLive();
           const gps = Number.isFinite(frame.accuracy_m) && frame.accuracy_m > ApexSensors.MAX_ACCURACY_M ? 'weak' : 'on';
           if (drive.status.gps !== gps) drive.status.gps = gps;
+          drive.status.calibration = typeof frame.calibration === 'string' ? frame.calibration : null;
           paintDriveStat();
         }
         const entering = state.mode !== 'live';
