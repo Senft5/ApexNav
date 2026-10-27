@@ -43,6 +43,7 @@ struct ApexNavApp: App {
 
 struct ApexShellRootView: View {
     @StateObject private var shell = ApexSensorShell()
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         ZStack {
@@ -67,6 +68,9 @@ struct ApexShellRootView: View {
             ActivityShareSheet(items: [item.url])
         }
         .onAppear { UIApplication.shared.isIdleTimerDisabled = true }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { shell.reloadIfWebContentDied() }
+        }
     }
 }
 
@@ -332,6 +336,18 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
     func webDidFinishLoading() {
         webReady = true
         pushLiveFrame()
+    }
+
+    /// iOS can kill the web content process while the app is in the background without calling
+    /// webViewWebContentProcessDidTerminate, which leaves a black screen on return. Back in the
+    /// foreground, ask the page for a trivial value and reload if nothing answers.
+    func reloadIfWebContentDied() {
+        guard let wv = webView else { return }
+        wv.evaluateJavaScript("document.readyState") { [weak self, weak wv] result, error in
+            guard error != nil || result == nil, let wv else { return }
+            self?.webDidStartLoading()
+            if wv.url == nil { wv.load(URLRequest(url: ApexWebBundle.entryURL)) } else { wv.reload() }
+        }
     }
 
     func handleCommand(_ command: String) {

@@ -9,7 +9,7 @@ export const LIMITS = { maxBins: 2000, minBins: 20, maxAgeDays: 14, kmPerDay: 60
 const BIN_KM = 0.005;
 
 /** crest: the bin's peak unweighting in g (0 = none, 1 = weightless over the top), null when the phone did not measure it. */
-export interface Bin { i: number; cam: number | null; rough: number; crest: number | null; k: number }
+export interface Bin { i: number; cam: number | null; rough: number; crest: number | null; k: number | null }
 export interface Contribution { wayId: number; dir: 0 | 1; drivenOn: string; driveId: string; bins: Bin[]; km: number }
 
 const isNum = (v: unknown, lo: number, hi: number): v is number => typeof v === "number" && Number.isFinite(v) && v >= lo && v <= hi;
@@ -39,7 +39,7 @@ export function validateContribution(raw: Record<string, unknown>, nowMs = Date.
     if (!isNum(b.rough, 0, 1.5)) throw bad("bad_roughness");
     const crest = b.crest === null || b.crest === undefined ? null : b.crest;        // a phone with no crest sensor says so
     if (crest !== null && !isNum(crest, 0, 3)) throw bad("bad_crest");
-    if (!isNum(b.k, -0.2, 0.2)) throw bad("bad_curvature");          // radius under 5 m is not a road
+    if (b.k !== null && !isNum(b.k, -0.2, 0.2)) throw bad("bad_curvature");          // null = curvature unknown; radius under 5 m is not a road
     out.push({ i, cam, rough: b.rough, crest, k: b.k });
   }
   const lo = Math.min(...seen), hi = Math.max(...seen);

@@ -20,7 +20,7 @@ Aggregates 5.0m physics bins into coherent **Road Sectors (`250m – 2.5km`)** s
 - **Adaptive Co-Driver**: Quiet in cruise (warns only on Flock LPR, cops, convoy hazards, and severe potholes); automatically wakes into full WRC Pace Notes when spirited driving is detected or when `STAGE` is toggled.
 
 ## 4. Live Convoy "Lead-Car IMU Relay" & Countermeasures
-- **Auto IMU Spike Relay**: When the lead car in a convoy hits a severe pothole ($>0.35g$ vertical spike) or hard-brakes mid-corner ($<-0.55g$), it automatically relays a geo-pinned alert to trailing convoy cars with a 3-second cancel override, alongside physical toggle switches for `COP`, `FLOCK LPR`, `GRAVEL`, and `REGROUP`.
+- **Auto IMU Spike Relay**: When the lead car in a convoy hits a severe pothole ($>0.35g$ vertical spike) or hard-brakes mid-corner ($<-0.55g$), it immediately relays a geo-pinned provisional alert for approaching followers' spoken co-driver warnings. The 3-second cancel override retracts the alert; it never delays transmission. This operates independently of personal recording and road-profile aggregation. Detection thresholds require sensor validation before use. Physical toggle switches remain for `COP`, `FLOCK LPR`, `GRAVEL`, and `REGROUP`.
 
 ## 5. Zero-Snitch Privacy & "Octane" Bounty Economy
 - **Zero Self-Incrimination**: Public road profiles strip individual speeds, timestamps, and user IDs; only speed-invariant road physics and hazard pins are shared.

@@ -21,7 +21,7 @@ and in random batches so a trace cannot be re-assembled.
 ### 2.1 Convoy (live, private)
 - Join by code/QR; group is ephemeral.
 - Lead-car IMU relay (manifesto §4): severe spike (> 0.35 g, robust 50 ms measure) or
-  hard mid-corner braking (< −0.55 g) → geo-pinned alert to followers, 3 s cancel.
+  hard mid-corner braking (< −0.55 g) → immediate geo-pinned provisional alert and spoken warning to approaching followers. Validate thresholds against live sensor evidence. The 3 s cancel window retracts an already-sent alert; it does not delay delivery. Works independently of personal drive recording and crowd-profile verification.
 - Physical switches: COP, FLOCK LPR, GRAVEL, REGROUP.
 - Gap display in time, not distance. Regroup points suggested at stage ends.
 - Transport: peer-to-peer where possible (WebRTC), tiny relay otherwise; nothing stored.

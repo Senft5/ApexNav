@@ -35,6 +35,9 @@ out.trimmed = a[0].bins.length;
 out.crest = [0.1, -0.12, -4].map((v) => run({ ...d, crest: d.lat.map(() => v) }, m)[0].bins[5].crest);
 out.offRoad = run({ ...d, lat: d.lat.map((v) => v + 200 / 110540) }, m).length;
 out.noRough = run({ ...d, rough: d.rough.map(() => null) }, m).length;
+out.unknownCurvature = [undefined, d.kappa.map(() => null), d.kappa.map(() => NaN), d.kappa.map(() => 0.5)]
+  .map(kappa => run({ ...d, kappa }, m).flatMap(chunk => chunk.bins.map(bin => bin.k)));
+out.zeroCurvature = run({ ...d, kappa: d.kappa.map(() => 0) }, m).flatMap(chunk => chunk.bins.map(bin => bin.k));
 out.eligible = [C.eligible({ rough: [1], kappa: [1], date: '2026-10-20T10:00' }, Date.parse('2026-10-25')), C.eligible({ rough: [1], kappa: [1], date: '2026-09-01T10:00' }, Date.parse('2026-10-25')), C.eligible({ date: '2026-10-24' }, Date.parse('2026-10-25'))];
 out.driveIds = [C.driveIdFor({ id: 'rec_Dry Ridge.csv', date: '2026-10-22T09:00' }), C.driveIdFor({ id: 'rec_Dry Ridge.csv', date: '2026-10-22T09:00' }), C.driveIdFor({ id: 'x', date: '' })];
 // payload contains only the allowed keys
@@ -251,6 +254,14 @@ def test_live_never_sends_first_or_last_km(live):
     assert n["n"] == n["unique"] and n["n"] >= 780                    # about 800 settled rows, none sent twice
     assert n["ids"] == ["d_live_test_01"] and n["keys"] == "bins,dir,drive_id,driven_on,way_id"
     assert n["overpass"] == 1 and n["firstState"] == "on"             # way geometry fetched once, then cached
+
+
+def test_unknown_curvature_is_null_and_known_zero_stays_zero(result):
+    for bins in result["unknownCurvature"]:
+        assert bins
+        assert all(value is None for value in bins)
+    assert result["zeroCurvature"]
+    assert all(value == 0 for value in result["zeroCurvature"])
 
 
 def test_live_network_blip_resends_instead_of_stopping(live):
