@@ -220,6 +220,21 @@
     .linkbtn { font: inherit; font-size: 15px; font-weight: 500; color: var(--panel-ink); text-decoration: underline; min-height: 44px; padding: 0 4px; background: none; border: none; }
     .danger-btn { font: inherit; font-size: 15px; font-weight: 600; color: var(--accent); text-decoration: none; min-height: 44px; padding: 0 4px; background: none; border: none; text-align: left; justify-self: start; }
     .crew-row { width: 100%; min-height: 44px; display: flex; justify-content: space-between; align-items: center; gap: 8px; text-align: left; }
+    /* Crews as tiles (two across); an open tile spans the row with its details. */
+    .crew-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    .crew-tiles .card { padding: 10px; min-height: 84px; align-content: start; }
+    .crew-tiles .card.open { grid-column: 1 / -1; }
+    .crew-tile-head { width: 100%; display: grid; gap: 3px; text-align: left; min-height: 44px; align-content: start; }
+    .crew-tile-head b { font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .crew-tile-head span { font-size: 12px; color: var(--panel-dim); }
+    .crew-tile-head em { font-style: normal; font-size: 12px; color: var(--panel-dim); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    /* Friends: a side pop-up over the Crew sheet. */
+    .side-pop { position: fixed; top: 0; right: 0; bottom: 0; width: min(360px, 88vw); z-index: 30; background: var(--panel); color: var(--panel-ink);
+      border-left: 1px solid var(--rule); box-shadow: -12px 0 32px rgba(0, 0, 0, 0.3); padding: calc(14px + var(--safe-top)) 16px calc(24px + var(--safe-bottom));
+      overflow-y: auto; display: grid; gap: 16px; align-content: start; transform: translateX(105%); transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1); }
+    .side-pop.open { transform: none; }
+    .side-pop-head { display: flex; justify-content: space-between; align-items: center; }
+    .side-pop-head h3 { border: 0; padding: 0; margin: 0; }
     .crew-detail { border-top: 1px solid var(--hair, var(--panel-dim)); padding-top: 8px; margin-top: 4px; }
     .overlay { position: fixed; inset: 0; z-index: 40; background: var(--panel); color: var(--panel-ink); display: none; flex-direction: column; padding: 24px 24px calc(24px + env(safe-area-inset-bottom)); overflow-y: auto; }
     .overlay.show { display: flex; }
@@ -1837,12 +1852,13 @@
     // Views: ROUTE / DRIVES / SETUP open the side panel; tapping the open tab again, the map
     // behind it, or swiping it right closes it. ANALYSIS is its own page.
     const VIEW_TITLES = { crew: 'Crew', setup: 'Settings' };
-    let view = null;
+    let view = null, friendsOpen = false;                                  // friendsOpen: the Crew sheet's friends pop-up
     function showView(v) {
       if (v === 'log') { location.href = 'analysis.html?tab=log'; return; }
       if (v === 'stages') { location.href = 'analysis.html?tab=stages'; return; }
       if (v === 'route') { showView(null); openPlan(true); return; }
       if (v === 'map') v = null;
+      if (v !== 'crew') { friendsOpen = false; document.querySelectorAll('.side-pop.open').forEach(n => n.classList.remove('open')); }
       view = v;
       if (v) openPlan(false);
       const sheet = $('sheet');
@@ -2123,6 +2139,7 @@
     const section = (title) => el('div', { className: 'stack-8' }, el('h3', { textContent: title }));
     const switchRow = (label, on, change) => { const b = el('button', { className: 'ink-btn' + (on ? ' on' : ''), textContent: `${label}: ${on ? 'On' : 'Off'}`, onclick: change }); b.setAttribute('aria-pressed', String(!!on)); return b; };
     let openCrewId = null;
+    const crewNear = () => { if (state.lastPosition) return state.lastPosition; const c = map.getCenter(); return { lat: c.lat, lon: c.lng }; };
     async function renderAccount() {
       const body = $('accountBody');
       let me = null;
@@ -2181,6 +2198,15 @@
         btn('Share my handle', () => copyText(`${location.origin}/?add=${me.handle}`, 'Link copied. Anyone who opens it can ask to be your friend.'))), invOut);
       body.append(you);
 
+      // friends: a side pop-up (owner decision), opened from the button under You; new requests light it up
+      if (stash('apex.add')) friendsOpen = true;
+      const fpop = el('aside', { className: 'side-pop' + (friendsOpen ? ' open' : '') });
+      fpop.setAttribute('aria-label', 'Friends');
+      const closePop = () => { friendsOpen = false; fpop.classList.remove('open'); };
+      fpop.append(el('div', { className: 'side-pop-head' }, el('h3', { textContent: 'Friends' }), btn('Done', closePop, 'linkbtn')));
+      const nFriends = friends.filter(f => f.status === 'accepted').length, nReq = friends.filter(f => f.status === 'pending' && f.incoming).length;
+      you.append(el('div', { className: 'row' }, btn(`Friends · ${nFriends}${nReq ? ` · ${nReq} new` : ''}`, () => { friendsOpen = true; fpop.classList.add('open'); }, nReq ? 'ink-btn solid' : 'ink-btn')));
+
       // requests waiting on you
       const incoming = friends.filter(f => f.status === 'pending' && f.incoming);
       if (incoming.length) {
@@ -2188,7 +2214,7 @@
         for (const f of incoming) sec.append(el('div', { className: 'row', style: 'align-items:center' }, el('b', { textContent: `@${f.handle || '?'}`, style: 'flex:1' }),
           btn('Accept', async () => { await apiCall('POST', '/api/friends/accept', { user_id: f.id }); toast(`You and @${f.handle} are friends. Choose what to share below.`); redo(); }, 'ink-btn solid'),
           btn('Decline', async () => { await apiCall('DELETE', `/api/friends/${f.id}`); redo(); })));
-        body.append(sec);
+        fpop.append(sec);
       }
 
       // friends
@@ -2212,7 +2238,7 @@
         toast(r.ok ? `Request sent. @${h} sees it if they're a member.` : 'Couldn\'t send that. Try again.'); redo();
       };
       fsec.append(el('div', { className: 'row' }, add, btn('Send request', sendRequest)));
-      body.append(fsec);
+      fpop.append(fsec);
       if (stash('apex.add') && add.value && !accepted.some(f => f.handle === add.value) ) { add.focus(); }
 
       // crews
@@ -2222,18 +2248,36 @@
         const tok = crewFromLink || stash('apex.crew'); unstash('apex.crew');
         const r = await apiCall('POST', '/api/crews/join', { token: tok }); toast(r.ok ? 'You joined the crew.' : 'That crew invite didn\'t work. Ask for a new one.'); if (r.ok) { redo(); return; }
       }
-      if (!crewList.length) csec.append(el('p', { className: 'note', textContent: 'A crew is a named group of friends for a weekend run or a club.' }));
+      if (!crewList.length) csec.append(el('p', { className: 'note', textContent: 'A crew is a group for a club or a weekend run. You can be in several. Make one below, or join one near you.' }));
+      const tiles = el('div', { className: 'crew-tiles' });
       for (const c of crewList) {
         const g = grants.get('crew:' + c.id) || { share_scores: 0, share_times: 0 }, card = el('div', { className: 'card' });
         const count = typeof c.members === 'number' ? c.members : Array.isArray(c.members) ? c.members.length : 0;
-        const chev = el('span', { textContent: `${count} ${count === 1 ? 'member' : 'members'} \u203a` });
-        const head = el('button', { className: 'crew-row' }, el('b', { textContent: c.name }), chev);
+        const kind = c.visibility === 'public' ? `Public${c.area_name ? ' · ' + c.area_name : ''}` : 'Private';
+        const chev = el('span', { textContent: `${count} ${count === 1 ? 'member' : 'members'} · ${kind}` });
+        const head = el('button', { className: 'crew-tile-head' }, el('b', { textContent: c.name }), chev);
+        if (c.about) head.append(el('em', { textContent: c.about }));
+        // owner: switch between private (invite link) and public (people nearby can find it; needs an area name)
+        const ownerBox = el('div', { className: 'stack-8' });
+        if (c.role === 'owner') {
+          if (c.visibility === 'public') ownerBox.append(btn('Make private', async () => { const r = await apiCall('PUT', `/api/crews/${c.id}`, { visibility: 'private', about: c.about || '' }); if (r.ok) redo(); else toast('Couldn\'t change that. Try again.'); }, 'linkbtn'));
+          else {
+            const areaIn = el('input', { className: 'field', placeholder: 'Area people nearby will see, e.g. Robbinsville', maxLength: 60, autocomplete: 'off' });
+            ownerBox.append(el('div', { className: 'row' }, areaIn, btn('Make public', async () => {
+              const near = crewNear(), name = areaIn.value.trim();
+              if (name.length < 2) { toast('Name the area people nearby will see.'); return; }
+              const r = await apiCall('PUT', `/api/crews/${c.id}`, { visibility: 'public', about: c.about || '', area: { name, lat: near.lat, lon: near.lon } });
+              if (r.ok) { toast(`${c.name} is public. People near ${name} can find and join it.`); redo(); } else toast('Couldn\'t change that. Try again.');
+            })));
+          }
+        }
         const mbox = el('div', { className: 'stack-8' });
         const detail = el('div', { className: 'crew-detail stack-8', hidden: openCrewId !== c.id },
           mbox,
           el('div', { className: 'row' }, switchRow('Scores', g.share_scores, () => putGrant('crew', c.id, !g.share_scores, g.share_scores ? g.share_times : false)),
             switchRow('Times', g.share_times, () => putGrant('crew', c.id, true, !g.share_times))),
           el('span', { textContent: g.share_scores ? (g.share_times ? `${c.name} sees your scores and times.` : `${c.name} sees your scores.`) : `${c.name} sees nothing of yours yet.` }),
+          ownerBox,
           el('div', { className: 'row' }, btn('Invite to crew', async () => { const r = await apiCall('POST', `/api/crews/${c.id}/invite`); const j = await jsonOf(r); if (r.ok) copyText(`${location.origin}/?crew=${j.token}`, 'Crew link copied.'); else toast('Only a crew\'s owner can invite.'); }),
             btn('Leave', async () => { if (confirm(`Leave ${c.name}?`)) { if (openCrewId === c.id) openCrewId = null; await apiCall('DELETE', `/api/crews/${c.id}/membership`); redo(); } }, 'linkbtn')));
         const loadMembers = async () => {
@@ -2251,18 +2295,50 @@
         };
         const setOpen = (on) => {
           detail.hidden = !on;
+          card.classList.toggle('open', on);
           head.setAttribute('aria-expanded', String(on));
-          chev.textContent = `${count} ${count === 1 ? 'member' : 'members'} ${on ? '\u25be' : '\u203a'}`;
           if (on) loadMembers();
         };
         head.onclick = () => { const open = detail.hidden; openCrewId = open ? c.id : null; setOpen(open); };
         setOpen(openCrewId === c.id);
         card.append(head, detail);
-        csec.append(card);
+        tiles.append(card);
       }
+      if (crewList.length) csec.append(tiles);
+      // new crew: private (invite link) or public (findable nearby by an area you name)
       const cname = el('input', { className: 'field', placeholder: 'New crew name', autocomplete: 'off', maxLength: 40, 'aria-label': 'Crew name' });
-      csec.append(el('div', { className: 'row' }, cname, btn('Create', async () => { if (!cname.value.trim()) return; const r = await apiCall('POST', '/api/crews', { name: cname.value.trim() }); if (r.ok) redo(); else toast('Couldn\'t create the crew.'); })));
+      const cvis = el('select', { className: 'field' }, new Option('Private: invite link only', 'private'), new Option('Public: people nearby can find it', 'public'));
+      const carea = el('input', { className: 'field', placeholder: 'Area people nearby will see, e.g. Robbinsville', maxLength: 60, autocomplete: 'off', hidden: true });
+      cvis.onchange = () => { carea.hidden = cvis.value !== 'public'; };
+      csec.append(cvis, carea);
+      csec.append(el('div', { className: 'row' }, cname, btn('Create', async () => {
+        if (!cname.value.trim()) return;
+        const pub = cvis.value === 'public', near = crewNear();
+        if (pub && carea.value.trim().length < 2) { toast('Name the area people nearby will see.'); return; }
+        const r = await apiCall('POST', '/api/crews', pub ? { name: cname.value.trim(), visibility: 'public', area: { name: carea.value.trim(), lat: near.lat, lon: near.lon } } : { name: cname.value.trim() }); if (r.ok) redo(); else toast('Couldn\'t create the crew.'); })));
       body.append(csec);
+
+      // public crews near you: tiles with Join (only name, area and size are shown; members stay private)
+      const nsec = section('Crews near you');
+      const near = crewNear();
+      const found = await apiCall('GET', `/api/crews/discover?lat=${near.lat.toFixed(2)}&lon=${near.lon.toFixed(2)}`).then(jsonOf).catch(() => null);
+      const nearby = Array.isArray(found) ? found : [];
+      if (!nearby.length) nsec.append(el('p', { className: 'note', textContent: found ? 'No public crews near you yet. Make yours public so people nearby can find it.' : 'Couldn\'t look for crews nearby. Check signal.' }));
+      else {
+        const ntiles = el('div', { className: 'crew-tiles' });
+        for (const c of nearby) {
+          const t = el('div', { className: 'card' });
+          t.append(el('div', { className: 'crew-tile-head' }, el('b', { textContent: c.name }),
+            el('span', { textContent: `${c.members} ${c.members === 1 ? 'member' : 'members'} · ${c.area_name}${Number.isFinite(c.km) ? ` · ${Math.max(1, Math.round(c.km / 1.609344))} mi` : ''}` }),
+            ...(c.about ? [el('em', { textContent: c.about })] : [])),
+            btn('Join', async () => { const r = await apiCall('POST', `/api/crews/${c.id}/join`); if (r.ok) { toast(`You joined ${c.name}.`); openCrewId = c.id; redo(); } else toast(r.status === 429 ? 'You\'re in 10 crews already.' : 'Couldn\'t join. Try again.'); }, 'ink-btn solid'));
+          ntiles.append(t);
+        }
+        nsec.append(ntiles);
+      }
+      body.append(nsec);
+      document.querySelectorAll('.side-pop').forEach(n => n.remove());       // one pop-up; on the page, not inside the sliding sheet
+      document.body.append(fpop);
 
       // points board
       if (pts && pts.board && pts.board.length) {
