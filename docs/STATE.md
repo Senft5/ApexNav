@@ -1,11 +1,17 @@
 # APEX NAV — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-10-27: traffic as a fun penalty (traffic-1, iOS only)
+- `web/traffic.js` (pure, `tests/test_traffic.py`): route ahead in 4 km chunks; Apple's time now vs at 3 am per chunk, counted only when Apple's path follows ours; slow ≥ 1.2x, jam ≥ 1.5x and ≥ 60 s. Traffic lowers route fun even with no delay (piece fun / r², time weight r). On a jam: Valhalla alternates + `exclude_polygons` around the jam, best more-fun detour within max(10 min, 25 %) offered for 6 s with Cancel and voiced; else "Traffic ahead · N min". Design in docs/ARCHITECTURE.md section 8.
+- `ApexNavApp.swift`: `trafficProbe` bridge command (MKDirections now + 3 am, both paths, stops on MapKit throttling). Swift compiled only by CI.
+- Not verified on a phone or in real traffic. Web/Android: no traffic source (keyed provider needs owner approval, not built).
+- Exact next task: owner drives a planned route in the IPA through known traffic and checks the announcement and the switch; then eta-1 (live ETA) so +N min uses the live estimate.
+
 ## Session 2026-10-27: morning-commute push (owner goal: everything discussed, in production)
 - Merged: #73 (nearby suggestions; route kept across tab switches; smooth pull-up sheet; route bar with Start/✕; routes start quiet with a destination pin and fly-to, follow paused until Start drive or FOLLOW; Apple MKLocalSearchCompleter place search in the app, Photon on web; voice audio to Bluetooth/CarPlay: .playback/.voicePrompt + .duckOthers/.interruptSpokenAudioAndMixWithOthers, active only while a prompt plays, web clips bracket with voiceBegin/voiceEnd).
 - #75 (polish): drive log on a phone no longer has the sticky map scrolling over content; readout above the tab bar + home indicator; keyboard ‹ › Done bar removed (runtime subclass of WKContentView); Stages is one list, tap a stage for board and runs, New stage button, sharing older drives folded away.
 - Crews (this PR): migration 0007 (crews.visibility/about/area_name/area_lat/area_lon, area rounded to 0.1°) applied by hand to apexnav-db and apexnav-preview-db on 2026-10-27; PUT /api/crews/:id (owner settings), GET /api/crews/discover?lat&lon (public crews within ~55 km, no members/owner/exact point, blocks respected), POST /api/crews/:id/join (public only). Crew sheet: your crews as tiles (open one for details, owner can make public/private), Crews near you with Join, create private or public with an area name, friends in a side pop-up (button shows new requests).
 - Not verified on a phone: car audio routing, Apple search, quiet destination view, crews against the real server (checked with stubbed API responses in the browser).
-- Still to do: traffic as a fun penalty (iOS-only, MapKit); real-phone pass on everything above.
+- Still to do: real-phone pass on everything above (traffic: see the session above).
 
 ## Session 2026-10-27: navigation redesign and app-open road sharing
 - #69 restored #66's cockpit fixes, which my resolution of #65's merge conflict (`git checkout --ours web/index.html`) had dropped from main. Lesson: never take a whole side of a conflicted file; merge hunks.
