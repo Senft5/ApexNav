@@ -192,6 +192,7 @@ struct ApexCockpitWebView: UIViewRepresentable {
         webView.allowsBackForwardNavigationGestures = false
         webView.isInspectable = true
         webView.navigationDelegate = context.coordinator
+        webView.hideKeyboardAccessoryBar()
 
         shell.attach(webView: webView)
         webView.load(URLRequest(url: ApexWebBundle.entryURL))
@@ -675,5 +676,26 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
             utterance.pitchMultiplier = 1.0
         }
         synth.speak(utterance)
+    }
+}
+
+extension WKWebView {
+    /// The keyboard's ‹ › Done bar is web-view furniture that makes the app feel like a web page. WKWebView has no switch for
+    /// it, so its content view gets a subclass whose inputAccessoryView is nil (made once, at runtime).
+    func hideKeyboardAccessoryBar() {
+        guard let content = scrollView.subviews.first(where: { String(describing: type(of: $0)).hasPrefix("WKContent") }) else { return }
+        let base: AnyClass = type(of: content)
+        let name = "\(NSStringFromClass(base))_ApexNoAccessory"
+        var noBar: AnyClass? = NSClassFromString(name)
+        if noBar == nil, let made = objc_allocateClassPair(base, name, 0) {
+            let selector = #selector(getter: UIResponder.inputAccessoryView)
+            let none: @convention(block) (AnyObject) -> AnyObject? = { _ in nil }
+            if let method = class_getInstanceMethod(UIResponder.self, selector) {
+                class_addMethod(made, selector, imp_implementationWithBlock(none), method_getTypeEncoding(method))
+            }
+            objc_registerClassPair(made)
+            noBar = made
+        }
+        if let noBar { object_setClass(content, noBar) }
     }
 }
