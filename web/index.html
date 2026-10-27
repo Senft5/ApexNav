@@ -2201,6 +2201,9 @@
       else if (drive.share === 'stopped') bits.push('Sharing paused');
       else if (drive.share === 'off-member') bits.push('Sharing off');
       if (s.wake === 'unavailable') bits.push('Keep the screen on');
+      // The app's mount calibration (ApexKit): until locked, g, camber and crest are recorded as unknown
+      if (s.calibration === 'default') bits.push('Calibrating · leave the phone in its mount');
+      else if (s.calibration === 'awaitingPull') bits.push('Calibrating · drive normally');
       $('driveStat').innerHTML = bits.join(' · ') + (s.message && s.gps !== 'denied' ? `<br><span>${s.message}</span>` : '');
     }
     // Road data streams while you drive when you are a member with ROAD DATA on: settled stretches only (never the first or last km).
@@ -2373,6 +2376,7 @@
           drive.frames++; drive.rec.add(frame); feedLive();
           const gps = Number.isFinite(frame.accuracy_m) && frame.accuracy_m > ApexSensors.MAX_ACCURACY_M ? 'weak' : 'on';
           if (drive.status.gps !== gps) drive.status.gps = gps;
+          drive.status.calibration = typeof frame.calibration === 'string' ? frame.calibration : null;
           paintDriveStat();
         }
         const entering = state.mode !== 'live';

@@ -203,7 +203,7 @@
     function finish(d) {
       d.corners = cornersOf(d);
       d.km = d.dist[d.dist.length - 1] / 1000;
-      d.ds = Core.driverScore(d.speed_mps, d.lon_g, d.lat_g, d.corners);
+      d.ds = Core.driverScore(d.speed_mps, d.lon_g, d.lat_g, ApexRecording.scorableCorners(d, d.corners));
       if (!Number.isFinite(d.ds.score)) d.ds = { ...d.ds, score: null };   // unknown shows as --, never NaN
       return d;
     }

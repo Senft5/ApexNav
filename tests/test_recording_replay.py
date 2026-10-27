@@ -93,6 +93,14 @@ const fixed = R.repair(Core, old);
 assert.deepEqual(fixed.events.map((e) => e.apex_mph), d.events.map((e) => e.apex_mph));
 assert.deepEqual(fixed.envMps, d.envMps);
 assert.equal(R.repair(Core, d), d);
+assert.equal(d.g_known, null, 'all g measured: no mask');
+// g blank before calibration (first half): those corners are not scored as perfectly smooth zeros
+const half = rows.map((l, i) => { if (i === 0 || i > 400) return l; const c = l.split(','); c[6] = ''; c[7] = ''; return c.join(','); });
+const h = R.parse(Core, half.join('\n') + '\n', 'web_20261026_170300.csv', { source: 'web-gps' });
+assert.ok(h.g_known && h.g_known.slice(0, 400).every((v) => v === 0) && h.g_known.slice(400).every((v) => v === 1));
+const hc = h.events.map((e) => ({ start: Math.round(e.start_m / 5), end: Math.round(e.end_m / 5), apex: e.index, apex_mps: e.apex_mph / 2.2369362921 }));
+const kept = R.scorableCorners(h, hc);
+assert.ok(kept.length > 0 && kept.length < hc.length && kept.every((c) => c.start >= 400));
 """
     result = subprocess.run([NODE, "-e", script], cwd=root, capture_output=True,
                             text=True, encoding="utf-8", timeout=30)

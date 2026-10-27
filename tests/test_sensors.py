@@ -48,7 +48,7 @@ for (const cal of ['locked', 'default', 'awaitingPull']) {
   const rec = new S.Recorder();
   for (let t = 0; t <= 20; t++) rec.add({ t: t * 1000, has_fix: true, ...at(t * 20, 0), speed_mps: 20, lat_g: 0.1, lon_g: 0, roughness_rms: 0.05, camber_deg: 3.5, crest_vertical_g: -0.12, calibration: cal });
   const rows = rec.toCsv().trim().split('\n').slice(1).map((l) => l.split(','));
-  out['native_' + cal] = { camber: [...new Set(rows.map((r) => r[8]))], crest: [...new Set(rows.map((r) => r[10]))], n: rows.length };
+  out['native_' + cal] = { camber: [...new Set(rows.map((r) => r[8]))], crest: [...new Set(rows.map((r) => r[10]))], latG: [...new Set(rows.map((r) => r[7]))], n: rows.length };
 }
 console.log(JSON.stringify(out));
 """
@@ -93,6 +93,6 @@ def test_recording_is_5m_samples_with_blanks(r):
 
 def test_native_camber_and_crest_recorded_only_when_calibrated(r):
     locked = r["native_locked"]
-    assert locked["n"] > 50 and locked["camber"] == ["3.50"] and locked["crest"] == ["-0.120"]
+    assert locked["n"] > 50 and locked["camber"] == ["3.50"] and locked["crest"] == ["-0.120"] and locked["latG"] == ["0.1000"]
     for cal in ("default", "awaitingPull"):                                               # an unsolved mount: unknown, not a guess
-        assert r[f"native_{cal}"]["camber"] == [""] and r[f"native_{cal}"]["crest"] == [""]
+        assert r[f"native_{cal}"]["camber"] == [""] and r[f"native_{cal}"]["crest"] == [""] and r[f"native_{cal}"]["latG"] == [""]
