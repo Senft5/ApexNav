@@ -32,7 +32,8 @@
     :root { --safe-top: env(safe-area-inset-top, 0px); --safe-bottom: env(safe-area-inset-bottom, 0px); --dial: clamp(88px, 12dvh, 150px); }
     * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
     html, body { width: 100%; height: 100%; overflow: hidden; background: var(--panel); color: var(--panel-ink);
-      font-family: var(--font-ui); font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; user-select: none; }
+      font-family: var(--font-ui); font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+    input, textarea, select { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }
     button { font: inherit; color: inherit; background: none; border: none; cursor: pointer; }
     #app { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; height: 100vh; height: 100dvh; }
 
@@ -66,6 +67,35 @@
     .plate.gear { width: 44px; height: 44px; min-height: 44px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
     .plate.gear svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; }
     .plate.live { background: var(--accent); color: var(--panel); border-color: var(--accent); }
+    /* ---------------- plan: a pull-up sheet over the map (collapsed bar: Where to? + Start) ---------------- */
+    .plan { position: absolute; left: 0; right: 0; bottom: 0; z-index: 5; background: var(--panel); color: var(--panel-ink); border-top: 1px solid var(--rule);
+      display: flex; flex-direction: column; max-height: 78%; }
+    [data-theme="roadbook"] .plan { border-top-width: 2px; }
+    .plan-bar { display: flex; gap: 8px; align-items: center; padding: 8px 10px; touch-action: none; }
+    .plan-bar::before { content: ""; position: absolute; top: 3px; left: 50%; width: 36px; height: 3px; margin-left: -18px; background: var(--panel-dim); opacity: 0.5; }
+    .plan-handle { flex: 1; min-width: 0; height: 44px; display: flex; align-items: center; gap: 8px; padding: 0 12px; border: 1px solid var(--panel-dim); color: var(--panel-dim); font-size: 16px; text-align: left; }
+    .plan-handle svg { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+    .plan-handle span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .plan.routed .plan-handle { color: var(--panel-ink); }
+    .plan-body { display: none; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding: 4px 16px 20px; gap: 20px; }
+    .plan.open .plan-body { display: grid; }
+    .place-list { display: grid; margin-top: 8px; }
+    .place { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: baseline; min-height: 44px; padding: 8px 2px; border-top: 1px solid var(--hair, var(--panel-dim)); text-align: left; }
+    .place b { font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .place span { font-size: 12px; color: var(--panel-dim); }
+    #app.live .plan, #app.sheet-open .plan { display: none; }
+    #app:not(.live) .plates { bottom: 72px; }
+    #app.plan-open .plates, #app.plan-open .edge-tab, #app.plan-open .edge-panel { display: none; }
+    /* ---------------- while-you-drive switches: an edge tab that slides a small panel over the map ---------------- */
+    .edge-tab { position: absolute; right: 0; top: 40%; z-index: 4; width: 40px; height: 52px; background: var(--panel); color: var(--panel-ink);
+      border: 1px solid var(--rule); border-right: 0; display: flex; align-items: center; justify-content: center; }
+    .edge-tab svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
+    .edge-tab[aria-expanded="true"] { color: var(--accent); }
+    .edge-panel { position: absolute; right: 40px; top: 40%; z-index: 4; width: min(240px, calc(100% - 64px)); background: var(--panel); color: var(--panel-ink);
+      border: 1px solid var(--rule); padding: 8px 12px 4px; transform: translateX(calc(100% + 48px)); transition: transform 0.18s ease-out; }
+    .edge-panel.open { transform: none; }
+    .edge-panel h3 { font-size: 12px; font-weight: 700; color: var(--panel-dim); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 2px; }
+    #app.sheet-open .edge-tab, #app.sheet-open .edge-panel { display: none; }
     #recenterBtn { display: none; } #recenterBtn.show { display: block; }
     .toast { position: absolute; left: 50%; top: 12px; transform: translateX(-50%); z-index: 6; max-width: calc(100% - 32px);
       background: var(--panel); color: var(--panel-ink); border: 1px solid var(--accent); padding: 8px 12px; font-size: 12px; font-weight: 600; display: none; }
@@ -138,12 +168,12 @@
     .sw.on i::after { left: 17px; background: var(--accent); }
     .sw span { font-size: 11px; font-weight: 600; color: var(--panel-dim); }
     #switchRow { display: grid; gap: 0; }
-    .sheet .sw { display: flex; flex-direction: row-reverse; justify-content: space-between; align-items: center; width: 100%; min-height: 48px; padding: 0; border-top: 1px solid var(--hair, var(--panel-dim)); }
-    .sheet .sw span { font-size: 15px; font-weight: 500; color: var(--panel-ink); }
+    .sheet .sw, .edge-panel .sw { display: flex; flex-direction: row-reverse; justify-content: space-between; align-items: center; width: 100%; min-height: 48px; padding: 0; border-top: 1px solid var(--hair, var(--panel-dim)); }
+    .sheet .sw span, .edge-panel .sw span { font-size: 15px; font-weight: 500; color: var(--panel-ink); }
     .sw.on span { color: var(--panel-ink); }
     .sw-cycle { min-height: 44px; }
     .sw-cycle b { min-width: 30px; font-size: 11px; font-weight: 700; color: var(--accent); }
-    .sheet .sw-cycle b { font-size: 15px; font-weight: 600; }
+    .sheet .sw-cycle b, .edge-panel .sw-cycle b { font-size: 15px; font-weight: 600; }
     .route-key { height: 34px; padding: 0 14px; }
 
     /* Roadbook binnacle reads as the printed page */
@@ -160,9 +190,8 @@
     }
 
     /* ---------------- start drive + first-run + permission sheets ---------------- */
-    .btn-record { width: 100%; height: 52px; background: var(--accent); color: var(--stage); border: none; font-size: 18px; font-weight: 700; font-family: var(--font-ui); display: flex; align-items: center; justify-content: center; gap: 10px; }
-    .btn-record i { width: 12px; height: 12px; border-radius: 50%; background: currentColor; }
-    .btn-record.end { background: var(--panel-ink); color: var(--panel); }
+    .btn-start { height: 44px; padding: 0 16px; background: var(--accent); color: var(--stage); font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 8px; flex: none; }
+    .btn-start i { width: 10px; height: 10px; border-radius: 50%; background: currentColor; }
     .linkbtn { font: inherit; font-size: 15px; font-weight: 500; color: var(--panel-ink); text-decoration: underline; min-height: 44px; padding: 0 4px; background: none; border: none; }
     .danger-btn { font: inherit; font-size: 15px; font-weight: 600; color: var(--accent); text-decoration: none; min-height: 44px; padding: 0 4px; background: none; border: none; text-align: left; justify-self: start; }
     .crew-row { width: 100%; min-height: 44px; display: flex; justify-content: space-between; align-items: center; gap: 8px; text-align: left; }
@@ -200,13 +229,13 @@
     /* With the notes bar hidden the stage reaches the top of the screen: keep toasts clear of the notch / Dynamic Island. */
     #app.idle .toast, #app.sheet-open .toast { top: calc(12px + var(--safe-top)); }
     /* Plan / Crew / Settings: only the tab bar is left in the binnacle, so its own top rule would double the tab bar's. */
-    #app.sheet-open .binnacle { border-top: 0; padding-top: 0; }
-    #app.sheet-open .tabbar { margin-top: 0; }
+    #app.sheet-open .binnacle, #app.idle .binnacle { border-top: 0; padding-top: 0; }
+    #app.sheet-open .tabbar, #app.idle .tabbar { margin-top: 0; }
     #app.idle #transport, #app.idle #cluster { display: none; }
     .scrim { position: absolute; inset: 0; z-index: 9; display: none; background: rgba(0,0,0,0.18); }
     .scrim.show { display: block; }
     .sheet [data-panel] { display: none; }
-    .sheet[data-view="route"] [data-panel~="route"], .sheet[data-view="crew"] [data-panel~="crew"],
+    .sheet[data-view="crew"] [data-panel~="crew"],
     .sheet[data-view="setup"] [data-panel~="setup"] { display: block; }
 
     /* ---------------- tab bar (switch views; tapping the open tab closes it) ---------------- */
@@ -220,16 +249,16 @@
     /* ---------------- busy buttons (loop / search in progress) ---------------- */
     .ink-btn.busy { position: relative; overflow: hidden; color: var(--panel); background: var(--panel-dim); border-color: var(--panel-dim); pointer-events: none; }
     .ink-btn.busy::after { content: ""; position: absolute; left: 0; bottom: 0; height: 3px; width: var(--progress, 0%); background: var(--accent); transition: width 0.3s ease-out; }
-        .ink-btn[disabled], .btn-record[disabled] { opacity: 0.45; pointer-events: none; }
+        .ink-btn[disabled], .btn-start[disabled] { opacity: 0.45; pointer-events: none; }
     .sheet header { display: flex; justify-content: space-between; align-items: center; padding: calc(14px + var(--safe-top)) 16px 14px; border-bottom: 1px solid var(--rule); }
     .sheet header h2 { font-size: 22px; font-weight: 700; font-family: var(--font-num); }
     .sheet .body { overflow-y: auto; padding: 14px 16px 24px; display: grid; gap: 20px; }
-    .sheet h3 { font-size: 18px; font-weight: 700; font-family: var(--font-num); border-top: 1px solid var(--hair, var(--panel-dim)); padding-top: 12px; margin-bottom: 8px; }
-    .sheet p.note.err { color: var(--accent); }
-    .sheet p.note { font-size: 13px; color: var(--panel-dim); line-height: 1.45; margin-top: 6px; }
+    .sheet h3, .plan h3 { font-size: 18px; font-weight: 700; font-family: var(--font-num); border-top: 1px solid var(--hair, var(--panel-dim)); padding-top: 12px; margin-bottom: 8px; }
+    .sheet p.note.err, .plan p.note.err { color: var(--accent); }
+    .sheet p.note, .plan p.note { font-size: 13px; color: var(--panel-dim); line-height: 1.45; margin-top: 6px; }
     .row { display: flex; gap: 6px; flex-wrap: wrap; }
     .plan-fields { display: grid; gap: 6px; } .plan-fields .ink-btn { min-width: 64px; }
-    .field { flex: 1; min-width: 0; height: 44px; padding: 0 10px; font: inherit; font-size: 15px; background: transparent; color: var(--panel-ink); border: 1px solid var(--panel-dim); user-select: text; }
+    .field { flex: 1; min-width: 0; height: 44px; padding: 0 10px; font: inherit; font-size: 16px; background: transparent; color: var(--panel-ink); border: 1px solid var(--panel-dim); user-select: text; }
     .ink-btn { height: 44px; padding: 0 16px; border: 1.5px solid var(--panel-ink); font-size: 15px; font-weight: 600; font-family: var(--font-ui); }
     .ink-btn.solid { height: 48px; background: var(--panel-ink); color: var(--panel); border-color: var(--panel-ink); }
     .ink-btn.on { background: var(--panel-ink); border-color: var(--panel-ink); color: var(--panel); }
@@ -256,74 +285,83 @@
       <div class="plates">
         <div class="plate" id="modePlate" role="status">Replay</div>
         <button class="plate" id="recenterBtn">Recenter</button>
-        <button class="plate gear" id="settingsBtn" aria-label="Settings"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2.5l1.6 2.6 3-.7.9 3 3 .9-.7 3 2.6 1.6-2.6 1.6.7 3-3 .9-.9 3-3-.7-1.6 2.6-1.6-2.6-3 .7-.9-3-3-.9.7-3L2.5 12l2.6-1.6-.7-3 3-.9.9-3 3 .7z"/></svg></button>
       </div>
       <div class="toast" id="toast"></div>
 
-      <div class="scrim" id="scrim"></div>
-      <aside class="sheet" id="sheet" aria-label="Menu" data-view="route">
-        <header><h2 id="sheetTitle">Plan</h2></header>
-        <div class="body">
-          <section data-panel="route">
-            <h3>Where to</h3>
-            <div class="plan-fields">
-              <div class="row">
-                <input class="field" id="fromInput" placeholder="Current location" aria-label="From" autocomplete="off" />
-                <button class="ink-btn" id="swapBtn" aria-label="Swap From and To">Swap</button>
+      <section class="plan" id="planPanel" aria-label="Plan">
+        <div class="plan-bar" id="planBar">
+          <button class="plan-handle" id="planHandle" aria-expanded="false" aria-controls="planBody"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5"/></svg><span id="planBarText">Where to?</span></button>
+          <button class="btn-start" id="startDrive" aria-label="Start drive"><i></i>Start</button>
+        </div>
+        <div class="plan-body" id="planBody">
+            <section>
+              <h3>Where to</h3>
+              <div class="plan-fields">
+                <div class="row">
+                  <input class="field" id="fromInput" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="go" placeholder="Current location" aria-label="From" autocomplete="off" />
+                  <button class="ink-btn" id="swapBtn" aria-label="Swap From and To">Swap</button>
+                </div>
+                <div class="row">
+                  <input class="field" id="destInput" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="go" placeholder="Town, road or address" aria-label="To" autocomplete="off" />
+                  <button class="ink-btn solid" id="destGoBtn">Go</button>
+                </div>
               </div>
+              <div class="place-list" id="placeList" hidden></div>
+              <button class="linkbtn" id="tapRouteBtn">Or tap the map</button>
+            </section>
+            <section>
+              <h3>Loop from here</h3>
               <div class="row">
-                <input class="field" id="destInput" placeholder="Town, road or address" aria-label="To" autocomplete="off" />
-                <button class="ink-btn solid" id="destGoBtn">Go</button>
+                <button class="ink-btn" data-loop-mi="15">15 mi</button>
+                <button class="ink-btn" data-loop-mi="30">30 mi</button>
+                <button class="ink-btn" data-loop-mi="45">45 mi</button>
               </div>
-            </div>
-            <button class="linkbtn" id="tapRouteBtn">Or tap the map</button>
-          </section>
-          <section data-panel="route">
-            <h3>Loop from here</h3>
-            <div class="row">
-              <button class="ink-btn" data-loop-mi="15">15 mi</button>
-              <button class="ink-btn" data-loop-mi="30">30 mi</button>
-              <button class="ink-btn" data-loop-mi="45">45 mi</button>
-            </div>
-            <p class="note">Loops pick the twistiest roads near you. Map only until someone drives them.</p>
-          </section>
-          <section data-panel="route" id="routeCard" hidden>
-            <h3 id="routeCardName"></h3>
-            <p class="route-meta" id="routeCardMeta"></p>
-            <div class="bars mt-8" id="routeCardBars"></div>
-            <p class="note" id="routeCardSub"></p>
-            <div class="row mt-8">
-              <button class="ink-btn solid" id="routeDriveBtn">Drive it</button>
-              <button class="ink-btn" id="routePreviewBtn">Preview</button>
-            </div>
-          </section>
-          <section data-panel="route">
-            <h3>Spots</h3>
-            <p class="note" style="margin:0 0 8px">Loops lean toward spots you rate 3★ or more. Your spots stay on this phone until you share one.</p>
-            <div class="row" id="detourList" role="group" aria-label="Detour">
-              <button class="ink-btn" data-detour="0">Off</button>
-              <button class="ink-btn" data-detour="0.5">Little</button>
-              <button class="ink-btn" data-detour="1">Some</button>
-              <button class="ink-btn" data-detour="2">More</button>
-            </div>
-            <button class="linkbtn" id="hlOpenBtn">Add a spot here</button>
-            <div id="hlList" class="stack-8 mt-8"></div>
-            <div id="hlNearby" class="stack-8 mt-8"></div>
-          </section>
-          <section data-panel="route">
-            <p class="note" id="measuredNote" hidden></p>
-          </section>
-          <section data-panel="crew" id="accountSection">
-            <div id="accountBody" class="stack-12"></div>
-          </section>
-          <section data-panel="setup">
-            <h3>While you drive</h3>
-<div class="switches" id="switchRow">
+              <p class="note">Loops pick the twistiest roads near you. Map only until someone drives them.</p>
+            </section>
+            <section id="routeCard" hidden>
+              <h3 id="routeCardName"></h3>
+              <p class="route-meta" id="routeCardMeta"></p>
+              <div class="bars mt-8" id="routeCardBars"></div>
+              <p class="note" id="routeCardSub"></p>
+              <div class="row mt-8">
+                <button class="ink-btn solid" id="routeDriveBtn">Drive it</button>
+                <button class="ink-btn" id="routePreviewBtn">Preview</button>
+              </div>
+            </section>
+            <section>
+              <h3>Spots</h3>
+              <p class="note" style="margin:0 0 8px">Loops lean toward spots you rate 3★ or more. Your spots stay on this phone until you share one.</p>
+              <div class="row" id="detourList" role="group" aria-label="Detour">
+                <button class="ink-btn" data-detour="0">Off</button>
+                <button class="ink-btn" data-detour="0.5">Little</button>
+                <button class="ink-btn" data-detour="1">Some</button>
+                <button class="ink-btn" data-detour="2">More</button>
+              </div>
+              <button class="linkbtn" id="hlOpenBtn">Add a spot here</button>
+              <div id="hlList" class="stack-8 mt-8"></div>
+              <div id="hlNearby" class="stack-8 mt-8"></div>
+            </section>
+            <section>
+              <p class="note" id="measuredNote" hidden></p>
+            </section>
+        </div>
+      </section>
+      <button class="edge-tab" id="swTab" aria-label="While you drive" aria-expanded="false" aria-controls="swPanel"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg></button>
+      <div class="edge-panel" id="swPanel" role="group" aria-label="While you drive">
+        <h3>While you drive</h3>
+        <div class="switches" id="switchRow">
         <button class="sw sw-cycle" data-cycle="notesMode" aria-label="Notes"><b></b><span>Notes</span></button>
         <button class="sw" data-toggle="voice"><i></i><span>Voice</span></button>
         <button class="sw" data-toggle="lpr"><i></i><span>Cameras</span></button>
         <button class="sw sw-cycle" data-cycle="nightMode" aria-label="Night"><b></b><span>Night</span></button>
       </div>
+      </div>
+      <div class="scrim" id="scrim"></div>
+      <aside class="sheet" id="sheet" aria-label="Menu" data-view="setup">
+        <header><h2 id="sheetTitle">Settings</h2></header>
+        <div class="body">
+          <section data-panel="crew" id="accountSection">
+            <div id="accountBody" class="stack-12"></div>
           </section>
           <section data-panel="setup">
             <h3>Voice</h3>
@@ -383,9 +421,6 @@
         <div class="dbstat" id="driveStat" role="status" aria-live="polite">Finding GPS…</div>
         <button class="key" id="driveEnd">End drive</button>
       </div>
-      <div id="startBlock">
-        <button class="btn-record" id="startDrive" aria-label="Start drive"><i></i>Start drive</button>
-      </div>
       <div class="transport" id="transport">
         <button class="key" id="playBtn">Run</button>
         <button class="key" id="rateBtn">1X</button>
@@ -394,10 +429,10 @@
       <div id="cluster"></div>
       <nav class="tabbar" id="tabbar" aria-label="Views">
         <button class="tab on" data-view="map" aria-label="Map"><svg viewBox="0 0 24 24"><path d="M12 3l6 15-6-3-6 3z"/></svg><span>Map</span></button>
-        <button class="tab" data-view="route" aria-label="Plan"><svg viewBox="0 0 24 24"><path d="M5 20c0-5 5-5 7-8s1-6 6-8"/><circle cx="5" cy="20" r="1.6"/><path d="M17 3l2 1-2 1"/></svg><span>Plan</span></button>
         <button class="tab" data-view="log" aria-label="Log"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg><span>Log</span></button>
         <button class="tab" data-view="stages" aria-label="Stages"><svg viewBox="0 0 24 24"><path d="M12 3v18M7 7h10M7 17h10"/></svg><span>Stages</span></button>
         <button class="tab" data-view="crew" id="crewTab" aria-label="Crew"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.2"/><path d="M3 20c0-3.5 2.7-6 6-6s6 2.5 6 6M15.5 14.2c2.6 0 5 1.8 5 5"/></svg><span>Crew</span></button>
+        <button class="tab" data-view="setup" aria-label="Settings"><svg viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg><span>Settings</span></button>
       </nav>
     </section>
   </div>
@@ -624,10 +659,15 @@
     // =======================================================================
     // 4. MAP — theme-driven restyle of OpenFreeMap + DEM hillshade/contours
     // =======================================================================
+    // Start where the phone last was (saved below), not at a fixed demo road; the first fix moves the map anyway.
+    const LAST_POS = 'apex.lastPos';
+    const startPos = (() => { try { const p = JSON.parse(localStorage.getItem(LAST_POS) || 'null'); return p && Number.isFinite(p.lat) && Number.isFinite(p.lon) ? p : null; } catch (_) { return null; } })();
     const map = new maplibregl.Map({ container: 'map', style: 'https://tiles.openfreemap.org/styles/liberty',
-      center: [-84.70, 39.24], zoom: 14.6, pitch: 45, maxPitch: 60, attributionControl: { compact: true }, fadeDuration: 0 });
+      center: startPos ? [startPos.lon, startPos.lat] : [-84.70, 39.24], zoom: 14.6, pitch: 45, maxPitch: 60, attributionControl: { compact: true }, fadeDuration: 0 });
     window.apexDebug = { map, get track() { return track; }, state, drives, buildRoute: (...a) => buildRoute(...a), renderRouteCard: (...a) => renderRouteCard(...a) };
     let mapReady = false;
+    // The map's box changes with the layout (idle hides the gauges, a drive shows them); keep the canvas the size of its box.
+    if (window.ResizeObserver) new ResizeObserver(() => map.resize()).observe(document.getElementById('map'));
     // iOS can drop the map's WebGL context under memory pressure (e.g. after building a long route): the page keeps running but
     // the map goes black. MapLibre recovers if WebKit restores the context; if it doesn't within 4 s, reload the page and plan the
     // same route again. Never during a drive: the recording lives in this page.
@@ -646,6 +686,18 @@
       }, 4000);
     });
     map.on('webglcontextrestored', () => { clearTimeout(glTimer); map.triggerRepaint(); });
+    setInterval(() => { try { if (state.lastPosition) localStorage.setItem(LAST_POS, JSON.stringify(state.lastPosition)); } catch (_) {} }, 30000);
+    // On the web the idle map follows the browser's GPS (the app's shell pushes its own frames instead). The browser asks once
+    // and remembers the answer for the site; denied or unavailable leaves the map where it is.
+    map.once('load', () => {
+      if (IN_APP_SHELL || !navigator.geolocation) return;
+      navigator.geolocation.watchPosition((p) => {
+        const c = p.coords;
+        state.lastPosition = { lat: c.latitude, lon: c.longitude }; state.lastPositionAt = performance.now();
+        if (state.mode === 'live') return;   // a web drive feeds its own frames
+        showIdleFix({ lat: c.latitude, lon: c.longitude, course_deg: Number.isFinite(c.heading) ? c.heading : NaN, speed_mps: Number.isFinite(c.speed) ? c.speed : 0 });
+      }, () => {}, { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 });
+    });
     map.once('load', () => setTimeout(async () => {
       let saved = null;
       try { saved = JSON.parse(sessionStorage.getItem(GL_RESTORE) || 'null'); sessionStorage.removeItem(GL_RESTORE); } catch (_) { saved = null; }
@@ -1465,8 +1517,19 @@
     }
     // Route planning starts from the phone's real position: the live fix while driving, else one
     // GPS fix. Never the map centre: a route from the wrong start is worse than none.
+    const IN_APP_SHELL = !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex);
     function locate() {
       if (state.live) return Promise.resolve({ lat: state.live.lat, lon: state.live.lon });
+      if (IN_APP_SHELL) {
+        return new Promise((resolve) => {
+          const fresh = () => state.lastPosition && performance.now() - (state.lastPositionAt || 0) < 30000;
+          if (fresh()) { resolve(state.lastPosition); return; }
+          const t0 = performance.now(), poll = setInterval(() => {
+            if (fresh()) { clearInterval(poll); resolve(state.lastPosition); }
+            else if (performance.now() - t0 > 10000) { clearInterval(poll); resolve(null); }
+          }, 200);
+        });
+      }
       return new Promise((resolve) => {
         if (!navigator.geolocation) { resolve(null); return; }
         navigator.geolocation.getCurrentPosition(
@@ -1492,6 +1555,7 @@
     }
     function renderRouteCard(t = plannedRoute) {
       const card = $('routeCard');
+      $('planBarText').textContent = t && t.name ? t.name : 'Where to?'; $('planPanel').classList.toggle('routed', !!t);
       if (!t) { card.hidden = true; return; }
       plannedRoute = t;
       card.hidden = false;
@@ -1534,7 +1598,7 @@
       plannedRoute = t;
       activate(t, 0);
       renderRouteCard(t);
-      if (state.mode !== 'live') openSheet('route');
+      if (state.mode !== 'live') openPlan(true);
       attachLimits(t);
       if (!prebuilt) toast(`${name} · ${(totalM() / 1609.344).toFixed(1)} mi · ${t.events.length} corners`);
     }
@@ -1568,6 +1632,7 @@
         // Kept on the track so a reroute can rebuild it; from: null = the phone's position.
         const request = { from: from.label === null ? null : { lat: from.lat, lon: from.lon }, to: { lat: to.lat, lon: to.lon }, via: [] };
         await buildRoute([from, to], 'route_dest', `To ${to.label || 'current location'}`, null, request);
+        if (to.label && !to.label.startsWith('Pin ')) rememberPlace(to);
       } catch (err) { toast(err.message); } finally { ui.done(); }
     }
     // Live off-route handling. Notes, pace and trip distance stay blank while off route (render
@@ -1702,14 +1767,15 @@
     }
     // Views: ROUTE / DRIVES / SETUP open the side panel; tapping the open tab again, the map
     // behind it, or swiping it right closes it. ANALYSIS is its own page.
-    const VIEW_TITLES = { route: 'Plan', crew: 'Crew', setup: 'Settings' };
+    const VIEW_TITLES = { crew: 'Crew', setup: 'Settings' };
     let view = null;
     function showView(v) {
       if (v === 'log') { location.href = 'analysis.html?tab=log'; return; }
       if (v === 'stages') { location.href = 'analysis.html?tab=stages'; return; }
+      if (v === 'route') { showView(null); openPlan(true); return; }
       if (v === 'map') v = null;
       view = v;
-      if (v === 'route') refreshSavedDrives();
+      if (v) openPlan(false);
       const sheet = $('sheet');
       if (v) { sheet.dataset.view = v; $('sheetTitle').textContent = VIEW_TITLES[v]; sheet.querySelector('.body').scrollTop = 0; }
       sheet.classList.toggle('open', !!v);
@@ -1718,9 +1784,63 @@
       document.querySelectorAll('#tabbar .tab').forEach(t => t.classList.toggle('on', v ? t.dataset.view === v : t.dataset.view === 'map'));
     }
     const openSheet = (v = view || 'route') => showView(v);
+    // Plan: the bar is always there (not while driving); tap it, or drag it up, for From / To, places, loops and the route card.
+    function openPlan(open) {
+      $('planPanel').classList.toggle('open', open);
+      $('app').classList.toggle('plan-open', open);
+      $('planHandle').setAttribute('aria-expanded', String(open));
+      if (open) { refreshSavedDrives(); renderPlaces(); $('planBody').scrollTop = 0; }
+    }
+    $('planHandle').addEventListener('click', () => openPlan(!$('planPanel').classList.contains('open')));
+    {
+      let y0 = null;
+      $('planBar').addEventListener('pointerdown', (e) => { y0 = e.clientY; });
+      $('planBar').addEventListener('pointerup', (e) => {
+        if (y0 == null) return;
+        const dy = e.clientY - y0; y0 = null;
+        if (dy < -30) openPlan(true); else if (dy > 30) openPlan(false);
+      });
+    }
+    $('swTab').addEventListener('click', () => {
+      const open = !$('swPanel').classList.contains('open');
+      $('swPanel').classList.toggle('open', open);
+      $('swTab').setAttribute('aria-expanded', String(open));
+    });
+    // Places to go without typing: recent destinations, then saved spots.
+    const RECENT_PLACES = 'apex.recentPlaces';
+    function recentPlaces() { try { return JSON.parse(localStorage.getItem(RECENT_PLACES) || '[]'); } catch (_) { return []; } }
+    function rememberPlace(p) {
+      if (!p || !p.label || !Number.isFinite(p.lat) || !Number.isFinite(p.lon)) return;
+      try { localStorage.setItem(RECENT_PLACES, JSON.stringify([{ label: p.label, lat: p.lat, lon: p.lon }, ...recentPlaces().filter(q => q.label !== p.label)].slice(0, 6))); } catch (_) {}
+    }
+    function renderPlaces() {
+      const rows = [...recentPlaces().map(p => ({ ...p, kind: 'Recent' })),
+                    ...loadHighlights().filter(h => Number.isFinite(h.lat) && Number.isFinite(h.lon)).map(h => ({ label: h.name || 'Spot', lat: h.lat, lon: h.lon, kind: 'Spot' }))].slice(0, 8);
+      const box = $('placeList');
+      box.replaceChildren(...rows.map(p => {
+        const b = document.createElement('button'); b.className = 'place';
+        const name = document.createElement('b'); name.textContent = p.label;
+        const kind = document.createElement('span'); kind.textContent = p.kind;
+        b.append(name, kind); b.addEventListener('click', () => routeToPlace(p));
+        return b;
+      }));
+      box.hidden = !rows.length;
+    }
+    async function routeToPlace(p) {
+      if ($('destGoBtn').classList.contains('busy')) return;
+      $('destInput').value = p.label;
+      const ui = busy($('destGoBtn'));
+      ui.step('Routing…', 0.5);
+      try {
+        const from = await resolvePlace($('fromInput').value);
+        const request = { from: from.label === null ? null : { lat: from.lat, lon: from.lon }, to: { lat: p.lat, lon: p.lon }, via: [] };
+        await buildRoute([from, { lat: p.lat, lon: p.lon, label: p.label }], 'route_dest', `To ${p.label}`, null, request);
+        rememberPlace(p);
+      } catch (err) { toast(err.message); } finally { ui.done(); }
+    }
+    for (const id of ['fromInput', 'destInput']) $(id).addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); routeToQuery(); } });
     const closeSheet = () => showView(null);
     document.querySelectorAll('#tabbar .tab').forEach(t => t.addEventListener('click', () => showView(view === t.dataset.view ? null : t.dataset.view)));
-    $('settingsBtn').addEventListener('click', () => showView(view === 'setup' ? null : 'setup'));
     $('scrim').addEventListener('click', closeSheet);
     $('pinCancelBtn').addEventListener('click', closePin);
     $('pinOverlay').addEventListener('click', (e) => { if (e.target === $('pinOverlay')) closePin(); });
@@ -1735,7 +1855,7 @@
       if (!droppedPin) return;
       $('fromInput').value = `${droppedPin.lat.toFixed(6)}, ${droppedPin.lon.toFixed(6)}`;
       state.planField = 'fromInput';
-      closePin(); openSheet('route');
+      closePin(); openPlan(true);
     });
     $('pinViaBtn').addEventListener('click', async (e) => {
       if (!droppedPin || !plannedRoute?.request) return;
@@ -2205,8 +2325,9 @@
     const NATIVE_SHELL = !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex);
     function paintModeSwitch() {
       const on = state.mode === 'live';
-      $('driveBar').hidden = !on; $('transport').hidden = on; $('startBlock').hidden = on;
-      if (on) $('app').classList.remove('sheet-open');
+      $('driveBar').hidden = !on; $('transport').hidden = on;
+      $('app').classList.toggle('live', on);
+      if (on) { $('app').classList.remove('sheet-open'); openPlan(false); }
     }
     // In the iOS app the switch lives under the app, not Safari.
     const LOC_DENIED_TEXT = `Location is off. Settings → ${window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex ? 'ApexNav' : 'Safari'} → Location → Allow`;
@@ -2401,7 +2522,7 @@
     window.apex = {
       live(frame) {
         if (!frame || !frame.has_fix || !Number.isFinite(frame.lat) || !Number.isFinite(frame.lon)) return;
-        state.lastPosition = { lat: frame.lat, lon: frame.lon };
+        state.lastPosition = { lat: frame.lat, lon: frame.lon }; state.lastPositionAt = performance.now();
         if (NATIVE_SHELL && !driveActive) { showIdleFix(frame); return; }
         state.live = frame; state.liveAt = performance.now();
         if (drive.native && drive.rec) {
@@ -2461,8 +2582,8 @@
         booting = false; paintIdle();
         if (params.get('play') === '1') setPlaying(true);
       } else { booting = false; paintIdle(); }
-      if (params.get('book') === '1') openSheet('route');
-      if (VIEW_TITLES[params.get('view')]) openSheet(params.get('view')); else if (params.get('view') === 'drives') openSheet('route');
+      if (params.get('book') === '1' || params.get('view') === 'route' || params.get('view') === 'drives') openPlan(true);
+      if (VIEW_TITLES[params.get('view')]) openSheet(params.get('view'));
     }
     bootDrives();
     if (document.fonts) document.fonts.ready.then(() => render(true));
