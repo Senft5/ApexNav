@@ -73,16 +73,21 @@
     [data-theme="roadbook"] .plan { border-top-width: 2px; }
     .plan-bar { display: flex; gap: 8px; align-items: center; padding: 8px 10px; touch-action: none; }
     .plan-bar::before { content: ""; position: absolute; top: 3px; left: 50%; width: 36px; height: 3px; margin-left: -18px; background: var(--panel-dim); opacity: 0.5; }
-    .plan-handle { flex: 1; min-width: 0; height: 44px; display: flex; align-items: center; gap: 8px; padding: 0 12px; border: 1px solid var(--panel-dim); color: var(--panel-dim); font-size: 16px; text-align: left; }
-    .plan-handle svg { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
-    .plan-handle span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .plan.routed .plan-handle { color: var(--panel-ink); }
+    .plan-search { flex: 1; min-width: 0; height: 44px; display: flex; align-items: center; gap: 8px; padding: 0 0 0 12px; border: 1px solid var(--panel-dim); color: var(--panel-dim); cursor: text; }
+    .plan-search:focus-within { border-color: var(--panel-ink); }
+    .plan-search svg { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+    .plan-search input { flex: 1; min-width: 0; height: 100%; padding-right: 10px; font: inherit; font-size: 16px; color: var(--panel-ink); background: transparent; border: 0; outline: none; -webkit-appearance: none; appearance: none; }
+    .plan-search input::placeholder { color: var(--panel-dim); }
+    .plan-search input::-webkit-search-cancel-button { -webkit-appearance: none; }
+    .plan-cancel { flex: none; padding: 0 4px; font-size: 15px; }
+    .plan:not(.open) .plan-cancel, .plan.open .btn-start { display: none; }
     .plan-body { display: none; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding: 4px 16px 20px; gap: 20px; }
     .plan.open .plan-body { display: grid; }
     .place-list { display: grid; margin-top: 8px; }
     .place { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: baseline; min-height: 44px; padding: 8px 2px; border-top: 1px solid var(--hair, var(--panel-dim)); text-align: left; }
     .place b { font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .place span { font-size: 12px; color: var(--panel-dim); }
+    .place span { font-size: 12px; color: var(--panel-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 45vw; }
+    .place-list .note { margin: 8px 2px 0; }
     #app.live .plan, #app.sheet-open .plan { display: none; }
     #app:not(.live) .plates { bottom: 72px; }
     #app.plan-open .plates, #app.plan-open .edge-tab, #app.plan-open .edge-panel { display: none; }
@@ -290,21 +295,17 @@
 
       <section class="plan" id="planPanel" aria-label="Plan">
         <div class="plan-bar" id="planBar">
-          <button class="plan-handle" id="planHandle" aria-expanded="false" aria-controls="planBody"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5"/></svg><span id="planBarText">Where to?</span></button>
+          <label class="plan-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5"/></svg>
+            <input id="destInput" type="search" placeholder="Where to?" aria-label="Where to" aria-controls="planBody" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="go" /></label>
           <button class="btn-start" id="startDrive" aria-label="Start drive"><i></i>Start</button>
+          <button class="linkbtn plan-cancel" id="planCancel">Cancel</button>
         </div>
         <div class="plan-body" id="planBody">
             <section>
-              <h3>Where to</h3>
-              <div class="plan-fields">
-                <div class="row">
-                  <input class="field" id="fromInput" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="go" placeholder="Current location" aria-label="From" autocomplete="off" />
-                  <button class="ink-btn" id="swapBtn" aria-label="Swap From and To">Swap</button>
-                </div>
-                <div class="row">
-                  <input class="field" id="destInput" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="go" placeholder="Town, road or address" aria-label="To" autocomplete="off" />
-                  <button class="ink-btn solid" id="destGoBtn">Go</button>
-                </div>
+              <div class="row">
+                <input class="field" id="fromInput" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="go" placeholder="From: current location" aria-label="From" autocomplete="off" />
+                <button class="ink-btn" id="swapBtn" aria-label="Swap From and To">Swap</button>
+                <button class="ink-btn solid" id="destGoBtn">Go</button>
               </div>
               <div class="place-list" id="placeList" hidden></div>
               <button class="linkbtn" id="tapRouteBtn">Or tap the map</button>
@@ -385,7 +386,7 @@
             <p class="note">How far the map leans into corners ahead.</p>
           </section>
           <section class="sources" data-panel="setup">
-            <details class="more"><summary>Sources and licences</summary><p class="note">Map &copy; OpenStreetMap contributors via OpenFreeMap. Terrain: AWS Terrarium DEM. Routing, map matching and posted limits: Valhalla (FOSSGIS). Geocoding: Nominatim. Plate-reading cameras: OpenStreetMap (<code>surveillance:type=ALPR</code>, DeFlock) via Overpass. Voices: Kokoro-82M (Apache-2.0).</p></details>
+            <details class="more"><summary>Sources and licences</summary><p class="note">Map &copy; OpenStreetMap contributors via OpenFreeMap. Terrain: AWS Terrarium DEM. Routing, map matching and posted limits: Valhalla (FOSSGIS). Geocoding: Nominatim. Search suggestions: Photon (Komoot). Plate-reading cameras: OpenStreetMap (<code>surveillance:type=ALPR</code>, DeFlock) via Overpass. Voices: Kokoro-82M (Apache-2.0).</p></details>
           </section>
         </div>
       </aside>
@@ -1555,7 +1556,7 @@
     }
     function renderRouteCard(t = plannedRoute) {
       const card = $('routeCard');
-      $('planBarText').textContent = t && t.name ? t.name : 'Where to?'; $('planPanel').classList.toggle('routed', !!t);
+      $('planPanel').classList.toggle('routed', !!t);
       if (!t) { card.hidden = true; return; }
       plannedRoute = t;
       card.hidden = false;
@@ -1788,10 +1789,11 @@
     function openPlan(open) {
       $('planPanel').classList.toggle('open', open);
       $('app').classList.toggle('plan-open', open);
-      $('planHandle').setAttribute('aria-expanded', String(open));
+      $('destInput').setAttribute('aria-expanded', String(open));
       if (open) { refreshSavedDrives(); renderPlaces(); $('planBody').scrollTop = 0; }
     }
-    $('planHandle').addEventListener('click', () => openPlan(!$('planPanel').classList.contains('open')));
+    $('destInput').addEventListener('focus', () => { if (!$('planPanel').classList.contains('open')) openPlan(true); });
+    $('planCancel').addEventListener('click', () => { $('destInput').blur(); $('fromInput').blur(); openPlan(false); });
     {
       let y0 = null;
       $('planBar').addEventListener('pointerdown', (e) => { y0 = e.clientY; });
@@ -1813,10 +1815,32 @@
       if (!p || !p.label || !Number.isFinite(p.lat) || !Number.isFinite(p.lon)) return;
       try { localStorage.setItem(RECENT_PLACES, JSON.stringify([{ label: p.label, lat: p.lat, lon: p.lon }, ...recentPlaces().filter(q => q.label !== p.label)].slice(0, 6))); } catch (_) {}
     }
-    function renderPlaces() {
-      const rows = [...recentPlaces().map(p => ({ ...p, kind: 'Recent' })),
-                    ...loadHighlights().filter(h => Number.isFinite(h.lat) && Number.isFinite(h.lon)).map(h => ({ label: h.name || 'Spot', lat: h.lat, lon: h.lon, kind: 'Spot' }))].slice(0, 8);
-      const box = $('placeList');
+    // Typing in Where to? suggests places near you. Photon is OpenStreetMap search built for search-as-you-type (public
+    // Nominatim forbids it, and stays for the final geocode). Offline: no list; typing and Go still work.
+    async function photonSuggest(q) {
+      const near = state.lastPosition, bias = near ? `&lat=${near.lat.toFixed(3)}&lon=${near.lon.toFixed(3)}` : '';
+      const j = await RouteLoading.json(`https://photon.komoot.io/api/?limit=5&lang=en&q=${encodeURIComponent(q)}${bias}`, {}, 6000);
+      return (j.features || []).map(f => {
+        const p = f.properties || {}, c = (f.geometry || {}).coordinates || [];
+        const name = p.name || [p.housenumber, p.street].filter(Boolean).join(' ') || q;
+        return { label: name, lat: c[1], lon: c[0], kind: [p.city || p.town || p.village || p.county, p.state].filter(x => x && x !== name).join(', ') || 'Place' };
+      }).filter((p, i, all) => Number.isFinite(p.lat) && Number.isFinite(p.lon)
+        && all.findIndex(o => o.label === p.label && o.kind === p.kind) === i);   // one row per place (OSM can hold a node and an area)
+    }
+    let suggestTimer = null, suggestSeq = 0;
+    $('destInput').addEventListener('input', () => { clearTimeout(suggestTimer); suggestTimer = setTimeout(renderPlaces, 300); });
+    async function renderPlaces() {
+      const q = $('destInput').value.trim(), seq = ++suggestSeq, box = $('placeList');
+      let rows, empty = '';
+      if (q.length >= 3 && !COORDS.test(q)) {
+        try { rows = await photonSuggest(q); } catch (_) { rows = []; empty = 'No suggestions offline. Press Go to search.'; }
+        if (seq !== suggestSeq) return;                                  // a newer keystroke won
+        if (!rows.length && !empty) empty = 'No matches nearby. Press Go to search everywhere.';
+      } else {
+        rows = [...recentPlaces().map(p => ({ ...p, kind: 'Recent' })),
+                ...loadHighlights().filter(h => Number.isFinite(h.lat) && Number.isFinite(h.lon)).map(h => ({ label: h.name || 'Spot', lat: h.lat, lon: h.lon, kind: 'Spot' }))].slice(0, 8);
+      }
+      if (empty) { const n = document.createElement('p'); n.className = 'note'; n.textContent = empty; box.replaceChildren(n); box.hidden = false; return; }
       box.replaceChildren(...rows.map(p => {
         const b = document.createElement('button'); b.className = 'place';
         const name = document.createElement('b'); name.textContent = p.label;
@@ -1838,7 +1862,7 @@
         rememberPlace(p);
       } catch (err) { toast(err.message); } finally { ui.done(); }
     }
-    for (const id of ['fromInput', 'destInput']) $(id).addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); routeToQuery(); } });
+
     const closeSheet = () => showView(null);
     document.querySelectorAll('#tabbar .tab').forEach(t => t.addEventListener('click', () => showView(view === t.dataset.view ? null : t.dataset.view)));
     $('scrim').addEventListener('click', closeSheet);
@@ -1898,14 +1922,14 @@
     });
     $('destGoBtn').addEventListener('click', () => routeToQuery());
     ['fromInput', 'destInput'].forEach(id => {
-      $(id).addEventListener('keydown', (e) => { if (e.key === 'Enter') routeToQuery(); });
+      $(id).addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); routeToQuery(); } });
       $(id).addEventListener('focus', () => { state.planField = id; });
     });
     $('swapBtn').addEventListener('click', () => { const f = $('fromInput'), t = $('destInput'); [f.value, t.value] = [t.value, f.value]; });
     $('tapRouteBtn').addEventListener('click', (e) => {
       state.tapToRoute = !state.tapToRoute;
       e.currentTarget.classList.toggle('on', state.tapToRoute);
-      if (state.tapToRoute) { closeSheet(); toast(state.planField === 'fromInput' ? 'Tap the map where you want to start.' : 'Tap the map where you want to go.'); }
+      if (state.tapToRoute) { closeSheet(); openPlan(false); toast(state.planField === 'fromInput' ? 'Tap the map where you want to start.' : 'Tap the map where you want to go.'); }
     });
     document.querySelectorAll('[data-loop-mi]').forEach(b => b.addEventListener('click', () => loop(parseInt(b.dataset.loopMi, 10), b)));
     $('routeDriveBtn').addEventListener('click', () => {
