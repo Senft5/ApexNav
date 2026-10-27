@@ -1,14 +1,68 @@
 import { env } from "cloudflare:workers";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { LIMITS, validateContribution } from "../src/contribute";
 import { api, freshDb, makeUser, ok } from "./helpers";
 
 beforeEach(freshDb);
+const dbRestorers: Array<() => void> = [];
+afterEach(() => { while (dbRestorers.length) dbRestorers.pop()!(); });
 
 const today = () => new Date().toISOString().slice(0, 10);
 const daysAgo = (n: number) => new Date(Date.now() - n * 86400_000).toISOString().slice(0, 10);
 const bins = (n = 60, start = 0) => Array.from({ length: n }, (_, j) => ({ i: start + j, cam: 1.5, rough: 0.05, crest: 0.1, k: 0.01 }));
 const upload = (over: Record<string, unknown> = {}) => ({ way_id: 123456, dir: 0, driven_on: today(), drive_id: "drive-aaaa-0001", bins: bins(), ...over });
+
+function injectBatchFailure(error: Error, commitThenFail = false): void {
+  const db = env.DB;
+  let fail = true;
+  env.DB = new Proxy(db, {
+    get(target, prop, receiver) {
+      if (prop !== "batch") return Reflect.get(target, prop, receiver);
+      return async (statements: D1PreparedStatement[]) => {
+        if (fail) {
+          fail = false;
+          if (commitThenFail) await target.batch(statements);
+          else {
+            try { await target.batch([...statements, target.prepare("SELECT * FROM missing_contribution_test_table")]); }
+            catch { throw error; }
+          }
+          throw error;
+        }
+        return target.batch(statements);
+      };
+    },
+  });
+  dbRestorers.push(() => { env.DB = db; });
+}
+
+function injectReceiptLookupFailure(failOnRead = 2): () => number {
+  const db = env.DB;
+  let reads = 0;
+  const wrap = (statement: D1PreparedStatement): D1PreparedStatement => new Proxy(statement, {
+    get(target, key) {
+      if (key === "bind") return (...values: unknown[]) => wrap(target.bind(...values));
+      if (key === "first") return async () => {
+        reads++;
+        if (reads === failOnRead) throw new Error("private db diagnostic");
+        return target.first();
+      };
+      const value = Reflect.get(target, key, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+  env.DB = new Proxy(db, {
+    get(target, prop, receiver) {
+      if (prop !== "prepare") return Reflect.get(target, prop, receiver);
+      return (sql: string) => {
+        const statement = target.prepare(sql);
+        if (!sql.startsWith("SELECT 1 FROM seen WHERE h = ?")) return statement;
+        return wrap(statement);
+      };
+    },
+  });
+  dbRestorers.push(() => { env.DB = db; });
+  return () => reads;
+}
 
 describe("validateContribution (pure rules)", () => {
   it("accepts a good run and computes its length", () => {
@@ -96,6 +150,63 @@ describe("POST /api/contribute (real time)", () => {
     expect(again.duplicate).toBe(true);
     expect((await q<{ n: number }>("SELECT n FROM road_bins WHERE bin_idx = 3")).n).toBe(1);
     expect(await ledger(a.id)).toBeCloseTo(0.9);
+  });
+
+  it("does not acknowledge a rolled back batch; a later retry commits the queued data", async () => {
+    const a = await makeUser("alice"); await optIn(a);
+    injectBatchFailure(new Error("sensitive database detail"));
+    const failed = await post(a);
+    expect(failed.status).toBe(503);
+    expect(await failed.text()).not.toContain("sensitive database detail");
+    expect((await q<{ n: number }>("SELECT COUNT(*) AS n FROM road_bins")).n).toBe(0);
+    expect(await ledger(a.id)).toBe(0);
+
+    const retried = await ok(post(a));
+    expect(await retried.json()).toEqual({ accepted: true, bins: 60 });
+    expect((await q<{ n: number }>("SELECT n FROM road_bins WHERE bin_idx = 3")).n).toBe(1);
+    expect(await ledger(a.id)).toBeCloseTo(0.9);
+  });
+
+  it("acknowledges a racing retry only when the receipt exists, without a second merge or payment", async () => {
+    const a = await makeUser("alice"); await optIn(a);
+    injectBatchFailure(new Error("parallel acknowledgement race"), true);
+    const raced = await ok(post(a));
+    expect(await raced.json()).toEqual({ accepted: true, bins: 60, duplicate: true });
+    expect((await q<{ n: number }>("SELECT n FROM road_bins WHERE bin_idx = 3")).n).toBe(1);
+    expect(await ledger(a.id)).toBeCloseTo(0.9);
+  });
+
+  it("does not acknowledge when receipt lookup fails after the batch error", async () => {
+    const a = await makeUser("alice"); await optIn(a);
+    const db = env.DB;
+    injectBatchFailure(new Error("batch failure"));
+    const receiptReads = injectReceiptLookupFailure();
+    const failed = await post(a);
+    expect(failed.status).toBe(503);
+    expect(receiptReads()).toBe(2);
+    expect(await failed.text()).not.toContain("private db diagnostic");
+    env.DB = db;
+    expect((await q<{ n: number }>("SELECT COUNT(*) AS n FROM road_bins")).n).toBe(0);
+  });
+
+  it("returns a sanitized retryable error when the initial receipt lookup fails", async () => {
+    const member = await makeUser("alice"); await optIn(member);
+    const receiptReads = injectReceiptLookupFailure(1);
+    const failed = await post(member);
+    expect(failed.status).toBe(503);
+    expect(await failed.json()).toEqual({ error: "contribution_temporarily_unavailable" });
+    expect(receiptReads()).toBe(1);
+    expect((await q<{ n: number }>("SELECT COUNT(*) AS n FROM road_bins")).n).toBe(0);
+  });
+
+  it("merges and rewards concurrent identical requests only once", async () => {
+    const member = await makeUser("alice"); await optIn(member);
+    const responses = await Promise.all([post(member), post(member)]);
+    expect(responses.map(response => response.status)).toEqual([202, 202]);
+    const bodies = await Promise.all(responses.map(response => response.json() as Promise<{ duplicate?: boolean }>));
+    expect(bodies.filter(body => body.duplicate)).toHaveLength(1);
+    expect((await q<{ n: number }>("SELECT n FROM road_bins WHERE bin_idx = 3")).n).toBe(1);
+    expect(await ledger(member.id)).toBeCloseTo(0.9);
   });
 
   it("keeps a correct running mean and variance across contributions", async () => {
