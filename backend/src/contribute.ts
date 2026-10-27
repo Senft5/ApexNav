@@ -108,7 +108,11 @@ export async function contribute(env: Env, v: Viewer, req: Request): Promise<{ a
   // the same chunk sent twice (a retry after a dropped connection) is acknowledged but merged once
   const lo = Math.min(...c.bins.map((b) => b.i)), hi = Math.max(...c.bins.map((b) => b.i));
   const chunk = await hmac(env, `c|${v.id}|${c.driveId}|${c.wayId}|${c.dir}|${lo}|${hi}`);
-  if (await env.DB.prepare("SELECT 1 FROM seen WHERE h = ?").bind(chunk.buffer).first()) return { accepted: true, bins: c.bins.length, duplicate: true };
+  const hasReceipt = async () => {
+    try { return await env.DB.prepare("SELECT 1 FROM seen WHERE h = ?").bind(chunk.buffer).first(); }
+    catch { throw new HttpError(503, "contribution_temporarily_unavailable"); }
+  };
+  if (await hasReceipt()) return { accepted: true, bins: c.bins.length, duplicate: true };
 
   const now = new Date(), hourKey = now.toISOString().slice(0, 13);
   const sum = (sql: string, ...a: unknown[]) => env.DB.prepare(sql).bind(...a).first<{ u: number; k: number }>();
@@ -130,6 +134,11 @@ export async function contribute(env: Env, v: Viewer, req: Request): Promise<{ a
     stmts.push(env.DB.prepare("INSERT INTO points_ledger (user_id, iso_week, octane) VALUES (?1, ?2, ?3) ON CONFLICT (user_id, iso_week) DO UPDATE SET octane = octane + ?3")
       .bind(v.id, isoWeek(now.getTime()), c.km * mult));
   }
-  try { await env.DB.batch(stmts); } catch { return { accepted: true, bins: c.bins.length, duplicate: true }; }
+  try {
+    await env.DB.batch(stmts);
+  } catch {
+    if (await hasReceipt()) return { accepted: true, bins: c.bins.length, duplicate: true };
+    throw new HttpError(503, "contribution_temporarily_unavailable");
+  }
   return { accepted: true, bins: c.bins.length };
 }
