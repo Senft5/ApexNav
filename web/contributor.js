@@ -207,6 +207,58 @@
     };
   }
 
+  /**
+   * Shares road data whenever the app is open and the phone is mounted (frames with calibration 'locked'), independent of
+   * recording a drive. Frames are cut into trips, each its own createLive stream, so the first and last km of every trip stay on
+   * the phone: a trip ends after stopS stopped, a gap in frames over gapS (app in the background), a jump over jumpM, or the mount
+   * losing its lock. A refusal (signed out, sharing off) pauses new trips for pauseS.
+   */
+  function createAmbient({ makeRecorder, makeLive, now = Date.now, stopS = 180, gapS = 10, jumpM = 150, pauseS = 600, onStatus }) {
+    let trip = null, doneKm = 0, trips = 0, lastT = null, lastFix = null, stoppedSince = null, pausedUntil = 0;
+    const status = () => { if (onStatus) onStatus(stats()); };
+    function stats() {
+      const cur = trip ? trip.live.stats() : null;
+      return { km: doneKm + (cur ? cur.km : 0), trips, active: !!trip, paused: now() < pausedUntil, error: cur ? cur.error : null };
+    }
+    function end() {
+      if (!trip) return;
+      const t = trip; trip = null; stoppedSince = null;
+      t.live.finish().then((s) => { doneKm += s.km; if (s.stopped) pausedUntil = now() + pauseS * 1000; status(); }).catch(() => {});
+    }
+    const metres = (a, b) => Math.hypot((b.lat - a.lat) * M_LAT, (b.lon - a.lon) * 111320 * Math.cos(a.lat * Math.PI / 180));
+    return {
+      /** One native frame (about every 0.1 s): { lat, lon, has_fix, speed_mps, calibration, roughness_rms, camber_deg, crest_vertical_g }. */
+      frame(fr) {
+        const t = now();
+        const usable = fr && fr.has_fix && fr.calibration === 'locked' && finite(fr.lat) && finite(fr.lon);
+        const gap = lastT != null && t - lastT > gapS * 1000, jump = lastFix && usable && metres(lastFix, fr) > jumpM;
+        lastT = t;
+        if (!usable || gap || jump) end();
+        if (!usable) { lastFix = null; return; }
+        lastFix = { lat: fr.lat, lon: fr.lon };
+        if (!(finite(fr.speed_mps) && fr.speed_mps >= 1)) {             // stopped: no new road; a long stop ends the trip (privacy)
+          if (stoppedSince == null) stoppedSince = t;
+          if (trip && t - stoppedSince > stopS * 1000) { end(); status(); }
+          return;
+        }
+        stoppedSince = null;
+        if (!trip) {
+          if (t < pausedUntil) return;
+          trip = { rec: makeRecorder(), live: makeLive(), idx: 0 }; trips++; status();
+        }
+        trip.rec.add(fr);
+        while (trip.idx < trip.rec.rows.length) {
+          const x = trip.rec.rows[trip.idx++];
+          trip.live.push({ lat: x.lat, lon: x.lon, roughness_rms: x.roughness_rms, camber_deg: x.camber_deg, crest: x.crest_vertical_g });
+        }
+        if (trip.live.stats().stopped) { end(); pausedUntil = t + pauseS * 1000; status(); }
+      },
+      /** The app is going away (or sharing was switched off): close the trip; its last km stays on the phone. */
+      stop() { end(); },
+      stats,
+    };
+  }
+
   /** Full pipeline for one drive. `post(contribution)` returns a Response-like or null. Returns { built, sent, skipped }. */
   async function contributeDrive(drive, post, opts = {}) {
     if (!eligible(drive, opts.now)) return { built: 0, sent: 0, skipped: 'drive is too old or lacks roughness data' };
@@ -279,6 +331,6 @@
     return -6 * Math.min(1, m.coverage * 2) * rough;
   }
 
-  const api = { createLive, driveIdFor, measuredSeries, seriesFrom, measuredAdjust, measuredAlong, summarize, locate, buildContributions, matchDrive, fetchWays, contributeDrive, eligible, project, cumulative, SKIP_CLASSES };
+  const api = { createLive, createAmbient, driveIdFor, measuredSeries, seriesFrom, measuredAdjust, measuredAlong, summarize, locate, buildContributions, matchDrive, fetchWays, contributeDrive, eligible, project, cumulative, SKIP_CLASSES };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexContributor = api;
 })(typeof window !== 'undefined' ? window : globalThis);

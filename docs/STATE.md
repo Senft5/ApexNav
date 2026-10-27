@@ -1,5 +1,12 @@
 # APEX NAV — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-10-27: navigation redesign and app-open road sharing
+- #69 restored #66's cockpit fixes, which my resolution of #65's merge conflict (`git checkout --ours web/index.html`) had dropped from main. Lesson: never take a whole side of a conflicted file; merge hunks.
+- #70 (navigation, owner decisions): tabs Map · Log · Stages · Crew · Settings; Plan is a pull-up sheet over the map ("Where to?" + compact Start; recent places and saved spots to route without typing); Notes/Voice/Cameras/Night on an edge tab over the map; no cog. In the app `locate()` uses the shell's GPS frames (no WKWebView location prompt every launch). Web idle map follows browser GPS and starts at the last known position, not a fixed demo road. No selecting UI text / callouts; 16 px fields. Map canvas follows its container size.
+- App-open sharing (branch claude/app-open-sharing, on top of #70): `ApexContributor.createAmbient` shares road data from native frames whenever calibration is `locked`, cut into trips (3 min stopped, 10 s frame gap, 150 m jump, mount lost) so each trip's first/last km stays private; pauses 10 min after a refusal. Native drives no longer run their own sharer (no double upload). Settings shows a Road data line; the drive line shows the same sharer. Web still shares only during drives (no mount calibration in a browser).
+- Not verified on a phone: any of the above. Untested in the app: the ambient sharer with real CoreMotion/GPS frames and real uploads.
+- Exact next task: owner test on the IPA; then Crews (tiles, local suggestions, public + private, friends as a side pop-up), Stages simplification, polish (drive-log scrolling overlaps, keyboard accessory bar, remaining web-feel issues), iOS-only traffic.
+
 ## Session 2026-10-26 (end): main has everything; one agent only
 - The owner shut down the earlier multi-model harness (queue/loop). One Claude Code session now works the repo; docs/WORKER_QUEUE.md and docs/LOOP.md are kept as a record, not a running process.
 - Merged to main: #63 (no false acknowledgements), #64 (no lost uploads, no NaN scores, camber/crest kept, automatic mount calibration, IMU g only when calibrated, calibration in the drive line), #66 (toasts clear the Dynamic Island, one divider on Plan/Crew, no start links, 12-hour time), #65 (crest averaged over measuring passes, peak unweighting shared), #67 (route loading deadlines, black-screen recovery, unknown curvature null; recovered harness work).
