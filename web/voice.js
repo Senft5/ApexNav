@@ -8,7 +8,7 @@
 
   function audio() {
     if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
-    if (ctx.state === 'suspended') ctx.resume();
+    if (ctx.state !== 'running') ctx.resume().catch(() => {});   // iOS leaves it 'interrupted' after the audio route changes
     return ctx;
   }
 
