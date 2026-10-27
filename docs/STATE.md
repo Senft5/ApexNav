@@ -1,5 +1,13 @@
 # APEX NAV — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-10-26 (end): main has everything; one agent only
+- The owner shut down the earlier multi-model harness (queue/loop). One Claude Code session now works the repo; docs/WORKER_QUEUE.md and docs/LOOP.md are kept as a record, not a running process.
+- Merged to main: #63 (no false acknowledgements), #64 (no lost uploads, no NaN scores, camber/crest kept, automatic mount calibration, IMU g only when calibrated, calibration in the drive line), #66 (toasts clear the Dynamic Island, one divider on Plan/Crew, no start links, 12-hour time), #65 (crest averaged over measuring passes, peak unweighting shared), #67 (route loading deadlines, black-screen recovery, unknown curvature null; recovered harness work).
+- Migration 0006 (`road_bins.crest_n`) applied by hand to both D1 databases (apexnav-db and apexnav-preview-db) on 2026-10-26 before #65 merged; `d1_migrations` still only records 0001.
+- The owner's old uncommitted main checkout is stashed (`stash@{0}`, "pre-reset 2026-10-26"); everything in it is on main.
+- Not verified on a phone: uploads over a full drive, calibration timeline, black-screen recovery (WebGL context loss / background kill), Dynamic Island spacing.
+- Exact next task: owner installs the IPA from main's iOS build and drives once (check shared km, `Calibrating` line clears, a score, no black screen after routing). Then the redesigns with the owner: Plan as a sheet over the map with prefilled places, Settings tab without the cog, smaller Start drive, Crews as groups (several per person), Stages, polish; traffic as a fun penalty; monetization (docs only so far, see conversation).
+
 ## Session 2026-10-26: road data upload loss (owner report)
 - Evidence: production D1 `upload_counts` for the owner's 17:03 EDT drive (bucket `2026-10-26T21`) shows 21 uploads, 4.545 km, against a 7.4 mi (11.9 km) recorded drive. By design about 2 km never leave the phone (first and last km), and residential/service roads are skipped; the rest was lost. The server stores no drive logs, only anonymous `road_bins`.
 - Causes found in the code: (1) `ApexSync.contribute` turned any network error into `'stop'`, so one blip ended sharing for the rest of the drive; (2) 5xx/429 returned `false` and the live streamer advanced past the chunk, dropping it; (3) each 100-row chunk dropped road pieces under 20 rows on either side of a chunk edge; (4) `finish()` left up to 99 settled rows unsent.
