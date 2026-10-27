@@ -10,6 +10,7 @@
 (function (root) {
   'use strict';
   const Core = root.ApexCore;
+  const Loading = root.ApexRouteLoading;
   const TILEJSON = 'https://tiles.openfreemap.org/planet';
   const ROAD_CLASSES = new Set(['primary', 'secondary', 'tertiary', 'minor']);
 
@@ -105,7 +106,7 @@
   };
   let tileUrl = null;
   async function roadPieces(c, radiusKm, onProgress) {
-    if (!tileUrl) tileUrl = (await (await fetch(TILEJSON)).json()).tiles[0];
+    if (!tileUrl) tileUrl = (await Loading.json(TILEJSON)).tiles[0];
     const z = 13, dLat = radiusKm / 110.54, dLon = radiusKm / (111.32 * Math.cos(c.lat * Math.PI / 180));
     const [x0, y0] = tileOf(c.lat + dLat, c.lon - dLon, z), [x1, y1] = tileOf(c.lat - dLat, c.lon + dLon, z);
     const jobs = [];
@@ -115,7 +116,7 @@
     const pieces = [];
     await Promise.all(jobs.map(async ([x, y]) => {
       try {
-        const buf = new Uint8Array(await (await fetch(tileUrl.replace('{z}', z).replace('{x}', x).replace('{y}', y))).arrayBuffer());
+        const buf = new Uint8Array(await Loading.arrayBuffer(tileUrl.replace('{z}', z).replace('{x}', x).replace('{y}', y)));
         for (const f of decodeLayer(buf, 'transportation', z, x, y)) {
           const p = f.props;
           if (!ROAD_CLASSES.has(p.class) || p.ramp === 1 || p.service || p.access === 'no' || p.surface === 'unpaved') continue;
@@ -251,9 +252,20 @@
 
   async function discover(c, radiusKm, onProgress, opts = {}) {
     const pieces = await roadPieces(c, radiusKm, (d, n) => onProgress && onProgress('tiles', d / n));
-    onProgress && onProgress('scoring', 1);
+    onProgress && onProgress('scoring', 0);
     const { strokes: all, ends } = strokes(pieces);
-    const stages = all.map(st => bestWindow(st, ends, pieces)).filter(Boolean);
+    const stages = [];
+    let yieldedAt = performance.now();
+    for (let index = 0; index < all.length; index++) {
+      if (performance.now() - yieldedAt >= 8) {
+        onProgress && onProgress('scoring', index / all.length);
+        await Loading.yieldToUI();
+        yieldedAt = performance.now();
+      }
+      const stage = bestWindow(all[index], ends, pieces);
+      if (stage) stages.push(stage);
+    }
+    onProgress && onProgress('scoring', 1);
     stages.sort((a, b) => b.score - a.score);
     return applyHighlights(stages, opts.highlights, opts.strength);
   }

@@ -50,3 +50,71 @@ Maps a normalized **Driver Engagement Score** (0.0 to 1.0, derived from combined
 ## 6. iOS & CarPlay Deployment Pipeline
 - **Cloud Unsigned `.ipa` Builder**: `.github/workflows/build.yml` uses `xcodegen` (`project.yml`) on `macos-15` runners to compile `ApexNav.ipa` for USB sideloading (Sideloadly / iloader).
 - **CarPlay Head-Unit Path**: Uses `WidgetKit` / `LiveActivity` for un-gated CarPlay Dashboard telemetry cards on free sideloaded builds, and `CPMapTemplate` (`com.apple.developer.carplay-maps`) for full head-unit vector map projection.
+
+## 7. App-open road learning and live convoy hazards (design draft, 2026-10-26)
+
+Reviewer transport decision: see CONVOY_TRANSPORT.md. First isolated build uses the small
+authenticated DO WebSocket relay fallback; WebRTC preference remains a future option.
+Live event/path anchors stay memory-only, and actor reset forces a fresh epoch/rejoin rather
+than restoring location history. This is a local implementation plan, not shipped behavior.
+
+Status: requirements and proposed boundaries, NOT implemented or device-validated.
+Road-1..4 and convoy-1..3 are coequal; convoy delivery must not wait for road-profile completion.
+This reprioritization performs no merge or production deployment.
+
+### Shared foreground acquisition, independent consumers
+- One sensor owner per foreground app session; page navigation must not duplicate or destroy it.
+  Personal recording, anonymous road learning and an explicitly joined convoy are separate consumers.
+  Start/End drive changes personal recording only. Each sharing consumer has its own consent/state.
+- Native IMU-derived observations retain source, calibration, availability, units and quality.
+  GPS-only web data never becomes invented banking, roughness or vertical evidence.
+  Keep unsupported measurements null; detection/filter math stays in headless core with parity tests.
+- Anonymous learning branches through privacy filtering and direction-aware map matching into a
+  bounded durable retry queue. Advance uploaded-distance UI only on a genuine server acknowledgment.
+  Account/session identity and precise trip shape must not enter public aggregate profiles.
+- Convoy observations branch immediately into a session-only provisional event stream, bypassing
+  road upload batching, rewards, long-term storage and multi-pass hazard corroboration.
+  A detected bump is not proof of a pothole; use provisional warning language until validated.
+
+### Small convoy vertical slice and proposed contract
+- Create -> invite/code -> authenticated join -> visible leader/follower state -> leave/revoke.
+  Reuse authentication, not permanent Crew membership as implicit location-sharing consent.
+- Versioned messages need random session/event IDs, authorized sender/leader epoch, sequence,
+  observation time, server-bounded expiry, hazard type, evidence/source/quality and path anchor.
+  Path anchor includes road/direction/progress and uncertainty; precise event/participant location
+  is session-scoped and ephemeral, never written into road profiles or routine request logs.
+- Publish the provisional hazard immediately. Three-second Cancel sends a retraction referring
+  to the same event ID; it is never a timer before initial transmission. Retraction tombstones
+  survive the event's replay lifetime so reconnect cannot resurrect cancelled warnings.
+- Speak once per follower/event only while still valid and ahead on the follower's compatible
+  path and direction. Proximity alone is insufficient for parallel/opposite roads or a passed event.
+  Unknown/stale position must not masquerade as known relevance. Retain distinct hazard IDs.
+- Server enforces joined-session authorization on transport and every event, rejects forged leader
+  messages and closes/revokes streams on leave/removal/session expiry. Reconnect cannot regain
+  revoked access or replay expired events. Do not persist live participant movement history.
+- UI exposes leader, joined/connecting/reconnecting/offline, sensor permission/calibration and
+  audio-disabled/interrupted states. Hazard speech preempts ordinary notes through the shared
+  speech arbiter, with an immediate visual cue; no promise of delivery while disconnected.
+
+### Latency target and evidence, not a shipped guarantee
+- Initial connected/foreground acceptance target: p95 <= 1.5 seconds from detector emission to
+  follower speech START, including speech arbitration. Detector window/group delay is measured
+  separately from physical impact to emission. Target requires validation; no measurements yet.
+- Instrument detector emission, leader enqueue/send, server receipt/fanout, follower receipt,
+  relevance decision, speech request and actual audio start. Never label queueing as audible speech.
+  Use local monotonic stage timings; raw monotonic clocks on different phones are not comparable.
+  Isolated multi-client harness uses one reference clock; physical checks require synchronized
+  recordings or a documented clock-offset/error bound and report percentiles, losses and reconnects.
+- Tests cover one leader/multiple followers, relevant/ahead vs opposite/parallel/passed paths,
+  duplicates, expiry, stale reconnect replay, retraction races, leave/revocation, missing permissions,
+  speech interruption and Start/End recording with sharing still active. Synthetic events are
+  isolated test/preview data only; real-phone acceptance is a separate, explicitly recorded result.
+
+### Existing gaps confirmed by initial road audit
+- Contribution payload is outside telemetry contracts; full source/confidence/grade/hazard evidence
+  is not carried end to end. Curvature can become zero when missing and is not aggregated in readback.
+- Current SQL catch-all can acknowledge failed ingestion as a duplicate; retry safety needs explicit
+  conflict verification and isolated failure tests before an upload is considered acknowledged.
+- Crest aggregation/count semantics and corroboration need a versioned, null-preserving design.
+  Current measured routing is a small roughness adjustment after loop generation, not character-aware
+  destination/loop/traffic candidate discovery. Preserve honest geometry fallback while fixing this.

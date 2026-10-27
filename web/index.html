@@ -13,6 +13,7 @@
   <script src="vendor/maplibre-gl.js"></script>
   <script src="vendor/maplibre-contour.min.js"></script>
   <script src="apex_core.js"></script>
+  <script src="route_loading.js"></script>
   <script src="stages.js"></script>
   <script src="sync.js"></script>
   <script src="sensors.js"></script>
@@ -455,7 +456,7 @@
   <script>
   (() => {
     'use strict';
-    const Core = window.ApexCore, Themes = window.ApexThemes, Inst = window.ApexInstruments;
+    const Core = window.ApexCore, Themes = window.ApexThemes, Inst = window.ApexInstruments, RouteLoading = window.ApexRouteLoading;
     const MPH = Core.MPS_TO_MPH;
     const params = new URLSearchParams(location.search);
     const $ = (id) => document.getElementById(id);
@@ -477,10 +478,13 @@
       };
     }
 
-    function trackFromPolyline(coords, id, name) {
+    async function trackFromPolyline(coords, id, name) {
+      await RouteLoading.yieldToUI();
       const rs = Core.resamplePolyline(coords.map(c => c[1]), coords.map(c => c[0]), 5);
       const { kappa, ds } = Core.computeCurvature(rs.lat, rs.lon);
+      await RouteLoading.yieldToUI();
       const sight = Core.sightDistanceM(rs.lat, rs.lon);
+      await RouteLoading.yieldToUI();
       const env = Core.brakingEnvelopeMps(kappa, ds, null, null, undefined, sight);
       const dist = rs.lat.map((_, i) => i * 5);
       const events = Core.annotateCautions(Core.detectCorners(kappa, ds), env, sight).map(c => {
@@ -624,6 +628,32 @@
       center: [-84.70, 39.24], zoom: 14.6, pitch: 45, maxPitch: 60, attributionControl: { compact: true }, fadeDuration: 0 });
     window.apexDebug = { map, get track() { return track; }, state, drives, buildRoute: (...a) => buildRoute(...a), renderRouteCard: (...a) => renderRouteCard(...a) };
     let mapReady = false;
+    // iOS can drop the map's WebGL context under memory pressure (e.g. after building a long route): the page keeps running but
+    // the map goes black. MapLibre recovers if WebKit restores the context; if it doesn't within 4 s, reload the page and plan the
+    // same route again. Never during a drive: the recording lives in this page.
+    const GL_RESTORE = 'apex.glRestoreRoute';
+    let glTimer = null;
+    map.on('webglcontextlost', () => {
+      clearTimeout(glTimer);
+      toast('Map graphics reset · restoring…');
+      glTimer = setTimeout(() => {
+        if (state.mode === 'live') { toast('Map display lost · your drive is still recording'); return; }
+        try {
+          const t = track && track.kind === 'route' && track.request ? track : null;
+          if (t) sessionStorage.setItem(GL_RESTORE, JSON.stringify({ id: t.id, name: t.name, request: t.request }));
+        } catch (_) { /* nothing to restore: the map still comes back */ }
+        location.reload();
+      }, 4000);
+    });
+    map.on('webglcontextrestored', () => { clearTimeout(glTimer); map.triggerRepaint(); });
+    map.once('load', () => setTimeout(async () => {
+      let saved = null;
+      try { saved = JSON.parse(sessionStorage.getItem(GL_RESTORE) || 'null'); sessionStorage.removeItem(GL_RESTORE); } catch (_) { saved = null; }
+      if (!saved || !saved.request || !saved.request.to) return;
+      const req = saved.request, from = req.from || await locate();
+      if (!from) { toast('Map restored · plan the route again'); return; }
+      await buildRoute([from, ...req.via, req.to], saved.id, saved.name, null, req);
+    }, 0));
     const DEM_URL = 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png';
     let demSource = null;
     try { demSource = new mlcontour.DemSource({ url: DEM_URL, encoding: 'terrarium', maxzoom: 13, worker: true }); demSource.setupMaplibre(maplibregl); } catch (_) { demSource = null; }
@@ -1393,20 +1423,19 @@
     async function valhallaRoute(points, throughRoadsOnly = false) {
       // Loop waypoints snap only to through roads (tertiary..primary), never cul-de-sacs or motorways.
       const filter = { min_road_class: 'tertiary', max_road_class: 'primary', exclude_ramp: true };
-      const res = await fetch(`${VALHALLA}/route`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+      const json = await RouteLoading.json(`${VALHALLA}/route`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
         locations: points.map((p, i) => {
           const end = i === 0 || i === points.length - 1;
           if (!end && p.shaping) return { lat: p.lat, lon: p.lon, type: 'through', radius: 25 };   // stay on the stage
           return { lat: p.lat, lon: p.lon, type: end ? 'break' : 'through', ...(throughRoadsOnly && !end ? { radius: 2500, search_filter: filter } : {}) };
         }),
         costing: 'auto', costing_options: { auto: { use_highways: 0.15, use_tolls: 0.3 } } }) });
-      const json = await res.json();
       if (!json.trip) throw new Error(json.error || 'no route');
       return json.trip.legs.flatMap((leg, i) => decodePolyline6(leg.shape).slice(i ? 1 : 0));
     }
     async function osrmRoute(points) {
       const coords = points.map(p => `${p.lon.toFixed(6)},${p.lat.toFixed(6)}`).join(';');
-      const json = await (await fetch(`https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`)).json();
+      const json = await RouteLoading.json(`https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`);
       if (!json.routes || !json.routes[0]) throw new Error(json.message || 'no route');
       return json.routes[0].geometry.coordinates;
     }
@@ -1416,10 +1445,9 @@
       for (let i = 0; i < t.lat.length; i += stride) idx.push(i);
       if (idx[idx.length - 1] !== t.lat.length - 1) idx.push(t.lat.length - 1);
       try {
-        const res = await fetch(`${VALHALLA}/trace_attributes`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+        const json = await RouteLoading.json(`${VALHALLA}/trace_attributes`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
           shape: idx.map(i => ({ lat: t.lat[i], lon: t.lon[i] })), costing: 'auto', shape_match: 'map_snap',
           filters: { attributes: ['edge.speed_limit', 'matched.edge_index'], action: 'include' } }) });
-        const json = await res.json();
         const edges = json.edges || [];
         t.limitMps = new Array(t.lat.length).fill(null);
         (json.matched_points || []).forEach((mp, k) => {
@@ -1496,7 +1524,7 @@
         toast(`Finding roads to ${name}…`);
         let coords = null;
         try { coords = await valhallaRoute(points); } catch (_) { try { coords = await osrmRoute(points); } catch (err) { toast('Couldn\'t build the route. Check signal and try again.'); return; } }
-        t = trackFromPolyline(coords, id, name);
+        t = await trackFromPolyline(coords, id, name);
         t.request = request;
       }
       if (t.request) for (const v of t.request.via) v.distM = t.dist[Core.nearestIndex(v.lat, v.lon, t.lat, t.lon, -1).index];
@@ -1522,7 +1550,7 @@
       const m = q.match(COORDS);
       if (m) return { lat: parseFloat(m[1]), lon: parseFloat(m[2]), label: `Pin ${parseFloat(m[1]).toFixed(3)}, ${parseFloat(m[2]).toFixed(3)}` };
       let items;
-      try { items = await (await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`)).json(); }
+      try { items = await RouteLoading.json(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`, {}, 10000); }
       catch (_) { throw new Error('Search is offline. Tap the map instead.'); }
       if (!items.length) throw new Error(`No match for "${q}"`);
       return { lat: parseFloat(items[0].lat), lon: parseFloat(items[0].lon), label: items[0].display_name.split(',')[0] };
@@ -1568,7 +1596,8 @@
       let coords;
       try { coords = await valhallaRoute(points); } catch (_) { try { coords = await osrmRoute(points); } catch (_) { failed(); return; } }
       if (track !== t || state.mode !== 'live') return;           // the driver loaded something else meanwhile
-      const nt = trackFromPolyline(coords, t.id, t.name);
+      const nt = await trackFromPolyline(coords, t.id, t.name);
+      if (track !== t || state.mode !== 'live') return;
       nt.request = { from: null, to: req.to, via: ahead };
       await buildRoute(null, t.id, t.name, nt);                     // activate() resets the monitor for the new route
     }
@@ -1608,7 +1637,9 @@
       if (loopBusy) return;
       loopBusy = true;
       const ui = btn ? busy(btn, [...document.querySelectorAll('[data-loop-mi]')]) : { step() {}, done() {} };
-      try { await buildLoop(miles, ui); } finally { loopBusy = false; ui.done(); }
+      try { await buildLoop(miles, ui); }
+      catch (_) { toast('Couldn\'t build a loop. Check signal and try again.'); }
+      finally { loopBusy = false; ui.done(); }
     }
     async function buildLoop(miles, ui) {
       const c = await locate();
@@ -1633,14 +1664,14 @@
         const coords = await valhallaRoute(job.pts, job.through)
           .finally(() => { settled++; ui.step(`Routing · ${settled} of ${jobs.length}`, 0.38 + 0.5 * settled / jobs.length); });
         const rs = Core.removeSpurs(coords.map(p => p[1]), coords.map(p => p[0]));
-        const t = trackFromPolyline(rs.lat.map((la, i) => [rs.lon[i], la]), `loop_${miles}`, `${miles} mi loop`);
+        const t = await trackFromPolyline(rs.lat.map((la, i) => [rs.lon[i], la]), `loop_${miles}`, `${miles} mi loop`);
         return { t, job, ...scoreLoop(t, miles), spursCut: rs.removed };
       });
       const done = (await Promise.allSettled(tries)).filter(r => r.status === 'fulfilled').map(r => r.value);
       if (!done.length) { toast('Couldn\'t build a loop. Check signal and try again.'); return; }
       done.sort((a, b) => b.score - a.score);
       // Members: let what others measured break ties among the top few (a rough road costs up to 6 points; unmeasured roads are neutral).
-      if (window.ApexSync && window.ApexContributor && done.length > 1 && await ApexSync.member()) {
+      if (window.ApexSync && window.ApexContributor && done.length > 1 && await RouteLoading.optional(ApexSync.member())) {
         ui.step('Checking road feel', 0.9);
         await Promise.all(done.slice(0, 3).map(async (d) => {
           try {

@@ -1,5 +1,12 @@
 # APEX NAV — OWNER VERIFICATION CHECKLIST
 
+## iOS route-loading freeze (2026-10-26; not yet device-verified)
+1. Install an IPA rebuilt with the local route-loading patch; the already installed bundle does not update automatically. Test while parked or as a passenger, never by operating the phone while driving.
+2. Load the route that froze, noting whether it is a destination, loop or saved replay, its approximate length and the last loading label. During loading, check that tabs and map gestures still respond.
+3. Repeat a destination route and a loop. Progress must advance during stage scoring rather than showing completed scoring before it starts. Preview/Drive it must still appear on success; no measured road values should be invented.
+4. Repeat with connectivity disabled or a stalled route service. Search has a 10 s deadline; individual routing/tile requests have 20 s deadlines including body reads. Multiple sequential steps/fallbacks can take longer than one deadline. An unavailable primary router must fall back or show a failure; controls must become usable for retry and an existing route must not be replaced by a failed result.
+5. Restore connectivity and retry without restarting the app. Report whether the exact original freeze reproduces. If it does, capture the last label, approximate elapsed time, voice/road-name settings and device logs; automated timer/Node tests are not physical-phone evidence.
+
 Four things I cannot do from my cloud container (no Google account, no live map servers, no real recording, no screen reader).
 Each is a short, ordered check with what "good" looks like. Site: https://apexnav.senftns.workers.dev (replace if your workers.dev name differs).
 

@@ -10,6 +10,9 @@ undoes it). The loop never pauses itself; when stuck on an item it skips it.
 
 Checkout: `C:/Users/senft/Projects/ApexNav`. Never work in the scratch copies.
 
+## Current owner priority (2026-10-26)
+Read and prioritize road-1 through road-4 and convoy-1 through convoy-3 in docs/WORKER_QUEUE.md as coequal top priorities before other feature work. Road intelligence means app-open sharing independent of personal recording, full supported measurement upload/processing and substantial routing influence. Convoys mean a leader's detected pothole immediately streams to approaching followers for spoken co-driver warnings, without waiting for road-profile batching, recording or multi-pass verification. Send first; the three-second cancel window retracts rather than delays. Sequence shared sensor foundations where needed without deferring all convoy work until road intelligence is complete. UX/UI, easy convoy joining and honest connection/sharing feedback are acceptance criteria. Checkpoint active overlapping work first.
+
 ## Tiers
 Pick the cheapest tier that can do the job **from a short brief**. A brief is a goal, the files,
 the constraints and an acceptance check, in one or two paragraphs. Never write old/new lines for

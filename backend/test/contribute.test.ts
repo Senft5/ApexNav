@@ -65,6 +65,11 @@ function injectReceiptLookupFailure(failOnRead = 2): () => number {
 }
 
 describe("validateContribution (pure rules)", () => {
+  it("accepts unknown curvature as null but still rejects an impossible one", () => {
+    expect(validateContribution(upload({ bins: bins().map((x) => ({ ...x, k: null })) })).bins.every((x) => x.k === null)).toBe(true);
+    expect(() => validateContribution(upload({ bins: bins().map((x) => ({ ...x, k: 0.5 })) }))).toThrow("bad_curvature");
+  });
+
   it("accepts a good run and computes its length", () => {
     const c = validateContribution(upload());
     expect(c.km).toBeCloseTo(0.3);
