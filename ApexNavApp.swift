@@ -327,8 +327,8 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         locManager.showsBackgroundLocationIndicator = true
         locManager.requestWhenInUseAuthorization()
         locManager.startUpdatingLocation()
-        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .voicePrompt, options: [.mixWithOthers, .duckOthers])
-        try? AVAudioSession.sharedInstance().setActive(true)
+        configureVoiceSession()
+        synth.delegate = self
         startMotionPipeline()
         startPushTimer()
     }
@@ -373,6 +373,14 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
             if isRecording { stopRecordingAndExport() } else { startRecording() }
         case "signIn":
             startSignIn()
+            return
+        case "voiceBegin":                                    // the web cockpit is about to play a voice clip
+            webVoiceActive = true
+            beginVoice()
+            return
+        case "voiceEnd":
+            webVoiceActive = false
+            endVoiceIfIdle()
             return
         default:
             break
@@ -721,12 +729,35 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
             ?? AVSpeechSynthesisVoice(language: "en-GB")
     }
 
+    // MARK: Voice audio: car stereo, CarPlay audio, Bluetooth
+    // A navigation app's prompts: .playback + .voicePrompt, ducking music and pausing podcasts only while a prompt plays.
+    // The session is active only while speaking: an always-active session kept the car's music ducked, and many head units
+    // switch to the phone's Bluetooth stream (or raise CarPlay audio) only when the app starts audio. The web cockpit's
+    // voice clips (WebAudio) share this session and bracket themselves with voiceBegin / voiceEnd.
+    private var webVoiceActive = false
+
+    private func configureVoiceSession() {
+        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .voicePrompt,
+                                                         options: [.duckOthers, .interruptSpokenAudioAndMixWithOthers])
+    }
+
+    private func beginVoice() {
+        configureVoiceSession()                                // WebKit may have changed the category for its own media
+        try? AVAudioSession.sharedInstance().setActive(true)
+    }
+
+    fileprivate func endVoiceIfIdle() {
+        guard !synth.isSpeaking, !webVoiceActive else { return }
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    }
+
     private func speak(_ phrase: String, interrupt: Bool = false, style: String = "codriver") {
         // AVSpeechSynthesizer queues utterances itself; only a forced call cuts in.
         // (The web cockpit decides which notes are still worth calling.)
         if interrupt && synth.isSpeaking {
             synth.stopSpeaking(at: .word)
         }
+        beginVoice()
         let utterance = AVSpeechUtterance(string: phrase)
         let voice = Self.voice(for: style)
         utterance.voice = voice
@@ -749,5 +780,15 @@ extension ApexSensorShell: MKLocalSearchCompleterDelegate {
 
     nonisolated func completer(_ completer: MKLocalSearchCompleter, didFailWithError error: Error) {
         Task { @MainActor in self.placeResultsUpdated(failed: true) }
+    }
+}
+
+extension ApexSensorShell: AVSpeechSynthesizerDelegate {
+    nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
+        Task { @MainActor in self.endVoiceIfIdle() }
+    }
+
+    nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
+        Task { @MainActor in self.endVoiceIfIdle() }
     }
 }

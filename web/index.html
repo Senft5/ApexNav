@@ -1193,22 +1193,32 @@
       if (speech.queue.length > 2) speech.queue.splice(0, speech.queue.length - 2);
       pumpSpeech();
     }
+    // In the app the shell owns the audio route (car stereo, CarPlay audio, Bluetooth): tell it while a web voice clip plays.
+    function voiceBracket(on) {
+      const native = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex;
+      if (native) { try { native.postMessage(on ? 'voiceBegin' : 'voiceEnd'); } catch (_) {} }
+    }
     async function pumpSpeech() {
       if (speech.busy || !speech.queue.length) return;
       const item = speech.queue.shift();
       speech.busy = true;
+      let played = false;
       try {
         if (state.voiceId !== 'device' && window.ApexVoice) {
           await ApexVoice.load(state.voiceId);
           const tokens = item.chain ? ApexVoice.tokensFor(item.chain, ApexVoice.bank.style) : item.sysToken ? [item.sysToken] : null;
-          // A call the bank can only voice by joining clips plays as one whole render when the
-          // route-load prefetch has it; the join is the audible seam we are avoiding.
-          if (tokens && ApexVoice.joins(tokens) > 0 && state.liveVoice && await ApexVoice.playWhole(spokenTextFor(item.text, ApexVoice.bank.style))) { speech.busy = false; pumpSpeech(); return; }
-          if (tokens && await ApexVoice.play(tokens)) { speech.busy = false; pumpSpeech(); return; }
-          // Not in the bank (drive names, route summaries): synthesise live with the same model.
-          if (state.liveVoice && await ApexVoice.speakLive(spokenTextFor(item.text, ApexVoice.bank.style))) { speech.busy = false; pumpSpeech(); return; }
+          voiceBracket(true);
+          try {
+            // A call the bank can only voice by joining clips plays as one whole render when the
+            // route-load prefetch has it; the join is the audible seam we are avoiding.
+            if (tokens && ApexVoice.joins(tokens) > 0 && state.liveVoice) played = await ApexVoice.playWhole(spokenTextFor(item.text, ApexVoice.bank.style));
+            if (!played && tokens) played = await ApexVoice.play(tokens);
+            // Not in the bank (drive names, route summaries): synthesise live with the same model.
+            if (!played && state.liveVoice) played = await ApexVoice.speakLive(spokenTextFor(item.text, ApexVoice.bank.style));
+          } finally { voiceBracket(false); }
         }
       } catch (_) { /* fall back to the device voice */ }
+      if (played) { speech.busy = false; pumpSpeech(); return; }
       deviceSpeak(spokenText(item.text));
     }
     function deviceSpeak(spoken) {
