@@ -20,6 +20,7 @@
   <script src="drive_view.js"></script>
   <script src="drive_card.js"></script>
   <script src="year_review.js"></script>
+  <script src="drive_tags.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { background: var(--panel); color: var(--panel-ink); font-family: var(--font-ui); font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -113,6 +114,8 @@
     a.back { display: inline-flex; align-items: center; min-height: 44px; font-size: 15px; font-weight: 600; text-decoration: none; color: var(--panel-dim); }
     .bar-top { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; min-height: 44px; }   /* page titles sit at the same height on every tab */
     label.btn { display: inline-flex; align-items: center; cursor: pointer; }
+    textarea { font: inherit; font-size: 15px; width: 100%; min-height: 64px; padding: 8px 10px; background: transparent; color: var(--panel-ink); border: 1px solid var(--panel-dim); box-sizing: border-box; }
+    .tagline { color: var(--accent); }
     details.more { border-top: 1px solid var(--rule); margin-top: 12px; }
     details.more summary { min-height: 44px; display: flex; align-items: center; font-size: 15px; font-weight: 600; cursor: pointer; list-style: none; }
     details.more summary::-webkit-details-marker { display: none; }
@@ -144,6 +147,11 @@
         <button class="btn" id="dvShare">Share</button>
         <button class="btn" id="dvCard">Share card</button>
       </div>
+      <div class="panel" id="dvTagsPanel"><h2>Tags and note</h2>
+        <div class="actions" id="dvTags" role="group" aria-label="Tags for this drive"></div>
+        <div class="actions mt-8"><input id="dvTagNew" maxlength="24" placeholder="Add a tag: the car, who came" aria-label="Add a tag" /><button class="btn" id="dvTagAdd">Add</button></div>
+        <textarea class="mt-8" id="dvNoteText" maxlength="280" placeholder="A note for yourself (stays on this phone)" aria-label="Note"></textarea>
+        <p class="note" id="dvTagsNote">Tags and notes stay on this phone. Filter the Log by them.</p></div>
       <div id="dvRoot"></div>
       <div class="panel" id="dvRoad" hidden><h2>This road over time</h2><div id="dvRoadChart"></div><div class="scroll"><table id="dvRoadTable"></table></div></div>
     </section>
@@ -165,6 +173,7 @@
       <div class="panel" id="trendPanel" hidden><h2>Score over time</h2><div id="trend"></div></div>
       <div class="panel" id="recordsPanel" hidden><h2>Your records</h2><div class="scroll"><table id="recordsTable"></table></div><p class="note" id="recordsNote"></p></div>
       <div class="panel" id="steadyPanel" hidden><h2>Braking consistency by month</h2><div id="steadyChart"></div><p class="note" id="steadyNote"></p></div>
+      <div class="actions" id="historyFilter" role="group" aria-label="Show drives tagged" hidden></div>
       <div class="panel" id="historyPanel"><div class="scroll"><table id="historyTable"></table></div></div>
       <details class="more"><summary>How Score works</summary>
         <p class="note">Score rates how you drive the corners, not how fast. <b>Pace</b>: corner speed against its safe grip limit, full credit from 85 % to 100 %. <b>Smooth</b>: how gently cornering load builds. <b>Brakes</b>: no hard braking after the apex. <b>Rhythm</b>: even commitment from corner to corner. Speed limits never enter it. 1000 is a closed-course number, not something to chase on public roads.</p></details>
@@ -271,6 +280,8 @@
     const dateLabel = (d) => ApexFormat.dateTime(d.date);
     // Pickers and buttons: a name that already carries its date ("Drive 10/27/2026 8:00 AM") does not repeat it
     const driveLabel = (d) => (/^Drive \d/.test(d.name) ? d.name : `${d.name} · ${dateLabel(d)}`);
+    const escH = (s) => String(s == null ? '' : s).replace(/[<>&"']/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' }[c]));
+    let tagFilter = [];
     const mmss = (s) => { const t = Math.round(s); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; };
     function bars(comp) {
       if (!comp) return '<span class="note">no clean corners</span>';
@@ -338,13 +349,23 @@
       if (!scored.length) { $('trend').innerHTML = '<p class="note">No scored drives yet. Import a recording, or start a drive on the map; a drive needs a few clean corners to get a Score.</p>'; }
       else $('trend').innerHTML = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Score over time">${grid}<path d="${line}" fill="none" stroke="${C.accent}" stroke-width="2"/>${dots}</svg>`;
 
-      const rows = drives.slice().reverse().map(d => `<tr class="row-link" data-drive="${d.id}" tabindex="0" role="link" aria-label="Open ${d.name}">
-        <td class="l"><b>${d.name}</b><span class="sub">${dateLabel(d)}</span></td>
+      // filter by tag (drive_tags.js, IDEAS D-23): chips for the tags in use; a chip toggles; a drive must carry every one picked
+      const tagsUsed = ApexDriveTags.used(drives);
+      tagFilter = tagFilter.filter((f) => tagsUsed.some((u) => u.tag.toLowerCase() === f.toLowerCase()));
+      const hf = $('historyFilter'); hf.hidden = !tagsUsed.length; hf.replaceChildren(...tagsUsed.map(({ tag, count }) => {
+        const on = tagFilter.includes(tag), b = document.createElement('button');
+        b.className = 'btn' + (on ? ' on' : ''); b.textContent = `${tag} ${count}`; b.setAttribute('aria-pressed', String(on));
+        b.addEventListener('click', () => { tagFilter = ApexDriveTags.toggle(tagFilter, tag); renderHistory(); });
+        return b;
+      }));
+      const shown = drives.filter((d) => ApexDriveTags.matches(d, tagFilter));
+      const rows = shown.slice().reverse().map(d => `<tr class="row-link" data-drive="${d.id}" tabindex="0" role="link" aria-label="Open ${escH(d.name)}">
+        <td class="l"><b>${escH(d.name)}</b><span class="sub">${dateLabel(d)}${ApexDriveTags.normalize(d.tags).length ? ` · <span class="tagline">${escH(ApexDriveTags.normalize(d.tags).join(', '))}</span>` : ''}</span></td>
         <td>${(d.km / 1.609344).toFixed(1)} mi</td>
         <td class="wide">${d.ds.corners}</td>
         <td><span class="score">${d.ds.score ?? '--'}</span></td>
         <td class="l wide">${bars(d.ds.components)}</td></tr>`).join('');
-      $('historyTable').innerHTML = !drives.length ? '<tr><td class="l" colspan="5"><span class="note">No drives yet.</span></td></tr>' : `<tr><th class="l">Drive</th><th>Distance</th><th class="wide">Corners scored</th><th>Score</th><th class="l wide">Components</th></tr>${rows}`;
+      $('historyTable').innerHTML = !drives.length ? '<tr><td class="l" colspan="5"><span class="note">No drives yet.</span></td></tr>' : !shown.length ? '<tr><td class="l" colspan="5"><span class="note">No drives with those tags.</span></td></tr>' : `<tr><th class="l">Drive</th><th>Distance</th><th class="wide">Corners scored</th><th>Score</th><th class="l wide">Components</th></tr>${rows}`;
       setTimeout(renderRecords, 0);
       setTimeout(renderSteadiness, 0);                                  // the coach runs per road: after the Log has painted
     }
@@ -765,8 +786,39 @@
       loadRoadFeel(d, dvView);
       // The drive's name is the page title (you arrive from the Log list); the picker stays only as this view's state.
       $('dvTitle').textContent = d.name;
+      renderTags(d);
       $('dvNote').textContent = `${dateLabel(d)} · ${d.source === 'web-gps' ? 'Recorded on this phone' : d.source === 'imported' ? 'Imported' : 'Example drive'}`;
     }
+    // Tags and note on a drive (drive_tags.js, IDEAS D-23): saved on its IndexedDB record, never sent anywhere.
+    async function saveTags(d, tags, note) {
+      d.tags = ApexDriveTags.normalize(tags); d.note = ApexDriveTags.note(note);
+      const raw = (await ApexRecording.all()).find((x) => x.id === d.id);
+      if (!raw) return false;
+      try { await ApexRecording.store({ ...raw, tags: d.tags, note: d.note }); return true; } catch (_) { return false; }
+    }
+    function renderTags(d) {
+      const box = $('dvTags'), current = ApexDriveTags.normalize(d.tags);
+      box.replaceChildren(...ApexDriveTags.offered(drives.filter((x) => x !== d), current).map((t) => {
+        const on = current.some((c) => c.toLowerCase() === t.toLowerCase()), b = document.createElement('button');
+        b.className = 'btn' + (on ? ' on' : ''); b.textContent = t; b.setAttribute('aria-pressed', String(on));
+        b.addEventListener('click', async () => { await saveTags(d, ApexDriveTags.toggle(d.tags, t), d.note); renderTags(d); });
+        return b;
+      }));
+      $('dvNoteText').value = d.note || '';
+    }
+    const currentDrive = () => drives.find((x) => x.id === $('dvPick').value);
+    async function addTag() {
+      const d = currentDrive(), inp = $('dvTagNew');
+      if (!d || !inp.value.trim()) return;
+      if (ApexDriveTags.normalize(d.tags).length >= ApexDriveTags.MAX_TAGS) { $('dvTagsNote').textContent = `At most ${ApexDriveTags.MAX_TAGS} tags on a drive.`; return; }
+      await saveTags(d, [...ApexDriveTags.normalize(d.tags), inp.value], d.note); inp.value = ''; renderTags(d);
+    }
+    $('dvTagAdd').addEventListener('click', addTag);
+    $('dvTagNew').addEventListener('keydown', (e) => { if (e.key === 'Enter') addTag(); });
+    $('dvNoteText').addEventListener('change', async () => {
+      const d = currentDrive(); if (!d) return;
+      $('dvTagsNote').textContent = (await saveTags(d, d.tags, $('dvNoteText').value)) ? 'Note saved on this phone.' : 'Couldn\u2019t save the note.';
+    });
     // Corner coach for a drive, against every other drive whose box overlaps it (Core.coach decides what is the same corner).
     // Boxes are cached on the drives and results per drive, so reopening a drive costs nothing until the library changes.
     const coachMemo = new Map(), boxes = new WeakMap();

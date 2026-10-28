@@ -628,6 +628,37 @@ flow('crew drives: an upcoming drive shows in Crew with who is going; Going answ
   check(plan && plan[1].title === 'Dragon run' && /Z$/.test(plan[1].starts_at) && Number.isFinite(plan[1].meet.lat) && plan[1].route_id === null && plan[1].public === false, 'the plan was sent: ' + JSON.stringify(plan));
 });
 
+flow('drive tags: tag a drive in the Log, filter by it, the note stays on the phone (IDEAS D-23)', async (page, base) => {
+  await page.goto(base + '/analysis.html');
+  await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && window.ApexRecording);
+  await page.evaluate(async () => {
+    const lat = [], lon = [];
+    for (let i = 0; i < 200; i++) { lat.push(35.6 + i * 5 / 110540); lon.push(-83.9); }
+    const rec = (id, name) => ({ id, name, date: '2026-10-20T15:00:00Z', lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: lat.map(() => 15),
+      lon_g: lat.map(() => 0), lat_g: lat.map(() => 0), g_known: null, events: [], elev: null, hz: 1, source: 'web-gps' });
+    await ApexRecording.store(rec('t1', 'Wet one <i>x</i>'));
+    await ApexRecording.store(rec('t2', 'Dry one'));
+  });
+  await page.goto(base + '/analysis.html?drive=t1');
+  await page.waitForSelector('#dvTags button');
+  await page.click('#dvTags button:has-text("Wet")');
+  await page.fill('#dvTagNew', 'E46');
+  await page.press('#dvTagNew', 'Enter');
+  await page.waitForSelector('#dvTags button[aria-pressed="true"]:has-text("E46")');
+  await page.fill('#dvNoteText', 'Puddles at the bridge');
+  await page.dispatchEvent('#dvNoteText', 'change');
+  await page.waitForFunction(() => /Note saved/.test(document.getElementById('dvTagsNote').textContent));
+  const rec = await page.evaluate(async () => (await ApexRecording.all()).find((d) => d.id === 't1'));
+  check(JSON.stringify(rec.tags) === '["Wet","E46"]' && rec.note === 'Puddles at the bridge', 'saved on the drive: ' + JSON.stringify([rec.tags, rec.note]));
+  await page.click('a.back[data-to="history"]');
+  await page.waitForSelector('#historyFilter button');
+  check((await page.$$('#historyTable tr.row-link')).length === 2, 'both drives listed');
+  check((await page.textContent('#historyTable')).includes('Wet one <i>x</i>'), 'a drive name shows as text');
+  await page.click('#historyFilter button:has-text("E46")');
+  const rows = await page.$$eval('#historyTable tr.row-link', (els) => els.map((e) => e.dataset.drive));
+  check(rows.length === 1 && rows[0] === 't1', 'filtered to the tagged drive: ' + rows);
+});
+
 flow('the Log page opens', async (page, base) => {
   await page.goto(base + '/analysis.html');
   await page.waitForLoadState('load');

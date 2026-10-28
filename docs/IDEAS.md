@@ -133,7 +133,7 @@ ideal drive and where to find time (#80), grip circle (#86), automatic mount cal
 | D-20 | Weekly drive digest: km of good roads, new roads, best moment, one thing to work on | M | S | todo | Strava weekly, Whoop |
 | D-21 | Coach in plain words: one sentence per drive that a non-racer understands | H | S | done (#101) | owner goal (approachable) |
 | D-22 | Blank lat/lon g while the mount is `default`, like camber, so uncalibrated drives can't skew the score | M | S | done (#64 phone drives; the app's own CSV export too, this thread) | STATE 2026-10-26 |
-| D-23 | Drive tags and notes (car, passenger, weather, mood) to filter the Log | L | S | todo | Strava |
+| D-23 | Drive tags and notes (car, passenger, weather, mood) to filter the Log | L | S | done: a drive's Tags and note (presets, your own tags, a note) on its IndexedDB record; the Log filters by tag chips (`web/drive_tags.js`); never sent | Strava |
 | D-24 | Driving year in review (roads, regions, best corners, crews) | M | M | partial (Log → \"2026 so far\": miles, drives, corners, months, roads you came back to, best score, longest drive, share as text; regions, best corners and crews are still to do) | Strava Year in Sport, Spotify Wrapped |
 
 ## 3. Road intelligence (Q)
