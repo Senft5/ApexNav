@@ -206,6 +206,14 @@
     for (const s of list) { const e = endsOf(s); ends.push(e.a, e.b); }
     return { sources: [from, ...ends], targets: [...ends, to] };
   }
+  // Which way round a stage is better (IDEAS R-11): technical ones climbed, flowing ones descended, worth DIRECTION_BONUS of
+  // the stage's value in the ranking when the DEM says it really climbs (stages.js addElevations); unknown, no bonus.
+  const DIRECTION_BONUS = 0.15, CLIMB_M = 40, TECH_PER_KM = 1.2;
+  function directionBonus(s, fwd) {
+    if (!s || !Number.isFinite(s.elevA) || !Number.isFinite(s.elevB) || Math.abs(s.elevB - s.elevA) < CLIMB_M || !(s.km > 0)) return 0;
+    const up = fwd ? s.elevB > s.elevA : s.elevA > s.elevB, technical = (s.tight || 0) / s.km >= TECH_PER_KM;
+    return (technical ? up : !up) ? DIRECTION_BONUS * Math.max(0, s.score || 0) : 0;
+  }
   const STAGE_KMH = 50;   // drive time on a stage itself (twisty roads; the router's own time replaces it once routed)
   /**
    * Plans of 1–2 shortlisted stages from the connector matrix (seconds; null = no road), each stage
@@ -227,7 +235,7 @@
       for (const leg of legs) {
         const c = T(row, leg.entry);
         if (c == null) return;
-        time += c + stageS(leg.s); value += leg.s.score; stageKm += leg.s.km;
+        time += c + stageS(leg.s); value += leg.s.score + directionBonus(leg.s, leg.fwd); stageKm += leg.s.km;
         row = src(leg.exit);
       }
       const last = T(row, B);
@@ -333,7 +341,7 @@
           const entry = 2 * i + (fwd ? 0 : 1), exit = 2 * i + (fwd ? 1 : 0), c = D(row, entry);
           if (c == null || stageKm + connector + c > target * 1.25) continue;
           legs.push({ s: list[i], fwd });
-          walk(legs, used | (1 << i), 1 + exit, connector + c, stageKm + by.stageCost(list[i]), score + list[i].score);
+          walk(legs, used | (1 << i), 1 + exit, connector + c, stageKm + by.stageCost(list[i]), score + list[i].score + directionBonus(list[i], fwd));
           legs.pop();
         }
       }
@@ -524,6 +532,6 @@
     return out;
   }
 
-  const api = { LEVELS, townKm, townCost, exploreShortlist, exploreTargets, explorePicks, distinctOptions, glare, glareCost, LOOP_BY_TIME, AVOID_DEFAULT, AVOID_LABELS, costing, unavoided, keepAvoiding, why, geometry, alongPoints, insertVia, loopValue, loopShortlist, loopPlansFromMatrix, score, shortlist, matrixPoints, plansFromMatrix, sectionCount, sectionPoints, combineSections, planKey, searchArea, waypoints, rank, along, kmBetween };
+  const api = { LEVELS, townKm, townCost, exploreShortlist, exploreTargets, explorePicks, distinctOptions, glare, glareCost, LOOP_BY_TIME, AVOID_DEFAULT, AVOID_LABELS, costing, unavoided, keepAvoiding, why, geometry, alongPoints, insertVia, loopValue, loopShortlist, loopPlansFromMatrix, score, shortlist, matrixPoints, plansFromMatrix, sectionCount, sectionPoints, combineSections, planKey, searchArea, waypoints, rank, along, kmBetween, directionBonus };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexFunRoute = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -281,6 +281,7 @@
     return {
       cls: stroke.cls, lat: rs.lat.slice(lo, hi + 1), lon: rs.lon.slice(lo, hi + 1), km,
       corners: inside.length, good: inside.filter(c => c.severity >= 2 && c.severity <= 5).length,
+      tight: inside.filter(c => c.severity === 'HP' || c.severity <= 2).length,
       junctionsPerKm: junc.slice(best.a, best.b + 1).reduce((x, y) => x + y, 0) / km,
       score: best.sum,
     };
@@ -368,6 +369,55 @@
   // Plans: subsets of the top stages (1–3), ordered by bearing around the start, each driven
   // in the direction that continues the loop. Estimated length = stages + 1.6 x crow-fly
   // connectors. Ranked by stage score, penalised by length error and connector share.
+  // ---- which way to drive a stage (IDEAS R-11, ROAD_INTELLIGENCE §7.2.3) --------------------------------------------
+  // Climb the technical one (tight corners are safer and more fun uphill: less speed into them, weight on the front), descend
+  // the flowing one. Only when the stage really climbs (CLIMB_M or more, end to end, from the DEM) and the other end costs at
+  // most DIRECTION_SLACK_KM more connector than the nearer one; otherwise the nearer end, as before.
+  const CLIMB_M = 40, DIRECTION_SLACK_KM = 3, TECH_PER_KM = 1.2;
+  function stageDirection(s, pos) {
+    const e = ends(s), nearFwd = kmBetween(pos, e.a) <= kmBetween(pos, e.b);
+    if (!Number.isFinite(s.elevA) || !Number.isFinite(s.elevB) || Math.abs(s.elevB - s.elevA) < CLIMB_M || !(s.km > 0)) return nearFwd;
+    const technical = (s.tight || 0) / s.km >= TECH_PER_KM;
+    const climbFwd = s.elevB > s.elevA;                        // a → b goes up
+    const want = technical ? climbFwd : !climbFwd;
+    if (want === nearFwd) return nearFwd;
+    const extra = kmBetween(pos, want ? e.a : e.b) - kmBetween(pos, nearFwd ? e.a : e.b);
+    return extra <= DIRECTION_SLACK_KM ? want : nearFwd;
+  }
+
+  // Elevation (m) at stage ends from the Terrarium DEM tiles the map already uses for hillshade (z12, ~30 m pixels).
+  // Unknown (no tiles, no canvas) stays unknown and the direction falls back to the nearer end.
+  const DEM = 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png', DEM_Z = 12;
+  const demTiles = new Map();
+  const terrarium = (r, g, b) => r * 256 + g + b / 256 - 32768;
+  async function demTile(key) {
+    if (!demTiles.has(key)) demTiles.set(key, (async () => {
+      const [x, y] = key.split('/').map(Number);
+      const blob = await (await fetch(DEM.replace('{z}', DEM_Z).replace('{x}', x).replace('{y}', y))).blob();
+      const img = await createImageBitmap(blob);
+      const c = typeof OffscreenCanvas === 'function' ? new OffscreenCanvas(256, 256) : Object.assign(document.createElement('canvas'), { width: 256, height: 256 });
+      const g = c.getContext('2d'); g.drawImage(img, 0, 0);
+      return g.getImageData(0, 0, 256, 256).data;
+    })().catch(() => null));
+    return demTiles.get(key);
+  }
+  async function elevation(lat, lon) {
+    const n = 2 ** DEM_Z, fx = (lon + 180) / 360 * n, r = lat * Math.PI / 180, fy = (1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * n;
+    const px = await demTile(`${Math.floor(fx)}/${Math.floor(fy)}`);
+    if (!px) return null;
+    const i = (Math.min(255, Math.floor((fy % 1) * 256)) * 256 + Math.min(255, Math.floor((fx % 1) * 256))) * 4;
+    return terrarium(px[i], px[i + 1], px[i + 2]);
+  }
+  /** Sets elevA / elevB on the stages (both ends), quietly leaving them unknown when the DEM can't be read. */
+  async function addElevations(stages) {
+    await Promise.all((stages || []).map(async (s) => {
+      try {
+        [s.elevA, s.elevB] = await Promise.all([elevation(s.lat[0], s.lon[0]), elevation(s.lat[s.lat.length - 1], s.lon[s.lon.length - 1])]);
+      } catch (_) { s.elevA = s.elevB = null; }
+    }));
+    return stages;
+  }
+
   function plans(start, stages, targetKm, count = 3) {
     const top = stages.slice(0, 14);
     const bearing = (p) => Math.atan2(p.lon - start.lon, p.lat - start.lat);
@@ -378,7 +428,7 @@
         let pos = start, connector = 0, stageKm = 0, score = 0;
         const legs = [];
         for (const s of order) {
-          const e = ends(s), fwd = kmBetween(pos, e.a) <= kmBetween(pos, e.b);
+          const e = ends(s), fwd = stageDirection(s, pos);
           const entry = fwd ? e.a : e.b, exit = fwd ? e.b : e.a;
           connector += kmBetween(pos, entry) * 1.6;
           stageKm += s.km; score += s.score;
@@ -442,5 +492,5 @@
     return pts;
   }
 
-  root.ApexStages = { decodeLayer, discover, nameStages, places, pois, applyHighlights, plans, waypoints, strokes, bestWindow, roadPieces };
+  root.ApexStages = { decodeLayer, discover, nameStages, places, pois, addElevations, stageDirection, terrarium, applyHighlights, plans, waypoints, strokes, bestWindow, roadPieces };
 })(typeof window !== 'undefined' ? window : globalThis);

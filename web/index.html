@@ -2616,6 +2616,7 @@
               const stages = await ApexStages.discover(area.center, area.radiusKm, null, state.hlOn ? { highlights: hls, strength: state.hlStrength } : {});
               const list = FunRoute.shortlist(a, b, stages, FunRoute.LEVELS[level].budget, 4, slack);
               if (!list.length) return [];
+              try { await RouteLoading.optional(ApexStages.addElevations(list)); } catch (_) { /* no DEM: which way round each stage (R-11) stays the nearer end */ }
               const mp = FunRoute.matrixPoints(a, b, list);
               return FunRoute.plansFromMatrix(list, (await valhallaMatrix(mp.sources, mp.targets)).times, stretchS, level, 2, 2);
             } catch (_) { return []; }                                   // no tiles or no matrix here: no stages from this stretch
@@ -2796,6 +2797,7 @@
         // Real road distances between the best stages (one or two matrix calls); the crow-fly plans are the fallback.
         try {
           const list = FunRoute.loopShortlist(c, stages, targetKm);
+          try { await RouteLoading.optional(ApexStages.addElevations(list)); } catch (_) { /* no DEM: which way round each stage (R-11) stays the nearer end */ }
           if (list.length) {
             ui.step('Measuring roads', 0.36);
             const mp = FunRoute.matrixPoints(c, c, list), m = await valhallaMatrix(mp.sources, mp.targets);
