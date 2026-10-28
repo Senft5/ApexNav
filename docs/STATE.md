@@ -5,7 +5,8 @@
 - Merged #208: R-21 forecast costs in fun-route ranking (difference from the driest, all-or-nothing), R-22 "Route around it" for conditional closures (exclude_locations).
 - Merged #209 Q-14 coverage map (migration 0023 `road_ways`; privacy page says the road's public map line is sent).
 - This PR: R-12 set list, R-20 car-aware routing (migration 0024 cars.clearance/width_cm applied to both D1).
-- Next PR: Z-11 Content-Security-Policy on every page (tools/csp.py; rerun it after editing an inline script, CLAUDE.md says so).
+- #210 also: Z-11 Content-Security-Policy on every page (tools/csp.py; rerun it after editing an inline script, CLAUDE.md says so).
+- This PR: Q-12 freshness (migration 0025 applied to both D1); CSP names apexnav: too; the Where to? e2e flow waited on a toast the closure replan can overwrite (fixed; FLOW=, REPEAT= in e2e/smoke.js).
 - Exact next task: remaining IDEAS todo rows (R-04, D-10–D-15, Q-03–Q-20, S-10, S-18, U-12, P-01/P-03/P-05 ...).
 
 ## Session 2026-10-28 (late morning)

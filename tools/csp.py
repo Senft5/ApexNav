@@ -29,6 +29,8 @@ CONNECT = [
     "https://huggingface.co", "https://*.huggingface.co", "https://*.hf.co",                         # the voice model
 ]
 MARK = '<meta http-equiv="Content-Security-Policy"'
+# The iOS shell serves the pages from apexnav://app; named as well as 'self' in case WebKit doesn't count a custom scheme as it.
+APP = "apexnav:"
 
 
 def inline_scripts(html):
@@ -39,15 +41,15 @@ def inline_scripts(html):
 def policy(html):
     hashes = " ".join("'sha256-%s'" % base64.b64encode(hashlib.sha256(s.encode("utf-8")).digest()).decode() for s in inline_scripts(html))
     return "; ".join([
-        "default-src 'self'",
-        "script-src 'self' %s https://cdn.jsdelivr.net 'wasm-unsafe-eval'" % hashes if hashes else "script-src 'self' https://cdn.jsdelivr.net 'wasm-unsafe-eval'",
-        "worker-src 'self' blob:",
-        "child-src 'self' blob:",
-        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-        "font-src 'self' data: https://fonts.gstatic.com",
-        "img-src 'self' data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com",
-        "media-src 'self' data: blob:",
-        "connect-src 'self' data: blob: " + " ".join(CONNECT),
+        "default-src 'self' " + APP,
+        ("script-src 'self' %s %s https://cdn.jsdelivr.net 'wasm-unsafe-eval'" % (APP, hashes)) if hashes else "script-src 'self' %s https://cdn.jsdelivr.net 'wasm-unsafe-eval'" % APP,
+        "worker-src 'self' %s blob:" % APP,
+        "child-src 'self' %s blob:" % APP,
+        "style-src 'self' %s 'unsafe-inline' https://fonts.googleapis.com" % APP,
+        "font-src 'self' %s data: https://fonts.gstatic.com" % APP,
+        "img-src 'self' %s data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com" % APP,
+        "media-src 'self' %s data: blob:" % APP,
+        "connect-src 'self' %s data: blob: " % APP + " ".join(CONNECT),
         "object-src 'none'",
         "base-uri 'none'",
         "form-action 'self'",

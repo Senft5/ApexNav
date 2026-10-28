@@ -23,7 +23,8 @@ something blocks on you, delete it once it's done. Everything else is in docs/ID
 
 ## Nice to know
 
-- **Worth trying on the next TestFlight build** (all merged today): say "Hey Siri, start a drive in ApexNav"; mount the phone sideways (landscape cockpit); map panel → 3D terrain, then Preview a route; Settings → Units → kilometres; on a planned route, tap a viewpoint pin → Add as a stop, and drag the route line to reshape it; the route card's forecast, climb and closure lines; Log → a drive → Your notes (recce) and "Which road was better?"; Crew → Friends → Profile and Kudos.
+- **Please check on the next TestFlight build**: the app now runs under a Content-Security-Policy (IDEAS Z-11). It was verified in Chromium with the live map and voice, but not inside the iOS app. If the map, routing, sign-in or the Log stop working there, tell Claude: it's a one-line fix in `tools/csp.py`.
+- **Worth trying on the next TestFlight build** (all merged today): While you drive → Measured roads; add your car's ride height and width in the Garage; say "Hey Siri, start a drive in ApexNav"; mount the phone sideways (landscape cockpit); map panel → 3D terrain, then Preview a route; Settings → Units → kilometres; on a planned route, tap a viewpoint pin → Add as a stop, and drag the route line to reshape it; the route card's forecast, climb and closure lines; Log → a drive → Your notes (recce) and "Which road was better?"; Crew → Friends → Profile and Kudos.
 
 - TestFlight: internal group "First Testers" gets every build automatically; every main merge uploads one (377.1 onward VALID).
 - Tester feedback (Settings → Feedback, once #196 merges) shows in the app under Crew → your owner section, with Done to clear it.

@@ -349,7 +349,7 @@
   function summarize(runs, roads, total) {
     // Readings whose passes disagree (agreement() says 'differ') don't steer a route: they count as covered but not as rough,
     // smooth or banked. A single pass, or an older server without spreads, counts; measuredAdjust weights passes separately.
-    let covered = 0, located = 0, passes = 0, trusted = 0, rough = [], camKnown = 0, banked = 0, offCamber = 0, smooth = 0, broken = 0, disputed = 0;
+    let covered = 0, located = 0, passes = 0, trusted = 0, rough = [], camKnown = 0, banked = 0, offCamber = 0, smooth = 0, broken = 0, disputed = 0, repaved = 0, repavedOn = null;
     for (const run of runs) {
       const d = roads[run.way] && roads[run.way][run.dir], idx = d ? new Map(d.i.map((b, j) => [b, j])) : null;
       for (const p of run.pts) {
@@ -357,6 +357,8 @@
         const j = idx && idx.get(p.bin);
         if (j == null) continue;
         covered++;
+        const ch = d.ch && d.ch[j];                                    // the month the crowd saw it repaved (IDEAS Q-12)
+        if (ch) { repaved++; if (!repavedOn || ch > repavedOn) repavedOn = ch; }
         const roughOk = agreement(d.n[j], d.rsd ? d.rsd[j] : null, AGREE.rough_g) !== 'differ';
         const camOk = agreement(d.cn ? d.cn[j] : d.n[j], d.csd ? d.csd[j] : null, AGREE.camber_deg) !== 'differ';
         if (!roughOk || !camOk) disputed++; else { passes += d.n[j]; trusted++; }
@@ -370,7 +372,8 @@
              // What each signal really covered (trusted readings only): the weights, so a few agreed bins can't stand for a disputed road.
              roughCoverage: total ? rough.length / total : 0, camberCoverage: total ? camKnown / total : 0,
              avgPasses: trusted ? passes / trusted : null,
-             smoothKm: smooth * BIN_M / 1000, roughKm: broken * BIN_M / 1000, disputedKm: disputed * BIN_M / 1000 };
+             smoothKm: smooth * BIN_M / 1000, roughKm: broken * BIN_M / 1000, disputedKm: disputed * BIN_M / 1000,
+             repavedKm: repaved * BIN_M / 1000, repavedOn };
   }
 
   /**

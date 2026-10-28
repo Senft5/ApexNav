@@ -161,7 +161,8 @@ flow('Where to?: a suggestion builds a route with a card and a Start button (sea
   // pin it as Home (IDEAS U-20): first in Where to?, on this phone; Unpin removes it
   page.once('dialog', (d) => d.accept('Home'));
   await page.evaluate(() => document.getElementById('routePinBtn').click());
-  await page.waitForFunction(() => /Pinned as Home/.test(document.getElementById('toast').textContent));
+  // the pin itself, not its toast: the replan around the closure can toast over it
+  await page.waitForFunction(() => (JSON.parse(localStorage.getItem('apex.pinnedPlaces') || '[]') || []).length === 1);
   const pinned = await page.evaluate(() => JSON.parse(localStorage.getItem('apex.pinnedPlaces')));
   check(pinned.length === 1 && pinned[0].name === 'Home' && pinned[0].label === 'Maryville' && Math.abs(pinned[0].lat - 35.7565) < 1e-6, 'pinned: ' + JSON.stringify(pinned));
   await page.click('#planClear');
@@ -1051,7 +1052,10 @@ flow('Your records: unknown dates and unscored drives never make a "new best", a
   const base = `http://127.0.0.1:${server.address().port}`;
   const browser = await chromium.launch();
   let failed = 0;
-  for (const { name, fn, ctxOpts } of flows) {
+  // FLOW=<text> runs only the flows whose name contains it; REPEAT=<n> runs each n times (for chasing a flaky one).
+  const only = process.env.FLOW ? flows.filter((f) => f.name.includes(process.env.FLOW)) : flows;
+  const runs = only.flatMap((f) => Array.from({ length: Math.max(1, Number(process.env.REPEAT) || 1) }, () => f));
+  for (const { name, fn, ctxOpts } of runs) {
     const { news, ...browserOpts } = ctxOpts;
     const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, ...browserOpts });
     // Only our own server: maps, routers, fonts and voices are blocked, so the result doesn't depend on the network.
@@ -1082,6 +1086,6 @@ flow('Your records: unknown dates and unscored drives never make a "new best", a
   }
   await browser.close();
   server.close();
-  console.log(`${flows.length - failed}/${flows.length} flows passed`);
+  console.log(`${runs.length - failed}/${runs.length} flows passed`);
   process.exit(failed ? 1 : 0);
 })();
