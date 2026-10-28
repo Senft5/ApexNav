@@ -254,15 +254,15 @@ console.log(JSON.stringify({
 def test_fatigue_in_plain_words():
     runner = r"""
 const V = require(process.argv[1] + '/web/drive_view.js');
-const fa = (cues, minutes = 85.4) => ({ minutes, early: {}, late: {}, cues });
-console.log(JSON.stringify({ none: V.fatigueText(null), steady: V.fatigueText(fa([], 120)), both: V.fatigueText(fa(['smoothness', 'braking'])),
-  brake: V.fatigueText(fa(['braking'], 61)) }));
+const fa = (cues, minutes = 85.4) => ({ minutes, early: { corrections: 0.2, braking: 0.95 }, late: { corrections: 0.6, braking: 0.85 }, cues });
+console.log(JSON.stringify({ none: V.fatigueText(null), steady: V.fatigueText(fa([], 120)), both: V.fatigueText(fa(['steering', 'braking'])),
+  brake: V.fatigueText(fa(['braking'], 61)), unknown: V.fatigueText({ ...fa([]), late: { corrections: null, braking: 0.9 } }) }));
 """
     root = str(__import__("pathlib").Path(__file__).resolve().parents[1])
     p = subprocess.run([NODE, "-e", runner, root], capture_output=True, text=True, timeout=60)
     assert p.returncode == 0, p.stderr
     r = json.loads(p.stdout)
-    assert r["none"] is None
-    assert r["steady"] == "You held your technique to the end of this 2 h drive: the last third was as smooth, and as tidy on the brakes, as the first."
-    assert r["both"].startswith("In the last third of this 1 h 25 min drive, your steering got busier and you braked past the middle")
-    assert "tiredness" in r["both"] and "1 h 1 min drive, you braked past the middle of corners more often than" in r["brake"]
+    assert r["none"] is None and r["unknown"] is None                       # nothing said from unknown means
+    assert r["steady"] == "No clear fade over 2 h of moving time: steering and braking in the last third looked like the first."
+    assert r["both"].startswith("In the last third of 1 h 25 min of moving time, you made more mid-corner steering corrections and braked")
+    assert "road may have changed" in r["both"] and "1 h 1 min of moving time, you braked past the middle of corners more often than" in r["brake"]

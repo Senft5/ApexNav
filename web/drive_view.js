@@ -57,15 +57,16 @@
     return a < 0 ? 'the brake came off sharply here: release it more gradually' : 'the throttle went on sharply here: squeeze it on more progressively';
   }
 
-  /** Fatigue cue (IDEAS D-16) in plain words from Core.fatigue, or null when the drive was too short to ask. */
+  /** Fatigue cue (IDEAS D-16) in plain words from Core.fatigue, or null when the drive was too short to ask or a mean is unknown. */
   function fatigueText(fa) {
-    if (!fa || !Number.isFinite(fa.minutes)) return null;
+    const fin = Number.isFinite;
+    if (!fa || !fin(fa.minutes) || ![fa.early, fa.late].every((p) => p && fin(p.corrections) && fin(p.braking))) return null;
     const m = Math.round(fa.minutes), dur = m >= 60 ? `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ''}` : `${m} min`;
-    const s = fa.cues.includes('smoothness'), b = fa.cues.includes('braking');
-    if (!s && !b) return `You held your technique to the end of this ${dur} drive: the last third was as smooth, and as tidy on the brakes, as the first.`;
-    const what = s && b ? 'your steering got busier and you braked past the middle of corners more often'
-      : s ? 'your steering got busier' : 'you braked past the middle of corners more often';
-    return `In the last third of this ${dur} drive, ${what} than in the first third. That can be the road, or tiredness; a break every couple of hours helps.`;
+    const s = fa.cues.includes('steering'), b = fa.cues.includes('braking');
+    if (!s && !b) return `No clear fade over ${dur} of moving time: steering and braking in the last third looked like the first.`;
+    const what = s && b ? 'you made more mid-corner steering corrections and braked past the middle of corners more often'
+      : s ? 'you made more mid-corner steering corrections' : 'you braked past the middle of corners more often';
+    return `In the last third of ${dur} of moving time, ${what} than in the first third. The road may have changed, or you may be tiring; if you have not stopped, a break helps.`;
   }
 
   function plainCoach(ds, co) {
@@ -174,7 +175,7 @@
     const ideal = co && co.clean && co.gain_s > 0 && co.corners.some((x) => x.passes > 1)
       ? { gain: co.gain_s, n: co.clean, drives: new Set(co.corners.filter((x) => x.gain_s != null).map((x) => (x.best ? x.best_from : -1))).size } : null;
     const plain = plainCoach(ds, co);
-    const tired = Core.fatigue ? fatigueText(Core.fatigue(d.speed_mps, d.lon_g, d.lat_g, d.corners)) : null;
+    const tired = Core.fatigue ? fatigueText(Core.fatigue(d.speed_mps, d.lon_g, d.lat_g, d.corners, d.g_known || null)) : null;   // unmeasured g is left out
     const mi = finite(S.km) ? `${(S.km / 1.609344).toFixed(1)} mi` : '--';
     const dur = finite(S.duration_s) ? fmtT(S.duration_s) : '--';
     head.innerHTML = `<div class="dv-score"><b class="score big">${scoreVal}</b> <small>/1000</small></div>`

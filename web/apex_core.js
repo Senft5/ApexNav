@@ -537,6 +537,7 @@
   function cornerTechnique(v, lonG, latG, c) {
     if (!Number.isFinite(c.apex_mps)) return null;
     for (let q = c.start; q <= c.end; q++) if (!Number.isFinite(v[q])) return null;   // a speed gap (blank GPS speed) leaves the corner out, not NaN
+    for (let q = c.start; q <= c.end; q++) if (!Number.isFinite(latG[q]) || !Number.isFinite(lonG[q])) return null;
     const m = cornerMetrics(v, lonG, latG, c.start, c.end, c.apex, c.apex_mps);
     if (m.min_mps < STOPPED_MPS) return null;
     // Smoothness per metre of road (speed-invariant): how abruptly lateral load changes.
@@ -566,29 +567,46 @@
              components: Object.fromEntries(Object.entries(comp).map(([k, x]) => [k, r4(x)])) };
   }
   // Fatigue cues (IDEAS D-16) — port of drive_analysis.fatigue (parity-tested): on a drive of an hour's moving time or
-  // more, did smoothness or braking fade from the first third to the last? A cue, never a verdict: the road can change too.
-  const FATIGUE_MIN_S = 3600, FATIGUE_MIN_CORNERS = 8, FATIGUE_MIN_DROP = 0.05, FATIGUE_SE = 2;
-  function fatigue(v, lonG, latG, corners) {
+  // more, did steering corrections rise or braking credit fall from the first third to the last? A cue, never a verdict:
+  // the road can change too. Corners with unmeasured g (gKnown false) are left out.
+  const FATIGUE_MIN_S = 3600, FATIGUE_MIN_CORNERS = 8, CORRECTION_STEP_G = 0.03, FATIGUE_MIN_CORRECTIONS = 0.3, FATIGUE_MIN_DROP = 0.05, FATIGUE_SE = 2;
+  function steeringCorrections(latG, start, end) {
+    const signs = [];
+    for (let q = start; q < end; q++) { const d = latG[q + 1] - latG[q]; if (Math.abs(d) >= CORRECTION_STEP_G) signs.push(d > 0 ? 1 : -1); }
+    let flips = 0;
+    for (let k = 1; k < signs.length; k++) if (signs[k] !== signs[k - 1]) flips++;
+    return Math.max(0, flips - 1);
+  }
+  function meanSe(xs) {                                              // left-to-right sums, as drive_analysis._mean_se
+    let m = 0;
+    for (const x of xs) m += x;
+    m /= xs.length;
+    let q = 0;
+    for (const x of xs) q += (x - m) ** 2;
+    return [m, Math.sqrt((xs.length > 1 ? q / (xs.length - 1) : 0) / xs.length)];
+  }
+  function fatigue(v, lonG, latG, corners, gKnown = null) {
     const n = v.length, t = new Float64Array(n);
     for (let i = 1; i < n; i++) t[i] = t[i - 1] + (Number.isFinite(v[i - 1]) && v[i - 1] >= STOPPED_MPS ? 5 / v[i - 1] : 0);
     const total = n ? t[n - 1] : 0;
     if (total < FATIGUE_MIN_S) return null;
     const early = [], late = [];
     for (const c of corners) {
+      if (c.start < 0 || c.end >= n || !(c.start <= c.apex && c.apex <= c.end)) continue;
+      if (gKnown) { let all = true; for (let q = c.start; q <= c.end; q++) if (!gKnown[q]) { all = false; break; } if (!all) continue; }
       const tc = cornerTechnique(v, lonG, latG, c);
       if (!tc) continue;
-      const at = t[c.apex];
-      if (at <= total / 3) early.push(tc); else if (at >= 2 * total / 3) late.push(tc);
+      const x = { corrections: steeringCorrections(latG, c.start, c.end), braking: tc.brake }, at = t[c.apex];
+      if (at <= total / 3) early.push(x); else if (at >= 2 * total / 3) late.push(x);
     }
     if (early.length < FATIGUE_MIN_CORNERS || late.length < FATIGUE_MIN_CORNERS) return null;
-    const meanSe = (xs) => { let m = 0; for (const x of xs) m += x; m /= xs.length; let q = 0; for (const x of xs) q += (x - m) ** 2; return [m, Math.sqrt((xs.length > 1 ? q / (xs.length - 1) : 0) / xs.length)]; };
-    const r4 = (x) => Math.round(x * 1e4) / 1e4;
-    const out = { minutes: Math.round(total / 6) / 10, early: { corners: early.length }, late: { corners: late.length }, cues: [] };
-    for (const [k, name] of [['smooth', 'smoothness'], ['brake', 'braking']]) {
+    const r = (x, k) => Math.round(x * 10 ** k) / 10 ** k;
+    const out = { minutes: r(total / 60, 1), early: { corners: early.length }, late: { corners: late.length }, cues: [] };
+    for (const [k, cue, worse, floor] of [['corrections', 'steering', 1, FATIGUE_MIN_CORRECTIONS], ['braking', 'braking', -1, FATIGUE_MIN_DROP]]) {
       const [me, se] = meanSe(early.map((x) => x[k])), [ml, sl] = meanSe(late.map((x) => x[k]));
-      out.early[name] = r4(me); out.late[name] = r4(ml);
-      const drop = me - ml;
-      if (drop >= FATIGUE_MIN_DROP && drop >= FATIGUE_SE * Math.sqrt(se ** 2 + sl ** 2)) out.cues.push(name);
+      out.early[k] = r(me, 4); out.late[k] = r(ml, 4);
+      const change = worse * (ml - me);
+      if (change >= floor && change >= FATIGUE_SE * Math.sqrt(se ** 2 + sl ** 2)) out.cues.push(cue);
     }
     return out;
   }
