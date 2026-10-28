@@ -46,6 +46,11 @@ use the answer that matches each question.
 > roads. Typing is locked on the iPhone while the car is moving. We will follow the CarPlay guidelines and respond to
 > any feedback from Apple or automakers.
 
+**Screenshots** (the form asks for them): `docs/carplay/1-search.png` (destination search), `2-route.png` (route
+card with time, distance and route options), `3-guidance.png` (guidance: the next turn, distance to it, time left and
+arrival). They are the real cockpit with live map tiles and the public router, taken by `node tools/carplay_shots.js`;
+screenshots from a TestFlight build on the phone work as well or better.
+
 Then agree to the **CarPlay Entitlement Addendum** (the owner reads it; it is a legal agreement).
 
 ## 2. Requirements and where we stand
