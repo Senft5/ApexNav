@@ -165,7 +165,7 @@ pace-note grammar, ALPR from DeFlock/OSM, reference-lap scoring and archetypes.
 | Q-19 | Benchmark road calibration set scored from map + DEM, checked in CI | M | M | todo | ROAD_INTELLIGENCE §6.2 |
 | Q-20 | Archetypes by clustering once crowd data exists | M | L | todo | ROAD_INTELLIGENCE §5.2 |
 | Q-21 | Real device acceptance for app-open sharing (shared km matches driven km, minus private ends) | H | S | owner (phone) | STATE 2026-10-27 |
-| Q-22 | "Pothole ahead" from your own confirmed hazards on any road, with no route loaded | H | S | todo | thread Deepen driver and road analysis |
+| Q-22 | "Pothole ahead" from your own confirmed hazards on any road, with no route loaded | H | S | active (Deepen driver and road analysis) | thread Deepen driver and road analysis |
 
 ## 4. Co-driver and pace notes (V)
 

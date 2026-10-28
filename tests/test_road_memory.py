@@ -54,6 +54,12 @@ const solo = M.build(Core, [recs[0]], R.cornersOf);
 out.realKinds = [...new Set(solo.map((n) => n.kind))];
 out.realCount = solo.length;
 out.longest = Math.max(...Object.values(M.SPOKEN).map((t) => t.length));
+// confirmed bumps from your own drives become "Bump ahead" on any road; a bump seen once does not
+const hzRec = (id, spike, seen) => ({ ...road(id, '2026-10-0' + id.length), events: [{ type: 'bump', index: spike, lat: 35 + spike * 5 / 110540, lon: -83, seen }] });
+const hz = M.hazards([hzRec('a', 100, { hits: 2, passes: 2 }), hzRec('bb', 102, { hits: 2, passes: 2 }), hzRec('ccc', 150, { hits: 1, passes: 3 })]);
+out.hz = hz.map((n) => [n.id, n.text]);
+out.hzSay = (M.upcoming(hz, fr(85, 0), 25, 100, new Set()) || {}).id || null;      // 75 m before it, inside the call distance
+out.hzFar = M.upcoming(hz, fr(0, 0), 25, 100, new Set());
 console.log(JSON.stringify(out));
 """
 
@@ -81,3 +87,8 @@ def test_real_coach_never_speaks_a_speed_tip(r):
     assert r["realPair"] > 0                          # the coach's own judgement of the newest pass (vs-best tips: see the stub test)
     assert r["realCount"] > 0 and set(r["realKinds"]) <= {"coast", "brake_after_apex", "early_apex"}
     assert r["longest"] <= 50                        # said well inside the 5 s the cockpit allows
+
+
+def test_confirmed_bumps_are_called_on_any_road(r):
+    assert r["hz"] == [["hz:a:100", "Bump ahead"]]          # one per spot; the single-pass one is not called
+    assert r["hzSay"] == "hz:a:100" and r["hzFar"] is None

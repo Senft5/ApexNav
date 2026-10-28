@@ -612,13 +612,14 @@
       savedDriveIds = ids;
       // What the coach found last time on each corner you have driven, spoken on the way in. Rebuilt only when the set of
       // drives changes (it runs the coach over your newest drives), off the main path.
+      hazardMemory = ApexRoadMemory.hazards(mine);                    // bumps your drives confirmed, called on any road
       const memoKey = records.map((d) => d.id).join(',');
       if (memoKey !== roadMemoryKey) setTimeout(() => {
         if (version !== refreshDriveVersion) return;
         try { roadMemory = ApexRoadMemory.build(Core, mine, ApexRecording.cornersOf); roadMemoryKey = memoKey; } catch (_) { roadMemory = []; }
       }, 0);
     }
-    let roadMemory = [], roadMemoryKey = null;
+    let roadMemory = [], roadMemoryKey = null, hazardMemory = [];
     let track = null;
 
     // =======================================================================
@@ -1350,6 +1351,11 @@
       // Roads you have driven: one technique tip per remembered corner, only with full notes on (never over a commute),
       // moving on a fresh heading, and only when it ends before any call is due: it starts MEMO_S of driving beyond the
       // call distance and never while a call is pending in that stretch or another voice may still be speaking.
+      // A bump your own drives confirmed, on any road (no route needed), unless the route's own notes already call one here.
+      if (live && vMps >= 5 && performance.now() - state.liveAt < 2500 && !ev.some(e => e.type === 'bump' && e.dist_m - state.cursorM < lead + 30)) {
+        const hz = ApexRoadMemory.upcoming(hazardMemory, state.live, 25, lead, state.spoken);
+        if (hz) { state.spoken.add(hz.id); say(hz.text); }
+      }
       const reach = lead + vMps * MEMO_S;
       if (live && spirited && vMps >= 5 && performance.now() - state.liveAt < 2500 && !speech.busy && !speech.queue.length
           && performance.now() > speech.talkingUntil

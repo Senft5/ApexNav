@@ -49,6 +49,23 @@
   }
 
   /**
+   * Bumps your own drives confirmed (ApexRecording.corroborate: found on two or more of your passes, same direction),
+   * as notes for `upcoming` on any road, route or not (IDEAS Q-22). One per spot and direction.
+   */
+  function hazards(records) {
+    const out = [];
+    for (const d of records) {
+      for (const e of d.events || []) {
+        if (e.type !== 'bump' || !e.seen || e.seen.hits < 2 || !finite(e.lat) || !finite(e.lon)) continue;
+        const h = heading(d, e.index);
+        if (!h || out.some((n) => Math.hypot(...xy(n.lat, n.lon, e.lat, e.lon)) < SAME_CORNER_M && n.hx * h[0] + n.hy * h[1] > 0)) continue;
+        out.push({ id: `hz:${d.id}:${e.index}`, lat: e.lat, lon: e.lon, hx: h[0], hy: h[1], kind: 'bump', text: 'Bump ahead', seen: e.seen });
+      }
+    }
+    return out;
+  }
+
+  /**
    * The note to say now, or null: the nearest one between minM and maxM straight ahead (within ~40 degrees of the
    * course), driven the same way, and not in `said`. frame: { lat, lon, course_deg } (compass degrees).
    */
@@ -67,6 +84,6 @@
     return best;
   }
 
-  const api = { build, upcoming, SPOKEN };
+  const api = { build, upcoming, hazards, SPOKEN };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexRoadMemory = api;
 })(typeof window !== 'undefined' ? window : globalThis);

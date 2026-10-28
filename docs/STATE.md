@@ -30,6 +30,7 @@
 - Spoken coaching on roads you have driven (`web/road_memory.js`): approaching a corner where the coach found something last time, with full notes on, the co-driver says it once before the corner call ("Last time, coasting here. Brake, then straight back to throttle."). Technique tips only; speed-pushing tips are never spoken. The latest pass of each corner decides, so a fixed corner goes quiet.
 - Plain-words coach (IDEAS D-21): the drive page opens with one sentence a non-racer understands: what went well, then the one habit to work on (from the coach's own-pass technique tips seen in two or more corners, else the weakest of smoothness, braking and rhythm). Never a nudge to go faster.
 - The app's own CSV export now leaves g, camber, crest and engagement blank while the mount is unsolved, and elevation blank without altitude (it wrote 0 before) (IDEAS D-22).
+- Bump ahead on any road (IDEAS Q-22): bumps your own drives confirmed (two or more passes, same direction) are called "Bump ahead" at the call distance on a live drive, with or without a route, unless the route's notes already call a bump there.
 - Not verified on a phone: the vertical spike, hazards on phone drives, confirmation labels and spoken coaching all need real drives (two or more of the same road for confirmation and coaching).
 - Exact next task: crowd confirmation of hazards across members (backend `hazard_obs` table exists, unused) and a live "pothole ahead" warning from confirmed hazards when no route is loaded; agreement-weighted routing belongs to the routing thread.
 
