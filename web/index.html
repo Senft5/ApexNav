@@ -1844,40 +1844,48 @@
       if (level !== 'quick' && Number.isFinite(quickS) && FunRoute.kmBetween(from, to) >= 3) {
         try {
           // Stage plans for one stretch a→b whose quickest drive takes stretchS: search its corridor, time the connectors, plan.
-          const stretch = async (a, b, stretchS, label, frac) => {
+          const stretch = async (a, b, stretchS, label, frac, slack) => {
             ui.step(label, frac);
             try {
               const area = FunRoute.searchArea(a, b);
               const hls = state.hlOn ? await allHighlights(area.center) : [];
               const stages = await ApexStages.discover(area.center, area.radiusKm, null, state.hlOn ? { highlights: hls, strength: state.hlStrength } : {});
-              const list = FunRoute.shortlist(a, b, stages, FunRoute.LEVELS[level].budget);
+              const list = FunRoute.shortlist(a, b, stages, FunRoute.LEVELS[level].budget, 4, slack);
               if (!list.length) return [];
               const mp = FunRoute.matrixPoints(a, b, list);
               return FunRoute.plansFromMatrix(list, (await valhallaMatrix(mp.sources, mp.targets)).times, stretchS, level, 2, 2);
             } catch (_) { return []; }                                   // no tiles or no matrix here: no stages from this stretch
           };
-          const plans = await stretch(from, to, quickS, 'Finding fun roads…', 0.75);
           // Longer trips also try sections along the quickest route, each planned like a short trip and chained (2 sections,
           // 3 on Max fun): one circle round the middle can't reach the start and end of a long trip, and the public matrix
-          // gives up on long connections. Both kinds of plan are routed and the ranking picks.
+          // gives up on long connections. Up to 2 sections the middle circle is planned too and both kinds compete; past
+          // that it only costs requests (its connectors are too long for the matrix).
           const n = FunRoute.sectionCount(from, to, level === 'max' ? 3 : 2);
+          const plans = n > 2 ? [] : await stretch(from, to, quickS, 'Finding fun roads…', 0.75);
           if (n > 1) {
-            const quick = cands.reduce((x, y) => (y.timeS < x.timeS ? y : x));
-            const cuts = FunRoute.sectionPoints(quick.route.coords, n);
-            cuts[0] = from; cuts[n] = to;
-            const sections = [];
-            for (let k = 0; k < n; k++) {
-              sections.push((await stretch(cuts[k], cuts[k + 1], quickS / n, `Finding fun roads · ${k + 1} of ${n}`, 0.78 + 0.06 * k / n))
-                .filter(p => p.value > 0));                              // a section only detours when it pays
-            }
-            plans.push(...FunRoute.combineSections(sections, 2));
+            try {
+              const quick = cands.reduce((x, y) => (y.timeS < x.timeS ? y : x));
+              const cuts = FunRoute.sectionPoints(quick.route.coords, n);
+              cuts[0] = from; cuts[n] = to;
+              const sections = [];
+              for (let k = 0; k < n; k++) {
+                sections.push((await stretch(cuts[k], cuts[k + 1], quickS / n, `Finding fun roads · ${k + 1} of ${n}`, 0.75 + 0.08 * k / n, 0))
+                  .filter(p => p.value > 0));                            // a section only detours when it pays
+              }
+              const seen = new Set(plans.map(FunRoute.planKey));
+              for (const p of FunRoute.combineSections(sections, quickS, level, 2)) if (!seen.has(FunRoute.planKey(p))) { seen.add(FunRoute.planKey(p)); plans.push(p); }
+            } catch (_) { /* no sections: the whole-trip plans still compete */ }
           }
           ui.step('Routing fun roads…', 0.85);
-          const routed = await Promise.allSettled(plans.map(async (plan) => {
-            const pts = FunRoute.waypoints(from, to, plan);
-            const [r] = await valhallaRoutes(pts);
-            return { kind: 'stages', route: r, timeS: r.timeS, via: pts.slice(1, -1) };
-          }));
+          // Two at a time: the public router rate-limits bursts.
+          const routed = [];
+          for (let i = 0; i < plans.length; i += 2) {
+            routed.push(...await Promise.allSettled(plans.slice(i, i + 2).map(async (plan) => {
+              const pts = FunRoute.waypoints(from, to, plan);
+              const [r] = await valhallaRoutes(pts);
+              return { kind: 'stages', route: r, timeS: r.timeS, via: pts.slice(1, -1) };
+            })));
+          }
           for (const r of routed) if (r.status === 'fulfilled') cands.push(r.value);
         } catch (_) { /* no tiles or no matrix: the router's own routes still compete */ }
       }

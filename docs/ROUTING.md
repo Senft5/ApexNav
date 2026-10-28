@@ -25,7 +25,9 @@ Changing the level re-plans a destination route that is not being driven (not wh
    which is about 11–12 km at 40°N). Trips over 22 km crow fly are also cut into sections of about
    24 km along the quickest route (2 on Fun, up to 3 on Max fun); each section gets its own stage
    search and plans, and the best of each section (plus variants swapping one section for its
-   second best, at most 4 stages in all) compete with the single-corridor plans. So long trips get
+   second best, at most 4 stages in all, a stage two sections both found driven once, the whole
+   trip kept within the level's budget) compete with the single-corridor plans (skipped past 2
+   sections, where its connectors are too long for the matrix). So long trips get
    stages all along the way, not only in the middle (Knoxville → Asheville on Fun: Fun 47 for
    +17 min, where before no fun option was found).
 3. Up to 4 stages inside the level's ellipse around A→B are shortlisted, and one Valhalla

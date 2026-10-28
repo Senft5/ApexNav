@@ -79,13 +79,17 @@ out.quickMin = quickS / 60;
 out.limitMin = (quickS * (1 + F.LEVELS.fun.budget) + F.LEVELS.fun.slackS) / 60;
 // long trips: sections along the quickest route, chained
 const far = P(90000, 0);
-out.sections = [F.sectionCount(A, B, 3), F.sectionCount(A, far, 3), F.sectionCount(A, far, 2)];
+out.sections = [F.sectionCount(A, B, 3), F.sectionCount(A, far, 3), F.sectionCount(A, far, 2), F.sectionCount(A, P(23000, 0), 3)];
 out.cuts = F.sectionPoints(ll(Array.from({ length: 9001 }, (_, i) => [i * 10, 0])), 3).map(p => Math.round((p.lon - lon0) / mLon / 1000));
 const plan = (name, km0, value, n = 1) => ({ value, timeS: 600, legs: Array.from({ length: n }, (_, i) => ({ s: stage(name + i, km0 * 1000 + i * 2000, 0, 3, 5), fwd: true })) });
-out.combined = F.combineSections([[plan('a', 5, 9), plan('a2', 8, 4)], [], [plan('c', 70, 6, 2), plan('c2', 75, 5)]], 2)
+out.combined = F.combineSections([[plan('a', 5, 9), plan('a2', 8, 4)], [], [plan('c', 70, 6, 2), plan('c2', 75, 5)]], 1800, 'fun', 2)
   .map(p => p.legs.map(l => l.s.name).join(' '));
-out.capped = F.combineSections([[plan('x', 5, 9, 2)], [plan('y', 40, 3, 2)], [plan('z', 70, 6, 2)]], 1, 4).map(p => p.legs.map(l => l.s.name).join(' '));
-out.empty = F.combineSections([[], []], 2).length;
+out.capped = F.combineSections([[plan('x', 5, 9, 2)], [plan('y', 40, 3, 2)], [plan('z', 70, 6, 2)]], 1800, 'fun', 1, 4).map(p => p.legs.map(l => l.s.name).join(' '));
+out.empty = F.combineSections([[], []], 1200, 'fun', 2).length;
+// the same stage picked by two neighbouring sections is driven once; a chain past the budget is left out
+out.shared = F.combineSections([[plan('s', 20, 9)], [plan('s', 20, 8), plan('t', 50, 7)]], 1200, 'fun', 2).map(p => p.legs.map(l => l.s.name).join(' '));
+const slow = (name, km0) => ({ ...plan(name, km0, 9), timeS: 1500 });
+out.overBudget = F.combineSections([[slow('u', 5)], [slow('v', 50)]], 1200, 'fun', 2).length;
 out.plansQuick = F.plansFromMatrix(list, times, quickS, 'quick', 3).length;
 // shaping points along a 30 km line: every ~6 km, at most 8, never the ends
 const line30 = ll(Array.from({ length: 3001 }, (_, i) => [i * 10, 0]));
@@ -170,11 +174,13 @@ def test_plans_use_real_connector_times_and_budget(r):
 
 
 def test_long_trips_are_chained_sections(r):
-    assert r["sections"] == [1, 3, 2]
+    assert r["sections"] == [1, 3, 2, 2], "23 km crow fly is already two sections"
     assert r["cuts"] == [0, 30, 60, 90], "cut points at equal distances along the quickest route"
     assert r["combined"] == ["a0 c0 c1", "a20 c0 c1"], "best of each section in travel order, then a variant"
     assert r["capped"] == ["x0 x1 z0 z1"], "at most 4 stages: the weakest section gives way"
     assert r["empty"] == 0
+    assert r["shared"] == ["s0", "s0 t0"], "a stage two sections both found is driven once"
+    assert r["overBudget"] == 0, "sections each within budget can still add up past the trip's"
 
 
 def test_loops_use_real_distances_and_fit_the_target(r):
