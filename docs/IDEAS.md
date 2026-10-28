@@ -208,7 +208,7 @@ Today: accounts with Google sign-in, friends, crews (public and private, crews n
 | S-13 | Car meets map: public events and recurring Cars & Coffee, added by crews | H | M | todo | car meet apps, Facebook groups |
 | S-14 | Invite links that open the app (or the web) on the crew or route | H | S | todo | growth |
 | S-15 | Profiles: handle, cars, crews, favourite roads, totals; private by default | M | M | todo | Strava profile |
-| S-16 | Block and report on every social surface; moderation queue for public crews and highlights | H | M | active (social thread) | App Store requirement for UGC |
+| S-16 | Block and report on every social surface; moderation queue for public crews and highlights | H | M | done (#120) | App Store requirement for UGC |
 | S-17 | Pairwise "which road was better?" after a drive feeds road scores (and is fun) | M | S | todo | SOCIAL §2.2 |
 | S-18 | Photos on highlights and stops, stripped of EXIF location beyond the highlight | M | M | todo | Roadtrippers, Google Maps |
 | S-19 | Live share ETA with a friend or family ("Nate is 12 min away") without sharing the drive | M | M | todo | Apple Maps Share ETA, Life360 |
