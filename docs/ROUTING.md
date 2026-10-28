@@ -15,6 +15,16 @@ The Plan sheet and the route card have a **Roads** choice, saved on the phone (`
 
 Changing the level re-plans a destination route that is not being driven (not while one is being planned; a route with a stop you added keeps it and the level applies to the next route). Loops ignore the level, so their card hides it.
 
+## Avoid
+
+Under Roads, an **Avoid** row (saved on the phone, `apex.avoid`): Highways, Tolls, Ferries, Unpaved (on by default:
+stages never use unpaved roads and most cars here don't want gravel). They set Valhalla's costing for routes and the
+connector matrix (`FunRoute.costing`: `use_highways`/`use_tolls`/`use_ferry` 0, `exclude_unpaved`). These are strong
+preferences, not bans, so each route's summary flags (`has_highway`, `has_toll`, `has_ferry`) are checked: candidates
+that still use an avoided road are dropped when any candidate doesn't (`keepAvoiding`, loops too), and when none can
+avoid it the route card says so ("Couldn't avoid tolls", e.g. the Chesapeake Bay Bridge-Tunnel). The OSRM fallback
+knows none of this and says nothing. Toggling one re-plans a destination route like the level does.
+
 ## Candidates
 
 1. The router's route (Valhalla, highways and tolls de-prioritised) and up to 2 Valhalla alternates
