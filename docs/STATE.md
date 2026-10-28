@@ -1,7 +1,7 @@
 # APEX NAV — CURRENT AGENT HANDOFF STATE
 
 ## Session 2026-10-28: loops by drive time
-- #118 merged (avoid options). #PR: 1 h / 2 h loop chips plan on drive time (docs/ROUTING.md, Loops "By time"). Knoxville 2 h → 119 min, 1 h → 75 min (nearest good roads are far). Loop cards now carry their real name ("119 min loop", "27 mi loop"; it used to keep the asked distance). Not checked on a phone.
+- #118 merged (avoid options). #122: 1 h / 2 h loop chips plan on drive time (docs/ROUTING.md, Loops "By time"). Knoxville 2 h → 119 min, 1 h → 75 min (nearest good roads are far). Loop cards now carry their real name ("119 min loop", "27 mi loop"; it used to keep the asked distance). Not checked on a phone.
 - Exact next task: R-30 route options side by side, or R-10 Explore.
 
 ## Session 2026-10-28: avoid highways, tolls, ferries, unpaved
