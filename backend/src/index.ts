@@ -3,13 +3,13 @@
 import {
   APP_ORIGIN, appExchange, csrfCheck, createInvite, googleCallback, googleStart, logout, redeemInvite, requireMember, requireUser, sessionHash, viewer,
 } from "./auth";
-import { convoyConnect, convoyCreate, convoyJoin, convoyRoom, unwrap } from "./convoy_routes";
+import { convoyConnect, convoyCreate, convoyJoin, convoyPreview, convoyRoom, unwrap } from "./convoy_routes";
 import { Env, HttpError, body, json, str } from "./util";
 import { rateCheck } from "./ratelimit";
 import { clientError } from "./errors";
 import { backupDatabase } from "./backup";
 import {
-  boardFor, crewCreate, crewDiscover, crewInvite, crewJoin, crewJoinPublic, crewLeave, crewList, crewMembers, crewUpdate, friendAccept, friendList, friendRequest,
+  boardFor, crewCreate, crewDiscover, crewInvite, crewInvitePreview, crewJoin, crewJoinPublic, crewLeave, crewList, crewMembers, crewUpdate, friendAccept, friendList, friendRequest,
   myGrants, publish, removePair, setGrant, setHandle,
 } from "./social";
 import { deleteAccount, exportMyData } from "./account";
@@ -77,6 +77,7 @@ on("POST", "/api/crews", async (req, env) => json(await crewCreate(env, await re
 on("GET", "/api/crews", async (req, env) => json(await crewList(env, await requireMember(req, env))));
 on("GET", "/api/crews/:id/members", async (req, env, m) => json(await crewMembers(env, await requireMember(req, env), m.groups!.id)));
 on("POST", "/api/crews/join", async (req, env) => json(await crewJoin(env, await requireMember(req, env), req)));
+on("POST", "/api/crews/invite/preview", async (req, env) => json(await crewInvitePreview(env, await requireMember(req, env), req)));
 on("POST", "/api/crews/:id/invite", async (req, env, m) => json(await crewInvite(env, await requireMember(req, env), m.groups!.id), 201));
 on("GET", "/api/crews/discover", async (req, env) => json(await crewDiscover(env, await requireMember(req, env), new URL(req.url))));
 on("PUT", "/api/crews/:id", async (req, env, m) => { await crewUpdate(env, await requireMember(req, env), m.groups!.id, req); return noContent(); });
@@ -114,6 +115,7 @@ on("GET", "/api/board/:canon", async (req, env, m) => json(await boardFor(env, a
 
 on("POST", "/api/convoy", async (req, env) => json(await convoyCreate(env, await requireMember(req, env), req), 201));
 on("POST", "/api/convoy/join", async (req, env) => json(await convoyJoin(env, await requireMember(req, env), req)));
+on("POST", "/api/convoy/preview", async (req, env) => json(await convoyPreview(env, await requireMember(req, env), req)));
 on("GET", "/api/convoy/:id", async (req, env, m) => json(await convoyRoom(env, m.groups!.id).status((await requireMember(req, env)).id).then(unwrap)));
 on("POST", "/api/convoy/:id/invite", async (req, env, m) => json(await convoyRoom(env, m.groups!.id).newInvite((await requireMember(req, env)).id).then(unwrap), 201));
 on("POST", "/api/convoy/:id/ticket", async (req, env, m) => {

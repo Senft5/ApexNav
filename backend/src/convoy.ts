@@ -123,6 +123,23 @@ export class ConvoyRoom extends DurableObject<Env> {
     });
   }
 
+  /** A join's checks without the join: who leads, what it's called, how many are in. A blocked pair learns nothing more
+   *  than a join would tell them (cannot_join), and member names other than the leader's are never shown. */
+  async preview(userId: string, secret: string): Promise<Result<{ name: string; leader: { handle: string | null; name: string | null }; members: number; max: number; full: boolean; expiresAtMs: number; member: boolean }>> {
+    const room = await this.live();
+    if (!room) return fail(404, "no_convoy");
+    const already = !!this.members[userId];
+    if (!already) {
+      if (room.invite.expiresAt <= Date.now() || (await sha256hex(secret)) !== room.invite.hash) return fail(400, "invalid_invite");
+      if (this.banned[userId] || (this.revoked[userId] ?? -1) >= room.invite.issuedAt) return fail(403, "invite_revoked");
+      if ((await this.blockedPairs([userId], Object.keys(this.members))).length) return fail(403, "cannot_join");
+    }
+    await this.loadNames();
+    const n = this.names.get(room.leaderId), count = Object.keys(this.members).length;
+    return okR({ name: room.name, leader: { handle: n?.handle ?? null, name: scrub(n?.name ?? null) }, members: count, max: LIMITS.members,
+                 full: count >= LIMITS.members, expiresAtMs: room.expiresAt, member: already });
+  }
+
   /** Leader only: a fresh invite link. The old one stops working. */
   async newInvite(userId: string): Promise<Result<{ invite: string; expiresAtMs: number }>> {
     const room = await this.live();
