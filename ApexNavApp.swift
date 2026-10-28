@@ -156,7 +156,9 @@ struct ApexCockpitWebView: UIViewRepresentable {
         // false and prompt() null, so Unfriend, Leave crew and Delete account silently did nothing in the app.
         private func present(_ alert: UIAlertController, from webView: WKWebView) -> Bool {
             guard var top = webView.window?.rootViewController else { return false }
-            while let next = top.presentedViewController { top = next }
+            while let next = top.presentedViewController, !next.isBeingDismissed { top = next }
+            // Mid-transition (the share sheet closing) present() does nothing and the handler would never be called.
+            if top.isBeingDismissed || top.isBeingPresented { return false }
             top.present(alert, animated: true)
             return true
         }
@@ -181,7 +183,8 @@ struct ApexCockpitWebView: UIViewRepresentable {
             let alert = UIAlertController(title: nil, message: prompt, preferredStyle: .alert)
             alert.addTextField { field in
                 field.text = defaultText
-                field.autocapitalizationType = .none
+                // An empty prompt asks for a typed word (Delete account wants DELETE); a filled one is a link to copy.
+                field.autocapitalizationType = (defaultText ?? "").isEmpty ? .allCharacters : .none
                 field.autocorrectionType = .no
             }
             alert.addAction(UIAlertAction(title: "Cancel", style: .cancel) { _ in completionHandler(nil) })
