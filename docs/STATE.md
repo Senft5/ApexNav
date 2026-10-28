@@ -1,7 +1,7 @@
 # APEX NAV — CURRENT AGENT HANDOFF STATE
 
 ## Session 2026-10-28: avoid highways, tolls, ferries, unpaved
-- #115 merged (why this route). #PR: Avoid row on the Plan sheet (docs/ROUTING.md, Avoid); unpaved avoided by default; Valhalla summary flags make it honest ("Couldn't avoid tolls" on Virginia Beach → Cape Charles, checked against the public server). Not checked on a phone.
+- #115 merged (why this route). #118: Avoid row on the Plan sheet (docs/ROUTING.md, Avoid); unpaved avoided by default; Valhalla summary flags make it honest ("Couldn't avoid tolls" on Virginia Beach → Cape Charles, checked against the public server). Not checked on a phone.
 - Exact next task: R-15 remainder (avoid towns, repeated roads), or R-13 sun glare.
 
 ## Session 2026-10-28: "why this route" on the route card
