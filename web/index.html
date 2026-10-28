@@ -2902,6 +2902,7 @@
     const crewNear = () => { if (state.lastPosition) return state.lastPosition; const c = map.getCenter(); return { lat: c.lat, lon: c.lng }; };
     // Links people share open the website (in the app the page's own origin is apexnav://app, which no one else can open).
     const shareOrigin = () => (ApexSync.inApp ? ApexSync.apiBase : location.origin);
+    const crewPreview = { token: null, data: null };   // what the crew link is for, fetched once per link
     let renderGen = 0;   // two renders at once (a link while one runs): only the newest one draws
     async function renderAccount() {
       const body = $('accountBody'), gen = ++renderGen;
@@ -3025,9 +3026,28 @@
       // A crew link asks first: joining shows your handle to its members, so it is never done for you by opening a link.
       if (stash('apex.crew')) {
         const tok = stash('apex.crew');
-        csec.append(el('div', { className: 'card stack-8' },
-          el('p', { textContent: 'You have a crew invite. Join? Its members will see your handle, and your car if you show it to crews.' }),
-          el('div', { className: 'row' }, btn('Join crew', async (e) => {
+        const what = el('p', { textContent: 'You have a crew invite.' });
+        const why = el('p', { className: 'note', textContent: 'Its members will see your handle, and your car if you show it to crews.' });
+        const actions = el('div', { className: 'row' });
+        const show = (j) => {   // name the crew before the yes
+          if (j.member) { unstash('apex.crew'); toast(`You're already in ${j.name}.`); redo(); return; }
+          what.replaceChildren(document.createTextNode('Join '), el('b', { textContent: j.name }), document.createTextNode('?'));
+          why.textContent = `${j.visibility === 'public' ? 'Public' : 'Private'} crew · ${j.members} ${j.members === 1 ? 'member' : 'members'}${j.owner ? ' · run by @' + j.owner : ''}. Its members will see your handle, and your car if you show it to crews.`;
+        };
+        if (crewPreview.token === tok && crewPreview.data) show(crewPreview.data);
+        else (async () => {
+          let r = null, j = null;
+          try { r = await apiCall('POST', '/api/crews/invite/preview', { token: tok }); j = r.ok ? await jsonOf(r) : null; } catch (_) {}
+          if (gen !== renderGen) return;   // a newer render owns the screen
+          if (j && j.name) { crewPreview.token = tok; crewPreview.data = j; show(j); }
+          else if (r && r.status === 400) {
+            unstash('apex.crew');
+            what.textContent = 'That crew invite has run out or doesn\'t work for you. Ask for a new one.'; why.remove();
+            actions.replaceChildren(btn('OK', redo, 'linkbtn'));
+          }
+        })();
+        csec.append(el('div', { className: 'card stack-8' }, what, why, actions));
+        actions.append(btn('Join crew', async (e) => {
             const b = e && e.currentTarget; if (b) { if (b.disabled) return; b.disabled = true; }
             let r = null;
             try { r = await apiCall('POST', '/api/crews/join', { token: tok }); } catch (_) {}
@@ -3036,7 +3056,7 @@
             if (r.ok || (r.status >= 400 && r.status < 500)) unstash('apex.crew');
             toast(r.ok ? 'You joined the crew.' : r.status < 500 ? 'That crew invite didn\'t work. Ask for a new one.' : 'Couldn\'t join. Check signal and try again.');
             redo();
-          }, 'ink-btn solid'), btn('Not now', () => { unstash('apex.crew'); redo(); }, 'linkbtn'))));
+          }, 'ink-btn solid'), btn('Not now', () => { unstash('apex.crew'); redo(); }, 'linkbtn'));
       }
       if (!crewList.length) csec.append(el('p', { className: 'note', textContent: 'A crew is a group for a club or a weekend run. You can be in several. Make one below, or join one near you.' }));
       const tiles = el('div', { className: 'crew-tiles' });

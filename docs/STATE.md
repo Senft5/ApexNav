@@ -89,7 +89,8 @@
 - Links that open the app (IDEAS S-14): apexnav://open?invite|crew|add|convoy (ApexNavApp.swift `linkItems`), handed to the running cockpit page without a reload; iPhone Safari shows "Have the app? Open it there". Crew links now ask before joining and invite links wait for Join (before, opening a link joined on its own); link parameters leave the address bar once read.
 - Not verified on a phone: the report sheet and moderation queue in the app; opening apexnav:// links (cold start and while running, and from Log/Stages); the Safari bar without the app installed shows Safari's own "address is invalid" alert.
 - Known open: apexnav:// is a custom scheme another installed app could also claim; Universal Links (applinks: entitlement + apple-app-site-association) would close that and need a provisioning change. Crew and convoy prompts don't name the crew/convoy yet (needs a read-only preview endpoint).
-- Exact next task: crew and convoy invite previews (name, leader/owner, member count) before Join; then convoy drive recaps (who drove, hazards called) and a real two-phone convoy test.
+- Crew and convoy invite previews: the join prompts name the crew (size, owner) and the convoy (leader, size, end time). Crew invites no longer work across a block with the owner or for a reported/removed crew (private-invite joins skipped both checks before).
+- Exact next task: convoy drive recaps (who drove, hazards called) and a real two-phone convoy test.
 
 ## Session 2026-10-28: long trips planned in sections
 - Trips over 22 km crow fly are cut into ~24 km sections along the quickest route (2 on Fun, 3 on Max fun); each section gets its own stage search, and the best per section (plus one-swap variants, max 4 stages) compete with the single-corridor plans (#96, `ApexFunRoute.sectionCount/sectionPoints/combineSections`). Knoxville→Asheville Fun: Fun 47 for +17 min (was no fun option); Knoxville→Maryville unchanged (79 @ 128 min). Not driven on a phone.

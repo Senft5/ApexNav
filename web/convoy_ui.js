@@ -208,6 +208,14 @@
       if (!invite) { toast('Couldn\'t make an invite. Try again.'); return; }
       copyText(inviteUrl(invite), 'Convoy link copied. It works for 30 minutes.', 'Join my convoy');
     }
+    const preview = { invite: null, status: null, ok: false, body: null, at: 0 };
+    async function loadPreview(invite) {
+      Object.assign(preview, { invite, status: null, ok: false, body: null, at: Date.now() });
+      const r = await client.post('/api/convoy/preview', { invite });
+      if (preview.invite !== invite) return;
+      Object.assign(preview, { status: r.status, ok: r.ok && !!(r.body && r.body.name), body: r.body, at: Date.now() });
+      lastKey = null; paint();
+    }
     function renderSection() {
       const s = snap, box = sectionHost;
       if (!box) return;
@@ -217,6 +225,18 @@
       if (!s || !s.id) {
         kids.push(el('p', { className: 'note', textContent: 'Drive together live: everyone in the convoy sees where everyone is, the leader can call hazards and a regroup point, and the co-driver warns you before you get there. Nothing is kept: it ends when the leader leaves or after two hours.' }));
         if (pending) {
+          // Say which convoy before the yes: joining shares your position with everyone in it.
+          const pv = preview.invite === pending ? preview : null;
+          if (!pv || (pv.status !== null && Date.now() - pv.at > 60e3)) loadPreview(pending);   // invites run out and convoys fill
+          const time = (ms) => new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+          const lead = (l) => (l && l.handle ? '@' + l.handle : 'someone');
+          kids.push(el('p', { className: 'note', textContent: !pv || !pv.status ? 'Checking the convoy link…'
+            : pv.ok ? `${pv.body.name} · led by ${lead(pv.body.leader)} · ${pv.body.members} of ${pv.body.max} in · ends ${time(pv.body.expiresAtMs)}`
+            : pv.status === 409 ? 'That convoy is full.'
+            : pv.status === 0 || pv.status === 429 || pv.status >= 500 ? 'Couldn\'t check the convoy link. You can still try to join.'
+            : 'That convoy link has run out or isn\'t yours to use. Ask the leader for a new one.' }));
+        }
+        if (pending) {
           kids.push(el('div', { className: 'row' }, btn('Join the convoy', async () => {
             const r = await client.join(pending);
             if (r.ok || r.status === 400 || r.status === 403 || r.status === 404 || r.status === 409) store.set('sessionStorage', INVITE_KEY, '');
@@ -224,7 +244,7 @@
               : r.status === 0 || r.status >= 500 ? 'No connection. Try again in a moment.' : 'That convoy link didn\'t work. Ask the leader for a new one.');
             else toast('You\'re in the convoy. Your position is shared with it until you leave.');
             paint();
-          }, 'ink-btn solid'), btn('Not now', () => { store.set('sessionStorage', INVITE_KEY, ''); paint(); }, 'linkbtn')));
+          }, 'ink-btn solid'), btn('Not now', () => { store.set('sessionStorage', INVITE_KEY, ''); preview.invite = null; paint(); }, 'linkbtn')));
         } else {
           const name = labelled(el('input', { className: 'field', placeholder: 'Convoy name (optional)', maxLength: 40, autocomplete: 'off' }), 'Convoy name');
           kids.push(el('div', { className: 'row' }, name, btn('Start a convoy', async () => {

@@ -7,7 +7,8 @@ records where the build differs from the draft that follows, and why.
 ## As built (2026-10-28)
 
 - Routes: `POST /api/convoy` `{consent, name?}`, `POST /api/convoy/join` `{consent, invite}` (the invite is
-  `<convoy id>.<secret>`, so a link `/?convoy=<invite>` is enough), `GET /api/convoy/:id`, `POST /api/convoy/:id/invite`
+  `<convoy id>.<secret>`, so a link `/?convoy=<invite>` is enough), `POST /api/convoy/preview` `{invite}` (name, leader, size and
+  end time before saying yes; same checks as a join, changes nothing), `GET /api/convoy/:id`, `POST /api/convoy/:id/invite`
   (leader: new link, old one dies), `/ticket`, `/leave`, `/remove` `{member}` (leader), `GET /api/convoy/:id/connect` (socket).
 - Bounds that changed, on purpose: invite 30 min (people gather at a meet before a drive; the leader can make a fresh one
   any time); frames up to 32 KiB, measured in bytes, but only a `route` frame may exceed 2 KiB (a shared route needs it);

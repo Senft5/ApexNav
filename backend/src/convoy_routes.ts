@@ -39,12 +39,23 @@ export async function convoyCreate(env: Env, v: Viewer, req: Request) {
 }
 
 /** The invite is `<convoy id>.<secret>`, as the leader's link carries it. */
+function parseInvite(invite: unknown): [string, string] {
+  const [id, secret, extra] = str(invite, "invite", 30, 100).split(".");
+  if (!id || !secret || extra !== undefined || !ROOM_RE.test(id)) throw new HttpError(400, "invalid_invite");
+  return [id, secret];
+}
+
 export async function convoyJoin(env: Env, v: Viewer, req: Request) {
   const b = await body<{ consent?: unknown; invite?: unknown }>(req);
   consent(b);
-  const [id, secret, extra] = str(b.invite, "invite", 30, 100).split(".");
-  if (!id || !secret || extra !== undefined || !ROOM_RE.test(id)) throw new HttpError(400, "invalid_invite");
+  const [id, secret] = parseInvite(b.invite);
   return unwrap(await convoyRoom(env, id).join(who(v), secret));
+}
+
+/** What a convoy link is for before you say yes: its name, leader and size. Same checks as a join, changes nothing. */
+export async function convoyPreview(env: Env, v: Viewer, req: Request) {
+  const [id, secret] = parseInvite((await body<{ invite?: unknown }>(req)).invite);
+  return unwrap(await convoyRoom(env, id).preview(v.id, secret));
 }
 
 /** Only our own pages (the site or the iOS shell) may open a convoy socket; the ticket in the first frame does the rest. */
