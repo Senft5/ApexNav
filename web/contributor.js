@@ -2,7 +2,7 @@
 // What leaves the phone: OSM way id, direction, bin index, and four road numbers per 5 m bin. Never coordinates, speeds or times.
 // The pure part (buildContributions) is deterministic and unit-tested; matchDrive/fetchWays/contributeDrive are the thin network shell.
 (function (root) {
-  const SMOOTH_G = 0.12, ROUGH_G = 0.30, MAX_LOOKUP_WAYS = 150;   // roughness g rms: smooth at or under, broken at or over
+  const SMOOTH_G = 0.08, ROUGH_G = 0.30, MAX_LOOKUP_WAYS = 150;   // roughness g rms: smooth at or under, broken at or over
   const BIN_M = 5, MIN_BINS = 20, MAX_BINS = 2000, MAX_OFF_ROAD_M = 25, MAX_AGE_DAYS = 13;
   const SKIP_CLASSES = new Set(['residential', 'service_other', 'unclassified_service', 'service']);   // private-feeling roads are never contributed
   const M_LAT = 110540;
@@ -338,48 +338,58 @@
   function summarize(runs, roads, total) {
     // Readings whose passes disagree (agreement() says 'differ') don't steer a route: they count as covered but not as rough,
     // smooth or banked. A single pass, or an older server without spreads, counts; measuredAdjust weights passes separately.
-    let covered = 0, located = 0, passes = 0, rough = [], banked = 0, smooth = 0, broken = 0, disputed = 0;
+    let covered = 0, located = 0, passes = 0, trusted = 0, rough = [], camKnown = 0, banked = 0, offCamber = 0, smooth = 0, broken = 0, disputed = 0;
     for (const run of runs) {
       const d = roads[run.way] && roads[run.way][run.dir], idx = d ? new Map(d.i.map((b, j) => [b, j])) : null;
       for (const p of run.pts) {
         located++;
         const j = idx && idx.get(p.bin);
         if (j == null) continue;
-        covered++; passes += d.n[j];
+        covered++;
         const roughOk = agreement(d.n[j], d.rsd ? d.rsd[j] : null, AGREE.rough_g) !== 'differ';
         const camOk = agreement(d.cn ? d.cn[j] : d.n[j], d.csd ? d.csd[j] : null, AGREE.camber_deg) !== 'differ';
-        if (!roughOk || !camOk) disputed++;
+        if (!roughOk || !camOk) disputed++; else { passes += d.n[j]; trusted++; }
         if (roughOk && finite(d.rough[j])) { rough.push(d.rough[j]); if (d.rough[j] <= SMOOTH_G) smooth++; else if (d.rough[j] >= ROUGH_G) broken++; }
-        if (camOk && finite(d.cam[j]) && Math.abs(d.cam[j]) >= 3) banked++;
+        // Camber is stored relative to the turn (ARCHITECTURE §1): + banked into it, − off-camber (a hazard, never a bonus).
+        if (camOk && finite(d.cam[j])) { camKnown++; if (d.cam[j] >= 3) banked++; else if (d.cam[j] <= -3) offCamber++; }
       }
     }
     return { km: total * BIN_M / 1000, coveredKm: covered * BIN_M / 1000, coverage: total ? covered / total : 0, located: located / (total || 1),
-             roughness: rough.length ? mean(rough) : null, bankedKm: banked * BIN_M / 1000, avgPasses: covered ? passes / covered : null,
+             roughness: rough.length ? mean(rough) : null, bankedKm: banked * BIN_M / 1000, offCamberKm: offCamber * BIN_M / 1000,
+             // What each signal really covered (trusted readings only): the weights, so a few agreed bins can't stand for a disputed road.
+             roughCoverage: total ? rough.length / total : 0, camberCoverage: total ? camKnown / total : 0,
+             avgPasses: trusted ? passes / trusted : null,
              smoothKm: smooth * BIN_M / 1000, roughKm: broken * BIN_M / 1000, disputedKm: disputed * BIN_M / 1000 };
   }
 
   /**
    * Route score adjustment from member measurements (docs/ROUTING.md, Measured roads). Fun scores run 0–100, so this is a real input:
    * - rough surface: up to -8 (same scale as core effective_mu: fine at 0.08 g rms, fully rough at 0.38 g);
-   * - measured smooth surface: up to +3 (≤ 0.12 g rms);
-   * - banked road (|camber| ≥ 3°): up to +2 when a tenth of the route is banked.
-   * Weighted by how much of the route is measured (full weight at half) and by passes (one pass counts 3/4, two or more fully).
+   * - smooth surface: up to +3, full at ≤ 0.05 g rms fading to 0 at 0.08 g (where the rough ramp starts);
+   * - banked into the corners (camber ≥ +3°): up to +2 when a tenth of the route is; off-camber (≤ −3°): the same scale, negative.
+   * Each term is weighted by how much of the route that signal measured with agreeing passes (full weight at two thirds) and by
+   * passes (one pass counts 3/4, two or more fully).
    * Unmeasured roads are neutral, never penalised or rewarded, so a route no one has driven is not disadvantaged.
    */
   function measuredAdjust(m) {
     if (!m || !(m.coverage > 0)) return 0;
-    const cover = Math.min(1, m.coverage * 2), passes = m.avgPasses == null ? 1 : Math.min(1, 0.5 + m.avgPasses / 4), w = cover * passes;
+    const weight = (cov) => Math.min(1, (cov ?? m.coverage) * 1.5);
+    const passes = m.avgPasses == null ? 1 : Math.min(1, 0.5 + m.avgPasses / 4);
     let adj = 0;
     if (m.roughness != null) {
+      const w = weight(m.roughCoverage) * passes;
       adj -= 8 * w * Math.max(0, Math.min(1, (m.roughness - 0.08) / 0.30));
-      adj += 3 * w * Math.max(0, Math.min(1, (SMOOTH_G - m.roughness) / 0.07));
+      adj += 3 * w * Math.max(0, Math.min(1, (SMOOTH_G - m.roughness) / 0.03));
     }
-    if (m.km > 0 && m.bankedKm > 0) adj += passes * Math.min(2, (m.bankedKm / m.km) * 20);
+    if (m.km > 0) {
+      const share = (km) => (km > 0 ? Math.min(2, (km / m.km) * 20) : 0);
+      adj += passes * (share(m.bankedKm) - share(m.offCamberKm));
+    }
     return adj;
   }
   /** Surface 0–100 from measured roughness (100 = glass), or null when under a fifth of the route is measured. */
   function surfaceScore(m) {
-    if (!m || m.roughness == null || !(m.coverage >= 0.2)) return null;
+    if (!m || m.roughness == null || !((m.roughCoverage ?? m.coverage) >= 0.2)) return null;
     return Math.round(100 * (1 - Math.max(0, Math.min(1, (m.roughness - 0.08) / 0.30))));
   }
 

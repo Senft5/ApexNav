@@ -43,6 +43,9 @@ out.driveIds = [C.driveIdFor({ id: 'rec_Dry Ridge.csv', date: '2026-10-22T09:00'
 // payload contains only the allowed keys
 out.keys = Object.keys(a[0]).sort().join() + '|' + Object.keys(a[0].bins[0]).sort().join();
 // network shell with a fake fetch: Valhalla trace_attributes + Overpass, then upload
+// a mostly disputed road: 45 of 50 measured bins disagree, 5 agree on smooth: tiny weight, no Surface
+out.mostlyDisputed = (() => { const m = { km: 0.5, coverage: 0.5, roughCoverage: 0.05, roughness: 0.05, avgPasses: 3, bankedKm: 0, offCamberKm: 0 }; return { adj: C.measuredAdjust(m), surface: C.surfaceScore(m) }; })();
+out.offCamber = C.measuredAdjust({ roughness: null, coverage: 1, km: 10, bankedKm: 0, offCamberKm: 1, avgPasses: 3 });
 out.adjust2 = { onePass: C.measuredAdjust({ roughness: 0.6, coverage: 1, avgPasses: 1 }), banked: C.measuredAdjust({ roughness: null, coverage: 1, km: 10, bankedKm: 1, avgPasses: 3 }),
   bankedLittle: C.measuredAdjust({ roughness: null, coverage: 1, km: 10, bankedKm: 0.5, avgPasses: 2 }), zeroCoverage: C.measuredAdjust({ roughness: 0.6, coverage: 0, km: 10, bankedKm: 1 }) };
 out.surface = [C.surfaceScore(null), C.surfaceScore({ roughness: 0.05, coverage: 0.1 }), C.surfaceScore({ roughness: 0.05, coverage: 0.5 }), C.surfaceScore({ roughness: 0.5, coverage: 1 }), C.surfaceScore({ roughness: 0.23, coverage: 1 })];
@@ -163,12 +166,14 @@ def test_measured_adjustment_moves_routes_but_never_rewards_or_punishes_the_unkn
     none, unknown_rough, smooth, rough_full, rough_little, mid = result["adjust"]
     assert none == 0 and unknown_rough == 0
     assert smooth == pytest.approx(3), "measured smooth pavement is worth up to 3"
-    assert rough_full == pytest.approx(-8) and -8 < rough_little < 0 and mid == pytest.approx(-4)
+    assert rough_full == pytest.approx(-8) and -8 < rough_little < 0 and mid == pytest.approx(-3), "half measured counts three quarters"
     a = result["adjust2"]
     assert a["onePass"] == pytest.approx(-6), "one pass counts three quarters"
     assert a["banked"] == pytest.approx(2) and a["bankedLittle"] == pytest.approx(1)
     assert a["zeroCoverage"] == 0
     assert result["surface"] == [None, None, 100, 0, 50]
+    assert result["offCamber"] == pytest.approx(-2), "off-camber road is a hazard, never a bonus"
+    assert 0 < result["mostlyDisputed"]["adj"] <= 0.25 and result["mostlyDisputed"]["surface"] is None
 
 
 def test_disagreeing_passes_do_not_steer_routes(result):
@@ -177,6 +182,8 @@ def test_disagreeing_passes_do_not_steer_routes(result):
     assert d["bankedKm"] == 0 and m["bankedKm"] > 0, "banking the passes disagree on is not banking"
     assert d["smoothKm"] == pytest.approx(m["smoothKm"] / 2, abs=0.02)
     assert d["disputedKm"] == pytest.approx(0.5, abs=0.02)
+    assert d["roughCoverage"] == pytest.approx(m["roughCoverage"] / 2, abs=0.01), "weights count agreed readings only"
+    assert m["offCamberKm"] == 0
 
 
 def test_long_routes_look_up_ways_in_batches(result):

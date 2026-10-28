@@ -60,16 +60,19 @@ trace_attributes + Overpass geometry, up to 150 ways in batches of 50 for `/api/
 `ApexContributor.measuredAdjust` added to their value:
 
 - rough surface: up to −8 (0.08 g rms fine … 0.38 g fully rough, the core effective_mu scale);
-- measured smooth surface (≤ 0.12 g rms): up to +3;
-- banked road (|camber| ≥ 3°): up to +2 when a tenth of the route is banked;
-- weighted by coverage (full weight at half the route measured) and passes (one pass counts 3/4).
+- smooth surface: up to +3, full at ≤ 0.05 g rms fading to 0 at 0.08 g (where the rough ramp starts);
+- banked into the corners (camber ≥ +3°): up to +2 when a tenth of the route is; off-camber
+  (≤ −3°, a hazard): the same scale, negative;
+- each term is weighted by how much of the route that signal measured with agreeing passes (full
+  weight at two thirds) and by passes (one pass counts 3/4);
 - readings whose passes disagree (`ApexContributor.agreement` says 'differ': camber spread over 1.5°,
-  roughness over 0.05 g) are left out of rough, smooth and banked; they still count as covered.
+  roughness over 0.05 g) are left out entirely; they still count as covered in the "Measured by
+  members" note, but never as weight.
 
 Unmeasured roads are neutral: a road nobody has driven is never penalised or rewarded. With fun
 scores on 0–100 this decides close calls (a fully rough road loses a 6-point lead) but cannot make a
 dull road beat a much better one (it keeps a 20-point lead). The route card adds a **Surface** bar
-(100 = glass) once a fifth of the route is measured. Not used yet: crest (not uploaded, see
+(100 = glass) once a fifth of the route has agreeing roughness readings. Not used yet: crest (not uploaded, see
 ARCHITECTURE §1), hazards, and measured data during stage discovery itself (stages are still found on
 map geometry; measured data only re-ranks routed candidates).
 

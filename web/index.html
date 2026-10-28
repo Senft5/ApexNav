@@ -1809,8 +1809,8 @@
       Object.assign(nt, { request: { from: null, to: req.to, via: ahead }, fun: funOf(nt, r.turns), timeS: r.timeS });
       await buildRoute(null, t.id, t.name, nt);                     // activate() resets the monitor for the new route
     }
-    // Members: what others measured on these roads (d.t.measured) and a score adjustment for it (d.adjust: a rough road
-    // costs up to 6 points; unmeasured roads are neutral). False when there is nothing to compare or no membership.
+    // Members: what others measured on these roads (d.t.measured) and a score adjustment for it (d.adjust: rough
+    // −8 … smooth +3, banked ±2, docs/ROUTING.md; unmeasured roads are neutral). False when there is nothing to compare or no membership.
     async function applyMeasured(list, ui) {
       if (!window.ApexSync || !window.ApexContributor || list.length < 2 || !await RouteLoading.optional(ApexSync.member())) return false;
       ui.step('Checking road feel', 0.9);
@@ -1975,7 +1975,7 @@
       const done = (await Promise.allSettled(tries)).filter(r => r.status === 'fulfilled').map(r => r.value);
       if (!done.length) { toast('Couldn\'t build a loop. Check signal and try again.'); return; }
       done.sort((a, b) => b.score - a.score);
-      // Members: let what others measured break ties among the top few (a rough road costs up to 6 points; unmeasured roads are neutral).
+      // Members: let what others measured break ties among the top few (rough −8 … smooth +3, banked ±2, docs/ROUTING.md; unmeasured roads are neutral).
       if (await applyMeasured(done.slice(0, 3), ui)) {
         for (const d of done) d.score += d.adjust || 0;
         done.sort((a, b) => b.score - a.score);
