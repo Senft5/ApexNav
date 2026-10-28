@@ -1,5 +1,11 @@
 # APEX NAV — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-10-28: fun routing from A to B (thread "Make fun-driving routing best in class")
+- Audit: destination routes had no fun optimisation at all (one Valhalla call with highways de-prioritised); the route card's Twist/Flow/Surface were always `--` for planned routes (no sectors); every 45 mi loop (and some 30 mi ones) silently fell back to a circle because stage discovery threw "area too large" above 64 tiles (a 14 km radius is 81 tiles at 39°N).
+- New web/fun_route.js + `funRoute` in web/index.html (docs/ROUTING.md): Quick / Fun / Max fun level on the Plan sheet and route card; candidates = Valhalla route + 2 alternates + 1–2 corridor stage detours timed with one `sources_to_targets` call; map-only fun score (Twist, Flow, Dull; junction maneuvers removed); ranked by fun + corners gained − time cost within the level's budget; stage points kept as shaping vias so reroutes still drive them. Route card shows Fun/Twist/Flow and "N min (+M for fun)". Stage search now shrinks to 64 tiles instead of failing.
+- Tests: tests/test_fun_route.py (new), tests/test_route_loading.py updated for the new router functions. Checked in desktop Chromium against the public servers (Knoxville→Maryville: Fun picks a +30 min stage detour, Fun 79 vs 51). Not driven on a phone.
+- Exact next task: make measured road character (surface, camber, crest, flow confidence) a real routing input for destination routes and loops (WORKER_QUEUE road-3), then unify the loop ranking with the fun score.
+
 ## Session 2026-10-28: UI polish (owner goal: best-in-class UI)
 - Audit method: Playwright at 390×844 (iPhone size), day and night, every tab, empty and with an imported drive (Dry Ridge rows exported to CSV). Map tiles load; the server API is unreachable from the sandbox, so Crew was only seen offline.
 - #79: Log has a page title like Stages; empty Log shows one empty state (Go to the map / Watch a replay) instead of blank Latest/Best tiles; no "No drives yet" flash before IndexedDB answers; empty Stages hides the drive picker, New stage and Share older drives until there is a drive; tab bar sets aria-current.
