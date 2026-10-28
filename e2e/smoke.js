@@ -977,6 +977,25 @@ flow('measured roads: the switch draws the roads members have measured around th
   check(await page.evaluate(() => window.apexDebug.map.getLayoutProperty('apex-coverage', 'visibility')) === 'none', 'hidden when off');
 });
 
+flow('road page: About a road shows its archetype, axes and how sure it is (IDEAS Q-13)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.openRoadPage);
+  await page.evaluate(() => {   // a run of tight alternating hairpins
+    const lat = [], lon = []; let x = 0, y = 0, h = Math.PI / 2;
+    const step = (n, turn) => { for (let i = 0; i < n; i++) { h += turn; x += 5 * Math.cos(h); y += 5 * Math.sin(h); lat.push(35 + y / 110540); lon.push(-83 + x / 91190); } };
+    step(20, 0); for (let k = 0; k < 8; k++) { step(10, (k % 2 ? 1 : -1) * Math.PI / 10); step(16, 0); } step(20, 0);
+    window.apexDebug.openRoadPage({ lat, lon, name: 'Test Pass', km: lat.length * 5 / 1000, junctionsPerKm: 0.2 });
+  });
+  await page.waitForSelector('aside.side-pop.open[aria-label="About this road"]');
+  const text = await page.textContent('aside.side-pop.open');
+  check(/Test Pass/.test(text) && /Switchbacks/.test(text), 'name and archetype: ' + text.slice(0, 200));
+  check(/TECH/.test(text) && /FLOW/.test(text) && /L0 · From the map only/.test(text), 'axes and confidence');
+  check(/SURF--/.test(text.replace(/\s+/g, '')), 'no member data: SURF unknown');
+  await page.click('aside.side-pop.open button:has-text("Close")');
+  check(!(await page.isVisible('aside.side-pop.open[aria-label="About this road"]')), 'closes');
+});
+
 flow('desk: on a big screen Where to? is a column on the left and sheets a panel on the right, the map in view (IDEAS A-05)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.goto(base + '/index.html?view=route');

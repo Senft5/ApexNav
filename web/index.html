@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-4Dd6BALBbkolxqSPV+9Iq7J5Y4Uws7hsxkQP2Msyxkg=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-8t3w92CPR77qHR1SiX0sS4/J+gDsxQ31ikk+R6T0TfU=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>ApexNav</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -20,6 +20,7 @@
   <script src="analysis_client.js"></script>
   <script src="driving_side.js"></script>
   <script src="crew_standings.js"></script>
+  <script src="road_page.js"></script>
   <script src="route_loading.js"></script>
   <script src="stages.js"></script>
   <script src="fun_route.js"></script>
@@ -1008,7 +1009,7 @@
     const startPos = (() => { try { const p = JSON.parse(localStorage.getItem(LAST_POS) || 'null'); return p && Number.isFinite(p.lat) && Number.isFinite(p.lon) ? p : null; } catch (_) { return null; } })();
     const map = new maplibregl.Map({ container: 'map', style: 'https://tiles.openfreemap.org/styles/liberty',
       center: startPos ? [startPos.lon, startPos.lat] : [-84.70, 39.24], zoom: 14.6, pitch: 45, maxPitch: 60, attributionControl: { compact: true }, fadeDuration: 0 });
-    window.apexDebug = { map, get track() { return track; }, state, drives, buildRoute: (...a) => buildRoute(...a), renderRouteCard: (...a) => renderRouteCard(...a) };
+    window.apexDebug = { map, get track() { return track; }, state, drives, buildRoute: (...a) => buildRoute(...a), renderRouteCard: (...a) => renderRouteCard(...a), openRoadPage: (...a) => openRoadPage(...a) };
     let mapReady = false;
     // The map's box changes with the layout (idle hides the gauges, a drive shows them); keep the canvas the size of its box.
     if (window.ResizeObserver) new ResizeObserver(() => map.resize()).observe(document.getElementById('map'));
@@ -3158,7 +3159,12 @@
         info.textContent = `${p.s.good} · ${ApexUnits.long((p.s.km) * 1000, 1)} · ${Math.max(1, Math.round(p.awayS / 60))} min`;
         b.setAttribute('aria-label', `${name.textContent}: ${p.s.good} good corners, ${info.textContent.split(' · ')[1]}, ${Math.max(1, Math.round(p.awayS / 60))} minutes away`);
         b.append(name, info); b.addEventListener('click', () => driveStage(i));
-        return b;
+        // what the road is like (road_page.js, IDEAS Q-13)
+        const about = document.createElement('button'); about.className = 'linkbtn'; about.textContent = 'About';
+        about.setAttribute('aria-label', `About ${name.textContent}`);
+        about.addEventListener('click', () => openRoadPage(p.s));
+        const row = document.createElement('div'); row.className = 'row pinned-row'; row.append(b, about);
+        return row;
       }));
       box.hidden = false;
       if (e.picks.length && mapReady && state.mode !== 'live') {
@@ -3169,6 +3175,42 @@
         const top = $('planPanel').getBoundingClientRect().top, bottom = Math.max(24, Math.min(window.innerHeight - 160, window.innerHeight - top + 16));
         map.fitBounds([[w, so], [ea, n]], { padding: { top: 40, left: 30, right: 30, bottom }, pitch: 0, bearing: 0, duration: 1000 });
       }
+    }
+    // Road page (road_page.js, IDEAS Q-13): the reference lap over the road's shape, the DEM's climb, members' measurements.
+    let roadPop = null;
+    async function openRoadPage(s) {
+      if (!window.ApexRoadPage) return;
+      if (!roadPop) {
+        roadPop = document.createElement('aside'); roadPop.className = 'side-pop'; roadPop.setAttribute('role', 'dialog'); roadPop.setAttribute('aria-label', 'About this road');
+        document.body.append(roadPop);
+      }
+      const head = document.createElement('div'); head.className = 'side-pop-head';
+      const h = document.createElement('h3'), close = document.createElement('button');
+      h.textContent = roadLabel(s.name); close.className = 'linkbtn'; close.textContent = 'Close'; close.addEventListener('click', () => roadPop.classList.remove('open'));
+      head.append(h, close);
+      const body = document.createElement('div'); body.className = 'stack-8';
+      const note = (t) => { const p = document.createElement('p'); p.className = 'note'; p.textContent = t; return p; };
+      roadPop.replaceChildren(head, body); roadPop.classList.add('open');
+      const paint = (d) => {
+        if (!d) { body.replaceChildren(note('Too short to describe.')); return; }
+        const lines = ApexRoadPage.rows(d).map(([k, v]) => { const r = document.createElement('div'); r.className = 'row'; r.style.justifyContent = 'space-between';
+          const a = document.createElement('span'), b = document.createElement('b'); a.textContent = k; b.textContent = v; r.append(a, b); return r; });
+        const best = Number.isFinite(s.elevA) && Number.isFinite(s.elevB) && Math.abs(s.elevB - s.elevA) >= 40
+          ? ((s.tight || 0) / s.km >= 1.2 ? 'Better climbed: tight corners are safer uphill.' : 'Better descended: it flows.') : null;
+        body.replaceChildren(note(ApexRoadPage.headline(d, (km) => ApexUnits.long(km * 1000, 1), (m) => ApexUnits.short(m))), ...lines,
+          ...(best ? [note(best)] : []), note('Map shape and terrain, scored by a simulated sane driver. Never a speed to aim for.'));
+      };
+      const rs = Core.resamplePolyline(s.lat, s.lon, 5), dist = rs.lat.map((_, i) => i * 5);
+      const side = (() => { try { return ApexDrivingSide.forRoute(rs.lat[0], rs.lon[0]); } catch (_) { return null; } })();
+      paint(ApexRoadPage.describe(Core, s, { side }));                // straight away from the shape; then with the terrain and members' data
+      let elev = null, measured = null;
+      try { elev = await RouteLoading.optional(ApexStages.profile({ lat: rs.lat, lon: rs.lon, dist }, 30), 6000); } catch (_) { elev = null; }
+      try {
+        if (window.ApexContributor && window.ApexSync && (await ApexSync.member()))
+          measured = await RouteLoading.optional(ApexContributor.measuredAlong({ lat: rs.lat, lon: rs.lon }, async (ids) => { const r = await apiCall('GET', `/api/roads?ways=${ids.join(',')}`); return r.ok ? r.json() : null; }), 12000);
+      } catch (_) { measured = null; }
+      if (!roadPop.classList.contains('open') || h.textContent !== roadLabel(s.name)) return;
+      paint(ApexRoadPage.describe(Core, s, { side, elev, measured, surf: window.ApexContributor ? ApexContributor.surfaceScore(measured) : null }));
     }
     function paintExplore() {
       if (!mapReady || !map.getSource('apex-explore-src')) return;
