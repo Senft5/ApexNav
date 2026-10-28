@@ -1,5 +1,10 @@
 # APEX NAV — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-10-28 (late morning)
+- Merged: #193 F-06 offline data, D-23 drive tags, V-08 ducking, S-20 flyby; #194 S-11 monthly challenges, R-18 drag to reshape.
+- This PR: Y-14 segment ids that can't collide (and a taken old id resent under a new one), R-34 ramps are Connectors, A-03 PWA (manifest + network-first service worker, websites only).
+- Exact next task: small IDEAS rows: R-14 re-score router geometry, R-35 avoid cameras as a routing option, D-20 weekly digest, S-08 local legends, S-17 which road was better, Z-08 k-anonymity, L-05 feedback button, Q-14 coverage map; then S-15 profiles, A-05 desktop planner, S-07 kudos.
+
 ## Session 2026-10-28 (morning)
 - Merged: #191 R-25/R-26 GPX in/out and maps links, #192 R-37 home by + R-11 which way round a stage + S-12 spots near you.
 - This PR: F-06 offline data in Settings (size and delete), D-23 drive tags and notes with a Log filter, V-08 ducking by note priority (shell `duck` flag; `.mixWithOthers` for cruise chatter), S-20 flyby on a drive's page, S-11 monthly challenges (personal part), R-18 drag the route to reshape it.
