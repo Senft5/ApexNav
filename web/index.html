@@ -523,6 +523,7 @@
         <button class="sw" data-toggle="voice"><i></i><span>Voice</span></button>
         <button class="sw" data-toggle="lpr"><i></i><span>Cameras</span></button>
         <button class="sw" data-toggle="twisty"><i></i><span>Twisty roads</span></button>
+        <button class="sw" data-toggle="terrain"><i></i><span>3D terrain</span></button>
         <button class="sw" data-toggle="haptics"><i></i><span>Haptics</span></button>
         <button class="sw sw-cycle" data-cycle="nightMode" aria-label="Night"><b></b><span>Night</span></button>
       </div>
@@ -842,7 +843,7 @@
       theme: 'roadbook', camFeel: 'dynamic', voiceId: 'george', liveVoice: false, voiceStyle: 'codriver', voiceName: '', hlOn: false, hlStrength: 1,
       notesMode: 'auto', nightMode: 'auto',   // Notes: auto | full | quiet. Night: auto (sunset/sunrise) | on | off
       noteWords: 'plain',                     // rally ("Left 4 minus") | plain ("Medium left"), IDEAS V-02; a saved setting wins
-      toggles: { stage: false, voice: true, lpr: true, dna: false, night: false, twisty: false, haptics: true, crash: true, health: true }   // stage and night are derived from the two modes; analysis.html reads toggles.night
+      toggles: { stage: false, voice: true, lpr: true, dna: false, night: false, twisty: false, haptics: true, crash: true, health: true, terrain: false }   // stage and night are derived from the two modes; analysis.html reads toggles.night
     };
     const NOTES_MODES = ['auto', 'full', 'quiet'], NIGHT_MODES = ['auto', 'on', 'off'];
     const MODE_LABEL = { auto: 'Auto', full: 'Full', quiet: 'Quiet', on: 'On', off: 'Off' };
@@ -1217,6 +1218,14 @@
       const dpr = window.devicePixelRatio || 1;   // null hands the ratio back to MapLibre (follows zoom and screen changes)
       if (power.low || map.getPixelRatio() !== dpr) try { map.setPixelRatio(power.low ? Math.min(dpr, 2) : null); } catch (_) {}
       for (const id of HEAVY_LAYERS) if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', power.low ? 'none' : 'visible');
+      applyTerrain();
+    }
+    // 3D terrain (IDEAS U-14): the hillshade's own DEM raised into relief, a little exaggerated so a ridge reads on a phone.
+    // Off by default and off while saving battery (it is the heaviest thing the map can draw). Preview flies over it.
+    function applyTerrain() {
+      if (!mapReady || !map.getSource('apex-dem')) return;
+      const on = !!state.toggles.terrain && !power.low;
+      try { map.setTerrain(on ? { source: 'apex-dem', exaggeration: 1.4 } : null); } catch (_) {}
     }
     function feedPower(info) {
       if (!power.update(info)) return;
@@ -4222,6 +4231,11 @@
       paintSwitches();
       if (k === 'lpr') updatePins();
       if (k === 'haptics' && state.toggles.haptics) haptic('note');   // feel it once
+      if (k === 'terrain') {
+        applyTerrain();
+        if (state.toggles.terrain && mapReady && state.mode !== 'live' && map.getPitch() < 40) map.easeTo({ pitch: 60, duration: 800 });
+        if (state.toggles.terrain && power.low) toast('3D terrain waits until the phone stops saving battery.');
+      }
       if (k === 'twisty') {
         updateTwisty();
         if (state.toggles.twisty) toast(mapReady && map.getZoom() < ApexTwisty.MIN_ZOOM ? 'Zoom in to see twisty roads.' : 'Twisty roads come from the map\'s shape, not from drives.');

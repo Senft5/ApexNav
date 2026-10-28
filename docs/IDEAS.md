@@ -239,7 +239,7 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 | U-11 | Live Activity / Dynamic Island: next note, distance to stage, ETA | H | M | done (ApexNavLive widget extension; the cockpit pushes the next note while a drive runs) | Apple Maps, Uber |
 | U-12 | Apple Watch: next note as a tap on the wrist, drive summary | M | L | todo | Apple Maps on Watch |
 | U-13 | Map style polish: road character colours (twist, surface) as an optional layer | H | M | partial: Twisty roads switch (map shape); surface todo | Kurviger curvy colours, Calimoto |
-| U-14 | 3D terrain with hillshade on the planning map and flyover preview of a route | M | M | todo | Apple Maps, Google Earth |
+| U-14 | 3D terrain with hillshade on the planning map and flyover preview of a route | M | M | done: map panel → 3D terrain raises the hillshade's DEM into relief (×1.4) and tilts the map; Preview then flies the route over it. Off by default and off while saving battery | Apple Maps, Google Earth |
 | U-15 | Dynamic Type and VoiceOver pass on every screen, checked with the iOS simulator | H | M | partial: sheets, Log and Stages follow the text size (up to 1.6x); replay scrubber is a slider; not run in the simulator | accessibility |
 | U-16 | Landscape cockpit layout for mounts in landscape | M | M | done: on a phone in landscape the notes run across the top, the map takes the left and the instruments a column on the right; a sheet leaves a tab rail; the app declares both landscape orientations | Waze |
 | U-17 | Copy pass to BRAND voice on every remaining string (errors, empty states, permissions) | M | S | partial (#103) | docs/BRAND.md §2 |
