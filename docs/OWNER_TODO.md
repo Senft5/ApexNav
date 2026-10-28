@@ -3,6 +3,17 @@
 Things only you can do, newest decisions first within each group. Claude keeps this list current: add a row when
 something blocks on you, delete it once it's done. Everything else is in docs/IDEAS.md and done without asking.
 
+## Money and marketing (new, 2026-10-28)
+
+| what | why | how long |
+|---|---|---|
+| **Say yes (or change) the Pro plan** in docs/MONETIZATION.md: free app + one-time **ApexNav Pro $24.99** (launch price $19.99 for 30 days), a 14-day trial you start yourself, a tip jar, founding drivers keep Pro for life. Section 2 is the free/Pro table: move anything you disagree with | Claude builds it behind the `pro` flag (off) once you agree; nothing is charged before that | 15 min |
+| **Sign the Paid Applications Agreement** and add banking and tax: App Store Connect → Business (only the Account Holder can). Then **enrol in the Small Business Program** (developer.apple.com/app-store/small-business-program: 15% commission instead of 30%) | Apple won't sell any In-App Purchase without them; Claude then creates the products through the API key | 20 min |
+| **Buy a domain** (about $15/yr, e.g. apexnav.app) in Cloudflare Registrar and turn on **Email Routing** to your Gmail with an address like hello@ and press@ | Email to clubs and press, a press page, road pages people can link to (docs/MARKETING.md section 7) | 15 min |
+| **Make the ApexNav accounts**: YouTube, Instagram (Professional), TikTok, Bluesky, Threads, Facebook page, X; same handle everywhere. Tell Claude when they exist and it will walk you through each API token | The weekly road video posts itself (MARKETING.md section 6) | 45 min |
+| **Write 3–4 sentences about you**: why you built ApexNav, what you drive, where. And a postal address for email footers (a PO box is fine) | Show HN, the press kit and every email need a real founder; Claude won't invent one. CAN-SPAM needs the address | 10 min |
+| **Pick the launch region** (Claude suggests the Southern Appalachians: Tail of the Dragon, Cherohala, NC-28, Blue Ridge Parkway) and say whether you can join one club drive there during the beta | Road data is what makes the app better than a map; concentrating the first 25 drivers on famous roads makes the first videos and road pages show real measured feel | 2 min |
+
 ## Before the first App Store submission
 
 | what | why | how long |

@@ -1,5 +1,11 @@
 # APEX NAV — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-10-28 (afternoon): monetization and marketing plans
+- Merged #224: D-11 dashcam overlay, P-01 battery cost, Q-07 road-data loop test, S-18 spot photos, A-02 browser mount calibration, R-04 measured stages.
+- Owner switched focus (2026-10-28): monetization that keeps users first, and a marketing plan Claude runs; then back to IDEAS.
+- This PR: docs/MONETIZATION.md (free app + one-time Pro, trial, tip jar, founding drivers keep Pro; L-02), docs/MARKETING.md (channels, launch region, timeline, how it runs autonomously, guardrails; L-06), drafts in docs/marketing/, owner asks at the top of OWNER_TODO.
+- Exact next task: build the Pro plumbing behind the `pro` flag (off): server entitlement + JWS verification, StoreKit 2 in the shell, web/pro.js gates with the rule tests (MONETIZATION §6). Then road pages for search (MARKETING channel 1) and the road-of-the-week renderer. Products in App Store Connect wait on the owner's Paid Applications Agreement.
+
 ## Session 2026-10-28 (midday)
 - Merged through #207: Q-09 sight offsets, Y-17 route latency, review fixes (migrations 0021–0022 applied to both D1).
 - Merged #208: R-21 forecast costs in fun-route ranking (difference from the driest, all-or-nothing), R-22 "Route around it" for conditional closures (exclude_locations).
