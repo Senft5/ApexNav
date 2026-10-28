@@ -276,16 +276,22 @@
    * guesses ran 40–75 % long in hills. Kept within 25 % of the target; value = stage score x
    * (1 − length error) − 0.08 per connector km (the old plans() formula). Best `count`, distinct lead stage.
    */
-  function loopPlansFromMatrix(list, distKm, targetKm, count = 3) {
+  /**
+   * The same in drive time ("home in 90 minutes", R-16): `cost` is the matrix in seconds, `target` seconds, a stage takes
+   * its length at 25 km/h and a connector second costs what a connector km does at 60 km/h. Default: km.
+   */
+  // Stages at 25 km/h here: the router times twisty back roads well below STAGE_KMH (a 43 km Smokies loop: 83 min).
+  const LOOP_BY_TIME = { stageCost: (s) => s.km / 25 * 3600, perUnit: 0.08 / 60 };
+  function loopPlansFromMatrix(list, cost, target, count = 3, by = { stageCost: (s) => s.km, perUnit: 0.08 }) {
     const n = list.length, home = 2 * n;
-    const D = (row, col) => { const v = distKm[row] && distKm[row][col]; return Number.isFinite(v) ? v : null; };
+    const D = (row, col) => { const v = cost[row] && cost[row][col]; return Number.isFinite(v) ? v : null; };
     const out = [];
     const walk = (legs, used, row, connector, stageKm, score) => {
       if (legs.length) {
         const back = D(row, home);
         if (back != null) {
-          const total = stageKm + connector + back, err = Math.abs(total - targetKm) / targetKm;
-          if (err <= 0.25) out.push({ legs: legs.slice(), total, stageKm, value: score * (1 - err) - (connector + back) * 0.08, share: stageKm / total });
+          const total = stageKm + connector + back, err = Math.abs(total - target) / target;
+          if (err <= 0.25) out.push({ legs: legs.slice(), total, stageKm, value: score * (1 - err) - (connector + back) * by.perUnit, share: stageKm / total });
         }
       }
       if (legs.length === 3) return;
@@ -293,9 +299,9 @@
         if (used & (1 << i)) continue;
         for (const fwd of [true, false]) {
           const entry = 2 * i + (fwd ? 0 : 1), exit = 2 * i + (fwd ? 1 : 0), c = D(row, entry);
-          if (c == null || stageKm + connector + c > targetKm * 1.25) continue;
+          if (c == null || stageKm + connector + c > target * 1.25) continue;
           legs.push({ s: list[i], fwd });
-          walk(legs, used | (1 << i), 1 + exit, connector + c, stageKm + list[i].km, score + list[i].score);
+          walk(legs, used | (1 << i), 1 + exit, connector + c, stageKm + by.stageCost(list[i]), score + list[i].score);
           legs.pop();
         }
       }
@@ -421,6 +427,6 @@
     return clean.length ? clean : cands;
   }
 
-  const api = { LEVELS, AVOID_DEFAULT, AVOID_LABELS, costing, unavoided, keepAvoiding, why, geometry, alongPoints, insertVia, loopValue, loopShortlist, loopPlansFromMatrix, score, shortlist, matrixPoints, plansFromMatrix, sectionCount, sectionPoints, combineSections, planKey, searchArea, waypoints, rank, along, kmBetween };
+  const api = { LEVELS, LOOP_BY_TIME, AVOID_DEFAULT, AVOID_LABELS, costing, unavoided, keepAvoiding, why, geometry, alongPoints, insertVia, loopValue, loopShortlist, loopPlansFromMatrix, score, shortlist, matrixPoints, plansFromMatrix, sectionCount, sectionPoints, combineSections, planKey, searchArea, waypoints, rank, along, kmBetween };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexFunRoute = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -110,6 +110,9 @@ const lmp = F.matrixPoints(S0, S0, loopList);
 const lkm = lmp.sources.map((a) => lmp.targets.map((b, c) => (loopList[c >> 1] && loopList[c >> 1].name === 'east' ? null : F.kmBetween(a, b) * 1.3)));
 const loops = F.loopPlansFromMatrix(loopList, lkm, 48, 3);
 out.loops = loops.map(p => ({ names: p.legs.map(l => l.s.name), total: p.total, wps: globalThis.ApexStages.waypoints(S0, p).length }));
+// the same stages as a "home in 60 minutes" loop: connectors at 60 km/h from the km matrix, stages at 50 km/h
+const lsec = lkm.map(row => row.map(v => (v == null ? null : v / 60 * 3600)));
+out.timeLoops = F.loopPlansFromMatrix(loopList, lsec, 3600, 3, F.LOOP_BY_TIME).map(p => ({ names: p.legs.map(l => l.s.name), total: p.total }));
 // routed loops are valued on the fun scale: retracing and missing the length cost points
 out.loopValue = [F.loopValue({ fun: 60 }, 48, 48, 0), F.loopValue({ fun: 60 }, 48, 48, 0.1), F.loopValue({ fun: 60 }, 60, 48, 0), F.loopValue(null, 48, 48, 0)];
 // why this route: roads the winner spends 2+ km more on than the quickest, and what it gains and costs
@@ -221,6 +224,13 @@ def test_avoid_options_reach_the_router_and_are_honest(r):
     assert r["costAll"] == {"use_highways": 0, "use_tolls": 0, "use_ferry": 0}
     assert r["unavoided"] == [["tolls"], [], []], "unknown flags say nothing"
     assert r["keep"] == [1, 1, 2], "a toll-free candidate wins the pool; if none is, the toll road stays (and the card says so)"
+
+
+def test_loops_by_drive_time_fit_the_time(r):
+    assert r["timeLoops"], "stages around the start make a one-hour loop"
+    for p in r["timeLoops"]:
+        assert abs(p["total"] - 3600) / 3600 <= 0.25
+        assert "east" not in p["names"] and "far" not in p["names"]
 
 
 def test_loops_are_valued_on_the_fun_scale(r):

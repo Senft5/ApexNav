@@ -377,7 +377,7 @@
               <div class="place-list" id="placeList" hidden></div>
               <div class="plan-links">
                 <button class="linkbtn" id="tapRouteBtn">Tap the map</button>
-                <span class="loop-row"><span>Loop</span><button class="chip" data-loop-mi="15">15</button><button class="chip" data-loop-mi="30">30</button><button class="chip" data-loop-mi="45">45 mi</button></span>
+                <span class="loop-row"><span>Loop</span><button class="chip" data-loop-mi="15">15</button><button class="chip" data-loop-mi="30">30</button><button class="chip" data-loop-mi="45">45 mi</button><button class="chip" data-loop-min="60" aria-label="1 hour loop">1 h</button><button class="chip" data-loop-min="120" aria-label="2 hour loop">2 h</button></span>
               </div>
               <div class="plan-links fun-row" role="radiogroup" aria-label="Route style"><span>Roads</span><button class="chip" data-fun="quick" role="radio" aria-checked="false">Quick</button><button class="chip" data-fun="fun" role="radio" aria-checked="false">Fun</button><button class="chip" data-fun="max" role="radio" aria-checked="false">Max fun</button></div>
               <div class="plan-links fun-row" role="group" aria-label="Avoid"><span>Avoid</span><button class="chip" data-avoid="highways" aria-pressed="false">Highways</button><button class="chip" data-avoid="tolls" aria-pressed="false">Tolls</button><button class="chip" data-avoid="ferries" aria-pressed="false">Ferries</button><button class="chip" data-avoid="unpaved" aria-pressed="false">Unpaved</button></div>
@@ -2138,11 +2138,13 @@
       pts.push(c);
       return pts;
     }
-    function scoreLoop(t, miles) {
+    // byTime { timeS, targetS }: a "home in N minutes" loop is judged on the router's drive time, not distance.
+    function scoreLoop(t, miles, byTime = null) {
       const km = totalOf(t) / 1000, targetKm = miles * 1.609344;
       const retraced = Core.retracedShare(t.lat, t.lon);
+      const score = byTime ? FunRoute.loopValue(t.fun, byTime.timeS, byTime.targetS, retraced) : FunRoute.loopValue(t.fun, km, targetKm, retraced);
       // good: corners off the router's junctions, as the fun score counts them
-      return { score: FunRoute.loopValue(t.fun, km, targetKm, retraced), good: t.fun ? t.fun.good : 0, retraced, km };
+      return { score, good: t.fun ? t.fun.good : 0, retraced, km };
     }
     const totalOf = (t) => t.dist[t.dist.length - 1];
     // Busy state on the button that started a slow request: label and progress bar;
@@ -2160,16 +2162,22 @@
     async function loop(miles, btn) {
       if (loopBusy) return;
       loopBusy = true;
-      const ui = btn ? busy(btn, [...document.querySelectorAll('[data-loop-mi]')]) : { step() {}, done() {} };
+      const ui = btn ? busy(btn, [...document.querySelectorAll('[data-loop-mi], [data-loop-min]')]) : { step() {}, done() {} };
       try { await buildLoop(miles, ui); }
       catch (_) { toast('Couldn\'t build a loop. Check signal and try again.'); }
       finally { loopBusy = false; ui.done(); }
     }
-    async function buildLoop(miles, ui) {
+    // A loop of `want` miles, or { minutes } of driving that ends back home (R-16). Time loops search as far as about
+    // LOOP_KMH on back roads would take you, then plan and pick on drive time.
+    const LOOP_KMH = 35;
+    async function buildLoop(want, ui) {
       const c = await locate();
       if (!c) { toast(NO_FIX); return; }
-      const targetKm = miles * 1.609344;
-      toast(`Finding roads · ${miles} mi loop`);
+      const minutes = typeof want === 'object' && want ? want.minutes : null;
+      const miles = minutes ? Math.round(minutes / 60 * LOOP_KMH / 1.609344) : want;
+      const targetKm = miles * 1.609344, targetS = minutes ? minutes * 60 : null;
+      const asked = minutes ? `${minutes / 60} h` : `${miles} mi`, loopId = minutes ? `loop_${minutes}min` : `loop_${miles}`;
+      toast(`Finding roads · ${asked} loop`);
       // 1. Stage discovery: score every road around the start from the map's own vector tiles.
       let plans = [];
       try {
@@ -2182,8 +2190,8 @@
           const list = FunRoute.loopShortlist(c, stages, targetKm);
           if (list.length) {
             ui.step('Measuring roads', 0.36);
-            const mp = FunRoute.matrixPoints(c, c, list);
-            plans = FunRoute.loopPlansFromMatrix(list, (await valhallaMatrix(mp.sources, mp.targets)).km, targetKm, 3);
+            const mp = FunRoute.matrixPoints(c, c, list), m = await valhallaMatrix(mp.sources, mp.targets);
+            plans = targetS ? FunRoute.loopPlansFromMatrix(list, m.times, targetS, 3, FunRoute.LOOP_BY_TIME) : FunRoute.loopPlansFromMatrix(list, m.km, targetKm, 3);
           }
         } catch (_) { plans = []; }
         if (!plans.length) plans = ApexStages.plans(c, stages, targetKm, 3);
@@ -2197,10 +2205,11 @@
         const [r] = await valhallaRoutes(job.pts, job.through)
           .finally(() => { settled++; ui.step(`Routing · ${settled} of ${jobs.length}`, 0.38 + 0.5 * settled / jobs.length); });
         const rs = Core.removeSpurs(r.coords.map(p => p[1]), r.coords.map(p => p[0]));
-        const t = await trackFromPolyline(rs.lat.map((la, i) => [rs.lon[i], la]), `loop_${miles}`, `${miles} mi loop`);
+        const t = await trackFromPolyline(rs.lat.map((la, i) => [rs.lon[i], la]), loopId, `${asked} loop`);
         t.fun = funOf(t, r.turns);
         t.unavoided = FunRoute.unavoided(avoid, r);
-        return { t, job, route: r, ...scoreLoop(t, miles), spursCut: rs.removed };
+        t.timeS = r.timeS;
+        return { t, job, route: r, ...scoreLoop(t, miles, targetS && Number.isFinite(r.timeS) ? { timeS: r.timeS, targetS } : null), spursCut: rs.removed };
       });
       const done = FunRoute.keepAvoiding((await Promise.allSettled(tries)).filter(r => r.status === 'fulfilled').map(r => r.value), avoid);
       if (!done.length) { toast('Couldn\'t build a loop. Check signal and try again.'); return; }
@@ -2214,9 +2223,18 @@
       best.t.request = { from: null, to: { lat: c.lat, lon: c.lon }, via: best.job.pts.slice(1, -1).map(p => ({ lat: p.lat, lon: p.lon })) };
       ui.step('Building route', 0.92);
       // Name the loop by what it is, not what was asked: a "15 mi loop" that is 9.3 mi reads as a bug.
-      const gotMi = best.km / 1.609344, near = Math.abs(gotMi - miles) <= 0.2 * miles;
-      await buildRoute(null, `loop_${miles}`, `${Math.max(1, Math.round(gotMi))} mi loop`, best.t);
-      toast(near ? `${best.good} good corners on this loop` : `${gotMi.toFixed(1)} mi: the closest good loop to ${miles} mi`);
+      const gotMi = best.km / 1.609344;
+      if (targetS && Number.isFinite(best.t.timeS)) {
+        const gotMin = Math.round(best.t.timeS / 60), near = Math.abs(best.t.timeS - targetS) <= 0.2 * targetS;
+        best.t.name = `${gotMin} min loop`;
+        await buildRoute(null, loopId, best.t.name, best.t);
+        toast(near ? `${best.good} good corners · home in about ${gotMin} min` : `${gotMin} min: the closest good loop to ${asked}`);
+      } else {
+        const near = Math.abs(gotMi - miles) <= 0.2 * miles;
+        best.t.name = `${Math.max(1, Math.round(gotMi))} mi loop`;
+        await buildRoute(null, loopId, best.t.name, best.t);
+        toast(near ? `${best.good} good corners on this loop` : `${gotMi.toFixed(1)} mi: the closest good loop to ${miles} mi`);
+      }
       window.apexDebug && (window.apexDebug.lastLoop = done.map(d => ({ kind: d.job.kind, fun: d.t.fun && d.t.fun.fun, score: d.score, km: d.km, good: d.good, retraced: d.retraced })));
     }
 
@@ -2490,6 +2508,7 @@
       if (state.tapToRoute) { closeSheet(); openPlan(false); toast(state.planField === 'fromInput' ? 'Tap the map where you want to start.' : 'Tap the map where you want to go.'); }
     });
     document.querySelectorAll('[data-loop-mi]').forEach(b => b.addEventListener('click', () => loop(parseInt(b.dataset.loopMi, 10), b)));
+    document.querySelectorAll('[data-loop-min]').forEach(b => b.addEventListener('click', () => loop({ minutes: parseInt(b.dataset.loopMin, 10) }, b)));
     document.querySelectorAll('[data-fun]').forEach(b => b.addEventListener('click', () => {
       if (b.dataset.fun === funLevel || $('planPanel').classList.contains('busy')) return;
       setFunLevel(b.dataset.fun); replanForLevel();
