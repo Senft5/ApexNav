@@ -398,11 +398,11 @@ Colour roles (both themes use the existing `themes.js` keys; values below are Ro
 |---|---|---|---|---|
 | Paper | `--panel`, `--stage` | `#EDE4D3` / `#F2EBDD` | `#151310` / `#1A1814` | Backgrounds |
 | Ink | `--panel-ink`, `--ink` | `#1C1A17` | `#EDE4D3` | Text, lines, primary buttons |
-| Pencil | `--panel-dim` | `#6F675A` | `#8C8373` | Secondary text only, never for values |
+| Pencil | `--panel-dim` | `#6A6255` | `#8C8373` | Secondary text only, never for values. Every text token holds 4.5:1 on paper (tests/test_themes.py) |
 | Rule | `--rule` | `#1C1A17` | `#EDE4D3` | Structure lines only (notes strip, binnacle), 1.5–2 px |
 | Hair | new `--hair` | `#CFC4AE` | `#2E2A23` | Row and section dividers, 1 px |
-| Red pen | `--accent` | `#C8102E` | `#E24A4A` | The route, call codes, the apex, Start drive, selected tab. Nothing else. |
-| Caution | `--amber` | `#B8741A` | `#D9A24A` | Caution ladder, "brake now" ribbon edge |
+| Red pen | `--accent` | `#C8102E` | `#E65252` | The route, call codes, the apex, Start drive, selected tab. Nothing else. |
+| Caution | `--amber` | `#8A5810` | `#D9A24A` | Caution ladder, "brake now" ribbon edge |
 | Hazard | (no new token) | ink box, paper text | paper box, ink text | Bump and camera pins and hazard calls. Today they reuse the route red, so a hazard looks like the route |
 | Gain | new `--gain` | `#2E6B3F` | `#6FBF7F` | Faster gap, improving trend. Replaces `#3FB950` |
 | Loss | `--accent` | | | Slower gap |
