@@ -75,6 +75,11 @@ struct ApexShellRootView: View {
             if phase == .active { shell.reloadIfWebContentDied() }
         }
         .onOpenURL { shell.openLink($0) }
+        // Siri and Shortcuts (ApexIntents.swift, IDEAS V-07): the intent's link, now or from before the view listened
+        .onReceive(NotificationCenter.default.publisher(for: ApexIntentInbox.notification)) { note in
+            if let url = note.object as? URL { _ = ApexIntentInbox.take(); shell.openLink(url) }
+        }
+        .task { if let url = ApexIntentInbox.take() { shell.openLink(url) } }
     }
 }
 

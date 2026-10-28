@@ -41,7 +41,8 @@
   }
 
   function lines(w) {
-    const out = [`${w.miles} mi in ${w.drives} drive${w.drives === 1 ? '' : 's'}${w.newRoads ? ` · ${w.newRoads} new road${w.newRoads === 1 ? '' : 's'}` : ''}`];
+    const U = root.ApexUnits;                                  // km or miles (units.js, U-22)
+    const out = [`${U ? U.long(w.miles * MI) : `${w.miles} mi`} in ${w.drives} drive${w.drives === 1 ? '' : 's'}${w.newRoads ? ` · ${w.newRoads} new road${w.newRoads === 1 ? '' : 's'}` : ''}`];
     if (w.best) out.push(`Best Driver Score: ${w.best.score} on ${w.best.name}`);
     if (w.focus) out.push(`One thing to work on: ${w.focus.label} (${w.focus.pct}%). Try to ${w.focus.tip}.`);
     return out;

@@ -27,6 +27,9 @@ const said = new Set(), heard = [];
 for (let m = 0; m <= 9100; m += 10) for (const l of D.due(steps, m, 20, said, 'r1')) { said.add(l.key); heard.push([m, l.text, l.now]); }
 const out = { heard };
 out.words = [50, 120, 300, 480, 805, 1609, 4000].map(D.distWords);
+globalThis.ApexUnits = { metric: () => true };                 // Settings → Units: kilometres (U-22)
+out.metricWords = [50, 320, 960, 1000, 2460].map(D.distWords);
+delete globalThis.ApexUnits;
 out.junction = [D.atJunction(steps, 1980), D.atJunction(steps, 2070), D.atJunction(steps, 9000), D.atJunction(steps, 5000)];
 // starting right at a turn: no early call, only the turn
 const s2 = new Set();
@@ -65,6 +68,7 @@ def test_timing(out):
 
 def test_us_units(out):
     assert out["words"] == ["200 feet", "400 feet", "0.2 miles", "0.3 miles", "half a mile", "1 mile", "2.5 miles"]
+    assert out["metricWords"] == ["100 metres", "300 metres", "1 kilometre", "1 kilometre", "2.5 kilometres"]
 
 
 def test_corner_notes_at_junctions_left_out(out):

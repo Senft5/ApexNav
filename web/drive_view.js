@@ -7,6 +7,12 @@
   const el = (tag, cls, html) => { const n = document.createElement(tag); if (cls) n.className = cls; if (html != null) n.innerHTML = html; return n; };
   const fmtT = (s) => { const t = Math.round(s); return t >= 3600 ? `${Math.floor(t / 3600)}:${String(Math.floor(t / 60) % 60).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}` : `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; };
   const finite = (v) => typeof v === 'number' && Number.isFinite(v);
+  // Units (units.js, U-22): the caller's MPH is already the chosen speed factor; these give the words for it and distances.
+  const U = () => root.ApexUnits;
+  const SPD = () => (U() ? U().speedU() : 'mph');
+  const SPD_WORDS = () => (U() && U().metric() ? 'kilometres per hour' : 'miles per hour');
+  const DIST = (m, digits = 2) => (U() ? U().long(m, digits) : `${(m / 1609.344).toFixed(digits)} mi`);
+  const DIST_WORDS = (m) => (U() && U().metric() ? `${(m / 1000).toFixed(2)} kilometres` : `${(m / 1609.344).toFixed(2)} miles`);
 
   /** Summary numbers for the header strip; null where the drive has no such data. */
   function summarize(d, Core) {
@@ -25,7 +31,7 @@
     if (!t) return null;
     const m = Math.round(t.value);
     switch (t.kind) {
-      case 'min_speed': return `Your best pass was ${Math.max(1, Math.round(t.value * MPH))} mph quicker at the slowest point`;
+      case 'min_speed': return `Your best pass was ${Math.max(1, Math.round(t.value * MPH))} ${SPD()} quicker at the slowest point`;
       case 'brake_later': return `Brake ${m} m later, like your best pass`;
       case 'throttle_sooner': return `Back on the throttle ${m} m sooner, like your best pass`;
       case 'turn_in_later': return `Turned in ${m} m earlier than your best pass: wait for the corner`;
@@ -193,7 +199,7 @@
       ? { gain: co.gain_s, n: co.clean, drives: new Set(co.corners.filter((x) => x.gain_s != null).map((x) => (x.best ? x.best_from : -1))).size } : null;
     const plain = plainCoach(ds, co);
     const tired = Core.fatigue ? fatigueText(Core.fatigue(d.speed_mps, d.lon_g, d.lat_g, d.corners, d.g_known || null)) : null;   // unmeasured g is left out
-    const mi = finite(S.km) ? `${(S.km / 1.609344).toFixed(1)} mi` : '--';
+    const mi = finite(S.km) ? DIST(S.km * 1000, 1) : '--';
     const dur = finite(S.duration_s) ? fmtT(S.duration_s) : '--';
     head.innerHTML = `<div class="dv-score"><b class="score big">${scoreVal}</b> <small>/1000</small></div>`
       + `<div class="bars">${bar('pace', 'Pace')}${bar('smoothness', 'Smooth')}${bar('braking', 'Brakes')}${bar('consistency', 'Rhythm')}</div>`
@@ -245,7 +251,7 @@
     let placed = [];
     const marks = d.corners.map((c, k) => { const [px, py] = P(c.apex); if (placed.some(([qx, qy]) => Math.hypot(qx - px, qy - py) < 18)) return `<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="2" fill="${C.signal}"/>`; placed.push([px, py]); return `<g data-k="${k}" style="cursor:pointer"><circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="8" fill="${C.panel}" stroke="${C.signal}" stroke-width="1.6"/><text x="${px.toFixed(1)}" y="${(py + 3.2).toFixed(1)}" text-anchor="middle" font-size="9" font-weight="700" fill="${C.panelInk}">${k + 1}</text></g>`; }).join('');
     mapBox.innerHTML = `<svg viewBox="0 0 ${MW} ${MH}" role="img" aria-label="Route map coloured by speed, ${d.corners.length} corners"><g id="dvSpeed">${segs}</g><g id="dvJerk" display="none">${jsegs}</g><polyline id="dvWin" fill="none" stroke="${C.panelInk}" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" opacity="0.28"/>${marks}<g id="dvJerkMarks" display="none" pointer-events="none">${jmarks}</g><circle id="dvDot" r="6" fill="${C.accent}" stroke="${C.panel}" stroke-width="2"/></svg>
-      <div class="dv-legend" id="dvLegSpeed"><span>slow</span><i style="background:linear-gradient(90deg,${colorAt(0)},${colorAt(vmax)})"></i><span>${Math.round(vmax * MPH)} mph</span></div>`
+      <div class="dv-legend" id="dvLegSpeed"><span>slow</span><i style="background:linear-gradient(90deg,${colorAt(0)},${colorAt(vmax)})"></i><span>${Math.round(vmax * MPH)} ${SPD()}</span></div>`
       + (jsegs ? `<div class="dv-legend" id="dvLegJerk" hidden><span>calm</span><i style="background:linear-gradient(90deg,${jerkColor(0)},${jerkColor(0.6)})"></i><span>abrupt</span></div>` : '');
     let showSmooth = null;
     if (jsegs) {                                                     // Speed / Smoothness switch for the map
@@ -268,7 +274,7 @@
     // ---- lanes -----------------------------------------------------------------------------------------------------
     let W = 0, geo = null;
     const LANES = [
-      { id: 'speed', label: 'Speed', h: 84, get: (i) => d.speed_mps[i] * MPH, lo: 0, hi: Math.ceil(vmax * MPH / 10) * 10, unit: 'mph', fill: true },
+      { id: 'speed', label: 'Speed', h: 84, get: (i) => d.speed_mps[i] * MPH, lo: 0, hi: Math.ceil(vmax * MPH / 10) * 10, unit: SPD(), fill: true },
       { id: 'lat', label: 'Cornering g', h: 70, get: (i) => (d.lat_g ? d.lat_g[i] : null), sym: true, unit: 'g' },
       { id: 'lon', label: 'Brake and throttle g', h: 70, get: (i) => (d.lon_g ? d.lon_g[i] : null), sym: true, unit: 'g' },
     ];
@@ -288,7 +294,7 @@
         const top = yTop + LH, h = L.h, Y = (v) => top + h - ((v - L.lo) / (L.hi - L.lo)) * h;
         geo.lanes.push({ top, h });
         svg += `<text x="${LM}" y="${yTop + 12}" font-size="11" fill="${C.panelDim}">${L.label}</text>`;
-        svg += `<text x="${W - RM}" y="${yTop + 12}" text-anchor="end" font-size="10" fill="${C.panelDim}">${L.sym ? `\u00b1${L.hi.toFixed(1)} g` : `${L.hi} mph`}</text>`;
+        svg += `<text x="${W - RM}" y="${yTop + 12}" text-anchor="end" font-size="10" fill="${C.panelDim}">${L.sym ? `\u00b1${L.hi.toFixed(1)} g` : `${L.hi} ${SPD()}`}</text>`;
         svg += `<line x1="${LM}" x2="${W - RM}" y1="${top + h}" y2="${top + h}" stroke="${C.rule}"/>`;
         if (L.sym) svg += `<line x1="${LM}" x2="${W - RM}" y1="${Y(0)}" y2="${Y(0)}" stroke="${C.rule}" stroke-dasharray="3 4"/>`;
         // corner bands behind the trace
@@ -349,11 +355,11 @@
     function move(i) {
       i = Math.max(0, Math.min(n - 1, Math.round(i))); state.i = i;
       const hair = lanes.querySelector('#dvHair'); if (hair && geo) { const gx = geo.X(i); hair.setAttribute('x1', gx); hair.setAttribute('x2', gx); hair.style.display = i < state.v0 || i > state.v1 ? 'none' : ''; }
-      lanes.setAttribute('aria-valuenow', i); lanes.setAttribute('aria-valuetext', `${(d.dist[i] / 1609.344).toFixed(2)} miles, ${Math.round(d.speed_mps[i] * MPH)} miles per hour`);
+      lanes.setAttribute('aria-valuenow', i); lanes.setAttribute('aria-valuetext', `${DIST_WORDS(d.dist[i])}, ${Math.round(d.speed_mps[i] * MPH)} ${SPD_WORDS()}`);
       const [px, py] = P(i); dot.setAttribute('cx', px); dot.setAttribute('cy', py);
       const k = cornerAt(i), c = k >= 0 ? d.corners[k] : null;
       const cell = (label, v) => `<div><b>${v}</b><span>${label}</span></div>`;
-      read.innerHTML = cell('Distance', `${(d.dist[i] / 1609.344).toFixed(2)} mi`) + cell('Time', fmtT(T[i])) + cell('Speed', `${Math.round(d.speed_mps[i] * MPH)} mph`)
+      read.innerHTML = cell('Distance', DIST(d.dist[i])) + cell('Time', fmtT(T[i])) + cell('Speed', `${Math.round(d.speed_mps[i] * MPH)} ${SPD()}`)
         + cell('Lateral', d.lat_g && finite(d.lat_g[i]) ? `${d.lat_g[i] >= 0 ? 'L ' : 'R '}${Math.abs(d.lat_g[i]).toFixed(2)} g` : '--')
         + cell('Brake / throttle', d.lon_g && finite(d.lon_g[i]) ? `${d.lon_g[i] < 0 ? 'brake ' : 'accel '}${Math.abs(d.lon_g[i]).toFixed(2)} g` : '--')
         + cell(c ? `Corner ${k + 1}` : 'Corner', c ? `${c.call || c.code}` : '--') + (ref ? cell('vs other drive', c ? fmtD(lost(k)) : '--') : '')
@@ -404,7 +410,7 @@
       ab.moments.forEach((m, k) => {
         const near = d.corners.findIndex((c) => m.index >= c.start - 4 && m.index <= c.end + 4), li = el('li'), b = el('button');
         b.innerHTML = `<b>${String.fromCharCode(65 + k)}</b><span>${near >= 0 ? `Corner ${near + 1} \u00b7 ${esc(d.corners[near].call || d.corners[near].code || '')}` : 'Between corners'}</span><em class="loss">${m.jerk_gps.toFixed(2)} g/s</em>`
-          + `<span class="note">${(d.dist[m.index] / 1609.344).toFixed(2)} mi \u00b7 ${abruptAdvice(d.lat_g, d.lon_g, m.index)}</span>`;
+          + `<span class="note">${DIST(d.dist[m.index])} \u00b7 ${abruptAdvice(d.lat_g, d.lon_g, m.index)}</span>`;
         b.onclick = () => { if (showSmooth) showSmooth(); if (zoomM) setZoom(zoomM, m.index); move(m.index); lanes.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); };
         li.append(b); ul.append(li);
       });
@@ -423,8 +429,8 @@
     }
     const grid2 = el('div', 'dv-corners');
     d.corners.forEach((c, k) => {
-      const r = el('button', 'dv-corner'); r.setAttribute('aria-label', `Corner ${k + 1}: ${c.call || c.code}, apex ${Math.round(c.apex_mps * MPH)} miles per hour`);
-      r.innerHTML = `<b>${k + 1}</b><span class="dv-call">${esc(c.call || c.code || '')}</span><span class="dv-v">${Math.round(c.apex_mps * MPH)} mph</span><span class="dv-d">${(d.dist[c.apex] / 1609.344).toFixed(2)} mi${ref ? ` \u00b7 <em class="${lost(k) == null ? '' : lost(k) > 0.05 ? 'loss' : lost(k) < -0.05 ? 'gain' : ''}">${fmtD(lost(k))}</em>` : ''}</span>`
+      const r = el('button', 'dv-corner'); r.setAttribute('aria-label', `Corner ${k + 1}: ${c.call || c.code}, apex ${Math.round(c.apex_mps * MPH)} ${SPD_WORDS()}`);
+      r.innerHTML = `<b>${k + 1}</b><span class="dv-call">${esc(c.call || c.code || '')}</span><span class="dv-v">${Math.round(c.apex_mps * MPH)} ${SPD()}</span><span class="dv-d">${DIST(d.dist[c.apex])}${ref ? ` \u00b7 <em class="${lost(k) == null ? '' : lost(k) > 0.05 ? 'loss' : lost(k) < -0.05 ? 'gain' : ''}">${fmtD(lost(k))}</em>` : ''}</span>`
         + (co && tipText(co.corners[k], MPH) ? `<span class="dv-tip">${esc(tipText(co.corners[k], MPH))}</span>` : '');
       r.onclick = () => { if (zoomM) setZoom(zoomM, c.apex); move(c.apex); lanes.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); };
       grid2.append(r);
@@ -433,7 +439,7 @@
     list.append(grid2);
 
     // Zoom: the lanes show the whole drive, or a window around the cursor (a corner pick recentres it).
-    const ZOOMS = [['All', 0], ['2 mi', 2 * 1609.344], ['0.5 mi', 0.5 * 1609.344], ['0.15 mi', 0.15 * 1609.344]];
+    const ZOOMS = U() && U().metric() ? [['All', 0], ['3 km', 3000], ['1 km', 1000], ['250 m', 250]] : [['All', 0], ['2 mi', 2 * 1609.344], ['0.5 mi', 0.5 * 1609.344], ['0.15 mi', 0.15 * 1609.344]];
     let zoomM = 0;
     function setZoom(m, center = state.i) {
       zoomM = m;

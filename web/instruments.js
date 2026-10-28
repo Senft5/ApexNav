@@ -125,7 +125,9 @@
   // -------------------------------------------------------------------------
   // Dial cluster
   // -------------------------------------------------------------------------
-  const ang = (mph) => 135 + 270 * Math.max(0, Math.min(SPEED_MAX, mph)) / SPEED_MAX;
+  const U = () => root.ApexUnits;                          // mph or km/h (units.js, U-22); mph without it
+  const top = () => (U() ? U().speedMax() : SPEED_MAX);
+  const ang = (v) => 135 + 270 * Math.max(0, Math.min(top(), v)) / top();
   const polar = (r, deg) => [100 + r * Math.cos(deg * Math.PI / 180), 100 + r * Math.sin(deg * Math.PI / 180)];
 
   function speedDial(parent, printed) {
@@ -134,8 +136,9 @@
     // scale arc
     const [ax, ay] = polar(90, 135), [bx, by] = polar(90, 405);
     svg('path', { d: `M${ax} ${ay} A90 90 0 1 1 ${bx} ${by}`, fill: 'none', stroke: 'var(--face-ink)', 'stroke-width': printed ? 1.8 : 0.8 }, s);
-    for (let v = 0; v <= SPEED_MAX; v += 5) {
-      const major = v % 20 === 0, mid = v % 10 === 0;
+    const step = top() > 160 ? 10 : 5, majorEvery = top() > 160 ? 40 : 20;
+    for (let v = 0; v <= top(); v += step) {
+      const major = v % majorEvery === 0, mid = v % (2 * step) === 0;
       const a = ang(v), [x1, y1] = polar(90, a), [x2, y2] = polar(major ? 76 : mid ? 81 : 85, a);
       svg('line', { x1, y1, x2, y2, stroke: 'var(--face-ink)', 'stroke-width': major ? 2.4 : mid ? 1.3 : 0.8 }, s);
       if (major) {
@@ -143,7 +146,7 @@
         svg('text', { x: tx, y: ty + 5, 'text-anchor': 'middle', class: 'dial-num' }, s).textContent = v;
       }
     }
-    svg('text', { x: 100, y: 132, 'text-anchor': 'middle', class: 'dial-label' }, s).textContent = 'MPH';
+    svg('text', { x: 100, y: 132, 'text-anchor': 'middle', class: 'dial-label' }, s).textContent = U() ? U().speedU().toUpperCase() : 'MPH';
     const limit = svg('g', {}, s);
     svg('rect', { x: 94, y: 4, width: 12, height: 14, fill: 'var(--face)', stroke: 'var(--face-ink)', 'stroke-width': 1.6 }, limit);
     const sight = svg('path', { d: 'M100 18 L95 8 L105 8 Z', fill: 'none', stroke: 'var(--amber)', 'stroke-width': 2 }, s);
@@ -233,7 +236,7 @@
     const o = html('div', 'odo' + (boxed ? ' boxed' : ''), parent);
     const digits = html('div', 'odo-digits', o);
     const meta = html('div', 'odo-meta', o);
-    html('span', '', meta, 'Trip mi');
+    html('span', '', meta, `Trip ${U() ? U().longU() : 'mi'}`);
     const total = html('span', '', meta, '');
     return (d) => {
       const s = Math.max(0, d.tripMi || 0).toFixed(1).padStart(5, '0');

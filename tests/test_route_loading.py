@@ -25,6 +25,7 @@ def test_deadline_covers_request_and_body_even_if_abort_is_ignored(phase):
     run_node(r"""
 const assert = require('node:assert/strict');
 const loading = require(process.argv[1] + '/web/route_loading.js');
+globalThis.ApexUnits = require(process.argv[1] + '/web/units.js');
 const phase = 'PHASE';
 let signal;
 global.fetch = async (url, options) => {
@@ -160,6 +161,7 @@ def test_stalled_primary_router_falls_back_and_awaits_analysis():
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const loading = require(process.argv[1] + '/web/route_loading.js');
+globalThis.ApexUnits = require(process.argv[1] + '/web/units.js');
 const html = fs.readFileSync(process.argv[1] + '/web/index.html', 'utf8');
 const source = html.match(/async function buildRoute\(.*?\n    }/s)[0];
 const drives = [];

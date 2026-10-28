@@ -54,7 +54,10 @@
     if (v) parts.push(`${v} viewpoint${v === 1 ? '' : 's'}`);
     if (cf) parts.push(`${cf} café${cf === 1 ? '' : 's'}`);
     const gap = fuelGap(list, totalM);
-    if (finite(totalM) && gap.m >= FUEL_WARN_M) parts.push(`no fuel for ${Math.round(gap.m / MI)} mi (mi ${Math.round(gap.fromM / MI)}–${Math.round(gap.toM / MI)})`);
+    if (finite(totalM) && gap.m >= FUEL_WARN_M) {
+      const U = root.ApexUnits, k = U && U.metric() ? 1000 : MI, u = U && U.metric() ? 'km' : 'mi';   // units.js, U-22
+      parts.push(`no fuel for ${Math.round(gap.m / k)} ${u} (${u} ${Math.round(gap.fromM / k)}–${Math.round(gap.toM / k)})`);
+    }
     return parts.join(' · ');
   }
 

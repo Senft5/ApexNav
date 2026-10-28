@@ -14,6 +14,7 @@
   <script src="errors.js"></script>   <!-- first, so it sees errors in everything after it -->
   <script src="apex_core.js"></script>
   <script src="themes.js"></script>
+  <script src="units.js"></script>
   <script src="instruments.js"></script>
   <script src="sync.js"></script>
   <script src="format.js"></script>
@@ -250,7 +251,7 @@
   <script>
   (() => {
     'use strict';
-    const Core = window.ApexCore, Inst = window.ApexInstruments, MPH = Core.MPS_TO_MPH;
+    const Core = window.ApexCore, Inst = window.ApexInstruments, MPH = window.ApexUnits ? ApexUnits.speed(1) : Core.MPS_TO_MPH;   // mph or km/h per m/s (U-22)
     const $ = (id) => document.getElementById(id);
     let prefs = { theme: 'roadbook', toggles: { night: false } };
     try { prefs = Object.assign(prefs, JSON.parse(localStorage.getItem('apex.prefs') || 'null') || {}); if (prefs.themeV !== 2) prefs.theme = 'roadbook'; } catch (_) {}
@@ -290,7 +291,7 @@
     const fmtS = (s) => (s == null ? '--' : `${s > 0 ? '+' : ''}${s.toFixed(2)} s`);
     const cls = (s) => (s == null || Math.abs(s) < 0.05 ? '' : s < 0 ? 'gain' : 'loss');
     const mph = (v) => (v == null ? '--' : Math.round(v * MPH));
-    const ft = (m) => (m == null ? '--' : `${Math.round(m * 3.28084)}`);
+    const ft = (m) => (m == null ? '--' : `${Math.round(m * (ApexUnits.metric() ? 1 : 3.28084))}`);   // feet or metres (U-22)
     const dateLabel = (d) => ApexFormat.dateTime(d.date);
     // Pickers and buttons: a name that already carries its date ("Drive 10/27/2026 8:00 AM") does not repeat it
     const driveLabel = (d) => (/^Drive \d/.test(d.name) ? d.name : `${d.name} · ${dateLabel(d)}`);
@@ -416,7 +417,7 @@
       const shown = drives.filter((d) => ApexDriveTags.matches(d, tagFilter));
       const rows = shown.slice().reverse().map(d => `<tr class="row-link" data-drive="${d.id}" tabindex="0" role="link" aria-label="Open ${escH(d.name)}">
         <td class="l"><b>${escH(d.name)}</b><span class="sub">${dateLabel(d)}${ApexDriveTags.normalize(d.tags).length ? ` · <span class="tagline">${escH(ApexDriveTags.normalize(d.tags).join(', '))}</span>` : ''}</span></td>
-        <td>${(d.km / 1.609344).toFixed(1)} mi</td>
+        <td>${ApexUnits.long(d.km * 1000)}</td>
         <td class="wide">${d.ds.corners}</td>
         <td><span class="score">${d.ds.score ?? '--'}</span></td>
         <td class="l wide">${bars(d.ds.components)}</td></tr>`).join('');
@@ -574,7 +575,7 @@
       box.hidden = false;
       box.style.left = `${(a / (n - 1)) * 100}%`; box.style.width = `${((b - a) / (n - 1)) * 100}%`;
       const corners = d.corners.filter(c => c.start >= a && c.end <= b).length;
-      $('segInfo').textContent = `${((b - a) * 5 / 1609.344).toFixed(2)} mi · ${corners} corners`;
+      $('segInfo').textContent = `${ApexUnits.long((b - a) * 5, 2)} · ${corners} corners`;
     }
     (() => {
       const strip = $('segStrip');
@@ -590,7 +591,7 @@
       if (!d || !sel) { $('segInfo').textContent = 'Drag across the profile first.'; return; }
       const [a, b] = sel[0] < sel[1] ? sel : [sel[1], sel[0]];
       if (b - a < 40) { $('segInfo').textContent = 'Make it at least 200 m long.'; return; }
-      const seg = { id: ApexSync.newSegmentId(), name: $('segName').value.trim() || `${d.name} ${((a * 5) / 1609.344).toFixed(1)}-${((b * 5) / 1609.344).toFixed(1)} mi`,
+      const seg = { id: ApexSync.newSegmentId(), name: $('segName').value.trim() || `${d.name} ${ApexUnits.longN(a * 5).toFixed(1)}-${ApexUnits.long(b * 5)}`,
                     lat0: d.lat[a], lon0: d.lon[a], lat1: d.lat[b], lon1: d.lon[b], length_m: (b - a) * 5, from: d.id,
                     geom: JSON.stringify(Array.from({ length: Math.min(60, b - a + 1) }, (_, k) => { const i = a + Math.round(k * (b - a) / (Math.min(60, b - a + 1) - 1)); return [+d.lat[i].toFixed(6), +d.lon[i].toFixed(6)]; })) };
       segs.push(seg); saveSegs(segs); activeSeg = seg.id; sel = null; $('segName').value = '';
@@ -736,7 +737,7 @@
         b.className = 'seg' + (s.id === activeSeg ? ' on' : '');
         b.innerHTML = `<b></b><span class="score" style="font-size:20px">${best ?? '--'}</span><span></span><span>best</span>`;
         b.querySelector('b').textContent = s.name;
-        b.querySelectorAll('span')[1].textContent = `${(s.length_m / 1609.344).toFixed(2)} mi · ${passes.length} run${passes.length === 1 ? '' : 's'}`;
+        b.querySelectorAll('span')[1].textContent = `${ApexUnits.long(s.length_m, 2)} · ${passes.length} run${passes.length === 1 ? '' : 's'}`;
         b.onclick = () => { activeSeg = activeSeg === s.id ? null : s.id; renderSegments(); syncSegments(); };
         list.appendChild(b);
       }
@@ -776,7 +777,7 @@
       const r = Core.compareDrives(A, B);
       const c = (v, label, extra, k = '') => `<div class="card"><b class="${k}">${v}</b><span>${label}</span>${extra ? `<em>${extra}</em>` : ''}</div>`;
       $('cards').innerHTML =
-        c(`${(r.overlap_m / 1609.344).toFixed(1)} mi`, 'Shared road', `${A.name} ∩ ${B.name}`) +
+        c(ApexUnits.long(r.overlap_m), 'Shared road', `${A.name} ∩ ${B.name}`) +
         c(`${r.matched_corners} / ${A.corners.length}`, 'Corners compared', 'clean passes, no stops') +
         c(fmtS(r.matched_corners ? r.corner_delta_s : null), 'Gap over the corners', `${B.name} against this drive`, cls(r.corner_delta_s));
       // plan
@@ -811,7 +812,7 @@
         <path d="${path}" fill="none" stroke="${C.accent}" stroke-width="2"/><line x1="${CL}" x2="${CW - CR}" y1="${mid}" y2="${mid}" stroke="${C.rule}"/>
         <path d="${sp}" fill="none" stroke="${C.panelInk}" stroke-width="1.2" opacity="0.8"/></svg>`;
       // table
-      const head = '<tr><th>#</th><th class="l">Corner</th><th>Time A</th><th>Time B</th><th>Δ B−A</th><th>Entry A/B</th><th>Min A/B</th><th>Exit A/B</th><th>Brake ft A/B</th><th>Peak lat g</th><th>Envelope use</th></tr>';
+      const head = '<tr><th>#</th><th class="l">Corner</th><th>Time A</th><th>Time B</th><th>Δ B−A</th><th>Entry A/B</th><th>Min A/B</th><th>Exit A/B</th><th>Brake ' + (ApexUnits.metric() ? 'm' : 'ft') + ' A/B</th><th>Peak lat g</th><th>Envelope use</th></tr>';
       $('table').innerHTML = head + r.corners.map((cc, k) => {
         const a = cc.a, b = cc.b, n = A.corners[k];
         const tul = Inst.tulipSVG({ type: 'corner', dir: n.dir, severity: n.severity, turnRad: n.turn_rad, mods: n.mods }, C.panelInk, C.accent).replace('class="tulip"', 'class="tul"');
@@ -968,7 +969,7 @@
       const id = $('dvPick').value, d = drives.find(x => x.id === id);
       if (!d) return;
       const score = d.ds && d.ds.score != null ? 'Score ' + d.ds.score + '/1000' : '';
-      const mi = (d.dist[d.dist.length - 1] / 1609.344).toFixed(1) + ' mi';
+      const mi = ApexUnits.long(d.dist[d.dist.length - 1]);
       const text = d.name + ' · ' + [score, mi].filter(Boolean).join(' · ');
       const url = location.origin + '/?drive=' + encodeURIComponent(d.id);
       if (navigator.share) {

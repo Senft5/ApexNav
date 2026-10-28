@@ -12,6 +12,7 @@ targets:
     platform: iOS
     sources:
       - path: ApexNavApp.swift
+      - path: ApexIntents.swift                         # Siri and Shortcuts (IDEAS V-07)
       - path: LiveActivity/ApexDriveAttributes.swift   # shared with the ApexNavLive extension
       - path: Assets.xcassets      # AppIcon: web/brand/icon-1024.png (single-size iOS icon)
       - path: web
