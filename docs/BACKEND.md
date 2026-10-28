@@ -58,6 +58,9 @@ Implemented in `backend/src/{auth,social,segments}.ts`, one router in `index.ts`
   still on, and not blocked either way. Times appear only with `share_times`.
 - Unfriend, block, leave crew, revoke grant: the grants and published entries between those people are deleted in the same transaction.
 - Friend requests answer identically for unknown, non-member and real handles (no handle enumeration). The requester cannot accept their own request.
+- **Garage** (`garage.ts`, migration 0008): a car card is shown only when its owner switches `shared` on, and then only to accepted friends and
+  members of the same **private** crew (anyone can join a public crew, so it doesn't count), never across a block either way, never for an owner with no
+  handle. No owner id, location or drive data is in it. Ten cars at most (checked inside the insert); always exactly one primary while you have any.
 - Invites and sessions are stored as SHA-256 hashes; an invite works once, expires after 7 days, and is redeemed atomically.
 - Verified by `backend/test/*.test.ts` (76 tests; each privacy rule was checked by temporarily reintroducing the bug and seeing the test fail).
 
