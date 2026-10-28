@@ -29,6 +29,7 @@
   <script src="week_digest.js"></script>
   <script src="legends.js"></script>
   <script src="road_votes.js"></script>
+  <script src="recce.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { background: var(--panel); color: var(--panel-ink); font-family: var(--font-ui); font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -124,6 +125,7 @@
     label.btn { display: inline-flex; align-items: center; cursor: pointer; }
     textarea { font: inherit; font-size: 15px; width: 100%; min-height: 64px; padding: 8px 10px; background: transparent; color: var(--panel-ink); border: 1px solid var(--panel-dim); box-sizing: border-box; }
     .tagline { color: var(--accent); }
+    .recce-row { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 8px; align-items: center; } .recce-row input { width: 100%; }
     .kudos-btn { height: 44px; font-size: 13px; padding: 0 10px; margin-left: 6px; vertical-align: middle; }
     .ch-bar { height: 6px; background: var(--rule); margin-top: 4px; } .ch-bar i { display: block; height: 100%; background: var(--accent); }
     details.more { border-top: 1px solid var(--rule); margin-top: 12px; }
@@ -163,6 +165,9 @@
         <textarea class="mt-8" id="dvNoteText" maxlength="280" placeholder="A note for yourself (stays on this phone)" aria-label="Note"></textarea>
         <p class="note" id="dvTagsNote">Tags and notes stay on this phone. Filter the Log by them.</p></div>
       <div id="dvRoot"></div>
+      <div class="panel" id="dvRecce"><h2>Your notes</h2>
+        <p class="note" id="dvRecceNote">Keep this drive's notes as yours, change any call, and the co-driver reads yours the next time you drive these corners this way. On this phone only.</p>
+        <div class="actions" id="dvRecceActs"></div><div class="stack-8 mt-8" id="dvRecceList"></div></div>
       <div class="panel" id="dvVote" hidden><h2>Which road was better?</h2><div class="actions" id="dvVoteBtns" role="group" aria-label="Which road was better"></div>
         <p class="note">Your answers rank your roads (Log). They stay on this phone.</p></div>
       <div class="panel" id="dvFlyby" hidden><h2>Friends on these roads that day</h2><div id="dvFlybyList" class="stack-8"></div>
@@ -349,6 +354,24 @@
     // Your year on the road (IDEAS D-24; web/year_review.js): this calendar year's drives with a known date. Set as text.
     let yearText = '';
     // This month's challenges (challenges.js, IDEAS S-11): text and a bar each; shown once this month has a dated drive.
+    // Your notes (recce.js, IDEAS V-09): keep a drive's calls as yours, edit them, forget them.
+    function renderRecce(d) {
+      const t = { lat: d.lat, lon: d.lon, events: d.events || [] }, notes = ApexRecce.load(localStorage), mine = ApexRecce.onTrack(notes, t);
+      const b = (label, fn, cls = 'btn') => { const n = document.createElement('button'); n.className = cls; n.textContent = label; n.addEventListener('click', fn); return n; };
+      const corners = (d.events || []).filter((e) => e.type === 'corner').length;
+      $('dvRecce').hidden = !corners;
+      $('dvRecceActs').replaceChildren(
+        b(mine.length ? 'Update from this drive' : 'Keep these notes as mine', () => { ApexRecce.save(localStorage, ApexRecce.keep(ApexRecce.load(localStorage), t)); renderRecce(d); }, 'btn solid'),
+        ...(mine.length ? [b('Forget them', () => { if (confirm('Forget your notes for these corners? The map\u2019s notes are read again.')) { ApexRecce.save(localStorage, ApexRecce.forget(ApexRecce.load(localStorage), t)); renderRecce(d); } })] : []));
+      $('dvRecceList').replaceChildren(...mine.map(({ note }, k) => {
+        const row = document.createElement('label'); row.className = 'recce-row';
+        const num = document.createElement('span'); num.textContent = String(k + 1);
+        const inp = document.createElement('input'); inp.value = note.call; inp.maxLength = 60; inp.setAttribute('aria-label', `Call ${k + 1}`);
+        inp.addEventListener('change', () => { ApexRecce.save(localStorage, ApexRecce.edit(ApexRecce.load(localStorage), note, inp.value)); $('dvRecceNote').textContent = 'Saved. Read at this corner from now on.'; });
+        row.append(num, inp);
+        return row;
+      }));
+    }
     // Which road was better? (road_votes.js, IDEAS S-17): one question per drive, this road against the last other one.
     function renderVote(d) {
       const panel = $('dvVote'), st = ApexRoadVotes.load(localStorage), q = ApexRoadVotes.question(drives, d, st);
@@ -871,6 +894,7 @@
       $('dvTitle').textContent = d.name;
       renderTags(d);
       renderVote(d);
+      renderRecce(d);
       renderFlyby(d).catch(() => { $('dvFlyby').hidden = true; });
       $('dvNote').textContent = `${dateLabel(d)} · ${d.source === 'web-gps' ? 'Recorded on this phone' : d.source === 'imported' ? 'Imported' : 'Example drive'}`;
     }

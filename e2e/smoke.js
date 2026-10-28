@@ -925,6 +925,44 @@ flow('3D terrain: the switch raises the map into relief and tilts it; off by def
   await page.waitForFunction(() => !window.apexDebug.map.getTerrain());
 });
 
+flow('desk: on a big screen Where to? is a column on the left and sheets a panel on the right, the map in view (IDEAS A-05)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html?view=route');
+  await page.waitForSelector('#planPanel.open');
+  const box = (sel) => page.evaluate((q) => { const r = document.querySelector(q).getBoundingClientRect(); return { x: r.x, w: r.width, h: r.height }; }, sel);
+  const plan = await box('#planPanel');
+  check(plan.w === 440 && plan.x < 40 && plan.h > 600, 'Where to? is a left column: ' + JSON.stringify(plan));
+  await page.click('.tab[data-view="setup"]');
+  await page.waitForTimeout(400);
+  const sheet = await box('.sheet.open');
+  check(sheet.w === 480 && sheet.x > 900, 'Settings is a right panel: ' + JSON.stringify(sheet));
+}, { viewport: { width: 1440, height: 900 } });
+
+flow('recce: keep a drive\'s notes, change a call, and the cockpit reads yours on that road (IDEAS V-09)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/analysis.html');
+  await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && window.ApexRecording);
+  await page.evaluate(async () => {
+    const lat = [], lon = [];
+    for (let i = 0; i < 300; i++) { lat.push(35.6 + i * 5 / 110540); lon.push(-83.9); }
+    await ApexRecording.store({ id: 'rc1', name: 'Recce road', date: '2026-10-20T15:00:00Z', lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: lat.map(() => 15),
+      lon_g: lat.map(() => 0), lat_g: lat.map(() => 0), g_known: null, elev: null, hz: 1, source: 'web-gps',
+      events: [{ type: 'corner', code: 'L4', call: 'Left 4', index: 100, dist_m: 500, start_m: 480, end_m: 520, radius_m: 80, apex_mph: 30, dir: 'L', severity: 4 }] });
+  });
+  await page.goto(base + '/analysis.html?drive=rc1');
+  await page.waitForSelector('#dvRecce:not([hidden]) button:has-text("Keep these notes as mine")');
+  await page.click('#dvRecceActs button:has-text("Keep these notes as mine")');
+  await page.waitForSelector('#dvRecceList input');
+  await page.fill('#dvRecceList input', 'Left 3 tightens, care');
+  await page.dispatchEvent('#dvRecceList input', 'change');
+  await page.waitForFunction(() => /Saved/.test(document.getElementById('dvRecceNote').textContent));
+  // the cockpit, replaying that drive, reads your call
+  await page.goto(base + '/index.html?drive=rc1');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.track && window.apexDebug.track.id === 'rc1', null, { timeout: 15000 });
+  const ev = await page.evaluate(() => window.apexDebug.track.events.find((e) => e.type === 'corner'));
+  check(ev && ev.call === 'Left 3 tightens, care' && ev.recce && ev.mapCall === 'Left 4', 'your call read: ' + JSON.stringify(ev && { call: ev.call, mapCall: ev.mapCall }));
+});
+
 flow('the Log page opens', async (page, base) => {
   await page.goto(base + '/analysis.html');
   await page.waitForLoadState('load');

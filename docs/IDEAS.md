@@ -183,7 +183,7 @@ adaptive notes (cruise vs spirited), car audio routing to Bluetooth/CarPlay (#73
 | V-06 | Celebrity/character voice packs as cosmetic Octane rewards | M | M | todo | Waze voice packs |
 | V-07 | Voice commands: "report pothole", "skip this stage", "how far to the next stage" (Siri Shortcuts first) | M | M | partly: Siri and Shortcuts (`ApexIntents.swift`): "Start a drive / Report a hazard / End my drive in ApexNav", through the app's own links; report and end only during a drive. Skip a stage and how far: todo |
 | V-08 | Music ducking tuned per note priority; never duck for low-priority notes in cruise | L | S | done: `ApexSpeechQueue.ducks`: hazards, pace notes, directions, lines you asked for and anything spirited duck; route and traffic phrases in cruise play over the music (`.mixWithOthers` in the shell) | — |
-| V-09 | Recce mode: drive slowly once, the co-driver writes your own notes for the road and reads them next time | H | L | todo | rally recce |
+| V-09 | Recce mode: drive slowly once, the co-driver writes your own notes for the road and reads them next time | H | L | done: a drive's page → Your notes: keep its calls as yours, change any call, forget them (`web/recce.js`); routes and drives over those corners in the same direction (30 m, ±60°) read your calls (rally words; plain words still come from the map) | rally recce |
 | V-10 | Remove espeak-ng (GPL) from the voice path before charging | M | M | todo | docs/VOICE.md |
 | V-11 | Notes are due at the corner's entry (turn-in), not its apex: countdown, spoken call, lead distance and staleness all measure to `start_m` | H | S | done (this PR) | owner 2026-10-28 |
 
@@ -354,7 +354,7 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 | A-02 | Web: mount calibration in the browser so the web app can share measured road data | M | M | todo | STATE 2026-10-27 |
 | A-03 | Web: installable PWA with offline shell and home screen icon | M | S | done: `manifest.webmanifest` (192/512 icons) and `sw.js`, network first with the last copy offline, never /api, voices or other hosts; websites only (not apexnav://, not the e2e host) | — |
 | A-04 | Place suggestions while typing (Apple search in the app, Photon on the web) | M | S | done (#73) | WORKER_QUEUE plan-suggest |
-| A-05 | Desktop planning view: big map, route list, GPX, send to phone | M | M | todo | Kurviger desktop, Calimoto web planner |
+| A-05 | Desktop planning view: big map, route list, GPX, send to phone | M | M | done: from 1100 px wide, Where to? is a 440 px column on the left and every sheet a 480 px panel on the right, the map in view; with mouse drag-to-reshape, stops, GPX in/out, saved routes, and Share (a link the phone opens) it plans at a desk | Kurviger desktop, Calimoto web planner |
 
 ## 14. Launch and business (L)
 

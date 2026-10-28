@@ -47,6 +47,7 @@
   <script src="route_weather.js"></script>
   <script src="conditional_closures.js"></script>
   <script src="place_search.js"></script>
+  <script src="recce.js"></script>
   <script src="incident.js"></script>
   <script src="traffic.js"></script>
   <script src="in_car.js"></script>
@@ -428,6 +429,17 @@
     /* Along the route (IDEAS R-24): viewpoints named, cafés and fuel small; map data, quieter than hazards. */
     .poi-pin { font: 700 10px var(--font-ui, sans-serif); letter-spacing: 0.04em; padding: 1px 4px; border: 1px solid var(--panel-ink, #222); color: var(--panel-ink, #222); background: var(--panel, #fff); white-space: nowrap; max-width: 140px; overflow: hidden; text-overflow: ellipsis; opacity: 0.9; }
     .poi-pin.poi-view { border-color: #2e7d5b; color: #2e7d5b; }
+    /* A desk (IDEAS A-05): on a big screen the sheets (Where to?, Log list, Crew, Settings) open as a 480 px panel on the
+       right and the map stays in view beside them, for planning with a mouse: drag the route, add stops, GPX in and out. */
+    @media (min-width: 1100px) and (min-height: 600px) {
+      .sheet { left: auto; width: 480px; border-left: 1px solid var(--rule); box-shadow: -12px 0 32px rgba(0, 0, 0, 0.25); }
+      .side-pop { right: 480px; }
+      /* Where to? is a column on the left, the map beside it: closed it is just the search bar, open it runs the full height. */
+      .plan { left: 16px; right: auto; top: 16px; bottom: auto; width: 440px; height: var(--plan-bar, 62px); transform: none; border: 1px solid var(--rule);
+        transition: height 0.25s cubic-bezier(0.2, 0.8, 0.2, 1); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22); overflow: hidden; }
+      .plan.open { height: calc(100% - 32px); transform: none; }
+      .plan-bar::before { display: none; }
+    }
     /* Landscape on a phone (IDEAS U-16, a landscape mount): the notes stay across the top, the map takes the left and the
        instruments stack in a column on the right, so the road ahead isn't squeezed into a strip. With a sheet open the
        right column shrinks to the tab rail. Notch-side safe areas pad the edges. */
@@ -1946,6 +1958,8 @@
     }
     function activate(t, startM = 0, { quiet = false } = {}) {
       if (!booting && !quiet) { replayOn = true; }
+      // your own notes from a recce drive (recce.js, IDEAS V-09) read on the same corners, same direction
+      try { if (window.ApexRecce && Array.isArray(t.events)) ApexRecce.apply(ApexRecce.load(localStorage), t); } catch (_) {}
       track = t;
       state.cursorM = Math.max(0, Math.min(totalM(), startM));
       refreshAutoNight();
