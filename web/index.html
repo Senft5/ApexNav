@@ -1851,7 +1851,8 @@
       const delayS = probes.reduce((a, p) => a + (p.level === 'jam' || p.level === 'slow' ? p.delayS : 0), 0);
       const delayMin = Math.max(1, Math.round(delayS / 60));
       const stay = () => { toast(`Traffic ahead · ${delayMin} min`); say(`Traffic ahead. ${delayMin} minute${delayMin === 1 ? '' : 's'} slower`); };
-      const ahead = req.via.filter(v => v.distM == null || v.distM > routeWatch.bestM).map(v => ({ lat: v.lat, lon: v.lon, ...(v.shaping ? { shaping: true } : {}) }));
+      // Only the driver's own stops still ahead: old shaping points may sit in the jam, and a detour gets its own.
+      const ahead = req.via.filter(v => !v.shaping && (v.distM == null || v.distM > routeWatch.bestM)).map(v => ({ lat: v.lat, lon: v.lon }));
       const points = [{ lat: L.lat, lon: L.lon }, ...ahead, req.to];
       // Valhalla gives alternates only between two points; the exclusion variant works through vias too.
       const [base, avoid] = await Promise.allSettled([valhallaRoutes(points, false, 2),
@@ -1884,12 +1885,26 @@
       say(`Traffic ahead. Switching to ${road}${extraMin > 0 ? `, ${extraMin} minute${extraMin === 1 ? '' : 's'} longer` : ''}`);
       await new Promise(r => setTimeout(r, 6000));
       if (sw.cancelled || track !== t || state.mode !== 'live' || rerouter.off) return;
-      const nt = await trackFromPolyline(c.route.coords, t.id, t.name);
+      // Pinned with shaping points along it, like a winning alternate in Plan, so a reroute stays on the detour (a short
+      // detour gets its midpoint).
+      const along = FunRoute.alongPoints(c.route.coords);
+      if (!along.length) { const m = c.route.coords[Math.floor(c.route.coords.length / 2)]; along.push({ lat: m[1], lon: m[0], shaping: true }); }
+      let route = c.route, nt = await trackFromPolyline(route.coords, t.id, t.name);
       if (track !== t || state.mode !== 'live') return;
-      // Pinned with shaping points along it, like a winning alternate in Plan, so a reroute stays on the detour.
+      // The car moved on while this was decided (routing, scoring, 6 s): if it is already off the detour, route again from
+      // where it is through the detour's points.
+      const Lnow = state.live;
+      if (Lnow && Core.nearestIndex(Lnow.lat, Lnow.lon, nt.lat, nt.lon, -1).distM > 40) {
+        const order = (v) => Core.nearestIndex(v.lat, v.lon, nt.lat, nt.lon, -1).index;
+        const pts = [...ahead, ...along].map(v => ({ v, i: order(v) })).sort((a, b) => a.i - b.i).map(x => x.v);
+        try { [route] = await valhallaRoutes([{ lat: Lnow.lat, lon: Lnow.lon }, ...pts, req.to]); } catch (_) { return; }
+        if (track !== t || state.mode !== 'live') return;
+        nt = await trackFromPolyline(route.coords, t.id, t.name);
+        if (track !== t || state.mode !== 'live') return;
+      }
       const at = (v) => Core.nearestIndex(v.lat, v.lon, nt.lat, nt.lon, -1).index;
-      const via = [...ahead, ...FunRoute.alongPoints(c.route.coords)].map(v => ({ v, i: at(v) })).sort((a, b) => a.i - b.i).map(x => x.v);
-      Object.assign(nt, { request: { from: null, to: req.to, via }, fun: funOf(nt, c.route.turns), timeS: c.route.timeS });
+      const via = [...ahead, ...along].map(v => ({ v, i: at(v) })).sort((a, b) => a.i - b.i).map(x => x.v);   // in order along it
+      Object.assign(nt, { request: { from: null, to: req.to, via }, fun: funOf(nt, route.turns), timeS: route.timeS });
       await buildRoute(null, t.id, t.name, nt);                     // activate() restarts the traffic clock for the new route
     }
     // Members: what others measured on these roads (d.t.measured) and a score adjustment for it (d.adjust: a rough road
