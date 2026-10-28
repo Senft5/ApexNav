@@ -550,6 +550,23 @@
     const late = Math.max(0, -mn);
     return { use: m.envelope_use, smooth: Math.exp(-(nd ? Math.sqrt(sq / nd) : 0) / 0.15), brake: 1 - Math.min(1, Math.max(0, (late - 0.10) / 0.30)) };
   }
+  // Per-car grip (IDEAS D-19) — port of drive_analysis.car_grip / corners_for_car (parity-tested). Only ever lower than the
+  // street default: a tall, heavy or winter-shod car isn't marked down for its own lower limit; grippy tyres raise nothing.
+  const GRIP_TALL = 0.52, GRIP_HEAVY = 0.52, HEAVY_KG = 2300, GRIP_WINTER = 0.50;
+  const WINTER_TYRES = /winter|snow|all[- ]?terrain|\bA\/T\b|\bM\/T\b|\bmud\b/i;
+  function carGrip(car) {
+    let mu = MU_EFF_DEFAULT;
+    if (!car) return mu;
+    if (car.clearance === 'high') mu = Math.min(mu, GRIP_TALL);
+    if (typeof car.weight_kg === 'number' && car.weight_kg >= HEAVY_KG) mu = Math.min(mu, GRIP_HEAVY);
+    if (typeof car.tyres === 'string' && WINTER_TYRES.test(car.tyres)) mu = Math.min(mu, GRIP_WINTER);
+    return mu;
+  }
+  function cornersForCar(corners, mu = null) {
+    if (mu == null || !(mu > 0 && mu < MU_EFF_DEFAULT)) return corners;
+    const k = Math.sqrt(mu / MU_EFF_DEFAULT);
+    return corners.map((c) => ({ ...c, apex_mps: c.apex_mps * k }));
+  }
   function driverScore(v, lonG, latG, corners, lo = 0, hi = null) {
     hi = hi === null ? v.length : hi;
     const ts = [];
@@ -977,7 +994,7 @@
 
   const api = {
     profileRecording,
-    driverScore, techniqueScore, cornerTechnique, fatigue, spreadBy, turnIn, segmentPass, segmentWindow,
+    driverScore, techniqueScore, cornerTechnique, carGrip, cornersForCar, fatigue, spreadBy, turnIn, segmentPass, segmentWindow,
     removeSpurs, retracedShare,
     compareDrives, cornerMetrics, elapsedS, cornerPhases, coach, ggEnvelope, gripUse, ggSector, abruptMoments,
     G_STD, MPS_TO_MPH, ALPR_RADIUS_M,
