@@ -52,7 +52,8 @@
     .notes-roadbook { display: grid; grid-template-columns: 1.25fr 1fr 1fr; gap: 0; padding-left: 0; padding-right: 0; }
     .rb-box { display: grid; grid-template-columns: auto 46px minmax(0, 1fr); gap: 6px; align-items: center; padding: 2px 8px; border-left: 1.5px solid var(--rule); min-width: 0; }
     .rb-box:first-child { border-left: none; }
-    .rb-box:not(.now) { opacity: 0.62; }
+    /* The next note steps back in colour, not opacity, so its small text keeps 4.5:1 contrast (only the tulip fades) */
+    .rb-box:not(.now) { color: var(--panel-dim); } .rb-box:not(.now) .rb-tulip { opacity: 0.62; } .rb-box:not(.now) .rb-call b { color: var(--panel-dim); }
     @media (max-width: 520px) { .notes-roadbook { grid-template-columns: 1.4fr 1fr; } .rb-box:nth-child(3) { display: none; } }
     .rb-dist { font-family: var(--font-num); text-align: right; }
     .rb-dist b { display: block; font-size: 22px; line-height: 1; font-weight: 700; }
@@ -774,7 +775,9 @@
 
     const puckEl = document.createElement('div');
     puckEl.className = 'puck';
+    puckEl.setAttribute('role', 'img');
     const puck = new maplibregl.Marker({ element: puckEl, rotationAlignment: 'map', pitchAlignment: 'map' }).setLngLat([-84.70, 39.24]).addTo(map);
+    puckEl.setAttribute('aria-label', 'Your position');                  // after the Marker, which labels it "Map marker"
     function drawPuck() {
       const c = look.colors;
       puckEl.innerHTML = `<svg viewBox="0 0 26 26" width="26" height="26"><circle cx="13" cy="13" r="11" fill="${c.panel}" stroke="${c.panelInk}" stroke-width="2"/><path d="M13 5 L19 18 L13 14.8 L7 18 Z" fill="${c.accent}"/></svg>`;
