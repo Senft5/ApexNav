@@ -193,3 +193,32 @@ console.log(JSON.stringify({ tests, s: C2.seriesFrom(runs, roads, 4), o: C2.seri
 def test_road_feel_readout_labels_agreement(r):
     assert "Banking · 3 runs agree" in r["feelRead"] and "4.2°" in r["feelRead"]
     assert "Roughness · runs differ ±0.20 g" in r["feelRead"]
+
+
+def test_plain_words_coach_sentence():
+    runner = r"""
+const V = require(process.argv[1] + '/web/drive_view.js');
+const ds = (c) => ({ score: 700, components: { pace: 0.8, smoothness: 0.9, braking: 0.75, consistency: 0.65, ...c } });
+const tip = (kind, vs_best = false) => ({ tip: { kind, value: 20, vs_best } });
+console.log(JSON.stringify({
+  habit: V.plainCoach(ds({}), { corners: [tip('coast'), tip('coast'), tip('early_apex'), {}] }),
+  speedOnly: V.plainCoach(ds({}), { corners: [tip('min_speed', true), tip('brake_later', true), tip('coast', true), tip('coast', true)] }),
+  weak: V.plainCoach(ds({ braking: 0.4 }), { corners: [tip('coast')] }),
+  clean: V.plainCoach(ds({}), null),
+  noStrong: V.plainCoach(ds({ pace: 0.5, smoothness: 0.5, braking: 0.65, consistency: 0.6 }), null),
+  unknown: V.plainCoach({ score: null, components: null }, null),
+}));
+"""
+    root = str(__import__("pathlib").Path(__file__).resolve().parents[1])
+    p = subprocess.run([NODE, "-e", runner, root], capture_output=True, text=True, timeout=60)
+    assert p.returncode == 0, p.stderr
+    r = json.loads(p.stdout)
+    assert r["habit"] == ("Smooth, unhurried steering. One thing to work on: in 2 corners you rolled with neither brake nor gas "
+                          "between slowing down and speeding up; go straight from one to the other.")
+    assert r["speedOnly"] == "Smooth, unhurried steering, and nothing stands out to fix."   # tips against a faster pass are not habits
+    assert r["weak"].endswith("One thing to work on: finish your braking before you turn in.")   # one coast tip is not a habit
+    assert r["clean"] == "Smooth, unhurried steering, and nothing stands out to fix."
+    assert r["noStrong"] == "One thing to work on: steer more gently, with fewer quick corrections in the middle of corners."
+    assert r["unknown"] is None
+    for v in r.values():
+        assert v is None or not any(w in v.lower() for w in ("faster", "quicker", "speed up", "mph", "apex"))

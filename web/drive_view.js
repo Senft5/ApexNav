@@ -35,6 +35,30 @@
     }
   }
 
+  // One sentence a non-racer understands (IDEAS D-21): what went well, then the one thing to work on. Built only from
+  // the Driver Score components and the coach's technique tips; never a nudge to go faster.
+  const PRAISE = { smoothness: 'Smooth, unhurried steering', braking: 'Braking done before the turn', consistency: 'An even rhythm from corner to corner',
+    pace: 'Good use of the grip you had' };
+  const HABIT = {
+    coast: (n) => `in ${n} corners you rolled with neither brake nor gas between slowing down and speeding up; go straight from one to the other`,
+    brake_after_apex: (n) => `in ${n} corners you were still braking past the middle; finish braking before you turn in`,
+    early_apex: (n) => `in ${n} corners you turned in early and had to slow down mid-corner; wait a moment longer before you turn`,
+  };
+  const WEAK = { smoothness: 'steer more gently, with fewer quick corrections in the middle of corners', braking: 'finish your braking before you turn in',
+    consistency: 'aim for the same calm rhythm in every corner; some were much busier than others' };
+  function plainCoach(ds, co) {
+    const comp = ds && finite(ds.score) && ds.components;
+    if (!comp) return null;
+    const kinds = {};
+    for (const x of (co && co.corners) || []) if (x && x.tip && x.tip.vs_best === false && HABIT[x.tip.kind]) kinds[x.tip.kind] = (kinds[x.tip.kind] || 0) + 1;
+    const habit = Object.entries(kinds).sort((a, b) => b[1] - a[1])[0];
+    const strong = Object.keys(PRAISE).filter((k) => finite(comp[k]) && comp[k] >= 0.7).sort((a, b) => comp[b] - comp[a])[0];
+    const weak = Object.keys(WEAK).filter((k) => finite(comp[k]) && comp[k] < 0.6).sort((a, b) => comp[a] - comp[b])[0];
+    const fix = habit && habit[1] >= 2 ? HABIT[habit[0]](habit[1]) : weak ? WEAK[weak] : null;
+    if (!fix) return `${strong ? PRAISE[strong] : 'A tidy drive'}, and nothing stands out to fix.`;
+    return `${strong ? `${PRAISE[strong]}. ` : ''}One thing to work on: ${fix}.`;
+  }
+
   /**
    * Friction circle: every measured 5 m sample as lateral g (left on the left) against longitudinal g (throttle up,
    * braking down), the driver's own envelope (Core.ggEnvelope, ink) and the scrubbed corner's samples on top (accent).
@@ -130,6 +154,7 @@
     head.innerHTML = `<div class="dv-score"><b class="score big">${scoreVal}</b> <small>/1000</small></div>`
       + `<div class="bars">${bar('pace', 'Pace')}${bar('smoothness', 'Smooth')}${bar('braking', 'Brakes')}${bar('consistency', 'Rhythm')}</div>`
       + `<div class="dv-meta">${mi} \u00b7 ${dur} \u00b7 ${d.corners.length} corners</div>`
+      + (plainCoach(ds, co) ? `<p class="dv-plain">${esc(plainCoach(ds, co))}</p>` : '')
       + (ideal ? `<div class="dv-meta">Ideal drive <b class="gain">${ideal.gain.toFixed(2)} s</b> quicker: your best pass of each of ${ideal.n} corners, from ${ideal.drives} drive${ideal.drives === 1 ? '' : 's'}</div>` : '');
     root_.append(head, el('div', 'dv-grid'));
     const grid = root_.lastChild; grid.append(mapBox, el('div', 'dv-right'));
@@ -308,6 +333,6 @@
     return { move, setRoadFeel, destroy() { ro.disconnect(); }, summary: S };
   }
 
-  const api = { mount, summarize, tipText };
+  const api = { mount, summarize, tipText, plainCoach };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexDriveView = api;
 })(typeof window !== 'undefined' ? window : globalThis);
