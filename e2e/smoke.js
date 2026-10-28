@@ -1030,6 +1030,8 @@ flow('desk: on a big screen Where to? is a column on the left and sheets a panel
   await page.goto(base + '/index.html?view=route');
   await page.waitForSelector('#planPanel.open');
   const box = (sel) => page.evaluate((q) => { const r = document.querySelector(q).getBoundingClientRect(); return { x: r.x, w: r.width, h: r.height }; }, sel);
+  // the column grows open over 0.25 s: measure once it has (CI caught it mid-way at 565 px)
+  await page.waitForFunction(() => document.getElementById('planPanel').getBoundingClientRect().height > 600, null, { timeout: 3000 }).catch(() => {});
   const plan = await box('#planPanel');
   check(plan.w === 440 && plan.x < 40 && plan.h > 600, 'Where to? is a left column: ' + JSON.stringify(plan));
   await page.click('.tab[data-view="setup"]');
