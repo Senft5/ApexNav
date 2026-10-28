@@ -312,9 +312,11 @@ const VISIBLE_FROM_OTHERS = `
 
 /** Only entries published TO the viewer (by someone who is still their friend / crew-mate, grant still on), plus their own. */
 export async function boardFor(env: Env, v: Viewer, canonId: string) {
-  return all<{ user_id: string; handle: string | null; name: string | null; driver_score: number; time_s: number | null; driven_on: string; mine: number }>(env,
+  // days_month (IDEAS S-08, local legends without speed): how many different days this month each driver posted a score here
+  return all<{ user_id: string; handle: string | null; name: string | null; driver_score: number; time_s: number | null; driven_on: string; mine: number; days_month: number }>(env,
     `SELECT be.user_id, u.handle, ${NAME_FOR("be.user_id", "?1")} AS name, MAX(be.driver_score) AS driver_score, MIN(be.time_s) AS time_s,
-            MAX(be.driven_on) AS driven_on, (be.user_id = ?1) AS mine
+            MAX(be.driven_on) AS driven_on, (be.user_id = ?1) AS mine,
+            COUNT(DISTINCT CASE WHEN be.driven_on >= date('now', 'start of month') THEN be.driven_on END) AS days_month
        FROM board_entries be JOIN users u ON u.id = be.user_id
       WHERE be.canon_id = ?2
         AND (be.user_id = ?1 OR (${VISIBLE_FROM_OTHERS}))

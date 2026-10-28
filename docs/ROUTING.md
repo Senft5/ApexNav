@@ -52,6 +52,13 @@ is driven, when the live arrival (above) is more than 5 minutes past it, a toast
 after 10 minutes if still late; it plans the quickest way from where you are back to the loop's start (IDEAS R-37,
 `homeByOffer` in web/eta.js).
 
+## Did the route drive the stage?
+
+The router joins a stage's shaping points by the quickest way it finds, which can be a parallel road that skips the stage.
+Every routed stage plan (A to B and loops) is checked against what came back: each stage is sampled about every 50 m and
+the share of samples within 40 m of the returned route is its coverage. Under 70% on any stage, the plan is dropped
+(`FunRoute.stageCoverage`, IDEAS R-14); the router's own routes and the circle loop still compete.
+
 ## Avoid cameras
 
 Avoid → **Cameras** (off by default) asks the camera map (OSM `surveillance:type=ALPR`, DeFlock, via Overpass, kept a week)

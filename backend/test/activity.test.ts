@@ -48,3 +48,20 @@ describe("friends' activity", () => {
     expect(await activity(a)).toEqual([]);
   });
 });
+
+describe("local legends (IDEAS S-08)", () => {
+  it("counts the different days each driver posted this month on a stage", async () => {
+    const [a, b] = [await makeUser("alice"), await makeUser("bob")];
+    await befriend(a, b);
+    const { seg, adopted } = await stageShared(a, b);
+    for (const [u, other] of [[a, b], [b, a]] as const) await ok(api(u, "PUT", "/api/grants", { audience_type: "friend", audience_id: other.id, share_scores: true }));
+    const monthStart = today.slice(0, 8) + "01";
+    const days = [...new Set([today, monthStart, daysAgo(1)].filter((d) => d >= monthStart))];
+    for (const d of days) await publish(b, adopted, 700, d);
+    await publish(b, adopted, 650, daysAgo(40));                       // last month or before: not this month
+    await publish(a, seg, 900);
+    const rows = (await (await ok(api(a, "GET", `/api/board/${seg}`))).json()) as Array<{ handle: string; days_month: number; driver_score: number }>;
+    expect(rows.map((r) => [r.handle, r.days_month])).toEqual([["alice", 1], ["bob", days.length]]);
+  });
+});
+
