@@ -305,6 +305,7 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
 
     // Live math (ApexKit)
     private var pipeline = IMUPipeline()
+    private var nodeVertPeakMps2: Double?   // largest >8 Hz vertical spike since the last 5 m node, nil when unmeasured
     private var fusion = ElevationFusion(baroAvailable: CMAltimeter.isRelativeAltitudeAvailable())
     private var odometer = Odometer5m()
     private var latestGravityG = Vec3(x: 0.0, y: -0.95, z: -0.30)   // CoreMotion gravity, phone frame, in g (points DOWN)
@@ -312,7 +313,7 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
     // Recording
     private var isRecording = false
     private var recordedSegments: Int = 0
-    private static let csvHeader = "segment_index,distance_m,lat,lon,elevation_m,speed_mph,lon_g,lat_g,camber_deg,crest_vertical_g,roughness_rms,engagement_score,grade_pct"
+    private static let csvHeader = "segment_index,distance_m,lat,lon,elevation_m,speed_mph,lon_g,lat_g,camber_deg,crest_vertical_g,roughness_rms,engagement_score,grade_pct,vert_peak_g"
     private var csvLines: [String] = [ApexSensorShell.csvHeader]
 
     override init() {
@@ -526,6 +527,7 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
     /// lat_g / lon_g in G (= m/s^2 / 9.80665), camber in degrees, roughness_rms in G RMS (>8 Hz vertical),
     /// speed in m/s, course in degrees true, elevation in m, grade in %.
     private func pushLiveFrame() {
+        let vertPeak = pipeline.takeVertPeak()   // this frame's spike window; the web Recorder places it on the road
         guard webReady, webView != nil else { return }
         let json = "{"
             + "\"lat\":\(Self.num(hasFix ? latDeg : nil, 7)),"
@@ -540,6 +542,7 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
             + "\"camber_deg\":\(Self.num(pipeline.camberRad * 180.0 / Double.pi, 2)),"
             + "\"crest_vertical_g\":\(Self.num(pipeline.crestAccMps2 / Self.gStd, 3)),"
             + "\"roughness_rms\":\(Self.num(pipeline.roughRMSMps2 / Self.gStd, 4)),"
+            + "\"vert_peak_g\":\(Self.num(vertPeak / Self.gStd, 3)),"
             + "\"recording\":\(isRecording ? "true" : "false"),"
             + "\"calibration\":\"\(pipeline.mount.state.rawValue)\","
             + "\"has_fix\":\(hasFix ? "true" : "false"),"
@@ -590,10 +593,12 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         let nodes = odometer.feed(lat: fix.lat, lon: fix.lon, elevationM: fusion.elevationM, speedMps: fix.speedMps,
                                   horizontalAccuracyM: fix.horizontalAccuracyM, roughRMSMps2: pipeline.segmentRoughRMS)
         if !nodes.isEmpty { pipeline.resetSegmentRough() }
-        for node in nodes { record(node) }
+        // A 1 Hz fix can close several nodes; in this CSV they share the spike, like roughness (the web Recorder places it per frame).
+        for node in nodes { record(node, vertPeakMps2: nodeVertPeakMps2) }
+        if !nodes.isEmpty { nodeVertPeakMps2 = nil }
     }
 
-    private func record(_ node: RoadNode) {
+    private func record(_ node: RoadNode, vertPeakMps2: Double?) {
         guard isRecording else { return }
         let idx = recordedSegments
         let row = String(
@@ -611,7 +616,7 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
             node.roughRMSMps2 / Self.gStd,
             pipeline.engagement,
             node.gradePct
-        )
+        ) + "," + (vertPeakMps2.map { String(format: "%.3f", $0 / Self.gStd) } ?? "")   // blank: unmeasured, never 0
         csvLines.append(row)
         recordedSegments += 1
     }
@@ -652,6 +657,10 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         let wasLocked = pipeline.mount.state == .locked
         pipeline.step(accel: a, gyro: w, timestamp: timestamp, speedMps: speedMps, gravityG: gravityG)
         if !wasLocked && pipeline.mount.state == .locked { persistMount() }
+        // Pothole evidence only in a solved chassis frame and while rolling (a door slam at a stop is not road).
+        if pipeline.mount.state == .locked && speedMps >= 1.0 {
+            nodeVertPeakMps2 = max(nodeVertPeakMps2 ?? 0.0, abs(pipeline.hpVert))
+        }
     }
 
     // MARK: SO(3) mount calibration

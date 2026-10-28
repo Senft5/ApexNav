@@ -246,6 +246,7 @@ class IMUPipeline:
     yaw_rate: float = 0.0       # about +Z up, rad/s
     crest_acc: float = 0.0      # < 1 Hz vertical (gravity removed)
     hp_vert: float = 0.0        # > 8 Hz vertical
+    vert_peak: float = 0.0      # max |hp_vert| since the last take (pothole/bump spikes), m/s^2
     last_az: float = 0.0
     rough_mean_sq: float = 0.0
     seg_rough_sum_sq: float = 0.0
@@ -278,6 +279,7 @@ class IMUPipeline:
         beta = rc / (rc + dt)
         self.hp_vert = beta * (self.hp_vert + az - self.last_az)
         self.last_az = az
+        self.vert_peak = max(self.vert_peak, abs(self.hp_vert))
         sq = self.hp_vert * self.hp_vert
         self.rough_mean_sq += alpha(dt, 0.5) * (sq - self.rough_mean_sq)
         self.seg_rough_sum_sq += sq
@@ -300,12 +302,17 @@ class IMUPipeline:
                else math.sqrt(max(0.0, self.rough_mean_sq)))
         return rms
 
+    def take_vert_peak(self) -> float:
+        """Peak |>8 Hz vertical| since the last call (m/s^2), then start a new window."""
+        peak, self.vert_peak = self.vert_peak, 0.0
+        return peak
+
     def reset_segment_rough(self) -> None:
         self.seg_rough_sum_sq, self.seg_rough_count = 0.0, 0
 
     def outputs(self) -> list:
         return [self.lon_acc, self.lat_acc, self.yaw_rate, self.crest_acc, self.hp_vert,
-                self.rough_mean_sq, self.camber, self.engagement]
+                self.rough_mean_sq, self.camber, self.engagement, self.vert_peak]
 
 
 # ---------------------------------------------------------------------------

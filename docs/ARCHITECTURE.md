@@ -41,6 +41,10 @@ The JS file is a line-for-line port used by the browser/iOS cockpit for live OSR
 ## 3b. Reference Lap, Live Pipeline, Analysis
 - `core/reference_lap.py` — simulated sane driver per car profile; all TECH/FLOW features and archetypes are read from it (docs/ROAD_INTELLIGENCE.md).
 - `core/live_pipeline.py` — causal 100 Hz pipeline the phone runs; Swift `ApexKit` is held to it by a generated fixture.
+  Its vertical spike (`vert_peak`, max |>8 Hz vertical| since the last `take_vert_peak()`) is taken once per live frame and
+  sent as `vert_peak_g`; the web Recorder places each frame's spike on the 5 m sample where the car was (its share of the way
+  between the two GPS fixes around it), only with a locked mount and above 1 m/s, as the CSV column `vert_peak_g`;
+  spikes inside a gap of over ~3 s or 100 m between fixes are dropped, not guessed. Blank means unmeasured, never 0.
 - `core/drive_analysis.py` — private corner-by-corner pass comparison, Driver Score (0–1000) and custom
   segment passes; JS port in `web/apex_core.js` (plus `profileRecording` for app CSVs), parity-tested.
 - Corner coach (`corner_phases`, `coach`; JS `cornerPhases`, `coach`): per corner, on 5 m bins, its own brake zone (the

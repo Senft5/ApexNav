@@ -111,6 +111,8 @@ def build() -> dict:
         if i % 10 == 0:
             outputs.append([i] + pipe.outputs())
             mounts.append([i, pipe.mount.state] + [v for row in pipe.mount.rows() for v in row])
+        if i % 50 == 0:
+            pipe.take_vert_peak()                       # a new spike window every half second, as the app does per frame
 
     # 1 Hz GPS along the driven path + barometer, through elevation fusion and the odometer
     heading = np.cumsum(yaw) / FS
