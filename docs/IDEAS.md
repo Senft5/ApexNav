@@ -79,7 +79,7 @@ long-press pin (#61), Apple place search and nearby suggestions in the app (#73)
 | R-12 | Set list: order stages so intensity builds, rests, and finishes high; no three max-TECH stages in a row | M | M | todo | ROAD_INTELLIGENCE §7.2.5 |
 | R-13 | Sun glare penalty for headings within 20° of a low sun, using the existing solar formula | M | S | done (#123) | ROAD_INTELLIGENCE §7.2.6 |
 | R-14 | Re-score the router's returned geometry and reject routes that shortcut a stage | M | S | todo | ROAD_INTELLIGENCE §7.2.4 |
-| R-15 | Avoid options: highways, tolls, ferries, unpaved, towns, repeated roads, with honest "couldn't avoid" | H | M | partial (#118: highways, tolls, ferries, unpaved; towns and repeated roads to do) | Kurviger, Calimoto, Google Maps |
+| R-15 | Avoid options: highways, tolls, ferries, unpaved, towns, repeated roads, with honest "couldn't avoid" | H | M | done (#118, #136: towns as a ranking cost; repeated roads were already a loop cost, A→B plans never repeat a stage) | Kurviger, Calimoto, Google Maps |
 | R-16 | Time budget routing: "I have 90 minutes, end at home" (orienteering with a hard time cap) | H | M | done (#122: 1 h / 2 h loops planned on drive time) | ROAD_INTELLIGENCE §7.1 |
 | R-17 | Day trip builder: start, stops (food, fuel, viewpoint), finish, with drag-to-reorder vias | H | L | todo | Roadtrippers, Calimoto tour planner |
 | R-18 | Drag the route line on the map to reshape it (adds a via) | M | M | todo | Google Maps, Kurviger |
