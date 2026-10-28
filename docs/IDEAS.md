@@ -296,8 +296,9 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 | Y-06 | Staged rollouts: preview Worker for TestFlight, feature flags per build | M | M | todo | docs/BACKEND.md |
 | Y-07 | Real-phone test checklist run before each TestFlight build (VERIFY.md) | H | S | done (VERIFY.md section 0; first run is the owner's) | docs/VERIFY.md |
 | Y-08 | Record migrations in `d1_migrations` (it only lists 0001) and a drift check in CI | M | S | todo | STATE 2026-10-26 |
-| Y-09 | Database backups (D1 time travel/export) and a restore drill | H | S | done (#124; first export and drill need the owner's wrangler login) | production readiness |
+| Y-09 | Database backups (D1 time travel/export) and a restore drill | H | S | done (#124; first export 2026-10-28 via the connector; drill needs the owner's wrangler login) | production readiness |
 | Y-10 | Rate limits and abuse protection on every write endpoint | H | M | done (#112) | production readiness |
+| Y-12 | Scheduled backups with no token: a Worker Cron Trigger (weekly) dumps every table through the D1 binding (`sqlite_master` + `quote()` SELECTs, as in docs/BACKUPS.md section 3) to a `.sql` object in a private R2 bucket, keeps the last 8, and logs row counts. No API token in GitHub, no export in a CI artifact; R2 free tier (10 GB) covers years. Alternative if a token arrives: a GitHub Action with a `CLOUDFLARE_API_TOKEN` repo secret running `wrangler d1 export` and uploading to the same R2 bucket (never as an Actions artifact) | H | S | todo | first backup 2026-10-28 |
 | Y-11 | End-to-end browser tests of the main flows (plan, drive replay, log, crew) in CI | M | M | todo | testing |
 
 ## 11. Performance and battery (P)

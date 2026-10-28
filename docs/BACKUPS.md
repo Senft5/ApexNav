@@ -1,7 +1,8 @@
 # APEX NAV — DATABASE BACKUPS AND RESTORE (IDEAS Y-09)
 
 The production database is D1 `apexnav-db` (id `b0c559d5-…`). The preview database `apexnav-preview-db` holds no real data
-and needs no backup. All of this is free on the Workers Free plan.
+(all tables empty on 2026-10-28); a schema-only export of it is still taken alongside, because it is the copy that gets
+migrations first. All of this is free on the Workers Free plan.
 
 ## 1. What protects the data
 
@@ -26,15 +27,42 @@ Write the bookmark it prints in the PR or STATE.md entry for the migration. If t
 
 ## 3. Monthly export (about a minute)
 
-From the repo root, signed in to wrangler (`npx wrangler login`):
+From the repo root, signed in to wrangler (`npx wrangler login`), or without a login by setting an API token in the shell
+(never in a file in the repo): `CLOUDFLARE_API_TOKEN` (a custom token with Account > D1 > Edit; export goes through the D1
+export API, which needs Edit even though nothing changes) and `CLOUDFLARE_ACCOUNT_ID`. Wrangler picks both up on its own:
 
 ```
 npx wrangler d1 export apexnav-db --remote --output=apexnav-db-YYYY-MM-DD.sql
 npx wrangler d1 execute apexnav-db --remote --file=tools/d1_rowcounts.sql
 ```
 
+Do the same for `apexnav-preview-db` (`--output=apexnav-preview-db-YYYY-MM-DD.sql`).
+
 The export blocks other queries to the database while it runs (seconds at today's size), so run it when no one is driving.
 Keep the `.sql` file and the row counts printed by the second command together. Keep the last three exports and delete older ones.
+
+**Where they are kept.** On the owner's own disk. The first exports (2026-10-28) are in the project's private file area at
+`backups/d1/` (with `2026-10-28-verify.txt`: checksums, row counts, how they were checked); copy them to your own disk.
+
+**Without wrangler (what Claude can do).** Claude sessions reach Cloudflare through the Cloudflare connector, not a token. It
+can run read-only `SELECT`s on both databases, so an export can be rebuilt from `sqlite_master` plus one `quote()`-formatted
+`SELECT` per table, then checked by loading it into a local SQLite and comparing a per-table fingerprint (rows, total
+characters of the quoted values, sum of the REAL columns) run identically on both sides. That is how the 2026-10-28 export
+was taken. Two traps found doing it: `printf('%g', NULL)` prints `0.0` (use `quote()` or a `CASE typeof(x)` for nullable
+REAL columns), and D1's `quote()` prints 15 significant digits where newer SQLite prints 17, so compare REAL values with `=`
+on D1 rather than by their text.
+
+**What the connector can and can't do** (checked 2026-10-28; there is no `CLOUDFLARE_API_TOKEN` in Claude's environment):
+
+| Can | Can't |
+|---|---|
+| list D1 databases; run SQL on them (reads and writes) | `wrangler d1 export` / the export API, Time Travel info or restore, undelete |
+| list/create/delete KV namespaces, R2 buckets, Hyperdrive configs | read or write R2 objects or KV values |
+| list Workers, read a Worker's deployed code | Workers Logs (`client_error` crash reports), Workers analytics, D1 metrics, rate-limit events |
+
+So Time Travel bookmarks before a migration (section 2), restores (section 4) and reading crash reports still need the
+owner's wrangler login or dashboard, or an API token added to the environment with: Account > D1 > Edit, Account > Workers
+Scripts > Read, Account > Account Analytics > Read, and Workers Observability (logs) > Read.
 
 ## 4. Restore
 
@@ -82,3 +110,4 @@ partway, check the database's metrics in the dashboard before blaming the export
 | Date | What | Result |
 |---|---|---|
 | 2026-10-28 | `tools/d1_rowcounts.sql` run on the live database (read only) | works: 27 tables (26 + `d1_migrations`), 909 road bins, 3 users. No export or drill yet: needs the owner's wrangler login |
+| 2026-10-28 | First export of both databases, by Claude through the connector (section 3, "Without wrangler") | `apexnav-db`: 28 tables (also `bans`, from the not-yet-merged 0009 migration), 72 KB; loaded into a fresh local SQLite, integrity and foreign-key checks clean, fingerprint identical to live D1 on every table. `apexnav-preview-db`: 27 tables, all empty, schema only. `d1_migrations` is empty on prod (not 1 row as IDEAS Y-08 says) and missing on preview. Stored in the project files `backups/d1/`. Not yet: a restore into a real D1 database (drill, section 5) |
