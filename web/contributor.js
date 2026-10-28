@@ -287,15 +287,39 @@
     if (!roads) return null;
     return summarize(locate({ drive: route, match, ways }), roads, route.lat.length);
   }
-  /** Per-sample measured series along a route: { cam[], rough[], n[] } with null where no member has measured that 5 m. */
+  /**
+   * Per-sample measured series along a route: { cam[], rough[], n[], cn[], csd[], rsd[] } with null where no member has measured
+   * that 5 m. cn: passes that measured camber; csd/rsd: how much the passes disagree (sample SD; null under two passes or from
+   * a server that does not send it yet).
+   */
   function seriesFrom(runs, roads, total) {
-    const cam = new Array(total).fill(null), rough = new Array(total).fill(null), n = new Array(total).fill(null);
+    const blank = () => new Array(total).fill(null);
+    const cam = blank(), rough = blank(), n = blank(), cn = blank(), csd = blank(), rsd = blank();
+    const at = (a, j) => (a && a[j] != null ? a[j] : null);
     for (const run of runs) {
       const d = roads[run.way] && roads[run.way][run.dir]; if (!d) continue;
       const idx = new Map(d.i.map((b, j) => [b, j]));
-      for (const p of run.pts) { const j = idx.get(p.bin); if (j == null) continue; cam[p.i] = d.cam[j]; rough[p.i] = d.rough[j]; n[p.i] = d.n[j]; }
+      for (const p of run.pts) {
+        const j = idx.get(p.bin); if (j == null) continue;
+        cam[p.i] = d.cam[j]; rough[p.i] = d.rough[j]; n[p.i] = d.n[j];
+        cn[p.i] = d.cn ? d.cn[j] : null; csd[p.i] = at(d.csd, j); rsd[p.i] = at(d.rsd, j);
+      }
     }
-    return { cam, rough, n };
+    return { cam, rough, n, cn, csd, rsd };
+  }
+
+  // Passes that agree within these spreads make a measurement trustworthy (camber: phone mounts and lines differ by ~1 deg;
+  // roughness: speed and tyres move the 5 m RMS by a few hundredths of a g).
+  const AGREE = { camber_deg: 1.5, rough_g: 0.05 };
+  /**
+   * How far to trust one merged 5 m value: 'one' (a single pass), 'agree' (two or more passes within tol), 'differ' (they
+   * disagree), or null when nothing was measured. passes: how many measured it; sd: their sample SD (null = not known).
+   */
+  function agreement(passes, sd, tol) {
+    if (!(passes >= 1)) return null;
+    if (passes < 2) return 'one';
+    if (sd == null || !Number.isFinite(sd)) return null;
+    return sd <= tol ? 'agree' : 'differ';
   }
   async function measuredSeries(route, lookup, opts = {}) {
     const match = await matchDrive(route, opts.fetch);
@@ -331,6 +355,6 @@
     return -6 * Math.min(1, m.coverage * 2) * rough;
   }
 
-  const api = { createLive, createAmbient, driveIdFor, measuredSeries, seriesFrom, measuredAdjust, measuredAlong, summarize, locate, buildContributions, matchDrive, fetchWays, contributeDrive, eligible, project, cumulative, SKIP_CLASSES };
+  const api = { createLive, createAmbient, driveIdFor, measuredSeries, seriesFrom, agreement, AGREE, measuredAdjust, measuredAlong, summarize, locate, buildContributions, matchDrive, fetchWays, contributeDrive, eligible, project, cumulative, SKIP_CLASSES };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexContributor = api;
 })(typeof window !== 'undefined' ? window : globalThis);
