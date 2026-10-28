@@ -29,7 +29,7 @@
     .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; font-size: 12px; }
     select, input, button.btn, a.btn { font: inherit; font-size: 15px; height: 44px; padding: 0 10px; background: transparent; color: var(--panel-ink); border: 1px solid var(--panel-dim); }
     button.btn { cursor: pointer; font-weight: 600; font-size: 15px; }
-    button.btn.solid, button.btn.on { background: var(--panel-ink); color: var(--panel); border-color: var(--panel-ink); }
+    button.btn.solid, button.btn.on, a.btn.solid { background: var(--panel-ink); color: var(--panel); border-color: var(--panel-ink); }
     .panel { border: 1px solid var(--rule); padding: 12px; min-width: 0; }
     .note { font-size: 12px; color: var(--panel-dim); line-height: 1.5; }
     .grid2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 12px; }
@@ -87,13 +87,15 @@
     .seglist { display: grid; gap: 6px; }
     .seg { text-align: left; border: 1px solid var(--rule); padding: 10px 12px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; cursor: pointer; background: transparent; color: inherit; font: inherit; }
     .seg.on { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
-    .stages-h { font-size: 22px; font-weight: 700; font-family: var(--font-num); }
+    .stages-h { font-size: 22px; font-weight: 700; font-family: var(--font-num); overflow-wrap: anywhere; }
+    .empty { border: 1px solid var(--rule); padding: 16px; display: grid; gap: 8px; } .empty b { font-size: 17px; } .empty .note { font-size: 14px; }
+    a.btn { display: inline-flex; align-items: center; text-decoration: none; font-weight: 600; }
     .seg b { font-size: 15px; } .seg span { font-size: 12px; color: var(--panel-dim); }
     :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; animation: none !important; transition: none !important; } }
     [hidden] { display: none !important; }
     a.back { display: inline-flex; align-items: center; min-height: 44px; font-size: 15px; font-weight: 600; text-decoration: none; color: var(--panel-dim); }
-    .bar-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+    .bar-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-height: 44px; }   /* page titles sit at the same height on every tab */
     label.btn { display: inline-flex; align-items: center; cursor: pointer; }
     details.more { border-top: 1px solid var(--rule); margin-top: 12px; }
     details.more summary { min-height: 44px; display: flex; align-items: center; font-size: 15px; font-weight: 600; cursor: pointer; list-style: none; }
@@ -118,11 +120,12 @@
     <!-- ============================ DRIVE ============================ -->
     <section id="tab-drive" class="stack-12" hidden>
       <div><a href="#" class="back" data-to="history">‹ Log</a></div>
-      <div class="row"><select id="dvPick" aria-label="Choose a drive" style="flex:1;min-width:200px"></select><span class="note" id="dvNote"></span></div>
-      <div class="actions">
-        <button class="btn" id="dvReplay">Replay on map</button>
-        <button class="btn" id="dvCompare">Compare with…</button>
-        <button class="btn" id="dvShare">Share drive</button>
+      <select id="dvPick" aria-label="Choose a drive" hidden></select>
+      <div><h1 class="stages-h" id="dvTitle">--</h1><p class="note" id="dvNote"></p></div>
+      <div class="actions" role="group" aria-label="This drive">
+        <button class="btn solid" id="dvReplay">Replay</button>
+        <button class="btn" id="dvCompare">Compare</button>
+        <button class="btn" id="dvShare">Share</button>
       </div>
       <div id="dvRoot"></div>
       <div class="panel" id="dvRoad" hidden><h2>This road over time</h2><div id="dvRoadChart"></div><div class="scroll"><table id="dvRoadTable"></table></div></div>
@@ -130,18 +133,23 @@
 
     <!-- ============================ HISTORY ============================ -->
     <section id="tab-history" class="stack-12">
+      <div class="bar-top"><h1 class="stages-h">Log</h1>
+        <label class="btn">Import .csv<input type="file" id="importFile" accept=".csv,text/csv" aria-label="Import a recording" hidden /></label></div>
+      <div class="empty" id="historyEmpty" hidden>
+        <b>No drives yet</b>
+        <p class="note">Start a drive on the map. It lands here with a score for every corner.</p>
+        <div class="actions"><a class="btn solid" href="index.html">Go to the map</a><a class="btn" href="index.html?drive=dry_ridge&amp;play=1">Watch a replay</a></div>
+      </div>
       <div class="cards" id="historyCards"></div>
       <div class="panel" id="trendPanel" hidden><h2>Score over time</h2><div id="trend"></div></div>
-      <div class="bar-top"><span></span>
-        <label class="btn">Import .csv<input type="file" id="importFile" accept=".csv,text/csv" aria-label="Import a recording" hidden /></label></div>
-      <div class="panel"><div class="scroll"><table id="historyTable"></table></div></div>
+      <div class="panel" id="historyPanel"><div class="scroll"><table id="historyTable"></table></div></div>
       <details class="more"><summary>How Score works</summary>
         <p class="note">Score rates how you drive the corners, not how fast. <b>Pace</b>: corner speed against its safe grip limit, full credit from 85 % to 100 %. <b>Smooth</b>: how gently cornering load builds. <b>Brakes</b>: no hard braking after the apex. <b>Rhythm</b>: even commitment from corner to corner. Speed limits never enter it. 1000 is a closed-course number, not something to chase on public roads.</p></details>
     </section>
 
     <!-- ============================ SEGMENTS ============================ -->
     <section id="tab-segments" hidden class="stack-12">
-      <div class="bar-top"><h2 class="stages-h">Stages</h2><button class="btn solid" id="newStageBtn">New stage</button></div>
+      <div class="bar-top"><h1 class="stages-h">Stages</h1><button class="btn solid" id="newStageBtn">New stage</button></div>
       <div class="seglist" id="segList"></div>
       <div class="grid2" id="segDetail" hidden>
       <div class="panel" id="segSyncPanel" hidden><h2>Board</h2><div class="row" id="segBoardFilter" role="group" aria-label="Board filter"></div><div class="scroll mt-8"><table id="segBoard"></table></div><div class="row mt-8" id="segShareRow"></div><div id="segShared" class="stack-8 mt-8"></div><div class="note mt-8" id="segSyncNote"></div></div>
@@ -154,12 +162,12 @@
         </div>
         <div class="strip" id="segStrip"><div class="sel" id="segSel" hidden></div><div id="segStripSvg"></div></div>
         <div class="row mt-8">
-          <input id="segName" aria-label="Stage name" placeholder="Name this stage, e.g. Dry Ridge climb" style="flex:1;min-width:200px" />
+          <input id="segName" aria-label="Stage name" placeholder="Stage name, e.g. Dry Ridge climb" style="flex:1;min-width:200px" />
           <button class="btn solid" id="segSave">Save stage</button>
           <span class="note" id="segInfo"></span>
         </div>
       </details>
-      <details class="more"><summary>Share older drives</summary>
+      <details class="more" id="shareOlder"><summary>Share older drives</summary>
         <div class="panel" id="contribPanel" hidden><p class="note" id="contribNote"></p><div id="contribList" class="stack-8"></div></div>
       </details>
     </section>
@@ -224,7 +232,7 @@
     const storeDrive = (d) => ApexRecording.store(d);
     const parseRecording = (text, fileName) => ApexRecording.parse(Core, text, fileName);
 
-    let drives = [];
+    let drives = [], drivesLoaded = false;
     async function loadDrives() {
       // Only the person's own recordings. The bundled ones are the cockpit's "Watch a replay" demo, not their drives.
       const stored = await storedDrives();
@@ -256,6 +264,8 @@
       const totalKm = drives.reduce((s, d) => s + d.km, 0);
       const latest = scored[scored.length - 1];
       const c = (v, label, extra) => `<div class="card"><b>${v}</b><span>${label}</span>${extra ? `<em>${extra}</em>` : ''}</div>`;
+      $('historyEmpty').hidden = !drivesLoaded || drives.length > 0;   // never claim "no drives" before the store has answered
+      $('historyCards').hidden = $('historyPanel').hidden = !drives.length;
       $('historyCards').innerHTML =
         c(latest ? latest.ds.score : '--', 'Latest', latest ? latest.name : '') +
         c(best ? best.ds.score : '--', 'Best', best ? best.name : '');
@@ -469,7 +479,10 @@
       drives.forEach(d => $('segDrive').add(new Option(`${d.name} · ${dateLabel(d)}`, d.id)));
       renderSegStrip();
       const list = $('segList');
-      list.innerHTML = segs.length ? '' : '<p class="note">No stages yet. A stage is a stretch you drive often; every run on it gets a score. Tap New stage and mark one on a drive.</p>';
+      // Nothing to mark a stage on until there is a drive: say so instead of showing an empty picker.
+      $('newStageBtn').hidden = $('newStage').hidden = $('shareOlder').hidden = !drives.length;
+      if (view === 'segments' && !segs.length && drives.length && !$('newStage').dataset.auto) { $('newStage').open = true; $('newStage').dataset.auto = '1'; }   // first visit: open the marker once
+      list.innerHTML = segs.length ? '' : `<div class="empty"><b>No stages yet</b><p class="note">A stage is a stretch you drive often; every run on it gets a score. ${drives.length ? 'Mark one on a drive below.' : 'Record a drive first, then mark a stretch of it here.'}</p></div>`;
       for (const s of segs) {
         const passes = passesFor(s), best = passes.reduce((m, x) => (x.p.score != null && (m == null || x.p.score > m) ? x.p.score : m), null);
         const b = document.createElement('button');
@@ -571,7 +584,8 @@
       const pick = $('dvPick'), keep = pick.value; pick.innerHTML = '';
       const list = drives.slice().reverse();
       list.forEach(d => pick.add(new Option(`${d.name} · ${dateLabel(d)}`, d.id)));
-      if (!list.length) { $('dvRoot').innerHTML = '<p class="note">No drives yet. Start a drive on the map, or import a recording from the Log.</p>'; return; }
+      const actions = document.querySelector('#tab-drive .actions'); actions.hidden = !list.length;
+      if (!list.length) { $('dvTitle').textContent = 'No drives yet'; $('dvNote').textContent = ''; $('dvRoot').innerHTML = '<p class="note">Start a drive on the map, or import a recording from the Log.</p>'; return; }
       pick.value = list.some(d => d.id === keep) ? keep : list[0].id;
       const d = drives.find(x => x.id === pick.value);
       if (dvView) dvView.destroy();
@@ -586,7 +600,9 @@
       dvView = ApexDriveView.mount($('dvRoot'), d, { Core, C, MPH, reference, coach });
       renderRoadHistory(d);
       loadRoadFeel(d, dvView);
-      $('dvNote').textContent = d.source === 'web-gps' ? 'recorded in the web app (GPS)' : d.source === 'imported' ? 'imported recording' : 'shipped example';
+      // The drive's name is the page title (you arrive from the Log list); the picker stays only as this view's state.
+      $('dvTitle').textContent = d.name;
+      $('dvNote').textContent = `${dateLabel(d)} · ${d.source === 'web-gps' ? 'Recorded on this phone' : d.source === 'imported' ? 'Imported' : 'Example drive'}`;
     }
     // Corner coach for a drive, against every other drive whose box overlaps it (Core.coach decides what is the same corner).
     // Boxes are cached on the drives and results per drive, so reopening a drive costs nothing until the library changes.
@@ -640,7 +656,8 @@
       view = t;
       for (const v of ['drive', 'history', 'segments', 'compare']) $(`tab-${v}`).hidden = v !== t;
       $('navLog').classList.toggle('on', t !== 'segments'); $('navStages').classList.toggle('on', t === 'segments');
-      if (t === 'segments') { if (!segs.length) $('newStage').open = true; renderSegStrip(); }
+      for (const [id, on] of [['navLog', t !== 'segments'], ['navStages', t === 'segments']]) on ? $(id).setAttribute('aria-current', 'page') : $(id).removeAttribute('aria-current');
+      if (t === 'segments') { if (!segs.length && drives.length) { $('newStage').open = true; $('newStage').dataset.auto = '1'; } renderSegStrip(); }
       if (t === 'history') renderHistory();
     }
     document.querySelectorAll('a.back').forEach(a => a.addEventListener('click', (e) => { e.preventDefault(); showTab(a.dataset.to); toTop(); }));
@@ -687,7 +704,7 @@
       const q = params.get('tab'), t = TAB_ALIAS[q] || q;
       showTab(['drive', 'history', 'segments', 'compare'].includes(t) ? t : 'history');
     }
-    loadDrives().then(() => { renderAll(); const want = params.get('drive'); if (want && drives.some(x => x.id === want)) openDrive(want); });
+    loadDrives().then(() => { drivesLoaded = true; renderAll(); const want = params.get('drive'); if (want && drives.some(x => x.id === want)) openDrive(want); });
   })();
   </script>
 </body>

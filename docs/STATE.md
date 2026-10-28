@@ -1,5 +1,13 @@
 # APEX NAV — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-10-28: UI polish (owner goal: best-in-class UI)
+- Audit method: Playwright at 390×844 (iPhone size), day and night, every tab, empty and with an imported drive (Dry Ridge rows exported to CSV). Map tiles load; the server API is unreachable from the sandbox, so Crew was only seen offline.
+- #79: Log has a page title like Stages; empty Log shows one empty state (Go to the map / Watch a replay) instead of blank Latest/Best tiles; no "No drives yet" flash before IndexedDB answers; empty Stages hides the drive picker, New stage and Share older drives until there is a drive; tab bar sets aria-current.
+- #81: switches in the While you drive panel and Settings lists use a 44×24 track and report role=switch + aria-checked (repainted on every tap); panel label sentence case; Crew no longer repeats "Crew" (offline: Can't reach ApexNav + Try again; signed out: Drive with friends; no invite: Join with an invite); :focus-visible ring, prefers-reduced-motion, toasts aria-live.
+- #83: drive detail leads with the drive's name as the title, date and source ("Recorded on this phone", was "recorded in the web app (GPS)" even in the iPhone app), then Replay · Compare · Share on one row, then the score.
+- Not verified on a phone or with VoiceOver: all of the above. Web-only PRs skip the iOS CI jobs; main's run after merge builds the IPA.
+- Next UI candidates seen in the audit: the Where to? / Start bar stays over the cluster during a replay; Crew sheet draws two rules under its title; imported drives are named after the file (web_20261027_080000); the live drive cockpit was not exercised (needs real GPS frames).
+
 ## Session 2026-10-27: morning-commute push (owner goal: everything discussed, in production)
 - Merged: #73 (nearby suggestions; route kept across tab switches; smooth pull-up sheet; route bar with Start/✕; routes start quiet with a destination pin and fly-to, follow paused until Start drive or FOLLOW; Apple MKLocalSearchCompleter place search in the app, Photon on web; voice audio to Bluetooth/CarPlay: .playback/.voicePrompt + .duckOthers/.interruptSpokenAudioAndMixWithOthers, active only while a prompt plays, web clips bracket with voiceBegin/voiceEnd).
 - #75 (polish, landed via #77 after merging main in: the only conflict was the end of ApexNavApp.swift, where polish's WKWebView keyboard-bar extension and main's search/voice delegate extensions were both kept): drive log on a phone no longer has the sticky map scrolling over content; readout above the tab bar + home indicator; keyboard ‹ › Done bar removed (runtime subclass of WKContentView); Stages is one list, tap a stage for board and runs, New stage button, sharing older drives folded away.
