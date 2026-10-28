@@ -121,6 +121,8 @@
     if (!jobs.length || jobs.length > MAX_TILES) jobs.splice(0, jobs.length, tileOf(c.lat, c.lon, z));
     let done = 0;
     const pieces = [];
+    pieces.names = [];   // named road lines (transportation_name), for naming stages when asked
+
     await Promise.all(jobs.map(async ([x, y]) => {
       try {
         const buf = new Uint8Array(await Loading.arrayBuffer(tileUrl.replace('{z}', z).replace('{x}', x).replace('{y}', y)));
@@ -129,6 +131,7 @@
           if (!ROAD_CLASSES.has(p.class) || p.ramp === 1 || p.service || p.access === 'no' || p.surface === 'unpaved') continue;
           for (const l of f.lines) pieces.push({ cls: p.class, pts: l });
         }
+        for (const f of decodeLayer(buf, 'transportation_name', z, x, y)) pieces.names.push({ properties: f.props, geometry: { type: 'MultiLineString', coordinates: f.lines } });
       } catch (_) { /* a missing tile just means fewer candidates */ }
       onProgress && onProgress(++done, jobs.length);
     }));
@@ -274,7 +277,38 @@
     }
     onProgress && onProgress('scoring', 1);
     stages.sort((a, b) => b.score - a.score);
-    return applyHighlights(stages, opts.highlights, opts.strength);
+    const out = applyHighlights(stages, opts.highlights, opts.strength);
+    if (opts.names) nameStages(out.slice(0, opts.names), pieces.names);
+    return out;
+  }
+  // Each stage's road name from the tiles' own name lines: the name most of 5 points along it sit on (2 of 5 at
+  // least), else none. Unknown stays unknown: an unnamed stage has no `name`.
+  const boxOf = (lines) => {
+    const b = [180, 90, -180, -90];
+    for (const l of lines) for (const [x, y] of l) { b[0] = Math.min(b[0], x); b[1] = Math.min(b[1], y); b[2] = Math.max(b[2], x); b[3] = Math.max(b[3], y); }
+    return b;
+  };
+  function nameStages(stages, names) {
+    const Names = root.ApexRoadNames;
+    if (!Names || !names || !names.length) return stages;
+    for (const s of stages) {
+      let w = 180, e = -180, so = 90, n = -90;
+      for (let i = 0; i < s.lat.length; i += 10) { w = Math.min(w, s.lon[i]); e = Math.max(e, s.lon[i]); so = Math.min(so, s.lat[i]); n = Math.max(n, s.lat[i]); }
+      const pad = 0.001;
+      const near = names.filter(f => {
+        const b = f.bbox || (f.bbox = boxOf(f.geometry.coordinates));
+        return b[0] <= e + pad && b[2] >= w - pad && b[1] <= n + pad && b[3] >= so - pad;
+      });
+      const votes = new Map();
+      for (let k = 1; k <= 5; k++) {
+        const i = Math.round(k / 6 * (s.lat.length - 1)), name = Names.nearestRoadName(near, s.lat[i], s.lon[i], 30);
+        if (name) votes.set(name, (votes.get(name) || 0) + 1);
+      }
+      let best = null, most = 1;
+      for (const [name, v] of votes) if (v > most) { most = v; best = name; }
+      if (best) s.name = best;
+    }
+    return stages;
   }
 
   // ---- chaining ---------------------------------------------------------------
@@ -360,5 +394,5 @@
     return pts;
   }
 
-  root.ApexStages = { decodeLayer, discover, applyHighlights, plans, waypoints, strokes, bestWindow, roadPieces };
+  root.ApexStages = { decodeLayer, discover, nameStages, applyHighlights, plans, waypoints, strokes, bestWindow, roadPieces };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -1,5 +1,9 @@
 # APEX NAV — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-10-28: Explore
+- #126 merged (route options). #NN: Explore 15/30 min lists the best roads you can reach in that time (real drive times from one matrix call), named from the map tiles, drawn on the map; one tap routes through the whole stage (docs/ROUTING.md, Explore). Checked in a desktop browser around Maryville TN. Not checked on a phone.
+- Exact next task: R-15 remainder (avoid towns, repeated roads), then R-11 stage direction.
+
 ## Session 2026-10-28: route options side by side
 - #123 merged (sun glare). #126: a planned route offers up to 3 distinct options (`FunRoute.distinctOptions`: same within 30 s and 1 fun point counts once) as chips on the route card ("Fun 79 · 128 min") and dashed lines on the map; tapping either re-plans on that option with its own why line, glare and avoid notes. Hidden while driving. Knoxville → Maryville on Fun: 79/128, 51/98, 61/127. Not checked on a phone.
 - Exact next task: R-10 Explore, or the R-15 remainder.
