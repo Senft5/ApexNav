@@ -59,6 +59,22 @@ Every routed stage plan (A to B and loops) is checked against what came back: ea
 the share of samples within 40 m of the returned route is its coverage. Under 70% on any stage, the plan is dropped
 (`FunRoute.stageCoverage`, IDEAS R-14); the router's own routes and the circle loop still compete.
 
+## Closed at times
+
+A planned route asks Overpass for the roads in its box (up to 1° across) that carry a conditional closing rule
+(`motor_vehicle`, `motorcar`, `vehicle` or `access` `:conditional` = `no @ (...)`), keeps those within 80 m of the route,
+and reads each rule for the time you'd get there: date ranges ("Nov 15-Apr 15", "Nov-Apr", years ignored), times
+("19:00-07:00") and weekdays ("Mo-Fr 07:00-09:00"). The card says what is closed then, what is closed at other times, and
+shows a rule it can't read as written (`sunset-sunrise`, `wet`) rather than guessing (IDEAS R-22). The router isn't told yet.
+
+## Weather along the way
+
+A planned route gets the forecast at six points along it, each for the hour you would reach it if you left now (the router's
+own times; 50 km/h where it gave none), from Open-Meteo in one request. The route card names what changes the drive, once
+each and where it starts: ice risk (at or below 1 °C and wet, or freezing rain), snow, thunderstorms, rain likely (60%+ or
+0.3 mm+), fog (under 1 km or a fog code), very hot (35 °C+); or says there's no rain, ice or fog. Beyond the forecast or
+offline: nothing is said (IDEAS R-21, `web/route_weather.js`). It doesn't yet change which route wins.
+
 ## Stops of the day
 
 The route card lists your stops in order (a pin's Add via, a dragged route, or a viewpoint, café or fuel pin along the route:
