@@ -1,7 +1,7 @@
 # Fun routing
 
-How ApexNav picks the way from A to B (web/fun_route.js, wired in web/index.html `funRoute`). Loops are
-built by the stage chainer in web/stages.js and docs/ROAD_INTELLIGENCE.md §7.
+How ApexNav picks the way from A to B (web/fun_route.js, wired in web/index.html `funRoute`), and how
+loops are sized (see Loops below; stage discovery itself is web/stages.js and docs/ROAD_INTELLIGENCE.md §7).
 
 ## Levels
 
@@ -40,6 +40,18 @@ Changing the level re-plans a destination route that is not being driven (not wh
 
 Any step that fails (no tiles, no matrix, a stage route that fails) just leaves fewer candidates;
 the router's own route is always there.
+
+## Loops
+
+Loops chain stages found around the start. Their length used to come from crow-fly connectors x 1.6,
+which ran 40–75 % long in hills (a 45 mi request around Knoxville routed to 99–102 km). Now the best
+6 stages that can be reached and returned from are shortlisted (`loopShortlist`), one Valhalla matrix
+(13 x 13, sent as two calls of at most 100 pairs) gives real road distances between the start and
+every stage end, and `loopPlansFromMatrix` chains 1–3 of them in any order and direction within 25 %
+of the target. Same value formula as before (stage score x (1 − length error) − 0.08 per connector
+km). The crow-fly plans are the fallback when the matrix fails, and the circle loop is still routed
+as a baseline. Checked against the public servers: routed loops now land within about 15 % of the
+target (Knoxville 30 mi: 43–44 km after spur removal; 45 mi: 58–62 km; Cincinnati 30 mi: 46–48 km).
 
 ## Fun score (map only)
 
