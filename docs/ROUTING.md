@@ -72,6 +72,13 @@ Fun minus 2 points per % of the loop driven twice and 0.8 per % off the asked le
 no longer count as corners on loops and the measured adjustment means the same on both. Checked against the public servers: routed loops now land within about 15 % of the
 target (Knoxville 30 mi: 43–44 km after spur removal; 45 mi: 58–62 km; Cincinnati 30 mi: 46–48 km).
 
+**By time** (1 h / 2 h chips, R-16): the same loop builder planned on drive time instead of distance. The search
+radius assumes 35 km/h, the matrix gives connector times, stages count at 25 km/h (the router times twisty roads far
+below 50: a 43 km Smokies loop is 83 min), and routed loops are judged on the router's time against the target
+(`FunRoute.LOOP_BY_TIME`, `loopValue` on seconds). The card names the loop by its real time ("119 min loop"). Knoxville:
+2 h → 119 min; 1 h → 75 min, because the good roads nearest the start are 40 km of driving away (the toast says
+"75 min: the closest good loop to 1 h").
+
 ## Measured roads
 
 For members, the top 3 candidates of a destination route or loop are matched to OSM ways (Valhalla
