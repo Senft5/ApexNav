@@ -1423,12 +1423,17 @@
         const memo = ApexRoadMemory.upcoming(roadMemory, state.live, reach, reach + 200, state.spoken);
         if (memo) { state.spoken.add(memo.id); say(memo.text); }
       }
-      // A break suggestion waits for the same quiet: a free voice and no call due within reach (any notes mode: tiredness
-      // matters on a commute too). Dropped after 5 min unsaid; the toast already showed it.
+      // A break suggestion waits for the same quiet (any notes mode: tiredness matters on a commute too): a fresh fix, a free
+      // voice, and no call that will be spoken (route call or a remembered bump) within the distance the line takes to say,
+      // at the app's estimate of 600 ms + 70 ms a character, plus 2 s for a model voice to start. Dropped after 5 min unsaid;
+      // the toast already showed it.
       if (breakSay && performance.now() > breakSay.until) breakSay = null;
-      if (breakSay && live && !speech.busy && !speech.queue.length && performance.now() > speech.talkingUntil
-          && !ev.some(e => e.dist_m - state.cursorM < reach && !state.spoken.has(`${track.id}:${e.type}:${e.index}`))) {
-        say(breakSay.text); breakSay = null;
+      if (breakSay && live && performance.now() - state.liveAt < 2500 && !speech.busy && !speech.queue.length && performance.now() > speech.talkingUntil) {
+        const breakReach = lead + vMps * (0.6 + 0.07 * breakSay.text.length + 2);
+        const callDue = ev.some(e => e.dist_m - state.cursorM < breakReach && !state.spoken.has(`${track.id}:${e.type}:${e.index}`)
+          && (e.type === 'corner' ? spirited : (spirited || noteworthyInCruise(e))));
+        const bumpDue = ApexRoadMemory.upcoming(hazardMemory, state.live, 0, breakReach, { has: () => false });
+        if (!callDue && !bumpDue) { say(breakSay.text); breakSay = null; }
       }
     }
 
@@ -3196,22 +3201,23 @@
         if (name) drive.roads[name] = (drive.roads[name] || 0) + 150;
       }
     }
-    // Break cue (IDEAS D-16, live): ApexRoadMemory.restTick keeps the clock (restarted by a stop of 15 min or more); once an
+    // Break cue (IDEAS D-16, live): ApexRoadMemory.restTick keeps the clock (restarted by 15 min standing still); once an
     // hour has passed, every 10 min the driving since the stop goes to break_worker.js (Core.fatigue, off the main thread).
-    // The cue is shown at once and spoken by the notes loop when no call is due (breakSay), like the remembered tips.
+    // The cue is shown at once and spoken by the notes loop when no call is due (breakSay), like the remembered tips. A
+    // reading that fails or takes over BREAK_WAIT_MS counts as unknown, so the time cue still comes.
+    const BREAK_WAIT_MS = 30000;
     let breakWorker = null, breakSeq = 0;
     function noteRest(frame) {
       const r = drive.rec; if (!r) return;
-      const now = Date.now(), moving = Number.isFinite(frame.speed_mps) && frame.speed_mps >= 2.5;
       let due;
-      [drive.rest, due] = ApexRoadMemory.restTick(drive.rest, now, moving, r.rows.length);
-      const w = drive.rest;
+      [drive.rest, due] = ApexRoadMemory.restTick(drive.rest, Date.now(), frame.speed_mps, r.rows.length);
+      const w = drive.rest, stretch = w.stretch;
       if (!due || w.busy) return;
       w.busy = true;
       const finish = (fa) => {
+        if (drive.rec !== r || drive.rest !== w || w.stretch !== stretch) return;   // the drive ended or a new stretch began
         w.busy = false;
-        if (drive.rec !== r || drive.rest !== w) return;                     // the drive ended or restarted meanwhile
-        const t = Date.now(), cue = ApexRoadMemory.breakCue(fa, (t - w.since) / 1000, w.said == null ? null : (t - w.said) / 1000);
+        const t = Date.now(), cue = ApexRoadMemory.breakCue(fa, (t - w.since) / 1000, w.said == null ? null : (t - w.said) / 1000, w.spoken);
         if (!cue) return;
         w.said = t;
         toast(cue.text);
@@ -3219,11 +3225,20 @@
       };
       const rows = r.rows.length - w.row0 > 200 ? ApexRoadMemory.rebase(r.rows.slice(w.row0)) : null;
       if (!rows) { finish(null); return; }
-      try { breakWorker = breakWorker || new Worker('break_worker.js'); } catch (_) { finish(null); return; }
-      const id = ++breakSeq, done = (fa) => { breakWorker.removeEventListener('message', onMsg); breakWorker.removeEventListener('error', onErr); finish(fa); };
-      const onMsg = (e) => { if (e.data && e.data.id === id) done(e.data.fa); }, onErr = () => { breakWorker = null; done(null); };
-      breakWorker.addEventListener('message', onMsg); breakWorker.addEventListener('error', onErr);
-      breakWorker.postMessage({ id, rows });
+      let wk;
+      try { wk = breakWorker = breakWorker || new Worker('break_worker.js'); } catch (_) { finish(null); return; }
+      const id = ++breakSeq;
+      let timer = null;
+      const done = (fa, broken) => {
+        clearTimeout(timer);
+        wk.removeEventListener('message', onMsg); wk.removeEventListener('error', onErr); wk.removeEventListener('messageerror', onErr);
+        if (broken && breakWorker === wk) { try { wk.terminate(); } catch (_) {} breakWorker = null; }   // a fresh one next time
+        try { finish(fa); } finally { if (drive.rest === w && w.stretch === stretch) w.busy = false; }
+      };
+      const onMsg = (e) => { if (e.data && e.data.id === id) done(e.data.fa, false); }, onErr = () => done(null, true);
+      wk.addEventListener('message', onMsg); wk.addEventListener('error', onErr); wk.addEventListener('messageerror', onErr);
+      timer = setTimeout(() => done(null, true), BREAK_WAIT_MS);
+      wk.postMessage({ id, rows });
     }
     // Road data whenever the app is open and the phone is mounted (calibration locked), not only during a drive
     // (owner 2026-10-26). Trips, privacy trims and gaps: ApexContributor.createAmbient. Members with ROAD DATA on only.
@@ -3288,7 +3303,7 @@
       driveActive = true;
       setPlaying(false);
       drive.rec = new ApexSensors.Recorder(); drive.status = { gps: 'waiting', motion: 'off', wake: 'off', message: '' }; drive.frames = 0;
-      drive.live = null; drive.liveIdx = 0; drive.share = 'off'; drive.shareKm = 0; drive.shareErr = null; drive.roads = {}; drive.roadIdx = 0; drive.rest = null; breakSay = null;
+      drive.live = null; drive.liveIdx = 0; drive.share = 'off'; drive.shareKm = 0; drive.shareErr = null; drive.roads = {}; drive.roadIdx = 0; drive.rest = null; breakSay = null; if (breakWorker) { breakWorker.terminate(); breakWorker = null; }
       if (NATIVE_SHELL) {   // the app's own GPS and IMU feed window.apex.live; no browser sensors to start
         drive.native = true;
         drive.status = { gps: performance.now() - state.liveAt < 5000 && state.live ? 'on' : 'waiting', motion: 'on', wake: 'on', message: '' };

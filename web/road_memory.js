@@ -89,20 +89,31 @@
   }
 
   // A break, suggested on a long live drive (IDEAS D-16). The clock is wall time since the drive started or since the last
-  // stop of STOP_RESETS_S or more (a fuel stop is shorter and does not count). After an hour, every BREAK_CHECK_S, the driving
-  // since then is read with Core.fatigue; a fade in steering or braking is the cue, else two hours on the road. At most every
-  // 45 min, and each kind is spoken once per stretch (shown each time).
-  const STOP_RESETS_S = 15 * 60, BREAK_MIN_S = 3600, BREAK_CHECK_S = 10 * 60, BREAK_AFTER_S = 2 * 3600, BREAK_REPEAT_S = 45 * 60;
-  const HOURS = ['', 'an hour', 'two hours', 'three hours', 'four hours', 'five hours'];
+  // stop of STOP_RESETS_S or more (a fuel stop is shorter and does not count). A stop means frames showing the car standing
+  // still (under STILL_MPS) all along: a crawl in a queue is driving, and a gap with no frames (a tunnel, a backgrounded page)
+  // is unknown, so neither restarts the clock. After an hour, every BREAK_CHECK_S, the driving since then is read with
+  // Core.fatigue; a fade in steering or braking is the cue, else two hours on the road (once a stretch). At most every 45 min.
+  const STOP_RESETS_S = 15 * 60, STILL_MPS = 0.5, MOVING_MPS = 2.5, FRAME_GAP_S = 60, BREAK_MIN_S = 3600, BREAK_CHECK_S = 10 * 60,
+    BREAK_AFTER_S = 2 * 3600, BREAK_REPEAT_S = 45 * 60;
   /**
-   * The rest clock, per live frame. w: the previous state (null at the start of a drive); rows: the recorder's row count.
-   * Returns [w, due]: due when the driving since the stop should be read now.
+   * The rest clock, per live frame. w: the previous state (null at the start of a drive); speed: m/s (NaN unknown); rows: the
+   * recorder's row count. Returns [w, due]: due when the driving since the stop should be read now. A restart bumps w.stretch,
+   * so a reading that began before it is known to be stale.
    */
-  function restTick(w, nowMs, moving, rows) {
-    w = w || { since: nowMs, lastMove: nowMs, row0: 0, checked: 0, said: null, spoken: [] };
-    if (!moving) return [w, false];
-    if (nowMs - w.lastMove >= STOP_RESETS_S * 1000) { w.since = nowMs; w.row0 = rows; w.checked = 0; w.said = null; w.spoken = []; }
-    w.lastMove = nowMs;
+  function restTick(w, nowMs, speed, rows) {
+    w = w || { since: nowMs, last: nowMs, stillFrom: null, stillTo: null, row0: 0, checked: 0, said: null, spoken: [], stretch: 0, busy: false };
+    const gap = nowMs - w.last;
+    w.last = nowMs;
+    if (finite(speed) && speed < STILL_MPS) {
+      if (w.stillFrom === null || gap > FRAME_GAP_S * 1000) w.stillFrom = nowMs;   // stillness is only what frames showed
+      w.stillTo = nowMs;
+      return [w, false];
+    }
+    if (w.stillFrom !== null && w.stillTo - w.stillFrom >= STOP_RESETS_S * 1000) {
+      Object.assign(w, { since: nowMs, row0: rows, checked: 0, said: null, spoken: [], stretch: w.stretch + 1, busy: false });
+    }
+    w.stillFrom = null;
+    if (!(finite(speed) && speed >= MOVING_MPS)) return [w, false];
     const due = nowMs - w.since >= BREAK_MIN_S * 1000 && nowMs - w.checked >= BREAK_CHECK_S * 1000;
     if (due) w.checked = nowMs;
     return [w, due];
@@ -111,16 +122,16 @@
   const rebase = (rows) => rows.map((x, i) => ({ ...x, distance_m: i * 5 }));
   /**
    * { kind, text } to suggest now, or null. fa: Core.fatigue over the stretch since the stop (null when too short to judge);
-   * sinceStopS: wall time since the stop or the start; sinceSaidS: since the last cue, null if none this stretch.
+   * sinceStopS: wall time since the stop or the start; sinceSaidS: since the last cue, null if none this stretch; given: the
+   * kinds already given this stretch (the time cue comes once). Short lines, so one fits in a gap between calls.
    */
-  function breakCue(fa, sinceStopS, sinceSaidS) {
+  function breakCue(fa, sinceStopS, sinceSaidS, given = []) {
     if (finite(sinceSaidS) && sinceSaidS < BREAK_REPEAT_S) return null;
     const cues = (fa && fa.cues) || [];
-    if (cues.includes('steering')) return { kind: 'steering', text: 'Your steering is getting busier than earlier. Time for a break?' };
-    if (cues.includes('braking')) return { kind: 'braking', text: 'More braking past the apex than earlier. Time for a break?' };
-    if (finite(sinceStopS) && sinceStopS >= BREAK_AFTER_S) {
-      const h = Math.floor(sinceStopS / 3600);
-      return { kind: 'time', text: `You've been on the road ${HOURS[h] || `${h} hours`}. Time for a break?` };
+    if (cues.includes('steering')) return { kind: 'steering', text: 'Steering is getting busier. Time for a break?' };
+    if (cues.includes('braking')) return { kind: 'braking', text: 'Braking is getting later. Time for a break?' };
+    if (finite(sinceStopS) && sinceStopS >= BREAK_AFTER_S && !given.includes('time')) {
+      return { kind: 'time', text: 'Two hours on the road. Time for a break?' };
     }
     return null;
   }

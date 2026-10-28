@@ -101,21 +101,31 @@ def test_break_cue_from_technique_or_time_since_the_last_stop():
 const M = require(process.argv[1] + '/web/road_memory.js');
 const fa = (cues) => ({ minutes: 70, early: {}, late: {}, cues });
 const t = (c) => (c ? c.text : null);
-// the rest clock: an hour after the start, a check every 10 min; a 15 min stop restarts it at the recorder's row then
-const min = 60000;
-let [w, due] = M.restTick(null, 0, true, 0);
+// the rest clock: an hour after the start, a check every 10 min; 15 min standing still restarts it at the recorder's row then
+const min = 60000, sec = 1000;
+let [w, due] = M.restTick(null, 0, 20, 0);
 const dues = [];
-for (let m = 1; m <= 80; m++) { [w, due] = M.restTick(w, m * min, true, m * 100); if (due) dues.push(m); }
+for (let m = 1; m <= 80; m++) { [w, due] = M.restTick(w, m * min, 20, m * 100); if (due) dues.push(m); }
 const before = w.since;
-[w, due] = M.restTick(w, 90 * min, false, 8000);                      // parked: nothing changes while stopped
-[w, due] = M.restTick(w, 96 * min, true, 8000);                       // 16 min since it last moved: a new stretch
-const restarted = [w.since, w.row0, due];
-[w, due] = M.restTick(w, 106 * min, true, 9000);                      // a 10 min fuel stop does not restart it
+for (let s = 0; s <= 16 * 60; s += 1) [w, due] = M.restTick(w, 81 * min + s * sec, 0, 8000);   // parked, frames every second
+w.busy = true;                                                         // a reading still in flight when the stop ends
+[w, due] = M.restTick(w, 98 * min, 20, 8000);
+const restarted = [w.since, w.row0, due, w.stretch, w.busy];
+for (let s = 0; s <= 10 * 60; s += 1) [w, due] = M.restTick(w, 99 * min + s * sec, 0, 9000);   // a 10 min fuel stop
+[w, due] = M.restTick(w, 110 * min, 20, 9000);
+const fuel = w.since;
+for (let s = 0; s <= 20 * 60; s += 1) [w, due] = M.restTick(w, 111 * min + s * sec, 1.5, 9500);  // 20 min crawling in a queue
+[w, due] = M.restTick(w, 132 * min, 20, 9600);
+const crawl = w.since;
+[w, due] = M.restTick(w, 133 * min, 0, 9700);                          // stopped, then no frames for 20 min (a tunnel, screen off)
+[w, due] = M.restTick(w, 153 * min, 0, 9700);
+[w, due] = M.restTick(w, 154 * min, 20, 9800);
+const gap = w.since;
 console.log(JSON.stringify({
   steer: t(M.breakCue(fa(['steering', 'braking']), 4000, null)), brake: t(M.breakCue(fa(['braking']), 4000, 3000)),
   fresh: M.breakCue(fa([]), 5000, null), unknown: M.breakCue(null, 5000, null), two: M.breakCue(null, 7300, null),
-  three: t(M.breakCue(fa([]), 3 * 3600 + 60, 2800)), soon: M.breakCue(fa(['steering']), 9000, 600), stop: M.STOP_RESETS_S,
-  dues, before, restarted, fuel: w.since,
+  three: M.breakCue(fa([]), 3 * 3600 + 60, 2800, ['time']), soon: M.breakCue(fa(['steering']), 9000, 600), stop: M.STOP_RESETS_S,
+  dues, before, restarted, fuel, crawl, gap,
   rebased: M.rebase([{ distance_m: 5000, lat: 1 }, { distance_m: 5005, lat: 2 }]),
 }));
 """
@@ -123,12 +133,14 @@ console.log(JSON.stringify({
     p = subprocess.run([NODE, "-e", runner, root], capture_output=True, text=True, timeout=60)
     assert p.returncode == 0, p.stderr
     r = json.loads(p.stdout)
-    assert r["steer"] == "Your steering is getting busier than earlier. Time for a break?"
-    assert r["brake"] == "More braking past the apex than earlier. Time for a break?"
+    assert r["steer"] == "Steering is getting busier. Time for a break?"
+    assert r["brake"] == "Braking is getting later. Time for a break?"
     assert r["fresh"] is None and r["unknown"] is None              # under two hours and no fade: nothing to say
-    assert r["two"] == {"kind": "time", "text": "You've been on the road two hours. Time for a break?"}
-    assert r["three"].startswith("You've been on the road three hours") and r["soon"] is None   # never again within 45 min
+    assert r["two"] == {"kind": "time", "text": "Two hours on the road. Time for a break?"}
+    assert r["three"] is None and r["soon"] is None                 # the time cue once a stretch; nothing again within 45 min
     assert r["stop"] == 900
     assert r["dues"] == [60, 70, 80] and r["before"] == 0           # an hour in, then every 10 min
-    assert r["restarted"] == [96 * 60000, 8000, False] and r["fuel"] == 96 * 60000
+    assert r["restarted"] == [98 * 60000, 8000, False, 1, False]    # a new stretch, and a reading in flight no longer blocks it
+    assert r["fuel"] == 98 * 60000                                   # a 10 min stop does not restart it
+    assert r["crawl"] == 98 * 60000 and r["gap"] == 98 * 60000      # nor a crawl, nor a gap with no frames
     assert r["rebased"] == [{"distance_m": 0, "lat": 1}, {"distance_m": 5, "lat": 2}]   # corner indexes point into the slice

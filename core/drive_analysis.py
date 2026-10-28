@@ -520,33 +520,27 @@ def coach(a: dict, others: list) -> dict:
 
 
 
-DEV_MIN_CORNERS = 3          # a pass needs its braking point in this many repeated corners to get a figure
-
-
-def pass_deviation(co: dict) -> dict:
-    """How far each pass's braking point sat from your usual one (IDEAS D-07 trend), from coach(a, others): for every corner
-    with SPREAD_MIN_PASSES or more braking marks, each pass's |mark - the corner's median|; per pass (-1 = a, j = others[j])
-    the mean over its corners, {pass: {"dev_m", "corners"}}, only for passes with DEV_MIN_CORNERS such corners."""
-    per: dict = {}
+def spread_by(co: dict, keys: list) -> dict:
+    """How repeatably you braked within each period (IDEAS D-07 trend), from coach(a, others). keys[0] is the period of a
+    (e.g. the month it was driven) and keys[j + 1] that of others[j], None when unknown. For every corner, the braking marks
+    are grouped by period and each group of SPREAD_MIN_PASSES or more gives a robust SD (`_sd`). Spread inside a period,
+    not distance from an all-time median, so braking deliberately earlier from one month on does not read as unsteady.
+    Returns {key: [[apex, sd_m] per corner]}, apex being the corner's index in a."""
+    out: dict = {}
     for c in co["corners"]:
         sp = c.get("spread")
         if not sp:
             continue
-        known = [(f, b) for f, b, _ in sp["marks"] if b is not None]
-        if len(known) < SPREAD_MIN_PASSES:
-            continue
-        med = _median([b for _, b in known])
-        for f, b in known:
-            per.setdefault(f, []).append(abs(b - med))
-    out = {}
-    for f in sorted(per):
-        xs = per[f]
-        if len(xs) < DEV_MIN_CORNERS:
-            continue
-        m = 0.0
-        for x in xs:
-            m += x
-        out[f] = {"dev_m": m / len(xs), "corners": len(xs)}
+        groups: dict = {}
+        for f, b, _ in sp["marks"]:
+            k = keys[f + 1] if 0 <= f + 1 < len(keys) else None
+            if b is None or k is None:
+                continue
+            groups.setdefault(k, []).append(b)
+        for k in sorted(groups):
+            sd = _sd(groups[k])
+            if sd is not None:
+                out.setdefault(k, []).append([c["apex"], sd])
     return out
 
 # ---------------------------------------------------------------------------

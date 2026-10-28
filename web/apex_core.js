@@ -767,25 +767,24 @@
       .sort((p, q) => out[q].gain_s - out[p].gain_s || p - q).slice(0, TOP_OPPORTUNITIES);
     return { corners: out, clean: clean.length, this_s: thisS, ideal_s: thisS - gainS, gain_s: gainS, top };
   }
-  // How far each pass's braking point sat from your usual one (port of drive_analysis.pass_deviation, IDEAS D-07 trend):
-  // { pass: { dev_m, corners } }, pass -1 = a, j = others[j].
-  const DEV_MIN_CORNERS = 3;
-  function passDeviation(co) {
-    const per = new Map();
+  // How repeatably you braked within each period (port of drive_analysis.spread_by, IDEAS D-07 trend): keys[0] is a's
+  // period, keys[j + 1] others[j]'s (null when unknown); { key: [[apex, robust SD] per corner with 3+ marks in that period] }.
+  function spreadBy(co, keys) {
+    const out = {};
     for (const c of co.corners) {
       const sp = c.spread;
       if (!sp) continue;
-      const known = sp.marks.filter((x) => x[1] !== null);
-      if (known.length < SPREAD_MIN_PASSES) continue;
-      const med = median(known.map((x) => x[1]));
-      for (const [f, b] of known) { if (!per.has(f)) per.set(f, []); per.get(f).push(Math.abs(b - med)); }
-    }
-    const out = {};
-    for (const f of [...per.keys()].sort((p, q) => p - q)) {
-      const xs = per.get(f);
-      if (xs.length < DEV_MIN_CORNERS) continue;
-      let m = 0; for (const x of xs) m += x;
-      out[f] = { dev_m: m / xs.length, corners: xs.length };
+      const groups = new Map();
+      for (const [f, b] of sp.marks) {
+        const k = f + 1 >= 0 && f + 1 < keys.length ? keys[f + 1] : null;
+        if (b === null || k === null || k === undefined) continue;
+        if (!groups.has(k)) groups.set(k, []);
+        groups.get(k).push(b);
+      }
+      for (const k of [...groups.keys()].sort()) {
+        const sd = sampleSd(groups.get(k));
+        if (sd !== null) (out[k] = out[k] || []).push([c.apex, sd]);
+      }
     }
     return out;
   }
@@ -942,7 +941,7 @@
 
   const api = {
     profileRecording,
-    driverScore, cornerTechnique, fatigue, passDeviation, segmentPass, segmentWindow,
+    driverScore, cornerTechnique, fatigue, spreadBy, segmentPass, segmentWindow,
     removeSpurs, retracedShare,
     compareDrives, cornerMetrics, elapsedS, cornerPhases, coach, ggEnvelope, gripUse, ggSector, abruptMoments,
     G_STD, MPS_TO_MPH, ALPR_RADIUS_M,

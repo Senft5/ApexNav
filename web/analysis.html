@@ -151,7 +151,7 @@
       </div>
       <div class="cards" id="historyCards"></div>
       <div class="panel" id="trendPanel" hidden><h2>Score over time</h2><div id="trend"></div></div>
-      <div class="panel" id="steadyPanel" hidden><h2>Braking consistency by week</h2><div id="steadyChart"></div><p class="note" id="steadyNote"></p></div>
+      <div class="panel" id="steadyPanel" hidden><h2>Braking consistency by month</h2><div id="steadyChart"></div><p class="note" id="steadyNote"></p></div>
       <div class="panel" id="historyPanel"><div class="scroll"><table id="historyTable"></table></div></div>
       <details class="more"><summary>How Score works</summary>
         <p class="note">Score rates how you drive the corners, not how fast. <b>Pace</b>: corner speed against its safe grip limit, full credit from 85 % to 100 %. <b>Smooth</b>: how gently cornering load builds. <b>Brakes</b>: no hard braking after the apex. <b>Rhythm</b>: even commitment from corner to corner. Speed limits never enter it. 1000 is a closed-course number, not something to chase on public roads.</p></details>
@@ -299,47 +299,63 @@
       setTimeout(renderSteadiness, 0);                                  // the coach runs per road: after the Log has painted
     }
 
-    // Braking consistency by week (IDEAS D-07 trend): on roads driven three or more times, how far each drive's braking point
-    // sat from your usual one for that corner (Core.passDeviation), averaged per week, weighted by corners. Newest drive first:
-    // each road's latest drive is the reference its earlier passes are measured on. Memoised per library.
-    const steady = { key: null, weeks: [] };
-    function steadinessByWeek() {
+    // Braking consistency by month (IDEAS D-07 trend): on corners you drove three or more times in a month, how widely your
+    // braking point spread inside that month (Core.spreadBy, a robust SD per corner), the median over the month's corners.
+    // Spread inside a month, so braking deliberately earlier from one month on is not counted as unsteady. Newest drive first,
+    // each road's latest drive is the reference its passes are mapped onto; one road per step so the page stays responsive.
+    // Drives whose date is unknown (an import without a stamp) are left out.
+    const STEADY_MIN_CORNERS = 3, STEADY_CLAIM_M = 5, STEADY_CLAIM_CORNERS = 5;
+    const steady = { key: null, months: [], run: 0 };
+    const monthOf = (o) => (o.date_known === false || !/^\d{4}-\d{2}/.test(o.date || '') ? null : o.date.slice(0, 7));
+    function steadinessByMonth(done) {
       const key = drives.map(o => o.id).join(',');
-      if (steady.key === key) return steady.weeks;
-      const dev = new Map();
-      for (const d of drives.slice().sort((p, q) => (q.date || '').localeCompare(p.date || ''))) {
-        if (dev.has(d) || !d.corners.length) continue;
-        const co = coachFor(d), pd = Core.passDeviation(co);
-        for (const [k, v] of Object.entries(pd)) { const o = +k < 0 ? d : co.near[+k]; if (o && !dev.has(o)) dev.set(o, v); }
-      }
-      const weeks = new Map();
-      for (const [d, v] of dev) {
-        const t = new Date((d.date || '').slice(0, 10) + 'T12:00:00');
-        if (!Number.isFinite(t.getTime())) continue;
-        t.setDate(t.getDate() - ((t.getDay() + 6) % 7));                  // the Monday of its week
-        const k = t.toISOString().slice(0, 10), w = weeks.get(k) || { week: k, sum: 0, corners: 0, drives: 0 };
-        w.sum += v.dev_m * v.corners; w.corners += v.corners; w.drives++; weeks.set(k, w);
-      }
-      steady.key = key;
-      steady.weeks = [...weeks.values()].sort((p, q) => p.week.localeCompare(q.week)).map(w => ({ ...w, dev_m: w.sum / w.corners }));
-      return steady.weeks;
+      if (steady.key === key) { done(steady.months); return; }
+      // Every drive is a reference in turn, newest first; a corner already counted for a month (from a newer reference, within
+      // 30 m) is not counted again, so overlapping roads do not double it and no drive's other roads are skipped.
+      const run = ++steady.run, seen = [], sds = new Map();
+      const queue = drives.filter(d => d.corners.length).sort((p, q) => (q.date || '').localeCompare(p.date || ''));
+      const step = () => {
+        if (run !== steady.run) return;                                   // the library changed: a newer run took over
+        const d = queue.shift();
+        if (d) {
+          const co = coachFor(d), by = Core.spreadBy(co, [monthOf(d), ...co.near.map(monthOf)]);
+          for (const [k, xs] of Object.entries(by)) for (const [apex, sd] of xs) {
+            const lat = d.lat[apex], lon = d.lon[apex], c = Math.cos(lat * Math.PI / 180);
+            if (seen.some(s => s.k === k && Math.hypot((s.lon - lon) * 111320 * c, (s.lat - lat) * 110540) < 30)) continue;
+            seen.push({ k, lat, lon });
+            sds.set(k, (sds.get(k) || []).concat([sd]));
+          }
+          setTimeout(step, 0);
+          return;
+        }
+        const med = (xs) => { const s = xs.slice().sort((p, q) => p - q), k = s.length >> 1; return s.length % 2 ? s[k] : (s[k - 1] + s[k]) / 2; };
+        steady.key = key;
+        steady.months = [...sds.entries()].filter(([, xs]) => xs.length >= STEADY_MIN_CORNERS).sort((p, q) => p[0].localeCompare(q[0]))
+          .map(([month, xs]) => ({ month, sd_m: med(xs), corners: xs.length }));
+        done(steady.months);
+      };
+      step();
     }
+    const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const monthLabel = (m) => `${MONTHS[+m.slice(5, 7) - 1]} ${m.slice(0, 4)}`;
     function renderSteadiness() {
       const panel = $('steadyPanel'); if (!panel) return;
-      let weeks = [];
-      try { weeks = steadinessByWeek(); } catch (e) { console.warn('consistency trend:', e); }
-      panel.hidden = weeks.length < 2;
-      if (panel.hidden) return;
-      const W = Math.max(300, Math.round($('steadyChart').clientWidth || 760)), H = 160, L = 40, R = 22, T = 12, B = 26;
-      const top = Math.max(10, Math.ceil(Math.max(...weeks.map(w => w.dev_m)) / 5) * 5);
-      const X = (i) => L + i / (weeks.length - 1) * (W - L - R), Y = (v) => T + (v / top) * (H - T - B);   // steadier is higher
-      const grid = [0, top / 2, top].map(v => `<line x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}" stroke="${C.rule}"/><text x="${L - 6}" y="${Y(v) + 3}" text-anchor="end" font-size="10" fill="${C.panelDim}">${Math.round(v)} m</text>`).join('');
-      const line = weeks.map((w, i) => `${i ? 'L' : 'M'}${X(i).toFixed(1)} ${Y(w.dev_m).toFixed(1)}`).join('');
-      const dots = weeks.map((w, i) => `<circle cx="${X(i).toFixed(1)}" cy="${Y(w.dev_m).toFixed(1)}" r="5" fill="${C.accent}"/><text x="${X(i).toFixed(1)}" y="${H - 8}" text-anchor="middle" font-size="10" fill="${C.panelDim}">${w.week.slice(5)}</text>`).join('');
-      $('steadyChart').innerHTML = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Braking consistency by week">${grid}<path d="${line}" fill="none" stroke="${C.accent}" stroke-width="2"/>${dots}</svg>`;
-      const a = weeks[0], z = weeks[weeks.length - 1], diff = z.dev_m - a.dev_m;
-      $('steadyNote').textContent = `How far your braking point sat from your usual one for each corner, on roads you have driven three or more times; higher on the chart is steadier (fewer metres). `
-        + `Week of ${z.week.slice(5)}: about ${Math.round(z.dev_m)} m over ${z.corners} corners${Math.abs(diff) >= 2 ? `, ${diff < 0 ? 'steadier' : 'less steady'} than the week of ${a.week.slice(5)} (${Math.round(a.dev_m)} m)` : ''}. 5 m samples and GPS make a few metres the floor.`;
+      steadinessByMonth((months) => {
+        panel.hidden = months.length < 2;
+        if (panel.hidden) return;
+        const idx = (m) => +m.slice(0, 4) * 12 + +m.slice(5, 7), i0 = idx(months[0].month), span = Math.max(1, idx(months[months.length - 1].month) - i0);
+        const W = Math.max(300, Math.round($('steadyChart').clientWidth || 760)), H = 160, L = 40, R = 22, T = 12, B = 26;
+        const top = Math.max(10, Math.ceil(Math.max(...months.map(w => w.sd_m)) / 5) * 5);
+        const X = (m) => L + (idx(m) - i0) / span * (W - L - R), Y = (v) => T + (v / top) * (H - T - B);   // steadier is higher
+        const grid = [0, top / 2, top].map(v => `<line x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}" stroke="${C.rule}"/><text x="${L - 6}" y="${Y(v) + 3}" text-anchor="end" font-size="10" fill="${C.panelDim}">${Math.round(v)} m</text>`).join('');
+        const line = months.map((w, i) => `${i ? 'L' : 'M'}${X(w.month).toFixed(1)} ${Y(w.sd_m).toFixed(1)}`).join('');
+        const dots = months.map((w) => `<circle cx="${X(w.month).toFixed(1)}" cy="${Y(w.sd_m).toFixed(1)}" r="${Math.min(8, 3 + Math.sqrt(w.corners))}" fill="${C.accent}"><title>${monthLabel(w.month)}: ${Math.round(w.sd_m)} m over ${w.corners} corners</title></circle><text x="${X(w.month).toFixed(1)}" y="${H - 8}" text-anchor="middle" font-size="10" fill="${C.panelDim}">${monthLabel(w.month)}</text>`).join('');
+        $('steadyChart').innerHTML = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Braking consistency by month">${grid}<path d="${line}" fill="none" stroke="${C.accent}" stroke-width="2"/>${dots}</svg>`;
+        const a = months[0], z = months[months.length - 1], diff = z.sd_m - a.sd_m;
+        const claim = Math.abs(diff) >= STEADY_CLAIM_M && a.corners >= STEADY_CLAIM_CORNERS && z.corners >= STEADY_CLAIM_CORNERS;
+        $('steadyNote').textContent = `How widely your braking point varied, within each month, on corners you drove three or more times that month; higher on the chart is steadier (fewer metres), bigger dots are more corners. `
+          + `${monthLabel(z.month)}: about ${Math.round(z.sd_m)} m over ${z.corners} corners${claim ? `, ${diff < 0 ? 'steadier' : 'less steady'} than ${monthLabel(a.month)} (${Math.round(a.sd_m)} m)` : ''}. 5 m samples and GPS put the floor near 3 m.`;
+      });
     }
 
     $('historyTable').addEventListener('click', (e) => { const r = e.target.closest('tr[data-drive]'); if (r) openDrive(r.dataset.drive); });
@@ -662,7 +678,8 @@
     const coachMemo = new Map(), boxes = new WeakMap();
     function coachFor(d) {
       const box = (x) => { if (!boxes.has(x)) { let a = Infinity, b = -Infinity, c = Infinity, e = -Infinity; for (let i = 0; i < x.lat.length; i++) { a = Math.min(a, x.lat[i]); b = Math.max(b, x.lat[i]); c = Math.min(c, x.lon[i]); e = Math.max(e, x.lon[i]); } boxes.set(x, [a, b, c, e]); } return boxes.get(x); };
-      const key = `${d.id}|${drives.map(o => o.id).join(',')}`;
+      const lib = drives.map(o => o.id).join(','), key = `${d.id}|${lib}`;
+      if (coachMemo.lib !== lib) { coachMemo.clear(); coachMemo.lib = lib; }            // results against an older library are dead
       if (coachMemo.has(key)) return coachMemo.get(key);
       const bd = box(d), near = drives.filter(o => { if (o === d) return false; const b = box(o); return b[0] <= bd[1] && b[1] >= bd[0] && b[2] <= bd[3] && b[3] >= bd[2]; });
       const r = { ...Core.coach(d, near), others: near.map(o => ({ name: o.name, date: dateLabel(o) })), near };

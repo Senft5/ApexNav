@@ -166,8 +166,10 @@ def test_parity_coach_on_real_drives():
              (drives[1], [*shifted, later])]
     np_ = lambda d: {**d, "speed_mps": np.array(d["speed_mps"]), "lon_g": np.array(d["lon_g"]), "lat_g": np.array(d["lat_g"])}
     py = [da.coach(np_(a), [np_(o) for o in others]) for a, others in cases]
-    runner = ("const c=require(process.argv[1]);const cases=JSON.parse(require('fs').readFileSync(0,'utf8'));"
-              "process.stdout.write(JSON.stringify(cases.map(([a,o])=>{const r=c.coach(a,o);r.dev=c.passDeviation(r);return r;})));")
+    keys = ["2026-09", "2026-09", "2026-09", "2026-10", None]
+    runner = (f"const KEYS={json.dumps(keys)};"
+              "const c=require(process.argv[1]);const cases=JSON.parse(require('fs').readFileSync(0,'utf8'));"
+              "process.stdout.write(JSON.stringify(cases.map(([a,o])=>{const r=c.coach(a,o);r.dev=c.spreadBy(r,KEYS);return r;})));")
     out = subprocess.run([NODE, "-e", runner, os.path.abspath("web/apex_core.js")], input=json.dumps(cases),
                          capture_output=True, text=True, check=True)
     tips = 0
@@ -197,12 +199,16 @@ def test_parity_coach_on_real_drives():
                     for k, v in cp[side].items():
                         assert cj[side][k] == (None if v is None else pytest.approx(v, rel=1e-9, abs=1e-9)), k
     assert tips > 0 and py[1]["clean"] > 0 and py[1]["gain_s"] > 0
-    for j, p in zip(js_all, py):                                                    # pass deviation (D-07 trend)
-        dev = da.pass_deviation(p)
-        assert {int(k): v["corners"] for k, v in j["dev"].items()} == {k: v["corners"] for k, v in dev.items()}
-        for k, v in dev.items():
-            assert j["dev"][str(k)]["dev_m"] == pytest.approx(v["dev_m"], rel=1e-12)
-    assert da.pass_deviation(py[3]) and da.pass_deviation(py[0]) == {}               # three passes give figures, two none
+    for j, p in zip(js_all, py):                                                    # spread per period (D-07 trend)
+        by = da.spread_by(p, keys)
+        assert sorted(j["dev"]) == sorted(by)
+        for k, v in by.items():
+            assert [x[0] for x in j["dev"][k]] == [x[0] for x in v]
+            assert [x[1] for x in j["dev"][k]] == pytest.approx([x[1] for x in v], rel=1e-12)
+    assert da.spread_by(py[3], keys) and da.spread_by(py[0], keys) == {}             # three passes in a month give figures, two none
+    assert "2026-10" not in da.spread_by(py[3], keys)                                 # one pass in October says nothing
+    whole = [c["spread"]["brake_sd_m"] for c in py[3]["corners"] if c.get("spread") and c["spread"]["brake_sd_m"] is not None]
+    assert [x[1] for x in da.spread_by(py[3], ["x"] * 4)["x"]] == pytest.approx(whole)               # one period: the corner spreads themselves
     spreads = [c["spread"]["brake_sd_m"] for c in py[3]["corners"] if c.get("spread") and c["spread"]["brake_sd_m"] is not None]
     assert spreads and max(spreads) > 0                                            # braking 0, 0, 10 and 20 m later: a spread
     assert all(c["spread"]["brake_sd_m"] is None for c in py[0]["corners"] if c.get("spread"))   # two passes say nothing
