@@ -1,5 +1,12 @@
 # APEX NAV — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-10-28 (night, later): TestFlight fixed, more of IDEAS
+- TestFlight works again: #181's ad-hoc archive + cloud signing at export uploaded build 377.1 (VALID in App Store Connect, entitlements intact, no new certificate). Revoking the 10 old CI certificates is now optional (OWNER_TODO).
+- Merged: #181 F-05 + O-09 + signing fix, #182 V-04 directions, D-05 stage delta, S-06 crew drives (migration 0013 applied), F-03 saved routes, S-03 friends' activity, O-10 what's new; #183 L-03 licences page, no downloaded code in the app (2.5.2), junction tulips in the strip.
+- This PR: Y-03 app health counts (migration 0014 applied to both D1 before merge).
+- Parked: D-04 ghost car (races the clock on public roads); Q-13 road pages need the reference-lap features ported to JS (L); U-10 widgets need an App Group capability (do it now that signing is proven).
+- Exact next task: U-10 widgets (App Group `group.com.senft.ApexNav` on both bundle IDs, shared UserDefaults for last drive score and next crew drive); then D-19, R-19, S-13 public meets.
+
 ## Session 2026-10-28 (night, continued): drive features, offline, TestFlight signing
 - Merged: #174 V-02, #175 U-09, #176 S-05 (migration 0012 applied by hand), #177 Z-03/Z-04 Your data, #178 Y-16/Y-18, #179 U-11 Live Activity (widget extension ApexNavLive), #180 D-17 crash check (impact_g in native and web frames).
 - #181 (open): F-05 hazard reports queue with no signal (web/outbox.js, `age_s`), O-09 listing draft (docs/LISTING.md), and the TestFlight fix below.
