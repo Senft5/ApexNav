@@ -1,5 +1,10 @@
 # APEX NAV — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-10-28: "why this route" on the route card
+- #111 merged (loops on the fun score). #PR: a fun route slower than the quickest says why under the bars, from Valhalla's road names (`FunRoute.why`, `whyText`): Knoxville→Maryville on Fun reads "For SR 360 13 mi, Cold Spring Road 8.2 mi, Doublecamp Creek Road 6.2 mi · 167 more good corners, +30 min". Kept across a page change (sessionStorage). OSRM fallback routes have no names, so only corners and minutes show. Not checked on a phone.
+- R-14 (reject routes that shortcut a stage) is mostly covered already: every candidate is scored on the router's returned geometry, so a shortcut route can't win on corners it didn't drive.
+- Exact next task: R-13 sun glare penalty, or R-15 avoid options (highways, tolls, unpaved).
+
 ## Session 2026-10-28: one fun score for loops and A→B
 - #96 merged (long trips in sections). #111: loops are now ranked by `FunRoute.loopValue` (Fun − 200 x retraced share − 80 x length error) instead of raw corners per km, so router junction turns no longer count as loop corners and the measured adjustment (fun points) is on the same scale. Knoxville 30 mi: a clean 43 km loop (Fun 75) beat a 47 km one with more corners but 9 % retraced. Not driven on a phone.
 - Exact next task: next routing rows in docs/IDEAS.md (R-14 reject routes that shortcut a stage, R-31 "why this route", R-13 sun glare).
