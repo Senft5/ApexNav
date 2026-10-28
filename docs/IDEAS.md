@@ -270,8 +270,8 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 | C-04 | Car audio: ducking and routing to Bluetooth/CarPlay while prompts play | H | M | done (#73) | — |
 | C-05 | Auto-start: open the cockpit when the phone joins the car's Bluetooth or CarPlay | M | S | todo | Waze, Shortcuts |
 | C-06 | Driving focus aware: no social notifications while driving, a summary after | M | S | todo | iOS Focus |
-| C-07 | Big-target in-car mode: every control ≥ 60 pt, no keyboard while moving | H | S | done (C-07 PR) | NHTSA distraction guidelines |
-| C-08 | Passenger mode: unlocks typing and route editing while moving, with a clear switch | M | S | done (C-07 PR) | Waze passenger prompt |
+| C-07 | Big-target in-car mode: every control ≥ 60 pt, no keyboard while moving | H | S | done (#121) | NHTSA distraction guidelines |
+| C-08 | Passenger mode: unlocks typing and route editing while moving, with a clear switch | M | S | done (#121) | Waze passenger prompt |
 
 ## 9. Offline (F)
 
