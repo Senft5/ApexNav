@@ -557,7 +557,7 @@
       if (!d || !sel) { $('segInfo').textContent = 'Drag across the profile first.'; return; }
       const [a, b] = sel[0] < sel[1] ? sel : [sel[1], sel[0]];
       if (b - a < 40) { $('segInfo').textContent = 'Make it at least 200 m long.'; return; }
-      const seg = { id: 'seg_' + Date.now(), name: $('segName').value.trim() || `${d.name} ${((a * 5) / 1609.344).toFixed(1)}-${((b * 5) / 1609.344).toFixed(1)} mi`,
+      const seg = { id: ApexSync.newSegmentId(), name: $('segName').value.trim() || `${d.name} ${((a * 5) / 1609.344).toFixed(1)}-${((b * 5) / 1609.344).toFixed(1)} mi`,
                     lat0: d.lat[a], lon0: d.lon[a], lat1: d.lat[b], lon1: d.lon[b], length_m: (b - a) * 5, from: d.id,
                     geom: JSON.stringify(Array.from({ length: Math.min(60, b - a + 1) }, (_, k) => { const i = a + Math.round(k * (b - a) / (Math.min(60, b - a + 1) - 1)); return [+d.lat[i].toFixed(6), +d.lon[i].toFixed(6)]; })) };
       segs.push(seg); saveSegs(segs); activeSeg = seg.id; sel = null; $('segName').value = '';
