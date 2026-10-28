@@ -82,7 +82,7 @@ long-press pin (#61), Apple place search and nearby suggestions in the app (#73)
 | R-15 | Avoid options: highways, tolls, ferries, unpaved, towns, repeated roads, with honest "couldn't avoid" | H | M | done (#118, #136: towns as a ranking cost; repeated roads were already a loop cost, A→B plans never repeat a stage) | Kurviger, Calimoto, Google Maps |
 | R-16 | Time budget routing: "I have 90 minutes, end at home" (orienteering with a hard time cap) | H | M | done (#122: 1 h / 2 h loops planned on drive time) | ROAD_INTELLIGENCE §7.1 |
 | R-17 | Day trip builder: start, stops (food, fuel, viewpoint), finish, with drag-to-reorder vias | H | L | todo | Roadtrippers, Calimoto tour planner |
-| R-18 | Drag the route line on the map to reshape it (adds a via) | M | M | todo | Google Maps, Kurviger |
+| R-18 | Drag the route line on the map to reshape it (adds a via) | M | M | done: drag the planned route (mouse at once, a finger after a 0.35 s hold so panning still pans); the drop becomes a stop in the grabbed point's order (`addViaAt`); held still, the long-press pin as before | Google Maps, Kurviger |
 | R-19 | Archetype preferences in routing ("love esses, skip switchbacks"), sliders first, learned later | H | M | partial (Plan → Hairpins fewer/more and Sweepers fewer/more weigh each route's fun, fun_route.js cornerWeight, ±60%; learning it from your choices is R-33) | ROAD_INTELLIGENCE §5.4 |
 | R-20 | Car-aware routing from the Garage (width, ride height, power: no goat tracks for a lowered car) | M | M | todo | SOCIAL §2.4 |
 | R-21 | Weather-aware routing: penalise wet, icy, foggy or very hot stages from a free forecast; show why | M | M | todo | Calimoto weather, REVER |
@@ -205,7 +205,7 @@ Today: accounts with Google sign-in, friends, crews (public and private, crews n
 | S-08 | Local legends without speed: most passes of a stage this month, smoothest crew | M | S | todo | Strava Local Legends |
 | S-09 | Pioneer badges for first measured passes of a road (3× Octane already designed) | M | S | todo | SOCIAL §2.3, Waze points |
 | S-10 | Octane redemptions that buy nothing safety-related: cosmetics, voice packs, early features | M | M | todo | SOCIAL §2.3 |
-| S-11 | Challenges: "drive 5 new roads this month", "pioneer 10 km", crew-vs-crew km | M | M | todo | Strava challenges, REVER |
+| S-11 | Challenges: "drive 5 new roads this month", "pioneer 10 km", crew-vs-crew km | M | M | partly: the Log's monthly challenges (5 new roads, 3 smooth drives, 200 scored corners; `web/challenges.js`). Pioneer km and crew-vs-crew need server counts: todo | Strava challenges, REVER |
 | S-12 | Highlights feed near you: viewpoints, cafés, meets, saved by members | M | M | done: Crew → Spots near you (`web/spots_feed.js`): members' spots best rated then nearest, category chips, Go there, 1/3/5★, Report; meets are S-13 | Roadtrippers, Google Maps contributions |
 | S-13 | Car meets map: public events and recurring Cars & Coffee, added by crews | H | M | partial (a public crew lists a drive as a meet; Crew → Meets near you within 80 km, join the crew to answer; migration 0015. Recurring meets and pins on the map are still to do) | car meet apps, Facebook groups |
 | S-14 | Invite links that open the app (or the web) on the crew or route | H | S | done (custom scheme; Universal Links later) | growth |

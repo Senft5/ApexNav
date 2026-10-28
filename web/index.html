@@ -183,6 +183,7 @@
     .pin.bump { color: var(--amber); border-color: var(--amber); }
     .pin.crest, .pin.dip { color: var(--panel-ink); border-color: var(--panel-dim); }
     .puck { width: 26px; height: 26px; }
+    .reshape-pin { cursor: grabbing; }
     .dropped-pin { width: 24px; height: 24px; border: 3px solid var(--panel); background: var(--accent); border-radius: 50%; box-shadow: 0 0 0 2px var(--panel-ink); }
     .pin-actions { display: grid; gap: 8px; }
     .pin-actions .ink-btn { width: 100%; text-align: left; }
@@ -1353,6 +1354,63 @@
     map.on('zoomstart', (e) => { if (e.originalEvent) cancelHold(); });
     window.addEventListener('pointerup', (e) => { activeMapPointers.delete(e.pointerId); if (hold?.id === e.pointerId) cancelHold(); });
     window.addEventListener('pointercancel', (e) => { activeMapPointers.delete(e.pointerId); cancelHold(); });
+    // Drag the planned route to reshape it (IDEAS R-18): a mouse grabs the line at once; a finger holds still on it for a
+    // moment first (so panning across the route still pans). Let go somewhere else and that becomes a stop, in the order of
+    // the point you grabbed; held and let go without moving, it is the long-press pin as before.
+    let reshape = null;
+    const ROUTE_HIT_PX = 12, RESHAPE_HOLD_MS = 350;
+    const reshapeable = () => !!(plannedRoute && plannedRoute.request && track === plannedRoute && state.mode !== 'live' && !state.playing);
+    function onRouteAt(x, y) {
+      try { return map.queryRenderedFeatures([[x - ROUTE_HIT_PX, y - ROUTE_HIT_PX], [x + ROUTE_HIT_PX, y + ROUTE_HIT_PX]], { layers: ['apex-route', 'apex-route-casing'] }).length > 0; } catch (_) { return false; }
+    }
+    function endReshape() {
+      if (!reshape) return;
+      clearTimeout(reshape.timer);
+      if (reshape.marker) reshape.marker.remove();
+      if (reshape.active) map.dragPan.enable();
+      reshape = null;
+    }
+    function beginReshape(r) {
+      cancelHold();
+      r.active = true; map.dragPan.disable();
+      const el = document.createElement('div'); el.className = 'dropped-pin reshape-pin';
+      r.marker = new maplibregl.Marker({ element: el }).setLngLat(map.unproject([r.x, r.y])).addTo(map);
+      if (r.touch) haptic('note');
+    }
+    mapEl.addEventListener('pointerdown', (e) => {
+      endReshape();
+      if (!reshapeable() || activeMapPointers.size !== 1 || (e.pointerType === 'mouse' && e.button !== 0)) return;
+      const rect = mapEl.getBoundingClientRect(), x = e.clientX - rect.left, y = e.clientY - rect.top;
+      if (!onRouteAt(x, y)) return;
+      const ll = map.unproject([x, y]), t = plannedRoute;
+      reshape = { id: e.pointerId, x, y, x0: x, y0: y, t0: Date.now(), touch: e.pointerType !== 'mouse', active: false, moved: false, t,
+                  atM: t.dist[Core.nearestIndex(ll.lat, ll.lng, t.lat, t.lon, -1).index] };
+      if (!reshape.touch) beginReshape(reshape);
+      else { const r = reshape; r.timer = setTimeout(() => { if (reshape === r && !r.moved) beginReshape(r); }, RESHAPE_HOLD_MS); }
+    }, { capture: true });
+    mapEl.addEventListener('pointermove', (e) => {
+      if (!reshape || reshape.id !== e.pointerId) return;
+      const rect = mapEl.getBoundingClientRect(), x = e.clientX - rect.left, y = e.clientY - rect.top;
+      if (Math.hypot(x - reshape.x0, y - reshape.y0) > 8) reshape.moved = true;
+      if (!reshape.active) { if (reshape.moved) endReshape(); return; }   // a finger that moves first is panning the map
+      reshape.x = x; reshape.y = y;
+      reshape.marker.setLngLat(map.unproject([x, y]));
+    }, { capture: true });
+    window.addEventListener('pointerup', (e) => {
+      const r = reshape;
+      if (!r || r.id !== e.pointerId) return;
+      if (!r.active || !r.moved || plannedRoute !== r.t) {
+        const held = r.active && !r.moved && (r.touch || Date.now() - r.t0 >= 500);
+        endReshape();
+        if (held) { const ll = map.unproject([r.x, r.y]); showPin({ lat: ll.lat, lon: ll.lng }); }   // the long-press pin, as before
+        return;
+      }
+      const ll = map.unproject([r.x, r.y]);
+      suppressMapClickUntil = Date.now() + 700;                           // the release is not a map tap
+      endReshape();
+      addViaAt({ lat: ll.lat, lon: ll.lng }, r.atM);
+    });
+    window.addEventListener('pointercancel', endReshape);
     let touching = 0;
     mapEl.addEventListener('pointerdown', () => { touching++; pauseFollow(); }, { capture: true });
     window.addEventListener('pointerup', () => { if (touching) { touching = 0; if (!state.follow) scheduleResume(); } });
@@ -3161,20 +3219,25 @@
       state.planField = 'fromInput';
       closePin(); openPlan(true);
     });
-    $('pinViaBtn').addEventListener('click', async (e) => {
-      if (!droppedPin || !plannedRoute?.request) return;
-      const pin = droppedPin, current = plannedRoute, req = current.request;
-      e.currentTarget.disabled = true;
+    // A stop added to the planned route at `pin`, ordered by `atM` along it (default: where the pin falls on it), no backtracking.
+    async function addViaAt(pin, atM = null) {
+      const current = plannedRoute, req = current && current.request;
+      if (!req) return false;
       const from = req.from || await locate();
-      if (!from) { toast(NO_FIX); e.currentTarget.disabled = false; return; }
-      // The stop goes where it falls along the route, not after every stage point (no backtracking).
-      const pinM = current.dist[Core.nearestIndex(pin.lat, pin.lon, current.lat, current.lon, -1).index];
+      if (!from) { toast(NO_FIX); return false; }
+      const pinM = atM ?? current.dist[Core.nearestIndex(pin.lat, pin.lon, current.lat, current.lon, -1).index];
       const via = FunRoute.insertVia(req.via.map(v => ({ lat: v.lat, lon: v.lon, distM: v.distM, ...(v.shaping ? { shaping: true } : {}) })), { lat: pin.lat, lon: pin.lon }, pinM)
         .map(({ distM, ...v }) => v);
+      await buildRoute([from, ...via, req.to], current.id, current.name, null, { from: req.from, to: req.to, via });
+      return true;
+    }
+    $('pinViaBtn').addEventListener('click', async (e) => {
+      if (!droppedPin || !plannedRoute?.request) return;
+      const pin = droppedPin, b = e.currentTarget;
+      b.disabled = true;
       closePin();
-      await buildRoute([from, ...via, req.to], current.id, current.name, null,
-        { from: req.from, to: req.to, via });
-      e.currentTarget.disabled = false;
+      await addViaAt(pin);
+      b.disabled = false;
     });
     $('pinSaveBtn').addEventListener('click', () => {
       if (!droppedPin) return;
