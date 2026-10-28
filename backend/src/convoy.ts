@@ -8,9 +8,9 @@ import { DurableObject } from "cloudflare:workers";
 import { Env, randomToken, sha256hex } from "./util";
 
 export const LIMITS = {
-  members: 16, roomMs: 2 * 3600_000, inviteMs: 30 * 60_000, ticketMs: 30_000, authMs: 5_000,
+  members: 16, roomMs: 2 * 3600_000, inviteMs: 30 * 60_000, ticketMs: 30_000, authMs: 2_000,
   frameBytes: 32 * 1024, smallFrameBytes: 2048, framesPerS: 20, positionMinMs: 400, positionKeepMs: 120_000,
-  socketsPerMember: 2, pendingSockets: 32, hazards: 256, hazardDefaultMs: 3 * 60_000, hazardMaxMs: 5 * 60_000, checkMs: 15_000,
+  socketsPerMember: 2, pendingSockets: 32, pendingPerIp: 4, hazards: 256, hazardDefaultMs: 3 * 60_000, hazardMaxMs: 5 * 60_000, checkMs: 15_000,
   ledAtOnce: 2, createdPerHour: 10,
 };
 /** What a leader can call out. bump and hard_braking can come from the phone's sensors; the rest are taps. */
@@ -20,7 +20,7 @@ export interface Who { id: string; handle: string | null; name: string | null }
 interface Room { id: string; name: string; leaderId: string; epoch: number; createdAt: number; expiresAt: number; invite: { hash: string; issuedAt: number; expiresAt: number } }
 interface Member { key: string; role: "leader" | "member"; joinedAt: number }
 interface Ticket { userId: string; sessionHash: string; expiresAt: number }
-interface Conn { ws: WebSocket; userId: string | null; key: string | null; sessionHash: string | null; state: "new" | "auth" | "open" | "closed"; frames: number; windowAt: number; openedAt: number; checkedAt: number; timer: ReturnType<typeof setTimeout> | null }
+interface Conn { ws: WebSocket; ip: string; userId: string | null; key: string | null; sessionHash: string | null; state: "new" | "auth" | "open" | "closed"; frames: number; windowAt: number; openedAt: number; checkedAt: number; timer: ReturnType<typeof setTimeout> | null }
 interface Anchor { lat: number; lon: number; pathId: string | null; routeVersion: number | null; direction: 1 | -1 | null; progressM: number | null }
 interface LiveEvent {
   version: 1; eventId: string; sessionId: string; leaderEpoch: number; leaderKey: string; seq: number; action: "hazard" | "retract";
@@ -191,10 +191,14 @@ export class ConvoyRoom extends DurableObject<Env> {
   async fetch(req: Request): Promise<Response> {
     if (req.headers.get("upgrade")?.toLowerCase() !== "websocket") return new Response(null, { status: 426 });
     if (!(await this.live())) return new Response(null, { status: 404 });
-    if ([...this.conns].filter((c) => c.state === "new" || c.state === "auth").length >= LIMITS.pendingSockets) return new Response(null, { status: 503 });
+    // Unauthenticated sockets are few and short-lived, and one address cannot hold many: someone with only the link
+    // (a removed member, say) cannot fill the queue and keep the convoy's members from reconnecting.
+    const ip = req.headers.get("cf-connecting-ip") ?? "", pending = [...this.conns].filter((c) => c.state === "new" || c.state === "auth");
+    if (pending.filter((c) => c.ip === ip).length >= LIMITS.pendingPerIp) return new Response(null, { status: 429 });
+    if (pending.length >= LIMITS.pendingSockets) return new Response(null, { status: 503 });
     const { 0: client, 1: server } = new WebSocketPair();
     server.accept();
-    const conn: Conn = { ws: server, userId: null, key: null, sessionHash: null, state: "new", frames: 0, windowAt: Date.now(), openedAt: 0, checkedAt: 0, timer: null };
+    const conn: Conn = { ws: server, ip, userId: null, key: null, sessionHash: null, state: "new", frames: 0, windowAt: Date.now(), openedAt: 0, checkedAt: 0, timer: null };
     conn.timer = setTimeout(() => { if (conn.state !== "open") this.close(conn, 4401, "auth_timeout"); }, LIMITS.authMs);
     this.conns.add(conn);
     server.addEventListener("message", (e) => { this.onFrame(conn, e.data).catch(() => this.close(conn, 1011, "server_error")); });
@@ -384,7 +388,7 @@ export class ConvoyRoom extends DurableObject<Env> {
     for (const [h, t] of this.tickets) if (t.userId === userId) this.tickets.delete(h);
     this.positions.delete(key);
     this.lastPosAt.delete(key);
-    for (const c of [...this.conns]) if (c.userId === userId) this.close(c, 4403, reason);
+    for (const c of [...this.conns]) if (c.userId === userId) this.close(c, 4403, reason === "blocked" ? "removed" : reason);   // never tell anyone they were blocked
     this.broadcast({ type: "member", action: reason === "blocked" ? "removed" : reason, member: { key } });
   }
 
