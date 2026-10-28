@@ -61,6 +61,7 @@ out.glare = [F.glare(line(sp.azimuth), 900, dawn, Sun).minutes, F.glare(line(sp.
              F.glare(line(sp.azimuth), 900, new Date('2026-06-21T17:40:00Z'), Sun).minutes, F.glare(line(0), 900, dawn, null)];
 out.options = F.distinctOptions([{ id: 'a', timeS: 7680, fun: fun(79, 0) }, { id: 'a2', timeS: 7700, fun: fun(80, 0) }, { id: 'b', timeS: 5880, fun: fun(51, 0) },
   { id: 'c', timeS: 7620, fun: fun(61, 0) }, { id: 'd', timeS: 5880, fun: fun(27, 0) }], 3).map(c => c.id);
+out.wetRank = F.rank([{ id: 'wet', timeS: 1800, fun: fun(46, 30), weatherCost: 12 }, { id: 'dry', timeS: 1800, fun: fun(40, 30) }], 'fun').map(c => c.id);
 out.glareRank = F.rank([{ id: 'into', timeS: 1800, fun: fun(46, 30), glare: { minutes: 15 } }, { id: 'away', timeS: 1800, fun: fun(40, 30), glare: { minutes: 0 } }], 'fun').map(c => c.id);
 
 // corridor: A at (0,0), B 20 km east
@@ -279,6 +280,7 @@ def test_driving_into_a_low_sun_costs(r):
     assert away == 0 and noon == 0, "sun behind you, or high at noon: no glare"
     assert nosun is None
     assert r["glareRank"][0] == "away", "15 minutes into the sun outweighs a 6-point fun lead"
+    assert r["wetRank"][0] == "dry", "a forecast of rain along most of it outweighs a 6-point fun lead (IDEAS R-21)"
 
 
 def test_loops_are_valued_on_the_fun_scale(r):
@@ -349,7 +351,7 @@ const A = { lat: lat0, lon: lon0 }, B = { lat: lat0, lon: lon0 + 10000 * mLon };
 async function run({ level, routes, osrm, discover, matrix, places, avoid = FunRoute.AVOID_DEFAULT }) {
   const built = [], toasts = [], calls = { matrix: 0, routes: 0 };
   const funRoute = new Function('funLevel', 'valhallaRoutes', 'osrmRoutes', 'toast', 'FunRoute', 'ApexStages', 'state', 'allHighlights', 'valhallaMatrix',
-    'Core', 'RouteLoading', 'funOf', 'applyMeasured', 'trackFromPolyline', 'buildRoute', 'totalOf', 'window', 'whyText', 'avoid', 'let routeOptions = null; ' + useOptionSource + '; ' + townsOnSource + '; ' + fewerSource + '; ' + marksSource + '; const stepsOf = () => []; return (' + source + ')')(
+    'Core', 'RouteLoading', 'funOf', 'applyMeasured', 'trackFromPolyline', 'buildRoute', 'totalOf', 'window', 'whyText', 'avoid', 'let routeOptions = null; ' + useOptionSource + '; ' + townsOnSource + '; const weatherOn = async () => {}; ' + fewerSource + '; ' + marksSource + '; const stepsOf = () => []; return (' + source + ')')(
     level, async (pts, through, alts) => { calls.routes++; return routes(pts, alts); }, osrm || (async () => { throw Error('down'); }),
     (m) => toasts.push(m), FunRoute, { discover, places }, { hlOn: false }, async () => [],
     async (s, t) => { calls.matrix++; return { times: await matrix(s, t) }; },

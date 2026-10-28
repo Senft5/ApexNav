@@ -2148,7 +2148,7 @@
     }
     // Avoid cameras (IDEAS R-35): the plate readers near the trip go to the router as exclude_locations with the closures.
     // A trip too big for one camera-map query, or the map offline, routes without them; the card still counts what is on it.
-    let cameraNote = 0;
+    let cameraNote = 0, avoidPoints = [];
     async function camerasAround(points, max) {
       if (!avoid.cameras || max <= 0) return [];
       const lats = points.map(p => p.lat), lons = points.map(p => p.lon);
@@ -2161,6 +2161,8 @@
     }
     async function valhallaRoutesOnce(points, throughRoadsOnly = false, alternates = 0, extra = {}) {
       const closures = await closuresAround(points);
+      // roads you chose to route around this session (closed when you'd get there, R-22), near this trip
+      closures.push(...FunRoute.camerasToExclude(avoidPoints, points, 10, 1));
       const cams = await camerasAround(points, 50 - closures.length);   // the public router takes about 50 exclusions
       if (cams.length) {
         try { return await valhallaRoutesExcluding(points, throughRoadsOnly, alternates, extra, [...closures, ...cams]); }
@@ -2841,6 +2843,7 @@
         await RouteLoading.yieldToUI();
       }
       await townsOn(pool.map(c => c.t), pool);
+      await weatherOn(pool, level);
       await applyMeasured(FunRoute.rank(pool, level).slice(0, 3).map(r => pool.find(c => c.t === r.t)), ui);   // the top few only
       const ranked = FunRoute.rank(pool, level), best = ranked[0];
       const quickest = pool.filter(c => Number.isFinite(c.timeS)).reduce((x, y) => (y.timeS < x.timeS ? y : x), best);
@@ -4482,11 +4485,44 @@
       const secAt = (m) => (Number.isFinite(t.timeS) ? t.timeS - ApexEta.routerLeft(m, total, t.timeS, t.timeMarks) : m / (50 / 3.6));
       const ways = (json.elements || []).filter((x) => x.center && x.tags).map((x) => {
         const hit = Core.nearestIndex(x.center.lat, x.center.lon, t.lat, t.lon, -1);
-        return hit.distM <= 80 ? { tags: x.tags, m: t.dist[hit.index], atMs: now + 1000 * secAt(t.dist[hit.index]) } : null;
+        return hit.distM <= 80 ? { tags: x.tags, m: t.dist[hit.index], atMs: now + 1000 * secAt(t.dist[hit.index]), lat: x.center.lat, lon: x.center.lon } : null;
       }).filter(Boolean);
-      const line = ApexConditional.summary(ApexConditional.check(ways));
+      const list = ApexConditional.check(ways), line = ApexConditional.summary(list);
       $('routeCardClosures').textContent = line;
       $('routeCardClosures').hidden = !line;
+      // closed when you'd get there: one tap routes around it (the closed road goes to the router as an exclusion)
+      const shut = list.filter((x) => x.closed === true && Number.isFinite(x.lat));
+      if (shut.length) {
+        const b = document.createElement('button'); b.className = 'linkbtn'; b.textContent = 'Route around it';
+        b.addEventListener('click', async () => {
+          avoidPoints.push(...shut.map((x) => ({ lat: x.lat, lon: x.lon })));
+          if (t.id === 'route_dest' && !t.request.via.some((v) => !v.shaping)) { await replanForLevel('Routing around the closure'); return; }
+          const from = t.request.from || await locate();
+          if (!from) { toast(NO_FIX); return; }
+          await buildRoute([from, ...t.request.via, t.request.to], t.id, t.name, null, t.request);
+        });
+        $('routeCardClosures').append(' ', b);
+      }
+    }
+    // Weather in the ranking (route_weather.js cost, IDEAS R-21): the top few candidates' forecasts for when you'd drive
+    // them; ice, snow, storms, rain and fog cost fun points, so a drier way can win. Offline or a failed forecast: no cost.
+    async function weatherOn(pool, level) {
+      if (!window.ApexRouteWeather || pool.length < 2) return;
+      const top = FunRoute.rank(pool, level).slice(0, 4).map(r => pool.find(c => c.t === r.t)).filter(Boolean);
+      const now = Date.now();
+      const costs = await Promise.all(top.map(async (c) => {
+        const pts = ApexRouteWeather.samplePoints(c.t, now, Number.isFinite(c.timeS) ? (m) => c.timeS * m / Math.max(1, c.t.dist[c.t.dist.length - 1]) : null);
+        try {
+          const ac = new AbortController(), timer = setTimeout(() => ac.abort(), 6000);
+          const r = await fetch(ApexRouteWeather.url(pts), { signal: ac.signal });
+          clearTimeout(timer);
+          return r.ok ? ApexRouteWeather.cost(ApexRouteWeather.atArrival(await r.json(), pts)) : null;
+        } catch (_) { return null; }
+      }));
+      // only when every one came back, and only the difference: rain over the whole area changes nothing
+      if (costs.some(x => x == null)) return;
+      const least = Math.min(...costs);
+      top.forEach((c, i) => { c.weatherCost = costs[i] - least; });
     }
     // Weather along the route (route_weather.js, IDEAS R-21): Open-Meteo's forecast at six points, for the hour you'd reach
     // each if you left now (the router's times). Said on the route card; nothing when the forecast can't be had.

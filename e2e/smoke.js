@@ -130,8 +130,10 @@ flow('Where to?: a suggestion builds a route with a card and a Start button (sea
   });
   await page.route('https://photon.komoot.io/**', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ features: [
     { geometry: { coordinates: [-83.9700, 35.7565] }, properties: { name: 'Maryville', state: 'Tennessee' } }] }) }));
+  const asked = [];
   await page.route('https://valhalla1.openstreetmap.de/route', (route) => {
     const req = JSON.parse(route.request().postData() || '{}');
+    asked.push(req);
     route.fulfill({ contentType: 'application/json', body: JSON.stringify(stubTrip(req.locations)) });
   });
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
@@ -152,6 +154,10 @@ flow('Where to?: a suggestion builds a route with a card and a Start button (sea
   check(steps.steps.some((x) => x.type === 4) && !steps.steps.some((x) => x.type === 1), 'arrival kept, the start left out');
   await page.waitForFunction(() => /Forecast: Rain likely at the start/.test(document.getElementById('routeCardWeather').textContent), null, { timeout: 10000 });
   await page.waitForFunction(() => /Closed when you'd get there \(map data\): Gate Road \(00:00-23:59\)/.test(document.getElementById('routeCardClosures').textContent), null, { timeout: 10000 });
+  // Route around it (R-22): the closed road goes to the router as an exclusion
+  await page.evaluate(() => document.querySelector('#routeCardClosures button').click());
+  for (let k = 0; k < 50 && !asked.some((r) => (r.exclude_locations || []).some((e) => Math.abs(e.lat - 35.7565) < 1e-4)); k++) await page.waitForTimeout(100);
+  check(asked.some((r) => (r.exclude_locations || []).some((e) => Math.abs(e.lat - 35.7565) < 1e-4 && Math.abs(e.lon + 83.97) < 1e-4)), 'the closed road is excluded');
   // pin it as Home (IDEAS U-20): first in Where to?, on this phone; Unpin removes it
   page.once('dialog', (d) => d.accept('Home'));
   await page.evaluate(() => document.getElementById('routePinBtn').click());

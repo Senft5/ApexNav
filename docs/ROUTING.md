@@ -65,7 +65,9 @@ A planned route asks Overpass for the roads in its box (up to 1° across) that c
 (`motor_vehicle`, `motorcar`, `vehicle` or `access` `:conditional` = `no @ (...)`), keeps those within 80 m of the route,
 and reads each rule for the time you'd get there: date ranges ("Nov 15-Apr 15", "Nov-Apr", years ignored), times
 ("19:00-07:00") and weekdays ("Mo-Fr 07:00-09:00"). The card says what is closed then, what is closed at other times, and
-shows a rule it can't read as written (`sunset-sunrise`, `wet`) rather than guessing (IDEAS R-22). The router isn't told yet.
+shows a rule it can't read as written (`sunset-sunrise`, `wet`) rather than guessing (IDEAS R-22). A closure that applies
+then gets a "Route around it" button: its point goes to the router as an excluded location (10 m) and the route is planned
+again, keeping your stops; the excluded points stay for the rest of the session's plans.
 
 ## Weather along the way
 
@@ -73,7 +75,10 @@ A planned route gets the forecast at six points along it, each for the hour you 
 own times; 50 km/h where it gave none), from Open-Meteo in one request. The route card names what changes the drive, once
 each and where it starts: ice risk (at or below 1 °C and wet, or freezing rain), snow, thunderstorms, rain likely (60%+ or
 0.3 mm+), fog (under 1 km or a fog code), very hot (35 °C+); or says there's no rain, ice or fog. Beyond the forecast or
-offline: nothing is said (IDEAS R-21, `web/route_weather.js`). It doesn't yet change which route wins.
+offline: nothing is said (IDEAS R-21, `web/route_weather.js`). When a fun route is chosen, the top four candidates each get
+their own forecast and a cost in fun points by the share of their points with ice or snow (30), storms (15), rain (6) or
+fog (4); only the difference from the driest counts, so rain over the whole area changes nothing, and if any forecast
+fails none counts.
 
 ## Stops of the day
 

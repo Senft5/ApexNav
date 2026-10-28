@@ -76,7 +76,7 @@
       const d = new Date(w.atMs);
       const states = rules.map((r) => closedAt(r.cond, d));
       const closed = states.some((s) => s === true) ? true : states.every((s) => s === false) ? false : null;
-      out.push({ name, m: w.m, closed, rule: rules.map((r) => r.cond).join('; ') });
+      out.push({ name, m: w.m, closed, rule: rules.map((r) => r.cond).join('; '), lat: w.lat, lon: w.lon });
     }
     return out;
   }

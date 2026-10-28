@@ -1,5 +1,10 @@
 # APEX NAV — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-10-28 (midday)
+- Merged through #207: Q-09 sight offsets, Y-17 route latency, review fixes (migrations 0021–0022 applied to both D1).
+- This PR: R-21 forecast costs in fun-route ranking (difference from the driest, all-or-nothing), R-22 "Route around it" for conditional closures (exclude_locations).
+- Exact next task: remaining IDEAS todo rows (R-04, R-12, R-20, D-10–D-15, Q-03–Q-20, S-10, S-18, U-12, P-01/P-03/P-05 ...).
+
 ## Session 2026-10-28 (late morning)
 - Merged: #193 F-06 offline data, D-23 drive tags, V-08 ducking, S-20 flyby; #194 S-11 monthly challenges, R-18 drag to reshape.
 - This PR: Y-14 segment ids that can't collide (and a taken old id resent under a new one), R-34 ramps are Connectors, A-03 PWA (manifest + network-first service worker, websites only), R-35 avoid cameras, D-20 your week, L-05 feedback (migration 0017 applied to both D1), Z-08 k-anonymity for road data, R-14 drop stage plans the router shortcut, S-08 local legends (days driven this month), U-16 landscape cockpit, S-15 friend profiles, S-07 kudos (migration 0018 applied to both D1), U-22 km or miles everywhere (Settings → Units), V-07 Siri shortcuts (start, report, end), U-21 route climb and hills in Preview, U-20 pinned places (phone only), S-17 which road was better (phone only), S-09 pioneer badges (migration 0019 applied to both D1), R-17 stops of the day, U-14 3D terrain, R-21 forecast along the route, R-22 conditional closures on the route card, U-19 search knows your stages and skips bike paths, O-07 referral Octane (migration 0020 applied to both D1), A-05 desk layout, V-09 recce notes, Q-09 sight lines from landcover, Y-17 server latency in D1 (migration 0021 applied to both D1), and fixes from a review of today's work (migration 0022).
