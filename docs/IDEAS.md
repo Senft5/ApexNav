@@ -185,6 +185,7 @@ adaptive notes (cruise vs spirited), car audio routing to Bluetooth/CarPlay (#73
 | V-08 | Music ducking tuned per note priority; never duck for low-priority notes in cruise | L | S | todo | — |
 | V-09 | Recce mode: drive slowly once, the co-driver writes your own notes for the road and reads them next time | H | L | todo | rally recce |
 | V-10 | Remove espeak-ng (GPL) from the voice path before charging | M | M | todo | docs/VOICE.md |
+| V-11 | Notes are due at the corner's entry (turn-in), not its apex: countdown, spoken call, lead distance and staleness all measure to `start_m` | H | S | done (this PR) | owner 2026-10-28 |
 
 ## 5. Social and community (S)
 
@@ -214,6 +215,8 @@ Today: accounts with Google sign-in, friends, crews (public and private, crews n
 | S-18 | Photos on highlights and stops, stripped of EXIF location beyond the highlight | M | M | todo | Roadtrippers, Google Maps |
 | S-19 | Live share ETA with a friend or family ("Nate is 12 min away") without sharing the drive | M | M | todo | Apple Maps Share ETA, Life360 |
 | S-20 | Flyby: after a drive, see which friends drove the same road that day (opt-in) | L | M | todo | Strava Flyby |
+| S-21 | Garage cars from a vehicle database: pick year, make, model and trim, specs (power, weight, drive, gearbox) fill in, and you only change what differs (colour, mods, tyres). Free source: NHTSA vPIC (makes/models/years, VIN decode, US-only, no power/weight) plus a curated spec table for enthusiast cars | H | M | todo, next (owner ask) | owner 2026-10-28 |
+| S-22 | Convoys without copy-paste links or a website: invite friends and crew-mates from inside the app (they get the invite in the app), a short join code to read out, and a QR code to scan in the car park | H | M | todo, next (owner ask) | owner 2026-10-28 |
 
 ## 6. UI and UX (U)
 
