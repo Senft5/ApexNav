@@ -338,6 +338,7 @@
     .sources a { color: inherit; }
     /* Keyboard and switch-control users see where they are; touch taps show nothing extra. */
     :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .overlay:focus { outline: none; }
     .plan-search:focus-within { border-color: var(--panel-ink); }
     @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: 0.01ms !important; animation: none !important; } }
   </style>
@@ -536,7 +537,7 @@
     </div>
     <div class="grow" data-step="3" hidden>
       <h2>Driving with friends?</h2>
-      <p>ApexNav is invite-only. Sign in to see their stages and boards.</p>
+      <p>Sign in to join a crew and see its stages and boards. You can do this later in Crew.</p>
       <a class="ink-btn solid" href="/api/auth/google/start" style="display:flex;align-items:center;justify-content:center;text-decoration:none">Sign in with Google</a>
     </div>
     <div class="stack">
@@ -3168,12 +3169,13 @@
       const paint = () => {
         steps.forEach(n => { n.hidden = Number(n.dataset.step) !== step; });
         $('obNext').textContent = step === 1 ? 'Get started' : step === 2 ? 'Next' : 'Not now';
+        $('obNext').classList.toggle('solid', step < 3);   // on the sign-in step, Sign in is the one solid button
         $('obAlt').textContent = 'Watch a replay';
         $('obAlt').hidden = step === 2;
         if (step === 2) {
           const list = $('obVoices'); list.innerHTML = '';
           for (const v of bankVoices.concat([{ id: 'device', name: 'Phone voice' }]).filter(v => v.id !== 'jarvis')) {
-            const b = document.createElement('button'); b.className = 'ink-btn' + (v.id === state.voiceId ? ' on' : ''); b.textContent = `▶  ${v.name}`;
+            const b = document.createElement('button'); b.className = 'ink-btn' + (v.id === state.voiceId ? ' on' : ''); b.textContent = `▶  ${v.name}`; b.setAttribute('aria-pressed', String(v.id === state.voiceId));
             b.addEventListener('click', () => { state.voiceId = v.id; state.voiceStyle = 'codriver'; savePrefs(); renderVoiceList(); if (window.ApexVoice) ApexVoice.unlock(); say('Left 4 tightens, one-fifty.', true, null, 'sys:test'); paint(); });
             list.append(b);
           }
@@ -3182,7 +3184,8 @@
       const finish = () => { flag('apex.onboarded', '1'); ob.classList.remove('show'); };
       $('obNext').onclick = () => { if (step < 3) { step++; paint(); } else finish(); };
       $('obAlt').onclick = () => { finish(); watchDryRidge(); };
-      ob.classList.add('show'); paint(); $('obNext').focus();
+      // Focus the dialog, not its button: VoiceOver reads the welcome, and no focus ring sits on Get started before a touch
+      ob.classList.add('show'); paint(); ob.tabIndex = -1; ob.focus();
     }
     if (!flag('apex.onboarded') && !window.APEX_EMBED && !['invite', 'crew', 'add', 'convoy', 'drive', 'play', 'at', 'theme'].some(k => params.has(k))) runOnboarding();
     else if (!flag('apex.onboarded')) flag('apex.onboarded', '1');

@@ -249,7 +249,7 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 
 | id | idea | impact | effort | status | from |
 |---|---|---|---|---|---|
-| O-01 | First run in three screens max, permissions at the moment of need | H | S | partial (BRAND §4) | docs/BRAND.md §4 |
+| O-01 | First run in three screens max, permissions at the moment of need | H | S | done (BRAND §4; polish: no focus ring, Sign in is the one solid button on its step) | docs/BRAND.md §4 |
 | O-02 | Mount guide: how and where to mount the phone, with a live "calibrated" tick | H | S | todo | STATE 2026-10-26 calibration |
 | O-03 | Instant value with no account: plan a fun loop from where you are in two taps | H | S | todo | Calimoto |
 | O-04 | Demo replay that shows the cockpit, notes and analysis in 60 s | M | S | partial (#58) | — |
