@@ -132,7 +132,7 @@ struct ApexCockpitWebView: UIViewRepresentable {
     let indexURL: URL
 
     @MainActor
-    final class Coordinator: NSObject, WKNavigationDelegate {
+    final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
         let shell: ApexSensorShell
 
         init(shell: ApexSensorShell) {
@@ -150,6 +150,45 @@ struct ApexCockpitWebView: UIViewRepresentable {
         func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
             shell.webDidStartLoading()
             webView.reload()
+        }
+
+        // WKWebView shows nothing for alert(), confirm() or prompt() unless its UI delegate does: confirm() answers
+        // false and prompt() null, so Unfriend, Leave crew and Delete account silently did nothing in the app.
+        private func present(_ alert: UIAlertController, from webView: WKWebView) -> Bool {
+            guard var top = webView.window?.rootViewController else { return false }
+            while let next = top.presentedViewController { top = next }
+            top.present(alert, animated: true)
+            return true
+        }
+
+        func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String,
+                     initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping () -> Void) {
+            let alert = UIAlertController(title: nil, message: message, preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "OK", style: .default) { _ in completionHandler() })
+            if !present(alert, from: webView) { completionHandler() }
+        }
+
+        func webView(_ webView: WKWebView, runJavaScriptConfirmPanelWithMessage message: String,
+                     initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (Bool) -> Void) {
+            let alert = UIAlertController(title: nil, message: message, preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "Cancel", style: .cancel) { _ in completionHandler(false) })
+            alert.addAction(UIAlertAction(title: "OK", style: .default) { _ in completionHandler(true) })
+            if !present(alert, from: webView) { completionHandler(false) }
+        }
+
+        func webView(_ webView: WKWebView, runJavaScriptTextInputPanelWithPrompt prompt: String, defaultText: String?,
+                     initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (String?) -> Void) {
+            let alert = UIAlertController(title: nil, message: prompt, preferredStyle: .alert)
+            alert.addTextField { field in
+                field.text = defaultText
+                field.autocapitalizationType = .none
+                field.autocorrectionType = .no
+            }
+            alert.addAction(UIAlertAction(title: "Cancel", style: .cancel) { _ in completionHandler(nil) })
+            alert.addAction(UIAlertAction(title: "OK", style: .default) { [weak alert] _ in
+                completionHandler(alert?.textFields?.first?.text ?? "")
+            })
+            if !present(alert, from: webView) { completionHandler(nil) }
         }
     }
 
@@ -193,6 +232,7 @@ struct ApexCockpitWebView: UIViewRepresentable {
         webView.allowsBackForwardNavigationGestures = false
         webView.isInspectable = true
         webView.navigationDelegate = context.coordinator
+        webView.uiDelegate = context.coordinator
         webView.hideKeyboardAccessoryBar()
 
         shell.attach(webView: webView)
