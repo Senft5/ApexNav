@@ -2987,6 +2987,22 @@
       closeSheet();
       startDrive();
     });
+    // Owner only (IDEAS Y-16): the week's crash and server-error counts (backend/src/errors.ts), most frequent first. Anonymous.
+    function errorsSection() {
+      const sec = el('div', { className: 'stack-8' }, el('h3', { textContent: 'Errors this week' }));
+      apiCall('GET', '/api/ops/errors?days=7').then(jsonOf).then((r) => {
+        const rows = r && Array.isArray(r.errors) ? r.errors : null;
+        if (!rows) { sec.append(el('p', { className: 'note', textContent: 'Couldn\'t load the counts.' })); return; }
+        if (!rows.length) { sec.append(el('p', { className: 'note', textContent: 'No errors in the last 7 days.' })); return; }
+        for (const e of rows.slice(0, 25)) {
+          const d = el('details', {}, el('summary', { textContent: `${e.n}× ${e.source} · ${e.kind} · ${e.message}` }),
+            el('p', { className: 'note', textContent: [e.page && `page ${e.page}`, `${e.days} day${e.days === 1 ? '' : 's'}`, `last ${e.last_at}`].filter(Boolean).join(' · ') }),
+            ...(e.stack ? [el('pre', { textContent: e.stack, style: 'white-space:pre-wrap;font-size:11px;max-height:160px;overflow:auto' })] : []));
+          sec.append(d);
+        }
+      }).catch(() => sec.append(el('p', { className: 'note', textContent: 'Couldn\'t load the counts.' })));
+      return sec;
+    }
     // ---- planned routes shared with friends and crews (IDEAS S-05; backend/src/routes_shared.ts) ----------------------
     // The shape only, thinned to 1,500 points, without the first 400 m (where you are when you plan is often home).
     const SHARE_TRIM_M = 400, SHARE_MAX_PTS = 1500;
@@ -3392,6 +3408,7 @@
         btn('Delete account', deleteMyAccount, 'danger-btn'));
       body.append(asec);
       if (safety) { body.append(safety.blockedSection()); if (me.moderator) body.append(safety.moderationSection()); }
+      if (me.moderator) body.append(errorsSection());
     }
 
     // Highlights (local for now): [{id, name, lat, lon, rating}] in localStorage; the server list joins later (docs/BACKEND.md section 9).

@@ -6,6 +6,7 @@
 // reaches those convoys at once, and so one person cannot open convoys without limit.
 import { DurableObject } from "cloudflare:workers";
 import { Env, randomToken, sha256hex } from "./util";
+import { countError, scrub } from "./errors";
 
 export const LIMITS = {
   members: 16, roomMs: 2 * 3600_000, inviteMs: 30 * 60_000, ticketMs: 30_000, authMs: 2_000,
@@ -220,8 +221,16 @@ export class ConvoyRoom extends DurableObject<Env> {
   }
 
   async alarm(): Promise<void> {
-    if (this.room && this.room.expiresAt <= Date.now()) await this.end("expired");
-    else if (this.room) await this.ctx.storage.setAlarm(this.room.expiresAt);
+    try {
+      if (this.room && this.room.expiresAt <= Date.now()) await this.end("expired");
+      else if (this.room) await this.ctx.storage.setAlarm(this.room.expiresAt);
+    } catch (err) { this.countFailure("alarm", err); throw err; }   // rethrown: the runtime retries the alarm
+  }
+  /** A convoy failure the Worker's route handler never sees (a socket frame, an alarm) counted like its 500s (IDEAS Y-18). */
+  private countFailure(where: string, err: unknown): void {
+    const msg = scrub(String(err instanceof Error ? err.message : err), 300), stack = scrub(err instanceof Error ? String(err.stack ?? "") : "", 2000);
+    console.error(JSON.stringify({ event: "convoy_error", where, message: msg }));
+    this.ctx.waitUntil(countError(this.env, { source: "server", kind: `convoy ${where}`, message: msg, page: "", stack }));
   }
 
   // ---- WebSocket side ---------------------------------------------------------------------------
@@ -239,7 +248,7 @@ export class ConvoyRoom extends DurableObject<Env> {
     const conn: Conn = { ws: server, ip, userId: null, key: null, sessionHash: null, state: "new", frames: 0, windowAt: Date.now(), openedAt: 0, checkedAt: 0, timer: null };
     conn.timer = setTimeout(() => { if (conn.state !== "open") this.close(conn, 4401, "auth_timeout"); }, LIMITS.authMs);
     this.conns.add(conn);
-    server.addEventListener("message", (e) => { this.onFrame(conn, e.data).catch(() => this.close(conn, 1011, "server_error")); });
+    server.addEventListener("message", (e) => { this.onFrame(conn, e.data).catch((err) => { this.countFailure("frame", err); this.close(conn, 1011, "server_error"); }); });
     const gone = () => this.close(conn, 1000, "gone");
     server.addEventListener("close", gone);
     server.addEventListener("error", gone);

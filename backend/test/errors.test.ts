@@ -115,3 +115,17 @@ describe("crash reports", () => {
     vi.restoreAllMocks();
   });
 });
+
+describe("convoy failures (IDEAS Y-18)", () => {
+  it("a convoy socket frame that throws is counted like a server 500", async () => {
+    const { ConvoyRoom } = await import("../src/convoy");
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    const waits: Promise<unknown>[] = [];
+    const room = Object.create(ConvoyRoom.prototype) as { env: unknown; ctx: unknown; countFailure(w: string, e: unknown): void };
+    room.env = env; room.ctx = { waitUntil: (p: Promise<unknown>) => waits.push(p) };
+    room.countFailure("frame", new Error("boom at 35.96123 for x@y.test"));
+    await Promise.all(waits);
+    expect(await counts()).toEqual([{ source: "server", kind: "convoy frame", message: "boom at [num] for [email]", page: "", n: 1, stack: expect.any(String) }]);
+    err.mockRestore();
+  });
+});
