@@ -582,13 +582,23 @@
         if (r.overlap_m >= 0.3 * d.dist[d.dist.length - 1] && r.matched_corners >= 3) { reference = { name: o.name, score: o.ds.score, corners: r.corners }; break; }
       }
       // corner coach: every other drive whose box overlaps this one is a candidate pass (Core.coach decides what is the same corner)
-      const box = (x) => { let a = Infinity, b = -Infinity, c = Infinity, e = -Infinity; for (let i = 0; i < x.lat.length; i++) { a = Math.min(a, x.lat[i]); b = Math.max(b, x.lat[i]); c = Math.min(c, x.lon[i]); e = Math.max(e, x.lon[i]); } return [a, b, c, e]; };
-      const bd = box(d), near = drives.filter(o => { if (o === d) return false; const b = box(o); return b[0] <= bd[1] && b[1] >= bd[0] && b[2] <= bd[3] && b[3] >= bd[2]; });
-      const coach = { ...Core.coach(d, near), others: near.map(o => ({ name: o.name, date: dateLabel(o) })) };
+      const coach = coachFor(d);
       dvView = ApexDriveView.mount($('dvRoot'), d, { Core, C, MPH, reference, coach });
       renderRoadHistory(d);
       loadRoadFeel(d, dvView);
       $('dvNote').textContent = d.source === 'web-gps' ? 'recorded in the web app (GPS)' : d.source === 'imported' ? 'imported recording' : 'shipped example';
+    }
+    // Corner coach for a drive, against every other drive whose box overlaps it (Core.coach decides what is the same corner).
+    // Boxes are cached on the drives and results per drive, so reopening a drive costs nothing until the library changes.
+    const coachMemo = new Map(), boxes = new WeakMap();
+    function coachFor(d) {
+      const box = (x) => { if (!boxes.has(x)) { let a = Infinity, b = -Infinity, c = Infinity, e = -Infinity; for (let i = 0; i < x.lat.length; i++) { a = Math.min(a, x.lat[i]); b = Math.max(b, x.lat[i]); c = Math.min(c, x.lon[i]); e = Math.max(e, x.lon[i]); } boxes.set(x, [a, b, c, e]); } return boxes.get(x); };
+      const key = `${d.id}|${drives.map(o => o.id).join(',')}`;
+      if (coachMemo.has(key)) return coachMemo.get(key);
+      const bd = box(d), near = drives.filter(o => { if (o === d) return false; const b = box(o); return b[0] <= bd[1] && b[1] >= bd[0] && b[2] <= bd[3] && b[3] >= bd[2]; });
+      const r = { ...Core.coach(d, near), others: near.map(o => ({ name: o.name, date: dateLabel(o) })) };
+      coachMemo.set(key, r);
+      return r;
     }
     // Every drive that shares at least 30% of this drive's road, oldest to newest: is the driving getting better on this road?
     function renderRoadHistory(d) {

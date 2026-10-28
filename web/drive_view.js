@@ -54,7 +54,7 @@
       return `<div class="bar">${label} ${v != null ? v : '--'}<i><u style="width:${v != null ? v : 0}%"></u></i></div>`;
     };
     // the ideal drive only means something once another pass of the same corners exists
-    const ideal = co && co.clean && co.corners.some((x) => x.passes > 1)
+    const ideal = co && co.clean && co.gain_s > 0 && co.corners.some((x) => x.passes > 1)
       ? { gain: co.gain_s, n: co.clean, drives: new Set(co.corners.filter((x) => x.gain_s != null).map((x) => (x.best ? x.best_from : -1))).size } : null;
     const mi = finite(S.km) ? `${(S.km / 1.609344).toFixed(1)} mi` : '--';
     const dur = finite(S.duration_s) ? fmtT(S.duration_s) : '--';
@@ -190,7 +190,7 @@
     // ---- corner list -----------------------------------------------------------------------------------------------
     let net = null;
     if (ref) { const ks = d.corners.map((_, k) => lost(k)).filter((x) => x != null); net = ks.length ? ks.reduce((s, x) => s + x, 0) : null; }
-    list.innerHTML = `<h2>Corners${ref ? ` \u00b7 compared with ${ref.name} (score ${ref.score}), your best other drive on this road` : ''}</h2>` + (ref ? `<p class="note" style="margin-bottom:8px">${net == null ? 'No clean corners to compare.' : `Over the ${d.corners.map((_, k) => lost(k)).filter((x) => x != null).length} corners both drives took cleanly, this drive was <b class="${net > 0.05 ? 'loss' : net < -0.05 ? 'gain' : ''}">${fmtD(net)}</b> ${net > 0 ? 'slower' : 'faster'}. Stops and traffic are left out.`}</p>` : '');
+    list.innerHTML = `<h2>Corners${ref ? ` \u00b7 compared with ${esc(ref.name)} (score ${ref.score}), your best other drive on this road` : ''}</h2>` + (ref ? `<p class="note" style="margin-bottom:8px">${net == null ? 'No clean corners to compare.' : `Over the ${d.corners.map((_, k) => lost(k)).filter((x) => x != null).length} corners both drives took cleanly, this drive was <b class="${net > 0.05 ? 'loss' : net < -0.05 ? 'gain' : ''}">${fmtD(net)}</b> ${net > 0 ? 'slower' : 'faster'}. Stops and traffic are left out.`}</p>` : '');
     if (co && co.top.length) {                                      // where the time is: the biggest gaps to your own best passes
       const ul = el('ol', 'dv-time');
       for (const k of co.top) {
@@ -205,7 +205,7 @@
     const grid2 = el('div', 'dv-corners');
     d.corners.forEach((c, k) => {
       const r = el('button', 'dv-corner'); r.setAttribute('aria-label', `Corner ${k + 1}: ${c.call || c.code}, apex ${Math.round(c.apex_mps * MPH)} miles per hour`);
-      r.innerHTML = `<b>${k + 1}</b><span class="dv-call">${(c.call || c.code || '').toString()}</span><span class="dv-v">${Math.round(c.apex_mps * MPH)} mph</span><span class="dv-d">${(d.dist[c.apex] / 1609.344).toFixed(2)} mi${ref ? ` \u00b7 <em class="${lost(k) == null ? '' : lost(k) > 0.05 ? 'loss' : lost(k) < -0.05 ? 'gain' : ''}">${fmtD(lost(k))}</em>` : ''}</span>`
+      r.innerHTML = `<b>${k + 1}</b><span class="dv-call">${esc(c.call || c.code || '')}</span><span class="dv-v">${Math.round(c.apex_mps * MPH)} mph</span><span class="dv-d">${(d.dist[c.apex] / 1609.344).toFixed(2)} mi${ref ? ` \u00b7 <em class="${lost(k) == null ? '' : lost(k) > 0.05 ? 'loss' : lost(k) < -0.05 ? 'gain' : ''}">${fmtD(lost(k))}</em>` : ''}</span>`
         + (co && tipText(co.corners[k], MPH) ? `<span class="dv-tip">${esc(tipText(co.corners[k], MPH))}</span>` : '');
       r.onclick = () => { if (zoomM) setZoom(zoomM, c.apex); move(c.apex); lanes.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); };
       grid2.append(r);

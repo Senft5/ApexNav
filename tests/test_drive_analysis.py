@@ -167,3 +167,33 @@ def test_coach_alone_still_names_the_habit():
     late = _pass(throttle_at=84)
     late["lon_g"][90:94] = -0.35                        # braking after the apex
     assert da.coach(late, [])["corners"][0]["tip"]["kind"] == "brake_after_apex"
+
+
+def test_coach_finds_no_time_in_the_same_drive_seen_through_gps_jitter():
+    a = _pass(corner_v=14.0)
+    rng = np.random.default_rng(7)
+    copies = [dict(a, lat=a["lat"] + rng.normal(0, 3 / 110540, len(a["lat"])),
+                   lon=a["lon"] + rng.normal(0, 3 / 90000, len(a["lat"]))) for _ in range(6)]
+    shifted = dict(a, lat=np.concatenate([a["lat"][1:], a["lat"][-1:]]), lon=np.concatenate([a["lon"][1:], a["lon"][-1:]]))
+    r = da.coach(a, copies + [shifted])
+    assert r["top"] == [] and r["gain_s"] == 0.0, "identical speeds are no gain, whatever the GPS does"
+
+
+def test_coach_reads_g_only_where_measured_around_the_corner():
+    a = _pass(corner_v=14.0)
+    ref = dict(_pass(corner_v=14.5), g_known=[1] * len(a["lat"]))
+    for q in range(48, 75):                             # blank g in the brake zone, before the corner starts
+        ref["g_known"][q] = 0
+    ref["lon_g"] = ref["lon_g"].copy()
+    ref["lon_g"][48:75] = 0.0                           # zero-filled, as recording.js stores it
+    c = da.coach(a, [ref])["corners"][0]
+    assert c["passes"] == 1, "a pass with blank g in its brake zone is no reference"
+
+
+def test_corner_phases_ignore_braking_for_an_earlier_corner():
+    d = _pass()
+    d["lon_g"][:] = 0.0
+    d["lon_g"][50:56] = -0.4                            # braking 120 m before turn-in, then steady
+    m = da.corner_phases(d["speed_mps"], d["lon_g"], d["lat_g"], 80, 96, 88, 15.0)
+    assert m["brake_m"] is None and m["trail_m"] == 0.0
+    assert da.coach(d, [])["corners"][0]["tip"] is None, "no brake zone of its own: no coasting note"
