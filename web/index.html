@@ -2098,9 +2098,10 @@
       const best = done[0];
       best.t.request = { from: null, to: { lat: c.lat, lon: c.lon }, via: best.job.pts.slice(1, -1).map(p => ({ lat: p.lat, lon: p.lon })) };
       ui.step('Building route', 0.92);
-      await buildRoute(null, `loop_${miles}`, `${miles} mi loop`, best.t);
-      const how = best.job.kind === 'stages' ? `${best.job.plan.legs.length} best-road stages` : 'circle fallback';
-      toast(`${miles} mi loop · ${(best.km / 1.609344).toFixed(1)} mi · ${best.good} good corners`);
+      // Name the loop by what it is, not what was asked: a "15 mi loop" that is 9.3 mi reads as a bug.
+      const gotMi = best.km / 1.609344, near = Math.abs(gotMi - miles) <= 0.2 * miles;
+      await buildRoute(null, `loop_${miles}`, `${Math.max(1, Math.round(gotMi))} mi loop`, best.t);
+      toast(near ? `${best.good} good corners on this loop` : `${gotMi.toFixed(1)} mi: the closest good loop to ${miles} mi`);
       window.apexDebug && (window.apexDebug.lastLoop = done.map(d => ({ kind: d.job.kind, score: d.score, km: d.km, good: d.good, retraced: d.retraced })));
     }
 
