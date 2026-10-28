@@ -689,6 +689,7 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
             + "\"recording\":\(isRecording ? "true" : "false"),"
             + "\"calibration\":\"\(live ? pipeline.mount.state.rawValue : "paused")\","
             + "\"thermal\":\(thermal.level),"
+            + "\"low_power_mode\":\(ProcessInfo.processInfo.isLowPowerModeEnabled ? "true" : "false"),"
             + "\"has_fix\":\(hasFix ? "true" : "false"),"
             + "\"segments\":\(recordedSegments)"
             + "}"
