@@ -1,5 +1,9 @@
 # APEX NAV — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-10-28: long trips planned in sections
+- Trips over 22 km crow fly are cut into ~24 km sections along the quickest route (2 on Fun, 3 on Max fun); each section gets its own stage search, and the best per section (plus one-swap variants, max 4 stages) compete with the single-corridor plans (`ApexFunRoute.sectionCount/sectionPoints/combineSections`). Knoxville→Asheville Fun: Fun 47 for +17 min (was no fun option); Knoxville→Maryville unchanged (79 @ 128 min). Not driven on a phone.
+- Exact next task: use measured data during stage discovery (road-3 remainder); unify loop ranking with the fun score.
+
 ## Session 2026-10-28: measured roads count in routing
 - #85 merged (loops sized with real road distances).
 - Measured road data now moves route choice for members (docs/ROUTING.md, Measured roads): `measuredAdjust` −8 rough … +3 smooth, +2 banked, weighted by coverage and passes; readings whose passes disagree (#87 spreads, `agreement() === 'differ'`) are ignored; unmeasured stays neutral. `measuredAlong`/`measuredSeries` look up to 150 ways in batches of 50 (long routes used to see only their first 50 ways). Route card shows a Surface bar once a fifth of the route is measured. Production has very little measured data yet (909 bins, no camber as of 2026-10-26), so the effect in the field will be small until people drive with sharing on.

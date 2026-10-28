@@ -1839,22 +1839,42 @@
       // Under 3 km there is no detour worth taking to the shop round the corner.
       if (level !== 'quick' && Number.isFinite(quickS) && FunRoute.kmBetween(from, to) >= 3) {
         try {
-          ui.step('Finding fun roads…', 0.75);
-          const area = FunRoute.searchArea(from, to);
-          const hls = state.hlOn ? await allHighlights(area.center) : [];
-          const stages = await ApexStages.discover(area.center, area.radiusKm, null, state.hlOn ? { highlights: hls, strength: state.hlStrength } : {});
-          const list = FunRoute.shortlist(from, to, stages, FunRoute.LEVELS[level].budget);
-          if (list.length) {
-            const mp = FunRoute.matrixPoints(from, to, list);
-            const plans = FunRoute.plansFromMatrix(list, (await valhallaMatrix(mp.sources, mp.targets)).times, quickS, level, 2);
-            ui.step('Routing fun roads…', 0.85);
-            const routed = await Promise.allSettled(plans.map(async (plan) => {
-              const pts = FunRoute.waypoints(from, to, plan);
-              const [r] = await valhallaRoutes(pts);
-              return { kind: 'stages', route: r, timeS: r.timeS, via: pts.slice(1, -1) };
-            }));
-            for (const r of routed) if (r.status === 'fulfilled') cands.push(r.value);
+          // Stage plans for one stretch a→b whose quickest drive takes stretchS: search its corridor, time the connectors, plan.
+          const stretch = async (a, b, stretchS, label, frac) => {
+            ui.step(label, frac);
+            try {
+              const area = FunRoute.searchArea(a, b);
+              const hls = state.hlOn ? await allHighlights(area.center) : [];
+              const stages = await ApexStages.discover(area.center, area.radiusKm, null, state.hlOn ? { highlights: hls, strength: state.hlStrength } : {});
+              const list = FunRoute.shortlist(a, b, stages, FunRoute.LEVELS[level].budget);
+              if (!list.length) return [];
+              const mp = FunRoute.matrixPoints(a, b, list);
+              return FunRoute.plansFromMatrix(list, (await valhallaMatrix(mp.sources, mp.targets)).times, stretchS, level, 2, 2);
+            } catch (_) { return []; }                                   // no tiles or no matrix here: no stages from this stretch
+          };
+          const plans = await stretch(from, to, quickS, 'Finding fun roads…', 0.75);
+          // Longer trips also try sections along the quickest route, each planned like a short trip and chained (2 sections,
+          // 3 on Max fun): one circle round the middle can't reach the start and end of a long trip, and the public matrix
+          // gives up on long connections. Both kinds of plan are routed and the ranking picks.
+          const n = FunRoute.sectionCount(from, to, level === 'max' ? 3 : 2);
+          if (n > 1) {
+            const quick = cands.reduce((x, y) => (y.timeS < x.timeS ? y : x));
+            const cuts = FunRoute.sectionPoints(quick.route.coords, n);
+            cuts[0] = from; cuts[n] = to;
+            const sections = [];
+            for (let k = 0; k < n; k++) {
+              sections.push((await stretch(cuts[k], cuts[k + 1], quickS / n, `Finding fun roads · ${k + 1} of ${n}`, 0.78 + 0.06 * k / n))
+                .filter(p => p.value > 0));                              // a section only detours when it pays
+            }
+            plans.push(...FunRoute.combineSections(sections, 2));
           }
+          ui.step('Routing fun roads…', 0.85);
+          const routed = await Promise.allSettled(plans.map(async (plan) => {
+            const pts = FunRoute.waypoints(from, to, plan);
+            const [r] = await valhallaRoutes(pts);
+            return { kind: 'stages', route: r, timeS: r.timeS, via: pts.slice(1, -1) };
+          }));
+          for (const r of routed) if (r.status === 'fulfilled') cands.push(r.value);
         } catch (_) { /* no tiles or no matrix: the router's own routes still compete */ }
       }
       ui.step('Scoring roads…', 0.9);
