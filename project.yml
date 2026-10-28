@@ -12,12 +12,14 @@ targets:
     platform: iOS
     sources:
       - path: ApexNavApp.swift
+      - path: LiveActivity/ApexDriveAttributes.swift   # shared with the ApexNavLive extension
       - path: Assets.xcassets      # AppIcon: web/brand/icon-1024.png (single-size iOS icon)
       - path: web
         type: folder
         buildPhase: resources
     dependencies:
       - package: ApexKit
+      - target: ApexNavLive          # the drive's Live Activity (IDEAS U-11), embedded in the app
     # Sign in with Apple (IDEAS O-05, App Review 4.8). The App ID has the capability (enabled through the App Store Connect API).
     entitlements:
       path: ApexNav.entitlements
@@ -35,6 +37,7 @@ targets:
       path: Info.plist
       properties:
         CFBundleDisplayName: "APEX NAV"
+        NSSupportsLiveActivities: true
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         # Only standard HTTPS/TLS: skips the export-compliance question on every TestFlight build.
@@ -53,6 +56,28 @@ targets:
           - CFBundleURLName: com.senft.ApexNav.links
             CFBundleURLSchemes:
               - apexnav
+  # The drive's Live Activity on the lock screen and in the Dynamic Island (IDEAS U-11). Its version and build number must
+  # match the app's: CI's CURRENT_PROJECT_VERSION applies to every target.
+  ApexNavLive:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: LiveActivity
+    info:
+      path: LiveActivity/Info.plist
+      properties:
+        CFBundleDisplayName: "APEX NAV"
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.senft.ApexNav.LiveActivity
+        TARGETED_DEVICE_FAMILY: "1"
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        SKIP_INSTALL: YES
   ApexNavUITests:
     type: bundle.ui-testing
     platform: iOS

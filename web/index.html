@@ -1591,6 +1591,7 @@
       });
       notes.quietText = offRoute ? (!track ? 'No route planned' : offRouteText()) : track ? `${track.name} · ${spirited ? 'Full notes' : 'Quiet · bumps and cameras only'}` : 'Plan a route for notes';
       Inst.renderNotes($('notes'), look.theme, notes);
+      if (live) pushActivity(notes);
 
       if (!(state.playing || live) || vMps == null) return;
       // How far ahead to read a note (note_timing.js, IDEAS V-01): time to say it, your reaction (learned), and braking from
@@ -3956,6 +3957,26 @@
       } catch (_) { /* sharing is optional: the drive itself is unaffected */ }
     }
     let driveActive = false;
+    // The drive's Live Activity in the app (ApexNavApp.swift, IDEAS U-11): the next note, its distance and time left, on the
+    // lock screen and in the Dynamic Island. Sent when the shown note changes, at most every 3 s otherwise.
+    const liveAct = { on: false, last: '', at: 0 };
+    function activity(action, fields = {}) {
+      const native = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex;
+      if (!native) return;
+      if (action === 'start') liveAct.on = true;
+      if (action === 'end') { if (!liveAct.on) return; liveAct.on = false; liveAct.last = ''; }
+      if (action === 'update' && !liveAct.on) return;
+      try { native.postMessage({ cmd: 'activity', action, ...fields }); } catch (_) {}
+    }
+    function pushActivity(notes) {
+      if (!liveAct.on) return;
+      const n = notes && notes[0];
+      const fields = { note: n ? n.call : (track ? 'No notes ahead' : 'Recording'), distance: n ? `${n.dist} ${n.unit}`.trim() : '', eta: etaText || '' };
+      const key = JSON.stringify(fields), now = performance.now();
+      if (key === liveAct.last || (now - liveAct.at < 3000 && liveAct.last && JSON.parse(liveAct.last).note === fields.note)) return;
+      liveAct.last = key; liveAct.at = now;
+      activity('update', fields);
+    }
     async function enterDrive() {
       if (state.mode === 'live' && drive.sensors) return;
       if (state.mode === 'live' || driveActive) return;                                   // native app is feeding frames already or start is pending
@@ -3966,6 +3987,7 @@
       drive.live = null; drive.liveIdx = 0; drive.share = 'off'; drive.shareKm = 0; drive.shareErr = null; drive.roads = {}; drive.roadIdx = 0; drive.rest = null; breakSay = null; if (breakWorker) { breakWorker.terminate(); breakWorker = null; }
       if (NATIVE_SHELL) {   // the app's own GPS and IMU feed window.apex.live; no browser sensors to start
         drive.native = true;
+        activity('start', { title: track ? track.name : 'Drive', note: 'Recording', distance: '', eta: '' });
         drive.status = { gps: performance.now() - state.liveAt < 5000 && state.live ? 'on' : 'waiting', motion: 'on', wake: 'on', message: '' };
         setPlaying(false); setMode('live'); paintModeSwitch(); resumeFollow(); paintDriveStat();
         if (state.live) render(true);
@@ -4005,6 +4027,7 @@
     }
     async function leaveDrive(save) {
       driveActive = false;
+      activity('end');
       const rec = drive.rec, sensors = drive.sensors, live = drive.live, road = rec && window.ApexRoadNames ? ApexRoadNames.mainRoad(drive.roads, rec.km * 1000) : null;
       drive.sensors = null; drive.rec = null; drive.live = null; drive.share = 'off'; drive.native = false;
       if (sensors) sensors.stop();
