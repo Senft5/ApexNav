@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-wKbcEVoDc2iiuxO8DE2lNSsw/1N/c+Y0FC9iNXXCLzA=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-zy4nJcalp9ZS102jRRmKVq3On+ezXXs3Yu8lh0XmpRw=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>ApexNav</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -29,6 +29,7 @@
   <script src="flyover_video.js"></script>
   <script src="battery_budget.js"></script>
   <script src="spot_photos.js"></script>
+  <script src="measured_stages.js"></script>
   <script src="route_loading.js"></script>
   <script src="stages.js"></script>
   <script src="fun_route.js"></script>
@@ -2897,6 +2898,24 @@
       }));
       return true;
     }
+    // Members' measurements and confirmed hazards in discovery (measured_stages.js, IDEAS R-04): before the shortlist picks
+    // which stages to time, broken roads drop, smooth and banked ones rise, closed ones go. Members only; any failure (offline,
+    // signed out, slow) leaves the map's order exactly as it was.
+    async function measuredStages(stages, c, radiusKm) {
+      if (!window.ApexMeasuredStages || !window.ApexSync || !stages || !stages.length || (window.ApexFlags && !ApexFlags.on('measured_stages'))) return stages;
+      try {
+        if (!(await RouteLoading.optional(ApexSync.member(), 3000))) return stages;
+        const boxes = ApexMeasuredStages.boxesFor(c, radiusKm) || [];
+        const get = async (path) => { const r = await ApexSync.apiFetch(path, { method: 'GET' }); return r.ok ? r.json() : null; };
+        const [cov, hz] = await Promise.all([
+          Promise.all(boxes.map((b) => RouteLoading.optional(get(`/api/coverage?bbox=${b.join(',')}`), 5000).catch(() => null))),
+          RouteLoading.optional(get(`/api/hazards?lat=${c.lat.toFixed(4)}&lon=${c.lon.toFixed(4)}&km=${Math.min(50, Math.ceil(radiusKm))}`), 5000).catch(() => null),
+        ]);
+        const ways = new Map();
+        for (const j of cov) for (const w of (j && Array.isArray(j.ways) ? j.ways : [])) if (w && Number.isFinite(w.way)) ways.set(w.way, w);
+        return ApexMeasuredStages.rescore(stages, [...ways.values()], Array.isArray(hz) ? hz : []);
+      } catch (_) { return stages; }
+    }
     // Destination routes: the most fun way within the chosen level's time budget (docs/ROUTING.md). Candidates are the
     // router's quickest route and its alternates, plus 1–2 stage detours timed with one matrix call; all are scored for fun
     // on the map geometry and ranked by fun against extra time. Anything that fails just leaves fewer candidates.
@@ -2921,7 +2940,7 @@
             try {
               const area = FunRoute.searchArea(a, b);
               const hls = state.hlOn ? await allHighlights(area.center) : [];
-              const stages = await ApexStages.discover(area.center, area.radiusKm, null, state.hlOn ? { highlights: hls, strength: state.hlStrength } : {});
+              const stages = await measuredStages(await ApexStages.discover(area.center, area.radiusKm, null, state.hlOn ? { highlights: hls, strength: state.hlStrength } : {}), area.center, area.radiusKm);
               const list = FunRoute.shortlist(a, b, stages, FunRoute.LEVELS[level].budget, 4, slack);
               if (!list.length) return [];
               try { await RouteLoading.optional(ApexStages.addElevations(list)); } catch (_) { /* no DEM: which way round each stage (R-11) stays the nearer end */ }
@@ -3105,8 +3124,8 @@
       try {
         const radiusKm = Math.min(14, Math.max(5, targetKm / 4.2));
         const hls = state.hlOn ? await allHighlights(c) : [];
-        const stages = await ApexStages.discover(c, radiusKm, (phase, f) => ui.step(phase === 'tiles' ? 'Finding roads' : 'Scoring roads', 0.05 + 0.3 * f),
-          state.hlOn ? { highlights: hls, strength: state.hlStrength } : {});
+        const stages = await measuredStages(await ApexStages.discover(c, radiusKm, (phase, f) => ui.step(phase === 'tiles' ? 'Finding roads' : 'Scoring roads', 0.05 + 0.3 * f),
+          state.hlOn ? { highlights: hls, strength: state.hlStrength } : {}), c, radiusKm);
         // Real road distances between the best stages (one or two matrix calls); the crow-fly plans are the fallback.
         try {
           const list = FunRoute.loopShortlist(c, stages, targetKm);
@@ -3185,7 +3204,7 @@
         const hls = state.hlOn ? await allHighlights(c) : [];
         const inReach = (s) => Math.min(FunRoute.kmBetween(c, { lat: s.lat[0], lon: s.lon[0] }), FunRoute.kmBetween(c, { lat: s.lat[s.lat.length - 1], lon: s.lon[s.lon.length - 1] })) <= maxKm;
         const stages = await ApexStages.discover(c, maxKm, (phase, f) => ui.step(phase === 'tiles' ? 'Finding roads' : 'Scoring roads', 0.1 + 0.6 * f),
-          { names: inReach, ...(state.hlOn ? { highlights: hls, strength: state.hlStrength } : {}) });
+          { names: inReach, ...(state.hlOn ? { highlights: hls, strength: state.hlStrength } : {}) }).then((st) => measuredStages(st, c, maxKm));
         const list = FunRoute.exploreShortlist(c, stages, maxKm, 12);   // 24 matrix pairs; most fall to the time limit
         ui.step('Measuring roads', 0.8);
         const m = list.length ? await valhallaMatrix([c], FunRoute.exploreTargets(list)) : { times: [[]] };
