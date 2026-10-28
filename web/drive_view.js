@@ -35,6 +35,33 @@
     }
   }
 
+  // One sentence a non-racer understands (IDEAS D-21): what went well, then the one thing to work on. Built only from
+  // the Driver Score components and the coach's technique tips; never a nudge to go faster.
+  const PRAISE = { smoothness: 'Smooth, unhurried steering', braking: 'Braking finished by the middle of each corner', consistency: 'An even rhythm from corner to corner',
+    pace: 'Good use of the grip you had' };
+  const HABIT = {
+    coast: (n) => `in ${n} corners you rolled with neither brake nor gas between slowing down and speeding up; go straight from one to the other`,
+    brake_after_apex: (n) => `in ${n} corners you were still braking past the middle; finish your braking by the middle of the corner`,
+    early_apex: (n) => `in ${n} corners your slowest point came well before the middle; wait a moment longer before you turn in`,
+  };
+  const WEAK = { smoothness: 'steer more gently, with fewer quick corrections in the middle of corners', braking: 'finish your braking by the middle of the corner',
+    consistency: 'aim for the same calm rhythm in every corner; you took some much nearer their limit than others' };
+  const HABIT_PART = { brake_after_apex: 'braking', coast: null, early_apex: null };   // a habit's own component is never also praised
+  function plainCoach(ds, co) {
+    const comp = ds && finite(ds.score) && ds.components;
+    if (!comp) return null;
+    const kinds = {};
+    for (const x of (co && co.corners) || []) if (x && x.tip && x.tip.vs_best === false && HABIT[x.tip.kind]) kinds[x.tip.kind] = (kinds[x.tip.kind] || 0) + 1;
+    const habit = Object.entries(kinds).sort((a, b) => b[1] - a[1])[0];
+    const isHabit = habit && habit[1] >= 2;
+    const weak = Object.keys(WEAK).filter((k) => finite(comp[k]) && comp[k] < 0.6).sort((a, b) => comp[a] - comp[b])[0];
+    const fix = isHabit ? HABIT[habit[0]](habit[1]) : weak ? WEAK[weak] : null;
+    const skip = isHabit ? HABIT_PART[habit[0]] : weak;
+    const strong = Object.keys(PRAISE).filter((k) => k !== skip && finite(comp[k]) && comp[k] >= 0.7).sort((a, b) => comp[b] - comp[a])[0];
+    if (!fix) return `${strong ? PRAISE[strong] : 'A tidy drive'}, and nothing stands out to fix.`;
+    return `${strong ? `${PRAISE[strong]}. ` : ''}One thing to work on: ${fix}.`;
+  }
+
   /**
    * Friction circle: every measured 5 m sample as lateral g (left on the left) against longitudinal g (throttle up,
    * braking down), the driver's own envelope (Core.ggEnvelope, ink) and the scrubbed corner's samples on top (accent).
@@ -125,11 +152,13 @@
     // the ideal drive only means something once another pass of the same corners exists
     const ideal = co && co.clean && co.gain_s > 0 && co.corners.some((x) => x.passes > 1)
       ? { gain: co.gain_s, n: co.clean, drives: new Set(co.corners.filter((x) => x.gain_s != null).map((x) => (x.best ? x.best_from : -1))).size } : null;
+    const plain = plainCoach(ds, co);
     const mi = finite(S.km) ? `${(S.km / 1.609344).toFixed(1)} mi` : '--';
     const dur = finite(S.duration_s) ? fmtT(S.duration_s) : '--';
     head.innerHTML = `<div class="dv-score"><b class="score big">${scoreVal}</b> <small>/1000</small></div>`
       + `<div class="bars">${bar('pace', 'Pace')}${bar('smoothness', 'Smooth')}${bar('braking', 'Brakes')}${bar('consistency', 'Rhythm')}</div>`
       + `<div class="dv-meta">${mi} \u00b7 ${dur} \u00b7 ${d.corners.length} corners</div>`
+      + (plain ? `<p class="dv-plain">${esc(plain)}</p>` : '')
       + (ideal ? `<div class="dv-meta">Ideal drive <b class="gain">${ideal.gain.toFixed(2)} s</b> quicker: your best pass of each of ${ideal.n} corners, from ${ideal.drives} drive${ideal.drives === 1 ? '' : 's'}</div>` : '');
     root_.append(head, el('div', 'dv-grid'));
     const grid = root_.lastChild; grid.append(mapBox, el('div', 'dv-right'));
@@ -216,11 +245,21 @@
         geo.lanes.push({ top, h }); yTop = top + h + 10;
       }
       if (hasElev) {                                                       // faint elevation profile along the bottom
-        let lo = Infinity, hi = -Infinity; for (const v of d.elev) { lo = Math.min(lo, v); hi = Math.max(hi, v); }
+        let lo = Infinity, hi = -Infinity; for (const v of d.elev) if (finite(v)) { lo = Math.min(lo, v); hi = Math.max(hi, v); }
         const top = yTop + LH, h = 40, span = Math.max(10, hi - lo);
         svg += `<text x="${LM}" y="${yTop + 12}" font-size="11" fill="${C.panelDim}">Elevation</text><text x="${W - RM}" y="${yTop + 12}" text-anchor="end" font-size="10" fill="${C.panelDim}">${Math.round(lo * 3.28084)}-${Math.round(hi * 3.28084)} ft</text>`;
-        let p = ''; for (let i = v0; i <= v1; i += step) p += `${i > v0 ? 'L' : 'M'}${X(i).toFixed(1)} ${(top + h - ((d.elev[i] - lo) / span) * h).toFixed(1)}`;
-        svg += `<path d="${p} L${X(v1).toFixed(1)} ${top + h} L${X(v0).toFixed(1)} ${top + h} Z" fill="${C.rule}"/>`;
+        // one filled shape per measured stretch: unknown elevation is a gap, never a dive to the bottom
+        let p = '', run = null;
+        const close = (a, b) => { if (a != null) p += ` L${X(b).toFixed(1)} ${top + h} L${X(a).toFixed(1)} ${top + h} Z`; };
+        let last = null;
+        for (let i = v0; i <= v1; i += step) {
+          if (!finite(d.elev[i])) { close(run, last); run = null; continue; }
+          p += `${run == null ? 'M' : 'L'}${X(i).toFixed(1)} ${(top + h - ((d.elev[i] - lo) / span) * h).toFixed(1)}`;
+          if (run == null) run = i;
+          last = i;
+        }
+        close(run, last);
+        if (p) svg += `<path d="${p}" fill="${C.rule}"/>`;
         geo.lanes.push({ top, h }); yTop = top + h + 6;
       }
       // numbered corner flags on top of the first lane
@@ -308,6 +347,6 @@
     return { move, setRoadFeel, destroy() { ro.disconnect(); }, summary: S };
   }
 
-  const api = { mount, summarize, tipText };
+  const api = { mount, summarize, tipText, plainCoach };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexDriveView = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -721,23 +721,31 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
     private func record(_ node: RoadNode, vertPeakMps2: Double?) {
         guard isRecording else { return }
         let idx = recordedSegments
-        let row = String(
-            format: "%d,%.1f,%.7f,%.7f,%.2f,%.2f,%.4f,%.4f,%.2f,%.4f,%.4f,%.3f,%.2f",
-            idx,
-            Double(idx) * ApexKit.segmentLengthM,
-            node.lat,
-            node.lon,
-            node.elevationM ?? 0.0,
-            speedMps * 2.2369362921,
-            pipeline.lonAccMps2 / Self.gStd,
-            pipeline.latAccMps2 / Self.gStd,
-            pipeline.camberRad * 180.0 / Double.pi,
-            pipeline.crestAccMps2 / Self.gStd,
-            node.roughRMSMps2 / Self.gStd,
-            pipeline.engagement,
-            node.gradePct
-        ) + "," + (vertPeakMps2.map { String(format: "%.3f", $0 / Self.gStd) } ?? "")   // blank: unmeasured, never 0
-        csvLines.append(row)
+        // Blank, never 0, for what is not measured: chassis-frame values need a solved mount (an unsolved one would put
+        // braking into lateral g and skew the score), elevation needs a fix with altitude.
+        let locked = pipeline.mount.state == .locked
+        let vertical = pipeline.mount.state != .default   // roughness needs only the road vertical
+        func cell(_ v: Double?, _ digits: Int) -> String {
+            guard let v = v, v.isFinite else { return "" }
+            return String(format: "%.\(digits)f", v)
+        }
+        let cells: [String] = [
+            String(idx),
+            cell(Double(idx) * ApexKit.segmentLengthM, 1),
+            cell(node.lat, 7),
+            cell(node.lon, 7),
+            cell(node.elevationM, 2),
+            cell(speedMps * 2.2369362921, 2),
+            cell(locked ? pipeline.lonAccMps2 / Self.gStd : nil, 4),
+            cell(locked ? pipeline.latAccMps2 / Self.gStd : nil, 4),
+            cell(locked ? pipeline.camberRad * 180.0 / Double.pi : nil, 2),
+            cell(locked ? pipeline.crestAccMps2 / Self.gStd : nil, 4),
+            cell(vertical ? node.roughRMSMps2 / Self.gStd : nil, 4),
+            cell(locked ? pipeline.engagement : nil, 3),
+            cell(node.elevationM == nil ? nil : node.gradePct, 2),
+            cell(vertPeakMps2.map { $0 / Self.gStd }, 3),
+        ]
+        csvLines.append(cells.joined(separator: ","))
         recordedSegments += 1
     }
 
