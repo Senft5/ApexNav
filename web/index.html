@@ -36,6 +36,7 @@
   <script src="health.js"></script>
   <script src="scenic.js"></script>
   <script src="eta_share.js"></script>
+  <script src="route_import.js"></script>
   <script src="incident.js"></script>
   <script src="traffic.js"></script>
   <script src="in_car.js"></script>
@@ -445,6 +446,7 @@
               <div class="place-list" id="placeList" hidden></div>
               <div class="plan-links">
                 <button class="linkbtn" id="tapRouteBtn">Tap the map</button>
+                <label class="linkbtn" id="gpxImportBtn">Open GPX<input type="file" id="gpxFile" accept=".gpx,application/gpx+xml,application/xml,text/xml" hidden /></label>
                 <span class="loop-row"><span>Loop</span><button class="chip" data-loop-mi="15">15</button><button class="chip" data-loop-mi="30">30</button><button class="chip" data-loop-mi="45">45 mi</button><button class="chip" data-loop-min="60">1 h</button><button class="chip" data-loop-min="120">2 h</button></span>
               </div>
               <div class="plan-links fun-row" role="group" aria-label="Explore: the best roads near you"><span>Explore</span><button class="chip" data-explore-min="15">15 min</button><button class="chip" data-explore-min="30">30 min</button></div>
@@ -468,6 +470,7 @@
                 <button class="ink-btn" id="routeSaveBtn" aria-pressed="false">Save</button>
                 <button class="ink-btn" id="routeShareBtn">Share</button>
                 <button class="ink-btn" id="etaShareBtn" aria-pressed="false" hidden>Share ETA</button>
+                <button class="linkbtn" id="routeGpxBtn">GPX</button>
               </div>
               <div class="stack-8" id="routeSharePick"></div>
             </section>
@@ -2320,9 +2323,50 @@
       if (!items.length) throw new Error(`No match for "${q}"`);
       return { lat: parseFloat(items[0].lat), lon: parseFloat(items[0].lon), label: items[0].display_name.split(',')[0] };
     }
+    // Routes from elsewhere (IDEAS R-25, R-26; web/route_import.js): a Google/Apple Maps link pasted into Where to?, or a GPX
+    // file (Open GPX, or "Open in ApexNav" from Files and Mail in the app). A GPX track is followed as drawn; route points,
+    // waypoints and a link's stops are routed through in order.
+    async function openMapsLink(link) {
+      if (link.short) { toast('Open that link in your browser first, then copy the full address from there.'); return; }
+      const ui = planBusy();
+      ui.step('Finding…', 0.3);
+      try {
+        const where = (p) => (p && p.query ? resolvePlace(p.query) : Promise.resolve(p ? { lat: p.lat, lon: p.lon, label: null } : null));
+        const from = link.from ? await where(link.from) : await resolvePlace('');
+        const to = await where(link.to), via = [];
+        for (const v of link.via || []) via.push(await where(v));
+        const name = `To ${to.label || 'the shared place'}`;
+        ui.step('Routing…', 0.7);
+        if (via.length) await buildRoute([from, ...via, to].map((p) => ({ lat: p.lat, lon: p.lon })), 'route_link', name);
+        else await funRoute(from, to, 'route_dest', name, { from: link.from ? { lat: from.lat, lon: from.lon } : null, to: { lat: to.lat, lon: to.lon }, via: [] }, ui);
+      } catch (err) { toast(err.message); } finally { ui.done(); }
+    }
+    async function openGpx(text, fileName) {
+      const g = ApexRouteImport.parseGpx(text);
+      if (!g) { toast('That file has no route or track in it.'); return; }
+      const name = g.name || (fileName || 'GPX route').replace(/\.gpx$/i, '');
+      if (g.kind === 'track') {
+        const t = await trackFromPolyline(g.coords, `gpx_${Date.now()}`, name);
+        await buildRoute(null, t.id, name, t);
+        toast(`${name}: following the track as drawn, ${(totalM() / 1609.344).toFixed(1)} mi.`);
+      } else await buildRoute(g.stops, `gpx_${Date.now()}`, name);
+    }
+    $('gpxFile').addEventListener('change', async (e) => {
+      const f = e.target.files && e.target.files[0]; e.target.value = '';
+      if (!f) return;
+      if (f.size > 5e6) { toast('That file is too big for a route (5 MB at most).'); return; }
+      openGpx(await f.text(), f.name);
+    });
+    $('routeGpxBtn').addEventListener('click', () => {
+      const t = plannedRoute;
+      if (!t || !Array.isArray(t.lat) || t.lat.length < 2) return;
+      saveFile(ApexRouteImport.toGpx(t.name, t.lat, t.lon), `${(t.name || 'route').replace(/[^\w-]+/g, '_').slice(0, 60)}.gpx`, 'application/gpx+xml');
+    });
     async function routeToQuery() {
       const fromQ = $('fromInput').value, toQ = $('destInput').value;
       if ((!fromQ.trim() && !toQ.trim()) || $('planPanel').classList.contains('busy')) return;
+      const link = typeof ApexRouteImport !== 'undefined' && ApexRouteImport.parseMapsLink(toQ);
+      if (link) { openMapsLink(link); return; }
       const ui = planBusy();
       ui.step('Finding…', 0.3);
       try {
@@ -3129,7 +3173,8 @@
       $(id).addEventListener('keydown', (e) => {
         if (e.key !== 'Enter') return;
         e.preventDefault(); e.target.blur();
-        const top = id === 'destInput' && shownRows.q === $('destInput').value.trim() && shownRows.rows[0];
+        const pasted = id === 'destInput' && window.ApexRouteImport && ApexRouteImport.parseMapsLink($('destInput').value);   // a maps link beats the top suggestion
+        const top = !pasted && id === 'destInput' && shownRows.q === $('destInput').value.trim() && shownRows.rows[0];
         if (top) routeToPlace(top); else routeToQuery();
       });
       $(id).addEventListener('focus', () => { state.planField = id; });
@@ -4546,6 +4591,7 @@
         // App sign-in finished in the native shell: keep the session token and redraw whatever shows account state.
         if (msg && msg.type === 'session' && msg.token) { ApexSync.setSession(msg.token); toast('Signed in.'); location.reload(); }
         if (msg && msg.type === 'link' && msg.params) { openAppLink(msg.params); return; }
+        if (msg && msg.type === 'gpx' && typeof msg.text === 'string') { openGpx(msg.text, msg.name); return; }
         // The phone joined CarPlay (IDEAS C-05): offer the drive, never start recording unasked.
         if (msg && msg.type === 'car' && !driveActive && state.mode !== 'live') { toast('CarPlay connected.', { label: 'Start drive', ms: 10000, onClick: startDrive }); carOfferUntil = $('toast')._holdUntil; return; }
         if (msg && msg.type === 'signInFailed' && msg.reason !== 'cancelled') toast('Couldn\'t sign in. Check signal and try again.');

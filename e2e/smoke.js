@@ -218,6 +218,25 @@ flow('share your ETA: the route card makes a link; its page says who and when, n
   check(/Arriving around/.test(await page.textContent('#sub')) && /not where they are/.test(await page.textContent('footer')), 'who, when, and the promise');
 }, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
 
+flow('routes from elsewhere: a GPX track is followed as drawn; a pasted Google Maps link routes through its stops (router stubbed, IDEAS R-25/R-26)', async (page, base) => {
+  const bodies = [];
+  await page.route('https://valhalla1.openstreetmap.de/route', (route) => { const req = JSON.parse(route.request().postData()); bodies.push(req); route.fulfill({ contentType: 'application/json', body: JSON.stringify(stubTrip(req.locations)) }); });
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.ApexRouteImport);
+  const pts = Array.from({ length: 300 }, (_, i) => `<trkpt lat="${(35.5 + i * 2e-4 + Math.sin(i / 9) * 3e-4).toFixed(6)}" lon="${(-83.9 + i * 2e-4).toFixed(6)}"/>`).join('');
+  await page.setInputFiles('#gpxFile', { name: 'dragon.gpx', mimeType: 'application/gpx+xml', buffer: Buffer.from(`<gpx><trk><name>Dragon run</name><trkseg>${pts}</trkseg></trk></gpx>`) });
+  await page.waitForFunction(() => window.apexDebug.track && window.apexDebug.track.name === 'Dragon run', null, { timeout: 10000 });
+  check(bodies.length === 0, 'a GPX track is followed as drawn, no router');
+  await page.click('#planClear');
+  await page.click('#destInput');
+  await page.fill('#destInput', 'https://www.google.com/maps/dir/35.9606,-83.9207/35.80,-83.95/35.7565,-83.97/@35.8,-83.9,11z');
+  await page.press('#destInput', 'Enter');
+  await page.waitForFunction(() => window.apexDebug.track && window.apexDebug.track.id === 'route_link', null, { timeout: 20000 });
+  const locs = bodies[bodies.length - 1].locations.map((l) => [l.lat, l.lon]);
+  check(JSON.stringify(locs) === JSON.stringify([[35.9606, -83.9207], [35.8, -83.95], [35.7565, -83.97]]), 'the link\'s stops, in order: ' + JSON.stringify(locs));
+}, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
+
 flow('the car connects: CarPlay offers Start drive, and an apexnav://open?go=drive link starts one', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.goto(base + '/index.html');

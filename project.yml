@@ -38,6 +38,20 @@ targets:
       properties:
         CFBundleDisplayName: "APEX NAV"
         NSSupportsLiveActivities: true
+        # "Open in ApexNav" for GPX files from Files, Mail and AirDrop (IDEAS R-26); copied in, not edited in place
+        LSSupportsOpeningDocumentsInPlace: false
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: GPX route
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+            LSItemContentTypes: [com.topografix.gpx]
+        UTImportedTypeDeclarations:
+          - UTTypeIdentifier: com.topografix.gpx
+            UTTypeDescription: GPX route
+            UTTypeConformsTo: [public.xml]
+            UTTypeTagSpecification:
+              public.filename-extension: [gpx]
+              public.mime-type: [application/gpx+xml]
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         # Only standard HTTPS/TLS: skips the export-compliance question on every TestFlight build.

@@ -36,6 +36,16 @@ it says "Couldn't check towns" instead of pretending there are none. Checked: we
 (Alcoa/Maryville) and no town-free alternate; Morristown → Rahway NJ, the winner has 29.5 km of town against 19.5–25 km for
 others, so the card says ~18 mi (fun outweighed the town cost there).
 
+## Routes from elsewhere
+
+Where to? takes a pasted Google Maps (`/maps/dir/…`, `?api=1&destination=…&waypoints=…`, `/place/…/@lat,lon`), Apple Maps
+(`daddr`, `saddr`, `ll`) or `geo:` link: places written as words are searched, the stops are routed through in order, and a
+link with no stops is planned like any destination (fun level and all). Short `maps.app.goo.gl` links can't be expanded from
+the page; the app says to open them in a browser first. **Open GPX** (and, in the iOS app, "Open in ApexNav" on a .gpx from
+Files, Mail or AirDrop) follows a track exactly as drawn, with our notes worked out from it; a file with only route points or
+waypoints is routed through them. The route card's **GPX** saves the planned route as a track (IDEAS R-25, R-26;
+web/route_import.js, tests/test_route_import.py).
+
 ## Along the route
 
 Once a route is planned, the `poi` layer of the same OpenFreeMap tiles at z14 is read under it (sampled every 1 km, at most
