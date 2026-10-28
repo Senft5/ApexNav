@@ -377,7 +377,7 @@
               <div class="place-list" id="placeList" hidden></div>
               <div class="plan-links">
                 <button class="linkbtn" id="tapRouteBtn">Tap the map</button>
-                <span class="loop-row"><span>Loop</span><button class="chip" data-loop-mi="15">15</button><button class="chip" data-loop-mi="30">30</button><button class="chip" data-loop-mi="45">45 mi</button><button class="chip" data-loop-min="60" aria-label="1 hour loop">1 h</button><button class="chip" data-loop-min="120" aria-label="2 hour loop">2 h</button></span>
+                <span class="loop-row"><span>Loop</span><button class="chip" data-loop-mi="15">15</button><button class="chip" data-loop-mi="30">30</button><button class="chip" data-loop-mi="45">45 mi</button><button class="chip" data-loop-min="60">1 h</button><button class="chip" data-loop-min="120">2 h</button></span>
               </div>
               <div class="plan-links fun-row" role="radiogroup" aria-label="Route style"><span>Roads</span><button class="chip" data-fun="quick" role="radio" aria-checked="false">Quick</button><button class="chip" data-fun="fun" role="radio" aria-checked="false">Fun</button><button class="chip" data-fun="max" role="radio" aria-checked="false">Max fun</button></div>
               <div class="plan-links fun-row" role="group" aria-label="Avoid"><span>Avoid</span><button class="chip" data-avoid="highways" aria-pressed="false">Highways</button><button class="chip" data-avoid="tolls" aria-pressed="false">Tolls</button><button class="chip" data-avoid="ferries" aria-pressed="false">Ferries</button><button class="chip" data-avoid="unpaved" aria-pressed="false">Unpaved</button></div>
@@ -2211,7 +2211,9 @@
         t.timeS = r.timeS;
         return { t, job, route: r, ...scoreLoop(t, miles, targetS && Number.isFinite(r.timeS) ? { timeS: r.timeS, targetS } : null), spursCut: rs.removed };
       });
-      const done = FunRoute.keepAvoiding((await Promise.allSettled(tries)).filter(r => r.status === 'fulfilled').map(r => r.value), avoid);
+      let done = FunRoute.keepAvoiding((await Promise.allSettled(tries)).filter(r => r.status === 'fulfilled').map(r => r.value), avoid);
+      // A time loop compares drive times: a route the router didn't time can't be judged with the others.
+      if (targetS && done.some(d => Number.isFinite(d.t.timeS))) done = done.filter(d => Number.isFinite(d.t.timeS));
       if (!done.length) { toast('Couldn\'t build a loop. Check signal and try again.'); return; }
       done.sort((a, b) => b.score - a.score);
       // Members: let what others measured break ties among the top few (rough −8 … smooth +3, banked ±2 on the same fun scale, docs/ROUTING.md; unmeasured roads are neutral).
@@ -2233,7 +2235,7 @@
         const near = Math.abs(gotMi - miles) <= 0.2 * miles;
         best.t.name = `${Math.max(1, Math.round(gotMi))} mi loop`;
         await buildRoute(null, loopId, best.t.name, best.t);
-        toast(near ? `${best.good} good corners on this loop` : `${gotMi.toFixed(1)} mi: the closest good loop to ${miles} mi`);
+        toast(near ? `${best.good} good corners on this loop` : `${gotMi.toFixed(1)} mi: the closest good loop to ${asked}`);
       }
       window.apexDebug && (window.apexDebug.lastLoop = done.map(d => ({ kind: d.job.kind, fun: d.t.fun && d.t.fun.fun, score: d.score, km: d.km, good: d.good, retraced: d.retraced })));
     }
