@@ -1,5 +1,6 @@
 # Headers for the Cloudflare Worker's static assets (wrangler.jsonc assets.directory).
-# No full Content-Security-Policy yet: the app uses inline scripts and several third-party map/route/model hosts; framing is blocked now.
+# The full Content-Security-Policy is a <meta> tag in each page (tools/csp.py, IDEAS Z-11), so it also holds in the iOS shell;
+# frame-ancestors only works as a header, so it stays here.
 /*
   Strict-Transport-Security: max-age=31536000
   X-Frame-Options: DENY

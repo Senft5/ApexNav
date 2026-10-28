@@ -1062,6 +1062,8 @@ flow('Your records: unknown dates and unscored drives never make a "new best", a
     const page = await ctx.newPage();
     const errors = [];
     page.on('pageerror', (e) => errors.push(String(e && e.stack || e)));
+    // Content-Security-Policy (tools/csp.py, IDEAS Z-11): anything the policy blocks is a failure, so a new host can't slip in.
+    page.on('console', (m) => { if (/Content Security Policy/i.test(m.text())) errors.push('CSP: ' + m.text()); });
     // A missing file of our own (a renamed script, a typo'd path) is a failure even when nothing throws. /api/* has no
     // Worker behind this server, so its 404s are expected.
     page.on('response', (res) => { const u = res.url(); if (u.startsWith(base) && !u.startsWith(base + '/api/') && res.status() >= 400) errors.push(`${res.status()} ${u.slice(base.length)}`); });
