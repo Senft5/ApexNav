@@ -921,6 +921,11 @@ flow('Siri links: report and end act only during a drive, and say so otherwise (
   check(!(await page.isVisible('#hzOverlay.show')), 'no report sheet outside a drive');
   await page.evaluate(() => window.apex.onNative({ type: 'link', params: { go: 'end' } }));
   await page.waitForFunction(() => /No drive to end/.test(document.getElementById('toast').textContent));
+  // next stage / skip a stage (no fun route with stages here): it says so, nothing else happens
+  await page.evaluate(() => window.apex.onNative({ type: 'link', params: { go: 'nextstage' } }));
+  await page.waitForFunction(() => /no stages|No route/i.test(document.getElementById('toast').textContent));
+  await page.evaluate(() => window.apex.onNative({ type: 'link', params: { go: 'skipstage' } }));
+  await page.waitForFunction(() => /Skip a stage during a drive/.test(document.getElementById('toast').textContent));
   // during a drive the report sheet opens
   await page.evaluate((f) => window.apex.live(f), frame(1));
   await page.waitForFunction(() => window.apexDebug.state.mode === 'live');

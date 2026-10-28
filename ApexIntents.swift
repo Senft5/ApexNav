@@ -1,7 +1,8 @@
 import AppIntents
 import Foundation
 
-/// Siri and Shortcuts (IDEAS V-07): "Start a drive in ApexNav", "Report a hazard in ApexNav", "End my drive in ApexNav".
+/// Siri and Shortcuts (IDEAS V-07): "Start a drive in ApexNav", "Report a hazard in ApexNav", "End my drive in ApexNav",
+/// "How far to the next stage in ApexNav", "Skip this stage in ApexNav".
 /// Each opens the app and hands it the same apexnav://open?go=… link a widget or a Shortcuts automation would, so the
 /// page decides what happens (a report or an end only during a drive). Hands-free in the car: Siri, or "Hey Siri" on CarPlay.
 enum ApexIntentInbox {
@@ -37,6 +38,20 @@ struct EndDriveIntent: AppIntent {
     @MainActor func perform() async throws -> some IntentResult { ApexIntentInbox.deliver("end"); return .result() }
 }
 
+struct NextStageIntent: AppIntent {
+    static let title: LocalizedStringResource = "How far to the next stage"
+    static let description = IntentDescription("Says how far it is to the next fun stretch on your route, or how much of this one is left.")
+    static let openAppWhenRun = true
+    @MainActor func perform() async throws -> some IntentResult { ApexIntentInbox.deliver("nextstage"); return .result() }
+}
+
+struct SkipStageIntent: AppIntent {
+    static let title: LocalizedStringResource = "Skip this stage"
+    static let description = IntentDescription("During a drive on a fun route, drops the stage you're on or the next one and reroutes.")
+    static let openAppWhenRun = true
+    @MainActor func perform() async throws -> some IntentResult { ApexIntentInbox.deliver("skipstage"); return .result() }
+}
+
 struct ApexShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
         AppShortcut(intent: StartDriveIntent(), phrases: ["Start a drive in \(.applicationName)", "Start driving with \(.applicationName)"],
@@ -45,5 +60,9 @@ struct ApexShortcuts: AppShortcutsProvider {
                     shortTitle: "Report a hazard", systemImageName: "exclamationmark.triangle")
         AppShortcut(intent: EndDriveIntent(), phrases: ["End my drive in \(.applicationName)", "Stop the drive in \(.applicationName)"],
                     shortTitle: "End the drive", systemImageName: "flag.checkered")
+        AppShortcut(intent: NextStageIntent(), phrases: ["How far to the next stage in \(.applicationName)", "Next stage in \(.applicationName)"],
+                    shortTitle: "Next stage", systemImageName: "road.lanes.curved.right")
+        AppShortcut(intent: SkipStageIntent(), phrases: ["Skip this stage in \(.applicationName)", "Skip the stage in \(.applicationName)"],
+                    shortTitle: "Skip this stage", systemImageName: "forward.end")
     }
 }

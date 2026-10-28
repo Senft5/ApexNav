@@ -34,7 +34,7 @@
   const REACTION_S = 1.5;
   const EYE_HEIGHT_M = 1.08;
   const OBJECT_HEIGHT_M = 0.60;
-  const SIGHT_OFFSET_M = 4.0;
+  const SIGHT_OFFSET_M = 4.0, NEAR_SIDE_M = 0.8, NEAR_SIDE_FLOOR_M = 1.0;   // NEAR_SIDE_M: see core/road_dna.py
   const SIGHT_MAX_M = 400.0;
   const CAMBER_CLIP_RAD = 0.15;
   const CREST_UNWEIGHT_G = -0.08;
@@ -150,7 +150,8 @@
 
   // Geometric sight distance ahead of each sample (see core/road_dna.sight_distance_m).
   // offsetM: one clearance (m) for the road, or one per sample (IDEAS Q-09), read where the sightline passes.
-  function sightDistanceM(lat, lon, elevation = null, offsetM = SIGHT_OFFSET_M) {
+  // keepSide 'right' | 'left' (IDEAS U-22): bends toward your own side get NEAR_SIDE_M less clearance; null: both alike.
+  function sightDistanceM(lat, lon, elevation = null, offsetM = SIGHT_OFFSET_M, keepSide = null) {
     const offAt = typeof offsetM === 'number' ? () => offsetM : (k) => (Number.isFinite(offsetM[k]) ? offsetM[k] : SIGHT_OFFSET_M);
     const n = lat.length, out = new Float64Array(n).fill(SIGHT_MAX_M);
     if (n < 3) return out;
@@ -167,8 +168,10 @@
         const chord = Math.max(Math.hypot(cx, cy), 1e-6);
         let blocked = false;
         for (let k = i + 1; k < j && !blocked; k++) {
-          const off = Math.abs(cx * (ys[k] - ys[i]) - cy * (xs[k] - xs[i])) / chord;
-          if (off > offAt(k)) blocked = true;
+          const cross = cx * (ys[k] - ys[i]) - cy * (xs[k] - xs[i]), off = Math.abs(cross) / chord;
+          let allow = offAt(k);
+          if ((keepSide === 'right' && cross > 0) || (keepSide === 'left' && cross < 0)) allow = Math.max(NEAR_SIDE_FLOOR_M, allow - NEAR_SIDE_M);
+          if (off > allow) blocked = true;
           else if (elevation) {
             const line = eye + (elevation[j] + OBJECT_HEIGHT_M - eye) * ((s[k] - s[i]) / (s[j] - s[i]));
             if (elevation[k] > line) blocked = true;

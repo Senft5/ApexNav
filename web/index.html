@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-taz21a5lIIhicPb3mh5FrkSuSQRuSpKzM/heETf/Q8c=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-+3TUkTRhN6racQmVb3EG2MIe1Wmam67KQ4xpjsZitx0=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>ApexNav</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -18,6 +18,7 @@
   <script src="vendor/maplibre-contour.min.js"></script>
   <script src="apex_core.js"></script>
   <script src="analysis_client.js"></script>
+  <script src="driving_side.js"></script>
   <script src="route_loading.js"></script>
   <script src="stages.js"></script>
   <script src="fun_route.js"></script>
@@ -586,6 +587,8 @@
           <section data-panel="setup">
             <h3>Units</h3>
             <div class="row" role="radiogroup" aria-label="Units" id="unitsRow"><button class="chip" data-units="imperial" role="radio">Miles and feet</button><button class="chip" data-units="metric" role="radio">Kilometres and metres</button></div>
+            <p class="note" style="margin:8px 0 4px">Driving side: bends toward your own side of the road get more caution, since you see less round them.</p>
+            <div class="row" role="radiogroup" aria-label="Driving side" id="sideRow"><button class="chip" data-side="auto" role="radio">From the map</button><button class="chip" data-side="right" role="radio">Right</button><button class="chip" data-side="left" role="radio">Left</button></div>
           </section>
           <section data-panel="setup">
             <h3>Feedback</h3>
@@ -798,7 +801,10 @@
       let offsets = null;
       try { offsets = window.ApexStages && ApexStages.sightOffsets ? await RouteLoading.optional(ApexStages.sightOffsets(rs.lat, rs.lon), 4000) : null; } catch (_) { offsets = null; }
       // curvature, sight, braking envelope and corners in a Web Worker (analysis_client.js, IDEAS P-05); inline without one
-      const { kappa, sight, env, corners } = await ApexAnalysis.analyse(rs.lat, rs.lon, offsets);
+      // which side you drive on (driving_side.js, IDEAS U-22): bends toward it are the blind ones
+      let side = null;
+      try { side = ApexDrivingSide.forRoute(rs.lat[0], rs.lon[0]); } catch (_) { side = null; }
+      const { kappa, sight, env, corners } = await ApexAnalysis.analyse(rs.lat, rs.lon, offsets, { side });
       const dist = rs.lat.map((_, i) => i * 5);
       const events = corners.map(c => {
         const t = Core.paceNoteText(c);
@@ -2699,6 +2705,7 @@
       const nt = await trackFromPolyline(r.coords, t.id, t.name);
       if (track !== t || state.mode !== 'live') return;
       Object.assign(nt, { request: { from: null, to: req.to, via: ahead }, fun: funOf(nt, r.turns), timeS: r.timeS, timeMarks: timeMarksOf(nt, r), steps: stepsOf(nt, r) });
+      if (t.stageSpans) nt.stageSpans = FunRoute.stageSpans(nt, t.stageSpans.filter(s => s.endM > routeWatch.bestM));
       await buildRoute(null, t.id, t.name, nt);                     // activate() resets the monitor for the new route
     }
     // Traffic ahead (iOS app only; docs/ARCHITECTURE.md section 8). Every 2 min while on a planned route, Apple times the next
@@ -2871,7 +2878,7 @@
               const [r] = await valhallaRoutes(pts);
               // The router may join the shaping points by a shortcut that skips the stage (R-14): then the plan didn't happen.
               if (!FunRoute.keptStages(r.coords, plan)) throw new Error('stage skipped');
-              return { kind: 'stages', route: r, timeS: r.timeS, via: pts.slice(1, -1) };
+              return { kind: 'stages', plan, route: r, timeS: r.timeS, via: pts.slice(1, -1) };
             })));
           }
           for (const r of routed) if (r.status === 'fulfilled') cands.push(r.value);
@@ -2909,6 +2916,7 @@
       Object.assign(t, { measured: c.t.measured, fun: c.fun, timeS: c.timeS, timeMarks: timeMarksOf(t, c.route), steps: stepsOf(t, c.route), extraS: c.extraS, funLevel: o.level, glareMin: c.glare ? Math.round(c.glare.minutes) : null, townKm: c.townKm,
                          unavoided: FunRoute.unavoided(avoid, c.route), why: whyText(FunRoute.why(c, o.quickest), fewerTownKm(c, o.quickest), c.extraS),
                          request: { ...o.request, via: via.map(p => ({ lat: p.lat, lon: p.lon, shaping: true })) } });
+      if (c.plan) t.stageSpans = FunRoute.stageSpans(t, c.plan.legs);   // where its stages are (Siri: next / skip, IDEAS V-07)
       routeOptions = Object.assign(o, { picked: i, current: t });
       await buildRoute(null, o.id, o.name, t);
       return t;
@@ -3689,6 +3697,10 @@
         ApexUnits.set(b.dataset.units); paintUnits(); location.reload();
       }));
       paintUnits();
+      // driving side (IDEAS U-22): the next route planned uses it
+      const paintSide = () => document.querySelectorAll('[data-side]').forEach(b => { const on = b.dataset.side === ApexDrivingSide.choice(); b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); });
+      document.querySelectorAll('[data-side]').forEach(b => b.addEventListener('click', () => { ApexDrivingSide.setChoice(b.dataset.side); paintSide(); toast('Used from the next route you plan.'); }));
+      paintSide();
     }
     // Send feedback (web/feedback.js, IDEAS L-05): Settings → Feedback; the owner reads it in Crew.
     let accountMe = null, feedbackUi = null;
@@ -5041,9 +5053,33 @@
         if (p.go === 'drive') { closeSheet(); driveFromLink(); }
         else if (p.go === 'report') { if (state.mode === 'live') { closeSheet(); $('hzOverlay').classList.add('show'); } else toast('Start a drive to report a hazard.'); }
         else if (p.go === 'end') { if (state.mode === 'live') leaveDrive(true); else toast('No drive to end.'); }
+        else if (p.go === 'nextstage') nextStageAnswer();
+        else if (p.go === 'skipstage') skipStage();
         return;
       }
       showView('crew'); renderAccount();
+    }
+    // Siri (IDEAS V-07): "how far to the next stage" says it aloud; "skip this stage" drops the stage you're on or the next
+    // one and reroutes to your next stop or the destination (only on a fun route with stages, during a drive).
+    function nextStageAnswer() {
+      const t = track, at = state.mode === 'live' ? routeWatch.bestM : state.cursorM;
+      const n = t && t.stageSpans ? FunRoute.stageAhead(t.stageSpans, Number.isFinite(at) ? at : 0) : null;
+      const line = !t || !t.stageSpans ? 'This route has no stages.' : !n ? 'No more stages on this route.'
+        : n.on ? `On ${n.span.name || 'a stage'} now: ${ApexUnits.long(n.toM, 1)} to go.` : `Next stage${n.span.name ? `, ${n.span.name},` : ''} in ${ApexUnits.long(n.toM, 1)}.`;
+      toast(line); say(line, true);
+    }
+    function skipStage() {
+      const t = track;
+      if (state.mode !== 'live' || !t || !t.request) { toast('Skip a stage during a drive on a fun route.'); return; }
+      const n = t.stageSpans ? FunRoute.stageAhead(t.stageSpans, routeWatch.bestM || 0) : null;
+      if (!n) { const line = 'No stage ahead to skip.'; toast(line); say(line, true); return; }
+      // its shaping points come out of the plan; your own stops stay
+      const near = (v) => { const h = Core.nearestIndex(v.lat, v.lon, t.lat, t.lon, -1); return h.index >= 0 && h.distM <= 80 ? t.dist[h.index] : null; };
+      t.request = { ...t.request, via: t.request.via.filter(v => { if (!v.shaping) return true; const m = near(v); return m == null || m < n.span.startM - 50 || m > n.span.endM + 50; }) };
+      t.stageSpans = t.stageSpans.filter(s => s !== n.span);
+      const line = `Skipping ${n.span.name || 'this stage'}.`;
+      toast(line); say(line, true);
+      reroute(t);
     }
     // Privacy zones (privacy_zones.js, IDEAS Z-02): inside one the drive keeps no samples, road data stops, convoys get no
     // position. A drive that enters one stops sharing road data for the rest of that drive (the stretch before stays private too).
