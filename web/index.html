@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-kU1yakxrRGP5rD9nFICPIiPmVnazkn9UQRNSQS2rYRI=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-GcTKwjxRYJGMvvNCubrt/DmEf/zVc6dhRMrWjLPOyDQ=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -133,6 +133,8 @@
     .rb-call span:first-child { font-size: 16px; font-weight: 800; line-height: 1.1; }
     .rb-box.now .rb-call span.long:first-child { font-size: 17px; }
     .rb-box.now .rb-call span.xlong:first-child { font-size: 14px; }
+    .rb-box:not(.now) .rb-call span.long:first-child, .rb-box:not(.now) .rb-call span.xlong:first-child { font-size: 11px; white-space: normal; line-height: 1.1; }
+    .ds-main > span { white-space: nowrap; }
 
     /* ---------------- stage map ---------------- */
     .stage { position: relative; min-height: 0; background: var(--stage); overflow: hidden; }
@@ -703,7 +705,8 @@
       </aside>
       <div class="overlay dim" id="hzOverlay" role="dialog" aria-modal="true" aria-label="Report a hazard">
         <div class="card-sheet">
-          <h2>Report ahead of others</h2>
+          <h2>Report a hazard</h2>
+          <p class="note">Drivers coming this way get a warning.</p>
           <div class="hz-grid" id="hzKinds"></div>
           <button class="linkbtn" id="hzCancel">Cancel</button>
         </div>
@@ -1741,7 +1744,8 @@
     // anything the bank can't voice (drive names...) falls back to the device voice.
     // opts: kind 'hazard' (goes first, may cut off an ordinary line), key (never twice in a row), atM (route metres: dropped once passed).
     function say(text, force, chain = null, sysToken = null, opts = {}) {
-      if (text && opts.kind === 'hazard' && driveActive) carPost({ kind: 'hazard', title: text });
+      // a road hazard (not a turn or a crest, which share the urgent speech lane) also alerts on the car's screen
+      if (text && opts.alert && driveActive) carPost({ kind: 'hazard', title: text });
       if (!text || (!state.toggles.voice && !force)) return;
       if (force) { speech.queue.clear(); stopSpeaking(); opts = { duck: true, ...opts }; }   // a line you asked for is heard
       speech.queue.push({ text, chain, sysToken, ...opts }, performance.now());
@@ -1946,7 +1950,7 @@
           && !calledBumps.some(e => e.dist_m - state.cursorM < lead + 30
             || Math.hypot((track.lon[e.index] - n.lon) * 111320 * Math.cos(n.lat * Math.PI / 180), (track.lat[e.index] - n.lat) * 110540) < HZ_SAME_SPOT_M));
         const hz = ApexRoadMemory.upcoming(pool, state.live, 25, lead, recent);
-        if (hz) { hazardSaid.set(hz.id, now); say(hz.text, false, null, null, { kind: 'hazard', key: `mem:${hz.id}`, repeatMs: HZ_REPEAT_MS }); }
+        if (hz) { hazardSaid.set(hz.id, now); say(hz.text, false, null, null, { kind: 'hazard', key: `mem:${hz.id}`, repeatMs: HZ_REPEAT_MS, alert: true }); }
       }
       const reach = lead + vMps * MEMO_S;
       if (live && spirited && vMps >= 5 && performance.now() - state.liveAt < 2500 && !speech.busy && !speech.queue.size
@@ -3849,7 +3853,7 @@
       },
       getRoute: () => (track && track.kind === 'route' && track.lat.length > 1 ? { name: track.name, pts: track.lat.map((la, i) => [la, track.lon[i]]) } : null),
       // A close hazard cuts in; a far one goes next, after the pace note being spoken (never dropping the notes queued).
-      speak: (text, urgent) => { if (!state.toggles.voice) toast(text); else if (urgent) say(text, true, null, null, { kind: 'hazard' }); else sayNext(text, `convoy:${text}`); },
+      speak: (text, urgent) => { if (!state.toggles.voice) toast(text); else if (urgent) say(text, true, null, null, { kind: 'hazard', alert: true }); else sayNext(text, `convoy:${text}`); },
     }) : null; } catch (e) { console.error('convoy', e); convoy = null; }   // the convoy never takes the page down
     // Garage (web/garage_ui.js): your cars, and the ones friends and crew-mates show.
     // Block and report (web/safety_ui.js) on every social surface below; the garage uses it for friends' cars.
@@ -4693,7 +4697,8 @@
       else if (s.calibration === 'paused') warn.push('Phone is hot · bumps and banking paused');
       // a browser's own mount calibration (live_pipeline.js, IDEAS A-02): banking only once checked against GPS; silent until then
       if (!NATIVE_SHELL && s.webMount === 'verified') main.push('Banking measured');
-      const m = main.join(' · '), w = warn.join(' · ');
+      // each part stays whole: a narrow screen breaks the line between parts, never inside "77 min left · 8:24 PM"
+      const m = main.map(x => `<span>${x}</span>`).join(' · '), w = warn.join(' · ');
       if ($('dsMain').innerHTML !== m) $('dsMain').innerHTML = m;
       if ($('dsWarn').textContent !== w) $('dsWarn').textContent = w;
       $('dsWarn').hidden = !w;
@@ -4984,7 +4989,7 @@
       const me = { lat: frame.lat, lon: frame.lon, heading: Number.isFinite(frame.course_deg) ? frame.course_deg : null };
       const v = Number.isFinite(frame.speed_mps) ? frame.speed_mps : 0;
       const next = ApexHazardReports.nextAhead(reported.list, me, Math.max(150, Math.min(600, v * 8)), reported.said);
-      if (next) { reported.said.add(next.id); say(next.text, false, null, null, { kind: 'hazard', key: `rep:${next.id}`, repeatMs: 10 * 60000 }); }
+      if (next) { reported.said.add(next.id); say(next.text, false, null, null, { kind: 'hazard', key: `rep:${next.id}`, repeatMs: 10 * 60000, alert: true }); }
       const passed = reported.watch.update(reported.list, me, reported.mine);
       if (passed && !reported.asking) askStill(passed);
     }

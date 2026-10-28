@@ -58,3 +58,10 @@ def test_next_maneuver(out):
 
 def test_places(out):
     assert out["places"] == {"kind": "places", "list": [{"name": "Home", "at": [35.1, -83.2]}]}
+
+
+def test_only_road_hazards_alert_the_car():
+    html = open(os.path.join(ROOT, "web", "index.html"), encoding="utf-8").read()
+    assert "if (text && opts.alert && driveActive) carPost({ kind: 'hazard'" in html
+    # the urgent speech lane also carries turn-now directions and crests: only member, reported and convoy hazards set alert
+    assert html.count("alert: true") == 3
