@@ -79,7 +79,7 @@ long-press pin (#61), Apple place search and nearby suggestions in the app (#73)
 | R-12 | Set list: order stages so intensity builds, rests, and finishes high; no three max-TECH stages in a row | M | M | todo | ROAD_INTELLIGENCE §7.2.5 |
 | R-13 | Sun glare penalty for headings within 20° of a low sun, using the existing solar formula | M | S | done (#123) | ROAD_INTELLIGENCE §7.2.6 |
 | R-14 | Re-score the router's returned geometry and reject routes that shortcut a stage | M | S | todo | ROAD_INTELLIGENCE §7.2.4 |
-| R-15 | Avoid options: highways, tolls, ferries, unpaved, towns, repeated roads, with honest "couldn't avoid" | H | M | partial (#118: highways, tolls, ferries, unpaved; towns and repeated roads to do) | Kurviger, Calimoto, Google Maps |
+| R-15 | Avoid options: highways, tolls, ferries, unpaved, towns, repeated roads, with honest "couldn't avoid" | H | M | done (#118, #136: towns as a ranking cost; repeated roads were already a loop cost, A→B plans never repeat a stage) | Kurviger, Calimoto, Google Maps |
 | R-16 | Time budget routing: "I have 90 minutes, end at home" (orienteering with a hard time cap) | H | M | done (#122: 1 h / 2 h loops planned on drive time) | ROAD_INTELLIGENCE §7.1 |
 | R-17 | Day trip builder: start, stops (food, fuel, viewpoint), finish, with drag-to-reorder vias | H | L | todo | Roadtrippers, Calimoto tour planner |
 | R-18 | Drag the route line on the map to reshape it (adds a via) | M | M | todo | Google Maps, Kurviger |
@@ -118,7 +118,7 @@ ideal drive and where to find time (#80), grip circle (#86), automatic mount cal
 | D-05 | Live delta bar during a known stage (green ahead / red behind your best, technique-scored, not speed-scored) | H | M | todo | Harry's Lap Timer |
 | D-06 | Smoothness heatmap on the drive map (lateral jerk, abrupt inputs) with the three worst moments | M | S | done (#104) | Garmin Catalyst |
 | D-07 | Consistency score across passes of the same road, and a trend over weeks | M | S | done (#114 per-corner repeatability; monthly braking-consistency trend) | Strava fitness trend |
-| D-08 | Personal records feed: best Driver Score per road, per archetype, smoothest drive this month | M | S | todo | Strava PRs |
+| D-08 | Personal records feed: best Driver Score per road, per archetype, smoothest drive this month | M | S | partial (best Score per road by name, smoothest and best braking this month, this thread; per archetype todo) | Strava PRs |
 | D-09 | Drive summary card worth sharing (score, map silhouette, archetype mix), no times or speeds | H | S | todo | Strava activity card, Relive |
 | D-10 | 3D flyover replay of a drive with the corner notes and g trace (export as a video) | H | L | todo | Relive |
 | D-11 | Dashcam overlay: sync a phone/GoPro video with the drive and render g, notes and score over it | M | L | todo | RaceRender, Track Addict |
@@ -237,7 +237,7 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 | U-12 | Apple Watch: next note as a tap on the wrist, drive summary | M | L | todo | Apple Maps on Watch |
 | U-13 | Map style polish: road character colours (twist, surface) as an optional layer | H | M | partial: Twisty roads switch (map shape); surface todo | Kurviger curvy colours, Calimoto |
 | U-14 | 3D terrain with hillshade on the planning map and flyover preview of a route | M | M | todo | Apple Maps, Google Earth |
-| U-15 | Dynamic Type and VoiceOver pass on every screen, checked with the iOS simulator | H | M | todo | accessibility |
+| U-15 | Dynamic Type and VoiceOver pass on every screen, checked with the iOS simulator | H | M | partial: sheets, Log and Stages follow the text size (up to 1.6x); replay scrubber is a slider; not run in the simulator | accessibility |
 | U-16 | Landscape cockpit layout for mounts in landscape | M | M | todo | Waze |
 | U-17 | Copy pass to BRAND voice on every remaining string (errors, empty states, permissions) | M | S | partial (#103) | docs/BRAND.md §2 |
 | U-18 | Native feel: replace remaining web-looking controls (selects, date inputs) with app-style ones | M | M | partial (selects) | STATE 2026-10-27 |

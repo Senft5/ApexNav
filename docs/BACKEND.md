@@ -94,7 +94,7 @@ Google setup (owner, free): Google Cloud console → OAuth consent screen (Exter
 | Convoy (later) | Durable Objects + WebSockets |
 | Photos, routing tiles, backups | R2 (free allowance, no download fees) |
 | CI | `.github/workflows/core-tests.yml` job `backend`: type check, vitest, `wrangler deploy --dry-run` |
-| iOS | CI builds an unsigned app; testers sideload with AltStore/SideStore (free Apple ID, re-signs every 7 days). TestFlight/CarPlay need the paid account |
+| iOS | Every main run that builds the app uploads it to TestFlight (job `testflight`, App Store Connect API key, automatic signing): docs/TESTFLIGHT.md. The unsigned sideload IPA is still built too. CarPlay needs Apple's separate CarPlay entitlement |
 | Everyone else | The web app (installable PWA). iPhone Safari recording needs the screen on and a lower sensor rate |
 | Domain | `workers.dev` now; buy a `.com` (~$10/yr) when it is rolling |
 
