@@ -138,7 +138,7 @@ async function handle(req: Request, env: Env): Promise<Response> {
       if (routes.some(([, re]) => re.test(url.pathname))) throw new HttpError(405, "method_not_allowed");
       throw new HttpError(404, "not_found");
     } catch (e) {
-      if (e instanceof HttpError) return json({ error: e.message }, e.status, e.status === 429 ? { "retry-after": "60" } : {});
+      if (e instanceof HttpError) return json({ error: e.message }, e.status, e.message === "rate_limited" ? { "retry-after": "60" } : {});
       console.error(e);
       return json({ error: "server_error" }, 500);
     }

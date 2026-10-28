@@ -7,10 +7,15 @@ import { sessionHash } from "./auth";
 
 const WRITE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
-/** Throws 429 when this request is over its limit. A missing binding (local dev) never limits. */
+// Sign-in steps limited per IP: starting one, and the app's code exchange. Not the Google callback (many people can share a
+// carrier-NAT address, and a 429 there loses a sign-in the person already consented to) and not logout (it must always work).
+const AUTH_LIMITED = new Set(["/api/auth/google/start", "/api/auth/app/exchange"]);
+
+/** Throws 429 when this request is over its limit. Without a binding (a test env without it) nothing is limited. */
 export async function rateCheck(req: Request, env: Env, path: string): Promise<void> {
   const ip = req.headers.get("cf-connecting-ip") ?? "unknown";
   if (path.startsWith("/api/auth/")) {
+    if (!AUTH_LIMITED.has(path)) return;
     if (env.AUTH_LIMIT && !(await env.AUTH_LIMIT.limit({ key: `ip:${ip}` })).success) throw new HttpError(429, "rate_limited");
     return;
   }

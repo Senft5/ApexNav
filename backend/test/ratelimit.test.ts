@@ -41,6 +41,9 @@ describe("rate limits", () => {
     expect((await call({ AUTH_LIMIT: au }, "GET", "/api/auth/google/start")).status).not.toBe(429);
     expect((await call({ AUTH_LIMIT: au }, "GET", "/api/auth/google/start")).status).toBe(429);
     expect((await call({ AUTH_LIMIT: au }, "GET", "/api/auth/google/start", undefined, "198.51.100.9")).status).not.toBe(429);
+    // the Google callback and logout are never limited: a 429 there loses a sign-in or leaves a session alive
+    expect((await call({ AUTH_LIMIT: au }, "GET", "/api/auth/google/callback")).status).not.toBe(429);
+    expect((await call({ AUTH_LIMIT: au }, "POST", "/api/auth/logout")).status).not.toBe(429);
   });
 
   it("does nothing without the binding (local dev)", async () => {
