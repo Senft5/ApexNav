@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>ApexNav · Log</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <meta name="theme-color" content="#1b1914" />
   <link rel="apple-touch-icon" href="brand/icon-180.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -557,7 +559,7 @@
       if (!d || !sel) { $('segInfo').textContent = 'Drag across the profile first.'; return; }
       const [a, b] = sel[0] < sel[1] ? sel : [sel[1], sel[0]];
       if (b - a < 40) { $('segInfo').textContent = 'Make it at least 200 m long.'; return; }
-      const seg = { id: 'seg_' + Date.now(), name: $('segName').value.trim() || `${d.name} ${((a * 5) / 1609.344).toFixed(1)}-${((b * 5) / 1609.344).toFixed(1)} mi`,
+      const seg = { id: ApexSync.newSegmentId(), name: $('segName').value.trim() || `${d.name} ${((a * 5) / 1609.344).toFixed(1)}-${((b * 5) / 1609.344).toFixed(1)} mi`,
                     lat0: d.lat[a], lon0: d.lon[a], lat1: d.lat[b], lon1: d.lon[b], length_m: (b - a) * 5, from: d.id,
                     geom: JSON.stringify(Array.from({ length: Math.min(60, b - a + 1) }, (_, k) => { const i = a + Math.round(k * (b - a) / (Math.min(60, b - a + 1) - 1)); return [+d.lat[i].toFixed(6), +d.lon[i].toFixed(6)]; })) };
       segs.push(seg); saveSegs(segs); activeSeg = seg.id; sel = null; $('segName').value = '';
@@ -969,6 +971,12 @@
     }
     loadDrives().then(() => { drivesLoaded = true; renderAll(); const want = params.get('drive'); if (want && drives.some(x => x.id === want)) openDrive(want); });
   })();
+  </script>
+  <script>
+    // The website's offline shell (web/sw.js, IDEAS A-03). Websites only: the app serves these pages from apexnav:// itself.
+    if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol) && location.hostname !== '127.0.0.1') {
+      window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(() => {}); });
+    }
   </script>
 </body>
 </html>

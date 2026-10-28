@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>ApexNav</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <meta name="theme-color" content="#1b1914" />
   <link rel="apple-touch-icon" href="brand/icon-180.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -454,7 +456,7 @@
               <div class="plan-links fun-row" role="group" aria-label="Explore: the best roads near you"><span>Explore</span><button class="chip" data-explore-min="15">15 min</button><button class="chip" data-explore-min="30">30 min</button></div>
               <div class="place-list" id="exploreList" hidden></div>
               <div class="plan-links fun-row" role="radiogroup" aria-label="Route style"><span>Roads</span><button class="chip" data-fun="quick" role="radio" aria-checked="false">Quick</button><button class="chip" data-fun="fun" role="radio" aria-checked="false">Fun</button><button class="chip" data-fun="max" role="radio" aria-checked="false">Max fun</button></div>
-              <div class="plan-links fun-row" role="group" aria-label="Avoid"><span>Avoid</span><button class="chip" data-avoid="highways" aria-pressed="false">Highways</button><button class="chip" data-avoid="tolls" aria-pressed="false">Tolls</button><button class="chip" data-avoid="ferries" aria-pressed="false">Ferries</button><button class="chip" data-avoid="unpaved" aria-pressed="false">Unpaved</button><button class="chip" data-avoid="towns" aria-pressed="false">Towns</button></div>
+              <div class="plan-links fun-row" role="group" aria-label="Avoid"><span>Avoid</span><button class="chip" data-avoid="highways" aria-pressed="false">Highways</button><button class="chip" data-avoid="tolls" aria-pressed="false">Tolls</button><button class="chip" data-avoid="ferries" aria-pressed="false">Ferries</button><button class="chip" data-avoid="unpaved" aria-pressed="false">Unpaved</button><button class="chip" data-avoid="towns" aria-pressed="false">Towns</button><button class="chip" data-avoid="cameras" aria-pressed="false">Cameras</button></div>
               <div class="plan-links fun-row" role="group" aria-label="Corners you like"><span>Hairpins</span><button class="chip" data-pref="tight" data-v="-1" aria-pressed="false">Fewer</button><button class="chip" data-pref="tight" data-v="1" aria-pressed="false">More</button><span>Sweepers</span><button class="chip" data-pref="fast" data-v="-1" aria-pressed="false">Fewer</button><button class="chip" data-pref="fast" data-v="1" aria-pressed="false">More</button></div>
             </section>
             <section id="routeCard" hidden>
@@ -1931,13 +1933,11 @@
           (m.roughKm >= 0.05 ? ` · ${m.roughKm.toFixed(1)} km rough` : '') +
           (m.avgPasses != null ? ` · ${m.avgPasses.toFixed(1)} runs on average` : '');
     }
-    async function fetchAlpr(t) {
-      if (t.alpr) return;
-      let s = Infinity, w = Infinity, n = -Infinity, e = -Infinity;
-      for (let i = 0; i < t.lat.length; i++) { s = Math.min(s, t.lat[i]); n = Math.max(n, t.lat[i]); w = Math.min(w, t.lon[i]); e = Math.max(e, t.lon[i]); }
-      const bbox = [s - 0.005, w - 0.005, n + 0.005, e + 0.005].map(v => v.toFixed(4)).join(',');
+    // Plate-reading cameras in a box [s, w, n, e] from the camera map (OSM / DeFlock via Overpass), kept a week; null offline.
+    async function alprNodesIn(s, w, n, e) {
+      const bbox = [s, w, n, e].map(v => v.toFixed(4)).join(',');
       const cacheKey = `apex.alpr.${bbox}`;
-      try { const c = JSON.parse(localStorage.getItem(cacheKey) || 'null'); if (c && Date.now() - c.at < 7 * 864e5) { attachAlpr(t, c.nodes); return; } } catch (_) {}
+      try { const c = JSON.parse(localStorage.getItem(cacheKey) || 'null'); if (c && Date.now() - c.at < 7 * 864e5) return c.nodes; } catch (_) {}
       const q = `[out:json][timeout:25];(node["surveillance:type"="ALPR"](${bbox});node["man_made"="surveillance"]["surveillance:type"="ALPR"](${bbox}););out body;`;
       for (const url of OVERPASS) {
         try {
@@ -1945,10 +1945,17 @@
           if (!res.ok) continue;
           const nodes = ((await res.json()).elements || []).filter(x => x.type === 'node').map(x => ({ lat: x.lat, lon: x.lon, id: x.id }));
           try { localStorage.setItem(cacheKey, JSON.stringify({ at: Date.now(), nodes })); } catch (_) {}
-          attachAlpr(t, nodes);
-          return;
+          return nodes;
         } catch (_) { /* next mirror */ }
       }
+      return null;
+    }
+    async function fetchAlpr(t) {
+      if (t.alpr) return;
+      let s = Infinity, w = Infinity, n = -Infinity, e = -Infinity;
+      for (let i = 0; i < t.lat.length; i++) { s = Math.min(s, t.lat[i]); n = Math.max(n, t.lat[i]); w = Math.min(w, t.lon[i]); e = Math.max(e, t.lon[i]); }
+      const nodes = await alprNodesIn(s - 0.005, w - 0.005, n + 0.005, e + 0.005);
+      if (nodes) { attachAlpr(t, nodes); return; }
       if (track === t && replayOn) toast('Camera map offline. No pins doesn\'t mean no cameras.');
     }
     function attachAlpr(t, nodes) {
@@ -2068,8 +2075,27 @@
       }
       return ApexHazardReports.closuresFor(closureCache.list, points);
     }
+    // Avoid cameras (IDEAS R-35): the plate readers near the trip go to the router as exclude_locations with the closures.
+    // A trip too big for one camera-map query, or the map offline, routes without them; the card still counts what is on it.
+    let cameraNote = 0;
+    async function camerasAround(points, max) {
+      if (!avoid.cameras || max <= 0) return [];
+      const lats = points.map(p => p.lat), lons = points.map(p => p.lon);
+      const s = Math.min(...lats), n = Math.max(...lats), w = Math.min(...lons), e = Math.max(...lons), pad = 0.02;
+      const note = (msg) => { if (performance.now() - cameraNote > 60000) { cameraNote = performance.now(); toast(msg); } };
+      if (n - s > FunRoute.CAMERA_BOX_DEG || e - w > FunRoute.CAMERA_BOX_DEG) { note('Too long a trip to route around cameras. They\'re still marked on the route.'); return []; }
+      const nodes = await alprNodesIn(s - pad, w - pad, n + pad, e + pad);
+      if (!nodes) { note('Camera map offline: not avoiding cameras this time.'); return []; }
+      return FunRoute.camerasToExclude(nodes, points, max);
+    }
     async function valhallaRoutesOnce(points, throughRoadsOnly = false, alternates = 0, extra = {}) {
-      const excl = await closuresAround(points);
+      const closures = await closuresAround(points);
+      const cams = await camerasAround(points, 50 - closures.length);   // the public router takes about 50 exclusions
+      if (cams.length) {
+        try { return await valhallaRoutesExcluding(points, throughRoadsOnly, alternates, extra, [...closures, ...cams]); }
+        catch (_) { toast('No way round every camera on this trip. Routing without avoiding them.'); }
+      }
+      const excl = closures;
       try { return await valhallaRoutesExcluding(points, throughRoadsOnly, alternates, extra, excl); }
       catch (e) {
         if (!excl.length) throw e;
@@ -4772,6 +4798,12 @@
     bootDrives();
     if (document.fonts) document.fonts.ready.then(() => render(true));
   })();
+  </script>
+  <script>
+    // The website's offline shell (web/sw.js, IDEAS A-03). Websites only: the app serves these pages from apexnav:// itself.
+    if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol) && location.hostname !== '127.0.0.1') {
+      window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(() => {}); });
+    }
   </script>
 </body>
 </html>

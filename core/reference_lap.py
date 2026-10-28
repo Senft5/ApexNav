@@ -199,10 +199,15 @@ ARCHETYPES = ("Switchbacks", "Esses", "Technical", "Rollercoaster",
               "Flowing sweepers", "Fast open", "Town", "Connector")
 
 
-def archetype(f: dict, town: bool = False) -> str:
-    """A label a driver recognises. Rule-based until crowd data allows clustering."""
+def archetype(f: dict, town: bool = False, ramp: bool = False) -> str:
+    """A label a driver recognises. Rule-based until crowd data allows clustering.
+
+    A motorway ramp (a cloverleaf's loop) bends like a hairpin but is a Connector, never Switchbacks (IDEAS R-34).
+    """
     if town:
         return "Town"
+    if ramp:
+        return "Connector"
     if f["hairpins_pm"] >= 0.8:
         return "Switchbacks"
     if f["transitions_pm"] >= 2.0 and f["engagement"] >= 0.25:

@@ -42,13 +42,29 @@
   /** Signed-in member, or null. */
   async function member() { const me = await call('GET', '/api/me'); return me && me.signed_in && me.member ? me : null; }
 
-  /** Uploads local segments the server has not seen (idempotent by local id). Returns how many were sent, or null when offline/signed out. */
+  /** A segment id that won't collide with anyone else's (ids are global on the server; IDEAS Y-14): time plus 48 random bits. */
+  function newSegmentId() {
+    const r = new Uint8Array(6);
+    try { crypto.getRandomValues(r); } catch (_) { for (let i = 0; i < 6; i++) r[i] = Math.floor(Math.random() * 256); }
+    return 'seg_' + Date.now() + '_' + Array.from(r, (b) => b.toString(16).padStart(2, '0')).join('');
+  }
+
+  /**
+   * Uploads local segments the server has not seen (idempotent by local id). Returns how many were sent, or null when offline/signed out.
+   * A never-synced segment whose id someone else already holds (409 id_taken, an old `seg_<ms>` id) gets a fresh id and is sent again.
+   */
   async function pushSegments(segs) {
     if (!(await member())) return null;
     let sent = 0;
     for (const s of segs) {
       if (s.synced) continue;
-      if (await call('POST', '/api/segments', toServer(s))) { s.synced = true; sent++; }
+      for (let attempt = 0; attempt < 2; attempt++) {
+        let r = null;
+        try { r = await apiFetch('/api/segments', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(toServer(s)) }); } catch (_) {}
+        if (r && r.ok) { s.synced = true; sent++; break; }
+        if (!r || r.status !== 409 || attempt) break;
+        s.id = newSegmentId();                                   // the page saves the list after this call
+      }
     }
     return sent;
   }
@@ -89,6 +105,6 @@
   }
   const contributionEnabled = async () => { const e = await call('GET', '/api/me/export'); return !!(e && e.member && e.member.contribute); };
 
-  const api = { inApp: IN_APP, apiBase: API_BASE, apiFetch, signIn, signInApple, setSession, contribute, contributionEnabled, publishScore, board, activity, highlightsNear, shareHighlight, rateHighlight, member, pushSegments, sharedWithMe, adopt, shareSegment, friends, crews, crewMembers, removeRemote, toServer, fromServer };
+  const api = { inApp: IN_APP, apiBase: API_BASE, apiFetch, signIn, signInApple, setSession, contribute, newSegmentId, contributionEnabled, publishScore, board, activity, highlightsNear, shareHighlight, rateHighlight, member, pushSegments, sharedWithMe, adopt, shareSegment, friends, crews, crewMembers, removeRemote, toServer, fromServer };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexSync = api;
 })(typeof window !== 'undefined' ? window : globalThis);

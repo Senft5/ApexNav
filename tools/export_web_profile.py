@@ -92,32 +92,45 @@ VALHALLA = "https://valhalla1.openstreetmap.de/trace_attributes"
 LIMIT_STRIDE = 4             # send every 20 m to the map matcher
 
 
+RAMP_USES = {"ramp", "turn_channel"}   # Valhalla edge use for motorway links and slip roads
+
+
 def posted_limits_kph(lat: np.ndarray, lon: np.ndarray) -> np.ndarray:
     """OSM maxspeed per sample via Valhalla map matching; NaN where unknown.
 
     Posted limits are shown beside the physics, never blended into it.
     """
+    return matched_attributes(lat, lon)[0]
+
+
+def matched_attributes(lat: np.ndarray, lon: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """(posted limit kph, ramp 1/0) per sample via one Valhalla map match; NaN where unknown."""
     idx = np.unique(np.concatenate([np.arange(0, len(lat), LIMIT_STRIDE), [len(lat) - 1]]))
     body = json.dumps({
         "shape": [{"lat": float(lat[i]), "lon": float(lon[i])} for i in idx],
         "costing": "auto", "shape_match": "map_snap",
-        "filters": {"attributes": ["edge.speed_limit", "matched.edge_index"], "action": "include"},
+        "filters": {"attributes": ["edge.speed_limit", "edge.use", "matched.edge_index"], "action": "include"},
     }).encode()
     req = urllib.request.Request(VALHALLA, data=body, headers={"Content-Type": "application/json",
                                                                "User-Agent": "ApexNav-exporter"})
     with urllib.request.urlopen(req, timeout=120) as resp:
         res = json.load(resp)
     edges = res.get("edges", [])
-    sampled = np.full(len(idx), np.nan)
+    sampled, ramp = np.full(len(idx), np.nan), np.full(len(idx), np.nan)
     for k, mp in enumerate(res.get("matched_points", [])):
         e = mp.get("edge_index")
-        if e is not None and e < len(edges) and isinstance(edges[e].get("speed_limit"), (int, float)):
+        if e is None or e >= len(edges):
+            continue
+        if isinstance(edges[e].get("speed_limit"), (int, float)):
             sampled[k] = float(edges[e]["speed_limit"])
+        if isinstance(edges[e].get("use"), str):
+            ramp[k] = 1.0 if edges[e]["use"] in RAMP_USES else 0.0
     # Hold each matched value forward to the next sample (limits change at signs, not gradually)
-    full = np.full(len(lat), np.nan)
+    full, full_ramp = np.full(len(lat), np.nan), np.full(len(lat), np.nan)
     for k, i in enumerate(idx):
-        full[i:idx[k + 1] if k + 1 < len(idx) else len(lat)] = sampled[k]
-    return full
+        end = idx[k + 1] if k + 1 < len(idx) else len(lat)
+        full[i:end], full_ramp[i:end] = sampled[k], ramp[k]
+    return full, full_ramp
 
 
 def load_web_profile(path: str) -> dict:
@@ -155,8 +168,9 @@ def profile_segments(seg: pd.DataFrame, alpr_nodes=None) -> tuple[pd.DataFrame, 
     limit_mps = seg["limit_kph"].to_numpy(float) / 3.6 if "limit_kph" in seg else None
     lap = rl.simulate(kappa, ds, seg["sight_m"].to_numpy(), camber, rough,
                       seg["elevation_m"].to_numpy(float), limit_mps)
+    ramp = seg["ramp"].to_numpy(float) if "ramp" in seg else None
     sectors = rd.score_sectors(dist, corners, camber, rough, hazards, lap, seg["sight_m"].to_numpy(),
-                               limit_mps, alpr_counts)
+                               limit_mps, alpr_counts, ramp)
     for s in sectors:
         s["start_m"] = round(s["start_m"], 1)
         s["end_m"] = round(s["end_m"], 1)
@@ -188,17 +202,20 @@ def profile_segments(seg: pd.DataFrame, alpr_nodes=None) -> tuple[pd.DataFrame, 
 
 def build_payload(seg: pd.DataFrame, meta: dict, alpr_nodes=None, limits=True) -> dict:
     limit = seg["limit_kph"] if "limit_kph" in seg else None
-    seg = seg.drop(columns=["limit_kph"], errors="ignore")
+    ramp = seg["ramp"] if "ramp" in seg else None
+    seg = seg.drop(columns=["limit_kph", "ramp"], errors="ignore")
     seg = seg.replace([np.inf, -np.inf], np.nan).dropna(subset=["lat", "lon"])
     unknown_ok = [c for c in ("camber_deg",) if c in seg]                # unknown camber stays null in the file
     seg = seg.fillna({c: 0.0 for c in seg.columns if c not in unknown_ok})
     if limits:
         try:
-            seg["limit_kph"] = posted_limits_kph(seg["lat"].to_numpy(float), seg["lon"].to_numpy(float))
+            seg["limit_kph"], seg["ramp"] = matched_attributes(seg["lat"].to_numpy(float), seg["lon"].to_numpy(float))
         except Exception as exc:  # network optional: unknown stays unknown
             print(f"posted limits unavailable: {exc}")
     elif limit is not None:
         seg["limit_kph"] = limit.to_numpy()
+    if not limits and ramp is not None:
+        seg["ramp"] = ramp.to_numpy()
     seg, sectors, events = profile_segments(seg, alpr_nodes)
     fields = [(f, d) for f, d in FIELDS if f in seg.columns]
     cols = []

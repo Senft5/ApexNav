@@ -98,8 +98,8 @@ long-press pin (#61), Apple place search and nearby suggestions in the app (#73)
 | R-31 | "Why this route" explainer: the stages it uses, what each adds, and what it cost in minutes | M | S | done (#115) | trust-building |
 | R-32 | Benchmark roads (Tail of the Dragon, Big Sur, Stelvio, Route 33) must rank in their region's top decile; CI test | M | M | todo | ROAD_INTELLIGENCE §6.2 |
 | R-33 | Preference learning: after a drive, "which was better, A or B?" fits per-user and global weights | H | L | todo | ROAD_INTELLIGENCE §6.3 |
-| R-34 | Ramp/cloverleaf loops no longer read as Switchbacks (veto motorway links by road class) | M | S | todo | STATE 2026-10-25 (c) |
-| R-35 | Avoid known speed traps and ALPR cameras as a routing option, not only a note | M | S | todo | DeFlock layer, Waze |
+| R-34 | Ramp/cloverleaf loops no longer read as Switchbacks (veto motorway links by road class) | M | S | done: the exporter's one map match also reads `edge.use`; a sector mostly on `ramp`/`turn_channel` is a Connector (`archetype(..., ramp=True)`); unknown use, no veto | STATE 2026-10-25 (c) |
+| R-35 | Avoid known speed traps and ALPR cameras as a routing option, not only a note | M | S | done for plate readers: Avoid → Cameras sends the OSM/DeFlock cameras near the trip as `exclude_locations` (`FunRoute.camerasToExclude`, ≤50 with closures); too long a trip, the camera map offline or no way round: routed without, and said. Speed traps have no open data: todo | DeFlock layer, Waze |
 | R-36 | Crowd quiet hours: prefer stages that are empty at the time you'll arrive (from anonymous counts) | M | L | todo | Strava heatmap, Google popular times |
 | R-37 | Return-to-start "home by" mode on a loop that shortens itself live if you're running late | M | M | partial (a loop's route card takes a Home by time; driving it, a live arrival more than 5 min late offers Head home: the quickest way back to the start. The loop doesn't yet shorten itself by dropping a stage) | Calimoto |
 
@@ -308,7 +308,7 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 | Y-12 | Scheduled backups with no token: a Worker Cron Trigger (Mondays 07:00 UTC) dumps every table through the D1 binding into the private `apexnav-backups` KV namespace, keeps the last 8 (docs/BACKUPS.md section 3a). Move to R2 once the owner enables it or a dump nears 24 MiB | H | S | done (this PR; first run the Monday after deploy) | first backup 2026-10-28 |
 | Y-11 | End-to-end browser tests of the main flows (plan, drive replay, log, crew) in CI | M | M | done (#148, routed plan stubbed in a follow-up): first run + replay, live cockpit + typing lock, battery saver, search offline, a stubbed routed plan, Log; Crew needs a stubbed Worker API (next) | testing |
 | Y-13 | No cron: expired invites, crew invites and app sign-in codes stay in D1 forever (sessions are now swept on the next sign-in, #132). A daily `scheduled` handler that deletes expired rows (can share the Y-12 backup cron) | L | S | done (this PR: daily cron `23 6 * * *`, src/sweep.ts; used account invites kept) | audit 2026-10-28 |
-| Y-14 | Segment ids are client-made (`seg_<ms>`) and global: two people saving at the same millisecond get `409 id_taken` and that segment never syncs. Scope ids per owner, or let the server assign and return one | L | S | todo | audit 2026-10-28 |
+| Y-14 | Segment ids are client-made (`seg_<ms>`) and global: two people saving at the same millisecond get `409 id_taken` and that segment never syncs. Scope ids per owner, or let the server assign and return one | L | S | done: ids are `seg_<ms>_<48 random bits>` (`ApexSync.newSegmentId`); an old id someone else holds gets a fresh one on 409 and is sent again | audit 2026-10-28 |
 | Y-15 | `upsertGoogleUser` never refreshes email or display name for an existing account, so a changed Google address stays stale in the export and in `OWNER_EMAIL` matching | L | S | done (this PR: every sign-in takes Google's current email and name) | audit 2026-10-28 |
 | Y-16 | Owner screen for crash counts (reads `GET /api/ops/errors`; today only JSON) | M | S | done (this PR: Crew → Errors this week for the owner: count, source, route or page, days, last seen, stack) | crash-log review 2026-10-28 |
 | Y-17 | Latency and real error rate where agents can read them: Analytics SQL binding (`logs.workersLogs`, beta) or a daily summary row in D1; or sign in the full Cloudflare connector | H | M | todo | crash-log review 2026-10-28: the connector reaches D1 and Worker code only |
@@ -352,7 +352,7 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 |---|---|---|---|---|---|
 | A-01 | Android shell (WebView + native sensors) reusing the web cockpit like the iOS shell | H | XL | owner (Android priority) | ARCHITECTURE thin shells |
 | A-02 | Web: mount calibration in the browser so the web app can share measured road data | M | M | todo | STATE 2026-10-27 |
-| A-03 | Web: installable PWA with offline shell and home screen icon | M | S | todo | — |
+| A-03 | Web: installable PWA with offline shell and home screen icon | M | S | done: `manifest.webmanifest` (192/512 icons) and `sw.js`, network first with the last copy offline, never /api, voices or other hosts; websites only (not apexnav://, not the e2e host) | — |
 | A-04 | Place suggestions while typing (Apple search in the app, Photon on the web) | M | S | done (#73) | WORKER_QUEUE plan-suggest |
 | A-05 | Desktop planning view: big map, route list, GPX, send to phone | M | M | todo | Kurviger desktop, Calimoto web planner |
 
