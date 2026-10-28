@@ -334,9 +334,11 @@
         const paint = () => { k.textContent = `Kudos${r.kudos ? ' ' + r.kudos : ''}`; k.classList.toggle('on', !!r.my_kudos); k.setAttribute('aria-pressed', String(!!r.my_kudos)); };
         k.setAttribute('aria-label', `Kudos to @${r.handle || 'someone'} for ${r.stage}`);
         k.addEventListener('click', async () => {
+          if (k.disabled) return;
           const on = !r.my_kudos;
-          if (!(await ApexSync.kudos(r, on))) return;
-          r.my_kudos = on; r.kudos = Math.max(0, (r.kudos || 0) + (on ? 1 : -1)); paint();
+          k.disabled = true;                                         // one request at a time: a double tap isn't two kudos
+          try { if (!(await ApexSync.kudos(r, on))) return; r.my_kudos = on; r.kudos = Math.max(0, (r.kudos || 0) + (on ? 1 : -1)); paint(); }
+          finally { k.disabled = false; }
         });
         paint(); p.append(k);
         return p;

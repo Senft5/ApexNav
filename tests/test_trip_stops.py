@@ -12,7 +12,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 RUNNER = r"""
 const T = require(process.argv[1] + '/web/trip_stops.js');
-const req = { via: [{ lat: 1, lon: 1, shaping: true }, { lat: 2, lon: 2, label: 'Look Rock', distM: 500 }, { lat: 3, lon: 3, shaping: true }, { lat: 4, lon: 4 }, { lat: 5, lon: 5, label: 'Cafe' }] };
+const req = { via: [{ lat: 1, lon: 1, shaping: true }, { lat: 2, lon: 2, label: 'Look Rock', distM: 500 }, { lat: 3, lon: 3, shaping: true }, { lat: 4, lon: 4 }, { lat: 5, lon: 5, label: 'Cafe' }, { lat: 6, lon: 6, planned: true }] };
 console.log(JSON.stringify({ stops: T.stops(req), up: T.move(req, 2, -1), down: T.move(req, 0, 1), edge: T.move(req, 0, -1), rm: T.remove(req, 1), none: T.stops(null) }));
 """
 

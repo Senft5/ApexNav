@@ -42,6 +42,13 @@ describe("kudos", () => {
     expect((await give(a, { handle: "bob", canon_id: seg, driven_on: "today" })).status).toBe(400);
   });
 
+  it("kudos from someone no longer a friend or crew-mate don't show", async () => {
+    const { a, b, seg } = await setup();
+    await give(a, { handle: "bob", canon_id: seg, driven_on: today });
+    await ok(api(b, "DELETE", `/api/friends/${a.id}`));
+    expect(((await (await ok(api(b, "GET", "/api/kudos"))).json()) as unknown[]).length).toBe(0);
+  });
+
   it("a block hides kudos; deleting an account takes its kudos with it", async () => {
     const { a, b, seg } = await setup();
     await give(a, { handle: "bob", canon_id: seg, driven_on: today });

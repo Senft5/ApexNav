@@ -33,6 +33,7 @@ describe("feedback", () => {
     await env.DB.prepare(`WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < ${DAY_CAP})
       INSERT INTO feedback (kind, message, app) SELECT 'other', 'x', 'web' FROM n`).run();
     expect((await api(null, "POST", "/api/feedback", { kind: "bug", message: "one more", app: "web" })).status).toBe(429);
+    expect((await api(await makeUser("member"), "POST", "/api/feedback", { kind: "bug", message: "a member still gets through", app: "web" })).status).toBe(201);
   });
 
   it("the owner reads it and marks it done; others can't", async () => {

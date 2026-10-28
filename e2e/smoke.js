@@ -961,6 +961,10 @@ flow('recce: keep a drive\'s notes, change a call, and the cockpit reads yours o
   await page.waitForFunction(() => window.apexDebug && window.apexDebug.track && window.apexDebug.track.id === 'rc1', null, { timeout: 15000 });
   const ev = await page.evaluate(() => window.apexDebug.track.events.find((e) => e.type === 'corner'));
   check(ev && ev.call === 'Left 3 tightens, care' && ev.recce && ev.mapCall === 'Left 4', 'your call read: ' + JSON.stringify(ev && { call: ev.call, mapCall: ev.mapCall }));
+  // shown as you wrote it in either words mode (review fix: plain words rebuilt it from the map's corner)
+  await page.evaluate(() => { window.apexDebug.state.noteWords = 'plain'; window.apexDebug.state.notesMode = 'full'; });
+  await page.evaluate(() => document.getElementById('playBtn').click());
+  await page.waitForFunction(() => /Left 3 tightens, care/.test(document.getElementById('notes').textContent), null, { timeout: 8000 });
 });
 
 flow('the Log page opens', async (page, base) => {

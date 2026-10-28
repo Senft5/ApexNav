@@ -24,10 +24,11 @@ export async function friendProfile(env: Env, v: Viewer, friendId: string) {
   const crews = await all<{ name: string }>(env,
     `SELECT cr.name FROM crews cr JOIN crew_members a ON a.crew_id = cr.id AND a.user_id = ?1 JOIN crew_members b ON b.crew_id = cr.id AND b.user_id = ?2
       ORDER BY cr.name LIMIT 20`, v.id, friendId);
-  const stages = await all<{ stage: string; best: number; days_month: number; last: string }>(env,
+  // only stages the viewer has too (named as the viewer named them): a friend's private stage names never show
+  const stages = await all<{ stage: string; best: number; days_month: number }>(env,
     `SELECT MIN(s.name) AS stage, MAX(be.driver_score) AS best,
-            COUNT(DISTINCT CASE WHEN be.driven_on >= date('now', 'start of month') THEN be.driven_on END) AS days_month, MAX(be.driven_on) AS last
-       FROM board_entries be JOIN segments s ON s.id = be.segment_id
+            COUNT(DISTINCT CASE WHEN be.driven_on >= date('now', 'start of month') THEN be.driven_on END) AS days_month
+       FROM board_entries be JOIN segments s ON s.owner = ?1 AND COALESCE(s.origin_id, s.id) = be.canon_id
       WHERE be.user_id = ?2 AND (${VISIBLE_FROM_OTHERS})
       GROUP BY be.canon_id ORDER BY days_month DESC, best DESC LIMIT 50`, v.id, friendId);
   return {
