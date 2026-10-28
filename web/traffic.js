@@ -4,9 +4,9 @@
 //     (with traffic) and leaving at 3 am (Apple's own quiet-road time). A chunk counts only when both of Apple's paths
 //     follow ours (80 % of each within 50 m of the other); otherwise it is unknown, never clear.
 //   - ratio = now / 3 am. Slow at >= 1.2, jam at >= 1.5 and >= 60 s lost. Slow or jammed, it costs fun even with no delay:
-//     a road at 1/r of its speed gives about 1/r^2 of its cornering load, for r times as long. So each 500 m piece of
-//     a route scores fun / r^2 with time weight r, and route fun is the time-weighted mean.
-//   - Piece fun is the loop builder's: good corners (severity 2..5, not hairpins) per km x 10.
+//     a road at 1/r of its speed gives about 1/r^2 of its cornering load, for r times as long. Each 500 m piece keeps
+//     1/r^2 of its fun and weighs r times its length, so a route's fun (web/fun_route.js score, the Plan route card's)
+//     is multiplied by sum(len / r) / sum(len * r).
 //   - A jam ahead looks for a detour: the best alternative that never crosses a jam and is more fun than the current
 //     route with its traffic, costing at most max(10 min, 25 %) more time. None: "Traffic ahead" and stay.
 (function (root) {
@@ -70,17 +70,13 @@
     return { level, ratio, delayS };
   }
 
-  /** 500 m pieces of a track from sample fromIdx: [{ i0, i1, lenM, fun }]. Fun = good corners per km x 10. */
-  function funPieces(t, fromIdx = 0) {
+  /** 500 m pieces of a track from sample fromIdx: [{ i0, i1, lenM }]. */
+  function pieces(t, fromIdx = 0) {
     const n = t.dist.length, out = [];
-    if (n < 2) return out;
-    const goodApex = (t.events || []).filter(e => e.type === 'corner' && e.severity !== 'HP' && e.severity >= 2 && e.severity <= 5).map(e => e.index);
     for (let i0 = Math.max(0, fromIdx); i0 < n - 1;) {
       let i1 = i0;
       while (i1 < n - 1 && t.dist[i1] - t.dist[i0] < PIECE_M) i1++;
-      const lenM = t.dist[i1] - t.dist[i0];
-      const good = goodApex.filter(a => a >= i0 && a < i1).length;
-      out.push({ i0, i1, lenM, fun: lenM > 0 ? good / (lenM / 1000) * 10 : 0 });
+      out.push({ i0, i1, lenM: t.dist[i1] - t.dist[i0] });
       i0 = i1;
     }
     return out;
@@ -101,19 +97,18 @@
   }
 
   /**
-   * Route fun with traffic: { fun, rawFun, jamM, slowM, crossesJam }. Unknown traffic counts as none (ratio 1).
+   * What traffic leaves of a route's fun: { factor (0..1], jamM, slowM, crossesJam }. Unknown traffic counts as none.
    */
-  function routeFun(t, probes = [], fromIdx = 0) {
-    let num = 0, den = 0, rawNum = 0, rawDen = 0, jamM = 0, slowM = 0;
-    for (const piece of funPieces(t, fromIdx)) {
+  function trafficFactor(t, probes = [], fromIdx = 0) {
+    let kept = 0, weight = 0, jamM = 0, slowM = 0;
+    for (const piece of pieces(t, fromIdx)) {
       const p = probes.length ? probeFor(t, piece, probes) : null;
       const r = p && finite(p.ratio) && p.level !== 'unknown' ? p.ratio : 1;
       if (p && p.level === 'jam') jamM += piece.lenM;
       else if (p && p.level === 'slow') slowM += piece.lenM;
-      num += piece.fun / (r * r) * piece.lenM * r; den += piece.lenM * r;
-      rawNum += piece.fun * piece.lenM; rawDen += piece.lenM;
+      kept += piece.lenM / r; weight += piece.lenM * r;
     }
-    return { fun: den > 0 ? num / den : 0, rawFun: rawDen > 0 ? rawNum / rawDen : 0, jamM, slowM, crossesJam: jamM > 0 };
+    return { factor: weight > 0 ? kept / weight : 1, jamM, slowM, crossesJam: jamM > 0 };
   }
 
   /**
@@ -175,7 +170,7 @@
     }
   }
 
-  const api = { chunksAhead, followShare, classifyChunk, funPieces, probeFor, routeFun, pickDetour, tooSlow, jamPolygons, TrafficMonitor,
+  const api = { chunksAhead, followShare, classifyChunk, pieces, probeFor, trafficFactor, pickDetour, tooSlow, jamPolygons, TrafficMonitor,
                 AHEAD_M, CHUNK_M, SLOW_RATIO, JAM_RATIO, JAM_MIN_S, PROBE_EVERY_MS, THROTTLE_BACKOFF_MS, QUIET_MS, EXTRA_MIN_S };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexTraffic = api;
 })(typeof window !== 'undefined' ? window : globalThis);

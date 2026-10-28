@@ -24,6 +24,10 @@ Camber and crest are recorded and shared only while `locked`. The phone's crest 
   - **Low-Pass (< 1.0 Hz)**: Isolates road elevation compression (dips) and unweighting over blind crests where tire normal load drops.
   - **High-Pass (> 8.0 Hz)**: Isolates pavement roughness, washboard ripples, and mid-corner expansion joints (computed as RMS energy per 5m slice).
 - **Confidence & Flow Index**: Compares entry-to-apex speed stability and mid-corner braking ($a_x < 0$) against geometric curve radius to flag blind/decreasing-radius hazards vs. high-flow sweepers.
+- **Agreement between passes (read side)**: `road_bins` keeps Welford sums of squares for camber and roughness; `GET /api/roads`
+  returns their sample SD (`csd`, `rsd`, null under two measuring passes) and the camber pass count `cn`. The phone calls a
+  5 m value `one` (single pass), `agree` (>= 2 passes within 1.5° camber / 0.05 g roughness) or `differ`
+  (`ApexContributor.agreement`); without a spread (older server) agreement is unknown, never assumed.
 
 ## 3. Road DNA Engine (`core/road_dna.py`, ported to `web/apex_core.js`)
 The JS file is a line-for-line port used by the browser/iOS cockpit for live OSRM routes; `tests/test_web_core_parity.py` runs both on the same input (synthetic + a real logged drive) and requires identical results. Change both or neither.
@@ -39,7 +43,30 @@ The JS file is a line-for-line port used by the browser/iOS cockpit for live OSR
 - `core/live_pipeline.py` — causal 100 Hz pipeline the phone runs; Swift `ApexKit` is held to it by a generated fixture.
 - `core/drive_analysis.py` — private corner-by-corner pass comparison, Driver Score (0–1000) and custom
   segment passes; JS port in `web/apex_core.js` (plus `profileRecording` for app CSVs), parity-tested.
+- Corner coach (`corner_phases`, `coach`; JS `cornerPhases`, `coach`): per corner, on 5 m bins, its own brake zone (the
+  braking run, a_lon < -0.15 g, nearest the apex within 200 m, ignored when it ended more than 100 m before turn-in),
+  trail braking (m of that run with |a_lat| >= 0.20 g), coasting (m with |a_lon| < 0.05 g from the brake point to the
+  throttle point), the throttle point (first a_lon > 0.05 g from the slowest point, m from the apex) and braking after the
+  apex. Each corner is matched by location in the person's other drives (same matcher as `compare`) and each other pass is
+  timed over exactly this drive's stretch (`aligned_time_s`: every bin projected onto the other path, median sub-bin
+  offset, fractional ends), so GPS jitter and a window one bin off do not read as time. The quickest clean pass is the
+  reference, except a pass whose slowest point is over the sane corner limit (envelope use > 1.0), which never counts.
+  Gains under 0.2 s are alignment noise and ignored; the rest rank "Where to find time" and sum to the ideal drive. One tip
+  per corner: slower at the slowest point (>= 0.9 m/s), brake point earlier (>= 10 m), throttle later (>= 10 m), more
+  coasting (>= 15 m); with no quicker pass, braking after the apex (>= 0.25 g), coasting after braking (>= 20 m) or a
+  slowest point >= 15 m before an apex driven >= 0.3 m/s faster. Corners through a stop (< 2.5 m/s), blank speed, or
+  unmeasured g (`g_known`) anywhere from 200 m before the apex to 100 m after the exit are left out.
+- Friction circle (`gg_envelope`, `grip_use`; JS `ggEnvelope`, `gripUse`): the driver's own g-g envelope from one drive,
+  16 slices of 22.5° centred on 0° = throttle, 90° = left, 180° = braking, 270° = right (so straight braking and steady
+  cornering sit mid-slice), each slice's radius the nearest-rank 95th percentile of combined g (one pothole jolt does not
+  set it), samples under 0.05 g (cruising) and unmeasured g left out, a slice with fewer than 8 samples unknown. Grip use
+  over a stretch = mean of combined g / that slice's radius (capped at 1.5, shown capped at 100 %) over samples of at least
+  0.15 g. The drive view draws it as the Grip circle; scrubbing into a corner shows its trace and grip use from 100 m
+  before turn-in to the exit.
 - Web shell: `web/index.html` (cockpit), `web/analysis.html` (history / segments / compare), `web/themes.js` (theme registry), `web/instruments.js` (renderers).
+
+## 3c. Fun routing (`web/fun_route.js`)
+Destination routes are chosen for fun within a time budget (Quick / Fun / Max fun): the router's route and alternates plus 1–2 corridor stage detours timed with one Valhalla matrix call, scored on map geometry (junction turns removed) and ranked by fun and corners gained against extra minutes. Details, weights and what was checked: docs/ROUTING.md.
 
 ## 4. Data Honesty
 Everything the cockpit shows is measured, derived from measurements, or fetched from a named open source (OSM/DeFlock ALPR via Overpass, OSRM, Nominatim). Geometry-only routes are labelled `SIM · NOT DRIVEN` and show `--` for anything that needs an IMU. A failed ALPR fetch says so instead of implying no cameras.
@@ -135,13 +162,14 @@ the shell only asks Apple.
   now and leaving at the next 3 am (Apple's quiet-road time, so no router time model is needed). A chunk counts only when
   80 % of each of Apple's paths is within 50 m of ours and ours of theirs; otherwise it is unknown, never clear.
 - **Levels**: $r = t_\text{now} / t_\text{3am}$ (clamped 1..6). Slow at $r \ge 1.2$; jam at $r \ge 1.5$ and ≥ 60 s lost.
-- **Fun penalty**: route fun is the loop builder's (good corners, severity 2..5 not hairpins, per km × 10) per 500 m
-  piece. A piece in traffic at ratio $r$ scores $\text{fun}/r^2$ (lateral load scales with $v^2$) and weighs $r$ times its
-  length (you spend $r$ times as long there); route fun is the time-weighted mean. Unknown traffic is ratio 1.
+- **Fun penalty**: route fun is the Plan route card's score (`web/fun_route.js`, docs/ROUTING.md). A 500 m piece in
+  traffic at ratio $r$ keeps $1/r^2$ of its fun (lateral load scales with $v^2$) and weighs $r$ times its length (you spend
+  $r$ times as long there), so the score is multiplied by $\sum \ell/r \,/\, \sum \ell r$. Unknown traffic is ratio 1.
 - **Detour on a jam**: Valhalla from the current fix through the vias still ahead to the destination: alternates (two
   points only) plus a variant with `exclude_polygons` (200 m boxes at ¼, ½, ¾ of each jam chunk, at most 12 to stay under
   Valhalla's perimeter limit). Candidates that cross a jam are dropped; the best one more fun (+0.5) than the current
   route with its traffic and at most max(10 min, 25 %) slower than the current route with its delay wins:
-  "Traffic ahead · switching to <road> (+N min)", voiced, 6 s to Cancel. None: "Traffic ahead · N min" and stay.
-  Each jam is announced at most once per 10 min. +N min is Valhalla's time difference against the jammed route
+  "Traffic ahead · switching to <road> (+N min)", voiced, 6 s to Cancel; the detour is pinned with shaping points so a
+  reroute stays on it. None: "Traffic ahead · N min" and stay.
+  Each jam (its stretch of route distance) is announced at most once per 10 min on a route. +N min is Valhalla's time difference against the jammed route
   (eta-1's live estimate does not exist yet).

@@ -30,15 +30,16 @@ out.otherRoad = T.classifyChunk(road, apple(400, parallel), apple(120));   // Ap
 out.noNight = T.classifyChunk(road, apple(400), null);
 out.nightFaster = T.classifyChunk(road, apple(100), apple(120));            // never below 1
 
-// Fun: a 2 km road with a good corner every 100 m (score 100 per piece).
-const track = { lat: road.lat, lon: road.lon, dist: road.lat.map((_, i) => i * 5),
-                events: Array.from({ length: 20 }, (_, k) => ({ type: 'corner', severity: 3, index: 10 + 20 * k })) };
+// What traffic leaves of a 2 km road's fun.
+const track = { lat: road.lat, lon: road.lon, dist: road.lat.map((_, i) => i * 5) };
 const probe = (level, ratio) => ({ lat: road.lat, lon: road.lon, level, ratio, delayS: 0 });
-out.funClear = T.routeFun(track, []);
-out.funSlow = T.routeFun(track, [probe('slow', 1.3)]);
-out.funJam = T.routeFun(track, [probe('jam', 3)]);
-out.funUnknown = T.routeFun(track, [probe('unknown', null)]);
-out.funElsewhere = T.routeFun(track, [{ ...parallel, level: 'jam', ratio: 3 }]);
+const half = { lat: road.lat.slice(0, 201), lon: road.lon.slice(0, 201), level: 'jam', ratio: 3 };
+out.funClear = T.trafficFactor(track, []);
+out.funSlow = T.trafficFactor(track, [probe('slow', 1.3)]);
+out.funJam = T.trafficFactor(track, [probe('jam', 3)]);
+out.funHalf = T.trafficFactor(track, [half]);
+out.funUnknown = T.trafficFactor(track, [probe('unknown', null)]);
+out.funElsewhere = T.trafficFactor(track, [{ ...parallel, level: 'jam', ratio: 3 }]);
 
 out.pick = T.pickDetour({ fun: 20, timeS: 1800, delayS: 600 }, [
   { fun: 60, timeS: 2000, crossesJam: true },        // crosses the jam: never
@@ -94,13 +95,14 @@ def test_never_claims_traffic_without_a_matching_path(r):
 
 
 def test_congestion_lowers_fun(r):
-    assert r["funClear"]["fun"] == pytest.approx(100, rel=0.05)
-    assert r["funSlow"]["fun"] == pytest.approx(r["funClear"]["fun"] / 1.3 ** 2, rel=1e-6)
-    assert r["funJam"]["fun"] == pytest.approx(r["funClear"]["fun"] / 9, rel=1e-6)
+    assert r["funClear"]["factor"] == 1
+    assert r["funSlow"]["factor"] == pytest.approx(1 / 1.3 ** 2), "congestion costs fun even with no delay"
+    assert r["funJam"]["factor"] == pytest.approx(1 / 9)
     assert r["funJam"]["crossesJam"] and r["funJam"]["jamM"] == pytest.approx(2000, abs=1)
-    assert r["funJam"]["rawFun"] == r["funClear"]["fun"]
-    assert r["funUnknown"]["fun"] == r["funClear"]["fun"], "unknown traffic is no penalty"
-    assert r["funElsewhere"]["fun"] == r["funClear"]["fun"], "a jam on another road is not ours"
+    # half the road at 1/3 speed: (1000 + 1000/3) / (1000 + 3000) = 1/3, time spent crawling counts
+    assert r["funHalf"]["factor"] == pytest.approx(1 / 3, abs=0.01) and r["funHalf"]["jamM"] == pytest.approx(1000, abs=10)
+    assert r["funUnknown"]["factor"] == 1, "unknown traffic is no penalty"
+    assert r["funElsewhere"]["factor"] == 1 and not r["funElsewhere"]["crossesJam"], "a jam on another road is not ours"
 
 
 def test_detour_choice(r):
