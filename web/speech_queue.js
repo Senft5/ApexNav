@@ -4,7 +4,8 @@
 // - Never stale: a line tied to a place on the route (`atM`) is dropped once the car is past it; every line has a
 //   shelf life (`maxAgeMs`) after which it is dropped unsaid rather than read late.
 // - Never duplicated: a line with a `key` already waiting, or said within `repeatMs`, is not queued again.
-// `preempts(playing, next)` tells the page when a waiting hazard should cut off an ordinary line already playing.
+// `preempts(playing, next)` tells the page when a waiting hazard should cut off an ordinary line already playing;
+// `ducks(line, spirited)` whether the app lowers the music for it (IDEAS V-08).
 (function (root) {
   'use strict';
   const MAX_ORDINARY = 2, HAZARD_AGE_MS = 15000, ORDINARY_AGE_MS = 8000, REPEAT_MS = 30000, PASSED_M = 5;
@@ -21,7 +22,7 @@
     function push(line, now) {
       if (!line || !line.text) return false;
       const it = { kind: line.kind === 'hazard' ? 'hazard' : 'ordinary', text: line.text, chain: line.chain || null,
-                   sysToken: line.sysToken || null, key: line.key || null, atM: typeof line.atM === 'number' ? line.atM : null,
+                   sysToken: line.sysToken || null, duck: line.duck === true, key: line.key || null, atM: typeof line.atM === 'number' ? line.atM : null,
                    at: now, repeatMs: line.repeatMs ?? REPEAT_MS,
                    maxAgeMs: line.maxAgeMs ?? (line.kind === 'hazard' ? HAZARD_AGE_MS : ORDINARY_AGE_MS) };
       if (it.key && (items.some((q) => q.key === it.key) || now - (said.get(it.key) ?? -Infinity) < it.repeatMs)) return false;
@@ -59,6 +60,13 @@
 
   const preempts = (playing, next) => !!playing && !!next && !isHazard(playing) && isHazard(next);
 
-  const api = { createSpeechQueue, preempts, MAX_ORDINARY, HAZARD_AGE_MS, ORDINARY_AGE_MS, REPEAT_MS };
+  /**
+   * Should this line duck the music (IDEAS V-08)? Hazards, pace notes (a chain), lines marked `duck` (directions, anything
+   * you asked for) and every line while driving spirited: yes. A low-priority line in cruise ("Rerouting", traffic, a drive
+   * name): no, it plays over the music at its own level.
+   */
+  const ducks = (it, spirited) => !!it && (isHazard(it) || !!it.chain || it.duck === true || !!spirited);
+
+  const api = { createSpeechQueue, preempts, ducks, MAX_ORDINARY, HAZARD_AGE_MS, ORDINARY_AGE_MS, REPEAT_MS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexSpeechQueue = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -405,7 +405,7 @@ flow('reported hazards: a call ahead, "still there?" after passing, and a one-ta
   check(reports.length === 1 && reports[0].kind === 'pothole' && Math.abs(reports[0].lat - (35.6 + 330 / 110540)) < 1e-4 && reports[0].heading === 0, 'reported at your position and heading');
 });
 
-flow('your data: Settings counts what the phone holds and downloads drives as GPX (IDEAS Z-03/Z-04)', async (page, base) => {
+flow('your data: Settings counts what the phone holds and downloads drives as GPX, offline data deleted (IDEAS Z-03/Z-04, F-06)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.goto(base + '/index.html');
   await page.waitForFunction(() => window.ApexRecording && window.ApexMyData);
@@ -419,6 +419,13 @@ flow('your data: Settings counts what the phone holds and downloads drives as GP
   page.once('dialog', (d) => d.accept());
   await page.click('#myDrivesDelBtn');
   await page.waitForFunction(() => /0 drives/.test(document.getElementById('myDataNote').textContent));
+  // offline data (IDEAS F-06): a saved route counted, then deleted; the drives are not touched by it
+  await page.evaluate(() => { localStorage.setItem('apex.savedRoutes', JSON.stringify([{ id: 'r1', coords: [[0, 0], [1, 1]] }])); document.querySelector('.tab[data-view="setup"]').click(); });
+  await page.waitForFunction(() => /Offline data: 1 saved route /.test(document.getElementById('myOfflineNote').textContent));
+  page.once('dialog', (d) => d.accept());
+  await page.click('#myOfflineDelBtn');
+  await page.waitForFunction(() => /Offline data: 0 saved routes/.test(document.getElementById('myOfflineNote').textContent));
+  check((await page.evaluate(() => localStorage.getItem('apex.savedRoutes'))) === null, 'saved routes gone');
 });
 
 flow('shared routes: one a friend shared shows in Crew and opens as a planned route with notes (Worker stubbed, IDEAS S-05)', async (page, base) => {
@@ -619,6 +626,62 @@ flow('crew drives: an upcoming drive shows in Crew with who is going; Going answ
   await page.waitForFunction(() => /Drive planned/.test(document.getElementById('toast').textContent));
   const plan = posted.find(([p]) => p === '/api/crews/CREW1/events');
   check(plan && plan[1].title === 'Dragon run' && /Z$/.test(plan[1].starts_at) && Number.isFinite(plan[1].meet.lat) && plan[1].route_id === null && plan[1].public === false, 'the plan was sent: ' + JSON.stringify(plan));
+});
+
+flow('drive tags: tag a drive in the Log, filter by it, the note stays on the phone (IDEAS D-23)', async (page, base) => {
+  await page.goto(base + '/analysis.html');
+  await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && window.ApexRecording);
+  await page.evaluate(async () => {
+    const lat = [], lon = [];
+    for (let i = 0; i < 200; i++) { lat.push(35.6 + i * 5 / 110540); lon.push(-83.9); }
+    const rec = (id, name) => ({ id, name, date: '2026-10-20T15:00:00Z', lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: lat.map(() => 15),
+      lon_g: lat.map(() => 0), lat_g: lat.map(() => 0), g_known: null, events: [], elev: null, hz: 1, source: 'web-gps' });
+    await ApexRecording.store(rec('t1', 'Wet one <i>x</i>'));
+    await ApexRecording.store(rec('t2', 'Dry one'));
+  });
+  await page.goto(base + '/analysis.html?drive=t1');
+  await page.waitForSelector('#dvTags button');
+  await page.click('#dvTags button:has-text("Wet")');
+  await page.fill('#dvTagNew', 'E46');
+  await page.press('#dvTagNew', 'Enter');
+  await page.waitForSelector('#dvTags button[aria-pressed="true"]:has-text("E46")');
+  await page.fill('#dvNoteText', 'Puddles at the bridge');
+  await page.dispatchEvent('#dvNoteText', 'change');
+  await page.waitForFunction(() => /Note saved/.test(document.getElementById('dvTagsNote').textContent));
+  const rec = await page.evaluate(async () => (await ApexRecording.all()).find((d) => d.id === 't1'));
+  check(JSON.stringify(rec.tags) === '["Wet","E46"]' && rec.note === 'Puddles at the bridge', 'saved on the drive: ' + JSON.stringify([rec.tags, rec.note]));
+  await page.click('a.back[data-to="history"]');
+  await page.waitForSelector('#historyFilter button');
+  check((await page.$$('#historyTable tr.row-link')).length === 2, 'both drives listed');
+  check((await page.textContent('#historyTable')).includes('Wet one <i>x</i>'), 'a drive name shows as text');
+  await page.click('#historyFilter button:has-text("E46")');
+  const rows = await page.$$eval('#historyTable tr.row-link', (els) => els.map((e) => e.dataset.drive));
+  check(rows.length === 1 && rows[0] === 't1', 'filtered to the tagged drive: ' + rows);
+});
+
+flow('flyby: a friend on the same stage that day shows on the drive, as text (Worker stubbed, IDEAS S-20)', async (page, base) => {
+  await page.route(base + '/api/**', (route) => {
+    const u = new URL(route.request().url()), json = (b) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (u.pathname === '/api/board/activity') return json([{ handle: 'bob', canon_id: 'CANON1', stage: 'Straight <b>run</b>', driver_score: 812, driven_on: '2026-10-20', you: { rank: null, of: 1, mine: null } },
+      { handle: 'cara', canon_id: 'CANON1', stage: 'Straight <b>run</b>', driver_score: 600, driven_on: '2026-10-19', you: { rank: null, of: 1, mine: null } }]);
+    return json([]);
+  });
+  await page.goto(base + '/analysis.html');
+  await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && window.ApexRecording);
+  await page.evaluate(async () => {
+    const lat = [], lon = [];
+    for (let i = 0; i < 200; i++) { lat.push(35.6 + i * 5 / 110540); lon.push(-83.9); }
+    await ApexRecording.store({ id: 'f1', name: 'Morning run', date: '2026-10-20T15:00:00Z', lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: lat.map(() => 15),
+      lon_g: lat.map(() => 0), lat_g: lat.map(() => 0), g_known: null, events: [], elev: null, hz: 1, source: 'web-gps' });
+    const a = 20, b = 180;
+    localStorage.setItem('apex.segments', JSON.stringify([{ id: 'seg_f', origin: 'CANON1', synced: true, name: 'Straight run', lat0: lat[a], lon0: lon[a], lat1: lat[b], lon1: lon[b], length_m: (b - a) * 5,
+      geom: JSON.stringify(Array.from({ length: 20 }, (_, k) => { const i = a + Math.round(k * (b - a) / 19); return [lat[i], lon[i]]; })) }]));
+  });
+  await page.goto(base + '/analysis.html?drive=f1');
+  await page.waitForSelector('#dvFlyby:not([hidden])');
+  const t = await page.textContent('#dvFlybyList');
+  check(t === 'Straight <b>run</b>: @bob 812', 'only the same day, as text: ' + t);
 });
 
 flow('the Log page opens', async (page, base) => {

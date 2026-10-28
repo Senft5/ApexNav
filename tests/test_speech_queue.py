@@ -1,4 +1,4 @@
-"""What the co-driver says next (web/speech_queue.js, IDEAS V-03): hazards first, never stale, never duplicated."""
+"""What the co-driver says next (web/speech_queue.js, IDEAS V-03, V-08): hazards first, never stale, never duplicated; what ducks the music."""
 import json
 import os
 import shutil
@@ -55,6 +55,13 @@ out.preempt = [Q.preempts({ kind: 'ordinary' }, { kind: 'hazard' }), Q.preempts(
 q = Q.createSpeechQueue();
 q.push({ text: 'note' }, 0);
 out.waiting = [q.hazardWaiting(0), (q.push({ text: 'bump', kind: 'hazard', atM: 50 }, 0), q.hazardWaiting(0, 10)), q.hazardWaiting(0, 60)];
+// Ducking (IDEAS V-08): through the queue, so the flag survives push/take.
+const taken = [];
+for (const pair of [[{ text: 'Rerouting' }, { text: 'Left 4', chain: ['l4'] }], [{ text: 'Turn left', duck: true }, { text: 'Bump', kind: 'hazard' }]]) {
+  q = Q.createSpeechQueue(); for (const l of pair) q.push(l, 0);            // two ordinary lines at most per queue
+  let it2; while ((it2 = q.take(0))) taken.push(it2);
+}
+out.ducks = { cruise: Object.fromEntries(taken.map((t) => [t.text, Q.ducks(t, false)])), spirited: Q.ducks(taken.find((t) => t.text === 'Rerouting'), true), none: Q.ducks(null, true) };
 console.log(JSON.stringify(out));
 """
 
@@ -99,3 +106,17 @@ def test_page_routes_hazards_through_the_queue():
     assert "kind: e.type === 'corner' ? 'ordinary' : 'hazard'" in html     # route bumps and cameras are hazards
     assert "kind: 'hazard', key: `mem:${hz.id}`" in html                  # remembered bumps too
     assert "speech.queue.length" not in html                               # the old array queue is gone
+
+
+def test_ducking_by_priority(out):
+    assert out["ducks"]["cruise"] == {"Bump": True, "Left 4": True, "Turn left": True, "Rerouting": False}
+    assert out["ducks"]["spirited"] is True
+    assert out["ducks"]["none"] is False
+
+
+def test_page_and_shell_pass_the_duck():
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    page = open(os.path.join(root, "web", "index.html"), encoding="utf-8").read()
+    assert "ApexSpeechQueue.ducks(item, isSpirited())" in page and "cmd: 'speak', text: spoken, force: interrupt, style, duck" in page
+    shell = open(os.path.join(root, "ApexNavApp.swift"), encoding="utf-8").read()
+    assert 'dict["duck"] as? Bool' in shell and "[.mixWithOthers]" in shell

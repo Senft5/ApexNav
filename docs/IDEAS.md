@@ -133,7 +133,7 @@ ideal drive and where to find time (#80), grip circle (#86), automatic mount cal
 | D-20 | Weekly drive digest: km of good roads, new roads, best moment, one thing to work on | M | S | todo | Strava weekly, Whoop |
 | D-21 | Coach in plain words: one sentence per drive that a non-racer understands | H | S | done (#101) | owner goal (approachable) |
 | D-22 | Blank lat/lon g while the mount is `default`, like camber, so uncalibrated drives can't skew the score | M | S | done (#64 phone drives; the app's own CSV export too, this thread) | STATE 2026-10-26 |
-| D-23 | Drive tags and notes (car, passenger, weather, mood) to filter the Log | L | S | todo | Strava |
+| D-23 | Drive tags and notes (car, passenger, weather, mood) to filter the Log | L | S | done: a drive's Tags and note (presets, your own tags, a note) on its IndexedDB record; the Log filters by tag chips (`web/drive_tags.js`); never sent | Strava |
 | D-24 | Driving year in review (roads, regions, best corners, crews) | M | M | partial (Log → \"2026 so far\": miles, drives, corners, months, roads you came back to, best score, longest drive, share as text; regions, best corners and crews are still to do) | Strava Year in Sport, Spotify Wrapped |
 
 ## 3. Road intelligence (Q)
@@ -182,7 +182,7 @@ adaptive notes (cruise vs spirited), car audio routing to Bluetooth/CarPlay (#73
 | V-05 | Phrases in the owner's voice (voice conversion), behind licences | M | L | owner (voice on hold) | docs/VOICE.md |
 | V-06 | Celebrity/character voice packs as cosmetic Octane rewards | M | M | todo | Waze voice packs |
 | V-07 | Voice commands: "report pothole", "skip this stage", "how far to the next stage" (Siri Shortcuts first) | M | M | todo | Waze, Google Assistant |
-| V-08 | Music ducking tuned per note priority; never duck for low-priority notes in cruise | L | S | todo | — |
+| V-08 | Music ducking tuned per note priority; never duck for low-priority notes in cruise | L | S | done: `ApexSpeechQueue.ducks`: hazards, pace notes, directions, lines you asked for and anything spirited duck; route and traffic phrases in cruise play over the music (`.mixWithOthers` in the shell) | — |
 | V-09 | Recce mode: drive slowly once, the co-driver writes your own notes for the road and reads them next time | H | L | todo | rally recce |
 | V-10 | Remove espeak-ng (GPL) from the voice path before charging | M | M | todo | docs/VOICE.md |
 | V-11 | Notes are due at the corner's entry (turn-in), not its apex: countdown, spoken call, lead distance and staleness all measure to `start_m` | H | S | done (this PR) | owner 2026-10-28 |
@@ -214,7 +214,7 @@ Today: accounts with Google sign-in, friends, crews (public and private, crews n
 | S-17 | Pairwise "which road was better?" after a drive feeds road scores (and is fun) | M | S | todo | SOCIAL §2.2 |
 | S-18 | Photos on highlights and stops, stripped of EXIF location beyond the highlight | M | M | todo | Roadtrippers, Google Maps |
 | S-19 | Live share ETA with a friend or family ("Nate is 12 min away") without sharing the drive | M | M | done (route card → Share ETA: a link to web/eta.html with the handle, minutes left and arrival time, refreshed each minute while driving, ended on arrival or Stop; no position, route or destination; migration 0016) | Apple Maps Share ETA, Life360 |
-| S-20 | Flyby: after a drive, see which friends drove the same road that day (opt-in) | L | M | todo | Strava Flyby |
+| S-20 | Flyby: after a drive, see which friends drove the same road that day (opt-in) | L | M | done: a drive's page lists friends who posted a score on its stages that day (`web/flyby.js`, from `/api/board/activity`: their board sharing is the opt-in; marked stages only, 14 days) | Strava Flyby |
 | S-21 | Garage cars from a vehicle database: pick year, make, model and trim, specs (power, weight, drive, gearbox) fill in, and you only change what differs (colour, mods, tyres). Free source: NHTSA vPIC (makes/models/years, VIN decode, US-only, no power/weight) plus a curated spec table for enthusiast cars | H | M | partial (this PR: VIN decode and model suggestions from NHTSA vPIC, typical specs for 31 enthusiast cars incl. weight; a bigger spec table todo) | owner 2026-10-28 |
 | S-22 | Convoys without copy-paste links or a website: invite friends and crew-mates from inside the app (they get the invite in the app), a short join code to read out, and a QR code to scan in the car park | H | M | partial (this PR: in-app invites to friends and private crew-mates, Join from the Crew sheet, a toast when one arrives, and a QR code of the link for the car park; a short spoken join code todo) | owner 2026-10-28 |
 
@@ -289,7 +289,7 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 | F-03 | Save a planned route for offline: geometry, notes, hazards and profiles cached before leaving | H | M | partial (web/saved_routes.js: Save on the route card keeps shape, directions, router times and limits; Where to? lists it and it opens with no signal, notes worked out on the phone. The planned route also survives an app restart for 12 h. Map tiles need F-02; reported hazards are live only) | Calimoto, Kurviger |
 | F-04 | Offline rerouting with on-device Valhalla (see R-28) | H | XL | todo | ROAD_INTELLIGENCE §7.4 |
 | F-05 | Queue hazard reports and road data offline, send on reconnect (see Q-06) | H | M | partial (hazard reports and "still there?" answers: web/outbox.js keeps them on the phone, sends on reconnect with age_s so they expire from when they were seen; road data retries within a drive, surviving a restart is Q-06) | Waze |
-| F-06 | Cache size control and "delete offline data" in Settings | L | S | todo | — |
+| F-06 | Cache size control and "delete offline data" in Settings | L | S | done: Settings → Your data says saved routes, downloaded voices and the app's total storage (unknown stays unsaid) and deletes the offline part; map tiles are the web cache's (MapLibre 4 keeps none) | — |
 
 ## 10. Reliability and observability (Y)
 

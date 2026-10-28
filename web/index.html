@@ -531,11 +531,13 @@
           <section data-panel="setup">
             <h3>Your data</h3>
             <p class="note" id="myDataNote" role="status">--</p>
+            <p class="note" id="myOfflineNote">--</p>
             <div class="row" style="flex-wrap:wrap">
               <button class="ink-btn" id="myGpxBtn">Download drives (GPX)</button>
               <button class="ink-btn" id="myAccountBtn">Download account data</button>
             </div>
             <div class="row mt-8" style="flex-wrap:wrap">
+              <button class="linkbtn" id="myOfflineDelBtn">Delete offline data</button>
               <button class="linkbtn" id="myDrivesDelBtn">Delete drives on this phone</button>
               <button class="linkbtn" id="myEraseBtn">Erase everything on this phone</button>
             </div>
@@ -1506,7 +1508,7 @@
     // opts: kind 'hazard' (goes first, may cut off an ordinary line), key (never twice in a row), atM (route metres: dropped once passed).
     function say(text, force, chain = null, sysToken = null, opts = {}) {
       if (!text || (!state.toggles.voice && !force)) return;
-      if (force) { speech.queue.clear(); stopSpeaking(); }
+      if (force) { speech.queue.clear(); stopSpeaking(); opts = { duck: true, ...opts }; }   // a line you asked for is heard
       speech.queue.push({ text, chain, sysToken, ...opts }, performance.now());
       if (!force) preemptForHazard();
       pumpSpeech(force);
@@ -1532,9 +1534,10 @@
       if (speech.via === 'native') { clearTimeout(speech.nativeTimer); speech.busy = false; speech.interrupt = true; }
     }
     // In the app the shell owns the audio route (car stereo, CarPlay audio, Bluetooth): tell it while a web voice clip plays.
-    function voiceBracket(on) {
+    // duck (IDEAS V-08, ApexSpeechQueue.ducks): lower the music for this line, or play over it.
+    function voiceBracket(on, duck = true) {
       const native = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex;
-      if (native) { try { native.postMessage(on ? 'voiceBegin' : 'voiceEnd'); } catch (_) {} }
+      if (native) { try { native.postMessage(on ? { cmd: 'voiceBegin', duck } : 'voiceEnd'); } catch (_) {} }
     }
     async function pumpSpeech() {
       if (speech.busy) return;
@@ -1542,12 +1545,13 @@
       if (!item) { speech.current = null; speech.via = null; return; }
       if (item.kind === 'hazard' || item.chain || item.haptic) haptic(item.kind === 'hazard' ? 'hazard' : 'note');
       speech.busy = true; speech.current = item; speech.via = 'model';
+      const duck = ApexSpeechQueue.ducks(item, isSpirited());
       let played = false;
       try {
         if (state.voiceId !== 'device' && window.ApexVoice) {
           await ApexVoice.load(state.voiceId);
           const tokens = item.chain ? ApexVoice.tokensFor(item.chain, ApexVoice.bank.style) : item.sysToken ? [item.sysToken] : null;
-          voiceBracket(true);
+          voiceBracket(true, duck);
           try {
             // A call the bank can only voice by joining clips plays as one whole render when the
             // route-load prefetch has it; the join is the audible seam we are avoiding.
@@ -1559,17 +1563,17 @@
         }
       } catch (_) { /* fall back to the device voice */ }
       if (played) { speech.busy = false; pumpSpeech(); return; }
-      deviceSpeak(spokenText(item.text));
+      deviceSpeak(spokenText(item.text), duck);
       if (speech.queue.hazardWaiting(performance.now(), queueCursor())) preemptForHazard();   // a hazard arrived while the model voice tried
     }
-    function deviceSpeak(spoken) {
+    function deviceSpeak(spoken, duck = true) {
       const style = state.voiceStyle;
       if (style === 'jarvis') chirp();
       const native = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex;
       if (native) {
         // One line at a time, so a hazard can still go ahead of the lines behind it; a hazard cutting in interrupts at a word.
         const interrupt = !!speech.interrupt; speech.interrupt = false;
-        try { native.postMessage({ cmd: 'speak', text: spoken, force: interrupt, style }); } catch (_) {}
+        try { native.postMessage({ cmd: 'speak', text: spoken, force: interrupt, style, duck }); } catch (_) {}
         speech.talkingUntil = (interrupt ? performance.now() : Math.max(performance.now(), speech.talkingUntil)) + 600 + spoken.length * 70;   // ~14 characters a second
         speech.via = 'native';
         clearTimeout(speech.nativeTimer);
@@ -1667,14 +1671,14 @@
         if (d > ApexNoteTiming.leadM({ vMps, apexMps, text: call.text, reactionS: reactS })) continue;
         state.spoken.add(key);
         if (e.type === 'corner' ? !spirited : !(spirited || noteworthyInCruise(e))) continue;
-        say(call.text, false, call.chain, null, { kind: e.type === 'corner' ? 'ordinary' : 'hazard', key, atM: noteM(e) });
+        say(call.text, false, call.chain, null, { kind: e.type === 'corner' ? 'ordinary' : 'hazard', key, atM: noteM(e), duck: true });
         if (live) reaction.called(performance.now(), call.text, ApexNoteTiming.needsBrake(vMps, apexMps));
       }
       // Directions at junctions (IDEAS V-04), in any notes mode: the call at the turn goes ahead of corner notes.
       if (track && track.kind === 'route' && !offRoute) {
         for (const line of ApexDirections.due(track.steps, state.cursorM, vMps, state.spoken, track.id)) {
           state.spoken.add(line.key); health.bump('directions_said');
-          say(line.text, false, null, null, { kind: line.now ? 'hazard' : 'ordinary', key: line.key, atM: line.atM });
+          say(line.text, false, null, null, { kind: line.now ? 'hazard' : 'ordinary', key: line.key, atM: line.atM, duck: true });
         }
       }
       // Roads you have driven: one technique tip per remembered corner, only with full notes on (never over a commute),
@@ -3797,6 +3801,22 @@
       const s = ApexMyData.phoneSummary(list, localStorage);
       $('myDataNote').textContent = `On this phone: ${s.drives} drive${s.drives === 1 ? '' : 's'} (${s.miles} mi), ${s.spots} spot${s.spots === 1 ? '' : 's'}, ${s.zones} privacy zone${s.zones === 1 ? '' : 's'}, ${s.places} recent place${s.places === 1 ? '' : 's'}. `
         + (s.signedIn ? 'Signed in: friends, crews and what you shared are on the server.' : 'Not signed in: nothing of yours is on the server.');
+      renderOffline();
+    }
+    // Offline data (IDEAS F-06): saved routes and downloaded voices, their size, and a delete. Drives are not offline data.
+    async function voiceCacheBytes() {
+      try {
+        if (!window.caches || !(await caches.has('kokoro-voices'))) return 0;
+        const c = await caches.open('kokoro-voices'); let n = 0;
+        for (const req of await c.keys()) { const r = await c.match(req); if (r) n += (await r.clone().arrayBuffer()).byteLength; }
+        return n;
+      } catch (_) { return null; }
+    }
+    async function renderOffline() {
+      let est = {};
+      try { est = (navigator.storage && navigator.storage.estimate) ? await navigator.storage.estimate() : {}; } catch (_) {}
+      const o = ApexMyData.offlineSummary(localStorage, await voiceCacheBytes(), est.usage, est.quota);
+      const note = $('myOfflineNote'); if (note) note.textContent = ApexMyData.offlineText(o);
     }
     const saveFile = (text, name, type) => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type })); a.download = name; document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 10000); };
     $('myGpxBtn').addEventListener('click', async () => {
@@ -3810,6 +3830,12 @@
       if (!r || r.status === 401) { toast(r ? 'Not signed in: there is no account data on the server.' : 'No signal. Try again.'); return; }
       if (!r.ok) { toast('Couldn\'t get your data. Try again.'); return; }
       saveFile(JSON.stringify(await r.json(), null, 2), 'apexnav-account.json', 'application/json');
+    });
+    $('myOfflineDelBtn').addEventListener('click', async () => {
+      if (!confirm('Delete routes saved for offline and downloaded voices? Your drives, spots and settings stay.')) return;
+      try { localStorage.removeItem(ApexSavedRoutes.KEY); } catch (_) {}
+      try { if (window.caches) await caches.delete('kokoro-voices'); } catch (_) {}
+      toast('Offline data deleted.'); renderMyData();
     });
     $('myDrivesDelBtn').addEventListener('click', async () => {
       const list = await ApexRecording.all();
