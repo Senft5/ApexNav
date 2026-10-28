@@ -7,6 +7,7 @@ import { convoyConnect, convoyCreate, convoyJoin, convoyRoom, unwrap } from "./c
 import { Env, HttpError, body, json, str } from "./util";
 import { rateCheck } from "./ratelimit";
 import { clientError } from "./errors";
+import { backupDatabase } from "./backup";
 import {
   boardFor, crewCreate, crewDiscover, crewInvite, crewJoin, crewJoinPublic, crewLeave, crewList, crewMembers, crewUpdate, friendAccept, friendList, friendRequest,
   myGrants, publish, removePair, setGrant, setHandle,
@@ -27,7 +28,11 @@ const on = (method: string, path: string, h: Handler) =>
   routes.push([method, new RegExp(`^${path.replace(/:(\w+)/g, "(?<$1>[^/]+)")}$`), h]);
 const noContent = () => new Response(null, { status: 204 });
 
-on("GET", "/api/health", async () => json({ ok: true }));
+// Status checks (tools/status_check.py, IDEAS Y-05): one trivial read proves the database answers, not just the Worker.
+on("GET", "/api/health", async (_req, env) => {
+  try { await env.DB.prepare("SELECT 1").first(); return json({ ok: true, db: true }); }
+  catch (e) { console.error(JSON.stringify({ event: "health_db_failed", error: String(e) })); return json({ ok: false, db: false }, 503); }
+});
 // Anonymous crash reports (web/errors.js): scrubbed, logged, never stored. Rate limited per IP like any signed-out write.
 on("POST", "/api/errors", async (req) => { await clientError(req); return noContent(); });
 on("GET", "/api/auth/google/start", (req, env) => googleStart(req, env));
@@ -143,6 +148,10 @@ export default {
     if (req.method === "OPTIONS") return fromApp ? new Response(null, { status: 204, headers: APP_CORS }) : new Response(null, { status: 405 });
     const res = await handle(req, env);
     return fromApp ? withAppCors(res) : res;
+  },
+  // Cron trigger (wrangler.jsonc triggers): the weekly database backup.
+  async scheduled(_ctrl: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    ctx.waitUntil(backupDatabase(env).catch((e) => console.error(JSON.stringify({ event: "backup_failed", reason: String(e) }))));
   },
 };
 

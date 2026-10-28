@@ -10,6 +10,7 @@ export interface Env {
   PUBLIC_ORIGIN?: string;
   WRITE_LIMIT?: RateLimit;  // wrangler.jsonc ratelimits: writes per session (or per IP when signed out)
   AUTH_LIMIT?: RateLimit;   // sign-in endpoints per IP
+  BACKUPS?: KVNamespace;    // weekly database dumps (src/backup.ts); production only
 }
 
 export class HttpError extends Error {

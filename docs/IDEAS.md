@@ -117,7 +117,7 @@ ideal drive and where to find time (#80), grip circle (#86), automatic mount cal
 | D-04 | Ghost car on the map: your best pass (or a friend's shared ghost) as a moving marker with live delta | H | M | todo | SOCIAL §3, racing games, Strava Live Segments |
 | D-05 | Live delta bar during a known stage (green ahead / red behind your best, technique-scored, not speed-scored) | H | M | todo | Harry's Lap Timer |
 | D-06 | Smoothness heatmap on the drive map (lateral jerk, abrupt inputs) with the three worst moments | M | S | done (#104) | Garmin Catalyst |
-| D-07 | Consistency score across passes of the same road, and a trend over weeks | M | S | partial (#114: per-corner repeatability; weekly trend todo) | Strava fitness trend |
+| D-07 | Consistency score across passes of the same road, and a trend over weeks | M | S | done (#114 per-corner repeatability; monthly braking-consistency trend) | Strava fitness trend |
 | D-08 | Personal records feed: best Driver Score per road, per archetype, smoothest drive this month | M | S | todo | Strava PRs |
 | D-09 | Drive summary card worth sharing (score, map silhouette, archetype mix), no times or speeds | H | S | todo | Strava activity card, Relive |
 | D-10 | 3D flyover replay of a drive with the corner notes and g trace (export as a video) | H | L | todo | Relive |
@@ -126,7 +126,7 @@ ideal drive and where to find time (#80), grip circle (#86), automatic mount cal
 | D-13 | External GNSS (10–25 Hz) support for better lines and lap timing | M | M | todo | RaceChrono, Dragy |
 | D-14 | Performance timing: 0–60, 60–0, quarter mile, only on a closed course with a clear warning | M | M | owner (safety stance) | Dragy |
 | D-15 | Track day mode: closed circuit, start/finish line, sector splits, laps, no public-road guardrails needed | H | L | todo | Harry's Lap Timer, RaceChrono |
-| D-16 | Fatigue cues: rising corrections, later braking and wider lines late in a long drive, suggest a break | M | M | partial (#108: post-drive steering corrections and braking; live cue and lines todo) | car driver-attention systems |
+| D-16 | Fatigue cues: rising corrections, later braking and wider lines late in a long drive, suggest a break | M | M | partial (#108 post-drive; live break cue; wider lines todo) | car driver-attention systems |
 | D-17 | Incident detection: a crash-level spike plus stop asks "Are you OK?" and can alert a chosen contact | H | M | todo | Apple Crash Detection, Life360, REVER |
 | D-18 | Line analysis: early vs late apex per corner from the GPS line against the road geometry | M | M | todo | SOCIAL §3 |
 | D-19 | Car-specific reference lap from the Garage so scores mean the same across cars | H | M | todo | SOCIAL §2.4 |
@@ -270,7 +270,7 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 | C-03 | Android Auto navigation template | H | L | owner (Android priority) | ApexNav mission |
 | C-04 | Car audio: ducking and routing to Bluetooth/CarPlay while prompts play | H | M | done (#73) | — |
 | C-05 | Auto-start: open the cockpit when the phone joins the car's Bluetooth or CarPlay | M | S | todo | Waze, Shortcuts |
-| C-06 | Driving focus aware: no social notifications while driving, a summary after | M | S | todo | iOS Focus |
+| C-06 | Driving focus aware: no social notifications while driving, a summary after | M | S | blocked: the app sends no notifications yet; build this with the first push or social alert | iOS Focus |
 | C-07 | Big-target in-car mode: every control ≥ 60 pt, no keyboard while moving | H | S | done (#121) | NHTSA distraction guidelines |
 | C-08 | Passenger mode: unlocks typing and route editing while moving, with a clear switch | M | S | done (#121) | Waze passenger prompt |
 
@@ -293,13 +293,13 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 | Y-02 | Crash and error reporting without personal data (self-hosted Worker endpoint, no third-party SDK) | H | M | done (#117) | production readiness |
 | Y-03 | Client health beacons: upload success rate, routing failures, calibration time, anonymous and aggregated | H | M | todo | production readiness |
 | Y-04 | Production router: self-host Valhalla or a paid tier instead of public demo servers | H | L | owner (cost) | STATE 2026-10-25 (d) |
-| Y-05 | Status page and synthetic checks for the Worker, D1 and routing | M | S | todo | production readiness |
+| Y-05 | Status page and synthetic checks for the Worker, D1 and routing | M | S | done (#141) | production readiness |
 | Y-06 | Staged rollouts: preview Worker for TestFlight, feature flags per build | M | M | todo | docs/BACKEND.md |
 | Y-07 | Real-phone test checklist run before each TestFlight build (VERIFY.md) | H | S | done (VERIFY.md section 0; first run is the owner's) | docs/VERIFY.md |
 | Y-08 | Record migrations in `d1_migrations` and a drift check in CI | M | S | half (backfilled 0001–0009 on both databases 2026-10-28; CI drift check todo) | STATE 2026-10-26 |
 | Y-09 | Database backups (D1 time travel/export) and a restore drill | H | S | done (#124; first export 2026-10-28 via the connector; drill needs the owner's wrangler login) | production readiness |
 | Y-10 | Rate limits and abuse protection on every write endpoint | H | M | done (#112) | production readiness |
-| Y-12 | Scheduled backups with no token: a Worker Cron Trigger (weekly) dumps every table through the D1 binding (`sqlite_master` + `quote()` SELECTs, as in docs/BACKUPS.md section 3) to a `.sql` object in a private R2 bucket, keeps the last 8, and logs row counts. No API token in GitHub, no export in a CI artifact; R2 free tier (10 GB) covers years. Alternative if a token arrives: a GitHub Action with a `CLOUDFLARE_API_TOKEN` repo secret running `wrangler d1 export` and uploading to the same R2 bucket (never as an Actions artifact) | H | S | todo | first backup 2026-10-28 |
+| Y-12 | Scheduled backups with no token: a Worker Cron Trigger (Mondays 07:00 UTC) dumps every table through the D1 binding into the private `apexnav-backups` KV namespace, keeps the last 8 (docs/BACKUPS.md section 3a). Move to R2 once the owner enables it or a dump nears 24 MiB | H | S | done (this PR; first run the Monday after deploy) | first backup 2026-10-28 |
 | Y-11 | End-to-end browser tests of the main flows (plan, drive replay, log, crew) in CI | M | M | todo | testing |
 | Y-13 | No cron: expired invites, crew invites and app sign-in codes stay in D1 forever (sessions are now swept on the next sign-in, #132). A daily `scheduled` handler that deletes expired rows (can share the Y-12 backup cron) | L | S | todo | audit 2026-10-28 |
 | Y-14 | Segment ids are client-made (`seg_<ms>`) and global: two people saving at the same millisecond get `409 id_taken` and that segment never syncs. Scope ids per owner, or let the server assign and return one | L | S | todo | audit 2026-10-28 |

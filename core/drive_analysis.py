@@ -446,13 +446,14 @@ def _on_a(a: dict, near: int, b: dict, i: int):
     return j if dist <= MATCH_RADIUS_M else None
 
 
-def _spread(brakes: list, mins: list, passes: int) -> dict:
+def _spread(brakes: list, mins: list, passes: int, froms: list) -> dict:
     """How repeatably a corner is driven over your clean passes of it (IDEAS D-07): a robust SD (`_sd`), in m along this drive's
     road, of where braking began and of where the slowest point fell, each over the passes that had a clear one. None
     with fewer than SPREAD_MIN_PASSES of them; 5 m bins and GPS put the floor near 3 m."""
     b = [x for x in brakes if x is not None]
     m = [x for x in mins if x is not None]
-    return {"passes": passes, "brake_sd_m": _sd(b), "brake_passes": len(b), "min_sd_m": _sd(m), "min_passes": len(m)}
+    return {"passes": passes, "brake_sd_m": _sd(b), "brake_passes": len(b), "min_sd_m": _sd(m), "min_passes": len(m),
+            "marks": [[f, x, y] for f, x, y in zip(froms, brakes, mins)]}       # per pass: [-1 this drive | j in others, brake, slowest]
 
 
 def coach(a: dict, others: list) -> dict:
@@ -478,6 +479,7 @@ def coach(a: dict, others: list) -> dict:
         oa, sa = _marks(a, c["start"], c["end"], c["apex"])                 # D-07 marks, in m along A's road from its apex
         brakes = [None if oa is None else (c["apex"] - oa) * 5.0]
         mins = [None if sa is None else (sa - c["apex"]) * 5.0]
+        froms = [-1]
         for j, b in enumerate(others):
             w = match_window(a, c["start"], c["end"], b, hints[j])
             if w is None:
@@ -501,12 +503,13 @@ def coach(a: dict, others: list) -> dict:
             ob = None if ob is not None and ob > c["apex"] else ob             # braking cannot begin past the apex
             brakes.append(None if ob is None else (c["apex"] - ob) * 5.0)
             mins.append(None if sb is None else (sb - c["apex"]) * 5.0)
+            froms.append(j)
             if mb["envelope_use"] <= PACE_CEILING and mb["time_s"] < best["time_s"]:
                 best, best_from = mb, j
         gain = ma["time_s"] - best["time_s"]
         tip = _tip(ma, best if best_from >= 0 and gain >= TIP_GAIN_S else None)
         out.append({"apex": c["apex"], "m": ma, "best": None if best_from < 0 else best, "best_from": best_from,
-                    "gain_s": gain, "tip": tip, "passes": passes, "spread": _spread(brakes, mins, passes)})
+                    "gain_s": gain, "tip": tip, "passes": passes, "spread": _spread(brakes, mins, passes, froms)})
     clean = [x for x in out if x["gain_s"] is not None]
     this_s = float(sum(x["m"]["time_s"] for x in clean))
     gain_s = float(sum(x["gain_s"] for x in clean if x["gain_s"] >= TIP_GAIN_S))     # below that is GPS alignment noise
@@ -515,6 +518,33 @@ def coach(a: dict, others: list) -> dict:
     return {"corners": out, "clean": len(clean), "this_s": this_s, "ideal_s": this_s - gain_s, "gain_s": gain_s,
             "top": order[:TOP_OPPORTUNITIES]}
 
+
+
+TREND_MIN_PASSES = 5         # marks a corner needs inside one period: with 3, two passes in the same 5 m bin read as 0 m
+
+
+def spread_by(co: dict, keys: list) -> dict:
+    """How repeatably you braked within each period (IDEAS D-07 trend), from coach(a, others). keys[0] is the period of a
+    (e.g. the month it was driven) and keys[j + 1] that of others[j], None when unknown. For every corner, the braking marks
+    are grouped by period and each group of TREND_MIN_PASSES or more gives a robust SD (`_sd`). Spread inside a period,
+    not distance from an all-time median, so braking deliberately earlier from one month on does not read as unsteady.
+    Returns {key: [[apex, sd_m] per corner]}, apex being the corner's index in a."""
+    out: dict = {}
+    for c in co["corners"]:
+        sp = c.get("spread")
+        if not sp:
+            continue
+        groups: dict = {}
+        for f, b, _ in sp["marks"]:
+            k = keys[f + 1] if 0 <= f + 1 < len(keys) else None
+            if b is None or k is None:
+                continue
+            groups.setdefault(k, []).append(b)
+        for k in sorted(groups):
+            sd = _sd(groups[k]) if len(groups[k]) >= TREND_MIN_PASSES else None
+            if sd is not None:
+                out.setdefault(k, []).append([c["apex"], sd])
+    return out
 
 # ---------------------------------------------------------------------------
 # Friction circle (g-g): the person's own grip envelope, and how much of it each corner used.
