@@ -1,5 +1,11 @@
 # APEX NAV — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-10-28: reliability (rate limits, crash reports)
+- #112 merged (IDEAS Y-10): Cloudflare rate limiting bindings, every write 60/min per session (per IP signed out), sign-in 20/min per IP, `429 rate_limited` + `retry-after: 60`.
+- Y-02 crash reports: `web/errors.js` (first script on index and analysis pages) sends uncaught errors and rejections, scrubbed, anonymous, max 5 per page, to `POST /api/errors`; the Worker scrubs again and logs one `client_error` line (nothing stored). Read them in Cloudflare Workers Logs. `body()` now checks the 64 KB cap on what arrived, not on Content-Length. Not checked from the iOS app yet (cross-origin post from apexnav://app, same CORS path as ApexSync).
+- F-03 (offline planned route) looked at: there is no service worker, map tiles always come from the network, and CacheStorage on the custom scheme is unproven. Needs a phone to test; not started.
+- Exact next task: C-07 big-target in-car mode, Y-09 database backups doc, Y-07 real-phone checklist.
+
 ## Session 2026-10-28: "why this route" on the route card
 - #111 merged (loops on the fun score). #115: a fun route slower than the quickest says why under the bars, from Valhalla's road names (`FunRoute.why`, `whyText`): Knoxville→Maryville on Fun reads "For SR 360 13 mi, Cold Spring Road 8.2 mi, Doublecamp Creek Road 6.2 mi · 167 more good corners, +30 min". Kept across a page change (sessionStorage). OSRM fallback routes have no names, so only corners and minutes show. Not checked on a phone.
 - R-14 (reject routes that shortcut a stage) is mostly covered already: every candidate is scored on the router's returned geometry, so a shortcut route can't win on corners it didn't drive.
@@ -15,7 +21,7 @@
 - Garage (migration 0008, applied by hand to both D1 databases on 2026-10-28): up to 10 cars with power, weight (lb in the UI, kg stored), lb/hp, drive, gearbox, tyres, mods; one primary ("daily"); "Show to my friends and private crews" (public crews don't count, anyone can join them). Rules in docs/BACKEND.md section 6. Reviewed by code-review and security subagents; cap/primary races, multi-line mods, zero-width/bidi text, public-crew exposure, null-handle grouping all fixed with tests.
 - Active bug found: the iOS shell had no WKUIDelegate, so `confirm()` returned false in the app and Unfriend, Leave crew and Remove car did nothing on iPhone. Fix is the next small PR (ApexNavApp.swift).
 - Not verified on a phone: any convoy drive between two real cars; whether WKWebView sends an Origin the connect route accepts (`apexnav://app`); hazard speech priority while pace notes play; the Garage UI in the app.
-- Known open (low): `body()` in util.ts trusts Content-Length (chunked bodies bypass the 64 KB cap); a crew switched from public to private keeps its open-join members.
+- Known open (low): a crew switched from public to private keeps its open-join members.
 - Exact next task: land the iOS confirm fix, then show each member's daily car in the convoy crew bar and member list, then convoy drive recaps (who drove, hazards called) and a real two-phone convoy test.
 
 ## Session 2026-10-28: long trips planned in sections

@@ -80,7 +80,9 @@ export function csrfCheck(req: Request, env: Env): void {
   if (req.method === "GET" || req.method === "HEAD") return;
   const o = req.headers.get("origin");
   if (o === APP_ORIGIN) {
-    if (!bearer(req) && new URL(req.url).pathname !== "/api/auth/app/exchange") throw new HttpError(403, "bad_origin");
+    // Signed-out app requests: only the sign-in exchange and anonymous crash reports.
+    const path = new URL(req.url).pathname;
+    if (!bearer(req) && path !== "/api/auth/app/exchange" && path !== "/api/errors") throw new HttpError(403, "bad_origin");
   } else if (!o || o !== origin(req, env)) throw new HttpError(403, "bad_origin");
   if (req.headers.get("x-apexnav") !== "1") throw new HttpError(403, "missing_header");
 }
