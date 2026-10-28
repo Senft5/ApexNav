@@ -37,6 +37,7 @@
   <script src="scenic.js"></script>
   <script src="eta_share.js"></script>
   <script src="route_import.js"></script>
+  <script src="spots_feed.js"></script>
   <script src="incident.js"></script>
   <script src="traffic.js"></script>
   <script src="in_car.js"></script>
@@ -471,6 +472,7 @@
                 <button class="ink-btn" id="routeShareBtn">Share</button>
                 <button class="ink-btn" id="etaShareBtn" aria-pressed="false" hidden>Share ETA</button>
                 <button class="linkbtn" id="routeGpxBtn">GPX</button>
+                <label class="linkbtn" id="homeByRow" hidden>Home by <input type="time" id="homeByInput" aria-label="Home by" /></label>
               </div>
               <div class="stack-8" id="routeSharePick"></div>
             </section>
@@ -2274,7 +2276,7 @@
       plannedRoute = t;
       activate(t, 0, { quiet: state.mode !== 'live' });
       renderRouteCard(t);
-      persistPlanned(t); paintSaveBtn(); paintEtaShareBtn();
+      persistPlanned(t); paintSaveBtn(); paintEtaShareBtn(); paintHomeBy();
       openPlan(false);
       markDestination(t);
       if (state.mode !== 'live' && !booting) lockOnDestination(t);
@@ -2400,6 +2402,10 @@
       const left = track && track.kind === 'route' && atM != null ? ApexEta.routerLeft(atM, totalM(), track.timeS, track.timeMarks) : null;
       const now = Date.now(), est = ApexEta.estimate(left, etaPace.update(now, left), now);
       if (est) pushEtaShare(est.leftS, atM);
+      if (est && track && track.homeBy && driveActive) {
+        const o = ApexEta.homeByOffer(est.arriveAt, track.homeBy, track.homeByOfferedAt ?? null, now);
+        if (o) { track.homeByOfferedAt = now; toast(`Running ${o.lateMin} min late for home.`, { label: 'Head home', ms: 15000, onClick: headHome }); }
+      }
       const text = est ? `${est.leftS < 60 ? '<1' : Math.round(est.leftS / 60)} min left · ${new Date(est.arriveAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : '';
       if (text !== etaText) { etaText = text; paintDriveStat(); }
     }
@@ -2434,6 +2440,28 @@
       etaShare.token = (await r.json()).token; etaShare.at = performance.now(); paintEtaShareBtn();
       copyText(`${shareOrigin()}/eta.html?t=${etaShare.token}`, 'Link copied. It shows when you\'ll arrive, never where you are.', 'My ETA');
     });
+    // "Home by" on a loop (IDEAS R-37): the route card's time; while driving, late by more than 5 min offers the direct way back
+    // to the loop's start, planned like any destination at the Quick level.
+    function paintHomeBy() {
+      const t = plannedRoute, loop = !!(t && String(t.id || '').startsWith('loop_'));
+      $('homeByRow').hidden = !loop;
+      if (loop) $('homeByInput').value = t.homeBy ? new Date(t.homeBy).toTimeString().slice(0, 5) : '';
+    }
+    $('homeByInput').addEventListener('change', () => {
+      const t = plannedRoute; if (!t) return;
+      t.homeBy = ApexEta.homeByAt($('homeByInput').value) || null; t.homeByOfferedAt = null;
+      if (t.homeBy) toast(`Home by ${new Date(t.homeBy).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}: if you're running late, ApexNav offers the way back.`);
+    });
+    async function headHome() {
+      const t = track, L = state.live;
+      if (!t || !L) return;
+      const home = { lat: t.lat[0], lon: t.lon[0] }, homeBy = t.homeBy;
+      try {
+        await buildRoute([{ lat: L.lat, lon: L.lon }, home], 'route_home', 'Home');
+        if (plannedRoute) plannedRoute.homeBy = homeBy;
+        toast('Heading home the quickest way.');
+      } catch (_) { toast('Couldn\'t plan the way home. Check signal.'); }
+    }
     async function reroute(t) {
       const req = t.request, L = state.live;
       if (!req || !L) { routeWatch.note = 'Off route'; return; }   // a recorded drive has no plan to rebuild
@@ -2589,6 +2617,7 @@
               const stages = await ApexStages.discover(area.center, area.radiusKm, null, state.hlOn ? { highlights: hls, strength: state.hlStrength } : {});
               const list = FunRoute.shortlist(a, b, stages, FunRoute.LEVELS[level].budget, 4, slack);
               if (!list.length) return [];
+              try { await RouteLoading.optional(ApexStages.addElevations(list)); } catch (_) { /* no DEM: which way round each stage (R-11) stays the nearer end */ }
               const mp = FunRoute.matrixPoints(a, b, list);
               return FunRoute.plansFromMatrix(list, (await valhallaMatrix(mp.sources, mp.targets)).times, stretchS, level, 2, 2);
             } catch (_) { return []; }                                   // no tiles or no matrix here: no stages from this stretch
@@ -2769,6 +2798,7 @@
         // Real road distances between the best stages (one or two matrix calls); the crow-fly plans are the fallback.
         try {
           const list = FunRoute.loopShortlist(c, stages, targetKm);
+          try { await RouteLoading.optional(ApexStages.addElevations(list)); } catch (_) { /* no DEM: which way round each stage (R-11) stays the nearer end */ }
           if (list.length) {
             ui.step('Measuring roads', 0.36);
             const mp = FunRoute.matrixPoints(c, c, list), m = await valhallaMatrix(mp.sources, mp.targets);
@@ -3372,6 +3402,10 @@
       goTo: (p) => { closeSheet(); routeToPlace(p); }, openRoute: (id) => openSharedRoute(id),
       startConvoy: (name, handles) => (convoy && convoy.startFor ? convoy.startFor(name, handles) : Promise.resolve({ ok: false, status: 0 })),
     }) : null; } catch (e) { console.error('crew drives', e); }
+    // Spots near you (web/spots_feed.js, IDEAS S-12): members' shared spots, rated, filtered by kind; Go there plans the way.
+    let spotsFeed = null;
+    try { spotsFeed = window.ApexSpotsFeed ? ApexSpotsFeed.mount({ el, btn, toast, sync: window.ApexSync, report: safety && safety.report,
+      here: () => state.lastPosition || (() => { const c = map.getCenter(); return { lat: c.lat, lon: c.lng }; })(), goTo: (p) => { closeSheet(); routeToPlace(p); } }) : null; } catch (e) { console.error('spots', e); }
     let garage = null;
     try { garage = window.ApexGarageUI ? ApexGarageUI.mount({ el, btn, toast, apiCall, jsonOf, report: safety && safety.report }) : null; } catch (e) { console.error('garage', e); }
     const switchRow = (label, on, change) => { const b = el('button', { className: 'ink-btn' + (on ? ' on' : ''), textContent: `${label}: ${on ? 'On' : 'Off'}`, onclick: change }); b.setAttribute('aria-pressed', String(!!on)); return b; };
@@ -3455,6 +3489,7 @@
       body.append(you);
       if (convoy) body.append(convoy.section());
       body.append(sharedRoutesSection());
+      if (spotsFeed) body.append(spotsFeed.section());
       if (crewEvents) body.append(crewEvents.section(Array.isArray(crews) ? crews.map((c) => ({ id: c.id, name: c.name, visibility: c.visibility })) : []));
       if (garage) body.append(garage.section());
 

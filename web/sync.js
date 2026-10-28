@@ -63,7 +63,8 @@
   /** Shared highlights in a box around a point (about 0.25 degrees each way); [] when offline. Scores are shrunk toward 3 stars by the server. */
   async function highlightsNear(c, deg = 0.25) {
     const r = await call('GET', `/api/highlights?bbox=${[c.lat - deg, c.lon - deg, c.lat + deg, c.lon + deg].map((v) => v.toFixed(5)).join(',')}`);
-    return list(r).map((h) => ({ id: 'srv_' + h.id, name: h.name, lat: h.lat, lon: h.lon, rating: h.score, ratings: h.ratings, server: true, mine: !!h.mine }));
+    return list(r).map((h) => ({ id: 'srv_' + h.id, name: h.name, lat: h.lat, lon: h.lon, rating: h.score, ratings: h.ratings, server: true, mine: !!h.mine,
+      category: h.category || 'other', note: h.note || null, visits: h.visits || 0, myStars: h.my_stars ?? null }));
   }
   const shareHighlight = (h, category) => call('POST', '/api/highlights', { name: h.name, category, lat: h.lat, lon: h.lon });
   const rateHighlight = (id, stars, visited = false) => call('POST', `/api/highlights/${encodeURIComponent(id.replace(/^srv_/, ''))}/rating`, { stars, visited });

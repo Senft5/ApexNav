@@ -55,6 +55,23 @@
     return { leftS: s, arriveAt: now + s * 1000 };
   }
 
-  const api = { routerLeft, createPace, estimate, PACE_MIN, PACE_MAX };
+  // "Home by" on a loop (IDEAS R-37): offer the way home when the live arrival is more than LATE_GRACE_MS past the time the
+  // driver set, once, and again only after REOFFER_MS if still late. `offeredAt` is when it was last offered (or null).
+  const LATE_GRACE_MS = 5 * 60000, REOFFER_MS = 10 * 60000;
+  function homeByOffer(arriveAt, homeBy, offeredAt, now) {
+    if (!Number.isFinite(arriveAt) || !Number.isFinite(homeBy) || arriveAt - homeBy <= LATE_GRACE_MS) return null;
+    if (Number.isFinite(offeredAt) && now - offeredAt < REOFFER_MS) return null;
+    return { lateMin: Math.round((arriveAt - homeBy) / 60000) };
+  }
+  /** The next time `hh:mm` happens after `now` (a "home by 6:00" set at 7 PM means tomorrow's 6 AM is not meant: today). */
+  function homeByAt(hhmm, now = Date.now()) {
+    const m = /^(\d{1,2}):(\d{2})$/.exec(hhmm || '');
+    if (!m) return null;
+    const d = new Date(now); d.setHours(+m[1], +m[2], 0, 0);
+    if (d.getTime() < now - 3600_000) d.setDate(d.getDate() + 1);   // an hour or more ago: the driver means tomorrow
+    return d.getTime();
+  }
+
+  const api = { routerLeft, createPace, estimate, homeByOffer, homeByAt, PACE_MIN, PACE_MAX, LATE_GRACE_MS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexEta = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -75,7 +75,7 @@ long-press pin (#61), Apple place search and nearby suggestions in the app (#73)
 | R-08 | Traffic ahead on iOS from MapKit, switch to the next most fun route that avoids the jam | H | L | done (#78, phone test pending) | WORKER_QUEUE traffic-1, Waze |
 | R-09 | Traffic on web/Android through a keyed provider (TomTom/HERE via the Worker) | M | M | owner (paid provider) | Google Maps |
 | R-10 | "Explore": best stages within N minutes of here, as a list and on the map, one tap to drive one | H | M | done (#129) | ROAD_INTELLIGENCE §7.1, REVER discover |
-| R-11 | Choose each stage's direction by score and car (climb the technical one, descend the flowing one) | M | M | todo | ROAD_INTELLIGENCE §7.2.3 |
+| R-11 | Choose each stage's direction by score and car (climb the technical one, descend the flowing one) | M | M | done (stage ends' elevation from the Terrarium DEM; a technical stage climbed or a flowing one descended is worth 15% more in loop and detour ranking; the crow-fly fallback takes the better end when it costs ≤ 3 km more. Car-specific choice waits on D-19) | ROAD_INTELLIGENCE §7.2.3 |
 | R-12 | Set list: order stages so intensity builds, rests, and finishes high; no three max-TECH stages in a row | M | M | todo | ROAD_INTELLIGENCE §7.2.5 |
 | R-13 | Sun glare penalty for headings within 20° of a low sun, using the existing solar formula | M | S | done (#123) | ROAD_INTELLIGENCE §7.2.6 |
 | R-14 | Re-score the router's returned geometry and reject routes that shortcut a stage | M | S | todo | ROAD_INTELLIGENCE §7.2.4 |
@@ -101,7 +101,7 @@ long-press pin (#61), Apple place search and nearby suggestions in the app (#73)
 | R-34 | Ramp/cloverleaf loops no longer read as Switchbacks (veto motorway links by road class) | M | S | todo | STATE 2026-10-25 (c) |
 | R-35 | Avoid known speed traps and ALPR cameras as a routing option, not only a note | M | S | todo | DeFlock layer, Waze |
 | R-36 | Crowd quiet hours: prefer stages that are empty at the time you'll arrive (from anonymous counts) | M | L | todo | Strava heatmap, Google popular times |
-| R-37 | Return-to-start "home by" mode on a loop that shortens itself live if you're running late | M | M | todo | Calimoto |
+| R-37 | Return-to-start "home by" mode on a loop that shortens itself live if you're running late | M | M | partial (a loop's route card takes a Home by time; driving it, a live arrival more than 5 min late offers Head home: the quickest way back to the start. The loop doesn't yet shorten itself by dropping a stage) | Calimoto |
 
 ## 2. Driver analysis and coaching (D)
 
@@ -206,7 +206,7 @@ Today: accounts with Google sign-in, friends, crews (public and private, crews n
 | S-09 | Pioneer badges for first measured passes of a road (3× Octane already designed) | M | S | todo | SOCIAL §2.3, Waze points |
 | S-10 | Octane redemptions that buy nothing safety-related: cosmetics, voice packs, early features | M | M | todo | SOCIAL §2.3 |
 | S-11 | Challenges: "drive 5 new roads this month", "pioneer 10 km", crew-vs-crew km | M | M | todo | Strava challenges, REVER |
-| S-12 | Highlights feed near you: viewpoints, cafés, meets, saved by members | M | M | todo | Roadtrippers, Google Maps contributions |
+| S-12 | Highlights feed near you: viewpoints, cafés, meets, saved by members | M | M | done: Crew → Spots near you (`web/spots_feed.js`): members' spots best rated then nearest, category chips, Go there, 1/3/5★, Report; meets are S-13 | Roadtrippers, Google Maps contributions |
 | S-13 | Car meets map: public events and recurring Cars & Coffee, added by crews | H | M | partial (a public crew lists a drive as a meet; Crew → Meets near you within 80 km, join the crew to answer; migration 0015. Recurring meets and pins on the map are still to do) | car meet apps, Facebook groups |
 | S-14 | Invite links that open the app (or the web) on the crew or route | H | S | done (custom scheme; Universal Links later) | growth |
 | S-15 | Profiles: handle, cars, crews, favourite roads, totals; private by default | M | M | todo | Strava profile |

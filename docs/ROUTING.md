@@ -36,6 +36,22 @@ it says "Couldn't check towns" instead of pretending there are none. Checked: we
 (Alcoa/Maryville) and no town-free alternate; Morristown → Rahway NJ, the winner has 29.5 km of town against 19.5–25 km for
 others, so the card says ~18 mi (fun outweighed the town cost there).
 
+## Which way round a stage
+
+Before loop and detour plans are ranked, each shortlisted stage gets the elevation of its two ends from the Terrarium DEM
+tiles the map uses for hillshade (`ApexStages.addElevations`, z12; Newfound Gap reads 1,539 m). When a stage climbs 40 m or
+more end to end, driving it the better way round adds 15% of its value in the ranking (`FunRoute.directionBonus`): a
+technical stage (1.2+ tight corners a km) climbed, a flowing one descended. Tight corners uphill come with less speed and
+more weight on the front tyres. The crow-fly fallback planner takes the better end when it costs at most 3 km more
+connector. No DEM: nothing changes (IDEAS R-11).
+
+## Home by
+
+A loop's route card takes a **Home by** time (the next time it comes round; an hour or more ago means tomorrow). While the loop
+is driven, when the live arrival (above) is more than 5 minutes past it, a toast offers **Head home**, once and then again
+after 10 minutes if still late; it plans the quickest way from where you are back to the loop's start (IDEAS R-37,
+`homeByOffer` in web/eta.js).
+
 ## Routes from elsewhere
 
 Where to? takes a pasted Google Maps (`/maps/dir/…`, `?api=1&destination=…&waypoints=…`, `/place/…/@lat,lon`), Apple Maps
