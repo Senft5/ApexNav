@@ -32,6 +32,7 @@
       background: var(--panel, #fff); white-space: nowrap; font-family: var(--font-ui, sans-serif); }
     .convoy-pin.regroup { border-color: var(--gain, #2a6); color: var(--gain, #2a6); }
     .cv-members { display: grid; gap: 4px; }
+    .cv-qr { width: 232px; height: 232px; image-rendering: pixelated; border-radius: 8px; }
     .cv-member { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-height: 44px; }
     .cv-member .cv-on { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--panel-dim); margin-right: 6px; }
     .cv-member .cv-on.live { background: var(--gain, #2a6); }
@@ -264,6 +265,30 @@
       if (!invite) { toast('Couldn\'t make an invite. Try again.'); return; }
       copyText(inviteUrl(invite), 'Convoy link copied. It works for 30 minutes.', 'Join my convoy');
     }
+    // A QR code of the link (IDEAS S-22): scanned with the phone camera in the car park, no copy and paste. The encoder
+    // (vendor/qrcode.js, MIT, Kazuhiko Arase) loads only when asked; the code is drawn on a canvas, no markup from it.
+    let qrLib = null;
+    const loadQr = () => qrLib || (qrLib = new Promise((ok, fail) => {
+      if (root.qrcode) { ok(root.qrcode); return; }
+      const sc = document.createElement('script'); sc.src = 'vendor/qrcode.js';
+      sc.onload = () => (root.qrcode ? ok(root.qrcode) : fail(new Error('qr'))); sc.onerror = () => { qrLib = null; fail(new Error('qr')); };
+      document.head.append(sc);
+    }));
+    async function showQr(box) {
+      const invite = await client.inviteLink(false);
+      if (!invite) { toast('Couldn\'t make an invite. Try again.'); return; }
+      let qrcode;
+      try { qrcode = await loadQr(); } catch (_) { toast('Couldn\'t draw the code. Share the link instead.'); return; }
+      const qr = qrcode(0, 'M'); qr.addData(inviteUrl(invite)); qr.make();
+      const n = qr.getModuleCount(), cell = Math.max(4, Math.floor(232 / (n + 8))), size = (n + 8) * cell;
+      const cv = el('canvas', { width: size, height: size, className: 'cv-qr' });
+      cv.setAttribute('role', 'img'); cv.setAttribute('aria-label', 'Convoy QR code');
+      const g = cv.getContext('2d');
+      g.fillStyle = '#fff'; g.fillRect(0, 0, size, size); g.fillStyle = '#000';
+      for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (qr.isDark(r, c)) g.fillRect((c + 4) * cell, (r + 4) * cell, cell, cell);
+      box.replaceChildren(cv, el('p', { className: 'note', textContent: 'Point a phone camera at it to join. Works for 30 minutes.' }),
+        btn('Hide', () => box.replaceChildren(), 'linkbtn'));
+    }
     const preview = { invite: null, status: null, ok: false, body: null, at: 0 };
     async function loadPreview(invite) {
       Object.assign(preview, { invite, status: null, ok: false, body: null, at: Date.now() });
@@ -342,7 +367,7 @@
         kids.push(list);
         const actions = el('div', { className: 'row' }), picker = el('div', { className: 'stack-8' });
         if (c.role === 'leader') {
-          actions.append(btn('Invite friends', () => invitePeople(picker), 'ink-btn solid'), btn('Share link', () => shareInvite(false)),
+          actions.append(btn('Invite friends', () => invitePeople(picker), 'ink-btn solid'), btn('Show QR', () => showQr(picker)), btn('Share link', () => shareInvite(false)),
             btn('New link', () => { if (confirm('Make a new link? The old one stops working for anyone who hasn\'t joined yet.')) shareInvite(true); }, 'linkbtn'));
           const r = getRoute();
           const shareMsg = { sent: (n) => `${n} shared with the convoy.`, offline: () => 'Not connected to the convoy.', too_long: () => 'That route is too long to share.' };
