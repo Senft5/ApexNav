@@ -540,3 +540,28 @@ def test_sight_with_per_sample_clearance_matches():
     # an open field beside the first corner sees further there; the woods-only road sees less
     woods = rd.sight_distance_m(lat, lon)
     assert (py >= woods - 1e-9).all() and (py > woods + 1).any()
+
+
+CARS = [None, {}, {"clearance": "low", "weight_kg": 1100, "tyres": "Michelin Pilot Sport 4S"}, {"clearance": "high"},
+        {"weight_kg": 2600}, {"tyres": "BFGoodrich KO2 All-Terrain"}, {"tyres": "Nokian Hakkapeliitta winter"},
+        {"tyres": "A/T 265/70R17"}, {"tyres": "Mudflap-free sport"}, {"clearance": "high", "weight_kg": 2500, "tyres": "M/T"},
+        {"weight_kg": "heavy", "tyres": 7}]
+
+
+def test_car_grip_matches_and_never_raises_the_limit():
+    """IDEAS D-19: per-car grip for the Driver Score, JS = Python, and never above the street default."""
+    from core import drive_analysis as da
+    corners = [{"start": 0, "end": 4, "apex": 2, "apex_mps": 21.7}, {"start": 10, "end": 14, "apex": 12, "apex_mps": 13.1}]
+    runner = ("const c=require(process.argv[1]);const {cars,corners}=JSON.parse(require('fs').readFileSync(0,'utf8'));"
+              "process.stdout.write(JSON.stringify(cars.map(car=>{const mu=c.carGrip(car);return {mu, corners:c.cornersForCar(corners, mu)};})));")
+    out = subprocess.run([NODE, "-e", runner, os.path.abspath("web/apex_core.js")], input=json.dumps({"cars": CARS, "corners": corners}),
+                         capture_output=True, text=True, check=True)
+    js = json.loads(out.stdout)
+    py = [{"mu": da.car_grip(car), "corners": da.corners_for_car(corners, da.car_grip(car))} for car in CARS]
+    assert js == py
+    mus = [p["mu"] for p in py]
+    assert mus == [0.6, 0.6, 0.6, 0.52, 0.52, 0.5, 0.5, 0.5, 0.6, 0.5, 0.6]
+    assert max(mus) <= rd.MU_EFF_DEFAULT, "grippy tyres never raise the limit"
+    tall = py[3]["corners"][0]["apex_mps"]
+    assert tall < 21.7 and abs(tall - 21.7 * math.sqrt(0.52 / 0.6)) < 1e-12
+    assert da.corners_for_car(corners, None) is corners and da.corners_for_car(corners, 0.9) is corners

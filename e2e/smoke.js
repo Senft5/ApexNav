@@ -147,6 +147,7 @@ flow('Where to?: a suggestion builds a route with a card and a Start button (sea
   const name = await page.textContent('#routeBarName');
   check(/Maryville/.test(name), `route bar names the destination (got "${name}")`);
   check(await page.isVisible('#startDrive'), 'Start is offered');
+  check(await page.evaluate(() => ApexAnalysis.stats.worker >= 1 && ApexAnalysis.stats.inline === 0), 'the route was analysed in the Web Worker (IDEAS P-05)');
   // the router's turn is on the track for spoken directions (IDEAS V-04): halfway along, onto Hollow Creek Road
   const steps = await page.evaluate(() => { const t = window.apexDebug.track; return { steps: t.steps, total: t.dist[t.dist.length - 1] }; });
   const turn = steps.steps.find((x) => x.type === 10);

@@ -82,7 +82,7 @@ const loading = require(process.argv[1] + '/web/route_loading.js');
 """)
 
 
-def test_route_analysis_yields_between_existing_core_phases():
+def test_route_analysis_runs_through_the_worker_client_after_a_yield():
     run_node(r"""
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -98,15 +98,17 @@ const instrumented = new Proxy(core, {
     return (...args) => { phases[name] = heartbeat; return target[name](...args); };
   },
 });
-const build = new Function('Core', 'MPH', 'RouteLoading', 'return (' + source + ')')(instrumented, core.MPS_TO_MPH, loading);
+const client = require(process.argv[1] + '/web/analysis_client.js');   // the worker's own code path, run inline here (IDEAS P-05)
+let viaClient = 0;
+const ApexAnalysis = { analyse: (lat, lon, off) => { viaClient++; return client.analyse(lat, lon, off, { Core: instrumented, inline: true }); } };
+const build = new Function('Core', 'MPH', 'RouteLoading', 'ApexAnalysis', 'return (' + source + ')')(instrumented, core.MPS_TO_MPH, loading, ApexAnalysis);
 (async () => {
   const timer = setInterval(() => heartbeat++, 0);
   try {
     const coords = Array.from({ length: 401 }, (_, index) => [-84 + index * 0.00005, 39 + Math.sin(index / 20) * 0.0005]);
     const route = await build(coords, 'isolated', 'Isolated route');
-    assert.ok(phases.computeCurvature > 0);
-    assert.ok(phases.sightDistanceM > phases.computeCurvature);
-    assert.ok(phases.brakingEnvelopeMps > phases.sightDistanceM);
+    assert.ok(phases.computeCurvature > 0, 'the UI got a turn before the analysis');
+    assert.equal(viaClient, 1, 'the analysis goes through the worker client');
     const sampled = core.resamplePolyline(coords.map(point => point[1]), coords.map(point => point[0]), 5);
     const { kappa, ds } = core.computeCurvature(sampled.lat, sampled.lon);
     const sight = core.sightDistanceM(sampled.lat, sampled.lon);

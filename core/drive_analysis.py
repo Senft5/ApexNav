@@ -8,6 +8,7 @@ location, so the comparison does not depend on both drives detecting the same co
 from __future__ import annotations
 
 import math
+import re
 
 import numpy as np
 
@@ -188,6 +189,42 @@ def corner_technique(v, lon_g, lat_g, c: dict):
     late = max(0.0, -float(np.min(np.asarray(lon_g, dtype=float)[c["apex"]:c["end"] + 1])))   # braking after the apex
     return {"use": m["envelope_use"], "smooth": math.exp(-step / 0.15),
             "brake": 1.0 - min(1.0, max(0.0, (late - 0.10) / 0.30))}
+
+
+# ---------------------------------------------------------------------------
+# Per-car grip (IDEAS D-19): the Driver Score's corner limit for the car you drove, so a tall, heavy or winter-shod car
+# isn't marked down for respecting its own lower limit. Only ever lower than the sane street default, never higher:
+# grippier tyres must not mean "drive faster" on a public road.
+# ---------------------------------------------------------------------------
+
+GRIP_TALL = 0.52             # lifted / tall cars: more body roll, a lower sane limit
+GRIP_HEAVY = 0.52            # 2.3 t and up
+HEAVY_KG = 2300
+GRIP_WINTER = 0.50           # winter, all-terrain or mud tyres
+WINTER_TYRES = re.compile(r"winter|snow|all[- ]?terrain|\bA/T\b|\bM/T\b|\bmud\b", re.IGNORECASE)
+
+
+def car_grip(car) -> float:
+    """Sane lateral grip for this car: the street default unless the Garage says it's tall, heavy or on winter/off-road tyres."""
+    mu = rd.MU_EFF_DEFAULT
+    if not car:
+        return mu
+    if car.get("clearance") == "high":
+        mu = min(mu, GRIP_TALL)
+    w = car.get("weight_kg")
+    if isinstance(w, (int, float)) and w >= HEAVY_KG:
+        mu = min(mu, GRIP_HEAVY)
+    if isinstance(car.get("tyres"), str) and WINTER_TYRES.search(car["tyres"]):
+        mu = min(mu, GRIP_WINTER)
+    return mu
+
+
+def corners_for_car(corners, mu=None):
+    """Corners with the apex limit scaled to the car's grip (v ~ sqrt(mu)); None or the default leaves them as they are."""
+    if mu is None or not (0 < mu < rd.MU_EFF_DEFAULT):
+        return corners
+    k = math.sqrt(mu / rd.MU_EFF_DEFAULT)
+    return [{**c, "apex_mps": c["apex_mps"] * k} for c in corners]
 
 
 def driver_score(speed_mps, lon_g, lat_g, corners, lo: int = 0, hi=None) -> dict:

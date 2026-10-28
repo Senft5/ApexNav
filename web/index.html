@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-yndSMZjiEeyeQzAKjIodStLJyDDbvNoJAO+u0hTsJvE=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-taz21a5lIIhicPb3mh5FrkSuSQRuSpKzM/heETf/Q8c=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>ApexNav</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -17,6 +17,7 @@
   <script src="vendor/maplibre-gl.js"></script>
   <script src="vendor/maplibre-contour.min.js"></script>
   <script src="apex_core.js"></script>
+  <script src="analysis_client.js"></script>
   <script src="route_loading.js"></script>
   <script src="stages.js"></script>
   <script src="fun_route.js"></script>
@@ -792,17 +793,14 @@
     async function trackFromPolyline(coords, id, name) {
       await RouteLoading.yieldToUI();
       const rs = Core.resamplePolyline(coords.map(c => c[1]), coords.map(c => c[0]), 5);
-      const { kappa, ds } = Core.computeCurvature(rs.lat, rs.lon);
       // what's beside the road (stages.js sightOffsets, IDEAS Q-09): open grass lets you see across a bend, woods don't;
       // no tiles or a long trip: the cautious 4 m everywhere
       let offsets = null;
       try { offsets = window.ApexStages && ApexStages.sightOffsets ? await RouteLoading.optional(ApexStages.sightOffsets(rs.lat, rs.lon), 4000) : null; } catch (_) { offsets = null; }
-      await RouteLoading.yieldToUI();
-      const sight = Core.sightDistanceM(rs.lat, rs.lon, null, offsets || undefined);
-      await RouteLoading.yieldToUI();
-      const env = Core.brakingEnvelopeMps(kappa, ds, null, null, undefined, sight);
+      // curvature, sight, braking envelope and corners in a Web Worker (analysis_client.js, IDEAS P-05); inline without one
+      const { kappa, sight, env, corners } = await ApexAnalysis.analyse(rs.lat, rs.lon, offsets);
       const dist = rs.lat.map((_, i) => i * 5);
-      const events = Core.annotateCautions(Core.detectCorners(kappa, ds), env, sight).map(c => {
+      const events = corners.map(c => {
         const t = Core.paceNoteText(c);
         return { type: 'corner', code: t.code, call: t.call, index: c.apex, dist_m: dist[c.apex], lat: rs.lat[c.apex], lon: rs.lon[c.apex],
                  start_m: dist[c.start], end_m: dist[c.end], radius_m: c.radius_m, apex_mph: c.apex_mps * MPH, dir: c.dir,
@@ -2100,13 +2098,14 @@
     // Avoid options (Plan sheet, saved on the phone): router costing for routes and the connector matrix alike.
     const AVOID = 'apex.avoid';
     let avoid = { ...FunRoute.AVOID_DEFAULT };
-    // The car routing plans for (IDEAS R-20): your Garage's daily car, kept on the phone so planning works offline.
+    // Your Garage's daily car, kept on the phone: routing plans for it (IDEAS R-20) and drives are scored for it (D-19).
     let carForRouting = null;
     try { carForRouting = JSON.parse(localStorage.getItem('apex.routingCar') || 'null'); } catch (_) {}
     const routingCar = () => carForRouting;
     function setRoutingCars(list) {
       const c = Array.isArray(list) ? list.find(x => x.is_primary) || null : null;
-      carForRouting = c && (c.clearance || c.width_cm) ? { clearance: c.clearance || null, width_cm: c.width_cm || null, label: c.nickname || [c.make, c.model].filter(Boolean).join(' ') } : null;
+      carForRouting = c ? { clearance: c.clearance || null, width_cm: c.width_cm || null, weight_kg: c.weight_kg || null, tyres: c.tyres || null,
+                            label: c.nickname || [c.make, c.model].filter(Boolean).join(' ') } : null;
       try { if (carForRouting) localStorage.setItem('apex.routingCar', JSON.stringify(carForRouting)); else localStorage.removeItem('apex.routingCar'); } catch (_) {}
     }
     try { const a = JSON.parse(localStorage.getItem(AVOID) || 'null'); if (a && typeof a === 'object') for (const k in avoid) if (typeof a[k] === 'boolean') avoid[k] = a[k]; } catch (_) { /* storage off */ }
@@ -4883,6 +4882,9 @@
           const when = new Date(rec.startedAt || Date.now()), pad = (n) => String(n).padStart(2, '0');
           const stamp = `${when.getFullYear()}${pad(when.getMonth() + 1)}${pad(when.getDate())}_${pad(when.getHours())}${pad(when.getMinutes())}${pad(when.getSeconds())}`;
           const d = ApexRecording.parse(Core, rec.toCsv(), `web_${stamp}.csv`, { source: 'web-gps', date: `${when.getFullYear()}-${pad(when.getMonth() + 1)}-${pad(when.getDate())}T${pad(when.getHours())}:${pad(when.getMinutes())}`, name: road || `Drive ${when.toLocaleDateString()} ${ApexFormat.clock12(when.getHours(), when.getMinutes())}` });
+          // the car it was driven in (IDEAS D-19): its label and the grip its score allows, never higher than the street default
+          const car = routingCar();
+          if (car) d.car = { label: car.label, mu: Core.carGrip(car) };
           await ApexRecording.store(d);
           await refreshSavedDrives();
           toast(`Drive saved · ${ApexUnits.long((rec.km) * 1000, 1)}`, { label: 'View', href: `analysis.html?tab=drive&drive=${encodeURIComponent(d.id)}` });
