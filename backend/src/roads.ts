@@ -4,6 +4,12 @@
 import { Env, HttpError } from "./util";
 
 const MAX_WAYS = 50;
+/**
+ * k-anonymity (IDEAS Z-08): a road+direction is shown only once this many different people have driven it, so a road only
+ * one person drives (the lane to their house) never shows their drives to anyone. rank_slots holds the first two distinct
+ * drivers of each road+direction (contribute.ts), so it counts them without saying who.
+ */
+export const MIN_DRIVERS = 2;
 
 export interface RoadBinRow {
   way_id: number; dir: number; bin_idx: number; n: number; camber_mean: number | null; camber_m2: number | null; camber_n: number;
@@ -21,7 +27,9 @@ export async function roadBins(env: Env, url: URL) {
   if (!ids.length || ids.length > MAX_WAYS || ids.some((x) => !Number.isSafeInteger(x) || x < 1)) throw new HttpError(400, "bad_ways");
   const marks = ids.map(() => "?").join(",");
   const rows = (await env.DB.prepare(
-    `SELECT way_id, dir, bin_idx, n, camber_mean, camber_m2, camber_n, rough_mean, rough_m2, crest_peak FROM road_bins WHERE way_id IN (${marks}) ORDER BY way_id, dir, bin_idx`,
+    `SELECT way_id, dir, bin_idx, n, camber_mean, camber_m2, camber_n, rough_mean, rough_m2, crest_peak FROM road_bins rb
+      WHERE way_id IN (${marks}) AND (SELECT COUNT(*) FROM rank_slots rs WHERE rs.way_id = rb.way_id AND rs.dir = rb.dir) >= ${MIN_DRIVERS}
+      ORDER BY way_id, dir, bin_idx`,
   ).bind(...ids).all<RoadBinRow>()).results;
   // { [way]: { [dir]: { i:[bin], n:[], cam:[], cn:[], csd:[], rough:[], rsd:[], crest:[] } } } keeps the payload small; unknown stays null
   type Col = (number | null)[];
