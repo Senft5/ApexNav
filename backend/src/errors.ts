@@ -6,9 +6,10 @@ import { HttpError, body } from "./util";
 /** Same rules as web/errors.js scrub(): URLs lose query and fragment, e-mails, precise numbers and token-like strings go. */
 export function scrub(text: string, max: number): string {
   let s = text;
-  s = s.replace(/\b(https?|apexnav):\/\/[^\s)'"]+/g, (u) => u.replace(/[?#].*?((?::\d+){1,2})?$/, "$1"));
-  s = s.replace(/[\w.+-]+@[\w-]+(\.[\w-]+)+/g, "[email]");
-  s = s.replace(/-?\d{1,3}\.\d{4,}/g, "[num]");
+  s = s.replace(/\bdata:[^\s)'"]+/g, "data:[…]");
+  s = s.replace(/\b[a-z][a-z0-9+.-]*:\/\/[^\s)'"]+/gi, (u) => u.replace(/[?#].*?((?::\d+){1,2})?$/, "$1"));
+  s = s.replace(/[\w.+-]+(?:@|%40)[\w-]+(\.[\w-]+)+/gi, "[email]");
+  s = s.replace(/-?\d{1,3}\.\d{3,}/g, "[num]");
   s = s.replace(/\b(?=[A-Za-z0-9_-]*\d)(?=[A-Za-z0-9_-]*[A-Za-z])[A-Za-z0-9_-]{24,}\b/g, "[token]");
   return s.length > max ? s.slice(0, max) : s;
 }

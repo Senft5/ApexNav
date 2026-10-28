@@ -289,7 +289,7 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 | id | idea | impact | effort | status | from |
 |---|---|---|---|---|---|
 | Y-01 | Route loading never hangs; black-screen recovery | H | M | done (#67) | owner report |
-| Y-02 | Crash and error reporting without personal data (self-hosted Worker endpoint, no third-party SDK) | H | M | done | production readiness |
+| Y-02 | Crash and error reporting without personal data (self-hosted Worker endpoint, no third-party SDK) | H | M | done (#117) | production readiness |
 | Y-03 | Client health beacons: upload success rate, routing failures, calibration time, anonymous and aggregated | H | M | todo | production readiness |
 | Y-04 | Production router: self-host Valhalla or a paid tier instead of public demo servers | H | L | owner (cost) | STATE 2026-10-25 (d) |
 | Y-05 | Status page and synthetic checks for the Worker, D1 and routing | M | S | todo | production readiness |

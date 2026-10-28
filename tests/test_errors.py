@@ -17,6 +17,7 @@ out.email = E.scrub('no user nate.s+x@gmail.com here');
 out.coords = E.scrub('bad point 35.960612,-83.920739 at index 12 of 1.5');
 out.token = E.scrub('Bearer eyJhbGciOiJIUzI1NiJ9abc123defghijk and a_long_function_name_without_digits_here');
 out.stack = E.scrub('at f (apexnav://app/index.html?x=1:120:7)');
+out.more = E.scrub('Invalid coordinate 48.137, 11.575 ws://h/x?k=v data:text/plain,Bob%20Smith /u/john%40example.com');
 out.cap = E.scrub('x'.repeat(5000), 300).length;
 // listener: 7 distinct errors and 1 repeat -> 5 sent
 const sent = [], listeners = {};
@@ -47,6 +48,7 @@ def test_scrub_removes_personal_data(r):
     assert "a_long_function_name_without_digits_here" in r["token"], "plain identifiers in stacks survive"
     assert r["stack"] == "at f (apexnav://app/index.html:120:7)", "line and column survive"
     assert r["cap"] == 300
+    assert r["more"] == "Invalid coordinate [num], [num] ws://h/x data:[…] /u/[email]", "3-decimal coordinates, any URL scheme, data: URLs, encoded e-mails"
 
 
 def test_one_report_per_error_and_five_per_page(r):

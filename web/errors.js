@@ -10,9 +10,10 @@
   /** Remove anything that could identify a person or a place. Pure; mirrored in backend/src/errors.ts. */
   function scrub(text, max = 300) {
     let s = String(text == null ? '' : text);
-    s = s.replace(/\b(https?|apexnav):\/\/[^\s)'"]+/g, (u) => u.replace(/[?#].*?((?::\d+){1,2})?$/, '$1'));        // keep where, drop what
-    s = s.replace(/[\w.+-]+@[\w-]+(\.[\w-]+)+/g, '[email]');
-    s = s.replace(/-?\d{1,3}\.\d{4,}/g, '[num]');                                                  // lat/lon and other precise numbers
+    s = s.replace(/\bdata:[^\s)'"]+/g, 'data:[…]');
+    s = s.replace(/\b[a-z][a-z0-9+.-]*:\/\/[^\s)'"]+/gi, (u) => u.replace(/[?#].*?((?::\d+){1,2})?$/, '$1'));        // keep where, drop what
+    s = s.replace(/[\w.+-]+(?:@|%40)[\w-]+(\.[\w-]+)+/gi, '[email]');
+    s = s.replace(/-?\d{1,3}\.\d{3,}/g, '[num]');                                                  // lat/lon and other precise numbers
     s = s.replace(/\b(?=[A-Za-z0-9_-]*\d)(?=[A-Za-z0-9_-]*[A-Za-z])[A-Za-z0-9_-]{24,}\b/g, '[token]');
     return cut(s, max);
   }
