@@ -1224,6 +1224,11 @@
       if (speech.queue.length > 2) speech.queue.splice(0, speech.queue.length - 2);
       pumpSpeech();
     }
+    // Next in line without cutting off what is playing or dropping the notes behind it (convoy hazard calls far ahead).
+    function sayNext(text) {
+      speech.queue.unshift({ text, chain: null, sysToken: null });
+      pumpSpeech();
+    }
     // In the app the shell owns the audio route (car stereo, CarPlay audio, Bluetooth): tell it while a web voice clip plays.
     function voiceBracket(on) {
       const native = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex;
@@ -2277,7 +2282,8 @@
     };
     const section = (title) => el('div', { className: 'stack-8' }, el('h3', { textContent: title }));
     // Convoy (web/convoy_ui.js): a live group drive. The page lends it the map, the position, the voice and its helpers.
-    const convoy = window.ApexConvoyUI && window.ApexConvoy ? ApexConvoyUI.mount({
+    let convoy = null;
+    try { convoy = window.ApexConvoyUI && window.ApexConvoy ? ApexConvoyUI.mount({
       map, maplibregl, el, btn, toast, copyText, showView, apiFetch: ApexSync.apiFetch, overlayParent: $('toast').parentElement,
       siteOrigin: () => (ApexSync.inApp ? ApexSync.apiBase : location.origin),
       wsUrl: (id) => `${ApexSync.inApp ? ApexSync.apiBase.replace(/^http/, 'ws') : location.origin.replace(/^http/, 'ws')}/api/convoy/${encodeURIComponent(id)}/connect`,
@@ -2288,8 +2294,9 @@
         return { lat: p.lat, lon: p.lon, heading: m.heading ?? null, speedMps: m.speedMps ?? null };
       },
       getRoute: () => (track && track.kind === 'route' && track.lat.length > 1 ? { name: track.name, pts: track.lat.map((la, i) => [la, track.lon[i]]) } : null),
-      speak: (text) => { if (state.toggles.voice) say(text, true); else toast(text); },   // hazards jump the queue
-    }) : null;
+      // A close hazard cuts in; a far one goes next, after the pace note being spoken (never dropping the notes queued).
+      speak: (text, urgent) => { if (!state.toggles.voice) toast(text); else if (urgent) say(text, true); else sayNext(text); },
+    }) : null; } catch (e) { console.error('convoy', e); convoy = null; }   // the convoy never takes the page down
     const switchRow = (label, on, change) => { const b = el('button', { className: 'ink-btn' + (on ? ' on' : ''), textContent: `${label}: ${on ? 'On' : 'Off'}`, onclick: change }); b.setAttribute('aria-pressed', String(!!on)); return b; };
     let openCrewId = null;
     const crewNear = () => { if (state.lastPosition) return state.lastPosition; const c = map.getCenter(); return { lat: c.lat, lon: c.lng }; };

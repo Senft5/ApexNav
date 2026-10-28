@@ -21,6 +21,10 @@ const back = C.decodePolyline(C.encodePolyline(road));
 out.roundTrip = Math.max(...back.map((p, i) => Math.abs(p[0] - road[i][0]) + Math.abs(p[1] - road[i][1])));
 out.thinned = C.thin(road, 100).length;
 out.proj = C.project(ri, { lat: 35.0045, lon: -82.9995 });   // ~500 m up, ~45 m east of the road
+// out and back on the same road: 0..5 km north, then 5..10 km back south. Near 500 m north, a car at 9.5 km stays on its pass.
+const outBack = C.routeIndex(road.concat(road.slice(0, -1).reverse()));
+out.globalPass = C.project(outBack, { lat: 35.0045, lon: -83 }).progressM;
+out.hintedPass = C.project(outBack, { lat: 35.0045, lon: -83 }, 9400).progressM;
 // relevance: on the route, same version
 const hz = (progressM, lat = 35.01, lon = -83, routeVersion = 3) => ({ anchor: { lat, lon, progressM, routeVersion } });
 const me = { lat: 35.0045, lon: -83, progressM: 500, routeDistM: 2, heading: 0, speedMps: 20 };
@@ -80,8 +84,18 @@ const ev = (id, seq, action = 'hazard', epoch = 1) => ({ eventId: id, seq, actio
   // positions: at most one a second
   now = 5000; out.pos1 = client.sendPosition({ lat: 35, lon: -83, heading: 10, speedMps: 20 });
   now = 5500; out.pos2 = client.sendPosition({ lat: 35, lon: -83 });
+  // the leader's own call shows locally when the server acks it (the server does not echo it back)
+  const mine = client.callHazard('debris', { lat: 35, lon: -83 });
+  ws.onmessage({ data: JSON.stringify({ type: 'ack', eventId: mine, seq: 4, status: 'sent' }) });
+  out.ownCallLive = client.liveHazards().some((e) => e.eventId === mine);
+  // route versions only go up, even after the route is cleared
+  out.share1 = client.shareRoute('A', road); client.setRoute(null); out.share2 = client.shareRoute('B', road);
+  out.versions = ws.sent.filter((m) => m.type === 'route').map((m) => m.route.version);
   // the network drops: reconnect after a backoff, resuming from the last seq in the same epoch
   ws.onclose({ code: 1006 });
+  // undo while offline: the retraction is queued, not lost
+  out.retractOffline = client.retract(mine);
+  out.pendingAfter = client.pending.map((p) => p.m.event.action);
   out.afterDrop = client.status;
   out.backoff = timers.map((t) => t[1]);
   timers[0][0](); await tick(); await tick();
@@ -89,9 +103,22 @@ const ev = (id, seq, action = 'hazard', epoch = 1) => ({ eventId: id, seq, actio
   // the server restarted: new epoch, old events are void
   sockets[1].onmessage({ data: JSON.stringify({ type: 'ready', context: ctx(2), events: [], positions: [], route: null, regroup: null }) });
   out.liveAfterRestart = client.liveHazards().length;
+  out.flushedRetract = sockets[1].sent.filter((m) => m.type === 'publish').map((m) => m.event.action);
+  // another tab took over (4409): stay put, no reconnect loop
+  const before = timers.length;
+  sockets[1].onclose({ code: 4409 });
+  out.replaced = client.status; out.timersAfterReplaced = timers.length - before;
+  client.takeOver(); await tick(); await tick();
+  sockets[2].onmessage({ data: JSON.stringify({ type: 'ready', context: ctx(2), events: [], positions: [], route: null, regroup: null }) });
+  out.afterTakeOver = client.status;
   // removal closes with 4403: stop, no reconnect
-  sockets[1].onclose({ code: 4403 });
-  out.removed = client.status; out.timersAfterRemoval = timers.length;
+  const beforeRemoval = timers.length;
+  sockets[2].onclose({ code: 4403 });
+  out.removed = client.status; out.timersAfterRemoval = timers.length - beforeRemoval;
+  // resume: 404 forgets, a network error keeps trying
+  const c2 = new C.ConvoyClient({ apiFetch: async () => resp(404, {}), wsUrl: () => '', WebSocketImpl: FakeWS });
+  const c3 = new C.ConvoyClient({ apiFetch: async () => { throw new Error('offline'); }, wsUrl: () => '', WebSocketImpl: FakeWS });
+  out.resume404 = await c2.resume('ROOM'); out.resumeOffline = await c3.resume('ROOM');
   console.log(JSON.stringify(out));
 })();
 """
@@ -112,6 +139,8 @@ def test_geometry(out):
     assert out["roundTrip"] < 2e-5
     assert out["thinned"] < 60
     assert abs(out["proj"]["progressM"] - 500) < 3 and 40 < out["proj"]["distM"] < 50
+    assert abs(out["globalPass"] - 500) < 3          # no hint: the first pass
+    assert abs(out["hintedPass"] - (2 * out["lengthM"] - 500)) < 3   # tracked on the way back: stays on the second pass
 
 
 def test_which_hazards_are_ahead(out):
@@ -147,7 +176,16 @@ def test_client_dedupe_and_retraction(out):
 
 def test_client_positions_reconnect_and_epochs(out):
     assert out["pos1"] is True and out["pos2"] is False
-    assert out["afterDrop"] == "reconnecting" and out["backoff"] == [1000]
-    assert out["resume"]["epoch"] == 1 and out["resume"]["afterSeq"] == 3
+    assert out["afterDrop"] == "reconnecting" and len(out["backoff"]) == 1 and 800 <= out["backoff"][0] <= 1200
+    assert out["resume"]["epoch"] == 1 and out["resume"]["afterSeq"] == 4   # includes my own acked call
     assert out["liveAfterRestart"] == 0
-    assert out["removed"] == "removed" and out["timersAfterRemoval"] == 1
+    assert out["removed"] == "removed" and out["timersAfterRemoval"] == 0
+    assert out["replaced"] == "replaced" and out["timersAfterReplaced"] == 0 and out["afterTakeOver"] == "live"
+    assert out["resume404"] == "gone" and out["resumeOffline"] == "retry"
+
+
+def test_leader_calls_undo_and_routes(out):
+    assert out["ownCallLive"] is True
+    assert out["share1"] == "sent" and out["share2"] == "sent" and out["versions"] == [1, 2]
+    assert out["retractOffline"] == "queued" and out["pendingAfter"] == ["retract"]
+    assert out["flushedRetract"] == ["retract"]
