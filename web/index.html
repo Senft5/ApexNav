@@ -602,7 +602,8 @@
       const records = saved.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
       const ids = new Set(records.map(d => d.id));
       const others = drives.filter(d => !savedDriveIds.has(d.id) && !ids.has(d.id));
-      drives.splice(0, drives.length, ...records.map((d) => ApexRecording.toTrack(ApexRecording.repair(Core, d))), ...others);
+      const mine = ApexRecording.corroborate(records.map((d) => ApexRecording.repair(Core, d)));   // hazards seen again on other drives
+      drives.splice(0, drives.length, ...mine.map((d) => ApexRecording.toTrack(d)), ...others);
       savedDriveIds = ids;
     }
     let track = null;
@@ -1271,7 +1272,7 @@
     function subFor(e) {
       if (e.type === 'corner') return `R ${Math.round(e.radius_m)} m · ${Math.round(e.apex_mph)} mph`;
       if (e.type === 'alpr') return 'Camera';
-      return 'Driven once';
+      return ApexRecording.seenLabel(e);
     }
     const linkLabel = (e) => (!e.link ? '' : (e.link === 'into' || e.link === 'and') ? ` · ${e.link.toUpperCase()}` : ` · ${e.link} m to next`);
 
@@ -1722,7 +1723,7 @@
       markDestination(t);
       if (state.mode !== 'live' && !booting) lockOnDestination(t);
       attachLimits(t);
-      if (!prebuilt) toast(`${name} · ${(totalM() / 1609.344).toFixed(1)} mi · ${t.events.length} corners`);
+      if (!prebuilt) toast(`${name} · ${(totalM() / 1609.344).toFixed(1)} mi · ${t.events.filter(e => e.type === 'corner').length} corners`);
     }
     // A route just found: pin its destination and show it, so you can check you are routing to the right place. FOLLOW
     // (or Start drive) goes back to your position. A loop has no destination: show the whole loop instead.

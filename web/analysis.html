@@ -219,7 +219,7 @@
     // Drive library: the person's recordings in IndexedDB
     // ---------------------------------------------------------------------
     function cornersOf(d) {
-      return d.events.map(e => ({ start: Math.round(e.start_m / 5), end: Math.round(e.end_m / 5), apex: e.index, apex_mps: e.apex_mph / MPH,
+      return d.events.filter(e => e.type === 'corner').map(e => ({ start: Math.round(e.start_m / 5), end: Math.round(e.end_m / 5), apex: e.index, apex_mps: e.apex_mph / MPH,
         code: e.code, call: e.call, dir: e.dir, severity: e.severity, turn_rad: e.turn_rad, mods: e.mods || [] }));
     }
     function finish(d) {
