@@ -274,7 +274,7 @@ def _known(drive: dict, start: int, end: int, apex: int) -> bool:
     if not (0 <= start <= apex <= end < n):
         return False
     for q in range(start, end + 1):
-        if not math.isfinite(v[q]):
+        if v[q] is None or not math.isfinite(v[q]):
             return False
     if gk is None:
         return True
@@ -329,28 +329,31 @@ def aligned_time_s(a: dict, start: int, end: int, b: dict, bs: int):
         return None
     if not np.all(np.isfinite(vb[int(math.floor(x0)):int(math.floor(x1)) + 1])):
         return None
-    t = elapsed_s(vb)
-    return _cum_time_at(t, vb, x1) - _cum_time_at(t, vb, x0)
+    k0 = int(math.floor(x0))
+    seg = vb[k0:int(math.floor(x1)) + 1]
+    t = elapsed_s(seg)                                  # only over the stretch: a blank speed elsewhere does not matter
+    return _cum_time_at(t, seg, x1 - k0) - _cum_time_at(t, seg, x0 - k0)
 
 
 def _tip(m: dict, ref: dict | None):
-    """The one thing to change in this corner, as {kind, value}, or None. ref: the best other pass (faster)."""
+    """The one thing to change in this corner, as {kind, value, vs_best}, or None. ref: the best other pass (faster);
+    vs_best says whether value is a difference to it or this pass's own number."""
     if ref is not None:
         if ref["min_mps"] - m["min_mps"] >= TIP_SPEED_MPS:
-            return {"kind": "min_speed", "value": ref["min_mps"] - m["min_mps"]}
+            return {"kind": "min_speed", "value": ref["min_mps"] - m["min_mps"], "vs_best": True}
         if m["brake_m"] is not None and ref["brake_m"] is not None and m["brake_m"] - ref["brake_m"] >= TIP_BRAKE_M:
-            return {"kind": "brake_later", "value": m["brake_m"] - ref["brake_m"]}
+            return {"kind": "brake_later", "value": m["brake_m"] - ref["brake_m"], "vs_best": True}
         if m["throttle_m"] is not None and ref["throttle_m"] is not None and m["throttle_m"] - ref["throttle_m"] >= TIP_BRAKE_M:
-            return {"kind": "throttle_sooner", "value": m["throttle_m"] - ref["throttle_m"]}
+            return {"kind": "throttle_sooner", "value": m["throttle_m"] - ref["throttle_m"], "vs_best": True}
         if m["coast_m"] - ref["coast_m"] >= TIP_COAST_M:
-            return {"kind": "coast", "value": m["coast_m"] - ref["coast_m"]}
+            return {"kind": "coast", "value": m["coast_m"] - ref["coast_m"], "vs_best": True}
         return None
     if m["late_brake_g"] >= SOLO_LATE_BRAKE_G:
-        return {"kind": "brake_after_apex", "value": m["late_brake_g"]}
+        return {"kind": "brake_after_apex", "value": m["late_brake_g"], "vs_best": False}
     if m["brake_m"] is not None and m["coast_m"] >= SOLO_COAST_M:     # dead time between brake and throttle
-        return {"kind": "coast", "value": m["coast_m"]}
+        return {"kind": "coast", "value": m["coast_m"], "vs_best": False}
     if m["min_offset_m"] <= SOLO_EARLY_APEX_M and m["apex_mps_driven"] - m["min_mps"] >= SOLO_APEX_DIP_MPS:
-        return {"kind": "early_apex", "value": -m["min_offset_m"]}
+        return {"kind": "early_apex", "value": -m["min_offset_m"], "vs_best": False}
     return None
 
 

@@ -613,20 +613,21 @@
     const x0 = start + off, x1 = end + 1 + off, vb = b.speed_mps;
     if (x0 < 0 || x1 > vb.length - 1) return null;
     for (let q = Math.floor(x0); q <= Math.floor(x1); q++) if (!Number.isFinite(vb[q])) return null;
-    const t = elapsedS(vb), at = (x) => { const k = Math.floor(x); return t[k] + (x - k) * 5 / Math.max(vb[k], 0.5); };
-    return at(x1) - at(x0);
+    const k0 = Math.floor(x0), seg = vb.slice(k0, Math.floor(x1) + 1), t = elapsedS(seg);   // only over the stretch
+    const at = (x) => { const k = Math.floor(x); return t[k] + (x - k) * 5 / Math.max(seg[k], 0.5); };
+    return at(x1 - k0) - at(x0 - k0);
   }
   function coachTip(m, ref) {
     if (ref) {
-      if (ref.min_mps - m.min_mps >= TIP_SPEED_MPS) return { kind: 'min_speed', value: ref.min_mps - m.min_mps };
-      if (m.brake_m !== null && ref.brake_m !== null && m.brake_m - ref.brake_m >= TIP_BRAKE_M) return { kind: 'brake_later', value: m.brake_m - ref.brake_m };
-      if (m.throttle_m !== null && ref.throttle_m !== null && m.throttle_m - ref.throttle_m >= TIP_BRAKE_M) return { kind: 'throttle_sooner', value: m.throttle_m - ref.throttle_m };
-      if (m.coast_m - ref.coast_m >= TIP_COAST_M) return { kind: 'coast', value: m.coast_m - ref.coast_m };
+      if (ref.min_mps - m.min_mps >= TIP_SPEED_MPS) return { kind: 'min_speed', value: ref.min_mps - m.min_mps, vs_best: true };
+      if (m.brake_m !== null && ref.brake_m !== null && m.brake_m - ref.brake_m >= TIP_BRAKE_M) return { kind: 'brake_later', value: m.brake_m - ref.brake_m, vs_best: true };
+      if (m.throttle_m !== null && ref.throttle_m !== null && m.throttle_m - ref.throttle_m >= TIP_BRAKE_M) return { kind: 'throttle_sooner', value: m.throttle_m - ref.throttle_m, vs_best: true };
+      if (m.coast_m - ref.coast_m >= TIP_COAST_M) return { kind: 'coast', value: m.coast_m - ref.coast_m, vs_best: true };
       return null;
     }
-    if (m.late_brake_g >= SOLO_LATE_BRAKE_G) return { kind: 'brake_after_apex', value: m.late_brake_g };
-    if (m.brake_m !== null && m.coast_m >= SOLO_COAST_M) return { kind: 'coast', value: m.coast_m };
-    if (m.min_offset_m <= SOLO_EARLY_APEX_M && m.apex_mps_driven - m.min_mps >= SOLO_APEX_DIP_MPS) return { kind: 'early_apex', value: -m.min_offset_m };
+    if (m.late_brake_g >= SOLO_LATE_BRAKE_G) return { kind: 'brake_after_apex', value: m.late_brake_g, vs_best: false };
+    if (m.brake_m !== null && m.coast_m >= SOLO_COAST_M) return { kind: 'coast', value: m.coast_m, vs_best: false };
+    if (m.min_offset_m <= SOLO_EARLY_APEX_M && m.apex_mps_driven - m.min_mps >= SOLO_APEX_DIP_MPS) return { kind: 'early_apex', value: -m.min_offset_m, vs_best: false };
     return null;
   }
   function coach(a, others) {

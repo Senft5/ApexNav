@@ -28,7 +28,7 @@
       case 'min_speed': return `Your best pass was ${Math.max(1, Math.round(t.value * MPH))} mph quicker at the slowest point`;
       case 'brake_later': return `Brake ${m} m later, like your best pass`;
       case 'throttle_sooner': return `Back on the throttle ${m} m sooner, like your best pass`;
-      case 'coast': return x.best ? `${m} m more coasting than your best pass` : `${m} m coasting between brake and throttle`;
+      case 'coast': return t.vs_best ? `${m} m more coasting than your best pass` : `${m} m coasting between brake and throttle`;
       case 'brake_after_apex': return `Still braking after the apex (${t.value.toFixed(2)} g)`;
       case 'early_apex': return `Slowest ${m} m before the apex: turn in later`;
       default: return null;

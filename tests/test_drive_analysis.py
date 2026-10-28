@@ -133,7 +133,7 @@ def test_coach_finds_the_time_against_your_own_best_pass():
     assert c["passes"] == 3 and c["best_from"] == 1
     assert c["gain_s"] == pytest.approx(c["m"]["time_s"] - c["best"]["time_s"])
     assert c["gain_s"] > da.TIP_GAIN_S
-    assert c["tip"] == {"kind": "brake_later", "value": pytest.approx(35.0)}
+    assert c["tip"] == {"kind": "brake_later", "value": pytest.approx(35.0), "vs_best": True}
     assert r["ideal_s"] == pytest.approx(r["this_s"] - r["gain_s"]) and r["top"] == [0]
     quicker = _pass(corner_v=15.0)
     assert da.coach(a, [quicker])["corners"][0]["tip"]["kind"] == "min_speed"
@@ -197,3 +197,19 @@ def test_corner_phases_ignore_braking_for_an_earlier_corner():
     m = da.corner_phases(d["speed_mps"], d["lon_g"], d["lat_g"], 80, 96, 88, 15.0)
     assert m["brake_m"] is None and m["trail_m"] == 0.0
     assert da.coach(d, [])["corners"][0]["tip"] is None, "no brake zone of its own: no coasting note"
+
+
+def test_coach_says_whether_a_tip_is_against_the_best_pass():
+    a, b = _pass(corner_v=14.0), _pass(corner_v=14.1)   # a quicker pass, but by less than TIP_GAIN_S
+    c = da.coach(a, [b])["corners"][0]
+    assert c["best"] is not None and c["gain_s"] < da.TIP_GAIN_S
+    assert c["tip"]["kind"] == "coast" and c["tip"]["vs_best"] is False, "both coasted 85 m: this is the pass's own number"
+
+
+def test_aligned_time_ignores_blank_speed_outside_the_stretch():
+    a = _pass(corner_v=14.0)
+    b = _pass(corner_v=14.0)
+    b["speed_mps"] = b["speed_mps"].copy()
+    b["speed_mps"][10] = np.nan                          # a blank speed long before the corner
+    t = da.aligned_time_s(a, 80, 96, b, 80)
+    assert t == pytest.approx(da.corner_metrics(a["speed_mps"], a["lon_g"], a["lat_g"], 80, 96, 88, 15.0)["time_s"], rel=1e-9)
