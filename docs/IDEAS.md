@@ -158,8 +158,8 @@ pace-note grammar, ALPR from DeFlock/OSM, reference-lap scoring and archetypes.
 | Q-12 | Freshness: decay old measurements, flag repaved roads when a rough road suddenly reads smooth | M | M | todo | Waze, ROAD_INTELLIGENCE §4.3 |
 | Q-13 | Road pages: archetype, four axes, confidence L0/L1/L2, elevation, notes, verified hazards, best direction and season | H | M | todo | SOCIAL §2.2, Kurviger/REVER road ratings |
 | Q-14 | Coverage map: which roads are measured, by how many passes, and where pioneers are needed | M | S | todo | Strava heatmap, Mapillary coverage |
-| Q-15 | Hazard reports by hand (one tap: pothole, gravel, debris, animal, police, closure) with auto-expiry | H | M | todo | Waze |
-| Q-16 | "Still there?" prompts when you pass a reported hazard, to confirm or clear it | M | S | todo | Waze |
+| Q-15 | Hazard reports by hand (one tap: pothole, gravel, debris, animal, police, closure) with auto-expiry | H | M | done (this PR: Report key in the drive bar, six kinds, expiry by kind, nearby reports pinned and called ahead in your direction; migration 0011) | Waze |
+| Q-16 | "Still there?" prompts when you pass a reported hazard, to confirm or clear it | M | S | done (this PR: after passing one in your direction, 'still there?' with Still there / Gone; two 'gone' outvoting confirmations end it) | Waze |
 | Q-17 | Road closure and construction from OSM and crowd reports, fed into routing | M | M | todo | Waze, Google Maps |
 | Q-18 | Native C++ core (`/core/cpp`) so iOS and Android share one implementation instead of Swift duplication | M | XL | todo | ARCHITECTURE, STATE 2026-10-25 |
 | Q-19 | Benchmark road calibration set scored from map + DEM, checked in CI | M | M | todo | ROAD_INTELLIGENCE §6.2 |

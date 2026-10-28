@@ -29,5 +29,7 @@ SELECT
   (SELECT COUNT(*) FROM cars) AS cars,
   (SELECT COUNT(*) FROM bans) AS bans,
   (SELECT COUNT(*) FROM error_counts) AS error_counts,
+  (SELECT COUNT(*) FROM hazard_reports) AS hazard_reports,
+  (SELECT COUNT(*) FROM hazard_votes) AS hazard_votes,
   (SELECT COUNT(*) FROM d1_migrations) AS d1_migrations
 ;
