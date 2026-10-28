@@ -61,8 +61,8 @@
 
     const me = () => client.locate(getFix());
     const isLeader = () => !!(snap && snap.ctx && snap.ctx.role === 'leader');
-    const label = (m) => (m && (m.handle ? '@' + m.handle : m.name)) || 'Driver';
-    const initial = (m) => ((m && (m.handle || m.name)) || '?').slice(0, 1).toUpperCase();
+    const label = (m) => (m && m.handle ? '@' + m.handle : 'Driver');
+    const initial = (m) => ((m && m.handle) || '?').slice(0, 1).toUpperCase();
 
     // ---- every second: send my position, call hazards that are ahead of me, move markers and text -----------------
     function tick() {

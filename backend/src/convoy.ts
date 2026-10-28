@@ -16,7 +16,7 @@ export const LIMITS = {
 /** What a leader can call out. bump and hard_braking can come from the phone's sensors; the rest are taps. */
 export const HAZARD_KINDS = ["bump", "hard_braking", "gravel", "debris", "animal", "police", "camera", "stopped"] as const;
 
-export interface Who { id: string; handle: string | null; name: string | null }
+export interface Who { id: string; handle: string | null }
 interface Room { id: string; name: string; leaderId: string; epoch: number; createdAt: number; expiresAt: number; invite: { hash: string; issuedAt: number; expiresAt: number } }
 interface Member { key: string; role: "leader" | "member"; joinedAt: number }
 interface Ticket { userId: string; sessionHash: string; expiresAt: number }
@@ -36,9 +36,7 @@ const fail = (status: number, error: string): Result<never> => ({ ok: false, sta
 const ID_RE = /^[A-Za-z0-9_-]{8,64}$/;
 // Control characters and bidi overrides never travel: they can disguise a name or a note on someone else's screen.
 const UNSAFE_RE = /[\u0000-\u001f\u007f-\u009f‪-‮⁦-⁩]/;
-const UNSAFE_G = new RegExp(UNSAFE_RE.source, "g");
 export const cleanText = (v: unknown, max: number): string | null => typeof v === "string" && v.length <= max && !UNSAFE_RE.test(v) ? v : null;
-const scrub = (s: string | null) => (s === null ? null : s.replace(UNSAFE_G, "").slice(0, 60));
 const isNum = (v: unknown, lo: number, hi: number): v is number => typeof v === "number" && Number.isFinite(v) && v >= lo && v <= hi;
 const optNum = (v: unknown, lo: number, hi: number) => v === undefined || v === null ? null : isNum(v, lo, hi) ? v : undefined;
 const onlyKeys = (o: Record<string, unknown>, keys: string[]) => Object.keys(o).every((k) => keys.includes(k));
@@ -53,7 +51,7 @@ export class ConvoyRoom extends DurableObject<Env> {
   private members: Record<string, Member> = {};
   private revoked: Record<string, number> = {};      // user id -> when they left; an invite older than that cannot bring them back
   private banned: Record<string, true> = {};         // removed by the leader: out for the life of the convoy
-  private names = new Map<string, { handle: string | null; name: string | null }>();   // memory only, from D1
+  private names = new Map<string, { handle: string | null }>();   // memory only, from D1; handles only, real names stay with friends
   private tickets = new Map<string, Ticket>();       // sha256(ticket) -> ticket, memory only
   private conns = new Set<Conn>();
   private events = new Map<string, LiveEvent>();     // eventId -> live hazard or retraction tombstone
@@ -95,7 +93,7 @@ export class ConvoyRoom extends DurableObject<Env> {
       this.room = { id, name, leaderId: who.id, epoch: 1, createdAt: now, expiresAt: now + LIMITS.roomMs,
                     invite: { hash: await sha256hex(secret), issuedAt: now, expiresAt: now + LIMITS.inviteMs } };
       this.members = { [who.id]: { key: randomToken(6), role: "leader", joinedAt: now } };
-      this.names.set(who.id, { handle: who.handle, name: who.name });
+      this.names.set(who.id, { handle: who.handle });
       await this.save();
       await this.ctx.storage.setAlarm(this.room.expiresAt);
       return okR({ invite: `${id}.${secret}`, context: await this.context(who.id) });
@@ -115,7 +113,7 @@ export class ConvoyRoom extends DurableObject<Env> {
       if ((await this.blockedPairs([who.id], Object.keys(this.members))).length) return fail(403, "cannot_join");
       if (!(await this.index(who.id, (ix) => ix.add(room.id, room.expiresAt)))) return fail(429, "too_many_convoys");
       this.members[who.id] = { key: randomToken(6), role: "member", joinedAt: now };
-      this.names.set(who.id, { handle: who.handle, name: who.name });
+      this.names.set(who.id, { handle: who.handle });
       delete this.revoked[who.id];
       await this.save();
       this.broadcast({ type: "member", action: "joined", member: this.pub(who.id) });
@@ -365,7 +363,7 @@ export class ConvoyRoom extends DurableObject<Env> {
   }
   private pub(userId: string) {
     const m = this.members[userId], n = this.names.get(userId);
-    return { key: m.key, handle: n?.handle ?? null, name: scrub(n?.name ?? null), role: m.role };
+    return { key: m.key, handle: n?.handle ?? null, role: m.role };
   }
   private online(key: string) { return [...this.conns].some((c) => c.state === "open" && c.key === key); }
 
@@ -373,11 +371,11 @@ export class ConvoyRoom extends DurableObject<Env> {
   private async loadNames(force = false): Promise<string[]> {
     const ids = Object.keys(this.members).filter((id) => force || !this.names.has(id));
     if (!ids.length) return [];
-    const rows = (await this.env.DB.prepare(`SELECT id, handle, display_name AS name FROM users WHERE id IN (${ids.map(() => "?").join(",")})`)
-      .bind(...ids).all<{ id: string; handle: string | null; name: string | null }>()).results;
-    for (const r of rows) this.names.set(r.id, { handle: r.handle, name: r.name });
+    const rows = (await this.env.DB.prepare(`SELECT id, handle FROM users WHERE id IN (${ids.map(() => "?").join(",")})`)
+      .bind(...ids).all<{ id: string; handle: string | null }>()).results;
+    for (const r of rows) this.names.set(r.id, { handle: r.handle });
     const gone = ids.filter((id) => !rows.some((r) => r.id === id));
-    for (const id of gone) this.names.set(id, { handle: null, name: null });
+    for (const id of gone) this.names.set(id, { handle: null });
     return gone;
   }
 
