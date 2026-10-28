@@ -283,7 +283,7 @@ const ll = (pts) => pts.map(([x, y]) => [lon0 + x * mLon, lat0 + y * mLat]);
 const straight = ll(Array.from({ length: 1001 }, (_, i) => [i * 10, 0]));
 const wiggly = ll(Array.from({ length: 2401 }, (_, i) => [i * 5, 60 * Math.sin(2 * Math.PI * i * 5 / 400)]));
 const A = { lat: lat0, lon: lon0 }, B = { lat: lat0, lon: lon0 + 10000 * mLon };
-async function run({ level, routes, osrm, discover, matrix }) {
+async function run({ level, routes, osrm, discover, matrix, avoid = FunRoute.AVOID_DEFAULT }) {
   const built = [], toasts = [], calls = { matrix: 0, routes: 0 };
   const funRoute = new Function('funLevel', 'valhallaRoutes', 'osrmRoutes', 'toast', 'FunRoute', 'ApexStages', 'state', 'allHighlights', 'valhallaMatrix',
     'Core', 'RouteLoading', 'funOf', 'applyMeasured', 'trackFromPolyline', 'buildRoute', 'totalOf', 'window', 'whyText', 'avoid', 'return (' + source + ')')(
@@ -292,7 +292,7 @@ async function run({ level, routes, osrm, discover, matrix }) {
     async (s, t) => { calls.matrix++; return { times: await matrix(s, t) }; },
     Core, { yieldToUI: async () => {} }, (t, turns) => FunRoute.score(t, []), async () => false,
     async (coords, id, name) => ({ id, name, ...FunRoute.geometry(coords, Core) }),
-    async (pts, id, name, t) => built.push(t), (t) => t.dist[t.dist.length - 1], {}, whyText, FunRoute.AVOID_DEFAULT);
+    async (pts, id, name, t) => built.push(t), (t) => t.dist[t.dist.length - 1], {}, whyText, avoid);
   await funRoute(A, B, 'route_dest', 'To B', { from: null, to: B, via: [] }, { step() {} });
   return { built, toasts, calls };
 }
@@ -317,6 +317,15 @@ async function run({ level, routes, osrm, discover, matrix }) {
   // 5. All down: one toast, nothing built.
   r = await run({ level: 'fun', routes: async () => { throw Error('down'); }, discover: async () => [] });
   out.down = { built: r.built.length, toasts: r.toasts };
+  // 6. Avoiding tolls: the quick toll road is dropped and the toll-free one is the baseline (no "+N for fun");
+  //    when every route has a toll, it stays and the card says so.
+  const tolls = { ...FunRoute.AVOID_DEFAULT, tolls: true };
+  r = await run({ level: 'quick', avoid: tolls, discover: async () => [],
+                  routes: async () => [{ coords: wiggly, turns: [], timeS: 500, has: { tolls: true } }, { coords: straight, turns: [], timeS: 600, has: { tolls: false } }] });
+  out.avoidTolls = { timeS: r.built[0].timeS, extraS: r.built[0].extraS, why: r.built[0].why, unavoided: r.built[0].unavoided };
+  r = await run({ level: 'quick', avoid: tolls, discover: async () => [],
+                  routes: async () => [{ coords: straight, turns: [], timeS: 600, has: { tolls: true } }] });
+  out.tollOnly = r.built[0].unavoided;
   process.stdout.write(JSON.stringify(out));
 })().catch(e => { console.error(e); process.exitCode = 1; });
 """
@@ -328,6 +337,8 @@ def test_app_fun_route_picks_and_falls_back():
     r = json.loads(res.stdout)
     assert r["quick"]["fun"] > 50 and r["quick"]["extraS"] == 60 and r["quick"]["matrix"] == 0
     assert r["quick"]["via"] >= 1 and r["quick"]["shaping"], "the winning 12 km alternate is pinned so a reroute stays on it"
+    assert r["avoidTolls"] == {"timeS": 600, "extraS": 0, "why": None, "unavoided": []}, "the toll road is dropped, not ranked"
+    assert r["tollOnly"] == ["tolls"], "no toll-free way: the card says so"
     assert re.fullmatch(r"For Twisty Rd 8\.7 mi · \d+ more good corners, \+1 min", r["quick"]["why"]), r["quick"]["why"]
     assert r["noTiles"] == {"built": 1, "fun": r["noTiles"]["fun"]}
     assert r["osrm"] == {"built": 1, "timeS": 700}

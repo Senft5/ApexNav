@@ -1944,14 +1944,17 @@
       const ahead = req.via.filter(v => !v.shaping && (v.distM == null || v.distM > routeWatch.bestM)).map(v => ({ lat: v.lat, lon: v.lon }));
       const points = [{ lat: L.lat, lon: L.lon }, ...ahead, req.to];
       // Valhalla gives alternates only between two points; the exclusion variant works through vias too.
-      const [base, avoid] = await Promise.allSettled([valhallaRoutes(points, false, 2),
+      const [base, excl] = await Promise.allSettled([valhallaRoutes(points, false, 2),
                                                       valhallaRoutes(points, false, 0, { exclude_polygons: ApexTraffic.jamPolygons(probes) })]);
       if (track !== t || state.mode !== 'live') return;
       if (base.status !== 'fulfilled' || !Number.isFinite(base.value[0].timeS)) { stay(); return; }
       const primary = base.value[0];
       const current = { timeS: primary.timeS, delayS };
-      const trips = [...base.value.slice(1), ...(avoid.status === 'fulfilled' ? avoid.value : [])]
-        .filter(c => Number.isFinite(c.timeS) && !ApexTraffic.tooSlow(current, c.timeS));   // only score what could win
+      // A detour may not add anything the driver avoids (a toll, a highway) that the current route doesn't already use.
+      const usesNow = FunRoute.unavoided(avoid, primary);
+      const trips = [...base.value.slice(1), ...(excl.status === 'fulfilled' ? excl.value : [])]
+        .filter(c => Number.isFinite(c.timeS) && !ApexTraffic.tooSlow(current, c.timeS)   // only score what could win
+          && FunRoute.unavoided(avoid, c).every(k => usesNow.includes(k)));
       // The Plan route card's fun score (web/fun_route.js) on light geometry, times what traffic leaves of it. The current
       // route is scored as the router's way from here, which follows it.
       const scored = (r) => {
@@ -1993,7 +1996,7 @@
       }
       const at = (v) => Core.nearestIndex(v.lat, v.lon, nt.lat, nt.lon, -1).index;
       const via = [...ahead, ...along].map(v => ({ v, i: at(v) })).sort((a, b) => a.i - b.i).map(x => x.v);   // in order along it
-      Object.assign(nt, { request: { from: null, to: req.to, via }, fun: funOf(nt, route.turns), timeS: route.timeS });
+      Object.assign(nt, { request: { from: null, to: req.to, via }, fun: funOf(nt, route.turns), timeS: route.timeS, unavoided: FunRoute.unavoided(avoid, route) });
       await buildRoute(null, t.id, t.name, nt);                     // activate() restarts the traffic clock for the new route
     }
     // Members: what others measured on these roads (d.t.measured) and a score adjustment for it (d.adjust: rough
@@ -2022,7 +2025,9 @@
       try { direct = await valhallaRoutes([from, to], false, 2); }
       catch (_) { try { direct = await osrmRoutes([from, to]); } catch (err) { toast('Couldn\'t build the route. Check signal and try again.'); return false; } }
       const cands = direct.map(r => ({ kind: 'router', route: r, timeS: r.timeS, via: [] }));
-      const quickS = Math.min(...cands.map(c => c.timeS).filter(Number.isFinite));
+      // The baseline is the quickest route that keeps to the avoid options (when one does), as the ranking's is.
+      const allowed = FunRoute.keepAvoiding(cands, avoid);
+      const quickS = Math.min(...allowed.map(c => c.timeS).filter(Number.isFinite));
       // Under 3 km there is no detour worth taking to the shop round the corner.
       if (level !== 'quick' && Number.isFinite(quickS) && FunRoute.kmBetween(from, to) >= 3) {
         try {
@@ -2047,7 +2052,7 @@
           const plans = FunRoute.kmBetween(from, to) > 48 ? [] : await stretch(from, to, quickS, 'Finding fun roads…', 0.75);
           if (n > 1) {
             try {
-              const quick = cands.reduce((x, y) => (y.timeS < x.timeS ? y : x));
+              const quick = allowed.reduce((x, y) => (y.timeS < x.timeS ? y : x));
               const cuts = FunRoute.sectionPoints(quick.route.coords, n);
               cuts[0] = from; cuts[n] = to;
               const sections = [];
@@ -2490,7 +2495,7 @@
     }));
     setFunLevel(funLevel);
     document.querySelectorAll('[data-avoid]').forEach(b => b.addEventListener('click', async () => {
-      if ($('planPanel').classList.contains('busy')) return;
+      if ($('planPanel').classList.contains('busy') || loopBusy) return;   // a build in flight reads `avoid` as it goes
       const k = b.dataset.avoid, was = avoid[k];
       setAvoid({ [k]: !was });
       const label = FunRoute.AVOID_LABELS[k];
