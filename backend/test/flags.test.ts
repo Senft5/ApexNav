@@ -9,7 +9,7 @@ afterEach(() => { delete (env as { FLAGS?: string }).FLAGS; });
 describe("feature flags (IDEAS Y-06)", () => {
   it("ships the new features on, for the web and the app, without signing in", async () => {
     const w = await get(), i = await get("", UA(377));
-    expect(w).toMatchObject({ platform: "web", build: null, flags: { track_mode: true, taste_ranking: true, crowd_curvature: true, measured_stages: true } });
+    expect(w).toMatchObject({ platform: "web", build: null, flags: { track_mode: true, taste_ranking: true, crowd_curvature: true, measured_stages: true, pro: false } });
     expect(i).toMatchObject({ platform: "ios", build: 377 });
   });
 

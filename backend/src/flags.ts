@@ -13,6 +13,7 @@ export const DEFAULT_FLAGS: Record<string, Rule> = {
   taste_ranking: { on: true },       // R-33 your taste nudging fun routes
   crowd_curvature: { on: true },     // Q-04 members' corners over the map's
   measured_stages: { on: true },     // R-04 measurements and hazards in stage discovery
+  pro: { on: false },                // ApexNav Pro gates and purchase sheet (docs/MONETIZATION.md); off until the owner approves the price
 };
 
 const BUILD = /ApexNav\/[\d.]+ \((\d+)\)/;

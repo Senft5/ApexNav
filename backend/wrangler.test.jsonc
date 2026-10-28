@@ -10,5 +10,5 @@
     { "binding": "RESTORE_TEST", "database_name": "apexnav-restore-test", "database_id": "00000000-0000-0000-0000-000000000001" }
   ],
   "kv_namespaces": [{ "binding": "BACKUPS", "id": "00000000000000000000000000000000" }],
-  "vars": { "GOOGLE_CLIENT_ID": "test-client", "GOOGLE_CLIENT_SECRET": "test-secret", "OWNER_EMAIL": "owner@example.test", "PEPPER": "test-pepper", "PUBLIC_ORIGIN": "https://apexnav.test", "REVIEW_INVITE_HASH": "5f48f2f96660bcebf73f3d53ab9cd4645eeedb54e9a04c40800fc358c47ac15e" }
+  "vars": { "GOOGLE_CLIENT_ID": "test-client", "GOOGLE_CLIENT_SECRET": "test-secret", "OWNER_EMAIL": "owner@example.test", "PEPPER": "test-pepper", "PUBLIC_ORIGIN": "https://apexnav.test", "STOREKIT_ROOT_SHA256": "f1d2854556776155846607f311a5d10537f0f62e0c94257713ea33dff0f46367", "REVIEW_INVITE_HASH": "5f48f2f96660bcebf73f3d53ab9cd4645eeedb54e9a04c40800fc358c47ac15e" }
 }
