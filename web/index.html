@@ -31,6 +31,7 @@
   <script src="stage_delta.js"></script>
   <script src="directions.js"></script>
   <script src="whats_new.js"></script>
+  <script src="saved_routes.js"></script>
   <script src="incident.js"></script>
   <script src="traffic.js"></script>
   <script src="in_car.js"></script>
@@ -455,6 +456,7 @@
               <div class="row mt-8">
                 <button class="ink-btn solid" id="routeDriveBtn">Drive it</button>
                 <button class="ink-btn" id="routePreviewBtn">Preview</button>
+                <button class="ink-btn" id="routeSaveBtn" aria-pressed="false">Save</button>
                 <button class="ink-btn" id="routeShareBtn">Share</button>
               </div>
               <div class="stack-8" id="routeSharePick"></div>
@@ -2151,22 +2153,48 @@
     // Log and Stages are another page, so coming back to Map reloads this one: keep the planned route for the session and
     // rebuild it here from its own geometry (no router call, works offline). Also what a reload after a lost map restores.
     const PLANNED = 'apex.plannedRoute';
+    // The planned route survives a page change and an app restart for PLANNED_KEEP_MS (kept with its directions, router times
+    // and limits, web/saved_routes.js), so a phone that killed the app mid-trip comes back to the same route.
+    const PLANNED_KEEP_MS = 12 * 3600_000;
     function persistPlanned(t) {
-      try {
-        const coords = t.lat.map((la, i) => [+t.lon[i].toFixed(6), +la.toFixed(6)]);
-        sessionStorage.setItem(PLANNED, JSON.stringify({ id: t.id, name: t.name, request: t.request || null, coords, fun: t.fun || null, timeS: t.timeS ?? null, extraS: t.extraS ?? null, why: t.why || null, unavoided: t.unavoided || [], townKm: t.townKm }));
-      } catch (_) { /* too big or storage off: the route just won't survive a page change */ }
+      try { localStorage.setItem(PLANNED, JSON.stringify({ ...ApexSavedRoutes.pack(t), extraS: t.extraS ?? null })); }
+      catch (_) { /* too big or storage off: the route just won't survive a restart */ }
+    }
+    // A packed route (planned or saved for offline) rebuilt on the phone: notes from its shape, the rest as it was kept.
+    async function trackFromPacked(p) {
+      const t = await trackFromPolyline(p.coords, p.id, p.name);
+      const u = ApexSavedRoutes.unpack(p, t.dist);
+      Object.assign(t, u, { extraS: p.extraS ?? null, unavoided: u.unavoided.filter(k => typeof k === 'string' && FunRoute.AVOID_LABELS[k]),
+                            townKm: u.townKm === null || Number.isFinite(u.townKm) ? u.townKm : undefined });
+      return t;
     }
     async function restorePlanned() {
       let saved = null;
-      try { saved = JSON.parse(sessionStorage.getItem(PLANNED) || 'null'); } catch (_) { saved = null; }
+      try { saved = JSON.parse(localStorage.getItem(PLANNED) || sessionStorage.getItem(PLANNED) || 'null'); } catch (_) { saved = null; }
       if (!saved || !Array.isArray(saved.coords) || saved.coords.length < 2) return;
-      const t = await trackFromPolyline(saved.coords, saved.id, saved.name);
-      Object.assign(t, { request: saved.request, fun: saved.fun || null, timeS: saved.timeS ?? null, extraS: saved.extraS ?? null, why: typeof saved.why === 'string' ? saved.why : null,
-                         unavoided: Array.isArray(saved.unavoided) ? saved.unavoided.filter(k => typeof k === 'string' && FunRoute.AVOID_LABELS[k]) : [],
-                         townKm: saved.townKm === null || Number.isFinite(saved.townKm) ? saved.townKm : undefined });
-      await buildRoute(null, saved.id, saved.name, t);
+      if (Number.isFinite(saved.savedAt) && Date.now() - saved.savedAt > PLANNED_KEEP_MS) { try { localStorage.removeItem(PLANNED); } catch (_) {} return; }
+      await buildRoute(null, saved.id, saved.name, await trackFromPacked(saved));
     }
+    // Saved for offline (IDEAS F-03): the route card's Save keeps it on the phone; Where to? lists it under Saved.
+    async function openSaved(p) {
+      $('destInput').value = p.name;
+      await buildRoute(null, p.id, p.name, await trackFromPacked(p));
+      toast(`${p.name}. Notes, directions and limits work with no signal; the map needs signal.`);
+    }
+    function paintSaveBtn() {
+      const t = plannedRoute, b = $('routeSaveBtn');
+      if (!b) return;
+      const saved = !!(t && ApexSavedRoutes.has(localStorage, t.id));
+      b.textContent = saved ? 'Saved' : 'Save'; b.setAttribute('aria-pressed', String(saved));
+    }
+    $('routeSaveBtn').addEventListener('click', () => {
+      const t = plannedRoute;
+      if (!t || !Array.isArray(t.lat) || t.lat.length < 2) return;
+      if (ApexSavedRoutes.has(localStorage, t.id)) { ApexSavedRoutes.remove(localStorage, t.id); toast(`${t.name} removed from saved routes.`); }
+      else if (ApexSavedRoutes.save(localStorage, ApexSavedRoutes.pack(t)) === 'saved') toast(`Saved for offline: ${t.name}. Find it in Where to?.`);
+      else toast('The phone is out of room for saved routes. Remove one first.');
+      paintSaveBtn();
+    });
     async function buildRoute(points, id, name, prebuilt = null, request = null) {
       let t = prebuilt;
       if (!t) {
@@ -2184,7 +2212,7 @@
       plannedRoute = t;
       activate(t, 0, { quiet: state.mode !== 'live' });
       renderRouteCard(t);
-      persistPlanned(t);
+      persistPlanned(t); paintSaveBtn();
       openPlan(false);
       markDestination(t);
       if (state.mode !== 'live' && !booting) lockOnDestination(t);
@@ -2805,7 +2833,7 @@
       routeOptions = null;
       showExplore(null);
       markDestination(null);
-      try { sessionStorage.removeItem(PLANNED); } catch (_) {}
+      try { sessionStorage.removeItem(PLANNED); localStorage.removeItem(PLANNED); } catch (_) {}
       $('destInput').value = '';
       renderRouteCard(null);
       if (track && track.kind === 'route' && state.mode !== 'live') {
@@ -2911,8 +2939,9 @@
         if (seq !== suggestSeq) return;                                  // a newer keystroke won
         if (!rows.length && !empty) empty = 'No matches nearby. Press Go to search everywhere.';
       } else {
-        rows = [...recentPlaces().map(p => ({ ...p, kind: 'Recent' })),
-                ...loadHighlights().filter(h => Number.isFinite(h.lat) && Number.isFinite(h.lon)).map(h => ({ label: h.name || 'Spot', lat: h.lat, lon: h.lon, kind: 'Spot' }))].slice(0, 8);
+        rows = [...ApexSavedRoutes.list(localStorage).slice(0, 4).map(p => ({ label: p.name, kind: Number.isFinite(p.miles) ? `Saved · ${p.miles} mi` : 'Saved', saved: p })),
+                ...recentPlaces().map(p => ({ ...p, kind: 'Recent' })),
+                ...loadHighlights().filter(h => Number.isFinite(h.lat) && Number.isFinite(h.lon)).map(h => ({ label: h.name || 'Spot', lat: h.lat, lon: h.lon, kind: 'Spot' }))].slice(0, 10);
       }
       shownRows = { q, rows: empty ? [] : rows };
       if (empty) { const n = document.createElement('p'); n.className = 'note'; n.textContent = empty; box.replaceChildren(n); box.hidden = false; return; }
@@ -2920,7 +2949,7 @@
         const b = document.createElement('button'); b.className = 'place';
         const name = document.createElement('b'); name.textContent = p.label;
         const kind = document.createElement('span'); kind.textContent = p.kind;
-        b.append(name, kind); b.addEventListener('click', () => routeToPlace(p));
+        b.append(name, kind); b.addEventListener('click', () => (p.saved ? openSaved(p.saved) : routeToPlace(p)));
         return b;
       }));
       box.hidden = !rows.length;

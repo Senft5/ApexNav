@@ -131,6 +131,42 @@ flow('Where to?: a suggestion builds a route with a card and a Start button (sea
   check(steps.steps.some((x) => x.type === 4) && !steps.steps.some((x) => x.type === 1), 'arrival kept, the start left out');
 }, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
 
+flow('saved for offline: Save on the route card, then with no signal it opens from Where to? with its directions (IDEAS F-03)', async (page, base) => {
+  let online = true;
+  await page.route('https://photon.komoot.io/**', (route) => (online ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ features: [
+    { geometry: { coordinates: [-83.9700, 35.7565] }, properties: { name: 'Maryville', state: 'Tennessee' } }] }) }) : route.abort()));
+  await page.route('https://valhalla1.openstreetmap.de/**', (route) => {
+    if (!online) return route.abort();
+    const req = JSON.parse(route.request().postData() || '{}');
+    if (!req.locations) return route.abort();
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify(stubTrip(req.locations)) });
+  });
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map);
+  await page.click('#destInput'); await page.fill('#destInput', 'Maryville');
+  await page.waitForSelector('#placeList .place', { timeout: 10000 });
+  await page.click('#placeList .place');
+  await page.waitForFunction(() => { const t = window.apexDebug.track; return t && t.kind === 'route' && t.steps && t.steps.length; }, null, { timeout: 20000 });
+  const [name, notesBefore] = await page.evaluate(() => [window.apexDebug.track.name, window.apexDebug.track.events.length]);
+  await page.evaluate(() => document.getElementById('routeSaveBtn').click());
+  await page.waitForFunction(() => document.getElementById('routeSaveBtn').textContent === 'Saved');
+  // no signal, a fresh start with nothing planned
+  online = false;
+  await page.evaluate(() => { localStorage.removeItem('apex.plannedRoute'); sessionStorage.clear(); });
+  await page.reload();
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map);
+  await page.click('#destInput');
+  await page.waitForSelector('#placeList .place:has-text("Saved")', { timeout: 5000 });
+  check((await page.textContent('#placeList')).includes(name), 'the saved route is listed');
+  await page.click('#placeList .place:has-text("Saved")');
+  await page.waitForFunction((n) => { const t = window.apexDebug.track; return t && t.name === n && t.kind === 'route'; }, name, { timeout: 10000 });
+  check(await page.evaluate(() => window.apexDebug.track.events.length) === notesBefore, 'the same notes, worked out on the phone: ' + notesBefore);
+  const steps = await page.evaluate(() => window.apexDebug.track.steps);
+  check(steps.some((x) => x.type === 10 && x.street === 'Hollow Creek Road'), 'directions came back with it');
+  check(/map needs signal/.test(await page.textContent('#toast')), 'says the map still needs signal');
+}, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
+
 flow('the car connects: CarPlay offers Start drive, and an apexnav://open?go=drive link starts one', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.goto(base + '/index.html');

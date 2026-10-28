@@ -286,7 +286,7 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 |---|---|---|---|---|---|
 | F-01 | Honest offline states everywhere (`--`, "no signal to reroute") | H | S | done (#34, #67) | honesty rule |
 | F-02 | Offline region downloads: vector tiles, DEM and road profiles for an area | H | L | todo | Google Maps offline, Calimoto |
-| F-03 | Save a planned route for offline: geometry, notes, hazards and profiles cached before leaving | H | M | todo | Calimoto, Kurviger |
+| F-03 | Save a planned route for offline: geometry, notes, hazards and profiles cached before leaving | H | M | partial (web/saved_routes.js: Save on the route card keeps shape, directions, router times and limits; Where to? lists it and it opens with no signal, notes worked out on the phone. The planned route also survives an app restart for 12 h. Map tiles need F-02; reported hazards are live only) | Calimoto, Kurviger |
 | F-04 | Offline rerouting with on-device Valhalla (see R-28) | H | XL | todo | ROAD_INTELLIGENCE §7.4 |
 | F-05 | Queue hazard reports and road data offline, send on reconnect (see Q-06) | H | M | partial (hazard reports and "still there?" answers: web/outbox.js keeps them on the phone, sends on reconnect with age_s so they expire from when they were seen; road data retries within a drive, surviving a restart is Q-06) | Waze |
 | F-06 | Cache size control and "delete offline data" in Settings | L | S | todo | — |
