@@ -888,6 +888,20 @@ flow('Siri links: report and end act only during a drive, and say so otherwise (
   await page.waitForSelector('#hzOverlay.show');
 });
 
+flow('3D terrain: the switch raises the map into relief and tilts it; off by default (IDEAS U-14)', async (page, base) => {
+  await page.route('https://tiles.openfreemap.org/**', (route) => (route.request().url().includes('/styles/')
+    ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 8, sources: {}, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#eee' } }] }) })
+    : route.abort()));
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apexDebug.map.getSource('apex-dem'), null, { timeout: 15000 });
+  check(await page.evaluate(() => !window.apexDebug.map.getTerrain()), 'flat by default');
+  await page.evaluate(() => document.querySelector('[data-toggle="terrain"]').click());
+  await page.waitForFunction(() => { const m = window.apexDebug.map; return m.getTerrain() && m.getTerrain().source === 'apex-dem' && m.getPitch() > 40; }, null, { timeout: 5000 });
+  await page.evaluate(() => document.querySelector('[data-toggle="terrain"]').click());
+  await page.waitForFunction(() => !window.apexDebug.map.getTerrain());
+});
+
 flow('the Log page opens', async (page, base) => {
   await page.goto(base + '/analysis.html');
   await page.waitForLoadState('load');
