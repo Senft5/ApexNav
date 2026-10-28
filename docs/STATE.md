@@ -1,5 +1,9 @@
 # APEX NAV — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-10-28: one fun score for loops and A→B
+- #96 merged (long trips in sections). #111: loops are now ranked by `FunRoute.loopValue` (Fun − 200 x retraced share − 80 x length error) instead of raw corners per km, so router junction turns no longer count as loop corners and the measured adjustment (fun points) is on the same scale. Knoxville 30 mi: a clean 43 km loop (Fun 75) beat a 47 km one with more corners but 9 % retraced. Not driven on a phone.
+- Exact next task: next routing rows in docs/IDEAS.md (R-14 reject routes that shortcut a stage, R-31 "why this route", R-13 sun glare).
+
 ## Session 2026-10-28: social: convoys and the garage (thread "Make ApexNav's social features best in class")
 - #84 convoy backend: `ConvoyRoom` Durable Object per drive (ticketed WebSocket, 16 cars, 2 h, 30-min invites, leader-only hazard calls / shared route / regroup point, retract with tombstones, replay after reconnect, restart epochs, positions never stored) and `ConvoyIndex` per user (2 led at once, 10 created per hour; blocks, logout and account deletion reach live convoys). Deviations from docs/CONVOY_TRANSPORT.md are listed in its "As built" section. Reviewed by code-review and security subagents (all findings fixed, re-verified). 32 tests in backend/test/convoy.test.ts.
 - #89 convoy app (web/convoy.js, web/convoy_ui.js): start/join by link, crew bar with gaps to leader and last car, leader call buttons with 3 s undo, spoken calls for hazards ahead on the shared route (or a heading cone), map markers and dashed route, reconnect with backoff, offline queue, "Use it here" when a second device takes over. tests/test_convoy_client.py; Playwright check as leader and member.
