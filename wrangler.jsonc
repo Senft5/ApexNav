@@ -16,12 +16,22 @@
   // but the env binding must be declared in the previews block too.
   "durable_objects": { "bindings": [{ "name": "CONVOY", "class_name": "ConvoyRoom" }, { "name": "CONVOY_INDEX", "class_name": "ConvoyIndex" }] },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["ConvoyRoom", "ConvoyIndex"] }],
+  // Abuse floor for every write (per session, or per IP signed out) and sign-in (per IP): backend/src/ratelimit.ts.
+  // namespace_id is any number unique to this account; previews declare their own below.
+  "ratelimits": [
+    { "name": "WRITE_LIMIT", "namespace_id": "1001", "simple": { "limit": 60, "period": 60 } },
+    { "name": "AUTH_LIMIT", "namespace_id": "1002", "simple": { "limit": 20, "period": 60 } }
+  ],
   "d1_databases": [
     { "binding": "DB", "database_name": "apexnav-db", "database_id": "b0c559d5-48c2-462c-bd97-cf375233f7c1", "migrations_dir": "backend/migrations" }
   ],
   // Preview builds (branches and pull requests) run `wrangler preview`, which reads only this block and does not inherit production settings.
   // They get their own empty database (apexnav-preview-db, same schema) so a preview can never touch real data.
   "previews": {
+    "ratelimits": [
+      { "name": "WRITE_LIMIT", "namespace_id": "1003", "simple": { "limit": 60, "period": 60 } },
+      { "name": "AUTH_LIMIT", "namespace_id": "1004", "simple": { "limit": 20, "period": 60 } }
+    ],
     "durable_objects": { "bindings": [{ "name": "CONVOY", "class_name": "ConvoyRoom" }, { "name": "CONVOY_INDEX", "class_name": "ConvoyIndex" }] },
     "d1_databases": [
       { "binding": "DB", "database_name": "apexnav-preview-db", "database_id": "9103ab07-0041-4bb1-ae9f-3a9f324aa543" }

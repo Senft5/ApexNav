@@ -61,6 +61,14 @@ The JS file is a line-for-line port used by the browser/iOS cockpit for live OSR
   segment passes; JS port in `web/apex_core.js` (plus `profileRecording` for app CSVs), parity-tested.
 - Smoothness map (`abrupt_moments`; JS `abruptMoments`): |change of the (lat, lon) g vector| x speed / 5 m, in g/s, per
   sample with both ends measured and at 5 m/s or more; the 3 largest at least 40 samples apart and over 0.3 g/s are named.
+- Corner repeatability (`coach` corners' `spread`; IDEAS D-07): for each clean pass of a corner (this drive and matched
+  others), `_marks` finds a noise-robust braking onset (in the braking run of 0.20 g or more nearest the apex, where the
+  3-bin smoothed deceleration first reaches 40 % of that run's peak, inside the 200 m lookback) and slowest point (only for
+  a real dip, 1 m/s below both corner ends, placed mid-way along the bins within 0.2 m/s of the minimum around it, gaps of
+  up to 2 bins bridged). Other passes' marks are projected onto this drive's road (`nearest_index` within 10 bins of where
+  the mark should fall, 20 m; an onset past the apex is dropped, so a hairpin's other leg cannot capture it). The spread is 1.4826 x the median absolute deviation, in m, so one odd pass (traffic, wet) does
+  not dominate; None under 3 marks. With realistic noise (4 m GPS jitter, 0.02 g, 0.15 m/s) identical driving stays under
+  10 m. The drive page names a corner as varying only with 5+ passes and a spread of max(10 m, 2 x your median).
 - Fatigue cues (`fatigue`; JS `fatigue`): on a drive with an hour or more of moving time (bins at 2.5 m/s or more), the
   clean, fully measured corners (8 or more) of the first and last thirds of that time are compared as two groups: extra
   steering corrections per corner (`steering_corrections`: reversals of the lateral-g trend on steps of 0.03 g or more,

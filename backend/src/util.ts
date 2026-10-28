@@ -8,6 +8,8 @@ export interface Env {
   OWNER_EMAIL?: string;     // secret: the first sign-in with this address becomes the owner/first member
   PEPPER?: string;          // secret: server-side hmac key for dedupe hashes
   PUBLIC_ORIGIN?: string;
+  WRITE_LIMIT?: RateLimit;  // wrangler.jsonc ratelimits: writes per session (or per IP when signed out)
+  AUTH_LIMIT?: RateLimit;   // sign-in endpoints per IP
 }
 
 export class HttpError extends Error {
@@ -71,8 +73,10 @@ export function cookie(name: string, value: string, maxAgeS: number): string {
 export async function body<T = Record<string, unknown>>(req: Request): Promise<T> {
   const len = Number(req.headers.get("content-length") ?? "0");
   if (len > 64 * 1024) throw new HttpError(413, "too_large");
+  const raw = await req.text();   // content-length can be missing (chunked): check what actually arrived
+  if (raw.length > 64 * 1024) throw new HttpError(413, "too_large");
   try {
-    return (await req.json()) as T;
+    return JSON.parse(raw) as T;
   } catch {
     throw new HttpError(400, "bad_json");
   }

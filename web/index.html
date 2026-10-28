@@ -10,6 +10,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter+Tight:wght@400;500;600&display=swap" />
   <link rel="stylesheet" href="vendor/maplibre-gl.css" />
+  <script src="errors.js"></script>   <!-- first, so it sees errors in everything after it -->
   <script src="vendor/maplibre-gl.js"></script>
   <script src="vendor/maplibre-contour.min.js"></script>
   <script src="apex_core.js"></script>
@@ -22,6 +23,7 @@
   <script src="traffic.js"></script>
   <script src="sun.js"></script>
   <script src="format.js"></script>
+  <script src="road_names.js"></script>
   <script src="recording.js"></script>
   <script src="road_memory.js"></script>
   <script src="contributor.js"></script>
@@ -384,6 +386,7 @@
               <h3 id="routeCardName"></h3>
               <p class="route-meta" id="routeCardMeta"></p>
               <div class="bars mt-8" id="routeCardBars"></div>
+              <p class="note" id="routeCardWhy" hidden></p>
               <p class="note" id="routeCardSub"></p>
               <div class="plan-links fun-row" id="routeCardFun" role="radiogroup" aria-label="Route style"><span>Roads</span><button class="chip" data-fun="quick" role="radio" aria-checked="false">Quick</button><button class="chip" data-fun="fun" role="radio" aria-checked="false">Fun</button><button class="chip" data-fun="max" role="radio" aria-checked="false">Max fun</button></div>
               <div class="row mt-8">
@@ -550,7 +553,7 @@
   <div class="overlay dim" id="permSheet" role="dialog" aria-modal="true" aria-label="Before your first drive">
     <div class="card-sheet">
       <h2>Before your first drive</h2>
-      <div class="perm"><b>Location</b><span id="permLoc">to call corners ahead</span><b>Motion</b><span id="permMot">to feel bumps and surface</span><b>Screen on</b><span>while you drive</span></div>
+      <div class="perm"><b>Location</b><span id="permLoc">to call corners ahead</span><b>Motion</b><span id="permMot">to feel bumps and surface</span><b>Screen on</b><span>while you drive</span><b class="mount-row" hidden>Mount</b><span class="mount-row" hidden>in a holder, any way up. It sets itself up in the first minute of driving.</span></div>
       <p id="permNote">Your drive stays on this phone.</p>
       <button class="ink-btn solid" id="permGo">Allow and start</button>
       <button class="linkbtn" id="permNo">Not now</button>
@@ -1712,6 +1715,14 @@
       for (const s of pool) counts.set(s.archetype, (counts.get(s.archetype) || 0) + 1);
       return normRoadType([...counts.entries()].sort((a, b) => b[1] - a[1])[0][0]);
     }
+    // "Why this route" from FunRoute.why: the roads the detour is for and what it costs (null = say nothing).
+    function whyText(w) {
+      if (!w) return null;
+      const mi = (km) => { const m = km / 1.609344; return `${m < 10 ? m.toFixed(1) : Math.round(m)} mi`; };
+      const roads = w.roads.map(r => `${r.name} ${mi(r.km)}`).join(', ');
+      const gain = w.gained ? `${w.gained} more good corners` : '';
+      return `For ${[roads, gain].filter(Boolean).join(' · ')}${w.extraMin >= 1 ? `, +${w.extraMin} min` : ''}`;
+    }
     function renderRouteCard(t = plannedRoute) {
       const card = $('routeCard');
       $('planPanel').classList.toggle('routed', !!t);
@@ -1753,6 +1764,8 @@
           : null;
       const feel = mCov != null && mCov > 0 ? `Road feel ${mCov}% driven` : 'Road feel after first drive';
       $('routeCardSub').textContent = `Cameras ${cams} · ${feel}`;
+      $('routeCardWhy').textContent = t.why || '';
+      $('routeCardWhy').hidden = !t.why;
       $('routeCardFun').hidden = t.id !== 'route_dest';           // the level re-plans destination routes only
     }
     // Log and Stages are another page, so coming back to Map reloads this one: keep the planned route for the session and
@@ -1761,7 +1774,7 @@
     function persistPlanned(t) {
       try {
         const coords = t.lat.map((la, i) => [+t.lon[i].toFixed(6), +la.toFixed(6)]);
-        sessionStorage.setItem(PLANNED, JSON.stringify({ id: t.id, name: t.name, request: t.request || null, coords, fun: t.fun || null, timeS: t.timeS ?? null, extraS: t.extraS ?? null }));
+        sessionStorage.setItem(PLANNED, JSON.stringify({ id: t.id, name: t.name, request: t.request || null, coords, fun: t.fun || null, timeS: t.timeS ?? null, extraS: t.extraS ?? null, why: t.why || null }));
       } catch (_) { /* too big or storage off: the route just won't survive a page change */ }
     }
     async function restorePlanned() {
@@ -1769,7 +1782,7 @@
       try { saved = JSON.parse(sessionStorage.getItem(PLANNED) || 'null'); } catch (_) { saved = null; }
       if (!saved || !Array.isArray(saved.coords) || saved.coords.length < 2) return;
       const t = await trackFromPolyline(saved.coords, saved.id, saved.name);
-      Object.assign(t, { request: saved.request, fun: saved.fun || null, timeS: saved.timeS ?? null, extraS: saved.extraS ?? null });
+      Object.assign(t, { request: saved.request, fun: saved.fun || null, timeS: saved.timeS ?? null, extraS: saved.extraS ?? null, why: typeof saved.why === 'string' ? saved.why : null });
       await buildRoute(null, saved.id, saved.name, t);
     }
     async function buildRoute(points, id, name, prebuilt = null, request = null) {
@@ -2061,7 +2074,8 @@
       best.t = await trackFromPolyline(best.route.coords, id, name);
       // A winning alternate is pinned with shaping points along it, so a reroute stays on it.
       const via = best.kind === 'router' && best.extraS > 0 ? FunRoute.alongPoints(best.route.coords) : best.via;
-      Object.assign(best.t, { measured, fun: best.fun, timeS: best.timeS, extraS: best.extraS, funLevel: level,
+      const quickest = cands.filter(c => Number.isFinite(c.timeS)).reduce((x, y) => (y.timeS < x.timeS ? y : x), best);
+      Object.assign(best.t, { measured, fun: best.fun, timeS: best.timeS, extraS: best.extraS, funLevel: level, why: whyText(FunRoute.why(best, quickest)),
                               request: { ...request, via: via.map(p => ({ lat: p.lat, lon: p.lon, shaping: true })) } });
       await buildRoute(null, id, name, best.t);
       const mi = (totalOf(best.t) / 1609.344).toFixed(1), extra = best.extraS >= 60 ? ` · +${Math.round(best.extraS / 60)} min for fun` : '';
@@ -2105,10 +2119,9 @@
     }
     function scoreLoop(t, miles) {
       const km = totalOf(t) / 1000, targetKm = miles * 1.609344;
-      const good = t.events.filter(e => e.type === 'corner' && e.severity !== 'HP' && e.severity >= 2 && e.severity <= 5).length;
       const retraced = Core.retracedShare(t.lat, t.lon);
-      const lengthErr = Math.abs(km - targetKm) / targetKm;
-      return { score: good / Math.max(1, km) * 10 - retraced * 60 - lengthErr * 25, good, retraced, km };
+      // good: corners off the router's junctions, as the fun score counts them
+      return { score: FunRoute.loopValue(t.fun, km, targetKm, retraced), good: t.fun ? t.fun.good : 0, retraced, km };
     }
     const totalOf = (t) => t.dist[t.dist.length - 1];
     // Busy state on the button that started a slow request: label and progress bar;
@@ -2170,7 +2183,7 @@
       const done = (await Promise.allSettled(tries)).filter(r => r.status === 'fulfilled').map(r => r.value);
       if (!done.length) { toast('Couldn\'t build a loop. Check signal and try again.'); return; }
       done.sort((a, b) => b.score - a.score);
-      // Members: let what others measured break ties among the top few (rough −8 … smooth +3, banked ±2, docs/ROUTING.md; unmeasured roads are neutral).
+      // Members: let what others measured break ties among the top few (rough −8 … smooth +3, banked ±2 on the same fun scale, docs/ROUTING.md; unmeasured roads are neutral).
       if (await applyMeasured(done.slice(0, 3), ui)) {
         for (const d of done) d.score += d.adjust || 0;
         done.sort((a, b) => b.score - a.score);
@@ -2182,7 +2195,7 @@
       const gotMi = best.km / 1.609344, near = Math.abs(gotMi - miles) <= 0.2 * miles;
       await buildRoute(null, `loop_${miles}`, `${Math.max(1, Math.round(gotMi))} mi loop`, best.t);
       toast(near ? `${best.good} good corners on this loop` : `${gotMi.toFixed(1)} mi: the closest good loop to ${miles} mi`);
-      window.apexDebug && (window.apexDebug.lastLoop = done.map(d => ({ kind: d.job.kind, score: d.score, km: d.km, good: d.good, retraced: d.retraced })));
+      window.apexDebug && (window.apexDebug.lastLoop = done.map(d => ({ kind: d.job.kind, fun: d.t.fun && d.t.fun.fun, score: d.score, km: d.km, good: d.good, retraced: d.retraced })));
     }
 
 
@@ -2970,7 +2983,7 @@
     // =======================================================================
     // 10b. DRIVE MODE (web): real GPS + motion, recorded to this device. REPLAY plays a saved drive; the two never mix.
     // =======================================================================
-    const drive = { sensors: null, rec: null, status: null, frames: 0, live: null, liveIdx: 0, share: 'off', shareKm: 0, shareErr: null, native: false };
+    const drive = { sensors: null, rec: null, status: null, frames: 0, live: null, liveIdx: 0, share: 'off', shareKm: 0, shareErr: null, native: false, roads: {}, roadIdx: 0 };
     const NATIVE_SHELL = !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex);
     function paintModeSwitch() {
       const on = state.mode === 'live';
@@ -3027,6 +3040,19 @@
     function feedLive() {
       const L = drive.live, r = drive.rec; if (!L || !r) return;
       while (drive.liveIdx < r.rows.length) { const x = r.rows[drive.liveIdx++]; L.push({ lat: x.lat, lon: x.lon, roughness_rms: x.roughness_rms, camber_deg: x.camber_deg, crest: x.crest_vertical_g }); }
+    }
+    // Which road the drive is on, every 150 m (30 rows), read from the map's own vector tiles (ApexRoadNames):
+    // the saved drive is named after the road that carried most of it. Nothing leaves the phone for this.
+    function noteRoads() {
+      const r = drive.rec; if (!r || !window.ApexRoadNames) return;
+      while (drive.roadIdx + 30 <= r.rows.length) {
+        drive.roadIdx += 30;
+        const x = r.rows[drive.roadIdx - 1];
+        let feats = [];
+        try { feats = map.querySourceFeatures('openmaptiles', { sourceLayer: 'transportation_name' }); } catch (_) { /* style not loaded */ }
+        const name = ApexRoadNames.nearestRoadName(feats, x.lat, x.lon);
+        if (name) drive.roads[name] = (drive.roads[name] || 0) + 150;
+      }
     }
     // Road data whenever the app is open and the phone is mounted (calibration locked), not only during a drive
     // (owner 2026-10-26). Trips, privacy trims and gaps: ApexContributor.createAmbient. Members with ROAD DATA on only.
@@ -3091,7 +3117,7 @@
       driveActive = true;
       setPlaying(false);
       drive.rec = new ApexSensors.Recorder(); drive.status = { gps: 'waiting', motion: 'off', wake: 'off', message: '' }; drive.frames = 0;
-      drive.live = null; drive.liveIdx = 0; drive.share = 'off'; drive.shareKm = 0; drive.shareErr = null;
+      drive.live = null; drive.liveIdx = 0; drive.share = 'off'; drive.shareKm = 0; drive.shareErr = null; drive.roads = {}; drive.roadIdx = 0;
       if (NATIVE_SHELL) {   // the app's own GPS and IMU feed window.apex.live; no browser sensors to start
         drive.native = true;
         drive.status = { gps: performance.now() - state.liveAt < 5000 && state.live ? 'on' : 'waiting', motion: 'on', wake: 'on', message: '' };
@@ -3116,7 +3142,7 @@
             paintPerms();
             paintDriveStat();
           },
-          onFrame: (fr) => { if (!fr.has_fix) return; drive.frames++; drive.rec.add(fr); feedLive(); window.apex.live(fr); paintDriveStat(); },
+          onFrame: (fr) => { if (!fr.has_fix) return; drive.frames++; drive.rec.add(fr); feedLive(); noteRoads(); window.apex.live(fr); paintDriveStat(); },
         });
         if (!driveActive || state.mode !== 'live') {
           sensors.stop();
@@ -3133,7 +3159,7 @@
     }
     async function leaveDrive(save) {
       driveActive = false;
-      const rec = drive.rec, sensors = drive.sensors, live = drive.live;
+      const rec = drive.rec, sensors = drive.sensors, live = drive.live, road = rec && window.ApexRoadNames ? ApexRoadNames.mainRoad(drive.roads, rec.km * 1000) : null;
       drive.sensors = null; drive.rec = null; drive.live = null; drive.share = 'off'; drive.native = false;
       if (sensors) sensors.stop();
       state.live = null;
@@ -3143,7 +3169,7 @@
         try {
           const when = new Date(rec.startedAt || Date.now()), pad = (n) => String(n).padStart(2, '0');
           const stamp = `${when.getFullYear()}${pad(when.getMonth() + 1)}${pad(when.getDate())}_${pad(when.getHours())}${pad(when.getMinutes())}${pad(when.getSeconds())}`;
-          const d = ApexRecording.parse(Core, rec.toCsv(), `web_${stamp}.csv`, { source: 'web-gps', date: `${when.getFullYear()}-${pad(when.getMonth() + 1)}-${pad(when.getDate())}T${pad(when.getHours())}:${pad(when.getMinutes())}`, name: `Drive ${when.toLocaleDateString()} ${ApexFormat.clock12(when.getHours(), when.getMinutes())}` });
+          const d = ApexRecording.parse(Core, rec.toCsv(), `web_${stamp}.csv`, { source: 'web-gps', date: `${when.getFullYear()}-${pad(when.getMonth() + 1)}-${pad(when.getDate())}T${pad(when.getHours())}:${pad(when.getMinutes())}`, name: road || `Drive ${when.toLocaleDateString()} ${ApexFormat.clock12(when.getHours(), when.getMinutes())}` });
           await ApexRecording.store(d);
           await refreshSavedDrives();
           toast(`Drive saved · ${(rec.km / 1.609344).toFixed(1)} mi`, { label: 'View', href: `analysis.html?tab=drive&drive=${encodeURIComponent(d.id)}` });
@@ -3174,6 +3200,8 @@
       if (state.mode === 'live' || locDenied) return;
       if (flag('apex.permsExplained')) { enterDrive(); return; }
       paintPerms();
+      // The app calibrates the mount (ApexKit); a browser has no mount calibration, so the tip is app-only
+      document.querySelectorAll('.mount-row').forEach(n => { n.hidden = !NATIVE_SHELL; });
       const sheet = $('permSheet'); sheet.classList.add('show'); $('permGo').focus();
     }
     $('permGo').addEventListener('click', () => { if (locDenied) return; flag('apex.permsExplained', '1'); $('permSheet').classList.remove('show'); enterDrive(); });
@@ -3229,10 +3257,13 @@
         if (NATIVE_SHELL && !driveActive) { showIdleFix(frame); return; }
         state.live = frame; state.liveAt = performance.now();
         if (drive.native && drive.rec) {
-          drive.frames++; drive.rec.add(frame); feedLive();
+          drive.frames++; drive.rec.add(frame); feedLive(); noteRoads();
           const gps = Number.isFinite(frame.accuracy_m) && frame.accuracy_m > ApexSensors.MAX_ACCURACY_M ? 'weak' : 'on';
           if (drive.status.gps !== gps) drive.status.gps = gps;
-          drive.status.calibration = typeof frame.calibration === 'string' ? frame.calibration : null;
+          const cal = typeof frame.calibration === 'string' ? frame.calibration : null;
+          // The mount guide's tick: say so when calibration locks after the driver saw "Calibrating"
+          if (cal === 'locked' && (drive.status.calibration === 'default' || drive.status.calibration === 'awaitingPull')) toast('Mount set. Bumps and banking are recording.');
+          drive.status.calibration = cal;
           paintDriveStat();
         }
         const entering = state.mode !== 'live';

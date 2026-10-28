@@ -57,7 +57,9 @@ which ran 40–75 % long in hills (a 45 mi request around Knoxville routed to 99
 every stage end, and `loopPlansFromMatrix` chains 1–3 of them in any order and direction within 25 %
 of the target. Same value formula as before (stage score x (1 − length error) − 0.08 per connector
 km). The crow-fly plans are the fallback when the matrix fails, and the circle loop is still routed
-as a baseline. Checked against the public servers: routed loops now land within about 15 % of the
+as a baseline. Routed loops are then ranked on the same fun score as A→B routes (`FunRoute.loopValue`:
+Fun minus 2 points per % of the loop driven twice and 0.8 per % off the asked length), so junction turns
+no longer count as corners on loops and the measured adjustment means the same on both. Checked against the public servers: routed loops now land within about 15 % of the
 target (Knoxville 30 mi: 43–44 km after spur removal; 45 mi: 58–62 km; Cincinnati 30 mi: 46–48 km).
 
 ## Measured roads
@@ -104,7 +106,10 @@ the detour. For members, the top candidates also get what others measured on tho
 
 The route card shows Fun / Twist / Flow for a planned route and Twist / Flow / Surface from
 measured sectors for a driven one, plus the router's time and "+N for fun" over the quickest.
-These are map-derived, never measured road feel.
+These are map-derived, never measured road feel. When the winner is slower than the quickest route, a line under the bars says
+why (`FunRoute.why`, from the router's own road names): the roads it spends 2+ km more on (at most 3), the
+good corners it gains and the minutes it costs, e.g. "For SR 360 13 mi, Cold Spring Road 8.2 mi · 167 more
+good corners, +30 min".
 
 ## Checked
 
