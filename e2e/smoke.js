@@ -1025,6 +1025,26 @@ flow('track day: on a mapped raceway, Start/finish here times laps (IDEAS D-15)'
   check(/last 0:(39|40)\.\d\d/.test(info) && /best 0:(39|40)\.\d\d/.test(info), 'laps timed: ' + info);
 });
 
+flow('look: an accent unlocked with Octane recolours the route line, warnings unchanged (Worker stubbed, IDEAS S-10)', async (page, base) => {
+  let owned = [];
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url()), m = route.request().method();
+    const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    const items = [{ id: 'accent_rally_blue', octane: 40 }, { id: 'accent_racing_green', octane: 80 }, { id: 'accent_ink', octane: 150 }];
+    if (u.pathname === '/api/shop') return json({ balance: owned.length ? 10 : 50, owned, items });
+    if (u.pathname === '/api/redeem' && m === 'POST') { owned = ['accent_rally_blue']; return json({ balance: 10, owned, items }); }
+    return json({ error: 'not_found' }, 404);
+  });
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => document.querySelectorAll('#lookRow .chip').length === 4);
+  const signal = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--signal').trim());
+  await page.evaluate(() => [...document.querySelectorAll('#lookRow .chip')].find((b) => /Rally blue/.test(b.textContent)).click());
+  await page.waitForFunction(() => getComputedStyle(document.documentElement).getPropertyValue('--route').trim().toLowerCase() === '#1f4fa8', null, { timeout: 5000 });
+  check(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--signal').trim()) === signal, 'warnings keep their colour');
+  check(await page.evaluate(() => localStorage.getItem('apex.accent')) === 'rally_blue', 'kept on the phone');
+});
+
 flow('desk: on a big screen Where to? is a column on the left and sheets a panel on the right, the map in view (IDEAS A-05)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.goto(base + '/index.html?view=route');

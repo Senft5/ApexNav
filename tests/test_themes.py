@@ -84,3 +84,24 @@ def test_text_tokens_meet_wcag_aa_contrast():
         if ratio < 4.5:
             failures.append(f"{mode} label on accent: {ratio:.2f}")
     assert not failures, failures
+
+
+def test_an_accent_changes_the_route_and_accent_only():
+    """IDEAS S-10: an accent recolours the route line and the accent; warnings (signal) keep theirs."""
+    runner = r"""
+const fs = require('node:fs'), vm = require('node:vm');
+const store = new Map([['apex.accent', 'rally_blue']]);
+const element = { dataset: {}, style: { setProperty() {} } };
+const browser = { window: { localStorage: { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, v), removeItem: (k) => store.delete(k) } }, document: { documentElement: element } };
+vm.runInNewContext(fs.readFileSync(process.argv[1], 'utf8'), browser);
+const T = browser.window.ApexThemes, day = T.apply('roadbook', false).colors, base = T.THEMES.roadbook.day;
+T.setAccent('nonsense');
+const after = T.accent();
+console.log(JSON.stringify({ route: day.route, accent: day.accent, signal: day.signal, baseSignal: base.signal, baseRoute: base.route, after }));
+"""
+    import json as _j, subprocess as _s, shutil as _sh, os as _o
+    out = _j.loads(_s.run([_sh.which("node"), "-e", runner, _o.path.join(_o.path.dirname(_o.path.dirname(_o.path.abspath(__file__))), "web", "themes.js")],
+                          capture_output=True, text=True, check=True).stdout)
+    assert out["route"] == "#1F4FA8" and out["accent"] == "#1F4FA8" and out["route"] != out["baseRoute"]
+    assert out["signal"] == out["baseSignal"], "warnings keep their colour"
+    assert out["after"] is None, "an unknown accent is no accent"

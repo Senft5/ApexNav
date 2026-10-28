@@ -41,5 +41,6 @@ SELECT
   (SELECT COUNT(*) FROM route_stats) AS route_stats,
   (SELECT COUNT(*) FROM road_ways) AS road_ways,
   (SELECT COUNT(*) FROM member_months) AS member_months,
+  (SELECT COUNT(*) FROM redemptions) AS redemptions,
   (SELECT COUNT(*) FROM d1_migrations) AS d1_migrations
 ;

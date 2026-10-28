@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-yi0vLx695y9CZBPJB6QXGBK789S9KMQzBmF4kMSmnoE=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-yK/V4VkLoJ4SOlH5zQUrFTSCaRXRli2lm3vZ30AWH3o=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>ApexNav</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -594,6 +594,12 @@
             <div class="row" role="radiogroup" aria-label="Units" id="unitsRow"><button class="chip" data-units="imperial" role="radio">Miles and feet</button><button class="chip" data-units="metric" role="radio">Kilometres and metres</button></div>
             <p class="note" style="margin:8px 0 4px">Driving side: bends toward your own side of the road get more caution, since you see less round them.</p>
             <div class="row" role="radiogroup" aria-label="Driving side" id="sideRow"><button class="chip" data-side="auto" role="radio">From the map</button><button class="chip" data-side="right" role="radio">Right</button><button class="chip" data-side="left" role="radio">Left</button></div>
+          </section>
+          <section data-panel="setup">
+            <h3>Look</h3>
+            <p class="note" style="margin:0 0 8px">Colours for the route line and the cockpit, unlocked with the Octane you earn sharing road data. Warnings keep their colour.</p>
+            <div class="row" style="flex-wrap:wrap" id="lookRow"></div>
+            <p class="note" id="lookNote" style="margin:6px 0 0"></p>
           </section>
           <section data-panel="setup">
             <h3>Feedback</h3>
@@ -3776,6 +3782,28 @@
       document.querySelectorAll('[data-side]').forEach(b => b.addEventListener('click', () => { ApexDrivingSide.setChoice(b.dataset.side); paintSide(); toast('Used from the next route you plan.'); }));
       paintSide();
     }
+    // Look (themes.js accents, IDEAS S-10): cosmetic only, bought with earned Octane through /api/shop and /api/redeem.
+    async function renderLook() {
+      const row = $('lookRow'), note = $('lookNote');
+      if (!row || !Themes.ACCENTS) return;
+      let shop = null;
+      try { const r = await apiCall('GET', '/api/shop'); shop = r.ok ? await r.json() : null; } catch (_) { shop = null; }
+      const owned = new Set(shop ? shop.owned : []), current = Themes.accent();
+      const chip = (label, on, fn) => { const b = document.createElement('button'); b.className = 'chip' + (on ? ' on' : ''); b.textContent = label; b.setAttribute('aria-pressed', String(on)); b.addEventListener('click', fn); return b; };
+      const use = (a) => { Themes.setAccent(a); applyTheme(); renderLook(); };
+      row.replaceChildren(chip('Road book', !current, () => use(null)), ...Object.entries(Themes.ACCENTS).map(([k, a]) => {
+        const item = shop && shop.items.find(i => i.id === `accent_${k}`), have = owned.has(`accent_${k}`);
+        if (have) return chip(a.label, current === k, () => use(k));
+        return chip(`${a.label} · ${item ? item.octane : '--'} Octane`, false, async () => {
+          if (!shop) { toast('Sign in (Crew) to unlock colours with Octane.'); return; }
+          let r; try { r = await apiCall('POST', '/api/redeem', { item: `accent_${k}` }); } catch (_) { toast('No signal. Try again.'); return; }
+          if (r.ok) { toast(`${a.label} unlocked.`); use(k); } else toast(r.status === 402 ? 'Not enough Octane yet: share road data to earn more.' : 'Couldn\'t unlock that. Try again.');
+        });
+      }));
+      note.textContent = shop ? `${shop.balance} Octane to spend` : 'Sign in to unlock colours with Octane.';
+      if (current && shop && !owned.has(`accent_${current}`)) use(null);   // an accent you don't own (a shared phone): back to the road book
+    }
+    renderLook();
     // Send feedback (web/feedback.js, IDEAS L-05): Settings → Feedback; the owner reads it in Crew.
     let accountMe = null, feedbackUi = null;
     try {
