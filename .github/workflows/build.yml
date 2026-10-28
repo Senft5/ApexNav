@@ -146,13 +146,8 @@ jobs:
           ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
         run: |
           KEY="$RUNNER_TEMP/AuthKey_$ASC_KEY_ID.p8"
-          # Accept the .p8 as pasted text or as base64 of the file.
-          if printf '%s' "$ASC_KEY_P8" | grep -q "BEGIN PRIVATE KEY"; then
-            printf '%s\n' "$ASC_KEY_P8" > "$KEY"
-          else
-            printf '%s' "$ASC_KEY_P8" | base64 --decode > "$KEY"
-          fi
-          chmod 600 "$KEY"
+          # Rebuilds the PEM whether the secret kept its BEGIN/END lines and line breaks or not.
+          tools/write_asc_key.sh "$KEY"
           echo "ASC_KEY_PATH=$KEY" >> "$GITHUB_ENV"
 
       - name: Archive (automatic signing)
