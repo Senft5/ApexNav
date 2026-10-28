@@ -498,6 +498,42 @@ flow("what's new: shown once after an update, not on a first install, not over a
   } finally { await fresh.close(); }
 }, { news: true });
 
+flow('crew drives: an upcoming drive shows in Crew with who is going; Going answers it; Plan a drive posts one (Worker stubbed, IDEAS S-06)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  const posted = [];
+  const starts = new Date(Date.now() + 26 * 3600e3).toISOString();
+  let mine = null;
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url()), m = route.request().method();
+    const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (u.pathname === '/api/crews' && m === 'GET') return json([{ id: 'CREW1', name: 'Ridge Runners', role: 'member', members: 3, visibility: 'private' }]);
+    if (u.pathname === '/api/events') return json([{ id: 'EVT1AAAAAAAAAAAA', crew_id: 'CREW1', crew_name: 'Ridge Runners', title: 'Cherohala <i>Saturday</i>', starts_at: starts,
+      meet_name: 'Tellico Shell', meet_lat: 35.36, meet_lon: -84.29, route_id: null, notes: null, by_handle: 'bob', mine: false, can_cancel: false, my_rsvp: mine, going: ['bob', 'cara'], maybe: 1 }]);
+    if (m === 'POST') { posted.push([u.pathname, JSON.parse(route.request().postData() || 'null')]); return u.pathname.endsWith('/rsvp') ? (mine = 'going', route.fulfill({ status: 204 })) : json({ id: 'NEWEVTAAAAAAAAAA' }, 201); }
+    if (m === 'GET') return json([]);
+    return json({}, 404);
+  });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && typeof window.apex.live === 'function');
+  await page.evaluate(() => document.querySelector('.tab[data-view="crew"]').click());
+  await page.waitForSelector('text=Crew drives');
+  await page.waitForSelector('.drive-card');
+  const card = await page.textContent('.drive-card');
+  check(card.includes('Cherohala <i>Saturday</i>') && /Tomorrow|Today/.test(card) && card.includes('Going: @bob, @cara · 1 maybe'), 'the drive, as text: ' + card);
+  await page.click('.drive-card button:has-text("Going")');
+  await page.waitForFunction(() => document.querySelector('.drive-card button[aria-pressed="true"]')?.textContent === 'Going');
+  check(posted.some(([p, b]) => p === '/api/events/EVT1AAAAAAAAAAAA/rsvp' && b.status === 'going'), 'the answer was sent');
+  // plan one: map centre as the meeting point
+  await page.click('button:has-text("Plan a drive")');
+  await page.fill('input[aria-label="Drive name"]', 'Dragon run');
+  await page.click('button:has-text("Map centre")');
+  await page.click('button:has-text("Plan it")');
+  await page.waitForFunction(() => /Drive planned/.test(document.getElementById('toast').textContent));
+  const plan = posted.find(([p]) => p === '/api/crews/CREW1/events');
+  check(plan && plan[1].title === 'Dragon run' && /Z$/.test(plan[1].starts_at) && Number.isFinite(plan[1].meet.lat) && plan[1].route_id === null, 'the plan was sent: ' + JSON.stringify(plan));
+});
+
 flow('the Log page opens', async (page, base) => {
   await page.goto(base + '/analysis.html');
   await page.waitForLoadState('load');

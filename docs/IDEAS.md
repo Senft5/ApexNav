@@ -200,14 +200,14 @@ Today: accounts with Google sign-in, friends, crews (public and private, crews n
 | S-03 | Friends' activity in the Log with rank on shared stages | H | M | done (Log → Friends lately: GET /api/board/activity, the board's visibility rules, your rank on each stage, scores only) | WORKER_QUEUE log-friends, Strava feed |
 | S-04 | Garage: car profile (mass, power, tyres, ride height), shareable car cards, no location | H | M | done (#98; ride height and grip numbers not yet) | SOCIAL §2.4, Drivetribe |
 | S-05 | Share a planned route (geometry + notes) to a friend or crew, never a recorded drive | H | M | done (this PR: Share on the route card to friends and crews, the shape without the first 400 m, 30 days; Crew → Routes shared with you → Open rebuilds the notes; migration 0012) | SOCIAL §2.5, Calimoto, Roadtrippers |
-| S-06 | Crew events: a planned drive with time, meeting point, route, RSVPs and a convoy that opens on the day | H | L | todo | Meetup, REVER rides, car clubs |
+| S-06 | Crew events: a planned drive with time, meeting point, route, RSVPs and a convoy that opens on the day | H | L | done (Crew → Crew drives: plan one for a crew with a meeting point and the planned route, going / maybe / can't, directions to meet, add to calendar, report; the planner's "Start the convoy" from 2 h before invites everyone going. Migration 0013) | Meetup, REVER rides, car clubs |
 | S-07 | Kudos and comments on shared drives and highlights | M | M | todo | Strava kudos |
 | S-08 | Local legends without speed: most passes of a stage this month, smoothest crew | M | S | todo | Strava Local Legends |
 | S-09 | Pioneer badges for first measured passes of a road (3× Octane already designed) | M | S | todo | SOCIAL §2.3, Waze points |
 | S-10 | Octane redemptions that buy nothing safety-related: cosmetics, voice packs, early features | M | M | todo | SOCIAL §2.3 |
 | S-11 | Challenges: "drive 5 new roads this month", "pioneer 10 km", crew-vs-crew km | M | M | todo | Strava challenges, REVER |
 | S-12 | Highlights feed near you: viewpoints, cafés, meets, saved by members | M | M | todo | Roadtrippers, Google Maps contributions |
-| S-13 | Car meets map: public events and recurring Cars & Coffee, added by crews | H | M | todo | car meet apps, Facebook groups |
+| S-13 | Car meets map: public events and recurring Cars & Coffee, added by crews | H | M | partial (crew drives, S-06, are crew-only; public listings and recurrence are still to do) | car meet apps, Facebook groups |
 | S-14 | Invite links that open the app (or the web) on the crew or route | H | S | done (custom scheme; Universal Links later) | growth |
 | S-15 | Profiles: handle, cars, crews, favourite roads, totals; private by default | M | M | todo | Strava profile |
 | S-16 | Block and report on every social surface; moderation queue for public crews and highlights | H | M | done (#120) | App Store requirement for UGC |

@@ -448,6 +448,17 @@
       get active() { return !!(snap && snap.id); },
       /** A convoy link the app handed to the running page: waits for a yes in the Crew sheet, like one opened from the web. */
       takeInvite,
+      /** A crew drive's convoy (IDEAS S-06): starts one named for it and invites the people going, in the app (no link).
+       *  Resolves { ok, invited } or { ok: false, status } ('busy' when you're already in a convoy). */
+      async startFor(name, handles) {
+        if (snap && snap.id) return { ok: false, status: 'busy' };
+        const r = await client.start(String(name || '').slice(0, 40));
+        if (!r.ok) return { ok: false, status: r.status };
+        const list = [...new Set(handles || [])].slice(0, 15);
+        if (!list.length || !client.id) return { ok: true, invited: 0 };
+        const inv = await client.post(`/api/convoy/${encodeURIComponent(client.id)}/invite-people`, { handles: list });
+        return { ok: true, invited: inv.ok && inv.body ? inv.body.invited || 0 : 0 };
+      },
     };
   }
 

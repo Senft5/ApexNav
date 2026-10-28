@@ -3,6 +3,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { env } from "cloudflare:workers";
 import worker from "../src/index";
+import { sweepExpired } from "../src/sweep";
 import { freshDb, makeUser } from "./helpers";
 
 beforeEach(freshDb);
@@ -37,7 +38,19 @@ describe("daily sweep", () => {
     expect((await env.DB.prepare("SELECT token_hash FROM invites ORDER BY token_hash").all()).results.map((r) => r.token_hash)).toEqual(["i-new", "i-used"]);
     expect((await env.DB.prepare("SELECT token_hash FROM crew_invites").all()).results).toEqual([{ token_hash: "ci-new" }]);
     const line = JSON.parse(log.mock.calls.map((c) => c[0] as string).find((l) => l.includes('"sweep"'))!);
-    expect(line).toEqual({ event: "sweep", deleted: { sessions: 1, app_auth_codes: 1, invites: 1, crew_invites: 1, hazard_reports: 0, shared_routes: 0 } });
+    expect(line).toEqual({ event: "sweep", deleted: { sessions: 1, app_auth_codes: 1, invites: 1, crew_invites: 1, hazard_reports: 0, shared_routes: 0, crew_event_rsvps: 0, crew_events: 0 } });
     log.mockRestore();
+  });
+
+  it("deletes crew drives a week after they started, with their answers (IDEAS S-06)", async () => {
+    const a = await makeUser("alice"), crew = crypto.randomUUID();
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO crews (id, name, owner) VALUES (?, 'Crew', ?)").bind(crew, a.id),
+      env.DB.prepare(`INSERT INTO crew_events (id, crew_id, created_by, title, starts_at, meet_lat, meet_lon) VALUES
+        ('old', ?1, ?2, 'Old', datetime('now', '-8 days'), 35, -84), ('recent', ?1, ?2, 'Recent', datetime('now', '-6 days'), 35, -84)`).bind(crew, a.id),
+      env.DB.prepare("INSERT INTO crew_event_rsvps (event_id, user_id, status) VALUES ('old', ?1, 'going'), ('recent', ?1, 'going')").bind(a.id),
+    ]);
+    expect((await sweepExpired(env)).crew_events).toBe(1);
+    expect(await count("crew_events")).toBe(1); expect(await count("crew_event_rsvps")).toBe(1);
   });
 });

@@ -4,7 +4,7 @@
 (function (root) {
   const REASONS = [['spam', 'Spam or scam'], ['abuse', 'Harassment or hate'], ['impersonation', 'Pretending to be someone'],
                    ['unsafe', 'Dangerous driving or illegal'], ['other', 'Something else']];
-  const KIND_WORD = { user: 'person', crew: 'crew', car: 'car', highlight: 'spot' };
+  const KIND_WORD = { user: 'person', crew: 'crew', car: 'car', highlight: 'spot', event: 'drive' };
   const CSS = `
     .report-sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 45; background: var(--panel); color: var(--panel-ink);
       border-top: 1px solid var(--rule); box-shadow: 0 -12px 32px rgba(0, 0, 0, 0.3); display: grid; gap: 10px;

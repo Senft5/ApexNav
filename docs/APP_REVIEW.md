@@ -23,7 +23,7 @@ Checked 2026-10-28 against main and App Store Connect (read through the API key 
 | 5.1.1(v) account deletion in the app | Account → Delete account (`DELETE /api/me`, erases the account and what others hold about it) |
 | 5.1.1(ii) permission strings | location, always-location and motion strings in project.yml say what each is for |
 | 5.1.2 data use and sharing | road data is opt-in (ROAD DATA switch), never coordinates or speeds (contributor.js), random private km at each trip end, privacy zones (Z-02) |
-| 1.2 user-generated content | block from every social surface, one report sheet, 3 reports hide an item, owner moderation queue (#120) |
+| 1.2 user-generated content | block from every social surface, one report sheet, 3 reports hide an item, owner moderation queue (#120). Crew drives (S-06) are reportable too (kind `event`); remove cancels the drive |
 | 2.5.2 no downloaded code | the web cockpit is bundled in the app (`web/` as a folder resource); the web view loads only `apexnav://` pages, http(s) opens in Safari (#135) |
 | 2.5.4 background modes | `location` for spoken turn-by-turn directions (V-04) and pace notes and recording a drive with the screen off; `audio` for spoken notes over other audio. Both are core features a reviewer will see in a drive |
 | 4.0 design, iPhone only | `TARGETED_DEVICE_FAMILY = 1`; Dynamic Type on reading pages (U-15) |
