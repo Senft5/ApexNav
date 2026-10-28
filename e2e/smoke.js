@@ -925,6 +925,19 @@ flow('3D terrain: the switch raises the map into relief and tilts it; off by def
   await page.waitForFunction(() => !window.apexDebug.map.getTerrain());
 });
 
+flow('desk: on a big screen Where to? is a column on the left and sheets a panel on the right, the map in view (IDEAS A-05)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html?view=route');
+  await page.waitForSelector('#planPanel.open');
+  const box = (sel) => page.evaluate((q) => { const r = document.querySelector(q).getBoundingClientRect(); return { x: r.x, w: r.width, h: r.height }; }, sel);
+  const plan = await box('#planPanel');
+  check(plan.w === 440 && plan.x < 40 && plan.h > 600, 'Where to? is a left column: ' + JSON.stringify(plan));
+  await page.click('.tab[data-view="setup"]');
+  await page.waitForTimeout(400);
+  const sheet = await box('.sheet.open');
+  check(sheet.w === 480 && sheet.x > 900, 'Settings is a right panel: ' + JSON.stringify(sheet));
+}, { viewport: { width: 1440, height: 900 } });
+
 flow('the Log page opens', async (page, base) => {
   await page.goto(base + '/analysis.html');
   await page.waitForLoadState('load');
