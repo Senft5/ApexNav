@@ -310,7 +310,7 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 | P-04 | Lazy-load voice banks and kokoro-js only when voice is on | M | S | done (already lazy: checked 2026-10-28, a cold start fetches only voices/index.json) | startup time |
 | P-05 | Route analysis in a Web Worker so the UI never stutters while scoring | M | M | todo | Y-01 |
 | P-06 | Startup under 1 s to an interactive map on a mid-range phone | H | M | partial (demo drives load on demand, #125) | — |
-| P-07 | Thermal guard: pause the 100 Hz pipeline gracefully if the phone overheats on the dash | M | S | todo | iPhone on windscreen |
+| P-07 | Thermal guard: pause the 100 Hz pipeline gracefully if the phone overheats on the dash | M | S | done (#PR) | iPhone on windscreen |
 
 ## 12. Privacy and security (Z)
 
