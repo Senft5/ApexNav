@@ -780,6 +780,22 @@ flow('feedback: Settings sends what you typed with the diagnostics, never a plac
   check(await page.isHidden('#feedbackBox label:has-text("reply")'), 'no reply option signed out');
 });
 
+flow('landscape mount: the map takes the left, the instruments a column on the right, a sheet leaves a tab rail (IDEAS U-16)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html?drive=dry_ridge');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.track, null, { timeout: 15000 });
+  const box = (sel) => page.evaluate((q) => { const r = document.querySelector(q).getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height }; }, sel);
+  const stage = await box('.stage'), bin = await box('#binnacle'), notes = await box('#notes');
+  check(stage.w > 0.5 * 844 && stage.h > 250, 'the map is big: ' + JSON.stringify(stage));
+  check(bin.x >= stage.x + stage.w - 1 && bin.y < 120, 'the instruments are a column on the right: ' + JSON.stringify(bin));
+  check(notes.w > 800, 'the notes run across the top');
+  check(await page.evaluate(() => document.documentElement.scrollWidth <= 844), 'no sideways scroll');
+  await page.click('.tab[data-view="setup"]');
+  await page.waitForTimeout(400);
+  const rail = await box('#binnacle');
+  check(rail.w < 100, 'a sheet leaves a narrow tab rail: ' + JSON.stringify(rail));
+}, { viewport: { width: 844, height: 390 } });
+
 flow('the Log page opens', async (page, base) => {
   await page.goto(base + '/analysis.html');
   await page.waitForLoadState('load');

@@ -241,7 +241,7 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 | U-13 | Map style polish: road character colours (twist, surface) as an optional layer | H | M | partial: Twisty roads switch (map shape); surface todo | Kurviger curvy colours, Calimoto |
 | U-14 | 3D terrain with hillshade on the planning map and flyover preview of a route | M | M | todo | Apple Maps, Google Earth |
 | U-15 | Dynamic Type and VoiceOver pass on every screen, checked with the iOS simulator | H | M | partial: sheets, Log and Stages follow the text size (up to 1.6x); replay scrubber is a slider; not run in the simulator | accessibility |
-| U-16 | Landscape cockpit layout for mounts in landscape | M | M | todo | Waze |
+| U-16 | Landscape cockpit layout for mounts in landscape | M | M | done: on a phone in landscape the notes run across the top, the map takes the left and the instruments a column on the right; a sheet leaves a tab rail; the app declares both landscape orientations | Waze |
 | U-17 | Copy pass to BRAND voice on every remaining string (errors, empty states, permissions) | M | S | partial (#103) | docs/BRAND.md §2 |
 | U-18 | Native feel: replace remaining web-looking controls (selects, date inputs) with app-style ones | M | M | partial (selects) | STATE 2026-10-27 |
 | U-19 | Search that understands roads and stages ("Tail of the Dragon"), not just addresses | H | M | todo | Google Maps |
