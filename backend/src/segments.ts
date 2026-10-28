@@ -10,7 +10,9 @@ export async function segmentCreate(env: Env, v: Viewer, req: Request): Promise<
   const b = await body<Record<string, unknown>>(req);
   const n = await first<{ n: number }>(env, "SELECT COUNT(*) AS n FROM segments WHERE owner = ?", v.id);
   if ((n?.n ?? 0) >= MAX_SEGMENTS) throw new HttpError(429, "too_many_segments");
-  const id = typeof b.id === "string" && b.id.length <= 64 ? b.id : crypto.randomUUID();   // clients may supply their local id so sync is idempotent
+  // clients may supply their local id so sync is idempotent; it must be URL-safe, or DELETE /api/segments/:id could never reach it
+  if (b.id !== undefined && (typeof b.id !== "string" || !/^[A-Za-z0-9_-]{1,64}$/.test(b.id))) throw new HttpError(400, "bad_id");
+  const id = typeof b.id === "string" ? b.id : crypto.randomUUID();
   await env.DB.prepare(
     `INSERT INTO segments (id, owner, name, length_m, geom, start_lat, start_lon, end_lat, end_lon) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT (id) DO NOTHING`,
