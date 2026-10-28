@@ -128,12 +128,22 @@ jobs:
   testflight:
     needs: [testflight-gate, apexkit-macos, simulator-tests]
     if: needs.testflight-gate.outputs.ready == 'true'
-    runs-on: macos-15
+    # App Store Connect only takes builds made with the iOS 26 SDK (Xcode 26) or later; macos-15 defaults to Xcode 16.
+    runs-on: macos-26
     env:
       # Build numbers only go up: the workflow's run number, plus the attempt so a re-run doesn't collide with itself.
       BUILD_NUMBER: ${{ github.run_number }}.${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Use the newest Xcode 26 or later
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_2[6-9]*.app 2>/dev/null | grep -v -i beta | sort -V | tail -1)
+          [ -n "$XCODE" ] && sudo xcode-select -s "$XCODE"
+          xcodebuild -version
+          SDK=$(xcrun --sdk iphoneos --show-sdk-version)
+          echo "iOS SDK $SDK"
+          [ "${SDK%%.*}" -ge 26 ] || { echo "::error::iOS SDK $SDK is older than 26; App Store Connect will refuse the upload."; exit 1; }
 
       - name: Generate Xcode project
         run: |

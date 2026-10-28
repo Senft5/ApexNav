@@ -12,6 +12,8 @@ in TestFlight after Apple's processing, usually 5 to 30 minutes.
   summary says which secrets are missing. The upload waits for `apexkit-macos` and `simulator-tests` to pass.
 - **Unchanged:** `build-ipa` still builds the unsigned sideload `ApexNav-IPA` artifact.
 - **Export compliance:** `ITSAppUsesNonExemptEncryption = NO` (HTTPS only), so builds don't wait on the question.
+- **Xcode 26:** App Store Connect refuses builds made with an iOS SDK older than 26, so `testflight` runs on
+  `macos-26` and checks the SDK before archiving. The other macOS jobs stay on `macos-15`.
 - **iPhone only** (`TARGETED_DEVICE_FAMILY = 1`): an iPad build would have to support every orientation.
 
 ## One-time setup (owner)
