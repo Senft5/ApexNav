@@ -160,6 +160,22 @@ flow('the car connects: CarPlay offers Start drive, and an apexnav://open?go=dri
   } finally { await fresh.close(); }
 }, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
 
+flow('privacy zones: add one at the map centre, kept on the phone only, then remove it (IDEAS Z-02)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && typeof window.apex.live === 'function');
+  await page.click('.tab[data-view="setup"]');
+  await page.click('#zoneRadius [data-zone-r="200"]');
+  page.once('dialog', (d) => d.accept('Home'));
+  await page.click('#zoneMapBtn');
+  await page.waitForFunction(() => /Home · 200 m/.test(document.getElementById('zoneList').textContent));
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('apex.privacyZones')));
+  check(saved.length === 1 && saved[0].name === 'Home' && saved[0].r === 200, 'the zone is saved on the phone');
+  await page.click('#zoneList .linkbtn');
+  await page.waitForFunction(() => /No zones yet/.test(document.getElementById('zoneList').textContent));
+  check((await page.evaluate(() => JSON.parse(localStorage.getItem('apex.privacyZones')))).length === 0, 'removed from the phone too');
+});
+
 flow('the Log page opens', async (page, base) => {
   await page.goto(base + '/analysis.html');
   await page.waitForLoadState('load');

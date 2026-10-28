@@ -19,6 +19,7 @@
   <script src="fun_route.js"></script>
   <script src="sync.js"></script>
   <script src="sensors.js"></script>
+  <script src="privacy_zones.js"></script>
   <script src="reroute.js"></script>
   <script src="eta.js"></script>
   <script src="speech_queue.js"></script>
@@ -453,6 +454,17 @@
           <section data-panel="setup">
             <h3>Road data</h3>
             <p class="note" id="ambientNote" role="status" aria-live="polite">--</p>
+          </section>
+          <section data-panel="setup">
+            <h3>Privacy zones</h3>
+            <p class="note" style="margin:0 0 8px">Places like home and work. Inside one, nothing is recorded or shared, and convoys don't see you. Kept on this phone only.</p>
+            <div class="row" id="zoneRadius" role="group" aria-label="Zone size">
+              <button class="ink-btn" data-zone-r="200">200 m</button>
+              <button class="ink-btn" data-zone-r="500">500 m</button>
+              <button class="ink-btn" data-zone-r="1000">1 km</button>
+            </div>
+            <div class="row mt-8"><button class="ink-btn" id="zoneHereBtn">Add where I am</button><button class="ink-btn" id="zoneMapBtn">Add at map centre</button></div>
+            <div id="zoneList" class="stack-8 mt-8"></div>
           </section>
         <section data-panel="setup">
             <h3>Spots</h3>
@@ -1314,6 +1326,8 @@
     // Voice: "codriver" (most natural voice installed, read like a real co-driver) or
     // "jarvis" (cartoonishly robotic: robot voice where installed, chirps, machine-speak).
     // -------------------------------------------------------------------------
+    let privacyZones = (() => { try { return ApexPrivacyZones.load(localStorage); } catch (_) { return []; } })();   // privacy_zones.js
+    const inPrivacyZone = (lat, lon) => !!ApexPrivacyZones.zoneAt(privacyZones, lat, lon);
     // queue: what to say next, hazards first, stale and duplicate lines dropped (speech_queue.js, IDEAS V-03). current: the line playing.
     // talkingUntil: the native voice's estimated end (it reports no finish).
     const speech = { busy: false, queue: ApexSpeechQueue.createSpeechQueue(), current: null, talkingUntil: 0, nativeTimer: 0, via: null };
@@ -2933,6 +2947,7 @@
       getFix: () => {
         const p = state.lastPosition;
         if (!p || !state.lastPositionAt || performance.now() - state.lastPositionAt > 10000) return null;
+        if (inPrivacyZone(p.lat, p.lon)) return null;                     // a privacy zone: the convoy gets no position
         const m = state.lastMotion || {};
         return { lat: p.lat, lon: p.lon, heading: m.heading ?? null, speedMps: m.speedMps ?? null };
       },
@@ -3312,6 +3327,29 @@
     function closeHighlightDialog() { $('hlOverlay').classList.remove('show'); highlightPoint = null; }
     document.querySelectorAll('#hlCategories button').forEach(b => b.addEventListener('click', () => selectHighlightCategory(b.dataset.category)));
     document.querySelectorAll('#hlRating button').forEach(b => b.addEventListener('click', () => selectHighlightRating(Number(b.dataset.rating))));
+    // Privacy zones (Settings): a circle at where you are or at the map's centre; remove any. Phone only.
+    let zoneR = 500;
+    function renderZones() {
+      document.querySelectorAll('#zoneRadius [data-zone-r]').forEach(b => b.classList.toggle('on', Number(b.dataset.zoneR) === zoneR));
+      const list = $('zoneList'); list.innerHTML = '';
+      if (!privacyZones.length) { list.append(el('p', { className: 'note', textContent: 'No zones yet.' })); return; }
+      for (const z of privacyZones) {
+        list.append(el('div', { className: 'row' }, el('span', { textContent: `${z.name} · ${z.r >= 1000 ? `${z.r / 1000} km` : `${z.r} m`}` }),
+          btn('Remove', () => { privacyZones = ApexPrivacyZones.remove(privacyZones, z.id); ApexPrivacyZones.save(localStorage, privacyZones); renderZones(); paintDriveStat(); }, 'linkbtn')));
+      }
+    }
+    function addZone(p) {
+      const name = prompt('Name this place (e.g. Home)', privacyZones.length ? '' : 'Home');
+      if (name === null) return;
+      const next = ApexPrivacyZones.add(privacyZones, { lat: p.lat, lon: p.lon, r: zoneR, name });
+      if (!next) { toast(`Up to ${ApexPrivacyZones.MAX_ZONES} zones.`); return; }
+      privacyZones = next; ApexPrivacyZones.save(localStorage, privacyZones); renderZones(); paintDriveStat();
+      toast(`${privacyZones.at(-1).name}: nothing is recorded or shared within ${zoneR >= 1000 ? `${zoneR / 1000} km` : `${zoneR} m`}.`);
+    }
+    document.querySelectorAll('#zoneRadius [data-zone-r]').forEach(b => b.addEventListener('click', () => { zoneR = Number(b.dataset.zoneR); renderZones(); }));
+    $('zoneHereBtn').addEventListener('click', async () => { const p = await locate(); if (!p) { toast(NO_FIX); return; } addZone(p); });
+    $('zoneMapBtn').addEventListener('click', () => { const c = map.getCenter(); addZone({ lat: c.lat, lon: c.lng }); });
+    renderZones();
     $('hlOpenBtn').addEventListener('click', async () => {
       const p = await locate();
       if (!p) { toast(NO_FIX); return; }
@@ -3495,13 +3533,16 @@
     // mileage ticking up never chatters to VoiceOver.
     function paintDriveStat() {
       const s = drive.status || {}, r = drive.rec, main = [], warn = [];
+      const zoned = state.lastPosition && inPrivacyZone(state.lastPosition.lat, state.lastPosition.lon);
       if (s.gps === 'denied') main.push('Location is off');
+      else if (zoned) main.push('<b>Privacy zone</b> · not recording');
       else if (r && r.samples > 0) main.push(`<b>● Rec</b> ${(r.km / 1.609344).toFixed(2)} mi`);
       else main.push(s.gps === 'on' ? 'Starting…' : 'Finding GPS…');
       if (etaText) main.push(etaText);
       if (NATIVE_SHELL) { const a = ambientStats(); if (a) main.push(a.error ? 'Sharing · retrying' : a.paused ? 'Sharing paused' : `Sharing ${(a.km / 1.609344).toFixed(1)} mi`); }
       else if (drive.share === 'on') main.push(drive.shareErr ? 'Sharing · retrying' : `Sharing ${(drive.shareKm / 1.609344).toFixed(1)} mi`);
       else if (drive.share === 'stopped') main.push('Sharing paused');
+      else if (drive.share === 'zone' && !zoned) main.push('Sharing off after a privacy zone');
       if (s.gps === 'denied') warn.push(LOC_DENIED_TEXT);
       else if (s.message) warn.push(s.message);                                       // weak or lost GPS, in the sensor's words
       else if (s.gps === 'weak') warn.push('Weak GPS · keep the sky in view');
@@ -3664,7 +3705,7 @@
             paintPerms();
             paintDriveStat();
           },
-          onFrame: (fr) => { if (!fr.has_fix) return; drive.frames++; drive.rec.add(fr); feedLive(); noteRoads(); noteRest(fr); window.apex.live(fr); paintDriveStat(); },
+          onFrame: (fr) => { if (!fr.has_fix) return; drive.frames++; recordFrame(fr); feedLive(); noteRoads(); noteRest(fr); window.apex.live(fr); paintDriveStat(); },
         });
         if (!driveActive || state.mode !== 'live') {
           sensors.stop();
@@ -3834,6 +3875,14 @@
       if (p.go) { if (p.go === 'drive') { closeSheet(); driveFromLink(); } return; }   // apexnav://open?go=drive (a Shortcuts automation, IDEAS C-05)
       showView('crew'); renderAccount();
     }
+    // Privacy zones (privacy_zones.js, IDEAS Z-02): inside one the drive keeps no samples, road data stops, convoys get no
+    // position. A drive that enters one stops sharing road data for the rest of that drive (the stretch before stays private too).
+    function recordFrame(fr) {
+      if (!inPrivacyZone(fr.lat, fr.lon)) { drive.rec.add(fr); return true; }
+      drive.rec.pause();
+      if (drive.live) { drive.live.finish().catch(() => {}); drive.live = null; drive.share = 'zone'; }
+      return false;
+    }
     window.apex = {
       live(frame) {
         if (frame) feedPower({ thermal: frame.thermal, lowPowerMode: frame.low_power_mode });
@@ -3841,11 +3890,11 @@
         feedMotion(frame.speed_mps);
         state.lastPosition = { lat: frame.lat, lon: frame.lon }; state.lastPositionAt = performance.now();
         state.lastMotion = { heading: Number.isFinite(frame.course_deg) ? frame.course_deg : null, speedMps: Number.isFinite(frame.speed_mps) ? frame.speed_mps : null };
-        if (NATIVE_SHELL) feedAmbient(frame);
+        if (NATIVE_SHELL) feedAmbient(inPrivacyZone(frame.lat, frame.lon) ? { has_fix: false } : frame);   // ends the trip; its last km stays here
         if (NATIVE_SHELL && !driveActive) { showIdleFix(frame); return; }
         state.live = frame; state.liveAt = performance.now();
         if (drive.native && drive.rec) {
-          drive.frames++; drive.rec.add(frame); feedLive(); noteRoads(); noteRest(frame);
+          drive.frames++; recordFrame(frame); feedLive(); noteRoads(); noteRest(frame);
           const gps = Number.isFinite(frame.accuracy_m) && frame.accuracy_m > ApexSensors.MAX_ACCURACY_M ? 'weak' : 'on';
           if (drive.status.gps !== gps) drive.status.gps = gps;
           const cal = typeof frame.calibration === 'string' ? frame.calibration : null;
