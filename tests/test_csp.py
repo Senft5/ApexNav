@@ -23,7 +23,7 @@ def test_the_policy_is_strict():
     assert d["script-src"].count("'sha256-") == 1
     assert d["object-src"] == "'none'" and d["base-uri"] == "'none'"
     assert "https:" not in d["connect-src"].split() and "*" not in d["connect-src"].split()
-    assert d["default-src"] == "'self'"
+    assert d["default-src"] == "'self' apexnav:"   # the iOS shell's own scheme, nothing else
 
 
 def test_tag_goes_after_the_charset_and_is_idempotent():
