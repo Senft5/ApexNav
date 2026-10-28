@@ -56,7 +56,7 @@ The JS file is a line-for-line port used by the browser/iOS cockpit for live OSR
   pass). Live, with full notes on, at 5 m/s or more on a fresh heading, the voice idle (the native voice's end is estimated,
   it reports none) and no call due within 5 s of driving beyond the call distance, `upcoming` picks the nearest one straight
   ahead in the next 200 m and driven the same way; each is said once per drive.
-  `breakCue` picks the live break suggestion from `Core.fatigue` over the driving since the last stop, or two hours of it.
+  `restTick` keeps the rest clock (a stop of 15 min or more restarts it) and `breakCue` picks the live break suggestion from `Core.fatigue` over the driving since the last stop, or two hours on the road; `web/break_worker.js` runs that fatigue read off the main thread.
   `hazards` turns bumps your drives confirmed (`seen.hits >= 2`) into "Bump ahead" notes said at the call distance on any road.
 - `core/drive_analysis.py` — private corner-by-corner pass comparison, Driver Score (0–1000) and custom
   segment passes; JS port in `web/apex_core.js` (plus `profileRecording` for app CSVs), parity-tested.

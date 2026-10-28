@@ -88,26 +88,43 @@
     return best;
   }
 
-  // A break, said on a long live drive (IDEAS D-16). The technique cue comes from Core.fatigue over the driving since your
-  // last stop; without one, two hours of driving since that stop is reason enough (the usual advice). At most every 45 min.
-  const BREAK_AFTER_S = 2 * 3600, BREAK_REPEAT_S = 45 * 60;
-  const HOURS = ['', 'An hour', 'Two hours', 'Three hours', 'Four hours', 'Five hours'];
+  // A break, suggested on a long live drive (IDEAS D-16). The clock is wall time since the drive started or since the last
+  // stop of STOP_RESETS_S or more (a fuel stop is shorter and does not count). After an hour, every BREAK_CHECK_S, the driving
+  // since then is read with Core.fatigue; a fade in steering or braking is the cue, else two hours on the road. At most every
+  // 45 min, and each kind is spoken once per stretch (shown each time).
+  const STOP_RESETS_S = 15 * 60, BREAK_MIN_S = 3600, BREAK_CHECK_S = 10 * 60, BREAK_AFTER_S = 2 * 3600, BREAK_REPEAT_S = 45 * 60;
+  const HOURS = ['', 'an hour', 'two hours', 'three hours', 'four hours', 'five hours'];
   /**
-   * What to say, or null. fa: Core.fatigue over the stretch since the last stop (null when too short to judge);
-   * sinceStopS: driving time since the last stop of STOP_RESETS_S or more (or the start); sinceSaidS: since the last cue, null if none.
+   * The rest clock, per live frame. w: the previous state (null at the start of a drive); rows: the recorder's row count.
+   * Returns [w, due]: due when the driving since the stop should be read now.
+   */
+  function restTick(w, nowMs, moving, rows) {
+    w = w || { since: nowMs, lastMove: nowMs, row0: 0, checked: 0, said: null, spoken: [] };
+    if (!moving) return [w, false];
+    if (nowMs - w.lastMove >= STOP_RESETS_S * 1000) { w.since = nowMs; w.row0 = rows; w.checked = 0; w.said = null; w.spoken = []; }
+    w.lastMove = nowMs;
+    const due = nowMs - w.since >= BREAK_MIN_S * 1000 && nowMs - w.checked >= BREAK_CHECK_S * 1000;
+    if (due) w.checked = nowMs;
+    return [w, due];
+  }
+  /** Recorder rows since the stop with distances from 0, so the profiler's corner indexes point into the slice. */
+  const rebase = (rows) => rows.map((x, i) => ({ ...x, distance_m: i * 5 }));
+  /**
+   * { kind, text } to suggest now, or null. fa: Core.fatigue over the stretch since the stop (null when too short to judge);
+   * sinceStopS: wall time since the stop or the start; sinceSaidS: since the last cue, null if none this stretch.
    */
   function breakCue(fa, sinceStopS, sinceSaidS) {
     if (finite(sinceSaidS) && sinceSaidS < BREAK_REPEAT_S) return null;
     const cues = (fa && fa.cues) || [];
-    if (cues.includes('steering')) return 'Your steering is getting busier than earlier. Time for a break?';
-    if (cues.includes('braking')) return 'More braking past the apex than earlier. Time for a break?';
+    if (cues.includes('steering')) return { kind: 'steering', text: 'Your steering is getting busier than earlier. Time for a break?' };
+    if (cues.includes('braking')) return { kind: 'braking', text: 'More braking past the apex than earlier. Time for a break?' };
     if (finite(sinceStopS) && sinceStopS >= BREAK_AFTER_S) {
       const h = Math.floor(sinceStopS / 3600);
-      return `${HOURS[h] || `${h} hours`} since your last stop. Time for a break?`;
+      return { kind: 'time', text: `You've been on the road ${HOURS[h] || `${h} hours`}. Time for a break?` };
     }
     return null;
   }
 
-  const api = { build, upcoming, hazards, breakCue, SPOKEN, STOP_RESETS_S: 15 * 60 };
+  const api = { build, upcoming, hazards, breakCue, restTick, rebase, SPOKEN, STOP_RESETS_S };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexRoadMemory = api;
 })(typeof window !== 'undefined' ? window : globalThis);
