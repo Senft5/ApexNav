@@ -78,6 +78,7 @@
     .dv-corner b { font-family: var(--font-num); color: var(--signal); } .dv-call { font-weight: 700; font-size: 14px; } .dv-v { font-family: var(--font-num); font-size: 13px; }
     .dv-d { grid-column: 2 / 4; font-size: 11px; color: var(--panel-dim); }
     .dv-tip { grid-column: 2 / 4; font-size: 12px; line-height: 1.35; }
+    .dv-plain { margin: 8px 0 0; font-size: 15px; line-height: 1.4; max-width: 60ch; }
     .dv-gg { margin-top: 12px; } .dv-gg h3 { font-size: 13px; margin: 0 0 6px; }
     .dv-gg-pic { position: relative; width: 100%; max-width: 320px; aspect-ratio: 1; } .dv-gg-pic svg { display: block; width: 100%; height: 100%; }
     .dv-gg-hot { position: absolute; inset: 0; pointer-events: none; }
@@ -218,10 +219,7 @@
     // ---------------------------------------------------------------------
     // Drive library: the person's recordings in IndexedDB
     // ---------------------------------------------------------------------
-    function cornersOf(d) {
-      return d.events.map(e => ({ start: Math.round(e.start_m / 5), end: Math.round(e.end_m / 5), apex: e.index, apex_mps: e.apex_mph / MPH,
-        code: e.code, call: e.call, dir: e.dir, severity: e.severity, turn_rad: e.turn_rad, mods: e.mods || [] }));
-    }
+    const cornersOf = (d) => ApexRecording.cornersOf(d);
     function finish(d) {
       d.corners = cornersOf(d);
       d.km = d.dist[d.dist.length - 1] / 1000;
@@ -302,7 +300,7 @@
         await storeDrive(d);
         await loadDrives();
         renderAll();
-      } catch (err) { alert(`Could not import ${file.name}: ${err.message}`); }
+      } catch (err) { alert(/^missing column/.test(err.message) ? `Couldn't import ${file.name}. It isn't an ApexNav drive log.` : `Couldn't import ${file.name}. The file may be damaged.`); }
       e.target.value = '';
     });
 
@@ -467,7 +465,7 @@
             const r = await ApexContributor.contributeDrive(d, ApexSync.contribute);
             if (r.sent) { d.contributed = true; await storeDrive(d); }
             b.textContent = r.skipped ? r.skipped : r.sent ? `Shared ${r.sent} road${r.sent === 1 ? '' : 's'}` : r.built ? 'Nothing new to share' : 'No usable roads. They were too short, private or unmatched.';
-          } catch (err) { b.disabled = false; b.textContent = `RETRY (${err.message})`; }
+          } catch (err) { b.disabled = false; b.textContent = 'Couldn\'t share. Tap to try again.'; b.title = err.message; }
         };
         list.appendChild(b);
       }
@@ -682,9 +680,9 @@
       const text = d.name + ' · ' + [score, mi].filter(Boolean).join(' · ');
       const url = location.origin + '/?drive=' + encodeURIComponent(d.id);
       if (navigator.share) {
-        try { await navigator.share({ title: 'ApexNav Drive', text, url }); return; } catch (e) { if (e.name === 'AbortError') return; }
+        try { await navigator.share({ title: 'ApexNav drive', text, url }); return; } catch (e) { if (e.name === 'AbortError') return; }
       }
-      try { await navigator.clipboard.writeText(text + ' ' + url); alert('Drive summary copied to clipboard.'); } catch (_) { window.prompt('Copy drive link', text + ' ' + url); }
+      try { await navigator.clipboard.writeText(text + ' ' + url); const b = $('dvShare'); b.textContent = 'Link copied'; setTimeout(() => { b.textContent = 'Share'; }, 2000); } catch (_) { window.prompt('Copy drive link', text + ' ' + url); }
     });
     // Compare with…: this drive against the best other drive on the same road (Core.compareDrives decides what shares a road).
     function bestOther(d) {

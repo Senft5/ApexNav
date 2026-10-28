@@ -12,9 +12,11 @@ on:
     paths: ['ApexNavApp.swift', 'Assets.xcassets/**', 'ApexKit/**', 'UITests/**', 'project.yml', '.github/workflows/build.yml']
   workflow_dispatch:
 
+# A newer push to a PR cancels its older run. On main a run in progress always finishes (a newer merge waits, and only
+# the newest waiting one runs next): with threads merging minutes apart, cancelling left main with no finished iOS build.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   apexkit-macos:

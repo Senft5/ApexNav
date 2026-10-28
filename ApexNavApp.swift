@@ -132,7 +132,7 @@ struct ApexCockpitWebView: UIViewRepresentable {
     let indexURL: URL
 
     @MainActor
-    final class Coordinator: NSObject, WKNavigationDelegate {
+    final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
         let shell: ApexSensorShell
 
         init(shell: ApexSensorShell) {
@@ -150,6 +150,48 @@ struct ApexCockpitWebView: UIViewRepresentable {
         func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
             shell.webDidStartLoading()
             webView.reload()
+        }
+
+        // WKWebView shows nothing for alert(), confirm() or prompt() unless its UI delegate does: confirm() answers
+        // false and prompt() null, so Unfriend, Leave crew and Delete account silently did nothing in the app.
+        private func present(_ alert: UIAlertController, from webView: WKWebView) -> Bool {
+            guard var top = webView.window?.rootViewController else { return false }
+            while let next = top.presentedViewController, !next.isBeingDismissed { top = next }
+            // Mid-transition (the share sheet closing) present() does nothing and the handler would never be called.
+            if top.isBeingDismissed || top.isBeingPresented { return false }
+            top.present(alert, animated: true)
+            return true
+        }
+
+        func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String,
+                     initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping () -> Void) {
+            let alert = UIAlertController(title: nil, message: message, preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "OK", style: .default) { _ in completionHandler() })
+            if !present(alert, from: webView) { completionHandler() }
+        }
+
+        func webView(_ webView: WKWebView, runJavaScriptConfirmPanelWithMessage message: String,
+                     initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (Bool) -> Void) {
+            let alert = UIAlertController(title: nil, message: message, preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "Cancel", style: .cancel) { _ in completionHandler(false) })
+            alert.addAction(UIAlertAction(title: "OK", style: .default) { _ in completionHandler(true) })
+            if !present(alert, from: webView) { completionHandler(false) }
+        }
+
+        func webView(_ webView: WKWebView, runJavaScriptTextInputPanelWithPrompt prompt: String, defaultText: String?,
+                     initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (String?) -> Void) {
+            let alert = UIAlertController(title: nil, message: prompt, preferredStyle: .alert)
+            alert.addTextField { field in
+                field.text = defaultText
+                // An empty prompt asks for a typed word (Delete account wants DELETE); a filled one is a link to copy.
+                field.autocapitalizationType = (defaultText ?? "").isEmpty ? .allCharacters : .none
+                field.autocorrectionType = .no
+            }
+            alert.addAction(UIAlertAction(title: "Cancel", style: .cancel) { _ in completionHandler(nil) })
+            alert.addAction(UIAlertAction(title: "OK", style: .default) { [weak alert] _ in
+                completionHandler(alert?.textFields?.first?.text ?? "")
+            })
+            if !present(alert, from: webView) { completionHandler(nil) }
         }
     }
 
@@ -193,6 +235,7 @@ struct ApexCockpitWebView: UIViewRepresentable {
         webView.allowsBackForwardNavigationGestures = false
         webView.isInspectable = true
         webView.navigationDelegate = context.coordinator
+        webView.uiDelegate = context.coordinator
         webView.hideKeyboardAccessoryBar()
 
         shell.attach(webView: webView)
@@ -254,6 +297,17 @@ final class ApexScriptBridge: NSObject, WKScriptMessageHandler {
             }
             if cmd == "placeResolve", let index = (dict["index"] as? NSNumber)?.intValue {
                 shell?.placeResolve(index: index, id: id)
+                return
+            }
+            if cmd == "trafficProbe", let chunks = dict["chunks"] as? [[String: Any]] {
+                // One entry per chunk, nil for a malformed one, so answers stay aligned with the page's chunks.
+                let pairs: [(CLLocationCoordinate2D, CLLocationCoordinate2D)?] = chunks.map { c in
+                    guard let a = c["a"] as? [String: Any], let b = c["b"] as? [String: Any],
+                          let aLat = (a["lat"] as? NSNumber)?.doubleValue, let aLon = (a["lon"] as? NSNumber)?.doubleValue,
+                          let bLat = (b["lat"] as? NSNumber)?.doubleValue, let bLon = (b["lon"] as? NSNumber)?.doubleValue else { return nil }
+                    return (CLLocationCoordinate2D(latitude: aLat, longitude: aLon), CLLocationCoordinate2D(latitude: bLat, longitude: bLon))
+                }
+                shell?.trafficProbe(chunks: pairs, id: id)
                 return
             }
         }
@@ -518,6 +572,72 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         evaluate("window.apex && window.apex.onNative && window.apex.onNative(\(json)); void 0;")
     }
 
+    // MARK: Traffic on the route ahead (MapKit, free, no key; web/traffic.js decides what it means)
+
+    private var trafficProbeRunning = false
+
+    /// For each chunk A->B of the route ahead, Apple's route leaving now (traffic-aware) and leaving at 3 am (Apple's quiet-road
+    /// time), with both paths so the page can check Apple drove our road. One request at a time; MapKit throttling stops the
+    /// round and says so, so the page backs off. Answered with window.apex.onNative({type:'trafficProbe'}).
+    func trafficProbe(chunks: [(CLLocationCoordinate2D, CLLocationCoordinate2D)?], id: Int) {
+        guard !trafficProbeRunning else { sendTrafficProbe(id: id, results: [], throttled: false, busy: true); return }
+        trafficProbeRunning = true
+        let night = Self.nextQuietDeparture()
+        Task { @MainActor in
+            var results: [[String: Any]] = []
+            var throttled = false
+            for chunk in chunks.prefix(6) {
+                var entry: [String: Any] = [:]
+                guard let pair = chunk else { results.append(entry); continue }
+                let (a, b) = pair
+                for (key, when) in [("now", Date()), ("night", night)] {
+                    do {
+                        if let leg = try await Self.appleRoute(from: a, to: b, leaving: when) { entry[key] = leg }
+                    } catch let error as MKError where error.code == .loadingThrottled {
+                        throttled = true
+                    } catch { /* no answer for this leg: unknown stays unknown */ }
+                    if throttled { break }
+                }
+                results.append(entry)
+                if throttled { break }
+            }
+            trafficProbeRunning = false
+            sendTrafficProbe(id: id, results: results, throttled: throttled, busy: false)
+        }
+    }
+
+    /// The next 3 am local time at least 2 h away: Apple's expected time with light traffic.
+    private static func nextQuietDeparture() -> Date {
+        let cal = Calendar.current
+        let soon = Date().addingTimeInterval(2 * 3600)
+        return cal.nextDate(after: soon, matching: DateComponents(hour: 3, minute: 0), matchingPolicy: .nextTime) ?? soon.addingTimeInterval(86_400)
+    }
+
+    private static func appleRoute(from a: CLLocationCoordinate2D, to b: CLLocationCoordinate2D, leaving: Date) async throws -> [String: Any]? {
+        let req = MKDirections.Request()
+        req.source = MKMapItem(placemark: MKPlacemark(coordinate: a))
+        req.destination = MKMapItem(placemark: MKPlacemark(coordinate: b))
+        req.transportType = .automobile
+        req.requestsAlternateRoutes = false
+        req.departureDate = leaving
+        let response = try await MKDirections(request: req).calculate()
+        guard let route = response.routes.first else { return nil }
+        let n = route.polyline.pointCount
+        var coords = [CLLocationCoordinate2D](repeating: kCLLocationCoordinate2DInvalid, count: n)
+        route.polyline.getCoordinates(&coords, range: NSRange(location: 0, length: n))
+        let stride = max(1, n / 200)                     // enough to check the path follows ours, small over the bridge
+        var lat: [Double] = [], lon: [Double] = []
+        for i in Swift.stride(from: 0, to: n, by: stride) { lat.append(coords[i].latitude); lon.append(coords[i].longitude) }
+        if n > 0, (n - 1) % stride != 0 { lat.append(coords[n - 1].latitude); lon.append(coords[n - 1].longitude) }
+        return ["s": route.expectedTravelTime, "lat": lat, "lon": lon]
+    }
+
+    private func sendTrafficProbe(id: Int, results: [[String: Any]], throttled: Bool, busy: Bool) {
+        let payload: [String: Any] = ["type": "trafficProbe", "id": id, "results": results, "throttled": throttled, "busy": busy]
+        guard let data = try? JSONSerialization.data(withJSONObject: payload), let json = String(data: data, encoding: .utf8) else { return }
+        evaluate("window.apex && window.apex.onNative && window.apex.onNative(\(json)); void 0;")
+    }
+
     private func evaluate(_ js: String) {
         guard webReady, let wv = webView else { return }
         wv.evaluateJavaScript(js, completionHandler: nil)
@@ -601,23 +721,31 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
     private func record(_ node: RoadNode, vertPeakMps2: Double?) {
         guard isRecording else { return }
         let idx = recordedSegments
-        let row = String(
-            format: "%d,%.1f,%.7f,%.7f,%.2f,%.2f,%.4f,%.4f,%.2f,%.4f,%.4f,%.3f,%.2f",
-            idx,
-            Double(idx) * ApexKit.segmentLengthM,
-            node.lat,
-            node.lon,
-            node.elevationM ?? 0.0,
-            speedMps * 2.2369362921,
-            pipeline.lonAccMps2 / Self.gStd,
-            pipeline.latAccMps2 / Self.gStd,
-            pipeline.camberRad * 180.0 / Double.pi,
-            pipeline.crestAccMps2 / Self.gStd,
-            node.roughRMSMps2 / Self.gStd,
-            pipeline.engagement,
-            node.gradePct
-        ) + "," + (vertPeakMps2.map { String(format: "%.3f", $0 / Self.gStd) } ?? "")   // blank: unmeasured, never 0
-        csvLines.append(row)
+        // Blank, never 0, for what is not measured: chassis-frame values need a solved mount (an unsolved one would put
+        // braking into lateral g and skew the score), elevation needs a fix with altitude.
+        let locked = pipeline.mount.state == .locked
+        let vertical = pipeline.mount.state != .default   // roughness needs only the road vertical
+        func cell(_ v: Double?, _ digits: Int) -> String {
+            guard let v = v, v.isFinite else { return "" }
+            return String(format: "%.\(digits)f", v)
+        }
+        let cells: [String] = [
+            String(idx),
+            cell(Double(idx) * ApexKit.segmentLengthM, 1),
+            cell(node.lat, 7),
+            cell(node.lon, 7),
+            cell(node.elevationM, 2),
+            cell(speedMps * 2.2369362921, 2),
+            cell(locked ? pipeline.lonAccMps2 / Self.gStd : nil, 4),
+            cell(locked ? pipeline.latAccMps2 / Self.gStd : nil, 4),
+            cell(locked ? pipeline.camberRad * 180.0 / Double.pi : nil, 2),
+            cell(locked ? pipeline.crestAccMps2 / Self.gStd : nil, 4),
+            cell(vertical ? node.roughRMSMps2 / Self.gStd : nil, 4),
+            cell(locked ? pipeline.engagement : nil, 3),
+            cell(node.elevationM == nil ? nil : node.gradePct, 2),
+            cell(vertPeakMps2.map { $0 / Self.gStd }, 3),
+        ]
+        csvLines.append(cells.joined(separator: ","))
         recordedSegments += 1
     }
 

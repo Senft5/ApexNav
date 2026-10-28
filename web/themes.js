@@ -15,15 +15,15 @@
       id: 'roadbook', label: 'Road book', tag: 'A', blurb: 'Paper and red ink.',
       fonts: FONT, cluster: 'dials', notes: 'roadbook', gauge: 'printed',
       day: {
-        stage: '#F2EBDD', ink: '#1C1A17', dim: '#6F675A', route: '#C8102E', routeCasing: '#F2EBDD',
-        panel: '#EDE4D3', panelInk: '#1C1A17', panelDim: '#6F675A', rule: '#1C1A17', accent: '#C8102E',
-        signal: '#C8102E', amber: '#B8741A', calm: '#1C1A17',
+        stage: '#F2EBDD', ink: '#1C1A17', dim: '#6A6255', route: '#C8102E', routeCasing: '#F2EBDD',
+        panel: '#EDE4D3', panelInk: '#1C1A17', panelDim: '#6A6255', rule: '#1C1A17', accent: '#C8102E',
+        signal: '#C8102E', amber: '#8A5810', calm: '#1C1A17',
         face: '#F6F0E4', faceInk: '#1C1A17', faceDim: '#9A9080', hair: '#CFC4AE', gain: '#2E6B3F'
       },
       night: {
-        stage: '#1A1814', ink: '#EDE4D3', dim: '#9A9080', route: '#E24A4A', routeCasing: '#1A1814',
-        panel: '#151310', panelInk: '#EDE4D3', panelDim: '#8C8373', rule: '#EDE4D3', accent: '#E24A4A',
-        signal: '#E24A4A', amber: '#D9A24A', calm: '#EDE4D3',
+        stage: '#1A1814', ink: '#EDE4D3', dim: '#9A9080', route: '#E65252', routeCasing: '#1A1814',
+        panel: '#151310', panelInk: '#EDE4D3', panelDim: '#8C8373', rule: '#EDE4D3', accent: '#E65252',
+        signal: '#E65252', amber: '#D9A24A', calm: '#EDE4D3',
         face: '#1A1814', faceInk: '#EDE4D3', faceDim: '#6A6255', hair: '#2E2A23', gain: '#6FBF7F'
       },
       map: {

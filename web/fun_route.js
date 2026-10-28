@@ -113,17 +113,82 @@
     const d = kmBetween(from, to);
     return { center: { lat: (from.lat + to.lat) / 2, lon: (from.lon + to.lon) / 2 }, radiusKm: Math.max(5, Math.min(maxRadiusKm, d / 2 + 3)) };
   }
+  // ---- long trips ---------------------------------------------------------------------
+  // The public server's cost matrix gives up on long connections (Knoxville → Asheville, 130 km crow fly, comes back null
+  // although the route exists), and one search circle only covers ~22 km of corridor. So a long trip is cut along its
+  // quickest route into sections of about SECTION_KM crow fly, each planned like a short trip, and the sections' best
+  // stages are chained into one route (at most 4 stages: the router takes 10 locations).
+  const SECTION_KM = 24, SINGLE_KM = 22;
+  /** How many sections: 1 up to SINGLE_KM crow fly, then at least 2 and one per SECTION_KM, at most `max`. */
+  function sectionCount(from, to, max = 3) {
+    const d = kmBetween(from, to);
+    return d <= SINGLE_KM || max < 2 ? 1 : Math.max(2, Math.min(max, Math.ceil(d / SECTION_KM)));
+  }
+  /** n + 1 cut points along a route polyline ([[lon, lat]]) at equal distances, first = start, last = end. */
+  function sectionPoints(coords, n) {
+    const cum = [0];
+    for (let i = 1; i < coords.length; i++) cum.push(cum[i - 1] + kmBetween({ lat: coords[i - 1][1], lon: coords[i - 1][0] }, { lat: coords[i][1], lon: coords[i][0] }));
+    const total = cum[cum.length - 1], out = [];
+    for (let k = 0, i = 0; k <= n; k++) {
+      const at = total * k / n;
+      while (i < cum.length - 1 && cum[i] < at) i++;
+      out.push({ lat: coords[i][1], lon: coords[i][0] });
+    }
+    return out;
+  }
+  /**
+   * Chain per-section plans (each section's list best first, possibly empty; section k planned against quickS / n) into
+   * whole-trip plans: the best of every section, then variants that swap one section for its next best. Stages in travel
+   * order; at most `maxStages` in all (the router's 10 locations), dropping the weakest sections' picks first; a pick that
+   * re-drives a stage an earlier section already took is dropped. Time and value are recomputed for the whole trip (a
+   * section without a pick counts its quick share) and plans past the level's budget are left out.
+   */
+  function combineSections(sections, quickS, level = 'fun', count = 2, maxStages = 4) {
+    const L = LEVELS[level] || LEVELS.fun, n = sections.length;
+    const limit = quickS * (1 + L.budget) + L.slackS;
+    const chain = (choice) => {
+      let picks = [];
+      for (let k = 0; k < n; k++) {
+        const p = sections[k][choice[k]];
+        if (p && !p.legs.some(l => picks.some(x => x.p.legs.some(m => overlap(l.s, m.s) || overlap(m.s, l.s))))) picks.push({ p, k });
+      }
+      while (picks.reduce((c, x) => c + x.p.legs.length, 0) > maxStages && picks.length) {
+        picks = picks.filter(x => x !== picks.reduce((a, b) => (b.p.value < a.p.value ? b : a)));
+      }
+      if (!picks.length) return null;
+      const legs = picks.flatMap(x => x.p.legs);
+      const timeS = picks.reduce((t, x) => t + x.p.timeS, 0) + (n - picks.length) * quickS / n;
+      if (timeS > limit) return null;
+      const score = legs.reduce((v, l) => v + l.s.score, 0);
+      return { legs, timeS, stageKm: legs.reduce((v, l) => v + l.s.km, 0), value: score - L.perMin * Math.max(0, timeS - quickS) / 60 };
+    };
+    const out = [], seen = new Set();
+    const add = (choice) => {
+      const p = chain(choice);
+      if (!p) return;
+      const key = planKey(p);
+      if (seen.has(key)) return;
+      seen.add(key); out.push(p);
+    };
+    add(sections.map(() => 0));
+    for (let k = 0; k < n && out.length < count; k++) if (sections[k].length > 1) add(sections.map((_, j) => (j === k ? 1 : 0)));
+    return out.slice(0, count);
+  }
+  /** A plan's identity: its stages in order with their direction (for de-duplicating plans from different searches). */
+  const planKey = (p) => p.legs.map(l => `${l.s.lat[0]},${l.s.lon[0]}${l.fwd ? '>' : '<'}`).join('|');
+
   /**
    * The stages worth asking the router about: inside the budget's ellipse around A→B (crow fly,
    * so only a sanity cut), not duplicates of each other, best scores first. At most `k`, so the
-   * connector matrix stays within the public server's 100 pairs: (1 + 2k) x (2k + 1).
+   * connector matrix stays within the public server's 100 pairs: (1 + 2k) x (2k + 1). `slack`: how far past
+   * either end (as a share of A→B) a stage's middle may lie; sections use 0 so neighbours don't share stages.
    */
-  function shortlist(from, to, stages, budget, k = 4) {
+  function shortlist(from, to, stages, budget, k = 4, slack = 0.15) {
     const maxKm = kmBetween(from, to) * (1 + budget) + 3;
     const out = [];
     for (const s of stages || []) {
       const m = midOf(s), u = along(from, to, m);
-      if (u < -0.15 || u > 1.15 || kmBetween(from, m) + kmBetween(m, to) > maxKm) continue;
+      if (u < -slack || u > 1 + slack || kmBetween(from, m) + kmBetween(m, to) > maxKm) continue;
       if (out.some(t => overlap(s, t))) continue;
       out.push(s);
       if (out.length === k) break;
@@ -142,7 +207,7 @@
    * driven either way. Time = A→entry + stage + exit→next entry ... + exit→B. Kept when within the
    * level's budget over the quickest route; ranked by stage value minus the level's time cost.
    */
-  function plansFromMatrix(list, timesS, quickestS, level = 'fun', count = 3) {
+  function plansFromMatrix(list, timesS, quickestS, level = 'fun', count = 3, maxStages = 2) {
     const L = LEVELS[level] || LEVELS.fun;
     const limit = quickestS * (1 + L.budget) + L.slackS;
     const n = list.length, B = 2 * n;
@@ -168,7 +233,7 @@
     };
     for (let i = 0; i < n; i++) for (const fi of [true, false]) {
       consider([[i, fi]]);
-      for (let j = 0; j < n; j++) if (j !== i) for (const fj of [true, false]) consider([[i, fi], [j, fj]]);
+      if (maxStages > 1) for (let j = 0; j < n; j++) if (j !== i) for (const fj of [true, false]) consider([[i, fi], [j, fj]]);
     }
     out.sort((a, b) => b.value - a.value);
     const picked = [], seen = new Set();
@@ -309,6 +374,6 @@
     }).filter(c => c.extraS === 0 || c.timeS <= limit).sort((a, b) => b.value - a.value);
   }
 
-  const api = { LEVELS, geometry, alongPoints, insertVia, loopShortlist, loopPlansFromMatrix, score, shortlist, matrixPoints, plansFromMatrix, searchArea, waypoints, rank, along, kmBetween };
+  const api = { LEVELS, geometry, alongPoints, insertVia, loopShortlist, loopPlansFromMatrix, score, shortlist, matrixPoints, plansFromMatrix, sectionCount, sectionPoints, combineSections, planKey, searchArea, waypoints, rank, along, kmBetween };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexFunRoute = api;
 })(typeof window !== 'undefined' ? window : globalThis);

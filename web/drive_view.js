@@ -35,6 +35,55 @@
     }
   }
 
+  // One sentence a non-racer understands (IDEAS D-21): what went well, then the one thing to work on. Built only from
+  // the Driver Score components and the coach's technique tips; never a nudge to go faster.
+  const PRAISE = { smoothness: 'Smooth, unhurried steering', braking: 'Braking finished by the middle of each corner', consistency: 'An even rhythm from corner to corner',
+    pace: 'Good use of the grip you had' };
+  const HABIT = {
+    coast: (n) => `in ${n} corners you rolled with neither brake nor gas between slowing down and speeding up; go straight from one to the other`,
+    brake_after_apex: (n) => `in ${n} corners you were still braking past the middle; finish your braking by the middle of the corner`,
+    early_apex: (n) => `in ${n} corners your slowest point came well before the middle; wait a moment longer before you turn in`,
+  };
+  const WEAK = { smoothness: 'steer more gently, with fewer quick corrections in the middle of corners', braking: 'finish your braking by the middle of the corner',
+    consistency: 'aim for the same calm rhythm in every corner; you took some much nearer their limit than others' };
+  const HABIT_PART = { brake_after_apex: 'braking', coast: null, early_apex: null };   // a habit's own component is never also praised
+  /** What changed most at an abrupt moment (sample i is the change from i-1): the steering, or the brake or throttle, and which way. */
+  function abruptAdvice(latG, lonG, i) {
+    const a = lonG[i - 1], b = lonG[i], fin = Number.isFinite;
+    if (![a, b, latG[i], latG[i - 1]].every((x) => fin(x))) return 'the load on the car changed sharply here';
+    const dLat = Math.abs(latG[i] - latG[i - 1]), dLon = b - a;
+    if (dLat >= Math.abs(dLon)) return 'the cornering load changed sharply here: turn in and unwind the wheel more smoothly';
+    if (dLon < 0) return b < 0 ? 'the brake came on sharply here: squeeze it on more progressively' : 'a sudden lift off the throttle here: ease off more progressively';
+    return a < 0 ? 'the brake came off sharply here: release it more gradually' : 'the throttle went on sharply here: squeeze it on more progressively';
+  }
+
+  /** Fatigue cue (IDEAS D-16) in plain words from Core.fatigue, or null when the drive was too short to ask or a mean is unknown. */
+  function fatigueText(fa) {
+    const fin = Number.isFinite;
+    if (!fa || !fin(fa.minutes) || ![fa.early, fa.late].every((p) => p && fin(p.corrections) && fin(p.braking))) return null;
+    const m = Math.round(fa.minutes), dur = m >= 60 ? `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ''}` : `${m} min`;
+    const s = fa.cues.includes('steering'), b = fa.cues.includes('braking');
+    if (!s && !b) return `No clear fade over ${dur} of moving time: steering and braking in the last third looked like the first.`;
+    const what = s && b ? 'you made more mid-corner steering corrections and braked past the middle of corners more often'
+      : s ? 'you made more mid-corner steering corrections' : 'you braked past the middle of corners more often';
+    return `In the last third of ${dur} of moving time, ${what} than in the first third. The road may have changed, or you may be tiring; if you have not stopped, a break helps.`;
+  }
+
+  function plainCoach(ds, co) {
+    const comp = ds && finite(ds.score) && ds.components;
+    if (!comp) return null;
+    const kinds = {};
+    for (const x of (co && co.corners) || []) if (x && x.tip && x.tip.vs_best === false && HABIT[x.tip.kind]) kinds[x.tip.kind] = (kinds[x.tip.kind] || 0) + 1;
+    const habit = Object.entries(kinds).sort((a, b) => b[1] - a[1])[0];
+    const isHabit = habit && habit[1] >= 2;
+    const weak = Object.keys(WEAK).filter((k) => finite(comp[k]) && comp[k] < 0.6).sort((a, b) => comp[a] - comp[b])[0];
+    const fix = isHabit ? HABIT[habit[0]](habit[1]) : weak ? WEAK[weak] : null;
+    const skip = isHabit ? HABIT_PART[habit[0]] : weak;
+    const strong = Object.keys(PRAISE).filter((k) => k !== skip && finite(comp[k]) && comp[k] >= 0.7).sort((a, b) => comp[b] - comp[a])[0];
+    if (!fix) return `${strong ? PRAISE[strong] : 'A tidy drive'}, and nothing stands out to fix.`;
+    return `${strong ? `${PRAISE[strong]}. ` : ''}One thing to work on: ${fix}.`;
+  }
+
   /**
    * Friction circle: every measured 5 m sample as lateral g (left on the left) against longitudinal g (throttle up,
    * braking down), the driver's own envelope (Core.ggEnvelope, ink) and the scrubbed corner's samples on top (accent).
@@ -125,11 +174,15 @@
     // the ideal drive only means something once another pass of the same corners exists
     const ideal = co && co.clean && co.gain_s > 0 && co.corners.some((x) => x.passes > 1)
       ? { gain: co.gain_s, n: co.clean, drives: new Set(co.corners.filter((x) => x.gain_s != null).map((x) => (x.best ? x.best_from : -1))).size } : null;
+    const plain = plainCoach(ds, co);
+    const tired = Core.fatigue ? fatigueText(Core.fatigue(d.speed_mps, d.lon_g, d.lat_g, d.corners, d.g_known || null)) : null;   // unmeasured g is left out
     const mi = finite(S.km) ? `${(S.km / 1.609344).toFixed(1)} mi` : '--';
     const dur = finite(S.duration_s) ? fmtT(S.duration_s) : '--';
     head.innerHTML = `<div class="dv-score"><b class="score big">${scoreVal}</b> <small>/1000</small></div>`
       + `<div class="bars">${bar('pace', 'Pace')}${bar('smoothness', 'Smooth')}${bar('braking', 'Brakes')}${bar('consistency', 'Rhythm')}</div>`
       + `<div class="dv-meta">${mi} \u00b7 ${dur} \u00b7 ${d.corners.length} corners</div>`
+      + (plain ? `<p class="dv-plain">${esc(plain)}</p>` : '')
+      + (tired ? `<p class="dv-plain">${esc(tired)}</p>` : '')
       + (ideal ? `<div class="dv-meta">Ideal drive <b class="gain">${ideal.gain.toFixed(2)} s</b> quicker: your best pass of each of ${ideal.n} corners, from ${ideal.drives} drive${ideal.drives === 1 ? '' : 's'}</div>` : '');
     root_.append(head, el('div', 'dv-grid'));
     const grid = root_.lastChild; grid.append(mapBox, el('div', 'dv-right'));
@@ -157,10 +210,42 @@
       const [ax, ay] = P(i), [bx, by] = P(j);
       segs += `<line x1="${ax.toFixed(1)}" y1="${ay.toFixed(1)}" x2="${bx.toFixed(1)}" y2="${by.toFixed(1)}" stroke="${colorAt(d.speed_mps[i])}" stroke-width="3.5" stroke-linecap="round"/>`;
     }
+    // Smoothness view (IDEAS D-06): how abruptly the load on the car changed, g/s; grey where g is unmeasured
+    const ab = Core.abruptMoments && d.lat_g && d.lon_g ? Core.abruptMoments(d.lat_g, d.lon_g, d.speed_mps, d.g_known || null) : null;
+    const calm = hex(asHex(C.panelDim, '#8A94A6')), sharp = hex(asHex(C.signal, '#E5484D'));
+    const jerkColor = (j) => { const t = Math.min(1, j / 0.6); return `rgb(${lerp(calm[0], sharp[0], t)},${lerp(calm[1], sharp[1], t)},${lerp(calm[2], sharp[2], t)})`; };
+    let jsegs = '', jmarks = '';
+    if (ab && ab.jerk.some((x) => x != null)) {                    // any measured stretch: a smooth drive still gets its map
+      for (let i = 0; i + stepM < n + stepM; i += stepM) {
+        const j = Math.min(n - 1, i + stepM); if (j === i) break;
+        let mx = null; for (let q = i + 1; q <= j; q++) if (ab.jerk[q] != null) mx = Math.max(mx == null ? 0 : mx, ab.jerk[q]);
+        const [ax, ay] = P(i), [bx, by] = P(j);
+        jsegs += mx == null ? `<line x1="${ax.toFixed(1)}" y1="${ay.toFixed(1)}" x2="${bx.toFixed(1)}" y2="${by.toFixed(1)}" stroke="${C.panelDim}" stroke-width="1.5" stroke-dasharray="2 3" opacity="0.5"/>`
+          : `<line x1="${ax.toFixed(1)}" y1="${ay.toFixed(1)}" x2="${bx.toFixed(1)}" y2="${by.toFixed(1)}" stroke="${jerkColor(mx)}" stroke-width="3.5" stroke-linecap="round"/>`;
+      }
+      jmarks = ab.moments.map((m, k) => { const [px, py] = P(m.index); return `<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="7" fill="none" stroke="${C.signal}" stroke-width="2"/><text x="${(px + 10).toFixed(1)}" y="${(py + 4).toFixed(1)}" font-size="10" font-weight="700" fill="${C.signal}">${String.fromCharCode(65 + k)}</text>`; }).join('');
+    }
     let placed = [];
     const marks = d.corners.map((c, k) => { const [px, py] = P(c.apex); if (placed.some(([qx, qy]) => Math.hypot(qx - px, qy - py) < 18)) return `<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="2" fill="${C.signal}"/>`; placed.push([px, py]); return `<g data-k="${k}" style="cursor:pointer"><circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="8" fill="${C.panel}" stroke="${C.signal}" stroke-width="1.6"/><text x="${px.toFixed(1)}" y="${(py + 3.2).toFixed(1)}" text-anchor="middle" font-size="9" font-weight="700" fill="${C.panelInk}">${k + 1}</text></g>`; }).join('');
-    mapBox.innerHTML = `<svg viewBox="0 0 ${MW} ${MH}" role="img" aria-label="Route map coloured by speed, ${d.corners.length} corners">${segs}<polyline id="dvWin" fill="none" stroke="${C.panelInk}" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" opacity="0.28"/>${marks}<circle id="dvDot" r="6" fill="${C.accent}" stroke="${C.panel}" stroke-width="2"/></svg>
-      <div class="dv-legend"><span>slow</span><i style="background:linear-gradient(90deg,${colorAt(0)},${colorAt(vmax)})"></i><span>${Math.round(vmax * MPH)} mph</span></div>`;
+    mapBox.innerHTML = `<svg viewBox="0 0 ${MW} ${MH}" role="img" aria-label="Route map coloured by speed, ${d.corners.length} corners"><g id="dvSpeed">${segs}</g><g id="dvJerk" display="none">${jsegs}</g><polyline id="dvWin" fill="none" stroke="${C.panelInk}" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" opacity="0.28"/>${marks}<g id="dvJerkMarks" display="none" pointer-events="none">${jmarks}</g><circle id="dvDot" r="6" fill="${C.accent}" stroke="${C.panel}" stroke-width="2"/></svg>
+      <div class="dv-legend" id="dvLegSpeed"><span>slow</span><i style="background:linear-gradient(90deg,${colorAt(0)},${colorAt(vmax)})"></i><span>${Math.round(vmax * MPH)} mph</span></div>`
+      + (jsegs ? `<div class="dv-legend" id="dvLegJerk" hidden><span>calm</span><i style="background:linear-gradient(90deg,${jerkColor(0)},${jerkColor(0.6)})"></i><span>abrupt</span></div>` : '');
+    let showSmooth = null;
+    if (jsegs) {                                                     // Speed / Smoothness switch for the map
+      const sw = el('div', 'dv-zoom dv-mapmode'), svg = mapBox.querySelector('svg'), speedLabel = svg && svg.getAttribute('aria-label'), bs = el('button', 'dv-z on', 'Speed'), bj = el('button', 'dv-z', 'Smoothness');
+      const show = (jerk) => {
+        bs.classList.toggle('on', !jerk); bj.classList.toggle('on', jerk); bs.setAttribute('aria-pressed', String(!jerk)); bj.setAttribute('aria-pressed', String(jerk));
+        const q = (id) => mapBox.querySelector(id);
+        if (q('#dvSpeed')) q('#dvSpeed').setAttribute('display', jerk ? 'none' : 'inline');
+        for (const id of ['#dvJerk', '#dvJerkMarks']) if (q(id)) q(id).setAttribute('display', jerk ? 'inline' : 'none');
+        if (svg) svg.setAttribute('aria-label', jerk ? `Route map coloured by how abruptly the load on the car changed, ${ab.moments.length} abrupt moments lettered` : speedLabel);
+        if (q('#dvLegSpeed')) q('#dvLegSpeed').hidden = jerk;
+        if (q('#dvLegJerk')) q('#dvLegJerk').hidden = !jerk;
+      };
+      bs.onclick = () => show(false); bj.onclick = () => show(true); show(false); showSmooth = () => show(true);
+      sw.setAttribute('role', 'group'); sw.setAttribute('aria-label', 'Map colour');
+      sw.append(bs, bj); mapBox.prepend(sw);
+    }
     const dot = mapBox.querySelector('#dvDot');
 
     // ---- lanes -----------------------------------------------------------------------------------------------------
@@ -216,11 +301,21 @@
         geo.lanes.push({ top, h }); yTop = top + h + 10;
       }
       if (hasElev) {                                                       // faint elevation profile along the bottom
-        let lo = Infinity, hi = -Infinity; for (const v of d.elev) { lo = Math.min(lo, v); hi = Math.max(hi, v); }
+        let lo = Infinity, hi = -Infinity; for (const v of d.elev) if (finite(v)) { lo = Math.min(lo, v); hi = Math.max(hi, v); }
         const top = yTop + LH, h = 40, span = Math.max(10, hi - lo);
         svg += `<text x="${LM}" y="${yTop + 12}" font-size="11" fill="${C.panelDim}">Elevation</text><text x="${W - RM}" y="${yTop + 12}" text-anchor="end" font-size="10" fill="${C.panelDim}">${Math.round(lo * 3.28084)}-${Math.round(hi * 3.28084)} ft</text>`;
-        let p = ''; for (let i = v0; i <= v1; i += step) p += `${i > v0 ? 'L' : 'M'}${X(i).toFixed(1)} ${(top + h - ((d.elev[i] - lo) / span) * h).toFixed(1)}`;
-        svg += `<path d="${p} L${X(v1).toFixed(1)} ${top + h} L${X(v0).toFixed(1)} ${top + h} Z" fill="${C.rule}"/>`;
+        // one filled shape per measured stretch: unknown elevation is a gap, never a dive to the bottom
+        let p = '', run = null;
+        const close = (a, b) => { if (a != null) p += ` L${X(b).toFixed(1)} ${top + h} L${X(a).toFixed(1)} ${top + h} Z`; };
+        let last = null;
+        for (let i = v0; i <= v1; i += step) {
+          if (!finite(d.elev[i])) { close(run, last); run = null; continue; }
+          p += `${run == null ? 'M' : 'L'}${X(i).toFixed(1)} ${(top + h - ((d.elev[i] - lo) / span) * h).toFixed(1)}`;
+          if (run == null) run = i;
+          last = i;
+        }
+        close(run, last);
+        if (p) svg += `<path d="${p}" fill="${C.rule}" opacity="0.18"/>`;   // faint, as the comment above says
         geo.lanes.push({ top, h }); yTop = top + h + 6;
       }
       // numbered corner flags on top of the first lane
@@ -264,6 +359,17 @@
     let net = null;
     if (ref) { const ks = d.corners.map((_, k) => lost(k)).filter((x) => x != null); net = ks.length ? ks.reduce((s, x) => s + x, 0) : null; }
     list.innerHTML = `<h2>Corners${ref ? ` \u00b7 compared with ${esc(ref.name)} (score ${ref.score}), your best other drive on this road` : ''}</h2>` + (ref ? `<p class="note" style="margin-bottom:8px">${net == null ? 'No clean corners to compare.' : `Over the ${d.corners.map((_, k) => lost(k)).filter((x) => x != null).length} corners both drives took cleanly, this drive was <b class="${net > 0.05 ? 'loss' : net < -0.05 ? 'gain' : ''}">${fmtD(net)}</b> ${net > 0 ? 'slower' : 'faster'}. Stops and traffic are left out.`}</p>` : '');
+    if (ab && ab.moments.length) {                                   // the most abrupt moments, lettered as on the Smoothness map
+      const ul = el('ol', 'dv-time dv-abrupt');
+      ab.moments.forEach((m, k) => {
+        const near = d.corners.findIndex((c) => m.index >= c.start - 4 && m.index <= c.end + 4), li = el('li'), b = el('button');
+        b.innerHTML = `<b>${String.fromCharCode(65 + k)}</b><span>${near >= 0 ? `Corner ${near + 1} \u00b7 ${esc(d.corners[near].call || d.corners[near].code || '')}` : 'Between corners'}</span><em class="loss">${m.jerk_gps.toFixed(2)} g/s</em>`
+          + `<span class="note">${(d.dist[m.index] / 1609.344).toFixed(2)} mi \u00b7 ${abruptAdvice(d.lat_g, d.lon_g, m.index)}</span>`;
+        b.onclick = () => { if (showSmooth) showSmooth(); if (zoomM) setZoom(zoomM, m.index); move(m.index); lanes.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); };
+        li.append(b); ul.append(li);
+      });
+      list.prepend(el('h2', null, 'Most abrupt moments'), ul);
+    }
     if (co && co.top.length) {                                      // where the time is: the biggest gaps to your own best passes
       const ul = el('ol', 'dv-time');
       for (const k of co.top) {
@@ -308,6 +414,6 @@
     return { move, setRoadFeel, destroy() { ro.disconnect(); }, summary: S };
   }
 
-  const api = { mount, summarize, tipText };
+  const api = { mount, summarize, tipText, plainCoach, abruptAdvice, fatigueText };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexDriveView = api;
 })(typeof window !== 'undefined' ? window : globalThis);

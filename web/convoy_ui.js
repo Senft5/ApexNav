@@ -121,7 +121,7 @@
       if (!rg && markers.regroup) { markers.regroup.remove(); markers.regroup = null; }
       if (rg) {
         if (!markers.regroup) markers.regroup = new maplibregl.Marker({ element: el('div', { className: 'convoy-pin regroup' }) }).addTo(map);
-        markers.regroup.getElement().textContent = 'REGROUP' + (rg.note ? ` · ${rg.note}` : '');
+        markers.regroup.getElement().textContent = 'Regroup' + (rg.note ? ` · ${rg.note}` : '');
         markers.regroup.setLngLat([rg.lon, rg.lat]);
       }
       const routeKey = want && client.route ? client.route.version : null;

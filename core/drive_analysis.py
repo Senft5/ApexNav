@@ -168,6 +168,28 @@ def _pace_credit(use: float) -> float:
     return max(0.0, 1.0 - 4.0 * (use - PACE_CEILING))     # 125 % of the limit earns nothing
 
 
+def corner_technique(v, lon_g, lat_g, c: dict):
+    """One clean corner's Driver Score inputs: envelope use, smoothness and braking credit (0..1), or None when the
+    corner is not scored (unknown apex speed, a speed or g gap, or a stop through it)."""
+    if not math.isfinite(c["apex_mps"]):
+        return None
+    v = np.asarray(v, dtype=float)
+    span = slice(c["start"], c["end"] + 1)
+    if not np.all(np.isfinite(v[span])):    # a speed gap (blank GPS speed) leaves the corner out, not NaN
+        return None
+    if not (np.all(np.isfinite(np.asarray(lat_g, dtype=float)[span])) and np.all(np.isfinite(np.asarray(lon_g, dtype=float)[span]))):
+        return None
+    m = corner_metrics(v, lon_g, lat_g, c["start"], c["end"], c["apex"], c["apex_mps"])
+    if m["min_mps"] < STOPPED_MPS:
+        return None
+    # Smoothness per metre of road (speed-invariant): how abruptly lateral load changes.
+    lat = np.asarray(lat_g, dtype=float)[c["start"]:c["end"] + 1]
+    step = float(np.sqrt(np.mean(np.diff(lat) ** 2))) if len(lat) > 1 else 0.0
+    late = max(0.0, -float(np.min(np.asarray(lon_g, dtype=float)[c["apex"]:c["end"] + 1])))   # braking after the apex
+    return {"use": m["envelope_use"], "smooth": math.exp(-step / 0.15),
+            "brake": 1.0 - min(1.0, max(0.0, (late - 0.10) / 0.30))}
+
+
 def driver_score(speed_mps, lon_g, lat_g, corners, lo: int = 0, hi=None) -> dict:
     """Score the driving between bins [lo, hi). corners: [{start, end, apex, apex_mps}].
 
@@ -176,25 +198,18 @@ def driver_score(speed_mps, lon_g, lat_g, corners, lo: int = 0, hi=None) -> dict
     (driving at the corner limit) is a closed-track figure, not a goal for public roads.
     """
     v = np.asarray(speed_mps, dtype=float)
-    lon = np.asarray(lon_g, dtype=float)
     hi = len(v) if hi is None else hi
     uses, pace, smooth, brake = [], [], [], []
     for c in corners:
-        if c["start"] < lo or c["end"] >= hi or not math.isfinite(c["apex_mps"]):
+        if c["start"] < lo or c["end"] >= hi:
             continue
-        if not np.all(np.isfinite(v[c["start"]:c["end"] + 1])):    # a speed gap (blank GPS speed) leaves the corner out, not NaN
+        t = corner_technique(v, lon_g, lat_g, c)
+        if t is None:
             continue
-        m = corner_metrics(v, lon_g, lat_g, c["start"], c["end"], c["apex"], c["apex_mps"])
-        if m["min_mps"] < STOPPED_MPS:
-            continue
-        uses.append(m["envelope_use"])
-        pace.append(_pace_credit(m["envelope_use"]))
-        # Smoothness per metre of road (speed-invariant): how abruptly lateral load changes.
-        lat = np.asarray(lat_g, dtype=float)[c["start"]:c["end"] + 1]
-        step = float(np.sqrt(np.mean(np.diff(lat) ** 2))) if len(lat) > 1 else 0.0
-        smooth.append(math.exp(-step / 0.15))
-        late = max(0.0, -float(np.min(lon[c["apex"]:c["end"] + 1])))       # braking after the apex
-        brake.append(1.0 - min(1.0, max(0.0, (late - 0.10) / 0.30)))
+        uses.append(t["use"])
+        pace.append(_pace_credit(t["use"]))
+        smooth.append(t["smooth"])
+        brake.append(t["brake"])
     if not uses:
         return {"score": None, "corners": 0, "components": None}
     consistency = 1.0 - min(1.0, float(np.std(uses)) / 0.25)
@@ -500,3 +515,112 @@ def segment_pass(seg: dict, drive: dict):
     t = elapsed_s(drive["speed_mps"])
     ds = driver_score(drive["speed_mps"], drive["lon_g"], drive["lat_g"], drive["corners"], lo, hi + 1)
     return {"lo": lo, "hi": hi, "time_s": float(t[hi] - t[lo]), **ds}
+
+
+# ---------------------------------------------------------------------------
+# Smoothness map: how abruptly the load on the car changed (IDEAS D-06)
+# ---------------------------------------------------------------------------
+JERK_MIN_MPS = 5.0           # below walking-jog pace the phone is handled more than the car is driven
+JERK_FLOOR_GPS = 0.3         # g per second: under this a moment is not abrupt enough to name
+JERK_SEPARATION = 40         # samples (200 m) between named moments
+JERK_TOP = 3
+
+
+def abrupt_moments(lat_g, lon_g, speed_mps, g_known=None) -> dict:
+    """Rate of change of the combined g vector, g/s, per 5 m sample (None where either sample is unmeasured or the
+    car is under JERK_MIN_MPS at either), and the JERK_TOP most abrupt moments at least JERK_SEPARATION apart and over JERK_FLOOR_GPS.
+    Sample i is the change from i-1 to i, over the 5 m covered at its speed."""
+    n = len(lat_g)
+    ok = [(g_known is None or bool(g_known[i])) and _num(lat_g[i]) and _num(lon_g[i]) for i in range(n)]
+    jerk: list = [None] * n
+    for i in range(1, n):
+        v, v0 = speed_mps[i], speed_mps[i - 1]
+        if not (ok[i] and ok[i - 1] and _num(v) and _num(v0) and min(v, v0) >= JERK_MIN_MPS):
+            continue
+        jerk[i] = math.hypot(lat_g[i] - lat_g[i - 1], lon_g[i] - lon_g[i - 1]) * v / 5.0
+    order = sorted((i for i in range(n) if jerk[i] is not None and jerk[i] >= JERK_FLOOR_GPS), key=lambda i: (-jerk[i], i))
+    picks: list[int] = []
+    for i in order:
+        if len(picks) == JERK_TOP:
+            break
+        if all(abs(i - p) >= JERK_SEPARATION for p in picks):
+            picks.append(i)
+    return {"jerk": jerk, "moments": [{"index": i, "jerk_gps": jerk[i]} for i in picks]}
+
+
+# ---------------------------------------------------------------------------
+# Fatigue cues (IDEAS D-16): on a long drive, did technique fade late on? The corners of the first and last thirds of the
+# moving time are compared as two groups. Different roads late in a drive can do the same, so this is a cue, never a verdict.
+# ---------------------------------------------------------------------------
+FATIGUE_MIN_S = 3600.0       # an hour of moving time before a drive is long enough to ask
+FATIGUE_MIN_CORNERS = 8      # clean corners needed in each third
+CORRECTION_STEP_G = 0.03     # a change of lateral g between 5 m bins this large counts as a steering movement
+FATIGUE_MIN_CORRECTIONS = 0.3  # extra steering corrections per corner the last third must add...
+FATIGUE_MIN_DROP = 0.05      # ...or braking credit (0..1) it must lose...
+FATIGUE_SE = 2.0             # ...and by this many standard errors of the difference
+
+
+def steering_corrections(lat_g, start: int, end: int) -> int:
+    """Mid-corner steering corrections: reversals of the lateral-g trend beyond the one every corner has (load builds,
+    then eases). Counted only on steps of CORRECTION_STEP_G or more, so the road's own tightness barely matters."""
+    signs = [1 if d > 0 else -1 for d in (lat_g[q + 1] - lat_g[q] for q in range(start, end)) if abs(d) >= CORRECTION_STEP_G]
+    return max(0, sum(1 for a, b in zip(signs, signs[1:]) if a != b) - 1)
+
+
+def _mean_se(xs: list) -> tuple:
+    m = 0.0
+    for x in xs:                 # plain left-to-right sums, as the JS port does (Python 3.12's sum() is compensated)
+        m += x
+    m /= len(xs)
+    q = 0.0
+    for x in xs:
+        q += (x - m) ** 2
+    var = q / (len(xs) - 1) if len(xs) > 1 else 0.0
+    return m, math.sqrt(var / len(xs))
+
+
+def _r(x: float, k: int) -> float:
+    return math.floor(x * 10 ** k + 0.5) / 10 ** k       # JS Math.round, so both ports print the same digits
+
+
+def fatigue(speed_mps, lon_g, lat_g, corners, g_known=None) -> dict | None:
+    """None when the drive is under FATIGUE_MIN_S of moving time or either third has too few clean, measured corners.
+    Otherwise the moving minutes, the first and last thirds' mean extra steering corrections per corner and braking credit,
+    and `cues`: "steering" when corrections rose by FATIGUE_MIN_CORRECTIONS, "braking" when the credit fell by
+    FATIGUE_MIN_DROP, each also by FATIGUE_SE standard errors. Moving time counts only bins with a known speed of
+    STOPPED_MPS or more (a 5 m recording holds no time while parked, so a rest stop is invisible). Corners where g was not
+    measured (g_known false) are left out: zero-filled g would read as perfect driving."""
+    v = np.asarray(speed_mps, dtype=float)
+    n = len(v)
+    t = np.zeros(n)
+    for i in range(1, n):
+        ok = math.isfinite(v[i - 1]) and v[i - 1] >= STOPPED_MPS
+        t[i] = t[i - 1] + (5.0 / v[i - 1] if ok else 0.0)
+    total = float(t[-1]) if n else 0.0
+    if total < FATIGUE_MIN_S:
+        return None
+    early, late = [], []
+    for c in corners:
+        if c["start"] < 0 or c["end"] >= n or not (c["start"] <= c["apex"] <= c["end"]):
+            continue
+        if g_known is not None and not all(g_known[q] for q in range(c["start"], c["end"] + 1)):
+            continue
+        tc = corner_technique(v, lon_g, lat_g, c)
+        if tc is None:
+            continue
+        x = {"corrections": steering_corrections(lat_g, c["start"], c["end"]), "braking": tc["brake"]}
+        at = t[c["apex"]]
+        if at <= total / 3.0:
+            early.append(x)
+        elif at >= 2.0 * total / 3.0:
+            late.append(x)
+    if len(early) < FATIGUE_MIN_CORNERS or len(late) < FATIGUE_MIN_CORNERS:
+        return None
+    out = {"minutes": _r(total / 60.0, 1), "early": {"corners": len(early)}, "late": {"corners": len(late)}, "cues": []}
+    for k, cue, worse, floor in (("corrections", "steering", 1.0, FATIGUE_MIN_CORRECTIONS), ("braking", "braking", -1.0, FATIGUE_MIN_DROP)):
+        (me, se), (ml, sl) = _mean_se([x[k] for x in early]), _mean_se([x[k] for x in late])
+        out["early"][k], out["late"][k] = _r(me, 4), _r(ml, 4)
+        change = worse * (ml - me)
+        if change >= floor and change >= FATIGUE_SE * math.sqrt(se ** 2 + sl ** 2):
+            out["cues"].append(cue)
+    return out

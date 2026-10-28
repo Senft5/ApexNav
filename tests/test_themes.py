@@ -1,3 +1,4 @@
+import json
 import shutil
 import subprocess
 from pathlib import Path
@@ -46,3 +47,40 @@ for (const id of ids) {
         [NODE, "-e", runner, str(ROOT / "web" / "themes.js")],
         check=True, capture_output=True, text=True,
     )
+
+
+def _luminance(hex_color):
+    channels = [int(hex_color[i:i + 2], 16) / 255 for i in (1, 3, 5)]
+    linear = [c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4 for c in channels]
+    return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+
+
+def _contrast(a, b):
+    hi, lo = sorted((_luminance(a), _luminance(b)), reverse=True)
+    return (hi + 0.05) / (lo + 0.05)
+
+
+@pytest.mark.skipif(NODE is None, reason="node not installed")
+def test_text_tokens_meet_wcag_aa_contrast():
+    """Every token used for text reads at 4.5:1 (WCAG AA) on the panel and the stage, day and night,
+    and the button label on an accent fill does too (Start drive). Sunlight in a car makes this the floor."""
+    out = subprocess.run(
+        [NODE, "-e", "const vm=require('node:vm'),fs=require('node:fs');const w={};"
+         "vm.runInNewContext(fs.readFileSync(process.argv[1],'utf8'),{window:w});"
+         "console.log(JSON.stringify(w.ApexThemes.THEMES.roadbook))",
+         str(ROOT / "web" / "themes.js")],
+        check=True, capture_output=True, text=True,
+    ).stdout
+    theme = json.loads(out)
+    failures = []
+    for mode in ("day", "night"):
+        c = theme[mode]
+        for fg in ("ink", "dim", "panelInk", "panelDim", "accent", "signal", "amber"):
+            for bg in ("panel", "stage"):
+                ratio = _contrast(c[fg], c[bg])
+                if ratio < 4.5:
+                    failures.append(f"{mode} {fg} on {bg}: {ratio:.2f}")
+        ratio = _contrast(c["stage"] if mode == "night" else c["panel"], c["accent"])
+        if ratio < 4.5:
+            failures.append(f"{mode} label on accent: {ratio:.2f}")
+    assert not failures, failures

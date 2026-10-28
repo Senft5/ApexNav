@@ -254,3 +254,21 @@ def test_gg_slices_are_centred_on_the_axes_and_none_is_unknown():
     env = da.gg_envelope([None, 0.3] + [0.5] * 10, [0.1, None] + [0.0] * 10)
     assert env["points"] == 10 and env["left_g"] == pytest.approx(0.5)
     assert da.grip_use([None], [0.0], 0, 0, env) is None
+
+
+def test_abrupt_moments_finds_the_jolts_and_ignores_crawling_and_unknown():
+    import math
+    from core import drive_analysis as da
+    n = 400
+    lat = [0.2 * math.sin(i / 20) for i in range(n)]                                  # a calm weave: well under the floor
+    lon = [0.0] * n
+    v = [20.0] * n
+    for i, g in ((100, 0.5), (110, 0.4), (250, -0.45), (330, 0.6)):                  # sudden inputs; 110 is too close to 100
+        lat[i] = g
+    v[330] = 3.0                                                                       # crawling: not driving input
+    r = da.abrupt_moments(lat, lon, v, [0 if i == 251 else 1 for i in range(n)])
+    assert [m["index"] for m in r["moments"]] == [100, 250]
+    assert r["jerk"][330] is None and r["jerk"][331] is None and r["jerk"][251] is None and r["jerk"][252] is None
+    assert all(m["jerk_gps"] >= da.JERK_FLOOR_GPS for m in r["moments"])
+    calm = da.abrupt_moments([0.2 * math.sin(i / 20) for i in range(n)], lon, v)
+    assert calm["moments"] == []

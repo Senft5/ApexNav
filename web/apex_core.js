@@ -39,6 +39,13 @@
   const CAMBER_CLIP_RAD = 0.15;
   const CREST_UNWEIGHT_G = -0.08;
   const ALPR_RADIUS_M = 60;
+  // IMU hazards (core/road_dna.py)
+  const SPIKE_PEAK_G = 0.35;
+  const SPIKE_CONTRAST = 6.0;
+  const SPIKE_BACKGROUND_BINS = 41;
+  const ROUGH_RMS_FALLBACK_G = 0.25;
+  const DIP_COMPRESS_G = 0.10;
+  const HAZARD_MIN_SEPARATION_M = 150.0;
 
   function movingAverage(v, window) {
     const n = v.length, half = Math.floor(window / 2);
@@ -526,26 +533,29 @@
     return Math.max(0, 1 - 4 * (u - PACE_CEILING));
   }
   function std(a) { const m = a.reduce((x, y) => x + y, 0) / a.length; return Math.sqrt(a.reduce((x, y) => x + (y - m) * (y - m), 0) / a.length); }
+  // One clean corner's Driver Score inputs (port of drive_analysis.corner_technique), or null when it is not scored.
+  function cornerTechnique(v, lonG, latG, c) {
+    if (!Number.isFinite(c.apex_mps)) return null;
+    for (let q = c.start; q <= c.end; q++) if (!Number.isFinite(v[q])) return null;   // a speed gap (blank GPS speed) leaves the corner out, not NaN
+    for (let q = c.start; q <= c.end; q++) if (!Number.isFinite(latG[q]) || !Number.isFinite(lonG[q])) return null;
+    const m = cornerMetrics(v, lonG, latG, c.start, c.end, c.apex, c.apex_mps);
+    if (m.min_mps < STOPPED_MPS) return null;
+    // Smoothness per metre of road (speed-invariant): how abruptly lateral load changes.
+    let sq = 0, nd = 0;
+    for (let q = c.start; q < c.end; q++) { const dl = latG[q + 1] - latG[q]; sq += dl * dl; nd++; }
+    let mn = Infinity;
+    for (let q = c.apex; q <= c.end; q++) mn = Math.min(mn, lonG[q]);
+    const late = Math.max(0, -mn);
+    return { use: m.envelope_use, smooth: Math.exp(-(nd ? Math.sqrt(sq / nd) : 0) / 0.15), brake: 1 - Math.min(1, Math.max(0, (late - 0.10) / 0.30)) };
+  }
   function driverScore(v, lonG, latG, corners, lo = 0, hi = null) {
     hi = hi === null ? v.length : hi;
     const uses = [], pace = [], smooth = [], brake = [];
     for (const c of corners) {
-      if (c.start < lo || c.end >= hi || !Number.isFinite(c.apex_mps)) continue;
-      let known = true;                                                 // a corner with a speed gap (blank GPS speed) is left out, not scored as NaN
-      for (let q = c.start; q <= c.end; q++) if (!Number.isFinite(v[q])) { known = false; break; }
-      if (!known) continue;
-      const m = cornerMetrics(v, lonG, latG, c.start, c.end, c.apex, c.apex_mps);
-      if (m.min_mps < STOPPED_MPS) continue;
-      uses.push(m.envelope_use);
-      pace.push(paceCredit(m.envelope_use));
-      // Smoothness per metre of road (speed-invariant): how abruptly lateral load changes.
-      let sq = 0, nd = 0;
-      for (let q = c.start; q < c.end; q++) { const dl = latG[q + 1] - latG[q]; sq += dl * dl; nd++; }
-      smooth.push(Math.exp(-(nd ? Math.sqrt(sq / nd) : 0) / 0.15));
-      let mn = Infinity;
-      for (let q = c.apex; q <= c.end; q++) mn = Math.min(mn, lonG[q]);
-      const late = Math.max(0, -mn);
-      brake.push(1 - Math.min(1, Math.max(0, (late - 0.10) / 0.30)));
+      if (c.start < lo || c.end >= hi) continue;
+      const t = cornerTechnique(v, lonG, latG, c);
+      if (!t) continue;
+      uses.push(t.use); pace.push(paceCredit(t.use)); smooth.push(t.smooth); brake.push(t.brake);
     }
     if (!uses.length) return { score: null, corners: 0, components: null };
     const mean = (a) => a.reduce((x, y) => x + y, 0) / a.length;
@@ -555,6 +565,50 @@
     const r4 = (x) => Math.round(x * 1e4) / 1e4;
     return { score: Math.round(1000 * raw), corners: uses.length,
              components: Object.fromEntries(Object.entries(comp).map(([k, x]) => [k, r4(x)])) };
+  }
+  // Fatigue cues (IDEAS D-16) — port of drive_analysis.fatigue (parity-tested): on a drive of an hour's moving time or
+  // more, did steering corrections rise or braking credit fall from the first third to the last? A cue, never a verdict:
+  // the road can change too. Corners with unmeasured g (gKnown false) are left out.
+  const FATIGUE_MIN_S = 3600, FATIGUE_MIN_CORNERS = 8, CORRECTION_STEP_G = 0.03, FATIGUE_MIN_CORRECTIONS = 0.3, FATIGUE_MIN_DROP = 0.05, FATIGUE_SE = 2;
+  function steeringCorrections(latG, start, end) {
+    const signs = [];
+    for (let q = start; q < end; q++) { const d = latG[q + 1] - latG[q]; if (Math.abs(d) >= CORRECTION_STEP_G) signs.push(d > 0 ? 1 : -1); }
+    let flips = 0;
+    for (let k = 1; k < signs.length; k++) if (signs[k] !== signs[k - 1]) flips++;
+    return Math.max(0, flips - 1);
+  }
+  function meanSe(xs) {                                              // left-to-right sums, as drive_analysis._mean_se
+    let m = 0;
+    for (const x of xs) m += x;
+    m /= xs.length;
+    let q = 0;
+    for (const x of xs) q += (x - m) ** 2;
+    return [m, Math.sqrt((xs.length > 1 ? q / (xs.length - 1) : 0) / xs.length)];
+  }
+  function fatigue(v, lonG, latG, corners, gKnown = null) {
+    const n = v.length, t = new Float64Array(n);
+    for (let i = 1; i < n; i++) t[i] = t[i - 1] + (Number.isFinite(v[i - 1]) && v[i - 1] >= STOPPED_MPS ? 5 / v[i - 1] : 0);
+    const total = n ? t[n - 1] : 0;
+    if (total < FATIGUE_MIN_S) return null;
+    const early = [], late = [];
+    for (const c of corners) {
+      if (c.start < 0 || c.end >= n || !(c.start <= c.apex && c.apex <= c.end)) continue;
+      if (gKnown) { let all = true; for (let q = c.start; q <= c.end; q++) if (!gKnown[q]) { all = false; break; } if (!all) continue; }
+      const tc = cornerTechnique(v, lonG, latG, c);
+      if (!tc) continue;
+      const x = { corrections: steeringCorrections(latG, c.start, c.end), braking: tc.brake }, at = t[c.apex];
+      if (at <= total / 3) early.push(x); else if (at >= 2 * total / 3) late.push(x);
+    }
+    if (early.length < FATIGUE_MIN_CORNERS || late.length < FATIGUE_MIN_CORNERS) return null;
+    const r = (x, k) => Math.round(x * 10 ** k) / 10 ** k;
+    const out = { minutes: r(total / 60, 1), early: { corners: early.length }, late: { corners: late.length }, cues: [] };
+    for (const [k, cue, worse, floor] of [['corrections', 'steering', 1, FATIGUE_MIN_CORRECTIONS], ['braking', 'braking', -1, FATIGUE_MIN_DROP]]) {
+      const [me, se] = meanSe(early.map((x) => x[k])), [ml, sl] = meanSe(late.map((x) => x[k]));
+      out.early[k] = r(me, 4); out.late[k] = r(ml, 4);
+      const change = worse * (ml - me);
+      if (change >= floor && change >= FATIGUE_SE * Math.sqrt(se ** 2 + sl ** 2)) out.cues.push(cue);
+    }
+    return out;
   }
   // Corner coach — port of core/drive_analysis.coach (parity-tested). Phases of each corner and the
   // time lost to the person's own best clean pass of it; passes over the sane limit never count as best.
@@ -684,6 +738,28 @@
     return { radius_g: radius, points: total.length, peak_g: total.length >= GG_MIN_POINTS ? pctl(total, GG_PCTL) : null,
              brake_g: radius[2 * q], throttle_g: radius[0], left_g: radius[q], right_g: radius[3 * q] };
   }
+  // Smoothness map (port of core/drive_analysis.abrupt_moments, parity-tested): g/s per 5 m sample and the 3 most abrupt moments.
+  const JERK_MIN_MPS = 5.0, JERK_FLOOR_GPS = 0.3, JERK_SEPARATION = 40, JERK_TOP = 3;
+  function abruptMoments(latG, lonG, speed, gKnown = null) {
+    const n = latG.length, fin = (x) => typeof x === 'number' && Number.isFinite(x);
+    const ok = Array.from({ length: n }, (_, i) => (!gKnown || !!gKnown[i]) && fin(latG[i]) && fin(lonG[i]));
+    const jerk = new Array(n).fill(null);
+    for (let i = 1; i < n; i++) {
+      const v = speed[i], v0 = speed[i - 1];
+      if (!(ok[i] && ok[i - 1] && fin(v) && fin(v0) && Math.min(v, v0) >= JERK_MIN_MPS)) continue;
+      jerk[i] = Math.hypot(latG[i] - latG[i - 1], lonG[i] - lonG[i - 1]) * v / 5.0;
+    }
+    const order = [];
+    for (let i = 0; i < n; i++) if (jerk[i] != null && jerk[i] >= JERK_FLOOR_GPS) order.push(i);
+    order.sort((a, b) => (jerk[b] - jerk[a]) || (a - b));
+    const picks = [];
+    for (const i of order) {
+      if (picks.length === JERK_TOP) break;
+      if (picks.every((p) => Math.abs(i - p) >= JERK_SEPARATION)) picks.push(i);
+    }
+    return { jerk, moments: picks.map((i) => ({ index: i, jerk_gps: jerk[i] })) };
+  }
+
   function gripUse(latG, lonG, lo, hi, env, gKnown = null) {
     let sum = 0, n = 0;
     for (let i = lo; i <= hi; i++) {
@@ -714,6 +790,53 @@
   // Profile a raw 5 m recording (the iOS app's ApexDrive CSV) in the browser with the same
   // geometry/envelope/corner pipeline tools/export_web_profile.py uses. Hazards and sectors need
   // the offline pipeline (multi-pass + reference lap) and are left out.
+  // Strongest sample of each cluster of mask, clusters at least HAZARD_MIN_SEPARATION_M apart (road_dna._peak_events).
+  function peakEvents(values, mask, dist, pickMax) {
+    const picks = [];
+    for (let i = 0; i < values.length; i++) {
+      if (!mask[i]) continue;
+      const last = picks[picks.length - 1];
+      if (picks.length && dist[i] - dist[last] < HAZARD_MIN_SEPARATION_M) {
+        if (pickMax ? values[i] > values[last] : values[i] < values[last]) picks[picks.length - 1] = i;
+      } else picks.push(i);
+    }
+    return picks;
+  }
+
+  // Centred rolling median of the measured values in the window (NaN where none are).
+  function rollingMedian(v, window) {
+    const half = Math.floor(window / 2), n = v.length, out = new Float64Array(n);
+    for (let i = 0; i < n; i++) {
+      const w = [];
+      for (let j = Math.max(0, i - half); j < Math.min(n, i + half + 1); j++) if (Number.isFinite(v[j])) w.push(v[j]);
+      w.sort((a, b) => a - b);
+      const m = w.length;
+      out[i] = !m ? NaN : (m % 2 ? w[(m - 1) / 2] : (w[m / 2 - 1] + w[m / 2]) / 2);
+    }
+    return out;
+  }
+
+  /**
+   * Bumps (vertical spike), crests (unweighting) and dips (compression) from measured IMU (road_dna.detect_hazards).
+   * Unmeasured samples (null/NaN) never make a hazard. With no vertPeak, roughness stands in for bumps unless
+   * roughFallback is false (phone recordings: a roughness RMS alone cannot tell a pothole from broken pavement).
+   */
+  function detectHazards(dist, crest, rough, vertPeak = null, { roughFallback = true } = {}) {
+    const num = (a, n) => Float64Array.from({ length: n }, (_, i) => (a && Number.isFinite(a[i]) ? a[i] : NaN));
+    const n = dist.length, c = num(crest, n), r = num(rough, n), out = [];
+    if (vertPeak) {
+      const peak = num(vertPeak, n), bg = rollingMedian(r, SPIKE_BACKGROUND_BINS);
+      const spike = Array.from(peak, (p, i) => p > SPIKE_PEAK_G && p > SPIKE_CONTRAST * bg[i]);
+      for (const i of peakEvents(peak, spike, dist, true)) out.push({ index: i, type: 'bump', severity_g: peak[i] });
+    } else if (roughFallback) {
+      for (const i of peakEvents(r, Array.from(r, (v) => v > ROUGH_RMS_FALLBACK_G), dist, true)) out.push({ index: i, type: 'bump', severity_g: r[i] });
+    }
+    for (const i of peakEvents(c, Array.from(c, (v) => v < CREST_UNWEIGHT_G), dist, false)) out.push({ index: i, type: 'crest', severity_g: c[i] });
+    for (const i of peakEvents(c, Array.from(c, (v) => v > DIP_COMPRESS_G), dist, true)) out.push({ index: i, type: 'dip', severity_g: c[i] });
+    return out.sort((a, b) => a.index - b.index);
+  }
+
+  const HAZARD_CALLS = { bump: ['BUMP', 'Bump'], crest: ['CREST', 'Crest'], dip: ['DIP', 'Dip'] };
   const MIN_CORNER_SPEED_MPS = 2.5;
   function profileRecording(cols) {
     const { lat, lon } = cols, n = lat.length;
@@ -731,19 +854,28 @@
                lat: lat[c.apex], lon: lon[c.apex], radius_m: c.radius_m, apex_mph: c.apex_mps * MPS_TO_MPH, dir: c.dir,
                severity: c.severity, grade: c.grade, shape: c.shape, caution: c.caution, turn_rad: Math.abs(c.turn_rad), mods: c.mods };
     });
+    // Hazards only from what the phone measured: spikes need the per-sample vertical peak, crests and dips a solved mount.
+    const peak = cols.vert_peak_g && cols.vert_peak_g.some(Number.isFinite) ? cols.vert_peak_g : null;
+    for (const h of detectHazards(dist, cols.crest_vertical_g || null, cols.roughness_rms || null, peak, { roughFallback: false })) {
+      if (!(speed[h.index] >= MIN_CORNER_SPEED_MPS)) continue;           // walking pace: the phone is being handled, not reading the road
+      const [code, call] = HAZARD_CALLS[h.type];
+      events.push({ type: h.type, code, call, index: h.index, dist_m: dist[h.index], start_m: dist[h.index], end_m: dist[h.index],
+                    lat: lat[h.index], lon: lon[h.index], severity_g: h.severity_g });
+    }
+    events.sort((a, b) => a.start_m - b.start_m);
     linkNotes(events);
     return { events, envMps: Array.from(env), sightM: Array.from(sight), n };
   }
 
   const api = {
     profileRecording,
-    driverScore, segmentPass, segmentWindow,
+    driverScore, cornerTechnique, fatigue, segmentPass, segmentWindow,
     removeSpurs, retracedShare,
-    compareDrives, cornerMetrics, elapsedS, cornerPhases, coach, ggEnvelope, gripUse, ggSector,
+    compareDrives, cornerMetrics, elapsedS, cornerPhases, coach, ggEnvelope, gripUse, ggSector, abruptMoments,
     G_STD, MPS_TO_MPH, ALPR_RADIUS_M,
     movingAverage, gradient, unwrap, localXY, resamplePolyline,
     computeCurvature, apexSpeedMps, effectiveMu, brakingEnvelopeMps, sightDistanceM, sightSpeedMps, SIGHT_MAX_M,
-    severityForRadius, detectCorners, paceNoteText, annotateCautions, linkNotes, rallyDistance, nearestIndex
+    severityForRadius, detectCorners, paceNoteText, annotateCautions, linkNotes, rallyDistance, nearestIndex, detectHazards
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.ApexCore = api;

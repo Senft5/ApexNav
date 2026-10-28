@@ -69,10 +69,10 @@ long-press pin (#61), Apple place search and nearby suggestions in the app (#73)
 | R-02 | Loops the length you asked for, from real road distances between stages | H | M | done (#85) | Calimoto round trips |
 | R-03 | Measured road character (roughness, banking) as a routing input, unmeasured stays neutral | H | M | partial (#88) | ROAD_INTELLIGENCE §7, WORKER_QUEUE road-3 |
 | R-04 | road-3 remainder: measured crest, flow confidence and corroborated hazards in candidate discovery and generation, not only in ranking | H | L | todo | WORKER_QUEUE road-3 |
-| R-05 | Multi-centre stage discovery so long A→B trips find stages near both ends, not only the midpoint | H | M | todo | STATE 2026-10-28 |
+| R-05 | Multi-centre stage discovery so long A→B trips find stages near both ends, not only the midpoint | H | M | done (#96) | STATE 2026-10-28 |
 | R-06 | One fun score for loops and A→B (unify loop ranking with the fun score) | M | S | todo | STATE 2026-10-28 |
 | R-07 | Live ETA and time left from router durations scaled by your own pace, reset on reroute | H | M | todo | WORKER_QUEUE eta-1, every nav app |
-| R-08 | Traffic ahead on iOS from MapKit, switch to the next most fun route that avoids the jam | H | L | todo | WORKER_QUEUE traffic-1, Waze |
+| R-08 | Traffic ahead on iOS from MapKit, switch to the next most fun route that avoids the jam | H | L | done (#78, phone test pending) | WORKER_QUEUE traffic-1, Waze |
 | R-09 | Traffic on web/Android through a keyed provider (TomTom/HERE via the Worker) | M | M | owner (paid provider) | Google Maps |
 | R-10 | "Explore": best stages within N minutes of here, as a list and on the map, one tap to drive one | H | M | todo | ROAD_INTELLIGENCE §7.1, REVER discover |
 | R-11 | Choose each stage's direction by score and car (climb the technical one, descend the flowing one) | M | M | todo | ROAD_INTELLIGENCE §7.2.3 |
@@ -113,10 +113,10 @@ ideal drive and where to find time (#80), grip circle (#86), automatic mount cal
 |---|---|---|---|---|---|
 | D-01 | Corner coach: brake zone, trail braking, coasting and throttle point per corner, timed over the same stretch | H | M | done (#80) | Harry's Lap Timer, Garmin Catalyst |
 | D-02 | Grip circle with the driver's own g-g envelope and per-corner grip use | H | M | done (#86) | RaceChrono, AiM |
-| D-03 | Live coaching on a known road: spoken "brake later" / "carry more speed" from your best pass | H | M | todo | STATE 2026-10-28, Garmin Catalyst |
+| D-03 | Live coaching on a known road: spoken "brake later" / "carry more speed" from your best pass | H | M | done (#100: technique tips only; speed tips stay on the analysis page by design) | STATE 2026-10-28, Garmin Catalyst |
 | D-04 | Ghost car on the map: your best pass (or a friend's shared ghost) as a moving marker with live delta | H | M | todo | SOCIAL §3, racing games, Strava Live Segments |
 | D-05 | Live delta bar during a known stage (green ahead / red behind your best, technique-scored, not speed-scored) | H | M | todo | Harry's Lap Timer |
-| D-06 | Smoothness heatmap on the drive map (lateral jerk, abrupt inputs) with the three worst moments | M | S | todo | Garmin Catalyst |
+| D-06 | Smoothness heatmap on the drive map (lateral jerk, abrupt inputs) with the three worst moments | M | S | done (#104) | Garmin Catalyst |
 | D-07 | Consistency score across passes of the same road, and a trend over weeks | M | S | todo | Strava fitness trend |
 | D-08 | Personal records feed: best Driver Score per road, per archetype, smoothest drive this month | M | S | todo | Strava PRs |
 | D-09 | Drive summary card worth sharing (score, map silhouette, archetype mix), no times or speeds | H | S | todo | Strava activity card, Relive |
@@ -126,13 +126,13 @@ ideal drive and where to find time (#80), grip circle (#86), automatic mount cal
 | D-13 | External GNSS (10–25 Hz) support for better lines and lap timing | M | M | todo | RaceChrono, Dragy |
 | D-14 | Performance timing: 0–60, 60–0, quarter mile, only on a closed course with a clear warning | M | M | owner (safety stance) | Dragy |
 | D-15 | Track day mode: closed circuit, start/finish line, sector splits, laps, no public-road guardrails needed | H | L | todo | Harry's Lap Timer, RaceChrono |
-| D-16 | Fatigue cues: rising corrections, later braking and wider lines late in a long drive, suggest a break | M | M | todo | car driver-attention systems |
+| D-16 | Fatigue cues: rising corrections, later braking and wider lines late in a long drive, suggest a break | M | M | partial (post-drive smoothness and braking; live cue and lines todo) | car driver-attention systems |
 | D-17 | Incident detection: a crash-level spike plus stop asks "Are you OK?" and can alert a chosen contact | H | M | todo | Apple Crash Detection, Life360, REVER |
 | D-18 | Line analysis: early vs late apex per corner from the GPS line against the road geometry | M | M | todo | SOCIAL §3 |
 | D-19 | Car-specific reference lap from the Garage so scores mean the same across cars | H | M | todo | SOCIAL §2.4 |
 | D-20 | Weekly drive digest: km of good roads, new roads, best moment, one thing to work on | M | S | todo | Strava weekly, Whoop |
-| D-21 | Coach in plain words: one sentence per drive that a non-racer understands | H | S | todo | owner goal (approachable) |
-| D-22 | Blank lat/lon g while the mount is `default`, like camber, so uncalibrated drives can't skew the score | M | S | todo | STATE 2026-10-26 |
+| D-21 | Coach in plain words: one sentence per drive that a non-racer understands | H | S | done (#101) | owner goal (approachable) |
+| D-22 | Blank lat/lon g while the mount is `default`, like camber, so uncalibrated drives can't skew the score | M | S | done (#64 phone drives; the app's own CSV export too, this thread) | STATE 2026-10-26 |
 | D-23 | Drive tags and notes (car, passenger, weather, mood) to filter the Log | L | S | todo | Strava |
 | D-24 | Driving year in review (roads, regions, best corners, crews) | M | M | todo | Strava Year in Sport, Spotify Wrapped |
 
@@ -145,7 +145,7 @@ pace-note grammar, ALPR from DeFlock/OSM, reference-lap scoring and archetypes.
 | id | idea | impact | effort | status | from |
 |---|---|---|---|---|---|
 | Q-01 | Road feel confidence: "N runs agree" / "runs differ" from per-bin spread | H | S | done (#87) | — |
-| Q-02 | Bayesian hazard verification: Beta posterior with recency decay; "Confirmed" when ≥ 2 drivers agree | H | M | todo | ROAD_INTELLIGENCE §4.3, WORKER_QUEUE brand-17b |
+| Q-02 | Bayesian hazard verification: Beta posterior with recency decay; "Confirmed" when ≥ 2 drivers agree | H | M | partial (#95: your own drives, "Confirmed on N of M"; crowd Bayesian todo) | ROAD_INTELLIGENCE §4.3, WORKER_QUEUE brand-17b |
 | Q-03 | Pace-normalised corner deviation: hidden difficulty where everyone slows more than geometry predicts | H | M | todo | ROAD_INTELLIGENCE §4.1 |
 | Q-04 | Geometry correction: crowd yaw-rate curvature overrides simplified OSM corners | H | L | todo | ROAD_INTELLIGENCE §4.2 |
 | Q-05 | Adaptive sectors by change-point detection, broken at junctions | M | M | todo | ROAD_INTELLIGENCE §5.3 |
@@ -165,6 +165,7 @@ pace-note grammar, ALPR from DeFlock/OSM, reference-lap scoring and archetypes.
 | Q-19 | Benchmark road calibration set scored from map + DEM, checked in CI | M | M | todo | ROAD_INTELLIGENCE §6.2 |
 | Q-20 | Archetypes by clustering once crowd data exists | M | L | todo | ROAD_INTELLIGENCE §5.2 |
 | Q-21 | Real device acceptance for app-open sharing (shared km matches driven km, minus private ends) | H | S | owner (phone) | STATE 2026-10-27 |
+| Q-22 | "Pothole ahead" from your own confirmed hazards on any road, with no route loaded | H | S | done (#104) | thread Deepen driver and road analysis |
 
 ## 4. Co-driver and pace notes (V)
 
@@ -227,7 +228,7 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 | U-04 | Imported drives get a real name (place, road, time of day), not the file name | M | S | partial (recorder file names read as "Drive date time"; place and road names todo) | STATE 2026-10-28 UI audit |
 | U-05 | Audit the live cockpit with simulated GPS frames at phone size (day, night, glare) | H | S | done (this PR: browser GPS track, day and night; native frames and glare still need a phone) | STATE 2026-10-28 UI audit |
 | U-06 | Stages simplified: one list near you with your best and the leader, create from a drive in one step | H | M | partial (#77) | WORKER_QUEUE stages-1 |
-| U-07 | Glanceable cockpit: one number and one note readable at arm's length in sunlight | H | M | todo | car HMI guidelines |
+| U-07 | Glanceable cockpit: one number and one note readable at arm's length in sunlight | H | M | partial (drive bar: big Rec mileage, problems only) | car HMI guidelines |
 | U-08 | Motion design pass: route reveal, sheet springs, note transitions, under 200 ms, reduced-motion respected | M | M | todo | Apple Maps |
 | U-09 | Haptics on notes and hazards (subtle, configurable) | M | S | todo | Apple Maps turn haptics on Watch |
 | U-10 | Home screen and lock screen widgets: nearby best stage, last drive score, crew event | M | M | todo | iOS widgets |
@@ -237,7 +238,7 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 | U-14 | 3D terrain with hillshade on the planning map and flyover preview of a route | M | M | todo | Apple Maps, Google Earth |
 | U-15 | Dynamic Type and VoiceOver pass on every screen, checked with the iOS simulator | H | M | todo | accessibility |
 | U-16 | Landscape cockpit layout for mounts in landscape | M | M | todo | Waze |
-| U-17 | Copy pass to BRAND voice on every remaining string (errors, empty states, permissions) | M | S | todo | docs/BRAND.md §2 |
+| U-17 | Copy pass to BRAND voice on every remaining string (errors, empty states, permissions) | M | S | partial (#103) | docs/BRAND.md §2 |
 | U-18 | Native feel: replace remaining web-looking controls (selects, date inputs) with app-style ones | M | M | todo | STATE 2026-10-27 |
 | U-19 | Search that understands roads and stages ("Tail of the Dragon"), not just addresses | H | M | todo | Google Maps |
 | U-20 | Saved places and lists (home, work, favourite stages) synced to the account | M | M | todo | Google Maps lists |
