@@ -1,5 +1,9 @@
 # APEX NAV — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-10-28: long trips planned in sections
+- Trips over 22 km crow fly are cut into ~24 km sections along the quickest route (2 on Fun, 3 on Max fun); each section gets its own stage search, and the best per section (plus one-swap variants, max 4 stages) compete with the single-corridor plans (#96, `ApexFunRoute.sectionCount/sectionPoints/combineSections`). Knoxville→Asheville Fun: Fun 47 for +17 min (was no fun option); Knoxville→Maryville unchanged (79 @ 128 min). Not driven on a phone.
+- Exact next task: use measured data during stage discovery (road-3 remainder); unify loop ranking with the fun score.
+
 ## Session 2026-10-28: traffic as a fun penalty (traffic-1, iOS only)
 - `web/traffic.js` (pure, `tests/test_traffic.py`): route ahead in 4 km chunks; Apple's time now vs at 3 am per chunk, counted only when Apple's path follows ours; slow ≥ 1.2x, jam ≥ 1.5x and ≥ 60 s. Traffic lowers route fun even with no delay: the Plan card's fun score (web/fun_route.js) times sum(len/r)/sum(len·r) over 500 m pieces. On a jam: Valhalla alternates + `exclude_polygons` around the jam, best more-fun detour within max(10 min, 25 %) offered for 6 s with Cancel and voiced; else "Traffic ahead · N min". Design in docs/ARCHITECTURE.md section 8.
 - `ApexNavApp.swift`: `trafficProbe` bridge command (MKDirections now + 3 am, both paths, stops on MapKit throttling). Swift compiled only by CI.
