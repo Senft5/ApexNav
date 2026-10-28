@@ -980,10 +980,14 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         offerDriveIfReady()
     }
 
+    /// Only the cockpit page has window.apex: on the Log or Stages page the offer stays pending until the cockpit loads again.
     private func offerDriveIfReady() {
-        guard carOfferPending, webReady else { return }
+        guard carOfferPending, webReady, let wv = webView else { return }
         carOfferPending = false
-        evaluate("window.apex && window.apex.onNative && window.apex.onNative({type:'car',via:'carplay'}); void 0;")
+        wv.evaluateJavaScript("(window.apex && window.apex.onNative) ? (window.apex.onNative({type:'car',via:'carplay'}), true) : false") { [weak self] result, _ in
+            guard let self, (result as? Bool) != true else { return }
+            self.carOfferPending = self.inCar
+        }
     }
 
     // MARK: Voice audio: car stereo, CarPlay audio, Bluetooth
