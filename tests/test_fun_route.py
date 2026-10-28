@@ -59,6 +59,8 @@ const sp = Sun.sunPosition(dawn, 39.1, -84.51);
 const line = (az) => { const n = 2001, lat = [], lon = [], dist = []; for (let i = 0; i < n; i++) { const m = i * 5; lat.push(39.1 + m * Math.cos(az) / 110540); lon.push(-84.51 + m * Math.sin(az) / (111320 * Math.cos(39.1 * Math.PI / 180))); dist.push(m); } return { lat, lon, dist }; };
 out.glare = [F.glare(line(sp.azimuth), 900, dawn, Sun).minutes, F.glare(line(sp.azimuth + Math.PI), 900, dawn, Sun).minutes,
              F.glare(line(sp.azimuth), 900, new Date('2026-06-21T17:40:00Z'), Sun).minutes, F.glare(line(0), 900, dawn, null)];
+out.options = F.distinctOptions([{ id: 'a', timeS: 7680, fun: fun(79, 0) }, { id: 'a2', timeS: 7700, fun: fun(80, 0) }, { id: 'b', timeS: 5880, fun: fun(51, 0) },
+  { id: 'c', timeS: 7620, fun: fun(61, 0) }, { id: 'd', timeS: 5880, fun: fun(27, 0) }], 3).map(c => c.id);
 out.glareRank = F.rank([{ id: 'into', timeS: 1800, fun: fun(46, 30), glare: { minutes: 15 } }, { id: 'away', timeS: 1800, fun: fun(40, 30), glare: { minutes: 0 } }], 'fun').map(c => c.id);
 
 // corridor: A at (0,0), B 20 km east
@@ -241,6 +243,10 @@ def test_loops_by_drive_time_fit_the_time(r):
         assert "east" not in p["names"] and "far" not in p["names"]
 
 
+def test_route_options_are_really_different(r):
+    assert r["options"] == ["a", "b", "c"], "a stage plan the router drew like the winner is not a second option"
+
+
 def test_driving_into_a_low_sun_costs(r):
     into, away, noon, nosun = r["glare"]
     assert abs(into - 15) < 0.5, "15 minutes straight at a sun 5° up"
@@ -303,6 +309,7 @@ globalThis.ApexCore = Core;
 const FunRoute = require(root + '/web/fun_route.js');
 const html = fs.readFileSync(root + '/web/index.html', 'utf8');
 const source = html.match(/async function funRoute\(.*?\n    }/s)[0];
+const useOptionSource = html.match(/async function useOption\(.*?\n    }/s)[0];
 const whyText = new Function('return (' + html.match(/function whyText\(w\) \{.*?\n    }/s)[0] + ')')();
 const lat0 = 39.2, lon0 = -84.6, mLat = 1 / 110540, mLon = 1 / (111320 * Math.cos(lat0 * Math.PI / 180));
 const ll = (pts) => pts.map(([x, y]) => [lon0 + x * mLon, lat0 + y * mLat]);
@@ -312,7 +319,7 @@ const A = { lat: lat0, lon: lon0 }, B = { lat: lat0, lon: lon0 + 10000 * mLon };
 async function run({ level, routes, osrm, discover, matrix, avoid = FunRoute.AVOID_DEFAULT }) {
   const built = [], toasts = [], calls = { matrix: 0, routes: 0 };
   const funRoute = new Function('funLevel', 'valhallaRoutes', 'osrmRoutes', 'toast', 'FunRoute', 'ApexStages', 'state', 'allHighlights', 'valhallaMatrix',
-    'Core', 'RouteLoading', 'funOf', 'applyMeasured', 'trackFromPolyline', 'buildRoute', 'totalOf', 'window', 'whyText', 'avoid', 'return (' + source + ')')(
+    'Core', 'RouteLoading', 'funOf', 'applyMeasured', 'trackFromPolyline', 'buildRoute', 'totalOf', 'window', 'whyText', 'avoid', 'let routeOptions = null; ' + useOptionSource + '; return (' + source + ')')(
     level, async (pts, through, alts) => { calls.routes++; return routes(pts, alts); }, osrm || (async () => { throw Error('down'); }),
     (m) => toasts.push(m), FunRoute, { discover }, { hlOn: false }, async () => [],
     async (s, t) => { calls.matrix++; return { times: await matrix(s, t) }; },

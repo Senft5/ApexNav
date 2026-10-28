@@ -58,6 +58,14 @@ knows none of this and says nothing. Toggling one re-plans a destination route l
 Any step that fails (no tiles, no matrix, a stage route that fails) just leaves fewer candidates;
 the router's own route is always there.
 
+## Options
+
+A destination route offers up to 3 options side by side (R-30): the ranked candidates with near-duplicates dropped
+(`FunRoute.distinctOptions`: within 30 s and 1 fun point of one already kept). The route card shows a chip each
+("Fun 79 · 128 min") and the map draws the others dashed; tapping a chip or a dashed line makes that option the
+route, with its own why line, glare and avoid notes ("+N for fun" and the why line still compare to the quickest).
+Hidden while driving and for loops.
+
 ## Loops
 
 Loops chain stages found around the start. Their length used to come from crow-fly connectors x 1.6,
