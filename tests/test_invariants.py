@@ -54,8 +54,7 @@ def test_sensor_logger_ingestion_end_to_end(tmp_path):
     # ~1.27 km cruise + pull -> 5 m bins, contiguous, flat & straight road
     assert 240 <= len(segments) <= 270
     assert set(np.diff(segments['segment_index'])) == {1}
-    assert segments['camber_deg'].notna().all()
-    assert np.abs(segments['camber_deg']).max() < 0.5
+    assert segments['camber_deg'].isna().all()        # straight: no cornering load, so camber is unknown, never 0.0
     assert np.abs(segments['lat_g']).max() < 0.02
     assert segments['vert_peak_g'].max() < 0.35
     assert 10.0 <= segments['elevation_m'].max() - segments['elevation_m'].min() <= 13.0
