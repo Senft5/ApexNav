@@ -7,7 +7,8 @@
 - This PR: R-12 set list, R-20 car-aware routing (migration 0024 cars.clearance/width_cm applied to both D1).
 - #210 also: Z-11 Content-Security-Policy on every page (tools/csp.py; rerun it after editing an inline script, CLAUDE.md says so).
 - Merged #215 also: Q-04 crowd curvature (migration 0027 applied), Q-03 asked of the owner, R-35 speed traps and S-07 comments dropped with reasons.
-- This PR: Q-13 road pages (reference lap ported to JS, parity-tested; Explore → About).
+- This PR: R-33 per-user taste from road votes (web/taste.js; ±8 fun points, 5+ answers).
+- Merged #217: Q-13 road pages (reference lap ported to JS, parity-tested; Explore → About).
 - Merged #216: R-32/Q-19 benchmark roads in CI (tests/benchmarks.js, fixtures from tools/make_benchmark_fixture.js). Known gap: dense hairpin sequences (Stelvio) are under-counted by stroke joining or corner detection; zoom-14 tiles do not fix it.
 - Merged #215: S-11 pioneer km + crew-vs-crew km, S-08 smoothest crew (migration 0026 member_months + board_entries.smoothness, applied to both D1).
 - Merged #214: V-07 Siri next/skip stage (FunRoute.stageSpans), U-22 driving side in sight distance (NEAR_SIDE_M 0.8, a first estimate).
