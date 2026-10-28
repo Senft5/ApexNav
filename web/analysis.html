@@ -226,7 +226,7 @@
     const storeDrive = (d) => ApexRecording.store(d);
     const parseRecording = (text, fileName) => ApexRecording.parse(Core, text, fileName);
 
-    let drives = [];
+    let drives = [], drivesLoaded = false;
     async function loadDrives() {
       // Only the person's own recordings. The bundled ones are the cockpit's "Watch a replay" demo, not their drives.
       const stored = await storedDrives();
@@ -258,7 +258,7 @@
       const totalKm = drives.reduce((s, d) => s + d.km, 0);
       const latest = scored[scored.length - 1];
       const c = (v, label, extra) => `<div class="card"><b>${v}</b><span>${label}</span>${extra ? `<em>${extra}</em>` : ''}</div>`;
-      $('historyEmpty').hidden = drives.length > 0;
+      $('historyEmpty').hidden = !drivesLoaded || drives.length > 0;   // never claim "no drives" before the store has answered
       $('historyCards').hidden = $('historyPanel').hidden = !drives.length;
       $('historyCards').innerHTML =
         c(latest ? latest.ds.score : '--', 'Latest', latest ? latest.name : '') +
@@ -681,7 +681,7 @@
       const q = params.get('tab'), t = TAB_ALIAS[q] || q;
       showTab(['drive', 'history', 'segments', 'compare'].includes(t) ? t : 'history');
     }
-    loadDrives().then(() => { renderAll(); const want = params.get('drive'); if (want && drives.some(x => x.id === want)) openDrive(want); });
+    loadDrives().then(() => { drivesLoaded = true; renderAll(); const want = params.get('drive'); if (want && drives.some(x => x.id === want)) openDrive(want); });
   })();
   </script>
 </body>
