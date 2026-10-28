@@ -328,7 +328,7 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 | id | idea | impact | effort | status | from |
 |---|---|---|---|---|---|
 | Z-01 | First and last km of every trip never leave the phone; trips cut on stops and gaps | H | M | done (#71; random 0.5–1.5 km per trip end since #139) | docs/SOCIAL.md §1 |
-| Z-02 | Privacy zones you draw (home, work) where nothing is ever recorded or shared | H | S | todo | Strava privacy zones |
+| Z-02 | Privacy zones you draw (home, work) where nothing is ever recorded or shared | H | S | done (this PR: Settings → Privacy zones, 200 m/500 m/1 km circles at your position or the map centre, phone only; inside: no drive samples, road data stops, convoys get no position) | Strava privacy zones |
 | Z-03 | Privacy dashboard: what's on the phone, what was shared, delete my account and data | H | M | todo | GDPR/CCPA, App Store 5.1.1(v) |
 | Z-04 | Data export (drives as CSV/GPX, account JSON) | M | S | todo | GDPR portability |
 | Z-05 | Security review of auth, crew and convoy endpoints before launch | H | M | partial (#132, #135, audit 2026-10-28; Z-09 to Z-15 are what it left) | production readiness |
