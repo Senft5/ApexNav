@@ -28,6 +28,7 @@ with a mark per row (✓ good, ✗ bad + one line on what you saw, – skipped).
 **C. After the drive, parked (5 min)**
 13. End drive: it saves, shows in Log with a score; Road data on: "Shared n mi of road feel" toast.
 14. Cloudflare → Workers → apexnav → Logs, filter `client_error` (or `GET /api/ops/errors?days=1` signed in as the owner): any lines from this run (time, message) go in the report.
+16. Road-data loop (two members, Road data on): both drive the same road on different days; the next day plan a route over it: "Measured by members" shows under the route card and the road's roughness is on its About panel. One member alone shows nothing (by design).
 15. Optional, two phones: start a convoy and open its link on the second phone, then drive both cars: crew bar gaps, a hazard call heard by the other car.
 
 | # | Check | Result |

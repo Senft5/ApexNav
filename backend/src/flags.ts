@@ -12,6 +12,7 @@ export const DEFAULT_FLAGS: Record<string, Rule> = {
   track_mode: { on: true },          // D-15 lap timing on raceways
   taste_ranking: { on: true },       // R-33 your taste nudging fun routes
   crowd_curvature: { on: true },     // Q-04 members' corners over the map's
+  measured_stages: { on: true },     // R-04 measurements and hazards in stage discovery
 };
 
 const BUILD = /ApexNav\/[\d.]+ \((\d+)\)/;

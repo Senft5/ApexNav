@@ -57,16 +57,25 @@ export async function coverage(env: Env, url: URL) {
   const [s, w, n, e] = box;
   if (s < -90 || n > 90 || w < -180 || e > 180 || n <= s || e <= w || n - s > 0.5 || e - w > 0.5) throw new HttpError(400, "bad_bbox");
   const rows = (await env.DB.prepare(
-    `SELECT rw.way_id, rw.shape, rb.dir, MAX(rb.n) AS passes FROM road_ways rw JOIN road_bins rb ON rb.way_id = rw.way_id
+    // per direction also what it measured (IDEAS R-04, stage discovery): mean roughness (g, pass-weighted) and the share of
+    // camber-measured bins banked into the turn (>= 3 deg) or off-camber (<= -3 deg); null when nothing was measured
+    `SELECT rw.way_id, rw.shape, rb.dir, MAX(rb.n) AS passes,
+            SUM(rb.rough_mean * rb.n) / NULLIF(SUM(CASE WHEN rb.rough_mean IS NOT NULL THEN rb.n END), 0) AS rough,
+            1.0 * SUM(CASE WHEN rb.camber_n > 0 AND rb.camber_mean >= 3 THEN 1 ELSE 0 END) / NULLIF(SUM(CASE WHEN rb.camber_n > 0 THEN 1 ELSE 0 END), 0) AS banked,
+            1.0 * SUM(CASE WHEN rb.camber_n > 0 AND rb.camber_mean <= -3 THEN 1 ELSE 0 END) / NULLIF(SUM(CASE WHEN rb.camber_n > 0 THEN 1 ELSE 0 END), 0) AS off_camber
+       FROM road_ways rw JOIN road_bins rb ON rb.way_id = rw.way_id
       WHERE rw.s <= ?3 AND rw.n >= ?1 AND rw.w <= ?4 AND rw.e >= ?2
       GROUP BY rw.way_id, rb.dir
      HAVING (SELECT COUNT(DISTINCT rs.holder) FROM rank_slots rs WHERE rs.way_id = rw.way_id AND rs.dir = rb.dir) >= ${MIN_DRIVERS}
       ORDER BY rw.way_id, rb.dir LIMIT 2000`,
-  ).bind(s, w, n, e).all<{ way_id: number; shape: string; dir: number; passes: number }>()).results;
-  const ways = new Map<number, { way: number; line: [number, number][]; passes: number[] }>();
+  ).bind(s, w, n, e).all<{ way_id: number; shape: string; dir: number; passes: number; rough: number | null; banked: number | null; off_camber: number | null }>()).results;
+  type Item = { way: number; line: [number, number][]; passes: number[]; rough: (number | null)[]; banked: (number | null)[]; offCamber: (number | null)[] };
+  const ways = new Map<number, Item>();
+  const r3 = (v: number | null) => (v == null ? null : Math.round(v * 1000) / 1000);
   for (const r of rows) {
-    const it = ways.get(r.way_id) ?? { way: r.way_id, line: JSON.parse(r.shape), passes: [0, 0] };
+    const it = ways.get(r.way_id) ?? { way: r.way_id, line: JSON.parse(r.shape), passes: [0, 0], rough: [null, null], banked: [null, null], offCamber: [null, null] };
     it.passes[r.dir] = r.passes;
+    it.rough[r.dir] = r3(r.rough); it.banked[r.dir] = r3(r.banked); it.offCamber[r.dir] = r3(r.off_camber);
     ways.set(r.way_id, it);
   }
   return { ways: [...ways.values()] };

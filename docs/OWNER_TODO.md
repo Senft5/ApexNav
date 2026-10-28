@@ -21,6 +21,8 @@ something blocks on you, delete it once it's done. Everything else is in docs/ID
 | **Routing server** (IDEAS Y-04). The app uses the free public Valhalla server, which has fair-use limits and no uptime promise | a) Cloudflare Workers Paid ($5/mo) + a Container with Southeast-US road tiles; b) a $5–7/mo VPS with the whole US; c) stay on the public server until users arrive. Claude's suggestion: (a) before an App Store launch |
 | **Hidden-difficulty corners (IDEAS Q-03)**: flag corners where everyone slows more than the shape predicts. It needs each pass's speed *relative to the corner's limit* in road data. The limit is public geometry, so that ratio gives the speed back within a few percent, which breaks the privacy page's "never speeds" | a) yes: send the ratio, rounded, merged anonymously like the rest; reword the privacy page; b) no (Claude's suggestion until there are enough drivers that a corner holds dozens of passes): keep "never speeds" |
 | **Quiet hours (IDEAS R-36)**: prefer stages that are usually empty when you'd get there. Needs the hour of each pass in road data, bucketed (e.g. weekday mornings) and merged per road | a) yes, 4-hour buckets, shown only for roads 5+ people drove, and reword the privacy page; b) no (Claude's suggestion for now): keep "never times" |
+| **Email sign-in (IDEAS O-06)**: a no-Google, no-Apple sign-in by emailed link | a) add a domain to Cloudflare and turn on Email Sending (free tier), then Claude builds it; b) skip: Google and Apple cover iPhone users (Claude's suggestion until the web app matters more) |
+| **Apple Watch (IDEAS U-12)**: next note as a tap on the wrist, drive summary | a) after CarPlay is approved, Claude adds a watchOS target (needs a new bundle id, which the API key can register); b) later |
 | **Repo visibility.** `Senft5/ApexNav` is public: anyone can read the code (the licence still reserves all rights). CI is free and unlimited while public | Keep public until launch (Claude's suggestion), or make it private (Settings → General → Danger Zone; about 13 iOS builds a month free after that) |
 
 ## Nice to know
@@ -32,3 +34,7 @@ something blocks on you, delete it once it's done. Everything else is in docs/ID
 - TestFlight: internal group "First Testers" gets every build automatically; every main merge uploads one (377.1 onward VALID).
 - Tester feedback (Settings → Feedback, once #196 merges) shows in the app under Crew → your owner section, with Done to clear it.
 - An unused App ID `com.senft.ApexNav.JNX759T5W6` (from the first attempt) is still registered. Harmless; delete it in Identifiers if you like.
+
+- **P-01 battery figure (10 min, during any TestFlight drive):** drive an hour unplugged with the app open; afterwards the Log shows "Battery: X% in N min". Send me that number (and the phone model) and I'll publish it in the listing and the Help page. Nothing is published until it's measured.
+
+- **S-18 shared spot photos (decision):** photos on your own spots work now and never leave the phone. Showing them to other members needs a Cloudflare R2 bucket (free up to 10 GB) and, for App Review 1.2, someone to look at reported photos. Say "yes R2" and I'll build it with the existing report/hide flow, or "keep local" and it stays as is.

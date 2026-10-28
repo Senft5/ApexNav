@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-8+KSVvMh17JOg6U2MDKOXCkamnSlgwzZHauoddXo69k=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-zy4nJcalp9ZS102jRRmKVq3On+ezXXs3Yu8lh0XmpRw=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>ApexNav</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -27,10 +27,14 @@
   <script src="flags.js"></script>
   <script src="save_file.js"></script>
   <script src="flyover_video.js"></script>
+  <script src="battery_budget.js"></script>
+  <script src="spot_photos.js"></script>
+  <script src="measured_stages.js"></script>
   <script src="route_loading.js"></script>
   <script src="stages.js"></script>
   <script src="fun_route.js"></script>
   <script src="sync.js"></script>
+  <script src="live_pipeline.js"></script>
   <script src="sensors.js"></script>
   <script src="privacy_zones.js"></script>
   <script src="reroute.js"></script>
@@ -218,6 +222,10 @@
     .spot-chips button.on, .spot-stars button.on { background: var(--panel-ink); color: var(--panel); }
     .spot-stars button { width: 44px; height: 44px; border: 1.5px solid var(--panel-ink); font-size: 24px; line-height: 1; }
     .spot-dialog-field { display: grid; gap: 8px; font-size: 15px; font-weight: 600; }
+    .spot-thumb { width: 44px; height: 44px; padding: 0; border: 1px solid var(--rule); overflow: hidden; flex: none; }
+    .spot-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .overlay.dim.spot-photo { flex-direction: column; justify-content: center; align-items: center; gap: 12px; padding: 16px; z-index: 60; }
+    .spot-photo img { max-width: 100%; max-height: 80vh; object-fit: contain; }
 
     /* ---------------- binnacle ---------------- */
     .binnacle { background: var(--panel); color: var(--panel-ink); border-top: 1px solid var(--rule); padding: 6px 10px calc(8px + var(--safe-bottom)); display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
@@ -706,6 +714,8 @@
           <div class="spot-dialog-field">Rating<div class="spot-stars" id="hlRating" role="group" aria-label="Rating">
             <button type="button" data-rating="1" aria-label="1 star">★</button><button type="button" data-rating="2" aria-label="2 stars">★</button><button type="button" data-rating="3" aria-label="3 stars">★</button><button type="button" data-rating="4" aria-label="4 stars">★</button><button type="button" data-rating="5" aria-label="5 stars">★</button>
           </div></div>
+          <div class="spot-dialog-field">Photo<div class="row" style="align-items:center"><label class="ink-btn" id="hlPhotoBtn">Add photo<input type="file" id="hlPhoto" accept="image/*" hidden /></label>
+            <span class="note" id="hlPhotoNote">Stays on this phone, without its location data.</span></div></div>
           <div class="row"><button class="ink-btn solid" id="hlAddBtn">Save</button><button class="ink-btn" id="hlCancelBtn">Cancel</button></div>
         </div>
       </div>
@@ -1332,13 +1342,14 @@
       const on = !!state.toggles.terrain && !power.low;
       try { map.setTerrain(on ? { source: 'apex-dem', exaggeration: 1.4 } : null); } catch (_) {}
     }
+    let webBattery = null;   // a browser's own battery reading, for what a drive costs (battery_budget.js, IDEAS P-01)
     function feedPower(info) {
       if (!power.update(info)) return;
       applyPower();
       toast(power.low ? `${power.reason} · saving battery: map at 30 fps, terrain shading off` : 'Full map detail back on.');
     }
     if (navigator.getBattery) navigator.getBattery().then((b) => {
-      const read = () => feedPower({ batteryLevel: b.level, charging: b.charging });
+      const read = () => { webBattery = { level: b.level, charging: b.charging }; feedPower({ batteryLevel: b.level, charging: b.charging }); };
       read(); b.addEventListener('levelchange', read); b.addEventListener('chargingchange', read);
     }).catch(() => {});
     const CAM_FEEL = {
@@ -2887,6 +2898,24 @@
       }));
       return true;
     }
+    // Members' measurements and confirmed hazards in discovery (measured_stages.js, IDEAS R-04): before the shortlist picks
+    // which stages to time, broken roads drop, smooth and banked ones rise, closed ones go. Members only; any failure (offline,
+    // signed out, slow) leaves the map's order exactly as it was.
+    async function measuredStages(stages, c, radiusKm) {
+      if (!window.ApexMeasuredStages || !window.ApexSync || !stages || !stages.length || (window.ApexFlags && !ApexFlags.on('measured_stages'))) return stages;
+      try {
+        if (!(await RouteLoading.optional(ApexSync.member(), 3000))) return stages;
+        const boxes = ApexMeasuredStages.boxesFor(c, radiusKm) || [];
+        const get = async (path) => { const r = await ApexSync.apiFetch(path, { method: 'GET' }); return r.ok ? r.json() : null; };
+        const [cov, hz] = await Promise.all([
+          Promise.all(boxes.map((b) => RouteLoading.optional(get(`/api/coverage?bbox=${b.join(',')}`), 5000).catch(() => null))),
+          RouteLoading.optional(get(`/api/hazards?lat=${c.lat.toFixed(4)}&lon=${c.lon.toFixed(4)}&km=${Math.min(50, Math.ceil(radiusKm))}`), 5000).catch(() => null),
+        ]);
+        const ways = new Map();
+        for (const j of cov) for (const w of (j && Array.isArray(j.ways) ? j.ways : [])) if (w && Number.isFinite(w.way)) ways.set(w.way, w);
+        return ApexMeasuredStages.rescore(stages, [...ways.values()], Array.isArray(hz) ? hz : []);
+      } catch (_) { return stages; }
+    }
     // Destination routes: the most fun way within the chosen level's time budget (docs/ROUTING.md). Candidates are the
     // router's quickest route and its alternates, plus 1–2 stage detours timed with one matrix call; all are scored for fun
     // on the map geometry and ranked by fun against extra time. Anything that fails just leaves fewer candidates.
@@ -2911,7 +2940,7 @@
             try {
               const area = FunRoute.searchArea(a, b);
               const hls = state.hlOn ? await allHighlights(area.center) : [];
-              const stages = await ApexStages.discover(area.center, area.radiusKm, null, state.hlOn ? { highlights: hls, strength: state.hlStrength } : {});
+              const stages = await measuredStages(await ApexStages.discover(area.center, area.radiusKm, null, state.hlOn ? { highlights: hls, strength: state.hlStrength } : {}), area.center, area.radiusKm);
               const list = FunRoute.shortlist(a, b, stages, FunRoute.LEVELS[level].budget, 4, slack);
               if (!list.length) return [];
               try { await RouteLoading.optional(ApexStages.addElevations(list)); } catch (_) { /* no DEM: which way round each stage (R-11) stays the nearer end */ }
@@ -3095,8 +3124,8 @@
       try {
         const radiusKm = Math.min(14, Math.max(5, targetKm / 4.2));
         const hls = state.hlOn ? await allHighlights(c) : [];
-        const stages = await ApexStages.discover(c, radiusKm, (phase, f) => ui.step(phase === 'tiles' ? 'Finding roads' : 'Scoring roads', 0.05 + 0.3 * f),
-          state.hlOn ? { highlights: hls, strength: state.hlStrength } : {});
+        const stages = await measuredStages(await ApexStages.discover(c, radiusKm, (phase, f) => ui.step(phase === 'tiles' ? 'Finding roads' : 'Scoring roads', 0.05 + 0.3 * f),
+          state.hlOn ? { highlights: hls, strength: state.hlStrength } : {}), c, radiusKm);
         // Real road distances between the best stages (one or two matrix calls); the crow-fly plans are the fallback.
         try {
           const list = FunRoute.loopShortlist(c, stages, targetKm);
@@ -3175,7 +3204,7 @@
         const hls = state.hlOn ? await allHighlights(c) : [];
         const inReach = (s) => Math.min(FunRoute.kmBetween(c, { lat: s.lat[0], lon: s.lon[0] }), FunRoute.kmBetween(c, { lat: s.lat[s.lat.length - 1], lon: s.lon[s.lon.length - 1] })) <= maxKm;
         const stages = await ApexStages.discover(c, maxKm, (phase, f) => ui.step(phase === 'tiles' ? 'Finding roads' : 'Scoring roads', 0.1 + 0.6 * f),
-          { names: inReach, ...(state.hlOn ? { highlights: hls, strength: state.hlStrength } : {}) });
+          { names: inReach, ...(state.hlOn ? { highlights: hls, strength: state.hlStrength } : {}) }).then((st) => measuredStages(st, c, maxKm));
         const list = FunRoute.exploreShortlist(c, stages, maxKm, 12);   // 24 matrix pairs; most fall to the time limit
         ui.step('Measuring roads', 0.8);
         const m = list.length ? await valhallaMatrix([c], FunRoute.exploreTargets(list)) : { times: [[]] };
@@ -4196,7 +4225,8 @@
         const row = document.createElement('div'); row.className = 'row'; row.style.cssText = 'justify-content:space-between;align-items:center;font-size:13px';
         const t = document.createElement('span'); t.textContent = `${'★'.repeat(h.rating)} ${h.name}`;
         const x = document.createElement('button'); x.className = 'ink-btn'; x.textContent = '×'; x.setAttribute('aria-label', `Remove ${h.name}`);
-        x.onclick = () => { saveHighlights(loadHighlights().filter(v => v.id !== h.id)); renderHighlights(); };
+        x.onclick = () => { saveHighlights(loadHighlights().filter(v => v.id !== h.id)); if (h.photo && window.ApexSpotPhotos) ApexSpotPhotos.remove(h.id); renderHighlights(); };
+        if (h.photo && window.ApexSpotPhotos) row.append(spotThumb(h));
         row.append(t);
         if (!h.shared && window.ApexSync) {
           const sh = document.createElement('button'); sh.className = 'ink-btn'; sh.textContent = 'Share'; sh.hidden = true;
@@ -4211,6 +4241,22 @@
         } else if (h.shared) { const tag = document.createElement('span'); tag.className = 'note'; tag.textContent = 'shared'; row.append(tag); }
         row.append(x); list.appendChild(row);
       }
+    }
+    // The photo kept with one of your spots (spot_photos.js, IDEAS S-18): a thumbnail that opens it full size.
+    function spotThumb(h) {
+      const b = document.createElement('button'); b.className = 'spot-thumb'; b.setAttribute('aria-label', `Photo of ${h.name}`); b.hidden = true;
+      ApexSpotPhotos.get(h.id).then((blob) => {
+        if (!blob) return;
+        const url = URL.createObjectURL(blob), img = document.createElement('img'); img.src = url; img.alt = ''; b.append(img); b.hidden = false;
+        b.onclick = () => {
+          const ov = document.createElement('div'); ov.className = 'overlay dim show spot-photo'; ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-label', h.name);
+          const big = document.createElement('img'); big.src = url; big.alt = h.name;
+          const close = document.createElement('button'); close.className = 'ink-btn'; close.textContent = 'Close';
+          ov.onclick = (e) => { if (e.target === ov || e.target === close) ov.remove(); };
+          ov.append(big, close); document.body.append(ov); close.focus();
+        };
+      });
+      return b;
     }
     // Members' shared spots near you, each rateable once signed in (the author can't rate their own; the server enforces it).
     async function renderNearbyHighlights() {
@@ -4233,7 +4279,14 @@
       const v = parseFloat(b.dataset.detour); state.hlOn = v > 0; if (v > 0) state.hlStrength = v;
       savePrefs(); renderHighlights(); if (state.hlOn) renderNearbyHighlights();
     }));
-    let highlightPoint = null, highlightCategory = 'other', highlightRating = 5;
+    let highlightPoint = null, highlightCategory = 'other', highlightRating = 5, pendingPhoto = null;
+    $('hlPhoto').addEventListener('change', async () => {
+      const f = $('hlPhoto').files && $('hlPhoto').files[0]; pendingPhoto = null;
+      if (!f) return;
+      $('hlPhotoNote').textContent = 'Preparing the photo…';
+      try { pendingPhoto = await ApexSpotPhotos.prepare(f); $('hlPhotoNote').textContent = 'Photo ready. Its location and camera details are removed.'; }
+      catch (_) { $('hlPhotoNote').textContent = 'That file isn\'t a photo this phone can open.'; }
+    });
     function selectHighlightCategory(value) {
       highlightCategory = value;
       document.querySelectorAll('#hlCategories button').forEach(b => {
@@ -4253,6 +4306,8 @@
       highlightPoint = point;
       $('hlName').value = '';
       selectHighlightCategory('other'); selectHighlightRating(5);
+      pendingPhoto = null; $('hlPhoto').value = ''; $('hlPhotoNote').textContent = 'Stays on this phone, without its location data.';
+      $('hlPhotoBtn').hidden = !window.ApexSpotPhotos;
       $('hlOverlay').classList.add('show');
       if (!document.body.classList.contains('moving')) $('hlName').focus();   // moving: no keyboard, Save names it
     }
@@ -4264,7 +4319,8 @@
       const list = await ApexRecording.all();
       const s = ApexMyData.phoneSummary(list, localStorage);
       $('myDataNote').textContent = `On this phone: ${s.drives} drive${s.drives === 1 ? '' : 's'} (${ApexUnits.long(s.miles * 1609.344)}), ${s.spots} spot${s.spots === 1 ? '' : 's'}, ${s.zones} privacy zone${s.zones === 1 ? '' : 's'}, ${s.places} recent place${s.places === 1 ? '' : 's'}. `
-        + (s.signedIn ? 'Signed in: friends, crews and what you shared are on the server.' : 'Not signed in: nothing of yours is on the server.');
+        + (s.signedIn ? 'Signed in: friends, crews and what you shared are on the server.' : 'Not signed in: nothing of yours is on the server.')
+        + (() => { const b = window.ApexBattery ? ApexBattery.overall(list) : null; return b ? ` Driving uses about ${b.perHour}% battery an hour on this phone (${b.drives} drive${b.drives === 1 ? '' : 's'}).` : ''; })();
       renderOffline();
     }
     // Offline data (IDEAS F-06): saved routes and downloaded voices, their size, and a delete. Drives are not offline data.
@@ -4343,6 +4399,8 @@
       for (const k of ApexMyData.keysToClear(localStorage)) { try { localStorage.removeItem(k); } catch (_) {} }
       try { sessionStorage.clear(); } catch (_) {}
       try { if (window.caches) for (const k of await caches.keys()) await caches.delete(k); } catch (_) {}
+      try { if (window.ApexSpotPhotos) await ApexSpotPhotos.clear(); } catch (_) {}      // spot photos (IDEAS S-18)
+      try { if (window.ApexOfflineTiles) await ApexOfflineTiles.clear(); } catch (_) {}  // offline map areas (IDEAS F-02)
       location.reload();
     });
     renderMyData();
@@ -4388,14 +4446,17 @@
     });
     $('hlCancelBtn').addEventListener('click', closeHighlightDialog);
     $('hlOverlay').addEventListener('click', (e) => { if (e.target === $('hlOverlay')) closeHighlightDialog(); });
-    $('hlAddBtn').addEventListener('click', () => {
+    $('hlAddBtn').addEventListener('click', async () => {
       if (!highlightPoint) return;
       let name = $('hlName').value.trim();
       // While moving there is no keyboard: an unnamed spot is named by the time.
       if (!name && document.body.classList.contains('moving')) name = `Spot ${new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
       if (!name) { toast('Name the spot first.'); $('hlName').focus(); return; }
       const p = highlightPoint;
-      saveHighlights(loadHighlights().concat({ id: String(Date.now()), name: name.slice(0, 60), lat: p.lat, lon: p.lon, rating: highlightRating, category: highlightCategory }));
+      const id = String(Date.now()), photo = pendingPhoto; pendingPhoto = null;
+      let kept = false;
+      if (photo) { try { await ApexSpotPhotos.put(id, photo); kept = true; } catch (_) { toast('The photo couldn\'t be kept (storage full?). The spot is saved without it.'); } }
+      saveHighlights(loadHighlights().concat({ id, name: name.slice(0, 60), lat: p.lat, lon: p.lon, rating: highlightRating, category: highlightCategory, ...(kept ? { photo: true } : {}) }));
       closeHighlightDialog(); renderHighlights(); toast(`Spot saved · ${name}`);
     });
 
@@ -4596,6 +4657,8 @@
       if (s.calibration === 'default') warn.push('Calibrating · leave the phone in its mount');
       else if (s.calibration === 'awaitingPull') warn.push('Calibrating · drive normally');
       else if (s.calibration === 'paused') warn.push('Phone is hot · bumps and banking paused');
+      // a browser's own mount calibration (live_pipeline.js, IDEAS A-02): banking only once checked against GPS; silent until then
+      if (!NATIVE_SHELL && s.webMount === 'verified') main.push('Banking measured');
       const m = main.join(' · '), w = warn.join(' · ');
       if ($('dsMain').innerHTML !== m) $('dsMain').innerHTML = m;
       if ($('dsWarn').textContent !== w) $('dsWarn').textContent = w;
@@ -5060,7 +5123,7 @@
       driveActive = true; health.bump('drives'); drive.startedAt = performance.now();
       clearCarOffer();
       setPlaying(false);
-      drive.rec = new ApexSensors.Recorder(); drive.status = { gps: 'waiting', motion: 'off', wake: 'off', message: '' }; drive.frames = 0;
+      drive.rec = new ApexSensors.Recorder(); drive.status = { gps: 'waiting', motion: 'off', wake: 'off', message: '' }; drive.frames = 0; drive.battery = null;
       startStageWatch();
       drive.live = null; drive.liveIdx = 0; drive.share = 'off'; drive.shareKm = 0; drive.shareErr = null; drive.roads = {}; drive.roadIdx = 0; drive.rest = null; breakSay = null; if (breakWorker) { breakWorker.terminate(); breakWorker = null; }
       if (NATIVE_SHELL) {   // the app's own GPS and IMU feed window.apex.live; no browser sensors to start
@@ -5088,7 +5151,9 @@
             paintPerms();
             paintDriveStat();
           },
-          onFrame: (fr) => { if (!fr.has_fix) return; drive.frames++; recordFrame(fr); feedLive(); noteRoads(); noteRest(fr); feedStage(); feedTrack(fr); window.apex.live(fr); paintDriveStat(); },
+          onFrame: (fr) => { if (!fr.has_fix) return; drive.frames++; drive.status.webMount = fr.web_mount || null; recordFrame(fr); feedLive(); noteRoads(); noteRest(fr); feedStage(); feedTrack(fr);
+            if (window.ApexBattery && webBattery) drive.battery = ApexBattery.feed(drive.battery, webBattery.level, webBattery.charging, Date.now());
+            window.apex.live(fr); paintDriveStat(); },
         });
         if (!driveActive || state.mode !== 'live') {
           sensors.stop();
@@ -5107,6 +5172,7 @@
       driveActive = false;
       stageWatch = null; $('stageBar').hidden = true;
       const laps = circuit.timer ? circuit.timer.state(Date.now()).laps : [];
+      const battery = window.ApexBattery ? ApexBattery.summary(drive.battery) : null; drive.battery = null;
       resetCircuit();
       activity('end');
       const rec = drive.rec, sensors = drive.sensors, live = drive.live, road = rec && window.ApexRoadNames ? ApexRoadNames.mainRoad(drive.roads, rec.km * 1000) : null;
@@ -5124,6 +5190,7 @@
           const car = routingCar();
           if (car) d.car = { label: car.label, mu: Core.carGrip(car) };
           if (laps.length) d.laps = laps;                            // lap times from track mode (on a circuit only, IDEAS D-15)
+          if (battery) d.battery = battery;                          // what the drive cost the battery (IDEAS P-01)
           await ApexRecording.store(d);
           await refreshSavedDrives();
           toast(`Drive saved · ${ApexUnits.long((rec.km) * 1000, 1)}`, { label: 'View', href: `analysis.html?tab=drive&drive=${encodeURIComponent(d.id)}` });
@@ -5329,6 +5396,7 @@
         state.live = frame; state.liveAt = performance.now();
         if (drive.native && drive.rec) {
           drive.frames++; recordFrame(frame); feedLive(); noteRoads(); noteRest(frame); feedStage(); feedTrack(frame);
+          if (window.ApexBattery) drive.battery = ApexBattery.feed(drive.battery, frame.battery, frame.charging === true, Date.now());
           const gps = Number.isFinite(frame.accuracy_m) && frame.accuracy_m > ApexSensors.MAX_ACCURACY_M ? 'weak' : 'on';
           if (drive.status.gps !== gps) drive.status.gps = gps;
           const cal = typeof frame.calibration === 'string' ? frame.calibration : null;

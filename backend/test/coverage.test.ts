@@ -28,6 +28,16 @@ describe("GET /api/coverage (IDEAS Q-14)", () => {
     expect((await (await ok(api(a, "GET", "/api/coverage?bbox=36,-83.6,36.2,-83.4"))).json() as { ways: unknown[] }).ways).toEqual([]);
   });
 
+  it("says what was measured per direction: mean roughness and banked / off-camber shares, null where unmeasured (IDEAS R-04)", async () => {
+    const a = await makeUser("a"), b = await makeUser("b");
+    await optIn(a, b);
+    const mixed = bins().map((x, j) => ({ ...x, rough: 0.2, cam: j < 15 ? 4 : j < 30 ? -4 : 1 }));
+    await ok(api(a, "POST", "/api/contribute", upload("drive-aaaa-0002", { bins: mixed })));
+    await ok(api(b, "POST", "/api/contribute", upload("drive-bbbb-0002", { bins: mixed.map((x) => ({ ...x, rough: 0.4 })) })));
+    const j = await (await ok(api(a, "GET", BOX))).json() as { ways: { rough: (number | null)[]; banked: (number | null)[]; offCamber: (number | null)[] }[] };
+    expect(j.ways[0]).toMatchObject({ rough: [0.3, null], banked: [0.25, null], offCamber: [0.25, null] });
+  });
+
   it("is for members, and the box must be small and real", async () => {
     expect((await api(null, "GET", BOX)).status).toBe(401);
     const a = await makeUser("a");

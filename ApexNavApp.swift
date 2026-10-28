@@ -487,6 +487,7 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
     func attach(webView: WKWebView) {
         self.webView = webView
         webReady = false
+        UIDevice.current.isBatteryMonitoringEnabled = true   // the battery level in each frame (IDEAS P-01): what an hour of driving costs
     }
 
     /// A link that arrived before the web view existed (the app was launched by it) waits here for the first load.
@@ -877,6 +878,8 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
             + "\"calibration\":\"\(live ? pipeline.mount.state.rawValue : "paused")\","
             + "\"thermal\":\(thermal.level),"
             + "\"low_power_mode\":\(ProcessInfo.processInfo.isLowPowerModeEnabled ? "true" : "false"),"
+            + "\"battery\":\(Self.num(UIDevice.current.batteryLevel >= 0 ? Double(UIDevice.current.batteryLevel) : nil, 2)),"
+            + "\"charging\":\(UIDevice.current.batteryState == .charging || UIDevice.current.batteryState == .full ? "true" : "false"),"
             + "\"has_fix\":\(hasFix ? "true" : "false"),"
             + "\"segments\":\(recordedSegments)"
             + "}"

@@ -1137,6 +1137,75 @@ flow('recce: keep a drive\'s notes, change a call, and the cockpit reads yours o
   await page.waitForFunction(() => /Left 3 tightens, care/.test(document.getElementById('notes').textContent), null, { timeout: 8000 });
 });
 
+flow('spot photo: a camera photo with GPS in its EXIF is kept without it, shows on the spot and goes with Erase (IDEAS S-18)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.ApexSpotPhotos && window.apexDebug);
+  // a 2000 x 1500 JPEG with an Exif APP1 segment spliced in after SOI, as a phone camera writes it
+  const bytes = await page.evaluate(async () => {
+    const c = document.createElement('canvas'); c.width = 2000; c.height = 1500;
+    const g = c.getContext('2d'); g.fillStyle = '#c33'; g.fillRect(0, 0, 2000, 1500); g.fillStyle = '#fff'; g.fillRect(100, 100, 400, 300);
+    const raw = new Uint8Array(await (await new Promise((r) => c.toBlob(r, 'image/jpeg', 0.9))).arrayBuffer());
+    const payload = [...'Exif\0\0MM\0*GPS 35.96N 83.92W'].map((ch) => ch.charCodeAt(0));
+    const app1 = [0xFF, 0xE1, (payload.length + 2) >> 8, (payload.length + 2) & 255, ...payload];
+    const out = [...raw.subarray(0, 2), ...app1, ...raw.subarray(2)];
+    if (window.ApexSpotPhotos.exifSegments(new Uint8Array(out))[0] !== 'exif') throw new Error('test photo lacks EXIF');
+    return out;
+  });
+  await page.evaluate(() => document.getElementById('hlOpenBtn').click());
+  await page.waitForSelector('#hlOverlay.show', { timeout: 10000 });
+  await page.setInputFiles('#hlPhoto', { name: 'IMG_0001.jpg', mimeType: 'image/jpeg', buffer: Buffer.from(bytes) });
+  await page.waitForFunction(() => /Photo ready/.test(document.getElementById('hlPhotoNote').textContent), null, { timeout: 10000 });
+  await page.fill('#hlName', 'Red barn');
+  await page.evaluate(() => document.getElementById('hlAddBtn').click());
+  await page.waitForFunction(() => JSON.parse(localStorage.getItem('apex.highlights') || '[]').some((h) => h.name === 'Red barn' && h.photo));
+  const kept = await page.evaluate(async () => {
+    const h = JSON.parse(localStorage.getItem('apex.highlights')).find((x) => x.name === 'Red barn');
+    const blob = await window.ApexSpotPhotos.get(h.id), b = new Uint8Array(await blob.arrayBuffer());
+    const bmp = await createImageBitmap(blob);
+    return { segs: window.ApexSpotPhotos.exifSegments(b), gps: new TextDecoder('latin1').decode(b).includes('GPS 35.96'), w: bmp.width, h: bmp.height };
+  });
+  check(kept.segs.length === 0 && !kept.gps, `kept photo still carries metadata: ${JSON.stringify(kept)}`);
+  check(kept.w === 1600 && kept.h === 1200, `kept photo scaled to 1600 px: ${kept.w}x${kept.h}`);
+  await page.waitForSelector('#hlList .spot-thumb img', { state: 'attached', timeout: 5000 });
+  page.once('dialog', (d) => d.accept());
+  await Promise.all([page.waitForNavigation({ waitUntil: 'load' }), page.evaluate(() => document.getElementById('myEraseBtn').click())]);   // Erase reloads the page
+  await page.waitForFunction(() => window.ApexSpotPhotos);
+  check(await page.evaluate(() => window.ApexSpotPhotos.count()) === 0, 'Erase everything clears spot photos');
+}, { geolocation: { latitude: 35.96, longitude: -83.92 }, permissions: ['geolocation'] });
+
+flow('dashcam overlay: a video from the drive gets its speed, g and calls drawn on and comes out as a new video (IDEAS D-11)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/analysis.html');
+  await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && window.ApexRecording);
+  await page.evaluate(async () => {
+    const lat = [], lon = [];
+    for (let i = 0; i < 300; i++) { lat.push(35.6 + i * 5 / 110540); lon.push(-83.9); }
+    await ApexRecording.store({ id: 'dc1', name: 'Dashcam road', date: '2026-10-20T15:00:00Z', lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: lat.map(() => 15),
+      lon_g: lat.map(() => -0.1), lat_g: lat.map((_, i) => Math.sin(i / 10) * 0.3), g_known: null, elev: null, hz: 1, source: 'web-gps',
+      events: [{ type: 'corner', code: 'L4', call: 'Left 4', index: 100, dist_m: 500, start_m: 480, end_m: 520, radius_m: 80, apex_mph: 30, dir: 'L', severity: 4 }] });
+  });
+  await page.goto(base + '/analysis.html?drive=dc1');
+  await page.waitForSelector('#dvDashcam input[type=file]');
+  // a 2 s video made right here, put in the file box as if picked
+  await page.evaluate(async () => {
+    const c = Object.assign(document.createElement('canvas'), { width: 320, height: 180 }), g = c.getContext('2d');
+    const rec = new MediaRecorder(c.captureStream(15), { mimeType: 'video/webm' }), parts = [];
+    rec.ondataavailable = (e) => parts.push(e.data);
+    const stop = new Promise((ok) => { rec.onstop = ok; });
+    rec.start(); let f = 0; const t = setInterval(() => { g.fillStyle = `hsl(${f++ * 12},60%,50%)`; g.fillRect(0, 0, 320, 180); }, 66);
+    await new Promise((r) => setTimeout(r, 2000)); clearInterval(t); rec.stop(); await stop;
+    const file = new File(parts, 'dash.webm', { type: 'video/webm' }), dt = new DataTransfer(); dt.items.add(file);
+    const input = document.querySelector('#dvDashcam input[type=file]'); input.files = dt.files; input.dispatchEvent(new Event('change'));
+    window.__saved = null; ApexSaveFile.saveFile = async (blob, name, type) => { window.__saved = { size: blob.size, name, type }; return 'saved'; };
+  });
+  await page.waitForFunction(() => { const b = [...document.querySelectorAll('#dvDashcam button')].find((x) => /Make the video/.test(x.textContent)); return b && !b.disabled; }, null, { timeout: 8000 });
+  await page.evaluate(() => [...document.querySelectorAll('#dvDashcam button')].find((x) => /Make the video/.test(x.textContent)).click());
+  await page.waitForFunction(() => window.__saved, null, { timeout: 20000 });
+  const saved = await page.evaluate(() => window.__saved);
+  check(saved.size > 500 && /^Dashcam_road-dashcam-.*\.(webm|mp4)$/.test(saved.name), 'a new video: ' + JSON.stringify(saved));
+});
+
 flow('the Log page opens', async (page, base) => {
   await page.goto(base + '/analysis.html');
   await page.waitForLoadState('load');
