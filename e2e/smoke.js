@@ -124,6 +124,11 @@ flow('Where to?: a suggestion builds a route with a card and a Start button (sea
   const name = await page.textContent('#routeBarName');
   check(/Maryville/.test(name), `route bar names the destination (got "${name}")`);
   check(await page.isVisible('#startDrive'), 'Start is offered');
+  // the router's turn is on the track for spoken directions (IDEAS V-04): halfway along, onto Hollow Creek Road
+  const steps = await page.evaluate(() => { const t = window.apexDebug.track; return { steps: t.steps, total: t.dist[t.dist.length - 1] }; });
+  const turn = steps.steps.find((x) => x.type === 10);
+  check(turn && turn.street === 'Hollow Creek Road' && Math.abs(turn.m / steps.total - 0.5) < 0.1, 'the turn is placed halfway: ' + JSON.stringify(steps.steps));
+  check(steps.steps.some((x) => x.type === 4) && !steps.steps.some((x) => x.type === 1), 'arrival kept, the start left out');
 }, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
 
 flow('the car connects: CarPlay offers Start drive, and an apexnav://open?go=drive link starts one', async (page, base) => {

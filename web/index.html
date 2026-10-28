@@ -29,6 +29,7 @@
   <script src="hazard_reports.js"></script>
   <script src="outbox.js"></script>
   <script src="stage_delta.js"></script>
+  <script src="directions.js"></script>
   <script src="incident.js"></script>
   <script src="traffic.js"></script>
   <script src="in_car.js"></script>
@@ -1626,6 +1627,7 @@
         if (d > ApexNoteTiming.MAX_M) break;
         const key = `${track.id}:${e.type}:${e.index}`;
         if (state.spoken.has(key) || d < 10) continue;
+        if (e.type === 'corner' && ApexDirections.atJunction(track.steps, noteM(e))) { state.spoken.add(key); continue; }   // the direction calls it
         const call = chainedCall(e, ev, spirited);
         const apexMps = e.type === 'corner' && Number.isFinite(e.apex_mph) ? e.apex_mph / 2.2369362921 : null;
         if (d > ApexNoteTiming.leadM({ vMps, apexMps, text: call.text, reactionS: reactS })) continue;
@@ -1633,6 +1635,13 @@
         if (e.type === 'corner' ? !spirited : !(spirited || noteworthyInCruise(e))) continue;
         say(call.text, false, call.chain, null, { kind: e.type === 'corner' ? 'ordinary' : 'hazard', key, atM: noteM(e) });
         if (live) reaction.called(performance.now(), call.text, ApexNoteTiming.needsBrake(vMps, apexMps));
+      }
+      // Directions at junctions (IDEAS V-04), in any notes mode: the call at the turn goes ahead of corner notes.
+      if (track && track.kind === 'route' && !offRoute) {
+        for (const line of ApexDirections.due(track.steps, state.cursorM, vMps, state.spoken, track.id)) {
+          state.spoken.add(line.key);
+          say(line.text, false, null, null, { kind: line.now ? 'hazard' : 'ordinary', key: line.key, atM: line.atM });
+        }
       }
       // Roads you have driven: one technique tip per remembered corner, only with full notes on (never over a commute),
       // moving on a fresh heading, and only when it ends before any call is due: it starts MEMO_S of driving beyond the
@@ -1885,11 +1894,13 @@
     // Junction turns (slight/normal/sharp left and right, U-turns, ramps, roundabouts): fun scoring drops the corners there.
     const TURN_TYPES = new Set([9, 10, 11, 12, 13, 14, 15, 16, 18, 19, 20, 21, 26, 27]);
     function routeOf(trip) {
-      const coords = [], turns = [], times = [];
+      const coords = [], turns = [], times = [], steps = [];
       let cumS = 0;
       trip.legs.forEach((leg, i) => {
         const shape = decodePolyline6(leg.shape);
         for (const m of leg.maneuvers || []) if (TURN_TYPES.has(m.type) && shape[m.begin_shape_index]) turns.push(shape[m.begin_shape_index]);
+        // spoken directions (IDEAS V-04): where each maneuver is, its type, the road it turns onto, roundabout exits
+        for (const m of leg.maneuvers || []) { const p = shape[m.begin_shape_index]; if (p) steps.push({ lon: p[0], lat: p[1], type: m.type, street: (m.street_names && m.street_names[0]) || null, exits: m.roundabout_exit_count }); }
         // the router's own clock along the route: [lon, lat, seconds so far] at each maneuver, for the live ETA (eta.js)
         for (const m of leg.maneuvers || []) { if (shape[m.begin_shape_index]) times.push([...shape[m.begin_shape_index], cumS]); if (Number.isFinite(m.time)) cumS += m.time; }
         coords.push(...shape.slice(i ? 1 : 0));
@@ -1903,7 +1914,25 @@
       const sum = trip.summary || {};
       // what the route uses that the driver may have asked to avoid (undefined = the router didn't say)
       const has = { highways: sum.has_highway, tolls: sum.has_toll, ferries: sum.has_ferry };
-      return { coords, turns, names, has, times, timeS: Number.isFinite(sum.time) ? sum.time : null };
+      return { coords, turns, names, has, times, steps, timeS: Number.isFinite(sum.time) ? sum.time : null };
+    }
+    // The router's maneuvers placed on a track for spoken directions (IDEAS V-04; web/directions.js); [] without a router's steps.
+    function stepsOf(t, r) {
+      if (!r || !Array.isArray(r.steps) || !t || !Array.isArray(t.lat) || !t.lat.length) return [];
+      // in route order: the first stretch after the last one placed that comes within 25 m, then its closest point (a loop or an
+      // out-and-back passes the same junction twice; the global nearest point could be the other pass)
+      const c = Math.cos(t.lat[0] * Math.PI / 180), n = t.lat.length;
+      const dm = (i, lat, lon) => Math.hypot((t.lon[i] - lon) * 111320 * c, (t.lat[i] - lat) * 110540);
+      let from = 0;
+      return ApexDirections.placeSteps(r.steps, (lat, lon) => {
+        let i = from;
+        while (i < n && dm(i, lat, lon) > 25) i++;
+        if (i >= n) return null;
+        let best = i;
+        for (let j = i + 1; j < Math.min(n, i + 20); j++) if (dm(j, lat, lon) < dm(best, lat, lon)) best = j;
+        from = best;
+        return t.dist[best];
+      });
     }
     // The router's maneuver times placed on a track: [[metres along it, seconds so far]], in order (ApexEta.routerLeft).
     function timeMarksOf(t, r) {
@@ -2144,7 +2173,7 @@
         let r = null;
         try { [r] = await valhallaRoutes(points); } catch (_) { try { [r] = await osrmRoutes(points); } catch (err) { toast('Couldn\'t build the route. Check signal and try again.'); return; } }
         t = await trackFromPolyline(r.coords, id, name);
-        Object.assign(t, { request, fun: funOf(t, r.turns), timeS: r.timeS, timeMarks: timeMarksOf(t, r), unavoided: FunRoute.unavoided(avoid, r) });
+        Object.assign(t, { request, fun: funOf(t, r.turns), timeS: r.timeS, timeMarks: timeMarksOf(t, r), steps: stepsOf(t, r), unavoided: FunRoute.unavoided(avoid, r) });
       }
       if (explore) showExplore(null);                               // a route is up: the explore list has done its job
       if (t.request) for (const v of t.request.via) v.distM = t.dist[Core.nearestIndex(v.lat, v.lon, t.lat, t.lon, -1).index];
@@ -2256,7 +2285,7 @@
       if (track !== t || state.mode !== 'live') return;           // the driver loaded something else meanwhile
       const nt = await trackFromPolyline(r.coords, t.id, t.name);
       if (track !== t || state.mode !== 'live') return;
-      Object.assign(nt, { request: { from: null, to: req.to, via: ahead }, fun: funOf(nt, r.turns), timeS: r.timeS, timeMarks: timeMarksOf(nt, r) });
+      Object.assign(nt, { request: { from: null, to: req.to, via: ahead }, fun: funOf(nt, r.turns), timeS: r.timeS, timeMarks: timeMarksOf(nt, r), steps: stepsOf(nt, r) });
       await buildRoute(null, t.id, t.name, nt);                     // activate() resets the monitor for the new route
     }
     // Traffic ahead (iOS app only; docs/ARCHITECTURE.md section 8). Every 2 min while on a planned route, Apple times the next
@@ -2351,7 +2380,7 @@
       }
       const at = (v) => Core.nearestIndex(v.lat, v.lon, nt.lat, nt.lon, -1).index;
       const via = [...ahead, ...along].map(v => ({ v, i: at(v) })).sort((a, b) => a.i - b.i).map(x => x.v);   // in order along it
-      Object.assign(nt, { request: { from: null, to: req.to, via }, fun: funOf(nt, route.turns), timeS: route.timeS, timeMarks: timeMarksOf(nt, route), unavoided: FunRoute.unavoided(avoid, route) });
+      Object.assign(nt, { request: { from: null, to: req.to, via }, fun: funOf(nt, route.turns), timeS: route.timeS, timeMarks: timeMarksOf(nt, route), steps: stepsOf(nt, route), unavoided: FunRoute.unavoided(avoid, route) });
       await buildRoute(null, t.id, t.name, nt);                     // activate() restarts the traffic clock for the new route
     }
     // Members: what others measured on these roads (d.t.measured) and a score adjustment for it (d.adjust: rough
@@ -2460,7 +2489,7 @@
       if (was && (routeOptions !== o || plannedRoute !== was || state.mode === 'live')) return null;
       // A winning alternate is pinned with shaping points along it, so a reroute stays on it.
       const via = c.kind === 'router' && c.extraS > 0 ? FunRoute.alongPoints(c.route.coords) : c.via;
-      Object.assign(t, { measured: c.t.measured, fun: c.fun, timeS: c.timeS, timeMarks: timeMarksOf(t, c.route), extraS: c.extraS, funLevel: o.level, glareMin: c.glare ? Math.round(c.glare.minutes) : null, townKm: c.townKm,
+      Object.assign(t, { measured: c.t.measured, fun: c.fun, timeS: c.timeS, timeMarks: timeMarksOf(t, c.route), steps: stepsOf(t, c.route), extraS: c.extraS, funLevel: o.level, glareMin: c.glare ? Math.round(c.glare.minutes) : null, townKm: c.townKm,
                          unavoided: FunRoute.unavoided(avoid, c.route), why: whyText(FunRoute.why(c, o.quickest), fewerTownKm(c, o.quickest), c.extraS),
                          request: { ...o.request, via: via.map(p => ({ lat: p.lat, lon: p.lon, shaping: true })) } });
       routeOptions = Object.assign(o, { picked: i, current: t });
@@ -2709,7 +2738,7 @@
         const t = await trackFromPolyline(r.coords, 'explore', name);
         if (explore !== e || state.mode === 'live') return;         // cleared, or a drive started, while routing
         const glare = FunRoute.glare(t, r.timeS, new Date());
-        Object.assign(t, { fun: funOf(t, r.turns), timeS: r.timeS, timeMarks: timeMarksOf(t, r), unavoided: FunRoute.unavoided(avoid, r), glareMin: glare ? Math.round(glare.minutes) : null,
+        Object.assign(t, { fun: funOf(t, r.turns), timeS: r.timeS, timeMarks: timeMarksOf(t, r), steps: stepsOf(t, r), unavoided: FunRoute.unavoided(avoid, r), glareMin: glare ? Math.round(glare.minutes) : null,
                            request: { from: null, to: { lat: end.lat, lon: end.lon }, via: pts.slice(1, -1).map(q => ({ lat: q.lat, lon: q.lon, shaping: true })) } });
         await buildRoute(null, 'explore', name, t);
         toast(`${name} · ${Math.max(1, Math.round(p.awayS / 60))} min to the start, then ${(p.s.km / 1.609344).toFixed(1)} mi`);
