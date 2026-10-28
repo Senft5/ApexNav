@@ -16,7 +16,8 @@ with `python tools/status_check.py`.
 | Elevation tiles | dependency | one terrarium DEM tile loads |
 | Overpass | dependency | overpass-api.de answers its status page |
 
-Each check gets a 10 s timeout and one retry 3 s later, so a single slow answer is not an outage.
+Each check gets a 10 s timeout and one retry 3 s later, so a single slow answer is not an outage. The checks run side by
+side and the whole run stops waiting after 60 s; a check still going then counts as failed ("timeout").
 
 ## What happens
 
