@@ -246,7 +246,7 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 | U-18 | Native feel: replace remaining web-looking controls (selects, date inputs) with app-style ones | M | M | partial (selects) | STATE 2026-10-27 |
 | U-19 | Search that understands roads and stages ("Tail of the Dragon"), not just addresses | H | M | todo | Google Maps |
 | U-20 | Saved places and lists (home, work, favourite stages) synced to the account | M | M | todo | Google Maps lists |
-| U-21 | Route preview: scrub along the route with elevation, notes and road character | M | M | todo | Calimoto, Komoot |
+| U-21 | Route preview: scrub along the route with elevation, notes and road character | M | M | done: Preview already scrubs with notes and the sector's character; a planned route now gets its elevation from the DEM (`ApexStages.profile`, every 60 m, ≤48 tiles) for the scrubber's hills and a "Climbs 1,200 ft · 1,400 to 5,050 ft" card line; long trips or no tiles: unknown. Checked live: Gatlinburg 424 m → Newfound Gap 1,539 m | Calimoto, Komoot |
 | U-22 | Units and locale: km/mi, 12/24 h, left-hand traffic notes | M | M | done for units: Settings → Units (`web/units.js`, miles by default for en-US/en-GB, km elsewhere) across the cockpit (notes, dial in km/h, trip), planning (cards, toasts, 25/50/75 km loops), spoken directions and convoy calls, the Log (drive view, charts, compare, stages, year and week), share cards and fuel gaps. Physics stays SI. Dates and 12/24 h already follow the phone; left-hand traffic notes: todo |
 
 ## 7. Onboarding and growth (O)

@@ -418,6 +418,47 @@
     return stages;
   }
 
+  /**
+   * A route's elevation profile (IDEAS U-21) from samples [{ m, e }] (e null where unknown): one value per point of `dist`,
+   * linear between known samples, held flat past the ends. Null when fewer than half the samples are known.
+   */
+  function fillProfile(dist, samples) {
+    const known = (samples || []).filter((s) => Number.isFinite(s.e) && Number.isFinite(s.m)).sort((a, b) => a.m - b.m);
+    if (!known.length || known.length < 0.5 * samples.length) return null;
+    const out = new Array(dist.length);
+    let k = 0;
+    for (let i = 0; i < dist.length; i++) {
+      const m = dist[i];
+      while (k < known.length - 1 && known[k + 1].m <= m) k++;
+      const a = known[k], b = known[Math.min(k + 1, known.length - 1)];
+      out[i] = m <= a.m || a === b ? a.e : m >= b.m ? b.e : a.e + (b.e - a.e) * (m - a.m) / (b.m - a.m);
+    }
+    return out;
+  }
+  /** Metres climbed along a profile, ignoring wiggles under 3 m (DEM noise). */
+  function climbM(elev) {
+    if (!elev || !elev.length) return null;
+    let up = 0, ref = elev[0];
+    for (const e of elev) { if (e > ref + 3) { up += e - ref; ref = e; } else if (e < ref - 3) ref = e; }
+    return Math.round(up);
+  }
+  /**
+   * The route's profile from the DEM, every `stepM` metres: null when it would need more than `maxTiles` tiles (a long trip)
+   * or the tiles can't be read. Unknown stays unknown.
+   */
+  async function profile(t, stepM = 60, maxTiles = 48) {
+    if (!t || !t.dist || t.dist.length < 2) return null;
+    const idx = [];
+    for (let i = 0, next = 0; i < t.dist.length; i++) if (t.dist[i] >= next || i === t.dist.length - 1) { idx.push(i); next = t.dist[i] + stepM; }
+    const n = 2 ** DEM_Z, tiles = new Set(idx.map((i) => {
+      const fx = (t.lon[i] + 180) / 360 * n, r = t.lat[i] * Math.PI / 180, fy = (1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * n;
+      return `${Math.floor(fx)}/${Math.floor(fy)}`;
+    }));
+    if (tiles.size > maxTiles) return null;
+    const samples = await Promise.all(idx.map(async (i) => { try { return { m: t.dist[i], e: await elevation(t.lat[i], t.lon[i]) }; } catch (_) { return { m: t.dist[i], e: null }; } }));
+    return fillProfile(t.dist, samples);
+  }
+
   function plans(start, stages, targetKm, count = 3) {
     const top = stages.slice(0, 14);
     const bearing = (p) => Math.atan2(p.lon - start.lon, p.lat - start.lat);
@@ -492,5 +533,5 @@
     return pts;
   }
 
-  root.ApexStages = { decodeLayer, discover, nameStages, places, pois, addElevations, stageDirection, terrarium, applyHighlights, plans, waypoints, strokes, bestWindow, roadPieces };
+  root.ApexStages = { decodeLayer, discover, nameStages, places, pois, addElevations, profile, fillProfile, climbM, stageDirection, terrarium, applyHighlights, plans, waypoints, strokes, bestWindow, roadPieces };
 })(typeof window !== 'undefined' ? window : globalThis);

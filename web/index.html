@@ -485,6 +485,7 @@
               <h3 id="routeCardName"></h3>
               <p class="route-meta" id="routeCardMeta"></p>
               <p class="route-meta" id="routeCardAlong" hidden></p>
+              <p class="route-meta" id="routeCardClimb" hidden></p>
               <div class="bars mt-8" id="routeCardBars"></div>
               <p class="note" id="routeCardWhy" hidden></p>
               <p class="note" id="routeCardSub"></p>
@@ -2398,6 +2399,7 @@
       if (state.mode !== 'live' && !booting) lockOnDestination(t);
       attachLimits(t);
       attachScenic(t);
+      attachProfile(t);
       if (!prebuilt) toast(`${name} · ${ApexUnits.long(totalM(), 1)} · ${t.events.filter(e => e.type === 'corner').length} corners`);
     }
     // A route just found: pin its destination and show it, so you can check you are routing to the right place. FOLLOW
@@ -4349,6 +4351,25 @@
     // line on the route card. Map data: a mapped viewpoint, a fuel station that may be closed. Nothing found says nothing.
     const scenicPins = [];
     const SCENIC_LABEL = { view: 'VIEW', cafe: 'CAFÉ', fuel: 'FUEL' };
+    // The route's climb (stages.js profile, IDEAS U-21): its elevation from the DEM, so Preview's scrubber shows the hills
+    // and the card says how much it climbs. A long trip or no tiles: unknown, nothing shown.
+    async function attachProfile(t) {
+      $('routeCardClimb').hidden = true;
+      if (!t || t.elev || !window.ApexStages || !ApexStages.profile) { if (t && t.elev) paintClimb(t); return; }
+      let elev = null;
+      try { elev = await RouteLoading.optional(ApexStages.profile(t), 15000); } catch (_) { elev = null; }
+      if (!elev || plannedRoute !== t) return;
+      t.elev = elev;
+      paintClimb(t);
+      if (track === t) drawScrubber();
+    }
+    function paintClimb(t) {
+      const up = ApexStages.climbM(t.elev), lo = Math.min(...t.elev), hi = Math.max(...t.elev);
+      if (up == null) return;
+      const h = (m) => (ApexUnits.metric() ? `${Math.round(m)} m` : `${Math.round(m * 3.28084).toLocaleString('en-US')} ft`);
+      $('routeCardClimb').textContent = `Climbs ${h(up)} · ${h(lo)} to ${h(hi)} · see the hills in Preview`;
+      $('routeCardClimb').hidden = false;
+    }
     async function attachScenic(t) {
       for (const mk of scenicPins.splice(0)) mk.remove();
       $('routeCardAlong').hidden = true;
