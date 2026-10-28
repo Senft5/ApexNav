@@ -134,7 +134,8 @@ flow('the Log page opens', async (page, base) => {
 
 flow('Your records: unknown dates and unscored drives never make a "new best", and the record fits a phone', async (page, base) => {
   await page.goto(base + '/analysis.html');
-  await page.waitForLoadState('load');
+  await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded());
+  await page.waitForTimeout(100);                                   // the library's own render (deferred) has run: it cannot overwrite the seed
   const r = await page.evaluate(() => {
     const now = new Date(), ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     const c = (s, b) => ({ pace: 0.8, smoothness: s, braking: b, consistency: 0.8 });

@@ -306,9 +306,9 @@
     // Your records (IDEAS D-08): the best Score on each road you have driven twice or more (roads by name), and this month's
     // smoothest drive and best braking. No speed, time or pace record of its own.
     // A drive whose date is unknown never counts for "this month".
-    function renderRecords() {
+    function renderRecords(list = drives) {
       const roads = new Map();
-      for (const d of drives) { const r = roads.get(d.name) || []; r.push(d); roads.set(d.name, r); }
+      for (const d of list) { const r = roads.get(d.name) || []; r.push(d); roads.set(d.name, r); }
       const when = (d) => monthOf(d) ? d.date : '';                    // an unknown date is never "latest" and never wins a tie
       const rows = [...roads.entries()].map(([name, all]) => {
         const ds = all.filter(d => d.ds.score != null);
@@ -318,7 +318,7 @@
         return { name, best, n: ds.length, fresh: last === best, last };
       }).filter(Boolean).sort((p, q) => (q.last ? when(q.last) : '').localeCompare(p.last ? when(p.last) : '')).slice(0, 6);
       const month = new Date(), key = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, '0')}`;
-      const mine = drives.filter(d => d.ds.score != null && monthOf(d) === key && d.ds.components);
+      const mine = list.filter(d => d.ds.score != null && monthOf(d) === key && d.ds.components);
       const of = (k) => mine.filter(d => finiteNum(d.ds.components[k]));
       const top = (k) => { const c = of(k); return c.length >= 2 ? c.reduce((m, d) => (d.ds.components[k] > m.ds.components[k] ? d : m)) : null; };
       const smooth = top('smoothness'), brake = top('braking');
@@ -336,7 +336,7 @@
       $('recordsNote').textContent = 'Roads are matched by name. Score counts pace only up to a margin inside the grip limit and takes points off past it; smoothness, braking and consistency make up the rest.';
     }
     const finiteNum = (v) => typeof v === 'number' && Number.isFinite(v);
-    window.apexLogDebug = { records: (ds) => { drives = ds; renderRecords(); } };   // e2e/smoke.js seeds the panel
+    window.apexLogDebug = { loaded: () => drivesLoaded, records: (ds) => renderRecords(ds) };   // e2e/smoke.js seeds the panel (the library itself is untouched)
 
     // Braking consistency by month (IDEAS D-07 trend): on corners you drove five or more times in a month, how widely your
     // braking point spread inside that month (Core.spreadBy, a robust SD per corner), the median over the month's corners.
