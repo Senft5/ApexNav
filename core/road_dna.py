@@ -57,6 +57,11 @@ REACTION_S = 1.5             # alert driver; AASHTO design uses 2.5 s for the ge
 EYE_HEIGHT_M = 1.08          # AASHTO stopping-sight geometry
 OBJECT_HEIGHT_M = 0.60
 SIGHT_OFFSET_M = 4.0         # lateral clearance to obstructions (wooded verge, conservative)
+# On a bend toward your own side you sit nearer its inside edge (half a lane is 1.8 m), but SIGHT_OFFSET_M is already a
+# cautious figure: the full 1.8 m on top doubled the right-hander cautions on the bundled Dry Ridge drive (6 to 13 of 17),
+# 0.8 m adds one. A first estimate, to calibrate against crowd data (IDEAS Q-19).
+NEAR_SIDE_M = 0.8
+NEAR_SIDE_FLOOR_M = 1.0      # never less clearance than this
 SIGHT_MAX_M = 400.0          # beyond this, sight no longer constrains a car
 CAMBER_CLIP_RAD = 0.15
 
@@ -166,7 +171,7 @@ def effective_mu(roughness_rms_g=None, mu_eff: float = MU_EFF_DEFAULT):
     return float(mu) if mu.ndim == 0 else mu
 
 
-def sight_distance_m(lat_deg, lon_deg, elevation_m=None, offset_m=SIGHT_OFFSET_M) -> np.ndarray:
+def sight_distance_m(lat_deg, lon_deg, elevation_m=None, offset_m=SIGHT_OFFSET_M, keep_side=None) -> np.ndarray:
     """Geometric sight distance ahead of each sample (m), capped at SIGHT_MAX_M.
 
     Target j is visible from i when the straight sightline between them
@@ -176,6 +181,9 @@ def sight_distance_m(lat_deg, lon_deg, elevation_m=None, offset_m=SIGHT_OFFSET_M
     Sight ends at the first target that fails either test.
     offset_m is one clearance for the whole road, or one per sample (IDEAS Q-09: wider beside open fields than
     beside woods), read at the point the sightline passes.
+    keep_side ('right' in the US, 'left' in the UK; IDEAS U-22): on bends toward that side the driver sits nearer the
+    inside edge, so those sightlines get NEAR_SIDE_M less clearance. Bends the other way keep offset_m: the
+    clearance across the oncoming lane is never counted on. None: the same clearance both ways.
     """
     x, y = local_xy_m(lat_deg, lon_deg)
     n = len(x)
@@ -199,8 +207,14 @@ def sight_distance_m(lat_deg, lon_deg, elevation_m=None, offset_m=SIGHT_OFFSET_M
         chord = np.maximum(np.hypot(cx, cy), 1e-6)
         px, py = xs[ks] - xs[i], ys[ks] - ys[i]
         between = ks[None, :] < js[:, None]
-        off = np.abs(cx[:, None] * py[None, :] - cy[:, None] * px[None, :]) / chord[:, None]
-        blocked = between & (off > offs[ks][None, :])
+        cross = cx[:, None] * py[None, :] - cy[:, None] * px[None, :]
+        off = np.abs(cross) / chord[:, None]
+        allow = np.broadcast_to(offs[ks][None, :], off.shape)
+        if keep_side in ("right", "left"):
+            # the road bending right leaves the points between left of the sightline (cross > 0)
+            near = cross > 0 if keep_side == "right" else cross < 0
+            allow = np.where(near, np.maximum(NEAR_SIDE_FLOOR_M, allow - NEAR_SIDE_M), allow)
+        blocked = between & (off > allow)
         if z is not None:
             eye = z[i] + EYE_HEIGHT_M
             frac = (s[ks][None, :] - s[i]) / (s[js] - s[i])[:, None]

@@ -3,17 +3,17 @@
 /* global importScripts, ApexCore */
 importScripts('apex_core.js');
 self.onmessage = (e) => {
-  const { id, lat, lon, offsets } = e.data || {};
+  const { id, lat, lon, offsets, side } = e.data || {};
   try {
-    self.postMessage({ id, ...ApexAnalysis_run(ApexCore, lat, lon, offsets) });
+    self.postMessage({ id, ...ApexAnalysis_run(ApexCore, lat, lon, offsets, side || null) });
   } catch (err) {
     self.postMessage({ id, error: String((err && err.message) || err) });
   }
 };
 // Kept in step with analysis_client.js runInline (tests/test_analysis_worker.py checks they give the same answer).
-function ApexAnalysis_run(Core, lat, lon, offsets) {
+function ApexAnalysis_run(Core, lat, lon, offsets, side) {
   const { kappa, ds } = Core.computeCurvature(lat, lon);
-  const sight = Core.sightDistanceM(lat, lon, null, offsets || undefined);
+  const sight = Core.sightDistanceM(lat, lon, null, offsets || undefined, side);
   const env = Core.brakingEnvelopeMps(kappa, ds, null, null, undefined, sight);
   const corners = Core.annotateCautions(Core.detectCorners(kappa, ds), env, sight);
   return { kappa, ds, sight, env, corners };

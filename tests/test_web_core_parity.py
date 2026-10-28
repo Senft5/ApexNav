@@ -565,3 +565,24 @@ def test_car_grip_matches_and_never_raises_the_limit():
     tall = py[3]["corners"][0]["apex_mps"]
     assert tall < 21.7 and abs(tall - 21.7 * math.sqrt(0.52 / 0.6)) < 1e-12
     assert da.corners_for_car(corners, None) is corners and da.corners_for_car(corners, 0.9) is corners
+
+
+def test_sight_knows_which_side_you_drive_on():
+    """IDEAS U-22: bends toward your own side get half a lane less clearance (JS = Python); the other way never gains."""
+    lat, lon = path_from_legs([("straight", 100), ("arc", 60, -90), ("straight", 150), ("arc", 60, 90), ("straight", 100)])
+    runner = ("const c=require(process.argv[1]);const {lat,lon}=JSON.parse(require('fs').readFileSync(0,'utf8'));"
+              "process.stdout.write(JSON.stringify([null,'right','left'].map(s=>Array.from(c.sightDistanceM(lat,lon,null,undefined,s)))));")
+    out = subprocess.run([NODE, "-e", runner, os.path.abspath("web/apex_core.js")], input=json.dumps({"lat": list(lat), "lon": list(lon)}),
+                         capture_output=True, text=True, check=True)
+    js = json.loads(out.stdout)
+    py = [rd.sight_distance_m(lat, lon, None, rd.SIGHT_OFFSET_M, s) for s in (None, "right", "left")]
+    for a, b in zip(js, py):
+        assert np.allclose(a, b, atol=1e-9)
+    both, right, left = py
+    r0 = 20                                                     # bend 1 (right) starts at 100 m
+    l0 = int(round((100 + 60 * math.pi / 2 + 150) / 5))        # bend 2 (left)
+    app_r, app_l = slice(r0 - 12, r0 + 4), slice(l0 - 12, l0 + 4)   # the approach to each
+    assert right[app_r].sum() < both[app_r].sum(), "US: the right-hander is the blind one"
+    assert np.array_equal(left[app_r], both[app_r])
+    assert left[app_l].sum() < both[app_l].sum() and np.array_equal(right[app_l], both[app_l]), "UK: the left-hander"
+    assert (right <= both + 1e-9).all() and (left <= both + 1e-9).all(), "never more sight than before"
