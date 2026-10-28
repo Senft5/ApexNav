@@ -2841,7 +2841,7 @@
       $('hlName').value = '';
       selectHighlightCategory('other'); selectHighlightRating(5);
       $('hlOverlay').classList.add('show');
-      $('hlName').focus();
+      if (!document.body.classList.contains('moving')) $('hlName').focus();   // moving: no keyboard, Save names it
     }
     function closeHighlightDialog() { $('hlOverlay').classList.remove('show'); highlightPoint = null; }
     document.querySelectorAll('#hlCategories button').forEach(b => b.addEventListener('click', () => selectHighlightCategory(b.dataset.category)));
@@ -2855,7 +2855,10 @@
     $('hlOverlay').addEventListener('click', (e) => { if (e.target === $('hlOverlay')) closeHighlightDialog(); });
     $('hlAddBtn').addEventListener('click', () => {
       if (!highlightPoint) return;
-      const name = $('hlName').value.trim(); if (!name) { toast('Name the spot first.'); $('hlName').focus(); return; }
+      let name = $('hlName').value.trim();
+      // While moving there is no keyboard: an unnamed spot is named by the time.
+      if (!name && document.body.classList.contains('moving')) name = `Spot ${new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+      if (!name) { toast('Name the spot first.'); $('hlName').focus(); return; }
       const p = highlightPoint;
       saveHighlights(loadHighlights().concat({ id: String(Date.now()), name: name.slice(0, 60), lat: p.lat, lon: p.lon, rating: highlightRating, category: highlightCategory }));
       closeHighlightDialog(); renderHighlights(); toast(`Spot saved · ${name}`);
@@ -3198,6 +3201,7 @@
     document.addEventListener('focusin', (e) => {
       if (!document.body.classList.contains('moving') || !ApexInCar.opensKeyboard(e.target)) return;
       e.target.blur();
+      if ($('toast')._holdUntil > performance.now()) return;   // never take over a Cancel countdown (a reroute, a detour)
       toast('Typing is off while the car moves.', { label: 'I\'m a passenger', ms: 6000, onClick: () => {
         passenger = true; paintMoving(); setTimeout(() => toast('Passenger mode: typing is on until the car stops.'), 0);
       } });

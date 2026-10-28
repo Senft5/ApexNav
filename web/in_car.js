@@ -2,10 +2,11 @@
 // keyboard stays shut; a passenger can unlock typing with one clear switch. Pure: the page feeds GPS speed and the clock,
 // this file says whether the car counts as moving. Hysteresis so a crawl in traffic or a GPS blip doesn't flicker the UI:
 //   - moving after 3 s at >= 4.5 m/s (10 mph), still moving down to 1.5 m/s;
-//   - stopped after 5 s below 1.5 m/s, or 10 s with no speed at all (no fix, or a browser that reports none).
+//   - stopped after 5 s below 1.5 m/s, or 10 s with no speed at all (no fix, or a browser that reports none);
+//   - the 3 s and 5 s must be unbroken: a gap of more than 2.5 s between speed samples starts the count again.
 // Unknown speed never turns the mode on: a phone that reports no speed is never treated as moving.
 (function (root) {
-  const GO_MPS = 4.5, STOP_MPS = 1.5, GO_MS = 3000, STOP_MS = 5000, STALE_MS = 10000;
+  const GO_MPS = 4.5, STOP_MPS = 1.5, GO_MS = 3000, STOP_MS = 5000, STALE_MS = 10000, GAP_MS = 2500;
   const finite = (v) => typeof v === 'number' && Number.isFinite(v);
 
   class MotionGate {
@@ -15,6 +16,7 @@
       if (!finite(t)) return false;
       const was = this.moving;
       if (finite(speedMps) && speedMps >= 0) {
+        if (this.lastSpeedAt == null || t - this.lastSpeedAt > GAP_MS) this.since = null;   // the 3 s / 5 s must be unbroken
         this.lastSpeedAt = t;
         const wants = this.moving ? speedMps >= STOP_MPS : speedMps >= GO_MPS;   // the state the sample argues for
         if (wants === this.moving) this.since = null;

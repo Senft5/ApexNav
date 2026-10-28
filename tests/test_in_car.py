@@ -26,6 +26,11 @@ out.unknown = run([[null, 0, 30]]).log;                           // no speed at
 const g = run([[10, 0, 5]]).g;
 out.staleAt = [g.tick(10000), g.moving, g.tick(15000), g.moving];   // last speed at 5 s: stale at 15 s
 out.badClock = new C.MotionGate().update(20, NaN);
+const sparse = new C.MotionGate(); sparse.update(6, 0); sparse.update(null, 1000); sparse.update(6, 60000);
+out.sparse = sparse.moving;                                         // two readings a minute apart: not 3 s of driving
+const ticked = new C.MotionGate();                                  // 1 Hz samples with the page's 2 s tick in between
+for (let s = 0; s <= 4; s++) { ticked.update(10, s * 1000); ticked.tick(s * 1000 + 500); }
+out.ticked = ticked.moving;
 const el = (tag, extra = {}) => ({ tagName: tag, ...extra });
 out.keyboard = [el('INPUT', { type: 'text' }), el('INPUT', { type: 'search' }), el('TEXTAREA'), el('INPUT', { type: 'checkbox' }),
                 el('INPUT', { type: 'range' }), el('INPUT', { type: 'text', readOnly: true }), el('BUTTON'), el('DIV', { isContentEditable: true }),
@@ -54,6 +59,8 @@ def test_unknown_speed_never_turns_it_on_and_goes_stale(r):
     assert 1 not in r["unknown"]
     assert r["staleAt"] == [False, True, True, False]
     assert r["badClock"] is False
+    assert r["sparse"] is False, "the 3 s must be unbroken"
+    assert r["ticked"] is True, "the timer tick between samples does not reset the count"
 
 
 def test_only_text_fields_open_the_keyboard(r):
