@@ -20,7 +20,7 @@
   const SMOOTH_S = 1.6;               // window (s) for the derived g
 
   class FrameBuilder {
-    constructor() { this.fixes = []; this.motion = []; this.lastCourse = null; this.roughness = null; this.lat = null; }
+    constructor() { this.fixes = []; this.motion = []; this.lastCourse = null; this.roughness = null; this.lat = null; this.impact = null; }
     /** A GPS fix: { t (ms), lat, lon, accuracy (m), speed (m/s|null), heading (deg|null), altitude (m|null) }. Returns a live frame. */
     addFix(f) {
       const bad = !finite(f.lat) || !finite(f.lon) || (finite(f.accuracy) && f.accuracy > MAX_ACCURACY_M);
@@ -35,8 +35,11 @@
       while (this.fixes.length > 2 && fix.t - this.fixes[0].t > 6000) this.fixes.shift();
       const { lonG, latG } = this._g();
       return { has_fix: true, lat: f.lat, lon: f.lon, speed_mps: v, course_deg: course, lon_g: lonG, lat_g: latG, camber_deg: null,
-               roughness_rms: this.roughness, elevation_m: fix.alt, accuracy_m: finite(f.accuracy) ? f.accuracy : null, t: f.t };
+               roughness_rms: this.roughness, elevation_m: fix.alt, accuracy_m: finite(f.accuracy) ? f.accuracy : null, t: f.t,
+               impact_g: this._takeImpact() };
     }
+    /** The largest impact since the last fix (g), then reset; null when the phone sends no motion. */
+    _takeImpact() { const v = this.impact; this.impact = null; return v == null ? null : Math.round(v * 100) / 100; }
     /** Smoothed g derived from the last SMOOTH_S seconds of fixes; null while there is not enough track. */
     _g() {
       const fx = this.fixes, last = fx[fx.length - 1];
@@ -57,6 +60,8 @@
     addMotion(m) {
       if (![m.ax, m.ay, m.az].every(finite)) return;
       this.motion.push({ t: m.t, a: Math.hypot(m.ax, m.ay, m.az) / G });
+      // Hard impacts for the crash check (incident.js): how far the magnitude strays from 1 g, largest since the last fix.
+      this.impact = Math.max(this.impact || 0, Math.abs(this.motion[this.motion.length - 1].a - 1));
       while (this.motion.length > 1 && m.t - this.motion[0].t > 1000) this.motion.shift();
       if (this.motion.length < 8) return;
       const mean = this.motion.reduce((s, x) => s + x.a, 0) / this.motion.length;         // slow part: gravity plus sustained g

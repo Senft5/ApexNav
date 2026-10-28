@@ -331,6 +331,25 @@ flow('shared routes: one a friend shared shows in Crew and opens as a planned ro
   check(/corners/.test(await page.textContent('#routeCardMeta')), 'the route card has its corners (notes rebuilt from the shape)');
 });
 
+flow('crash check: a hard impact then a stop asks "Are you OK?"; no answer offers a call and a text to the contact (IDEAS D-17)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.crashContact', JSON.stringify({ name: 'Sam', phone: '+1 555 010 2030' })); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && typeof window.apex.live === 'function' && window.ApexIncident);
+  await page.evaluate(() => {   // 1 Hz frames: cruising at 20 m/s, a 12 g hit, to rest, then still
+    const sp = [...Array(8).fill(20), 18, 8, 2, ...Array(12).fill(0)];
+    sp.forEach((v, i) => window.apex.live({ t: 1e9 + i * 1000, lat: 35.6 + i * 1e-4, lon: -83.9, accuracy_m: 5, speed_mps: v, course_deg: 0, has_fix: true,
+      impact_g: i === 8 ? 12 : 0.2 }));
+  });
+  await page.waitForSelector('.crash-sheet[role="alertdialog"]');
+  check(/Are you OK\?/.test(await page.textContent('.crash-sheet')), 'asks if you are OK');
+  await page.click('.crash-sheet button:has-text("Get help")');
+  check(await page.getAttribute('.crash-sheet a[href^="tel:"]', 'href') === 'tel:911', 'offers the emergency call');
+  const sms = await page.getAttribute('.crash-sheet a[href^="sms:"]', 'href');
+  check(sms.startsWith('sms:+15550102030') && /maps\.apple\.com/.test(decodeURIComponent(sms)), 'the text to Sam carries where you are');
+  await page.click('.crash-sheet button:has-text("OK")');
+  check(!(await page.$('.crash-sheet')), 'closes');
+});
+
 flow('the Log page opens', async (page, base) => {
   await page.goto(base + '/analysis.html');
   await page.waitForLoadState('load');

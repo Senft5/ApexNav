@@ -424,6 +424,9 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
     // Recording
     private var isRecording = false
     private var recordedSegments: Int = 0
+    /// Largest acceleration magnitude (m/s^2, any mount, gravity removed) since the last live frame: the web's crash
+    /// check (web/incident.js, IDEAS D-17) needs a hard impact, which no 5 m road value shows.
+    private var frameImpactMps2: Double = 0
     private static let csvHeader = "segment_index,distance_m,lat,lon,elevation_m,speed_mph,lon_g,lat_g,camber_deg,crest_vertical_g,roughness_rms,engagement_score,grade_pct,vert_peak_g"
     private var csvLines: [String] = [ApexSensorShell.csvHeader]
 
@@ -809,6 +812,7 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
     /// speed in m/s, course in degrees true, elevation in m, grade in %.
     private func pushLiveFrame() {
         let vertPeak = pipeline.takeVertPeak()   // this frame's spike window; the web Recorder places it on the road
+        let impact = frameImpactMps2; frameImpactMps2 = 0
         guard webReady, webView != nil else { return }
         let live = imuLive   // false while the thermal guard has motion paused: g, camber, crest and roughness are unknown
         func imu(_ v: Double) -> Double? { live ? v : nil }
@@ -826,6 +830,7 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
             + "\"crest_vertical_g\":\(Self.num(imu(pipeline.crestAccMps2 / Self.gStd), 3)),"
             + "\"roughness_rms\":\(Self.num(imu(pipeline.roughRMSMps2 / Self.gStd), 4)),"
             + "\"vert_peak_g\":\(Self.num(imu(vertPeak / Self.gStd), 3)),"
+            + "\"impact_g\":\(Self.num(imu(impact / Self.gStd), 2)),"
             + "\"recording\":\(isRecording ? "true" : "false"),"
             + "\"calibration\":\"\(live ? pipeline.mount.state.rawValue : "paused")\","
             + "\"thermal\":\(thermal.level),"
@@ -964,6 +969,7 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
 
     private func ingestMotion(gravityG: Vec3, accelMps2 a: Vec3, gyroRadS w: Vec3, timestamp: Double) {
         latestGravityG = gravityG
+        frameImpactMps2 = max(frameImpactMps2, (a.x * a.x + a.y * a.y + a.z * a.z).squareRoot())
         // Calibration is automatic and continuous (ApexKit.MountCalibrator): gravity gives the vertical, GPS speed and
         // turns give forward, a moved phone drops back to unknown. Silent; the frame's "calibration" field shows the state.
         let wasLocked = pipeline.mount.state == .locked

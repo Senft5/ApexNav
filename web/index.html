@@ -27,6 +27,7 @@
   <script src="note_timing.js"></script>
   <script src="plain_notes.js"></script>
   <script src="hazard_reports.js"></script>
+  <script src="incident.js"></script>
   <script src="traffic.js"></script>
   <script src="in_car.js"></script>
   <script src="power.js"></script>
@@ -488,6 +489,17 @@
             <div id="zoneList" class="stack-8 mt-8"></div>
           </section>
           <section data-panel="setup">
+            <h3>Crash check</h3>
+            <p class="note" style="margin:0 0 8px">After a hard impact and a stop, ApexNav asks if you're OK. If you don't answer within a minute it shows buttons to call emergency services or text this person your location. Your phone never calls or texts by itself. This is a backup to your phone's own crash detection, not a replacement for it. The contact stays on this phone.</p>
+            <div class="row" style="flex-wrap:wrap">
+              <button class="sw" data-toggle="crash"><i></i><span>Crash check</span></button>
+            </div>
+            <div class="row mt-8" style="flex-wrap:wrap">
+              <input class="field" id="crashName" autocomplete="off" maxlength="40" placeholder="Contact name" aria-label="Emergency contact name">
+              <input class="field" id="crashPhone" type="tel" autocomplete="off" maxlength="24" placeholder="Phone number" aria-label="Emergency contact phone number">
+            </div>
+          </section>
+          <section data-panel="setup">
             <h3>Your data</h3>
             <p class="note" id="myDataNote" role="status">--</p>
             <div class="row" style="flex-wrap:wrap">
@@ -754,7 +766,7 @@
       theme: 'roadbook', camFeel: 'dynamic', voiceId: 'george', liveVoice: false, voiceStyle: 'codriver', voiceName: '', hlOn: false, hlStrength: 1,
       notesMode: 'auto', nightMode: 'auto',   // Notes: auto | full | quiet. Night: auto (sunset/sunrise) | on | off
       noteWords: 'plain',                     // rally ("Left 4 minus") | plain ("Medium left"), IDEAS V-02; a saved setting wins
-      toggles: { stage: false, voice: true, lpr: true, dna: false, night: false, twisty: false, haptics: true }   // stage and night are derived from the two modes; analysis.html reads toggles.night
+      toggles: { stage: false, voice: true, lpr: true, dna: false, night: false, twisty: false, haptics: true, crash: true }   // stage and night are derived from the two modes; analysis.html reads toggles.night
     };
     const NOTES_MODES = ['auto', 'full', 'quiet'], NIGHT_MODES = ['auto', 'on', 'off'];
     const MODE_LABEL = { auto: 'Auto', full: 'Full', quiet: 'Quiet', on: 'On', off: 'Off' };
@@ -3875,6 +3887,25 @@
       }
     }
     // Each fresh fix while driving: call the next reported hazard ahead, and after passing one ask if it's still there.
+    // ---- crash check (IDEAS D-17; web/incident.js): impact + stop asks "Are you OK?"; the contact is local only ----------
+    const CRASH_KEY = 'apex.crashContact';
+    const crashContact = () => { try { const c = JSON.parse(localStorage.getItem(CRASH_KEY) || 'null'); return c && c.phone ? c : null; } catch (_) { return null; } };
+    (() => {
+      const c = crashContact() || {};
+      $('crashName').value = c.name || ''; $('crashPhone').value = c.phone || '';
+      const save = () => {
+        const name = $('crashName').value.trim().slice(0, 40), phone = $('crashPhone').value.trim().slice(0, 24);
+        try { if (phone) localStorage.setItem(CRASH_KEY, JSON.stringify({ name, phone })); else localStorage.removeItem(CRASH_KEY); } catch (_) {}
+      };
+      $('crashName').addEventListener('change', save); $('crashPhone').addEventListener('change', save);
+    })();
+    const crashSheet = window.ApexIncident ? ApexIncident.mount({ el, say: (t) => say(t, true), haptic, contact: crashContact, position: () => state.lastPosition || null }) : null;
+    const crashDetector = window.ApexIncident ? ApexIncident.createDetector() : null;
+    function feedCrash(frame) {
+      if (!crashDetector || !crashSheet || !state.toggles.crash) return;   // the native shell sends no frames here outside a drive
+      const t = Number.isFinite(frame.t) ? frame.t : Date.now();
+      if (crashDetector.update({ t, speed_mps: frame.speed_mps, impact_g: frame.impact_g }) === 'ask') crashSheet.ask();
+    }
     function feedReported(frame) {
       if (!driveActive && state.mode !== 'live') return;
       loadReported();
@@ -4198,7 +4229,7 @@
         state.lastMotion = { heading: Number.isFinite(frame.course_deg) ? frame.course_deg : null, speedMps: Number.isFinite(frame.speed_mps) ? frame.speed_mps : null };
         if (NATIVE_SHELL) feedAmbient(inPrivacyZone(frame.lat, frame.lon) ? { has_fix: false } : frame);   // ends the trip; its last km stays here
         if (NATIVE_SHELL && !driveActive) { showIdleFix(frame); return; }
-        feedReported(frame); feedReaction(frame);
+        feedReported(frame); feedReaction(frame); feedCrash(frame);
         state.live = frame; state.liveAt = performance.now();
         if (drive.native && drive.rec) {
           drive.frames++; recordFrame(frame); feedLive(); noteRoads(); noteRest(frame);

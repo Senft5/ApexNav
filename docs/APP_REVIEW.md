@@ -29,6 +29,7 @@ Checked 2026-10-28 against main and App Store Connect (read through the API key 
 | 4.0 design, iPhone only | `TARGETED_DEVICE_FAMILY = 1`; Dynamic Type on reading pages (U-15) |
 | 5.2 third-party content | OpenStreetMap/OpenFreeMap attribution on the map and in Settings → Sources and licences |
 | Export compliance | `ITSAppUsesNonExemptEncryption = NO` (HTTPS only) |
+| 1.4.1 safety claims | Crash check (D-17) is described in the app and policy as a backup to the phone's own crash detection, never a replacement; it never calls or texts by itself (the driver or someone with them taps `tel:`/`sms:` links), so it makes no claim it can't keep. Keep listing copy the same: no "we call for help" |
 | 1.4 physical harm | no speed leaderboards or top-speed records anywhere (guardrails in IDEAS.md), typing locked while moving (C-08), performance timing parked (D-14). Keep listing copy about flow, smoothness and finding good roads, never racing or speed |
 
 ## Open before the first App Store submission
