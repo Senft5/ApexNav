@@ -372,10 +372,17 @@ async function run({ level, routes, osrm, discover, matrix, places, avoid = FunR
   out.osrm = { built: r.built.length, timeS: r.built[0].timeS };
   // 4. A stage on the way: shortlisted, timed by the matrix, routed, wins, and its points become shaping vias.
   const stage = { km: 5, score: 20, lat: wiggly.slice(0, 1001).map(p => p[1] + 300 * mLat), lon: wiggly.slice(0, 1001).map(p => p[0]) };
+  const onStage = wiggly.map(p => [p[0], p[1] + 300 * mLat]);
+  r = await run({ level: 'fun', discover: async () => [stage],
+                  routes: async (pts) => pts.length === 2 ? [{ coords: straight, turns: [], timeS: 600 }] : [{ coords: onStage, turns: [], timeS: 720 }],
+                  matrix: async (s, t) => s.map(() => t.map(() => 60)) });
+  out.stage = { fun: r.built[0].fun.fun, via: r.built[0].request.via.length, shaping: r.built[0].request.via.every(v => v.shaping), extraS: r.built[0].extraS, matrix: r.calls.matrix };
+  // 4b. The router's way through the stage points is a road 300 m away (a shortcut past it, R-14): the plan is dropped.
   r = await run({ level: 'fun', discover: async () => [stage],
                   routes: async (pts) => pts.length === 2 ? [{ coords: straight, turns: [], timeS: 600 }] : [{ coords: wiggly, turns: [], timeS: 720 }],
                   matrix: async (s, t) => s.map(() => t.map(() => 60)) });
-  out.stage = { fun: r.built[0].fun.fun, via: r.built[0].request.via.length, shaping: r.built[0].request.via.every(v => v.shaping), extraS: r.built[0].extraS, matrix: r.calls.matrix };
+  out.shortcut = { timeS: r.built[0].timeS, via: r.built[0].request.via.length };
+  out.coverage = { kept: FunRoute.stageCoverage(onStage, { legs: [{ s: stage }] }), skipped: FunRoute.stageCoverage(wiggly, { legs: [{ s: stage }] }), none: FunRoute.stageCoverage(wiggly, { legs: [] }) };
   // 5. All down: one toast, nothing built.
   r = await run({ level: 'fun', routes: async () => { throw Error('down'); }, discover: async () => [] });
   out.down = { built: r.built.length, toasts: r.toasts };
@@ -412,6 +419,8 @@ def test_app_fun_route_picks_and_falls_back():
     assert r["quick"]["fun"] > 50 and r["quick"]["extraS"] == 60 and r["quick"]["matrix"] == 0
     assert len(r["quick"]["marks"]) == 2 and r["quick"]["marks"][0] == [0, 0] and r["quick"]["marks"][1][1] == 330, r["quick"]["marks"]
     assert r["quick"]["via"] >= 1 and r["quick"]["shaping"], "the winning 12 km alternate is pinned so a reroute stays on it"
+    assert r["shortcut"] == {"timeS": 600, "via": 0}, "a route that skipped its stage is not a stage route"
+    assert r["coverage"]["kept"] == 1 and r["coverage"]["skipped"] == 0 and r["coverage"]["none"] == 1
     assert r["avoidTolls"] == {"timeS": 600, "extraS": 0, "why": None, "unavoided": []}, "the toll road is dropped, not ranked"
     assert r["tollOnly"] == ["tolls"], "no toll-free way: the card says so"
     assert (r["towns"]["timeS"], r["towns"]["townKm"]) == (660, 0), "the bow round the town wins when towns are avoided"

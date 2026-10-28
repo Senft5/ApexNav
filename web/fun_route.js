@@ -449,6 +449,35 @@
   // that want this app don't want gravel. Highways and tolls are already de-prioritised, not avoided, by default.
   const AVOID_DEFAULT = { highways: false, tolls: false, ferries: false, unpaved: true, towns: false, cameras: false };
   const AVOID_LABELS = { highways: 'highways', tolls: 'tolls', ferries: 'ferries', unpaved: 'unpaved roads', towns: 'towns', cameras: 'cameras' };
+  /**
+   * Did the router actually drive the stages (IDEAS R-14, ROAD_INTELLIGENCE §7.2.4)? For each stage of `plan`, the share of
+   * its length (sampled every ~50 m) that lies within `nearM` of the returned route ([lon, lat] coords). The lowest share
+   * across stages; 1 for a plan with no stages. Under STAGE_KEPT the router took a shortcut and the plan didn't happen.
+   */
+  const STAGE_KEPT = 0.7;
+  function stageCoverage(coords, plan, nearM = 40) {
+    if (!plan || !Array.isArray(plan.legs) || !plan.legs.length) return 1;
+    if (!Array.isArray(coords) || coords.length < 2) return 0;
+    const lat0 = coords[0][1], c = Math.cos(lat0 * Math.PI / 180), mx = 111320 * c, my = 110540;
+    const rx = coords.map((p) => p[0] * mx), ry = coords.map((p) => p[1] * my);
+    let worst = 1;
+    for (const { s } of plan.legs) {
+      const n = (s.lat || []).length;
+      if (n < 2) continue;
+      const step = Math.max(1, Math.round(n / Math.max(2, (s.km || 0) * 20)));       // about every 50 m
+      let near = 0, total = 0;
+      for (let i = 0; i < n; i += step) {
+        const x = s.lon[i] * mx, y = s.lat[i] * my;
+        total++;
+        for (let j = 0; j < rx.length; j++) {
+          if (Math.abs(rx[j] - x) <= nearM && Math.abs(ry[j] - y) <= nearM && Math.hypot(rx[j] - x, ry[j] - y) <= nearM) { near++; break; }
+        }
+      }
+      if (total) worst = Math.min(worst, near / total);
+    }
+    return worst;
+  }
+  const keptStages = (coords, plan) => stageCoverage(coords, plan) >= STAGE_KEPT;
   /** The camera span a trip may ask the camera map for (degrees each way); bigger trips route without (IDEAS R-35). */
   const CAMERA_BOX_DEG = 1.0;
   /**
@@ -555,6 +584,6 @@
     return out;
   }
 
-  const api = { LEVELS, townKm, townCost, exploreShortlist, exploreTargets, explorePicks, distinctOptions, glare, glareCost, LOOP_BY_TIME, AVOID_DEFAULT, AVOID_LABELS, CAMERA_BOX_DEG, camerasToExclude, costing, unavoided, keepAvoiding, why, geometry, alongPoints, insertVia, loopValue, loopShortlist, loopPlansFromMatrix, score, shortlist, matrixPoints, plansFromMatrix, sectionCount, sectionPoints, combineSections, planKey, searchArea, waypoints, rank, along, kmBetween, directionBonus };
+  const api = { LEVELS, townKm, townCost, exploreShortlist, exploreTargets, explorePicks, distinctOptions, glare, glareCost, LOOP_BY_TIME, AVOID_DEFAULT, AVOID_LABELS, STAGE_KEPT, stageCoverage, keptStages, CAMERA_BOX_DEG, camerasToExclude, costing, unavoided, keepAvoiding, why, geometry, alongPoints, insertVia, loopValue, loopShortlist, loopPlansFromMatrix, score, shortlist, matrixPoints, plansFromMatrix, sectionCount, sectionPoints, combineSections, planKey, searchArea, waypoints, rank, along, kmBetween, directionBonus };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexFunRoute = api;
 })(typeof window !== 'undefined' ? window : globalThis);

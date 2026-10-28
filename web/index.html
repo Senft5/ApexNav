@@ -2743,6 +2743,8 @@
             routed.push(...await Promise.allSettled(plans.slice(i, i + 2).map(async (plan) => {
               const pts = FunRoute.waypoints(from, to, plan);
               const [r] = await valhallaRoutes(pts);
+              // The router may join the shaping points by a shortcut that skips the stage (R-14): then the plan didn't happen.
+              if (!FunRoute.keptStages(r.coords, plan)) throw new Error('stage skipped');
               return { kind: 'stages', route: r, timeS: r.timeS, via: pts.slice(1, -1) };
             })));
           }
@@ -2909,6 +2911,7 @@
       const tries = jobs.map(async (job) => {
         const [r] = await valhallaRoutes(job.pts, job.through)
           .finally(() => { settled++; ui.step(`Routing · ${settled} of ${jobs.length}`, 0.38 + 0.5 * settled / jobs.length); });
+        if (job.plan && !FunRoute.keptStages(r.coords, job.plan)) throw new Error('stage skipped');   // a shortcut past the stage (R-14)
         const rs = Core.removeSpurs(r.coords.map(p => p[1]), r.coords.map(p => p[0]));
         const t = await trackFromPolyline(rs.lat.map((la, i) => [rs.lon[i], la]), loopId, `${asked} loop`);
         t.fun = funOf(t, r.turns);
