@@ -73,6 +73,17 @@
     }).join(' · ');
   }
 
-  const api = { samplePoints, url, atArrival, hazard, summary, POINTS };
+  /**
+   * What the weather costs a candidate route in the ranking (fun points, IDEAS R-21): the share of its sampled points with
+   * ice or snow (30), storms (15), rain (6) or fog (4). Unknown points cost nothing; heat costs nothing (it isn't grip).
+   */
+  const COST = { ice: 30, snow: 30, storm: 15, rain: 6, fog: 4 };
+  function cost(list) {
+    const known = (list || []).map(hazard).filter((h) => h !== undefined);
+    if (!known.length) return 0;
+    return Math.round(10 * known.reduce((s, h) => s + (COST[h] || 0), 0) / known.length) / 10;
+  }
+
+  const api = { samplePoints, url, atArrival, hazard, summary, cost, COST, POINTS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexRouteWeather = api;
 })(typeof window !== 'undefined' ? window : globalThis);
