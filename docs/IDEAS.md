@@ -304,6 +304,9 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 | Y-13 | No cron: expired invites, crew invites and app sign-in codes stay in D1 forever (sessions are now swept on the next sign-in, #132). A daily `scheduled` handler that deletes expired rows (can share the Y-12 backup cron) | L | S | todo | audit 2026-10-28 |
 | Y-14 | Segment ids are client-made (`seg_<ms>`) and global: two people saving at the same millisecond get `409 id_taken` and that segment never syncs. Scope ids per owner, or let the server assign and return one | L | S | todo | audit 2026-10-28 |
 | Y-15 | `upsertGoogleUser` never refreshes email or display name for an existing account, so a changed Google address stays stale in the export and in `OWNER_EMAIL` matching | L | S | todo | audit 2026-10-28 |
+| Y-16 | Owner screen for crash counts (reads `GET /api/ops/errors`; today only JSON) | M | S | todo | crash-log review 2026-10-28 |
+| Y-17 | Latency and real error rate where agents can read them: Analytics SQL binding (`logs.workersLogs`, beta) or a daily summary row in D1; or sign in the full Cloudflare connector | H | M | todo | crash-log review 2026-10-28: the connector reaches D1 and Worker code only |
+| Y-18 | Count Durable Object (convoy) exceptions in `error_counts` too; today only the Worker's route handler 500s are counted | M | S | todo | crash-log review 2026-10-28 |
 
 ## 11. Performance and battery (P)
 

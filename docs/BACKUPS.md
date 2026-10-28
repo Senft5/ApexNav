@@ -137,7 +137,20 @@ partway, check the database's metrics in the dashboard before blaming the export
 
 - `tools/d1_rowcounts.sql` lists every table. `tests/test_backups.py` fails when a migration adds a table that is not in it.
 - Durable Objects (convoy rooms) hold only live, short-lived state (2 h drives, nothing personal kept) and are not backed up.
-- Workers Logs (crash reports, `client_error`) are not data to keep and are not backed up.
+- Workers Logs (crash reports, `client_error`) are not data to keep and are not backed up. `error_counts` (anonymous daily crash counts) is in the export like any table, but losing it costs nothing.
+
+## 6a. What Claude can reach (Cloudflare connector, checked 2026-10-28)
+
+There is no API token in Claude's environment. Its Cloudflare access is the claude.ai "Cloudflare Developer Platform" connector, which Cloudflare marks deprecated in favour of the full Cloudflare API connector (mcp.cloudflare.com).
+
+| Can | Cannot |
+|---|---|
+| D1: list, read and write SQL on both databases (backups in section 3 are rebuilt from SELECTs) | D1 export, Time Travel, undelete |
+| Workers: list scripts, read the deployed (bundled) code | Workers Logs, Observability queries, invocation errors, CPU/wall time, request analytics |
+| KV, R2 buckets, Hyperdrive: create, list, delete | R2 objects, secrets, deployments, routes |
+| Search Cloudflare's docs | Anything in the dashboard (Custom Dashboards, Monitors, Issues) |
+
+So crash reports and server 500s are also counted in D1 `error_counts` (docs/BACKEND.md), which this connector can read. Latency and the real error rate still need the dashboard (Workers → apexnav → Metrics / Observability) until the full connector is signed in or a token with Workers Observability read is added.
 
 ## 7. Log
 
@@ -147,3 +160,4 @@ partway, check the database's metrics in the dashboard before blaming the export
 | 2026-10-28 | First export of both databases, by Claude through the connector (section 3, "Without wrangler") | `apexnav-db`: 28 tables (also `bans`, from the not-yet-merged 0009 migration), 72 KB; loaded into a fresh local SQLite, integrity and foreign-key checks clean, fingerprint identical to live D1 on every table. `apexnav-preview-db`: 27 tables, all empty, schema only. `d1_migrations` is empty on prod (not 1 row as IDEAS Y-08 says) and missing on preview. Stored in the project files `backups/d1/`. Not yet: a restore into a real D1 database (drill, section 5) |
 | 2026-10-28 | KV namespace `apexnav-backups` created for the weekly copy (R2 refused: not enabled on the account) | first run: the Monday after the Y-12 PR deploys |
 | 2026-10-28 | `d1_migrations` backfilled on both databases (created on preview), 0001–0009, `applied_at` = the backfill time (03:03–03:04Z), after checking each migration's tables and columns exist on both | `wrangler d1 migrations list` now shows nothing pending. A future hand-applied migration must add its row: `INSERT INTO d1_migrations (name) VALUES ('00NN_name.sql')` |
+| 2026-10-28 | Migration 0010 (`error_counts`, additive) applied by hand to `apexnav-preview-db`, then `apexnav-db`, with its `d1_migrations` row on both | ok; no Time Travel bookmark (the connector can't read one) |

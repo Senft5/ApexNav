@@ -1,5 +1,11 @@
 # APEX NAV — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-10-28: production crash and error review
+- Cloudflare connector checked: it reaches D1 SQL and the deployed Worker code, not Workers Logs, analytics or latency (table in docs/BACKUPS.md 6a). So no crash report or server error from production could be read; there was nothing else to review.
+- Production D1 looked healthy: 3 users, 909 road bins, no expired sessions or stale sign-in codes left, empty ingest queue.
+- Crash reports and the Worker's own 500s are now counted per day in D1 `error_counts` (migration 0010, anonymous, capped at 500 rows a day, kept 30 days); owner view `GET /api/ops/errors?days=7` (docs/BACKEND.md). Unfixed follow-ups: IDEAS Y-16 to Y-18.
+- Exact next task: once some counts exist, `SELECT * FROM error_counts ORDER BY day DESC, n DESC` on apexnav-db and fix the top entries; Y-17 for latency.
+
 ## Session 2026-10-28: production-readiness audit
 - Read the whole backend, the iOS shell's web view and bridge, the live contributor, kinematics.py and sun.js. SQL is all bound parameters; auth, CSRF, invites, export/delete and the board/grant rules hold. pytest 253 green, vitest 169 green.
 - #132: real names (Google display name) only to yourself and accepted friends (public crews and pending friend requests leaked them); app sign-in code consumed atomically; expired sessions swept on sign-in; crew invite links respect the 10-crew cap.
