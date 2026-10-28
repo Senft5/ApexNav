@@ -201,6 +201,32 @@
     return pts;
   }
 
+  /**
+   * Shaping points along a router polyline ([[lon, lat]]), about every `everyKm` and at most `max`, ends
+   * excluded. A winning alternate keeps them as vias, so a reroute or an added stop stays on that road
+   * instead of falling back to the quickest one.
+   */
+  function alongPoints(coords, everyKm = 6, max = 8) {
+    if (!Array.isArray(coords) || coords.length < 3) return [];
+    const cum = [0];
+    for (let i = 1; i < coords.length; i++) cum.push(cum[i - 1] + kmBetween({ lat: coords[i - 1][1], lon: coords[i - 1][0] }, { lat: coords[i][1], lon: coords[i][0] }));
+    const total = cum[cum.length - 1], n = Math.min(max, Math.floor(total / everyKm));
+    const out = [];
+    for (let k = 1, i = 0; k <= n; k++) {
+      const at = total * k / (n + 1);
+      while (i < cum.length - 1 && cum[i] < at) i++;
+      out.push({ lat: coords[i][1], lon: coords[i][0], shaping: true });
+    }
+    return out;
+  }
+  /** Where a new stop goes among a route's vias (each with distM along it): before the first via past it. */
+  function insertVia(vias, stop, stopM) {
+    const i = vias.findIndex(v => Number.isFinite(v.distM) && v.distM > stopM);
+    const out = vias.slice();
+    out.splice(i < 0 ? out.length : i, 0, stop);
+    return out;
+  }
+
   // ---- ranking --------------------------------------------------------------------
   /**
    * cands: [{ fun: score(), timeS, adjust? }]. Drops candidates past the level's budget over the
@@ -224,6 +250,6 @@
     }).filter(c => c.extraS === 0 || c.timeS <= limit).sort((a, b) => b.value - a.value);
   }
 
-  const api = { LEVELS, geometry, score, shortlist, matrixPoints, plansFromMatrix, searchArea, waypoints, rank, along, kmBetween };
+  const api = { LEVELS, geometry, alongPoints, insertVia, score, shortlist, matrixPoints, plansFromMatrix, searchArea, waypoints, rank, along, kmBetween };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexFunRoute = api;
 })(typeof window !== 'undefined' ? window : globalThis);

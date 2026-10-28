@@ -73,6 +73,15 @@ out.plans = plans.map(p => ({ legs: p.legs.map(l => l.s.name + (l.fwd ? '>' : '<
 out.quickMin = quickS / 60;
 out.limitMin = (quickS * (1 + F.LEVELS.fun.budget) + F.LEVELS.fun.slackS) / 60;
 out.plansQuick = F.plansFromMatrix(list, times, quickS, 'quick', 3).length;
+// shaping points along a 30 km line: every ~6 km, at most 8, never the ends
+const line30 = ll(Array.from({ length: 3001 }, (_, i) => [i * 10, 0]));
+out.along = F.alongPoints(line30).map(p => Math.round((p.lon - lon0) / mLon / 1000));
+out.alongMax = F.alongPoints(ll(Array.from({ length: 20001 }, (_, i) => [i * 10, 0]))).length;
+out.alongShort = F.alongPoints(ll([[0, 0], [1000, 0], [2000, 0]])).length;
+// a stop near the start goes before the stage points, not after them
+const vias = [{ id: 's1', distM: 5000 }, { id: 's2', distM: 9000 }];
+out.insertEarly = F.insertVia(vias, { id: 'pin' }, 1000).map(v => v.id);
+out.insertLate = F.insertVia(vias, { id: 'pin' }, 12000).map(v => v.id);
 process.stdout.write(JSON.stringify(out));
 """
 
@@ -136,6 +145,13 @@ def test_plans_use_real_connector_times_and_budget(r):
     assert r["plansQuick"] <= len(r["plans"])
 
 
+def test_alternates_keep_shaping_points_and_stops_go_in_order(r):
+    assert r["along"] == [5, 10, 15, 20, 25], "a 30 km alternate is pinned every 5–6 km"
+    assert r["alongMax"] == 8 and r["alongShort"] == 0
+    assert r["insertEarly"] == ["pin", "s1", "s2"]
+    assert r["insertLate"] == ["s1", "s2", "pin"]
+
+
 def test_stage_search_shrinks_to_the_tile_budget():
     res = subprocess.run([NODE, "-e", TILES, os.path.abspath(".")], capture_output=True, text=True, check=True)
     calls = json.loads(res.stdout)["calls"]
@@ -174,7 +190,7 @@ async function run({ level, routes, osrm, discover, matrix }) {
   // 1. Quick: no stage search; the twistier alternate wins when it costs 1 minute.
   let r = await run({ level: 'quick', routes: async (pts, alts) => [{ coords: straight, turns: [], timeS: 600 }, { coords: wiggly, turns: [], timeS: 660 }],
                       discover: async () => { throw Error('should not search'); } });
-  out.quick = { fun: r.built[0].fun.fun, extraS: r.built[0].extraS, via: r.built[0].request.via.length, matrix: r.calls.matrix };
+  out.quick = { fun: r.built[0].fun.fun, extraS: r.built[0].extraS, via: r.built[0].request.via.length, shaping: r.built[0].request.via.every(v => v.shaping), matrix: r.calls.matrix };
   // 2. No tiles: the router's own routes still compete, no error.
   r = await run({ level: 'fun', routes: async () => [{ coords: straight, turns: [], timeS: 600 }], discover: async () => { throw Error('no tiles'); } });
   out.noTiles = { built: r.built.length, fun: r.built[0].fun.fun };
@@ -199,7 +215,8 @@ def test_app_fun_route_picks_and_falls_back():
     res = subprocess.run([NODE, "-e", APP, os.path.abspath(".")], capture_output=True, text=True)
     assert res.returncode == 0, res.stderr
     r = json.loads(res.stdout)
-    assert r["quick"]["fun"] > 50 and r["quick"]["extraS"] == 60 and r["quick"]["via"] == 0 and r["quick"]["matrix"] == 0
+    assert r["quick"]["fun"] > 50 and r["quick"]["extraS"] == 60 and r["quick"]["matrix"] == 0
+    assert r["quick"]["via"] >= 1 and r["quick"]["shaping"], "the winning 12 km alternate is pinned so a reroute stays on it"
     assert r["noTiles"] == {"built": 1, "fun": r["noTiles"]["fun"]}
     assert r["osrm"] == {"built": 1, "timeS": 700}
     assert r["stage"]["matrix"] == 1 and r["stage"]["via"] >= 2 and r["stage"]["shaping"] and r["stage"]["fun"] > 50 and r["stage"]["extraS"] == 120

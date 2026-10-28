@@ -13,7 +13,7 @@ The Plan sheet and the route card have a **Roads** choice, saved on the phone (`
 | Fun (default) | 35 % + 4 min | 2 good corners a minute |
 | Max fun | 90 % + 10 min | 0.7 good corners a minute |
 
-Changing the level re-plans a destination route that is not being driven.
+Changing the level re-plans a destination route that is not being driven (not while one is being planned; a route with a stop you added keeps it and the level applies to the next route). Loops ignore the level, so their card hides it.
 
 ## Candidates
 
@@ -32,6 +32,11 @@ Changing the level re-plans a destination route that is not being driven.
    level's time cost; the best 2 are routed with each stage's entry, exit and midpoints as shaping
    points (`through`, 25 m radius). Those points become the route's vias, so a reroute still
    drives the stages ahead.
+5. A winning router alternate (not the quickest) is pinned with shaping points about every 5–6 km
+   (at most 8), so a reroute or an added stop stays on it instead of falling back to the quickest
+   road. An added stop is inserted where it falls along the route. Trips under 3 km crow fly skip
+   the stage search. Quick may still take an alternate up to 10 % + 1 min slower when it is
+   clearly more fun.
 
 Any step that fails (no tiles, no matrix, a stage route that fails) just leaves fewer candidates;
 the router's own route is always there.

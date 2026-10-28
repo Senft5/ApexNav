@@ -359,7 +359,7 @@
               <p class="route-meta" id="routeCardMeta"></p>
               <div class="bars mt-8" id="routeCardBars"></div>
               <p class="note" id="routeCardSub"></p>
-              <div class="plan-links fun-row" role="radiogroup" aria-label="Route style"><span>Roads</span><button class="chip" data-fun="quick" role="radio" aria-checked="false">Quick</button><button class="chip" data-fun="fun" role="radio" aria-checked="false">Fun</button><button class="chip" data-fun="max" role="radio" aria-checked="false">Max fun</button></div>
+              <div class="plan-links fun-row" id="routeCardFun" role="radiogroup" aria-label="Route style"><span>Roads</span><button class="chip" data-fun="quick" role="radio" aria-checked="false">Quick</button><button class="chip" data-fun="fun" role="radio" aria-checked="false">Fun</button><button class="chip" data-fun="max" role="radio" aria-checked="false">Max fun</button></div>
               <div class="row mt-8">
                 <button class="ink-btn solid" id="routeDriveBtn">Drive it</button>
                 <button class="ink-btn" id="routePreviewBtn">Preview</button>
@@ -1658,6 +1658,7 @@
           : null;
       const feel = mCov != null && mCov > 0 ? `Road feel ${mCov}% driven` : 'Road feel after first drive';
       $('routeCardSub').textContent = `Cameras ${cams} · ${feel}`;
+      $('routeCardFun').hidden = t.id !== 'route_dest';           // the level re-plans destination routes only
     }
     // Log and Stages are another page, so coming back to Map reloads this one: keep the planned route for the session and
     // rebuild it here from its own geometry (no router call, works offline). Also what a reload after a lost map restores.
@@ -1812,10 +1813,11 @@
       const level = funLevel;
       let direct;
       try { direct = await valhallaRoutes([from, to], false, 2); }
-      catch (_) { try { direct = await osrmRoutes([from, to]); } catch (err) { toast('Couldn\'t build the route. Check signal and try again.'); return; } }
+      catch (_) { try { direct = await osrmRoutes([from, to]); } catch (err) { toast('Couldn\'t build the route. Check signal and try again.'); return false; } }
       const cands = direct.map(r => ({ kind: 'router', route: r, timeS: r.timeS, via: [] }));
       const quickS = Math.min(...cands.map(c => c.timeS).filter(Number.isFinite));
-      if (level !== 'quick' && Number.isFinite(quickS)) {
+      // Under 3 km there is no detour worth taking to the shop round the corner.
+      if (level !== 'quick' && Number.isFinite(quickS) && FunRoute.kmBetween(from, to) >= 3) {
         try {
           ui.step('Finding fun roads…', 0.75);
           const area = FunRoute.searchArea(from, to);
@@ -1838,16 +1840,19 @@
       ui.step('Scoring roads…', 0.9);
       // Score on light geometry (corners only); the full track (envelope, sight lines, notes) is built for the winner.
       for (const c of cands) { c.t = FunRoute.geometry(c.route.coords, Core); c.fun = funOf(c.t, c.route.turns); await RouteLoading.yieldToUI(); }
-      await applyMeasured(cands, ui);
+      await applyMeasured(FunRoute.rank(cands, level).slice(0, 3).map(r => cands.find(c => c.t === r.t)), ui);   // the top few only
       const best = FunRoute.rank(cands, level)[0];
       const measured = best.t.measured;
       best.t = await trackFromPolyline(best.route.coords, id, name);
+      // A winning alternate is pinned with shaping points along it, so a reroute stays on it.
+      const via = best.kind === 'router' && best.extraS > 0 ? FunRoute.alongPoints(best.route.coords) : best.via;
       Object.assign(best.t, { measured, fun: best.fun, timeS: best.timeS, extraS: best.extraS, funLevel: level,
-                              request: { ...request, via: best.via.map(p => ({ lat: p.lat, lon: p.lon, shaping: true })) } });
+                              request: { ...request, via: via.map(p => ({ lat: p.lat, lon: p.lon, shaping: true })) } });
       await buildRoute(null, id, name, best.t);
       const mi = (totalOf(best.t) / 1609.344).toFixed(1), extra = best.extraS >= 60 ? ` · +${Math.round(best.extraS / 60)} min for fun` : '';
       toast(`${name} · ${mi} mi · Fun ${best.fun ? best.fun.fun : '--'}${extra}`);
       window.apexDebug && (window.apexDebug.lastFun = FunRoute.rank(cands, level).map(c => ({ kind: c.kind, fun: c.fun, timeS: c.timeS, value: c.value, adjust: c.adjust || 0 })));
+      return true;
     }
     function setFunLevel(level) {
       if (!FunRoute.LEVELS[level]) return;
@@ -1858,14 +1863,17 @@
     // Changing the level re-plans a destination route that isn't being driven.
     async function replanForLevel() {
       const t = plannedRoute;
-      if (!t || t.id !== 'route_dest' || !t.request || state.mode === 'live' || $('planPanel').classList.contains('busy')) return;
+      if (!t || t.id !== 'route_dest' || !t.request || state.mode === 'live') return;
+      if (t.request.via.some(v => !v.shaping)) { toast(`${FunRoute.LEVELS[funLevel].label} from your next route (this one has your added stop)`); return; }
       const ui = planBusy();
       ui.step('Routing…', 0.5);
+      let ok = false;
       try {
         const from = t.request.from || await locate();
         if (!from) throw new Error(NO_FIX);
-        await funRoute(from, t.request.to, t.id, t.name, { from: t.request.from, to: t.request.to, via: [] }, ui);
+        ok = await funRoute(from, t.request.to, t.id, t.name, { from: t.request.from, to: t.request.to, via: [] }, ui);
       } catch (err) { toast(err.message); } finally { ui.done(); }
+      if (!ok && t.funLevel) setFunLevel(t.funLevel);             // the chips show the level the route on screen was built with
     }
 
     // Loops: three candidate circles through the start, waypoints snapped to through roads,
@@ -2162,7 +2170,10 @@
       e.currentTarget.disabled = true;
       const from = req.from || await locate();
       if (!from) { toast(NO_FIX); e.currentTarget.disabled = false; return; }
-      const via = [...req.via.map(v => ({ lat: v.lat, lon: v.lon, ...(v.shaping ? { shaping: true } : {}) })), pin];
+      // The stop goes where it falls along the route, not after every stage point (no backtracking).
+      const pinM = current.dist[Core.nearestIndex(pin.lat, pin.lon, current.lat, current.lon, -1).index];
+      const via = FunRoute.insertVia(req.via.map(v => ({ lat: v.lat, lon: v.lon, distM: v.distM, ...(v.shaping ? { shaping: true } : {}) })), { lat: pin.lat, lon: pin.lon }, pinM)
+        .map(({ distM, ...v }) => v);
       closePin();
       await buildRoute([from, ...via, req.to], current.id, current.name, null,
         { from: req.from, to: req.to, via });
@@ -2211,7 +2222,10 @@
       if (state.tapToRoute) { closeSheet(); openPlan(false); toast(state.planField === 'fromInput' ? 'Tap the map where you want to start.' : 'Tap the map where you want to go.'); }
     });
     document.querySelectorAll('[data-loop-mi]').forEach(b => b.addEventListener('click', () => loop(parseInt(b.dataset.loopMi, 10), b)));
-    document.querySelectorAll('[data-fun]').forEach(b => b.addEventListener('click', () => { if (b.dataset.fun === funLevel) return; setFunLevel(b.dataset.fun); replanForLevel(); }));
+    document.querySelectorAll('[data-fun]').forEach(b => b.addEventListener('click', () => {
+      if (b.dataset.fun === funLevel || $('planPanel').classList.contains('busy')) return;
+      setFunLevel(b.dataset.fun); replanForLevel();
+    }));
     setFunLevel(funLevel);
     $('routeDriveBtn').addEventListener('click', () => {
       if (!plannedRoute) return;

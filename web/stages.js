@@ -111,12 +111,14 @@
     const z = 13, jobs = [];
     // At most 64 tiles: a 14 km radius needs 81 at 39°N, so shrink the area to fit instead of giving up (which
     // used to drop every 45 mi loop to the circle fallback).
-    for (let r = radiusKm; jobs.length === 0 || jobs.length > MAX_TILES; r -= 0.5) {
+    if (!Number.isFinite(c.lat) || !Number.isFinite(c.lon) || !(radiusKm > 0)) throw new Error('bad search area');
+    for (let r = radiusKm; r > 0 && (jobs.length === 0 || jobs.length > MAX_TILES); r -= 0.5) {
       const dLat = r / 110.54, dLon = r / (111.32 * Math.cos(c.lat * Math.PI / 180));
       const [x0, y0] = tileOf(c.lat + dLat, c.lon - dLon, z), [x1, y1] = tileOf(c.lat - dLat, c.lon + dLon, z);
       jobs.length = 0;
       for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) jobs.push([x, y]);
     }
+    if (!jobs.length || jobs.length > MAX_TILES) jobs.splice(0, jobs.length, tileOf(c.lat, c.lon, z));
     let done = 0;
     const pieces = [];
     await Promise.all(jobs.map(async ([x, y]) => {
