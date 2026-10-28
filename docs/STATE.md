@@ -1,5 +1,9 @@
 # APEX NAV — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-10-28: avoid highways, tolls, ferries, unpaved
+- #115 merged (why this route). #PR: Avoid row on the Plan sheet (docs/ROUTING.md, Avoid); unpaved avoided by default; Valhalla summary flags make it honest ("Couldn't avoid tolls" on Virginia Beach → Cape Charles, checked against the public server). Not checked on a phone.
+- Exact next task: R-15 remainder (avoid towns, repeated roads), or R-13 sun glare.
+
 ## Session 2026-10-28: "why this route" on the route card
 - #111 merged (loops on the fun score). #115: a fun route slower than the quickest says why under the bars, from Valhalla's road names (`FunRoute.why`, `whyText`): Knoxville→Maryville on Fun reads "For SR 360 13 mi, Cold Spring Road 8.2 mi, Doublecamp Creek Road 6.2 mi · 167 more good corners, +30 min". Kept across a page change (sessionStorage). OSRM fallback routes have no names, so only corners and minutes show. Not checked on a phone.
 - R-14 (reject routes that shortcut a stage) is mostly covered already: every candidate is scored on the router's returned geometry, so a shortcut route can't win on corners it didn't drive.

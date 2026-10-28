@@ -398,6 +398,29 @@
     return { roads, gained, extraMin: Math.round((best.timeS - quick.timeS) / 60) };
   }
 
-  const api = { LEVELS, why, geometry, alongPoints, insertVia, loopValue, loopShortlist, loopPlansFromMatrix, score, shortlist, matrixPoints, plansFromMatrix, sectionCount, sectionPoints, combineSections, planKey, searchArea, waypoints, rank, along, kmBetween };
+  // ---- avoid options ------------------------------------------------------------------
+  // What the driver asked to stay off. Unpaved is avoided by default: stages never use it (web/stages.js) and most cars
+  // that want this app don't want gravel. Highways and tolls are already de-prioritised, not avoided, by default.
+  const AVOID_DEFAULT = { highways: false, tolls: false, ferries: false, unpaved: true };
+  const AVOID_LABELS = { highways: 'highways', tolls: 'tolls', ferries: 'ferries', unpaved: 'unpaved roads' };
+  /** Valhalla auto costing for the avoid options (preferences, not hard bans: the router may still need one). */
+  function costing(avoid = AVOID_DEFAULT) {
+    const auto = { use_highways: avoid.highways ? 0 : 0.15, use_tolls: avoid.tolls ? 0 : 0.3 };
+    if (avoid.ferries) auto.use_ferry = 0;
+    if (avoid.unpaved) auto.exclude_unpaved = true;
+    return { costing: 'auto', costing_options: { auto } };
+  }
+  /** Which avoided things a route still uses, from the router's summary flags (route.has = { highways, tolls, ferries }); unknown flags say nothing. */
+  function unavoided(avoid, route) {
+    const has = (route && route.has) || {};
+    return ['highways', 'tolls', 'ferries'].filter(k => avoid && avoid[k] && has[k] === true);
+  }
+  /** Candidates that keep to the avoid options, when any do; otherwise all of them (the card then says what couldn't be avoided). */
+  function keepAvoiding(cands, avoid) {
+    const clean = cands.filter(c => !unavoided(avoid, c.route).length);
+    return clean.length ? clean : cands;
+  }
+
+  const api = { LEVELS, AVOID_DEFAULT, AVOID_LABELS, costing, unavoided, keepAvoiding, why, geometry, alongPoints, insertVia, loopValue, loopShortlist, loopPlansFromMatrix, score, shortlist, matrixPoints, plansFromMatrix, sectionCount, sectionPoints, combineSections, planKey, searchArea, waypoints, rank, along, kmBetween };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexFunRoute = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -118,6 +118,12 @@ const wr = { timeS: 5400, fun: { good: 48 }, route: { names: new Map([['Foothill
 out.why = F.why(wr, qr);
 out.whyQuick = F.why(qr, qr);
 out.whyNoNames = F.why({ ...wr, route: {} }, qr);
+// avoid options: costing, what a route still uses, and keeping to them when any candidate can
+out.costDefault = F.costing().costing_options.auto;
+out.costAll = F.costing({ highways: true, tolls: true, ferries: true, unpaved: false }).costing_options.auto;
+const tollRoad = { route: { has: { tolls: true, highways: false } } }, freeRoad = { route: { has: { tolls: false, highways: false } } }, unknown = { route: {} };
+out.unavoided = [F.unavoided({ tolls: true }, tollRoad.route), F.unavoided({ tolls: false }, tollRoad.route), F.unavoided({ tolls: true }, unknown.route)];
+out.keep = [F.keepAvoiding([tollRoad, freeRoad], { tolls: true }).length, F.keepAvoiding([tollRoad], { tolls: true }).length, F.keepAvoiding([tollRoad, freeRoad], { tolls: false }).length];
 process.stdout.write(JSON.stringify(out));
 """
 
@@ -210,6 +216,13 @@ def test_why_this_route_names_the_roads_it_is_for(r):
     assert r["whyNoNames"] == {"roads": [], "gained": 38, "extraMin": 30}, "no road names: still the corners and the cost"
 
 
+def test_avoid_options_reach_the_router_and_are_honest(r):
+    assert r["costDefault"] == {"use_highways": 0.15, "use_tolls": 0.3, "exclude_unpaved": True}
+    assert r["costAll"] == {"use_highways": 0, "use_tolls": 0, "use_ferry": 0}
+    assert r["unavoided"] == [["tolls"], [], []], "unknown flags say nothing"
+    assert r["keep"] == [1, 1, 2], "a toll-free candidate wins the pool; if none is, the toll road stays (and the card says so)"
+
+
 def test_loops_are_valued_on_the_fun_scale(r):
     full, retraced, long_, unscored = r["loopValue"]
     assert full == 60, "a clean loop of the asked length is worth its fun score"
@@ -225,7 +238,7 @@ const source = html.match(/async function valhallaMatrix\(.*?\n    }/s)[0];
 const calls = [];
 const RouteLoading = { json: async (url, opts) => { const b = JSON.parse(opts.body); calls.push(b.sources.length * b.targets.length);
   return { sources_to_targets: b.sources.map((s, i) => b.targets.map((t, j) => (j === 0 ? null : { time: 60, distance: Math.round((s.lat - 39) * 100) + j }))) }; } };
-const m = new Function('RouteLoading', 'VALHALLA', 'COSTING', 'return (' + source + ')')(RouteLoading, 'https://v', {});
+const m = new Function('RouteLoading', 'VALHALLA', 'FunRoute', 'avoid', 'return (' + source + ')')(RouteLoading, 'https://v', { costing: () => ({}) }, {});
 const pts = (n) => Array.from({ length: n }, (_, i) => ({ lat: 39 + i / 100, lon: -84 }));
 (async () => {
   const r = await m(pts(13), pts(13));
@@ -273,13 +286,13 @@ const A = { lat: lat0, lon: lon0 }, B = { lat: lat0, lon: lon0 + 10000 * mLon };
 async function run({ level, routes, osrm, discover, matrix }) {
   const built = [], toasts = [], calls = { matrix: 0, routes: 0 };
   const funRoute = new Function('funLevel', 'valhallaRoutes', 'osrmRoutes', 'toast', 'FunRoute', 'ApexStages', 'state', 'allHighlights', 'valhallaMatrix',
-    'Core', 'RouteLoading', 'funOf', 'applyMeasured', 'trackFromPolyline', 'buildRoute', 'totalOf', 'window', 'whyText', 'return (' + source + ')')(
+    'Core', 'RouteLoading', 'funOf', 'applyMeasured', 'trackFromPolyline', 'buildRoute', 'totalOf', 'window', 'whyText', 'avoid', 'return (' + source + ')')(
     level, async (pts, through, alts) => { calls.routes++; return routes(pts, alts); }, osrm || (async () => { throw Error('down'); }),
     (m) => toasts.push(m), FunRoute, { discover }, { hlOn: false }, async () => [],
     async (s, t) => { calls.matrix++; return { times: await matrix(s, t) }; },
     Core, { yieldToUI: async () => {} }, (t, turns) => FunRoute.score(t, []), async () => false,
     async (coords, id, name) => ({ id, name, ...FunRoute.geometry(coords, Core) }),
-    async (pts, id, name, t) => built.push(t), (t) => t.dist[t.dist.length - 1], {}, whyText);
+    async (pts, id, name, t) => built.push(t), (t) => t.dist[t.dist.length - 1], {}, whyText, FunRoute.AVOID_DEFAULT);
   await funRoute(A, B, 'route_dest', 'To B', { from: null, to: B, via: [] }, { step() {} });
   return { built, toasts, calls };
 }
