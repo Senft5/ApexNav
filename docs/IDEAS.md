@@ -77,10 +77,10 @@ long-press pin (#61), Apple place search and nearby suggestions in the app (#73)
 | R-10 | "Explore": best stages within N minutes of here, as a list and on the map, one tap to drive one | H | M | todo | ROAD_INTELLIGENCE §7.1, REVER discover |
 | R-11 | Choose each stage's direction by score and car (climb the technical one, descend the flowing one) | M | M | todo | ROAD_INTELLIGENCE §7.2.3 |
 | R-12 | Set list: order stages so intensity builds, rests, and finishes high; no three max-TECH stages in a row | M | M | todo | ROAD_INTELLIGENCE §7.2.5 |
-| R-13 | Sun glare penalty for headings within 20° of a low sun, using the existing solar formula | M | S | todo | ROAD_INTELLIGENCE §7.2.6 |
+| R-13 | Sun glare penalty for headings within 20° of a low sun, using the existing solar formula | M | S | done (#123) | ROAD_INTELLIGENCE §7.2.6 |
 | R-14 | Re-score the router's returned geometry and reject routes that shortcut a stage | M | S | todo | ROAD_INTELLIGENCE §7.2.4 |
-| R-15 | Avoid options: highways, tolls, ferries, unpaved, towns, repeated roads, with honest "couldn't avoid" | H | M | todo | Kurviger, Calimoto, Google Maps |
-| R-16 | Time budget routing: "I have 90 minutes, end at home" (orienteering with a hard time cap) | H | M | todo | ROAD_INTELLIGENCE §7.1 |
+| R-15 | Avoid options: highways, tolls, ferries, unpaved, towns, repeated roads, with honest "couldn't avoid" | H | M | partial (#118: highways, tolls, ferries, unpaved; towns and repeated roads to do) | Kurviger, Calimoto, Google Maps |
+| R-16 | Time budget routing: "I have 90 minutes, end at home" (orienteering with a hard time cap) | H | M | done (#122: 1 h / 2 h loops planned on drive time) | ROAD_INTELLIGENCE §7.1 |
 | R-17 | Day trip builder: start, stops (food, fuel, viewpoint), finish, with drag-to-reorder vias | H | L | todo | Roadtrippers, Calimoto tour planner |
 | R-18 | Drag the route line on the map to reshape it (adds a via) | M | M | todo | Google Maps, Kurviger |
 | R-19 | Archetype preferences in routing ("love esses, skip switchbacks"), sliders first, learned later | H | M | todo | ROAD_INTELLIGENCE §5.4 |
@@ -94,7 +94,7 @@ long-press pin (#61), Apple place search and nearby suggestions in the app (#73)
 | R-27 | Our own routing graph with fun scores baked into edge costs (Valhalla custom costing) | H | XL | todo | ROAD_INTELLIGENCE §7.3 |
 | R-28 | On-device Valhalla with regional tiles built monthly by free CI, so routing works with no signal | H | XL | todo | ROAD_INTELLIGENCE §7.4, Calimoto offline |
 | R-29 | Lane guidance and junction views at complex interchanges on the transit parts of a trip | M | L | todo | Google Maps, Apple Maps |
-| R-30 | Multiple route options shown side by side on the map with Fun/Twist/Flow and time for each | H | M | todo | Google Maps alternatives |
+| R-30 | Multiple route options shown side by side on the map with Fun/Twist/Flow and time for each | H | M | done (#126) | Google Maps alternatives |
 | R-31 | "Why this route" explainer: the stages it uses, what each adds, and what it cost in minutes | M | S | done (#115) | trust-building |
 | R-32 | Benchmark roads (Tail of the Dragon, Big Sur, Stelvio, Route 33) must rank in their region's top decile; CI test | M | M | todo | ROAD_INTELLIGENCE §6.2 |
 | R-33 | Preference learning: after a drive, "which was better, A or B?" fits per-user and global weights | H | L | todo | ROAD_INTELLIGENCE §6.3 |
@@ -270,8 +270,8 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 | C-04 | Car audio: ducking and routing to Bluetooth/CarPlay while prompts play | H | M | done (#73) | — |
 | C-05 | Auto-start: open the cockpit when the phone joins the car's Bluetooth or CarPlay | M | S | todo | Waze, Shortcuts |
 | C-06 | Driving focus aware: no social notifications while driving, a summary after | M | S | todo | iOS Focus |
-| C-07 | Big-target in-car mode: every control ≥ 60 pt, no keyboard while moving | H | S | todo | NHTSA distraction guidelines |
-| C-08 | Passenger mode: unlocks typing and route editing while moving, with a clear switch | M | S | todo | Waze passenger prompt |
+| C-07 | Big-target in-car mode: every control ≥ 60 pt, no keyboard while moving | H | S | done (#121) | NHTSA distraction guidelines |
+| C-08 | Passenger mode: unlocks typing and route editing while moving, with a clear switch | M | S | done (#121) | Waze passenger prompt |
 
 ## 9. Offline (F)
 
@@ -294,9 +294,9 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 | Y-04 | Production router: self-host Valhalla or a paid tier instead of public demo servers | H | L | owner (cost) | STATE 2026-10-25 (d) |
 | Y-05 | Status page and synthetic checks for the Worker, D1 and routing | M | S | todo | production readiness |
 | Y-06 | Staged rollouts: preview Worker for TestFlight, feature flags per build | M | M | todo | docs/BACKEND.md |
-| Y-07 | Real-phone test checklist run before each TestFlight build (VERIFY.md) | H | S | todo | docs/VERIFY.md |
+| Y-07 | Real-phone test checklist run before each TestFlight build (VERIFY.md) | H | S | done (VERIFY.md section 0; first run is the owner's) | docs/VERIFY.md |
 | Y-08 | Record migrations in `d1_migrations` (it only lists 0001) and a drift check in CI | M | S | todo | STATE 2026-10-26 |
-| Y-09 | Database backups (D1 time travel/export) and a restore drill | H | S | todo | production readiness |
+| Y-09 | Database backups (D1 time travel/export) and a restore drill | H | S | done (#124; first export and drill need the owner's wrangler login) | production readiness |
 | Y-10 | Rate limits and abuse protection on every write endpoint | H | M | done (#112) | production readiness |
 | Y-11 | End-to-end browser tests of the main flows (plan, drive replay, log, crew) in CI | M | M | todo | testing |
 
@@ -307,9 +307,9 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 | P-01 | Battery budget for an hour of driving with screen on, measured and published | H | M | todo | Waze, REVER complaints |
 | P-02 | Low-power cockpit: drop to 30 fps and fewer map layers when the battery is low or hot | M | M | todo | thermal throttling |
 | P-03 | Split web/index.html into modules so pages load faster and threads stop colliding | M | L | todo | dev velocity |
-| P-04 | Lazy-load voice banks and kokoro-js only when voice is on | M | S | todo | startup time |
+| P-04 | Lazy-load voice banks and kokoro-js only when voice is on | M | S | done (already lazy: checked 2026-10-28, a cold start fetches only voices/index.json) | startup time |
 | P-05 | Route analysis in a Web Worker so the UI never stutters while scoring | M | M | todo | Y-01 |
-| P-06 | Startup under 1 s to an interactive map on a mid-range phone | H | M | todo | — |
+| P-06 | Startup under 1 s to an interactive map on a mid-range phone | H | M | partial (demo drives load on demand, #125) | — |
 | P-07 | Thermal guard: pause the 100 Hz pipeline gracefully if the phone overheats on the dash | M | S | todo | iPhone on windscreen |
 
 ## 12. Privacy and security (Z)

@@ -270,22 +270,26 @@
     }
     return out;
   }
+  // Loops by drive time ("home in 90 minutes", R-16): stages at 25 km/h, since the router times twisty back roads well
+  // below STAGE_KMH (a 43 km Smokies loop: 83 min); a connector second costs what a connector km does at 60 km/h.
+  const LOOP_BY_TIME = { stageCost: (s) => s.km / 25 * 3600, perUnit: 0.08 / 60 };
   /**
    * Loops of 1–3 shortlisted stages in any order and direction, measured with real road distances
    * (matrix km; null = no road): start→entry + stage + exit→next entry ... + exit→start. Crow-fly
    * guesses ran 40–75 % long in hills. Kept within 25 % of the target; value = stage score x
    * (1 − length error) − 0.08 per connector km (the old plans() formula). Best `count`, distinct lead stage.
+   * With `by` = LOOP_BY_TIME, `cost` is the matrix in seconds and `target` is seconds.
    */
-  function loopPlansFromMatrix(list, distKm, targetKm, count = 3) {
+  function loopPlansFromMatrix(list, cost, target, count = 3, by = { stageCost: (s) => s.km, perUnit: 0.08 }) {
     const n = list.length, home = 2 * n;
-    const D = (row, col) => { const v = distKm[row] && distKm[row][col]; return Number.isFinite(v) ? v : null; };
+    const D = (row, col) => { const v = cost[row] && cost[row][col]; return Number.isFinite(v) ? v : null; };
     const out = [];
     const walk = (legs, used, row, connector, stageKm, score) => {
       if (legs.length) {
         const back = D(row, home);
         if (back != null) {
-          const total = stageKm + connector + back, err = Math.abs(total - targetKm) / targetKm;
-          if (err <= 0.25) out.push({ legs: legs.slice(), total, stageKm, value: score * (1 - err) - (connector + back) * 0.08, share: stageKm / total });
+          const total = stageKm + connector + back, err = Math.abs(total - target) / target;
+          if (err <= 0.25) out.push({ legs: legs.slice(), total, stageKm, value: score * (1 - err) - (connector + back) * by.perUnit, share: stageKm / total });
         }
       }
       if (legs.length === 3) return;
@@ -293,9 +297,9 @@
         if (used & (1 << i)) continue;
         for (const fwd of [true, false]) {
           const entry = 2 * i + (fwd ? 0 : 1), exit = 2 * i + (fwd ? 1 : 0), c = D(row, entry);
-          if (c == null || stageKm + connector + c > targetKm * 1.25) continue;
+          if (c == null || stageKm + connector + c > target * 1.25) continue;
           legs.push({ s: list[i], fwd });
-          walk(legs, used | (1 << i), 1 + exit, connector + c, stageKm + list[i].km, score + list[i].score);
+          walk(legs, used | (1 << i), 1 + exit, connector + c, stageKm + by.stageCost(list[i]), score + list[i].score);
           legs.pop();
         }
       }
@@ -364,7 +368,7 @@
   /**
    * cands: [{ fun: score(), timeS, adjust? }]. Drops candidates past the level's budget over the
    * quickest, then ranks by fun + GAIN_PER_CORNER x good corners gained over the quickest route
-   * - perMin x extra minutes (+ `adjust`, e.g. measured roughness). Fun is a density, so a longer
+   * - perMin x extra minutes (+ `adjust`, e.g. measured roughness; − glareCost, minutes into a low sun). Fun is a density, so a longer
    * route through a great stage would barely move it; the corner gain is what pays for the detour.
    * The quickest route always stays in, so there is always an answer.
    */
@@ -379,7 +383,7 @@
     return cands.map(c => {
       const extraS = Number.isFinite(c.timeS) ? Math.max(0, c.timeS - quick.timeS) : Infinity;
       const fun = c.fun ? c.fun.fun : 0, gain = c.fun ? Math.min(GAIN_CAP, Math.max(0, c.fun.good - quickGood)) : 0;
-      return { ...c, extraS, value: fun + GAIN_PER_CORNER * gain - L.perMin * extraS / 60 + (c.adjust || 0) };
+      return { ...c, extraS, value: fun + GAIN_PER_CORNER * gain - L.perMin * extraS / 60 + (c.adjust || 0) - glareCost(c) };
     }).filter(c => c.extraS === 0 || c.timeS <= limit).sort((a, b) => b.value - a.value);
   }
 
@@ -398,6 +402,67 @@
     return { roads, gained, extraMin: Math.round((best.timeS - quick.timeS) / 60) };
   }
 
-  const api = { LEVELS, why, geometry, alongPoints, insertVia, loopValue, loopShortlist, loopPlansFromMatrix, score, shortlist, matrixPoints, plansFromMatrix, sectionCount, sectionPoints, combineSections, planKey, searchArea, waypoints, rank, along, kmBetween };
+  // ---- avoid options ------------------------------------------------------------------
+  // What the driver asked to stay off. Unpaved is avoided by default: stages never use it (web/stages.js) and most cars
+  // that want this app don't want gravel. Highways and tolls are already de-prioritised, not avoided, by default.
+  const AVOID_DEFAULT = { highways: false, tolls: false, ferries: false, unpaved: true };
+  const AVOID_LABELS = { highways: 'highways', tolls: 'tolls', ferries: 'ferries', unpaved: 'unpaved roads' };
+  /** Valhalla auto costing for the avoid options (preferences, not hard bans: the router may still need one). */
+  function costing(avoid = AVOID_DEFAULT) {
+    const auto = { use_highways: avoid.highways ? 0 : 0.15, use_tolls: avoid.tolls ? 0 : 0.3 };
+    if (avoid.ferries) auto.use_ferry = 0;
+    if (avoid.unpaved) auto.exclude_unpaved = true;
+    return { costing: 'auto', costing_options: { auto } };
+  }
+  /** Which avoided things a route still uses, from the router's summary flags (route.has = { highways, tolls, ferries }); unknown flags say nothing. */
+  function unavoided(avoid, route) {
+    const has = (route && route.has) || {};
+    return ['highways', 'tolls', 'ferries'].filter(k => avoid && avoid[k] && has[k] === true);
+  }
+  /** Candidates that keep to the avoid options, when any do; otherwise all of them (the card then says what couldn't be avoided). */
+  function keepAvoiding(cands, avoid) {
+    const clean = cands.filter(c => !unavoided(avoid, c.route).length);
+    return clean.length ? clean : cands;
+  }
+
+  // ---- sun glare (R-13) ----------------------------------------------------------------
+  // Driving into a sun low ahead (0–15° up, within 20° of the heading) blinds you on exactly the roads this app picks.
+  // Minutes of it on a route, from its geometry ({lat, lon, dist}) driven evenly over timeS from `start`.
+  const GLARE_MAX_ALT = 15 * Math.PI / 180, GLARE_HALF_ANGLE = 20 * Math.PI / 180;
+  function glare(t, timeS, start, sun = root.ApexSun) {
+    if (!t || !t.dist || t.dist.length < 2 || !(timeS > 0) || !sun || !(start instanceof Date)) return null;
+    const total = t.dist[t.dist.length - 1], step = 20;      // 20 samples: 100 m on 5 m geometry
+    if (!(total > 0)) return null;
+    let seconds = 0;
+    for (let i = 0; i + step < t.lat.length; i += step) {
+      const j = i + step, kx = Math.cos(t.lat[i] * Math.PI / 180);
+      const heading = Math.atan2((t.lon[j] - t.lon[i]) * kx, t.lat[j] - t.lat[i]);
+      const at = new Date(start.getTime() + t.dist[i] / total * timeS * 1000);
+      const p = sun.sunPosition(at, t.lat[i], t.lon[i]);
+      if (p.altitude <= 0 || p.altitude > GLARE_MAX_ALT) continue;
+      const off = Math.abs(Math.atan2(Math.sin(heading - p.azimuth), Math.cos(heading - p.azimuth)));
+      if (off < GLARE_HALF_ANGLE) seconds += (t.dist[j] - t.dist[i]) / total * timeS;
+    }
+    return { minutes: seconds / 60 };
+  }
+  const GLARE_COST_PER_MIN = 1, GLARE_COST_MAX = 20;          // fun points; a 10-minute squint costs a 10-point lead
+  const glareCost = (c) => Math.min(GLARE_COST_MAX, GLARE_COST_PER_MIN * ((c.glare && c.glare.minutes) || 0));
+
+  /**
+   * Route options to show side by side (R-30): the ranked list's best and the next ones that are really different
+   * (not within 30 s and 1 fun point of one already picked: a stage plan the router drew the same way). At most `k`.
+   */
+  function distinctOptions(ranked, k = 3) {
+    const out = [];
+    for (const c of ranked || []) {
+      const f = c.fun ? c.fun.fun : null;
+      if (out.some(o => Math.abs(o.timeS - c.timeS) < 30 && Math.abs((o.fun ? o.fun.fun : null) - f) <= 1)) continue;
+      out.push(c);
+      if (out.length === k) break;
+    }
+    return out;
+  }
+
+  const api = { LEVELS, distinctOptions, glare, glareCost, LOOP_BY_TIME, AVOID_DEFAULT, AVOID_LABELS, costing, unavoided, keepAvoiding, why, geometry, alongPoints, insertVia, loopValue, loopShortlist, loopPlansFromMatrix, score, shortlist, matrixPoints, plansFromMatrix, sectionCount, sectionPoints, combineSections, planKey, searchArea, waypoints, rank, along, kmBetween };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexFunRoute = api;
 })(typeof window !== 'undefined' ? window : globalThis);

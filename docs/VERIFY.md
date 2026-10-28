@@ -1,5 +1,51 @@
 # APEX NAV — OWNER VERIFICATION CHECKLIST
 
+## 0. Before every TestFlight / IPA build: the real-phone run (IDEAS Y-07, about 40 minutes)
+Automated tests and headless Chromium cover the logic; this run covers what only a phone in a car shows. **A passenger
+operates the phone, or you do it parked. Never while driving.** Copy the table at the end into the PR or STATE.md entry
+with a mark per row (✓ good, ✗ bad + one line on what you saw, – skipped).
+
+**A. Parked, Wi-Fi off, cellular on (10 min)**
+1. Install the new IPA over the old one. Cold start to a usable map in about a second; no white flash; the map is where you are.
+2. Plan: type a destination 20–40 mi away, Fun. Good: a route card with fun score, minutes, "why this route" line under the
+   bars, and, near sunrise/sunset, a low-sun warning. Try Avoid → Highways, a 30 mi loop and a 1 h loop: each gives a route.
+3. Settings → Account: signed in, Garage shows your car; Remove car asks to confirm (iOS dialogs work).
+4. Log → open an old drive → Replay plays; Map → onboarding's "Watch a replay" (or `?drive=dry_ridge`) plays the demo.
+5. Airplane mode on, plan again: a clear failure message, buttons usable; airplane off, retry works without restarting.
+
+**B. Driving, passenger holds the phone (25 min, mixed roads, ideally some traffic)**
+6. Start drive. Within 10 s: "Finding GPS…" gives way to a fix and the speed shows in the cluster.
+7. In-car mode: above 10 mph the buttons get bigger; tapping a text field shows "Typing is off while the car moves" with
+   "I'm a passenger"; tapping it lets the passenger type until the car stops.
+8. Pace notes: calls arrive before corners, through the car speakers (CarPlay/Bluetooth), music ducks and comes back.
+9. Traffic (iOS): on a jammed stretch, "Traffic ahead" or a detour offer with a 6 s Cancel; Cancel keeps the route.
+10. Off route on purpose (with a planned route): a new route to rejoin, and notes carry on.
+11. Lock the phone for 1 minute, unlock: the drive is still recording, the map catches up, no black screen.
+12. Note the battery % at start and end of this part (P-01 needs real numbers: % per hour, screen on, phone model).
+
+**C. After the drive, parked (5 min)**
+13. End drive: it saves, shows in Log with a score; Road data on: "Shared n mi of road feel" toast.
+14. Cloudflare → Workers → apexnav → Logs, filter `client_error`: any lines from this run (time, message) go in the report.
+15. Optional, two phones: start a convoy and open its link on the second phone, then drive both cars: crew bar gaps, a hazard call heard by the other car.
+
+| # | Check | Result |
+|---|---|---|
+| 1 | Install, cold start | |
+| 2 | Plan: fun, why, avoid, loops | |
+| 3 | Account, garage, dialogs | |
+| 4 | Replay, demo | |
+| 5 | Offline failure and retry | |
+| 6 | Start drive, GPS | |
+| 7 | In-car mode, passenger switch | |
+| 8 | Pace notes over car audio | |
+| 9 | Traffic | |
+| 10 | Reroute | |
+| 11 | Lock and resume | |
+| 12 | Battery %/h (model, screen on) | |
+| 13 | Save, share | |
+| 14 | Crash reports in logs | |
+| 15 | Convoy (optional) | |
+
 ## iOS route-loading freeze (2026-10-26; not yet device-verified)
 1. Install an IPA rebuilt with the local route-loading patch; the already installed bundle does not update automatically. Test while parked or as a passenger, never by operating the phone while driving.
 2. Load the route that froze, noting whether it is a destination, loop or saved replay, its approximate length and the last loading label. During loading, check that tabs and map gestures still respond.

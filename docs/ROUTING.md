@@ -15,6 +15,16 @@ The Plan sheet and the route card have a **Roads** choice, saved on the phone (`
 
 Changing the level re-plans a destination route that is not being driven (not while one is being planned; a route with a stop you added keeps it and the level applies to the next route). Loops ignore the level, so their card hides it.
 
+## Avoid
+
+Under Roads, an **Avoid** row (saved on the phone, `apex.avoid`): Highways, Tolls, Ferries, Unpaved (on by default:
+stages never use unpaved roads and most cars here don't want gravel). They set Valhalla's costing for routes and the
+connector matrix (`FunRoute.costing`: `use_highways`/`use_tolls`/`use_ferry` 0, `exclude_unpaved`). These are strong
+preferences, not bans, so each route's summary flags (`has_highway`, `has_toll`, `has_ferry`) are checked: candidates
+that still use an avoided road are dropped when any candidate doesn't (`keepAvoiding`, loops too), and when none can
+avoid it the route card says so ("Couldn't avoid tolls", e.g. the Chesapeake Bay Bridge-Tunnel). The OSRM fallback
+knows none of this and says nothing. Toggling one re-plans a destination route like the level does.
+
 ## Candidates
 
 1. The router's route (Valhalla, highways and tolls de-prioritised) and up to 2 Valhalla alternates
@@ -48,6 +58,14 @@ Changing the level re-plans a destination route that is not being driven (not wh
 Any step that fails (no tiles, no matrix, a stage route that fails) just leaves fewer candidates;
 the router's own route is always there.
 
+## Options
+
+A destination route offers up to 3 options side by side (R-30): the ranked candidates with near-duplicates dropped
+(`FunRoute.distinctOptions`: within 30 s and 1 fun point of one already kept). The route card shows a chip each
+("Fun 79 · 128 min") and the map draws the others dashed; tapping a chip or a dashed line makes that option the
+route, with its own why line, glare and avoid notes ("+N for fun" and the why line still compare to the quickest).
+Hidden while driving and for loops.
+
 ## Loops
 
 Loops chain stages found around the start. Their length used to come from crow-fly connectors x 1.6,
@@ -61,6 +79,13 @@ as a baseline. Routed loops are then ranked on the same fun score as A→B route
 Fun minus 2 points per % of the loop driven twice and 0.8 per % off the asked length), so junction turns
 no longer count as corners on loops and the measured adjustment means the same on both. Checked against the public servers: routed loops now land within about 15 % of the
 target (Knoxville 30 mi: 43–44 km after spur removal; 45 mi: 58–62 km; Cincinnati 30 mi: 46–48 km).
+
+**By time** (1 h / 2 h chips, R-16): the same loop builder planned on drive time instead of distance. The search
+radius assumes 35 km/h, the matrix gives connector times, stages count at 25 km/h (the router times twisty roads far
+below 50: a 43 km Smokies loop is 83 min), and routed loops are judged on the router's time against the target
+(`FunRoute.LOOP_BY_TIME`, `loopValue` on seconds). The card names the loop by its real time ("119 min loop"). Knoxville:
+2 h → 119 min; 1 h → 75 min, because the good roads nearest the start are 40 km of driving away (the toast says
+"75 min: the closest good loop to 1 h").
 
 ## Measured roads
 
@@ -84,6 +109,15 @@ dull road beat a much better one (it keeps a 20-point lead). The route card adds
 (100 = glass) once a fifth of the route has agreeing roughness readings. Not used yet: crest (not uploaded, see
 ARCHITECTURE §1), hazards, and measured data during stage discovery itself (stages are still found on
 map geometry; measured data only re-ranks routed candidates).
+
+## Sun glare
+
+Every candidate (A→B and loops) is driven in time from now over its router time, and each 100 m that heads within
+20° of a sun 0–15° above the horizon counts as glare (`FunRoute.glare`, `ApexSun.sunPosition`, NOAA). Ranking takes
+1 point per glare minute, at most 20, so a road straight into the setting sun loses a close call but not a much
+better road. The route card warns "Low sun ahead for ~N min" from 3 minutes. Checked: Knoxville → west at 5:40 pm in
+late October, every candidate has 22–34 min of it and the card says so. Not kept when a route is restored later
+(the time has moved on).
 
 ## Fun score (map only)
 

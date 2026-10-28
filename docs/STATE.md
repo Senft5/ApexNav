@@ -1,10 +1,30 @@
 # APEX NAV — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-10-28: route options side by side
+- #123 merged (sun glare). #126: a planned route offers up to 3 distinct options (`FunRoute.distinctOptions`: same within 30 s and 1 fun point counts once) as chips on the route card ("Fun 79 · 128 min") and dashed lines on the map; tapping either re-plans on that option with its own why line, glare and avoid notes. Hidden while driving. Knoxville → Maryville on Fun: 79/128, 51/98, 61/127. Not checked on a phone.
+- Exact next task: R-10 Explore, or the R-15 remainder.
+
+## Session 2026-10-28: sun glare in routing
+- #122 merged (loops by drive time). #123: `ApexSun.sunPosition` (altitude/azimuth, tested against Cincinnati solstice values) and `FunRoute.glare`: minutes heading within 20° of a sun 0–15° up cost 1 fun point each (max 20) in A→B ranking and loops; the route card warns "Low sun ahead for ~N min" (docs/ROUTING.md, Sun glare). Not checked on a phone.
+- Exact next task: R-30 route options side by side, or R-10 Explore.
+
+## Session 2026-10-28: loops by drive time
+- #118 merged (avoid options). #122: 1 h / 2 h loop chips plan on drive time (docs/ROUTING.md, Loops "By time"). Knoxville 2 h → 119 min, 1 h → 75 min (nearest good roads are far). Loop cards now carry their real name ("119 min loop", "27 mi loop"; it used to keep the asked distance). Not checked on a phone.
+- Exact next task: R-30 route options side by side, or R-10 Explore.
+
+## Session 2026-10-28: avoid highways, tolls, ferries, unpaved
+- #115 merged (why this route). #118: Avoid row on the Plan sheet (docs/ROUTING.md, Avoid); unpaved avoided by default; Valhalla summary flags make it honest ("Couldn't avoid tolls" on Virginia Beach → Cape Charles, checked against the public server). Not checked on a phone.
+- Exact next task: R-15 remainder (avoid towns, repeated roads), or R-13 sun glare.
+
 ## Session 2026-10-28: reliability (rate limits, crash reports)
 - #112 merged (IDEAS Y-10): Cloudflare rate limiting bindings, every write 60/min per session (per IP signed out), sign-in 20/min per IP, `429 rate_limited` + `retry-after: 60`.
 - Y-02 crash reports: `web/errors.js` (first script on index and analysis pages) sends uncaught errors and rejections, scrubbed, anonymous, max 5 per page, to `POST /api/errors`; the Worker scrubs again and logs one `client_error` line (nothing stored). Read them in Cloudflare Workers Logs. `body()` now checks the 64 KB cap on what arrived, not on Content-Length. Not checked from the iOS app yet (cross-origin post from apexnav://app, same CORS path as ApexSync).
 - F-03 (offline planned route) looked at: there is no service worker, map tiles always come from the network, and CacheStorage on the custom scheme is unproven. Needs a phone to test; not started.
-- Exact next task: C-07 big-target in-car mode, Y-09 database backups doc, Y-07 real-phone checklist.
+- C-07 / C-08 in-car mode: `web/in_car.js` MotionGate (moving after 3 s at >= 10 mph, stopped after 5 s under 1.5 m/s or 10 s with no speed; unknown speed never counts as moving) sets `body.moving`. Every button grows to >= 60 px and text fields won't take focus; a tap explains and offers "I'm a passenger", which unlocks typing until the car next stops. Fed by the app's frames and the browser's GPS. Checked in headless Chromium (drive cockpit, While-you-drive panel, Plan sheet); not on a phone.
+- Y-09 backups: docs/BACKUPS.md (Time Travel restore, note a bookmark before every hand-applied migration, monthly export kept off-repo, quarterly restore drill into a throwaway database), `tools/d1_rowcounts.sql` (checked on the live database: 26 tables + d1_migrations), `tests/test_backups.py` keeps it in step with migrations. The first export and drill need the owner's `wrangler login`.
+- P-06 start-up: the two bundled demo drives (1.8 MB of the 3.1 MB a cold start fetched) now load only for Watch a replay or a `?drive=` link (`loadDemos()` in web/index.html). Headless Chromium at 4x CPU: DOMContentLoaded about 1.2-1.6 s with them, 1.0-1.2 s without. P-04 was already true (voice models load only when used).
+- Y-07: docs/VERIFY.md section 0 is the 40-minute real-phone run before every IPA/TestFlight build (parked, passenger-operated drive, after), with a result table; it gathers every "not checked on a phone" item above, and battery %/hour for P-01.
+- Exact next task: owner's first real-phone run (VERIFY.md section 0); P-06 next: the 241 KB index.html inline script and MapLibre's 800 KB are the rest of the start-up.
 
 ## Session 2026-10-28: "why this route" on the route card
 - #111 merged (loops on the fun score). #115: a fun route slower than the quickest says why under the bars, from Valhalla's road names (`FunRoute.why`, `whyText`): Knoxville→Maryville on Fun reads "For SR 360 13 mi, Cold Spring Road 8.2 mi, Doublecamp Creek Road 6.2 mi · 167 more good corners, +30 min". Kept across a page change (sessionStorage). OSRM fallback routes have no names, so only corners and minutes show. Not checked on a phone.

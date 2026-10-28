@@ -87,6 +87,7 @@ Google setup (owner, free): Google Cloud console → OAuth consent screen (Exter
 |---|---|
 | Web app + API | One Cloudflare Worker `apexnav` (`wrangler.jsonc`): static files from `web/`, `/api/*` to `backend/src/index.ts`. Live at https://apexnav.senftns.workers.dev/ |
 | Database | D1 `apexnav-db` (US East); previews use a separate empty `apexnav-preview-db` (`previews` block in wrangler.jsonc; apply every migration to both). Migrations in `backend/migrations`; applied through the Cloudflare connection; CI runs the same SQL in tests |
+| Backups | D1 Time Travel (7 days) plus a monthly `wrangler d1 export` kept by the owner, restore drill every 3 months: docs/BACKUPS.md |
 | Merging | In the upload request (`backend/src/contribute.ts`): one atomic SQL upsert per bin (running mean/variance), points written immediately. No cron, no nightly job. |
 | Convoy (later) | Durable Objects + WebSockets |
 | Photos, routing tiles, backups | R2 (free allowance, no download fees) |
