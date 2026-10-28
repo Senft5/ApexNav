@@ -298,7 +298,7 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 | Y-08 | Record migrations in `d1_migrations` and a drift check in CI | M | S | half (backfilled 0001–0009 on both databases 2026-10-28; CI drift check todo) | STATE 2026-10-26 |
 | Y-09 | Database backups (D1 time travel/export) and a restore drill | H | S | done (#124; first export 2026-10-28 via the connector; drill needs the owner's wrangler login) | production readiness |
 | Y-10 | Rate limits and abuse protection on every write endpoint | H | M | done (#112) | production readiness |
-| Y-12 | Scheduled backups with no token: a Worker Cron Trigger (weekly) dumps every table through the D1 binding (`sqlite_master` + `quote()` SELECTs, as in docs/BACKUPS.md section 3) to a `.sql` object in a private R2 bucket, keeps the last 8, and logs row counts. No API token in GitHub, no export in a CI artifact; R2 free tier (10 GB) covers years. Alternative if a token arrives: a GitHub Action with a `CLOUDFLARE_API_TOKEN` repo secret running `wrangler d1 export` and uploading to the same R2 bucket (never as an Actions artifact) | H | S | todo | first backup 2026-10-28 |
+| Y-12 | Scheduled backups with no token: a Worker Cron Trigger (Mondays 07:00 UTC) dumps every table through the D1 binding into the private `apexnav-backups` KV namespace, keeps the last 8 (docs/BACKUPS.md section 3a). Move to R2 once the owner enables it or a dump nears 24 MiB | H | S | done (this PR; first run the Monday after deploy) | first backup 2026-10-28 |
 | Y-11 | End-to-end browser tests of the main flows (plan, drive replay, log, crew) in CI | M | M | todo | testing |
 
 ## 11. Performance and battery (P)
