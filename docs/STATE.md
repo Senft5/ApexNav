@@ -1,5 +1,11 @@
 # APEX NAV — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-10-28: TestFlight live; open PRs merged; audit leftovers
+- First TestFlight upload succeeded: build 342.1 (Xcode 26 on macos-26), processing in App Store Connect. The owner adds an Internal Testing group once.
+- Merged the other session's open PRs (#143, #152, #154, #155, #156, #157) after merging main into #154; #159 fixed a 1-in-64 convoy test flake.
+- #160 Z-13: convoy members see handles only. This PR: Y-13 daily sweep of expired sessions, app codes, unused invites and crew invites (cron `23 6 * * *`); Y-15 sign-in refreshes email and name; backend/ and e2e/ no longer trigger the iOS build or a TestFlight upload.
+- Exact next task: Z-12, Z-15, then IDEAS H/S rows (V-03, Z-02, D-09).
+
 ## Session 2026-10-28: live time left and arrival
 - #136 merged (avoid towns). #154: eta-1 / R-07, the drive bar shows "N min left · h:mm" on a planned route, from the router's maneuver times ahead scaled by your pace on this route (web/eta.js, docs/ROUTING.md "Time left while driving"). Checked in a desktop browser with fake GPS; not on a phone or CarPlay.
 - West Knoxville → Townsend on Fun (no stage detour) checked: the best stage plans route at 91–92 min against an 89 min budget (quickest is a 63 min highway alternate); not a bug. The matrix plan estimate ran ~9 min short of the routed time there.
