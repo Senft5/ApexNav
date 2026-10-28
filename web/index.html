@@ -1796,12 +1796,13 @@
     // Only when the driver asked; unknown (no tiles) stays unknown and costs nothing.
     async function townsOn(tracks, cands) {
       if (!avoid.towns || !tracks.length) return;
-      let w = 180, e = -180, s = 90, n = -90;
-      for (const t of tracks) for (let i = 0; i < t.lat.length; i += 20) { w = Math.min(w, t.lon[i]); e = Math.max(e, t.lon[i]); s = Math.min(s, t.lat[i]); n = Math.max(n, t.lat[i]); }
+      const pts = [];
+      for (const t of tracks) for (let i = 0, next = 0; i < t.lat.length; i++) if (t.dist[i] >= next) { pts.push({ lat: t.lat[i], lon: t.lon[i] }); next = t.dist[i] + 1000; }
       let places = null;
-      try { places = await ApexStages.places({ w, e, s, n }); } catch (_) { /* no tiles, or a trip too big: unknown */ }
+      try { places = await ApexStages.places(pts); } catch (_) { /* no tiles, or a trip too big: unknown (the card says so) */ }
       cands.forEach((c, i) => { c.townKm = places ? FunRoute.townKm(tracks[i], places) : null; });
     }
+    const fewerTownKm = (c, quick) => (c && quick && Number.isFinite(c.townKm) && Number.isFinite(quick.townKm) ? quick.townKm - c.townKm : 0);
     // Route options of the last fun plan: { id, name, request, level, quickest, list (ranked candidates), picked, current (its track) }.
     let routeOptions = null;
     // The Explore list while it is up (R-10): { here, minutes, picks: [{ s, fwd, awayS }] }.
@@ -1820,12 +1821,16 @@
       return normRoadType([...counts.entries()].sort((a, b) => b[1] - a[1])[0][0]);
     }
     // "Why this route" from FunRoute.why: the roads the detour is for and what it costs (null = say nothing).
-    function whyText(w) {
-      if (!w) return null;
+    // fewerKm: km less in towns than the quickest (Avoid towns), when that is part of why; extraS: the minutes it costs.
+    function whyText(w, fewerKm = 0, extraS = 0) {
+      const fewer = fewerKm >= 1;
+      if (!w && !(fewer && extraS >= 60)) return null;
       const mi = (km) => { const m = km / 1.609344; return `${m < 10 ? m.toFixed(1) : Math.round(m)} mi`; };
-      const roads = w.roads.map(r => `${r.name} ${mi(r.km)}`).join(', ');
-      const gain = w.gained ? `${w.gained} more good corners` : '';
-      return `For ${[roads, gain].filter(Boolean).join(' · ')}${w.extraMin >= 1 ? `, +${w.extraMin} min` : ''}`;
+      const roads = w ? w.roads.map(r => `${r.name} ${mi(r.km)}`).join(', ') : '';
+      const gain = w && w.gained ? `${w.gained} more good corners` : '';
+      const towns = fewer ? `${mi(fewerKm)} less in towns` : '';
+      const extraMin = w ? w.extraMin : Math.round(extraS / 60);
+      return `For ${[roads, gain, towns].filter(Boolean).join(' · ')}${extraMin >= 1 ? `, +${extraMin} min` : ''}`;
     }
     function renderRouteCard(t = plannedRoute) {
       const card = $('routeCard');
@@ -1870,7 +1875,8 @@
       const missed = Array.isArray(t.unavoided) && t.unavoided.length ? `Couldn't avoid ${t.unavoided.map(k => FunRoute.AVOID_LABELS[k] || k).join(' or ')} · ` : '';
       // Planned routes only: a driven track's own time has passed.
       const sun = !(Array.isArray(t.sectors) && t.sectors.length) && t.glareMin >= 3 ? `Low sun ahead for ~${t.glareMin} min · ` : '';
-      const towns = avoid.towns && t.townKm >= 1.6 ? `Through towns ~${Math.round(t.townKm / 1.609344)} mi · ` : '';
+      // Only on a route planned with Towns on (townKm undefined otherwise); null = the town check couldn't run.
+      const towns = t.townKm === null ? 'Couldn\'t check towns · ' : t.townKm >= 1.6 ? `Through towns ~${Math.round(t.townKm / 1.609344)} mi · ` : '';
       $('routeCardSub').textContent = `${missed}${towns}${sun}Cameras ${cams} · ${feel}`;
       $('routeCardWhy').textContent = t.why || '';
       $('routeCardWhy').hidden = !t.why;
@@ -1901,7 +1907,7 @@
     function persistPlanned(t) {
       try {
         const coords = t.lat.map((la, i) => [+t.lon[i].toFixed(6), +la.toFixed(6)]);
-        sessionStorage.setItem(PLANNED, JSON.stringify({ id: t.id, name: t.name, request: t.request || null, coords, fun: t.fun || null, timeS: t.timeS ?? null, extraS: t.extraS ?? null, why: t.why || null, unavoided: t.unavoided || [] }));
+        sessionStorage.setItem(PLANNED, JSON.stringify({ id: t.id, name: t.name, request: t.request || null, coords, fun: t.fun || null, timeS: t.timeS ?? null, extraS: t.extraS ?? null, why: t.why || null, unavoided: t.unavoided || [], townKm: t.townKm }));
       } catch (_) { /* too big or storage off: the route just won't survive a page change */ }
     }
     async function restorePlanned() {
@@ -1910,7 +1916,8 @@
       if (!saved || !Array.isArray(saved.coords) || saved.coords.length < 2) return;
       const t = await trackFromPolyline(saved.coords, saved.id, saved.name);
       Object.assign(t, { request: saved.request, fun: saved.fun || null, timeS: saved.timeS ?? null, extraS: saved.extraS ?? null, why: typeof saved.why === 'string' ? saved.why : null,
-                         unavoided: Array.isArray(saved.unavoided) ? saved.unavoided.filter(k => typeof k === 'string' && FunRoute.AVOID_LABELS[k]) : [] });
+                         unavoided: Array.isArray(saved.unavoided) ? saved.unavoided.filter(k => typeof k === 'string' && FunRoute.AVOID_LABELS[k]) : [],
+                         townKm: saved.townKm === null || Number.isFinite(saved.townKm) ? saved.townKm : undefined });
       await buildRoute(null, saved.id, saved.name, t);
     }
     async function buildRoute(points, id, name, prebuilt = null, request = null) {
@@ -2215,7 +2222,7 @@
       const quickest = pool.filter(c => Number.isFinite(c.timeS)).reduce((x, y) => (y.timeS < x.timeS ? y : x), best);
       // The best and up to two really different others stay on the card (and faint on the map) to pick from.
       const t = await useOption({ id, name, request, level, quickest, list: FunRoute.distinctOptions(ranked, 3) }, 0);
-      const mi = (totalOf(t) / 1609.344).toFixed(1), extra = best.extraS >= 60 ? ` · +${Math.round(best.extraS / 60)} min for fun` : '';
+      const mi = (totalOf(t) / 1609.344).toFixed(1), extra = best.extraS >= 60 ? ` · +${Math.round(best.extraS / 60)} min for ${fewerTownKm(best, quickest) >= 1 ? 'fun and fewer towns' : 'fun'}` : '';
       toast(`${name} · ${mi} mi · Fun ${best.fun ? best.fun.fun : '--'}${extra}`);
       window.apexDebug && (window.apexDebug.lastFun = FunRoute.rank(pool, level).map(c => ({ kind: c.kind, fun: c.fun, timeS: c.timeS, value: c.value, adjust: c.adjust || 0, glare: c.glare, townKm: c.townKm })));
       return true;
@@ -2227,8 +2234,8 @@
       if (was && (routeOptions !== o || plannedRoute !== was || state.mode === 'live')) return null;
       // A winning alternate is pinned with shaping points along it, so a reroute stays on it.
       const via = c.kind === 'router' && c.extraS > 0 ? FunRoute.alongPoints(c.route.coords) : c.via;
-      Object.assign(t, { measured: c.t.measured, fun: c.fun, timeS: c.timeS, extraS: c.extraS, funLevel: o.level, glareMin: c.glare ? Math.round(c.glare.minutes) : null, townKm: c.townKm ?? null,
-                         unavoided: FunRoute.unavoided(avoid, c.route), why: whyText(FunRoute.why(c, o.quickest)),
+      Object.assign(t, { measured: c.t.measured, fun: c.fun, timeS: c.timeS, extraS: c.extraS, funLevel: o.level, glareMin: c.glare ? Math.round(c.glare.minutes) : null, townKm: c.townKm,
+                         unavoided: FunRoute.unavoided(avoid, c.route), why: whyText(FunRoute.why(c, o.quickest), fewerTownKm(c, o.quickest), c.extraS),
                          request: { ...o.request, via: via.map(p => ({ lat: p.lat, lon: p.lon, shaping: true })) } });
       routeOptions = Object.assign(o, { picked: i, current: t });
       await buildRoute(null, o.id, o.name, t);
@@ -2370,7 +2377,7 @@
       });
       let done = FunRoute.keepAvoiding((await Promise.allSettled(tries)).filter(r => r.status === 'fulfilled').map(r => r.value), avoid);
       await townsOn(done.map(d => d.t), done);
-      for (const d of done) { d.t.townKm = d.townKm ?? null; d.score -= FunRoute.townCost(d); }
+      for (const d of done) { d.t.townKm = d.townKm; d.score -= FunRoute.townCost(d); }
       // A time loop compares drive times: a route the router didn't time can't be judged with the others.
       if (targetS && done.some(d => Number.isFinite(d.t.timeS))) done = done.filter(d => Number.isFinite(d.t.timeS));
       if (!done.length) { toast('Couldn\'t build a loop. Check signal and try again.'); return; }

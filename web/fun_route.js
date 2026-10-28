@@ -478,8 +478,8 @@
     }
     return Math.round(km * 10) / 10;
   }
-  /** Ranking cost of the town km on a candidate when towns are avoided: 3 points a km, at most 30. */
-  const townCost = (c) => (Number.isFinite(c.townKm) ? Math.min(30, 3 * c.townKm) : 0);
+  /** Ranking cost of the town km on a candidate when towns are avoided: 3 points a km, at most 60 (a city crossing is ~24). */
+  const townCost = (c) => (Number.isFinite(c.townKm) ? Math.min(60, 3 * c.townKm) : 0);
 
   // ---- sun glare (R-13) ----------------------------------------------------------------
   // Driving into a sun low ahead (0–15° up, within 20° of the heading) blinds you on exactly the roads this app picks.

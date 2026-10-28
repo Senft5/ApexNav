@@ -140,24 +140,26 @@
   }
 
   // ---- towns along a route (avoid towns, R-15) ---------------------------------------
-  // City, town and village points from the same tiles, at z9 (about 70 km a tile here, every village is in it). At most
-  // 9 tiles; a bigger area gets none (no data, not "no towns"). Tiles are kept for the session.
+  // City, town and village points from the same tiles, at z11 (about 16 km a tile here): z9 and z10 thin villages out
+  // in busy country (northern NJ: 11 of 79 at z9; Heidelberg: 62 of 73 at z10; all of them at z11). Tiles are those
+  // within 4 km of any of `points` (the routes, sampled), at most 80; more is no data, not "no towns". Kept for the session.
   const placeTiles = new Map();
-  async function places(bbox) {
+  const PLACE_Z = 11, PLACE_PAD_KM = 4, PLACE_MAX_TILES = 80;
+  async function places(points) {
     if (!tileUrl) tileUrl = (await Loading.json(TILEJSON)).tiles[0];
-    const z = 9, [x0, y0] = tileOf(bbox.n, bbox.w, z), [x1, y1] = tileOf(bbox.s, bbox.e, z);
-    if ((x1 - x0 + 1) * (y1 - y0 + 1) > 9) throw new Error('area too big');
-    const out = [];
-    for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) {
-      const key = `${x}/${y}`;
-      if (!placeTiles.has(key)) {
-        const buf = new Uint8Array(await Loading.arrayBuffer(tileUrl.replace('{z}', z).replace('{x}', x).replace('{y}', y)));
-        placeTiles.set(key, decodeLayer(buf, 'place', z, x, y, 1).filter(f => ['city', 'town', 'village'].includes(f.props.class))
-          .flatMap(f => f.lines.map(([[lon, lat]]) => ({ lat, lon, cls: f.props.class, name: f.props.name || null }))));
-      }
-      out.push(...placeTiles.get(key));
+    const want = new Set();
+    for (const p of points || []) {
+      const dLat = PLACE_PAD_KM / 110.54, dLon = PLACE_PAD_KM / (111.32 * Math.cos(p.lat * Math.PI / 180));
+      for (const [a, b] of [[0, 0], [dLat, 0], [-dLat, 0], [0, dLon], [0, -dLon]]) want.add(tileOf(p.lat + a, p.lon + b, PLACE_Z).join('/'));
     }
-    return out;
+    if (!want.size || want.size > PLACE_MAX_TILES) throw new Error('area too big');
+    await Promise.all([...want].filter(k => !placeTiles.has(k)).map(async (key) => {
+      const [x, y] = key.split('/').map(Number);
+      const buf = new Uint8Array(await Loading.arrayBuffer(tileUrl.replace('{z}', PLACE_Z).replace('{x}', x).replace('{y}', y)));
+      placeTiles.set(key, decodeLayer(buf, 'place', PLACE_Z, x, y, 1).filter(f => ['city', 'town', 'village'].includes(f.props.class))
+        .flatMap(f => f.lines.map(([[lon, lat]]) => ({ lat, lon, cls: f.props.class, name: f.props.name || null }))));
+    }));
+    return [...want].flatMap(k => placeTiles.get(k));
   }
 
   // Join pieces end to end into strokes, continuing straight-ish through each node (≤ 50°).
