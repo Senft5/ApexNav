@@ -133,7 +133,7 @@ let loopAttempts = 0;
 const messages = [];
 const button = { value: 'Somewhere', classList: { contains: () => false } };
 const busy = () => ({ step() {}, done() { completed++; } });
-const destination = new Function('$', 'planBusy', 'toast', 'resolvePlace', 'buildRoute', 'return (' + destinationSource + ')')(
+const destination = new Function('$', 'planBusy', 'toast', 'resolvePlace', 'funRoute', 'return (' + destinationSource + ')')(
   () => button, busy, message => messages.push(message),
   async () => ({ lat: 39, lon: -84, label: 'Place' }),
   async () => { throw Error('service deadline'); },
@@ -167,16 +167,16 @@ let analyzed = false;
 let activated = null;
 let fallbackCalls = 0;
 global.fetch = async () => new Promise(() => {});
-const build = new Function('valhallaRoute', 'osrmRoute', 'trackFromPolyline', 'Core', 'drives', 'activate', 'renderRouteCard', 'state', 'openPlan', 'attachLimits', 'totalM', 'toast', 'persistPlanned', 'markDestination', 'lockOnDestination', 'booting',
+const build = new Function('valhallaRoutes', 'osrmRoutes', 'trackFromPolyline', 'Core', 'drives', 'activate', 'renderRouteCard', 'state', 'openPlan', 'attachLimits', 'totalM', 'toast', 'persistPlanned', 'markDestination', 'lockOnDestination', 'booting', 'funOf',
   'let plannedRoute = null; return (' + source + ')')(
   () => loading.json('https://isolated.test', {}, 5),
-  async () => { fallbackCalls++; return [[-84, 39], [-83.99, 39]]; },
+  async () => { fallbackCalls++; return [{ coords: [[-84, 39], [-83.99, 39]], turns: [], timeS: 60 }]; },
   async (coords, id, name) => {
     await loading.yieldToUI(); analyzed = true;
     return { id, name, lat: [39, 39], lon: [-84, -83.99], dist: [0, 1000], events: [] };
   }, {}, drives,
   route => { assert.equal(analyzed, true); activated = route; },
-  () => {}, { mode: 'sim' }, () => {}, () => {}, () => 1000, () => {}, () => {}, () => {}, () => {}, false,
+  () => {}, { mode: 'sim' }, () => {}, () => {}, () => 1000, () => {}, () => {}, () => {}, () => {}, false, () => null,
 );
 (async () => {
   await build([], 'isolated', 'Test route');

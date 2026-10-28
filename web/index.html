@@ -15,6 +15,7 @@
   <script src="apex_core.js"></script>
   <script src="route_loading.js"></script>
   <script src="stages.js"></script>
+  <script src="fun_route.js"></script>
   <script src="sync.js"></script>
   <script src="sensors.js"></script>
   <script src="reroute.js"></script>
@@ -103,6 +104,8 @@
     .loop-row { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--panel-dim); }
     .chip { min-width: 40px; height: 32px; padding: 0 10px; border: 1px solid var(--panel-dim); color: var(--panel-ink); font-size: 13px; font-weight: 600; }
     .chip.busy { color: var(--panel); background: var(--panel-dim); }
+    .chip.on { color: var(--panel); background: var(--panel-ink); border-color: var(--panel-ink); }
+    .fun-row { justify-content: flex-start; gap: 6px; font-size: 13px; color: var(--panel-dim); }
     .place-list { display: grid; margin-top: 8px; }
     .place { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: baseline; min-height: 44px; padding: 8px 2px; border-top: 1px solid var(--hair, var(--panel-dim)); text-align: left; }
     .place b { font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -359,12 +362,14 @@
                 <button class="linkbtn" id="tapRouteBtn">Tap the map</button>
                 <span class="loop-row"><span>Loop</span><button class="chip" data-loop-mi="15">15</button><button class="chip" data-loop-mi="30">30</button><button class="chip" data-loop-mi="45">45 mi</button></span>
               </div>
+              <div class="plan-links fun-row" role="radiogroup" aria-label="Route style"><span>Roads</span><button class="chip" data-fun="quick" role="radio" aria-checked="false">Quick</button><button class="chip" data-fun="fun" role="radio" aria-checked="false">Fun</button><button class="chip" data-fun="max" role="radio" aria-checked="false">Max fun</button></div>
             </section>
             <section id="routeCard" hidden>
               <h3 id="routeCardName"></h3>
               <p class="route-meta" id="routeCardMeta"></p>
               <div class="bars mt-8" id="routeCardBars"></div>
               <p class="note" id="routeCardSub"></p>
+              <div class="plan-links fun-row" id="routeCardFun" role="radiogroup" aria-label="Route style"><span>Roads</span><button class="chip" data-fun="quick" role="radio" aria-checked="false">Quick</button><button class="chip" data-fun="fun" role="radio" aria-checked="false">Fun</button><button class="chip" data-fun="max" role="radio" aria-checked="false">Max fun</button></div>
               <div class="row mt-8">
                 <button class="ink-btn solid" id="routeDriveBtn">Drive it</button>
                 <button class="ink-btn" id="routePreviewBtn">Preview</button>
@@ -539,7 +544,7 @@
   <script>
   (() => {
     'use strict';
-    const Core = window.ApexCore, Themes = window.ApexThemes, Inst = window.ApexInstruments, RouteLoading = window.ApexRouteLoading;
+    const Core = window.ApexCore, Themes = window.ApexThemes, Inst = window.ApexInstruments, RouteLoading = window.ApexRouteLoading, FunRoute = window.ApexFunRoute;
     const MPH = Core.MPS_TO_MPH;
     const params = new URLSearchParams(location.search);
     const $ = (id) => document.getElementById(id);
@@ -1518,7 +1523,20 @@
       }
       return out;
     }
-    async function valhallaRoute(points, throughRoadsOnly = false) {
+    const COSTING = { costing: 'auto', costing_options: { auto: { use_highways: 0.15, use_tolls: 0.3 } } };
+    // Junction turns (slight/normal/sharp left and right, U-turns, ramps, roundabouts): fun scoring drops the corners there.
+    const TURN_TYPES = new Set([9, 10, 11, 12, 13, 14, 15, 16, 18, 19, 20, 21, 26, 27]);
+    function routeOf(trip) {
+      const coords = [], turns = [];
+      trip.legs.forEach((leg, i) => {
+        const shape = decodePolyline6(leg.shape);
+        for (const m of leg.maneuvers || []) if (TURN_TYPES.has(m.type) && shape[m.begin_shape_index]) turns.push(shape[m.begin_shape_index]);
+        coords.push(...shape.slice(i ? 1 : 0));
+      });
+      return { coords, turns, timeS: trip.summary && Number.isFinite(trip.summary.time) ? trip.summary.time : null };
+    }
+    // [{ coords, turns: [[lon, lat]], timeS }]: the route, then up to `alternates` other ways (two-point requests only).
+    async function valhallaRoutes(points, throughRoadsOnly = false, alternates = 0) {
       // Loop waypoints snap only to through roads (tertiary..primary), never cul-de-sacs or motorways.
       const filter = { min_road_class: 'tertiary', max_road_class: 'primary', exclude_ramp: true };
       const json = await RouteLoading.json(`${VALHALLA}/route`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
@@ -1527,15 +1545,29 @@
           if (!end && p.shaping) return { lat: p.lat, lon: p.lon, type: 'through', radius: 25 };   // stay on the stage
           return { lat: p.lat, lon: p.lon, type: end ? 'break' : 'through', ...(throughRoadsOnly && !end ? { radius: 2500, search_filter: filter } : {}) };
         }),
-        costing: 'auto', costing_options: { auto: { use_highways: 0.15, use_tolls: 0.3 } } }) });
+        ...COSTING, ...(alternates && points.length === 2 ? { alternates } : {}) }) });
       if (!json.trip) throw new Error(json.error || 'no route');
-      return json.trip.legs.flatMap((leg, i) => decodePolyline6(leg.shape).slice(i ? 1 : 0));
+      return [json.trip, ...(json.alternates || []).map(a => a.trip).filter(Boolean)].map(routeOf);
     }
-    async function osrmRoute(points) {
+    const valhallaRoute = async (points, throughRoadsOnly = false) => (await valhallaRoutes(points, throughRoadsOnly))[0].coords;
+    // Drive time in seconds from every source to every target (null: no road). The public server takes at most 100 pairs.
+    async function valhallaMatrix(sources, targets) {
+      const json = await RouteLoading.json(`${VALHALLA}/sources_to_targets`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sources: sources.map(p => ({ lat: p.lat, lon: p.lon })), targets: targets.map(p => ({ lat: p.lat, lon: p.lon })), ...COSTING }) });
+      if (!Array.isArray(json.sources_to_targets)) throw new Error(json.error || 'no matrix');
+      return json.sources_to_targets.map(row => row.map(c => (c && Number.isFinite(c.time) ? c.time : null)));
+    }
+    async function osrmRoutes(points) {
       const coords = points.map(p => `${p.lon.toFixed(6)},${p.lat.toFixed(6)}`).join(';');
       const json = await RouteLoading.json(`https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`);
       if (!json.routes || !json.routes[0]) throw new Error(json.message || 'no route');
-      return json.routes[0].geometry.coordinates;
+      return [{ coords: json.routes[0].geometry.coordinates, turns: [], timeS: Number.isFinite(json.routes[0].duration) ? json.routes[0].duration : null }];
+    }
+    const osrmRoute = async (points) => (await osrmRoutes(points))[0].coords;
+    // Fun score of a routed track, with the router's junction turns placed on it (map only, docs/ROUTING.md).
+    function funOf(t, turns = []) {
+      const turnsM = turns.map(([lon, lat]) => { const h = Core.nearestIndex(lat, lon, t.lat, t.lon, -1); return h.distM < 40 ? t.dist[h.index] : null; });
+      return FunRoute.score(t, turnsM);
     }
     // OSM maxspeed per sample via Valhalla map matching (same as tools/export_web_profile.py).
     async function attachLimits(t) {
@@ -1614,13 +1646,18 @@
       const hasDist = Array.isArray(t.dist) && t.dist.length > 0 && Number.isFinite(t.dist[t.dist.length - 1]);
       const mi = hasDist ? `${(t.dist[t.dist.length - 1] / 1609.344).toFixed(1)} mi` : '--';
       const corners = Array.isArray(t.events) ? `${t.events.filter(e => e.type === 'corner').length} corners` : '--';
-      $('routeCardMeta').textContent = `${mi} · ${corners} · ${roadTypeOf(t)}`;
+      const min = Number.isFinite(t.timeS) ? `${Math.round(t.timeS / 60)} min` : null;
+      const extra = Number.isFinite(t.extraS) && t.extraS >= 60 ? ` (+${Math.round(t.extraS / 60)} for fun)` : '';
+      $('routeCardMeta').textContent = [mi, min && min + extra, corners, roadTypeOf(t)].filter(v => v && v !== '--').join(' · ');
       const avgSector = (k) => {
         if (!Array.isArray(t.sectors) || !t.sectors.length) return null;
         const vals = t.sectors.map(s => s && s[k]).filter(Number.isFinite);
         return vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) : null;
       };
-      const bars = [['Twist', avgSector('tech')], ['Flow', avgSector('flow')], ['Surface', avgSector('surf')]];
+      // A driven road has measured sectors; a planned one has its map-only fun score (docs/ROUTING.md).
+      const bars = Array.isArray(t.sectors) && t.sectors.length
+        ? [['Twist', avgSector('tech')], ['Flow', avgSector('flow')], ['Surface', avgSector('surf')]]
+        : [['Fun', t.fun ? t.fun.fun : null], ['Twist', t.fun ? t.fun.twist : null], ['Flow', t.fun ? t.fun.flow : null]];
       $('routeCardBars').innerHTML = bars.map(([label, v]) =>
         `<div class="bar"><span>${label} <b>${v != null ? v : '--'}</b></span><i><u style="width:${v != null ? v : 0}%"></u></i></div>`
       ).join('');
@@ -1632,6 +1669,7 @@
           : null;
       const feel = mCov != null && mCov > 0 ? `Road feel ${mCov}% driven` : 'Road feel after first drive';
       $('routeCardSub').textContent = `Cameras ${cams} · ${feel}`;
+      $('routeCardFun').hidden = t.id !== 'route_dest';           // the level re-plans destination routes only
     }
     // Log and Stages are another page, so coming back to Map reloads this one: keep the planned route for the session and
     // rebuild it here from its own geometry (no router call, works offline). Also what a reload after a lost map restores.
@@ -1639,7 +1677,7 @@
     function persistPlanned(t) {
       try {
         const coords = t.lat.map((la, i) => [+t.lon[i].toFixed(6), +la.toFixed(6)]);
-        sessionStorage.setItem(PLANNED, JSON.stringify({ id: t.id, name: t.name, request: t.request || null, coords }));
+        sessionStorage.setItem(PLANNED, JSON.stringify({ id: t.id, name: t.name, request: t.request || null, coords, fun: t.fun || null, timeS: t.timeS ?? null, extraS: t.extraS ?? null }));
       } catch (_) { /* too big or storage off: the route just won't survive a page change */ }
     }
     async function restorePlanned() {
@@ -1647,17 +1685,17 @@
       try { saved = JSON.parse(sessionStorage.getItem(PLANNED) || 'null'); } catch (_) { saved = null; }
       if (!saved || !Array.isArray(saved.coords) || saved.coords.length < 2) return;
       const t = await trackFromPolyline(saved.coords, saved.id, saved.name);
-      t.request = saved.request;
+      Object.assign(t, { request: saved.request, fun: saved.fun || null, timeS: saved.timeS ?? null, extraS: saved.extraS ?? null });
       await buildRoute(null, saved.id, saved.name, t);
     }
     async function buildRoute(points, id, name, prebuilt = null, request = null) {
       let t = prebuilt;
       if (!t) {
         toast(`Finding roads to ${name}…`);
-        let coords = null;
-        try { coords = await valhallaRoute(points); } catch (_) { try { coords = await osrmRoute(points); } catch (err) { toast('Couldn\'t build the route. Check signal and try again.'); return; } }
-        t = await trackFromPolyline(coords, id, name);
-        t.request = request;
+        let r = null;
+        try { [r] = await valhallaRoutes(points); } catch (_) { try { [r] = await osrmRoutes(points); } catch (err) { toast('Couldn\'t build the route. Check signal and try again.'); return; } }
+        t = await trackFromPolyline(r.coords, id, name);
+        Object.assign(t, { request, fun: funOf(t, r.turns), timeS: r.timeS });
       }
       if (t.request) for (const v of t.request.via) v.distM = t.dist[Core.nearestIndex(v.lat, v.lon, t.lat, t.lon, -1).index];
       const i = drives.findIndex(d => d.id === id);
@@ -1726,7 +1764,7 @@
         ui.step('Routing…', 0.7);
         // Kept on the track so a reroute can rebuild it; from: null = the phone's position.
         const request = { from: from.label === null ? null : { lat: from.lat, lon: from.lon }, to: { lat: to.lat, lon: to.lon }, via: [] };
-        await buildRoute([from, to], 'route_dest', `To ${to.label || 'current location'}`, null, request);
+        await funRoute(from, to, 'route_dest', `To ${to.label || 'current location'}`, request, ui);
         if (to.label && !to.label.startsWith('Pin ')) rememberPlace(to);
       } catch (err) { toast(err.message); } finally { ui.done(); }
     }
@@ -1751,16 +1789,104 @@
       routeWatch.note = 'Rerouting…';
       say('Rerouting');
       // From here through the via points still ahead (a loop's next unpassed waypoint, then the rest) to the destination.
-      const ahead = req.via.filter(v => v.distM == null || v.distM > routeWatch.bestM).map(v => ({ lat: v.lat, lon: v.lon }));
+      // Stage points stay shaping points, so a reroute still drives the fun roads ahead.
+      const ahead = req.via.filter(v => v.distM == null || v.distM > routeWatch.bestM).map(v => ({ lat: v.lat, lon: v.lon, ...(v.shaping ? { shaping: true } : {}) }));
       const points = [{ lat: L.lat, lon: L.lon }, ...ahead, req.to];
-      let coords;
-      try { coords = await valhallaRoute(points); } catch (_) { try { coords = await osrmRoute(points); } catch (_) { failed(); return; } }
+      let r;
+      try { [r] = await valhallaRoutes(points); } catch (_) { try { [r] = await osrmRoutes(points); } catch (_) { failed(); return; } }
       if (track !== t || state.mode !== 'live') return;           // the driver loaded something else meanwhile
-      const nt = await trackFromPolyline(coords, t.id, t.name);
+      const nt = await trackFromPolyline(r.coords, t.id, t.name);
       if (track !== t || state.mode !== 'live') return;
-      nt.request = { from: null, to: req.to, via: ahead };
+      Object.assign(nt, { request: { from: null, to: req.to, via: ahead }, fun: funOf(nt, r.turns), timeS: r.timeS });
       await buildRoute(null, t.id, t.name, nt);                     // activate() resets the monitor for the new route
     }
+    // Members: what others measured on these roads (d.t.measured) and a score adjustment for it (d.adjust: a rough road
+    // costs up to 6 points; unmeasured roads are neutral). False when there is nothing to compare or no membership.
+    async function applyMeasured(list, ui) {
+      if (!window.ApexSync || !window.ApexContributor || list.length < 2 || !await RouteLoading.optional(ApexSync.member())) return false;
+      ui.step('Checking road feel', 0.9);
+      await Promise.all(list.map(async (d) => {
+        try {
+          const m = await Promise.race([ApexContributor.measuredAlong(d.t, async (ids) => { const r = await apiCall('GET', `/api/roads?ways=${ids.join(',')}`); return r.ok ? r.json() : null; }),
+                                        new Promise(r => setTimeout(() => r(null), 12000))]);
+          d.t.measured = m; d.adjust = ApexContributor.measuredAdjust(m);
+        } catch (_) { /* offline or slow: keep the unadjusted score */ }
+      }));
+      return true;
+    }
+    // Destination routes: the most fun way within the chosen level's time budget (docs/ROUTING.md). Candidates are the
+    // router's quickest route and its alternates, plus 1–2 stage detours timed with one matrix call; all are scored for fun
+    // on the map geometry and ranked by fun against extra time. Anything that fails just leaves fewer candidates.
+    const FUN_LEVEL = 'apex.funLevel';
+    let funLevel = 'fun';
+    try { funLevel = FunRoute.LEVELS[localStorage.getItem(FUN_LEVEL)] ? localStorage.getItem(FUN_LEVEL) : 'fun'; } catch (_) { /* storage off */ }
+    async function funRoute(from, to, id, name, request, ui) {
+      const level = funLevel;
+      let direct;
+      try { direct = await valhallaRoutes([from, to], false, 2); }
+      catch (_) { try { direct = await osrmRoutes([from, to]); } catch (err) { toast('Couldn\'t build the route. Check signal and try again.'); return false; } }
+      const cands = direct.map(r => ({ kind: 'router', route: r, timeS: r.timeS, via: [] }));
+      const quickS = Math.min(...cands.map(c => c.timeS).filter(Number.isFinite));
+      // Under 3 km there is no detour worth taking to the shop round the corner.
+      if (level !== 'quick' && Number.isFinite(quickS) && FunRoute.kmBetween(from, to) >= 3) {
+        try {
+          ui.step('Finding fun roads…', 0.75);
+          const area = FunRoute.searchArea(from, to);
+          const hls = state.hlOn ? await allHighlights(area.center) : [];
+          const stages = await ApexStages.discover(area.center, area.radiusKm, null, state.hlOn ? { highlights: hls, strength: state.hlStrength } : {});
+          const list = FunRoute.shortlist(from, to, stages, FunRoute.LEVELS[level].budget);
+          if (list.length) {
+            const mp = FunRoute.matrixPoints(from, to, list);
+            const plans = FunRoute.plansFromMatrix(list, await valhallaMatrix(mp.sources, mp.targets), quickS, level, 2);
+            ui.step('Routing fun roads…', 0.85);
+            const routed = await Promise.allSettled(plans.map(async (plan) => {
+              const pts = FunRoute.waypoints(from, to, plan);
+              const [r] = await valhallaRoutes(pts);
+              return { kind: 'stages', route: r, timeS: r.timeS, via: pts.slice(1, -1) };
+            }));
+            for (const r of routed) if (r.status === 'fulfilled') cands.push(r.value);
+          }
+        } catch (_) { /* no tiles or no matrix: the router's own routes still compete */ }
+      }
+      ui.step('Scoring roads…', 0.9);
+      // Score on light geometry (corners only); the full track (envelope, sight lines, notes) is built for the winner.
+      for (const c of cands) { c.t = FunRoute.geometry(c.route.coords, Core); c.fun = funOf(c.t, c.route.turns); await RouteLoading.yieldToUI(); }
+      await applyMeasured(FunRoute.rank(cands, level).slice(0, 3).map(r => cands.find(c => c.t === r.t)), ui);   // the top few only
+      const best = FunRoute.rank(cands, level)[0];
+      const measured = best.t.measured;
+      best.t = await trackFromPolyline(best.route.coords, id, name);
+      // A winning alternate is pinned with shaping points along it, so a reroute stays on it.
+      const via = best.kind === 'router' && best.extraS > 0 ? FunRoute.alongPoints(best.route.coords) : best.via;
+      Object.assign(best.t, { measured, fun: best.fun, timeS: best.timeS, extraS: best.extraS, funLevel: level,
+                              request: { ...request, via: via.map(p => ({ lat: p.lat, lon: p.lon, shaping: true })) } });
+      await buildRoute(null, id, name, best.t);
+      const mi = (totalOf(best.t) / 1609.344).toFixed(1), extra = best.extraS >= 60 ? ` · +${Math.round(best.extraS / 60)} min for fun` : '';
+      toast(`${name} · ${mi} mi · Fun ${best.fun ? best.fun.fun : '--'}${extra}`);
+      window.apexDebug && (window.apexDebug.lastFun = FunRoute.rank(cands, level).map(c => ({ kind: c.kind, fun: c.fun, timeS: c.timeS, value: c.value, adjust: c.adjust || 0 })));
+      return true;
+    }
+    function setFunLevel(level) {
+      if (!FunRoute.LEVELS[level]) return;
+      funLevel = level;
+      try { localStorage.setItem(FUN_LEVEL, level); } catch (_) { /* storage off: this session only */ }
+      document.querySelectorAll('[data-fun]').forEach(b => { const on = b.dataset.fun === level; b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); });
+    }
+    // Changing the level re-plans a destination route that isn't being driven.
+    async function replanForLevel() {
+      const t = plannedRoute;
+      if (!t || t.id !== 'route_dest' || !t.request || state.mode === 'live') return;
+      if (t.request.via.some(v => !v.shaping)) { toast(`${FunRoute.LEVELS[funLevel].label} from your next route (this one has your added stop)`); return; }
+      const ui = planBusy();
+      ui.step('Routing…', 0.5);
+      let ok = false;
+      try {
+        const from = t.request.from || await locate();
+        if (!from) throw new Error(NO_FIX);
+        ok = await funRoute(from, t.request.to, t.id, t.name, { from: t.request.from, to: t.request.to, via: [] }, ui);
+      } catch (err) { toast(err.message); } finally { ui.done(); }
+      if (!ok && t.funLevel) setFunLevel(t.funLevel);             // the chips show the level the route on screen was built with
+    }
+
     // Loops: three candidate circles through the start, waypoints snapped to through roads,
     // spurs cut, then the candidate with the best road character wins (a first step toward
     // stage chaining, docs/ROAD_INTELLIGENCE.md section 7).
@@ -1821,25 +1947,19 @@
       let settled = 0;
       ui.step(`Routing · 0 of ${jobs.length}`, 0.38);
       const tries = jobs.map(async (job) => {
-        const coords = await valhallaRoute(job.pts, job.through)
+        const [r] = await valhallaRoutes(job.pts, job.through)
           .finally(() => { settled++; ui.step(`Routing · ${settled} of ${jobs.length}`, 0.38 + 0.5 * settled / jobs.length); });
-        const rs = Core.removeSpurs(coords.map(p => p[1]), coords.map(p => p[0]));
+        const rs = Core.removeSpurs(r.coords.map(p => p[1]), r.coords.map(p => p[0]));
         const t = await trackFromPolyline(rs.lat.map((la, i) => [rs.lon[i], la]), `loop_${miles}`, `${miles} mi loop`);
+        t.fun = funOf(t, r.turns);
         return { t, job, ...scoreLoop(t, miles), spursCut: rs.removed };
       });
       const done = (await Promise.allSettled(tries)).filter(r => r.status === 'fulfilled').map(r => r.value);
       if (!done.length) { toast('Couldn\'t build a loop. Check signal and try again.'); return; }
       done.sort((a, b) => b.score - a.score);
       // Members: let what others measured break ties among the top few (a rough road costs up to 6 points; unmeasured roads are neutral).
-      if (window.ApexSync && window.ApexContributor && done.length > 1 && await RouteLoading.optional(ApexSync.member())) {
-        ui.step('Checking road feel', 0.9);
-        await Promise.all(done.slice(0, 3).map(async (d) => {
-          try {
-            const m = await Promise.race([ApexContributor.measuredAlong(d.t, async (ids) => { const r = await apiCall('GET', `/api/roads?ways=${ids.join(',')}`); return r.ok ? r.json() : null; }),
-                                          new Promise(r => setTimeout(() => r(null), 12000))]);
-            d.t.measured = m; d.score += ApexContributor.measuredAdjust(m);
-          } catch (_) { /* offline or slow: keep the unadjusted score */ }
-        }));
+      if (await applyMeasured(done.slice(0, 3), ui)) {
+        for (const d of done) d.score += d.adjust || 0;
         done.sort((a, b) => b.score - a.score);
       }
       const best = done[0];
@@ -2032,7 +2152,7 @@
         }
         const from = await resolvePlace($('fromInput').value);
         const request = { from: from.label === null ? null : { lat: from.lat, lon: from.lon }, to: { lat: p.lat, lon: p.lon }, via: [] };
-        await buildRoute([from, { lat: p.lat, lon: p.lon, label: p.label }], 'route_dest', `To ${p.label}`, null, request);
+        await funRoute(from, { lat: p.lat, lon: p.lon }, 'route_dest', `To ${p.label}`, request, ui);
         rememberPlace(p);
       } catch (err) { toast(err.message); } finally { ui.done(); }
     }
@@ -2061,7 +2181,10 @@
       e.currentTarget.disabled = true;
       const from = req.from || await locate();
       if (!from) { toast(NO_FIX); e.currentTarget.disabled = false; return; }
-      const via = [...req.via.map(v => ({ lat: v.lat, lon: v.lon })), pin];
+      // The stop goes where it falls along the route, not after every stage point (no backtracking).
+      const pinM = current.dist[Core.nearestIndex(pin.lat, pin.lon, current.lat, current.lon, -1).index];
+      const via = FunRoute.insertVia(req.via.map(v => ({ lat: v.lat, lon: v.lon, distM: v.distM, ...(v.shaping ? { shaping: true } : {}) })), { lat: pin.lat, lon: pin.lon }, pinM)
+        .map(({ distM, ...v }) => v);
       closePin();
       await buildRoute([from, ...via, req.to], current.id, current.name, null,
         { from: req.from, to: req.to, via });
@@ -2110,6 +2233,11 @@
       if (state.tapToRoute) { closeSheet(); openPlan(false); toast(state.planField === 'fromInput' ? 'Tap the map where you want to start.' : 'Tap the map where you want to go.'); }
     });
     document.querySelectorAll('[data-loop-mi]').forEach(b => b.addEventListener('click', () => loop(parseInt(b.dataset.loopMi, 10), b)));
+    document.querySelectorAll('[data-fun]').forEach(b => b.addEventListener('click', () => {
+      if (b.dataset.fun === funLevel || $('planPanel').classList.contains('busy')) return;
+      setFunLevel(b.dataset.fun); replanForLevel();
+    }));
+    setFunLevel(funLevel);
     $('routeDriveBtn').addEventListener('click', () => {
       if (!plannedRoute) return;
       booting = false;

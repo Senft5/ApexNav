@@ -26,7 +26,7 @@ records where the build differs from the draft that follows, and why.
 - Blocks: never in the same convoy. A block mid-drive drops the blocked member (or the blocker, if the blocked one leads)
   immediately, and every 15 s sweep re-checks. Removed by the leader = out for the life of the convoy. Sessions are
   re-checked on sign-out (immediately), every 15 s, and before a hazard (at most 5 s old).
-- Sockets: two per member (a third replaces the oldest), 32 unauthenticated at once per convoy, frames sent behind
+- Sockets: two per member (a third replaces the oldest); unauthenticated ones get 2 s, at most 4 per address and 32 per convoy; frames sent behind
   `authenticate` are dropped until `ready`. Control characters and bidi overrides are refused in names, notes and routes.
 - The iOS shell's origin (`apexnav://app`) is allowed; whether WKWebView sends exactly that Origin on a socket is
   untested on a phone.

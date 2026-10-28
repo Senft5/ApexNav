@@ -14,8 +14,9 @@ const create = (u: TestUser, name = "Sunday run") => json(api(u, "POST", "/api/c
 const join = (u: TestUser, invite: string) => api(u, "POST", "/api/convoy/join", { consent: true, invite });
 const ticket = async (u: TestUser, id: string) => (await json(api(u, "POST", `/api/convoy/${id}/ticket`))).ticket as string;
 
-async function open(id: string, origin = ORIGIN): Promise<Client> {
-  const res = await exports.default.fetch(new Request(`${ORIGIN}/api/convoy/${id}/connect`, { headers: { upgrade: "websocket", origin } }));
+let ipSeq = 0;
+async function open(id: string, origin = ORIGIN, ip = `10.0.0.${++ipSeq % 250}`): Promise<Client> {
+  const res = await exports.default.fetch(new Request(`${ORIGIN}/api/convoy/${id}/connect`, { headers: { upgrade: "websocket", origin, "cf-connecting-ip": ip } }));
   if (!res.webSocket) throw new Error(`no socket: HTTP ${res.status}`);
   const ws = res.webSocket;
   ws.accept();
@@ -111,7 +112,7 @@ describe("convoy: create, join, leave", () => {
     const { lead, f1, f2, id } = await convoyOfThree();
     const l = await connect(lead, id), a = await connect(f1, id), b = await connect(f2, id);
     await ok(api(f1, "POST", "/api/blocks", { user_id: f2.id }));
-    expect((await closedWith(b))?.code).toBe(4403);
+    expect(await closedWith(b)).toEqual({ code: 4403, reason: "removed" });                              // never "blocked"
     expect((await api(f2, "GET", `/api/convoy/${id}`)).status).toBe(404);
     a.send({ type: "position", lat: 35.31, lon: -83.81 });
     await l.next("position");
@@ -222,6 +223,15 @@ describe("convoy: socket authentication", () => {
     const res = await exports.default.fetch(new Request(`${ORIGIN}/api/convoy/${id}/connect`, { headers: { upgrade: "websocket", origin: "https://evil.test" } }));
     expect(res.status).toBe(403);
     expect((await api(await makeUser("other"), "POST", `/api/convoy/${id}/ticket`)).status).toBe(404);
+  });
+
+  it("one address cannot fill the handshake queue and lock members out", async () => {
+    const { f1, id } = await convoyOfThree();
+    for (let i = 0; i < LIMITS.pendingPerIp; i++) await open(id, ORIGIN, "203.0.113.9");
+    const res = await exports.default.fetch(new Request(`${ORIGIN}/api/convoy/${id}/connect`, { headers: { upgrade: "websocket", origin: ORIGIN, "cf-connecting-ip": "203.0.113.9" } }));
+    expect(res.status).toBe(429);
+    const c = await connect(f1, id);
+    expect(c.closed).toBeNull();
   });
 
   it("an expired ticket is refused", async () => {
