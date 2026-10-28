@@ -29,6 +29,10 @@
     .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; font-size: 12px; }
     select, input, button.btn, a.btn { font: inherit; font-size: 15px; height: 44px; padding: 0 10px; background: transparent; color: var(--panel-ink); border: 1px solid var(--panel-dim); }
     button.btn { cursor: pointer; font-weight: 600; font-size: 15px; }
+    /* Selects drawn like the app's other controls on every platform: square, ink border, a drawn chevron (iOS otherwise adds its own rounded bubble) */
+    select { -webkit-appearance: none; appearance: none; border-radius: 0; padding-right: 30px; text-overflow: ellipsis;
+      background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%);
+      background-position: calc(100% - 17px) 50%, calc(100% - 12px) 50%; background-size: 5px 5px, 5px 5px; background-repeat: no-repeat; }
     button.btn.solid, button.btn.on, a.btn.solid { background: var(--panel-ink); color: var(--panel); border-color: var(--panel-ink); }
     .panel { border: 1px solid var(--rule); padding: 12px; min-width: 0; }
     .note { font-size: 12px; color: var(--panel-dim); line-height: 1.5; }
@@ -248,6 +252,8 @@
     const mph = (v) => (v == null ? '--' : Math.round(v * MPH));
     const ft = (m) => (m == null ? '--' : `${Math.round(m * 3.28084)}`);
     const dateLabel = (d) => ApexFormat.dateTime(d.date);
+    // Pickers and buttons: a name that already carries its date ("Drive 10/27/2026 8:00 AM") does not repeat it
+    const driveLabel = (d) => (/^Drive \d/.test(d.name) ? d.name : `${d.name} · ${dateLabel(d)}`);
     const mmss = (s) => { const t = Math.round(s); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; };
     function bars(comp) {
       if (!comp) return '<span class="note">no clean corners</span>';
@@ -458,7 +464,7 @@
         : ready.length ? 'Recent drives you can share. The first and last kilometre of each drive and small residential roads are left out.' : 'No recent drives to share (drives must be under two weeks old and recorded with the phone app).';
       if (!on) return;
       for (const d of ready) {
-        const b = document.createElement('button'); b.className = 'btn'; b.textContent = `Share ${d.name} · ${dateLabel(d)}`;
+        const b = document.createElement('button'); b.className = 'btn'; b.textContent = `Share ${driveLabel(d)}`;
         b.onclick = async () => {
           b.disabled = true; b.textContent = 'Matching roads…';
           try {
@@ -477,7 +483,7 @@
     }
     function renderSegments() {
       $('segDrive').innerHTML = '';
-      drives.forEach(d => $('segDrive').add(new Option(`${d.name} · ${dateLabel(d)}`, d.id)));
+      drives.forEach(d => $('segDrive').add(new Option(driveLabel(d), d.id)));
       renderSegStrip();
       const list = $('segList');
       // Nothing to mark a stage on until there is a drive: say so instead of showing an empty picker.
@@ -517,7 +523,7 @@
     // COMPARE (corner by corner between two passes)
     // ---------------------------------------------------------------------
     function renderCompareSelectors() {
-      for (const s of [$('selA'), $('selB')]) { const keep = s.value; s.innerHTML = ''; drives.forEach(d => s.add(new Option(`${d.name} · ${dateLabel(d)}`, d.id))); if (keep) s.value = keep; }
+      for (const s of [$('selA'), $('selB')]) { const keep = s.value; s.innerHTML = ''; drives.forEach(d => s.add(new Option(driveLabel(d), d.id))); if (keep) s.value = keep; }
       if (!$('selA').value && drives[0]) $('selA').value = drives[0].id;
       if ((!$('selB').value || $('selB').value === $('selA').value) && drives[1]) $('selB').value = drives.find(d => d.id !== $('selA').value).id;
     }
@@ -584,7 +590,7 @@
     function renderDrive() {
       const pick = $('dvPick'), keep = pick.value; pick.innerHTML = '';
       const list = drives.slice().reverse();
-      list.forEach(d => pick.add(new Option(`${d.name} · ${dateLabel(d)}`, d.id)));
+      list.forEach(d => pick.add(new Option(driveLabel(d), d.id)));
       const actions = document.querySelector('#tab-drive .actions'); actions.hidden = !list.length;
       if (!list.length) { $('dvTitle').textContent = 'No drives yet'; $('dvNote').textContent = ''; $('dvRoot').innerHTML = '<p class="note">Start a drive on the map, or import a recording from the Log.</p>'; return; }
       pick.value = list.some(d => d.id === keep) ? keep : list[0].id;

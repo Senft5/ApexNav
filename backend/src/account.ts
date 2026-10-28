@@ -24,6 +24,7 @@ export async function exportMyData(env: Env, v: Viewer) {
     published_results: await q(`SELECT s.name AS segment, e.audience_type, COALESCE(u.handle, c.name) AS audience, e.driver_score, e.time_s, e.driven_on FROM board_entries e
                        JOIN segments s ON s.id = e.segment_id LEFT JOIN users u ON e.audience_type = 'friend' AND u.id = e.audience_id
                        LEFT JOIN crews c ON e.audience_type = 'crew' AND c.id = e.audience_id WHERE e.user_id = ?`),
+    cars: await q("SELECT year, make, model, trim, nickname, color, power_hp, weight_kg, drivetrain, transmission, tyres, mods, shared, is_primary, created_at FROM cars WHERE owner = ?"),
     highlights: await q("SELECT id, name, category, note, lat, lon, status, created_at FROM highlights WHERE author_id = ?"),
     highlight_ratings: await q("SELECT highlight_id, stars, visited, created_at FROM highlight_ratings WHERE user_id = ?"),
     points_by_week: await q("SELECT iso_week, octane FROM points_ledger WHERE user_id = ?"),
