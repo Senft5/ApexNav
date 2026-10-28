@@ -165,7 +165,7 @@
       const timeS = picks.reduce((t, x) => t + x.p.timeS, 0) + (n - picks.length) * quickS / n;
       if (timeS > limit) return null;
       const score = legs.reduce((v, l) => v + l.s.score, 0);
-      return { legs, timeS, stageKm: legs.reduce((v, l) => v + l.s.km, 0), value: score - L.perMin * Math.max(0, timeS - quickS) / 60 };
+      return { legs, timeS, stageKm: legs.reduce((v, l) => v + l.s.km, 0), value: score + setList(legs) - L.perMin * Math.max(0, timeS - quickS) / 60 };
     };
     const out = [], seen = new Set();
     const add = (choice) => {
@@ -214,6 +214,19 @@
     const up = fwd ? s.elevB > s.elevA : s.elevA > s.elevB, technical = (s.tight || 0) / s.km >= TECH_PER_KM;
     return (technical ? up : !up) ? DIRECTION_BONUS * Math.max(0, s.score || 0) : 0;
   }
+  // Set list (IDEAS R-12, ROAD_INTELLIGENCE §7.2.5): with the same stages, the order that finishes on the most technical one
+  // is worth SET_FINISH of their value, and three max-TECH stages back to back (tight corners per km ≥ MAX_TECH_PER_KM) lose
+  // SET_FATIGUE of it: tiring is a safety issue. Builds and rests follow: the hardest comes last, the others before it.
+  const SET_FINISH = 0.04, SET_FATIGUE = 0.25, MAX_TECH_PER_KM = 2.5;
+  const techOf = (s) => (s && s.km > 0 ? (s.tight || 0) / s.km : 0);
+  function setList(legs) {
+    if (!legs || legs.length < 2) return 0;
+    const tech = legs.map(l => techOf(l.s)), total = legs.reduce((v, l) => v + Math.max(0, l.s.score || 0), 0);
+    let adjust = 0;
+    if (tech[tech.length - 1] >= Math.max(...tech) && Math.max(...tech) > Math.min(...tech)) adjust += SET_FINISH * total;
+    for (let i = 2; i < tech.length; i++) if (tech.slice(i - 2, i + 1).every(t => t >= MAX_TECH_PER_KM)) { adjust -= SET_FATIGUE * total; break; }
+    return adjust;
+  }
   const STAGE_KMH = 50;   // drive time on a stage itself (twisty roads; the router's own time replaces it once routed)
   /**
    * Plans of 1–2 shortlisted stages from the connector matrix (seconds; null = no road), each stage
@@ -242,7 +255,7 @@
       if (last == null) return;
       time += last;
       if (time > limit) return;
-      out.push({ legs: legs.map(({ s, fwd }) => ({ s, fwd })), timeS: time, stageKm, value: value - L.perMin * Math.max(0, time - quickestS) / 60 });
+      out.push({ legs: legs.map(({ s, fwd }) => ({ s, fwd })), timeS: time, stageKm, value: value + setList(legs) - L.perMin * Math.max(0, time - quickestS) / 60 });
     };
     for (let i = 0; i < n; i++) for (const fi of [true, false]) {
       consider([[i, fi]]);
@@ -331,7 +344,7 @@
         const back = D(row, home);
         if (back != null) {
           const total = stageKm + connector + back, err = Math.abs(total - target) / target;
-          if (err <= 0.25) out.push({ legs: legs.slice(), total, stageKm, value: score * (1 - err) - (connector + back) * by.perUnit, share: stageKm / total });
+          if (err <= 0.25) out.push({ legs: legs.slice(), total, stageKm, value: (score + setList(legs)) * (1 - err) - (connector + back) * by.perUnit, share: stageKm / total });
         }
       }
       if (legs.length === 3) return;
@@ -502,11 +515,24 @@
       .map((n) => ({ lat: n.lat, lon: n.lon, k: off(n) })).sort((x, y) => x.k - y.k).slice(0, max).map(({ lat, lon }) => ({ lat, lon }));
   }
   /** Valhalla auto costing for the avoid options (preferences, not hard bans: the router may still need one). */
-  function costing(avoid = AVOID_DEFAULT) {
+  /**
+   * Router options for the avoid chips and the car you drive (IDEAS R-20, your Garage's daily car): a lowered car never gets
+   * unpaved roads, and a width (mirrors included) keeps to roads whose posted width fits. No car or unknown: nothing changes.
+   */
+  function costing(avoid = AVOID_DEFAULT, car = null) {
     const auto = { use_highways: avoid.highways ? 0 : 0.15, use_tolls: avoid.tolls ? 0 : 0.3 };
     if (avoid.ferries) auto.use_ferry = 0;
-    if (avoid.unpaved) auto.exclude_unpaved = true;
+    if (avoid.unpaved || (car && car.clearance === 'low')) auto.exclude_unpaved = true;
+    if (car && Number.isInteger(car.width_cm) && car.width_cm >= 120 && car.width_cm <= 300) auto.width = car.width_cm / 100;
     return { costing: 'auto', costing_options: { auto } };
+  }
+  /** What the car changed, for the route card: '' when nothing did. */
+  function carNote(car, avoid = AVOID_DEFAULT) {
+    if (!car) return '';
+    const bits = [];
+    if (car.clearance === 'low' && !avoid.unpaved) bits.push('no unpaved roads');
+    if (Number.isInteger(car.width_cm)) bits.push('roads wide enough');
+    return bits.length ? `Planned for your ${car.label || 'car'}: ${bits.join(', ')}.` : '';
   }
   /** Which avoided things a route still uses, from the router's summary flags (route.has = { highways, tolls, ferries }); unknown flags say nothing. */
   function unavoided(avoid, route) {
@@ -584,6 +610,6 @@
     return out;
   }
 
-  const api = { LEVELS, townKm, townCost, exploreShortlist, exploreTargets, explorePicks, distinctOptions, glare, glareCost, LOOP_BY_TIME, AVOID_DEFAULT, AVOID_LABELS, STAGE_KEPT, stageCoverage, keptStages, CAMERA_BOX_DEG, camerasToExclude, costing, unavoided, keepAvoiding, why, geometry, alongPoints, insertVia, loopValue, loopShortlist, loopPlansFromMatrix, score, shortlist, matrixPoints, plansFromMatrix, sectionCount, sectionPoints, combineSections, planKey, searchArea, waypoints, rank, along, kmBetween, directionBonus };
+  const api = { LEVELS, townKm, townCost, exploreShortlist, exploreTargets, explorePicks, distinctOptions, glare, glareCost, LOOP_BY_TIME, AVOID_DEFAULT, AVOID_LABELS, STAGE_KEPT, stageCoverage, keptStages, CAMERA_BOX_DEG, camerasToExclude, costing, unavoided, keepAvoiding, why, geometry, alongPoints, insertVia, loopValue, loopShortlist, loopPlansFromMatrix, score, shortlist, matrixPoints, plansFromMatrix, sectionCount, sectionPoints, combineSections, planKey, searchArea, waypoints, rank, along, kmBetween, directionBonus, setList, SET_FINISH, SET_FATIGUE, MAX_TECH_PER_KM, carNote };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexFunRoute = api;
 })(typeof window !== 'undefined' ? window : globalThis);

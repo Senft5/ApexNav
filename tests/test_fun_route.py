@@ -148,6 +148,10 @@ out.whyNoNames = F.why({ ...wr, route: {} }, qr);
 // avoid options: costing, what a route still uses, and keeping to them when any candidate can
 out.costDefault = F.costing().costing_options.auto;
 out.costAll = F.costing({ highways: true, tolls: true, ferries: true, unpaved: false }).costing_options.auto;
+const allowGravel = { highways: false, tolls: false, ferries: false, unpaved: false };
+out.costCar = [F.costing(allowGravel, { clearance: 'low', width_cm: 195 }).costing_options.auto, F.costing(allowGravel, { clearance: 'high' }).costing_options.auto,
+  F.costing(allowGravel, { width_cm: 50 }).costing_options.auto];
+out.carNote = [F.carNote({ clearance: 'low', width_cm: 195, label: 'Miata' }, allowGravel), F.carNote({ clearance: 'stock' }), F.carNote(null), F.carNote({ clearance: 'low', label: 'Miata' })];
 const tollRoad = { route: { has: { tolls: true, highways: false } } }, freeRoad = { route: { has: { tolls: false, highways: false } } }, unknown = { route: {} };
 out.unavoided = [F.unavoided({ tolls: true }, tollRoad.route), F.unavoided({ tolls: false }, tollRoad.route), F.unavoided({ tolls: true }, unknown.route)];
 out.keep = [F.keepAvoiding([tollRoad, freeRoad], { tolls: true }).length, F.keepAvoiding([tollRoad], { tolls: true }).length, F.keepAvoiding([tollRoad, freeRoad], { tolls: false }).length];
@@ -260,6 +264,10 @@ def test_avoid_options_reach_the_router_and_are_honest(r):
     assert r["costDefault"] == {"use_highways": 0.15, "use_tolls": 0.3, "exclude_unpaved": True}
     assert r["costAll"] == {"use_highways": 0, "use_tolls": 0, "use_ferry": 0}
     assert r["unavoided"] == [["tolls"], [], []], "unknown flags say nothing"
+    low, high, silly = r["costCar"]
+    assert low["exclude_unpaved"] is True and low["width"] == 1.95, "a lowered car stays off gravel; its width goes to the router (IDEAS R-20)"
+    assert "exclude_unpaved" not in high and "width" not in high and "width" not in silly
+    assert r["carNote"] == ["Planned for your Miata: no unpaved roads, roads wide enough.", "", "", ""]
     assert r["keep"] == [1, 1, 2], "a toll-free candidate wins the pool; if none is, the toll road stays (and the card says so)"
 
 
@@ -298,7 +306,7 @@ const source = html.match(/async function valhallaMatrix\(.*?\n    }/s)[0];
 const calls = [];
 const RouteLoading = { json: async (url, opts) => { const b = JSON.parse(opts.body); calls.push(b.sources.length * b.targets.length);
   return { sources_to_targets: b.sources.map((s, i) => b.targets.map((t, j) => (j === 0 ? null : { time: 60, distance: Math.round((s.lat - 39) * 100) + j }))) }; } };
-const m = new Function('RouteLoading', 'VALHALLA', 'FunRoute', 'avoid', 'return (' + source + ')')(RouteLoading, 'https://v', { costing: () => ({}) }, {});
+const m = new Function('RouteLoading', 'VALHALLA', 'FunRoute', 'avoid', 'routingCar', 'return (' + source + ')')(RouteLoading, 'https://v', { costing: () => ({}) }, {}, () => null);
 const pts = (n) => Array.from({ length: n }, (_, i) => ({ lat: 39 + i / 100, lon: -84 }));
 (async () => {
   const r = await m(pts(13), pts(13));

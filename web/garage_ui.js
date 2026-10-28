@@ -3,6 +3,8 @@
 (function (root) {
   const LB = 2.20462;
   const DRIVE = { fwd: 'FWD', rwd: 'RWD', awd: 'AWD' }, TRANS = { manual: 'Manual', auto: 'Automatic', dct: 'DCT' };
+  const HEIGHT = { low: 'Lowered', stock: 'Stock height', high: 'Lifted' }, IN = 2.54;
+  const metric = () => !!(root.ApexUnits && root.ApexUnits.metric());
   const CSS = `
     .garage-cards { display: grid; gap: 8px; }
     .car-card { border: 1px solid var(--rule); padding: 10px 12px; display: grid; gap: 4px; overflow: hidden; overflow-wrap: anywhere; }
@@ -19,7 +21,7 @@
   const FIELD_HINT = {
     bad_year: 'Year should be between 1886 and 2035.', bad_make: 'Check the make.', bad_model: 'Check the model.', bad_trim: 'Check the trim.',
     bad_nickname: 'Check the nickname.', bad_color: 'Check the colour.', bad_power_hp: 'Power should be 1 to 3,000 hp.',
-    bad_weight_kg: 'Weight should be 441 to 13,228 lb.', bad_tyres: 'Check the tyres.', bad_mods: 'Check the mods (500 characters at most).',
+    bad_weight_kg: 'Weight should be 441 to 13,228 lb.', bad_width_cm: 'Width should be 47 to 118 in (120 to 300 cm).', bad_tyres: 'Check the tyres.', bad_mods: 'Check the mods (500 characters at most).',
   };
 
   /** One line of who-has-what, e.g. "2003 BMW M3 E46 CSL". */
@@ -39,6 +41,7 @@
       const pw = lbPerHp(c); add('', pw ? `${pw.toFixed(1)} lb/hp` : '');
       add('', [DRIVE[c.drivetrain], TRANS[c.transmission]].filter(Boolean).join(' · '));
       add('', c.tyres || '');
+      add('', c.clearance === 'low' ? 'Lowered' : c.clearance === 'high' ? 'Lifted' : '');
       const kids = [el('div', { className: 'car-title' }, el('b', { textContent: title(c) }), c.is_primary ? el('span', { className: 'note', textContent: 'Daily' }) : '')];
       if (c.nickname) kids.push(el('div', { className: 'car-nick', textContent: `“${c.nickname}”` }));
       if (spec.childNodes.length) kids.push(spec);
@@ -64,6 +67,8 @@
         weight_lb: f('weight_lb', 'Weight (lb)', c.weight_kg ? Math.round(c.weight_kg * LB) : '', { inputMode: 'numeric' }),
         drivetrain: sel('drivetrain', 'Drive', DRIVE, c.drivetrain), transmission: sel('transmission', 'Gearbox', TRANS, c.transmission),
         tyres: f('tyres', 'Tyres', c.tyres, { maxLength: 80 }),
+        clearance: sel('clearance', 'Ride height', HEIGHT, c.clearance),
+        width: f('width', metric() ? 'Width with mirrors (cm)' : 'Width with mirrors (in)', c.width_cm ? (metric() ? c.width_cm : Math.round(c.width_cm / IN)) : '', { inputMode: 'numeric' }),
         mods: el('textarea', { className: 'field', name: 'mods', placeholder: 'Mods', maxLength: 500, rows: 3, value: c.mods ?? '' }),
       };
       inputs.mods.setAttribute('aria-label', 'Mods');
@@ -116,9 +121,10 @@
         const lb = int(v('weight_lb'));
         const body = { year: int(v('year')), make: v('make'), model: v('model'), trim: v('trim'), nickname: v('nickname'), color: v('color'),
                        power_hp: int(v('power_hp')), weight_kg: lb == null ? null : Math.round(lb / LB), drivetrain: v('drivetrain') || null,
-                       transmission: v('transmission') || null, tyres: v('tyres'), mods: v('mods'), shared: share.checked, is_primary: !!c.is_primary };
+                       transmission: v('transmission') || null, tyres: v('tyres'), mods: v('mods'), shared: share.checked, is_primary: !!c.is_primary,
+                       clearance: v('clearance') || null, width_cm: int(v('width')) == null ? null : Math.round(metric() ? int(v('width')) : int(v('width')) * IN) };
         if (!body.make.trim() || !body.model.trim()) { toast('A car needs a make and a model.'); return; }
-        for (const k of ['year', 'power_hp', 'weight_kg']) if (body[k] !== null && !Number.isInteger(body[k])) { toast('Year, power and weight are whole numbers.'); return; }
+        for (const k of ['year', 'power_hp', 'weight_kg', 'width_cm']) if (body[k] !== null && !Number.isInteger(body[k])) { toast('Year, power, weight and width are whole numbers.'); return; }
         let r;
         try { r = await apiCall(c.id ? 'PUT' : 'POST', c.id ? `/api/garage/${encodeURIComponent(c.id)}` : '/api/garage', body); }
         catch (_) { toast('No signal. Your car wasn\'t saved.'); return; }
@@ -128,7 +134,8 @@
       return el('div', { className: 'stack-8' },
         lookups,
         el('div', { className: 'car-form' }, inputs.year, inputs.make, inputs.model, inputs.trim, inputs.nickname, inputs.color, inputs.power_hp, inputs.weight_lb,
-          inputs.drivetrain, inputs.transmission, el('div', { className: 'wide' }, inputs.tyres), el('div', { className: 'wide' }, inputs.mods)),
+          inputs.drivetrain, inputs.transmission, el('div', { className: 'wide' }, inputs.tyres), inputs.clearance, inputs.width, el('div', { className: 'wide' }, inputs.mods)),
+        el('p', { className: 'note', textContent: 'Ride height and width plan your daily car\'s routes: a lowered car stays off unpaved roads.' }),
         el('label', { className: 'row', style: 'gap:8px;align-items:center' }, share, document.createTextNode('Show to my friends and private crews')),
         el('div', { className: 'row' }, btn(c.id ? 'Save' : 'Add car', save, 'ink-btn solid'), btn('Cancel', onDone, 'linkbtn')));
     }
@@ -149,6 +156,7 @@
         try { [mineR, theirsR] = await Promise.all([apiCall('GET', '/api/garage'), apiCall('GET', '/api/garage/people')]); }
         catch (_) { mineR = { ok: false }; theirsR = { ok: false }; }
         const mine = mineR.ok ? (await jsonOf(mineR)) || [] : null, theirs = theirsR.ok ? (await jsonOf(theirsR)) || [] : [];
+        if (mine && page.onCars) page.onCars(mine);
         const kids = [el('h3', { textContent: 'Garage' })];
         if (mine === null) { kids.push(el('p', { className: 'note', textContent: 'Couldn\'t load your garage. Check signal.' })); host.replaceChildren(...kids); return; }
         if (!mine.length && editing !== 'new') kids.push(el('p', { className: 'note', textContent: 'Add your car: friends and private crews see it next to your name when you show it. No location or drives are on a car card.' }));

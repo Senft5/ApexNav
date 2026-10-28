@@ -477,7 +477,9 @@ flow('garage: a VIN fills the car in, the owner keeps the colour (NHTSA stubbed,
     const el = (tag, props = {}, ...kids) => { const n = Object.assign(document.createElement(tag), props); n.append(...kids); return n; };
     const btn = (text, onclick, className = 'ink-btn') => el('button', { textContent: text, onclick, className });
     const ok = (body) => ({ ok: true, status: 200, json: async () => body });
-    const g = ApexGarageUI.mount({ el, btn, toast: () => {}, apiCall: async () => ok([]), jsonOf: (r) => r.json() });
+    window.__garage = { calls: [], cars: null };
+    const g = ApexGarageUI.mount({ el, btn, toast: () => {}, apiCall: async (m, p, b) => { window.__garage.calls.push({ m, p, b }); return ok(m === 'POST' ? { id: 'c1' } : []); },
+      jsonOf: (r) => r.json(), onCars: (list) => { window.__garage.cars = list; } });
     const host = el('div', { id: 'e2eGarage' }); document.body.prepend(host); host.append(g.section());
   });
   await page.click('#e2eGarage button:has-text("Add a car")');
@@ -491,6 +493,13 @@ flow('garage: a VIN fills the car in, the owner keeps the colour (NHTSA stubbed,
   check(v.drive === 'rwd' && v.weight_lb !== '', 'drive from the VIN, weight from typical specs');
   check(v.color === 'Soul Red', 'the colour the owner typed is kept');
   check(/typical factory specs/.test(await page.textContent('#e2eGarage [role="status"]')), 'says the specs are typical');
+  // ride height and width for routing (IDEAS R-20), in inches by default, kept in cm
+  await page.selectOption('#e2eGarage select[name="clearance"]', 'low');
+  await page.fill('#e2eGarage input[name="width"]', '75');
+  await page.click('#e2eGarage button:has-text("Add car")');
+  const sent = await page.evaluate(() => window.__garage.calls.find((c) => c.m === 'POST'));
+  check(sent && sent.b.clearance === 'low' && sent.b.width_cm === 191, 'ride height and width saved: ' + JSON.stringify(sent && sent.b));
+  check(await page.evaluate(() => Array.isArray(window.__garage.cars)), 'the planner hears about your cars');
 });
 
 flow('reported hazards: a call ahead, "still there?" after passing, and a one-tap report (Worker stubbed, IDEAS Q-15/Q-16)', async (page, base) => {
@@ -1053,6 +1062,8 @@ flow('Your records: unknown dates and unscored drives never make a "new best", a
     const page = await ctx.newPage();
     const errors = [];
     page.on('pageerror', (e) => errors.push(String(e && e.stack || e)));
+    // Content-Security-Policy (tools/csp.py, IDEAS Z-11): anything the policy blocks is a failure, so a new host can't slip in.
+    page.on('console', (m) => { if (/Content Security Policy/i.test(m.text())) errors.push('CSP: ' + m.text()); });
     // A missing file of our own (a renamed script, a typo'd path) is a failure even when nothing throws. /api/* has no
     // Worker behind this server, so its 404s are expected.
     page.on('response', (res) => { const u = res.url(); if (u.startsWith(base) && !u.startsWith(base + '/api/') && res.status() >= 400) errors.push(`${res.status()} ${u.slice(base.length)}`); });
