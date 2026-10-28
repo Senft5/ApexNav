@@ -34,5 +34,6 @@ SELECT
   (SELECT COUNT(*) FROM shared_route_audience) AS shared_route_audience,
   (SELECT COUNT(*) FROM crew_events) AS crew_events,
   (SELECT COUNT(*) FROM crew_event_rsvps) AS crew_event_rsvps,
+  (SELECT COUNT(*) FROM health_counts) AS health_counts,
   (SELECT COUNT(*) FROM d1_migrations) AS d1_migrations
 ;

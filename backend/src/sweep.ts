@@ -1,6 +1,7 @@
 // Daily housekeeping (IDEAS Y-13): rows that expired and can never be used again are deleted, so D1 doesn't keep
 // them forever. Used account invites stay (they record who invited whom, which moderation reads as invite chains).
 import { Env } from "./util";
+import { HEALTH_SWEEP } from "./health";
 
 export const SWEEPS: Record<string, string> = {
   sessions: "DELETE FROM sessions WHERE expires_at <= datetime('now')",
@@ -12,6 +13,7 @@ export const SWEEPS: Record<string, string> = {
   // answers first (not left to the cascade), then the drives
   crew_event_rsvps: "DELETE FROM crew_event_rsvps WHERE event_id IN (SELECT id FROM crew_events WHERE starts_at <= datetime('now', '-7 days'))",
   crew_events: "DELETE FROM crew_events WHERE starts_at <= datetime('now', '-7 days')",
+  health_counts: HEALTH_SWEEP,
 };
 
 export async function sweepExpired(env: Env): Promise<Record<string, number>> {
