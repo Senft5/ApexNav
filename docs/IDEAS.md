@@ -194,9 +194,9 @@ Today: accounts with Google sign-in, friends, crews (public and private, crews n
 | id | idea | impact | effort | status | from |
 |---|---|---|---|---|---|
 | S-01 | Crews as groups: public/private, nearby discovery, tiles, owner settings | H | M | done (#76) | Strava clubs, REVER groups |
-| S-02 | Convoy client: create/join by code or QR, live positions, gap in time, leader hazard calls, regroup | H | L | partial (#84 server) | WORKER_QUEUE convoy-1..3, REVER, Waze |
+| S-02 | Convoy client: create/join by code or QR, live positions, gap in time, leader hazard calls, regroup | H | L | done (#84, #89) | WORKER_QUEUE convoy-1..3, REVER, Waze |
 | S-03 | Friends' activity in the Log with rank on shared stages | H | M | todo | WORKER_QUEUE log-friends, Strava feed |
-| S-04 | Garage: car profile (mass, power, tyres, ride height), shareable car cards, no location | H | M | active (garage thread) | SOCIAL §2.4, Drivetribe |
+| S-04 | Garage: car profile (mass, power, tyres, ride height), shareable car cards, no location | H | M | done (#98; ride height and grip numbers not yet) | SOCIAL §2.4, Drivetribe |
 | S-05 | Share a planned route (geometry + notes) to a friend or crew, never a recorded drive | H | M | todo | SOCIAL §2.5, Calimoto, Roadtrippers |
 | S-06 | Crew events: a planned drive with time, meeting point, route, RSVPs and a convoy that opens on the day | H | L | todo | Meetup, REVER rides, car clubs |
 | S-07 | Kudos and comments on shared drives and highlights | M | M | todo | Strava kudos |

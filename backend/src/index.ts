@@ -10,6 +10,7 @@ import {
   myGrants, publish, removePair, setGrant, setHandle,
 } from "./social";
 import { deleteAccount, exportMyData } from "./account";
+import { carCreate, carDelete, carUpdate, myCars, peoplesCars } from "./garage";
 import { contribute, setContribute } from "./contribute";
 import { pointsFor } from "./points";
 import { roadBins } from "./roads";
@@ -67,6 +68,12 @@ on("DELETE", "/api/crews/:id/membership", async (req, env, m) => { await crewLea
 
 on("GET", "/api/grants", async (req, env) => json(await myGrants(env, await requireMember(req, env))));
 on("PUT", "/api/grants", async (req, env) => { await setGrant(env, await requireMember(req, env), req); return noContent(); });
+
+on("GET", "/api/garage", async (req, env) => json(await myCars(env, await requireMember(req, env))));
+on("GET", "/api/garage/people", async (req, env) => json(await peoplesCars(env, await requireMember(req, env))));
+on("POST", "/api/garage", async (req, env) => json(await carCreate(env, await requireMember(req, env), req), 201));
+on("PUT", "/api/garage/:id", async (req, env, m) => { await carUpdate(env, await requireMember(req, env), m.groups!.id, req); return noContent(); });
+on("DELETE", "/api/garage/:id", async (req, env, m) => { await carDelete(env, await requireMember(req, env), m.groups!.id); return noContent(); });
 
 on("POST", "/api/segments", async (req, env) => json(await segmentCreate(env, await requireMember(req, env), req), 201));
 on("GET", "/api/segments", async (req, env) => json(await segmentList(env, await requireMember(req, env))));
