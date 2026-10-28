@@ -4,6 +4,10 @@
 - Trips over 22 km crow fly are cut into ~24 km sections along the quickest route (2 on Fun, 3 on Max fun); each section gets its own stage search, and the best per section (plus one-swap variants, max 4 stages) compete with the single-corridor plans (`ApexFunRoute.sectionCount/sectionPoints/combineSections`). Knoxville→Asheville Fun: Fun 47 for +17 min (was no fun option); Knoxville→Maryville unchanged (79 @ 128 min). Not driven on a phone.
 - Exact next task: use measured data during stage discovery (road-3 remainder); unify loop ranking with the fun score.
 
+## Session 2026-10-28: idea backlog (thread "Build the best-in-class idea backlog")
+- New docs/IDEAS.md: ~190 ideas in 14 areas (routing, analysis, road intelligence, co-driver, social, UI, onboarding, in-car, offline, reliability, performance, privacy, Android/web, launch), each with impact, effort, status and source (repo docs, owner asks, competitors such as Waze, Strava, Calimoto, Kurviger, Roadtrippers, REVER, Relive, Dragy). Statuses checked against this file and main as of #88. Includes "How to pick next" and the decided guardrails. Threads claim a row as `active`, then mark it `done (#N)`.
+- Exact next task: each area thread picks its next row by the pick rules (owner reports first, then WORKER_QUEUE top priorities, then H/S → H/M → M/S → H/L).
+
 ## Session 2026-10-28: measured roads count in routing
 - #85 merged (loops sized with real road distances).
 - Measured road data now moves route choice for members (docs/ROUTING.md, Measured roads): `measuredAdjust` −8 rough … +3 smooth, +2 banked, weighted by coverage and passes; readings whose passes disagree (#87 spreads, `agreement() === 'differ'`) are ignored; unmeasured stays neutral. `measuredAlong`/`measuredSeries` look up to 150 ways in batches of 50 (long routes used to see only their first 50 ways). Route card shows a Surface bar once a fifth of the route is measured. Production has very little measured data yet (909 bins, no camber as of 2026-10-26), so the effect in the field will be small until people drive with sharing on.
@@ -15,6 +19,7 @@
 - #87 road feel confidence: `GET /api/roads` adds `cn`, `csd`, `rsd` (sample SD from the Welford sums road_bins already keeps; no migration); readout says "1 run", "N runs agree" (camber within 1.5°, roughness within 0.05 g) or "runs differ ±x"; faint bars for single/disagreeing passes. Older server payloads read with agreement unknown.
 - Reviewed by code-review subagents (phantom gains from GPS alignment, tips from zero-filled g, braking from the previous corner, skewed slices: all fixed with tests). Checked in headless Chromium at 390 px with the shipped drives stored as recordings.
 - Not verified on a phone: any of the above with real drives; the coach needs two or more drives of the same road to show an ideal drive. Road-feel confidence needs a signed-in member and real multi-pass data, so it has only been checked with stubbed data in tests.
+- Pothole evidence on phone drives: the live pipeline keeps the largest >8 Hz vertical spike (`vert_peak`, Swift `vertPeakMps2`, fixture regenerated); the app sends it per frame as `vert_peak_g` and its own CSV writes it per node (blank unless locked and rolling); the web Recorder places each frame's spike on its 5 m sample (column `vert_peak_g`). Not yet used for detection.
 - Exact next task: use corner phases in live coaching (spoken "brake later" on a known road), feed agreement into routing (WORKER_QUEUE road-3: trust only agreeing measurements), and corroborated hazards ("Confirmed" pothole when passes agree).
 
 ## Session 2026-10-28: loops the length you asked for

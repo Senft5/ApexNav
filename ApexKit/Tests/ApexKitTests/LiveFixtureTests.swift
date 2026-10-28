@@ -22,6 +22,7 @@ final class LiveFixtureTests: XCTestCase {
         for i in 0..<t.count {
             pipe.step(accel: Vec3(accel[i]), gyro: Vec3(gyro[i]), timestamp: t[i], speedMps: speed[i], gravityG: Vec3(gravity[i]))
             check(i, pipe)
+            if i % 50 == 0 { _ = pipe.takeVertPeak() }   // same windows as tools/make_live_fixture.py
         }
     }
 

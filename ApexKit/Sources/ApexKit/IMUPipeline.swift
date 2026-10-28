@@ -9,6 +9,7 @@ public struct IMUPipeline: Sendable {
     public private(set) var yawRateRadS = 0.0    // about +Z up
     public private(set) var crestAccMps2 = 0.0   // < 1 Hz vertical (gravity removed)
     public private(set) var hpVert = 0.0         // > 8 Hz vertical
+    public private(set) var vertPeakMps2 = 0.0   // max |hpVert| since the last take (pothole/bump spikes)
     var lastAzVeh = 0.0
     public private(set) var roughMeanSq = 0.0    // EMA of hpVert^2, (m/s^2)^2
     var segRoughSumSq = 0.0
@@ -41,6 +42,7 @@ public struct IMUPipeline: Sendable {
         let beta = rc / (rc + dt)
         hpVert = beta * (hpVert + az - lastAzVeh)
         lastAzVeh = az
+        vertPeakMps2 = max(vertPeakMps2, abs(hpVert))
         let sq = hpVert * hpVert
         roughMeanSq += lowPassAlpha(dt: dt, tau: 0.5) * (sq - roughMeanSq)
         segRoughSumSq += sq
@@ -65,6 +67,13 @@ public struct IMUPipeline: Sendable {
         segRoughCount > 0 ? sqrt(segRoughSumSq / Double(segRoughCount)) : sqrt(max(0.0, roughMeanSq))
     }
 
+    /// Peak |>8 Hz vertical| since the last call (m/s^2), then start a new window.
+    public mutating func takeVertPeak() -> Double {
+        let peak = vertPeakMps2
+        vertPeakMps2 = 0.0
+        return peak
+    }
+
     public mutating func resetSegmentRough() {
         segRoughSumSq = 0.0
         segRoughCount = 0
@@ -74,6 +83,6 @@ public struct IMUPipeline: Sendable {
 
     /// Same order as core/live_pipeline.IMUPipeline.outputs().
     public var outputs: [Double] {
-        [lonAccMps2, latAccMps2, yawRateRadS, crestAccMps2, hpVert, roughMeanSq, camberRad, engagement]
+        [lonAccMps2, latAccMps2, yawRateRadS, crestAccMps2, hpVert, roughMeanSq, camberRad, engagement, vertPeakMps2]
     }
 }

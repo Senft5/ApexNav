@@ -6,7 +6,7 @@
 //   - roughness_rms: from the accelerometer, orientation independent (high-passed magnitude), in g; null if the device gives no motion events.
 //   - camber_deg: null always (needs a calibrated chassis frame the web cannot get). The native app's frames carry camber_deg and
 //     crest_vertical_g from its IMU; Recorder keeps them, and the app's lat_g/lon_g, only while the frame says calibration 'locked'
-//     (a solved phone-to-car rotation).
+//     (a solved phone-to-car rotation). Its vert_peak_g (largest >8 Hz vertical spike, g) becomes each 5 m sample's pothole/bump evidence.
 // FrameBuilder is pure and unit-tested; start()/stop() are the thin browser shell and must be called from a user gesture (iOS requires it).
 (function (root) {
   const G = 9.80665, D2R = Math.PI / 180;
@@ -67,25 +67,38 @@
 
   /** Collects frames into 5 m samples (CLAUDE.md spatial binning) and writes the ApexDrive CSV the analysis page imports. */
   class Recorder {
-    constructor() { this.rows = []; this.dist = 0; this.prev = null; this.nextAt = 0; this.startedAt = null; this.last = null; }
+    constructor() { this.rows = []; this.dist = 0; this.prev = null; this.nextAt = 0; this.startedAt = null; this.last = null; this.peaks = []; this.peaksLost = false; }
     add(fr) {
       if (!fr || !fr.has_fix) return;
       if (!this.startedAt) this.startedAt = fr.t || Date.now();
+      const locked = fr.calibration === 'locked';                            // camber/crest/spikes are only meaningful in a solved chassis frame
+      // The app's vertical spike (max |>8 Hz vertical| since its last frame) arrives ~10 times between GPS fixes, which all share one
+      // position. Keep each frame's spike in order (null when unmeasured or crawling: door slams are not road) and place it on the road
+      // when the next fix moves, at its share of the way between the two fixes.
+      // Over ~3 s without a new position (tunnel, GPS outage, a stop) the frames can no longer be placed: they are dropped, not guessed.
+      if (this.peaks.length <= 30) this.peaks.push(locked && finite(fr.vert_peak_g) && finite(fr.speed_mps) && fr.speed_mps >= 1 ? fr.vert_peak_g : null);
+      else this.peaksLost = true;
       if (this.prev) {
         const seg = metres(this.prev, fr), d0 = this.dist;
         if (seg < 0.5) { this.last = fr; return; }                          // stationary: no new road
         this.dist += seg;
-        const locked = fr.calibration === 'locked';                          // camber/crest are only meaningful in a solved chassis frame
-        const gOk = typeof fr.calibration !== 'string' || locked;            // so is the app's IMU g; browser frames carry GPS-derived g and no calibration
+        const gOk = typeof fr.calibration !== 'string' || locked;            // the app's IMU g likewise; browser frames carry GPS-derived g and no calibration
         while (this.nextAt <= this.dist) {                                   // interpolate each 5 m crossing
           const f = (this.nextAt - d0) / seg, mix = (a, b) => (finite(a) && finite(b) ? a + (b - a) * f : (finite(b) ? b : null));
           this.rows.push({ distance_m: this.nextAt, lat: this.prev.lat + (fr.lat - this.prev.lat) * f, lon: this.prev.lon + (fr.lon - this.prev.lon) * f,
             elevation_m: mix(this.prev.elevation_m, fr.elevation_m), speed_mps: mix(this.prev.speed_mps, fr.speed_mps),
             lon_g: gOk && finite(fr.lon_g) ? fr.lon_g : null, lat_g: gOk && finite(fr.lat_g) ? fr.lat_g : null, roughness_rms: finite(fr.roughness_rms) ? fr.roughness_rms : null,
-            camber_deg: locked && finite(fr.camber_deg) ? fr.camber_deg : null, crest_vertical_g: locked && finite(fr.crest_vertical_g) ? fr.crest_vertical_g : null });
+            camber_deg: locked && finite(fr.camber_deg) ? fr.camber_deg : null, crest_vertical_g: locked && finite(fr.crest_vertical_g) ? fr.crest_vertical_g : null,
+            vert_peak_g: null });
           this.nextAt += 5;
         }
+        const n = this.peaks.length;
+        if (!this.peaksLost && seg <= 100) this.peaks.forEach((p, k) => {                                      // frame k of n since the last move: (k + 1) / n of the way along
+          const row = this.rows[Math.floor((d0 + seg * (k + 1) / n) / 5)];
+          if (p != null && row) row.vert_peak_g = row.vert_peak_g == null ? p : Math.max(row.vert_peak_g, p);
+        });
       } else this.nextAt = 0;
+      this.peaks = []; this.peaksLost = false;
       this.prev = fr; this.last = fr;
     }
     get km() { return this.dist / 1000; }
@@ -93,9 +106,9 @@
     /** CSV in the ApexDrive column layout; missing values are left blank, never zero. */
     toCsv() {
       const num = (v, d) => (finite(v) ? v.toFixed(d) : '');
-      const head = 'segment_index,distance_m,lat,lon,elevation_m,speed_mph,lon_g,lat_g,camber_deg,roughness_rms,crest_vertical_g,source';
+      const head = 'segment_index,distance_m,lat,lon,elevation_m,speed_mph,lon_g,lat_g,camber_deg,roughness_rms,crest_vertical_g,vert_peak_g,source';
       return [head, ...this.rows.map((r, i) => [i, num(r.distance_m, 1), num(r.lat, 7), num(r.lon, 7), num(r.elevation_m, 1), num(finite(r.speed_mps) ? r.speed_mps * 2.2369362921 : null, 2),
-        num(r.lon_g, 4), num(r.lat_g, 4), num(r.camber_deg, 2), num(r.roughness_rms, 4), num(r.crest_vertical_g, 3), 'web-gps'].join(','))].join('\n') + '\n';
+        num(r.lon_g, 4), num(r.lat_g, 4), num(r.camber_deg, 2), num(r.roughness_rms, 4), num(r.crest_vertical_g, 3), num(r.vert_peak_g, 3), 'web-gps'].join(','))].join('\n') + '\n';
     }
   }
 
