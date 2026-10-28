@@ -17,5 +17,7 @@ export async function pointsFor(env: Env, userId: string) {
     `SELECT u.handle, ROUND(SUM(p.octane), 2) AS total FROM points_ledger p JOIN users u ON u.id = p.user_id JOIN members m ON m.user_id = u.id
       WHERE u.handle IS NOT NULL GROUP BY p.user_id ORDER BY total DESC LIMIT 50`).all<{ handle: string; total: number }>();
   const total = mine.results.reduce((s, r) => s + r.octane, 0);
-  return { total: Math.round(total * 100) / 100, weeks: mine.results, board: board.results };
+  // your own pioneer badges (IDEAS S-09): roads you were first or second to map; never anyone else's
+  const badges = await env.DB.prepare("SELECT pioneer_firsts AS firsts, pioneer_seconds AS seconds FROM members WHERE user_id = ?").bind(userId).first<{ firsts: number; seconds: number }>();
+  return { total: Math.round(total * 100) / 100, weeks: mine.results, board: board.results, pioneer: { firsts: badges?.firsts ?? 0, seconds: badges?.seconds ?? 0 } };
 }

@@ -43,6 +43,7 @@
   <script src="feedback.js"></script>
   <script src="profile_view.js"></script>
   <script src="pinned_places.js"></script>
+  <script src="trip_stops.js"></script>
   <script src="incident.js"></script>
   <script src="traffic.js"></script>
   <script src="in_car.js"></script>
@@ -190,6 +191,8 @@
     .pin.crest, .pin.dip { color: var(--panel-ink); border-color: var(--panel-dim); }
     .puck { width: 26px; height: 26px; }
     .reshape-pin { cursor: grabbing; }
+    .stop-row { align-items: center; gap: 6px; } .stop-row span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .poi-pin { cursor: pointer; }
     .pinned-row { flex-wrap: nowrap; align-items: stretch; } .pinned-row .place { flex: 1; min-width: 0; }
     .dropped-pin { width: 24px; height: 24px; border: 3px solid var(--panel); background: var(--accent); border-radius: 50%; box-shadow: 0 0 0 2px var(--panel-ink); }
     .pin-actions { display: grid; gap: 8px; }
@@ -488,6 +491,7 @@
               <p class="route-meta" id="routeCardMeta"></p>
               <p class="route-meta" id="routeCardAlong" hidden></p>
               <p class="route-meta" id="routeCardClimb" hidden></p>
+              <div class="stack-8" id="routeStops" hidden></div>
               <div class="bars mt-8" id="routeCardBars"></div>
               <p class="note" id="routeCardWhy" hidden></p>
               <p class="note" id="routeCardSub"></p>
@@ -2413,6 +2417,7 @@
       attachLimits(t);
       attachScenic(t);
       attachProfile(t);
+      paintStops(t);
       if (!prebuilt) toast(`${name} · ${ApexUnits.long(totalM(), 1)} · ${t.events.filter(e => e.type === 'corner').length} corners`);
     }
     // A route just found: pin its destination and show it, so you can check you are routing to the right place. FOLLOW
@@ -3304,10 +3309,33 @@
       const from = req.from || await locate();
       if (!from) { toast(NO_FIX); return false; }
       const pinM = atM ?? current.dist[Core.nearestIndex(pin.lat, pin.lon, current.lat, current.lon, -1).index];
-      const via = FunRoute.insertVia(req.via.map(v => ({ lat: v.lat, lon: v.lon, distM: v.distM, ...(v.shaping ? { shaping: true } : {}) })), { lat: pin.lat, lon: pin.lon }, pinM)
+      const via = FunRoute.insertVia(req.via.map(v => ({ lat: v.lat, lon: v.lon, distM: v.distM, ...(v.shaping ? { shaping: true } : {}), ...(v.label ? { label: v.label } : {}) })),
+        { lat: pin.lat, lon: pin.lon, ...(pin.label ? { label: pin.label } : {}) }, pinM)
         .map(({ distM, ...v }) => v);
       await buildRoute([from, ...via, req.to], current.id, current.name, null, { from: req.from, to: req.to, via });
       return true;
+    }
+    // Your stops on the route card (trip_stops.js, IDEAS R-17): move up or down, take out; the route is rebuilt through them.
+    function paintStops(t) {
+      const box = $('routeStops');
+      const list = t && t.request ? ApexTripStops.stops(t.request) : [];
+      box.hidden = !list.length;
+      if (!list.length) { box.replaceChildren(); return; }
+      const reroute = async (via) => {
+        const req = t.request, from = req.from || await locate();
+        if (!from) { toast(NO_FIX); return; }
+        await buildRoute([from, ...via, req.to], t.id, t.name, null, { from: req.from, to: req.to, via });
+      };
+      const b = (label, aria, fn) => { const n = document.createElement('button'); n.className = 'linkbtn'; n.textContent = label; n.setAttribute('aria-label', aria); n.addEventListener('click', fn); return n; };
+      box.replaceChildren(...list.map((s, k) => {
+        const row = document.createElement('div'); row.className = 'row stop-row';
+        const name = document.createElement('span'); name.textContent = `${k + 1}. ${s.label}`;
+        row.append(name,
+          ...(k > 0 ? [b('Up', `Move ${s.label} earlier`, () => reroute(ApexTripStops.move(t.request, k, -1)))] : []),
+          ...(k < list.length - 1 ? [b('Down', `Move ${s.label} later`, () => reroute(ApexTripStops.move(t.request, k, 1)))] : []),
+          b('Remove', `Remove ${s.label}`, () => reroute(ApexTripStops.remove(t.request, k))));
+        return row;
+      }));
     }
     $('pinViaBtn').addEventListener('click', async (e) => {
       if (!droppedPin || !plannedRoute?.request) return;
@@ -3651,6 +3679,9 @@
       const you = section('You');
       you.append(el('div', { className: 'row', style: 'align-items:baseline;gap:12px' }, el('b', { textContent: `@${me.handle}`, style: 'font-size:22px;font-family:var(--font-num)' }),
         el('span', { className: 'note', textContent: pts ? `${pts.total} points` : '' })));
+      // pioneer badges (IDEAS S-09): roads you were first or second to map with Road data on; only you see them
+      const pio = pts && pts.pioneer;
+      if (pio && (pio.firsts || pio.seconds)) you.append(el('p', { className: 'note pioneer', textContent: [pio.firsts ? `Pioneer of ${pio.firsts} road${pio.firsts === 1 ? '' : 's'}` : '', pio.seconds ? `second to map ${pio.seconds}` : ''].filter(Boolean).join(' · ') }));
       const invOut = el('p', { className: 'note' });
       you.append(el('div', { className: 'row' },
         btn('Invite someone', async () => { const r = await apiCall('POST', '/api/invites'); const j = await jsonOf(r); if (r.ok) copyText(j.url, 'Invite link copied. They\'ll be your friend the moment they join.'); else toast('Couldn\'t make an invite. Try again.'); }, 'ink-btn solid'),
@@ -4405,6 +4436,12 @@
         const el = document.createElement('div'); el.className = `poi-pin poi-${p.kind}`;
         el.textContent = p.kind === 'view' && p.name ? p.name : SCENIC_LABEL[p.kind];
         el.title = p.name || SCENIC_LABEL[p.kind];
+        // tap a viewpoint, café or fuel stop on the map to make it a stop of the day (IDEAS R-17)
+        el.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const label = p.name || SCENIC_LABEL[p.kind];
+          toast(label, { label: 'Add as a stop', ms: 6000, onClick: () => { if (plannedRoute === t) addViaAt({ lat: p.lat, lon: p.lon, label }, p.m); } });
+        });
         scenicPins.push(new maplibregl.Marker({ element: el }).setLngLat([p.lon, p.lat]).addTo(map));
       }
     }

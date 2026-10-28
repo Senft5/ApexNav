@@ -59,6 +59,12 @@ Every routed stage plan (A to B and loops) is checked against what came back: ea
 the share of samples within 40 m of the returned route is its coverage. Under 70% on any stage, the plan is dropped
 (`FunRoute.stageCoverage`, IDEAS R-14); the router's own routes and the circle loop still compete.
 
+## Stops of the day
+
+The route card lists your stops in order (a pin's Add via, a dragged route, or a viewpoint, café or fuel pin along the route:
+tap it, then Add as a stop). Up, Down and Remove rebuild the route through the stops as listed; the planner's shaping points
+are dropped then, since they were chosen for the old order (`web/trip_stops.js`, IDEAS R-17).
+
 ## Avoid cameras
 
 Avoid → **Cameras** (off by default) asks the camera map (OSM `surveillance:type=ALPR`, DeFlock, via Overpass, kept a week)

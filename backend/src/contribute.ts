@@ -96,7 +96,12 @@ async function multiplierFor(env: Env, userId: string, c: Contribution): Promise
   for (let s = 1; s <= MULTIPLIER.length; s++) {                                       // the primary key makes the claim atomic
     const r = await env.DB.prepare("INSERT OR IGNORE INTO rank_slots (way_id, dir, slot, user_id, driven_on, holder) VALUES (?, ?, ?, NULL, ?, ?)")
       .bind(c.wayId, c.dir, s, c.drivenOn, holder.buffer).run();
-    if (r.meta.changes) { mult = MULTIPLIER[s - 1]; break; }
+    if (r.meta.changes) {
+      mult = MULTIPLIER[s - 1];
+      // a pioneer badge (IDEAS S-09): counted now, for this member only
+      await env.DB.prepare(`UPDATE members SET ${s === 1 ? "pioneer_firsts = pioneer_firsts" : "pioneer_seconds = pioneer_seconds"} + 1 WHERE user_id = ?`).bind(userId).run();
+      break;
+    }
   }
   await env.DB.prepare("INSERT OR IGNORE INTO seen (h, d) VALUES (?, ?)").bind(holder.buffer, drive.buffer).run();
   return mult;

@@ -139,6 +139,17 @@ describe("POST /api/contribute (real time)", () => {
     expect(slots.every((s) => s.user_id === null)).toBe(true);                         // who held a slot is not stored in readable form
   });
 
+  it("counts pioneer badges for the member only: first and second on each road+direction, once (IDEAS S-09)", async () => {
+    const [a, b, c] = [await makeUser("alice"), await makeUser("bob"), await makeUser("carol")]; await optIn(a, b, c);
+    await ok(post(a, { drive_id: "drive-alice-1" })); await ok(post(b, { drive_id: "drive-bob-001" })); await ok(post(c, { drive_id: "drive-carol-01" }));
+    await ok(post(a, { drive_id: "drive-alice-1", way_id: 777 }));                     // first on another road
+    await ok(post(a, { drive_id: "drive-alice-2" }));                                  // the same road again: no new badge
+    const pts = async (u: Parameters<typeof api>[0]) => ((await (await ok(api(u, "GET", "/api/points"))).json()) as { pioneer: unknown }).pioneer;
+    expect(await pts(a)).toEqual({ firsts: 2, seconds: 0 });
+    expect(await pts(b)).toEqual({ firsts: 0, seconds: 1 });
+    expect(await pts(c)).toEqual({ firsts: 0, seconds: 0 });
+  });
+
   it("opposite directions and different roads rank separately", async () => {
     const [a, b] = [await makeUser("alice"), await makeUser("bob")]; await optIn(a, b);
     await ok(post(a)); await ok(post(b, { dir: 1, drive_id: "drive-bob-001" })); await ok(post(b, { way_id: 777, drive_id: "drive-bob-001" }));
