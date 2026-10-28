@@ -85,7 +85,11 @@ holds up to 25 MiB and the dump is about 0.1 MB today; the Worker refuses to wri
 transaction, so a copy is a consistent snapshot even while drives upload; a run uses 4 of Workers Free's 50 D1 queries (a
 batch counts as one). The file restores into an empty database only (plain `CREATE TABLE`), and it carries the
 AUTOINCREMENT counters so restored ids are never reused.
-Integers above 2^53 would lose precision on the way through JavaScript; no column holds one (way ids are under 2^32).
+The other Free-plan ceiling is 10 ms of CPU per cron run: formatting about a thousand rows fits easily, but somewhere in the
+tens of thousands of rows the run will stop with `exceededCpu` in the Worker's metrics and no `backup` log line. The next
+run that succeeds logs `backup_gap` (no copy for more than 8 days before it), and a week without a new key under
+`d1/apexnav-db/` means the same. Then either move to Workers Paid (30 s per cron run) or split the dump across several
+runs. Integers above 2^53 would lose precision on the way through JavaScript; no column holds one (way ids are under 2^32).
 
 To fetch a copy: dashboard > Storage & Databases > KV > `apexnav-backups`, or
 `npx wrangler kv key get --namespace-id=3be0be04839649c0a5b474c8389e8e4b --remote "d1/apexnav-db/YYYY-MM-DD.sql" > copy.sql`.
