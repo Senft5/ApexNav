@@ -160,32 +160,18 @@ jobs:
           tools/write_asc_key.sh "$KEY"
           echo "ASC_KEY_PATH=$KEY" >> "$GITHUB_ENV"
 
-      - name: Archive (automatic signing)
+      # Archive first with an ad-hoc signature ("-"), which needs no certificate but keeps the entitlements, and let the
+      # export re-sign it with Apple's cloud-managed distribution certificate. Archiving with automatic signing made a new
+      # "Apple Development: Created via API" certificate on every throwaway runner until the account hit Apple's limit
+      # (archive 372.1: "Your account has reached the maximum number of certificates"). If Apple won't export the ad-hoc
+      # archive, the automatic-signing archive is tried as before.
+      - name: Archive, sign and upload to TestFlight
         env:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          xcodebuild archive \
-            -project ApexNav.xcodeproj \
-            -scheme ApexNav \
-            -configuration Release \
-            -destination 'generic/platform=iOS' \
-            -archivePath "$RUNNER_TEMP/ApexNav.xcarchive" \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath "$ASC_KEY_PATH" \
-            -authenticationKeyID "$ASC_KEY_ID" \
-            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
-            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
-            CODE_SIGN_STYLE=Automatic \
-            CURRENT_PROJECT_VERSION="$BUILD_NUMBER"
-
-      - name: Export and upload to TestFlight
-        env:
-          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
-          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: |
+          AUTH=(-allowProvisioningUpdates -authenticationKeyPath "$ASC_KEY_PATH" -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID")
           cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -200,14 +186,23 @@ jobs:
           </dict>
           </plist>
           PLIST
-          xcodebuild -exportArchive \
-            -archivePath "$RUNNER_TEMP/ApexNav.xcarchive" \
-            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
-            -exportPath "$RUNNER_TEMP/export" \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath "$ASC_KEY_PATH" \
-            -authenticationKeyID "$ASC_KEY_ID" \
-            -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+          archive() {   # $1: archive path; the rest: signing settings
+            local out="$1"; shift
+            xcodebuild archive -project ApexNav.xcodeproj -scheme ApexNav -configuration Release -destination 'generic/platform=iOS' \
+              -archivePath "$out" DEVELOPMENT_TEAM="$APPLE_TEAM_ID" CURRENT_PROJECT_VERSION="$BUILD_NUMBER" "$@"
+          }
+          upload() {
+            rm -rf "$RUNNER_TEMP/export"
+            xcodebuild -exportArchive -archivePath "$1" -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" -exportPath "$RUNNER_TEMP/export" "${AUTH[@]}"
+          }
+          if archive "$RUNNER_TEMP/adhoc.xcarchive" CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- PROVISIONING_PROFILE_SPECIFIER= AD_HOC_CODE_SIGNING_ALLOWED=YES \
+             && upload "$RUNNER_TEMP/adhoc.xcarchive"; then
+            echo "Signed at export from an ad-hoc archive (no development certificate made)." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::warning::The ad-hoc archive didn't export; archiving with automatic signing instead (this makes a development certificate)."
+            archive "$RUNNER_TEMP/ApexNav.xcarchive" CODE_SIGN_STYLE=Automatic "${AUTH[@]}"
+            upload "$RUNNER_TEMP/ApexNav.xcarchive"
+          fi
           echo "Uploaded ApexNav build $BUILD_NUMBER to App Store Connect; it shows in TestFlight after Apple's processing (usually 5-30 min)." >> "$GITHUB_STEP_SUMMARY"
 
       # xcodebuild's own error ("Error Downloading App Information") hides Apple's reason; it is in the distribution logs.
