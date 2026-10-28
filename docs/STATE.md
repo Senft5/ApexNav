@@ -2,7 +2,7 @@
 
 ## Session 2026-10-28 (morning)
 - Merged: #191 R-25/R-26 GPX in/out and maps links, #192 R-37 home by + R-11 which way round a stage + S-12 spots near you.
-- This PR: F-06 offline data in Settings (size and delete), D-23 drive tags and notes with a Log filter, V-08 ducking by note priority (shell `duck` flag; `.mixWithOthers` for cruise chatter), S-20 flyby on a drive's page.
+- This PR: F-06 offline data in Settings (size and delete), D-23 drive tags and notes with a Log filter, V-08 ducking by note priority (shell `duck` flag; `.mixWithOthers` for cruise chatter), S-20 flyby on a drive's page, S-11 monthly challenges (personal part).
 - Exact next task: IDEAS M rows: S-15 profiles, A-05 desktop planner, R-18 drag to reshape, S-07 kudos, S-11 challenges; widgets with data need an App Group (U-10).
 
 ## Session 2026-10-28 (early morning): more of IDEAS, all through TestFlight

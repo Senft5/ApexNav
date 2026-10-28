@@ -659,7 +659,7 @@ flow('drive tags: tag a drive in the Log, filter by it, the note stays on the ph
   check(rows.length === 1 && rows[0] === 't1', 'filtered to the tagged drive: ' + rows);
 });
 
-flow('flyby: a friend on the same stage that day shows on the drive, as text (Worker stubbed, IDEAS S-20)', async (page, base) => {
+flow('flyby: a friend on the same stage that day shows on the drive, as text; challenges this month (Worker stubbed, IDEAS S-20, S-11)', async (page, base) => {
   await page.route(base + '/api/**', (route) => {
     const u = new URL(route.request().url()), json = (b) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(b) });
     if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
@@ -682,6 +682,11 @@ flow('flyby: a friend on the same stage that day shows on the drive, as text (Wo
   await page.waitForSelector('#dvFlyby:not([hidden])');
   const t = await page.textContent('#dvFlybyList');
   check(t === 'Straight <b>run</b>: @bob 812', 'only the same day, as text: ' + t);
+  // this month's challenges (IDEAS S-11): a drive dated now makes the panel, a new road counted (f1 counts too in October 2026)
+  await page.evaluate(async () => { const f = (await ApexRecording.all()).find((d) => d.id === 'f1'); await ApexRecording.store({ ...f, id: 'f2', name: 'Fresh road', date: new Date().toISOString() }); });
+  await page.goto(base + '/analysis.html');
+  await page.waitForSelector('#challengePanel:not([hidden])');
+  check(/Drive 5 roads you haven't driven before · [12] of 5/.test(await page.textContent('#challengeList')), 'a new road this month');
 });
 
 flow('the Log page opens', async (page, base) => {

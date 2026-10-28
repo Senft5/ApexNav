@@ -22,6 +22,7 @@
   <script src="year_review.js"></script>
   <script src="drive_tags.js"></script>
   <script src="flyby.js"></script>
+  <script src="challenges.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { background: var(--panel); color: var(--panel-ink); font-family: var(--font-ui); font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -117,6 +118,7 @@
     label.btn { display: inline-flex; align-items: center; cursor: pointer; }
     textarea { font: inherit; font-size: 15px; width: 100%; min-height: 64px; padding: 8px 10px; background: transparent; color: var(--panel-ink); border: 1px solid var(--panel-dim); box-sizing: border-box; }
     .tagline { color: var(--accent); }
+    .ch-bar { height: 6px; background: var(--rule); margin-top: 4px; } .ch-bar i { display: block; height: 100%; background: var(--accent); }
     details.more { border-top: 1px solid var(--rule); margin-top: 12px; }
     details.more summary { min-height: 44px; display: flex; align-items: center; font-size: 15px; font-weight: 600; cursor: pointer; list-style: none; }
     details.more summary::-webkit-details-marker { display: none; }
@@ -171,6 +173,8 @@
       <div class="cards" id="historyCards"></div>
       <div class="panel" id="yearPanel" hidden><h2 id="yearTitle">--</h2><div id="yearLines" class="stack-8"></div>
         <div class="row mt-8"><button class="btn" id="yearShare">Share</button></div></div>
+      <div class="panel" id="challengePanel" hidden><h2>This month's challenges</h2><div id="challengeList" class="stack-8"></div>
+        <p class="note">Exploring and technique, never speed. From the drives on this phone.</p></div>
       <div class="panel" id="friendsPanel" hidden><h2>Friends lately</h2><div id="friendsList" class="stack-8"></div>
         <p class="note">From friends and crews who share scores with you, on stages you have. Scores only, never times.</p></div>
       <div class="panel" id="trendPanel" hidden><h2>Score over time</h2><div id="trend"></div></div>
@@ -313,6 +317,20 @@
     }
     // Your year on the road (IDEAS D-24; web/year_review.js): this calendar year's drives with a known date. Set as text.
     let yearText = '';
+    // This month's challenges (challenges.js, IDEAS S-11): text and a bar each; shown once this month has a dated drive.
+    function renderChallenges() {
+      const now = new Date(), month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      const list = drives.map((d) => ({ ...d, dateKnown: monthOf(d) !== null }));
+      $('challengePanel').hidden = !list.some((d) => d.dateKnown && d.date.startsWith(month + '-'));
+      $('challengeList').replaceChildren(...ApexChallenges.progress(list, month).map((c) => {
+        const row = document.createElement('div'), t = document.createElement('p'), bar = document.createElement('div'), fill = document.createElement('i');
+        t.className = 'friend-act'; t.textContent = `${c.complete ? '\u2713 ' : ''}${c.title} · ${c.done} of ${c.goal}`;
+        bar.className = 'ch-bar'; bar.setAttribute('role', 'progressbar'); bar.setAttribute('aria-label', c.title);
+        bar.setAttribute('aria-valuemin', '0'); bar.setAttribute('aria-valuemax', String(c.goal)); bar.setAttribute('aria-valuenow', String(c.done));
+        fill.style.width = `${Math.round(100 * c.done / c.goal)}%`; bar.append(fill); row.append(t, bar);
+        return row;
+      }));
+    }
     function renderYear() {
       const year = new Date().getFullYear();
       const s = window.ApexYearReview ? ApexYearReview.summary(drives.map((d) => ({ ...d, dateKnown: monthOf(d) !== null })), year) : null;
@@ -342,6 +360,7 @@
         c(best ? best.ds.score : '--', 'Best', best ? best.name : '');
       $('trendPanel').hidden = scored.length < 3;
       renderYear();
+      renderChallenges();
 
       // trend
       const W = Math.max(300, Math.round($('trend').clientWidth || 760)), H = 180, L = 40, R = 22, T = 12, B = 26;   // drawn at the real width so labels stay readable
