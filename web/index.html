@@ -21,6 +21,7 @@
   <script src="sensors.js"></script>
   <script src="reroute.js"></script>
   <script src="traffic.js"></script>
+  <script src="in_car.js"></script>
   <script src="sun.js"></script>
   <script src="format.js"></script>
   <script src="road_names.js"></script>
@@ -344,6 +345,14 @@
     .overlay:focus { outline: none; }
     .plan-search:focus-within { border-color: var(--panel-ink); }
     @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: 0.01ms !important; animation: none !important; } }
+    /* In-car mode (web/in_car.js, IDEAS C-07): while the car moves every control is at least 60 pt and text fields stay
+       shut (a tap explains and offers passenger mode). The map's attribution button is the one exception. */
+    body.moving button:not(.maplibregl-ctrl-attrib-button), body.moving .toast a, body.moving .plate { min-height: 60px; min-width: 60px; }
+    body.moving .chip { height: 60px; }
+    body.moving .edge-tab { width: 60px; height: 64px; }
+    body.moving .toast { font-size: 15px; }
+    body.moving .toast a { display: inline-flex; align-items: center; padding: 0 12px; }
+    body.moving input:not([type=checkbox]):not([type=radio]):not([type=range]), body.moving textarea { opacity: 0.5; }
   </style>
 </head>
 <body>
@@ -775,6 +784,7 @@
         const c = p.coords;
         state.lastPosition = { lat: c.latitude, lon: c.longitude }; state.lastPositionAt = performance.now();
         state.lastMotion = { heading: Number.isFinite(c.heading) ? c.heading : null, speedMps: Number.isFinite(c.speed) ? c.speed : null };
+        feedMotion(c.speed);
         if (state.mode === 'live') return;   // a web drive feeds its own frames
         showIdleFix({ lat: c.latitude, lon: c.longitude, course_deg: Number.isFinite(c.heading) ? c.heading : NaN, speed_mps: Number.isFinite(c.speed) ? c.speed : 0 });
       }, () => {}, { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 });
@@ -2893,7 +2903,7 @@
       $('hlName').value = '';
       selectHighlightCategory('other'); selectHighlightRating(5);
       $('hlOverlay').classList.add('show');
-      $('hlName').focus();
+      if (!document.body.classList.contains('moving')) $('hlName').focus();   // moving: no keyboard, Save names it
     }
     function closeHighlightDialog() { $('hlOverlay').classList.remove('show'); highlightPoint = null; }
     document.querySelectorAll('#hlCategories button').forEach(b => b.addEventListener('click', () => selectHighlightCategory(b.dataset.category)));
@@ -2907,7 +2917,10 @@
     $('hlOverlay').addEventListener('click', (e) => { if (e.target === $('hlOverlay')) closeHighlightDialog(); });
     $('hlAddBtn').addEventListener('click', () => {
       if (!highlightPoint) return;
-      const name = $('hlName').value.trim(); if (!name) { toast('Name the spot first.'); $('hlName').focus(); return; }
+      let name = $('hlName').value.trim();
+      // While moving there is no keyboard: an unnamed spot is named by the time.
+      if (!name && document.body.classList.contains('moving')) name = `Spot ${new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+      if (!name) { toast('Name the spot first.'); $('hlName').focus(); return; }
       const p = highlightPoint;
       saveHighlights(loadHighlights().concat({ id: String(Date.now()), name: name.slice(0, 60), lat: p.lat, lon: p.lon, rating: highlightRating, category: highlightCategory }));
       closeHighlightDialog(); renderHighlights(); toast(`Spot saved · ${name}`);
@@ -3235,6 +3248,27 @@
         live.finish().catch(() => {});
       }
     }
+    // In-car mode (web/in_car.js, IDEAS C-07 / C-08): big targets and no keyboard while the car moves. A tap on a text field
+    // explains and offers "I'm a passenger", which unlocks typing until the car next stops.
+    const motion = new ApexInCar.MotionGate();
+    let passenger = false;
+    function paintMoving() {
+      if (!motion.moving) passenger = false;
+      const on = motion.moving && !passenger;
+      document.body.classList.toggle('moving', on);
+      if (on && ApexInCar.opensKeyboard(document.activeElement)) document.activeElement.blur();
+    }
+    function feedMotion(speedMps) { if (motion.update(speedMps, performance.now())) paintMoving(); }
+    setInterval(() => { if (motion.tick(performance.now())) paintMoving(); }, 2000);
+    document.addEventListener('focusin', (e) => {
+      if (!document.body.classList.contains('moving') || !ApexInCar.opensKeyboard(e.target)) return;
+      e.target.blur();
+      if ($('toast')._holdUntil > performance.now()) return;   // never take over a Cancel countdown (a reroute, a detour)
+      toast('Typing is off while the car moves.', { label: 'I\'m a passenger', ms: 6000, onClick: () => {
+        passenger = true; paintMoving(); setTimeout(() => toast('Passenger mode: typing is on until the car stops.'), 0);
+      } });
+    });
+
     const flag = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (_) {} return null; };
     function watchDryRidge() {
       const d = drives.find(x => x.id === 'dry_ridge') || drives.find(x => x.kind === 'drive') || drives[0];
@@ -3296,6 +3330,7 @@
     window.apex = {
       live(frame) {
         if (!frame || !frame.has_fix || !Number.isFinite(frame.lat) || !Number.isFinite(frame.lon)) return;
+        feedMotion(frame.speed_mps);
         state.lastPosition = { lat: frame.lat, lon: frame.lon }; state.lastPositionAt = performance.now();
         state.lastMotion = { heading: Number.isFinite(frame.course_deg) ? frame.course_deg : null, speedMps: Number.isFinite(frame.speed_mps) ? frame.speed_mps : null };
         if (NATIVE_SHELL) feedAmbient(frame);
