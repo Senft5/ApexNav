@@ -19,3 +19,4 @@ backend/.wrangler/
 apexnav-db-*.sql
 /*.png
 /status.json
+/e2e/node_modules/

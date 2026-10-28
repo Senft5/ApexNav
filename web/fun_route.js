@@ -412,7 +412,7 @@
     return cands.map(c => {
       const extraS = Number.isFinite(c.timeS) ? Math.max(0, c.timeS - quick.timeS) : Infinity;
       const fun = c.fun ? c.fun.fun : 0, gain = c.fun ? Math.min(GAIN_CAP, Math.max(0, c.fun.good - quickGood)) : 0;
-      return { ...c, extraS, value: fun + GAIN_PER_CORNER * gain - L.perMin * extraS / 60 + (c.adjust || 0) - glareCost(c) };
+      return { ...c, extraS, value: fun + GAIN_PER_CORNER * gain - L.perMin * extraS / 60 + (c.adjust || 0) - glareCost(c) - townCost(c) };
     }).filter(c => c.extraS === 0 || c.timeS <= limit).sort((a, b) => b.value - a.value);
   }
 
@@ -434,8 +434,8 @@
   // ---- avoid options ------------------------------------------------------------------
   // What the driver asked to stay off. Unpaved is avoided by default: stages never use it (web/stages.js) and most cars
   // that want this app don't want gravel. Highways and tolls are already de-prioritised, not avoided, by default.
-  const AVOID_DEFAULT = { highways: false, tolls: false, ferries: false, unpaved: true };
-  const AVOID_LABELS = { highways: 'highways', tolls: 'tolls', ferries: 'ferries', unpaved: 'unpaved roads' };
+  const AVOID_DEFAULT = { highways: false, tolls: false, ferries: false, unpaved: true, towns: false };
+  const AVOID_LABELS = { highways: 'highways', tolls: 'tolls', ferries: 'ferries', unpaved: 'unpaved roads', towns: 'towns' };
   /** Valhalla auto costing for the avoid options (preferences, not hard bans: the router may still need one). */
   function costing(avoid = AVOID_DEFAULT) {
     const auto = { use_highways: avoid.highways ? 0 : 0.15, use_tolls: avoid.tolls ? 0 : 0.3 };
@@ -453,6 +453,33 @@
     const clean = cands.filter(c => !unavoided(avoid, c.route).length);
     return clean.length ? clean : cands;
   }
+
+  // ---- towns (R-15) -------------------------------------------------------------------------
+  // The router can't avoid towns, so candidates are ranked on how much of them is in one: within a radius of a city
+  // (4 km), town (1.5 km) or village (0.6 km) point from the map tiles. A rough circle, not the town's real edge. The
+  // places you start or end in don't count: every route has those.
+  const TOWN_KM = { city: 4, town: 1.5, village: 0.6 };
+  /** km of a route ({lat, lon, dist}) near a town, in 100 m steps; null when the places are unknown. */
+  function townKm(t, places) {
+    if (!Array.isArray(places) || !t || !t.lat || !t.lat.length) return null;
+    const n = t.lat.length, start = { lat: t.lat[0], lon: t.lon[0] }, end = { lat: t.lat[n - 1], lon: t.lon[n - 1] };
+    let w = 180, e = -180, so = 90, no = -90;
+    for (let i = 0; i < n; i += 20) { w = Math.min(w, t.lon[i]); e = Math.max(e, t.lon[i]); so = Math.min(so, t.lat[i]); no = Math.max(no, t.lat[i]); }
+    const pad = 0.05;   // ~4–5 km
+    const near = places.filter(p => TOWN_KM[p.cls] && p.lon >= w - pad && p.lon <= e + pad && p.lat >= so - pad && p.lat <= no + pad
+      && kmBetween(p, start) > TOWN_KM[p.cls] && kmBetween(p, end) > TOWN_KM[p.cls]);
+    if (!near.length) return 0;
+    let km = 0, next = 0;
+    for (let i = 0; i < n; i++) {
+      if (t.dist[i] < next) continue;
+      next = t.dist[i] + 100;
+      const q = { lat: t.lat[i], lon: t.lon[i] };
+      if (near.some(p => kmBetween(p, q) <= TOWN_KM[p.cls])) km += 0.1;
+    }
+    return Math.round(km * 10) / 10;
+  }
+  /** Ranking cost of the town km on a candidate when towns are avoided: 3 points a km, at most 60 (a city crossing is ~24). */
+  const townCost = (c) => (Number.isFinite(c.townKm) ? Math.min(60, 3 * c.townKm) : 0);
 
   // ---- sun glare (R-13) ----------------------------------------------------------------
   // Driving into a sun low ahead (0–15° up, within 20° of the heading) blinds you on exactly the roads this app picks.
@@ -492,6 +519,6 @@
     return out;
   }
 
-  const api = { LEVELS, exploreShortlist, exploreTargets, explorePicks, distinctOptions, glare, glareCost, LOOP_BY_TIME, AVOID_DEFAULT, AVOID_LABELS, costing, unavoided, keepAvoiding, why, geometry, alongPoints, insertVia, loopValue, loopShortlist, loopPlansFromMatrix, score, shortlist, matrixPoints, plansFromMatrix, sectionCount, sectionPoints, combineSections, planKey, searchArea, waypoints, rank, along, kmBetween };
+  const api = { LEVELS, townKm, townCost, exploreShortlist, exploreTargets, explorePicks, distinctOptions, glare, glareCost, LOOP_BY_TIME, AVOID_DEFAULT, AVOID_LABELS, costing, unavoided, keepAvoiding, why, geometry, alongPoints, insertVia, loopValue, loopShortlist, loopPlansFromMatrix, score, shortlist, matrixPoints, plansFromMatrix, sectionCount, sectionPoints, combineSections, planKey, searchArea, waypoints, rank, along, kmBetween };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexFunRoute = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -46,7 +46,7 @@
   }
   function packed(b) { const r = reader(b), out = []; while (r.pos < b.length) out.push(r.varint()); return out; }
   // Returns [{props, lines: [[[lon, lat], ...]]}] for LineString features of one layer.
-  function decodeLayer(buf, layerName, z, x, y) {
+  function decodeLayer(buf, layerName, z, x, y, geomType = 2) {   // 2 lines, 1 points
     const top = reader(buf), out = [];
     while (top.pos < buf.length) {
       const tag = top.varint();
@@ -80,7 +80,7 @@
           else if (f === 4) geom = packed(fr.bytes());
           else fr.skip(t & 7);
         }
-        if (type !== 2) continue;
+        if (type !== geomType) continue;
         const props = {};
         for (let i = 0; i + 1 < tags.length; i += 2) props[keys[tags[i]]] = values[tags[i + 1]];
         const lines = [];
@@ -93,7 +93,7 @@
             if (cmd === 1) { cur = [toLonLat(cx, cy)]; lines.push(cur); } else cur.push(toLonLat(cx, cy));
           }
         }
-        out.push({ props, lines: lines.filter(l => l.length > 1) });
+        out.push({ props, lines: geomType === 1 ? lines : lines.filter(l => l.length > 1) });
       }
     }
     return out;
@@ -137,6 +137,29 @@
     // No tile at all is no data, not "no roads here": say so instead of returning an empty area.
     if (failed === jobs.length) throw new Error('no map tiles');
     return pieces;
+  }
+
+  // ---- towns along a route (avoid towns, R-15) ---------------------------------------
+  // City, town and village points from the same tiles, at z11 (about 16 km a tile here): z9 and z10 thin villages out
+  // in busy country (northern NJ: 11 of 79 at z9; Heidelberg: 62 of 73 at z10; all of them at z11). Tiles are those
+  // within 4 km of any of `points` (the routes, sampled), at most 80; more is no data, not "no towns". Kept for the session.
+  const placeTiles = new Map();
+  const PLACE_Z = 11, PLACE_PAD_KM = 4, PLACE_MAX_TILES = 80;
+  async function places(points) {
+    if (!tileUrl) tileUrl = (await Loading.json(TILEJSON)).tiles[0];
+    const want = new Set();
+    for (const p of points || []) {
+      const dLat = PLACE_PAD_KM / 110.54, dLon = PLACE_PAD_KM / (111.32 * Math.cos(p.lat * Math.PI / 180));
+      for (const a of [-dLat, 0, dLat]) for (const b of [-dLon, 0, dLon]) want.add(tileOf(p.lat + a, p.lon + b, PLACE_Z).join('/'));
+    }
+    if (!want.size || want.size > PLACE_MAX_TILES) throw new Error('area too big');
+    await Promise.all([...want].filter(k => !placeTiles.has(k)).map(async (key) => {
+      const [x, y] = key.split('/').map(Number);
+      const buf = new Uint8Array(await Loading.arrayBuffer(tileUrl.replace('{z}', PLACE_Z).replace('{x}', x).replace('{y}', y)));
+      placeTiles.set(key, decodeLayer(buf, 'place', PLACE_Z, x, y, 1).filter(f => ['city', 'town', 'village'].includes(f.props.class))
+        .flatMap(f => f.lines.map(([[lon, lat]]) => ({ lat, lon, cls: f.props.class, name: f.props.name || null }))));
+    }));
+    return [...want].flatMap(k => placeTiles.get(k));
   }
 
   // Join pieces end to end into strokes, continuing straight-ish through each node (≤ 50°).
@@ -396,5 +419,5 @@
     return pts;
   }
 
-  root.ApexStages = { decodeLayer, discover, nameStages, applyHighlights, plans, waypoints, strokes, bestWindow, roadPieces };
+  root.ApexStages = { decodeLayer, discover, nameStages, places, applyHighlights, plans, waypoints, strokes, bestWindow, roadPieces };
 })(typeof window !== 'undefined' ? window : globalThis);

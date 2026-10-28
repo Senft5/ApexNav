@@ -25,6 +25,17 @@ that still use an avoided road are dropped when any candidate doesn't (`keepAvoi
 avoid it the route card says so ("Couldn't avoid tolls", e.g. the Chesapeake Bay Bridge-Tunnel). The OSRM fallback
 knows none of this and says nothing. Toggling one re-plans a destination route like the level does.
 
+**Towns** (off by default) is not something the router can avoid, so it is a ranking cost: city, town and village points
+come from the map tiles (`ApexStages.places`: z11 tiles within 4 km of the candidates, at most 80; z9 and z10 drop most
+villages in busy country, e.g. 11 of 79 places in northern NJ at z9), every candidate (A→B and loops) gets the km it spends
+within 4 km of a city, 1.5 km of a town or 0.6 km of a village (`FunRoute.townKm`, 100 m steps; the places you start
+or end in don't count), and ranking takes 3 points a km, at most 60 (a city crossing is about 24). Circles round a point,
+not the town's real edge. The card says "Through towns ~N mi" from 1 mi, the why line and toast say when fewer towns are
+part of the extra time ("2.5 mi less in towns, +4 min"), and when the places couldn't be loaded (no tiles, a trip too big)
+it says "Couldn't check towns" instead of pretending there are none. Checked: west Knoxville → Townsend, 10.5 km of town
+(Alcoa/Maryville) and no town-free alternate; Morristown → Rahway NJ, the winner has 29.5 km of town against 19.5–25 km for
+others, so the card says ~18 mi (fun outweighed the town cost there).
+
 ## Candidates
 
 1. The router's route (Valhalla, highways and tolls de-prioritised) and up to 2 Valhalla alternates
