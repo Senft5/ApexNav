@@ -154,6 +154,8 @@
     .dbstat { font-size: 13px; line-height: 1.35; color: var(--panel-ink); min-width: 0; flex: 1; }
     #driveEnd { flex: none; background: var(--panel-ink); color: var(--panel); border-color: var(--panel-ink); font-size: 15px; padding: 0 16px; }
     .dbstat b { color: var(--accent); }
+    .ds-main { font-size: 20px; font-weight: 600; line-height: 1.2; font-variant-numeric: tabular-nums; }
+    .ds-warn { margin-top: 2px; font-size: 13px; }
     .key { height: 44px; min-width: 44px; padding: 0 12px; font-size: 15px; font-weight: 600; border: 1px solid var(--rule); color: var(--panel-ink); background: transparent; }
     .key.on { color: var(--accent); border-color: var(--accent); }
     .scrubber { position: relative; height: 28px; border: 1px solid var(--rule); cursor: ew-resize; touch-action: none; }
@@ -477,7 +479,7 @@
 
     <section class="binnacle" id="binnacle">
       <div class="drivebar" id="driveBar" hidden>
-        <div class="dbstat" id="driveStat" role="status" aria-live="polite">Finding GPS…</div>
+        <div class="dbstat" id="driveStat"><div class="ds-main" id="dsMain">Finding GPS…</div><div class="ds-warn" id="dsWarn" role="status" aria-live="polite" hidden></div></div>
         <button class="key" id="driveEnd">End drive</button>
       </div>
       <div class="transport" id="transport">
@@ -1454,7 +1456,7 @@
       const idle = !replayOn && state.mode !== 'live';
       $('app').classList.toggle('idle', idle);
       $('app').classList.toggle('replaying', replayOn && state.mode === 'replay');
-      $('modePlate').hidden = idle;
+      $('modePlate').hidden = idle || state.mode === 'live';   // driving: the drive bar under the map says it
       $('modePlate').setAttribute('role', replayOn && state.mode !== 'live' ? 'button' : 'status');
     }
     function setMode(mode) {
@@ -2965,20 +2967,30 @@
         sync(); p.onchange = sync;
       }).catch(() => {});
     }
+    // Glanceable at arm's length: the recording (and sharing) in large type on top; below it, only what needs the
+    // driver's attention. Healthy GPS and motion say nothing. Only the attention line is a live region, so the
+    // mileage ticking up never chatters to VoiceOver.
     function paintDriveStat() {
-      const s = drive.status || {}, r = drive.rec, bits = [];
-      bits.push(s.gps === 'on' ? '<b>GPS</b>' : s.gps === 'denied' ? LOC_DENIED_TEXT : s.gps === 'weak' ? 'Weak GPS · keep the sky in view' : s.gps === 'error' ? 'GPS error' : 'Finding GPS…');
-      bits.push(s.motion === 'on' ? '<b>Motion</b>' : s.motion === 'denied' || s.motion === 'unavailable' ? MOT_DENIED_TEXT : 'Motion…');
-      if (r && r.samples > 0) bits.push(`<b>● Rec</b> ${(r.km / 1.609344).toFixed(2)} mi`);
-      if (NATIVE_SHELL) { const a = ambientStats(); if (a) bits.push(a.error ? 'Sharing · retrying' : a.paused ? 'Sharing paused' : `<b>Sharing</b> ${(a.km / 1.609344).toFixed(1)} mi`); }
-      else if (drive.share === 'on') bits.push(drive.shareErr ? 'Sharing · retrying' : `<b>Sharing</b> ${(drive.shareKm / 1.609344).toFixed(1)} mi`);
-      else if (drive.share === 'stopped') bits.push('Sharing paused');
-      else if (drive.share === 'off-member') bits.push('Sharing off');
-      if (s.wake === 'unavailable') bits.push('Keep the screen on');
+      const s = drive.status || {}, r = drive.rec, main = [], warn = [];
+      if (s.gps === 'denied') main.push('Location is off');
+      else if (r && r.samples > 0) main.push(`<b>● Rec</b> ${(r.km / 1.609344).toFixed(2)} mi`);
+      else main.push(s.gps === 'on' ? 'Starting…' : 'Finding GPS…');
+      if (NATIVE_SHELL) { const a = ambientStats(); if (a) main.push(a.error ? 'Sharing · retrying' : a.paused ? 'Sharing paused' : `Sharing ${(a.km / 1.609344).toFixed(1)} mi`); }
+      else if (drive.share === 'on') main.push(drive.shareErr ? 'Sharing · retrying' : `Sharing ${(drive.shareKm / 1.609344).toFixed(1)} mi`);
+      else if (drive.share === 'stopped') main.push('Sharing paused');
+      if (s.gps === 'denied') warn.push(LOC_DENIED_TEXT);
+      else if (s.message) warn.push(s.message);                                       // weak or lost GPS, in the sensor's words
+      else if (s.gps === 'weak') warn.push('Weak GPS · keep the sky in view');
+      else if (s.gps === 'error') warn.push('GPS error');
+      if (s.motion === 'denied' || s.motion === 'unavailable') warn.push(MOT_DENIED_TEXT);
+      if (s.wake === 'unavailable') warn.push('Keep the screen on');
       // The app's mount calibration (ApexKit): until locked, g, camber and crest are recorded as unknown
-      if (s.calibration === 'default') bits.push('Calibrating · leave the phone in its mount');
-      else if (s.calibration === 'awaitingPull') bits.push('Calibrating · drive normally');
-      $('driveStat').innerHTML = bits.join(' · ') + (s.message && s.gps !== 'denied' ? `<br><span>${s.message}</span>` : '');
+      if (s.calibration === 'default') warn.push('Calibrating · leave the phone in its mount');
+      else if (s.calibration === 'awaitingPull') warn.push('Calibrating · drive normally');
+      const m = main.join(' · '), w = warn.join(' · ');
+      if ($('dsMain').innerHTML !== m) $('dsMain').innerHTML = m;
+      if ($('dsWarn').textContent !== w) $('dsWarn').textContent = w;
+      $('dsWarn').hidden = !w;
     }
     // Road data streams while you drive when you are a member with ROAD DATA on: settled stretches only (never the first or last km).
     // Camber and crest go up when the recorder kept them (calibrated mount).
@@ -2997,7 +3009,7 @@
         : ambient.allowed === false ? 'Off. Sign in and turn on Road data in Crew to share.'
         : !ambient.mounted ? 'Waiting for the phone to be calibrated in its mount.'
         : a && a.paused ? 'Paused: the server refused. Trying again in a few minutes.'
-        : a && a.error ? `Retrying (${a.error}). ${mi}`
+        : a && a.error ? `Couldn't reach the server. Retrying. ${mi}`
         : `Sharing while the phone is mounted. ${mi || 'Starts once you move.'} The first and last km of every trip stay on this phone.`;
     }
     async function checkAmbientAllowed() {
