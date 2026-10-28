@@ -933,6 +933,125 @@
     return { lo, hi, time_s: t[hi] - t[lo], ...driverScore(d.speed_mps, d.lon_g, d.lat_g, d.corners, lo, hi + 1) };
   }
 
+  // -------------------------------------------------------------------------
+  // Reference lap (IDEAS Q-13) — port of core/reference_lap.py (parity-tested): a sane, skilled driver in a given car
+  // simulated over the road, then read as features, the TECH and FLOW axes and a recognisable archetype.
+  // -------------------------------------------------------------------------
+  const CAR_DEFAULT = { mass_kg: 1500, power_kw: 150, mu_lat: MU_EFF_DEFAULT, mu_lon: 0.45, cda_m2: 0.65, drivetrain_eff: 0.85 };
+  const ENGAGED_G = 0.20, CRUISE_MPS = 27.0, CRUISE_OVER_LIMIT = 1.2, AIR_DENSITY = 1.2;
+  function accelerationMps2(v, grade, car) {
+    const traction = car.mu_lon * G_STD;
+    const power = car.power_kw * 1000.0 * car.drivetrain_eff / (car.mass_kg * Math.max(v, 1.0));
+    const drag = 0.5 * AIR_DENSITY * car.cda_m2 * v * v / car.mass_kg;
+    return Math.min(traction, power) - drag - G_STD * grade / Math.sqrt(1.0 + grade * grade);
+  }
+  // numpy.gradient(f, x) for a non-uniform x (second order inside, first order at the ends)
+  function gradientAt(f, x) {
+    const n = f.length, out = new Float64Array(n);
+    if (n < 2) return out;
+    out[0] = (f[1] - f[0]) / (x[1] - x[0]);
+    out[n - 1] = (f[n - 1] - f[n - 2]) / (x[n - 1] - x[n - 2]);
+    for (let i = 1; i < n - 1; i++) {
+      const d1 = x[i] - x[i - 1], d2 = x[i + 1] - x[i];
+      const a = -(d2) / (d1 * (d1 + d2)), b = (d2 - d1) / (d1 * d2), c = d1 / (d2 * (d1 + d2));
+      out[i] = a * f[i - 1] + b * f[i] + c * f[i + 1];
+    }
+    return out;
+  }
+  function referenceLap(kappa, ds, opts = {}) {
+    const car = { ...CAR_DEFAULT, ...(opts.car || {}) }, n = kappa.length;
+    const env = brakingEnvelopeMps(kappa, ds, opts.camberRad || null, opts.roughG || null, car.mu_lat, opts.sightM || null);
+    const cruise = new Float64Array(n).fill(CRUISE_MPS);
+    if (opts.limitMps) for (let i = 0; i < n; i++) { const l = opts.limitMps[i]; cruise[i] = Number.isFinite(l) && l > 0 ? l * CRUISE_OVER_LIMIT : CRUISE_MPS; }
+    const vCap = new Float64Array(n);
+    for (let i = 0; i < n; i++) vCap[i] = Math.min(env[i], cruise[i]);
+    for (let i = n - 2; i >= 0; i--) vCap[i] = Math.min(vCap[i], Math.sqrt(vCap[i + 1] ** 2 + 2.0 * BRAKE_DECEL_MPS2 * ds[i]));
+    let z = null, grade = new Float64Array(n), kappaV = new Float64Array(n);
+    if (opts.elevationM && n > 2) {
+      z = movingAverage(opts.elevationM, SMOOTH_WINDOW);
+      const s = new Float64Array(n);
+      for (let i = 1; i < n; i++) s[i] = s[i - 1] + ds[i - 1];
+      grade = gradientAt(z, s);
+      kappaV = movingAverage(gradientAt(grade, s), SMOOTH_WINDOW);
+    }
+    const v = Float64Array.from(vCap);
+    for (let i = 0; i < n - 1; i++) {
+      const a = accelerationMps2(v[i], grade[i], car);
+      v[i + 1] = Math.min(vCap[i + 1], Math.sqrt(Math.max(0.0, v[i] ** 2 + 2.0 * a * ds[i])));
+    }
+    for (let i = 0; i < n; i++) v[i] = Math.max(v[i], 0.5);
+    const dt = new Float64Array(n), t = new Float64Array(n), half = new Float64Array(n);
+    for (let i = 0; i < n; i++) { dt[i] = ds[i] / v[i]; half[i] = v[i] * v[i] / 2.0; }
+    for (let i = 1; i < n; i++) t[i] = t[i - 1] + dt[i - 1];
+    const g = gradient(half), aLon = new Float64Array(n), aLat = new Float64Array(n), aVert = new Float64Array(n);
+    for (let i = 0; i < n; i++) { aLon[i] = g[i] / ds[i]; aLat[i] = v[i] * v[i] * kappa[i]; aVert[i] = v[i] * v[i] * kappaV[i]; }
+    return { v, dt, t, aLat, aLon, aVert, grade, elevation: z, envelope: env, cruise };
+  }
+  const perMin = (count, seconds) => count * 60.0 / Math.max(seconds, 1.0);
+  const runsOf = (mask) => { let k = 0; for (let i = 0; i < mask.length; i++) if (mask[i] && (i === 0 || !mask[i - 1])) k++; return k; };
+  function windowFeatures(lap, corners, sightM, lo, hi) {
+    let T = 0;
+    for (let i = lo; i < hi; i++) T += lap.dt[i];
+    const W = Math.max(T, 1e-6);
+    let engaged = 0, dead = 0, meanV = 0;
+    for (let i = lo; i < hi; i++) {
+      const w = lap.dt[i] / W;
+      if (Math.abs(lap.aLat[i]) > ENGAGED_G * G_STD) engaged += w;
+      if (Math.abs(lap.aLat[i]) < 0.05 * G_STD && lap.v[i] >= 0.95 * lap.cruise[i]) dead += w;
+      meanV += w * lap.v[i];
+    }
+    const cs = corners.filter((c) => lo <= c.apex && c.apex < hi);
+    const apexT = cs.map((c) => lap.t[c.apex]);
+    let regularity = 0;
+    if (apexT.length > 2) {
+      const gaps = apexT.slice(1).map((x, i) => x - apexT[i]);
+      if (gaps.length >= 2) { const m = gaps.reduce((a, b) => a + b, 0) / gaps.length; regularity = 1.0 - Math.min(1.0, std(gaps) / m); }
+    }
+    let transitions = 0, lastSide = 0, lastT = -1e9, lastV = 0;
+    for (let i = lo; i < hi; i++) {
+      const a = lap.aLat[i], side = a > 0.15 * G_STD ? 1 : (a < -0.15 * G_STD ? -1 : 0);
+      if (side === 0) continue;
+      if (lastSide && side !== lastSide && lap.t[i] - lastT <= 3.0 && lap.v[i] >= 0.85 * lastV) transitions++;
+      lastSide = side; lastT = lap.t[i]; lastV = lap.v[i];
+    }
+    let brakingJ = 0;
+    for (let i = lo; i < hi - 1; i++) brakingJ += Math.max(0, -((lap.v[i + 1] * lap.v[i + 1] / 2.0) - (lap.v[i] * lap.v[i] / 2.0)));
+    const un = [], co = [];
+    for (let i = lo; i < hi; i++) { un.push(lap.aVert[i] < -0.15 * G_STD); co.push(lap.aVert[i] > 0.15 * G_STD); }
+    let relief = 0;
+    if (lap.elevation && hi - lo > 1) for (let i = lo; i < hi - 1; i++) relief += Math.abs(lap.elevation[i + 1] - lap.elevation[i]);
+    let blind = 0;
+    for (const c of cs) { const vc = c.apex_mps, stop = vc * REACTION_S + vc * vc / (2.0 * BRAKE_DECEL_MPS2); if (sightM[c.start] < stop) blind++; }
+    const hairpins = cs.filter((c) => c.severity === 'HP').length, tight = cs.filter((c) => c.severity === 'HP' || c.severity <= 3).length;
+    const tightens = cs.filter((c) => (c.mods || []).includes('tightens')).length;
+    return { seconds: T, engagement: engaged, dead_time: dead, cadence_pm: perMin(cs.length, T), regularity,
+             transitions_pm: perMin(transitions, T), braking_jpkg_pm: perMin(brakingJ, T), vertical_pm: perMin(runsOf(un) + runsOf(co), T),
+             relief_m_pm: perMin(relief, T), hairpins_pm: perMin(hairpins, T), tight_share: cs.length ? tight / cs.length : 0,
+             blind_share: cs.length ? blind / cs.length : 0, tightens_pm: perMin(tightens, T), mean_speed: meanV };
+  }
+  const sat = (x, x0) => 100.0 * (1.0 - Math.exp(-Math.max(0.0, x) / x0));
+  const pyRound = (x) => { const r = Math.round(x); return Math.abs(x % 1) === 0.5 && r % 2 !== 0 ? r - 1 : r; };   // Python's round(): halves to even
+  function axisScores(f) {
+    const tech = 0.25 * sat(f.cadence_pm, 3.0) + 0.20 * 100.0 * f.tight_share + 0.15 * sat(f.hairpins_pm, 0.8) + 0.15 * sat(f.transitions_pm, 2.0)
+      + 0.10 * 100.0 * f.blind_share + 0.10 * sat(f.vertical_pm, 1.5) + 0.05 * sat(f.tightens_pm, 0.5);
+    const squirt = f.braking_jpkg_pm / Math.max(1.0, 1000.0 * f.engagement);
+    const flow = 0.35 * 100.0 * Math.min(1.0, f.engagement / 0.6) + 0.20 * 100.0 * f.regularity + 0.20 * sat(f.transitions_pm, 2.0)
+      + 0.15 * 100.0 * (1.0 - Math.min(1.0, squirt)) + 0.10 * 100.0 * (1.0 - f.dead_time);
+    const clip = (x) => Math.max(0, Math.min(100, x));
+    return { tech: pyRound(clip(tech)), flow: pyRound(clip(flow)) };
+  }
+  function archetype(f, town = false, ramp = false) {
+    if (town) return 'Town';
+    if (ramp) return 'Connector';
+    if (f.hairpins_pm >= 0.8) return 'Switchbacks';
+    if (f.transitions_pm >= 2.0 && f.engagement >= 0.25) return 'Esses';
+    if (f.cadence_pm >= 3.0 && f.tight_share >= 0.4) return 'Technical';
+    if (f.vertical_pm >= 2.0) return 'Rollercoaster';
+    if (f.engagement >= 0.15 && f.cadence_pm >= 1.0 && f.tight_share < 0.4) return 'Flowing sweepers';
+    if (f.dead_time < 0.6 && f.cadence_pm >= 0.4) return 'Fast open';
+    return 'Connector';
+  }
+
   // Profile a raw 5 m recording (the iOS app's ApexDrive CSV) in the browser with the same
   // geometry/envelope/corner pipeline tools/export_web_profile.py uses. Hazards and sectors need
   // the offline pipeline (multi-pass + reference lap) and are left out.
@@ -1014,7 +1133,7 @@
   }
 
   const api = {
-    profileRecording,
+    profileRecording, referenceLap, windowFeatures, axisScores, archetype,
     driverScore, techniqueScore, cornerTechnique, carGrip, cornersForCar, fatigue, spreadBy, turnIn, segmentPass, segmentWindow,
     removeSpurs, retracedShare,
     compareDrives, cornerMetrics, elapsedS, cornerPhases, coach, ggEnvelope, gripUse, ggSector, abruptMoments,

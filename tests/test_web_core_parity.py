@@ -605,3 +605,43 @@ def test_crowd_curvature_blends_the_same():
     out = json.loads(subprocess.run([NODE, "-e", runner, os.path.abspath("web/apex_core.js")], input=json.dumps({"km": km, "crowd": crowd, "passes": passes}),
                                     capture_output=True, text=True, check=True).stdout)
     assert out["replaced"] == replaced and out["k"] == list(k)
+
+
+ROADS = {
+    "switchbacks": [("straight", 80)] + [("arc", 15, 170 if i % 2 else -170) for i in range(6) for _ in [0]] + [("straight", 80)],
+    "esses": [("straight", 60)] + [("arc", 80, 40 if i % 2 else -40) for i in range(10)] + [("straight", 60)],
+    "sweepers": [("straight", 200), ("arc", 250, 45), ("straight", 300), ("arc", 300, -50), ("straight", 400)],
+}
+
+
+def _ref_lap_py(lat, lon, elev):
+    from core import reference_lap as rl
+    k, ds = rd.compute_curvature(lat, lon)
+    sight = rd.sight_distance_m(lat, lon, elev)
+    corners = rd.detect_corners(k, ds)
+    lap = rl.simulate(k, ds, sight_m=sight, elevation_m=elev)
+    f = rl.window_features(lap, corners, sight, 0, len(k))
+    return k, ds, sight, corners, lap, f, rl.axis_scores(f), rl.archetype(f)
+
+
+def test_reference_lap_matches_python():
+    """IDEAS Q-13: the reference lap, its features, TECH/FLOW and the archetype, JS = Python."""
+    runner = ("const c=require(process.argv[1]);const i=JSON.parse(require('fs').readFileSync(0,'utf8'));"
+              "const lap=c.referenceLap(i.k,i.ds,{sightM:i.sight,elevationM:i.elev});const f=c.windowFeatures(lap,i.corners,i.sight,0,i.k.length);"
+              "process.stdout.write(JSON.stringify({v:Array.from(lap.v),aVert:Array.from(lap.aVert),f,axes:c.axisScores(f),arch:c.archetype(f)}));")
+    archetypes = {}
+    for name, legs in ROADS.items():
+        lat, lon = path_from_legs(legs)
+        n = len(lat)
+        elev = [100 + 30 * math.sin(i / 40) for i in range(n)] if name == "sweepers" else None
+        k, ds, sight, corners, lap, f, axes, arch = _ref_lap_py(lat, lon, elev)
+        payload = {"k": list(k), "ds": list(ds), "sight": list(sight), "elev": elev,
+                   "corners": [{kk: (c[kk] if not isinstance(c[kk], np.generic) else c[kk].item()) for kk in ("start", "end", "apex", "apex_mps", "severity", "mods")} for c in corners]}
+        out = json.loads(subprocess.run([NODE, "-e", runner, os.path.abspath("web/apex_core.js")], input=json.dumps(payload),
+                                        capture_output=True, text=True, check=True).stdout)
+        assert np.allclose(out["v"], lap["v"], atol=1e-9) and np.allclose(out["aVert"], lap["a_vert"], atol=1e-9), name
+        for key, val in f.items():
+            assert abs(out["f"][key] - val) < 1e-9, (name, key, out["f"][key], val)
+        assert out["axes"] == axes and out["arch"] == arch, name
+        archetypes[name] = arch
+    assert archetypes["switchbacks"] == "Switchbacks"
