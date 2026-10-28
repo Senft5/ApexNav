@@ -138,6 +138,81 @@ def test_parity_drive_analysis_on_real_overlapping_drives():
     assert len(js["delta_curve"]) == len(py["delta_curve"])
 
 
+def test_parity_coach_on_real_drives():
+    from core import drive_analysis as da
+    paths = ["web/data/pebble_ridge.js", "web/data/dry_ridge.js"]
+    if not all(os.path.exists(p) for p in paths):
+        pytest.skip("no shipped drive data")
+    drives = []
+    for path in paths:
+        text = open(path, encoding="utf-8").read()
+        d = json.loads(text[text.index("push(") + 5:text.rindex(");")])
+        f = {name: i for i, name in enumerate(d["fields"])}
+        col = lambda k: [r[f[k]] for r in d["rows"]]
+        drives.append({"lat": col("lat"), "lon": col("lon"), "speed_mps": [v / 2.2369362921 for v in col("speed_mph")],
+                       "lon_g": col("lon_g"), "lat_g": col("lat_g"),
+                       "corners": [{"start": int(round(e["start_m"] / 5)), "end": int(round(e["end_m"] / 5)), "apex": e["index"],
+                                    "apex_mps": e["apex_mph"] / 2.2369362921} for e in d["events"] if e["type"] == "corner"]})
+    # a third pass: the second drive 4 % quicker, with blank g through part of it
+    quick = dict(drives[1], speed_mps=[v * 1.04 for v in drives[1]["speed_mps"]],
+                 g_known=[0 if 3000 <= i < 3400 else 1 for i in range(len(drives[1]["lat"]))])
+    cases = [(drives[0], [drives[1]]), (drives[1], [drives[0], quick]), (drives[1], [])]
+    np_ = lambda d: {**d, "speed_mps": np.array(d["speed_mps"]), "lon_g": np.array(d["lon_g"]), "lat_g": np.array(d["lat_g"])}
+    py = [da.coach(np_(a), [np_(o) for o in others]) for a, others in cases]
+    runner = ("const c=require(process.argv[1]);const cases=JSON.parse(require('fs').readFileSync(0,'utf8'));"
+              "process.stdout.write(JSON.stringify(cases.map(([a,o])=>c.coach(a,o))));")
+    out = subprocess.run([NODE, "-e", runner, os.path.abspath("web/apex_core.js")], input=json.dumps(cases),
+                         capture_output=True, text=True, check=True)
+    tips = 0
+    for j, p in zip(json.loads(out.stdout), py):
+        assert (j["clean"], j["top"]) == (p["clean"], p["top"])
+        assert j["ideal_s"] == pytest.approx(p["ideal_s"], rel=1e-9) and j["gain_s"] == pytest.approx(p["gain_s"], rel=1e-9, abs=1e-9)
+        assert len(j["corners"]) == len(p["corners"])
+        for cj, cp in zip(j["corners"], p["corners"]):
+            assert (cj["passes"], cj["best"] is None, cj["gain_s"] is None) == (cp["passes"], cp["best"] is None, cp["gain_s"] is None)
+            if cp["gain_s"] is not None:
+                assert cj["gain_s"] == pytest.approx(cp["gain_s"], rel=1e-9, abs=1e-9) and cj["best_from"] == cp["best_from"]
+            assert (cj["tip"] is None) == (cp["tip"] is None)
+            if cp["tip"]:
+                tips += 1
+                assert cj["tip"]["kind"] == cp["tip"]["kind"] and cj["tip"]["value"] == pytest.approx(cp["tip"]["value"], rel=1e-9)
+            for side in ("m", "best"):
+                if cp[side] is not None:
+                    for k, v in cp[side].items():
+                        assert cj[side][k] == (None if v is None else pytest.approx(v, rel=1e-9, abs=1e-9)), k
+    assert tips > 0 and py[1]["clean"] > 0 and py[1]["gain_s"] > 0
+
+
+def test_parity_friction_circle_on_real_drives():
+    from core import drive_analysis as da
+    path = "web/data/dry_ridge.js"
+    if not os.path.exists(path):
+        pytest.skip("no shipped drive data")
+    text = open(path, encoding="utf-8").read()
+    d = json.loads(text[text.index("push(") + 5:text.rindex(");")])
+    f = {name: i for i, name in enumerate(d["fields"])}
+    lat = [r[f["lat_g"]] for r in d["rows"]]
+    lon = [r[f["lon_g"]] for r in d["rows"]]
+    known = [0 if 2000 <= i < 2600 else 1 for i in range(len(lat))]
+    spans = [(i, i + 30) for i in range(0, len(lat) - 31, 997)]
+    py_env = da.gg_envelope(lat, lon, known)
+    py = {"env": py_env, "use": [da.grip_use(lat, lon, a, b, py_env, known) for a, b in spans]}
+    runner = ("const c=require(process.argv[1]);const {lat,lon,known,spans}=JSON.parse(require('fs').readFileSync(0,'utf8'));"
+              "const env=c.ggEnvelope(lat,lon,known);"
+              "process.stdout.write(JSON.stringify({env,use:spans.map(([a,b])=>c.gripUse(lat,lon,a,b,env,known))}));")
+    out = subprocess.run([NODE, "-e", runner, os.path.abspath("web/apex_core.js")],
+                         input=json.dumps({"lat": lat, "lon": lon, "known": known, "spans": spans}), capture_output=True, text=True, check=True)
+    js = json.loads(out.stdout)
+    assert js["env"]["points"] == py["env"]["points"] > 1000
+    for k in ("radius_g", "peak_g", "brake_g", "throttle_g", "left_g", "right_g"):
+        jv, pv = (js["env"][k], py["env"][k]) if k == "radius_g" else ([js["env"][k]], [py["env"][k]])
+        assert [x is None for x in jv] == [x is None for x in pv], k          # hypot may differ in the last ulp
+        assert [x for x in jv if x is not None] == pytest.approx([x for x in pv if x is not None], rel=1e-12), k
+    assert any(u is None for u in py["use"]) and any(u is not None for u in py["use"])
+    for j, p in zip(js["use"], py["use"]):
+        assert (j is None) == (p is None) and (p is None or j == pytest.approx(p, rel=1e-12))
+
+
 def test_remove_spurs_cuts_dead_end_out_and_back():
     lat, lon = path_from_legs([("straight", 300.0)])
     # out-and-back spur: 80 m east and back, inserted at sample 30

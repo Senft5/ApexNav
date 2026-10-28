@@ -17,8 +17,96 @@
     return { km: d.dist[n - 1] / 1000, duration_s: t[n - 1], top_mps: Math.max(...d.speed_mps), peak_lat_g: mx(d.lat_g), peak_brake_g: d.lon_g ? Math.max(0, -Math.min(...d.lon_g.filter(finite))) : null, climb_m: gain };
   }
 
+  const esc = (t) => String(t).replace(/[&<>"']/g, (ch) => `&#${ch.charCodeAt(0)};`);
+
+  /** One line of coaching for a Core.coach corner, or null. Units converted here only (metres, mph). */
+  function tipText(x, MPH) {
+    const t = x && x.tip;
+    if (!t) return null;
+    const m = Math.round(t.value);
+    switch (t.kind) {
+      case 'min_speed': return `Your best pass was ${Math.max(1, Math.round(t.value * MPH))} mph quicker at the slowest point`;
+      case 'brake_later': return `Brake ${m} m later, like your best pass`;
+      case 'throttle_sooner': return `Back on the throttle ${m} m sooner, like your best pass`;
+      case 'coast': return t.vs_best ? `${m} m more coasting than your best pass` : `${m} m coasting between brake and throttle`;
+      case 'brake_after_apex': return `Still braking after the apex (${t.value.toFixed(2)} g)`;
+      case 'early_apex': return `Slowest ${m} m before the apex: turn in later`;
+      default: return null;
+    }
+  }
+
+  /**
+   * Friction circle: every measured 5 m sample as lateral g (left on the left) against longitudinal g (throttle up,
+   * braking down), the driver's own envelope (Core.ggEnvelope, ink) and the scrubbed corner's samples on top (accent).
+   */
+  function ggView(d, Core, C) {
+    if (!d.lat_g || !d.lon_g || !Core.ggEnvelope) return null;
+    const env = Core.ggEnvelope(d.lat_g, d.lon_g, d.g_known || null);
+    if (env.peak_g == null) return null;
+    const S = 240, c0 = S / 2, R = Math.max(0.6, env.peak_g, ...env.radius_g.filter((r) => r != null)) * 1.15, k = (c0 - 14) / R;
+    const xy = (la, lo) => [c0 - la * k, c0 - lo * k];
+    const ok = (i) => (!d.g_known || d.g_known[i]) && finite(d.lat_g[i]) && finite(d.lon_g[i]);
+    let dots = '';
+    const n = d.lat_g.length, step = Math.max(1, Math.floor(n / 1500));
+    for (let i = 0; i < n; i += step) if (ok(i)) { const [x, y] = xy(d.lat_g[i], d.lon_g[i]); dots += `M${x.toFixed(1)} ${y.toFixed(1)}h0`; }
+    const N = env.radius_g.length, half = Math.PI / N;
+    let hull = '', open = false;
+    for (let q = 0; q <= N; q++) {                                   // envelope through each known slice's middle; gaps stay gaps
+      const r = env.radius_g[q % N];
+      if (r == null) { open = false; continue; }
+      const a = (q % N) * 2 * half, [x, y] = xy(r * Math.sin(a), r * Math.cos(a));   // slices are centred on their angle
+      hull += `${open ? 'L' : 'M'}${x.toFixed(1)} ${y.toFixed(1)}`; open = true;
+    }
+    const ring = (g) => `<circle cx="${c0}" cy="${c0}" r="${(g * k).toFixed(1)}" fill="none" stroke="${C.rule}" stroke-dasharray="2 4"/><text x="${c0 + 3}" y="${(c0 - g * k - 3).toFixed(1)}" font-size="9" fill="${C.panelDim}">${g.toFixed(1)} g</text>`;
+    const txt = (x, y, a, t) => `<text x="${x}" y="${y}" text-anchor="${a}" font-size="10" fill="${C.panelDim}">${t}</text>`;
+    const box = el('div', 'dv-gg'), pic = el('div', 'dv-gg-pic'), hot = el('div', 'dv-gg-hot'), cap = el('p', 'note');
+    cap.setAttribute('aria-live', 'polite');
+    pic.innerHTML = `<svg viewBox="0 0 ${S} ${S}" role="img" aria-label="Friction circle: cornering against braking and throttle g">`
+      + ring(0.5) + (R > 1.05 ? ring(1.0) : '')
+      + `<line x1="${c0}" x2="${c0}" y1="6" y2="${S - 6}" stroke="${C.rule}"/><line y1="${c0}" y2="${c0}" x1="6" x2="${S - 6}" stroke="${C.rule}"/>`
+      + `<path d="${dots}" stroke="${C.panelDim}" stroke-width="3" stroke-linecap="round" opacity="0.35"/>`
+      + `<path d="${hull}" fill="none" stroke="${C.panelInk}" stroke-width="1.6" stroke-linejoin="round"/>`
+      + txt(c0, 12, 'middle', 'Throttle') + txt(c0, S - 4, 'middle', 'Brake') + txt(4, c0 - 4, 'start', 'Left') + txt(S - 4, c0 - 4, 'end', 'Right') + '</svg>';
+    const g2 = (v) => (v == null ? '--' : `${v.toFixed(2)} g`);
+    const base = `Your grip on this drive: braking ${g2(env.brake_g)}, cornering left ${g2(env.left_g)} and right ${g2(env.right_g)}, throttle ${g2(env.throttle_g)}.`;
+    cap.textContent = base;
+    const head = el('h3', null, 'Grip circle');
+    box.append(head, pic, cap);
+    pic.append(hot);
+    let shown = -2;
+    function show(c, kc) {
+      if (kc === shown) return; shown = kc;
+      if (!c) { hot.innerHTML = ''; cap.textContent = base; return; }
+      let p = '';
+      const lo = Math.max(0, c.start - 20);                          // 100 m before turn-in: the brake zone, not the straight before it
+      for (let i = lo; i <= c.end; i++) if (ok(i)) { const [x, y] = xy(d.lat_g[i], d.lon_g[i]); p += `${p ? 'L' : 'M'}${x.toFixed(1)} ${y.toFixed(1)}`; }
+      hot.innerHTML = `<svg viewBox="0 0 ${S} ${S}" aria-hidden="true"><path d="${p}" fill="none" stroke="${C.accent}" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round" opacity="0.9"/></svg>`;
+      const use = Core.gripUse(d.lat_g, d.lon_g, lo, c.end, env, d.g_known || null);
+      cap.textContent = `Corner ${kc + 1}, from 100 m before turn-in to the exit: ${use == null ? '--' : `${Math.round(Math.min(1, use) * 100)} %`} of your grip on this drive.`;
+    }
+    return { box, show, env };
+  }
+
+  // How far to trust member road feel at sample i: passes and their spread (ApexContributor.agreement), never a guess.
+  function feelTrust(feel, i, k) {
+    const C2 = root.ApexContributor;
+    const passes = k === 'cam' ? (feel.cn && feel.cn[i] != null ? feel.cn[i] : feel.n[i]) : feel.n[i];
+    const sd = k === 'cam' ? (feel.csd ? feel.csd[i] : null) : (feel.rsd ? feel.rsd[i] : null);
+    if (!finite(feel[k][i]) || !C2 || !C2.agreement) return { a: null, passes, sd };
+    return { a: C2.agreement(passes, sd, k === 'cam' ? C2.AGREE.camber_deg : C2.AGREE.rough_g), passes, sd };
+  }
+  const trustOpacity = (t) => (t.a === 'agree' ? 0.8 : t.a === 'one' || t.a === 'differ' ? 0.3 : 0.55);
+  function trustLabel(feel, i, k) {
+    const t = feelTrust(feel, i, k), unit = k === 'cam' ? '\u00b0' : ' g', dp = k === 'cam' ? 1 : 2;
+    if (t.a === 'one') return ' \u00b7 1 run';
+    if (t.a === 'agree') return ` \u00b7 ${t.passes} runs agree`;
+    if (t.a === 'differ') return ` \u00b7 runs differ \u00b1${t.sd.toFixed(dp)}${unit}`;
+    return '';
+  }
+
   function mount(root_, d, o) {
     const { Core, C, MPH } = o, ref = o.reference || null;        // ref: { name, score, corners[] } from Core.compareDrives(this, best other drive)
+    const co = o.coach || null;                                      // Core.coach(this, other drives) + others: [{ name, date }]
     const lost = (k) => { const r = ref && ref.corners[k]; return r && r.delta_s != null && !r.stopped ? -r.delta_s : null; };   // seconds this pass was slower than the reference
     const fmtD = (s) => (s == null ? '--' : `${s > 0.005 ? '+' : s < -0.005 ? '\u2212' : ''}${Math.abs(s).toFixed(2)} s`);
     root_.innerHTML = '';
@@ -34,14 +122,20 @@
       const v = comp && finite(comp[k]) ? Math.round(comp[k] * 100) : null;
       return `<div class="bar">${label} ${v != null ? v : '--'}<i><u style="width:${v != null ? v : 0}%"></u></i></div>`;
     };
+    // the ideal drive only means something once another pass of the same corners exists
+    const ideal = co && co.clean && co.gain_s > 0 && co.corners.some((x) => x.passes > 1)
+      ? { gain: co.gain_s, n: co.clean, drives: new Set(co.corners.filter((x) => x.gain_s != null).map((x) => (x.best ? x.best_from : -1))).size } : null;
     const mi = finite(S.km) ? `${(S.km / 1.609344).toFixed(1)} mi` : '--';
     const dur = finite(S.duration_s) ? fmtT(S.duration_s) : '--';
     head.innerHTML = `<div class="dv-score"><b class="score big">${scoreVal}</b> <small>/1000</small></div>`
       + `<div class="bars">${bar('pace', 'Pace')}${bar('smoothness', 'Smooth')}${bar('braking', 'Brakes')}${bar('consistency', 'Rhythm')}</div>`
-      + `<div class="dv-meta">${mi} \u00b7 ${dur} \u00b7 ${d.corners.length} corners</div>`;
+      + `<div class="dv-meta">${mi} \u00b7 ${dur} \u00b7 ${d.corners.length} corners</div>`
+      + (ideal ? `<div class="dv-meta">Ideal drive <b class="gain">${ideal.gain.toFixed(2)} s</b> quicker: your best pass of each of ${ideal.n} corners, from ${ideal.drives} drive${ideal.drives === 1 ? '' : 's'}</div>` : '');
     root_.append(head, el('div', 'dv-grid'));
     const grid = root_.lastChild; grid.append(mapBox, el('div', 'dv-right'));
     const zoom = el('div', 'dv-zoom'); grid.lastChild.append(zoom, lanes, read);
+    const gg = ggView(d, Core, C);                                   // friction circle; null without enough measured g
+    if (gg) grid.lastChild.append(gg.box);
     root_.append(list);
 
     // ---- plan map ------------------------------------------------------------------------------------------------
@@ -109,13 +203,13 @@
       }
       if (feel) {                                                          // what members measured on these roads; gaps are unknown, not zero
         const top = yTop + LH, h = 56, covered = feel.cam.filter((v) => v != null).length;
-        svg += `<text x="${LM}" y="${yTop + 12}" font-size="11" fill="${C.panelDim}">Road feel</text><text x="${W - RM}" y="${yTop + 12}" text-anchor="end" font-size="10" fill="${C.panelDim}">${covered ? `banking \u00b18\u00b0 \u00b7 roughness` : 'no member data on this road yet'}</text>`;
+        svg += `<text x="${LM}" y="${yTop + 12}" font-size="11" fill="${C.panelDim}">Road feel</text><text x="${W - RM}" y="${yTop + 12}" text-anchor="end" font-size="10" fill="${C.panelDim}">${covered ? `banking \u00b18\u00b0 (faint: 1 run or runs differ) \u00b7 roughness` : 'no member data on this road yet'}</text>`;
         svg += `<line x1="${LM}" x2="${W - RM}" y1="${top + h / 2}" y2="${top + h / 2}" stroke="${C.rule}" stroke-dasharray="3 4"/><line x1="${LM}" x2="${W - RM}" y1="${top + h}" y2="${top + h}" stroke="${C.rule}"/>`;
         const cs = Math.max(1, Math.floor((v1 - v0) / (W * 1.2)));
         let bars = '', rp = '', rs = false;
         for (let i = v0; i <= v1; i += cs) {
           const cm = feel.cam[i], rf = feel.rough[i];
-          if (finite(cm)) { const hh = Math.min(1, Math.abs(cm) / 8) * (h / 2); bars += `<rect x="${X(i).toFixed(1)}" y="${(cm >= 0 ? top + h / 2 - hh : top + h / 2).toFixed(1)}" width="${Math.max(1, (W - LM - RM) / ((v1 - v0) / cs)).toFixed(1)}" height="${hh.toFixed(1)}" fill="${C.accent}" opacity="0.55"/>`; }
+          if (finite(cm)) { const hh = Math.min(1, Math.abs(cm) / 8) * (h / 2); bars += `<rect x="${X(i).toFixed(1)}" y="${(cm >= 0 ? top + h / 2 - hh : top + h / 2).toFixed(1)}" width="${Math.max(1, (W - LM - RM) / ((v1 - v0) / cs)).toFixed(1)}" height="${hh.toFixed(1)}" fill="${C.accent}" opacity="${trustOpacity(feelTrust(feel, i, 'cam'))}"/>`; }
           if (finite(rf)) { rp += `${rs ? 'L' : 'M'}${X(i).toFixed(1)} ${(top + h - Math.min(1, rf / 0.4) * h).toFixed(1)}`; rs = true; } else rs = false;
         }
         svg += bars + (rp ? `<path d="${rp}" fill="none" stroke="${C.signal}" stroke-width="1.4"/>` : '');
@@ -151,8 +245,10 @@
         + cell('Lateral', d.lat_g && finite(d.lat_g[i]) ? `${d.lat_g[i] >= 0 ? 'L ' : 'R '}${Math.abs(d.lat_g[i]).toFixed(2)} g` : '--')
         + cell('Brake / throttle', d.lon_g && finite(d.lon_g[i]) ? `${d.lon_g[i] < 0 ? 'brake ' : 'accel '}${Math.abs(d.lon_g[i]).toFixed(2)} g` : '--')
         + cell(c ? `Corner ${k + 1}` : 'Corner', c ? `${c.call || c.code}` : '--') + (ref ? cell('vs other drive', c ? fmtD(lost(k)) : '--') : '')
-        + (feel ? cell('Banking', finite(feel.cam[i]) ? `${feel.cam[i].toFixed(1)}\u00b0` : '--') + cell('Roughness', finite(feel.rough[i]) ? `${feel.rough[i].toFixed(2)} g` : '--') + cell('Runs', feel.n[i] != null ? feel.n[i] : '--') : '');
+        + (feel ? cell(`Banking${trustLabel(feel, i, 'cam')}`, finite(feel.cam[i]) ? `${feel.cam[i].toFixed(1)}\u00b0` : '--')
+          + cell(`Roughness${trustLabel(feel, i, 'rough')}`, finite(feel.rough[i]) ? `${feel.rough[i].toFixed(2)} g` : '--') + cell('Runs', feel.n[i] != null ? feel.n[i] : '--') : '');
       list.querySelectorAll('.dv-corner').forEach((r, q) => r.classList.toggle('on', q === k));
+      if (gg) gg.show(c, k);
     }
     // pointer scrubbing on the lanes and taps on map corners
     let drag = false;
@@ -167,11 +263,23 @@
     // ---- corner list -----------------------------------------------------------------------------------------------
     let net = null;
     if (ref) { const ks = d.corners.map((_, k) => lost(k)).filter((x) => x != null); net = ks.length ? ks.reduce((s, x) => s + x, 0) : null; }
-    list.innerHTML = `<h2>Corners${ref ? ` \u00b7 compared with ${ref.name} (score ${ref.score}), your best other drive on this road` : ''}</h2>` + (ref ? `<p class="note" style="margin-bottom:8px">${net == null ? 'No clean corners to compare.' : `Over the ${d.corners.map((_, k) => lost(k)).filter((x) => x != null).length} corners both drives took cleanly, this drive was <b class="${net > 0.05 ? 'loss' : net < -0.05 ? 'gain' : ''}">${fmtD(net)}</b> ${net > 0 ? 'slower' : 'faster'}. Stops and traffic are left out.`}</p>` : '');
+    list.innerHTML = `<h2>Corners${ref ? ` \u00b7 compared with ${esc(ref.name)} (score ${ref.score}), your best other drive on this road` : ''}</h2>` + (ref ? `<p class="note" style="margin-bottom:8px">${net == null ? 'No clean corners to compare.' : `Over the ${d.corners.map((_, k) => lost(k)).filter((x) => x != null).length} corners both drives took cleanly, this drive was <b class="${net > 0.05 ? 'loss' : net < -0.05 ? 'gain' : ''}">${fmtD(net)}</b> ${net > 0 ? 'slower' : 'faster'}. Stops and traffic are left out.`}</p>` : '');
+    if (co && co.top.length) {                                      // where the time is: the biggest gaps to your own best passes
+      const ul = el('ol', 'dv-time');
+      for (const k of co.top) {
+        const x = co.corners[k], c = d.corners[k], from = x.best ? co.others[x.best_from] : null, li = el('li'), b = el('button');
+        b.innerHTML = `<b>${k + 1}</b><span>${esc(c.call || c.code || '')}</span><em class="loss">${fmtD(x.gain_s)}</em>`
+          + `<span class="note">${esc(tipText(x, MPH) || 'Same technique, quicker all the way through')}${from ? ` \u00b7 best pass ${esc(from.date)}` : ''}</span>`;
+        b.onclick = () => { if (zoomM) setZoom(zoomM, c.apex); move(c.apex); lanes.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); };
+        li.append(b); ul.append(li);
+      }
+      list.prepend(el('h2', null, 'Where to find time'), ul);
+    }
     const grid2 = el('div', 'dv-corners');
     d.corners.forEach((c, k) => {
       const r = el('button', 'dv-corner'); r.setAttribute('aria-label', `Corner ${k + 1}: ${c.call || c.code}, apex ${Math.round(c.apex_mps * MPH)} miles per hour`);
-      r.innerHTML = `<b>${k + 1}</b><span class="dv-call">${(c.call || c.code || '').toString()}</span><span class="dv-v">${Math.round(c.apex_mps * MPH)} mph</span><span class="dv-d">${(d.dist[c.apex] / 1609.344).toFixed(2)} mi${ref ? ` \u00b7 <em class="${lost(k) == null ? '' : lost(k) > 0.05 ? 'loss' : lost(k) < -0.05 ? 'gain' : ''}">${fmtD(lost(k))}</em>` : ''}</span>`;
+      r.innerHTML = `<b>${k + 1}</b><span class="dv-call">${esc(c.call || c.code || '')}</span><span class="dv-v">${Math.round(c.apex_mps * MPH)} mph</span><span class="dv-d">${(d.dist[c.apex] / 1609.344).toFixed(2)} mi${ref ? ` \u00b7 <em class="${lost(k) == null ? '' : lost(k) > 0.05 ? 'loss' : lost(k) < -0.05 ? 'gain' : ''}">${fmtD(lost(k))}</em>` : ''}</span>`
+        + (co && tipText(co.corners[k], MPH) ? `<span class="dv-tip">${esc(tipText(co.corners[k], MPH))}</span>` : '');
       r.onclick = () => { if (zoomM) setZoom(zoomM, c.apex); move(c.apex); lanes.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); };
       grid2.append(r);
     });
@@ -200,6 +308,6 @@
     return { move, setRoadFeel, destroy() { ro.disconnect(); }, summary: S };
   }
 
-  const api = { mount, summarize };
+  const api = { mount, summarize, tipText };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexDriveView = api;
 })(typeof window !== 'undefined' ? window : globalThis);
