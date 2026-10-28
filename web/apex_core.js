@@ -684,6 +684,18 @@
     if (m.min_offset_m <= SOLO_EARLY_APEX_M && m.apex_mps_driven - m.min_mps >= SOLO_APEX_DIP_MPS) return { kind: 'early_apex', value: -m.min_offset_m, vs_best: false };
     return null;
   }
+  // How repeatably a corner is driven over your clean passes (port of drive_analysis._spread, IDEAS D-07).
+  const SPREAD_MIN_PASSES = 3;
+  function sampleSd(xs) {
+    if (xs.length < SPREAD_MIN_PASSES) return null;
+    let m = 0; for (const x of xs) m += x; m /= xs.length;
+    let q = 0; for (const x of xs) q += (x - m) ** 2;
+    return Math.sqrt(q / (xs.length - 1));
+  }
+  function spread(brakes, mins) {
+    const b = brakes.filter((x) => x !== null && x !== undefined);
+    return { brake_sd_m: sampleSd(b), brake_passes: b.length, min_sd_m: sampleSd(mins), min_passes: mins.length };
+  }
   function coach(a, others) {
     const hints = others.map(() => -1), out = [];
     for (const c of a.corners) {
@@ -691,6 +703,7 @@
       const ma = cornerPhases(a.speed_mps, a.lon_g, a.lat_g, c.start, c.end, c.apex, c.apex_mps);
       if (ma.min_mps < STOPPED_MPS) { out.push({ apex: c.apex, m: ma, best: null, gain_s: null, tip: null, passes: 0 }); continue; }
       let best = ma, bestFrom = -1, passes = 1;
+      const brakes = [ma.brake_m], mins = [ma.min_offset_m];
       others.forEach((b, j) => {
         const w = matchWindow(a, c.start, c.end, b, hints[j]);
         if (!w) return;
@@ -704,11 +717,12 @@
         mb.time_s = tb;
         if (mb.min_mps < STOPPED_MPS) return;
         passes++;
+        brakes.push(mb.brake_m); mins.push(mb.min_offset_m);
         if (mb.envelope_use <= PACE_CEILING && mb.time_s < best.time_s) { best = mb; bestFrom = j; }
       });
       const gain = ma.time_s - best.time_s;
       out.push({ apex: c.apex, m: ma, best: bestFrom < 0 ? null : best, best_from: bestFrom, gain_s: gain,
-                 tip: coachTip(ma, bestFrom >= 0 && gain >= TIP_GAIN_S ? best : null), passes });
+                 tip: coachTip(ma, bestFrom >= 0 && gain >= TIP_GAIN_S ? best : null), passes, spread: spread(brakes, mins) });
     }
     const clean = out.filter(x => x.gain_s !== null);
     const thisS = clean.reduce((s, x) => s + x.m.time_s, 0), gainS = clean.reduce((s, x) => s + (x.gain_s >= TIP_GAIN_S ? x.gain_s : 0), 0);

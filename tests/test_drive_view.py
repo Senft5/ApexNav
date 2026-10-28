@@ -266,3 +266,20 @@ console.log(JSON.stringify({ none: V.fatigueText(null), steady: V.fatigueText(fa
     assert r["steady"] == "No clear fade over 2 h of moving time: steering and braking in the last third looked like the first."
     assert r["both"].startswith("In the last third of 1 h 25 min of moving time, you made more mid-corner steering corrections and braked")
     assert "road may have changed" in r["both"] and "1 h 1 min of moving time, you braked past the middle of corners more often than" in r["brake"]
+
+
+def test_consistency_rows_rank_measured_corners_only():
+    runner = r"""
+const V = require(process.argv[1] + '/web/drive_view.js');
+const sp = (b, m, n = 4) => ({ spread: { brake_sd_m: b, brake_passes: n, min_sd_m: m, min_passes: n } });
+console.log(JSON.stringify({
+  rows: V.consistencyRows({ corners: [sp(12, 4), sp(null, 3), sp(3, null), {}, sp(6, 5), null] }),
+  few: V.consistencyRows({ corners: [sp(3, 3), sp(5, 5)] }), none: V.consistencyRows(null) }));
+"""
+    root = str(__import__("pathlib").Path(__file__).resolve().parents[1])
+    p = subprocess.run([NODE, "-e", runner, root], capture_output=True, text=True, timeout=60)
+    assert p.returncode == 0, p.stderr
+    r = json.loads(p.stdout)
+    assert [x["k"] for x in r["rows"]] == [2, 4, 0]                  # steadiest first; unknown braking spread left out
+    assert r["rows"][0]["min_sd_m"] is None and r["rows"][2]["passes"] == 4
+    assert r["few"] == [] and r["none"] == []                        # too little to rank

@@ -156,7 +156,9 @@ def test_parity_coach_on_real_drives():
     # a third pass: the second drive 4 % quicker, with blank g through part of it
     quick = dict(drives[1], speed_mps=[v * 1.04 for v in drives[1]["speed_mps"]],
                  g_known=[0 if 3000 <= i < 3400 else 1 for i in range(len(drives[1]["lat"]))])
-    cases = [(drives[0], [drives[1]]), (drives[1], [drives[0], quick]), (drives[1], [])]
+    # and a fourth that brakes and lifts two bins (10 m) later everywhere, so the spread across passes is not zero
+    late = dict(drives[1], speed_mps=[v * 0.98 for v in drives[1]["speed_mps"]], lon_g=drives[1]["lon_g"][:2] + drives[1]["lon_g"][:-2])
+    cases = [(drives[0], [drives[1]]), (drives[1], [drives[0], quick]), (drives[1], []), (drives[1], [quick, late])]
     np_ = lambda d: {**d, "speed_mps": np.array(d["speed_mps"]), "lon_g": np.array(d["lon_g"]), "lat_g": np.array(d["lat_g"])}
     py = [da.coach(np_(a), [np_(o) for o in others]) for a, others in cases]
     runner = ("const c=require(process.argv[1]);const cases=JSON.parse(require('fs').readFileSync(0,'utf8'));"
@@ -176,11 +178,19 @@ def test_parity_coach_on_real_drives():
             if cp["tip"]:
                 tips += 1
                 assert cj["tip"]["kind"] == cp["tip"]["kind"] and cj["tip"]["value"] == pytest.approx(cp["tip"]["value"], rel=1e-9)
+            if "spread" in cp:
+                for k, v in cp["spread"].items():
+                    assert cj["spread"][k] == (None if v is None else pytest.approx(v, rel=1e-9, abs=1e-9)), k
+            else:
+                assert "spread" not in cj
             for side in ("m", "best"):
                 if cp[side] is not None:
                     for k, v in cp[side].items():
                         assert cj[side][k] == (None if v is None else pytest.approx(v, rel=1e-9, abs=1e-9)), k
     assert tips > 0 and py[1]["clean"] > 0 and py[1]["gain_s"] > 0
+    spreads = [c["spread"]["brake_sd_m"] for c in py[3]["corners"] if c.get("spread") and c["spread"]["brake_sd_m"] is not None]
+    assert spreads and max(spreads) > 0                                            # three passes: a measured spread
+    assert all(c["spread"]["brake_sd_m"] is None for c in py[0]["corners"] if c.get("spread"))   # two passes say nothing
 
 
 def test_parity_friction_circle_on_real_drives():

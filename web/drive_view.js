@@ -69,6 +69,20 @@
     return `In the last third of ${dur} of moving time, ${what} than in the first third. The road may have changed, or you may be tiring; if you have not stopped, a break helps.`;
   }
 
+  /**
+   * Corners ranked by how repeatably you drive them (IDEAS D-07), from Core.coach's per-corner spread over your clean passes:
+   * [{ k, brake_sd_m, min_sd_m, passes }] steadiest first, only corners with a known braking spread. Fewer than 3 such
+   * corners: [] (too little to rank).
+   */
+  const VARIES_M = 10;            // a braking point that moves this much (and twice your usual) is worth a marker
+  function consistencyRows(co) {
+    if (!co || !co.corners) return [];
+    const rows = co.corners.map((x, k) => (x && x.spread && Number.isFinite(x.spread.brake_sd_m)
+      ? { k, brake_sd_m: x.spread.brake_sd_m, min_sd_m: Number.isFinite(x.spread.min_sd_m) ? x.spread.min_sd_m : null, passes: x.spread.brake_passes } : null))
+      .filter(Boolean).sort((a, b) => a.brake_sd_m - b.brake_sd_m || a.k - b.k);
+    return rows.length >= 3 ? rows : [];
+  }
+
   function plainCoach(ds, co) {
     const comp = ds && finite(ds.score) && ds.components;
     if (!comp) return null;
@@ -359,6 +373,22 @@
     let net = null;
     if (ref) { const ks = d.corners.map((_, k) => lost(k)).filter((x) => x != null); net = ks.length ? ks.reduce((s, x) => s + x, 0) : null; }
     list.innerHTML = `<h2>Corners${ref ? ` \u00b7 compared with ${esc(ref.name)} (score ${ref.score}), your best other drive on this road` : ''}</h2>` + (ref ? `<p class="note" style="margin-bottom:8px">${net == null ? 'No clean corners to compare.' : `Over the ${d.corners.map((_, k) => lost(k)).filter((x) => x != null).length} corners both drives took cleanly, this drive was <b class="${net > 0.05 ? 'loss' : net < -0.05 ? 'gain' : ''}">${fmtD(net)}</b> ${net > 0 ? 'slower' : 'faster'}. Stops and traffic are left out.`}</p>` : '');
+    const reps = consistencyRows(co);
+    if (reps.length) {                                               // how repeatably each corner is driven over your passes (D-07)
+      const ul = el('ol', 'dv-time'), m = (x) => `\u00b1${Math.max(3, Math.round(x))} m`;
+      const med = reps[Math.floor((reps.length - 1) / 2)].brake_sd_m, varies = (r) => r.brake_sd_m >= Math.max(VARIES_M, 2 * med);
+      const loose = reps.filter(varies).slice(-2).reverse(), pick = [...reps.slice(0, 2), ...loose];
+      pick.forEach((r) => {
+        const c = d.corners[r.k], li = el('li'), b = el('button'), v = varies(r);
+        b.innerHTML = `<b>${r.k + 1}</b><span>${esc(c.call || c.code || '')}</span><em class="${v ? 'loss' : 'gain'}">${m(r.brake_sd_m)}</em>`
+          + `<span class="note">braking point ${m(r.brake_sd_m)}${r.min_sd_m != null ? `, slowest point ${m(r.min_sd_m)}` : ''} over ${r.passes} passes${v ? ': pick one marker for your braking and use it every time' : ''}</span>`;
+        b.onclick = () => { if (zoomM) setZoom(zoomM, c.apex); move(c.apex); lanes.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); };
+        li.append(b); ul.append(li);
+      });
+      list.prepend(el('h2', null, 'How repeatable your corners are'),
+        el('p', 'note', `Across ${reps.length} corners you have driven three or more times, your braking point moves about ${m(med)} from drive to drive (5 m samples and GPS make about \u00b13 m the floor). `
+          + (loose.length ? 'Your two steadiest corners, then the ones that vary most.' : 'Your two steadiest corners; none varies much more than the rest.')), ul);
+    }
     if (ab && ab.moments.length) {                                   // the most abrupt moments, lettered as on the Smoothness map
       const ul = el('ol', 'dv-time dv-abrupt');
       ab.moments.forEach((m, k) => {
@@ -414,6 +444,6 @@
     return { move, setRoadFeel, destroy() { ro.disconnect(); }, summary: S };
   }
 
-  const api = { mount, summarize, tipText, plainCoach, abruptAdvice, fatigueText };
+  const api = { mount, summarize, tipText, plainCoach, abruptAdvice, fatigueText, consistencyRows };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexDriveView = api;
 })(typeof window !== 'undefined' ? window : globalThis);

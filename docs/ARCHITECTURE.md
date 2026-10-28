@@ -61,6 +61,9 @@ The JS file is a line-for-line port used by the browser/iOS cockpit for live OSR
   segment passes; JS port in `web/apex_core.js` (plus `profileRecording` for app CSVs), parity-tested.
 - Smoothness map (`abrupt_moments`; JS `abruptMoments`): |change of the (lat, lon) g vector| x speed / 5 m, in g/s, per
   sample with both ends measured and at 5 m/s or more; the 3 largest at least 40 samples apart and over 0.3 g/s are named.
+- Corner repeatability (`coach` corners' `spread`; IDEAS D-07): over your clean passes of a corner (this drive and matched
+  others), the sample SD in m of where braking began (`brake_sd_m`) and of the slowest point (`min_sd_m`); None under 3
+  known values. The drive page ranks corners by braking spread and names those over max(10 m, 2 x your median).
 - Fatigue cues (`fatigue`; JS `fatigue`): on a drive with an hour or more of moving time (bins at 2.5 m/s or more), the
   clean, fully measured corners (8 or more) of the first and last thirds of that time are compared as two groups: extra
   steering corrections per corner (`steering_corrections`: reversals of the lateral-g trend on steps of 0.03 g or more,

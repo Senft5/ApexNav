@@ -117,7 +117,7 @@ ideal drive and where to find time (#80), grip circle (#86), automatic mount cal
 | D-04 | Ghost car on the map: your best pass (or a friend's shared ghost) as a moving marker with live delta | H | M | todo | SOCIAL §3, racing games, Strava Live Segments |
 | D-05 | Live delta bar during a known stage (green ahead / red behind your best, technique-scored, not speed-scored) | H | M | todo | Harry's Lap Timer |
 | D-06 | Smoothness heatmap on the drive map (lateral jerk, abrupt inputs) with the three worst moments | M | S | done (#104) | Garmin Catalyst |
-| D-07 | Consistency score across passes of the same road, and a trend over weeks | M | S | todo | Strava fitness trend |
+| D-07 | Consistency score across passes of the same road, and a trend over weeks | M | S | partial (per-corner repeatability; weekly trend todo) | Strava fitness trend |
 | D-08 | Personal records feed: best Driver Score per road, per archetype, smoothest drive this month | M | S | todo | Strava PRs |
 | D-09 | Drive summary card worth sharing (score, map silhouette, archetype mix), no times or speeds | H | S | todo | Strava activity card, Relive |
 | D-10 | 3D flyover replay of a drive with the corner notes and g trace (export as a video) | H | L | todo | Relive |
@@ -126,7 +126,7 @@ ideal drive and where to find time (#80), grip circle (#86), automatic mount cal
 | D-13 | External GNSS (10–25 Hz) support for better lines and lap timing | M | M | todo | RaceChrono, Dragy |
 | D-14 | Performance timing: 0–60, 60–0, quarter mile, only on a closed course with a clear warning | M | M | owner (safety stance) | Dragy |
 | D-15 | Track day mode: closed circuit, start/finish line, sector splits, laps, no public-road guardrails needed | H | L | todo | Harry's Lap Timer, RaceChrono |
-| D-16 | Fatigue cues: rising corrections, later braking and wider lines late in a long drive, suggest a break | M | M | partial (post-drive smoothness and braking; live cue and lines todo) | car driver-attention systems |
+| D-16 | Fatigue cues: rising corrections, later braking and wider lines late in a long drive, suggest a break | M | M | partial (#108: post-drive steering corrections and braking; live cue and lines todo) | car driver-attention systems |
 | D-17 | Incident detection: a crash-level spike plus stop asks "Are you OK?" and can alert a chosen contact | H | M | todo | Apple Crash Detection, Life360, REVER |
 | D-18 | Line analysis: early vs late apex per corner from the GPS line against the road geometry | M | M | todo | SOCIAL §3 |
 | D-19 | Car-specific reference lap from the Garage so scores mean the same across cars | H | M | todo | SOCIAL §2.4 |
