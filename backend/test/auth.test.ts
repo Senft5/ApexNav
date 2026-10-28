@@ -43,6 +43,13 @@ describe("Google sign-in", () => {
     expect(again).toBe(owner);                                                     // same person, same row
     expect(await env.DB.prepare("SELECT 1 FROM members WHERE user_id = ?").bind(owner).first()).toBeNull();   // not re-added once members exist
   });
+
+  it("a returning account takes Google's current email and name", async () => {
+    const id = await upsertGoogleUser(env, "g3", "old@example.test", "Old Name");
+    expect(await upsertGoogleUser(env, "g3", "new@example.test", "New Name")).toBe(id);
+    expect(await env.DB.prepare("SELECT email, display_name FROM users WHERE id = ?").bind(id).first())
+      .toEqual({ email: "new@example.test", display_name: "New Name" });
+  });
 });
 
 describe("sessions", () => {

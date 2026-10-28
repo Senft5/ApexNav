@@ -167,10 +167,23 @@ export async function crewMembers(env: Env, v: Viewer, crewId: string) {
 export async function crewInvite(env: Env, v: Viewer, crewId: string): Promise<{ token: string }> {
   const crew = await first<{ owner: string }>(env, "SELECT owner FROM crews WHERE id = ?", crewId);
   if (!crew || crew.owner !== v.id) throw new HttpError(404, "no_crew");
+  // Same cap as account invites: at most 10 live links per owner across their crews (IDEAS Z-15).
+  const open = await first<{ n: number }>(env, "SELECT COUNT(*) AS n FROM crew_invites WHERE created_by = ? AND expires_at > datetime('now')", v.id);
+  if ((open?.n ?? 0) >= CREW_INVITE_CAP) throw new HttpError(429, "too_many_open_invites");
   const token = randomToken(24);
   await run(env, "INSERT INTO crew_invites (token_hash, crew_id, created_by, expires_at) VALUES (?, ?, ?, ?)",
     await sha256hex(token), crewId, v.id, sqlTime(Date.now() + 7 * 86400_000));
   return { token };
+}
+
+export const CREW_INVITE_CAP = 10;
+
+/** The owner turns off every link to their crew at once; links already used keep their members. */
+export async function crewInvitesRevoke(env: Env, v: Viewer, crewId: string): Promise<{ revoked: number }> {
+  const crew = await first<{ owner: string }>(env, "SELECT owner FROM crews WHERE id = ?", crewId);
+  if (!crew || crew.owner !== v.id) throw new HttpError(404, "no_crew");
+  const r = await env.DB.prepare("DELETE FROM crew_invites WHERE crew_id = ?").bind(crewId).run();
+  return { revoked: r.meta.changes ?? 0 };
 }
 
 /** A crew invite works only while it's live, never across a block with the owner (either way) and never for a crew several people

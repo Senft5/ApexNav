@@ -3114,6 +3114,11 @@
         // owner: switch between private (invite link) and public (people nearby can find it; needs an area name)
         const ownerBox = el('div', { className: 'stack-8' });
         if (c.role === 'owner') {
+          ownerBox.append(btn('Turn off invite links', async () => {
+            if (!confirm(`Turn off every invite link to ${c.name}? People already in stay in.`)) return;
+            const r = await apiCall('DELETE', `/api/crews/${c.id}/invites`); const j = await jsonOf(r);
+            toast(r.ok ? (j.revoked ? `Old links to ${c.name} no longer work.` : `${c.name} had no open links.`) : 'Couldn\'t change that. Try again.');
+          }, 'linkbtn'));
           if (c.visibility === 'public') ownerBox.append(btn('Make private', async () => { const r = await apiCall('PUT', `/api/crews/${c.id}`, { visibility: 'private', about: c.about || '' }); if (r.ok) redo(); else toast('Couldn\'t change that. Try again.'); }, 'linkbtn'));
           else {
             const areaIn = el('input', { className: 'field', placeholder: 'Area people nearby will see, e.g. Robbinsville', maxLength: 60, autocomplete: 'off' });
@@ -3132,7 +3137,7 @@
             switchRow('Times', g.share_times, () => putGrant('crew', c.id, true, !g.share_times))),
           el('span', { textContent: g.share_scores ? (g.share_times ? `${c.name} sees your scores and times.` : `${c.name} sees your scores.`) : `${c.name} sees nothing of yours yet.` }),
           ownerBox,
-          el('div', { className: 'row' }, btn('Invite to crew', async () => { const r = await apiCall('POST', `/api/crews/${c.id}/invite`); const j = await jsonOf(r); if (r.ok) copyText(`${shareOrigin()}/?crew=${j.token}`, 'Crew link copied.'); else toast('Only a crew\'s owner can invite.'); }),
+          el('div', { className: 'row' }, btn('Invite to crew', async () => { const r = await apiCall('POST', `/api/crews/${c.id}/invite`); const j = await jsonOf(r); if (r.ok) copyText(`${shareOrigin()}/?crew=${j.token}`, 'Crew link copied.'); else toast(j && j.error === 'too_many_open_invites' ? 'You have 10 open crew links. Turn some off first.' : 'Only a crew\'s owner can invite.'); }),
             btn('Leave', async () => { if (confirm(`Leave ${c.name}?`)) { if (openCrewId === c.id) openCrewId = null; await apiCall('DELETE', `/api/crews/${c.id}/membership`); redo(); } }, 'linkbtn')));
         const loadMembers = async () => {
           mbox.innerHTML = '';
