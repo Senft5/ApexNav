@@ -23,6 +23,7 @@
   <script src="reroute.js"></script>
   <script src="eta.js"></script>
   <script src="speech_queue.js"></script>
+  <script src="my_data.js"></script>
   <script src="note_timing.js"></script>
   <script src="plain_notes.js"></script>
   <script src="hazard_reports.js"></script>
@@ -485,6 +486,19 @@
             </div>
             <div class="row mt-8"><button class="ink-btn" id="zoneHereBtn">Add where I am</button><button class="ink-btn" id="zoneMapBtn">Add at map centre</button></div>
             <div id="zoneList" class="stack-8 mt-8"></div>
+          </section>
+          <section data-panel="setup">
+            <h3>Your data</h3>
+            <p class="note" id="myDataNote" role="status">--</p>
+            <div class="row" style="flex-wrap:wrap">
+              <button class="ink-btn" id="myGpxBtn">Download drives (GPX)</button>
+              <button class="ink-btn" id="myAccountBtn">Download account data</button>
+            </div>
+            <div class="row mt-8" style="flex-wrap:wrap">
+              <button class="linkbtn" id="myDrivesDelBtn">Delete drives on this phone</button>
+              <button class="linkbtn" id="myEraseBtn">Erase everything on this phone</button>
+            </div>
+            <p class="note">Your account (friends, crews, shared spots, routes and results) is deleted from the server in Crew → Delete account.</p>
           </section>
         <section data-panel="setup">
             <h3>Spots</h3>
@@ -3461,6 +3475,44 @@
     function closeHighlightDialog() { $('hlOverlay').classList.remove('show'); highlightPoint = null; }
     document.querySelectorAll('#hlCategories button').forEach(b => b.addEventListener('click', () => selectHighlightCategory(b.dataset.category)));
     document.querySelectorAll('#hlRating button').forEach(b => b.addEventListener('click', () => selectHighlightRating(Number(b.dataset.rating))));
+    // Your data (my_data.js, IDEAS Z-03 / Z-04): what this phone holds, drives as GPX, delete and erase.
+    async function renderMyData() {
+      const list = await ApexRecording.all();
+      const s = ApexMyData.phoneSummary(list, localStorage);
+      $('myDataNote').textContent = `On this phone: ${s.drives} drive${s.drives === 1 ? '' : 's'} (${s.miles} mi), ${s.spots} spot${s.spots === 1 ? '' : 's'}, ${s.zones} privacy zone${s.zones === 1 ? '' : 's'}, ${s.places} recent place${s.places === 1 ? '' : 's'}. `
+        + (s.signedIn ? 'Signed in: friends, crews and what you shared are on the server.' : 'Not signed in: nothing of yours is on the server.');
+    }
+    const saveFile = (text, name, type) => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type })); a.download = name; document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 10000); };
+    $('myGpxBtn').addEventListener('click', async () => {
+      const list = await ApexRecording.all();
+      if (!list.length) { toast('No drives on this phone yet.'); return; }
+      saveFile(ApexMyData.toGpx(list), `apexnav-drives-${new Date().toISOString().slice(0, 10)}.gpx`, 'application/gpx+xml');
+    });
+    $('myAccountBtn').addEventListener('click', async () => {
+      let r = null;
+      try { r = await ApexSync.apiFetch('/api/me/export', { method: 'GET' }); } catch (_) {}
+      if (!r || r.status === 401) { toast(r ? 'Not signed in: there is no account data on the server.' : 'No signal. Try again.'); return; }
+      if (!r.ok) { toast('Couldn\'t get your data. Try again.'); return; }
+      saveFile(JSON.stringify(await r.json(), null, 2), 'apexnav-account.json', 'application/json');
+    });
+    $('myDrivesDelBtn').addEventListener('click', async () => {
+      const list = await ApexRecording.all();
+      if (!list.length) { toast('No drives on this phone.'); return; }
+      if (!confirm(`Delete all ${list.length} drives from this phone? Download them first if you want to keep them.`)) return;
+      for (const d of list) { try { await ApexRecording.remove(d.id); } catch (_) {} }
+      toast('Drives deleted from this phone.'); renderMyData();
+    });
+    $('myEraseBtn').addEventListener('click', async () => {
+      if (!confirm('Erase drives, spots, zones, settings and sign-in from this phone? Your account on the server stays until you delete it in Crew.')) return;
+      const list = await ApexRecording.all();
+      for (const d of list) { try { await ApexRecording.remove(d.id); } catch (_) {} }
+      for (const k of ApexMyData.keysToClear(localStorage)) { try { localStorage.removeItem(k); } catch (_) {} }
+      try { sessionStorage.clear(); } catch (_) {}
+      location.reload();
+    });
+    renderMyData();
+    document.querySelector('.tab[data-view="setup"]') && document.querySelector('.tab[data-view="setup"]').addEventListener('click', renderMyData);
+
     // Privacy zones (Settings): a circle at where you are or at the map's centre; remove any. Phone only.
     let zoneR = 500;
     function renderZones() {

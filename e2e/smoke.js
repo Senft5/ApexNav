@@ -294,6 +294,22 @@ flow('reported hazards: a call ahead, "still there?" after passing, and a one-ta
   check(reports.length === 1 && reports[0].kind === 'pothole' && Math.abs(reports[0].lat - (35.6 + 330 / 110540)) < 1e-4 && reports[0].heading === 0, 'reported at your position and heading');
 });
 
+flow('your data: Settings counts what the phone holds and downloads drives as GPX (IDEAS Z-03/Z-04)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.ApexRecording && window.ApexMyData);
+  await page.evaluate(() => ApexRecording.store({ id: 'e2e_drive', name: 'Test road', date: '2026-10-20T15:00:00Z',
+    lat: [35.6, 35.601, 35.602], lon: [-83.9, -83.901, -83.902], elev: null, dist: [0, 150, 300] }));
+  await page.click('.tab[data-view="setup"]');
+  await page.waitForFunction(() => /1 drive \(0.2 mi\)/.test(document.getElementById('myDataNote').textContent));
+  const [dl] = await Promise.all([page.waitForEvent('download'), page.click('#myGpxBtn')]);
+  const gpx = require('fs').readFileSync(await dl.path(), 'utf8');
+  check(/<trk><name>Test road<\/name>/.test(gpx) && (gpx.match(/<trkpt /g) || []).length === 3, 'the GPX holds the drive');
+  page.once('dialog', (d) => d.accept());
+  await page.click('#myDrivesDelBtn');
+  await page.waitForFunction(() => /0 drives/.test(document.getElementById('myDataNote').textContent));
+});
+
 flow('shared routes: one a friend shared shows in Crew and opens as a planned route with notes (Worker stubbed, IDEAS S-05)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   const geom = Array.from({ length: 120 }, (_, i) => [-83.9 + i * 4e-4 + Math.sin(i / 6) * 3e-4, 35.6 + i * 3e-4]);
