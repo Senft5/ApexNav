@@ -52,6 +52,30 @@
       ['Corners', `${d.corners}${d.hairpins ? ` (${d.hairpins} hairpins)` : ''}`], ['Blind corners', `${v(d.blind)}%`], ['Confidence', `${d.confidence} · ${CONF[d.confidence]}`]];
   }
 
-  const api = { describe, headline, rows, CONF };
+  /**
+   * A route's character (IDEAS Q-05): adaptive sectors (apex_core adaptiveSectors, split at its turns `breaks`), each read
+   * by the reference lap as an archetype, neighbours of the same kind merged: [{ archetype, startM, endM }].
+   */
+  function character(Core, t, breaks = []) {
+    if (!t || !Array.isArray(t.kappa) || t.kappa.length < 60) return [];
+    const n = t.kappa.length, ds = new Float64Array(n).fill(5), sight = Array.isArray(t.sightM) && t.sightM.length === n ? t.sightM : new Float64Array(n).fill(Core.SIGHT_MAX_M);
+    const corners = Core.detectCorners(t.kappa, ds), lap = Core.referenceLap(t.kappa, ds, { sightM: sight });
+    const out = [];
+    for (const [a, b] of Core.adaptiveSectors(t.kappa, ds, breaks)) {
+      const arch = Core.archetype(Core.windowFeatures(lap, corners, sight, a, b));
+      const last = out[out.length - 1];
+      if (last && last.archetype === arch) last.endM = b * 5; else out.push({ archetype: arch, startM: a * 5, endM: b * 5 });
+    }
+    return out;
+  }
+  const PLAIN = new Set(['Connector', 'Fast open', 'Town']);
+  /** "Esses 2.1 mi at 14 mi · Switchbacks 1.2 mi at 31 mi": the stretches worth knowing about, longest first (at most 3). */
+  function characterLine(list, fmt = (m) => `${(m / 1000).toFixed(1)} km`) {
+    const good = (list || []).filter((x) => !PLAIN.has(x.archetype) && x.endM - x.startM >= 500)
+      .sort((a, b) => (b.endM - b.startM) - (a.endM - a.startM)).slice(0, 3).sort((a, b) => a.startM - b.startM);
+    return good.map((x) => `${x.archetype} ${fmt(x.endM - x.startM)}${x.startM >= 500 ? ` at ${fmt(x.startM)}` : ' from the start'}`).join(' · ');
+  }
+
+  const api = { describe, headline, rows, CONF, character, characterLine };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexRoadPage = api;
 })(typeof window !== 'undefined' ? window : globalThis);

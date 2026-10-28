@@ -212,6 +212,48 @@
     return m;
   }
 
+  // Adaptive sectors (IDEAS Q-05) — port of road_dna.adaptive_sectors (parity-tested): split where the road's character
+  // changes (turning per 100 m, optimal partitioning on a mean change), 300 m to 2.5 km each, always at junctions.
+  const SECTOR_BIN = 20, SECTOR_MIN_BINS = 3, SECTOR_MAX_BINS = 25, SECTOR_NOISE_RAD = 0.05;
+  const medianOf = (a) => { const s = Float64Array.from(a).sort(), m = s.length; return m % 2 ? s[(m - 1) / 2] : (s[m / 2 - 1] + s[m / 2]) / 2; };
+  function adaptiveSectors(kappa, ds, breaks = []) {
+    const n = kappa.length;
+    if (!n) return [];
+    const nb = Math.max(1, Math.ceil(n / SECTOR_BIN)), x = new Float64Array(nb);
+    for (let b = 0; b < nb; b++) { let s = 0; for (let i = b * SECTOR_BIN; i < Math.min(n, (b + 1) * SECTOR_BIN); i++) s += Math.abs(kappa[i]) * ds[i]; x[b] = s; }
+    let sigma2 = 0;
+    if (nb > 1) {
+      const diffs = []; for (let i = 1; i < nb; i++) diffs.push(x[i] - x[i - 1]);
+      const md = medianOf(diffs);
+      sigma2 = (1.4826 * medianOf(diffs.map((v) => Math.abs(v - md))) / Math.sqrt(2.0)) ** 2;
+    }
+    const beta = 2.0 * Math.log(Math.max(nb, 2)) * Math.max(sigma2, SECTOR_NOISE_RAD ** 2);
+    const cuts = [...new Set(breaks.map((b) => Math.min(nb, Math.max(0, Math.floor(b / SECTOR_BIN)))))].filter((c) => c !== 0 && c !== nb).sort((a, b) => a - b);
+    const pieces = []; let last = 0;
+    for (const c of [...cuts, nb]) { if (c > last) pieces.push([last, c]); last = c; }
+    const c1 = new Float64Array(nb + 1), c2 = new Float64Array(nb + 1);
+    for (let i = 0; i < nb; i++) { c1[i + 1] = c1[i] + x[i]; c2[i + 1] = c2[i] + x[i] * x[i]; }
+    const cost = (a, b) => (c2[b] - c2[a]) - (c1[b] - c1[a]) ** 2 / (b - a);
+    const outBins = [];
+    for (const [a0, b0] of pieces) {
+      const m = b0 - a0;
+      if (m <= SECTOR_MIN_BINS) { outBins.push([a0, b0]); continue; }
+      const F = new Array(m + 1).fill(Infinity), prev = new Array(m + 1).fill(0);
+      F[0] = -beta;
+      for (let t = SECTOR_MIN_BINS; t <= m; t++) {
+        for (let s = Math.max(0, t - SECTOR_MAX_BINS); s <= t - SECTOR_MIN_BINS; s++) {
+          if (F[s] === Infinity) continue;
+          const v = F[s] + cost(a0 + s, a0 + t) + beta;
+          if (v < F[t]) { F[t] = v; prev[t] = s; }
+        }
+      }
+      if (F[m] === Infinity) { for (let i = 0; i < m; i += SECTOR_MAX_BINS) outBins.push([a0 + i, Math.min(b0, a0 + i + SECTOR_MAX_BINS)]); continue; }
+      const segs = [];
+      for (let t = m; t > 0; t = prev[t]) segs.push([a0 + prev[t], a0 + t]);
+      outBins.push(...segs.reverse());
+    }
+    return outBins.map(([a, b]) => [a * SECTOR_BIN, Math.min(n, b * SECTOR_BIN)]);
+  }
   // Crowd curvature over the map's (IDEAS Q-04) — port of road_dna.blend_curvature (parity-tested).
   const CROWD_MIN_PASSES = 2, CROWD_MIN_RUN = 6;
   function blendCurvature(kappaMap, kappaCrowd, passes) {
@@ -1140,7 +1182,7 @@
     G_STD, MPS_TO_MPH, ALPR_RADIUS_M,
     movingAverage, gradient, unwrap, localXY, resamplePolyline,
     computeCurvature, apexSpeedMps, effectiveMu, brakingEnvelopeMps, sightDistanceM, sightSpeedMps, SIGHT_MAX_M,
-    severityForRadius, blendCurvature, detectCorners, paceNoteText, annotateCautions, linkNotes, rallyDistance, nearestIndex, detectHazards
+    severityForRadius, blendCurvature, adaptiveSectors, detectCorners, paceNoteText, annotateCautions, linkNotes, rallyDistance, nearestIndex, detectHazards
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.ApexCore = api;

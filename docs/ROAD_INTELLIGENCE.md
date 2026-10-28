@@ -182,7 +182,7 @@ Sectors are also labelled with a character a human recognises:
 Rule-based first (thresholds on §3 features), clustering once crowd data exists.
 The UI leads with the archetype ("Esses, 3.1 mi, climbing") — far more useful than "74".
 
-### 5.3 Adaptive sectors **[next]**
+### 5.3 Adaptive sectors **[built: road_dna.adaptive_sectors, optimal partitioning; IDEAS Q-05]**
 Fixed 500 m bins cut great roads in half. Sectors are found by change-point detection
 (PELT) on the feature time series, bounded 250 m – 2.5 km (manifesto), and always broken
 at junctions — because a junction is where a route can join or leave. A **stage** is a

@@ -260,6 +260,65 @@ def severity_for_radius(radius_m: float) -> int | None:
     return None
 
 
+SECTOR_BIN = 20              # 100 m bins (20 x 5 m) for adaptive sectors (IDEAS Q-05)
+SECTOR_MIN_BINS = 3          # 300 m: shortest sector (ROAD_INTELLIGENCE 5.3 says 250 m-2.5 km)
+SECTOR_MAX_BINS = 25         # 2.5 km: longest
+SECTOR_NOISE_RAD = 0.05      # turning per 100 m below which two bins read the same (about 3 degrees)
+
+
+def adaptive_sectors(kappa, ds, breaks=()):
+    """Sectors that follow the road's character (IDEAS Q-05, ROAD_INTELLIGENCE 5.3): the turning per 100 m bin, split by
+    optimal partitioning where its mean changes (a Gaussian mean-change cost, penalty 2 log(n) times the noise variance),
+    each sector 300 m to 2.5 km, and always split at `breaks` (sample indices of junctions). A stretch between junctions
+    shorter than 300 m is one sector. Returns [(start, end)] sample ranges, end exclusive, covering every sample.
+    """
+    k = np.abs(np.asarray(kappa, dtype=float))
+    d = np.asarray(ds, dtype=float)
+    n = len(k)
+    if n == 0:
+        return []
+    nb = max(1, int(math.ceil(n / SECTOR_BIN)))
+    x = np.array([float(np.sum(k[b * SECTOR_BIN:(b + 1) * SECTOR_BIN] * d[b * SECTOR_BIN:(b + 1) * SECTOR_BIN])) for b in range(nb)])
+    diffs = np.diff(x)
+    sigma2 = (1.4826 * float(np.median(np.abs(diffs - np.median(diffs)))) / math.sqrt(2.0)) ** 2 if len(diffs) else 0.0
+    beta = 2.0 * math.log(max(nb, 2)) * max(sigma2, SECTOR_NOISE_RAD ** 2)
+    cut_bins = sorted({min(nb, max(0, int(b) // SECTOR_BIN)) for b in breaks} - {0, nb})
+    pieces, last = [], 0
+    for c in cut_bins + [nb]:
+        if c > last:
+            pieces.append((last, c))
+        last = c
+    c1 = np.concatenate([[0.0], np.cumsum(x)])
+    c2 = np.concatenate([[0.0], np.cumsum(x * x)])
+    cost = lambda a, b: (c2[b] - c2[a]) - (c1[b] - c1[a]) ** 2 / (b - a)
+    out_bins = []
+    for a0, b0 in pieces:
+        m = b0 - a0
+        if m <= SECTOR_MIN_BINS:
+            out_bins.append((a0, b0))
+            continue
+        F = [math.inf] * (m + 1)
+        prev = [0] * (m + 1)
+        F[0] = -beta
+        for t in range(SECTOR_MIN_BINS, m + 1):
+            for s in range(max(0, t - SECTOR_MAX_BINS), t - SECTOR_MIN_BINS + 1):
+                if F[s] == math.inf:
+                    continue
+                v = F[s] + cost(a0 + s, a0 + t) + beta
+                if v < F[t]:
+                    F[t], prev[t] = v, s
+        if F[m] == math.inf:                                   # can't fill exactly: even sectors of the longest size
+            step = SECTOR_MAX_BINS
+            out_bins += [(a0 + i, min(b0, a0 + i + step)) for i in range(0, m, step)]
+            continue
+        segs, t = [], m
+        while t > 0:
+            segs.append((a0 + prev[t], a0 + t))
+            t = prev[t]
+        out_bins += segs[::-1]
+    return [(a * SECTOR_BIN, min(n, b * SECTOR_BIN)) for a, b in out_bins]
+
+
 CROWD_MIN_PASSES = 2          # a bin's crowd curvature counts once this many passes measured it
 CROWD_MIN_RUN = 6             # ... and only in runs of this many known bins (30 m): a lone bin is noise, not a corner
 
