@@ -166,6 +166,7 @@ pace-note grammar, ALPR from DeFlock/OSM, reference-lap scoring and archetypes.
 | Q-20 | Archetypes by clustering once crowd data exists | M | L | todo | ROAD_INTELLIGENCE §5.2 |
 | Q-21 | Real device acceptance for app-open sharing (shared km matches driven km, minus private ends) | H | S | owner (phone) | STATE 2026-10-27 |
 | Q-22 | "Pothole ahead" from your own confirmed hazards on any road, with no route loaded | H | S | done (#104) | thread Deepen driver and road analysis |
+| Q-23 | Bundled demo drives (tools/export_web_profile.py via core/kinematics.py `profile_drive_dataframe`) write camber 0.0 for every 5 m bin with no cornering (`fillna(0.0)`), so straights read as measured flat. Keep NaN, export null, re-export web/data | M | S | todo | audit 2026-10-28 (CLAUDE.md rule 3) |
 
 ## 4. Co-driver and pace notes (V)
 
@@ -295,17 +296,21 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 | Y-05 | Status page and synthetic checks for the Worker, D1 and routing | M | S | done (#141) | production readiness |
 | Y-06 | Staged rollouts: preview Worker for TestFlight, feature flags per build | M | M | todo | docs/BACKEND.md |
 | Y-07 | Real-phone test checklist run before each TestFlight build (VERIFY.md) | H | S | done (VERIFY.md section 0; first run is the owner's) | docs/VERIFY.md |
-| Y-08 | Record migrations in `d1_migrations` (it only lists 0001) and a drift check in CI | M | S | todo | STATE 2026-10-26 |
-| Y-09 | Database backups (D1 time travel/export) and a restore drill | H | S | done (#124; first export and drill need the owner's wrangler login) | production readiness |
+| Y-08 | Record migrations in `d1_migrations` and a drift check in CI | M | S | half (backfilled 0001–0009 on both databases 2026-10-28; CI drift check todo) | STATE 2026-10-26 |
+| Y-09 | Database backups (D1 time travel/export) and a restore drill | H | S | done (#124; first export 2026-10-28 via the connector; drill needs the owner's wrangler login) | production readiness |
 | Y-10 | Rate limits and abuse protection on every write endpoint | H | M | done (#112) | production readiness |
+| Y-12 | Scheduled backups with no token: a Worker Cron Trigger (Mondays 07:00 UTC) dumps every table through the D1 binding into the private `apexnav-backups` KV namespace, keeps the last 8 (docs/BACKUPS.md section 3a). Move to R2 once the owner enables it or a dump nears 24 MiB | H | S | done (this PR; first run the Monday after deploy) | first backup 2026-10-28 |
 | Y-11 | End-to-end browser tests of the main flows (plan, drive replay, log, crew) in CI | M | M | todo | testing |
+| Y-13 | No cron: expired invites, crew invites and app sign-in codes stay in D1 forever (sessions are now swept on the next sign-in, #132). A daily `scheduled` handler that deletes expired rows (can share the Y-12 backup cron) | L | S | todo | audit 2026-10-28 |
+| Y-14 | Segment ids are client-made (`seg_<ms>`) and global: two people saving at the same millisecond get `409 id_taken` and that segment never syncs. Scope ids per owner, or let the server assign and return one | L | S | todo | audit 2026-10-28 |
+| Y-15 | `upsertGoogleUser` never refreshes email or display name for an existing account, so a changed Google address stays stale in the export and in `OWNER_EMAIL` matching | L | S | todo | audit 2026-10-28 |
 
 ## 11. Performance and battery (P)
 
 | id | idea | impact | effort | status | from |
 |---|---|---|---|---|---|
 | P-01 | Battery budget for an hour of driving with screen on, measured and published | H | M | todo | Waze, REVER complaints |
-| P-02 | Low-power cockpit: drop to 30 fps and fewer map layers when the battery is low or hot | M | M | todo | thermal throttling |
+| P-02 | Low-power cockpit: drop to 30 fps and fewer map layers when the battery is low or hot | M | M | done (#133) | thermal throttling |
 | P-03 | Split web/index.html into modules so pages load faster and threads stop colliding | M | L | todo | dev velocity |
 | P-04 | Lazy-load voice banks and kokoro-js only when voice is on | M | S | done (already lazy: checked 2026-10-28, a cold start fetches only voices/index.json) | startup time |
 | P-05 | Route analysis in a Web Worker so the UI never stutters while scoring | M | M | todo | Y-01 |
@@ -316,14 +321,21 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 
 | id | idea | impact | effort | status | from |
 |---|---|---|---|---|---|
-| Z-01 | First and last km of every trip never leave the phone; trips cut on stops and gaps | H | M | done (#71) | docs/SOCIAL.md §1 |
+| Z-01 | First and last km of every trip never leave the phone; trips cut on stops and gaps | H | M | done (#71; random 0.5–1.5 km per trip end since #139) | docs/SOCIAL.md §1 |
 | Z-02 | Privacy zones you draw (home, work) where nothing is ever recorded or shared | H | S | todo | Strava privacy zones |
 | Z-03 | Privacy dashboard: what's on the phone, what was shared, delete my account and data | H | M | todo | GDPR/CCPA, App Store 5.1.1(v) |
 | Z-04 | Data export (drives as CSV/GPX, account JSON) | M | S | todo | GDPR portability |
-| Z-05 | Security review of auth, crew and convoy endpoints before launch | H | M | todo | production readiness |
+| Z-05 | Security review of auth, crew and convoy endpoints before launch | H | M | partial (#132, #135, audit 2026-10-28; Z-09 to Z-15 are what it left) | production readiness |
 | Z-06 | Convoy positions ephemeral, scoped to joined members, revoked on leave, never logged | H | S | partial (#84) | docs/CONVOY_TRANSPORT.md |
 | Z-07 | Privacy policy and terms written for real (and linked in the app and store) | H | S | owner (legal) | App Store requirement |
 | Z-08 | Minimum k-anonymity for road bins shown publicly (don't show a bin only one driver touched near a home) | M | S | todo | Strava heatmap lesson |
+| Z-09 | iOS web view is `isInspectable = true` in release builds: Safari Web Inspector on a Mac with the unlocked phone plugged in can read the session token from localStorage. Gate it behind `#if DEBUG` or a hidden developer toggle | M | S | todo | audit 2026-10-28 |
+| Z-10 | App session token lives in web localStorage; keep it in the iOS Keychain and hand it to the page per request through the bridge | M | M | todo | audit 2026-10-28 |
+| Z-11 | Content-Security-Policy beyond `frame-ancestors` (script-src for the inline scripts by hash, connect-src for the map/route hosts): defence in depth now that a session token sits in page storage | M | M | todo | audit 2026-10-28 |
+| Z-12 | The outgoing friend-request list shows a pending row only for real member handles, so typing handles still tells you which exist (the request answer itself is uniform). Show sent requests for unknown handles too, or not at all | L | S | todo | audit 2026-10-28 |
+| Z-13 | Convoy members see each other's Google display name (`who()` in convoy_routes.ts), unlike crews and boards since #132. Send the handle only, or the name only between friends | L | S | todo | audit 2026-10-28 |
+| Z-14 | Map matching sends the (trimmed) drive trace with the phone's IP to the public Valhalla demo server, and routing sends start and end points to public servers. Self-hosting (Y-04) fixes both; say it in the privacy policy (Z-07) until then | M | L | owner (cost) | audit 2026-10-28 |
+| Z-15 | Crew invite links are multi-use, never revocable and uncapped per owner (account invites are capped at 10 open). Add revoke on the crew card and a cap | L | S | todo | audit 2026-10-28 |
 
 ## 13. Android and web parity (A)
 

@@ -137,7 +137,10 @@
    * stays on the phone; the server also never receives coordinates. Failures (matching, offline, server errors) keep the rows or the built
    * chunks and resend the same payloads later with backoff; only a refusal (signed out, opted out) stops it.
    */
-  function createLive({ Core, post, fetch: fetchFn, driveId, drivenOn, chunk = 100, lag = 200, skip = 200, ctx = 20, retryMs = 30000, maxRetryMs = 300000, now = Date.now, onStatus }) {
+  // The first and last stretch of every trip never leaves the phone. A random 0.5 to 1.5 km at each end (docs/BACKEND.md section 3),
+  // drawn per trip: a fixed 1 km would put home exactly 1 km back along the road from where a person's data starts.
+  const privateEdge = (rand = Math.random) => Math.round((500 + 1000 * rand()) / BIN_M);
+  function createLive({ Core, post, fetch: fetchFn, driveId, drivenOn, chunk = 100, lag = privateEdge(), skip = privateEdge(), ctx = 20, retryMs = 30000, maxRetryMs = 300000, now = Date.now, onStatus }) {
     const A = { lat: [], lon: [], rough: [], camber: [], crest: [] };
     const wayCache = {}, HOLD = MIN_BINS + 5;
     let done = 0, busy = false, stopped = false, retryAt = 0, fails = 0, bins = 0, chunks = 0, error = null, pending = [];
@@ -266,7 +269,7 @@
     const match = await matchDrive(drive, opts.fetch);
     const ids = [...new Set(match.filter((m) => m && m.way != null).map((m) => m.way))];
     const ways = await fetchWays(ids, opts.fetch);
-    const list = buildContributions({ drive, match, ways, drivenOn: drive.date.slice(0, 10), driveId: driveIdFor(drive), trimM: opts.trimM });
+    const list = buildContributions({ drive, match, ways, drivenOn: drive.date.slice(0, 10), driveId: driveIdFor(drive), trimM: opts.trimM ?? privateEdge() * BIN_M });
     let sent = 0;
     for (const c of list) {
       const r = await post(c);
@@ -393,6 +396,6 @@
     return Math.round(100 * (1 - Math.max(0, Math.min(1, (m.roughness - 0.08) / 0.30))));
   }
 
-  const api = { createLive, createAmbient, driveIdFor, measuredSeries, seriesFrom, agreement, AGREE, measuredAdjust, surfaceScore, measuredAlong, summarize, locate, buildContributions, matchDrive, fetchWays, contributeDrive, eligible, project, cumulative, SKIP_CLASSES };
+  const api = { createLive, privateEdge, createAmbient, driveIdFor, measuredSeries, seriesFrom, agreement, AGREE, measuredAdjust, surfaceScore, measuredAlong, summarize, locate, buildContributions, matchDrive, fetchWays, contributeDrive, eligible, project, cumulative, SKIP_CLASSES };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexContributor = api;
 })(typeof window !== 'undefined' ? window : globalThis);
