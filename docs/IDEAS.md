@@ -297,7 +297,7 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 | Y-07 | Real-phone test checklist run before each TestFlight build (VERIFY.md) | H | S | todo | docs/VERIFY.md |
 | Y-08 | Record migrations in `d1_migrations` (it only lists 0001) and a drift check in CI | M | S | todo | STATE 2026-10-26 |
 | Y-09 | Database backups (D1 time travel/export) and a restore drill | H | S | todo | production readiness |
-| Y-10 | Rate limits and abuse protection on every write endpoint | H | M | active (thread Make reliability, offline and CarPlay best in class) | production readiness |
+| Y-10 | Rate limits and abuse protection on every write endpoint | H | M | done (#112) | production readiness |
 | Y-11 | End-to-end browser tests of the main flows (plan, drive replay, log, crew) in CI | M | M | todo | testing |
 
 ## 11. Performance and battery (P)
