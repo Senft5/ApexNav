@@ -164,6 +164,9 @@ def test_parity_coach_on_real_drives():
                     lon=[x + 4e-5 * math.cos(i / 5 + k) for i, x in enumerate(drives[1]["lon"])]) for k in (1, 2)]
     cases = [(drives[0], [drives[1]]), (drives[1], [drives[0], quick]), (drives[1], []), (drives[1], [quick, late, later]),
              (drives[1], [*shifted, later]), (drives[1], [quick, late, later, *shifted])]
+    # and a slower pass that turned in 15 m sooner everywhere (D-18)
+    early = dict(drives[1], speed_mps=[v * 0.96 for v in drives[1]["speed_mps"]], lat_g=drives[1]["lat_g"][3:] + drives[1]["lat_g"][-3:])
+    cases.append((early, [drives[1]]))
     np_ = lambda d: {**d, "speed_mps": np.array(d["speed_mps"]), "lon_g": np.array(d["lon_g"]), "lat_g": np.array(d["lat_g"])}
     py = [da.coach(np_(a), [np_(o) for o in others]) for a, others in cases]
     keys = ["2026-09", "2026-09", "2026-09", "2026-09", "2026-09", "2026-10", None]
@@ -199,6 +202,9 @@ def test_parity_coach_on_real_drives():
                     for k, v in cp[side].items():
                         assert cj[side][k] == (None if v is None else pytest.approx(v, rel=1e-9, abs=1e-9)), k
     assert tips > 0 and py[1]["clean"] > 0 and py[1]["gain_s"] > 0
+    kinds = lambda r: [c["tip"]["kind"] for c in r["corners"] if c["tip"]]
+    assert "turn_in_later" in kinds(py[6])                                         # turned in sooner than the quicker pass
+    assert "turn_in_later" not in kinds(py[4]) + kinds(py[5])                      # same steering, other GPS traces: no such tip
     for j, p in zip(js_all, py):                                                    # spread per period (D-07 trend)
         by = da.spread_by(p, keys)
         assert sorted(j["dev"]) == sorted(by)

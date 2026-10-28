@@ -362,6 +362,9 @@ def _tip(m: dict, ref: dict | None):
             return {"kind": "throttle_sooner", "value": m["throttle_m"] - ref["throttle_m"], "vs_best": True}
         if m["coast_m"] - ref["coast_m"] >= TIP_COAST_M:
             return {"kind": "coast", "value": m["coast_m"] - ref["coast_m"], "vs_best": True}
+        ta, tr = m.get("turn_in_m"), ref.get("turn_in_m")
+        if ta is not None and tr is not None and ta - tr >= TIP_TURN_M:
+            return {"kind": "turn_in_later", "value": ta - tr, "vs_best": True}
         return None
     if m["late_brake_g"] >= SOLO_LATE_BRAKE_G:
         return {"kind": "brake_after_apex", "value": m["late_brake_g"], "vs_best": False}
@@ -436,6 +439,32 @@ def _marks(d: dict, start: int, end: int, apex: int) -> tuple:
     return onset, slow
 
 
+TURN_MIN_G = 0.20            # a corner whose (3-bin smoothed) lateral load peaks lighter than this has no clear turn-in
+TURN_ONSET = 0.4             # turn-in is where the smoothed lateral load, towards the corner, first reaches 40 % of its peak
+TIP_TURN_M = 15.0            # three bins earlier than the quicker pass (one bin of it is sensor noise): an early turn-in
+
+
+def _turn_in(d: dict, start: int, end: int, apex: int):
+    """Turn-in of one pass as an index into it, or None (IDEAS D-18). Phone GPS cannot place the car in its lane, but the
+    accelerometer shows where the car began to turn: the start of the run, towards the corner (the sign of the load at the
+    apex), where the 3-bin smoothed lateral g stays at or above TURN_ONSET of its peak in the corner. None when the peak is
+    under TURN_MIN_G or the run reaches back past the brake lookback."""
+    lat, n = d["lat_g"], len(d["lat_g"])
+    lo = max(0, apex - BRAKE_LOOKBACK)
+    sm = lambda i: (float(lat[max(0, i - 1)]) + float(lat[i]) + float(lat[min(n - 1, i + 1)])) / 3.0
+    side = sm(apex)
+    if not math.isfinite(side) or side == 0:
+        return None
+    y = lambda i: sm(i) if side > 0 else -sm(i)
+    pk = max(range(start, end + 1), key=lambda i: (y(i), -i))
+    if not y(pk) >= TURN_MIN_G:
+        return None
+    j = pk
+    while j > lo and y(j - 1) >= TURN_ONSET * y(pk):
+        j -= 1
+    return j if j > lo and j <= apex else None
+
+
 ON_A_WINDOW = 10             # bins either side of where a pass's mark should fall on A's road
 
 
@@ -477,6 +506,8 @@ def coach(a: dict, others: list) -> dict:
             continue
         best, best_from, passes = ma, -1, 1
         oa, sa = _marks(a, c["start"], c["end"], c["apex"])                 # D-07 marks, in m along A's road from its apex
+        ta = _turn_in(a, c["start"], c["end"], c["apex"])
+        ma["turn_in_m"] = None if ta is None else (c["apex"] - ta) * 5.0
         brakes = [None if oa is None else (c["apex"] - oa) * 5.0]
         mins = [None if sa is None else (sa - c["apex"]) * 5.0]
         froms = [-1]
@@ -501,6 +532,9 @@ def coach(a: dict, others: list) -> dict:
             ob, sb = _marks(b, bs, be, b_apex)
             ob, sb = (None if x is None else _on_a(a, c["apex"] - (b_apex - x), b, x) for x in (ob, sb))
             ob = None if ob is not None and ob > c["apex"] else ob             # braking cannot begin past the apex
+            tb_ = _turn_in(b, bs, be, b_apex)
+            tb_ = None if tb_ is None else _on_a(a, c["apex"] - (b_apex - tb_), b, tb_)
+            mb["turn_in_m"] = None if tb_ is None or tb_ > c["apex"] else (c["apex"] - tb_) * 5.0   # on A's road, m before its apex
             brakes.append(None if ob is None else (c["apex"] - ob) * 5.0)
             mins.append(None if sb is None else (sb - c["apex"]) * 5.0)
             froms.append(j)

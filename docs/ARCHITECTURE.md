@@ -91,9 +91,14 @@ The JS file is a line-for-line port used by the browser/iOS cockpit for live OSR
   reference, except a pass whose slowest point is over the sane corner limit (envelope use > 1.0), which never counts.
   Gains under 0.2 s are alignment noise and ignored; the rest rank "Where to find time" and sum to the ideal drive. One tip
   per corner: slower at the slowest point (>= 0.9 m/s), brake point earlier (>= 10 m), throttle later (>= 10 m), more
-  coasting (>= 15 m); with no quicker pass, braking after the apex (>= 0.25 g), coasting after braking (>= 20 m) or a
+  coasting (>= 15 m), turned in sooner (>= 15 m, see below); with no quicker pass, braking after the apex (>= 0.25 g), coasting after braking (>= 20 m) or a
   slowest point >= 15 m before an apex driven >= 0.3 m/s faster. Corners through a stop (< 2.5 m/s), blank speed, or
   unmeasured g (`g_known`) anywhere from 200 m before the apex to 100 m after the exit are left out.
+- Turn-in (`_turn_in`; JS `turnIn`, IDEAS D-18): phone GPS cannot place the car in its lane, so the line is read from the
+  accelerometer: turn-in is the start of the run, towards the corner, where the 3-bin smoothed lateral g holds 40 % of its
+  peak (none when the peak is under 0.20 g or the run reaches back past the 200 m lookback). Other passes' turn-ins are
+  projected onto this drive's road like the D-07 marks. Turning in 15 m or more sooner than the quicker pass is the tip
+  "turn in later" (an early turn-in is the usual cause of an early apex). 0.03 g of noise moves it by one bin.
 - Friction circle (`gg_envelope`, `grip_use`; JS `ggEnvelope`, `gripUse`): the driver's own g-g envelope from one drive,
   16 slices of 22.5° centred on 0° = throttle, 90° = left, 180° = braking, 270° = right (so straight braking and steady
   cornering sit mid-slice), each slice's radius the nearest-rank 95th percentile of combined g (one pothole jolt does not

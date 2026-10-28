@@ -272,3 +272,35 @@ def test_abrupt_moments_finds_the_jolts_and_ignores_crawling_and_unknown():
     assert all(m["jerk_gps"] >= da.JERK_FLOOR_GPS for m in r["moments"])
     calm = da.abrupt_moments([0.2 * math.sin(i / 20) for i in range(n)], lon, v)
     assert calm["moments"] == []
+
+
+def _ramped(turn_at: int, speed_scale: float = 1.0) -> dict:
+    """The test corner with the lateral load building over 4 bins from turn_at (a real turn-in is a ramp, not a step)."""
+    d = _drive(speed_scale)
+    lat_g = np.zeros(len(d["lat_g"]))
+    for k in range(4):
+        lat_g[turn_at + k] = 0.125 * (k + 1)
+    lat_g[turn_at + 4:96] = 0.5
+    d["lat_g"] = lat_g
+    return d
+
+
+def test_turn_in_is_read_from_the_lateral_load():
+    d = _ramped(78)
+    assert da._turn_in(d, 80, 96, 88) == 79                      # 3-bin smoothed load first holds 40 % of its peak
+    flat = _drive()
+    flat["lat_g"] = flat["lat_g"] * 0.3                           # a light curve: no clear turn-in
+    assert da._turn_in(flat, 80, 96, 88) is None
+    right = _ramped(78)
+    right["lat_g"] = -right["lat_g"]                              # the same either way
+    assert da._turn_in(right, 80, 96, 88) == 79
+
+
+def test_coach_says_turn_in_later_when_the_quicker_pass_did():
+    early, late = _ramped(74, 0.96), _ramped(78)                  # turned in 20 m sooner, and 4 % slower
+    co = da.coach(early, [late])
+    c = co["corners"][0]
+    assert c["m"]["turn_in_m"] - c["best"]["turn_in_m"] == pytest.approx(20.0)
+    assert c["tip"] == {"kind": "turn_in_later", "value": pytest.approx(20.0), "vs_best": True}
+    same = da.coach(_ramped(78, 0.96), [late])["corners"][0]      # the same turn-in: the time is elsewhere, no turn-in tip
+    assert same["tip"] is None or same["tip"]["kind"] != "turn_in_later"
