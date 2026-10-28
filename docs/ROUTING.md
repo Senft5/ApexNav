@@ -52,6 +52,13 @@ is driven, when the live arrival (above) is more than 5 minutes past it, a toast
 after 10 minutes if still late; it plans the quickest way from where you are back to the loop's start (IDEAS R-37,
 `homeByOffer` in web/eta.js).
 
+## Drag to reshape
+
+A planned route (not while driving or playing) can be dragged: a mouse grabs the line at once, a finger holds still on it for
+0.35 s first so that panning across the route still pans. Where it is let go becomes a stop, ordered by where along the route
+it was grabbed (`FunRoute.insertVia`, as the pin's Add via), and the route is rebuilt through it. Held and let go without
+moving, it is the long-press pin, as before (IDEAS R-18).
+
 ## Routes from elsewhere
 
 Where to? takes a pasted Google Maps (`/maps/dir/…`, `?api=1&destination=…&waypoints=…`, `/place/…/@lat,lon`), Apple Maps

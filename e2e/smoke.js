@@ -131,6 +131,52 @@ flow('Where to?: a suggestion builds a route with a card and a Start button (sea
   check(steps.steps.some((x) => x.type === 4) && !steps.steps.some((x) => x.type === 1), 'arrival kept, the start left out');
 }, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
 
+flow('drag to reshape: dragging the planned route with the mouse adds a stop where it is let go (router stubbed, IDEAS R-18)', async (page, base) => {
+  const asked = [];
+  // the real map style is offline here: a bare one, so the app's own route layers draw
+  await page.route('https://tiles.openfreemap.org/**', (route) => (route.request().url().includes('/styles/')
+    ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 8, sources: {}, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#eee' } }] }) })
+    : route.abort()));
+  await page.route('https://photon.komoot.io/**', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ features: [
+    { geometry: { coordinates: [-83.9700, 35.7565] }, properties: { name: 'Maryville', state: 'Tennessee' } }] }) }));
+  await page.route('https://valhalla1.openstreetmap.de/route', (route) => {
+    const req = JSON.parse(route.request().postData() || '{}');
+    asked.push(req.locations);
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify(stubTrip(req.locations)) });
+  });
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map);
+  await page.click('#destInput');
+  await page.fill('#destInput', 'Maryville');
+  await page.waitForSelector('#placeList .place', { timeout: 10000 });
+  await page.click('#placeList .place');
+  await page.waitForFunction(() => { const t = window.apexDebug.track; return t && t.kind === 'route' && t.lat.length > 50; }, null, { timeout: 20000 });
+  await page.evaluate(() => { const t = window.apexDebug.track, i = Math.round(t.lat.length / 2); window.apexDebug.map.jumpTo({ center: [t.lon[i], t.lat[i]], zoom: 13 }); });
+  await page.waitForTimeout(800);                                    // drawn there
+  // a point on the drawn route that is on screen and not under the route card
+  const pt = await page.evaluate(() => {
+    const t = window.apexDebug.track, m = window.apexDebug.map, r = m.getContainer().getBoundingClientRect();
+    for (let k = 2; k < 9; k++) {
+      const i = Math.round(t.lat.length * k / 10), p = m.project([t.lon[i], t.lat[i]]), x = r.left + p.x, y = r.top + p.y;
+      const el = document.elementFromPoint(x, y);
+      if (el && el.classList.contains('maplibregl-canvas') && m.queryRenderedFeatures([[p.x - 4, p.y - 4], [p.x + 4, p.y + 4]], { layers: ['apex-route'] }).length) return { x, y };
+    }
+    return null;
+  });
+  check(pt, 'the route is on screen');
+  const before = asked.length;
+  await page.mouse.move(pt.x, pt.y);
+  await page.mouse.down();
+  await page.mouse.move(pt.x + 40, pt.y + 30, { steps: 4 });
+  await page.mouse.move(pt.x + 70, pt.y + 60, { steps: 4 });
+  await page.mouse.up();
+  for (let k = 0; k < 50 && asked.length === before; k++) await page.waitForTimeout(100);
+  const locs = asked[asked.length - 1];
+  check(asked.length > before && locs.length === 3, 'the router was asked through a new stop: ' + JSON.stringify(locs));
+  await page.waitForFunction(() => { const t = window.apexDebug.track; return t && t.request && t.request.via.length === 1; }, null, { timeout: 10000 });
+}, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
+
 flow('saved for offline: Save on the route card, then with no signal it opens from Where to? with its directions (IDEAS F-03)', async (page, base) => {
   let online = true;
   await page.route('https://photon.komoot.io/**', (route) => (online ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ features: [
