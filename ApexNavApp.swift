@@ -1094,9 +1094,21 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         speak(phrase, interrupt: interrupt, style: style, duck: duck)
     }
 
+    /// A web voice clip is about to play. The page waits for the answer (`promptStyle`) and skips the clip unless it's
+    /// "normal": CarPlay asks navigation apps to stay silent during a call or Siri, or to play only a tone.
     func webVoiceBegin(duck: Bool) {
-        webVoiceActive = true
-        beginVoice(duck: duck)
+        let style = currentPromptStyle(duck: duck)
+        switch style {
+        case AVAudioSession.PromptStyle.none:
+            break
+        case AVAudioSession.PromptStyle.short:
+            playPromptTone()
+        default:
+            webVoiceActive = true
+            beginVoice(duck: duck)
+        }
+        let name = style == AVAudioSession.PromptStyle.none ? "none" : style == AVAudioSession.PromptStyle.short ? "short" : "normal"
+        evaluate("window.apex && window.apex.onNative && window.apex.onNative({type:'promptStyle',style:'\(name)'}); void 0;")
     }
 
     private static let robotVoiceNames = ["Zarvox", "Trinoids", "Fred", "Ralph", "Cellos"]
@@ -1166,6 +1178,43 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         try? AVAudioSession.sharedInstance().setActive(true)
     }
 
+    // CarPlay Developer Guide, Voice prompts: check the session's promptStyle just before each prompt. None (a phone call,
+    // Siri listening): say nothing. Short: a tone instead of words. Normal: the full prompt. It is read with the session set
+    // up for prompts, which is when the system fills it in.
+    private func currentPromptStyle(duck: Bool) -> AVAudioSession.PromptStyle {
+        configureVoiceSession(duck: duck)
+        return AVAudioSession.sharedInstance().promptStyle
+    }
+
+    private var tonePlayer: AVAudioPlayer?
+    private static let promptTone: Data = {
+        // 0.15 s at 880 Hz, 16-bit mono PCM with a soft start and end, as a WAV made in memory (no bundled sound file)
+        let rate = 22050, n = rate * 15 / 100
+        var pcm = Data(capacity: n * 2)
+        for i in 0..<n {
+            let env = min(1.0, Double(i) / 300.0, Double(n - i) / 600.0)
+            let v = Int16(sin(2.0 * Double.pi * 880.0 * Double(i) / Double(rate)) * env * 12000.0)
+            withUnsafeBytes(of: v.littleEndian) { pcm.append(contentsOf: $0) }
+        }
+        var wav = Data()
+        func u32(_ x: Int) { withUnsafeBytes(of: UInt32(x).littleEndian) { wav.append(contentsOf: $0) } }
+        func u16(_ x: Int) { withUnsafeBytes(of: UInt16(x).littleEndian) { wav.append(contentsOf: $0) } }
+        wav.append(contentsOf: Array("RIFF".utf8)); u32(36 + pcm.count); wav.append(contentsOf: Array("WAVE".utf8))
+        wav.append(contentsOf: Array("fmt ".utf8)); u32(16); u16(1); u16(1); u32(rate); u32(rate * 2); u16(2); u16(16)
+        wav.append(contentsOf: Array("data".utf8)); u32(pcm.count); wav.append(pcm)
+        return wav
+    }()
+
+    private func playPromptTone() {
+        beginVoice(duck: true)
+        tonePlayer = try? AVAudioPlayer(data: Self.promptTone)
+        tonePlayer?.play()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
+            self?.tonePlayer = nil
+            self?.endVoiceIfIdle()
+        }
+    }
+
     fileprivate func endVoiceIfIdle() {
         guard !synth.isSpeaking, !webVoiceActive else { return }
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
@@ -1176,6 +1225,16 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         // (The web cockpit decides which notes are still worth calling.)
         if interrupt && synth.isSpeaking {
             synth.stopSpeaking(at: .word)
+        }
+        switch currentPromptStyle(duck: duck) {
+        case AVAudioSession.PromptStyle.none:
+            endVoiceIfIdle()
+            return
+        case AVAudioSession.PromptStyle.short:
+            playPromptTone()
+            return
+        default:
+            break
         }
         beginVoice(duck: duck)
         let utterance = AVSpeechUtterance(string: phrase)

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-zy4nJcalp9ZS102jRRmKVq3On+ezXXs3Yu8lh0XmpRw=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-xLwHjlDLJjXT7YAf4U+WDGusqRtmVw4Y2YBmSBKwCOw=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>ApexNav</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -1755,9 +1755,18 @@
     }
     // In the app the shell owns the audio route (car stereo, CarPlay audio, Bluetooth): tell it while a web voice clip plays.
     // duck (IDEAS V-08, ApexSpeechQueue.ducks): lower the music for this line, or play over it.
+    // Starting one resolves with the shell's prompt style (CarPlay Developer Guide, Voice prompts): 'none' during a call or
+    // Siri, 'short' when the shell played a tone instead, 'normal' to speak. A browser, or a shell that doesn't answer, speaks.
+    let promptStyleWaiter = null;
     function voiceBracket(on, duck = true) {
       const native = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex;
-      if (native) { try { native.postMessage(on ? { cmd: 'voiceBegin', duck } : 'voiceEnd'); } catch (_) {} }
+      if (!native) return Promise.resolve('normal');
+      if (!on) { try { native.postMessage('voiceEnd'); } catch (_) {} return Promise.resolve('normal'); }
+      return new Promise((resolve) => {
+        const t = setTimeout(() => { promptStyleWaiter = null; resolve('normal'); }, 250);
+        promptStyleWaiter = (style) => { clearTimeout(t); promptStyleWaiter = null; resolve(style); };
+        try { native.postMessage({ cmd: 'voiceBegin', duck }); } catch (_) { promptStyleWaiter('normal'); }
+      });
     }
     async function pumpSpeech() {
       if (speech.busy) return;
@@ -1771,7 +1780,8 @@
         if (state.voiceId !== 'device' && window.ApexVoice) {
           await ApexVoice.load(state.voiceId);
           const tokens = item.chain ? ApexVoice.tokensFor(item.chain, ApexVoice.bank.style) : item.sysToken ? [item.sysToken] : null;
-          voiceBracket(true, duck);
+          const promptStyle = await voiceBracket(true, duck);
+          if (promptStyle !== 'normal') { voiceBracket(false); speech.busy = false; pumpSpeech(); return; }   // silent or a tone: skip the words
           try {
             // A call the bank can only voice by joining clips plays as one whole render when the
             // route-load prefetch has it; the join is the audible seam we are avoiding.
@@ -5419,6 +5429,7 @@
         // App sign-in finished in the native shell: keep the session token and redraw whatever shows account state.
         // the shell keeps the token in the Keychain and says signedIn (IDEAS Z-10); an older shell hands the token over
         if (msg && msg.type === 'session' && (msg.token || msg.signedIn)) { ApexSync.setSession(msg.token || true); toast('Signed in.'); location.reload(); }
+        if (msg && msg.type === 'promptStyle') { if (promptStyleWaiter) promptStyleWaiter(msg.style || 'normal'); return; }
         if (msg && msg.type === 'link' && msg.params) { openAppLink(msg.params); return; }
         if (msg && msg.type === 'gpx' && typeof msg.text === 'string') { openGpx(msg.text, msg.name); return; }
         // The phone joined CarPlay (IDEAS C-05): offer the drive, never start recording unasked.
