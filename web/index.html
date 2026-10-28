@@ -3576,6 +3576,24 @@
     if (!flag('apex.onboarded') && !window.APEX_EMBED && !['invite', 'crew', 'add', 'convoy', 'drive', 'play', 'at', 'theme'].some(k => params.has(k))) runOnboarding();
     else if (!flag('apex.onboarded')) flag('apex.onboarded', '1');
 
+    // An invite, crew, friend or convoy link opened in iPhone Safari: offer to open it in the app instead (apexnav://open?...).
+    // Only the link keys go across, and only values the app accepts; the app checks them again.
+    (() => {
+      const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      if (window.APEX_EMBED || !ios) return;
+      const q = new URLSearchParams();
+      for (const k of ['invite', 'crew', 'add', 'convoy']) { const v = params.get(k); if (v && /^[A-Za-z0-9._-]{1,200}$/.test(v)) q.set(k, v); }
+      if (![...q.keys()].length) return;
+      const bar = document.createElement('div');
+      bar.id = 'openInApp';
+      bar.style.cssText = 'position:fixed;left:50%;bottom:calc(76px + var(--safe-bottom, 0px));transform:translateX(-50%);z-index:40;display:flex;gap:12px;align-items:center;' +
+        'background:var(--panel);color:var(--panel-ink);border:1px solid var(--rule);padding:10px 14px;box-shadow:0 8px 24px rgba(0,0,0,.3);max-width:calc(100% - 32px)';
+      const a = document.createElement('a'); a.href = 'apexnav://open?' + q.toString(); a.textContent = 'Open in the ApexNav app'; a.style.cssText = 'color:var(--accent);font-weight:600;white-space:nowrap';
+      const x = document.createElement('button'); x.type = 'button'; x.textContent = '×'; x.setAttribute('aria-label', 'Stay in the browser'); x.className = 'linkbtn';
+      x.onclick = () => bar.remove();
+      bar.append(a, x); document.body.append(bar);
+    })();
+
     // =======================================================================
     // 11. NATIVE BRIDGE (ApexNavApp.swift pushes window.apex.live every 0.1 s)
     // =======================================================================

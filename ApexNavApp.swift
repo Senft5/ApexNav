@@ -72,6 +72,7 @@ struct ApexShellRootView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { shell.reloadIfWebContentDied() }
         }
+        .onOpenURL { shell.openLink($0) }
     }
 }
 
@@ -83,6 +84,18 @@ enum ApexWebBundle {
     /// file URLs, which silently broke the voice banks (every voice fell back to the device TTS).
     static let scheme = "apexnav"
     static let entryURL = URL(string: "\(scheme)://app/index.html")!
+
+    /// "Open in the app" links from the web (apexnav://open?invite=…): the page's own link parameters, and only those, carried
+    /// over to the cockpit page, which handles them exactly as it does on the web. Anything else opens the app as usual.
+    static let linkKeys: Set<String> = ["invite", "crew", "add", "convoy"]
+    static func entryURL(forLink url: URL) -> URL? {
+        guard url.scheme == scheme, url.host == "open",
+              let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems else { return nil }
+        let kept = items.filter { linkKeys.contains($0.name) && ($0.value ?? "").range(of: "^[A-Za-z0-9._-]{1,200}$", options: .regularExpression) != nil }
+        guard !kept.isEmpty, var comps = URLComponents(url: entryURL, resolvingAgainstBaseURL: false) else { return nil }
+        comps.queryItems = kept
+        return comps.url
+    }
 }
 
 /// Serves files from the bundled web/ folder for the apexnav:// scheme.
@@ -252,7 +265,7 @@ struct ApexCockpitWebView: UIViewRepresentable {
         webView.hideKeyboardAccessoryBar()
 
         shell.attach(webView: webView)
-        webView.load(URLRequest(url: ApexWebBundle.entryURL))
+        webView.load(URLRequest(url: shell.takePendingLink() ?? ApexWebBundle.entryURL))
         return webView
     }
 
@@ -415,6 +428,17 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
     func attach(webView: WKWebView) {
         self.webView = webView
         webReady = false
+    }
+
+    /// A link that arrived before the web view existed (the app was launched by it) waits here for the first load.
+    private var pendingLink: URL?
+    func takePendingLink() -> URL? { defer { pendingLink = nil }; return pendingLink }
+
+    func openLink(_ url: URL) {
+        guard let entry = ApexWebBundle.entryURL(forLink: url) else { return }
+        guard let wv = webView else { pendingLink = entry; return }
+        webDidStartLoading()
+        wv.load(URLRequest(url: entry))
     }
 
     func webDidStartLoading() {
