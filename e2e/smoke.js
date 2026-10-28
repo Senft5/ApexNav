@@ -373,6 +373,51 @@ flow('no signal: a hazard report waits on the phone and goes when the connection
   check(await page.evaluate(() => localStorage.getItem('apex.outbox')) === null, 'and gone from the phone');
 });
 
+flow('a saved stage: the live delta shows while you drive it and the result at the end (native frames, IDEAS D-05)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
+    window.webkit = { messageHandlers: { apex: { postMessage: () => {} } } }; });
+  await page.route('**/api/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && window.ApexStageDelta && window.ApexRecording);
+  // a winding road and a stored best pass over it, with the stage marked in the Log
+  await page.evaluate(async () => {
+    const Core = window.ApexCore, MPH = 2.2369362921, lat = [], lon = [];
+    let la = 35.6, lo = -83.9, h = 0;
+    for (let i = 0; i < 800; i++) { if (i > 100 && i < 700) h += 0.05 * Math.sin((i - 100) / 25);
+      la += 5 * Math.cos(h) / 110540; lo += 5 * Math.sin(h) / (111320 * Math.cos(35.6 * Math.PI / 180)); lat.push(la); lon.push(lo); }
+    const { kappa } = Core.computeCurvature(lat, lon);
+    const v = kappa.map((k) => Math.max(9, 22 - 300 * Math.abs(k))), latG = v.map((x, i) => x * x * kappa[i] / 9.80665);
+    const lonG = v.map((x, i) => (i ? (x * x - v[i - 1] ** 2) / 10 / 9.80665 : 0));
+    const prof = Core.profileRecording({ lat, lon, distance_m: lat.map((_, i) => i * 5), speed_mph: v.map((x) => x * MPH), lon_g: lonG, lat_g: latG });
+    await ApexRecording.store({ id: 'e2e_best', name: 'Esses run', date: '2026-10-20T15:00:00Z', lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: v, lon_g: lonG, lat_g: latG,
+      g_known: null, events: prof.events, elev: null, hz: 1 });
+    const a = 110, b = 690;
+    localStorage.setItem('apex.segments', JSON.stringify([{ id: 'seg_e2e', name: 'Esses', lat0: lat[a], lon0: lon[a], lat1: lat[b], lon1: lon[b], length_m: (b - a) * 5,
+      geom: JSON.stringify(Array.from({ length: 60 }, (_, k) => { const i = a + Math.round(k * (b - a) / 59); return [lat[i], lon[i]]; })) }]));
+    window.__road = { lat, lon, v, latG, lonG };
+  });
+  await page.evaluate(() => window.apex.onNative({ type: 'link', params: { go: 'drive' } }));
+  await page.waitForTimeout(300);
+  if (await page.isVisible('#permSheet.show')) await page.click('#permGo');
+  // drive the same road the same way, as the app's frames (half a bin apart), in bursts a second apart
+  let seenBar = false;
+  for (let burst = 0; burst < 10; burst++) {
+    await page.evaluate((burst) => {
+      const r = window.__road;
+      for (let j = burst * 160; j < Math.min(1600, (burst + 1) * 160); j++) {
+        const i = Math.min(799, Math.floor(j / 2)), f = (j % 2) / 2, k = Math.min(799, i + 1);
+        window.apex.live({ lat: r.lat[i] + (r.lat[k] - r.lat[i]) * f, lon: r.lon[i] + (r.lon[k] - r.lon[i]) * f, accuracy_m: 4, speed_mps: r.v[i], course_deg: 0,
+          lat_g: r.latG[i], lon_g: r.lonG[i], has_fix: true, calibration: 'locked' });
+      }
+    }, burst);
+    await page.waitForTimeout(1050);
+    if (!seenBar && await page.isVisible('#stageBar')) { seenBar = /Esses/.test(await page.textContent('#stageBar')); }
+  }
+  check(seenBar, 'the stage bar showed during the stage');
+  await page.waitForFunction(() => /Esses: (level with|\d+ points (up|down) on) your best/.test(document.getElementById('toast').textContent), null, { timeout: 4000 });
+  check(!(await page.isVisible('#stageBar')), 'the bar goes when the stage ends');
+});
+
 flow('the Log page opens', async (page, base) => {
   await page.goto(base + '/analysis.html');
   await page.waitForLoadState('load');

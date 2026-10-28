@@ -115,7 +115,7 @@ ideal drive and where to find time (#80), grip circle (#86), automatic mount cal
 | D-02 | Grip circle with the driver's own g-g envelope and per-corner grip use | H | M | done (#86) | RaceChrono, AiM |
 | D-03 | Live coaching on a known road: spoken "brake later" / "carry more speed" from your best pass | H | M | done (#100: technique tips only; speed tips stay on the analysis page by design) | STATE 2026-10-28, Garmin Catalyst |
 | D-04 | Ghost car on the map: your best pass (or a friend's shared ghost) as a moving marker with live delta | H | M | todo | SOCIAL §3, racing games, Strava Live Segments |
-| D-05 | Live delta bar during a known stage (green ahead / red behind your best, technique-scored, not speed-scored) | H | M | todo | Harry's Lap Timer |
+| D-05 | Live delta bar during a known stage (green ahead / red behind your best, technique-scored, not speed-scored) | H | M | done (web/stage_delta.js: on a stage you marked in the Log, each finished corner is scored as the Driver Score does and compared with your best pass over the same corners; the result is said at the end) | Harry's Lap Timer |
 | D-06 | Smoothness heatmap on the drive map (lateral jerk, abrupt inputs) with the three worst moments | M | S | done (#104) | Garmin Catalyst |
 | D-07 | Consistency score across passes of the same road, and a trend over weeks | M | S | done (#114 per-corner repeatability; monthly braking-consistency trend) | Strava fitness trend |
 | D-08 | Personal records feed: best Driver Score per road, per archetype, smoothest drive this month | M | S | partial (best Score per road by name, smoothest and best braking this month, this thread; per archetype todo) | Strava PRs |

@@ -28,6 +28,7 @@
   <script src="plain_notes.js"></script>
   <script src="hazard_reports.js"></script>
   <script src="outbox.js"></script>
+  <script src="stage_delta.js"></script>
   <script src="incident.js"></script>
   <script src="traffic.js"></script>
   <script src="in_car.js"></script>
@@ -390,6 +391,14 @@
     .hz-ask { position: absolute; left: 10px; right: 10px; bottom: calc(96px + var(--safe-bottom, 0px)); z-index: 6; display: flex; gap: 8px; align-items: center;
       background: var(--panel); color: var(--panel-ink); border: 1px solid var(--rule); padding: 10px; max-width: 460px; }
     .hz-ask[hidden] { display: none; }
+    /* Live delta on a saved stage (IDEAS D-05): technique against your best pass, never time. */
+    .stage-bar { position: absolute; left: 10px; bottom: 12px; z-index: 5; display: flex; gap: 10px; align-items: baseline;
+      background: var(--panel); color: var(--panel-ink); border: 1px solid var(--rule); border-left: 6px solid var(--panel-dim); padding: 8px 12px; max-width: 340px; }
+    .stage-bar[hidden] { display: none; }
+    .stage-bar span { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 150px; }
+    .stage-bar b { font-family: var(--font-num, inherit); font-size: 22px; }
+    .stage-bar small { color: var(--panel-dim); }
+    .stage-bar.ahead { border-left-color: #2e9e5b; } .stage-bar.behind { border-left-color: #d0453a; }
     .hz-ask span { flex: 1; font-weight: 700; }
     .hz-ask .key { min-height: 56px; }
     .hz-pin { font: 800 11px var(--font-ui, sans-serif); letter-spacing: 0.06em; padding: 2px 5px; border: 1.5px solid var(--signal, #c33); color: var(--signal, #c33); background: var(--panel, #fff); white-space: nowrap; }
@@ -565,6 +574,7 @@
           <button class="linkbtn" id="hzCancel">Cancel</button>
         </div>
       </div>
+      <div class="stage-bar" id="stageBar" role="status" aria-live="polite" hidden><span id="stageName"></span><b id="stageDelta">--</b><small id="stageCount"></small></div>
       <div class="hz-ask" id="hzAsk" role="alertdialog" aria-live="assertive" hidden><span id="hzAskText"></span><button class="key" id="hzStill">Still there</button><button class="key" id="hzGone">Gone</button></div>
       <div class="overlay dim" id="pinOverlay" role="dialog" aria-modal="true" aria-label="Dropped pin">
         <div class="card-sheet">
@@ -4023,6 +4033,36 @@
       liveAct.last = key; liveAct.at = now;
       activity('update', fields);
     }
+    // ---- live delta on your saved stages (IDEAS D-05; web/stage_delta.js) ----------------------------------------------
+    // Stages are the ones marked in the Log (apex.segments); the reference is your best-scoring pass among the drives here.
+    let stageWatch = null;
+    async function startStageWatch() {
+      stageWatch = null;
+      let segs = [];
+      try { segs = JSON.parse(localStorage.getItem('apex.segments') || '[]'); } catch (_) {}
+      if (!Array.isArray(segs) || !segs.length || !window.ApexStageDelta) return;
+      const drives = (await ApexRecording.all()).map((d) => ApexRecording.repair(Core, d)).filter((d) => Array.isArray(d.events));
+      const refs = [];
+      for (const seg of segs) {
+        const best = ApexStageDelta.best(drives.map((d) => ApexStageDelta.reference(Core, seg, d, ApexRecording.scorableCorners(d, ApexRecording.cornersOf(d)))));
+        if (best) refs.push(best);
+      }
+      if (refs.length && driveActive) stageWatch = { tracker: ApexStageDelta.createTracker(Core, refs), at: 0 };
+    }
+    function feedStage() {
+      const w = stageWatch, rows = drive.rec && drive.rec.rows;
+      if (!w || !rows || performance.now() - w.at < 1000) return;
+      w.at = performance.now();
+      const r = w.tracker.update(rows);
+      const bar = $('stageBar');
+      if (!r) { bar.hidden = true; return; }
+      bar.hidden = r.state === 'done';
+      $('stageName').textContent = r.name;
+      $('stageDelta').textContent = ApexStageDelta.label(r.delta);
+      $('stageCount').textContent = `${r.done}/${r.of} corners`;
+      bar.classList.toggle('ahead', r.delta > 0); bar.classList.toggle('behind', r.delta < 0);
+      if (r.state === 'done') toast(r.delta == null ? `${r.name} done.` : r.delta === 0 ? `${r.name}: level with your best.` : `${r.name}: ${Math.abs(r.delta)} points ${r.delta > 0 ? 'up on' : 'down on'} your best.`);
+    }
     async function enterDrive() {
       if (state.mode === 'live' && drive.sensors) return;
       if (state.mode === 'live' || driveActive) return;                                   // native app is feeding frames already or start is pending
@@ -4030,6 +4070,7 @@
       clearCarOffer();
       setPlaying(false);
       drive.rec = new ApexSensors.Recorder(); drive.status = { gps: 'waiting', motion: 'off', wake: 'off', message: '' }; drive.frames = 0;
+      startStageWatch();
       drive.live = null; drive.liveIdx = 0; drive.share = 'off'; drive.shareKm = 0; drive.shareErr = null; drive.roads = {}; drive.roadIdx = 0; drive.rest = null; breakSay = null; if (breakWorker) { breakWorker.terminate(); breakWorker = null; }
       if (NATIVE_SHELL) {   // the app's own GPS and IMU feed window.apex.live; no browser sensors to start
         drive.native = true;
@@ -4056,7 +4097,7 @@
             paintPerms();
             paintDriveStat();
           },
-          onFrame: (fr) => { if (!fr.has_fix) return; drive.frames++; recordFrame(fr); feedLive(); noteRoads(); noteRest(fr); window.apex.live(fr); paintDriveStat(); },
+          onFrame: (fr) => { if (!fr.has_fix) return; drive.frames++; recordFrame(fr); feedLive(); noteRoads(); noteRest(fr); feedStage(); window.apex.live(fr); paintDriveStat(); },
         });
         if (!driveActive || state.mode !== 'live') {
           sensors.stop();
@@ -4073,6 +4114,7 @@
     }
     async function leaveDrive(save) {
       driveActive = false;
+      stageWatch = null; $('stageBar').hidden = true;
       activity('end');
       const rec = drive.rec, sensors = drive.sensors, live = drive.live, road = rec && window.ApexRoadNames ? ApexRoadNames.mainRoad(drive.roads, rec.km * 1000) : null;
       drive.sensors = null; drive.rec = null; drive.live = null; drive.share = 'off'; drive.native = false;
@@ -4247,7 +4289,7 @@
         feedReported(frame); feedReaction(frame); feedCrash(frame);
         state.live = frame; state.liveAt = performance.now();
         if (drive.native && drive.rec) {
-          drive.frames++; recordFrame(frame); feedLive(); noteRoads(); noteRest(frame);
+          drive.frames++; recordFrame(frame); feedLive(); noteRoads(); noteRest(frame); feedStage();
           const gps = Number.isFinite(frame.accuracy_m) && frame.accuracy_m > ApexSensors.MAX_ACCURACY_M ? 'weak' : 'on';
           if (drive.status.gps !== gps) drive.status.gps = gps;
           const cal = typeof frame.calibration === 'string' ? frame.calibration : null;
