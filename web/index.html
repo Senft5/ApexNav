@@ -26,6 +26,8 @@
   <script src="instruments.js"></script>
   <script src="g2p.js"></script>
   <script src="voice.js"></script>
+  <script src="convoy.js"></script>
+  <script src="convoy_ui.js"></script>
   <script src="data/dry_ridge.js"></script>
   <script src="data/pebble_ridge.js"></script>
   <style>
@@ -735,6 +737,7 @@
       navigator.geolocation.watchPosition((p) => {
         const c = p.coords;
         state.lastPosition = { lat: c.latitude, lon: c.longitude }; state.lastPositionAt = performance.now();
+        state.lastMotion = { heading: Number.isFinite(c.heading) ? c.heading : null, speedMps: Number.isFinite(c.speed) ? c.speed : null };
         if (state.mode === 'live') return;   // a web drive feeds its own frames
         showIdleFix({ lat: c.latitude, lon: c.longitude, course_deg: Number.isFinite(c.heading) ? c.heading : NaN, speed_mps: Number.isFinite(c.speed) ? c.speed : 0 });
       }, () => {}, { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 });
@@ -2145,6 +2148,20 @@
       try { await navigator.clipboard.writeText(text); toast(ok); } catch (_) { window.prompt('Copy this link', text); }
     };
     const section = (title) => el('div', { className: 'stack-8' }, el('h3', { textContent: title }));
+    // Convoy (web/convoy_ui.js): a live group drive. The page lends it the map, the position, the voice and its helpers.
+    const convoy = window.ApexConvoyUI && window.ApexConvoy ? ApexConvoyUI.mount({
+      map, maplibregl, el, btn, toast, copyText, showView, apiFetch: ApexSync.apiFetch, overlayParent: $('toast').parentElement,
+      siteOrigin: () => (ApexSync.inApp ? ApexSync.apiBase : location.origin),
+      wsUrl: (id) => `${ApexSync.inApp ? ApexSync.apiBase.replace(/^http/, 'ws') : location.origin.replace(/^http/, 'ws')}/api/convoy/${encodeURIComponent(id)}/connect`,
+      getFix: () => {
+        const p = state.lastPosition;
+        if (!p || !state.lastPositionAt || performance.now() - state.lastPositionAt > 10000) return null;
+        const m = state.lastMotion || {};
+        return { lat: p.lat, lon: p.lon, heading: m.heading ?? null, speedMps: m.speedMps ?? null };
+      },
+      getRoute: () => (track && track.kind === 'route' && track.lat.length > 1 ? { name: track.name, pts: track.lat.map((la, i) => [la, track.lon[i]]) } : null),
+      speak: (text) => { if (state.toggles.voice) say(text, true); else toast(text); },   // hazards jump the queue
+    }) : null;
     const switchRow = (label, on, change) => { const b = el('button', { className: 'ink-btn' + (on ? ' on' : ''), textContent: `${label}: ${on ? 'On' : 'Off'}`, onclick: change }); b.setAttribute('aria-pressed', String(!!on)); return b; };
     let openCrewId = null;
     const crewNear = () => { if (state.lastPosition) return state.lastPosition; const c = map.getCenter(); return { lat: c.lat, lon: c.lng }; };
@@ -2205,6 +2222,7 @@
         btn('Invite someone', async () => { const r = await apiCall('POST', '/api/invites'); const j = await jsonOf(r); if (r.ok) copyText(j.url, 'Invite link copied. They\'ll be your friend the moment they join.'); else toast('Couldn\'t make an invite. Try again.'); }, 'ink-btn solid'),
         btn('Share my handle', () => copyText(`${location.origin}/?add=${me.handle}`, 'Link copied. Anyone who opens it can ask to be your friend.'))), invOut);
       body.append(you);
+      if (convoy) body.append(convoy.section());
 
       // friends: a side pop-up (owner decision), opened from the button under You; new requests light it up
       if (stash('apex.add')) friendsOpen = true;
@@ -2807,7 +2825,7 @@
       $('obAlt').onclick = () => { finish(); watchDryRidge(); };
       ob.classList.add('show'); paint(); $('obNext').focus();
     }
-    if (!flag('apex.onboarded') && !window.APEX_EMBED && !['invite', 'crew', 'add', 'drive', 'play', 'at', 'theme'].some(k => params.has(k))) runOnboarding();
+    if (!flag('apex.onboarded') && !window.APEX_EMBED && !['invite', 'crew', 'add', 'convoy', 'drive', 'play', 'at', 'theme'].some(k => params.has(k))) runOnboarding();
     else if (!flag('apex.onboarded')) flag('apex.onboarded', '1');
 
     // =======================================================================
@@ -2822,6 +2840,7 @@
       live(frame) {
         if (!frame || !frame.has_fix || !Number.isFinite(frame.lat) || !Number.isFinite(frame.lon)) return;
         state.lastPosition = { lat: frame.lat, lon: frame.lon }; state.lastPositionAt = performance.now();
+        state.lastMotion = { heading: Number.isFinite(frame.course_deg) ? frame.course_deg : null, speedMps: Number.isFinite(frame.speed_mps) ? frame.speed_mps : null };
         if (NATIVE_SHELL) feedAmbient(frame);
         if (NATIVE_SHELL && !driveActive) { showIdleFix(frame); return; }
         state.live = frame; state.liveAt = performance.now();
