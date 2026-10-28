@@ -568,7 +568,7 @@ flow("what's new: shown once after an update, not on a first install, not over a
   } finally { await fresh.close(); }
 }, { news: true });
 
-flow('crew drives: an upcoming drive shows in Crew with who is going; Going answers it; Plan a drive posts one (Worker stubbed, IDEAS S-06)', async (page, base) => {
+flow('crew drives: an upcoming drive shows in Crew with who is going; Going answers it; Plan a drive posts one; spots near you (Worker stubbed, IDEAS S-06, S-12)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   const posted = [];
   const starts = new Date(Date.now() + 26 * 3600e3).toISOString();
@@ -582,6 +582,8 @@ flow('crew drives: an upcoming drive shows in Crew with who is going; Going answ
       meet_name: 'Kroger lot', meet_lat: 35.76, meet_lon: -83.96, notes: null, going: 7, member: false, km: 12 }]);
     if (u.pathname === '/api/events') return json([{ id: 'EVT1AAAAAAAAAAAA', crew_id: 'CREW1', crew_name: 'Ridge Runners', title: 'Cherohala <i>Saturday</i>', starts_at: starts,
       meet_name: 'Tellico Shell', meet_lat: 35.36, meet_lon: -84.29, route_id: null, notes: null, by_handle: 'bob', mine: false, can_cancel: false, my_rsvp: mine, going: ['bob', 'cara'], maybe: 1 }]);
+    if (u.pathname === '/api/highlights' && m === 'GET') return json([{ id: 'HL1', name: 'Look Rock <b>view</b>', lat: 35.64, lon: -83.94, score: 4.5, ratings: 6, mine: false,
+      category: 'overlook', note: 'Best at sunset', visits: 9, my_stars: null }, { id: 'HL2', name: 'Bean Stop', lat: 35.75, lon: -83.97, score: 3.9, ratings: 2, mine: true, category: 'cafe' }]);
     if (m === 'POST') { posted.push([u.pathname, JSON.parse(route.request().postData() || 'null')]); return u.pathname.endsWith('/rsvp') ? (mine = 'going', route.fulfill({ status: 204 })) : json({ id: 'NEWEVTAAAAAAAAAA' }, 201); }
     if (m === 'GET') return json([]);
     return json({}, 404);
@@ -598,6 +600,17 @@ flow('crew drives: an upcoming drive shows in Crew with who is going; Going answ
   await page.click('.drive-card:not(.meet-card) button:has-text("Going")');
   await page.waitForFunction(() => document.querySelector('.drive-card:not(.meet-card) button[aria-pressed="true"]')?.textContent === 'Going');
   check(posted.some(([p, b]) => p === '/api/events/EVT1AAAAAAAAAAAA/rsvp' && b.status === 'going'), 'the answer was sent');
+  // spots near you (IDEAS S-12): best rated first, as text, filterable; a rating is sent
+  await page.waitForSelector('.spot-card');
+  const spots = await page.$$eval('.spot-card', (els) => els.map((e) => e.textContent));
+  check(spots.length === 2 && spots[0].includes('Look Rock <b>view</b>') && /4\.5★ \(6\) · Overlook · [\d.]+ km · 9 visited/.test(spots[0]) && spots[0].includes('Best at sunset'), 'the spots: ' + spots.join(' | '));
+  check(!/Report/.test(spots[1]) && !/5★/.test(spots[1]), 'no rating or report on your own spot');
+  await page.click('button:has-text("Café")');
+  check((await page.$$('.spot-card')).length === 1, 'the café filter');
+  await page.click('button:has-text("All")');
+  await page.click('button[aria-label="Rate Look Rock <b>view</b> 5 stars"]');
+  await page.waitForFunction(() => /Rated/.test(document.getElementById('toast').textContent));
+  check(posted.some(([p, b]) => p === '/api/highlights/HL1/rating' && b.stars === 5), 'the rating was sent');
   // plan one: map centre as the meeting point
   await page.click('button:has-text("Plan a drive")');
   await page.fill('input[aria-label="Drive name"]', 'Dragon run');
