@@ -196,12 +196,21 @@ export async function createInvite(env: Env, v: Viewer, req: Request): Promise<{
   return { token, url: `${origin(req, env)}/?invite=${token}` };
 }
 
+const REVIEW_INVITE_HASH = "3b614a849d85e285c92b440e079d8f36ec1fbb10a264064794785765cd07e4e3";
+
 export async function redeemInvite(env: Env, v: Viewer, req: Request): Promise<void> {
   const { token } = await body<{ token?: string }>(req);
   const hash = await sha256hex(str(token, "token", 10, 100));
   // someone the owner removed can't come back in, on anyone's invite (docs/BACKEND.md section 6)
   const BANNED = "EXISTS (SELECT 1 FROM bans b JOIN users u ON u.google_sub = b.google_sub WHERE u.id = ?1)";
   if (await env.DB.prepare(`SELECT 1 WHERE ${BANNED}`).bind(v.id).first()) throw new HttpError(403, "not_allowed");
+  // App Review (IDEAS O-12, guideline 2.1): one long-lived code, written only in App Store Connect's private review notes, lets
+  // a reviewer's fresh account in without anyone's invite. Only its sha256 is here; it makes no friendship and no inviter.
+  if (hash === (env.REVIEW_INVITE_HASH ?? REVIEW_INVITE_HASH)) {
+    await env.DB.prepare(`INSERT OR IGNORE INTO members (user_id, invited_by) SELECT ?1, NULL WHERE NOT ${BANNED}`).bind(v.id).run();
+    if (!(await env.DB.prepare("SELECT 1 FROM members WHERE user_id = ?").bind(v.id).first())) throw new HttpError(403, "not_allowed");
+    return;
+  }
   // one atomic step: only an unused, unexpired invite flips to used, and only then is the user made a member
   const used = await env.DB.prepare(
     "UPDATE invites SET used_by = ?1, used_at = datetime('now') WHERE token_hash = ?2 AND created_by != ?1 AND used_at IS NULL AND expires_at > datetime('now') RETURNING created_by",
