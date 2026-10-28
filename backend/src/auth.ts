@@ -175,6 +175,8 @@ export async function upsertGoogleUser(env: Env, sub: string, email: string, nam
   const found = await env.DB.prepare("SELECT id FROM users WHERE google_sub = ?").bind(sub).first<{ id: string }>();
   const id = found?.id ?? crypto.randomUUID();
   if (!found) await env.DB.prepare("INSERT INTO users (id, google_sub, email, display_name) VALUES (?, ?, ?, ?)").bind(id, sub, email, name).run();
+  // Google is the source of truth for both: a changed address or name reaches the export and OWNER_EMAIL (IDEAS Y-15).
+  else await env.DB.prepare("UPDATE users SET email = ?, display_name = ? WHERE id = ?").bind(email, name, id).run();
   if (env.OWNER_EMAIL && email.toLowerCase() === env.OWNER_EMAIL.toLowerCase()) {
     await env.DB.prepare(
       "INSERT INTO members (user_id) SELECT ? WHERE NOT EXISTS (SELECT 1 FROM members)",

@@ -10,6 +10,7 @@ migrations first. All of this is free on the Workers Free plan.
 |---|---|---|---|
 | D1 Time Travel | Cloudflare keeps every change; any minute can be restored in place | 7 days on Free (30 on Workers Paid) | automatic, restore by hand |
 | Weekly automatic copy | The Worker's cron (Mondays 07:00 UTC) dumps every table to the private `apexnav-backups` KV namespace (section 3a) | 8 weeks (last 8 copies) | automatic |
+| Daily sweep | The Worker's second cron (06:23 UTC daily, `backend/src/sweep.ts`) deletes expired sessions, app sign-in codes, unused account invites and crew invites; used invites stay (invite chains) | n/a | automatic |
 | Monthly export | `wrangler d1 export` writes the whole database as one `.sql` file | as long as the files are kept | owner, once a month and before risky work |
 | Bookmark before a migration | The Time Travel bookmark noted just before a hand-applied migration | 7 days | whoever applies the migration |
 

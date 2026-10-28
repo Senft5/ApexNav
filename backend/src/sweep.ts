@@ -1,0 +1,18 @@
+// Daily housekeeping (IDEAS Y-13): rows that expired and can never be used again are deleted, so D1 doesn't keep
+// them forever. Used account invites stay (they record who invited whom, which moderation reads as invite chains).
+import { Env } from "./util";
+
+export const SWEEPS: Record<string, string> = {
+  sessions: "DELETE FROM sessions WHERE expires_at <= datetime('now')",
+  app_auth_codes: "DELETE FROM app_auth_codes WHERE expires_at <= datetime('now')",
+  invites: "DELETE FROM invites WHERE used_at IS NULL AND expires_at <= datetime('now')",
+  crew_invites: "DELETE FROM crew_invites WHERE expires_at <= datetime('now')",
+};
+
+export async function sweepExpired(env: Env): Promise<Record<string, number>> {
+  const names = Object.keys(SWEEPS);
+  const res = await env.DB.batch(names.map((n) => env.DB.prepare(SWEEPS[n])));
+  const deleted = Object.fromEntries(names.map((n, i) => [n, res[i].meta.changes ?? 0]));
+  console.log(JSON.stringify({ event: "sweep", deleted }));
+  return deleted;
+}
