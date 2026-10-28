@@ -319,6 +319,7 @@ final class ApexScriptBridge: NSObject, WKScriptMessageHandler {
         var speechText: String?
         var interruptSpeech = false
         var speechStyle = "codriver"
+        var speechDuck = true                                   // IDEAS V-08: the page says when a line may play over the music
         if let text = body as? String {
             command = text
         } else if let dict = body as? [String: Any] {
@@ -326,10 +327,15 @@ final class ApexScriptBridge: NSObject, WKScriptMessageHandler {
             speechText = dict["text"] as? String
             interruptSpeech = (dict["force"] as? Bool) ?? false
             speechStyle = (dict["style"] as? String) ?? "codriver"
+            speechDuck = (dict["duck"] as? Bool) ?? true
         }
         guard let cmd = command else { return }
         if cmd == "speak", let phrase = speechText {
-            shell?.speakCoDriver(phrase, interrupt: interruptSpeech, style: speechStyle)
+            shell?.speakCoDriver(phrase, interrupt: interruptSpeech, style: speechStyle, duck: speechDuck)
+            return
+        }
+        if cmd == "voiceBegin" {
+            shell?.webVoiceBegin(duck: speechDuck)
             return
         }
         // The drive's Live Activity (IDEAS U-11): the page starts, updates and ends it.
@@ -548,8 +554,7 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
             startAppleSignIn()
             return
         case "voiceBegin":                                    // the web cockpit is about to play a voice clip
-            webVoiceActive = true
-            beginVoice()
+            webVoiceBegin(duck: true)
             return
         case "voiceEnd":
             webVoiceActive = false
@@ -1048,8 +1053,13 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         }
     }
 
-    func speakCoDriver(_ phrase: String, interrupt: Bool = false, style: String = "codriver") {
-        speak(phrase, interrupt: interrupt, style: style)
+    func speakCoDriver(_ phrase: String, interrupt: Bool = false, style: String = "codriver", duck: Bool = true) {
+        speak(phrase, interrupt: interrupt, style: style, duck: duck)
+    }
+
+    func webVoiceBegin(duck: Bool) {
+        webVoiceActive = true
+        beginVoice(duck: duck)
     }
 
     private static let robotVoiceNames = ["Zarvox", "Trinoids", "Fred", "Ralph", "Cellos"]
@@ -1107,13 +1117,15 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
     // voice clips (WebAudio) share this session and bracket themselves with voiceBegin / voiceEnd.
     private var webVoiceActive = false
 
-    private func configureVoiceSession() {
+    // IDEAS V-08: a low-priority line in cruise (a route or traffic phrase) plays over the music at its own level instead of
+    // ducking it; pace notes, hazards, directions and anything spirited duck. The page decides (ApexSpeechQueue.ducks).
+    private func configureVoiceSession(duck: Bool = true) {
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .voicePrompt,
-                                                         options: [.duckOthers, .interruptSpokenAudioAndMixWithOthers])
+                                                         options: duck ? [.duckOthers, .interruptSpokenAudioAndMixWithOthers] : [.mixWithOthers])
     }
 
-    private func beginVoice() {
-        configureVoiceSession()                                // WebKit may have changed the category for its own media
+    private func beginVoice(duck: Bool = true) {
+        configureVoiceSession(duck: duck)                      // WebKit may have changed the category for its own media
         try? AVAudioSession.sharedInstance().setActive(true)
     }
 
@@ -1122,13 +1134,13 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 
-    private func speak(_ phrase: String, interrupt: Bool = false, style: String = "codriver") {
+    private func speak(_ phrase: String, interrupt: Bool = false, style: String = "codriver", duck: Bool = true) {
         // AVSpeechSynthesizer queues utterances itself; only a forced call cuts in.
         // (The web cockpit decides which notes are still worth calling.)
         if interrupt && synth.isSpeaking {
             synth.stopSpeaking(at: .word)
         }
-        beginVoice()
+        beginVoice(duck: duck)
         let utterance = AVSpeechUtterance(string: phrase)
         let voice = Self.voice(for: style)
         utterance.voice = voice

@@ -182,7 +182,7 @@ adaptive notes (cruise vs spirited), car audio routing to Bluetooth/CarPlay (#73
 | V-05 | Phrases in the owner's voice (voice conversion), behind licences | M | L | owner (voice on hold) | docs/VOICE.md |
 | V-06 | Celebrity/character voice packs as cosmetic Octane rewards | M | M | todo | Waze voice packs |
 | V-07 | Voice commands: "report pothole", "skip this stage", "how far to the next stage" (Siri Shortcuts first) | M | M | todo | Waze, Google Assistant |
-| V-08 | Music ducking tuned per note priority; never duck for low-priority notes in cruise | L | S | todo | — |
+| V-08 | Music ducking tuned per note priority; never duck for low-priority notes in cruise | L | S | done: `ApexSpeechQueue.ducks`: hazards, pace notes, directions, lines you asked for and anything spirited duck; route and traffic phrases in cruise play over the music (`.mixWithOthers` in the shell) | — |
 | V-09 | Recce mode: drive slowly once, the co-driver writes your own notes for the road and reads them next time | H | L | todo | rally recce |
 | V-10 | Remove espeak-ng (GPL) from the voice path before charging | M | M | todo | docs/VOICE.md |
 | V-11 | Notes are due at the corner's entry (turn-in), not its apex: countdown, spoken call, lead distance and staleness all measure to `start_m` | H | S | done (this PR) | owner 2026-10-28 |
