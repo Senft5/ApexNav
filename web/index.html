@@ -1977,7 +1977,33 @@
     // Router calls counted for app health (Y-03): found, failed, and the fallback router used.
     async function valhallaRoutes(...a) { try { const r = await valhallaRoutesOnce(...a); health.bump('route_ok'); return r; } catch (e) { health.bump('route_fail'); throw e; } }
     async function osrmRoutes(...a) { const r = await osrmRoutesOnce(...a); health.bump('route_fallback'); return r; }
+    // Reported road closures (IDEAS Q-17; hazard_reports.js closuresFor): fetched around the trip for members, kept 5 min, and
+    // sent to the router as exclude_locations. If no way around them exists, the route is asked again without them.
+    const closureCache = { key: '', at: 0, list: [] };
+    async function closuresAround(points) {
+      const mid = points[Math.floor(points.length / 2)] || points[0];
+      if (!mid || !window.ApexSync) return [];
+      const key = `${mid.lat.toFixed(1)},${mid.lon.toFixed(1)}`;
+      if (closureCache.key !== key || performance.now() - closureCache.at > 300000) {
+        let list = [];
+        try {
+          const r = await ApexSync.apiFetch(`/api/hazards?lat=${mid.lat.toFixed(4)}&lon=${mid.lon.toFixed(4)}&km=50`, { method: 'GET' });
+          if (r.ok) list = await r.json();
+        } catch (_) { /* offline or signed out: no closures known */ }
+        Object.assign(closureCache, { key, at: performance.now(), list: Array.isArray(list) ? list : [] });
+      }
+      return ApexHazardReports.closuresFor(closureCache.list, points);
+    }
     async function valhallaRoutesOnce(points, throughRoadsOnly = false, alternates = 0, extra = {}) {
+      const excl = await closuresAround(points);
+      try { return await valhallaRoutesExcluding(points, throughRoadsOnly, alternates, extra, excl); }
+      catch (e) {
+        if (!excl.length) throw e;
+        toast('A reported road closure is in the way and there\'s no road around it. Check it before you go.');
+        return valhallaRoutesExcluding(points, throughRoadsOnly, alternates, extra, []);
+      }
+    }
+    async function valhallaRoutesExcluding(points, throughRoadsOnly, alternates, extra, excl) {
       // Loop waypoints snap only to through roads (tertiary..primary), never cul-de-sacs or motorways.
       const filter = { min_road_class: 'tertiary', max_road_class: 'primary', exclude_ramp: true };
       const json = await RouteLoading.json(`${VALHALLA}/route`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
@@ -1986,7 +2012,7 @@
           if (!end && p.shaping) return { lat: p.lat, lon: p.lon, type: 'through', radius: 25 };   // stay on the stage
           return { lat: p.lat, lon: p.lon, type: end ? 'break' : 'through', ...(throughRoadsOnly && !end ? { radius: 2500, search_filter: filter } : {}) };
         }),
-        ...FunRoute.costing(avoid), ...(alternates && points.length === 2 ? { alternates } : {}), ...extra }) });
+        ...FunRoute.costing(avoid), ...(alternates && points.length === 2 ? { alternates } : {}), ...(excl.length ? { exclude_locations: excl } : {}), ...extra }) });
       if (!json.trip) throw new Error(json.error || 'no route');
       return [json.trip, ...(json.alternates || []).map(a => a.trip).filter(Boolean)].map(routeOf);
     }

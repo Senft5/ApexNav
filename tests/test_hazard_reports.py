@@ -31,6 +31,10 @@ for (const m of [0, 150, 190, 210, 250, 290, 300]) seen.push(w.update(list, pos(
 out.passed = seen;
 const w2 = H.createPassWatch();
 out.mine = [190, 200, 300].map((m) => w2.update(list, pos(m), new Set(['ahead']))?.id ?? null);
+const cl = [{ kind: 'closure', lat: 35.65, lon: -83.9 }, { kind: 'closure', lat: 36.9, lon: -83.9 }, { kind: 'gravel', lat: 35.65, lon: -83.9 },
+  { kind: 'closure', lat: 35.61, lon: -83.95 }];
+out.closures = H.closuresFor(cl, [{ lat: 35.6, lon: -84.0 }, { lat: 35.7, lon: -83.8 }]);
+out.noPoints = H.closuresFor(cl, []);
 console.log(JSON.stringify(out));
 """
 
@@ -50,3 +54,9 @@ def test_calls_the_nearest_one_ahead_going_your_way(out):
 def test_asks_once_after_passing(out):
     assert out["passed"] == [None, None, None, None, None, "ahead", None]   # within 60 m at 190/210/250, 80 m behind at 290
     assert out["mine"] == [None, None, None]                                # never about your own report
+
+
+def test_closures_for_routing(out):
+    # inside the trip's box (widened 15 km), closures only, nearest the middle first; one 140 km away left out
+    assert out["closures"] == [{"lat": 35.65, "lon": -83.9}, {"lat": 35.61, "lon": -83.95}]
+    assert out["noPoints"] == []
