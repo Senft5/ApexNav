@@ -152,7 +152,7 @@ pace-note grammar, ALPR from DeFlock/OSM, reference-lap scoring and archetypes.
 | Q-06 | Durable upload queue that survives page navigation and app restarts (IndexedDB) | H | M | partial (road-queue, unintegrated) | WORKER_QUEUE road-1, road-queue |
 | Q-07 | End-to-end verification of open app → upload → profile → routing change on preview data | H | M | todo | WORKER_QUEUE road-4 |
 | Q-08 | Upload crest with the right sign and range (resolve crest semantics with the server's 0..3) | M | S | partial (#65) | ARCHITECTURE §1 |
-| Q-09 | Sight offset per corner from landcover (forest vs field) instead of a constant 4 m | M | M | todo | STATE 2026-10-25 (c) |
+| Q-09 | Sight offset per corner from landcover (forest vs field) instead of a constant 4 m | M | M | done for planned routes: the sightline clearance is per sample (Python and JS, parity-tested), from the map's landcover: grass, wetland, sand, rock, ice 12 m, farmland 6 m (crops grow tall), woods and unknown 4 m (`ApexStages.sightOffsets`). Checked live: Iowa farmland roads open up, the Smokies stay at 4 m. The drive exporter still uses 4 m | STATE 2026-10-25 (c) |
 | Q-10 | Surface type from vibration spectrum (asphalt, chip seal, concrete joints, gravel) | H | L | todo | ROAD_INTELLIGENCE §3.4 |
 | Q-11 | Wet/low-grip zones from repeated traction events and weather at the time | M | L | todo | Waze hazards |
 | Q-12 | Freshness: decay old measurements, flag repaved roads when a rough road suddenly reads smooth | M | M | todo | Waze, ROAD_INTELLIGENCE §4.3 |

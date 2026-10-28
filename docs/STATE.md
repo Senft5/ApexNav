@@ -2,7 +2,7 @@
 
 ## Session 2026-10-28 (late morning)
 - Merged: #193 F-06 offline data, D-23 drive tags, V-08 ducking, S-20 flyby; #194 S-11 monthly challenges, R-18 drag to reshape.
-- This PR: Y-14 segment ids that can't collide (and a taken old id resent under a new one), R-34 ramps are Connectors, A-03 PWA (manifest + network-first service worker, websites only), R-35 avoid cameras, D-20 your week, L-05 feedback (migration 0017 applied to both D1), Z-08 k-anonymity for road data, R-14 drop stage plans the router shortcut, S-08 local legends (days driven this month), U-16 landscape cockpit, S-15 friend profiles, S-07 kudos (migration 0018 applied to both D1), U-22 km or miles everywhere (Settings → Units), V-07 Siri shortcuts (start, report, end), U-21 route climb and hills in Preview, U-20 pinned places (phone only), S-17 which road was better (phone only), S-09 pioneer badges (migration 0019 applied to both D1), R-17 stops of the day, U-14 3D terrain, R-21 forecast along the route, R-22 conditional closures on the route card, U-19 search knows your stages and skips bike paths, O-07 referral Octane (migration 0020 applied to both D1), A-05 desk layout, V-09 recce notes.
+- This PR: Y-14 segment ids that can't collide (and a taken old id resent under a new one), R-34 ramps are Connectors, A-03 PWA (manifest + network-first service worker, websites only), R-35 avoid cameras, D-20 your week, L-05 feedback (migration 0017 applied to both D1), Z-08 k-anonymity for road data, R-14 drop stage plans the router shortcut, S-08 local legends (days driven this month), U-16 landscape cockpit, S-15 friend profiles, S-07 kudos (migration 0018 applied to both D1), U-22 km or miles everywhere (Settings → Units), V-07 Siri shortcuts (start, report, end), U-21 route climb and hills in Preview, U-20 pinned places (phone only), S-17 which road was better (phone only), S-09 pioneer badges (migration 0019 applied to both D1), R-17 stops of the day, U-14 3D terrain, R-21 forecast along the route, R-22 conditional closures on the route card, U-19 search knows your stages and skips bike paths, O-07 referral Octane (migration 0020 applied to both D1), A-05 desk layout, V-09 recce notes, Q-09 sight lines from landcover.
 - Exact next task: small IDEAS rows: S-17 which road was better, Q-14 coverage map; then U-22 left-hand traffic notes, Q-14 coverage, P-05 analysis in a Web Worker.
 
 ## Session 2026-10-28 (morning)
@@ -387,7 +387,7 @@ docs/SOCIAL.md.
 
 ### Active bugs / limitations
 - ~~Ramp loops (cloverleafs) read as "Switchbacks"~~: fixed by R-34 (edge use from map matching vetoes ramps) for profiles exported with limits.
-- Sight offset M is a constant 4 m; landcover (forest vs field) should set it per corner.
+- ~~Sight offset M is a constant 4 m~~: per sample from landcover on planned routes (Q-09); the drive exporter still uses 4 m.
 - Single-pass bumps are unverified (1 of 7 repeat); multi-pass store still to build.
 - Route scoring (archetypes/axes) exists only in Python; routes in the browser get corners,
   sight and envelope but no Stage DNA until the reference lap is ported to JS.

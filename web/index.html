@@ -790,8 +790,12 @@
       await RouteLoading.yieldToUI();
       const rs = Core.resamplePolyline(coords.map(c => c[1]), coords.map(c => c[0]), 5);
       const { kappa, ds } = Core.computeCurvature(rs.lat, rs.lon);
+      // what's beside the road (stages.js sightOffsets, IDEAS Q-09): open grass lets you see across a bend, woods don't;
+      // no tiles or a long trip: the cautious 4 m everywhere
+      let offsets = null;
+      try { offsets = window.ApexStages && ApexStages.sightOffsets ? await RouteLoading.optional(ApexStages.sightOffsets(rs.lat, rs.lon), 4000) : null; } catch (_) { offsets = null; }
       await RouteLoading.yieldToUI();
-      const sight = Core.sightDistanceM(rs.lat, rs.lon);
+      const sight = Core.sightDistanceM(rs.lat, rs.lon, null, offsets || undefined);
       await RouteLoading.yieldToUI();
       const env = Core.brakingEnvelopeMps(kappa, ds, null, null, undefined, sight);
       const dist = rs.lat.map((_, i) => i * 5);

@@ -139,6 +139,67 @@
     return pieces;
   }
 
+  // ---- what's beside the road, for sight lines (IDEAS Q-09) --------------------------------
+  // OpenMapTiles landcover classes → how far off the road's line a sightline may pass before something blocks it (m).
+  // Woods, buildings and anything unknown keep the cautious 4 m of core/road_dna.py; farmland only a little more (crops
+  // grow tall); open grass, wetland, sand, rock and ice let you see across the inside of a bend.
+  const SIGHT_OPEN_M = { grass: 12, wetland: 12, sand: 12, rock: 12, ice: 12, farmland: 6 };
+  const LANDCOVER_Z = 13, LANDCOVER_MAX_TILES = 48, landcoverTiles = new Map();   // decoded open-land polygons per tile, for the session
+  /** Even-odd point-in-polygon over all rings ([[lon, lat], ...]), so holes count as outside. */
+  function inRings(lon, lat, rings) {
+    let inside = false;
+    for (const r of rings) for (let i = 0, j = r.length - 1; i < r.length; j = i++) {
+      const [xi, yi] = r[i], [xj, yj] = r[j];
+      if ((yi > lat) !== (yj > lat) && lon < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) inside = !inside;
+    }
+    return inside;
+  }
+  /** Per-sample clearance from landcover polygons ([{ cls, rings, box }]); NaN (the default) where none covers the point. */
+  function offsetsFrom(lat, lon, polys) {
+    const out = new Array(lat.length).fill(NaN);
+    for (let i = 0; i < lat.length; i++) {
+      let best = NaN;
+      for (const p of polys) {
+        const o = SIGHT_OPEN_M[p.cls];
+        if (!o || (Number.isFinite(best) && best >= o)) continue;
+        if (lon[i] < p.box[0] || lon[i] > p.box[2] || lat[i] < p.box[1] || lat[i] > p.box[3]) continue;
+        if (inRings(lon[i], lat[i], p.rings)) best = o;
+      }
+      out[i] = best;
+    }
+    return out;
+  }
+  /** Clearances along a route from the map's landcover; null when it would need too many tiles or none could be read. */
+  async function sightOffsets(lat, lon) {
+    if (!lat || lat.length < 3) return null;
+    if (!tileUrl) tileUrl = (await Loading.json(TILEJSON)).tiles[0];
+    const tiles = new Set();
+    for (let i = 0; i < lat.length; i += 20) tiles.add(tileOf(lat[i], lon[i], LANDCOVER_Z).join('/'));
+    tiles.add(tileOf(lat[lat.length - 1], lon[lon.length - 1], LANDCOVER_Z).join('/'));
+    if (tiles.size > LANDCOVER_MAX_TILES) return null;
+    const polys = [];
+    let ok = 0;
+    await Promise.all([...tiles].map(async (k) => {
+      const [x, y] = k.split('/').map(Number);
+      try {
+        if (!landcoverTiles.has(k)) {
+          const buf = new Uint8Array(await Loading.arrayBuffer(tileUrl.replace('{z}', LANDCOVER_Z).replace('{x}', x).replace('{y}', y)));
+          const list = [];
+          for (const f of decodeLayer(buf, 'landcover', LANDCOVER_Z, x, y, 3)) {
+            if (!SIGHT_OPEN_M[f.props.class]) continue;
+            let b = [Infinity, Infinity, -Infinity, -Infinity];
+            for (const r of f.lines) for (const [x2, y2] of r) b = [Math.min(b[0], x2), Math.min(b[1], y2), Math.max(b[2], x2), Math.max(b[3], y2)];
+            list.push({ cls: f.props.class, rings: f.lines, box: b });
+          }
+          landcoverTiles.set(k, list);
+        }
+        polys.push(...landcoverTiles.get(k));
+        ok++;
+      } catch (_) { /* a missing tile: those samples keep the default */ }
+    }));
+    return ok ? offsetsFrom(lat, lon, polys) : null;
+  }
+
   // ---- towns along a route (avoid towns, R-15) ---------------------------------------
   // City, town and village points from the same tiles, at z11 (about 16 km a tile here): z9 and z10 thin villages out
   // in busy country (northern NJ: 11 of 79 at z9; Heidelberg: 62 of 73 at z10; all of them at z11). Tiles are those
@@ -533,5 +594,5 @@
     return pts;
   }
 
-  root.ApexStages = { decodeLayer, discover, nameStages, places, pois, addElevations, profile, fillProfile, climbM, stageDirection, terrarium, applyHighlights, plans, waypoints, strokes, bestWindow, roadPieces };
+  root.ApexStages = { decodeLayer, discover, nameStages, places, pois, addElevations, profile, fillProfile, climbM, sightOffsets, offsetsFrom, SIGHT_OPEN_M, stageDirection, terrarium, applyHighlights, plans, waypoints, strokes, bestWindow, roadPieces };
 })(typeof window !== 'undefined' ? window : globalThis);

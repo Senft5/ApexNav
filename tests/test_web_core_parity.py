@@ -518,3 +518,25 @@ def test_corner_marks_take_this_corners_braking_and_one_dip():
     assert da._marks(d2, 60, 79, 72)[1] == 71                  # a double dip: the first minimum's own bins, not the gap between
     flat = {"lon_g": lon, "speed_mps": [18.6, 18.5, 18.3, 18.2, 18.2, 18.3, 18.3, 18.3, 18.3, 18.4, 18.4, 18.8, 19.1] * 7}
     assert da._marks(flat, 2, 14, 5)[1] is None                # a plateau, not a dip: no slowest point
+
+
+SIGHT_RUNNER = r"""
+const core = require(process.argv[1]);
+const inp = JSON.parse(require('fs').readFileSync(0, 'utf8'));
+process.stdout.write(JSON.stringify(Array.from(core.sightDistanceM(inp.lat, inp.lon, null, inp.offsets.map((v) => (v === null ? NaN : v))))));
+"""
+
+
+def test_sight_with_per_sample_clearance_matches():
+    """IDEAS Q-09: a clearance per sample (wide beside fields, the default beside woods or where unknown) in both cores."""
+    lat, lon = path_from_legs([("straight", 200.0), ("arc", 120.0, 90.0), ("straight", 200.0), ("arc", 60.0, -120.0), ("straight", 200.0)])
+    n = len(lat)
+    offsets = [25.0 if 20 <= i < 80 else (None if i % 37 == 0 else 4.0) for i in range(n)]
+    out = subprocess.run([NODE, "-e", SIGHT_RUNNER, os.path.abspath("web/apex_core.js")],
+                         input=json.dumps({"lat": list(map(float, lat)), "lon": list(map(float, lon)), "offsets": offsets}),
+                         capture_output=True, text=True, check=True)
+    py = rd.sight_distance_m(lat, lon, None, np.array([np.nan if v is None else v for v in offsets]))
+    np.testing.assert_allclose(json.loads(out.stdout), py, atol=1e-9)
+    # an open field beside the first corner sees further there; the woods-only road sees less
+    woods = rd.sight_distance_m(lat, lon)
+    assert (py >= woods - 1e-9).all() and (py > woods + 1).any()
