@@ -331,6 +331,15 @@ final class ApexScriptBridge: NSObject, WKScriptMessageHandler {
             shell?.speakCoDriver(phrase, interrupt: interruptSpeech, style: speechStyle)
             return
         }
+        // A tap with a call (IDEAS U-09): light for a pace note, a warning pattern for a hazard.
+        if cmd == "haptic" {
+            if (body as? [String: Any])?["kind"] as? String == "hazard" {
+                UINotificationFeedbackGenerator().notificationOccurred(.warning)
+            } else {
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            }
+            return
+        }
         if let dict = body as? [String: Any], let id = (dict["id"] as? NSNumber)?.intValue {
             if cmd == "placeComplete", let q = dict["q"] as? String {
                 shell?.placeComplete(query: q, lat: (dict["lat"] as? NSNumber)?.doubleValue, lon: (dict["lon"] as? NSNumber)?.doubleValue, id: id)

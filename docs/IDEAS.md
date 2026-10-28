@@ -199,7 +199,7 @@ Today: accounts with Google sign-in, friends, crews (public and private, crews n
 | S-02 | Convoy client: create/join by code or QR, live positions, gap in time, leader hazard calls, regroup | H | L | done (#84, #89) | WORKER_QUEUE convoy-1..3, REVER, Waze |
 | S-03 | Friends' activity in the Log with rank on shared stages | H | M | todo | WORKER_QUEUE log-friends, Strava feed |
 | S-04 | Garage: car profile (mass, power, tyres, ride height), shareable car cards, no location | H | M | done (#98; ride height and grip numbers not yet) | SOCIAL §2.4, Drivetribe |
-| S-05 | Share a planned route (geometry + notes) to a friend or crew, never a recorded drive | H | M | todo | SOCIAL §2.5, Calimoto, Roadtrippers |
+| S-05 | Share a planned route (geometry + notes) to a friend or crew, never a recorded drive | H | M | done (this PR: Share on the route card to friends and crews, the shape without the first 400 m, 30 days; Crew → Routes shared with you → Open rebuilds the notes; migration 0012) | SOCIAL §2.5, Calimoto, Roadtrippers |
 | S-06 | Crew events: a planned drive with time, meeting point, route, RSVPs and a convoy that opens on the day | H | L | todo | Meetup, REVER rides, car clubs |
 | S-07 | Kudos and comments on shared drives and highlights | M | M | todo | Strava kudos |
 | S-08 | Local legends without speed: most passes of a stage this month, smoothest crew | M | S | todo | Strava Local Legends |
@@ -234,7 +234,7 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 | U-06 | Stages simplified: one list near you with your best and the leader, create from a drive in one step | H | M | partial (#77) | WORKER_QUEUE stages-1 |
 | U-07 | Glanceable cockpit: one number and one note readable at arm's length in sunlight | H | M | partial (drive bar: big Rec mileage, problems only; lead pace note 32 px distance, 21 px call, 56 px tulip) | car HMI guidelines |
 | U-08 | Motion design pass: route reveal, sheet springs, note transitions, under 200 ms, reduced-motion respected | M | M | partial (pace notes slide on in 160 ms when one is passed) | Apple Maps |
-| U-09 | Haptics on notes and hazards (subtle, configurable) | M | S | todo | Apple Maps turn haptics on Watch |
+| U-09 | Haptics on notes and hazards (subtle, configurable) | M | S | done (this PR: a light tap on each pace note, a warning pattern on hazards, via the shell's Taptic Engine; Haptics switch, on by default) | Apple Maps turn haptics on Watch |
 | U-10 | Home screen and lock screen widgets: nearby best stage, last drive score, crew event | M | M | todo | iOS widgets |
 | U-11 | Live Activity / Dynamic Island: next note, distance to stage, ETA | H | M | todo | Apple Maps, Uber |
 | U-12 | Apple Watch: next note as a tap on the wrist, drive summary | M | L | todo | Apple Maps on Watch |
@@ -332,8 +332,8 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 |---|---|---|---|---|---|
 | Z-01 | First and last km of every trip never leave the phone; trips cut on stops and gaps | H | M | done (#71; random 0.5–1.5 km per trip end since #139) | docs/SOCIAL.md §1 |
 | Z-02 | Privacy zones you draw (home, work) where nothing is ever recorded or shared | H | S | done (this PR: Settings → Privacy zones, 200 m/500 m/1 km circles at your position or the map centre, phone only; inside: no drive samples, road data stops, convoys get no position) | Strava privacy zones |
-| Z-03 | Privacy dashboard: what's on the phone, what was shared, delete my account and data | H | M | todo | GDPR/CCPA, App Store 5.1.1(v) |
-| Z-04 | Data export (drives as CSV/GPX, account JSON) | M | S | todo | GDPR portability |
+| Z-03 | Privacy dashboard: what's on the phone, what was shared, delete my account and data | H | M | done (this PR: Settings → Your data: what the phone holds and whether anything is on the server, download account data, delete drives, erase everything on this phone; account deletion stays in Crew) | GDPR/CCPA, App Store 5.1.1(v) |
+| Z-04 | Data export (drives as CSV/GPX, account JSON) | M | S | done (this PR: drives as one GPX file, account data as JSON) | GDPR portability |
 | Z-05 | Security review of auth, crew and convoy endpoints before launch | H | M | partial (#132, #135, audit 2026-10-28; Z-09 to Z-15 are what it left) | production readiness |
 | Z-06 | Convoy positions ephemeral, scoped to joined members, revoked on leave, never logged | H | S | partial (#84) | docs/CONVOY_TRANSPORT.md |
 | Z-07 | Privacy policy and terms written for real (and linked in the app and store) | H | S | owner (legal) | App Store requirement |
