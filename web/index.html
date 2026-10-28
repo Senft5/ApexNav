@@ -2320,7 +2320,8 @@
       speak: (text, urgent) => { if (!state.toggles.voice) toast(text); else if (urgent) say(text, true); else sayNext(text); },
     }) : null; } catch (e) { console.error('convoy', e); convoy = null; }   // the convoy never takes the page down
     // Garage (web/garage_ui.js): your cars, and the ones friends and crew-mates show.
-    const garage = window.ApexGarageUI ? ApexGarageUI.mount({ el, btn, toast, apiCall, jsonOf }) : null;
+    let garage = null;
+    try { garage = window.ApexGarageUI ? ApexGarageUI.mount({ el, btn, toast, apiCall, jsonOf }) : null; } catch (e) { console.error('garage', e); }
     const switchRow = (label, on, change) => { const b = el('button', { className: 'ink-btn' + (on ? ' on' : ''), textContent: `${label}: ${on ? 'On' : 'Off'}`, onclick: change }); b.setAttribute('aria-pressed', String(!!on)); return b; };
     let openCrewId = null;
     const crewNear = () => { if (state.lastPosition) return state.lastPosition; const c = map.getCenter(); return { lat: c.lat, lon: c.lng }; };
