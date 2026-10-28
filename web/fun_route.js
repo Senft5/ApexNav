@@ -165,7 +165,7 @@
       const timeS = picks.reduce((t, x) => t + x.p.timeS, 0) + (n - picks.length) * quickS / n;
       if (timeS > limit) return null;
       const score = legs.reduce((v, l) => v + l.s.score, 0);
-      return { legs, timeS, stageKm: legs.reduce((v, l) => v + l.s.km, 0), value: score - L.perMin * Math.max(0, timeS - quickS) / 60 };
+      return { legs, timeS, stageKm: legs.reduce((v, l) => v + l.s.km, 0), value: score + setList(legs) - L.perMin * Math.max(0, timeS - quickS) / 60 };
     };
     const out = [], seen = new Set();
     const add = (choice) => {
@@ -214,6 +214,19 @@
     const up = fwd ? s.elevB > s.elevA : s.elevA > s.elevB, technical = (s.tight || 0) / s.km >= TECH_PER_KM;
     return (technical ? up : !up) ? DIRECTION_BONUS * Math.max(0, s.score || 0) : 0;
   }
+  // Set list (IDEAS R-12, ROAD_INTELLIGENCE §7.2.5): with the same stages, the order that finishes on the most technical one
+  // is worth SET_FINISH of their value, and three max-TECH stages back to back (tight corners per km ≥ MAX_TECH_PER_KM) lose
+  // SET_FATIGUE of it: tiring is a safety issue. Builds and rests follow: the hardest comes last, the others before it.
+  const SET_FINISH = 0.04, SET_FATIGUE = 0.25, MAX_TECH_PER_KM = 2.5;
+  const techOf = (s) => (s && s.km > 0 ? (s.tight || 0) / s.km : 0);
+  function setList(legs) {
+    if (!legs || legs.length < 2) return 0;
+    const tech = legs.map(l => techOf(l.s)), total = legs.reduce((v, l) => v + Math.max(0, l.s.score || 0), 0);
+    let adjust = 0;
+    if (tech[tech.length - 1] >= Math.max(...tech) && Math.max(...tech) > Math.min(...tech)) adjust += SET_FINISH * total;
+    for (let i = 2; i < tech.length; i++) if (tech.slice(i - 2, i + 1).every(t => t >= MAX_TECH_PER_KM)) { adjust -= SET_FATIGUE * total; break; }
+    return adjust;
+  }
   const STAGE_KMH = 50;   // drive time on a stage itself (twisty roads; the router's own time replaces it once routed)
   /**
    * Plans of 1–2 shortlisted stages from the connector matrix (seconds; null = no road), each stage
@@ -242,7 +255,7 @@
       if (last == null) return;
       time += last;
       if (time > limit) return;
-      out.push({ legs: legs.map(({ s, fwd }) => ({ s, fwd })), timeS: time, stageKm, value: value - L.perMin * Math.max(0, time - quickestS) / 60 });
+      out.push({ legs: legs.map(({ s, fwd }) => ({ s, fwd })), timeS: time, stageKm, value: value + setList(legs) - L.perMin * Math.max(0, time - quickestS) / 60 });
     };
     for (let i = 0; i < n; i++) for (const fi of [true, false]) {
       consider([[i, fi]]);
@@ -331,7 +344,7 @@
         const back = D(row, home);
         if (back != null) {
           const total = stageKm + connector + back, err = Math.abs(total - target) / target;
-          if (err <= 0.25) out.push({ legs: legs.slice(), total, stageKm, value: score * (1 - err) - (connector + back) * by.perUnit, share: stageKm / total });
+          if (err <= 0.25) out.push({ legs: legs.slice(), total, stageKm, value: (score + setList(legs)) * (1 - err) - (connector + back) * by.perUnit, share: stageKm / total });
         }
       }
       if (legs.length === 3) return;
@@ -584,6 +597,6 @@
     return out;
   }
 
-  const api = { LEVELS, townKm, townCost, exploreShortlist, exploreTargets, explorePicks, distinctOptions, glare, glareCost, LOOP_BY_TIME, AVOID_DEFAULT, AVOID_LABELS, STAGE_KEPT, stageCoverage, keptStages, CAMERA_BOX_DEG, camerasToExclude, costing, unavoided, keepAvoiding, why, geometry, alongPoints, insertVia, loopValue, loopShortlist, loopPlansFromMatrix, score, shortlist, matrixPoints, plansFromMatrix, sectionCount, sectionPoints, combineSections, planKey, searchArea, waypoints, rank, along, kmBetween, directionBonus };
+  const api = { LEVELS, townKm, townCost, exploreShortlist, exploreTargets, explorePicks, distinctOptions, glare, glareCost, LOOP_BY_TIME, AVOID_DEFAULT, AVOID_LABELS, STAGE_KEPT, stageCoverage, keptStages, CAMERA_BOX_DEG, camerasToExclude, costing, unavoided, keepAvoiding, why, geometry, alongPoints, insertVia, loopValue, loopShortlist, loopPlansFromMatrix, score, shortlist, matrixPoints, plansFromMatrix, sectionCount, sectionPoints, combineSections, planKey, searchArea, waypoints, rank, along, kmBetween, directionBonus, setList, SET_FINISH, SET_FATIGUE, MAX_TECH_PER_KM };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexFunRoute = api;
 })(typeof window !== 'undefined' ? window : globalThis);

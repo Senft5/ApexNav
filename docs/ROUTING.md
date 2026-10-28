@@ -45,6 +45,10 @@ technical stage (1.2+ tight corners a km) climbed, a flowing one descended. Tigh
 more weight on the front tyres. The crow-fly fallback planner takes the better end when it costs at most 3 km more
 connector. No DEM: nothing changes (IDEAS R-11).
 
+Set list (IDEAS R-12): among plans with the same stages, the order that finishes on the most technical one (tight corners
+per km) gets 4% of their value, so a loop or a two-stage trip builds to its hardest road; three stages of 2.5+ tight
+corners per km back to back lose 25%, since tiring on hard roads is a safety issue (`FunRoute.setList`).
+
 ## Home by
 
 A loop's route card takes a **Home by** time (the next time it comes round; an hour or more ago means tomorrow). While the loop
