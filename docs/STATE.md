@@ -1,5 +1,9 @@
 # APEX NAV — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-10-28: web inspector off in release (Z-09)
+- #143: the iOS web view is inspectable only in DEBUG builds (Safari's Web Inspector could read the session token from a release IPA). The CI IPA is Release, so a phone trace through Web Inspector now needs a Debug build. (Q-23 landed separately in #147.)
+- Exact next task: the remaining audit rows (Z-10, Z-11, Z-15, Y-13 to Y-15).
+
 ## Session 2026-10-28: TestFlight uploads from CI
 - `build.yml` jobs `testflight-gate` + `testflight`: on main, after ApexKit and simulator tests pass, archive with automatic signing through an App Store Connect API key and upload (docs/TESTFLIGHT.md). Skipped with a run-summary note while any of `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8`, `APPLE_TEAM_ID` is missing. Build number = run number.attempt; `MARKETING_VERSION` 1.0 in project.yml; iPhone only; `ITSAppUsesNonExemptEncryption` NO. `build-ipa` unchanged.
 - First signed run (run 339, build 339.1): all four secrets present, archive with automatic signing succeeded, export failed with "Error Downloading App Information" (App Store Connect returned no app record for com.senft.ApexNav, or the key can't see it). A failed export now prints the IDEDistribution log's error lines.
