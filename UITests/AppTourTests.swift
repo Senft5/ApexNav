@@ -43,41 +43,62 @@ final class AppTourTests: XCTestCase {
         let a = XCTAttachment(screenshot: app.screenshot()); a.name = name; a.lifetime = .keepAlways; add(a)
     }
 
-    /// Every text field on every tab with the real keyboard up (review 2026-10-28): a screenshot of each, and the field must
-    /// sit above the keyboard. The workflow turns the simulator's hardware keyboard off so the on-screen one shows.
+    /// A tab by its label: buttons on the map page, links on the Log and Stages page.
+    private func tab(_ web: XCUIElement, _ name: String) -> XCUIElement {
+        web.descendants(matching: .any).matching(NSPredicate(format: "label == %@ AND (elementType == %d OR elementType == %d)",
+            name, XCUIElement.ElementType.button.rawValue, XCUIElement.ElementType.link.rawValue)).firstMatch
+    }
+
+    /// Every text field on every tab with the real keyboard up (review 2026-10-28): a screenshot of each, the field fully on
+    /// screen above the keyboard, and no tab bar while typing. The workflow turns the simulator's hardware keyboard off so the
+    /// on-screen one shows.
     func testKeyboard() throws {
         try XCTSkipUnless(ProcessInfo.processInfo.environment["APEX_TOUR"] == "1", "recorded tour only")
         let (app, web) = launch()
-        for tab in ["Map", "Log", "Stages", "Crew", "Settings"] {
-            let b = web.buttons[tab]
-            guard b.waitForExistence(timeout: 10) else { continue }
+        let types = [XCUIElement.ElementType.textField, .searchField, .textView, .secureTextField].map { NSNumber(value: $0.rawValue) }
+        for name in ["Map", "Log", "Stages", "Crew", "Settings"] {
+            let b = tab(web, name)
+            guard b.waitForExistence(timeout: 10) else { XCTFail("no \(name) tab"); continue }
             b.tap(); pause(2.5)
-            let fields = web.descendants(matching: .any).matching(NSPredicate(format: "elementType IN %@",
-                [XCUIElement.ElementType.textField.rawValue, XCUIElement.ElementType.searchField.rawValue, XCUIElement.ElementType.textView.rawValue].map { NSNumber(value: $0) }))
-            for i in 0..<min(fields.count, 12) {
+            let fields = web.descendants(matching: .any).matching(NSPredicate(format: "elementType IN %@", types))
+            var done = Set<String>()
+            for i in 0..<min(fields.count, 16) {
                 let f = fields.element(boundBy: i)
-                guard f.exists, f.isHittable else { continue }
+                guard f.exists else { continue }
+                var tries = 0
+                while !f.isHittable && tries < 6 { web.swipeUp(velocity: .slow); pause(0.6); tries += 1 }
+                guard f.isHittable else { continue }
                 let label = [f.label, f.placeholderValue ?? ""].first { !$0.isEmpty } ?? "field \(i)"
+                guard !done.contains(label) else { continue }
+                done.insert(label)
                 f.tap(); pause(1.5)
                 let kb = app.keyboards.firstMatch
                 if kb.exists {
-                    XCTAssertLessThanOrEqual(f.frame.maxY, kb.frame.minY + 1, "\(tab) · \(label): the field is under the keyboard")
+                    let screen = app.frame
+                    XCTAssertGreaterThanOrEqual(f.frame.minY, screen.minY - 1, "\(name) · \(label): the field went off the top")
+                    XCTAssertLessThanOrEqual(f.frame.maxY, kb.frame.minY + 1, "\(name) · \(label): the field is under the keyboard")
+                    let bar = tab(web, name)
+                    XCTAssertFalse(bar.exists && bar.isHittable && bar.frame.maxY <= kb.frame.minY, "\(name) · \(label): the tab bar shows while typing")
+                } else {
+                    XCTFail("\(name) · \(label): no keyboard")
                 }
-                shot(app, "\(tab) · \(label)")
-                // put the keyboard away without submitting: tap the very top of the screen
-                app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.04)).tap(); pause(1)
+                shot(app, "\(name) · \(label)")
             }
+            // put the keyboard away without submitting, then back to the top of the page
+            if app.keyboards.firstMatch.exists { app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.04)).tap(); pause(1) }
+            for _ in 0..<6 { web.swipeDown(velocity: .fast) }
         }
     }
 
     func testTour() throws {
         try XCTSkipUnless(ProcessInfo.processInfo.environment["APEX_TOUR"] == "1", "recorded tour only")
         let (app, web) = launch()
-        for tab in ["Log", "Stages", "Crew", "Settings"] {
-            let b = web.buttons[tab]
+        for name in ["Log", "Stages", "Crew", "Settings"] {
+            let b = tab(web, name)
             if b.waitForExistence(timeout: 10) { b.tap(); pause(2.5); scroll(app, times: 5) }
         }
-        if web.buttons["Map"].exists { web.buttons["Map"].tap(); pause(2) }
+        let map = tab(web, "Map")
+        if map.waitForExistence(timeout: 10) { map.tap(); pause(2) }
         // plan a route by search (the simulator's location is the start)
         let search = web.searchFields.firstMatch
         if search.waitForExistence(timeout: 10) {

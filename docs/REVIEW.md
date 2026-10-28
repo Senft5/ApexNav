@@ -36,6 +36,7 @@ Severity: **S1** wrong or unsafe (App Review risk, a lie on screen), **S2** look
 | 16 | road book strip, next boxes | "LEFT 4 P…" in the smaller boxes | S3 | Long calls there wrap at a smaller size |
 | 17 | hazard sheet | Titled "Report ahead of others" | S3 | "Report a hazard" · "Drivers coming this way get a warning." |
 | 18 | CarPlay bridge (new, caught in review before merge) | Turn-now directions and crests share the urgent speech lane with hazards, so the car would have shown every turn as a hazard alert | S1 | Only member, reported and convoy hazards alert the car (`alert: true`), tested |
+| 19 | keyboard, in the app (simulator run 1) | The web-only fix (#3) didn't work in the app: WKWebView still panned the Where to? field off the top and the tab bar stayed above the keyboard; the check only looked under the keyboard | S1 | The shell undoes the pan and tells the page how much the keyboard covers (`keyboardMoved`, `ApexKeyboard.native`); `testKeyboard` now also fails on a field off the top or a tab bar while typing, and reaches every tab (the Log page's tabs are links) |
 
 ## Audio
 

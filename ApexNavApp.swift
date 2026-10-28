@@ -492,7 +492,44 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
     func attach(webView: WKWebView) {
         self.webView = webView
         webReady = false
+        observeKeyboard(webView)
         UIDevice.current.isBatteryMonitoringEnabled = true   // the battery level in each frame (IDEAS P-01): what an hour of driving costs
+    }
+
+    // MARK: The on-screen keyboard (review 2026-10-28)
+    // WKWebView lays the keyboard over the page and pans its scroll view to show the focused field, even with scrolling off,
+    // which pushed the plan sheet's own search field off the top. The pan is undone, and the page is told how much of it the
+    // keyboard covers (web/keyboard.js), so it hides the tab bar and fits itself above the keyboard.
+    private var keyboardObservers: [NSObjectProtocol] = []
+    private var offsetObservation: NSKeyValueObservation?
+
+    private func observeKeyboard(_ wv: WKWebView) {
+        keyboardObservers.forEach { NotificationCenter.default.removeObserver($0) }
+        let nc = NotificationCenter.default
+        keyboardObservers = [
+            nc.addObserver(forName: UIResponder.keyboardWillChangeFrameNotification, object: nil, queue: .main) { [weak self] note in
+                let end = (note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue)?.cgRectValue ?? .zero
+                MainActor.assumeIsolated { self?.keyboardMoved(to: end) }
+            },
+            nc.addObserver(forName: UIResponder.keyboardWillHideNotification, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.keyboardMoved(to: .zero) }
+            },
+        ]
+        offsetObservation = wv.scrollView.observe(\.contentOffset, options: [.new]) { sv, _ in
+            guard sv.contentOffset != .zero else { return }
+            DispatchQueue.main.async { sv.setContentOffset(.zero, animated: false) }
+        }
+    }
+
+    private func keyboardMoved(to frame: CGRect) {
+        guard let wv = webView else { return }
+        var covered: CGFloat = 0
+        if let window = wv.window, !frame.isEmpty {
+            let mine = wv.convert(wv.bounds, to: nil), kb = window.convert(frame, from: nil)   // both in window coordinates
+            covered = max(0, mine.maxY - kb.minY)
+        }
+        wv.scrollView.setContentOffset(.zero, animated: false)
+        wv.evaluateJavaScript("window.ApexKeyboard && window.ApexKeyboard.native && window.ApexKeyboard.native(\(Int(covered.rounded()))); void 0;", completionHandler: nil)
     }
 
     /// A link that arrived before the web view existed (the app was launched by it) waits here for the first load.

@@ -20,23 +20,30 @@
   root.ApexKeyboard = api;
 
   const vv = root.visualViewport, doc = root.document, html = doc.documentElement;
-  if (!vv) return;
+  // In the app the shell says how many px the keyboard covers (ApexNavApp.swift keyboardMoved): the web view neither resizes
+  // nor reports it reliably there. In a browser, the visual viewport tells.
+  let nativeCover = null;
+  api.native = (px) => { nativeCover = Number.isFinite(px) && px >= 0 ? px : null; soon(); };
   let raf = 0;
   function update() {
     raf = 0;
-    const open = keyboardOpen(root.innerHeight, vv.height, doc.activeElement);
+    const active = doc.activeElement;
+    const open = nativeCover != null ? isText(active) && nativeCover > 120 : !!vv && keyboardOpen(root.innerHeight, vv.height, active);
+    const above = nativeCover != null ? root.innerHeight - nativeCover : vv ? vv.height : root.innerHeight;
     html.classList.toggle('kb-open', open);
     if (open) {
-      html.style.setProperty('--kb-h', `${Math.round(vv.height)}px`);
+      html.style.setProperty('--kb-h', `${Math.round(above)}px`);
       // the page itself never scrolls: undo iOS's pan and bring the field into view inside its own scroller instead
-      if (root.scrollY || vv.offsetTop) root.scrollTo(0, 0);
-      const el = doc.activeElement, r = el.getBoundingClientRect();
-      if (r.bottom > vv.height - 8 || r.top < 0) el.scrollIntoView({ block: 'center' });
+      if (root.scrollY || (vv && vv.offsetTop)) root.scrollTo(0, 0);
+      // after the page has refitted, bring the field into view inside its own scroller
+      root.requestAnimationFrame(() => {
+        const r = active.getBoundingClientRect();
+        if (r.bottom > above - 8 || r.top < 0) active.scrollIntoView({ block: 'center' });
+      });
     } else html.style.removeProperty('--kb-h');
   }
-  const soon = () => { if (!raf) raf = root.requestAnimationFrame(update); };
-  vv.addEventListener('resize', soon);
-  vv.addEventListener('scroll', soon);
+  function soon() { if (!raf) raf = root.requestAnimationFrame(update); }
+  if (vv) { vv.addEventListener('resize', soon); vv.addEventListener('scroll', soon); }
   doc.addEventListener('focusin', () => root.setTimeout(soon, 60));
   doc.addEventListener('focusout', () => root.setTimeout(soon, 60));
 })(typeof window !== 'undefined' ? window : globalThis);
