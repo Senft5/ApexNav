@@ -11,11 +11,11 @@ import {
 } from "./social";
 import { deleteAccount, exportMyData } from "./account";
 import { carCreate, carDelete, carUpdate, myCars, peoplesCars } from "./garage";
-import { block, blockList, isModerator, moderationQueue, moderationResolve, report, unblock } from "./safety";
+import { block, blockList, fileReport, isModerator, moderationQueue, moderationResolve, report, unblock } from "./safety";
 import { contribute, setContribute } from "./contribute";
 import { pointsFor } from "./points";
 import { roadBins } from "./roads";
-import { highlightCreate, highlightDelete, highlightList, highlightRate, highlightReport } from "./highlights";
+import { highlightCreate, highlightDelete, highlightList, highlightRate } from "./highlights";
 export { ConvoyIndex, ConvoyRoom } from "./convoy";
 import { segmentAdopt, segmentCreate, segmentDelete, segmentList, segmentShare, segmentsSharedWithMe } from "./segments";
 
@@ -42,8 +42,9 @@ on("GET", "/api/me", async (req, env) => {
 });
 on("POST", "/api/invites/redeem", async (req, env) => { await redeemInvite(env, await requireUser(req, env), req); return noContent(); });
 on("POST", "/api/invites", async (req, env) => json(await createInvite(env, await requireMember(req, env), req), 201));
-on("GET", "/api/me/export", async (req, env) => json(await exportMyData(env, await requireMember(req, env))));
-on("DELETE", "/api/me", async (req, env) => deleteAccount(env, await requireMember(req, env), req));
+// Signed in is enough to take your data or close your account, member or not (someone removed by the owner keeps both rights).
+on("GET", "/api/me/export", async (req, env) => json(await exportMyData(env, await requireUser(req, env))));
+on("DELETE", "/api/me", async (req, env) => deleteAccount(env, await requireUser(req, env), req));
 on("PUT", "/api/me/handle", async (req, env) => { await setHandle(env, await requireMember(req, env), req); return noContent(); });
 
 on("PUT", "/api/me/contribute", async (req, env) => { await setContribute(env, await requireMember(req, env), req); return noContent(); });
@@ -92,7 +93,11 @@ on("POST", "/api/segments/:id/share", async (req, env, m) => { await segmentShar
 on("POST", "/api/highlights", async (req, env) => json(await highlightCreate(env, await requireMember(req, env), req), 201));
 on("GET", "/api/highlights", async (req, env) => json(await highlightList(env, await requireMember(req, env), new URL(req.url))));
 on("POST", "/api/highlights/:id/rating", async (req, env, m) => { await highlightRate(env, await requireMember(req, env), m.groups!.id, req); return noContent(); });
-on("POST", "/api/highlights/:id/report", async (req, env, m) => { await highlightReport(env, await requireMember(req, env), m.groups!.id, req); return noContent(); });
+on("POST", "/api/highlights/:id/report", async (req, env, m) => {   // older route: same rules as POST /api/reports
+  const v = await requireMember(req, env), b = await body<{ note?: unknown } | null>(req);
+  await fileReport(env, v, { kind: "highlight", target: m.groups!.id, reason: "other", note: b && typeof b === "object" ? b.note : undefined });
+  return noContent();
+});
 on("DELETE", "/api/highlights/:id", async (req, env, m) => { await highlightDelete(env, await requireMember(req, env), m.groups!.id); return noContent(); });
 
 on("POST", "/api/board", async (req, env) => json(await publish(env, await requireMember(req, env), req)));

@@ -2,7 +2,7 @@
 // A car card carries no location or drive data. Nothing is shown to anyone until its owner switches `shared` on.
 import type { Viewer } from "./auth";
 import { Env, HttpError, body } from "./util";
-import { reportedSql } from "./safety";
+import { removedSql, reportedSql } from "./reports_sql";
 
 const MAX_CARS = 10;
 // Controls, format characters (bidi marks and overrides, zero-width), surrogates and private use; ZWJ stays for emoji.
@@ -81,6 +81,7 @@ export async function carCreate(env: Env, v: Viewer, req: Request): Promise<{ id
 /** Owner only: replaces the card. Making it primary unmarks the others. */
 export async function carUpdate(env: Env, v: Viewer, id: string, req: Request): Promise<void> {
   const c = parseCar(await body(req));
+  if (c.shared && (await env.DB.prepare(`SELECT 1 WHERE ${removedSql("car", "?1")}`).bind(id).first())) throw new HttpError(403, "removed_by_moderator");
   // Primary moves by choosing another car, never to none: an edit keeps whatever the row holds now (not a stale read).
   const res = await env.DB.batch([
     ...(c.is_primary ? [env.DB.prepare("UPDATE cars SET is_primary = 0 WHERE owner = ?1 AND id != ?2 AND EXISTS (SELECT 1 FROM cars WHERE id = ?2 AND owner = ?1)").bind(v.id, id)] : []),

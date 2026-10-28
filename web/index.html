@@ -2547,6 +2547,9 @@
         if (inviteFromLink || crewFromLink || addFromLink) { showView('crew'); }
         return;
       }
+      // Anyone signed in can take their data or close the account, member or not.
+      const downloadMyData = async () => { const r = await apiCall('GET', '/api/me/export'); const blob = new Blob([JSON.stringify(await r.json(), null, 2)], { type: 'application/json' }); const a = el('a', { href: URL.createObjectURL(blob), download: 'apexnav-my-data.json' }); a.click(); };
+      const deleteMyAccount = async () => { if (prompt('This erases your account, friends, shared results and spots from the server. Type DELETE to confirm.') === 'DELETE') { await apiCall('DELETE', '/api/me', { confirm: 'DELETE' }); redo(); } };
       if (!me.member) {
         const inp = el('input', { className: 'field', placeholder: 'Paste your invite', value: stash('apex.invite'), autocomplete: 'off', 'aria-label': 'Invite' });
         const join = async () => {
@@ -2555,7 +2558,8 @@
           if (r.ok) { unstash('apex.invite'); toast('You\'re in. You and the person who invited you are now friends.'); redo(); } else toast('That invite didn\'t work. Ask for a new one.');
         };
         body.append(el('h3', { textContent: 'Join with an invite' }), el('p', { className: 'note', textContent: 'ApexNav is invite-only. Paste your invite.' }), el('div', { className: 'row' }, inp, btn('Join', join, 'ink-btn solid')),
-          btn('Sign out', async () => { await apiCall('POST', '/api/auth/logout'); ApexSync.setSession(null); redo(); }, 'linkbtn'));
+          el('div', { className: 'row' }, btn('Sign out', async () => { await apiCall('POST', '/api/auth/logout'); ApexSync.setSession(null); redo(); }, 'linkbtn'),
+            btn('Download my data', downloadMyData, 'linkbtn'), btn('Delete account', deleteMyAccount, 'danger-btn')));
         if (stash('apex.invite')) join();
         return;
       }
@@ -2748,9 +2752,9 @@
       body.append(dsec);
       const asec = section('Account');
       asec.append(el('div', { className: 'row' },
-        btn('Download my data', async () => { const r = await apiCall('GET', '/api/me/export'); const blob = new Blob([JSON.stringify(await r.json(), null, 2)], { type: 'application/json' }); const a = el('a', { href: URL.createObjectURL(blob), download: 'apexnav-my-data.json' }); a.click(); }),
+        btn('Download my data', downloadMyData),
         btn('Sign out', async () => { await apiCall('POST', '/api/auth/logout'); ApexSync.setSession(null); redo(); })),
-        btn('Delete account', async () => { if (prompt('This erases your account, friends, shared results and spots from the server. Type DELETE to confirm.') === 'DELETE') { await apiCall('DELETE', '/api/me', { confirm: 'DELETE' }); redo(); } }, 'danger-btn'));
+        btn('Delete account', deleteMyAccount, 'danger-btn'));
       body.append(asec);
       if (safety) { body.append(safety.blockedSection()); if (me.moderator) body.append(safety.moderationSection()); }
     }

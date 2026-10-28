@@ -190,9 +190,11 @@ export async function createInvite(env: Env, v: Viewer, req: Request): Promise<{
 export async function redeemInvite(env: Env, v: Viewer, req: Request): Promise<void> {
   const { token } = await body<{ token?: string }>(req);
   const hash = await sha256hex(str(token, "token", 10, 100));
+  // someone the owner removed can't come back in, on anyone's invite (docs/BACKEND.md section 6)
+  if (await env.DB.prepare("SELECT 1 FROM bans WHERE user_id = ?").bind(v.id).first()) throw new HttpError(403, "not_allowed");
   // one atomic step: only an unused, unexpired invite flips to used, and only then is the user made a member
   const used = await env.DB.prepare(
-    "UPDATE invites SET used_by = ?, used_at = datetime('now') WHERE token_hash = ? AND used_at IS NULL AND expires_at > datetime('now') RETURNING created_by",
+    "UPDATE invites SET used_by = ?1, used_at = datetime('now') WHERE token_hash = ?2 AND created_by != ?1 AND used_at IS NULL AND expires_at > datetime('now') RETURNING created_by",
   ).bind(v.id, hash).first<{ created_by: string }>();
   if (!used) throw new HttpError(400, "invalid_invite");
   await env.DB.prepare("INSERT OR IGNORE INTO members (user_id, invited_by) VALUES (?, ?)").bind(v.id, used.created_by).run();

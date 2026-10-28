@@ -2,7 +2,7 @@
 // takes a user id for "whose data to read". Privacy rules (docs/BACKEND.md section 11) are enforced here and tested.
 import { Env, HANDLE_RE, HttpError, body, num, pair, randomToken, sha256hex, sqlTime, str } from "./util";
 import type { Viewer } from "./auth";
-import { reportedSql } from "./safety";
+import { removedSql, reportedSql } from "./reports_sql";
 
 const run = (env: Env, sql: string, ...args: unknown[]) => env.DB.prepare(sql).bind(...args).run();
 const all = async <T>(env: Env, sql: string, ...args: unknown[]) => (await env.DB.prepare(sql).bind(...args).all<T>()).results;
@@ -111,6 +111,7 @@ export async function crewUpdate(env: Env, v: Viewer, crewId: string, req: Reque
   if (!crew || crew.owner !== v.id) throw new HttpError(404, "no_crew");
   const b = await body<CrewBody>(req);
   const set = crewSettings(b), name = b.name === undefined ? crew.name : str(b.name, "name", 2, 40);
+  if (set.visibility === "public" && (await first(env, `SELECT 1 WHERE ${removedSql("crew", "?1")}`, crewId))) throw new HttpError(403, "removed_by_moderator");
   await run(env, "UPDATE crews SET name = ?, visibility = ?, about = ?, area_name = ?, area_lat = ?, area_lon = ? WHERE id = ?",
     name, set.visibility, set.about, set.area_name, set.area_lat, set.area_lon, crewId);
 }
