@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-+3TUkTRhN6racQmVb3EG2MIe1Wmam67KQ4xpjsZitx0=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-4Dd6BALBbkolxqSPV+9Iq7J5Y4Uws7hsxkQP2Msyxkg=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>ApexNav</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -19,6 +19,7 @@
   <script src="apex_core.js"></script>
   <script src="analysis_client.js"></script>
   <script src="driving_side.js"></script>
+  <script src="crew_standings.js"></script>
   <script src="route_loading.js"></script>
   <script src="stages.js"></script>
   <script src="fun_route.js"></script>
@@ -793,6 +794,33 @@
       };
     }
 
+    /** A detected corner as a route's note event (5 m samples). */
+    function cornerEventOf(c, lat, lon, dist) {
+      const t = Core.paceNoteText(c);
+      return { type: 'corner', code: t.code, call: t.call, index: c.apex, dist_m: dist[c.apex], lat: lat[c.apex], lon: lon[c.apex],
+               start_m: dist[c.start], end_m: dist[c.end], radius_m: c.radius_m, apex_mph: c.apex_mps * MPH, dir: c.dir,
+               severity: c.severity, grade: c.grade, shape: c.shape, caution: c.caution, turn_rad: Math.abs(c.turn_rad), mods: c.mods };
+    }
+    /**
+     * Corners from members' driven paths (IDEAS Q-04): where the crowd measured the curvature (2+ passes, 30 m runs) it
+     * replaces the map's, and the route's corner notes and braking envelope are worked out again. Not during a drive (the
+     * notes ahead would jump); the route says how much of it was corrected. Returns true when anything changed.
+     */
+    function applyCrowdCurvature(t, m) {
+      if (!t || t.kind !== 'route' || !m || !Array.isArray(m.crowdK) || !Array.isArray(t.kappa) || t.crowdCorrected != null) return false;
+      const { kappa, replaced } = Core.blendCurvature(t.kappa, m.crowdK, m.crowdKn || []);
+      t.crowdCorrected = replaced * 5;
+      if (!replaced) return false;
+      const ds = new Float64Array(kappa.length).fill(5), sight = Float64Array.from(t.sightM);
+      const env = Core.brakingEnvelopeMps(kappa, ds, null, null, undefined, sight);
+      const corners = Core.annotateCautions(Core.detectCorners(kappa, ds), env, sight);
+      const events = corners.map(c => cornerEventOf(c, t.lat, t.lon, t.dist));
+      Core.linkNotes(events);
+      t.events = [...events, ...t.events.filter(e => e.type !== 'corner')].sort((a, b) => a.dist_m - b.dist_m);
+      t.kappa = Array.from(kappa); t.envMps = Array.from(env);
+      try { if (window.ApexRecce) ApexRecce.apply(ApexRecce.load(localStorage), t); } catch (_) {}   // your own recce notes again
+      return true;
+    }
     async function trackFromPolyline(coords, id, name) {
       await RouteLoading.yieldToUI();
       const rs = Core.resamplePolyline(coords.map(c => c[1]), coords.map(c => c[0]), 5);
@@ -806,12 +834,7 @@
       try { side = ApexDrivingSide.forRoute(rs.lat[0], rs.lon[0]); } catch (_) { side = null; }
       const { kappa, sight, env, corners } = await ApexAnalysis.analyse(rs.lat, rs.lon, offsets, { side });
       const dist = rs.lat.map((_, i) => i * 5);
-      const events = corners.map(c => {
-        const t = Core.paceNoteText(c);
-        return { type: 'corner', code: t.code, call: t.call, index: c.apex, dist_m: dist[c.apex], lat: rs.lat[c.apex], lon: rs.lon[c.apex],
-                 start_m: dist[c.start], end_m: dist[c.end], radius_m: c.radius_m, apex_mph: c.apex_mps * MPH, dir: c.dir,
-                 severity: c.severity, grade: c.grade, shape: c.shape, caution: c.caution, turn_rad: Math.abs(c.turn_rad), mods: c.mods };
-      });
+      const events = corners.map(c => cornerEventOf(c, rs.lat, rs.lon, dist));
       Core.linkNotes(events);
       return {
         id, name, kind: 'route', subtitle: 'Map only · not yet driven',
@@ -2032,6 +2055,8 @@
         catch (_) { t.measured = null; }
       }
       const m = t.measured;
+      // the corners members actually drove, where the map simplified them (IDEAS Q-04); never mid-drive
+      if (state.mode !== 'live' && applyCrowdCurvature(t, m) && track === t) { state.spoken.clear(); loadTrackOnMap(); render(true); }
       if (t === plannedRoute) renderRouteCard(t);
       if (!m || track !== t) return;
       note.hidden = false;
@@ -2041,7 +2066,8 @@
           (m.roughness != null ? ` · roughness ${m.roughness.toFixed(2)}` : '') + (m.bankedKm >= 0.05 ? ` · ${ApexUnits.long(m.bankedKm * 1000, 1)} banked` : '') +
           (m.roughKm >= 0.05 ? ` · ${ApexUnits.long(m.roughKm * 1000, 1)} rough` : '') +
           (m.repavedKm >= 0.05 && m.repavedOn ? ` · ${ApexUnits.long(m.repavedKm * 1000, 1)} repaved ${repavedMonth(m.repavedOn)}` : '') +
-          (m.avgPasses != null ? ` · ${m.avgPasses.toFixed(1)} runs on average` : '');
+          (m.avgPasses != null ? ` · ${m.avgPasses.toFixed(1)} runs on average` : '') +
+          (t.crowdCorrected >= 30 ? ` · corners from members' drives on ${ApexUnits.long(t.crowdCorrected, 1)}` : '');
     }
     const repavedMonth = (ym) => { const d = new Date(ym + '-15T12:00:00Z'); return Number.isFinite(d.getTime()) ? d.toLocaleDateString([], { month: 'short', year: 'numeric' }) : ym; };
     // Plate-reading cameras in a box [s, w, n, e] from the camera map (OSM / DeFlock via Overpass), kept a week; null offline.
@@ -3713,6 +3739,9 @@
     } catch (e) { console.error('feedback', e); }
     // Spots near you (web/spots_feed.js, IDEAS S-12): members' shared spots, rated, filtered by kind; Go there plans the way.
     let spotsFeed = null;
+    // Crews this month (crew_standings.js, IDEAS S-11/S-08): road data km and smoothness, crew totals only
+    let crewStandings = null;
+    try { crewStandings = window.ApexCrewStandings ? ApexCrewStandings.mount({ el, sync: window.ApexSync, fmtKm: (km) => ApexUnits.long(km * 1000, 0) }) : null; } catch (e) { console.error('crew standings', e); }
     try { spotsFeed = window.ApexSpotsFeed ? ApexSpotsFeed.mount({ el, btn, toast, sync: window.ApexSync, report: safety && safety.report,
       here: () => state.lastPosition || (() => { const c = map.getCenter(); return { lat: c.lat, lon: c.lng }; })(), goTo: (p) => { closeSheet(); routeToPlace(p); } }) : null; } catch (e) { console.error('spots', e); }
     let garage = null;
@@ -3807,6 +3836,7 @@
       if (convoy) body.append(convoy.section());
       body.append(sharedRoutesSection());
       if (spotsFeed) body.append(spotsFeed.section());
+      if (crewStandings) body.append(crewStandings.section());
       if (crewEvents) body.append(crewEvents.section(Array.isArray(crews) ? crews.map((c) => ({ id: c.id, name: c.name, visibility: c.visibility })) : []));
       if (garage) body.append(garage.section());
 

@@ -101,7 +101,8 @@ const instrumented = new Proxy(core, {
 const client = require(process.argv[1] + '/web/analysis_client.js');   // the worker's own code path, run inline here (IDEAS P-05)
 let viaClient = 0;
 const ApexAnalysis = { analyse: (lat, lon, off) => { viaClient++; return client.analyse(lat, lon, off, { Core: instrumented, inline: true }); } };
-const build = new Function('Core', 'MPH', 'RouteLoading', 'ApexAnalysis', 'return (' + source + ')')(instrumented, core.MPS_TO_MPH, loading, ApexAnalysis);
+const helper = html.match(/function cornerEventOf\(.*?\n    }/s)[0];
+const build = new Function('Core', 'MPH', 'RouteLoading', 'ApexAnalysis', helper + '; return (' + source + ')')(instrumented, core.MPS_TO_MPH, loading, ApexAnalysis);
 (async () => {
   const timer = setInterval(() => heartbeat++, 0);
   try {

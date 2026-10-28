@@ -113,7 +113,11 @@
   const rateHighlight = (id, stars, visited = false) => call('POST', `/api/highlights/${encodeURIComponent(id.replace(/^srv_/, ''))}/rating`, { stars, visited });
 
   /** Publishes one pass; the server delivers it only to friends/crews you granted (Account). Safe to repeat. */
-  const publishScore = (segmentId, score, timeS, day) => call('POST', '/api/board', { segment_id: segmentId, driver_score: Math.round(score), time_s: timeS == null ? null : Math.max(1, Math.round(timeS)), driven_on: day });
+  // smooth: the run's Smooth component 0..1 (IDEAS S-08 smoothest crew), sent as 0-100; unknown stays null
+  const publishScore = (segmentId, score, timeS, day, smooth = null) => call('POST', '/api/board', { segment_id: segmentId, driver_score: Math.round(score), time_s: timeS == null ? null : Math.max(1, Math.round(timeS)), driven_on: day,
+    smoothness: Number.isFinite(smooth) ? Math.max(0, Math.min(100, Math.round(smooth * 100))) : null });
+  const standings = () => call('GET', '/api/crews/standings');
+  const points = () => call('GET', '/api/points');
   const board = async (canonId) => list(await call('GET', `/api/board/${encodeURIComponent(canonId)}`));
   /** Friends' activity on your stages (IDEAS S-03); [] signed out or offline. */
   const activity = async () => list(await call('GET', '/api/board/activity'));
@@ -135,6 +139,6 @@
   }
   const contributionEnabled = async () => { const e = await call('GET', '/api/me/export'); return !!(e && e.member && e.member.contribute); };
 
-  const api = { inApp: IN_APP, apiBase: API_BASE, apiFetch, signIn, signInApple, setSession, signedIn, contribute, newSegmentId, contributionEnabled, publishScore, board, activity, kudos, kudosReceived, highlightsNear, shareHighlight, rateHighlight, member, pushSegments, sharedWithMe, adopt, shareSegment, friends, crews, crewMembers, removeRemote, toServer, fromServer };
+  const api = { inApp: IN_APP, apiBase: API_BASE, apiFetch, signIn, signInApple, setSession, signedIn, contribute, newSegmentId, contributionEnabled, publishScore, standings, points, board, activity, kudos, kudosReceived, highlightsNear, shareHighlight, rateHighlight, member, pushSegments, sharedWithMe, adopt, shareSegment, friends, crews, crewMembers, removeRemote, toServer, fromServer };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexSync = api;
 })(typeof window !== 'undefined' ? window : globalThis);

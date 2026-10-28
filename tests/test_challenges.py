@@ -35,3 +35,18 @@ def test_new_roads_count_names_never_driven_before(out):
 def test_smooth_and_corners(out):
     assert out["smooth"]["done"] == 3 and out["smooth"]["complete"]        # 0.85, 0.95, 0.81; NaN and an unknown date don't count
     assert out["corners"]["done"] == 200 and out["corners"]["complete"]   # 320 capped at the goal
+
+
+def test_pioneer_km_from_the_server_only_when_known():
+    runner = r"""
+const C = require(process.argv[1] + '/web/challenges.js');
+const none = C.progress([], '2026-10').map((c) => c.id);
+const some = C.progress([], '2026-10', { pioneer_km: 3.24 }, (km) => `${km} km`).find((c) => c.id === 'pioneer');
+const done = C.progress([], '2026-10', { pioneer_km: 12 }).find((c) => c.id === 'pioneer');
+console.log(JSON.stringify({ none, some, done }));
+"""
+    import json as _j, subprocess as _s
+    out = _j.loads(_s.run([NODE, "-e", runner, ROOT], capture_output=True, text=True, check=True).stdout)
+    assert "pioneer" not in out["none"], "signed out or offline: the row is left out, not shown as zero"
+    assert out["some"] == {"id": "pioneer", "title": "Be first to map 10 km of road", "done": 3.2, "goal": 10, "complete": False, "unit": "km"}
+    assert out["done"]["complete"] is True and out["done"]["done"] == 10

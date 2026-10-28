@@ -586,3 +586,22 @@ def test_sight_knows_which_side_you_drive_on():
     assert np.array_equal(left[app_r], both[app_r])
     assert left[app_l].sum() < both[app_l].sum() and np.array_equal(right[app_l], both[app_l]), "UK: the left-hander"
     assert (right <= both + 1e-9).all() and (left <= both + 1e-9).all(), "never more sight than before"
+
+
+def test_crowd_curvature_blends_the_same():
+    """IDEAS Q-04: members' driven curvature replaces the map's in runs of 6+ samples with 2+ passes; JS = Python."""
+    km = [0.0] * 30
+    crowd = [None] * 30
+    passes = [None] * 30
+    for i in range(5, 15):
+        crowd[i], passes[i] = 0.02 + i * 1e-4, 3                  # a 50 m run the crowd knows
+    crowd[20], passes[20] = 0.05, 4                                # a lone bin: noise
+    for i in range(24, 28):
+        crowd[i], passes[i] = 0.03, 1                              # one pass only
+    k, replaced = rd.blend_curvature(km, crowd, passes)
+    assert replaced == 10 and k[5] == crowd[5] and k[14] == crowd[14] and k[20] == 0 and k[25] == 0
+    runner = ("const c=require(process.argv[1]);const {km,crowd,passes}=JSON.parse(require('fs').readFileSync(0,'utf8'));"
+              "const r=c.blendCurvature(km,crowd,passes);process.stdout.write(JSON.stringify({k:Array.from(r.kappa),replaced:r.replaced}));")
+    out = json.loads(subprocess.run([NODE, "-e", runner, os.path.abspath("web/apex_core.js")], input=json.dumps({"km": km, "crowd": crowd, "passes": passes}),
+                                    capture_output=True, text=True, check=True).stdout)
+    assert out["replaced"] == replaced and out["k"] == list(k)

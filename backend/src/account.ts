@@ -25,7 +25,7 @@ export async function exportMyData(env: Env, v: Viewer) {
     // audiences are named by what you see in the app (a friend's handle, a crew's name), never by someone else's internal id
     grants: await q(`SELECT g.audience_type, COALESCE(u.handle, c.name) AS audience, g.share_scores, g.share_times FROM grants g
                        LEFT JOIN users u ON g.audience_type = 'friend' AND u.id = g.audience_id LEFT JOIN crews c ON g.audience_type = 'crew' AND c.id = g.audience_id WHERE g.user_id = ?`),
-    published_results: await q(`SELECT s.name AS segment, e.audience_type, COALESCE(u.handle, c.name) AS audience, e.driver_score, e.time_s, e.driven_on FROM board_entries e
+    published_results: await q(`SELECT s.name AS segment, e.audience_type, COALESCE(u.handle, c.name) AS audience, e.driver_score, e.time_s, e.smoothness, e.driven_on FROM board_entries e
                        JOIN segments s ON s.id = e.segment_id LEFT JOIN users u ON e.audience_type = 'friend' AND u.id = e.audience_id
                        LEFT JOIN crews c ON e.audience_type = 'crew' AND c.id = e.audience_id WHERE e.user_id = ?`),
     cars: await q("SELECT year, make, model, trim, nickname, color, power_hp, weight_kg, drivetrain, transmission, tyres, mods, shared, is_primary, created_at FROM cars WHERE owner = ?"),
@@ -33,6 +33,7 @@ export async function exportMyData(env: Env, v: Viewer) {
     reports_you_made: await q("SELECT kind, note, status, created_at FROM reports WHERE reporter = ?"),
     highlight_ratings: await q("SELECT highlight_id, stars, visited, created_at FROM highlight_ratings WHERE user_id = ?"),
     points_by_week: await q("SELECT iso_week, octane FROM points_ledger WHERE user_id = ?"),
+    road_data_by_month: await q("SELECT month, km, pioneer_km FROM member_months WHERE user_id = ?"),
     note: "Merged road data (banking, roughness, crests per 5 m bin) is anonymous and cannot be traced to you, so it is not part of this export and is not deleted with your account.",
   };
 }

@@ -212,6 +212,24 @@
     return m;
   }
 
+  // Crowd curvature over the map's (IDEAS Q-04) — port of road_dna.blend_curvature (parity-tested).
+  const CROWD_MIN_PASSES = 2, CROWD_MIN_RUN = 6;
+  function blendCurvature(kappaMap, kappaCrowd, passes) {
+    const n = kappaMap.length, k = Float64Array.from(kappaMap), ok = new Uint8Array(n);
+    for (let i = 0; i < n; i++) {
+      const c = kappaCrowd[i], p = passes[i];
+      ok[i] = c != null && p != null && Number.isFinite(c) && p >= CROWD_MIN_PASSES ? 1 : 0;
+    }
+    let replaced = 0;
+    for (let i = 0; i < n;) {
+      if (!ok[i]) { i++; continue; }
+      let j = i;
+      while (j < n && ok[j]) j++;
+      if (j - i >= CROWD_MIN_RUN) { for (let q = i; q < j; q++) k[q] = kappaCrowd[q]; replaced += j - i; }
+      i = j;
+    }
+    return { kappa: k, replaced };
+  }
   function detectCorners(kappa, ds, camberRad = null, crestG = null, roughG = null, mu = MU_EFF_DEFAULT) {
     const n = kappa.length;
     const sign = new Int8Array(n);
@@ -1003,7 +1021,7 @@
     G_STD, MPS_TO_MPH, ALPR_RADIUS_M,
     movingAverage, gradient, unwrap, localXY, resamplePolyline,
     computeCurvature, apexSpeedMps, effectiveMu, brakingEnvelopeMps, sightDistanceM, sightSpeedMps, SIGHT_MAX_M,
-    severityForRadius, detectCorners, paceNoteText, annotateCautions, linkNotes, rallyDistance, nearestIndex, detectHazards
+    severityForRadius, blendCurvature, detectCorners, paceNoteText, annotateCautions, linkNotes, rallyDistance, nearestIndex, detectHazards
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.ApexCore = api;
