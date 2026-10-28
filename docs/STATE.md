@@ -1,7 +1,7 @@
 # APEX NAV — CURRENT AGENT HANDOFF STATE
 
 ## Session 2026-10-28: long trips planned in sections
-- Trips over 22 km crow fly are cut into ~24 km sections along the quickest route (2 on Fun, 3 on Max fun); each section gets its own stage search, and the best per section (plus one-swap variants, max 4 stages) compete with the single-corridor plans (`ApexFunRoute.sectionCount/sectionPoints/combineSections`). Knoxville→Asheville Fun: Fun 47 for +17 min (was no fun option); Knoxville→Maryville unchanged (79 @ 128 min). Not driven on a phone.
+- Trips over 22 km crow fly are cut into ~24 km sections along the quickest route (2 on Fun, 3 on Max fun); each section gets its own stage search, and the best per section (plus one-swap variants, max 4 stages) compete with the single-corridor plans (#96, `ApexFunRoute.sectionCount/sectionPoints/combineSections`). Knoxville→Asheville Fun: Fun 47 for +17 min (was no fun option); Knoxville→Maryville unchanged (79 @ 128 min). Not driven on a phone.
 - Exact next task: use measured data during stage discovery (road-3 remainder); unify loop ranking with the fun score.
 
 ## Session 2026-10-28: idea backlog (thread "Build the best-in-class idea backlog")
