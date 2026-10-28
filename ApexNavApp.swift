@@ -508,6 +508,9 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         case "signIn":
             startSignIn()
             return
+        case "signInApple":
+            startAppleSignIn()
+            return
         case "voiceBegin":                                    // the web cockpit is about to play a voice clip
             webVoiceActive = true
             beginVoice()
@@ -575,6 +578,48 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         req.setValue("1", forHTTPHeaderField: "x-apexnav")
         req.setValue("\(ApexWebBundle.scheme)://app", forHTTPHeaderField: "origin")
         req.httpBody = try? JSONSerialization.data(withJSONObject: ["code": code, "verifier": verifier])
+        do {
+            let (data, resp) = try await URLSession.shared.data(for: req)
+            guard (resp as? HTTPURLResponse)?.statusCode == 200,
+                  let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let token = obj["token"] as? String,
+                  token.range(of: "^[A-Za-z0-9_-]{20,200}$", options: .regularExpression) != nil else { signInFailed("error"); return }
+            evaluate("window.apex && window.apex.onNative && window.apex.onNative({type:'session',token:'\(token)'}); void 0;")
+        } catch {
+            signInFailed("offline")
+        }
+    }
+
+    // MARK: Sign in with Apple (IDEAS O-05, App Review 4.8): the native sheet with the sha256 of a one-time nonce; the
+    // Worker verifies the identity token's signature against Apple's keys, checks the nonce and returns a session token.
+    private var appleSignIn: ApexAppleSignIn?
+
+    private func startAppleSignIn() {
+        guard appleSignIn == nil else { return }
+        var bytes = [UInt8](repeating: 0, count: 32)
+        guard SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes) == errSecSuccess else { signInFailed("error"); return }
+        let nonce = Self.b64url(Data(bytes))
+        let nonceHash = SHA256.hash(data: Data(nonce.utf8)).map { String(format: "%02x", $0) }.joined()
+        let helper = ApexAppleSignIn(nonceHash: nonceHash) { [weak self] outcome in
+            guard let self else { return }
+            self.appleSignIn = nil
+            switch outcome {
+            case .token(let token, let name): Task { await self.appleExchange(idToken: token, nonce: nonce, name: name) }
+            case .cancelled: self.signInFailed("cancelled")
+            case .failed: self.signInFailed("error")
+            }
+        }
+        appleSignIn = helper
+        helper.start()
+    }
+
+    private func appleExchange(idToken: String, nonce: String, name: String?) async {
+        var req = URLRequest(url: Self.apiBase.appendingPathComponent("api/auth/apple"))
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "content-type")
+        req.setValue("1", forHTTPHeaderField: "x-apexnav")
+        req.setValue("\(ApexWebBundle.scheme)://app", forHTTPHeaderField: "origin")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: ["id_token": idToken, "nonce": nonce, "name": name ?? ""])
         do {
             let (data, resp) = try await URLSession.shared.data(for: req)
             guard (resp as? HTTPURLResponse)?.statusCode == 200,
@@ -1075,5 +1120,54 @@ extension ApexSensorShell: AVSpeechSynthesizerDelegate {
 
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
         Task { @MainActor in self.endVoiceIfIdle() }
+    }
+}
+
+/// Runs Apple's sign-in sheet once and reports the identity token (and the name, which Apple gives only the first time).
+@MainActor
+final class ApexAppleSignIn: NSObject, ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding {
+    enum Outcome { case token(String, String?), cancelled, failed }
+    private let nonceHash: String
+    private let done: (Outcome) -> Void
+    private var controller: ASAuthorizationController?
+
+    init(nonceHash: String, done: @escaping (Outcome) -> Void) {
+        self.nonceHash = nonceHash
+        self.done = done
+    }
+
+    func start() {
+        let request = ASAuthorizationAppleIDProvider().createRequest()
+        request.requestedScopes = [.fullName, .email]
+        request.nonce = nonceHash
+        let c = ASAuthorizationController(authorizationRequests: [request])
+        c.delegate = self
+        c.presentationContextProvider = self
+        controller = c
+        c.performRequests()
+    }
+
+    nonisolated func authorizationController(controller: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
+        let credential = authorization.credential as? ASAuthorizationAppleIDCredential
+        let token = credential?.identityToken.flatMap { String(data: $0, encoding: .utf8) }
+        let name = credential?.fullName.map { PersonNameComponentsFormatter().string(from: $0) }.flatMap { $0.isEmpty ? nil : $0 }
+        MainActor.assumeIsolated {
+            self.controller = nil
+            if let token { done(.token(token, name)) } else { done(.failed) }
+        }
+    }
+
+    nonisolated func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
+        let cancelled = (error as? ASAuthorizationError)?.code == .canceled
+        MainActor.assumeIsolated {
+            self.controller = nil
+            done(cancelled ? .cancelled : .failed)
+        }
+    }
+
+    nonisolated func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
+        MainActor.assumeIsolated {
+            UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.keyWindow }.first ?? ASPresentationAnchor()
+        }
     }
 }

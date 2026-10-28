@@ -374,7 +374,11 @@
     body.moving .toast { font-size: 15px; }
     body.moving .toast a { display: inline-flex; align-items: center; padding: 0 12px; }
     body.moving input:not([type=checkbox]):not([type=radio]):not([type=range]), body.moving textarea { opacity: 0.5; }
-  </style>
+      /* Sign in with Apple: Apple's black button style, full width like the Google one (HIG), shown in the app only. */
+    .apple-btn { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; min-height: 44px; border: 0; border-radius: 10px; background: #000; color: #fff; font: 600 17px -apple-system, system-ui, sans-serif; margin-bottom: 8px; }
+    .apple-btn[hidden] { display: none; }
+    @media (prefers-color-scheme: dark) { .apple-btn { background: #fff; color: #000; } }
+</style>
 </head>
 <body>
   <div id="app">
@@ -503,6 +507,7 @@
           </section>
           <section class="sources" data-panel="setup">
             <details class="more"><summary>Sources and licences</summary><p class="note">Map &copy; OpenStreetMap contributors via OpenFreeMap. Terrain: AWS Terrarium DEM. Routing, map matching and posted limits: Valhalla (FOSSGIS). Geocoding: Nominatim. Search suggestions: Photon (Komoot). Plate-reading cameras: OpenStreetMap (<code>surveillance:type=ALPR</code>, DeFlock) via Overpass. Voices: Kokoro-82M (Apache-2.0).</p></details>
+            <p class="note mt-8"><a href="https://apexnav.senftns.workers.dev/privacy.html" target="_blank" rel="noopener">Privacy</a> · <a href="https://apexnav.senftns.workers.dev/terms.html" target="_blank" rel="noopener">Terms of use</a></p>
           </section>
         </div>
       </aside>
@@ -588,7 +593,9 @@
     <div class="grow" data-step="3" hidden>
       <h2>Driving with friends?</h2>
       <p>Sign in to join a crew and see its stages and boards. You can do this later in Crew.</p>
+      <button class="apple-btn" data-apple-signin hidden>&#xF8FF; Sign in with Apple</button>
       <a class="ink-btn solid" href="/api/auth/google/start" style="display:flex;align-items:center;justify-content:center;text-decoration:none">Sign in with Google</a>
+      <p class="note">By signing in you agree to the <a href="https://apexnav.senftns.workers.dev/terms.html" target="_blank" rel="noopener">Terms</a> and <a href="https://apexnav.senftns.workers.dev/privacy.html" target="_blank" rel="noopener">Privacy</a> policy.</p>
     </div>
     <div class="stack">
       <button class="ink-btn solid" id="obNext">Get started</button>
@@ -1506,15 +1513,18 @@
       return { text, chain: voiced };
     }
 
+    // Where a note is due: a corner's entry (turn-in), not its apex, so the call and the countdown come before you turn
+    // (owner 2026-10-28: "called out in reference to the apex rather than the entry"). Hazards are a point: entry = apex.
+    const noteM = (e) => (Number.isFinite(e.start_m) && e.start_m <= e.dist_m ? e.start_m : e.dist_m);
     function updateNotes(vMps, live) {
       // Driving somewhere that is not on the loaded route: its calls (and its stale trip distance) must never be read out as if they were this road.
       const offRoute = live && state.cursorIdx < 0;
-      const ev = offRoute ? [] : allEvents().filter(e => e.dist_m >= state.cursorM - 5 && (e.type !== 'alpr' || state.toggles.lpr)).sort((a, b) => a.dist_m - b.dist_m);
+      const ev = offRoute ? [] : allEvents().filter(e => e.dist_m >= state.cursorM - 5 && (e.type !== 'alpr' || state.toggles.lpr)).sort((a, b) => noteM(a) - noteM(b));
       const spirited = isSpirited();
-      const shown = ev.filter(e => spirited || noteworthyInCruise(e) || e.type !== 'corner').filter(e => e.dist_m - state.cursorM <= 3000).slice(0, 3);
+      const shown = ev.filter(e => spirited || noteworthyInCruise(e) || e.type !== 'corner').filter(e => noteM(e) - state.cursorM <= 3000).slice(0, 3);
       const notes = shown.map(e => {
-        const d = distLabel(e.dist_m - state.cursorM);
-        return { key: `${e.type}:${e.index}:${e.dist_m}`, type: e.type, code: e.code, call: e.call, sub: subFor(e) + linkLabel(e), dist: d.n, unit: d.u, distM: e.dist_m - state.cursorM,
+        const d = distLabel(Math.max(0, noteM(e) - state.cursorM));   // 0 once you're in the corner
+        return { key: `${e.type}:${e.index}:${e.dist_m}`, type: e.type, code: e.code, call: e.call, sub: subFor(e) + linkLabel(e), dist: d.n, unit: d.u, distM: Math.max(0, noteM(e) - state.cursorM),
                  dir: e.dir, severity: e.severity, turnRad: e.turn_rad, mods: e.mods || [] };
       });
       notes.quietText = offRoute ? (!track ? 'No route planned' : offRouteText()) : track ? `${track.name} · ${spirited ? 'Full notes' : 'Quiet · bumps and cameras only'}` : 'Plan a route for notes';
@@ -1523,14 +1533,14 @@
       if (!(state.playing || live) || vMps == null) return;
       const lead = Math.max(60, Math.min(250, vMps * 5));
       for (const e of ev) {
-        const d = e.dist_m - state.cursorM;
+        const d = noteM(e) - state.cursorM;
         if (d > lead) break;
         const key = `${track.id}:${e.type}:${e.index}`;
         if (state.spoken.has(key) || d < 10) continue;
         state.spoken.add(key);
         if (e.type === 'corner' ? !spirited : !(spirited || noteworthyInCruise(e))) continue;
         const call = chainedCall(e, ev, spirited);
-        say(call.text, false, call.chain, null, { kind: e.type === 'corner' ? 'ordinary' : 'hazard', key, atM: e.dist_m });
+        say(call.text, false, call.chain, null, { kind: e.type === 'corner' ? 'ordinary' : 'hazard', key, atM: noteM(e) });
       }
       // Roads you have driven: one technique tip per remembered corner, only with full notes on (never over a commute),
       // moving on a fresh heading, and only when it ends before any call is due: it starts MEMO_S of driving beyond the
@@ -1551,7 +1561,7 @@
       const reach = lead + vMps * MEMO_S;
       if (live && spirited && vMps >= 5 && performance.now() - state.liveAt < 2500 && !speech.busy && !speech.queue.size
           && performance.now() > speech.talkingUntil
-          && !ev.some(e => e.dist_m - state.cursorM < reach && !state.spoken.has(`${track.id}:${e.type}:${e.index}`))) {
+          && !ev.some(e => noteM(e) - state.cursorM < reach && !state.spoken.has(`${track.id}:${e.type}:${e.index}`))) {
         const memo = ApexRoadMemory.upcoming(roadMemory, state.live, reach, reach + 200, state.spoken);
         if (memo) { state.spoken.add(memo.id); say(memo.text); }
       }
@@ -1562,7 +1572,7 @@
       if (breakSay && performance.now() > breakSay.until) breakSay = null;
       if (breakSay && live && performance.now() - state.liveAt < 2500 && !speech.busy && !speech.queue.size && performance.now() > speech.talkingUntil) {
         const breakReach = lead + vMps * (0.6 + 0.07 * breakSay.text.length + 2);
-        const callDue = ev.some(e => e.dist_m - state.cursorM < breakReach && !state.spoken.has(`${track.id}:${e.type}:${e.index}`)
+        const callDue = ev.some(e => noteM(e) - state.cursorM < breakReach && !state.spoken.has(`${track.id}:${e.type}:${e.index}`)
           && (e.type === 'corner' ? spirited : (spirited || noteworthyInCruise(e))));
         const bumpDue = ApexRoadMemory.upcoming(hazardMemory, state.live, 0, breakReach, { has: () => false });
         if (!callDue && !bumpDue) { say(breakSay.text); breakSay = null; }
@@ -2633,6 +2643,7 @@
     }
     // Views: ROUTE / DRIVES / SETUP open the side panel; tapping the open tab again, the map
     // behind it, or swiping it right closes it. ANALYSIS is its own page.
+    const LEGAL_SITE = 'https://apexnav.senftns.workers.dev';   // the published privacy and terms pages (web/privacy.html, web/terms.html)
     const VIEW_TITLES = { crew: 'Crew', setup: 'Settings' };
     let view = null, friendsOpen = false;                                  // friendsOpen: the Crew sheet's friends pop-up
     function showView(v) {
@@ -2928,7 +2939,11 @@
     document.addEventListener('click', (e) => {
       const a = e.target.closest && e.target.closest('a[href="/api/auth/google/start"]');
       if (a && ApexSync.inApp) { e.preventDefault(); ApexSync.signIn(); }
+      if (e.target.closest && e.target.closest('[data-apple-signin]')) ApexSync.signInApple();
     });
+    // Sign in with Apple (IDEAS O-05, App Review 4.8): in the app only, first and as prominent as Google.
+    if (ApexSync.inApp) document.querySelectorAll('[data-apple-signin]').forEach((b) => { b.hidden = false; });
+    const appleButton = () => { const b = el('button', { className: 'apple-btn', textContent: '\uF8FF Sign in with Apple', hidden: !ApexSync.inApp }); b.setAttribute('data-apple-signin', ''); return b; };
     const jsonOf = async (r) => { try { return await r.json(); } catch (_) { return null; } };
     const el = (tag, props = {}, ...kids) => { const n = Object.assign(document.createElement(tag), props); n.append(...kids); return n; };
     const btn = (label, onclick, cls = 'ink-btn') => el('button', { className: cls, textContent: label, onclick });
@@ -2990,13 +3005,18 @@
         if (stashed) try { for (const k of ['invite', 'crew', 'add']) params2.delete(k); history.replaceState(history.state, '', location.pathname + (params2.toString() ? '?' + params2 : '') + location.hash); } catch (_) {}
         showView('crew');
       }
+      // Terms and Privacy open in Safari from the app (http links leave the web view, #135) and in a new tab on the web.
+      const legalLink = (path, text) => el('a', { href: `${LEGAL_SITE}/${path}`, target: '_blank', rel: 'noopener', textContent: text });
+      const legalNote = (lead) => el('p', { className: 'note' }, lead, legalLink('terms.html', 'Terms'), ' and ', legalLink('privacy.html', 'Privacy'), ' policy.');
       const stash = (k) => { try { return sessionStorage.getItem(k) || ''; } catch (_) { return ''; } };
       const unstash = (k) => { try { sessionStorage.removeItem(k); } catch (_) {} };
       if (!me.signed_in) {
         body.append(el('img', { src: 'brand/logo.svg', alt: 'ApexNav', width: 200, style: 'max-width:60%' }),
           el('h3', { textContent: 'Drive with friends' }),
           el('p', { className: 'note', textContent: 'ApexNav is invite-only. Sign in to add friends, share scores and join boards. Nothing is shared unless you switch it on.' }),
-          el('a', { className: 'ink-btn solid', href: '/api/auth/google/start', textContent: 'Sign in with Google', style: 'display:flex;align-items:center;justify-content:center;text-decoration:none' }));
+          appleButton(),
+          el('a', { className: 'ink-btn solid', href: '/api/auth/google/start', textContent: 'Sign in with Google', style: 'display:flex;align-items:center;justify-content:center;text-decoration:none' }),
+          legalNote('By signing in you agree to the '));
         return;
       }
       // Anyone signed in can take their data or close the account, member or not.
