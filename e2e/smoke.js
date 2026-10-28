@@ -24,6 +24,32 @@ function serve() {
   return new Promise((ok) => server.listen(0, '127.0.0.1', () => ok(server)));
 }
 
+// Polyline6 as Valhalla encodes shapes, for the stub router below.
+function polyline6(points) {
+  let out = '', pLat = 0, pLon = 0;
+  const enc = (v) => { v = v < 0 ? ~(v << 1) : v << 1; let s = ''; while (v >= 0x20) { s += String.fromCharCode((0x20 | (v & 0x1f)) + 63); v >>= 5; } return s + String.fromCharCode(v + 63); };
+  for (const [lat, lon] of points) {
+    const a = Math.round(lat * 1e6), b = Math.round(lon * 1e6);
+    out += enc(a - pLat) + enc(b - pLon); pLat = a; pLon = b;
+  }
+  return out;
+}
+// A stand-in for the public Valhalla server: a winding road from the first location to the last, about 12 km,
+// with a few named maneuvers. Enough for the app to score it, draw the card and offer Start.
+function stubTrip(locs) {
+  const a = locs[0], b = locs[locs.length - 1], n = 400, pts = [];
+  for (let i = 0; i <= n; i++) {
+    const t = i / n, wig = Math.sin(t * Math.PI * 9) * 0.004 * Math.sin(t * Math.PI);
+    pts.push([a.lat + (b.lat - a.lat) * t + wig, a.lon + (b.lon - a.lon) * t + wig]);
+  }
+  const lenKm = 12;
+  return { trip: { legs: [{ shape: polyline6(pts), maneuvers: [
+    { type: 1, begin_shape_index: 0, length: lenKm / 2, street_names: ['Test Ridge Road'] },
+    { type: 10, begin_shape_index: 200, length: lenKm / 2, street_names: ['Hollow Creek Road'] },
+    { type: 4, begin_shape_index: n, length: 0 }] }],
+    summary: { length: lenKm, time: 900, has_highway: false, has_toll: false, has_ferry: false } } };
+}
+
 const flows = [];
 const flow = (name, fn, ctxOpts = {}) => flows.push({ name, fn, ctxOpts });
 function check(cond, msg) { if (!cond) throw new Error(msg); }
@@ -78,6 +104,26 @@ flow('Where to?: with the search and routing services unreachable, a search fail
   await page.fill('#destInput', 'Knoxville');
   await page.press('#destInput', 'Enter');
   await page.waitForFunction(() => /Search is offline/.test(document.getElementById('toast').textContent), null, { timeout: 15000 });
+}, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
+
+flow('Where to?: a suggestion builds a route with a card and a Start button (search and router stubbed)', async (page, base) => {
+  await page.route('https://photon.komoot.io/**', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ features: [
+    { geometry: { coordinates: [-83.9700, 35.7565] }, properties: { name: 'Maryville', state: 'Tennessee' } }] }) }));
+  await page.route('https://valhalla1.openstreetmap.de/route', (route) => {
+    const req = JSON.parse(route.request().postData() || '{}');
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify(stubTrip(req.locations)) });
+  });
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map);
+  await page.click('#destInput');
+  await page.fill('#destInput', 'Maryville');
+  await page.waitForSelector('#placeList .place', { timeout: 10000 });
+  await page.click('#placeList .place');
+  await page.waitForFunction(() => { const t = window.apexDebug.track; return t && t.kind === 'route' && t.lat.length > 50; }, null, { timeout: 20000 });
+  const name = await page.textContent('#routeBarName');
+  check(/Maryville/.test(name), `route bar names the destination (got "${name}")`);
+  check(await page.isVisible('#startDrive'), 'Start is offered');
 }, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
 
 flow('the Log page opens', async (page, base) => {
