@@ -307,9 +307,9 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 | P-01 | Battery budget for an hour of driving with screen on, measured and published | H | M | todo | Waze, REVER complaints |
 | P-02 | Low-power cockpit: drop to 30 fps and fewer map layers when the battery is low or hot | M | M | todo | thermal throttling |
 | P-03 | Split web/index.html into modules so pages load faster and threads stop colliding | M | L | todo | dev velocity |
-| P-04 | Lazy-load voice banks and kokoro-js only when voice is on | M | S | todo | startup time |
+| P-04 | Lazy-load voice banks and kokoro-js only when voice is on | M | S | done (already lazy: checked 2026-10-28, a cold start fetches only voices/index.json) | startup time |
 | P-05 | Route analysis in a Web Worker so the UI never stutters while scoring | M | M | todo | Y-01 |
-| P-06 | Startup under 1 s to an interactive map on a mid-range phone | H | M | todo | — |
+| P-06 | Startup under 1 s to an interactive map on a mid-range phone | H | M | partial (demo drives load on demand, #125) | — |
 | P-07 | Thermal guard: pause the 100 Hz pipeline gracefully if the phone overheats on the dash | M | S | todo | iPhone on windscreen |
 
 ## 12. Privacy and security (Z)
