@@ -166,7 +166,7 @@ pace-note grammar, ALPR from DeFlock/OSM, reference-lap scoring and archetypes.
 | Q-20 | Archetypes by clustering once crowd data exists | M | L | todo | ROAD_INTELLIGENCE §5.2 |
 | Q-21 | Real device acceptance for app-open sharing (shared km matches driven km, minus private ends) | H | S | owner (phone) | STATE 2026-10-27 |
 | Q-22 | "Pothole ahead" from your own confirmed hazards on any road, with no route loaded | H | S | done (#104) | thread Deepen driver and road analysis |
-| Q-23 | Bundled demo drives (tools/export_web_profile.py via core/kinematics.py `profile_drive_dataframe`) write camber 0.0 for every 5 m bin with no cornering (`fillna(0.0)`), so straights read as measured flat. Keep NaN, export null, re-export web/data | M | S | todo | audit 2026-10-28 (CLAUDE.md rule 3) |
+| Q-23 | Bundled demo drives (tools/export_web_profile.py via core/kinematics.py `profile_drive_dataframe`) write camber 0.0 for every 5 m bin with no cornering (`fillna(0.0)`), so straights read as measured flat. Keep NaN, export null, re-export web/data | M | S | done (thread Deepen driver and road analysis) | audit 2026-10-28 (CLAUDE.md rule 3) |
 
 ## 4. Co-driver and pace notes (V)
 

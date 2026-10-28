@@ -189,7 +189,9 @@ def profile_segments(seg: pd.DataFrame, alpr_nodes=None) -> tuple[pd.DataFrame, 
 def build_payload(seg: pd.DataFrame, meta: dict, alpr_nodes=None, limits=True) -> dict:
     limit = seg["limit_kph"] if "limit_kph" in seg else None
     seg = seg.drop(columns=["limit_kph"], errors="ignore")
-    seg = seg.replace([np.inf, -np.inf], np.nan).dropna(subset=["lat", "lon"]).fillna(0.0)
+    seg = seg.replace([np.inf, -np.inf], np.nan).dropna(subset=["lat", "lon"])
+    unknown_ok = [c for c in ("camber_deg",) if c in seg]                # unknown camber stays null in the file
+    seg = seg.fillna({c: 0.0 for c in seg.columns if c not in unknown_ok})
     if limits:
         try:
             seg["limit_kph"] = posted_limits_kph(seg["lat"].to_numpy(float), seg["lon"].to_numpy(float))
