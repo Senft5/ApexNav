@@ -29,6 +29,7 @@ import { healthReport, healthSummary } from "./health";
 import { feedbackCreate, feedbackDone, feedbackList } from "./feedback";
 import { friendProfile } from "./profile";
 import { kudosGive, kudosReceived, kudosTake } from "./kudos";
+import { STATS_SAMPLE, recordStat, statsSummary } from "./stats";
 import { etaStart, etaUpdate, etaView } from "./eta_share";
 import { highlightCreate, highlightDelete, highlightList, highlightRate } from "./highlights";
 export { ConvoyIndex, ConvoyRoom } from "./convoy";
@@ -63,6 +64,10 @@ on("POST", "/api/ops/feedback/:id/done", async (req, env, m) => {
   if (!isModerator(env, await requireMember(req, env))) throw new HttpError(404, "not_found");
   await feedbackDone(env, m.groups!.id);
   return noContent();
+});
+on("GET", "/api/ops/latency", async (req, env) => {
+  if (!isModerator(env, await requireMember(req, env))) throw new HttpError(404, "not_found");
+  return json(await statsSummary(env, new URL(req.url)));
 });
 on("GET", "/api/ops/errors", async (req, env) => {
   if (!isModerator(env, await requireMember(req, env))) throw new HttpError(404, "not_found");
@@ -208,10 +213,14 @@ function withAppCors(res: Response): Response {
 }
 
 export default {
-  async fetch(req: Request, env: Env): Promise<Response> {
+  async fetch(req: Request, env: Env, ctx?: ExecutionContext): Promise<Response> {
     const fromApp = req.headers.get("origin") === APP_ORIGIN;
     if (req.method === "OPTIONS") return fromApp ? new Response(null, { status: 204, headers: APP_CORS }) : new Response(null, { status: 405 });
-    const res = await handle(req, env);
+    const t0 = Date.now(), seen = { route: "" };
+    const res = await handle(req, env, seen);
+    // latency and error rates (IDEAS Y-17): sampled, 5xx always; written after the response
+    const sampled = Math.random() < 1 / STATS_SAMPLE;
+    if (ctx && (sampled || res.status >= 500)) ctx.waitUntil(recordStat(env, seen.route || "(none)", res.status, Date.now() - t0, sampled ? STATS_SAMPLE : 0));
     return fromApp ? withAppCors(res) : res;
   },
   // Cron triggers (wrangler.jsonc triggers): the weekly database backup, and the daily sweep of expired rows.
@@ -224,14 +233,14 @@ export default {
   },
 };
 
-async function handle(req: Request, env: Env): Promise<Response> {
+async function handle(req: Request, env: Env, seen: { route: string } = { route: "" }): Promise<Response> {
     let route = "";
     try {
       const url = new URL(req.url);
       for (const [method, re, handler, name] of routes) {
         const m = url.pathname.match(re);
         if (m && req.method === method) {
-          route = name;
+          route = name; seen.route = `${method} ${name}`;
           csrfCheck(req, env);
           await rateCheck(req, env, url.pathname);
           return await handler(req, env, m);
