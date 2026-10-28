@@ -2,6 +2,7 @@
 // A car card carries no location or drive data. Nothing is shown to anyone until its owner switches `shared` on.
 import type { Viewer } from "./auth";
 import { Env, HttpError, body } from "./util";
+import { removedSql, reportedSql } from "./reports_sql";
 
 const MAX_CARS = 10;
 // Controls, format characters (bidi marks and overrides, zero-width), surrogates and private use; ZWJ stays for emoji.
@@ -80,6 +81,7 @@ export async function carCreate(env: Env, v: Viewer, req: Request): Promise<{ id
 /** Owner only: replaces the card. Making it primary unmarks the others. */
 export async function carUpdate(env: Env, v: Viewer, id: string, req: Request): Promise<void> {
   const c = parseCar(await body(req));
+  if (c.shared && (await env.DB.prepare(`SELECT 1 WHERE ${removedSql("car", "?1")}`).bind(id).first())) throw new HttpError(403, "removed_by_moderator");
   // Primary moves by choosing another car, never to none: an edit keeps whatever the row holds now (not a stale read).
   const res = await env.DB.batch([
     ...(c.is_primary ? [env.DB.prepare("UPDATE cars SET is_primary = 0 WHERE owner = ?1 AND id != ?2 AND EXISTS (SELECT 1 FROM cars WHERE id = ?2 AND owner = ?1)").bind(v.id, id)] : []),
@@ -111,7 +113,7 @@ export async function peoplesCars(env: Env, v: Viewer) {
         SELECT b.user_id FROM crew_members a JOIN crews cr ON cr.id = a.crew_id AND cr.visibility = 'private'
           JOIN crew_members b ON b.crew_id = a.crew_id WHERE a.user_id = ?1)
      SELECT u.handle, ${PUBLIC_COLS} FROM known k JOIN users u ON u.id = k.id JOIN cars c ON c.owner = k.id
-      WHERE k.id != ?1 AND c.shared = 1 AND u.handle IS NOT NULL
+      WHERE k.id != ?1 AND c.shared = 1 AND u.handle IS NOT NULL AND NOT ${reportedSql("car", "c.id")}
         AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker = ?1 AND b.blocked = k.id) OR (b.blocker = k.id AND b.blocked = ?1))
       ORDER BY u.handle, c.is_primary DESC, c.created_at, c.rowid LIMIT 1000`,
   ).bind(v.id).all<{ handle: string } & Record<string, unknown>>()).results;
