@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-8t3w92CPR77qHR1SiX0sS4/J+gDsxQ31ikk+R6T0TfU=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-S4TdhclQ4e2E6fXQ7sSDqSp3u0x/+bG6s7IQBglxcpQ=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>ApexNav</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -21,6 +21,7 @@
   <script src="driving_side.js"></script>
   <script src="crew_standings.js"></script>
   <script src="road_page.js"></script>
+  <script src="taste.js"></script>
   <script src="route_loading.js"></script>
   <script src="stages.js"></script>
   <script src="fun_route.js"></script>
@@ -2923,6 +2924,7 @@
       }
       await townsOn(pool.map(c => c.t), pool);
       await weatherOn(pool, level);
+      tasteOn(pool);
       await applyMeasured(FunRoute.rank(pool, level).slice(0, 3).map(r => pool.find(c => c.t === r.t)), ui);   // the top few only
       const ranked = FunRoute.rank(pool, level), best = ranked[0];
       const quickest = pool.filter(c => Number.isFinite(c.timeS)).reduce((x, y) => (y.timeS < x.timeS ? y : x), best);
@@ -4659,6 +4661,14 @@
       if (costs.some(x => x == null)) return;
       const least = Math.min(...costs);
       top.forEach((c, i) => { c.weatherCost = costs[i] - least; });
+    }
+    // Your taste (taste.js, IDEAS R-33): with five or more "which road was better?" answers, each candidate's TECH, FLOW and
+    // known smoothness from the reference lap, and a few fun points toward what you pick. No answers: nothing changes.
+    function tasteOn(pool) {
+      const t = window.ApexTaste ? ApexTaste.fit(ApexTaste.load(localStorage)) : null;
+      if (!t) return;
+      const top = FunRoute.rank(pool, funLevel).slice(0, 4).map(r => pool.find(c => c.t === r.t)).filter(Boolean);   // the contenders only
+      for (const c of top) { try { c.tasteBonus = ApexTaste.bonus(t, ApexTaste.featuresOf(Core, c.t, { quick: true })); } catch (_) { c.tasteBonus = 0; } }
     }
     // Weather along the route (route_weather.js, IDEAS R-21): Open-Meteo's forecast at six points, for the hour you'd reach
     // each if you left now (the router's times). Said on the route card; nothing when the forecast can't be had.

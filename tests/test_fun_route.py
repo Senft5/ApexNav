@@ -368,7 +368,7 @@ const A = { lat: lat0, lon: lon0 }, B = { lat: lat0, lon: lon0 + 10000 * mLon };
 async function run({ level, routes, osrm, discover, matrix, places, avoid = FunRoute.AVOID_DEFAULT }) {
   const built = [], toasts = [], calls = { matrix: 0, routes: 0 };
   const funRoute = new Function('funLevel', 'valhallaRoutes', 'osrmRoutes', 'toast', 'FunRoute', 'ApexStages', 'state', 'allHighlights', 'valhallaMatrix',
-    'Core', 'RouteLoading', 'funOf', 'applyMeasured', 'trackFromPolyline', 'buildRoute', 'totalOf', 'window', 'whyText', 'avoid', 'let routeOptions = null; ' + useOptionSource + '; ' + townsOnSource + '; const weatherOn = async () => {}; ' + fewerSource + '; ' + marksSource + '; const stepsOf = () => []; return (' + source + ')')(
+    'Core', 'RouteLoading', 'funOf', 'applyMeasured', 'trackFromPolyline', 'buildRoute', 'totalOf', 'window', 'whyText', 'avoid', 'let routeOptions = null; ' + useOptionSource + '; ' + townsOnSource + '; const weatherOn = async () => {}; const tasteOn = () => {}; ' + fewerSource + '; ' + marksSource + '; const stepsOf = () => []; return (' + source + ')')(
     level, async (pts, through, alts) => { calls.routes++; return routes(pts, alts); }, osrm || (async () => { throw Error('down'); }),
     (m) => toasts.push(m), FunRoute, { discover, places }, { hlOn: false }, async () => [],
     async (s, t) => { calls.matrix++; return { times: await matrix(s, t) }; },
