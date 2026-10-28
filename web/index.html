@@ -22,6 +22,7 @@
   <script src="reroute.js"></script>
   <script src="traffic.js"></script>
   <script src="in_car.js"></script>
+  <script src="power.js"></script>
   <script src="sun.js"></script>
   <script src="format.js"></script>
   <script src="road_names.js"></script>
@@ -954,6 +955,7 @@
       mapReady = true;
       addApexLayers();
       restyleBasemap();
+      applyPower();
       map.setLayoutProperty('apex-dna', 'visibility', state.toggles.dna ? 'visible' : 'none');
       if (track) loadTrackOnMap();
       // Tap a faint option on the map to take it.
@@ -984,6 +986,25 @@
     //   * road texture: shake from measured pavement roughness, a kick at recorded bumps
     //   * override: any touch pauses follow; it glides back after FOLLOW_RESUME_S of no touch
     // =======================================================================
+    // Low-power cockpit (web/power.js, IDEAS P-02): a hot phone, Low Power Mode or a low battery drops this loop to 30 fps
+    // without shake, the map to 2x pixels, and hides hillshade and contours. Everything else (notes, recording) is unchanged.
+    const power = new ApexPower.PowerSaver();
+    const HEAVY_LAYERS = ['apex-hillshade', 'apex-contours', 'apex-contour-labels'];
+    function applyPower() {
+      if (!mapReady) return;
+      const dpr = window.devicePixelRatio || 1;
+      try { map.setPixelRatio(power.low ? Math.min(dpr, 2) : dpr); } catch (_) {}
+      for (const id of HEAVY_LAYERS) if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', power.low ? 'none' : 'visible');
+    }
+    function feedPower(info) {
+      if (!power.update(info)) return;
+      applyPower();
+      toast(power.low ? `${power.reason} · saving battery: map at 30 fps, terrain shading off` : 'Full map detail back on.');
+    }
+    if (navigator.getBattery) navigator.getBattery().then((b) => {
+      const read = () => feedPower({ batteryLevel: b.level, charging: b.charging });
+      read(); b.addEventListener('levelchange', read); b.addEventListener('chargingchange', read);
+    }).catch(() => {});
     const CAM_FEEL = {
       steady:  { wPos: 3.4, zPos: 1.00, wBear: 1.8, zBear: 0.95, lead: 0.8, ahead: 1.8, sway: 0.0, punch: 0.3, shake: 0.25 },
       dynamic: { wPos: 3.0, zPos: 0.80, wBear: 3.0, zBear: 0.55, lead: 1.0, ahead: 2.6, sway: 1.0, punch: 1.0, shake: 1.0 },
@@ -1040,6 +1061,7 @@
     let camLast = 0, lastBumpKey = '';
     function cameraFrame(ts) {
       requestAnimationFrame(cameraFrame);
+      if (!power.frameDue(ts)) return;
       const dt = Math.min(0.05, (ts - (camLast || ts)) / 1000);
       camLast = ts;
       if (!vehicle || !cam.ready || dt <= 0) return;
@@ -1061,7 +1083,7 @@
       if (bump && key !== lastBumpKey) cam.kick = Math.min(1.5, bump.severity_g * 2.2);
       lastBumpKey = key;
       cam.kick *= Math.exp(-dt * 6);
-      const amp = f.shake * (clamp01((vehicle.rough || 0) / 0.25) * 0.6 + cam.kick) * clamp01(vehicle.vMps / 6);
+      const amp = (power.low ? 0 : f.shake) * (clamp01((vehicle.rough || 0) / 0.25) * 0.6 + cam.kick) * clamp01(vehicle.vMps / 6);
       const tt = ts / 1000;
       const [sLat, sLon] = offsetPoint(cam.lat, cam.lon, cam.bearing + 90, amp * 1.2 * texture(tt, 1));
       map.jumpTo({
@@ -3410,6 +3432,7 @@
     document.addEventListener('gesturestart', (e) => e.preventDefault(), { passive: false });
     window.apex = {
       live(frame) {
+        if (frame) feedPower({ thermal: frame.thermal, lowPowerMode: frame.low_power_mode });
         if (!frame || !frame.has_fix || !Number.isFinite(frame.lat) || !Number.isFinite(frame.lon)) return;
         feedMotion(frame.speed_mps);
         state.lastPosition = { lat: frame.lat, lon: frame.lon }; state.lastPositionAt = performance.now();
