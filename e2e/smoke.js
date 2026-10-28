@@ -132,6 +132,34 @@ flow('the Log page opens', async (page, base) => {
   check((await page.title()).length > 0, 'analysis.html has a title');
 });
 
+flow('Your records: unknown dates and unscored drives never make a "new best", and the record fits a phone', async (page, base) => {
+  await page.goto(base + '/analysis.html');
+  await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded());
+  await page.waitForTimeout(100);                                   // the library's own render (deferred) has run: it cannot overwrite the seed
+  const r = await page.evaluate(() => {
+    const now = new Date(), ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const c = (s, b) => ({ pace: 0.8, smoothness: s, braking: b, consistency: 0.8 });
+    const d = (id, name, date, score, comp, extra = {}) => ({ id, name, date, ds: { score, components: comp }, ...extra });
+    // road A: 880 then 910 dated, an unscored drive after both (the latest), and an undated import scoring 930
+    const seed = [d('a1', 'Mulholland Highway', '2020-08-01T09:00:00', 880, c(0.5, 0.5)), d('a2', 'Mulholland Highway', '2020-08-02T09:00:00', 910, c(0.5, 0.5)),
+      d('a3', 'Mulholland Highway', '2020-08-03T09:00:00', null, null), d('a4', 'Mulholland Highway', '2026-01-01T00:00:00.000Z', 930, c(0.5, 0.5), { date_known: false }),
+      // road B: the dated latest is the best
+      d('b1', 'Tail of the Dragon', '2020-07-01T09:00:00', 700, c(0.5, 0.5)), d('b2', 'Tail of the Dragon', '2020-09-01T09:00:00', 750, c(0.5, 0.5)),
+      // this month: smoothness measured on two, braking on one only
+      d('m1', 'Town loop', `${ym}-01T09:00:00`, 600, c(0.6, NaN)), d('m2', 'Back road', `${ym}-02T09:00:00`, 650, c(0.7, 0.9))];
+    window.apexLogDebug.records(seed);
+    const rows = [...document.querySelectorAll('#recordsTable tr')].map((tr) => [tr.dataset.drive, tr.textContent]);
+    const t = document.getElementById('recordsTable').closest('.scroll');
+    return { rows, overflow: t.scrollWidth - t.clientWidth };
+  });
+  const text = r.rows.map(([id, t]) => `${id}: ${t}`).join('\n');
+  check(r.rows.length === 3, `two roads and one month record (got\n${text})`);
+  check(r.rows[0][0] === 'b2' && /a new best/.test(r.rows[0][1]), `the dated latest best is new (got\n${text})`);
+  check(r.rows[1][0] === 'a4' && !/new best/.test(r.rows[1][1]) && /date unknown/.test(r.rows[1][1]) && /of 3 scored drives/.test(r.rows[1][1]), `an undated import is no "latest" (got\n${text})`);
+  check(r.rows[2][0] === 'm2' && /Smoothest drive this month, of 2/.test(r.rows[2][1]), `braking measured once is no record (got\n${text})`);
+  check(r.overflow <= 1, `the records table fits a 390 px screen (overflows by ${r.overflow} px)`);
+});
+
 (async () => {
   const server = await serve();
   const base = `http://127.0.0.1:${server.address().port}`;
