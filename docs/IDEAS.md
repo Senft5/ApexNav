@@ -207,7 +207,7 @@ Today: accounts with Google sign-in, friends, crews (public and private, crews n
 | S-11 | Challenges: "drive 5 new roads this month", "pioneer 10 km", crew-vs-crew km | M | M | todo | Strava challenges, REVER |
 | S-12 | Highlights feed near you: viewpoints, cafés, meets, saved by members | M | M | todo | Roadtrippers, Google Maps contributions |
 | S-13 | Car meets map: public events and recurring Cars & Coffee, added by crews | H | M | todo | car meet apps, Facebook groups |
-| S-14 | Invite links that open the app (or the web) on the crew or route | H | S | todo | growth |
+| S-14 | Invite links that open the app (or the web) on the crew or route | H | S | done (custom scheme; Universal Links later) | growth |
 | S-15 | Profiles: handle, cars, crews, favourite roads, totals; private by default | M | M | todo | Strava profile |
 | S-16 | Block and report on every social surface; moderation queue for public crews and highlights | H | M | done (#120) | App Store requirement for UGC |
 | S-17 | Pairwise "which road was better?" after a drive feeds road scores (and is fun) | M | S | todo | SOCIAL §2.2 |
