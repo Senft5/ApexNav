@@ -14,3 +14,6 @@ backend/node_modules/
 .wrangler/
 backend/.wrangler/
 .worker/
+
+# Database exports hold personal data (docs/BACKUPS.md): never commit them
+apexnav-db-*.sql

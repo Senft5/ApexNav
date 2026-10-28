@@ -1,0 +1,30 @@
+-- Row count per table, one row: run on the live database and on a restored copy; the numbers must match (docs/BACKUPS.md).
+-- One SELECT of subqueries because D1 refuses long UNION ALL chains. Add new tables here when a migration creates one.
+SELECT
+  (SELECT COUNT(*) FROM users) AS users,
+  (SELECT COUNT(*) FROM members) AS members,
+  (SELECT COUNT(*) FROM invites) AS invites,
+  (SELECT COUNT(*) FROM sessions) AS sessions,
+  (SELECT COUNT(*) FROM friendships) AS friendships,
+  (SELECT COUNT(*) FROM blocks) AS blocks,
+  (SELECT COUNT(*) FROM crews) AS crews,
+  (SELECT COUNT(*) FROM crew_members) AS crew_members,
+  (SELECT COUNT(*) FROM crew_invites) AS crew_invites,
+  (SELECT COUNT(*) FROM segments) AS segments,
+  (SELECT COUNT(*) FROM grants) AS grants,
+  (SELECT COUNT(*) FROM board_entries) AS board_entries,
+  (SELECT COUNT(*) FROM shared_routes) AS shared_routes,
+  (SELECT COUNT(*) FROM road_bins) AS road_bins,
+  (SELECT COUNT(*) FROM hazard_obs) AS hazard_obs,
+  (SELECT COUNT(*) FROM ingest_pending) AS ingest_pending,
+  (SELECT COUNT(*) FROM rank_slots) AS rank_slots,
+  (SELECT COUNT(*) FROM seen) AS seen,
+  (SELECT COUNT(*) FROM points_ledger) AS points_ledger,
+  (SELECT COUNT(*) FROM highlights) AS highlights,
+  (SELECT COUNT(*) FROM highlight_ratings) AS highlight_ratings,
+  (SELECT COUNT(*) FROM reports) AS reports,
+  (SELECT COUNT(*) FROM segment_shares) AS segment_shares,
+  (SELECT COUNT(*) FROM upload_counts) AS upload_counts,
+  (SELECT COUNT(*) FROM app_auth_codes) AS app_auth_codes,
+  (SELECT COUNT(*) FROM cars) AS cars
+;
