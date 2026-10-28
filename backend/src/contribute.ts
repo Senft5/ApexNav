@@ -207,6 +207,10 @@ export async function contribute(env: Env, v: Viewer, req: Request): Promise<{ a
     stmts.push(env.DB.prepare("INSERT OR IGNORE INTO road_ways (way_id, s, w, n, e, shape) VALUES (?, ?, ?, ?, ?, ?)")
       .bind(c.wayId, Math.min(...lats), Math.min(...lons), Math.max(...lats), Math.max(...lons), JSON.stringify(c.shape)));
   }
+  // this month's km and pioneer km (IDEAS S-11): every accepted chunk counts; pioneer km only while this drive holds the first slot
+  stmts.push(env.DB.prepare(`INSERT INTO member_months (user_id, month, km, pioneer_km) VALUES (?1, ?2, ?3, ?4)
+                             ON CONFLICT (user_id, month) DO UPDATE SET km = km + ?3, pioneer_km = pioneer_km + ?4`)
+    .bind(v.id, now.toISOString().slice(0, 7), c.km, mult === MULTIPLIER[0] ? c.km : 0));
   if (mult > 0) {
     stmts.push(env.DB.prepare("INSERT INTO points_ledger (user_id, iso_week, octane) VALUES (?1, ?2, ?3) ON CONFLICT (user_id, iso_week) DO UPDATE SET octane = octane + ?3")
       .bind(v.id, isoWeek(now.getTime()), c.km * mult));

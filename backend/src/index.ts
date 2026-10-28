@@ -24,6 +24,7 @@ import { block, blockList, fileReport, isModerator, moderationQueue, moderationR
 import { contribute, setContribute } from "./contribute";
 import { pointsFor } from "./points";
 import { coverage, roadBins } from "./roads";
+import { crewStandings } from "./standings";
 import { eventCancel, eventCreate, eventRsvp, eventsList, eventsNear } from "./events";
 import { healthReport, healthSummary } from "./health";
 import { feedbackCreate, feedbackDone, feedbackList } from "./feedback";
@@ -133,6 +134,7 @@ on("POST", "/api/crews/invite/preview", async (req, env) => json(await crewInvit
 on("POST", "/api/crews/:id/invite", async (req, env, m) => json(await crewInvite(env, await requireMember(req, env), m.groups!.id), 201));
 on("DELETE", "/api/crews/:id/invites", async (req, env, m) => json(await crewInvitesRevoke(env, await requireMember(req, env), m.groups!.id)));
 on("GET", "/api/crews/discover", async (req, env) => json(await crewDiscover(env, await requireMember(req, env), new URL(req.url))));
+on("GET", "/api/crews/standings", async (req, env) => json(await crewStandings(env, await requireMember(req, env))));
 on("PUT", "/api/crews/:id", async (req, env, m) => { await crewUpdate(env, await requireMember(req, env), m.groups!.id, req); return noContent(); });
 on("POST", "/api/crews/:id/join", async (req, env, m) => json(await crewJoinPublic(env, await requireMember(req, env), m.groups!.id)));
 on("DELETE", "/api/crews/:id/membership", async (req, env, m) => { await crewLeave(env, await requireMember(req, env), m.groups!.id); return noContent(); });

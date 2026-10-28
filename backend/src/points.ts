@@ -1,5 +1,6 @@
 // Points ("Octane") totals. Points are written when a contribution is merged (contribute.ts); this module only reads them.
 import { Env } from "./util";
+import { myMonth } from "./standings";
 
 /** ISO week label like 2026-W43 for a timestamp (UTC). */
 export function isoWeek(ms: number): string {
@@ -19,5 +20,6 @@ export async function pointsFor(env: Env, userId: string) {
   const total = mine.results.reduce((s, r) => s + r.octane, 0);
   // your own pioneer badges (IDEAS S-09): roads you were first or second to map; never anyone else's
   const badges = await env.DB.prepare("SELECT pioneer_firsts AS firsts, pioneer_seconds AS seconds FROM members WHERE user_id = ?").bind(userId).first<{ firsts: number; seconds: number }>();
-  return { total: Math.round(total * 100) / 100, weeks: mine.results, board: board.results, pioneer: { firsts: badges?.firsts ?? 0, seconds: badges?.seconds ?? 0 } };
+  return { total: Math.round(total * 100) / 100, weeks: mine.results, board: board.results, pioneer: { firsts: badges?.firsts ?? 0, seconds: badges?.seconds ?? 0 },
+           month: await myMonth(env, userId) };
 }

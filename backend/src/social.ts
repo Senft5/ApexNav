@@ -272,7 +272,7 @@ export const myGrants = (env: Env, v: Viewer) => all(env,
 // ---- boards --------------------------------------------------------------------------------------
 /** Publishes one result to every audience the owner has opted into, and only those. */
 export async function publish(env: Env, v: Viewer, req: Request): Promise<{ published: number }> {
-  const b = await body<{ segment_id?: string; driver_score?: number; time_s?: number | null; driven_on?: string }>(req);
+  const b = await body<{ segment_id?: string; driver_score?: number; time_s?: number | null; driven_on?: string; smoothness?: number | null }>(req);
   const seg = await first<{ id: string; origin_id: string | null }>(env,
     "SELECT id, origin_id FROM segments WHERE id = ? AND owner = ?", str(b.segment_id, "segment_id", 1, 64), v.id);
   if (!seg) throw new HttpError(404, "no_segment");
@@ -282,6 +282,9 @@ export async function publish(env: Env, v: Viewer, req: Request): Promise<{ publ
   if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) throw new HttpError(400, "bad_driven_on");
   const time = b.time_s == null ? null : b.time_s;
   if (time !== null && (!Number.isInteger(time) || time < 1 || time > 36000)) throw new HttpError(400, "bad_time_s");
+  // how smooth the run was, 0-100 (IDEAS S-08 smoothest crew); unknown stays null
+  const smooth = b.smoothness == null ? null : b.smoothness;
+  if (smooth !== null && (!Number.isInteger(smooth) || smooth < 0 || smooth > 100)) throw new HttpError(400, "bad_smoothness");
 
   const grants = await all<{ audience_type: string; audience_id: string; share_times: number }>(env,
     "SELECT audience_type, audience_id, share_times FROM grants WHERE user_id = ? AND share_scores = 1", v.id);
@@ -290,11 +293,11 @@ export async function publish(env: Env, v: Viewer, req: Request): Promise<{ publ
     const ok = g.audience_type === "friend" ? await isAcceptedFriend(env, v.id, g.audience_id) : await isCrewMember(env, g.audience_id, v.id);
     if (!ok) continue;
     stmts.push(env.DB.prepare(
-      `INSERT INTO board_entries (id, segment_id, canon_id, user_id, audience_type, audience_id, driver_score, time_s, driven_on)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+      `INSERT INTO board_entries (id, segment_id, canon_id, user_id, audience_type, audience_id, driver_score, time_s, driven_on, smoothness)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
        ON CONFLICT (segment_id, user_id, audience_type, audience_id, driven_on)
-       DO UPDATE SET driver_score = ?7, time_s = ?8`,
-    ).bind(crypto.randomUUID(), seg.id, seg.origin_id ?? seg.id, v.id, g.audience_type, g.audience_id, score, g.share_times ? time : null, day));
+       DO UPDATE SET driver_score = ?7, time_s = ?8, smoothness = ?10`,
+    ).bind(crypto.randomUUID(), seg.id, seg.origin_id ?? seg.id, v.id, g.audience_type, g.audience_id, score, g.share_times ? time : null, day, smooth));
   }
   if (stmts.length) await env.DB.batch(stmts);
   return { published: stmts.length };

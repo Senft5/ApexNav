@@ -29,7 +29,7 @@ def out():
 
 
 def test_day_bests_and_publishing_once(out):
-    assert out["bests"] == [{"day": "2026-10-27", "score": 760, "time_s": 290}, {"day": "2026-10-20", "score": 650, "time_s": 300}]
+    assert out["bests"] == [{"day": "2026-10-27", "score": 760, "time_s": 290, "smoothness": None}, {"day": "2026-10-20", "score": 650, "time_s": 300, "smoothness": None}]
     assert [b["day"] for b in out["pub"]] == ["2026-10-20"]                 # the 27th was sent with this score already
     assert out["again"] == ["2026-10-27", "2026-10-20"]                      # a better run that day is sent again
 

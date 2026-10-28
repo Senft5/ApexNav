@@ -12,7 +12,8 @@
       const day = x && x.d && typeof x.d.date === 'string' && /^\d{4}-\d{2}-\d{2}/.test(x.d.date) ? x.d.date.slice(0, 10) : null;
       if (!day || day < from || !x.p || !Number.isFinite(x.p.score)) continue;
       const had = best.get(day);
-      if (!had || x.p.score > had.score) best.set(day, { day, score: x.p.score, time_s: x.p.time_s ?? null });
+      const smooth = x.p.components && Number.isFinite(x.p.components.smoothness) ? x.p.components.smoothness : null;   // for the smoothest crew (IDEAS S-08)
+      if (!had || x.p.score > had.score) best.set(day, { day, score: x.p.score, time_s: x.p.time_s ?? null, smoothness: smooth });
     }
     return [...best.values()].sort((a, b) => b.day.localeCompare(a.day));
   }
