@@ -1466,6 +1466,7 @@
         ? 'No member measurements on this route yet. Drive it with Share road feel on to be the first (3× points).'
         : `Measured by members: ${m.coveredKm.toFixed(1)} of ${m.km.toFixed(1)} km (${Math.round(m.coverage * 100)}%)` +
           (m.roughness != null ? ` · roughness ${m.roughness.toFixed(2)}` : '') + (m.bankedKm >= 0.05 ? ` · ${m.bankedKm.toFixed(1)} km banked` : '') +
+          (m.roughKm >= 0.05 ? ` · ${m.roughKm.toFixed(1)} km rough` : '') +
           (m.avgPasses != null ? ` · ${m.avgPasses.toFixed(1)} runs on average` : '');
     }
     async function fetchAlpr(t) {
@@ -1662,7 +1663,10 @@
       // A driven road has measured sectors; a planned one has its map-only fun score (docs/ROUTING.md).
       const bars = Array.isArray(t.sectors) && t.sectors.length
         ? [['Twist', avgSector('tech')], ['Flow', avgSector('flow')], ['Surface', avgSector('surf')]]
-        : [['Fun', t.fun ? t.fun.fun : null], ['Twist', t.fun ? t.fun.twist : null], ['Flow', t.fun ? t.fun.flow : null]];
+        : [['Fun', t.fun ? t.fun.fun : null], ['Twist', t.fun ? t.fun.twist : null], ['Flow', t.fun ? t.fun.flow : null],
+           // Surface only once members have measured enough of it; map geometry can't know pavement.
+           ...(window.ApexContributor && ApexContributor.surfaceScore(t.measured) != null ? [['Surface', ApexContributor.surfaceScore(t.measured)]] : [])];
+      $('routeCardBars').style.gridTemplateColumns = `repeat(${bars.length}, minmax(0, 1fr))`;
       $('routeCardBars').innerHTML = bars.map(([label, v]) =>
         `<div class="bar"><span>${label} <b>${v != null ? v : '--'}</b></span><i><u style="width:${v != null ? v : 0}%"></u></i></div>`
       ).join('');

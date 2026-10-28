@@ -2,6 +2,7 @@
 // What leaves the phone: OSM way id, direction, bin index, and four road numbers per 5 m bin. Never coordinates, speeds or times.
 // The pure part (buildContributions) is deterministic and unit-tested; matchDrive/fetchWays/contributeDrive are the thin network shell.
 (function (root) {
+  const SMOOTH_G = 0.12, ROUGH_G = 0.30, MAX_LOOKUP_WAYS = 150;   // roughness g rms: smooth at or under, broken at or over
   const BIN_M = 5, MIN_BINS = 20, MAX_BINS = 2000, MAX_OFF_ROAD_M = 25, MAX_AGE_DAYS = 13;
   const SKIP_CLASSES = new Set(['residential', 'service_other', 'unclassified_service', 'service']);   // private-feeling roads are never contributed
   const M_LAT = 110540;
@@ -279,11 +280,17 @@
    * What the crowd has measured along a planned route. Matches it, looks up /api/roads for the ways it uses, and returns coverage and averages.
    * `lookup(wayIds)` returns the /api/roads JSON (or null when signed out). Unknown stays unknown: no data means null, not zero.
    */
+  // The server takes 50 ways a lookup; a long route asks in batches (up to 150 ways). Any batch signed out = null.
+  async function lookupAll(ids, lookup) {
+    const parts = [];
+    for (let s = 0; s < ids.length; s += 50) parts.push(await lookup(ids.slice(s, s + 50)));
+    return parts.some((p) => !p) ? null : Object.assign({}, ...parts);
+  }
   async function measuredAlong(route, lookup, opts = {}) {
     const match = await matchDrive(route, opts.fetch);
-    const ids = [...new Set(match.filter((m) => m && m.way != null).map((m) => m.way))].slice(0, 50);
+    const ids = [...new Set(match.filter((m) => m && m.way != null).map((m) => m.way))].slice(0, MAX_LOOKUP_WAYS);
     if (!ids.length) return null;
-    const [ways, roads] = await Promise.all([fetchWays(ids, opts.fetch), lookup(ids)]);
+    const [ways, roads] = await Promise.all([fetchWays(ids, opts.fetch), lookupAll(ids, lookup)]);
     if (!roads) return null;
     return summarize(locate({ drive: route, match, ways }), roads, route.lat.length);
   }
@@ -299,13 +306,13 @@
   }
   async function measuredSeries(route, lookup, opts = {}) {
     const match = await matchDrive(route, opts.fetch);
-    const ids = [...new Set(match.filter((m) => m && m.way != null).map((m) => m.way))].slice(0, 50);
+    const ids = [...new Set(match.filter((m) => m && m.way != null).map((m) => m.way))].slice(0, MAX_LOOKUP_WAYS);
     if (!ids.length) return null;
-    const [ways, roads] = await Promise.all([fetchWays(ids, opts.fetch), lookup(ids)]);
+    const [ways, roads] = await Promise.all([fetchWays(ids, opts.fetch), lookupAll(ids, lookup)]);
     return roads ? seriesFrom(locate({ drive: route, match, ways }), roads, route.lat.length) : null;
   }
   function summarize(runs, roads, total) {
-    let covered = 0, located = 0, passes = 0, rough = [], banked = 0;
+    let covered = 0, located = 0, passes = 0, rough = [], banked = 0, smooth = 0, broken = 0;
     for (const run of runs) {
       const d = roads[run.way] && roads[run.way][run.dir], idx = d ? new Map(d.i.map((b, j) => [b, j])) : null;
       for (const p of run.pts) {
@@ -313,24 +320,40 @@
         const j = idx && idx.get(p.bin);
         if (j == null) continue;
         covered++; passes += d.n[j];
-        if (finite(d.rough[j])) rough.push(d.rough[j]);
+        if (finite(d.rough[j])) { rough.push(d.rough[j]); if (d.rough[j] <= SMOOTH_G) smooth++; else if (d.rough[j] >= ROUGH_G) broken++; }
         if (finite(d.cam[j]) && Math.abs(d.cam[j]) >= 3) banked++;
       }
     }
     return { km: total * BIN_M / 1000, coveredKm: covered * BIN_M / 1000, coverage: total ? covered / total : 0, located: located / (total || 1),
-             roughness: rough.length ? mean(rough) : null, bankedKm: banked * BIN_M / 1000, avgPasses: covered ? passes / covered : null };
+             roughness: rough.length ? mean(rough) : null, bankedKm: banked * BIN_M / 1000, avgPasses: covered ? passes / covered : null,
+             smoothKm: smooth * BIN_M / 1000, roughKm: broken * BIN_M / 1000 };
   }
 
   /**
-   * Gentle score adjustment for a candidate loop from member measurements. Only measured roughness moves the score (a rough stretch is a real
-   * penalty up to 6 points at full coverage); unmeasured roads are neutral, never penalised, so a route no one has driven is not disadvantaged.
+   * Route score adjustment from member measurements (docs/ROUTING.md, Measured roads). Fun scores run 0–100, so this is a real input:
+   * - rough surface: up to -8 (same scale as core effective_mu: fine at 0.08 g rms, fully rough at 0.38 g);
+   * - measured smooth surface: up to +3 (≤ 0.12 g rms);
+   * - banked road (|camber| ≥ 3°): up to +2 when a tenth of the route is banked.
+   * Weighted by how much of the route is measured (full weight at half) and by passes (one pass counts 3/4, two or more fully).
+   * Unmeasured roads are neutral, never penalised or rewarded, so a route no one has driven is not disadvantaged.
    */
   function measuredAdjust(m) {
-    if (!m || m.roughness == null || !(m.coverage > 0)) return 0;
-    const rough = Math.max(0, Math.min(1, (m.roughness - 0.08) / 0.30));       // same scale as core effective_mu: fine at 0.08 g rms, fully rough at 0.38 g
-    return -6 * Math.min(1, m.coverage * 2) * rough;
+    if (!m || !(m.coverage > 0)) return 0;
+    const cover = Math.min(1, m.coverage * 2), passes = m.avgPasses == null ? 1 : Math.min(1, 0.5 + m.avgPasses / 4), w = cover * passes;
+    let adj = 0;
+    if (m.roughness != null) {
+      adj -= 8 * w * Math.max(0, Math.min(1, (m.roughness - 0.08) / 0.30));
+      adj += 3 * w * Math.max(0, Math.min(1, (SMOOTH_G - m.roughness) / 0.07));
+    }
+    if (m.km > 0 && m.bankedKm > 0) adj += passes * Math.min(2, (m.bankedKm / m.km) * 20);
+    return adj;
+  }
+  /** Surface 0–100 from measured roughness (100 = glass), or null when under a fifth of the route is measured. */
+  function surfaceScore(m) {
+    if (!m || m.roughness == null || !(m.coverage >= 0.2)) return null;
+    return Math.round(100 * (1 - Math.max(0, Math.min(1, (m.roughness - 0.08) / 0.30))));
   }
 
-  const api = { createLive, createAmbient, driveIdFor, measuredSeries, seriesFrom, measuredAdjust, measuredAlong, summarize, locate, buildContributions, matchDrive, fetchWays, contributeDrive, eligible, project, cumulative, SKIP_CLASSES };
+  const api = { createLive, createAmbient, driveIdFor, measuredSeries, seriesFrom, measuredAdjust, surfaceScore, measuredAlong, summarize, locate, buildContributions, matchDrive, fetchWays, contributeDrive, eligible, project, cumulative, SKIP_CLASSES };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexContributor = api;
 })(typeof window !== 'undefined' ? window : globalThis);

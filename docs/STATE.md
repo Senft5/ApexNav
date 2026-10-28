@@ -1,5 +1,10 @@
 # APEX NAV — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-10-28: measured roads count in routing
+- #85 merged (loops sized with real road distances).
+- Measured road data now moves route choice for members (docs/ROUTING.md, Measured roads): `measuredAdjust` −8 rough … +3 smooth, +2 banked, weighted by coverage and passes; unmeasured stays neutral. `measuredAlong`/`measuredSeries` look up to 150 ways in batches of 50 (long routes used to see only their first 50 ways). Route card shows a Surface bar once a fifth of the route is measured. Production has very little measured data yet (909 bins, no camber as of 2026-10-26), so the effect in the field will be small until people drive with sharing on.
+- Exact next task: stage discovery that also covers the ends of long A→B trips (multi-centre search), and using measured data during stage discovery (road-3 remainder).
+
 ## Session 2026-10-28: loops the length you asked for
 - #82 merged (fun A→B routing, see the entry below and docs/ROUTING.md).
 - Loops: stage plans were sized with crow-fly connectors x 1.6, so in hills they routed 40–75 % long (Knoxville 45 mi request → 99–102 km, ~3.5 h). Now the best 6 reachable stages get one road-distance matrix (`valhallaMatrix` splits it into calls of ≤100 pairs and returns times and km) and `ApexFunRoute.loopPlansFromMatrix` chains 1–3 within 25 % of the target; crow-fly plans stay as the fallback. In Chromium against the public servers, loops land within ~15 % (docs/ROUTING.md, Loops). Not driven on a phone.

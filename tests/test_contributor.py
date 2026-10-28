@@ -43,6 +43,9 @@ out.driveIds = [C.driveIdFor({ id: 'rec_Dry Ridge.csv', date: '2026-10-22T09:00'
 // payload contains only the allowed keys
 out.keys = Object.keys(a[0]).sort().join() + '|' + Object.keys(a[0].bins[0]).sort().join();
 // network shell with a fake fetch: Valhalla trace_attributes + Overpass, then upload
+out.adjust2 = { onePass: C.measuredAdjust({ roughness: 0.6, coverage: 1, avgPasses: 1 }), banked: C.measuredAdjust({ roughness: null, coverage: 1, km: 10, bankedKm: 1, avgPasses: 3 }),
+  bankedLittle: C.measuredAdjust({ roughness: null, coverage: 1, km: 10, bankedKm: 0.5, avgPasses: 2 }), zeroCoverage: C.measuredAdjust({ roughness: 0.6, coverage: 0, km: 10, bankedKm: 1 }) };
+out.surface = [C.surfaceScore(null), C.surfaceScore({ roughness: 0.05, coverage: 0.1 }), C.surfaceScore({ roughness: 0.05, coverage: 0.5 }), C.surfaceScore({ roughness: 0.5, coverage: 1 }), C.surfaceScore({ roughness: 0.23, coverage: 1 })];
 out.adjust = [C.measuredAdjust(null), C.measuredAdjust({ roughness: null, coverage: 1 }), C.measuredAdjust({ roughness: 0.05, coverage: 1 }), C.measuredAdjust({ roughness: 0.6, coverage: 1 }), C.measuredAdjust({ roughness: 0.6, coverage: 0.1 }), C.measuredAdjust({ roughness: 0.23, coverage: 0.5 })];
 (async () => {
   // measured data along a route: way 77 direction 0 has bins 200..399 merged from 3 passes, one banked stretch, one unmeasured-camber stretch
@@ -58,6 +61,15 @@ out.adjust = [C.measuredAdjust(null), C.measuredAdjust({ roughness: null, covera
   out.series = (() => { const s = C.seriesFrom(C.locate({ drive: rt, match: rm, ways: { 77: way } }), roads, 1000); return { len: s.cam.length, known: s.cam.filter((v) => v != null).length, unknownRough: s.rough.filter((v) => v == null).length, first: s.cam.findIndex((v) => v != null), n: s.n.find((v) => v != null) }; })();
   out.viaNetwork = viaNet && { coveredKm: Math.round(viaNet.coveredKm * 100) / 100, banked: viaNet.bankedKm };
   out.signedOut = await C.measuredAlong(rt, async () => null, { fetch: fk });
+  // a route over 125 ways: three lookups of at most 50; one signed-out batch makes the whole answer unknown
+  const many = rt.lat.map((_, i) => ({ way: 1000 + Math.floor(i / 8), cls: 'tertiary' }));
+  const fkMany = async (url, init) => url.includes('trace_attributes')
+    ? { ok: true, json: async () => ({ edges: Array.from({ length: 125 }, (_, k) => ({ way_id: 1000 + k, road_class: 'tertiary' })), matched_points: JSON.parse(init.body).shape.map((_, k) => ({ type: 'matched', edge_index: Math.floor(k / 8) })) }) }
+    : { ok: true, json: async () => ({ elements: [] }) };
+  out.batches = [];
+  await C.measuredAlong(rt, async (ids) => { out.batches.push(ids.length); return {}; }, { fetch: fkMany });
+  let nth = 0;
+  out.batchSignedOut = await C.measuredAlong(rt, async () => (++nth === 2 ? null : {}), { fetch: fkMany });
   const calls = [];
   const fake = async (url, init) => {
     calls.push(url);
@@ -144,10 +156,21 @@ def test_measured_is_per_direction_and_network_path(result):
     assert result["signedOut"] is None
 
 
-def test_measured_adjustment_is_gentle_and_never_rewards_or_punishes_the_unknown(result):
+def test_measured_adjustment_moves_routes_but_never_rewards_or_punishes_the_unknown(result):
     none, unknown_rough, smooth, rough_full, rough_little, mid = result["adjust"]
-    assert none == 0 and unknown_rough == 0 and smooth == 0
-    assert rough_full == pytest.approx(-6) and -6 < rough_little < 0 and mid == pytest.approx(-3)
+    assert none == 0 and unknown_rough == 0
+    assert smooth == pytest.approx(3), "measured smooth pavement is worth up to 3"
+    assert rough_full == pytest.approx(-8) and -8 < rough_little < 0 and mid == pytest.approx(-4)
+    a = result["adjust2"]
+    assert a["onePass"] == pytest.approx(-6), "one pass counts three quarters"
+    assert a["banked"] == pytest.approx(2) and a["bankedLittle"] == pytest.approx(1)
+    assert a["zeroCoverage"] == 0
+    assert result["surface"] == [None, None, 100, 0, 50]
+
+
+def test_long_routes_look_up_ways_in_batches(result):
+    assert result["batches"] == [50, 50, 25]
+    assert result["batchSignedOut"] is None
 
 
 def test_series_marks_unmeasured_samples_null(result):

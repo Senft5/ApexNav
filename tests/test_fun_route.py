@@ -47,6 +47,9 @@ const cands = [
 ];
 for (const lv of ['quick', 'fun', 'max']) out['rank_' + lv] = F.rank(cands, lv).map(c => c.id);
 out.rankAdjust = F.rank([{ id: 'a', timeS: 1800, fun: fun(40, 30) }, { id: 'b', timeS: 1800, fun: fun(42, 30), adjust: -6 }], 'fun').map(c => c.id);
+// measured roads: a fully rough road (-8) loses a close call but can't sink a much more fun one
+out.roughClose = F.rank([{ id: 'a', timeS: 1800, fun: fun(40, 30) }, { id: 'b', timeS: 1800, fun: fun(46, 30), adjust: -8 }], 'fun').map(c => c.id);
+out.roughFar = F.rank([{ id: 'a', timeS: 1800, fun: fun(40, 30) }, { id: 'b', timeS: 1800, fun: fun(60, 30), adjust: -8 }], 'fun').map(c => c.id);
 out.rankNoTime = F.rank([{ id: 'x', timeS: null, fun: fun(10, 0) }], 'fun').map(c => c.id);
 
 // corridor: A at (0,0), B 20 km east
@@ -136,6 +139,7 @@ def test_rank_respects_each_levels_budget(r):
     assert r["rank_fun"][0] == "detour" and "huge" not in r["rank_fun"]
     assert r["rank_max"][0] == "huge"
     assert r["rankAdjust"] == ["a", "b"], "a measured rough road loses a near tie"
+    assert r["roughClose"] == ["a", "b"] and r["roughFar"] == ["b", "a"]
     assert r["rankNoTime"] == ["x"], "with no times there is still an answer"
 
 
