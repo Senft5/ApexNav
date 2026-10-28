@@ -74,7 +74,7 @@ place or by name) get one Valhalla matrix call from here to both ends of each (2
 within the time are listed best first (at most 5): road name, good corners, length, minutes to its start. They are drawn on
 the map too; tapping a row or a line routes from here into the near end and through the whole stage to its far end (shaping
 points, so a reroute stays on it). Names come from the same vector tiles (`transportation_name`, `ApexStages.nameStages`:
-the name under at least 2 of 5 points along it), else "Unnamed road"; a bare number reads "Route 28". Checked: Maryville TN,
+the name under at least 2 of 5 points along it), else "Road name unknown" (unknown, not unnamed); a bare number reads "Route 28". Checked: Maryville TN,
 30 min → Little River Gorge Road (42 good corners, 6.2 mi, 28 min away), Fence Rail Gap Road, Old Walland Highway; south of
 there, 15 min → Calderwood Highway (9 min away).
 

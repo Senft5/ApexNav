@@ -1522,7 +1522,8 @@
       state.mode = mode;
       if (mode === 'live') { cancelHold(); closePin(); $('hlOverlay').classList.remove('show'); }
       $('routeCardOptions').hidden = !optionsOffered(plannedRoute);
-      paintAlternates(); paintExplore();
+      paintAlternates();
+      if (mode === 'live' && explore) showExplore(null);           // its times were from where you were
       $('modePlate').textContent = { replay: `Replay${track && track.demo ? ' · Demo' : ''}${track && track.name ? ' · ' + track.name : ''} ×`, sim: 'Preview ×', live: 'Drive ● Rec' }[mode];
       $('modePlate').classList.toggle('live', mode === 'live');
       paintIdle();
@@ -2353,31 +2354,34 @@
     // end, through the whole stage). Roads come from the same stage discovery as loops; the matrix gives real drive times.
     const EXPLORE_KMH = 45;   // search radius per minute of driving, crow fly (capped by the 64-tile search)
     async function exploreNear(minutes, btn) {
-      if (loopBusy || $('planPanel').classList.contains('busy')) return;
+      if (loopBusy || state.mode === 'live' || $('planPanel').classList.contains('busy')) return;
       loopBusy = true;
+      const panel = planBusy(), was = plannedRoute;                 // a destination typed meanwhile waits, not races
       const ui = busy(btn, [...document.querySelectorAll('[data-loop-mi], [data-loop-min], [data-explore-min]')]);
       try {
         const c = await locate();
         if (!c) { toast(NO_FIX); return; }
         const maxKm = Math.min(14, minutes / 60 * EXPLORE_KMH);
         const hls = state.hlOn ? await allHighlights(c) : [];
+        const inReach = (s) => Math.min(FunRoute.kmBetween(c, { lat: s.lat[0], lon: s.lon[0] }), FunRoute.kmBetween(c, { lat: s.lat[s.lat.length - 1], lon: s.lon[s.lon.length - 1] })) <= maxKm;
         const stages = await ApexStages.discover(c, maxKm, (phase, f) => ui.step(phase === 'tiles' ? 'Finding roads' : 'Scoring roads', 0.1 + 0.6 * f),
-          { names: 40, ...(state.hlOn ? { highlights: hls, strength: state.hlStrength } : {}) });
+          { names: inReach, ...(state.hlOn ? { highlights: hls, strength: state.hlStrength } : {}) });
         const list = FunRoute.exploreShortlist(c, stages, maxKm, 12);   // 24 matrix pairs; most fall to the time limit
         ui.step('Measuring roads', 0.8);
         const m = list.length ? await valhallaMatrix([c], FunRoute.exploreTargets(list)) : { times: [[]] };
+        if (state.mode === 'live' || plannedRoute !== was) return;   // driving now, or another route went up: too late
         showExplore({ here: c, minutes, picks: FunRoute.explorePicks(list, m.times, minutes * 60) });
       } catch (_) { toast('Couldn\'t explore here. Check signal and try again.'); }
-      finally { loopBusy = false; ui.done(); }
+      finally { loopBusy = false; ui.done(); panel.done(); }
     }
     // A bare route number from the tiles' ref reads as a count: "282" → "Route 282".
-    const roadLabel = (name) => (!name ? 'Unnamed road' : /^\d+[A-Z]?$/.test(name) ? `Route ${name}` : name);
+    const roadLabel = (name) => (!name ? 'Road name unknown' : /^\d+[A-Z]?$/.test(name) ? `Route ${name}` : name);
     function showExplore(e) {
-      explore = e && e.picks.length ? e : null;
+      explore = e || null;                                          // up, with or without picks, until a route or ✕
       const box = $('exploreList');
       paintExplore();
       if (!e) { box.hidden = true; box.replaceChildren(); return; }
-      const head = document.createElement('p'); head.className = 'note';
+      const head = document.createElement('p'); head.className = 'note'; head.setAttribute('role', 'status');
       head.textContent = e.picks.length ? `Best roads within ${e.minutes} min: good corners · length · drive to the start` : `No good roads within ${e.minutes} min of here.`;
       box.replaceChildren(head, ...e.picks.map((p, i) => {
         const b = document.createElement('button'); b.className = 'place';
@@ -2389,7 +2393,7 @@
         return b;
       }));
       box.hidden = false;
-      if (explore && mapReady) {
+      if (e.picks.length && mapReady && state.mode !== 'live') {
         let w = e.here.lon, ea = e.here.lon, so = e.here.lat, n = e.here.lat;
         for (const p of e.picks) for (let i = 0; i < p.s.lat.length; i += 10) { w = Math.min(w, p.s.lon[i]); ea = Math.max(ea, p.s.lon[i]); so = Math.min(so, p.s.lat[i]); n = Math.max(n, p.s.lat[i]); }
         pauseFollow();
@@ -2400,12 +2404,12 @@
     }
     function paintExplore() {
       if (!mapReady || !map.getSource('apex-explore-src')) return;
-      map.getSource('apex-explore-src').setData(explore && state.mode !== 'live' ? { type: 'FeatureCollection', features: explore.picks.map((p, i) => ({ type: 'Feature', properties: { i },
+      map.getSource('apex-explore-src').setData(explore && explore.picks.length && state.mode !== 'live' ? { type: 'FeatureCollection', features: explore.picks.map((p, i) => ({ type: 'Feature', properties: { i },
         geometry: { type: 'LineString', coordinates: p.s.lat.map((la, k) => [p.s.lon[k], la]) } })) } : emptyFC());
     }
     async function driveStage(i) {
       const e = explore, p = e && e.picks[i];
-      if (!p || loopBusy || state.mode === 'live' || $('planPanel').classList.contains('busy')) return;
+      if (!p || loopBusy || optionBusy || state.mode === 'live' || $('planPanel').classList.contains('busy')) return;
       loopBusy = true;
       const ui = planBusy();
       try {
@@ -2417,6 +2421,7 @@
         if (explore !== e) return;                                  // cleared meanwhile
         const name = roadLabel(p.s.name), end = pts[pts.length - 1];
         const t = await trackFromPolyline(r.coords, 'explore', name);
+        if (explore !== e || state.mode === 'live') return;         // cleared, or a drive started, while routing
         const glare = FunRoute.glare(t, r.timeS, new Date());
         Object.assign(t, { fun: funOf(t, r.turns), timeS: r.timeS, unavoided: FunRoute.unavoided(avoid, r), glareMin: glare ? Math.round(glare.minutes) : null,
                            request: { from: null, to: { lat: end.lat, lon: end.lon }, via: pts.slice(1, -1).map(q => ({ lat: q.lat, lon: q.lon, shaping: true })) } });

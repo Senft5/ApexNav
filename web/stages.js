@@ -56,7 +56,7 @@
       const keys = [], values = [], feats = [];
       while (lr.pos < lb.length) {
         const t = lr.varint(), f = t >> 3;
-        if (f === 1) name = utf8.decode(lr.bytes());
+        if (f === 1) { name = utf8.decode(lr.bytes()); if (name !== layerName) break; }   // another layer: skip its keys and values
         else if (f === 2) feats.push(lr.bytes());
         else if (f === 3) keys.push(utf8.decode(lr.bytes()));
         else if (f === 4) values.push(decodeValue(lr.bytes()));
@@ -106,7 +106,7 @@
   };
   let tileUrl = null;
   const MAX_TILES = 64;
-  async function roadPieces(c, radiusKm, onProgress) {
+  async function roadPieces(c, radiusKm, onProgress, withNames = false) {
     if (!tileUrl) tileUrl = (await Loading.json(TILEJSON)).tiles[0];
     const z = 13, jobs = [];
     // At most 64 tiles: a 14 km radius needs 81 at 39°N, so shrink the area to fit instead of giving up (which
@@ -119,10 +119,9 @@
       for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) jobs.push([x, y]);
     }
     if (!jobs.length || jobs.length > MAX_TILES) jobs.splice(0, jobs.length, tileOf(c.lat, c.lon, z));
-    let done = 0;
+    let done = 0, failed = 0;
     const pieces = [];
-    pieces.names = [];   // named road lines (transportation_name), for naming stages when asked
-
+    pieces.names = [];   // named road lines (transportation_name), only when asked (naming stages)
     await Promise.all(jobs.map(async ([x, y]) => {
       try {
         const buf = new Uint8Array(await Loading.arrayBuffer(tileUrl.replace('{z}', z).replace('{x}', x).replace('{y}', y)));
@@ -131,10 +130,12 @@
           if (!ROAD_CLASSES.has(p.class) || p.ramp === 1 || p.service || p.access === 'no' || p.surface === 'unpaved') continue;
           for (const l of f.lines) pieces.push({ cls: p.class, pts: l });
         }
-        for (const f of decodeLayer(buf, 'transportation_name', z, x, y)) pieces.names.push({ properties: f.props, geometry: { type: 'MultiLineString', coordinates: f.lines } });
-      } catch (_) { /* a missing tile just means fewer candidates */ }
+        if (withNames) for (const f of decodeLayer(buf, 'transportation_name', z, x, y)) pieces.names.push({ properties: f.props, geometry: { type: 'MultiLineString', coordinates: f.lines } });
+      } catch (_) { failed++; /* a missing tile just means fewer candidates */ }
       onProgress && onProgress(++done, jobs.length);
     }));
+    // No tile at all is no data, not "no roads here": say so instead of returning an empty area.
+    if (failed === jobs.length) throw new Error('no map tiles');
     return pieces;
   }
 
@@ -261,7 +262,7 @@
   }
 
   async function discover(c, radiusKm, onProgress, opts = {}) {
-    const pieces = await roadPieces(c, radiusKm, (d, n) => onProgress && onProgress('tiles', d / n));
+    const pieces = await roadPieces(c, radiusKm, (d, n) => onProgress && onProgress('tiles', d / n), !!opts.names);
     onProgress && onProgress('scoring', 0);
     const { strokes: all, ends } = strokes(pieces);
     const stages = [];
@@ -278,7 +279,8 @@
     onProgress && onProgress('scoring', 1);
     stages.sort((a, b) => b.score - a.score);
     const out = applyHighlights(stages, opts.highlights, opts.strength);
-    if (opts.names) nameStages(out.slice(0, opts.names), pieces.names);
+    // opts.names: which stages the caller will show (a filter); the best 40 of them get names.
+    if (opts.names) nameStages(out.filter(opts.names).slice(0, 40), pieces.names);
     return out;
   }
   // Each stage's road name from the tiles' own name lines: the name most of 5 points along it sit on (2 of 5 at
