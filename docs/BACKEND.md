@@ -58,6 +58,7 @@ Implemented in `backend/src/{auth,social,segments}.ts`, one router in `index.ts`
   still on, and not blocked either way. Times appear only with `share_times`.
 - Unfriend, block, leave crew, revoke grant: the grants and published entries between those people are deleted in the same transaction.
 - Friend requests answer identically for unknown, non-member and real handles (no handle enumeration). The requester cannot accept their own request.
+- **Rate limits** (`backend/src/ratelimit.ts`, Cloudflare rate limiting bindings in wrangler.jsonc, free): every write 60/min per session (per IP signed out), sign-in start and app code exchange 20/min per IP (not the Google callback or logout); over the limit is `429 rate_limited` with `retry-after: 60` (road uploads already retry on 429). Reads are not limited. Per-feature caps (uploads/hour, km/day, crews, highlights/day) stay on top.
 - **Garage** (`garage.ts`, migration 0008): a car card is shown only when its owner switches `shared` on, and then only to accepted friends and
   members of the same **private** crew (anyone can join a public crew, so it doesn't count), never across a block either way, never for an owner with no
   handle. No owner id, location or drive data is in it. Ten cars at most (checked inside the insert); always exactly one primary while you have any.

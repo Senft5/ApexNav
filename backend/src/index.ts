@@ -5,6 +5,7 @@ import {
 } from "./auth";
 import { convoyConnect, convoyCreate, convoyJoin, convoyRoom, unwrap } from "./convoy_routes";
 import { Env, HttpError, body, json, str } from "./util";
+import { rateCheck } from "./ratelimit";
 import {
   blockUser, boardFor, crewCreate, crewDiscover, crewInvite, crewJoin, crewJoinPublic, crewLeave, crewList, crewMembers, crewUpdate, friendAccept, friendList, friendRequest,
   myGrants, publish, removePair, setGrant, setHandle,
@@ -137,13 +138,14 @@ async function handle(req: Request, env: Env): Promise<Response> {
         const m = url.pathname.match(re);
         if (m && req.method === method) {
           csrfCheck(req, env);
+          await rateCheck(req, env, url.pathname);
           return await handler(req, env, m);
         }
       }
       if (routes.some(([, re]) => re.test(url.pathname))) throw new HttpError(405, "method_not_allowed");
       throw new HttpError(404, "not_found");
     } catch (e) {
-      if (e instanceof HttpError) return json({ error: e.message }, e.status);
+      if (e instanceof HttpError) return json({ error: e.message }, e.status, e.message === "rate_limited" ? { "retry-after": "60" } : {});
       console.error(e);
       return json({ error: "server_error" }, 500);
     }

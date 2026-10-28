@@ -684,6 +684,51 @@
     if (m.min_offset_m <= SOLO_EARLY_APEX_M && m.apex_mps_driven - m.min_mps >= SOLO_APEX_DIP_MPS) return { kind: 'early_apex', value: -m.min_offset_m, vs_best: false };
     return null;
   }
+  // How repeatably a corner is driven over your clean passes (port of drive_analysis._marks/_spread, IDEAS D-07).
+  const SPREAD_MIN_PASSES = 3, SPREAD_BRAKE_G = -0.20, SPREAD_ONSET = 0.4, SLOW_DIP_MPS = 1.0, SLOW_BAND_MPS = 0.2, SLOW_GAP = 2;
+  const median = (xs) => { const s = xs.slice().sort((p, q) => p - q), k = s.length >> 1; return s.length % 2 ? s[k] : (s[k - 1] + s[k]) / 2; };
+  function sampleSd(xs) {                                           // robust: 1.4826 x median absolute deviation
+    if (xs.length < SPREAD_MIN_PASSES) return null;
+    const m = median(xs);
+    return 1.4826 * median(xs.map((x) => Math.abs(x - m)));
+  }
+  // [braking onset, slowest point] of one pass as indexes into it, each null without a clear one (noise-robust, see Python).
+  function passMarks(d, start, end, apex) {
+    const lon = d.lon_g, v = d.speed_mps, n = v.length, lo = Math.max(0, apex - BRAKE_LOOKBACK);
+    const sm = (i) => (lon[Math.max(0, i - 1)] + lon[i] + lon[Math.min(n - 1, i + 1)]) / 3;
+    let onset = null, k = apex;                                      // the braking run nearest the apex
+    while (k >= lo && !(sm(k) <= SPREAD_BRAKE_G)) k--;
+    if (k >= lo) {
+      let r = k;
+      while (r > lo && sm(r - 1) <= SPREAD_BRAKE_G) r--;
+      let pk = r;
+      for (let i = r + 1; i <= k; i++) if (sm(i) < sm(pk)) pk = i;
+      let j = pk;
+      while (j > lo && sm(j - 1) <= SPREAD_ONSET * sm(pk)) j--;
+      onset = j > lo ? j : null;
+    }
+    let i0 = start;
+    for (let i = start + 1; i <= end; i++) if (v[i] < v[i0]) i0 = i;
+    const vmin = v[i0];
+    let slow = null;
+    if (vmin <= v[start] - SLOW_DIP_MPS && vmin <= v[end] - SLOW_DIP_MPS) {
+      const near = (q) => v[q] <= vmin + SLOW_BAND_MPS;
+      let a = i0, b = i0;                                            // bins near the minimum around it, gaps of SLOW_GAP bridged
+      for (let moved = true; moved;) { moved = false; for (let q = a - 1; q >= Math.max(start, a - 1 - SLOW_GAP); q--) if (near(q)) { a = q; moved = true; break; } }
+      for (let moved = true; moved;) { moved = false; for (let q = b + 1; q <= Math.min(end, b + 1 + SLOW_GAP); q++) if (near(q)) { b = q; moved = true; break; } }
+      slow = Math.floor((a + b) / 2 + 0.5);
+    }
+    return [onset, slow];
+  }
+  const ON_A_WINDOW = 10;
+  function onA(a, near, b, i) {                                     // searched only around where the mark should fall
+    const [j, dist] = nearestIndexWin(b.lat[i], b.lon[i], a.lat, a.lon, Math.max(0, near), ON_A_WINDOW);
+    return dist <= MATCH_RADIUS_M ? j : null;
+  }
+  function spread(brakes, mins, passes) {
+    const b = brakes.filter((x) => x !== null), m = mins.filter((x) => x !== null);
+    return { passes, brake_sd_m: sampleSd(b), brake_passes: b.length, min_sd_m: sampleSd(m), min_passes: m.length };
+  }
   function coach(a, others) {
     const hints = others.map(() => -1), out = [];
     for (const c of a.corners) {
@@ -691,6 +736,8 @@
       const ma = cornerPhases(a.speed_mps, a.lon_g, a.lat_g, c.start, c.end, c.apex, c.apex_mps);
       if (ma.min_mps < STOPPED_MPS) { out.push({ apex: c.apex, m: ma, best: null, gain_s: null, tip: null, passes: 0 }); continue; }
       let best = ma, bestFrom = -1, passes = 1;
+      const [oa, sa] = passMarks(a, c.start, c.end, c.apex);             // D-07 marks, in m along A's road from its apex
+      const brakes = [oa === null ? null : (c.apex - oa) * 5], mins = [sa === null ? null : (sa - c.apex) * 5];
       others.forEach((b, j) => {
         const w = matchWindow(a, c.start, c.end, b, hints[j]);
         if (!w) return;
@@ -704,11 +751,14 @@
         mb.time_s = tb;
         if (mb.min_mps < STOPPED_MPS) return;
         passes++;
+        let [ob, sb] = passMarks(b, bs, be, bApex).map((x) => (x === null ? null : onA(a, c.apex - (bApex - x), b, x)));
+        if (ob !== null && ob > c.apex) ob = null;                       // braking cannot begin past the apex
+        brakes.push(ob === null ? null : (c.apex - ob) * 5); mins.push(sb === null ? null : (sb - c.apex) * 5);
         if (mb.envelope_use <= PACE_CEILING && mb.time_s < best.time_s) { best = mb; bestFrom = j; }
       });
       const gain = ma.time_s - best.time_s;
       out.push({ apex: c.apex, m: ma, best: bestFrom < 0 ? null : best, best_from: bestFrom, gain_s: gain,
-                 tip: coachTip(ma, bestFrom >= 0 && gain >= TIP_GAIN_S ? best : null), passes });
+                 tip: coachTip(ma, bestFrom >= 0 && gain >= TIP_GAIN_S ? best : null), passes, spread: spread(brakes, mins, passes) });
     }
     const clean = out.filter(x => x.gain_s !== null);
     const thisS = clean.reduce((s, x) => s + x.m.time_s, 0), gainS = clean.reduce((s, x) => s + (x.gain_s >= TIP_GAIN_S ? x.gain_s : 0), 0);

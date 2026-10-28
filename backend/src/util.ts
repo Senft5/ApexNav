@@ -8,6 +8,8 @@ export interface Env {
   OWNER_EMAIL?: string;     // secret: the first sign-in with this address becomes the owner/first member
   PEPPER?: string;          // secret: server-side hmac key for dedupe hashes
   PUBLIC_ORIGIN?: string;
+  WRITE_LIMIT?: RateLimit;  // wrangler.jsonc ratelimits: writes per session (or per IP when signed out)
+  AUTH_LIMIT?: RateLimit;   // sign-in endpoints per IP
 }
 
 export class HttpError extends Error {
