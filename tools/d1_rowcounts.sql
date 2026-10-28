@@ -32,5 +32,7 @@ SELECT
   (SELECT COUNT(*) FROM hazard_reports) AS hazard_reports,
   (SELECT COUNT(*) FROM hazard_votes) AS hazard_votes,
   (SELECT COUNT(*) FROM shared_route_audience) AS shared_route_audience,
+  (SELECT COUNT(*) FROM crew_events) AS crew_events,
+  (SELECT COUNT(*) FROM crew_event_rsvps) AS crew_event_rsvps,
   (SELECT COUNT(*) FROM d1_migrations) AS d1_migrations
 ;

@@ -151,6 +151,16 @@ seconds over router seconds for the part driven, used only after 2 min and 1 rou
 0.6–1.8 and smoothed, so a red light or a jam doesn't swing it (tests/test_eta.py). A reroute or a new drive starts the pace
 over. Blank off route, on a recorded drive, or when the router gave no time. No traffic goes into it.
 
+## Spoken directions
+
+The router's maneuvers are kept with the route (`stepsOf`, placed in route order so a loop's second pass of a junction is
+not the first) and spoken in the co-driver's voice (web/directions.js, IDEAS V-04): "In 0.4 miles, turn left onto Deals
+Gap Road" from max(400 m, 30 s) out, then "Turn left onto Deals Gap Road" at max(40 m, 5 s), with ", then turn right onto
+US 129" when the next turn is within 150 m. Roundabouts name the exit; the end says "Arriving at your destination". Starts,
+"continue" and "stay straight" are never said. The call at the turn is a hazard-priority line (ahead of corner notes) and
+a corner note within 35 m of a junction is left out, so one bend is never called twice. Any notes mode; off route, nothing.
+A route rebuilt from a shared shape has no maneuvers and so no directions.
+
 ## Fun score (map only)
 
 `ApexFunRoute.score` on 5 m geometry (`geometry()`: resample, curvature, corner detection from the

@@ -550,13 +550,18 @@
   }
   function driverScore(v, lonG, latG, corners, lo = 0, hi = null) {
     hi = hi === null ? v.length : hi;
-    const uses = [], pace = [], smooth = [], brake = [];
+    const ts = [];
     for (const c of corners) {
       if (c.start < lo || c.end >= hi) continue;
       const t = cornerTechnique(v, lonG, latG, c);
-      if (!t) continue;
-      uses.push(t.use); pace.push(paceCredit(t.use)); smooth.push(t.smooth); brake.push(t.brake);
+      if (t) ts.push(t);
     }
+    return techniqueScore(ts);
+  }
+  /** The Driver Score of a list of cornerTechnique results (the live stage delta scores corners one at a time, IDEAS D-05). */
+  function techniqueScore(ts) {
+    const uses = [], pace = [], smooth = [], brake = [];
+    for (const t of ts) { uses.push(t.use); pace.push(paceCredit(t.use)); smooth.push(t.smooth); brake.push(t.brake); }
     if (!uses.length) return { score: null, corners: 0, components: null };
     const mean = (a) => a.reduce((x, y) => x + y, 0) / a.length;
     const consistency = 1 - Math.min(1, std(uses) / 0.25);
@@ -970,7 +975,7 @@
 
   const api = {
     profileRecording,
-    driverScore, cornerTechnique, fatigue, spreadBy, turnIn, segmentPass, segmentWindow,
+    driverScore, techniqueScore, cornerTechnique, fatigue, spreadBy, turnIn, segmentPass, segmentWindow,
     removeSpurs, retracedShare,
     compareDrives, cornerMetrics, elapsedS, cornerPhases, coach, ggEnvelope, gripUse, ggSector, abruptMoments,
     G_STD, MPS_TO_MPH, ALPR_RADIUS_M,

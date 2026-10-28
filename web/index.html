@@ -28,6 +28,11 @@
   <script src="plain_notes.js"></script>
   <script src="hazard_reports.js"></script>
   <script src="outbox.js"></script>
+  <script src="stage_delta.js"></script>
+  <script src="directions.js"></script>
+  <script src="whats_new.js"></script>
+  <script src="saved_routes.js"></script>
+  <script src="crew_events.js"></script>
   <script src="incident.js"></script>
   <script src="traffic.js"></script>
   <script src="in_car.js"></script>
@@ -390,6 +395,14 @@
     .hz-ask { position: absolute; left: 10px; right: 10px; bottom: calc(96px + var(--safe-bottom, 0px)); z-index: 6; display: flex; gap: 8px; align-items: center;
       background: var(--panel); color: var(--panel-ink); border: 1px solid var(--rule); padding: 10px; max-width: 460px; }
     .hz-ask[hidden] { display: none; }
+    /* Live delta on a saved stage (IDEAS D-05): technique against your best pass, never time. */
+    .stage-bar { position: absolute; left: 10px; bottom: 12px; z-index: 5; display: flex; gap: 10px; align-items: baseline;
+      background: var(--panel); color: var(--panel-ink); border: 1px solid var(--rule); border-left: 6px solid var(--panel-dim); padding: 8px 12px; max-width: 340px; }
+    .stage-bar[hidden] { display: none; }
+    .stage-bar span { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 150px; }
+    .stage-bar b { font-family: var(--font-num, inherit); font-size: 22px; }
+    .stage-bar small { color: var(--panel-dim); }
+    .stage-bar.ahead { border-left-color: #2e9e5b; } .stage-bar.behind { border-left-color: #d0453a; }
     .hz-ask span { flex: 1; font-weight: 700; }
     .hz-ask .key { min-height: 56px; }
     .hz-pin { font: 800 11px var(--font-ui, sans-serif); letter-spacing: 0.06em; padding: 2px 5px; border: 1.5px solid var(--signal, #c33); color: var(--signal, #c33); background: var(--panel, #fff); white-space: nowrap; }
@@ -444,6 +457,7 @@
               <div class="row mt-8">
                 <button class="ink-btn solid" id="routeDriveBtn">Drive it</button>
                 <button class="ink-btn" id="routePreviewBtn">Preview</button>
+                <button class="ink-btn" id="routeSaveBtn" aria-pressed="false">Save</button>
                 <button class="ink-btn" id="routeShareBtn">Share</button>
               </div>
               <div class="stack-8" id="routeSharePick"></div>
@@ -565,6 +579,7 @@
           <button class="linkbtn" id="hzCancel">Cancel</button>
         </div>
       </div>
+      <div class="stage-bar" id="stageBar" role="status" aria-live="polite" hidden><span id="stageName"></span><b id="stageDelta">--</b><small id="stageCount"></small></div>
       <div class="hz-ask" id="hzAsk" role="alertdialog" aria-live="assertive" hidden><span id="hzAskText"></span><button class="key" id="hzStill">Still there</button><button class="key" id="hzGone">Gone</button></div>
       <div class="overlay dim" id="pinOverlay" role="dialog" aria-modal="true" aria-label="Dropped pin">
         <div class="card-sheet">
@@ -1616,6 +1631,7 @@
         if (d > ApexNoteTiming.MAX_M) break;
         const key = `${track.id}:${e.type}:${e.index}`;
         if (state.spoken.has(key) || d < 10) continue;
+        if (e.type === 'corner' && ApexDirections.atJunction(track.steps, noteM(e))) { state.spoken.add(key); continue; }   // the direction calls it
         const call = chainedCall(e, ev, spirited);
         const apexMps = e.type === 'corner' && Number.isFinite(e.apex_mph) ? e.apex_mph / 2.2369362921 : null;
         if (d > ApexNoteTiming.leadM({ vMps, apexMps, text: call.text, reactionS: reactS })) continue;
@@ -1623,6 +1639,13 @@
         if (e.type === 'corner' ? !spirited : !(spirited || noteworthyInCruise(e))) continue;
         say(call.text, false, call.chain, null, { kind: e.type === 'corner' ? 'ordinary' : 'hazard', key, atM: noteM(e) });
         if (live) reaction.called(performance.now(), call.text, ApexNoteTiming.needsBrake(vMps, apexMps));
+      }
+      // Directions at junctions (IDEAS V-04), in any notes mode: the call at the turn goes ahead of corner notes.
+      if (track && track.kind === 'route' && !offRoute) {
+        for (const line of ApexDirections.due(track.steps, state.cursorM, vMps, state.spoken, track.id)) {
+          state.spoken.add(line.key);
+          say(line.text, false, null, null, { kind: line.now ? 'hazard' : 'ordinary', key: line.key, atM: line.atM });
+        }
       }
       // Roads you have driven: one technique tip per remembered corner, only with full notes on (never over a commute),
       // moving on a fresh heading, and only when it ends before any call is due: it starts MEMO_S of driving beyond the
@@ -1875,11 +1898,13 @@
     // Junction turns (slight/normal/sharp left and right, U-turns, ramps, roundabouts): fun scoring drops the corners there.
     const TURN_TYPES = new Set([9, 10, 11, 12, 13, 14, 15, 16, 18, 19, 20, 21, 26, 27]);
     function routeOf(trip) {
-      const coords = [], turns = [], times = [];
+      const coords = [], turns = [], times = [], steps = [];
       let cumS = 0;
       trip.legs.forEach((leg, i) => {
         const shape = decodePolyline6(leg.shape);
         for (const m of leg.maneuvers || []) if (TURN_TYPES.has(m.type) && shape[m.begin_shape_index]) turns.push(shape[m.begin_shape_index]);
+        // spoken directions (IDEAS V-04): where each maneuver is, its type, the road it turns onto, roundabout exits
+        for (const m of leg.maneuvers || []) { const p = shape[m.begin_shape_index]; if (p) steps.push({ lon: p[0], lat: p[1], type: m.type, street: (m.street_names && m.street_names[0]) || null, exits: m.roundabout_exit_count }); }
         // the router's own clock along the route: [lon, lat, seconds so far] at each maneuver, for the live ETA (eta.js)
         for (const m of leg.maneuvers || []) { if (shape[m.begin_shape_index]) times.push([...shape[m.begin_shape_index], cumS]); if (Number.isFinite(m.time)) cumS += m.time; }
         coords.push(...shape.slice(i ? 1 : 0));
@@ -1893,7 +1918,25 @@
       const sum = trip.summary || {};
       // what the route uses that the driver may have asked to avoid (undefined = the router didn't say)
       const has = { highways: sum.has_highway, tolls: sum.has_toll, ferries: sum.has_ferry };
-      return { coords, turns, names, has, times, timeS: Number.isFinite(sum.time) ? sum.time : null };
+      return { coords, turns, names, has, times, steps, timeS: Number.isFinite(sum.time) ? sum.time : null };
+    }
+    // The router's maneuvers placed on a track for spoken directions (IDEAS V-04; web/directions.js); [] without a router's steps.
+    function stepsOf(t, r) {
+      if (!r || !Array.isArray(r.steps) || !t || !Array.isArray(t.lat) || !t.lat.length) return [];
+      // in route order: the first stretch after the last one placed that comes within 25 m, then its closest point (a loop or an
+      // out-and-back passes the same junction twice; the global nearest point could be the other pass)
+      const c = Math.cos(t.lat[0] * Math.PI / 180), n = t.lat.length;
+      const dm = (i, lat, lon) => Math.hypot((t.lon[i] - lon) * 111320 * c, (t.lat[i] - lat) * 110540);
+      let from = 0;
+      return ApexDirections.placeSteps(r.steps, (lat, lon) => {
+        let i = from;
+        while (i < n && dm(i, lat, lon) > 25) i++;
+        if (i >= n) return null;
+        let best = i;
+        for (let j = i + 1; j < Math.min(n, i + 20); j++) if (dm(j, lat, lon) < dm(best, lat, lon)) best = j;
+        from = best;
+        return t.dist[best];
+      });
     }
     // The router's maneuver times placed on a track: [[metres along it, seconds so far]], in order (ApexEta.routerLeft).
     function timeMarksOf(t, r) {
@@ -2111,22 +2154,48 @@
     // Log and Stages are another page, so coming back to Map reloads this one: keep the planned route for the session and
     // rebuild it here from its own geometry (no router call, works offline). Also what a reload after a lost map restores.
     const PLANNED = 'apex.plannedRoute';
+    // The planned route survives a page change and an app restart for PLANNED_KEEP_MS (kept with its directions, router times
+    // and limits, web/saved_routes.js), so a phone that killed the app mid-trip comes back to the same route.
+    const PLANNED_KEEP_MS = 12 * 3600_000;
     function persistPlanned(t) {
-      try {
-        const coords = t.lat.map((la, i) => [+t.lon[i].toFixed(6), +la.toFixed(6)]);
-        sessionStorage.setItem(PLANNED, JSON.stringify({ id: t.id, name: t.name, request: t.request || null, coords, fun: t.fun || null, timeS: t.timeS ?? null, extraS: t.extraS ?? null, why: t.why || null, unavoided: t.unavoided || [], townKm: t.townKm }));
-      } catch (_) { /* too big or storage off: the route just won't survive a page change */ }
+      try { localStorage.setItem(PLANNED, JSON.stringify({ ...ApexSavedRoutes.pack(t), extraS: t.extraS ?? null })); }
+      catch (_) { /* too big or storage off: the route just won't survive a restart */ }
+    }
+    // A packed route (planned or saved for offline) rebuilt on the phone: notes from its shape, the rest as it was kept.
+    async function trackFromPacked(p) {
+      const t = await trackFromPolyline(p.coords, p.id, p.name);
+      const u = ApexSavedRoutes.unpack(p, t.dist);
+      Object.assign(t, u, { extraS: p.extraS ?? null, unavoided: u.unavoided.filter(k => typeof k === 'string' && FunRoute.AVOID_LABELS[k]),
+                            townKm: u.townKm === null || Number.isFinite(u.townKm) ? u.townKm : undefined });
+      return t;
     }
     async function restorePlanned() {
       let saved = null;
-      try { saved = JSON.parse(sessionStorage.getItem(PLANNED) || 'null'); } catch (_) { saved = null; }
+      try { saved = JSON.parse(localStorage.getItem(PLANNED) || sessionStorage.getItem(PLANNED) || 'null'); } catch (_) { saved = null; }
       if (!saved || !Array.isArray(saved.coords) || saved.coords.length < 2) return;
-      const t = await trackFromPolyline(saved.coords, saved.id, saved.name);
-      Object.assign(t, { request: saved.request, fun: saved.fun || null, timeS: saved.timeS ?? null, extraS: saved.extraS ?? null, why: typeof saved.why === 'string' ? saved.why : null,
-                         unavoided: Array.isArray(saved.unavoided) ? saved.unavoided.filter(k => typeof k === 'string' && FunRoute.AVOID_LABELS[k]) : [],
-                         townKm: saved.townKm === null || Number.isFinite(saved.townKm) ? saved.townKm : undefined });
-      await buildRoute(null, saved.id, saved.name, t);
+      if (Number.isFinite(saved.savedAt) && Date.now() - saved.savedAt > PLANNED_KEEP_MS) { try { localStorage.removeItem(PLANNED); } catch (_) {} return; }
+      await buildRoute(null, saved.id, saved.name, await trackFromPacked(saved));
     }
+    // Saved for offline (IDEAS F-03): the route card's Save keeps it on the phone; Where to? lists it under Saved.
+    async function openSaved(p) {
+      $('destInput').value = p.name;
+      await buildRoute(null, p.id, p.name, await trackFromPacked(p));
+      toast(`${p.name}. Notes, directions and limits work with no signal; the map needs signal.`);
+    }
+    function paintSaveBtn() {
+      const t = plannedRoute, b = $('routeSaveBtn');
+      if (!b) return;
+      const saved = !!(t && ApexSavedRoutes.has(localStorage, t.id));
+      b.textContent = saved ? 'Saved' : 'Save'; b.setAttribute('aria-pressed', String(saved));
+    }
+    $('routeSaveBtn').addEventListener('click', () => {
+      const t = plannedRoute;
+      if (!t || !Array.isArray(t.lat) || t.lat.length < 2) return;
+      if (ApexSavedRoutes.has(localStorage, t.id)) { ApexSavedRoutes.remove(localStorage, t.id); toast(`${t.name} removed from saved routes.`); }
+      else if (ApexSavedRoutes.save(localStorage, ApexSavedRoutes.pack(t)) === 'saved') toast(`Saved for offline: ${t.name}. Find it in Where to?.`);
+      else toast('The phone is out of room for saved routes. Remove one first.');
+      paintSaveBtn();
+    });
     async function buildRoute(points, id, name, prebuilt = null, request = null) {
       let t = prebuilt;
       if (!t) {
@@ -2134,7 +2203,7 @@
         let r = null;
         try { [r] = await valhallaRoutes(points); } catch (_) { try { [r] = await osrmRoutes(points); } catch (err) { toast('Couldn\'t build the route. Check signal and try again.'); return; } }
         t = await trackFromPolyline(r.coords, id, name);
-        Object.assign(t, { request, fun: funOf(t, r.turns), timeS: r.timeS, timeMarks: timeMarksOf(t, r), unavoided: FunRoute.unavoided(avoid, r) });
+        Object.assign(t, { request, fun: funOf(t, r.turns), timeS: r.timeS, timeMarks: timeMarksOf(t, r), steps: stepsOf(t, r), unavoided: FunRoute.unavoided(avoid, r) });
       }
       if (explore) showExplore(null);                               // a route is up: the explore list has done its job
       if (t.request) for (const v of t.request.via) v.distM = t.dist[Core.nearestIndex(v.lat, v.lon, t.lat, t.lon, -1).index];
@@ -2144,7 +2213,7 @@
       plannedRoute = t;
       activate(t, 0, { quiet: state.mode !== 'live' });
       renderRouteCard(t);
-      persistPlanned(t);
+      persistPlanned(t); paintSaveBtn();
       openPlan(false);
       markDestination(t);
       if (state.mode !== 'live' && !booting) lockOnDestination(t);
@@ -2246,7 +2315,7 @@
       if (track !== t || state.mode !== 'live') return;           // the driver loaded something else meanwhile
       const nt = await trackFromPolyline(r.coords, t.id, t.name);
       if (track !== t || state.mode !== 'live') return;
-      Object.assign(nt, { request: { from: null, to: req.to, via: ahead }, fun: funOf(nt, r.turns), timeS: r.timeS, timeMarks: timeMarksOf(nt, r) });
+      Object.assign(nt, { request: { from: null, to: req.to, via: ahead }, fun: funOf(nt, r.turns), timeS: r.timeS, timeMarks: timeMarksOf(nt, r), steps: stepsOf(nt, r) });
       await buildRoute(null, t.id, t.name, nt);                     // activate() resets the monitor for the new route
     }
     // Traffic ahead (iOS app only; docs/ARCHITECTURE.md section 8). Every 2 min while on a planned route, Apple times the next
@@ -2341,7 +2410,7 @@
       }
       const at = (v) => Core.nearestIndex(v.lat, v.lon, nt.lat, nt.lon, -1).index;
       const via = [...ahead, ...along].map(v => ({ v, i: at(v) })).sort((a, b) => a.i - b.i).map(x => x.v);   // in order along it
-      Object.assign(nt, { request: { from: null, to: req.to, via }, fun: funOf(nt, route.turns), timeS: route.timeS, timeMarks: timeMarksOf(nt, route), unavoided: FunRoute.unavoided(avoid, route) });
+      Object.assign(nt, { request: { from: null, to: req.to, via }, fun: funOf(nt, route.turns), timeS: route.timeS, timeMarks: timeMarksOf(nt, route), steps: stepsOf(nt, route), unavoided: FunRoute.unavoided(avoid, route) });
       await buildRoute(null, t.id, t.name, nt);                     // activate() restarts the traffic clock for the new route
     }
     // Members: what others measured on these roads (d.t.measured) and a score adjustment for it (d.adjust: rough
@@ -2450,7 +2519,7 @@
       if (was && (routeOptions !== o || plannedRoute !== was || state.mode === 'live')) return null;
       // A winning alternate is pinned with shaping points along it, so a reroute stays on it.
       const via = c.kind === 'router' && c.extraS > 0 ? FunRoute.alongPoints(c.route.coords) : c.via;
-      Object.assign(t, { measured: c.t.measured, fun: c.fun, timeS: c.timeS, timeMarks: timeMarksOf(t, c.route), extraS: c.extraS, funLevel: o.level, glareMin: c.glare ? Math.round(c.glare.minutes) : null, townKm: c.townKm,
+      Object.assign(t, { measured: c.t.measured, fun: c.fun, timeS: c.timeS, timeMarks: timeMarksOf(t, c.route), steps: stepsOf(t, c.route), extraS: c.extraS, funLevel: o.level, glareMin: c.glare ? Math.round(c.glare.minutes) : null, townKm: c.townKm,
                          unavoided: FunRoute.unavoided(avoid, c.route), why: whyText(FunRoute.why(c, o.quickest), fewerTownKm(c, o.quickest), c.extraS),
                          request: { ...o.request, via: via.map(p => ({ lat: p.lat, lon: p.lon, shaping: true })) } });
       routeOptions = Object.assign(o, { picked: i, current: t });
@@ -2699,7 +2768,7 @@
         const t = await trackFromPolyline(r.coords, 'explore', name);
         if (explore !== e || state.mode === 'live') return;         // cleared, or a drive started, while routing
         const glare = FunRoute.glare(t, r.timeS, new Date());
-        Object.assign(t, { fun: funOf(t, r.turns), timeS: r.timeS, timeMarks: timeMarksOf(t, r), unavoided: FunRoute.unavoided(avoid, r), glareMin: glare ? Math.round(glare.minutes) : null,
+        Object.assign(t, { fun: funOf(t, r.turns), timeS: r.timeS, timeMarks: timeMarksOf(t, r), steps: stepsOf(t, r), unavoided: FunRoute.unavoided(avoid, r), glareMin: glare ? Math.round(glare.minutes) : null,
                            request: { from: null, to: { lat: end.lat, lon: end.lon }, via: pts.slice(1, -1).map(q => ({ lat: q.lat, lon: q.lon, shaping: true })) } });
         await buildRoute(null, 'explore', name, t);
         toast(`${name} · ${Math.max(1, Math.round(p.awayS / 60))} min to the start, then ${(p.s.km / 1.609344).toFixed(1)} mi`);
@@ -2765,7 +2834,7 @@
       routeOptions = null;
       showExplore(null);
       markDestination(null);
-      try { sessionStorage.removeItem(PLANNED); } catch (_) {}
+      try { sessionStorage.removeItem(PLANNED); localStorage.removeItem(PLANNED); } catch (_) {}
       $('destInput').value = '';
       renderRouteCard(null);
       if (track && track.kind === 'route' && state.mode !== 'live') {
@@ -2871,8 +2940,9 @@
         if (seq !== suggestSeq) return;                                  // a newer keystroke won
         if (!rows.length && !empty) empty = 'No matches nearby. Press Go to search everywhere.';
       } else {
-        rows = [...recentPlaces().map(p => ({ ...p, kind: 'Recent' })),
-                ...loadHighlights().filter(h => Number.isFinite(h.lat) && Number.isFinite(h.lon)).map(h => ({ label: h.name || 'Spot', lat: h.lat, lon: h.lon, kind: 'Spot' }))].slice(0, 8);
+        rows = [...ApexSavedRoutes.list(localStorage).slice(0, 4).map(p => ({ label: p.name, kind: Number.isFinite(p.miles) ? `Saved · ${p.miles} mi` : 'Saved', saved: p })),
+                ...recentPlaces().map(p => ({ ...p, kind: 'Recent' })),
+                ...loadHighlights().filter(h => Number.isFinite(h.lat) && Number.isFinite(h.lon)).map(h => ({ label: h.name || 'Spot', lat: h.lat, lon: h.lon, kind: 'Spot' }))].slice(0, 10);
       }
       shownRows = { q, rows: empty ? [] : rows };
       if (empty) { const n = document.createElement('p'); n.className = 'note'; n.textContent = empty; box.replaceChildren(n); box.hidden = false; return; }
@@ -2880,7 +2950,7 @@
         const b = document.createElement('button'); b.className = 'place';
         const name = document.createElement('b'); name.textContent = p.label;
         const kind = document.createElement('span'); kind.textContent = p.kind;
-        b.append(name, kind); b.addEventListener('click', () => routeToPlace(p));
+        b.append(name, kind); b.addEventListener('click', () => (p.saved ? openSaved(p.saved) : routeToPlace(p)));
         return b;
       }));
       box.hidden = !rows.length;
@@ -3123,6 +3193,14 @@
     // Block and report (web/safety_ui.js) on every social surface below; the garage uses it for friends' cars.
     let safety = null;
     try { safety = window.ApexSafetyUI ? ApexSafetyUI.mount({ el, btn, toast, apiCall, jsonOf }) : null; } catch (e) { console.error('safety', e); }
+    // Crew drives (web/crew_events.js, IDEAS S-06): planned drives across your crews, RSVPs, and the day's convoy.
+    let crewEvents = null;
+    try { crewEvents = window.ApexCrewEvents ? ApexCrewEvents.mount({ el, btn, toast, apiCall, jsonOf, report: safety && safety.report,
+      here: () => state.lastPosition || null, mapCentre: () => { const c = map.getCenter(); return { lat: c.lat, lon: c.lng }; },
+      plannedRoute: () => (plannedRoute && plannedRoute.lat.length > 1 ? { name: plannedRoute.name, geom: sharedGeom(plannedRoute) } : null),
+      goTo: (p) => { closeSheet(); routeToPlace(p); }, openRoute: (id) => openSharedRoute(id),
+      startConvoy: (name, handles) => (convoy && convoy.startFor ? convoy.startFor(name, handles) : Promise.resolve({ ok: false, status: 0 })),
+    }) : null; } catch (e) { console.error('crew drives', e); }
     let garage = null;
     try { garage = window.ApexGarageUI ? ApexGarageUI.mount({ el, btn, toast, apiCall, jsonOf, report: safety && safety.report }) : null; } catch (e) { console.error('garage', e); }
     const switchRow = (label, on, change) => { const b = el('button', { className: 'ink-btn' + (on ? ' on' : ''), textContent: `${label}: ${on ? 'On' : 'Off'}`, onclick: change }); b.setAttribute('aria-pressed', String(!!on)); return b; };
@@ -3206,6 +3284,7 @@
       body.append(you);
       if (convoy) body.append(convoy.section());
       body.append(sharedRoutesSection());
+      if (crewEvents) body.append(crewEvents.section(Array.isArray(crews) ? crews.map((c) => ({ id: c.id, name: c.name })) : []));
       if (garage) body.append(garage.section());
 
       // friends: a side pop-up (owner decision), opened from the button under You; new requests light it up
@@ -4023,6 +4102,36 @@
       liveAct.last = key; liveAct.at = now;
       activity('update', fields);
     }
+    // ---- live delta on your saved stages (IDEAS D-05; web/stage_delta.js) ----------------------------------------------
+    // Stages are the ones marked in the Log (apex.segments); the reference is your best-scoring pass among the drives here.
+    let stageWatch = null;
+    async function startStageWatch() {
+      stageWatch = null;
+      let segs = [];
+      try { segs = JSON.parse(localStorage.getItem('apex.segments') || '[]'); } catch (_) {}
+      if (!Array.isArray(segs) || !segs.length || !window.ApexStageDelta) return;
+      const drives = (await ApexRecording.all()).map((d) => ApexRecording.repair(Core, d)).filter((d) => Array.isArray(d.events));
+      const refs = [];
+      for (const seg of segs) {
+        const best = ApexStageDelta.best(drives.map((d) => ApexStageDelta.reference(Core, seg, d, ApexRecording.scorableCorners(d, ApexRecording.cornersOf(d)))));
+        if (best) refs.push(best);
+      }
+      if (refs.length && driveActive) stageWatch = { tracker: ApexStageDelta.createTracker(Core, refs), at: 0 };
+    }
+    function feedStage() {
+      const w = stageWatch, rows = drive.rec && drive.rec.rows;
+      if (!w || !rows || performance.now() - w.at < 1000) return;
+      w.at = performance.now();
+      const r = w.tracker.update(rows);
+      const bar = $('stageBar');
+      if (!r) { bar.hidden = true; return; }
+      bar.hidden = r.state === 'done';
+      $('stageName').textContent = r.name;
+      $('stageDelta').textContent = ApexStageDelta.label(r.delta);
+      $('stageCount').textContent = `${r.done}/${r.of} corners`;
+      bar.classList.toggle('ahead', r.delta > 0); bar.classList.toggle('behind', r.delta < 0);
+      if (r.state === 'done') toast(r.delta == null ? `${r.name} done.` : r.delta === 0 ? `${r.name}: level with your best.` : `${r.name}: ${Math.abs(r.delta)} points ${r.delta > 0 ? 'up on' : 'down on'} your best.`);
+    }
     async function enterDrive() {
       if (state.mode === 'live' && drive.sensors) return;
       if (state.mode === 'live' || driveActive) return;                                   // native app is feeding frames already or start is pending
@@ -4030,6 +4139,7 @@
       clearCarOffer();
       setPlaying(false);
       drive.rec = new ApexSensors.Recorder(); drive.status = { gps: 'waiting', motion: 'off', wake: 'off', message: '' }; drive.frames = 0;
+      startStageWatch();
       drive.live = null; drive.liveIdx = 0; drive.share = 'off'; drive.shareKm = 0; drive.shareErr = null; drive.roads = {}; drive.roadIdx = 0; drive.rest = null; breakSay = null; if (breakWorker) { breakWorker.terminate(); breakWorker = null; }
       if (NATIVE_SHELL) {   // the app's own GPS and IMU feed window.apex.live; no browser sensors to start
         drive.native = true;
@@ -4056,7 +4166,7 @@
             paintPerms();
             paintDriveStat();
           },
-          onFrame: (fr) => { if (!fr.has_fix) return; drive.frames++; recordFrame(fr); feedLive(); noteRoads(); noteRest(fr); window.apex.live(fr); paintDriveStat(); },
+          onFrame: (fr) => { if (!fr.has_fix) return; drive.frames++; recordFrame(fr); feedLive(); noteRoads(); noteRest(fr); feedStage(); window.apex.live(fr); paintDriveStat(); },
         });
         if (!driveActive || state.mode !== 'live') {
           sensors.stop();
@@ -4073,6 +4183,7 @@
     }
     async function leaveDrive(save) {
       driveActive = false;
+      stageWatch = null; $('stageBar').hidden = true;
       activity('end');
       const rec = drive.rec, sensors = drive.sensors, live = drive.live, road = rec && window.ApexRoadNames ? ApexRoadNames.mainRoad(drive.roads, rec.km * 1000) : null;
       drive.sensors = null; drive.rec = null; drive.live = null; drive.share = 'off'; drive.native = false;
@@ -4185,8 +4296,18 @@
       // Focus the dialog, not its button: VoiceOver reads the welcome, and no focus ring sits on Get started before a touch
       ob.classList.add('show'); paint(); ob.tabIndex = -1; ob.focus();
     }
+    const wasOnboarded = !!flag('apex.onboarded');
     if (!flag('apex.onboarded') && !window.APEX_EMBED && !['invite', 'crew', 'add', 'convoy', 'drive', 'play', 'at', 'theme', 'go'].some(k => params.has(k))) runOnboarding();
     else if (!flag('apex.onboarded')) flag('apex.onboarded', '1');
+    // What's new after an update (IDEAS O-10; web/whats_new.js): once, a moment after the page settles, never over a drive or a
+    // link that opened the app for something; a first install only marks it seen.
+    (() => {
+      if (!window.ApexWhatsNew || window.APEX_EMBED) return;
+      if (!wasOnboarded) { ApexWhatsNew.markSeen(localStorage); return; }
+      const busy = ['invite', 'crew', 'add', 'convoy', 'drive', 'play', 'at', 'theme', 'go', 'view'].some(k => params.has(k));
+      const news = ApexWhatsNew.pending(ApexWhatsNew.seen(localStorage), wasOnboarded, busy);
+      if (news) setTimeout(() => { if (!driveActive && !document.querySelector('.overlay.show')) ApexWhatsNew.show(el, news, () => ApexWhatsNew.markSeen(localStorage)); }, 1200);
+    })();
 
     // An invite, crew, friend or convoy link opened in iPhone Safari: offer to open it in the app instead (apexnav://open?...).
     // Only the link keys go across, and only values the app accepts; the app checks them again.
@@ -4247,7 +4368,7 @@
         feedReported(frame); feedReaction(frame); feedCrash(frame);
         state.live = frame; state.liveAt = performance.now();
         if (drive.native && drive.rec) {
-          drive.frames++; recordFrame(frame); feedLive(); noteRoads(); noteRest(frame);
+          drive.frames++; recordFrame(frame); feedLive(); noteRoads(); noteRest(frame); feedStage();
           const gps = Number.isFinite(frame.accuracy_m) && frame.accuracy_m > ApexSensors.MAX_ACCURACY_M ? 'weak' : 'on';
           if (drive.status.gps !== gps) drive.status.gps = gps;
           const cal = typeof frame.calibration === 'string' ? frame.calibration : null;

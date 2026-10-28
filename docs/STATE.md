@@ -1,5 +1,13 @@
 # APEX NAV — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-10-28 (night, continued): drive features, offline, TestFlight signing
+- Merged: #174 V-02, #175 U-09, #176 S-05 (migration 0012 applied by hand), #177 Z-03/Z-04 Your data, #178 Y-16/Y-18, #179 U-11 Live Activity (widget extension ApexNavLive), #180 D-17 crash check (impact_g in native and web frames).
+- #181 (open): F-05 hazard reports queue with no signal (web/outbox.js, `age_s`), O-09 listing draft (docs/LISTING.md), and the TestFlight fix below.
+- **TestFlight is blocked** since build 372.1: "Your account has reached the maximum number of certificates". Each automatic-signing archive made an "Apple Development: Created via API" certificate on a throwaway runner (10 exist). #181 archives ad hoc and signs at export (fallback: the old path). Revoking the 10 through the API was blocked as an irreversible action; the owner revokes them (docs/OWNER_TODO.md top row). Check the first main run after #181: if the ad-hoc export works, the step summary says "Signed at export from an ad-hoc archive".
+- Next PR from the f05 chain: D-05 stage delta (web/stage_delta.js, ApexCore.techniqueScore), S-03 friends' activity (GET /api/board/activity), V-04 spoken directions (web/directions.js; the app had no turn-by-turn before), O-10 what's new (web/whats_new.js; edit NEWS per release), F-03 saved routes (web/saved_routes.js; planned route kept 12 h).
+- Decisions: D-04 ghost car parked (a ghost that moves by time races the clock on public roads); D-05 compares technique only.
+- Exact next task: merge #181, push the f05 chain as one PR, confirm TestFlight uploads; then IDEAS H/M rows: Q-13 road pages (needs the archetype rules ported from core/reference_lap.py), R-19, D-19, S-13, Y-03 (needs a switch and an App Privacy update).
+
 ## Session 2026-10-28 (night, autonomous): App Store readiness and IDEAS
 - TestFlight works end to end: every app-changing merge uploads (Xcode 26 on macos-26); internal group "First Testers" gets all builds. The session can read App Store Connect through `ASC_*` secrets (docs/APP_REVIEW.md).
 - Merged tonight: #160 Z-13, #161 Y-13/Y-15 (+ backend-only merges skip iOS), #162 Z-15, #163 V-03, #164 Z-02, #165 note timing at corner entry (owner report), #166 Sign in with Apple + privacy/terms + APP_REVIEW.md + OWNER_TODO.md, #167 S-21 garage lookup, #168 S-22 convoy invites + QR, #169 O-12 review code, #170 D-09 drive card, #171 Z-12, #172 Q-15/Q-16 hazard reports (migration 0011 applied by hand to both D1), #173 V-01 note lead from speed/reaction/braking. Open: #174 V-02 plain words; this PR U-09 haptics.

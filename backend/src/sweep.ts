@@ -9,6 +9,9 @@ export const SWEEPS: Record<string, string> = {
   crew_invites: "DELETE FROM crew_invites WHERE expires_at <= datetime('now')",
   hazard_reports: "DELETE FROM hazard_reports WHERE expires_at <= datetime('now', '-1 day')",   // votes go with them (cascade)
   shared_routes: "DELETE FROM shared_routes WHERE created_at <= datetime('now', '-30 days')",       // audience rows go with them
+  // answers first (not left to the cascade), then the drives
+  crew_event_rsvps: "DELETE FROM crew_event_rsvps WHERE event_id IN (SELECT id FROM crew_events WHERE starts_at <= datetime('now', '-7 days'))",
+  crew_events: "DELETE FROM crew_events WHERE starts_at <= datetime('now', '-7 days')",
 };
 
 export async function sweepExpired(env: Env): Promise<Record<string, number>> {

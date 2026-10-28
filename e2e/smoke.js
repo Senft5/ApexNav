@@ -124,6 +124,47 @@ flow('Where to?: a suggestion builds a route with a card and a Start button (sea
   const name = await page.textContent('#routeBarName');
   check(/Maryville/.test(name), `route bar names the destination (got "${name}")`);
   check(await page.isVisible('#startDrive'), 'Start is offered');
+  // the router's turn is on the track for spoken directions (IDEAS V-04): halfway along, onto Hollow Creek Road
+  const steps = await page.evaluate(() => { const t = window.apexDebug.track; return { steps: t.steps, total: t.dist[t.dist.length - 1] }; });
+  const turn = steps.steps.find((x) => x.type === 10);
+  check(turn && turn.street === 'Hollow Creek Road' && Math.abs(turn.m / steps.total - 0.5) < 0.1, 'the turn is placed halfway: ' + JSON.stringify(steps.steps));
+  check(steps.steps.some((x) => x.type === 4) && !steps.steps.some((x) => x.type === 1), 'arrival kept, the start left out');
+}, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
+
+flow('saved for offline: Save on the route card, then with no signal it opens from Where to? with its directions (IDEAS F-03)', async (page, base) => {
+  let online = true;
+  await page.route('https://photon.komoot.io/**', (route) => (online ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ features: [
+    { geometry: { coordinates: [-83.9700, 35.7565] }, properties: { name: 'Maryville', state: 'Tennessee' } }] }) }) : route.abort()));
+  await page.route('https://valhalla1.openstreetmap.de/**', (route) => {
+    if (!online) return route.abort();
+    const req = JSON.parse(route.request().postData() || '{}');
+    if (!req.locations) return route.abort();
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify(stubTrip(req.locations)) });
+  });
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map);
+  await page.click('#destInput'); await page.fill('#destInput', 'Maryville');
+  await page.waitForSelector('#placeList .place', { timeout: 10000 });
+  await page.click('#placeList .place');
+  await page.waitForFunction(() => { const t = window.apexDebug.track; return t && t.kind === 'route' && t.steps && t.steps.length; }, null, { timeout: 20000 });
+  const [name, notesBefore] = await page.evaluate(() => [window.apexDebug.track.name, window.apexDebug.track.events.length]);
+  await page.evaluate(() => document.getElementById('routeSaveBtn').click());
+  await page.waitForFunction(() => document.getElementById('routeSaveBtn').textContent === 'Saved');
+  // no signal, a fresh start with nothing planned
+  online = false;
+  await page.evaluate(() => { localStorage.removeItem('apex.plannedRoute'); sessionStorage.clear(); });
+  await page.reload();
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map);
+  await page.click('#destInput');
+  await page.waitForSelector('#placeList .place:has-text("Saved")', { timeout: 5000 });
+  check((await page.textContent('#placeList')).includes(name), 'the saved route is listed');
+  await page.click('#placeList .place:has-text("Saved")');
+  await page.waitForFunction((n) => { const t = window.apexDebug.track; return t && t.name === n && t.kind === 'route'; }, name, { timeout: 10000 });
+  check(await page.evaluate(() => window.apexDebug.track.events.length) === notesBefore, 'the same notes, worked out on the phone: ' + notesBefore);
+  const steps = await page.evaluate(() => window.apexDebug.track.steps);
+  check(steps.some((x) => x.type === 10 && x.street === 'Hollow Creek Road'), 'directions came back with it');
+  check(/map needs signal/.test(await page.textContent('#toast')), 'says the map still needs signal');
 }, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
 
 flow('the car connects: CarPlay offers Start drive, and an apexnav://open?go=drive link starts one', async (page, base) => {
@@ -373,6 +414,126 @@ flow('no signal: a hazard report waits on the phone and goes when the connection
   check(await page.evaluate(() => localStorage.getItem('apex.outbox')) === null, 'and gone from the phone');
 });
 
+flow('a saved stage: the live delta shows while you drive it and the result at the end (native frames, IDEAS D-05)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
+    window.webkit = { messageHandlers: { apex: { postMessage: () => {} } } }; });
+  await page.route('**/api/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && window.ApexStageDelta && window.ApexRecording);
+  // a winding road and a stored best pass over it, with the stage marked in the Log
+  await page.evaluate(async () => {
+    const Core = window.ApexCore, MPH = 2.2369362921, lat = [], lon = [];
+    let la = 35.6, lo = -83.9, h = 0;
+    for (let i = 0; i < 800; i++) { if (i > 100 && i < 700) h += 0.05 * Math.sin((i - 100) / 25);
+      la += 5 * Math.cos(h) / 110540; lo += 5 * Math.sin(h) / (111320 * Math.cos(35.6 * Math.PI / 180)); lat.push(la); lon.push(lo); }
+    const { kappa } = Core.computeCurvature(lat, lon);
+    const v = kappa.map((k) => Math.max(9, 22 - 300 * Math.abs(k))), latG = v.map((x, i) => x * x * kappa[i] / 9.80665);
+    const lonG = v.map((x, i) => (i ? (x * x - v[i - 1] ** 2) / 10 / 9.80665 : 0));
+    const prof = Core.profileRecording({ lat, lon, distance_m: lat.map((_, i) => i * 5), speed_mph: v.map((x) => x * MPH), lon_g: lonG, lat_g: latG });
+    await ApexRecording.store({ id: 'e2e_best', name: 'Esses run', date: '2026-10-20T15:00:00Z', lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: v, lon_g: lonG, lat_g: latG,
+      g_known: null, events: prof.events, elev: null, hz: 1 });
+    const a = 110, b = 690;
+    localStorage.setItem('apex.segments', JSON.stringify([{ id: 'seg_e2e', name: 'Esses', lat0: lat[a], lon0: lon[a], lat1: lat[b], lon1: lon[b], length_m: (b - a) * 5,
+      geom: JSON.stringify(Array.from({ length: 60 }, (_, k) => { const i = a + Math.round(k * (b - a) / 59); return [lat[i], lon[i]]; })) }]));
+    window.__road = { lat, lon, v, latG, lonG };
+  });
+  await page.evaluate(() => window.apex.onNative({ type: 'link', params: { go: 'drive' } }));
+  await page.waitForTimeout(300);
+  if (await page.isVisible('#permSheet.show')) await page.click('#permGo');
+  // drive the same road the same way, as the app's frames (half a bin apart), in bursts a second apart
+  let seenBar = false;
+  for (let burst = 0; burst < 10; burst++) {
+    await page.evaluate((burst) => {
+      const r = window.__road;
+      for (let j = burst * 160; j < Math.min(1600, (burst + 1) * 160); j++) {
+        const i = Math.min(799, Math.floor(j / 2)), f = (j % 2) / 2, k = Math.min(799, i + 1);
+        window.apex.live({ lat: r.lat[i] + (r.lat[k] - r.lat[i]) * f, lon: r.lon[i] + (r.lon[k] - r.lon[i]) * f, accuracy_m: 4, speed_mps: r.v[i], course_deg: 0,
+          lat_g: r.latG[i], lon_g: r.lonG[i], has_fix: true, calibration: 'locked' });
+      }
+    }, burst);
+    await page.waitForTimeout(1050);
+    if (!seenBar && await page.isVisible('#stageBar')) { seenBar = /Esses/.test(await page.textContent('#stageBar')); }
+  }
+  check(seenBar, 'the stage bar showed during the stage');
+  await page.waitForFunction(() => /Esses: (level with|\d+ points (up|down) on) your best/.test(document.getElementById('toast').textContent), null, { timeout: 4000 });
+  check(!(await page.isVisible('#stageBar')), 'the bar goes when the stage ends');
+});
+
+flow("friends' activity: the Log lists who drove your stages lately and where you stand, as text (Worker stubbed, IDEAS S-03)", async (page, base) => {
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url());
+    const json = (b) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (u.pathname === '/api/board/activity') return json([
+      { handle: 'bob', name: 'Bob', canon_id: 'seg_1', stage: 'Esses <b>bold</b>', driver_score: 812, driven_on: '2026-10-26', you: { rank: 2, of: 3, mine: 700 } },
+      { handle: 'cara', name: null, canon_id: 'seg_2', stage: 'Dry Ridge', driver_score: 640, driven_on: '2026-10-25', you: { rank: null, of: 1, mine: null } }]);
+    return json([]);
+  });
+  await page.goto(base + '/analysis.html?tab=log');
+  await page.waitForSelector('#friendsPanel:not([hidden])');
+  const text = await page.textContent('#friendsList');
+  check(/@bob drove Esses <b>bold<\/b> · 812 · .* · you're 2nd of 3/.test(text), 'bob, the stage as typed (not as HTML), your rank: ' + text);
+  check(/@cara drove Dry Ridge · 640 .*you haven't posted a score here/.test(text), 'no rank when you have no score');
+  check(!(await page.$('#friendsList b b')), 'a stage name never becomes markup');
+});
+
+flow("what's new: shown once after an update, not on a first install, not over a link that opened the app (IDEAS O-10)", async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); if (!localStorage.getItem('apex.newsSeen')) localStorage.setItem('apex.newsSeen', 'an-older-release'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForSelector('#newsSheet', { timeout: 5000 });
+  check(/What's new/.test(await page.textContent('#newsSheet')) && (await page.$$('#newsSheet p')).length <= 4, 'one screen, at most four lines');
+  await page.click('#newsSheet button');
+  const id = await page.evaluate(() => localStorage.getItem('apex.newsSeen'));
+  check(id === require('../web/whats_new.js').NEWS.id, 'marked seen');
+  await page.reload(); await page.waitForTimeout(1800);
+  check(!(await page.$('#newsSheet')), 'not again');
+  // a first install: onboarding, never news; the release is marked seen so the next one is the first news
+  const fresh = await page.context().browser().newContext();
+  try {
+    const p2 = await fresh.newPage();
+    await p2.route('**/*', (r) => (r.request().url().startsWith(base) ? r.continue() : r.abort()));
+    await p2.goto(base + '/index.html'); await p2.waitForSelector('#onboard.show'); await p2.waitForTimeout(1800);
+    check(!(await p2.$('#newsSheet')), 'no news on a first install');
+    check(await p2.evaluate(() => localStorage.getItem('apex.newsSeen')) === require('../web/whats_new.js').NEWS.id, 'first install marks it seen');
+  } finally { await fresh.close(); }
+}, { news: true });
+
+flow('crew drives: an upcoming drive shows in Crew with who is going; Going answers it; Plan a drive posts one (Worker stubbed, IDEAS S-06)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  const posted = [];
+  const starts = new Date(Date.now() + 26 * 3600e3).toISOString();
+  let mine = null;
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url()), m = route.request().method();
+    const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (u.pathname === '/api/crews' && m === 'GET') return json([{ id: 'CREW1', name: 'Ridge Runners', role: 'member', members: 3, visibility: 'private' }]);
+    if (u.pathname === '/api/events') return json([{ id: 'EVT1AAAAAAAAAAAA', crew_id: 'CREW1', crew_name: 'Ridge Runners', title: 'Cherohala <i>Saturday</i>', starts_at: starts,
+      meet_name: 'Tellico Shell', meet_lat: 35.36, meet_lon: -84.29, route_id: null, notes: null, by_handle: 'bob', mine: false, can_cancel: false, my_rsvp: mine, going: ['bob', 'cara'], maybe: 1 }]);
+    if (m === 'POST') { posted.push([u.pathname, JSON.parse(route.request().postData() || 'null')]); return u.pathname.endsWith('/rsvp') ? (mine = 'going', route.fulfill({ status: 204 })) : json({ id: 'NEWEVTAAAAAAAAAA' }, 201); }
+    if (m === 'GET') return json([]);
+    return json({}, 404);
+  });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && typeof window.apex.live === 'function');
+  await page.evaluate(() => document.querySelector('.tab[data-view="crew"]').click());
+  await page.waitForSelector('text=Crew drives');
+  await page.waitForSelector('.drive-card');
+  const card = await page.textContent('.drive-card');
+  check(card.includes('Cherohala <i>Saturday</i>') && /Tomorrow|Today/.test(card) && card.includes('Going: @bob, @cara · 1 maybe'), 'the drive, as text: ' + card);
+  await page.click('.drive-card button:has-text("Going")');
+  await page.waitForFunction(() => document.querySelector('.drive-card button[aria-pressed="true"]')?.textContent === 'Going');
+  check(posted.some(([p, b]) => p === '/api/events/EVT1AAAAAAAAAAAA/rsvp' && b.status === 'going'), 'the answer was sent');
+  // plan one: map centre as the meeting point
+  await page.click('button:has-text("Plan a drive")');
+  await page.fill('input[aria-label="Drive name"]', 'Dragon run');
+  await page.click('button:has-text("Map centre")');
+  await page.click('button:has-text("Plan it")');
+  await page.waitForFunction(() => /Drive planned/.test(document.getElementById('toast').textContent));
+  const plan = posted.find(([p]) => p === '/api/crews/CREW1/events');
+  check(plan && plan[1].title === 'Dragon run' && /Z$/.test(plan[1].starts_at) && Number.isFinite(plan[1].meet.lat) && plan[1].route_id === null, 'the plan was sent: ' + JSON.stringify(plan));
+});
+
 flow('the Log page opens', async (page, base) => {
   await page.goto(base + '/analysis.html');
   await page.waitForLoadState('load');
@@ -413,9 +574,13 @@ flow('Your records: unknown dates and unscored drives never make a "new best", a
   const browser = await chromium.launch();
   let failed = 0;
   for (const { name, fn, ctxOpts } of flows) {
-    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, ...ctxOpts });
+    const { news, ...browserOpts } = ctxOpts;
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, ...browserOpts });
     // Only our own server: maps, routers, fonts and voices are blocked, so the result doesn't depend on the network.
     await ctx.route('**/*', (route) => (route.request().url().startsWith(base) ? route.continue() : route.abort()));
+    // "What's new" (IDEAS O-10) would sit over every flow; it is seen already unless a flow says otherwise (ctxOpts.news).
+    const newsId = require('../web/whats_new.js').NEWS.id;
+    if (!ctxOpts.news) await ctx.addInitScript((id) => { try { if (!localStorage.getItem('apex.newsSeen')) localStorage.setItem('apex.newsSeen', id); } catch (_) {} }, newsId);
     const page = await ctx.newPage();
     const errors = [];
     page.on('pageerror', (e) => errors.push(String(e && e.stack || e)));

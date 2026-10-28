@@ -157,6 +157,8 @@
         <div class="actions"><a class="btn solid" href="index.html">Go to the map</a><a class="btn" href="index.html?drive=dry_ridge&amp;play=1">Watch a replay</a></div>
       </div>
       <div class="cards" id="historyCards"></div>
+      <div class="panel" id="friendsPanel" hidden><h2>Friends lately</h2><div id="friendsList" class="stack-8"></div>
+        <p class="note">From friends and crews who share scores with you, on stages you have. Scores only, never times.</p></div>
       <div class="panel" id="trendPanel" hidden><h2>Score over time</h2><div id="trend"></div></div>
       <div class="panel" id="recordsPanel" hidden><h2>Your records</h2><div class="scroll"><table id="recordsTable"></table></div><p class="note" id="recordsNote"></p></div>
       <div class="panel" id="steadyPanel" hidden><h2>Braking consistency by month</h2><div id="steadyChart"></div><p class="note" id="steadyNote"></p></div>
@@ -276,6 +278,22 @@
     // ---------------------------------------------------------------------
     // HISTORY
     // ---------------------------------------------------------------------
+    // Friends' activity (IDEAS S-03): who drove your stages lately and where you stand. Set as text: handles and stage names are people's words.
+    const ordinal = (n) => n + (n % 100 >= 11 && n % 100 <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] || 'th');
+    async function renderFriends() {
+      const panel = $('friendsPanel'), box = $('friendsList');
+      if (!window.ApexSync || !(await ApexSync.member())) { panel.hidden = true; return; }
+      const rows = await ApexSync.activity();
+      panel.hidden = !rows.length;
+      box.replaceChildren(...rows.map((r) => {
+        const p = document.createElement('p'); p.className = 'friend-act';
+        const who = document.createElement('b'); who.textContent = '@' + (r.handle || 'someone');
+        const day = new Date(r.driven_on + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+        const you = r.you && r.you.rank ? ` · you're ${ordinal(r.you.rank)} of ${r.you.of}` : r.you ? ` · you haven't posted a score here` : '';
+        p.append(who, ` drove ${r.stage} · ${r.driver_score} · ${day}${you}`);
+        return p;
+      }));
+    }
     function renderHistory() {
       const scored = drives.filter(d => d.ds.score != null);
       const best = scored.reduce((m, d) => (!m || d.ds.score > m.ds.score ? d : m), null);
@@ -773,7 +791,7 @@
     }
     $('dvPick').addEventListener('change', renderDrive);
     function renderAll() {
-      renderDrive(); renderHistory(); renderSegments(); renderCompareSelectors(); renderCompare(); syncSegments(); renderContribute(); }
+      renderDrive(); renderHistory(); renderSegments(); renderCompareSelectors(); renderCompare(); syncSegments(); renderContribute(); renderFriends().catch(() => {}); }
     $('newStage').addEventListener('toggle', () => { if ($('newStage').open) renderSegStrip(); });
     // One view at a time: drives list (default), drive detail, stages, compare. No inner tab row.
     let view = 'history';

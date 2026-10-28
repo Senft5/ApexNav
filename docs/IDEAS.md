@@ -114,8 +114,8 @@ ideal drive and where to find time (#80), grip circle (#86), automatic mount cal
 | D-01 | Corner coach: brake zone, trail braking, coasting and throttle point per corner, timed over the same stretch | H | M | done (#80) | Harry's Lap Timer, Garmin Catalyst |
 | D-02 | Grip circle with the driver's own g-g envelope and per-corner grip use | H | M | done (#86) | RaceChrono, AiM |
 | D-03 | Live coaching on a known road: spoken "brake later" / "carry more speed" from your best pass | H | M | done (#100: technique tips only; speed tips stay on the analysis page by design) | STATE 2026-10-28, Garmin Catalyst |
-| D-04 | Ghost car on the map: your best pass (or a friend's shared ghost) as a moving marker with live delta | H | M | todo | SOCIAL §3, racing games, Strava Live Segments |
-| D-05 | Live delta bar during a known stage (green ahead / red behind your best, technique-scored, not speed-scored) | H | M | todo | Harry's Lap Timer |
+| D-04 | Ghost car on the map: your best pass (or a friend's shared ghost) as a moving marker with live delta | H | M | parked: a ghost that moves by time is a race against the clock on public roads (guardrails: never reward speed). D-05 gives the same "better than last time" by technique; a ghost belongs in track mode (D-15) | SOCIAL §3, racing games, Strava Live Segments |
+| D-05 | Live delta bar during a known stage (green ahead / red behind your best, technique-scored, not speed-scored) | H | M | done (web/stage_delta.js: on a stage you marked in the Log, each finished corner is scored as the Driver Score does and compared with your best pass over the same corners; the result is said at the end) | Harry's Lap Timer |
 | D-06 | Smoothness heatmap on the drive map (lateral jerk, abrupt inputs) with the three worst moments | M | S | done (#104) | Garmin Catalyst |
 | D-07 | Consistency score across passes of the same road, and a trend over weeks | M | S | done (#114 per-corner repeatability; monthly braking-consistency trend) | Strava fitness trend |
 | D-08 | Personal records feed: best Driver Score per road, per archetype, smoothest drive this month | M | S | partial (best Score per road by name, smoothest and best braking this month, this thread; per archetype todo) | Strava PRs |
@@ -178,7 +178,7 @@ adaptive notes (cruise vs spirited), car audio routing to Bluetooth/CarPlay (#73
 | V-01 | Note timing from your speed and reaction, not a fixed ~5 s; learned per driver | H | M | done (this PR: lead = time to say the note + your reaction + braking from your speed to the corner's at 0.35 g, 60–600 m; reaction learned from when you brake after a call, kept on the phone) | rally co-drivers |
 | V-02 | Note density levels a novice understands ("gentle left" vs "left 4 minus") | H | M | done (this PR: Settings → Voice → Plain words / Rally notes; plain is the default for new installs, saved settings keep rally; same notes, plain wording, spoken whole) | owner goal (approachable) |
 | V-03 | Hazard speech always pre-empts ordinary notes, never stale, never duplicated | H | S | done (this PR: web/speech_queue.js; hazards first and cut off an ordinary line, passed or old lines dropped, keyed lines never twice; the app gets one line at a time) | WORKER_QUEUE convoy-2 |
-| V-04 | Turn-by-turn and pace notes in one voice stream so transit directions never collide with notes | H | M | todo | Waze/Google voice |
+| V-04 | Turn-by-turn and pace notes in one voice stream so transit directions never collide with notes | H | M | done (web/directions.js: the router's junctions spoken early and at the turn, "then" for a turn right after, roundabout exits, arrival; the call at the turn goes ahead of corner notes and a corner note at a junction is left out) | Waze/Google voice |
 | V-05 | Phrases in the owner's voice (voice conversion), behind licences | M | L | owner (voice on hold) | docs/VOICE.md |
 | V-06 | Celebrity/character voice packs as cosmetic Octane rewards | M | M | todo | Waze voice packs |
 | V-07 | Voice commands: "report pothole", "skip this stage", "how far to the next stage" (Siri Shortcuts first) | M | M | todo | Waze, Google Assistant |
@@ -197,17 +197,17 @@ Today: accounts with Google sign-in, friends, crews (public and private, crews n
 |---|---|---|---|---|---|
 | S-01 | Crews as groups: public/private, nearby discovery, tiles, owner settings | H | M | done (#76) | Strava clubs, REVER groups |
 | S-02 | Convoy client: create/join by code or QR, live positions, gap in time, leader hazard calls, regroup | H | L | done (#84, #89) | WORKER_QUEUE convoy-1..3, REVER, Waze |
-| S-03 | Friends' activity in the Log with rank on shared stages | H | M | todo | WORKER_QUEUE log-friends, Strava feed |
+| S-03 | Friends' activity in the Log with rank on shared stages | H | M | done (Log → Friends lately: GET /api/board/activity, the board's visibility rules, your rank on each stage, scores only) | WORKER_QUEUE log-friends, Strava feed |
 | S-04 | Garage: car profile (mass, power, tyres, ride height), shareable car cards, no location | H | M | done (#98; ride height and grip numbers not yet) | SOCIAL §2.4, Drivetribe |
 | S-05 | Share a planned route (geometry + notes) to a friend or crew, never a recorded drive | H | M | done (this PR: Share on the route card to friends and crews, the shape without the first 400 m, 30 days; Crew → Routes shared with you → Open rebuilds the notes; migration 0012) | SOCIAL §2.5, Calimoto, Roadtrippers |
-| S-06 | Crew events: a planned drive with time, meeting point, route, RSVPs and a convoy that opens on the day | H | L | todo | Meetup, REVER rides, car clubs |
+| S-06 | Crew events: a planned drive with time, meeting point, route, RSVPs and a convoy that opens on the day | H | L | done (Crew → Crew drives: plan one for a crew with a meeting point and the planned route, going / maybe / can't, directions to meet, add to calendar, report; the planner's "Start the convoy" from 2 h before invites everyone going. Migration 0013) | Meetup, REVER rides, car clubs |
 | S-07 | Kudos and comments on shared drives and highlights | M | M | todo | Strava kudos |
 | S-08 | Local legends without speed: most passes of a stage this month, smoothest crew | M | S | todo | Strava Local Legends |
 | S-09 | Pioneer badges for first measured passes of a road (3× Octane already designed) | M | S | todo | SOCIAL §2.3, Waze points |
 | S-10 | Octane redemptions that buy nothing safety-related: cosmetics, voice packs, early features | M | M | todo | SOCIAL §2.3 |
 | S-11 | Challenges: "drive 5 new roads this month", "pioneer 10 km", crew-vs-crew km | M | M | todo | Strava challenges, REVER |
 | S-12 | Highlights feed near you: viewpoints, cafés, meets, saved by members | M | M | todo | Roadtrippers, Google Maps contributions |
-| S-13 | Car meets map: public events and recurring Cars & Coffee, added by crews | H | M | todo | car meet apps, Facebook groups |
+| S-13 | Car meets map: public events and recurring Cars & Coffee, added by crews | H | M | partial (crew drives, S-06, are crew-only; public listings and recurrence are still to do) | car meet apps, Facebook groups |
 | S-14 | Invite links that open the app (or the web) on the crew or route | H | S | done (custom scheme; Universal Links later) | growth |
 | S-15 | Profiles: handle, cars, crews, favourite roads, totals; private by default | M | M | todo | Strava profile |
 | S-16 | Block and report on every social surface; moderation queue for public crews and highlights | H | M | done (#120) | App Store requirement for UGC |
@@ -262,7 +262,7 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 | O-07 | Referral: invite a friend into your crew, both get Octane | M | S | todo | Waze, Strava |
 | O-08 | Landing page with real screenshots, the four promises and TestFlight/Play links | H | S | todo | launch |
 | O-09 | App Store listing: screenshots, preview video, privacy nutrition label, keywords | H | M | partial (text, keywords, age rating and App Privacy answers drafted in docs/LISTING.md; the owner pastes them; screenshots to come) | launch |
-| O-10 | In-app "what's new" sheet after an update, one screen | L | S | todo | — |
+| O-10 | In-app "what's new" sheet after an update, one screen | L | S | done (web/whats_new.js: once per release, not on a first install or over a link; edit NEWS and its id when a release adds something drivers notice) | — |
 | O-11 | Privacy policy and terms of use pages, linked in Settings and at sign-in, policy URL in App Store Connect; terms carry the no-tolerance rule for objectionable content (guideline 1.2). Drafted from the real data flows, owner approves (Z-07) | H | S | partial (this PR: pages drafted and linked; owner approves the text and the contact line, then the URL goes into App Store Connect) | App Store guidelines 5.1.1(i), 1.2 |
 | O-12 | App Review access: a reviewer sign-in path that needs no invite, and review notes (drives need a car; replays show the cockpit) | H | S | partial (this PR: a long-lived review code, only its hash in the repo, makes a reviewer's account a member; the owner pastes the code and notes into App Store Connect) | App Store guideline 2.1 |
 | O-13 | Native surfaces that make the app more than a web view (Live Activity, widgets, CarPlay) named in the review notes | M | M | partial (Live Activity shipped; widgets U-10, CarPlay to come) | App Store guideline 4.2 |
@@ -286,7 +286,7 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 |---|---|---|---|---|---|
 | F-01 | Honest offline states everywhere (`--`, "no signal to reroute") | H | S | done (#34, #67) | honesty rule |
 | F-02 | Offline region downloads: vector tiles, DEM and road profiles for an area | H | L | todo | Google Maps offline, Calimoto |
-| F-03 | Save a planned route for offline: geometry, notes, hazards and profiles cached before leaving | H | M | todo | Calimoto, Kurviger |
+| F-03 | Save a planned route for offline: geometry, notes, hazards and profiles cached before leaving | H | M | partial (web/saved_routes.js: Save on the route card keeps shape, directions, router times and limits; Where to? lists it and it opens with no signal, notes worked out on the phone. The planned route also survives an app restart for 12 h. Map tiles need F-02; reported hazards are live only) | Calimoto, Kurviger |
 | F-04 | Offline rerouting with on-device Valhalla (see R-28) | H | XL | todo | ROAD_INTELLIGENCE §7.4 |
 | F-05 | Queue hazard reports and road data offline, send on reconnect (see Q-06) | H | M | partial (hazard reports and "still there?" answers: web/outbox.js keeps them on the phone, sends on reconnect with age_s so they expire from when they were seen; road data retries within a drive, surviving a restart is Q-06) | Waze |
 | F-06 | Cache size control and "delete offline data" in Settings | L | S | todo | — |
