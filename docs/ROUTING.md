@@ -106,7 +106,10 @@ the detour. For members, the top candidates also get what others measured on tho
 
 The route card shows Fun / Twist / Flow for a planned route and Twist / Flow / Surface from
 measured sectors for a driven one, plus the router's time and "+N for fun" over the quickest.
-These are map-derived, never measured road feel.
+These are map-derived, never measured road feel. When the winner is slower than the quickest route, a line under the bars says
+why (`FunRoute.why`, from the router's own road names): the roads it spends 2+ km more on (at most 3), the
+good corners it gains and the minutes it costs, e.g. "For SR 360 13 mi, Cold Spring Road 8.2 mi · 167 more
+good corners, +30 min".
 
 ## Checked
 

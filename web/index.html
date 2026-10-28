@@ -384,6 +384,7 @@
               <h3 id="routeCardName"></h3>
               <p class="route-meta" id="routeCardMeta"></p>
               <div class="bars mt-8" id="routeCardBars"></div>
+              <p class="note" id="routeCardWhy" hidden></p>
               <p class="note" id="routeCardSub"></p>
               <div class="plan-links fun-row" id="routeCardFun" role="radiogroup" aria-label="Route style"><span>Roads</span><button class="chip" data-fun="quick" role="radio" aria-checked="false">Quick</button><button class="chip" data-fun="fun" role="radio" aria-checked="false">Fun</button><button class="chip" data-fun="max" role="radio" aria-checked="false">Max fun</button></div>
               <div class="row mt-8">
@@ -1712,6 +1713,14 @@
       for (const s of pool) counts.set(s.archetype, (counts.get(s.archetype) || 0) + 1);
       return normRoadType([...counts.entries()].sort((a, b) => b[1] - a[1])[0][0]);
     }
+    // "Why this route" from FunRoute.why: the roads the detour is for and what it costs (null = say nothing).
+    function whyText(w) {
+      if (!w) return null;
+      const mi = (km) => { const m = km / 1.609344; return `${m < 10 ? m.toFixed(1) : Math.round(m)} mi`; };
+      const roads = w.roads.map(r => `${r.name} ${mi(r.km)}`).join(', ');
+      const gain = w.gained ? `${w.gained} more good corners` : '';
+      return `For ${[roads, gain].filter(Boolean).join(' · ')}${w.extraMin >= 1 ? `, +${w.extraMin} min` : ''}`;
+    }
     function renderRouteCard(t = plannedRoute) {
       const card = $('routeCard');
       $('planPanel').classList.toggle('routed', !!t);
@@ -1753,6 +1762,8 @@
           : null;
       const feel = mCov != null && mCov > 0 ? `Road feel ${mCov}% driven` : 'Road feel after first drive';
       $('routeCardSub').textContent = `Cameras ${cams} · ${feel}`;
+      $('routeCardWhy').textContent = t.why || '';
+      $('routeCardWhy').hidden = !t.why;
       $('routeCardFun').hidden = t.id !== 'route_dest';           // the level re-plans destination routes only
     }
     // Log and Stages are another page, so coming back to Map reloads this one: keep the planned route for the session and
@@ -1761,7 +1772,7 @@
     function persistPlanned(t) {
       try {
         const coords = t.lat.map((la, i) => [+t.lon[i].toFixed(6), +la.toFixed(6)]);
-        sessionStorage.setItem(PLANNED, JSON.stringify({ id: t.id, name: t.name, request: t.request || null, coords, fun: t.fun || null, timeS: t.timeS ?? null, extraS: t.extraS ?? null }));
+        sessionStorage.setItem(PLANNED, JSON.stringify({ id: t.id, name: t.name, request: t.request || null, coords, fun: t.fun || null, timeS: t.timeS ?? null, extraS: t.extraS ?? null, why: t.why || null }));
       } catch (_) { /* too big or storage off: the route just won't survive a page change */ }
     }
     async function restorePlanned() {
@@ -1769,7 +1780,7 @@
       try { saved = JSON.parse(sessionStorage.getItem(PLANNED) || 'null'); } catch (_) { saved = null; }
       if (!saved || !Array.isArray(saved.coords) || saved.coords.length < 2) return;
       const t = await trackFromPolyline(saved.coords, saved.id, saved.name);
-      Object.assign(t, { request: saved.request, fun: saved.fun || null, timeS: saved.timeS ?? null, extraS: saved.extraS ?? null });
+      Object.assign(t, { request: saved.request, fun: saved.fun || null, timeS: saved.timeS ?? null, extraS: saved.extraS ?? null, why: typeof saved.why === 'string' ? saved.why : null });
       await buildRoute(null, saved.id, saved.name, t);
     }
     async function buildRoute(points, id, name, prebuilt = null, request = null) {
@@ -2061,7 +2072,8 @@
       best.t = await trackFromPolyline(best.route.coords, id, name);
       // A winning alternate is pinned with shaping points along it, so a reroute stays on it.
       const via = best.kind === 'router' && best.extraS > 0 ? FunRoute.alongPoints(best.route.coords) : best.via;
-      Object.assign(best.t, { measured, fun: best.fun, timeS: best.timeS, extraS: best.extraS, funLevel: level,
+      const quickest = cands.filter(c => Number.isFinite(c.timeS)).reduce((x, y) => (y.timeS < x.timeS ? y : x), best);
+      Object.assign(best.t, { measured, fun: best.fun, timeS: best.timeS, extraS: best.extraS, funLevel: level, why: whyText(FunRoute.why(best, quickest)),
                               request: { ...request, via: via.map(p => ({ lat: p.lat, lon: p.lon, shaping: true })) } });
       await buildRoute(null, id, name, best.t);
       const mi = (totalOf(best.t) / 1609.344).toFixed(1), extra = best.extraS >= 60 ? ` · +${Math.round(best.extraS / 60)} min for fun` : '';

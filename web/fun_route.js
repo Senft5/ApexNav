@@ -383,6 +383,21 @@
     }).filter(c => c.extraS === 0 || c.timeS <= limit).sort((a, b) => b.value - a.value);
   }
 
-  const api = { LEVELS, geometry, alongPoints, insertVia, loopValue, loopShortlist, loopPlansFromMatrix, score, shortlist, matrixPoints, plansFromMatrix, sectionCount, sectionPoints, combineSections, planKey, searchArea, waypoints, rank, along, kmBetween };
+  /**
+   * Why the winner beat the quickest route, from the router's own road names (km per named road): the roads it
+   * spends at least `minKm` more on than the quickest, most first (at most 3), the good corners it gains and the
+   * minutes it costs. null when the winner is the quickest, or nothing is known (no names, no fun score).
+   */
+  function why(best, quick, minKm = 2) {
+    if (!best || !quick || best === quick || !(best.timeS > quick.timeS)) return null;
+    const bn = best.route && best.route.names, qn = quick.route && quick.route.names;
+    const roads = bn instanceof Map ? [...bn].map(([name, km]) => ({ name, km: km - ((qn instanceof Map && qn.get(name)) || 0) }))
+      .filter(r => r.km >= minKm).sort((a, b) => b.km - a.km).slice(0, 3) : [];
+    const gained = best.fun && quick.fun ? Math.max(0, best.fun.good - quick.fun.good) : null;
+    if (!roads.length && !gained) return null;
+    return { roads, gained, extraMin: Math.round((best.timeS - quick.timeS) / 60) };
+  }
+
+  const api = { LEVELS, why, geometry, alongPoints, insertVia, loopValue, loopShortlist, loopPlansFromMatrix, score, shortlist, matrixPoints, plansFromMatrix, sectionCount, sectionPoints, combineSections, planKey, searchArea, waypoints, rank, along, kmBetween };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexFunRoute = api;
 })(typeof window !== 'undefined' ? window : globalThis);

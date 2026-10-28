@@ -1,5 +1,6 @@
 """Fun A→B routing (web/fun_route.js) on synthetic roads: no network, deterministic."""
 import json
+import re
 import os
 import shutil
 import subprocess
@@ -111,6 +112,12 @@ const loops = F.loopPlansFromMatrix(loopList, lkm, 48, 3);
 out.loops = loops.map(p => ({ names: p.legs.map(l => l.s.name), total: p.total, wps: globalThis.ApexStages.waypoints(S0, p).length }));
 // routed loops are valued on the fun scale: retracing and missing the length cost points
 out.loopValue = [F.loopValue({ fun: 60 }, 48, 48, 0), F.loopValue({ fun: 60 }, 48, 48, 0.1), F.loopValue({ fun: 60 }, 60, 48, 0), F.loopValue(null, 48, 48, 0)];
+// why this route: roads the winner spends 2+ km more on than the quickest, and what it gains and costs
+const qr = { timeS: 3600, fun: { good: 10 }, route: { names: new Map([['I-40', 50], ['Main St', 3]]) } };
+const wr = { timeS: 5400, fun: { good: 48 }, route: { names: new Map([['Foothills Pkwy', 14], ['Main St', 4], ['US 129', 6], ['I-40', 20]]) } };
+out.why = F.why(wr, qr);
+out.whyQuick = F.why(qr, qr);
+out.whyNoNames = F.why({ ...wr, route: {} }, qr);
 process.stdout.write(JSON.stringify(out));
 """
 
@@ -197,6 +204,12 @@ def test_loops_use_real_distances_and_fit_the_target(r):
     assert len(set(sets)) == len(sets), "a loop and the same loop backwards are one choice"
 
 
+def test_why_this_route_names_the_roads_it_is_for(r):
+    assert r["why"] == {"roads": [{"name": "Foothills Pkwy", "km": 14}, {"name": "US 129", "km": 6}], "gained": 38, "extraMin": 30}
+    assert r["whyQuick"] is None, "the quickest route needs no reason"
+    assert r["whyNoNames"] == {"roads": [], "gained": 38, "extraMin": 30}, "no road names: still the corners and the cost"
+
+
 def test_loops_are_valued_on_the_fun_scale(r):
     full, retraced, long_, unscored = r["loopValue"]
     assert full == 60, "a clean loop of the asked length is worth its fun score"
@@ -251,6 +264,7 @@ globalThis.ApexCore = Core;
 const FunRoute = require(root + '/web/fun_route.js');
 const html = fs.readFileSync(root + '/web/index.html', 'utf8');
 const source = html.match(/async function funRoute\(.*?\n    }/s)[0];
+const whyText = new Function('return (' + html.match(/function whyText\(w\) \{.*?\n    }/s)[0] + ')')();
 const lat0 = 39.2, lon0 = -84.6, mLat = 1 / 110540, mLon = 1 / (111320 * Math.cos(lat0 * Math.PI / 180));
 const ll = (pts) => pts.map(([x, y]) => [lon0 + x * mLon, lat0 + y * mLat]);
 const straight = ll(Array.from({ length: 1001 }, (_, i) => [i * 10, 0]));
@@ -259,22 +273,22 @@ const A = { lat: lat0, lon: lon0 }, B = { lat: lat0, lon: lon0 + 10000 * mLon };
 async function run({ level, routes, osrm, discover, matrix }) {
   const built = [], toasts = [], calls = { matrix: 0, routes: 0 };
   const funRoute = new Function('funLevel', 'valhallaRoutes', 'osrmRoutes', 'toast', 'FunRoute', 'ApexStages', 'state', 'allHighlights', 'valhallaMatrix',
-    'Core', 'RouteLoading', 'funOf', 'applyMeasured', 'trackFromPolyline', 'buildRoute', 'totalOf', 'window', 'return (' + source + ')')(
+    'Core', 'RouteLoading', 'funOf', 'applyMeasured', 'trackFromPolyline', 'buildRoute', 'totalOf', 'window', 'whyText', 'return (' + source + ')')(
     level, async (pts, through, alts) => { calls.routes++; return routes(pts, alts); }, osrm || (async () => { throw Error('down'); }),
     (m) => toasts.push(m), FunRoute, { discover }, { hlOn: false }, async () => [],
     async (s, t) => { calls.matrix++; return { times: await matrix(s, t) }; },
     Core, { yieldToUI: async () => {} }, (t, turns) => FunRoute.score(t, []), async () => false,
     async (coords, id, name) => ({ id, name, ...FunRoute.geometry(coords, Core) }),
-    async (pts, id, name, t) => built.push(t), (t) => t.dist[t.dist.length - 1], {});
+    async (pts, id, name, t) => built.push(t), (t) => t.dist[t.dist.length - 1], {}, whyText);
   await funRoute(A, B, 'route_dest', 'To B', { from: null, to: B, via: [] }, { step() {} });
   return { built, toasts, calls };
 }
 (async () => {
   const out = {};
   // 1. Quick: no stage search; the twistier alternate wins when it costs 1 minute.
-  let r = await run({ level: 'quick', routes: async (pts, alts) => [{ coords: straight, turns: [], timeS: 600 }, { coords: wiggly, turns: [], timeS: 660 }],
+  let r = await run({ level: 'quick', routes: async (pts, alts) => [{ coords: straight, turns: [], timeS: 600 }, { coords: wiggly, turns: [], timeS: 660, names: new Map([['Twisty Rd', 14]]) }],
                       discover: async () => { throw Error('should not search'); } });
-  out.quick = { fun: r.built[0].fun.fun, extraS: r.built[0].extraS, via: r.built[0].request.via.length, shaping: r.built[0].request.via.every(v => v.shaping), matrix: r.calls.matrix };
+  out.quick = { fun: r.built[0].fun.fun, extraS: r.built[0].extraS, via: r.built[0].request.via.length, shaping: r.built[0].request.via.every(v => v.shaping), matrix: r.calls.matrix, why: r.built[0].why };
   // 2. No tiles: the router's own routes still compete, no error.
   r = await run({ level: 'fun', routes: async () => [{ coords: straight, turns: [], timeS: 600 }], discover: async () => { throw Error('no tiles'); } });
   out.noTiles = { built: r.built.length, fun: r.built[0].fun.fun };
@@ -301,6 +315,7 @@ def test_app_fun_route_picks_and_falls_back():
     r = json.loads(res.stdout)
     assert r["quick"]["fun"] > 50 and r["quick"]["extraS"] == 60 and r["quick"]["matrix"] == 0
     assert r["quick"]["via"] >= 1 and r["quick"]["shaping"], "the winning 12 km alternate is pinned so a reroute stays on it"
+    assert re.fullmatch(r"For Twisty Rd 8\.7 mi · \d+ more good corners, \+1 min", r["quick"]["why"]), r["quick"]["why"]
     assert r["noTiles"] == {"built": 1, "fun": r["noTiles"]["fun"]}
     assert r["osrm"] == {"built": 1, "timeS": 700}
     assert r["stage"]["matrix"] == 1 and r["stage"]["via"] >= 2 and r["stage"]["shaping"] and r["stage"]["fun"] > 50 and r["stage"]["extraS"] == 120
