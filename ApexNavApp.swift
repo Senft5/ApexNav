@@ -471,6 +471,7 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
     func takePendingLink() -> URL? { defer { pendingLink = nil }; return pendingLink }
 
     func openLink(_ url: URL) {
+        if url.isFileURL { openFile(url); return }
         guard let items = ApexWebBundle.linkItems(url) else { return }
         guard let entry = ApexWebBundle.linkEntryURL(items) else { return }
         guard let wv = webView else { pendingLink = entry; return }
@@ -491,6 +492,22 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         }
     }
 
+    /// A GPX file from Files, Mail or AirDrop ("Open in ApexNav", IDEAS R-26): its text goes to the cockpit, which builds
+    /// the route (web/route_import.js). Up to 5 MB; anything else is ignored.
+    private var pendingGpx: [String: Any]?
+    private func openFile(_ url: URL) {
+        guard url.pathExtension.lowercased() == "gpx" else { return }
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        guard let data = try? Data(contentsOf: url), data.count <= 5_000_000, let text = String(data: data, encoding: .utf8) else { return }
+        deliverGpx(["type": "gpx", "name": url.lastPathComponent, "text": text])
+    }
+    private func deliverGpx(_ payload: [String: Any]) {
+        guard webReady, let wv = webView, let data = try? JSONSerialization.data(withJSONObject: payload),
+              let json = String(data: data, encoding: .utf8) else { pendingGpx = payload; return }
+        wv.evaluateJavaScript("window.apex && window.apex.onNative && window.apex.onNative(\(json)); void 0;", completionHandler: nil)
+    }
+
     func webDidStartLoading() {
         webReady = false
     }
@@ -499,6 +516,7 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         webReady = true
         pushLiveFrame()
         offerDriveIfReady()
+        if let g = pendingGpx { pendingGpx = nil; deliverGpx(g) }
     }
 
     /// iOS can kill the web content process while the app is in the background without calling
