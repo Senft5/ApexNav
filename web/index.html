@@ -620,6 +620,7 @@
       }, 0);
     }
     let roadMemory = [], roadMemoryKey = null, hazardMemory = [];
+    const hazardSaid = new Map(), HZ_REPEAT_MS = 5 * 60000, HZ_SAME_SPOT_M = 40;   // confirmed bump id -> when it was last said
     let track = null;
 
     // =======================================================================
@@ -1351,10 +1352,18 @@
       // Roads you have driven: one technique tip per remembered corner, only with full notes on (never over a commute),
       // moving on a fresh heading, and only when it ends before any call is due: it starts MEMO_S of driving beyond the
       // call distance and never while a call is pending in that stretch or another voice may still be speaking.
-      // A bump your own drives confirmed, on any road (no route needed), unless the route's own notes already call one here.
-      if (live && vMps >= 5 && performance.now() - state.liveAt < 2500 && !ev.some(e => e.type === 'bump' && e.dist_m - state.cursorM < lead + 30)) {
-        const hz = ApexRoadMemory.upcoming(hazardMemory, state.live, 25, lead, state.spoken);
-        if (hz) { state.spoken.add(hz.id); say(hz.text); }
+      // A bump your own drives confirmed, on any road (no route needed), held to the same quiet-mode rule as route bumps,
+      // unless a route bump that will be called lies within reach along the route or within SAME_SPOT_M of it (a hairpin can
+      // put it close in a straight line but far along the road). It never pushes a queued call out, and may be said again
+      // once HZ_REPEAT_MS has passed (the same road later, a lap), so the id is not kept in state.spoken.
+      if (live && vMps >= 5 && performance.now() - state.liveAt < 2500 && speech.queue.length < 2) {
+        const calledBumps = ev.filter(e => e.type === 'bump' && (spirited || noteworthyInCruise(e)));
+        const now = performance.now(), recent = { has: (id) => now - (hazardSaid.get(id) ?? -Infinity) < HZ_REPEAT_MS };
+        const pool = hazardMemory.filter(n => (spirited || n.severity_g >= 0.45)
+          && !calledBumps.some(e => e.dist_m - state.cursorM < lead + 30
+            || Math.hypot((track.lon[e.index] - n.lon) * 111320 * Math.cos(n.lat * Math.PI / 180), (track.lat[e.index] - n.lat) * 110540) < HZ_SAME_SPOT_M));
+        const hz = ApexRoadMemory.upcoming(pool, state.live, 25, lead, recent);
+        if (hz) { hazardSaid.set(hz.id, now); say(hz.text); }
       }
       const reach = lead + vMps * MEMO_S;
       if (live && spirited && vMps >= 5 && performance.now() - state.liveAt < 2500 && !speech.busy && !speech.queue.length

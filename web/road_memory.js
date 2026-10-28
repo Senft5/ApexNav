@@ -50,7 +50,8 @@
 
   /**
    * Bumps your own drives confirmed (ApexRecording.corroborate: found on two or more of your passes, same direction),
-   * as notes for `upcoming` on any road, route or not (IDEAS Q-22). One per spot and direction.
+   * as notes for `upcoming` on any road, route or not (IDEAS Q-22). One per spot and direction, keeping the hardest hit
+   * your drives measured there (severity_g, the spike in g) so quiet mode can skip the mild ones as it does on a route.
    */
   function hazards(records) {
     const out = [];
@@ -58,8 +59,11 @@
       for (const e of d.events || []) {
         if (e.type !== 'bump' || !e.seen || e.seen.hits < 2 || !finite(e.lat) || !finite(e.lon)) continue;
         const h = heading(d, e.index);
-        if (!h || out.some((n) => Math.hypot(...xy(n.lat, n.lon, e.lat, e.lon)) < SAME_CORNER_M && n.hx * h[0] + n.hy * h[1] > 0)) continue;
-        out.push({ id: `hz:${d.id}:${e.index}`, lat: e.lat, lon: e.lon, hx: h[0], hy: h[1], kind: 'bump', text: 'Bump ahead', seen: e.seen });
+        if (!h) continue;
+        const dup = out.find((n) => Math.hypot(...xy(n.lat, n.lon, e.lat, e.lon)) < SAME_CORNER_M && n.hx * h[0] + n.hy * h[1] > 0);
+        if (dup) { if (finite(e.severity_g) && !(dup.severity_g >= e.severity_g)) dup.severity_g = e.severity_g; continue; }
+        out.push({ id: `hz:${d.id}:${e.index}`, lat: e.lat, lon: e.lon, hx: h[0], hy: h[1], kind: 'bump', text: 'Bump ahead', seen: e.seen,
+                   severity_g: finite(e.severity_g) ? e.severity_g : null });
       }
     }
     return out;
