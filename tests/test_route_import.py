@@ -65,5 +65,5 @@ def test_wired_in_app_and_shell():
     html, yml, swift = read("web", "index.html"), read("project.yml"), read("ApexNavApp.swift")
     assert '<script src="route_import.js"></script>' in html and 'id="gpxFile"' in html and 'id="routeGpxBtn"' in html
     assert "msg.type === 'gpx'" in html and "ApexRouteImport.parseMapsLink(toQ);" in html
-    assert "LSItemContentTypes: [com.topografix.gpx]" in yml and "LSSupportsOpeningDocumentsInPlace: false" in yml
+    assert "LSItemContentTypes: [com.topografix.gpx]" in yml and yml.count("LSSupportsOpeningDocumentsInPlace:") == 1   # one key: a duplicate is ambiguous to YAML readers
     assert "if url.isFileURL { openFile(url); return }" in swift and "data.count <= 5_000_000" in swift

@@ -38,8 +38,8 @@ targets:
       properties:
         CFBundleDisplayName: "APEX NAV"
         NSSupportsLiveActivities: true
-        # "Open in ApexNav" for GPX files from Files, Mail and AirDrop (IDEAS R-26); copied in, not edited in place
-        LSSupportsOpeningDocumentsInPlace: false
+        # "Open in ApexNav" for GPX files from Files, Mail and AirDrop (IDEAS R-26). Read once through a security-scoped URL
+        # (openFile), never edited; LSSupportsOpeningDocumentsInPlace is set once, below, with UIFileSharingEnabled.
         CFBundleDocumentTypes:
           - CFBundleTypeName: GPX route
             CFBundleTypeRole: Viewer
@@ -57,12 +57,15 @@ targets:
         # Only standard HTTPS/TLS: skips the export-compliance question on every TestFlight build.
         ITSAppUsesNonExemptEncryption: false
         UILaunchScreen: {}
+        # Portrait, or landscape for landscape mounts (IDEAS U-16: the cockpit has a landscape layout)
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
         NSLocationWhenInUseUsageDescription: "Required for live turn-by-turn navigation and road-feel mapping."
         NSLocationAlwaysAndWhenInUseUsageDescription: "Required for live turn-by-turn navigation and road-feel mapping."
         NSMotionUsageDescription: "Required to paint live G-load and surface feel onto the road map."
         UIBackgroundModes:
           - location
           - audio
+        # Exports show in Files → On My iPhone → APEX NAV (needs both); a GPX opened from Files is read in place, never written
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true
         # "Open in the app" links from the web: apexnav://open?invite=…|crew=…|add=…|convoy=… (ApexWebBundle.linkItems / linkEntryURL)
