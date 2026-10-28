@@ -686,7 +686,7 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
             guard let v = v, v.isFinite else { return "" }
             return String(format: "%.\(digits)f", v)
         }
-        let row: [String] = [
+        let cells: [String] = [
             String(idx),
             cell(Double(idx) * ApexKit.segmentLengthM, 1),
             cell(node.lat, 7),
@@ -701,8 +701,8 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
             cell(locked ? pipeline.engagement : nil, 3),
             cell(node.elevationM == nil ? nil : node.gradePct, 2),
             cell(vertPeakMps2.map { $0 / Self.gStd }, 3),
-        ].joined(separator: ",")
-        csvLines.append(row)
+        ]
+        csvLines.append(cells.joined(separator: ","))
         recordedSegments += 1
     }
 
