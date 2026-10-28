@@ -187,6 +187,14 @@ flow('drag to reshape: dragging the planned route with the mouse adds a stop whe
   const locs = asked[asked.length - 1];
   check(asked.length > before && locs.length === 3, 'the router was asked through a new stop: ' + JSON.stringify(locs));
   await page.waitForFunction(() => { const t = window.apexDebug.track; return t && t.request && t.request.via.length === 1; }, null, { timeout: 10000 });
+  // the stop is listed on the route card (IDEAS R-17); Remove rebuilds the route without it
+  await page.waitForSelector('#routeStops:not([hidden]) .stop-row');
+  check((await page.textContent('#routeStops')).startsWith('1. Stop 1'), 'the stop listed: ' + await page.textContent('#routeStops'));
+  const n = asked.length;
+  await page.evaluate(() => document.querySelector('#routeStops button[aria-label="Remove Stop 1"]').click());
+  await page.waitForFunction(() => { const t = window.apexDebug.track; return t && t.request && t.request.via.length === 0; }, null, { timeout: 10000 });
+  check(asked.length > n && asked[asked.length - 1].length === 2, 'routed again without it');
+  check(await page.isHidden('#routeStops'), 'no stops, no list');
 }, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
 
 flow('avoid cameras: with the chip on, the cameras near the trip go to the router as exclusions (camera map and router stubbed, IDEAS R-35)', async (page, base) => {
