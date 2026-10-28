@@ -201,6 +201,62 @@
       paint();
     }
 
+    // ---- in-app invites (IDEAS S-22): no link to copy, no website ----------------------------------------------------
+    // Invites wait on the server for a minute-ish poll while the page is open and you're not in a convoy; a new one toasts.
+    const asked = { list: [], at: 0, busy: false, seen: new Set() };
+    async function loadAsked(force = false) {
+      if (asked.busy || (snap && snap.id) || (!force && Date.now() - asked.at < 55e3)) return;
+      asked.busy = true;
+      try {
+        const r = await apiFetch('/api/convoy/invites', { method: 'GET' });
+        const list = r.ok ? await r.json() : null;
+        if (Array.isArray(list)) {
+          const fresh = list.find((i) => !asked.seen.has(i.id));
+          for (const i of list) asked.seen.add(i.id);
+          const changed = JSON.stringify(list.map((i) => i.id)) !== JSON.stringify(asked.list.map((i) => i.id));
+          asked.list = list;
+          if (fresh) toast(`${fresh.from ? '@' + fresh.from : 'A friend'} invited you to a convoy: ${fresh.name}.`, { label: 'See it', ms: 10000, onClick: () => page.showView && page.showView('crew') });
+          if (changed) { lastKey = null; paint(); }
+        }
+      } catch (_) { /* signed out or offline: try again next minute */ }
+      finally { asked.at = Date.now(); asked.busy = false; }
+    }
+    setInterval(() => { if (!document.hidden) loadAsked(); }, 60e3);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) loadAsked(); });
+    setTimeout(() => loadAsked(true), 3000);
+
+    // The leader's picker: accepted friends, then private crew-mates, by handle; the server re-checks each one.
+    async function invitePeople(box) {
+      box.replaceChildren(el('p', { className: 'note', textContent: 'Loading your friends…' }));
+      const handles = new Set();
+      try {
+        const friends = await apiFetch('/api/friends', { method: 'GET' }).then((r) => (r.ok ? r.json() : []));
+        for (const f of friends || []) if (f.status === 'accepted' && f.handle) handles.add(f.handle);
+        const crews = await apiFetch('/api/crews', { method: 'GET' }).then((r) => (r.ok ? r.json() : []));
+        for (const c of (crews || []).filter((c) => c.visibility !== 'public').slice(0, 10)) {
+          const mem = await apiFetch(`/api/crews/${encodeURIComponent(c.id)}/members`, { method: 'GET' }).then((r) => (r.ok ? r.json() : []));
+          for (const m of mem || []) if (m.handle && !m.mine) handles.add(m.handle);
+        }
+      } catch (_) { /* offline: the list says so below */ }
+      const inConvoy = new Set((snap && snap.members || []).map((m) => m.handle));
+      const picks = [...handles].filter((h) => !inConvoy.has(h)).sort();
+      if (!picks.length) { box.replaceChildren(el('p', { className: 'note', textContent: 'No friends or crew-mates to invite yet. Add friends in Crew, or share the link.' })); return; }
+      const chosen = new Set();
+      const rows = picks.map((h) => {
+        const b = el('button', { className: 'ink-btn', textContent: '@' + h });
+        b.setAttribute('aria-pressed', 'false');
+        b.onclick = () => { if (chosen.has(h)) chosen.delete(h); else if (chosen.size < 15) chosen.add(h); b.classList.toggle('on', chosen.has(h)); b.setAttribute('aria-pressed', String(chosen.has(h))); };
+        return b;
+      });
+      box.replaceChildren(el('div', { className: 'row', style: 'flex-wrap:wrap' }, ...rows), el('div', { className: 'row' }, btn('Send invites', async () => {
+        if (!chosen.size) { toast('Pick who to invite.'); return; }
+        const r = await client.post(`/api/convoy/${encodeURIComponent(snap.id)}/invite-people`, { handles: [...chosen] });
+        if (!r.ok) { toast(r.status === 429 ? 'That\'s a lot of invites. Wait for some to join.' : 'Couldn\'t send the invites. Try again.'); return; }
+        toast(r.body.invited ? `Invited ${r.body.invited}. They'll see it in the app.` : 'Nobody new to invite.');
+        box.replaceChildren();
+      }, 'ink-btn solid'), btn('Cancel', () => box.replaceChildren(), 'linkbtn')));
+    }
+
     // ---- the Crew sheet's Convoy section ------------------------------------------------------------------------
     const inviteUrl = (invite) => `${siteOrigin()}/?convoy=${encodeURIComponent(invite)}`;
     async function shareInvite(fresh = false) {
@@ -224,6 +280,21 @@
       const pending = store.get('sessionStorage', INVITE_KEY);
       if (!s || !s.id) {
         kids.push(el('p', { className: 'note', textContent: 'Drive together live: everyone in the convoy sees where everyone is, the leader can call hazards and a regroup point, and the co-driver warns you before you get there. Nothing is kept: it ends when the leader leaves or after two hours.' }));
+        loadAsked();
+        const at = (ms) => new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+        for (const inv of asked.list) {
+          kids.push(el('p', { className: 'note', textContent: `${inv.from ? '@' + inv.from : 'A friend'} invited you: ${inv.name} · until ${at(inv.expiresAtMs)}. Joining shares your position with the convoy.` }),
+            el('div', { className: 'row' }, btn('Join', async () => {
+              const r = await client.accept(inv.id);
+              asked.list = asked.list.filter((x) => x.id !== inv.id);
+              if (!r.ok) toast(r.status === 409 ? 'That convoy is full.' : r.status === 0 || r.status >= 500 ? 'No connection. Try again in a moment.' : 'That invite has run out. Ask for a new one.');
+              else toast('You\'re in the convoy. Your position is shared with it until you leave.');
+              lastKey = null; paint();
+            }, 'ink-btn solid'), btn('Not now', async () => {
+              asked.list = asked.list.filter((x) => x.id !== inv.id); lastKey = null; paint();
+              apiFetch(`/api/convoy/invites/${encodeURIComponent(inv.id)}`, { method: 'DELETE' }).catch(() => {});
+            }, 'linkbtn')));
+        }
         if (pending) {
           // Say which convoy before the yes: joining shares your position with everyone in it.
           const pv = preview.invite === pending ? preview : null;
@@ -269,9 +340,9 @@
           list.append(row);
         }
         kids.push(list);
-        const actions = el('div', { className: 'row' });
+        const actions = el('div', { className: 'row' }), picker = el('div', { className: 'stack-8' });
         if (c.role === 'leader') {
-          actions.append(btn('Share link', () => shareInvite(false)),
+          actions.append(btn('Invite friends', () => invitePeople(picker), 'ink-btn solid'), btn('Share link', () => shareInvite(false)),
             btn('New link', () => { if (confirm('Make a new link? The old one stops working for anyone who hasn\'t joined yet.')) shareInvite(true); }, 'linkbtn'));
           const r = getRoute();
           const shareMsg = { sent: (n) => `${n} shared with the convoy.`, offline: () => 'Not connected to the convoy.', too_long: () => 'That route is too long to share.' };
@@ -283,6 +354,7 @@
           await client.leave(); toast(c.role === 'leader' ? 'Convoy ended.' : 'You left the convoy.');
         }, c.role === 'leader' ? 'ink-btn' : 'linkbtn'));
         kids.push(actions);
+        if (c.role === 'leader') kids.push(picker);
         if (s.status === 'replaced') kids.push(el('div', { className: 'row' }, el('span', { className: 'note', textContent: 'This convoy is open on another screen.' }), btn('Use it here', () => client.takeOver())));
         else if (s.status !== 'live') kids.push(el('p', { className: 'note', textContent: s.unreachable ? 'Can\'t reach the convoy. Still trying.' : s.status === 'reconnecting' ? 'No connection to the convoy. Retrying…' : 'Connecting…' }));
       }

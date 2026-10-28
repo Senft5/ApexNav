@@ -171,6 +171,14 @@
       this.connect();
       return r;
     }
+    /** Join from an in-app invite (IDEAS S-22): no link, the leader asked for you by handle. */
+    async accept(id) {
+      const r = await this.post(`/api/convoy/${encodeURIComponent(id)}/accept`, { consent: true });
+      if (!r.ok) return r;
+      this.adopt(r.body);
+      this.connect();
+      return r;
+    }
     async join(invite) {
       const r = await this.post('/api/convoy/join', { consent: true, invite });
       if (!r.ok) return r;
