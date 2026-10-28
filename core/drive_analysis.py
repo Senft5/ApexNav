@@ -168,6 +168,25 @@ def _pace_credit(use: float) -> float:
     return max(0.0, 1.0 - 4.0 * (use - PACE_CEILING))     # 125 % of the limit earns nothing
 
 
+def corner_technique(v, lon_g, lat_g, c: dict):
+    """One clean corner's Driver Score inputs: envelope use, smoothness and braking credit (0..1), or None when the
+    corner is not scored (unknown apex speed, a speed gap, or a stop through it)."""
+    if not math.isfinite(c["apex_mps"]):
+        return None
+    v = np.asarray(v, dtype=float)
+    if not np.all(np.isfinite(v[c["start"]:c["end"] + 1])):    # a speed gap (blank GPS speed) leaves the corner out, not NaN
+        return None
+    m = corner_metrics(v, lon_g, lat_g, c["start"], c["end"], c["apex"], c["apex_mps"])
+    if m["min_mps"] < STOPPED_MPS:
+        return None
+    # Smoothness per metre of road (speed-invariant): how abruptly lateral load changes.
+    lat = np.asarray(lat_g, dtype=float)[c["start"]:c["end"] + 1]
+    step = float(np.sqrt(np.mean(np.diff(lat) ** 2))) if len(lat) > 1 else 0.0
+    late = max(0.0, -float(np.min(np.asarray(lon_g, dtype=float)[c["apex"]:c["end"] + 1])))   # braking after the apex
+    return {"use": m["envelope_use"], "smooth": math.exp(-step / 0.15),
+            "brake": 1.0 - min(1.0, max(0.0, (late - 0.10) / 0.30))}
+
+
 def driver_score(speed_mps, lon_g, lat_g, corners, lo: int = 0, hi=None) -> dict:
     """Score the driving between bins [lo, hi). corners: [{start, end, apex, apex_mps}].
 
@@ -176,25 +195,18 @@ def driver_score(speed_mps, lon_g, lat_g, corners, lo: int = 0, hi=None) -> dict
     (driving at the corner limit) is a closed-track figure, not a goal for public roads.
     """
     v = np.asarray(speed_mps, dtype=float)
-    lon = np.asarray(lon_g, dtype=float)
     hi = len(v) if hi is None else hi
     uses, pace, smooth, brake = [], [], [], []
     for c in corners:
-        if c["start"] < lo or c["end"] >= hi or not math.isfinite(c["apex_mps"]):
+        if c["start"] < lo or c["end"] >= hi:
             continue
-        if not np.all(np.isfinite(v[c["start"]:c["end"] + 1])):    # a speed gap (blank GPS speed) leaves the corner out, not NaN
+        t = corner_technique(v, lon_g, lat_g, c)
+        if t is None:
             continue
-        m = corner_metrics(v, lon_g, lat_g, c["start"], c["end"], c["apex"], c["apex_mps"])
-        if m["min_mps"] < STOPPED_MPS:
-            continue
-        uses.append(m["envelope_use"])
-        pace.append(_pace_credit(m["envelope_use"]))
-        # Smoothness per metre of road (speed-invariant): how abruptly lateral load changes.
-        lat = np.asarray(lat_g, dtype=float)[c["start"]:c["end"] + 1]
-        step = float(np.sqrt(np.mean(np.diff(lat) ** 2))) if len(lat) > 1 else 0.0
-        smooth.append(math.exp(-step / 0.15))
-        late = max(0.0, -float(np.min(lon[c["apex"]:c["end"] + 1])))       # braking after the apex
-        brake.append(1.0 - min(1.0, max(0.0, (late - 0.10) / 0.30)))
+        uses.append(t["use"])
+        pace.append(_pace_credit(t["use"]))
+        smooth.append(t["smooth"])
+        brake.append(t["brake"])
     if not uses:
         return {"score": None, "corners": 0, "components": None}
     consistency = 1.0 - min(1.0, float(np.std(uses)) / 0.25)
@@ -531,3 +543,60 @@ def abrupt_moments(lat_g, lon_g, speed_mps, g_known=None) -> dict:
         if all(abs(i - p) >= JERK_SEPARATION for p in picks):
             picks.append(i)
     return {"jerk": jerk, "moments": [{"index": i, "jerk_gps": jerk[i]} for i in picks]}
+
+
+# ---------------------------------------------------------------------------
+# Fatigue cues (IDEAS D-16): on a long drive, did technique fade late on? The first and last thirds of the moving time
+# are compared corner by corner. Different roads late in a drive can do the same, so this is a cue, never a verdict.
+# ---------------------------------------------------------------------------
+FATIGUE_MIN_S = 3600.0       # an hour of moving time before a drive is long enough to ask
+FATIGUE_MIN_CORNERS = 8      # clean corners needed in each third
+FATIGUE_MIN_DROP = 0.05      # a component must fall at least this much (0..1 scale)...
+FATIGUE_SE = 2.0             # ...and by this many standard errors of the difference
+
+
+def _mean_se(xs: list) -> tuple:
+    m = 0.0
+    for x in xs:                 # plain left-to-right sums, as the JS port does (Python 3.12's sum() is compensated)
+        m += x
+    m /= len(xs)
+    q = 0.0
+    for x in xs:
+        q += (x - m) ** 2
+    var = q / (len(xs) - 1) if len(xs) > 1 else 0.0
+    return m, math.sqrt(var / len(xs))
+
+
+def fatigue(speed_mps, lon_g, lat_g, corners) -> dict | None:
+    """None when the drive is under FATIGUE_MIN_S of moving time or either third has too few clean corners. Otherwise the
+    moving minutes, the mean smoothness and braking credit of the first and last thirds, and `cues`: the components that
+    fell by at least FATIGUE_MIN_DROP and FATIGUE_SE standard errors. Moving time counts only bins with a known speed of
+    STOPPED_MPS or more (a 5 m recording holds no time while parked)."""
+    v = np.asarray(speed_mps, dtype=float)
+    t = np.zeros(len(v))
+    for i in range(1, len(v)):
+        ok = math.isfinite(v[i - 1]) and v[i - 1] >= STOPPED_MPS
+        t[i] = t[i - 1] + (5.0 / v[i - 1] if ok else 0.0)
+    total = float(t[-1]) if len(t) else 0.0
+    if total < FATIGUE_MIN_S:
+        return None
+    early, late = [], []
+    for c in corners:
+        tc = corner_technique(v, lon_g, lat_g, c)
+        if tc is None:
+            continue
+        at = t[c["apex"]]
+        if at <= total / 3.0:
+            early.append(tc)
+        elif at >= 2.0 * total / 3.0:
+            late.append(tc)
+    if len(early) < FATIGUE_MIN_CORNERS or len(late) < FATIGUE_MIN_CORNERS:
+        return None
+    out = {"minutes": round(total / 60.0, 1), "early": {"corners": len(early)}, "late": {"corners": len(late)}, "cues": []}
+    for k, name in (("smooth", "smoothness"), ("brake", "braking")):
+        (me, se), (ml, sl) = _mean_se([x[k] for x in early]), _mean_se([x[k] for x in late])
+        out["early"][name], out["late"][name] = round(me, 4), round(ml, 4)
+        drop = me - ml
+        if drop >= FATIGUE_MIN_DROP and drop >= FATIGUE_SE * math.sqrt(se ** 2 + sl ** 2):
+            out["cues"].append(name)
+    return out

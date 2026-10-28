@@ -61,6 +61,10 @@ The JS file is a line-for-line port used by the browser/iOS cockpit for live OSR
   segment passes; JS port in `web/apex_core.js` (plus `profileRecording` for app CSVs), parity-tested.
 - Smoothness map (`abrupt_moments`; JS `abruptMoments`): |change of the (lat, lon) g vector| x speed / 5 m, in g/s, per
   sample with both ends measured and at 5 m/s or more; the 3 largest at least 40 samples apart and over 0.3 g/s are named.
+- Fatigue cues (`fatigue`; JS `fatigue`): on a drive with an hour or more of moving time (bins at 2.5 m/s or more), the
+  Driver Score smoothness and braking credit of clean corners in the first and last thirds of that time (8 or more each);
+  a component is cued when it fell by 0.05 or more and by 2 standard errors of the difference. `corner_technique` is the
+  per-corner Driver Score input both share.
 - Corner coach (`corner_phases`, `coach`; JS `cornerPhases`, `coach`): per corner, on 5 m bins, its own brake zone (the
   braking run, a_lon < -0.15 g, nearest the apex within 200 m, ignored when it ended more than 100 m before turn-in),
   trail braking (m of that run with |a_lat| >= 0.20 g), coasting (m with |a_lon| < 0.05 g from the brake point to the

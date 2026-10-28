@@ -249,3 +249,20 @@ console.log(JSON.stringify({
     assert "wheel" in r["steer"] and "brake came on" in r["brakeOn"] and "brake came off" in r["brakeOff"]
     assert "throttle went on" in r["throttleOn"] and "lift" in r["lift"]
     assert r["unknown"] == "the load on the car changed sharply here"
+
+
+def test_fatigue_in_plain_words():
+    runner = r"""
+const V = require(process.argv[1] + '/web/drive_view.js');
+const fa = (cues, minutes = 85.4) => ({ minutes, early: {}, late: {}, cues });
+console.log(JSON.stringify({ none: V.fatigueText(null), steady: V.fatigueText(fa([], 120)), both: V.fatigueText(fa(['smoothness', 'braking'])),
+  brake: V.fatigueText(fa(['braking'], 61)) }));
+"""
+    root = str(__import__("pathlib").Path(__file__).resolve().parents[1])
+    p = subprocess.run([NODE, "-e", runner, root], capture_output=True, text=True, timeout=60)
+    assert p.returncode == 0, p.stderr
+    r = json.loads(p.stdout)
+    assert r["none"] is None
+    assert r["steady"] == "You held your technique to the end of this 2 h drive: the last third was as smooth, and as tidy on the brakes, as the first."
+    assert r["both"].startswith("In the last third of this 1 h 25 min drive, your steering got busier and you braked past the middle")
+    assert "tiredness" in r["both"] and "1 h 1 min drive, you braked past the middle of corners more often than" in r["brake"]

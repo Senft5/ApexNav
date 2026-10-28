@@ -533,26 +533,28 @@
     return Math.max(0, 1 - 4 * (u - PACE_CEILING));
   }
   function std(a) { const m = a.reduce((x, y) => x + y, 0) / a.length; return Math.sqrt(a.reduce((x, y) => x + (y - m) * (y - m), 0) / a.length); }
+  // One clean corner's Driver Score inputs (port of drive_analysis.corner_technique), or null when it is not scored.
+  function cornerTechnique(v, lonG, latG, c) {
+    if (!Number.isFinite(c.apex_mps)) return null;
+    for (let q = c.start; q <= c.end; q++) if (!Number.isFinite(v[q])) return null;   // a speed gap (blank GPS speed) leaves the corner out, not NaN
+    const m = cornerMetrics(v, lonG, latG, c.start, c.end, c.apex, c.apex_mps);
+    if (m.min_mps < STOPPED_MPS) return null;
+    // Smoothness per metre of road (speed-invariant): how abruptly lateral load changes.
+    let sq = 0, nd = 0;
+    for (let q = c.start; q < c.end; q++) { const dl = latG[q + 1] - latG[q]; sq += dl * dl; nd++; }
+    let mn = Infinity;
+    for (let q = c.apex; q <= c.end; q++) mn = Math.min(mn, lonG[q]);
+    const late = Math.max(0, -mn);
+    return { use: m.envelope_use, smooth: Math.exp(-(nd ? Math.sqrt(sq / nd) : 0) / 0.15), brake: 1 - Math.min(1, Math.max(0, (late - 0.10) / 0.30)) };
+  }
   function driverScore(v, lonG, latG, corners, lo = 0, hi = null) {
     hi = hi === null ? v.length : hi;
     const uses = [], pace = [], smooth = [], brake = [];
     for (const c of corners) {
-      if (c.start < lo || c.end >= hi || !Number.isFinite(c.apex_mps)) continue;
-      let known = true;                                                 // a corner with a speed gap (blank GPS speed) is left out, not scored as NaN
-      for (let q = c.start; q <= c.end; q++) if (!Number.isFinite(v[q])) { known = false; break; }
-      if (!known) continue;
-      const m = cornerMetrics(v, lonG, latG, c.start, c.end, c.apex, c.apex_mps);
-      if (m.min_mps < STOPPED_MPS) continue;
-      uses.push(m.envelope_use);
-      pace.push(paceCredit(m.envelope_use));
-      // Smoothness per metre of road (speed-invariant): how abruptly lateral load changes.
-      let sq = 0, nd = 0;
-      for (let q = c.start; q < c.end; q++) { const dl = latG[q + 1] - latG[q]; sq += dl * dl; nd++; }
-      smooth.push(Math.exp(-(nd ? Math.sqrt(sq / nd) : 0) / 0.15));
-      let mn = Infinity;
-      for (let q = c.apex; q <= c.end; q++) mn = Math.min(mn, lonG[q]);
-      const late = Math.max(0, -mn);
-      brake.push(1 - Math.min(1, Math.max(0, (late - 0.10) / 0.30)));
+      if (c.start < lo || c.end >= hi) continue;
+      const t = cornerTechnique(v, lonG, latG, c);
+      if (!t) continue;
+      uses.push(t.use); pace.push(paceCredit(t.use)); smooth.push(t.smooth); brake.push(t.brake);
     }
     if (!uses.length) return { score: null, corners: 0, components: null };
     const mean = (a) => a.reduce((x, y) => x + y, 0) / a.length;
@@ -562,6 +564,33 @@
     const r4 = (x) => Math.round(x * 1e4) / 1e4;
     return { score: Math.round(1000 * raw), corners: uses.length,
              components: Object.fromEntries(Object.entries(comp).map(([k, x]) => [k, r4(x)])) };
+  }
+  // Fatigue cues (IDEAS D-16) — port of drive_analysis.fatigue (parity-tested): on a drive of an hour's moving time or
+  // more, did smoothness or braking fade from the first third to the last? A cue, never a verdict: the road can change too.
+  const FATIGUE_MIN_S = 3600, FATIGUE_MIN_CORNERS = 8, FATIGUE_MIN_DROP = 0.05, FATIGUE_SE = 2;
+  function fatigue(v, lonG, latG, corners) {
+    const n = v.length, t = new Float64Array(n);
+    for (let i = 1; i < n; i++) t[i] = t[i - 1] + (Number.isFinite(v[i - 1]) && v[i - 1] >= STOPPED_MPS ? 5 / v[i - 1] : 0);
+    const total = n ? t[n - 1] : 0;
+    if (total < FATIGUE_MIN_S) return null;
+    const early = [], late = [];
+    for (const c of corners) {
+      const tc = cornerTechnique(v, lonG, latG, c);
+      if (!tc) continue;
+      const at = t[c.apex];
+      if (at <= total / 3) early.push(tc); else if (at >= 2 * total / 3) late.push(tc);
+    }
+    if (early.length < FATIGUE_MIN_CORNERS || late.length < FATIGUE_MIN_CORNERS) return null;
+    const meanSe = (xs) => { let m = 0; for (const x of xs) m += x; m /= xs.length; let q = 0; for (const x of xs) q += (x - m) ** 2; return [m, Math.sqrt((xs.length > 1 ? q / (xs.length - 1) : 0) / xs.length)]; };
+    const r4 = (x) => Math.round(x * 1e4) / 1e4;
+    const out = { minutes: Math.round(total / 6) / 10, early: { corners: early.length }, late: { corners: late.length }, cues: [] };
+    for (const [k, name] of [['smooth', 'smoothness'], ['brake', 'braking']]) {
+      const [me, se] = meanSe(early.map((x) => x[k])), [ml, sl] = meanSe(late.map((x) => x[k]));
+      out.early[name] = r4(me); out.late[name] = r4(ml);
+      const drop = me - ml;
+      if (drop >= FATIGUE_MIN_DROP && drop >= FATIGUE_SE * Math.sqrt(se ** 2 + sl ** 2)) out.cues.push(name);
+    }
+    return out;
   }
   // Corner coach — port of core/drive_analysis.coach (parity-tested). Phases of each corner and the
   // time lost to the person's own best clean pass of it; passes over the sane limit never count as best.
@@ -822,7 +851,7 @@
 
   const api = {
     profileRecording,
-    driverScore, segmentPass, segmentWindow,
+    driverScore, cornerTechnique, fatigue, segmentPass, segmentWindow,
     removeSpurs, retracedShare,
     compareDrives, cornerMetrics, elapsedS, cornerPhases, coach, ggEnvelope, gripUse, ggSector, abruptMoments,
     G_STD, MPS_TO_MPH, ALPR_RADIUS_M,
