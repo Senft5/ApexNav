@@ -150,7 +150,7 @@
     const want = new Set();
     for (const p of points || []) {
       const dLat = PLACE_PAD_KM / 110.54, dLon = PLACE_PAD_KM / (111.32 * Math.cos(p.lat * Math.PI / 180));
-      for (const [a, b] of [[0, 0], [dLat, 0], [-dLat, 0], [0, dLon], [0, -dLon]]) want.add(tileOf(p.lat + a, p.lon + b, PLACE_Z).join('/'));
+      for (const a of [-dLat, 0, dLat]) for (const b of [-dLon, 0, dLon]) want.add(tileOf(p.lat + a, p.lon + b, PLACE_Z).join('/'));
     }
     if (!want.size || want.size > PLACE_MAX_TILES) throw new Error('area too big');
     await Promise.all([...want].filter(k => !placeTiles.has(k)).map(async (key) => {

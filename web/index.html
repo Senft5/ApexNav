@@ -2223,7 +2223,7 @@
       const quickest = pool.filter(c => Number.isFinite(c.timeS)).reduce((x, y) => (y.timeS < x.timeS ? y : x), best);
       // The best and up to two really different others stay on the card (and faint on the map) to pick from.
       const t = await useOption({ id, name, request, level, quickest, list: FunRoute.distinctOptions(ranked, 3) }, 0);
-      const mi = (totalOf(t) / 1609.344).toFixed(1), extra = best.extraS >= 60 ? ` · +${Math.round(best.extraS / 60)} min for ${fewerTownKm(best, quickest) >= 1 ? 'fun and fewer towns' : 'fun'}` : '';
+      const mi = (totalOf(t) / 1609.344).toFixed(1), extra = best.extraS >= 60 ? ` · +${Math.round(best.extraS / 60)} min for ${fewerTownKm(best, quickest) < 1 ? 'fun' : best.fun && quickest.fun && best.fun.good > quickest.fun.good ? 'fun and fewer towns' : 'fewer towns'}` : '';
       toast(`${name} · ${mi} mi · Fun ${best.fun ? best.fun.fun : '--'}${extra}`);
       window.apexDebug && (window.apexDebug.lastFun = FunRoute.rank(pool, level).map(c => ({ kind: c.kind, fun: c.fun, timeS: c.timeS, value: c.value, adjust: c.adjust || 0, glare: c.glare, townKm: c.townKm })));
       return true;
