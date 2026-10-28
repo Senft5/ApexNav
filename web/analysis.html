@@ -21,6 +21,7 @@
   <script src="drive_card.js"></script>
   <script src="year_review.js"></script>
   <script src="drive_tags.js"></script>
+  <script src="flyby.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { background: var(--panel); color: var(--panel-ink); font-family: var(--font-ui); font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -153,6 +154,8 @@
         <textarea class="mt-8" id="dvNoteText" maxlength="280" placeholder="A note for yourself (stays on this phone)" aria-label="Note"></textarea>
         <p class="note" id="dvTagsNote">Tags and notes stay on this phone. Filter the Log by them.</p></div>
       <div id="dvRoot"></div>
+      <div class="panel" id="dvFlyby" hidden><h2>Friends on these roads that day</h2><div id="dvFlybyList" class="stack-8"></div>
+        <p class="note">From the scores friends chose to show you, on stages you both marked. The last 14 days.</p></div>
       <div class="panel" id="dvRoad" hidden><h2>This road over time</h2><div id="dvRoadChart"></div><div class="scroll"><table id="dvRoadTable"></table></div></div>
     </section>
 
@@ -787,7 +790,21 @@
       // The drive's name is the page title (you arrive from the Log list); the picker stays only as this view's state.
       $('dvTitle').textContent = d.name;
       renderTags(d);
+      renderFlyby(d).catch(() => { $('dvFlyby').hidden = true; });
       $('dvNote').textContent = `${dateLabel(d)} · ${d.source === 'web-gps' ? 'Recorded on this phone' : d.source === 'imported' ? 'Imported' : 'Example drive'}`;
+    }
+    // Flyby (flyby.js, IDEAS S-20): friends who drove this drive's stages the same day. Members only; set as text.
+    let activityRows = null;
+    async function renderFlyby(d) {
+      const panel = $('dvFlyby'); panel.hidden = true;
+      if (monthOf(d) === null || !window.ApexSync || !(await ApexSync.member())) return;
+      const canons = segs.filter((s) => s.synced && Core.segmentPass(s, d)).map((s) => s.origin || s.id);
+      if (!canons.length) return;
+      if (!activityRows) activityRows = await ApexSync.activity();
+      if ($('dvPick').value !== d.id) return;                          // another drive opened meanwhile
+      const groups = ApexFlyby.flyby(activityRows, d.date.slice(0, 10), canons);
+      $('dvFlybyList').replaceChildren(...ApexFlyby.lines(groups).map((t) => { const p = document.createElement('p'); p.className = 'friend-act'; p.textContent = t; return p; }));
+      panel.hidden = !groups.length;
     }
     // Tags and note on a drive (drive_tags.js, IDEAS D-23): saved on its IndexedDB record, never sent anywhere.
     async function saveTags(d, tags, note) {

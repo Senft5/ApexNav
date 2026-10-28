@@ -659,6 +659,31 @@ flow('drive tags: tag a drive in the Log, filter by it, the note stays on the ph
   check(rows.length === 1 && rows[0] === 't1', 'filtered to the tagged drive: ' + rows);
 });
 
+flow('flyby: a friend on the same stage that day shows on the drive, as text (Worker stubbed, IDEAS S-20)', async (page, base) => {
+  await page.route(base + '/api/**', (route) => {
+    const u = new URL(route.request().url()), json = (b) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (u.pathname === '/api/board/activity') return json([{ handle: 'bob', canon_id: 'CANON1', stage: 'Straight <b>run</b>', driver_score: 812, driven_on: '2026-10-20', you: { rank: null, of: 1, mine: null } },
+      { handle: 'cara', canon_id: 'CANON1', stage: 'Straight <b>run</b>', driver_score: 600, driven_on: '2026-10-19', you: { rank: null, of: 1, mine: null } }]);
+    return json([]);
+  });
+  await page.goto(base + '/analysis.html');
+  await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && window.ApexRecording);
+  await page.evaluate(async () => {
+    const lat = [], lon = [];
+    for (let i = 0; i < 200; i++) { lat.push(35.6 + i * 5 / 110540); lon.push(-83.9); }
+    await ApexRecording.store({ id: 'f1', name: 'Morning run', date: '2026-10-20T15:00:00Z', lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: lat.map(() => 15),
+      lon_g: lat.map(() => 0), lat_g: lat.map(() => 0), g_known: null, events: [], elev: null, hz: 1, source: 'web-gps' });
+    const a = 20, b = 180;
+    localStorage.setItem('apex.segments', JSON.stringify([{ id: 'seg_f', origin: 'CANON1', synced: true, name: 'Straight run', lat0: lat[a], lon0: lon[a], lat1: lat[b], lon1: lon[b], length_m: (b - a) * 5,
+      geom: JSON.stringify(Array.from({ length: 20 }, (_, k) => { const i = a + Math.round(k * (b - a) / 19); return [lat[i], lon[i]]; })) }]));
+  });
+  await page.goto(base + '/analysis.html?drive=f1');
+  await page.waitForSelector('#dvFlyby:not([hidden])');
+  const t = await page.textContent('#dvFlybyList');
+  check(t === 'Straight <b>run</b>: @bob 812', 'only the same day, as text: ' + t);
+});
+
 flow('the Log page opens', async (page, base) => {
   await page.goto(base + '/analysis.html');
   await page.waitForLoadState('load');
