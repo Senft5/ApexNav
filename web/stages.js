@@ -106,6 +106,12 @@
   };
   let tileUrl = null;
   const MAX_TILES = 64;
+  /** The map's road lines in the zoom-14 tile under a point (for "am I on a raceway?", IDEAS D-15); throws without tiles. */
+  async function transportationAt(lat, lon, z = 14) {
+    if (!tileUrl) tileUrl = (await Loading.json(TILEJSON)).tiles[0];
+    const [x, y] = tileOf(lat, lon, z);
+    return decodeLayer(new Uint8Array(await Loading.arrayBuffer(tileUrl.replace('{z}', z).replace('{x}', x).replace('{y}', y))), 'transportation', z, x, y);
+  }
   async function roadPieces(c, radiusKm, onProgress, withNames = false) {
     if (!tileUrl) tileUrl = (await Loading.json(TILEJSON)).tiles[0];
     const z = 13, jobs = [];
@@ -594,5 +600,5 @@
     return pts;
   }
 
-  root.ApexStages = { decodeLayer, discover, nameStages, places, pois, addElevations, profile, fillProfile, climbM, sightOffsets, offsetsFrom, SIGHT_OPEN_M, stageDirection, terrarium, applyHighlights, plans, waypoints, strokes, bestWindow, roadPieces };
+  root.ApexStages = { decodeLayer, transportationAt, discover, nameStages, places, pois, addElevations, profile, fillProfile, climbM, sightOffsets, offsetsFrom, SIGHT_OPEN_M, stageDirection, terrarium, applyHighlights, plans, waypoints, strokes, bestWindow, roadPieces };
 })(typeof window !== 'undefined' ? window : globalThis);

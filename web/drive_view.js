@@ -204,6 +204,11 @@
     head.innerHTML = `<div class="dv-score"><b class="score big">${scoreVal}</b> <small>/1000</small></div>`
       + `<div class="bars">${bar('pace', 'Pace')}${bar('smoothness', 'Smooth')}${bar('braking', 'Brakes')}${bar('consistency', 'Rhythm')}</div>`
       + `<div class="dv-meta">${mi} \u00b7 ${dur} \u00b7 ${d.corners.length} corners</div>`
+      // lap times from track mode (a circuit only, IDEAS D-15): best marked, sectors when the first lap set their lines
+      + (Array.isArray(d.laps) && d.laps.length ? `<div class="dv-meta">Laps: ${d.laps.map((l) => {
+          const best = Math.min(...d.laps.map((x) => x.timeS)), t = `${Math.floor(l.timeS / 60)}:${(l.timeS % 60).toFixed(2).padStart(5, '0')}`;
+          return `${l.n}. <b>${esc(t)}</b>${l.timeS === best ? ' best' : ''}${Array.isArray(l.sectors) ? ` (${l.sectors.map((s) => s.toFixed(2)).join(' / ')})` : ''}`;
+        }).join(' · ')}</div>` : '')
       // which car the score is for (IDEAS D-19); a lower limit is said, since it changes what Pace means
       + (d.car && d.car.label ? `<div class="dv-meta">Scored for your ${esc(d.car.label)}${finite(d.car.mu) && d.car.mu < 0.6 ? ` \u00b7 its own grip, ${d.car.mu.toFixed(2)} g (the default is 0.60 g)` : ''}</div>` : '')
       + (plain ? `<p class="dv-plain">${esc(plain)}</p>` : '')

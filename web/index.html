@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-T4zrtlle2GL6yELwj5xuTfNLo8Ke6Qs4Vlum7i9I0Qo=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-yi0vLx695y9CZBPJB6QXGBK789S9KMQzBmF4kMSmnoE=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>ApexNav</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -22,6 +22,7 @@
   <script src="crew_standings.js"></script>
   <script src="road_page.js"></script>
   <script src="taste.js"></script>
+  <script src="track_mode.js"></script>
   <script src="route_loading.js"></script>
   <script src="stages.js"></script>
   <script src="fun_route.js"></script>
@@ -669,6 +670,7 @@
         </div>
       </div>
       <div class="stage-bar" id="stageBar" role="status" aria-live="polite" hidden><span id="stageName"></span><b id="stageDelta">--</b><small id="stageCount"></small></div>
+      <div class="stage-bar" id="lapBar" role="status" aria-live="polite" hidden><span id="lapName">Track</span><b id="lapTime">--</b><small id="lapInfo"></small><button class="key" id="lapSetBtn" hidden>Start/finish here</button></div>
       <div class="hz-ask" id="hzAsk" role="alertdialog" aria-live="assertive" hidden><span id="hzAskText"></span><button class="key" id="hzStill">Still there</button><button class="key" id="hzGone">Gone</button></div>
       <div class="overlay dim" id="pinOverlay" role="dialog" aria-modal="true" aria-label="Dropped pin">
         <div class="card-sheet">
@@ -4926,6 +4928,42 @@
       bar.classList.toggle('ahead', r.delta > 0); bar.classList.toggle('behind', r.delta < 0);
       if (r.state === 'done') toast(r.delta == null ? `${r.name} done.` : r.delta === 0 ? `${r.name}: level with your best.` : `${r.name}: ${Math.abs(r.delta)} points ${r.delta > 0 ? 'up on' : 'down on'} your best.`);
     }
+    // Track day mode (track_mode.js, IDEAS D-15): only on a mapped raceway. Every 30 s while moving the map is asked whether
+    // you're on one; then "Start/finish here" sets the line where you are, and the bar shows laps, sectors and the delta.
+    const circuit = { checkedAt: 0, on: false, busy: false, timer: null, prev: null };
+    function resetCircuit() { Object.assign(circuit, { checkedAt: 0, on: false, busy: false, timer: null, prev: null }); $('lapBar').hidden = true; $('lapSetBtn').hidden = true; }
+    function feedTrack(fr) {
+      if (!window.ApexTrackMode || !fr || !Number.isFinite(fr.lat)) return;
+      const now = Number.isFinite(fr.t) ? fr.t : Date.now();          // a frame's own time when it has one
+      if (!circuit.on && !circuit.busy && now - circuit.checkedAt > 30000 && fr.speed_mps > 3 && window.ApexStages && ApexStages.transportationAt) {
+        circuit.busy = true; circuit.checkedAt = now;
+        ApexStages.transportationAt(fr.lat, fr.lon).then((f) => {
+          circuit.busy = false;
+          if (!driveActive || !ApexTrackMode.onRaceway(f, fr.lat, fr.lon)) return;
+          circuit.on = true; $('lapBar').hidden = false; $('lapSetBtn').hidden = false;
+          $('lapName').textContent = 'On a circuit'; $('lapTime').textContent = '--'; $('lapInfo').textContent = 'Tap at the start/finish line';
+          say('Track mode. Tap start finish when you cross the line.', true);
+        }).catch(() => { circuit.busy = false; });
+      }
+      if (circuit.timer) {
+        const r = circuit.timer.feed({ lat: fr.lat, lon: fr.lon, t: now }), st = circuit.timer.state(now);
+        if (r) { const L = r.lap; say(`Lap ${L.n}. ${ApexTrackMode.lapText(L.timeS).replace(':', ' ')}${st.best === L ? '. Best' : ''}`, true); }
+        $('lapName').textContent = `Lap ${st.laps.length + (st.running ? 1 : 0)}`;
+        $('lapTime').textContent = st.delta == null ? ApexTrackMode.lapText(st.elapsedS) : `${st.delta > 0 ? '+' : ''}${st.delta.toFixed(2)}`;
+        $('lapInfo').textContent = [st.last ? `last ${ApexTrackMode.lapText(st.last.timeS)}` : '', st.best ? `best ${ApexTrackMode.lapText(st.best.timeS)}` : ''].filter(Boolean).join(' · ');
+        $('lapBar').classList.toggle('ahead', st.delta != null && st.delta < 0); $('lapBar').classList.toggle('behind', st.delta != null && st.delta > 0);
+      }
+      circuit.prev = fr;
+    }
+    $('lapSetBtn').addEventListener('click', () => {
+      const fr = state.live;
+      if (!circuit.on || !fr) return;
+      const h = Number.isFinite(fr.course_deg) ? fr.course_deg : circuit.prev && circuit.prev !== fr ? Math.atan2((fr.lon - circuit.prev.lon) * Math.cos(fr.lat * Math.PI / 180), fr.lat - circuit.prev.lat) * 180 / Math.PI : null;
+      if (h == null) { toast('Move a little first so the line knows which way you go.'); return; }
+      circuit.timer = ApexTrackMode.createLapTimer({ lat: fr.lat, lon: fr.lon, headingDeg: h });
+      $('lapSetBtn').hidden = true; $('lapInfo').textContent = 'Line set · laps start at the next crossing';
+      toast('Start/finish set here. Laps are timed from the next crossing.');
+    });
     async function enterDrive() {
       if (state.mode === 'live' && drive.sensors) return;
       if (state.mode === 'live' || driveActive) return;                                   // native app is feeding frames already or start is pending
@@ -4960,7 +4998,7 @@
             paintPerms();
             paintDriveStat();
           },
-          onFrame: (fr) => { if (!fr.has_fix) return; drive.frames++; recordFrame(fr); feedLive(); noteRoads(); noteRest(fr); feedStage(); window.apex.live(fr); paintDriveStat(); },
+          onFrame: (fr) => { if (!fr.has_fix) return; drive.frames++; recordFrame(fr); feedLive(); noteRoads(); noteRest(fr); feedStage(); feedTrack(fr); window.apex.live(fr); paintDriveStat(); },
         });
         if (!driveActive || state.mode !== 'live') {
           sensors.stop();
@@ -4978,6 +5016,8 @@
     async function leaveDrive(save) {
       driveActive = false;
       stageWatch = null; $('stageBar').hidden = true;
+      const laps = circuit.timer ? circuit.timer.state(Date.now()).laps : [];
+      resetCircuit();
       activity('end');
       const rec = drive.rec, sensors = drive.sensors, live = drive.live, road = rec && window.ApexRoadNames ? ApexRoadNames.mainRoad(drive.roads, rec.km * 1000) : null;
       drive.sensors = null; drive.rec = null; drive.live = null; drive.share = 'off'; drive.native = false;
@@ -4993,6 +5033,7 @@
           // the car it was driven in (IDEAS D-19): its label and the grip its score allows, never higher than the street default
           const car = routingCar();
           if (car) d.car = { label: car.label, mu: Core.carGrip(car) };
+          if (laps.length) d.laps = laps;                            // lap times from track mode (on a circuit only, IDEAS D-15)
           await ApexRecording.store(d);
           await refreshSavedDrives();
           toast(`Drive saved · ${ApexUnits.long((rec.km) * 1000, 1)}`, { label: 'View', href: `analysis.html?tab=drive&drive=${encodeURIComponent(d.id)}` });
@@ -5197,7 +5238,7 @@
         feedReported(frame); feedReaction(frame); feedCrash(frame);
         state.live = frame; state.liveAt = performance.now();
         if (drive.native && drive.rec) {
-          drive.frames++; recordFrame(frame); feedLive(); noteRoads(); noteRest(frame); feedStage();
+          drive.frames++; recordFrame(frame); feedLive(); noteRoads(); noteRest(frame); feedStage(); feedTrack(frame);
           const gps = Number.isFinite(frame.accuracy_m) && frame.accuracy_m > ApexSensors.MAX_ACCURACY_M ? 'weak' : 'on';
           if (drive.status.gps !== gps) drive.status.gps = gps;
           const cal = typeof frame.calibration === 'string' ? frame.calibration : null;
