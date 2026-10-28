@@ -24,6 +24,7 @@
   <script src="eta.js"></script>
   <script src="speech_queue.js"></script>
   <script src="note_timing.js"></script>
+  <script src="plain_notes.js"></script>
   <script src="hazard_reports.js"></script>
   <script src="traffic.js"></script>
   <script src="in_car.js"></script>
@@ -504,6 +505,11 @@
             </div>
             <div class="row mt-8"><select class="field" id="voiceSelect"></select></div>
             <div class="row mt-8"><button class="ink-btn" id="voiceTestBtn">▶ Sample</button></div>
+            <div class="row mt-8" id="noteWordsList" role="group" aria-label="Note words">
+              <button class="ink-btn" data-words="plain">Plain words</button>
+              <button class="ink-btn" data-words="rally">Rally notes</button>
+            </div>
+            <p class="note" id="noteWordsNote"></p>
             <button class="sw mt-8" id="liveVoiceBtn" role="switch" aria-checked="false"><i></i><span>Speak road names</span></button>
             <p class="note" id="liveNote" role="status" aria-live="polite"></p>
           </section>
@@ -730,6 +736,7 @@
       live: null, liveAt: 0, lastPosition: null, spiritedAt: -Infinity, spoken: new Set(), tapToRoute: false,
       theme: 'roadbook', camFeel: 'dynamic', voiceId: 'george', liveVoice: false, voiceStyle: 'codriver', voiceName: '', hlOn: false, hlStrength: 1,
       notesMode: 'auto', nightMode: 'auto',   // Notes: auto | full | quiet. Night: auto (sunset/sunrise) | on | off
+      noteWords: 'plain',                     // rally ("Left 4 minus") | plain ("Medium left"), IDEAS V-02; a saved setting wins
       toggles: { stage: false, voice: true, lpr: true, dna: false, night: false, twisty: false }   // stage and night are derived from the two modes; analysis.html reads toggles.night
     };
     const NOTES_MODES = ['auto', 'full', 'quiet'], NIGHT_MODES = ['auto', 'on', 'off'];
@@ -762,6 +769,7 @@
         Object.assign(state.toggles, saved.toggles || {});
         state.toggles.dna = false;   // the Road scores switch is gone (BRAND §7 item 5); a stored "on" must not leave the layer stuck on
         // Old saves only have toggles.stage / toggles.night: stage true = Full, false = Auto; night true = On, false = Off (a saved false was a choice, not unset).
+        state.noteWords = saved.noteWords === 'plain' || saved.noteWords === 'rally' ? saved.noteWords : 'rally';   // people from before V-02 keep rally
         state.notesMode = NOTES_MODES.includes(saved.notesMode) ? saved.notesMode : (saved.toggles && saved.toggles.stage ? 'full' : 'auto');
         state.nightMode = NIGHT_MODES.includes(saved.nightMode) ? saved.nightMode : (saved.toggles && saved.toggles.night ? 'on' : saved.toggles && 'night' in saved.toggles ? 'off' : 'auto');
       }
@@ -780,7 +788,7 @@
     document.addEventListener('visibilitychange', () => { if (!document.hidden) ApexFormat.applyTypeScale(document); });   // text size changed in Settings
     state.theme = look.theme.id;   // a retired or unknown saved theme resolves to the one it maps to
     let cluster = Inst.mountCluster($('cluster'), look.theme);
-    function savePrefs() { try { localStorage.setItem('apex.prefs', JSON.stringify({ theme: state.theme, themeV: 2, camFeel: state.camFeel, voiceId: state.voiceId, liveVoice: state.liveVoice, liveVoiceV: 2, voiceName: state.voiceName, hlOn: state.hlOn, hlStrength: state.hlStrength, notesMode: state.notesMode, nightMode: state.nightMode, toggles: state.toggles })); } catch (_) {} }
+    function savePrefs() { try { localStorage.setItem('apex.prefs', JSON.stringify({ theme: state.theme, themeV: 2, camFeel: state.camFeel, voiceId: state.voiceId, liveVoice: state.liveVoice, liveVoiceV: 2, voiceName: state.voiceName, hlOn: state.hlOn, hlStrength: state.hlStrength, notesMode: state.notesMode, noteWords: state.noteWords, nightMode: state.nightMode, toggles: state.toggles })); } catch (_) {} }
     function paintSwitches() {
       document.querySelectorAll('[data-toggle]').forEach(b => { const on = !!state.toggles[b.dataset.toggle]; b.classList.toggle('on', on); b.setAttribute('role', 'switch'); b.setAttribute('aria-checked', String(on)); });
       document.querySelectorAll('[data-cycle]').forEach(b => { const v = state[b.dataset.cycle]; b.querySelector('b').textContent = MODE_LABEL[v]; b.setAttribute('aria-label', `${b.querySelector('span').textContent}: ${MODE_LABEL[v]}`); });
@@ -1530,6 +1538,8 @@
       if (cur.link && cur.link !== 'into' && cur.link !== 'and') text += `, ${cur.link}`;
       // The last note's link is "into"/"and" only if the chain was cut short; don't voice a dangling link.
       const voiced = chain.map((n, i) => (i === chain.length - 1 && (n.link === 'into' || n.link === 'and')) ? { ...n, link: null } : n);
+      // Plain words: spoken whole (the voice bank's clips are rally words), from the same notes.
+      if (state.noteWords === 'plain') return { text: ApexPlainNotes.plainChain(voiced), chain: null };
       return { text, chain: voiced };
     }
 
@@ -1551,7 +1561,7 @@
       const shown = ev.filter(e => spirited || noteworthyInCruise(e) || e.type !== 'corner').filter(e => noteM(e) - state.cursorM <= 3000).slice(0, 3);
       const notes = shown.map(e => {
         const d = distLabel(Math.max(0, noteM(e) - state.cursorM));   // 0 once you're in the corner
-        return { key: `${e.type}:${e.index}:${e.dist_m}`, type: e.type, code: e.code, call: e.call, sub: subFor(e) + linkLabel(e), dist: d.n, unit: d.u, distM: Math.max(0, noteM(e) - state.cursorM),
+        return { key: `${e.type}:${e.index}:${e.dist_m}`, type: e.type, code: e.code, call: state.noteWords === 'plain' ? ApexPlainNotes.plainCall(e) : e.call, sub: subFor(e) + linkLabel(e), dist: d.n, unit: d.u, distM: Math.max(0, noteM(e) - state.cursorM),
                  dir: e.dir, severity: e.severity, turnRad: e.turn_rad, mods: e.mods || [] };
       });
       notes.quietText = offRoute ? (!track ? 'No route planned' : offRouteText()) : track ? `${track.name} · ${spirited ? 'Full notes' : 'Quiet · bumps and cameras only'}` : 'Plan a route for notes';
@@ -3412,6 +3422,16 @@
     $('zoneHereBtn').addEventListener('click', async () => { const p = await locate(); if (!p) { toast(NO_FIX); return; } addZone(p); });
     $('zoneMapBtn').addEventListener('click', () => { const c = map.getCenter(); addZone({ lat: c.lat, lon: c.lng }); });
     renderZones();
+    // Note words (plain_notes.js, IDEAS V-02)
+    function renderNoteWords() {
+      document.querySelectorAll('#noteWordsList [data-words]').forEach(b => { const on = b.dataset.words === state.noteWords; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
+      $('noteWordsNote').textContent = state.noteWords === 'plain' ? 'For example "Medium left, tightens, slow down".' : 'Rally pace notes, 1 tightest to 6: "Left 3 tightens, caution".';
+    }
+    document.querySelectorAll('#noteWordsList [data-words]').forEach(b => b.addEventListener('click', () => {
+      state.noteWords = b.dataset.words; savePrefs(); renderNoteWords(); render(true);
+      say(state.noteWords === 'plain' ? 'Medium left, tightens, then hairpin right.' : 'Left 3 tightens into right hairpin.', true);
+    }));
+    renderNoteWords();
     $('hlOpenBtn').addEventListener('click', async () => {
       const p = await locate();
       if (!p) { toast(NO_FIX); return; }
