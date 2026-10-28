@@ -19,8 +19,10 @@
   <script src="fun_route.js"></script>
   <script src="sync.js"></script>
   <script src="sensors.js"></script>
+  <script src="privacy_zones.js"></script>
   <script src="reroute.js"></script>
   <script src="eta.js"></script>
+  <script src="speech_queue.js"></script>
   <script src="traffic.js"></script>
   <script src="in_car.js"></script>
   <script src="power.js"></script>
@@ -456,6 +458,17 @@
           <section data-panel="setup">
             <h3>Road data</h3>
             <p class="note" id="ambientNote" role="status" aria-live="polite">--</p>
+          </section>
+          <section data-panel="setup">
+            <h3>Privacy zones</h3>
+            <p class="note" style="margin:0 0 8px">Places like home and work. Inside one, nothing is recorded or shared, and convoys don't see you. Kept on this phone only.</p>
+            <div class="row" id="zoneRadius" role="group" aria-label="Zone size">
+              <button class="ink-btn" data-zone-r="200">200 m</button>
+              <button class="ink-btn" data-zone-r="500">500 m</button>
+              <button class="ink-btn" data-zone-r="1000">1 km</button>
+            </div>
+            <div class="row mt-8"><button class="ink-btn" id="zoneHereBtn">Add where I am</button><button class="ink-btn" id="zoneMapBtn">Add at map centre</button></div>
+            <div id="zoneList" class="stack-8 mt-8"></div>
           </section>
         <section data-panel="setup">
             <h3>Spots</h3>
@@ -1320,7 +1333,11 @@
     // Voice: "codriver" (most natural voice installed, read like a real co-driver) or
     // "jarvis" (cartoonishly robotic: robot voice where installed, chirps, machine-speak).
     // -------------------------------------------------------------------------
-    const speech = { busy: false, queue: [], talkingUntil: 0 };   // talkingUntil: the native voice's estimated end (it reports no finish)
+    let privacyZones = (() => { try { return ApexPrivacyZones.load(localStorage); } catch (_) { return []; } })();   // privacy_zones.js
+    const inPrivacyZone = (lat, lon) => !!ApexPrivacyZones.zoneAt(privacyZones, lat, lon);
+    // queue: what to say next, hazards first, stale and duplicate lines dropped (speech_queue.js, IDEAS V-03). current: the line playing.
+    // talkingUntil: the native voice's estimated end (it reports no finish).
+    const speech = { busy: false, queue: ApexSpeechQueue.createSpeechQueue(), current: null, talkingUntil: 0, nativeTimer: 0, via: null };
     const MEMO_S = 5;   // a remembered coaching tip takes up to this long to say
     let breakSay = null;  // a break suggestion waiting for a quiet moment (noteRest sets it, the notes loop says it)
     const NUM_WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
@@ -1392,17 +1409,26 @@
     }
     // say(): pace notes (chain) and fixed phrases (sysToken) play from the open-model voice bank;
     // anything the bank can't voice (drive names...) falls back to the device voice.
-    function say(text, force, chain = null, sysToken = null) {
+    // opts: kind 'hazard' (goes first, may cut off an ordinary line), key (never twice in a row), atM (route metres: dropped once passed).
+    function say(text, force, chain = null, sysToken = null, opts = {}) {
       if (!text || (!state.toggles.voice && !force)) return;
-      if (force) { if ('speechSynthesis' in window) speechSynthesis.cancel(); speech.queue.length = 0; }
-      speech.queue.push({ text, chain, sysToken });
-      if (speech.queue.length > 2) speech.queue.splice(0, speech.queue.length - 2);
-      pumpSpeech();
+      if (force) { speech.queue.clear(); stopSpeaking(); }
+      speech.queue.push({ text, chain, sysToken, ...opts }, performance.now());
+      if (!force) preemptForHazard();
+      pumpSpeech(force);
     }
-    // Next in line without cutting off what is playing or dropping the notes behind it (convoy hazard calls far ahead).
-    function sayNext(text) {
-      speech.queue.unshift({ text, chain: null, sysToken: null });
-      pumpSpeech();
+    // A hazard said ahead of whatever ordinary lines are waiting (convoy hazard calls far ahead).
+    function sayNext(text, key) { say(text, false, null, null, { kind: 'hazard', key }); }
+    const queueCursor = () => (track && state.cursorIdx >= 0 ? state.cursorM : null);
+    // A hazard waiting while an ordinary line plays: cut the line off. A model-voice clip is short and finishes; the hazard is next.
+    function preemptForHazard() {
+      if (!speech.busy || !ApexSpeechQueue.preempts(speech.current, speech.queue.items[0])) return;
+      if (speech.via === 'native') { clearTimeout(speech.nativeTimer); speech.busy = false; speech.interrupt = true; }
+      else if (speech.via === 'web' && 'speechSynthesis' in window) speechSynthesis.cancel();   // onend pumps the hazard
+    }
+    function stopSpeaking() {
+      if ('speechSynthesis' in window) speechSynthesis.cancel();
+      if (speech.via === 'native') { clearTimeout(speech.nativeTimer); speech.busy = false; speech.interrupt = true; }
     }
     // In the app the shell owns the audio route (car stereo, CarPlay audio, Bluetooth): tell it while a web voice clip plays.
     function voiceBracket(on) {
@@ -1410,9 +1436,10 @@
       if (native) { try { native.postMessage(on ? 'voiceBegin' : 'voiceEnd'); } catch (_) {} }
     }
     async function pumpSpeech() {
-      if (speech.busy || !speech.queue.length) return;
-      const item = speech.queue.shift();
-      speech.busy = true;
+      if (speech.busy) return;
+      const item = speech.queue.take(performance.now(), queueCursor());
+      if (!item) { speech.current = null; speech.via = null; return; }
+      speech.busy = true; speech.current = item; speech.via = 'model';
       let played = false;
       try {
         if (state.voiceId !== 'device' && window.ApexVoice) {
@@ -1431,17 +1458,24 @@
       } catch (_) { /* fall back to the device voice */ }
       if (played) { speech.busy = false; pumpSpeech(); return; }
       deviceSpeak(spokenText(item.text));
+      if (speech.queue.hazardWaiting(performance.now(), queueCursor())) preemptForHazard();   // a hazard arrived while the model voice tried
     }
     function deviceSpeak(spoken) {
       const style = state.voiceStyle;
       if (style === 'jarvis') chirp();
       const native = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex;
       if (native) {
-        try { native.postMessage({ cmd: 'speak', text: spoken, force: false, style }); } catch (_) {}
-        speech.talkingUntil = Math.max(performance.now(), speech.talkingUntil) + 600 + spoken.length * 70;   // ~14 characters a second
-        speech.busy = false; pumpSpeech(); return;
+        // One line at a time, so a hazard can still go ahead of the lines behind it; a hazard cutting in interrupts at a word.
+        const interrupt = !!speech.interrupt; speech.interrupt = false;
+        try { native.postMessage({ cmd: 'speak', text: spoken, force: interrupt, style }); } catch (_) {}
+        speech.talkingUntil = (interrupt ? performance.now() : Math.max(performance.now(), speech.talkingUntil)) + 600 + spoken.length * 70;   // ~14 characters a second
+        speech.via = 'native';
+        clearTimeout(speech.nativeTimer);
+        speech.nativeTimer = setTimeout(() => { speech.busy = false; pumpSpeech(); }, Math.max(0, speech.talkingUntil - performance.now()));
+        return;
       }
       if (!('speechSynthesis' in window)) { speech.busy = false; return; }
+      speech.via = 'web';
       const u = new SpeechSynthesisUtterance(spoken);
       const v = pickVoice(state.voiceStyle);
       if (v) { u.voice = v; u.lang = v.lang; }
@@ -1478,15 +1512,18 @@
       return { text, chain: voiced };
     }
 
+    // Where a note is due: a corner's entry (turn-in), not its apex, so the call and the countdown come before you turn
+    // (owner 2026-10-28: "called out in reference to the apex rather than the entry"). Hazards are a point: entry = apex.
+    const noteM = (e) => (Number.isFinite(e.start_m) && e.start_m <= e.dist_m ? e.start_m : e.dist_m);
     function updateNotes(vMps, live) {
       // Driving somewhere that is not on the loaded route: its calls (and its stale trip distance) must never be read out as if they were this road.
       const offRoute = live && state.cursorIdx < 0;
-      const ev = offRoute ? [] : allEvents().filter(e => e.dist_m >= state.cursorM - 5 && (e.type !== 'alpr' || state.toggles.lpr)).sort((a, b) => a.dist_m - b.dist_m);
+      const ev = offRoute ? [] : allEvents().filter(e => e.dist_m >= state.cursorM - 5 && (e.type !== 'alpr' || state.toggles.lpr)).sort((a, b) => noteM(a) - noteM(b));
       const spirited = isSpirited();
-      const shown = ev.filter(e => spirited || noteworthyInCruise(e) || e.type !== 'corner').filter(e => e.dist_m - state.cursorM <= 3000).slice(0, 3);
+      const shown = ev.filter(e => spirited || noteworthyInCruise(e) || e.type !== 'corner').filter(e => noteM(e) - state.cursorM <= 3000).slice(0, 3);
       const notes = shown.map(e => {
-        const d = distLabel(e.dist_m - state.cursorM);
-        return { key: `${e.type}:${e.index}:${e.dist_m}`, type: e.type, code: e.code, call: e.call, sub: subFor(e) + linkLabel(e), dist: d.n, unit: d.u, distM: e.dist_m - state.cursorM,
+        const d = distLabel(Math.max(0, noteM(e) - state.cursorM));   // 0 once you're in the corner
+        return { key: `${e.type}:${e.index}:${e.dist_m}`, type: e.type, code: e.code, call: e.call, sub: subFor(e) + linkLabel(e), dist: d.n, unit: d.u, distM: Math.max(0, noteM(e) - state.cursorM),
                  dir: e.dir, severity: e.severity, turnRad: e.turn_rad, mods: e.mods || [] };
       });
       notes.quietText = offRoute ? (!track ? 'No route planned' : offRouteText()) : track ? `${track.name} · ${spirited ? 'Full notes' : 'Quiet · bumps and cameras only'}` : 'Plan a route for notes';
@@ -1495,14 +1532,14 @@
       if (!(state.playing || live) || vMps == null) return;
       const lead = Math.max(60, Math.min(250, vMps * 5));
       for (const e of ev) {
-        const d = e.dist_m - state.cursorM;
+        const d = noteM(e) - state.cursorM;
         if (d > lead) break;
         const key = `${track.id}:${e.type}:${e.index}`;
         if (state.spoken.has(key) || d < 10) continue;
         state.spoken.add(key);
         if (e.type === 'corner' ? !spirited : !(spirited || noteworthyInCruise(e))) continue;
         const call = chainedCall(e, ev, spirited);
-        say(call.text, false, call.chain);
+        say(call.text, false, call.chain, null, { kind: e.type === 'corner' ? 'ordinary' : 'hazard', key, atM: noteM(e) });
       }
       // Roads you have driven: one technique tip per remembered corner, only with full notes on (never over a commute),
       // moving on a fresh heading, and only when it ends before any call is due: it starts MEMO_S of driving beyond the
@@ -1511,19 +1548,19 @@
       // unless a route bump that will be called lies within reach along the route or within SAME_SPOT_M of it (a hairpin can
       // put it close in a straight line but far along the road). It never pushes a queued call out, and may be said again
       // once HZ_REPEAT_MS has passed (the same road later, a lap), so the id is not kept in state.spoken.
-      if (live && vMps >= 5 && performance.now() - state.liveAt < 2500 && speech.queue.length < 2) {
+      if (live && vMps >= 5 && performance.now() - state.liveAt < 2500 && speech.queue.size < 2) {
         const calledBumps = ev.filter(e => e.type === 'bump' && (spirited || noteworthyInCruise(e)));
         const now = performance.now(), recent = { has: (id) => now - (hazardSaid.get(id) ?? -Infinity) < HZ_REPEAT_MS };
         const pool = hazardMemory.filter(n => (spirited || n.severity_g >= 0.45)
           && !calledBumps.some(e => e.dist_m - state.cursorM < lead + 30
             || Math.hypot((track.lon[e.index] - n.lon) * 111320 * Math.cos(n.lat * Math.PI / 180), (track.lat[e.index] - n.lat) * 110540) < HZ_SAME_SPOT_M));
         const hz = ApexRoadMemory.upcoming(pool, state.live, 25, lead, recent);
-        if (hz) { hazardSaid.set(hz.id, now); say(hz.text); }
+        if (hz) { hazardSaid.set(hz.id, now); say(hz.text, false, null, null, { kind: 'hazard', key: `mem:${hz.id}`, repeatMs: HZ_REPEAT_MS }); }
       }
       const reach = lead + vMps * MEMO_S;
-      if (live && spirited && vMps >= 5 && performance.now() - state.liveAt < 2500 && !speech.busy && !speech.queue.length
+      if (live && spirited && vMps >= 5 && performance.now() - state.liveAt < 2500 && !speech.busy && !speech.queue.size
           && performance.now() > speech.talkingUntil
-          && !ev.some(e => e.dist_m - state.cursorM < reach && !state.spoken.has(`${track.id}:${e.type}:${e.index}`))) {
+          && !ev.some(e => noteM(e) - state.cursorM < reach && !state.spoken.has(`${track.id}:${e.type}:${e.index}`))) {
         const memo = ApexRoadMemory.upcoming(roadMemory, state.live, reach, reach + 200, state.spoken);
         if (memo) { state.spoken.add(memo.id); say(memo.text); }
       }
@@ -1532,9 +1569,9 @@
       // at the app's estimate of 600 ms + 70 ms a character, plus 2 s for a model voice to start. Dropped after 5 min unsaid;
       // the toast already showed it.
       if (breakSay && performance.now() > breakSay.until) breakSay = null;
-      if (breakSay && live && performance.now() - state.liveAt < 2500 && !speech.busy && !speech.queue.length && performance.now() > speech.talkingUntil) {
+      if (breakSay && live && performance.now() - state.liveAt < 2500 && !speech.busy && !speech.queue.size && performance.now() > speech.talkingUntil) {
         const breakReach = lead + vMps * (0.6 + 0.07 * breakSay.text.length + 2);
-        const callDue = ev.some(e => e.dist_m - state.cursorM < breakReach && !state.spoken.has(`${track.id}:${e.type}:${e.index}`)
+        const callDue = ev.some(e => noteM(e) - state.cursorM < breakReach && !state.spoken.has(`${track.id}:${e.type}:${e.index}`)
           && (e.type === 'corner' ? spirited : (spirited || noteworthyInCruise(e))));
         const bumpDue = ApexRoadMemory.upcoming(hazardMemory, state.live, 0, breakReach, { has: () => false });
         if (!callDue && !bumpDue) { say(breakSay.text); breakSay = null; }
@@ -2925,12 +2962,13 @@
       getFix: () => {
         const p = state.lastPosition;
         if (!p || !state.lastPositionAt || performance.now() - state.lastPositionAt > 10000) return null;
+        if (inPrivacyZone(p.lat, p.lon)) return null;                     // a privacy zone: the convoy gets no position
         const m = state.lastMotion || {};
         return { lat: p.lat, lon: p.lon, heading: m.heading ?? null, speedMps: m.speedMps ?? null };
       },
       getRoute: () => (track && track.kind === 'route' && track.lat.length > 1 ? { name: track.name, pts: track.lat.map((la, i) => [la, track.lon[i]]) } : null),
       // A close hazard cuts in; a far one goes next, after the pace note being spoken (never dropping the notes queued).
-      speak: (text, urgent) => { if (!state.toggles.voice) toast(text); else if (urgent) say(text, true); else sayNext(text); },
+      speak: (text, urgent) => { if (!state.toggles.voice) toast(text); else if (urgent) say(text, true, null, null, { kind: 'hazard' }); else sayNext(text, `convoy:${text}`); },
     }) : null; } catch (e) { console.error('convoy', e); convoy = null; }   // the convoy never takes the page down
     // Garage (web/garage_ui.js): your cars, and the ones friends and crew-mates show.
     // Block and report (web/safety_ui.js) on every social surface below; the garage uses it for friends' cars.
@@ -3116,6 +3154,11 @@
         // owner: switch between private (invite link) and public (people nearby can find it; needs an area name)
         const ownerBox = el('div', { className: 'stack-8' });
         if (c.role === 'owner') {
+          ownerBox.append(btn('Turn off invite links', async () => {
+            if (!confirm(`Turn off every invite link to ${c.name}? People already in stay in.`)) return;
+            const r = await apiCall('DELETE', `/api/crews/${c.id}/invites`); const j = await jsonOf(r);
+            toast(r.ok ? (j.revoked ? `Old links to ${c.name} no longer work.` : `${c.name} had no open links.`) : 'Couldn\'t change that. Try again.');
+          }, 'linkbtn'));
           if (c.visibility === 'public') ownerBox.append(btn('Make private', async () => { const r = await apiCall('PUT', `/api/crews/${c.id}`, { visibility: 'private', about: c.about || '' }); if (r.ok) redo(); else toast('Couldn\'t change that. Try again.'); }, 'linkbtn'));
           else {
             const areaIn = el('input', { className: 'field', placeholder: 'Area people nearby will see, e.g. Robbinsville', maxLength: 60, autocomplete: 'off' });
@@ -3134,7 +3177,7 @@
             switchRow('Times', g.share_times, () => putGrant('crew', c.id, true, !g.share_times))),
           el('span', { textContent: g.share_scores ? (g.share_times ? `${c.name} sees your scores and times.` : `${c.name} sees your scores.`) : `${c.name} sees nothing of yours yet.` }),
           ownerBox,
-          el('div', { className: 'row' }, btn('Invite to crew', async () => { const r = await apiCall('POST', `/api/crews/${c.id}/invite`); const j = await jsonOf(r); if (r.ok) copyText(`${shareOrigin()}/?crew=${j.token}`, 'Crew link copied.'); else toast('Only a crew\'s owner can invite.'); }),
+          el('div', { className: 'row' }, btn('Invite to crew', async () => { const r = await apiCall('POST', `/api/crews/${c.id}/invite`); const j = await jsonOf(r); if (r.ok) copyText(`${shareOrigin()}/?crew=${j.token}`, 'Crew link copied.'); else toast(j && j.error === 'too_many_open_invites' ? 'You have 10 open crew links. Turn some off first.' : 'Only a crew\'s owner can invite.'); }),
             btn('Leave', async () => { if (confirm(`Leave ${c.name}?`)) { if (openCrewId === c.id) openCrewId = null; await apiCall('DELETE', `/api/crews/${c.id}/membership`); redo(); } }, 'linkbtn')));
         const loadMembers = async () => {
           mbox.innerHTML = '';
@@ -3304,6 +3347,29 @@
     function closeHighlightDialog() { $('hlOverlay').classList.remove('show'); highlightPoint = null; }
     document.querySelectorAll('#hlCategories button').forEach(b => b.addEventListener('click', () => selectHighlightCategory(b.dataset.category)));
     document.querySelectorAll('#hlRating button').forEach(b => b.addEventListener('click', () => selectHighlightRating(Number(b.dataset.rating))));
+    // Privacy zones (Settings): a circle at where you are or at the map's centre; remove any. Phone only.
+    let zoneR = 500;
+    function renderZones() {
+      document.querySelectorAll('#zoneRadius [data-zone-r]').forEach(b => b.classList.toggle('on', Number(b.dataset.zoneR) === zoneR));
+      const list = $('zoneList'); list.innerHTML = '';
+      if (!privacyZones.length) { list.append(el('p', { className: 'note', textContent: 'No zones yet.' })); return; }
+      for (const z of privacyZones) {
+        list.append(el('div', { className: 'row' }, el('span', { textContent: `${z.name} · ${z.r >= 1000 ? `${z.r / 1000} km` : `${z.r} m`}` }),
+          btn('Remove', () => { privacyZones = ApexPrivacyZones.remove(privacyZones, z.id); ApexPrivacyZones.save(localStorage, privacyZones); renderZones(); paintDriveStat(); }, 'linkbtn')));
+      }
+    }
+    function addZone(p) {
+      const name = prompt('Name this place (e.g. Home)', privacyZones.length ? '' : 'Home');
+      if (name === null) return;
+      const next = ApexPrivacyZones.add(privacyZones, { lat: p.lat, lon: p.lon, r: zoneR, name });
+      if (!next) { toast(`Up to ${ApexPrivacyZones.MAX_ZONES} zones.`); return; }
+      privacyZones = next; ApexPrivacyZones.save(localStorage, privacyZones); renderZones(); paintDriveStat();
+      toast(`${privacyZones.at(-1).name}: nothing is recorded or shared within ${zoneR >= 1000 ? `${zoneR / 1000} km` : `${zoneR} m`}.`);
+    }
+    document.querySelectorAll('#zoneRadius [data-zone-r]').forEach(b => b.addEventListener('click', () => { zoneR = Number(b.dataset.zoneR); renderZones(); }));
+    $('zoneHereBtn').addEventListener('click', async () => { const p = await locate(); if (!p) { toast(NO_FIX); return; } addZone(p); });
+    $('zoneMapBtn').addEventListener('click', () => { const c = map.getCenter(); addZone({ lat: c.lat, lon: c.lng }); });
+    renderZones();
     $('hlOpenBtn').addEventListener('click', async () => {
       const p = await locate();
       if (!p) { toast(NO_FIX); return; }
@@ -3487,13 +3553,16 @@
     // mileage ticking up never chatters to VoiceOver.
     function paintDriveStat() {
       const s = drive.status || {}, r = drive.rec, main = [], warn = [];
+      const zoned = state.lastPosition && inPrivacyZone(state.lastPosition.lat, state.lastPosition.lon);
       if (s.gps === 'denied') main.push('Location is off');
+      else if (zoned) main.push('<b>Privacy zone</b> · not recording');
       else if (r && r.samples > 0) main.push(`<b>● Rec</b> ${(r.km / 1.609344).toFixed(2)} mi`);
       else main.push(s.gps === 'on' ? 'Starting…' : 'Finding GPS…');
       if (etaText) main.push(etaText);
       if (NATIVE_SHELL) { const a = ambientStats(); if (a) main.push(a.error ? 'Sharing · retrying' : a.paused ? 'Sharing paused' : `Sharing ${(a.km / 1.609344).toFixed(1)} mi`); }
       else if (drive.share === 'on') main.push(drive.shareErr ? 'Sharing · retrying' : `Sharing ${(drive.shareKm / 1.609344).toFixed(1)} mi`);
       else if (drive.share === 'stopped') main.push('Sharing paused');
+      else if (drive.share === 'zone' && !zoned) main.push('Sharing off after a privacy zone');
       if (s.gps === 'denied') warn.push(LOC_DENIED_TEXT);
       else if (s.message) warn.push(s.message);                                       // weak or lost GPS, in the sensor's words
       else if (s.gps === 'weak') warn.push('Weak GPS · keep the sky in view');
@@ -3656,7 +3725,7 @@
             paintPerms();
             paintDriveStat();
           },
-          onFrame: (fr) => { if (!fr.has_fix) return; drive.frames++; drive.rec.add(fr); feedLive(); noteRoads(); noteRest(fr); window.apex.live(fr); paintDriveStat(); },
+          onFrame: (fr) => { if (!fr.has_fix) return; drive.frames++; recordFrame(fr); feedLive(); noteRoads(); noteRest(fr); window.apex.live(fr); paintDriveStat(); },
         });
         if (!driveActive || state.mode !== 'live') {
           sensors.stop();
@@ -3826,6 +3895,14 @@
       if (p.go) { if (p.go === 'drive') { closeSheet(); driveFromLink(); } return; }   // apexnav://open?go=drive (a Shortcuts automation, IDEAS C-05)
       showView('crew'); renderAccount();
     }
+    // Privacy zones (privacy_zones.js, IDEAS Z-02): inside one the drive keeps no samples, road data stops, convoys get no
+    // position. A drive that enters one stops sharing road data for the rest of that drive (the stretch before stays private too).
+    function recordFrame(fr) {
+      if (!inPrivacyZone(fr.lat, fr.lon)) { drive.rec.add(fr); return true; }
+      drive.rec.pause();
+      if (drive.live) { drive.live.finish().catch(() => {}); drive.live = null; drive.share = 'zone'; }
+      return false;
+    }
     window.apex = {
       live(frame) {
         if (frame) feedPower({ thermal: frame.thermal, lowPowerMode: frame.low_power_mode });
@@ -3833,11 +3910,11 @@
         feedMotion(frame.speed_mps);
         state.lastPosition = { lat: frame.lat, lon: frame.lon }; state.lastPositionAt = performance.now();
         state.lastMotion = { heading: Number.isFinite(frame.course_deg) ? frame.course_deg : null, speedMps: Number.isFinite(frame.speed_mps) ? frame.speed_mps : null };
-        if (NATIVE_SHELL) feedAmbient(frame);
+        if (NATIVE_SHELL) feedAmbient(inPrivacyZone(frame.lat, frame.lon) ? { has_fix: false } : frame);   // ends the trip; its last km stays here
         if (NATIVE_SHELL && !driveActive) { showIdleFix(frame); return; }
         state.live = frame; state.liveAt = performance.now();
         if (drive.native && drive.rec) {
-          drive.frames++; drive.rec.add(frame); feedLive(); noteRoads(); noteRest(frame);
+          drive.frames++; recordFrame(frame); feedLive(); noteRoads(); noteRest(frame);
           const gps = Number.isFinite(frame.accuracy_m) && frame.accuracy_m > ApexSensors.MAX_ACCURACY_M ? 'weak' : 'on';
           if (drive.status.gps !== gps) drive.status.gps = gps;
           const cal = typeof frame.calibration === 'string' ? frame.calibration : null;

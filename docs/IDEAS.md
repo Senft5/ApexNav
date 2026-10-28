@@ -177,7 +177,7 @@ adaptive notes (cruise vs spirited), car audio routing to Bluetooth/CarPlay (#73
 |---|---|---|---|---|---|
 | V-01 | Note timing from your speed and reaction, not a fixed ~5 s; learned per driver | H | M | todo | rally co-drivers |
 | V-02 | Note density levels a novice understands ("gentle left" vs "left 4 minus") | H | M | todo | owner goal (approachable) |
-| V-03 | Hazard speech always pre-empts ordinary notes, never stale, never duplicated | H | S | todo | WORKER_QUEUE convoy-2 |
+| V-03 | Hazard speech always pre-empts ordinary notes, never stale, never duplicated | H | S | done (this PR: web/speech_queue.js; hazards first and cut off an ordinary line, passed or old lines dropped, keyed lines never twice; the app gets one line at a time) | WORKER_QUEUE convoy-2 |
 | V-04 | Turn-by-turn and pace notes in one voice stream so transit directions never collide with notes | H | M | todo | Waze/Google voice |
 | V-05 | Phrases in the owner's voice (voice conversion), behind licences | M | L | owner (voice on hold) | docs/VOICE.md |
 | V-06 | Celebrity/character voice packs as cosmetic Octane rewards | M | M | todo | Waze voice packs |
@@ -185,6 +185,7 @@ adaptive notes (cruise vs spirited), car audio routing to Bluetooth/CarPlay (#73
 | V-08 | Music ducking tuned per note priority; never duck for low-priority notes in cruise | L | S | todo | — |
 | V-09 | Recce mode: drive slowly once, the co-driver writes your own notes for the road and reads them next time | H | L | todo | rally recce |
 | V-10 | Remove espeak-ng (GPL) from the voice path before charging | M | M | todo | docs/VOICE.md |
+| V-11 | Notes are due at the corner's entry (turn-in), not its apex: countdown, spoken call, lead distance and staleness all measure to `start_m` | H | S | done (this PR) | owner 2026-10-28 |
 
 ## 5. Social and community (S)
 
@@ -214,6 +215,8 @@ Today: accounts with Google sign-in, friends, crews (public and private, crews n
 | S-18 | Photos on highlights and stops, stripped of EXIF location beyond the highlight | M | M | todo | Roadtrippers, Google Maps |
 | S-19 | Live share ETA with a friend or family ("Nate is 12 min away") without sharing the drive | M | M | todo | Apple Maps Share ETA, Life360 |
 | S-20 | Flyby: after a drive, see which friends drove the same road that day (opt-in) | L | M | todo | Strava Flyby |
+| S-21 | Garage cars from a vehicle database: pick year, make, model and trim, specs (power, weight, drive, gearbox) fill in, and you only change what differs (colour, mods, tyres). Free source: NHTSA vPIC (makes/models/years, VIN decode, US-only, no power/weight) plus a curated spec table for enthusiast cars | H | M | todo, next (owner ask) | owner 2026-10-28 |
+| S-22 | Convoys without copy-paste links or a website: invite friends and crew-mates from inside the app (they get the invite in the app), a short join code to read out, and a QR code to scan in the car park | H | M | todo, next (owner ask) | owner 2026-10-28 |
 
 ## 6. UI and UX (U)
 
@@ -328,7 +331,7 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 | id | idea | impact | effort | status | from |
 |---|---|---|---|---|---|
 | Z-01 | First and last km of every trip never leave the phone; trips cut on stops and gaps | H | M | done (#71; random 0.5–1.5 km per trip end since #139) | docs/SOCIAL.md §1 |
-| Z-02 | Privacy zones you draw (home, work) where nothing is ever recorded or shared | H | S | todo | Strava privacy zones |
+| Z-02 | Privacy zones you draw (home, work) where nothing is ever recorded or shared | H | S | done (this PR: Settings → Privacy zones, 200 m/500 m/1 km circles at your position or the map centre, phone only; inside: no drive samples, road data stops, convoys get no position) | Strava privacy zones |
 | Z-03 | Privacy dashboard: what's on the phone, what was shared, delete my account and data | H | M | todo | GDPR/CCPA, App Store 5.1.1(v) |
 | Z-04 | Data export (drives as CSV/GPX, account JSON) | M | S | todo | GDPR portability |
 | Z-05 | Security review of auth, crew and convoy endpoints before launch | H | M | partial (#132, #135, audit 2026-10-28; Z-09 to Z-15 are what it left) | production readiness |
@@ -341,7 +344,7 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 | Z-12 | The outgoing friend-request list shows a pending row only for real member handles, so typing handles still tells you which exist (the request answer itself is uniform). Show sent requests for unknown handles too, or not at all | L | S | todo | audit 2026-10-28 |
 | Z-13 | Convoy members see each other's Google display name (`who()` in convoy_routes.ts), unlike crews and boards since #132. Send the handle only, or the name only between friends | L | S | done (this PR: handle only, the Google name never enters the convoy room) | audit 2026-10-28 |
 | Z-14 | Map matching sends the (trimmed) drive trace with the phone's IP to the public Valhalla demo server, and routing sends start and end points to public servers. Self-hosting (Y-04) fixes both; say it in the privacy policy (Z-07) until then | M | L | owner (cost) | audit 2026-10-28 |
-| Z-15 | Crew invite links are multi-use, never revocable and uncapped per owner (account invites are capped at 10 open). Add revoke on the crew card and a cap | L | S | todo | audit 2026-10-28 |
+| Z-15 | Crew invite links are multi-use, never revocable and uncapped per owner (account invites are capped at 10 open). Add revoke on the crew card and a cap | L | S | done (this PR: 10 live links per owner, "Turn off invite links" on the crew card) | audit 2026-10-28 |
 
 ## 13. Android and web parity (A)
 
