@@ -50,7 +50,7 @@
       id: meta.id || ('rec_' + fileName.replace(/\W+/g, '_')), name: meta.name || fileName.replace(/\.csv$/i, ''), date, source: meta.source || 'imported',
       lat: cols.lat, lon: cols.lon, dist: cols.distance_m || cols.lat.map((_, i) => i * 5), speed_mps: cols.speed_mph.map((v) => v / MPH),
       lon_g: prepared.lon_g, lat_g: prepared.lat_g, g_known: gKnown.every(Boolean) ? null : gKnown, elev: cols.elevation_m && cols.elevation_m.some(Number.isFinite) ? cols.elevation_m : null, events: prof.events,
-      camber: nul(cols.camber_deg), rough: nul(cols.roughness_rms), crest: nul(cols.crest_vertical_g), kappa: Array.from(Core.computeCurvature(cols.lat, cols.lon).kappa),
+      camber: nul(cols.camber_deg), rough: nul(cols.roughness_rms), crest: nul(cols.crest_vertical_g), vpeak: nul(cols.vert_peak_g), kappa: Array.from(Core.computeCurvature(cols.lat, cols.lon).kappa),
       envMps: nul(prof.envMps), sightM: nul(prof.sightM),
     };
   }
