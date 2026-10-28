@@ -7,6 +7,7 @@ import UniformTypeIdentifiers
 import AuthenticationServices
 import MapKit
 import CryptoKit
+import ActivityKit
 import ApexKit
 
 // =====================================================================================
@@ -331,6 +332,11 @@ final class ApexScriptBridge: NSObject, WKScriptMessageHandler {
             shell?.speakCoDriver(phrase, interrupt: interruptSpeech, style: speechStyle)
             return
         }
+        // The drive's Live Activity (IDEAS U-11): the page starts, updates and ends it.
+        if cmd == "activity", let dict = body as? [String: Any] {
+            shell?.handleActivity(dict)
+            return
+        }
         // A tap with a call (IDEAS U-09): light for a pace note, a warning pattern for a hazard.
         if cmd == "haptic" {
             if (body as? [String: Any])?["kind"] as? String == "hazard" {
@@ -596,6 +602,29 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
             evaluate("window.apex && window.apex.onNative && window.apex.onNative({type:'session',token:'\(token)'}); void 0;")
         } catch {
             signInFailed("offline")
+        }
+    }
+
+    // MARK: Live Activity (IDEAS U-11): next note, distance and time left on the lock screen and in the Dynamic Island.
+    private var liveActivity: Activity<ApexDriveAttributes>?
+
+    func handleActivity(_ dict: [String: Any]) {
+        let state = ApexDriveAttributes.ContentState(note: (dict["note"] as? String) ?? "", distance: (dict["distance"] as? String) ?? "",
+                                                     eta: (dict["eta"] as? String) ?? "")
+        switch dict["action"] as? String {
+        case "start":
+            guard liveActivity == nil, ActivityAuthorizationInfo().areActivitiesEnabled else { return }
+            liveActivity = try? Activity.request(attributes: ApexDriveAttributes(title: (dict["title"] as? String) ?? "Drive"),
+                                                 content: ActivityContent(state: state, staleDate: nil), pushType: nil)
+        case "update":
+            guard let activity = liveActivity else { return }
+            Task { await activity.update(ActivityContent(state: state, staleDate: nil)) }
+        case "end":
+            guard let activity = liveActivity else { return }
+            liveActivity = nil
+            Task { await activity.end(nil, dismissalPolicy: .immediate) }
+        default:
+            break
         }
     }
 
