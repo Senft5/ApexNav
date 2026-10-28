@@ -26,6 +26,7 @@
   <script src="flyby.js"></script>
   <script src="challenges.js"></script>
   <script src="week_digest.js"></script>
+  <script src="legends.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { background: var(--panel); color: var(--panel-ink); font-family: var(--font-ui); font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -195,7 +196,7 @@
       <div class="bar-top"><h1 class="stages-h">Stages</h1><button class="btn solid" id="newStageBtn">New stage</button></div>
       <div class="seglist" id="segList"></div>
       <div class="grid2" id="segDetail" hidden>
-      <div class="panel" id="segSyncPanel" hidden><h2>Board</h2><div class="row" id="segBoardFilter" role="group" aria-label="Board filter"></div><div class="scroll mt-8"><table id="segBoard"></table></div><div class="row mt-8" id="segShareRow"></div><div id="segShared" class="stack-8 mt-8"></div><div class="note mt-8" id="segSyncNote"></div></div>
+      <div class="panel" id="segSyncPanel" hidden><h2>Board</h2><div class="row" id="segBoardFilter" role="group" aria-label="Board filter"></div><p class="note" id="segLegend"></p><div class="scroll mt-8"><table id="segBoard"></table></div><div class="row mt-8" id="segShareRow"></div><div id="segShared" class="stack-8 mt-8"></div><div class="note mt-8" id="segSyncNote"></div></div>
       <div class="panel"><h2 id="segTitle">Runs</h2><div id="segChart"></div><div class="scroll"><table id="segTable"></table></div></div>
       </div>
       <details class="more" id="newStage"><summary>New stage from a drive</summary>
@@ -594,6 +595,13 @@
       for (const s of segs.filter(x => x.synced)) {
         const best = passesFor(s).filter(x => x.p.score != null && /^\d{4}-\d{2}-\d{2}/.test(x.d.date)).sort((p, q) => q.p.score - p.p.score)[0];
         if (best) await ApexSync.publishScore(s.id, best.p.score, best.p.time_s, best.d.date.slice(0, 10));
+        // each recent day's best too, once, so the board can count days for its local legend (IDEAS S-08)
+        let sent = {};
+        try { sent = JSON.parse(localStorage.getItem('apex.publishedDays') || '{}') || {}; } catch (_) {}
+        for (const b of ApexLegends.toPublish(s.id, ApexLegends.dayBests(passesFor(s)), sent)) {
+          if (await ApexSync.publishScore(s.id, b.score, b.time_s, b.day)) sent[`${s.id}|${b.day}`] = b.score;
+        }
+        try { localStorage.setItem('apex.publishedDays', JSON.stringify(sent)); } catch (_) {}
       }
       const act = segs.find(s => s.id === activeSeg), bt = $('segBoard'), bf = $('segBoardFilter');
       const [fr, crewList, rows] = await Promise.all([
@@ -603,7 +611,7 @@
       ]);
       if (boardFilter !== 'friends' && !crewList.some(c => 'crew:' + c.id === boardFilter)) boardFilter = 'friends';
       const drawBoard = async () => {
-        bf.innerHTML = '';
+        bf.innerHTML = ''; $('segLegend').textContent = '';
         const chips = [{ key: 'friends', label: 'Friends' }, ...crewList.map(c => ({ key: 'crew:' + c.id, label: c.name }))];
         for (const ch of chips) {
           const b = document.createElement('button');
@@ -646,6 +654,7 @@
             return;
           }
         }
+        $('segLegend').textContent = ApexLegends.legendText(ApexLegends.legend(filtered));
         bt.innerHTML = '<tr><th class="l">#</th><th class="l">Driver</th><th>Score</th><th>Time</th></tr>' + filtered.map((r, i) =>
           `<tr class="${r.mine ? 'best' : ''}"><td class="l">${i + 1}</td><td class="l"><b></b></td><td><span class="score">${r.driver_score}</span></td><td>${r.time_s == null ? '--' : mmss(r.time_s)}</td></tr>`).join('');
         bt.querySelectorAll('tr b').forEach((b, i) => { b.textContent = filtered[i].mine ? 'You' : '@' + (filtered[i].handle || '?'); });
