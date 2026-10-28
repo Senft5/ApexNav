@@ -12,7 +12,7 @@ type Any = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 const umd = (ns: Any, name: string) => (globalThis as Any)[name] ?? ns.default ?? ns;
 const C = umd(contributorNs, "ApexContributor"), FR = umd(funRouteNs, "ApexFunRoute");
 
-beforeEach(freshDb);
+beforeEach(async () => { await freshDb(); roadClass = "track"; });
 
 // Two parallel 2 km roads running north: way 101 (rough) and way 202 (smooth).
 const ROADS: Record<number, number> = { 101: -84.0, 202: -83.99 };
@@ -20,10 +20,12 @@ const LAT0 = 39.0, N = 400, STEP = 5 / 110540;
 const line = (lon: number) => Array.from({ length: N }, (_, i) => [LAT0 + i * STEP, lon] as [number, number]);
 const wayAt = (lon: number) => Number(Object.keys(ROADS).find((w) => Math.abs(ROADS[+w] - lon) < 0.002));
 
+// The class the map match gives the test roads: "track" is not an open road (two-driver rule), "secondary" is (roads.ts).
+let roadClass = "track";
 async function mapStub(url: string, init: { body: string }): Promise<Response> {
   if (url.includes("trace_attributes")) {
     const shape = JSON.parse(init.body).shape as { lat: number; lon: number }[];
-    return Response.json({ edges: [{ way_id: wayAt(shape[0].lon), road_class: "secondary" }], matched_points: shape.map(() => ({ type: "matched", edge_index: 0 })) });
+    return Response.json({ edges: [{ way_id: wayAt(shape[0].lon), road_class: roadClass }], matched_points: shape.map(() => ({ type: "matched", edge_index: 0 })) });
   }
   const ids = (decodeURIComponent(init.body).match(/way\(id:([\d,]+)\)/) || [])[1].split(",").map(Number);
   return Response.json({ elements: ids.map((id) => ({ type: "way", id, geometry: line(ROADS[id]).map(([lat, lon]) => ({ lat, lon })) })) });
@@ -40,7 +42,7 @@ const lookup = (u: TestUser) => async (ids: number[]) => { const r = await api(u
 const route = (way: number) => { const p = line(ROADS[way]); return { lat: p.map((x) => x[0]), lon: p.map((x) => x[1]) }; };
 
 describe("road-data loop (IDEAS Q-07)", () => {
-  it("two members' drives change which route is chosen; one member alone changes nothing", async () => {
+  it("on a road that may be a lane, two members' drives change which route is chosen; one member alone changes nothing", async () => {
     const a = await makeUser("alice"), b = await makeUser("bob"), reader = await makeUser("carol");
     for (const u of [a, b]) await env.DB.prepare("UPDATE members SET contribute = 1 WHERE user_id = ?").bind(u.id).run();
 
@@ -78,5 +80,20 @@ describe("road-data loop (IDEAS Q-07)", () => {
     // A retried upload of the same drive is merged once (no third pass).
     await C.contributeDrive(drive("b101", 101, 0.38), post(b), { fetch: mapStub, trimM: 0 });
     expect(((await lookup(reader)([101])) as Any)["101"]["0"].n.every((n: number) => n === 2)).toBe(true);
+  });
+
+  it("on an open road, one member's single pass already counts, at lower weight (owner decision 2026-10-28)", async () => {
+    roadClass = "secondary";
+    const a = await makeUser("alice"), reader = await makeUser("carol");
+    await env.DB.prepare("UPDATE members SET contribute = 1 WHERE user_id = ?").bind(a.id).run();
+    for (const [w, r] of [[101, 0.4], [202, 0.03]] as const)
+      expect((await C.contributeDrive(drive(`a${w}`, w, r), post(a), { fetch: mapStub, trimM: 0 })).sent).toBeGreaterThan(0);
+    const rows = (await lookup(reader)([101, 202])) as Any;
+    expect(Object.keys(rows).sort()).toEqual(["101", "202"]);
+    expect(rows["101"]["0"].n.every((n: number) => n === 1)).toBe(true);
+    const m = await C.measuredAlong(route(202), lookup(reader), { fetch: mapStub });
+    const one = C.measuredAdjust(m), two = C.measuredAdjust({ ...m, avgPasses: 2 });
+    expect(one).toBeGreaterThan(0);
+    expect(one).toBeLessThan(two);                                   // a single pass weighs less than two
   });
 });

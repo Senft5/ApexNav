@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-p4yA/nq4bp7oy4kL5BUzndqi7/zYNXjhci8XSyFn1u0=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-GcTKwjxRYJGMvvNCubrt/DmEf/zVc6dhRMrWjLPOyDQ=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -47,6 +47,7 @@
   <script src="outbox.js"></script>
   <script src="stage_delta.js"></script>
   <script src="directions.js"></script>
+  <script src="carplay.js"></script>
   <script src="whats_new.js"></script>
   <script src="saved_routes.js"></script>
   <script src="crew_events.js"></script>
@@ -132,6 +133,8 @@
     .rb-call span:first-child { font-size: 16px; font-weight: 800; line-height: 1.1; }
     .rb-box.now .rb-call span.long:first-child { font-size: 17px; }
     .rb-box.now .rb-call span.xlong:first-child { font-size: 14px; }
+    .rb-box:not(.now) .rb-call span.long:first-child, .rb-box:not(.now) .rb-call span.xlong:first-child { font-size: 11px; white-space: normal; line-height: 1.1; }
+    .ds-main > span { white-space: nowrap; }
 
     /* ---------------- stage map ---------------- */
     .stage { position: relative; min-height: 0; background: var(--stage); overflow: hidden; }
@@ -702,7 +705,8 @@
       </aside>
       <div class="overlay dim" id="hzOverlay" role="dialog" aria-modal="true" aria-label="Report a hazard">
         <div class="card-sheet">
-          <h2>Report ahead of others</h2>
+          <h2>Report a hazard</h2>
+          <p class="note">Drivers coming this way get a warning.</p>
           <div class="hz-grid" id="hzKinds"></div>
           <button class="linkbtn" id="hzCancel">Cancel</button>
         </div>
@@ -960,7 +964,8 @@
     const trafficMon = new ApexTraffic.TrafficMonitor();
     const routeWatch = { note: null, frame: null, bestM: 0 };
     const etaPace = ApexEta.createPace();   // live ETA pace on the current route (paintEta)
-    let etaText = '';   // strip text while off route; last frame fed; furthest progress
+    let etaText = '', etaLeftS = null;
+    const car = { route: '', guideAt: 0, guideKey: '' };   // what the car's screen was last sent (carRoute, carGuide below)   // strip text while off route; last frame fed; furthest progress
     try {
       const saved = JSON.parse(localStorage.getItem('apex.prefs') || 'null');
       if (saved) {
@@ -1160,10 +1165,10 @@
       const byTier = (strong, weak) => ['match', ['get', 't'], 2, strong, weak];
       map.addLayer({ id: 'apex-twisty', type: 'line', source: 'apex-twisty-src', layout: { 'line-cap': 'round', 'line-join': 'round', visibility: 'none' },
         paint: { 'line-width': ['interpolate', ['linear'], ['zoom'], 10, byTier(2.5, 1.5), 16, byTier(8, 5)], 'line-opacity': byTier(0.9, 0.55) } }, firstSymbol);   // under the road names
-      // Measured roads (coverage.js, IDEAS Q-14): t = 2 five or more passes, 1 two to four.
+      // Measured roads (coverage.js, IDEAS Q-14): t = 2 five or more passes, 1 two to four, 0 one pass (faint).
       map.addSource('apex-coverage-src', { type: 'geojson', data: emptyFC() });
       map.addLayer({ id: 'apex-coverage', type: 'line', source: 'apex-coverage-src', layout: { 'line-cap': 'round', 'line-join': 'round', visibility: 'none' },
-        paint: { 'line-width': ['interpolate', ['linear'], ['zoom'], 10, byTier(3, 1.5), 16, byTier(9, 5)], 'line-opacity': byTier(0.85, 0.6) } }, firstSymbol);
+        paint: { 'line-width': ['interpolate', ['linear'], ['zoom'], 10, ['match', ['get', 't'], 2, 3, 1, 1.5, 1], 16, ['match', ['get', 't'], 2, 9, 1, 5, 3]], 'line-opacity': ['match', ['get', 't'], 2, 0.85, 1, 0.6, 0.35] } }, firstSymbol);
       map.addSource('apex-alt-src', { type: 'geojson', data: emptyFC() });
       map.addLayer({ id: 'apex-alt', type: 'line', source: 'apex-alt-src', layout: { 'line-cap': 'round', 'line-join': 'round' },
         paint: { 'line-width': width(3, 6), 'line-opacity': 0.45, 'line-dasharray': [1.5, 1.5] } });
@@ -1739,6 +1744,8 @@
     // anything the bank can't voice (drive names...) falls back to the device voice.
     // opts: kind 'hazard' (goes first, may cut off an ordinary line), key (never twice in a row), atM (route metres: dropped once passed).
     function say(text, force, chain = null, sysToken = null, opts = {}) {
+      // a road hazard (not a turn or a crest, which share the urgent speech lane) also alerts on the car's screen
+      if (text && opts.alert && driveActive) carPost({ kind: 'hazard', title: text });
       if (!text || (!state.toggles.voice && !force)) return;
       if (force) { speech.queue.clear(); stopSpeaking(); opts = { duck: true, ...opts }; }   // a line you asked for is heard
       speech.queue.push({ text, chain, sysToken, ...opts }, performance.now());
@@ -1901,6 +1908,7 @@
       Inst.renderNotes($('notes'), look.theme, notes);
       lastNotes = notes;
       if (live) pushActivity(notes);
+      if (live) carGuide();
 
       if (!(state.playing || live) || vMps == null) return;
       // How far ahead to read a note (note_timing.js, IDEAS V-01): time to say it, your reaction (learned), and braking from
@@ -1942,7 +1950,7 @@
           && !calledBumps.some(e => e.dist_m - state.cursorM < lead + 30
             || Math.hypot((track.lon[e.index] - n.lon) * 111320 * Math.cos(n.lat * Math.PI / 180), (track.lat[e.index] - n.lat) * 110540) < HZ_SAME_SPOT_M));
         const hz = ApexRoadMemory.upcoming(pool, state.live, 25, lead, recent);
-        if (hz) { hazardSaid.set(hz.id, now); say(hz.text, false, null, null, { kind: 'hazard', key: `mem:${hz.id}`, repeatMs: HZ_REPEAT_MS }); }
+        if (hz) { hazardSaid.set(hz.id, now); say(hz.text, false, null, null, { kind: 'hazard', key: `mem:${hz.id}`, repeatMs: HZ_REPEAT_MS, alert: true }); }
       }
       const reach = lead + vMps * MEMO_S;
       if (live && spirited && vMps >= 5 && performance.now() - state.liveAt < 2500 && !speech.busy && !speech.queue.size
@@ -2470,6 +2478,7 @@
         $('routeBarName').textContent = t.name || 'Route';
         $('routeBarMeta').textContent = [mi, Array.isArray(t.events) ? `${t.events.filter(e => e.type === 'corner').length} corners` : ''].filter(Boolean).join(' · ');
       }
+      carRoute(t);
       if (!t) { card.hidden = true; paintAlternates(); return; }
       plannedRoute = t;
       card.hidden = false;
@@ -2740,6 +2749,7 @@
         const o = ApexEta.homeByOffer(est.arriveAt, track.homeBy, track.homeByOfferedAt ?? null, now);
         if (o) { track.homeByOfferedAt = now; toast(`Running ${o.lateMin} min late for home.`, { label: 'Head home', ms: 15000, onClick: headHome }); }
       }
+      etaLeftS = est ? est.leftS : null;
       const text = est ? `${est.leftS < 60 ? '<1' : Math.round(est.leftS / 60)} min left · ${new Date(est.arriveAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : '';
       if (text !== etaText) { etaText = text; paintDriveStat(); }
     }
@@ -3451,6 +3461,7 @@
     function rememberPlace(p) {
       if (!p || !p.label || !Number.isFinite(p.lat) || !Number.isFinite(p.lon)) return;
       try { localStorage.setItem(RECENT_PLACES, JSON.stringify([{ label: p.label, lat: p.lat, lon: p.lon }, ...recentPlaces().filter(q => q.label !== p.label)].slice(0, 6))); } catch (_) {}
+      carPost(ApexCarPlay.placesMessage(recentPlaces()));   // the car's Places list
     }
     // Typing in Where to? suggests places near you. Photon is OpenStreetMap search built for search-as-you-type (public
     // Nominatim forbids it, and stays for the final geocode). Offline: no list; typing and Go still work.
@@ -3842,7 +3853,7 @@
       },
       getRoute: () => (track && track.kind === 'route' && track.lat.length > 1 ? { name: track.name, pts: track.lat.map((la, i) => [la, track.lon[i]]) } : null),
       // A close hazard cuts in; a far one goes next, after the pace note being spoken (never dropping the notes queued).
-      speak: (text, urgent) => { if (!state.toggles.voice) toast(text); else if (urgent) say(text, true, null, null, { kind: 'hazard' }); else sayNext(text, `convoy:${text}`); },
+      speak: (text, urgent) => { if (!state.toggles.voice) toast(text); else if (urgent) say(text, true, null, null, { kind: 'hazard', alert: true }); else sayNext(text, `convoy:${text}`); },
     }) : null; } catch (e) { console.error('convoy', e); convoy = null; }   // the convoy never takes the page down
     // Garage (web/garage_ui.js): your cars, and the ones friends and crew-mates show.
     // Block and report (web/safety_ui.js) on every social surface below; the garage uses it for friends' cars.
@@ -4604,7 +4615,7 @@
       }
       if (k === 'coverage') {
         updateCoverage();
-        if (state.toggles.coverage) toast(mapReady && map.getZoom() < ApexCoverage.MIN_ZOOM ? 'Zoom in to see measured roads.' : 'Green: measured by 2+ members. A road without a line is waiting for a pioneer: the first drivers earn extra Octane.');
+        if (state.toggles.coverage) toast(mapReady && map.getZoom() < ApexCoverage.MIN_ZOOM ? 'Zoom in to see measured roads.' : 'Green: measured roads, bolder the surer. A road without a line is waiting for a pioneer: the first drivers earn extra Octane.');
       }
       if (k === 'twisty') {
         updateTwisty();
@@ -4686,7 +4697,8 @@
       else if (s.calibration === 'paused') warn.push('Phone is hot · bumps and banking paused');
       // a browser's own mount calibration (live_pipeline.js, IDEAS A-02): banking only once checked against GPS; silent until then
       if (!NATIVE_SHELL && s.webMount === 'verified') main.push('Banking measured');
-      const m = main.join(' · '), w = warn.join(' · ');
+      // each part stays whole: a narrow screen breaks the line between parts, never inside "77 min left · 8:24 PM"
+      const m = main.map(x => `<span>${x}</span>`).join(' · '), w = warn.join(' · ');
       if ($('dsMain').innerHTML !== m) $('dsMain').innerHTML = m;
       if ($('dsWarn').textContent !== w) $('dsWarn').textContent = w;
       $('dsWarn').hidden = !w;
@@ -4977,7 +4989,7 @@
       const me = { lat: frame.lat, lon: frame.lon, heading: Number.isFinite(frame.course_deg) ? frame.course_deg : null };
       const v = Number.isFinite(frame.speed_mps) ? frame.speed_mps : 0;
       const next = ApexHazardReports.nextAhead(reported.list, me, Math.max(150, Math.min(600, v * 8)), reported.said);
-      if (next) { reported.said.add(next.id); say(next.text, false, null, null, { kind: 'hazard', key: `rep:${next.id}`, repeatMs: 10 * 60000 }); }
+      if (next) { reported.said.add(next.id); say(next.text, false, null, null, { kind: 'hazard', key: `rep:${next.id}`, repeatMs: 10 * 60000, alert: true }); }
       const passed = reported.watch.update(reported.list, me, reported.mine);
       if (passed && !reported.asking) askStill(passed);
     }
@@ -5061,6 +5073,28 @@
     // The drive's Live Activity in the app (ApexNavApp.swift, IDEAS U-11): the next note, its distance and time left, on the
     // lock screen and in the Dynamic Island. Sent when the shown note changes, at most every 3 s otherwise.
     const liveAct = { on: false, last: '', at: 0 };
+    // CarPlay (web/carplay.js, CarPlay/ApexCarPlay.swift): the car's screen gets the planned route, the next maneuver and
+    // hazards; what the driver picks there comes back as onNative({type:'carplay'}). Only in the app.
+    function carPost(msg) {
+      const native = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex;
+      if (native && msg) try { native.postMessage({ cmd: 'car', ...msg }); } catch (_) {}
+    }
+    function carRoute(t) {
+      const o = routeOptions && t && routeOptions.current === t ? routeOptions : null;
+      const key = t ? `${t.id}|${t.lat.length}|${o ? o.picked : -1}` : '';
+      if (key === car.route) return;
+      car.route = key;
+      if (!t) { carPost({ kind: 'clear' }); return; }
+      carPost(ApexCarPlay.routeMessage(t, o ? o.list.map(c => ({ fun: c.fun, timeS: c.timeS, distM: c.t && c.t.dist ? c.t.dist[c.t.dist.length - 1] : null })) : null,
+        o ? o.picked : 0, (m) => ApexUnits.long(m, 1)));
+    }
+    function carGuide() {
+      if (!driveActive || !track || track.kind !== 'route') return;
+      const now = performance.now(), g = ApexCarPlay.guideMessage(track, state.cursorM, etaLeftS, ApexDirections.phrase);
+      if (!g || (g.key === car.guideKey && now - car.guideAt < 1000)) return;
+      car.guideKey = g.key; car.guideAt = now;
+      carPost(g);
+    }
     function activity(action, fields = {}) {
       const native = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex;
       if (!native) return;
@@ -5202,6 +5236,7 @@
       const battery = window.ApexBattery ? ApexBattery.summary(drive.battery) : null; drive.battery = null;
       resetCircuit();
       activity('end');
+      carPost({ kind: 'end' }); car.guideKey = '';
       const rec = drive.rec, sensors = drive.sensors, live = drive.live, road = rec && window.ApexRoadNames ? ApexRoadNames.mainRoad(drive.roads, rec.km * 1000) : null;
       drive.sensors = null; drive.rec = null; drive.live = null; drive.share = 'off'; drive.native = false;
       if (sensors) sensors.stop();
@@ -5277,6 +5312,16 @@
     }
     // A go=drive link (a Shortcuts automation) can't start without location: say so rather than do nothing.
     function driveFromLink() { if (locDenied) toast(LOC_DENIED_TEXT); else startDrive(); }
+    // From the car's screen (CarPlay/ApexCarPlay.swift). Nothing here asks the driver to use the phone: no explainer sheet
+    // (the system's own location prompt is the only one, and only if it was never answered).
+    function carAction(m) {
+      if (m.action === 'go' && Number.isFinite(m.lat) && Number.isFinite(m.lon) && !driveActive) routeToPlace({ label: String(m.name || 'Destination').slice(0, 80), lat: m.lat, lon: m.lon });
+      else if (m.action === 'pick' && Number.isInteger(m.i)) pickOption(m.i);
+      else if (m.action === 'start' && state.mode !== 'live' && !locDenied) enterDrive();
+      else if (m.action === 'end' && driveActive) leaveDrive(true);
+      else if (m.action === 'places') carPost(ApexCarPlay.placesMessage(recentPlaces()));
+    }
+    carPost(ApexCarPlay.placesMessage(recentPlaces()));
     function startDrive() {
       if (state.mode === 'live' || locDenied) return;
       if (flag('apex.permsExplained')) { enterDrive(); return; }
@@ -5449,6 +5494,7 @@
         if (msg && msg.type === 'promptStyle') { if (promptStyleWaiter) promptStyleWaiter(msg.style || 'normal'); return; }
         if (msg && msg.type === 'link' && msg.params) { openAppLink(msg.params); return; }
         if (msg && msg.type === 'gpx' && typeof msg.text === 'string') { openGpx(msg.text, msg.name); return; }
+        if (msg && msg.type === 'carplay') { carAction(msg); return; }
         // The phone joined CarPlay (IDEAS C-05): offer the drive, never start recording unasked.
         if (msg && msg.type === 'car' && !driveActive && state.mode !== 'live') { toast('CarPlay connected.', { label: 'Start drive', ms: 10000, onClick: startDrive }); carOfferUntil = $('toast')._holdUntil; return; }
         if (msg && msg.type === 'signInFailed' && msg.reason !== 'cancelled') toast('Couldn\'t sign in. Check signal and try again.');

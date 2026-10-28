@@ -962,7 +962,7 @@ flow('measured roads: the switch draws the roads members have measured around th
     if (u.pathname === '/api/coverage') {
       boxes.push(u.searchParams.get('bbox'));
       const [s, w, n, e] = u.searchParams.get('bbox').split(',').map(Number), lat = (s + n) / 2, lon = (w + e) / 2;
-      return json({ ways: [{ way: 1, line: [[lat, lon], [lat + 0.01, lon]], passes: [2, 6] }] });
+      return json({ ways: [{ way: 1, line: [[lat, lon], [lat + 0.01, lon]], conf: [2, 3] }] });
     }
     return json({ error: 'not_found' }, 404);
   });

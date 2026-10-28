@@ -14,18 +14,39 @@ const optIn = async (...us: { id: string }[]) => { for (const u of us) await env
 const BOX = "/api/coverage?bbox=35.4,-83.6,35.6,-83.4";
 
 describe("GET /api/coverage (IDEAS Q-14)", () => {
-  it("shows a road once two people have driven it, as its map line with passes per direction", async () => {
+  it("shows a road that may be a lane once two people have driven it, as its map line with a confidence level, never a count", async () => {
     const a = await makeUser("a"), b = await makeUser("b");
     await optIn(a, b);
     await ok(api(a, "POST", "/api/contribute", upload("drive-aaaa-0001")));
     expect((await (await ok(api(a, "GET", BOX))).json() as { ways: unknown[] }).ways).toEqual([]);      // one driver: blank, like nobody
     await ok(api(b, "POST", "/api/contribute", upload("drive-bbbb-0001", { shape: [[0, 0], [0, 1]] })));   // a later, wrong shape doesn't replace it
-    const j = await (await ok(api(a, "GET", BOX))).json() as { ways: { way: number; line: number[][]; passes: number[] }[] };
+    const j = await (await ok(api(a, "GET", BOX))).json() as { ways: { way: number; line: number[][]; conf: number[] }[] };
     expect(j.ways).toHaveLength(1);
-    expect(j.ways[0]).toMatchObject({ way: 777, passes: [2, 0] });
+    expect(j.ways[0]).toMatchObject({ way: 777, conf: [2, 0] });
+    expect(j.ways[0]).not.toHaveProperty("passes");
     expect(j.ways[0].line[0]).toEqual([35.5, -83.5]);
     expect(JSON.stringify(j)).not.toMatch(/user|handle|holder|drive/i);
     expect((await (await ok(api(a, "GET", "/api/coverage?bbox=36,-83.6,36.2,-83.4"))).json() as { ways: unknown[] }).ways).toEqual([]);
+  });
+
+  it("shows an open road from its first pass, at the lowest confidence (owner decision 2026-10-28)", async () => {
+    const a = await makeUser("a");
+    await optIn(a);
+    await ok(api(a, "POST", "/api/contribute", upload("drive-aaaa-0003", { cls: "tertiary" })));
+    const j = await (await ok(api(a, "GET", BOX))).json() as { ways: { way: number; conf: number[] }[] };
+    expect(j.ways).toEqual([expect.objectContaining({ way: 777, conf: [1, 0] })]);
+  });
+
+  it("a short unclassified road or an unknown class waits for a second driver", async () => {
+    const a = await makeUser("a");
+    await optIn(a);
+    await ok(api(a, "POST", "/api/contribute", upload("drive-aaaa-0004", { cls: "unclassified" })));    // a 1 km line: could be a dead end
+    expect((await (await ok(api(a, "GET", BOX))).json() as { ways: unknown[] }).ways).toEqual([]);
+    await ok(api(a, "POST", "/api/contribute", upload("drive-aaaa-0005", { way_id: 778, cls: "motorway!" })));   // not a class: unknown
+    expect((await (await ok(api(a, "GET", BOX))).json() as { ways: unknown[] }).ways).toEqual([]);
+    const row = await env.DB.prepare("SELECT cls, len_m FROM road_ways WHERE way_id = 777").first<{ cls: string; len_m: number }>();
+    expect(row?.cls).toBe("unclassified");
+    expect(Math.abs((row?.len_m ?? 0) - 1000)).toBeLessThan(5);
   });
 
   it("says what was measured per direction: mean roughness and banked / off-camber shares, null where unmeasured (IDEAS R-04)", async () => {

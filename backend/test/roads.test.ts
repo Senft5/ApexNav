@@ -43,6 +43,34 @@ describe("GET /api/roads", () => {
     expect(Object.keys(j["9"])).toEqual(["0"]);                 // way 9 the other way: one driver
   });
 
+  it("shows an open road from one driver; a short unclassified road or an unknown class keeps the two-driver rule", async () => {
+    const shape = JSON.stringify([[35.5, -83.5], [35.51, -83.5]]);
+    const way = (id: number, cls: string | null, len: number | null) => env.DB.prepare("INSERT INTO road_ways (way_id, s, w, n, e, shape, cls, len_m) VALUES (?, 35.5, -83.5, 35.51, -83.5, ?, ?, ?)").bind(id, shape, cls, len).run();
+    const bin = (id: number) => env.DB.prepare("INSERT INTO road_bins (way_id, dir, bin_idx, n, camber_mean, camber_m2, camber_n, rough_mean, rough_m2, crest_peak) VALUES (?, 0, 1, 1, 1, 0, 1, 0.1, 0, 0.1)").bind(id).run();
+    for (const [id, cls, len] of [[21, "tertiary", 300], [22, "unclassified", 2000], [23, "unclassified", 600], [24, null, 5000], [25, "residential", 5000]] as const) { await way(id, cls, len); await bin(id); }
+    const j = await (await api(await makeUser("alice"), "GET", "/api/roads?ways=21,22,23,24,25")).json() as Record<string, unknown>;
+    expect(Object.keys(j).sort()).toEqual(["21", "22"]);
+  });
+
+  it("the owner's GeoJSON export: open-road rule, confidence not counts, nothing about people", async () => {
+    await seed();
+    await env.DB.prepare("INSERT INTO road_ways (way_id, s, w, n, e, shape, cls, len_m) VALUES (9, 35.5, -83.5, 35.51, -83.49, ?, 'secondary', 1500)")
+      .bind(JSON.stringify([[35.5, -83.5], [35.51, -83.49]])).run();
+    await env.DB.prepare("UPDATE road_bins SET last_on = '2026-10-12' WHERE way_id = 9").run();
+    const owner = await makeUser("owner"), someone = await makeUser("someone");
+    const url = "/api/ops/roads.geojson?bbox=35.4,-83.6,35.6,-83.4";
+    expect((await api(someone, "GET", url)).status).toBe(404);
+    expect((await api(owner, "GET", "/api/ops/roads.geojson?bbox=1,2,3")).status).toBe(400);
+    const g = await (await api(owner, "GET", url)).json() as { type: string; method_version: string; features: { geometry: { coordinates: number[][] }; properties: Record<string, unknown> }[] };
+    expect(g.type).toBe("FeatureCollection");
+    expect(g.features).toHaveLength(2);
+    const [fwd, back] = g.features;
+    expect(fwd.properties).toEqual({ way: 9, dir: 0, cls: "secondary", confidence: 0.667, rough_g: 0.133, banked: 1, off_camber: 0, last_month: "2026-10", method_version: g.method_version });
+    expect(fwd.geometry.coordinates[0]).toEqual([-83.5, 35.5]);
+    expect(back.geometry.coordinates[0]).toEqual([-83.49, 35.51]);               // the other direction, drawn the way it was driven
+    expect(JSON.stringify(g)).not.toMatch(/user|handle|holder|drive|email|"n"|passes|2026-10-12/i);
+  });
+
   it("one person can't hold both slots, so can't meet the two-driver rule alone", async () => {
     await env.DB.prepare("INSERT INTO rank_slots (way_id, dir, slot, user_id, driven_on, holder) VALUES (12, 0, 1, NULL, '2026-10-01', X'01')").run();
     await expect(env.DB.prepare("INSERT INTO rank_slots (way_id, dir, slot, user_id, driven_on, holder) VALUES (12, 0, 2, NULL, '2026-10-01', X'01')").run()).rejects.toThrow();

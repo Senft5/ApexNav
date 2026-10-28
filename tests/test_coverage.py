@@ -1,4 +1,5 @@
-"""Coverage map (web/coverage.js, IDEAS Q-14): a small box around the view, thicker lines with more passes, [lon, lat] for the map."""
+"""Coverage map (web/coverage.js, IDEAS Q-14): a small box around the view, thicker lines the surer a road is (a confidence
+level, never a count), [lon, lat] for the map."""
 import json
 import os
 import shutil
@@ -13,9 +14,9 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RUNNER = r"""
 const C = require(process.argv[1] + '/web/coverage.js');
 const cache = new Map();
-const first = C.add(cache, { ways: [{ way: 1, line: [[35.5, -83.5], [35.51, -83.5]], passes: [2, 0] }, { way: 2, line: [[35.6, -83.4], [35.6, -83.39]], passes: [3, 6] }] });
-const again = C.add(cache, { ways: [{ way: 1, line: [[35.5, -83.5], [35.51, -83.5]], passes: [2, 0] }] });
-const more = C.add(cache, { ways: [{ way: 1, line: [[35.5, -83.5], [35.51, -83.5]], passes: [3, 0] }] });
+const first = C.add(cache, { ways: [{ way: 1, line: [[35.5, -83.5], [35.51, -83.5]], conf: [2, 0] }, { way: 2, line: [[35.6, -83.4], [35.6, -83.39]], conf: [2, 3] }, { way: 3, line: [[35.7, -83.4], [35.7, -83.39]], conf: [0, 1] }] });
+const again = C.add(cache, { ways: [{ way: 1, line: [[35.5, -83.5], [35.51, -83.5]], conf: [2, 0] }] });
+const more = C.add(cache, { ways: [{ way: 1, line: [[35.5, -83.5], [35.51, -83.5]], conf: [3, 0] }] });
 console.log(JSON.stringify({
   far: C.boxFor({ s: 30, w: -90, n: 40, e: -80, zoom: 6 }),
   big: C.boxFor({ s: 35, w: -84, n: 36, e: -83, zoom: 9.5 }),
@@ -42,5 +43,6 @@ def test_box_is_small_and_only_when_zoomed_in(out):
 def test_lines_for_the_map(out):
     assert out["first"] is True and out["again"] is False and out["more"] is True
     f = out["gj"]["features"]
-    assert [x["properties"]["t"] for x in f] == [1, 2]
+    assert [x["properties"]["t"] for x in f] == [2, 2, 0], "five or more passes strongest; a single pass faintest"
+    assert all(set(x["properties"]) == {"t"} for x in f), "no pass counts on the map"
     assert f[0]["geometry"]["coordinates"][0] == [-83.5, 35.5]

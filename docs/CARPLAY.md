@@ -62,21 +62,40 @@ From the guide's "Guidelines for all CarPlay apps" and "Additional guidelines fo
 | Designed primarily for the category: turn-by-turn directions with upcoming maneuvers | Yes on iPhone: place search, route choice, spoken directions (V-04), next turn in the note strip, live ETA, reroute. The App Store listing now leads with navigation (docs/LISTING.md) |
 | Voice prompts: `.playback`, `.voicePrompt`, `.duckOthers` + `.interruptSpokenAudioAndMixWithOthers`, active only while playing | Done (`configureVoiceSession`, ApexNavApp.swift). Low-priority cruise lines (not maneuvers) mix without ducking (V-08) |
 | Check `promptStyle` before each prompt: none = silent, short = a tone, normal = speak | Done: native speech and the web voice clips both ask the shell first; the shell plays a short tone for `short` |
-| Base view draws only the map; all controls through templates | To build (section 3) |
-| Pan button when panning exists; touch gestures only for pan, zoom, pitch, rotate | To build |
+| Base view draws only the map; all controls through templates | Built (`CarPlay/ApexCarPlay.swift`): MapKit route line and position; search, places, End and map buttons are templates |
+| Pan button when panning exists; touch gestures only for pan, zoom, pitch, rotate | Built: zoom in, zoom out, recentre and pan map buttons; panning through the template's panning interface |
 | Each template used for its purpose: maneuver images show maneuvers only | Design decision: corner calls stay voice-only in CarPlay (a corner isn't a maneuver); hazards use navigation alerts |
-| Stop guidance immediately when the car's own navigation starts (`mapTemplateDidCancelNavigation`) | To build |
-| All CarPlay flows possible without touching the iPhone, including with it locked | To build: the route and note engine lives in the web view, so CarPlay must start it without the phone UI (a background web view, or native routing for CarPlay). Data needed in the car must not use the strictest file protection (the session token already uses after-first-unlock) |
-| Never tell the driver to pick up the iPhone | To build: errors say what happened ("Couldn't load the route. Try again when there's signal"), never "on your iPhone" |
+| Stop guidance immediately when the car's own navigation starts (`mapTemplateDidCancelNavigation`) | Built: ends the drive |
+| All CarPlay flows possible without touching the iPhone, including with it locked | Partly: search, route choice, start, guidance and end all work from the car while the app is running on the phone (locked is fine: background location and audio keep it alive). Still to build: starting the route engine (the cockpit page) when CarPlay launches the app cold, in a window-less web view |
+| Never tell the driver to pick up the iPhone | Built: the only CarPlay error says what happened ("Couldn't plan the route yet. Try again in a moment."); starting from the car skips the phone's explainer sheet |
 | No gaming or social networking in CarPlay; nothing unrelated to the drive (settings, account) | Crews, friends, kudos, scores, Log and Settings stay on the iPhone |
 | Map appropriate in each supported country | United States only at launch |
-| Light and dark map (`contentStyle`) | To build: the Daylight and Night themes map onto it |
-| Maneuver symbols at the guide's sizes, light and dark variants | To build: from Valhalla maneuver types (directions.js has the full list) |
+| Light and dark map (`contentStyle`) | Built: the MapKit base view follows the car screen's appearance |
+| Maneuver symbols at the guide's sizes, light and dark variants | Built: SF Symbols per Valhalla maneuver type, as template images CarPlay tints for light and dark |
 | Templates within depth limits (navigation: 5) | Plan below uses at most 3 |
 | Widgets in CarPlay (iOS 26): a widget that only opens the app on iPhone sets `disfavoredLocations([.carPlay])` | The Start-a-drive widget opens the app; once Vetta is a CarPlay app it opens it in CarPlay too, so it is set when the CarPlay build lands |
 | Live Activities in CarPlay (iOS 26) | Already shown: without the small family CarPlay uses the compact Dynamic Island views (distance, next note). The small family can be added with the CarPlay build |
 
-## 3. The CarPlay build (after the entitlement arrives)
+## 3. What is built (2026-10-28) and how to try it
+
+`CarPlay/ApexCarPlay.swift` and `web/carplay.js`: the page stays the one brain (routing, directions, notes, hazards); the
+car's screen shows what it decides and sends back what the driver picks.
+
+- **Root:** our map (route line, position, follow / follow with heading while guiding), Search and Places buttons, zoom,
+  recentre and pan map buttons.
+- **Search:** Apple's place search near you (CPSearchTemplate); **Places:** recent destinations from the phone.
+- **Trip preview:** the cockpit's route options ("Fun 99 · 77 min") as up to three route choices with distance and time;
+  picking one switches the route on the phone too; Drive starts the drive.
+- **Guidance:** CPNavigationSession with the next maneuver (instruction, street, symbol, distance to it) and the trip's
+  distance and time left; End on the car ends the drive; the car's own navigation starting ends it too.
+- **Hazards:** every hazard the co-driver calls shows as a navigation alert for 8 s.
+- **Not in CarPlay:** scores, crews, friends, Log, settings (guideline: nothing unrelated to the drive).
+
+**Trying it** (Xcode on a Mac): simulator builds carry `com.apple.developer.carplay-maps` (`CarPlay/Simulator.entitlements`,
+`project.yml`), device builds don't until Apple grants it. Run the app in an iPhone simulator, then I/O → External
+Displays → CarPlay. Screenshots of it are what the entitlement form wants.
+
+## 4. Still to build (after the entitlement arrives)
 
 1. **Entitlement and profile.** Enable CarPlay Navigation on the App ID (the API key can), add
    `com.apple.developer.carplay-maps` to ApexNav.entitlements, and confirm cloud signing picks it up (TESTFLIGHT.md).

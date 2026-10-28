@@ -43,6 +43,7 @@ out.driveIds = [C.driveIdFor({ id: 'rec_Dry Ridge.csv', date: '2026-10-22T09:00'
 // payload contains only the allowed keys
 out.shape = JSON.stringify(a[0].shape) === JSON.stringify(way.map(([la, lo]) => [+la.toFixed(5), +lo.toFixed(5)]));   // the way's map line, not the drive's points (3 m off it)
 out.keys = Object.keys(a[0]).sort().join() + '|' + Object.keys(a[0].bins[0]).sort().join();
+out.cls = a[0].cls;
 // network shell with a fake fetch: Valhalla trace_attributes + Overpass, then upload
 // a mostly disputed road: 45 of 50 measured bins disagree, 5 agree on smooth: tiny weight, no Surface
 out.mostlyDisputed = (() => { const m = { km: 0.5, coverage: 0.5, roughCoverage: 0.05, roughness: 0.05, avgPasses: 3, bankedKm: 0, offCamberKm: 0 }; return { adj: C.measuredAdjust(m), surface: C.surfaceScore(m) }; })();
@@ -139,14 +140,15 @@ def test_eligibility_window(result):
 
 def test_payload_has_no_drive_coordinates_or_times(result):
     assert result["shape"] is True
-    assert result["keys"] == "bins,dir,drive_id,driven_on,shape,way_id|cam,crest,i,k,rough"
+    assert result["keys"] == "bins,cls,dir,drive_id,driven_on,shape,way_id|cam,crest,i,k,rough"
+    assert result["cls"] == "tertiary", "the map match's road class goes with it (the server's open-road rule)"
 
 
 def test_network_shell_matches_fetches_and_uploads_bins_only(result):
     sh = result["shell"]
     assert sh["res"] == {"built": 1, "sent": 1} and sh["posted"] == 1
     assert sh["valhalla"] == 1 and sh["overpass"] == 1
-    assert sh["keys"] == "bins,dir,drive_id,driven_on,shape,way_id"
+    assert sh["keys"] == "bins,cls,dir,drive_id,driven_on,shape,way_id"
 
 
 def test_server_refusal_stops_uploading(result):
@@ -304,7 +306,7 @@ def test_live_never_sends_first_or_last_km(live):
     n = live["normal"]
     assert n["lo"] >= 200 - 1 and n["hi"] <= 1200 - 200 + 1          # rows 0-199 and the last 200 rows never leave the phone
     assert n["n"] == n["unique"] and n["n"] >= 780                    # about 800 settled rows, none sent twice
-    assert n["ids"] == ["d_live_test_01"] and n["keys"] == "bins,dir,drive_id,driven_on,shape,way_id"
+    assert n["ids"] == ["d_live_test_01"] and n["keys"] == "bins,cls,dir,drive_id,driven_on,shape,way_id"
     assert n["overpass"] == 1 and n["firstState"] == "on"             # way geometry fetched once, then cached
 
 

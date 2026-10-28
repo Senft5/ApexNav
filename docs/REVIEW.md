@@ -32,6 +32,10 @@ Severity: **S1** wrong or unsafe (App Review risk, a lie on screen), **S2** look
 | 12 | onboarding, sign-in notes | Terms and Privacy in browser blue | S3 | Links are ink, underlined, like the rest |
 | 13 | page change at night | Log → Crew flashed the day colours before the night ones | S3 | `themes.js` puts the last look back from `<head>` |
 | 14 | exports | Downloaded files named `apexnav-…` | S3 | `vetta-my-data.json`, `vetta-drives-<date>.gpx`, `vetta-account.json` |
+| 15 | drive status | "Rec 0.11 mi · 77 min left · 8:24 PM" broke inside "8:24 / PM" and ran to four lines beside Report and End drive | S2 | Parts stay whole; lines break between them |
+| 16 | road book strip, next boxes | "LEFT 4 P…" in the smaller boxes | S3 | Long calls there wrap at a smaller size |
+| 17 | hazard sheet | Titled "Report ahead of others" | S3 | "Report a hazard" · "Drivers coming this way get a warning." |
+| 18 | CarPlay bridge (new, caught in review before merge) | Turn-now directions and crests share the urgent speech lane with hazards, so the car would have shown every turn as a hazard alert | S1 | Only member, reported and convoy hazards alert the car (`alert: true`), tested |
 
 ## Audio
 
@@ -43,6 +47,8 @@ Lines heard in the replay and the simulated drive (the captions in the tour vide
 - Prompts duck the music and wait for it to dip (PR #226); nothing spoke over another line in the tour.
 
 ## Still open
+
+- After a drive ends at night the next map can open in day tiles for a moment while auto night waits for a position fix.
 
 - The simulator recording and keyboard screenshots (`app-tour` artifact) after this merges: `testKeyboard` failures, if any,
   are fixed in the next PR.

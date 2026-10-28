@@ -1,4 +1,5 @@
-// Coverage map (IDEAS Q-14): the roads two or more members have measured, drawn as their map line, thicker with more passes.
+// Coverage map (IDEAS Q-14): the measured roads, drawn as their map line, thicker the surer they are. The server sends a
+// confidence level per direction (`conf`: 1 one pass, 2 two to four, 3 five or more), never a count of passes or drivers.
 // A road with no line is waiting for a pioneer (first to measure it earns 3x, second 2x); one driver alone is never shown
 // (Z-08), so blank never means "someone drives here". Pure (tests/test_coverage.py); index.html fetches and draws.
 (function (root) {
@@ -18,13 +19,13 @@
   /** Has `box` already been fetched (inside one we have)? */
   const inside = (box, had) => (had || []).some((h) => box[0] >= h[0] && box[1] >= h[1] && box[2] <= h[2] && box[3] <= h[3]);
 
-  /** Tier for the line: 2 = five or more passes in its busier direction, 1 = two to four. */
-  const tier = (passes) => (Math.max(...(passes || [0])) >= 5 ? 2 : 1);
+  /** Tier for the line, from its surer direction: 2 = five or more passes, 1 = two to four, 0 = a single pass (faintest). */
+  const tier = (conf) => Math.max(0, Math.max(...(conf || [0])) - 1);
 
   /** GeoJSON for the layer from the cached /api/coverage ways (Map way → item). */
   function geojson(cache) {
     return { type: 'FeatureCollection', features: [...cache.values()].filter((w) => Array.isArray(w.line) && w.line.length >= 2).map((w) => ({
-      type: 'Feature', properties: { t: tier(w.passes), p: Math.max(...w.passes) },
+      type: 'Feature', properties: { t: tier(w.conf) },
       geometry: { type: 'LineString', coordinates: w.line.map(([la, lo]) => [lo, la]) } })) };
   }
 
@@ -33,7 +34,7 @@
     let added = false;
     for (const w of (json && json.ways) || []) {
       const was = cache.get(w.way);
-      if (!was || JSON.stringify(was.passes) !== JSON.stringify(w.passes)) { cache.set(w.way, w); added = true; }
+      if (!was || JSON.stringify(was.conf) !== JSON.stringify(w.conf)) { cache.set(w.way, w); added = true; }
     }
     return added;
   }

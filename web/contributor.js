@@ -1,5 +1,5 @@
 // Phone-side road-data contributor (docs/BACKEND.md sections 3-4). Turns a profiled drive into per-road bin summaries.
-// What leaves the phone: OSM way id, direction, bin index, four road numbers per 5 m bin, and the way's own public OSM line (the
+// What leaves the phone: OSM way id, direction, bin index, four road numbers per 5 m bin, the way's road class, and the way's own public OSM line (the
 // coverage map, IDEAS Q-14). Never your position, your path, speeds or times.
 // The pure part (buildContributions) is deterministic and unit-tested; matchDrive/fetchWays/contributeDrive are the thin network shell.
 (function (root) {
@@ -58,7 +58,7 @@
       const span = bins[bins.length - 1].i - bins[0].i + 1;
       if (bins.length / span < 0.6) continue;                          // scattered, not a run (5 m samples on 5 m bins can skip a bin now and then: about 75% is normal worst case)
       const key = `${run.way}|${run.dir}`;
-      if (!best.has(key) || best.get(key).bins.length < bins.length) best.set(key, { way_id: run.way, dir: run.dir, driven_on: drivenOn, drive_id: driveId, bins: bins.slice(0, MAX_BINS), shape: shapeOf(ways[run.way]) });
+      if (!best.has(key) || best.get(key).bins.length < bins.length) best.set(key, { way_id: run.way, dir: run.dir, driven_on: drivenOn, drive_id: driveId, bins: bins.slice(0, MAX_BINS), shape: shapeOf(ways[run.way]), cls: run.cls });
     }
     return [...best.values()];
   }
@@ -91,7 +91,11 @@
       if (pts.filter((p) => p.d > MAX_OFF_ROAD_M).length > pts.length * 0.1) continue;          // match did not really follow this way
       const fwd = pts[pts.length - 1].off - pts[0].off;
       if (Math.abs(fwd) < MIN_BINS * BIN_M * 0.5) continue;
-      out.push({ way: run.way, dir: fwd > 0 ? 0 : 1, pts: pts.filter((p) => p.d <= MAX_OFF_ROAD_M).map((p) => ({ i: p.i, bin: Math.floor(p.off / BIN_M) })) });
+      // the way's road class as the map match named it, most common over the run (the server's open-road rule, roads.ts)
+      const counts = new Map();
+      for (const i of run.idx) { const c = match[i].cls; if (c) counts.set(c, (counts.get(c) || 0) + 1); }
+      const cls = [...counts].sort((a, b) => b[1] - a[1])[0];
+      out.push({ way: run.way, dir: fwd > 0 ? 0 : 1, cls: cls ? cls[0] : null, pts: pts.filter((p) => p.d <= MAX_OFF_ROAD_M).map((p) => ({ i: p.i, bin: Math.floor(p.off / BIN_M) })) });
     }
     return out;
   }
