@@ -30,6 +30,7 @@
   <script src="outbox.js"></script>
   <script src="stage_delta.js"></script>
   <script src="directions.js"></script>
+  <script src="whats_new.js"></script>
   <script src="incident.js"></script>
   <script src="traffic.js"></script>
   <script src="in_car.js"></script>
@@ -4256,8 +4257,18 @@
       // Focus the dialog, not its button: VoiceOver reads the welcome, and no focus ring sits on Get started before a touch
       ob.classList.add('show'); paint(); ob.tabIndex = -1; ob.focus();
     }
+    const wasOnboarded = !!flag('apex.onboarded');
     if (!flag('apex.onboarded') && !window.APEX_EMBED && !['invite', 'crew', 'add', 'convoy', 'drive', 'play', 'at', 'theme', 'go'].some(k => params.has(k))) runOnboarding();
     else if (!flag('apex.onboarded')) flag('apex.onboarded', '1');
+    // What's new after an update (IDEAS O-10; web/whats_new.js): once, a moment after the page settles, never over a drive or a
+    // link that opened the app for something; a first install only marks it seen.
+    (() => {
+      if (!window.ApexWhatsNew || window.APEX_EMBED) return;
+      if (!wasOnboarded) { ApexWhatsNew.markSeen(localStorage); return; }
+      const busy = ['invite', 'crew', 'add', 'convoy', 'drive', 'play', 'at', 'theme', 'go', 'view'].some(k => params.has(k));
+      const news = ApexWhatsNew.pending(ApexWhatsNew.seen(localStorage), wasOnboarded, busy);
+      if (news) setTimeout(() => { if (!driveActive && !document.querySelector('.overlay.show')) ApexWhatsNew.show(el, news, () => ApexWhatsNew.markSeen(localStorage)); }, 1200);
+    })();
 
     // An invite, crew, friend or convoy link opened in iPhone Safari: offer to open it in the app instead (apexnav://open?...).
     // Only the link keys go across, and only values the app accepts; the app checks them again.

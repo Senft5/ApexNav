@@ -441,6 +441,27 @@ flow("friends' activity: the Log lists who drove your stages lately and where yo
   check(!(await page.$('#friendsList b b')), 'a stage name never becomes markup');
 });
 
+flow("what's new: shown once after an update, not on a first install, not over a link that opened the app (IDEAS O-10)", async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); if (!localStorage.getItem('apex.newsSeen')) localStorage.setItem('apex.newsSeen', 'an-older-release'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForSelector('#newsSheet', { timeout: 5000 });
+  check(/What's new/.test(await page.textContent('#newsSheet')) && (await page.$$('#newsSheet p')).length <= 4, 'one screen, at most four lines');
+  await page.click('#newsSheet button');
+  const id = await page.evaluate(() => localStorage.getItem('apex.newsSeen'));
+  check(id === require('../web/whats_new.js').NEWS.id, 'marked seen');
+  await page.reload(); await page.waitForTimeout(1800);
+  check(!(await page.$('#newsSheet')), 'not again');
+  // a first install: onboarding, never news; the release is marked seen so the next one is the first news
+  const fresh = await page.context().browser().newContext();
+  try {
+    const p2 = await fresh.newPage();
+    await p2.route('**/*', (r) => (r.request().url().startsWith(base) ? r.continue() : r.abort()));
+    await p2.goto(base + '/index.html'); await p2.waitForSelector('#onboard.show'); await p2.waitForTimeout(1800);
+    check(!(await p2.$('#newsSheet')), 'no news on a first install');
+    check(await p2.evaluate(() => localStorage.getItem('apex.newsSeen')) === require('../web/whats_new.js').NEWS.id, 'first install marks it seen');
+  } finally { await fresh.close(); }
+}, { news: true });
+
 flow('the Log page opens', async (page, base) => {
   await page.goto(base + '/analysis.html');
   await page.waitForLoadState('load');
@@ -481,9 +502,13 @@ flow('Your records: unknown dates and unscored drives never make a "new best", a
   const browser = await chromium.launch();
   let failed = 0;
   for (const { name, fn, ctxOpts } of flows) {
-    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, ...ctxOpts });
+    const { news, ...browserOpts } = ctxOpts;
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, ...browserOpts });
     // Only our own server: maps, routers, fonts and voices are blocked, so the result doesn't depend on the network.
     await ctx.route('**/*', (route) => (route.request().url().startsWith(base) ? route.continue() : route.abort()));
+    // "What's new" (IDEAS O-10) would sit over every flow; it is seen already unless a flow says otherwise (ctxOpts.news).
+    const newsId = require('../web/whats_new.js').NEWS.id;
+    if (!ctxOpts.news) await ctx.addInitScript((id) => { try { if (!localStorage.getItem('apex.newsSeen')) localStorage.setItem('apex.newsSeen', id); } catch (_) {} }, newsId);
     const page = await ctx.newPage();
     const errors = [];
     page.on('pageerror', (e) => errors.push(String(e && e.stack || e)));
