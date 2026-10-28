@@ -70,7 +70,7 @@ long-press pin (#61), Apple place search and nearby suggestions in the app (#73)
 | R-03 | Measured road character (roughness, banking) as a routing input, unmeasured stays neutral | H | M | partial (#88) | ROAD_INTELLIGENCE §7, WORKER_QUEUE road-3 |
 | R-04 | road-3 remainder: measured crest, flow confidence and corroborated hazards in candidate discovery and generation, not only in ranking | H | L | todo | WORKER_QUEUE road-3 |
 | R-05 | Multi-centre stage discovery so long A→B trips find stages near both ends, not only the midpoint | H | M | done (#96) | STATE 2026-10-28 |
-| R-06 | One fun score for loops and A→B (unify loop ranking with the fun score) | M | S | todo | STATE 2026-10-28 |
+| R-06 | One fun score for loops and A→B (unify loop ranking with the fun score) | M | S | done (#111) | STATE 2026-10-28 |
 | R-07 | Live ETA and time left from router durations scaled by your own pace, reset on reroute | H | M | todo | WORKER_QUEUE eta-1, every nav app |
 | R-08 | Traffic ahead on iOS from MapKit, switch to the next most fun route that avoids the jam | H | L | done (#78, phone test pending) | WORKER_QUEUE traffic-1, Waze |
 | R-09 | Traffic on web/Android through a keyed provider (TomTom/HERE via the Worker) | M | M | owner (paid provider) | Google Maps |
@@ -194,9 +194,9 @@ Today: accounts with Google sign-in, friends, crews (public and private, crews n
 | id | idea | impact | effort | status | from |
 |---|---|---|---|---|---|
 | S-01 | Crews as groups: public/private, nearby discovery, tiles, owner settings | H | M | done (#76) | Strava clubs, REVER groups |
-| S-02 | Convoy client: create/join by code or QR, live positions, gap in time, leader hazard calls, regroup | H | L | partial (#84 server) | WORKER_QUEUE convoy-1..3, REVER, Waze |
+| S-02 | Convoy client: create/join by code or QR, live positions, gap in time, leader hazard calls, regroup | H | L | done (#84, #89) | WORKER_QUEUE convoy-1..3, REVER, Waze |
 | S-03 | Friends' activity in the Log with rank on shared stages | H | M | todo | WORKER_QUEUE log-friends, Strava feed |
-| S-04 | Garage: car profile (mass, power, tyres, ride height), shareable car cards, no location | H | M | active (garage thread) | SOCIAL §2.4, Drivetribe |
+| S-04 | Garage: car profile (mass, power, tyres, ride height), shareable car cards, no location | H | M | done (#98; ride height and grip numbers not yet) | SOCIAL §2.4, Drivetribe |
 | S-05 | Share a planned route (geometry + notes) to a friend or crew, never a recorded drive | H | M | todo | SOCIAL §2.5, Calimoto, Roadtrippers |
 | S-06 | Crew events: a planned drive with time, meeting point, route, RSVPs and a convoy that opens on the day | H | L | todo | Meetup, REVER rides, car clubs |
 | S-07 | Kudos and comments on shared drives and highlights | M | M | todo | Strava kudos |
@@ -239,7 +239,7 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 | U-15 | Dynamic Type and VoiceOver pass on every screen, checked with the iOS simulator | H | M | todo | accessibility |
 | U-16 | Landscape cockpit layout for mounts in landscape | M | M | todo | Waze |
 | U-17 | Copy pass to BRAND voice on every remaining string (errors, empty states, permissions) | M | S | partial (#103) | docs/BRAND.md §2 |
-| U-18 | Native feel: replace remaining web-looking controls (selects, date inputs) with app-style ones | M | M | todo | STATE 2026-10-27 |
+| U-18 | Native feel: replace remaining web-looking controls (selects, date inputs) with app-style ones | M | M | partial (selects) | STATE 2026-10-27 |
 | U-19 | Search that understands roads and stages ("Tail of the Dragon"), not just addresses | H | M | todo | Google Maps |
 | U-20 | Saved places and lists (home, work, favourite stages) synced to the account | M | M | todo | Google Maps lists |
 | U-21 | Route preview: scrub along the route with elevation, notes and road character | M | M | todo | Calimoto, Komoot |
@@ -249,8 +249,8 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 
 | id | idea | impact | effort | status | from |
 |---|---|---|---|---|---|
-| O-01 | First run in three screens max, permissions at the moment of need | H | S | partial (BRAND §4) | docs/BRAND.md §4 |
-| O-02 | Mount guide: how and where to mount the phone, with a live "calibrated" tick | H | S | todo | STATE 2026-10-26 calibration |
+| O-01 | First run in three screens max, permissions at the moment of need | H | S | done (BRAND §4; polish: no focus ring, Sign in is the one solid button on its step) | docs/BRAND.md §4 |
+| O-02 | Mount guide: how and where to mount the phone, with a live "calibrated" tick | H | S | done (app: Mount row before the first drive, "Mount set" when calibration locks) | STATE 2026-10-26 calibration |
 | O-03 | Instant value with no account: plan a fun loop from where you are in two taps | H | S | todo | Calimoto |
 | O-04 | Demo replay that shows the cockpit, notes and analysis in 60 s | M | S | partial (#58) | — |
 | O-05 | Sign in with Apple (required on iOS when Google sign-in is offered) | H | S | owner (Apple account) | App Store guideline 4.8 |

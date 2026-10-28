@@ -1,5 +1,18 @@
 # APEX NAV — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-10-28: one fun score for loops and A→B
+- #96 merged (long trips in sections). #111: loops are now ranked by `FunRoute.loopValue` (Fun − 200 x retraced share − 80 x length error) instead of raw corners per km, so router junction turns no longer count as loop corners and the measured adjustment (fun points) is on the same scale. Knoxville 30 mi: a clean 43 km loop (Fun 75) beat a 47 km one with more corners but 9 % retraced. Not driven on a phone.
+- Exact next task: next routing rows in docs/IDEAS.md (R-14 reject routes that shortcut a stage, R-31 "why this route", R-13 sun glare).
+
+## Session 2026-10-28: social: convoys and the garage (thread "Make ApexNav's social features best in class")
+- #84 convoy backend: `ConvoyRoom` Durable Object per drive (ticketed WebSocket, 16 cars, 2 h, 30-min invites, leader-only hazard calls / shared route / regroup point, retract with tombstones, replay after reconnect, restart epochs, positions never stored) and `ConvoyIndex` per user (2 led at once, 10 created per hour; blocks, logout and account deletion reach live convoys). Deviations from docs/CONVOY_TRANSPORT.md are listed in its "As built" section. Reviewed by code-review and security subagents (all findings fixed, re-verified). 32 tests in backend/test/convoy.test.ts.
+- #89 convoy app (web/convoy.js, web/convoy_ui.js): start/join by link, crew bar with gaps to leader and last car, leader call buttons with 3 s undo, spoken calls for hazards ahead on the shared route (or a heading cone), map markers and dashed route, reconnect with backoff, offline queue, "Use it here" when a second device takes over. tests/test_convoy_client.py; Playwright check as leader and member.
+- Garage (migration 0008, applied by hand to both D1 databases on 2026-10-28): up to 10 cars with power, weight (lb in the UI, kg stored), lb/hp, drive, gearbox, tyres, mods; one primary ("daily"); "Show to my friends and private crews" (public crews don't count, anyone can join them). Rules in docs/BACKEND.md section 6. Reviewed by code-review and security subagents; cap/primary races, multi-line mods, zero-width/bidi text, public-crew exposure, null-handle grouping all fixed with tests.
+- Active bug found: the iOS shell had no WKUIDelegate, so `confirm()` returned false in the app and Unfriend, Leave crew and Remove car did nothing on iPhone. Fix is the next small PR (ApexNavApp.swift).
+- Not verified on a phone: any convoy drive between two real cars; whether WKWebView sends an Origin the connect route accepts (`apexnav://app`); hazard speech priority while pace notes play; the Garage UI in the app.
+- Known open (low): `body()` in util.ts trusts Content-Length (chunked bodies bypass the 64 KB cap); a crew switched from public to private keeps its open-join members.
+- Exact next task: land the iOS confirm fix, then show each member's daily car in the convoy crew bar and member list, then convoy drive recaps (who drove, hazards called) and a real two-phone convoy test.
+
 ## Session 2026-10-28: long trips planned in sections
 - Trips over 22 km crow fly are cut into ~24 km sections along the quickest route (2 on Fun, 3 on Max fun); each section gets its own stage search, and the best per section (plus one-swap variants, max 4 stages) compete with the single-corridor plans (#96, `ApexFunRoute.sectionCount/sectionPoints/combineSections`). Knoxville→Asheville Fun: Fun 47 for +17 min (was no fun option); Knoxville→Maryville unchanged (79 @ 128 min). Not driven on a phone.
 - Exact next task: use measured data during stage discovery (road-3 remainder); unify loop ranking with the fun score.

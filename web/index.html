@@ -31,6 +31,7 @@
   <script src="voice.js"></script>
   <script src="convoy.js"></script>
   <script src="convoy_ui.js"></script>
+  <script src="garage_ui.js"></script>
   <script src="data/dry_ridge.js"></script>
   <script src="data/pebble_ridge.js"></script>
   <style>
@@ -101,6 +102,10 @@
     .plan-body { display: grid; align-content: start; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding: 2px 16px 20px; gap: 16px; flex: 1; min-height: 0; }
     .from-row { display: flex; gap: 4px; align-items: center; }
     .from-row .field { height: 40px; border-color: var(--hair, var(--panel-dim)); }
+    /* Selects drawn like the app's other controls on every platform: square, ink border, a drawn chevron (iOS otherwise adds its own rounded bubble) */
+    select, select.field { -webkit-appearance: none; appearance: none; border-radius: 0; padding-right: 30px; text-overflow: ellipsis;
+      background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%);
+      background-position: calc(100% - 17px) 50%, calc(100% - 12px) 50%; background-size: 5px 5px, 5px 5px; background-repeat: no-repeat; }
     .plan-status { font-size: 12px; color: var(--panel-dim); min-height: 0; margin: 4px 2px 0; }
     .plan-status:empty { display: none; }
     .plan-links { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
@@ -334,6 +339,7 @@
     .sources a { color: inherit; }
     /* Keyboard and switch-control users see where they are; touch taps show nothing extra. */
     :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .overlay:focus { outline: none; }
     .plan-search:focus-within { border-color: var(--panel-ink); }
     @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: 0.01ms !important; animation: none !important; } }
   </style>
@@ -532,7 +538,7 @@
     </div>
     <div class="grow" data-step="3" hidden>
       <h2>Driving with friends?</h2>
-      <p>ApexNav is invite-only. Sign in to see their stages and boards.</p>
+      <p>Sign in to join a crew and see its stages and boards. You can do this later in Crew.</p>
       <a class="ink-btn solid" href="/api/auth/google/start" style="display:flex;align-items:center;justify-content:center;text-decoration:none">Sign in with Google</a>
     </div>
     <div class="stack">
@@ -543,7 +549,7 @@
   <div class="overlay dim" id="permSheet" role="dialog" aria-modal="true" aria-label="Before your first drive">
     <div class="card-sheet">
       <h2>Before your first drive</h2>
-      <div class="perm"><b>Location</b><span id="permLoc">to call corners ahead</span><b>Motion</b><span id="permMot">to feel bumps and surface</span><b>Screen on</b><span>while you drive</span></div>
+      <div class="perm"><b>Location</b><span id="permLoc">to call corners ahead</span><b>Motion</b><span id="permMot">to feel bumps and surface</span><b>Screen on</b><span>while you drive</span><b class="mount-row" hidden>Mount</b><span class="mount-row" hidden>in a holder, any way up. It sets itself up in the first minute of driving.</span></div>
       <p id="permNote">Your drive stays on this phone.</p>
       <button class="ink-btn solid" id="permGo">Allow and start</button>
       <button class="linkbtn" id="permNo">Not now</button>
@@ -2098,10 +2104,9 @@
     }
     function scoreLoop(t, miles) {
       const km = totalOf(t) / 1000, targetKm = miles * 1.609344;
-      const good = t.events.filter(e => e.type === 'corner' && e.severity !== 'HP' && e.severity >= 2 && e.severity <= 5).length;
       const retraced = Core.retracedShare(t.lat, t.lon);
-      const lengthErr = Math.abs(km - targetKm) / targetKm;
-      return { score: good / Math.max(1, km) * 10 - retraced * 60 - lengthErr * 25, good, retraced, km };
+      // good: corners off the router's junctions, as the fun score counts them
+      return { score: FunRoute.loopValue(t.fun, km, targetKm, retraced), good: t.fun ? t.fun.good : 0, retraced, km };
     }
     const totalOf = (t) => t.dist[t.dist.length - 1];
     // Busy state on the button that started a slow request: label and progress bar;
@@ -2163,7 +2168,7 @@
       const done = (await Promise.allSettled(tries)).filter(r => r.status === 'fulfilled').map(r => r.value);
       if (!done.length) { toast('Couldn\'t build a loop. Check signal and try again.'); return; }
       done.sort((a, b) => b.score - a.score);
-      // Members: let what others measured break ties among the top few (rough −8 … smooth +3, banked ±2, docs/ROUTING.md; unmeasured roads are neutral).
+      // Members: let what others measured break ties among the top few (rough −8 … smooth +3, banked ±2 on the same fun scale, docs/ROUTING.md; unmeasured roads are neutral).
       if (await applyMeasured(done.slice(0, 3), ui)) {
         for (const d of done) d.score += d.adjust || 0;
         done.sort((a, b) => b.score - a.score);
@@ -2175,7 +2180,7 @@
       const gotMi = best.km / 1.609344, near = Math.abs(gotMi - miles) <= 0.2 * miles;
       await buildRoute(null, `loop_${miles}`, `${Math.max(1, Math.round(gotMi))} mi loop`, best.t);
       toast(near ? `${best.good} good corners on this loop` : `${gotMi.toFixed(1)} mi: the closest good loop to ${miles} mi`);
-      window.apexDebug && (window.apexDebug.lastLoop = done.map(d => ({ kind: d.job.kind, score: d.score, km: d.km, good: d.good, retraced: d.retraced })));
+      window.apexDebug && (window.apexDebug.lastLoop = done.map(d => ({ kind: d.job.kind, fun: d.t.fun && d.t.fun.fun, score: d.score, km: d.km, good: d.good, retraced: d.retraced })));
     }
 
 
@@ -2507,6 +2512,9 @@
       // A close hazard cuts in; a far one goes next, after the pace note being spoken (never dropping the notes queued).
       speak: (text, urgent) => { if (!state.toggles.voice) toast(text); else if (urgent) say(text, true); else sayNext(text); },
     }) : null; } catch (e) { console.error('convoy', e); convoy = null; }   // the convoy never takes the page down
+    // Garage (web/garage_ui.js): your cars, and the ones friends and crew-mates show.
+    let garage = null;
+    try { garage = window.ApexGarageUI ? ApexGarageUI.mount({ el, btn, toast, apiCall, jsonOf }) : null; } catch (e) { console.error('garage', e); }
     const switchRow = (label, on, change) => { const b = el('button', { className: 'ink-btn' + (on ? ' on' : ''), textContent: `${label}: ${on ? 'On' : 'Off'}`, onclick: change }); b.setAttribute('aria-pressed', String(!!on)); return b; };
     let openCrewId = null;
     const crewNear = () => { if (state.lastPosition) return state.lastPosition; const c = map.getCenter(); return { lat: c.lat, lon: c.lng }; };
@@ -2568,6 +2576,7 @@
         btn('Share my handle', () => copyText(`${location.origin}/?add=${me.handle}`, 'Link copied. Anyone who opens it can ask to be your friend.'))), invOut);
       body.append(you);
       if (convoy) body.append(convoy.section());
+      if (garage) body.append(garage.section());
 
       // friends: a side pop-up (owner decision), opened from the button under You; new requests light it up
       if (stash('apex.add')) friendsOpen = true;
@@ -3147,6 +3156,8 @@
       if (state.mode === 'live' || locDenied) return;
       if (flag('apex.permsExplained')) { enterDrive(); return; }
       paintPerms();
+      // The app calibrates the mount (ApexKit); a browser has no mount calibration, so the tip is app-only
+      document.querySelectorAll('.mount-row').forEach(n => { n.hidden = !NATIVE_SHELL; });
       const sheet = $('permSheet'); sheet.classList.add('show'); $('permGo').focus();
     }
     $('permGo').addEventListener('click', () => { if (locDenied) return; flag('apex.permsExplained', '1'); $('permSheet').classList.remove('show'); enterDrive(); });
@@ -3164,12 +3175,13 @@
       const paint = () => {
         steps.forEach(n => { n.hidden = Number(n.dataset.step) !== step; });
         $('obNext').textContent = step === 1 ? 'Get started' : step === 2 ? 'Next' : 'Not now';
+        $('obNext').classList.toggle('solid', step < 3);   // on the sign-in step, Sign in is the one solid button
         $('obAlt').textContent = 'Watch a replay';
         $('obAlt').hidden = step === 2;
         if (step === 2) {
           const list = $('obVoices'); list.innerHTML = '';
           for (const v of bankVoices.concat([{ id: 'device', name: 'Phone voice' }]).filter(v => v.id !== 'jarvis')) {
-            const b = document.createElement('button'); b.className = 'ink-btn' + (v.id === state.voiceId ? ' on' : ''); b.textContent = `▶  ${v.name}`;
+            const b = document.createElement('button'); b.className = 'ink-btn' + (v.id === state.voiceId ? ' on' : ''); b.textContent = `▶  ${v.name}`; b.setAttribute('aria-pressed', String(v.id === state.voiceId));
             b.addEventListener('click', () => { state.voiceId = v.id; state.voiceStyle = 'codriver'; savePrefs(); renderVoiceList(); if (window.ApexVoice) ApexVoice.unlock(); say('Left 4 tightens, one-fifty.', true, null, 'sys:test'); paint(); });
             list.append(b);
           }
@@ -3178,7 +3190,8 @@
       const finish = () => { flag('apex.onboarded', '1'); ob.classList.remove('show'); };
       $('obNext').onclick = () => { if (step < 3) { step++; paint(); } else finish(); };
       $('obAlt').onclick = () => { finish(); watchDryRidge(); };
-      ob.classList.add('show'); paint(); $('obNext').focus();
+      // Focus the dialog, not its button: VoiceOver reads the welcome, and no focus ring sits on Get started before a touch
+      ob.classList.add('show'); paint(); ob.tabIndex = -1; ob.focus();
     }
     if (!flag('apex.onboarded') && !window.APEX_EMBED && !['invite', 'crew', 'add', 'convoy', 'drive', 'play', 'at', 'theme'].some(k => params.has(k))) runOnboarding();
     else if (!flag('apex.onboarded')) flag('apex.onboarded', '1');
@@ -3203,7 +3216,10 @@
           drive.frames++; drive.rec.add(frame); feedLive();
           const gps = Number.isFinite(frame.accuracy_m) && frame.accuracy_m > ApexSensors.MAX_ACCURACY_M ? 'weak' : 'on';
           if (drive.status.gps !== gps) drive.status.gps = gps;
-          drive.status.calibration = typeof frame.calibration === 'string' ? frame.calibration : null;
+          const cal = typeof frame.calibration === 'string' ? frame.calibration : null;
+          // The mount guide's tick: say so when calibration locks after the driver saw "Calibrating"
+          if (cal === 'locked' && (drive.status.calibration === 'default' || drive.status.calibration === 'awaitingPull')) toast('Mount set. Bumps and banking are recording.');
+          drive.status.calibration = cal;
           paintDriveStat();
         }
         const entering = state.mode !== 'live';

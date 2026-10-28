@@ -247,6 +247,15 @@
   }
   // ---- loops ------------------------------------------------------------------------
   /**
+   * A routed loop's value on the same 0–100 fun scale as A→B routes (so the measured adjustment means the same
+   * on both): fun score minus 2 points per % of the loop driven twice (out-and-back spurs, the same road both ways)
+   * and 0.8 per % it misses the asked length. Unscored geometry (too short) is worth nothing.
+   */
+  function loopValue(fun, km, targetKm, retraced) {
+    const f = fun && Number.isFinite(fun.fun) ? fun.fun : 0;
+    return f - 200 * (retraced || 0) - 80 * Math.abs(km - targetKm) / targetKm;
+  }
+  /**
    * Stages worth timing for a loop of targetKm from start: the best-scoring ones close enough to
    * reach and come back from (crow fly out and back within the target), no duplicates. At most `k`;
    * the matrix is (1 + 2k) x (2k + 1), split into calls of 100 pairs.
@@ -374,6 +383,6 @@
     }).filter(c => c.extraS === 0 || c.timeS <= limit).sort((a, b) => b.value - a.value);
   }
 
-  const api = { LEVELS, geometry, alongPoints, insertVia, loopShortlist, loopPlansFromMatrix, score, shortlist, matrixPoints, plansFromMatrix, sectionCount, sectionPoints, combineSections, planKey, searchArea, waypoints, rank, along, kmBetween };
+  const api = { LEVELS, geometry, alongPoints, insertVia, loopValue, loopShortlist, loopPlansFromMatrix, score, shortlist, matrixPoints, plansFromMatrix, sectionCount, sectionPoints, combineSections, planKey, searchArea, waypoints, rank, along, kmBetween };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexFunRoute = api;
 })(typeof window !== 'undefined' ? window : globalThis);

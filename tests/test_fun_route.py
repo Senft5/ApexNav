@@ -109,6 +109,8 @@ const lmp = F.matrixPoints(S0, S0, loopList);
 const lkm = lmp.sources.map((a) => lmp.targets.map((b, c) => (loopList[c >> 1] && loopList[c >> 1].name === 'east' ? null : F.kmBetween(a, b) * 1.3)));
 const loops = F.loopPlansFromMatrix(loopList, lkm, 48, 3);
 out.loops = loops.map(p => ({ names: p.legs.map(l => l.s.name), total: p.total, wps: globalThis.ApexStages.waypoints(S0, p).length }));
+// routed loops are valued on the fun scale: retracing and missing the length cost points
+out.loopValue = [F.loopValue({ fun: 60 }, 48, 48, 0), F.loopValue({ fun: 60 }, 48, 48, 0.1), F.loopValue({ fun: 60 }, 60, 48, 0), F.loopValue(null, 48, 48, 0)];
 process.stdout.write(JSON.stringify(out));
 """
 
@@ -193,6 +195,14 @@ def test_loops_use_real_distances_and_fit_the_target(r):
         assert len(set(p["names"])) == len(p["names"]), "no stage twice"
     sets = [tuple(sorted(p["names"])) for p in r["loops"]]
     assert len(set(sets)) == len(sets), "a loop and the same loop backwards are one choice"
+
+
+def test_loops_are_valued_on_the_fun_scale(r):
+    full, retraced, long_, unscored = r["loopValue"]
+    assert full == 60, "a clean loop of the asked length is worth its fun score"
+    assert retraced == 40, "a tenth driven twice costs 20 points"
+    assert abs(long_ - 40) < 1e-9, "25 % long costs 20 points"
+    assert unscored == 0
 
 
 MATRIX = r"""
