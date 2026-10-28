@@ -13,6 +13,8 @@ RUNNER = r"""
 const root = process.argv[1];
 globalThis.ApexCore = require(root + '/web/apex_core.js');
 const F = require(root + '/web/fun_route.js');
+globalThis.ApexRouteLoading = {};
+require(root + '/web/stages.js');
 const lat0 = 39.2, lon0 = -84.6, mLat = 1 / 110540, mLon = 1 / (111320 * Math.cos(lat0 * Math.PI / 180));
 const ll = (pts) => pts.map(([x, y]) => [lon0 + x * mLon, lat0 + y * mLat]);
 const P = (x, y) => ({ lat: lat0 + y * mLat, lon: lon0 + x * mLon });
@@ -90,7 +92,7 @@ out.loopList = loopList.map(s => s.name);
 const lmp = F.matrixPoints(S0, S0, loopList);
 const lkm = lmp.sources.map((a) => lmp.targets.map((b, c) => (loopList[c >> 1] && loopList[c >> 1].name === 'east' ? null : F.kmBetween(a, b) * 1.3)));
 const loops = F.loopPlansFromMatrix(loopList, lkm, 48, 3);
-out.loops = loops.map(p => ({ names: p.legs.map(l => l.s.name), total: p.total, wps: F.waypoints(S0, S0, p).length }));
+out.loops = loops.map(p => ({ names: p.legs.map(l => l.s.name), total: p.total, wps: globalThis.ApexStages.waypoints(S0, p).length }));
 process.stdout.write(JSON.stringify(out));
 """
 
@@ -162,6 +164,8 @@ def test_loops_use_real_distances_and_fit_the_target(r):
         assert "east" not in p["names"], "no road reaches it"
         assert p["wps"] <= 10
         assert len(set(p["names"])) == len(p["names"]), "no stage twice"
+    sets = [tuple(sorted(p["names"])) for p in r["loops"]]
+    assert len(set(sets)) == len(sets), "a loop and the same loop backwards are one choice"
 
 
 MATRIX = r"""
@@ -175,7 +179,7 @@ const m = new Function('RouteLoading', 'VALHALLA', 'COSTING', 'return (' + sourc
 const pts = (n) => Array.from({ length: n }, (_, i) => ({ lat: 39 + i / 100, lon: -84 }));
 (async () => {
   const r = await m(pts(13), pts(13));
-  process.stdout.write(JSON.stringify({ calls, rows: r.km.length, cols: r.km[0].length, last: r.km[12][12], nul: r.times[5][0] }));
+  process.stdout.write(JSON.stringify({ calls, rows: r.km.length, cols: r.km[0].length, last: r.km[12][12], nul: r.times[5][0], nulKm: r.km[5][0] }));
 })();
 """
 
@@ -185,7 +189,7 @@ def test_big_matrix_is_split_into_calls_of_100_pairs():
     r = json.loads(res.stdout)
     assert all(c <= 100 for c in r["calls"]) and sum(r["calls"]) == 169
     assert r["rows"] == 13 and r["cols"] == 13 and r["last"] == 24, "rows come back in order"
-    assert r["nul"] is None, "no road stays unknown"
+    assert r["nul"] is None and r["nulKm"] is None, "no road stays unknown"
 
 
 def test_alternates_keep_shaping_points_and_stops_go_in_order(r):

@@ -1548,19 +1548,19 @@
     }
     const valhallaRoute = async (points, throughRoadsOnly = false) => (await valhallaRoutes(points, throughRoadsOnly))[0].coords;
     // Drive time (s) and road distance (km) from every source to every target (null: no road). The public server takes at
-    // most 100 pairs a call, so bigger matrices go in several calls of whole source rows.
+    // most 100 pairs a call, so bigger matrices go in several calls of whole source rows, one after another (a burst
+    // of parallel calls risks the server's rate limit). Callers send at most 13 targets.
     async function valhallaMatrix(sources, targets) {
-      const rows = Math.max(1, Math.floor(100 / targets.length)), calls = [];
-      for (let i = 0; i < sources.length; i += rows) calls.push(sources.slice(i, i + rows));
-      const parts = await Promise.all(calls.map(async (src) => {
+      const rows = Math.max(1, Math.floor(100 / targets.length)), parts = [];
+      for (let i = 0; i < sources.length; i += rows) {
+        const src = sources.slice(i, i + rows);
         const json = await RouteLoading.json(`${VALHALLA}/sources_to_targets`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ sources: src.map(p => ({ lat: p.lat, lon: p.lon })), targets: targets.map(p => ({ lat: p.lat, lon: p.lon })), ...COSTING }) });
         if (!Array.isArray(json.sources_to_targets)) throw new Error(json.error || 'no matrix');
-        return json.sources_to_targets;
-      }));
-      const all = parts.flat();
-      return { times: all.map(row => row.map(c => (c && Number.isFinite(c.time) ? c.time : null))),
-               km: all.map(row => row.map(c => (c && Number.isFinite(c.distance) ? c.distance : null))) };
+        parts.push(json.sources_to_targets);
+      }
+      const all = parts.flat(), ok = (c) => c && Number.isFinite(c.time) && Number.isFinite(c.distance);   // no time = no road
+      return { times: all.map(row => row.map(c => (ok(c) ? c.time : null))), km: all.map(row => row.map(c => (ok(c) ? c.distance : null))) };
     }
     async function osrmRoutes(points) {
       const coords = points.map(p => `${p.lon.toFixed(6)},${p.lat.toFixed(6)}`).join(';');

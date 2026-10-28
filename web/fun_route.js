@@ -228,8 +228,14 @@
     };
     walk([], 0, 0, 0, 0, 0);
     out.sort((a, b) => b.value - a.value);
-    const picked = [], seen = new Set();
-    for (const p of out) { const k = p.legs[0].s; if (seen.has(k)) continue; seen.add(k); picked.push(p); if (picked.length === count) break; }
+    // Distinct stage sets (a loop and the same loop driven backwards are one choice), then distinct lead stages.
+    const picked = [], sets = new Set(), leads = new Set();
+    for (const p of out) {
+      const set = p.legs.map(l => list.indexOf(l.s)).sort().join(','), lead = p.legs[0].s;
+      if (sets.has(set) || leads.has(lead)) continue;
+      sets.add(set); leads.add(lead); picked.push(p);
+      if (picked.length === count) break;
+    }
     return picked;
   }
 
