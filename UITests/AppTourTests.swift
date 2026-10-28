@@ -62,9 +62,10 @@ final class AppTourTests: XCTestCase {
             b.tap(); pause(2.5)
             let fields = web.descendants(matching: .any).matching(NSPredicate(format: "elementType IN %@", types))
             var done = Set<String>()
-            for i in 0..<min(fields.count, 16) {
+            // twice: a field can appear once another opens its sheet (Where to? opens the plan with From)
+            for i in Array(0..<min(fields.count, 16)) + Array(0..<min(fields.count, 16)) {
                 let f = fields.element(boundBy: i)
-                guard f.exists else { continue }
+                guard f.exists, !f.frame.isEmpty else { continue }   // a field in a hidden view has no frame
                 var tries = 0
                 while !f.isHittable && tries < 6 { web.swipeUp(velocity: .slow); pause(0.6); tries += 1 }
                 guard f.isHittable else { continue }
@@ -84,8 +85,15 @@ final class AppTourTests: XCTestCase {
                 }
                 shot(app, "\(name) · \(label)")
             }
-            // put the keyboard away without submitting, then back to the top of the page
-            if app.keyboards.firstMatch.exists { app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.04)).tap(); pause(1) }
+            // put the keyboard away without submitting: Cancel on the plan sheet, else a tap on the page's title
+            if app.keyboards.firstMatch.exists {
+                let cancel = web.buttons["Cancel"]
+                if cancel.exists && cancel.isHittable { cancel.tap() }
+                else if web.staticTexts[name].firstMatch.exists && web.staticTexts[name].firstMatch.isHittable { web.staticTexts[name].firstMatch.tap() }
+                else { app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.08)).tap() }
+                pause(1)
+                XCTAssertFalse(app.keyboards.firstMatch.exists, "\(name): the keyboard wouldn't go away")
+            }
             for _ in 0..<6 { web.swipeDown(velocity: .fast) }
         }
     }

@@ -127,7 +127,8 @@
 
     /* The keyboard (web/keyboard.js): one clean ink border on the field that has it, no tab bar while typing, and the page
        fits above the keyboard. */
-    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):focus-visible, textarea:focus-visible, select:focus-visible {
+    /* :where keeps this rule weak, so a field that draws its own focus (the plan search box) wins */
+    :where(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), textarea, select):focus-visible {
       outline: none; border-color: var(--panel-ink); box-shadow: inset 0 0 0 1px var(--panel-ink); }
     html.kb-open .tabbar { display: none !important; }
     html.kb-open body { height: var(--kb-h); }
