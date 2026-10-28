@@ -351,7 +351,7 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 | id | idea | impact | effort | status | from |
 |---|---|---|---|---|---|
 | A-01 | Android shell (WebView + native sensors) reusing the web cockpit like the iOS shell | H | XL | owner (Android priority) | ARCHITECTURE thin shells |
-| A-02 | Web: mount calibration in the browser so the web app can share measured road data | M | M | todo | STATE 2026-10-27 |
+| A-02 | Web: mount calibration in the browser so the web app can share measured road data | M | M | done: web/live_pipeline.js (exact port, parity-tested on the ApexKit fixture), fed by DeviceMotion; banking counts only after a GPS cross-check, so an engine with flipped signs never contributes (tested) | STATE 2026-10-27 |
 | A-03 | Web: installable PWA with offline shell and home screen icon | M | S | done: `manifest.webmanifest` (192/512 icons) and `sw.js`, network first with the last copy offline, never /api, voices or other hosts; websites only (not apexnav://, not the e2e host) | — |
 | A-04 | Place suggestions while typing (Apple search in the app, Photon on the web) | M | S | done (#73) | WORKER_QUEUE plan-suggest |
 | A-05 | Desktop planning view: big map, route list, GPX, send to phone | M | M | done: from 1100 px wide, Where to? is a 440 px column on the left and every sheet a 480 px panel on the right, the map in view; with mouse drag-to-reshape, stops, GPX in/out, saved routes, and Share (a link the phone opens) it plans at a desk | Kurviger desktop, Calimoto web planner |

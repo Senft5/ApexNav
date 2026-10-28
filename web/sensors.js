@@ -4,7 +4,11 @@
 //   - lat_g / lon_g: DERIVED from the GPS track (v x yaw rate, dv/dt), smoothed. Not IMU readings; browsers cannot give a phone-mount-independent
 //     chassis frame, and a 1 Hz GPS cannot see anything quicker than about a second. Labelled source 'gps' in recordings.
 //   - roughness_rms: from the accelerometer, orientation independent (high-passed magnitude), in g; null if the device gives no motion events.
-//   - camber_deg: null always (needs a calibrated chassis frame the web cannot get). The native app's frames carry camber_deg and
+//   - camber_deg, crest_vertical_g, vert_peak_g: from the same live pipeline and automatic mount calibration the app runs
+//     (live_pipeline.js, IDEAS A-02), fed by DeviceMotion when the browser gives acceleration, gravity and rotation rate. A browser's
+//     sensors are not proven, so they count only once the mount is locked AND its lateral g agrees with the GPS-derived one
+//     (CrossCheck); then the frame says calibration 'locked' and roughness_rms becomes the app's (>8 Hz vertical). Otherwise null.
+//     The native app's frames carry camber_deg and
 //     crest_vertical_g from its IMU; Recorder keeps them, and the app's lat_g/lon_g, only while the frame says calibration 'locked'
 //     (a solved phone-to-car rotation). Its vert_peak_g (largest >8 Hz vertical spike, g) becomes each 5 m sample's pothole/bump evidence.
 // FrameBuilder is pure and unit-tested; start()/stop() are the thin browser shell and must be called from a user gesture (iOS requires it).
@@ -20,7 +24,32 @@
   const SMOOTH_S = 1.6;               // window (s) for the derived g
 
   class FrameBuilder {
-    constructor() { this.fixes = []; this.motion = []; this.lastCourse = null; this.roughness = null; this.lat = null; this.impact = null; }
+    constructor() {
+      this.fixes = []; this.motion = []; this.lastCourse = null; this.roughness = null; this.lat = null; this.impact = null;
+      const L = root.ApexLivePipeline || (typeof require === 'function' ? (() => { try { return require('./live_pipeline.js'); } catch (_) { return null; } })() : null);
+      this.L = L; this.imu = null; this.check = L ? new L.CrossCheck() : null; this.speed = 0; this.imuAt = null;
+    }
+    /** One DeviceMotion sample through the live pipeline: { accel, gravity, gyro } from ApexLivePipeline.fromDeviceMotion, t its
+     *  sensor time (s), wall the clock the GPS fixes use (ms). */
+    addImu(s, t, wall = Date.now()) {
+      if (!this.L || !s) return;
+      if (!this.imu) this.imu = new this.L.IMUPipeline();
+      this.imu.step(s.accel, s.gyro, t, this.speed, s.gravity); this.imuAt = wall;
+    }
+    /** The mount as far as this browser has proven it: null (no IMU), 'default', 'awaitingPull', 'locked' (unverified) or 'verified'. */
+    get mount() { return !this.imu ? null : this.imu.mount.state === 'locked' && this.check.verified ? 'verified' : this.imu.mount.state; }
+    /** Camber, crest, spikes and roughness from the IMU, or {} while the mount isn't verified (fields stay as the GPS shell has them). */
+    _imuFields(gpsLatG, t) {
+      const p = this.imu;
+      if (!p || this.imuAt == null || Math.abs(t - this.imuAt) > 1500) { if (this.check) this.check.reset(); return {}; }   // motion stopped
+      if (p.mount.state !== 'locked') { this.check.reset(); p.takeVertPeak(); return {}; }
+      this.check.add(p.latAcc / this.L.G, gpsLatG);
+      const peak = p.takeVertPeak();
+      if (!this.check.verified) return {};
+      const G_ = this.L.G, r = (v, d) => Math.round(v * 10 ** d) / 10 ** d;
+      return { calibration: 'locked', camber_deg: r(p.camber / D2R, 2), crest_vertical_g: r(p.crestAcc / G_, 3), vert_peak_g: r(peak / G_, 3),
+               roughness_rms: r(Math.sqrt(Math.max(0, p.roughMeanSq)) / G_, 4) };
+    }
     /** A GPS fix: { t (ms), lat, lon, accuracy (m), speed (m/s|null), heading (deg|null), altitude (m|null) }. Returns a live frame. */
     addFix(f) {
       const bad = !finite(f.lat) || !finite(f.lon) || (finite(f.accuracy) && f.accuracy > MAX_ACCURACY_M);
@@ -34,9 +63,10 @@
       this.fixes.push(fix);
       while (this.fixes.length > 2 && fix.t - this.fixes[0].t > 6000) this.fixes.shift();
       const { lonG, latG } = this._g();
+      this.speed = v;
       return { has_fix: true, lat: f.lat, lon: f.lon, speed_mps: v, course_deg: course, lon_g: lonG, lat_g: latG, camber_deg: null,
                roughness_rms: this.roughness, elevation_m: fix.alt, accuracy_m: finite(f.accuracy) ? f.accuracy : null, t: f.t,
-               impact_g: this._takeImpact() };
+               impact_g: this._takeImpact(), ...this._imuFields(latG, f.t), web_mount: this.mount };
     }
     /** The largest impact since the last fix (g), then reset; null when the phone sends no motion. */
     _takeImpact() { const v = this.impact; this.impact = null; return v == null ? null : Math.round(v * 100) / 100; }
@@ -149,6 +179,7 @@
     const onMotion = (e) => {
       const a = e.accelerationIncludingGravity; if (!a) return;
       fb.addMotion({ t: Date.now(), ax: a.x, ay: a.y, az: a.z });
+      if (root.ApexLivePipeline) fb.addImu(root.ApexLivePipeline.fromDeviceMotion(e), (e.timeStamp || performance.now()) / 1000);
       if (status.motion !== 'on' && fb.roughness != null) say({ motion: 'on' });
     };
     if (status.motion === 'waiting') window.addEventListener('devicemotion', onMotion);

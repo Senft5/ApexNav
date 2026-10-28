@@ -7,7 +7,7 @@
 - This PR: R-12 set list, R-20 car-aware routing (migration 0024 cars.clearance/width_cm applied to both D1).
 - #210 also: Z-11 Content-Security-Policy on every page (tools/csp.py; rerun it after editing an inline script, CLAUDE.md says so).
 - Merged #215 also: Q-04 crowd curvature (migration 0027 applied), Q-03 asked of the owner, R-35 speed traps and S-07 comments dropped with reasons.
-- This PR: S-18 spot photos (web/spot_photos.js, EXIF removed, phone only; NSCameraUsageDescription); D-11 dashcam overlay (web/dashcam.js); blocked IDEAS rows marked owner/parked; P-01 battery cost per drive (web/battery_budget.js, iOS frames carry battery/charging); Q-07 road-data loop test (backend/test/loop.test.ts).
+- This PR: A-02 browser mount calibration (web/live_pipeline.js + GPS cross-check); S-18 spot photos (web/spot_photos.js, EXIF removed, phone only; NSCameraUsageDescription); D-11 dashcam overlay (web/dashcam.js); blocked IDEAS rows marked owner/parked; P-01 battery cost per drive (web/battery_budget.js, iOS frames carry battery/charging); Q-07 road-data loop test (backend/test/loop.test.ts).
 - Merged #223: F-02 offline map areas (web/offline_tiles.js, apexc:// protocol, IndexedDB).
 - Merged #222: D-10 flyover video (web/flyover_video.js) + in-app file saving through the share sheet (shareFile bridge; GPX and Download my data were silently doing nothing in the app).
 - Merged #221: Y-06 feature flags (/api/flags, web/flags.js, FLAGS variable; kill switches for track mode, taste, crowd curvature).
@@ -22,7 +22,7 @@
 - Merged #213: P-05 route analysis in a Web Worker (web/analysis_worker.js + analysis_client.js; inline fallback); D-19 scores per car (only ever gentler than the street default).
 - Merged #212: Z-10 session token in the iOS Keychain, API calls through the shell (ApexApiBridge). Needs the iOS CI build to compile it; check sign-in on TestFlight.
 - Merged #211: Q-12 freshness (migration 0025 applied to both D1); CSP names apexnav: too; the Where to? e2e flow waited on a toast the closure replan can overwrite (fixed; FLOW=, REPEAT= in e2e/smoke.js).
-- Exact next task: remaining IDEAS todo rows (R-29 lane guidance, R-04 measured data in candidate generation, A-02 web calibration, P-03 split index.html); partial rows R-32, Q-13, R-33, F-02, Q-09.
+- Exact next task: remaining IDEAS todo rows (R-29 lane guidance, R-04 measured data in candidate generation, P-03 split index.html); partial rows R-32, Q-13, R-33, F-02, Q-09.
 
 ## Session 2026-10-28 (late morning)
 - Merged: #193 F-06 offline data, D-23 drive tags, V-08 ducking, S-20 flyby; #194 S-11 monthly challenges, R-18 drag to reshape.

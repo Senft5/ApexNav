@@ -1169,8 +1169,7 @@ flow('spot photo: a camera photo with GPS in its EXIF is kept without it, shows 
   check(kept.w === 1600 && kept.h === 1200, `kept photo scaled to 1600 px: ${kept.w}x${kept.h}`);
   await page.waitForSelector('#hlList .spot-thumb img', { state: 'attached', timeout: 5000 });
   page.once('dialog', (d) => d.accept());
-  await page.evaluate(() => document.getElementById('myEraseBtn').click());
-  await page.waitForLoadState('load');
+  await Promise.all([page.waitForNavigation({ waitUntil: 'load' }), page.evaluate(() => document.getElementById('myEraseBtn').click())]);   // Erase reloads the page
   await page.waitForFunction(() => window.ApexSpotPhotos);
   check(await page.evaluate(() => window.ApexSpotPhotos.count()) === 0, 'Erase everything clears spot photos');
 }, { geolocation: { latitude: 35.96, longitude: -83.92 }, permissions: ['geolocation'] });

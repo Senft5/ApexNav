@@ -47,6 +47,7 @@ The JS file is a line-for-line port used by the browser/iOS cockpit for live OSR
 ## 3b. Reference Lap, Live Pipeline, Analysis
 - `core/reference_lap.py` — simulated sane driver per car profile; all TECH/FLOW features and archetypes are read from it (docs/ROAD_INTELLIGENCE.md).
 - `core/live_pipeline.py` — causal 100 Hz pipeline the phone runs; Swift `ApexKit` is held to it by a generated fixture.
+- `web/live_pipeline.js` — the same pipeline for the browser (IDEAS A-02), held to the same fixture (`tests/test_web_live_parity.py`). DeviceMotion → `fromDeviceMotion` (gravity = (acceleration − accelerationIncludingGravity)/g, rotationRate deg/s → rad/s). A browser's sign conventions are not trusted: camber, crest and spikes count only when the mount is `locked` **and** `CrossCheck` finds the calibrated lateral g agreeing in sign with the GPS-derived one (8 of the last 10+ turns over 0.15 g). Only then does a web frame say `calibration: 'locked'`.
   Its vertical spike (`vert_peak`, max |>8 Hz vertical| since the last `take_vert_peak()`) is taken once per live frame and
   sent as `vert_peak_g`; the web Recorder places each frame's spike on the 5 m sample where the car was (its share of the way
   between the two GPS fixes around it), only with a locked mount and above 1 m/s, as the CSV column `vert_peak_g`;
