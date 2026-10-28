@@ -47,7 +47,9 @@ export function validateContribution(raw: Record<string, unknown>, nowMs = Date.
   return { wayId, dir, drivenOn: day, driveId, bins: out, km: out.length * BIN_KM };
 }
 
-const MULTIPLIER = [3, 2] as const;                 // first and second person to map a road+direction; then 1x
+const MULTIPLIER = [3, 2] as const;
+/** Octane each for an invite that led to real road data (IDEAS O-07): the inviter and the person they invited, once. */
+export const REFERRAL_OCTANE = 5;                 // first and second person to map a road+direction; then 1x
 
 async function hmac(env: Env, text: string): Promise<Uint8Array> {
   if (!env.PEPPER) throw new HttpError(503, "contribute_not_configured");
@@ -107,6 +109,20 @@ async function multiplierFor(env: Env, userId: string, c: Contribution): Promise
   return mult;
 }
 
+/**
+ * Referral (IDEAS O-07): a member who joined on someone's invite, on their first accepted road data, earns REFERRAL_OCTANE
+ * for themselves and their inviter, once. Only the request whose update flips the flag pays, so parallel chunks can't pay twice.
+ */
+async function payReferral(env: Env, userId: string, now: Date): Promise<void> {
+  const flip = await env.DB.prepare("UPDATE members SET referral_paid = 1 WHERE user_id = ? AND referral_paid = 0 AND invited_by IS NOT NULL RETURNING invited_by")
+    .bind(userId).first<{ invited_by: string }>();
+  if (!flip) return;
+  const week = isoWeek(now.getTime());
+  await env.DB.batch([userId, flip.invited_by].map((who) => env.DB.prepare(
+    `INSERT INTO points_ledger (user_id, iso_week, octane) SELECT ?1, ?2, ?3 WHERE EXISTS (SELECT 1 FROM members WHERE user_id = ?1)
+     ON CONFLICT (user_id, iso_week) DO UPDATE SET octane = octane + ?3`).bind(who, week, REFERRAL_OCTANE)));
+}
+
 export async function contribute(env: Env, v: Viewer, req: Request): Promise<{ accepted: true; bins: number; duplicate?: true }> {
   const opted = await env.DB.prepare("SELECT contribute FROM members WHERE user_id = ?").bind(v.id).first<{ contribute: number }>();
   if (!opted?.contribute) throw new HttpError(403, "contribution_not_enabled");
@@ -147,5 +163,6 @@ export async function contribute(env: Env, v: Viewer, req: Request): Promise<{ a
     if (await hasReceipt()) return { accepted: true, bins: c.bins.length, duplicate: true };
     throw new HttpError(503, "contribution_temporarily_unavailable");
   }
+  await payReferral(env, v.id, now);
   return { accepted: true, bins: c.bins.length };
 }

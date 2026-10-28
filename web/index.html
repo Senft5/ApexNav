@@ -46,6 +46,7 @@
   <script src="trip_stops.js"></script>
   <script src="route_weather.js"></script>
   <script src="conditional_closures.js"></script>
+  <script src="place_search.js"></script>
   <script src="incident.js"></script>
   <script src="traffic.js"></script>
   <script src="in_car.js"></script>
@@ -3218,7 +3219,7 @@
       let feats = await ask(`&bbox=${(near.lon - dLon).toFixed(3)},${(near.lat - dLat).toFixed(3)},${(near.lon + dLon).toFixed(3)},${(near.lat + dLat).toFixed(3)}`);
       if (!feats.length) feats = await ask('');
       const km = (lat, lon) => Math.hypot((lat - near.lat) * 111.2, (lon - near.lon) * 111.32 * Math.cos(near.lat * Math.PI / 180));
-      return feats.map(f => {
+      return feats.filter(ApexPlaceSearch.drivable).map(f => {             // no bike paths or footways (U-19)
         const p = f.properties || {}, c = (f.geometry || {}).coordinates || [];
         const name = p.name || [p.housenumber, p.street].filter(Boolean).join(' ') || q;
         const area = [p.city || p.town || p.village || p.county, p.state].filter(x => x && x !== name).join(', ');
@@ -3256,8 +3257,13 @@
       const q = $('destInput').value.trim(), seq = ++suggestSeq, box = $('placeList');
       let rows, empty = '';
       if (q.length >= 3 && !COORDS.test(q)) {
-        try { rows = (IN_APP_SHELL && await appleSuggest(q)) || await photonSuggest(q); } catch (_) { rows = []; empty = 'No suggestions offline. Press Go to search.'; }
+        // your own stages and spots by name first (U-19), then the map search
+        let segs = [];
+        try { segs = JSON.parse(localStorage.getItem('apex.segments') || '[]'); } catch (_) {}
+        const mine = ApexPlaceSearch.localMatches(q, segs, loadHighlights());
+        try { rows = (IN_APP_SHELL && await appleSuggest(q)) || await photonSuggest(q); } catch (_) { rows = []; if (!mine.length) empty = 'No suggestions offline. Press Go to search.'; }
         if (seq !== suggestSeq) return;                                  // a newer keystroke won
+        rows = [...mine, ...rows.filter((r) => !mine.some((m) => ApexPlaceSearch.norm(m.label) === ApexPlaceSearch.norm(r.label)))];
         if (!rows.length && !empty) empty = 'No matches nearby. Press Go to search everywhere.';
       } else {
         rows = [...ApexPinnedPlaces.list(localStorage).map(p => ({ label: p.name, lat: p.lat, lon: p.lon, kind: p.label, pinned: p })),
@@ -3699,7 +3705,7 @@
       if (pio && (pio.firsts || pio.seconds)) you.append(el('p', { className: 'note pioneer', textContent: [pio.firsts ? `Pioneer of ${pio.firsts} road${pio.firsts === 1 ? '' : 's'}` : '', pio.seconds ? `second to map ${pio.seconds}` : ''].filter(Boolean).join(' · ') }));
       const invOut = el('p', { className: 'note' });
       you.append(el('div', { className: 'row' },
-        btn('Invite someone', async () => { const r = await apiCall('POST', '/api/invites'); const j = await jsonOf(r); if (r.ok) copyText(j.url, 'Invite link copied. They\'ll be your friend the moment they join.'); else toast('Couldn\'t make an invite. Try again.'); }, 'ink-btn solid'),
+        btn('Invite someone', async () => { const r = await apiCall('POST', '/api/invites'); const j = await jsonOf(r); if (r.ok) copyText(j.url, 'Invite link copied. They\'ll be your friend the moment they join, and you both get 5 points when they first share road data.'); else toast('Couldn\'t make an invite. Try again.'); }, 'ink-btn solid'),
         btn('Share my handle', () => copyText(`${shareOrigin()}/?add=${me.handle}`, 'Link copied. Anyone who opens it can ask to be your friend.'))), invOut);
       body.append(you);
       if (convoy) body.append(convoy.section());
