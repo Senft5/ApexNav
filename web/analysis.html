@@ -77,6 +77,11 @@
     .dv-corner.on { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
     .dv-corner b { font-family: var(--font-num); color: var(--signal); } .dv-call { font-weight: 700; font-size: 14px; } .dv-v { font-family: var(--font-num); font-size: 13px; }
     .dv-d { grid-column: 2 / 4; font-size: 11px; color: var(--panel-dim); }
+    .dv-tip { grid-column: 2 / 4; font-size: 12px; line-height: 1.35; }
+    .dv-time { margin: 0 0 12px; padding: 0; list-style: none; display: grid; gap: 6px; }
+    .dv-time button { width: 100%; text-align: left; background: transparent; color: inherit; font: inherit; cursor: pointer; display: grid; grid-template-columns: auto 1fr auto; gap: 2px 10px; align-items: baseline; padding: 8px 10px; border: 1px solid var(--rule); }
+    .dv-time b { font-family: var(--font-num); color: var(--signal); } .dv-time em { font-style: normal; font-family: var(--font-num); }
+    .dv-time span.note { grid-column: 2 / 4; }
     /* One column on a phone: the map scrolls with the page (pinned, it covered everything scrolling under it). */
     @media (max-width: 760px) { .dv-grid { grid-template-columns: 1fr; } .dv-map { position: static; } }
     .seglist { display: grid; gap: 6px; }
@@ -576,7 +581,11 @@
         const r = Core.compareDrives(d, o);
         if (r.overlap_m >= 0.3 * d.dist[d.dist.length - 1] && r.matched_corners >= 3) { reference = { name: o.name, score: o.ds.score, corners: r.corners }; break; }
       }
-      dvView = ApexDriveView.mount($('dvRoot'), d, { Core, C, MPH, reference });
+      // corner coach: every other drive whose box overlaps this one is a candidate pass (Core.coach decides what is the same corner)
+      const box = (x) => { let a = Infinity, b = -Infinity, c = Infinity, e = -Infinity; for (let i = 0; i < x.lat.length; i++) { a = Math.min(a, x.lat[i]); b = Math.max(b, x.lat[i]); c = Math.min(c, x.lon[i]); e = Math.max(e, x.lon[i]); } return [a, b, c, e]; };
+      const bd = box(d), near = drives.filter(o => { if (o === d) return false; const b = box(o); return b[0] <= bd[1] && b[1] >= bd[0] && b[2] <= bd[3] && b[3] >= bd[2]; });
+      const coach = { ...Core.coach(d, near), others: near.map(o => ({ name: o.name, date: dateLabel(o) })) };
+      dvView = ApexDriveView.mount($('dvRoot'), d, { Core, C, MPH, reference, coach });
       renderRoadHistory(d);
       loadRoadFeel(d, dvView);
       $('dvNote').textContent = d.source === 'web-gps' ? 'recorded in the web app (GPS)' : d.source === 'imported' ? 'imported recording' : 'shipped example';

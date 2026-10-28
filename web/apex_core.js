@@ -556,6 +556,70 @@
     return { score: Math.round(1000 * raw), corners: uses.length,
              components: Object.fromEntries(Object.entries(comp).map(([k, x]) => [k, r4(x)])) };
   }
+  // Corner coach — port of core/drive_analysis.coach (parity-tested). Phases of each corner and the
+  // time lost to the person's own best clean pass of it; passes over the sane limit never count as best.
+  const COAST_G = 0.05, THROTTLE_G = 0.05, TRAIL_LAT_G = 0.20, THROTTLE_LOOKAHEAD = 20, TIP_SPEED_MPS = 0.9, TIP_BRAKE_M = 10,
+    TIP_COAST_M = 15, TIP_GAIN_S = 0.10, SOLO_COAST_M = 20, SOLO_EARLY_APEX_M = -15, SOLO_LATE_BRAKE_G = 0.25, TOP_OPPORTUNITIES = 3;
+  function cornerPhases(v, lonG, latG, start, end, apex, apexMps) {
+    const m = cornerMetrics(v, lonG, latG, start, end, apex, apexMps), n = v.length;
+    const lo = Math.max(0, apex - BRAKE_LOOKBACK), iMin = apex + Math.round(m.min_offset_m / 5);
+    let trail = 0;
+    for (let k = lo; k <= apex; k++) if (lonG[k] < BRAKE_G && Math.abs(latG[k]) >= TRAIL_LAT_G) trail++;
+    let kThr = null;
+    for (let k = iMin; k < Math.min(n, end + THROTTLE_LOOKAHEAD + 1); k++) if (lonG[k] > THROTTLE_G) { kThr = k; break; }
+    const b0 = m.brake_m === null ? start : apex - Math.round(m.brake_m / 5), b1 = kThr === null ? end : kThr;
+    let coast = 0;
+    for (let k = b0; k <= b1; k++) if (Math.abs(lonG[k]) < COAST_G) coast++;
+    let mn = Infinity;
+    for (let k = apex; k <= end; k++) mn = Math.min(mn, lonG[k]);
+    return { ...m, trail_m: trail * 5, coast_m: coast * 5, throttle_m: kThr === null ? null : (kThr - apex) * 5, late_brake_g: Math.max(0, -mn) };
+  }
+  function knownRun(d, lo, hi) {
+    for (let q = lo; q <= hi; q++) if (!Number.isFinite(d.speed_mps[q]) || (d.g_known && !d.g_known[q])) return false;
+    return true;
+  }
+  function coachTip(m, ref) {
+    if (ref) {
+      if (ref.min_mps - m.min_mps >= TIP_SPEED_MPS) return { kind: 'min_speed', value: ref.min_mps - m.min_mps };
+      if (m.brake_m !== null && ref.brake_m !== null && m.brake_m - ref.brake_m >= TIP_BRAKE_M) return { kind: 'brake_later', value: m.brake_m - ref.brake_m };
+      if (m.throttle_m !== null && ref.throttle_m !== null && m.throttle_m - ref.throttle_m >= TIP_BRAKE_M) return { kind: 'throttle_sooner', value: m.throttle_m - ref.throttle_m };
+      if (m.coast_m - ref.coast_m >= TIP_COAST_M) return { kind: 'coast', value: m.coast_m - ref.coast_m };
+      return null;
+    }
+    if (m.late_brake_g >= SOLO_LATE_BRAKE_G) return { kind: 'brake_after_apex', value: m.late_brake_g };
+    if (m.brake_m !== null && m.coast_m >= SOLO_COAST_M) return { kind: 'coast', value: m.coast_m };
+    if (m.min_offset_m <= SOLO_EARLY_APEX_M) return { kind: 'early_apex', value: -m.min_offset_m };
+    return null;
+  }
+  function coach(a, others) {
+    const hints = others.map(() => -1), out = [];
+    for (const c of a.corners) {
+      if (!Number.isFinite(c.apex_mps) || !knownRun(a, c.start, c.end)) { out.push({ apex: c.apex, m: null, best: null, gain_s: null, tip: null, passes: 0 }); continue; }
+      const ma = cornerPhases(a.speed_mps, a.lon_g, a.lat_g, c.start, c.end, c.apex, c.apex_mps);
+      if (ma.min_mps < STOPPED_MPS) { out.push({ apex: c.apex, m: ma, best: null, gain_s: null, tip: null, passes: 0 }); continue; }
+      let best = ma, bestFrom = -1, passes = 1;
+      others.forEach((b, j) => {
+        const w = matchWindow(a, c.start, c.end, b, hints[j]);
+        if (!w) return;
+        const [bs, be] = w;
+        hints[j] = be;
+        if (!knownRun(b, bs, be)) return;
+        const bApex = bs + Math.round((c.apex - c.start) * (be - bs) / Math.max(1, c.end - c.start));
+        const mb = cornerPhases(b.speed_mps, b.lon_g, b.lat_g, bs, be, bApex, c.apex_mps);
+        if (mb.min_mps < STOPPED_MPS) return;
+        passes++;
+        if (mb.envelope_use <= PACE_CEILING && mb.time_s < best.time_s) { best = mb; bestFrom = j; }
+      });
+      const gain = ma.time_s - best.time_s;
+      out.push({ apex: c.apex, m: ma, best: bestFrom < 0 ? null : best, best_from: bestFrom, gain_s: gain,
+                 tip: coachTip(ma, bestFrom >= 0 && gain >= TIP_GAIN_S ? best : null), passes });
+    }
+    const clean = out.filter(x => x.gain_s !== null);
+    const thisS = clean.reduce((s, x) => s + x.m.time_s, 0), gainS = clean.reduce((s, x) => s + x.gain_s, 0);
+    const top = out.map((x, k) => k).filter(k => out[k].gain_s !== null && out[k].gain_s >= TIP_GAIN_S)
+      .sort((p, q) => out[q].gain_s - out[p].gain_s || p - q).slice(0, TOP_OPPORTUNITIES);
+    return { corners: out, clean: clean.length, this_s: thisS, ideal_s: thisS - gainS, gain_s: gainS, top };
+  }
   function segmentWindow(seg, d) {
     const [i0, d0] = nearestIndexWin(seg.lat0, seg.lon0, d.lat, d.lon, -1);
     if (d0 > MATCH_RADIUS_M) return null;
@@ -600,7 +664,7 @@
     profileRecording,
     driverScore, segmentPass, segmentWindow,
     removeSpurs, retracedShare,
-    compareDrives, cornerMetrics, elapsedS,
+    compareDrives, cornerMetrics, elapsedS, cornerPhases, coach,
     G_STD, MPS_TO_MPH, ALPR_RADIUS_M,
     movingAverage, gradient, unwrap, localXY, resamplePolyline,
     computeCurvature, apexSpeedMps, effectiveMu, brakingEnvelopeMps, sightDistanceM, sightSpeedMps, SIGHT_MAX_M,

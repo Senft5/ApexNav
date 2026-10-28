@@ -39,6 +39,16 @@ The JS file is a line-for-line port used by the browser/iOS cockpit for live OSR
 - `core/live_pipeline.py` — causal 100 Hz pipeline the phone runs; Swift `ApexKit` is held to it by a generated fixture.
 - `core/drive_analysis.py` — private corner-by-corner pass comparison, Driver Score (0–1000) and custom
   segment passes; JS port in `web/apex_core.js` (plus `profileRecording` for app CSVs), parity-tested.
+- Corner coach (`corner_phases`, `coach`; JS `cornerPhases`, `coach`): per corner, on 5 m bins, the brake point (m before
+  the apex, a_lon < -0.15 g), trail braking (m braking with |a_lat| >= 0.20 g before the apex), coasting (m with
+  |a_lon| < 0.05 g from the brake point to the throttle point), the throttle point (first a_lon > 0.05 g from the slowest
+  point, m from the apex) and braking after the apex. Each corner is matched by location in the person's other drives
+  (same matcher as `compare`); the quickest clean pass is the reference, except a pass whose slowest point is over the
+  sane corner limit (envelope use > 1.0), which never counts. Time lost to the reference ranks the "Where to find time"
+  list; the sum of best passes is the ideal drive. One tip per corner, in priority order: slower at the slowest point
+  (>= 0.9 m/s), brake point earlier (>= 10 m), throttle later (>= 10 m), more coasting (>= 15 m); with no quicker pass,
+  braking after the apex (>= 0.25 g), coasting after braking (>= 20 m) or an early slowest point (>= 15 m). Corners
+  through a stop (< 2.5 m/s), blank speed or unmeasured g (`g_known`) are left out, never coached on zero-filled g.
 - Web shell: `web/index.html` (cockpit), `web/analysis.html` (history / segments / compare), `web/themes.js` (theme registry), `web/instruments.js` (renderers).
 
 ## 4. Data Honesty

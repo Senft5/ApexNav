@@ -17,8 +17,27 @@
     return { km: d.dist[n - 1] / 1000, duration_s: t[n - 1], top_mps: Math.max(...d.speed_mps), peak_lat_g: mx(d.lat_g), peak_brake_g: d.lon_g ? Math.max(0, -Math.min(...d.lon_g.filter(finite))) : null, climb_m: gain };
   }
 
+  const esc = (t) => String(t).replace(/[&<>"']/g, (ch) => `&#${ch.charCodeAt(0)};`);
+
+  /** One line of coaching for a Core.coach corner, or null. Units converted here only (metres, mph). */
+  function tipText(x, MPH) {
+    const t = x && x.tip;
+    if (!t) return null;
+    const m = Math.round(t.value);
+    switch (t.kind) {
+      case 'min_speed': return `Your best pass was ${Math.max(1, Math.round(t.value * MPH))} mph quicker at the slowest point`;
+      case 'brake_later': return `Brake ${m} m later, like your best pass`;
+      case 'throttle_sooner': return `Back on the throttle ${m} m sooner, like your best pass`;
+      case 'coast': return x.best ? `${m} m more coasting than your best pass` : `${m} m coasting between brake and throttle`;
+      case 'brake_after_apex': return `Still braking after the apex (${t.value.toFixed(2)} g)`;
+      case 'early_apex': return `Slowest ${m} m before the apex: turn in later`;
+      default: return null;
+    }
+  }
+
   function mount(root_, d, o) {
     const { Core, C, MPH } = o, ref = o.reference || null;        // ref: { name, score, corners[] } from Core.compareDrives(this, best other drive)
+    const co = o.coach || null;                                      // Core.coach(this, other drives) + others: [{ name, date }]
     const lost = (k) => { const r = ref && ref.corners[k]; return r && r.delta_s != null && !r.stopped ? -r.delta_s : null; };   // seconds this pass was slower than the reference
     const fmtD = (s) => (s == null ? '--' : `${s > 0.005 ? '+' : s < -0.005 ? '\u2212' : ''}${Math.abs(s).toFixed(2)} s`);
     root_.innerHTML = '';
@@ -34,11 +53,15 @@
       const v = comp && finite(comp[k]) ? Math.round(comp[k] * 100) : null;
       return `<div class="bar">${label} ${v != null ? v : '--'}<i><u style="width:${v != null ? v : 0}%"></u></i></div>`;
     };
+    // the ideal drive only means something once another pass of the same corners exists
+    const ideal = co && co.clean && co.corners.some((x) => x.passes > 1)
+      ? { gain: co.gain_s, n: co.clean, drives: new Set(co.corners.filter((x) => x.gain_s != null).map((x) => (x.best ? x.best_from : -1))).size } : null;
     const mi = finite(S.km) ? `${(S.km / 1.609344).toFixed(1)} mi` : '--';
     const dur = finite(S.duration_s) ? fmtT(S.duration_s) : '--';
     head.innerHTML = `<div class="dv-score"><b class="score big">${scoreVal}</b> <small>/1000</small></div>`
       + `<div class="bars">${bar('pace', 'Pace')}${bar('smoothness', 'Smooth')}${bar('braking', 'Brakes')}${bar('consistency', 'Rhythm')}</div>`
-      + `<div class="dv-meta">${mi} \u00b7 ${dur} \u00b7 ${d.corners.length} corners</div>`;
+      + `<div class="dv-meta">${mi} \u00b7 ${dur} \u00b7 ${d.corners.length} corners</div>`
+      + (ideal ? `<div class="dv-meta">Ideal drive <b class="gain">${ideal.gain.toFixed(2)} s</b> quicker: your best pass of each of ${ideal.n} corners, from ${ideal.drives} drive${ideal.drives === 1 ? '' : 's'}</div>` : '');
     root_.append(head, el('div', 'dv-grid'));
     const grid = root_.lastChild; grid.append(mapBox, el('div', 'dv-right'));
     const zoom = el('div', 'dv-zoom'); grid.lastChild.append(zoom, lanes, read);
@@ -168,10 +191,22 @@
     let net = null;
     if (ref) { const ks = d.corners.map((_, k) => lost(k)).filter((x) => x != null); net = ks.length ? ks.reduce((s, x) => s + x, 0) : null; }
     list.innerHTML = `<h2>Corners${ref ? ` \u00b7 compared with ${ref.name} (score ${ref.score}), your best other drive on this road` : ''}</h2>` + (ref ? `<p class="note" style="margin-bottom:8px">${net == null ? 'No clean corners to compare.' : `Over the ${d.corners.map((_, k) => lost(k)).filter((x) => x != null).length} corners both drives took cleanly, this drive was <b class="${net > 0.05 ? 'loss' : net < -0.05 ? 'gain' : ''}">${fmtD(net)}</b> ${net > 0 ? 'slower' : 'faster'}. Stops and traffic are left out.`}</p>` : '');
+    if (co && co.top.length) {                                      // where the time is: the biggest gaps to your own best passes
+      const ul = el('ol', 'dv-time');
+      for (const k of co.top) {
+        const x = co.corners[k], c = d.corners[k], from = x.best ? co.others[x.best_from] : null, li = el('li'), b = el('button');
+        b.innerHTML = `<b>${k + 1}</b><span>${esc(c.call || c.code || '')}</span><em class="loss">${fmtD(x.gain_s)}</em>`
+          + `<span class="note">${esc(tipText(x, MPH) || 'Same technique, quicker all the way through')}${from ? ` \u00b7 best pass ${esc(from.date)}` : ''}</span>`;
+        b.onclick = () => { if (zoomM) setZoom(zoomM, c.apex); move(c.apex); lanes.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); };
+        li.append(b); ul.append(li);
+      }
+      list.prepend(el('h2', null, 'Where to find time'), ul);
+    }
     const grid2 = el('div', 'dv-corners');
     d.corners.forEach((c, k) => {
       const r = el('button', 'dv-corner'); r.setAttribute('aria-label', `Corner ${k + 1}: ${c.call || c.code}, apex ${Math.round(c.apex_mps * MPH)} miles per hour`);
-      r.innerHTML = `<b>${k + 1}</b><span class="dv-call">${(c.call || c.code || '').toString()}</span><span class="dv-v">${Math.round(c.apex_mps * MPH)} mph</span><span class="dv-d">${(d.dist[c.apex] / 1609.344).toFixed(2)} mi${ref ? ` \u00b7 <em class="${lost(k) == null ? '' : lost(k) > 0.05 ? 'loss' : lost(k) < -0.05 ? 'gain' : ''}">${fmtD(lost(k))}</em>` : ''}</span>`;
+      r.innerHTML = `<b>${k + 1}</b><span class="dv-call">${(c.call || c.code || '').toString()}</span><span class="dv-v">${Math.round(c.apex_mps * MPH)} mph</span><span class="dv-d">${(d.dist[c.apex] / 1609.344).toFixed(2)} mi${ref ? ` \u00b7 <em class="${lost(k) == null ? '' : lost(k) > 0.05 ? 'loss' : lost(k) < -0.05 ? 'gain' : ''}">${fmtD(lost(k))}</em>` : ''}</span>`
+        + (co && tipText(co.corners[k], MPH) ? `<span class="dv-tip">${esc(tipText(co.corners[k], MPH))}</span>` : '');
       r.onclick = () => { if (zoomM) setZoom(zoomM, c.apex); move(c.apex); lanes.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); };
       grid2.append(r);
     });
@@ -200,6 +235,6 @@
     return { move, setRoadFeel, destroy() { ro.disconnect(); }, summary: S };
   }
 
-  const api = { mount, summarize };
+  const api = { mount, summarize, tipText };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexDriveView = api;
 })(typeof window !== 'undefined' ? window : globalThis);

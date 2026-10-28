@@ -95,3 +95,75 @@ def test_driver_score_leaves_out_corners_with_unknown_speed_or_limit():
     nolimit = [dict(d["corners"][0], apex_mps=float("nan"))]
     assert da.driver_score(d["speed_mps"], d["lon_g"], d["lat_g"], nolimit)["score"] is None
     assert whole is not None
+
+
+# ---------------------------------------------------------------------------
+# Corner coach
+# ---------------------------------------------------------------------------
+
+def _pass(corner_v=14.0, brake_from=65, throttle_at=None, lat_from=80):
+    d = _drive()
+    d["speed_mps"][75:100] = corner_v
+    d["lon_g"][:] = 0.0
+    d["lon_g"][brake_from:80] = -0.4
+    if throttle_at is not None:
+        d["lon_g"][throttle_at:110] = 0.2
+    d["lat_g"][:] = 0.0
+    d["lat_g"][lat_from:96] = 0.5
+    return d
+
+
+def test_corner_phases_read_trail_coast_and_throttle():
+    d = _pass(throttle_at=92, lat_from=75)
+    m = da.corner_phases(d["speed_mps"], d["lon_g"], d["lat_g"], 80, 96, 88, 15.0)
+    assert m["brake_m"] == pytest.approx(115.0)
+    assert m["trail_m"] == pytest.approx(25.0), "braking with lateral load on: bins 75-79"
+    assert m["throttle_m"] == pytest.approx(20.0), "back on the throttle 20 m after the apex"
+    assert m["coast_m"] == pytest.approx(60.0), "bins 80-91: off the brake, not yet on the throttle"
+    none = da.corner_phases(*(lambda p: (p["speed_mps"], p["lon_g"], p["lat_g"]))(_pass()), 80, 96, 88, 15.0)
+    assert none["throttle_m"] is None and none["trail_m"] == 0.0
+
+
+def test_coach_finds_the_time_against_your_own_best_pass():
+    a = _pass(corner_v=14.0)
+    slow = _pass(corner_v=13.0)
+    late_brake = _pass(corner_v=14.5, brake_from=72)
+    r = da.coach(a, [slow, late_brake])
+    c = r["corners"][0]
+    assert c["passes"] == 3 and c["best_from"] == 1
+    assert c["gain_s"] == pytest.approx(c["m"]["time_s"] - c["best"]["time_s"])
+    assert c["gain_s"] > da.TIP_GAIN_S
+    assert c["tip"] == {"kind": "brake_later", "value": pytest.approx(35.0)}
+    assert r["ideal_s"] == pytest.approx(r["this_s"] - r["gain_s"]) and r["top"] == [0]
+    quicker = _pass(corner_v=15.0)
+    assert da.coach(a, [quicker])["corners"][0]["tip"]["kind"] == "min_speed"
+
+
+def test_coach_never_takes_an_overdriven_pass_as_the_reference():
+    a = _pass(corner_v=14.0)
+    over = _pass(corner_v=16.5)                         # 110 % of the 15 m/s sane limit
+    r = da.coach(a, [over])
+    c = r["corners"][0]
+    assert c["passes"] == 2 and c["best"] is None and c["gain_s"] == 0.0 and r["top"] == []
+
+
+def test_coach_leaves_out_stops_and_unmeasured_g():
+    a = _pass()
+    stopped = _pass()
+    stopped["speed_mps"][90] = 0.3
+    assert da.coach(stopped, [a])["corners"][0]["gain_s"] is None
+    gap = dict(_pass(corner_v=15.0), g_known=[1] * len(a["lat"]))
+    gap["g_known"][85] = 0
+    r = da.coach(a, [gap])
+    assert r["corners"][0]["passes"] == 1, "a pass with blank g is no reference"
+    own_gap = dict(a, g_known=gap["g_known"])
+    assert da.coach(own_gap, [])["clean"] == 0
+
+
+def test_coach_alone_still_names_the_habit():
+    a = _pass()                                         # off the brake at 80, never back on the throttle
+    tip = da.coach(a, [])["corners"][0]["tip"]
+    assert tip["kind"] == "coast" and tip["value"] >= da.SOLO_COAST_M
+    late = _pass(throttle_at=84)
+    late["lon_g"][90:94] = -0.35                        # braking after the apex
+    assert da.coach(late, [])["corners"][0]["tip"]["kind"] == "brake_after_apex"
