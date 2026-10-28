@@ -47,6 +47,7 @@
   <script src="route_weather.js"></script>
   <script src="conditional_closures.js"></script>
   <script src="place_search.js"></script>
+  <script src="recce.js"></script>
   <script src="incident.js"></script>
   <script src="traffic.js"></script>
   <script src="in_car.js"></script>
@@ -1957,6 +1958,8 @@
     }
     function activate(t, startM = 0, { quiet = false } = {}) {
       if (!booting && !quiet) { replayOn = true; }
+      // your own notes from a recce drive (recce.js, IDEAS V-09) read on the same corners, same direction
+      try { if (window.ApexRecce && Array.isArray(t.events)) ApexRecce.apply(ApexRecce.load(localStorage), t); } catch (_) {}
       track = t;
       state.cursorM = Math.max(0, Math.min(totalM(), startM));
       refreshAutoNight();
