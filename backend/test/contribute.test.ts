@@ -150,6 +150,21 @@ describe("POST /api/contribute (real time)", () => {
     expect(await pts(c)).toEqual({ firsts: 0, seconds: 0 });
   });
 
+  it("pays a referral once, to both, on the invitee's first road data; never for a member who wasn't invited (IDEAS O-07)", async () => {
+    const { REFERRAL_OCTANE } = await import("../src/contribute");
+    const inviter = await makeUser("alice"), newbie = await makeUser("bob", false), plain = await makeUser("carol");
+    const { token } = (await (await ok(api(inviter, "POST", "/api/invites"))).json()) as { token: string };
+    await ok(api(newbie, "POST", "/api/invites/redeem", { token }));
+    await optIn(newbie, plain);
+    await ok(post(newbie, { drive_id: "drive-bob-001" }));                               // first on the road: 0.3 km x 3 = 0.9
+    expect(Math.round((await ledger(newbie.id)) * 100) / 100).toBe(0.9 + REFERRAL_OCTANE);
+    expect(await ledger(inviter.id)).toBe(REFERRAL_OCTANE);
+    await ok(post(newbie, { drive_id: "drive-bob-002", way_id: 555 }));                  // another road: no second referral
+    expect(await ledger(inviter.id)).toBe(REFERRAL_OCTANE);
+    await ok(post(plain, { drive_id: "drive-carol-01", way_id: 556 }));
+    expect(Math.round((await ledger(plain.id)) * 100) / 100).toBe(0.9);                 // not invited: no referral
+  });
+
   it("opposite directions and different roads rank separately", async () => {
     const [a, b] = [await makeUser("alice"), await makeUser("bob")]; await optIn(a, b);
     await ok(post(a)); await ok(post(b, { dir: 1, drive_id: "drive-bob-001" })); await ok(post(b, { way_id: 777, drive_id: "drive-bob-001" }));
