@@ -58,5 +58,5 @@
 
   const api = { scrub, reportOf, install, MAX_PER_PAGE };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
-  else { root.ApexErrors = api; if (root.addEventListener && root.fetch) install(); }
+  else { root.ApexErrors = api; if (root.addEventListener && root.fetch) api.reporter = install(); }   // reporter.sent: feedback diagnostics
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -130,7 +130,7 @@ ideal drive and where to find time (#80), grip circle (#86), automatic mount cal
 | D-17 | Incident detection: a crash-level spike plus stop asks "Are you OK?" and can alert a chosen contact | H | M | done (web/incident.js: ≥6 g while moving, at rest within 15 s, still 8 s; a minute unanswered shows Call 911/112 and a text with your location to the contact, which the driver sends. Native frames carry impact_g from the 100 Hz IMU) | Apple Crash Detection, Life360, REVER |
 | D-18 | Line analysis: early vs late apex per corner from the GPS line against the road geometry | M | M | partial (turn-in from lateral g vs your quicker pass, this thread; lane position needs better than phone GPS, D-13) | SOCIAL §3 |
 | D-19 | Car-specific reference lap from the Garage so scores mean the same across cars | H | M | todo | SOCIAL §2.4 |
-| D-20 | Weekly drive digest: km of good roads, new roads, best moment, one thing to work on | M | S | todo | Strava weekly, Whoop |
+| D-20 | Weekly drive digest: km of good roads, new roads, best moment, one thing to work on | M | S | done: the Log's Your week (`web/week_digest.js`): last 7 days, miles, new roads, best Score, one tip from the weakest of Smooth/Brakes/Rhythm (never pace) | Strava weekly, Whoop |
 | D-21 | Coach in plain words: one sentence per drive that a non-racer understands | H | S | done (#101) | owner goal (approachable) |
 | D-22 | Blank lat/lon g while the mount is `default`, like camber, so uncalibrated drives can't skew the score | M | S | done (#64 phone drives; the app's own CSV export too, this thread) | STATE 2026-10-26 |
 | D-23 | Drive tags and notes (car, passenger, weather, mood) to filter the Log | L | S | done: a drive's Tags and note (presets, your own tags, a note) on its IndexedDB record; the Log filters by tag chips (`web/drive_tags.js`); never sent | Strava |
@@ -364,4 +364,4 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 | L-02 | Zero-subscription model written down: one-time unlock, cosmetic Octane, or donations | H | S | owner (decision) | mission |
 | L-03 | Licence audit of every dependency and voice model before charging | H | S | done (THIRD_PARTY_NOTICES.md audit note; web/licenses.html ships the BSD/MIT notices in the app, linked from Settings; the website-only voice engine is never loaded in the app, guideline 2.5.2) | docs/VOICE.md licences |
 | L-04 | Attribution for OSM, OpenFreeMap, Valhalla, Nominatim, Photon, DeFlock, Kokoro (Settings → Sources and licences) | M | S | done | licences |
-| L-05 | Support channel and feedback button that attaches anonymous diagnostics | M | S | todo | — |
+| L-05 | Support channel and feedback button that attaches anonymous diagnostics | M | S | done: Settings → Feedback (`web/feedback.js`, `POST /api/feedback`, migration 0017), optional diagnostics (version from the app's user agent, device, screen, language, error count), handle only for a reply; owner list in Crew | — |

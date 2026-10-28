@@ -757,6 +757,27 @@ flow('flyby: a friend on the same stage that day shows on the drive, as text; ch
   await page.goto(base + '/analysis.html');
   await page.waitForSelector('#challengePanel:not([hidden])');
   check(/Drive 5 roads you haven't driven before · [12] of 5/.test(await page.textContent('#challengeList')), 'a new road this month');
+  check(/^\d+(\.\d)? mi in 1 drive · 1 new road/.test(await page.textContent('#weekLines')), 'your week: ' + await page.textContent('#weekLines'));
+});
+
+flow('feedback: Settings sends what you typed with the diagnostics, never a place (Worker stubbed, IDEAS L-05)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  let sent = null;
+  await page.route(base + '/api/**', (route) => {
+    const u = new URL(route.request().url());
+    if (u.pathname === '/api/feedback') { sent = JSON.parse(route.request().postData()); return route.fulfill({ status: 201, contentType: 'application/json', body: '{"id":1}' }); }
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(u.pathname === '/api/me' ? { signed_in: false } : []) });
+  });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.ApexFeedback && document.querySelector('#feedbackBox textarea'));
+  await page.click('.tab[data-view="setup"]');
+  await page.click('#feedbackBox button:has-text("An idea")');
+  await page.fill('#feedbackBox textarea', 'A night theme please');
+  await page.click('#feedbackBox button:has-text("Send")');
+  await page.waitForFunction(() => /Thanks/.test(document.getElementById('toast').textContent));
+  check(sent && sent.kind === 'idea' && sent.message === 'A night theme please' && sent.app === 'web' && !sent.reply, 'sent: ' + JSON.stringify(sent));
+  check(sent.diag && sent.diag.screen && !('lat' in sent.diag) && !('lon' in sent.diag), 'diagnostics without a place: ' + JSON.stringify(sent.diag));
+  check(await page.isHidden('#feedbackBox label:has-text("reply")'), 'no reply option signed out');
 });
 
 flow('the Log page opens', async (page, base) => {

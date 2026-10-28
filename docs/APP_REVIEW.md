@@ -22,6 +22,7 @@ Checked 2026-10-28 against main and App Store Connect (read through the API key 
 |---|---|
 | 5.1.1(v) account deletion in the app | Account → Delete account (`DELETE /api/me`, erases the account and what others hold about it) |
 | 5.1.1(ii) permission strings | location, always-location and motion strings in project.yml say what each is for |
+| 1.5 support | Settings → Feedback (L-05) sends to the owner in-app (GET /api/ops/feedback), with optional diagnostics and a handle only for a reply; the support URL and contact address still wait on the owner (O-11) |
 | 5.1.2 diagnostics | app health counts (Y-03) are anonymous daily totals with a switch in Settings → Your data, declared as Other diagnostic data, not linked (docs/LISTING.md) |
 | 5.1.2 data use and sharing | road data is opt-in (ROAD DATA switch), never coordinates or speeds (contributor.js), random private km at each trip end, privacy zones (Z-02) |
 | 1.2 user-generated content | block from every social surface, one report sheet, 3 reports hide an item, owner moderation queue (#120). Crew drives (S-06) are reportable too (kind `event`); remove cancels the drive. Spots near you (S-12, Crew) shows members' highlights as text with Report on every one not yours. Flyby (S-20) only re-shows friends' scores they already chose to show you |

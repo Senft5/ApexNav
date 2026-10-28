@@ -56,7 +56,8 @@ export async function deleteAccount(env: Env, v: Viewer, req: Request): Promise<
     run("DELETE FROM crews WHERE id = ?", id);
   }
   // crews they only belong to: nothing else of theirs remains there after the cascade below, but their grants/entries use user_id and cascade too
-  run("DELETE FROM highlights WHERE author_id = ?", v.id);          // their spots go with them (ratings by others on them cascade)
+  run("DELETE FROM highlights WHERE author_id = ?", v.id);
+  if (v.handle) run("UPDATE feedback SET handle = NULL WHERE handle = ?", v.handle);   // feedback stays, without who sent it (L-05)          // their spots go with them (ratings by others on them cascade)
   run("DELETE FROM users WHERE id = ?", v.id);                       // cascades: sessions, member, friendships, blocks, segments, grants, entries, ratings, pending uploads, points
   await env.DB.batch(stmts);
   return new Response(null, { status: 204, headers: { "set-cookie": cookie(SESSION_COOKIE, "", 0) } });
