@@ -122,7 +122,7 @@
     .edge-tab[aria-expanded="true"] { color: var(--accent); }
     .edge-panel { width: 236px; background: var(--panel); color: var(--panel-ink); border: 1px solid var(--rule); border-right: 0;
       padding: 8px 14px 4px; box-shadow: -8px 8px 24px rgba(0, 0, 0, 0.22); }
-    .edge-panel h3 { font-size: 12px; font-weight: 700; color: var(--panel-dim); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 2px; }
+    .edge-panel h3 { font-size: 13px; font-weight: 600; color: var(--panel-dim); margin-bottom: 2px; }
     #app.sheet-open .edge { display: none; }
     #recenterBtn { display: none; } #recenterBtn.show { display: block; }
     .toast { position: absolute; left: 50%; top: 12px; transform: translateX(-50%); z-index: 6; max-width: calc(100% - 32px);
@@ -198,6 +198,10 @@
     #switchRow { display: grid; gap: 0; }
     .sheet .sw, .edge-panel .sw { display: flex; flex-direction: row-reverse; justify-content: space-between; align-items: center; width: 100%; min-height: 48px; padding: 0; border-top: 1px solid var(--hair, var(--panel-dim)); }
     .sheet .sw span, .edge-panel .sw span { font-size: 15px; font-weight: 500; color: var(--panel-ink); }
+    /* In a list the switch is read at arm's length: a track big enough to see On from Off at a glance. */
+    .sheet .sw i, .edge-panel .sw i { width: 44px; height: 24px; flex: none; }
+    .sheet .sw i::after, .edge-panel .sw i::after { top: 3px; left: 3px; width: 15px; height: 15px; }
+    .sheet .sw.on i::after, .edge-panel .sw.on i::after { left: 23px; }
     .sw.on span { color: var(--panel-ink); }
     .sw-cycle { min-height: 44px; }
     .sw-cycle b { min-width: 30px; font-size: 11px; font-weight: 700; color: var(--accent); }
@@ -317,6 +321,10 @@
     .route-meta { font-size: 15px; font-weight: 600; color: var(--panel-ink); }
     .sources { font-size: 11px; color: var(--panel-dim); line-height: 1.5; }
     .sources a { color: inherit; }
+    /* Keyboard and switch-control users see where they are; touch taps show nothing extra. */
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .plan-search:focus-within { border-color: var(--panel-ink); }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: 0.01ms !important; animation: none !important; } }
   </style>
 </head>
 <body>
@@ -329,7 +337,7 @@
         <div class="plate" id="modePlate" role="status">Replay</div>
         <button class="plate" id="recenterBtn">Recenter</button>
       </div>
-      <div class="toast" id="toast"></div>
+      <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
       <section class="plan" id="planPanel" aria-label="Plan">
         <div class="plan-bar" id="planBar">
@@ -650,7 +658,7 @@
     let cluster = Inst.mountCluster($('cluster'), look.theme);
     function savePrefs() { try { localStorage.setItem('apex.prefs', JSON.stringify({ theme: state.theme, themeV: 2, camFeel: state.camFeel, voiceId: state.voiceId, liveVoice: state.liveVoice, liveVoiceV: 2, voiceName: state.voiceName, hlOn: state.hlOn, hlStrength: state.hlStrength, notesMode: state.notesMode, nightMode: state.nightMode, toggles: state.toggles })); } catch (_) {} }
     function paintSwitches() {
-      document.querySelectorAll('[data-toggle]').forEach(b => b.classList.toggle('on', !!state.toggles[b.dataset.toggle]));
+      document.querySelectorAll('[data-toggle]').forEach(b => { const on = !!state.toggles[b.dataset.toggle]; b.classList.toggle('on', on); b.setAttribute('role', 'switch'); b.setAttribute('aria-checked', String(on)); });
       document.querySelectorAll('[data-cycle]').forEach(b => { const v = state[b.dataset.cycle]; b.querySelector('b').textContent = MODE_LABEL[v]; b.setAttribute('aria-label', `${b.querySelector('span').textContent}: ${MODE_LABEL[v]}`); });
     }
     function applyTheme() {
@@ -2277,7 +2285,7 @@
       const badge = $('crewTab').querySelector('.badge'); if (badge) badge.remove();
       const params2 = new URLSearchParams(location.search);
       if (!me) {
-        body.append(el('h3', { textContent: 'Crew' }), el('p', { className: 'note', textContent: 'Friends and boards need a connection to the ApexNav server. Everything else works offline.' }));
+        body.append(el('h3', { textContent: 'Can\'t reach ApexNav' }), el('p', { className: 'note', textContent: 'Friends, crews and boards need a connection. Driving, notes and your Log work offline.' }), btn('Try again', redo, 'ink-btn'));
         return;
       }
       const inviteFromLink = params2.get('invite'), crewFromLink = params2.get('crew'), addFromLink = params2.get('add');
@@ -2286,7 +2294,7 @@
       const unstash = (k) => { try { sessionStorage.removeItem(k); } catch (_) {} };
       if (!me.signed_in) {
         body.append(el('img', { src: 'brand/logo.svg', alt: 'ApexNav', width: 200, style: 'max-width:60%' }),
-          el('h3', { textContent: 'Crew' }),
+          el('h3', { textContent: 'Drive with friends' }),
           el('p', { className: 'note', textContent: 'ApexNav is invite-only. Sign in to add friends, share scores and join boards. Nothing is shared unless you switch it on.' }),
           el('a', { className: 'ink-btn solid', href: '/api/auth/google/start', textContent: 'Sign in with Google', style: 'display:flex;align-items:center;justify-content:center;text-decoration:none' }));
         if (inviteFromLink || crewFromLink || addFromLink) { showView('crew'); }
@@ -2299,7 +2307,7 @@
           const r = await apiCall('POST', '/api/invites/redeem', { token });
           if (r.ok) { unstash('apex.invite'); toast('You\'re in. You and the person who invited you are now friends.'); redo(); } else toast('That invite didn\'t work. Ask for a new one.');
         };
-        body.append(el('h3', { textContent: 'Crew' }), el('p', { className: 'note', textContent: 'ApexNav is invite-only. Paste your invite.' }), el('div', { className: 'row' }, inp, btn('Join', join, 'ink-btn solid')),
+        body.append(el('h3', { textContent: 'Join with an invite' }), el('p', { className: 'note', textContent: 'ApexNav is invite-only. Paste your invite.' }), el('div', { className: 'row' }, inp, btn('Join', join, 'ink-btn solid')),
           btn('Sign out', async () => { await apiCall('POST', '/api/auth/logout'); ApexSync.setSession(null); redo(); }, 'linkbtn'));
         if (stash('apex.invite')) join();
         return;
@@ -2676,7 +2684,7 @@
     document.querySelectorAll('[data-toggle]').forEach(b => b.addEventListener('click', () => {
       const k = b.dataset.toggle;
       state.toggles[k] = !state.toggles[k];
-      b.classList.toggle('on', state.toggles[k]);
+      paintSwitches();
       if (k === 'lpr') updatePins();
       savePrefs();
       render(true);
@@ -2755,7 +2763,7 @@
     function paintAmbient() {
       const note = $('ambientNote'); if (!note) return;
       const a = ambientStats(), mi = a ? `${(a.km / 1.609344).toFixed(1)} mi shared since the app opened` : '';
-      note.textContent = !NATIVE_SHELL ? 'Shared while you drive (the app also shares whenever the phone is mounted).'
+      note.textContent = !NATIVE_SHELL ? 'Shared while you drive. In the iPhone app it also shares whenever the phone is mounted.'
         : ambient.allowed === false ? 'Off. Sign in and turn on Road data in Crew to share.'
         : !ambient.mounted ? 'Waiting for the phone to be calibrated in its mount.'
         : a && a.paused ? 'Paused: the server refused. Trying again in a few minutes.'
