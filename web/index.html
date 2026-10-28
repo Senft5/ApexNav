@@ -838,7 +838,7 @@
     let cluster = Inst.mountCluster($('cluster'), look.theme);
     // App health counts (IDEAS Y-03; web/health.js): yesterday's totals, anonymous, once a day; Settings → Your data switches it off.
     const health = window.ApexHealth ? ApexHealth.createHealth(localStorage,
-      async (b) => (await fetch(`${window.ApexSync ? ApexSync.apiBase : ''}/api/health`, { method: 'POST', credentials: 'omit', headers: { 'content-type': 'application/json', 'x-apexnav': '1' }, body: JSON.stringify(b) })).status,
+      async (b) => (await fetch(`${window.ApexSync ? ApexSync.apiBase : ''}/api/app-health`, { method: 'POST', credentials: 'omit', headers: { 'content-type': 'application/json', 'x-apexnav': '1' }, body: JSON.stringify(b) })).status,
       () => !!state.toggles.health) : { bump() {}, flush: async () => 0 };
     function savePrefs() { try { localStorage.setItem('apex.prefs', JSON.stringify({ theme: state.theme, themeV: 2, camFeel: state.camFeel, voiceId: state.voiceId, liveVoice: state.liveVoice, liveVoiceV: 2, voiceName: state.voiceName, hlOn: state.hlOn, hlStrength: state.hlStrength, notesMode: state.notesMode, noteWords: state.noteWords, nightMode: state.nightMode, toggles: state.toggles })); } catch (_) {} }
     function paintSwitches() {
@@ -3095,7 +3095,7 @@
     // Owner only (IDEAS Y-03): the week's app health totals, as rates where there is one (backend/src/health.ts). Anonymous.
     function healthSection() {
       const sec = el('div', { className: 'stack-8' }, el('h3', { textContent: 'App health this week' }));
-      apiCall('GET', '/api/ops/health?days=7').then(jsonOf).then((r) => {
+      apiCall('GET', '/api/ops/app-health?days=7').then(jsonOf).then((r) => {
         const rows = r && Array.isArray(r.rows) ? r.rows : null;
         if (!rows) { sec.append(el('p', { className: 'note', textContent: 'Couldn\'t load the counts.' })); return; }
         if (!rows.length) { sec.append(el('p', { className: 'note', textContent: 'No reports in the last 7 days.' })); return; }

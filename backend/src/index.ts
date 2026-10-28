@@ -44,8 +44,8 @@ on("GET", "/api/health", async (_req, env) => {
 // Anonymous crash reports (web/errors.js): scrubbed, logged and counted per day (no person in it). Rate limited per IP like any signed-out write.
 on("POST", "/api/errors", async (req, env) => { await clientError(req, env); return noContent(); });
 // Anonymous app health counts (web/health.js, IDEAS Y-03): yesterday's totals, once a day, no session read.
-on("POST", "/api/health", async (req, env) => { await healthReport(req, env); return noContent(); });
-on("GET", "/api/ops/health", async (req, env) => {
+on("POST", "/api/app-health", async (req, env) => { await healthReport(req, env); return noContent(); });
+on("GET", "/api/ops/app-health", async (req, env) => {
   if (!isModerator(env, await requireMember(req, env))) throw new HttpError(404, "not_found");
   return json(await healthSummary(env, new URL(req.url)));
 });

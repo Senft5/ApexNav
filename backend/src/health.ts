@@ -1,7 +1,7 @@
 // App health counts (IDEAS Y-03, web/health.js): each phone sends yesterday's totals of a few named events once a day,
 // anonymously (no session is read, nothing about the phone or a place is stored), when its Settings switch is on. They add
 // up per day, app and metric in health_counts, with how many reports added to each, so the owner reads rates: routing
-// failures per route asked, road uploads that failed, how long the mount takes to calibrate. Owner view: GET /api/ops/health.
+// failures per route asked, road uploads that failed, how long the mount takes to calibrate. Owner view: GET /api/ops/app-health.
 import { Env, HttpError, body } from "./util";
 
 /** The only metrics accepted; anything else in a report is ignored. Keep in step with web/health.js. */
