@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-1dRQ4Z/0Z9I6FcdhFaEV2RS6vgjLm+cr+kRr1vZw8BY=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-k7+QsnkCIT56kOHE/JxIco5XzZfj3wizJGOPwg2Gxmg=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>ApexNav · Log</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -31,6 +31,9 @@
   <script src="legends.js"></script>
   <script src="road_votes.js"></script>
   <script src="taste.js"></script>
+  <script src="flyover_video.js"></script>
+  <script src="save_file.js"></script>
+  <script src="dashcam.js"></script>
   <script src="recce.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -167,6 +170,7 @@
         <textarea class="mt-8" id="dvNoteText" maxlength="280" placeholder="A note for yourself (stays on this phone)" aria-label="Note"></textarea>
         <p class="note" id="dvTagsNote">Tags and notes stay on this phone. Filter the Log by them.</p></div>
       <div id="dvRoot"></div>
+      <div id="dvDashcam"></div>
       <div class="panel" id="dvRecce"><h2>Your notes</h2>
         <p class="note" id="dvRecceNote">Keep this drive's notes as yours, change any call, and the co-driver reads yours the next time you drive these corners this way. On this phone only.</p>
         <div class="actions" id="dvRecceActs"></div><div class="stack-8 mt-8" id="dvRecceList"></div></div>
@@ -910,6 +914,12 @@
       // corner coach: every other drive whose box overlaps this one is a candidate pass (Core.coach decides what is the same corner)
       const coach = coachFor(d);
       dvView = ApexDriveView.mount($('dvRoot'), d, { Core, C, MPH, reference, coach });
+      // a video from this drive with its numbers on it (dashcam.js, IDEAS D-11)
+      if (window.ApexDashcam && window.MediaRecorder && Array.isArray(d.speed_mps) && d.speed_mps.length > 20) {
+        const mk = (tag, props = {}, ...kids) => { const n = Object.assign(document.createElement(tag), props); n.append(...kids); return n; };
+        $('dvDashcam').replaceChildren(ApexDashcam.mount({ el: mk, Core, d, fmtSpeed: (v) => `${Math.round(ApexUnits.speed(v))} ${ApexUnits.speedU()}`,
+          save: (blob, name, type) => ApexSaveFile.saveFile(blob, name, type) }));
+      } else $('dvDashcam').replaceChildren();
       renderRoadHistory(d);
       loadRoadFeel(d, dvView);
       // The drive's name is the page title (you arrive from the Log list); the picker stays only as this view's state.

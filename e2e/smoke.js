@@ -1137,6 +1137,38 @@ flow('recce: keep a drive\'s notes, change a call, and the cockpit reads yours o
   await page.waitForFunction(() => /Left 3 tightens, care/.test(document.getElementById('notes').textContent), null, { timeout: 8000 });
 });
 
+flow('dashcam overlay: a video from the drive gets its speed, g and calls drawn on and comes out as a new video (IDEAS D-11)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/analysis.html');
+  await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && window.ApexRecording);
+  await page.evaluate(async () => {
+    const lat = [], lon = [];
+    for (let i = 0; i < 300; i++) { lat.push(35.6 + i * 5 / 110540); lon.push(-83.9); }
+    await ApexRecording.store({ id: 'dc1', name: 'Dashcam road', date: '2026-10-20T15:00:00Z', lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: lat.map(() => 15),
+      lon_g: lat.map(() => -0.1), lat_g: lat.map((_, i) => Math.sin(i / 10) * 0.3), g_known: null, elev: null, hz: 1, source: 'web-gps',
+      events: [{ type: 'corner', code: 'L4', call: 'Left 4', index: 100, dist_m: 500, start_m: 480, end_m: 520, radius_m: 80, apex_mph: 30, dir: 'L', severity: 4 }] });
+  });
+  await page.goto(base + '/analysis.html?drive=dc1');
+  await page.waitForSelector('#dvDashcam input[type=file]');
+  // a 2 s video made right here, put in the file box as if picked
+  await page.evaluate(async () => {
+    const c = Object.assign(document.createElement('canvas'), { width: 320, height: 180 }), g = c.getContext('2d');
+    const rec = new MediaRecorder(c.captureStream(15), { mimeType: 'video/webm' }), parts = [];
+    rec.ondataavailable = (e) => parts.push(e.data);
+    const stop = new Promise((ok) => { rec.onstop = ok; });
+    rec.start(); let f = 0; const t = setInterval(() => { g.fillStyle = `hsl(${f++ * 12},60%,50%)`; g.fillRect(0, 0, 320, 180); }, 66);
+    await new Promise((r) => setTimeout(r, 2000)); clearInterval(t); rec.stop(); await stop;
+    const file = new File(parts, 'dash.webm', { type: 'video/webm' }), dt = new DataTransfer(); dt.items.add(file);
+    const input = document.querySelector('#dvDashcam input[type=file]'); input.files = dt.files; input.dispatchEvent(new Event('change'));
+    window.__saved = null; ApexSaveFile.saveFile = async (blob, name, type) => { window.__saved = { size: blob.size, name, type }; return 'saved'; };
+  });
+  await page.waitForFunction(() => { const b = [...document.querySelectorAll('#dvDashcam button')].find((x) => /Make the video/.test(x.textContent)); return b && !b.disabled; }, null, { timeout: 8000 });
+  await page.evaluate(() => [...document.querySelectorAll('#dvDashcam button')].find((x) => /Make the video/.test(x.textContent)).click());
+  await page.waitForFunction(() => window.__saved, null, { timeout: 20000 });
+  const saved = await page.evaluate(() => window.__saved);
+  check(saved.size > 500 && /^Dashcam_road-dashcam-.*\.(webm|mp4)$/.test(saved.name), 'a new video: ' + JSON.stringify(saved));
+});
+
 flow('the Log page opens', async (page, base) => {
   await page.goto(base + '/analysis.html');
   await page.waitForLoadState('load');

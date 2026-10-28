@@ -7,6 +7,7 @@
 - This PR: R-12 set list, R-20 car-aware routing (migration 0024 cars.clearance/width_cm applied to both D1).
 - #210 also: Z-11 Content-Security-Policy on every page (tools/csp.py; rerun it after editing an inline script, CLAUDE.md says so).
 - Merged #215 also: Q-04 crowd curvature (migration 0027 applied), Q-03 asked of the owner, R-35 speed traps and S-07 comments dropped with reasons.
+- Next PR: D-11 dashcam overlay (web/dashcam.js); blocked IDEAS rows marked owner/parked with reasons.
 - This PR: F-02 offline map areas (web/offline_tiles.js, apexc:// protocol, IndexedDB).
 - Merged #222: D-10 flyover video (web/flyover_video.js) + in-app file saving through the share sheet (shareFile bridge; GPX and Download my data were silently doing nothing in the app).
 - Merged #221: Y-06 feature flags (/api/flags, web/flags.js, FLAGS variable; kill switches for track mode, taste, crowd curvature).
