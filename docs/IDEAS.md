@@ -131,7 +131,7 @@ ideal drive and where to find time (#80), grip circle (#86), automatic mount cal
 | D-18 | Line analysis: early vs late apex per corner from the GPS line against the road geometry | M | M | todo | SOCIAL §3 |
 | D-19 | Car-specific reference lap from the Garage so scores mean the same across cars | H | M | todo | SOCIAL §2.4 |
 | D-20 | Weekly drive digest: km of good roads, new roads, best moment, one thing to work on | M | S | todo | Strava weekly, Whoop |
-| D-21 | Coach in plain words: one sentence per drive that a non-racer understands | H | S | active (Deepen driver and road analysis) | owner goal (approachable) |
+| D-21 | Coach in plain words: one sentence per drive that a non-racer understands | H | S | done (#101) | owner goal (approachable) |
 | D-22 | Blank lat/lon g while the mount is `default`, like camber, so uncalibrated drives can't skew the score | M | S | done (#64 phone drives; the app's own CSV export too, this thread) | STATE 2026-10-26 |
 | D-23 | Drive tags and notes (car, passenger, weather, mood) to filter the Log | L | S | todo | Strava |
 | D-24 | Driving year in review (roads, regions, best corners, crews) | M | M | todo | Strava Year in Sport, Spotify Wrapped |
