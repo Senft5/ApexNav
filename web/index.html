@@ -2552,7 +2552,7 @@
     document.querySelectorAll('[data-toggle]').forEach(b => b.addEventListener('click', () => {
       const k = b.dataset.toggle;
       state.toggles[k] = !state.toggles[k];
-      b.classList.toggle('on', state.toggles[k]);
+      paintSwitches();
       if (k === 'lpr') updatePins();
       savePrefs();
       render(true);
