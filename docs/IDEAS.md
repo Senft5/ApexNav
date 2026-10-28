@@ -261,7 +261,7 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 | O-06 | Email link sign-in as a no-Google option | M | S | todo | docs/BACKEND.md |
 | O-07 | Referral: invite a friend into your crew, both get Octane | M | S | todo | Waze, Strava |
 | O-08 | Landing page with real screenshots, the four promises and TestFlight/Play links | H | S | todo | launch |
-| O-09 | App Store listing: screenshots, preview video, privacy nutrition label, keywords | H | M | owner (Apple account) | launch |
+| O-09 | App Store listing: screenshots, preview video, privacy nutrition label, keywords | H | M | partial (text, keywords, age rating and App Privacy answers drafted in docs/LISTING.md; the owner pastes them; screenshots to come) | launch |
 | O-10 | In-app "what's new" sheet after an update, one screen | L | S | todo | — |
 | O-11 | Privacy policy and terms of use pages, linked in Settings and at sign-in, policy URL in App Store Connect; terms carry the no-tolerance rule for objectionable content (guideline 1.2). Drafted from the real data flows, owner approves (Z-07) | H | S | partial (this PR: pages drafted and linked; owner approves the text and the contact line, then the URL goes into App Store Connect) | App Store guidelines 5.1.1(i), 1.2 |
 | O-12 | App Review access: a reviewer sign-in path that needs no invite, and review notes (drives need a car; replays show the cockpit) | H | S | partial (this PR: a long-lived review code, only its hash in the repo, makes a reviewer's account a member; the owner pastes the code and notes into App Store Connect) | App Store guideline 2.1 |
