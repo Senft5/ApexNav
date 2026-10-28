@@ -276,12 +276,53 @@ def test_browser_profiler_matches_the_exporter_on_a_real_drive():
     d = json.loads(text[text.index("push(") + 5:text.rindex(");")])
     seg = pd.DataFrame(d["rows"], columns=d["fields"]).fillna(0.0)
     _, _, events = profile_segments(seg.copy())
-    py = [(e["code"], e["call"], e["index"], e["link"]) for e in events if e["type"] == "corner"]
+    py = [(e["code"], e["call"], e["index"], e["link"]) for e in events]
+    assert {"BUMP", "CREST"} <= {p[0] for p in py}                                     # hazards are part of the comparison
     cols = {k: seg[k].tolist() for k in ("distance_m", "lat", "lon", "elevation_m", "speed_mph", "camber_deg",
-                                         "crest_vertical_g", "roughness_rms")}
+                                         "crest_vertical_g", "roughness_rms", "vert_peak_g")}
     runner = ("const c=require(process.argv[1]);const cols=JSON.parse(require('fs').readFileSync(0,'utf8'));"
-              "process.stdout.write(JSON.stringify(c.profileRecording(cols).events.map(e=>[e.code,e.call,e.index])));")
+              "process.stdout.write(JSON.stringify(c.profileRecording(cols).events.map(e=>[e.code,e.call,e.index,e.link])));")
     out = subprocess.run([NODE, "-e", runner, os.path.abspath("web/apex_core.js")], input=json.dumps(cols),
                          capture_output=True, text=True, check=True)
     js = [tuple(j) for j in json.loads(out.stdout)]
-    assert js == [p[:3] for p in py]
+    assert js == py
+
+
+def test_parity_hazards():
+    rng = np.random.default_rng(7)
+    n = 900
+    dist = np.arange(n) * 5.0
+    rough = 0.03 + 0.01 * rng.random(n)
+    rough[400:480] = 0.2                                                               # broken pavement: no spike calls
+    peak = 0.1 + 0.05 * rng.random(n)
+    peak[[100, 104, 300, 450, 700]] = [0.5, 0.8, 0.3, 0.9, 1.1]                       # cluster, sub-threshold, low contrast, two real
+    crest = 0.03 * np.sin(dist / 80.0)
+    crest[[200, 220, 600]] = [-0.12, -0.2, 0.15]
+    cases = [(peak, True), (None, True), (None, False)]
+    runner = ("const c=require(process.argv[1]);const {dist,crest,rough,cases}=JSON.parse(require('fs').readFileSync(0,'utf8'));"
+              "process.stdout.write(JSON.stringify(cases.map(([p,fb])=>c.detectHazards(dist,crest,rough,p,{roughFallback:fb}))));")
+    payload = {"dist": dist.tolist(), "crest": crest.tolist(), "rough": rough.tolist(),
+               "cases": [[None if p is None else p.tolist(), fb] for p, fb in cases]}
+    out = subprocess.run([NODE, "-e", runner, os.path.abspath("web/apex_core.js")], input=json.dumps(payload),
+                         capture_output=True, text=True, check=True)
+    js = json.loads(out.stdout)
+    with_peak = rd.detect_hazards(dist, crest, rough, peak)
+    assert [(h["index"], h["type"]) for h in with_peak] == [(104, "bump"), (220, "crest"), (600, "dip"), (700, "bump")]
+    fallback = rd.detect_hazards(dist, crest, rough)
+    for got, want in zip(js[:2], [with_peak, fallback]):
+        assert [(h["index"], h["type"]) for h in got] == [(h["index"], h["type"]) for h in want]
+        assert [h["severity_g"] for h in got] == pytest.approx([h["severity_g"] for h in want], rel=1e-12)
+    assert [h["type"] for h in js[2]] == ["crest", "dip"]                              # no roughness stand-in for spikes
+
+
+def test_hazards_ignore_unmeasured_samples():
+    n = 200
+    nan = float("nan")
+    payload = {"dist": [i * 5.0 for i in range(n)], "crest": [nan] * n, "rough": [nan] * 100 + [0.03] * 100,
+               "peak": [nan] * 50 + [0.9] + [nan] * 49 + [0.05] * 50 + [0.9] + [0.05] * 49}
+    runner = ("const c=require(process.argv[1]);const p=JSON.parse(require('fs').readFileSync(0,'utf8').replace(/NaN/g,'null'));"
+              "process.stdout.write(JSON.stringify(c.detectHazards(p.dist,p.crest,p.rough,p.peak)));")
+    out = subprocess.run([NODE, "-e", runner, os.path.abspath("web/apex_core.js")], input=json.dumps(payload),
+                         capture_output=True, text=True, check=True)
+    # the spike at 50 has no measured roughness around it to stand out from; the one at 150 does
+    assert [(h["index"], h["type"]) for h in json.loads(out.stdout)] == [(150, "bump")]

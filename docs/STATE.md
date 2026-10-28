@@ -22,6 +22,7 @@
 - Reviewed by code-review subagents (phantom gains from GPS alignment, tips from zero-filled g, braking from the previous corner, skewed slices: all fixed with tests). Checked in headless Chromium at 390 px with the shipped drives stored as recordings.
 - Not verified on a phone: any of the above with real drives; the coach needs two or more drives of the same road to show an ideal drive. Road-feel confidence needs a signed-in member and real multi-pass data, so it has only been checked with stubbed data in tests.
 - Pothole evidence on phone drives: the live pipeline keeps the largest >8 Hz vertical spike (`vert_peak`, Swift `vertPeakMps2`, fixture regenerated); the app sends it per frame as `vert_peak_g` and its own CSV writes it per node (blank unless locked and rolling); the web Recorder places each frame's spike on its 5 m sample (column `vert_peak_g`). Not yet used for detection.
+- Pothole confirmation: phone drives now get bump/crest/dip calls from what they measured (`detectHazards`, parity with road_dna; no roughness-only bumps), and each hazard is labelled from your other drives of the same spot and direction: "Confirmed on N of M drives", "Seen on 1 of M drives", "Driven once". Analysis page and the route toast count only corners as corners.
 - Exact next task: use corner phases in live coaching (spoken "brake later" on a known road), feed agreement into routing (WORKER_QUEUE road-3: trust only agreeing measurements), and corroborated hazards ("Confirmed" pothole when passes agree).
 
 ## Session 2026-10-28: loops the length you asked for
