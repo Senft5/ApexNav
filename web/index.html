@@ -320,6 +320,7 @@
     .sheet header { display: flex; justify-content: space-between; align-items: center; padding: calc(14px + var(--safe-top)) 16px 14px; border-bottom: 1px solid var(--rule); }
     .sheet header h2 { font-size: 22px; font-weight: 700; font-family: var(--font-num); }
     .sheet .body { overflow-y: auto; padding: 14px 16px 24px; display: grid; gap: 20px; }
+    .sheet .body { zoom: var(--type-scale, 1); }   /* the phone's text size (format.js applyTypeScale) */
     .sheet h3, .plan h3 { font-size: 18px; font-weight: 700; font-family: var(--font-num); border-top: 1px solid var(--hair, var(--panel-dim)); padding-top: 12px; margin-bottom: 8px; }
     .sheet p.note.err, .plan p.note.err { color: var(--accent); }
     /* The sheet header already draws a rule: the first heading under it doesn't draw a second. */
@@ -512,7 +513,7 @@
       <div class="transport" id="transport">
         <button class="key" id="playBtn">Play</button>
         <button class="key" id="rateBtn">1X</button>
-        <div class="scrubber" id="scrubber"><canvas id="scrubCanvas"></canvas></div>
+        <div class="scrubber" id="scrubber" role="slider" tabindex="0" aria-label="Replay position" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><canvas id="scrubCanvas" aria-hidden="true"></canvas></div>
       </div>
       <div id="cluster"></div>
       <nav class="tabbar" id="tabbar" aria-label="Views">
@@ -718,6 +719,8 @@
     state.voiceStyle = state.voiceId === 'jarvis' ? 'jarvis' : 'codriver';
 
     let look = Themes.apply(state.theme, state.toggles.night);
+    ApexFormat.applyTypeScale(document);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) ApexFormat.applyTypeScale(document); });   // text size changed in Settings
     state.theme = look.theme.id;   // a retired or unknown saved theme resolves to the one it maps to
     let cluster = Inst.mountCluster($('cluster'), look.theme);
     function savePrefs() { try { localStorage.setItem('apex.prefs', JSON.stringify({ theme: state.theme, themeV: 2, camFeel: state.camFeel, voiceId: state.voiceId, liveVoice: state.liveVoice, liveVoiceV: 2, voiceName: state.voiceName, hlOn: state.hlOn, hlStrength: state.hlStrength, notesMode: state.notesMode, nightMode: state.nightMode, toggles: state.toggles })); } catch (_) {} }
@@ -1236,12 +1239,21 @@
     // 5. SCRUBBER (pace profile = braking envelope, elevation behind it)
     // =======================================================================
     const scrubCanvas = $('scrubCanvas'), sctx = scrubCanvas.getContext('2d');
+    // What VoiceOver reads on the scrubber: "2.4 of 35.6 mi". Set only when the words change.
+    function paintScrubValue() {
+      const T = totalM(), at = Math.max(0, Math.min(T, state.cursorM || 0));
+      const text = `${(at / 1609.344).toFixed(1)} of ${(T / 1609.344).toFixed(1)} mi`, el = $('scrubber');
+      if (el.getAttribute('aria-valuetext') === text) return;
+      el.setAttribute('aria-valuetext', text);
+      el.setAttribute('aria-valuenow', String(T > 0 ? Math.round(at / T * 100) : 0));
+    }
     function drawScrubber() {
       const r = scrubCanvas.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
       const w = Math.max(10, Math.round(r.width * dpr)), h = Math.max(10, Math.round(r.height * dpr));
       if (scrubCanvas.width !== w || scrubCanvas.height !== h) { scrubCanvas.width = w; scrubCanvas.height = h; }
       sctx.clearRect(0, 0, w, h);
       if (!track) return;
+      paintScrubValue();
       const C = look.colors, n = track.dist.length, T = totalM(), step = Math.max(1, Math.floor(n / w)), xOf = (m) => (m / T) * w;
       if (track.elev) {
         let lo = Infinity, hi = -Infinity;
@@ -3297,6 +3309,20 @@
     scrubber.addEventListener('pointerdown', (e) => { scrubbing = true; scrubber.setPointerCapture(e.pointerId); scrubTo(e.clientX); });
     scrubber.addEventListener('pointermove', (e) => { if (scrubbing) scrubTo(e.clientX); });
     scrubber.addEventListener('pointerup', () => { scrubbing = false; });
+    // Keys (and VoiceOver's adjust gesture where it sends them): arrows step 2 %, Page keys 10 %, Home / End.
+    scrubber.addEventListener('keydown', (e) => {
+      if (!track || state.mode === 'live') return;
+      const T = totalM(), step = { ArrowRight: 0.02, ArrowUp: 0.02, ArrowLeft: -0.02, ArrowDown: -0.02, PageUp: 0.1, PageDown: -0.1 }[e.key];
+      let m;
+      if (step !== undefined) m = state.cursorM + step * T;
+      else if (e.key === 'Home') m = 0;
+      else if (e.key === 'End') m = T;
+      else return;
+      e.preventDefault();
+      state.cursorM = Math.max(0, Math.min(T, m));
+      state.spoken.clear(); resumeFollow();
+      render(true);
+    });
 
     document.querySelectorAll('[data-toggle]').forEach(b => b.addEventListener('click', () => {
       const k = b.dataset.toggle;

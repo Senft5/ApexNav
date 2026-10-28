@@ -24,6 +24,9 @@
     input, textarea, select { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; font-size: max(16px, 1em); }
     /* The page scrolls inside body: the iOS shell disables the web view's own scroll view (the map page must not rubber-band). */
     html { height: 100%; overflow: hidden; } body { height: 100%; overflow-y: auto; overscroll-behavior-y: none; -webkit-overflow-scrolling: touch; }
+    /* The phone's text size (format.js applyTypeScale) on the text blocks; charts and the stage strip measure their
+       own width and stay unzoomed, so they still fit and track the finger. */
+    #tab-history > :not(#trendPanel):not(#steadyPanel), #tab-segments > .bar-top, #segList, #segDetail table, #tab-segments .more > summary, #contribPanel { zoom: var(--type-scale, 1); }
     main { max-width: 1180px; margin: 0 auto; padding: calc(14px + env(safe-area-inset-top, 0px)) 16px calc(80px + env(safe-area-inset-bottom, 0px)); display: grid; gap: 18px; }
     h2 { font-size: 18px; font-weight: 700; font-family: var(--font-num); margin-bottom: 8px; }
     a { color: inherit; }
@@ -104,7 +107,7 @@
     @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; animation: none !important; transition: none !important; } }
     [hidden] { display: none !important; }
     a.back { display: inline-flex; align-items: center; min-height: 44px; font-size: 15px; font-weight: 600; text-decoration: none; color: var(--panel-dim); }
-    .bar-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-height: 44px; }   /* page titles sit at the same height on every tab */
+    .bar-top { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; min-height: 44px; }   /* page titles sit at the same height on every tab */
     label.btn { display: inline-flex; align-items: center; cursor: pointer; }
     details.more { border-top: 1px solid var(--rule); margin-top: 12px; }
     details.more summary { min-height: 44px; display: flex; align-items: center; font-size: 15px; font-weight: 600; cursor: pointer; list-style: none; }
@@ -220,6 +223,8 @@
     try { prefs = Object.assign(prefs, JSON.parse(localStorage.getItem('apex.prefs') || 'null') || {}); if (prefs.themeV !== 2) prefs.theme = 'roadbook'; } catch (_) {}
     const params = new URLSearchParams(location.search);
     const look = window.ApexThemes.apply(params.get('theme') || prefs.theme, params.has('night') ? params.get('night') === '1' : !!(prefs.toggles && prefs.toggles.night));
+    window.ApexFormat.applyTypeScale(document);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) window.ApexFormat.applyTypeScale(document); });   // text size changed in Settings
     const C = look.colors;
 
     // ---------------------------------------------------------------------
