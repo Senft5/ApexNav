@@ -26,6 +26,7 @@ import { pointsFor } from "./points";
 import { roadBins } from "./roads";
 import { eventCancel, eventCreate, eventRsvp, eventsList, eventsNear } from "./events";
 import { healthReport, healthSummary } from "./health";
+import { feedbackCreate, feedbackDone, feedbackList } from "./feedback";
 import { etaStart, etaUpdate, etaView } from "./eta_share";
 import { highlightCreate, highlightDelete, highlightList, highlightRate } from "./highlights";
 export { ConvoyIndex, ConvoyRoom } from "./convoy";
@@ -49,6 +50,17 @@ on("POST", "/api/app-health", async (req, env) => { await healthReport(req, env)
 on("GET", "/api/ops/app-health", async (req, env) => {
   if (!isModerator(env, await requireMember(req, env))) throw new HttpError(404, "not_found");
   return json(await healthSummary(env, new URL(req.url)));
+});
+// Feedback (IDEAS L-05): anyone may send it; the owner reads it.
+on("POST", "/api/feedback", async (req, env) => json(await feedbackCreate(req, env, await viewer(req, env)), 201));
+on("GET", "/api/ops/feedback", async (req, env) => {
+  if (!isModerator(env, await requireMember(req, env))) throw new HttpError(404, "not_found");
+  return json(await feedbackList(env));
+});
+on("POST", "/api/ops/feedback/:id/done", async (req, env, m) => {
+  if (!isModerator(env, await requireMember(req, env))) throw new HttpError(404, "not_found");
+  await feedbackDone(env, m.groups!.id);
+  return noContent();
 });
 on("GET", "/api/ops/errors", async (req, env) => {
   if (!isModerator(env, await requireMember(req, env))) throw new HttpError(404, "not_found");

@@ -40,6 +40,7 @@
   <script src="eta_share.js"></script>
   <script src="route_import.js"></script>
   <script src="spots_feed.js"></script>
+  <script src="feedback.js"></script>
   <script src="incident.js"></script>
   <script src="traffic.js"></script>
   <script src="in_car.js"></script>
@@ -530,6 +531,11 @@
               <input class="field" id="crashName" autocomplete="off" maxlength="40" placeholder="Contact name" aria-label="Emergency contact name">
               <input class="field" id="crashPhone" type="tel" autocomplete="off" maxlength="24" placeholder="Phone number" aria-label="Emergency contact phone number">
             </div>
+          </section>
+          <section data-panel="setup">
+            <h3>Feedback</h3>
+            <p class="note" style="margin:0 0 8px">Something wrong, or an idea? It goes straight to the person who makes ApexNav.</p>
+            <div class="stack-8" id="feedbackBox"></div>
           </section>
           <section data-panel="setup">
             <h3>Your data</h3>
@@ -3495,6 +3501,15 @@
       goTo: (p) => { closeSheet(); routeToPlace(p); }, openRoute: (id) => openSharedRoute(id),
       startConvoy: (name, handles) => (convoy && convoy.startFor ? convoy.startFor(name, handles) : Promise.resolve({ ok: false, status: 0 })),
     }) : null; } catch (e) { console.error('crew drives', e); }
+    // Send feedback (web/feedback.js, IDEAS L-05): Settings → Feedback; the owner reads it in Crew.
+    let accountMe = null, feedbackUi = null;
+    try {
+      feedbackUi = window.ApexFeedback ? ApexFeedback.mount($('feedbackBox'), { el, btn, toast, apiFetch: (...a) => ApexSync.apiFetch(...a), app: ApexSync.inApp ? 'ios' : 'web',
+        signedIn: () => !!accountMe,
+        env: () => ({ ua: navigator.userAgent, w: screen.width, h: screen.height, lang: navigator.language, page: location.pathname,
+                      errors: window.ApexErrors && ApexErrors.reporter ? ApexErrors.reporter.sent : undefined,
+                      online: navigator.onLine }) }) : null;
+    } catch (e) { console.error('feedback', e); }
     // Spots near you (web/spots_feed.js, IDEAS S-12): members' shared spots, rated, filtered by kind; Go there plans the way.
     let spotsFeed = null;
     try { spotsFeed = window.ApexSpotsFeed ? ApexSpotsFeed.mount({ el, btn, toast, sync: window.ApexSync, report: safety && safety.report,
@@ -3511,8 +3526,11 @@
     async function renderAccount() {
       const body = $('accountBody'), gen = ++renderGen;
       let me = null;
+      accountMe = null;
       try { const r = await apiCall('GET', '/api/me'); if (r.ok && (r.headers.get('content-type') || '').includes('json')) me = await r.json(); } catch (_) {}
       if (gen !== renderGen) return;
+      accountMe = me && me.signed_in ? me : null;
+      if (feedbackUi) feedbackUi.refresh();
       body.innerHTML = '';
       const redo = () => renderAccount();
       const badge = $('crewTab').querySelector('.badge'); if (badge) badge.remove();
@@ -3800,7 +3818,7 @@
         btn('Delete account', deleteMyAccount, 'danger-btn'));
       body.append(asec);
       if (safety) { body.append(safety.blockedSection()); if (me.moderator) body.append(safety.moderationSection()); }
-      if (me.moderator) body.append(errorsSection(), healthSection());
+      if (me.moderator) body.append(errorsSection(), healthSection(), ...(window.ApexFeedback ? [ApexFeedback.ownerSection({ el, btn, apiCall, jsonOf })] : []));
     }
 
     // Highlights (local for now): [{id, name, lat, lon, rating}] in localStorage; the server list joins later (docs/BACKEND.md section 9).

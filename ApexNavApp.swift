@@ -251,6 +251,9 @@ struct ApexCockpitWebView: UIViewRepresentable {
         config.userContentController = contentController
         config.allowsInlineMediaPlayback = true
         config.mediaTypesRequiringUserActionForPlayback = []
+        // The page reads the app's version from its user agent for feedback diagnostics (IDEAS L-05, web/feedback.js).
+        let info = Bundle.main.infoDictionary
+        config.applicationNameForUserAgent = "ApexNav/\(info?["CFBundleShortVersionString"] as? String ?? "?") (\(info?["CFBundleVersion"] as? String ?? "?"))"
         config.setURLSchemeHandler(ApexBundleSchemeHandler(root: indexURL.deletingLastPathComponent()),
                                    forURLScheme: ApexWebBundle.scheme)
         Self.enableLocalFileAccess(config)
