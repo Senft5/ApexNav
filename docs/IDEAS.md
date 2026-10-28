@@ -175,7 +175,7 @@ adaptive notes (cruise vs spirited), car audio routing to Bluetooth/CarPlay (#73
 
 | id | idea | impact | effort | status | from |
 |---|---|---|---|---|---|
-| V-01 | Note timing from your speed and reaction, not a fixed ~5 s; learned per driver | H | M | todo | rally co-drivers |
+| V-01 | Note timing from your speed and reaction, not a fixed ~5 s; learned per driver | H | M | done (this PR: lead = time to say the note + your reaction + braking from your speed to the corner's at 0.35 g, 60–600 m; reaction learned from when you brake after a call, kept on the phone) | rally co-drivers |
 | V-02 | Note density levels a novice understands ("gentle left" vs "left 4 minus") | H | M | todo | owner goal (approachable) |
 | V-03 | Hazard speech always pre-empts ordinary notes, never stale, never duplicated | H | S | done (this PR: web/speech_queue.js; hazards first and cut off an ordinary line, passed or old lines dropped, keyed lines never twice; the app gets one line at a time) | WORKER_QUEUE convoy-2 |
 | V-04 | Turn-by-turn and pace notes in one voice stream so transit directions never collide with notes | H | M | todo | Waze/Google voice |

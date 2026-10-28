@@ -23,6 +23,7 @@
   <script src="reroute.js"></script>
   <script src="eta.js"></script>
   <script src="speech_queue.js"></script>
+  <script src="note_timing.js"></script>
   <script src="traffic.js"></script>
   <script src="in_car.js"></script>
   <script src="power.js"></script>
@@ -1515,6 +1516,13 @@
 
     // Where a note is due: a corner's entry (turn-in), not its apex, so the call and the countdown come before you turn
     // (owner 2026-10-28: "called out in reference to the apex rather than the entry"). Hazards are a point: entry = apex.
+    // Your reaction to a call, learned from when you start braking after one (note_timing.js), kept on this phone.
+    const REACT_KEY = 'apex.reactionS';
+    const reaction = ApexNoteTiming.createReactionLearner((() => { try { return Number(localStorage.getItem(REACT_KEY)) || undefined; } catch (_) { return undefined; } })());
+    function feedReaction(frame) {
+      const learned = reaction.frame(performance.now(), frame.lon_g);
+      if (learned != null) { try { localStorage.setItem(REACT_KEY, learned.toFixed(2)); } catch (_) {} }
+    }
     const noteM = (e) => (Number.isFinite(e.start_m) && e.start_m <= e.dist_m ? e.start_m : e.dist_m);
     function updateNotes(vMps, live) {
       // Driving somewhere that is not on the loaded route: its calls (and its stale trip distance) must never be read out as if they were this road.
@@ -1531,16 +1539,22 @@
       Inst.renderNotes($('notes'), look.theme, notes);
 
       if (!(state.playing || live) || vMps == null) return;
-      const lead = Math.max(60, Math.min(250, vMps * 5));
+      // How far ahead to read a note (note_timing.js, IDEAS V-01): time to say it, your reaction (learned), and braking from
+      // your speed to the corner's. `lead` is the point-hazard version (no braking), also used by the quiet-window checks below.
+      const reactS = reaction.reactionS;
+      const lead = ApexNoteTiming.leadM({ vMps, text: 'Bump ahead', reactionS: reactS });
       for (const e of ev) {
         const d = noteM(e) - state.cursorM;
-        if (d > lead) break;
+        if (d > ApexNoteTiming.MAX_M) break;
         const key = `${track.id}:${e.type}:${e.index}`;
         if (state.spoken.has(key) || d < 10) continue;
+        const call = chainedCall(e, ev, spirited);
+        const apexMps = e.type === 'corner' && Number.isFinite(e.apex_mph) ? e.apex_mph / 2.2369362921 : null;
+        if (d > ApexNoteTiming.leadM({ vMps, apexMps, text: call.text, reactionS: reactS })) continue;
         state.spoken.add(key);
         if (e.type === 'corner' ? !spirited : !(spirited || noteworthyInCruise(e))) continue;
-        const call = chainedCall(e, ev, spirited);
         say(call.text, false, call.chain, null, { kind: e.type === 'corner' ? 'ordinary' : 'hazard', key, atM: noteM(e) });
+        if (live) reaction.called(performance.now(), call.text, ApexNoteTiming.needsBrake(vMps, apexMps));
       }
       // Roads you have driven: one technique tip per remembered corner, only with full notes on (never over a commute),
       // moving on a fresh heading, and only when it ends before any call is due: it starts MEMO_S of driving beyond the
@@ -3921,6 +3935,7 @@
         state.lastMotion = { heading: Number.isFinite(frame.course_deg) ? frame.course_deg : null, speedMps: Number.isFinite(frame.speed_mps) ? frame.speed_mps : null };
         if (NATIVE_SHELL) feedAmbient(inPrivacyZone(frame.lat, frame.lon) ? { has_fix: false } : frame);   // ends the trip; its last km stays here
         if (NATIVE_SHELL && !driveActive) { showIdleFix(frame); return; }
+        feedReaction(frame);
         state.live = frame; state.liveAt = performance.now();
         if (drive.native && drive.rec) {
           drive.frames++; recordFrame(frame); feedLive(); noteRoads(); noteRest(frame);
