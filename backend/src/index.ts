@@ -13,7 +13,7 @@ import { appleSignIn } from "./apple";
 
 const BACKUP_CRON = "0 7 * * 1";   // wrangler.jsonc triggers; the other cron is the daily sweep
 import {
-  boardFor, crewCreate, crewDiscover, crewInvite, crewInvitePreview, crewInvitesRevoke, crewJoin, crewJoinPublic, crewLeave, crewList, crewMembers, crewUpdate, friendAccept, friendList, friendRequest,
+  boardFor, crewCreate, crewDiscover, crewInvite, crewInvitePreview, crewInvitesRevoke, crewJoin, crewJoinPublic, crewLeave, crewList, crewMembers, crewUpdate, friendAccept, friendList, friendRequest, friendRequestCancel,
   myGrants, publish, removePair, setGrant, setHandle,
 } from "./social";
 import { deleteAccount, exportMyData } from "./account";
@@ -72,6 +72,7 @@ on("GET", "/api/roads", async (req, env) => { await requireMember(req, env); ret
 on("GET", "/api/points", async (req, env) => json(await pointsFor(env, (await requireMember(req, env)).id)));
 
 on("POST", "/api/friends/request", async (req, env) => { await friendRequest(env, await requireMember(req, env), req); return json({ ok: true }, 202); });
+on("POST", "/api/friends/request/cancel", async (req, env) => { await friendRequestCancel(env, await requireMember(req, env), req); return noContent(); });
 on("GET", "/api/friends", async (req, env) => json(await friendList(env, await requireMember(req, env))));
 on("POST", "/api/friends/accept", async (req, env) => { await friendAccept(env, await requireMember(req, env), req); return noContent(); });
 on("DELETE", "/api/friends/:id", async (req, env, m) => { await removePair(env, (await requireMember(req, env)).id, m.groups!.id); return noContent(); });

@@ -3080,7 +3080,13 @@
 
       // friends
       const fsec = section('Friends');
-      const accepted = friends.filter(f => f.status === 'accepted'), waiting = friends.filter(f => f.status === 'pending' && !f.incoming);
+      // Requests you sent live on this phone (the server doesn't list them, so a reply never tells which handles exist; IDEAS Z-12).
+      const SENT_KEY = 'apex.sentRequests';
+      const sentList = () => { try { return JSON.parse(localStorage.getItem(SENT_KEY) || '[]').filter(h => typeof h === 'string'); } catch (_) { return []; } };
+      const setSent = (l) => { try { localStorage.setItem(SENT_KEY, JSON.stringify(l.slice(-30))); } catch (_) {} };
+      const accepted = friends.filter(f => f.status === 'accepted');
+      setSent(sentList().filter(h => !friends.some(f => f.handle === h)));   // accepted, or they asked you too: no longer "sent"
+      const waiting = sentList();
       if (!accepted.length && !waiting.length) fsec.append(el('p', { className: 'note', textContent: 'No friends yet. Invite someone, or add a member by handle.' }));
       for (const f of accepted) {
         const g = grants.get('friend:' + f.id) || { share_scores: 0, share_times: 0 }, card = el('div', { className: 'card' });
@@ -3094,11 +3100,13 @@
                                       btn('Block', () => safety.block(f.handle, redo), 'linkbtn')] : [])));
         fsec.append(card);
       }
-      for (const f of waiting) fsec.append(el('div', { className: 'row', style: 'align-items:center' }, el('span', { style: 'flex:1', textContent: `@${f.handle || '?'} · request sent` }), btn('Cancel', async () => { await apiCall('DELETE', `/api/friends/${f.id}`); redo(); }, 'linkbtn')));
+      for (const h of waiting) fsec.append(el('div', { className: 'row', style: 'align-items:center' }, el('span', { style: 'flex:1', textContent: `@${h} · request sent` }),
+        btn('Cancel', async () => { await apiCall('POST', '/api/friends/request/cancel', { handle: h }); setSent(sentList().filter(x => x !== h)); redo(); }, 'linkbtn')));
       const add = el('input', { className: 'field', placeholder: 'Add by handle', autocomplete: 'off', autocapitalize: 'none', 'aria-label': 'Friend handle', value: stash('apex.add') });
       const sendRequest = async () => {
         const h = add.value.trim().replace(/^@/, '').toLowerCase(); if (!h) return;
         const r = await apiCall('POST', '/api/friends/request', { handle: h }); unstash('apex.add'); add.value = '';
+        if (r.ok && !accepted.some(f => f.handle === h)) setSent([...sentList().filter(x => x !== h), h]);
         toast(r.ok ? `Request sent. @${h} sees it if they're a member.` : 'Couldn\'t send that. Try again.'); redo();
       };
       fsec.append(el('div', { className: 'row' }, add, btn('Send request', sendRequest)));

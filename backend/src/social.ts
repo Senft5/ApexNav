@@ -51,11 +51,21 @@ export async function friendRequest(env: Env, v: Viewer, req: Request): Promise<
   }
 }
 
+/** Friends and incoming requests. Requests you sent are not listed (IDEAS Z-12): a row only for handles that exist would
+ *  tell you which handles are real. The phone keeps what you sent and shows every one alike. */
 export async function friendList(env: Env, v: Viewer) {
   return all<{ id: string; handle: string | null; name: string | null; status: string; incoming: number }>(env,
-    `SELECT u.id, u.handle, CASE WHEN f.status = 'pending' AND f.requested_by = ?1 THEN NULL ELSE u.display_name END AS name, f.status, (f.requested_by != ?1) AS incoming
+    `SELECT u.id, u.handle, u.display_name AS name, f.status, (f.requested_by != ?1) AS incoming
        FROM friendships f JOIN users u ON u.id = CASE WHEN f.user_a = ?1 THEN f.user_b ELSE f.user_a END
-      WHERE f.user_a = ?1 OR f.user_b = ?1 ORDER BY u.handle`, v.id);
+      WHERE (f.user_a = ?1 OR f.user_b = ?1) AND NOT (f.status = 'pending' AND f.requested_by = ?1) ORDER BY u.handle`, v.id);
+}
+
+/** Cancel a request you sent, by handle. Answers the same whether or not there was one (or such a member). */
+export async function friendRequestCancel(env: Env, v: Viewer, req: Request): Promise<void> {
+  const { handle } = await body<{ handle?: string }>(req);
+  const h = str(handle, "handle", 3, 20).replace(/^@/, "").toLowerCase();
+  await run(env, `DELETE FROM friendships WHERE status = 'pending' AND requested_by = ?1
+                   AND (user_a = ?1 OR user_b = ?1) AND (SELECT id FROM users WHERE handle = ?2) IN (user_a, user_b)`, v.id, h);
 }
 
 export async function friendAccept(env: Env, v: Viewer, req: Request): Promise<void> {
