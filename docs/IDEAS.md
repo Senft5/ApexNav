@@ -305,7 +305,7 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 | id | idea | impact | effort | status | from |
 |---|---|---|---|---|---|
 | P-01 | Battery budget for an hour of driving with screen on, measured and published | H | M | todo | Waze, REVER complaints |
-| P-02 | Low-power cockpit: drop to 30 fps and fewer map layers when the battery is low or hot | M | M | done (#PR) | thermal throttling |
+| P-02 | Low-power cockpit: drop to 30 fps and fewer map layers when the battery is low or hot | M | M | done (#133) | thermal throttling |
 | P-03 | Split web/index.html into modules so pages load faster and threads stop colliding | M | L | todo | dev velocity |
 | P-04 | Lazy-load voice banks and kokoro-js only when voice is on | M | S | done (already lazy: checked 2026-10-28, a cold start fetches only voices/index.json) | startup time |
 | P-05 | Route analysis in a Web Worker so the UI never stutters while scoring | M | M | todo | Y-01 |
