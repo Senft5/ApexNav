@@ -318,6 +318,10 @@
     .route-meta { font-size: 15px; font-weight: 600; color: var(--panel-ink); }
     .sources { font-size: 11px; color: var(--panel-dim); line-height: 1.5; }
     .sources a { color: inherit; }
+    /* Keyboard and switch-control users see where they are; touch taps show nothing extra. */
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .plan-search:focus-within { border-color: var(--panel-ink); }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: 0.01ms !important; animation: none !important; } }
   </style>
 </head>
 <body>
@@ -330,7 +334,7 @@
         <div class="plate" id="modePlate" role="status">Replay</div>
         <button class="plate" id="recenterBtn">Recenter</button>
       </div>
-      <div class="toast" id="toast"></div>
+      <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
       <section class="plan" id="planPanel" aria-label="Plan">
         <div class="plan-bar" id="planBar">
