@@ -72,3 +72,28 @@ def test_a_new_route_starts_the_pace_over_and_estimates_say_unknown(r):
     assert r["reset"] == 1
     assert r["est"] == {"leftS": 360, "arriveAt": 361000}
     assert r["estUnknown"] is None
+
+
+def test_home_by_offer():
+    """IDEAS R-37: late by more than 5 min offers the way home, once, then again only after 10 min."""
+    import json as _json, shutil as _sh, subprocess as _sp
+    node = _sh.which("node")
+    if not node:
+        pytest.skip("node not installed")
+    js = r"""
+    process.env.TZ = 'America/New_York';
+    const E = require(process.argv[1] + '/web/eta.js'), M = 60000, now = Date.parse('2026-10-30T22:00:00Z');   // 6 PM
+    console.log(JSON.stringify({
+      onTime: E.homeByOffer(now + 30 * M, now + 28 * M, null, now), late: E.homeByOffer(now + 40 * M, now + 30 * M, null, now),
+      again: E.homeByOffer(now + 40 * M, now + 30 * M, now - 5 * M, now), later: E.homeByOffer(now + 40 * M, now + 30 * M, now - 11 * M, now),
+      unset: E.homeByOffer(now + 40 * M, null, null, now),
+      at7pm: new Date(E.homeByAt('19:00', now)).toISOString(), at6am: new Date(E.homeByAt('06:00', now)).toISOString(), bad: E.homeByAt('7pm', now),
+    }));
+    """
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    out = _json.loads(_sp.run([node, "-e", js, root], capture_output=True, text=True, check=True).stdout)
+    assert out["onTime"] is None and out["late"] == {"lateMin": 10}
+    assert out["again"] is None and out["later"] == {"lateMin": 10} and out["unset"] is None
+    assert out["at7pm"] == "2026-10-30T23:00:00.000Z"          # tonight
+    assert out["at6am"] == "2026-10-31T10:00:00.000Z"          # 6 AM is long gone today: tomorrow
+    assert out["bad"] is None

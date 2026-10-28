@@ -101,7 +101,7 @@ long-press pin (#61), Apple place search and nearby suggestions in the app (#73)
 | R-34 | Ramp/cloverleaf loops no longer read as Switchbacks (veto motorway links by road class) | M | S | todo | STATE 2026-10-25 (c) |
 | R-35 | Avoid known speed traps and ALPR cameras as a routing option, not only a note | M | S | todo | DeFlock layer, Waze |
 | R-36 | Crowd quiet hours: prefer stages that are empty at the time you'll arrive (from anonymous counts) | M | L | todo | Strava heatmap, Google popular times |
-| R-37 | Return-to-start "home by" mode on a loop that shortens itself live if you're running late | M | M | todo | Calimoto |
+| R-37 | Return-to-start "home by" mode on a loop that shortens itself live if you're running late | M | M | partial (a loop's route card takes a Home by time; driving it, a live arrival more than 5 min late offers Head home: the quickest way back to the start. The loop doesn't yet shorten itself by dropping a stage) | Calimoto |
 
 ## 2. Driver analysis and coaching (D)
 

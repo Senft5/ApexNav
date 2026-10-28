@@ -36,6 +36,13 @@ it says "Couldn't check towns" instead of pretending there are none. Checked: we
 (Alcoa/Maryville) and no town-free alternate; Morristown → Rahway NJ, the winner has 29.5 km of town against 19.5–25 km for
 others, so the card says ~18 mi (fun outweighed the town cost there).
 
+## Home by
+
+A loop's route card takes a **Home by** time (the next time it comes round; an hour or more ago means tomorrow). While the loop
+is driven, when the live arrival (above) is more than 5 minutes past it, a toast offers **Head home**, once and then again
+after 10 minutes if still late; it plans the quickest way from where you are back to the loop's start (IDEAS R-37,
+`homeByOffer` in web/eta.js).
+
 ## Routes from elsewhere
 
 Where to? takes a pasted Google Maps (`/maps/dir/…`, `?api=1&destination=…&waypoints=…`, `/place/…/@lat,lon`), Apple Maps
