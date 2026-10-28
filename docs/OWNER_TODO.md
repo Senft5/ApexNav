@@ -23,5 +23,6 @@ something blocks on you, delete it once it's done. Everything else is in docs/ID
 
 ## Nice to know
 
-- TestFlight: internal group "First Testers" gets every build automatically. Builds 342.1 and 349.1 are installable.
+- TestFlight: internal group "First Testers" gets every build automatically; every main merge uploads one (377.1 onward VALID).
+- Tester feedback (Settings → Feedback, once #196 merges) shows in the app under Crew → your owner section, with Done to clear it.
 - An unused App ID `com.senft.ApexNav.JNX759T5W6` (from the first attempt) is still registered. Harmless; delete it in Identifiers if you like.
