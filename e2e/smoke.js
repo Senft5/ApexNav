@@ -107,6 +107,13 @@ flow('Where to?: with the search and routing services unreachable, a search fail
 }, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
 
 flow('Where to?: a suggestion builds a route with a card and a Start button (search and router stubbed)', async (page, base) => {
+  // weather along the route (IDEAS R-21): rain everywhere, every hour
+  await page.route('https://api.open-meteo.com/**', (route) => {
+    const n = new URL(route.request().url()).searchParams.get('latitude').split(',').length, now = Math.floor(Date.now() / 3600e3) * 3600;
+    const one = { hourly: { time: Array.from({ length: 72 }, (_, i) => now - 3600 * 12 + i * 3600), precipitation_probability: Array(72).fill(85), precipitation: Array(72).fill(1.5),
+      temperature_2m: Array(72).fill(14), visibility: Array(72).fill(9000), weather_code: Array(72).fill(63) } };
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify(Array.from({ length: n }, () => one)) });
+  });
   await page.route('https://photon.komoot.io/**', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ features: [
     { geometry: { coordinates: [-83.9700, 35.7565] }, properties: { name: 'Maryville', state: 'Tennessee' } }] }) }));
   await page.route('https://valhalla1.openstreetmap.de/route', (route) => {
@@ -129,6 +136,7 @@ flow('Where to?: a suggestion builds a route with a card and a Start button (sea
   const turn = steps.steps.find((x) => x.type === 10);
   check(turn && turn.street === 'Hollow Creek Road' && Math.abs(turn.m / steps.total - 0.5) < 0.1, 'the turn is placed halfway: ' + JSON.stringify(steps.steps));
   check(steps.steps.some((x) => x.type === 4) && !steps.steps.some((x) => x.type === 1), 'arrival kept, the start left out');
+  await page.waitForFunction(() => /Forecast: Rain likely at the start/.test(document.getElementById('routeCardWeather').textContent), null, { timeout: 10000 });
   // pin it as Home (IDEAS U-20): first in Where to?, on this phone; Unpin removes it
   page.once('dialog', (d) => d.accept('Home'));
   await page.evaluate(() => document.getElementById('routePinBtn').click());

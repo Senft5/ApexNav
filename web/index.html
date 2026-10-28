@@ -44,6 +44,7 @@
   <script src="profile_view.js"></script>
   <script src="pinned_places.js"></script>
   <script src="trip_stops.js"></script>
+  <script src="route_weather.js"></script>
   <script src="incident.js"></script>
   <script src="traffic.js"></script>
   <script src="in_car.js"></script>
@@ -491,6 +492,7 @@
               <p class="route-meta" id="routeCardMeta"></p>
               <p class="route-meta" id="routeCardAlong" hidden></p>
               <p class="route-meta" id="routeCardClimb" hidden></p>
+              <p class="route-meta" id="routeCardWeather" hidden></p>
               <div class="stack-8" id="routeStops" hidden></div>
               <div class="bars mt-8" id="routeCardBars"></div>
               <p class="note" id="routeCardWhy" hidden></p>
@@ -2427,6 +2429,7 @@
       attachScenic(t);
       attachProfile(t);
       paintStops(t);
+      attachWeather(t);
       if (!prebuilt) toast(`${name} · ${ApexUnits.long(totalM(), 1)} · ${t.events.filter(e => e.type === 'corner').length} corners`);
     }
     // A route just found: pin its destination and show it, so you can check you are routing to the right place. FOLLOW
@@ -4415,6 +4418,27 @@
     // line on the route card. Map data: a mapped viewpoint, a fuel station that may be closed. Nothing found says nothing.
     const scenicPins = [];
     const SCENIC_LABEL = { view: 'VIEW', cafe: 'CAFÉ', fuel: 'FUEL' };
+    // Weather along the route (route_weather.js, IDEAS R-21): Open-Meteo's forecast at six points, for the hour you'd reach
+    // each if you left now (the router's times). Said on the route card; nothing when the forecast can't be had.
+    async function attachWeather(t) {
+      $('routeCardWeather').hidden = true;
+      if (!t || !Array.isArray(t.dist) || t.dist.length < 2 || !window.ApexRouteWeather) return;
+      const total = t.dist[t.dist.length - 1];
+      const secAt = Number.isFinite(t.timeS) ? (m) => t.timeS - ApexEta.routerLeft(m, total, t.timeS, t.timeMarks) : null;
+      const pts = ApexRouteWeather.samplePoints(t, Date.now(), secAt);
+      let json = null;
+      try {
+        const ac = new AbortController(), timer = setTimeout(() => ac.abort(), 8000);
+        const r = await fetch(ApexRouteWeather.url(pts), { signal: ac.signal });
+        clearTimeout(timer);
+        json = r.ok ? await r.json() : null;
+      } catch (_) { json = null; }
+      if (!json || plannedRoute !== t) return;
+      const line = ApexRouteWeather.summary(ApexRouteWeather.atArrival(json, pts),
+        { dist: (m) => ApexUnits.long(m, 0), time: (ms) => new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) });
+      $('routeCardWeather').textContent = line;
+      $('routeCardWeather').hidden = !line;
+    }
     // The route's climb (stages.js profile, IDEAS U-21): its elevation from the DEM, so Preview's scrubber shows the hills
     // and the card says how much it climbs. A long trip or no tiles: unknown, nothing shown.
     async function attachProfile(t) {
