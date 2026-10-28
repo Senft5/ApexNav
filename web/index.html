@@ -550,7 +550,7 @@
   <div class="overlay dim" id="permSheet" role="dialog" aria-modal="true" aria-label="Before your first drive">
     <div class="card-sheet">
       <h2>Before your first drive</h2>
-      <div class="perm"><b>Location</b><span id="permLoc">to call corners ahead</span><b>Motion</b><span id="permMot">to feel bumps and surface</span><b>Screen on</b><span>while you drive</span></div>
+      <div class="perm"><b>Location</b><span id="permLoc">to call corners ahead</span><b>Motion</b><span id="permMot">to feel bumps and surface</span><b>Screen on</b><span>while you drive</span><b class="mount-row" hidden>Mount</b><span class="mount-row" hidden>in a holder, any way up. It sets itself up in the first minute of driving.</span></div>
       <p id="permNote">Your drive stays on this phone.</p>
       <button class="ink-btn solid" id="permGo">Allow and start</button>
       <button class="linkbtn" id="permNo">Not now</button>
@@ -3168,6 +3168,8 @@
       if (state.mode === 'live' || locDenied) return;
       if (flag('apex.permsExplained')) { enterDrive(); return; }
       paintPerms();
+      // The app calibrates the mount (ApexKit); a browser has no mount calibration, so the tip is app-only
+      document.querySelectorAll('.mount-row').forEach(n => { n.hidden = !NATIVE_SHELL; });
       const sheet = $('permSheet'); sheet.classList.add('show'); $('permGo').focus();
     }
     $('permGo').addEventListener('click', () => { if (locDenied) return; flag('apex.permsExplained', '1'); $('permSheet').classList.remove('show'); enterDrive(); });
@@ -3226,7 +3228,10 @@
           drive.frames++; drive.rec.add(frame); feedLive();
           const gps = Number.isFinite(frame.accuracy_m) && frame.accuracy_m > ApexSensors.MAX_ACCURACY_M ? 'weak' : 'on';
           if (drive.status.gps !== gps) drive.status.gps = gps;
-          drive.status.calibration = typeof frame.calibration === 'string' ? frame.calibration : null;
+          const cal = typeof frame.calibration === 'string' ? frame.calibration : null;
+          // The mount guide's tick: say so when calibration locks after the driver saw "Calibrating"
+          if (cal === 'locked' && (drive.status.calibration === 'default' || drive.status.calibration === 'awaitingPull')) toast('Mount set. Bumps and banking are recording.');
+          drive.status.calibration = cal;
           paintDriveStat();
         }
         const entering = state.mode !== 'live';
