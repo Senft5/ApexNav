@@ -622,11 +622,14 @@
     const DEMO_SCRIPTS = ['data/dry_ridge.js', 'data/pebble_ridge.js'];
     let demosLoading = null;
     function loadDemos() {
-      if (!demosLoading) demosLoading = Promise.all(DEMO_SCRIPTS.map((src) => new Promise((done) => {
-        const s = document.createElement('script'); s.src = src; s.onload = s.onerror = done; document.head.append(s);
+      // Resolves true once every demo is in `drives`; false on a failed load, which a later call tries again.
+      if (!demosLoading) demosLoading = Promise.all(DEMO_SCRIPTS.map((src) => new Promise((done, fail) => {
+        const s = document.createElement('script'); s.src = src; s.onload = done; s.onerror = () => { s.remove(); fail(new Error(src)); };
+        document.head.append(s);
       }))).then(() => {
         for (const d of window.APEX_DRIVES || []) if (!drives.some(x => x.id === d.id)) drives.push(Object.assign(trackFromDrive(d), { demo: true }));
-      });
+        return true;
+      }, () => { demosLoading = null; return false; });
       return demosLoading;
     }
     let savedDriveIds = new Set();
@@ -3280,9 +3283,10 @@
 
     const flag = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (_) {} return null; };
     async function watchDryRidge() {
+      if (!drives.some(x => x.id === 'dry_ridge')) toast('Loading the replay…');
       await loadDemos();
-      const d = drives.find(x => x.id === 'dry_ridge') || drives.find(x => x.kind === 'drive') || drives[0];
-      if (!d) return;
+      const d = drives.find(x => x.id === 'dry_ridge');
+      if (!d) { toast('Couldn\'t load the replay. Check the connection and try again.'); return; }
       booting = false; replayOn = true; closeSheet(); activate(d, 0);
     }
     function startDrive() {
