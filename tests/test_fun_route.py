@@ -286,7 +286,7 @@ async function run({ level, routes, osrm, discover, matrix }) {
 (async () => {
   const out = {};
   // 1. Quick: no stage search; the twistier alternate wins when it costs 1 minute.
-  let r = await run({ level: 'quick', routes: async (pts, alts) => [{ coords: straight, turns: [], timeS: 600 }, { coords: wiggly, turns: [], timeS: 660 }],
+  let r = await run({ level: 'quick', routes: async (pts, alts) => [{ coords: straight, turns: [], timeS: 600 }, { coords: wiggly, turns: [], timeS: 660, names: new Map([['Twisty Rd', 14]]) }],
                       discover: async () => { throw Error('should not search'); } });
   out.quick = { fun: r.built[0].fun.fun, extraS: r.built[0].extraS, via: r.built[0].request.via.length, shaping: r.built[0].request.via.every(v => v.shaping), matrix: r.calls.matrix, why: r.built[0].why };
   // 2. No tiles: the router's own routes still compete, no error.
@@ -315,7 +315,7 @@ def test_app_fun_route_picks_and_falls_back():
     r = json.loads(res.stdout)
     assert r["quick"]["fun"] > 50 and r["quick"]["extraS"] == 60 and r["quick"]["matrix"] == 0
     assert r["quick"]["via"] >= 1 and r["quick"]["shaping"], "the winning 12 km alternate is pinned so a reroute stays on it"
-    assert re.fullmatch(r"For \d+ more good corners, \+1 min", r["quick"]["why"]), r["quick"]["why"]
+    assert re.fullmatch(r"For Twisty Rd 8\.7 mi · \d+ more good corners, \+1 min", r["quick"]["why"]), r["quick"]["why"]
     assert r["noTiles"] == {"built": 1, "fun": r["noTiles"]["fun"]}
     assert r["osrm"] == {"built": 1, "timeS": 700}
     assert r["stage"]["matrix"] == 1 and r["stage"]["via"] >= 2 and r["stage"]["shaping"] and r["stage"]["fun"] > 50 and r["stage"]["extraS"] == 120
