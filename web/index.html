@@ -3166,6 +3166,7 @@
       // The app's mount calibration (ApexKit): until locked, g, camber and crest are recorded as unknown
       if (s.calibration === 'default') warn.push('Calibrating · leave the phone in its mount');
       else if (s.calibration === 'awaitingPull') warn.push('Calibrating · drive normally');
+      else if (s.calibration === 'paused') warn.push('Phone is hot · bumps and banking paused');
       const m = main.join(' · '), w = warn.join(' · ');
       if ($('dsMain').innerHTML !== m) $('dsMain').innerHTML = m;
       if ($('dsWarn').textContent !== w) $('dsWarn').textContent = w;
