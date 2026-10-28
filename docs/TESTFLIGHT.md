@@ -4,8 +4,10 @@ Every push to `main` that runs the iOS workflow (`.github/workflows/build.yml`; 
 manual run of that workflow on `main` archives the app, signs it and uploads it to App Store Connect. The build shows
 in TestFlight after Apple's processing, usually 5 to 30 minutes.
 
-- **Signing:** automatic, through an App Store Connect API key (`xcodebuild -allowProvisioningUpdates`). Xcode creates
-  the distribution certificate and profile in Apple's cloud. Nothing is stored in the repo.
+- **Signing:** automatic, through an App Store Connect API key (`xcodebuild -allowProvisioningUpdates`). The archive is
+  signed ad hoc (no certificate) and the export signs it with Apple's cloud-managed distribution certificate and profile,
+  including the Live Activity extension (`com.senft.ApexNav.LiveActivity`). Nothing is stored in the repo. If Apple won't
+  export the ad-hoc archive, the job archives with automatic signing instead, which makes a development certificate.
 - **Build number:** `CFBundleVersion` = `<workflow run number>.<attempt>` (always goes up; a re-run gets a new one).
   The version people see is `MARKETING_VERSION` in `project.yml` (1.0); raise it there for each App Store release.
 - **Gate:** the job `testflight-gate` checks the four secrets. While any is missing, `testflight` is skipped and the run
@@ -40,6 +42,9 @@ in TestFlight after Apple's processing, usually 5 to 30 minutes.
 ## If an upload fails
 
 - "No Accounts" / "No signing certificate": the API key isn't Admin, or the membership isn't active yet.
+- "Your account has reached the maximum number of certificates": archives signed automatically each made an "Apple
+  Development: Created via API" certificate on a runner that is then thrown away. Revoke those in Certificates, IDs &
+  Profiles → Certificates (never your own Mac's); the ad-hoc archive step exists so this doesn't happen again.
 - "No suitable application records were found": step 3 not done, or the bundle ID differs.
 - "The bundle version must be higher": a build number was used already; re-run the workflow (new attempt number).
 - "Error Downloading App Information" at export: App Store Connect has no app record for `com.senft.ApexNav` that the
