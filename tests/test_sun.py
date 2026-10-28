@@ -11,7 +11,7 @@ NODE = shutil.which("node")
 pytestmark = pytest.mark.skipif(NODE is None, reason="node not installed")
 
 RUNNER = r"""
-const { sunTimes, isDark } = require(process.argv[1]);
+const { sunTimes, isDark, sunPosition } = require(process.argv[1]);
 const fs = require('fs'), vm = require('vm');
 const browser = { window: {} };
 vm.runInNewContext(fs.readFileSync(process.argv[1], 'utf8'), browser);
@@ -41,6 +41,10 @@ out.sunriseBoundary = [isDark(new Date(summer.sunrise.getTime() - 60000), 39.10,
   isDark(new Date(summer.sunrise.getTime() + 60000), 39.10, -84.51)];
 out.sunsetBoundary = [isDark(new Date(summer.sunset.getTime() - 60000), 39.10, -84.51),
   isDark(new Date(summer.sunset.getTime() + 60000), 39.10, -84.51)];
+const deg = (p) => ({ alt: p.altitude * 180 / Math.PI, az: p.azimuth * 180 / Math.PI });
+out.pos = { noon: deg(sunPosition(new Date('2026-06-21T17:40:00Z'), 39.10, -84.51)),
+            rise: deg(sunPosition(summer.sunrise, 39.10, -84.51)), set: deg(sunPosition(summer.sunset, 39.10, -84.51)),
+            winterRise: deg(sunPosition(sunTimes(new Date('2026-12-21T12:00:00Z'), 39.10, -84.51).sunrise, 39.10, -84.51)) };
 console.log(JSON.stringify(out));
 """
 
@@ -83,6 +87,15 @@ def test_polar_day_and_night_have_no_crossings(results):
 
 
 def test_browser_export_and_boundaries(results):
-    assert results["browserApi"] == ["isDark", "sunTimes"]
+    assert results["browserApi"] == ["isDark", "sunPosition", "sunTimes"]
     assert results["sunriseBoundary"] == [True, False]
     assert results["sunsetBoundary"] == [False, True]
+
+
+def test_sun_position_altitude_and_azimuth(results):
+    pos = results["pos"]
+    # Cincinnati, June solstice: high in the south at noon, rising in the north-east, setting north-west.
+    assert abs(pos["noon"]["alt"] - 74.3) < 1.0 and abs(pos["noon"]["az"] - 180) < 5
+    assert abs(pos["rise"]["alt"] + 0.83) < 0.5 and abs(pos["rise"]["az"] - 58.5) < 2
+    assert abs(pos["set"]["az"] - 301.5) < 2
+    assert abs(pos["winterRise"]["az"] - 121) < 2, "December sunrise is in the south-east"

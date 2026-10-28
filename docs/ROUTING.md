@@ -102,6 +102,15 @@ dull road beat a much better one (it keeps a 20-point lead). The route card adds
 ARCHITECTURE §1), hazards, and measured data during stage discovery itself (stages are still found on
 map geometry; measured data only re-ranks routed candidates).
 
+## Sun glare
+
+Every candidate (A→B and loops) is driven in time from now over its router time, and each 100 m that heads within
+20° of a sun 0–15° above the horizon counts as glare (`FunRoute.glare`, `ApexSun.sunPosition`, NOAA). Ranking takes
+1 point per glare minute, at most 20, so a road straight into the setting sun loses a close call but not a much
+better road. The route card warns "Low sun ahead for ~N min" from 3 minutes. Checked: Knoxville → west at 5:40 pm in
+late October, every candidate has 22–34 min of it and the card says so. Not kept when a route is restored later
+(the time has moved on).
+
 ## Fun score (map only)
 
 `ApexFunRoute.score` on 5 m geometry (`geometry()`: resample, curvature, corner detection from the
