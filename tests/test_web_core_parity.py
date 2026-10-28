@@ -158,7 +158,12 @@ def test_parity_coach_on_real_drives():
                  g_known=[0 if 3000 <= i < 3400 else 1 for i in range(len(drives[1]["lat"]))])
     # and a fourth that brakes and lifts two bins (10 m) later everywhere, so the spread across passes is not zero
     late = dict(drives[1], speed_mps=[v * 0.98 for v in drives[1]["speed_mps"]], lon_g=drives[1]["lon_g"][:2] + drives[1]["lon_g"][:-2])
-    cases = [(drives[0], [drives[1]]), (drives[1], [drives[0], quick]), (drives[1], []), (drives[1], [quick, late])]
+    later = dict(drives[1], lon_g=drives[1]["lon_g"][:4] + drives[1]["lon_g"][:-4])
+    # and passes on their own GPS traces (a few metres off), so the marks are projected onto A's road
+    shifted = [dict(late, lat=[x + 3e-5 * math.sin(i / 7 + k) for i, x in enumerate(drives[1]["lat"])],
+                    lon=[x + 4e-5 * math.cos(i / 5 + k) for i, x in enumerate(drives[1]["lon"])]) for k in (1, 2)]
+    cases = [(drives[0], [drives[1]]), (drives[1], [drives[0], quick]), (drives[1], []), (drives[1], [quick, late, later]),
+             (drives[1], [*shifted, later])]
     np_ = lambda d: {**d, "speed_mps": np.array(d["speed_mps"]), "lon_g": np.array(d["lon_g"]), "lat_g": np.array(d["lat_g"])}
     py = [da.coach(np_(a), [np_(o) for o in others]) for a, others in cases]
     runner = ("const c=require(process.argv[1]);const cases=JSON.parse(require('fs').readFileSync(0,'utf8'));"
@@ -189,7 +194,7 @@ def test_parity_coach_on_real_drives():
                         assert cj[side][k] == (None if v is None else pytest.approx(v, rel=1e-9, abs=1e-9)), k
     assert tips > 0 and py[1]["clean"] > 0 and py[1]["gain_s"] > 0
     spreads = [c["spread"]["brake_sd_m"] for c in py[3]["corners"] if c.get("spread") and c["spread"]["brake_sd_m"] is not None]
-    assert spreads and max(spreads) > 0                                            # three passes: a measured spread
+    assert spreads and max(spreads) > 0                                            # braking 0, 0, 10 and 20 m later: a spread
     assert all(c["spread"]["brake_sd_m"] is None for c in py[0]["corners"] if c.get("spread"))   # two passes say nothing
 
 
@@ -440,3 +445,37 @@ def test_parity_fatigue():
         v, lat, lon, corners = _long_drive(**kw)
         py, js = da.fatigue(v, lon, lat, corners), _js_fatigue(v, lat, lon, corners)
         assert js == py
+
+
+def _dry_ridge_pass():
+    text = open("web/data/dry_ridge.js", encoding="utf-8").read()
+    d = json.loads(text[text.index("push(") + 5:text.rindex(");")])
+    f = {name: i for i, name in enumerate(d["fields"])}
+    col = lambda k: [r[f[k]] for r in d["rows"]]
+    return {"lat": col("lat"), "lon": col("lon"), "speed_mps": [v / 2.2369362921 for v in col("speed_mph")], "lon_g": col("lon_g"),
+            "lat_g": col("lat_g"), "corners": [{"start": int(round(e["start_m"] / 5)), "end": int(round(e["end_m"] / 5)), "apex": e["index"],
+                                                "apex_mps": e["apex_mph"] / 2.2369362921} for e in d["events"] if e["type"] == "corner"]}
+
+
+def test_corner_spread_is_sensor_noise_proof_but_sees_real_variation():
+    from core import drive_analysis as da
+    if not os.path.exists("web/data/dry_ridge.js"):
+        pytest.skip("no shipped drive data")
+    base = _dry_ridge_pass()
+    n = len(base["lat"])
+    for seed in range(4):
+        # the same driving four times, seen through realistic noise: ~4 m of smoothed GPS jitter, 0.02 g, 0.15 m/s
+        rng = np.random.default_rng(seed)
+        ps = []
+        for _ in range(4):
+            jx, jy = (np.convolve(rng.normal(0, 4, n), np.ones(9) / 9, "same") for _ in range(2))
+            ps.append({**base, "lat": list(np.array(base["lat"]) + jy / 110540), "lon": list(np.array(base["lon"]) + jx / (111320 * 0.774)),
+                       "lon_g": list(np.array(base["lon_g"]) + rng.normal(0, 0.02, n)), "speed_mps": list(np.array(base["speed_mps"]) + rng.normal(0, 0.15, n))})
+        sp = [c["spread"] for c in da.coach(ps[0], ps[1:])["corners"] if c.get("spread")]
+        assert all(x["brake_sd_m"] is None or x["brake_sd_m"] < 10 for x in sp), seed    # never flagged as erratic (10 m)
+        assert all(x["min_sd_m"] is None or x["min_sd_m"] < 10 for x in sp), seed
+        assert sum(x["brake_sd_m"] is not None for x in sp) >= 3
+    # two of four passes braking 30 m (6 bins) earlier everywhere: a real spread
+    early = dict(base, lon_g=base["lon_g"][6:] + base["lon_g"][-6:])
+    sp = [c["spread"]["brake_sd_m"] for c in da.coach(base, [base, early, early])["corners"] if c.get("spread") and c["spread"]["brake_sd_m"] is not None]
+    assert sp and max(sp) >= 20

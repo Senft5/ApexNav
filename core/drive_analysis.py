@@ -373,27 +373,63 @@ def _tip(m: dict, ref: dict | None):
 
 
 SPREAD_MIN_PASSES = 3        # a spread from fewer passes says nothing
+SPREAD_BRAKE_G = -0.20       # a pass whose (3-bin smoothed) braking peaks lighter than this has no clear braking point
+SPREAD_ONSET = 0.4           # braking starts where the smoothed deceleration first reaches 40 % of that pass's peak
+SLOW_DIP_MPS = 0.5           # a slowest point counts only this far below both ends of the corner
+SLOW_BAND_MPS = 0.2          # ...placed at the middle of the bins within this of the minimum
+
+
+def _median(xs: list) -> float:
+    s = sorted(xs)
+    k = len(s) // 2
+    return s[k] if len(s) % 2 else (s[k - 1] + s[k]) / 2.0
 
 
 def _sd(xs: list):
+    """Robust spread: 1.4826 x the median absolute deviation (equals the SD for normal scatter), so one odd pass, behind
+    traffic or in the wet, does not make a corner look erratic. None under SPREAD_MIN_PASSES values."""
     if len(xs) < SPREAD_MIN_PASSES:
         return None
-    m = 0.0
-    for x in xs:                 # left-to-right, as the JS port
-        m += x
-    m /= len(xs)
-    q = 0.0
-    for x in xs:
-        q += (x - m) ** 2
-    return math.sqrt(q / (len(xs) - 1))
+    m = _median(xs)
+    return 1.4826 * _median([abs(x - m) for x in xs])
 
 
-def _spread(brakes: list, mins: list) -> dict:
-    """How repeatably a corner is driven over your clean passes of it (IDEAS D-07): the sample SD, in m, of where braking
-    began and of where the slowest point fell. None with fewer than SPREAD_MIN_PASSES known values; 5 m bins and GPS
-    alignment put the floor near 3 m."""
+def _marks(d: dict, start: int, end: int, apex: int) -> tuple:
+    """(braking onset, slowest point) of one pass as indexes into that pass, each None when it has no clear one.
+    Both are made robust to sensor noise for the spread: the onset is where the 3-bin smoothed deceleration first reaches
+    SPREAD_ONSET of its peak (None when the peak is lighter than SPREAD_BRAKE_G or the run reaches back past the lookback),
+    and the slowest point needs a real dip (SLOW_DIP_MPS below both ends) and sits mid-way along the bins near the minimum."""
+    lon, v, n = d["lon_g"], d["speed_mps"], len(d["speed_mps"])
+    lo = max(0, apex - BRAKE_LOOKBACK)
+    sm = lambda i: (float(lon[max(0, i - 1)]) + float(lon[i]) + float(lon[min(n - 1, i + 1)])) / 3.0
+    pk = min(range(lo, apex + 1), key=lambda i: (sm(i), i))
+    onset = None
+    if sm(pk) <= SPREAD_BRAKE_G:
+        j = pk
+        while j > lo and sm(j - 1) <= SPREAD_ONSET * sm(pk):
+            j -= 1
+        onset = j if j > lo else None
+    vmin = min(float(v[i]) for i in range(start, end + 1))
+    slow = None
+    if vmin <= float(v[start]) - SLOW_DIP_MPS and vmin <= float(v[end]) - SLOW_DIP_MPS:
+        near = [i for i in range(start, end + 1) if float(v[i]) <= vmin + SLOW_BAND_MPS]
+        slow = int(math.floor(sum(near) / len(near) + 0.5))
+    return onset, slow
+
+
+def _on_a(a: dict, apex: int, b: dict, i: int):
+    """Bin of A's path nearest to sample i of pass b, near A's corner, or None when b was not on A's road there."""
+    j, dist = nearest_index(b["lat"][i], b["lon"][i], a["lat"], a["lon"], apex, BRAKE_LOOKBACK + 20)
+    return j if dist <= MATCH_RADIUS_M else None
+
+
+def _spread(brakes: list, mins: list, passes: int) -> dict:
+    """How repeatably a corner is driven over your clean passes of it (IDEAS D-07): a robust SD (`_sd`), in m along this drive's
+    road, of where braking began and of where the slowest point fell, each over the passes that had a clear one. None
+    with fewer than SPREAD_MIN_PASSES of them; 5 m bins and GPS put the floor near 3 m."""
     b = [x for x in brakes if x is not None]
-    return {"brake_sd_m": _sd(b), "brake_passes": len(b), "min_sd_m": _sd(mins), "min_passes": len(mins)}
+    m = [x for x in mins if x is not None]
+    return {"passes": passes, "brake_sd_m": _sd(b), "brake_passes": len(b), "min_sd_m": _sd(m), "min_passes": len(m)}
 
 
 def coach(a: dict, others: list) -> dict:
@@ -416,7 +452,9 @@ def coach(a: dict, others: list) -> dict:
             out.append({"apex": c["apex"], "m": ma, "best": None, "gain_s": None, "tip": None, "passes": 0})
             continue
         best, best_from, passes = ma, -1, 1
-        brakes, mins = [ma["brake_m"]], [ma["min_offset_m"]]
+        oa, sa = _marks(a, c["start"], c["end"], c["apex"])                 # D-07 marks, in m along A's road from its apex
+        brakes = [None if oa is None else (c["apex"] - oa) * 5.0]
+        mins = [None if sa is None else (sa - c["apex"]) * 5.0]
         for j, b in enumerate(others):
             w = match_window(a, c["start"], c["end"], b, hints[j])
             if w is None:
@@ -435,14 +473,16 @@ def coach(a: dict, others: list) -> dict:
             if mb["min_mps"] < STOPPED_MPS:
                 continue
             passes += 1
-            brakes.append(mb["brake_m"])
-            mins.append(mb["min_offset_m"])
+            ob, sb = _marks(b, bs, be, b_apex)
+            ob, sb = (None if x is None else _on_a(a, c["apex"], b, x) for x in (ob, sb))
+            brakes.append(None if ob is None else (c["apex"] - ob) * 5.0)
+            mins.append(None if sb is None else (sb - c["apex"]) * 5.0)
             if mb["envelope_use"] <= PACE_CEILING and mb["time_s"] < best["time_s"]:
                 best, best_from = mb, j
         gain = ma["time_s"] - best["time_s"]
         tip = _tip(ma, best if best_from >= 0 and gain >= TIP_GAIN_S else None)
         out.append({"apex": c["apex"], "m": ma, "best": None if best_from < 0 else best, "best_from": best_from,
-                    "gain_s": gain, "tip": tip, "passes": passes, "spread": _spread(brakes, mins)})
+                    "gain_s": gain, "tip": tip, "passes": passes, "spread": _spread(brakes, mins, passes)})
     clean = [x for x in out if x["gain_s"] is not None]
     this_s = float(sum(x["m"]["time_s"] for x in clean))
     gain_s = float(sum(x["gain_s"] for x in clean if x["gain_s"] >= TIP_GAIN_S))     # below that is GPS alignment noise
