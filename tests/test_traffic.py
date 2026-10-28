@@ -58,7 +58,11 @@ out.schedule = log;
 const r = new T.TrafficMonitor(); r.routeChanged(0);
 out.afterSwitch = [r.due(60000), r.due(120000)];
 const q = new T.TrafficMonitor();
-out.say = [q.shouldSay('a', 0), q.shouldSay('a', 300000), q.shouldSay('b', 300000), q.shouldSay('a', 600000)];
+// the same jam probed again 300 m later (chunks shift), a different jam, the first one after 10 min, then a new route
+out.say = [q.shouldSay([[4000, 8000]], 0), q.shouldSay([[3700, 7700]], 120000), q.shouldSay([[12000, 16000]], 120000),
+           q.shouldSay([[4300, 8300]], 600000)];
+q.routeChanged(600000); out.sayNewRoute = q.shouldSay([[4300, 8300]], 610000);
+out.tooSlow = [T.tooSlow({ timeS: 1800, delayS: 600 }, 3000), T.tooSlow({ timeS: 1800, delayS: 600 }, 3001)];
 console.log(JSON.stringify(out));
 """
 
@@ -113,4 +117,6 @@ def test_probe_schedule(r):
     # every 2 min; throttled at 240 and 480 -> 4 then 8 min backoff; back to 2 min after a clean probe
     assert r["schedule"] == [0, 120, 240, 480, 960, 1080, 1200]
     assert r["afterSwitch"] == [False, True]
-    assert r["say"] == [True, False, True, True]
+    assert r["say"] == [True, False, True, True], "a jam probed again from 300 m further on is the same jam"
+    assert r["sayNewRoute"] is True
+    assert r["tooSlow"] == [False, True]

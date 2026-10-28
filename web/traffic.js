@@ -121,16 +121,20 @@
    * Returns { index, extraS } of the detour to take, or null to stay.
    */
   function pickDetour(current, candidates) {
-    const withTraffic = current.timeS + (finite(current.delayS) ? current.delayS : 0);
-    const maxExtra = Math.max(EXTRA_MIN_S, EXTRA_SHARE * current.timeS);
     let best = null;
     candidates.forEach((c, index) => {
-      if (!c || c.crossesJam || !finite(c.fun) || !finite(c.timeS)) return;
-      const extraS = c.timeS - withTraffic;
-      if (extraS > maxExtra || c.fun < current.fun + FUN_MARGIN) return;
+      if (!c || c.crossesJam || !finite(c.fun) || !finite(c.timeS) || tooSlow(current, c.timeS)) return;
+      const extraS = c.timeS - current.timeS - (finite(current.delayS) ? current.delayS : 0);
+      if (c.fun < current.fun + FUN_MARGIN) return;
       if (!best || c.fun > best.fun) best = { index, extraS, fun: c.fun };
     });
     return best && { index: best.index, extraS: best.extraS };
+  }
+
+  /** A candidate taking timeS is too slow: more than max(10 min, 25 %) over the current route with its delay. */
+  function tooSlow(current, timeS) {
+    const withTraffic = current.timeS + (finite(current.delayS) ? current.delayS : 0);
+    return !(timeS - withTraffic <= Math.max(EXTRA_MIN_S, EXTRA_SHARE * current.timeS));
   }
 
   /** Exclusion boxes (Valhalla exclude_polygons rings, [lon, lat]) at 1/4, 1/2, 3/4 of each jam chunk; at most 12. */
@@ -149,9 +153,9 @@
 
   /** When to ask Apple: every 2 min while driving a route; throttled by MapKit -> 4 / 8 / 16 min; one in flight. */
   class TrafficMonitor {
-    constructor() { this.throttles = 0; this.lastSaid = new Map(); this.routeChanged(null); }
+    constructor() { this.throttles = 0; this.routeChanged(null); }
     /** A new route is on screen: wait a full interval before probing it (t in ms, null = probe at once). */
-    routeChanged(t) { this.nextAt = t == null ? 0 : t + PROBE_EVERY_MS; this.busy = false; }
+    routeChanged(t) { this.nextAt = t == null ? 0 : t + PROBE_EVERY_MS; this.busy = false; this.said = []; }
     due(t) { return !this.busy && finite(t) && t >= this.nextAt; }
     started() { this.busy = true; }
     done(t, { throttled = false } = {}) {
@@ -159,16 +163,19 @@
       if (throttled) { this.throttles += 1; this.nextAt = t + THROTTLE_BACKOFF_MS[Math.min(this.throttles, THROTTLE_BACKOFF_MS.length) - 1]; }
       else { this.throttles = 0; this.nextAt = t + PROBE_EVERY_MS; }
     }
-    /** "Traffic ahead" for the same jam is said at most once per 10 min. */
-    shouldSay(key, t) {
-      const last = this.lastSaid.get(key);
-      if (last != null && t - last < QUIET_MS) return false;
-      this.lastSaid.set(key, t);
+    /**
+     * "Traffic ahead" (or a detour offer) for the same jam at most once per 10 min on this route. A jam is its stretch of
+     * route distance [startM, endM]; chunks are cut from wherever the car is, so a jam probed again overlaps, not equals.
+     */
+    shouldSay(ranges, t) {
+      this.said = this.said.filter(s => t - s.t < QUIET_MS);
+      if (ranges.some(([a, b]) => this.said.some(s => a <= s.b && b >= s.a))) return false;
+      for (const [a, b] of ranges) this.said.push({ a, b, t });
       return true;
     }
   }
 
-  const api = { chunksAhead, followShare, classifyChunk, funPieces, probeFor, routeFun, pickDetour, jamPolygons, TrafficMonitor,
+  const api = { chunksAhead, followShare, classifyChunk, funPieces, probeFor, routeFun, pickDetour, tooSlow, jamPolygons, TrafficMonitor,
                 AHEAD_M, CHUNK_M, SLOW_RATIO, JAM_RATIO, JAM_MIN_S, PROBE_EVERY_MS, THROTTLE_BACKOFF_MS, QUIET_MS, EXTRA_MIN_S };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexTraffic = api;
 })(typeof window !== 'undefined' ? window : globalThis);

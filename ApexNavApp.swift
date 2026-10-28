@@ -257,7 +257,8 @@ final class ApexScriptBridge: NSObject, WKScriptMessageHandler {
                 return
             }
             if cmd == "trafficProbe", let chunks = dict["chunks"] as? [[String: Any]] {
-                let pairs: [(CLLocationCoordinate2D, CLLocationCoordinate2D)] = chunks.compactMap { c in
+                // One entry per chunk, nil for a malformed one, so answers stay aligned with the page's chunks.
+                let pairs: [(CLLocationCoordinate2D, CLLocationCoordinate2D)?] = chunks.map { c in
                     guard let a = c["a"] as? [String: Any], let b = c["b"] as? [String: Any],
                           let aLat = (a["lat"] as? NSNumber)?.doubleValue, let aLon = (a["lon"] as? NSNumber)?.doubleValue,
                           let bLat = (b["lat"] as? NSNumber)?.doubleValue, let bLon = (b["lon"] as? NSNumber)?.doubleValue else { return nil }
@@ -534,15 +535,17 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
     /// For each chunk A->B of the route ahead, Apple's route leaving now (traffic-aware) and leaving at 3 am (Apple's quiet-road
     /// time), with both paths so the page can check Apple drove our road. One request at a time; MapKit throttling stops the
     /// round and says so, so the page backs off. Answered with window.apex.onNative({type:'trafficProbe'}).
-    func trafficProbe(chunks: [(CLLocationCoordinate2D, CLLocationCoordinate2D)], id: Int) {
+    func trafficProbe(chunks: [(CLLocationCoordinate2D, CLLocationCoordinate2D)?], id: Int) {
         guard !trafficProbeRunning else { sendTrafficProbe(id: id, results: [], throttled: false, busy: true); return }
         trafficProbeRunning = true
         let night = Self.nextQuietDeparture()
         Task { @MainActor in
             var results: [[String: Any]] = []
             var throttled = false
-            for (a, b) in chunks.prefix(6) {
+            for chunk in chunks.prefix(6) {
                 var entry: [String: Any] = [:]
+                guard let pair = chunk else { results.append(entry); continue }
+                let (a, b) = pair
                 for (key, when) in [("now", Date()), ("night", night)] {
                     do {
                         if let leg = try await Self.appleRoute(from: a, to: b, leaving: when) { entry[key] = leg }

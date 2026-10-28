@@ -1789,7 +1789,7 @@
         const keep = (_, i) => i % 5 === 0 || i === c.i1 - c.i0;    // every 25 m is plenty to compare paths
         const ours = { lat: t.lat.slice(c.i0, c.i1 + 1).filter(keep), lon: t.lon.slice(c.i0, c.i1 + 1).filter(keep) };
         const got = (Array.isArray(reply.results) && reply.results[k]) || {};
-        return { ...ours, ...ApexTraffic.classifyChunk(ours, got.now, got.night) };
+        return { ...ours, startM: c.startM, endM: c.endM, ...ApexTraffic.classifyChunk(ours, got.now, got.night) };
       });
       t.traffic = { at: Date.now(), probes };
       if (probes.some(p => p.level === 'jam')) await trafficDetour(t, idx, probes);
@@ -1797,8 +1797,8 @@
     }
     async function trafficDetour(t, idx, probes) {
       const req = t.request, L = state.live, jams = probes.filter(p => p.level === 'jam');
-      const key = jams.map(p => `${p.lat[0].toFixed(3)},${p.lon[0].toFixed(3)}`).join('|');
-      if (!L || !trafficMon.shouldSay(key, Date.now())) return;   // each jam once per 10 min, switched, cancelled or not
+      // Each jam once per 10 min on this route, switched, cancelled or not.
+      if (!L || !trafficMon.shouldSay(jams.map(p => [p.startM, p.endM]), Date.now())) return;
       const delayS = probes.reduce((a, p) => a + (p.level === 'jam' || p.level === 'slow' ? p.delayS : 0), 0);
       const delayMin = Math.max(1, Math.round(delayS / 60));
       const stay = () => { toast(`Traffic ahead · ${delayMin} min`); say(`Traffic ahead. ${delayMin} minute${delayMin === 1 ? '' : 's'} slower`); };
@@ -1810,7 +1810,9 @@
       if (track !== t || state.mode !== 'live') return;
       if (base.status !== 'fulfilled' || !Number.isFinite(base.value[0].timeS)) { stay(); return; }
       const primary = base.value[0];
-      const trips = [...base.value.slice(1), ...(avoid.status === 'fulfilled' ? avoid.value : [])].filter(c => Number.isFinite(c.timeS));
+      const current = { timeS: primary.timeS, delayS };
+      const trips = [...base.value.slice(1), ...(avoid.status === 'fulfilled' ? avoid.value : [])]
+        .filter(c => Number.isFinite(c.timeS) && !ApexTraffic.tooSlow(current, c.timeS));   // only score what could win
       const cands = [];
       for (const trip of trips) {
         const ct = await trackFromPolyline(trip.coords, t.id, t.name);
@@ -1818,7 +1820,7 @@
       }
       if (track !== t || state.mode !== 'live') return;
       const now = ApexTraffic.routeFun(t, probes, idx);
-      const pick = ApexTraffic.pickDetour({ fun: now.fun, timeS: primary.timeS, delayS }, cands.map(c => ({ fun: c.fun, timeS: c.trip.timeS, crossesJam: c.crossesJam })));
+      const pick = ApexTraffic.pickDetour({ ...current, fun: now.fun }, cands.map(c => ({ fun: c.fun, timeS: c.trip.timeS, crossesJam: c.crossesJam })));
       window.apexDebug && (window.apexDebug.lastTraffic = { now, delayS, primaryS: primary.timeS, pick,
         cands: cands.map(c => ({ fun: c.fun, jamM: c.jamM, timeS: c.trip.timeS, corners: c.t.events.length })) });
       if (!pick) { stay(); return; }
@@ -1826,7 +1828,8 @@
       const road = [...c.trip.names].filter(([n]) => !primary.names.has(n)).sort((a, b) => b[1] - a[1]).map(([n]) => n)[0] || 'another road';
       const extraMin = Math.round(pick.extraS / 60);
       const sw = { cancelled: false };
-      toast(`Traffic ahead · switching to ${road}${extraMin > 0 ? ` (+${extraMin} min)` : ''}`, { label: 'Cancel', onClick: () => { sw.cancelled = true; say('Staying on this route'); } });
+      toast(`Traffic ahead · switching to ${road}${extraMin > 0 ? ` (+${extraMin} min)` : ''}`,
+            { label: 'Cancel', ms: 6000, onClick: () => { sw.cancelled = true; say('Staying on this route'); } });
       say(`Traffic ahead. Switching to ${road}${extraMin > 0 ? `, ${extraMin} minute${extraMin === 1 ? '' : 's'} longer` : ''}`);
       await new Promise(r => setTimeout(r, 6000));
       if (sw.cancelled || track !== t || state.mode !== 'live' || rerouter.off) return;
@@ -1928,12 +1931,15 @@
     // 10. UI WIRING
     // =======================================================================
     function toast(msg, action) {
-      const t = $('toast'); t.textContent = msg;
+      const t = $('toast');
+      if (!action && t._holdUntil > performance.now()) return;   // a Cancel countdown owns the toast until it ends
+      t._holdUntil = action && action.ms ? performance.now() + action.ms : 0;
+      t.textContent = msg;
       if (action) {
         const a = document.createElement('a'); a.href = action.href || '#'; a.textContent = action.label; a.style.cssText = 'margin-left:10px;color:var(--accent);text-decoration:underline'; t.append(a);
-        if (action.onClick) a.onclick = (e) => { e.preventDefault(); action.onClick(); t.classList.remove('show'); };
+        if (action.onClick) a.onclick = (e) => { e.preventDefault(); t._holdUntil = 0; action.onClick(); t.classList.remove('show'); };
       }
-      t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), action ? 7000 : 4200);
+      t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), action ? action.ms || 7000 : 4200);
     }
     // Views: ROUTE / DRIVES / SETUP open the side panel; tapping the open tab again, the map
     // behind it, or swiping it right closes it. ANALYSIS is its own page.
