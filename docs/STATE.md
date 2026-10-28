@@ -1,4 +1,10 @@
-# APEX NAV — CURRENT AGENT HANDOFF STATE
+# VETTA — CURRENT AGENT HANDOFF STATE
+
+## Session 2026-10-28 (night): app review, Vetta, CarPlay
+- Merged #228: recorded app tour (tools/app_tour.js with the co-driver's audio and captions; app-tour workflow with a simulator video and AppTourTests.testKeyboard over every text field), web/keyboard.js (owner's screenshots), 14 review fixes (docs/REVIEW.md), the Vetta name, MONETIZATION.md rewritten (free forever; Pro monthly/yearly/lifetime; founders; earned Pro; road-data framework).
+- This PR (#229): CarPlay navigation app (CarPlay/ApexCarPlay.swift + web/carplay.js; entitlement only in simulator builds), single-pass roads (migration 0029 `road_ways.cls/len_m`: apply to both D1 when merged), owner-only road GeoJSON export (docs/ROAD_DATA.md), more review fixes.
+- Open: the app-tour workflow's keyboard screenshots and simulator video to review; CarPlay cold launch (route engine without the phone's window scene); owner sign-off on Pro prices; owner trademark knockout for VETTA and the App Store name.
+- Exact next task: review the app-tour artifact and fix what testKeyboard finds; CarPlay screenshots from the simulator for the entitlement form; then IDEAS (R-29 lane guidance, P-03 split index.html).
 
 ## Session 2026-10-28 (evening): CarPlay request readiness, naming
 - This PR: CarPlay pre-request work from Apple's CarPlay Developer Guide (Oct 2026): voice prompts check `promptStyle` (native speech, and web clips ask the shell first; a generated tone for `short`), the App Store listing leads with navigation, docs/CARPLAY.md (form answers, requirement table, build plan).
