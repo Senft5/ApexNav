@@ -116,7 +116,7 @@ ideal drive and where to find time (#80), grip circle (#86), automatic mount cal
 | D-03 | Live coaching on a known road: spoken "brake later" / "carry more speed" from your best pass | H | M | done (#100: technique tips only; speed tips stay on the analysis page by design) | STATE 2026-10-28, Garmin Catalyst |
 | D-04 | Ghost car on the map: your best pass (or a friend's shared ghost) as a moving marker with live delta | H | M | todo | SOCIAL §3, racing games, Strava Live Segments |
 | D-05 | Live delta bar during a known stage (green ahead / red behind your best, technique-scored, not speed-scored) | H | M | todo | Harry's Lap Timer |
-| D-06 | Smoothness heatmap on the drive map (lateral jerk, abrupt inputs) with the three worst moments | M | S | active (Deepen driver and road analysis) | Garmin Catalyst |
+| D-06 | Smoothness heatmap on the drive map (lateral jerk, abrupt inputs) with the three worst moments | M | S | done (#104) | Garmin Catalyst |
 | D-07 | Consistency score across passes of the same road, and a trend over weeks | M | S | todo | Strava fitness trend |
 | D-08 | Personal records feed: best Driver Score per road, per archetype, smoothest drive this month | M | S | todo | Strava PRs |
 | D-09 | Drive summary card worth sharing (score, map silhouette, archetype mix), no times or speeds | H | S | todo | Strava activity card, Relive |
@@ -165,7 +165,7 @@ pace-note grammar, ALPR from DeFlock/OSM, reference-lap scoring and archetypes.
 | Q-19 | Benchmark road calibration set scored from map + DEM, checked in CI | M | M | todo | ROAD_INTELLIGENCE §6.2 |
 | Q-20 | Archetypes by clustering once crowd data exists | M | L | todo | ROAD_INTELLIGENCE §5.2 |
 | Q-21 | Real device acceptance for app-open sharing (shared km matches driven km, minus private ends) | H | S | owner (phone) | STATE 2026-10-27 |
-| Q-22 | "Pothole ahead" from your own confirmed hazards on any road, with no route loaded | H | S | active (Deepen driver and road analysis) | thread Deepen driver and road analysis |
+| Q-22 | "Pothole ahead" from your own confirmed hazards on any road, with no route loaded | H | S | done (#104) | thread Deepen driver and road analysis |
 
 ## 4. Co-driver and pace notes (V)
 
