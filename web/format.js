@@ -12,8 +12,11 @@
     if (!m) return '--';
     return m[2] === undefined ? m[1] : `${m[1]} ${clock12(Number(m[2]), Number(m[3]))}`;
   }
-  /** Drive names saved with a 24-hour time ("Drive 10/26/2026 17:03") read in 12-hour; any other name is unchanged. */
+  /** Drive names saved with a 24-hour time ("Drive 10/26/2026 17:03") read in 12-hour; a recorder file name
+   *  ("web_20261027_080000", how an exported drive comes back on import) reads like an app drive; any other name is unchanged. */
   function driveName(name) {
+    const f = /^web_(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})\d{2}$/.exec(name || '');
+    if (f) return `Drive ${Number(f[2])}/${Number(f[3])}/${f[1]} ${clock12(Number(f[4]), Number(f[5]))}`;
     const m = /^(Drive .+ )(\d{2}):(\d{2})$/.exec(name || '');
     return m ? m[1] + clock12(Number(m[2]), Number(m[3])) : name;
   }
