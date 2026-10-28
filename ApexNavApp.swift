@@ -388,7 +388,8 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         synth.delegate = self
         startMotionPipeline()
         NotificationCenter.default.addObserver(forName: ProcessInfo.thermalStateDidChangeNotification, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.thermalChanged() }
+            guard let self else { return }
+            MainActor.assumeIsolated { self.thermalChanged() }
         }
         thermalChanged()
         startPushTimer()
@@ -813,7 +814,7 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         pipeline.step(accel: a, gyro: w, timestamp: timestamp, speedMps: speedMps, gravityG: gravityG)
         if !wasLocked && pipeline.mount.state == .locked { persistMount() }
         // Pothole evidence only in a solved chassis frame and while rolling (a door slam at a stop is not road).
-        if pipeline.mount.state == .locked && speedMps >= 1.0 {
+        if imuLive && pipeline.mount.state == .locked && speedMps >= 1.0 {   // not while settling after a thermal pause
             nodeVertPeakMps2 = max(nodeVertPeakMps2 ?? 0.0, abs(pipeline.hpVert))
         }
     }
