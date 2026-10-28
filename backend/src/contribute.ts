@@ -10,7 +10,12 @@ const BIN_KM = 0.005;
 
 /** crest: the bin's peak unweighting in g (0 = none, 1 = weightless over the top), null when the phone did not measure it. */
 export interface Bin { i: number; cam: number | null; rough: number; crest: number | null; k: number | null }
-export interface Contribution { wayId: number; dir: 0 | 1; drivenOn: string; driveId: string; bins: Bin[]; km: number; shape: [number, number][] | null }
+export interface Contribution { wayId: number; dir: 0 | 1; drivenOn: string; driveId: string; bins: Bin[]; km: number; shape: [number, number][] | null; cls: RoadClass | null }
+
+/** Valhalla's road classes (the phone's map match, `edge.road_class`); anything else is stored as unknown (null). */
+export const ROAD_CLASSES = ["motorway", "trunk", "primary", "secondary", "tertiary", "unclassified", "residential", "service_other", "track"] as const;
+export type RoadClass = typeof ROAD_CLASSES[number];
+const roadClass = (v: unknown): RoadClass | null => (ROAD_CLASSES as readonly unknown[]).includes(v) ? v as RoadClass : null;
 
 const isNum = (v: unknown, lo: number, hi: number): v is number => typeof v === "number" && Number.isFinite(v) && v >= lo && v <= hi;
 const bad = (why: string) => new HttpError(400, why);
@@ -44,7 +49,7 @@ export function validateContribution(raw: Record<string, unknown>, nowMs = Date.
   }
   const lo = Math.min(...seen), hi = Math.max(...seen);
   if (out.length / (hi - lo + 1) < LIMITS.minCoverage) throw bad("not_contiguous");   // real drives cover a run of the road, not scattered bins
-  return { wayId, dir, drivenOn: day, driveId, bins: out, km: out.length * BIN_KM, shape: validateShape(raw.shape, hi) };
+  return { wayId, dir, drivenOn: day, driveId, bins: out, km: out.length * BIN_KM, shape: validateShape(raw.shape, hi), cls: roadClass(raw.cls) };
 }
 
 const MAX_SHAPE = 64;
@@ -62,12 +67,17 @@ export function validateShape(raw: unknown, hiBin: number): [number, number][] |
   }
   const lats = pts.map((p) => p[0]), lons = pts.map((p) => p[1]);
   if (Math.max(...lats) - Math.min(...lats) > 0.5 || Math.max(...lons) - Math.min(...lons) > 0.5) return null;
+  return shapeLength(pts) >= hiBin * 5 * 0.8 ? pts : null;
+}
+
+/** Length of a [lat, lon] line in metres (local flat-earth, fine at road scale). */
+export function shapeLength(pts: [number, number][]): number {
   let m = 0;
   for (let k = 1; k < pts.length; k++) {
     const [a, b] = [pts[k - 1], pts[k]];
     m += Math.hypot((b[0] - a[0]) * 110540, (b[1] - a[1]) * 111320 * Math.cos(a[0] * Math.PI / 180));
   }
-  return m >= hiBin * 5 * 0.8 ? pts : null;
+  return m;
 }
 
 const MULTIPLIER = [3, 2] as const;
@@ -207,9 +217,11 @@ export async function contribute(env: Env, v: Viewer, req: Request): Promise<{ a
     env.DB.prepare("DELETE FROM upload_counts WHERE bucket < ?").bind(new Date(now.getTime() - 8 * 86400_000).toISOString().slice(0, 13)),
   ];
   if (c.shape) {                                                                       // first good shape of a way wins; it's the map's, not the drive's
+    // class and length (the open-road rule, roads.ts) also first-wins, filled in for ways stored before they were sent
     const lats = c.shape.map((p) => p[0]), lons = c.shape.map((p) => p[1]);
-    stmts.push(env.DB.prepare("INSERT OR IGNORE INTO road_ways (way_id, s, w, n, e, shape) VALUES (?, ?, ?, ?, ?, ?)")
-      .bind(c.wayId, Math.min(...lats), Math.min(...lons), Math.max(...lats), Math.max(...lons), JSON.stringify(c.shape)));
+    stmts.push(env.DB.prepare(`INSERT INTO road_ways (way_id, s, w, n, e, shape, cls, len_m) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                               ON CONFLICT (way_id) DO UPDATE SET cls = COALESCE(road_ways.cls, excluded.cls), len_m = COALESCE(road_ways.len_m, excluded.len_m)`)
+      .bind(c.wayId, Math.min(...lats), Math.min(...lons), Math.max(...lats), Math.max(...lons), JSON.stringify(c.shape), c.cls, Math.round(shapeLength(c.shape))));
   }
   // this month's km and pioneer km (IDEAS S-11): every accepted chunk counts; pioneer km only while this drive holds the first slot
   stmts.push(env.DB.prepare(`INSERT INTO member_months (user_id, month, km, pioneer_km) VALUES (?1, ?2, ?3, ?4)

@@ -33,7 +33,7 @@ Camber and crest are recorded and shared only while `locked`. The phone's crest 
   (`changed_on`), sent to phones as a month (`ch`).
 - **Coverage (read side)**: each contribution may carry its way's OSM line (public map data, at most 64 points; the server
   drops one shorter than the bins imply); the first good one is kept in `road_ways` with its box. `GET /api/coverage?bbox=`
-  (at most 0.5° a side, members) returns measured ways with passes per direction, under the same two-driver rule.
+  (at most 0.5° a side, members) returns measured ways with a confidence level per direction (never a count), under the same open-road / two-driver rule (docs/ROAD_DATA.md).
 
 ## 3. Road DNA Engine (`core/road_dna.py`, ported to `web/apex_core.js`)
 The JS file is a line-for-line port used by the browser/iOS cockpit for live OSRM routes; `tests/test_web_core_parity.py` runs both on the same input (synthetic + a real logged drive) and requires identical results. Change both or neither.

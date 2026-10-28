@@ -56,7 +56,7 @@ struct ApexShellRootView: View {
                     .ignoresSafeArea()
             } else {
                 VStack(spacing: 10) {
-                    Text("APEX NAV")
+                    Text("VETTA")
                         .font(.system(size: 22, weight: .black, design: .monospaced))
                         .foregroundStyle(.white)
                     Text("Cockpit bundle missing: web/index.html")
@@ -349,6 +349,11 @@ final class ApexScriptBridge: NSObject, WKScriptMessageHandler {
             shell?.webVoiceBegin(duck: speechDuck)
             return
         }
+        // CarPlay (CarPlay/ApexCarPlay.swift): the route, the next maneuver and hazards for the car's screen.
+        if cmd == "car", let dict = body as? [String: Any] {
+            ApexCar.shared.receive(dict)
+            return
+        }
         // The drive's Live Activity (IDEAS U-11): the page starts, updates and ends it.
         if cmd == "activity", let dict = body as? [String: Any] {
             shell?.handleActivity(dict)
@@ -538,6 +543,8 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
 
     func webDidFinishLoading() {
         webReady = true
+        // what the driver picks on the car's screen goes to the page (CarPlay/ApexCarPlay.swift)
+        ApexCar.shared.toPage = { [weak self] obj in self?.sendToPage(obj) }
         pushLiveFrame()
         offerDriveIfReady()
         if let g = pendingGpx { pendingGpx = nil; deliverGpx(g) }
@@ -842,6 +849,12 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
     private func sendTrafficProbe(id: Int, results: [[String: Any]], throttled: Bool, busy: Bool) {
         let payload: [String: Any] = ["type": "trafficProbe", "id": id, "results": results, "throttled": throttled, "busy": busy]
         guard let data = try? JSONSerialization.data(withJSONObject: payload), let json = String(data: data, encoding: .utf8) else { return }
+        evaluate("window.apex && window.apex.onNative && window.apex.onNative(\(json)); void 0;")
+    }
+
+    /// A message to the page's onNative, as JSON.
+    func sendToPage(_ obj: [String: Any]) {
+        guard let data = try? JSONSerialization.data(withJSONObject: obj), let json = String(data: data, encoding: .utf8) else { return }
         evaluate("window.apex && window.apex.onNative && window.apex.onNative(\(json)); void 0;")
     }
 

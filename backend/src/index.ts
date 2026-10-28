@@ -25,7 +25,7 @@ import { contribute, setContribute } from "./contribute";
 import { pointsFor } from "./points";
 import { redeem, shop } from "./redeem";
 import { flagsFor } from "./flags";
-import { coverage, roadBins } from "./roads";
+import { coverage, exportRoads, roadBins } from "./roads";
 import { crewStandings } from "./standings";
 import { eventCancel, eventCreate, eventRsvp, eventsList, eventsNear } from "./events";
 import { healthReport, healthSummary } from "./health";
@@ -103,6 +103,11 @@ on("POST", "/api/contribute", async (req, env) => json(await contribute(env, awa
 
 on("GET", "/api/roads", async (req, env) => { await requireMember(req, env); return json(await roadBins(env, new URL(req.url))); });
 on("GET", "/api/coverage", async (req, env) => { await requireMember(req, env); return json(await coverage(env, new URL(req.url))); });
+// The road-data export (docs/ROAD_DATA.md): the owner only, for a pilot; anyone else gets a plain 404.
+on("GET", "/api/ops/roads.geojson", async (req, env) => {
+  if (!isModerator(env, await requireMember(req, env))) throw new HttpError(404, "not_found");
+  return json(await exportRoads(env, new URL(req.url)));
+});
 on("GET", "/api/points", async (req, env) => json(await pointsFor(env, (await requireMember(req, env)).id)));
 on("GET", "/api/flags", async (req, env) => json(await flagsFor(env, req)));
 on("GET", "/api/shop", async (req, env) => json(await shop(env, await requireMember(req, env))));
