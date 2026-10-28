@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-nflOQYZ1sErVuS/A+7c0qtIBlChnm+NR6HYPurgyR5w=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-NVbpq/62vmQeun3KdKB4hybcvW7bAkCrIt3Njms0iRQ=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>ApexNav</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -24,6 +24,8 @@
   <script src="taste.js"></script>
   <script src="track_mode.js"></script>
   <script src="flags.js"></script>
+  <script src="save_file.js"></script>
+  <script src="flyover_video.js"></script>
   <script src="route_loading.js"></script>
   <script src="stages.js"></script>
   <script src="fun_route.js"></script>
@@ -715,6 +717,7 @@
       <div class="transport" id="transport">
         <button class="key" id="playBtn">Play</button>
         <button class="key" id="rateBtn">1X</button>
+        <button class="key" id="videoBtn" hidden aria-label="Record a video of the replay">Video</button>
         <div class="scrubber" id="scrubber" role="slider" tabindex="0" aria-label="Replay position" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><canvas id="scrubCanvas" aria-hidden="true"></canvas></div>
       </div>
       <div id="cluster"></div>
@@ -1832,6 +1835,7 @@
       if (learned != null) { try { localStorage.setItem(REACT_KEY, learned.toFixed(2)); } catch (_) {} }
     }
     const noteM = (e) => (Number.isFinite(e.start_m) && e.start_m <= e.dist_m ? e.start_m : e.dist_m);
+    let lastNotes = [];
     function updateNotes(vMps, live) {
       // Driving somewhere that is not on the loaded route: its calls (and its stale trip distance) must never be read out as if they were this road.
       const offRoute = live && state.cursorIdx < 0;
@@ -1855,6 +1859,7 @@
       notes.sort((a, b) => a.distM - b.distM).splice(3);
       notes.quietText = offRoute ? (!track ? 'No route planned' : offRouteText()) : track ? `${track.name} · ${spirited ? 'Full notes' : 'Quiet · bumps and cameras only'}` : 'Plan a route for notes';
       Inst.renderNotes($('notes'), look.theme, notes);
+      lastNotes = notes;
       if (live) pushActivity(notes);
 
       if (!(state.playing || live) || vMps == null) return;
@@ -1972,7 +1977,7 @@
     }
     const simSpeed = (i) => Math.max(6, Math.min(track.envMps[i] * 0.92, track.limitMps && track.limitMps[i] ? track.limitMps[i] * 1.1 : 27));
 
-    let lastTs = 0, raf = null;
+    let lastTs = 0, raf = null, video = null;   // video: a replay being recorded (startVideo below)
     function tick(ts) {
       raf = null;
       if (!state.playing || !track || state.mode === 'live') return;
@@ -1987,6 +1992,7 @@
     }
     function setPlaying(on) {
       state.playing = on && !!track && state.mode !== 'live';
+      if (!state.playing && video) { video.stop(); video = null; }      // the replay ended or paused: the video ends with it
       $('playBtn').textContent = state.playing ? 'Pause' : 'Play';
       $('playBtn').classList.toggle('on', state.playing);
       if (state.playing) {
@@ -1995,6 +2001,23 @@
         lastTs = 0; if (!raf) raf = requestAnimationFrame(tick);
       }
     }
+    // The replay as a video (flyover_video.js, IDEAS D-10): from the start, at the chosen speed, with the note and speed on it.
+    const canRecord = !!(window.ApexFlyoverVideo && ApexFlyoverVideo.mimeFor(window.MediaRecorder));
+    $('videoBtn').hidden = !canRecord;
+    function startVideo() {
+      if (!track || state.mode === 'live' || !mapReady) return;
+      const t = track;
+      video = ApexFlyoverVideo.start({ map, fps: 30,
+        overlay: () => { const s = sample(t, state.cursorM), n = lastNotes[0];
+          return { title: t.name, note: n ? `${n.call}${n.dist != null ? ` · ${n.dist}${n.unit || ''}` : ''}` : '', speed: Number.isFinite(s.speedMps) ? `${Math.round(ApexUnits.speed(s.speedMps))} ${ApexUnits.speedU()}` : '' }; },
+        onStop: (blob, mime) => { $('videoBtn').classList.remove('on'); $('videoBtn').textContent = 'Video';
+          if (blob.size > 0) ApexSaveFile.saveFile(blob, ApexFlyoverVideo.fileName(t.name, mime), mime.split(';')[0]).then((r) => { if (r !== 'cancelled') toast('Video ready.'); }); else toast('Couldn\'t record the video on this phone.'); } });
+      if (!video) { toast('This browser can\'t record video.'); return; }
+      $('videoBtn').classList.add('on'); $('videoBtn').textContent = 'Stop';
+      state.cursorM = 0; resumeFollow(); setPlaying(true);
+      toast('Recording the replay. Tap Stop to end it early.');
+    }
+    $('videoBtn').addEventListener('click', () => { if (video) { const v = video; video = null; v.stop(); setPlaying(false); } else startVideo(); });
     // Idle = nothing playing and not driving: just the map, Start drive and the tabs. A replay or a route preview wakes the gauges and the notes.
     let replayOn = false, booting = true;
     function paintIdle() {
@@ -4252,7 +4275,8 @@
       const o = ApexMyData.offlineSummary(localStorage, await voiceCacheBytes(), est.usage, est.quota);
       const note = $('myOfflineNote'); if (note) note.textContent = ApexMyData.offlineText(o);
     }
-    const saveFile = (text, name, type) => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type })); a.download = name; document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 10000); };
+    // a download on the web, the share sheet in the iOS app (save_file.js): a download link does nothing in the app's web view
+    const saveFile = (text, name, type) => ApexSaveFile.saveFile(text, name, type);
     $('myGpxBtn').addEventListener('click', async () => {
       const list = await ApexRecording.all();
       if (!list.length) { toast('No drives on this phone yet.'); return; }

@@ -355,6 +355,12 @@ final class ApexScriptBridge: NSObject, WKScriptMessageHandler {
             return
         }
         // A tap with a call (IDEAS U-09): light for a pace note, a warning pattern for a hazard.
+        // A file the page made (GPX, Download my data, a drive video): the share sheet, since a download link does nothing in
+        // a web view. The name is cleaned to letters, digits, dot, dash and underscore; the file goes in the app's temp folder.
+        if cmd == "shareFile", let dict = body as? [String: Any], let b64 = dict["data"] as? String, let data = Data(base64Encoded: b64) {
+            shell?.shareFile(name: (dict["name"] as? String) ?? "ApexNav", data: data)
+            return
+        }
         if cmd == "haptic" {
             if (body as? [String: Any])?["kind"] as? String == "hazard" {
                 UINotificationFeedbackGenerator().notificationOccurred(.warning)
@@ -1045,6 +1051,21 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         recordedSegments = 0
         isRecording = true
         speak("Mapping 5 meter road feel.")
+    }
+
+    func shareFile(name: String, data: Data) {
+        var clean = ""
+        for c in name.unicodeScalars where CharacterSet.alphanumerics.contains(c) || ".-_".unicodeScalars.contains(c) {
+            if clean.unicodeScalars.count >= 80 { break }
+            clean.unicodeScalars.append(c)
+        }
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(clean.isEmpty || clean.hasPrefix(".") ? "ApexNav-file" : clean)
+        do {
+            try data.write(to: url, options: .atomic)
+            shareItem = CSVShareItem(url: url)
+        } catch {
+            evaluate("window.apex && window.apex.onNative && window.apex.onNative({type:'shareFailed'}); void 0;")
+        }
     }
 
     func stopRecordingAndExport() {
