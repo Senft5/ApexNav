@@ -6,12 +6,12 @@
   'use strict';
   const KEY = 'apex.newsSeen';
   const NEWS = {
-    id: '2026-10-28',
+    id: '2026-10-28b',
     items: [
-      ['Directions', 'Turns are called in the co-driver\'s voice: early, then at the junction, never on top of a corner note.'],
-      ['Stage delta', 'Drive a stage you marked in the Log and see how your technique compares with your best pass, corner by corner.'],
-      ['Crash check', 'After a hard impact and a stop, ApexNav asks if you\'re OK and helps you call or text someone. Settings → Crash check.'],
-      ['Lock screen', 'The next note and its distance show on the lock screen and in the Dynamic Island while you drive.'],
+      ['Siri', 'Say "Start a drive in ApexNav", "Report a hazard in ApexNav" or "End my drive in ApexNav", hands on the wheel.'],
+      ['Landscape and 3D', 'Mount the phone sideways for a wide map, and turn on 3D terrain in the map panel to preview a route over the hills.'],
+      ['Stops of the day', 'Tap a viewpoint or café along your route to add it as a stop; move or remove stops on the route card.'],
+      ['Kilometres', 'Prefer km and metres? Settings → Units. Notes, directions and the Log follow.'],
     ],
   };
 
