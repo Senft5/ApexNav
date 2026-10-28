@@ -39,6 +39,13 @@
   const CAMBER_CLIP_RAD = 0.15;
   const CREST_UNWEIGHT_G = -0.08;
   const ALPR_RADIUS_M = 60;
+  // IMU hazards (core/road_dna.py)
+  const SPIKE_PEAK_G = 0.35;
+  const SPIKE_CONTRAST = 6.0;
+  const SPIKE_BACKGROUND_BINS = 41;
+  const ROUGH_RMS_FALLBACK_G = 0.25;
+  const DIP_COMPRESS_G = 0.10;
+  const HAZARD_MIN_SEPARATION_M = 150.0;
 
   function movingAverage(v, window) {
     const n = v.length, half = Math.floor(window / 2);
@@ -714,6 +721,53 @@
   // Profile a raw 5 m recording (the iOS app's ApexDrive CSV) in the browser with the same
   // geometry/envelope/corner pipeline tools/export_web_profile.py uses. Hazards and sectors need
   // the offline pipeline (multi-pass + reference lap) and are left out.
+  // Strongest sample of each cluster of mask, clusters at least HAZARD_MIN_SEPARATION_M apart (road_dna._peak_events).
+  function peakEvents(values, mask, dist, pickMax) {
+    const picks = [];
+    for (let i = 0; i < values.length; i++) {
+      if (!mask[i]) continue;
+      const last = picks[picks.length - 1];
+      if (picks.length && dist[i] - dist[last] < HAZARD_MIN_SEPARATION_M) {
+        if (pickMax ? values[i] > values[last] : values[i] < values[last]) picks[picks.length - 1] = i;
+      } else picks.push(i);
+    }
+    return picks;
+  }
+
+  // Centred rolling median of the measured values in the window (NaN where none are).
+  function rollingMedian(v, window) {
+    const half = Math.floor(window / 2), n = v.length, out = new Float64Array(n);
+    for (let i = 0; i < n; i++) {
+      const w = [];
+      for (let j = Math.max(0, i - half); j < Math.min(n, i + half + 1); j++) if (Number.isFinite(v[j])) w.push(v[j]);
+      w.sort((a, b) => a - b);
+      const m = w.length;
+      out[i] = !m ? NaN : (m % 2 ? w[(m - 1) / 2] : (w[m / 2 - 1] + w[m / 2]) / 2);
+    }
+    return out;
+  }
+
+  /**
+   * Bumps (vertical spike), crests (unweighting) and dips (compression) from measured IMU (road_dna.detect_hazards).
+   * Unmeasured samples (null/NaN) never make a hazard. With no vertPeak, roughness stands in for bumps unless
+   * roughFallback is false (phone recordings: a roughness RMS alone cannot tell a pothole from broken pavement).
+   */
+  function detectHazards(dist, crest, rough, vertPeak = null, { roughFallback = true } = {}) {
+    const num = (a, n) => Float64Array.from({ length: n }, (_, i) => (a && Number.isFinite(a[i]) ? a[i] : NaN));
+    const n = dist.length, c = num(crest, n), r = num(rough, n), out = [];
+    if (vertPeak) {
+      const peak = num(vertPeak, n), bg = rollingMedian(r, SPIKE_BACKGROUND_BINS);
+      const spike = Array.from(peak, (p, i) => p > SPIKE_PEAK_G && p > SPIKE_CONTRAST * bg[i]);
+      for (const i of peakEvents(peak, spike, dist, true)) out.push({ index: i, type: 'bump', severity_g: peak[i] });
+    } else if (roughFallback) {
+      for (const i of peakEvents(r, Array.from(r, (v) => v > ROUGH_RMS_FALLBACK_G), dist, true)) out.push({ index: i, type: 'bump', severity_g: r[i] });
+    }
+    for (const i of peakEvents(c, Array.from(c, (v) => v < CREST_UNWEIGHT_G), dist, false)) out.push({ index: i, type: 'crest', severity_g: c[i] });
+    for (const i of peakEvents(c, Array.from(c, (v) => v > DIP_COMPRESS_G), dist, true)) out.push({ index: i, type: 'dip', severity_g: c[i] });
+    return out.sort((a, b) => a.index - b.index);
+  }
+
+  const HAZARD_CALLS = { bump: ['BUMP', 'Bump'], crest: ['CREST', 'Crest'], dip: ['DIP', 'Dip'] };
   const MIN_CORNER_SPEED_MPS = 2.5;
   function profileRecording(cols) {
     const { lat, lon } = cols, n = lat.length;
@@ -731,6 +785,15 @@
                lat: lat[c.apex], lon: lon[c.apex], radius_m: c.radius_m, apex_mph: c.apex_mps * MPS_TO_MPH, dir: c.dir,
                severity: c.severity, grade: c.grade, shape: c.shape, caution: c.caution, turn_rad: Math.abs(c.turn_rad), mods: c.mods };
     });
+    // Hazards only from what the phone measured: spikes need the per-sample vertical peak, crests and dips a solved mount.
+    const peak = cols.vert_peak_g && cols.vert_peak_g.some(Number.isFinite) ? cols.vert_peak_g : null;
+    for (const h of detectHazards(dist, cols.crest_vertical_g || null, cols.roughness_rms || null, peak, { roughFallback: false })) {
+      if (!(speed[h.index] >= MIN_CORNER_SPEED_MPS)) continue;           // walking pace: the phone is being handled, not reading the road
+      const [code, call] = HAZARD_CALLS[h.type];
+      events.push({ type: h.type, code, call, index: h.index, dist_m: dist[h.index], start_m: dist[h.index], end_m: dist[h.index],
+                    lat: lat[h.index], lon: lon[h.index], severity_g: h.severity_g });
+    }
+    events.sort((a, b) => a.start_m - b.start_m);
     linkNotes(events);
     return { events, envMps: Array.from(env), sightM: Array.from(sight), n };
   }
@@ -743,7 +806,7 @@
     G_STD, MPS_TO_MPH, ALPR_RADIUS_M,
     movingAverage, gradient, unwrap, localXY, resamplePolyline,
     computeCurvature, apexSpeedMps, effectiveMu, brakingEnvelopeMps, sightDistanceM, sightSpeedMps, SIGHT_MAX_M,
-    severityForRadius, detectCorners, paceNoteText, annotateCautions, linkNotes, rallyDistance, nearestIndex
+    severityForRadius, detectCorners, paceNoteText, annotateCautions, linkNotes, rallyDistance, nearestIndex, detectHazards
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.ApexCore = api;

@@ -19,14 +19,18 @@
   <script src="sync.js"></script>
   <script src="sensors.js"></script>
   <script src="reroute.js"></script>
+  <script src="traffic.js"></script>
   <script src="sun.js"></script>
   <script src="format.js"></script>
   <script src="recording.js"></script>
+  <script src="road_memory.js"></script>
   <script src="contributor.js"></script>
   <script src="themes.js"></script>
   <script src="instruments.js"></script>
   <script src="g2p.js"></script>
   <script src="voice.js"></script>
+  <script src="convoy.js"></script>
+  <script src="convoy_ui.js"></script>
   <script src="data/dry_ridge.js"></script>
   <script src="data/pebble_ridge.js"></script>
   <style>
@@ -161,8 +165,9 @@
     .dial-num { font-family: var(--font-num); font-size: 15px; font-weight: 600; fill: var(--face-ink); }
     .dial-label { font-size: 11px; font-weight: 700; letter-spacing: 2px; fill: var(--face-dim); }
     .dial-tiny { font-size: 11px; fill: var(--face-dim); }
-    .dial-digital { font-family: var(--font-num); font-size: 22px; font-weight: 700; fill: var(--face-ink); }
-    .dial-digital.small { font-size: 11px; fill: var(--accent); }
+    /* Speed is the one number read at a glance: the dial draws at about half size, so 44 here is ~22 px on a phone. */
+    .dial-digital { font-family: var(--font-num); font-size: 44px; font-weight: 700; fill: var(--face-ink); }
+    .dial-digital.small { font-size: 15px; fill: var(--accent); }
     .gauge-printed .dial-num { font-size: 17px; font-weight: 700; }
     .cluster-center { min-width: 0; display: grid; gap: 4px; justify-items: center; align-content: center; }
     .readouts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; width: min(100%, 250px); }
@@ -602,9 +607,18 @@
       const records = saved.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
       const ids = new Set(records.map(d => d.id));
       const others = drives.filter(d => !savedDriveIds.has(d.id) && !ids.has(d.id));
-      drives.splice(0, drives.length, ...records.map((d) => ApexRecording.toTrack(ApexRecording.repair(Core, d))), ...others);
+      const mine = ApexRecording.corroborate(records.map((d) => ApexRecording.repair(Core, d)));   // hazards seen again on other drives
+      drives.splice(0, drives.length, ...mine.map((d) => ApexRecording.toTrack(d)), ...others);
       savedDriveIds = ids;
+      // What the coach found last time on each corner you have driven, spoken on the way in. Rebuilt only when the set of
+      // drives changes (it runs the coach over your newest drives), off the main path.
+      const memoKey = records.map((d) => d.id).join(',');
+      if (memoKey !== roadMemoryKey) setTimeout(() => {
+        if (version !== refreshDriveVersion) return;
+        try { roadMemory = ApexRoadMemory.build(Core, mine, ApexRecording.cornersOf); roadMemoryKey = memoKey; } catch (_) { roadMemory = []; }
+      }, 0);
     }
+    let roadMemory = [], roadMemoryKey = null;
     let track = null;
 
     // =======================================================================
@@ -636,6 +650,8 @@
     function syncDerivedToggles() { state.toggles.stage = state.notesMode === 'full'; state.toggles.night = isNight(); }
     // Off route in live mode: web/reroute.js decides, reroute() (ROUTING) rebuilds the plan.
     const rerouter = new ApexReroute.RerouteMonitor();
+    // Traffic on the route ahead (iOS app only, Apple via the shell): web/traffic.js decides, checkTraffic() (ROUTING) asks.
+    const trafficMon = new ApexTraffic.TrafficMonitor();
     const routeWatch = { note: null, frame: null, bestM: 0 };   // strip text while off route; last frame fed; furthest progress
     try {
       const saved = JSON.parse(localStorage.getItem('apex.prefs') || 'null');
@@ -743,6 +759,7 @@
       navigator.geolocation.watchPosition((p) => {
         const c = p.coords;
         state.lastPosition = { lat: c.latitude, lon: c.longitude }; state.lastPositionAt = performance.now();
+        state.lastMotion = { heading: Number.isFinite(c.heading) ? c.heading : null, speedMps: Number.isFinite(c.speed) ? c.speed : null };
         if (state.mode === 'live') return;   // a web drive feeds its own frames
         showIdleFix({ lat: c.latitude, lon: c.longitude, course_deg: Number.isFinite(c.heading) ? c.heading : NaN, speed_mps: Number.isFinite(c.speed) ? c.speed : 0 });
       }, () => {}, { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 });
@@ -1147,7 +1164,8 @@
     // Voice: "codriver" (most natural voice installed, read like a real co-driver) or
     // "jarvis" (cartoonishly robotic: robot voice where installed, chirps, machine-speak).
     // -------------------------------------------------------------------------
-    const speech = { busy: false, queue: [] };
+    const speech = { busy: false, queue: [], talkingUntil: 0 };   // talkingUntil: the native voice's estimated end (it reports no finish)
+    const MEMO_S = 5;   // a remembered coaching tip takes up to this long to say
     const NUM_WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
     const TENS = { 30: 'thirty', 40: 'forty', 50: 'fifty', 60: 'sixty', 70: 'seventy', 80: 'eighty' };
     // Co-drivers say "one-fifty", "two hundred", "thirty" — never "one hundred and fifty".
@@ -1224,6 +1242,11 @@
       if (speech.queue.length > 2) speech.queue.splice(0, speech.queue.length - 2);
       pumpSpeech();
     }
+    // Next in line without cutting off what is playing or dropping the notes behind it (convoy hazard calls far ahead).
+    function sayNext(text) {
+      speech.queue.unshift({ text, chain: null, sysToken: null });
+      pumpSpeech();
+    }
     // In the app the shell owns the audio route (car stereo, CarPlay audio, Bluetooth): tell it while a web voice clip plays.
     function voiceBracket(on) {
       const native = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex;
@@ -1256,7 +1279,11 @@
       const style = state.voiceStyle;
       if (style === 'jarvis') chirp();
       const native = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex;
-      if (native) { try { native.postMessage({ cmd: 'speak', text: spoken, force: false, style }); } catch (_) {} speech.busy = false; pumpSpeech(); return; }
+      if (native) {
+        try { native.postMessage({ cmd: 'speak', text: spoken, force: false, style }); } catch (_) {}
+        speech.talkingUntil = Math.max(performance.now(), speech.talkingUntil) + 600 + spoken.length * 70;   // ~14 characters a second
+        speech.busy = false; pumpSpeech(); return;
+      }
       if (!('speechSynthesis' in window)) { speech.busy = false; return; }
       const u = new SpeechSynthesisUtterance(spoken);
       const v = pickVoice(state.voiceStyle);
@@ -1271,7 +1298,7 @@
     function subFor(e) {
       if (e.type === 'corner') return `R ${Math.round(e.radius_m)} m · ${Math.round(e.apex_mph)} mph`;
       if (e.type === 'alpr') return 'Camera';
-      return 'Driven once';
+      return ApexRecording.seenLabel(e);
     }
     const linkLabel = (e) => (!e.link ? '' : (e.link === 'into' || e.link === 'and') ? ` · ${e.link.toUpperCase()}` : ` · ${e.link} m to next`);
 
@@ -1305,7 +1332,7 @@
         return { type: e.type, code: e.code, call: e.call, sub: subFor(e) + linkLabel(e), dist: d.n, unit: d.u, distM: e.dist_m - state.cursorM,
                  dir: e.dir, severity: e.severity, turnRad: e.turn_rad, mods: e.mods || [] };
       });
-      notes.quietText = offRoute ? (!track ? 'Driving · no route loaded' : offRouteText()) : track ? `${track.name} · ${spirited ? 'Full notes' : 'Quiet · bumps and cameras only'}` : 'Plan a route for notes';
+      notes.quietText = offRoute ? (!track ? 'No route planned' : offRouteText()) : track ? `${track.name} · ${spirited ? 'Full notes' : 'Quiet · bumps and cameras only'}` : 'Plan a route for notes';
       Inst.renderNotes($('notes'), look.theme, notes);
 
       if (!(state.playing || live) || vMps == null) return;
@@ -1319,6 +1346,16 @@
         if (e.type === 'corner' ? !spirited : !(spirited || noteworthyInCruise(e))) continue;
         const call = chainedCall(e, ev, spirited);
         say(call.text, false, call.chain);
+      }
+      // Roads you have driven: one technique tip per remembered corner, only with full notes on (never over a commute),
+      // moving on a fresh heading, and only when it ends before any call is due: it starts MEMO_S of driving beyond the
+      // call distance and never while a call is pending in that stretch or another voice may still be speaking.
+      const reach = lead + vMps * MEMO_S;
+      if (live && spirited && vMps >= 5 && performance.now() - state.liveAt < 2500 && !speech.busy && !speech.queue.length
+          && performance.now() > speech.talkingUntil
+          && !ev.some(e => e.dist_m - state.cursorM < reach && !state.spoken.has(`${track.id}:${e.type}:${e.index}`))) {
+        const memo = ApexRoadMemory.upcoming(roadMemory, state.live, reach, reach + 200, state.spoken);
+        if (memo) { state.spoken.add(memo.id); say(memo.text); }
       }
     }
 
@@ -1337,7 +1374,7 @@
         if (track) {
           // Off route the rejoin can be anywhere on the route, so search all of it (hint -1).
           const hit = Core.nearestIndex(lat, lon, track.lat, track.lon, rerouter.off ? -1 : state.cursorIdx, 600);
-          if (L !== routeWatch.frame) { routeWatch.frame = L; feedRerouter(L, hit); }
+          if (L !== routeWatch.frame) { routeWatch.frame = L; feedRerouter(L, hit); trafficTick(L, hit); }
           if (hit.distM < 40 && !rerouter.off) { idx = hit.index; state.cursorM = track.dist[idx]; }
         }
       } else if (track && replayOn) {
@@ -1440,7 +1477,7 @@
       state.cursorM = Math.max(0, Math.min(totalM(), startM));
       refreshAutoNight();
       state.spoken.clear();
-      rerouter.routeChanged(); routeWatch.note = null; routeWatch.frame = null; routeWatch.bestM = 0;
+      rerouter.routeChanged(); trafficMon.routeChanged(Date.now()); routeWatch.note = null; routeWatch.frame = null; routeWatch.bestM = 0;
       if (state.mode !== 'live') setMode(t.kind === 'drive' ? 'replay' : 'sim');
       loadTrackOnMap();
       fetchAlpr(t);
@@ -1535,10 +1572,17 @@
         for (const m of leg.maneuvers || []) if (TURN_TYPES.has(m.type) && shape[m.begin_shape_index]) turns.push(shape[m.begin_shape_index]);
         coords.push(...shape.slice(i ? 1 : 0));
       });
-      return { coords, turns, timeS: trip.summary && Number.isFinite(trip.summary.time) ? trip.summary.time : null };
+      // km on each named road, for "switching to <road>" (traffic detours)
+      const names = new Map();
+      for (const leg of trip.legs) for (const m of leg.maneuvers || []) {
+        const n = m.street_names && m.street_names[0];
+        if (n && Number.isFinite(m.length)) names.set(n, (names.get(n) || 0) + m.length);
+      }
+      return { coords, turns, names, timeS: trip.summary && Number.isFinite(trip.summary.time) ? trip.summary.time : null };
     }
-    // [{ coords, turns: [[lon, lat]], timeS }]: the route, then up to `alternates` other ways (two-point requests only).
-    async function valhallaRoutes(points, throughRoadsOnly = false, alternates = 0) {
+    // [{ coords, turns: [[lon, lat]], names, timeS }]: the route, then up to `alternates` other ways (two-point requests
+    // only). extra: more request options, e.g. { exclude_polygons }.
+    async function valhallaRoutes(points, throughRoadsOnly = false, alternates = 0, extra = {}) {
       // Loop waypoints snap only to through roads (tertiary..primary), never cul-de-sacs or motorways.
       const filter = { min_road_class: 'tertiary', max_road_class: 'primary', exclude_ramp: true };
       const json = await RouteLoading.json(`${VALHALLA}/route`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
@@ -1547,7 +1591,7 @@
           if (!end && p.shaping) return { lat: p.lat, lon: p.lon, type: 'through', radius: 25 };   // stay on the stage
           return { lat: p.lat, lon: p.lon, type: end ? 'break' : 'through', ...(throughRoadsOnly && !end ? { radius: 2500, search_filter: filter } : {}) };
         }),
-        ...COSTING, ...(alternates && points.length === 2 ? { alternates } : {}) }) });
+        ...COSTING, ...(alternates && points.length === 2 ? { alternates } : {}), ...extra }) });
       if (!json.trip) throw new Error(json.error || 'no route');
       return [json.trip, ...(json.alternates || []).map(a => a.trip).filter(Boolean)].map(routeOf);
     }
@@ -1722,7 +1766,7 @@
       markDestination(t);
       if (state.mode !== 'live' && !booting) lockOnDestination(t);
       attachLimits(t);
-      if (!prebuilt) toast(`${name} · ${(totalM() / 1609.344).toFixed(1)} mi · ${t.events.length} corners`);
+      if (!prebuilt) toast(`${name} · ${(totalM() / 1609.344).toFixed(1)} mi · ${t.events.filter(e => e.type === 'corner').length} corners`);
     }
     // A route just found: pin its destination and show it, so you can check you are routing to the right place. FOLLOW
     // (or Start drive) goes back to your position. A loop has no destination: show the whole loop instead.
@@ -1812,6 +1856,98 @@
       if (track !== t || state.mode !== 'live') return;
       Object.assign(nt, { request: { from: null, to: req.to, via: ahead }, fun: funOf(nt, r.turns), timeS: r.timeS });
       await buildRoute(null, t.id, t.name, nt);                     // activate() resets the monitor for the new route
+    }
+    // Traffic ahead (iOS app only; docs/ARCHITECTURE.md section 8). Every 2 min while on a planned route, Apple times the next
+    // 20 km in chunks, now and at 3 am. A jam (or a slowdown) costs the route fun even with no delay; on a jam, a detour that
+    // avoids it and is more fun than staying is offered for 6 s with Cancel, else "Traffic ahead · N min". Web and Android
+    // have no traffic source and say nothing (a keyed provider through the Worker needs the owner's approval).
+    function trafficTick(L, hit) {
+      const t = track;
+      if (!window.APEX_EMBED || !t || !t.request || rerouter.off || hit.distM >= 40 || !(L.speed_mps > 2)) return;
+      if (!trafficMon.due(Date.now())) return;
+      trafficMon.started();
+      checkTraffic(t, hit.index).then((r) => trafficMon.done(Date.now(), r || {}), () => trafficMon.done(Date.now()));
+    }
+    async function checkTraffic(t, idx) {
+      const chunks = ApexTraffic.chunksAhead(t.dist, t.dist[idx]);
+      if (!chunks.length) return null;
+      const pt = (i) => ({ lat: +t.lat[i].toFixed(6), lon: +t.lon[i].toFixed(6) });
+      const reply = await askNative({ cmd: 'trafficProbe', chunks: chunks.map(c => ({ a: pt(c.i0), b: pt(c.i1) })) }, 90000);
+      if (!reply || reply.busy) return null;
+      const result = { throttled: !!reply.throttled };
+      if (track !== t || state.mode !== 'live') return result;
+      const probes = chunks.map((c, k) => {
+        const keep = (_, i) => i % 5 === 0 || i === c.i1 - c.i0;    // every 25 m is plenty to compare paths
+        const ours = { lat: t.lat.slice(c.i0, c.i1 + 1).filter(keep), lon: t.lon.slice(c.i0, c.i1 + 1).filter(keep) };
+        const got = (Array.isArray(reply.results) && reply.results[k]) || {};
+        return { ...ours, startM: c.startM, endM: c.endM, ...ApexTraffic.classifyChunk(ours, got.now, got.night) };
+      });
+      t.traffic = { at: Date.now(), probes };
+      if (probes.some(p => p.level === 'jam')) await trafficDetour(t, idx, probes);
+      return result;
+    }
+    async function trafficDetour(t, idx, probes) {
+      const req = t.request, L = state.live, jams = probes.filter(p => p.level === 'jam');
+      // Each jam once per 10 min on this route, switched, cancelled or not.
+      if (!L || !trafficMon.shouldSay(jams.map(p => [p.startM, p.endM]), Date.now())) return;
+      const delayS = probes.reduce((a, p) => a + (p.level === 'jam' || p.level === 'slow' ? p.delayS : 0), 0);
+      const delayMin = Math.max(1, Math.round(delayS / 60));
+      const stay = () => { toast(`Traffic ahead · ${delayMin} min`); say(`Traffic ahead. ${delayMin} minute${delayMin === 1 ? '' : 's'} slower`); };
+      // Only the driver's own stops still ahead: old shaping points may sit in the jam, and a detour gets its own.
+      const ahead = req.via.filter(v => !v.shaping && (v.distM == null || v.distM > routeWatch.bestM)).map(v => ({ lat: v.lat, lon: v.lon }));
+      const points = [{ lat: L.lat, lon: L.lon }, ...ahead, req.to];
+      // Valhalla gives alternates only between two points; the exclusion variant works through vias too.
+      const [base, avoid] = await Promise.allSettled([valhallaRoutes(points, false, 2),
+                                                      valhallaRoutes(points, false, 0, { exclude_polygons: ApexTraffic.jamPolygons(probes) })]);
+      if (track !== t || state.mode !== 'live') return;
+      if (base.status !== 'fulfilled' || !Number.isFinite(base.value[0].timeS)) { stay(); return; }
+      const primary = base.value[0];
+      const current = { timeS: primary.timeS, delayS };
+      const trips = [...base.value.slice(1), ...(avoid.status === 'fulfilled' ? avoid.value : [])]
+        .filter(c => Number.isFinite(c.timeS) && !ApexTraffic.tooSlow(current, c.timeS));   // only score what could win
+      // The Plan route card's fun score (web/fun_route.js) on light geometry, times what traffic leaves of it. The current
+      // route is scored as the router's way from here, which follows it.
+      const scored = (r) => {
+        const g = FunRoute.geometry(r.coords, Core), f = funOf(g, r.turns), tf = ApexTraffic.trafficFactor(g, probes);
+        return { route: r, fun: f ? f.fun * tf.factor : null, crossesJam: tf.crossesJam };
+      };
+      const now = scored(primary), cands = [];
+      for (const r of trips) { cands.push(scored(r)); await RouteLoading.yieldToUI(); }
+      if (track !== t || state.mode !== 'live') return;
+      const pick = Number.isFinite(now.fun) && ApexTraffic.pickDetour({ ...current, fun: now.fun }, cands.map(c => ({ fun: c.fun, timeS: c.route.timeS, crossesJam: c.crossesJam })));
+      window.apexDebug && (window.apexDebug.lastTraffic = { now: now.fun, delayS, primaryS: primary.timeS, pick,
+        cands: cands.map(c => ({ fun: c.fun, timeS: c.route.timeS, crossesJam: c.crossesJam })) });
+      if (!pick) { stay(); return; }
+      const c = cands[pick.index];
+      const road = [...c.route.names].filter(([n]) => !primary.names.has(n)).sort((a, b) => b[1] - a[1]).map(([n]) => n)[0] || 'another road';
+      const extraMin = Math.round(pick.extraS / 60);
+      const sw = { cancelled: false };
+      toast(`Traffic ahead · switching to ${road}${extraMin > 0 ? ` (+${extraMin} min)` : ''}`,
+            { label: 'Cancel', ms: 6000, onClick: () => { sw.cancelled = true; say('Staying on this route'); } });
+      say(`Traffic ahead. Switching to ${road}${extraMin > 0 ? `, ${extraMin} minute${extraMin === 1 ? '' : 's'} longer` : ''}`);
+      await new Promise(r => setTimeout(r, 6000));
+      if (sw.cancelled || track !== t || state.mode !== 'live' || rerouter.off) return;
+      // Pinned with shaping points along it, like a winning alternate in Plan, so a reroute stays on the detour (a short
+      // detour gets its midpoint).
+      const along = FunRoute.alongPoints(c.route.coords);
+      if (!along.length) { const m = c.route.coords[Math.floor(c.route.coords.length / 2)]; along.push({ lat: m[1], lon: m[0], shaping: true }); }
+      let route = c.route, nt = await trackFromPolyline(route.coords, t.id, t.name);
+      if (track !== t || state.mode !== 'live') return;
+      // The car moved on while this was decided (routing, scoring, 6 s): if it is already off the detour, route again from
+      // where it is through the detour's points.
+      const Lnow = state.live;
+      if (Lnow && Core.nearestIndex(Lnow.lat, Lnow.lon, nt.lat, nt.lon, -1).distM > 40) {
+        const order = (v) => Core.nearestIndex(v.lat, v.lon, nt.lat, nt.lon, -1).index;
+        const pts = [...ahead, ...along].map(v => ({ v, i: order(v) })).sort((a, b) => a.i - b.i).map(x => x.v);
+        try { [route] = await valhallaRoutes([{ lat: Lnow.lat, lon: Lnow.lon }, ...pts, req.to]); } catch (_) { return; }
+        if (track !== t || state.mode !== 'live') return;
+        nt = await trackFromPolyline(route.coords, t.id, t.name);
+        if (track !== t || state.mode !== 'live') return;
+      }
+      const at = (v) => Core.nearestIndex(v.lat, v.lon, nt.lat, nt.lon, -1).index;
+      const via = [...ahead, ...along].map(v => ({ v, i: at(v) })).sort((a, b) => a.i - b.i).map(x => x.v);   // in order along it
+      Object.assign(nt, { request: { from: null, to: req.to, via }, fun: funOf(nt, route.turns), timeS: route.timeS });
+      await buildRoute(null, t.id, t.name, nt);                     // activate() restarts the traffic clock for the new route
     }
     // Members: what others measured on these roads (d.t.measured) and a score adjustment for it (d.adjust: rough
     // −8 … smooth +3, banked ±2, docs/ROUTING.md; unmeasured roads are neutral). False when there is nothing to compare or no membership.
@@ -2015,9 +2151,10 @@
       const best = done[0];
       best.t.request = { from: null, to: { lat: c.lat, lon: c.lon }, via: best.job.pts.slice(1, -1).map(p => ({ lat: p.lat, lon: p.lon })) };
       ui.step('Building route', 0.92);
-      await buildRoute(null, `loop_${miles}`, `${miles} mi loop`, best.t);
-      const how = best.job.kind === 'stages' ? `${best.job.plan.legs.length} best-road stages` : 'circle fallback';
-      toast(`${miles} mi loop · ${(best.km / 1.609344).toFixed(1)} mi · ${best.good} good corners`);
+      // Name the loop by what it is, not what was asked: a "15 mi loop" that is 9.3 mi reads as a bug.
+      const gotMi = best.km / 1.609344, near = Math.abs(gotMi - miles) <= 0.2 * miles;
+      await buildRoute(null, `loop_${miles}`, `${Math.max(1, Math.round(gotMi))} mi loop`, best.t);
+      toast(near ? `${best.good} good corners on this loop` : `${gotMi.toFixed(1)} mi: the closest good loop to ${miles} mi`);
       window.apexDebug && (window.apexDebug.lastLoop = done.map(d => ({ kind: d.job.kind, score: d.score, km: d.km, good: d.good, retraced: d.retraced })));
     }
 
@@ -2026,9 +2163,17 @@
     // 10. UI WIRING
     // =======================================================================
     function toast(msg, action) {
-      const t = $('toast'); t.textContent = msg;
-      if (action) { const a = document.createElement('a'); a.href = action.href; a.textContent = action.label; a.style.cssText = 'margin-left:10px;color:var(--accent);text-decoration:underline'; t.append(a); }
-      t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), action ? 7000 : 4200);
+      const t = $('toast');
+      if (!action && t._holdUntil > performance.now()) return;   // a Cancel countdown owns the toast until it ends
+      t._holdUntil = action && action.ms ? performance.now() + action.ms : 0;
+      t.textContent = msg;
+      if (action) {
+        const a = document.createElement('a'); a.href = action.href || '#'; a.textContent = action.label; a.style.cssText = 'margin-left:10px;color:var(--accent);text-decoration:underline'; t.append(a);
+        // Once the countdown is over the action is gone: a late tap must not undo what already happened.
+        if (action.onClick) a.onclick = (e) => { e.preventDefault(); if (!a.isConnected) return; t._holdUntil = 0; a.remove(); action.onClick(); t.classList.remove('show'); };
+      }
+      t.classList.add('show'); clearTimeout(t._h);
+      t._h = setTimeout(() => { t.classList.remove('show'); if (action && action.onClick) t.querySelectorAll('a').forEach(x => x.remove()); }, action ? action.ms || 7000 : 4200);
     }
     // Views: ROUTE / DRIVES / SETUP open the side panel; tapping the open tab again, the map
     // behind it, or swiping it right closes it. ANALYSIS is its own page.
@@ -2326,6 +2471,22 @@
       try { await navigator.clipboard.writeText(text); toast(ok); } catch (_) { window.prompt('Copy this link', text); }
     };
     const section = (title) => el('div', { className: 'stack-8' }, el('h3', { textContent: title }));
+    // Convoy (web/convoy_ui.js): a live group drive. The page lends it the map, the position, the voice and its helpers.
+    let convoy = null;
+    try { convoy = window.ApexConvoyUI && window.ApexConvoy ? ApexConvoyUI.mount({
+      map, maplibregl, el, btn, toast, copyText, showView, apiFetch: ApexSync.apiFetch, overlayParent: $('toast').parentElement,
+      siteOrigin: () => (ApexSync.inApp ? ApexSync.apiBase : location.origin),
+      wsUrl: (id) => `${ApexSync.inApp ? ApexSync.apiBase.replace(/^http/, 'ws') : location.origin.replace(/^http/, 'ws')}/api/convoy/${encodeURIComponent(id)}/connect`,
+      getFix: () => {
+        const p = state.lastPosition;
+        if (!p || !state.lastPositionAt || performance.now() - state.lastPositionAt > 10000) return null;
+        const m = state.lastMotion || {};
+        return { lat: p.lat, lon: p.lon, heading: m.heading ?? null, speedMps: m.speedMps ?? null };
+      },
+      getRoute: () => (track && track.kind === 'route' && track.lat.length > 1 ? { name: track.name, pts: track.lat.map((la, i) => [la, track.lon[i]]) } : null),
+      // A close hazard cuts in; a far one goes next, after the pace note being spoken (never dropping the notes queued).
+      speak: (text, urgent) => { if (!state.toggles.voice) toast(text); else if (urgent) say(text, true); else sayNext(text); },
+    }) : null; } catch (e) { console.error('convoy', e); convoy = null; }   // the convoy never takes the page down
     const switchRow = (label, on, change) => { const b = el('button', { className: 'ink-btn' + (on ? ' on' : ''), textContent: `${label}: ${on ? 'On' : 'Off'}`, onclick: change }); b.setAttribute('aria-pressed', String(!!on)); return b; };
     let openCrewId = null;
     const crewNear = () => { if (state.lastPosition) return state.lastPosition; const c = map.getCenter(); return { lat: c.lat, lon: c.lng }; };
@@ -2386,6 +2547,7 @@
         btn('Invite someone', async () => { const r = await apiCall('POST', '/api/invites'); const j = await jsonOf(r); if (r.ok) copyText(j.url, 'Invite link copied. They\'ll be your friend the moment they join.'); else toast('Couldn\'t make an invite. Try again.'); }, 'ink-btn solid'),
         btn('Share my handle', () => copyText(`${location.origin}/?add=${me.handle}`, 'Link copied. Anyone who opens it can ask to be your friend.'))), invOut);
       body.append(you);
+      if (convoy) body.append(convoy.section());
 
       // friends: a side pop-up (owner decision), opened from the button under You; new requests light it up
       if (stash('apex.add')) friendsOpen = true;
@@ -2988,7 +3150,7 @@
       $('obAlt').onclick = () => { finish(); watchDryRidge(); };
       ob.classList.add('show'); paint(); $('obNext').focus();
     }
-    if (!flag('apex.onboarded') && !window.APEX_EMBED && !['invite', 'crew', 'add', 'drive', 'play', 'at', 'theme'].some(k => params.has(k))) runOnboarding();
+    if (!flag('apex.onboarded') && !window.APEX_EMBED && !['invite', 'crew', 'add', 'convoy', 'drive', 'play', 'at', 'theme'].some(k => params.has(k))) runOnboarding();
     else if (!flag('apex.onboarded')) flag('apex.onboarded', '1');
 
     // =======================================================================
@@ -3003,6 +3165,7 @@
       live(frame) {
         if (!frame || !frame.has_fix || !Number.isFinite(frame.lat) || !Number.isFinite(frame.lon)) return;
         state.lastPosition = { lat: frame.lat, lon: frame.lon }; state.lastPositionAt = performance.now();
+        state.lastMotion = { heading: Number.isFinite(frame.course_deg) ? frame.course_deg : null, speedMps: Number.isFinite(frame.speed_mps) ? frame.speed_mps : null };
         if (NATIVE_SHELL) feedAmbient(frame);
         if (NATIVE_SHELL && !driveActive) { showIdleFix(frame); return; }
         state.live = frame; state.liveAt = performance.now();
@@ -3019,7 +3182,7 @@
         render(entering);
       },
       onNative(msg) {
-        if (msg && (msg.type === 'placeSuggestions' || msg.type === 'placeResolved')) { nativePlaceReply(msg); return; }
+        if (msg && (msg.type === 'placeSuggestions' || msg.type === 'placeResolved' || msg.type === 'trafficProbe')) { nativePlaceReply(msg); return; }
         if (msg && msg.type === 'recordingSaved') toast(`Saved ${msg.segments} road segments to ${msg.file}`);
         // App sign-in finished in the native shell: keep the session token and redraw whatever shows account state.
         if (msg && msg.type === 'session' && msg.token) { ApexSync.setSession(msg.token); toast('Signed in.'); location.reload(); }

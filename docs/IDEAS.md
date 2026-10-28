@@ -72,7 +72,7 @@ long-press pin (#61), Apple place search and nearby suggestions in the app (#73)
 | R-05 | Multi-centre stage discovery so long A→B trips find stages near both ends, not only the midpoint | H | M | done (#96) | STATE 2026-10-28 |
 | R-06 | One fun score for loops and A→B (unify loop ranking with the fun score) | M | S | todo | STATE 2026-10-28 |
 | R-07 | Live ETA and time left from router durations scaled by your own pace, reset on reroute | H | M | todo | WORKER_QUEUE eta-1, every nav app |
-| R-08 | Traffic ahead on iOS from MapKit, switch to the next most fun route that avoids the jam | H | L | todo | WORKER_QUEUE traffic-1, Waze |
+| R-08 | Traffic ahead on iOS from MapKit, switch to the next most fun route that avoids the jam | H | L | done (#78, phone test pending) | WORKER_QUEUE traffic-1, Waze |
 | R-09 | Traffic on web/Android through a keyed provider (TomTom/HERE via the Worker) | M | M | owner (paid provider) | Google Maps |
 | R-10 | "Explore": best stages within N minutes of here, as a list and on the map, one tap to drive one | H | M | todo | ROAD_INTELLIGENCE §7.1, REVER discover |
 | R-11 | Choose each stage's direction by score and car (climb the technical one, descend the flowing one) | M | M | todo | ROAD_INTELLIGENCE §7.2.3 |
@@ -225,7 +225,7 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 | U-02 | Hide the Where to?/Start bar during a replay; it covers the cluster | M | S | done (#90) | STATE 2026-10-28 UI audit |
 | U-03 | Crew sheet draws one rule under its title, not two | L | S | done (this PR) | STATE 2026-10-28 UI audit |
 | U-04 | Imported drives get a real name (place, road, time of day), not the file name | M | S | partial (recorder file names read as "Drive date time"; place and road names todo) | STATE 2026-10-28 UI audit |
-| U-05 | Audit the live cockpit with simulated GPS frames at phone size (day, night, glare) | H | S | todo | STATE 2026-10-28 UI audit |
+| U-05 | Audit the live cockpit with simulated GPS frames at phone size (day, night, glare) | H | S | done (this PR: browser GPS track, day and night; native frames and glare still need a phone) | STATE 2026-10-28 UI audit |
 | U-06 | Stages simplified: one list near you with your best and the leader, create from a drive in one step | H | M | partial (#77) | WORKER_QUEUE stages-1 |
 | U-07 | Glanceable cockpit: one number and one note readable at arm's length in sunlight | H | M | todo | car HMI guidelines |
 | U-08 | Motion design pass: route reveal, sheet springs, note transitions, under 200 ms, reduced-motion respected | M | M | todo | Apple Maps |

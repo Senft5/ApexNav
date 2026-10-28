@@ -119,7 +119,7 @@
         svg('text', { x: tx, y: ty + 5, 'text-anchor': 'middle', class: 'dial-num' }, s).textContent = v;
       }
     }
-    svg('text', { x: 100, y: 142, 'text-anchor': 'middle', class: 'dial-label' }, s).textContent = 'MPH';
+    svg('text', { x: 100, y: 132, 'text-anchor': 'middle', class: 'dial-label' }, s).textContent = 'MPH';
     const limit = svg('g', {}, s);
     svg('rect', { x: 94, y: 4, width: 12, height: 14, fill: 'var(--face)', stroke: 'var(--face-ink)', 'stroke-width': 1.6 }, limit);
     const sight = svg('path', { d: 'M100 18 L95 8 L105 8 Z', fill: 'none', stroke: 'var(--amber)', 'stroke-width': 2 }, s);
@@ -127,7 +127,7 @@
     const needle = svg('g', {}, s);
     const np = svg('path', { d: printed ? 'M98.6 112 L100 24 L101.4 112 Z' : 'M97.5 108 L100 22 L102.5 108 Z', fill: printed ? 'var(--signal)' : 'var(--face-ink)' }, needle);
     svg('circle', { cx: 100, cy: 100, r: printed ? 5 : 7, fill: 'var(--face)', stroke: 'var(--face-ink)', 'stroke-width': 1.6 }, s);
-    const digital = svg('text', { x: 100, y: 168, 'text-anchor': 'middle', class: 'dial-digital' }, s);
+    const digital = svg('text', { x: 100, y: 174, 'text-anchor': 'middle', class: 'dial-digital' }, s);
     return (d) => {
       const live = d.speedMph != null;
       needle.setAttribute('transform', `rotate(${ang(live ? d.speedMph : 0) + 90} 100 100)`);
@@ -157,7 +157,7 @@
       svg('line', { x1, y1, x2, y2, stroke: d === 0 ? 'var(--face-ink)' : 'var(--face-dim)', 'stroke-width': d === 0 ? 1.8 : 1 }, s);
     }
     const bank = svg('path', { d: 'M100 182 L96 172 L104 172 Z', fill: 'var(--accent)' }, s);
-    const bankTxt = svg('text', { x: 100, y: 160, 'text-anchor': 'middle', class: 'dial-digital small' }, s);
+    const bankTxt = svg('text', { x: 100, y: 158, 'text-anchor': 'middle', class: 'dial-digital small' }, s);
     const trail = svg('polyline', { points: '', fill: 'none', stroke: 'var(--accent)', 'stroke-opacity': 0.4, 'stroke-width': 2 }, s);
     const ball = svg('circle', { cx: 100, cy: 100, r: 7, fill: 'var(--accent)' }, s);
     const pts = [];

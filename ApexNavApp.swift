@@ -256,6 +256,17 @@ final class ApexScriptBridge: NSObject, WKScriptMessageHandler {
                 shell?.placeResolve(index: index, id: id)
                 return
             }
+            if cmd == "trafficProbe", let chunks = dict["chunks"] as? [[String: Any]] {
+                // One entry per chunk, nil for a malformed one, so answers stay aligned with the page's chunks.
+                let pairs: [(CLLocationCoordinate2D, CLLocationCoordinate2D)?] = chunks.map { c in
+                    guard let a = c["a"] as? [String: Any], let b = c["b"] as? [String: Any],
+                          let aLat = (a["lat"] as? NSNumber)?.doubleValue, let aLon = (a["lon"] as? NSNumber)?.doubleValue,
+                          let bLat = (b["lat"] as? NSNumber)?.doubleValue, let bLon = (b["lon"] as? NSNumber)?.doubleValue else { return nil }
+                    return (CLLocationCoordinate2D(latitude: aLat, longitude: aLon), CLLocationCoordinate2D(latitude: bLat, longitude: bLon))
+                }
+                shell?.trafficProbe(chunks: pairs, id: id)
+                return
+            }
         }
         shell?.handleCommand(cmd)
     }
@@ -514,6 +525,72 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         var payload: [String: Any] = ["type": "placeResolved", "id": id]
         if let lat, let lon, lat.isFinite, lon.isFinite { payload["lat"] = lat; payload["lon"] = lon }
         if let name { payload["name"] = name }
+        guard let data = try? JSONSerialization.data(withJSONObject: payload), let json = String(data: data, encoding: .utf8) else { return }
+        evaluate("window.apex && window.apex.onNative && window.apex.onNative(\(json)); void 0;")
+    }
+
+    // MARK: Traffic on the route ahead (MapKit, free, no key; web/traffic.js decides what it means)
+
+    private var trafficProbeRunning = false
+
+    /// For each chunk A->B of the route ahead, Apple's route leaving now (traffic-aware) and leaving at 3 am (Apple's quiet-road
+    /// time), with both paths so the page can check Apple drove our road. One request at a time; MapKit throttling stops the
+    /// round and says so, so the page backs off. Answered with window.apex.onNative({type:'trafficProbe'}).
+    func trafficProbe(chunks: [(CLLocationCoordinate2D, CLLocationCoordinate2D)?], id: Int) {
+        guard !trafficProbeRunning else { sendTrafficProbe(id: id, results: [], throttled: false, busy: true); return }
+        trafficProbeRunning = true
+        let night = Self.nextQuietDeparture()
+        Task { @MainActor in
+            var results: [[String: Any]] = []
+            var throttled = false
+            for chunk in chunks.prefix(6) {
+                var entry: [String: Any] = [:]
+                guard let pair = chunk else { results.append(entry); continue }
+                let (a, b) = pair
+                for (key, when) in [("now", Date()), ("night", night)] {
+                    do {
+                        if let leg = try await Self.appleRoute(from: a, to: b, leaving: when) { entry[key] = leg }
+                    } catch let error as MKError where error.code == .loadingThrottled {
+                        throttled = true
+                    } catch { /* no answer for this leg: unknown stays unknown */ }
+                    if throttled { break }
+                }
+                results.append(entry)
+                if throttled { break }
+            }
+            trafficProbeRunning = false
+            sendTrafficProbe(id: id, results: results, throttled: throttled, busy: false)
+        }
+    }
+
+    /// The next 3 am local time at least 2 h away: Apple's expected time with light traffic.
+    private static func nextQuietDeparture() -> Date {
+        let cal = Calendar.current
+        let soon = Date().addingTimeInterval(2 * 3600)
+        return cal.nextDate(after: soon, matching: DateComponents(hour: 3, minute: 0), matchingPolicy: .nextTime) ?? soon.addingTimeInterval(86_400)
+    }
+
+    private static func appleRoute(from a: CLLocationCoordinate2D, to b: CLLocationCoordinate2D, leaving: Date) async throws -> [String: Any]? {
+        let req = MKDirections.Request()
+        req.source = MKMapItem(placemark: MKPlacemark(coordinate: a))
+        req.destination = MKMapItem(placemark: MKPlacemark(coordinate: b))
+        req.transportType = .automobile
+        req.requestsAlternateRoutes = false
+        req.departureDate = leaving
+        let response = try await MKDirections(request: req).calculate()
+        guard let route = response.routes.first else { return nil }
+        let n = route.polyline.pointCount
+        var coords = [CLLocationCoordinate2D](repeating: kCLLocationCoordinate2DInvalid, count: n)
+        route.polyline.getCoordinates(&coords, range: NSRange(location: 0, length: n))
+        let stride = max(1, n / 200)                     // enough to check the path follows ours, small over the bridge
+        var lat: [Double] = [], lon: [Double] = []
+        for i in Swift.stride(from: 0, to: n, by: stride) { lat.append(coords[i].latitude); lon.append(coords[i].longitude) }
+        if n > 0, (n - 1) % stride != 0 { lat.append(coords[n - 1].latitude); lon.append(coords[n - 1].longitude) }
+        return ["s": route.expectedTravelTime, "lat": lat, "lon": lon]
+    }
+
+    private func sendTrafficProbe(id: Int, results: [[String: Any]], throttled: Bool, busy: Bool) {
+        let payload: [String: Any] = ["type": "trafficProbe", "id": id, "results": results, "throttled": throttled, "busy": busy]
         guard let data = try? JSONSerialization.data(withJSONObject: payload), let json = String(data: data, encoding: .utf8) else { return }
         evaluate("window.apex && window.apex.onNative && window.apex.onNative(\(json)); void 0;")
     }
