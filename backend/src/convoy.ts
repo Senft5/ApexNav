@@ -51,6 +51,7 @@ export class ConvoyRoom extends DurableObject<Env> {
   private members: Record<string, Member> = {};
   private revoked: Record<string, number> = {};      // user id -> when they left; an invite older than that cannot bring them back
   private banned: Record<string, true> = {};         // removed by the leader: out for the life of the convoy
+  private invited: Record<string, { at: number; until: number }> = {};   // invited in the app by the leader (IDEAS S-22): join without a link
   private names = new Map<string, { handle: string | null }>();   // memory only, from D1; handles only, real names stay with friends
   private tickets = new Map<string, Ticket>();       // sha256(ticket) -> ticket, memory only
   private conns = new Set<Conn>();
@@ -74,6 +75,7 @@ export class ConvoyRoom extends DurableObject<Env> {
       this.members = (await ctx.storage.get<Record<string, Member>>("members")) ?? {};
       this.revoked = (await ctx.storage.get<Record<string, number>>("revoked")) ?? {};
       this.banned = (await ctx.storage.get<Record<string, true>>("banned")) ?? {};
+      this.invited = (await ctx.storage.get<Record<string, { at: number; until: number }>>("invited")) ?? {};
       await ctx.storage.put("room", room);
     });
   }
@@ -100,21 +102,23 @@ export class ConvoyRoom extends DurableObject<Env> {
     });
   }
 
-  join(who: Who, secret: string): Promise<Result<Context>> {
+  join(who: Who, secret: string | null): Promise<Result<Context>> {
     return this.serial(async () => {
       const room = await this.live();
       if (!room) return fail(404, "no_convoy");
       if (this.members[who.id]) return okR(await this.context(who.id));
       const now = Date.now();
-      if (room.invite.expiresAt <= now || (await sha256hex(secret)) !== room.invite.hash) return fail(400, "invalid_invite");
-      if (this.banned[who.id] || (this.revoked[who.id] ?? -1) >= room.invite.issuedAt) return fail(403, "invite_revoked");
+      // A link (secret) or the leader's in-app invite (secret null). Either one is older than a leave: it can't bring them back.
+      const asked = secret === null ? this.invited[who.id] : null;
+      if (secret === null ? !asked || asked.until <= now : room.invite.expiresAt <= now || (await sha256hex(secret)) !== room.invite.hash) return fail(400, "invalid_invite");
+      if (this.banned[who.id] || (this.revoked[who.id] ?? -1) >= (asked ? asked.at : room.invite.issuedAt)) return fail(403, "invite_revoked");
       if (Object.keys(this.members).length >= LIMITS.members) return fail(409, "convoy_full");
       // Someone who blocked a member, or was blocked by one, never sees that member's live position: no join.
       if ((await this.blockedPairs([who.id], Object.keys(this.members))).length) return fail(403, "cannot_join");
       if (!(await this.index(who.id, (ix) => ix.add(room.id, room.expiresAt)))) return fail(429, "too_many_convoys");
       this.members[who.id] = { key: randomToken(6), role: "member", joinedAt: now };
       this.names.set(who.id, { handle: who.handle });
-      delete this.revoked[who.id];
+      delete this.revoked[who.id]; delete this.invited[who.id];
       await this.save();
       this.broadcast({ type: "member", action: "joined", member: this.pub(who.id) });
       return okR(await this.context(who.id));
@@ -141,6 +145,23 @@ export class ConvoyRoom extends DurableObject<Env> {
   }
 
   /** Leader only: a fresh invite link. The old one stops working. */
+  /** The leader invites people in the app (the Worker already checked they are friends or private crew-mates, no blocks).
+   *  Each can join without a link until the invite expires. Members, the banned and people who just left are skipped. */
+  inviteUsers(leaderId: string, userIds: string[]): Promise<Result<{ name: string; leader: string | null; expiresAtMs: number; invited: string[] }>> {
+    return this.serial(async () => {
+      const room = await this.live();
+      if (!room || this.members[leaderId]?.role !== "leader") return fail(404, "no_convoy");
+      const now = Date.now(), until = Math.min(now + LIMITS.inviteMs, room.expiresAt);
+      for (const [id, inv] of Object.entries(this.invited)) if (inv.until <= now) delete this.invited[id];
+      const fresh = userIds.filter((id) => !this.members[id] && !this.banned[id]);
+      if (Object.keys(this.invited).length + fresh.length > LIMITS.members * 2) return fail(429, "too_many_invites");
+      for (const id of fresh) this.invited[id] = { at: now, until };
+      await this.save();
+      await this.loadNames();
+      return okR({ name: room.name, leader: this.names.get(leaderId)?.handle ?? null, expiresAtMs: until, invited: fresh });
+    });
+  }
+
   async newInvite(userId: string): Promise<Result<{ invite: string; expiresAtMs: number }>> {
     const room = await this.live();
     if (!room || this.members[userId]?.role !== "leader") return fail(404, "no_convoy");
@@ -386,7 +407,7 @@ export class ConvoyRoom extends DurableObject<Env> {
   }
 
   private async save(): Promise<void> {
-    await this.ctx.storage.put({ room: this.room, members: this.members, revoked: this.revoked, banned: this.banned });
+    await this.ctx.storage.put({ room: this.room, members: this.members, revoked: this.revoked, banned: this.banned, invited: this.invited });
   }
 
   /** Runs `fn` against a user's convoy index; false when it refused (or could not be reached for an add). */
@@ -500,17 +521,39 @@ export class ConvoyRoom extends DurableObject<Env> {
 }
 
 /** Per user: the convoys they are in right now (ids and expiry only), and how many they started lately. */
+export interface PendingInvite { name: string; from: string | null; expiresAtMs: number }
+const MAX_PENDING = 10;
+
 export class ConvoyIndex extends DurableObject<Env> {
   private async load() {
     const now = Date.now();
     const convoys = Object.fromEntries(Object.entries((await this.ctx.storage.get<Record<string, number>>("convoys")) ?? {}).filter(([, exp]) => exp > now));
     const led = Object.fromEntries(Object.entries((await this.ctx.storage.get<Record<string, number>>("led")) ?? {}).filter(([id]) => id in convoys));
     const created = ((await this.ctx.storage.get<number[]>("created")) ?? []).filter((t) => now - t < 3600_000);
-    return { convoys, led, created };
+    const invites = Object.fromEntries(Object.entries((await this.ctx.storage.get<Record<string, PendingInvite>>("invites")) ?? {})
+      .filter(([id, inv]) => inv.expiresAtMs > now && !(id in convoys)));
+    return { convoys, led, created, invites };
   }
   private async save(s: Awaited<ReturnType<ConvoyIndex["load"]>>) {
-    if (!Object.keys(s.convoys).length && !s.created.length) { await this.ctx.storage.deleteAll(); return; }
-    await this.ctx.storage.put({ convoys: s.convoys, led: s.led, created: s.created });
+    if (!Object.keys(s.convoys).length && !s.created.length && !Object.keys(s.invites).length) { await this.ctx.storage.deleteAll(); return; }
+    await this.ctx.storage.put({ convoys: s.convoys, led: s.led, created: s.created, invites: s.invites });
+  }
+  /** In-app convoy invites waiting for this person (IDEAS S-22): newest kept, at most MAX_PENDING. */
+  async addInvite(id: string, inv: PendingInvite): Promise<void> {
+    const s = await this.load();
+    s.invites[id] = inv;
+    const ids = Object.keys(s.invites).sort((a, b) => s.invites[b].expiresAtMs - s.invites[a].expiresAtMs);
+    for (const old of ids.slice(MAX_PENDING)) delete s.invites[old];
+    await this.save(s);
+  }
+  async invites(): Promise<(PendingInvite & { id: string })[]> {
+    const s = await this.load();
+    return Object.entries(s.invites).map(([id, inv]) => ({ id, ...inv })).sort((a, b) => b.expiresAtMs - a.expiresAtMs);
+  }
+  async dropInvite(id: string): Promise<void> {
+    const s = await this.load();
+    delete s.invites[id];
+    await this.save(s);
   }
   /** Before creating a convoy: at most two led at once and ten started in an hour. */
   async claim(id: string, expiresAt: number): Promise<boolean> {

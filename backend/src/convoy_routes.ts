@@ -65,3 +65,46 @@ export function convoyConnect(req: Request, env: Env, id: string): Promise<Respo
   if (o !== APP_ORIGIN && o !== (env.PUBLIC_ORIGIN ?? new URL(req.url).origin)) throw new HttpError(403, "bad_origin");
   return convoyRoom(env, id).fetch(req);
 }
+
+// ---- In-app invites (IDEAS S-22): no link to copy, no website ---------------------------------------------------------
+const MAX_INVITE = 15;
+
+/** The leader invites friends and private crew-mates by handle. Anyone else (strangers, public-crew acquaintances, either
+ *  side of a block) is skipped without saying why. Returns how many were invited. */
+export async function convoyInvitePeople(env: Env, v: Viewer, id: string, req: Request) {
+  const { handles } = await body<{ handles?: unknown }>(req);
+  if (!Array.isArray(handles) || !handles.length || handles.length > MAX_INVITE || !handles.every((h) => typeof h === "string" && h.length <= 30)) {
+    throw new HttpError(400, "bad_handles");
+  }
+  const list = [...new Set((handles as string[]).map((h) => h.replace(/^@/, "").toLowerCase()))];
+  const ok = (await env.DB.prepare(
+    `SELECT u.id FROM users u
+      WHERE u.handle IN (${list.map((_, i) => `?${i + 2}`).join(",")}) AND u.id != ?1
+        AND (EXISTS (SELECT 1 FROM friendships f WHERE f.status = 'accepted' AND f.user_a = MIN(u.id, ?1) AND f.user_b = MAX(u.id, ?1))
+          OR EXISTS (SELECT 1 FROM crew_members a JOIN crew_members b ON b.crew_id = a.crew_id JOIN crews c ON c.id = a.crew_id
+                      WHERE a.user_id = ?1 AND b.user_id = u.id AND c.visibility = 'private'))
+        AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker = ?1 AND b.blocked = u.id) OR (b.blocker = u.id AND b.blocked = ?1))`)
+    .bind(v.id, ...list).all<{ id: string }>()).results.map((r) => r.id);
+  if (!ok.length) return { invited: 0 };
+  const r = unwrap(await convoyRoom(env, id).inviteUsers(v.id, ok));
+  await Promise.all(r.invited.map((uid) => userIndex(env, uid).addInvite(id, { name: r.name, from: r.leader, expiresAtMs: r.expiresAtMs }).catch(() => {})));
+  return { invited: r.invited.length };
+}
+
+export async function convoyInvites(env: Env, v: Viewer) {
+  return userIndex(env, v.id).invites();
+}
+
+/** Join from an in-app invite: the same consent and checks as a link. */
+export async function convoyAccept(env: Env, v: Viewer, id: string, req: Request) {
+  consent(await body<{ consent?: unknown }>(req));
+  const ctx = unwrap(await convoyRoom(env, id).join(who(v), null));
+  await userIndex(env, v.id).dropInvite(id).catch(() => {});
+  return ctx;
+}
+
+export async function convoyDismiss(env: Env, v: Viewer, id: string) {
+  if (!ROOM_RE.test(id)) throw new HttpError(404, "no_convoy");
+  await userIndex(env, v.id).dropInvite(id);
+  return { ok: true };
+}
