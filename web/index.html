@@ -25,6 +25,7 @@
   <script src="sun.js"></script>
   <script src="format.js"></script>
   <script src="road_names.js"></script>
+  <script src="twisty.js"></script>
   <script src="recording.js"></script>
   <script src="road_memory.js"></script>
   <script src="contributor.js"></script>
@@ -419,6 +420,7 @@
         <button class="sw sw-cycle" data-cycle="notesMode" aria-label="Notes"><b></b><span>Notes</span></button>
         <button class="sw" data-toggle="voice"><i></i><span>Voice</span></button>
         <button class="sw" data-toggle="lpr"><i></i><span>Cameras</span></button>
+        <button class="sw" data-toggle="twisty"><i></i><span>Twisty roads</span></button>
         <button class="sw sw-cycle" data-cycle="nightMode" aria-label="Night"><b></b><span>Night</span></button>
       </div>
       </div>
@@ -670,7 +672,7 @@
       live: null, liveAt: 0, lastPosition: null, spiritedAt: -Infinity, spoken: new Set(), tapToRoute: false,
       theme: 'roadbook', camFeel: 'dynamic', voiceId: 'george', liveVoice: false, voiceStyle: 'codriver', voiceName: '', hlOn: false, hlStrength: 1,
       notesMode: 'auto', nightMode: 'auto',   // Notes: auto | full | quiet. Night: auto (sunset/sunrise) | on | off
-      toggles: { stage: false, voice: true, lpr: true, dna: false, night: false }   // stage and night are derived from the two modes; analysis.html reads toggles.night
+      toggles: { stage: false, voice: true, lpr: true, dna: false, night: false, twisty: false }   // stage and night are derived from the two modes; analysis.html reads toggles.night
     };
     const NOTES_MODES = ['auto', 'full', 'quiet'], NIGHT_MODES = ['auto', 'on', 'off'];
     const MODE_LABEL = { auto: 'Auto', full: 'Full', quiet: 'Quiet', on: 'On', off: 'Off' };
@@ -857,6 +859,7 @@
       if (has('apex-route')) map.setPaintProperty('apex-route', 'line-color', C.route);
       if (has('apex-alt')) map.setPaintProperty('apex-alt', 'line-color', C.route);
       if (has('apex-explore')) map.setPaintProperty('apex-explore', 'line-color', C.route);
+      if (has('apex-twisty')) map.setPaintProperty('apex-twisty', 'line-color', C.amber);
     }
 
     function addApexLayers() {
@@ -875,6 +878,11 @@
       }
       map.addSource('apex-route-src', { type: 'geojson', data: emptyFC() });
       const width = (a, b) => ['interpolate', ['linear'], ['zoom'], 10, a, 16, b];
+      // Twisty roads (map shape, not measured): under every route line. t = 2 very twisty, 1 twisty.
+      map.addSource('apex-twisty-src', { type: 'geojson', data: emptyFC() });
+      const byTier = (strong, weak) => ['match', ['get', 't'], 2, strong, weak];
+      map.addLayer({ id: 'apex-twisty', type: 'line', source: 'apex-twisty-src', layout: { 'line-cap': 'round', 'line-join': 'round', visibility: 'none' },
+        paint: { 'line-width': ['interpolate', ['linear'], ['zoom'], 10, byTier(2.5, 1.5), 16, byTier(8, 5)], 'line-opacity': byTier(0.9, 0.55) } }, firstSymbol);   // under the road names
       map.addSource('apex-alt-src', { type: 'geojson', data: emptyFC() });
       map.addLayer({ id: 'apex-alt', type: 'line', source: 'apex-alt-src', layout: { 'line-cap': 'round', 'line-join': 'round' },
         paint: { 'line-width': width(3, 6), 'line-opacity': 0.45, 'line-dasharray': [1.5, 1.5] } });
@@ -961,6 +969,8 @@
       addApexLayers();
       restyleBasemap();
       map.setLayoutProperty('apex-dna', 'visibility', state.toggles.dna ? 'visible' : 'none');
+      updateTwisty();
+      map.on('moveend', () => { clearTimeout(twisty.timer); twisty.timer = setTimeout(updateTwisty, 600); });
       if (track) loadTrackOnMap();
       // Tap a faint option on the map to take it.
       map.on('click', 'apex-alt', (e) => {
@@ -984,6 +994,28 @@
         routeToQuery();
       });
     });
+    // Twisty roads: the loop planner's stage finder run around the map centre as you look around.
+    const twisty = { cache: new Map(), searched: [], busy: false, timer: 0 };
+    async function updateTwisty() {
+      if (!mapReady || !map.getLayer('apex-twisty')) return;
+      const on = !!state.toggles.twisty && !!window.ApexTwisty;
+      map.setLayoutProperty('apex-twisty', 'visibility', on ? 'visible' : 'none');
+      if (!on || twisty.busy) return;
+      const c = map.getCenter(), b = map.getBounds();
+      const halfDiagKm = Math.hypot((b.getNorth() - b.getSouth()) * 110.54, (b.getEast() - b.getWest()) * 111.32 * Math.cos(c.lat * Math.PI / 180)) / 2;
+      const area = ApexTwisty.nextSearch({ lat: c.lat, lon: c.lng, zoom: map.getZoom(), halfDiagKm }, twisty.searched);
+      if (!area) return;
+      twisty.busy = true;
+      try {
+        const stages = await ApexStages.discover({ lat: area.lat, lon: area.lon }, area.radiusKm);
+        twisty.searched.push(area);
+        if (twisty.searched.length > 40) twisty.searched.shift();
+        if (ApexTwisty.add(twisty.cache, stages)) map.getSource('apex-twisty-src').setData(ApexTwisty.geojson(twisty.cache));
+      } catch (_) { twisty.busy = false; return; }   // no tiles (offline): nothing drawn, try again on the next move
+      twisty.busy = false;
+      updateTwisty();   // the map may have moved on while this area was scored
+    }
+
     map.once('idle', () => document.querySelectorAll('.maplibregl-ctrl-attrib').forEach(a => a.classList.remove('maplibregl-compact-show')));
     $('recenterBtn').addEventListener('click', () => { resumeFollow(); render(false); });
 
@@ -3198,6 +3230,10 @@
       state.toggles[k] = !state.toggles[k];
       paintSwitches();
       if (k === 'lpr') updatePins();
+      if (k === 'twisty') {
+        updateTwisty();
+        if (state.toggles.twisty) toast(mapReady && map.getZoom() < ApexTwisty.MIN_ZOOM ? 'Zoom in to see twisty roads.' : 'Twisty roads come from the map\'s shape, not from drives.');
+      }
       savePrefs();
       render(true);
     }));
