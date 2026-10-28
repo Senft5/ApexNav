@@ -3651,6 +3651,9 @@
       const you = section('You');
       you.append(el('div', { className: 'row', style: 'align-items:baseline;gap:12px' }, el('b', { textContent: `@${me.handle}`, style: 'font-size:22px;font-family:var(--font-num)' }),
         el('span', { className: 'note', textContent: pts ? `${pts.total} points` : '' })));
+      // pioneer badges (IDEAS S-09): roads you were first or second to map with Road data on; only you see them
+      const pio = pts && pts.pioneer;
+      if (pio && (pio.firsts || pio.seconds)) you.append(el('p', { className: 'note pioneer', textContent: [pio.firsts ? `Pioneer of ${pio.firsts} road${pio.firsts === 1 ? '' : 's'}` : '', pio.seconds ? `second to map ${pio.seconds}` : ''].filter(Boolean).join(' · ') }));
       const invOut = el('p', { className: 'note' });
       you.append(el('div', { className: 'row' },
         btn('Invite someone', async () => { const r = await apiCall('POST', '/api/invites'); const j = await jsonOf(r); if (r.ok) copyText(j.url, 'Invite link copied. They\'ll be your friend the moment they join.'); else toast('Couldn\'t make an invite. Try again.'); }, 'ink-btn solid'),
