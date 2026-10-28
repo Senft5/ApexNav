@@ -71,7 +71,7 @@ positions, routing and search requests) is not "collected" by Apple's definition
 | data type | collected | linked to the user | tracking | purpose |
 |---|---|---|---|---|
 | Precise location | Yes: hazard reports and shared routes you make | Yes (kept with your account; never shown with your name) | No | App functionality |
-| Precise location | Yes: road data, only with the switch on (map road id, 5 m section, four road measurements; never coordinates) | No | No | App functionality, product improvement |
+| Precise location | Yes: road data, only with the switch on (map road id, 5 m section, four road measurements, the road's public map line; never your position or path) | No | No | App functionality, product improvement |
 | Name | Yes (from Google or Apple sign-in) | Yes | No | App functionality |
 | Email address | Yes (sign-in) | Yes | No | App functionality |
 | User ID | Yes (account id, handle) | Yes | No | App functionality |

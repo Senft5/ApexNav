@@ -39,5 +39,6 @@ SELECT
   (SELECT COUNT(*) FROM feedback) AS feedback,
   (SELECT COUNT(*) FROM kudos) AS kudos,
   (SELECT COUNT(*) FROM route_stats) AS route_stats,
+  (SELECT COUNT(*) FROM road_ways) AS road_ways,
   (SELECT COUNT(*) FROM d1_migrations) AS d1_migrations
 ;

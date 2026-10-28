@@ -10,7 +10,7 @@ def test_pages_exist_and_link_each_other():
     privacy, terms = read("web", "privacy.html"), read("web", "terms.html")
     assert 'href="terms.html"' in privacy and 'href="privacy.html"' in terms
     assert "Delete account" in privacy and "8 weeks" in privacy           # deletion and backup retention are stated
-    assert "Never coordinates, speeds or times" in privacy                # matches contributor.js
+    assert "Never your position, your path, speeds or times" in privacy                # matches contributor.js
     assert "no tolerance for objectionable content" in terms.lower()      # guideline 1.2
 
 

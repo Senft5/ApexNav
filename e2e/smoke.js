@@ -931,6 +931,36 @@ flow('3D terrain: the switch raises the map into relief and tilts it; off by def
   await page.waitForFunction(() => !window.apexDebug.map.getTerrain());
 });
 
+flow('measured roads: the switch draws the roads members have measured around the view (IDEAS Q-14)', async (page, base) => {
+  await page.route('https://tiles.openfreemap.org/**', (route) => (route.request().url().includes('/styles/')
+    ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 8, sources: {}, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#eee' } }] }) })
+    : route.abort()));
+  const boxes = [];
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url());
+    const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (u.pathname === '/api/coverage') {
+      boxes.push(u.searchParams.get('bbox'));
+      const [s, w, n, e] = u.searchParams.get('bbox').split(',').map(Number), lat = (s + n) / 2, lon = (w + e) / 2;
+      return json({ ways: [{ way: 1, line: [[lat, lon], [lat + 0.01, lon]], passes: [2, 6] }] });
+    }
+    return json({ error: 'not_found' }, 404);
+  });
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apexDebug.map.getLayer('apex-coverage'), null, { timeout: 15000 });
+  await page.evaluate(() => window.apexDebug.map.jumpTo({ center: [-83.5, 35.5], zoom: 12 }));
+  check(boxes.length === 0, 'nothing asked while the switch is off');
+  await page.evaluate(() => document.querySelector('[data-toggle="coverage"]').click());
+  await page.waitForFunction(() => window.apexDebug.map.getSource('apex-coverage-src')._data && (window.apexDebug.map.getSource('apex-coverage-src')._data.features || []).length === 1, null, { timeout: 8000 });
+  const [s, w, n, e] = boxes[0].split(',').map(Number);
+  check(n - s <= 0.5 && e - w <= 0.5 && s < 35.5 && n > 35.5, 'a small box around the view: ' + boxes[0]);
+  check(await page.evaluate(() => window.apexDebug.map.getLayoutProperty('apex-coverage', 'visibility')) === 'visible', 'drawn');
+  await page.evaluate(() => document.querySelector('[data-toggle="coverage"]').click());
+  check(await page.evaluate(() => window.apexDebug.map.getLayoutProperty('apex-coverage', 'visibility')) === 'none', 'hidden when off');
+});
+
 flow('desk: on a big screen Where to? is a column on the left and sheets a panel on the right, the map in view (IDEAS A-05)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.goto(base + '/index.html?view=route');

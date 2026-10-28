@@ -1,5 +1,6 @@
 // Phone-side road-data contributor (docs/BACKEND.md sections 3-4). Turns a profiled drive into per-road bin summaries.
-// What leaves the phone: OSM way id, direction, bin index, and four road numbers per 5 m bin. Never coordinates, speeds or times.
+// What leaves the phone: OSM way id, direction, bin index, four road numbers per 5 m bin, and the way's own public OSM line (the
+// coverage map, IDEAS Q-14). Never your position, your path, speeds or times.
 // The pure part (buildContributions) is deterministic and unit-tested; matchDrive/fetchWays/contributeDrive are the thin network shell.
 (function (root) {
   const SMOOTH_G = 0.08, ROUGH_G = 0.30, MAX_LOOKUP_WAYS = 150;   // roughness g rms: smooth at or under, broken at or over
@@ -57,9 +58,16 @@
       const span = bins[bins.length - 1].i - bins[0].i + 1;
       if (bins.length / span < 0.6) continue;                          // scattered, not a run (5 m samples on 5 m bins can skip a bin now and then: about 75% is normal worst case)
       const key = `${run.way}|${run.dir}`;
-      if (!best.has(key) || best.get(key).bins.length < bins.length) best.set(key, { way_id: run.way, dir: run.dir, driven_on: drivenOn, drive_id: driveId, bins: bins.slice(0, MAX_BINS) });
+      if (!best.has(key) || best.get(key).bins.length < bins.length) best.set(key, { way_id: run.way, dir: run.dir, driven_on: drivenOn, drive_id: driveId, bins: bins.slice(0, MAX_BINS), shape: shapeOf(ways[run.way]) });
     }
     return [...best.values()];
+  }
+
+  /** The way's own OSM line (public map data, not the drive) for the coverage map, IDEAS Q-14: at most 64 points, ends kept. */
+  function shapeOf(poly) {
+    if (!poly || poly.length < 2) return null;
+    const n = Math.min(64, poly.length), pick = Array.from({ length: n }, (_, k) => poly[Math.round(k * (poly.length - 1) / (n - 1))]);
+    return pick.map(([la, lo]) => [+la.toFixed(5), +lo.toFixed(5)]);
   }
 
   /**
@@ -134,7 +142,7 @@
    * Streams a drive to /api/contribute while it is being driven (owner decision: real time, no holding period).
    * Rows arrive one per 5 m. Every `chunk` rows the settled part of the drive is matched, turned into bins and posted.
    * Privacy: the first `skip` rows (about 1 km) are never sent and the last `lag` rows (about 1 km) are never sent, so where a trip starts and ends
-   * stays on the phone; the server also never receives coordinates. Failures (matching, offline, server errors) keep the rows or the built
+   * stays on the phone; the server never receives your position (only roads' public map lines, no more than their way ids already say). Failures (matching, offline, server errors) keep the rows or the built
    * chunks and resend the same payloads later with backoff; only a refusal (signed out, opted out) stops it.
    */
   // The first and last stretch of every trip never leaves the phone. A random 0.5 to 1.5 km at each end (docs/BACKEND.md section 3),

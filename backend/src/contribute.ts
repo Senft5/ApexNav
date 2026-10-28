@@ -10,7 +10,7 @@ const BIN_KM = 0.005;
 
 /** crest: the bin's peak unweighting in g (0 = none, 1 = weightless over the top), null when the phone did not measure it. */
 export interface Bin { i: number; cam: number | null; rough: number; crest: number | null; k: number | null }
-export interface Contribution { wayId: number; dir: 0 | 1; drivenOn: string; driveId: string; bins: Bin[]; km: number }
+export interface Contribution { wayId: number; dir: 0 | 1; drivenOn: string; driveId: string; bins: Bin[]; km: number; shape: [number, number][] | null }
 
 const isNum = (v: unknown, lo: number, hi: number): v is number => typeof v === "number" && Number.isFinite(v) && v >= lo && v <= hi;
 const bad = (why: string) => new HttpError(400, why);
@@ -44,7 +44,30 @@ export function validateContribution(raw: Record<string, unknown>, nowMs = Date.
   }
   const lo = Math.min(...seen), hi = Math.max(...seen);
   if (out.length / (hi - lo + 1) < LIMITS.minCoverage) throw bad("not_contiguous");   // real drives cover a run of the road, not scattered bins
-  return { wayId, dir, drivenOn: day, driveId, bins: out, km: out.length * BIN_KM };
+  return { wayId, dir, drivenOn: day, driveId, bins: out, km: out.length * BIN_KM, shape: validateShape(raw.shape, hi) };
+}
+
+const MAX_SHAPE = 64;
+/**
+ * The way's OSM geometry for the coverage map (IDEAS Q-14), optional: 2-64 [lat, lon] points within 0.5° of each other and
+ * at least as long as the bins say the way is (bins count 5 m from its first node; 20% slack for simplifying). Anything else
+ * is dropped rather than refused: the road data is still good without a line to draw.
+ */
+export function validateShape(raw: unknown, hiBin: number): [number, number][] | null {
+  if (!Array.isArray(raw) || raw.length < 2 || raw.length > MAX_SHAPE) return null;
+  const pts: [number, number][] = [];
+  for (const p of raw) {
+    if (!Array.isArray(p) || p.length !== 2 || !isNum(p[0], -85, 85) || !isNum(p[1], -180, 180)) return null;
+    pts.push([Math.round(p[0] * 1e5) / 1e5, Math.round(p[1] * 1e5) / 1e5]);
+  }
+  const lats = pts.map((p) => p[0]), lons = pts.map((p) => p[1]);
+  if (Math.max(...lats) - Math.min(...lats) > 0.5 || Math.max(...lons) - Math.min(...lons) > 0.5) return null;
+  let m = 0;
+  for (let k = 1; k < pts.length; k++) {
+    const [a, b] = [pts[k - 1], pts[k]];
+    m += Math.hypot((b[0] - a[0]) * 110540, (b[1] - a[1]) * 111320 * Math.cos(a[0] * Math.PI / 180));
+  }
+  return m >= hiBin * 5 * 0.8 ? pts : null;
 }
 
 const MULTIPLIER = [3, 2] as const;
@@ -153,6 +176,11 @@ export async function contribute(env: Env, v: Viewer, req: Request): Promise<{ a
     env.DB.prepare("INSERT INTO upload_counts (user_id, bucket, uploads, km) VALUES (?1, ?2, 1, ?3) ON CONFLICT (user_id, bucket) DO UPDATE SET uploads = uploads + 1, km = km + ?3").bind(v.id, hourKey, c.km),
     env.DB.prepare("DELETE FROM upload_counts WHERE bucket < ?").bind(new Date(now.getTime() - 8 * 86400_000).toISOString().slice(0, 13)),
   ];
+  if (c.shape) {                                                                       // first good shape of a way wins; it's the map's, not the drive's
+    const lats = c.shape.map((p) => p[0]), lons = c.shape.map((p) => p[1]);
+    stmts.push(env.DB.prepare("INSERT OR IGNORE INTO road_ways (way_id, s, w, n, e, shape) VALUES (?, ?, ?, ?, ?, ?)")
+      .bind(c.wayId, Math.min(...lats), Math.min(...lons), Math.max(...lats), Math.max(...lons), JSON.stringify(c.shape)));
+  }
   if (mult > 0) {
     stmts.push(env.DB.prepare("INSERT INTO points_ledger (user_id, iso_week, octane) VALUES (?1, ?2, ?3) ON CONFLICT (user_id, iso_week) DO UPDATE SET octane = octane + ?3")
       .bind(v.id, isoWeek(now.getTime()), c.km * mult));

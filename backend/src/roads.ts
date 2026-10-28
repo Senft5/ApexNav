@@ -41,3 +41,29 @@ export async function roadBins(env: Env, url: URL) {
   }
   return out;
 }
+
+/**
+ * The coverage map (IDEAS Q-14): measured roads in a box (at most 0.5° a side) as their map line, per direction with the most
+ * passes on any bin. Only road+directions two or more people have driven (Z-08), so a road one person drives stays blank,
+ * the same as a road nobody has driven: blank means "waiting for a pioneer", never "someone drives here".
+ */
+export async function coverage(env: Env, url: URL) {
+  const box = (url.searchParams.get("bbox") ?? "").split(",").map(Number);
+  if (box.length !== 4 || box.some((x) => !Number.isFinite(x))) throw new HttpError(400, "bad_bbox");
+  const [s, w, n, e] = box;
+  if (s < -90 || n > 90 || w < -180 || e > 180 || n <= s || e <= w || n - s > 0.5 || e - w > 0.5) throw new HttpError(400, "bad_bbox");
+  const rows = (await env.DB.prepare(
+    `SELECT rw.way_id, rw.shape, rb.dir, MAX(rb.n) AS passes FROM road_ways rw JOIN road_bins rb ON rb.way_id = rw.way_id
+      WHERE rw.s <= ?3 AND rw.n >= ?1 AND rw.w <= ?4 AND rw.e >= ?2
+      GROUP BY rw.way_id, rb.dir
+     HAVING (SELECT COUNT(DISTINCT rs.holder) FROM rank_slots rs WHERE rs.way_id = rw.way_id AND rs.dir = rb.dir) >= ${MIN_DRIVERS}
+      ORDER BY rw.way_id, rb.dir LIMIT 2000`,
+  ).bind(s, w, n, e).all<{ way_id: number; shape: string; dir: number; passes: number }>()).results;
+  const ways = new Map<number, { way: number; line: [number, number][]; passes: number[] }>();
+  for (const r of rows) {
+    const it = ways.get(r.way_id) ?? { way: r.way_id, line: JSON.parse(r.shape), passes: [0, 0] };
+    it.passes[r.dir] = r.passes;
+    ways.set(r.way_id, it);
+  }
+  return { ways: [...ways.values()] };
+}

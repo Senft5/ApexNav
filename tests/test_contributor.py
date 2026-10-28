@@ -41,6 +41,7 @@ out.zeroCurvature = run({ ...d, kappa: d.kappa.map(() => 0) }, m).flatMap(chunk 
 out.eligible = [C.eligible({ rough: [1], kappa: [1], date: '2026-10-20T10:00' }, Date.parse('2026-10-25')), C.eligible({ rough: [1], kappa: [1], date: '2026-09-01T10:00' }, Date.parse('2026-10-25')), C.eligible({ date: '2026-10-24' }, Date.parse('2026-10-25'))];
 out.driveIds = [C.driveIdFor({ id: 'rec_Dry Ridge.csv', date: '2026-10-22T09:00' }), C.driveIdFor({ id: 'rec_Dry Ridge.csv', date: '2026-10-22T09:00' }), C.driveIdFor({ id: 'x', date: '' })];
 // payload contains only the allowed keys
+out.shape = JSON.stringify(a[0].shape) === JSON.stringify(way.map(([la, lo]) => [+la.toFixed(5), +lo.toFixed(5)]));   // the way's map line, not the drive's points (3 m off it)
 out.keys = Object.keys(a[0]).sort().join() + '|' + Object.keys(a[0].bins[0]).sort().join();
 // network shell with a fake fetch: Valhalla trace_attributes + Overpass, then upload
 // a mostly disputed road: 45 of 50 measured bins disagree, 5 agree on smooth: tiny weight, no Surface
@@ -133,15 +134,16 @@ def test_eligibility_window(result):
     assert result["eligible"] == [True, False, False]
 
 
-def test_payload_has_no_coordinates_or_times(result):
-    assert result["keys"] == "bins,dir,drive_id,driven_on,way_id|cam,crest,i,k,rough"
+def test_payload_has_no_drive_coordinates_or_times(result):
+    assert result["shape"] is True
+    assert result["keys"] == "bins,dir,drive_id,driven_on,shape,way_id|cam,crest,i,k,rough"
 
 
 def test_network_shell_matches_fetches_and_uploads_bins_only(result):
     sh = result["shell"]
     assert sh["res"] == {"built": 1, "sent": 1} and sh["posted"] == 1
     assert sh["valhalla"] == 1 and sh["overpass"] == 1
-    assert sh["keys"] == "bins,dir,drive_id,driven_on,way_id"
+    assert sh["keys"] == "bins,dir,drive_id,driven_on,shape,way_id"
 
 
 def test_server_refusal_stops_uploading(result):
@@ -299,7 +301,7 @@ def test_live_never_sends_first_or_last_km(live):
     n = live["normal"]
     assert n["lo"] >= 200 - 1 and n["hi"] <= 1200 - 200 + 1          # rows 0-199 and the last 200 rows never leave the phone
     assert n["n"] == n["unique"] and n["n"] >= 780                    # about 800 settled rows, none sent twice
-    assert n["ids"] == ["d_live_test_01"] and n["keys"] == "bins,dir,drive_id,driven_on,way_id"
+    assert n["ids"] == ["d_live_test_01"] and n["keys"] == "bins,dir,drive_id,driven_on,shape,way_id"
     assert n["overpass"] == 1 and n["firstState"] == "on"             # way geometry fetched once, then cached
 
 

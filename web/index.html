@@ -56,6 +56,7 @@
   <script src="format.js"></script>
   <script src="road_names.js"></script>
   <script src="twisty.js"></script>
+  <script src="coverage.js"></script>
   <script src="recording.js"></script>
   <script src="road_memory.js"></script>
   <script src="contributor.js"></script>
@@ -540,6 +541,7 @@
         <button class="sw" data-toggle="voice"><i></i><span>Voice</span></button>
         <button class="sw" data-toggle="lpr"><i></i><span>Cameras</span></button>
         <button class="sw" data-toggle="twisty"><i></i><span>Twisty roads</span></button>
+        <button class="sw" data-toggle="coverage"><i></i><span>Measured roads</span></button>
         <button class="sw" data-toggle="terrain"><i></i><span>3D terrain</span></button>
         <button class="sw" data-toggle="haptics"><i></i><span>Haptics</span></button>
         <button class="sw sw-cycle" data-cycle="nightMode" aria-label="Night"><b></b><span>Night</span></button>
@@ -864,7 +866,7 @@
       theme: 'roadbook', camFeel: 'dynamic', voiceId: 'george', liveVoice: false, voiceStyle: 'codriver', voiceName: '', hlOn: false, hlStrength: 1,
       notesMode: 'auto', nightMode: 'auto',   // Notes: auto | full | quiet. Night: auto (sunset/sunrise) | on | off
       noteWords: 'plain',                     // rally ("Left 4 minus") | plain ("Medium left"), IDEAS V-02; a saved setting wins
-      toggles: { stage: false, voice: true, lpr: true, dna: false, night: false, twisty: false, haptics: true, crash: true, health: true, terrain: false }   // stage and night are derived from the two modes; analysis.html reads toggles.night
+      toggles: { stage: false, voice: true, lpr: true, dna: false, night: false, twisty: false, haptics: true, crash: true, health: true, terrain: false, coverage: false }   // stage and night are derived from the two modes; analysis.html reads toggles.night
     };
     const NOTES_MODES = ['auto', 'full', 'quiet'], NIGHT_MODES = ['auto', 'on', 'off'];
     const MODE_LABEL = { auto: 'Auto', full: 'Full', quiet: 'Quiet', on: 'On', off: 'Off' };
@@ -1061,6 +1063,7 @@
       if (has('apex-alt')) map.setPaintProperty('apex-alt', 'line-color', C.route);
       if (has('apex-explore')) map.setPaintProperty('apex-explore', 'line-color', C.route);
       if (has('apex-twisty')) map.setPaintProperty('apex-twisty', 'line-color', C.amber);
+      if (has('apex-coverage')) map.setPaintProperty('apex-coverage', 'line-color', C.gain);
     }
 
     function addApexLayers() {
@@ -1084,6 +1087,10 @@
       const byTier = (strong, weak) => ['match', ['get', 't'], 2, strong, weak];
       map.addLayer({ id: 'apex-twisty', type: 'line', source: 'apex-twisty-src', layout: { 'line-cap': 'round', 'line-join': 'round', visibility: 'none' },
         paint: { 'line-width': ['interpolate', ['linear'], ['zoom'], 10, byTier(2.5, 1.5), 16, byTier(8, 5)], 'line-opacity': byTier(0.9, 0.55) } }, firstSymbol);   // under the road names
+      // Measured roads (coverage.js, IDEAS Q-14): t = 2 five or more passes, 1 two to four.
+      map.addSource('apex-coverage-src', { type: 'geojson', data: emptyFC() });
+      map.addLayer({ id: 'apex-coverage', type: 'line', source: 'apex-coverage-src', layout: { 'line-cap': 'round', 'line-join': 'round', visibility: 'none' },
+        paint: { 'line-width': ['interpolate', ['linear'], ['zoom'], 10, byTier(3, 1.5), 16, byTier(9, 5)], 'line-opacity': byTier(0.85, 0.6) } }, firstSymbol);
       map.addSource('apex-alt-src', { type: 'geojson', data: emptyFC() });
       map.addLayer({ id: 'apex-alt', type: 'line', source: 'apex-alt-src', layout: { 'line-cap': 'round', 'line-join': 'round' },
         paint: { 'line-width': width(3, 6), 'line-opacity': 0.45, 'line-dasharray': [1.5, 1.5] } });
@@ -1173,6 +1180,8 @@
       map.setLayoutProperty('apex-dna', 'visibility', state.toggles.dna ? 'visible' : 'none');
       updateTwisty();
       map.on('moveend', () => { clearTimeout(twisty.timer); twisty.timer = setTimeout(updateTwisty, 600); });
+      updateCoverage();
+      map.on('moveend', () => { clearTimeout(coverage.timer); coverage.timer = setTimeout(updateCoverage, 700); });
       if (track) loadTrackOnMap();
       // Tap a faint option on the map to take it.
       map.on('click', 'apex-alt', (e) => {
@@ -1216,6 +1225,30 @@
       } catch (_) { twisty.busy = false; return; }   // no tiles (offline): nothing drawn, try again on the next move
       twisty.busy = false;
       updateTwisty();   // the map may have moved on while this area was scored
+    }
+
+    // Measured roads: what members have measured around the view, from /api/coverage (members only; nothing drawn otherwise).
+    const coverage = { cache: new Map(), had: [], busy: false, timer: 0, said: false };
+    async function updateCoverage() {
+      if (!mapReady || !map.getLayer('apex-coverage')) return;
+      const on = !!state.toggles.coverage && !!window.ApexCoverage;
+      map.setLayoutProperty('apex-coverage', 'visibility', on ? 'visible' : 'none');
+      if (!on || coverage.busy) return;
+      const b = map.getBounds(), box = ApexCoverage.boxFor({ s: b.getSouth(), w: b.getWest(), n: b.getNorth(), e: b.getEast(), zoom: map.getZoom() });
+      if (!box || ApexCoverage.inside(box, coverage.had)) return;
+      coverage.busy = true;
+      try {
+        const r = await apiCall('GET', `/api/coverage?bbox=${box.join(',')}`);
+        if (r.status === 401 || r.status === 403) {
+          if (!coverage.said) toast('Sign in (Crew) to see measured roads.');
+          coverage.said = true;
+        } else if (r.ok) {
+          coverage.had.push(box);
+          if (coverage.had.length > 30) coverage.had.shift();
+          if (ApexCoverage.add(coverage.cache, await r.json())) map.getSource('apex-coverage-src').setData(ApexCoverage.geojson(coverage.cache));
+        }
+      } catch (_) { /* offline: nothing new drawn */ }
+      coverage.busy = false;
     }
 
     map.once('idle', () => document.querySelectorAll('.maplibregl-ctrl-attrib').forEach(a => a.classList.remove('maplibregl-compact-show')));
@@ -4285,6 +4318,10 @@
         applyTerrain();
         if (state.toggles.terrain && mapReady && state.mode !== 'live' && map.getPitch() < 40) map.easeTo({ pitch: 60, duration: 800 });
         if (state.toggles.terrain && power.low) toast('3D terrain waits until the phone stops saving battery.');
+      }
+      if (k === 'coverage') {
+        updateCoverage();
+        if (state.toggles.coverage) toast(mapReady && map.getZoom() < ApexCoverage.MIN_ZOOM ? 'Zoom in to see measured roads.' : 'Green: measured by 2+ members. A road without a line is waiting for a pioneer: the first drivers earn extra Octane.');
       }
       if (k === 'twisty') {
         updateTwisty();
