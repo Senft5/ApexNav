@@ -35,6 +35,7 @@
     .cv-member { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-height: 44px; }
     .cv-member .cv-on { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--panel-dim); margin-right: 6px; }
     .cv-member .cv-on.live { background: var(--gain, #2a6); }
+    .cv-member .cv-car { display: block; margin-left: 14px; font-size: 12px; color: var(--panel-dim); }
   `;
 
   function mount(page) {
@@ -236,11 +237,14 @@
         const c = s.ctx;
         kids.push(el('p', { className: 'note', textContent: `${c.name} · you are ${c.role === 'leader' ? 'leading' : 'following'} · ends ${new Date(c.expiresAtMs).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` }));
         const list = el('div', { className: 'cv-members' });
+        loadCars();
         for (const m of s.members) {
+          const car = m.key !== c.you && m.handle ? cars.byHandle.get(m.handle) : null;
           const gap = el('span', { className: 'note' });
           live.gaps.set(m.key, gap);
           const row = el('div', { className: 'cv-member' },
-            el('span', {}, el('span', { className: 'cv-on' + (m.online || m.key === c.you ? ' live' : '') }), document.createTextNode(label(m) + (m.role === 'leader' ? ' · leader' : ''))), gap);
+            el('span', {}, el('span', { className: 'cv-on' + (m.online || m.key === c.you ? ' live' : '') }), document.createTextNode(label(m) + (m.role === 'leader' ? ' · leader' : '')),
+              ...(car ? [el('span', { className: 'cv-car', textContent: car })] : [])), gap);
           if (c.role === 'leader' && m.key !== c.you) row.append(btn('Remove', async () => { if (confirm(`Remove ${label(m)} from the convoy? They can't come back into it.`)) { if (!(await client.removeMember(m.key))) toast('Couldn\'t remove them. Try again.'); } }, 'linkbtn'));
           list.append(row);
         }
@@ -263,6 +267,24 @@
         else if (s.status !== 'live') kids.push(el('p', { className: 'note', textContent: s.unreachable ? 'Can\'t reach the convoy. Still trying.' : s.status === 'reconnecting' ? 'No connection to the convoy. Retrying…' : 'Connecting…' }));
       }
       box.replaceChildren(...kids);
+    }
+    // Daily cars come from the Garage's own list of people you know, so its rules hold here too: only a car its owner shows, only
+    // to friends and private crew-mates, never across a block. Someone in the convoy you don't know simply has no car line.
+    const cars = { byHandle: new Map(), at: 0, busy: false };
+    function loadCars() {
+      if (cars.busy || Date.now() - cars.at < 60e3) return;
+      cars.busy = true;
+      apiFetch('/api/garage/people').then((r) => (r.ok ? r.json() : null)).then((people) => {
+        if (!Array.isArray(people)) return;
+        const next = new Map();
+        for (const p of people) {
+          const c = p && p.handle && Array.isArray(p.cars) ? p.cars.find((x) => x.is_primary) : null;
+          if (c) next.set(p.handle, [c.year, c.make, c.model].filter((x) => x != null && x !== '').join(' '));
+        }
+        const changed = JSON.stringify([...next]) !== JSON.stringify([...cars.byHandle]);
+        cars.byHandle = next;
+        if (changed) { lastKey = null; paint(); }
+      }).catch(() => {}).finally(() => { cars.at = Date.now(); cars.busy = false; });
     }
     const STATUS_TOAST = { ended: 'The convoy has ended.', removed: 'The leader took you out of the convoy.', signed_out: 'Signed out, so you left the convoy.' };
     let lastStatus = 'off';
