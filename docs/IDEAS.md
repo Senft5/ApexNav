@@ -234,7 +234,7 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 | U-10 | Home screen and lock screen widgets: nearby best stage, last drive score, crew event | M | M | todo | iOS widgets |
 | U-11 | Live Activity / Dynamic Island: next note, distance to stage, ETA | H | M | todo | Apple Maps, Uber |
 | U-12 | Apple Watch: next note as a tap on the wrist, drive summary | M | L | todo | Apple Maps on Watch |
-| U-13 | Map style polish: road character colours (twist, surface) as an optional layer | H | M | todo | Kurviger curvy colours, Calimoto |
+| U-13 | Map style polish: road character colours (twist, surface) as an optional layer | H | M | partial: Twisty roads switch (map shape); surface todo | Kurviger curvy colours, Calimoto |
 | U-14 | 3D terrain with hillshade on the planning map and flyover preview of a route | M | M | todo | Apple Maps, Google Earth |
 | U-15 | Dynamic Type and VoiceOver pass on every screen, checked with the iOS simulator | H | M | todo | accessibility |
 | U-16 | Landscape cockpit layout for mounts in landscape | M | M | todo | Waze |
