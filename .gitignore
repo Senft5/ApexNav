@@ -17,3 +17,4 @@ backend/.wrangler/
 
 # Database exports hold personal data (docs/BACKUPS.md): never commit them
 apexnav-db-*.sql
+/*.png

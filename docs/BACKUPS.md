@@ -48,7 +48,8 @@ Use `--bookmark=<bookmark>` instead of `--timestamp` when there is one from sect
 every write after that moment is lost, and the command prints a bookmark that undoes the restore. Check the result with
 `tools/d1_rowcounts.sql` and by signing in on the live site.
 
-Older than 7 days, or the database is gone: create a fresh database from the last export (section 5), then point
+Database deleted in the last 7 days: undelete it first (dashboard, or the D1 undelete API); it comes back with its Time Travel
+history, then restore as above if needed. Older than 7 days, or gone for good: create a fresh database from the last export (section 5), then point
 `database_id` in `wrangler.jsonc` at it and deploy.
 
 ## 5. Restore drill (every 3 months, about 10 minutes)
@@ -62,8 +63,13 @@ npx wrangler d1 execute apexnav-restore-drill --remote --file=tools/d1_rowcounts
 npx wrangler d1 delete apexnav-restore-drill
 ```
 
-The row counts must match the ones saved with the export. Then delete the drill database (the last command), because it is a
+When `d1 create` asks whether to add the database to your config, answer **No** (the drill database must never end up in
+`wrangler.jsonc`). The row counts must match the ones saved with the export. Then delete the drill database (the last command), because it is a
 second copy of personal data. Note the date and the result in docs/STATE.md.
+
+Free-plan daily limits apply (100,000 rows written and 5 million read per day): the drill import writes every row and the
+export reads every row. Fine at today's size; as the database grows, run the drill on a quiet day and, if the import stops
+partway, check the database's metrics in the dashboard before blaming the export.
 
 ## 6. Keeping this current
 
