@@ -977,6 +977,7 @@
       map.on('click', (e) => {
         if (Date.now() < suppressMapClickUntil) return;
         if (!state.tapToRoute) return;
+        if ($('planPanel').classList.contains('busy')) { toast('Still finding roads. Tap again in a moment.'); return; }
         state.tapToRoute = false;
         $('tapRouteBtn').classList.remove('on');
         $(state.planField || 'destInput').value = `${e.lngLat.lat.toFixed(5)}, ${e.lngLat.lng.toFixed(5)}`;
@@ -2371,8 +2372,11 @@
         const list = FunRoute.exploreShortlist(c, stages, maxKm, 12);   // 24 matrix pairs; most fall to the time limit
         ui.step('Measuring roads', 0.8);
         const m = list.length ? await valhallaMatrix([c], FunRoute.exploreTargets(list)) : { times: [[]] };
-        if (state.mode === 'live' || plannedRoute !== was) return;   // driving now, or another route went up: too late
-        showExplore({ here: c, minutes, picks: FunRoute.explorePicks(list, m.times, minutes * 60) });
+        if (state.mode === 'live') return;                            // driving now: too late
+        if (plannedRoute && plannedRoute !== was) { toast('Explore cancelled: a route is up.'); return; }
+        const picks = FunRoute.explorePicks(list, m.times, minutes * 60);
+        showExplore({ here: c, minutes, picks });
+        toast(picks.length ? `${picks.length} good ${picks.length === 1 ? 'road' : 'roads'} within ${minutes} min` : `No good roads within ${minutes} min`);   // heard by screen readers too
       } catch (_) { toast('Couldn\'t explore here. Check signal and try again.'); }
       finally { loopBusy = false; ui.done(); panel.done(); }
     }
