@@ -215,7 +215,7 @@ Today: accounts with Google sign-in, friends, crews (public and private, crews n
 | S-18 | Photos on highlights and stops, stripped of EXIF location beyond the highlight | M | M | todo | Roadtrippers, Google Maps |
 | S-19 | Live share ETA with a friend or family ("Nate is 12 min away") without sharing the drive | M | M | todo | Apple Maps Share ETA, Life360 |
 | S-20 | Flyby: after a drive, see which friends drove the same road that day (opt-in) | L | M | todo | Strava Flyby |
-| S-21 | Garage cars from a vehicle database: pick year, make, model and trim, specs (power, weight, drive, gearbox) fill in, and you only change what differs (colour, mods, tyres). Free source: NHTSA vPIC (makes/models/years, VIN decode, US-only, no power/weight) plus a curated spec table for enthusiast cars | H | M | todo, next (owner ask) | owner 2026-10-28 |
+| S-21 | Garage cars from a vehicle database: pick year, make, model and trim, specs (power, weight, drive, gearbox) fill in, and you only change what differs (colour, mods, tyres). Free source: NHTSA vPIC (makes/models/years, VIN decode, US-only, no power/weight) plus a curated spec table for enthusiast cars | H | M | partial (this PR: VIN decode and model suggestions from NHTSA vPIC, typical specs for 31 enthusiast cars incl. weight; a bigger spec table todo) | owner 2026-10-28 |
 | S-22 | Convoys without copy-paste links or a website: invite friends and crew-mates from inside the app (they get the invite in the app), a short join code to read out, and a QR code to scan in the car park | H | M | todo, next (owner ask) | owner 2026-10-28 |
 
 ## 6. UI and UX (U)
