@@ -269,7 +269,7 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 | C-02 | CarPlay notes as a list template and hazard alerts as CPAlert | H | M | owner (Apple account) | Waze CarPlay |
 | C-03 | Android Auto navigation template | H | L | owner (Android priority) | ApexNav mission |
 | C-04 | Car audio: ducking and routing to Bluetooth/CarPlay while prompts play | H | M | done (#73) | — |
-| C-05 | Auto-start: open the cockpit when the phone joins the car's Bluetooth or CarPlay | M | S | todo | Waze, Shortcuts |
+| C-05 | Auto-start: open the cockpit when the phone joins the car's Bluetooth or CarPlay | M | S | done (#PR): CarPlay audio route offers "Start drive"; `apexnav://open?go=drive` starts one (Shortcuts automation "When CarPlay connects"). Not yet checked in a car | Waze, Shortcuts |
 | C-06 | Driving focus aware: no social notifications while driving, a summary after | M | S | blocked: the app sends no notifications yet; build this with the first push or social alert | iOS Focus |
 | C-07 | Big-target in-car mode: every control ≥ 60 pt, no keyboard while moving | H | S | done (#121) | NHTSA distraction guidelines |
 | C-08 | Passenger mode: unlocks typing and route editing while moving, with a clear switch | M | S | done (#121) | Waze passenger prompt |

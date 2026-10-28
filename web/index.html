@@ -3646,7 +3646,7 @@
       // Focus the dialog, not its button: VoiceOver reads the welcome, and no focus ring sits on Get started before a touch
       ob.classList.add('show'); paint(); ob.tabIndex = -1; ob.focus();
     }
-    if (!flag('apex.onboarded') && !window.APEX_EMBED && !['invite', 'crew', 'add', 'convoy', 'drive', 'play', 'at', 'theme'].some(k => params.has(k))) runOnboarding();
+    if (!flag('apex.onboarded') && !window.APEX_EMBED && !['invite', 'crew', 'add', 'convoy', 'drive', 'play', 'at', 'theme', 'go'].some(k => params.has(k))) runOnboarding();
     else if (!flag('apex.onboarded')) flag('apex.onboarded', '1');
 
     // An invite, crew, friend or convoy link opened in iPhone Safari: offer to open it in the app instead (apexnav://open?...).
@@ -3685,6 +3685,7 @@
         if (ok(p.add)) sessionStorage.setItem('apex.add', p.add.toLowerCase());
       } catch (_) {}
       if (ok(p.convoy) && convoy && convoy.takeInvite) convoy.takeInvite(p.convoy);
+      if (p.go === 'drive') { closeSheet(); startDrive(); return; }   // apexnav://open?go=drive (a Shortcuts automation, IDEAS C-05)
       showView('crew'); renderAccount();
     }
     window.apex = {
@@ -3718,6 +3719,8 @@
         // App sign-in finished in the native shell: keep the session token and redraw whatever shows account state.
         if (msg && msg.type === 'session' && msg.token) { ApexSync.setSession(msg.token); toast('Signed in.'); location.reload(); }
         if (msg && msg.type === 'link' && msg.params) { openAppLink(msg.params); return; }
+        // The phone joined CarPlay (IDEAS C-05): offer the drive, never start recording unasked.
+        if (msg && msg.type === 'car' && !driveActive && state.mode !== 'live') { toast('CarPlay connected.', { label: 'Start drive', ms: 10000, onClick: startDrive }); return; }
         if (msg && msg.type === 'signInFailed' && msg.reason !== 'cancelled') toast('Couldn\'t sign in. Check signal and try again.');
       }
     };
@@ -3767,6 +3770,7 @@
       }
       if (params.get('book') === '1' || params.get('view') === 'route' || params.get('view') === 'drives') openPlan(true);
       if (VIEW_TITLES[params.get('view')]) openSheet(params.get('view'));
+      if (params.get('go') === 'drive') startDrive();   // the app opened from apexnav://open?go=drive (IDEAS C-05)
     }
     bootDrives();
     if (document.fonts) document.fonts.ready.then(() => render(true));
