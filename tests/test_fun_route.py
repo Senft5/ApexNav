@@ -332,6 +332,7 @@ const fs = require('node:fs');
 const root = process.argv[1];
 const Core = require(root + '/web/apex_core.js');
 globalThis.ApexCore = Core;
+globalThis.ApexUnits = require(root + "/web/units.js");
 const FunRoute = require(root + '/web/fun_route.js');
 const html = fs.readFileSync(root + '/web/index.html', 'utf8');
 const source = html.match(/async function funRoute\(.*?\n    }/s)[0];

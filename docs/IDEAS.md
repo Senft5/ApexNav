@@ -247,7 +247,7 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 | U-19 | Search that understands roads and stages ("Tail of the Dragon"), not just addresses | H | M | todo | Google Maps |
 | U-20 | Saved places and lists (home, work, favourite stages) synced to the account | M | M | todo | Google Maps lists |
 | U-21 | Route preview: scrub along the route with elevation, notes and road character | M | M | todo | Calimoto, Komoot |
-| U-22 | Units and locale: km/mi, 12/24 h, left-hand traffic notes | M | M | todo | international launch |
+| U-22 | Units and locale: km/mi, 12/24 h, left-hand traffic notes | M | M | partly: Settings → Units (`web/units.js`, miles by default for en-US/en-GB, km elsewhere): the cockpit (notes, dial in km/h, trip), route planning (cards, toasts, loops of 25/50/75 km) and spoken directions (metres, kilometres). Still miles: the Log pages, convoy, share cards; 12/24 h follows the phone; left-hand traffic notes todo | international launch |
 
 ## 7. Onboarding and growth (O)
 

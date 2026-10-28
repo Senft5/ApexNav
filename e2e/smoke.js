@@ -826,6 +826,24 @@ flow('friend profile: Friends → Profile shows what the friend shares, as text,
   await page.waitForSelector('.side-pop.open button:has-text("Profile")');
 });
 
+flow('units: kilometres in Settings redraw the dial, the notes and the replay in metric (IDEAS U-22)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html?drive=dry_ridge');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.track, null, { timeout: 15000 });
+  check(await page.evaluate(() => ApexUnits.system()) === 'imperial', 'miles by default in en-US');
+  await page.click('.tab[data-view="setup"]');
+  await Promise.all([page.waitForNavigation(), page.click('[data-units="metric"]')]);
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.track, null, { timeout: 15000 });
+  check(await page.evaluate(() => localStorage.getItem('apex.units')) === 'metric', 'saved');
+  const dial = await page.textContent('#cluster');
+  check(/KM\/H/.test(dial) && /Trip km/.test(dial) && /200/.test(dial), 'the dial in km/h: ' + dial.slice(0, 200));
+  await page.evaluate(() => document.getElementById('playBtn').click());
+  await page.waitForTimeout(1500);
+  const notes = await page.textContent('#notes');
+  check(/\d\s*(M|KM)/.test(notes) && !/\d\s*(FT|MI)/.test(notes), 'note distances in metres: ' + notes);
+  check(/ km$/.test(await page.getAttribute('#scrubber', 'aria-valuetext')), 'the replay position in km');
+});
+
 flow('the Log page opens', async (page, base) => {
   await page.goto(base + '/analysis.html');
   await page.waitForLoadState('load');

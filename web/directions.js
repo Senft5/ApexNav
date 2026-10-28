@@ -18,8 +18,16 @@
   const ord = (n) => n + (n % 100 >= 11 && n % 100 <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] || 'th');
   const lower = (s) => s.charAt(0).toLowerCase() + s.slice(1);
 
-  /** "500 feet", "0.3 miles", "half a mile", "1 mile": US units, rounded the way people say them. */
+  /**
+   * "500 feet", "0.3 miles", "half a mile", "1 mile"; or with metric units (units.js, U-22) "300 metres", "1.5 kilometres",
+   * "1 kilometre": rounded the way people say them.
+   */
   function distWords(m) {
+    if (root.ApexUnits && root.ApexUnits.metric()) {
+      if (m < 950) return `${Math.max(100, Math.round(m / 100) * 100)} metres`;
+      const k = Math.round(m / 100) / 10;
+      return k === 1 ? '1 kilometre' : `${k} kilometres`;
+    }
     const mi = m / M_PER_MI;
     if (mi < 0.15) return `${Math.max(100, Math.round(m * FT_PER_M / 100) * 100)} feet`;
     const r = Math.round(mi * 10) / 10;

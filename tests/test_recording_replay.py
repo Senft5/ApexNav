@@ -17,6 +17,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const R = require('./web/recording.js');
 const Core = require('./web/apex_core.js');
+globalThis.ApexUnits = require('./web/units.js');
 const csv = ['distance_m,lat,lon,speed_mph,lon_g,lat_g,camber_deg,roughness_rms',
   ...Array.from({length: 100}, (_, i) => `${i*5},${35+i*5/110540},-83,30,0,0,,`)].join('\n');
 const record = R.parse(Core, csv, 'test.csv');

@@ -54,6 +54,7 @@
   <script src="road_memory.js"></script>
   <script src="contributor.js"></script>
   <script src="themes.js"></script>
+  <script src="units.js"></script>
   <script src="instruments.js"></script>
   <script src="g2p.js"></script>
   <script src="voice.js"></script>
@@ -551,6 +552,10 @@
               <input class="field" id="crashName" autocomplete="off" maxlength="40" placeholder="Contact name" aria-label="Emergency contact name">
               <input class="field" id="crashPhone" type="tel" autocomplete="off" maxlength="24" placeholder="Phone number" aria-label="Emergency contact phone number">
             </div>
+          </section>
+          <section data-panel="setup">
+            <h3>Units</h3>
+            <div class="row" role="radiogroup" aria-label="Units" id="unitsRow"><button class="chip" data-units="imperial" role="radio">Miles and feet</button><button class="chip" data-units="metric" role="radio">Kilometres and metres</button></div>
           </section>
           <section data-panel="setup">
             <h3>Feedback</h3>
@@ -1460,7 +1465,7 @@
     // What VoiceOver reads on the scrubber: "2.4 of 35.6 mi". Set only when the words change.
     function paintScrubValue() {
       const T = totalM(), at = Math.max(0, Math.min(T, state.cursorM || 0));
-      const text = `${(at / 1609.344).toFixed(1)} of ${(T / 1609.344).toFixed(1)} mi`, el = $('scrubber');
+      const text = `${ApexUnits.longN(at).toFixed(1)} of ${ApexUnits.long(T, 1)}`, el = $('scrubber');
       if (el.getAttribute('aria-valuetext') === text) return;
       el.setAttribute('aria-valuetext', text);
       el.setAttribute('aria-valuenow', String(T > 0 ? Math.round(at / T * 100) : 0));
@@ -1502,11 +1507,7 @@
     // 6. CO-DRIVER — quiet in cruise, full pace notes when spirited or STAGE
     // =======================================================================
     const allEvents = () => (track ? track.events.concat(track.alpr || []) : []);
-    function distLabel(m) {
-      const ft = m * 3.28084;
-      if (ft >= 1000) return { n: (m / 1609.344).toFixed(1), u: 'MI' };
-      return { n: String(Math.max(0, Math.round(ft / 50) * 50)), u: 'FT' };
-    }
+    const distLabel = (m) => ApexUnits.short(m);          // feet and miles, or metres and km (Settings → Units, U-22)
     // Auto: wake on hard driving. Full: always awake. Quiet: never wake, so only cameras and severe bumps are called.
     const isSpirited = () => state.notesMode === 'full' || (state.notesMode === 'auto' && performance.now() - state.spiritedAt < 30000);
     const noteworthyInCruise = (e) => e.type === 'alpr' || (e.type === 'bump' && e.severity_g >= 0.45);
@@ -1679,7 +1680,7 @@
     }
 
     function subFor(e) {
-      if (e.type === 'corner') return `R ${Math.round(e.radius_m)} m · ${Math.round(e.apex_mph)} mph`;
+      if (e.type === 'corner') return `R ${Math.round(e.radius_m)} m · ${Math.round(ApexUnits.speed(e.apex_mph / 2.2369362921))} ${ApexUnits.speedU()}`;
       if (e.type === 'alpr') return 'Camera';
       return ApexRecording.seenLabel(e);
     }
@@ -1840,12 +1841,13 @@
       const sight = at(track && track.sightM);
       const limit = at(track && track.limitMps);
       cluster.update({
-        speedMph: vMps != null ? vMps * MPH : null,
-        paceMph: at(track && track.envMps) != null ? at(track.envMps) * MPH : null,
-        sightMph: sight != null ? Core.sightSpeedMps(sight) * MPH : null,
-        limitMph: limit != null ? limit * MPH : null,
+        // in the chosen units (mph or km/h, U-22); the names are the cluster's
+        speedMph: vMps != null ? ApexUnits.speed(vMps) : null,
+        paceMph: at(track && track.envMps) != null ? ApexUnits.speed(at(track.envMps)) : null,
+        sightMph: sight != null ? ApexUnits.speed(Core.sightSpeedMps(sight)) : null,
+        limitMph: limit != null ? ApexUnits.speed(limit) : null,
         latG, lonG, camberDeg: camber,
-        tripMi: live && idx < 0 ? (drive.rec ? drive.rec.km / 1.609344 : 0) : state.cursorM / 1609.344, totalMi: track && !(live && idx < 0) ? totalM() / 1609.344 : null,
+        tripMi: ApexUnits.longN(live && idx < 0 ? (drive.rec ? drive.rec.km * 1000 : 0) : state.cursorM), totalMi: track && !(live && idx < 0) ? ApexUnits.longN(totalM()) : null,
         sector: sectorAt(idx), routeOnly: track && track.kind === 'route'
       });
       updateRibbon(vMps, idx, snap);
@@ -2252,7 +2254,7 @@
     function whyText(w, fewerKm = 0, extraS = 0) {
       const fewer = fewerKm >= 1;
       if (!w && !(fewer && extraS >= 60)) return null;
-      const mi = (km) => { const m = km / 1.609344; return `${m < 10 ? m.toFixed(1) : Math.round(m)} mi`; };
+      const mi = (km) => ApexUnits.long(km * 1000, 1, true);
       const roads = w ? w.roads.map(r => `${r.name} ${mi(r.km)}`).join(', ') : '';
       const gain = w && w.gained ? `${w.gained} more good corners` : '';
       const towns = fewer ? `${mi(fewerKm)} less in towns` : '';
@@ -2263,7 +2265,7 @@
       const card = $('routeCard');
       $('planPanel').classList.toggle('routed', !!t);
       if (t) {
-        const mi = Array.isArray(t.dist) && t.dist.length ? `${(t.dist[t.dist.length - 1] / 1609.344).toFixed(1)} mi` : '--';
+        const mi = Array.isArray(t.dist) && t.dist.length ? `${ApexUnits.long(t.dist[t.dist.length - 1], 1)}` : '--';
         $('routeBarName').textContent = t.name || 'Route';
         $('routeBarMeta').textContent = [mi, Array.isArray(t.events) ? `${t.events.filter(e => e.type === 'corner').length} corners` : ''].filter(Boolean).join(' · ');
       }
@@ -2272,7 +2274,7 @@
       card.hidden = false;
       $('routeCardName').textContent = t.name || '--';
       const hasDist = Array.isArray(t.dist) && t.dist.length > 0 && Number.isFinite(t.dist[t.dist.length - 1]);
-      const mi = hasDist ? `${(t.dist[t.dist.length - 1] / 1609.344).toFixed(1)} mi` : '--';
+      const mi = hasDist ? `${ApexUnits.long(t.dist[t.dist.length - 1], 1)}` : '--';
       const corners = Array.isArray(t.events) ? `${t.events.filter(e => e.type === 'corner').length} corners` : '--';
       const min = Number.isFinite(t.timeS) ? `${Math.round(t.timeS / 60)} min` : null;
       const extra = Number.isFinite(t.extraS) && t.extraS >= 60 ? ` (+${Math.round(t.extraS / 60)} for fun)` : '';
@@ -2303,7 +2305,7 @@
       // Planned routes only: a driven track's own time has passed.
       const sun = !(Array.isArray(t.sectors) && t.sectors.length) && t.glareMin >= 3 ? `Low sun ahead for ~${t.glareMin} min · ` : '';
       // Only on a route planned with Towns on (townKm undefined otherwise); null = the town check couldn't run.
-      const towns = t.townKm === null ? 'Couldn\'t check towns · ' : t.townKm >= 1.6 ? `Through towns ~${Math.round(t.townKm / 1.609344)} mi · ` : '';
+      const towns = t.townKm === null ? 'Couldn\'t check towns · ' : t.townKm >= 1.6 ? `Through towns ~${ApexUnits.long(t.townKm * 1000, 0)} · ` : '';
       $('routeCardSub').textContent = `${missed}${towns}${sun}Cameras ${cams} · ${feel}`;
       $('routeCardWhy').textContent = t.why || '';
       $('routeCardWhy').hidden = !t.why;
@@ -2396,7 +2398,7 @@
       if (state.mode !== 'live' && !booting) lockOnDestination(t);
       attachLimits(t);
       attachScenic(t);
-      if (!prebuilt) toast(`${name} · ${(totalM() / 1609.344).toFixed(1)} mi · ${t.events.filter(e => e.type === 'corner').length} corners`);
+      if (!prebuilt) toast(`${name} · ${ApexUnits.long(totalM(), 1)} · ${t.events.filter(e => e.type === 'corner').length} corners`);
     }
     // A route just found: pin its destination and show it, so you can check you are routing to the right place. FOLLOW
     // (or Start drive) goes back to your position. A loop has no destination: show the whole loop instead.
@@ -2464,7 +2466,7 @@
       if (g.kind === 'track') {
         const t = await trackFromPolyline(g.coords, `gpx_${Date.now()}`, name);
         await buildRoute(null, t.id, name, t);
-        toast(`${name}: following the track as drawn, ${(totalM() / 1609.344).toFixed(1)} mi.`);
+        toast(`${name}: following the track as drawn, ${ApexUnits.long(totalM(), 1)}.`);
       } else await buildRoute(g.stops, `gpx_${Date.now()}`, name);
     }
     $('gpxFile').addEventListener('change', async (e) => {
@@ -2787,8 +2789,8 @@
       const quickest = pool.filter(c => Number.isFinite(c.timeS)).reduce((x, y) => (y.timeS < x.timeS ? y : x), best);
       // The best and up to two really different others stay on the card (and faint on the map) to pick from.
       const t = await useOption({ id, name, request, level, quickest, list: FunRoute.distinctOptions(ranked, 3) }, 0);
-      const mi = (totalOf(t) / 1609.344).toFixed(1), extra = best.extraS >= 60 ? ` · +${Math.round(best.extraS / 60)} min for ${fewerTownKm(best, quickest) < 1 ? 'fun' : best.fun && quickest.fun && best.fun.good > quickest.fun.good ? 'fun and fewer towns' : 'fewer towns'}` : '';
-      toast(`${name} · ${mi} mi · Fun ${best.fun ? best.fun.fun : '--'}${extra}`);
+      const mi = ApexUnits.long(totalOf(t)), extra = best.extraS >= 60 ? ` · +${Math.round(best.extraS / 60)} min for ${fewerTownKm(best, quickest) < 1 ? 'fun' : best.fun && quickest.fun && best.fun.good > quickest.fun.good ? 'fun and fewer towns' : 'fewer towns'}` : '';
+      toast(`${name} · ${mi} · Fun ${best.fun ? best.fun.fun : '--'}${extra}`);
       window.apexDebug && (window.apexDebug.lastFun = FunRoute.rank(pool, level).map(c => ({ kind: c.kind, fun: c.fun, timeS: c.timeS, value: c.value, adjust: c.adjust || 0, glare: c.glare, townKm: c.townKm })));
       return true;
     }
@@ -2902,7 +2904,7 @@
       const minutes = typeof want === 'object' && want ? want.minutes : null;
       const miles = minutes ? Math.round(minutes / 60 * LOOP_KMH / 1.609344) : want;
       const targetKm = miles * 1.609344, targetS = minutes ? minutes * 60 : null;
-      const asked = minutes ? `${minutes / 60} h` : `${miles} mi`, loopId = minutes ? `loop_${minutes}min` : `loop_${miles}`;
+      const asked = minutes ? `${minutes / 60} h` : ApexUnits.long(miles * 1609.344, 0), loopId = minutes ? `loop_${minutes}min` : `loop_${miles}`;
       toast(`Finding roads · ${asked} loop`);
       // 1. Stage discovery: score every road around the start from the map's own vector tiles.
       let plans = [];
@@ -2967,9 +2969,9 @@
         toast(near ? `${best.good} good corners · home in about ${gotMin} min` : `${gotMin} min: the closest good loop to ${asked}`);
       } else {
         const near = Math.abs(gotMi - miles) <= 0.2 * miles;
-        best.t.name = `${Math.max(1, Math.round(gotMi))} mi loop`;
+        best.t.name = `${Math.max(1, Math.round(ApexUnits.longN(best.km * 1000)))} ${ApexUnits.longU()} loop`;
         await buildRoute(null, loopId, best.t.name, best.t);
-        toast(near ? `${best.good} good corners on this loop` : `${gotMi.toFixed(1)} mi: the closest good loop to ${asked}`);
+        toast(near ? `${best.good} good corners on this loop` : `${ApexUnits.long(best.km * 1000)}: the closest good loop to ${asked}`);
       }
       window.apexDebug && (window.apexDebug.lastLoop = done.map(d => ({ kind: d.job.kind, fun: d.t.fun && d.t.fun.fun, score: d.score, km: d.km, good: d.good, retraced: d.retraced })));
     }
@@ -3014,7 +3016,7 @@
         const b = document.createElement('button'); b.className = 'place';
         const name = document.createElement('b'); name.textContent = roadLabel(p.s.name);
         const info = document.createElement('span');
-        info.textContent = `${p.s.good} · ${(p.s.km / 1.609344).toFixed(1)} mi · ${Math.max(1, Math.round(p.awayS / 60))} min`;
+        info.textContent = `${p.s.good} · ${ApexUnits.long((p.s.km) * 1000, 1)} · ${Math.max(1, Math.round(p.awayS / 60))} min`;
         b.setAttribute('aria-label', `${name.textContent}: ${p.s.good} good corners, ${info.textContent.split(' · ')[1]}, ${Math.max(1, Math.round(p.awayS / 60))} minutes away`);
         b.append(name, info); b.addEventListener('click', () => driveStage(i));
         return b;
@@ -3053,7 +3055,7 @@
         Object.assign(t, { fun: funOf(t, r.turns), timeS: r.timeS, timeMarks: timeMarksOf(t, r), steps: stepsOf(t, r), unavoided: FunRoute.unavoided(avoid, r), glareMin: glare ? Math.round(glare.minutes) : null,
                            request: { from: null, to: { lat: end.lat, lon: end.lon }, via: pts.slice(1, -1).map(q => ({ lat: q.lat, lon: q.lon, shaping: true })) } });
         await buildRoute(null, 'explore', name, t);
-        toast(`${name} · ${Math.max(1, Math.round(p.awayS / 60))} min to the start, then ${(p.s.km / 1.609344).toFixed(1)} mi`);
+        toast(`${name} · ${Math.max(1, Math.round(p.awayS / 60))} min to the start, then ${ApexUnits.long((p.s.km) * 1000, 1)}`);
       } catch (_) { toast('Couldn\'t route to that road. Try another.'); }
       finally { loopBusy = false; ui.done(); }
     }
@@ -3189,7 +3191,7 @@
       }).filter((p, i, all) => Number.isFinite(p.lat) && Number.isFinite(p.lon)
         && all.findIndex(o => o.label === p.label && o.area === p.area) === i)   // one row per place (OSM can hold a node and an area)
         .sort((a, b) => a.km - b.km).slice(0, 5)
-        .map(p => ({ ...p, kind: [`${p.km < 16 ? (p.km / 1.609344).toFixed(1) : Math.round(p.km / 1.609344)} mi`, p.area].filter(Boolean).join(' · ') }));
+        .map(p => ({ ...p, kind: [ApexUnits.long(p.km * 1000, 1, true), p.area].filter(Boolean).join(' · ') }));
     }
     // In the app, Apple's place search (the shell's MKLocalSearchCompleter: knows house numbers, no key) answers instead;
     // coordinates are asked only for the row tapped. No answer in 4 s: Photon.
@@ -3223,7 +3225,7 @@
         if (seq !== suggestSeq) return;                                  // a newer keystroke won
         if (!rows.length && !empty) empty = 'No matches nearby. Press Go to search everywhere.';
       } else {
-        rows = [...ApexSavedRoutes.list(localStorage).slice(0, 4).map(p => ({ label: p.name, kind: Number.isFinite(p.miles) ? `Saved · ${p.miles} mi` : 'Saved', saved: p })),
+        rows = [...ApexSavedRoutes.list(localStorage).slice(0, 4).map(p => ({ label: p.name, kind: Number.isFinite(p.miles) ? `Saved · ${ApexUnits.long(p.miles * 1609.344)}` : 'Saved', saved: p })),
                 ...recentPlaces().map(p => ({ ...p, kind: 'Recent' })),
                 ...loadHighlights().filter(h => Number.isFinite(h.lat) && Number.isFinite(h.lon)).map(h => ({ label: h.name || 'Spot', lat: h.lat, lon: h.lon, kind: 'Spot' }))].slice(0, 10);
       }
@@ -3337,7 +3339,9 @@
       e.currentTarget.classList.toggle('on', state.tapToRoute);
       if (state.tapToRoute) { closeSheet(); openPlan(false); toast(state.planField === 'fromInput' ? 'Tap the map where you want to start.' : 'Tap the map where you want to go.'); }
     });
-    document.querySelectorAll('[data-loop-mi]').forEach(b => b.addEventListener('click', () => loop(parseInt(b.dataset.loopMi, 10), b)));
+    // Loop lengths in the chosen units (U-22): 25/50/75 km in metric, kept as miles inside.
+    if (ApexUnits.metric()) document.querySelectorAll('[data-loop-mi]').forEach((b, i, all) => { const km = [25, 50, 75][i]; b.dataset.loopMi = String(km / 1.609344); b.textContent = i === all.length - 1 ? `${km} km` : String(km); });
+    document.querySelectorAll('[data-loop-mi]').forEach(b => b.addEventListener('click', () => loop(parseFloat(b.dataset.loopMi), b)));
     document.querySelectorAll('[data-loop-min]').forEach(b => b.addEventListener('click', () => loop({ minutes: parseInt(b.dataset.loopMin, 10) }, b)));
     document.querySelectorAll('[data-explore-min]').forEach(b => b.addEventListener('click', () => exploreNear(parseInt(b.dataset.exploreMin, 10), b)));
     document.querySelectorAll('[data-fun]').forEach(b => b.addEventListener('click', () => {
@@ -3458,7 +3462,7 @@
       closeSheet && closeSheet();
       const t = await trackFromPolyline(j.geom, `shared_${id}`, j.name);
       await buildRoute(null, t.id, j.name, t);
-      toast(`${j.name} from @${j.from_handle || '?'}: ${(totalM() / 1609.344).toFixed(1)} mi.`);
+      toast(`${j.name} from @${j.from_handle || '?'}: ${ApexUnits.long(totalM(), 1)}.`);
     }
     $('routePreviewBtn').addEventListener('click', () => {
       if (!plannedRoute) return;
@@ -3524,6 +3528,16 @@
       goTo: (p) => { closeSheet(); routeToPlace(p); }, openRoute: (id) => openSharedRoute(id),
       startConvoy: (name, handles) => (convoy && convoy.startFor ? convoy.startFor(name, handles) : Promise.resolve({ ok: false, status: 0 })),
     }) : null; } catch (e) { console.error('crew drives', e); }
+    // Units (web/units.js, IDEAS U-22): the page reloads to redraw every number; never mid-drive (the drive lives in this page).
+    {
+      const paintUnits = () => document.querySelectorAll('[data-units]').forEach(b => { const on = b.dataset.units === ApexUnits.system(); b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); });
+      document.querySelectorAll('[data-units]').forEach(b => b.addEventListener('click', () => {
+        if (b.dataset.units === ApexUnits.system()) return;
+        if (state.mode === 'live') { toast('Change units when the drive has ended.'); return; }
+        ApexUnits.set(b.dataset.units); paintUnits(); location.reload();
+      }));
+      paintUnits();
+    }
     // Send feedback (web/feedback.js, IDEAS L-05): Settings → Feedback; the owner reads it in Crew.
     let accountMe = null, feedbackUi = null;
     try {
@@ -3818,7 +3832,7 @@
         for (const c of nearby) {
           const t = el('div', { className: 'card' });
           t.append(el('div', { className: 'crew-tile-head' }, el('b', { textContent: c.name }),
-            el('span', { textContent: `${c.members} ${c.members === 1 ? 'member' : 'members'} · ${c.area_name}${Number.isFinite(c.km) ? ` · ${Math.max(1, Math.round(c.km / 1.609344))} mi` : ''}` }),
+            el('span', { textContent: `${c.members} ${c.members === 1 ? 'member' : 'members'} · ${c.area_name}${Number.isFinite(c.km) ? ` · ${ApexUnits.long(Math.max(1609.344, c.km * 1000), 0)}` : ''}` }),
             ...(c.about ? [el('em', { textContent: c.about })] : [])),
             el('div', { className: 'row' },
               btn('Join', async () => { const r = await apiCall('POST', `/api/crews/${c.id}/join`); if (r.ok) { toast(`You joined ${c.name}.`); openCrewId = c.id; redo(); } else toast(r.status === 429 ? 'You\'re in 10 crews already.' : 'Couldn\'t join. Try again.'); }, 'ink-btn solid'),
@@ -4217,11 +4231,11 @@
       const zoned = state.lastPosition && inPrivacyZone(state.lastPosition.lat, state.lastPosition.lon);
       if (s.gps === 'denied') main.push('Location is off');
       else if (zoned) main.push('<b>Privacy zone</b> · not recording');
-      else if (r && r.samples > 0) main.push(`<b>● Rec</b> ${(r.km / 1.609344).toFixed(2)} mi`);
+      else if (r && r.samples > 0) main.push(`<b>● Rec</b> ${ApexUnits.long((r.km) * 1000, 2)}`);
       else main.push(s.gps === 'on' ? 'Starting…' : 'Finding GPS…');
       if (etaText) main.push(etaText);
-      if (NATIVE_SHELL) { const a = ambientStats(); if (a) main.push(a.error ? 'Sharing · retrying' : a.paused ? 'Sharing paused' : `Sharing ${(a.km / 1.609344).toFixed(1)} mi`); }
-      else if (drive.share === 'on') main.push(drive.shareErr ? 'Sharing · retrying' : `Sharing ${(drive.shareKm / 1.609344).toFixed(1)} mi`);
+      if (NATIVE_SHELL) { const a = ambientStats(); if (a) main.push(a.error ? 'Sharing · retrying' : a.paused ? 'Sharing paused' : `Sharing ${ApexUnits.long((a.km) * 1000, 1)}`); }
+      else if (drive.share === 'on') main.push(drive.shareErr ? 'Sharing · retrying' : `Sharing ${ApexUnits.long((drive.shareKm) * 1000, 1)}`);
       else if (drive.share === 'stopped') main.push('Sharing paused');
       else if (drive.share === 'zone' && !zoned) main.push('Sharing off after a privacy zone');
       if (s.gps === 'denied') warn.push(LOC_DENIED_TEXT);
@@ -4303,7 +4317,7 @@
     function ambientStats() { return ambient.sharer ? ambient.sharer.stats() : null; }
     function paintAmbient() {
       const note = $('ambientNote'); if (!note) return;
-      const a = ambientStats(), mi = a ? `${(a.km / 1.609344).toFixed(1)} mi shared since the app opened` : '';
+      const a = ambientStats(), mi = a ? `${ApexUnits.long((a.km) * 1000, 1)} shared since the app opened` : '';
       note.textContent = !NATIVE_SHELL ? 'Shared while you drive. In the iPhone app it also shares whenever the phone is mounted.'
         : ambient.allowed === false ? 'Off. Sign in and turn on Road data in Crew to share.'
         : !ambient.mounted ? 'Waiting for the phone to be calibrated in its mount.'
@@ -4597,13 +4611,13 @@
           const d = ApexRecording.parse(Core, rec.toCsv(), `web_${stamp}.csv`, { source: 'web-gps', date: `${when.getFullYear()}-${pad(when.getMonth() + 1)}-${pad(when.getDate())}T${pad(when.getHours())}:${pad(when.getMinutes())}`, name: road || `Drive ${when.toLocaleDateString()} ${ApexFormat.clock12(when.getHours(), when.getMinutes())}` });
           await ApexRecording.store(d);
           await refreshSavedDrives();
-          toast(`Drive saved · ${(rec.km / 1.609344).toFixed(1)} mi`, { label: 'View', href: `analysis.html?tab=drive&drive=${encodeURIComponent(d.id)}` });
+          toast(`Drive saved · ${ApexUnits.long((rec.km) * 1000, 1)}`, { label: 'View', href: `analysis.html?tab=drive&drive=${encodeURIComponent(d.id)}` });
           if (live) {
             live.finish().then(async (shared) => {
               if (shared && shared.chunks > 0) {
                 d.contributed = true;
                 await ApexRecording.store(d);
-                if (shared.km > 0) toast(`Shared ${(shared.km / 1.609344).toFixed(1)} mi of road feel.`);
+                if (shared.km > 0) toast(`Shared ${ApexUnits.long((shared.km) * 1000, 1)} of road feel.`);
               }
             }).catch(() => {});
           }
