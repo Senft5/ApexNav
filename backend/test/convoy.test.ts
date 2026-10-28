@@ -78,7 +78,7 @@ describe("convoy: create, join, leave", () => {
     expect(made.context).toMatchObject({ role: "leader", name: "Sunday run", members: [{ handle: "alice", role: "leader" }] });
     expect(made.invite).toMatch(/^[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{32}$/);
     expect((await api(b, "POST", "/api/convoy/join", { invite: made.invite })).status).toBe(400);           // no consent
-    expect((await join(b, made.invite.replace(/.$/, "x"))).status).toBe(400);                               // wrong secret
+    expect((await join(b, made.invite.replace(/.$/, (c) => (c === "x" ? "y" : "x")))).status).toBe(400); // wrong secret (never the same last char)
     const ctx = await json(join(b, made.invite));
     expect(ctx).toMatchObject({ role: "member", sessionId: made.context.sessionId });
     expect(ctx.members.map((m: Msg) => m.handle)).toEqual(["alice", "bob"]);
