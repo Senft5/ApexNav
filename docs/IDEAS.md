@@ -74,7 +74,7 @@ long-press pin (#61), Apple place search and nearby suggestions in the app (#73)
 | R-07 | Live ETA and time left from router durations scaled by your own pace, reset on reroute | H | M | todo | WORKER_QUEUE eta-1, every nav app |
 | R-08 | Traffic ahead on iOS from MapKit, switch to the next most fun route that avoids the jam | H | L | done (#78, phone test pending) | WORKER_QUEUE traffic-1, Waze |
 | R-09 | Traffic on web/Android through a keyed provider (TomTom/HERE via the Worker) | M | M | owner (paid provider) | Google Maps |
-| R-10 | "Explore": best stages within N minutes of here, as a list and on the map, one tap to drive one | H | M | todo | ROAD_INTELLIGENCE §7.1, REVER discover |
+| R-10 | "Explore": best stages within N minutes of here, as a list and on the map, one tap to drive one | H | M | done (#129) | ROAD_INTELLIGENCE §7.1, REVER discover |
 | R-11 | Choose each stage's direction by score and car (climb the technical one, descend the flowing one) | M | M | todo | ROAD_INTELLIGENCE §7.2.3 |
 | R-12 | Set list: order stages so intensity builds, rests, and finishes high; no three max-TECH stages in a row | M | M | todo | ROAD_INTELLIGENCE §7.2.5 |
 | R-13 | Sun glare penalty for headings within 20° of a low sun, using the existing solar formula | M | S | done (#123) | ROAD_INTELLIGENCE §7.2.6 |
@@ -251,7 +251,7 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 |---|---|---|---|---|---|
 | O-01 | First run in three screens max, permissions at the moment of need | H | S | done (BRAND §4; polish: no focus ring, Sign in is the one solid button on its step) | docs/BRAND.md §4 |
 | O-02 | Mount guide: how and where to mount the phone, with a live "calibrated" tick | H | S | done (app: Mount row before the first drive, "Mount set" when calibration locks) | STATE 2026-10-26 calibration |
-| O-03 | Instant value with no account: plan a fun loop from where you are in two taps | H | S | todo | Calimoto |
+| O-03 | Instant value with no account: plan a fun loop from where you are in two taps | H | S | done (loop chips in Where to?) | Calimoto |
 | O-04 | Demo replay that shows the cockpit, notes and analysis in 60 s | M | S | partial (#58) | — |
 | O-05 | Sign in with Apple (required on iOS when Google sign-in is offered) | H | S | owner (Apple account) | App Store guideline 4.8 |
 | O-06 | Email link sign-in as a no-Google option | M | S | todo | docs/BACKEND.md |
@@ -310,7 +310,7 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 | P-04 | Lazy-load voice banks and kokoro-js only when voice is on | M | S | done (already lazy: checked 2026-10-28, a cold start fetches only voices/index.json) | startup time |
 | P-05 | Route analysis in a Web Worker so the UI never stutters while scoring | M | M | todo | Y-01 |
 | P-06 | Startup under 1 s to an interactive map on a mid-range phone | H | M | partial (demo drives load on demand, #125) | — |
-| P-07 | Thermal guard: pause the 100 Hz pipeline gracefully if the phone overheats on the dash | M | S | todo | iPhone on windscreen |
+| P-07 | Thermal guard: pause the 100 Hz pipeline gracefully if the phone overheats on the dash | M | S | done (#128) | iPhone on windscreen |
 
 ## 12. Privacy and security (Z)
 
