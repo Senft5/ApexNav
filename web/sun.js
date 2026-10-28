@@ -55,6 +55,18 @@
     return sineAltitude < Math.sin(SUNRISE_ALTITUDE);
   }
 
-  const api = { isDark, sunTimes };
+  // Where the sun is: altitude above the horizon and azimuth clockwise from north, both radians.
+  function sunPosition(date, lat, lon) {
+    const minutes = date.getUTCHours() * 60 + date.getUTCMinutes() + date.getUTCSeconds() / 60;
+    const { equation, declination } = solarTerms(utcDay(date), minutes);
+    const latitude = lat * Math.PI / 180, longitude = lon * Math.PI / 180;
+    const hourAngle = (minutes + equation - 720) * Math.PI / 720 + longitude;
+    const altitude = Math.asin(Math.sin(latitude) * Math.sin(declination) +
+      Math.cos(latitude) * Math.cos(declination) * Math.cos(hourAngle));
+    const azimuth = Math.atan2(-Math.sin(hourAngle), Math.tan(declination) * Math.cos(latitude) - Math.sin(latitude) * Math.cos(hourAngle));
+    return { altitude, azimuth: (azimuth + TAU) % TAU };
+  }
+
+  const api = { isDark, sunTimes, sunPosition };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexSun = api;
 })(typeof window !== 'undefined' ? window : globalThis);

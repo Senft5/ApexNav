@@ -52,6 +52,14 @@ out.rankAdjust = F.rank([{ id: 'a', timeS: 1800, fun: fun(40, 30) }, { id: 'b', 
 out.roughClose = F.rank([{ id: 'a', timeS: 1800, fun: fun(40, 30) }, { id: 'b', timeS: 1800, fun: fun(46, 30), adjust: -8 }], 'fun').map(c => c.id);
 out.roughFar = F.rank([{ id: 'a', timeS: 1800, fun: fun(40, 30) }, { id: 'b', timeS: 1800, fun: fun(60, 30), adjust: -8 }], 'fun').map(c => c.id);
 out.rankNoTime = F.rank([{ id: 'x', timeS: null, fun: fun(10, 0) }], 'fun').map(c => c.id);
+// sun glare: 10 km straight at the low morning sun vs the same road with the sun behind
+const Sun = require(root + '/web/sun.js');
+const dawn = new Date(Sun.sunTimes(new Date('2026-06-21T12:00:00Z'), 39.1, -84.51).sunrise.getTime() + 30 * 60000);
+const sp = Sun.sunPosition(dawn, 39.1, -84.51);
+const line = (az) => { const n = 2001, lat = [], lon = [], dist = []; for (let i = 0; i < n; i++) { const m = i * 5; lat.push(39.1 + m * Math.cos(az) / 110540); lon.push(-84.51 + m * Math.sin(az) / (111320 * Math.cos(39.1 * Math.PI / 180))); dist.push(m); } return { lat, lon, dist }; };
+out.glare = [F.glare(line(sp.azimuth), 900, dawn, Sun).minutes, F.glare(line(sp.azimuth + Math.PI), 900, dawn, Sun).minutes,
+             F.glare(line(sp.azimuth), 900, new Date('2026-06-21T17:40:00Z'), Sun).minutes, F.glare(line(0), 900, dawn, null)];
+out.glareRank = F.rank([{ id: 'into', timeS: 1800, fun: fun(46, 30), glare: { minutes: 15 } }, { id: 'away', timeS: 1800, fun: fun(40, 30), glare: { minutes: 0 } }], 'fun').map(c => c.id);
 
 // corridor: A at (0,0), B 20 km east
 const A = P(0, 0), B = P(20000, 0);
@@ -231,6 +239,14 @@ def test_loops_by_drive_time_fit_the_time(r):
     for p in r["timeLoops"]:
         assert abs(p["total"] - 3600) / 3600 <= 0.25
         assert "east" not in p["names"] and "far" not in p["names"]
+
+
+def test_driving_into_a_low_sun_costs(r):
+    into, away, noon, nosun = r["glare"]
+    assert abs(into - 15) < 0.5, "15 minutes straight at a sun 5° up"
+    assert away == 0 and noon == 0, "sun behind you, or high at noon: no glare"
+    assert nosun is None
+    assert r["glareRank"][0] == "away", "15 minutes into the sun outweighs a 6-point fun lead"
 
 
 def test_loops_are_valued_on_the_fun_scale(r):

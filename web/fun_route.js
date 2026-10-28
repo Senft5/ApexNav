@@ -368,7 +368,7 @@
   /**
    * cands: [{ fun: score(), timeS, adjust? }]. Drops candidates past the level's budget over the
    * quickest, then ranks by fun + GAIN_PER_CORNER x good corners gained over the quickest route
-   * - perMin x extra minutes (+ `adjust`, e.g. measured roughness). Fun is a density, so a longer
+   * - perMin x extra minutes (+ `adjust`, e.g. measured roughness; − glareCost, minutes into a low sun). Fun is a density, so a longer
    * route through a great stage would barely move it; the corner gain is what pays for the detour.
    * The quickest route always stays in, so there is always an answer.
    */
@@ -383,7 +383,7 @@
     return cands.map(c => {
       const extraS = Number.isFinite(c.timeS) ? Math.max(0, c.timeS - quick.timeS) : Infinity;
       const fun = c.fun ? c.fun.fun : 0, gain = c.fun ? Math.min(GAIN_CAP, Math.max(0, c.fun.good - quickGood)) : 0;
-      return { ...c, extraS, value: fun + GAIN_PER_CORNER * gain - L.perMin * extraS / 60 + (c.adjust || 0) };
+      return { ...c, extraS, value: fun + GAIN_PER_CORNER * gain - L.perMin * extraS / 60 + (c.adjust || 0) - glareCost(c) };
     }).filter(c => c.extraS === 0 || c.timeS <= limit).sort((a, b) => b.value - a.value);
   }
 
@@ -425,6 +425,29 @@
     return clean.length ? clean : cands;
   }
 
-  const api = { LEVELS, LOOP_BY_TIME, AVOID_DEFAULT, AVOID_LABELS, costing, unavoided, keepAvoiding, why, geometry, alongPoints, insertVia, loopValue, loopShortlist, loopPlansFromMatrix, score, shortlist, matrixPoints, plansFromMatrix, sectionCount, sectionPoints, combineSections, planKey, searchArea, waypoints, rank, along, kmBetween };
+  // ---- sun glare (R-13) ----------------------------------------------------------------
+  // Driving into a sun low ahead (0–15° up, within 20° of the heading) blinds you on exactly the roads this app picks.
+  // Minutes of it on a route, from its geometry ({lat, lon, dist}) driven evenly over timeS from `start`.
+  const GLARE_MAX_ALT = 15 * Math.PI / 180, GLARE_HALF_ANGLE = 20 * Math.PI / 180;
+  function glare(t, timeS, start, sun = root.ApexSun) {
+    if (!t || !t.dist || t.dist.length < 2 || !(timeS > 0) || !sun || !(start instanceof Date)) return null;
+    const total = t.dist[t.dist.length - 1], step = 20;      // 20 samples: 100 m on 5 m geometry
+    if (!(total > 0)) return null;
+    let seconds = 0;
+    for (let i = 0; i + step < t.lat.length; i += step) {
+      const j = i + step, kx = Math.cos(t.lat[i] * Math.PI / 180);
+      const heading = Math.atan2((t.lon[j] - t.lon[i]) * kx, t.lat[j] - t.lat[i]);
+      const at = new Date(start.getTime() + t.dist[i] / total * timeS * 1000);
+      const p = sun.sunPosition(at, t.lat[i], t.lon[i]);
+      if (p.altitude <= 0 || p.altitude > GLARE_MAX_ALT) continue;
+      const off = Math.abs(Math.atan2(Math.sin(heading - p.azimuth), Math.cos(heading - p.azimuth)));
+      if (off < GLARE_HALF_ANGLE) seconds += (t.dist[j] - t.dist[i]) / total * timeS;
+    }
+    return { minutes: seconds / 60 };
+  }
+  const GLARE_COST_PER_MIN = 1, GLARE_COST_MAX = 20;          // fun points; a 10-minute squint costs a 10-point lead
+  const glareCost = (c) => Math.min(GLARE_COST_MAX, GLARE_COST_PER_MIN * ((c.glare && c.glare.minutes) || 0));
+
+  const api = { LEVELS, glare, glareCost, LOOP_BY_TIME, AVOID_DEFAULT, AVOID_LABELS, costing, unavoided, keepAvoiding, why, geometry, alongPoints, insertVia, loopValue, loopShortlist, loopPlansFromMatrix, score, shortlist, matrixPoints, plansFromMatrix, sectionCount, sectionPoints, combineSections, planKey, searchArea, waypoints, rank, along, kmBetween };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexFunRoute = api;
 })(typeof window !== 'undefined' ? window : globalThis);

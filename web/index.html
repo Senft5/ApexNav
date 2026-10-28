@@ -1780,7 +1780,9 @@
           : null;
       const feel = mCov != null && mCov > 0 ? `Road feel ${mCov}% driven` : 'Road feel after first drive';
       const missed = Array.isArray(t.unavoided) && t.unavoided.length ? `Couldn't avoid ${t.unavoided.map(k => FunRoute.AVOID_LABELS[k] || k).join(' or ')} · ` : '';
-      $('routeCardSub').textContent = `${missed}Cameras ${cams} · ${feel}`;
+      // Planned routes only: a driven track's own time has passed.
+      const sun = !(Array.isArray(t.sectors) && t.sectors.length) && t.glareMin >= 3 ? `Low sun ahead for ~${t.glareMin} min · ` : '';
+      $('routeCardSub').textContent = `${missed}${sun}Cameras ${cams} · ${feel}`;
       $('routeCardWhy').textContent = t.why || '';
       $('routeCardWhy').hidden = !t.why;
       $('routeCardFun').hidden = t.id !== 'route_dest';           // the level re-plans destination routes only
@@ -2092,7 +2094,12 @@
       // Avoid options are router preferences: drop candidates that still use an avoided road when any candidate doesn't.
       const pool = FunRoute.keepAvoiding(cands, avoid);
       // Score on light geometry (corners only); the full track (envelope, sight lines, notes) is built for the winner.
-      for (const c of pool) { c.t = FunRoute.geometry(c.route.coords, Core); c.fun = funOf(c.t, c.route.turns); await RouteLoading.yieldToUI(); }
+      const leaving = new Date();
+      for (const c of pool) {
+        c.t = FunRoute.geometry(c.route.coords, Core); c.fun = funOf(c.t, c.route.turns);
+        c.glare = FunRoute.glare(c.t, c.timeS, leaving);                    // minutes driving into a low sun, if you leave now
+        await RouteLoading.yieldToUI();
+      }
       await applyMeasured(FunRoute.rank(pool, level).slice(0, 3).map(r => pool.find(c => c.t === r.t)), ui);   // the top few only
       const best = FunRoute.rank(pool, level)[0];
       const measured = best.t.measured;
@@ -2100,12 +2107,12 @@
       // A winning alternate is pinned with shaping points along it, so a reroute stays on it.
       const via = best.kind === 'router' && best.extraS > 0 ? FunRoute.alongPoints(best.route.coords) : best.via;
       const quickest = pool.filter(c => Number.isFinite(c.timeS)).reduce((x, y) => (y.timeS < x.timeS ? y : x), best);
-      Object.assign(best.t, { measured, fun: best.fun, timeS: best.timeS, extraS: best.extraS, funLevel: level, unavoided: FunRoute.unavoided(avoid, best.route), why: whyText(FunRoute.why(best, quickest)),
+      Object.assign(best.t, { measured, fun: best.fun, timeS: best.timeS, extraS: best.extraS, funLevel: level, glareMin: best.glare ? Math.round(best.glare.minutes) : null, unavoided: FunRoute.unavoided(avoid, best.route), why: whyText(FunRoute.why(best, quickest)),
                               request: { ...request, via: via.map(p => ({ lat: p.lat, lon: p.lon, shaping: true })) } });
       await buildRoute(null, id, name, best.t);
       const mi = (totalOf(best.t) / 1609.344).toFixed(1), extra = best.extraS >= 60 ? ` · +${Math.round(best.extraS / 60)} min for fun` : '';
       toast(`${name} · ${mi} mi · Fun ${best.fun ? best.fun.fun : '--'}${extra}`);
-      window.apexDebug && (window.apexDebug.lastFun = FunRoute.rank(pool, level).map(c => ({ kind: c.kind, fun: c.fun, timeS: c.timeS, value: c.value, adjust: c.adjust || 0 })));
+      window.apexDebug && (window.apexDebug.lastFun = FunRoute.rank(pool, level).map(c => ({ kind: c.kind, fun: c.fun, timeS: c.timeS, value: c.value, adjust: c.adjust || 0, glare: c.glare })));
       return true;
     }
     function setFunLevel(level) {
@@ -2219,7 +2226,10 @@
         t.fun = funOf(t, r.turns);
         t.unavoided = FunRoute.unavoided(avoid, r);
         t.timeS = r.timeS;
-        return { t, job, route: r, ...scoreLoop(t, miles, targetS && Number.isFinite(r.timeS) ? { timeS: r.timeS, targetS } : null), spursCut: rs.removed };
+        const glare = FunRoute.glare(t, r.timeS, new Date());
+        t.glareMin = glare ? Math.round(glare.minutes) : null;
+        const s = scoreLoop(t, miles, targetS && Number.isFinite(r.timeS) ? { timeS: r.timeS, targetS } : null);
+        return { t, job, route: r, ...s, score: s.score - FunRoute.glareCost({ glare }), spursCut: rs.removed };
       });
       let done = FunRoute.keepAvoiding((await Promise.allSettled(tries)).filter(r => r.status === 'fulfilled').map(r => r.value), avoid);
       // A time loop compares drive times: a route the router didn't time can't be judged with the others.
