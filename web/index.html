@@ -531,11 +531,13 @@
           <section data-panel="setup">
             <h3>Your data</h3>
             <p class="note" id="myDataNote" role="status">--</p>
+            <p class="note" id="myOfflineNote">--</p>
             <div class="row" style="flex-wrap:wrap">
               <button class="ink-btn" id="myGpxBtn">Download drives (GPX)</button>
               <button class="ink-btn" id="myAccountBtn">Download account data</button>
             </div>
             <div class="row mt-8" style="flex-wrap:wrap">
+              <button class="linkbtn" id="myOfflineDelBtn">Delete offline data</button>
               <button class="linkbtn" id="myDrivesDelBtn">Delete drives on this phone</button>
               <button class="linkbtn" id="myEraseBtn">Erase everything on this phone</button>
             </div>
@@ -3797,6 +3799,22 @@
       const s = ApexMyData.phoneSummary(list, localStorage);
       $('myDataNote').textContent = `On this phone: ${s.drives} drive${s.drives === 1 ? '' : 's'} (${s.miles} mi), ${s.spots} spot${s.spots === 1 ? '' : 's'}, ${s.zones} privacy zone${s.zones === 1 ? '' : 's'}, ${s.places} recent place${s.places === 1 ? '' : 's'}. `
         + (s.signedIn ? 'Signed in: friends, crews and what you shared are on the server.' : 'Not signed in: nothing of yours is on the server.');
+      renderOffline();
+    }
+    // Offline data (IDEAS F-06): saved routes and downloaded voices, their size, and a delete. Drives are not offline data.
+    async function voiceCacheBytes() {
+      try {
+        if (!window.caches || !(await caches.has('kokoro-voices'))) return 0;
+        const c = await caches.open('kokoro-voices'); let n = 0;
+        for (const req of await c.keys()) { const r = await c.match(req); if (r) n += (await r.clone().arrayBuffer()).byteLength; }
+        return n;
+      } catch (_) { return null; }
+    }
+    async function renderOffline() {
+      let est = {};
+      try { est = (navigator.storage && navigator.storage.estimate) ? await navigator.storage.estimate() : {}; } catch (_) {}
+      const o = ApexMyData.offlineSummary(localStorage, await voiceCacheBytes(), est.usage, est.quota);
+      const note = $('myOfflineNote'); if (note) note.textContent = ApexMyData.offlineText(o);
     }
     const saveFile = (text, name, type) => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type })); a.download = name; document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 10000); };
     $('myGpxBtn').addEventListener('click', async () => {
@@ -3810,6 +3828,12 @@
       if (!r || r.status === 401) { toast(r ? 'Not signed in: there is no account data on the server.' : 'No signal. Try again.'); return; }
       if (!r.ok) { toast('Couldn\'t get your data. Try again.'); return; }
       saveFile(JSON.stringify(await r.json(), null, 2), 'apexnav-account.json', 'application/json');
+    });
+    $('myOfflineDelBtn').addEventListener('click', async () => {
+      if (!confirm('Delete routes saved for offline and downloaded voices? Your drives, spots and settings stay.')) return;
+      try { localStorage.removeItem(ApexSavedRoutes.KEY); } catch (_) {}
+      try { if (window.caches) await caches.delete('kokoro-voices'); } catch (_) {}
+      toast('Offline data deleted.'); renderMyData();
     });
     $('myDrivesDelBtn').addEventListener('click', async () => {
       const list = await ApexRecording.all();

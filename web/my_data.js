@@ -38,6 +38,29 @@
   /** The keys this app keeps in localStorage (cleared by "Erase everything on this phone"). */
   const keysToClear = (storage) => { const ks = []; for (let i = 0; i < storage.length; i++) { const k = storage.key(i); if (k && k.startsWith('apex.')) ks.push(k); } return ks; };
 
-  const api = { toGpx, phoneSummary, keysToClear };
+  /**
+   * Offline data (IDEAS F-06): routes saved for offline (count, size) in `storage`, downloaded voices (`voiceBytes`, from the
+   * Cache API, null unknown) and the browser's total (`usage`/`quota` from navigator.storage.estimate, null unknown).
+   * Map tiles sit in the browser's own HTTP cache, which the app can't size or clear; it says so.
+   */
+  function offlineSummary(storage, voiceBytes = null, usage = null, quota = null) {
+    let routes = 0, routeBytes = 0;
+    try {
+      const raw = storage.getItem('apex.savedRoutes');
+      if (raw) { const v = JSON.parse(raw); routes = Array.isArray(v) ? v.length : 0; routeBytes = raw.length * 2; }
+    } catch (_) {}
+    return { routes, routeBytes, voiceBytes: finite(voiceBytes) ? voiceBytes : null, usage: finite(usage) ? usage : null, quota: finite(quota) ? quota : null };
+  }
+  const mb = (b) => (b < 0.05 * 1048576 ? '<0.1' : (b / 1048576).toFixed(1)) + ' MB';
+  /** One line for Settings. */
+  function offlineText(o) {
+    const parts = [`${o.routes} saved route${o.routes === 1 ? '' : 's'} (${mb(o.routeBytes)})`];
+    if (o.voiceBytes != null && o.voiceBytes > 0) parts.push(`downloaded voices ${mb(o.voiceBytes)}`);
+    let s = `Offline data: ${parts.join(', ')}.`;
+    if (o.usage != null) s += ` The app uses ${mb(o.usage)} on this phone in all${o.quota ? ` (of ${Math.round(o.quota / 1073741824 * 10) / 10} GB allowed)` : ''}.`;
+    return s + ' Map tiles are kept by the phone\u2019s own web cache, which clears itself.';
+  }
+
+  const api = { toGpx, phoneSummary, keysToClear, offlineSummary, offlineText };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexMyData = api;
 })(typeof window !== 'undefined' ? window : globalThis);

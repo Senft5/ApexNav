@@ -405,7 +405,7 @@ flow('reported hazards: a call ahead, "still there?" after passing, and a one-ta
   check(reports.length === 1 && reports[0].kind === 'pothole' && Math.abs(reports[0].lat - (35.6 + 330 / 110540)) < 1e-4 && reports[0].heading === 0, 'reported at your position and heading');
 });
 
-flow('your data: Settings counts what the phone holds and downloads drives as GPX (IDEAS Z-03/Z-04)', async (page, base) => {
+flow('your data: Settings counts what the phone holds and downloads drives as GPX, offline data deleted (IDEAS Z-03/Z-04, F-06)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.goto(base + '/index.html');
   await page.waitForFunction(() => window.ApexRecording && window.ApexMyData);
@@ -419,6 +419,13 @@ flow('your data: Settings counts what the phone holds and downloads drives as GP
   page.once('dialog', (d) => d.accept());
   await page.click('#myDrivesDelBtn');
   await page.waitForFunction(() => /0 drives/.test(document.getElementById('myDataNote').textContent));
+  // offline data (IDEAS F-06): a saved route counted, then deleted; the drives are not touched by it
+  await page.evaluate(() => { localStorage.setItem('apex.savedRoutes', JSON.stringify([{ id: 'r1', coords: [[0, 0], [1, 1]] }])); document.querySelector('.tab[data-view="setup"]').click(); });
+  await page.waitForFunction(() => /Offline data: 1 saved route /.test(document.getElementById('myOfflineNote').textContent));
+  page.once('dialog', (d) => d.accept());
+  await page.click('#myOfflineDelBtn');
+  await page.waitForFunction(() => /Offline data: 0 saved routes/.test(document.getElementById('myOfflineNote').textContent));
+  check((await page.evaluate(() => localStorage.getItem('apex.savedRoutes'))) === null, 'saved routes gone');
 });
 
 flow('shared routes: one a friend shared shows in Crew and opens as a planned route with notes (Worker stubbed, IDEAS S-05)', async (page, base) => {
