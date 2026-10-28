@@ -446,13 +446,14 @@ def _on_a(a: dict, near: int, b: dict, i: int):
     return j if dist <= MATCH_RADIUS_M else None
 
 
-def _spread(brakes: list, mins: list, passes: int) -> dict:
+def _spread(brakes: list, mins: list, passes: int, froms: list) -> dict:
     """How repeatably a corner is driven over your clean passes of it (IDEAS D-07): a robust SD (`_sd`), in m along this drive's
     road, of where braking began and of where the slowest point fell, each over the passes that had a clear one. None
     with fewer than SPREAD_MIN_PASSES of them; 5 m bins and GPS put the floor near 3 m."""
     b = [x for x in brakes if x is not None]
     m = [x for x in mins if x is not None]
-    return {"passes": passes, "brake_sd_m": _sd(b), "brake_passes": len(b), "min_sd_m": _sd(m), "min_passes": len(m)}
+    return {"passes": passes, "brake_sd_m": _sd(b), "brake_passes": len(b), "min_sd_m": _sd(m), "min_passes": len(m),
+            "marks": [[f, x, y] for f, x, y in zip(froms, brakes, mins)]}       # per pass: [-1 this drive | j in others, brake, slowest]
 
 
 def coach(a: dict, others: list) -> dict:
@@ -478,6 +479,7 @@ def coach(a: dict, others: list) -> dict:
         oa, sa = _marks(a, c["start"], c["end"], c["apex"])                 # D-07 marks, in m along A's road from its apex
         brakes = [None if oa is None else (c["apex"] - oa) * 5.0]
         mins = [None if sa is None else (sa - c["apex"]) * 5.0]
+        froms = [-1]
         for j, b in enumerate(others):
             w = match_window(a, c["start"], c["end"], b, hints[j])
             if w is None:
@@ -501,12 +503,13 @@ def coach(a: dict, others: list) -> dict:
             ob = None if ob is not None and ob > c["apex"] else ob             # braking cannot begin past the apex
             brakes.append(None if ob is None else (c["apex"] - ob) * 5.0)
             mins.append(None if sb is None else (sb - c["apex"]) * 5.0)
+            froms.append(j)
             if mb["envelope_use"] <= PACE_CEILING and mb["time_s"] < best["time_s"]:
                 best, best_from = mb, j
         gain = ma["time_s"] - best["time_s"]
         tip = _tip(ma, best if best_from >= 0 and gain >= TIP_GAIN_S else None)
         out.append({"apex": c["apex"], "m": ma, "best": None if best_from < 0 else best, "best_from": best_from,
-                    "gain_s": gain, "tip": tip, "passes": passes, "spread": _spread(brakes, mins, passes)})
+                    "gain_s": gain, "tip": tip, "passes": passes, "spread": _spread(brakes, mins, passes, froms)})
     clean = [x for x in out if x["gain_s"] is not None]
     this_s = float(sum(x["m"]["time_s"] for x in clean))
     gain_s = float(sum(x["gain_s"] for x in clean if x["gain_s"] >= TIP_GAIN_S))     # below that is GPS alignment noise
@@ -515,6 +518,36 @@ def coach(a: dict, others: list) -> dict:
     return {"corners": out, "clean": len(clean), "this_s": this_s, "ideal_s": this_s - gain_s, "gain_s": gain_s,
             "top": order[:TOP_OPPORTUNITIES]}
 
+
+
+DEV_MIN_CORNERS = 3          # a pass needs its braking point in this many repeated corners to get a figure
+
+
+def pass_deviation(co: dict) -> dict:
+    """How far each pass's braking point sat from your usual one (IDEAS D-07 trend), from coach(a, others): for every corner
+    with SPREAD_MIN_PASSES or more braking marks, each pass's |mark - the corner's median|; per pass (-1 = a, j = others[j])
+    the mean over its corners, {pass: {"dev_m", "corners"}}, only for passes with DEV_MIN_CORNERS such corners."""
+    per: dict = {}
+    for c in co["corners"]:
+        sp = c.get("spread")
+        if not sp:
+            continue
+        known = [(f, b) for f, b, _ in sp["marks"] if b is not None]
+        if len(known) < SPREAD_MIN_PASSES:
+            continue
+        med = _median([b for _, b in known])
+        for f, b in known:
+            per.setdefault(f, []).append(abs(b - med))
+    out = {}
+    for f in sorted(per):
+        xs = per[f]
+        if len(xs) < DEV_MIN_CORNERS:
+            continue
+        m = 0.0
+        for x in xs:
+            m += x
+        out[f] = {"dev_m": m / len(xs), "corners": len(xs)}
+    return out
 
 # ---------------------------------------------------------------------------
 # Friction circle (g-g): the person's own grip envelope, and how much of it each corner used.

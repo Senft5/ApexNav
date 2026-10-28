@@ -70,6 +70,9 @@ The JS file is a line-for-line port used by the browser/iOS cockpit for live OSR
   the mark should fall, 20 m; an onset past the apex is dropped, so a hairpin's other leg cannot capture it). The spread is 1.4826 x the median absolute deviation, in m, so one odd pass (traffic, wet) does
   not dominate; None under 3 marks. With realistic noise (4 m GPS jitter, 0.02 g, 0.15 m/s) identical driving stays under
   10 m. The drive page names a corner as varying only with 5+ passes and a spread of max(10 m, 2 x your median).
+- Braking consistency trend (`pass_deviation`; JS `passDeviation`): from a coach result's per-pass `spread.marks`, each
+  pass's mean |braking mark - the corner's median| over corners with 3+ marks (3+ corners per pass); the Log averages it
+  by week, weighted by corners.
 - Fatigue cues (`fatigue`; JS `fatigue`): on a drive with an hour or more of moving time (bins at 2.5 m/s or more), the
   clean, fully measured corners (8 or more) of the first and last thirds of that time are compared as two groups: extra
   steering corrections per corner (`steering_corrections`: reversals of the lateral-g trend on steps of 0.03 g or more,
