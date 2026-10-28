@@ -1,5 +1,9 @@
 # APEX NAV — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-10-28: web inspector off in release (Z-09)
+- #143: the iOS web view is inspectable only in DEBUG builds (Safari's Web Inspector could read the session token from a release IPA). The CI IPA is Release, so a phone trace through Web Inspector now needs a Debug build. (Q-23 landed separately in #147.)
+- Exact next task: the remaining audit rows (Z-10, Z-11, Z-15, Y-13 to Y-15).
+
 ## Session 2026-10-28: production crash and error review
 - Cloudflare connector checked: it reaches D1 SQL and the deployed Worker code, not Workers Logs, analytics or latency (table in docs/BACKUPS.md 6a). So no crash report or server error from production could be read; there was nothing else to review.
 - Production D1 looked healthy: 3 users, 909 road bins, no expired sessions or stale sign-in codes left, empty ingest queue.

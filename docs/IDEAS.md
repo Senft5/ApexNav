@@ -332,7 +332,7 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 | Z-06 | Convoy positions ephemeral, scoped to joined members, revoked on leave, never logged | H | S | partial (#84) | docs/CONVOY_TRANSPORT.md |
 | Z-07 | Privacy policy and terms written for real (and linked in the app and store) | H | S | owner (legal) | App Store requirement |
 | Z-08 | Minimum k-anonymity for road bins shown publicly (don't show a bin only one driver touched near a home) | M | S | todo | Strava heatmap lesson |
-| Z-09 | iOS web view is `isInspectable = true` in release builds: Safari Web Inspector on a Mac with the unlocked phone plugged in can read the session token from localStorage. Gate it behind `#if DEBUG` or a hidden developer toggle | M | S | todo | audit 2026-10-28 |
+| Z-09 | iOS web view is `isInspectable = true` in release builds: Safari Web Inspector on a Mac with the unlocked phone plugged in can read the session token from localStorage. Gate it behind `#if DEBUG` or a hidden developer toggle | M | S | done (#143) | audit 2026-10-28 |
 | Z-10 | App session token lives in web localStorage; keep it in the iOS Keychain and hand it to the page per request through the bridge | M | M | todo | audit 2026-10-28 |
 | Z-11 | Content-Security-Policy beyond `frame-ancestors` (script-src for the inline scripts by hash, connect-src for the map/route hosts): defence in depth now that a session token sits in page storage | M | M | todo | audit 2026-10-28 |
 | Z-12 | The outgoing friend-request list shows a pending row only for real member handles, so typing handles still tells you which exist (the request answer itself is uniform). Show sent requests for unknown handles too, or not at all | L | S | todo | audit 2026-10-28 |

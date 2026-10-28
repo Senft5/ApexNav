@@ -269,7 +269,10 @@ struct ApexCockpitWebView: UIViewRepresentable {
         webView.scrollView.pinchGestureRecognizer?.isEnabled = false
         webView.allowsLinkPreview = false
         webView.allowsBackForwardNavigationGestures = false
+        #if DEBUG
+        // Safari's Web Inspector can read page storage, the session token included: debug builds only, never the release IPA.
         webView.isInspectable = true
+        #endif
         webView.navigationDelegate = context.coordinator
         webView.uiDelegate = context.coordinator
         webView.hideKeyboardAccessoryBar()
