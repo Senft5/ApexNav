@@ -24,6 +24,10 @@ Camber and crest are recorded and shared only while `locked`. The phone's crest 
   - **Low-Pass (< 1.0 Hz)**: Isolates road elevation compression (dips) and unweighting over blind crests where tire normal load drops.
   - **High-Pass (> 8.0 Hz)**: Isolates pavement roughness, washboard ripples, and mid-corner expansion joints (computed as RMS energy per 5m slice).
 - **Confidence & Flow Index**: Compares entry-to-apex speed stability and mid-corner braking ($a_x < 0$) against geometric curve radius to flag blind/decreasing-radius hazards vs. high-flow sweepers.
+- **Agreement between passes (read side)**: `road_bins` keeps Welford sums of squares for camber and roughness; `GET /api/roads`
+  returns their sample SD (`csd`, `rsd`, null under two measuring passes) and the camber pass count `cn`. The phone calls a
+  5 m value `one` (single pass), `agree` (>= 2 passes within 1.5° camber / 0.05 g roughness) or `differ`
+  (`ApexContributor.agreement`); without a spread (older server) agreement is unknown, never assumed.
 
 ## 3. Road DNA Engine (`core/road_dna.py`, ported to `web/apex_core.js`)
 The JS file is a line-for-line port used by the browser/iOS cockpit for live OSRM routes; `tests/test_web_core_parity.py` runs both on the same input (synthetic + a real logged drive) and requires identical results. Change both or neither.

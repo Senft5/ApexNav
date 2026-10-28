@@ -63,6 +63,8 @@ trace_attributes + Overpass geometry, up to 150 ways in batches of 50 for `/api/
 - measured smooth surface (≤ 0.12 g rms): up to +3;
 - banked road (|camber| ≥ 3°): up to +2 when a tenth of the route is banked;
 - weighted by coverage (full weight at half the route measured) and passes (one pass counts 3/4).
+- readings whose passes disagree (`ApexContributor.agreement` says 'differ': camber spread over 1.5°,
+  roughness over 0.05 g) are left out of rough, smooth and banked; they still count as covered.
 
 Unmeasured roads are neutral: a road nobody has driven is never penalised or rewarded. With fun
 scores on 0–100 this decides close calls (a fully rough road loses a 6-point lead) but cannot make a

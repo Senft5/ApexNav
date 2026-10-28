@@ -2,8 +2,16 @@
 
 ## Session 2026-10-28: measured roads count in routing
 - #85 merged (loops sized with real road distances).
-- Measured road data now moves route choice for members (docs/ROUTING.md, Measured roads): `measuredAdjust` −8 rough … +3 smooth, +2 banked, weighted by coverage and passes; unmeasured stays neutral. `measuredAlong`/`measuredSeries` look up to 150 ways in batches of 50 (long routes used to see only their first 50 ways). Route card shows a Surface bar once a fifth of the route is measured. Production has very little measured data yet (909 bins, no camber as of 2026-10-26), so the effect in the field will be small until people drive with sharing on.
+- Measured road data now moves route choice for members (docs/ROUTING.md, Measured roads): `measuredAdjust` −8 rough … +3 smooth, +2 banked, weighted by coverage and passes; readings whose passes disagree (#87 spreads, `agreement() === 'differ'`) are ignored; unmeasured stays neutral. `measuredAlong`/`measuredSeries` look up to 150 ways in batches of 50 (long routes used to see only their first 50 ways). Route card shows a Surface bar once a fifth of the route is measured. Production has very little measured data yet (909 bins, no camber as of 2026-10-26), so the effect in the field will be small until people drive with sharing on.
 - Exact next task: stage discovery that also covers the ends of long A→B trips (multi-centre search), and using measured data during stage discovery (road-3 remainder).
+
+## Session 2026-10-28: driver and road analysis (thread "Deepen driver and road analysis")
+- #80 corner coach (core/drive_analysis `corner_phases`/`coach`, JS parity): per corner its own brake zone, trail braking, coasting and throttle point; each corner matched in your other drives and timed over exactly the same stretch (sub-bin alignment, so GPS jitter is not "time"); overdriven passes never count as best; gains under 0.2 s ignored. Drive view: "Ideal drive N s quicker", "Where to find time" (top 3 with one tip each), a tip on corner cards. Unmeasured g anywhere from 200 m before the apex to 100 m after the exit leaves the corner out.
+- #86 grip circle (`gg_envelope`/`grip_use`): the driver's own g-g envelope (16 slices centred on the axes, 95th percentile), every sample as a dot, the scrubbed corner's trace and its grip use.
+- #87 road feel confidence: `GET /api/roads` adds `cn`, `csd`, `rsd` (sample SD from the Welford sums road_bins already keeps; no migration); readout says "1 run", "N runs agree" (camber within 1.5°, roughness within 0.05 g) or "runs differ ±x"; faint bars for single/disagreeing passes. Older server payloads read with agreement unknown.
+- Reviewed by code-review subagents (phantom gains from GPS alignment, tips from zero-filled g, braking from the previous corner, skewed slices: all fixed with tests). Checked in headless Chromium at 390 px with the shipped drives stored as recordings.
+- Not verified on a phone: any of the above with real drives; the coach needs two or more drives of the same road to show an ideal drive. Road-feel confidence needs a signed-in member and real multi-pass data, so it has only been checked with stubbed data in tests.
+- Exact next task: use corner phases in live coaching (spoken "brake later" on a known road), feed agreement into routing (WORKER_QUEUE road-3: trust only agreeing measurements), and corroborated hazards ("Confirmed" pothole when passes agree).
 
 ## Session 2026-10-28: loops the length you asked for
 - #82 merged (fun A→B routing, see the entry below and docs/ROUTING.md).

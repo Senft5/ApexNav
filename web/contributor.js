@@ -294,15 +294,39 @@
     if (!roads) return null;
     return summarize(locate({ drive: route, match, ways }), roads, route.lat.length);
   }
-  /** Per-sample measured series along a route: { cam[], rough[], n[] } with null where no member has measured that 5 m. */
+  /**
+   * Per-sample measured series along a route: { cam[], rough[], n[], cn[], csd[], rsd[] } with null where no member has measured
+   * that 5 m. cn: passes that measured camber; csd/rsd: how much the passes disagree (sample SD; null under two passes or from
+   * a server that does not send it yet).
+   */
   function seriesFrom(runs, roads, total) {
-    const cam = new Array(total).fill(null), rough = new Array(total).fill(null), n = new Array(total).fill(null);
+    const blank = () => new Array(total).fill(null);
+    const cam = blank(), rough = blank(), n = blank(), cn = blank(), csd = blank(), rsd = blank();
+    const at = (a, j) => (a && a[j] != null ? a[j] : null);
     for (const run of runs) {
       const d = roads[run.way] && roads[run.way][run.dir]; if (!d) continue;
       const idx = new Map(d.i.map((b, j) => [b, j]));
-      for (const p of run.pts) { const j = idx.get(p.bin); if (j == null) continue; cam[p.i] = d.cam[j]; rough[p.i] = d.rough[j]; n[p.i] = d.n[j]; }
+      for (const p of run.pts) {
+        const j = idx.get(p.bin); if (j == null) continue;
+        cam[p.i] = d.cam[j]; rough[p.i] = d.rough[j]; n[p.i] = d.n[j];
+        cn[p.i] = d.cn ? d.cn[j] : null; csd[p.i] = at(d.csd, j); rsd[p.i] = at(d.rsd, j);
+      }
     }
-    return { cam, rough, n };
+    return { cam, rough, n, cn, csd, rsd };
+  }
+
+  // Passes that agree within these spreads make a measurement trustworthy (camber: phone mounts and lines differ by ~1 deg;
+  // roughness: speed and tyres move the 5 m RMS by a few hundredths of a g).
+  const AGREE = { camber_deg: 1.5, rough_g: 0.05 };
+  /**
+   * How far to trust one merged 5 m value: 'one' (a single pass), 'agree' (two or more passes within tol), 'differ' (they
+   * disagree), or null when nothing was measured. passes: how many measured it; sd: their sample SD (null = not known).
+   */
+  function agreement(passes, sd, tol) {
+    if (!(passes >= 1)) return null;
+    if (passes < 2) return 'one';
+    if (sd == null || !Number.isFinite(sd)) return null;
+    return sd <= tol ? 'agree' : 'differ';
   }
   async function measuredSeries(route, lookup, opts = {}) {
     const match = await matchDrive(route, opts.fetch);
@@ -312,7 +336,9 @@
     return roads ? seriesFrom(locate({ drive: route, match, ways }), roads, route.lat.length) : null;
   }
   function summarize(runs, roads, total) {
-    let covered = 0, located = 0, passes = 0, rough = [], banked = 0, smooth = 0, broken = 0;
+    // Readings whose passes disagree (agreement() says 'differ') don't steer a route: they count as covered but not as rough,
+    // smooth or banked. A single pass, or an older server without spreads, counts; measuredAdjust weights passes separately.
+    let covered = 0, located = 0, passes = 0, rough = [], banked = 0, smooth = 0, broken = 0, disputed = 0;
     for (const run of runs) {
       const d = roads[run.way] && roads[run.way][run.dir], idx = d ? new Map(d.i.map((b, j) => [b, j])) : null;
       for (const p of run.pts) {
@@ -320,13 +346,16 @@
         const j = idx && idx.get(p.bin);
         if (j == null) continue;
         covered++; passes += d.n[j];
-        if (finite(d.rough[j])) { rough.push(d.rough[j]); if (d.rough[j] <= SMOOTH_G) smooth++; else if (d.rough[j] >= ROUGH_G) broken++; }
-        if (finite(d.cam[j]) && Math.abs(d.cam[j]) >= 3) banked++;
+        const roughOk = agreement(d.n[j], d.rsd ? d.rsd[j] : null, AGREE.rough_g) !== 'differ';
+        const camOk = agreement(d.cn ? d.cn[j] : d.n[j], d.csd ? d.csd[j] : null, AGREE.camber_deg) !== 'differ';
+        if (!roughOk || !camOk) disputed++;
+        if (roughOk && finite(d.rough[j])) { rough.push(d.rough[j]); if (d.rough[j] <= SMOOTH_G) smooth++; else if (d.rough[j] >= ROUGH_G) broken++; }
+        if (camOk && finite(d.cam[j]) && Math.abs(d.cam[j]) >= 3) banked++;
       }
     }
     return { km: total * BIN_M / 1000, coveredKm: covered * BIN_M / 1000, coverage: total ? covered / total : 0, located: located / (total || 1),
              roughness: rough.length ? mean(rough) : null, bankedKm: banked * BIN_M / 1000, avgPasses: covered ? passes / covered : null,
-             smoothKm: smooth * BIN_M / 1000, roughKm: broken * BIN_M / 1000 };
+             smoothKm: smooth * BIN_M / 1000, roughKm: broken * BIN_M / 1000, disputedKm: disputed * BIN_M / 1000 };
   }
 
   /**
@@ -354,6 +383,6 @@
     return Math.round(100 * (1 - Math.max(0, Math.min(1, (m.roughness - 0.08) / 0.30))));
   }
 
-  const api = { createLive, createAmbient, driveIdFor, measuredSeries, seriesFrom, measuredAdjust, surfaceScore, measuredAlong, summarize, locate, buildContributions, matchDrive, fetchWays, contributeDrive, eligible, project, cumulative, SKIP_CLASSES };
+  const api = { createLive, createAmbient, driveIdFor, measuredSeries, seriesFrom, agreement, AGREE, measuredAdjust, surfaceScore, measuredAlong, summarize, locate, buildContributions, matchDrive, fetchWays, contributeDrive, eligible, project, cumulative, SKIP_CLASSES };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexContributor = api;
 })(typeof window !== 'undefined' ? window : globalThis);

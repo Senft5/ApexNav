@@ -87,6 +87,23 @@
     return { box, show, env };
   }
 
+  // How far to trust member road feel at sample i: passes and their spread (ApexContributor.agreement), never a guess.
+  function feelTrust(feel, i, k) {
+    const C2 = root.ApexContributor;
+    const passes = k === 'cam' ? (feel.cn && feel.cn[i] != null ? feel.cn[i] : feel.n[i]) : feel.n[i];
+    const sd = k === 'cam' ? (feel.csd ? feel.csd[i] : null) : (feel.rsd ? feel.rsd[i] : null);
+    if (!finite(feel[k][i]) || !C2 || !C2.agreement) return { a: null, passes, sd };
+    return { a: C2.agreement(passes, sd, k === 'cam' ? C2.AGREE.camber_deg : C2.AGREE.rough_g), passes, sd };
+  }
+  const trustOpacity = (t) => (t.a === 'agree' ? 0.8 : t.a === 'one' || t.a === 'differ' ? 0.3 : 0.55);
+  function trustLabel(feel, i, k) {
+    const t = feelTrust(feel, i, k), unit = k === 'cam' ? '\u00b0' : ' g', dp = k === 'cam' ? 1 : 2;
+    if (t.a === 'one') return ' \u00b7 1 run';
+    if (t.a === 'agree') return ` \u00b7 ${t.passes} runs agree`;
+    if (t.a === 'differ') return ` \u00b7 runs differ \u00b1${t.sd.toFixed(dp)}${unit}`;
+    return '';
+  }
+
   function mount(root_, d, o) {
     const { Core, C, MPH } = o, ref = o.reference || null;        // ref: { name, score, corners[] } from Core.compareDrives(this, best other drive)
     const co = o.coach || null;                                      // Core.coach(this, other drives) + others: [{ name, date }]
@@ -186,13 +203,13 @@
       }
       if (feel) {                                                          // what members measured on these roads; gaps are unknown, not zero
         const top = yTop + LH, h = 56, covered = feel.cam.filter((v) => v != null).length;
-        svg += `<text x="${LM}" y="${yTop + 12}" font-size="11" fill="${C.panelDim}">Road feel</text><text x="${W - RM}" y="${yTop + 12}" text-anchor="end" font-size="10" fill="${C.panelDim}">${covered ? `banking \u00b18\u00b0 \u00b7 roughness` : 'no member data on this road yet'}</text>`;
+        svg += `<text x="${LM}" y="${yTop + 12}" font-size="11" fill="${C.panelDim}">Road feel</text><text x="${W - RM}" y="${yTop + 12}" text-anchor="end" font-size="10" fill="${C.panelDim}">${covered ? `banking \u00b18\u00b0 (faint: 1 run or runs differ) \u00b7 roughness` : 'no member data on this road yet'}</text>`;
         svg += `<line x1="${LM}" x2="${W - RM}" y1="${top + h / 2}" y2="${top + h / 2}" stroke="${C.rule}" stroke-dasharray="3 4"/><line x1="${LM}" x2="${W - RM}" y1="${top + h}" y2="${top + h}" stroke="${C.rule}"/>`;
         const cs = Math.max(1, Math.floor((v1 - v0) / (W * 1.2)));
         let bars = '', rp = '', rs = false;
         for (let i = v0; i <= v1; i += cs) {
           const cm = feel.cam[i], rf = feel.rough[i];
-          if (finite(cm)) { const hh = Math.min(1, Math.abs(cm) / 8) * (h / 2); bars += `<rect x="${X(i).toFixed(1)}" y="${(cm >= 0 ? top + h / 2 - hh : top + h / 2).toFixed(1)}" width="${Math.max(1, (W - LM - RM) / ((v1 - v0) / cs)).toFixed(1)}" height="${hh.toFixed(1)}" fill="${C.accent}" opacity="0.55"/>`; }
+          if (finite(cm)) { const hh = Math.min(1, Math.abs(cm) / 8) * (h / 2); bars += `<rect x="${X(i).toFixed(1)}" y="${(cm >= 0 ? top + h / 2 - hh : top + h / 2).toFixed(1)}" width="${Math.max(1, (W - LM - RM) / ((v1 - v0) / cs)).toFixed(1)}" height="${hh.toFixed(1)}" fill="${C.accent}" opacity="${trustOpacity(feelTrust(feel, i, 'cam'))}"/>`; }
           if (finite(rf)) { rp += `${rs ? 'L' : 'M'}${X(i).toFixed(1)} ${(top + h - Math.min(1, rf / 0.4) * h).toFixed(1)}`; rs = true; } else rs = false;
         }
         svg += bars + (rp ? `<path d="${rp}" fill="none" stroke="${C.signal}" stroke-width="1.4"/>` : '');
@@ -228,7 +245,8 @@
         + cell('Lateral', d.lat_g && finite(d.lat_g[i]) ? `${d.lat_g[i] >= 0 ? 'L ' : 'R '}${Math.abs(d.lat_g[i]).toFixed(2)} g` : '--')
         + cell('Brake / throttle', d.lon_g && finite(d.lon_g[i]) ? `${d.lon_g[i] < 0 ? 'brake ' : 'accel '}${Math.abs(d.lon_g[i]).toFixed(2)} g` : '--')
         + cell(c ? `Corner ${k + 1}` : 'Corner', c ? `${c.call || c.code}` : '--') + (ref ? cell('vs other drive', c ? fmtD(lost(k)) : '--') : '')
-        + (feel ? cell('Banking', finite(feel.cam[i]) ? `${feel.cam[i].toFixed(1)}\u00b0` : '--') + cell('Roughness', finite(feel.rough[i]) ? `${feel.rough[i].toFixed(2)} g` : '--') + cell('Runs', feel.n[i] != null ? feel.n[i] : '--') : '');
+        + (feel ? cell(`Banking${trustLabel(feel, i, 'cam')}`, finite(feel.cam[i]) ? `${feel.cam[i].toFixed(1)}\u00b0` : '--')
+          + cell(`Roughness${trustLabel(feel, i, 'rough')}`, finite(feel.rough[i]) ? `${feel.rough[i].toFixed(2)} g` : '--') + cell('Runs', feel.n[i] != null ? feel.n[i] : '--') : '');
       list.querySelectorAll('.dv-corner').forEach((r, q) => r.classList.toggle('on', q === k));
       if (gg) gg.show(c, k);
     }

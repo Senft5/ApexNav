@@ -52,6 +52,9 @@ out.adjust = [C.measuredAdjust(null), C.measuredAdjust({ roughness: null, covera
   const roads = { 77: { 0: { i: Array.from({ length: 200 }, (_, j) => 200 + j), n: Array(200).fill(3), cam: Array.from({ length: 200 }, (_, j) => (j < 40 ? 5 : j < 60 ? null : 1)), rough: Array(200).fill(0.1), crest: Array(200).fill(0.2) } } };
   const rt = drive(1000), rm = rt.lat.map(() => ({ way: 77, cls: 'tertiary' }));
   out.measured = C.summarize(C.locate({ drive: rt, match: rm, ways: { 77: way } }), roads, 1000);
+  // passes disagree on roughness for the first 100 bins and on camber for the banked 40: those don't steer a route
+  const disputedRoads = { 77: { 0: { ...roads[77][0], rsd: Array.from({ length: 200 }, (_, j) => (j < 100 ? 0.2 : 0.01)), cn: Array(200).fill(3), csd: Array.from({ length: 200 }, (_, j) => (j < 40 ? 4 : 0.5)) } } };
+  out.disputed = C.summarize(C.locate({ drive: rt, match: rm, ways: { 77: way } }), disputedRoads, 1000);
   out.unknownRoad = C.summarize(C.locate({ drive: rt, match: rm, ways: { 77: way } }), {}, 1000);
   out.reverseRoute = C.summarize(C.locate({ drive: drive(1000, true), match: rm, ways: { 77: way } }), roads, 1000);
   const fk = async (url, init) => url.includes('trace_attributes')
@@ -166,6 +169,14 @@ def test_measured_adjustment_moves_routes_but_never_rewards_or_punishes_the_unkn
     assert a["banked"] == pytest.approx(2) and a["bankedLittle"] == pytest.approx(1)
     assert a["zeroCoverage"] == 0
     assert result["surface"] == [None, None, 100, 0, 50]
+
+
+def test_disagreeing_passes_do_not_steer_routes(result):
+    d, m = result["disputed"], result["measured"]
+    assert d["coveredKm"] == pytest.approx(m["coveredKm"]), "still covered"
+    assert d["bankedKm"] == 0 and m["bankedKm"] > 0, "banking the passes disagree on is not banking"
+    assert d["smoothKm"] == pytest.approx(m["smoothKm"] / 2, abs=0.02)
+    assert d["disputedKm"] == pytest.approx(0.5, abs=0.02)
 
 
 def test_long_routes_look_up_ways_in_batches(result):
