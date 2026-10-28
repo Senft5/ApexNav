@@ -1064,6 +1064,35 @@ flow('flyover video: Video records the replay with the note on it and hands over
   check(!(await page.evaluate(() => window.apexDebug.state.playing)), 'the replay stops with it');
 });
 
+flow('offline area: Save the map here keeps the map, labels and terrain; with no signal the map still opens (IDEAS F-02)', async (page, base) => {
+  let online = true, tiles = 0;
+  const style = { version: 8, glyphs: 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf', sources: { openmaptiles: { type: 'vector', url: 'https://tiles.openfreemap.org/planet' } },
+    layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#eee' } }, { id: 'names', type: 'symbol', source: 'openmaptiles', 'source-layer': 'place', layout: { 'text-field': '{name}', 'text-font': ['Noto Sans Regular'] } }] };
+  await page.route('https://tiles.openfreemap.org/**', (route) => {
+    if (!online) return route.abort();
+    const u = route.request().url();
+    if (u.includes('/styles/')) return route.fulfill({ contentType: 'application/json', body: JSON.stringify(style) });
+    if (u.endsWith('/planet')) return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ tiles: ['https://tiles.openfreemap.org/planet/t/{z}/{x}/{y}.pbf'], minzoom: 0, maxzoom: 14 }) });
+    tiles++;
+    return route.fulfill({ contentType: 'application/x-protobuf', body: Buffer.alloc(0) });
+  });
+  await page.route('https://s3.amazonaws.com/**', (route) => (online ? route.fulfill({ contentType: 'image/png', body: Buffer.alloc(8) }) : route.abort()));
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apexDebug.map.loaded(), null, { timeout: 15000 });
+  await page.evaluate(() => { window.apexDebug.map.jumpTo({ center: [-83.5, 35.6], zoom: 11 }); document.getElementById('myAreaBtn').click(); });
+  await page.waitForFunction(() => (JSON.parse(localStorage.getItem('apex.offlineAreas') || '[]')).length === 1, null, { timeout: 60000 });
+  const area = await page.evaluate(() => JSON.parse(localStorage.getItem('apex.offlineAreas'))[0]);
+  check(area.tiles > 500 && area.tiles <= 2500 && Math.abs(area.lat - 35.6) < 0.01, 'an area of tiles round the map: ' + JSON.stringify(area));
+  check(tiles > 400, 'the tiles were fetched: ' + tiles);
+  await page.waitForFunction(() => /1 map area/.test(document.getElementById('myOfflineNote').textContent), null, { timeout: 5000 });
+  // no signal: the map opens from the saved style and tiles
+  online = false;
+  await page.reload();
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apexDebug.map.getStyle() && window.apexDebug.map.getLayer('names'), null, { timeout: 15000 });
+  check(await page.evaluate(() => !!window.apexDebug.map.getSource('openmaptiles')), 'the saved style and its source loaded offline');
+}, { viewport: { width: 1280, height: 900 } });
+
 flow('desk: on a big screen Where to? is a column on the left and sheets a panel on the right, the map in view (IDEAS A-05)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.goto(base + '/index.html?view=route');

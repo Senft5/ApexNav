@@ -105,15 +105,19 @@
     return [Math.floor((lon + 180) / 360 * n), Math.floor((1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * n)];
   };
   let tileUrl = null;
+  // a saved copy first (offline_tiles.js, IDEAS F-02), so loops, Explore and climbs work in a saved area with no signal
+  const offline = (url) => (root.ApexOfflineTiles ? root.ApexOfflineTiles.get(url) : Promise.resolve(null));
+  const bufferOf = async (url) => (await offline(url)) || Loading.arrayBuffer(url);
+  const tileJson = async () => { const b = await offline(TILEJSON); return b ? JSON.parse(new TextDecoder().decode(b)) : Loading.json(TILEJSON); };
   const MAX_TILES = 64;
   /** The map's road lines in the zoom-14 tile under a point (for "am I on a raceway?", IDEAS D-15); throws without tiles. */
   async function transportationAt(lat, lon, z = 14) {
-    if (!tileUrl) tileUrl = (await Loading.json(TILEJSON)).tiles[0];
+    if (!tileUrl) tileUrl = (await tileJson()).tiles[0];
     const [x, y] = tileOf(lat, lon, z);
-    return decodeLayer(new Uint8Array(await Loading.arrayBuffer(tileUrl.replace('{z}', z).replace('{x}', x).replace('{y}', y))), 'transportation', z, x, y);
+    return decodeLayer(new Uint8Array(await bufferOf(tileUrl.replace('{z}', z).replace('{x}', x).replace('{y}', y))), 'transportation', z, x, y);
   }
   async function roadPieces(c, radiusKm, onProgress, withNames = false) {
-    if (!tileUrl) tileUrl = (await Loading.json(TILEJSON)).tiles[0];
+    if (!tileUrl) tileUrl = (await tileJson()).tiles[0];
     const z = 13, jobs = [];
     // At most 64 tiles: a 14 km radius needs 81 at 39°N, so shrink the area to fit instead of giving up (which
     // used to drop every 45 mi loop to the circle fallback).
@@ -130,7 +134,7 @@
     pieces.names = [];   // named road lines (transportation_name), only when asked (naming stages)
     await Promise.all(jobs.map(async ([x, y]) => {
       try {
-        const buf = new Uint8Array(await Loading.arrayBuffer(tileUrl.replace('{z}', z).replace('{x}', x).replace('{y}', y)));
+        const buf = new Uint8Array(await bufferOf(tileUrl.replace('{z}', z).replace('{x}', x).replace('{y}', y)));
         for (const f of decodeLayer(buf, 'transportation', z, x, y)) {
           const p = f.props;
           if (!ROAD_CLASSES.has(p.class) || p.ramp === 1 || p.service || p.access === 'no' || p.surface === 'unpaved') continue;
@@ -178,7 +182,7 @@
   /** Clearances along a route from the map's landcover; null when it would need too many tiles or none could be read. */
   async function sightOffsets(lat, lon) {
     if (!lat || lat.length < 3) return null;
-    if (!tileUrl) tileUrl = (await Loading.json(TILEJSON)).tiles[0];
+    if (!tileUrl) tileUrl = (await tileJson()).tiles[0];
     const tiles = new Set();
     for (let i = 0; i < lat.length; i += 20) tiles.add(tileOf(lat[i], lon[i], LANDCOVER_Z).join('/'));
     tiles.add(tileOf(lat[lat.length - 1], lon[lon.length - 1], LANDCOVER_Z).join('/'));
@@ -189,7 +193,7 @@
       const [x, y] = k.split('/').map(Number);
       try {
         if (!landcoverTiles.has(k)) {
-          const buf = new Uint8Array(await Loading.arrayBuffer(tileUrl.replace('{z}', LANDCOVER_Z).replace('{x}', x).replace('{y}', y)));
+          const buf = new Uint8Array(await bufferOf(tileUrl.replace('{z}', LANDCOVER_Z).replace('{x}', x).replace('{y}', y)));
           const list = [];
           for (const f of decodeLayer(buf, 'landcover', LANDCOVER_Z, x, y, 3)) {
             if (!SIGHT_OPEN_M[f.props.class]) continue;
@@ -213,7 +217,7 @@
   const placeTiles = new Map();
   const PLACE_Z = 11, PLACE_PAD_KM = 4, PLACE_MAX_TILES = 80;
   async function places(points) {
-    if (!tileUrl) tileUrl = (await Loading.json(TILEJSON)).tiles[0];
+    if (!tileUrl) tileUrl = (await tileJson()).tiles[0];
     const want = new Set();
     for (const p of points || []) {
       const dLat = PLACE_PAD_KM / 110.54, dLon = PLACE_PAD_KM / (111.32 * Math.cos(p.lat * Math.PI / 180));
@@ -222,7 +226,7 @@
     if (!want.size || want.size > PLACE_MAX_TILES) throw new Error('area too big');
     await Promise.all([...want].filter(k => !placeTiles.has(k)).map(async (key) => {
       const [x, y] = key.split('/').map(Number);
-      const buf = new Uint8Array(await Loading.arrayBuffer(tileUrl.replace('{z}', PLACE_Z).replace('{x}', x).replace('{y}', y)));
+      const buf = new Uint8Array(await bufferOf(tileUrl.replace('{z}', PLACE_Z).replace('{x}', x).replace('{y}', y)));
       placeTiles.set(key, decodeLayer(buf, 'place', PLACE_Z, x, y, 1).filter(f => ['city', 'town', 'village'].includes(f.props.class))
         .flatMap(f => f.lines.map(([[lon, lat]]) => ({ lat, lon, cls: f.props.class, name: f.props.name || null }))));
     }));
@@ -236,7 +240,7 @@
   const POI_Z = 14, POI_PAD_KM = 0.4, POI_MAX_TILES = 160;
   const POI_KIND = (p) => (p.subclass === 'viewpoint' ? 'view' : p.class === 'cafe' ? 'cafe' : p.class === 'fuel' ? 'fuel' : null);
   async function pois(points) {
-    if (!tileUrl) tileUrl = (await Loading.json(TILEJSON)).tiles[0];
+    if (!tileUrl) tileUrl = (await tileJson()).tiles[0];
     const want = new Set();
     for (const p of points || []) {
       const dLat = POI_PAD_KM / 110.54, dLon = POI_PAD_KM / (111.32 * Math.cos(p.lat * Math.PI / 180));
@@ -245,7 +249,7 @@
     if (!want.size || want.size > POI_MAX_TILES) throw new Error('area too big');
     await Promise.all([...want].filter(k => !poiTiles.has(k)).map(async (key) => {
       const [x, y] = key.split('/').map(Number);
-      const buf = new Uint8Array(await Loading.arrayBuffer(tileUrl.replace('{z}', POI_Z).replace('{x}', x).replace('{y}', y)));
+      const buf = new Uint8Array(await bufferOf(tileUrl.replace('{z}', POI_Z).replace('{x}', x).replace('{y}', y)));
       poiTiles.set(key, decodeLayer(buf, 'poi', POI_Z, x, y, 1).map(f => ({ kind: POI_KIND(f.props), name: f.props.name || null, pt: f.lines[0] && f.lines[0][0] }))
         .filter(f => f.kind && f.pt).map(f => ({ kind: f.kind, name: f.name, lat: f.pt[1], lon: f.pt[0] })));
     }));
@@ -460,7 +464,8 @@
   async function demTile(key) {
     if (!demTiles.has(key)) demTiles.set(key, (async () => {
       const [x, y] = key.split('/').map(Number);
-      const blob = await (await fetch(DEM.replace('{z}', DEM_Z).replace('{x}', x).replace('{y}', y))).blob();
+      const url = DEM.replace('{z}', DEM_Z).replace('{x}', x).replace('{y}', y), saved = await offline(url);
+      const blob = saved ? new Blob([saved], { type: 'image/png' }) : await (await fetch(url)).blob();
       const img = await createImageBitmap(blob);
       const c = typeof OffscreenCanvas === 'function' ? new OffscreenCanvas(256, 256) : Object.assign(document.createElement('canvas'), { width: 256, height: 256 });
       const g = c.getContext('2d'); g.drawImage(img, 0, 0);

@@ -48,5 +48,5 @@ def test_offline_data(out):
     assert out["off"]["routes"] == 2 and out["off"]["routeBytes"] > 0
     assert out["offText"].startswith("Offline data: 2 saved routes (<0.1 MB), downloaded voices 3.0 MB.")
     assert "uses 12.0 MB" in out["offText"] and "of 2 GB allowed" in out["offText"]
-    assert out["none"] == {"routes": 0, "routeBytes": 0, "voiceBytes": None, "usage": None, "quota": None}   # unknown stays unknown
-    assert out["noneText"].startswith("Offline data: 0 saved routes (<0.1 MB). Map tiles")
+    assert out["none"] == {"routes": 0, "routeBytes": 0, "areas": 0, "areaBytes": 0, "voiceBytes": None, "usage": None, "quota": None}   # unknown stays unknown
+    assert out["noneText"].startswith("Offline data: 0 saved routes (<0.1 MB). Other map tiles")

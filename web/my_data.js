@@ -49,16 +49,19 @@
       const raw = storage.getItem('apex.savedRoutes');
       if (raw) { const v = JSON.parse(raw); routes = Array.isArray(v) ? v.length : 0; routeBytes = raw.length * 2; }
     } catch (_) {}
-    return { routes, routeBytes, voiceBytes: finite(voiceBytes) ? voiceBytes : null, usage: finite(usage) ? usage : null, quota: finite(quota) ? quota : null };
+    let areas = 0, areaBytes = 0;
+    try { const v = JSON.parse(storage.getItem('apex.offlineAreas') || '[]'); if (Array.isArray(v)) { areas = v.length; areaBytes = v.reduce((s, a) => s + (finite(a && a.bytes) ? a.bytes : 0), 0); } } catch (_) {}
+    return { routes, routeBytes, areas, areaBytes, voiceBytes: finite(voiceBytes) ? voiceBytes : null, usage: finite(usage) ? usage : null, quota: finite(quota) ? quota : null };
   }
   const mb = (b) => (b < 0.05 * 1048576 ? '<0.1' : (b / 1048576).toFixed(1)) + ' MB';
   /** One line for Settings. */
   function offlineText(o) {
     const parts = [`${o.routes} saved route${o.routes === 1 ? '' : 's'} (${mb(o.routeBytes)})`];
+    if (o.areas > 0) parts.push(`${o.areas} map area${o.areas === 1 ? '' : 's'} (${mb(o.areaBytes)})`);
     if (o.voiceBytes != null && o.voiceBytes > 0) parts.push(`downloaded voices ${mb(o.voiceBytes)}`);
     let s = `Offline data: ${parts.join(', ')}.`;
     if (o.usage != null) s += ` The app uses ${mb(o.usage)} on this phone in all${o.quota ? ` (of ${Math.round(o.quota / 1073741824 * 10) / 10} GB allowed)` : ''}.`;
-    return s + ' Map tiles are kept by the phone\u2019s own web cache, which clears itself.';
+    return s + (o.areas > 0 ? '' : ' Other map tiles are kept by the phone\u2019s own web cache, which clears itself.');
   }
 
   const api = { toGpx, phoneSummary, keysToClear, offlineSummary, offlineText };
