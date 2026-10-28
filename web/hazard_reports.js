@@ -54,6 +54,22 @@
     };
   }
 
-  const api = { nextAhead, createPassWatch, LABEL, KINDS: Object.keys(LABEL) };
+  /**
+   * Road closures to route around (IDEAS Q-17): reported closures inside the trip's box (its points, widened by `padKm`),
+   * as Valhalla exclude_locations ({lat, lon}), nearest the trip's middle first, at most `max` (the router's limit is 50).
+   */
+  function closuresFor(list, points, padKm = 15, max = 30) {
+    const pts = (points || []).filter((p) => p && finite(p.lat) && finite(p.lon));
+    if (!pts.length) return [];
+    const lat0 = Math.min(...pts.map((p) => p.lat)), lat1 = Math.max(...pts.map((p) => p.lat));
+    const lon0 = Math.min(...pts.map((p) => p.lon)), lon1 = Math.max(...pts.map((p) => p.lon));
+    const dLat = padKm / 110.54, dLon = padKm / (111.32 * Math.max(0.2, Math.cos(((lat0 + lat1) / 2) * Math.PI / 180)));
+    const mid = { lat: (lat0 + lat1) / 2, lon: (lon0 + lon1) / 2 };
+    return (list || []).filter((h) => h && h.kind === 'closure' && finite(h.lat) && finite(h.lon)
+        && h.lat >= lat0 - dLat && h.lat <= lat1 + dLat && h.lon >= lon0 - dLon && h.lon <= lon1 + dLon)
+      .sort((a, b) => local(mid, a).m - local(mid, b).m).slice(0, max).map((h) => ({ lat: h.lat, lon: h.lon }));
+  }
+
+  const api = { nextAhead, createPassWatch, closuresFor, LABEL, KINDS: Object.keys(LABEL) };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexHazardReports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

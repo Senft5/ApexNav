@@ -36,6 +36,13 @@ it says "Couldn't check towns" instead of pretending there are none. Checked: we
 (Alcoa/Maryville) and no town-free alternate; Morristown → Rahway NJ, the winner has 29.5 km of town against 19.5–25 km for
 others, so the card says ~18 mi (fun outweighed the town cost there).
 
+## Reported closures
+
+Before each route request, live "Road closed" reports (IDEAS Q-15) within 50 km of the trip's middle are fetched for members
+(kept 5 minutes) and those inside the trip's box widened by 15 km go to the router as `exclude_locations` (at most 30,
+nearest the middle first; `closuresFor` in web/hazard_reports.js). If the router finds no way around them, the route is
+asked again without them and a toast says a reported closure is in the way (IDEAS Q-17).
+
 ## Corners you like
 
 Plan → **Hairpins** fewer / more and **Sweepers** fewer / more (IDEAS R-19, saved on the phone): in the fun score of every
