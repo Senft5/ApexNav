@@ -33,6 +33,7 @@
   <script src="whats_new.js"></script>
   <script src="saved_routes.js"></script>
   <script src="crew_events.js"></script>
+  <script src="health.js"></script>
   <script src="incident.js"></script>
   <script src="traffic.js"></script>
   <script src="in_car.js"></script>
@@ -526,6 +527,8 @@
               <button class="linkbtn" id="myEraseBtn">Erase everything on this phone</button>
             </div>
             <p class="note">Your account (friends, crews, shared spots, routes and results) is deleted from the server in Crew → Delete account.</p>
+            <button class="sw mt-8" data-toggle="health"><i></i><span>Share app health</span></button>
+            <p class="note">Once a day, totals like "3 routes found, 1 failed" go to ApexNav with no account, phone or place in them, so problems get fixed. Off: nothing is counted or sent.</p>
           </section>
         <section data-panel="setup">
             <h3>Spots</h3>
@@ -782,7 +785,7 @@
       theme: 'roadbook', camFeel: 'dynamic', voiceId: 'george', liveVoice: false, voiceStyle: 'codriver', voiceName: '', hlOn: false, hlStrength: 1,
       notesMode: 'auto', nightMode: 'auto',   // Notes: auto | full | quiet. Night: auto (sunset/sunrise) | on | off
       noteWords: 'plain',                     // rally ("Left 4 minus") | plain ("Medium left"), IDEAS V-02; a saved setting wins
-      toggles: { stage: false, voice: true, lpr: true, dna: false, night: false, twisty: false, haptics: true, crash: true }   // stage and night are derived from the two modes; analysis.html reads toggles.night
+      toggles: { stage: false, voice: true, lpr: true, dna: false, night: false, twisty: false, haptics: true, crash: true, health: true }   // stage and night are derived from the two modes; analysis.html reads toggles.night
     };
     const NOTES_MODES = ['auto', 'full', 'quiet'], NIGHT_MODES = ['auto', 'on', 'off'];
     const MODE_LABEL = { auto: 'Auto', full: 'Full', quiet: 'Quiet', on: 'On', off: 'Off' };
@@ -833,6 +836,10 @@
     document.addEventListener('visibilitychange', () => { if (!document.hidden) ApexFormat.applyTypeScale(document); });   // text size changed in Settings
     state.theme = look.theme.id;   // a retired or unknown saved theme resolves to the one it maps to
     let cluster = Inst.mountCluster($('cluster'), look.theme);
+    // App health counts (IDEAS Y-03; web/health.js): yesterday's totals, anonymous, once a day; Settings → Your data switches it off.
+    const health = window.ApexHealth ? ApexHealth.createHealth(localStorage,
+      async (b) => (await fetch(`${window.ApexSync ? ApexSync.apiBase : ''}/api/app-health`, { method: 'POST', credentials: 'omit', headers: { 'content-type': 'application/json', 'x-apexnav': '1' }, body: JSON.stringify(b) })).status,
+      () => !!state.toggles.health) : { bump() {}, flush: async () => 0 };
     function savePrefs() { try { localStorage.setItem('apex.prefs', JSON.stringify({ theme: state.theme, themeV: 2, camFeel: state.camFeel, voiceId: state.voiceId, liveVoice: state.liveVoice, liveVoiceV: 2, voiceName: state.voiceName, hlOn: state.hlOn, hlStrength: state.hlStrength, notesMode: state.notesMode, noteWords: state.noteWords, nightMode: state.nightMode, toggles: state.toggles })); } catch (_) {} }
     function paintSwitches() {
       document.querySelectorAll('[data-toggle]').forEach(b => { const on = !!state.toggles[b.dataset.toggle]; b.classList.toggle('on', on); b.setAttribute('role', 'switch'); b.setAttribute('aria-checked', String(on)); });
@@ -1653,7 +1660,7 @@
       // Directions at junctions (IDEAS V-04), in any notes mode: the call at the turn goes ahead of corner notes.
       if (track && track.kind === 'route' && !offRoute) {
         for (const line of ApexDirections.due(track.steps, state.cursorM, vMps, state.spoken, track.id)) {
-          state.spoken.add(line.key);
+          state.spoken.add(line.key); health.bump('directions_said');
           say(line.text, false, null, null, { kind: line.now ? 'hazard' : 'ordinary', key: line.key, atM: line.atM });
         }
       }
@@ -1962,7 +1969,10 @@
     }
     // [{ coords, turns: [[lon, lat]], names, timeS }]: the route, then up to `alternates` other ways (two-point requests
     // only). extra: more request options, e.g. { exclude_polygons }.
-    async function valhallaRoutes(points, throughRoadsOnly = false, alternates = 0, extra = {}) {
+    // Router calls counted for app health (Y-03): found, failed, and the fallback router used.
+    async function valhallaRoutes(...a) { try { const r = await valhallaRoutesOnce(...a); health.bump('route_ok'); return r; } catch (e) { health.bump('route_fail'); throw e; } }
+    async function osrmRoutes(...a) { const r = await osrmRoutesOnce(...a); health.bump('route_fallback'); return r; }
+    async function valhallaRoutesOnce(points, throughRoadsOnly = false, alternates = 0, extra = {}) {
       // Loop waypoints snap only to through roads (tertiary..primary), never cul-de-sacs or motorways.
       const filter = { min_road_class: 'tertiary', max_road_class: 'primary', exclude_ramp: true };
       const json = await RouteLoading.json(`${VALHALLA}/route`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
@@ -1991,7 +2001,7 @@
       const all = parts.flat(), ok = (c) => c && Number.isFinite(c.time) && Number.isFinite(c.distance);   // no time = no road
       return { times: all.map(row => row.map(c => (ok(c) ? c.time : null))), km: all.map(row => row.map(c => (ok(c) ? c.distance : null))) };
     }
-    async function osrmRoutes(points) {
+    async function osrmRoutesOnce(points) {
       const coords = points.map(p => `${p.lon.toFixed(6)},${p.lat.toFixed(6)}`).join(';');
       const json = await RouteLoading.json(`https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`);
       if (!json.routes || !json.routes[0]) throw new Error(json.message || 'no route');
@@ -3082,6 +3092,27 @@
       startDrive();
     });
     // Owner only (IDEAS Y-16): the week's crash and server-error counts (backend/src/errors.ts), most frequent first. Anonymous.
+    // Owner only (IDEAS Y-03): the week's app health totals, as rates where there is one (backend/src/health.ts). Anonymous.
+    function healthSection() {
+      const sec = el('div', { className: 'stack-8' }, el('h3', { textContent: 'App health this week' }));
+      apiCall('GET', '/api/ops/app-health?days=7').then(jsonOf).then((r) => {
+        const rows = r && Array.isArray(r.rows) ? r.rows : null;
+        if (!rows) { sec.append(el('p', { className: 'note', textContent: 'Couldn\'t load the counts.' })); return; }
+        if (!rows.length) { sec.append(el('p', { className: 'note', textContent: 'No reports in the last 7 days.' })); return; }
+        const get = (app, m) => (rows.find((x) => x.app === app && x.metric === m) || { n: 0 }).n;
+        const pct = (a, b) => (b ? `${Math.round((100 * a) / b)}%` : '--');
+        for (const app of [...new Set(rows.map((x) => x.app))]) {
+          const routes = get(app, 'route_ok') + get(app, 'route_fail'), uploads = get(app, 'road_upload_ok') + get(app, 'road_upload_fail');
+          const locks = get(app, 'calib_locked');
+          sec.append(el('p', { className: 'note', textContent: [`${app === 'ios' ? 'iPhone app' : 'Website'}: ${get(app, 'drives')} drives`,
+            `routing failed ${pct(get(app, 'route_fail'), routes)} of ${routes}`, `fallback router ${get(app, 'route_fallback')}×`,
+            `road uploads failed ${pct(get(app, 'road_upload_fail'), uploads)} of ${uploads}`,
+            `mount set in ${locks ? Math.round(get(app, 'calib_lock_s') / locks) + ' s' : '--'} on average`,
+            `${get(app, 'hazard_queued')} reports queued with no signal`, `${get(app, 'crash_asked')} crash checks`].join(' · ') }));
+        }
+      }).catch(() => sec.append(el('p', { className: 'note', textContent: 'Couldn\'t load the counts.' })));
+      return sec;
+    }
     function errorsSection() {
       const sec = el('div', { className: 'stack-8' }, el('h3', { textContent: 'Errors this week' }));
       apiCall('GET', '/api/ops/errors?days=7').then(jsonOf).then((r) => {
@@ -3511,7 +3542,7 @@
         btn('Delete account', deleteMyAccount, 'danger-btn'));
       body.append(asec);
       if (safety) { body.append(safety.blockedSection()); if (me.moderator) body.append(safety.moderationSection()); }
-      if (me.moderator) body.append(errorsSection());
+      if (me.moderator) body.append(errorsSection(), healthSection());
     }
 
     // Highlights (local for now): [{id, name, lat, lon, rating}] in localStorage; the server list joins later (docs/BACKEND.md section 9).
@@ -3996,7 +4027,7 @@
     function feedCrash(frame) {
       if (!crashDetector || !crashSheet || !state.toggles.crash) return;   // the native shell sends no frames here outside a drive
       const t = Number.isFinite(frame.t) ? frame.t : Date.now();
-      if (crashDetector.update({ t, speed_mps: frame.speed_mps, impact_g: frame.impact_g }) === 'ask') crashSheet.ask();
+      if (crashDetector.update({ t, speed_mps: frame.speed_mps, impact_g: frame.impact_g }) === 'ask') { crashSheet.ask(); health.bump('crash_asked'); }
     }
     // Reports and answers made with no signal wait here and go when it's back (IDEAS F-05; web/outbox.js).
     const outbox = ApexOutbox.createOutbox(localStorage, async (path, b) => {
@@ -4004,7 +4035,7 @@
       return r.status;
     });
     let outboxAt = 0;
-    const flushOutbox = () => { outboxAt = performance.now(); if (navigator.onLine === false) return; outbox.flush().then((n) => { if (!n) return; toast(n === 1 ? 'Sent what you reported with no signal.' : `Sent ${n} things you reported with no signal.`); loadReported(true); }).catch(() => {}); };
+    const flushOutbox = () => { outboxAt = performance.now(); if (navigator.onLine === false) return; outbox.flush().then((n) => { if (!n) return; health.bump('hazard_sent_late', n); toast(n === 1 ? 'Sent what you reported with no signal.' : `Sent ${n} things you reported with no signal.`); loadReported(true); }).catch(() => {}); };
     window.addEventListener('online', flushOutbox);
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') flushOutbox(); });
     if (outbox.size()) setTimeout(flushOutbox, 3000);
@@ -4051,7 +4082,7 @@
       let r = null;
       const body = { kind, lat: p.lat, lon: p.lon, heading: Number.isFinite(heading) ? Math.round((heading % 360 + 360) % 360) : null };
       try { r = await ApexSync.apiFetch('/api/hazards', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }); } catch (_) {}
-      if (!r || r.status >= 500) { outbox.add('/api/hazards', body, true); toast(`No signal. ${ApexHazardReports.LABEL[kind]} saved; it's sent when you have one.`); return; }
+      if (!r || r.status >= 500) { outbox.add('/api/hazards', body, true); health.bump('hazard_queued'); toast(`No signal. ${ApexHazardReports.LABEL[kind]} saved; it's sent when you have one.`); return; }
       if (r.status === 401 || r.status === 403) { toast('Sign in (Crew) to report hazards for others.'); return; }
       if (!r.ok) { toast(r.status === 429 ? 'That\'s a lot of reports today.' : 'Couldn\'t send that. Try again.'); return; }
       const j = await r.json(); reported.mine.add(j.id); reported.said.add(j.id);
@@ -4059,6 +4090,8 @@
       loadReported(true);
     }
 
+    // Road uploads counted for app health (Y-03): taken, or failed (to be retried or refused).
+    const countedContribute = async (c) => { const r = await ApexSync.contribute(c); health.bump(r === true ? 'road_upload_ok' : 'road_upload_fail'); return r; };
     function feedAmbient(frame) {
       ambient.mounted = frame.calibration === 'locked';
       if (!window.ApexContributor || !window.ApexSensors) return;
@@ -4067,7 +4100,7 @@
       if (!ambient.sharer) {
         ambient.sharer = ApexContributor.createAmbient({
           makeRecorder: () => new ApexSensors.Recorder(),
-          makeLive: () => { const day = new Date(); return ApexContributor.createLive({ Core, fetch: window.fetch.bind(window), post: ApexSync.contribute,
+          makeLive: () => { const day = new Date(); return ApexContributor.createLive({ Core, fetch: window.fetch.bind(window), post: countedContribute,
             driveId: ApexContributor.driveIdFor({ id: `app_${Date.now()}`, date: day.toISOString() }), drivenOn: day.toISOString().slice(0, 10) }); },
           onStatus: () => { paintAmbient(); if (state.mode === 'live') paintDriveStat(); },
         });
@@ -4085,7 +4118,7 @@
         if (drive.rec !== rec) return;                                       // the drive ended while we were checking
         const day = new Date(), pad = (n) => String(n).padStart(2, '0');
         drive.live = ApexContributor.createLive({
-          Core, fetch: window.fetch.bind(window), post: ApexSync.contribute,
+          Core, fetch: window.fetch.bind(window), post: countedContribute,
           driveId: ApexContributor.driveIdFor({ id: `live_${Date.now()}`, date: day.toISOString() }),
           drivenOn: day.toISOString().slice(0, 10),
           onStatus: (s) => { drive.share = s.state === 'stopped' ? 'stopped' : 'on'; drive.shareKm = s.km; drive.shareErr = s.error; if (s.error) console.warn('road data sharing:', s.error); paintDriveStat(); },
@@ -4147,7 +4180,7 @@
     async function enterDrive() {
       if (state.mode === 'live' && drive.sensors) return;
       if (state.mode === 'live' || driveActive) return;                                   // native app is feeding frames already or start is pending
-      driveActive = true;
+      driveActive = true; health.bump('drives'); drive.startedAt = performance.now();
       clearCarOffer();
       setPlaying(false);
       drive.rec = new ApexSensors.Recorder(); drive.status = { gps: 'waiting', motion: 'off', wake: 'off', message: '' }; drive.frames = 0;
@@ -4308,6 +4341,8 @@
       // Focus the dialog, not its button: VoiceOver reads the welcome, and no focus ring sits on Get started before a touch
       ob.classList.add('show'); paint(); ob.tabIndex = -1; ob.focus();
     }
+    setTimeout(() => health.flush(IN_APP_SHELL ? 'ios' : 'web').catch(() => {}), 5000);
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') health.flush(IN_APP_SHELL ? 'ios' : 'web').catch(() => {}); });
     const wasOnboarded = !!flag('apex.onboarded');
     if (!flag('apex.onboarded') && !window.APEX_EMBED && !['invite', 'crew', 'add', 'convoy', 'drive', 'play', 'at', 'theme', 'go'].some(k => params.has(k))) runOnboarding();
     else if (!flag('apex.onboarded')) flag('apex.onboarded', '1');
@@ -4385,7 +4420,10 @@
           if (drive.status.gps !== gps) drive.status.gps = gps;
           const cal = typeof frame.calibration === 'string' ? frame.calibration : null;
           // The mount guide's tick: say so when calibration locks after the driver saw "Calibrating"
-          if (cal === 'locked' && (drive.status.calibration === 'default' || drive.status.calibration === 'awaitingPull')) toast('Mount set. Bumps and banking are recording.');
+          if (cal === 'locked' && (drive.status.calibration === 'default' || drive.status.calibration === 'awaitingPull')) {
+            toast('Mount set. Bumps and banking are recording.');
+            health.bump('calib_locked'); if (drive.startedAt) health.bump('calib_lock_s', (performance.now() - drive.startedAt) / 1000);
+          }
           drive.status.calibration = cal;
           paintDriveStat();
         }

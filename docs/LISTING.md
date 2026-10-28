@@ -77,6 +77,7 @@ positions, routing and search requests) is not "collected" by Apple's definition
 | User ID | Yes (account id, handle) | Yes | No | App functionality |
 | Other user content | Yes (crew names, spots, shared routes, scores you publish) | Yes | No | App functionality |
 | Crash data | Yes (error counts with a scrubbed message, no identifiers) | No | No | App functionality |
+| Other diagnostic data | Yes (daily totals: routes found/failed, uploads failed, mount set time; switch in Settings) | No | No | App functionality, analytics |
 | Contacts | **No**: the crash-check contact never leaves the phone | | | |
 | Health, financial, browsing, search history, purchases, sensitive info | No | | | |
 
