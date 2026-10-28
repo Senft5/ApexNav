@@ -269,7 +269,7 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 | C-03 | Android Auto navigation template | H | L | owner (Android priority) | ApexNav mission |
 | C-04 | Car audio: ducking and routing to Bluetooth/CarPlay while prompts play | H | M | done (#73) | — |
 | C-05 | Auto-start: open the cockpit when the phone joins the car's Bluetooth or CarPlay | M | S | todo | Waze, Shortcuts |
-| C-06 | Driving focus aware: no social notifications while driving, a summary after | M | S | todo | iOS Focus |
+| C-06 | Driving focus aware: no social notifications while driving, a summary after | M | S | blocked: the app sends no notifications yet; build this with the first push or social alert | iOS Focus |
 | C-07 | Big-target in-car mode: every control ≥ 60 pt, no keyboard while moving | H | S | done (#121) | NHTSA distraction guidelines |
 | C-08 | Passenger mode: unlocks typing and route editing while moving, with a clear switch | M | S | done (#121) | Waze passenger prompt |
 
@@ -292,7 +292,7 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 | Y-02 | Crash and error reporting without personal data (self-hosted Worker endpoint, no third-party SDK) | H | M | done (#117) | production readiness |
 | Y-03 | Client health beacons: upload success rate, routing failures, calibration time, anonymous and aggregated | H | M | todo | production readiness |
 | Y-04 | Production router: self-host Valhalla or a paid tier instead of public demo servers | H | L | owner (cost) | STATE 2026-10-25 (d) |
-| Y-05 | Status page and synthetic checks for the Worker, D1 and routing | M | S | todo | production readiness |
+| Y-05 | Status page and synthetic checks for the Worker, D1 and routing | M | S | done (#PR) | production readiness |
 | Y-06 | Staged rollouts: preview Worker for TestFlight, feature flags per build | M | M | todo | docs/BACKEND.md |
 | Y-07 | Real-phone test checklist run before each TestFlight build (VERIFY.md) | H | S | done (VERIFY.md section 0; first run is the owner's) | docs/VERIFY.md |
 | Y-08 | Record migrations in `d1_migrations` (it only lists 0001) and a drift check in CI | M | S | todo | STATE 2026-10-26 |

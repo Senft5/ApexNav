@@ -27,7 +27,11 @@ const on = (method: string, path: string, h: Handler) =>
   routes.push([method, new RegExp(`^${path.replace(/:(\w+)/g, "(?<$1>[^/]+)")}$`), h]);
 const noContent = () => new Response(null, { status: 204 });
 
-on("GET", "/api/health", async () => json({ ok: true }));
+// Status checks (tools/status_check.py, IDEAS Y-05): one trivial read proves the database answers, not just the Worker.
+on("GET", "/api/health", async (_req, env) => {
+  try { await env.DB.prepare("SELECT 1").first(); return json({ ok: true, db: true }, 200, { "cache-control": "no-store" }); }
+  catch { return json({ ok: false, db: false }, 503, { "cache-control": "no-store" }); }
+});
 // Anonymous crash reports (web/errors.js): scrubbed, logged, never stored. Rate limited per IP like any signed-out write.
 on("POST", "/api/errors", async (req) => { await clientError(req); return noContent(); });
 on("GET", "/api/auth/google/start", (req, env) => googleStart(req, env));

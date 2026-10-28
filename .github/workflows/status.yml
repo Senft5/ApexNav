@@ -1,0 +1,53 @@
+name: Status
+
+# Synthetic checks (IDEAS Y-05, tools/status_check.py): every 30 minutes, check the live site, the API and its database,
+# and the free services the app depends on. A core failure opens one "outage" issue (later failures comment on it);
+# the first all-clear closes it. Dependency failures only show in the run summary. Free: the repo is public.
+on:
+  schedule:
+    - cron: "7,37 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: status
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Check
+        id: check
+        continue-on-error: true
+        shell: bash   # -o pipefail: the check's exit code, not tee's
+        run: python tools/status_check.py | tee status.md
+      - name: Open, update or close the outage issue
+        uses: actions/github-script@v7
+        env:
+          CORE_OK: ${{ steps.check.outcome == 'success' }}
+        with:
+          script: |
+            const fs = require('fs');
+            const md = fs.existsSync('status.md') ? fs.readFileSync('status.md', 'utf8') : '(no output)';
+            const run = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const { data: open } = await github.rest.issues.listForRepo({ ...context.repo, state: 'open', labels: 'outage', per_page: 1 });
+            if (process.env.CORE_OK === 'true') {
+              if (open.length) {
+                await github.rest.issues.createComment({ ...context.repo, issue_number: open[0].number, body: `Back up.\n\n${md}\n${run}` });
+                await github.rest.issues.update({ ...context.repo, issue_number: open[0].number, state: 'closed', state_reason: 'completed' });
+              }
+              return;
+            }
+            if (open.length) await github.rest.issues.createComment({ ...context.repo, issue_number: open[0].number, body: `Still down.\n\n${md}\n${run}` });
+            else await github.rest.issues.create({ ...context.repo, title: 'ApexNav is down', labels: ['outage'], assignees: [context.repo.owner],
+              body: `The status check found ApexNav's own site or API failing (docs/STATUS.md says what to do).\n\n${md}\n${run}` });
+            core.setFailed('A core status check failed.');
