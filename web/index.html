@@ -111,7 +111,8 @@
     .place b { font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .place span { font-size: 12px; color: var(--panel-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 45vw; }
     .place-list .note { margin: 8px 2px 0; }
-    #app.live .plan, #app.sheet-open .plan { display: none; }
+    /* Watching a recorded drive: the gauges and scrubber own the bottom; the plate's × ends the replay and brings Where to? back. */
+    #app.live .plan, #app.sheet-open .plan, #app.replaying .plan { display: none; }
     #app:not(.live) .plates { bottom: 72px; }
     #app.plan-open .plates, #app.plan-open .edge { display: none; }
     /* ---------------- while-you-drive switches: an edge tab that slides a small panel over the map ---------------- */
@@ -475,7 +476,7 @@
         <button class="key" id="driveEnd">End drive</button>
       </div>
       <div class="transport" id="transport">
-        <button class="key" id="playBtn">Run</button>
+        <button class="key" id="playBtn">Play</button>
         <button class="key" id="rateBtn">1X</button>
         <div class="scrubber" id="scrubber"><canvas id="scrubCanvas"></canvas></div>
       </div>
@@ -1393,7 +1394,7 @@
     }
     function setPlaying(on) {
       state.playing = on && !!track && state.mode !== 'live';
-      $('playBtn').textContent = state.playing ? 'HOLD' : 'RUN';
+      $('playBtn').textContent = state.playing ? 'Pause' : 'Play';
       $('playBtn').classList.toggle('on', state.playing);
       if (state.playing) {
         if (state.cursorM >= totalM() - 1) state.cursorM = 0;
@@ -1406,6 +1407,7 @@
     function paintIdle() {
       const idle = !replayOn && state.mode !== 'live';
       $('app').classList.toggle('idle', idle);
+      $('app').classList.toggle('replaying', replayOn && state.mode === 'replay');
       $('modePlate').hidden = idle;
       $('modePlate').setAttribute('role', replayOn && state.mode !== 'live' ? 'button' : 'status');
     }
