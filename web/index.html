@@ -397,7 +397,7 @@
               <div class="bars mt-8" id="routeCardBars"></div>
               <p class="note" id="routeCardWhy" hidden></p>
               <p class="note" id="routeCardSub"></p>
-              <div class="plan-links fun-row" id="routeCardOptions" role="group" aria-label="Route options" hidden></div>
+              <div class="plan-links fun-row" id="routeCardOptions" role="radiogroup" aria-label="Route options" hidden></div>
               <div class="plan-links fun-row" id="routeCardFun" role="radiogroup" aria-label="Route style"><span>Roads</span><button class="chip" data-fun="quick" role="radio" aria-checked="false">Quick</button><button class="chip" data-fun="fun" role="radio" aria-checked="false">Fun</button><button class="chip" data-fun="max" role="radio" aria-checked="false">Max fun</button></div>
               <div class="row mt-8">
                 <button class="ink-btn solid" id="routeDriveBtn">Drive it</button>
@@ -945,6 +945,7 @@
       // Tap a faint option on the map to take it.
       map.on('click', 'apex-alt', (e) => {
         if (state.tapToRoute || !e.features || !e.features.length) return;
+        if (map.queryRenderedFeatures(e.point, { layers: ['apex-route'] }).length) return;   // a shared stretch: the drawn route wins
         suppressMapClickUntil = Date.now() + 400;
         pickOption(e.features[0].properties.i);
       });
@@ -1147,6 +1148,7 @@
       if (!mapReady || !track) return;
       map.getSource('apex-route-src').setData(routeGeoJSON(track));
       rebuildPins();
+      paintAlternates();
     }
 
     // =======================================================================
@@ -1495,7 +1497,9 @@
     }
     function setMode(mode) {
       state.mode = mode;
-      if (mode === 'live') { cancelHold(); closePin(); $('hlOverlay').classList.remove('show'); paintAlternates(false); }
+      if (mode === 'live') { cancelHold(); closePin(); $('hlOverlay').classList.remove('show'); }
+      $('routeCardOptions').hidden = !optionsOffered(plannedRoute);
+      paintAlternates();
       $('modePlate').textContent = { replay: `Replay${track && track.demo ? ' · Demo' : ''}${track && track.name ? ' · ' + track.name : ''} ×`, sim: 'Preview ×', live: 'Drive ● Rec' }[mode];
       $('modePlate').classList.toggle('live', mode === 'live');
       paintIdle();
@@ -1729,6 +1733,8 @@
     }
     const NO_FIX = 'Couldn\'t get your location. Type a start or tap the map.';
     let plannedRoute = null;
+    // Route options of the last fun plan: { id, name, request, level, quickest, list (ranked candidates), picked, current (its track) }.
+    let routeOptions = null;
     function normRoadType(type) {
       return type === 'Flowing sweepers' ? 'Sweepers' : type === 'Fast open' ? 'Fast & open' : (type || '--');
     }
@@ -1758,7 +1764,7 @@
         $('routeBarName').textContent = t.name || 'Route';
         $('routeBarMeta').textContent = [mi, Array.isArray(t.events) ? `${t.events.filter(e => e.type === 'corner').length} corners` : ''].filter(Boolean).join(' · ');
       }
-      if (!t) { card.hidden = true; return; }
+      if (!t) { card.hidden = true; paintAlternates(); return; }
       plannedRoute = t;
       card.hidden = false;
       $('routeCardName').textContent = t.name || '--';
@@ -1797,20 +1803,25 @@
       $('routeCardWhy').textContent = t.why || '';
       $('routeCardWhy').hidden = !t.why;
       $('routeCardFun').hidden = t.id !== 'route_dest';           // the level re-plans destination routes only
-      const o = routeOptions, offer = !!o && o.current === t && o.list.length > 1 && state.mode !== 'live';
-      $('routeCardOptions').hidden = !offer;
-      if (offer) {
+      const o = routeOptions, box = $('routeCardOptions');
+      box.hidden = !optionsOffered(t);
+      // Built once per pick (not on every card refresh), so keyboard focus survives camera and measured updates.
+      if (o && o.current === t && box._t !== t) {
         const label = document.createElement('span'); label.textContent = 'Options';
-        $('routeCardOptions').replaceChildren(label, ...o.list.map((c, i) => {
+        const refocus = box.contains(document.activeElement);
+        box.replaceChildren(label, ...o.list.map((c, i) => {
           const b = document.createElement('button');
           b.className = 'chip' + (i === o.picked ? ' on' : '');
-          b.textContent = `Fun ${c.fun ? c.fun.fun : '--'} · ${Math.round(c.timeS / 60)} min`;
-          b.setAttribute('aria-pressed', String(i === o.picked));
+          b.textContent = `Fun ${c.fun ? c.fun.fun : '--'} · ${Number.isFinite(c.timeS) ? Math.round(c.timeS / 60) : '--'} min`;
+          b.setAttribute('role', 'radio');
+          b.setAttribute('aria-checked', String(i === o.picked));
           b.addEventListener('click', () => pickOption(i));
           return b;
         }));
+        box._t = t;
+        if (refocus) box.children[o.picked + 1].focus();
       }
-      paintAlternates(offer);
+      paintAlternates();
     }
     // Log and Stages are another page, so coming back to Map reloads this one: keep the planned route for the session and
     // rebuild it here from its own geometry (no router call, works offline). Also what a reload after a lost map restores.
@@ -2135,11 +2146,11 @@
       window.apexDebug && (window.apexDebug.lastFun = FunRoute.rank(pool, level).map(c => ({ kind: c.kind, fun: c.fun, timeS: c.timeS, value: c.value, adjust: c.adjust || 0, glare: c.glare })));
       return true;
     }
-    // Route options of the last fun plan: { id, name, request, level, quickest, list (ranked candidates), picked, current (its track) }.
-    let routeOptions = null;
     async function useOption(o, i) {
-      const c = o.list[i];
+      const c = o.list[i], was = o.current;
       const t = await trackFromPolyline(c.route.coords, o.id, o.name);
+      // A pick (not the first build) is dropped if the route was cleared, replaced or driven meanwhile.
+      if (was && (routeOptions !== o || plannedRoute !== was || state.mode === 'live')) return null;
       // A winning alternate is pinned with shaping points along it, so a reroute stays on it.
       const via = c.kind === 'router' && c.extraS > 0 ? FunRoute.alongPoints(c.route.coords) : c.via;
       Object.assign(t, { measured: c.t.measured, fun: c.fun, timeS: c.timeS, extraS: c.extraS, funLevel: o.level, glareMin: c.glare ? Math.round(c.glare.minutes) : null,
@@ -2152,15 +2163,19 @@
     let optionBusy = false;
     async function pickOption(i) {
       const o = routeOptions;
-      if (!o || optionBusy || i === o.picked || !o.list[i] || state.mode === 'live' || $('planPanel').classList.contains('busy')) return;
+      if (!o || optionBusy || loopBusy || i === o.picked || !o.list[i] || plannedRoute !== o.current || state.mode === 'live' || $('planPanel').classList.contains('busy')) return;
       optionBusy = true;
       try { await useOption(o, i); } catch (_) { toast('Couldn\'t switch to that route. Try again.'); } finally { optionBusy = false; }
     }
     // The other options, faint on the map while the card offers them; nothing while driving or for any other route.
-    function paintAlternates(show) {
+    function optionsOffered(t) {
+      const o = routeOptions;
+      return !!t && !!o && o.current === t && o.list.length > 1 && state.mode !== 'live';
+    }
+    function paintAlternates() {
       if (!mapReady || !map.getSource('apex-alt-src')) return;
       const o = routeOptions;
-      map.getSource('apex-alt-src').setData(show && o ? { type: 'FeatureCollection', features: o.list.map((c, i) => ({ type: 'Feature', properties: { i },
+      map.getSource('apex-alt-src').setData(optionsOffered(plannedRoute) && track === plannedRoute ? { type: 'FeatureCollection', features: o.list.map((c, i) => ({ type: 'Feature', properties: { i },
         geometry: { type: 'LineString', coordinates: c.route.coords } })).filter(f => f.properties.i !== o.picked) } : emptyFC());
     }
     function setFunLevel(level) {
@@ -2363,6 +2378,7 @@
     // ✕ on the route bar: back to Where to? and the idle map.
     function clearPlanned() {
       plannedRoute = null;
+      routeOptions = null;
       markDestination(null);
       try { sessionStorage.removeItem(PLANNED); } catch (_) {}
       $('destInput').value = '';
