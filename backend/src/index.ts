@@ -26,6 +26,7 @@ import { pointsFor } from "./points";
 import { roadBins } from "./roads";
 import { eventCancel, eventCreate, eventRsvp, eventsList, eventsNear } from "./events";
 import { healthReport, healthSummary } from "./health";
+import { etaStart, etaUpdate, etaView } from "./eta_share";
 import { highlightCreate, highlightDelete, highlightList, highlightRate } from "./highlights";
 export { ConvoyIndex, ConvoyRoom } from "./convoy";
 import { segmentAdopt, segmentCreate, segmentDelete, segmentList, segmentShare, segmentsSharedWithMe } from "./segments";
@@ -97,6 +98,10 @@ on("POST", "/api/crews", async (req, env) => json(await crewCreate(env, await re
 on("GET", "/api/crews", async (req, env) => json(await crewList(env, await requireMember(req, env))));
 on("GET", "/api/crews/:id/events", async (req, env, m) => json(await eventsList(env, await requireMember(req, env), m.groups!.id)));
 on("POST", "/api/crews/:id/events", async (req, env, m) => json(await eventCreate(env, await requireMember(req, env), m.groups!.id, req), 201));
+// Share your ETA (IDEAS S-19): the driver starts and refreshes it; anyone with the link reads it, signed out.
+on("POST", "/api/eta", async (req, env) => json(await etaStart(env, await requireMember(req, env), req), 201));
+on("PUT", "/api/eta/:token", async (req, env, m) => { await etaUpdate(env, await requireMember(req, env), m.groups!.token, req); return noContent(); });
+on("GET", "/api/eta/:token", async (_req, env, m) => json(await etaView(env, m.groups!.token)));
 on("GET", "/api/events/near", async (req, env) => json(await eventsNear(env, await requireMember(req, env), new URL(req.url))));
 on("GET", "/api/events", async (req, env) => json(await eventsList(env, await requireMember(req, env), null)));
 on("POST", "/api/events/:id/rsvp", async (req, env, m) => { await eventRsvp(env, await requireMember(req, env), m.groups!.id, req); return noContent(); });
