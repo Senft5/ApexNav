@@ -1,5 +1,11 @@
 # APEX NAV — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-10-28: traffic as a fun penalty (traffic-1, iOS only)
+- `web/traffic.js` (pure, `tests/test_traffic.py`): route ahead in 4 km chunks; Apple's time now vs at 3 am per chunk, counted only when Apple's path follows ours; slow ≥ 1.2x, jam ≥ 1.5x and ≥ 60 s. Traffic lowers route fun even with no delay: the Plan card's fun score (web/fun_route.js) times sum(len/r)/sum(len·r) over 500 m pieces. On a jam: Valhalla alternates + `exclude_polygons` around the jam, best more-fun detour within max(10 min, 25 %) offered for 6 s with Cancel and voiced; else "Traffic ahead · N min". Design in docs/ARCHITECTURE.md section 8.
+- `ApexNavApp.swift`: `trafficProbe` bridge command (MKDirections now + 3 am, both paths, stops on MapKit throttling). Swift compiled only by CI.
+- Not verified on a phone or in real traffic. Web/Android: no traffic source (keyed provider needs owner approval, not built).
+- Exact next task: owner drives a planned route in the IPA through known traffic and checks the announcement and the switch; then eta-1 (live ETA) so +N min uses the live estimate.
+
 ## Session 2026-10-28: idea backlog (thread "Build the best-in-class idea backlog")
 - New docs/IDEAS.md: ~190 ideas in 14 areas (routing, analysis, road intelligence, co-driver, social, UI, onboarding, in-car, offline, reliability, performance, privacy, Android/web, launch), each with impact, effort, status and source (repo docs, owner asks, competitors such as Waze, Strava, Calimoto, Kurviger, Roadtrippers, REVER, Relive, Dragy). Statuses checked against this file and main as of #88. Includes "How to pick next" and the decided guardrails. Threads claim a row as `active`, then mark it `done (#N)`.
 - Exact next task: each area thread picks its next row by the pick rules (owner reports first, then WORKER_QUEUE top priorities, then H/S → H/M → M/S → H/L).
@@ -43,7 +49,7 @@
 - #76 (crews, merged): migration 0007 (crews.visibility/about/area_name/area_lat/area_lon, area rounded to 0.1°) applied by hand to apexnav-db and apexnav-preview-db on 2026-10-27; PUT /api/crews/:id (owner settings), GET /api/crews/discover?lat&lon (public crews within ~55 km, no members/owner/exact point, blocks respected), POST /api/crews/:id/join (public only). Crew sheet: your crews as tiles (open one for details, owner can make public/private), Crews near you with Join, create private or public with an area name, friends in a side pop-up (button shows new requests).
 - Not verified on a phone: car audio routing, Apple search, quiet destination view, crews against the real server (checked with stubbed API responses in the browser).
 - Not verified on a phone either: app-open road sharing, auto mount calibration, the drive log scroll fix, no keyboard bar.
-- Exact next task: owner installs the IPA from main's "iOS Build & Simulator Tests" run and drives the commute; then traffic as a fun penalty (iOS-only, MapKit MKDirections, docs/WORKER_QUEUE.md traffic-1: congestion lowers fun even without delay).
+- Next after this session: owner installs the IPA from main's "iOS Build & Simulator Tests" run and drives the commute (traffic: see the session above).
 
 ## Session 2026-10-27: navigation redesign and app-open road sharing
 - #69 restored #66's cockpit fixes, which my resolution of #65's merge conflict (`git checkout --ours web/index.html`) had dropped from main. Lesson: never take a whole side of a conflicted file; merge hunks.

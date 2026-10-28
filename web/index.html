@@ -19,6 +19,7 @@
   <script src="sync.js"></script>
   <script src="sensors.js"></script>
   <script src="reroute.js"></script>
+  <script src="traffic.js"></script>
   <script src="sun.js"></script>
   <script src="format.js"></script>
   <script src="recording.js"></script>
@@ -639,6 +640,8 @@
     function syncDerivedToggles() { state.toggles.stage = state.notesMode === 'full'; state.toggles.night = isNight(); }
     // Off route in live mode: web/reroute.js decides, reroute() (ROUTING) rebuilds the plan.
     const rerouter = new ApexReroute.RerouteMonitor();
+    // Traffic on the route ahead (iOS app only, Apple via the shell): web/traffic.js decides, checkTraffic() (ROUTING) asks.
+    const trafficMon = new ApexTraffic.TrafficMonitor();
     const routeWatch = { note: null, frame: null, bestM: 0 };   // strip text while off route; last frame fed; furthest progress
     try {
       const saved = JSON.parse(localStorage.getItem('apex.prefs') || 'null');
@@ -1346,7 +1349,7 @@
         if (track) {
           // Off route the rejoin can be anywhere on the route, so search all of it (hint -1).
           const hit = Core.nearestIndex(lat, lon, track.lat, track.lon, rerouter.off ? -1 : state.cursorIdx, 600);
-          if (L !== routeWatch.frame) { routeWatch.frame = L; feedRerouter(L, hit); }
+          if (L !== routeWatch.frame) { routeWatch.frame = L; feedRerouter(L, hit); trafficTick(L, hit); }
           if (hit.distM < 40 && !rerouter.off) { idx = hit.index; state.cursorM = track.dist[idx]; }
         }
       } else if (track && replayOn) {
@@ -1449,7 +1452,7 @@
       state.cursorM = Math.max(0, Math.min(totalM(), startM));
       refreshAutoNight();
       state.spoken.clear();
-      rerouter.routeChanged(); routeWatch.note = null; routeWatch.frame = null; routeWatch.bestM = 0;
+      rerouter.routeChanged(); trafficMon.routeChanged(Date.now()); routeWatch.note = null; routeWatch.frame = null; routeWatch.bestM = 0;
       if (state.mode !== 'live') setMode(t.kind === 'drive' ? 'replay' : 'sim');
       loadTrackOnMap();
       fetchAlpr(t);
@@ -1544,10 +1547,17 @@
         for (const m of leg.maneuvers || []) if (TURN_TYPES.has(m.type) && shape[m.begin_shape_index]) turns.push(shape[m.begin_shape_index]);
         coords.push(...shape.slice(i ? 1 : 0));
       });
-      return { coords, turns, timeS: trip.summary && Number.isFinite(trip.summary.time) ? trip.summary.time : null };
+      // km on each named road, for "switching to <road>" (traffic detours)
+      const names = new Map();
+      for (const leg of trip.legs) for (const m of leg.maneuvers || []) {
+        const n = m.street_names && m.street_names[0];
+        if (n && Number.isFinite(m.length)) names.set(n, (names.get(n) || 0) + m.length);
+      }
+      return { coords, turns, names, timeS: trip.summary && Number.isFinite(trip.summary.time) ? trip.summary.time : null };
     }
-    // [{ coords, turns: [[lon, lat]], timeS }]: the route, then up to `alternates` other ways (two-point requests only).
-    async function valhallaRoutes(points, throughRoadsOnly = false, alternates = 0) {
+    // [{ coords, turns: [[lon, lat]], names, timeS }]: the route, then up to `alternates` other ways (two-point requests
+    // only). extra: more request options, e.g. { exclude_polygons }.
+    async function valhallaRoutes(points, throughRoadsOnly = false, alternates = 0, extra = {}) {
       // Loop waypoints snap only to through roads (tertiary..primary), never cul-de-sacs or motorways.
       const filter = { min_road_class: 'tertiary', max_road_class: 'primary', exclude_ramp: true };
       const json = await RouteLoading.json(`${VALHALLA}/route`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
@@ -1556,7 +1566,7 @@
           if (!end && p.shaping) return { lat: p.lat, lon: p.lon, type: 'through', radius: 25 };   // stay on the stage
           return { lat: p.lat, lon: p.lon, type: end ? 'break' : 'through', ...(throughRoadsOnly && !end ? { radius: 2500, search_filter: filter } : {}) };
         }),
-        ...COSTING, ...(alternates && points.length === 2 ? { alternates } : {}) }) });
+        ...COSTING, ...(alternates && points.length === 2 ? { alternates } : {}), ...extra }) });
       if (!json.trip) throw new Error(json.error || 'no route');
       return [json.trip, ...(json.alternates || []).map(a => a.trip).filter(Boolean)].map(routeOf);
     }
@@ -1822,6 +1832,98 @@
       Object.assign(nt, { request: { from: null, to: req.to, via: ahead }, fun: funOf(nt, r.turns), timeS: r.timeS });
       await buildRoute(null, t.id, t.name, nt);                     // activate() resets the monitor for the new route
     }
+    // Traffic ahead (iOS app only; docs/ARCHITECTURE.md section 8). Every 2 min while on a planned route, Apple times the next
+    // 20 km in chunks, now and at 3 am. A jam (or a slowdown) costs the route fun even with no delay; on a jam, a detour that
+    // avoids it and is more fun than staying is offered for 6 s with Cancel, else "Traffic ahead · N min". Web and Android
+    // have no traffic source and say nothing (a keyed provider through the Worker needs the owner's approval).
+    function trafficTick(L, hit) {
+      const t = track;
+      if (!window.APEX_EMBED || !t || !t.request || rerouter.off || hit.distM >= 40 || !(L.speed_mps > 2)) return;
+      if (!trafficMon.due(Date.now())) return;
+      trafficMon.started();
+      checkTraffic(t, hit.index).then((r) => trafficMon.done(Date.now(), r || {}), () => trafficMon.done(Date.now()));
+    }
+    async function checkTraffic(t, idx) {
+      const chunks = ApexTraffic.chunksAhead(t.dist, t.dist[idx]);
+      if (!chunks.length) return null;
+      const pt = (i) => ({ lat: +t.lat[i].toFixed(6), lon: +t.lon[i].toFixed(6) });
+      const reply = await askNative({ cmd: 'trafficProbe', chunks: chunks.map(c => ({ a: pt(c.i0), b: pt(c.i1) })) }, 90000);
+      if (!reply || reply.busy) return null;
+      const result = { throttled: !!reply.throttled };
+      if (track !== t || state.mode !== 'live') return result;
+      const probes = chunks.map((c, k) => {
+        const keep = (_, i) => i % 5 === 0 || i === c.i1 - c.i0;    // every 25 m is plenty to compare paths
+        const ours = { lat: t.lat.slice(c.i0, c.i1 + 1).filter(keep), lon: t.lon.slice(c.i0, c.i1 + 1).filter(keep) };
+        const got = (Array.isArray(reply.results) && reply.results[k]) || {};
+        return { ...ours, startM: c.startM, endM: c.endM, ...ApexTraffic.classifyChunk(ours, got.now, got.night) };
+      });
+      t.traffic = { at: Date.now(), probes };
+      if (probes.some(p => p.level === 'jam')) await trafficDetour(t, idx, probes);
+      return result;
+    }
+    async function trafficDetour(t, idx, probes) {
+      const req = t.request, L = state.live, jams = probes.filter(p => p.level === 'jam');
+      // Each jam once per 10 min on this route, switched, cancelled or not.
+      if (!L || !trafficMon.shouldSay(jams.map(p => [p.startM, p.endM]), Date.now())) return;
+      const delayS = probes.reduce((a, p) => a + (p.level === 'jam' || p.level === 'slow' ? p.delayS : 0), 0);
+      const delayMin = Math.max(1, Math.round(delayS / 60));
+      const stay = () => { toast(`Traffic ahead · ${delayMin} min`); say(`Traffic ahead. ${delayMin} minute${delayMin === 1 ? '' : 's'} slower`); };
+      // Only the driver's own stops still ahead: old shaping points may sit in the jam, and a detour gets its own.
+      const ahead = req.via.filter(v => !v.shaping && (v.distM == null || v.distM > routeWatch.bestM)).map(v => ({ lat: v.lat, lon: v.lon }));
+      const points = [{ lat: L.lat, lon: L.lon }, ...ahead, req.to];
+      // Valhalla gives alternates only between two points; the exclusion variant works through vias too.
+      const [base, avoid] = await Promise.allSettled([valhallaRoutes(points, false, 2),
+                                                      valhallaRoutes(points, false, 0, { exclude_polygons: ApexTraffic.jamPolygons(probes) })]);
+      if (track !== t || state.mode !== 'live') return;
+      if (base.status !== 'fulfilled' || !Number.isFinite(base.value[0].timeS)) { stay(); return; }
+      const primary = base.value[0];
+      const current = { timeS: primary.timeS, delayS };
+      const trips = [...base.value.slice(1), ...(avoid.status === 'fulfilled' ? avoid.value : [])]
+        .filter(c => Number.isFinite(c.timeS) && !ApexTraffic.tooSlow(current, c.timeS));   // only score what could win
+      // The Plan route card's fun score (web/fun_route.js) on light geometry, times what traffic leaves of it. The current
+      // route is scored as the router's way from here, which follows it.
+      const scored = (r) => {
+        const g = FunRoute.geometry(r.coords, Core), f = funOf(g, r.turns), tf = ApexTraffic.trafficFactor(g, probes);
+        return { route: r, fun: f ? f.fun * tf.factor : null, crossesJam: tf.crossesJam };
+      };
+      const now = scored(primary), cands = [];
+      for (const r of trips) { cands.push(scored(r)); await RouteLoading.yieldToUI(); }
+      if (track !== t || state.mode !== 'live') return;
+      const pick = Number.isFinite(now.fun) && ApexTraffic.pickDetour({ ...current, fun: now.fun }, cands.map(c => ({ fun: c.fun, timeS: c.route.timeS, crossesJam: c.crossesJam })));
+      window.apexDebug && (window.apexDebug.lastTraffic = { now: now.fun, delayS, primaryS: primary.timeS, pick,
+        cands: cands.map(c => ({ fun: c.fun, timeS: c.route.timeS, crossesJam: c.crossesJam })) });
+      if (!pick) { stay(); return; }
+      const c = cands[pick.index];
+      const road = [...c.route.names].filter(([n]) => !primary.names.has(n)).sort((a, b) => b[1] - a[1]).map(([n]) => n)[0] || 'another road';
+      const extraMin = Math.round(pick.extraS / 60);
+      const sw = { cancelled: false };
+      toast(`Traffic ahead · switching to ${road}${extraMin > 0 ? ` (+${extraMin} min)` : ''}`,
+            { label: 'Cancel', ms: 6000, onClick: () => { sw.cancelled = true; say('Staying on this route'); } });
+      say(`Traffic ahead. Switching to ${road}${extraMin > 0 ? `, ${extraMin} minute${extraMin === 1 ? '' : 's'} longer` : ''}`);
+      await new Promise(r => setTimeout(r, 6000));
+      if (sw.cancelled || track !== t || state.mode !== 'live' || rerouter.off) return;
+      // Pinned with shaping points along it, like a winning alternate in Plan, so a reroute stays on the detour (a short
+      // detour gets its midpoint).
+      const along = FunRoute.alongPoints(c.route.coords);
+      if (!along.length) { const m = c.route.coords[Math.floor(c.route.coords.length / 2)]; along.push({ lat: m[1], lon: m[0], shaping: true }); }
+      let route = c.route, nt = await trackFromPolyline(route.coords, t.id, t.name);
+      if (track !== t || state.mode !== 'live') return;
+      // The car moved on while this was decided (routing, scoring, 6 s): if it is already off the detour, route again from
+      // where it is through the detour's points.
+      const Lnow = state.live;
+      if (Lnow && Core.nearestIndex(Lnow.lat, Lnow.lon, nt.lat, nt.lon, -1).distM > 40) {
+        const order = (v) => Core.nearestIndex(v.lat, v.lon, nt.lat, nt.lon, -1).index;
+        const pts = [...ahead, ...along].map(v => ({ v, i: order(v) })).sort((a, b) => a.i - b.i).map(x => x.v);
+        try { [route] = await valhallaRoutes([{ lat: Lnow.lat, lon: Lnow.lon }, ...pts, req.to]); } catch (_) { return; }
+        if (track !== t || state.mode !== 'live') return;
+        nt = await trackFromPolyline(route.coords, t.id, t.name);
+        if (track !== t || state.mode !== 'live') return;
+      }
+      const at = (v) => Core.nearestIndex(v.lat, v.lon, nt.lat, nt.lon, -1).index;
+      const via = [...ahead, ...along].map(v => ({ v, i: at(v) })).sort((a, b) => a.i - b.i).map(x => x.v);   // in order along it
+      Object.assign(nt, { request: { from: null, to: req.to, via }, fun: funOf(nt, route.turns), timeS: route.timeS });
+      await buildRoute(null, t.id, t.name, nt);                     // activate() restarts the traffic clock for the new route
+    }
     // Members: what others measured on these roads (d.t.measured) and a score adjustment for it (d.adjust: rough
     // −8 … smooth +3, banked ±2, docs/ROUTING.md; unmeasured roads are neutral). False when there is nothing to compare or no membership.
     async function applyMeasured(list, ui) {
@@ -2007,9 +2109,17 @@
     // 10. UI WIRING
     // =======================================================================
     function toast(msg, action) {
-      const t = $('toast'); t.textContent = msg;
-      if (action) { const a = document.createElement('a'); a.href = action.href; a.textContent = action.label; a.style.cssText = 'margin-left:10px;color:var(--accent);text-decoration:underline'; t.append(a); }
-      t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), action ? 7000 : 4200);
+      const t = $('toast');
+      if (!action && t._holdUntil > performance.now()) return;   // a Cancel countdown owns the toast until it ends
+      t._holdUntil = action && action.ms ? performance.now() + action.ms : 0;
+      t.textContent = msg;
+      if (action) {
+        const a = document.createElement('a'); a.href = action.href || '#'; a.textContent = action.label; a.style.cssText = 'margin-left:10px;color:var(--accent);text-decoration:underline'; t.append(a);
+        // Once the countdown is over the action is gone: a late tap must not undo what already happened.
+        if (action.onClick) a.onclick = (e) => { e.preventDefault(); if (!a.isConnected) return; t._holdUntil = 0; a.remove(); action.onClick(); t.classList.remove('show'); };
+      }
+      t.classList.add('show'); clearTimeout(t._h);
+      t._h = setTimeout(() => { t.classList.remove('show'); if (action && action.onClick) t.querySelectorAll('a').forEach(x => x.remove()); }, action ? action.ms || 7000 : 4200);
     }
     // Views: ROUTE / DRIVES / SETUP open the side panel; tapping the open tab again, the map
     // behind it, or swiping it right closes it. ANALYSIS is its own page.
@@ -3018,7 +3128,7 @@
         render(entering);
       },
       onNative(msg) {
-        if (msg && (msg.type === 'placeSuggestions' || msg.type === 'placeResolved')) { nativePlaceReply(msg); return; }
+        if (msg && (msg.type === 'placeSuggestions' || msg.type === 'placeResolved' || msg.type === 'trafficProbe')) { nativePlaceReply(msg); return; }
         if (msg && msg.type === 'recordingSaved') toast(`Saved ${msg.segments} road segments to ${msg.file}`);
         // App sign-in finished in the native shell: keep the session token and redraw whatever shows account state.
         if (msg && msg.type === 'session' && msg.token) { ApexSync.setSession(msg.token); toast('Signed in.'); location.reload(); }

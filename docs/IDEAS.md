@@ -72,7 +72,7 @@ long-press pin (#61), Apple place search and nearby suggestions in the app (#73)
 | R-05 | Multi-centre stage discovery so long A→B trips find stages near both ends, not only the midpoint | H | M | todo | STATE 2026-10-28 |
 | R-06 | One fun score for loops and A→B (unify loop ranking with the fun score) | M | S | todo | STATE 2026-10-28 |
 | R-07 | Live ETA and time left from router durations scaled by your own pace, reset on reroute | H | M | todo | WORKER_QUEUE eta-1, every nav app |
-| R-08 | Traffic ahead on iOS from MapKit, switch to the next most fun route that avoids the jam | H | L | todo | WORKER_QUEUE traffic-1, Waze |
+| R-08 | Traffic ahead on iOS from MapKit, switch to the next most fun route that avoids the jam | H | L | done (#78, phone test pending) | WORKER_QUEUE traffic-1, Waze |
 | R-09 | Traffic on web/Android through a keyed provider (TomTom/HERE via the Worker) | M | M | owner (paid provider) | Google Maps |
 | R-10 | "Explore": best stages within N minutes of here, as a list and on the map, one tap to drive one | H | M | todo | ROAD_INTELLIGENCE §7.1, REVER discover |
 | R-11 | Choose each stage's direction by score and car (climb the technical one, descend the flowing one) | M | M | todo | ROAD_INTELLIGENCE §7.2.3 |

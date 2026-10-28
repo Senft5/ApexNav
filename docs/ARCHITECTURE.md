@@ -149,3 +149,31 @@ This reprioritization performs no merge or production deployment.
 - Crest aggregation/count semantics and corroboration need a versioned, null-preserving design.
   Current measured routing is a small roughness adjustment after loop generation, not character-aware
   destination/loop/traffic candidate discovery. Preserve honest geometry fallback while fixing this.
+
+## 8. Traffic as a fun penalty (iOS app only)
+
+Owner rule: traffic is not a "faster route" finder. Congestion lowers a route's fun even when it costs no time, and a jam
+on the route ahead switches to the next most fun route that avoids it. Pure logic in `web/traffic.js` (tests/test_traffic.py);
+the shell only asks Apple.
+
+- **Source**: MapKit `MKDirections` in `ApexNavApp.swift` (free, no key, traffic-aware), over the bridge as
+  `{cmd: 'trafficProbe', id, chunks: [{a, b}]}` answered with `{type: 'trafficProbe', id, results: [{now, night}], throttled, busy}`.
+  Web and Android have no traffic source and show nothing; a keyed provider (TomTom/HERE through the Worker) needs the
+  owner's approval and is not built.
+- **When**: every 2 min while driving (> 2 m/s, on route) a planned route with a request; one probe in flight; MapKit
+  throttling backs off 4 / 8 / 16 min. A new route waits a full interval.
+- **What**: the next 20 km cut into 4 km chunks (a tail under 1 km joins the last). Apple routes each chunk's ends leaving
+  now and leaving at the next 3 am (Apple's quiet-road time, so no router time model is needed). A chunk counts only when
+  80 % of each of Apple's paths is within 50 m of ours and ours of theirs; otherwise it is unknown, never clear.
+- **Levels**: $r = t_\text{now} / t_\text{3am}$ (clamped 1..6). Slow at $r \ge 1.2$; jam at $r \ge 1.5$ and ≥ 60 s lost.
+- **Fun penalty**: route fun is the Plan route card's score (`web/fun_route.js`, docs/ROUTING.md). A 500 m piece in
+  traffic at ratio $r$ keeps $1/r^2$ of its fun (lateral load scales with $v^2$) and weighs $r$ times its length (you spend
+  $r$ times as long there), so the score is multiplied by $\sum \ell/r \,/\, \sum \ell r$. Unknown traffic is ratio 1.
+- **Detour on a jam**: Valhalla from the current fix through the vias still ahead to the destination: alternates (two
+  points only) plus a variant with `exclude_polygons` (200 m boxes at ¼, ½, ¾ of each jam chunk, at most 12 to stay under
+  Valhalla's perimeter limit). Candidates that cross a jam are dropped; the best one more fun (+0.5) than the current
+  route with its traffic and at most max(10 min, 25 %) slower than the current route with its delay wins:
+  "Traffic ahead · switching to <road> (+N min)", voiced, 6 s to Cancel; the detour is pinned with shaping points so a
+  reroute stays on it. None: "Traffic ahead · N min" and stay.
+  Each jam (its stretch of route distance) is announced at most once per 10 min on a route. +N min is Valhalla's time difference against the jammed route
+  (eta-1's live estimate does not exist yet).
