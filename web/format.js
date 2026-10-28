@@ -20,6 +20,29 @@
     const m = /^(Drive .+ )(\d{2}):(\d{2})$/.exec(name || '');
     return m ? m[1] + clock12(Number(m[2]), Number(m[3])) : name;
   }
-  const api = { clock12, dateTime, driveName };
+  // Dynamic Type: iOS sizes `-apple-system-body` from the phone's text size setting (17 px at the default, Large).
+  // Reading pages (sheets, Log, Stages) zoom by that ratio. Never smaller than designed, and capped at 1.6 so the
+  // largest accessibility sizes still fit a phone; the cockpit keeps its fixed at-a-glance sizes.
+  /** 17 -> 1, 23 -> 1.35, 53 -> 1.6; smaller or unknown -> 1. Steps of 0.05. */
+  function typeScale(bodyPx) {
+    if (!(bodyPx > 0)) return 1;
+    return Math.round(Math.max(1, Math.min(1.6, bodyPx / 17)) * 20) / 20;
+  }
+  /** Sets --type-scale on the page from the phone's text size; outside iOS WebKit it stays 1. */
+  function applyTypeScale(doc) {
+    let scale = 1;
+    try {
+      if (doc.defaultView.CSS && doc.defaultView.CSS.supports('font', '-apple-system-body')) {
+        const probe = doc.createElement('span');
+        probe.style.cssText = 'font: -apple-system-body; position: absolute; visibility: hidden';
+        doc.body.appendChild(probe);
+        scale = typeScale(parseFloat(doc.defaultView.getComputedStyle(probe).fontSize));
+        probe.remove();
+      }
+    } catch (_) { scale = 1; }
+    doc.documentElement.style.setProperty('--type-scale', String(scale));
+    return scale;
+  }
+  const api = { clock12, dateTime, driveName, typeScale, applyTypeScale };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexFormat = api;
 })(typeof window !== 'undefined' ? window : globalThis);

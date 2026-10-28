@@ -24,6 +24,9 @@
     input, textarea, select { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; font-size: max(16px, 1em); }
     /* The page scrolls inside body: the iOS shell disables the web view's own scroll view (the map page must not rubber-band). */
     html { height: 100%; overflow: hidden; } body { height: 100%; overflow-y: auto; overscroll-behavior-y: none; -webkit-overflow-scrolling: touch; }
+    /* The phone's text size (format.js applyTypeScale) on the text blocks; charts and the stage strip measure their
+       own width and stay unzoomed, so they still fit and track the finger. */
+    #tab-history > :not(#trendPanel):not(#steadyPanel), #tab-segments > .bar-top, #segList, #segDetail table, #tab-segments .more > summary, #contribPanel { zoom: var(--type-scale, 1); }
     main { max-width: 1180px; margin: 0 auto; padding: calc(14px + env(safe-area-inset-top, 0px)) 16px calc(80px + env(safe-area-inset-bottom, 0px)); display: grid; gap: 18px; }
     h2 { font-size: 18px; font-weight: 700; font-family: var(--font-num); margin-bottom: 8px; }
     a { color: inherit; }
@@ -43,6 +46,8 @@
     th { font-size: 11px; font-weight: 600; color: var(--panel-dim); text-align: right; padding: 6px; border-bottom: 1px solid var(--rule); white-space: nowrap; }
     td { padding: 8px 6px; border-bottom: 1px solid var(--rule); text-align: right; font-family: var(--font-num); white-space: nowrap; vertical-align: middle; }
     th.l, td.l { text-align: left; }
+    #recordsTable td.l { white-space: normal; }
+    #recordsTable .nw { white-space: nowrap; }
     td .sub { display: block; font-size: 11px; color: var(--panel-dim); font-family: var(--font-ui); }
     tr.stopped td { opacity: 0.55; }
     tr.best td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
@@ -104,7 +109,7 @@
     @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; animation: none !important; transition: none !important; } }
     [hidden] { display: none !important; }
     a.back { display: inline-flex; align-items: center; min-height: 44px; font-size: 15px; font-weight: 600; text-decoration: none; color: var(--panel-dim); }
-    .bar-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-height: 44px; }   /* page titles sit at the same height on every tab */
+    .bar-top { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; min-height: 44px; }   /* page titles sit at the same height on every tab */
     label.btn { display: inline-flex; align-items: center; cursor: pointer; }
     details.more { border-top: 1px solid var(--rule); margin-top: 12px; }
     details.more summary { min-height: 44px; display: flex; align-items: center; font-size: 15px; font-weight: 600; cursor: pointer; list-style: none; }
@@ -151,6 +156,7 @@
       </div>
       <div class="cards" id="historyCards"></div>
       <div class="panel" id="trendPanel" hidden><h2>Score over time</h2><div id="trend"></div></div>
+      <div class="panel" id="recordsPanel" hidden><h2>Your records</h2><div class="scroll"><table id="recordsTable"></table></div><p class="note" id="recordsNote"></p></div>
       <div class="panel" id="steadyPanel" hidden><h2>Braking consistency by month</h2><div id="steadyChart"></div><p class="note" id="steadyNote"></p></div>
       <div class="panel" id="historyPanel"><div class="scroll"><table id="historyTable"></table></div></div>
       <details class="more"><summary>How Score works</summary>
@@ -220,6 +226,8 @@
     try { prefs = Object.assign(prefs, JSON.parse(localStorage.getItem('apex.prefs') || 'null') || {}); if (prefs.themeV !== 2) prefs.theme = 'roadbook'; } catch (_) {}
     const params = new URLSearchParams(location.search);
     const look = window.ApexThemes.apply(params.get('theme') || prefs.theme, params.has('night') ? params.get('night') === '1' : !!(prefs.toggles && prefs.toggles.night));
+    window.ApexFormat.applyTypeScale(document);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) window.ApexFormat.applyTypeScale(document); });   // text size changed in Settings
     const C = look.colors;
 
     // ---------------------------------------------------------------------
@@ -296,8 +304,44 @@
         <td><span class="score">${d.ds.score ?? '--'}</span></td>
         <td class="l wide">${bars(d.ds.components)}</td></tr>`).join('');
       $('historyTable').innerHTML = !drives.length ? '<tr><td class="l" colspan="5"><span class="note">No drives yet.</span></td></tr>' : `<tr><th class="l">Drive</th><th>Distance</th><th class="wide">Corners scored</th><th>Score</th><th class="l wide">Components</th></tr>${rows}`;
+      setTimeout(renderRecords, 0);
       setTimeout(renderSteadiness, 0);                                  // the coach runs per road: after the Log has painted
     }
+
+    // Your records (IDEAS D-08): the best Score on each road you have driven twice or more (roads by name), and this month's
+    // smoothest drive and best braking. No speed, time or pace record of its own.
+    // A drive whose date is unknown never counts for "this month".
+    function renderRecords(list = drives) {
+      const roads = new Map();
+      for (const d of list) { const r = roads.get(d.name) || []; r.push(d); roads.set(d.name, r); }
+      const when = (d) => monthOf(d) ? d.date : '';                    // an unknown date is never "latest" and never wins a tie
+      const rows = [...roads.entries()].map(([name, all]) => {
+        const ds = all.filter(d => d.ds.score != null);
+        if (ds.length < 2) return null;
+        const best = ds.reduce((m, d) => (d.ds.score > m.ds.score || (d.ds.score === m.ds.score && when(d) && (!when(m) || when(d) < when(m))) ? d : m));
+        const dated = all.filter(when), last = dated.length ? dated.reduce((m, d) => (when(d) > when(m) ? d : m)) : null;
+        return { name, best, n: ds.length, fresh: last === best, last };
+      }).filter(Boolean).sort((p, q) => (q.last ? when(q.last) : '').localeCompare(p.last ? when(p.last) : '')).slice(0, 6);
+      const month = new Date(), key = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, '0')}`;
+      const mine = list.filter(d => d.ds.score != null && monthOf(d) === key && d.ds.components);
+      const of = (k) => mine.filter(d => finiteNum(d.ds.components[k]));
+      const top = (k) => { const c = of(k); return c.length >= 2 ? c.reduce((m, d) => (d.ds.components[k] > m.ds.components[k] ? d : m)) : null; };
+      const smooth = top('smoothness'), brake = top('braking');
+      $('recordsPanel').hidden = !rows.length && !smooth && !brake;
+      if ($('recordsPanel').hidden) return;
+      const pct = (v) => `${Math.round(v * 100)}%`;
+      const day = (d) => `<span class="nw">${monthOf(d) ? d.date.slice(0, 10).replace(/[^0-9-]/g, '') : 'date unknown'}</span>`;
+      const line = (what, d, value, sub) => `<tr class="row-link" data-drive="${d.id}" tabindex="0" role="link"><td class="l"><b></b><span class="sub">${what} · ${sub}</span></td><td><span class="score">${value}</span></td></tr>`;
+      const out = [], names = [];
+      for (const r of rows) { out.push(line(`Best Score on this road, of ${r.n} scored drives`, r.best, r.best.ds.score, r.fresh ? `${day(r.best)}, your latest here: a new best` : day(r.best))); names.push(r.name); }
+      if (smooth) { out.push(line(`Smoothest drive this month, of ${of('smoothness').length}`, smooth, pct(smooth.ds.components.smoothness), day(smooth))); names.push(smooth.name); }
+      if (brake) { out.push(line(`Best braking this month, of ${of('braking').length}`, brake, pct(brake.ds.components.braking), day(brake))); names.push(brake.name); }
+      $('recordsTable').innerHTML = out.join('');
+      $('recordsTable').querySelectorAll('tr td.l b').forEach((b, i) => { b.textContent = names[i]; });   // names are user text
+      $('recordsNote').textContent = 'Roads are matched by name. Score counts pace only up to a margin inside the grip limit and takes points off past it; smoothness, braking and consistency make up the rest.';
+    }
+    const finiteNum = (v) => typeof v === 'number' && Number.isFinite(v);
+    window.apexLogDebug = { loaded: () => drivesLoaded, records: (ds) => renderRecords(ds) };   // e2e/smoke.js seeds the panel (the library itself is untouched)
 
     // Braking consistency by month (IDEAS D-07 trend): on corners you drove five or more times in a month, how widely your
     // braking point spread inside that month (Core.spreadBy, a robust SD per corner), the median over the month's corners.
@@ -365,8 +409,10 @@
       });
     }
 
-    $('historyTable').addEventListener('click', (e) => { const r = e.target.closest('tr[data-drive]'); if (r) openDrive(r.dataset.drive); });
-    $('historyTable').addEventListener('keydown', (e) => { const r = e.target.closest('tr[data-drive]'); if (r && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openDrive(r.dataset.drive); } });
+    for (const id of ['historyTable', 'recordsTable']) {
+      $(id).addEventListener('click', (e) => { const r = e.target.closest('tr[data-drive]'); if (r) openDrive(r.dataset.drive); });
+      $(id).addEventListener('keydown', (e) => { const r = e.target.closest('tr[data-drive]'); if (r && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openDrive(r.dataset.drive); } });
+    }
     $('importFile').addEventListener('change', async (e) => {
       const file = e.target.files[0];
       if (!file) return;

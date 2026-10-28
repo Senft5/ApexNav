@@ -21,10 +21,19 @@ targets:
     settings:
       base:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        # iPhone only: an iPad build must support every orientation or App Store Connect rejects the upload.
+        TARGETED_DEVICE_FAMILY: "1"
+        # The version people see. CI's TestFlight job sets CURRENT_PROJECT_VERSION (the build number) per run.
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "1"
     info:
       path: Info.plist
       properties:
         CFBundleDisplayName: "APEX NAV"
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        # Only standard HTTPS/TLS: skips the export-compliance question on every TestFlight build.
+        ITSAppUsesNonExemptEncryption: false
         UILaunchScreen: {}
         NSLocationWhenInUseUsageDescription: "Required for live turn-by-turn navigation and road-feel mapping."
         NSLocationAlwaysAndWhenInUseUsageDescription: "Required for live turn-by-turn navigation and road-feel mapping."

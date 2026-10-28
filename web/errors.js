@@ -2,7 +2,7 @@
 // go to our own Worker (POST /api/errors), never a third-party SDK. Before anything leaves the phone it is scrubbed:
 // query strings and fragments cut from URLs, e-mail addresses, precise numbers (coordinates) and long token-like strings
 // replaced. No session, no account, no position, no drive data. At most 5 reports per page load, one per distinct error.
-// The Worker scrubs again and writes one log line; read them in Cloudflare → Workers → apexnav → Logs (event client_error).
+// The Worker scrubs again, writes one log line (Workers Logs, event client_error) and counts it per day in D1 error_counts.
 (function (root) {
   const MAX_PER_PAGE = 5;
   const cut = (s, max) => (s.length > max ? s.slice(0, max) : s);

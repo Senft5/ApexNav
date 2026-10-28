@@ -39,7 +39,7 @@ def _run_js(payload: dict) -> dict:
 
 def _assert_parity(lat, lon, camber=None, crest=None, rough=None, resample=False, elev=None):
     payload = {"lat": list(map(float, lat)), "lon": list(map(float, lon)), "resample": resample,
-               "camber": None if camber is None else list(map(float, camber)),
+               "camber": None if camber is None else [float(x) if math.isfinite(x) else None for x in camber],   # unknown: null
                "crest": None if crest is None else list(map(float, crest)),
                "rough": None if rough is None else list(map(float, rough)),
                "elev": None if elev is None else list(map(float, elev))}
