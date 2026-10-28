@@ -97,10 +97,12 @@
           const row = this.rows[Math.floor((d0 + seg * (k + 1) / n) / 5)];
           if (p != null && row) row.vert_peak_g = row.vert_peak_g == null ? p : Math.max(row.vert_peak_g, p);
         });
-      } else this.nextAt = 0;
+      } else if (!this.rows.length) this.nextAt = 0;                      // after a pause the distance carries on, nothing filled in
       this.peaks = []; this.peaksLost = false;
       this.prev = fr; this.last = fr;
     }
+    /** A gap (a privacy zone, IDEAS Z-02): the next fix starts a new stretch; no samples are placed between the two. */
+    pause() { this.prev = null; this.peaks = []; this.peaksLost = false; }
     get km() { return this.dist / 1000; }
     get samples() { return this.rows.length; }
     /** CSV in the ApexDrive column layout; missing values are left blank, never zero. */
