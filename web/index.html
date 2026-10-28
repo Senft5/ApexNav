@@ -21,6 +21,7 @@
   <script src="sensors.js"></script>
   <script src="reroute.js"></script>
   <script src="eta.js"></script>
+  <script src="speech_queue.js"></script>
   <script src="traffic.js"></script>
   <script src="in_car.js"></script>
   <script src="power.js"></script>
@@ -1313,7 +1314,9 @@
     // Voice: "codriver" (most natural voice installed, read like a real co-driver) or
     // "jarvis" (cartoonishly robotic: robot voice where installed, chirps, machine-speak).
     // -------------------------------------------------------------------------
-    const speech = { busy: false, queue: [], talkingUntil: 0 };   // talkingUntil: the native voice's estimated end (it reports no finish)
+    // queue: what to say next, hazards first, stale and duplicate lines dropped (speech_queue.js, IDEAS V-03). current: the line playing.
+    // talkingUntil: the native voice's estimated end (it reports no finish).
+    const speech = { busy: false, queue: ApexSpeechQueue.createSpeechQueue(), current: null, talkingUntil: 0, nativeTimer: 0, via: null };
     const MEMO_S = 5;   // a remembered coaching tip takes up to this long to say
     let breakSay = null;  // a break suggestion waiting for a quiet moment (noteRest sets it, the notes loop says it)
     const NUM_WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
@@ -1385,17 +1388,26 @@
     }
     // say(): pace notes (chain) and fixed phrases (sysToken) play from the open-model voice bank;
     // anything the bank can't voice (drive names...) falls back to the device voice.
-    function say(text, force, chain = null, sysToken = null) {
+    // opts: kind 'hazard' (goes first, may cut off an ordinary line), key (never twice in a row), atM (route metres: dropped once passed).
+    function say(text, force, chain = null, sysToken = null, opts = {}) {
       if (!text || (!state.toggles.voice && !force)) return;
-      if (force) { if ('speechSynthesis' in window) speechSynthesis.cancel(); speech.queue.length = 0; }
-      speech.queue.push({ text, chain, sysToken });
-      if (speech.queue.length > 2) speech.queue.splice(0, speech.queue.length - 2);
-      pumpSpeech();
+      if (force) { speech.queue.clear(); stopSpeaking(); }
+      speech.queue.push({ text, chain, sysToken, ...opts }, performance.now());
+      if (!force) preemptForHazard();
+      pumpSpeech(force);
     }
-    // Next in line without cutting off what is playing or dropping the notes behind it (convoy hazard calls far ahead).
-    function sayNext(text) {
-      speech.queue.unshift({ text, chain: null, sysToken: null });
-      pumpSpeech();
+    // A hazard said ahead of whatever ordinary lines are waiting (convoy hazard calls far ahead).
+    function sayNext(text, key) { say(text, false, null, null, { kind: 'hazard', key }); }
+    const queueCursor = () => (track && state.cursorIdx >= 0 ? state.cursorM : null);
+    // A hazard waiting while an ordinary line plays: cut the line off. A model-voice clip is short and finishes; the hazard is next.
+    function preemptForHazard() {
+      if (!speech.busy || !ApexSpeechQueue.preempts(speech.current, speech.queue.items[0])) return;
+      if (speech.via === 'native') { clearTimeout(speech.nativeTimer); speech.busy = false; speech.interrupt = true; }
+      else if (speech.via === 'web' && 'speechSynthesis' in window) speechSynthesis.cancel();   // onend pumps the hazard
+    }
+    function stopSpeaking() {
+      if ('speechSynthesis' in window) speechSynthesis.cancel();
+      if (speech.via === 'native') { clearTimeout(speech.nativeTimer); speech.busy = false; speech.interrupt = true; }
     }
     // In the app the shell owns the audio route (car stereo, CarPlay audio, Bluetooth): tell it while a web voice clip plays.
     function voiceBracket(on) {
@@ -1403,9 +1415,10 @@
       if (native) { try { native.postMessage(on ? 'voiceBegin' : 'voiceEnd'); } catch (_) {} }
     }
     async function pumpSpeech() {
-      if (speech.busy || !speech.queue.length) return;
-      const item = speech.queue.shift();
-      speech.busy = true;
+      if (speech.busy) return;
+      const item = speech.queue.take(performance.now(), queueCursor());
+      if (!item) { speech.current = null; speech.via = null; return; }
+      speech.busy = true; speech.current = item; speech.via = 'model';
       let played = false;
       try {
         if (state.voiceId !== 'device' && window.ApexVoice) {
@@ -1424,17 +1437,24 @@
       } catch (_) { /* fall back to the device voice */ }
       if (played) { speech.busy = false; pumpSpeech(); return; }
       deviceSpeak(spokenText(item.text));
+      if (speech.queue.hazardWaiting(performance.now(), queueCursor())) preemptForHazard();   // a hazard arrived while the model voice tried
     }
     function deviceSpeak(spoken) {
       const style = state.voiceStyle;
       if (style === 'jarvis') chirp();
       const native = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex;
       if (native) {
-        try { native.postMessage({ cmd: 'speak', text: spoken, force: false, style }); } catch (_) {}
-        speech.talkingUntil = Math.max(performance.now(), speech.talkingUntil) + 600 + spoken.length * 70;   // ~14 characters a second
-        speech.busy = false; pumpSpeech(); return;
+        // One line at a time, so a hazard can still go ahead of the lines behind it; a hazard cutting in interrupts at a word.
+        const interrupt = !!speech.interrupt; speech.interrupt = false;
+        try { native.postMessage({ cmd: 'speak', text: spoken, force: interrupt, style }); } catch (_) {}
+        speech.talkingUntil = (interrupt ? performance.now() : Math.max(performance.now(), speech.talkingUntil)) + 600 + spoken.length * 70;   // ~14 characters a second
+        speech.via = 'native';
+        clearTimeout(speech.nativeTimer);
+        speech.nativeTimer = setTimeout(() => { speech.busy = false; pumpSpeech(); }, Math.max(0, speech.talkingUntil - performance.now()));
+        return;
       }
       if (!('speechSynthesis' in window)) { speech.busy = false; return; }
+      speech.via = 'web';
       const u = new SpeechSynthesisUtterance(spoken);
       const v = pickVoice(state.voiceStyle);
       if (v) { u.voice = v; u.lang = v.lang; }
@@ -1495,7 +1515,7 @@
         state.spoken.add(key);
         if (e.type === 'corner' ? !spirited : !(spirited || noteworthyInCruise(e))) continue;
         const call = chainedCall(e, ev, spirited);
-        say(call.text, false, call.chain);
+        say(call.text, false, call.chain, null, { kind: e.type === 'corner' ? 'ordinary' : 'hazard', key, atM: e.dist_m });
       }
       // Roads you have driven: one technique tip per remembered corner, only with full notes on (never over a commute),
       // moving on a fresh heading, and only when it ends before any call is due: it starts MEMO_S of driving beyond the
@@ -1504,17 +1524,17 @@
       // unless a route bump that will be called lies within reach along the route or within SAME_SPOT_M of it (a hairpin can
       // put it close in a straight line but far along the road). It never pushes a queued call out, and may be said again
       // once HZ_REPEAT_MS has passed (the same road later, a lap), so the id is not kept in state.spoken.
-      if (live && vMps >= 5 && performance.now() - state.liveAt < 2500 && speech.queue.length < 2) {
+      if (live && vMps >= 5 && performance.now() - state.liveAt < 2500 && speech.queue.size < 2) {
         const calledBumps = ev.filter(e => e.type === 'bump' && (spirited || noteworthyInCruise(e)));
         const now = performance.now(), recent = { has: (id) => now - (hazardSaid.get(id) ?? -Infinity) < HZ_REPEAT_MS };
         const pool = hazardMemory.filter(n => (spirited || n.severity_g >= 0.45)
           && !calledBumps.some(e => e.dist_m - state.cursorM < lead + 30
             || Math.hypot((track.lon[e.index] - n.lon) * 111320 * Math.cos(n.lat * Math.PI / 180), (track.lat[e.index] - n.lat) * 110540) < HZ_SAME_SPOT_M));
         const hz = ApexRoadMemory.upcoming(pool, state.live, 25, lead, recent);
-        if (hz) { hazardSaid.set(hz.id, now); say(hz.text); }
+        if (hz) { hazardSaid.set(hz.id, now); say(hz.text, false, null, null, { kind: 'hazard', key: `mem:${hz.id}`, repeatMs: HZ_REPEAT_MS }); }
       }
       const reach = lead + vMps * MEMO_S;
-      if (live && spirited && vMps >= 5 && performance.now() - state.liveAt < 2500 && !speech.busy && !speech.queue.length
+      if (live && spirited && vMps >= 5 && performance.now() - state.liveAt < 2500 && !speech.busy && !speech.queue.size
           && performance.now() > speech.talkingUntil
           && !ev.some(e => e.dist_m - state.cursorM < reach && !state.spoken.has(`${track.id}:${e.type}:${e.index}`))) {
         const memo = ApexRoadMemory.upcoming(roadMemory, state.live, reach, reach + 200, state.spoken);
@@ -1525,7 +1545,7 @@
       // at the app's estimate of 600 ms + 70 ms a character, plus 2 s for a model voice to start. Dropped after 5 min unsaid;
       // the toast already showed it.
       if (breakSay && performance.now() > breakSay.until) breakSay = null;
-      if (breakSay && live && performance.now() - state.liveAt < 2500 && !speech.busy && !speech.queue.length && performance.now() > speech.talkingUntil) {
+      if (breakSay && live && performance.now() - state.liveAt < 2500 && !speech.busy && !speech.queue.size && performance.now() > speech.talkingUntil) {
         const breakReach = lead + vMps * (0.6 + 0.07 * breakSay.text.length + 2);
         const callDue = ev.some(e => e.dist_m - state.cursorM < breakReach && !state.spoken.has(`${track.id}:${e.type}:${e.index}`)
           && (e.type === 'corner' ? spirited : (spirited || noteworthyInCruise(e))));
@@ -2918,7 +2938,7 @@
       },
       getRoute: () => (track && track.kind === 'route' && track.lat.length > 1 ? { name: track.name, pts: track.lat.map((la, i) => [la, track.lon[i]]) } : null),
       // A close hazard cuts in; a far one goes next, after the pace note being spoken (never dropping the notes queued).
-      speak: (text, urgent) => { if (!state.toggles.voice) toast(text); else if (urgent) say(text, true); else sayNext(text); },
+      speak: (text, urgent) => { if (!state.toggles.voice) toast(text); else if (urgent) say(text, true, null, null, { kind: 'hazard' }); else sayNext(text, `convoy:${text}`); },
     }) : null; } catch (e) { console.error('convoy', e); convoy = null; }   // the convoy never takes the page down
     // Garage (web/garage_ui.js): your cars, and the ones friends and crew-mates show.
     // Block and report (web/safety_ui.js) on every social surface below; the garage uses it for friends' cars.
