@@ -205,6 +205,16 @@ jobs:
             -authenticationKeyIssuerID "$ASC_ISSUER_ID"
           echo "Uploaded ApexNav build $BUILD_NUMBER to App Store Connect; it shows in TestFlight after Apple's processing (usually 5-30 min)." >> "$GITHUB_STEP_SUMMARY"
 
+      # xcodebuild's own error ("Error Downloading App Information") hides Apple's reason; it is in the distribution logs.
+      - name: Show the distribution log
+        if: failure()
+        run: |
+          for log in $(find "${TMPDIR:-/tmp}" -path '*.xcdistributionlogs/IDEDistribution*.log' 2>/dev/null); do
+            echo "::group::$log"
+            grep -iE -B2 -A8 'error|status code|failed|not found|forbidden|unauthori' "$log" | tail -200
+            echo "::endgroup::"
+          done
+
       - name: Remove the API key
         if: always()
         run: rm -f "$RUNNER_TEMP"/AuthKey_*.p8

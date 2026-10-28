@@ -2,8 +2,8 @@
 
 ## Session 2026-10-28: TestFlight uploads from CI
 - `build.yml` jobs `testflight-gate` + `testflight`: on main, after ApexKit and simulator tests pass, archive with automatic signing through an App Store Connect API key and upload (docs/TESTFLIGHT.md). Skipped with a run-summary note while any of `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8`, `APPLE_TEAM_ID` is missing. Build number = run number.attempt; `MARKETING_VERSION` 1.0 in project.yml; iPhone only; `ITSAppUsesNonExemptEncryption` NO. `build-ipa` unchanged.
-- Not run signed yet: needs the owner's bundle ID, app record and secrets (TESTFLIGHT.md setup).
-- Exact next task: once the secrets are in, run the workflow on main and confirm the build in TestFlight.
+- First signed run (run 339, build 339.1): all four secrets present, archive with automatic signing succeeded, export failed with "Error Downloading App Information" (App Store Connect returned no app record for com.senft.ApexNav, or the key can't see it). A failed export now prints the IDEDistribution log's error lines.
+- Exact next task: owner checks the App Store Connect app record (bundle ID com.senft.ApexNav) and that the API key is Admin; re-run the workflow on main and confirm the build in TestFlight.
 
 ## Session 2026-10-28: avoid towns
 - #129 merged (Explore). #136: a Towns chip under Avoid; candidates are ranked on km near cities, towns and villages from the map tiles (3 points a km, max 30) and the card says "Through towns ~N mi" (docs/ROUTING.md, Avoid). Not checked on a phone.

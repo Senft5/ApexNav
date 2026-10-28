@@ -40,3 +40,6 @@ in TestFlight after Apple's processing, usually 5 to 30 minutes.
 - "No Accounts" / "No signing certificate": the API key isn't Admin, or the membership isn't active yet.
 - "No suitable application records were found": step 3 not done, or the bundle ID differs.
 - "The bundle version must be higher": a build number was used already; re-run the workflow (new attempt number).
+- "Error Downloading App Information" at export: App Store Connect has no app record for `com.senft.ApexNav` that the
+  key can see (step 3 missing, a different bundle ID, or a key without Admin). The "Show the distribution log" step
+  prints Apple's actual reply.
