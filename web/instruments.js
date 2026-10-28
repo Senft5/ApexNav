@@ -60,6 +60,23 @@
       if ((note.mods || []).includes('over crest')) body += `<path d="M10 22 Q20 10 30 22" fill="none" stroke="${accent}" stroke-width="2.6"/>`;
       if ((note.mods || []).includes('tightens')) body += `<path d="M76 12 l8 0 M80 8 l0 8" stroke="${accent}" stroke-width="2.6"/>`;
       if ((note.mods || []).includes('opens')) body += `<path d="M76 12 l8 0" stroke="${accent}" stroke-width="2.6"/>`;
+    } else if (note.type === 'turn') {
+      // A junction from the route's directions (IDEAS V-04): the road you're on to the junction, the way straight on as a
+      // thin stub, and the exit at its angle; a roundabout as a ring, arrival as a flag.
+      body += `<path d="M50 92 L50 52" stroke="${ink}" stroke-width="${w}" stroke-linecap="round"/><circle cx="50" cy="92" r="4.2" fill="${ink}"/>`;
+      if (note.dir === 'A') {
+        body += `<path d="M50 52 L50 14" stroke="${ink}" stroke-width="${w}"/><path d="M50 14 L76 22 L50 30 Z" fill="${accent}"/>`;
+      } else if (note.dir === 'O') {
+        body += `<circle cx="50" cy="38" r="14" fill="none" stroke="${ink}" stroke-width="${w}"/><path d="M60 28 L78 10" stroke="${ink}" stroke-width="${w}" stroke-linecap="round"/><polygon points="82,6 70,10 78,18" fill="${ink}"/>`;
+      } else if (note.dir === 'U') {
+        body += `<path d="M50 52 L50 34 A12 12 0 0 0 26 34 L26 62" fill="none" stroke="${ink}" stroke-width="${w}" stroke-linecap="round"/><polygon points="26,70 20,58 32,58" fill="${ink}"/>`;
+      } else {
+        const deg = note.dir === 'L' ? -(note.angle || 0) : (note.angle || 0), rad = (deg - 90) * Math.PI / 180;
+        const ex = 50 + 38 * Math.cos(rad), ey = 52 + 38 * Math.sin(rad), hx = Math.cos(rad), hy = Math.sin(rad), a = 8;
+        if (note.dir !== 'S') body += `<path d="M50 52 L50 16" stroke="${ink}" stroke-width="1.4" opacity="0.55"/>`;
+        body += `<path d="M50 52 L${ex.toFixed(1)} ${ey.toFixed(1)}" stroke="${ink}" stroke-width="${w}" stroke-linecap="round"/>`;
+        body += `<polygon points="${(ex + hx * a).toFixed(1)},${(ey + hy * a).toFixed(1)} ${(ex - hy * a * 0.6).toFixed(1)},${(ey + hx * a * 0.6).toFixed(1)} ${(ex + hy * a * 0.6).toFixed(1)},${(ey - hx * a * 0.6).toFixed(1)}" fill="${ink}"/>`;
+      }
     } else {
       // Hazard glyphs on a straight
       body += `<path d="M50 92 L50 14" stroke="${ink}" stroke-width="${w}" stroke-linecap="round"/><circle cx="50" cy="92" r="4.2" fill="${ink}"/>`;
