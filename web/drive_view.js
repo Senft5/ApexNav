@@ -47,6 +47,16 @@
   const WEAK = { smoothness: 'steer more gently, with fewer quick corrections in the middle of corners', braking: 'finish your braking by the middle of the corner',
     consistency: 'aim for the same calm rhythm in every corner; you took some much nearer their limit than others' };
   const HABIT_PART = { brake_after_apex: 'braking', coast: null, early_apex: null };   // a habit's own component is never also praised
+  /** What changed most at an abrupt moment (sample i is the change from i-1): the steering, or the brake or throttle, and which way. */
+  function abruptAdvice(latG, lonG, i) {
+    const a = lonG[i - 1], b = lonG[i], fin = Number.isFinite;
+    if (![a, b, latG[i], latG[i - 1]].every((x) => fin(x))) return 'the load on the car changed sharply here';
+    const dLat = Math.abs(latG[i] - latG[i - 1]), dLon = b - a;
+    if (dLat >= Math.abs(dLon)) return 'the cornering load changed sharply here: turn in and unwind the wheel more smoothly';
+    if (dLon < 0) return b < 0 ? 'the brake came on sharply here: squeeze it on more progressively' : 'a sudden lift off the throttle here: ease off more progressively';
+    return a < 0 ? 'the brake came off sharply here: release it more gradually' : 'the throttle went on sharply here: squeeze it on more progressively';
+  }
+
   function plainCoach(ds, co) {
     const comp = ds && finite(ds.score) && ds.components;
     if (!comp) return null;
@@ -190,33 +200,36 @@
     const ab = Core.abruptMoments && d.lat_g && d.lon_g ? Core.abruptMoments(d.lat_g, d.lon_g, d.speed_mps, d.g_known || null) : null;
     const calm = hex(asHex(C.panelDim, '#8A94A6')), sharp = hex(asHex(C.signal, '#E5484D'));
     const jerkColor = (j) => { const t = Math.min(1, j / 0.6); return `rgb(${lerp(calm[0], sharp[0], t)},${lerp(calm[1], sharp[1], t)},${lerp(calm[2], sharp[2], t)})`; };
-    let jsegs = '';
-    if (ab && ab.moments.length) {
+    let jsegs = '', jmarks = '';
+    if (ab && ab.jerk.some((x) => x != null)) {                    // any measured stretch: a smooth drive still gets its map
       for (let i = 0; i + stepM < n + stepM; i += stepM) {
         const j = Math.min(n - 1, i + stepM); if (j === i) break;
         let mx = null; for (let q = i + 1; q <= j; q++) if (ab.jerk[q] != null) mx = Math.max(mx == null ? 0 : mx, ab.jerk[q]);
         const [ax, ay] = P(i), [bx, by] = P(j);
-        jsegs += mx == null ? `<line x1="${ax.toFixed(1)}" y1="${ay.toFixed(1)}" x2="${bx.toFixed(1)}" y2="${by.toFixed(1)}" stroke="${C.panelDim}" stroke-width="1.5" opacity="0.5"/>`
+        jsegs += mx == null ? `<line x1="${ax.toFixed(1)}" y1="${ay.toFixed(1)}" x2="${bx.toFixed(1)}" y2="${by.toFixed(1)}" stroke="${C.panelDim}" stroke-width="1.5" stroke-dasharray="2 3" opacity="0.5"/>`
           : `<line x1="${ax.toFixed(1)}" y1="${ay.toFixed(1)}" x2="${bx.toFixed(1)}" y2="${by.toFixed(1)}" stroke="${jerkColor(mx)}" stroke-width="3.5" stroke-linecap="round"/>`;
       }
-      jsegs += ab.moments.map((m, k) => { const [px, py] = P(m.index); return `<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="7" fill="none" stroke="${C.signal}" stroke-width="2"/><text x="${(px + 10).toFixed(1)}" y="${(py + 4).toFixed(1)}" font-size="10" font-weight="700" fill="${C.signal}">${String.fromCharCode(65 + k)}</text>`; }).join('');
+      jmarks = ab.moments.map((m, k) => { const [px, py] = P(m.index); return `<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="7" fill="none" stroke="${C.signal}" stroke-width="2"/><text x="${(px + 10).toFixed(1)}" y="${(py + 4).toFixed(1)}" font-size="10" font-weight="700" fill="${C.signal}">${String.fromCharCode(65 + k)}</text>`; }).join('');
     }
     let placed = [];
     const marks = d.corners.map((c, k) => { const [px, py] = P(c.apex); if (placed.some(([qx, qy]) => Math.hypot(qx - px, qy - py) < 18)) return `<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="2" fill="${C.signal}"/>`; placed.push([px, py]); return `<g data-k="${k}" style="cursor:pointer"><circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="8" fill="${C.panel}" stroke="${C.signal}" stroke-width="1.6"/><text x="${px.toFixed(1)}" y="${(py + 3.2).toFixed(1)}" text-anchor="middle" font-size="9" font-weight="700" fill="${C.panelInk}">${k + 1}</text></g>`; }).join('');
-    mapBox.innerHTML = `<svg viewBox="0 0 ${MW} ${MH}" role="img" aria-label="Route map coloured by speed, ${d.corners.length} corners"><g id="dvSpeed">${segs}</g><g id="dvJerk" display="none">${jsegs}</g><polyline id="dvWin" fill="none" stroke="${C.panelInk}" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" opacity="0.28"/>${marks}<circle id="dvDot" r="6" fill="${C.accent}" stroke="${C.panel}" stroke-width="2"/></svg>
+    mapBox.innerHTML = `<svg viewBox="0 0 ${MW} ${MH}" role="img" aria-label="Route map coloured by speed, ${d.corners.length} corners"><g id="dvSpeed">${segs}</g><g id="dvJerk" display="none">${jsegs}</g><polyline id="dvWin" fill="none" stroke="${C.panelInk}" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" opacity="0.28"/>${marks}<g id="dvJerkMarks" display="none" pointer-events="none">${jmarks}</g><circle id="dvDot" r="6" fill="${C.accent}" stroke="${C.panel}" stroke-width="2"/></svg>
       <div class="dv-legend" id="dvLegSpeed"><span>slow</span><i style="background:linear-gradient(90deg,${colorAt(0)},${colorAt(vmax)})"></i><span>${Math.round(vmax * MPH)} mph</span></div>`
       + (jsegs ? `<div class="dv-legend" id="dvLegJerk" hidden><span>calm</span><i style="background:linear-gradient(90deg,${jerkColor(0)},${jerkColor(0.6)})"></i><span>abrupt</span></div>` : '');
+    let showSmooth = null;
     if (jsegs) {                                                     // Speed / Smoothness switch for the map
-      const sw = el('div', 'dv-zoom dv-mapmode'), bs = el('button', 'dv-z on', 'Speed'), bj = el('button', 'dv-z', 'Smoothness');
+      const sw = el('div', 'dv-zoom dv-mapmode'), svg = mapBox.querySelector('svg'), speedLabel = svg && svg.getAttribute('aria-label'), bs = el('button', 'dv-z on', 'Speed'), bj = el('button', 'dv-z', 'Smoothness');
       const show = (jerk) => {
         bs.classList.toggle('on', !jerk); bj.classList.toggle('on', jerk); bs.setAttribute('aria-pressed', String(!jerk)); bj.setAttribute('aria-pressed', String(jerk));
         const q = (id) => mapBox.querySelector(id);
         if (q('#dvSpeed')) q('#dvSpeed').setAttribute('display', jerk ? 'none' : 'inline');
-        if (q('#dvJerk')) q('#dvJerk').setAttribute('display', jerk ? 'inline' : 'none');
+        for (const id of ['#dvJerk', '#dvJerkMarks']) if (q(id)) q(id).setAttribute('display', jerk ? 'inline' : 'none');
+        if (svg) svg.setAttribute('aria-label', jerk ? `Route map coloured by how abruptly the load on the car changed, ${ab.moments.length} abrupt moments lettered` : speedLabel);
         if (q('#dvLegSpeed')) q('#dvLegSpeed').hidden = jerk;
         if (q('#dvLegJerk')) q('#dvLegJerk').hidden = !jerk;
       };
-      bs.onclick = () => show(false); bj.onclick = () => show(true); show(false);
+      bs.onclick = () => show(false); bj.onclick = () => show(true); show(false); showSmooth = () => show(true);
+      sw.setAttribute('role', 'group'); sw.setAttribute('aria-label', 'Map colour');
       sw.append(bs, bj); mapBox.prepend(sw);
     }
     const dot = mapBox.querySelector('#dvDot');
@@ -337,8 +350,8 @@
       ab.moments.forEach((m, k) => {
         const near = d.corners.findIndex((c) => m.index >= c.start - 4 && m.index <= c.end + 4), li = el('li'), b = el('button');
         b.innerHTML = `<b>${String.fromCharCode(65 + k)}</b><span>${near >= 0 ? `Corner ${near + 1} \u00b7 ${esc(d.corners[near].call || d.corners[near].code || '')}` : 'Between corners'}</span><em class="loss">${m.jerk_gps.toFixed(2)} g/s</em>`
-          + `<span class="note">${(d.dist[m.index] / 1609.344).toFixed(2)} mi \u00b7 the load on the car changed sharply here: steer, brake and lift more progressively</span>`;
-        b.onclick = () => { if (zoomM) setZoom(zoomM, m.index); move(m.index); lanes.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); };
+          + `<span class="note">${(d.dist[m.index] / 1609.344).toFixed(2)} mi \u00b7 ${abruptAdvice(d.lat_g, d.lon_g, m.index)}</span>`;
+        b.onclick = () => { if (showSmooth) showSmooth(); if (zoomM) setZoom(zoomM, m.index); move(m.index); lanes.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); };
         li.append(b); ul.append(li);
       });
       list.prepend(el('h2', null, 'Most abrupt moments'), ul);
@@ -387,6 +400,6 @@
     return { move, setRoadFeel, destroy() { ro.disconnect(); }, summary: S };
   }
 
-  const api = { mount, summarize, tipText, plainCoach };
+  const api = { mount, summarize, tipText, plainCoach, abruptAdvice };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexDriveView = api;
 })(typeof window !== 'undefined' ? window : globalThis);

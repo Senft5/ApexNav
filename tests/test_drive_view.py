@@ -231,3 +231,21 @@ console.log(JSON.stringify({
 
 def test_unknown_elevation_is_a_gap_not_nan(r):
     assert "Elevation" in r["gapLanes"] and "NaN" not in r["gapLanes"]
+
+
+def test_abrupt_moment_advice_follows_what_changed():
+    runner = r"""
+const V = require(process.argv[1] + '/web/drive_view.js');
+const A = (lat, lon) => V.abruptAdvice(lat, lon, 1);
+console.log(JSON.stringify({
+  steer: A([0.1, 0.6], [0, 0.1]), brakeOn: A([0, 0], [0, -0.5]), brakeOff: A([0, 0], [-0.5, 0]),
+  throttleOn: A([0, 0], [0.06, 0.35]), lift: A([0, 0], [0.3, 0]), unknown: A([0, null], [0, 0]),
+}));
+"""
+    root = str(__import__("pathlib").Path(__file__).resolve().parents[1])
+    p = subprocess.run([NODE, "-e", runner, root], capture_output=True, text=True, timeout=60)
+    assert p.returncode == 0, p.stderr
+    r = json.loads(p.stdout)
+    assert "wheel" in r["steer"] and "brake came on" in r["brakeOn"] and "brake came off" in r["brakeOff"]
+    assert "throttle went on" in r["throttleOn"] and "lift" in r["lift"]
+    assert r["unknown"] == "the load on the car changed sharply here"
