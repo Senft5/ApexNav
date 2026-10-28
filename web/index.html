@@ -27,6 +27,7 @@
   <script src="note_timing.js"></script>
   <script src="plain_notes.js"></script>
   <script src="hazard_reports.js"></script>
+  <script src="outbox.js"></script>
   <script src="incident.js"></script>
   <script src="traffic.js"></script>
   <script src="in_car.js"></script>
@@ -3906,7 +3907,18 @@
       const t = Number.isFinite(frame.t) ? frame.t : Date.now();
       if (crashDetector.update({ t, speed_mps: frame.speed_mps, impact_g: frame.impact_g }) === 'ask') crashSheet.ask();
     }
+    // Reports and answers made with no signal wait here and go when it's back (IDEAS F-05; web/outbox.js).
+    const outbox = ApexOutbox.createOutbox(localStorage, async (path, b) => {
+      const r = await ApexSync.apiFetch(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) });
+      return r.status;
+    });
+    let outboxAt = 0;
+    const flushOutbox = () => { outboxAt = performance.now(); if (navigator.onLine === false) return; outbox.flush().then((n) => { if (!n) return; toast(n === 1 ? 'Sent what you reported with no signal.' : `Sent ${n} things you reported with no signal.`); loadReported(true); }).catch(() => {}); };
+    window.addEventListener('online', flushOutbox);
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') flushOutbox(); });
+    if (outbox.size()) setTimeout(flushOutbox, 3000);
     function feedReported(frame) {
+      if (outbox.size() && performance.now() - outboxAt > 60000) flushOutbox();   // a fix and a minute since the last try
       if (!driveActive && state.mode !== 'live') return;
       loadReported();
       const me = { lat: frame.lat, lon: frame.lon, heading: Number.isFinite(frame.course_deg) ? frame.course_deg : null };
@@ -3926,7 +3938,10 @@
     async function answerStill(still) {
       const h = reported.asking; $('hzAsk').hidden = true; reported.asking = null; clearTimeout(reported.askTimer);
       if (!h) return;
-      try { await ApexSync.apiFetch(`/api/hazards/${encodeURIComponent(h.id)}/vote`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ still }) }); } catch (_) {}
+      const path = `/api/hazards/${encodeURIComponent(h.id)}/vote`;
+      let r = null;
+      try { r = await ApexSync.apiFetch(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ still }) }); } catch (_) {}
+      if (!r || r.status >= 500) { outbox.add(path, { still }); toast('No signal. Your answer goes when you have one.'); return; }
       toast(still ? 'Thanks. Others will hear about it.' : 'Thanks. It goes once others agree.');
     }
     $('hzStill').addEventListener('click', () => answerStill(true));
@@ -3943,9 +3958,9 @@
       const p = state.lastPosition, heading = state.lastMotion && state.lastMotion.heading;
       if (!p || !state.lastPositionAt || performance.now() - state.lastPositionAt > 10000) { toast('No GPS fix yet. Try again in a moment.'); return; }
       let r = null;
-      try { r = await ApexSync.apiFetch('/api/hazards', { method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ kind, lat: p.lat, lon: p.lon, heading: Number.isFinite(heading) ? Math.round((heading % 360 + 360) % 360) : null }) }); } catch (_) {}
-      if (!r) { toast('No signal. Your report wasn\'t sent.'); return; }
+      const body = { kind, lat: p.lat, lon: p.lon, heading: Number.isFinite(heading) ? Math.round((heading % 360 + 360) % 360) : null };
+      try { r = await ApexSync.apiFetch('/api/hazards', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }); } catch (_) {}
+      if (!r || r.status >= 500) { outbox.add('/api/hazards', body, true); toast(`No signal. ${ApexHazardReports.LABEL[kind]} saved; it's sent when you have one.`); return; }
       if (r.status === 401 || r.status === 403) { toast('Sign in (Crew) to report hazards for others.'); return; }
       if (!r.ok) { toast(r.status === 429 ? 'That\'s a lot of reports today.' : 'Couldn\'t send that. Try again.'); return; }
       const j = await r.json(); reported.mine.add(j.id); reported.said.add(j.id);

@@ -13,14 +13,17 @@ export const SAME_M = 50, MAX_PER_DAY = 30, NEAR_MAX_KM = 50, MAX_LISTED = 200;
 
 const M_LAT = 110540;
 const cosLat = (lat: number) => Math.cos(lat * Math.PI / 180);
-const until = (kind: Kind) => `datetime('now', '+${LIFE_MIN[kind]} minutes')`;
+const until = (kind: Kind, ageS = 0) => `datetime('now', '+${LIFE_MIN[kind] * 60 - ageS} seconds')`;
 
 export async function reportHazard(env: Env, v: Viewer, req: Request) {
-  const b = await body<{ kind?: unknown; lat?: unknown; lon?: unknown; heading?: unknown }>(req);
+  const b = await body<{ kind?: unknown; lat?: unknown; lon?: unknown; heading?: unknown; age_s?: unknown }>(req);
   if (typeof b.kind !== "string" || !(KINDS as readonly string[]).includes(b.kind)) throw new HttpError(400, "bad_kind");
   const kind = b.kind as Kind;
   const lat = num(b.lat, "lat", -85, 85), lon = num(b.lon, "lon", -180, 180);
   const heading = b.heading === undefined || b.heading === null ? null : Math.round(num(b.heading, "heading", 0, 360)) % 360;
+  // Made with no signal and sent later (IDEAS F-05): it lives from when it was seen, and one already past its life is refused.
+  const ageS = b.age_s === undefined || b.age_s === null ? 0 : Math.round(num(b.age_s, "age_s", 0, 86400));
+  if (ageS >= LIFE_MIN[kind] * 60) throw new HttpError(410, "stale_report");
   const today = await env.DB.prepare("SELECT COUNT(*) AS n FROM hazard_reports WHERE reported_by = ? AND created_at > datetime('now', '-1 day')")
     .bind(v.id).first<{ n: number }>();
   if ((today?.n ?? 0) >= MAX_PER_DAY) throw new HttpError(429, "too_many_reports");
@@ -31,7 +34,7 @@ export async function reportHazard(env: Env, v: Viewer, req: Request) {
        AND lat BETWEEN ? AND ? AND lon BETWEEN ? AND ? LIMIT 1`).bind(kind, lat - dLat, lat + dLat, lon - dLon, lon + dLon).first<{ id: string }>();
   if (near) { await vote(env, v, near.id, true); return { id: near.id, confirmed: true }; }
   const id = randomToken(12);
-  await env.DB.prepare(`INSERT INTO hazard_reports (id, kind, lat, lon, heading, reported_by, expires_at) VALUES (?, ?, ?, ?, ?, ?, ${until(kind)})`)
+  await env.DB.prepare(`INSERT INTO hazard_reports (id, kind, lat, lon, heading, reported_by, expires_at) VALUES (?, ?, ?, ?, ?, ?, ${until(kind, ageS)})`)
     .bind(id, kind, lat, lon, heading, v.id).run();
   return { id, confirmed: false };
 }
