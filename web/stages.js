@@ -105,13 +105,20 @@
     return [Math.floor((lon + 180) / 360 * n), Math.floor((1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * n)];
   };
   let tileUrl = null;
+  const MAX_TILES = 64;
   async function roadPieces(c, radiusKm, onProgress) {
     if (!tileUrl) tileUrl = (await Loading.json(TILEJSON)).tiles[0];
-    const z = 13, dLat = radiusKm / 110.54, dLon = radiusKm / (111.32 * Math.cos(c.lat * Math.PI / 180));
-    const [x0, y0] = tileOf(c.lat + dLat, c.lon - dLon, z), [x1, y1] = tileOf(c.lat - dLat, c.lon + dLon, z);
-    const jobs = [];
-    for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) jobs.push([x, y]);
-    if (jobs.length > 64) throw new Error('area too large');
+    const z = 13, jobs = [];
+    // At most 64 tiles: a 14 km radius needs 81 at 39°N, so shrink the area to fit instead of giving up (which
+    // used to drop every 45 mi loop to the circle fallback).
+    if (!Number.isFinite(c.lat) || !Number.isFinite(c.lon) || !(radiusKm > 0)) throw new Error('bad search area');
+    for (let r = radiusKm; r > 0 && (jobs.length === 0 || jobs.length > MAX_TILES); r -= 0.5) {
+      const dLat = r / 110.54, dLon = r / (111.32 * Math.cos(c.lat * Math.PI / 180));
+      const [x0, y0] = tileOf(c.lat + dLat, c.lon - dLon, z), [x1, y1] = tileOf(c.lat - dLat, c.lon + dLon, z);
+      jobs.length = 0;
+      for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) jobs.push([x, y]);
+    }
+    if (!jobs.length || jobs.length > MAX_TILES) jobs.splice(0, jobs.length, tileOf(c.lat, c.lon, z));
     let done = 0;
     const pieces = [];
     await Promise.all(jobs.map(async ([x, y]) => {

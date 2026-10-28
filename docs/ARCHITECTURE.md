@@ -54,6 +54,9 @@ The JS file is a line-for-line port used by the browser/iOS cockpit for live OSR
   unmeasured g (`g_known`) anywhere from 200 m before the apex to 100 m after the exit are left out.
 - Web shell: `web/index.html` (cockpit), `web/analysis.html` (history / segments / compare), `web/themes.js` (theme registry), `web/instruments.js` (renderers).
 
+## 3c. Fun routing (`web/fun_route.js`)
+Destination routes are chosen for fun within a time budget (Quick / Fun / Max fun): the router's route and alternates plus 1–2 corridor stage detours timed with one Valhalla matrix call, scored on map geometry (junction turns removed) and ranked by fun and corners gained against extra minutes. Details, weights and what was checked: docs/ROUTING.md.
+
 ## 4. Data Honesty
 Everything the cockpit shows is measured, derived from measurements, or fetched from a named open source (OSM/DeFlock ALPR via Overpass, OSRM, Nominatim). Geometry-only routes are labelled `SIM · NOT DRIVEN` and show `--` for anything that needs an IMU. A failed ALPR fetch says so instead of implying no cameras.
 
