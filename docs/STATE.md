@@ -1,5 +1,10 @@
 # APEX NAV — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-10-28: TestFlight uploads from CI
+- `build.yml` jobs `testflight-gate` + `testflight`: on main, after ApexKit and simulator tests pass, archive with automatic signing through an App Store Connect API key and upload (docs/TESTFLIGHT.md). Skipped with a run-summary note while any of `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8`, `APPLE_TEAM_ID` is missing. Build number = run number.attempt; `MARKETING_VERSION` 1.0 in project.yml; iPhone only; `ITSAppUsesNonExemptEncryption` NO. `build-ipa` unchanged.
+- Not run signed yet: needs the owner's bundle ID, app record and secrets (TESTFLIGHT.md setup).
+- Exact next task: once the secrets are in, run the workflow on main and confirm the build in TestFlight.
+
 ## Session 2026-10-28: production-readiness audit
 - Read the whole backend, the iOS shell's web view and bridge, the live contributor, kinematics.py and sun.js. SQL is all bound parameters; auth, CSRF, invites, export/delete and the board/grant rules hold. pytest 253 green, vitest 169 green.
 - #132: real names (Google display name) only to yourself and accepted friends (public crews and pending friend requests leaked them); app sign-in code consumed atomically; expired sessions swept on sign-in; crew invite links respect the 10-crew cap.
