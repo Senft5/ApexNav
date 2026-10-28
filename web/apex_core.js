@@ -722,21 +722,26 @@
     }
     return [onset, slow];
   }
-  // Turn-in of one pass as an index into it, or null (port of drive_analysis._turn_in, IDEAS D-18): where the smoothed
-  // lateral load towards the corner first holds 40 % of its peak, from the accelerometer (GPS cannot place the car in its lane).
-  const TURN_MIN_G = 0.20, TURN_ONSET = 0.4, TIP_TURN_M = 15;
-  function turnIn(d, start, end, apex) {
-    const lat = d.lat_g, n = lat.length, lo = Math.max(0, apex - BRAKE_LOOKBACK);
+  // Turn-in of one pass as an index into it, or null (port of drive_analysis._turn_in, IDEAS D-18): walking back from the
+  // corner's peak smoothed |lateral g|, the first bin of the run at 40 % of it; null on unknown g, a run past 40 m before the
+  // start, or load building again on the way back (a chicane, linked corners). GPS cannot place the car in its lane.
+  const TURN_MIN_G = 0.20, TURN_ONSET = 0.4, TURN_LEAD = 8, TURN_VALLEY_G = 0.05, TIP_TURN_M = 20;
+  function turnIn(d, start, end) {
+    const lat = d.lat_g, n = lat.length, lo = Math.max(1, start - TURN_LEAD);
+    for (let q = lo - 1; q <= Math.min(n - 1, end + 1); q++) if (!Number.isFinite(lat[q])) return null;
     const sm = (i) => (lat[Math.max(0, i - 1)] + lat[i] + lat[Math.min(n - 1, i + 1)]) / 3;
-    const side = sm(apex);
-    if (!Number.isFinite(side) || side === 0) return null;
-    const y = (i) => (side > 0 ? sm(i) : -sm(i));
     let pk = start;
-    for (let i = start + 1; i <= end; i++) if (y(i) > y(pk)) pk = i;
-    if (!(y(pk) >= TURN_MIN_G)) return null;
-    let j = pk;
-    while (j > lo && y(j - 1) >= TURN_ONSET * y(pk)) j--;
-    return j > lo && j <= apex ? j : null;
+    for (let i = start + 1; i <= end; i++) if (Math.abs(sm(i)) > Math.abs(sm(pk))) pk = i;
+    const side = sm(pk) > 0 ? 1 : -1, y = (i) => side * sm(i), peak = y(pk);
+    if (!(peak >= TURN_MIN_G)) return null;
+    let j = pk, low = peak;
+    while (y(j - 1) >= TURN_ONSET * peak) {
+      if (j - 1 <= lo) return null;
+      if (low < 0.7 * peak && y(j - 1) > low + TURN_VALLEY_G) return null;
+      j--;
+      low = Math.min(low, y(j));
+    }
+    return j;
   }
   const ON_A_WINDOW = 10;
   function onA(a, near, b, i) {                                     // searched only around where the mark should fall
@@ -756,8 +761,8 @@
       if (ma.min_mps < STOPPED_MPS) { out.push({ apex: c.apex, m: ma, best: null, gain_s: null, tip: null, passes: 0 }); continue; }
       let best = ma, bestFrom = -1, passes = 1;
       const [oa, sa] = passMarks(a, c.start, c.end, c.apex);             // D-07 marks, in m along A's road from its apex
-      const ta = turnIn(a, c.start, c.end, c.apex);
-      ma.turn_in_m = ta === null ? null : (c.apex - ta) * 5;
+      const ta = turnIn(a, c.start, c.end);
+      ma.turn_in_m = ta === null || ta > c.apex ? null : (c.apex - ta) * 5;
       const brakes = [oa === null ? null : (c.apex - oa) * 5], mins = [sa === null ? null : (sa - c.apex) * 5], froms = [-1];
       others.forEach((b, j) => {
         const w = matchWindow(a, c.start, c.end, b, hints[j]);
@@ -774,7 +779,7 @@
         passes++;
         let [ob, sb] = passMarks(b, bs, be, bApex).map((x) => (x === null ? null : onA(a, c.apex - (bApex - x), b, x)));
         if (ob !== null && ob > c.apex) ob = null;                       // braking cannot begin past the apex
-        let tt = turnIn(b, bs, be, bApex);
+        let tt = turnIn(b, bs, be);
         if (tt !== null) tt = onA(a, c.apex - (bApex - tt), b, tt);
         mb.turn_in_m = tt === null || tt > c.apex ? null : (c.apex - tt) * 5;   // on A's road, m before its apex
         brakes.push(ob === null ? null : (c.apex - ob) * 5); mins.push(sb === null ? null : (sb - c.apex) * 5); froms.push(j);
@@ -965,7 +970,7 @@
 
   const api = {
     profileRecording,
-    driverScore, cornerTechnique, fatigue, spreadBy, segmentPass, segmentWindow,
+    driverScore, cornerTechnique, fatigue, spreadBy, turnIn, segmentPass, segmentWindow,
     removeSpurs, retracedShare,
     compareDrives, cornerMetrics, elapsedS, cornerPhases, coach, ggEnvelope, gripUse, ggSector, abruptMoments,
     G_STD, MPS_TO_MPH, ALPR_RADIUS_M,

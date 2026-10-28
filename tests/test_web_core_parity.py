@@ -164,8 +164,8 @@ def test_parity_coach_on_real_drives():
                     lon=[x + 4e-5 * math.cos(i / 5 + k) for i, x in enumerate(drives[1]["lon"])]) for k in (1, 2)]
     cases = [(drives[0], [drives[1]]), (drives[1], [drives[0], quick]), (drives[1], []), (drives[1], [quick, late, later]),
              (drives[1], [*shifted, later]), (drives[1], [quick, late, later, *shifted])]
-    # and a slower pass that turned in 15 m sooner everywhere (D-18)
-    early = dict(drives[1], speed_mps=[v * 0.96 for v in drives[1]["speed_mps"]], lat_g=drives[1]["lat_g"][3:] + drives[1]["lat_g"][-3:])
+    # and a slower pass that turned in 25 m sooner everywhere (D-18)
+    early = dict(drives[1], speed_mps=[v * 0.96 for v in drives[1]["speed_mps"]], lat_g=drives[1]["lat_g"][5:] + drives[1]["lat_g"][-5:])
     cases.append((early, [drives[1]]))
     np_ = lambda d: {**d, "speed_mps": np.array(d["speed_mps"]), "lon_g": np.array(d["lon_g"]), "lat_g": np.array(d["lat_g"])}
     py = [da.coach(np_(a), [np_(o) for o in others]) for a, others in cases]
