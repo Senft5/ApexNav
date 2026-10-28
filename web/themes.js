@@ -34,9 +34,19 @@
   };
   function get() { return THEMES.roadbook; }
 
+  // Accents (IDEAS S-10): cosmetic colours for the route line and the cockpit's accent, unlocked with earned Octane
+  // (Settings → Look). Warnings keep their own colour (signal) whatever the accent: nothing here changes what a hazard looks like.
+  const ACCENTS = {
+    rally_blue: { label: 'Rally blue', day: { route: '#1F4FA8', accent: '#1F4FA8' }, night: { route: '#6E9BEF', accent: '#6E9BEF' } },
+    racing_green: { label: 'Racing green', day: { route: '#1E5B3A', accent: '#1E5B3A' }, night: { route: '#5DB585', accent: '#5DB585' } },
+    ink: { label: 'Ink', day: { route: '#1C1A17', accent: '#1C1A17' }, night: { route: '#EDE4D3', accent: '#EDE4D3' } },
+  };
+  const ACCENT_KEY = 'apex.accent';
+  function accent() { try { const a = root.localStorage.getItem(ACCENT_KEY); return ACCENTS[a] ? a : null; } catch (_) { return null; } }
+  function setAccent(a) { try { if (ACCENTS[a]) root.localStorage.setItem(ACCENT_KEY, a); else root.localStorage.removeItem(ACCENT_KEY); } catch (_) {} }
   function apply(id, night) {
-    const t = get(id);
-    const c = night ? t.night : t.day;
+    const t = get(id), a = accent();
+    const base = night ? t.night : t.day, c = a ? { ...base, ...ACCENTS[a][night ? 'night' : 'day'] } : base;
     const r = document.documentElement;
     for (const [k, v] of Object.entries(c)) r.style.setProperty(`--${k.replace(/[A-Z]/g, m => '-' + m.toLowerCase())}`, v);
     r.style.setProperty('--font-ui', t.fonts.ui);
@@ -46,5 +56,5 @@
     return { theme: t, colors: c, map: night ? t.map.night : t.map.day };
   }
 
-  root.ApexThemes = { THEMES, get, apply };
+  root.ApexThemes = { THEMES, ACCENTS, get, apply, accent, setAccent };
 })(window);
