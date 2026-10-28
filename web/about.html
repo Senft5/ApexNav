@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>ApexNav · A co-driver for the long way home</title>
+  <meta name="description" content="ApexNav reads the road ahead out loud, finds the twisty roads near you and scores how smoothly you drove them. Never how fast." />
+  <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="brand/icon-180.png" />
+  <style>
+    :root { --paper: #ece3d3; --ink: #1b1914; --dim: #5f594d; --red: #c8102e; --rule: #cfc4b0; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--paper); color: var(--ink); font: 17px/1.5 "Inter Tight", system-ui, -apple-system, sans-serif; }
+    main { max-width: 980px; margin: 0 auto; padding: 32px 16px 64px; }
+    header { display: flex; align-items: center; gap: 12px; }
+    header img { width: 44px; height: 44px; }
+    header b { font-size: 22px; letter-spacing: 0.02em; }
+    h1 { font-size: clamp(34px, 7vw, 58px); line-height: 1.05; margin: 36px 0 12px; }
+    h1 em { font-style: normal; color: var(--red); }
+    .lead { font-size: 20px; color: var(--dim); max-width: 640px; margin: 0 0 28px; }
+    .cta { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 40px; }
+    .btn { display: inline-block; background: var(--ink); color: var(--paper); text-decoration: none; padding: 14px 20px; font-weight: 700; }
+    .btn.ghost { background: transparent; color: var(--ink); border: 2px solid var(--ink); }
+    .note { color: var(--dim); font-size: 15px; }
+    .shots { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; margin: 8px 0 48px; }
+    .shots figure { margin: 0; }
+    .shots img { width: 100%; height: auto; border: 2px solid var(--ink); display: block; }
+    .shots figcaption { font-size: 14px; color: var(--dim); margin-top: 6px; }
+    h2 { font-size: 26px; margin: 40px 0 14px; border-top: 2px solid var(--ink); padding-top: 18px; }
+    .promises { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 16px; }
+    .promises div { border-left: 6px solid var(--red); padding: 4px 0 4px 14px; }
+    .promises b { display: block; font-size: 18px; }
+    ul.features { padding-left: 20px; }
+    ul.features li { margin: 6px 0; }
+    footer { margin-top: 56px; border-top: 1px solid var(--rule); padding-top: 16px; font-size: 14px; color: var(--dim); display: flex; flex-wrap: wrap; gap: 14px; }
+    footer a { color: var(--ink); }
+  </style>
+</head>
+<body>
+<main>
+  <header><img src="brand/mark.svg" alt="" /><b>ApexNav</b></header>
+
+  <h1>A co-driver for <em>the long way home</em>.</h1>
+  <p class="lead">ApexNav reads the road ahead out loud, finds the twisty roads near you, and scores how smoothly you drove them. Never how fast.</p>
+  <div class="cta">
+    <a class="btn" href="index.html">Open the app in your browser</a>
+    <a class="btn ghost" href="index.html?drive=dry_ridge&amp;play=1">Watch a replay</a>
+    <span class="note">On iPhone: in TestFlight now, by invitation. Ask a member for an invite.</span>
+  </div>
+
+  <div class="shots">
+    <figure><img src="brand/shots/cockpit.png" alt="The cockpit on a back road: the next note, Left 4 opens, called 500 feet ahead, with a crest and a dip marked on the map" width="390" height="844" loading="lazy" />
+      <figcaption>Notes called before the corner, crests and dips on the map. The bundled Dry Ridge Road replay.</figcaption></figure>
+    <figure><img src="brand/shots/crew.png" alt="Crew drives: a planned sunrise drive with who is going, and a coffee meet nearby" width="390" height="844" loading="lazy" />
+      <figcaption>Plan a drive with your crew, find meets nearby. An example crew.</figcaption></figure>
+  </div>
+
+  <h2>Four promises</h2>
+  <div class="promises">
+    <div><b>Technique, never speed</b>Scores reward smoothness, braking and consistency. There are no speed records anywhere.</div>
+    <div><b>Yours until you share it</b>Drives stay on your phone. Privacy zones keep home and work out of everything.</div>
+    <div><b>Unknown stays unknown</b>When the app doesn't know, it shows <code>--</code>, never a guess dressed up as a measurement.</div>
+    <div><b>No subscription</b>No ads, no data sold, nothing to unlock.</div>
+  </div>
+
+  <h2>What it does</h2>
+  <ul class="features">
+    <li><b>Pace notes, spoken</b> in plain words or rally notes, timed to your speed so you hear them at the entry, not the apex. The voice works with no signal.</li>
+    <li><b>Directions in the same voice</b>, never on top of a corner call.</li>
+    <li><b>Find the good roads</b>: loops of the length you want, or the most fun way to a destination. More hairpins or more sweepers, your call.</li>
+    <li><b>A Driver Score</b> for every drive, corner by corner, and a live delta against your best on the stages you mark.</li>
+    <li><b>Drive together</b>: convoys, crew drives with a convoy on the day, hazard reports for the drivers behind you.</li>
+    <li><b>A crash check</b> that asks if you're OK after a hard impact. A backup to your phone's own, not a replacement.</li>
+  </ul>
+  <p class="note">Always drive within the law and the conditions. ApexNav is not a racing app.</p>
+
+  <footer>
+    <a href="privacy.html">Privacy</a><a href="terms.html">Terms</a><a href="licenses.html">Licences</a>
+    <span>Support: <span id="contact">a contact address is coming</span></span>
+    <span>Map data &copy; OpenStreetMap contributors</span>
+  </footer>
+</main>
+</body>
+</html>

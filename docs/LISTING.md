@@ -48,9 +48,9 @@ ApexNav accounts are by invitation for now. Driving, pace notes, loops and the L
 
 | field | value |
 |---|---|
-| Support URL | https://apexnav.senftns.workers.dev/ (until a support page exists: O-08) |
+| Support URL | https://apexnav.senftns.workers.dev/about.html (the landing page; its footer needs the owner's contact address, O-11) |
+| Marketing URL | https://apexnav.senftns.workers.dev/about.html |
 | Privacy policy URL | https://apexnav.senftns.workers.dev/privacy.html (after the owner approves it: O-11) |
-| Marketing URL | leave empty |
 
 ## Category
 

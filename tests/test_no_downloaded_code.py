@@ -43,3 +43,11 @@ def test_licences_page_ships_every_vendored_notice():
     for f in os.listdir(os.path.join(WEB, "vendor")):
         if f.endswith(".js"):
             assert f in vendored and vendored[f] in page, f                     # a new vendored file needs its notice here
+
+
+def test_landing_page_links_and_shots_exist():
+    page = read("web", "about.html")
+    for href in re.findall(r'(?:href|src)="([^"#?:]+)', page):
+        assert os.path.exists(os.path.join(WEB, href)), href                     # every local link and image is there
+    for claim in ("Never how fast", "No subscription", "not a racing app"):
+        assert claim in page
