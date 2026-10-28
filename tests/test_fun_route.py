@@ -107,6 +107,11 @@ const line30 = ll(Array.from({ length: 3001 }, (_, i) => [i * 10, 0]));
 out.along = F.alongPoints(line30).map(p => Math.round((p.lon - lon0) / mLon / 1000));
 out.alongMax = F.alongPoints(ll(Array.from({ length: 20001 }, (_, i) => [i * 10, 0]))).length;
 out.alongShort = F.alongPoints(ll([[0, 0], [1000, 0], [2000, 0]])).length;
+// towns: 3 km through a town 10 km out; the city you start in and a village 1 km off the road don't count
+const g30 = F.geometry(line30, globalThis.ApexCore || require(process.argv[1] + '/web/apex_core.js'));
+out.townKm = F.townKm(g30, [{ ...P(10000, 0), cls: 'town' }, { ...P(0, 0), cls: 'city' }, { ...P(20000, 1000), cls: 'village' }]);
+out.townKmNone = F.townKm(g30, null);
+out.townCost = [F.townCost({ townKm: 3 }), F.townCost({ townKm: 50 }), F.townCost({ townKm: null })];
 // a stop near the start goes before the stage points, not after them
 const vias = [{ id: 's1', distM: 5000 }, { id: 's2', distM: 9000 }];
 out.insertEarly = F.insertVia(vias, { id: 'pin' }, 1000).map(v => v.id);
@@ -219,6 +224,12 @@ def test_long_trips_are_chained_sections(r):
     assert r["overBudget"] == 0, "sections each within budget can still add up past the trip's"
 
 
+def test_town_km_counts_towns_on_the_way_not_where_you_start(r):
+    assert 2.8 <= r["townKm"] <= 3.2, r["townKm"]
+    assert r["townKmNone"] is None, "no place data: unknown"
+    assert r["townCost"] == [9, 30, 0]
+
+
 def test_explore_lists_the_best_roads_you_can_reach_in_time(r):
     assert r["expList"] == ["west", "lake", "slow", "north"], "no duplicate road, nothing past the search"
     assert r["expPicks"] == [{"name": "west", "fwd": False, "min": 4}, {"name": "north", "fwd": True, "min": 12}], \
@@ -325,18 +336,19 @@ const FunRoute = require(root + '/web/fun_route.js');
 const html = fs.readFileSync(root + '/web/index.html', 'utf8');
 const source = html.match(/async function funRoute\(.*?\n    }/s)[0];
 const useOptionSource = html.match(/async function useOption\(.*?\n    }/s)[0];
+const townsOnSource = html.match(/async function townsOn\(.*?\n    }/s)[0];
 const whyText = new Function('return (' + html.match(/function whyText\(w\) \{.*?\n    }/s)[0] + ')')();
 const lat0 = 39.2, lon0 = -84.6, mLat = 1 / 110540, mLon = 1 / (111320 * Math.cos(lat0 * Math.PI / 180));
 const ll = (pts) => pts.map(([x, y]) => [lon0 + x * mLon, lat0 + y * mLat]);
 const straight = ll(Array.from({ length: 1001 }, (_, i) => [i * 10, 0]));
 const wiggly = ll(Array.from({ length: 2401 }, (_, i) => [i * 5, 60 * Math.sin(2 * Math.PI * i * 5 / 400)]));
 const A = { lat: lat0, lon: lon0 }, B = { lat: lat0, lon: lon0 + 10000 * mLon };
-async function run({ level, routes, osrm, discover, matrix, avoid = FunRoute.AVOID_DEFAULT }) {
+async function run({ level, routes, osrm, discover, matrix, places, avoid = FunRoute.AVOID_DEFAULT }) {
   const built = [], toasts = [], calls = { matrix: 0, routes: 0 };
   const funRoute = new Function('funLevel', 'valhallaRoutes', 'osrmRoutes', 'toast', 'FunRoute', 'ApexStages', 'state', 'allHighlights', 'valhallaMatrix',
-    'Core', 'RouteLoading', 'funOf', 'applyMeasured', 'trackFromPolyline', 'buildRoute', 'totalOf', 'window', 'whyText', 'avoid', 'let routeOptions = null; ' + useOptionSource + '; return (' + source + ')')(
+    'Core', 'RouteLoading', 'funOf', 'applyMeasured', 'trackFromPolyline', 'buildRoute', 'totalOf', 'window', 'whyText', 'avoid', 'let routeOptions = null; ' + useOptionSource + '; ' + townsOnSource + '; return (' + source + ')')(
     level, async (pts, through, alts) => { calls.routes++; return routes(pts, alts); }, osrm || (async () => { throw Error('down'); }),
-    (m) => toasts.push(m), FunRoute, { discover }, { hlOn: false }, async () => [],
+    (m) => toasts.push(m), FunRoute, { discover, places }, { hlOn: false }, async () => [],
     async (s, t) => { calls.matrix++; return { times: await matrix(s, t) }; },
     Core, { yieldToUI: async () => {} }, (t, turns) => FunRoute.score(t, []), async () => false,
     async (coords, id, name) => ({ id, name, ...FunRoute.geometry(coords, Core) }),
@@ -374,6 +386,18 @@ async function run({ level, routes, osrm, discover, matrix, avoid = FunRoute.AVO
   r = await run({ level: 'quick', avoid: tolls, discover: async () => [],
                   routes: async () => [{ coords: straight, turns: [], timeS: 600, has: { tolls: true } }] });
   out.tollOnly = r.built[0].unavoided;
+  // 7. Avoiding towns: the straight road through a town (1.5 km round a point 5 km out) loses to a 1 min longer bow round it;
+  //    without the option the straight road wins; with no place data nothing is known and nothing changes.
+  const bow = ll([...Array.from({ length: 501 }, (_, i) => [i * 10, i * 5]), ...Array.from({ length: 500 }, (_, i) => [5010 + i * 10, 2500 - (i + 1) * 5])]);
+  const two = async () => [{ coords: straight, turns: [], timeS: 600 }, { coords: bow, turns: [], timeS: 660 }];
+  const town = [{ lat: lat0, lon: lon0 + 5000 * mLon, cls: 'town', name: 'Mid' }];
+  const towns = { ...FunRoute.AVOID_DEFAULT, towns: true };
+  r = await run({ level: 'quick', avoid: towns, discover: async () => [], places: async () => town, routes: two });
+  out.towns = { timeS: r.built[0].timeS, townKm: r.built[0].townKm };
+  r = await run({ level: 'quick', discover: async () => [], places: async () => { throw Error('not asked'); }, routes: two });
+  out.townsOff = { timeS: r.built[0].timeS, townKm: r.built[0].townKm };
+  r = await run({ level: 'quick', avoid: towns, discover: async () => [], places: async () => { throw Error('no tiles'); }, routes: two });
+  out.townsUnknown = { timeS: r.built[0].timeS, townKm: r.built[0].townKm };
   process.stdout.write(JSON.stringify(out));
 })().catch(e => { console.error(e); process.exitCode = 1; });
 """
@@ -387,6 +411,9 @@ def test_app_fun_route_picks_and_falls_back():
     assert r["quick"]["via"] >= 1 and r["quick"]["shaping"], "the winning 12 km alternate is pinned so a reroute stays on it"
     assert r["avoidTolls"] == {"timeS": 600, "extraS": 0, "why": None, "unavoided": []}, "the toll road is dropped, not ranked"
     assert r["tollOnly"] == ["tolls"], "no toll-free way: the card says so"
+    assert r["towns"] == {"timeS": 660, "townKm": 0}, "the bow round the town wins when towns are avoided"
+    assert r["townsOff"] == {"timeS": 600, "townKm": None}, "not asked: the quickest straight road, no town lookup"
+    assert r["townsUnknown"] == {"timeS": 600, "townKm": None}, "no place data: unknown, no cost"
     assert re.fullmatch(r"For Twisty Rd 8\.7 mi · \d+ more good corners, \+1 min", r["quick"]["why"]), r["quick"]["why"]
     assert r["noTiles"] == {"built": 1, "fun": r["noTiles"]["fun"]}
     assert r["osrm"] == {"built": 1, "timeS": 700}
