@@ -222,9 +222,9 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 | id | idea | impact | effort | status | from |
 |---|---|---|---|---|---|
 | U-01 | Plan as a sheet over the map with recent places and saved spots | H | M | done (#70, #73) | Apple Maps |
-| U-02 | Hide the Where to?/Start bar during a replay; it covers the cluster | M | S | todo | STATE 2026-10-28 UI audit |
-| U-03 | Crew sheet draws one rule under its title, not two | L | S | todo | STATE 2026-10-28 UI audit |
-| U-04 | Imported drives get a real name (place, road, time of day), not the file name | M | S | todo | STATE 2026-10-28 UI audit |
+| U-02 | Hide the Where to?/Start bar during a replay; it covers the cluster | M | S | done (#90) | STATE 2026-10-28 UI audit |
+| U-03 | Crew sheet draws one rule under its title, not two | L | S | done (this PR) | STATE 2026-10-28 UI audit |
+| U-04 | Imported drives get a real name (place, road, time of day), not the file name | M | S | partial (recorder file names read as "Drive date time"; place and road names todo) | STATE 2026-10-28 UI audit |
 | U-05 | Audit the live cockpit with simulated GPS frames at phone size (day, night, glare) | H | S | todo | STATE 2026-10-28 UI audit |
 | U-06 | Stages simplified: one list near you with your best and the leader, create from a drive in one step | H | M | partial (#77) | WORKER_QUEUE stages-1 |
 | U-07 | Glanceable cockpit: one number and one note readable at arm's length in sunlight | H | M | todo | car HMI guidelines |
