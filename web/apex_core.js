@@ -662,6 +662,39 @@
       .sort((p, q) => out[q].gain_s - out[p].gain_s || p - q).slice(0, TOP_OPPORTUNITIES);
     return { corners: out, clean: clean.length, this_s: thisS, ideal_s: thisS - gainS, gain_s: gainS, top };
   }
+  // Friction circle — port of core/drive_analysis.gg_envelope / grip_use (parity-tested).
+  const GG_SECTORS = 16, GG_PCTL = 0.95, GG_MIN_POINTS = 8, GG_MIN_G = 0.05, GG_USE_MIN_G = 0.15;
+  const pctl = (vals, q) => { const s = vals.slice().sort((a, b) => a - b); return s[Math.min(s.length - 1, Math.max(0, Math.ceil(q * s.length) - 1))]; };
+  function ggSector(lat, lon) {
+    const T = 2 * Math.PI, w = T / GG_SECTORS;                      // slice k centred on k x 22.5 deg
+    let a = (Math.atan2(lat, lon) + 0.5 * w) % T; if (a < 0) a += T;
+    return Math.floor(a / w) % GG_SECTORS;
+  }
+  function ggEnvelope(latG, lonG, gKnown = null) {
+    const buckets = Array.from({ length: GG_SECTORS }, () => []), total = [];
+    for (let i = 0; i < latG.length; i++) {
+      const la = latG[i], lo = lonG[i];
+      if ((gKnown && !gKnown[i]) || !Number.isFinite(la) || !Number.isFinite(lo)) continue;
+      const r = Math.hypot(la, lo);
+      if (r < GG_MIN_G) continue;
+      buckets[ggSector(la, lo)].push(r); total.push(r);
+    }
+    const radius = buckets.map(b => (b.length >= GG_MIN_POINTS ? pctl(b, GG_PCTL) : null));
+    const q = GG_SECTORS / 4;
+    return { radius_g: radius, points: total.length, peak_g: total.length >= GG_MIN_POINTS ? pctl(total, GG_PCTL) : null,
+             brake_g: radius[2 * q], throttle_g: radius[0], left_g: radius[q], right_g: radius[3 * q] };
+  }
+  function gripUse(latG, lonG, lo, hi, env, gKnown = null) {
+    let sum = 0, n = 0;
+    for (let i = lo; i <= hi; i++) {
+      if (gKnown && !gKnown[i]) return null;
+      const la = latG[i], lg = lonG[i];
+      if (!Number.isFinite(la) || !Number.isFinite(lg)) return null;
+      const r = Math.hypot(la, lg), cap = r >= GG_USE_MIN_G ? env.radius_g[ggSector(la, lg)] : null;
+      if (cap) { sum += Math.min(r / cap, 1.5); n++; }
+    }
+    return n ? sum / n : null;
+  }
   function segmentWindow(seg, d) {
     const [i0, d0] = nearestIndexWin(seg.lat0, seg.lon0, d.lat, d.lon, -1);
     if (d0 > MATCH_RADIUS_M) return null;
@@ -706,7 +739,7 @@
     profileRecording,
     driverScore, segmentPass, segmentWindow,
     removeSpurs, retracedShare,
-    compareDrives, cornerMetrics, elapsedS, cornerPhases, coach,
+    compareDrives, cornerMetrics, elapsedS, cornerPhases, coach, ggEnvelope, gripUse, ggSector,
     G_STD, MPS_TO_MPH, ALPR_RADIUS_M,
     movingAverage, gradient, unwrap, localXY, resamplePolyline,
     computeCurvature, apexSpeedMps, effectiveMu, brakingEnvelopeMps, sightDistanceM, sightSpeedMps, SIGHT_MAX_M,

@@ -183,6 +183,36 @@ def test_parity_coach_on_real_drives():
     assert tips > 0 and py[1]["clean"] > 0 and py[1]["gain_s"] > 0
 
 
+def test_parity_friction_circle_on_real_drives():
+    from core import drive_analysis as da
+    path = "web/data/dry_ridge.js"
+    if not os.path.exists(path):
+        pytest.skip("no shipped drive data")
+    text = open(path, encoding="utf-8").read()
+    d = json.loads(text[text.index("push(") + 5:text.rindex(");")])
+    f = {name: i for i, name in enumerate(d["fields"])}
+    lat = [r[f["lat_g"]] for r in d["rows"]]
+    lon = [r[f["lon_g"]] for r in d["rows"]]
+    known = [0 if 2000 <= i < 2600 else 1 for i in range(len(lat))]
+    spans = [(i, i + 30) for i in range(0, len(lat) - 31, 997)]
+    py_env = da.gg_envelope(lat, lon, known)
+    py = {"env": py_env, "use": [da.grip_use(lat, lon, a, b, py_env, known) for a, b in spans]}
+    runner = ("const c=require(process.argv[1]);const {lat,lon,known,spans}=JSON.parse(require('fs').readFileSync(0,'utf8'));"
+              "const env=c.ggEnvelope(lat,lon,known);"
+              "process.stdout.write(JSON.stringify({env,use:spans.map(([a,b])=>c.gripUse(lat,lon,a,b,env,known))}));")
+    out = subprocess.run([NODE, "-e", runner, os.path.abspath("web/apex_core.js")],
+                         input=json.dumps({"lat": lat, "lon": lon, "known": known, "spans": spans}), capture_output=True, text=True, check=True)
+    js = json.loads(out.stdout)
+    assert js["env"]["points"] == py["env"]["points"] > 1000
+    for k in ("radius_g", "peak_g", "brake_g", "throttle_g", "left_g", "right_g"):
+        jv, pv = (js["env"][k], py["env"][k]) if k == "radius_g" else ([js["env"][k]], [py["env"][k]])
+        assert [x is None for x in jv] == [x is None for x in pv], k          # hypot may differ in the last ulp
+        assert [x for x in jv if x is not None] == pytest.approx([x for x in pv if x is not None], rel=1e-12), k
+    assert any(u is None for u in py["use"]) and any(u is not None for u in py["use"])
+    for j, p in zip(js["use"], py["use"]):
+        assert (j is None) == (p is None) and (p is None or j == pytest.approx(p, rel=1e-12))
+
+
 def test_remove_spurs_cuts_dead_end_out_and_back():
     lat, lon = path_from_legs([("straight", 300.0)])
     # out-and-back spur: 80 m east and back, inserted at sample 30

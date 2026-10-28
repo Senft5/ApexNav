@@ -213,3 +213,44 @@ def test_aligned_time_ignores_blank_speed_outside_the_stretch():
     b["speed_mps"][10] = np.nan                          # a blank speed long before the corner
     t = da.aligned_time_s(a, 80, 96, b, 80)
     assert t == pytest.approx(da.corner_metrics(a["speed_mps"], a["lon_g"], a["lat_g"], 80, 96, 88, 15.0)["time_s"], rel=1e-9)
+
+# ---------------------------------------------------------------------------
+# Friction circle
+# ---------------------------------------------------------------------------
+
+def test_gg_envelope_reads_each_direction_and_ignores_one_spike():
+    lat, lon = [], []
+    for k in range(40):
+        lat += [0.0, 0.0, 0.5, -0.4]
+        lon += [-0.7, 0.3, 0.0, 0.0]
+    lon[0] = -1.4                                       # one pothole jolt in the braking slice
+    env = da.gg_envelope(lat, lon)
+    assert env["brake_g"] == pytest.approx(0.7) and env["throttle_g"] == pytest.approx(0.3)
+    assert env["left_g"] == pytest.approx(0.5) and env["right_g"] == pytest.approx(0.4)
+    assert env["points"] == 160
+    diag = [r for k, r in enumerate(env["radius_g"]) if k % 4 == 2]
+    assert diag == [None] * 4, "no measured points on the diagonals: unknown, not zero"
+
+
+def test_gg_envelope_skips_unmeasured_and_cruising():
+    lat = [0.5] * 20 + [0.01] * 50
+    lon = [0.0] * 70
+    known = [0] * 10 + [1] * 60
+    env = da.gg_envelope(lat, lon, known)
+    assert env["points"] == 10 and env["left_g"] == pytest.approx(0.5)
+    assert da.gg_envelope([0.5] * 5, [0.0] * 5)["peak_g"] is None
+
+
+def test_grip_use_is_the_share_of_your_own_envelope():
+    env = da.gg_envelope([0.5] * 20 + [0.0] * 20, [0.0] * 20 + [-0.8] * 20)
+    assert da.grip_use([0.25, 0.5, 0.0], [0.0, 0.0, -0.4], 0, 2, env) == pytest.approx((0.5 + 1.0 + 0.5) / 3)
+    assert da.grip_use([0.25, 0.01], [0.0, 0.0], 0, 1, env) == pytest.approx(0.5), "cruising bins are left out"
+    assert da.grip_use([0.25, 0.5], [0.0, 0.0], 0, 1, env, [1, 0]) is None
+
+
+def test_gg_slices_are_centred_on_the_axes_and_none_is_unknown():
+    assert da._sector(0.5, 0.0) == 4 and da._sector(-0.5, 0.0) == 12 and da._sector(0.0, -0.5) == 8 and da._sector(0.0, 0.3) == 0
+    assert da._sector(0.01, 0.3) == da._sector(-0.01, 0.3) == 0, "noise either side of an axis stays in one slice"
+    env = da.gg_envelope([None, 0.3] + [0.5] * 10, [0.1, None] + [0.0] * 10)
+    assert env["points"] == 10 and env["left_g"] == pytest.approx(0.5)
+    assert da.grip_use([None], [0.0], 0, 0, env) is None
