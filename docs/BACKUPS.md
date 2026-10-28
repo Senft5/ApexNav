@@ -60,6 +60,10 @@ on D1 rather than by their text.
 | list/create/delete KV namespaces, R2 buckets, Hyperdrive configs | read or write R2 objects or KV values |
 | list Workers, read a Worker's deployed code | Workers Logs (`client_error` crash reports), Workers analytics, D1 metrics, rate-limit events |
 
+A second, full-API Cloudflare connector was added on 2026-10-28; sessions started before it was authorized don't see it.
+If a session lists `cloudflare` tools beyond the ones above (Workers observability, GraphQL analytics), use those for logs
+and analytics and update this table.
+
 So Time Travel bookmarks before a migration (section 2), restores (section 4) and reading crash reports still need the
 owner's wrangler login or dashboard, or an API token added to the environment with: Account > D1 > Edit, Account > Workers
 Scripts > Read, Account > Account Analytics > Read, and Workers Observability (logs) > Read.
@@ -111,3 +115,4 @@ partway, check the database's metrics in the dashboard before blaming the export
 |---|---|---|
 | 2026-10-28 | `tools/d1_rowcounts.sql` run on the live database (read only) | works: 27 tables (26 + `d1_migrations`), 909 road bins, 3 users. No export or drill yet: needs the owner's wrangler login |
 | 2026-10-28 | First export of both databases, by Claude through the connector (section 3, "Without wrangler") | `apexnav-db`: 28 tables (also `bans`, from the not-yet-merged 0009 migration), 72 KB; loaded into a fresh local SQLite, integrity and foreign-key checks clean, fingerprint identical to live D1 on every table. `apexnav-preview-db`: 27 tables, all empty, schema only. `d1_migrations` is empty on prod (not 1 row as IDEAS Y-08 says) and missing on preview. Stored in the project files `backups/d1/`. Not yet: a restore into a real D1 database (drill, section 5) |
+| 2026-10-28 | `d1_migrations` backfilled on both databases (created on preview), 0001–0009, `applied_at` = the backfill time (03:03–03:04Z), after checking each migration's tables and columns exist on both | `wrangler d1 migrations list` now shows nothing pending. A future hand-applied migration must add its row: `INSERT INTO d1_migrations (name) VALUES ('00NN_name.sql')` |
