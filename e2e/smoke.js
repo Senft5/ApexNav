@@ -844,6 +844,22 @@ flow('units: kilometres in Settings redraw the dial, the notes and the replay in
   check(/ km$/.test(await page.getAttribute('#scrubber', 'aria-valuetext')), 'the replay position in km');
 });
 
+flow('Siri links: report and end act only during a drive, and say so otherwise (IDEAS V-07)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && typeof window.apex.onNative === 'function');
+  await page.evaluate(() => window.apex.onNative({ type: 'link', params: { go: 'report' } }));
+  await page.waitForFunction(() => /Start a drive to report a hazard/.test(document.getElementById('toast').textContent));
+  check(!(await page.isVisible('#hzOverlay.show')), 'no report sheet outside a drive');
+  await page.evaluate(() => window.apex.onNative({ type: 'link', params: { go: 'end' } }));
+  await page.waitForFunction(() => /No drive to end/.test(document.getElementById('toast').textContent));
+  // during a drive the report sheet opens
+  await page.evaluate((f) => window.apex.live(f), frame(1));
+  await page.waitForFunction(() => window.apexDebug.state.mode === 'live');
+  await page.evaluate(() => window.apex.onNative({ type: 'link', params: { go: 'report' } }));
+  await page.waitForSelector('#hzOverlay.show');
+});
+
 flow('the Log page opens', async (page, base) => {
   await page.goto(base + '/analysis.html');
   await page.waitForLoadState('load');

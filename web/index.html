@@ -4760,7 +4760,13 @@
         if (ok(p.add)) sessionStorage.setItem('apex.add', p.add.toLowerCase());
       } catch (_) {}
       if (ok(p.convoy) && convoy && convoy.takeInvite) convoy.takeInvite(p.convoy);
-      if (p.go) { if (p.go === 'drive') { closeSheet(); driveFromLink(); } return; }   // apexnav://open?go=drive (a Shortcuts automation, IDEAS C-05)
+      // apexnav://open?go=drive (a Shortcuts automation, IDEAS C-05); go=report and go=end from Siri (IDEAS V-07), during a drive only
+      if (p.go) {
+        if (p.go === 'drive') { closeSheet(); driveFromLink(); }
+        else if (p.go === 'report') { if (state.mode === 'live') { closeSheet(); $('hzOverlay').classList.add('show'); } else toast('Start a drive to report a hazard.'); }
+        else if (p.go === 'end') { if (state.mode === 'live') leaveDrive(true); else toast('No drive to end.'); }
+        return;
+      }
       showView('crew'); renderAccount();
     }
     // Privacy zones (privacy_zones.js, IDEAS Z-02): inside one the drive keeps no samples, road data stops, convoys get no
