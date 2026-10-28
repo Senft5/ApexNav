@@ -1,5 +1,11 @@
 # APEX NAV — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-10-28: first database backup
+- First export of `apexnav-db` and `apexnav-preview-db` taken and verified (docs/BACKUPS.md section 3 and log). No Cloudflare API token is set in Claude's environment; it went through the Cloudflare connector's read-only SELECTs, rebuilt as a `.sql` file, loaded into a local SQLite and fingerprint-matched against live D1 on every table. Files are in the project files `backups/d1/`, not the repo.
+- The connector can query D1 and read Worker code; it cannot export, use Time Travel, or read Workers Logs/analytics (table in BACKUPS.md section 3).
+- `d1_migrations` was empty on prod and missing on preview; backfilled 0001–0009 on both (BACKUPS.md log). Hand-applied migrations must now add their row too (Y-08 drift check in CI still todo).
+- Exact next task: Y-12 scheduled backups through a Worker cron to R2 (docs/IDEAS.md); restore drill once the owner has a wrangler login or token.
+
 ## Session 2026-10-28: Explore
 - #126 merged (route options). #129: Explore 15/30 min lists the best roads you can reach in that time (real drive times from one matrix call), named from the map tiles, drawn on the map; one tap routes through the whole stage (docs/ROUTING.md, Explore). Checked in a desktop browser around Maryville TN. Not checked on a phone.
 - Exact next task: R-15 remainder (avoid towns, repeated roads), then R-11 stage direction.
