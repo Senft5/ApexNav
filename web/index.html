@@ -27,6 +27,7 @@
   <script src="instruments.js"></script>
   <script src="g2p.js"></script>
   <script src="voice.js"></script>
+  <script src="garage_ui.js"></script>
   <script src="data/dry_ridge.js"></script>
   <script src="data/pebble_ridge.js"></script>
   <style>
@@ -2273,6 +2274,8 @@
       try { await navigator.clipboard.writeText(text); toast(ok); } catch (_) { window.prompt('Copy this link', text); }
     };
     const section = (title) => el('div', { className: 'stack-8' }, el('h3', { textContent: title }));
+    // Garage (web/garage_ui.js): your cars, and the ones friends and crew-mates show.
+    const garage = window.ApexGarageUI ? ApexGarageUI.mount({ el, btn, toast, apiCall, jsonOf }) : null;
     const switchRow = (label, on, change) => { const b = el('button', { className: 'ink-btn' + (on ? ' on' : ''), textContent: `${label}: ${on ? 'On' : 'Off'}`, onclick: change }); b.setAttribute('aria-pressed', String(!!on)); return b; };
     let openCrewId = null;
     const crewNear = () => { if (state.lastPosition) return state.lastPosition; const c = map.getCenter(); return { lat: c.lat, lon: c.lng }; };
@@ -2333,6 +2336,7 @@
         btn('Invite someone', async () => { const r = await apiCall('POST', '/api/invites'); const j = await jsonOf(r); if (r.ok) copyText(j.url, 'Invite link copied. They\'ll be your friend the moment they join.'); else toast('Couldn\'t make an invite. Try again.'); }, 'ink-btn solid'),
         btn('Share my handle', () => copyText(`${location.origin}/?add=${me.handle}`, 'Link copied. Anyone who opens it can ask to be your friend.'))), invOut);
       body.append(you);
+      if (garage) body.append(garage.section());
 
       // friends: a side pop-up (owner decision), opened from the button under You; new requests light it up
       if (stash('apex.add')) friendsOpen = true;
