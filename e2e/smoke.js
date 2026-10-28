@@ -350,6 +350,29 @@ flow('crash check: a hard impact then a stop asks "Are you OK?"; no answer offer
   check(!(await page.$('.crash-sheet')), 'closes');
 });
 
+flow('no signal: a hazard report waits on the phone and goes when the connection is back, with its age (IDEAS F-05)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  let offline = true; const posted = [];
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url()), m = route.request().method();
+    if (offline) return route.abort('internetdisconnected');
+    if (u.pathname === '/api/hazards' && m === 'POST') { posted.push(JSON.parse(route.request().postData())); return route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ id: 'q1', confirmed: false }) }); }
+    return route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+  });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && typeof window.apex.live === 'function');
+  await page.evaluate(() => window.apex.live({ lat: 35.6, lon: -83.9, accuracy_m: 5, speed_mps: 15, course_deg: 90, has_fix: true }));
+  await page.click('#hzReportBtn');
+  await page.click('#hzKinds button:has-text("Debris")');
+  await page.waitForFunction(() => /Debris saved/.test(document.getElementById('toast').textContent));
+  check(await page.evaluate(() => JSON.parse(localStorage.getItem('apex.outbox')).length) === 1, 'kept on the phone');
+  offline = false;
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  await page.waitForFunction(() => /Sent what you reported/.test(document.getElementById('toast').textContent), null, { timeout: 5000 });
+  check(posted.length === 1 && posted[0].kind === 'debris' && posted[0].heading === 90 && Number.isInteger(posted[0].age_s), 'sent with its age');
+  check(await page.evaluate(() => localStorage.getItem('apex.outbox')) === null, 'and gone from the phone');
+});
+
 flow('the Log page opens', async (page, base) => {
   await page.goto(base + '/analysis.html');
   await page.waitForLoadState('load');

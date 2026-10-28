@@ -37,6 +37,16 @@ describe("hand-reported hazards", () => {
     expect(list).toHaveLength(2);
   });
 
+  it("a report sent late (made with no signal, IDEAS F-05) lives from when it was made; one past its life is refused", async () => {
+    const a = await makeUser("alice");
+    const r = await json(report(a, { kind: "animal", ...P, age_s: 20 * 60 }));     // animals live 30 min: 10 min left
+    const row = await env.DB.prepare("SELECT (julianday(expires_at) - julianday('now')) * 1440 AS left_min FROM hazard_reports WHERE id = ?")
+      .bind(r.id).first<{ left_min: number }>();
+    expect(row!.left_min).toBeGreaterThan(9); expect(row!.left_min).toBeLessThan(11);
+    expect((await report(a, { kind: "animal", lat: 36, lon: -83, age_s: LIFE_MIN.animal * 60 })).status).toBe(410);
+    expect((await report(a, { kind: "animal", lat: 36, lon: -83, age_s: -5 })).status).toBe(400);
+  });
+
   it("refuses bad reports and caps reports per day", async () => {
     const a = await makeUser("alice");
     expect((await report(a, { kind: "aliens", ...P })).status).toBe(400);
