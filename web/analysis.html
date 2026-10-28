@@ -18,6 +18,7 @@
   <script src="recording.js"></script>
   <script src="contributor.js"></script>
   <script src="drive_view.js"></script>
+  <script src="drive_card.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { background: var(--panel); color: var(--panel-ink); font-family: var(--font-ui); font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -140,6 +141,7 @@
         <button class="btn solid" id="dvReplay">Replay</button>
         <button class="btn" id="dvCompare">Compare</button>
         <button class="btn" id="dvShare">Share</button>
+        <button class="btn" id="dvCard">Share card</button>
       </div>
       <div id="dvRoot"></div>
       <div class="panel" id="dvRoad" hidden><h2>This road over time</h2><div id="dvRoadChart"></div><div class="scroll"><table id="dvRoadTable"></table></div></div>
@@ -805,6 +807,17 @@
         try { await navigator.share({ title: 'ApexNav drive', text, url }); return; } catch (e) { if (e.name === 'AbortError') return; }
       }
       try { await navigator.clipboard.writeText(text + ' ' + url); const b = $('dvShare'); b.textContent = 'Link copied'; setTimeout(() => { b.textContent = 'Share'; }, 2000); } catch (_) { window.prompt('Copy drive link', text + ' ' + url); }
+    });
+    // A picture of the drive to share (drive_card.js, IDEAS D-09): the road's outline, score and corner mix, no times or speeds.
+    $('dvCard').addEventListener('click', async () => {
+      const d = drives.find(x => x.id === $('dvPick').value);
+      if (!d) return;
+      const css = getComputedStyle(document.documentElement);
+      const cv = ApexDriveCard.drawCard(document.createElement('canvas'), ApexDriveCard.cardModel(d),
+        { ...C, fontNum: css.getPropertyValue('--font-num').trim(), fontUi: css.getPropertyValue('--font-ui').trim() });
+      const out = await ApexDriveCard.shareCard(cv, `${(d.name || 'drive').replace(/[^A-Za-z0-9 _-]+/g, '').trim() || 'drive'}.png`);
+      const b = $('dvCard');
+      if (out === 'saved') { b.textContent = 'Card saved'; setTimeout(() => { b.textContent = 'Share card'; }, 2000); }
     });
     // Compare with…: this drive against the best other drive on the same road (Core.compareDrives decides what shares a road).
     function bestOther(d) {

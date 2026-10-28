@@ -119,7 +119,7 @@ ideal drive and where to find time (#80), grip circle (#86), automatic mount cal
 | D-06 | Smoothness heatmap on the drive map (lateral jerk, abrupt inputs) with the three worst moments | M | S | done (#104) | Garmin Catalyst |
 | D-07 | Consistency score across passes of the same road, and a trend over weeks | M | S | done (#114 per-corner repeatability; monthly braking-consistency trend) | Strava fitness trend |
 | D-08 | Personal records feed: best Driver Score per road, per archetype, smoothest drive this month | M | S | partial (best Score per road by name, smoothest and best braking this month, this thread; per archetype todo) | Strava PRs |
-| D-09 | Drive summary card worth sharing (score, map silhouette, archetype mix), no times or speeds | H | S | todo | Strava activity card, Relive |
+| D-09 | Drive summary card worth sharing (score, map silhouette, archetype mix), no times or speeds | H | S | done (this PR: Log → Share card, a 1080×1350 picture: outline without the first and last 800 m, score, smoothness/braking/consistency, corner mix; no times, speeds or pace) | Strava activity card, Relive |
 | D-10 | 3D flyover replay of a drive with the corner notes and g trace (export as a video) | H | L | todo | Relive |
 | D-11 | Dashcam overlay: sync a phone/GoPro video with the drive and render g, notes and score over it | M | L | todo | RaceRender, Track Addict |
 | D-12 | OBD-II over Bluetooth LE: throttle, brake, RPM, gear for true inputs instead of inferred ones | H | L | todo | Track Addict, RaceChrono |
