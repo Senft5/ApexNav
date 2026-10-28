@@ -1,5 +1,10 @@
 # APEX NAV — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-10-28: avoid towns
+- #129 merged (Explore). #136: a Towns chip under Avoid; candidates are ranked on km near cities, towns and villages from the map tiles (3 points a km, max 30) and the card says "Through towns ~N mi" (docs/ROUTING.md, Avoid). Not checked on a phone.
+- Seen while checking: west Knoxville → Townsend on Fun found no stage plans (router routes only); worth a look.
+- Exact next task: R-11 stage direction by climb/descent, or that Knoxville → Townsend case.
+
 ## Session 2026-10-28: production crash and error review
 - Cloudflare connector checked: it reaches D1 SQL and the deployed Worker code, not Workers Logs, analytics or latency (table in docs/BACKUPS.md 6a). So no crash report or server error from production could be read; there was nothing else to review.
 - Production D1 looked healthy: 3 users, 909 road bins, no expired sessions or stale sign-in codes left, empty ingest queue.
