@@ -3,7 +3,7 @@ import { Env, HttpError, body, int, num, str } from "./util";
 import type { Viewer } from "./auth";
 
 const CATEGORIES = new Set(["overlook", "bridge", "cafe", "trailhead", "landmark", "water", "photo", "other"]);
-const PER_DAY = 10, PER_USER = 200, HIDE_AFTER_REPORTS = 3, DUPLICATE_M = 40;
+const PER_DAY = 10, PER_USER = 200, DUPLICATE_M = 40;
 const first = <T>(env: Env, sql: string, ...a: unknown[]) => env.DB.prepare(sql).bind(...a).first<T>();
 const all = async <T>(env: Env, sql: string, ...a: unknown[]) => (await env.DB.prepare(sql).bind(...a).all<T>()).results;
 
@@ -58,20 +58,6 @@ export async function highlightRate(env: Env, v: Viewer, id: string, req: Reques
     `INSERT INTO highlight_ratings (highlight_id, user_id, stars, visited) VALUES (?1, ?2, ?3, ?4)
      ON CONFLICT (highlight_id, user_id) DO UPDATE SET stars = ?3, visited = ?4`,
   ).bind(id, v.id, stars, b.visited === true ? 1 : 0).run();
-}
-
-export async function highlightReport(env: Env, v: Viewer, id: string, req: Request): Promise<void> {
-  const b = await body<{ note?: string }>(req);
-  if (!(await first(env, "SELECT 1 FROM highlights WHERE id = ?", id))) throw new HttpError(404, "no_highlight");
-  const done = await first(env, "SELECT 1 FROM reports WHERE reporter = ? AND kind = 'highlight' AND target_id = ?", v.id, id);
-  if (!done) {
-    await env.DB.prepare("INSERT INTO reports (id, reporter, kind, target_id, note) VALUES (?, ?, 'highlight', ?, ?)")
-      .bind(crypto.randomUUID(), v.id, id, b.note ? String(b.note).slice(0, 280) : null).run();
-  }
-  await env.DB.prepare(
-    `UPDATE highlights SET status = 'hidden' WHERE id = ?1
-        AND (SELECT COUNT(DISTINCT reporter) FROM reports WHERE kind = 'highlight' AND target_id = ?1) >= ?2`,
-  ).bind(id, HIDE_AFTER_REPORTS).run();
 }
 
 export async function highlightDelete(env: Env, v: Viewer, id: string): Promise<void> {
