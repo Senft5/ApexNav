@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-NVbpq/62vmQeun3KdKB4hybcvW7bAkCrIt3Njms0iRQ=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-8+KSVvMh17JOg6U2MDKOXCkamnSlgwzZHauoddXo69k=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>ApexNav</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -15,6 +15,7 @@
   <link rel="stylesheet" href="vendor/maplibre-gl.css" />
   <script src="errors.js"></script>   <!-- first, so it sees errors in everything after it -->
   <script src="vendor/maplibre-gl.js"></script>
+  <script src="offline_tiles.js"></script>
   <script src="vendor/maplibre-contour.min.js"></script>
   <script src="apex_core.js"></script>
   <script src="analysis_client.js"></script>
@@ -613,11 +614,13 @@
             <h3>Your data</h3>
             <p class="note" id="myDataNote" role="status">--</p>
             <p class="note" id="myOfflineNote">--</p>
+            <div class="stack-8" id="myAreas"></div>
             <div class="row" style="flex-wrap:wrap">
               <button class="ink-btn" id="myGpxBtn">Download drives (GPX)</button>
               <button class="ink-btn" id="myAccountBtn">Download account data</button>
             </div>
             <div class="row mt-8" style="flex-wrap:wrap">
+              <button class="ink-btn" id="myAreaBtn">Save the map here for offline</button>
               <button class="linkbtn" id="myOfflineDelBtn">Delete offline data</button>
               <button class="linkbtn" id="myDrivesDelBtn">Delete drives on this phone</button>
               <button class="linkbtn" id="myEraseBtn">Erase everything on this phone</button>
@@ -1022,8 +1025,12 @@
     // Start where the phone last was (saved below), not at a fixed demo road; the first fix moves the map anyway.
     const LAST_POS = 'apex.lastPos';
     const startPos = (() => { try { const p = JSON.parse(localStorage.getItem(LAST_POS) || 'null'); return p && Number.isFinite(p.lat) && Number.isFinite(p.lon) ? p : null; } catch (_) { return null; } })();
-    const map = new maplibregl.Map({ container: 'map', style: 'https://tiles.openfreemap.org/styles/liberty',
-      center: startPos ? [startPos.lon, startPos.lat] : [-84.70, 39.24], zoom: 14.6, pitch: 45, maxPitch: 60, attributionControl: { compact: true }, fadeDuration: 0 });
+    const MAP_STYLE = 'https://tiles.openfreemap.org/styles/liberty';
+    // Offline areas (offline_tiles.js, IDEAS F-02): map requests go through a protocol that serves a saved copy first
+    try { if (window.ApexOfflineTiles) ApexOfflineTiles.install(maplibregl); } catch (_) {}
+    const map = new maplibregl.Map({ container: 'map', style: MAP_STYLE,
+      center: startPos ? [startPos.lon, startPos.lat] : [-84.70, 39.24], zoom: 14.6, pitch: 45, maxPitch: 60, attributionControl: { compact: true }, fadeDuration: 0,
+      transformRequest: window.ApexOfflineTiles ? ApexOfflineTiles.transform : undefined });
     window.apexDebug = { map, get track() { return track; }, state, drives, buildRoute: (...a) => buildRoute(...a), renderRouteCard: (...a) => renderRouteCard(...a), openRoadPage: (...a) => openRoadPage(...a) };
     let mapReady = false;
     // The map's box changes with the layout (idle hides the gauges, a drive shows them); keep the canvas the size of its box.
@@ -4273,6 +4280,7 @@
       let est = {};
       try { est = (navigator.storage && navigator.storage.estimate) ? await navigator.storage.estimate() : {}; } catch (_) {}
       const o = ApexMyData.offlineSummary(localStorage, await voiceCacheBytes(), est.usage, est.quota);
+      renderAreas();
       const note = $('myOfflineNote'); if (note) note.textContent = ApexMyData.offlineText(o);
     }
     // a download on the web, the share sheet in the iOS app (save_file.js): a download link does nothing in the app's web view
@@ -4289,9 +4297,34 @@
       if (!r.ok) { toast('Couldn\'t get your data. Try again.'); return; }
       saveFile(JSON.stringify(await r.json(), null, 2), 'apexnav-account.json', 'application/json');
     });
+    // Save the map here (offline_tiles.js, IDEAS F-02): the map, labels and terrain round the map's centre (25 km, less
+    // when that would be over 2,500 tiles), so the map, loops, Explore and climbs work there with no signal.
+    let areaBusy = false;
+    $('myAreaBtn').addEventListener('click', async () => {
+      if (areaBusy || !window.ApexOfflineTiles || !mapReady) return;
+      const c = map.getCenter();
+      areaBusy = true; $('myAreaBtn').disabled = true;
+      try {
+        const a = await ApexOfflineTiles.download({ lat: c.lat, lon: c.lng, radiusKm: 25, styleUrl: MAP_STYLE, name: `Around ${c.lat.toFixed(2)}, ${c.lng.toFixed(2)}`,
+          onProgress: (d, n) => { if (d % 25 === 0 || d === n) $('myAreaBtn').textContent = `Saving the map… ${Math.round(100 * d / n)}%`; } });
+        toast(`Saved ${ApexUnits.long(a.radiusKm * 1000, 0)} round here for offline · ${(a.bytes / 1048576).toFixed(0)} MB`);
+      } catch (_) { toast('Couldn\'t save the map. Check signal and try again.'); }
+      finally { areaBusy = false; $('myAreaBtn').disabled = false; $('myAreaBtn').textContent = 'Save the map here for offline'; renderMyData(); }
+    });
+    function renderAreas() {
+      const box = $('myAreas'); if (!box || !window.ApexOfflineTiles) return;
+      box.replaceChildren(...ApexOfflineTiles.areas().map((a) => {
+        const row = document.createElement('div'); row.className = 'row'; row.style.justifyContent = 'space-between';
+        const t = document.createElement('span'); t.className = 'note'; t.textContent = `${a.name} · ${ApexUnits.long(a.radiusKm * 1000, 0)} round · ${(a.bytes / 1048576).toFixed(0)} MB`;
+        const del = document.createElement('button'); del.className = 'linkbtn'; del.textContent = 'Delete';
+        del.addEventListener('click', async () => { await ApexOfflineTiles.removeArea(a.id); renderMyData(); });
+        row.append(t, del); return row;
+      }));
+    }
     $('myOfflineDelBtn').addEventListener('click', async () => {
-      if (!confirm('Delete routes saved for offline and downloaded voices? Your drives, spots and settings stay.')) return;
+      if (!confirm('Delete routes and map areas saved for offline, and downloaded voices? Your drives, spots and settings stay.')) return;
       try { localStorage.removeItem(ApexSavedRoutes.KEY); } catch (_) {}
+      try { if (window.ApexOfflineTiles) await ApexOfflineTiles.clear(); } catch (_) {}
       try { if (window.caches) { await caches.delete('kokoro-voices'); for (const k of await caches.keys()) if (k.startsWith('apexnav-shell-')) await caches.delete(k); } } catch (_) {}
       toast('Offline data deleted.'); renderMyData();
     });
