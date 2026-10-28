@@ -3129,7 +3129,7 @@
     }
     async function leaveDrive(save) {
       driveActive = false;
-      const rec = drive.rec, sensors = drive.sensors, live = drive.live, road = rec ? ApexRoadNames.mainRoad(drive.roads, rec.km * 1000) : null;
+      const rec = drive.rec, sensors = drive.sensors, live = drive.live, road = rec && window.ApexRoadNames ? ApexRoadNames.mainRoad(drive.roads, rec.km * 1000) : null;
       drive.sensors = null; drive.rec = null; drive.live = null; drive.share = 'off'; drive.native = false;
       if (sensors) sensors.stop();
       state.live = null;
