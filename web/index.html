@@ -1547,12 +1547,20 @@
       return [json.trip, ...(json.alternates || []).map(a => a.trip).filter(Boolean)].map(routeOf);
     }
     const valhallaRoute = async (points, throughRoadsOnly = false) => (await valhallaRoutes(points, throughRoadsOnly))[0].coords;
-    // Drive time in seconds from every source to every target (null: no road). The public server takes at most 100 pairs.
+    // Drive time (s) and road distance (km) from every source to every target (null: no road). The public server takes at
+    // most 100 pairs a call, so bigger matrices go in several calls of whole source rows.
     async function valhallaMatrix(sources, targets) {
-      const json = await RouteLoading.json(`${VALHALLA}/sources_to_targets`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sources: sources.map(p => ({ lat: p.lat, lon: p.lon })), targets: targets.map(p => ({ lat: p.lat, lon: p.lon })), ...COSTING }) });
-      if (!Array.isArray(json.sources_to_targets)) throw new Error(json.error || 'no matrix');
-      return json.sources_to_targets.map(row => row.map(c => (c && Number.isFinite(c.time) ? c.time : null)));
+      const rows = Math.max(1, Math.floor(100 / targets.length)), calls = [];
+      for (let i = 0; i < sources.length; i += rows) calls.push(sources.slice(i, i + rows));
+      const parts = await Promise.all(calls.map(async (src) => {
+        const json = await RouteLoading.json(`${VALHALLA}/sources_to_targets`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sources: src.map(p => ({ lat: p.lat, lon: p.lon })), targets: targets.map(p => ({ lat: p.lat, lon: p.lon })), ...COSTING }) });
+        if (!Array.isArray(json.sources_to_targets)) throw new Error(json.error || 'no matrix');
+        return json.sources_to_targets;
+      }));
+      const all = parts.flat();
+      return { times: all.map(row => row.map(c => (c && Number.isFinite(c.time) ? c.time : null))),
+               km: all.map(row => row.map(c => (c && Number.isFinite(c.distance) ? c.distance : null))) };
     }
     async function osrmRoutes(points) {
       const coords = points.map(p => `${p.lon.toFixed(6)},${p.lat.toFixed(6)}`).join(';');
@@ -1834,7 +1842,7 @@
           const list = FunRoute.shortlist(from, to, stages, FunRoute.LEVELS[level].budget);
           if (list.length) {
             const mp = FunRoute.matrixPoints(from, to, list);
-            const plans = FunRoute.plansFromMatrix(list, await valhallaMatrix(mp.sources, mp.targets), quickS, level, 2);
+            const plans = FunRoute.plansFromMatrix(list, (await valhallaMatrix(mp.sources, mp.targets)).times, quickS, level, 2);
             ui.step('Routing fun roads…', 0.85);
             const routed = await Promise.allSettled(plans.map(async (plan) => {
               const pts = FunRoute.waypoints(from, to, plan);
@@ -1936,7 +1944,16 @@
         const hls = state.hlOn ? await allHighlights(c) : [];
         const stages = await ApexStages.discover(c, radiusKm, (phase, f) => ui.step(phase === 'tiles' ? 'Finding roads' : 'Scoring roads', 0.05 + 0.3 * f),
           state.hlOn ? { highlights: hls, strength: state.hlStrength } : {});
-        plans = ApexStages.plans(c, stages, targetKm, 3);
+        // Real road distances between the best stages (one or two matrix calls); the crow-fly plans are the fallback.
+        try {
+          const list = FunRoute.loopShortlist(c, stages, targetKm);
+          if (list.length) {
+            ui.step('Measuring roads', 0.36);
+            const mp = FunRoute.matrixPoints(c, c, list);
+            plans = FunRoute.loopPlansFromMatrix(list, (await valhallaMatrix(mp.sources, mp.targets)).km, targetKm, 3);
+          }
+        } catch (_) { plans = []; }
+        if (!plans.length) plans = ApexStages.plans(c, stages, targetKm, 3);
       } catch (_) { /* no tiles: fall back to circle loops below */ }
       // 2. Route each stage plan, plus one circle loop as a baseline, and keep the best result.
       const jobs = plans.map(p => ({ kind: 'stages', plan: p, pts: ApexStages.waypoints(c, p), through: false }));

@@ -1,5 +1,10 @@
 # APEX NAV — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-10-28: loops the length you asked for
+- #82 merged (fun A→B routing, see the entry below and docs/ROUTING.md).
+- Loops: stage plans were sized with crow-fly connectors x 1.6, so in hills they routed 40–75 % long (Knoxville 45 mi request → 99–102 km, ~3.5 h). Now the best 6 reachable stages get one road-distance matrix (`valhallaMatrix` splits it into calls of ≤100 pairs and returns times and km) and `ApexFunRoute.loopPlansFromMatrix` chains 1–3 within 25 % of the target; crow-fly plans stay as the fallback. In Chromium against the public servers, loops land within ~15 % (docs/ROUTING.md, Loops). Not driven on a phone.
+- Exact next task: measured road character (surface, camber, crest, passes) as a real routing input for destination routes and loops (WORKER_QUEUE road-3); long A→B trips only get stages around their midpoint (multi-centre search would cover the ends).
+
 ## Session 2026-10-28: fun routing from A to B (thread "Make fun-driving routing best in class")
 - Audit: destination routes had no fun optimisation at all (one Valhalla call with highways de-prioritised); the route card's Twist/Flow/Surface were always `--` for planned routes (no sectors); every 45 mi loop (and some 30 mi ones) silently fell back to a circle because stage discovery threw "area too large" above 64 tiles (a 14 km radius is 81 tiles at 39°N).
 - New web/fun_route.js + `funRoute` in web/index.html (docs/ROUTING.md): Quick / Fun / Max fun level on the Plan sheet and route card; candidates = Valhalla route + 2 alternates + 1–2 corridor stage detours timed with one `sources_to_targets` call; map-only fun score (Twist, Flow, Dull; junction maneuvers removed); ranked by fun + corners gained − time cost within the level's budget; stage points kept as shaping vias so reroutes still drive them. Route card shows Fun/Twist/Flow and "N min (+M for fun)". Stage search now shrinks to 64 tiles instead of failing.
