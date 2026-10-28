@@ -7,7 +7,8 @@
 - This PR: R-12 set list, R-20 car-aware routing (migration 0024 cars.clearance/width_cm applied to both D1).
 - #210 also: Z-11 Content-Security-Policy on every page (tools/csp.py; rerun it after editing an inline script, CLAUDE.md says so).
 - Merged #215 also: Q-04 crowd curvature (migration 0027 applied), Q-03 asked of the owner, R-35 speed traps and S-07 comments dropped with reasons.
-- This PR: S-10 Octane accents (migration 0028 applied), V-06 parked, R-36 asked of the owner.
+- This PR: Y-06 feature flags (/api/flags, web/flags.js, FLAGS variable; kill switches for track mode, taste, crowd curvature).
+- Merged #220: S-10 Octane accents (migration 0028 applied), V-06 parked, R-36 asked of the owner.
 - Merged #219 also: D-15 track day mode (raceway-only lap timing, web/track_mode.js).
 - Merged #219: Q-05 adaptive sectors + route character line.
 - Merged #218: R-33 per-user taste from road votes (web/taste.js; ±8 fun points, 5+ answers).

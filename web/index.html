@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-f11x3tZV31Kw9wMBtEGRlxGYm1cWyC23U+GMs9SzUQo=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-nflOQYZ1sErVuS/A+7c0qtIBlChnm+NR6HYPurgyR5w=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>ApexNav</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -23,6 +23,7 @@
   <script src="road_page.js"></script>
   <script src="taste.js"></script>
   <script src="track_mode.js"></script>
+  <script src="flags.js"></script>
   <script src="route_loading.js"></script>
   <script src="stages.js"></script>
   <script src="fun_route.js"></script>
@@ -819,6 +820,7 @@
      */
     function applyCrowdCurvature(t, m) {
       if (!t || t.kind !== 'route' || !m || !Array.isArray(m.crowdK) || !Array.isArray(t.kappa) || t.crowdCorrected != null) return false;
+      if (window.ApexFlags && !ApexFlags.on('crowd_curvature')) return false;            // switched off on the server (flags.js, IDEAS Y-06)
       const { kappa, replaced } = Core.blendCurvature(t.kappa, m.crowdK, m.crowdKn || []);
       t.crowdCorrected = replaced * 5;
       if (!replaced) return false;
@@ -3805,6 +3807,8 @@
       if (current && shop && !owned.has(`accent_${current}`)) use(null);   // an accent you don't own (a shared phone): back to the road book
     }
     renderLook();
+    // feature flags (flags.js, IDEAS Y-06): fetched once a start, used from then on
+    if (window.ApexFlags && window.ApexSync) ApexFlags.load((p) => ApexSync.apiFetch(p)).catch(() => {});
     // Send feedback (web/feedback.js, IDEAS L-05): Settings → Feedback; the owner reads it in Crew.
     let accountMe = null, feedbackUi = null;
     try {
@@ -4698,7 +4702,7 @@
     // Your taste (taste.js, IDEAS R-33): with five or more "which road was better?" answers, each candidate's TECH, FLOW and
     // known smoothness from the reference lap, and a few fun points toward what you pick. No answers: nothing changes.
     function tasteOn(pool) {
-      const t = window.ApexTaste ? ApexTaste.fit(ApexTaste.load(localStorage)) : null;
+      const t = window.ApexTaste && !(window.ApexFlags && !ApexFlags.on('taste_ranking')) ? ApexTaste.fit(ApexTaste.load(localStorage)) : null;
       if (!t) return;
       const top = FunRoute.rank(pool, funLevel).slice(0, 4).map(r => pool.find(c => c.t === r.t)).filter(Boolean);   // the contenders only
       for (const c of top) { try { c.tasteBonus = ApexTaste.bonus(t, ApexTaste.featuresOf(Core, c.t, { quick: true })); } catch (_) { c.tasteBonus = 0; } }
@@ -4962,7 +4966,7 @@
     const circuit = { checkedAt: 0, on: false, busy: false, timer: null, prev: null };
     function resetCircuit() { Object.assign(circuit, { checkedAt: 0, on: false, busy: false, timer: null, prev: null }); $('lapBar').hidden = true; $('lapSetBtn').hidden = true; }
     function feedTrack(fr) {
-      if (!window.ApexTrackMode || !fr || !Number.isFinite(fr.lat)) return;
+      if (!window.ApexTrackMode || !fr || !Number.isFinite(fr.lat) || (window.ApexFlags && !ApexFlags.on('track_mode'))) return;
       const now = Number.isFinite(fr.t) ? fr.t : Date.now();          // a frame's own time when it has one
       if (!circuit.on && !circuit.busy && now - circuit.checkedAt > 30000 && fr.speed_mps > 3 && window.ApexStages && ApexStages.transportationAt) {
         circuit.busy = true; circuit.checkedAt = now;

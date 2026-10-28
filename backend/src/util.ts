@@ -11,6 +11,7 @@ export interface Env {
   WRITE_LIMIT?: RateLimit;  // wrangler.jsonc ratelimits: writes per session (or per IP when signed out)
   AUTH_LIMIT?: RateLimit;   // sign-in endpoints per IP
   BACKUPS?: KVNamespace;
+  FLAGS?: string;           // feature flags JSON (src/flags.ts), set in the dashboard to change a rollout without a release
   REVIEW_INVITE_HASH?: string;   // tests only: production uses the constant in auth.ts    // weekly database dumps (src/backup.ts); production only
 }
 
