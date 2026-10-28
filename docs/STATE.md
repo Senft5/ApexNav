@@ -1,7 +1,7 @@
 # APEX NAV — CURRENT AGENT HANDOFF STATE
 
 ## Session 2026-10-28: sun glare in routing
-- #122 merged (loops by drive time). #PR: `ApexSun.sunPosition` (altitude/azimuth, tested against Cincinnati solstice values) and `FunRoute.glare`: minutes heading within 20° of a sun 0–15° up cost 1 fun point each (max 20) in A→B ranking and loops; the route card warns "Low sun ahead for ~N min" (docs/ROUTING.md, Sun glare). Not checked on a phone.
+- #122 merged (loops by drive time). #123: `ApexSun.sunPosition` (altitude/azimuth, tested against Cincinnati solstice values) and `FunRoute.glare`: minutes heading within 20° of a sun 0–15° up cost 1 fun point each (max 20) in A→B ranking and loops; the route card warns "Low sun ahead for ~N min" (docs/ROUTING.md, Sun glare). Not checked on a phone.
 - Exact next task: R-30 route options side by side, or R-10 Explore.
 
 ## Session 2026-10-28: loops by drive time
