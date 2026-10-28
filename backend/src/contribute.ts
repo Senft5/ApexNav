@@ -86,22 +86,48 @@ export async function setContribute(env: Env, v: Viewer, req: Request): Promise<
   await env.DB.prepare("UPDATE members SET contribute = ? WHERE user_id = ?").bind(on ? 1 : 0, v.id).run();
 }
 
-/** Merges one bin into road_bins in a single atomic statement (Welford running mean / variance, computed from the old row). */
-function mergeBin(env: Env, wayId: number, dir: number, b: Bin): D1PreparedStatement {
+/**
+ * Freshness (IDEAS Q-12). MEMORY: once a bin has this many passes each new one keeps a 1/(MEMORY+1) share, so a road that
+ * changes slowly (wear, a patch) shows it instead of being outvoted by years of old passes; under MEMORY it's the plain mean.
+ * A step change: a pass reading under half an established bin's roughness (3+ passes) and more than 0.05 g below it is
+ * "much smoother"; two in a row and the road was repaved, so the bin starts again from the second. (No spread test: the
+ * first smooth pass itself widens the spread it would be judged against.)
+ */
+export const FRESH = { memory: 20, repaveRatio: 0.5, repaveG: 0.05, repavePasses: 2 };
+
+/** Running mean and Welford sum of squares for value x over count k, with the MEMORY cap (SQL; old values on the right). */
+function meanSql(mean: string, m2: string, k: string, x: string) {
+  const K = `MIN(${k}, ${FRESH.memory})`, a = `1.0 / (${FRESH.memory} + 1)`;
+  return {
+    mean: `${mean} + (${x} - ${mean}) / (${K} + 1)`,
+    // exact Welford under MEMORY; past it an exponentially weighted variance, stored so that m2 / (k - 1) is still the variance
+    m2: `CASE WHEN ${k} < ${FRESH.memory} THEN COALESCE(${m2}, 0) + (${x} - ${mean}) * (${x} - (${mean} + (${x} - ${mean}) / (${K} + 1)))
+              ELSE ${k} * (1 - ${a}) * (COALESCE(${m2}, 0) / (${k} - 1) + ${a} * (${x} - ${mean}) * (${x} - ${mean})) END`,
+  };
+}
+
+/** Merges one bin into road_bins in a single atomic statement (computed from the old row). */
+function mergeBin(env: Env, wayId: number, dir: number, b: Bin, day: string): D1PreparedStatement {
+  const smoother = `(n >= 3 AND rough_mean IS NOT NULL AND ?5 < rough_mean * ${FRESH.repaveRatio} AND rough_mean - ?5 > ${FRESH.repaveG})`;
+  const reset = `(${smoother} AND smooth_run + 1 >= ${FRESH.repavePasses})`;
+  const cam = meanSql("camber_mean", "camber_m2", "camber_n", "?4"), rough = meanSql("rough_mean", "rough_m2", "n", "?5");
   return env.DB.prepare(
-    `INSERT INTO road_bins (way_id, dir, bin_idx, n, camber_mean, camber_m2, camber_n, rough_mean, rough_m2, crest_peak, crest_n)
-     VALUES (?1, ?2, ?3, 1, ?4, CASE WHEN ?4 IS NULL THEN NULL ELSE 0 END, CASE WHEN ?4 IS NULL THEN 0 ELSE 1 END, ?5, 0, ?6, CASE WHEN ?6 IS NULL THEN 0 ELSE 1 END)
+    `INSERT INTO road_bins (way_id, dir, bin_idx, n, camber_mean, camber_m2, camber_n, rough_mean, rough_m2, crest_peak, crest_n, last_on, smooth_run)
+     VALUES (?1, ?2, ?3, 1, ?4, CASE WHEN ?4 IS NULL THEN NULL ELSE 0 END, CASE WHEN ?4 IS NULL THEN 0 ELSE 1 END, ?5, 0, ?6, CASE WHEN ?6 IS NULL THEN 0 ELSE 1 END, ?7, 0)
      ON CONFLICT (way_id, dir, bin_idx) DO UPDATE SET
-       camber_mean = CASE WHEN ?4 IS NULL THEN camber_mean WHEN camber_n = 0 OR camber_mean IS NULL THEN ?4 ELSE camber_mean + (?4 - camber_mean) / (camber_n + 1) END,
-       camber_m2   = CASE WHEN ?4 IS NULL THEN camber_m2 WHEN camber_n = 0 OR camber_mean IS NULL THEN 0
-                          ELSE camber_m2 + (?4 - camber_mean) * (?4 - (camber_mean + (?4 - camber_mean) / (camber_n + 1))) END,
-       camber_n    = camber_n + (?4 IS NOT NULL),
-       rough_mean  = rough_mean + (?5 - rough_mean) / (n + 1),
-       rough_m2    = COALESCE(rough_m2, 0) + (?5 - rough_mean) * (?5 - (rough_mean + (?5 - rough_mean) / (n + 1))),
-       crest_peak  = CASE WHEN ?6 IS NULL THEN crest_peak WHEN crest_n = 0 OR crest_peak IS NULL THEN ?6 ELSE crest_peak + (?6 - crest_peak) / (crest_n + 1) END,
-       crest_n     = crest_n + (?6 IS NOT NULL),
-       n           = n + 1`,
-  ).bind(wayId, dir, b.i, b.cam, b.rough, b.crest);
+       camber_mean = CASE WHEN ${reset} THEN ?4 WHEN ?4 IS NULL THEN camber_mean WHEN camber_n = 0 OR camber_mean IS NULL THEN ?4 ELSE ${cam.mean} END,
+       camber_m2   = CASE WHEN ${reset} THEN CASE WHEN ?4 IS NULL THEN NULL ELSE 0 END WHEN ?4 IS NULL THEN camber_m2 WHEN camber_n = 0 OR camber_mean IS NULL THEN 0 ELSE ${cam.m2} END,
+       camber_n    = CASE WHEN ${reset} THEN (?4 IS NOT NULL) ELSE camber_n + (?4 IS NOT NULL) END,
+       rough_mean  = CASE WHEN ${reset} THEN ?5 ELSE ${rough.mean} END,
+       rough_m2    = CASE WHEN ${reset} THEN 0 ELSE ${rough.m2} END,
+       crest_peak  = CASE WHEN ${reset} THEN ?6 WHEN ?6 IS NULL THEN crest_peak WHEN crest_n = 0 OR crest_peak IS NULL THEN ?6
+                          ELSE crest_peak + (?6 - crest_peak) / (MIN(crest_n, ${FRESH.memory}) + 1) END,
+       crest_n     = CASE WHEN ${reset} THEN (?6 IS NOT NULL) ELSE crest_n + (?6 IS NOT NULL) END,
+       changed_on  = CASE WHEN ${reset} THEN ?7 ELSE changed_on END,
+       smooth_run  = CASE WHEN ${reset} THEN 0 WHEN ${smoother} THEN smooth_run + 1 ELSE 0 END,
+       last_on     = MAX(COALESCE(last_on, ''), ?7),
+       n           = CASE WHEN ${reset} THEN 1 ELSE n + 1 END`,
+  ).bind(wayId, dir, b.i, b.cam, b.rough, b.crest, day);
 }
 
 /**
@@ -172,7 +198,7 @@ export async function contribute(env: Env, v: Viewer, req: Request): Promise<{ a
   const mult = await multiplierFor(env, v.id, c);
   const stmts: D1PreparedStatement[] = [
     env.DB.prepare("INSERT INTO seen (h) VALUES (?)").bind(chunk.buffer),                                  // fails (409 below) if a parallel copy won the race
-    ...c.bins.map((b) => mergeBin(env, c.wayId, c.dir, b)),
+    ...c.bins.map((b) => mergeBin(env, c.wayId, c.dir, b, c.drivenOn)),
     env.DB.prepare("INSERT INTO upload_counts (user_id, bucket, uploads, km) VALUES (?1, ?2, 1, ?3) ON CONFLICT (user_id, bucket) DO UPDATE SET uploads = uploads + 1, km = km + ?3").bind(v.id, hourKey, c.km),
     env.DB.prepare("DELETE FROM upload_counts WHERE bucket < ?").bind(new Date(now.getTime() - 8 * 86400_000).toISOString().slice(0, 13)),
   ];

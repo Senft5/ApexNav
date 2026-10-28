@@ -59,6 +59,9 @@ out.adjust = [C.measuredAdjust(null), C.measuredAdjust({ roughness: null, covera
   // passes disagree on roughness for the first 100 bins and on camber for the banked 40: those don't steer a route
   const disputedRoads = { 77: { 0: { ...roads[77][0], rsd: Array.from({ length: 200 }, (_, j) => (j < 100 ? 0.2 : 0.01)), cn: Array(200).fill(3), csd: Array.from({ length: 200 }, (_, j) => (j < 40 ? 4 : 0.5)) } } };
   out.disputed = C.summarize(C.locate({ drive: rt, match: rm, ways: { 77: way } }), disputedRoads, 1000);
+  // repaved (IDEAS Q-12): 50 bins restarted in 2026-09, 10 more in 2026-10; the summary says how much and the newest month
+  const repavedRoads = { 77: { 0: { ...roads[77][0], ch: Array.from({ length: 200 }, (_, j) => (j < 50 ? '2026-09' : j < 60 ? '2026-10' : null)) } } };
+  out.repaved = C.summarize(C.locate({ drive: rt, match: rm, ways: { 77: way } }), repavedRoads, 1000);
   out.unknownRoad = C.summarize(C.locate({ drive: rt, match: rm, ways: { 77: way } }), {}, 1000);
   out.reverseRoute = C.summarize(C.locate({ drive: drive(1000, true), match: rm, ways: { 77: way } }), roads, 1000);
   const fk = async (url, init) => url.includes('trace_attributes')
@@ -416,3 +419,9 @@ def test_ambient_cuts_trips_so_each_keeps_its_ends_private(ambient):
 
 def test_ambient_pauses_after_a_refusal(ambient):
     assert ambient["refused"] == {"trips": 1, "paused": True}
+
+
+def test_repaved_stretches_are_counted(result):
+    r, m = result["repaved"], result["measured"]
+    assert r["repavedKm"] == pytest.approx(0.3) and r["repavedOn"] == "2026-10"
+    assert m["repavedKm"] == 0 and m["repavedOn"] is None, "an older server without ch says nothing"

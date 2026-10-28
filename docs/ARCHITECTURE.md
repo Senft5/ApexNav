@@ -28,6 +28,9 @@ Camber and crest are recorded and shared only while `locked`. The phone's crest 
   returns their sample SD (`csd`, `rsd`, null under two measuring passes) and the camber pass count `cn`. The phone calls a
   5 m value `one` (single pass), `agree` (>= 2 passes within 1.5° camber / 0.05 g roughness) or `differ`
   (`ApexContributor.agreement`); without a spread (older server) agreement is unknown, never assumed.
+- **Freshness (write side, IDEAS Q-12)**: past 20 passes a bin's means and variances are exponentially weighted (each new pass
+  1/21), so wear shows; two passes in a row under half an established bin's roughness restart it (repaved), keeping the day
+  (`changed_on`), sent to phones as a month (`ch`).
 - **Coverage (read side)**: each contribution may carry its way's OSM line (public map data, at most 64 points; the server
   drops one shorter than the bins imply); the first good one is kept in `road_ways` with its box. `GET /api/coverage?bbox=`
   (at most 0.5° a side, members) returns measured ways with passes per direction, under the same two-driver rule.

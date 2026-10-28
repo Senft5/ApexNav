@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-4/O6WN7v5XLQQpqGi+L017BHddc8jY8lPBb8K2Ex7Mk=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' blob:; child-src 'self' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' data: blob:; connect-src 'self' data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-jUNhPvPcRUsVK+JCy/x8QX3xHJlvzXcfae/Cz586leQ=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' blob:; child-src 'self' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' data: blob:; connect-src 'self' data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>ApexNav</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -2033,11 +2033,13 @@
       note.hidden = false;
       note.textContent = m.coveredKm < 0.05
         ? 'No member measurements on this route yet. Drive it with Share road feel on to be the first (3× points).'
-        : `Measured by members: ${m.coveredKm.toFixed(1)} of ${m.km.toFixed(1)} km (${Math.round(m.coverage * 100)}%)` +
-          (m.roughness != null ? ` · roughness ${m.roughness.toFixed(2)}` : '') + (m.bankedKm >= 0.05 ? ` · ${m.bankedKm.toFixed(1)} km banked` : '') +
-          (m.roughKm >= 0.05 ? ` · ${m.roughKm.toFixed(1)} km rough` : '') +
+        : `Measured by members: ${ApexUnits.long(m.coveredKm * 1000, 1)} of ${ApexUnits.long(m.km * 1000, 1)} (${Math.round(m.coverage * 100)}%)` +
+          (m.roughness != null ? ` · roughness ${m.roughness.toFixed(2)}` : '') + (m.bankedKm >= 0.05 ? ` · ${ApexUnits.long(m.bankedKm * 1000, 1)} banked` : '') +
+          (m.roughKm >= 0.05 ? ` · ${ApexUnits.long(m.roughKm * 1000, 1)} rough` : '') +
+          (m.repavedKm >= 0.05 && m.repavedOn ? ` · ${ApexUnits.long(m.repavedKm * 1000, 1)} repaved ${repavedMonth(m.repavedOn)}` : '') +
           (m.avgPasses != null ? ` · ${m.avgPasses.toFixed(1)} runs on average` : '');
     }
+    const repavedMonth = (ym) => { const d = new Date(ym + '-15T12:00:00Z'); return Number.isFinite(d.getTime()) ? d.toLocaleDateString([], { month: 'short', year: 'numeric' }) : ym; };
     // Plate-reading cameras in a box [s, w, n, e] from the camera map (OSM / DeFlock via Overpass), kept a week; null offline.
     async function alprNodesIn(s, w, n, e) {
       const bbox = [s, w, n, e].map(v => v.toFixed(4)).join(',');
