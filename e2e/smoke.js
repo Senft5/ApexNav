@@ -1137,6 +1137,44 @@ flow('recce: keep a drive\'s notes, change a call, and the cockpit reads yours o
   await page.waitForFunction(() => /Left 3 tightens, care/.test(document.getElementById('notes').textContent), null, { timeout: 8000 });
 });
 
+flow('spot photo: a camera photo with GPS in its EXIF is kept without it, shows on the spot and goes with Erase (IDEAS S-18)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.ApexSpotPhotos && window.apexDebug);
+  // a 2000 x 1500 JPEG with an Exif APP1 segment spliced in after SOI, as a phone camera writes it
+  const bytes = await page.evaluate(async () => {
+    const c = document.createElement('canvas'); c.width = 2000; c.height = 1500;
+    const g = c.getContext('2d'); g.fillStyle = '#c33'; g.fillRect(0, 0, 2000, 1500); g.fillStyle = '#fff'; g.fillRect(100, 100, 400, 300);
+    const raw = new Uint8Array(await (await new Promise((r) => c.toBlob(r, 'image/jpeg', 0.9))).arrayBuffer());
+    const payload = [...'Exif\0\0MM\0*GPS 35.96N 83.92W'].map((ch) => ch.charCodeAt(0));
+    const app1 = [0xFF, 0xE1, (payload.length + 2) >> 8, (payload.length + 2) & 255, ...payload];
+    const out = [...raw.subarray(0, 2), ...app1, ...raw.subarray(2)];
+    if (window.ApexSpotPhotos.exifSegments(new Uint8Array(out))[0] !== 'exif') throw new Error('test photo lacks EXIF');
+    return out;
+  });
+  await page.evaluate(() => document.getElementById('hlOpenBtn').click());
+  await page.waitForSelector('#hlOverlay.show', { timeout: 10000 });
+  await page.setInputFiles('#hlPhoto', { name: 'IMG_0001.jpg', mimeType: 'image/jpeg', buffer: Buffer.from(bytes) });
+  await page.waitForFunction(() => /Photo ready/.test(document.getElementById('hlPhotoNote').textContent), null, { timeout: 10000 });
+  await page.fill('#hlName', 'Red barn');
+  await page.evaluate(() => document.getElementById('hlAddBtn').click());
+  await page.waitForFunction(() => JSON.parse(localStorage.getItem('apex.highlights') || '[]').some((h) => h.name === 'Red barn' && h.photo));
+  const kept = await page.evaluate(async () => {
+    const h = JSON.parse(localStorage.getItem('apex.highlights')).find((x) => x.name === 'Red barn');
+    const blob = await window.ApexSpotPhotos.get(h.id), b = new Uint8Array(await blob.arrayBuffer());
+    const bmp = await createImageBitmap(blob);
+    return { segs: window.ApexSpotPhotos.exifSegments(b), gps: new TextDecoder('latin1').decode(b).includes('GPS 35.96'), w: bmp.width, h: bmp.height };
+  });
+  check(kept.segs.length === 0 && !kept.gps, `kept photo still carries metadata: ${JSON.stringify(kept)}`);
+  check(kept.w === 1600 && kept.h === 1200, `kept photo scaled to 1600 px: ${kept.w}x${kept.h}`);
+  await page.waitForSelector('#hlList .spot-thumb img', { state: 'attached', timeout: 5000 });
+  page.once('dialog', (d) => d.accept());
+  await page.evaluate(() => document.getElementById('myEraseBtn').click());
+  await page.waitForLoadState('load');
+  await page.waitForFunction(() => window.ApexSpotPhotos);
+  check(await page.evaluate(() => window.ApexSpotPhotos.count()) === 0, 'Erase everything clears spot photos');
+}, { geolocation: { latitude: 35.96, longitude: -83.92 }, permissions: ['geolocation'] });
+
 flow('dashcam overlay: a video from the drive gets its speed, g and calls drawn on and comes out as a new video (IDEAS D-11)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.goto(base + '/analysis.html');

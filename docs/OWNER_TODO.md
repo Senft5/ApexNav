@@ -36,3 +36,5 @@ something blocks on you, delete it once it's done. Everything else is in docs/ID
 - An unused App ID `com.senft.ApexNav.JNX759T5W6` (from the first attempt) is still registered. Harmless; delete it in Identifiers if you like.
 
 - **P-01 battery figure (10 min, during any TestFlight drive):** drive an hour unplugged with the app open; afterwards the Log shows "Battery: X% in N min". Send me that number (and the phone model) and I'll publish it in the listing and the Help page. Nothing is published until it's measured.
+
+- **S-18 shared spot photos (decision):** photos on your own spots work now and never leave the phone. Showing them to other members needs a Cloudflare R2 bucket (free up to 10 GB) and, for App Review 1.2, someone to look at reported photos. Say "yes R2" and I'll build it with the existing report/hide flow, or "keep local" and it stays as is.

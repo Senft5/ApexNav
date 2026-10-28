@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-4QaHlktS4pbmer3j7q/MFAnrFrsOqSKbcBMmGz7Q0nM=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-5bbdPMfDGwS/okqmf3898gWrG09qD8HqVqMS2wUAEYU=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>ApexNav</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -28,6 +28,7 @@
   <script src="save_file.js"></script>
   <script src="flyover_video.js"></script>
   <script src="battery_budget.js"></script>
+  <script src="spot_photos.js"></script>
   <script src="route_loading.js"></script>
   <script src="stages.js"></script>
   <script src="fun_route.js"></script>
@@ -219,6 +220,10 @@
     .spot-chips button.on, .spot-stars button.on { background: var(--panel-ink); color: var(--panel); }
     .spot-stars button { width: 44px; height: 44px; border: 1.5px solid var(--panel-ink); font-size: 24px; line-height: 1; }
     .spot-dialog-field { display: grid; gap: 8px; font-size: 15px; font-weight: 600; }
+    .spot-thumb { width: 44px; height: 44px; padding: 0; border: 1px solid var(--rule); overflow: hidden; flex: none; }
+    .spot-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .overlay.dim.spot-photo { flex-direction: column; justify-content: center; align-items: center; gap: 12px; padding: 16px; z-index: 60; }
+    .spot-photo img { max-width: 100%; max-height: 80vh; object-fit: contain; }
 
     /* ---------------- binnacle ---------------- */
     .binnacle { background: var(--panel); color: var(--panel-ink); border-top: 1px solid var(--rule); padding: 6px 10px calc(8px + var(--safe-bottom)); display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
@@ -707,6 +712,8 @@
           <div class="spot-dialog-field">Rating<div class="spot-stars" id="hlRating" role="group" aria-label="Rating">
             <button type="button" data-rating="1" aria-label="1 star">★</button><button type="button" data-rating="2" aria-label="2 stars">★</button><button type="button" data-rating="3" aria-label="3 stars">★</button><button type="button" data-rating="4" aria-label="4 stars">★</button><button type="button" data-rating="5" aria-label="5 stars">★</button>
           </div></div>
+          <div class="spot-dialog-field">Photo<div class="row" style="align-items:center"><label class="ink-btn" id="hlPhotoBtn">Add photo<input type="file" id="hlPhoto" accept="image/*" hidden /></label>
+            <span class="note" id="hlPhotoNote">Stays on this phone, without its location data.</span></div></div>
           <div class="row"><button class="ink-btn solid" id="hlAddBtn">Save</button><button class="ink-btn" id="hlCancelBtn">Cancel</button></div>
         </div>
       </div>
@@ -4198,7 +4205,8 @@
         const row = document.createElement('div'); row.className = 'row'; row.style.cssText = 'justify-content:space-between;align-items:center;font-size:13px';
         const t = document.createElement('span'); t.textContent = `${'★'.repeat(h.rating)} ${h.name}`;
         const x = document.createElement('button'); x.className = 'ink-btn'; x.textContent = '×'; x.setAttribute('aria-label', `Remove ${h.name}`);
-        x.onclick = () => { saveHighlights(loadHighlights().filter(v => v.id !== h.id)); renderHighlights(); };
+        x.onclick = () => { saveHighlights(loadHighlights().filter(v => v.id !== h.id)); if (h.photo && window.ApexSpotPhotos) ApexSpotPhotos.remove(h.id); renderHighlights(); };
+        if (h.photo && window.ApexSpotPhotos) row.append(spotThumb(h));
         row.append(t);
         if (!h.shared && window.ApexSync) {
           const sh = document.createElement('button'); sh.className = 'ink-btn'; sh.textContent = 'Share'; sh.hidden = true;
@@ -4213,6 +4221,22 @@
         } else if (h.shared) { const tag = document.createElement('span'); tag.className = 'note'; tag.textContent = 'shared'; row.append(tag); }
         row.append(x); list.appendChild(row);
       }
+    }
+    // The photo kept with one of your spots (spot_photos.js, IDEAS S-18): a thumbnail that opens it full size.
+    function spotThumb(h) {
+      const b = document.createElement('button'); b.className = 'spot-thumb'; b.setAttribute('aria-label', `Photo of ${h.name}`); b.hidden = true;
+      ApexSpotPhotos.get(h.id).then((blob) => {
+        if (!blob) return;
+        const url = URL.createObjectURL(blob), img = document.createElement('img'); img.src = url; img.alt = ''; b.append(img); b.hidden = false;
+        b.onclick = () => {
+          const ov = document.createElement('div'); ov.className = 'overlay dim show spot-photo'; ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-label', h.name);
+          const big = document.createElement('img'); big.src = url; big.alt = h.name;
+          const close = document.createElement('button'); close.className = 'ink-btn'; close.textContent = 'Close';
+          ov.onclick = (e) => { if (e.target === ov || e.target === close) ov.remove(); };
+          ov.append(big, close); document.body.append(ov); close.focus();
+        };
+      });
+      return b;
     }
     // Members' shared spots near you, each rateable once signed in (the author can't rate their own; the server enforces it).
     async function renderNearbyHighlights() {
@@ -4235,7 +4259,14 @@
       const v = parseFloat(b.dataset.detour); state.hlOn = v > 0; if (v > 0) state.hlStrength = v;
       savePrefs(); renderHighlights(); if (state.hlOn) renderNearbyHighlights();
     }));
-    let highlightPoint = null, highlightCategory = 'other', highlightRating = 5;
+    let highlightPoint = null, highlightCategory = 'other', highlightRating = 5, pendingPhoto = null;
+    $('hlPhoto').addEventListener('change', async () => {
+      const f = $('hlPhoto').files && $('hlPhoto').files[0]; pendingPhoto = null;
+      if (!f) return;
+      $('hlPhotoNote').textContent = 'Preparing the photo…';
+      try { pendingPhoto = await ApexSpotPhotos.prepare(f); $('hlPhotoNote').textContent = 'Photo ready. Its location and camera details are removed.'; }
+      catch (_) { $('hlPhotoNote').textContent = 'That file isn\'t a photo this phone can open.'; }
+    });
     function selectHighlightCategory(value) {
       highlightCategory = value;
       document.querySelectorAll('#hlCategories button').forEach(b => {
@@ -4255,6 +4286,8 @@
       highlightPoint = point;
       $('hlName').value = '';
       selectHighlightCategory('other'); selectHighlightRating(5);
+      pendingPhoto = null; $('hlPhoto').value = ''; $('hlPhotoNote').textContent = 'Stays on this phone, without its location data.';
+      $('hlPhotoBtn').hidden = !window.ApexSpotPhotos;
       $('hlOverlay').classList.add('show');
       if (!document.body.classList.contains('moving')) $('hlName').focus();   // moving: no keyboard, Save names it
     }
@@ -4346,6 +4379,8 @@
       for (const k of ApexMyData.keysToClear(localStorage)) { try { localStorage.removeItem(k); } catch (_) {} }
       try { sessionStorage.clear(); } catch (_) {}
       try { if (window.caches) for (const k of await caches.keys()) await caches.delete(k); } catch (_) {}
+      try { if (window.ApexSpotPhotos) await ApexSpotPhotos.clear(); } catch (_) {}      // spot photos (IDEAS S-18)
+      try { if (window.ApexOfflineTiles) await ApexOfflineTiles.clear(); } catch (_) {}  // offline map areas (IDEAS F-02)
       location.reload();
     });
     renderMyData();
@@ -4391,14 +4426,17 @@
     });
     $('hlCancelBtn').addEventListener('click', closeHighlightDialog);
     $('hlOverlay').addEventListener('click', (e) => { if (e.target === $('hlOverlay')) closeHighlightDialog(); });
-    $('hlAddBtn').addEventListener('click', () => {
+    $('hlAddBtn').addEventListener('click', async () => {
       if (!highlightPoint) return;
       let name = $('hlName').value.trim();
       // While moving there is no keyboard: an unnamed spot is named by the time.
       if (!name && document.body.classList.contains('moving')) name = `Spot ${new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
       if (!name) { toast('Name the spot first.'); $('hlName').focus(); return; }
       const p = highlightPoint;
-      saveHighlights(loadHighlights().concat({ id: String(Date.now()), name: name.slice(0, 60), lat: p.lat, lon: p.lon, rating: highlightRating, category: highlightCategory }));
+      const id = String(Date.now()), photo = pendingPhoto; pendingPhoto = null;
+      let kept = false;
+      if (photo) { try { await ApexSpotPhotos.put(id, photo); kept = true; } catch (_) { toast('The photo couldn\'t be kept (storage full?). The spot is saved without it.'); } }
+      saveHighlights(loadHighlights().concat({ id, name: name.slice(0, 60), lat: p.lat, lon: p.lon, rating: highlightRating, category: highlightCategory, ...(kept ? { photo: true } : {}) }));
       closeHighlightDialog(); renderHighlights(); toast(`Spot saved · ${name}`);
     });
 
