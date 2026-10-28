@@ -59,3 +59,30 @@ describe("public and private crews", () => {
     expect((await api(a, "POST", "/api/crews", { name: "Bad", visibility: "everyone" })).status).toBe(400);
   });
 });
+
+describe("crew invite links (IDEAS Z-15)", () => {
+  const invite = async (who: Awaited<ReturnType<typeof makeUser>>, id: string) => api(who, "POST", `/api/crews/${id}/invite`);
+
+  it("the owner can turn off every link; members already in stay, the old link stops working", async () => {
+    const owner = await makeUser("owner"), early = await makeUser("early"), late = await makeUser("late");
+    const id = await make(owner, { name: "Night Owls" });
+    const { token } = (await (await ok(invite(owner, id))).json()) as { token: string };
+    await ok(api(early, "POST", "/api/crews/join", { token }));
+    expect((await api(early, "DELETE", `/api/crews/${id}/invites`)).status).toBe(404);   // members can't, only the owner
+    expect(await (await ok(api(owner, "DELETE", `/api/crews/${id}/invites`))).json()).toEqual({ revoked: 1 });
+    expect((await api(late, "POST", "/api/crews/join", { token })).status).toBe(400);
+    const members = (await (await ok(api(owner, "GET", `/api/crews/${id}/members`))).json()) as { handle: string }[];
+    expect(members.map((m) => m.handle).sort()).toEqual(["early", "owner"]);
+  });
+
+  it("an owner holds at most 10 open links across their crews", async () => {
+    const owner = await makeUser("owner");
+    const a = await make(owner, { name: "Crew A" }), b = await make(owner, { name: "Crew B" });
+    for (let i = 0; i < 10; i++) await ok(invite(owner, i % 2 ? a : b));
+    const r = await invite(owner, a);
+    expect(r.status).toBe(429);
+    expect(await r.json()).toEqual({ error: "too_many_open_invites" });
+    await ok(api(owner, "DELETE", `/api/crews/${b}/invites`));
+    await ok(invite(owner, a));
+  });
+});
