@@ -34,7 +34,7 @@ targets:
           - audio
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true
-        # "Open in the app" links from the web: apexnav://open?invite=…|crew=…|add=…|convoy=… (ApexWebBundle.entryURL(forLink:))
+        # "Open in the app" links from the web: apexnav://open?invite=…|crew=…|add=…|convoy=… (ApexWebBundle.linkItems / linkEntryURL)
         CFBundleURLTypes:
           - CFBundleURLName: com.senft.ApexNav.links
             CFBundleURLSchemes:

@@ -92,7 +92,7 @@ enum ApexWebBundle {
     private static let linkValue = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-")
     /// The link's parameters the page understands, or nil when the link isn't one of ours or carries none.
     static func linkItems(_ url: URL) -> [URLQueryItem]? {
-        guard url.scheme == scheme, url.host == "open",
+        guard url.scheme == scheme, url.host() == "open",
               let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems else { return nil }
         let kept = items.filter { item in
             guard linkKeys.contains(item.name), let v = item.value, (1...200).contains(v.count) else { return false }
@@ -446,19 +446,23 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
 
     func openLink(_ url: URL) {
         guard let items = ApexWebBundle.linkItems(url) else { return }
-        // A running page takes the link in place (window.apex.onNative({type:'link'})): never reload the cockpit mid-drive.
-        if webReady {
-            var params: [String: String] = [:]
-            for item in items where params[item.name] == nil { params[item.name] = item.value }
-            let payload: [String: Any] = ["type": "link", "params": params]
-            guard let data = try? JSONSerialization.data(withJSONObject: payload), let json = String(data: data, encoding: .utf8) else { return }
-            evaluate("window.apex && window.apex.onNative && window.apex.onNative(\(json)); void 0;")
-            return
-        }
         guard let entry = ApexWebBundle.linkEntryURL(items) else { return }
         guard let wv = webView else { pendingLink = entry; return }
-        webDidStartLoading()
-        wv.load(URLRequest(url: entry))
+        // The cockpit page takes the link in place (window.apex.onNative({type:'link'})): never reload it mid-drive. Any other
+        // page (Log, Stages) has no window.apex, answers false, and the cockpit is loaded with the link instead.
+        var params: [String: String] = [:]
+        for item in items where params[item.name] == nil { params[item.name] = item.value }
+        let payload: [String: Any] = ["type": "link", "params": params]
+        guard webReady, let data = try? JSONSerialization.data(withJSONObject: payload), let json = String(data: data, encoding: .utf8) else {
+            webDidStartLoading()
+            wv.load(URLRequest(url: entry))
+            return
+        }
+        wv.evaluateJavaScript("(window.apex && window.apex.onNative) ? (window.apex.onNative(\(json)), true) : false") { [weak self, weak wv] result, _ in
+            guard (result as? Bool) != true, let wv else { return }
+            self?.webDidStartLoading()
+            wv.load(URLRequest(url: entry))
+        }
     }
 
     func webDidStartLoading() {

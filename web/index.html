@@ -2843,10 +2843,12 @@
     const crewNear = () => { if (state.lastPosition) return state.lastPosition; const c = map.getCenter(); return { lat: c.lat, lon: c.lng }; };
     // Links people share open the website (in the app the page's own origin is apexnav://app, which no one else can open).
     const shareOrigin = () => (ApexSync.inApp ? ApexSync.apiBase : location.origin);
+    let renderGen = 0;   // two renders at once (a link while one runs): only the newest one draws
     async function renderAccount() {
-      const body = $('accountBody');
+      const body = $('accountBody'), gen = ++renderGen;
       let me = null;
       try { const r = await apiCall('GET', '/api/me'); if (r.ok && (r.headers.get('content-type') || '').includes('json')) me = await r.json(); } catch (_) {}
+      if (gen !== renderGen) return;
       body.innerHTML = '';
       const redo = () => renderAccount();
       const badge = $('crewTab').querySelector('.badge'); if (badge) badge.remove();
@@ -2856,10 +2858,11 @@
         return;
       }
       const inviteFromLink = params2.get('invite'), crewFromLink = params2.get('crew'), addFromLink = params2.get('add');
-      try { if (inviteFromLink) sessionStorage.setItem('apex.invite', inviteFromLink); if (crewFromLink) sessionStorage.setItem('apex.crew', crewFromLink); if (addFromLink) sessionStorage.setItem('apex.add', addFromLink.toLowerCase()); } catch (_) {}
+      let stashed = false;
+      try { if (inviteFromLink) sessionStorage.setItem('apex.invite', inviteFromLink); if (crewFromLink) sessionStorage.setItem('apex.crew', crewFromLink); if (addFromLink) sessionStorage.setItem('apex.add', addFromLink.toLowerCase()); stashed = true; } catch (_) {}
       // Kept in the tab, gone from the address bar: a reload or a redraw must not act on the link again.
       if (inviteFromLink || crewFromLink || addFromLink) {
-        try { for (const k of ['invite', 'crew', 'add']) params2.delete(k); history.replaceState(history.state, '', location.pathname + (params2.toString() ? '?' + params2 : '') + location.hash); } catch (_) {}
+        if (stashed) try { for (const k of ['invite', 'crew', 'add']) params2.delete(k); history.replaceState(history.state, '', location.pathname + (params2.toString() ? '?' + params2 : '') + location.hash); } catch (_) {}
         showView('crew');
       }
       const stash = (k) => { try { return sessionStorage.getItem(k) || ''; } catch (_) { return ''; } };
@@ -2895,6 +2898,7 @@
       if (me.requests > 0) { const b = el('span', { className: 'badge', textContent: String(me.requests) }); b.setAttribute('aria-label', `${me.requests} friend requests`); $('crewTab').append(b); }
       const [fr, gr, pts, ex, crews] = await Promise.all([apiCall('GET', '/api/friends').then(jsonOf), apiCall('GET', '/api/grants').then(jsonOf), apiCall('GET', '/api/points').then(jsonOf),
         apiCall('GET', '/api/me/export').then(jsonOf), window.ApexSync && ApexSync.crews ? ApexSync.crews() : apiCall('GET', '/api/crews').then(jsonOf)]);
+      if (gen !== renderGen) return;
       const friends = Array.isArray(fr) ? fr : [], grants = new Map((Array.isArray(gr) ? gr : []).map(g => [g.audience_type + ':' + g.audience_id, g]));
       const putGrant = async (type, id, scores, times) => { await apiCall('PUT', '/api/grants', { audience_type: type, audience_id: id, share_scores: scores, share_times: times }); redo(); };
 
@@ -2914,7 +2918,7 @@
       if (stash('apex.add')) friendsOpen = true;
       const fpop = el('aside', { className: 'side-pop' + (friendsOpen ? ' open' : '') });
       fpop.setAttribute('aria-label', 'Friends');
-      const closePop = () => { friendsOpen = false; fpop.classList.remove('open'); };
+      const closePop = () => { friendsOpen = false; unstash('apex.add'); fpop.classList.remove('open'); };
       fpop.append(el('div', { className: 'side-pop-head' }, el('h3', { textContent: 'Friends' }), btn('Done', closePop, 'linkbtn')));
       const nFriends = friends.filter(f => f.status === 'accepted').length, nReq = friends.filter(f => f.status === 'pending' && f.incoming).length;
       you.append(el('div', { className: 'row' }, btn(`Friends · ${nFriends}${nReq ? ` · ${nReq} new` : ''}`, () => { friendsOpen = true; fpop.classList.add('open'); }, nReq ? 'ink-btn solid' : 'ink-btn')));
@@ -2964,8 +2968,12 @@
         const tok = stash('apex.crew');
         csec.append(el('div', { className: 'card stack-8' },
           el('p', { textContent: 'You have a crew invite. Join? Its members will see your handle, and your car if you show it to crews.' }),
-          el('div', { className: 'row' }, btn('Join crew', async () => {
-            const r = await apiCall('POST', '/api/crews/join', { token: tok });
+          el('div', { className: 'row' }, btn('Join crew', async (e) => {
+            const b = e && e.currentTarget; if (b) { if (b.disabled) return; b.disabled = true; }
+            let r = null;
+            try { r = await apiCall('POST', '/api/crews/join', { token: tok }); } catch (_) {}
+            if (b) b.disabled = false;
+            if (!r) { toast('Couldn\'t join. Check signal and try again.'); return; }
             if (r.ok || (r.status >= 400 && r.status < 500)) unstash('apex.crew');
             toast(r.ok ? 'You joined the crew.' : r.status < 500 ? 'That crew invite didn\'t work. Ask for a new one.' : 'Couldn\'t join. Check signal and try again.');
             redo();
