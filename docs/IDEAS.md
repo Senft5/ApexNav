@@ -362,6 +362,6 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 |---|---|---|---|---|---|
 | L-01 | Apple developer account, TestFlight external beta | H | S | owner (account) | launch |
 | L-02 | Zero-subscription model written down: one-time unlock, cosmetic Octane, or donations | H | S | owner (decision) | mission |
-| L-03 | Licence audit of every dependency and voice model before charging | H | S | todo | docs/VOICE.md licences |
+| L-03 | Licence audit of every dependency and voice model before charging | H | S | done (THIRD_PARTY_NOTICES.md audit note; web/licenses.html ships the BSD/MIT notices in the app, linked from Settings; the website-only voice engine is never loaded in the app, guideline 2.5.2) | docs/VOICE.md licences |
 | L-04 | Attribution for OSM, OpenFreeMap, Valhalla, Nominatim, Photon, DeFlock, Kokoro (Settings → Sources and licences) | M | S | done | licences |
 | L-05 | Support channel and feedback button that attaches anonymous diagnostics | M | S | todo | — |

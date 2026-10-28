@@ -568,7 +568,7 @@
           </section>
           <section class="sources" data-panel="setup">
             <details class="more"><summary>Sources and licences</summary><p class="note">Map &copy; OpenStreetMap contributors via OpenFreeMap. Terrain: AWS Terrarium DEM. Routing, map matching and posted limits: Valhalla (FOSSGIS). Geocoding: Nominatim. Search suggestions: Photon (Komoot). Plate-reading cameras: OpenStreetMap (<code>surveillance:type=ALPR</code>, DeFlock) via Overpass. Voices: Kokoro-82M (Apache-2.0).</p></details>
-            <p class="note mt-8"><a href="https://apexnav.senftns.workers.dev/privacy.html" target="_blank" rel="noopener">Privacy</a> · <a href="https://apexnav.senftns.workers.dev/terms.html" target="_blank" rel="noopener">Terms of use</a></p>
+            <p class="note mt-8"><a href="https://apexnav.senftns.workers.dev/privacy.html" target="_blank" rel="noopener">Privacy</a> · <a href="https://apexnav.senftns.workers.dev/terms.html" target="_blank" rel="noopener">Terms of use</a> · <a href="licenses.html">Licences</a></p>
           </section>
         </div>
       </aside>
@@ -3719,6 +3719,8 @@
         note.classList.toggle('err', !!(state.liveVoice && (st === 'error' || info.error)));
       }
     }
+    // The app never loads the downloaded voice engine (guideline 2.5.2; web/voice.js): no switch, names use the phone voice.
+    if (IN_APP_SHELL) { state.liveVoice = false; $('liveVoiceBtn').hidden = true; $('liveNote').hidden = true; }
     $('liveVoiceBtn').addEventListener('click', () => {
       const retry = state.liveVoice && window.ApexVoice && ApexVoice.liveState() === 'error';   // a failed load: tapping again tries again instead of switching off
       if (!retry) state.liveVoice = !state.liveVoice;

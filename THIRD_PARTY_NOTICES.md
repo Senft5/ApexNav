@@ -1,7 +1,10 @@
 # Third-party notices
 
 ApexNav is proprietary (see LICENSE). It uses the open components below under their own licences.
-Check each licence before redistributing a build; some notices must ship inside the app.
+Check each licence before redistributing a build. The notices that must ship inside the app are in `web/licenses.html`
+(Settings → Sources and licences → Licences); keep the two in step. Audit 2026-10-28 (IDEAS L-03): every shipped
+component is permissive (BSD-3, MIT, Apache-2.0, OFL); no GPL code ships; the app downloads no code at run time
+(the live voice engine is website-only, `tests/test_no_downloaded_code.py`).
 
 | Component | Used for | Licence |
 |---|---|---|
@@ -11,7 +14,8 @@ Check each licence before redistributing a build; some notices must ship inside 
 | graphemes_to_phonemes_en_us / _en_gb (Peter Reid, Hugging Face), `web/g2p/*_fallback.safetensors` | phonemes for unknown words | Apache-2.0 (model card) |
 | kNN-VC, WavLM, HiFi-GAN (bshall, Microsoft, Jungil Kong) | converting the owner's voice | MIT |
 | Chatterbox (Resemble AI) | experimental voice clone (not shipped) | MIT |
-| MapLibre GL JS | map rendering | BSD-3-Clause |
+| MapLibre GL JS 4.7.1 | map rendering | BSD-3-Clause |
+| maplibre-contour (Michael Barry), `web/vendor/maplibre-contour.min.js` | contour lines | BSD-3-Clause |
 | QR Code Generator 2.0.4 (Kazuhiko Arase), `web/vendor/qrcode.js` | the convoy QR code | MIT |
 | Valhalla (via FOSSGIS public server) | routing, map matching, speed limits | MIT |
 | OpenStreetMap data, OpenFreeMap tiles | roads, base map | ODbL 1.0; attribution required: © OpenStreetMap contributors |
