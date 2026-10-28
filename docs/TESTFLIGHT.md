@@ -12,7 +12,7 @@ in TestFlight after Apple's processing, usually 5 to 30 minutes.
   The version people see is `MARKETING_VERSION` in `project.yml` (1.0); raise it there for each App Store release.
 - **Gate:** the job `testflight-gate` checks the four secrets. While any is missing, `testflight` is skipped and the run
   summary says which secrets are missing. The upload waits for `apexkit-macos` and `simulator-tests` to pass.
-- **Unchanged:** `build-ipa` still builds the unsigned sideload `ApexNav-IPA` artifact.
+- **`build-ipa`** (the unsigned sideload `ApexNav-IPA` artifact) runs on pull requests that change native code and on manual runs; main's TestFlight archive compiles the same app. To save Mac minutes (2026-10-28), the simulator UI tests run on main only when native code changed, and the macOS ApexKit tests only when ApexKit changed (Linux runs them on every PR).
 - **Export compliance:** `ITSAppUsesNonExemptEncryption = NO` (HTTPS only), so builds don't wait on the question.
 - **Xcode 26:** App Store Connect refuses builds made with an iOS SDK older than 26, so `testflight` runs on
   `macos-26` and checks the SDK before archiving. The other macOS jobs stay on `macos-15`.

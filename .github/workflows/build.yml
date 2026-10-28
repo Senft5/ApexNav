@@ -1,9 +1,11 @@
 name: iOS Build & Simulator Tests
 
-# macOS minutes count 10x on a private repo (2,000 free minutes a month) and the simulator run is slow.
-# Pull requests run the iOS jobs only when native code changes; web-only PRs skip them. Every merge to
-# main runs them for anything that ships in the app (web/ is bundled), so a web change that breaks the
-# iOS shell shows up on main right after merge. Run by hand any time with workflow_dispatch.
+# macOS minutes count 10x on a private repo and the simulator run is slow, so Mac time goes where it finds something:
+# - Pull requests run only when native code changes, and then only the compile check (build-ipa) plus the macOS
+#   ApexKit tests when ApexKit changed (core-tests.yml runs them on Linux for every PR anyway).
+# - Every merge to main uploads to TestFlight (web/ is bundled, so a web change ships too). The simulator UI tests run
+#   on main only when native code changed. A big native change can run everything on its branch by hand first
+#   (workflow_dispatch runs every job).
 on:
   push:
     branches: [main]
@@ -19,7 +21,34 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Which kinds of files this run changes (a few seconds on Linux), so the Mac jobs below can sit out.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      native: ${{ steps.diff.outputs.native }}
+      apexkit: ${{ steps.diff.outputs.apexkit }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: diff
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [ "$EVENT" = "workflow_dispatch" ] || [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ] \
+             || ! files=$(git diff --name-only "$BASE" "$GITHUB_SHA" 2>/dev/null); then
+            echo "native=true" >> "$GITHUB_OUTPUT"; echo "apexkit=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          echo "$files"
+          native=false; apexkit=false
+          echo "$files" | grep -qE '^(ApexNavApp\.swift|ApexIntents\.swift|LiveActivity/|Assets\.xcassets/|ApexKit/|UITests/|project\.yml|\.github/workflows/build\.yml)' && native=true
+          echo "$files" | grep -qE '^(ApexKit/|\.github/workflows/build\.yml)' && apexkit=true
+          echo "native=$native" >> "$GITHUB_OUTPUT"; echo "apexkit=$apexkit" >> "$GITHUB_OUTPUT"
+
   apexkit-macos:
+    needs: changes
+    if: needs.changes.outputs.apexkit == 'true'
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
@@ -27,6 +56,8 @@ jobs:
         run: swift test --package-path ApexKit
 
   simulator-tests:
+    needs: changes
+    if: github.event_name != 'pull_request' && needs.changes.outputs.native == 'true'
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
@@ -63,7 +94,9 @@ jobs:
             TestResults.xcresult
             shots
 
+  # The compile check for pull requests (main's TestFlight archive compiles the same app).
   build-ipa:
+    if: github.event_name != 'push'
     runs-on: macos-15
     steps:
       - name: Checkout Repository
@@ -127,7 +160,8 @@ jobs:
 
   testflight:
     needs: [testflight-gate, apexkit-macos, simulator-tests]
-    if: needs.testflight-gate.outputs.ready == 'true'
+    # skipped test jobs (nothing native changed) don't block the upload; failed or cancelled ones do
+    if: always() && needs.testflight-gate.outputs.ready == 'true' && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
     # App Store Connect only takes builds made with the iOS 26 SDK (Xcode 26) or later; macos-15 defaults to Xcode 16.
     runs-on: macos-26
     env:
