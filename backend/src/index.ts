@@ -6,7 +6,7 @@ import {
 import { convoyConnect, convoyCreate, convoyJoin, convoyRoom, unwrap } from "./convoy_routes";
 import { Env, HttpError, body, json, str } from "./util";
 import { rateCheck } from "./ratelimit";
-import { clientError } from "./errors";
+import { clientError, errorSummary, serverError } from "./errors";
 import {
   boardFor, crewCreate, crewDiscover, crewInvite, crewJoin, crewJoinPublic, crewLeave, crewList, crewMembers, crewUpdate, friendAccept, friendList, friendRequest,
   myGrants, publish, removePair, setGrant, setHandle,
@@ -22,14 +22,18 @@ export { ConvoyIndex, ConvoyRoom } from "./convoy";
 import { segmentAdopt, segmentCreate, segmentDelete, segmentList, segmentShare, segmentsSharedWithMe } from "./segments";
 
 type Handler = (req: Request, env: Env, m: RegExpMatchArray) => Promise<Response>;
-const routes: [string, RegExp, Handler][] = [];
+const routes: [string, RegExp, Handler, string][] = [];
 const on = (method: string, path: string, h: Handler) =>
-  routes.push([method, new RegExp(`^${path.replace(/:(\w+)/g, "(?<$1>[^/]+)")}$`), h]);
+  routes.push([method, new RegExp(`^${path.replace(/:(\w+)/g, "(?<$1>[^/]+)")}$`), h, `${method} ${path}`]);
 const noContent = () => new Response(null, { status: 204 });
 
 on("GET", "/api/health", async () => json({ ok: true }));
-// Anonymous crash reports (web/errors.js): scrubbed, logged, never stored. Rate limited per IP like any signed-out write.
-on("POST", "/api/errors", async (req) => { await clientError(req); return noContent(); });
+// Anonymous crash reports (web/errors.js): scrubbed, logged and counted per day (no person in it). Rate limited per IP like any signed-out write.
+on("POST", "/api/errors", async (req, env) => { await clientError(req, env); return noContent(); });
+on("GET", "/api/ops/errors", async (req, env) => {
+  if (!isModerator(env, await requireMember(req, env))) throw new HttpError(404, "not_found");
+  return json(await errorSummary(env, new URL(req.url)));
+});
 on("GET", "/api/auth/google/start", (req, env) => googleStart(req, env));
 on("GET", "/api/auth/google/callback", (req, env) => googleCallback(req, env));
 on("POST", "/api/auth/logout", (req, env) => logout(req, env));
@@ -147,11 +151,13 @@ export default {
 };
 
 async function handle(req: Request, env: Env): Promise<Response> {
+    let route = "";
     try {
       const url = new URL(req.url);
-      for (const [method, re, handler] of routes) {
+      for (const [method, re, handler, name] of routes) {
         const m = url.pathname.match(re);
         if (m && req.method === method) {
+          route = name;
           csrfCheck(req, env);
           await rateCheck(req, env, url.pathname);
           return await handler(req, env, m);
@@ -162,6 +168,7 @@ async function handle(req: Request, env: Env): Promise<Response> {
     } catch (e) {
       if (e instanceof HttpError) return json({ error: e.message }, e.status, e.message === "rate_limited" ? { "retry-after": "60" } : {});
       console.error(e);
+      await serverError(env, route || "(no route)", e);
       return json({ error: "server_error" }, 500);
     }
 }

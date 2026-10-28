@@ -75,7 +75,20 @@ partway, check the database's metrics in the dashboard before blaming the export
 
 - `tools/d1_rowcounts.sql` lists every table. `tests/test_backups.py` fails when a migration adds a table that is not in it.
 - Durable Objects (convoy rooms) hold only live, short-lived state (2 h drives, nothing personal kept) and are not backed up.
-- Workers Logs (crash reports, `client_error`) are not data to keep and are not backed up.
+- Workers Logs (crash reports, `client_error`) are not data to keep and are not backed up. `error_counts` (anonymous daily crash counts) is in the export like any table, but losing it costs nothing.
+
+## 6a. What Claude can reach (Cloudflare connector, checked 2026-10-28)
+
+There is no API token in Claude's environment. Its Cloudflare access is the claude.ai "Cloudflare Developer Platform" connector, which Cloudflare marks deprecated in favour of the full Cloudflare API connector (mcp.cloudflare.com).
+
+| Can | Cannot |
+|---|---|
+| D1: list, read and write SQL on both databases (backups in section 3 are rebuilt from SELECTs) | D1 export, Time Travel, undelete |
+| Workers: list scripts, read the deployed (bundled) code | Workers Logs, Observability queries, invocation errors, CPU/wall time, request analytics |
+| KV, R2 buckets, Hyperdrive: create, list, delete | R2 objects, secrets, deployments, routes |
+| Search Cloudflare's docs | Anything in the dashboard (Custom Dashboards, Monitors, Issues) |
+
+So crash reports and server 500s are also counted in D1 `error_counts` (docs/BACKEND.md), which this connector can read. Latency and the real error rate still need the dashboard (Workers → apexnav → Metrics / Observability) until the full connector is signed in or a token with Workers Observability read is added.
 
 ## 7. Log
 

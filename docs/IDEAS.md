@@ -299,6 +299,9 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 | Y-09 | Database backups (D1 time travel/export) and a restore drill | H | S | done (#124; first export and drill need the owner's wrangler login) | production readiness |
 | Y-10 | Rate limits and abuse protection on every write endpoint | H | M | done (#112) | production readiness |
 | Y-11 | End-to-end browser tests of the main flows (plan, drive replay, log, crew) in CI | M | M | todo | testing |
+| Y-12 | Owner screen for crash counts (reads `GET /api/ops/errors`; today only JSON) | M | S | todo | crash-log review 2026-10-28 |
+| Y-13 | Latency and real error rate where agents can read them: Analytics SQL binding (`logs.workersLogs`, beta) or a daily summary row in D1; or sign in the full Cloudflare connector | H | M | todo | crash-log review 2026-10-28: the connector reaches D1 and Worker code only |
+| Y-14 | Count Durable Object (convoy) exceptions in `error_counts` too; today only the Worker's route handler 500s are counted | M | S | todo | crash-log review 2026-10-28 |
 
 ## 11. Performance and battery (P)
 

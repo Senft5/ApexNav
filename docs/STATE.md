@@ -1,5 +1,11 @@
 # APEX NAV — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-10-28: production crash and error review
+- Cloudflare connector checked: it reaches D1 SQL and the deployed Worker code, not Workers Logs, analytics or latency (table in docs/BACKUPS.md 6a). So no crash report or server error from production could be read; there was nothing else to review.
+- Production D1 looked healthy: 3 users, 909 road bins, no expired sessions or stale sign-in codes left, empty ingest queue.
+- Crash reports and the Worker's own 500s are now counted per day in D1 `error_counts` (migration 0010, anonymous, capped at 500 rows a day, kept 30 days); owner view `GET /api/ops/errors?days=7` (docs/BACKEND.md). Unfixed follow-ups: IDEAS Y-12 to Y-14.
+- Exact next task: once some counts exist, `SELECT * FROM error_counts ORDER BY day DESC, n DESC` on apexnav-db and fix the top entries; Y-13 for latency.
+
 ## Session 2026-10-28: Explore
 - #126 merged (route options). #129: Explore 15/30 min lists the best roads you can reach in that time (real drive times from one matrix call), named from the map tiles, drawn on the map; one tap routes through the whole stage (docs/ROUTING.md, Explore). Checked in a desktop browser around Maryville TN. Not checked on a phone.
 - Exact next task: R-15 remainder (avoid towns, repeated roads), then R-11 stage direction.
