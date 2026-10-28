@@ -23,7 +23,7 @@ import { carCreate, carDelete, carUpdate, myCars, peoplesCars } from "./garage";
 import { block, blockList, fileReport, isModerator, moderationQueue, moderationResolve, report, unblock } from "./safety";
 import { contribute, setContribute } from "./contribute";
 import { pointsFor } from "./points";
-import { roadBins } from "./roads";
+import { coverage, roadBins } from "./roads";
 import { eventCancel, eventCreate, eventRsvp, eventsList, eventsNear } from "./events";
 import { healthReport, healthSummary } from "./health";
 import { feedbackCreate, feedbackDone, feedbackList } from "./feedback";
@@ -99,6 +99,7 @@ on("PUT", "/api/me/contribute", async (req, env) => { await setContribute(env, a
 on("POST", "/api/contribute", async (req, env) => json(await contribute(env, await requireMember(req, env), req), 202));
 
 on("GET", "/api/roads", async (req, env) => { await requireMember(req, env); return json(await roadBins(env, new URL(req.url))); });
+on("GET", "/api/coverage", async (req, env) => { await requireMember(req, env); return json(await coverage(env, new URL(req.url))); });
 on("GET", "/api/points", async (req, env) => json(await pointsFor(env, (await requireMember(req, env)).id)));
 
 on("POST", "/api/friends/request", async (req, env) => { await friendRequest(env, await requireMember(req, env), req); return json({ ok: true }, 202); });

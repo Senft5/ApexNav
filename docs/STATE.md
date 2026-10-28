@@ -2,7 +2,8 @@
 
 ## Session 2026-10-28 (midday)
 - Merged through #207: Q-09 sight offsets, Y-17 route latency, review fixes (migrations 0021–0022 applied to both D1).
-- This PR: R-21 forecast costs in fun-route ranking (difference from the driest, all-or-nothing), R-22 "Route around it" for conditional closures (exclude_locations).
+- #208: R-21 forecast costs in fun-route ranking (difference from the driest, all-or-nothing), R-22 "Route around it" for conditional closures (exclude_locations).
+- Next PR: Q-14 coverage map (migration 0023 `road_ways` applied to both D1; privacy page now says the road's public map line is sent).
 - Exact next task: remaining IDEAS todo rows (R-04, R-12, R-20, D-10–D-15, Q-03–Q-20, S-10, S-18, U-12, P-01/P-03/P-05 ...).
 
 ## Session 2026-10-28 (late morning)

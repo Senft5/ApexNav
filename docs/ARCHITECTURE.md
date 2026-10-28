@@ -28,6 +28,9 @@ Camber and crest are recorded and shared only while `locked`. The phone's crest 
   returns their sample SD (`csd`, `rsd`, null under two measuring passes) and the camber pass count `cn`. The phone calls a
   5 m value `one` (single pass), `agree` (>= 2 passes within 1.5° camber / 0.05 g roughness) or `differ`
   (`ApexContributor.agreement`); without a spread (older server) agreement is unknown, never assumed.
+- **Coverage (read side)**: each contribution may carry its way's OSM line (public map data, at most 64 points; the server
+  drops one shorter than the bins imply); the first good one is kept in `road_ways` with its box. `GET /api/coverage?bbox=`
+  (at most 0.5° a side, members) returns measured ways with passes per direction, under the same two-driver rule.
 
 ## 3. Road DNA Engine (`core/road_dna.py`, ported to `web/apex_core.js`)
 The JS file is a line-for-line port used by the browser/iOS cockpit for live OSRM routes; `tests/test_web_core_parity.py` runs both on the same input (synthetic + a real logged drive) and requires identical results. Change both or neither.
