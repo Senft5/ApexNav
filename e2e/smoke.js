@@ -996,11 +996,42 @@ flow('road page: About a road shows its archetype, axes and how sure it is (IDEA
   check(!(await page.isVisible('aside.side-pop.open[aria-label="About this road"]')), 'closes');
 });
 
+flow('track day: on a mapped raceway, Start/finish here times laps (IDEAS D-15)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
+    window.webkit = { messageHandlers: { apex: { postMessage() {} } } };   // the iOS shell's bridge, faked: frames come from window.apex.live
+    window.__said = []; });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && typeof window.apex.onNative === 'function' && window.ApexStages);
+  await page.evaluate(() => {
+    const R = 1000 / (2 * Math.PI), c = Math.cos(35 * Math.PI / 180);
+    window.__pos = (a) => ({ lat: 35 + R * Math.sin(a) / 110540, lon: -83 + R * Math.cos(a) / (111320 * c) });
+    const ring = Array.from({ length: 73 }, (_, i) => { const p = window.__pos(i / 72 * 2 * Math.PI); return [p.lon, p.lat]; });
+    ApexStages.transportationAt = async () => [{ props: { class: 'raceway' }, lines: [ring] }];
+  });
+  await page.evaluate(() => window.apex.onNative({ type: 'link', params: { go: 'drive' } }));
+  await page.waitForFunction(() => document.getElementById('permSheet') && (document.getElementById('permSheet').classList.contains('show') || window.apexDebug.state.mode === 'live'), null, { timeout: 5000 }).catch(() => {});
+  if (await page.isVisible('#permSheet.show')) await page.evaluate(() => document.getElementById('permGo').click());
+  const R = 1000 / (2 * Math.PI);
+  const feed = (a, t, course) => page.evaluate(([a, t, course]) => window.apex.live({ ...window.__pos(a), t, accuracy_m: 4, speed_mps: 25, course_deg: course, has_fix: true, calibration: 'locked' }), [a, t, course]);
+  let t = 1e6, a = -Math.PI / 2 - 0.5;
+  for (let i = 0; i < 3; i++) { a += 25 / R; t += 1000; await feed(a, t, 90); }
+  await page.waitForFunction(() => !document.getElementById('lapSetBtn').hidden, null, { timeout: 5000 });
+  // drive round to just short of the line, tap Start/finish when the car is at it, then two laps at 25 m/s (40 s each)
+  while (a < -Math.PI / 2 - 0.02) { a += 25 / R; t += 1000; await feed(a, t, 90); }
+  await page.evaluate(() => document.getElementById('lapSetBtn').click());
+  for (let k = 0; k < 2 * 40 + 6; k++) { a += 25 / R; t += 1000; await feed(a, t, (a * 180 / Math.PI + 90) % 360); }
+  await page.waitForFunction(() => /best/.test(document.getElementById('lapInfo').textContent), null, { timeout: 5000 });
+  const info = await page.textContent('#lapInfo');
+  check(/last 0:(39|40)\.\d\d/.test(info) && /best 0:(39|40)\.\d\d/.test(info), 'laps timed: ' + info);
+});
+
 flow('desk: on a big screen Where to? is a column on the left and sheets a panel on the right, the map in view (IDEAS A-05)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.goto(base + '/index.html?view=route');
   await page.waitForSelector('#planPanel.open');
   const box = (sel) => page.evaluate((q) => { const r = document.querySelector(q).getBoundingClientRect(); return { x: r.x, w: r.width, h: r.height }; }, sel);
+  // the column grows open over 0.25 s: measure once it has (CI caught it mid-way at 565 px)
+  await page.waitForFunction(() => document.getElementById('planPanel').getBoundingClientRect().height > 600, null, { timeout: 3000 }).catch(() => {});
   const plan = await box('#planPanel');
   check(plan.w === 440 && plan.x < 40 && plan.h > 600, 'Where to? is a left column: ' + JSON.stringify(plan));
   await page.click('.tab[data-view="setup"]');

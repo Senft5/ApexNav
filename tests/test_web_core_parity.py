@@ -645,3 +645,29 @@ def test_reference_lap_matches_python():
         assert out["axes"] == axes and out["arch"] == arch, name
         archetypes[name] = arch
     assert archetypes["switchbacks"] == "Switchbacks"
+
+
+def test_adaptive_sectors_match_and_follow_the_road():
+    """IDEAS Q-05: sectors split where the road changes character and at junctions, 300 m-2.5 km; JS = Python."""
+    cases = [
+        ([("straight", 1500)] + [("arc", 50, 60 if i % 2 else -60) for i in range(14)] + [("straight", 1500)], []),
+        ([("straight", 4000)], []),
+        ([("straight", 600)] + [("arc", 30, 170 if i % 2 else -170) for i in range(6)] + [("straight", 200), ("arc", 300, 30), ("straight", 500), ("arc", 300, -30), ("straight", 900)], [300]),
+        ([("straight", 200)], []),
+    ]
+    runner = ("const c=require(process.argv[1]);const i=JSON.parse(require('fs').readFileSync(0,'utf8'));"
+              "process.stdout.write(JSON.stringify(c.adaptiveSectors(i.k,i.ds,i.breaks)));")
+    got = []
+    for legs, breaks in cases:
+        lat, lon = path_from_legs(legs)
+        k, ds = rd.compute_curvature(lat, lon)
+        py = [list(s) for s in rd.adaptive_sectors(k, ds, breaks)]
+        js = json.loads(subprocess.run([NODE, "-e", runner, os.path.abspath("web/apex_core.js")], input=json.dumps({"k": list(k), "ds": list(ds), "breaks": breaks}),
+                                       capture_output=True, text=True, check=True).stdout)
+        assert js == py, (legs[:2], js, py)
+        assert py[0][0] == 0 and py[-1][1] == len(k) and all(a[1] == b[0] for a, b in zip(py, py[1:])), "covers every sample"
+        got.append(py)
+    assert [(a * 5, b * 5) for a, b in got[0]][:2] == [(0, 1500), (1500, 2200)], "the twisty stretch is its own sector"
+    assert all((b - a) * 5 <= 2500 for a, b in got[1]), "never over 2.5 km"
+    assert any(a == 300 for a, _ in got[2]), "split at the junction"
+    assert got[3] == [[0, len(path_from_legs([("straight", 200)])[0])]]
