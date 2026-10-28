@@ -86,6 +86,15 @@ const coastNear = V.tipText({ best: { time_s: 3.9 }, tip: { kind: 'coast', value
 const aloneHead = rootAlone.children[0].innerHTML, aloneList = rootAlone.children[2].children.map((c) => c.className);
 const aloneCard = rootAlone.children[2].children.find((c) => c.className === 'dv-corners').children[0].innerHTML;
 
+// Road feel readout names how far to trust each value.
+global.ApexContributor = require(process.argv[1] + '/web/contributor.js');
+const rootFeel = mkEl('div');
+const vFeel = V.mount(rootFeel, scoredDrive, { Core, C, MPH: Core.MPS_TO_MPH });
+const nn = d.lat.length, fill = (v) => Array.from({ length: nn }, () => v);
+vFeel.setRoadFeel({ cam: fill(4.2), rough: fill(0.12), n: fill(3), cn: fill(3), csd: fill(0.5), rsd: fill(0.2) });
+vFeel.move(5);
+const feelRead = rootFeel.children[1].children[1].children[2].innerHTML;
+
 // Grip circle: shown with measured g, absent without it; scrubbing into a corner names its grip use.
 const ggCol = rootScored.children[1].children[1].children[3];
 const ggCaption = ggCol ? ggCol.children[2].textContent : null;
@@ -96,7 +105,7 @@ V.mount(rootNoG, { ...scoredDrive, g_known: d.lat.map(() => 0) }, { Core, C, MPH
 const ggNone = rootNoG.children[1].children[1].children.length;
 
 console.log(JSON.stringify({ full, bare, headHtml, unscoredHeadHtml, hiddenBeforeScrub, hiddenAfterKeyScrub, hiddenBeforeZoom, hiddenAfterZoom,
-  coachHead, timeHtml, cardHtml, aloneHead, aloneList, aloneCard, coastNear, ggCaption, ggCorner, ggNone }));
+  coachHead, timeHtml, cardHtml, aloneHead, aloneList, aloneCard, coastNear, ggCaption, ggCorner, ggNone, feelRead }));
 """
 
 
@@ -159,3 +168,28 @@ def test_grip_circle_from_measured_g_only(r):
     assert r["ggCaption"].startswith("Your grip on this drive: braking")
     assert r["ggCorner"].startswith("Corner 1, from 100 m before turn-in to the exit:") and "%" in r["ggCorner"]
     assert r["ggNone"] == 3, "no measured g: no grip circle"
+
+
+def test_road_feel_says_how_far_to_trust_it():
+    root = str(__import__("pathlib").Path(__file__).resolve().parents[1])
+    js = r"""
+global.window = global; const C2 = require(process.argv[1] + '/web/contributor.js'); global.ApexContributor = C2;
+const tests = [C2.agreement(1, null, 1.5), C2.agreement(3, 0.4, 1.5), C2.agreement(3, 2.2, 1.5), C2.agreement(0, null, 1.5), C2.agreement(2, null, 1.5)];
+const roads = { 7: { 0: { i: [0, 1, 2], n: [1, 3, 4], cam: [2, 4, -3], cn: [1, 3, 2], csd: [null, 0.4, 2.2], rough: [0.1, 0.2, 0.3], rsd: [null, 0.01, 0.2] } } };
+const old = { 7: { 0: { i: [0], n: [3], cam: [2], rough: [0.1] } } };
+const runs = [{ way: 7, dir: 0, pts: [{ i: 0, bin: 0 }, { i: 1, bin: 1 }, { i: 2, bin: 2 }, { i: 3, bin: 9 }] }];
+console.log(JSON.stringify({ tests, s: C2.seriesFrom(runs, roads, 4), o: C2.seriesFrom(runs, old, 4) }));
+"""
+    p = subprocess.run([NODE, "-e", js, root], capture_output=True, text=True, timeout=60)
+    assert p.returncode == 0, p.stderr
+    r = json.loads(p.stdout)
+    assert r["tests"] == ["one", "agree", "differ", None, None], "two passes without a spread are not called agreeing"
+    s = r["s"]
+    assert s["cn"] == [1, 3, 2, None] and s["csd"] == [None, 0.4, 2.2, None] and s["rsd"] == [None, 0.01, 0.2, None]
+    o = r["o"]
+    assert o["cam"][0] == 2 and o["csd"][0] is None and o["cn"][0] is None, "an older server's payload still reads, spread unknown"
+
+
+def test_road_feel_readout_labels_agreement(r):
+    assert "Banking · 3 runs agree" in r["feelRead"] and "4.2°" in r["feelRead"]
+    assert "Roughness · runs differ ±0.20 g" in r["feelRead"]
