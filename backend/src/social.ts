@@ -2,7 +2,7 @@
 // takes a user id for "whose data to read". Privacy rules (docs/BACKEND.md section 11) are enforced here and tested.
 import { Env, HANDLE_RE, HttpError, body, num, pair, randomToken, sha256hex, sqlTime, str } from "./util";
 import type { Viewer } from "./auth";
-import { convoysRecheck } from "./convoy";
+import { reportedSql } from "./safety";
 
 const run = (env: Env, sql: string, ...args: unknown[]) => env.DB.prepare(sql).bind(...args).run();
 const all = async <T>(env: Env, sql: string, ...args: unknown[]) => (await env.DB.prepare(sql).bind(...args).all<T>()).results;
@@ -74,15 +74,6 @@ export async function removePair(env: Env, me: string, other: string): Promise<v
   ]);
 }
 
-export async function blockUser(env: Env, v: Viewer, req: Request): Promise<void> {
-  const { user_id } = await body<{ user_id?: string }>(req);
-  const other = str(user_id, "user_id", 1, 64);
-  if (other === v.id) throw new HttpError(400, "bad_user_id");
-  await run(env, "INSERT OR IGNORE INTO blocks (blocker, blocked) VALUES (?, ?)", v.id, other).catch(() => { throw new HttpError(404, "no_user"); });
-  await removePair(env, v.id, other);
-  await convoysRecheck(env, v.id);                                   // a convoy the two share drops one of them now
-}
-
 // ---- crews ---------------------------------------------------------------------------------------
 // ---- crews: like groups. Private (the default) = invite link only. Public = listed for people nearby by its area, which the
 // owner picks (a name and a point rounded to 0.1 degree, about 11 km); non-members see name, about, area and member count only.
@@ -138,6 +129,7 @@ export async function crewDiscover(env: Env, v: Viewer, url: URL) {
       WHERE c.visibility = 'public' AND c.area_lat BETWEEN ?1 AND ?2 AND c.area_lon BETWEEN ?3 AND ?4
         AND NOT EXISTS (SELECT 1 FROM crew_members m WHERE m.crew_id = c.id AND m.user_id = ?5)
         AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker = ?5 AND b.blocked = c.owner) OR (b.blocker = c.owner AND b.blocked = ?5))
+        AND NOT ${reportedSql("crew", "c.id")}                       -- reported by several people: off the list until the owner looks
       LIMIT 50`, lat - dLat, lat + dLat, lon - dLon, lon + dLon, v.id);
   const km = (r: { area_lat: number; area_lon: number }) => Math.hypot((r.area_lat - lat) * 111.2, (r.area_lon - lon) * 111.32 * Math.cos(lat * Math.PI / 180));
   return rows.map((r) => ({ id: r.id, name: r.name, about: r.about, area_name: r.area_name, members: r.members, km: Math.round(km(r)) }))
@@ -147,7 +139,7 @@ export async function crewDiscover(env: Env, v: Viewer, url: URL) {
 /** Join a public crew without an invite (a private one still needs its link). */
 export async function crewJoinPublic(env: Env, v: Viewer, crewId: string): Promise<{ id: string }> {
   const crew = await first<{ visibility: string; owner: string }>(env, "SELECT visibility, owner FROM crews WHERE id = ?", crewId);
-  if (!crew || crew.visibility !== "public") throw new HttpError(404, "no_crew");
+  if (!crew || crew.visibility !== "public" || (await first(env, `SELECT 1 WHERE ${reportedSql("crew", "?1")}`, crewId))) throw new HttpError(404, "no_crew");
   if (await first(env, "SELECT 1 FROM blocks WHERE (blocker = ?1 AND blocked = ?2) OR (blocker = ?2 AND blocked = ?1)", v.id, crew.owner)) throw new HttpError(404, "no_crew");
   const n = await first<{ n: number }>(env, "SELECT COUNT(*) AS n FROM crew_members WHERE user_id = ?", v.id);
   if ((n?.n ?? 0) >= 10) throw new HttpError(429, "too_many_crews");

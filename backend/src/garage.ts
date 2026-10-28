@@ -2,6 +2,7 @@
 // A car card carries no location or drive data. Nothing is shown to anyone until its owner switches `shared` on.
 import type { Viewer } from "./auth";
 import { Env, HttpError, body } from "./util";
+import { reportedSql } from "./safety";
 
 const MAX_CARS = 10;
 // Controls, format characters (bidi marks and overrides, zero-width), surrogates and private use; ZWJ stays for emoji.
@@ -111,7 +112,7 @@ export async function peoplesCars(env: Env, v: Viewer) {
         SELECT b.user_id FROM crew_members a JOIN crews cr ON cr.id = a.crew_id AND cr.visibility = 'private'
           JOIN crew_members b ON b.crew_id = a.crew_id WHERE a.user_id = ?1)
      SELECT u.handle, ${PUBLIC_COLS} FROM known k JOIN users u ON u.id = k.id JOIN cars c ON c.owner = k.id
-      WHERE k.id != ?1 AND c.shared = 1 AND u.handle IS NOT NULL
+      WHERE k.id != ?1 AND c.shared = 1 AND u.handle IS NOT NULL AND NOT ${reportedSql("car", "c.id")}
         AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker = ?1 AND b.blocked = k.id) OR (b.blocker = k.id AND b.blocked = ?1))
       ORDER BY u.handle, c.is_primary DESC, c.created_at, c.rowid LIMIT 1000`,
   ).bind(v.id).all<{ handle: string } & Record<string, unknown>>()).results;

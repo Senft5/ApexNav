@@ -6,11 +6,12 @@ import {
 import { convoyConnect, convoyCreate, convoyJoin, convoyRoom, unwrap } from "./convoy_routes";
 import { Env, HttpError, body, json, str } from "./util";
 import {
-  blockUser, boardFor, crewCreate, crewDiscover, crewInvite, crewJoin, crewJoinPublic, crewLeave, crewList, crewMembers, crewUpdate, friendAccept, friendList, friendRequest,
+  boardFor, crewCreate, crewDiscover, crewInvite, crewJoin, crewJoinPublic, crewLeave, crewList, crewMembers, crewUpdate, friendAccept, friendList, friendRequest,
   myGrants, publish, removePair, setGrant, setHandle,
 } from "./social";
 import { deleteAccount, exportMyData } from "./account";
 import { carCreate, carDelete, carUpdate, myCars, peoplesCars } from "./garage";
+import { block, blockList, isModerator, moderationQueue, moderationResolve, report, unblock } from "./safety";
 import { contribute, setContribute } from "./contribute";
 import { pointsFor } from "./points";
 import { roadBins } from "./roads";
@@ -36,7 +37,8 @@ on("GET", "/api/me", async (req, env) => {
   // incoming friend requests: lets the app show a badge on the Crew tab without a second call
   const waiting = v.member ? await env.DB.prepare(
     "SELECT COUNT(*) AS n FROM friendships WHERE status = 'pending' AND requested_by != ?1 AND (user_a = ?1 OR user_b = ?1)").bind(v.id).first<{ n: number }>() : null;
-  return json({ signed_in: true, id: v.id, handle: v.handle, name: v.displayName, member: v.member, requests: waiting?.n ?? 0 });
+  return json({ signed_in: true, id: v.id, handle: v.handle, name: v.displayName, member: v.member, requests: waiting?.n ?? 0,
+               ...(v.member && isModerator(env, v) ? { moderator: true } : {}) });
 });
 on("POST", "/api/invites/redeem", async (req, env) => { await redeemInvite(env, await requireUser(req, env), req); return noContent(); });
 on("POST", "/api/invites", async (req, env) => json(await createInvite(env, await requireMember(req, env), req), 201));
@@ -54,7 +56,12 @@ on("POST", "/api/friends/request", async (req, env) => { await friendRequest(env
 on("GET", "/api/friends", async (req, env) => json(await friendList(env, await requireMember(req, env))));
 on("POST", "/api/friends/accept", async (req, env) => { await friendAccept(env, await requireMember(req, env), req); return noContent(); });
 on("DELETE", "/api/friends/:id", async (req, env, m) => { await removePair(env, (await requireMember(req, env)).id, m.groups!.id); return noContent(); });
-on("POST", "/api/blocks", async (req, env) => { await blockUser(env, await requireMember(req, env), req); return noContent(); });
+on("POST", "/api/blocks", async (req, env) => { await block(env, await requireMember(req, env), req); return noContent(); });
+on("GET", "/api/blocks", async (req, env) => json(await blockList(env, await requireMember(req, env))));
+on("DELETE", "/api/blocks/:handle", async (req, env, m) => { await unblock(env, await requireMember(req, env), m.groups!.handle); return noContent(); });
+on("POST", "/api/reports", async (req, env) => { await report(env, await requireMember(req, env), req); return noContent(); });
+on("GET", "/api/moderation", async (req, env) => json(await moderationQueue(env, await requireMember(req, env))));
+on("POST", "/api/moderation/resolve", async (req, env) => { await moderationResolve(env, await requireMember(req, env), req); return noContent(); });
 
 on("POST", "/api/crews", async (req, env) => json(await crewCreate(env, await requireMember(req, env), req), 201));
 on("GET", "/api/crews", async (req, env) => json(await crewList(env, await requireMember(req, env))));

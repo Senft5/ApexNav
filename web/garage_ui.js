@@ -28,7 +28,7 @@
   const lbPerHp = (c) => (c.power_hp && c.weight_kg ? (c.weight_kg * LB) / c.power_hp : null);
 
   function mount(page) {
-    const { el, btn, toast, apiCall, jsonOf } = page;
+    const { el, btn, toast, apiCall, jsonOf, report } = page;
     const style = document.createElement('style'); style.textContent = CSS; document.head.append(style);
 
     function card(c, actions) {
@@ -125,7 +125,11 @@
         if (theirs.length) {
           kids.push(el('h3', { textContent: 'Friends\' and crew cars' }));
           const list = el('div', { className: 'garage-cards' });
-          for (const p of theirs) for (const c of p.cars) list.append(card({ ...c, is_primary: 0 }, el('div', { className: 'note', textContent: '@' + p.handle })));
+          for (const p of theirs) for (const c of p.cars) {
+            list.append(card({ ...c, is_primary: 0 }, el('div', { className: 'row', style: 'justify-content:space-between;align-items:center' },
+              el('span', { className: 'note', textContent: '@' + p.handle }),
+              ...(report ? [btn('Report', () => report({ kind: 'car', target: c.id, label: `${title(c)} · @${p.handle}`, who: p.handle, done: render }), 'linkbtn')] : []))));
+          }
           kids.push(list);
         }
         host.replaceChildren(...kids);

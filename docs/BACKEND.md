@@ -61,6 +61,11 @@ Implemented in `backend/src/{auth,social,segments}.ts`, one router in `index.ts`
 - **Garage** (`garage.ts`, migration 0008): a car card is shown only when its owner switches `shared` on, and then only to accepted friends and
   members of the same **private** crew (anyone can join a public crew, so it doesn't count), never across a block either way, never for an owner with no
   handle. No owner id, location or drive data is in it. Ten cars at most (checked inside the insert); always exactly one primary while you have any.
+- **Block and report** (`safety.ts`, no migration): block by id or handle (unknown handles answer like real ones), list and unblock your own blocks
+  (never who blocked you; unblocking restores nothing). `POST /api/reports` covers people, crews, cars and highlights, only ones the reporter
+  could see (else 404), one per person per target, 20 a day. Three different reporters take a public crew off discovery and public join, a car
+  out of friends' garages, a highlight off the map, until the owner (OWNER_EMAIL) dismisses or acts in `GET /api/moderation`: remove = crew made
+  private, car unshared, highlight hidden, person's membership ended and all sessions signed out.
 - Invites and sessions are stored as SHA-256 hashes; an invite works once, expires after 7 days, and is redeemed atomically.
 - Verified by `backend/test/*.test.ts` (76 tests; each privacy rule was checked by temporarily reintroducing the bug and seeing the test fail).
 
