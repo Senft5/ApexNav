@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-yndSMZjiEeyeQzAKjIodStLJyDDbvNoJAO+u0hTsJvE=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-Qrpz/Wdk3u+I61i3LZjXJxPnMY6zTbeopF/mHhnaU+U=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>ApexNav</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -17,6 +17,7 @@
   <script src="vendor/maplibre-gl.js"></script>
   <script src="vendor/maplibre-contour.min.js"></script>
   <script src="apex_core.js"></script>
+  <script src="analysis_client.js"></script>
   <script src="route_loading.js"></script>
   <script src="stages.js"></script>
   <script src="fun_route.js"></script>
@@ -792,17 +793,14 @@
     async function trackFromPolyline(coords, id, name) {
       await RouteLoading.yieldToUI();
       const rs = Core.resamplePolyline(coords.map(c => c[1]), coords.map(c => c[0]), 5);
-      const { kappa, ds } = Core.computeCurvature(rs.lat, rs.lon);
       // what's beside the road (stages.js sightOffsets, IDEAS Q-09): open grass lets you see across a bend, woods don't;
       // no tiles or a long trip: the cautious 4 m everywhere
       let offsets = null;
       try { offsets = window.ApexStages && ApexStages.sightOffsets ? await RouteLoading.optional(ApexStages.sightOffsets(rs.lat, rs.lon), 4000) : null; } catch (_) { offsets = null; }
-      await RouteLoading.yieldToUI();
-      const sight = Core.sightDistanceM(rs.lat, rs.lon, null, offsets || undefined);
-      await RouteLoading.yieldToUI();
-      const env = Core.brakingEnvelopeMps(kappa, ds, null, null, undefined, sight);
+      // curvature, sight, braking envelope and corners in a Web Worker (analysis_client.js, IDEAS P-05); inline without one
+      const { kappa, sight, env, corners } = await ApexAnalysis.analyse(rs.lat, rs.lon, offsets);
       const dist = rs.lat.map((_, i) => i * 5);
-      const events = Core.annotateCautions(Core.detectCorners(kappa, ds), env, sight).map(c => {
+      const events = corners.map(c => {
         const t = Core.paceNoteText(c);
         return { type: 'corner', code: t.code, call: t.call, index: c.apex, dist_m: dist[c.apex], lat: rs.lat[c.apex], lon: rs.lon[c.apex],
                  start_m: dist[c.start], end_m: dist[c.end], radius_m: c.radius_m, apex_mph: c.apex_mps * MPH, dir: c.dir,
