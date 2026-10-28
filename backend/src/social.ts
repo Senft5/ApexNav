@@ -173,10 +173,16 @@ export async function crewInvite(env: Env, v: Viewer, crewId: string): Promise<{
   return { token };
 }
 
+/** A crew invite works only while it's live, never across a block with the owner (either way) and never for a crew several people
+ *  reported or the owner removed; all three look the same as an unknown token, so nobody learns they were blocked. ?1 token hash, ?2 viewer. */
+const CREW_INVITE_OK = `i.token_hash = ?1 AND i.expires_at > datetime('now')
+  AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker = ?2 AND b.blocked = c.owner) OR (b.blocker = c.owner AND b.blocked = ?2))
+  AND NOT ${reportedSql("crew", "c.id")}`;
+
 export async function crewJoin(env: Env, v: Viewer, req: Request): Promise<{ id: string }> {
   const { token } = await body<{ token?: string }>(req);
   const inv = await first<{ crew_id: string }>(env,
-    "SELECT crew_id FROM crew_invites WHERE token_hash = ? AND expires_at > datetime('now')", await sha256hex(str(token, "token", 10, 100)));
+    `SELECT i.crew_id FROM crew_invites i JOIN crews c ON c.id = i.crew_id WHERE ${CREW_INVITE_OK}`, await sha256hex(str(token, "token", 10, 100)), v.id);
   if (!inv) throw new HttpError(400, "invalid_invite");
   const n = await first<{ n: number }>(env, "SELECT COUNT(*) AS n FROM crew_members WHERE user_id = ? AND crew_id != ?", v.id, inv.crew_id);
   if ((n?.n ?? 0) >= 10) throw new HttpError(429, "too_many_crews");                // same cap as creating or joining a public crew
@@ -189,13 +195,11 @@ export async function crewJoin(env: Env, v: Viewer, req: Request): Promise<{ id:
 export async function crewInvitePreview(env: Env, v: Viewer, req: Request) {
   const { token } = await body<{ token?: string }>(req);
   const row = await first<{ id: string; name: string; visibility: string; owner_handle: string | null; members: number; mine: number }>(env,
-    `SELECT c.id, c.name, c.visibility,
-            CASE WHEN EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker = ?2 AND b.blocked = c.owner) OR (b.blocker = c.owner AND b.blocked = ?2))
-                 THEN NULL ELSE o.handle END AS owner_handle,
+    `SELECT c.id, c.name, c.visibility, o.handle AS owner_handle,
             (SELECT COUNT(*) FROM crew_members m WHERE m.crew_id = c.id) AS members,
             EXISTS (SELECT 1 FROM crew_members m WHERE m.crew_id = c.id AND m.user_id = ?2) AS mine
        FROM crew_invites i JOIN crews c ON c.id = i.crew_id JOIN users o ON o.id = c.owner
-      WHERE i.token_hash = ?1 AND i.expires_at > datetime('now')`,
+      WHERE ${CREW_INVITE_OK}`,
     await sha256hex(str(token, "token", 10, 100)), v.id);
   if (!row) throw new HttpError(400, "invalid_invite");
   return { id: row.id, name: row.name, visibility: row.visibility, owner: row.owner_handle, members: row.members, member: !!row.mine };
