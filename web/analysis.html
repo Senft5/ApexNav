@@ -2,9 +2,9 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-k7+QsnkCIT56kOHE/JxIco5XzZfj3wizJGOPwg2Gxmg=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-vyIWUYcnHbh8YIxjsFKSDeT9P0vkVWtpTmrywNi7jB4=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>ApexNav · Log</title>
+  <title>Vetta · Log</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
   <link rel="manifest" href="manifest.webmanifest" />
   <meta name="theme-color" content="#1b1914" />
@@ -14,6 +14,7 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter+Tight:wght@400;500;600&display=swap" />
   <script src="errors.js"></script>   <!-- first, so it sees errors in everything after it -->
   <script src="apex_core.js"></script>
+  <script src="keyboard.js"></script>
   <script src="themes.js"></script>
   <script src="units.js"></script>
   <script src="instruments.js"></script>
@@ -123,6 +124,13 @@
     a.btn { display: inline-flex; align-items: center; text-decoration: none; font-weight: 600; }
     .seg b { font-size: 15px; } .seg span { font-size: 12px; color: var(--panel-dim); }
     :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    /* The keyboard (web/keyboard.js): one clean ink border on the field that has it, no tab bar while typing, and the page
+       fits above the keyboard. */
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):focus-visible, textarea:focus-visible, select:focus-visible {
+      outline: none; border-color: var(--panel-ink); box-shadow: inset 0 0 0 1px var(--panel-ink); }
+    html.kb-open .tabbar { display: none !important; }
+    html.kb-open body { height: var(--kb-h); }
     @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; animation: none !important; transition: none !important; } }
     [hidden] { display: none !important; }
     a.back { display: inline-flex; align-items: center; min-height: 44px; font-size: 15px; font-weight: 600; text-decoration: none; color: var(--panel-dim); }
@@ -439,7 +447,7 @@
       const ls = ApexYearReview.lines(s);
       $('yearTitle').textContent = `${year} so far`;
       $('yearLines').replaceChildren(...ls.map((t) => Object.assign(document.createElement('p'), { textContent: t })));
-      yearText = [`My ${year} on the road with ApexNav`, ...ls].join('\n');
+      yearText = [`My ${year} on the road with Vetta`, ...ls].join('\n');
     }
     $('yearShare').addEventListener('click', async () => {
       if (!yearText) return;
@@ -607,7 +615,7 @@
         await storeDrive(d);
         await loadDrives();
         renderAll();
-      } catch (err) { alert(/^missing column/.test(err.message) ? `Couldn't import ${file.name}. It isn't an ApexNav drive log.` : `Couldn't import ${file.name}. The file may be damaged.`); }
+      } catch (err) { alert(/^missing column/.test(err.message) ? `Couldn't import ${file.name}. It isn't an Vetta drive log.` : `Couldn't import ${file.name}. The file may be damaged.`); }
       e.target.value = '';
     });
 
@@ -1049,7 +1057,7 @@
       const text = d.name + ' · ' + [score, mi].filter(Boolean).join(' · ');
       const url = location.origin + '/?drive=' + encodeURIComponent(d.id);
       if (navigator.share) {
-        try { await navigator.share({ title: 'ApexNav drive', text, url }); return; } catch (e) { if (e.name === 'AbortError') return; }
+        try { await navigator.share({ title: 'Vetta drive', text, url }); return; } catch (e) { if (e.name === 'AbortError') return; }
       }
       try { await navigator.clipboard.writeText(text + ' ' + url); const b = $('dvShare'); b.textContent = 'Link copied'; setTimeout(() => { b.textContent = 'Share'; }, 2000); } catch (_) { window.prompt('Copy drive link', text + ' ' + url); }
     });

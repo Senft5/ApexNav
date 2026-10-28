@@ -10,8 +10,8 @@ every channel the owner set up (MARKETING.md section 6). Numbers come from the r
 | on-screen title (0–3 s) | {road name}, {state} |
 | on-screen line (3–20 s) | {length} mi · {corners} corners · {climb} ft of climb (from the map) |
 | if 2+ members drove it | Measured: {smooth / some rough patches / rough}, {banked / flat} corners |
-| end card (last 3 s) | ApexNav · the co-driver for the long way home |
-| caption | {why it's worth it, one sentence}. {length} miles, {corners} corners. Plan it in ApexNav: {campaign link} |
+| end card (last 3 s) | Vetta · the co-driver for the long way home |
+| caption | {why it's worth it, one sentence}. {length} miles, {corners} corners. Plan it in Vetta: {campaign link} |
 | hashtags (Instagram, TikTok only, 3 max) | #drivingroads #{state}roads #{car community if relevant} |
 
 Never in a clip: a speed, a time, a speedometer, a phone in a hand, traffic, a real person's drive or position.
@@ -41,7 +41,7 @@ Between road videos (one post each, mid-week):
 | time | picture | sound |
 |---|---|---|
 | 0–3 | cockpit on a dash mount, demo drive running | co-driver: "Left 4. Crest. Right 3 tightens." |
-| 3–9 | the map strip showing the next three corners | "ApexNav reads the road ahead out loud." |
+| 3–9 | the map strip showing the next three corners | "Vetta reads the road ahead out loud." |
 | 9–13 | Log: the drive's corners, a smooth score | "And scores how smoothly you drove it." |
 | 13–15 | end card | "Never how fast." |
 
@@ -64,5 +64,5 @@ Between road videos (one post each, mid-week):
 
 ## Bluesky / Threads / X launch post
 
-I built ApexNav: a co-driver for back roads. It reads every corner before you reach it, finds the twisty roads near
+I built Vetta: a co-driver for back roads. It reads every corner before you reach it, finds the twisty roads near
 you, and scores how smoothly you drove them, never how fast. Free, no ads, no subscription. {link}

@@ -5,12 +5,12 @@ launch week, never the same text twice, and the owner answers every comment that
 
 ## Show HN
 
-**Title:** Show HN: ApexNav, phones as 100 Hz road probes for a pace-note co-driver
+**Title:** Show HN: Vetta, phones as 100 Hz road probes for a pace-note co-driver
 
 **Text:**
 
 I like driving back roads, and every app I tried either knew only the map's line or wanted a subscription. So I
-built ApexNav: an iPhone co-driver that calls corners before you reach them, rally-style, and learns how roads
+built Vetta: an iPhone co-driver that calls corners before you reach them, rally-style, and learns how roads
 actually feel from the phones of the people driving them.
 
 The technical part I'd love feedback on:
@@ -30,9 +30,9 @@ No ads, no tracking, no subscription. {Pro sentence once it ships.} {App Store l
 
 ## Product Hunt
 
-**Name:** ApexNav
+**Name:** Vetta
 **Tagline (60):** A co-driver that reads the road ahead out loud
-**Description (260):** ApexNav calls every corner before you reach it, finds the twisty roads near you, and scores
+**Description (260):** Vetta calls every corner before you reach it, finds the twisty roads near you, and scores
 how smoothly you drove them, never how fast. Members' phones measure how roads feel, so the good ones rise. No
 subscription, no ads, no tracking.
 **First comment:** the Show HN text, shortened to its first paragraph and the list of what it does.
@@ -47,7 +47,7 @@ say in the first line that you made it; ask a real question; no link in the titl
 
 **Title:** I made a co-driver app for back roads, and I'd like Miata people to tell me what's wrong with it
 
-I'm the developer, so take this with salt. ApexNav sits on your dash and reads the road ahead out loud like a
+I'm the developer, so take this with salt. Vetta sits on your dash and reads the road ahead out loud like a
 rally co-driver ("left 3, crest, right 4 tightens"), timed to your speed. It'll build a loop of the length you ask
 for from the twistiest roads nearby, and it scores drives on smoothness, never speed.
 
@@ -84,5 +84,5 @@ Held until Apple approves the CarPlay entitlement.
 - **"What do you do with my location?"** Drives stay on your phone. With road data on, only road measurements are
   sent, never your position, path, times or speeds, and not the first and last km of any trip. {privacy link}
 - **"Android?"** Later. iPhone first because it's one person building it.
-- **"How do you make money?"** {Free with a one-time Pro for track days, video and power tools, once Pro ships.}
+- **"How do you make money?"** {Free forever for driving, notes and crews; an optional Pro subscription (or lifetime) for coaching, track days and clean video, once Pro ships. No ads, and we never sell data about drivers.}
   No ads, no data sales, no subscription.

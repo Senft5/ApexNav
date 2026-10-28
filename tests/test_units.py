@@ -54,5 +54,5 @@ def test_imperial(out):
 def test_other_modules_in_metric(out):
     m = out["modules"]
     assert m["convoy"] == ["300 m", "4.2 km", "Bump ahead, 400 metres.", "Bump ahead, 1 kilometre.", "Bump ahead, 3.0 kilometres."]
-    assert m["scenic"] == "no fuel for 120 km (km 0–120)"
+    assert m["scenic"] == "No fuel on the way"
     assert m["week"] == "16.1 km in 2 drives"

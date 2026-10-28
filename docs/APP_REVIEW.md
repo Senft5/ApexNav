@@ -1,6 +1,6 @@
 # App Store review readiness
 
-What Apple's App Review Guidelines ask of ApexNav, what already holds, and what is still open. Every agent that
+What Apple's App Review Guidelines ask of Vetta, what already holds, and what is still open. Every agent that
 changes the iOS shell, sign-in, social features, data collection or the store listing checks this page first and
 updates it in the same PR. Guideline numbers refer to https://developer.apple.com/app-store/review/guidelines/.
 
@@ -11,7 +11,7 @@ Checked 2026-10-28 against main and App Store Connect (read through the API key 
 
 | item | state |
 |---|---|
-| App record | ApexNav, `com.senft.ApexNav`, Apple ID 6827831098, version 1.0 "Prepare for Submission" |
+| App record | Vetta, `com.senft.ApexNav`, Apple ID 6827831098, version 1.0 "Prepare for Submission" |
 | Builds | uploaded by CI on every app-changing merge to main (docs/TESTFLIGHT.md); 342.1 and 349.1 VALID, no export-compliance question |
 | TestFlight | internal group "First Testers", access to all builds |
 | Bundle ID capabilities | In-App Purchase (Apple's default) and Sign in with Apple (enabled 2026-10-28 through the API). A second, unused App ID `com.senft.ApexNav.JNX759T5W6` (App Groups) exists from an earlier attempt; harmless, the owner may delete it |

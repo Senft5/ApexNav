@@ -641,6 +641,8 @@
     for (const c of ranked || []) {
       const f = c.fun ? c.fun.fun : null;
       if (out.some(o => Math.abs(o.timeS - c.timeS) < 30 && Math.abs((o.fun ? o.fun.fun : null) - f) <= 1)) continue;
+      // Never offer a route that is both slower and less fun than one already on the card: nobody would pick it.
+      if (out.some(o => o.fun && f != null && o.fun.fun >= f && o.timeS <= c.timeS)) continue;
       out.push(c);
       if (out.length === k) break;
     }

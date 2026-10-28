@@ -1,4 +1,4 @@
-# APEX NAV — OWNER VERIFICATION CHECKLIST
+# VETTA — OWNER VERIFICATION CHECKLIST
 
 ## 0. Before every TestFlight / IPA build: the real-phone run (IDEAS Y-07, about 40 minutes)
 Automated tests and headless Chromium cover the logic; this run covers what only a phone in a car shows. **A passenger
@@ -61,7 +61,7 @@ Each is a short, ordered check with what "good" looks like. Site: https://apexna
 
 ## 1. Google sign-in (about 15 minutes)
 **Create the client** (Google Cloud console, free):
-1. console.cloud.google.com → create a project "ApexNav" → **APIs & Services → OAuth consent screen**: User type *External*, app name ApexNav, your email as support and developer contact, scopes: only the defaults (`openid`, `email`, `profile`), then **Publish app** (status "In production"; basic scopes like these do not need Google's app verification).
+1. console.cloud.google.com → create a project "Vetta" → **APIs & Services → OAuth consent screen**: User type *External*, app name Vetta, your email as support and developer contact, scopes: only the defaults (`openid`, `email`, `profile`), then **Publish app** (status "In production"; basic scopes like these do not need Google's app verification).
 2. **Credentials → Create credentials → OAuth client ID → Web application.**
    Authorized redirect URI (exact): `https://apexnav.senftns.workers.dev/api/auth/google/callback`
 3. Copy the **Client ID** and **Client secret**.

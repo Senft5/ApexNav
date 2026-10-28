@@ -40,6 +40,6 @@ def test_along_the_road(out):
 
 def test_fuel_gap_and_summary(out):
     assert {k: round(v, -2) for k, v in out["gap"].items()} == {"m": 95000, "fromM": 15000, "toM": 110000}   # 30 m sampling
-    assert out["summary"] == "1 viewpoint · 1 café · no fuel for 59 mi (mi 9–68)"
+    assert out["summary"] == "1 viewpoint · 1 café · no fuel from mi 9 to 68"
     assert out["noFuelShort"] == "1 viewpoint · 1 café"          # 20 km with no fuel isn't worth a warning
     assert out["none"] == ""

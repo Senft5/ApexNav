@@ -1,4 +1,4 @@
-# APEX NAV — DATABASE BACKUPS AND RESTORE (IDEAS Y-09)
+# VETTA — DATABASE BACKUPS AND RESTORE (IDEAS Y-09)
 
 The production database is D1 `apexnav-db` (id `b0c559d5-…`). The preview database `apexnav-preview-db` holds no real data
 (all tables empty on 2026-10-28); a schema-only export of it is still taken alongside, because it is the copy that gets

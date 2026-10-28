@@ -1,8 +1,8 @@
 import AppIntents
 import Foundation
 
-/// Siri and Shortcuts (IDEAS V-07): "Start a drive in ApexNav", "Report a hazard in ApexNav", "End my drive in ApexNav",
-/// "How far to the next stage in ApexNav", "Skip this stage in ApexNav".
+/// Siri and Shortcuts (IDEAS V-07): "Start a drive in Vetta", "Report a hazard in Vetta", "End my drive in Vetta",
+/// "How far to the next stage in Vetta", "Skip this stage in Vetta".
 /// Each opens the app and hands it the same apexnav://open?go=… link a widget or a Shortcuts automation would, so the
 /// page decides what happens (a report or an end only during a drive). Hands-free in the car: Siri, or "Hey Siri" on CarPlay.
 enum ApexIntentInbox {
@@ -19,7 +19,7 @@ enum ApexIntentInbox {
 
 struct StartDriveIntent: AppIntent {
     static let title: LocalizedStringResource = "Start a drive"
-    static let description = IntentDescription("Opens ApexNav straight into a drive: pace notes on, recording.")
+    static let description = IntentDescription("Opens Vetta straight into a drive: pace notes on, recording.")
     static let openAppWhenRun = true
     @MainActor func perform() async throws -> some IntentResult { ApexIntentInbox.deliver("drive"); return .result() }
 }

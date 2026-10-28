@@ -1,4 +1,4 @@
-﻿# APEX NAV — SYSTEM ARCHITECTURE & MATH SPECIFICATION
+﻿# VETTA — SYSTEM ARCHITECTURE & MATH SPECIFICATION
 
 ## 1. 3D Phone Mount Auto-Alignment (`compute_mount_rotation_matrix`)
 Phones are mounted at arbitrary pitch, roll, and yaw angles inside a vehicle. To transform raw phone-frame sensor vectors $\mathbf{a}_{\text{phone}}$ and $\boldsymbol{\omega}_{\text{phone}}$ into the ISO 8855 vehicle frame:

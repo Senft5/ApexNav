@@ -56,9 +56,12 @@
     const gap = fuelGap(list, totalM);
     if (finite(totalM) && gap.m >= FUEL_WARN_M) {
       const U = root.ApexUnits, k = U && U.metric() ? 1000 : MI, u = U && U.metric() ? 'km' : 'mi';   // units.js, U-22
-      parts.push(`no fuel for ${Math.round(gap.m / k)} ${u} (${u} ${Math.round(gap.fromM / k)}–${Math.round(gap.toM / k)})`);
+      const n = (m) => Math.round(m / k), atStart = gap.fromM < 500, atEnd = totalM - gap.toM < 500;
+      parts.push(atStart && atEnd ? 'no fuel on the way' : atStart ? `no fuel for the first ${n(gap.m)} ${u}`
+        : atEnd ? `no fuel for the last ${n(gap.m)} ${u}` : `no fuel from ${u} ${n(gap.fromM)} to ${n(gap.toM)}`);
     }
-    return parts.join(' · ');
+    const line = parts.join(' · ');
+    return line.charAt(0).toUpperCase() + line.slice(1);
   }
 
   const api = { along, fuelGap, summary, NEAR_M, FUEL_WARN_M };

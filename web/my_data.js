@@ -8,7 +8,7 @@
   /** GPX 1.1, one track per drive (name, date as the track's time); points with elevation when known. Unknown stays out. */
   function toGpx(drives) {
     const out = ['<?xml version="1.0" encoding="UTF-8"?>',
-      '<gpx version="1.1" creator="ApexNav" xmlns="http://www.topografix.com/GPX/1/1">'];
+      '<gpx version="1.1" creator="Vetta" xmlns="http://www.topografix.com/GPX/1/1">'];
     for (const d of drives || []) {
       const lat = d.lat || [], lon = d.lon || [], ele = d.elev || [];
       const pts = [];

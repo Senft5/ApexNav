@@ -2,15 +2,15 @@
 
 ## One line
 
-ApexNav is a co-driver app for people who take the long way home: it reads the road ahead out loud, finds the
+Vetta is a co-driver app for people who take the long way home: it reads the road ahead out loud, finds the
 twisty roads near you, and learns how each road actually feels from the phones of the people who drive it.
 
 ## Boilerplate (80 words)
 
-ApexNav turns a phone on the dashboard into a rally co-driver. It calls each corner before you reach it, timed to
+Vetta turns a phone on the dashboard into a rally co-driver. It calls each corner before you reach it, timed to
 your speed and working with no signal; builds loops from the best driving roads nearby; and scores drives on
 smoothness and technique, never speed. Members' phones measure how roads feel (banking, crests, rough surface) so
-good roads rise and broken ones sink. No ads, no tracking, no subscription. ApexNav is made in {city, state: OWNER}
+good roads rise and broken ones sink. No ads, no tracking, no subscription. Vetta is made in {city, state: OWNER}
 by {name: OWNER}.
 
 ## Fact sheet
@@ -18,7 +18,7 @@ by {name: OWNER}.
 | | |
 |---|---|
 | Platform | iPhone (iOS {min version}); CarPlay after Apple's approval; Android later |
-| Price | free; ApexNav Pro one-time {price} (only once Pro ships) |
+| Price | free forever; Vetta Pro monthly, yearly or lifetime (only once Pro ships) |
 | Launch | {date} |
 | Region | United States |
 | Developer | {name, city: OWNER} |
@@ -28,7 +28,7 @@ by {name: OWNER}.
 ## What's new about it (for journalists)
 
 1. **Phones as road probes.** The phone's motion sensors run at 100 Hz during a drive. After calibrating to how the
-   phone is mounted, ApexNav measures a road's banking, crests and surface roughness in 5-metre sections. Only those
+   phone is mounted, Vetta measures a road's banking, crests and surface roughness in 5-metre sections. Only those
    road numbers are shared (with the switch on), never where you went, when, or how fast, and a road only counts
    once two or more members have driven it.
 2. **A co-driver, not a sat-nav.** Pace notes in rally style ("left 4 tightens") or plain words, spoken on the phone

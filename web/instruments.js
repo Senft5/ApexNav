@@ -118,7 +118,9 @@
       t.innerHTML = tulipSVG(n, ink, n.type === 'corner' ? accent : signal);
       const c = html('div', 'rb-call', box);
       if (n.type !== 'corner' && n.code.toLowerCase() !== n.call.toLowerCase()) html('b', '', c, n.code);
-      html('span', '', c, n.call);
+      // a long call ("Square left off-camber") steps down a size so it reads whole instead of ending in "..."
+      const len = String(n.call || '').length;
+      html('span', len > 18 ? 'xlong' : len > 11 ? 'long' : '', c, n.call);
     });
   }
 
@@ -216,7 +218,7 @@
       const value = html('div', 'ro-value', c);
       const v = html('b', '', value, '--');
       html('span', '', c, label);
-      return { value, v };
+      return { c, value, v };
     };
     const limit = cell('Limit', 'ro-limit');
     const road = cell('Road', 'ro-pace');
@@ -226,6 +228,7 @@
     eye.style.display = 'none';
     return (d) => {
       limit.v.textContent = fmt(d.limitMph);
+      limit.c.classList.toggle('unknown', !Number.isFinite(d.limitMph));   // a sign only when there is a limit to show
       const both = [d.paceMph, d.sightMph].filter(v => Number.isFinite(v));
       road.v.textContent = fmt(both.length ? Math.min(...both) : null);
       eye.style.display = both.length === 2 && d.sightMph < d.paceMph ? '' : 'none';

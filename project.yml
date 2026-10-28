@@ -37,7 +37,7 @@ targets:
     info:
       path: Info.plist
       properties:
-        CFBundleDisplayName: "APEX NAV"
+        CFBundleDisplayName: "Vetta"
         NSSupportsLiveActivities: true
         # "Open in ApexNav" for GPX files from Files, Mail and AirDrop (IDEAS R-26). Read once through a security-scoped URL
         # (openFile), never edited; LSSupportsOpeningDocumentsInPlace is set once, below, with UIFileSharingEnabled.
@@ -86,7 +86,7 @@ targets:
     info:
       path: LiveActivity/Info.plist
       properties:
-        CFBundleDisplayName: "APEX NAV"
+        CFBundleDisplayName: "Vetta"
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         NSExtension:

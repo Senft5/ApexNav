@@ -1,24 +1,40 @@
 # Pro sheet copy (draft, docs/MONETIZATION.md)
 
-BRAND.md voice: short, sentence case, no "unlock", no exclamation marks. Shown only when the car is parked.
+BRAND.md voice: short, sentence case, no "unlock", no exclamation marks. Shown only when the car is parked. Prices come
+from StoreKit at run time (the user's own currency), never typed into the copy.
 
 ## The sheet
 
-**ApexNav Pro**
-One payment. Yours for good. No subscription.
+**Vetta Pro**
+Vetta is free forever. Pro is for drivers who want to get better.
 
+- **Corner-by-corner coaching**: where you lost smoothness, and how each run of a road compares with your best.
 - **Track days**: lap and sector timing on raceways.
-- **Your progress**: how each run of a road compares with your best, and your week and year in full.
 - **Clean videos**: flyovers and dashcam overlays without the mark, up to 1080p 60.
 - **Every offline area** you want, for no-signal roads.
 - **Every car** in your Garage, each with its own scores.
-- **New co-driver voices** as they come.
+- **Every co-driver voice**, and your week and year in full.
 
-Everything else stays free: pace notes, hazards, loops, convoys, crews, and every drive you've made.
+Everything else stays free: navigation, pace notes, hazards, CarPlay, loops, convoys, crews, measured roads, and every
+drive you've made.
 
-[ Get Pro · {price} ]
-[ Try Pro free for 14 days ]
-Restore purchases · Family Sharing included
+[ Yearly · {yearly price} · first week free ]
+[ Monthly · {monthly price} ]
+[ Lifetime · {lifetime price} · pay once ]
+Restore purchases · Cancel any time in Settings → Apple ID → Subscriptions · Terms · Privacy
+
+(Apple 3.1.2: the sheet names what you get, the length and price of each plan, and that it renews until cancelled;
+the Terms and Privacy links are required on the sheet.)
+
+## Founders
+
+- Before launch: "You're a founder: Pro is yours for good. Thank you for measuring the first roads."
+- After launch, Lifetime while the founder price lasts: "Founder price · {n} of 1,000 left". The real count, no timer.
+
+## Earned by measuring roads
+
+- Progress, in the Log: "64 of 100 km of new road toward a free month of Pro."
+- Earned: "You measured 100 km nobody had before. A month of Pro is yours: [Redeem]" (an App Store offer code).
 
 ## When a free user taps a Pro tool
 
@@ -26,25 +42,15 @@ One line under the control, once a week at most, with the sheet one tap away:
 
 | tool | line |
 |---|---|
+| corner coaching | Corner-by-corner coaching is part of Pro. Your score stays free. [See Pro] |
 | track mode | Lap timing is part of Pro. [See Pro] |
 | stage delta | Compare runs with Pro. Your drive is saved either way. [See Pro] |
 | second offline area | One area is free. Pro saves as many as you need. [See Pro] |
 | second car | One car is free. Pro keeps your whole garage. [See Pro] |
-| video export | Saved with the ApexNav mark. Pro saves it clean. [See Pro] |
+| video export | Saved with the Vetta mark. Pro saves it clean. [See Pro] |
 
 ## Trial
 
-- Start: "Pro for 14 days. Nothing to cancel: it just ends."
-- Day 12: one line in the Log, once: "Pro trial ends in 2 days. Your drives and videos stay."
+- Start (yearly plan only): "A week of Pro, then {yearly price} a year. Cancel before {date} and you pay nothing."
+- Two days before: one line in the Log, once: "Your Pro trial ends {date}. Your drives and videos stay either way."
 - End: nothing pops up. Pro tools show their one line again.
-
-## Founding drivers
-
-"You're a founding driver: Pro is yours for good. Thank you for measuring the first roads."
-
-## Tip jar (Settings → About)
-
-**Fuel the road crew**
-ApexNav has no ads and no subscription. If it's earned a tank of fuel, this keeps it going. It buys nothing extra.
-[ $2.99 ] [ $6.99 ] [ $14.99 ]
-After: "Thank you. Supporter mark on your profile: [Show] [Don't show]"

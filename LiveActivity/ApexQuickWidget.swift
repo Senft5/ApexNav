@@ -27,7 +27,7 @@ struct ApexQuickView: View {
         case .accessoryRectangular:
             VStack(alignment: .leading, spacing: 2) {
                 Label("Start a drive", systemImage: "steeringwheel").font(.headline)
-                Text("ApexNav").font(.caption).foregroundStyle(.secondary)
+                Text("Vetta").font(.caption).foregroundStyle(.secondary)
             }
         case .accessoryInline:
             Label("Start a drive", systemImage: "steeringwheel")
@@ -51,7 +51,7 @@ struct ApexQuickWidget: Widget {
                 .containerBackground(.fill.tertiary, for: .widget)
         }
         .configurationDisplayName("Start a drive")
-        .description("Opens ApexNav straight into a drive.")
+        .description("Opens Vetta straight into a drive.")
         .supportedFamilies([.systemSmall, .accessoryCircular, .accessoryRectangular, .accessoryInline])
     }
 }
@@ -65,6 +65,6 @@ struct ApexDriveControl: ControlWidget {
             }
         }
         .displayName("Start a drive")
-        .description("Opens ApexNav straight into a drive.")
+        .description("Opens Vetta straight into a drive.")
     }
 }

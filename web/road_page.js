@@ -73,7 +73,16 @@
   function characterLine(list, fmt = (m) => `${(m / 1000).toFixed(1)} km`) {
     const good = (list || []).filter((x) => !PLAIN.has(x.archetype) && x.endM - x.startM >= 500)
       .sort((a, b) => (b.endM - b.startM) - (a.endM - a.startM)).slice(0, 3).sort((a, b) => a.startM - b.startM);
-    return good.map((x) => `${x.archetype} ${fmt(x.endM - x.startM)}${x.startM >= 500 ? ` at ${fmt(x.startM)}` : ' from the start'}`).join(' · ');
+    // one phrase per kind of road, where each stretch starts: "Flowing sweepers at 13.0, 21.3 and 29.6 mi"
+    const and = (xs) => (xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`);
+    const kinds = [...new Set(good.map((x) => x.archetype))];
+    return kinds.map((k) => {
+      const at = good.filter((x) => x.archetype === k);
+      const later = at.filter((x) => x.startM >= 500).map((x) => fmt(x.startM));
+      const nums = later.map((v, i) => (i < later.length - 1 ? v.replace(/\s*[^\d.,\s]+$/, '') : v));
+      const parts = [...(at.length > later.length ? ['from the start'] : []), ...(nums.length ? [`at ${and(nums)}`] : [])];
+      return `${k} ${and(parts)}`;
+    }).join(' · ');
   }
 
   const api = { describe, headline, rows, CONF, character, characterLine };

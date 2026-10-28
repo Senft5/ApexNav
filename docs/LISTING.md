@@ -1,12 +1,12 @@
 # App Store listing (IDEAS O-09)
 
 Drafted from what the app does today (no CarPlay, no Android, no feature that isn't in the build: guideline 2.3.1).
-The owner pastes it into App Store Connect → ApexNav → 1.0. `tests/test_listing.py` keeps every field inside Apple's
+The owner pastes it into App Store Connect → Vetta → 1.0. `tests/test_listing.py` keeps every field inside Apple's
 limits and away from speed claims (guideline 1.4, IDEAS guardrails). Change the text here first, then paste.
 
 ## Name (30)
 
-ApexNav
+Vetta
 
 ## Subtitle (30)
 
@@ -22,7 +22,7 @@ navigation,gps,pace notes,co-driver,twisty roads,scenic drive,back roads,road tr
 
 ## Description (4000)
 
-ApexNav is turn-by-turn navigation for people who take the long way home. Search for a destination, pick the fun route or the quick one, and follow spoken directions with the next turn on screen and a live arrival time. Along the way it reads every corner out loud like a rally co-driver, and afterwards it scores how cleanly you drove, never how fast.
+Vetta is turn-by-turn navigation for people who take the long way home. Search for a destination, pick the fun route or the quick one, and follow spoken directions with the next turn on screen and a live arrival time. Along the way it reads every corner out loud like a rally co-driver, and afterwards it scores how cleanly you drove, never how fast.
 
 TURN-BY-TURN NAVIGATION
 Search for any address or place, choose between routes, and get spoken turn-by-turn directions ("In 0.3 miles, turn left onto Deals Gap Road") with the next turn on screen, distance and time left, and arrival time. Miss a turn and the route is rebuilt. Directions and notes keep working with the screen off and play over your music, which dips while a prompt plays.
@@ -31,7 +31,7 @@ PACE NOTES, SPOKEN
 Corners are called before you reach them, in plain words or rally notes ("left 4 tightens"), with hazards other drivers reported, and crests and bumps on roads that have been measured. The voice runs on the phone and works with no signal. Calls are timed to your speed so you hear them at the entry, not the apex.
 
 FIND THE GOOD ROADS
-Ask for a loop of the length you want and ApexNav builds one from the twistiest roads around you, or plans a fun route to a destination. Mark the spots you love and loops lean toward them.
+Ask for a loop of the length you want and Vetta builds one from the twistiest roads around you, or plans a fun route to a destination. Mark the spots you love and loops lean toward them.
 
 A SCORE FOR TECHNIQUE
 Every drive gets a Driver Score from smoothness, braking and consistency. The Log shows your drives on the map, corner by corner, and how you are improving on the roads you drive most. Share a drive card with the road's outline and your score.
@@ -45,7 +45,7 @@ Drives are kept on your phone. Nothing is shared until you share it. Privacy zon
 SAFETY
 Typing is locked while you move. A crash check asks if you are OK after a hard impact and helps you call or text for help; it is a backup to your phone's own crash detection, not a replacement. Always drive within the law and the conditions, and keep your eyes on the road.
 
-ApexNav accounts are by invitation for now. Driving, pace notes, loops and the Log all work without an account.
+Vetta accounts are by invitation for now. Driving, pace notes, loops and the Log all work without an account.
 
 ## URLs
 

@@ -47,7 +47,7 @@ local. Two tasks that touch the same file go one after the other.
 
 Brief template:
 ```
-You are working on ApexNav (your current directory is its checkout). Read CLAUDE.md first.
+You are working on Vetta (your current directory is its checkout). Read CLAUDE.md first.
 Goal (<id>): <what and why, one paragraph>
 Files: <files you expect to change>; do not touch core/, web/apex_core.js or ApexKit/ unless named.
 Constraints: <brand/honesty rules that apply>; unknown data stays unknown (null / --).

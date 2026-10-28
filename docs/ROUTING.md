@@ -1,6 +1,6 @@
 # Fun routing
 
-How ApexNav picks the way from A to B (web/fun_route.js, wired in web/index.html `funRoute`), and how
+How Vetta picks the way from A to B (web/fun_route.js, wired in web/index.html `funRoute`), and how
 loops are sized (see Loops below; stage discovery itself is web/stages.js and docs/ROAD_INTELLIGENCE.md §7).
 
 ## Levels
@@ -114,7 +114,7 @@ moving, it is the long-press pin, as before (IDEAS R-18).
 Where to? takes a pasted Google Maps (`/maps/dir/…`, `?api=1&destination=…&waypoints=…`, `/place/…/@lat,lon`), Apple Maps
 (`daddr`, `saddr`, `ll`) or `geo:` link: places written as words are searched, the stops are routed through in order, and a
 link with no stops is planned like any destination (fun level and all). Short `maps.app.goo.gl` links can't be expanded from
-the page; the app says to open them in a browser first. **Open GPX** (and, in the iOS app, "Open in ApexNav" on a .gpx from
+the page; the app says to open them in a browser first. **Open GPX** (and, in the iOS app, "Open in Vetta" on a .gpx from
 Files, Mail or AirDrop) follows a track exactly as drawn, with our notes worked out from it; a file with only route points or
 waypoints is routed through them. The route card's **GPX** saves the planned route as a track (IDEAS R-25, R-26;
 web/route_import.js, tests/test_route_import.py).
