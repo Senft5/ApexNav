@@ -35,7 +35,6 @@ export async function exportMyData(env: Env, v: Viewer) {
     points_by_week: await q("SELECT iso_week, octane FROM points_ledger WHERE user_id = ?"),
     road_data_by_month: await q("SELECT month, km, pioneer_km FROM member_months WHERE user_id = ?"),
     octane_redemptions: await q("SELECT item, octane, created_at FROM redemptions WHERE user_id = ?"),
-    pro_purchases: await q("SELECT product, environment, purchased_at, expires_at, revoked_at FROM pro_purchases WHERE user_id = ?"),
     note: "Merged road data (banking, roughness, crests per 5 m bin) is anonymous and cannot be traced to you, so it is not part of this export and is not deleted with your account.",
   };
 }

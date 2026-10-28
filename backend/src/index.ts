@@ -25,7 +25,6 @@ import { contribute, setContribute } from "./contribute";
 import { pointsFor } from "./points";
 import { redeem, shop } from "./redeem";
 import { flagsFor } from "./flags";
-import { proStatus, proVerify } from "./pro";
 import { coverage, roadBins } from "./roads";
 import { crewStandings } from "./standings";
 import { eventCancel, eventCreate, eventRsvp, eventsList, eventsNear } from "./events";
@@ -90,7 +89,7 @@ on("GET", "/api/me", async (req, env) => {
   const waiting = v.member ? await env.DB.prepare(
     "SELECT COUNT(*) AS n FROM friendships WHERE status = 'pending' AND requested_by != ?1 AND (user_a = ?1 OR user_b = ?1)").bind(v.id).first<{ n: number }>() : null;
   return json({ signed_in: true, id: v.id, handle: v.handle, name: v.displayName, member: v.member, requests: waiting?.n ?? 0,
-               pro: await proStatus(env, v.id), ...(v.member && isModerator(env, v) ? { moderator: true } : {}) });
+               ...(v.member && isModerator(env, v) ? { moderator: true } : {}) });
 });
 on("POST", "/api/invites/redeem", async (req, env) => { await redeemInvite(env, await requireUser(req, env), req); return noContent(); });
 on("POST", "/api/invites", async (req, env) => json(await createInvite(env, await requireMember(req, env), req), 201));
@@ -105,9 +104,6 @@ on("POST", "/api/contribute", async (req, env) => json(await contribute(env, awa
 on("GET", "/api/roads", async (req, env) => { await requireMember(req, env); return json(await roadBins(env, new URL(req.url))); });
 on("GET", "/api/coverage", async (req, env) => { await requireMember(req, env); return json(await coverage(env, new URL(req.url))); });
 on("GET", "/api/points", async (req, env) => json(await pointsFor(env, (await requireMember(req, env)).id)));
-// ApexNav Pro (docs/MONETIZATION.md): signed in is enough, a purchase belongs to the account, member or not
-on("GET", "/api/pro", async (req, env) => json(await proStatus(env, (await requireUser(req, env)).id)));
-on("POST", "/api/pro/verify", async (req, env) => json(await proVerify(env, await requireUser(req, env), req)));
 on("GET", "/api/flags", async (req, env) => json(await flagsFor(env, req)));
 on("GET", "/api/shop", async (req, env) => json(await shop(env, await requireMember(req, env))));
 on("POST", "/api/redeem", async (req, env) => json(await redeem(env, await requireMember(req, env), req)));

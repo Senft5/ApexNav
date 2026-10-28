@@ -12,9 +12,6 @@ export interface Env {
   AUTH_LIMIT?: RateLimit;   // sign-in endpoints per IP
   BACKUPS?: KVNamespace;
   FLAGS?: string;           // feature flags JSON (src/flags.ts), set in the dashboard to change a rollout without a release
-  PRO_FOUNDING_BEFORE?: string; // ISO date: members who joined before it have Pro for life (docs/MONETIZATION.md §2)
-  PRO_ALLOW_SANDBOX?: string;   // "1": count sandbox (TestFlight) purchases too
-  STOREKIT_ROOT_SHA256?: string; // tests only: production pins Apple Root CA - G3 in storekit.ts
   REVIEW_INVITE_HASH?: string;   // tests only: production uses the constant in auth.ts    // weekly database dumps (src/backup.ts); production only
 }
 
