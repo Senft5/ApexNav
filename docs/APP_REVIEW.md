@@ -20,6 +20,7 @@ Checked 2026-10-28 against main and App Store Connect (read through the API key 
 
 | guideline | how |
 |---|---|
+| 5.1.1 data portability in the app | Download my data, GPX exports and drive videos open the share sheet in the app (`shareFile` bridge, save_file.js); before this a download link did nothing in the web view |
 | 5.1.1(v) account deletion in the app | Account → Delete account (`DELETE /api/me`, erases the account and what others hold about it) |
 | 5.1.1 data security | the app's session token lives in the iOS Keychain (this device only, after first unlock); the shell makes the page's API calls (`ApexApiBridge`), so web content never holds it (IDEAS Z-10); every page runs under a Content-Security-Policy (Z-11) |
 | 3.1.1 in-app purchase | Octane (points for sharing road data) can't be bought; it only unlocks cosmetic accents (S-10). No money changes hands, so no IAP is involved; nothing redeemable is functionality or a safety feature |

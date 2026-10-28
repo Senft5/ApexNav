@@ -1045,6 +1045,25 @@ flow('look: an accent unlocked with Octane recolours the route line, warnings un
   check(await page.evaluate(() => localStorage.getItem('apex.accent')) === 'rally_blue', 'kept on the phone');
 });
 
+flow('flyover video: Video records the replay with the note on it and hands over a file (IDEAS D-10)', async (page, base) => {
+  await page.route('https://tiles.openfreemap.org/**', (route) => (route.request().url().includes('/styles/')
+    ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 8, sources: {}, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#eee' } }] }) })
+    : route.abort()));
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html?drive=dry_ridge');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.track && window.apexDebug.map && window.apexDebug.map.loaded(), null, { timeout: 20000 });
+  check(!(await page.evaluate(() => document.getElementById('videoBtn').hidden)), 'Video is offered where the browser can record');
+  await page.evaluate(() => { window.__saved = null; ApexSaveFile.saveFile = async (blob, name, type) => { window.__saved = { size: blob.size, name, type }; return 'saved'; }; });
+  await page.evaluate(() => document.getElementById('videoBtn').click());
+  await page.waitForFunction(() => window.apexDebug.state.playing && document.getElementById('videoBtn').textContent === 'Stop');
+  await page.waitForTimeout(2500);
+  await page.evaluate(() => document.getElementById('videoBtn').click());
+  await page.waitForFunction(() => window.__saved, null, { timeout: 8000 });
+  const saved = await page.evaluate(() => window.__saved);
+  check(saved.size > 1000 && /^Dry_Ridge.*\.(webm|mp4)$/.test(saved.name) && /^video\//.test(saved.type), 'a video file: ' + JSON.stringify(saved));
+  check(!(await page.evaluate(() => window.apexDebug.state.playing)), 'the replay stops with it');
+});
+
 flow('desk: on a big screen Where to? is a column on the left and sheets a panel on the right, the map in view (IDEAS A-05)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.goto(base + '/index.html?view=route');
