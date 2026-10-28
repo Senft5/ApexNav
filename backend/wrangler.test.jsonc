@@ -3,6 +3,8 @@
   "name": "apexnav-test",
   "main": "./src/index.ts",
   "compatibility_date": "2026-10-19",
+  "durable_objects": { "bindings": [{ "name": "CONVOY", "class_name": "ConvoyRoom" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["ConvoyRoom"] }],
   "d1_databases": [{ "binding": "DB", "database_name": "apexnav-test", "database_id": "00000000-0000-0000-0000-000000000000" }],
   "vars": { "GOOGLE_CLIENT_ID": "test-client", "GOOGLE_CLIENT_SECRET": "test-secret", "OWNER_EMAIL": "owner@example.test", "PEPPER": "test-pepper", "PUBLIC_ORIGIN": "https://apexnav.test" }
 }

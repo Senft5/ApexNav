@@ -1,5 +1,6 @@
 export interface Env {
   DB: D1Database;
+  CONVOY: DurableObjectNamespace<import("./convoy").ConvoyRoom>;
   ASSETS?: Fetcher;
   GOOGLE_CLIENT_ID?: string;
   GOOGLE_CLIENT_SECRET?: string;

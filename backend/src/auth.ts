@@ -25,6 +25,11 @@ function bearer(req: Request): string | null {
   return m ? m[1] : null;
 }
 const sessionToken = (req: Request) => bearer(req) ?? getCookie(req, SESSION_COOKIE);
+/** sha256 of the request's session token: lets a live connection be tied to (and dropped with) the account session. */
+export async function sessionHash(req: Request): Promise<string | null> {
+  const t = sessionToken(req);
+  return t ? sha256hex(t) : null;
+}
 
 // ---- sessions ----------------------------------------------------------------------------------
 export async function viewer(req: Request, env: Env): Promise<Viewer | null> {
