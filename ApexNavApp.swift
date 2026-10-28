@@ -681,11 +681,12 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         // Blank, never 0, for what is not measured: chassis-frame values need a solved mount (an unsolved one would put
         // braking into lateral g and skew the score), elevation needs a fix with altitude.
         let locked = pipeline.mount.state == .locked
+        let vertical = pipeline.mount.state != .default   // roughness needs only the road vertical
         func cell(_ v: Double?, _ digits: Int) -> String {
             guard let v = v, v.isFinite else { return "" }
             return String(format: "%.\(digits)f", v)
         }
-        let row = [
+        let row: [String] = [
             String(idx),
             cell(Double(idx) * ApexKit.segmentLengthM, 1),
             cell(node.lat, 7),
@@ -696,9 +697,9 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
             cell(locked ? pipeline.latAccMps2 / Self.gStd : nil, 4),
             cell(locked ? pipeline.camberRad * 180.0 / Double.pi : nil, 2),
             cell(locked ? pipeline.crestAccMps2 / Self.gStd : nil, 4),
-            cell(node.roughRMSMps2 / Self.gStd, 4),
+            cell(vertical ? node.roughRMSMps2 / Self.gStd : nil, 4),
             cell(locked ? pipeline.engagement : nil, 3),
-            cell(node.gradePct, 2),
+            cell(node.elevationM == nil ? nil : node.gradePct, 2),
             cell(vertPeakMps2.map { $0 / Self.gStd }, 3),
         ].joined(separator: ",")
         csvLines.append(row)

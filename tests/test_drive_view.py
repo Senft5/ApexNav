@@ -103,9 +103,12 @@ const ggCorner = ggCol ? ggCol.children[2].textContent : null;
 const rootNoG = mkEl('div');
 V.mount(rootNoG, { ...scoredDrive, g_known: d.lat.map(() => 0) }, { Core, C, MPH: Core.MPS_TO_MPH });
 const ggNone = rootNoG.children[1].children[1].children.length;
+const rootGap = mkEl('div');                                       // elevation unknown for the first 50 samples (no altitude yet)
+V.mount(rootGap, { ...scoredDrive, elev: scoredDrive.elev.map((v, i) => (i < 50 ? NaN : v)) }, { Core, C, MPH: Core.MPS_TO_MPH });
+const gapLanes = rootGap.children[1].children[1].children[1].innerHTML;
 
 console.log(JSON.stringify({ full, bare, headHtml, unscoredHeadHtml, hiddenBeforeScrub, hiddenAfterKeyScrub, hiddenBeforeZoom, hiddenAfterZoom,
-  coachHead, timeHtml, cardHtml, aloneHead, aloneList, aloneCard, coastNear, ggCaption, ggCorner, ggNone, feelRead }));
+  coachHead, timeHtml, cardHtml, aloneHead, aloneList, aloneCard, coastNear, ggCaption, ggCorner, ggNone, feelRead, gapLanes }));
 """
 
 
@@ -207,6 +210,7 @@ console.log(JSON.stringify({
   clean: V.plainCoach(ds({}), null),
   noStrong: V.plainCoach(ds({ pace: 0.5, smoothness: 0.5, braking: 0.65, consistency: 0.6 }), null),
   unknown: V.plainCoach({ score: null, components: null }, null),
+  noContradiction: V.plainCoach(ds({ smoothness: 0.6, braking: 0.95 }), { corners: [tip('brake_after_apex'), tip('brake_after_apex')] }),
 }));
 """
     root = str(__import__("pathlib").Path(__file__).resolve().parents[1])
@@ -216,9 +220,14 @@ console.log(JSON.stringify({
     assert r["habit"] == ("Smooth, unhurried steering. One thing to work on: in 2 corners you rolled with neither brake nor gas "
                           "between slowing down and speeding up; go straight from one to the other.")
     assert r["speedOnly"] == "Smooth, unhurried steering, and nothing stands out to fix."   # tips against a faster pass are not habits
-    assert r["weak"].endswith("One thing to work on: finish your braking before you turn in.")   # one coast tip is not a habit
+    assert r["weak"].endswith("One thing to work on: finish your braking by the middle of the corner.")   # one coast tip is not a habit
     assert r["clean"] == "Smooth, unhurried steering, and nothing stands out to fix."
     assert r["noStrong"] == "One thing to work on: steer more gently, with fewer quick corrections in the middle of corners."
     assert r["unknown"] is None
+    assert r["noContradiction"].startswith("Good use of the grip you had. One thing to work on: in 2 corners you were still braking")
     for v in r.values():
         assert v is None or not any(w in v.lower() for w in ("faster", "quicker", "speed up", "mph", "apex"))
+
+
+def test_unknown_elevation_is_a_gap_not_nan(r):
+    assert "Elevation" in r["gapLanes"] and "NaN" not in r["gapLanes"]
