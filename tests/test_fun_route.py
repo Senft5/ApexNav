@@ -336,6 +336,7 @@ const FunRoute = require(root + '/web/fun_route.js');
 const html = fs.readFileSync(root + '/web/index.html', 'utf8');
 const source = html.match(/async function funRoute\(.*?\n    }/s)[0];
 const useOptionSource = html.match(/async function useOption\(.*?\n    }/s)[0];
+const marksSource = html.match(/function timeMarksOf\(.*?\n    }/s)[0];
 const fewerSource = html.match(/const fewerTownKm = .*?;\n/s)[0];
 const townsOnSource = html.match(/async function townsOn\(.*?\n    }/s)[0];
 const whyText = new Function('return (' + html.match(/function whyText\(w.*?\) \{.*?\n    }/s)[0] + ')')();
@@ -347,7 +348,7 @@ const A = { lat: lat0, lon: lon0 }, B = { lat: lat0, lon: lon0 + 10000 * mLon };
 async function run({ level, routes, osrm, discover, matrix, places, avoid = FunRoute.AVOID_DEFAULT }) {
   const built = [], toasts = [], calls = { matrix: 0, routes: 0 };
   const funRoute = new Function('funLevel', 'valhallaRoutes', 'osrmRoutes', 'toast', 'FunRoute', 'ApexStages', 'state', 'allHighlights', 'valhallaMatrix',
-    'Core', 'RouteLoading', 'funOf', 'applyMeasured', 'trackFromPolyline', 'buildRoute', 'totalOf', 'window', 'whyText', 'avoid', 'let routeOptions = null; ' + useOptionSource + '; ' + townsOnSource + '; ' + fewerSource + '; return (' + source + ')')(
+    'Core', 'RouteLoading', 'funOf', 'applyMeasured', 'trackFromPolyline', 'buildRoute', 'totalOf', 'window', 'whyText', 'avoid', 'let routeOptions = null; ' + useOptionSource + '; ' + townsOnSource + '; ' + fewerSource + '; ' + marksSource + '; return (' + source + ')')(
     level, async (pts, through, alts) => { calls.routes++; return routes(pts, alts); }, osrm || (async () => { throw Error('down'); }),
     (m) => toasts.push(m), FunRoute, { discover, places }, { hlOn: false }, async () => [],
     async (s, t) => { calls.matrix++; return { times: await matrix(s, t) }; },
@@ -360,9 +361,9 @@ async function run({ level, routes, osrm, discover, matrix, places, avoid = FunR
 (async () => {
   const out = {};
   // 1. Quick: no stage search; the twistier alternate wins when it costs 1 minute.
-  let r = await run({ level: 'quick', routes: async (pts, alts) => [{ coords: straight, turns: [], timeS: 600 }, { coords: wiggly, turns: [], timeS: 660, names: new Map([['Twisty Rd', 14]]) }],
+  let r = await run({ level: 'quick', routes: async (pts, alts) => [{ coords: straight, turns: [], timeS: 600 }, { coords: wiggly, turns: [], timeS: 660, names: new Map([['Twisty Rd', 14]]), times: [[...wiggly[0], 0], [...wiggly[1200], 330]] }],
                       discover: async () => { throw Error('should not search'); } });
-  out.quick = { fun: r.built[0].fun.fun, extraS: r.built[0].extraS, via: r.built[0].request.via.length, shaping: r.built[0].request.via.every(v => v.shaping), matrix: r.calls.matrix, why: r.built[0].why };
+  out.quick = { fun: r.built[0].fun.fun, extraS: r.built[0].extraS, via: r.built[0].request.via.length, shaping: r.built[0].request.via.every(v => v.shaping), matrix: r.calls.matrix, why: r.built[0].why, marks: r.built[0].timeMarks.map(([m, sec]) => [Math.round(m / 100) / 10, sec]) };
   // 2. No tiles: the router's own routes still compete, no error.
   r = await run({ level: 'fun', routes: async () => [{ coords: straight, turns: [], timeS: 600 }], discover: async () => { throw Error('no tiles'); } });
   out.noTiles = { built: r.built.length, fun: r.built[0].fun.fun };
@@ -409,6 +410,7 @@ def test_app_fun_route_picks_and_falls_back():
     assert res.returncode == 0, res.stderr
     r = json.loads(res.stdout)
     assert r["quick"]["fun"] > 50 and r["quick"]["extraS"] == 60 and r["quick"]["matrix"] == 0
+    assert len(r["quick"]["marks"]) == 2 and r["quick"]["marks"][0] == [0, 0] and r["quick"]["marks"][1][1] == 330, r["quick"]["marks"]
     assert r["quick"]["via"] >= 1 and r["quick"]["shaping"], "the winning 12 km alternate is pinned so a reroute stays on it"
     assert r["avoidTolls"] == {"timeS": 600, "extraS": 0, "why": None, "unavoided": []}, "the toll road is dropped, not ranked"
     assert r["tollOnly"] == ["tolls"], "no toll-free way: the card says so"
