@@ -16,6 +16,7 @@ export async function exportMyData(env: Env, v: Viewer) {
     // other people appear only as the handle they already show you
     friends: await q("SELECT u.handle, f.status, f.created_at FROM friendships f JOIN users u ON u.id = CASE WHEN f.user_a = ?1 THEN f.user_b ELSE f.user_a END WHERE f.user_a = ?1 OR f.user_b = ?1"),
     blocks: await q("SELECT u.handle FROM blocks b JOIN users u ON u.id = b.blocked WHERE b.blocker = ?"),
+    shared_routes: await q("SELECT name, created_at FROM shared_routes WHERE owner = ?"),
     hazard_reports: await q("SELECT kind, lat, lon, heading, created_at, expires_at, confirms, clears FROM hazard_reports WHERE reported_by = ?"),
     crews: await q("SELECT c.name, m.role, m.joined_at FROM crew_members m JOIN crews c ON c.id = m.crew_id WHERE m.user_id = ?"),
     segments: await q("SELECT id, name, length_m, geom, origin_id, created_at FROM segments WHERE owner = ?"),
