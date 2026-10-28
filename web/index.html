@@ -42,6 +42,7 @@
   <script src="spots_feed.js"></script>
   <script src="feedback.js"></script>
   <script src="profile_view.js"></script>
+  <script src="pinned_places.js"></script>
   <script src="incident.js"></script>
   <script src="traffic.js"></script>
   <script src="in_car.js"></script>
@@ -189,6 +190,7 @@
     .pin.crest, .pin.dip { color: var(--panel-ink); border-color: var(--panel-dim); }
     .puck { width: 26px; height: 26px; }
     .reshape-pin { cursor: grabbing; }
+    .pinned-row { flex-wrap: nowrap; align-items: stretch; } .pinned-row .place { flex: 1; min-width: 0; }
     .dropped-pin { width: 24px; height: 24px; border: 3px solid var(--panel); background: var(--accent); border-radius: 50%; box-shadow: 0 0 0 2px var(--panel-ink); }
     .pin-actions { display: grid; gap: 8px; }
     .pin-actions .ink-btn { width: 100%; text-align: left; }
@@ -498,6 +500,7 @@
                 <button class="ink-btn" id="routeShareBtn">Share</button>
                 <button class="ink-btn" id="etaShareBtn" aria-pressed="false" hidden>Share ETA</button>
                 <button class="linkbtn" id="routeGpxBtn">GPX</button>
+                <button class="linkbtn" id="routePinBtn">Pin place</button>
                 <label class="linkbtn" id="homeByRow" hidden>Home by <input type="time" id="homeByInput" aria-label="Home by" /></label>
               </div>
               <div class="stack-8" id="routeSharePick"></div>
@@ -2368,6 +2371,16 @@
       const saved = !!(t && ApexSavedRoutes.has(localStorage, t.id));
       b.textContent = saved ? 'Saved' : 'Save'; b.setAttribute('aria-pressed', String(saved));
     }
+    // Pin the destination (pinned_places.js, IDEAS U-20): Home, Work or any name, first in Where to?; on this phone only.
+    $('routePinBtn').addEventListener('click', () => {
+      const t = plannedRoute, to = t && t.request && t.request.to;
+      if (!to || !Number.isFinite(to.lat)) { toast('Plan a route to a place first.'); return; }
+      const has = (n) => ApexPinnedPlaces.list(localStorage).some((p) => p.name.toLowerCase() === n);
+      const name = prompt('Pin this place as (Home, Work or any name)', has('home') ? (has('work') ? '' : 'Work') : 'Home');
+      if (!name || !name.trim()) return;
+      const label = String(t.name || '').replace(/^To /, '') || name;
+      toast(ApexPinnedPlaces.pin(localStorage, name, { label, lat: to.lat, lon: to.lon }) ? `Pinned as ${name.trim()}. It's first in Where to?, on this phone only.` : 'Couldn\u2019t pin that.');
+    });
     $('routeSaveBtn').addEventListener('click', () => {
       const t = plannedRoute;
       if (!t || !Array.isArray(t.lat) || t.lat.length < 2) return;
@@ -3227,9 +3240,10 @@
         if (seq !== suggestSeq) return;                                  // a newer keystroke won
         if (!rows.length && !empty) empty = 'No matches nearby. Press Go to search everywhere.';
       } else {
-        rows = [...ApexSavedRoutes.list(localStorage).slice(0, 4).map(p => ({ label: p.name, kind: Number.isFinite(p.miles) ? `Saved · ${ApexUnits.long(p.miles * 1609.344)}` : 'Saved', saved: p })),
+        rows = [...ApexPinnedPlaces.list(localStorage).map(p => ({ label: p.name, lat: p.lat, lon: p.lon, kind: p.label, pinned: p })),
+                ...ApexSavedRoutes.list(localStorage).slice(0, 4).map(p => ({ label: p.name, kind: Number.isFinite(p.miles) ? `Saved · ${ApexUnits.long(p.miles * 1609.344)}` : 'Saved', saved: p })),
                 ...recentPlaces().map(p => ({ ...p, kind: 'Recent' })),
-                ...loadHighlights().filter(h => Number.isFinite(h.lat) && Number.isFinite(h.lon)).map(h => ({ label: h.name || 'Spot', lat: h.lat, lon: h.lon, kind: 'Spot' }))].slice(0, 10);
+                ...loadHighlights().filter(h => Number.isFinite(h.lat) && Number.isFinite(h.lon)).map(h => ({ label: h.name || 'Spot', lat: h.lat, lon: h.lon, kind: 'Spot' }))].slice(0, 10 + ApexPinnedPlaces.MAX);
       }
       shownRows = { q, rows: empty ? [] : rows };
       if (empty) { const n = document.createElement('p'); n.className = 'note'; n.textContent = empty; box.replaceChildren(n); box.hidden = false; return; }
@@ -3238,7 +3252,12 @@
         const name = document.createElement('b'); name.textContent = p.label;
         const kind = document.createElement('span'); kind.textContent = p.kind;
         b.append(name, kind); b.addEventListener('click', () => (p.saved ? openSaved(p.saved) : routeToPlace(p)));
-        return b;
+        if (!p.pinned) return b;
+        // a pinned place (U-20): its own row with Unpin beside it
+        const un = document.createElement('button'); un.className = 'linkbtn'; un.textContent = 'Unpin'; un.setAttribute('aria-label', `Unpin ${p.label}`);
+        un.addEventListener('click', (e) => { e.stopPropagation(); ApexPinnedPlaces.unpin(localStorage, p.pinned.name); renderPlaces(); });
+        const row = document.createElement('div'); row.className = 'row pinned-row'; row.append(b, un);
+        return row;
       }));
       box.hidden = !rows.length;
     }
