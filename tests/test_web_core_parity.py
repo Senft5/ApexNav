@@ -163,10 +163,10 @@ def test_parity_coach_on_real_drives():
     shifted = [dict(late, lat=[x + 3e-5 * math.sin(i / 7 + k) for i, x in enumerate(drives[1]["lat"])],
                     lon=[x + 4e-5 * math.cos(i / 5 + k) for i, x in enumerate(drives[1]["lon"])]) for k in (1, 2)]
     cases = [(drives[0], [drives[1]]), (drives[1], [drives[0], quick]), (drives[1], []), (drives[1], [quick, late, later]),
-             (drives[1], [*shifted, later])]
+             (drives[1], [*shifted, later]), (drives[1], [quick, late, later, *shifted])]
     np_ = lambda d: {**d, "speed_mps": np.array(d["speed_mps"]), "lon_g": np.array(d["lon_g"]), "lat_g": np.array(d["lat_g"])}
     py = [da.coach(np_(a), [np_(o) for o in others]) for a, others in cases]
-    keys = ["2026-09", "2026-09", "2026-09", "2026-10", None]
+    keys = ["2026-09", "2026-09", "2026-09", "2026-09", "2026-09", "2026-10", None]
     runner = (f"const KEYS={json.dumps(keys)};"
               "const c=require(process.argv[1]);const cases=JSON.parse(require('fs').readFileSync(0,'utf8'));"
               "process.stdout.write(JSON.stringify(cases.map(([a,o])=>{const r=c.coach(a,o);r.dev=c.spreadBy(r,KEYS);return r;})));")
@@ -205,10 +205,10 @@ def test_parity_coach_on_real_drives():
         for k, v in by.items():
             assert [x[0] for x in j["dev"][k]] == [x[0] for x in v]
             assert [x[1] for x in j["dev"][k]] == pytest.approx([x[1] for x in v], rel=1e-12)
-    assert da.spread_by(py[3], keys) and da.spread_by(py[0], keys) == {}             # three passes in a month give figures, two none
-    assert "2026-10" not in da.spread_by(py[3], keys)                                 # one pass in October says nothing
-    whole = [c["spread"]["brake_sd_m"] for c in py[3]["corners"] if c.get("spread") and c["spread"]["brake_sd_m"] is not None]
-    assert [x[1] for x in da.spread_by(py[3], ["x"] * 4)["x"]] == pytest.approx(whole)               # one period: the corner spreads themselves
+    assert da.spread_by(py[5], keys) and da.spread_by(py[3], keys) == {}             # five passes in a month give figures, four none
+    assert "2026-10" not in da.spread_by(py[5], keys)                                 # one pass in October says nothing
+    whole = [c["spread"]["brake_sd_m"] for c in py[5]["corners"] if c.get("spread") and c["spread"]["brake_passes"] >= 5]
+    assert whole and [x[1] for x in da.spread_by(py[5], ["x"] * 6)["x"]] == pytest.approx(whole)   # one period: the spreads               # one period: the corner spreads themselves
     spreads = [c["spread"]["brake_sd_m"] for c in py[3]["corners"] if c.get("spread") and c["spread"]["brake_sd_m"] is not None]
     assert spreads and max(spreads) > 0                                            # braking 0, 0, 10 and 20 m later: a spread
     assert all(c["spread"]["brake_sd_m"] is None for c in py[0]["corners"] if c.get("spread"))   # two passes say nothing

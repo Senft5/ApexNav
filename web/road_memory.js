@@ -90,22 +90,26 @@
 
   // A break, suggested on a long live drive (IDEAS D-16). The clock is wall time since the drive started or since the last
   // stop of STOP_RESETS_S or more (a fuel stop is shorter and does not count). A stop means frames showing the car standing
-  // still (under STILL_MPS) all along: a crawl in a queue is driving, and a gap with no frames (a tunnel, a backgrounded page)
-  // is unknown, so neither restarts the clock. After an hour, every BREAK_CHECK_S, the driving since then is read with
+  // still (under STILL_MPS) all along, or a gap with no frames of that length that ends within GAP_STILL_M of where the frames
+  // stopped (a locked phone at lunch). A crawl in a queue is driving, and a gap that ends far away (a tunnel) is unknown, so
+  // neither restarts the clock. After an hour, every BREAK_CHECK_S, the driving since then is read with
   // Core.fatigue; a fade in steering or braking is the cue, else two hours on the road (once a stretch). At most every 45 min.
-  const STOP_RESETS_S = 15 * 60, STILL_MPS = 0.5, MOVING_MPS = 2.5, FRAME_GAP_S = 60, BREAK_MIN_S = 3600, BREAK_CHECK_S = 10 * 60,
+  const STOP_RESETS_S = 15 * 60, STILL_MPS = 0.5, MOVING_MPS = 2.5, FRAME_GAP_S = 60, GAP_STILL_M = 200, BREAK_MIN_S = 3600, BREAK_CHECK_S = 10 * 60,
     BREAK_AFTER_S = 2 * 3600, BREAK_REPEAT_S = 45 * 60;
   /**
    * The rest clock, per live frame. w: the previous state (null at the start of a drive); speed: m/s (NaN unknown); rows: the
-   * recorder's row count. Returns [w, due]: due when the driving since the stop should be read now. A restart bumps w.stretch,
+   * recorder's row count; pos: [lat, lon] of the frame, or null. Returns [w, due]: due when the driving since the stop should be read now. A restart bumps w.stretch,
    * so a reading that began before it is known to be stale.
    */
-  function restTick(w, nowMs, speed, rows) {
-    w = w || { since: nowMs, last: nowMs, stillFrom: null, stillTo: null, row0: 0, checked: 0, said: null, spoken: [], stretch: 0, busy: false };
-    const gap = nowMs - w.last;
+  function restTick(w, nowMs, speed, rows, pos = null) {
+    w = w || { since: nowMs, last: nowMs, pos: null, stillFrom: null, stillTo: null, row0: 0, checked: 0, said: null, spoken: [], stretch: 0, busy: false };
+    const gap = nowMs - w.last, prev = w.pos;
     w.last = nowMs;
+    if (pos && finite(pos[0]) && finite(pos[1])) w.pos = pos;
+    const parked = gap >= STOP_RESETS_S * 1000 && prev && w.pos !== prev && Math.hypot(...xy(prev[0], prev[1], w.pos[0], w.pos[1])) <= GAP_STILL_M;
+    if (parked) { w.stillFrom = nowMs - gap; w.stillTo = nowMs; }      // parked with no frames: as good as frames standing still
     if (finite(speed) && speed < STILL_MPS) {
-      if (w.stillFrom === null || gap > FRAME_GAP_S * 1000) w.stillFrom = nowMs;   // stillness is only what frames showed
+      if (!parked && (w.stillFrom === null || gap > FRAME_GAP_S * 1000)) w.stillFrom = nowMs;   // stillness is only what frames showed
       w.stillTo = nowMs;
       return [w, false];
     }

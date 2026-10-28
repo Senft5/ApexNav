@@ -3210,7 +3210,7 @@
     function noteRest(frame) {
       const r = drive.rec; if (!r) return;
       let due;
-      [drive.rest, due] = ApexRoadMemory.restTick(drive.rest, Date.now(), frame.speed_mps, r.rows.length);
+      [drive.rest, due] = ApexRoadMemory.restTick(drive.rest, Date.now(), frame.speed_mps, r.rows.length, [frame.lat, frame.lon]);
       const w = drive.rest, stretch = w.stretch;
       if (!due || w.busy) return;
       w.busy = true;

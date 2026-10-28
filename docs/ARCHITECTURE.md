@@ -56,7 +56,7 @@ The JS file is a line-for-line port used by the browser/iOS cockpit for live OSR
   pass). Live, with full notes on, at 5 m/s or more on a fresh heading, the voice idle (the native voice's end is estimated,
   it reports none) and no call due within 5 s of driving beyond the call distance, `upcoming` picks the nearest one straight
   ahead in the next 200 m and driven the same way; each is said once per drive.
-  `restTick` keeps the rest clock (15 min of frames standing still, under 0.5 m/s, restarts it; a crawl or a gap with no frames does not) and `breakCue` picks the live break suggestion from `Core.fatigue` over the driving since the last stop, or two hours on the road; `web/break_worker.js` runs that fatigue read off the main thread.
+  `restTick` keeps the rest clock (15 min of frames standing still under 0.5 m/s, or a 15 min frame gap ending within 200 m of where it began, restarts it; a crawl or a tunnel does not) and `breakCue` picks the live break suggestion from `Core.fatigue` over the driving since the last stop, or two hours on the road; `web/break_worker.js` runs that fatigue read off the main thread.
   `hazards` turns bumps your drives confirmed (`seen.hits >= 2`) into "Bump ahead" notes said at the call distance on any road.
 - `core/drive_analysis.py` — private corner-by-corner pass comparison, Driver Score (0–1000) and custom
   segment passes; JS port in `web/apex_core.js` (plus `profileRecording` for app CSVs), parity-tested.
@@ -72,7 +72,7 @@ The JS file is a line-for-line port used by the browser/iOS cockpit for live OSR
   10 m. The drive page names a corner as varying only with 5+ passes and a spread of max(10 m, 2 x your median).
 - Braking consistency trend (`spread_by`; JS `spreadBy`): from a coach result's per-pass `spread.marks` and a period key
   per pass (the month it was driven, None when the date is unknown), the robust SD of each corner's braking marks inside
-  each period with 3+ of them. Spread inside a month, not distance from an all-time median, so deliberately braking earlier
+  each period with 5+ of them (with 3, two in one 5 m bin give 0 m). Spread inside a month, not distance from an all-time median, so deliberately braking earlier
   from one month on is not read as unsteady. The Log takes the median over a month's corners (3+ corners), each corner
   counted once per month across overlapping references, computed one drive per tick.
 - Fatigue cues (`fatigue`; JS `fatigue`): on a drive with an hour or more of moving time (bins at 2.5 m/s or more), the

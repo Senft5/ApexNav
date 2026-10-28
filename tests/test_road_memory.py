@@ -121,11 +121,18 @@ const crawl = w.since;
 [w, due] = M.restTick(w, 153 * min, 0, 9700);
 [w, due] = M.restTick(w, 154 * min, 20, 9800);
 const gap = w.since;
+const P = (lat) => [45 + lat, -122];                                   // a locked phone at lunch: 40 min with no frames, same spot
+[w, due] = M.restTick(w, 160 * min, 20, 9900, P(0));
+[w, due] = M.restTick(w, 200 * min, 20, 9900, P(0.0005));             // ~55 m away: a new stretch
+const lunch = [w.since, w.stretch];
+[w, due] = M.restTick(w, 201 * min, 20, 9950, P(0.0005));
+[w, due] = M.restTick(w, 230 * min, 20, 9990, P(0.05));               // 30 min with no frames, 5.5 km on: a tunnel, not a rest
+const tunnel = w.since;
 console.log(JSON.stringify({
   steer: t(M.breakCue(fa(['steering', 'braking']), 4000, null)), brake: t(M.breakCue(fa(['braking']), 4000, 3000)),
   fresh: M.breakCue(fa([]), 5000, null), unknown: M.breakCue(null, 5000, null), two: M.breakCue(null, 7300, null),
   three: M.breakCue(fa([]), 3 * 3600 + 60, 2800, ['time']), soon: M.breakCue(fa(['steering']), 9000, 600), stop: M.STOP_RESETS_S,
-  dues, before, restarted, fuel, crawl, gap,
+  dues, before, restarted, fuel, crawl, gap, lunch, tunnel,
   rebased: M.rebase([{ distance_m: 5000, lat: 1 }, { distance_m: 5005, lat: 2 }]),
 }));
 """
@@ -142,5 +149,6 @@ console.log(JSON.stringify({
     assert r["dues"] == [60, 70, 80] and r["before"] == 0           # an hour in, then every 10 min
     assert r["restarted"] == [98 * 60000, 8000, False, 1, False]    # a new stretch, and a reading in flight no longer blocks it
     assert r["fuel"] == 98 * 60000                                   # a 10 min stop does not restart it
-    assert r["crawl"] == 98 * 60000 and r["gap"] == 98 * 60000      # nor a crawl, nor a gap with no frames
+    assert r["crawl"] == 98 * 60000 and r["gap"] == 98 * 60000      # nor a crawl, nor a gap with no frames and no position
+    assert r["lunch"] == [200 * 60000, 2] and r["tunnel"] == 200 * 60000   # a gap ending where it began is a stop; far on is not
     assert r["rebased"] == [{"distance_m": 0, "lat": 1}, {"distance_m": 5, "lat": 2}]   # corner indexes point into the slice

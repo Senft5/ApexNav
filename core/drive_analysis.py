@@ -520,10 +520,13 @@ def coach(a: dict, others: list) -> dict:
 
 
 
+TREND_MIN_PASSES = 5         # marks a corner needs inside one period: with 3, two passes in the same 5 m bin read as 0 m
+
+
 def spread_by(co: dict, keys: list) -> dict:
     """How repeatably you braked within each period (IDEAS D-07 trend), from coach(a, others). keys[0] is the period of a
     (e.g. the month it was driven) and keys[j + 1] that of others[j], None when unknown. For every corner, the braking marks
-    are grouped by period and each group of SPREAD_MIN_PASSES or more gives a robust SD (`_sd`). Spread inside a period,
+    are grouped by period and each group of TREND_MIN_PASSES or more gives a robust SD (`_sd`). Spread inside a period,
     not distance from an all-time median, so braking deliberately earlier from one month on does not read as unsteady.
     Returns {key: [[apex, sd_m] per corner]}, apex being the corner's index in a."""
     out: dict = {}
@@ -538,7 +541,7 @@ def spread_by(co: dict, keys: list) -> dict:
                 continue
             groups.setdefault(k, []).append(b)
         for k in sorted(groups):
-            sd = _sd(groups[k])
+            sd = _sd(groups[k]) if len(groups[k]) >= TREND_MIN_PASSES else None
             if sd is not None:
                 out.setdefault(k, []).append([c["apex"], sd])
     return out

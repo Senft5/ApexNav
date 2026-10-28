@@ -768,7 +768,8 @@
     return { corners: out, clean: clean.length, this_s: thisS, ideal_s: thisS - gainS, gain_s: gainS, top };
   }
   // How repeatably you braked within each period (port of drive_analysis.spread_by, IDEAS D-07 trend): keys[0] is a's
-  // period, keys[j + 1] others[j]'s (null when unknown); { key: [[apex, robust SD] per corner with 3+ marks in that period] }.
+  // period, keys[j + 1] others[j]'s (null when unknown); { key: [[apex, robust SD] per corner with TREND_MIN_PASSES+ marks in that period] }.
+  const TREND_MIN_PASSES = 5;
   function spreadBy(co, keys) {
     const out = {};
     for (const c of co.corners) {
@@ -782,7 +783,7 @@
         groups.get(k).push(b);
       }
       for (const k of [...groups.keys()].sort()) {
-        const sd = sampleSd(groups.get(k));
+        const g = groups.get(k), sd = g.length >= TREND_MIN_PASSES ? sampleSd(g) : null;
         if (sd !== null) (out[k] = out[k] || []).push([c.apex, sd]);
       }
     }

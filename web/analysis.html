@@ -299,19 +299,22 @@
       setTimeout(renderSteadiness, 0);                                  // the coach runs per road: after the Log has painted
     }
 
-    // Braking consistency by month (IDEAS D-07 trend): on corners you drove three or more times in a month, how widely your
+    // Braking consistency by month (IDEAS D-07 trend): on corners you drove five or more times in a month, how widely your
     // braking point spread inside that month (Core.spreadBy, a robust SD per corner), the median over the month's corners.
     // Spread inside a month, so braking deliberately earlier from one month on is not counted as unsteady. Newest drive first,
     // each road's latest drive is the reference its passes are mapped onto; one road per step so the page stays responsive.
     // Drives whose date is unknown (an import without a stamp) are left out.
     const STEADY_MIN_CORNERS = 3, STEADY_CLAIM_M = 5, STEADY_CLAIM_CORNERS = 5;
     const steady = { key: null, months: [], run: 0 };
-    const monthOf = (o) => (o.date_known === false || !/^\d{4}-\d{2}/.test(o.date || '') ? null : o.date.slice(0, 7));
+    // A date is unknown when parse said so, or on an import stored before it could: those got the import time, the only dates
+    // written with toISOString (seconds and a Z); a stamp in the file name or a drive recorded here has neither.
+    const monthOf = (o) => (o.date_known === false || (o.date_known === undefined && o.source === 'imported' && /Z$/.test(o.date || ''))
+      || !/^\d{4}-\d{2}/.test(o.date || '') ? null : o.date.slice(0, 7));
     function steadinessByMonth(done) {
       const key = drives.map(o => o.id).join(',');
       if (steady.key === key) { done(steady.months); return; }
       // Every drive is a reference in turn, newest first; a corner already counted for a month (from a newer reference, within
-      // 30 m) is not counted again, so overlapping roads do not double it and no drive's other roads are skipped.
+      // 20 m, the same way) is not counted again, so overlapping roads do not double it and no drive's other roads are skipped.
       const run = ++steady.run, seen = [], sds = new Map();
       const queue = drives.filter(d => d.corners.length).sort((p, q) => (q.date || '').localeCompare(p.date || ''));
       const step = () => {
@@ -321,8 +324,11 @@
           const co = coachFor(d), by = Core.spreadBy(co, [monthOf(d), ...co.near.map(monthOf)]);
           for (const [k, xs] of Object.entries(by)) for (const [apex, sd] of xs) {
             const lat = d.lat[apex], lon = d.lon[apex], c = Math.cos(lat * Math.PI / 180);
-            if (seen.some(s => s.k === k && Math.hypot((s.lon - lon) * 111320 * c, (s.lat - lat) * 110540) < 30)) continue;
-            seen.push({ k, lat, lon });
+            const a0 = Math.max(0, apex - 2), a1 = Math.min(d.lat.length - 1, apex + 2);
+            const hx = (d.lon[a1] - d.lon[a0]) * c, hy = d.lat[a1] - d.lat[a0], hn = Math.hypot(hx, hy) || 1;
+            // the same corner, the same way: apex within 20 m and heading within ~45 degrees (not the next bend of an S)
+            if (seen.some(s => s.k === k && Math.hypot((s.lon - lon) * 111320 * c, (s.lat - lat) * 110540) < 20 && (s.hx * hx + s.hy * hy) / hn > 0.7)) continue;
+            seen.push({ k, lat, lon, hx: hx / hn, hy: hy / hn });
             sds.set(k, (sds.get(k) || []).concat([sd]));
           }
           setTimeout(step, 0);
@@ -352,9 +358,10 @@
         const dots = months.map((w) => `<circle cx="${X(w.month).toFixed(1)}" cy="${Y(w.sd_m).toFixed(1)}" r="${Math.min(8, 3 + Math.sqrt(w.corners))}" fill="${C.accent}"><title>${monthLabel(w.month)}: ${Math.round(w.sd_m)} m over ${w.corners} corners</title></circle><text x="${X(w.month).toFixed(1)}" y="${H - 8}" text-anchor="middle" font-size="10" fill="${C.panelDim}">${monthLabel(w.month)}</text>`).join('');
         $('steadyChart').innerHTML = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Braking consistency by month">${grid}<path d="${line}" fill="none" stroke="${C.accent}" stroke-width="2"/>${dots}</svg>`;
         const a = months[0], z = months[months.length - 1], diff = z.sd_m - a.sd_m;
+        const about = (v) => (v < 3 ? 'under 3 m' : `about ${Math.round(v)} m`);           // below the floor, no finer figure
         const claim = Math.abs(diff) >= STEADY_CLAIM_M && a.corners >= STEADY_CLAIM_CORNERS && z.corners >= STEADY_CLAIM_CORNERS;
-        $('steadyNote').textContent = `How widely your braking point varied, within each month, on corners you drove three or more times that month; higher on the chart is steadier (fewer metres), bigger dots are more corners. `
-          + `${monthLabel(z.month)}: about ${Math.round(z.sd_m)} m over ${z.corners} corners${claim ? `, ${diff < 0 ? 'steadier' : 'less steady'} than ${monthLabel(a.month)} (${Math.round(a.sd_m)} m)` : ''}. 5 m samples and GPS put the floor near 3 m.`;
+        $('steadyNote').textContent = `How widely your braking point varied, within each month, on corners you drove five or more times that month; higher on the chart is steadier (fewer metres), bigger dots are more corners. `
+          + `${monthLabel(z.month)}: ${about(z.sd_m)} over ${z.corners} corners${claim ? `, ${diff < 0 ? 'steadier' : 'less steady'} than ${monthLabel(a.month)} (${about(a.sd_m)})` : ''}. 5 m samples and GPS put the floor near 3 m.`;
       });
     }
 
