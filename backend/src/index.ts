@@ -27,6 +27,8 @@ import { roadBins } from "./roads";
 import { eventCancel, eventCreate, eventRsvp, eventsList, eventsNear } from "./events";
 import { healthReport, healthSummary } from "./health";
 import { feedbackCreate, feedbackDone, feedbackList } from "./feedback";
+import { friendProfile } from "./profile";
+import { kudosGive, kudosReceived, kudosTake } from "./kudos";
 import { etaStart, etaUpdate, etaView } from "./eta_share";
 import { highlightCreate, highlightDelete, highlightList, highlightRate } from "./highlights";
 export { ConvoyIndex, ConvoyRoom } from "./convoy";
@@ -99,6 +101,7 @@ on("POST", "/api/friends/request/cancel", async (req, env) => { await friendRequ
 on("GET", "/api/friends", async (req, env) => json(await friendList(env, await requireMember(req, env))));
 on("POST", "/api/friends/accept", async (req, env) => { await friendAccept(env, await requireMember(req, env), req); return noContent(); });
 on("DELETE", "/api/friends/:id", async (req, env, m) => { await removePair(env, (await requireMember(req, env)).id, m.groups!.id); return noContent(); });
+on("GET", "/api/friends/:id/profile", async (req, env, m) => json(await friendProfile(env, await requireMember(req, env), m.groups!.id)));
 on("POST", "/api/blocks", async (req, env) => { await block(env, await requireMember(req, env), req); return noContent(); });
 on("GET", "/api/blocks", async (req, env) => json(await blockList(env, await requireMember(req, env))));
 on("DELETE", "/api/blocks/:handle", async (req, env, m) => { await unblock(env, await requireMember(req, env), m.groups!.handle); return noContent(); });
@@ -162,6 +165,10 @@ on("POST", "/api/highlights/:id/report", async (req, env, m) => {   // older rou
 on("DELETE", "/api/highlights/:id", async (req, env, m) => { await highlightDelete(env, await requireMember(req, env), m.groups!.id); return noContent(); });
 
 on("POST", "/api/board", async (req, env) => json(await publish(env, await requireMember(req, env), req)));
+// Kudos (IDEAS S-07): a tap of thanks on a friend's run you can see; no text.
+on("POST", "/api/kudos", async (req, env) => { await kudosGive(env, await requireMember(req, env), req); return noContent(); });
+on("DELETE", "/api/kudos", async (req, env) => { await kudosTake(env, await requireMember(req, env), req); return noContent(); });
+on("GET", "/api/kudos", async (req, env) => json(await kudosReceived(env, await requireMember(req, env))));
 on("GET", "/api/board/activity", async (req, env) => json(await boardActivity(env, await requireMember(req, env))));
 on("GET", "/api/board/:canon", async (req, env, m) => json(await boardFor(env, await requireMember(req, env), m.groups!.canon)));
 
