@@ -8,6 +8,9 @@ import { Env, HttpError, body, json, str } from "./util";
 import { rateCheck } from "./ratelimit";
 import { clientError, errorSummary, serverError } from "./errors";
 import { backupDatabase } from "./backup";
+import { sweepExpired } from "./sweep";
+
+const BACKUP_CRON = "0 7 * * 1";   // wrangler.jsonc triggers; the other cron is the daily sweep
 import {
   boardFor, crewCreate, crewDiscover, crewInvite, crewInvitePreview, crewInvitesRevoke, crewJoin, crewJoinPublic, crewLeave, crewList, crewMembers, crewUpdate, friendAccept, friendList, friendRequest,
   myGrants, publish, removePair, setGrant, setHandle,
@@ -156,9 +159,13 @@ export default {
     const res = await handle(req, env);
     return fromApp ? withAppCors(res) : res;
   },
-  // Cron trigger (wrangler.jsonc triggers): the weekly database backup.
-  async scheduled(_ctrl: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
-    ctx.waitUntil(backupDatabase(env).catch((e) => console.error(JSON.stringify({ event: "backup_failed", reason: String(e) }))));
+  // Cron triggers (wrangler.jsonc triggers): the weekly database backup, and the daily sweep of expired rows.
+  async scheduled(ctrl: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    if (ctrl.cron === BACKUP_CRON) {
+      ctx.waitUntil(backupDatabase(env).catch((e) => console.error(JSON.stringify({ event: "backup_failed", reason: String(e) }))));
+    } else {
+      ctx.waitUntil(sweepExpired(env).catch((e) => console.error(JSON.stringify({ event: "sweep_failed", reason: String(e) }))));
+    }
   },
 };
 
