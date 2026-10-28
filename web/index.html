@@ -62,7 +62,20 @@
     @keyframes rb-advance { from { transform: translateX(14%); opacity: 0.35; } to { transform: none; opacity: 1; } }
     /* The next note steps back in colour, not opacity, so its small text keeps 4.5:1 contrast (only the tulip fades) */
     .rb-box:not(.now) { color: var(--panel-dim); } .rb-box:not(.now) .rb-tulip { opacity: 0.62; } .rb-box:not(.now) .rb-call b { color: var(--panel-dim); }
-    @media (max-width: 520px) { .notes-roadbook { grid-template-columns: 1.4fr 1fr; } .rb-box:nth-child(3) { display: none; } }
+    @media (max-width: 520px) { .notes-roadbook { grid-template-columns: 1.6fr 1fr; } .rb-box:nth-child(3) { display: none; } }
+    /* The lead note reads at arm's length (U-07): bigger distance, tulip and call than the note after it. The call may take
+       two lines rather than lose its end to an ellipsis. */
+    .rb-box.now { grid-template-columns: auto 56px minmax(0, 1fr); }
+    @media (max-width: 520px) {
+      .rb-box:not(.now) { grid-template-columns: auto 30px minmax(0, 1fr); gap: 4px; padding: 2px 6px; }
+      .rb-box:not(.now) .rb-tulip { width: 30px; height: 30px; }
+      .rb-box:not(.now) .rb-dist b { font-size: 18px; }
+      .rb-box:not(.now) .rb-call span:first-child { font-size: 14px; }
+    }
+    .rb-box.now .rb-dist b { font-size: 32px; }
+    .rb-box.now .rb-tulip { width: 56px; height: 56px; }
+    .rb-box.now .rb-call b { font-size: 24px; }
+    .rb-box.now .rb-call span:first-child { font-size: 21px; line-height: 1.05; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
     .rb-dist { font-family: var(--font-num); text-align: right; }
     .rb-dist b { display: block; font-size: 22px; line-height: 1; font-weight: 700; }
     .rb-tulip { width: 46px; height: 46px; }
@@ -2918,6 +2931,7 @@
     const crewNear = () => { if (state.lastPosition) return state.lastPosition; const c = map.getCenter(); return { lat: c.lat, lon: c.lng }; };
     // Links people share open the website (in the app the page's own origin is apexnav://app, which no one else can open).
     const shareOrigin = () => (ApexSync.inApp ? ApexSync.apiBase : location.origin);
+    const crewPreview = { token: null, data: null };   // what the crew link is for, fetched once per link
     let renderGen = 0;   // two renders at once (a link while one runs): only the newest one draws
     async function renderAccount() {
       const body = $('accountBody'), gen = ++renderGen;
@@ -3041,9 +3055,28 @@
       // A crew link asks first: joining shows your handle to its members, so it is never done for you by opening a link.
       if (stash('apex.crew')) {
         const tok = stash('apex.crew');
-        csec.append(el('div', { className: 'card stack-8' },
-          el('p', { textContent: 'You have a crew invite. Join? Its members will see your handle, and your car if you show it to crews.' }),
-          el('div', { className: 'row' }, btn('Join crew', async (e) => {
+        const what = el('p', { textContent: 'You have a crew invite.' });
+        const why = el('p', { className: 'note', textContent: 'Its members will see your handle, and your car if you show it to crews.' });
+        const actions = el('div', { className: 'row' });
+        const show = (j) => {   // name the crew before the yes
+          if (j.member) { unstash('apex.crew'); toast(`You're already in ${j.name}.`); redo(); return; }
+          what.replaceChildren(document.createTextNode('Join '), el('b', { textContent: j.name }), document.createTextNode('?'));
+          why.textContent = `${j.visibility === 'public' ? 'Public' : 'Private'} crew · ${j.members} ${j.members === 1 ? 'member' : 'members'}${j.owner ? ' · run by @' + j.owner : ''}. Its members will see your handle, and your car if you show it to crews.`;
+        };
+        if (crewPreview.token === tok && crewPreview.data) show(crewPreview.data);
+        else (async () => {
+          let r = null, j = null;
+          try { r = await apiCall('POST', '/api/crews/invite/preview', { token: tok }); j = r.ok ? await jsonOf(r) : null; } catch (_) {}
+          if (gen !== renderGen) return;   // a newer render owns the screen
+          if (j && j.name) { crewPreview.token = tok; crewPreview.data = j; show(j); }
+          else if (r && r.status === 400) {
+            unstash('apex.crew');
+            what.textContent = 'That crew invite has run out or doesn\'t work for you. Ask for a new one.'; why.remove();
+            actions.replaceChildren(btn('OK', redo, 'linkbtn'));
+          }
+        })();
+        csec.append(el('div', { className: 'card stack-8' }, what, why, actions));
+        actions.append(btn('Join crew', async (e) => {
             const b = e && e.currentTarget; if (b) { if (b.disabled) return; b.disabled = true; }
             let r = null;
             try { r = await apiCall('POST', '/api/crews/join', { token: tok }); } catch (_) {}
@@ -3052,7 +3085,7 @@
             if (r.ok || (r.status >= 400 && r.status < 500)) unstash('apex.crew');
             toast(r.ok ? 'You joined the crew.' : r.status < 500 ? 'That crew invite didn\'t work. Ask for a new one.' : 'Couldn\'t join. Check signal and try again.');
             redo();
-          }, 'ink-btn solid'), btn('Not now', () => { unstash('apex.crew'); redo(); }, 'linkbtn'))));
+          }, 'ink-btn solid'), btn('Not now', () => { unstash('apex.crew'); redo(); }, 'linkbtn'));
       }
       if (!crewList.length) csec.append(el('p', { className: 'note', textContent: 'A crew is a group for a club or a weekend run. You can be in several. Make one below, or join one near you.' }));
       const tiles = el('div', { className: 'crew-tiles' });
@@ -3578,6 +3611,7 @@
       if (state.mode === 'live' && drive.sensors) return;
       if (state.mode === 'live' || driveActive) return;                                   // native app is feeding frames already or start is pending
       driveActive = true;
+      clearCarOffer();
       setPlaying(false);
       drive.rec = new ApexSensors.Recorder(); drive.status = { gps: 'waiting', motion: 'off', wake: 'off', message: '' }; drive.frames = 0;
       drive.live = null; drive.liveIdx = 0; drive.share = 'off'; drive.shareKm = 0; drive.shareErr = null; drive.roads = {}; drive.roadIdx = 0; drive.rest = null; breakSay = null; if (breakWorker) { breakWorker.terminate(); breakWorker = null; }
@@ -3682,6 +3716,16 @@
       if (!d) { toast('Couldn\'t load the replay. Check the connection and try again.'); return; }
       booting = false; replayOn = true; closeSheet(); activate(d, 0);
     }
+    // CarPlay's "Start drive" offer (IDEAS C-05) holds the toast for 10 s: once a drive starts it is moot, so it goes
+    // and stops holding back other toasts.
+    let carOfferUntil = 0;
+    function clearCarOffer() {
+      const t = $('toast');
+      if (!carOfferUntil || t._holdUntil !== carOfferUntil) return;
+      carOfferUntil = 0; t._holdUntil = 0; t.classList.remove('show'); t.querySelectorAll('a').forEach(x => x.remove());
+    }
+    // A go=drive link (a Shortcuts automation) can't start without location: say so rather than do nothing.
+    function driveFromLink() { if (locDenied) toast(LOC_DENIED_TEXT); else startDrive(); }
     function startDrive() {
       if (state.mode === 'live' || locDenied) return;
       if (flag('apex.permsExplained')) { enterDrive(); return; }
@@ -3723,7 +3767,7 @@
       // Focus the dialog, not its button: VoiceOver reads the welcome, and no focus ring sits on Get started before a touch
       ob.classList.add('show'); paint(); ob.tabIndex = -1; ob.focus();
     }
-    if (!flag('apex.onboarded') && !window.APEX_EMBED && !['invite', 'crew', 'add', 'convoy', 'drive', 'play', 'at', 'theme'].some(k => params.has(k))) runOnboarding();
+    if (!flag('apex.onboarded') && !window.APEX_EMBED && !['invite', 'crew', 'add', 'convoy', 'drive', 'play', 'at', 'theme', 'go'].some(k => params.has(k))) runOnboarding();
     else if (!flag('apex.onboarded')) flag('apex.onboarded', '1');
 
     // An invite, crew, friend or convoy link opened in iPhone Safari: offer to open it in the app instead (apexnav://open?...).
@@ -3762,6 +3806,7 @@
         if (ok(p.add)) sessionStorage.setItem('apex.add', p.add.toLowerCase());
       } catch (_) {}
       if (ok(p.convoy) && convoy && convoy.takeInvite) convoy.takeInvite(p.convoy);
+      if (p.go) { if (p.go === 'drive') { closeSheet(); driveFromLink(); } return; }   // apexnav://open?go=drive (a Shortcuts automation, IDEAS C-05)
       showView('crew'); renderAccount();
     }
     window.apex = {
@@ -3795,6 +3840,8 @@
         // App sign-in finished in the native shell: keep the session token and redraw whatever shows account state.
         if (msg && msg.type === 'session' && msg.token) { ApexSync.setSession(msg.token); toast('Signed in.'); location.reload(); }
         if (msg && msg.type === 'link' && msg.params) { openAppLink(msg.params); return; }
+        // The phone joined CarPlay (IDEAS C-05): offer the drive, never start recording unasked.
+        if (msg && msg.type === 'car' && !driveActive && state.mode !== 'live') { toast('CarPlay connected.', { label: 'Start drive', ms: 10000, onClick: startDrive }); carOfferUntil = $('toast')._holdUntil; return; }
         if (msg && msg.type === 'signInFailed' && msg.reason !== 'cancelled') toast('Couldn\'t sign in. Check signal and try again.');
       }
     };
@@ -3844,6 +3891,7 @@
       }
       if (params.get('book') === '1' || params.get('view') === 'route' || params.get('view') === 'drives') openPlan(true);
       if (VIEW_TITLES[params.get('view')]) openSheet(params.get('view'));
+      if (params.get('go') === 'drive') driveFromLink();   // the app opened from apexnav://open?go=drive (IDEAS C-05)
     }
     bootDrives();
     if (document.fonts) document.fonts.ready.then(() => render(true));

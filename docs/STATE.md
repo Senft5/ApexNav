@@ -5,6 +5,10 @@
 - West Knoxville → Townsend on Fun (no stage detour) checked: the best stage plans route at 91–92 min against an 89 min budget (quickest is a 63 min highway alternate); not a bug. The matrix plan estimate ran ~9 min short of the routed time there.
 - Exact next task: R-11 stage direction by climb/descent; or show the ETA on CarPlay.
 
+## Session 2026-10-28: web inspector off in release (Z-09)
+- #143: the iOS web view is inspectable only in DEBUG builds (Safari's Web Inspector could read the session token from a release IPA). The CI IPA is Release, so a phone trace through Web Inspector now needs a Debug build. (Q-23 landed separately in #147.)
+- Exact next task: the remaining audit rows (Z-10, Z-11, Z-15, Y-13 to Y-15).
+
 ## Session 2026-10-28: TestFlight uploads from CI
 - `build.yml` jobs `testflight-gate` + `testflight`: on main, after ApexKit and simulator tests pass, archive with automatic signing through an App Store Connect API key and upload (docs/TESTFLIGHT.md). Skipped with a run-summary note while any of `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8`, `APPLE_TEAM_ID` is missing. Build number = run number.attempt; `MARKETING_VERSION` 1.0 in project.yml; iPhone only; `ITSAppUsesNonExemptEncryption` NO. `build-ipa` unchanged.
 - First signed run (run 339, build 339.1): all four secrets present, archive with automatic signing succeeded, export failed with "Error Downloading App Information" (App Store Connect returned no app record for com.senft.ApexNav, or the key can't see it). A failed export now prints the IDEDistribution log's error lines.
@@ -69,6 +73,7 @@
 - P-02 low-power cockpit: `web/power.js` PowerSaver. A serious or critical thermal state, iOS Low Power Mode (frames now carry `low_power_mode`) or a browser battery at <= 20 % not charging (off at 25 % or charging) drops the chase cam to 30 fps with no road shake, the map to 2x pixels, and hides hillshade and contours, with a one-line toast each way. Checked in headless Chromium; not on a phone.
 - Y-05 status checks: `.github/workflows/status.yml` runs `tools/status_check.py` every 30 min (site, `/api/health` now runs `SELECT 1` on D1, and the free Valhalla/OSRM/OpenFreeMap/DEM/Overpass services). A core failure opens one `outage` issue assigned to the owner and the next all-clear closes it; dependencies only show in the run summary (evidence for Y-04). Runbook: docs/STATUS.md. C-06 parked: the app sends no notifications to hold back yet.
 - Y-11 end-to-end tests: `e2e/smoke.js` (run `node e2e/smoke.js` with Playwright installed; CI job `e2e` in core-tests.yml) serves web/ and blocks every other host, then drives its flows in headless Chromium and fails on any page error: first run → Watch a replay → Play, live frames → cockpit + big targets + typing lock, hot phone → battery saver on/off, Where to? with search offline, the Log page. A sixth flow plans a route with Photon and Valhalla stubbed (suggestion → route card → Start). Next: stub the Worker API for Crew.
+- C-05 auto-start: when the audio route gains a CarPlay output (`AVAudioSession` route change, `.carAudio`) and no drive is running, the cockpit offers "CarPlay connected · Start drive" for 10 s. `apexnav://open?go=drive` (and `?go=drive` on the web) starts a drive directly, so an iOS Shortcuts automation "When CarPlay connects → Open URL apexnav://open?go=drive" auto-starts. An e2e flow covers the toast and the link; not yet checked in a car.
 - Exact next task: owner's first real-phone run (VERIFY.md section 0); P-06 next: the 241 KB index.html inline script and MapLibre's 800 KB are the rest of the start-up.
 
 ## Session 2026-10-28: "why this route" on the route card
@@ -90,7 +95,8 @@
 - Links that open the app (IDEAS S-14): apexnav://open?invite|crew|add|convoy (ApexNavApp.swift `linkItems`), handed to the running cockpit page without a reload; iPhone Safari shows "Have the app? Open it there". Crew links now ask before joining and invite links wait for Join (before, opening a link joined on its own); link parameters leave the address bar once read.
 - Not verified on a phone: the report sheet and moderation queue in the app; opening apexnav:// links (cold start and while running, and from Log/Stages); the Safari bar without the app installed shows Safari's own "address is invalid" alert.
 - Known open: apexnav:// is a custom scheme another installed app could also claim; Universal Links (applinks: entitlement + apple-app-site-association) would close that and need a provisioning change. Crew and convoy prompts don't name the crew/convoy yet (needs a read-only preview endpoint).
-- Exact next task: crew and convoy invite previews (name, leader/owner, member count) before Join; then convoy drive recaps (who drove, hazards called) and a real two-phone convoy test.
+- Crew and convoy invite previews: the join prompts name the crew (size, owner) and the convoy (leader, size, end time). Crew invites no longer work across a block with the owner or for a reported/removed crew (private-invite joins skipped both checks before).
+- Exact next task: convoy drive recaps (who drove, hazards called) and a real two-phone convoy test.
 
 ## Session 2026-10-28: long trips planned in sections
 - Trips over 22 km crow fly are cut into ~24 km sections along the quickest route (2 on Fun, 3 on Max fun); each section gets its own stage search, and the best per section (plus one-swap variants, max 4 stages) compete with the single-corridor plans (#96, `ApexFunRoute.sectionCount/sectionPoints/combineSections`). Knoxville→Asheville Fun: Fun 47 for +17 min (was no fun option); Knoxville→Maryville unchanged (79 @ 128 min). Not driven on a phone.

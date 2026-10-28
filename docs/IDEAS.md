@@ -229,7 +229,7 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 | U-04 | Imported drives get a real name (place, road, time of day), not the file name | M | S | partial (recorded drives are named after their main road, from map tiles on the phone; imports still read "Drive date time") | STATE 2026-10-28 UI audit |
 | U-05 | Audit the live cockpit with simulated GPS frames at phone size (day, night, glare) | H | S | done (this PR: browser GPS track, day and night; native frames and glare still need a phone) | STATE 2026-10-28 UI audit |
 | U-06 | Stages simplified: one list near you with your best and the leader, create from a drive in one step | H | M | partial (#77) | WORKER_QUEUE stages-1 |
-| U-07 | Glanceable cockpit: one number and one note readable at arm's length in sunlight | H | M | partial (drive bar: big Rec mileage, problems only) | car HMI guidelines |
+| U-07 | Glanceable cockpit: one number and one note readable at arm's length in sunlight | H | M | partial (drive bar: big Rec mileage, problems only; lead pace note 32 px distance, 21 px call, 56 px tulip) | car HMI guidelines |
 | U-08 | Motion design pass: route reveal, sheet springs, note transitions, under 200 ms, reduced-motion respected | M | M | partial (pace notes slide on in 160 ms when one is passed) | Apple Maps |
 | U-09 | Haptics on notes and hazards (subtle, configurable) | M | S | todo | Apple Maps turn haptics on Watch |
 | U-10 | Home screen and lock screen widgets: nearby best stage, last drive score, crew event | M | M | todo | iOS widgets |
@@ -269,7 +269,7 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 | C-02 | CarPlay notes as a list template and hazard alerts as CPAlert | H | M | owner (Apple account) | Waze CarPlay |
 | C-03 | Android Auto navigation template | H | L | owner (Android priority) | ApexNav mission |
 | C-04 | Car audio: ducking and routing to Bluetooth/CarPlay while prompts play | H | M | done (#73) | — |
-| C-05 | Auto-start: open the cockpit when the phone joins the car's Bluetooth or CarPlay | M | S | todo | Waze, Shortcuts |
+| C-05 | Auto-start: open the cockpit when the phone joins the car's Bluetooth or CarPlay | M | S | done (#152): CarPlay audio route offers "Start drive"; `apexnav://open?go=drive` starts one (Shortcuts automation "When CarPlay connects"). Not yet checked in a car | Waze, Shortcuts |
 | C-06 | Driving focus aware: no social notifications while driving, a summary after | M | S | blocked: the app sends no notifications yet; build this with the first push or social alert | iOS Focus |
 | C-07 | Big-target in-car mode: every control ≥ 60 pt, no keyboard while moving | H | S | done (#121) | NHTSA distraction guidelines |
 | C-08 | Passenger mode: unlocks typing and route editing while moving, with a clear switch | M | S | done (#121) | Waze passenger prompt |
@@ -332,7 +332,7 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 | Z-06 | Convoy positions ephemeral, scoped to joined members, revoked on leave, never logged | H | S | partial (#84) | docs/CONVOY_TRANSPORT.md |
 | Z-07 | Privacy policy and terms written for real (and linked in the app and store) | H | S | owner (legal) | App Store requirement |
 | Z-08 | Minimum k-anonymity for road bins shown publicly (don't show a bin only one driver touched near a home) | M | S | todo | Strava heatmap lesson |
-| Z-09 | iOS web view is `isInspectable = true` in release builds: Safari Web Inspector on a Mac with the unlocked phone plugged in can read the session token from localStorage. Gate it behind `#if DEBUG` or a hidden developer toggle | M | S | todo | audit 2026-10-28 |
+| Z-09 | iOS web view is `isInspectable = true` in release builds: Safari Web Inspector on a Mac with the unlocked phone plugged in can read the session token from localStorage. Gate it behind `#if DEBUG` or a hidden developer toggle | M | S | done (#143) | audit 2026-10-28 |
 | Z-10 | App session token lives in web localStorage; keep it in the iOS Keychain and hand it to the page per request through the bridge | M | M | todo | audit 2026-10-28 |
 | Z-11 | Content-Security-Policy beyond `frame-ancestors` (script-src for the inline scripts by hash, connect-src for the map/route hosts): defence in depth now that a session token sits in page storage | M | M | todo | audit 2026-10-28 |
 | Z-12 | The outgoing friend-request list shows a pending row only for real member handles, so typing handles still tells you which exist (the request answer itself is uniform). Show sent requests for unknown handles too, or not at all | L | S | todo | audit 2026-10-28 |

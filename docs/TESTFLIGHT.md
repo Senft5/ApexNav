@@ -31,7 +31,7 @@ in TestFlight after Apple's processing, usually 5 to 30 minutes.
 5. Add four repository secrets: https://github.com/Senft5/ApexNav/settings/secrets/actions
    - `ASC_KEY_ID`: the Key ID
    - `ASC_ISSUER_ID`: the Issuer ID
-   - `ASC_KEY_P8`: the whole `.p8` file contents, including the BEGIN/END lines (base64 of the file also works)
+   - `ASC_KEY_P8`: the `.p8` file contents. With or without the BEGIN/END lines and line breaks, or base64 of the file: `tools/write_asc_key.sh` rebuilds the PEM and checks it
    - `APPLE_TEAM_ID`: the Team ID
 6. Run it: https://github.com/Senft5/ApexNav/actions/workflows/build.yml, Run workflow on `main` (or merge anything).
 7. Testers: App Store Connect, the app, TestFlight. Internal testers (up to 100 people on the team) get builds right
