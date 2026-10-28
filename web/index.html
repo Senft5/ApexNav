@@ -24,6 +24,7 @@
   <script src="eta.js"></script>
   <script src="speech_queue.js"></script>
   <script src="note_timing.js"></script>
+  <script src="hazard_reports.js"></script>
   <script src="traffic.js"></script>
   <script src="in_car.js"></script>
   <script src="power.js"></script>
@@ -379,6 +380,15 @@
     .apple-btn { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; min-height: 44px; border: 0; border-radius: 10px; background: #000; color: #fff; font: 600 17px -apple-system, system-ui, sans-serif; margin-bottom: 8px; }
     .apple-btn[hidden] { display: none; }
     @media (prefers-color-scheme: dark) { .apple-btn { background: #fff; color: #000; } }
+    /* Hazard reports (IDEAS Q-15/Q-16): six big targets, a passing "still there?" bar, pins on the map. */
+    .hz-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0; }
+    .hz-grid button { min-height: 64px; font-size: 18px; font-weight: 700; }
+    .hz-ask { position: absolute; left: 10px; right: 10px; bottom: calc(96px + var(--safe-bottom, 0px)); z-index: 6; display: flex; gap: 8px; align-items: center;
+      background: var(--panel); color: var(--panel-ink); border: 1px solid var(--rule); padding: 10px; max-width: 460px; }
+    .hz-ask[hidden] { display: none; }
+    .hz-ask span { flex: 1; font-weight: 700; }
+    .hz-ask .key { min-height: 56px; }
+    .hz-pin { font: 800 11px var(--font-ui, sans-serif); letter-spacing: 0.06em; padding: 2px 5px; border: 1.5px solid var(--signal, #c33); color: var(--signal, #c33); background: var(--panel, #fff); white-space: nowrap; }
 </style>
 </head>
 <body>
@@ -512,6 +522,14 @@
           </section>
         </div>
       </aside>
+      <div class="overlay dim" id="hzOverlay" role="dialog" aria-modal="true" aria-label="Report a hazard">
+        <div class="card-sheet">
+          <h2>Report ahead of others</h2>
+          <div class="hz-grid" id="hzKinds"></div>
+          <button class="linkbtn" id="hzCancel">Cancel</button>
+        </div>
+      </div>
+      <div class="hz-ask" id="hzAsk" role="alertdialog" aria-live="assertive" hidden><span id="hzAskText"></span><button class="key" id="hzStill">Still there</button><button class="key" id="hzGone">Gone</button></div>
       <div class="overlay dim" id="pinOverlay" role="dialog" aria-modal="true" aria-label="Dropped pin">
         <div class="card-sheet">
           <h2 id="pinPlace">--</h2>
@@ -542,6 +560,7 @@
     <section class="binnacle" id="binnacle">
       <div class="drivebar" id="driveBar" hidden>
         <div class="dbstat" id="driveStat"><div class="ds-main" id="dsMain">Finding GPS…</div><div class="ds-warn" id="dsWarn" role="status" aria-live="polite" hidden></div></div>
+        <button class="key" id="hzReportBtn" aria-label="Report a hazard">Report</button>
         <button class="key" id="driveEnd">End drive</button>
       </div>
       <div class="transport" id="transport">
@@ -3681,6 +3700,75 @@
       finally { ambient.checking = false; ambient.checkedAt = performance.now(); paintAmbient(); }
       if (ambient.allowed === false && ambient.sharer) ambient.sharer.stop();
     }
+    // ---- hazards people reported (hazard_reports.js; backend/src/hazards.ts) -----------------------------------------
+    const reported = { list: [], at: -Infinity, busy: false, said: new Set(), mine: new Set(), pins: new Map(), watch: ApexHazardReports.createPassWatch(), asking: null };
+    async function loadReported(force = false) {
+      const p = state.lastPosition;
+      if (!p || reported.busy || (!force && performance.now() - reported.at < 120e3) || !window.ApexSync) return;
+      reported.busy = true;
+      try {
+        const r = await ApexSync.apiFetch(`/api/hazards?lat=${p.lat.toFixed(5)}&lon=${p.lon.toFixed(5)}&km=20`, { method: 'GET' });
+        if (r.ok) { reported.list = await r.json(); paintReported(); }
+      } catch (_) { /* offline or signed out: keep what we had */ }
+      finally { reported.at = performance.now(); reported.busy = false; }
+    }
+    function paintReported() {
+      const keep = new Set(reported.list.map(h => h.id));
+      for (const [id, mk] of reported.pins) if (!keep.has(id)) { mk.remove(); reported.pins.delete(id); }
+      for (const h of reported.list) {
+        if (reported.pins.has(h.id)) continue;
+        const el = document.createElement('div'); el.className = 'hz-pin'; el.textContent = (ApexHazardReports.LABEL[h.kind] || 'Hazard').toUpperCase();
+        reported.pins.set(h.id, new maplibregl.Marker({ element: el }).setLngLat([h.lon, h.lat]).addTo(map));
+      }
+    }
+    // Each fresh fix while driving: call the next reported hazard ahead, and after passing one ask if it's still there.
+    function feedReported(frame) {
+      if (!driveActive && state.mode !== 'live') return;
+      loadReported();
+      const me = { lat: frame.lat, lon: frame.lon, heading: Number.isFinite(frame.course_deg) ? frame.course_deg : null };
+      const v = Number.isFinite(frame.speed_mps) ? frame.speed_mps : 0;
+      const next = ApexHazardReports.nextAhead(reported.list, me, Math.max(150, Math.min(600, v * 8)), reported.said);
+      if (next) { reported.said.add(next.id); say(next.text, false, null, null, { kind: 'hazard', key: `rep:${next.id}`, repeatMs: 10 * 60000 }); }
+      const passed = reported.watch.update(reported.list, me, reported.mine);
+      if (passed && !reported.asking) askStill(passed);
+    }
+    function askStill(h) {
+      reported.asking = h;
+      $('hzAskText').textContent = `${ApexHazardReports.LABEL[h.kind] || 'Hazard'} still there?`;
+      $('hzAsk').hidden = false;
+      clearTimeout(reported.askTimer);
+      reported.askTimer = setTimeout(() => { $('hzAsk').hidden = true; reported.asking = null; }, 12000);
+    }
+    async function answerStill(still) {
+      const h = reported.asking; $('hzAsk').hidden = true; reported.asking = null; clearTimeout(reported.askTimer);
+      if (!h) return;
+      try { await ApexSync.apiFetch(`/api/hazards/${encodeURIComponent(h.id)}/vote`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ still }) }); } catch (_) {}
+      toast(still ? 'Thanks. Others will hear about it.' : 'Thanks. It goes once others agree.');
+    }
+    $('hzStill').addEventListener('click', () => answerStill(true));
+    $('hzGone').addEventListener('click', () => answerStill(false));
+    for (const k of ApexHazardReports.KINDS) {
+      const b = document.createElement('button'); b.className = 'ink-btn'; b.textContent = ApexHazardReports.LABEL[k];
+      b.addEventListener('click', () => reportHazard(k));
+      $('hzKinds').append(b);
+    }
+    $('hzReportBtn').addEventListener('click', () => $('hzOverlay').classList.add('show'));
+    $('hzCancel').addEventListener('click', () => $('hzOverlay').classList.remove('show'));
+    async function reportHazard(kind) {
+      $('hzOverlay').classList.remove('show');
+      const p = state.lastPosition, heading = state.lastMotion && state.lastMotion.heading;
+      if (!p || !state.lastPositionAt || performance.now() - state.lastPositionAt > 10000) { toast('No GPS fix yet. Try again in a moment.'); return; }
+      let r = null;
+      try { r = await ApexSync.apiFetch('/api/hazards', { method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ kind, lat: p.lat, lon: p.lon, heading: Number.isFinite(heading) ? Math.round((heading % 360 + 360) % 360) : null }) }); } catch (_) {}
+      if (!r) { toast('No signal. Your report wasn\'t sent.'); return; }
+      if (r.status === 401 || r.status === 403) { toast('Sign in (Crew) to report hazards for others.'); return; }
+      if (!r.ok) { toast(r.status === 429 ? 'That\'s a lot of reports today.' : 'Couldn\'t send that. Try again.'); return; }
+      const j = await r.json(); reported.mine.add(j.id); reported.said.add(j.id);
+      toast(j.confirmed ? `${ApexHazardReports.LABEL[kind]}: someone reported it already. You confirmed it.` : `${ApexHazardReports.LABEL[kind]} reported. Drivers behind you will hear about it.`);
+      loadReported(true);
+    }
+
     function feedAmbient(frame) {
       ambient.mounted = frame.calibration === 'locked';
       if (!window.ApexContributor || !window.ApexSensors) return;
@@ -3935,7 +4023,7 @@
         state.lastMotion = { heading: Number.isFinite(frame.course_deg) ? frame.course_deg : null, speedMps: Number.isFinite(frame.speed_mps) ? frame.speed_mps : null };
         if (NATIVE_SHELL) feedAmbient(inPrivacyZone(frame.lat, frame.lon) ? { has_fix: false } : frame);   // ends the trip; its last km stays here
         if (NATIVE_SHELL && !driveActive) { showIdleFix(frame); return; }
-        feedReaction(frame);
+        feedReported(frame); feedReaction(frame);
         state.live = frame; state.liveAt = performance.now();
         if (drive.native && drive.rec) {
           drive.frames++; recordFrame(frame); feedLive(); noteRoads(); noteRest(frame);
