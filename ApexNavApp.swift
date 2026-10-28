@@ -24,7 +24,8 @@ import ApexKit
 //               | "stopRecording" | "toggleRecording")  (or {cmd: "..."}).
 // native -> JS: window.APEX_EMBED = true (documentStart),
 //               window.apex.live(frame) every 0.1 s after the page finished loading,
-//               window.apex.onNative({type: "recordingSaved", file, segments}) after export.
+//               window.apex.onNative({type: "recordingSaved", file, segments}) after export,
+//               window.apex.onNative({type: "link", params}) when an apexnav://open link arrives while the page runs.
 //
 // Units: everything internal is SI / ISO 8855 (+X fwd, +Y left, +Z up; m/s^2, rad, rad/s).
 // Conversion to display units (G, degrees, mph) happens ONLY at serialization.
@@ -72,6 +73,7 @@ struct ApexShellRootView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { shell.reloadIfWebContentDied() }
         }
+        .onOpenURL { shell.openLink($0) }
     }
 }
 
@@ -83,6 +85,27 @@ enum ApexWebBundle {
     /// file URLs, which silently broke the voice banks (every voice fell back to the device TTS).
     static let scheme = "apexnav"
     static let entryURL = URL(string: "\(scheme)://app/index.html")!
+
+    /// "Open in the app" links from the web (apexnav://open?invite=…): the page's own link parameters, and only those, carried
+    /// over to the cockpit page, which handles them exactly as it does on the web. Anything else opens the app as usual.
+    static let linkKeys: Set<String> = ["invite", "crew", "add", "convoy"]
+    private static let linkValue = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-")
+    /// The link's parameters the page understands, or nil when the link isn't one of ours or carries none.
+    static func linkItems(_ url: URL) -> [URLQueryItem]? {
+        guard url.scheme == scheme, url.host() == "open",
+              let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems else { return nil }
+        let kept = items.filter { item in
+            guard linkKeys.contains(item.name), let v = item.value, (1...200).contains(v.count) else { return false }
+            return v.unicodeScalars.allSatisfy { linkValue.contains($0) }
+        }
+        return kept.isEmpty ? nil : kept
+    }
+    /// The cockpit page opened with those parameters (when the app starts from a link).
+    static func linkEntryURL(_ items: [URLQueryItem]) -> URL? {
+        guard var comps = URLComponents(url: entryURL, resolvingAgainstBaseURL: false) else { return nil }
+        comps.queryItems = items
+        return comps.url
+    }
 }
 
 /// Serves files from the bundled web/ folder for the apexnav:// scheme.
@@ -252,7 +275,7 @@ struct ApexCockpitWebView: UIViewRepresentable {
         webView.hideKeyboardAccessoryBar()
 
         shell.attach(webView: webView)
-        webView.load(URLRequest(url: ApexWebBundle.entryURL))
+        webView.load(URLRequest(url: shell.takePendingLink() ?? ApexWebBundle.entryURL))
         return webView
     }
 
@@ -415,6 +438,31 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
     func attach(webView: WKWebView) {
         self.webView = webView
         webReady = false
+    }
+
+    /// A link that arrived before the web view existed (the app was launched by it) waits here for the first load.
+    private var pendingLink: URL?
+    func takePendingLink() -> URL? { defer { pendingLink = nil }; return pendingLink }
+
+    func openLink(_ url: URL) {
+        guard let items = ApexWebBundle.linkItems(url) else { return }
+        guard let entry = ApexWebBundle.linkEntryURL(items) else { return }
+        guard let wv = webView else { pendingLink = entry; return }
+        // The cockpit page takes the link in place (window.apex.onNative({type:'link'})): never reload it mid-drive. Any other
+        // page (Log, Stages) has no window.apex, answers false, and the cockpit is loaded with the link instead.
+        var params: [String: String] = [:]
+        for item in items where params[item.name] == nil { params[item.name] = item.value }
+        let payload: [String: Any] = ["type": "link", "params": params]
+        guard webReady, let data = try? JSONSerialization.data(withJSONObject: payload), let json = String(data: data, encoding: .utf8) else {
+            webDidStartLoading()
+            wv.load(URLRequest(url: entry))
+            return
+        }
+        wv.evaluateJavaScript("(window.apex && window.apex.onNative) ? (window.apex.onNative(\(json)), true) : false") { [weak self, weak wv] result, _ in
+            guard (result as? Bool) != true, let wv else { return }
+            self?.webDidStartLoading()
+            wv.load(URLRequest(url: entry))
+        }
     }
 
     func webDidStartLoading() {
