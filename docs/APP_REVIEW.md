@@ -14,7 +14,7 @@ Checked 2026-10-28 against main and App Store Connect (read through the API key 
 | App record | ApexNav, `com.senft.ApexNav`, Apple ID 6827831098, version 1.0 "Prepare for Submission" |
 | Builds | uploaded by CI on every app-changing merge to main (docs/TESTFLIGHT.md); 342.1 and 349.1 VALID, no export-compliance question |
 | TestFlight | internal group "First Testers", access to all builds |
-| Bundle ID capabilities | In-App Purchase only (Apple's default). A second, unused App ID `com.senft.ApexNav.JNX759T5W6` (App Groups) exists from an earlier attempt; harmless, the owner may delete it |
+| Bundle ID capabilities | In-App Purchase (Apple's default) and Sign in with Apple (enabled 2026-10-28 through the API). A second, unused App ID `com.senft.ApexNav.JNX759T5W6` (App Groups) exists from an earlier attempt; harmless, the owner may delete it |
 
 ## Holds today
 
@@ -36,7 +36,7 @@ Checked 2026-10-28 against main and App Store Connect (read through the API key 
 | id | guideline | what | who |
 |---|---|---|---|
 | O-11 | 5.1.1(i), 1.2 | **Privacy policy and terms of use** (drafted: web/privacy.html, web/terms.html; linked in Settings and at sign-in; waiting on the owner's approval and a contact address) as pages on the site, linked in Settings and at sign-in, with the policy URL in App Store Connect. Terms must include a no-tolerance rule for objectionable content and abusive users (1.2). Claude drafts from the real data flows; the owner approves the legal text (Z-07) | Claude, then owner |
-| O-05 | 4.8 | **Sign in with Apple.** The app offers Google sign-in, so it must also offer Sign in with Apple (or an equivalent that limits data to name and email and lets people hide their email). Native `ASAuthorizationAppleIDProvider` in the shell, the token verified by the Worker against Apple's keys (`aud` = bundle ID), the `com.apple.developer.applesignin` entitlement, and the capability on the bundle ID (the API key can enable it) | Claude |
+| O-05 | 4.8, 5.1.1(v) | **Sign in with Apple** (built: native sheet, Worker verification, entitlement, capability. Open: on account deletion the Apple token must be revoked through Apple's REST API, which needs a Sign in with Apple key the owner creates). The app offers Google sign-in, so it must also offer Sign in with Apple (or an equivalent that limits data to name and email and lets people hide their email). Native `ASAuthorizationAppleIDProvider` in the shell, the token verified by the Worker against Apple's keys (`aud` = bundle ID), the `com.apple.developer.applesignin` entitlement, and the capability on the bundle ID (the API key can enable it) | Claude |
 | O-12 | 2.1 | **Reviewer access.** Sign-in needs a membership invite, so App Review needs a way in: a review account or a reviewer sign-in code in the App Review notes, plus notes explaining that drives need a car (the bundled replays show the cockpit without one) | Claude, owner pastes the notes |
 | O-09 | 2.3 | **Listing:** description, keywords, support URL, screenshots (6.9" iPhone), App Privacy answers (precise location: collected for app functionality, not linked to identity when shared as road data; account email and name: linked; crash data: not linked) | Claude drafts, owner submits |
 | O-13 | 4.2 | **Not a thin web wrapper.** The app's value is native: CoreMotion IMU at 100 Hz, background GPS, the voice route to the car stereo, CarPlay (C-01/C-02 when the entitlement comes). Keep adding native surfaces (Live Activity U-11, widgets U-10) and say so in the review notes | Claude |

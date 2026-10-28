@@ -9,7 +9,7 @@ const WRITE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
 // Sign-in steps limited per IP: starting one, and the app's code exchange. Not the Google callback (many people can share a
 // carrier-NAT address, and a 429 there loses a sign-in the person already consented to) and not logout (it must always work).
-const AUTH_LIMITED = new Set(["/api/auth/google/start", "/api/auth/app/exchange"]);
+const AUTH_LIMITED = new Set(["/api/auth/google/start", "/api/auth/app/exchange", "/api/auth/apple"]);
 
 /** Throws 429 when this request is over its limit. Without a binding (a test env without it) nothing is limited. */
 export async function rateCheck(req: Request, env: Env, path: string): Promise<void> {

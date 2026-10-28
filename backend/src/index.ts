@@ -9,6 +9,7 @@ import { rateCheck } from "./ratelimit";
 import { clientError, errorSummary, serverError } from "./errors";
 import { backupDatabase } from "./backup";
 import { sweepExpired } from "./sweep";
+import { appleSignIn } from "./apple";
 
 const BACKUP_CRON = "0 7 * * 1";   // wrangler.jsonc triggers; the other cron is the daily sweep
 import {
@@ -46,6 +47,7 @@ on("GET", "/api/auth/google/start", (req, env) => googleStart(req, env));
 on("GET", "/api/auth/google/callback", (req, env) => googleCallback(req, env));
 on("POST", "/api/auth/logout", (req, env) => logout(req, env));
 on("POST", "/api/auth/app/exchange", (req, env) => appExchange(req, env));
+on("POST", "/api/auth/apple", (req, env) => appleSignIn(req, env));
 
 on("GET", "/api/me", async (req, env) => {
   const v = await viewer(req, env);

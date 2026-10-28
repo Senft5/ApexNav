@@ -371,7 +371,11 @@
     body.moving .toast { font-size: 15px; }
     body.moving .toast a { display: inline-flex; align-items: center; padding: 0 12px; }
     body.moving input:not([type=checkbox]):not([type=radio]):not([type=range]), body.moving textarea { opacity: 0.5; }
-  </style>
+      /* Sign in with Apple: Apple's black button style, full width like the Google one (HIG), shown in the app only. */
+    .apple-btn { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; min-height: 44px; border: 0; border-radius: 10px; background: #000; color: #fff; font: 600 17px -apple-system, system-ui, sans-serif; margin-bottom: 8px; }
+    .apple-btn[hidden] { display: none; }
+    @media (prefers-color-scheme: dark) { .apple-btn { background: #fff; color: #000; } }
+</style>
 </head>
 <body>
   <div id="app">
@@ -575,6 +579,7 @@
     <div class="grow" data-step="3" hidden>
       <h2>Driving with friends?</h2>
       <p>Sign in to join a crew and see its stages and boards. You can do this later in Crew.</p>
+      <button class="apple-btn" data-apple-signin hidden>&#xF8FF; Sign in with Apple</button>
       <a class="ink-btn solid" href="/api/auth/google/start" style="display:flex;align-items:center;justify-content:center;text-decoration:none">Sign in with Google</a>
       <p class="note">By signing in you agree to the <a href="https://apexnav.senftns.workers.dev/terms.html" target="_blank" rel="noopener">Terms</a> and <a href="https://apexnav.senftns.workers.dev/privacy.html" target="_blank" rel="noopener">Privacy</a> policy.</p>
     </div>
@@ -2896,7 +2901,11 @@
     document.addEventListener('click', (e) => {
       const a = e.target.closest && e.target.closest('a[href="/api/auth/google/start"]');
       if (a && ApexSync.inApp) { e.preventDefault(); ApexSync.signIn(); }
+      if (e.target.closest && e.target.closest('[data-apple-signin]')) ApexSync.signInApple();
     });
+    // Sign in with Apple (IDEAS O-05, App Review 4.8): in the app only, first and as prominent as Google.
+    if (ApexSync.inApp) document.querySelectorAll('[data-apple-signin]').forEach((b) => { b.hidden = false; });
+    const appleButton = () => { const b = el('button', { className: 'apple-btn', textContent: '\uF8FF Sign in with Apple', hidden: !ApexSync.inApp }); b.setAttribute('data-apple-signin', ''); return b; };
     const jsonOf = async (r) => { try { return await r.json(); } catch (_) { return null; } };
     const el = (tag, props = {}, ...kids) => { const n = Object.assign(document.createElement(tag), props); n.append(...kids); return n; };
     const btn = (label, onclick, cls = 'ink-btn') => el('button', { className: cls, textContent: label, onclick });
@@ -2966,6 +2975,7 @@
         body.append(el('img', { src: 'brand/logo.svg', alt: 'ApexNav', width: 200, style: 'max-width:60%' }),
           el('h3', { textContent: 'Drive with friends' }),
           el('p', { className: 'note', textContent: 'ApexNav is invite-only. Sign in to add friends, share scores and join boards. Nothing is shared unless you switch it on.' }),
+          appleButton(),
           el('a', { className: 'ink-btn solid', href: '/api/auth/google/start', textContent: 'Sign in with Google', style: 'display:flex;align-items:center;justify-content:center;text-decoration:none' }),
           legalNote('By signing in you agree to the '));
         return;

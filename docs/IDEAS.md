@@ -254,7 +254,7 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 | O-02 | Mount guide: how and where to mount the phone, with a live "calibrated" tick | H | S | done (app: Mount row before the first drive, "Mount set" when calibration locks) | STATE 2026-10-26 calibration |
 | O-03 | Instant value with no account: plan a fun loop from where you are in two taps | H | S | done (loop chips in Where to?) | Calimoto |
 | O-04 | Demo replay that shows the cockpit, notes and analysis in 60 s | M | S | partial (#58) | — |
-| O-05 | Sign in with Apple (required on iOS when Google sign-in is offered): native provider in the shell, Worker verifies the token, capability enabled through the API key (docs/APP_REVIEW.md) | H | M | todo (unblocked: the session has the App Store Connect key) | App Store guideline 4.8 |
+| O-05 | Sign in with Apple (required on iOS when Google sign-in is offered): native provider in the shell, Worker verifies the token, capability enabled through the API key (docs/APP_REVIEW.md) | H | M | partial (this PR: native sheet, Worker verification, entitlement, capability on the App ID; token revocation on account deletion needs the owner's Sign in with Apple key) | App Store guideline 4.8 |
 | O-06 | Email link sign-in as a no-Google option | M | S | todo | docs/BACKEND.md |
 | O-07 | Referral: invite a friend into your crew, both get Octane | M | S | todo | Waze, Strava |
 | O-08 | Landing page with real screenshots, the four promises and TestFlight/Play links | H | S | todo | launch |
