@@ -1,5 +1,10 @@
 # APEX NAV — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-10-28 (morning)
+- Merged: #191 R-25/R-26 GPX in/out and maps links, #192 R-37 home by + R-11 which way round a stage + S-12 spots near you.
+- This PR: F-06 offline data in Settings (size and delete), D-23 drive tags and notes with a Log filter, V-08 ducking by note priority (shell `duck` flag; `.mixWithOthers` for cruise chatter).
+- Exact next task: IDEAS M rows: S-15 profiles, A-05 desktop planner, R-18 drag to reshape, S-07 kudos, S-11 challenges, S-20 flyby; widgets with data need an App Group (U-10).
+
 ## Session 2026-10-28 (early morning): more of IDEAS, all through TestFlight
 - Merged since: #184 Y-03 app health counts (migration 0014), #185 U-10 Start-a-drive widget + Control Center button, #186 S-13 public meets (migration 0015) + R-19 corners you like + D-24 year so far, #187 O-08 landing page (web/about.html), #188 Q-17 closures routed around, #189 R-24/R-23 viewpoints, cafés and fuel along a route, #190 S-19 share your ETA (migration 0016).
 - Open: #191 R-25/R-26 GPX in/out, maps links, Open in ApexNav (iOS document type). Next PR: R-37 home by, R-11 which way round a stage (DEM climb), S-12 spots near you in Crew.
