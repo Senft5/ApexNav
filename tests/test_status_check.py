@@ -67,3 +67,12 @@ def test_workflow_uses_pipefail_and_runs_on_a_schedule():
     assert "python tools/status_check.py | tee status.md" in wf and "status.json" in wf
     assert "shell: bash" in wf, "without pipefail the step would report tee's exit code"
     assert "schedule:" in wf and "cron:" in wf
+
+
+def test_a_hung_check_times_out_without_holding_the_rest():
+    import time as _t
+    t0 = _t.monotonic()
+    res = sc.run("https://x.test", get=fake({"overpass": lambda url: _t.sleep(5) or (200, b"")}), sleep=lambda s: None, deadline_s=0.5)
+    assert _t.monotonic() - t0 < 2
+    assert [r["name"] for r in res][0] == "Site" and res[0]["ok"]
+    assert res[-1] == {"name": "Overpass", "core": False, "ok": False, "status": "timeout", "ms": 500}

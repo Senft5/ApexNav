@@ -16,6 +16,7 @@ import argparse
 import json
 import os
 import sys
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -62,23 +63,39 @@ def checks(base):
     ]
 
 
-def run(base=BASE, get=fetch, tries=2, pause=3.0, clock=time.monotonic, sleep=time.sleep):
-    """One result per check: {name, core, ok, status, ms}. status is the HTTP code, or the error's class name."""
-    out = []
-    for name, core, url, data, ok in checks(base):
-        for attempt in range(tries):
-            t0 = clock()
-            try:
-                status, body = get(url, data)
-                good = bool(ok(status, body))
-            except Exception as e:  # noqa: BLE001 - any network failure is a failed check, named in the table
-                status, good = type(e).__name__, False
-            ms = round((clock() - t0) * 1000)
-            if good or attempt == tries - 1:
-                break
-            sleep(pause)
-        out.append({"name": name, "core": core, "ok": good, "status": status, "ms": ms})
-    return out
+def _one(name, core, url, data, ok, get, tries, pause, clock, sleep):
+    for attempt in range(tries):
+        t0 = clock()
+        try:
+            status, body = get(url, data)
+            good = bool(ok(status, body))
+        except Exception as e:  # noqa: BLE001 - any network failure is a failed check, named in the table
+            status, good = type(e).__name__, False
+        ms = round((clock() - t0) * 1000)
+        if good or attempt == tries - 1:
+            break
+        sleep(pause)
+    return {"name": name, "core": core, "ok": good, "status": status, "ms": ms}
+
+
+def run(base=BASE, get=fetch, tries=2, pause=3.0, clock=time.monotonic, sleep=time.sleep, deadline_s=60.0):
+    """One result per check, in table order: {name, core, ok, status, ms}. status is the HTTP code, or the error's class
+    name. The checks run side by side, and any still going after deadline_s counts as failed ("timeout"): urlopen's
+    timeout is per socket read, so a server trickling bytes could otherwise hold the whole run past the workflow's limit."""
+    cs = checks(base)
+    out = [None] * len(cs)
+
+    def work(i, c):
+        out[i] = _one(*c, get, tries, pause, clock, sleep)
+
+    threads = [threading.Thread(target=work, args=(i, c), daemon=True) for i, c in enumerate(cs)]   # daemon: a hung one can't block exit
+    for t in threads:
+        t.start()
+    end = time.monotonic() + deadline_s
+    for t in threads:
+        t.join(max(0.0, end - time.monotonic()))
+    return [r or {"name": c[0], "core": c[1], "ok": False, "status": "timeout", "ms": round(deadline_s * 1000)}
+            for r, c in zip(list(out), cs)]
 
 
 def summarize(results, when=None):
