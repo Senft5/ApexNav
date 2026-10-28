@@ -746,6 +746,14 @@ flow('drive tags: tag a drive in the Log, filter by it, the note stays on the ph
   await page.click('#historyFilter button:has-text("E46")');
   const rows = await page.$$eval('#historyTable tr.row-link', (els) => els.map((e) => e.dataset.drive));
   check(rows.length === 1 && rows[0] === 't1', 'filtered to the tagged drive: ' + rows);
+  // which road was better (IDEAS S-17): asked on the newer drive, answered once, ranked in the Log
+  await page.goto(base + '/analysis.html?drive=t2');
+  await page.waitForSelector('#dvVote:not([hidden])');
+  await page.click('#dvVoteBtns button:has-text("Wet one")');
+  await page.waitForSelector('#dvVote[hidden]', { state: 'attached' });
+  await page.click('a.back[data-to="history"]');
+  await page.waitForSelector('#roadsPanel:not([hidden])');
+  check((await page.textContent('#roadsList')).startsWith('1. Wet one <i>x</i>2. Dry one'), 'your roads: ' + await page.textContent('#roadsList'));
 });
 
 flow('flyby: a friend on the same stage that day shows on the drive, as text; challenges this month (Worker stubbed, IDEAS S-20, S-11)', async (page, base) => {
