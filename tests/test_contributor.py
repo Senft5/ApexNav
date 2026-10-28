@@ -43,12 +43,21 @@ out.driveIds = [C.driveIdFor({ id: 'rec_Dry Ridge.csv', date: '2026-10-22T09:00'
 // payload contains only the allowed keys
 out.keys = Object.keys(a[0]).sort().join() + '|' + Object.keys(a[0].bins[0]).sort().join();
 // network shell with a fake fetch: Valhalla trace_attributes + Overpass, then upload
+// a mostly disputed road: 45 of 50 measured bins disagree, 5 agree on smooth: tiny weight, no Surface
+out.mostlyDisputed = (() => { const m = { km: 0.5, coverage: 0.5, roughCoverage: 0.05, roughness: 0.05, avgPasses: 3, bankedKm: 0, offCamberKm: 0 }; return { adj: C.measuredAdjust(m), surface: C.surfaceScore(m) }; })();
+out.offCamber = C.measuredAdjust({ roughness: null, coverage: 1, km: 10, bankedKm: 0, offCamberKm: 1, avgPasses: 3 });
+out.adjust2 = { onePass: C.measuredAdjust({ roughness: 0.6, coverage: 1, avgPasses: 1 }), banked: C.measuredAdjust({ roughness: null, coverage: 1, km: 10, bankedKm: 1, avgPasses: 3 }),
+  bankedLittle: C.measuredAdjust({ roughness: null, coverage: 1, km: 10, bankedKm: 0.5, avgPasses: 2 }), zeroCoverage: C.measuredAdjust({ roughness: 0.6, coverage: 0, km: 10, bankedKm: 1 }) };
+out.surface = [C.surfaceScore(null), C.surfaceScore({ roughness: 0.05, coverage: 0.1 }), C.surfaceScore({ roughness: 0.05, coverage: 0.5 }), C.surfaceScore({ roughness: 0.5, coverage: 1 }), C.surfaceScore({ roughness: 0.23, coverage: 1 })];
 out.adjust = [C.measuredAdjust(null), C.measuredAdjust({ roughness: null, coverage: 1 }), C.measuredAdjust({ roughness: 0.05, coverage: 1 }), C.measuredAdjust({ roughness: 0.6, coverage: 1 }), C.measuredAdjust({ roughness: 0.6, coverage: 0.1 }), C.measuredAdjust({ roughness: 0.23, coverage: 0.5 })];
 (async () => {
   // measured data along a route: way 77 direction 0 has bins 200..399 merged from 3 passes, one banked stretch, one unmeasured-camber stretch
   const roads = { 77: { 0: { i: Array.from({ length: 200 }, (_, j) => 200 + j), n: Array(200).fill(3), cam: Array.from({ length: 200 }, (_, j) => (j < 40 ? 5 : j < 60 ? null : 1)), rough: Array(200).fill(0.1), crest: Array(200).fill(0.2) } } };
   const rt = drive(1000), rm = rt.lat.map(() => ({ way: 77, cls: 'tertiary' }));
   out.measured = C.summarize(C.locate({ drive: rt, match: rm, ways: { 77: way } }), roads, 1000);
+  // passes disagree on roughness for the first 100 bins and on camber for the banked 40: those don't steer a route
+  const disputedRoads = { 77: { 0: { ...roads[77][0], rsd: Array.from({ length: 200 }, (_, j) => (j < 100 ? 0.2 : 0.01)), cn: Array(200).fill(3), csd: Array.from({ length: 200 }, (_, j) => (j < 40 ? 4 : 0.5)) } } };
+  out.disputed = C.summarize(C.locate({ drive: rt, match: rm, ways: { 77: way } }), disputedRoads, 1000);
   out.unknownRoad = C.summarize(C.locate({ drive: rt, match: rm, ways: { 77: way } }), {}, 1000);
   out.reverseRoute = C.summarize(C.locate({ drive: drive(1000, true), match: rm, ways: { 77: way } }), roads, 1000);
   const fk = async (url, init) => url.includes('trace_attributes')
@@ -58,6 +67,15 @@ out.adjust = [C.measuredAdjust(null), C.measuredAdjust({ roughness: null, covera
   out.series = (() => { const s = C.seriesFrom(C.locate({ drive: rt, match: rm, ways: { 77: way } }), roads, 1000); return { len: s.cam.length, known: s.cam.filter((v) => v != null).length, unknownRough: s.rough.filter((v) => v == null).length, first: s.cam.findIndex((v) => v != null), n: s.n.find((v) => v != null) }; })();
   out.viaNetwork = viaNet && { coveredKm: Math.round(viaNet.coveredKm * 100) / 100, banked: viaNet.bankedKm };
   out.signedOut = await C.measuredAlong(rt, async () => null, { fetch: fk });
+  // a route over 125 ways: three lookups of at most 50; one signed-out batch makes the whole answer unknown
+  const many = rt.lat.map((_, i) => ({ way: 1000 + Math.floor(i / 8), cls: 'tertiary' }));
+  const fkMany = async (url, init) => url.includes('trace_attributes')
+    ? { ok: true, json: async () => ({ edges: Array.from({ length: 125 }, (_, k) => ({ way_id: 1000 + k, road_class: 'tertiary' })), matched_points: JSON.parse(init.body).shape.map((_, k) => ({ type: 'matched', edge_index: Math.floor(k / 8) })) }) }
+    : { ok: true, json: async () => ({ elements: [] }) };
+  out.batches = [];
+  await C.measuredAlong(rt, async (ids) => { out.batches.push(ids.length); return {}; }, { fetch: fkMany });
+  let nth = 0;
+  out.batchSignedOut = await C.measuredAlong(rt, async () => (++nth === 2 ? null : {}), { fetch: fkMany });
   const calls = [];
   const fake = async (url, init) => {
     calls.push(url);
@@ -144,10 +162,33 @@ def test_measured_is_per_direction_and_network_path(result):
     assert result["signedOut"] is None
 
 
-def test_measured_adjustment_is_gentle_and_never_rewards_or_punishes_the_unknown(result):
+def test_measured_adjustment_moves_routes_but_never_rewards_or_punishes_the_unknown(result):
     none, unknown_rough, smooth, rough_full, rough_little, mid = result["adjust"]
-    assert none == 0 and unknown_rough == 0 and smooth == 0
-    assert rough_full == pytest.approx(-6) and -6 < rough_little < 0 and mid == pytest.approx(-3)
+    assert none == 0 and unknown_rough == 0
+    assert smooth == pytest.approx(3), "measured smooth pavement is worth up to 3"
+    assert rough_full == pytest.approx(-8) and -8 < rough_little < 0 and mid == pytest.approx(-3), "half measured counts three quarters"
+    a = result["adjust2"]
+    assert a["onePass"] == pytest.approx(-6), "one pass counts three quarters"
+    assert a["banked"] == pytest.approx(2) and a["bankedLittle"] == pytest.approx(1)
+    assert a["zeroCoverage"] == 0
+    assert result["surface"] == [None, None, 100, 0, 50]
+    assert result["offCamber"] == pytest.approx(-2), "off-camber road is a hazard, never a bonus"
+    assert 0 < result["mostlyDisputed"]["adj"] <= 0.25 and result["mostlyDisputed"]["surface"] is None
+
+
+def test_disagreeing_passes_do_not_steer_routes(result):
+    d, m = result["disputed"], result["measured"]
+    assert d["coveredKm"] == pytest.approx(m["coveredKm"]), "still covered"
+    assert d["bankedKm"] == 0 and m["bankedKm"] > 0, "banking the passes disagree on is not banking"
+    assert d["smoothKm"] == pytest.approx(m["smoothKm"] / 2, abs=0.02)
+    assert d["disputedKm"] == pytest.approx(0.5, abs=0.02)
+    assert d["roughCoverage"] == pytest.approx(m["roughCoverage"] / 2, abs=0.01), "weights count agreed readings only"
+    assert m["offCamberKm"] == 0
+
+
+def test_long_routes_look_up_ways_in_batches(result):
+    assert result["batches"] == [50, 50, 25]
+    assert result["batchSignedOut"] is None
 
 
 def test_series_marks_unmeasured_samples_null(result):

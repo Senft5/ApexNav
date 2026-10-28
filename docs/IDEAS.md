@@ -1,0 +1,345 @@
+# Idea backlog
+
+The long list of everything that could make ApexNav best in class. It is a menu, not a
+plan: threads pick from it, turn a picked idea into a concrete task (in their own PR, or a
+row in docs/WORKER_QUEUE.md when it needs a written brief), and come back here to update the
+status. Anyone may add, split, merge, re-rate or drop ideas; keep the id stable once an idea
+has one, and never reuse an id.
+
+Owner goal (2026-10-27): keep looping until every area is best in class. The areas are
+fun routing, driver and road analysis, social, and UI first; the rest of this file is what
+makes those four trustworthy in production.
+
+## How to read a row
+
+| column | meaning |
+|---|---|
+| id | Stable handle (`R-12`). Reference it in PR titles or bodies so the next thread can find the work. |
+| impact | **H** changes why someone picks ApexNav over another app, or removes a reason to leave. **M** clearly better day to day. **L** nice, niche or polish. |
+| effort | **S** one small PR. **M** a few PRs or one large one. **L** several PRs across core, web and native. **XL** a project in its own right (new platform, new data pipeline). |
+| status | `done (#N)` shipped on main. `partial (#N)` a first version shipped, the rest of the row is not. `active (thread)` a thread is building it now. `todo`. `owner` needs an owner decision, money, an account or a phone test before it can move. `dropped (why)`. |
+| from | Where the idea comes from: a doc in this repo, an owner request, or a competitor that does it well. |
+
+## How to pick next
+
+1. **Owner asks and broken things first.** Anything the owner reported from a phone, then
+   anything that loses data, freezes, or shows something untrue (the honesty rule:
+   unknown stays `--`, never fabricated).
+2. **Then the coequal top priorities** in docs/WORKER_QUEUE.md (road intelligence, convoy
+   hazard streaming), then this file.
+3. **Within an area, take the best impact for the effort**: H/S, then H/M, then M/S,
+   then H/L. Skip anything marked `owner` unless the owner just unblocked it.
+4. **Prefer ideas that feed each other.** Measured road data improves routing, coaching,
+   hazards and road pages at once; a thread that can choose should choose the foundation.
+5. **Check for a collision before starting.** Look for `active` rows and open PRs on the
+   same files (web/index.html is shared by almost everything); keep PRs small and merge
+   origin/main in before merging.
+6. **Claim, ship, record.** Set the row to `active (thread name)` in your first PR, `done
+   (#N)` or `partial (#N)` when it merges, and add any new ideas you found on the way.
+7. **Respect the guardrails below.** An idea that breaks one is `dropped`, however popular
+   it is elsewhere.
+
+## Guardrails (decided; do not build around them)
+
+- Driver Score is technique only. No legality in the score, no public speed or time
+  leaderboards; corner and segment times are shared only by explicit opt-in per friend and
+  per crew (docs/SOCIAL.md, owner 2026-10-25).
+- Zero subscription and zero budget backend (Cloudflare Workers + D1 today). A paid
+  provider (traffic, tiles, routing) needs the owner's yes first.
+- Never ship placeholder or synthesized road data as if measured. Single-pass hazards are
+  "Driven once" until corroborated.
+- Privacy by design: no per-user trace storage on the server, the first and last km of every
+  trip stay on the phone, anonymous road learning is separate from private social sharing.
+- Physics and signal math live in `/core` with JS (and Swift where live) parity tests.
+- CarPlay waits for an Apple developer account; Android is low priority (owner 2026-10-25).
+  Ideas for both are listed so they are ready when that changes.
+
+---
+
+## 1. Fun routing (R)
+
+Today: Quick / Fun / Max fun A→B with stage detours and a map-only fun score (#82), loops
+sized with real road distances (#85), measured roughness/banking moving route choice for
+members (#88), off-route rerouting (#30, #34), From/To with current location (#28, #31),
+long-press pin (#61), Apple place search and nearby suggestions in the app (#73).
+
+| id | idea | impact | effort | status | from |
+|---|---|---|---|---|---|
+| R-01 | Fun level slider on the Plan sheet (Quick / Fun / Max fun) and "N min (+M for fun)" on the route card | H | M | done (#82) | Kurviger curvy levels, Calimoto |
+| R-02 | Loops the length you asked for, from real road distances between stages | H | M | done (#85) | Calimoto round trips |
+| R-03 | Measured road character (roughness, banking) as a routing input, unmeasured stays neutral | H | M | partial (#88) | ROAD_INTELLIGENCE §7, WORKER_QUEUE road-3 |
+| R-04 | road-3 remainder: measured crest, flow confidence and corroborated hazards in candidate discovery and generation, not only in ranking | H | L | todo | WORKER_QUEUE road-3 |
+| R-05 | Multi-centre stage discovery so long A→B trips find stages near both ends, not only the midpoint | H | M | todo | STATE 2026-10-28 |
+| R-06 | One fun score for loops and A→B (unify loop ranking with the fun score) | M | S | todo | STATE 2026-10-28 |
+| R-07 | Live ETA and time left from router durations scaled by your own pace, reset on reroute | H | M | todo | WORKER_QUEUE eta-1, every nav app |
+| R-08 | Traffic ahead on iOS from MapKit, switch to the next most fun route that avoids the jam | H | L | done (#78, phone test pending) | WORKER_QUEUE traffic-1, Waze |
+| R-09 | Traffic on web/Android through a keyed provider (TomTom/HERE via the Worker) | M | M | owner (paid provider) | Google Maps |
+| R-10 | "Explore": best stages within N minutes of here, as a list and on the map, one tap to drive one | H | M | todo | ROAD_INTELLIGENCE §7.1, REVER discover |
+| R-11 | Choose each stage's direction by score and car (climb the technical one, descend the flowing one) | M | M | todo | ROAD_INTELLIGENCE §7.2.3 |
+| R-12 | Set list: order stages so intensity builds, rests, and finishes high; no three max-TECH stages in a row | M | M | todo | ROAD_INTELLIGENCE §7.2.5 |
+| R-13 | Sun glare penalty for headings within 20° of a low sun, using the existing solar formula | M | S | todo | ROAD_INTELLIGENCE §7.2.6 |
+| R-14 | Re-score the router's returned geometry and reject routes that shortcut a stage | M | S | todo | ROAD_INTELLIGENCE §7.2.4 |
+| R-15 | Avoid options: highways, tolls, ferries, unpaved, towns, repeated roads, with honest "couldn't avoid" | H | M | todo | Kurviger, Calimoto, Google Maps |
+| R-16 | Time budget routing: "I have 90 minutes, end at home" (orienteering with a hard time cap) | H | M | todo | ROAD_INTELLIGENCE §7.1 |
+| R-17 | Day trip builder: start, stops (food, fuel, viewpoint), finish, with drag-to-reorder vias | H | L | todo | Roadtrippers, Calimoto tour planner |
+| R-18 | Drag the route line on the map to reshape it (adds a via) | M | M | todo | Google Maps, Kurviger |
+| R-19 | Archetype preferences in routing ("love esses, skip switchbacks"), sliders first, learned later | H | M | todo | ROAD_INTELLIGENCE §5.4 |
+| R-20 | Car-aware routing from the Garage (width, ride height, power: no goat tracks for a lowered car) | M | M | todo | SOCIAL §2.4 |
+| R-21 | Weather-aware routing: penalise wet, icy, foggy or very hot stages from a free forecast; show why | M | M | todo | Calimoto weather, REVER |
+| R-22 | Seasonal and time-of-day closures (OSM `conditional` tags, seasonal mountain passes) | M | M | todo | Kurviger |
+| R-23 | Fuel and charge range: warn before a long stage with no fuel; EV charger stops on loops | M | M | todo | Google Maps, ABRP |
+| R-24 | Scenic layer: viewpoints, overlooks, waterfalls and car-friendly cafés along the route from OSM | M | M | todo | Roadtrippers, Scenic |
+| R-25 | GPX import (follow someone's route with our notes) and GPX/KML export of planned routes | M | S | todo | Kurviger, Calimoto, REVER |
+| R-26 | Open a shared route link from Google/Apple Maps or a GPX in the app ("Open in ApexNav") | M | M | todo | Waze deep links |
+| R-27 | Our own routing graph with fun scores baked into edge costs (Valhalla custom costing) | H | XL | todo | ROAD_INTELLIGENCE §7.3 |
+| R-28 | On-device Valhalla with regional tiles built monthly by free CI, so routing works with no signal | H | XL | todo | ROAD_INTELLIGENCE §7.4, Calimoto offline |
+| R-29 | Lane guidance and junction views at complex interchanges on the transit parts of a trip | M | L | todo | Google Maps, Apple Maps |
+| R-30 | Multiple route options shown side by side on the map with Fun/Twist/Flow and time for each | H | M | todo | Google Maps alternatives |
+| R-31 | "Why this route" explainer: the stages it uses, what each adds, and what it cost in minutes | M | S | todo | trust-building |
+| R-32 | Benchmark roads (Tail of the Dragon, Big Sur, Stelvio, Route 33) must rank in their region's top decile; CI test | M | M | todo | ROAD_INTELLIGENCE §6.2 |
+| R-33 | Preference learning: after a drive, "which was better, A or B?" fits per-user and global weights | H | L | todo | ROAD_INTELLIGENCE §6.3 |
+| R-34 | Ramp/cloverleaf loops no longer read as Switchbacks (veto motorway links by road class) | M | S | todo | STATE 2026-10-25 (c) |
+| R-35 | Avoid known speed traps and ALPR cameras as a routing option, not only a note | M | S | todo | DeFlock layer, Waze |
+| R-36 | Crowd quiet hours: prefer stages that are empty at the time you'll arrive (from anonymous counts) | M | L | todo | Strava heatmap, Google popular times |
+| R-37 | Return-to-start "home by" mode on a loop that shortens itself live if you're running late | M | M | todo | Calimoto |
+
+## 2. Driver analysis and coaching (D)
+
+Today: Driver Score (technique only), per-corner compare, segments, corner coach with
+ideal drive and where to find time (#80), grip circle (#86), automatic mount calibration
+(#64), camber and crest from the IMU.
+
+| id | idea | impact | effort | status | from |
+|---|---|---|---|---|---|
+| D-01 | Corner coach: brake zone, trail braking, coasting and throttle point per corner, timed over the same stretch | H | M | done (#80) | Harry's Lap Timer, Garmin Catalyst |
+| D-02 | Grip circle with the driver's own g-g envelope and per-corner grip use | H | M | done (#86) | RaceChrono, AiM |
+| D-03 | Live coaching on a known road: spoken "brake later" / "carry more speed" from your best pass | H | M | todo | STATE 2026-10-28, Garmin Catalyst |
+| D-04 | Ghost car on the map: your best pass (or a friend's shared ghost) as a moving marker with live delta | H | M | todo | SOCIAL §3, racing games, Strava Live Segments |
+| D-05 | Live delta bar during a known stage (green ahead / red behind your best, technique-scored, not speed-scored) | H | M | todo | Harry's Lap Timer |
+| D-06 | Smoothness heatmap on the drive map (lateral jerk, abrupt inputs) with the three worst moments | M | S | todo | Garmin Catalyst |
+| D-07 | Consistency score across passes of the same road, and a trend over weeks | M | S | todo | Strava fitness trend |
+| D-08 | Personal records feed: best Driver Score per road, per archetype, smoothest drive this month | M | S | todo | Strava PRs |
+| D-09 | Drive summary card worth sharing (score, map silhouette, archetype mix), no times or speeds | H | S | todo | Strava activity card, Relive |
+| D-10 | 3D flyover replay of a drive with the corner notes and g trace (export as a video) | H | L | todo | Relive |
+| D-11 | Dashcam overlay: sync a phone/GoPro video with the drive and render g, notes and score over it | M | L | todo | RaceRender, Track Addict |
+| D-12 | OBD-II over Bluetooth LE: throttle, brake, RPM, gear for true inputs instead of inferred ones | H | L | todo | Track Addict, RaceChrono |
+| D-13 | External GNSS (10–25 Hz) support for better lines and lap timing | M | M | todo | RaceChrono, Dragy |
+| D-14 | Performance timing: 0–60, 60–0, quarter mile, only on a closed course with a clear warning | M | M | owner (safety stance) | Dragy |
+| D-15 | Track day mode: closed circuit, start/finish line, sector splits, laps, no public-road guardrails needed | H | L | todo | Harry's Lap Timer, RaceChrono |
+| D-16 | Fatigue cues: rising corrections, later braking and wider lines late in a long drive, suggest a break | M | M | todo | car driver-attention systems |
+| D-17 | Incident detection: a crash-level spike plus stop asks "Are you OK?" and can alert a chosen contact | H | M | todo | Apple Crash Detection, Life360, REVER |
+| D-18 | Line analysis: early vs late apex per corner from the GPS line against the road geometry | M | M | todo | SOCIAL §3 |
+| D-19 | Car-specific reference lap from the Garage so scores mean the same across cars | H | M | todo | SOCIAL §2.4 |
+| D-20 | Weekly drive digest: km of good roads, new roads, best moment, one thing to work on | M | S | todo | Strava weekly, Whoop |
+| D-21 | Coach in plain words: one sentence per drive that a non-racer understands | H | S | todo | owner goal (approachable) |
+| D-22 | Blank lat/lon g while the mount is `default`, like camber, so uncalibrated drives can't skew the score | M | S | todo | STATE 2026-10-26 |
+| D-23 | Drive tags and notes (car, passenger, weather, mood) to filter the Log | L | S | todo | Strava |
+| D-24 | Driving year in review (roads, regions, best corners, crews) | M | M | todo | Strava Year in Sport, Spotify Wrapped |
+
+## 3. Road intelligence (Q)
+
+Today: 5 m bins with roughness, camber, crest (#64, #65), passes-agree confidence (#87),
+app-open anonymous sharing once the mount is calibrated (#71), sightline physics, rally
+pace-note grammar, ALPR from DeFlock/OSM, reference-lap scoring and archetypes.
+
+| id | idea | impact | effort | status | from |
+|---|---|---|---|---|---|
+| Q-01 | Road feel confidence: "N runs agree" / "runs differ" from per-bin spread | H | S | done (#87) | — |
+| Q-02 | Bayesian hazard verification: Beta posterior with recency decay; "Confirmed" when ≥ 2 drivers agree | H | M | todo | ROAD_INTELLIGENCE §4.3, WORKER_QUEUE brand-17b |
+| Q-03 | Pace-normalised corner deviation: hidden difficulty where everyone slows more than geometry predicts | H | M | todo | ROAD_INTELLIGENCE §4.1 |
+| Q-04 | Geometry correction: crowd yaw-rate curvature overrides simplified OSM corners | H | L | todo | ROAD_INTELLIGENCE §4.2 |
+| Q-05 | Adaptive sectors by change-point detection, broken at junctions | M | M | todo | ROAD_INTELLIGENCE §5.3 |
+| Q-06 | Durable upload queue that survives page navigation and app restarts (IndexedDB) | H | M | partial (road-queue, unintegrated) | WORKER_QUEUE road-1, road-queue |
+| Q-07 | End-to-end verification of open app → upload → profile → routing change on preview data | H | M | todo | WORKER_QUEUE road-4 |
+| Q-08 | Upload crest with the right sign and range (resolve crest semantics with the server's 0..3) | M | S | partial (#65) | ARCHITECTURE §1 |
+| Q-09 | Sight offset per corner from landcover (forest vs field) instead of a constant 4 m | M | M | todo | STATE 2026-10-25 (c) |
+| Q-10 | Surface type from vibration spectrum (asphalt, chip seal, concrete joints, gravel) | H | L | todo | ROAD_INTELLIGENCE §3.4 |
+| Q-11 | Wet/low-grip zones from repeated traction events and weather at the time | M | L | todo | Waze hazards |
+| Q-12 | Freshness: decay old measurements, flag repaved roads when a rough road suddenly reads smooth | M | M | todo | Waze, ROAD_INTELLIGENCE §4.3 |
+| Q-13 | Road pages: archetype, four axes, confidence L0/L1/L2, elevation, notes, verified hazards, best direction and season | H | M | todo | SOCIAL §2.2, Kurviger/REVER road ratings |
+| Q-14 | Coverage map: which roads are measured, by how many passes, and where pioneers are needed | M | S | todo | Strava heatmap, Mapillary coverage |
+| Q-15 | Hazard reports by hand (one tap: pothole, gravel, debris, animal, police, closure) with auto-expiry | H | M | todo | Waze |
+| Q-16 | "Still there?" prompts when you pass a reported hazard, to confirm or clear it | M | S | todo | Waze |
+| Q-17 | Road closure and construction from OSM and crowd reports, fed into routing | M | M | todo | Waze, Google Maps |
+| Q-18 | Native C++ core (`/core/cpp`) so iOS and Android share one implementation instead of Swift duplication | M | XL | todo | ARCHITECTURE, STATE 2026-10-25 |
+| Q-19 | Benchmark road calibration set scored from map + DEM, checked in CI | M | M | todo | ROAD_INTELLIGENCE §6.2 |
+| Q-20 | Archetypes by clustering once crowd data exists | M | L | todo | ROAD_INTELLIGENCE §5.2 |
+| Q-21 | Real device acceptance for app-open sharing (shared km matches driven km, minus private ends) | H | S | owner (phone) | STATE 2026-10-27 |
+
+## 4. Co-driver and pace notes (V)
+
+Today: rally grammar (McRae 1–6, caution ladder, chaining), Kokoro voice banks, Jarvis,
+adaptive notes (cruise vs spirited), car audio routing to Bluetooth/CarPlay (#73).
+
+| id | idea | impact | effort | status | from |
+|---|---|---|---|---|---|
+| V-01 | Note timing from your speed and reaction, not a fixed ~5 s; learned per driver | H | M | todo | rally co-drivers |
+| V-02 | Note density levels a novice understands ("gentle left" vs "left 4 minus") | H | M | todo | owner goal (approachable) |
+| V-03 | Hazard speech always pre-empts ordinary notes, never stale, never duplicated | H | S | todo | WORKER_QUEUE convoy-2 |
+| V-04 | Turn-by-turn and pace notes in one voice stream so transit directions never collide with notes | H | M | todo | Waze/Google voice |
+| V-05 | Phrases in the owner's voice (voice conversion), behind licences | M | L | owner (voice on hold) | docs/VOICE.md |
+| V-06 | Celebrity/character voice packs as cosmetic Octane rewards | M | M | todo | Waze voice packs |
+| V-07 | Voice commands: "report pothole", "skip this stage", "how far to the next stage" (Siri Shortcuts first) | M | M | todo | Waze, Google Assistant |
+| V-08 | Music ducking tuned per note priority; never duck for low-priority notes in cruise | L | S | todo | — |
+| V-09 | Recce mode: drive slowly once, the co-driver writes your own notes for the road and reads them next time | H | L | todo | rally recce |
+| V-10 | Remove espeak-ng (GPL) from the voice path before charging | M | M | todo | docs/VOICE.md |
+
+## 5. Social and community (S)
+
+Today: accounts with Google sign-in, friends, crews (public and private, crews near you)
+(#76), Board with Friends/crew filters (#48), opt-in segment time sharing, highlights
+(#61), Octane points per contributed km, convoy server (#84).
+
+| id | idea | impact | effort | status | from |
+|---|---|---|---|---|---|
+| S-01 | Crews as groups: public/private, nearby discovery, tiles, owner settings | H | M | done (#76) | Strava clubs, REVER groups |
+| S-02 | Convoy client: create/join by code or QR, live positions, gap in time, leader hazard calls, regroup | H | L | partial (#84 server) | WORKER_QUEUE convoy-1..3, REVER, Waze |
+| S-03 | Friends' activity in the Log with rank on shared stages | H | M | todo | WORKER_QUEUE log-friends, Strava feed |
+| S-04 | Garage: car profile (mass, power, tyres, ride height), shareable car cards, no location | H | M | active (garage thread) | SOCIAL §2.4, Drivetribe |
+| S-05 | Share a planned route (geometry + notes) to a friend or crew, never a recorded drive | H | M | todo | SOCIAL §2.5, Calimoto, Roadtrippers |
+| S-06 | Crew events: a planned drive with time, meeting point, route, RSVPs and a convoy that opens on the day | H | L | todo | Meetup, REVER rides, car clubs |
+| S-07 | Kudos and comments on shared drives and highlights | M | M | todo | Strava kudos |
+| S-08 | Local legends without speed: most passes of a stage this month, smoothest crew | M | S | todo | Strava Local Legends |
+| S-09 | Pioneer badges for first measured passes of a road (3× Octane already designed) | M | S | todo | SOCIAL §2.3, Waze points |
+| S-10 | Octane redemptions that buy nothing safety-related: cosmetics, voice packs, early features | M | M | todo | SOCIAL §2.3 |
+| S-11 | Challenges: "drive 5 new roads this month", "pioneer 10 km", crew-vs-crew km | M | M | todo | Strava challenges, REVER |
+| S-12 | Highlights feed near you: viewpoints, cafés, meets, saved by members | M | M | todo | Roadtrippers, Google Maps contributions |
+| S-13 | Car meets map: public events and recurring Cars & Coffee, added by crews | H | M | todo | car meet apps, Facebook groups |
+| S-14 | Invite links that open the app (or the web) on the crew or route | H | S | todo | growth |
+| S-15 | Profiles: handle, cars, crews, favourite roads, totals; private by default | M | M | todo | Strava profile |
+| S-16 | Block and report on every social surface; moderation queue for public crews and highlights | H | M | todo | App Store requirement for UGC |
+| S-17 | Pairwise "which road was better?" after a drive feeds road scores (and is fun) | M | S | todo | SOCIAL §2.2 |
+| S-18 | Photos on highlights and stops, stripped of EXIF location beyond the highlight | M | M | todo | Roadtrippers, Google Maps |
+| S-19 | Live share ETA with a friend or family ("Nate is 12 min away") without sharing the drive | M | M | todo | Apple Maps Share ETA, Life360 |
+| S-20 | Flyby: after a drive, see which friends drove the same road that day (opt-in) | L | M | todo | Strava Flyby |
+
+## 6. UI and UX (U)
+
+Today: Road book as the one theme with day/night (#56, #62), Night Auto by sunset (#46),
+Plan as a pull-up sheet (#70, #73), Settings tab, drive switches on the map edge,
+accessible switches and focus (#81), honest empty states (#79), drive detail (#83).
+
+| id | idea | impact | effort | status | from |
+|---|---|---|---|---|---|
+| U-01 | Plan as a sheet over the map with recent places and saved spots | H | M | done (#70, #73) | Apple Maps |
+| U-02 | Hide the Where to?/Start bar during a replay; it covers the cluster | M | S | todo | STATE 2026-10-28 UI audit |
+| U-03 | Crew sheet draws one rule under its title, not two | L | S | todo | STATE 2026-10-28 UI audit |
+| U-04 | Imported drives get a real name (place, road, time of day), not the file name | M | S | todo | STATE 2026-10-28 UI audit |
+| U-05 | Audit the live cockpit with simulated GPS frames at phone size (day, night, glare) | H | S | todo | STATE 2026-10-28 UI audit |
+| U-06 | Stages simplified: one list near you with your best and the leader, create from a drive in one step | H | M | partial (#77) | WORKER_QUEUE stages-1 |
+| U-07 | Glanceable cockpit: one number and one note readable at arm's length in sunlight | H | M | todo | car HMI guidelines |
+| U-08 | Motion design pass: route reveal, sheet springs, note transitions, under 200 ms, reduced-motion respected | M | M | todo | Apple Maps |
+| U-09 | Haptics on notes and hazards (subtle, configurable) | M | S | todo | Apple Maps turn haptics on Watch |
+| U-10 | Home screen and lock screen widgets: nearby best stage, last drive score, crew event | M | M | todo | iOS widgets |
+| U-11 | Live Activity / Dynamic Island: next note, distance to stage, ETA | H | M | todo | Apple Maps, Uber |
+| U-12 | Apple Watch: next note as a tap on the wrist, drive summary | M | L | todo | Apple Maps on Watch |
+| U-13 | Map style polish: road character colours (twist, surface) as an optional layer | H | M | todo | Kurviger curvy colours, Calimoto |
+| U-14 | 3D terrain with hillshade on the planning map and flyover preview of a route | M | M | todo | Apple Maps, Google Earth |
+| U-15 | Dynamic Type and VoiceOver pass on every screen, checked with the iOS simulator | H | M | todo | accessibility |
+| U-16 | Landscape cockpit layout for mounts in landscape | M | M | todo | Waze |
+| U-17 | Copy pass to BRAND voice on every remaining string (errors, empty states, permissions) | M | S | todo | docs/BRAND.md §2 |
+| U-18 | Native feel: replace remaining web-looking controls (selects, date inputs) with app-style ones | M | M | todo | STATE 2026-10-27 |
+| U-19 | Search that understands roads and stages ("Tail of the Dragon"), not just addresses | H | M | todo | Google Maps |
+| U-20 | Saved places and lists (home, work, favourite stages) synced to the account | M | M | todo | Google Maps lists |
+| U-21 | Route preview: scrub along the route with elevation, notes and road character | M | M | todo | Calimoto, Komoot |
+| U-22 | Units and locale: km/mi, 12/24 h, left-hand traffic notes | M | M | todo | international launch |
+
+## 7. Onboarding and growth (O)
+
+| id | idea | impact | effort | status | from |
+|---|---|---|---|---|---|
+| O-01 | First run in three screens max, permissions at the moment of need | H | S | partial (BRAND §4) | docs/BRAND.md §4 |
+| O-02 | Mount guide: how and where to mount the phone, with a live "calibrated" tick | H | S | todo | STATE 2026-10-26 calibration |
+| O-03 | Instant value with no account: plan a fun loop from where you are in two taps | H | S | todo | Calimoto |
+| O-04 | Demo replay that shows the cockpit, notes and analysis in 60 s | M | S | partial (#58) | — |
+| O-05 | Sign in with Apple (required on iOS when Google sign-in is offered) | H | S | owner (Apple account) | App Store guideline 4.8 |
+| O-06 | Email link sign-in as a no-Google option | M | S | todo | docs/BACKEND.md |
+| O-07 | Referral: invite a friend into your crew, both get Octane | M | S | todo | Waze, Strava |
+| O-08 | Landing page with real screenshots, the four promises and TestFlight/Play links | H | S | todo | launch |
+| O-09 | App Store listing: screenshots, preview video, privacy nutrition label, keywords | H | M | owner (Apple account) | launch |
+| O-10 | In-app "what's new" sheet after an update, one screen | L | S | todo | — |
+
+## 8. CarPlay, Android Auto and in-car (C)
+
+| id | idea | impact | effort | status | from |
+|---|---|---|---|---|---|
+| C-01 | CarPlay map template with route, next note and ETA | H | L | owner (Apple account, CarPlay entitlement) | ApexNav mission |
+| C-02 | CarPlay notes as a list template and hazard alerts as CPAlert | H | M | owner (Apple account) | Waze CarPlay |
+| C-03 | Android Auto navigation template | H | L | owner (Android priority) | ApexNav mission |
+| C-04 | Car audio: ducking and routing to Bluetooth/CarPlay while prompts play | H | M | done (#73) | — |
+| C-05 | Auto-start: open the cockpit when the phone joins the car's Bluetooth or CarPlay | M | S | todo | Waze, Shortcuts |
+| C-06 | Driving focus aware: no social notifications while driving, a summary after | M | S | todo | iOS Focus |
+| C-07 | Big-target in-car mode: every control ≥ 60 pt, no keyboard while moving | H | S | todo | NHTSA distraction guidelines |
+| C-08 | Passenger mode: unlocks typing and route editing while moving, with a clear switch | M | S | todo | Waze passenger prompt |
+
+## 9. Offline (F)
+
+| id | idea | impact | effort | status | from |
+|---|---|---|---|---|---|
+| F-01 | Honest offline states everywhere (`--`, "no signal to reroute") | H | S | done (#34, #67) | honesty rule |
+| F-02 | Offline region downloads: vector tiles, DEM and road profiles for an area | H | L | todo | Google Maps offline, Calimoto |
+| F-03 | Save a planned route for offline: geometry, notes, hazards and profiles cached before leaving | H | M | todo | Calimoto, Kurviger |
+| F-04 | Offline rerouting with on-device Valhalla (see R-28) | H | XL | todo | ROAD_INTELLIGENCE §7.4 |
+| F-05 | Queue hazard reports and road data offline, send on reconnect (see Q-06) | H | M | todo | Waze |
+| F-06 | Cache size control and "delete offline data" in Settings | L | S | todo | — |
+
+## 10. Reliability and observability (Y)
+
+| id | idea | impact | effort | status | from |
+|---|---|---|---|---|---|
+| Y-01 | Route loading never hangs; black-screen recovery | H | M | done (#67) | owner report |
+| Y-02 | Crash and error reporting without personal data (self-hosted Worker endpoint, no third-party SDK) | H | M | todo | production readiness |
+| Y-03 | Client health beacons: upload success rate, routing failures, calibration time, anonymous and aggregated | H | M | todo | production readiness |
+| Y-04 | Production router: self-host Valhalla or a paid tier instead of public demo servers | H | L | owner (cost) | STATE 2026-10-25 (d) |
+| Y-05 | Status page and synthetic checks for the Worker, D1 and routing | M | S | todo | production readiness |
+| Y-06 | Staged rollouts: preview Worker for TestFlight, feature flags per build | M | M | todo | docs/BACKEND.md |
+| Y-07 | Real-phone test checklist run before each TestFlight build (VERIFY.md) | H | S | todo | docs/VERIFY.md |
+| Y-08 | Record migrations in `d1_migrations` (it only lists 0001) and a drift check in CI | M | S | todo | STATE 2026-10-26 |
+| Y-09 | Database backups (D1 time travel/export) and a restore drill | H | S | todo | production readiness |
+| Y-10 | Rate limits and abuse protection on every write endpoint | H | M | todo | production readiness |
+| Y-11 | End-to-end browser tests of the main flows (plan, drive replay, log, crew) in CI | M | M | todo | testing |
+
+## 11. Performance and battery (P)
+
+| id | idea | impact | effort | status | from |
+|---|---|---|---|---|---|
+| P-01 | Battery budget for an hour of driving with screen on, measured and published | H | M | todo | Waze, REVER complaints |
+| P-02 | Low-power cockpit: drop to 30 fps and fewer map layers when the battery is low or hot | M | M | todo | thermal throttling |
+| P-03 | Split web/index.html into modules so pages load faster and threads stop colliding | M | L | todo | dev velocity |
+| P-04 | Lazy-load voice banks and kokoro-js only when voice is on | M | S | todo | startup time |
+| P-05 | Route analysis in a Web Worker so the UI never stutters while scoring | M | M | todo | Y-01 |
+| P-06 | Startup under 1 s to an interactive map on a mid-range phone | H | M | todo | — |
+| P-07 | Thermal guard: pause the 100 Hz pipeline gracefully if the phone overheats on the dash | M | S | todo | iPhone on windscreen |
+
+## 12. Privacy and security (Z)
+
+| id | idea | impact | effort | status | from |
+|---|---|---|---|---|---|
+| Z-01 | First and last km of every trip never leave the phone; trips cut on stops and gaps | H | M | done (#71) | docs/SOCIAL.md §1 |
+| Z-02 | Privacy zones you draw (home, work) where nothing is ever recorded or shared | H | S | todo | Strava privacy zones |
+| Z-03 | Privacy dashboard: what's on the phone, what was shared, delete my account and data | H | M | todo | GDPR/CCPA, App Store 5.1.1(v) |
+| Z-04 | Data export (drives as CSV/GPX, account JSON) | M | S | todo | GDPR portability |
+| Z-05 | Security review of auth, crew and convoy endpoints before launch | H | M | todo | production readiness |
+| Z-06 | Convoy positions ephemeral, scoped to joined members, revoked on leave, never logged | H | S | partial (#84) | docs/CONVOY_TRANSPORT.md |
+| Z-07 | Privacy policy and terms written for real (and linked in the app and store) | H | S | owner (legal) | App Store requirement |
+| Z-08 | Minimum k-anonymity for road bins shown publicly (don't show a bin only one driver touched near a home) | M | S | todo | Strava heatmap lesson |
+
+## 13. Android and web parity (A)
+
+| id | idea | impact | effort | status | from |
+|---|---|---|---|---|---|
+| A-01 | Android shell (WebView + native sensors) reusing the web cockpit like the iOS shell | H | XL | owner (Android priority) | ARCHITECTURE thin shells |
+| A-02 | Web: mount calibration in the browser so the web app can share measured road data | M | M | todo | STATE 2026-10-27 |
+| A-03 | Web: installable PWA with offline shell and home screen icon | M | S | todo | — |
+| A-04 | Place suggestions while typing (Apple search in the app, Photon on the web) | M | S | done (#73) | WORKER_QUEUE plan-suggest |
+| A-05 | Desktop planning view: big map, route list, GPX, send to phone | M | M | todo | Kurviger desktop, Calimoto web planner |
+
+## 14. Launch and business (L)
+
+| id | idea | impact | effort | status | from |
+|---|---|---|---|---|---|
+| L-01 | Apple developer account, TestFlight external beta | H | S | owner (account) | launch |
+| L-02 | Zero-subscription model written down: one-time unlock, cosmetic Octane, or donations | H | S | owner (decision) | mission |
+| L-03 | Licence audit of every dependency and voice model before charging | H | S | todo | docs/VOICE.md licences |
+| L-04 | Attribution for OSM, OpenFreeMap, Valhalla, Nominatim, Photon, DeFlock, Kokoro (Settings → Sources and licences) | M | S | done | licences |
+| L-05 | Support channel and feedback button that attaches anonymous diagnostics | M | S | todo | — |

@@ -2,6 +2,7 @@
 // takes a user id for "whose data to read". Privacy rules (docs/BACKEND.md section 11) are enforced here and tested.
 import { Env, HANDLE_RE, HttpError, body, num, pair, randomToken, sha256hex, sqlTime, str } from "./util";
 import type { Viewer } from "./auth";
+import { convoysRecheck } from "./convoy";
 
 const run = (env: Env, sql: string, ...args: unknown[]) => env.DB.prepare(sql).bind(...args).run();
 const all = async <T>(env: Env, sql: string, ...args: unknown[]) => (await env.DB.prepare(sql).bind(...args).all<T>()).results;
@@ -79,6 +80,7 @@ export async function blockUser(env: Env, v: Viewer, req: Request): Promise<void
   if (other === v.id) throw new HttpError(400, "bad_user_id");
   await run(env, "INSERT OR IGNORE INTO blocks (blocker, blocked) VALUES (?, ?)", v.id, other).catch(() => { throw new HttpError(404, "no_user"); });
   await removePair(env, v.id, other);
+  await convoysRecheck(env, v.id);                                   // a convoy the two share drops one of them now
 }
 
 // ---- crews ---------------------------------------------------------------------------------------

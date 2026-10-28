@@ -9,6 +9,9 @@ stays, so the Jarvis removal in item 22 is cancelled.
 
 Statuses: `todo`, `active`, `merged (#35)`, `dropped (reason)`.
 
+The longer idea backlog, by area with impact, effort and status, is docs/IDEAS.md; this file
+keeps the tasks that need a written brief.
+
 ## Top priority: full road intelligence (owner 2026-10-26)
 
 Road intelligence and convoy hazard streaming below are coequal top priorities. Safely finish or checkpoint active overlapping work, then prioritize these flows, sequencing shared sensor foundations first where needed. UX/UI remain top priorities.
