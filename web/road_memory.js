@@ -88,6 +88,26 @@
     return best;
   }
 
-  const api = { build, upcoming, hazards, SPOKEN };
+  // A break, said on a long live drive (IDEAS D-16). The technique cue comes from Core.fatigue over the driving since your
+  // last stop; without one, two hours of driving since that stop is reason enough (the usual advice). At most every 45 min.
+  const BREAK_AFTER_S = 2 * 3600, BREAK_REPEAT_S = 45 * 60;
+  const HOURS = ['', 'An hour', 'Two hours', 'Three hours', 'Four hours', 'Five hours'];
+  /**
+   * What to say, or null. fa: Core.fatigue over the stretch since the last stop (null when too short to judge);
+   * sinceStopS: driving time since the last stop of STOP_RESETS_S or more (or the start); sinceSaidS: since the last cue, null if none.
+   */
+  function breakCue(fa, sinceStopS, sinceSaidS) {
+    if (finite(sinceSaidS) && sinceSaidS < BREAK_REPEAT_S) return null;
+    const cues = (fa && fa.cues) || [];
+    if (cues.includes('steering')) return 'Your steering is getting busier than earlier. Time for a break?';
+    if (cues.includes('braking')) return 'More braking past the apex than earlier. Time for a break?';
+    if (finite(sinceStopS) && sinceStopS >= BREAK_AFTER_S) {
+      const h = Math.floor(sinceStopS / 3600);
+      return `${HOURS[h] || `${h} hours`} since your last stop. Time for a break?`;
+    }
+    return null;
+  }
+
+  const api = { build, upcoming, hazards, breakCue, SPOKEN, STOP_RESETS_S: 15 * 60 };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexRoadMemory = api;
 })(typeof window !== 'undefined' ? window : globalThis);

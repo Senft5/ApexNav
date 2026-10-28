@@ -3117,7 +3117,7 @@
     // =======================================================================
     // 10b. DRIVE MODE (web): real GPS + motion, recorded to this device. REPLAY plays a saved drive; the two never mix.
     // =======================================================================
-    const drive = { sensors: null, rec: null, status: null, frames: 0, live: null, liveIdx: 0, share: 'off', shareKm: 0, shareErr: null, native: false, roads: {}, roadIdx: 0 };
+    const drive = { sensors: null, rec: null, status: null, frames: 0, live: null, liveIdx: 0, share: 'off', shareKm: 0, shareErr: null, native: false, roads: {}, roadIdx: 0, rest: null };
     const NATIVE_SHELL = !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex);
     function paintModeSwitch() {
       const on = state.mode === 'live';
@@ -3188,6 +3188,35 @@
         if (name) drive.roads[name] = (drive.roads[name] || 0) + 150;
       }
     }
+    // Break cue (IDEAS D-16, live): the clock restarts after a stop of 15 min or more; once an hour has passed since then,
+    // every 10 min the driving since the stop is read by Core.fatigue (steering corrections, braking past the apex, first third
+    // against last) off the main path. The cue is said only when the voice is free, and shown either way.
+    const BREAK_CHECK_MS = 10 * 60000, BREAK_MIN_MS = 60 * 60000;
+    function noteRest(frame) {
+      const r = drive.rec; if (!r) return;
+      const now = Date.now(), w = drive.rest || (drive.rest = { since: now, lastMove: now, row0: 0, checked: 0, said: null, busy: false });
+      if (!(Number.isFinite(frame.speed_mps) && frame.speed_mps >= 2.5)) return;
+      if (now - w.lastMove >= ApexRoadMemory.STOP_RESETS_S * 1000) { w.since = now; w.row0 = r.rows.length; }
+      w.lastMove = now;
+      if (w.busy || now - w.since < BREAK_MIN_MS || now - w.checked < BREAK_CHECK_MS) return;
+      w.checked = now; w.busy = true;
+      setTimeout(() => {
+        try {
+          if (drive.rec !== r) return;                                       // the drive ended
+          let fa = null;
+          const rows = r.rows.slice(w.row0);
+          if (rows.length > 200) {
+            const d = ApexRecording.parse(Core, ApexSensors.Recorder.prototype.toCsv.call({ rows }), 'live.csv', {});
+            fa = Core.fatigue(d.speed_mps, d.lon_g, d.lat_g, ApexRecording.cornersOf(d), d.g_known);
+          }
+          const t = Date.now(), text = ApexRoadMemory.breakCue(fa, (t - w.since) / 1000, w.said == null ? null : (t - w.said) / 1000);
+          if (!text) return;
+          w.said = t;
+          toast(text);
+          if (!speech.busy && !speech.queue.length && performance.now() > speech.talkingUntil) say(text);
+        } catch (e) { console.warn('break cue:', e); } finally { w.busy = false; }
+      }, 0);
+    }
     // Road data whenever the app is open and the phone is mounted (calibration locked), not only during a drive
     // (owner 2026-10-26). Trips, privacy trims and gaps: ApexContributor.createAmbient. Members with ROAD DATA on only.
     const ambient = { sharer: null, allowed: null, checkedAt: -Infinity, checking: false, mounted: false };
@@ -3251,7 +3280,7 @@
       driveActive = true;
       setPlaying(false);
       drive.rec = new ApexSensors.Recorder(); drive.status = { gps: 'waiting', motion: 'off', wake: 'off', message: '' }; drive.frames = 0;
-      drive.live = null; drive.liveIdx = 0; drive.share = 'off'; drive.shareKm = 0; drive.shareErr = null; drive.roads = {}; drive.roadIdx = 0;
+      drive.live = null; drive.liveIdx = 0; drive.share = 'off'; drive.shareKm = 0; drive.shareErr = null; drive.roads = {}; drive.roadIdx = 0; drive.rest = null;
       if (NATIVE_SHELL) {   // the app's own GPS and IMU feed window.apex.live; no browser sensors to start
         drive.native = true;
         drive.status = { gps: performance.now() - state.liveAt < 5000 && state.live ? 'on' : 'waiting', motion: 'on', wake: 'on', message: '' };
@@ -3276,7 +3305,7 @@
             paintPerms();
             paintDriveStat();
           },
-          onFrame: (fr) => { if (!fr.has_fix) return; drive.frames++; drive.rec.add(fr); feedLive(); noteRoads(); window.apex.live(fr); paintDriveStat(); },
+          onFrame: (fr) => { if (!fr.has_fix) return; drive.frames++; drive.rec.add(fr); feedLive(); noteRoads(); noteRest(fr); window.apex.live(fr); paintDriveStat(); },
         });
         if (!driveActive || state.mode !== 'live') {
           sensors.stop();
@@ -3415,7 +3444,7 @@
         if (NATIVE_SHELL && !driveActive) { showIdleFix(frame); return; }
         state.live = frame; state.liveAt = performance.now();
         if (drive.native && drive.rec) {
-          drive.frames++; drive.rec.add(frame); feedLive(); noteRoads();
+          drive.frames++; drive.rec.add(frame); feedLive(); noteRoads(); noteRest(frame);
           const gps = Number.isFinite(frame.accuracy_m) && frame.accuracy_m > ApexSensors.MAX_ACCURACY_M ? 'weak' : 'on';
           if (drive.status.gps !== gps) drive.status.gps = gps;
           const cal = typeof frame.calibration === 'string' ? frame.calibration : null;

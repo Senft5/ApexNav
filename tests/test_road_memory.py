@@ -94,3 +94,25 @@ def test_confirmed_bumps_are_called_on_any_road(r):
     assert r["hz"] == [["hz:a:100", "Bump ahead", 0.6]]     # one per spot, the hardest hit kept; a single pass is not called
     assert r["hzUnknownG"] is None                           # unmeasured severity stays unknown (quiet mode then skips it)
     assert r["hzSay"] == "hz:a:100" and r["hzFar"] is None
+
+
+def test_break_cue_from_technique_or_time_since_the_last_stop():
+    runner = r"""
+const M = require(process.argv[1] + '/web/road_memory.js');
+const fa = (cues) => ({ minutes: 70, early: {}, late: {}, cues });
+console.log(JSON.stringify({
+  steer: M.breakCue(fa(['steering', 'braking']), 4000, null), brake: M.breakCue(fa(['braking']), 4000, 3000),
+  fresh: M.breakCue(fa([]), 5000, null), unknown: M.breakCue(null, 5000, null), two: M.breakCue(null, 7300, null),
+  three: M.breakCue(fa([]), 3 * 3600 + 60, 2800), soon: M.breakCue(fa(['steering']), 9000, 600), stop: M.STOP_RESETS_S,
+}));
+"""
+    root = str(Path(__file__).resolve().parents[1])
+    p = subprocess.run([NODE, "-e", runner, root], capture_output=True, text=True, timeout=60)
+    assert p.returncode == 0, p.stderr
+    r = json.loads(p.stdout)
+    assert r["steer"] == "Your steering is getting busier than earlier. Time for a break?"
+    assert r["brake"] == "More braking past the apex than earlier. Time for a break?"
+    assert r["fresh"] is None and r["unknown"] is None              # under two hours and no fade: nothing to say
+    assert r["two"] == "Two hours since your last stop. Time for a break?"
+    assert r["three"].startswith("Three hours") and r["soon"] is None   # never again within 45 min
+    assert r["stop"] == 900
