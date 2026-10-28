@@ -375,8 +375,9 @@ def _tip(m: dict, ref: dict | None):
 SPREAD_MIN_PASSES = 3        # a spread from fewer passes says nothing
 SPREAD_BRAKE_G = -0.20       # a pass whose (3-bin smoothed) braking peaks lighter than this has no clear braking point
 SPREAD_ONSET = 0.4           # braking starts where the smoothed deceleration first reaches 40 % of that pass's peak
-SLOW_DIP_MPS = 0.5           # a slowest point counts only this far below both ends of the corner
+SLOW_DIP_MPS = 1.0           # a slowest point counts only this far below both ends of the corner
 SLOW_BAND_MPS = 0.2          # ...placed at the middle of the bins within this of the minimum
+SLOW_GAP = 2                 # ...bridging gaps of up to this many bins
 
 
 def _median(xs: list) -> float:
@@ -402,24 +403,46 @@ def _marks(d: dict, start: int, end: int, apex: int) -> tuple:
     lon, v, n = d["lon_g"], d["speed_mps"], len(d["speed_mps"])
     lo = max(0, apex - BRAKE_LOOKBACK)
     sm = lambda i: (float(lon[max(0, i - 1)]) + float(lon[i]) + float(lon[min(n - 1, i + 1)])) / 3.0
-    pk = min(range(lo, apex + 1), key=lambda i: (sm(i), i))
     onset = None
-    if sm(pk) <= SPREAD_BRAKE_G:
+    k = apex                                     # the braking run nearest the apex, not a harder one for the corner before
+    while k >= lo and not sm(k) <= SPREAD_BRAKE_G:
+        k -= 1
+    if k >= lo:
+        r = k
+        while r > lo and sm(r - 1) <= SPREAD_BRAKE_G:
+            r -= 1
+        pk = min(range(r, k + 1), key=lambda i: (sm(i), i))
         j = pk
         while j > lo and sm(j - 1) <= SPREAD_ONSET * sm(pk):
             j -= 1
         onset = j if j > lo else None
-    vmin = min(float(v[i]) for i in range(start, end + 1))
+    i0 = min(range(start, end + 1), key=lambda i: (float(v[i]), i))
+    vmin = float(v[i0])
     slow = None
     if vmin <= float(v[start]) - SLOW_DIP_MPS and vmin <= float(v[end]) - SLOW_DIP_MPS:
-        near = [i for i in range(start, end + 1) if float(v[i]) <= vmin + SLOW_BAND_MPS]
-        slow = int(math.floor(sum(near) / len(near) + 0.5))
+        near = lambda q: float(v[q]) <= vmin + SLOW_BAND_MPS
+        a, b = i0, i0                            # the bins near the minimum around it, bridging gaps of up to SLOW_GAP
+        while True:                              # bins (speed noise), not a second dip further on
+            back = [q for q in range(max(start, a - 1 - SLOW_GAP), a) if near(q)]
+            if not back:
+                break
+            a = back[-1]
+        while True:
+            ahead = [q for q in range(b + 1, min(end, b + 1 + SLOW_GAP) + 1) if near(q)]
+            if not ahead:
+                break
+            b = ahead[0]
+        slow = int(math.floor((a + b) / 2.0 + 0.5))
     return onset, slow
 
 
-def _on_a(a: dict, apex: int, b: dict, i: int):
-    """Bin of A's path nearest to sample i of pass b, near A's corner, or None when b was not on A's road there."""
-    j, dist = nearest_index(b["lat"][i], b["lon"][i], a["lat"], a["lon"], apex, BRAKE_LOOKBACK + 20)
+ON_A_WINDOW = 10             # bins either side of where a pass's mark should fall on A's road
+
+
+def _on_a(a: dict, near: int, b: dict, i: int):
+    """Bin of A's path nearest to sample i of pass b, searched only around `near` (where proportional mapping puts it) so
+    a hairpin's other leg cannot capture it, or None when b was not on A's road there."""
+    j, dist = nearest_index(b["lat"][i], b["lon"][i], a["lat"], a["lon"], max(0, near), ON_A_WINDOW)
     return j if dist <= MATCH_RADIUS_M else None
 
 
@@ -474,7 +497,8 @@ def coach(a: dict, others: list) -> dict:
                 continue
             passes += 1
             ob, sb = _marks(b, bs, be, b_apex)
-            ob, sb = (None if x is None else _on_a(a, c["apex"], b, x) for x in (ob, sb))
+            ob, sb = (None if x is None else _on_a(a, c["apex"] - (b_apex - x), b, x) for x in (ob, sb))
+            ob = None if ob is not None and ob > c["apex"] else ob             # braking cannot begin past the apex
             brakes.append(None if ob is None else (c["apex"] - ob) * 5.0)
             mins.append(None if sb is None else (sb - c["apex"]) * 5.0)
             if mb["envelope_use"] <= PACE_CEILING and mb["time_s"] < best["time_s"]:

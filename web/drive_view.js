@@ -380,7 +380,7 @@
       const ul = el('ol', 'dv-time'), m = (x) => `${Math.max(3, Math.round(x))} m`;
       const med = reps[Math.floor((reps.length - 1) / 2)].brake_sd_m;
       const varies = (r) => r.brake_passes >= VARIES_MIN_PASSES && r.brake_sd_m >= Math.max(VARIES_M, 2 * med);
-      const steady = reps.filter((r) => r.brake_passes === r.passes && !varies(r)).slice(0, 2);   // braked clearly on every pass
+      const steady = reps.filter((r) => r.brake_passes === r.passes && r.brake_sd_m <= med && !varies(r)).slice(0, 2);   // braked clearly on every pass
       const loose = reps.filter(varies).slice(-2).reverse();
       [...steady, ...loose].forEach((r) => {
         const c = d.corners[r.k], li = el('li'), b = el('button'), v = varies(r);
@@ -391,9 +391,12 @@
         b.onclick = () => { if (zoomM) setZoom(zoomM, c.apex); move(c.apex); lanes.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); };
         li.append(b); ul.append(li);
       });
-      list.prepend(el('h2', null, 'How repeatable your corners are'),
-        el('p', 'note', `In ${reps.length} corners where you braked clearly on three or more passes, your braking point typically moves about ${m(med)} from drive to drive (5 m samples and GPS make about 3 m the floor). `
-          + (loose.length ? 'Your steadiest corners, then the ones that vary most.' : steady.length ? 'Your steadiest corners; none varies much more than the rest.' : 'None varies much more than the rest.')), ul);
+      const which = steady.length && loose.length ? 'Your steadiest corners, then the ones that vary most.'
+        : steady.length ? 'Your steadiest corners; none varies much more than the rest.'
+        : loose.length ? 'The corners that vary most.' : 'None varies much more than the rest.';
+      const intro = el('p', 'note', `In ${reps.length} corners where you braked clearly on three or more passes, your braking point typically moves about ${m(med)} from drive to drive (5 m samples and GPS make about 3 m the floor). ${which}`);
+      if (ul.children.length) list.prepend(el('h2', null, 'How repeatable your corners are'), intro, ul);
+      else list.prepend(el('h2', null, 'How repeatable your corners are'), intro);
     }
     if (ab && ab.moments.length) {                                   // the most abrupt moments, lettered as on the Smoothness map
       const ul = el('ol', 'dv-time dv-abrupt');

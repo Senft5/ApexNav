@@ -479,3 +479,20 @@ def test_corner_spread_is_sensor_noise_proof_but_sees_real_variation():
     early = dict(base, lon_g=base["lon_g"][6:] + base["lon_g"][-6:])
     sp = [c["spread"]["brake_sd_m"] for c in da.coach(base, [base, early, early])["corners"] if c.get("spread") and c["spread"]["brake_sd_m"] is not None]
     assert sp and max(sp) >= 20
+
+
+def test_corner_marks_take_this_corners_braking_and_one_dip():
+    from core import drive_analysis as da
+    n = 80
+    lon = [0.0] * n
+    for q in range(42, 48):
+        lon[q] = -0.6                     # hard braking for the corner before, inside this corner's 200 m lookback
+    for q in range(66, 71):
+        lon[q] = -0.3                     # this corner's own, lighter braking
+    d = {"lon_g": lon, "speed_mps": [20.0] * n}
+    onset, slow = da._marks(d, 60, 79, 72)
+    assert 64 <= onset <= 66                                   # this corner's braking run, not the harder one before it
+    d2 = {"lon_g": lon, "speed_mps": [20.0] * 70 + [15.0, 15.0, 19.0, 19.0, 19.0, 19.0, 15.1, 15.0, 19.0, 20.0]}
+    assert da._marks(d2, 60, 79, 72)[1] == 71                  # a double dip: the first minimum's own bins, not the gap between
+    flat = {"lon_g": lon, "speed_mps": [18.6, 18.5, 18.3, 18.2, 18.2, 18.3, 18.3, 18.3, 18.3, 18.4, 18.4, 18.8, 19.1] * 7}
+    assert da._marks(flat, 2, 14, 5)[1] is None                # a plateau, not a dip: no slowest point

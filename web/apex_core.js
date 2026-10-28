@@ -685,7 +685,7 @@
     return null;
   }
   // How repeatably a corner is driven over your clean passes (port of drive_analysis._marks/_spread, IDEAS D-07).
-  const SPREAD_MIN_PASSES = 3, SPREAD_BRAKE_G = -0.20, SPREAD_ONSET = 0.4, SLOW_DIP_MPS = 0.5, SLOW_BAND_MPS = 0.2;
+  const SPREAD_MIN_PASSES = 3, SPREAD_BRAKE_G = -0.20, SPREAD_ONSET = 0.4, SLOW_DIP_MPS = 1.0, SLOW_BAND_MPS = 0.2, SLOW_GAP = 2;
   const median = (xs) => { const s = xs.slice().sort((p, q) => p - q), k = s.length >> 1; return s.length % 2 ? s[k] : (s[k - 1] + s[k]) / 2; };
   function sampleSd(xs) {                                           // robust: 1.4826 x median absolute deviation
     if (xs.length < SPREAD_MIN_PASSES) return null;
@@ -696,26 +696,33 @@
   function passMarks(d, start, end, apex) {
     const lon = d.lon_g, v = d.speed_mps, n = v.length, lo = Math.max(0, apex - BRAKE_LOOKBACK);
     const sm = (i) => (lon[Math.max(0, i - 1)] + lon[i] + lon[Math.min(n - 1, i + 1)]) / 3;
-    let pk = lo;
-    for (let i = lo + 1; i <= apex; i++) if (sm(i) < sm(pk)) pk = i;
-    let onset = null;
-    if (sm(pk) <= SPREAD_BRAKE_G) {
+    let onset = null, k = apex;                                      // the braking run nearest the apex
+    while (k >= lo && !(sm(k) <= SPREAD_BRAKE_G)) k--;
+    if (k >= lo) {
+      let r = k;
+      while (r > lo && sm(r - 1) <= SPREAD_BRAKE_G) r--;
+      let pk = r;
+      for (let i = r + 1; i <= k; i++) if (sm(i) < sm(pk)) pk = i;
       let j = pk;
       while (j > lo && sm(j - 1) <= SPREAD_ONSET * sm(pk)) j--;
       onset = j > lo ? j : null;
     }
-    let vmin = Infinity;
-    for (let i = start; i <= end; i++) vmin = Math.min(vmin, v[i]);
+    let i0 = start;
+    for (let i = start + 1; i <= end; i++) if (v[i] < v[i0]) i0 = i;
+    const vmin = v[i0];
     let slow = null;
     if (vmin <= v[start] - SLOW_DIP_MPS && vmin <= v[end] - SLOW_DIP_MPS) {
-      let sum = 0, cnt = 0;
-      for (let i = start; i <= end; i++) if (v[i] <= vmin + SLOW_BAND_MPS) { sum += i; cnt++; }
-      slow = Math.floor(sum / cnt + 0.5);
+      const near = (q) => v[q] <= vmin + SLOW_BAND_MPS;
+      let a = i0, b = i0;                                            // bins near the minimum around it, gaps of SLOW_GAP bridged
+      for (let moved = true; moved;) { moved = false; for (let q = a - 1; q >= Math.max(start, a - 1 - SLOW_GAP); q--) if (near(q)) { a = q; moved = true; break; } }
+      for (let moved = true; moved;) { moved = false; for (let q = b + 1; q <= Math.min(end, b + 1 + SLOW_GAP); q++) if (near(q)) { b = q; moved = true; break; } }
+      slow = Math.floor((a + b) / 2 + 0.5);
     }
     return [onset, slow];
   }
-  function onA(a, apex, b, i) {
-    const [j, dist] = nearestIndexWin(b.lat[i], b.lon[i], a.lat, a.lon, apex, BRAKE_LOOKBACK + 20);
+  const ON_A_WINDOW = 10;
+  function onA(a, near, b, i) {                                     // searched only around where the mark should fall
+    const [j, dist] = nearestIndexWin(b.lat[i], b.lon[i], a.lat, a.lon, Math.max(0, near), ON_A_WINDOW);
     return dist <= MATCH_RADIUS_M ? j : null;
   }
   function spread(brakes, mins, passes) {
@@ -744,7 +751,8 @@
         mb.time_s = tb;
         if (mb.min_mps < STOPPED_MPS) return;
         passes++;
-        const [ob, sb] = passMarks(b, bs, be, bApex).map((x) => (x === null ? null : onA(a, c.apex, b, x)));
+        let [ob, sb] = passMarks(b, bs, be, bApex).map((x) => (x === null ? null : onA(a, c.apex - (bApex - x), b, x)));
+        if (ob !== null && ob > c.apex) ob = null;                       // braking cannot begin past the apex
         brakes.push(ob === null ? null : (c.apex - ob) * 5); mins.push(sb === null ? null : (sb - c.apex) * 5);
         if (mb.envelope_use <= PACE_CEILING && mb.time_s < best.time_s) { best = mb; bestFrom = j; }
       });
