@@ -36,6 +36,13 @@ it says "Couldn't check towns" instead of pretending there are none. Checked: we
 (Alcoa/Maryville) and no town-free alternate; Morristown → Rahway NJ, the winner has 29.5 km of town against 19.5–25 km for
 others, so the card says ~18 mi (fun outweighed the town cost there).
 
+## Corners you like
+
+Plan → **Hairpins** fewer / more and **Sweepers** fewer / more (IDEAS R-19, saved on the phone): in the fun score of every
+candidate, tight corners (hairpins, 1s and 2s) or fast sweepers (5s and 6s) weigh 60% more or less (`cornerWeight` in
+web/fun_route.js). Nothing chosen, the scores are exactly as before (tests/test_road_prefs.py). A change re-plans the
+destination route on screen like the Avoid chips do.
+
 ## Candidates
 
 1. The router's route (Valhalla, highways and tolls de-prioritised) and up to 2 Valhalla alternates

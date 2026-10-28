@@ -111,11 +111,21 @@
       const withRoute = el('input', { type: 'checkbox', checked: !!route, disabled: !route });
       const notes = el('input', { className: 'field', maxLength: 280, placeholder: 'Notes (optional)', autocomplete: 'off' });
       notes.setAttribute('aria-label', 'Notes');
+      // a public crew can list it for everyone nearby (car meets, S-13)
+      const listed = el('input', { type: 'checkbox' });
+      const listedLabel = el('span');
+      const paintListed = () => {
+        const pub = (crews.find((c) => c.id === crew.value) || {}).visibility === 'public';
+        listed.disabled = !pub; if (!pub) listed.checked = false;
+        listedLabel.textContent = pub ? 'List it for everyone nearby (a meet)' : 'Only public crews can list a meet for everyone';
+      };
+      crew.addEventListener('change', paintListed); paintListed();
       form.append(crew, title, el('div', { className: 'row' }, date, time),
         el('div', { className: 'row', style: 'flex-wrap:wrap' }, btn('Where I am', () => setMeet(page.here(), 'where you are'), 'ink-btn'), btn('Map centre', () => setMeet(page.mapCentre(), 'map centre'), 'ink-btn')),
         meetNote, meetName,
         el('label', { className: 'row', style: 'align-items:center;gap:8px' }, withRoute, el('span', { textContent: route ? `Add the planned route (${route.name})` : 'Plan a route first to add it' })),
         notes,
+        el('label', { className: 'row', style: 'align-items:center;gap:8px' }, listed, listedLabel),
         el('div', { className: 'row' }, btn('Plan it', async () => {
           const when = isoFromInputs(date.value, time.value);
           if (!title.value.trim()) { toast('Give the drive a name.'); return; }
@@ -129,7 +139,7 @@
             routeId = j.id;
           }
           const r = await apiCall('POST', `/api/crews/${encodeURIComponent(crew.value)}/events`, {
-            title: title.value.trim(), starts_at: when, meet: { name: meetName.value.trim() || null, lat: meet.lat, lon: meet.lon }, route_id: routeId, notes: notes.value.trim() || null });
+            title: title.value.trim(), starts_at: when, meet: { name: meetName.value.trim() || null, lat: meet.lat, lon: meet.lon }, route_id: routeId, notes: notes.value.trim() || null, public: listed.checked });
           if (!r.ok) { toast(r.status === 429 ? 'That crew has 10 drives coming up already.' : r.status === 400 ? 'Pick a time in the next 30 days.' : 'Couldn\'t plan it. Check signal.'); return; }
           toast('Drive planned. The crew sees it in Crew.');
           done();
@@ -137,18 +147,49 @@
       return form;
     }
 
-    /** The "Crew drives" section; `crews` are the ones you're in. */
+    // Public meets from crews you're not in (S-13): no handles, how many are going, join the crew to answer.
+    function meetCard(e, redo) {
+      const box = el('div', { className: 'stack-8 drive-card meet-card', style: 'border:1px solid var(--rule);padding:10px' });
+      box.append(el('b', { textContent: e.title }),
+        el('p', { className: 'note', textContent: `${whenText(e.starts_at)} · ${e.crew_name} · ${e.km} km away` }),
+        el('p', { className: 'note', textContent: `Meet: ${e.meet_name || 'the pin'}${e.notes ? ` · ${e.notes}` : ''} · ${e.going} going` }));
+      const acts = el('div', { className: 'row', style: 'flex-wrap:wrap' },
+        btn('Join the crew', async () => {
+          const r = await apiCall('POST', `/api/crews/${encodeURIComponent(e.crew_id)}/join`);
+          if (r.ok) { toast(`You're in ${e.crew_name}. Answer in Crew drives.`); redo(); }
+          else toast(r.status === 429 ? 'You\'re in 10 crews already. Leave one first.' : 'Couldn\'t join. Try again.');
+        }, 'ink-btn solid'),
+        btn('Directions to meet', () => page.goTo({ label: e.meet_name || e.title, lat: e.meet_lat, lon: e.meet_lon }), 'linkbtn'),
+        btn('Add to calendar', () => {
+          const a = el('a', { href: URL.createObjectURL(new Blob([icsFor(e)], { type: 'text/calendar' })), download: 'car-meet.ics' });
+          document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+        }, 'linkbtn'));
+      if (page.report) acts.append(btn('Report', () => page.report({ kind: 'event', target: e.id, label: e.title, done: redo }), 'linkbtn'));
+      box.append(acts);
+      return box;
+    }
+
+    /** The "Crew drives" section; `crews` are the ones you're in ({id, name, visibility}). */
     function section(crews) {
       const sec = el('div', { className: 'stack-8' }, el('h3', { textContent: 'Crew drives' }));
-      const list = el('div', { className: 'stack-8' }), formHost = el('div');
+      const list = el('div', { className: 'stack-8' }), formHost = el('div'), meets = el('div', { className: 'stack-8' });
+      const loadMeets = () => {
+        const at = (page.here && page.here()) || (page.mapCentre && page.mapCentre());
+        if (!at) return;
+        apiCall('GET', `/api/events/near?lat=${at.lat.toFixed(3)}&lon=${at.lon.toFixed(3)}`).then(jsonOf).then((rows) => {
+          const others = Array.isArray(rows) ? rows.filter((e) => !e.member) : [];
+          meets.replaceChildren(...(others.length ? [el('h3', { textContent: 'Meets near you' }), ...others.map((e) => meetCard(e, redo))] : []));
+        }).catch(() => meets.replaceChildren());
+      };
       const redo = () => {
+        loadMeets();
         apiCall('GET', '/api/events').then(jsonOf).then((rows) => {
           if (!Array.isArray(rows)) throw new Error('offline');
           list.replaceChildren(...(rows.length ? rows.map((e) => card(e, redo)) : [el('p', { className: 'note', textContent: crews.length ? 'No drives planned. Plan one for your crew.' : 'Join or start a crew to plan drives together.' })]));
         }).catch(() => list.replaceChildren(el('p', { className: 'note', textContent: 'Couldn\'t load crew drives. Check signal.' })));
       };
       if (crews.length) sec.append(btn('Plan a drive', () => formHost.replaceChildren(planForm(crews, () => { formHost.replaceChildren(); redo(); })), 'ink-btn'));
-      sec.append(formHost, list);
+      sec.append(formHost, list, meets);
       redo();
       return sec;
     }

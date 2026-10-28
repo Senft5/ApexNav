@@ -93,4 +93,26 @@ describe("crew drives", () => {
     expect(await json(api(a, "GET", `/api/crews/${crew}/events`))).toEqual([]);
     expect((await env.DB.prepare("SELECT COUNT(*) AS n FROM crew_event_rsvps").first<{ n: number }>())!.n).toBe(0);
   });
+
+  it("a public crew lists a meet for everyone nearby; a private crew can't; it goes with privacy, distance, blocks and reports", async () => {
+    const [a, b, c] = [await makeUser("alice"), await makeUser("bob"), await makeUser("cara")];
+    const pub = (await json(api(a, "POST", "/api/crews", { name: "Coffee & Cars", visibility: "public", area: { name: "Maryville", lat: 35.75, lon: -83.97 } }))).id;
+    const priv = await crewOf(a);
+    const near = (u: TestUser, lat = 35.8, lon = -83.9) => json(api(u, "GET", `/api/events/near?lat=${lat}&lon=${lon}`));
+    expect((await api(a, "POST", `/api/crews/${priv}/events`, { ...DRIVE, public: true })).status).toBe(400);
+    const { id } = await json(api(a, "POST", `/api/crews/${pub}/events`, { ...DRIVE, meet: { name: "Kroger lot", lat: 35.76, lon: -83.96 }, public: true }));
+    await json(api(a, "POST", `/api/crews/${pub}/events`, { ...DRIVE, title: "Members only", starts_at: inHours(50) }));   // not listed
+    const [m] = await near(b) as Msg[];
+    expect(m).toMatchObject({ id, crew_name: "Coffee & Cars", title: "Cherohala Saturday", meet_name: "Kroger lot", going: 1, member: false });
+    expect(JSON.stringify(m)).not.toMatch(/alice|by_handle/);                                      // no handles for outsiders
+    expect((await near(b)).length).toBe(1);
+    expect(await near(b, 37.5, -83.9)).toEqual([]);                                                    // ~190 km away
+    await ok(api(b, "POST", `/api/crews/${pub}/join`));
+    expect((await near(b))[0].member).toBe(true);
+    await ok(api(c, "POST", "/api/blocks", { handle: "alice" }));
+    expect(await near(c)).toEqual([]);                                                                 // blocked the planner
+    await ok(api(a, "PUT", `/api/crews/${pub}`, { visibility: "private" }));
+    expect(await near(b)).toEqual([]);                                                                 // the crew went private
+  });
 });
+

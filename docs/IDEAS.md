@@ -83,7 +83,7 @@ long-press pin (#61), Apple place search and nearby suggestions in the app (#73)
 | R-16 | Time budget routing: "I have 90 minutes, end at home" (orienteering with a hard time cap) | H | M | done (#122: 1 h / 2 h loops planned on drive time) | ROAD_INTELLIGENCE §7.1 |
 | R-17 | Day trip builder: start, stops (food, fuel, viewpoint), finish, with drag-to-reorder vias | H | L | todo | Roadtrippers, Calimoto tour planner |
 | R-18 | Drag the route line on the map to reshape it (adds a via) | M | M | todo | Google Maps, Kurviger |
-| R-19 | Archetype preferences in routing ("love esses, skip switchbacks"), sliders first, learned later | H | M | todo | ROAD_INTELLIGENCE §5.4 |
+| R-19 | Archetype preferences in routing ("love esses, skip switchbacks"), sliders first, learned later | H | M | partial (Plan → Hairpins fewer/more and Sweepers fewer/more weigh each route's fun, fun_route.js cornerWeight, ±60%; learning it from your choices is R-33) | ROAD_INTELLIGENCE §5.4 |
 | R-20 | Car-aware routing from the Garage (width, ride height, power: no goat tracks for a lowered car) | M | M | todo | SOCIAL §2.4 |
 | R-21 | Weather-aware routing: penalise wet, icy, foggy or very hot stages from a free forecast; show why | M | M | todo | Calimoto weather, REVER |
 | R-22 | Seasonal and time-of-day closures (OSM `conditional` tags, seasonal mountain passes) | M | M | todo | Kurviger |
@@ -134,7 +134,7 @@ ideal drive and where to find time (#80), grip circle (#86), automatic mount cal
 | D-21 | Coach in plain words: one sentence per drive that a non-racer understands | H | S | done (#101) | owner goal (approachable) |
 | D-22 | Blank lat/lon g while the mount is `default`, like camber, so uncalibrated drives can't skew the score | M | S | done (#64 phone drives; the app's own CSV export too, this thread) | STATE 2026-10-26 |
 | D-23 | Drive tags and notes (car, passenger, weather, mood) to filter the Log | L | S | todo | Strava |
-| D-24 | Driving year in review (roads, regions, best corners, crews) | M | M | todo | Strava Year in Sport, Spotify Wrapped |
+| D-24 | Driving year in review (roads, regions, best corners, crews) | M | M | partial (Log → \"2026 so far\": miles, drives, corners, months, roads you came back to, best score, longest drive, share as text; regions, best corners and crews are still to do) | Strava Year in Sport, Spotify Wrapped |
 
 ## 3. Road intelligence (Q)
 
@@ -207,7 +207,7 @@ Today: accounts with Google sign-in, friends, crews (public and private, crews n
 | S-10 | Octane redemptions that buy nothing safety-related: cosmetics, voice packs, early features | M | M | todo | SOCIAL §2.3 |
 | S-11 | Challenges: "drive 5 new roads this month", "pioneer 10 km", crew-vs-crew km | M | M | todo | Strava challenges, REVER |
 | S-12 | Highlights feed near you: viewpoints, cafés, meets, saved by members | M | M | todo | Roadtrippers, Google Maps contributions |
-| S-13 | Car meets map: public events and recurring Cars & Coffee, added by crews | H | M | partial (crew drives, S-06, are crew-only; public listings and recurrence are still to do) | car meet apps, Facebook groups |
+| S-13 | Car meets map: public events and recurring Cars & Coffee, added by crews | H | M | partial (a public crew lists a drive as a meet; Crew → Meets near you within 80 km, join the crew to answer; migration 0015. Recurring meets and pins on the map are still to do) | car meet apps, Facebook groups |
 | S-14 | Invite links that open the app (or the web) on the crew or route | H | S | done (custom scheme; Universal Links later) | growth |
 | S-15 | Profiles: handle, cars, crews, favourite roads, totals; private by default | M | M | todo | Strava profile |
 | S-16 | Block and report on every social surface; moderation queue for public crews and highlights | H | M | done (#120) | App Store requirement for UGC |
