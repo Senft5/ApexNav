@@ -55,6 +55,16 @@ describe("database backup", () => {
     expect(await idx(restoreDb)).toEqual(await idx(env.DB));
   });
 
+  it("keeps AUTOINCREMENT counters and restores only into an empty database", async () => {
+    await seed();
+    const u = (await env.DB.prepare("SELECT id FROM users LIMIT 1").first<{ id: string }>())!.id;
+    await env.DB.prepare("INSERT INTO ingest_pending (id, user_id, way_id, dir, driven_on, km, bins) VALUES (41, ?, 1, 0, '2026-10-26', 1, '[]')").bind(u).run();
+    await env.DB.prepare("DELETE FROM ingest_pending").run();
+    const { statements } = await dumpStatements(env.DB);
+    expect(statements).toContain("INSERT INTO sqlite_sequence (name, seq) VALUES('ingest_pending',41);");
+    expect(statements.some((s) => s.includes("IF NOT EXISTS"))).toBe(false);
+  });
+
   it("pages through tables longer than one query page", async () => {
     await freshDb();
     const rows = Array.from({ length: 1205 }, (_, i) => env.DB.prepare("INSERT INTO road_bins (way_id, dir, bin_idx, n, rough_mean) VALUES (1, 0, ?, 1, ?)").bind(i, i / 1000));
@@ -72,7 +82,11 @@ describe("database backup", () => {
     const keys = (await kv.list({ prefix: "d1/apexnav-db/" })).keys.map((k) => k.name);
     expect(keys).toHaveLength(KEEP);
     expect(keys[0]).toBe("d1/apexnav-db/2026-01-19.sql");
-    const { value, metadata } = await kv.getWithMetadata<{ counts: Record<string, number>; bytes: number }>(keys.at(-1)!);
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    await backupDatabase(env, new Date(Date.UTC(2026, 2, 30, 7)));   // three weeks after the last copy
+    expect(err.mock.calls.map((c) => JSON.parse(c[0] as string))).toEqual([{ event: "backup_gap", since: "d1/apexnav-db/2026-03-09.sql" }]);
+    err.mockRestore();
+    const { value, metadata } = await kv.getWithMetadata<{ counts: Record<string, number>; bytes: number }>("d1/apexnav-db/2026-03-30.sql");
     expect(metadata!.counts.users).toBe(2);
     expect(new TextEncoder().encode(value!).byteLength).toBe(metadata!.bytes);
     expect(splitSql(value!).some((s) => s.startsWith('INSERT INTO "users"'))).toBe(true);

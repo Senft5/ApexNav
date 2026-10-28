@@ -81,8 +81,10 @@ has the binding and the cron; preview builds have neither.
 
 KV, not R2, because R2 isn't enabled on the account (it needs the owner to turn it on in the dashboard). One KV value
 holds up to 25 MiB and the dump is about 0.1 MB today; the Worker refuses to write past 24 MiB and logs
-`backup_failed` / `too_big`, which is the signal to move to R2. Workers Free allows 50 D1 queries per run: the dump uses
-one for the schema, one batch for every table's first 1,000 rows, and one more per further 1,000 rows of a long table.
+`backup_failed` / `too_big`, which is the signal to move to R2. All rows are read in one `db.batch`, which D1 runs as one
+transaction, so a copy is a consistent snapshot even while drives upload; a run uses 4 of Workers Free's 50 D1 queries (a
+batch counts as one). The file restores into an empty database only (plain `CREATE TABLE`), and it carries the
+AUTOINCREMENT counters so restored ids are never reused.
 Integers above 2^53 would lose precision on the way through JavaScript; no column holds one (way ids are under 2^32).
 
 To fetch a copy: dashboard > Storage & Databases > KV > `apexnav-backups`, or
