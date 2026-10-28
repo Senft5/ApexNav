@@ -40,10 +40,18 @@ describe("real names", () => {
   it("sending a request to a handle does not reveal the person's real name until they accept", async () => {
     const [a, b] = [await makeUser("alice"), await makeUser("bob")];
     await ok(api(a, "POST", "/api/friends/request", { handle: "bob" }));
-    expect((await get<Named[]>(a, "/api/friends"))[0]).toMatchObject({ handle: "bob", name: null });
+    expect(await get<Named[]>(a, "/api/friends")).toEqual([]);   // a sent request isn't listed at all (IDEAS Z-12), so no name either
     expect((await get<Named[]>(b, "/api/friends"))[0]).toMatchObject({ handle: "alice", name: "ALICE" });   // the one who reached out
     await ok(api(b, "POST", "/api/friends/accept", { user_id: a.id }));
     expect((await get<Named[]>(a, "/api/friends"))[0].name).toBe("BOB");
+  });
+
+  it("sent requests look the same for real and made-up handles, and cancel answers the same (IDEAS Z-12)", async () => {
+    const [a, b] = [await makeUser("alice"), await makeUser("bob")];
+    for (const h of ["bob", "nobody_here"]) expect((await api(a, "POST", "/api/friends/request", { handle: h })).status).toBe(202);
+    expect(await get<Named[]>(a, "/api/friends")).toEqual([]);
+    for (const h of ["bob", "nobody_here"]) expect((await api(a, "POST", "/api/friends/request/cancel", { handle: h })).status).toBe(204);
+    expect(await get<Named[]>(b, "/api/friends")).toEqual([]);   // bob's incoming request is gone
   });
 });
 
