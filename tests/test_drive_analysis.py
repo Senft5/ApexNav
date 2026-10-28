@@ -272,3 +272,79 @@ def test_abrupt_moments_finds_the_jolts_and_ignores_crawling_and_unknown():
     assert all(m["jerk_gps"] >= da.JERK_FLOOR_GPS for m in r["moments"])
     calm = da.abrupt_moments([0.2 * math.sin(i / 20) for i in range(n)], lon, v)
     assert calm["moments"] == []
+
+
+def _ramped(turn_at: int, speed_scale: float = 1.0) -> dict:
+    """The test corner with the lateral load building over 4 bins from turn_at (a real turn-in is a ramp, not a step)."""
+    d = _drive(speed_scale)
+    lat_g = np.zeros(len(d["lat_g"]))
+    for k in range(4):
+        lat_g[turn_at + k] = 0.125 * (k + 1)
+    lat_g[turn_at + 4:96] = 0.5
+    d["lat_g"] = lat_g
+    return d
+
+
+def test_turn_in_is_read_from_the_lateral_load():
+    d = _ramped(78)
+    assert da._turn_in(d, 80, 96) == 79                          # 3-bin smoothed load first holds 40 % of its peak
+    flat = _drive()
+    flat["lat_g"] = flat["lat_g"] * 0.3                           # a light curve: no clear turn-in
+    assert da._turn_in(flat, 80, 96) is None
+    right = _ramped(78)
+    right["lat_g"] = -right["lat_g"]                              # the same either way
+    assert da._turn_in(right, 80, 96) == 79
+
+
+def _lat(n: int, runs: list) -> dict:
+    lat = np.zeros(n)
+    for a, b, g in runs:
+        lat[a:b] = g
+    return {"lat_g": lat}
+
+
+def test_turn_in_is_unknown_where_it_cannot_be_told():
+    # a chicane: a right, a short transition, then this left; the direction comes from the corner's peak, not one bin
+    chicane = _lat(200, [(60, 80, -0.5), (80, 84, 0.1), (84, 100, 0.4)])
+    assert da._turn_in(chicane, 82, 100) == 83                    # not the right-hander's turn-in at 60
+    # linked lefts: a lighter left runs into this one; above 40 % between them, whose turn-in it is cannot be told
+    for gap, want in ((0.19, 79), (0.21, None)):
+        linked = _lat(200, [(50, 70, 0.3), (70, 80, gap), (80, 100, 0.5)])
+        assert da._turn_in(linked, 82, 100) == want
+    # unknown lateral g anywhere it reads: unknown, never a later turn-in
+    d = _ramped(78)
+    d["lat_g"][81] = np.nan
+    assert da._turn_in(d, 80, 96) is None
+    # and never further back than 40 m before the corner's start
+    long_run = _lat(200, [(40, 100, 0.5)])
+    assert da._turn_in(long_run, 80, 96) is None
+
+
+def test_turn_in_matches_its_js_port():
+    import json
+    import os
+    import subprocess
+    cases = [(_ramped(78)["lat_g"].tolist(), 80, 96), ((-_ramped(78)["lat_g"]).tolist(), 80, 96),
+             (_lat(200, [(60, 80, -0.5), (80, 84, 0.1), (84, 100, 0.4)])["lat_g"].tolist(), 82, 100),
+             (_lat(200, [(50, 70, 0.3), (70, 80, 0.19), (80, 100, 0.5)])["lat_g"].tolist(), 82, 100),
+             (_lat(200, [(50, 70, 0.3), (70, 80, 0.21), (80, 100, 0.5)])["lat_g"].tolist(), 82, 100),
+             (_lat(200, [(40, 100, 0.5)])["lat_g"].tolist(), 80, 96)]
+    gap = _ramped(78)["lat_g"].tolist()
+    gap[81] = None                                                # JSON null in JS, NaN in Python
+    runner = ("const c=require(process.argv[1]);const cases=JSON.parse(require('fs').readFileSync(0,'utf8'));"
+              "process.stdout.write(JSON.stringify(cases.map(([l,s,e])=>c.turnIn({lat_g:l},s,e))));")
+    out = subprocess.run(["node", "-e", runner, os.path.abspath("web/apex_core.js")], input=json.dumps(cases + [(gap, 80, 96)]),
+                         capture_output=True, text=True, check=True)
+    py = [da._turn_in({"lat_g": np.array(l, dtype=float)}, s, e) for l, s, e in cases]
+    py.append(da._turn_in({"lat_g": np.array([np.nan if v is None else v for v in gap])}, 80, 96))
+    assert json.loads(out.stdout) == py and py[-1] is None
+
+
+def test_coach_says_turn_in_later_when_the_quicker_pass_did():
+    early, late = _ramped(73, 0.96), _ramped(78)                  # turned in 25 m sooner, and 4 % slower
+    co = da.coach(early, [late])
+    c = co["corners"][0]
+    assert c["m"]["turn_in_m"] - c["best"]["turn_in_m"] == pytest.approx(25.0)
+    assert c["tip"] == {"kind": "turn_in_later", "value": pytest.approx(25.0), "vs_best": True}
+    same = da.coach(_ramped(78, 0.96), [late])["corners"][0]      # the same turn-in: the time is elsewhere, no turn-in tip
+    assert same["tip"] is None or same["tip"]["kind"] != "turn_in_later"

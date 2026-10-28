@@ -128,7 +128,7 @@ ideal drive and where to find time (#80), grip circle (#86), automatic mount cal
 | D-15 | Track day mode: closed circuit, start/finish line, sector splits, laps, no public-road guardrails needed | H | L | todo | Harry's Lap Timer, RaceChrono |
 | D-16 | Fatigue cues: rising corrections, later braking and wider lines late in a long drive, suggest a break | M | M | partial (#108 post-drive; live break cue; wider lines todo) | car driver-attention systems |
 | D-17 | Incident detection: a crash-level spike plus stop asks "Are you OK?" and can alert a chosen contact | H | M | todo | Apple Crash Detection, Life360, REVER |
-| D-18 | Line analysis: early vs late apex per corner from the GPS line against the road geometry | M | M | todo | SOCIAL §3 |
+| D-18 | Line analysis: early vs late apex per corner from the GPS line against the road geometry | M | M | partial (turn-in from lateral g vs your quicker pass, this thread; lane position needs better than phone GPS, D-13) | SOCIAL §3 |
 | D-19 | Car-specific reference lap from the Garage so scores mean the same across cars | H | M | todo | SOCIAL §2.4 |
 | D-20 | Weekly drive digest: km of good roads, new roads, best moment, one thing to work on | M | S | todo | Strava weekly, Whoop |
 | D-21 | Coach in plain words: one sentence per drive that a non-racer understands | H | S | done (#101) | owner goal (approachable) |
