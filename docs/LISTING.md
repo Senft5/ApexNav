@@ -10,19 +10,22 @@ ApexNav
 
 ## Subtitle (30)
 
-Pace notes for back roads
+Navigation for back roads
 
 ## Promotional text (170)
 
-A co-driver for the long way home: it reads the road ahead out loud, finds the twisty roads near you and scores how smoothly you drove them. Never how fast.
+Turn-by-turn navigation for the long way home: spoken directions and pace notes for every corner, routes over the twistiest roads nearby, and a score for smooth driving.
 
 ## Keywords (100, comma separated, no spaces)
 
-pace notes,co-driver,twisty roads,scenic drive,back roads,road trip,corners,convoy,car club,driving
+navigation,gps,pace notes,co-driver,twisty roads,scenic drive,back roads,road trip,convoy,car club
 
 ## Description (4000)
 
-ApexNav is a co-driver for people who take the long way home. It reads the road ahead out loud, finds the roads worth driving near you, and scores how cleanly you drove them, never how fast.
+ApexNav is turn-by-turn navigation for people who take the long way home. Search for a destination, pick the fun route or the quick one, and follow spoken directions with the next turn on screen and a live arrival time. Along the way it reads every corner out loud like a rally co-driver, and afterwards it scores how cleanly you drove, never how fast.
+
+TURN-BY-TURN NAVIGATION
+Search for any address or place, choose between routes, and get spoken turn-by-turn directions ("In 0.3 miles, turn left onto Deals Gap Road") with the next turn on screen, distance and time left, and arrival time. Miss a turn and the route is rebuilt. Directions and notes keep working with the screen off and play over your music, which dips while a prompt plays.
 
 PACE NOTES, SPOKEN
 Corners are called before you reach them, in plain words or rally notes ("left 4 tightens"), with hazards other drivers reported, and crests and bumps on roads that have been measured. The voice runs on the phone and works with no signal. Calls are timed to your speed so you hear them at the entry, not the apex.

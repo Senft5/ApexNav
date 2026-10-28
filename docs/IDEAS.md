@@ -271,7 +271,7 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 
 | id | idea | impact | effort | status | from |
 |---|---|---|---|---|---|
-| C-01 | CarPlay map template with route, next note and ETA | H | L | owner (Apple account, CarPlay entitlement) | ApexNav mission |
+| C-01 | CarPlay map template with route, next note and ETA | H | L | owner (CarPlay entitlement): request answers, the guide's requirements and the build plan are in docs/CARPLAY.md; pre-request fixes done (promptStyle, listing leads with navigation) | ApexNav mission |
 | C-02 | CarPlay notes as a list template and hazard alerts as CPAlert | H | M | owner (Apple account) | Waze CarPlay |
 | C-03 | Android Auto navigation template | H | L | owner (Android priority) | ApexNav mission |
 | C-04 | Car audio: ducking and routing to Bluetooth/CarPlay while prompts play | H | M | done (#73) | — |

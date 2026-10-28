@@ -1,5 +1,11 @@
 # APEX NAV — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-10-28 (evening): CarPlay request readiness, naming
+- This PR: CarPlay pre-request work from Apple's CarPlay Developer Guide (Oct 2026): voice prompts check `promptStyle` (native speech, and web clips ask the shell first; a generated tone for `short`), the App Store listing leads with navigation, docs/CARPLAY.md (form answers, requirement table, build plan).
+- On hold, reverted from this branch: Pro entitlement server code (commit f670035; `git revert` of the revert brings it back) while the owner decides the free/paid split; MONETIZATION.md is to be rewritten for free forever + Pro subscription + lifetime, with a road-data business framework (owner approved the direction).
+- Naming: owner wants a real foreign word; Vetta (Italian: summit) is the front runner (USPTO: no live marks in classes 9/42; vettadrive.com free). Single-pass roads to be scored with confidence weighting (owner approved; not built yet).
+- Exact next task: after the owner submits the CarPlay request, the rename decision, then the MONETIZATION.md rewrite and the single-pass weighting.
+
 ## Session 2026-10-28 (afternoon): monetization and marketing plans
 - Merged #224: D-11 dashcam overlay, P-01 battery cost, Q-07 road-data loop test, S-18 spot photos, A-02 browser mount calibration, R-04 measured stages.
 - Owner switched focus (2026-10-28): monetization that keeps users first, and a marketing plan Claude runs; then back to IDEAS.
