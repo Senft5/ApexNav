@@ -107,6 +107,9 @@ flow('Where to?: with the search and routing services unreachable, a search fail
 }, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
 
 flow('Where to?: a suggestion builds a route with a card and a Start button (search and router stubbed)', async (page, base) => {
+  // a road on the route closed at all hours by the map's conditional tags (IDEAS R-22)
+  await page.route('https://overpass-api.de/**', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ elements: [
+    { type: 'way', id: 9, center: { lat: 35.7565, lon: -83.97 }, tags: { highway: 'tertiary', name: 'Gate Road', 'access:conditional': 'no @ (00:00-23:59)' } }] }) }));
   // weather along the route (IDEAS R-21): rain everywhere, every hour
   await page.route('https://api.open-meteo.com/**', (route) => {
     const n = new URL(route.request().url()).searchParams.get('latitude').split(',').length, now = Math.floor(Date.now() / 3600e3) * 3600;
@@ -137,6 +140,7 @@ flow('Where to?: a suggestion builds a route with a card and a Start button (sea
   check(turn && turn.street === 'Hollow Creek Road' && Math.abs(turn.m / steps.total - 0.5) < 0.1, 'the turn is placed halfway: ' + JSON.stringify(steps.steps));
   check(steps.steps.some((x) => x.type === 4) && !steps.steps.some((x) => x.type === 1), 'arrival kept, the start left out');
   await page.waitForFunction(() => /Forecast: Rain likely at the start/.test(document.getElementById('routeCardWeather').textContent), null, { timeout: 10000 });
+  await page.waitForFunction(() => /Closed when you'd get there \(map data\): Gate Road \(00:00-23:59\)/.test(document.getElementById('routeCardClosures').textContent), null, { timeout: 10000 });
   // pin it as Home (IDEAS U-20): first in Where to?, on this phone; Unpin removes it
   page.once('dialog', (d) => d.accept('Home'));
   await page.evaluate(() => document.getElementById('routePinBtn').click());

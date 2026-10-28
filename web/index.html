@@ -45,6 +45,7 @@
   <script src="pinned_places.js"></script>
   <script src="trip_stops.js"></script>
   <script src="route_weather.js"></script>
+  <script src="conditional_closures.js"></script>
   <script src="incident.js"></script>
   <script src="traffic.js"></script>
   <script src="in_car.js"></script>
@@ -493,6 +494,7 @@
               <p class="route-meta" id="routeCardAlong" hidden></p>
               <p class="route-meta" id="routeCardClimb" hidden></p>
               <p class="route-meta" id="routeCardWeather" hidden></p>
+              <p class="route-meta" id="routeCardClosures" hidden></p>
               <div class="stack-8" id="routeStops" hidden></div>
               <div class="bars mt-8" id="routeCardBars"></div>
               <p class="note" id="routeCardWhy" hidden></p>
@@ -2430,6 +2432,7 @@
       attachProfile(t);
       paintStops(t);
       attachWeather(t);
+      attachClosures(t);
       if (!prebuilt) toast(`${name} · ${ApexUnits.long(totalM(), 1)} · ${t.events.filter(e => e.type === 'corner').length} corners`);
     }
     // A route just found: pin its destination and show it, so you can check you are routing to the right place. FOLLOW
@@ -4418,6 +4421,32 @@
     // line on the route card. Map data: a mapped viewpoint, a fuel station that may be closed. Nothing found says nothing.
     const scenicPins = [];
     const SCENIC_LABEL = { view: 'VIEW', cafe: 'CAFÉ', fuel: 'FUEL' };
+    // Seasonal and time-of-day closures (conditional_closures.js, IDEAS R-22): OSM conditional access tags on the roads the
+    // route uses, read for when you'd get there. A trip over 1° across, or the map offline: nothing said.
+    async function attachClosures(t) {
+      $('routeCardClosures').hidden = true;
+      if (!t || !Array.isArray(t.lat) || t.lat.length < 2 || !window.ApexConditional) return;
+      let s = Infinity, w = Infinity, n = -Infinity, e = -Infinity;
+      for (let i = 0; i < t.lat.length; i++) { s = Math.min(s, t.lat[i]); n = Math.max(n, t.lat[i]); w = Math.min(w, t.lon[i]); e = Math.max(e, t.lon[i]); }
+      if (n - s > 1 || e - w > 1) return;
+      let json = null;
+      for (const url of OVERPASS) {
+        try {
+          const r = await fetch(url, { method: 'POST', body: 'data=' + encodeURIComponent(ApexConditional.query(s - 0.005, w - 0.005, n + 0.005, e + 0.005)), headers: { 'Content-Type': 'application/x-www-form-urlencoded' } });
+          if (r.ok) { json = await r.json(); break; }
+        } catch (_) { /* next mirror */ }
+      }
+      if (!json || plannedRoute !== t) return;
+      const total = t.dist[t.dist.length - 1], now = Date.now();
+      const secAt = (m) => (Number.isFinite(t.timeS) ? t.timeS - ApexEta.routerLeft(m, total, t.timeS, t.timeMarks) : m / (50 / 3.6));
+      const ways = (json.elements || []).filter((x) => x.center && x.tags).map((x) => {
+        const hit = Core.nearestIndex(x.center.lat, x.center.lon, t.lat, t.lon, -1);
+        return hit.distM <= 80 ? { tags: x.tags, m: t.dist[hit.index], atMs: now + 1000 * secAt(t.dist[hit.index]) } : null;
+      }).filter(Boolean);
+      const line = ApexConditional.summary(ApexConditional.check(ways));
+      $('routeCardClosures').textContent = line;
+      $('routeCardClosures').hidden = !line;
+    }
     // Weather along the route (route_weather.js, IDEAS R-21): Open-Meteo's forecast at six points, for the hour you'd reach
     // each if you left now (the router's times). Said on the route card; nothing when the forecast can't be had.
     async function attachWeather(t) {
