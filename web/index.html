@@ -23,6 +23,7 @@
   <script src="sun.js"></script>
   <script src="format.js"></script>
   <script src="recording.js"></script>
+  <script src="road_memory.js"></script>
   <script src="contributor.js"></script>
   <script src="themes.js"></script>
   <script src="instruments.js"></script>
@@ -609,7 +610,15 @@
       const mine = ApexRecording.corroborate(records.map((d) => ApexRecording.repair(Core, d)));   // hazards seen again on other drives
       drives.splice(0, drives.length, ...mine.map((d) => ApexRecording.toTrack(d)), ...others);
       savedDriveIds = ids;
+      // What the coach found last time on each corner you have driven, spoken on the way in. Rebuilt only when the set of
+      // drives changes (it runs the coach over your newest drives), off the main path.
+      const memoKey = records.map((d) => d.id).join(',');
+      if (memoKey !== roadMemoryKey) setTimeout(() => {
+        if (version !== refreshDriveVersion) return;
+        try { roadMemory = ApexRoadMemory.build(Core, mine, ApexRecording.cornersOf); roadMemoryKey = memoKey; } catch (_) { roadMemory = []; }
+      }, 0);
     }
+    let roadMemory = [], roadMemoryKey = null;
     let track = null;
 
     // =======================================================================
@@ -1155,7 +1164,8 @@
     // Voice: "codriver" (most natural voice installed, read like a real co-driver) or
     // "jarvis" (cartoonishly robotic: robot voice where installed, chirps, machine-speak).
     // -------------------------------------------------------------------------
-    const speech = { busy: false, queue: [] };
+    const speech = { busy: false, queue: [], talkingUntil: 0 };   // talkingUntil: the native voice's estimated end (it reports no finish)
+    const MEMO_S = 5;   // a remembered coaching tip takes up to this long to say
     const NUM_WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
     const TENS = { 30: 'thirty', 40: 'forty', 50: 'fifty', 60: 'sixty', 70: 'seventy', 80: 'eighty' };
     // Co-drivers say "one-fifty", "two hundred", "thirty" — never "one hundred and fifty".
@@ -1269,7 +1279,11 @@
       const style = state.voiceStyle;
       if (style === 'jarvis') chirp();
       const native = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex;
-      if (native) { try { native.postMessage({ cmd: 'speak', text: spoken, force: false, style }); } catch (_) {} speech.busy = false; pumpSpeech(); return; }
+      if (native) {
+        try { native.postMessage({ cmd: 'speak', text: spoken, force: false, style }); } catch (_) {}
+        speech.talkingUntil = Math.max(performance.now(), speech.talkingUntil) + 600 + spoken.length * 70;   // ~14 characters a second
+        speech.busy = false; pumpSpeech(); return;
+      }
       if (!('speechSynthesis' in window)) { speech.busy = false; return; }
       const u = new SpeechSynthesisUtterance(spoken);
       const v = pickVoice(state.voiceStyle);
@@ -1332,6 +1346,16 @@
         if (e.type === 'corner' ? !spirited : !(spirited || noteworthyInCruise(e))) continue;
         const call = chainedCall(e, ev, spirited);
         say(call.text, false, call.chain);
+      }
+      // Roads you have driven: one technique tip per remembered corner, only with full notes on (never over a commute),
+      // moving on a fresh heading, and only when it ends before any call is due: it starts MEMO_S of driving beyond the
+      // call distance and never while a call is pending in that stretch or another voice may still be speaking.
+      const reach = lead + vMps * MEMO_S;
+      if (live && spirited && vMps >= 5 && performance.now() - state.liveAt < 2500 && !speech.busy && !speech.queue.length
+          && performance.now() > speech.talkingUntil
+          && !ev.some(e => e.dist_m - state.cursorM < reach && !state.spoken.has(`${track.id}:${e.type}:${e.index}`))) {
+        const memo = ApexRoadMemory.upcoming(roadMemory, state.live, reach, reach + 200, state.spoken);
+        if (memo) { state.spoken.add(memo.id); say(memo.text); }
       }
     }
 

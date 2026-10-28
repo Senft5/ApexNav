@@ -50,6 +50,12 @@ The JS file is a line-for-line port used by the browser/iOS cockpit for live OSR
   measured crest. `ApexRecording.corroborate` then counts, per hazard, your other drives over the same spot in the same
   direction that measured there (passes) and those that found the same kind within 25 m (hits): "Confirmed on 2 of 3 drives",
   "Seen on 1 of 3 drives" or "Driven once".
+- Spoken coaching on known roads (`web/road_memory.js`): `build` runs `Core.coach` over your newest 12 drives (again only
+  when the set of drives changes); for each corner the most recent measured pass decides, and only the coach's judgement of
+  that pass on its own is kept (still braking past the apex, coasting, early apex; never a tip measured against a faster
+  pass). Live, with full notes on, at 5 m/s or more on a fresh heading, the voice idle (the native voice's end is estimated,
+  it reports none) and no call due within 5 s of driving beyond the call distance, `upcoming` picks the nearest one straight
+  ahead in the next 200 m and driven the same way; each is said once per drive.
 - `core/drive_analysis.py` — private corner-by-corner pass comparison, Driver Score (0–1000) and custom
   segment passes; JS port in `web/apex_core.js` (plus `profileRecording` for app CSVs), parity-tested.
 - Corner coach (`corner_phases`, `coach`; JS `cornerPhases`, `coach`): per corner, on 5 m bins, its own brake zone (the
