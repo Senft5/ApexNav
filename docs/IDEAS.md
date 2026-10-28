@@ -70,7 +70,7 @@ long-press pin (#61), Apple place search and nearby suggestions in the app (#73)
 | R-03 | Measured road character (roughness, banking) as a routing input, unmeasured stays neutral | H | M | partial (#88) | ROAD_INTELLIGENCE §7, WORKER_QUEUE road-3 |
 | R-04 | road-3 remainder: measured crest, flow confidence and corroborated hazards in candidate discovery and generation, not only in ranking | H | L | todo | WORKER_QUEUE road-3 |
 | R-05 | Multi-centre stage discovery so long A→B trips find stages near both ends, not only the midpoint | H | M | done (#96) | STATE 2026-10-28 |
-| R-06 | One fun score for loops and A→B (unify loop ranking with the fun score) | M | S | done (#PR) | STATE 2026-10-28 |
+| R-06 | One fun score for loops and A→B (unify loop ranking with the fun score) | M | S | done (#111) | STATE 2026-10-28 |
 | R-07 | Live ETA and time left from router durations scaled by your own pace, reset on reroute | H | M | todo | WORKER_QUEUE eta-1, every nav app |
 | R-08 | Traffic ahead on iOS from MapKit, switch to the next most fun route that avoids the jam | H | L | done (#78, phone test pending) | WORKER_QUEUE traffic-1, Waze |
 | R-09 | Traffic on web/Android through a keyed provider (TomTom/HERE via the Worker) | M | M | owner (paid provider) | Google Maps |

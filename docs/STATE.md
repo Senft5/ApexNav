@@ -1,7 +1,7 @@
 # APEX NAV — CURRENT AGENT HANDOFF STATE
 
 ## Session 2026-10-28: one fun score for loops and A→B
-- #96 merged (long trips in sections). Loops are now ranked by `FunRoute.loopValue` (Fun − 200 x retraced share − 80 x length error) instead of raw corners per km, so router junction turns no longer count as loop corners and the measured adjustment (fun points) is on the same scale. Knoxville 30 mi: a clean 43 km loop (Fun 75) beat a 47 km one with more corners but 9 % retraced. Not driven on a phone.
+- #96 merged (long trips in sections). #111: loops are now ranked by `FunRoute.loopValue` (Fun − 200 x retraced share − 80 x length error) instead of raw corners per km, so router junction turns no longer count as loop corners and the measured adjustment (fun points) is on the same scale. Knoxville 30 mi: a clean 43 km loop (Fun 75) beat a 47 km one with more corners but 9 % retraced. Not driven on a phone.
 - Exact next task: next routing rows in docs/IDEAS.md (R-14 reject routes that shortcut a stage, R-31 "why this route", R-13 sun glare).
 
 ## Session 2026-10-28: long trips planned in sections
