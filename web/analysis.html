@@ -28,6 +28,7 @@
   <script src="challenges.js"></script>
   <script src="week_digest.js"></script>
   <script src="legends.js"></script>
+  <script src="road_votes.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { background: var(--panel); color: var(--panel-ink); font-family: var(--font-ui); font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -162,6 +163,8 @@
         <textarea class="mt-8" id="dvNoteText" maxlength="280" placeholder="A note for yourself (stays on this phone)" aria-label="Note"></textarea>
         <p class="note" id="dvTagsNote">Tags and notes stay on this phone. Filter the Log by them.</p></div>
       <div id="dvRoot"></div>
+      <div class="panel" id="dvVote" hidden><h2>Which road was better?</h2><div class="actions" id="dvVoteBtns" role="group" aria-label="Which road was better"></div>
+        <p class="note">Your answers rank your roads (Log). They stay on this phone.</p></div>
       <div class="panel" id="dvFlyby" hidden><h2>Friends on these roads that day</h2><div id="dvFlybyList" class="stack-8"></div>
         <p class="note">From the scores friends chose to show you, on stages you both marked. The last 14 days.</p></div>
       <div class="panel" id="dvRoad" hidden><h2>This road over time</h2><div id="dvRoadChart"></div><div class="scroll"><table id="dvRoadTable"></table></div></div>
@@ -179,6 +182,7 @@
       <div class="cards" id="historyCards"></div>
       <div class="panel" id="yearPanel" hidden><h2 id="yearTitle">--</h2><div id="yearLines" class="stack-8"></div>
         <div class="row mt-8"><button class="btn" id="yearShare">Share</button></div></div>
+      <div class="panel" id="roadsPanel" hidden><h2>Your roads</h2><div id="roadsList" class="stack-8"></div></div>
       <div class="panel" id="weekPanel" hidden><h2>Your week</h2><div id="weekLines" class="stack-8"></div></div>
       <div class="panel" id="challengePanel" hidden><h2>This month's challenges</h2><div id="challengeList" class="stack-8"></div>
         <p class="note">Exploring and technique, never speed. From the drives on this phone.</p></div>
@@ -345,6 +349,20 @@
     // Your year on the road (IDEAS D-24; web/year_review.js): this calendar year's drives with a known date. Set as text.
     let yearText = '';
     // This month's challenges (challenges.js, IDEAS S-11): text and a bar each; shown once this month has a dated drive.
+    // Which road was better? (road_votes.js, IDEAS S-17): one question per drive, this road against the last other one.
+    function renderVote(d) {
+      const panel = $('dvVote'), st = ApexRoadVotes.load(localStorage), q = ApexRoadVotes.question(drives, d, st);
+      panel.hidden = !q;
+      if (!q) return;
+      const pick = (winner) => { ApexRoadVotes.save(localStorage, winner ? ApexRoadVotes.vote(st, q, winner) : ApexRoadVotes.skip(st, q)); panel.hidden = true; renderRoads(); };
+      const b = (label, fn, cls = 'btn') => { const n = document.createElement('button'); n.className = cls; n.textContent = label; n.addEventListener('click', fn); return n; };
+      $('dvVoteBtns').replaceChildren(b(q.a, () => pick(q.a)), b(q.b, () => pick(q.b)), b('Skip', () => pick(null), 'btn ghost'));
+    }
+    function renderRoads() {
+      const list = ApexRoadVotes.ranking(ApexRoadVotes.load(localStorage)).slice(0, 10);
+      $('roadsPanel').hidden = list.length < 2;
+      $('roadsList').replaceChildren(...list.map((r, i) => { const p = document.createElement('p'); p.className = 'friend-act'; p.textContent = `${i + 1}. ${r.name}`; return p; }));
+    }
     // Your week (week_digest.js, IDEAS D-20): the last 7 days, set as text.
     function renderWeek() {
       const w = ApexWeekDigest.digest(drives.map((d) => ({ ...d, dateKnown: monthOf(d) !== null })));
@@ -395,6 +413,7 @@
       renderYear();
       renderChallenges();
       renderWeek();
+      renderRoads();
 
       // trend
       const W = Math.max(300, Math.round($('trend').clientWidth || 760)), H = 180, L = 40, R = 22, T = 12, B = 26;   // drawn at the real width so labels stay readable
@@ -851,6 +870,7 @@
       // The drive's name is the page title (you arrive from the Log list); the picker stays only as this view's state.
       $('dvTitle').textContent = d.name;
       renderTags(d);
+      renderVote(d);
       renderFlyby(d).catch(() => { $('dvFlyby').hidden = true; });
       $('dvNote').textContent = `${dateLabel(d)} · ${d.source === 'web-gps' ? 'Recorded on this phone' : d.source === 'imported' ? 'Imported' : 'Example drive'}`;
     }

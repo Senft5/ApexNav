@@ -129,6 +129,18 @@ flow('Where to?: a suggestion builds a route with a card and a Start button (sea
   const turn = steps.steps.find((x) => x.type === 10);
   check(turn && turn.street === 'Hollow Creek Road' && Math.abs(turn.m / steps.total - 0.5) < 0.1, 'the turn is placed halfway: ' + JSON.stringify(steps.steps));
   check(steps.steps.some((x) => x.type === 4) && !steps.steps.some((x) => x.type === 1), 'arrival kept, the start left out');
+  // pin it as Home (IDEAS U-20): first in Where to?, on this phone; Unpin removes it
+  page.once('dialog', (d) => d.accept('Home'));
+  await page.evaluate(() => document.getElementById('routePinBtn').click());
+  await page.waitForFunction(() => /Pinned as Home/.test(document.getElementById('toast').textContent));
+  const pinned = await page.evaluate(() => JSON.parse(localStorage.getItem('apex.pinnedPlaces')));
+  check(pinned.length === 1 && pinned[0].name === 'Home' && pinned[0].label === 'Maryville' && Math.abs(pinned[0].lat - 35.7565) < 1e-6, 'pinned: ' + JSON.stringify(pinned));
+  await page.click('#planClear');
+  await page.click('#destInput');
+  await page.waitForSelector('#placeList .pinned-row');
+  check((await page.textContent('#placeList .pinned-row .place b')) === 'Home', 'Home is first');
+  await page.click('#placeList .pinned-row button:has-text("Unpin")');
+  await page.waitForFunction(() => !document.querySelector('#placeList .pinned-row'));
 }, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
 
 flow('drag to reshape: dragging the planned route with the mouse adds a stop where it is let go (router stubbed, IDEAS R-18)', async (page, base) => {
@@ -734,6 +746,14 @@ flow('drive tags: tag a drive in the Log, filter by it, the note stays on the ph
   await page.click('#historyFilter button:has-text("E46")');
   const rows = await page.$$eval('#historyTable tr.row-link', (els) => els.map((e) => e.dataset.drive));
   check(rows.length === 1 && rows[0] === 't1', 'filtered to the tagged drive: ' + rows);
+  // which road was better (IDEAS S-17): asked on the newer drive, answered once, ranked in the Log
+  await page.goto(base + '/analysis.html?drive=t2');
+  await page.waitForSelector('#dvVote:not([hidden])');
+  await page.click('#dvVoteBtns button:has-text("Wet one")');
+  await page.waitForSelector('#dvVote[hidden]', { state: 'attached' });
+  await page.click('a.back[data-to="history"]');
+  await page.waitForSelector('#roadsPanel:not([hidden])');
+  check((await page.textContent('#roadsList')).startsWith('1. Wet one <i>x</i>2. Dry one'), 'your roads: ' + await page.textContent('#roadsList'));
 });
 
 flow('flyby: a friend on the same stage that day shows on the drive, as text; challenges this month (Worker stubbed, IDEAS S-20, S-11)', async (page, base) => {
