@@ -33,9 +33,10 @@
 
   /** The year as a few lines of text, for the panel and for sharing. */
   function lines(s) {
-    const out = [`${s.miles.toLocaleString('en-US')} mi in ${s.drives} drive${s.drives === 1 ? '' : 's'} · ${s.corners.toLocaleString('en-US')} corners · ${s.months} month${s.months === 1 ? '' : 's'} on the road`];
+    const U = root.ApexUnits, dist = (mi, d = 0) => (U ? U.long(mi * MI, d) : `${mi.toLocaleString('en-US')} mi`);
+    const out = [`${U ? dist(s.miles) : `${s.miles.toLocaleString('en-US')} mi`} in ${s.drives} drive${s.drives === 1 ? '' : 's'} · ${s.corners.toLocaleString('en-US')} corners · ${s.months} month${s.months === 1 ? '' : 's'} on the road`];
     if (s.best) out.push(`Best Driver Score: ${s.best.score} on ${s.best.name}`);
-    if (s.longest) out.push(`Longest drive: ${s.longest.name}, ${s.longest.miles} mi`);
+    if (s.longest) out.push(`Longest drive: ${s.longest.name}, ${U ? dist(s.longest.miles, 1) : `${s.longest.miles} mi`}`);
     if (s.topRoads.length) out.push(`Roads you came back to: ${s.topRoads.map((r) => `${r.name} (${r.times}×)`).join(', ')}`);
     return out;
   }

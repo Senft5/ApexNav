@@ -112,6 +112,9 @@
     return `${distText(Math.abs(g.meters))}${s}`;
   }
   function distText(m) {
+    if (root.ApexUnits && root.ApexUnits.metric()) {          // metres and km (units.js, U-22)
+      return m < 1000 ? `${Math.max(100, Math.round(m / 100) * 100)} m` : `${(m / 1000).toFixed(m < 10000 ? 1 : 0)} km`;
+    }
     if (m < 0.1 * MI) return `${Math.max(100, Math.round((m * FT) / 100) * 100)} ft`;
     return `${(m / MI).toFixed(m < 10 * MI ? 1 : 0)} mi`;
   }
@@ -124,7 +127,8 @@
     const what = KINDS[type] || 'Hazard';
     if (aheadM == null) return `${what} reported.`;
     if (aheadM < 120) return `${what}, now.`;
-    const t = distText(aheadM), d = t.endsWith(' ft') ? t.replace(' ft', ' feet') : t === '1.0 mi' ? '1 mile' : t.replace(' mi', ' miles');
+    const t = distText(aheadM), d = t.endsWith(' ft') ? t.replace(' ft', ' feet') : t === '1.0 mi' ? '1 mile' : t.endsWith(' mi') ? t.replace(' mi', ' miles')
+      : t.endsWith(' km') ? (t === '1.0 km' ? '1 kilometre' : t.replace(' km', ' kilometres')) : t.replace(' m', ' metres');
     return `${what} ahead, ${d}.`;
   }
 

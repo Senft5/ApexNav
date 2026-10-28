@@ -19,6 +19,11 @@ const out = { choose: [U.choose(null, 'en-US'), U.choose(null, 'en-GB'), U.choos
 out.metric = { sys: U.system(), long: U.long(19800), smart: U.long(25400, 1, true), short: [U.short(143), U.short(1500)], speed: Math.round(U.speed(25)), unit: U.speedU(), max: U.speedMax() };
 U.set('imperial');
 out.imperial = { sys: U.system(), saved: store['apex.units'], long: U.long(19800), short: [U.short(143), U.short(400)], speed: Math.round(U.speed(25)), unit: U.speedU(), max: U.speedMax(), nan: U.long(NaN) };
+U.set('metric');
+globalThis.ApexUnits = U;                                     // the modules read it when present
+const C = require(process.argv[1] + '/web/convoy.js'), S = require(process.argv[1] + '/web/scenic.js'), W = require(process.argv[1] + '/web/week_digest.js');
+out.modules = { convoy: [C.distText(250), C.distText(4200), C.hazardPhrase('bump', 400), C.hazardPhrase('bump', 1000), C.hazardPhrase('bump', 3000)],
+  scenic: S.summary([], 120000), week: W.lines({ miles: 10, drives: 2, newRoads: 0, best: null, focus: null })[0] };
 console.log(JSON.stringify(out));
 """
 
@@ -44,3 +49,10 @@ def test_imperial(out):
     assert i["sys"] == "imperial" and i["saved"] == "imperial" and i["long"] == "12.3 mi"
     assert i["short"] == [{"n": "450", "u": "FT"}, {"n": "0.2", "u": "MI"}]
     assert (i["speed"], i["unit"], i["max"], i["nan"]) == (56, "mph", 140, "--")
+
+
+def test_other_modules_in_metric(out):
+    m = out["modules"]
+    assert m["convoy"] == ["300 m", "4.2 km", "Bump ahead, 400 metres.", "Bump ahead, 1 kilometre.", "Bump ahead, 3.0 kilometres."]
+    assert m["scenic"] == "no fuel for 120 km (km 0–120)"
+    assert m["week"] == "16.1 km in 2 drives"

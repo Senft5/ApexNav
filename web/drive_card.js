@@ -78,7 +78,7 @@
     g.fillText(title.toUpperCase(), 90, 90);
     g.fillStyle = C.panelDim || '#999'; g.font = font(500, 36);
     const when = m.date ? new Date(m.date).toLocaleDateString(opts.locale, { year: 'numeric', month: 'short', day: 'numeric' }) : '';
-    g.fillText([when, finite(m.miles) ? `${m.miles.toFixed(1)} mi` : ''].filter(Boolean).join(' · '), 90, 182);
+    g.fillText([when, finite(m.miles) ? (root.ApexUnits ? root.ApexUnits.long(m.miles * 1609.344) : `${m.miles.toFixed(1)} mi`) : ''].filter(Boolean).join(' · '), 90, 182);
     // score and parts
     const y0 = 990;
     g.fillStyle = C.panelInk || '#fff'; g.font = font(800, 150, C.fontNum);
