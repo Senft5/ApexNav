@@ -1,7 +1,7 @@
 // Benchmark roads (IDEAS R-32 / Q-19): famous driving roads and how high the stage scorer must rank them in their region
 // (`top`: the share of the region's stages above which the road's best stage must sit). The Dragon must be in the top
-// tenth. The others guard today's ranks while the scorer can't do better: the zoom-13 map tiles stage discovery reads
-// simplify the Stelvio's hairpins away, Big Sur is a coast road of sweepers in a region with Nacimiento-Fergusson Road
+// tenth. The others guard today's ranks while the scorer can't do better: only 4-7 of the Stelvio's 48 hairpins are found (zoom-14
+// tiles don't change it: stroke joining or corner detection under-counts dense hairpin sequences), Big Sur is a coast road of sweepers in a region with Nacimiento-Fergusson Road
 // in it, and CA-33 sits just outside the top tenth (#3 of 28).
 // `match`: the road's ref or name in the map tiles; tools/make_benchmark_fixture.js saves each region's road pieces and
 // points along the matching named lines; tests/test_benchmark_roads.py scores the pieces and finds the road's stages.
