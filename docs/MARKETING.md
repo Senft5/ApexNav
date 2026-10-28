@@ -1,6 +1,6 @@
 # Marketing plan
 
-How ApexNav finds its first 10,000 drivers with almost no budget, run by Claude as far as the platforms allow.
+How Vetta finds its first 10,000 drivers with almost no budget, run by Claude as far as the platforms allow.
 Drafted 2026-10-28. Draft materials are in `docs/marketing/`; nothing is posted or sent until the owner has made the
 accounts in section 7 and approved the first batch. The money side is in docs/MONETIZATION.md.
 
@@ -39,7 +39,7 @@ the brand legal-speed fun. `tests/test_listing.py` already enforces this for the
 | 5 | **Launch moments** | Show HN (the technical story: phones as 100 Hz road probes), Product Hunt, r/CarPlay when CarPlay ships | drafts, timing, the reply plan | posts (they need a person's account) | $0 |
 | 6 | **Press and creators** | car media (Jalopnik, The Drive, Road & Track, Hagerty, Car Throttle, Motor1), Apple press (9to5Mac, MacStories for CarPlay), small and mid YouTube car channels | press kit page, pitch emails, promo codes, follow-ups | approve; appear on camera if anyone asks | $0 (promo codes) |
 | 7 | **App Store optimisation** | keywords, subtitle, screenshots, Product Page Optimisation A/B tests, in-app rating prompt after a good drive (never during one, Apple caps it at 3 a year) | all of it through the App Store Connect API, version by version | approve listing changes | $0 |
-| 8 | **Built-in loops** | drive cards and videos carry the ApexNav mark (MONETIZATION §2), crew invites earn Octane (O-07), shared routes open the app | already shipped; Claude tunes | nothing | $0 |
+| 8 | **Built-in loops** | drive cards and videos carry the Vetta mark (MONETIZATION §2), crew invites earn Octane (O-07), shared routes open the app | already shipped; Claude tunes | nothing | $0 |
 | 9 | **Apple Search Ads** (optional) | only after launch, only if the product page converts above 30%, capped | sets up and watches | decide a monthly cap (suggest $0 until data, then $50–100) | owner's call |
 
 ## 4. The launch region
@@ -83,10 +83,10 @@ campaign links (`?pt=…&ct=road-of-week-12`) count downloads per campaign in Ap
 
 Listed in docs/OWNER_TODO.md too. In order of value:
 
-1. **A domain** (about $15/yr, e.g. apexnav.app or getapexnav.com): needed for email sending, a professional press
+1. **A domain** (about $15/yr, vettadrive.com and vettadrive.app, both free on 2026-10-28): needed for email sending, a professional press
    kit, road pages people can link, and the social handles to point at. Add it to Cloudflare.
 2. **A contact email** on that domain (Cloudflare Email Routing to your Gmail: free).
-3. **Accounts, all named ApexNav** (same handle everywhere, check availability first): YouTube channel, Instagram
+3. **Accounts, all named Vetta** (same handle everywhere, check availability first): YouTube channel, Instagram
    (Professional, needed for posting by API), TikTok, Bluesky, Threads, Facebook page, X. For each, an API token
    or app as section 6 needs (Claude writes the steps per platform when you're ready).
 4. **Your own Reddit account** in good standing, and a few forum accounts on the marques you know: those posts

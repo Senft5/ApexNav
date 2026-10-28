@@ -53,8 +53,14 @@
     r.style.setProperty('--font-num', t.fonts.num);
     r.dataset.theme = t.id;
     r.dataset.mode = night ? 'night' : 'day';
+    try { root.localStorage.setItem(LAST_KEY, JSON.stringify([t.id, !!night])); } catch (_) {}
     return { theme: t, colors: c, map: night ? t.map.night : t.map.day };
   }
+
+  // The last look, put back as soon as this file loads (in <head>), so a page change at night doesn't flash the day colours
+  // before the page's own script picks the theme (review 2026-10-28).
+  const LAST_KEY = 'apex.lastLook';
+  try { const last = JSON.parse(root.localStorage.getItem(LAST_KEY)); if (Array.isArray(last)) apply(last[0], last[1]); } catch (_) {}
 
   root.ApexThemes = { THEMES, ACCENTS, get, apply, accent, setAccent };
 })(window);

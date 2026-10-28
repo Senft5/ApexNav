@@ -49,7 +49,7 @@
   function helpText(pos) {
     const at = pos && finite(pos.lat) && finite(pos.lon)
       ? ` I'm at https://maps.apple.com/?ll=${pos.lat.toFixed(5)},${pos.lon.toFixed(5)}&q=Here` : ' My position is unknown.';
-    return `ApexNav sensed a hard impact and I haven't answered.${at}`;
+    return `Vetta sensed a hard impact and I haven't answered.${at}`;
   }
   /** An sms: link (the body after "&" works on iOS, "?" on Android); digits and + only from the stored number. */
   function smsHref(number, body, ios) {
@@ -94,7 +94,7 @@
       const count = el('p', { className: 'count' });
       const okBtn = el('button', { className: 'ink-btn solid big', textContent: 'I\'m OK' });
       const helpBtn = el('button', { className: 'ink-btn big', textContent: 'Get help' });
-      node.append(el('h2', { textContent: 'Are you OK?' }), el('p', { textContent: 'ApexNav sensed a hard impact and then a stop.' }), okBtn, helpBtn, count);
+      node.append(el('h2', { textContent: 'Are you OK?' }), el('p', { textContent: 'Vetta sensed a hard impact and then a stop.' }), okBtn, helpBtn, count);
       document.body.append(node);
       let left = ANSWER_S;
       const tick = () => { count.textContent = `Showing ways to get help in ${left} s`; };

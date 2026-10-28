@@ -1,144 +1,141 @@
 # Monetization (IDEAS L-02)
 
-How ApexNav pays for itself without becoming an app people resent. Drafted 2026-10-28 from the owner's brief: "a
-balance that brings profitability without turning away prospective users". Nothing here is live until the owner
-approves the price and the free/Pro split (docs/OWNER_TODO.md), and the code ships behind the `pro` flag, off.
+How Vetta makes real money without becoming an app people resent. Rewritten 2026-10-28 after the owner chose a
+bigger model than a one-time unlock: **free forever for basic use, Vetta Pro by subscription or lifetime, and a road-data
+business that sells answers about roads (never data about people)**. Prices and the exact free/Pro split are a proposal
+for the owner to sign off (section 3); nothing is charged until then, and the Pro code ships behind the `pro` flag, off.
 
-## 1. The promise we keep
+## 1. The promises (these never change)
 
-ApexNav's mission says **zero subscription**. That stays, because it is also the best marketing line we have: every
-serious competitor rents itself out by the year (approximate US prices from memory, not yet checked; verify in the
-App Store before any of them appears in marketing copy):
-
-| app | model | yearly cost |
-|---|---|---|
-| Calimoto (motorcycles) | subscription | about $50–60 |
-| Kurviger | subscription tiers | about $10–30 |
-| REVER | subscription | about $30–40 |
-| Roadtrippers | subscription | about $36–60 |
-| Waze, Google Maps | free with ads and tracking | $0 and your data |
-| **ApexNav** | **free, plus a one-time Pro unlock** | **$0, or one payment once** |
-
-Rules that hold whatever else changes:
-
-1. **Free is a whole app, not a demo.** Someone who never pays can drive, hear pace notes, find twisty roads, build
-   loops, keep every drive in the Log, run convoys, join crews and report hazards. A free user should recommend us.
+1. **Free forever, and it means it.** Someone who never pays can drive, hear pace notes and spoken directions, find
+   twisty roads, build loops, keep every drive in the Log, run convoys, join crews and report hazards. "Free forever"
+   is marketing we can stand behind because basic use never needs a payment.
 2. **Safety is never sold.** Hazard warnings, closures, the crash check, convoy hazard relays, typing lock, spoken
-   directions and pace notes stay free forever. So does CarPlay when it ships (a bigger screen is the safer screen).
-3. **The road network is never sold back to the people who built it.** Contributing road data and seeing what
-   members measured is free. Contributors earn Octane (cosmetic, S-10) and their names on nothing.
-4. **Your own data is never held hostage.** Every drive stays viewable and exportable (GPX, Download my data) for free,
-   for ever. Pro adds tools on top of your data; it never takes your data away when a trial ends.
-5. **No ads, no tracking, no selling data.** Not even "privacy-friendly" ads. It is what the listing already says.
-6. **No paywall while the car moves.** The Pro sheet never opens during a drive or above walking speed, never as a
-   launch screen, and a locked feature asks at most once a week. No countdown timers, fake discounts, pre-ticked
-   boxes, or "are you sure you want to stay basic?" second screens.
-7. **Apple's rules (3.1.1):** every unlock goes through In-App Purchase on iOS; Restore Purchases is always visible;
-   Family Sharing is on. Octane can never buy Pro (it would be an unlock outside IAP).
+   directions and pace notes are free. So is CarPlay (a bigger screen is the safer screen).
+3. **Contributors are never charged for what they built.** Measured road feel is free to see, and the people who
+   measure the most get Pro free (section 4).
+4. **Your own data is never held hostage.** Every drive stays viewable and exportable (GPX, Download my data) for free.
+   Pro adds tools on top of your data; a lapsed subscription takes nothing away that you made.
+5. **No ads, no tracking, and no selling data about people.** Not a driver's position, path, speed, times, scores or
+   identity, to anyone (insurers and police included). Section 5 sells anonymous facts about roads.
+6. **No dark patterns.** No paywall while the car moves, no paywall at launch, a locked tool mentions Pro at most once
+   a week, no countdown timers, no fake discounts, cancel in two taps (Apple's own subscription screen).
 
-## 2. What is free and what is Pro
+## 2. Who we compete with (approximate US prices from memory; verify before any appears in marketing)
 
-The name is **ApexNav Pro**: a product name people understand at a glance. BRAND.md's ban on "pro" and "unlock" as
-hype words still holds for every other line of copy (the Pro sheet says "Get Pro", "Try Pro free", never "unlock").
-
-Pro is **depth and creation**: tools for people who drive a lot, plan at a desk, make videos, or go to track days.
-They are the people most willing to pay, and holding them back costs a casual driver nothing.
-
-| area | free | Pro |
+| app | what it does | model |
 |---|---|---|
-| Pace notes, directions, hazards, closures, crash check | all | — |
-| Fun routes, loops, Explore, stage discovery, measured roads | all | — |
-| Log | every drive, its map, corners, Driver Score, drive card, GPX export, Download my data | **progress tools**: stage delta against your best on a road (D-05), year and week reviews in full (D-20, D-24), "which road was better" history (S-17) |
+| Calimoto (motorcycles) | twisty routes, tracking | subscription, about $50–60 a year |
+| Kurviger | curvy routing | tiers, about $10–30 a year |
+| REVER | ride tracking, routes | subscription, about $30–40 a year |
+| Sideways, Tornante, Pacenote Maps | voice pace notes, scenic routes | free or subscription (Oct 2026 listings) |
+| APEX Pro | track lap timing hardware + app | hardware + subscription |
+| **Vetta** | pace notes + navigation + measured road feel + crews | **free forever; Pro subscription or lifetime** |
+
+What none of them have, and what Pro sells on: roads measured by drivers' phones (feel, not just shape), a technique
+score that teaches, crew convoys with hazard relay, and (with the adapter) the car's own data.
+
+## 3. Free and Pro (proposal for the owner's sign-off)
+
+| area | free forever | Vetta Pro |
+|---|---|---|
+| Navigation, pace notes, directions, hazards, closures, crash check, CarPlay | all | — |
+| Routes: fun routes, loops, Explore, stops, drag to reshape, GPX in and out, saved routes | all | — |
+| Measured roads (crowd road feel) on the map and in routing | all | — |
 | Convoys, crews, friends, kudos, spots, meets | all | — |
-| Offline map areas (F-02) | 1 area | unlimited areas |
-| Videos: flyover (D-10), dashcam overlay (D-11) | export with a small ApexNav mark in the corner | no mark, higher resolution (1080p / 60 fps where the phone can) |
-| Track day mode (D-15) | — | lap and sector timing on raceways |
-| Garage (R-20, D-19) | 1 car | unlimited cars |
-| Route planning | stops, drag to reshape, saved routes, GPX import | — (kept free: planning is how people find out the app is good) |
-| Voices (V-xx) | the default co-driver voice | extra co-driver voices as they ship |
-| Spot photos (S-18) | all | — |
-| Cockpit accents | bought with Octane (earned only) | — |
+| Log: every drive, its map and corners, Driver Score, drive card, exports | all | — |
+| Coaching | the score and its three parts | **corner-by-corner coaching**: where you lost smoothness, run-to-run comparison against your best (D-05), progress on the roads you drive most |
+| Offline map areas | 1 area | unlimited |
+| Videos (flyover, dashcam overlay) | with a small Vetta mark | clean, up to 1080p 60 |
+| Track days (D-15) | — | lap and sector timing on raceways |
+| Garage | 1 car | every car, scores per car |
+| Car data (Vetta Adapter / OBD, future) | — | live engine data, throttle and brake traces, shift points, temperatures |
+| Voices | the default co-driver | every co-driver voice |
+| Year and week reviews | the headline | in full |
 
-Why the watermark rather than a lock on videos: a free user's video with the ApexNav mark is our cheapest ad. Locking
-it would remove both the user's fun and the ad.
+**Prices (proposal):** Vetta Pro **$5.99 a month**, **$39.99 a year** (a week's trial included), or **Lifetime $99.99**.
+Small Business Program commission (15%) makes those about $5.09, $33.99 and $84.99 to us.
 
-**Founding drivers.** Everyone with an account before the App Store launch (TestFlight testers and the beta crews,
-see MARKETING.md) gets Pro for life, recorded on the server. It thanks the people who measured the first roads, and
-it means nobody who has a feature today loses it. (This is an entitlement we grant, not a purchase, which Apple
-allows; it is not bought with Octane.)
+**Founders (the early-customer incentive):**
+- Everyone with an account before the App Store launch (TestFlight testers, the beta crews in MARKETING.md) gets
+  **Lifetime Pro free**, and a Founder mark on their profile that can't be bought later.
+- The **first 1,000 Lifetime buyers** after launch pay **$69.99** and get the Founder mark too. The count is shown
+  honestly ("612 of 1,000 left"), never a fake timer.
+- Both are server-side grants or prices, not something bought with Octane (Apple guideline 3.1.1).
 
-## 3. Price
+## 4. Pro earned by measuring roads
 
-| item | type | price (US) | notes |
+Road data is what makes Vetta better than a map and what the data business sells, so the people who measure roads
+should be paid in Pro: **every 100 km of new road data (sections nobody had measured before) earns a free month**,
+shown in the app as progress toward the next month. Delivered as App Store subscription **offer codes** the server
+issues to the account (the mechanism Apple provides for granting subscription time). To confirm with App Review before
+launch: that an earned offer code for contributing data is acceptable under 3.1.1 and 3.1.2.
+
+## 5. The road-data business (framework now, sales later)
+
+**What history says.** Buyers paid for specific road products: Michelin bought RoadBotics (pavement condition for
+cities), Bentley Systems bought Blyncsy (road condition from imagery), Nexar sells road data to cities, Roadroid sold
+phone-based roughness surveys. Companies that sold raw driver and location data struggled (Wejo went bankrupt in 2023;
+Otonomo struggled and merged). Sell answers about roads; never data about people.
+
+**Products, in the order they become possible:**
+
+| product | buyer | what it is | needs |
 |---|---|---|---|
-| **ApexNav Pro** | non-consumable IAP | **$24.99** | less than half of one year of any subscription above. Launch price **$19.99** for the first 30 days, said plainly ("launch price until 30 Nov"), then $24.99 |
-| **Pro trial** | non-consumable, $0 | free | 14 days of every Pro tool, started by the user (never automatic, never asks for payment details). Apple's recommended pattern for trying a one-time unlock. When it ends, Pro tools lock again; nothing made during the trial is deleted |
-| **Fuel the road crew** (tip jar) | consumable IAP | $2.99 / $6.99 / $14.99 | buys nothing, says thanks; a small "Supporter" mark on your profile if you want it. In Settings → About only, never prompted |
+| Pavement condition layer | city and county public works, state DOTs | roughness per 5 m section, as an IRI-calibrated index with confidence and month | calibration against IRI, enough passes in an area |
+| Live hazard feed | DOTs, 511 services, fleets | confirmed potholes, debris, closures, with time and confidence | volume of reports |
+| Road geometry and feel | map makers, driver-assistance and tyre companies | measured banking, crests, corner radius vs map | measured coverage |
+| Driving-road guides | tourism boards, car and motorcycle brands | curated scenic and twisty roads with measured feel | road pages (Q-13) and coverage |
+| Car-data aggregates (later) | aftermarket and parts makers | anonymous totals from adapters ("engines on mountain roads run X hot") | the adapter, consent |
 
-Proceeds: enrol in Apple's **Small Business Program** (15% commission under $1 M a year), so $24.99 nets about $21.
+**How the data is kept so it can be packaged (built, see docs/ROAD_DATA.md):** every measured section keeps its
+road id and direction, the weighted value and a confidence from the number of passes, the month it was last measured,
+the class of car that measured it (stiff, medium, soft suspension: never the car or the person), and the version of the
+method. An owner-only export writes any area as GeoJSON for a pilot.
 
-Web and (later) Android: the same Pro on the same account, bought through Stripe on the website, honoured in the
-app (guideline 3.1.3(b) multiplatform services: allowed as long as iOS also offers IAP, and the app never links out
-to buy). Not before iOS launch.
+**Before anything is sold:**
+1. **Consent.** Terms and the privacy page say that anonymous road measurements may be licensed to organisations (cities,
+   map makers), and the App Privacy answers say so. Contributors opt in with the Road data switch, as now. Changed
+   before the first pilot, not after.
+2. **Map licence.** Our sections are keyed to OpenStreetMap ways, whose ODbL licence can require sharing a database
+   built from it. A lawyer checks the delivery format first; the likely answer is to deliver positions and our own
+   values, not OSM's data.
+3. **Calibration.** A drive over a road with a published IRI survey, to map our roughness to IRI.
 
-## 4. The numbers
+## 6. The numbers
 
-Running costs today are almost nil (Cloudflare free tier). At launch, with the router decision (OWNER_TODO Y-04):
+Running costs at launch are about $175–260 a year (Apple developer program, Workers Paid, domain, router). Break-even is
+a handful of subscribers. Rough first-year range (assumptions, not forecasts):
 
-| cost | per year |
-|---|---|
-| Apple Developer Program | $99 |
-| Cloudflare Workers Paid (router container, 30-day backups) | $60 |
-| Domain (MARKETING.md asks for one) | about $15 |
-| **Total** | **about $175** (about $260 if the router is a $7/mo VPS instead) |
-
-**Break-even on cash: about 9–13 Pro sales a year.** Rough first-year range (assumptions, not forecasts; the real
-numbers come from App Store Connect after launch):
-
-| | downloads | active after a month | buy Pro | revenue | after costs |
+| | downloads | monthly active | Pro (subscription + lifetime) | app revenue | plus data |
 |---|---|---|---|---|---|
-| quiet launch | 2,000 | 30% | 4% of active | about $500 | about +$300 |
-| steady (the plan in MARKETING.md works) | 10,000 | 35% | 5% | about $3,700 + tips | about +$3,500 |
-| a hit in one community (a viral video, a magazine piece) | 50,000 | 35% | 5% | about $18,000 + tips | about +$17,800 |
+| quiet | 2,000 | 30% | 4% | about $1,500 | none |
+| steady | 10,000 | 35% | 5% | about $8,000–10,000 | a pilot (city) possible in year 2 |
+| a hit in one community | 50,000 | 35% | 5% | about $40,000–50,000 | pilots in the launch region |
 
-One-time revenue tails off once early adopters have bought, so long-term profit needs a stream of new drivers, not a
-higher price. Later options, all opt-in, all still no subscription: **Pro 2** as a paid upgrade only when it is a
-real new version (owners of Pro 1 keep everything); **club packs** for car clubs that run events (crew event tools
-beyond what friends need, priced per club once); **curated route packs** by named local drivers with revenue share.
-None are built until there are clubs or creators asking.
+Subscriptions recur, so year two compounds; data contracts (tens of thousands a year each for a county-wide
+pavement survey) are the upside.
 
-Rejected, with reasons: ads (break the promise and the privacy stance), selling or "anonymised" licensing of
-driver data (same), subscriptions (mission), paid hazard alerts or police/camera alerts (safety is never sold),
-affiliate links for tyres and parts (App Review rule in APP_REVIEW.md: no links that sell; also feels like an ad),
-loot-box or paid Octane (3.1.1 and it would cheapen Octane).
+## 7. How we will know it is balanced
 
-## 5. How we will know it is balanced
-
-Counted the way app health already is (Y-03: anonymous daily totals, no identifiers, behind the same switch):
-Pro sheet shown, trial started, purchased, restored. App Store Connect gives downloads, conversion and refunds. Watch:
+Counted as app health is (Y-03: anonymous daily totals behind the same switch): Pro sheet shown, trial started,
+subscribed, lifetime bought, restored, cancelled. App Store Connect gives conversion, retention and refunds.
 
 | signal | healthy | if not |
 |---|---|---|
-| 1-star reviews mentioning price or "paywall" | under 5% of ratings | move the item that is named back to free |
-| trial → purchase | 15–30% | below 10%: Pro is not worth it yet, build depth before pushing; above 40%: price is low |
-| active free users month to month | flat or rising after the paywall ships | the free tier got worse: undo the last move |
-| refund rate | under 3% | the sheet promised something the feature doesn't do: fix the copy |
+| 1-star reviews naming price or "paywall" | under 5% | move what's named back to free |
+| trial → paid | 30–50% | below 20%: Pro isn't worth it yet, build depth before pushing |
+| monthly churn | under 6% | the paid tools aren't used weekly: look at which |
+| free users month to month | flat or rising after Pro ships | the free tier got worse: undo the last move |
 
-## 6. Building it (code plan, behind the `pro` flag)
+## 8. Building it (code plan, behind the `pro` flag)
 
-1. **Entitlement on the server.** `members.pro_source` (`founding`, `purchase`, `trial`, `web`) and `pro_until`
-   (null = for ever). `POST /api/pro/verify` takes the StoreKit 2 signed transaction (JWS), checks its certificate
-   chain to Apple Root CA G3, the bundle id and the product id, and records it; `GET /api/me` carries `pro`. A
-   founding grant is one SQL update at launch.
-2. **StoreKit 2 in the shell.** `Product.products(for:)`, `purchase()`, `Transaction.currentEntitlements` at launch
-   and `Transaction.updates` for purchases made elsewhere (Family Sharing, refunds). Bridge messages `proProducts`,
-   `proBuy`, `proRestore`; the shell posts `pro` state to the page. Works offline from the device's own entitlement;
-   the server copy is for web and Android.
-3. **`web/pro.js`.** `ApexPro.has(feature)` from one table (section 2), pure and tested. Each gate is a single call in
-   index.html; the Pro sheet is one view (what each tool does, price from StoreKit, Restore, Try free for 14 days).
-4. **Rules as tests.** A test fails if a gate is reachable while a drive runs, if a safety feature or GPX/data export
-   is behind a gate, or if the sheet has no Restore. APP_REVIEW.md 3.1.1 row and LISTING.md (Pro in the description,
-   "In-App Purchases" line) are updated in the same PR that turns the flag on.
-5. **App Store Connect.** The products (`com.senft.ApexNav.pro`, `.pro.trial`, `.tip.small|medium|large`) can be
-   created through the API key once the owner has signed the **Paid Applications Agreement** and set up banking and
-   tax (only the Account Holder can).
+1. **Entitlement on the server** (built and parked on the branch history, commit f670035: StoreKit 2 transaction
+   verification pinned to Apple Root CA - G3, founding grant). Extend for subscriptions: `expiresDate` and renewals from
+   App Store Server Notifications v2.
+2. **StoreKit 2 in the shell**: products, purchase, `Transaction.currentEntitlements`, `Transaction.updates`, Restore.
+3. **`web/pro.js`**: one table of Pro tools (section 3), gates as single calls, the Pro sheet, and tests that fail if a
+   safety feature, an export or road data is ever behind a gate, or if the sheet can open while the car moves.
+4. **App Store Connect**: products `com.senft.ApexNav.pro.monthly`, `.pro.yearly`, `.pro.lifetime`, and the Founder
+   price. Needs the owner's Paid Applications Agreement first.
+5. APP_REVIEW.md 3.1.1/3.1.2 rows, LISTING.md ("In-App Purchases"), privacy page, all in the PR that turns the flag on.

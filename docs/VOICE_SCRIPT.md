@@ -1,4 +1,4 @@
-# ApexNav voice script
+# Vetta voice script
 
 Read this in your normal voice as if you were navigating a friend down a fast road: calm, quick, a little urgent. Not an announcer voice.
 

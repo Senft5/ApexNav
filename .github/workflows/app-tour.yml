@@ -1,0 +1,63 @@
+name: App tour recording
+
+# A video of the real app in the iPhone simulator for review (docs/REVIEW.md): AppTourTests walks every tab, plans a
+# route and starts a drive while simctl plays a GPS drive along the Cherohala Skyway area. Run by hand (Actions → App tour
+# recording → Run workflow); the video is the run's `app-tour` artifact. The simulator records the screen only: the
+# audio review comes from tools/app_tour.js, which captures the co-driver's voice in the browser build.
+on:
+  workflow_dispatch:
+
+jobs:
+  tour:
+    runs-on: macos-15
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generate Xcode project
+        run: |
+          brew install xcodegen
+          xcodegen generate
+      - name: Boot an iPhone simulator
+        id: sim
+        run: |
+          UDID=$(xcrun simctl list devices available -j | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; print(next(x['udid'] for k,v in d.items() if 'iOS' in k for x in v if x['name'].startswith('iPhone 16') or x['name'].startswith('iPhone 15')))")
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+          # the on-screen keyboard, as on a phone (AppTourTests.testKeyboard screenshots every field with it up)
+          defaults write com.apple.iphonesimulator ConnectHardwareKeyboard -bool false
+          xcrun simctl boot "$UDID" || true
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl privacy "$UDID" grant location-always com.senft.ApexNav || true
+          xcrun simctl privacy "$UDID" grant motion com.senft.ApexNav || true
+          xcrun simctl location "$UDID" set 35.3626,-84.2866
+      - name: Build for testing
+        run: xcodebuild build-for-testing -project ApexNav.xcodeproj -scheme ApexNav -destination "id=${{ steps.sim.outputs.udid }}" -derivedDataPath build
+      - name: Keyboard on every text field
+        run: |
+          TEST_RUNNER_APEX_TOUR=1 xcodebuild test-without-building -project ApexNav.xcodeproj -scheme ApexNav \
+            -destination "id=${{ steps.sim.outputs.udid }}" -derivedDataPath build -only-testing:ApexNavUITests/AppTourTests/testKeyboard \
+            -resultBundlePath Keyboard.xcresult || true
+          # the screenshots as PNGs (one per field, named tab · field)
+          xcrun xcresulttool export attachments --path Keyboard.xcresult --output-path keyboard || true
+      - name: Record the tour
+        env:
+          UDID: ${{ steps.sim.outputs.udid }}
+        run: |
+          xcrun simctl io "$UDID" recordVideo --codec=h264 --force app-tour.mp4 &
+          REC=$!
+          # after the planning steps, drive west to east on TN-165 / NC-143 at about 15 m/s
+          ( sleep 120; xcrun simctl location "$UDID" start --speed=15 \
+              35.3626,-84.2866 35.3640,-84.2700 35.3580,-84.2400 35.3460,-84.2060 35.3420,-84.1700 35.3400,-84.1300 35.3350,-84.0900 35.3300,-84.0400 ) &
+          TEST_RUNNER_APEX_TOUR=1 xcodebuild test-without-building -project ApexNav.xcodeproj -scheme ApexNav \
+            -destination "id=$UDID" -derivedDataPath build -only-testing:ApexNavUITests/AppTourTests/testTour \
+            -resultBundlePath Tour.xcresult || true
+          kill -INT $REC; sleep 3
+          ls -la app-tour.mp4
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: app-tour
+          path: |
+            app-tour.mp4
+            keyboard
+            Keyboard.xcresult
+            Tour.xcresult

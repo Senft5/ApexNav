@@ -1,0 +1,50 @@
+# App review (2026-10-28)
+
+A walk through every screen, menu and spoken line, against docs/BRAND.md, docs/APP_REVIEW.md and "best in class". How:
+
+- **Browser tour with sound** (`tools/app_tour.js`): Playwright drives the real cockpit at iPhone size (390×844) through
+  onboarding, the map and its menus, search → route card → options → Preview → a drive on simulated GPS → hazard report →
+  drive end, the demo replay, loops, Explore, Log, Stages, Crew (signed out and as a member) and Settings. Every clip the
+  co-driver plays is captured from WebAudio and every spoken line is logged and burned in as a caption, so the review hears
+  and reads what a driver would. `OUT=dir node tools/app_tour.js [scene ...]`.
+- **iPhone simulator** (`.github/workflows/app-tour.yml`, run by hand on GitHub's Mac runners): the real app with the
+  on-screen keyboard. `AppTourTests.testKeyboard` taps every text field on every tab, screenshots it with the keyboard up and
+  fails if the field ends up under the keyboard; `testTour` is recorded as video while simctl drives a GPS route.
+- **The owner's own phone** (screenshots, 2026-10-28): the keyboard pass below.
+
+Severity: **S1** wrong or unsafe (App Review risk, a lie on screen), **S2** looks broken or confusing, **S3** polish.
+
+## Found and fixed
+
+| # | where | what | sev | fix |
+|---|---|---|---|---|
+| 1 | binnacle, Road cell | Showed the road's pace above the limit (125 on a highway). A number above the limit reads as a target (App Review 1.4.1) | S1 | Pace and sight speed never read above the posted limit; with no known limit only paces under 55 mph show (`web/index.html` roadCap) |
+| 2 | demo replay | Drove up to 10% over the limit | S1 | The replay keeps to the limit |
+| 3 | keyboard, every text field (owner's phone) | The tab bar floated over the plan sheet or showed through behind the keyboard; the sheet's own search field could be panned out of sight; a focused field got a second, offset ring in the accent colour | S2 | `web/keyboard.js`: while a field has the keyboard the tab bar hides and the page fits above the keyboard; one ink border on the focused field. Checked on the simulator by `testKeyboard` |
+| 4 | route card, Options | Offered a route both slower and less fun than another ("Fun 64 · 102 min" next to "Fun 99 · 77 min") | S2 | Dominated options are dropped (`FunRoute.distinctOptions`) |
+| 5 | route card | "Cameras --" when the camera check hadn't run; "no fuel for 50 mi (mi 0–50)" | S2 | Cameras only once known ("2 plate cameras" / "No known plate cameras"); fuel in words ("No fuel on the way", "for the first 40 mi", "from mi 9 to 68") |
+| 6 | route card | The route's name twice (sheet bar and card); "Climbs 11,056 ft · 858 ft to 5,387 ft · see the hills in Preview"; "Flowing sweepers 7.6 mi at 13.0 mi · Flowing sweepers 6.0 mi at 21.3 mi · …" | S3 | Name once; "Climbs 11,056 ft in all · highest 5,387 ft"; "Flowing sweepers at 13.0, 21.3 and 29.6 mi" |
+| 7 | plan sheet, Loop | "15 · 30 · 45 mi · 1 h · 2 h": the first two had no unit next to "Explore 15 min" | S3 | Every chip has its unit; Loop is its own row; "Tap the map" and "Open GPX" line up |
+| 8 | Crew | "@nate undefined points" if the points call came back without a total | S2 | Points only when known, rounded |
+| 9 | road book strip | Long calls cut off ("SQUARE LEFT OFF-…", "LEFT 4 OPENS…") | S2 | Long calls step down a size and read whole |
+| 10 | binnacle, Limit cell | Unknown limit drawn as a solid black sign with a dash | S3 | A sign only when there is a limit; unknown is a quiet outlined cell |
+| 11 | replay toast | "Camera map offline. No pins doesn't mean no cameras." | S3 | "Camera map is offline, so cameras may be missing from the map." |
+| 12 | onboarding, sign-in notes | Terms and Privacy in browser blue | S3 | Links are ink, underlined, like the rest |
+| 13 | page change at night | Log → Crew flashed the day colours before the night ones | S3 | `themes.js` puts the last look back from `<head>` |
+| 14 | exports | Downloaded files named `apexnav-…` | S3 | `vetta-my-data.json`, `vetta-drives-<date>.gpx`, `vetta-account.json` |
+
+## Audio
+
+Lines heard in the replay and the simulated drive (the captions in the tour video):
+
+- "Right 1 plus off-camber, care and Bump, 120" · "Left 4 opens over crest, care into Crest, 150" · "Dip, 100" ·
+  "Crest, 300" · "Square left off-camber, caution".
+- Calls are short, in rally order (direction, severity, modifier, distance), and the device voice and the voice bank agree.
+- Prompts duck the music and wait for it to dip (PR #226); nothing spoke over another line in the tour.
+
+## Still open
+
+- The simulator recording and keyboard screenshots (`app-tour` artifact) after this merges: `testKeyboard` failures, if any,
+  are fixed in the next PR.
+- Loops and Explore need a location in the tour (the browser tour starts them before granting one); planning by search
+  and the simulated drive cover the same routing.

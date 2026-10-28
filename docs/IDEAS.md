@@ -1,6 +1,6 @@
 # Idea backlog
 
-The long list of everything that could make ApexNav best in class. It is a menu, not a
+The long list of everything that could make Vetta best in class. It is a menu, not a
 plan: threads pick from it, turn a picked idea into a concrete task (in their own PR, or a
 row in docs/WORKER_QUEUE.md when it needs a written brief), and come back here to update the
 status. Anyone may add, split, merge, re-rate or drop ideas; keep the id stable once an idea
@@ -15,7 +15,7 @@ makes those four trustworthy in production.
 | column | meaning |
 |---|---|
 | id | Stable handle (`R-12`). Reference it in PR titles or bodies so the next thread can find the work. |
-| impact | **H** changes why someone picks ApexNav over another app, or removes a reason to leave. **M** clearly better day to day. **L** nice, niche or polish. |
+| impact | **H** changes why someone picks Vetta over another app, or removes a reason to leave. **M** clearly better day to day. **L** nice, niche or polish. |
 | effort | **S** one small PR. **M** a few PRs or one large one. **L** several PRs across core, web and native. **XL** a project in its own right (new platform, new data pipeline). |
 | status | `done (#N)` shipped on main. `partial (#N)` a first version shipped, the rest of the row is not. `active (thread)` a thread is building it now. `todo`. `owner` needs an owner decision, money, an account or a phone test before it can move. `dropped (why)`. |
 | from | Where the idea comes from: a doc in this repo, an owner request, or a competitor that does it well. |
@@ -90,7 +90,7 @@ long-press pin (#61), Apple place search and nearby suggestions in the app (#73)
 | R-23 | Fuel and charge range: warn before a long stage with no fuel; EV charger stops on loops | M | M | partial (fuel stations from the map along a planned route; the route card warns of 50+ mi with none; EV chargers and the car's range still to do) | Google Maps, ABRP |
 | R-24 | Scenic layer: viewpoints, overlooks, waterfalls and car-friendly cafés along the route from OSM | M | M | partial (web/scenic.js + stages.js pois: OpenStreetMap viewpoints and cafés within reach of a planned route pinned on the map and counted on the route card, e.g. \"7 viewpoints · 1 café\" over Newfound Gap; waterfalls and car-friendly picks still to do) | Roadtrippers, Scenic |
 | R-25 | GPX import (follow someone's route with our notes) and GPX/KML export of planned routes | M | S | done (Plan → Open GPX: a track is followed as drawn with our notes, route points or waypoints are routed through; route card → GPX exports the planned route; web/route_import.js) | Kurviger, Calimoto, REVER |
-| R-26 | Open a shared route link from Google/Apple Maps or a GPX in the app ("Open in ApexNav") | M | M | done (paste a Google Maps, Apple Maps or geo: link into Where to?: its start, stops and destination; \"Open in ApexNav\" for .gpx files from Files, Mail and AirDrop. Short maps.app.goo.gl links must be opened in a browser first) | Waze deep links |
+| R-26 | Open a shared route link from Google/Apple Maps or a GPX in the app ("Open in Vetta") | M | M | done (paste a Google Maps, Apple Maps or geo: link into Where to?: its start, stops and destination; \"Open in Vetta\" for .gpx files from Files, Mail and AirDrop. Short maps.app.goo.gl links must be opened in a browser first) | Waze deep links |
 | R-27 | Our own routing graph with fun scores baked into edge costs (Valhalla custom costing) | H | XL | owner: needs our own routing server (a graph with fun baked into edge costs), which is the routing-server decision in OWNER_TODO (Y-04); until then fun lives in candidate generation and ranking | ROAD_INTELLIGENCE §7.3 |
 | R-28 | On-device Valhalla with regional tiles built monthly by free CI, so routing works with no signal | H | XL | parked (XL): Valhalla builds for iOS, but it needs a native C++ target, a monthly regional tile build in CI and a tile download per area; F-02 already keeps the map, terrain and stage discovery offline, so offline routing is the remaining gap | ROAD_INTELLIGENCE §7.4, Calimoto offline |
 | R-29 | Lane guidance and junction views at complex interchanges on the transit parts of a trip | M | L | todo | Google Maps, Apple Maps |
@@ -181,7 +181,7 @@ adaptive notes (cruise vs spirited), car audio routing to Bluetooth/CarPlay (#73
 | V-04 | Turn-by-turn and pace notes in one voice stream so transit directions never collide with notes | H | M | done (web/directions.js: the router's junctions spoken early and at the turn, "then" for a turn right after, roundabout exits, arrival; the call at the turn goes ahead of corner notes and a corner note at a junction is left out) | Waze/Google voice |
 | V-05 | Phrases in the owner's voice (voice conversion), behind licences | M | L | owner (voice on hold) | docs/VOICE.md |
 | V-06 | Celebrity/character voice packs as cosmetic Octane rewards | M | M | parked: celebrity voices need licences (money, owner); character packs need a pre-rendered bank per voice (several MB each, and the live engine isn't allowed in the iOS app, 2.5.2). The Octane shop (S-10) is ready to sell them as cosmetics once a bank exists | Waze voice packs |
-| V-07 | Voice commands: "report pothole", "skip this stage", "how far to the next stage" (Siri Shortcuts first) | M | M | done: Siri and Shortcuts (`ApexIntents.swift`): "Start a drive / Report a hazard / End my drive in ApexNav", through the app's own links; report and end only during a drive. "How far to the next stage" says it aloud (or how much of this one is left) and "Skip this stage" drops the stage you're on or the next one and reroutes, keeping your stops: a fun route keeps where its stages are (`FunRoute.stageSpans`, placed again after a reroute) |
+| V-07 | Voice commands: "report pothole", "skip this stage", "how far to the next stage" (Siri Shortcuts first) | M | M | done: Siri and Shortcuts (`ApexIntents.swift`): "Start a drive / Report a hazard / End my drive in Vetta", through the app's own links; report and end only during a drive. "How far to the next stage" says it aloud (or how much of this one is left) and "Skip this stage" drops the stage you're on or the next one and reroutes, keeping your stops: a fun route keeps where its stages are (`FunRoute.stageSpans`, placed again after a reroute) |
 | V-08 | Music ducking tuned per note priority; never duck for low-priority notes in cruise | L | S | done: `ApexSpeechQueue.ducks`: hazards, pace notes, directions, lines you asked for and anything spirited duck; route and traffic phrases in cruise play over the music (`.mixWithOthers` in the shell) | — |
 | V-09 | Recce mode: drive slowly once, the co-driver writes your own notes for the road and reads them next time | H | L | done: a drive's page → Your notes: keep its calls as yours, change any call, forget them (`web/recce.js`); routes and drives over those corners in the same direction (30 m, ±60°) read your calls (rally words; plain words still come from the map) | rally recce |
 | V-10 | Remove espeak-ng (GPL) from the voice path before charging | M | M | done: kokoro-js (which inlines espeak-ng) is not loaded; text becomes phonemes in `web/g2p.js` (misaki's dictionaries and its Apache-2.0 fallback model); docs/VOICE.md "Removing espeak-ng (GPL)", tests/test_g2p.py. Audio the bank was rendered with isn't covered by the tool's licence | docs/VOICE.md |
@@ -271,9 +271,9 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 
 | id | idea | impact | effort | status | from |
 |---|---|---|---|---|---|
-| C-01 | CarPlay map template with route, next note and ETA | H | L | owner (CarPlay entitlement): request answers, the guide's requirements and the build plan are in docs/CARPLAY.md; pre-request fixes done (promptStyle, listing leads with navigation) | ApexNav mission |
+| C-01 | CarPlay map template with route, next note and ETA | H | L | owner (CarPlay entitlement): request answers, the guide's requirements and the build plan are in docs/CARPLAY.md; pre-request fixes done (promptStyle, listing leads with navigation) | Vetta mission |
 | C-02 | CarPlay notes as a list template and hazard alerts as CPAlert | H | M | owner (Apple account) | Waze CarPlay |
-| C-03 | Android Auto navigation template | H | L | owner (Android priority) | ApexNav mission |
+| C-03 | Android Auto navigation template | H | L | owner (Android priority) | Vetta mission |
 | C-04 | Car audio: ducking and routing to Bluetooth/CarPlay while prompts play | H | M | done (#73) | — |
 | C-05 | Auto-start: open the cockpit when the phone joins the car's Bluetooth or CarPlay | M | S | done (#152): CarPlay audio route offers "Start drive"; `apexnav://open?go=drive` starts one (Shortcuts automation "When CarPlay connects"). Not yet checked in a car | Waze, Shortcuts |
 | C-06 | Driving focus aware: no social notifications while driving, a summary after | M | S | blocked: the app sends no notifications yet; build this with the first push or social alert | iOS Focus |
@@ -361,7 +361,7 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 | id | idea | impact | effort | status | from |
 |---|---|---|---|---|---|
 | L-01 | Apple developer account, TestFlight external beta | H | S | owner (account) | launch |
-| L-02 | Zero-subscription model written down: one-time unlock, cosmetic Octane, or donations | H | S | partial: docs/MONETIZATION.md (free app + one-time Pro, 14-day trial, tip jar, founding drivers keep Pro; safety, road data and your own data never sold). Waiting on the owner's yes to the price and split; then the StoreKit build behind the `pro` flag | mission |
+| L-02 | Money model written down: free forever, Pro subscription or lifetime, road-data framework | H | S | partial: docs/MONETIZATION.md (free forever; Vetta Pro monthly / yearly / lifetime; founders keep Pro; Pro earned by measuring roads; road data sold as facts about roads, never people, docs/ROAD_DATA.md). Waiting on the owner's yes to the prices and split; then the StoreKit build behind the `pro` flag | mission |
 | L-06 | Marketing plan run by Claude: road pages for search, a weekly road video, community posts drafted for the owner, club and press outreach, a weekly report | H | M | partial: docs/MARKETING.md and drafts in docs/marketing/. Waiting on the owner's domain and accounts (OWNER_TODO) | owner 2026-10-28 |
 | L-03 | Licence audit of every dependency and voice model before charging | H | S | done (THIRD_PARTY_NOTICES.md audit note; web/licenses.html ships the BSD/MIT notices in the app, linked from Settings; the website-only voice engine is never loaded in the app, guideline 2.5.2) | docs/VOICE.md licences |
 | L-04 | Attribution for OSM, OpenFreeMap, Valhalla, Nominatim, Photon, DeFlock, Kokoro (Settings → Sources and licences) | M | S | done | licences |

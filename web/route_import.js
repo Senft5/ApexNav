@@ -86,7 +86,7 @@
     const pts = [];
     for (let i = 0; i < lat.length; i += step) pts.push(i);
     if (pts[pts.length - 1] !== lat.length - 1) pts.push(lat.length - 1);
-    return `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="ApexNav" xmlns="http://www.topografix.com/GPX/1/1">\n<trk><name>${esc(name || 'Route')}</name><trkseg>\n`
+    return `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Vetta" xmlns="http://www.topografix.com/GPX/1/1">\n<trk><name>${esc(name || 'Route')}</name><trkseg>\n`
       + pts.map((i) => `<trkpt lat="${lat[i].toFixed(6)}" lon="${lon[i].toFixed(6)}"/>`).join('\n') + '\n</trkseg></trk>\n</gpx>\n';
   }
 

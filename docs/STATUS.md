@@ -1,4 +1,4 @@
-# APEX NAV — STATUS CHECKS AND WHAT TO DO WHEN IT'S DOWN (IDEAS Y-05)
+# VETTA — STATUS CHECKS AND WHAT TO DO WHEN IT'S DOWN (IDEAS Y-05)
 
 `.github/workflows/status.yml` runs `tools/status_check.py` every 30 minutes (GitHub's schedule can run a few minutes
 late). It is free because the repository is public. Run it by hand from the Actions tab ("Status", Run workflow) or locally
@@ -34,7 +34,7 @@ side and the whole run stops waiting after 60 s; a check still going then counts
 GitHub pauses scheduled workflows in a public repository after 60 days with no commits, and says so on the Actions tab.
 Re-enable it there ("Status" → Enable workflow). Any commit also resets the 60 days.
 
-## When ApexNav is down
+## When Vetta is down
 
 1. Open the failing run from the issue and check which core check failed.
 2. **Site and API both failing:** check https://www.cloudflarestatus.com. If Cloudflare is fine, look at the latest

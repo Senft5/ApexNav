@@ -1,4 +1,4 @@
-# APEX NAV — ROAD INTELLIGENCE & ROUTING DESIGN
+# VETTA — ROAD INTELLIGENCE & ROUTING DESIGN
 
 > Why we win: Calimoto, Kurviger and CorsaView rank roads mostly by *how curvy the
 > line on the map is*. We rank roads by **what driving them feels like** — in time,

@@ -527,6 +527,7 @@ flow('reported hazards: a call ahead, "still there?" after passing, and a one-ta
   await page.waitForFunction(() => !document.getElementById('hzAsk').hidden, null, { timeout: 5000 });
   check(/Gravel still there\?/.test(await page.textContent('#hzAsk')), 'asks after passing it');
   await page.click('#hzGone');
+  for (let i = 0; i < 40 && !votes.length; i++) await page.waitForTimeout(50);   // the vote is a request: let it land
   check(votes.length === 1 && votes[0].still === false, 'the vote is sent');
   check(await page.evaluate(() => window.__said.some((t) => /gravel reported ahead/i.test(t)) || /Gravel reported ahead/.test(document.body.textContent)), 'the hazard was called ahead');
   await page.click('#hzReportBtn');
@@ -715,7 +716,9 @@ flow("what's new: shown once after an update, not on a first install, not over a
 flow('crew drives: an upcoming drive shows in Crew with who is going; Going answers it; Plan a drive posts one; spots near you (Worker stubbed, IDEAS S-06, S-12)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   const posted = [];
-  const starts = new Date(Date.now() + 26 * 3600e3).toISOString();
+  // tomorrow at noon (now + 26 h is the day after tomorrow when the run starts after 22:00)
+  const noon = new Date(); noon.setDate(noon.getDate() + 1); noon.setHours(12, 0, 0, 0);
+  const starts = noon.toISOString();
   let mine = null;
   await page.route('**/api/**', (route) => {
     const u = new URL(route.request().url()), m = route.request().method();

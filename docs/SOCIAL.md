@@ -1,4 +1,4 @@
-# APEX NAV — SOCIAL, CROWD & DRIVE ANALYSIS PLAN
+# VETTA — SOCIAL, CROWD & DRIVE ANALYSIS PLAN
 
 The social layer exists to (1) make the road intelligence better with every drive and
 (2) make driving with friends better. It must never become evidence against its users.

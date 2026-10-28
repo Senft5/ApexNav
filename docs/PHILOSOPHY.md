@@ -1,6 +1,6 @@
-# APEX NAV — PRODUCT PHILOSOPHY & ARCHITECTURE MANIFESTO
+# VETTA — PRODUCT PHILOSOPHY & ARCHITECTURE MANIFESTO
 
-> **Core Thesis**: Existing apps for car people fail because they are either sterile telemetry spreadsheets that look like noisy scientific plots, or clunky social apps bolted onto generic consumer maps. **ApexNav is a tactile motorsport instrument and countermeasure co-driver built for spirited driving—combining the physical soul of a Singer / Group B / Halda Tripmaster cockpit with crowdsourced road-character intelligence, DeFlock/police radar, automatic lead-car convoy telemetry relay, and a zero-snitch enthusiast economy.**
+> **Core Thesis**: Existing apps for car people fail because they are either sterile telemetry spreadsheets that look like noisy scientific plots, or clunky social apps bolted onto generic consumer maps. **Vetta is a tactile motorsport instrument and countermeasure co-driver built for spirited driving—combining the physical soul of a Singer / Group B / Halda Tripmaster cockpit with crowdsourced road-character intelligence, DeFlock/police radar, automatic lead-car convoy telemetry relay, and a zero-snitch enthusiast economy.**
 
 ## 1. Visual & Industrial Design Philosophy: "Hardware, Not Web Boxes"
 - **Banned Anti-Slop Patterns**: No translucent dark-gray blurred floating boxes, no cyberpunk neon cyan/magenta gradients, no emojis, no blacked-out 3D building boxes, no flickery satellite draped over coarse DEM meshes, and no raw 5-meter confetti speckles.

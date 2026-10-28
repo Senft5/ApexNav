@@ -61,6 +61,8 @@ out.glare = [F.glare(line(sp.azimuth), 900, dawn, Sun).minutes, F.glare(line(sp.
              F.glare(line(sp.azimuth), 900, new Date('2026-06-21T17:40:00Z'), Sun).minutes, F.glare(line(0), 900, dawn, null)];
 out.options = F.distinctOptions([{ id: 'a', timeS: 7680, fun: fun(79, 0) }, { id: 'a2', timeS: 7700, fun: fun(80, 0) }, { id: 'b', timeS: 5880, fun: fun(51, 0) },
   { id: 'c', timeS: 7620, fun: fun(61, 0) }, { id: 'd', timeS: 5880, fun: fun(27, 0) }], 3).map(c => c.id);
+out.dominated = F.distinctOptions([{ id: 'best', timeS: 4620, fun: fun(99, 0) }, { id: 'worse', timeS: 6120, fun: fun(64, 0) },
+  { id: 'quick', timeS: 3900, fun: fun(40, 0) }], 3).map(c => c.id);
 out.wetRank = F.rank([{ id: 'wet', timeS: 1800, fun: fun(46, 30), weatherCost: 12 }, { id: 'dry', timeS: 1800, fun: fun(40, 30) }], 'fun').map(c => c.id);
 out.glareRank = F.rank([{ id: 'into', timeS: 1800, fun: fun(46, 30), glare: { minutes: 15 } }, { id: 'away', timeS: 1800, fun: fun(40, 30), glare: { minutes: 0 } }], 'fun').map(c => c.id);
 
@@ -289,6 +291,7 @@ def test_loops_by_drive_time_fit_the_time(r):
 
 def test_route_options_are_really_different(r):
     assert r["options"] == ["a", "b", "c"], "a stage plan the router drew like the winner is not a second option"
+    assert r["dominated"] == ["best", "quick"], "a route slower and less fun than another is never offered"
 
 
 def test_driving_into_a_low_sun_costs(r):

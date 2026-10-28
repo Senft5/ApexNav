@@ -1,6 +1,6 @@
 # CarPlay
 
-ApexNav's CarPlay plan: the entitlement request, what Apple's CarPlay Developer Guide (October 2026) requires of a
+Vetta's CarPlay plan: the entitlement request, what Apple's CarPlay Developer Guide (October 2026) requires of a
 navigation app, where the app stands, and what gets built once the entitlement is granted. IDEAS C-01, C-02.
 
 ## 1. The request (the owner submits it)
@@ -13,7 +13,7 @@ use the answer that matches each question.
 | question | answer |
 |---|---|
 | Entitlement / category | **CarPlay Navigation app** (`com.apple.developer.carplay-maps`) |
-| App name | ApexNav |
+| App name | Vetta |
 | Bundle ID | com.senft.ApexNav |
 | Apple ID (App Store Connect) | 6827831098 |
 | On the App Store? | Not yet: in TestFlight, first submission planned after CarPlay is in place |
@@ -22,7 +22,7 @@ use the answer that matches each question.
 
 **Describe your app (short):**
 
-> ApexNav is turn-by-turn navigation for drivers who choose the scenic, winding way. Drivers search for a destination,
+> Vetta is turn-by-turn navigation for drivers who choose the scenic, winding way. Drivers search for a destination,
 > choose between route options (the quickest, or one over more enjoyable roads), and follow spoken turn-by-turn
 > directions with the next maneuver, distance remaining and arrival time. Off-route detection rebuilds the route. It
 > also warns of hazards other drivers reported ahead (debris, gravel, closures) and calls upcoming corners by
@@ -73,7 +73,7 @@ From the guide's "Guidelines for all CarPlay apps" and "Additional guidelines fo
 | Light and dark map (`contentStyle`) | To build: the Daylight and Night themes map onto it |
 | Maneuver symbols at the guide's sizes, light and dark variants | To build: from Valhalla maneuver types (directions.js has the full list) |
 | Templates within depth limits (navigation: 5) | Plan below uses at most 3 |
-| Widgets in CarPlay (iOS 26): a widget that only opens the app on iPhone sets `disfavoredLocations([.carPlay])` | The Start-a-drive widget opens the app; once ApexNav is a CarPlay app it opens it in CarPlay too, so it is set when the CarPlay build lands |
+| Widgets in CarPlay (iOS 26): a widget that only opens the app on iPhone sets `disfavoredLocations([.carPlay])` | The Start-a-drive widget opens the app; once Vetta is a CarPlay app it opens it in CarPlay too, so it is set when the CarPlay build lands |
 | Live Activities in CarPlay (iOS 26) | Already shown: without the small family CarPlay uses the compact Dynamic Island views (distance, next note). The small family can be added with the CarPlay build |
 
 ## 3. The CarPlay build (after the entitlement arrives)

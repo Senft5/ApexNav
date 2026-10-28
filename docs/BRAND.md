@@ -1,4 +1,4 @@
-# APEX NAV — BRAND & UI DIRECTION
+# VETTA — BRAND & UI DIRECTION
 
 Status: decided (owner asked for decisions, not options). Supersedes the visual parts of
 PHILOSOPHY.md §1 where they conflict. Engineers: section 7 is the work list.
@@ -77,7 +77,7 @@ signed-out and invite screens of Account, night mode of the current build. Crews
 
 ## 1. Positioning
 
-**ApexNav is the co-driver for people who take the long way home: it reads the road ahead
+**Vetta is the co-driver for people who take the long way home: it reads the road ahead
 out loud, scores how cleanly you drove it, and keeps a shared road book with your friends.**
 
 - **For:** enthusiasts in their own road cars on public back roads, driving with a small group
@@ -119,7 +119,7 @@ out loud, scores how cleanly you drove it, and keeps a shared road book with you
 | 5 | pace-note sub | Measured 0.44 g · single pass, unverified | Driven once |
 | 6 | quiet strip | Dry Ridge Rd · cruise: hazards and LPR only | Quiet · bumps and cameras only |
 | 7 | toast after drive | Saved 35.6 mi. Open ANALYSIS to see it. | Drive saved · 35.6 mi  [View] |
-| 8 | Account | You are signed in. Ask a member for an invite to see friends. | ApexNav is invite-only. Paste your invite. |
+| 8 | Account | You are signed in. Ask a member for an invite to see friends. | Vetta is invite-only. Paste your invite. |
 | 9 | Friend request toast | If that member exists, they have your request. | Request sent. @handle sees it if they're a member. |
 | 10 | Segments note | Segments are your custom stretches. Every drive that covers one, in the same direction, is ranked on it by Driver Score. Sign in (Account on the main page) to back them up and compare with friends. | Mark a stretch you drive often. Every run gets a score. |
 | 11 | History note | Driver Score (0-1000) rates technique, never time or speed: pace = … (80 words) | Score rates how you drive the corners, not how fast. 1000 is a closed-course number. (rest moves into "How Score works") |
@@ -203,7 +203,7 @@ Compare is a sheet inside a drive, not a tab.
 1 ─────────────────────────   2 ─────────────────────────   3 ─────────────────────────
                                Pick your co-driver            Driving with friends?
    [logo.svg, 220 px]
-                               ( George  ) ▶                  ApexNav is invite-only.
+                               ( George  ) ▶                  Vetta is invite-only.
    Your co-driver for the      ( Emma    ) ▶                  Sign in to see their
    long way home.              ( Daniel  ) ▶                  stages and boards.
                                ( Michael ) ▶
@@ -367,7 +367,7 @@ Auto/Full/Quiet, Map motion, Theme (Road book / Instruments), Night (Auto / On /
   tulips the app already draws (`tulipSVG` in `web/instruments.js`), so the logo is a call, not a
   decoration.
 - **Wordmark:** `APEX` heavy + `NAV` light, monoline caps drawn as paths (no font dependency),
-  flat-cut tops and bottoms. Written "ApexNav" in running text.
+  flat-cut tops and bottoms. Written "Vetta" in running text.
 - Files (all hand-written SVG, ink = `currentColor`, apex = `var(--brand-accent, var(--accent, #C8102E))`):
   - `web/brand/logo.svg`: mark + wordmark, 444×100. First-run screen 1, Crew signed-out state,
     and the web page `<head>` share image. Not inside the cockpit.
@@ -492,7 +492,7 @@ by swiping right; the Kokoro voices; the analysis lanes and corner list (only re
 20. **`web/index.html` + `web/analysis.html`: fonts.** Google Fonts link becomes `family=Barlow+Condensed:wght@600;700;800&family=Inter+Tight:wght@400;500;600&display=swap`; `themes.js` FONTS: Road book ui = Inter Tight, num = Barlow Condensed; Instruments ui = Inter Tight, num = Barlow Condensed.
 21. **Both pages CSS: button hierarchy and targets.** Implement §5 button table: `.key` 28 → 44 px, `.ink-btn` 38 → 44, `.ink-btn.solid` 48, new `.btn-record` (red, 52); `.ink-btn.on` (selected) = ink fill, not accent; analysis `select, input, button.btn` 34 → 44; `.dv-z` 30 → 44. Delete `.ink-btn.busy::before` and `@keyframes sweep`.
 22. **`web/index.html`: Settings sheet.** Voice chips George, Emma, Daniel, Michael, My voice, Phone voice + one "▶ Sample" text button; delete the Jarvis option from the list; LIVE becomes a "Speak road names" switch with a status sentence under it; move licence text to Sources; "Camera feel" → "Map motion: Steady / Lean / Whip".
-23. **`web/index.html`, `web/analysis.html` `<head>`: names and icons.** Titles "ApexNav" and "ApexNav · Log"; `<link rel="icon" href="brand/mark.svg" type="image/svg+xml">`; `<link rel="apple-touch-icon" href="brand/icon-180.png">` after rasterising `brand/icon-180.svg` to 180×180 PNG; for the iOS shell, add an `Assets.xcassets/AppIcon.appiconset` with a 1024×1024 PNG of the same art and list it in `project.yml` sources (it has no icon today).
+23. **`web/index.html`, `web/analysis.html` `<head>`: names and icons.** Titles "Vetta" and "Vetta · Log"; `<link rel="icon" href="brand/mark.svg" type="image/svg+xml">`; `<link rel="apple-touch-icon" href="brand/icon-180.png">` after rasterising `brand/icon-180.svg` to 180×180 PNG; for the iOS shell, add an `Assets.xcassets/AppIcon.appiconset` with a 1024×1024 PNG of the same art and list it in `project.yml` sources (it has no icon today).
 24. **Both pages: inline style cleanup.** Replace every `style="margin-top:6px"`, `style="display:grid;gap:6px"` etc. with three utilities (`.mt-8`, `.stack-8`, `.stack-12`) on the 4 px grid; section = title + `border-top: 1px solid var(--hair)`, drop `.panel` borders on phones.
 25. **`web/index.html` + `web/sync.js`: Crews UI.** In Crew: "New crew" (name), crew detail with members, "Invite to crew" (uses the existing `crew_invites` API), Share switches per crew identical to per-friend ones; Board filter chips "Friends / <crew name>" on the stage Board.
 

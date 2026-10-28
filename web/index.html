@@ -2,9 +2,9 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-xLwHjlDLJjXT7YAf4U+WDGusqRtmVw4Y2YBmSBKwCOw=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-p4yA/nq4bp7oy4kL5BUzndqi7/zYNXjhci8XSyFn1u0=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>ApexNav</title>
+  <title>Vetta</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
   <link rel="manifest" href="manifest.webmanifest" />
   <meta name="theme-color" content="#1b1914" />
@@ -75,6 +75,7 @@
   <script src="recording.js"></script>
   <script src="road_memory.js"></script>
   <script src="contributor.js"></script>
+  <script src="keyboard.js"></script>
   <script src="themes.js"></script>
   <script src="units.js"></script>
   <script src="instruments.js"></script>
@@ -129,6 +130,8 @@
     .rb-call b { display: block; font-size: 20px; font-weight: 800; color: var(--accent); line-height: 1; }
     .rb-call span { display: block; font-size: 11px; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: 0.04em; }
     .rb-call span:first-child { font-size: 16px; font-weight: 800; line-height: 1.1; }
+    .rb-box.now .rb-call span.long:first-child { font-size: 17px; }
+    .rb-box.now .rb-call span.xlong:first-child { font-size: 14px; }
 
     /* ---------------- stage map ---------------- */
     .stage { position: relative; min-height: 0; background: var(--stage); overflow: hidden; }
@@ -152,7 +155,8 @@
     .plan-bar { display: flex; gap: 8px; align-items: center; padding: 8px 10px; touch-action: none; }
     .plan-bar::before { content: ""; position: absolute; top: 3px; left: 50%; width: 36px; height: 3px; margin-left: -18px; background: var(--panel-dim); opacity: 0.5; }
     .plan-search { flex: 1; min-width: 0; height: 44px; display: flex; align-items: center; gap: 8px; padding: 0 0 0 12px; border: 1px solid var(--panel-dim); color: var(--panel-dim); cursor: text; }
-    .plan-search:focus-within { border-color: var(--panel-ink); }
+    .plan-search:focus-within { border-color: var(--panel-ink); box-shadow: inset 0 0 0 1px var(--panel-ink); }
+    .plan-search input:focus-visible { box-shadow: none; }
     .plan-search svg { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
     .plan-search input { flex: 1; min-width: 0; height: 100%; padding-right: 10px; font: inherit; font-size: 16px; color: var(--panel-ink); background: transparent; border: 0; outline: none; -webkit-appearance: none; appearance: none; }
     .plan-search input::placeholder { color: var(--panel-dim); }
@@ -260,6 +264,8 @@
     .ro span { font-size: 11px; font-weight: 600; color: var(--panel-dim); }
     .ro-limit { background: var(--panel-ink); color: var(--panel); border-color: var(--panel-ink); }
     .ro-limit span { color: var(--panel); opacity: 0.7; }
+    .ro-limit.unknown { background: none; color: var(--panel-dim); border-color: var(--rule); }
+    .ro-limit.unknown span { color: var(--panel-dim); opacity: 1; }
     .ro-pace b { color: var(--accent); }
     .odo { display: grid; justify-items: center; gap: 2px; }
     .odo-digits { display: flex; gap: 1px; font-family: var(--font-num); font-size: 22px; font-weight: 700; line-height: 1; }
@@ -312,6 +318,7 @@
     /* ---------------- start drive + first-run + permission sheets ---------------- */
     .btn-start { height: 44px; padding: 0 16px; background: var(--accent); color: var(--stage); font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 8px; flex: none; }
     .btn-start i { width: 10px; height: 10px; border-radius: 50%; background: currentColor; }
+    label.linkbtn { display: inline-flex; align-items: center; cursor: pointer; }
     .linkbtn { font: inherit; font-size: 15px; font-weight: 500; color: var(--panel-ink); text-decoration: underline; min-height: 44px; padding: 0 4px; background: none; border: none; }
     .danger-btn { font: inherit; font-size: 15px; font-weight: 600; color: var(--accent); text-decoration: none; min-height: 44px; padding: 0 4px; background: none; border: none; text-align: left; justify-self: start; }
     .crew-row { width: 100%; min-height: 44px; display: flex; justify-content: space-between; align-items: center; gap: 8px; text-align: left; }
@@ -411,10 +418,20 @@
     .bar u { display: block; height: 100%; background: var(--accent); text-decoration: none; }
     .route-meta { font-size: 15px; font-weight: 600; color: var(--panel-ink); }
     .sources { font-size: 11px; color: var(--panel-dim); line-height: 1.5; }
-    .sources a { color: inherit; }
+    a { color: inherit; }   /* ink, underlined: never the browser's blue */
     /* Keyboard and switch-control users see where they are; touch taps show nothing extra. */
     :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     .overlay:focus { outline: none; }
+
+    /* The keyboard (web/keyboard.js): one clean ink border on the field that has it, no tab bar while typing, and the page
+       fits above the keyboard. */
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):focus-visible, textarea:focus-visible, select:focus-visible {
+      outline: none; border-color: var(--panel-ink); box-shadow: inset 0 0 0 1px var(--panel-ink); }
+    html.kb-open .tabbar { display: none !important; }
+    html.kb-open #app { height: var(--kb-h); }
+    html.kb-open .plan.open { height: 100%; }
+    /* the bar already names the route while the sheet is open */
+    .plan.open #routeCardName { display: none; }
     .plan-search:focus-within { border-color: var(--panel-ink); }
     @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: 0.01ms !important; animation: none !important; } }
     /* In-car mode (web/in_car.js, IDEAS C-07): while the car moves every control is at least 60 pt and text fields stay
@@ -513,7 +530,8 @@
               <div class="plan-links">
                 <button class="linkbtn" id="tapRouteBtn">Tap the map</button>
                 <label class="linkbtn" id="gpxImportBtn">Open GPX<input type="file" id="gpxFile" accept=".gpx,application/gpx+xml,application/xml,text/xml" hidden /></label>
-                <span class="loop-row"><span>Loop</span><button class="chip" data-loop-mi="15">15</button><button class="chip" data-loop-mi="30">30</button><button class="chip" data-loop-mi="45">45 mi</button><button class="chip" data-loop-min="60">1 h</button><button class="chip" data-loop-min="120">2 h</button></span>
+              </div>
+              <div class="plan-links fun-row" role="group" aria-label="Loop from here"><span class="loop-row"><span>Loop</span><button class="chip" data-loop-mi="15">15 mi</button><button class="chip" data-loop-mi="30">30 mi</button><button class="chip" data-loop-mi="45">45 mi</button><button class="chip" data-loop-min="60">1 h</button><button class="chip" data-loop-min="120">2 h</button></span>
               </div>
               <div class="plan-links fun-row" role="group" aria-label="Explore: the best roads near you"><span>Explore</span><button class="chip" data-explore-min="15">15 min</button><button class="chip" data-explore-min="30">30 min</button></div>
               <div class="place-list" id="exploreList" hidden></div>
@@ -592,7 +610,7 @@
           </section>
           <section data-panel="setup">
             <h3>Crash check</h3>
-            <p class="note" style="margin:0 0 8px">After a hard impact and a stop, ApexNav asks if you're OK. If you don't answer within a minute it shows buttons to call emergency services or text this person your location. Your phone never calls or texts by itself. This is a backup to your phone's own crash detection, not a replacement for it. The contact stays on this phone.</p>
+            <p class="note" style="margin:0 0 8px">After a hard impact and a stop, Vetta asks if you're OK. If you don't answer within a minute it shows buttons to call emergency services or text this person your location. Your phone never calls or texts by itself. This is a backup to your phone's own crash detection, not a replacement for it. The contact stays on this phone.</p>
             <div class="row" style="flex-wrap:wrap">
               <button class="sw" data-toggle="crash"><i></i><span>Crash check</span></button>
             </div>
@@ -615,7 +633,7 @@
           </section>
           <section data-panel="setup">
             <h3>Feedback</h3>
-            <p class="note" style="margin:0 0 8px">Something wrong, or an idea? It goes straight to the person who makes ApexNav.</p>
+            <p class="note" style="margin:0 0 8px">Something wrong, or an idea? It goes straight to the person who makes Vetta.</p>
             <div class="stack-8" id="feedbackBox"></div>
           </section>
           <section data-panel="setup">
@@ -635,7 +653,7 @@
             </div>
             <p class="note">Your account (friends, crews, shared spots, routes and results) is deleted from the server in Crew → Delete account.</p>
             <button class="sw mt-8" data-toggle="health"><i></i><span>Share app health</span></button>
-            <p class="note">Once a day, totals like "3 routes found, 1 failed" go to ApexNav with no account, phone or place in them, so problems get fixed. Off: nothing is counted or sent.</p>
+            <p class="note">Once a day, totals like "3 routes found, 1 failed" go to Vetta with no account, phone or place in them, so problems get fixed. Off: nothing is counted or sent.</p>
           </section>
         <section data-panel="setup">
             <h3>Spots</h3>
@@ -745,27 +763,21 @@
   </div>
 
 
-  <div class="overlay" id="onboard" role="dialog" aria-modal="true" aria-label="Welcome to ApexNav">
+  <div class="overlay" id="onboard" role="dialog" aria-modal="true" aria-label="Welcome to Vetta">
     <div class="grow" data-step="1">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 444 100" width="220" height="50" style="max-width:70%;height:auto" role="img" aria-label="ApexNav">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 372 100" width="184" height="50" style="max-width:70%;height:auto" role="img" aria-label="Vetta">
         <style>.apex{fill:var(--brand-accent,var(--accent,#C8102E))}</style>
-        <defs><clipPath id="cap"><rect x="0" y="26" width="444" height="48"/></clipPath></defs>
+        <defs><clipPath id="cap"><rect x="0" y="26" width="372" height="48"/></clipPath></defs>
         <circle cx="34" cy="84" r="8" fill="currentColor"/>
         <path d="M34 84 V52 Q34 26 62 21.5" fill="none" stroke="currentColor" stroke-width="9"/>
         <path d="M60 9 L88 18 L63 34 Z" fill="currentColor"/>
         <circle class="apex" cx="51" cy="43" r="6.5"/>
-        <g clip-path="url(#cap)" fill="none" stroke="currentColor" stroke-linejoin="miter" stroke-miterlimit="10">
-          <g stroke-width="8.5">
-            <path d="M118 78 L135 22 L152 78 M124 59 H146"/>
-            <path d="M168.25 78 V30 H184 Q198 30 198 41.5 Q198 53 184 53 H168.25"/>
-            <path d="M244 30 H214.25 V70 H244 M214.25 50 H238"/>
-            <path d="M258 20 L290 80 M290 20 L258 80"/>
-          </g>
-          <g stroke-width="4.5">
-            <path d="M310.25 78 V22 L334.75 78 V22"/>
-            <path d="M350 78 L367 22 L384 78 M356 59 H378"/>
-            <path d="M396 22 L413 78 L430 22"/>
-          </g>
+        <g clip-path="url(#cap)" fill="none" stroke="currentColor" stroke-linejoin="miter" stroke-miterlimit="10" stroke-width="8.5">
+          <path d="M118 22 L135 78 L152 22"/>
+          <path d="M196 30 H170.25 V70 H196 M170.25 50 H190"/>
+          <path d="M208 30 H244 M226 30 V80"/>
+          <path d="M254 30 H290 M272 30 V80"/>
+          <path d="M300 78 L317 22 L334 78 M306 59 H328"/>
         </g>
       </svg>
       <h1>Your co-driver for the long way home.</h1>
@@ -1988,11 +2000,15 @@
       const at = (arr) => (idx >= 0 && arr && arr[idx] != null ? arr[idx] : null);
       const sight = at(track && track.sightM);
       const limit = at(track && track.limitMps);
+      // The road's own pace never reads above the posted limit (App Review 1.4.1: no prompts to speed). With no
+      // known limit, only paces under 55 mph are shown: above that the road isn't what sets the speed.
+      const roadCap = (mps) => (mps == null ? null : limit != null ? Math.min(mps, limit) : (mps < 24.6 ? mps : null));
+      const pace = roadCap(at(track && track.envMps)), sightMps = roadCap(sight != null ? Core.sightSpeedMps(sight) : null);
       cluster.update({
         // in the chosen units (mph or km/h, U-22); the names are the cluster's
         speedMph: vMps != null ? ApexUnits.speed(vMps) : null,
-        paceMph: at(track && track.envMps) != null ? ApexUnits.speed(at(track.envMps)) : null,
-        sightMph: sight != null ? ApexUnits.speed(Core.sightSpeedMps(sight)) : null,
+        paceMph: pace != null ? ApexUnits.speed(pace) : null,
+        sightMph: sightMps != null ? ApexUnits.speed(sightMps) : null,
         limitMph: limit != null ? ApexUnits.speed(limit) : null,
         latG, lonG, camberDeg: camber,
         tripMi: ApexUnits.longN(live && idx < 0 ? (drive.rec ? drive.rec.km * 1000 : 0) : state.cursorM), totalMi: track && !(live && idx < 0) ? ApexUnits.longN(totalM()) : null,
@@ -2003,7 +2019,7 @@
       const now = performance.now();
       if (snap || now - lastNotesAt > 150) { lastNotesAt = now; updateNotes(vMps, live); drawScrubber(); }
     }
-    const simSpeed = (i) => Math.max(6, Math.min(track.envMps[i] * 0.92, track.limitMps && track.limitMps[i] ? track.limitMps[i] * 1.1 : 27));
+    const simSpeed = (i) => Math.max(6, Math.min(track.envMps[i] * 0.92, track.limitMps && track.limitMps[i] ? track.limitMps[i] : 27));
 
     let lastTs = 0, raf = null, video = null;   // video: a replay being recorded (startVideo below)
     function tick(ts) {
@@ -2157,7 +2173,7 @@
       for (let i = 0; i < t.lat.length; i++) { s = Math.min(s, t.lat[i]); n = Math.max(n, t.lat[i]); w = Math.min(w, t.lon[i]); e = Math.max(e, t.lon[i]); }
       const nodes = await alprNodesIn(s - 0.005, w - 0.005, n + 0.005, e + 0.005);
       if (nodes) { attachAlpr(t, nodes); return; }
-      if (track === t && replayOn) toast('Camera map offline. No pins doesn\'t mean no cameras.');
+      if (track === t && replayOn) toast('Camera map is offline, so cameras may be missing from the map.');
     }
     function attachAlpr(t, nodes) {
       t.alpr = [];
@@ -2479,7 +2495,8 @@
       $('routeCardBars').innerHTML = bars.map(([label, v]) =>
         `<div class="bar"><span>${label} <b>${v != null ? v : '--'}</b></span><i><u style="width:${v != null ? v : 0}%"></u></i></div>`
       ).join('');
-      const cams = Array.isArray(t.alpr) ? t.alpr.length : '--';
+      // Plate cameras along it, only once the camera check has run (unknown stays off the card).
+      const cams = !Array.isArray(t.alpr) ? '' : t.alpr.length ? `${t.alpr.length} plate camera${t.alpr.length === 1 ? '' : 's'} · ` : 'No known plate cameras · ';
       const mCov = t.measured && Number.isFinite(t.measured.coverage) && t.measured.coverage > 0
         ? Math.round(t.measured.coverage * 100)
         : (Array.isArray(t.roughG) && t.roughG.length && t.roughG.some(Number.isFinite))
@@ -2492,7 +2509,7 @@
       // Only on a route planned with Towns on (townKm undefined otherwise); null = the town check couldn't run.
       const towns = t.townKm === null ? 'Couldn\'t check towns · ' : t.townKm >= 1.6 ? `Through towns ~${ApexUnits.long(t.townKm * 1000, 0)} · ` : '';
       const carLine = t.request ? FunRoute.carNote(routingCar(), avoid) : '';
-      $('routeCardSub').textContent = `${carLine ? carLine + ' · ' : ''}${missed}${towns}${sun}Cameras ${cams} · ${feel}`;
+      $('routeCardSub').textContent = `${carLine ? carLine + ' · ' : ''}${missed}${towns}${sun}${cams}${feel}`;
       $('routeCardWhy').textContent = t.why || '';
       $('routeCardWhy').hidden = !t.why;
       $('routeCardFun').hidden = t.id !== 'route_dest';           // the level re-plans destination routes only
@@ -2643,7 +2660,7 @@
       return { lat: parseFloat(items[0].lat), lon: parseFloat(items[0].lon), label: items[0].display_name.split(',')[0] };
     }
     // Routes from elsewhere (IDEAS R-25, R-26; web/route_import.js): a Google/Apple Maps link pasted into Where to?, or a GPX
-    // file (Open GPX, or "Open in ApexNav" from Files and Mail in the app). A GPX track is followed as drawn; route points,
+    // file (Open GPX, or "Open in Vetta" from Files and Mail in the app). A GPX track is followed as drawn; route points,
     // waypoints and a link's stops are routed through in order.
     async function openMapsLink(link) {
       if (link.short) { toast('Open that link in your browser first, then copy the full address from there.'); return; }
@@ -2767,7 +2784,7 @@
     $('homeByInput').addEventListener('change', () => {
       const t = plannedRoute; if (!t) return;
       t.homeBy = ApexEta.homeByAt($('homeByInput').value) || null; t.homeByOfferedAt = null;
-      if (t.homeBy) toast(`Home by ${new Date(t.homeBy).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}: if you're running late, ApexNav offers the way back.`);
+      if (t.homeBy) toast(`Home by ${new Date(t.homeBy).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}: if you're running late, Vetta offers the way back.`);
     });
     async function headHome() {
       const t = track, L = state.live;
@@ -3638,7 +3655,7 @@
       if (state.tapToRoute) { closeSheet(); openPlan(false); toast(state.planField === 'fromInput' ? 'Tap the map where you want to start.' : 'Tap the map where you want to go.'); }
     });
     // Loop lengths in the chosen units (U-22): 25/50/75 km in metric, kept as miles inside.
-    if (ApexUnits.metric()) document.querySelectorAll('[data-loop-mi]').forEach((b, i, all) => { const km = [25, 50, 75][i]; b.dataset.loopMi = String(km / 1.609344); b.textContent = i === all.length - 1 ? `${km} km` : String(km); });
+    if (ApexUnits.metric()) document.querySelectorAll('[data-loop-mi]').forEach((b, i, all) => { const km = [25, 50, 75][i]; b.dataset.loopMi = String(km / 1.609344); b.textContent = `${km} km`; });
     document.querySelectorAll('[data-loop-mi]').forEach(b => b.addEventListener('click', () => loop(parseFloat(b.dataset.loopMi), b)));
     document.querySelectorAll('[data-loop-min]').forEach(b => b.addEventListener('click', () => loop({ minutes: parseInt(b.dataset.loopMin, 10) }, b)));
     document.querySelectorAll('[data-explore-min]').forEach(b => b.addEventListener('click', () => exploreNear(parseInt(b.dataset.exploreMin, 10), b)));
@@ -3803,7 +3820,7 @@
     const jsonOf = async (r) => { try { return await r.json(); } catch (_) { return null; } };
     const el = (tag, props = {}, ...kids) => { const n = Object.assign(document.createElement(tag), props); n.append(...kids); return n; };
     const btn = (label, onclick, cls = 'ink-btn') => el('button', { className: cls, textContent: label, onclick });
-    const copyText = async (text, ok, title = 'ApexNav') => {
+    const copyText = async (text, ok, title = 'Vetta') => {
       if (navigator.share) {
         try { await navigator.share({ title, text, url: text.startsWith('http') ? text : undefined }); return; } catch (e) { if (e.name === 'AbortError') return; }
       }
@@ -3918,7 +3935,7 @@
       const badge = $('crewTab').querySelector('.badge'); if (badge) badge.remove();
       const params2 = new URLSearchParams(location.search);
       if (!me) {
-        body.append(el('h3', { textContent: 'Can\'t reach ApexNav' }), el('p', { className: 'note', textContent: 'Friends, crews and boards need a connection. Driving, notes and your Log work offline.' }), btn('Try again', redo, 'ink-btn'));
+        body.append(el('h3', { textContent: 'Can\'t reach Vetta' }), el('p', { className: 'note', textContent: 'Friends, crews and boards need a connection. Driving, notes and your Log work offline.' }), btn('Try again', redo, 'ink-btn'));
         return;
       }
       const inviteFromLink = params2.get('invite'), crewFromLink = params2.get('crew'), addFromLink = params2.get('add');
@@ -3935,16 +3952,16 @@
       const stash = (k) => { try { return sessionStorage.getItem(k) || ''; } catch (_) { return ''; } };
       const unstash = (k) => { try { sessionStorage.removeItem(k); } catch (_) {} };
       if (!me.signed_in) {
-        body.append(el('img', { src: 'brand/logo.svg', alt: 'ApexNav', width: 200, style: 'max-width:60%' }),
+        body.append(el('img', { src: 'brand/logo.svg', alt: 'Vetta', width: 200, style: 'max-width:60%' }),
           el('h3', { textContent: 'Drive with friends' }),
-          el('p', { className: 'note', textContent: 'ApexNav is invite-only. Sign in to add friends, share scores and join boards. Nothing is shared unless you switch it on.' }),
+          el('p', { className: 'note', textContent: 'Vetta is invite-only. Sign in to add friends, share scores and join boards. Nothing is shared unless you switch it on.' }),
           appleButton(),
           el('a', { className: 'ink-btn solid', href: '/api/auth/google/start', textContent: 'Sign in with Google', style: 'display:flex;align-items:center;justify-content:center;text-decoration:none' }),
           legalNote('By signing in you agree to the '));
         return;
       }
       // Anyone signed in can take their data or close the account, member or not.
-      const downloadMyData = async () => { const r = await apiCall('GET', '/api/me/export'); const blob = new Blob([JSON.stringify(await r.json(), null, 2)], { type: 'application/json' }); const a = el('a', { href: URL.createObjectURL(blob), download: 'apexnav-my-data.json' }); a.click(); };
+      const downloadMyData = async () => { const r = await apiCall('GET', '/api/me/export'); const blob = new Blob([JSON.stringify(await r.json(), null, 2)], { type: 'application/json' }); const a = el('a', { href: URL.createObjectURL(blob), download: 'vetta-my-data.json' }); a.click(); };
       const deleteMyAccount = async () => { if (prompt('This erases your account, friends, shared results and spots from the server. Type DELETE to confirm.') === 'DELETE') { const r = await apiCall('DELETE', '/api/me', { confirm: 'DELETE' }); if (r.ok) ApexSync.setSession(null); redo(); } };
       if (!me.member) {
         const inp = el('input', { className: 'field', placeholder: 'Paste your invite', value: stash('apex.invite'), autocomplete: 'off', 'aria-label': 'Invite' });
@@ -3953,7 +3970,7 @@
           const r = await apiCall('POST', '/api/invites/redeem', { token });
           if (r.ok) { unstash('apex.invite'); toast('You\'re in. You and the person who invited you are now friends.'); redo(); } else toast('That invite didn\'t work. Ask for a new one.');
         };
-        body.append(el('h3', { textContent: 'Join with an invite' }), el('p', { className: 'note', textContent: 'ApexNav is invite-only. Paste your invite.' }), el('div', { className: 'row' }, inp, btn('Join', join, 'ink-btn solid')),
+        body.append(el('h3', { textContent: 'Join with an invite' }), el('p', { className: 'note', textContent: 'Vetta is invite-only. Paste your invite.' }), el('div', { className: 'row' }, inp, btn('Join', join, 'ink-btn solid')),
           el('div', { className: 'row' }, btn('Sign out', async () => { await apiCall('POST', '/api/auth/logout'); ApexSync.setSession(null); redo(); }, 'linkbtn'),
             btn('Download my data', downloadMyData, 'linkbtn'), btn('Delete account', deleteMyAccount, 'danger-btn')));
         return;
@@ -3974,7 +3991,7 @@
       // you
       const you = section('You');
       you.append(el('div', { className: 'row', style: 'align-items:baseline;gap:12px' }, el('b', { textContent: `@${me.handle}`, style: 'font-size:22px;font-family:var(--font-num)' }),
-        el('span', { className: 'note', textContent: pts ? `${pts.total} points` : '' })));
+        el('span', { className: 'note', textContent: pts && Number.isFinite(pts.total) ? `${Math.round(pts.total).toLocaleString()} points` : '' })));
       // pioneer badges (IDEAS S-09): roads you were first or second to map with Road data on; only you see them
       const pio = pts && pts.pioneer;
       if (pio && (pio.firsts || pio.seconds)) you.append(el('p', { className: 'note pioneer', textContent: [pio.firsts ? `Pioneer of ${pio.firsts} road${pio.firsts === 1 ? '' : 's'}` : '', pio.seconds ? `second to map ${pio.seconds}` : ''].filter(Boolean).join(' · ') }));
@@ -4354,14 +4371,14 @@
     $('myGpxBtn').addEventListener('click', async () => {
       const list = await ApexRecording.all();
       if (!list.length) { toast('No drives on this phone yet.'); return; }
-      saveFile(ApexMyData.toGpx(list), `apexnav-drives-${new Date().toISOString().slice(0, 10)}.gpx`, 'application/gpx+xml');
+      saveFile(ApexMyData.toGpx(list), `vetta-drives-${new Date().toISOString().slice(0, 10)}.gpx`, 'application/gpx+xml');
     });
     $('myAccountBtn').addEventListener('click', async () => {
       let r = null;
       try { r = await ApexSync.apiFetch('/api/me/export', { method: 'GET' }); } catch (_) {}
       if (!r || r.status === 401) { toast(r ? 'Not signed in: there is no account data on the server.' : 'No signal. Try again.'); return; }
       if (!r.ok) { toast('Couldn\'t get your data. Try again.'); return; }
-      saveFile(JSON.stringify(await r.json(), null, 2), 'apexnav-account.json', 'application/json');
+      saveFile(JSON.stringify(await r.json(), null, 2), 'vetta-account.json', 'application/json');
     });
     // Save the map here (offline_tiles.js, IDEAS F-02): the map, labels and terrain round the map's centre (25 km, less
     // when that would be over 2,500 tiles), so the map, loops, Explore and climbs work there with no signal.
@@ -4624,7 +4641,7 @@
       if (on) { $('app').classList.remove('sheet-open'); openPlan(false); }
     }
     // In the iOS app the switch lives under the app, not Safari.
-    const LOC_DENIED_TEXT = `Location is off. Settings → ${window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex ? 'ApexNav' : 'Safari'} → Location → Allow`;
+    const LOC_DENIED_TEXT = `Location is off. Settings → ${window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex ? 'Vetta' : 'Safari'} → Location → Allow`;
     const MOT_DENIED_TEXT = 'No motion · surface not recorded';
     let locDenied = false, motDenied = false;
     function paintPerms() {
@@ -4886,7 +4903,7 @@
       const up = ApexStages.climbM(t.elev), lo = Math.min(...t.elev), hi = Math.max(...t.elev);
       if (up == null) return;
       const h = (m) => (ApexUnits.metric() ? `${Math.round(m)} m` : `${Math.round(m * 3.28084).toLocaleString('en-US')} ft`);
-      $('routeCardClimb').textContent = `Climbs ${h(up)} · ${h(lo)} to ${h(hi)} · see the hills in Preview`;
+      $('routeCardClimb').textContent = `Climbs ${h(up)} in all · highest ${h(hi)}`;
       $('routeCardClimb').hidden = false;
     }
     async function attachScenic(t) {
