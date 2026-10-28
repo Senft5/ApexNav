@@ -1,6 +1,36 @@
 # Convoy transport: first isolated slice (2026-10-26)
 
-Status: reviewer design decision for local implementation, NOT shipped, deployed or phone-validated.
+Status: server built (backend/src/convoy.ts, 2026-10-28) and tested locally against real Durable Objects, D1 and
+sockets in the Workers test pool (backend/test/convoy.test.ts). Not phone-validated. The section "As built" below
+records where the build differs from the draft that follows, and why.
+
+## As built (2026-10-28)
+
+- Routes: `POST /api/convoy` `{consent, name?}`, `POST /api/convoy/join` `{consent, invite}` (the invite is
+  `<convoy id>.<secret>`, so a link `/?convoy=<invite>` is enough), `GET /api/convoy/:id`, `POST /api/convoy/:id/invite`
+  (leader: new link, old one dies), `/ticket`, `/leave`, `/remove` `{member}` (leader), `GET /api/convoy/:id/connect` (socket).
+- Bounds that changed, on purpose: invite 30 min (people gather at a meet before a drive; the leader can make a fresh one
+  any time); frames up to 32 KiB, measured in bytes, but only a `route` frame may exceed 2 KiB (a shared route needs it);
+  hazards live 3 min by default and 5 min at most, because the last car of a 16-car convoy can be minutes behind; hazard
+  kinds add tap calls (gravel, debris, animal, police, camera, stopped) to bump and hard_braking.
+- Anchors need lat/lon; pathId (ID-shaped), routeVersion, direction and progressM are optional. The shared route is the
+  leader's planned route, versioned; progress along it is what followers compare.
+- Live positions (lat, lon, heading, speed, progress on the shared route) go to the other members only, at most one per
+  400 ms per member, kept in memory for 2 min. Regroup point: leader only.
+- Context is `{ sessionId, name, leaderEpoch, leaderKey, role, you, expiresAtMs, seq, members }`. Members are shown by a
+  per-convoy key, handle and name; account ids never leave the server. A new member gets every live hazard (they are
+  behind the leader, which is exactly who needs them); a reconnecting client passes `{epoch, afterSeq}` to skip what it has.
+- Persisted: room, member keys/roles, left/removed lists. Names are read from the accounts, not stored. A second object
+  per user (ConvoyIndex: convoy ids and expiry only) lets a block, sign-out or account deletion reach that user's convoys
+  at once, and caps each person at two led convoys at once and ten started an hour.
+- Blocks: never in the same convoy. A block mid-drive drops the blocked member (or the blocker, if the blocked one leads)
+  immediately, and every 15 s sweep re-checks. Removed by the leader = out for the life of the convoy. Sessions are
+  re-checked on sign-out (immediately), every 15 s, and before a hazard (at most 5 s old).
+- Sockets: two per member (a third replaces the oldest), 32 unauthenticated at once per convoy, frames sent behind
+  `authenticate` are dropped until `ready`. Control characters and bidi overrides are refused in names, notes and routes.
+- The iOS shell's origin (`apexnav://app`) is allowed; whether WKWebView sends exactly that Origin on a socket is
+  untested on a phone.
+
 
 ## Decision and scope
 

@@ -2,6 +2,7 @@
 // tied to a person goes. Tables without a foreign key to the audience (grants, board entries, segment shares) are cleaned by hand.
 import { Env, HttpError, body, cookie } from "./util";
 import { SESSION_COOKIE, type Viewer } from "./auth";
+import { convoysLeaveAll } from "./convoy";
 
 const all = async <T>(env: Env, sql: string, ...a: unknown[]) => (await env.DB.prepare(sql).bind(...a).all<T>()).results;
 
@@ -33,6 +34,7 @@ export async function exportMyData(env: Env, v: Viewer) {
 export async function deleteAccount(env: Env, v: Viewer, req: Request): Promise<Response> {
   const { confirm } = await body<{ confirm?: string }>(req);
   if (confirm !== "DELETE") throw new HttpError(400, "confirmation_required");
+  await convoysLeaveAll(env, v.id);                                  // live convoys first: leave them, or end the ones they lead
   const owned = (await all<{ id: string }>(env, "SELECT id FROM crews WHERE owner = ?", v.id)).map((c) => c.id);
   const stmts: D1PreparedStatement[] = [];
   const run = (sql: string, ...a: unknown[]) => stmts.push(env.DB.prepare(sql).bind(...a));

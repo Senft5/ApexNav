@@ -14,7 +14,7 @@ import { contribute, setContribute } from "./contribute";
 import { pointsFor } from "./points";
 import { roadBins } from "./roads";
 import { highlightCreate, highlightDelete, highlightList, highlightRate, highlightReport } from "./highlights";
-export { ConvoyRoom } from "./convoy";
+export { ConvoyIndex, ConvoyRoom } from "./convoy";
 import { segmentAdopt, segmentCreate, segmentDelete, segmentList, segmentShare, segmentsSharedWithMe } from "./segments";
 
 type Handler = (req: Request, env: Env, m: RegExpMatchArray) => Promise<Response>;
@@ -108,6 +108,7 @@ const APP_CORS: Record<string, string> = {
   "access-control-allow-headers": "authorization, content-type, x-apexnav", "access-control-max-age": "600", vary: "Origin",
 };
 function withAppCors(res: Response): Response {
+  if (res.status === 101 || res.webSocket) return res;   // a socket upgrade: CORS does not apply, and a 101 cannot be rebuilt
   const headers = new Headers(res.headers);
   for (const [k, v] of Object.entries(APP_CORS)) headers.set(k, v);
   return new Response(res.body, { status: res.status, statusText: res.statusText, headers });

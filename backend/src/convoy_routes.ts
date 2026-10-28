@@ -1,13 +1,13 @@
 // The Worker side of convoys: checks the account and the request, then hands over to the convoy's Durable Object.
 import { APP_ORIGIN, type Viewer } from "./auth";
-import type { Result } from "./convoy";
+import { type Result, LIMITS, cleanText, roomStub, userIndex } from "./convoy";
 import { Env, HttpError, body, randomToken, str } from "./util";
 
 const ROOM_RE = /^[A-Za-z0-9_-]{22}$/;
 
 export function convoyRoom(env: Env, id: string) {
   if (!ROOM_RE.test(id)) throw new HttpError(404, "no_convoy");
-  return env.CONVOY.get(env.CONVOY.idFromName(id));
+  return roomStub(env, id);
 }
 
 export function unwrap<T>(r: Result<T>): T {
@@ -25,9 +25,17 @@ function consent(b: { consent?: unknown }) {
 export async function convoyCreate(env: Env, v: Viewer, req: Request) {
   const b = await body<{ consent?: unknown; name?: unknown }>(req);
   consent(b);
-  const name = b.name === undefined || b.name === null || b.name === "" ? "Convoy" : str(b.name, "name", 1, 40);
+  const name = b.name === undefined || b.name === null || b.name === "" ? "Convoy" : cleanText(b.name, 40);
+  if (name === null) throw new HttpError(400, "bad_name");
   const id = randomToken(16);
-  return unwrap(await convoyRoom(env, id).create(id, who(v), name));
+  // at most two convoys led at once and ten started an hour, per person
+  if (!(await userIndex(env, v.id).claim(id, Date.now() + LIMITS.roomMs))) throw new HttpError(429, "too_many_convoys");
+  try {
+    return unwrap(await convoyRoom(env, id).create(id, who(v), name));
+  } catch (e) {
+    await userIndex(env, v.id).remove(id).catch(() => {});
+    throw e;
+  }
 }
 
 /** The invite is `<convoy id>.<secret>`, as the leader's link carries it. */

@@ -4,6 +4,7 @@
 import {
   Env, HttpError, b64urlDecode, body, cookie, getCookie, pair, randomToken, sha256b64url, sha256hex, sqlTime, str,
 } from "./util";
+import { convoysRecheck } from "./convoy";
 
 export const SESSION_COOKIE = "__Host-ax_session";
 const OAUTH_COOKIE = "__Host-ax_oauth";
@@ -65,7 +66,10 @@ async function startSession(env: Env, userId: string): Promise<string> {
 
 export async function logout(req: Request, env: Env): Promise<Response> {
   const token = sessionToken(req);
-  if (token) await env.DB.prepare("DELETE FROM sessions WHERE id_hash = ?").bind(await sha256hex(token)).run();
+  if (token) {
+    const gone = await env.DB.prepare("DELETE FROM sessions WHERE id_hash = ? RETURNING user_id").bind(await sha256hex(token)).first<{ user_id: string }>();
+    if (gone) await convoysRecheck(env, gone.user_id);             // that session's convoy sockets close now, not at the next sweep
+  }
   return new Response(null, { status: 204, headers: { "set-cookie": cookie(SESSION_COOKIE, "", 0) } });
 }
 

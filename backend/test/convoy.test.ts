@@ -55,6 +55,8 @@ const hazard = (eventId: string, over: Msg = {}) => ({
   type: "publish", event: { eventId, type: "bump", action: "hazard", observedAtMs: Date.now(), anchor: { lat: 35.3, lon: -83.8, progressM: 1200 }, source: "manual", ...over },
 });
 
+const stub = (id: string) => env.CONVOY.get(env.CONVOY.idFromName(id));
+
 /** A leader with a live convoy and two followers who joined it. */
 async function convoyOfThree() {
   const [lead, f1, f2] = [await makeUser("lead"), await makeUser("fone"), await makeUser("ftwo")];
@@ -101,6 +103,48 @@ describe("convoy: create, join, leave", () => {
     await ok(api(lead, "POST", `/api/convoy/${id}/remove`, { member: key }));
     expect((await api(f2, "GET", `/api/convoy/${id}`)).status).toBe(404);
     expect((await join(f2, fresh)).status).toBe(403);
+    const later = (await json(api(lead, "POST", `/api/convoy/${id}/invite`))).invite as string;
+    expect((await join(f2, later)).status).toBe(403);                                                     // removed: out for good
+  });
+
+  it("a block made mid-drive drops the blocked member at once", async () => {
+    const { lead, f1, f2, id } = await convoyOfThree();
+    const l = await connect(lead, id), a = await connect(f1, id), b = await connect(f2, id);
+    await ok(api(f1, "POST", "/api/blocks", { user_id: f2.id }));
+    expect((await closedWith(b))?.code).toBe(4403);
+    expect((await api(f2, "GET", `/api/convoy/${id}`)).status).toBe(404);
+    a.send({ type: "position", lat: 35.31, lon: -83.81 });
+    await l.next("position");
+    // blocking the leader takes the blocker out instead (they cannot follow someone they blocked)
+    await ok(api(f1, "POST", "/api/blocks", { user_id: lead.id }));
+    expect((await closedWith(a))?.code).toBe(4403);
+    expect((await api(lead, "GET", `/api/convoy/${id}`)).status).toBe(200);
+  });
+
+  it("deleting an account takes it out of live convoys first", async () => {
+    const { lead, f1, id } = await convoyOfThree();
+    const l = await connect(lead, id);
+    await ok(api(f1, "DELETE", "/api/me", { confirm: "DELETE" }));
+    expect((await l.next("member")).action).toBe("left");
+    expect((await json(api(lead, "GET", `/api/convoy/${id}`))).members.length).toBe(2);
+  });
+
+  it("one person leads at most two convoys at once", async () => {
+    const a = await makeUser("alice");
+    await create(a); await create(a);
+    expect((await api(a, "POST", "/api/convoy", { consent: true })).status).toBe(429);
+  });
+
+  it("names with control or bidi characters are cleaned; route names with them are refused", async () => {
+    const { lead, f1, id } = await convoyOfThree();
+    await env.DB.prepare("UPDATE users SET display_name = ? WHERE id = ?").bind("Evil\u202eNAME", f1.id).run();
+    expect((await api(lead, "POST", "/api/convoy", { consent: true, name: "bad\u0007" })).status).toBe(400);
+    const l = await connect(lead, id);
+    await runInDurableObject(stub(id), (inst) => (inst as unknown as { sweep(): Promise<void> }).sweep());   // names refresh from the accounts
+    const shown = (await json(api(lead, "GET", `/api/convoy/${id}`))).members.find((m: Msg) => m.handle === "fone");
+    expect(shown.name).toBe("EvilNAME");
+    l.send({ type: "route", route: { name: "x\u202ey", polyline: "_p~iF~ps|U", version: 1 } });
+    expect((await l.next("error")).error).toBe("bad_route");
   });
 
   it("a blocked person cannot join a convoy with someone they blocked or who blocked them", async () => {
@@ -108,6 +152,15 @@ describe("convoy: create, join, leave", () => {
     const stranger = await makeUser("stranger");
     await ok(api(stranger, "POST", "/api/blocks", { user_id: f1.id }));
     expect((await join(stranger, invite)).status).toBe(403);
+  });
+
+  it("concurrent joins never pass the cap", async () => {
+    const lead = await makeUser("lead");
+    const made = await create(lead);
+    const people = await Promise.all(Array.from({ length: 24 }, (_, i) => makeUser(`c${i}`)));
+    const codes = await Promise.all(people.map((p) => join(p, made.invite).then((r) => r.status)));
+    expect(codes.filter((c) => c === 200).length).toBe(LIMITS.members - 1);
+    expect((await json(api(lead, "GET", `/api/convoy/${made.context.sessionId}`))).members.length).toBe(LIMITS.members);
   });
 
   it("caps convoys at 16 members", async () => {
@@ -140,7 +193,9 @@ describe("convoy: create, join, leave", () => {
     });
     expect(await runDurableObjectAlarm(stub)).toBe(true);
     expect((await c.next("ended")).reason).toBe("expired");
+    expect((await closedWith(c))?.code).toBe(4000);
     expect((await api(f1, "GET", `/api/convoy/${id}`)).status).toBe(404);
+    expect(await runInDurableObject(stub, async (_i, state) => (await state.storage.list()).size)).toBe(0);
   });
 });
 
@@ -179,13 +234,65 @@ describe("convoy: socket authentication", () => {
     expect((await closedWith(c))?.reason).toBe("bad_ticket");
   });
 
-  it("signing out closes the socket on the next check and before any hazard goes out", async () => {
+  it("signing out closes that person's convoy sockets at once, and a hazard never goes out after it", async () => {
     const { lead, f1, id } = await convoyOfThree();
     const l = await connect(lead, id), f = await connect(f1, id);
-    await env.DB.prepare("DELETE FROM sessions WHERE user_id = ?").bind(lead.id).run();
-    l.send(hazard("evt-signedout"));
+    await ok(api(lead, "POST", "/api/auth/logout"));
     expect((await closedWith(l))?.reason).toBe("signed_out");
+    expect((await api(lead, "POST", `/api/convoy/${id}/ticket`)).status).toBe(401);                       // and cannot get back in
     await f.none("event");
+    expect(f.closed).toBeNull();
+  });
+
+  it("the sweep closes sockets whose session ended some other way (expiry)", async () => {
+    const { f1, id } = await convoyOfThree();
+    const f = await connect(f1, id);
+    await env.DB.prepare("UPDATE sessions SET expires_at = datetime('now', '-1 minute') WHERE user_id = ?").bind(f1.id).run();
+    await runInDurableObject(stub(id), (inst) => (inst as unknown as { sweep(): Promise<void> }).sweep());
+    expect((await closedWith(f))?.reason).toBe("signed_out");
+  });
+
+  it("the iOS shell's origin can open a socket", async () => {
+    const { f1, id } = await convoyOfThree();
+    const t = await ticket(f1, id), c = await open(id, "apexnav://app");
+    c.send({ type: "authenticate", ticket: t });
+    expect((await c.next("ready")).context.role).toBe("member");
+  });
+
+  it("a client that hangs up mid-handshake leaves nothing behind", async () => {
+    const { f1, id } = await convoyOfThree();
+    const t = await ticket(f1, id), c = await open(id);
+    c.send({ type: "authenticate", ticket: t });
+    c.ws.close(1000, "bye");
+    await new Promise((r) => setTimeout(r, 100));
+    const left = await runInDurableObject(stub(id), (inst) => { const i = inst as unknown as { conns: Set<unknown>; sweepTimer: unknown }; return { conns: i.conns.size, timer: !!i.sweepTimer }; });
+    expect(left).toEqual({ conns: 0, timer: false });
+  });
+
+  it("frames sent right behind authenticate are dropped, not fatal", async () => {
+    const { f1, id } = await convoyOfThree();
+    const t = await ticket(f1, id), c = await open(id);
+    c.send({ type: "authenticate", ticket: t });
+    c.send({ type: "ping" });
+    await c.next("ready");
+    expect(c.closed).toBeNull();
+  });
+
+  it("at most two sockets per member: a third replaces the oldest", async () => {
+    const { f1, id } = await convoyOfThree();
+    const a = await connect(f1, id), b = await connect(f1, id), c = await connect(f1, id);
+    expect((await closedWith(a))?.code).toBe(4409);
+    expect(b.closed).toBeNull();
+    expect(c.closed).toBeNull();
+  });
+
+  it("presence: a member who hangs up shows offline to the others", async () => {
+    const { lead, f1, id } = await convoyOfThree();
+    const l = await connect(lead, id), f = await connect(f1, id);
+    const on = await l.next("presence");
+    expect(on.online).toBe(true);
+    f.ws.close(1000, "bye");
+    expect(await l.next("presence")).toMatchObject({ key: on.key, online: false });
   });
 
   it("leaving closes that member's sockets right away", async () => {
@@ -280,8 +387,9 @@ describe("convoy: live relay", () => {
     await l.none("position");
     a.send({ type: "position", lat: 200, lon: 0 });
     expect((await a.next("error")).error).toBe("bad_position");
-    const late = await connect(lead, id);                                                                  // snapshot for a fresh socket
-    expect(late.inbox).toEqual([]);
+    const t = await ticket(lead, id), late = await open(id);                                               // snapshot for a fresh socket
+    late.send({ type: "authenticate", ticket: t });
+    expect((await late.next("ready")).positions).toMatchObject([{ lat: 35.31, lon: -83.81, speedMps: 22.5 }]);
     const stub = env.CONVOY.get(env.CONVOY.idFromName(id));
     const stored = await runInDurableObject(stub, async (_i, state) => JSON.stringify([...(await state.storage.list()).entries()]));
     expect(stored).not.toContain("35.31");
@@ -323,8 +431,7 @@ describe("convoy: live relay", () => {
     l.send(hazard("evt-0001")); await l.next("ack");
     const stale = await ticket(f1, id);
     l.ws.close(1000, "bye");
-    const stub = env.CONVOY.get(env.CONVOY.idFromName(id));
-    await evictDurableObject(stub);
+    await evictDurableObject(stub(id));
     const c = await open(id);
     c.send({ type: "authenticate", ticket: stale });
     expect((await closedWith(c))?.reason).toBe("bad_ticket");
