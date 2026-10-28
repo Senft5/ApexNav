@@ -106,6 +106,17 @@ flow('Where to?: with the search and routing services unreachable, a search fail
   await page.waitForFunction(() => /Search is offline/.test(document.getElementById('toast').textContent), null, { timeout: 15000 });
 }, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
 
+flow('Where to?: your own stages match by name, even with the map search offline (IDEAS U-19)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1');
+    localStorage.setItem('apex.segments', JSON.stringify([{ id: 's1', name: 'Tail of the Dragon (US 129)', lat0: 35.47, lon0: -83.92, lat1: 35.52, lon1: -83.95, length_m: 17000 }])); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.click('#destInput');
+  await page.fill('#destInput', 'tail dragon');
+  await page.waitForSelector('#placeList .place', { timeout: 10000 });
+  const first = await page.textContent('#placeList .place');
+  check(/Tail of the Dragon \(US 129\)/.test(first) && /Your stage/.test(first), 'your stage first: ' + first);
+}, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
+
 flow('Where to?: a suggestion builds a route with a card and a Start button (search and router stubbed)', async (page, base) => {
   // a road on the route closed at all hours by the map's conditional tags (IDEAS R-22)
   await page.route('https://overpass-api.de/**', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ elements: [
