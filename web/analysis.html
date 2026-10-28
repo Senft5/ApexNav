@@ -299,7 +299,7 @@
         await storeDrive(d);
         await loadDrives();
         renderAll();
-      } catch (err) { alert(`Could not import ${file.name}: ${err.message}`); }
+      } catch (err) { alert(/^missing column/.test(err.message) ? `Couldn't import ${file.name}. It isn't an ApexNav drive log.` : `Couldn't import ${file.name}. The file may be damaged.`); }
       e.target.value = '';
     });
 
@@ -464,7 +464,7 @@
             const r = await ApexContributor.contributeDrive(d, ApexSync.contribute);
             if (r.sent) { d.contributed = true; await storeDrive(d); }
             b.textContent = r.skipped ? r.skipped : r.sent ? `Shared ${r.sent} road${r.sent === 1 ? '' : 's'}` : r.built ? 'Nothing new to share' : 'No usable roads. They were too short, private or unmatched.';
-          } catch (err) { b.disabled = false; b.textContent = `RETRY (${err.message})`; }
+          } catch (err) { b.disabled = false; b.textContent = 'Couldn\'t share. Tap to try again.'; b.title = err.message; }
         };
         list.appendChild(b);
       }
@@ -679,9 +679,9 @@
       const text = d.name + ' · ' + [score, mi].filter(Boolean).join(' · ');
       const url = location.origin + '/?drive=' + encodeURIComponent(d.id);
       if (navigator.share) {
-        try { await navigator.share({ title: 'ApexNav Drive', text, url }); return; } catch (e) { if (e.name === 'AbortError') return; }
+        try { await navigator.share({ title: 'ApexNav drive', text, url }); return; } catch (e) { if (e.name === 'AbortError') return; }
       }
-      try { await navigator.clipboard.writeText(text + ' ' + url); alert('Drive summary copied to clipboard.'); } catch (_) { window.prompt('Copy drive link', text + ' ' + url); }
+      try { await navigator.clipboard.writeText(text + ' ' + url); const b = $('dvShare'); b.textContent = 'Link copied'; setTimeout(() => { b.textContent = 'Share'; }, 2000); } catch (_) { window.prompt('Copy drive link', text + ' ' + url); }
     });
     // Compare with…: this drive against the best other drive on the same road (Core.compareDrives decides what shares a road).
     function bestOther(d) {
