@@ -13,9 +13,11 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
 
 function serve() {
   const server = http.createServer((req, res) => {
-    const rel = decodeURIComponent(new URL(req.url, 'http://x').pathname).replace(/^\/+/, '') || 'index.html';
+    let rel;
+    try { rel = decodeURIComponent(new URL(req.url, 'http://x').pathname).replace(/^\/+/, '') || 'index.html'; }
+    catch (_) { res.writeHead(400); res.end(); return; }
     const file = path.resolve(WEB, rel);
-    if (!file.startsWith(WEB) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) { res.writeHead(404); res.end(); return; }
+    if (!file.startsWith(WEB + path.sep) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) { res.writeHead(404); res.end(); return; }
     res.writeHead(200, { 'content-type': TYPES[path.extname(file)] || 'application/octet-stream' });
     fs.createReadStream(file).pipe(res);
   });
@@ -96,11 +98,14 @@ flow('the Log page opens', async (page, base) => {
     const page = await ctx.newPage();
     const errors = [];
     page.on('pageerror', (e) => errors.push(String(e && e.stack || e)));
+    // A missing file of our own (a renamed script, a typo'd path) is a failure even when nothing throws. /api/* has no
+    // Worker behind this server, so its 404s are expected.
+    page.on('response', (res) => { const u = res.url(); if (u.startsWith(base) && !u.startsWith(base + '/api/') && res.status() >= 400) errors.push(`${res.status()} ${u.slice(base.length)}`); });
     const t0 = Date.now();
     try {
       await fn(page, base);
       await page.waitForTimeout(300);   // let late async errors surface
-      check(!errors.length, `page errors:\n  ${errors.join('\n  ')}`);
+      check(!errors.length, `page errors or missing files:\n  ${errors.join('\n  ')}`);
       console.log(`ok   ${name} (${Date.now() - t0} ms)`);
     } catch (e) {
       failed++;
