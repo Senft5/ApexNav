@@ -52,6 +52,14 @@ is driven, when the live arrival (above) is more than 5 minutes past it, a toast
 after 10 minutes if still late; it plans the quickest way from where you are back to the loop's start (IDEAS R-37,
 `homeByOffer` in web/eta.js).
 
+## Avoid cameras
+
+Avoid → **Cameras** (off by default) asks the camera map (OSM `surveillance:type=ALPR`, DeFlock, via Overpass, kept a week)
+for the plate readers within about 2 km of the trip and sends the router those nearest the start-to-end line as
+`exclude_locations`, with any reported closures, 50 at most (`FunRoute.camerasToExclude`). The router avoids the road edge
+nearest each camera. A trip more than 1° across, the camera map offline, or no way round them: the route is built without
+avoiding cameras and a toast says so; the cameras still on the route are marked and counted as before (IDEAS R-35).
+
 ## Drag to reshape
 
 A planned route (not while driving or playing) can be dragged: a mouse grabs the line at once, a finger holds still on it for

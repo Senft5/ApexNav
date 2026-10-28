@@ -447,8 +447,31 @@
   // ---- avoid options ------------------------------------------------------------------
   // What the driver asked to stay off. Unpaved is avoided by default: stages never use it (web/stages.js) and most cars
   // that want this app don't want gravel. Highways and tolls are already de-prioritised, not avoided, by default.
-  const AVOID_DEFAULT = { highways: false, tolls: false, ferries: false, unpaved: true, towns: false };
-  const AVOID_LABELS = { highways: 'highways', tolls: 'tolls', ferries: 'ferries', unpaved: 'unpaved roads', towns: 'towns' };
+  const AVOID_DEFAULT = { highways: false, tolls: false, ferries: false, unpaved: true, towns: false, cameras: false };
+  const AVOID_LABELS = { highways: 'highways', tolls: 'tolls', ferries: 'ferries', unpaved: 'unpaved roads', towns: 'towns', cameras: 'cameras' };
+  /** The camera span a trip may ask the camera map for (degrees each way); bigger trips route without (IDEAS R-35). */
+  const CAMERA_BOX_DEG = 1.0;
+  /**
+   * Plate-reading cameras (OSM, DeFlock) to send the router as exclude_locations (IDEAS R-35): those within `padKm` of the
+   * trip's box, nearest the straight line from start to end first, at most `max` (the public router's limit is shared with
+   * closures). The router avoids the road edge nearest each one.
+   */
+  function camerasToExclude(nodes, points, max = 40, padKm = 2) {
+    const pts = (points || []).filter((p) => p && Number.isFinite(p.lat) && Number.isFinite(p.lon));
+    if (pts.length < 2 || max <= 0) return [];
+    const lat0 = Math.min(...pts.map((p) => p.lat)), lat1 = Math.max(...pts.map((p) => p.lat));
+    const lon0 = Math.min(...pts.map((p) => p.lon)), lon1 = Math.max(...pts.map((p) => p.lon));
+    const c = Math.max(0.2, Math.cos(((lat0 + lat1) / 2) * Math.PI / 180)), dLat = padKm / 110.54, dLon = padKm / (111.32 * c);
+    const a = pts[0], b = pts[pts.length - 1];
+    const off = (n) => {                                            // km from the start-end line, flat-earth
+      const ax = 0, ay = 0, bx = (b.lon - a.lon) * 111.32 * c, by = (b.lat - a.lat) * 110.54, px = (n.lon - a.lon) * 111.32 * c, py = (n.lat - a.lat) * 110.54;
+      const L = bx * bx + by * by, t = L ? Math.max(0, Math.min(1, (px * bx + py * by) / L)) : 0;
+      return Math.hypot(px - (ax + t * bx), py - (ay + t * by));
+    };
+    return (nodes || []).filter((n) => n && Number.isFinite(n.lat) && Number.isFinite(n.lon)
+        && n.lat >= lat0 - dLat && n.lat <= lat1 + dLat && n.lon >= lon0 - dLon && n.lon <= lon1 + dLon)
+      .map((n) => ({ lat: n.lat, lon: n.lon, k: off(n) })).sort((x, y) => x.k - y.k).slice(0, max).map(({ lat, lon }) => ({ lat, lon }));
+  }
   /** Valhalla auto costing for the avoid options (preferences, not hard bans: the router may still need one). */
   function costing(avoid = AVOID_DEFAULT) {
     const auto = { use_highways: avoid.highways ? 0 : 0.15, use_tolls: avoid.tolls ? 0 : 0.3 };
@@ -532,6 +555,6 @@
     return out;
   }
 
-  const api = { LEVELS, townKm, townCost, exploreShortlist, exploreTargets, explorePicks, distinctOptions, glare, glareCost, LOOP_BY_TIME, AVOID_DEFAULT, AVOID_LABELS, costing, unavoided, keepAvoiding, why, geometry, alongPoints, insertVia, loopValue, loopShortlist, loopPlansFromMatrix, score, shortlist, matrixPoints, plansFromMatrix, sectionCount, sectionPoints, combineSections, planKey, searchArea, waypoints, rank, along, kmBetween, directionBonus };
+  const api = { LEVELS, townKm, townCost, exploreShortlist, exploreTargets, explorePicks, distinctOptions, glare, glareCost, LOOP_BY_TIME, AVOID_DEFAULT, AVOID_LABELS, CAMERA_BOX_DEG, camerasToExclude, costing, unavoided, keepAvoiding, why, geometry, alongPoints, insertVia, loopValue, loopShortlist, loopPlansFromMatrix, score, shortlist, matrixPoints, plansFromMatrix, sectionCount, sectionPoints, combineSections, planKey, searchArea, waypoints, rank, along, kmBetween, directionBonus };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexFunRoute = api;
 })(typeof window !== 'undefined' ? window : globalThis);
