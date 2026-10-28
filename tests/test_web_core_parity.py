@@ -326,3 +326,27 @@ def test_hazards_ignore_unmeasured_samples():
                          capture_output=True, text=True, check=True)
     # the spike at 50 has no measured roughness around it to stand out from; the one at 150 does
     assert [(h["index"], h["type"]) for h in json.loads(out.stdout)] == [(150, "bump")]
+
+
+def test_parity_abrupt_moments_on_a_real_drive():
+    from core import drive_analysis as da
+    path = "web/data/dry_ridge.js"
+    if not os.path.exists(path):
+        pytest.skip("no shipped drive data")
+    text = open(path, encoding="utf-8").read()
+    d = json.loads(text[text.index("push(") + 5:text.rindex(");")])
+    f = {name: i for i, name in enumerate(d["fields"])}
+    lat = [r[f["lat_g"]] for r in d["rows"]]
+    lon = [r[f["lon_g"]] for r in d["rows"]]
+    v = [r[f["speed_mph"]] / 2.2369362921 for r in d["rows"]]
+    known = [0 if 1000 <= i < 1400 else 1 for i in range(len(lat))]
+    py = da.abrupt_moments(lat, lon, v, known)
+    runner = ("const c=require(process.argv[1]);const {lat,lon,v,known}=JSON.parse(require('fs').readFileSync(0,'utf8'));"
+              "process.stdout.write(JSON.stringify(c.abruptMoments(lat,lon,v,known)));")
+    out = subprocess.run([NODE, "-e", runner, os.path.abspath("web/apex_core.js")],
+                         input=json.dumps({"lat": lat, "lon": lon, "v": v, "known": known}), capture_output=True, text=True, check=True)
+    js = json.loads(out.stdout)
+    assert [m["index"] for m in js["moments"]] == [m["index"] for m in py["moments"]] and len(py["moments"]) == 3
+    assert [x is None for x in js["jerk"]] == [x is None for x in py["jerk"]]
+    assert [x for x in js["jerk"] if x is not None] == pytest.approx([x for x in py["jerk"] if x is not None], rel=1e-12)
+    assert all(py["jerk"][i] is None for i in range(1000, 1401))                      # unmeasured g: no smoothness claimed
