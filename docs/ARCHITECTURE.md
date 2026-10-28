@@ -52,6 +52,13 @@ The JS file is a line-for-line port used by the browser/iOS cockpit for live OSR
   coasting (>= 15 m); with no quicker pass, braking after the apex (>= 0.25 g), coasting after braking (>= 20 m) or a
   slowest point >= 15 m before an apex driven >= 0.3 m/s faster. Corners through a stop (< 2.5 m/s), blank speed, or
   unmeasured g (`g_known`) anywhere from 200 m before the apex to 100 m after the exit are left out.
+- Friction circle (`gg_envelope`, `grip_use`; JS `ggEnvelope`, `gripUse`): the driver's own g-g envelope from one drive,
+  16 slices of 22.5° centred on 0° = throttle, 90° = left, 180° = braking, 270° = right (so straight braking and steady
+  cornering sit mid-slice), each slice's radius the nearest-rank 95th percentile of combined g (one pothole jolt does not
+  set it), samples under 0.05 g (cruising) and unmeasured g left out, a slice with fewer than 8 samples unknown. Grip use
+  over a stretch = mean of combined g / that slice's radius (capped at 1.5, shown capped at 100 %) over samples of at least
+  0.15 g. The drive view draws it as the Grip circle; scrubbing into a corner shows its trace and grip use from 100 m
+  before turn-in to the exit.
 - Web shell: `web/index.html` (cockpit), `web/analysis.html` (history / segments / compare), `web/themes.js` (theme registry), `web/instruments.js` (renderers).
 
 ## 3c. Fun routing (`web/fun_route.js`)
