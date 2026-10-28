@@ -500,3 +500,34 @@ def segment_pass(seg: dict, drive: dict):
     t = elapsed_s(drive["speed_mps"])
     ds = driver_score(drive["speed_mps"], drive["lon_g"], drive["lat_g"], drive["corners"], lo, hi + 1)
     return {"lo": lo, "hi": hi, "time_s": float(t[hi] - t[lo]), **ds}
+
+
+# ---------------------------------------------------------------------------
+# Smoothness map: how abruptly the load on the car changed (IDEAS D-06)
+# ---------------------------------------------------------------------------
+JERK_MIN_MPS = 5.0           # below walking-jog pace the phone is handled more than the car is driven
+JERK_FLOOR_GPS = 0.3         # g per second: under this a moment is not abrupt enough to name
+JERK_SEPARATION = 40         # samples (200 m) between named moments
+JERK_TOP = 3
+
+
+def abrupt_moments(lat_g, lon_g, speed_mps, g_known=None) -> dict:
+    """Rate of change of the combined g vector, g/s, per 5 m sample (None where either sample is unmeasured or the
+    car is under JERK_MIN_MPS at either), and the JERK_TOP most abrupt moments at least JERK_SEPARATION apart and over JERK_FLOOR_GPS.
+    Sample i is the change from i-1 to i, over the 5 m covered at its speed."""
+    n = len(lat_g)
+    ok = [(g_known is None or bool(g_known[i])) and _num(lat_g[i]) and _num(lon_g[i]) for i in range(n)]
+    jerk: list = [None] * n
+    for i in range(1, n):
+        v, v0 = speed_mps[i], speed_mps[i - 1]
+        if not (ok[i] and ok[i - 1] and _num(v) and _num(v0) and min(v, v0) >= JERK_MIN_MPS):
+            continue
+        jerk[i] = math.hypot(lat_g[i] - lat_g[i - 1], lon_g[i] - lon_g[i - 1]) * v / 5.0
+    order = sorted((i for i in range(n) if jerk[i] is not None and jerk[i] >= JERK_FLOOR_GPS), key=lambda i: (-jerk[i], i))
+    picks: list[int] = []
+    for i in order:
+        if len(picks) == JERK_TOP:
+            break
+        if all(abs(i - p) >= JERK_SEPARATION for p in picks):
+            picks.append(i)
+    return {"jerk": jerk, "moments": [{"index": i, "jerk_gps": jerk[i]} for i in picks]}

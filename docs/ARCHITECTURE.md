@@ -59,6 +59,8 @@ The JS file is a line-for-line port used by the browser/iOS cockpit for live OSR
   `hazards` turns bumps your drives confirmed (`seen.hits >= 2`) into "Bump ahead" notes said at the call distance on any road.
 - `core/drive_analysis.py` — private corner-by-corner pass comparison, Driver Score (0–1000) and custom
   segment passes; JS port in `web/apex_core.js` (plus `profileRecording` for app CSVs), parity-tested.
+- Smoothness map (`abrupt_moments`; JS `abruptMoments`): |change of the (lat, lon) g vector| x speed / 5 m, in g/s, per
+  sample with both ends measured and at 5 m/s or more; the 3 largest at least 40 samples apart and over 0.3 g/s are named.
 - Corner coach (`corner_phases`, `coach`; JS `cornerPhases`, `coach`): per corner, on 5 m bins, its own brake zone (the
   braking run, a_lon < -0.15 g, nearest the apex within 200 m, ignored when it ended more than 100 m before turn-in),
   trail braking (m of that run with |a_lat| >= 0.20 g), coasting (m with |a_lon| < 0.05 g from the brake point to the

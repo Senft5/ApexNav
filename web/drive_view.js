@@ -186,10 +186,39 @@
       const [ax, ay] = P(i), [bx, by] = P(j);
       segs += `<line x1="${ax.toFixed(1)}" y1="${ay.toFixed(1)}" x2="${bx.toFixed(1)}" y2="${by.toFixed(1)}" stroke="${colorAt(d.speed_mps[i])}" stroke-width="3.5" stroke-linecap="round"/>`;
     }
+    // Smoothness view (IDEAS D-06): how abruptly the load on the car changed, g/s; grey where g is unmeasured
+    const ab = Core.abruptMoments && d.lat_g && d.lon_g ? Core.abruptMoments(d.lat_g, d.lon_g, d.speed_mps, d.g_known || null) : null;
+    const calm = hex(asHex(C.panelDim, '#8A94A6')), sharp = hex(asHex(C.signal, '#E5484D'));
+    const jerkColor = (j) => { const t = Math.min(1, j / 0.6); return `rgb(${lerp(calm[0], sharp[0], t)},${lerp(calm[1], sharp[1], t)},${lerp(calm[2], sharp[2], t)})`; };
+    let jsegs = '';
+    if (ab && ab.moments.length) {
+      for (let i = 0; i + stepM < n + stepM; i += stepM) {
+        const j = Math.min(n - 1, i + stepM); if (j === i) break;
+        let mx = null; for (let q = i + 1; q <= j; q++) if (ab.jerk[q] != null) mx = Math.max(mx == null ? 0 : mx, ab.jerk[q]);
+        const [ax, ay] = P(i), [bx, by] = P(j);
+        jsegs += mx == null ? `<line x1="${ax.toFixed(1)}" y1="${ay.toFixed(1)}" x2="${bx.toFixed(1)}" y2="${by.toFixed(1)}" stroke="${C.panelDim}" stroke-width="1.5" opacity="0.5"/>`
+          : `<line x1="${ax.toFixed(1)}" y1="${ay.toFixed(1)}" x2="${bx.toFixed(1)}" y2="${by.toFixed(1)}" stroke="${jerkColor(mx)}" stroke-width="3.5" stroke-linecap="round"/>`;
+      }
+      jsegs += ab.moments.map((m, k) => { const [px, py] = P(m.index); return `<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="7" fill="none" stroke="${C.signal}" stroke-width="2"/><text x="${(px + 10).toFixed(1)}" y="${(py + 4).toFixed(1)}" font-size="10" font-weight="700" fill="${C.signal}">${String.fromCharCode(65 + k)}</text>`; }).join('');
+    }
     let placed = [];
     const marks = d.corners.map((c, k) => { const [px, py] = P(c.apex); if (placed.some(([qx, qy]) => Math.hypot(qx - px, qy - py) < 18)) return `<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="2" fill="${C.signal}"/>`; placed.push([px, py]); return `<g data-k="${k}" style="cursor:pointer"><circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="8" fill="${C.panel}" stroke="${C.signal}" stroke-width="1.6"/><text x="${px.toFixed(1)}" y="${(py + 3.2).toFixed(1)}" text-anchor="middle" font-size="9" font-weight="700" fill="${C.panelInk}">${k + 1}</text></g>`; }).join('');
-    mapBox.innerHTML = `<svg viewBox="0 0 ${MW} ${MH}" role="img" aria-label="Route map coloured by speed, ${d.corners.length} corners">${segs}<polyline id="dvWin" fill="none" stroke="${C.panelInk}" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" opacity="0.28"/>${marks}<circle id="dvDot" r="6" fill="${C.accent}" stroke="${C.panel}" stroke-width="2"/></svg>
-      <div class="dv-legend"><span>slow</span><i style="background:linear-gradient(90deg,${colorAt(0)},${colorAt(vmax)})"></i><span>${Math.round(vmax * MPH)} mph</span></div>`;
+    mapBox.innerHTML = `<svg viewBox="0 0 ${MW} ${MH}" role="img" aria-label="Route map coloured by speed, ${d.corners.length} corners"><g id="dvSpeed">${segs}</g><g id="dvJerk" display="none">${jsegs}</g><polyline id="dvWin" fill="none" stroke="${C.panelInk}" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" opacity="0.28"/>${marks}<circle id="dvDot" r="6" fill="${C.accent}" stroke="${C.panel}" stroke-width="2"/></svg>
+      <div class="dv-legend" id="dvLegSpeed"><span>slow</span><i style="background:linear-gradient(90deg,${colorAt(0)},${colorAt(vmax)})"></i><span>${Math.round(vmax * MPH)} mph</span></div>`
+      + (jsegs ? `<div class="dv-legend" id="dvLegJerk" hidden><span>calm</span><i style="background:linear-gradient(90deg,${jerkColor(0)},${jerkColor(0.6)})"></i><span>abrupt</span></div>` : '');
+    if (jsegs) {                                                     // Speed / Smoothness switch for the map
+      const sw = el('div', 'dv-zoom dv-mapmode'), bs = el('button', 'dv-z on', 'Speed'), bj = el('button', 'dv-z', 'Smoothness');
+      const show = (jerk) => {
+        bs.classList.toggle('on', !jerk); bj.classList.toggle('on', jerk); bs.setAttribute('aria-pressed', String(!jerk)); bj.setAttribute('aria-pressed', String(jerk));
+        const q = (id) => mapBox.querySelector(id);
+        if (q('#dvSpeed')) q('#dvSpeed').setAttribute('display', jerk ? 'none' : 'inline');
+        if (q('#dvJerk')) q('#dvJerk').setAttribute('display', jerk ? 'inline' : 'none');
+        if (q('#dvLegSpeed')) q('#dvLegSpeed').hidden = jerk;
+        if (q('#dvLegJerk')) q('#dvLegJerk').hidden = !jerk;
+      };
+      bs.onclick = () => show(false); bj.onclick = () => show(true); show(false);
+      sw.append(bs, bj); mapBox.prepend(sw);
+    }
     const dot = mapBox.querySelector('#dvDot');
 
     // ---- lanes -----------------------------------------------------------------------------------------------------
@@ -259,7 +288,7 @@
           last = i;
         }
         close(run, last);
-        if (p) svg += `<path d="${p}" fill="${C.rule}"/>`;
+        if (p) svg += `<path d="${p}" fill="${C.rule}" opacity="0.18"/>`;   // faint, as the comment above says
         geo.lanes.push({ top, h }); yTop = top + h + 6;
       }
       // numbered corner flags on top of the first lane
@@ -303,6 +332,17 @@
     let net = null;
     if (ref) { const ks = d.corners.map((_, k) => lost(k)).filter((x) => x != null); net = ks.length ? ks.reduce((s, x) => s + x, 0) : null; }
     list.innerHTML = `<h2>Corners${ref ? ` \u00b7 compared with ${esc(ref.name)} (score ${ref.score}), your best other drive on this road` : ''}</h2>` + (ref ? `<p class="note" style="margin-bottom:8px">${net == null ? 'No clean corners to compare.' : `Over the ${d.corners.map((_, k) => lost(k)).filter((x) => x != null).length} corners both drives took cleanly, this drive was <b class="${net > 0.05 ? 'loss' : net < -0.05 ? 'gain' : ''}">${fmtD(net)}</b> ${net > 0 ? 'slower' : 'faster'}. Stops and traffic are left out.`}</p>` : '');
+    if (ab && ab.moments.length) {                                   // the most abrupt moments, lettered as on the Smoothness map
+      const ul = el('ol', 'dv-time dv-abrupt');
+      ab.moments.forEach((m, k) => {
+        const near = d.corners.findIndex((c) => m.index >= c.start - 4 && m.index <= c.end + 4), li = el('li'), b = el('button');
+        b.innerHTML = `<b>${String.fromCharCode(65 + k)}</b><span>${near >= 0 ? `Corner ${near + 1} \u00b7 ${esc(d.corners[near].call || d.corners[near].code || '')}` : 'Between corners'}</span><em class="loss">${m.jerk_gps.toFixed(2)} g/s</em>`
+          + `<span class="note">${(d.dist[m.index] / 1609.344).toFixed(2)} mi \u00b7 the load on the car changed sharply here: steer, brake and lift more progressively</span>`;
+        b.onclick = () => { if (zoomM) setZoom(zoomM, m.index); move(m.index); lanes.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); };
+        li.append(b); ul.append(li);
+      });
+      list.prepend(el('h2', null, 'Most abrupt moments'), ul);
+    }
     if (co && co.top.length) {                                      // where the time is: the biggest gaps to your own best passes
       const ul = el('ol', 'dv-time');
       for (const k of co.top) {

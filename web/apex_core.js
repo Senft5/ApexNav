@@ -691,6 +691,28 @@
     return { radius_g: radius, points: total.length, peak_g: total.length >= GG_MIN_POINTS ? pctl(total, GG_PCTL) : null,
              brake_g: radius[2 * q], throttle_g: radius[0], left_g: radius[q], right_g: radius[3 * q] };
   }
+  // Smoothness map (port of core/drive_analysis.abrupt_moments, parity-tested): g/s per 5 m sample and the 3 most abrupt moments.
+  const JERK_MIN_MPS = 5.0, JERK_FLOOR_GPS = 0.3, JERK_SEPARATION = 40, JERK_TOP = 3;
+  function abruptMoments(latG, lonG, speed, gKnown = null) {
+    const n = latG.length, fin = (x) => typeof x === 'number' && Number.isFinite(x);
+    const ok = Array.from({ length: n }, (_, i) => (!gKnown || !!gKnown[i]) && fin(latG[i]) && fin(lonG[i]));
+    const jerk = new Array(n).fill(null);
+    for (let i = 1; i < n; i++) {
+      const v = speed[i], v0 = speed[i - 1];
+      if (!(ok[i] && ok[i - 1] && fin(v) && fin(v0) && Math.min(v, v0) >= JERK_MIN_MPS)) continue;
+      jerk[i] = Math.hypot(latG[i] - latG[i - 1], lonG[i] - lonG[i - 1]) * v / 5.0;
+    }
+    const order = [];
+    for (let i = 0; i < n; i++) if (jerk[i] != null && jerk[i] >= JERK_FLOOR_GPS) order.push(i);
+    order.sort((a, b) => (jerk[b] - jerk[a]) || (a - b));
+    const picks = [];
+    for (const i of order) {
+      if (picks.length === JERK_TOP) break;
+      if (picks.every((p) => Math.abs(i - p) >= JERK_SEPARATION)) picks.push(i);
+    }
+    return { jerk, moments: picks.map((i) => ({ index: i, jerk_gps: jerk[i] })) };
+  }
+
   function gripUse(latG, lonG, lo, hi, env, gKnown = null) {
     let sum = 0, n = 0;
     for (let i = lo; i <= hi; i++) {
@@ -802,7 +824,7 @@
     profileRecording,
     driverScore, segmentPass, segmentWindow,
     removeSpurs, retracedShare,
-    compareDrives, cornerMetrics, elapsedS, cornerPhases, coach, ggEnvelope, gripUse, ggSector,
+    compareDrives, cornerMetrics, elapsedS, cornerPhases, coach, ggEnvelope, gripUse, ggSector, abruptMoments,
     G_STD, MPS_TO_MPH, ALPR_RADIUS_M,
     movingAverage, gradient, unwrap, localXY, resamplePolyline,
     computeCurvature, apexSpeedMps, effectiveMu, brakingEnvelopeMps, sightDistanceM, sightSpeedMps, SIGHT_MAX_M,
