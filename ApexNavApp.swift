@@ -94,7 +94,7 @@ final class ApexBundleSchemeHandler: NSObject, WKURLSchemeHandler {
         guard let url = task.request.url else { return }
         let rel = url.path.hasPrefix("/") ? String(url.path.dropFirst()) : url.path
         let file = root.appendingPathComponent(rel.isEmpty ? "index.html" : rel).standardizedFileURL
-        guard file.path.hasPrefix(root.path), let data = try? Data(contentsOf: file) else {
+        guard file.path.hasPrefix(root.path + "/"), let data = try? Data(contentsOf: file) else {
             task.didFailWithError(URLError(.fileDoesNotExist))
             return
         }
@@ -145,6 +145,19 @@ struct ApexCockpitWebView: UIViewRepresentable {
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             shell.webDidFinishLoading()
+        }
+
+        // The app's own pages (apexnav://) stay in the web view. Any other page in the main frame would get the native
+        // bridge (sign-in, sensors, share) and strand the driver with no back button, so http(s) links open in Safari.
+        func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction,
+                     decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+            guard let url = navigationAction.request.url, let scheme = url.scheme?.lowercased() else { return decisionHandler(.cancel) }
+            if scheme == ApexWebBundle.scheme || scheme == "about" || scheme == "blob" || scheme == "data" { return decisionHandler(.allow) }
+            if navigationAction.targetFrame?.isMainFrame == false { return decisionHandler(.allow) }   // an embedded frame never gets the bridge
+            if scheme == "http" || scheme == "https" || scheme == "mailto" || scheme == "tel" || scheme == "maps" {
+                UIApplication.shared.open(url)
+            }
+            decisionHandler(.cancel)
         }
 
         func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
@@ -272,6 +285,8 @@ final class ApexScriptBridge: NSObject, WKScriptMessageHandler {
     }
 
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        // Only the app's own top-level page may drive the shell, never an embedded or navigated-to web page.
+        guard message.frameInfo.isMainFrame, message.frameInfo.securityOrigin.protocol == ApexWebBundle.scheme else { return }
         let body = message.body
         var command: String?
         var speechText: String?
