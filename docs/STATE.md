@@ -2,8 +2,8 @@
 
 ## Session 2026-10-28 (late morning)
 - Merged: #193 F-06 offline data, D-23 drive tags, V-08 ducking, S-20 flyby; #194 S-11 monthly challenges, R-18 drag to reshape.
-- This PR: Y-14 segment ids that can't collide (and a taken old id resent under a new one), R-34 ramps are Connectors, A-03 PWA (manifest + network-first service worker, websites only), R-35 avoid cameras, D-20 your week, L-05 feedback (migration 0017 applied to both D1), Z-08 k-anonymity for road data, R-14 drop stage plans the router shortcut, S-08 local legends (days driven this month), U-16 landscape cockpit.
-- Exact next task: small IDEAS rows: S-17 which road was better, Q-14 coverage map; then S-15 profiles, A-05 desktop planner, S-07 kudos.
+- This PR: Y-14 segment ids that can't collide (and a taken old id resent under a new one), R-34 ramps are Connectors, A-03 PWA (manifest + network-first service worker, websites only), R-35 avoid cameras, D-20 your week, L-05 feedback (migration 0017 applied to both D1), Z-08 k-anonymity for road data, R-14 drop stage plans the router shortcut, S-08 local legends (days driven this month), U-16 landscape cockpit, S-15 friend profiles.
+- Exact next task: small IDEAS rows: S-17 which road was better, Q-14 coverage map; then A-05 desktop planner, S-07 kudos, S-17 which road was better, U-22 units.
 
 ## Session 2026-10-28 (morning)
 - Merged: #191 R-25/R-26 GPX in/out and maps links, #192 R-37 home by + R-11 which way round a stage + S-12 spots near you.

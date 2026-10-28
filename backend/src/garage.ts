@@ -9,7 +9,7 @@ const MAX_CARS = 10;
 const UNSAFE_RE = /(?!\u200d)[\p{Cc}\p{Cf}\p{Cs}\p{Co}\u2028\u2029]/u;
 const VISIBLE_RE = /(?![\u115f\u1160\u3164\uffa0])[\p{L}\p{N}]/u;   // Hangul fillers are letters that draw nothing
 const COLS = "id, year, make, model, trim, nickname, color, power_hp, weight_kg, drivetrain, transmission, tyres, mods, shared, is_primary";
-const PUBLIC_COLS = "c.id, c.year, c.make, c.model, c.trim, c.nickname, c.color, c.power_hp, c.weight_kg, c.drivetrain, c.transmission, c.tyres, c.mods, c.is_primary";
+export const PUBLIC_COLS = "c.id, c.year, c.make, c.model, c.trim, c.nickname, c.color, c.power_hp, c.weight_kg, c.drivetrain, c.transmission, c.tyres, c.mods, c.is_primary";
 
 interface Car {
   year: number | null; make: string; model: string; trim: string | null; nickname: string | null; color: string | null;

@@ -41,6 +41,7 @@
   <script src="route_import.js"></script>
   <script src="spots_feed.js"></script>
   <script src="feedback.js"></script>
+  <script src="profile_view.js"></script>
   <script src="incident.js"></script>
   <script src="traffic.js"></script>
   <script src="in_car.js"></script>
@@ -3645,6 +3646,15 @@
         fpop.append(sec);
       }
 
+      // A friend's profile (profile_view.js, IDEAS S-15): over the list in the pop-up; Back restores it.
+      const openProfile = async (f) => {
+        let p = null;
+        try { const r = await apiCall('GET', `/api/friends/${encodeURIComponent(f.id)}/profile`); p = r.ok ? await jsonOf(r) : null; } catch (_) {}
+        if (!p) { toast('Couldn\u2019t load the profile. Try again.'); return; }
+        const kept = [...fpop.childNodes], view = el('div', { className: 'stack-8 profile-view' });
+        ApexProfileView.show(view, p, { el, btn, back: () => fpop.replaceChildren(...kept) });
+        fpop.replaceChildren(view);
+      };
       // friends
       const fsec = section('Friends');
       // Requests you sent live on this phone (the server doesn't list them, so a reply never tells which handles exist; IDEAS Z-12).
@@ -3662,6 +3672,7 @@
             switchRow('Times', g.share_times, () => putGrant('friend', f.id, true, !g.share_times))),
           el('span', { textContent: g.share_scores ? (g.share_times ? `@${f.handle} sees your scores and times.` : `@${f.handle} sees your scores.`) : `@${f.handle} sees nothing of yours yet.` }),
           el('div', { className: 'row' },
+            ...(window.ApexProfileView ? [btn('Profile', () => openProfile(f), 'linkbtn')] : []),
             btn('Unfriend', async () => { if (confirm(`Unfriend @${f.handle}? This also stops all sharing.`)) { await apiCall('DELETE', `/api/friends/${f.id}`); redo(); } }, 'linkbtn'),
             ...(safety && f.handle ? [btn('Report', () => safety.report({ kind: 'user', target: f.handle, label: `@${f.handle}`, who: f.handle, done: redo }), 'linkbtn'),
                                       btn('Block', () => safety.block(f.handle, redo), 'linkbtn')] : [])));

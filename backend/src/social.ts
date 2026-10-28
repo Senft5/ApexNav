@@ -18,7 +18,7 @@ export const isCrewMember = async (env: Env, crewId: string, userId: string) =>
 // boards and strangers who type your handle see (anyone can join a public crew, and anyone who knows a handle can send a request).
 const NAME_FOR = (who: string, viewer: string) =>
   `CASE WHEN ${who} = ${viewer} OR EXISTS (SELECT 1 FROM friendships nf WHERE nf.status = 'accepted' AND nf.user_a = MIN(${who}, ${viewer}) AND nf.user_b = MAX(${who}, ${viewer})) THEN u.display_name END`;
-const isBlocked = async (env: Env, a: string, b: string) =>
+export const isBlocked = async (env: Env, a: string, b: string) =>
   !!(await first(env, "SELECT 1 FROM blocks WHERE (blocker = ?1 AND blocked = ?2) OR (blocker = ?2 AND blocked = ?1)", a, b));
 
 // ---- handle --------------------------------------------------------------------------------------
@@ -300,7 +300,7 @@ export async function publish(env: Env, v: Viewer, req: Request): Promise<{ publ
 }
 
 /** A board entry `be` someone else published TO the viewer ?1: still their friend or crew-mate, grant still on, no block. */
-const VISIBLE_FROM_OTHERS = `
+export const VISIBLE_FROM_OTHERS = `
            NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker = ?1 AND b.blocked = be.user_id) OR (b.blocker = be.user_id AND b.blocked = ?1))
            AND EXISTS (SELECT 1 FROM grants g WHERE g.user_id = be.user_id AND g.audience_type = be.audience_type AND g.audience_id = be.audience_id AND g.share_scores = 1)
            AND ( (be.audience_type = 'friend' AND be.audience_id = ?1
@@ -346,3 +346,4 @@ export async function boardActivity(env: Env, v: Viewer) {
   return rows.map((r) => ({ handle: r.handle, name: r.name, canon_id: r.canon_id, stage: r.stage, driver_score: r.driver_score, driven_on: r.driven_on,
     you: standing.get(r.canon_id)! }));
 }
+

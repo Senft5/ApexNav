@@ -209,7 +209,7 @@ Today: accounts with Google sign-in, friends, crews (public and private, crews n
 | S-12 | Highlights feed near you: viewpoints, cafés, meets, saved by members | M | M | done: Crew → Spots near you (`web/spots_feed.js`): members' spots best rated then nearest, category chips, Go there, 1/3/5★, Report; meets are S-13 | Roadtrippers, Google Maps contributions |
 | S-13 | Car meets map: public events and recurring Cars & Coffee, added by crews | H | M | partial (a public crew lists a drive as a meet; Crew → Meets near you within 80 km, join the crew to answer; migration 0015. Recurring meets and pins on the map are still to do) | car meet apps, Facebook groups |
 | S-14 | Invite links that open the app (or the web) on the crew or route | H | S | done (custom scheme; Universal Links later) | growth |
-| S-15 | Profiles: handle, cars, crews, favourite roads, totals; private by default | M | M | todo | Strava profile |
+| S-15 | Profiles: handle, cars, crews, favourite roads, totals; private by default | M | M | done: Friends → Profile (`GET /api/friends/:id/profile`, `web/profile_view.js`): accepted friends only, made only of what they already share with you (cars shown to friends, crews in common, stages scored to you with best score and days this month); never times | Strava profile |
 | S-16 | Block and report on every social surface; moderation queue for public crews and highlights | H | M | done (#120) | App Store requirement for UGC |
 | S-17 | Pairwise "which road was better?" after a drive feeds road scores (and is fun) | M | S | todo | SOCIAL §2.2 |
 | S-18 | Photos on highlights and stops, stripped of EXIF location beyond the highlight | M | M | todo | Roadtrippers, Google Maps |
