@@ -59,8 +59,12 @@ export async function requireMember(req: Request, env: Env): Promise<Viewer> {
 
 async function startSession(env: Env, userId: string): Promise<string> {
   const token = randomToken(32);
-  await env.DB.prepare("INSERT INTO sessions (id_hash, user_id, expires_at) VALUES (?, ?, ?)")
-    .bind(await sha256hex(token), userId, sqlTime(Date.now() + SESSION_DAYS * 86400_000)).run();
+  // no cron job: expired sessions (this person's) are swept whenever they sign in again
+  await env.DB.batch([
+    env.DB.prepare("DELETE FROM sessions WHERE user_id = ? AND expires_at <= datetime('now')").bind(userId),
+    env.DB.prepare("INSERT INTO sessions (id_hash, user_id, expires_at) VALUES (?, ?, ?)")
+      .bind(await sha256hex(token), userId, sqlTime(Date.now() + SESSION_DAYS * 86400_000)),
+  ]);
   return token;
 }
 
@@ -157,10 +161,11 @@ export async function appExchange(req: Request, env: Env): Promise<Response> {
   const b = await body<{ code?: unknown; verifier?: unknown }>(req);
   const code = str(b.code, "code", 20, 200), verifier = str(b.verifier, "verifier", 43, 128);
   const hash = await sha256hex(code);
-  const row = await env.DB.prepare("SELECT user_id, challenge FROM app_auth_codes WHERE code_hash = ? AND expires_at > datetime('now')")
-    .bind(hash).first<{ user_id: string; challenge: string }>();
-  await env.DB.prepare("DELETE FROM app_auth_codes WHERE code_hash = ? OR expires_at <= datetime('now')").bind(hash).run();   // single use
-  if (!row || (await sha256b64url(verifier)) !== row.challenge) throw new HttpError(401, "bad_code");
+  // single use in one statement: two exchanges racing for the same code cannot both get a row
+  const row = await env.DB.prepare("DELETE FROM app_auth_codes WHERE code_hash = ? RETURNING user_id, challenge, (expires_at > datetime('now')) AS live")
+    .bind(hash).first<{ user_id: string; challenge: string; live: number }>();
+  await env.DB.prepare("DELETE FROM app_auth_codes WHERE expires_at <= datetime('now')").run();
+  if (!row || !row.live || (await sha256b64url(verifier)) !== row.challenge) throw new HttpError(401, "bad_code");
   return new Response(JSON.stringify({ token: await startSession(env, row.user_id) }),
     { status: 200, headers: { "content-type": "application/json", "cache-control": "no-store" } });
 }
@@ -192,12 +197,17 @@ export async function createInvite(env: Env, v: Viewer, req: Request): Promise<{
 export async function redeemInvite(env: Env, v: Viewer, req: Request): Promise<void> {
   const { token } = await body<{ token?: string }>(req);
   const hash = await sha256hex(str(token, "token", 10, 100));
+  // someone the owner removed can't come back in, on anyone's invite (docs/BACKEND.md section 6)
+  const BANNED = "EXISTS (SELECT 1 FROM bans b JOIN users u ON u.google_sub = b.google_sub WHERE u.id = ?1)";
+  if (await env.DB.prepare(`SELECT 1 WHERE ${BANNED}`).bind(v.id).first()) throw new HttpError(403, "not_allowed");
   // one atomic step: only an unused, unexpired invite flips to used, and only then is the user made a member
   const used = await env.DB.prepare(
-    "UPDATE invites SET used_by = ?, used_at = datetime('now') WHERE token_hash = ? AND used_at IS NULL AND expires_at > datetime('now') RETURNING created_by",
+    "UPDATE invites SET used_by = ?1, used_at = datetime('now') WHERE token_hash = ?2 AND created_by != ?1 AND used_at IS NULL AND expires_at > datetime('now') RETURNING created_by",
   ).bind(v.id, hash).first<{ created_by: string }>();
   if (!used) throw new HttpError(400, "invalid_invite");
-  await env.DB.prepare("INSERT OR IGNORE INTO members (user_id, invited_by) VALUES (?, ?)").bind(v.id, used.created_by).run();
+  // the ban is checked again in the same statement, so one made a moment ago still holds
+  const joined = await env.DB.prepare(`INSERT OR IGNORE INTO members (user_id, invited_by) SELECT ?1, ?2 WHERE NOT ${BANNED}`).bind(v.id, used.created_by).run();
+  if (!joined.meta.changes && !(await env.DB.prepare("SELECT 1 FROM members WHERE user_id = ?").bind(v.id).first())) throw new HttpError(403, "not_allowed");
   // An invite is two people agreeing to meet: the inviter made the link for this person, the invitee accepted it. They start as friends
   // (sharing is still off until each of them turns it on, per friend).
   const [x, y] = pair(v.id, used.created_by);

@@ -58,11 +58,20 @@ Implemented in `backend/src/{auth,social,segments}.ts`, one router in `index.ts`
   still on, and not blocked either way. Times appear only with `share_times`.
 - Unfriend, block, leave crew, revoke grant: the grants and published entries between those people are deleted in the same transaction.
 - Friend requests answer identically for unknown, non-member and real handles (no handle enumeration). The requester cannot accept their own request.
+- **Real names** (the Google display name) reach only the person and their accepted friends. Crew member lists, boards and a request you sent (before it is accepted) show the handle only: anyone can join a public crew, and anyone who knows a handle can send a request (`backend/test/names.test.ts`).
 - **Rate limits** (`backend/src/ratelimit.ts`, Cloudflare rate limiting bindings in wrangler.jsonc, free): every write 60/min per session (per IP signed out), sign-in start and app code exchange 20/min per IP (not the Google callback or logout); over the limit is `429 rate_limited` with `retry-after: 60` (road uploads already retry on 429). Reads are not limited. Per-feature caps (uploads/hour, km/day, crews, highlights/day) stay on top.
 - **Crash reports** (`POST /api/errors`, `backend/src/errors.ts`; client `web/errors.js`, loaded first on every page): uncaught errors and unhandled rejections, at most 5 per page load, anonymous (no cookie, no bearer; the app origin may post it signed out). Message, stack and page path are scrubbed on the phone and again in the Worker (URL queries, e-mails, precise numbers, token-like strings). Nothing is stored: one `client_error` log line each. Read them in Cloudflare → Workers → apexnav → Logs, filtered on `client_error`.
 - **Garage** (`garage.ts`, migration 0008): a car card is shown only when its owner switches `shared` on, and then only to accepted friends and
   members of the same **private** crew (anyone can join a public crew, so it doesn't count), never across a block either way, never for an owner with no
   handle. No owner id, location or drive data is in it. Ten cars at most (checked inside the insert); always exactly one primary while you have any.
+- **Block and report** (`safety.ts`, `reports_sql.ts`, migration 0009): block by id or handle (unknown handles answer like real ones), list and
+  unblock your own blocks (never who blocked you; unblocking restores nothing). `POST /api/reports` covers people, crews, cars and highlights, only
+  ones the reporter could see (else 404), one per person per target, 20 a day (checked before any lookup, so no handle oracle). Open reports from
+  three current members **invited by different people and not by one another** (one member's spare accounts count once) take a public crew off discovery and public join, a car out of
+  friends' garages, a highlight off the map, until the owner (OWNER_EMAIL) decides in `GET /api/moderation` (shows reporters and who invited them).
+  Dismiss closes those reports for good (the same people can't re-trigger it). Remove keeps it down (`status='removed'`; the owner of a crew or car
+  can't make it public/shown again); for a person it is a ban: membership, sessions, app sign-in codes and unused invites go, their crews turn
+  private and cars unshown, live convoys drop them, and no invite (nor their own) lets them back, even after deleting and re-creating the account (bans are keyed on the Google account). Export and account deletion need only sign-in.
 - Invites and sessions are stored as SHA-256 hashes; an invite works once, expires after 7 days, and is redeemed atomically.
 - Verified by `backend/test/*.test.ts` (76 tests; each privacy rule was checked by temporarily reintroducing the bug and seeing the test fail).
 

@@ -1,5 +1,23 @@
 # APEX NAV — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-10-28: production-readiness audit
+- Read the whole backend, the iOS shell's web view and bridge, the live contributor, kinematics.py and sun.js. SQL is all bound parameters; auth, CSRF, invites, export/delete and the board/grant rules hold. pytest 253 green, vitest 169 green.
+- #132: real names (Google display name) only to yourself and accepted friends (public crews and pending friend requests leaked them); app sign-in code consumed atomically; expired sessions swept on sign-in; crew invite links respect the 10-crew cap.
+- #135: the iOS web view loads only apexnav:// pages; http(s) links open in Safari; the native bridge answers only the app's own top-level page.
+- #139: crew discovery without lat/lon is a 400 (was a search around 0,0); client segment ids must be URL-safe; live road sharing keeps a random 0.5–1.5 km private at each end of a trip (was a fixed 1 km, which pointed exactly 1 km back to home).
+- Not fixed, logged in docs/IDEAS.md: Z-09 to Z-15, Y-13 to Y-15, Q-23. Not reviewed in depth: convoy.ts transport (it has its own doc and tests), fun_route.js and stages.js scoring (routing threads are active there).
+- Exact next task: Z-09 (inspector off in release) and Q-23 (demo drives export null camber), both small.
+
+## Session 2026-10-28: first database backup
+- First export of `apexnav-db` and `apexnav-preview-db` taken and verified (docs/BACKUPS.md section 3 and log). No Cloudflare API token is set in Claude's environment; it went through the Cloudflare connector's read-only SELECTs, rebuilt as a `.sql` file, loaded into a local SQLite and fingerprint-matched against live D1 on every table. Files are in the project files `backups/d1/`, not the repo.
+- The connector can query D1 and read Worker code; it cannot export, use Time Travel, or read Workers Logs/analytics (table in BACKUPS.md section 3).
+- `d1_migrations` was empty on prod and missing on preview; backfilled 0001–0009 on both (BACKUPS.md log). Hand-applied migrations must now add their row too (Y-08 drift check in CI still todo).
+- Exact next task: Y-12 scheduled backups through a Worker cron to R2 (docs/IDEAS.md); restore drill once the owner has a wrangler login or token.
+
+## Session 2026-10-28: Explore
+- #126 merged (route options). #129: Explore 15/30 min lists the best roads you can reach in that time (real drive times from one matrix call), named from the map tiles, drawn on the map; one tap routes through the whole stage (docs/ROUTING.md, Explore). Checked in a desktop browser around Maryville TN. Not checked on a phone.
+- Exact next task: R-15 remainder (avoid towns, repeated roads), then R-11 stage direction.
+
 ## Session 2026-10-28: route options side by side
 - #123 merged (sun glare). #126: a planned route offers up to 3 distinct options (`FunRoute.distinctOptions`: same within 30 s and 1 fun point counts once) as chips on the route card ("Fun 79 · 128 min") and dashed lines on the map; tapping either re-plans on that option with its own why line, glare and avoid notes. Hidden while driving. Knoxville → Maryville on Fun: 79/128, 51/98, 61/127. Not checked on a phone.
 - Exact next task: R-10 Explore, or the R-15 remainder.
@@ -24,6 +42,8 @@
 - Y-09 backups: docs/BACKUPS.md (Time Travel restore, note a bookmark before every hand-applied migration, monthly export kept off-repo, quarterly restore drill into a throwaway database), `tools/d1_rowcounts.sql` (checked on the live database: 26 tables + d1_migrations), `tests/test_backups.py` keeps it in step with migrations. The first export and drill need the owner's `wrangler login`.
 - P-06 start-up: the two bundled demo drives (1.8 MB of the 3.1 MB a cold start fetched) now load only for Watch a replay or a `?drive=` link (`loadDemos()` in web/index.html). Headless Chromium at 4x CPU: DOMContentLoaded about 1.2-1.6 s with them, 1.0-1.2 s without. P-04 was already true (voice models load only when used).
 - Y-07: docs/VERIFY.md section 0 is the 40-minute real-phone run before every IPA/TestFlight build (parked, passenger-operated drive, after), with a result table; it gathers every "not checked on a phone" item above, and battery %/hour for P-01.
+- P-07 thermal guard: `ApexKit/ThermalGuard.swift` (critical pauses, back to fair or nominal resumes after 3 s settle). While paused the app stops CoreMotion, sends `calibration: "paused"` with g, camber, crest and roughness null (so nothing is recorded or contributed as measured), and the cockpit warns "Phone is hot". Frames carry `thermal` (0-3). Not checked on a hot phone.
+- P-02 low-power cockpit: `web/power.js` PowerSaver. A serious or critical thermal state, iOS Low Power Mode (frames now carry `low_power_mode`) or a browser battery at <= 20 % not charging (off at 25 % or charging) drops the chase cam to 30 fps with no road shake, the map to 2x pixels, and hides hillshade and contours, with a one-line toast each way. Checked in headless Chromium; not on a phone.
 - Exact next task: owner's first real-phone run (VERIFY.md section 0); P-06 next: the 241 KB index.html inline script and MapLibre's 800 KB are the rest of the start-up.
 
 ## Session 2026-10-28: "why this route" on the route card
@@ -104,7 +124,10 @@
 - Next UI candidates seen in the audit: the Where to? / Start bar stays over the cluster during a replay; Crew sheet draws two rules under its title; imported drives are named after the file (web_20261027_080000); the live drive cockpit was not exercised (needs real GPS frames).
 - Round 2 (all merged): #90 Where to? hides during a replay; #93 account headings, imported drives named "Drive 10/27/2026 8:00 AM"; #94 dial spacing; #97 loops named by real length; #99 main's iOS runs are not cancelled by the next merge; #102 iOS app: confirm/prompt/alert dialogs work (WKUIDelegate; Unfriend, Leave crew, Delete account did nothing before); #103 plain-language errors, "Recenter in 6s" with a 44 px target; #105 drive bar shows big "● Rec 0.46 mi" with only problems below, and only that line is aria-live; #106 every text token holds 4.5:1 (axe-core pass on map, replay, Crew, Settings, Log, Stages; tests/test_themes.py enforces it).
 - Not verified on a phone: the iOS dialogs (simulator tests and IPA build passed), the drive bar with real GPS, VoiceOver, sunlight. Crew signed in was not seen (sandbox can't reach the API).
-- Exact next UI task: docs/IDEAS.md U-18 (native-looking selects in Compare and voice), U-15 Dynamic Type/VoiceOver in the simulator, U-07 rest (one note readable at arm's length).
+- (round 2) Next UI task was: docs/IDEAS.md U-18 (native-looking selects in Compare and voice), U-15 Dynamic Type/VoiceOver in the simulator, U-07 rest (one note readable at arm's length).
+- Round 3 (all merged): #109 selects drawn the same on both pages (no iOS gloss), drives named "Name · date" in pickers; #110 onboarding takes focus, voice buttons report aria-pressed, plainer sign-in copy; #113 mount row in the permissions sheet (app only) and a "Mount set" toast when calibration locks; #116 recorded drives named after the road that carried a third of them, from the map's own tiles (web/road_names.js, nothing leaves the phone); #130 pace notes slide on when the lead note is passed (off under reduced motion).
+- Not verified on a phone: the calibration toast and road naming with native frames, the select look in iOS WebKit, the pace note slide at 60 fps.
+- Exact next UI task: docs/IDEAS.md U-13 road character layer on the map, U-15 Dynamic Type/VoiceOver in the simulator, U-07 rest.
 
 ## Session 2026-10-27: morning-commute push (owner goal: everything discussed, in production)
 - Merged: #73 (nearby suggestions; route kept across tab switches; smooth pull-up sheet; route bar with Start/✕; routes start quiet with a destination pin and fly-to, follow paused until Start drive or FOLLOW; Apple MKLocalSearchCompleter place search in the app, Photon on web; voice audio to Bluetooth/CarPlay: .playback/.voicePrompt + .duckOthers/.interruptSpokenAudioAndMixWithOthers, active only while a prompt plays, web clips bracket with voiceBegin/voiceEnd).

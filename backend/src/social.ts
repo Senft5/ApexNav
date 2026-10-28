@@ -2,7 +2,7 @@
 // takes a user id for "whose data to read". Privacy rules (docs/BACKEND.md section 11) are enforced here and tested.
 import { Env, HANDLE_RE, HttpError, body, num, pair, randomToken, sha256hex, sqlTime, str } from "./util";
 import type { Viewer } from "./auth";
-import { convoysRecheck } from "./convoy";
+import { removedSql, reportedSql } from "./reports_sql";
 
 const run = (env: Env, sql: string, ...args: unknown[]) => env.DB.prepare(sql).bind(...args).run();
 const all = async <T>(env: Env, sql: string, ...args: unknown[]) => (await env.DB.prepare(sql).bind(...args).all<T>()).results;
@@ -14,6 +14,10 @@ export async function isAcceptedFriend(env: Env, a: string, b: string): Promise<
 }
 export const isCrewMember = async (env: Env, crewId: string, userId: string) =>
   !!(await first(env, "SELECT 1 FROM crew_members WHERE crew_id = ? AND user_id = ?", crewId, userId));
+// A Google display name is a real name. It is shown to yourself and to accepted friends only: a handle is what crew-mates,
+// boards and strangers who type your handle see (anyone can join a public crew, and anyone who knows a handle can send a request).
+const NAME_FOR = (who: string, viewer: string) =>
+  `CASE WHEN ${who} = ${viewer} OR EXISTS (SELECT 1 FROM friendships nf WHERE nf.status = 'accepted' AND nf.user_a = MIN(${who}, ${viewer}) AND nf.user_b = MAX(${who}, ${viewer})) THEN u.display_name END`;
 const isBlocked = async (env: Env, a: string, b: string) =>
   !!(await first(env, "SELECT 1 FROM blocks WHERE (blocker = ?1 AND blocked = ?2) OR (blocker = ?2 AND blocked = ?1)", a, b));
 
@@ -49,7 +53,7 @@ export async function friendRequest(env: Env, v: Viewer, req: Request): Promise<
 
 export async function friendList(env: Env, v: Viewer) {
   return all<{ id: string; handle: string | null; name: string | null; status: string; incoming: number }>(env,
-    `SELECT u.id, u.handle, u.display_name AS name, f.status, (f.requested_by != ?1) AS incoming
+    `SELECT u.id, u.handle, CASE WHEN f.status = 'pending' AND f.requested_by = ?1 THEN NULL ELSE u.display_name END AS name, f.status, (f.requested_by != ?1) AS incoming
        FROM friendships f JOIN users u ON u.id = CASE WHEN f.user_a = ?1 THEN f.user_b ELSE f.user_a END
       WHERE f.user_a = ?1 OR f.user_b = ?1 ORDER BY u.handle`, v.id);
 }
@@ -72,15 +76,6 @@ export async function removePair(env: Env, me: string, other: string): Promise<v
     env.DB.prepare("DELETE FROM segment_shares WHERE audience_type = 'friend' AND segment_id IN (SELECT id FROM segments WHERE owner = ?1) AND audience_id = ?2").bind(me, other),
     env.DB.prepare("DELETE FROM segment_shares WHERE audience_type = 'friend' AND segment_id IN (SELECT id FROM segments WHERE owner = ?2) AND audience_id = ?1").bind(me, other),
   ]);
-}
-
-export async function blockUser(env: Env, v: Viewer, req: Request): Promise<void> {
-  const { user_id } = await body<{ user_id?: string }>(req);
-  const other = str(user_id, "user_id", 1, 64);
-  if (other === v.id) throw new HttpError(400, "bad_user_id");
-  await run(env, "INSERT OR IGNORE INTO blocks (blocker, blocked) VALUES (?, ?)", v.id, other).catch(() => { throw new HttpError(404, "no_user"); });
-  await removePair(env, v.id, other);
-  await convoysRecheck(env, v.id);                                   // a convoy the two share drops one of them now
 }
 
 // ---- crews ---------------------------------------------------------------------------------------
@@ -120,6 +115,7 @@ export async function crewUpdate(env: Env, v: Viewer, crewId: string, req: Reque
   if (!crew || crew.owner !== v.id) throw new HttpError(404, "no_crew");
   const b = await body<CrewBody>(req);
   const set = crewSettings(b), name = b.name === undefined ? crew.name : str(b.name, "name", 2, 40);
+  if (set.visibility === "public" && (await first(env, `SELECT 1 WHERE ${removedSql("crew", "?1")}`, crewId))) throw new HttpError(403, "removed_by_moderator");
   await run(env, "UPDATE crews SET name = ?, visibility = ?, about = ?, area_name = ?, area_lat = ?, area_lon = ? WHERE id = ?",
     name, set.visibility, set.about, set.area_name, set.area_lat, set.area_lon, crewId);
 }
@@ -130,7 +126,9 @@ export const crewList = (env: Env, v: Viewer) => all<{ id: string; name: string;
 
 /** Public crews near a point (about 55 km), nearest first; not ones you are in, none whose owner you blocked or who blocked you. */
 export async function crewDiscover(env: Env, v: Viewer, url: URL) {
-  const lat = num(Number(url.searchParams.get("lat")), "lat", -85, 85), lon = num(Number(url.searchParams.get("lon")), "lon", -180, 180);
+  // a missing parameter must not become Number(null) = 0 and quietly search the Gulf of Guinea
+  const q = (k: string) => { const s = url.searchParams.get(k); return s === null || s.trim() === "" ? NaN : Number(s); };
+  const lat = num(q("lat"), "lat", -85, 85), lon = num(q("lon"), "lon", -180, 180);
   const dLat = 0.5, dLon = 0.5 / Math.max(0.2, Math.cos(lat * Math.PI / 180));
   const rows = await all<{ id: string; name: string; about: string | null; area_name: string; area_lat: number; area_lon: number; members: number }>(env,
     `SELECT c.id, c.name, c.about, c.area_name, c.area_lat, c.area_lon, (SELECT COUNT(*) FROM crew_members x WHERE x.crew_id = c.id) AS members
@@ -138,6 +136,7 @@ export async function crewDiscover(env: Env, v: Viewer, url: URL) {
       WHERE c.visibility = 'public' AND c.area_lat BETWEEN ?1 AND ?2 AND c.area_lon BETWEEN ?3 AND ?4
         AND NOT EXISTS (SELECT 1 FROM crew_members m WHERE m.crew_id = c.id AND m.user_id = ?5)
         AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker = ?5 AND b.blocked = c.owner) OR (b.blocker = c.owner AND b.blocked = ?5))
+        AND NOT ${reportedSql("crew", "c.id")}                       -- reported by several people: off the list until the owner looks
       LIMIT 50`, lat - dLat, lat + dLat, lon - dLon, lon + dLon, v.id);
   const km = (r: { area_lat: number; area_lon: number }) => Math.hypot((r.area_lat - lat) * 111.2, (r.area_lon - lon) * 111.32 * Math.cos(lat * Math.PI / 180));
   return rows.map((r) => ({ id: r.id, name: r.name, about: r.about, area_name: r.area_name, members: r.members, km: Math.round(km(r)) }))
@@ -147,7 +146,7 @@ export async function crewDiscover(env: Env, v: Viewer, url: URL) {
 /** Join a public crew without an invite (a private one still needs its link). */
 export async function crewJoinPublic(env: Env, v: Viewer, crewId: string): Promise<{ id: string }> {
   const crew = await first<{ visibility: string; owner: string }>(env, "SELECT visibility, owner FROM crews WHERE id = ?", crewId);
-  if (!crew || crew.visibility !== "public") throw new HttpError(404, "no_crew");
+  if (!crew || crew.visibility !== "public" || (await first(env, `SELECT 1 WHERE ${reportedSql("crew", "?1")}`, crewId))) throw new HttpError(404, "no_crew");
   if (await first(env, "SELECT 1 FROM blocks WHERE (blocker = ?1 AND blocked = ?2) OR (blocker = ?2 AND blocked = ?1)", v.id, crew.owner)) throw new HttpError(404, "no_crew");
   const n = await first<{ n: number }>(env, "SELECT COUNT(*) AS n FROM crew_members WHERE user_id = ?", v.id);
   if ((n?.n ?? 0) >= 10) throw new HttpError(429, "too_many_crews");
@@ -158,7 +157,7 @@ export async function crewJoinPublic(env: Env, v: Viewer, crewId: string): Promi
 export async function crewMembers(env: Env, v: Viewer, crewId: string) {
   if (!(await isCrewMember(env, crewId, v.id))) throw new HttpError(404, "no_crew");
   return all<{ handle: string | null; name: string | null; role: string; mine: number }>(env,
-    `SELECT u.handle, u.display_name AS name, m.role, (m.user_id = ?2) AS mine
+    `SELECT u.handle, ${NAME_FOR("m.user_id", "?2")} AS name, m.role, (m.user_id = ?2) AS mine
        FROM crew_members m JOIN users u ON u.id = m.user_id
       WHERE m.crew_id = ?1
         AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker = ?2 AND b.blocked = m.user_id) OR (b.blocker = m.user_id AND b.blocked = ?2))
@@ -179,6 +178,8 @@ export async function crewJoin(env: Env, v: Viewer, req: Request): Promise<{ id:
   const inv = await first<{ crew_id: string }>(env,
     "SELECT crew_id FROM crew_invites WHERE token_hash = ? AND expires_at > datetime('now')", await sha256hex(str(token, "token", 10, 100)));
   if (!inv) throw new HttpError(400, "invalid_invite");
+  const n = await first<{ n: number }>(env, "SELECT COUNT(*) AS n FROM crew_members WHERE user_id = ? AND crew_id != ?", v.id, inv.crew_id);
+  if ((n?.n ?? 0) >= 10) throw new HttpError(429, "too_many_crews");                // same cap as creating or joining a public crew
   await run(env, "INSERT OR IGNORE INTO crew_members (crew_id, user_id) VALUES (?, ?)", inv.crew_id, v.id);
   return { id: inv.crew_id };
 }
@@ -257,7 +258,7 @@ export async function publish(env: Env, v: Viewer, req: Request): Promise<{ publ
 /** Only entries published TO the viewer (by someone who is still their friend / crew-mate, grant still on), plus their own. */
 export async function boardFor(env: Env, v: Viewer, canonId: string) {
   return all<{ user_id: string; handle: string | null; name: string | null; driver_score: number; time_s: number | null; driven_on: string; mine: number }>(env,
-    `SELECT be.user_id, u.handle, u.display_name AS name, MAX(be.driver_score) AS driver_score, MIN(be.time_s) AS time_s,
+    `SELECT be.user_id, u.handle, ${NAME_FOR("be.user_id", "?1")} AS name, MAX(be.driver_score) AS driver_score, MIN(be.time_s) AS time_s,
             MAX(be.driven_on) AS driven_on, (be.user_id = ?1) AS mine
        FROM board_entries be JOIN users u ON u.id = be.user_id
       WHERE be.canon_id = ?2

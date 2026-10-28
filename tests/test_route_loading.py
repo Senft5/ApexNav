@@ -168,7 +168,7 @@ let activated = null;
 let fallbackCalls = 0;
 global.fetch = async () => new Promise(() => {});
 const build = new Function('valhallaRoutes', 'osrmRoutes', 'trackFromPolyline', 'Core', 'drives', 'activate', 'renderRouteCard', 'state', 'openPlan', 'attachLimits', 'totalM', 'toast', 'persistPlanned', 'markDestination', 'lockOnDestination', 'booting', 'funOf',
-  'FunRoute', 'avoid', 'let plannedRoute = null; return (' + source + ')')(
+  'FunRoute', 'avoid', 'let plannedRoute = null, explore = null; return (' + source + ')')(
   () => loading.json('https://isolated.test', {}, 5),
   async () => { fallbackCalls++; return [{ coords: [[-84, 39], [-83.99, 39]], turns: [], timeS: 60 }]; },
   async (coords, id, name) => {

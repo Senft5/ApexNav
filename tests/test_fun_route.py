@@ -123,6 +123,14 @@ out.loops = loops.map(p => ({ names: p.legs.map(l => l.s.name), total: p.total, 
 // the same stages as a "home in 60 minutes" loop: connectors at 60 km/h from the km matrix, stages at 50 km/h
 const lsec = lkm.map(row => row.map(v => (v == null ? null : v / 60 * 3600)));
 out.timeLoops = F.loopPlansFromMatrix(loopList, lsec, 3600, 3, F.LOOP_BY_TIME).map(p => ({ names: p.legs.map(l => l.s.name), total: p.total }));
+// Explore: best first; a duplicate of a better road, a road past the search and one with no road to it are left out;
+// 'slow' is near by crow fly but 20 min by road; 'west' is entered from its nearer (east) end
+const exp = [stage('west', -6000, 0, 3, 20), stage('twin', -6000, 40, 3, 18), stage('far', 30000, 0, 3, 16), stage('lake', 0, 5000, 3, 14), stage('slow', 0, -9000, 3, 12), stage('north', 0, 9000, 3, 10), { ...stage('west2', 6000, 0, 3, 9), name: 'west' }];
+const expList = F.exploreShortlist(S0, exp, 14);
+out.expList = expList.map(s => s.name);
+const expT = [F.exploreTargets(expList).map((b, c) => { const s = expList[c >> 1].name; return s === 'lake' ? null : s === 'slow' ? 1200 : F.kmBetween(S0, b) * 1.3 / 60 * 3600; })];
+out.expPicks = F.explorePicks(expList, expT, 900).map(p => ({ name: p.s.name, fwd: p.fwd, min: Math.round(p.awayS / 60) }));
+out.expPicks1 = F.explorePicks(expList, expT, 900, 1).map(p => p.s.name);
 // routed loops are valued on the fun scale: retracing and missing the length cost points
 out.loopValue = [F.loopValue({ fun: 60 }, 48, 48, 0), F.loopValue({ fun: 60 }, 48, 48, 0.1), F.loopValue({ fun: 60 }, 60, 48, 0), F.loopValue(null, 48, 48, 0)];
 // why this route: roads the winner spends 2+ km more on than the quickest, and what it gains and costs
@@ -209,6 +217,13 @@ def test_long_trips_are_chained_sections(r):
     assert r["empty"] == 0
     assert r["shared"] == ["s0", "s0 t0"], "a stage two sections both found is driven once"
     assert r["overBudget"] == 0, "sections each within budget can still add up past the trip's"
+
+
+def test_explore_lists_the_best_roads_you_can_reach_in_time(r):
+    assert r["expList"] == ["west", "lake", "slow", "north"], "no duplicate road, nothing past the search"
+    assert r["expPicks"] == [{"name": "west", "fwd": False, "min": 4}, {"name": "north", "fwd": True, "min": 12}], \
+        "best first, by road time: no road to 'lake', 'slow' is 20 min away; entered from the nearer end"
+    assert r["expPicks1"] == ["west"]
 
 
 def test_loops_use_real_distances_and_fit_the_target(r):

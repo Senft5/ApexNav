@@ -84,6 +84,13 @@ describe("app sign-in", () => {
     expect((await appFetch("POST", "/api/auth/app/exchange", { body: { code, verifier: VERIFIER } })).status).toBe(401);
   });
 
+  it("two exchanges racing for one code give one session, not two", async () => {
+    const a = await makeUser("alice");
+    const code = await issueCode(a.id, VERIFIER);
+    const both = await Promise.all([0, 1].map(() => appFetch("POST", "/api/auth/app/exchange", { body: { code, verifier: VERIFIER } })));
+    expect(both.map((r) => r.status).sort()).toEqual([200, 401]);
+  });
+
   it("a wrong verifier fails and burns the code; an expired code fails", async () => {
     const a = await makeUser("alice");
     const code = await issueCode(a.id, VERIFIER);

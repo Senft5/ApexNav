@@ -27,5 +27,6 @@ SELECT
   (SELECT COUNT(*) FROM upload_counts) AS upload_counts,
   (SELECT COUNT(*) FROM app_auth_codes) AS app_auth_codes,
   (SELECT COUNT(*) FROM cars) AS cars,
+  (SELECT COUNT(*) FROM bans) AS bans,
   (SELECT COUNT(*) FROM d1_migrations) AS d1_migrations
 ;

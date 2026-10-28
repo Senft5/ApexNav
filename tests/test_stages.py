@@ -99,3 +99,23 @@ def test_highlights_tip_the_choice_between_good_roads_but_never_rescue_a_dull_on
     assert r["cappedBonus"] <= 6, "many highlights cannot stack without limit"
     assert r["dull"] == "AZ", "a viewpoint cannot lift a dull road above a great one"
     assert r["named"] == ["Overlook"]
+
+
+NAMES = r"""
+globalThis.ApexCore = require(process.argv[1] + '/web/apex_core.js');
+globalThis.ApexRoadNames = require(process.argv[1] + '/web/road_names.js');
+require(process.argv[1] + '/web/stages.js');
+const S = globalThis.ApexStages;
+const lat0 = 39.2, lon0 = -84.6, mLat = 1 / 110540, mLon = 1 / (111320 * Math.cos(lat0 * Math.PI / 180));
+const stage = (y) => ({ lat: Array.from({ length: 801 }, () => lat0 + y * mLat), lon: Array.from({ length: 801 }, (_, i) => lon0 + i * 5 * mLon) });
+const line = (name, y, x0, x1) => ({ properties: { name }, geometry: { type: 'MultiLineString', coordinates: [[[lon0 + x0 * mLon, lat0 + y * mLat], [lon0 + x1 * mLon, lat0 + y * mLat]]] } });
+// 'Ridge Rd' runs the whole stage; 'Side St' touches one point of the other; a third stage has no name line near it
+const names = [line('Ridge Rd', 10, -100, 4100), line('Side St', 1010, 600, 800), line('Far Rd', 5000, 0, 4000)];
+const st = S.nameStages([stage(0), stage(1000), stage(3000)], names);
+process.stdout.write(JSON.stringify(st.map(s => s.name || null)));
+"""
+
+
+def test_stages_are_named_after_the_road_most_of_them_is_on():
+    res = subprocess.run([NODE, "-e", NAMES, os.path.abspath(".")], capture_output=True, text=True, check=True)
+    assert json.loads(res.stdout) == ["Ridge Rd", None, None], "one name point in five is not enough; no name stays unknown"

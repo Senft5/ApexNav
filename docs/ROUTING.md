@@ -66,6 +66,18 @@ A destination route offers up to 3 options side by side (R-30): the ranked candi
 route, with its own why line, glare and avoid notes ("+N for fun" and the why line still compare to the quickest).
 Hidden while driving and for loops.
 
+## Explore
+
+**Explore** (15 min / 30 min chips under Loop, R-10): the best roads you can reach from here in that time. Stage discovery
+runs around you (radius 45 km/h crow fly x the minutes, at most 14 km), the best 12 stages that aren't the same road (by
+place or by name) get one Valhalla matrix call from here to both ends of each (24 pairs), and the ones whose nearer end is
+within the time are listed best first (at most 5): road name, good corners, length, minutes to its start. They are drawn on
+the map too; tapping a row or a line routes from here into the near end and through the whole stage to its far end (shaping
+points, so a reroute stays on it). Names come from the same vector tiles (`transportation_name`, `ApexStages.nameStages`:
+the name under at least 2 of 5 points along it), else "Road name unknown" (unknown, not unnamed); a bare number reads "Route 28". Checked: Maryville TN,
+30 min → Little River Gorge Road (42 good corners, 6.2 mi, 28 min away), Fence Rail Gap Road, Old Walland Highway; south of
+there, 15 min → Calderwood Highway (9 min away).
+
 ## Loops
 
 Loops chain stages found around the start. Their length used to come from crow-fly connectors x 1.6,

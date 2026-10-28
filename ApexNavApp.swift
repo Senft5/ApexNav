@@ -94,7 +94,7 @@ final class ApexBundleSchemeHandler: NSObject, WKURLSchemeHandler {
         guard let url = task.request.url else { return }
         let rel = url.path.hasPrefix("/") ? String(url.path.dropFirst()) : url.path
         let file = root.appendingPathComponent(rel.isEmpty ? "index.html" : rel).standardizedFileURL
-        guard file.path.hasPrefix(root.path), let data = try? Data(contentsOf: file) else {
+        guard file.path.hasPrefix(root.path + "/"), let data = try? Data(contentsOf: file) else {
             task.didFailWithError(URLError(.fileDoesNotExist))
             return
         }
@@ -145,6 +145,19 @@ struct ApexCockpitWebView: UIViewRepresentable {
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             shell.webDidFinishLoading()
+        }
+
+        // The app's own pages (apexnav://) stay in the web view. Any other page in the main frame would get the native
+        // bridge (sign-in, sensors, share) and strand the driver with no back button, so http(s) links open in Safari.
+        func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction,
+                     decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+            guard let url = navigationAction.request.url, let scheme = url.scheme?.lowercased() else { return decisionHandler(.cancel) }
+            if scheme == ApexWebBundle.scheme || scheme == "about" || scheme == "blob" || scheme == "data" { return decisionHandler(.allow) }
+            if navigationAction.targetFrame?.isMainFrame == false { return decisionHandler(.allow) }   // an embedded frame never gets the bridge
+            if scheme == "http" || scheme == "https" || scheme == "mailto" || scheme == "tel" || scheme == "maps" {
+                UIApplication.shared.open(url)
+            }
+            decisionHandler(.cancel)
         }
 
         func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
@@ -272,6 +285,8 @@ final class ApexScriptBridge: NSObject, WKScriptMessageHandler {
     }
 
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        // Only the app's own top-level page may drive the shell, never an embedded or navigated-to web page.
+        guard message.frameInfo.isMainFrame, message.frameInfo.securityOrigin.protocol == ApexWebBundle.scheme else { return }
         let body = message.body
         var command: String?
         var speechText: String?
@@ -363,6 +378,7 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
     private var fusion = ElevationFusion(baroAvailable: CMAltimeter.isRelativeAltitudeAvailable())
     private var odometer = Odometer5m()
     private var latestGravityG = Vec3(x: 0.0, y: -0.95, z: -0.30)   // CoreMotion gravity, phone frame, in g (points DOWN)
+    private var thermal = ThermalGuard()   // IDEAS P-07: a critically hot phone pauses CoreMotion, IMU values go unknown
 
     // Recording
     private var isRecording = false
@@ -386,6 +402,11 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         configureVoiceSession()
         synth.delegate = self
         startMotionPipeline()
+        NotificationCenter.default.addObserver(forName: ProcessInfo.thermalStateDidChangeNotification, object: nil, queue: .main) { [weak self] _ in
+            guard let self else { return }
+            MainActor.assumeIsolated { self.thermalChanged() }
+        }
+        thermalChanged()
         startPushTimer()
     }
 
@@ -649,6 +670,8 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
     private func pushLiveFrame() {
         let vertPeak = pipeline.takeVertPeak()   // this frame's spike window; the web Recorder places it on the road
         guard webReady, webView != nil else { return }
+        let live = imuLive   // false while the thermal guard has motion paused: g, camber, crest and roughness are unknown
+        func imu(_ v: Double) -> Double? { live ? v : nil }
         let json = "{"
             + "\"lat\":\(Self.num(hasFix ? latDeg : nil, 7)),"
             + "\"lon\":\(Self.num(hasFix ? lonDeg : nil, 7)),"
@@ -657,14 +680,16 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
             + "\"course_deg\":\(Self.num(courseDeg, 1)),"
             + "\"elevation_m\":\(Self.num(fusion.elevationM, 2)),"
             + "\"grade_pct\":\(Self.num(odometer.gradePct, 2)),"
-            + "\"lat_g\":\(Self.num(pipeline.latAccMps2 / Self.gStd, 3)),"
-            + "\"lon_g\":\(Self.num(pipeline.lonAccMps2 / Self.gStd, 3)),"
-            + "\"camber_deg\":\(Self.num(pipeline.camberRad * 180.0 / Double.pi, 2)),"
-            + "\"crest_vertical_g\":\(Self.num(pipeline.crestAccMps2 / Self.gStd, 3)),"
-            + "\"roughness_rms\":\(Self.num(pipeline.roughRMSMps2 / Self.gStd, 4)),"
-            + "\"vert_peak_g\":\(Self.num(vertPeak / Self.gStd, 3)),"
+            + "\"lat_g\":\(Self.num(imu(pipeline.latAccMps2 / Self.gStd), 3)),"
+            + "\"lon_g\":\(Self.num(imu(pipeline.lonAccMps2 / Self.gStd), 3)),"
+            + "\"camber_deg\":\(Self.num(imu(pipeline.camberRad * 180.0 / Double.pi), 2)),"
+            + "\"crest_vertical_g\":\(Self.num(imu(pipeline.crestAccMps2 / Self.gStd), 3)),"
+            + "\"roughness_rms\":\(Self.num(imu(pipeline.roughRMSMps2 / Self.gStd), 4)),"
+            + "\"vert_peak_g\":\(Self.num(imu(vertPeak / Self.gStd), 3)),"
             + "\"recording\":\(isRecording ? "true" : "false"),"
-            + "\"calibration\":\"\(pipeline.mount.state.rawValue)\","
+            + "\"calibration\":\"\(live ? pipeline.mount.state.rawValue : "paused")\","
+            + "\"thermal\":\(thermal.level),"
+            + "\"low_power_mode\":\(ProcessInfo.processInfo.isLowPowerModeEnabled ? "true" : "false"),"
             + "\"has_fix\":\(hasFix ? "true" : "false"),"
             + "\"segments\":\(recordedSegments)"
             + "}"
@@ -723,8 +748,8 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         let idx = recordedSegments
         // Blank, never 0, for what is not measured: chassis-frame values need a solved mount (an unsolved one would put
         // braking into lateral g and skew the score), elevation needs a fix with altitude.
-        let locked = pipeline.mount.state == .locked
-        let vertical = pipeline.mount.state != .default   // roughness needs only the road vertical
+        let locked = imuLive && pipeline.mount.state == .locked
+        let vertical = imuLive && pipeline.mount.state != .default   // roughness needs only the road vertical
         func cell(_ v: Double?, _ digits: Int) -> String {
             guard let v = v, v.isFinite else { return "" }
             return String(format: "%.\(digits)f", v)
@@ -761,7 +786,11 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
                 }
             }
         }
-        guard motionManager.isDeviceMotionAvailable else { return }
+        startDeviceMotion()
+    }
+
+    private func startDeviceMotion() {
+        guard motionManager.isDeviceMotionAvailable, !motionManager.isDeviceMotionActive else { return }
         motionManager.deviceMotionUpdateInterval = 1.0 / 100.0
         motionManager.startDeviceMotionUpdates(to: .main) { [weak self] motion, _ in
             guard let self, let m = motion else { return }
@@ -778,6 +807,21 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         }
     }
 
+    /// Thermal guard (ApexKit.ThermalGuard): critical stops the 100 Hz pipeline, fair or cooler restarts it. GPS, map,
+    /// recording and pace notes carry on; motion values are sent and recorded as unknown while paused and settling.
+    private func thermalChanged() {
+        let level = ProcessInfo.processInfo.thermalState.rawValue
+        guard thermal.update(level: level, t: ProcessInfo.processInfo.systemUptime) else { return }
+        if thermal.paused {
+            motionManager.stopDeviceMotionUpdates()
+            nodeVertPeakMps2 = nil
+        } else {
+            startDeviceMotion()
+        }
+    }
+
+    private var imuLive: Bool { thermal.imuLive(t: ProcessInfo.processInfo.systemUptime) }
+
     private func ingestMotion(gravityG: Vec3, accelMps2 a: Vec3, gyroRadS w: Vec3, timestamp: Double) {
         latestGravityG = gravityG
         // Calibration is automatic and continuous (ApexKit.MountCalibrator): gravity gives the vertical, GPS speed and
@@ -786,7 +830,7 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         pipeline.step(accel: a, gyro: w, timestamp: timestamp, speedMps: speedMps, gravityG: gravityG)
         if !wasLocked && pipeline.mount.state == .locked { persistMount() }
         // Pothole evidence only in a solved chassis frame and while rolling (a door slam at a stop is not road).
-        if pipeline.mount.state == .locked && speedMps >= 1.0 {
+        if imuLive && pipeline.mount.state == .locked && speedMps >= 1.0 {   // not while settling after a thermal pause
             nodeVertPeakMps2 = max(nodeVertPeakMps2 ?? 0.0, abs(pipeline.hpVert))
         }
     }
