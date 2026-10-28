@@ -338,7 +338,7 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 | Z-12 | The outgoing friend-request list shows a pending row only for real member handles, so typing handles still tells you which exist (the request answer itself is uniform). Show sent requests for unknown handles too, or not at all | L | S | todo | audit 2026-10-28 |
 | Z-13 | Convoy members see each other's Google display name (`who()` in convoy_routes.ts), unlike crews and boards since #132. Send the handle only, or the name only between friends | L | S | done (this PR: handle only, the Google name never enters the convoy room) | audit 2026-10-28 |
 | Z-14 | Map matching sends the (trimmed) drive trace with the phone's IP to the public Valhalla demo server, and routing sends start and end points to public servers. Self-hosting (Y-04) fixes both; say it in the privacy policy (Z-07) until then | M | L | owner (cost) | audit 2026-10-28 |
-| Z-15 | Crew invite links are multi-use, never revocable and uncapped per owner (account invites are capped at 10 open). Add revoke on the crew card and a cap | L | S | todo | audit 2026-10-28 |
+| Z-15 | Crew invite links are multi-use, never revocable and uncapped per owner (account invites are capped at 10 open). Add revoke on the crew card and a cap | L | S | done (this PR: 10 live links per owner, "Turn off invite links" on the crew card) | audit 2026-10-28 |
 
 ## 13. Android and web parity (A)
 
