@@ -22,6 +22,9 @@
     { "name": "WRITE_LIMIT", "namespace_id": "1001", "simple": { "limit": 60, "period": 60 } },
     { "name": "AUTH_LIMIT", "namespace_id": "1002", "simple": { "limit": 20, "period": 60 } }
   ],
+  // Weekly database backup into KV (backend/src/backup.ts, docs/BACKUPS.md): Mondays 07:00 UTC, a quiet hour in the US.
+  "triggers": { "crons": ["0 7 * * 1"] },
+  "kv_namespaces": [{ "binding": "BACKUPS", "id": "3be0be04839649c0a5b474c8389e8e4b" }],
   "d1_databases": [
     { "binding": "DB", "database_name": "apexnav-db", "database_id": "b0c559d5-48c2-462c-bd97-cf375233f7c1", "migrations_dir": "backend/migrations" }
   ],
