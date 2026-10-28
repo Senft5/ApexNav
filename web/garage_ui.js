@@ -67,6 +67,48 @@
         mods: el('textarea', { className: 'field', name: 'mods', placeholder: 'Mods', maxLength: 500, rows: 3, value: c.mods ?? '' }),
       };
       inputs.mods.setAttribute('aria-label', 'Mods');
+      // Look the car up (car_lookup.js, IDEAS S-21): a VIN, or year + make + model; the specs fill in and you change what differs.
+      const L = root.ApexCarLookup;
+      const lookupNote = el('p', { className: 'note', role: 'status' });
+      const fill = (found, typical) => {
+        const cur = { year: inputs.year.value, make: inputs.make.value, model: inputs.model.value, trim: inputs.trim.value, power_hp: inputs.power_hp.value,
+                      weight_kg: inputs.weight_lb.value ? Math.round(Number(inputs.weight_lb.value) / LB) : null,
+                      drivetrain: inputs.drivetrain.value, transmission: inputs.transmission.value };
+        const m = L.merge(cur, found);
+        for (const k of ['year', 'make', 'model', 'trim', 'power_hp', 'drivetrain', 'transmission']) inputs[k].value = m[k] ?? '';
+        inputs.weight_lb.value = m.weight_kg ? Math.round(m.weight_kg * LB) : '';
+        const missing = [!m.power_hp && 'power', !m.weight_kg && 'weight', !m.drivetrain && 'drive', !m.transmission && 'gearbox'].filter(Boolean);
+        lookupNote.textContent = (typical ? 'Filled with typical factory specs. ' : 'Filled in. ') +
+          (missing.length ? `Add ${missing.join(', ')} yourself. ` : '') + 'Change anything that differs on yours.';
+      };
+      const vin = f('vin', 'VIN (optional)', '', { maxLength: 17, autocapitalize: 'characters' });
+      const lookups = L ? el('div', { className: 'stack-8' },
+        el('div', { className: 'row' }, vin, btn('Look up VIN', async () => {
+          lookupNote.textContent = 'Looking up…';
+          const r = await L.decodeVin(vin.value, root.fetch.bind(root));
+          if (r.error) { lookupNote.textContent = r.error === 'bad_vin' ? 'A VIN is 17 letters and numbers (no I, O or Q).' : r.error === 'offline' ? 'No signal. Try again, or type the car in.' : 'That VIN wasn\'t found. Type the car in instead.'; return; }
+          fill(r.car, r.typical);
+        })),
+        el('div', { className: 'row' }, btn('Fill specs from year, make and model', () => {
+          const spec = L.specFor({ year: inputs.year.value, make: inputs.make.value, model: inputs.model.value, trim: inputs.trim.value });
+          if (!spec) { lookupNote.textContent = 'No typical specs for that car yet. Type them in.'; return; }
+          fill(spec, true);
+        }, 'linkbtn')),
+        lookupNote) : '';
+      if (L) {   // suggestions while typing: makes from the spec table, models for the year from vPIC
+        const makes = el('datalist', { id: 'carMakes' }); for (const m of L.MAKES) makes.append(el('option', { value: m }));
+        const models = el('datalist', { id: 'carModels' });
+        inputs.make.setAttribute('list', 'carMakes'); inputs.model.setAttribute('list', 'carModels');
+        let asked = '';
+        const loadModels = async () => {
+          const key = `${inputs.year.value}|${inputs.make.value}`; if (key === asked) return; asked = key;
+          const list = await L.models(inputs.make.value, inputs.year.value, root.fetch.bind(root));
+          if (asked !== key) return;
+          models.replaceChildren(...list.map((m) => el('option', { value: m })));
+        };
+        inputs.make.addEventListener('change', loadModels); inputs.year.addEventListener('change', loadModels);
+        lookups.append(makes, models);
+      }
       const share = el('input', { type: 'checkbox', checked: !!c.shared });
       const int = (v) => (v.trim() === '' ? null : Number(v.trim().replace(/,/g, '')));
       const save = async () => {
@@ -84,6 +126,7 @@
         else { const j = await jsonOf(r); toast(r.status === 429 ? 'Your garage is full (10 cars).' : (FIELD_HINT[j && j.error] || 'Check the details and try again.')); }
       };
       return el('div', { className: 'stack-8' },
+        lookups,
         el('div', { className: 'car-form' }, inputs.year, inputs.make, inputs.model, inputs.trim, inputs.nickname, inputs.color, inputs.power_hp, inputs.weight_lb,
           inputs.drivetrain, inputs.transmission, el('div', { className: 'wide' }, inputs.tyres), el('div', { className: 'wide' }, inputs.mods)),
         el('label', { className: 'row', style: 'gap:8px;align-items:center' }, share, document.createTextNode('Show to my friends and private crews')),

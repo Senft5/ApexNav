@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>ApexNav · Privacy</title>
+  <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="legal.css" />
+</head>
+<body>
+<main>
+  <p class="draft" id="draft">Draft for the owner's review. Not yet the published policy.</p>
+  <h1>Privacy</h1>
+  <p class="lede">ApexNav is built so that how you drive stays yours. Most of what the app knows never leaves your phone. This page lists everything that does, where it goes, and how to remove it.</p>
+  <p class="meta">Last updated 28 October 2026</p>
+
+  <h2>On your phone only</h2>
+  <ul>
+    <li><b>Your drives</b>: position, speed, g-forces, banking, bumps and roughness every 5 m. Saved in the app's storage on the phone. They are never uploaded unless you share one yourself.</li>
+    <li><b>Privacy zones</b> you set (home, work). Inside one, nothing is recorded or shared and convoys don't see you.</li>
+    <li><b>Spots</b> you save, until you share one.</li>
+    <li><b>Voice</b>: notes are spoken by a voice model that runs on the phone. No audio is recorded or sent.</li>
+    <li><b>Settings</b> and your route history.</li>
+  </ul>
+
+  <h2>If you make an account</h2>
+  <p>Signing in is optional. The cockpit, routing, recording and the Log all work without an account.</p>
+  <ul>
+    <li><b>From Google sign-in</b>: your Google account id, email address and display name. Your display name is shown only to you and to friends you accept; everyone else sees your handle.</li>
+    <li><b>What you add</b>: your handle, friends, blocks, crews, garage cars, shared spots and ratings, results you choose to share, and reports you file.</li>
+    <li><b>Sign-in sessions</b>, which expire after 30 days.</li>
+  </ul>
+
+  <h2>Road data (only if you turn it on)</h2>
+  <p>With <b>Road data</b> switched on, the app helps map how roads feel. What is sent is the map's road id, the direction, a 5 m section number on that road, and four road measurements for it (roughness, banking, crest and bumps). <b>Never coordinates, speeds or times.</b> A random 0.5 to 1.5 km at each end of every trip is never sent, nor anything inside a privacy zone, nor residential and service roads. Once merged into a road's averages, road data is anonymous and is not deleted with your account.</p>
+
+  <h2>Convoys</h2>
+  <p>In a convoy you joined, the other cars see your live position, heading and handle while the convoy runs. Positions are kept in memory only and are gone when the convoy ends. Nothing is sent from inside a privacy zone.</p>
+
+  <h2>Crash reports</h2>
+  <p>If the app hits an error, it sends the error message and where in the app it happened, with numbers, emails and links removed. Nothing in it identifies you. Daily counts are kept for 30 days.</p>
+
+  <h2>Services the app talks to</h2>
+  <p>To draw maps and plan routes the app asks these services directly. They see your phone's internet address and what is asked of them:</p>
+  <ul>
+    <li><b>Map tiles</b>: OpenFreeMap (map area on screen). <b>Terrain</b>: Amazon Web Services public terrain tiles.</li>
+    <li><b>Routing and map matching</b>: the public Valhalla server (openstreetmap.de) and OSRM. They receive the start, end and stops of a route you plan, and, when the Log matches a drive to roads, that drive's track with its first and last km removed.</li>
+    <li><b>Search</b>: Photon (komoot) and Nominatim (OpenStreetMap) for what you type in Where to?</li>
+    <li><b>Road names and features</b>: Overpass (OpenStreetMap).</li>
+    <li><b>Car lookup</b>: NHTSA's vehicle database (US Department of Transportation), only when you look a car up in the Garage. It receives the VIN or the make and year you typed.</li>
+    <li><b>Fonts</b>: Google Fonts.</li>
+    <li><b>Our server</b> runs on Cloudflare, which processes requests to it.</li>
+  </ul>
+  <p>ApexNav has no advertising, no tracking across apps or websites, and sells no data.</p>
+
+  <h2>Keeping and deleting</h2>
+  <ul>
+    <li><b>Download my data</b> (Account) gives you everything the server holds about you as a file.</li>
+    <li><b>Delete account</b> (Account) erases your account, friends, crews you own, shared results and spots, and removes you from what other people hold. Server backups are kept for up to 8 weeks, so a deleted account can remain in a backup copy until then.</li>
+    <li>Deleting the app removes everything stored on the phone.</li>
+  </ul>
+
+  <h2>Children</h2>
+  <p>ApexNav is for licensed drivers and is not directed at children under 13.</p>
+
+  <h2>Contact</h2>
+  <p id="contact">Questions or requests: see the contact address on ApexNav's App Store page.</p>
+  <p class="meta"><a href="terms.html">Terms of use</a></p>
+</main>
+</body>
+</html>

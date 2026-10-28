@@ -237,6 +237,32 @@ flow('convoy: the leader shows a QR code of the link (Worker stubbed, IDEAS S-22
   check(dark > 0.2 && dark < 0.6, `a QR code is drawn (${(dark * 100).toFixed(0)} % dark)`);
 });
 
+flow('garage: a VIN fills the car in, the owner keeps the colour (NHTSA stubbed, IDEAS S-21)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.route('https://vpic.nhtsa.dot.gov/**', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ Results: [
+    { ModelYear: '2022', Make: 'MAZDA', Model: 'MX-5', Trim: 'Grand Touring', DriveType: 'RWD/Rear-Wheel Drive', TransmissionStyle: '', EngineHP: '181' }] }) }));
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.ApexGarageUI && window.ApexCarLookup);
+  await page.evaluate(() => {   // the garage section on its own, with a signed-in member's empty garage
+    const el = (tag, props = {}, ...kids) => { const n = Object.assign(document.createElement(tag), props); n.append(...kids); return n; };
+    const btn = (text, onclick, className = 'ink-btn') => el('button', { textContent: text, onclick, className });
+    const ok = (body) => ({ ok: true, status: 200, json: async () => body });
+    const g = ApexGarageUI.mount({ el, btn, toast: () => {}, apiCall: async () => ok([]), jsonOf: (r) => r.json() });
+    const host = el('div', { id: 'e2eGarage' }); document.body.prepend(host); host.append(g.section());
+  });
+  await page.click('#e2eGarage button:has-text("Add a car")');
+  await page.fill('#e2eGarage input[name="color"]', 'Soul Red');
+  await page.fill('#e2eGarage input[name="vin"]', 'JM1NDAD75N0500000');
+  await page.click('#e2eGarage button:has-text("Look up VIN")');
+  await page.waitForFunction(() => document.querySelector('#e2eGarage input[name="power_hp"]').value === '181');
+  const v = await page.evaluate(() => Object.fromEntries(['year', 'make', 'model', 'trim', 'power_hp', 'weight_lb', 'color'].map((k) =>
+    [k, document.querySelector(`#e2eGarage [name="${k}"]`).value]).concat([['drive', document.querySelector('#e2eGarage [name="drivetrain"]').value]])));
+  check(v.year === '2022' && v.make === 'Mazda' && v.model === 'MX-5' && v.trim === 'Grand Touring', 'year, make, model and trim filled');
+  check(v.drive === 'rwd' && v.weight_lb !== '', 'drive from the VIN, weight from typical specs');
+  check(v.color === 'Soul Red', 'the colour the owner typed is kept');
+  check(/typical factory specs/.test(await page.textContent('#e2eGarage [role="status"]')), 'says the specs are typical');
+});
+
 flow('the Log page opens', async (page, base) => {
   await page.goto(base + '/analysis.html');
   await page.waitForLoadState('load');

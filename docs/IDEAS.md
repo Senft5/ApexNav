@@ -215,7 +215,7 @@ Today: accounts with Google sign-in, friends, crews (public and private, crews n
 | S-18 | Photos on highlights and stops, stripped of EXIF location beyond the highlight | M | M | todo | Roadtrippers, Google Maps |
 | S-19 | Live share ETA with a friend or family ("Nate is 12 min away") without sharing the drive | M | M | todo | Apple Maps Share ETA, Life360 |
 | S-20 | Flyby: after a drive, see which friends drove the same road that day (opt-in) | L | M | todo | Strava Flyby |
-| S-21 | Garage cars from a vehicle database: pick year, make, model and trim, specs (power, weight, drive, gearbox) fill in, and you only change what differs (colour, mods, tyres). Free source: NHTSA vPIC (makes/models/years, VIN decode, US-only, no power/weight) plus a curated spec table for enthusiast cars | H | M | todo, next (owner ask) | owner 2026-10-28 |
+| S-21 | Garage cars from a vehicle database: pick year, make, model and trim, specs (power, weight, drive, gearbox) fill in, and you only change what differs (colour, mods, tyres). Free source: NHTSA vPIC (makes/models/years, VIN decode, US-only, no power/weight) plus a curated spec table for enthusiast cars | H | M | partial (this PR: VIN decode and model suggestions from NHTSA vPIC, typical specs for 31 enthusiast cars incl. weight; a bigger spec table todo) | owner 2026-10-28 |
 | S-22 | Convoys without copy-paste links or a website: invite friends and crew-mates from inside the app (they get the invite in the app), a short join code to read out, and a QR code to scan in the car park | H | M | partial (this PR: in-app invites to friends and private crew-mates, Join from the Crew sheet, a toast when one arrives, and a QR code of the link for the car park; a short spoken join code todo) | owner 2026-10-28 |
 
 ## 6. UI and UX (U)
@@ -257,12 +257,15 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 | O-02 | Mount guide: how and where to mount the phone, with a live "calibrated" tick | H | S | done (app: Mount row before the first drive, "Mount set" when calibration locks) | STATE 2026-10-26 calibration |
 | O-03 | Instant value with no account: plan a fun loop from where you are in two taps | H | S | done (loop chips in Where to?) | Calimoto |
 | O-04 | Demo replay that shows the cockpit, notes and analysis in 60 s | M | S | partial (#58) | — |
-| O-05 | Sign in with Apple (required on iOS when Google sign-in is offered) | H | S | owner (Apple account) | App Store guideline 4.8 |
+| O-05 | Sign in with Apple (required on iOS when Google sign-in is offered): native provider in the shell, Worker verifies the token, capability enabled through the API key (docs/APP_REVIEW.md) | H | M | partial (this PR: native sheet, Worker verification, entitlement, capability on the App ID; token revocation on account deletion needs the owner's Sign in with Apple key) | App Store guideline 4.8 |
 | O-06 | Email link sign-in as a no-Google option | M | S | todo | docs/BACKEND.md |
 | O-07 | Referral: invite a friend into your crew, both get Octane | M | S | todo | Waze, Strava |
 | O-08 | Landing page with real screenshots, the four promises and TestFlight/Play links | H | S | todo | launch |
 | O-09 | App Store listing: screenshots, preview video, privacy nutrition label, keywords | H | M | owner (Apple account) | launch |
 | O-10 | In-app "what's new" sheet after an update, one screen | L | S | todo | — |
+| O-11 | Privacy policy and terms of use pages, linked in Settings and at sign-in, policy URL in App Store Connect; terms carry the no-tolerance rule for objectionable content (guideline 1.2). Drafted from the real data flows, owner approves (Z-07) | H | S | partial (this PR: pages drafted and linked; owner approves the text and the contact line, then the URL goes into App Store Connect) | App Store guidelines 5.1.1(i), 1.2 |
+| O-12 | App Review access: a reviewer sign-in path that needs no invite, and review notes (drives need a car; replays show the cockpit) | H | S | todo | App Store guideline 2.1 |
+| O-13 | Native surfaces that make the app more than a web view (Live Activity, widgets, CarPlay) named in the review notes | M | M | todo | App Store guideline 4.2 |
 
 ## 8. CarPlay, Android Auto and in-car (C)
 

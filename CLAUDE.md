@@ -23,4 +23,5 @@ Regardless of how the phone is mounted in the cabin, all aligned chassis telemet
    After ANY edit to live sensor math (`core/live_pipeline.py` or `ApexKit/`), regenerate the fixture with `python tools/make_live_fixture.py` and run `swift test --package-path ApexKit`.
 3. Never ship placeholder or synthesized road data as if it were measured. Unknown stays unknown (`null`, `--`).
 4. For iOS / CarPlay changes, verify `project.yml` and `.github/workflows/build.yml` remain valid for cloud `xcodegen` compilation.
-5. Before concluding an agent session, update `/docs/STATE.md` with completed milestones, active bugs, and the exact next task.
+5. For anything touching the iOS shell, sign-in, social features, data collection or the store listing, check `/docs/APP_REVIEW.md` (App Store Review Guidelines) and update it in the same PR.
+6. Before concluding an agent session, update `/docs/STATE.md` with completed milestones, active bugs, and the exact next task.
