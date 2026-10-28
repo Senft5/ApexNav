@@ -15,6 +15,16 @@ The Plan sheet and the route card have a **Roads** choice, saved on the phone (`
 
 Changing the level re-plans a destination route that is not being driven (not while one is being planned; a route with a stop you added keeps it and the level applies to the next route). Loops ignore the level, so their card hides it.
 
+## Avoid
+
+Under Roads, an **Avoid** row (saved on the phone, `apex.avoid`): Highways, Tolls, Ferries, Unpaved (on by default:
+stages never use unpaved roads and most cars here don't want gravel). They set Valhalla's costing for routes and the
+connector matrix (`FunRoute.costing`: `use_highways`/`use_tolls`/`use_ferry` 0, `exclude_unpaved`). These are strong
+preferences, not bans, so each route's summary flags (`has_highway`, `has_toll`, `has_ferry`) are checked: candidates
+that still use an avoided road are dropped when any candidate doesn't (`keepAvoiding`, loops too), and when none can
+avoid it the route card says so ("Couldn't avoid tolls", e.g. the Chesapeake Bay Bridge-Tunnel). The OSRM fallback
+knows none of this and says nothing. Toggling one re-plans a destination route like the level does.
+
 ## Candidates
 
 1. The router's route (Valhalla, highways and tolls de-prioritised) and up to 2 Valhalla alternates
@@ -61,6 +71,13 @@ as a baseline. Routed loops are then ranked on the same fun score as A→B route
 Fun minus 2 points per % of the loop driven twice and 0.8 per % off the asked length), so junction turns
 no longer count as corners on loops and the measured adjustment means the same on both. Checked against the public servers: routed loops now land within about 15 % of the
 target (Knoxville 30 mi: 43–44 km after spur removal; 45 mi: 58–62 km; Cincinnati 30 mi: 46–48 km).
+
+**By time** (1 h / 2 h chips, R-16): the same loop builder planned on drive time instead of distance. The search
+radius assumes 35 km/h, the matrix gives connector times, stages count at 25 km/h (the router times twisty roads far
+below 50: a 43 km Smokies loop is 83 min), and routed loops are judged on the router's time against the target
+(`FunRoute.LOOP_BY_TIME`, `loopValue` on seconds). The card names the loop by its real time ("119 min loop"). Knoxville:
+2 h → 119 min; 1 h → 75 min, because the good roads nearest the start are 40 km of driving away (the toast says
+"75 min: the closest good loop to 1 h").
 
 ## Measured roads
 

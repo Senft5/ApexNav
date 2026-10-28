@@ -1,5 +1,13 @@
 # APEX NAV — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-10-28: loops by drive time
+- #118 merged (avoid options). #122: 1 h / 2 h loop chips plan on drive time (docs/ROUTING.md, Loops "By time"). Knoxville 2 h → 119 min, 1 h → 75 min (nearest good roads are far). Loop cards now carry their real name ("119 min loop", "27 mi loop"; it used to keep the asked distance). Not checked on a phone.
+- Exact next task: R-30 route options side by side, or R-10 Explore.
+
+## Session 2026-10-28: avoid highways, tolls, ferries, unpaved
+- #115 merged (why this route). #118: Avoid row on the Plan sheet (docs/ROUTING.md, Avoid); unpaved avoided by default; Valhalla summary flags make it honest ("Couldn't avoid tolls" on Virginia Beach → Cape Charles, checked against the public server). Not checked on a phone.
+- Exact next task: R-15 remainder (avoid towns, repeated roads), or R-13 sun glare.
+
 ## Session 2026-10-28: reliability (rate limits, crash reports)
 - #112 merged (IDEAS Y-10): Cloudflare rate limiting bindings, every write 60/min per session (per IP signed out), sign-in 20/min per IP, `429 rate_limited` + `retry-after: 60`.
 - Y-02 crash reports: `web/errors.js` (first script on index and analysis pages) sends uncaught errors and rejections, scrubbed, anonymous, max 5 per page, to `POST /api/errors`; the Worker scrubs again and logs one `client_error` line (nothing stored). Read them in Cloudflare Workers Logs. `body()` now checks the 64 KB cap on what arrived, not on Content-Length. Not checked from the iOS app yet (cross-origin post from apexnav://app, same CORS path as ApexSync).

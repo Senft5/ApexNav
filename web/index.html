@@ -386,9 +386,10 @@
               <div class="place-list" id="placeList" hidden></div>
               <div class="plan-links">
                 <button class="linkbtn" id="tapRouteBtn">Tap the map</button>
-                <span class="loop-row"><span>Loop</span><button class="chip" data-loop-mi="15">15</button><button class="chip" data-loop-mi="30">30</button><button class="chip" data-loop-mi="45">45 mi</button></span>
+                <span class="loop-row"><span>Loop</span><button class="chip" data-loop-mi="15">15</button><button class="chip" data-loop-mi="30">30</button><button class="chip" data-loop-mi="45">45 mi</button><button class="chip" data-loop-min="60">1 h</button><button class="chip" data-loop-min="120">2 h</button></span>
               </div>
               <div class="plan-links fun-row" role="radiogroup" aria-label="Route style"><span>Roads</span><button class="chip" data-fun="quick" role="radio" aria-checked="false">Quick</button><button class="chip" data-fun="fun" role="radio" aria-checked="false">Fun</button><button class="chip" data-fun="max" role="radio" aria-checked="false">Max fun</button></div>
+              <div class="plan-links fun-row" role="group" aria-label="Avoid"><span>Avoid</span><button class="chip" data-avoid="highways" aria-pressed="false">Highways</button><button class="chip" data-avoid="tolls" aria-pressed="false">Tolls</button><button class="chip" data-avoid="ferries" aria-pressed="false">Ferries</button><button class="chip" data-avoid="unpaved" aria-pressed="false">Unpaved</button></div>
             </section>
             <section id="routeCard" hidden>
               <h3 id="routeCardName"></h3>
@@ -1601,7 +1602,10 @@
       }
       return out;
     }
-    const COSTING = { costing: 'auto', costing_options: { auto: { use_highways: 0.15, use_tolls: 0.3 } } };
+    // Avoid options (Plan sheet, saved on the phone): router costing for routes and the connector matrix alike.
+    const AVOID = 'apex.avoid';
+    let avoid = { ...FunRoute.AVOID_DEFAULT };
+    try { const a = JSON.parse(localStorage.getItem(AVOID) || 'null'); if (a && typeof a === 'object') for (const k in avoid) if (typeof a[k] === 'boolean') avoid[k] = a[k]; } catch (_) { /* storage off */ }
     // Junction turns (slight/normal/sharp left and right, U-turns, ramps, roundabouts): fun scoring drops the corners there.
     const TURN_TYPES = new Set([9, 10, 11, 12, 13, 14, 15, 16, 18, 19, 20, 21, 26, 27]);
     function routeOf(trip) {
@@ -1617,7 +1621,10 @@
         const n = m.street_names && m.street_names[0];
         if (n && Number.isFinite(m.length)) names.set(n, (names.get(n) || 0) + m.length);
       }
-      return { coords, turns, names, timeS: trip.summary && Number.isFinite(trip.summary.time) ? trip.summary.time : null };
+      const sum = trip.summary || {};
+      // what the route uses that the driver may have asked to avoid (undefined = the router didn't say)
+      const has = { highways: sum.has_highway, tolls: sum.has_toll, ferries: sum.has_ferry };
+      return { coords, turns, names, has, timeS: Number.isFinite(sum.time) ? sum.time : null };
     }
     // [{ coords, turns: [[lon, lat]], names, timeS }]: the route, then up to `alternates` other ways (two-point requests
     // only). extra: more request options, e.g. { exclude_polygons }.
@@ -1630,7 +1637,7 @@
           if (!end && p.shaping) return { lat: p.lat, lon: p.lon, type: 'through', radius: 25 };   // stay on the stage
           return { lat: p.lat, lon: p.lon, type: end ? 'break' : 'through', ...(throughRoadsOnly && !end ? { radius: 2500, search_filter: filter } : {}) };
         }),
-        ...COSTING, ...(alternates && points.length === 2 ? { alternates } : {}), ...extra }) });
+        ...FunRoute.costing(avoid), ...(alternates && points.length === 2 ? { alternates } : {}), ...extra }) });
       if (!json.trip) throw new Error(json.error || 'no route');
       return [json.trip, ...(json.alternates || []).map(a => a.trip).filter(Boolean)].map(routeOf);
     }
@@ -1643,7 +1650,7 @@
       for (let i = 0; i < sources.length; i += rows) {
         const src = sources.slice(i, i + rows);
         const json = await RouteLoading.json(`${VALHALLA}/sources_to_targets`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sources: src.map(p => ({ lat: p.lat, lon: p.lon })), targets: targets.map(p => ({ lat: p.lat, lon: p.lon })), ...COSTING }) });
+          body: JSON.stringify({ sources: src.map(p => ({ lat: p.lat, lon: p.lon })), targets: targets.map(p => ({ lat: p.lat, lon: p.lon })), ...FunRoute.costing(avoid) }) });
         if (!Array.isArray(json.sources_to_targets)) throw new Error(json.error || 'no matrix');
         parts.push(json.sources_to_targets);
       }
@@ -1772,7 +1779,8 @@
           ? Math.round(t.roughG.filter(Number.isFinite).length / t.roughG.length * 100)
           : null;
       const feel = mCov != null && mCov > 0 ? `Road feel ${mCov}% driven` : 'Road feel after first drive';
-      $('routeCardSub').textContent = `Cameras ${cams} · ${feel}`;
+      const missed = Array.isArray(t.unavoided) && t.unavoided.length ? `Couldn't avoid ${t.unavoided.map(k => FunRoute.AVOID_LABELS[k] || k).join(' or ')} · ` : '';
+      $('routeCardSub').textContent = `${missed}Cameras ${cams} · ${feel}`;
       $('routeCardWhy').textContent = t.why || '';
       $('routeCardWhy').hidden = !t.why;
       $('routeCardFun').hidden = t.id !== 'route_dest';           // the level re-plans destination routes only
@@ -1783,7 +1791,7 @@
     function persistPlanned(t) {
       try {
         const coords = t.lat.map((la, i) => [+t.lon[i].toFixed(6), +la.toFixed(6)]);
-        sessionStorage.setItem(PLANNED, JSON.stringify({ id: t.id, name: t.name, request: t.request || null, coords, fun: t.fun || null, timeS: t.timeS ?? null, extraS: t.extraS ?? null, why: t.why || null }));
+        sessionStorage.setItem(PLANNED, JSON.stringify({ id: t.id, name: t.name, request: t.request || null, coords, fun: t.fun || null, timeS: t.timeS ?? null, extraS: t.extraS ?? null, why: t.why || null, unavoided: t.unavoided || [] }));
       } catch (_) { /* too big or storage off: the route just won't survive a page change */ }
     }
     async function restorePlanned() {
@@ -1791,7 +1799,8 @@
       try { saved = JSON.parse(sessionStorage.getItem(PLANNED) || 'null'); } catch (_) { saved = null; }
       if (!saved || !Array.isArray(saved.coords) || saved.coords.length < 2) return;
       const t = await trackFromPolyline(saved.coords, saved.id, saved.name);
-      Object.assign(t, { request: saved.request, fun: saved.fun || null, timeS: saved.timeS ?? null, extraS: saved.extraS ?? null, why: typeof saved.why === 'string' ? saved.why : null });
+      Object.assign(t, { request: saved.request, fun: saved.fun || null, timeS: saved.timeS ?? null, extraS: saved.extraS ?? null, why: typeof saved.why === 'string' ? saved.why : null,
+                         unavoided: Array.isArray(saved.unavoided) ? saved.unavoided.filter(k => typeof k === 'string' && FunRoute.AVOID_LABELS[k]) : [] });
       await buildRoute(null, saved.id, saved.name, t);
     }
     async function buildRoute(points, id, name, prebuilt = null, request = null) {
@@ -1801,7 +1810,7 @@
         let r = null;
         try { [r] = await valhallaRoutes(points); } catch (_) { try { [r] = await osrmRoutes(points); } catch (err) { toast('Couldn\'t build the route. Check signal and try again.'); return; } }
         t = await trackFromPolyline(r.coords, id, name);
-        Object.assign(t, { request, fun: funOf(t, r.turns), timeS: r.timeS });
+        Object.assign(t, { request, fun: funOf(t, r.turns), timeS: r.timeS, unavoided: FunRoute.unavoided(avoid, r) });
       }
       if (t.request) for (const v of t.request.via) v.distM = t.dist[Core.nearestIndex(v.lat, v.lon, t.lat, t.lon, -1).index];
       const i = drives.findIndex(d => d.id === id);
@@ -1946,14 +1955,17 @@
       const ahead = req.via.filter(v => !v.shaping && (v.distM == null || v.distM > routeWatch.bestM)).map(v => ({ lat: v.lat, lon: v.lon }));
       const points = [{ lat: L.lat, lon: L.lon }, ...ahead, req.to];
       // Valhalla gives alternates only between two points; the exclusion variant works through vias too.
-      const [base, avoid] = await Promise.allSettled([valhallaRoutes(points, false, 2),
+      const [base, excl] = await Promise.allSettled([valhallaRoutes(points, false, 2),
                                                       valhallaRoutes(points, false, 0, { exclude_polygons: ApexTraffic.jamPolygons(probes) })]);
       if (track !== t || state.mode !== 'live') return;
       if (base.status !== 'fulfilled' || !Number.isFinite(base.value[0].timeS)) { stay(); return; }
       const primary = base.value[0];
       const current = { timeS: primary.timeS, delayS };
-      const trips = [...base.value.slice(1), ...(avoid.status === 'fulfilled' ? avoid.value : [])]
-        .filter(c => Number.isFinite(c.timeS) && !ApexTraffic.tooSlow(current, c.timeS));   // only score what could win
+      // A detour may not add anything the driver avoids (a toll, a highway) that the current route doesn't already use.
+      const usesNow = FunRoute.unavoided(avoid, primary);
+      const trips = [...base.value.slice(1), ...(excl.status === 'fulfilled' ? excl.value : [])]
+        .filter(c => Number.isFinite(c.timeS) && !ApexTraffic.tooSlow(current, c.timeS)   // only score what could win
+          && FunRoute.unavoided(avoid, c).every(k => usesNow.includes(k)));
       // The Plan route card's fun score (web/fun_route.js) on light geometry, times what traffic leaves of it. The current
       // route is scored as the router's way from here, which follows it.
       const scored = (r) => {
@@ -1995,7 +2007,7 @@
       }
       const at = (v) => Core.nearestIndex(v.lat, v.lon, nt.lat, nt.lon, -1).index;
       const via = [...ahead, ...along].map(v => ({ v, i: at(v) })).sort((a, b) => a.i - b.i).map(x => x.v);   // in order along it
-      Object.assign(nt, { request: { from: null, to: req.to, via }, fun: funOf(nt, route.turns), timeS: route.timeS });
+      Object.assign(nt, { request: { from: null, to: req.to, via }, fun: funOf(nt, route.turns), timeS: route.timeS, unavoided: FunRoute.unavoided(avoid, route) });
       await buildRoute(null, t.id, t.name, nt);                     // activate() restarts the traffic clock for the new route
     }
     // Members: what others measured on these roads (d.t.measured) and a score adjustment for it (d.adjust: rough
@@ -2024,7 +2036,9 @@
       try { direct = await valhallaRoutes([from, to], false, 2); }
       catch (_) { try { direct = await osrmRoutes([from, to]); } catch (err) { toast('Couldn\'t build the route. Check signal and try again.'); return false; } }
       const cands = direct.map(r => ({ kind: 'router', route: r, timeS: r.timeS, via: [] }));
-      const quickS = Math.min(...cands.map(c => c.timeS).filter(Number.isFinite));
+      // The baseline is the quickest route that keeps to the avoid options (when one does), as the ranking's is.
+      const allowed = FunRoute.keepAvoiding(cands, avoid);
+      const quickS = Math.min(...allowed.map(c => c.timeS).filter(Number.isFinite));
       // Under 3 km there is no detour worth taking to the shop round the corner.
       if (level !== 'quick' && Number.isFinite(quickS) && FunRoute.kmBetween(from, to) >= 3) {
         try {
@@ -2049,7 +2063,7 @@
           const plans = FunRoute.kmBetween(from, to) > 48 ? [] : await stretch(from, to, quickS, 'Finding fun roads…', 0.75);
           if (n > 1) {
             try {
-              const quick = cands.reduce((x, y) => (y.timeS < x.timeS ? y : x));
+              const quick = allowed.reduce((x, y) => (y.timeS < x.timeS ? y : x));
               const cuts = FunRoute.sectionPoints(quick.route.coords, n);
               cuts[0] = from; cuts[n] = to;
               const sections = [];
@@ -2075,21 +2089,23 @@
         } catch (_) { /* no tiles or no matrix: the router's own routes still compete */ }
       }
       ui.step('Scoring roads…', 0.9);
+      // Avoid options are router preferences: drop candidates that still use an avoided road when any candidate doesn't.
+      const pool = FunRoute.keepAvoiding(cands, avoid);
       // Score on light geometry (corners only); the full track (envelope, sight lines, notes) is built for the winner.
-      for (const c of cands) { c.t = FunRoute.geometry(c.route.coords, Core); c.fun = funOf(c.t, c.route.turns); await RouteLoading.yieldToUI(); }
-      await applyMeasured(FunRoute.rank(cands, level).slice(0, 3).map(r => cands.find(c => c.t === r.t)), ui);   // the top few only
-      const best = FunRoute.rank(cands, level)[0];
+      for (const c of pool) { c.t = FunRoute.geometry(c.route.coords, Core); c.fun = funOf(c.t, c.route.turns); await RouteLoading.yieldToUI(); }
+      await applyMeasured(FunRoute.rank(pool, level).slice(0, 3).map(r => pool.find(c => c.t === r.t)), ui);   // the top few only
+      const best = FunRoute.rank(pool, level)[0];
       const measured = best.t.measured;
       best.t = await trackFromPolyline(best.route.coords, id, name);
       // A winning alternate is pinned with shaping points along it, so a reroute stays on it.
       const via = best.kind === 'router' && best.extraS > 0 ? FunRoute.alongPoints(best.route.coords) : best.via;
-      const quickest = cands.filter(c => Number.isFinite(c.timeS)).reduce((x, y) => (y.timeS < x.timeS ? y : x), best);
-      Object.assign(best.t, { measured, fun: best.fun, timeS: best.timeS, extraS: best.extraS, funLevel: level, why: whyText(FunRoute.why(best, quickest)),
+      const quickest = pool.filter(c => Number.isFinite(c.timeS)).reduce((x, y) => (y.timeS < x.timeS ? y : x), best);
+      Object.assign(best.t, { measured, fun: best.fun, timeS: best.timeS, extraS: best.extraS, funLevel: level, unavoided: FunRoute.unavoided(avoid, best.route), why: whyText(FunRoute.why(best, quickest)),
                               request: { ...request, via: via.map(p => ({ lat: p.lat, lon: p.lon, shaping: true })) } });
       await buildRoute(null, id, name, best.t);
       const mi = (totalOf(best.t) / 1609.344).toFixed(1), extra = best.extraS >= 60 ? ` · +${Math.round(best.extraS / 60)} min for fun` : '';
       toast(`${name} · ${mi} mi · Fun ${best.fun ? best.fun.fun : '--'}${extra}`);
-      window.apexDebug && (window.apexDebug.lastFun = FunRoute.rank(cands, level).map(c => ({ kind: c.kind, fun: c.fun, timeS: c.timeS, value: c.value, adjust: c.adjust || 0 })));
+      window.apexDebug && (window.apexDebug.lastFun = FunRoute.rank(pool, level).map(c => ({ kind: c.kind, fun: c.fun, timeS: c.timeS, value: c.value, adjust: c.adjust || 0 })));
       return true;
     }
     function setFunLevel(level) {
@@ -2098,11 +2114,16 @@
       try { localStorage.setItem(FUN_LEVEL, level); } catch (_) { /* storage off: this session only */ }
       document.querySelectorAll('[data-fun]').forEach(b => { const on = b.dataset.fun === level; b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); });
     }
-    // Changing the level re-plans a destination route that isn't being driven.
-    async function replanForLevel() {
+    function setAvoid(next) {
+      avoid = { ...avoid, ...next };
+      try { localStorage.setItem(AVOID, JSON.stringify(avoid)); } catch (_) { /* storage off: this session only */ }
+      document.querySelectorAll('[data-avoid]').forEach(b => { const on = !!avoid[b.dataset.avoid]; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
+    }
+    // Changing the level (or what to avoid) re-plans a destination route that isn't being driven.
+    async function replanForLevel(what = FunRoute.LEVELS[funLevel].label) {
       const t = plannedRoute;
-      if (!t || t.id !== 'route_dest' || !t.request || state.mode === 'live') return;
-      if (t.request.via.some(v => !v.shaping)) { toast(`${FunRoute.LEVELS[funLevel].label} from your next route (this one has your added stop)`); return; }
+      if (!t || t.id !== 'route_dest' || !t.request || state.mode === 'live') return true;
+      if (t.request.via.some(v => !v.shaping)) { toast(`${what} from your next route (this one has your added stop)`); return true; }
       const ui = planBusy();
       ui.step('Routing…', 0.5);
       let ok = false;
@@ -2112,6 +2133,7 @@
         ok = await funRoute(from, t.request.to, t.id, t.name, { from: t.request.from, to: t.request.to, via: [] }, ui);
       } catch (err) { toast(err.message); } finally { ui.done(); }
       if (!ok && t.funLevel) setFunLevel(t.funLevel);             // the chips show the level the route on screen was built with
+      return ok;
     }
 
     // Loops: three candidate circles through the start, waypoints snapped to through roads,
@@ -2126,11 +2148,13 @@
       pts.push(c);
       return pts;
     }
-    function scoreLoop(t, miles) {
+    // byTime { timeS, targetS }: a "home in N minutes" loop is judged on the router's drive time, not distance.
+    function scoreLoop(t, miles, byTime = null) {
       const km = totalOf(t) / 1000, targetKm = miles * 1.609344;
       const retraced = Core.retracedShare(t.lat, t.lon);
+      const score = byTime ? FunRoute.loopValue(t.fun, byTime.timeS, byTime.targetS, retraced) : FunRoute.loopValue(t.fun, km, targetKm, retraced);
       // good: corners off the router's junctions, as the fun score counts them
-      return { score: FunRoute.loopValue(t.fun, km, targetKm, retraced), good: t.fun ? t.fun.good : 0, retraced, km };
+      return { score, good: t.fun ? t.fun.good : 0, retraced, km };
     }
     const totalOf = (t) => t.dist[t.dist.length - 1];
     // Busy state on the button that started a slow request: label and progress bar;
@@ -2148,16 +2172,22 @@
     async function loop(miles, btn) {
       if (loopBusy) return;
       loopBusy = true;
-      const ui = btn ? busy(btn, [...document.querySelectorAll('[data-loop-mi]')]) : { step() {}, done() {} };
+      const ui = btn ? busy(btn, [...document.querySelectorAll('[data-loop-mi], [data-loop-min]')]) : { step() {}, done() {} };
       try { await buildLoop(miles, ui); }
       catch (_) { toast('Couldn\'t build a loop. Check signal and try again.'); }
       finally { loopBusy = false; ui.done(); }
     }
-    async function buildLoop(miles, ui) {
+    // A loop of `want` miles, or { minutes } of driving that ends back home (R-16). Time loops search as far as about
+    // LOOP_KMH on back roads would take you, then plan and pick on drive time.
+    const LOOP_KMH = 35;
+    async function buildLoop(want, ui) {
       const c = await locate();
       if (!c) { toast(NO_FIX); return; }
-      const targetKm = miles * 1.609344;
-      toast(`Finding roads · ${miles} mi loop`);
+      const minutes = typeof want === 'object' && want ? want.minutes : null;
+      const miles = minutes ? Math.round(minutes / 60 * LOOP_KMH / 1.609344) : want;
+      const targetKm = miles * 1.609344, targetS = minutes ? minutes * 60 : null;
+      const asked = minutes ? `${minutes / 60} h` : `${miles} mi`, loopId = minutes ? `loop_${minutes}min` : `loop_${miles}`;
+      toast(`Finding roads · ${asked} loop`);
       // 1. Stage discovery: score every road around the start from the map's own vector tiles.
       let plans = [];
       try {
@@ -2170,8 +2200,8 @@
           const list = FunRoute.loopShortlist(c, stages, targetKm);
           if (list.length) {
             ui.step('Measuring roads', 0.36);
-            const mp = FunRoute.matrixPoints(c, c, list);
-            plans = FunRoute.loopPlansFromMatrix(list, (await valhallaMatrix(mp.sources, mp.targets)).km, targetKm, 3);
+            const mp = FunRoute.matrixPoints(c, c, list), m = await valhallaMatrix(mp.sources, mp.targets);
+            plans = targetS ? FunRoute.loopPlansFromMatrix(list, m.times, targetS, 3, FunRoute.LOOP_BY_TIME) : FunRoute.loopPlansFromMatrix(list, m.km, targetKm, 3);
           }
         } catch (_) { plans = []; }
         if (!plans.length) plans = ApexStages.plans(c, stages, targetKm, 3);
@@ -2185,11 +2215,15 @@
         const [r] = await valhallaRoutes(job.pts, job.through)
           .finally(() => { settled++; ui.step(`Routing · ${settled} of ${jobs.length}`, 0.38 + 0.5 * settled / jobs.length); });
         const rs = Core.removeSpurs(r.coords.map(p => p[1]), r.coords.map(p => p[0]));
-        const t = await trackFromPolyline(rs.lat.map((la, i) => [rs.lon[i], la]), `loop_${miles}`, `${miles} mi loop`);
+        const t = await trackFromPolyline(rs.lat.map((la, i) => [rs.lon[i], la]), loopId, `${asked} loop`);
         t.fun = funOf(t, r.turns);
-        return { t, job, ...scoreLoop(t, miles), spursCut: rs.removed };
+        t.unavoided = FunRoute.unavoided(avoid, r);
+        t.timeS = r.timeS;
+        return { t, job, route: r, ...scoreLoop(t, miles, targetS && Number.isFinite(r.timeS) ? { timeS: r.timeS, targetS } : null), spursCut: rs.removed };
       });
-      const done = (await Promise.allSettled(tries)).filter(r => r.status === 'fulfilled').map(r => r.value);
+      let done = FunRoute.keepAvoiding((await Promise.allSettled(tries)).filter(r => r.status === 'fulfilled').map(r => r.value), avoid);
+      // A time loop compares drive times: a route the router didn't time can't be judged with the others.
+      if (targetS && done.some(d => Number.isFinite(d.t.timeS))) done = done.filter(d => Number.isFinite(d.t.timeS));
       if (!done.length) { toast('Couldn\'t build a loop. Check signal and try again.'); return; }
       done.sort((a, b) => b.score - a.score);
       // Members: let what others measured break ties among the top few (rough −8 … smooth +3, banked ±2 on the same fun scale, docs/ROUTING.md; unmeasured roads are neutral).
@@ -2201,9 +2235,18 @@
       best.t.request = { from: null, to: { lat: c.lat, lon: c.lon }, via: best.job.pts.slice(1, -1).map(p => ({ lat: p.lat, lon: p.lon })) };
       ui.step('Building route', 0.92);
       // Name the loop by what it is, not what was asked: a "15 mi loop" that is 9.3 mi reads as a bug.
-      const gotMi = best.km / 1.609344, near = Math.abs(gotMi - miles) <= 0.2 * miles;
-      await buildRoute(null, `loop_${miles}`, `${Math.max(1, Math.round(gotMi))} mi loop`, best.t);
-      toast(near ? `${best.good} good corners on this loop` : `${gotMi.toFixed(1)} mi: the closest good loop to ${miles} mi`);
+      const gotMi = best.km / 1.609344;
+      if (targetS && Number.isFinite(best.t.timeS)) {
+        const gotMin = Math.round(best.t.timeS / 60), near = Math.abs(best.t.timeS - targetS) <= 0.2 * targetS;
+        best.t.name = `${gotMin} min loop`;
+        await buildRoute(null, loopId, best.t.name, best.t);
+        toast(near ? `${best.good} good corners · home in about ${gotMin} min` : `${gotMin} min: the closest good loop to ${asked}`);
+      } else {
+        const near = Math.abs(gotMi - miles) <= 0.2 * miles;
+        best.t.name = `${Math.max(1, Math.round(gotMi))} mi loop`;
+        await buildRoute(null, loopId, best.t.name, best.t);
+        toast(near ? `${best.good} good corners on this loop` : `${gotMi.toFixed(1)} mi: the closest good loop to ${asked}`);
+      }
       window.apexDebug && (window.apexDebug.lastLoop = done.map(d => ({ kind: d.job.kind, fun: d.t.fun && d.t.fun.fun, score: d.score, km: d.km, good: d.good, retraced: d.retraced })));
     }
 
@@ -2477,11 +2520,20 @@
       if (state.tapToRoute) { closeSheet(); openPlan(false); toast(state.planField === 'fromInput' ? 'Tap the map where you want to start.' : 'Tap the map where you want to go.'); }
     });
     document.querySelectorAll('[data-loop-mi]').forEach(b => b.addEventListener('click', () => loop(parseInt(b.dataset.loopMi, 10), b)));
+    document.querySelectorAll('[data-loop-min]').forEach(b => b.addEventListener('click', () => loop({ minutes: parseInt(b.dataset.loopMin, 10) }, b)));
     document.querySelectorAll('[data-fun]').forEach(b => b.addEventListener('click', () => {
       if (b.dataset.fun === funLevel || $('planPanel').classList.contains('busy')) return;
       setFunLevel(b.dataset.fun); replanForLevel();
     }));
     setFunLevel(funLevel);
+    document.querySelectorAll('[data-avoid]').forEach(b => b.addEventListener('click', async () => {
+      if ($('planPanel').classList.contains('busy') || loopBusy) return;   // a build in flight reads `avoid` as it goes
+      const k = b.dataset.avoid, was = avoid[k];
+      setAvoid({ [k]: !was });
+      const label = FunRoute.AVOID_LABELS[k];
+      if (!(await replanForLevel(was ? `Allowing ${label}` : `Avoiding ${label}`))) setAvoid({ [k]: was });   // the chips show what the route on screen avoids
+    }));
+    setAvoid({});
     $('routeDriveBtn').addEventListener('click', () => {
       if (!plannedRoute) return;
       booting = false;
