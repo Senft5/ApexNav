@@ -1,0 +1,16 @@
+{
+  "name": "ApexNav",
+  "short_name": "ApexNav",
+  "description": "A co-driver for the long way home: pace notes, good roads, a Driver Score for technique, never speed.",
+  "start_url": "/index.html",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#1b1914",
+  "theme_color": "#1b1914",
+  "icons": [
+    { "src": "brand/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "brand/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "brand/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
