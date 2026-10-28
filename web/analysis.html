@@ -579,7 +579,8 @@
       const pick = $('dvPick'), keep = pick.value; pick.innerHTML = '';
       const list = drives.slice().reverse();
       list.forEach(d => pick.add(new Option(`${d.name} · ${dateLabel(d)}`, d.id)));
-      if (!list.length) { $('dvRoot').innerHTML = '<p class="note">No drives yet. Start a drive on the map, or import a recording from the Log.</p>'; return; }
+      const actions = document.querySelector('#tab-drive .actions'); actions.hidden = !list.length;
+      if (!list.length) { $('dvTitle').textContent = 'No drives yet'; $('dvNote').textContent = ''; $('dvRoot').innerHTML = '<p class="note">Start a drive on the map, or import a recording from the Log.</p>'; return; }
       pick.value = list.some(d => d.id === keep) ? keep : list[0].id;
       const d = drives.find(x => x.id === pick.value);
       if (dvView) dvView.destroy();
