@@ -442,7 +442,9 @@
               <div class="row mt-8">
                 <button class="ink-btn solid" id="routeDriveBtn">Drive it</button>
                 <button class="ink-btn" id="routePreviewBtn">Preview</button>
+                <button class="ink-btn" id="routeShareBtn">Share</button>
               </div>
+              <div class="stack-8" id="routeSharePick"></div>
             </section>
             <section>
               <p class="note" id="measuredNote" hidden></p>
@@ -458,6 +460,7 @@
         <button class="sw" data-toggle="voice"><i></i><span>Voice</span></button>
         <button class="sw" data-toggle="lpr"><i></i><span>Cameras</span></button>
         <button class="sw" data-toggle="twisty"><i></i><span>Twisty roads</span></button>
+        <button class="sw" data-toggle="haptics"><i></i><span>Haptics</span></button>
         <button class="sw sw-cycle" data-cycle="nightMode" aria-label="Night"><b></b><span>Night</span></button>
       </div>
       </div>
@@ -751,7 +754,7 @@
       theme: 'roadbook', camFeel: 'dynamic', voiceId: 'george', liveVoice: false, voiceStyle: 'codriver', voiceName: '', hlOn: false, hlStrength: 1,
       notesMode: 'auto', nightMode: 'auto',   // Notes: auto | full | quiet. Night: auto (sunset/sunrise) | on | off
       noteWords: 'plain',                     // rally ("Left 4 minus") | plain ("Medium left"), IDEAS V-02; a saved setting wins
-      toggles: { stage: false, voice: true, lpr: true, dna: false, night: false, twisty: false }   // stage and night are derived from the two modes; analysis.html reads toggles.night
+      toggles: { stage: false, voice: true, lpr: true, dna: false, night: false, twisty: false, haptics: true }   // stage and night are derived from the two modes; analysis.html reads toggles.night
     };
     const NOTES_MODES = ['auto', 'full', 'quiet'], NIGHT_MODES = ['auto', 'on', 'off'];
     const MODE_LABEL = { auto: 'Auto', full: 'Full', quiet: 'Quiet', on: 'On', off: 'Off' };
@@ -1469,6 +1472,13 @@
       if (speech.via === 'native') { clearTimeout(speech.nativeTimer); speech.busy = false; speech.interrupt = true; }
       else if (speech.via === 'web' && 'speechSynthesis' in window) speechSynthesis.cancel();   // onend pumps the hazard
     }
+    // A tap as a call starts (IDEAS U-09): the app's Taptic Engine, or a short buzz where the browser offers one. Off in Settings.
+    function haptic(kind) {
+      if (!state.toggles.haptics) return;
+      const native = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex;
+      if (native) { try { native.postMessage({ cmd: 'haptic', kind }); } catch (_) {} return; }
+      try { if (navigator.vibrate) navigator.vibrate(kind === 'hazard' ? [60, 60, 60] : 25); } catch (_) {}
+    }
     function stopSpeaking() {
       if ('speechSynthesis' in window) speechSynthesis.cancel();
       if (speech.via === 'native') { clearTimeout(speech.nativeTimer); speech.busy = false; speech.interrupt = true; }
@@ -1482,6 +1492,7 @@
       if (speech.busy) return;
       const item = speech.queue.take(performance.now(), queueCursor());
       if (!item) { speech.current = null; speech.via = null; return; }
+      if (item.kind === 'hazard' || item.chain || item.haptic) haptic(item.kind === 'hazard' ? 'hazard' : 'note');
       speech.busy = true; speech.current = item; speech.via = 'model';
       let played = false;
       try {
@@ -2976,6 +2987,56 @@
       closeSheet();
       startDrive();
     });
+    // ---- planned routes shared with friends and crews (IDEAS S-05; backend/src/routes_shared.ts) ----------------------
+    // The shape only, thinned to 1,500 points, without the first 400 m (where you are when you plan is often home).
+    const SHARE_TRIM_M = 400, SHARE_MAX_PTS = 1500;
+    function sharedGeom(t) {
+      const n = t.lat.length, from = t.dist.findIndex(d => d >= SHARE_TRIM_M), step = Math.max(1, Math.ceil((n - Math.max(0, from)) / SHARE_MAX_PTS));
+      const out = [];
+      for (let i = Math.max(0, from); i < n; i += step) out.push([+t.lon[i].toFixed(5), +t.lat[i].toFixed(5)]);
+      if (out.length && (out[out.length - 1][0] !== +t.lon[n - 1].toFixed(5))) out.push([+t.lon[n - 1].toFixed(5), +t.lat[n - 1].toFixed(5)]);
+      return out.slice(0, SHARE_MAX_PTS);
+    }
+    $('routeShareBtn').addEventListener('click', async () => {
+      const t = plannedRoute, box = $('routeSharePick');
+      if (!t || !Array.isArray(t.lat) || t.lat.length < 2) return;
+      box.replaceChildren(el('p', { className: 'note', textContent: 'Loading your friends and crews…' }));
+      let friends = [], crews = [];
+      try { [friends, crews] = await Promise.all([apiCall('GET', '/api/friends').then(jsonOf), apiCall('GET', '/api/crews').then(jsonOf)]); } catch (_) {}
+      const fr = (friends || []).filter(f => f.status === 'accepted' && f.handle), cr = crews || [];
+      if (!fr.length && !cr.length) { box.replaceChildren(el('p', { className: 'note', textContent: 'Sign in and add friends or a crew (Crew) to share routes.' })); return; }
+      const picked = { friends: new Set(), crews: new Set() };
+      const chip = (label, set, key) => { const b = el('button', { className: 'ink-btn', textContent: label }); b.setAttribute('aria-pressed', 'false');
+        b.onclick = () => { if (set.has(key)) set.delete(key); else set.add(key); b.classList.toggle('on', set.has(key)); b.setAttribute('aria-pressed', String(set.has(key))); }; return b; };
+      box.replaceChildren(el('p', { className: 'note', textContent: 'Share this route\'s shape (not a drive). The first 400 m stay private.' }),
+        el('div', { className: 'row', style: 'flex-wrap:wrap' }, ...fr.map(f => chip('@' + f.handle, picked.friends, f.handle)), ...cr.map(c => chip(c.name, picked.crews, c.id))),
+        el('div', { className: 'row' }, btn('Send', async () => {
+          if (!picked.friends.size && !picked.crews.size) { toast('Pick who to share it with.'); return; }
+          const r = await apiCall('POST', '/api/routes', { name: t.name || 'Route', geom: sharedGeom(t), friends: [...picked.friends], crews: [...picked.crews] });
+          const j = await jsonOf(r);
+          if (!r.ok) { toast(r.status === 429 ? 'That\'s a lot of shares today.' : 'Couldn\'t share it. Try again.'); return; }
+          toast(j && j.shared ? `Shared. They'll find it in Crew.` : 'Nobody to share it with.'); box.replaceChildren();
+        }, 'ink-btn solid'), btn('Cancel', () => box.replaceChildren(), 'linkbtn')));
+    });
+    function sharedRoutesSection() {
+      const sec = el('div', { className: 'stack-8' }, el('h3', { textContent: 'Routes shared with you' }));
+      apiCall('GET', '/api/routes/shared').then(jsonOf).then((list) => {
+        if (!Array.isArray(list) || !list.length) { sec.append(el('p', { className: 'note', textContent: 'Routes friends and crews share show up here.' })); return; }
+        for (const r of list) sec.append(el('div', { className: 'row', style: 'align-items:center' },
+          el('span', { style: 'flex:1', textContent: `${r.name} · from @${r.from_handle || '?'}` }),
+          btn('Open', () => openSharedRoute(r.id), 'ink-btn')));
+      }).catch(() => sec.append(el('p', { className: 'note', textContent: 'Couldn\'t load shared routes. Check signal.' })));
+      return sec;
+    }
+    async function openSharedRoute(id) {
+      const r = await apiCall('GET', `/api/routes/${encodeURIComponent(id)}`);
+      const j = r.ok ? await jsonOf(r) : null;
+      if (!j || !Array.isArray(j.geom) || j.geom.length < 2) { toast('That route isn\'t shared with you any more.'); return; }
+      closeSheet && closeSheet();
+      const t = await trackFromPolyline(j.geom, `shared_${id}`, j.name);
+      await buildRoute(null, t.id, j.name, t);
+      toast(`${j.name} from @${j.from_handle || '?'}: ${(totalM() / 1609.344).toFixed(1)} mi.`);
+    }
     $('routePreviewBtn').addEventListener('click', () => {
       if (!plannedRoute) return;
       booting = false;
@@ -3114,6 +3175,7 @@
         btn('Share my handle', () => copyText(`${shareOrigin()}/?add=${me.handle}`, 'Link copied. Anyone who opens it can ask to be your friend.'))), invOut);
       body.append(you);
       if (convoy) body.append(convoy.section());
+      body.append(sharedRoutesSection());
       if (garage) body.append(garage.section());
 
       // friends: a side pop-up (owner decision), opened from the button under You; new requests light it up
@@ -3609,6 +3671,7 @@
       state.toggles[k] = !state.toggles[k];
       paintSwitches();
       if (k === 'lpr') updatePins();
+      if (k === 'haptics' && state.toggles.haptics) haptic('note');   // feel it once
       if (k === 'twisty') {
         updateTwisty();
         if (state.toggles.twisty) toast(mapReady && map.getZoom() < ApexTwisty.MIN_ZOOM ? 'Zoom in to see twisty roads.' : 'Twisty roads come from the map\'s shape, not from drives.');
