@@ -397,6 +397,7 @@
               <div class="bars mt-8" id="routeCardBars"></div>
               <p class="note" id="routeCardWhy" hidden></p>
               <p class="note" id="routeCardSub"></p>
+              <div class="plan-links fun-row" id="routeCardOptions" role="group" aria-label="Route options" hidden></div>
               <div class="plan-links fun-row" id="routeCardFun" role="radiogroup" aria-label="Route style"><span>Roads</span><button class="chip" data-fun="quick" role="radio" aria-checked="false">Quick</button><button class="chip" data-fun="fun" role="radio" aria-checked="false">Fun</button><button class="chip" data-fun="max" role="radio" aria-checked="false">Max fun</button></div>
               <div class="row mt-8">
                 <button class="ink-btn solid" id="routeDriveBtn">Drive it</button>
@@ -838,6 +839,7 @@
       if (has('apex-contour-labels')) { map.setPaintProperty('apex-contour-labels', 'text-color', P.contour); map.setPaintProperty('apex-contour-labels', 'text-halo-color', P.bg); }
       if (has('apex-route-casing')) map.setPaintProperty('apex-route-casing', 'line-color', C.routeCasing);
       if (has('apex-route')) map.setPaintProperty('apex-route', 'line-color', C.route);
+      if (has('apex-alt')) map.setPaintProperty('apex-alt', 'line-color', C.route);
     }
 
     function addApexLayers() {
@@ -856,6 +858,9 @@
       }
       map.addSource('apex-route-src', { type: 'geojson', data: emptyFC() });
       const width = (a, b) => ['interpolate', ['linear'], ['zoom'], 10, a, 16, b];
+      map.addSource('apex-alt-src', { type: 'geojson', data: emptyFC() });
+      map.addLayer({ id: 'apex-alt', type: 'line', source: 'apex-alt-src', layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: { 'line-width': width(3, 6), 'line-opacity': 0.45, 'line-dasharray': [1.5, 1.5] } });
       map.addLayer({ id: 'apex-route-casing', type: 'line', source: 'apex-route-src', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-width': width(6, 13) } });
       map.addLayer({ id: 'apex-route', type: 'line', source: 'apex-route-src', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-width': width(3, 7) } });
       map.addLayer({ id: 'apex-dna', type: 'line', source: 'apex-route-src', filter: ['has', 'dna'], layout: { 'line-cap': 'butt', 'line-join': 'round', visibility: 'none' },
@@ -937,6 +942,12 @@
       restyleBasemap();
       map.setLayoutProperty('apex-dna', 'visibility', state.toggles.dna ? 'visible' : 'none');
       if (track) loadTrackOnMap();
+      // Tap a faint option on the map to take it.
+      map.on('click', 'apex-alt', (e) => {
+        if (state.tapToRoute || !e.features || !e.features.length) return;
+        suppressMapClickUntil = Date.now() + 400;
+        pickOption(e.features[0].properties.i);
+      });
       map.on('click', (e) => {
         if (Date.now() < suppressMapClickUntil) return;
         if (!state.tapToRoute) return;
@@ -1484,7 +1495,7 @@
     }
     function setMode(mode) {
       state.mode = mode;
-      if (mode === 'live') { cancelHold(); closePin(); $('hlOverlay').classList.remove('show'); }
+      if (mode === 'live') { cancelHold(); closePin(); $('hlOverlay').classList.remove('show'); paintAlternates(false); }
       $('modePlate').textContent = { replay: `Replay${track && track.demo ? ' · Demo' : ''}${track && track.name ? ' · ' + track.name : ''} ×`, sim: 'Preview ×', live: 'Drive ● Rec' }[mode];
       $('modePlate').classList.toggle('live', mode === 'live');
       paintIdle();
@@ -1786,6 +1797,20 @@
       $('routeCardWhy').textContent = t.why || '';
       $('routeCardWhy').hidden = !t.why;
       $('routeCardFun').hidden = t.id !== 'route_dest';           // the level re-plans destination routes only
+      const o = routeOptions, offer = !!o && o.current === t && o.list.length > 1 && state.mode !== 'live';
+      $('routeCardOptions').hidden = !offer;
+      if (offer) {
+        const label = document.createElement('span'); label.textContent = 'Options';
+        $('routeCardOptions').replaceChildren(label, ...o.list.map((c, i) => {
+          const b = document.createElement('button');
+          b.className = 'chip' + (i === o.picked ? ' on' : '');
+          b.textContent = `Fun ${c.fun ? c.fun.fun : '--'} · ${Math.round(c.timeS / 60)} min`;
+          b.setAttribute('aria-pressed', String(i === o.picked));
+          b.addEventListener('click', () => pickOption(i));
+          return b;
+        }));
+      }
+      paintAlternates(offer);
     }
     // Log and Stages are another page, so coming back to Map reloads this one: keep the planned route for the session and
     // rebuild it here from its own geometry (no router call, works offline). Also what a reload after a lost map restores.
@@ -2101,19 +2126,42 @@
         await RouteLoading.yieldToUI();
       }
       await applyMeasured(FunRoute.rank(pool, level).slice(0, 3).map(r => pool.find(c => c.t === r.t)), ui);   // the top few only
-      const best = FunRoute.rank(pool, level)[0];
-      const measured = best.t.measured;
-      best.t = await trackFromPolyline(best.route.coords, id, name);
-      // A winning alternate is pinned with shaping points along it, so a reroute stays on it.
-      const via = best.kind === 'router' && best.extraS > 0 ? FunRoute.alongPoints(best.route.coords) : best.via;
+      const ranked = FunRoute.rank(pool, level), best = ranked[0];
       const quickest = pool.filter(c => Number.isFinite(c.timeS)).reduce((x, y) => (y.timeS < x.timeS ? y : x), best);
-      Object.assign(best.t, { measured, fun: best.fun, timeS: best.timeS, extraS: best.extraS, funLevel: level, glareMin: best.glare ? Math.round(best.glare.minutes) : null, unavoided: FunRoute.unavoided(avoid, best.route), why: whyText(FunRoute.why(best, quickest)),
-                              request: { ...request, via: via.map(p => ({ lat: p.lat, lon: p.lon, shaping: true })) } });
-      await buildRoute(null, id, name, best.t);
-      const mi = (totalOf(best.t) / 1609.344).toFixed(1), extra = best.extraS >= 60 ? ` · +${Math.round(best.extraS / 60)} min for fun` : '';
+      // The best and up to two really different others stay on the card (and faint on the map) to pick from.
+      const t = await useOption({ id, name, request, level, quickest, list: FunRoute.distinctOptions(ranked, 3) }, 0);
+      const mi = (totalOf(t) / 1609.344).toFixed(1), extra = best.extraS >= 60 ? ` · +${Math.round(best.extraS / 60)} min for fun` : '';
       toast(`${name} · ${mi} mi · Fun ${best.fun ? best.fun.fun : '--'}${extra}`);
       window.apexDebug && (window.apexDebug.lastFun = FunRoute.rank(pool, level).map(c => ({ kind: c.kind, fun: c.fun, timeS: c.timeS, value: c.value, adjust: c.adjust || 0, glare: c.glare })));
       return true;
+    }
+    // Route options of the last fun plan: { id, name, request, level, quickest, list (ranked candidates), picked, current (its track) }.
+    let routeOptions = null;
+    async function useOption(o, i) {
+      const c = o.list[i];
+      const t = await trackFromPolyline(c.route.coords, o.id, o.name);
+      // A winning alternate is pinned with shaping points along it, so a reroute stays on it.
+      const via = c.kind === 'router' && c.extraS > 0 ? FunRoute.alongPoints(c.route.coords) : c.via;
+      Object.assign(t, { measured: c.t.measured, fun: c.fun, timeS: c.timeS, extraS: c.extraS, funLevel: o.level, glareMin: c.glare ? Math.round(c.glare.minutes) : null,
+                         unavoided: FunRoute.unavoided(avoid, c.route), why: whyText(FunRoute.why(c, o.quickest)),
+                         request: { ...o.request, via: via.map(p => ({ lat: p.lat, lon: p.lon, shaping: true })) } });
+      routeOptions = Object.assign(o, { picked: i, current: t });
+      await buildRoute(null, o.id, o.name, t);
+      return t;
+    }
+    let optionBusy = false;
+    async function pickOption(i) {
+      const o = routeOptions;
+      if (!o || optionBusy || i === o.picked || !o.list[i] || state.mode === 'live' || $('planPanel').classList.contains('busy')) return;
+      optionBusy = true;
+      try { await useOption(o, i); } catch (_) { toast('Couldn\'t switch to that route. Try again.'); } finally { optionBusy = false; }
+    }
+    // The other options, faint on the map while the card offers them; nothing while driving or for any other route.
+    function paintAlternates(show) {
+      if (!mapReady || !map.getSource('apex-alt-src')) return;
+      const o = routeOptions;
+      map.getSource('apex-alt-src').setData(show && o ? { type: 'FeatureCollection', features: o.list.map((c, i) => ({ type: 'Feature', properties: { i },
+        geometry: { type: 'LineString', coordinates: c.route.coords } })).filter(f => f.properties.i !== o.picked) } : emptyFC());
     }
     function setFunLevel(level) {
       if (!FunRoute.LEVELS[level]) return;

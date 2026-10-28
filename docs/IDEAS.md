@@ -94,7 +94,7 @@ long-press pin (#61), Apple place search and nearby suggestions in the app (#73)
 | R-27 | Our own routing graph with fun scores baked into edge costs (Valhalla custom costing) | H | XL | todo | ROAD_INTELLIGENCE §7.3 |
 | R-28 | On-device Valhalla with regional tiles built monthly by free CI, so routing works with no signal | H | XL | todo | ROAD_INTELLIGENCE §7.4, Calimoto offline |
 | R-29 | Lane guidance and junction views at complex interchanges on the transit parts of a trip | M | L | todo | Google Maps, Apple Maps |
-| R-30 | Multiple route options shown side by side on the map with Fun/Twist/Flow and time for each | H | M | todo | Google Maps alternatives |
+| R-30 | Multiple route options shown side by side on the map with Fun/Twist/Flow and time for each | H | M | done (#NN) | Google Maps alternatives |
 | R-31 | "Why this route" explainer: the stages it uses, what each adds, and what it cost in minutes | M | S | done (#115) | trust-building |
 | R-32 | Benchmark roads (Tail of the Dragon, Big Sur, Stelvio, Route 33) must rank in their region's top decile; CI test | M | M | todo | ROAD_INTELLIGENCE §6.2 |
 | R-33 | Preference learning: after a drive, "which was better, A or B?" fits per-user and global weights | H | L | todo | ROAD_INTELLIGENCE §6.3 |
