@@ -35,6 +35,58 @@
     }
   }
 
+  /**
+   * Friction circle: every measured 5 m sample as lateral g (left on the left) against longitudinal g (throttle up,
+   * braking down), the driver's own envelope (Core.ggEnvelope, ink) and the scrubbed corner's samples on top (accent).
+   */
+  function ggView(d, Core, C) {
+    if (!d.lat_g || !d.lon_g || !Core.ggEnvelope) return null;
+    const env = Core.ggEnvelope(d.lat_g, d.lon_g, d.g_known || null);
+    if (env.peak_g == null) return null;
+    const S = 240, c0 = S / 2, R = Math.max(0.6, env.peak_g, ...env.radius_g.filter((r) => r != null)) * 1.15, k = (c0 - 14) / R;
+    const xy = (la, lo) => [c0 - la * k, c0 - lo * k];
+    const ok = (i) => (!d.g_known || d.g_known[i]) && finite(d.lat_g[i]) && finite(d.lon_g[i]);
+    let dots = '';
+    const n = d.lat_g.length, step = Math.max(1, Math.floor(n / 1500));
+    for (let i = 0; i < n; i += step) if (ok(i)) { const [x, y] = xy(d.lat_g[i], d.lon_g[i]); dots += `M${x.toFixed(1)} ${y.toFixed(1)}h0`; }
+    const N = env.radius_g.length, half = Math.PI / N;
+    let hull = '', open = false;
+    for (let q = 0; q <= N; q++) {                                   // envelope through each known slice's middle; gaps stay gaps
+      const r = env.radius_g[q % N];
+      if (r == null) { open = false; continue; }
+      const a = (q % N) * 2 * half, [x, y] = xy(r * Math.sin(a), r * Math.cos(a));   // slices are centred on their angle
+      hull += `${open ? 'L' : 'M'}${x.toFixed(1)} ${y.toFixed(1)}`; open = true;
+    }
+    const ring = (g) => `<circle cx="${c0}" cy="${c0}" r="${(g * k).toFixed(1)}" fill="none" stroke="${C.rule}" stroke-dasharray="2 4"/><text x="${c0 + 3}" y="${(c0 - g * k - 3).toFixed(1)}" font-size="9" fill="${C.panelDim}">${g.toFixed(1)} g</text>`;
+    const txt = (x, y, a, t) => `<text x="${x}" y="${y}" text-anchor="${a}" font-size="10" fill="${C.panelDim}">${t}</text>`;
+    const box = el('div', 'dv-gg'), pic = el('div', 'dv-gg-pic'), hot = el('div', 'dv-gg-hot'), cap = el('p', 'note');
+    cap.setAttribute('aria-live', 'polite');
+    pic.innerHTML = `<svg viewBox="0 0 ${S} ${S}" role="img" aria-label="Friction circle: cornering against braking and throttle g">`
+      + ring(0.5) + (R > 1.05 ? ring(1.0) : '')
+      + `<line x1="${c0}" x2="${c0}" y1="6" y2="${S - 6}" stroke="${C.rule}"/><line y1="${c0}" y2="${c0}" x1="6" x2="${S - 6}" stroke="${C.rule}"/>`
+      + `<path d="${dots}" stroke="${C.panelDim}" stroke-width="3" stroke-linecap="round" opacity="0.35"/>`
+      + `<path d="${hull}" fill="none" stroke="${C.panelInk}" stroke-width="1.6" stroke-linejoin="round"/>`
+      + txt(c0, 12, 'middle', 'Throttle') + txt(c0, S - 4, 'middle', 'Brake') + txt(4, c0 - 4, 'start', 'Left') + txt(S - 4, c0 - 4, 'end', 'Right') + '</svg>';
+    const g2 = (v) => (v == null ? '--' : `${v.toFixed(2)} g`);
+    const base = `Your grip on this drive: braking ${g2(env.brake_g)}, cornering left ${g2(env.left_g)} and right ${g2(env.right_g)}, throttle ${g2(env.throttle_g)}.`;
+    cap.textContent = base;
+    const head = el('h3', null, 'Grip circle');
+    box.append(head, pic, cap);
+    pic.append(hot);
+    let shown = -2;
+    function show(c, kc) {
+      if (kc === shown) return; shown = kc;
+      if (!c) { hot.innerHTML = ''; cap.textContent = base; return; }
+      let p = '';
+      const lo = Math.max(0, c.start - 20);                          // 100 m before turn-in: the brake zone, not the straight before it
+      for (let i = lo; i <= c.end; i++) if (ok(i)) { const [x, y] = xy(d.lat_g[i], d.lon_g[i]); p += `${p ? 'L' : 'M'}${x.toFixed(1)} ${y.toFixed(1)}`; }
+      hot.innerHTML = `<svg viewBox="0 0 ${S} ${S}" aria-hidden="true"><path d="${p}" fill="none" stroke="${C.accent}" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round" opacity="0.9"/></svg>`;
+      const use = Core.gripUse(d.lat_g, d.lon_g, lo, c.end, env, d.g_known || null);
+      cap.textContent = `Corner ${kc + 1}, from 100 m before turn-in to the exit: ${use == null ? '--' : `${Math.round(Math.min(1, use) * 100)} %`} of your grip on this drive.`;
+    }
+    return { box, show, env };
+  }
+
   function mount(root_, d, o) {
     const { Core, C, MPH } = o, ref = o.reference || null;        // ref: { name, score, corners[] } from Core.compareDrives(this, best other drive)
     const co = o.coach || null;                                      // Core.coach(this, other drives) + others: [{ name, date }]
@@ -65,6 +117,8 @@
     root_.append(head, el('div', 'dv-grid'));
     const grid = root_.lastChild; grid.append(mapBox, el('div', 'dv-right'));
     const zoom = el('div', 'dv-zoom'); grid.lastChild.append(zoom, lanes, read);
+    const gg = ggView(d, Core, C);                                   // friction circle; null without enough measured g
+    if (gg) grid.lastChild.append(gg.box);
     root_.append(list);
 
     // ---- plan map ------------------------------------------------------------------------------------------------
@@ -176,6 +230,7 @@
         + cell(c ? `Corner ${k + 1}` : 'Corner', c ? `${c.call || c.code}` : '--') + (ref ? cell('vs other drive', c ? fmtD(lost(k)) : '--') : '')
         + (feel ? cell('Banking', finite(feel.cam[i]) ? `${feel.cam[i].toFixed(1)}\u00b0` : '--') + cell('Roughness', finite(feel.rough[i]) ? `${feel.rough[i].toFixed(2)} g` : '--') + cell('Runs', feel.n[i] != null ? feel.n[i] : '--') : '');
       list.querySelectorAll('.dv-corner').forEach((r, q) => r.classList.toggle('on', q === k));
+      if (gg) gg.show(c, k);
     }
     // pointer scrubbing on the lanes and taps on map corners
     let drag = false;

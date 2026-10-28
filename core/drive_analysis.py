@@ -410,6 +410,72 @@ def coach(a: dict, others: list) -> dict:
             "top": order[:TOP_OPPORTUNITIES]}
 
 
+# ---------------------------------------------------------------------------
+# Friction circle (g-g): the person's own grip envelope, and how much of it each corner used.
+# ---------------------------------------------------------------------------
+
+GG_SECTORS = 16              # 22.5 degree slices centred on 0 = +lon (throttle), 90 deg = +lat (left), 180 = braking
+GG_PCTL = 0.95               # envelope radius in a slice: the 95th percentile, so one pothole spike does not set it
+GG_MIN_POINTS = 8            # a slice with fewer measured points has no envelope (unknown, not zero)
+GG_MIN_G = 0.05              # below this the car is cruising; the angle means nothing
+GG_USE_MIN_G = 0.15          # grip use counts only real load, so a long straight's sway does not dilute a corner
+
+
+def _pctl(values: list, q: float) -> float:
+    """Nearest-rank percentile (the JS port does the same; no interpolation)."""
+    s = sorted(values)
+    return float(s[min(len(s) - 1, max(0, int(math.ceil(q * len(s))) - 1))])
+
+
+def _sector(lat: float, lon: float) -> int:
+    """Slice k is centred on k x 22.5 deg, so the axes (straight braking, steady cornering) sit in the middle of a slice."""
+    w = 2.0 * math.pi / GG_SECTORS
+    a = (math.atan2(lat, lon) + 0.5 * w) % (2.0 * math.pi)
+    return int(a / w) % GG_SECTORS
+
+
+def _num(x) -> bool:
+    return x is not None and math.isfinite(x)
+
+
+def gg_envelope(lat_g, lon_g, g_known=None) -> dict:
+    """The driver's g-g envelope from one drive: per slice the 95th-percentile combined g (None when too few points).
+
+    Units are g (a / 9.80665) in the ISO 8855 frame: +lon throttle, -lon braking, +lat left.
+    """
+    buckets = [[] for _ in range(GG_SECTORS)]
+    total = []
+    for i, (la, lo) in enumerate(zip(lat_g, lon_g)):
+        if (g_known is not None and not g_known[i]) or not (_num(la) and _num(lo)):
+            continue
+        r = math.hypot(la, lo)
+        if r < GG_MIN_G:
+            continue
+        buckets[_sector(la, lo)].append(r)
+        total.append(r)
+    radius = [_pctl(b, GG_PCTL) if len(b) >= GG_MIN_POINTS else None for b in buckets]
+    q = GG_SECTORS // 4
+    return {"radius_g": radius, "points": len(total),
+            "peak_g": _pctl(total, GG_PCTL) if len(total) >= GG_MIN_POINTS else None,
+            "brake_g": radius[2 * q], "throttle_g": radius[0], "left_g": radius[q], "right_g": radius[3 * q]}
+
+
+def grip_use(lat_g, lon_g, lo: int, hi: int, env: dict, g_known=None):
+    """Mean share of the envelope used over bins [lo, hi] where the car was really loaded (>= GG_USE_MIN_G); None if unknown."""
+    use = []
+    for i in range(lo, hi + 1):
+        if g_known is not None and not g_known[i]:
+            return None
+        la, lo_ = lat_g[i], lon_g[i]
+        if not (_num(la) and _num(lo_)):
+            return None
+        r = math.hypot(la, lo_)
+        cap = env["radius_g"][_sector(la, lo_)] if r >= GG_USE_MIN_G else None
+        if cap:
+            use.append(min(r / cap, 1.5))
+    return float(sum(use) / len(use)) if use else None
+
+
 def segment_window(seg: dict, drive: dict):
     """Bins [lo, hi] where a drive passes a user segment {lat0, lon0, lat1, lon1, length_m}
     from start to end in that direction, or None."""

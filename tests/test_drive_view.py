@@ -86,8 +86,17 @@ const coastNear = V.tipText({ best: { time_s: 3.9 }, tip: { kind: 'coast', value
 const aloneHead = rootAlone.children[0].innerHTML, aloneList = rootAlone.children[2].children.map((c) => c.className);
 const aloneCard = rootAlone.children[2].children.find((c) => c.className === 'dv-corners').children[0].innerHTML;
 
+// Grip circle: shown with measured g, absent without it; scrubbing into a corner names its grip use.
+const ggCol = rootScored.children[1].children[1].children[3];
+const ggCaption = ggCol ? ggCol.children[2].textContent : null;
+lanesEl.dispatch('keydown', { key: 'Home' }); for (let q = 0; q < 4; q++) lanesEl.dispatch('keydown', { key: 'ArrowRight', preventDefault() {} });
+const ggCorner = ggCol ? ggCol.children[2].textContent : null;
+const rootNoG = mkEl('div');
+V.mount(rootNoG, { ...scoredDrive, g_known: d.lat.map(() => 0) }, { Core, C, MPH: Core.MPS_TO_MPH });
+const ggNone = rootNoG.children[1].children[1].children.length;
+
 console.log(JSON.stringify({ full, bare, headHtml, unscoredHeadHtml, hiddenBeforeScrub, hiddenAfterKeyScrub, hiddenBeforeZoom, hiddenAfterZoom,
-  coachHead, timeHtml, cardHtml, aloneHead, aloneList, aloneCard, coastNear }));
+  coachHead, timeHtml, cardHtml, aloneHead, aloneList, aloneCard, coastNear, ggCaption, ggCorner, ggNone }));
 """
 
 
@@ -144,3 +153,9 @@ def test_corner_coach_alone_has_no_ideal_but_keeps_the_habit_tip(r):
 
 def test_coast_tip_wording_follows_the_tip_not_the_best_pass(r):
     assert r["coastNear"] == "85 m coasting between brake and throttle"
+
+
+def test_grip_circle_from_measured_g_only(r):
+    assert r["ggCaption"].startswith("Your grip on this drive: braking")
+    assert r["ggCorner"].startswith("Corner 1, from 100 m before turn-in to the exit:") and "%" in r["ggCorner"]
+    assert r["ggNone"] == 3, "no measured g: no grip circle"
