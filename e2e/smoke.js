@@ -757,6 +757,7 @@ flow('flyby: a friend on the same stage that day shows on the drive, as text; ch
   await page.goto(base + '/analysis.html');
   await page.waitForSelector('#challengePanel:not([hidden])');
   check(/Drive 5 roads you haven't driven before · [12] of 5/.test(await page.textContent('#challengeList')), 'a new road this month');
+  check(/^\d+(\.\d)? mi in 1 drive · 1 new road/.test(await page.textContent('#weekLines')), 'your week: ' + await page.textContent('#weekLines'));
 });
 
 flow('the Log page opens', async (page, base) => {

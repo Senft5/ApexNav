@@ -25,6 +25,7 @@
   <script src="drive_tags.js"></script>
   <script src="flyby.js"></script>
   <script src="challenges.js"></script>
+  <script src="week_digest.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { background: var(--panel); color: var(--panel-ink); font-family: var(--font-ui); font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -175,6 +176,7 @@
       <div class="cards" id="historyCards"></div>
       <div class="panel" id="yearPanel" hidden><h2 id="yearTitle">--</h2><div id="yearLines" class="stack-8"></div>
         <div class="row mt-8"><button class="btn" id="yearShare">Share</button></div></div>
+      <div class="panel" id="weekPanel" hidden><h2>Your week</h2><div id="weekLines" class="stack-8"></div></div>
       <div class="panel" id="challengePanel" hidden><h2>This month's challenges</h2><div id="challengeList" class="stack-8"></div>
         <p class="note">Exploring and technique, never speed. From the drives on this phone.</p></div>
       <div class="panel" id="friendsPanel" hidden><h2>Friends lately</h2><div id="friendsList" class="stack-8"></div>
@@ -320,6 +322,12 @@
     // Your year on the road (IDEAS D-24; web/year_review.js): this calendar year's drives with a known date. Set as text.
     let yearText = '';
     // This month's challenges (challenges.js, IDEAS S-11): text and a bar each; shown once this month has a dated drive.
+    // Your week (week_digest.js, IDEAS D-20): the last 7 days, set as text.
+    function renderWeek() {
+      const w = ApexWeekDigest.digest(drives.map((d) => ({ ...d, dateKnown: monthOf(d) !== null })));
+      $('weekPanel').hidden = !w;
+      if (w) $('weekLines').replaceChildren(...ApexWeekDigest.lines(w).map((t) => { const p = document.createElement('p'); p.className = 'friend-act'; p.textContent = t; return p; }));
+    }
     function renderChallenges() {
       const now = new Date(), month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
       const list = drives.map((d) => ({ ...d, dateKnown: monthOf(d) !== null }));
@@ -363,6 +371,7 @@
       $('trendPanel').hidden = scored.length < 3;
       renderYear();
       renderChallenges();
+      renderWeek();
 
       // trend
       const W = Math.max(300, Math.round($('trend').clientWidth || 760)), H = 180, L = 40, R = 22, T = 12, B = 26;   // drawn at the real width so labels stay readable
