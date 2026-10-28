@@ -22,6 +22,11 @@
     const native = IN_APP && root.webkit && root.webkit.messageHandlers && root.webkit.messageHandlers.apex;
     if (native) native.postMessage({ cmd: 'signIn' }); else location.href = '/api/auth/google/start';
   }
+  /** Sign in with Apple: the app only (Apple's native sheet; the web would need a Services ID). Answers like signIn. */
+  function signInApple() {
+    const native = IN_APP && root.webkit && root.webkit.messageHandlers && root.webkit.messageHandlers.apex;
+    if (native) native.postMessage({ cmd: 'signInApple' });
+  }
   const call = async (method, path, body) => {
     try {
       const r = await apiFetch(path, { method, headers: { 'content-type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
@@ -81,6 +86,6 @@
   }
   const contributionEnabled = async () => { const e = await call('GET', '/api/me/export'); return !!(e && e.member && e.member.contribute); };
 
-  const api = { inApp: IN_APP, apiBase: API_BASE, apiFetch, signIn, setSession, contribute, contributionEnabled, publishScore, board, highlightsNear, shareHighlight, rateHighlight, member, pushSegments, sharedWithMe, adopt, shareSegment, friends, crews, crewMembers, removeRemote, toServer, fromServer };
+  const api = { inApp: IN_APP, apiBase: API_BASE, apiFetch, signIn, signInApple, setSession, contribute, contributionEnabled, publishScore, board, highlightsNear, shareHighlight, rateHighlight, member, pushSegments, sharedWithMe, adopt, shareSegment, friends, crews, crewMembers, removeRemote, toServer, fromServer };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexSync = api;
 })(typeof window !== 'undefined' ? window : globalThis);

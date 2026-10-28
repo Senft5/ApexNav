@@ -57,7 +57,7 @@ export async function requireMember(req: Request, env: Env): Promise<Viewer> {
   return v;
 }
 
-async function startSession(env: Env, userId: string): Promise<string> {
+export async function startSession(env: Env, userId: string): Promise<string> {
   const token = randomToken(32);
   // no cron job: expired sessions (this person's) are swept whenever they sign in again
   await env.DB.batch([
@@ -84,9 +84,9 @@ export function csrfCheck(req: Request, env: Env): void {
   if (req.method === "GET" || req.method === "HEAD") return;
   const o = req.headers.get("origin");
   if (o === APP_ORIGIN) {
-    // Signed-out app requests: only the sign-in exchange and anonymous crash reports.
+    // Signed-out app requests: only the sign-in exchanges (Google code, Apple token) and anonymous crash reports.
     const path = new URL(req.url).pathname;
-    if (!bearer(req) && path !== "/api/auth/app/exchange" && path !== "/api/errors") throw new HttpError(403, "bad_origin");
+    if (!bearer(req) && path !== "/api/auth/app/exchange" && path !== "/api/auth/apple" && path !== "/api/errors") throw new HttpError(403, "bad_origin");
   } else if (!o || o !== origin(req, env)) throw new HttpError(403, "bad_origin");
   if (req.headers.get("x-apexnav") !== "1") throw new HttpError(403, "missing_header");
 }
