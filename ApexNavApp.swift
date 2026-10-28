@@ -88,7 +88,7 @@ enum ApexWebBundle {
 
     /// "Open in the app" links from the web (apexnav://open?invite=…): the page's own link parameters, and only those, carried
     /// over to the cockpit page, which handles them exactly as it does on the web. Anything else opens the app as usual.
-    static let linkKeys: Set<String> = ["invite", "crew", "add", "convoy"]
+    static let linkKeys: Set<String> = ["invite", "crew", "add", "convoy", "go"]   // go=drive: start a drive (IDEAS C-05)
     private static let linkValue = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-")
     /// The link's parameters the page understands, or nil when the link isn't one of ours or carries none.
     static func linkItems(_ url: URL) -> [URLQueryItem]? {
@@ -433,6 +433,11 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
             MainActor.assumeIsolated { self.thermalChanged() }
         }
         thermalChanged()
+        NotificationCenter.default.addObserver(forName: AVAudioSession.routeChangeNotification, object: nil, queue: .main) { [weak self] _ in
+            guard let self else { return }
+            MainActor.assumeIsolated { self.carRouteChanged() }
+        }
+        carRouteChanged()
         startPushTimer()
     }
 
@@ -475,6 +480,7 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
     func webDidFinishLoading() {
         webReady = true
         pushLiveFrame()
+        offerDriveIfReady()
     }
 
     /// iOS can kill the web content process while the app is in the background without calling
@@ -960,6 +966,31 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         }
         return all.filter { $0.language.hasPrefix("en") && !robotVoiceNames.contains($0.name) }.max { rank($0) < rank($1) }
             ?? AVSpeechSynthesisVoice(language: "en-GB")
+    }
+
+    // MARK: Car connection (IDEAS C-05)
+    // Joining CarPlay (an audio route to .carAudio) offers Start drive in the cockpit, once per connection. It never starts
+    // recording by itself. A plain Bluetooth stream can't be told apart from headphones, so only CarPlay counts. For a fully
+    // automatic start, a Shortcuts automation ("When CarPlay connects") can open apexnav://open?go=drive.
+    private var inCar = false
+    private var carOfferPending = false
+
+    private func carRouteChanged() {
+        let now = AVAudioSession.sharedInstance().currentRoute.outputs.contains { $0.portType == .carAudio }
+        guard now != inCar else { return }
+        inCar = now
+        carOfferPending = now
+        offerDriveIfReady()
+    }
+
+    /// Only the cockpit page has window.apex: on the Log or Stages page the offer stays pending until the cockpit loads again.
+    private func offerDriveIfReady() {
+        guard carOfferPending, webReady, let wv = webView else { return }
+        carOfferPending = false
+        wv.evaluateJavaScript("(window.apex && window.apex.onNative) ? (window.apex.onNative({type:'car',via:'carplay'}), true) : false") { [weak self] result, _ in
+            guard let self, (result as? Bool) != true else { return }
+            self.carOfferPending = self.inCar
+        }
     }
 
     // MARK: Voice audio: car stereo, CarPlay audio, Bluetooth

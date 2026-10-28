@@ -126,6 +126,40 @@ flow('Where to?: a suggestion builds a route with a card and a Start button (sea
   check(await page.isVisible('#startDrive'), 'Start is offered');
 }, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
 
+flow('the car connects: CarPlay offers Start drive, and an apexnav://open?go=drive link starts one', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && typeof window.apex.onNative === 'function');
+  await page.evaluate(() => window.apex.onNative({ type: 'car', via: 'carplay' }));
+  await page.waitForFunction(() => /CarPlay connected/.test(document.getElementById('toast').textContent));
+  await page.click('#toast a');
+  await page.waitForSelector('#permSheet.show');                 // first drive: the permissions sheet comes first
+  await page.evaluate(() => document.getElementById('permNo').click());
+  await page.evaluate(() => window.apex.onNative({ type: 'link', params: { go: 'drive' } }));
+  await page.waitForSelector('#permSheet.show');
+  // The offer is up when the drive starts some other way: starting it takes the offer down, so it can't hold back
+  // other toasts, and no new offer comes while driving.
+  await page.evaluate(() => window.apex.onNative({ type: 'car', via: 'carplay' }));
+  await page.waitForSelector('#toast a');
+  await page.evaluate(() => document.getElementById('permGo').click());
+  await page.waitForFunction(() => !document.querySelector('#toast a') && !(document.getElementById('toast')._holdUntil > performance.now()), null, { timeout: 3000 });   // well inside the offer's 10 s
+  await page.evaluate(() => window.apex.onNative({ type: 'car', via: 'carplay' }));
+  check(!(await page.isVisible('#toast a')), 'no offer while a drive is running');
+  // Cold start from the link on a fresh install: the page opens with ?go=drive and goes straight to Start drive,
+  // without onboarding on top.
+  const fresh = await page.context().browser().newContext();
+  await fresh.route('**/*', (route) => (route.request().url().startsWith(base) ? route.continue() : route.abort()));
+  try {
+    const cold = await fresh.newPage();
+    const errors = [];
+    cold.on('pageerror', (e) => errors.push(e.message));
+    await cold.goto(base + '/index.html?go=drive');
+    await cold.waitForSelector('#permSheet.show');
+    check(!(await cold.isVisible('#onboard.show')), 'no onboarding over a go=drive start');
+    check(!errors.length, 'no page errors on a go=drive start: ' + errors.join('; '));
+  } finally { await fresh.close(); }
+}, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
+
 flow('the Log page opens', async (page, base) => {
   await page.goto(base + '/analysis.html');
   await page.waitForLoadState('load');
