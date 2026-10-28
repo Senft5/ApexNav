@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-taz21a5lIIhicPb3mh5FrkSuSQRuSpKzM/heETf/Q8c=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-6zc9qhfVHnGS7rDrsDWJkDZPNs79mSVxRrriGkvws+w=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>ApexNav</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -2699,6 +2699,7 @@
       const nt = await trackFromPolyline(r.coords, t.id, t.name);
       if (track !== t || state.mode !== 'live') return;
       Object.assign(nt, { request: { from: null, to: req.to, via: ahead }, fun: funOf(nt, r.turns), timeS: r.timeS, timeMarks: timeMarksOf(nt, r), steps: stepsOf(nt, r) });
+      if (t.stageSpans) nt.stageSpans = FunRoute.stageSpans(nt, t.stageSpans.filter(s => s.endM > routeWatch.bestM));
       await buildRoute(null, t.id, t.name, nt);                     // activate() resets the monitor for the new route
     }
     // Traffic ahead (iOS app only; docs/ARCHITECTURE.md section 8). Every 2 min while on a planned route, Apple times the next
@@ -2871,7 +2872,7 @@
               const [r] = await valhallaRoutes(pts);
               // The router may join the shaping points by a shortcut that skips the stage (R-14): then the plan didn't happen.
               if (!FunRoute.keptStages(r.coords, plan)) throw new Error('stage skipped');
-              return { kind: 'stages', route: r, timeS: r.timeS, via: pts.slice(1, -1) };
+              return { kind: 'stages', plan, route: r, timeS: r.timeS, via: pts.slice(1, -1) };
             })));
           }
           for (const r of routed) if (r.status === 'fulfilled') cands.push(r.value);
@@ -2909,6 +2910,7 @@
       Object.assign(t, { measured: c.t.measured, fun: c.fun, timeS: c.timeS, timeMarks: timeMarksOf(t, c.route), steps: stepsOf(t, c.route), extraS: c.extraS, funLevel: o.level, glareMin: c.glare ? Math.round(c.glare.minutes) : null, townKm: c.townKm,
                          unavoided: FunRoute.unavoided(avoid, c.route), why: whyText(FunRoute.why(c, o.quickest), fewerTownKm(c, o.quickest), c.extraS),
                          request: { ...o.request, via: via.map(p => ({ lat: p.lat, lon: p.lon, shaping: true })) } });
+      if (c.plan) t.stageSpans = FunRoute.stageSpans(t, c.plan.legs);   // where its stages are (Siri: next / skip, IDEAS V-07)
       routeOptions = Object.assign(o, { picked: i, current: t });
       await buildRoute(null, o.id, o.name, t);
       return t;
@@ -5041,9 +5043,33 @@
         if (p.go === 'drive') { closeSheet(); driveFromLink(); }
         else if (p.go === 'report') { if (state.mode === 'live') { closeSheet(); $('hzOverlay').classList.add('show'); } else toast('Start a drive to report a hazard.'); }
         else if (p.go === 'end') { if (state.mode === 'live') leaveDrive(true); else toast('No drive to end.'); }
+        else if (p.go === 'nextstage') nextStageAnswer();
+        else if (p.go === 'skipstage') skipStage();
         return;
       }
       showView('crew'); renderAccount();
+    }
+    // Siri (IDEAS V-07): "how far to the next stage" says it aloud; "skip this stage" drops the stage you're on or the next
+    // one and reroutes to your next stop or the destination (only on a fun route with stages, during a drive).
+    function nextStageAnswer() {
+      const t = track, at = state.mode === 'live' ? routeWatch.bestM : state.cursorM;
+      const n = t && t.stageSpans ? FunRoute.stageAhead(t.stageSpans, Number.isFinite(at) ? at : 0) : null;
+      const line = !t || !t.stageSpans ? 'This route has no stages.' : !n ? 'No more stages on this route.'
+        : n.on ? `On ${n.span.name || 'a stage'} now: ${ApexUnits.long(n.toM, 1)} to go.` : `Next stage${n.span.name ? `, ${n.span.name},` : ''} in ${ApexUnits.long(n.toM, 1)}.`;
+      toast(line); say(line, true);
+    }
+    function skipStage() {
+      const t = track;
+      if (state.mode !== 'live' || !t || !t.request) { toast('Skip a stage during a drive on a fun route.'); return; }
+      const n = t.stageSpans ? FunRoute.stageAhead(t.stageSpans, routeWatch.bestM || 0) : null;
+      if (!n) { const line = 'No stage ahead to skip.'; toast(line); say(line, true); return; }
+      // its shaping points come out of the plan; your own stops stay
+      const near = (v) => { const h = Core.nearestIndex(v.lat, v.lon, t.lat, t.lon, -1); return h.index >= 0 && h.distM <= 80 ? t.dist[h.index] : null; };
+      t.request = { ...t.request, via: t.request.via.filter(v => { if (!v.shaping) return true; const m = near(v); return m == null || m < n.span.startM - 50 || m > n.span.endM + 50; }) };
+      t.stageSpans = t.stageSpans.filter(s => s !== n.span);
+      const line = `Skipping ${n.span.name || 'this stage'}.`;
+      toast(line); say(line, true);
+      reroute(t);
     }
     // Privacy zones (privacy_zones.js, IDEAS Z-02): inside one the drive keeps no samples, road data stops, convoys get no
     // position. A drive that enters one stops sharing road data for the rest of that drive (the stretch before stays private too).

@@ -146,6 +146,15 @@ out.why = F.why(wr, qr);
 out.whyQuick = F.why(qr, qr);
 out.whyNoNames = F.why({ ...wr, route: {} }, qr);
 // avoid options: costing, what a route still uses, and keeping to them when any candidate can
+// where a route's stages are (IDEAS V-07): a 10 km straight route with two 1 km stages on it, the second driven backwards
+{
+  const N = 2001, rt = { lat: Array.from({ length: N }, (_, i) => 39.2 + i * 5 / 110540), lon: Array(N).fill(-84.6), dist: Array.from({ length: N }, (_, i) => i * 5) };
+  const seg = (m0, m1, name) => ({ name, lat: [39.2 + m0 / 110540, 39.2 + m1 / 110540], lon: [-84.6, -84.6] });
+  const spans = F.stageSpans(rt, [{ s: seg(2000, 3000, 'Ridge'), fwd: true }, { s: seg(7000, 6000, 'Hollow'), fwd: false }, { s: { name: 'Far', lat: [40, 40.01], lon: [-84, -84] }, fwd: true }]);
+  out.spans = spans.map(s => [s.name, s.startM, s.endM]);
+  out.ahead = [F.stageAhead(spans, 500), F.stageAhead(spans, 2500), F.stageAhead(spans, 9000)].map(a => a && [a.span.name, a.on, a.toM]);
+  out.respan = F.stageSpans({ ...rt, dist: rt.dist.map(d => d + 100) }, spans).map(s => [s.name, s.startM]);
+}
 out.costDefault = F.costing().costing_options.auto;
 out.costAll = F.costing({ highways: true, tolls: true, ferries: true, unpaved: false }).costing_options.auto;
 const allowGravel = { highways: false, tolls: false, ferries: false, unpaved: false };
@@ -444,3 +453,9 @@ def test_app_fun_route_picks_and_falls_back():
     assert r["osrm"] == {"built": 1, "timeS": 700}
     assert r["stage"]["matrix"] == 1 and r["stage"]["via"] >= 2 and r["stage"]["shaping"] and r["stage"]["fun"] > 50 and r["stage"]["extraS"] == 120
     assert r["down"]["built"] == 0 and len(r["down"]["toasts"]) == 1
+
+
+def test_stages_are_placed_along_the_route_for_siri(r):
+    assert r["spans"] == [["Ridge", 2000, 3000], ["Hollow", 6000, 7000]], "the far stage isn't on the route"
+    assert r["ahead"] == [["Ridge", False, 1500], ["Ridge", True, 500], None]
+    assert r["respan"] == [["Ridge", 2100], ["Hollow", 6100]], "spans placed again on a rerouted track"

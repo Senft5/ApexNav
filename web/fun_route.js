@@ -526,6 +526,43 @@
     if (car && Number.isInteger(car.width_cm) && car.width_cm >= 120 && car.width_cm <= 300) auto.width = car.width_cm / 100;
     return { costing: 'auto', costing_options: { auto } };
   }
+  /**
+   * Where a route's stages are along it (IDEAS V-07, for "how far to the next stage" and "skip this stage"): each stage's
+   * entry and exit placed on the route `t` ({lat, lon, dist}) in order, as { name, a, b, startM, endM }. `stages` are a
+   * plan's legs ({ s, fwd }) or spans from before (a reroute: placed again on the new route). A stage whose ends aren't
+   * within 60 m of the route (the reroute left it) is dropped.
+   */
+  function stageSpans(t, stages) {
+    if (!t || !t.lat || !t.lat.length || !Array.isArray(stages)) return [];
+    const c = Math.cos(t.lat[0] * Math.PI / 180), out = [];
+    const near = (p, from) => {
+      let best = -1, bd = Infinity;
+      for (let i = from; i < t.lat.length; i++) {
+        const d = Math.hypot((t.lat[i] - p.lat) * 110540, (t.lon[i] - p.lon) * 111320 * c);
+        if (d < bd) { bd = d; best = i; }
+      }
+      return bd <= 60 ? best : -1;
+    };
+    let from = 0;
+    for (const x of stages) {
+      let a = x.a, b = x.b;
+      if (x.s) {
+        const n = x.s.lat.length - 1, i0 = x.fwd ? 0 : n, i1 = x.fwd ? n : 0;
+        a = { lat: x.s.lat[i0], lon: x.s.lon[i0] }; b = { lat: x.s.lat[i1], lon: x.s.lon[i1] };
+      }
+      const ia = near(a, from), ib = ia < 0 ? -1 : near(b, ia);
+      if (ia < 0 || ib < 0) continue;
+      out.push({ name: (x.s ? x.s.name : x.name) || null, a, b, startM: t.dist[ia], endM: t.dist[ib] });
+      from = ib;
+    }
+    return out;
+  }
+  /** The stage you're on or the next one ahead of `atM`, or null: { span, on, toM } (toM: to its start, or to its end when on it). */
+  function stageAhead(spans, atM) {
+    const s = (spans || []).find((x) => x.endM > atM);
+    if (!s) return null;
+    return s.startM <= atM ? { span: s, on: true, toM: s.endM - atM } : { span: s, on: false, toM: s.startM - atM };
+  }
   /** What the car changed, for the route card: '' when nothing did. */
   function carNote(car, avoid = AVOID_DEFAULT) {
     if (!car) return '';
@@ -610,6 +647,6 @@
     return out;
   }
 
-  const api = { LEVELS, townKm, townCost, exploreShortlist, exploreTargets, explorePicks, distinctOptions, glare, glareCost, LOOP_BY_TIME, AVOID_DEFAULT, AVOID_LABELS, STAGE_KEPT, stageCoverage, keptStages, CAMERA_BOX_DEG, camerasToExclude, costing, unavoided, keepAvoiding, why, geometry, alongPoints, insertVia, loopValue, loopShortlist, loopPlansFromMatrix, score, shortlist, matrixPoints, plansFromMatrix, sectionCount, sectionPoints, combineSections, planKey, searchArea, waypoints, rank, along, kmBetween, directionBonus, setList, SET_FINISH, SET_FATIGUE, MAX_TECH_PER_KM, carNote };
+  const api = { LEVELS, townKm, townCost, exploreShortlist, exploreTargets, explorePicks, distinctOptions, glare, glareCost, LOOP_BY_TIME, AVOID_DEFAULT, AVOID_LABELS, STAGE_KEPT, stageCoverage, keptStages, CAMERA_BOX_DEG, camerasToExclude, costing, unavoided, keepAvoiding, why, geometry, alongPoints, insertVia, loopValue, loopShortlist, loopPlansFromMatrix, score, shortlist, matrixPoints, plansFromMatrix, sectionCount, sectionPoints, combineSections, planKey, searchArea, waypoints, rank, along, kmBetween, directionBonus, setList, SET_FINISH, SET_FATIGUE, MAX_TECH_PER_KM, carNote, stageSpans, stageAhead };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexFunRoute = api;
 })(typeof window !== 'undefined' ? window : globalThis);
