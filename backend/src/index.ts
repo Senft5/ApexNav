@@ -11,6 +11,7 @@ import { backupDatabase } from "./backup";
 import { sweepExpired } from "./sweep";
 import { appleSignIn } from "./apple";
 import { hazardsNear, reportHazard, voteHazard } from "./hazards";
+import { routeDelete, routeGet, routesSharedWithMe, shareRoute } from "./routes_shared";
 
 const BACKUP_CRON = "0 7 * * 1";   // wrangler.jsonc triggers; the other cron is the daily sweep
 import {
@@ -112,6 +113,10 @@ on("POST", "/api/segments/adopt", async (req, env) => json(await segmentAdopt(en
 on("DELETE", "/api/segments/:id", async (req, env, m) => { await segmentDelete(env, await requireMember(req, env), m.groups!.id); return noContent(); });
 on("POST", "/api/segments/:id/share", async (req, env, m) => { await segmentShare(env, await requireMember(req, env), m.groups!.id, req); return noContent(); });
 
+on("POST", "/api/routes", async (req, env) => json(await shareRoute(env, await requireMember(req, env), req), 201));
+on("GET", "/api/routes/shared", async (req, env) => json(await routesSharedWithMe(env, await requireMember(req, env))));
+on("GET", "/api/routes/:id", async (req, env, m) => json(await routeGet(env, await requireMember(req, env), m.groups!.id)));
+on("DELETE", "/api/routes/:id", async (req, env, m) => json(await routeDelete(env, await requireMember(req, env), m.groups!.id)));
 on("POST", "/api/hazards", async (req, env) => json(await reportHazard(env, await requireMember(req, env), req), 201));
 on("GET", "/api/hazards", async (req, env) => { await requireMember(req, env); return json(await hazardsNear(env, new URL(req.url))); });
 on("POST", "/api/hazards/:id/vote", async (req, env, m) => json(await voteHazard(env, await requireMember(req, env), m.groups!.id, req)));
