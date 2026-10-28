@@ -228,7 +228,7 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 | U-04 | Imported drives get a real name (place, road, time of day), not the file name | M | S | partial (recorder file names read as "Drive date time"; place and road names todo) | STATE 2026-10-28 UI audit |
 | U-05 | Audit the live cockpit with simulated GPS frames at phone size (day, night, glare) | H | S | done (this PR: browser GPS track, day and night; native frames and glare still need a phone) | STATE 2026-10-28 UI audit |
 | U-06 | Stages simplified: one list near you with your best and the leader, create from a drive in one step | H | M | partial (#77) | WORKER_QUEUE stages-1 |
-| U-07 | Glanceable cockpit: one number and one note readable at arm's length in sunlight | H | M | todo | car HMI guidelines |
+| U-07 | Glanceable cockpit: one number and one note readable at arm's length in sunlight | H | M | partial (drive bar: big Rec mileage, problems only) | car HMI guidelines |
 | U-08 | Motion design pass: route reveal, sheet springs, note transitions, under 200 ms, reduced-motion respected | M | M | todo | Apple Maps |
 | U-09 | Haptics on notes and hazards (subtle, configurable) | M | S | todo | Apple Maps turn haptics on Watch |
 | U-10 | Home screen and lock screen widgets: nearby best stage, last drive score, crew event | M | M | todo | iOS widgets |
@@ -238,7 +238,7 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 | U-14 | 3D terrain with hillshade on the planning map and flyover preview of a route | M | M | todo | Apple Maps, Google Earth |
 | U-15 | Dynamic Type and VoiceOver pass on every screen, checked with the iOS simulator | H | M | todo | accessibility |
 | U-16 | Landscape cockpit layout for mounts in landscape | M | M | todo | Waze |
-| U-17 | Copy pass to BRAND voice on every remaining string (errors, empty states, permissions) | M | S | todo | docs/BRAND.md §2 |
+| U-17 | Copy pass to BRAND voice on every remaining string (errors, empty states, permissions) | M | S | partial (#103) | docs/BRAND.md §2 |
 | U-18 | Native feel: replace remaining web-looking controls (selects, date inputs) with app-style ones | M | M | todo | STATE 2026-10-27 |
 | U-19 | Search that understands roads and stages ("Tail of the Dragon"), not just addresses | H | M | todo | Google Maps |
 | U-20 | Saved places and lists (home, work, favourite stages) synced to the account | M | M | todo | Google Maps lists |
