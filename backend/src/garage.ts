@@ -6,7 +6,7 @@ import { Env, HttpError, body } from "./util";
 const MAX_CARS = 10;
 // Controls, format characters (bidi marks and overrides, zero-width), surrogates and private use; ZWJ stays for emoji.
 const UNSAFE_RE = /(?!\u200d)[\p{Cc}\p{Cf}\p{Cs}\p{Co}\u2028\u2029]/u;
-const VISIBLE_RE = /[\p{L}\p{N}]/u;
+const VISIBLE_RE = /(?![\u115f\u1160\u3164\uffa0])[\p{L}\p{N}]/u;   // Hangul fillers are letters that draw nothing
 const COLS = "id, year, make, model, trim, nickname, color, power_hp, weight_kg, drivetrain, transmission, tyres, mods, shared, is_primary";
 const PUBLIC_COLS = "c.id, c.year, c.make, c.model, c.trim, c.nickname, c.color, c.power_hp, c.weight_kg, c.drivetrain, c.transmission, c.tyres, c.mods, c.is_primary";
 
@@ -80,15 +80,14 @@ export async function carCreate(env: Env, v: Viewer, req: Request): Promise<{ id
 /** Owner only: replaces the card. Making it primary unmarks the others. */
 export async function carUpdate(env: Env, v: Viewer, id: string, req: Request): Promise<void> {
   const c = parseCar(await body(req));
-  const own = await env.DB.prepare("SELECT is_primary FROM cars WHERE id = ? AND owner = ?").bind(id, v.id).first<{ is_primary: number }>();
-  if (!own) throw new HttpError(404, "no_car");
-  const primary = c.is_primary || own.is_primary ? 1 : 0;                     // primary moves by choosing another car, never to none
-  await env.DB.batch([
+  // Primary moves by choosing another car, never to none: an edit keeps whatever the row holds now (not a stale read).
+  const res = await env.DB.batch([
     ...(c.is_primary ? [env.DB.prepare("UPDATE cars SET is_primary = 0 WHERE owner = ?1 AND id != ?2 AND EXISTS (SELECT 1 FROM cars WHERE id = ?2 AND owner = ?1)").bind(v.id, id)] : []),
     env.DB.prepare(`UPDATE cars SET year = ?, make = ?, model = ?, trim = ?, nickname = ?, color = ?, power_hp = ?, weight_kg = ?, drivetrain = ?,
-                    transmission = ?, tyres = ?, mods = ?, shared = ?, is_primary = ? WHERE id = ? AND owner = ?`)
-      .bind(c.year, c.make, c.model, c.trim, c.nickname, c.color, c.power_hp, c.weight_kg, c.drivetrain, c.transmission, c.tyres, c.mods, c.shared, primary, id, v.id),
+                    transmission = ?, tyres = ?, mods = ?, shared = ?, is_primary = CASE WHEN ? = 1 THEN 1 ELSE is_primary END WHERE id = ? AND owner = ?`)
+      .bind(c.year, c.make, c.model, c.trim, c.nickname, c.color, c.power_hp, c.weight_kg, c.drivetrain, c.transmission, c.tyres, c.mods, c.shared, c.is_primary, id, v.id),
   ]);
+  if (!res[res.length - 1].meta.changes) throw new HttpError(404, "no_car");
 }
 
 export async function carDelete(env: Env, v: Viewer, id: string): Promise<void> {

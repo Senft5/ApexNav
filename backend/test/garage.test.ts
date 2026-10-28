@@ -26,7 +26,7 @@ describe("garage", () => {
     const a = await makeUser("alice");
     for (const bad of [{ make: "", model: "M3" }, { make: "BMW" }, { ...m3, year: 1700 }, { ...m3, power_hp: 1.5 }, { ...m3, drivetrain: "4wd" },
                        { ...m3, mods: "x".repeat(501) }, { ...m3, nickname: "Gr‮ace" }, { ...m3, weight_kg: "heavy" },
-                       { ...m3, nickname: "Gr\u200face" }, { ...m3, trim: "E46\u200bCSL" }, { ...m3, make: "\u200b", model: "\u200b" }, { ...m3, nickname: "a\nb" }, { ...m3, shared: "true" }, { ...m3, is_primary: 1 }]) {
+                       { ...m3, nickname: "Gr\u200face" }, { ...m3, trim: "E46\u200bCSL" }, { ...m3, make: "\u200b", model: "\u200b" }, { ...m3, nickname: "a\nb" }, { ...m3, shared: "true" }, { ...m3, is_primary: 1 }, { ...m3, make: "\u3164" }]) {
       expect((await api(a, "POST", "/api/garage", bad)).status, JSON.stringify(bad)).toBe(400);
     }
     for (const bad of [null, [], "car"]) expect((await api(a, "POST", "/api/garage", bad)).status, JSON.stringify(bad)).toBe(400);
