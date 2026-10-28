@@ -362,6 +362,9 @@ def _tip(m: dict, ref: dict | None):
             return {"kind": "throttle_sooner", "value": m["throttle_m"] - ref["throttle_m"], "vs_best": True}
         if m["coast_m"] - ref["coast_m"] >= TIP_COAST_M:
             return {"kind": "coast", "value": m["coast_m"] - ref["coast_m"], "vs_best": True}
+        ta, tr = m.get("turn_in_m"), ref.get("turn_in_m")
+        if ta is not None and tr is not None and ta - tr >= TIP_TURN_M:
+            return {"kind": "turn_in_later", "value": ta - tr, "vs_best": True}
         return None
     if m["late_brake_g"] >= SOLO_LATE_BRAKE_G:
         return {"kind": "brake_after_apex", "value": m["late_brake_g"], "vs_best": False}
@@ -436,6 +439,43 @@ def _marks(d: dict, start: int, end: int, apex: int) -> tuple:
     return onset, slow
 
 
+TURN_MIN_G = 0.20            # a corner whose (3-bin smoothed) lateral load peaks lighter than this has no clear turn-in
+TURN_ONSET = 0.4             # turn-in is where the smoothed lateral load, towards the corner, first reaches 40 % of its peak
+TURN_LEAD = 8                # ...no more than 40 m before the corner's start (further back is another corner's load)
+TURN_VALLEY_G = 0.05         # load rising again this much on the way back, below 70 % of the peak: a corner before it
+TIP_TURN_M = 20.0            # four bins earlier than the quicker pass (one bin each of noise and projection): an early turn-in
+
+
+def _turn_in(d: dict, start: int, end: int):
+    """Turn-in of one pass as an index into it, or None (IDEAS D-18). Phone GPS cannot place the car in its lane, but the
+    accelerometer shows where the car began to turn: walking back from the corner's peak load (the largest 3-bin smoothed
+    |lateral g| in it, whose sign says which way it turns), the first bin of the run at or above TURN_ONSET of that peak.
+    None when the peak is under TURN_MIN_G, when any lateral g it reads is unknown, when the run reaches back more than
+    TURN_LEAD bins before the start, or when the load builds again on the way back (a chicane or linked corners: whose
+    turn-in it is cannot be told)."""
+    lat, n = d["lat_g"], len(d["lat_g"])
+    lo = max(1, start - TURN_LEAD)
+    for q in range(lo - 1, min(n - 1, end + 1) + 1):
+        if not math.isfinite(float(lat[q])):
+            return None
+    sm = lambda i: (float(lat[max(0, i - 1)]) + float(lat[i]) + float(lat[min(n - 1, i + 1)])) / 3.0
+    pk = max(range(start, end + 1), key=lambda i: (abs(sm(i)), -i))
+    side = 1.0 if sm(pk) > 0 else -1.0
+    y = lambda i: side * sm(i)
+    peak = y(pk)
+    if not peak >= TURN_MIN_G:
+        return None
+    j, low = pk, peak
+    while y(j - 1) >= TURN_ONSET * peak:
+        if j - 1 <= lo:
+            return None
+        if low < 0.7 * peak and y(j - 1) > low + TURN_VALLEY_G:
+            return None
+        j -= 1
+        low = min(low, y(j))
+    return j
+
+
 ON_A_WINDOW = 10             # bins either side of where a pass's mark should fall on A's road
 
 
@@ -446,13 +486,14 @@ def _on_a(a: dict, near: int, b: dict, i: int):
     return j if dist <= MATCH_RADIUS_M else None
 
 
-def _spread(brakes: list, mins: list, passes: int) -> dict:
+def _spread(brakes: list, mins: list, passes: int, froms: list) -> dict:
     """How repeatably a corner is driven over your clean passes of it (IDEAS D-07): a robust SD (`_sd`), in m along this drive's
     road, of where braking began and of where the slowest point fell, each over the passes that had a clear one. None
     with fewer than SPREAD_MIN_PASSES of them; 5 m bins and GPS put the floor near 3 m."""
     b = [x for x in brakes if x is not None]
     m = [x for x in mins if x is not None]
-    return {"passes": passes, "brake_sd_m": _sd(b), "brake_passes": len(b), "min_sd_m": _sd(m), "min_passes": len(m)}
+    return {"passes": passes, "brake_sd_m": _sd(b), "brake_passes": len(b), "min_sd_m": _sd(m), "min_passes": len(m),
+            "marks": [[f, x, y] for f, x, y in zip(froms, brakes, mins)]}       # per pass: [-1 this drive | j in others, brake, slowest]
 
 
 def coach(a: dict, others: list) -> dict:
@@ -476,8 +517,11 @@ def coach(a: dict, others: list) -> dict:
             continue
         best, best_from, passes = ma, -1, 1
         oa, sa = _marks(a, c["start"], c["end"], c["apex"])                 # D-07 marks, in m along A's road from its apex
+        ta = _turn_in(a, c["start"], c["end"])
+        ma["turn_in_m"] = None if ta is None or ta > c["apex"] else (c["apex"] - ta) * 5.0
         brakes = [None if oa is None else (c["apex"] - oa) * 5.0]
         mins = [None if sa is None else (sa - c["apex"]) * 5.0]
+        froms = [-1]
         for j, b in enumerate(others):
             w = match_window(a, c["start"], c["end"], b, hints[j])
             if w is None:
@@ -499,14 +543,18 @@ def coach(a: dict, others: list) -> dict:
             ob, sb = _marks(b, bs, be, b_apex)
             ob, sb = (None if x is None else _on_a(a, c["apex"] - (b_apex - x), b, x) for x in (ob, sb))
             ob = None if ob is not None and ob > c["apex"] else ob             # braking cannot begin past the apex
+            tb_ = _turn_in(b, bs, be)
+            tb_ = None if tb_ is None else _on_a(a, c["apex"] - (b_apex - tb_), b, tb_)
+            mb["turn_in_m"] = None if tb_ is None or tb_ > c["apex"] else (c["apex"] - tb_) * 5.0   # on A's road, m before its apex
             brakes.append(None if ob is None else (c["apex"] - ob) * 5.0)
             mins.append(None if sb is None else (sb - c["apex"]) * 5.0)
+            froms.append(j)
             if mb["envelope_use"] <= PACE_CEILING and mb["time_s"] < best["time_s"]:
                 best, best_from = mb, j
         gain = ma["time_s"] - best["time_s"]
         tip = _tip(ma, best if best_from >= 0 and gain >= TIP_GAIN_S else None)
         out.append({"apex": c["apex"], "m": ma, "best": None if best_from < 0 else best, "best_from": best_from,
-                    "gain_s": gain, "tip": tip, "passes": passes, "spread": _spread(brakes, mins, passes)})
+                    "gain_s": gain, "tip": tip, "passes": passes, "spread": _spread(brakes, mins, passes, froms)})
     clean = [x for x in out if x["gain_s"] is not None]
     this_s = float(sum(x["m"]["time_s"] for x in clean))
     gain_s = float(sum(x["gain_s"] for x in clean if x["gain_s"] >= TIP_GAIN_S))     # below that is GPS alignment noise
@@ -515,6 +563,33 @@ def coach(a: dict, others: list) -> dict:
     return {"corners": out, "clean": len(clean), "this_s": this_s, "ideal_s": this_s - gain_s, "gain_s": gain_s,
             "top": order[:TOP_OPPORTUNITIES]}
 
+
+
+TREND_MIN_PASSES = 5         # marks a corner needs inside one period: with 3, two passes in the same 5 m bin read as 0 m
+
+
+def spread_by(co: dict, keys: list) -> dict:
+    """How repeatably you braked within each period (IDEAS D-07 trend), from coach(a, others). keys[0] is the period of a
+    (e.g. the month it was driven) and keys[j + 1] that of others[j], None when unknown. For every corner, the braking marks
+    are grouped by period and each group of TREND_MIN_PASSES or more gives a robust SD (`_sd`). Spread inside a period,
+    not distance from an all-time median, so braking deliberately earlier from one month on does not read as unsteady.
+    Returns {key: [[apex, sd_m] per corner]}, apex being the corner's index in a."""
+    out: dict = {}
+    for c in co["corners"]:
+        sp = c.get("spread")
+        if not sp:
+            continue
+        groups: dict = {}
+        for f, b, _ in sp["marks"]:
+            k = keys[f + 1] if 0 <= f + 1 < len(keys) else None
+            if b is None or k is None:
+                continue
+            groups.setdefault(k, []).append(b)
+        for k in sorted(groups):
+            sd = _sd(groups[k]) if len(groups[k]) >= TREND_MIN_PASSES else None
+            if sd is not None:
+                out.setdefault(k, []).append([c["apex"], sd])
+    return out
 
 # ---------------------------------------------------------------------------
 # Friction circle (g-g): the person's own grip envelope, and how much of it each corner used.

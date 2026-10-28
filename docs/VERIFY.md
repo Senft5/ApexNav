@@ -22,10 +22,12 @@ with a mark per row (✓ good, ✗ bad + one line on what you saw, – skipped).
 10. Off route on purpose (with a planned route): a new route to rejoin, and notes carry on.
 11. Lock the phone for 1 minute, unlock: the drive is still recording, the map catches up, no black screen.
 12. Note the battery % at start and end of this part (P-01 needs real numbers: % per hour, screen on, phone model).
+    Optional: switch on Low Power Mode for a minute: "Low Power Mode · saving battery" shows, the map stays smooth enough
+    to drive by and loses its terrain shading; switching it off brings it back.
 
 **C. After the drive, parked (5 min)**
 13. End drive: it saves, shows in Log with a score; Road data on: "Shared n mi of road feel" toast.
-14. Cloudflare → Workers → apexnav → Logs, filter `client_error`: any lines from this run (time, message) go in the report.
+14. Cloudflare → Workers → apexnav → Logs, filter `client_error` (or `GET /api/ops/errors?days=1` signed in as the owner): any lines from this run (time, message) go in the report.
 15. Optional, two phones: start a convoy and open its link on the second phone, then drive both cars: crew bar gaps, a hazard call heard by the other car.
 
 | # | Check | Result |

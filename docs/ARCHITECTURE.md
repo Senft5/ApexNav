@@ -56,6 +56,7 @@ The JS file is a line-for-line port used by the browser/iOS cockpit for live OSR
   pass). Live, with full notes on, at 5 m/s or more on a fresh heading, the voice idle (the native voice's end is estimated,
   it reports none) and no call due within 5 s of driving beyond the call distance, `upcoming` picks the nearest one straight
   ahead in the next 200 m and driven the same way; each is said once per drive.
+  `restTick` keeps the rest clock (15 min of frames standing still under 0.5 m/s, or a 15 min frame gap ending within 200 m of where it began, restarts it; a crawl or a tunnel does not) and `breakCue` picks the live break suggestion from `Core.fatigue` over the driving since the last stop, or two hours on the road; `web/break_worker.js` runs that fatigue read off the main thread.
   `hazards` turns bumps your drives confirmed (`seen.hits >= 2`) into "Bump ahead" notes said at the call distance on any road.
 - `core/drive_analysis.py` — private corner-by-corner pass comparison, Driver Score (0–1000) and custom
   segment passes; JS port in `web/apex_core.js` (plus `profileRecording` for app CSVs), parity-tested.
@@ -69,6 +70,11 @@ The JS file is a line-for-line port used by the browser/iOS cockpit for live OSR
   the mark should fall, 20 m; an onset past the apex is dropped, so a hairpin's other leg cannot capture it). The spread is 1.4826 x the median absolute deviation, in m, so one odd pass (traffic, wet) does
   not dominate; None under 3 marks. With realistic noise (4 m GPS jitter, 0.02 g, 0.15 m/s) identical driving stays under
   10 m. The drive page names a corner as varying only with 5+ passes and a spread of max(10 m, 2 x your median).
+- Braking consistency trend (`spread_by`; JS `spreadBy`): from a coach result's per-pass `spread.marks` and a period key
+  per pass (the month it was driven, None when the date is unknown), the robust SD of each corner's braking marks inside
+  each period with 5+ of them (with 3, two in one 5 m bin give 0 m). Spread inside a month, not distance from an all-time median, so deliberately braking earlier
+  from one month on is not read as unsteady. The Log takes the median over a month's corners (3+ corners), each corner
+  counted once per month across overlapping references, computed one drive per tick.
 - Fatigue cues (`fatigue`; JS `fatigue`): on a drive with an hour or more of moving time (bins at 2.5 m/s or more), the
   clean, fully measured corners (8 or more) of the first and last thirds of that time are compared as two groups: extra
   steering corrections per corner (`steering_corrections`: reversals of the lateral-g trend on steps of 0.03 g or more,
@@ -85,9 +91,17 @@ The JS file is a line-for-line port used by the browser/iOS cockpit for live OSR
   reference, except a pass whose slowest point is over the sane corner limit (envelope use > 1.0), which never counts.
   Gains under 0.2 s are alignment noise and ignored; the rest rank "Where to find time" and sum to the ideal drive. One tip
   per corner: slower at the slowest point (>= 0.9 m/s), brake point earlier (>= 10 m), throttle later (>= 10 m), more
-  coasting (>= 15 m); with no quicker pass, braking after the apex (>= 0.25 g), coasting after braking (>= 20 m) or a
+  coasting (>= 15 m), turned in sooner (>= 20 m, see below); with no quicker pass, braking after the apex (>= 0.25 g), coasting after braking (>= 20 m) or a
   slowest point >= 15 m before an apex driven >= 0.3 m/s faster. Corners through a stop (< 2.5 m/s), blank speed, or
   unmeasured g (`g_known`) anywhere from 200 m before the apex to 100 m after the exit are left out.
+- Turn-in (`_turn_in`; JS `turnIn`, IDEAS D-18): phone GPS cannot place the car in its lane, so the line is read from the
+  accelerometer: walking back from the corner's peak 3-bin smoothed |lateral g| (its sign says which way the corner turns),
+  the first bin of the run at 40 % of that peak. Unknown (None) when the peak is under 0.20 g, when any lateral g read is
+  unknown, when the run reaches more than 40 m before the corner's start, or when the load builds again on the way back
+  (0.05 g above the run's low once under 70 % of the peak: a chicane or linked corners, whose turn-in cannot be told).
+  Other passes' turn-ins are projected onto this drive's road like the D-07 marks. Turning in 20 m or more sooner than the
+  quicker pass is the tip "turn in later" (an early turn-in is the usual cause of an early apex). On the shipped drives with
+  0.03-0.04 g of noise on both passes, identical steering differs by at most 10 m.
 - Friction circle (`gg_envelope`, `grip_use`; JS `ggEnvelope`, `gripUse`): the driver's own g-g envelope from one drive,
   16 slices of 22.5° centred on 0° = throttle, 90° = left, 180° = braking, 270° = right (so straight braking and steady
   cornering sit mid-slice), each slice's radius the nearest-rank 95th percentile of combined g (one pothole jolt does not

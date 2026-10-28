@@ -22,6 +22,7 @@
   <script src="reroute.js"></script>
   <script src="traffic.js"></script>
   <script src="in_car.js"></script>
+  <script src="power.js"></script>
   <script src="sun.js"></script>
   <script src="format.js"></script>
   <script src="road_names.js"></script>
@@ -969,6 +970,7 @@
       mapReady = true;
       addApexLayers();
       restyleBasemap();
+      applyPower();
       map.setLayoutProperty('apex-dna', 'visibility', state.toggles.dna ? 'visible' : 'none');
       updateTwisty();
       map.on('moveend', () => { clearTimeout(twisty.timer); twisty.timer = setTimeout(updateTwisty, 600); });
@@ -1029,6 +1031,25 @@
     //   * road texture: shake from measured pavement roughness, a kick at recorded bumps
     //   * override: any touch pauses follow; it glides back after FOLLOW_RESUME_S of no touch
     // =======================================================================
+    // Low-power cockpit (web/power.js, IDEAS P-02): a hot phone, Low Power Mode or a low battery drops this loop to 30 fps
+    // without shake, the map to 2x pixels, and hides hillshade and contours. Everything else (notes, recording) is unchanged.
+    const power = new ApexPower.PowerSaver();
+    const HEAVY_LAYERS = ['apex-hillshade', 'apex-contours', 'apex-contour-labels'];
+    function applyPower() {
+      if (!mapReady) return;
+      const dpr = window.devicePixelRatio || 1;   // null hands the ratio back to MapLibre (follows zoom and screen changes)
+      if (power.low || map.getPixelRatio() !== dpr) try { map.setPixelRatio(power.low ? Math.min(dpr, 2) : null); } catch (_) {}
+      for (const id of HEAVY_LAYERS) if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', power.low ? 'none' : 'visible');
+    }
+    function feedPower(info) {
+      if (!power.update(info)) return;
+      applyPower();
+      toast(power.low ? `${power.reason} · saving battery: map at 30 fps, terrain shading off` : 'Full map detail back on.');
+    }
+    if (navigator.getBattery) navigator.getBattery().then((b) => {
+      const read = () => feedPower({ batteryLevel: b.level, charging: b.charging });
+      read(); b.addEventListener('levelchange', read); b.addEventListener('chargingchange', read);
+    }).catch(() => {});
     const CAM_FEEL = {
       steady:  { wPos: 3.4, zPos: 1.00, wBear: 1.8, zBear: 0.95, lead: 0.8, ahead: 1.8, sway: 0.0, punch: 0.3, shake: 0.25 },
       dynamic: { wPos: 3.0, zPos: 0.80, wBear: 3.0, zBear: 0.55, lead: 1.0, ahead: 2.6, sway: 1.0, punch: 1.0, shake: 1.0 },
@@ -1085,6 +1106,7 @@
     let camLast = 0, lastBumpKey = '';
     function cameraFrame(ts) {
       requestAnimationFrame(cameraFrame);
+      if (!power.frameDue(ts)) return;
       const dt = Math.min(0.05, (ts - (camLast || ts)) / 1000);
       camLast = ts;
       if (!vehicle || !cam.ready || dt <= 0) return;
@@ -1106,7 +1128,7 @@
       if (bump && key !== lastBumpKey) cam.kick = Math.min(1.5, bump.severity_g * 2.2);
       lastBumpKey = key;
       cam.kick *= Math.exp(-dt * 6);
-      const amp = f.shake * (clamp01((vehicle.rough || 0) / 0.25) * 0.6 + cam.kick) * clamp01(vehicle.vMps / 6);
+      const amp = (power.low ? 0 : f.shake) * (clamp01((vehicle.rough || 0) / 0.25) * 0.6 + cam.kick) * clamp01(vehicle.vMps / 6);
       const tt = ts / 1000;
       const [sLat, sLon] = offsetPoint(cam.lat, cam.lon, cam.bearing + 90, amp * 1.2 * texture(tt, 1));
       map.jumpTo({
@@ -1265,6 +1287,7 @@
     // -------------------------------------------------------------------------
     const speech = { busy: false, queue: [], talkingUntil: 0 };   // talkingUntil: the native voice's estimated end (it reports no finish)
     const MEMO_S = 5;   // a remembered coaching tip takes up to this long to say
+    let breakSay = null;  // a break suggestion waiting for a quiet moment (noteRest sets it, the notes loop says it)
     const NUM_WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
     const TENS = { 30: 'thirty', 40: 'forty', 50: 'fifty', 60: 'sixty', 70: 'seventy', 80: 'eighty' };
     // Co-drivers say "one-fifty", "two hundred", "thirty" — never "one hundred and fifty".
@@ -1468,6 +1491,18 @@
           && !ev.some(e => e.dist_m - state.cursorM < reach && !state.spoken.has(`${track.id}:${e.type}:${e.index}`))) {
         const memo = ApexRoadMemory.upcoming(roadMemory, state.live, reach, reach + 200, state.spoken);
         if (memo) { state.spoken.add(memo.id); say(memo.text); }
+      }
+      // A break suggestion waits for the same quiet (any notes mode: tiredness matters on a commute too): a fresh fix, a free
+      // voice, and no call that will be spoken (route call or a remembered bump) within the distance the line takes to say,
+      // at the app's estimate of 600 ms + 70 ms a character, plus 2 s for a model voice to start. Dropped after 5 min unsaid;
+      // the toast already showed it.
+      if (breakSay && performance.now() > breakSay.until) breakSay = null;
+      if (breakSay && live && performance.now() - state.liveAt < 2500 && !speech.busy && !speech.queue.length && performance.now() > speech.talkingUntil) {
+        const breakReach = lead + vMps * (0.6 + 0.07 * breakSay.text.length + 2);
+        const callDue = ev.some(e => e.dist_m - state.cursorM < breakReach && !state.spoken.has(`${track.id}:${e.type}:${e.index}`)
+          && (e.type === 'corner' ? spirited : (spirited || noteworthyInCruise(e))));
+        const bumpDue = ApexRoadMemory.upcoming(hazardMemory, state.live, 0, breakReach, { has: () => false });
+        if (!callDue && !bumpDue) { say(breakSay.text); breakSay = null; }
       }
     }
 
@@ -2840,10 +2875,14 @@
     const switchRow = (label, on, change) => { const b = el('button', { className: 'ink-btn' + (on ? ' on' : ''), textContent: `${label}: ${on ? 'On' : 'Off'}`, onclick: change }); b.setAttribute('aria-pressed', String(!!on)); return b; };
     let openCrewId = null;
     const crewNear = () => { if (state.lastPosition) return state.lastPosition; const c = map.getCenter(); return { lat: c.lat, lon: c.lng }; };
+    // Links people share open the website (in the app the page's own origin is apexnav://app, which no one else can open).
+    const shareOrigin = () => (ApexSync.inApp ? ApexSync.apiBase : location.origin);
+    let renderGen = 0;   // two renders at once (a link while one runs): only the newest one draws
     async function renderAccount() {
-      const body = $('accountBody');
+      const body = $('accountBody'), gen = ++renderGen;
       let me = null;
       try { const r = await apiCall('GET', '/api/me'); if (r.ok && (r.headers.get('content-type') || '').includes('json')) me = await r.json(); } catch (_) {}
+      if (gen !== renderGen) return;
       body.innerHTML = '';
       const redo = () => renderAccount();
       const badge = $('crewTab').querySelector('.badge'); if (badge) badge.remove();
@@ -2853,7 +2892,13 @@
         return;
       }
       const inviteFromLink = params2.get('invite'), crewFromLink = params2.get('crew'), addFromLink = params2.get('add');
-      try { if (inviteFromLink) sessionStorage.setItem('apex.invite', inviteFromLink); if (crewFromLink) sessionStorage.setItem('apex.crew', crewFromLink); if (addFromLink) sessionStorage.setItem('apex.add', addFromLink.toLowerCase()); } catch (_) {}
+      let stashed = false;
+      try { if (inviteFromLink) sessionStorage.setItem('apex.invite', inviteFromLink); if (crewFromLink) sessionStorage.setItem('apex.crew', crewFromLink); if (addFromLink) sessionStorage.setItem('apex.add', addFromLink.toLowerCase()); stashed = true; } catch (_) {}
+      // Kept in the tab, gone from the address bar: a reload or a redraw must not act on the link again.
+      if (inviteFromLink || crewFromLink || addFromLink) {
+        if (stashed) try { for (const k of ['invite', 'crew', 'add']) params2.delete(k); history.replaceState(history.state, '', location.pathname + (params2.toString() ? '?' + params2 : '') + location.hash); } catch (_) {}
+        showView('crew');
+      }
       const stash = (k) => { try { return sessionStorage.getItem(k) || ''; } catch (_) { return ''; } };
       const unstash = (k) => { try { sessionStorage.removeItem(k); } catch (_) {} };
       if (!me.signed_in) {
@@ -2861,7 +2906,6 @@
           el('h3', { textContent: 'Drive with friends' }),
           el('p', { className: 'note', textContent: 'ApexNav is invite-only. Sign in to add friends, share scores and join boards. Nothing is shared unless you switch it on.' }),
           el('a', { className: 'ink-btn solid', href: '/api/auth/google/start', textContent: 'Sign in with Google', style: 'display:flex;align-items:center;justify-content:center;text-decoration:none' }));
-        if (inviteFromLink || crewFromLink || addFromLink) { showView('crew'); }
         return;
       }
       // Anyone signed in can take their data or close the account, member or not.
@@ -2877,7 +2921,6 @@
         body.append(el('h3', { textContent: 'Join with an invite' }), el('p', { className: 'note', textContent: 'ApexNav is invite-only. Paste your invite.' }), el('div', { className: 'row' }, inp, btn('Join', join, 'ink-btn solid')),
           el('div', { className: 'row' }, btn('Sign out', async () => { await apiCall('POST', '/api/auth/logout'); ApexSync.setSession(null); redo(); }, 'linkbtn'),
             btn('Download my data', downloadMyData, 'linkbtn'), btn('Delete account', deleteMyAccount, 'danger-btn')));
-        if (stash('apex.invite')) join();
         return;
       }
       if (!me.handle) {
@@ -2889,6 +2932,7 @@
       if (me.requests > 0) { const b = el('span', { className: 'badge', textContent: String(me.requests) }); b.setAttribute('aria-label', `${me.requests} friend requests`); $('crewTab').append(b); }
       const [fr, gr, pts, ex, crews] = await Promise.all([apiCall('GET', '/api/friends').then(jsonOf), apiCall('GET', '/api/grants').then(jsonOf), apiCall('GET', '/api/points').then(jsonOf),
         apiCall('GET', '/api/me/export').then(jsonOf), window.ApexSync && ApexSync.crews ? ApexSync.crews() : apiCall('GET', '/api/crews').then(jsonOf)]);
+      if (gen !== renderGen) return;
       const friends = Array.isArray(fr) ? fr : [], grants = new Map((Array.isArray(gr) ? gr : []).map(g => [g.audience_type + ':' + g.audience_id, g]));
       const putGrant = async (type, id, scores, times) => { await apiCall('PUT', '/api/grants', { audience_type: type, audience_id: id, share_scores: scores, share_times: times }); redo(); };
 
@@ -2899,7 +2943,7 @@
       const invOut = el('p', { className: 'note' });
       you.append(el('div', { className: 'row' },
         btn('Invite someone', async () => { const r = await apiCall('POST', '/api/invites'); const j = await jsonOf(r); if (r.ok) copyText(j.url, 'Invite link copied. They\'ll be your friend the moment they join.'); else toast('Couldn\'t make an invite. Try again.'); }, 'ink-btn solid'),
-        btn('Share my handle', () => copyText(`${location.origin}/?add=${me.handle}`, 'Link copied. Anyone who opens it can ask to be your friend.'))), invOut);
+        btn('Share my handle', () => copyText(`${shareOrigin()}/?add=${me.handle}`, 'Link copied. Anyone who opens it can ask to be your friend.'))), invOut);
       body.append(you);
       if (convoy) body.append(convoy.section());
       if (garage) body.append(garage.section());
@@ -2908,7 +2952,7 @@
       if (stash('apex.add')) friendsOpen = true;
       const fpop = el('aside', { className: 'side-pop' + (friendsOpen ? ' open' : '') });
       fpop.setAttribute('aria-label', 'Friends');
-      const closePop = () => { friendsOpen = false; fpop.classList.remove('open'); };
+      const closePop = () => { friendsOpen = false; unstash('apex.add'); fpop.classList.remove('open'); };
       fpop.append(el('div', { className: 'side-pop-head' }, el('h3', { textContent: 'Friends' }), btn('Done', closePop, 'linkbtn')));
       const nFriends = friends.filter(f => f.status === 'accepted').length, nReq = friends.filter(f => f.status === 'pending' && f.incoming).length;
       you.append(el('div', { className: 'row' }, btn(`Friends · ${nFriends}${nReq ? ` · ${nReq} new` : ''}`, () => { friendsOpen = true; fpop.classList.add('open'); }, nReq ? 'ink-btn solid' : 'ink-btn')));
@@ -2953,9 +2997,21 @@
       // crews
       const csec = section('Crews');
       const crewList = Array.isArray(crews) ? crews : [];
-      if (crewFromLink || stash('apex.crew')) {
-        const tok = crewFromLink || stash('apex.crew'); unstash('apex.crew');
-        const r = await apiCall('POST', '/api/crews/join', { token: tok }); toast(r.ok ? 'You joined the crew.' : 'That crew invite didn\'t work. Ask for a new one.'); if (r.ok) { redo(); return; }
+      // A crew link asks first: joining shows your handle to its members, so it is never done for you by opening a link.
+      if (stash('apex.crew')) {
+        const tok = stash('apex.crew');
+        csec.append(el('div', { className: 'card stack-8' },
+          el('p', { textContent: 'You have a crew invite. Join? Its members will see your handle, and your car if you show it to crews.' }),
+          el('div', { className: 'row' }, btn('Join crew', async (e) => {
+            const b = e && e.currentTarget; if (b) { if (b.disabled) return; b.disabled = true; }
+            let r = null;
+            try { r = await apiCall('POST', '/api/crews/join', { token: tok }); } catch (_) {}
+            if (b) b.disabled = false;
+            if (!r) { toast('Couldn\'t join. Check signal and try again.'); return; }
+            if (r.ok || (r.status >= 400 && r.status < 500)) unstash('apex.crew');
+            toast(r.ok ? 'You joined the crew.' : r.status < 500 ? 'That crew invite didn\'t work. Ask for a new one.' : 'Couldn\'t join. Check signal and try again.');
+            redo();
+          }, 'ink-btn solid'), btn('Not now', () => { unstash('apex.crew'); redo(); }, 'linkbtn'))));
       }
       if (!crewList.length) csec.append(el('p', { className: 'note', textContent: 'A crew is a group for a club or a weekend run. You can be in several. Make one below, or join one near you.' }));
       const tiles = el('div', { className: 'crew-tiles' });
@@ -2987,7 +3043,7 @@
             switchRow('Times', g.share_times, () => putGrant('crew', c.id, true, !g.share_times))),
           el('span', { textContent: g.share_scores ? (g.share_times ? `${c.name} sees your scores and times.` : `${c.name} sees your scores.`) : `${c.name} sees nothing of yours yet.` }),
           ownerBox,
-          el('div', { className: 'row' }, btn('Invite to crew', async () => { const r = await apiCall('POST', `/api/crews/${c.id}/invite`); const j = await jsonOf(r); if (r.ok) copyText(`${location.origin}/?crew=${j.token}`, 'Crew link copied.'); else toast('Only a crew\'s owner can invite.'); }),
+          el('div', { className: 'row' }, btn('Invite to crew', async () => { const r = await apiCall('POST', `/api/crews/${c.id}/invite`); const j = await jsonOf(r); if (r.ok) copyText(`${shareOrigin()}/?crew=${j.token}`, 'Crew link copied.'); else toast('Only a crew\'s owner can invite.'); }),
             btn('Leave', async () => { if (confirm(`Leave ${c.name}?`)) { if (openCrewId === c.id) openCrewId = null; await apiCall('DELETE', `/api/crews/${c.id}/membership`); redo(); } }, 'linkbtn')));
         const loadMembers = async () => {
           mbox.innerHTML = '';
@@ -3294,7 +3350,7 @@
     // =======================================================================
     // 10b. DRIVE MODE (web): real GPS + motion, recorded to this device. REPLAY plays a saved drive; the two never mix.
     // =======================================================================
-    const drive = { sensors: null, rec: null, status: null, frames: 0, live: null, liveIdx: 0, share: 'off', shareKm: 0, shareErr: null, native: false, roads: {}, roadIdx: 0 };
+    const drive = { sensors: null, rec: null, status: null, frames: 0, live: null, liveIdx: 0, share: 'off', shareKm: 0, shareErr: null, native: false, roads: {}, roadIdx: 0, rest: null };
     const NATIVE_SHELL = !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex);
     function paintModeSwitch() {
       const on = state.mode === 'live';
@@ -3366,6 +3422,45 @@
         if (name) drive.roads[name] = (drive.roads[name] || 0) + 150;
       }
     }
+    // Break cue (IDEAS D-16, live): ApexRoadMemory.restTick keeps the clock (restarted by 15 min standing still); once an
+    // hour has passed, every 10 min the driving since the stop goes to break_worker.js (Core.fatigue, off the main thread).
+    // The cue is shown at once and spoken by the notes loop when no call is due (breakSay), like the remembered tips. A
+    // reading that fails or takes over BREAK_WAIT_MS counts as unknown, so the time cue still comes.
+    const BREAK_WAIT_MS = 30000;
+    let breakWorker = null, breakSeq = 0;
+    function noteRest(frame) {
+      const r = drive.rec; if (!r) return;
+      let due;
+      [drive.rest, due] = ApexRoadMemory.restTick(drive.rest, Date.now(), frame.speed_mps, r.rows.length, [frame.lat, frame.lon]);
+      const w = drive.rest, stretch = w.stretch;
+      if (!due || w.busy) return;
+      w.busy = true;
+      const finish = (fa) => {
+        if (drive.rec !== r || drive.rest !== w || w.stretch !== stretch) return;   // the drive ended or a new stretch began
+        w.busy = false;
+        const t = Date.now(), cue = ApexRoadMemory.breakCue(fa, (t - w.since) / 1000, w.said == null ? null : (t - w.said) / 1000, w.spoken);
+        if (!cue) return;
+        w.said = t;
+        toast(cue.text);
+        if (!w.spoken.includes(cue.kind)) { w.spoken.push(cue.kind); breakSay = { text: cue.text, until: performance.now() + 5 * 60000 }; }
+      };
+      const rows = r.rows.length - w.row0 > 200 ? ApexRoadMemory.rebase(r.rows.slice(w.row0)) : null;
+      if (!rows) { finish(null); return; }
+      let wk;
+      try { wk = breakWorker = breakWorker || new Worker('break_worker.js'); } catch (_) { finish(null); return; }
+      const id = ++breakSeq;
+      let timer = null;
+      const done = (fa, broken) => {
+        clearTimeout(timer);
+        wk.removeEventListener('message', onMsg); wk.removeEventListener('error', onErr); wk.removeEventListener('messageerror', onErr);
+        if (broken && breakWorker === wk) { try { wk.terminate(); } catch (_) {} breakWorker = null; }   // a fresh one next time
+        try { finish(fa); } finally { if (drive.rest === w && w.stretch === stretch) w.busy = false; }
+      };
+      const onMsg = (e) => { if (e.data && e.data.id === id) done(e.data.fa, false); }, onErr = () => done(null, true);
+      wk.addEventListener('message', onMsg); wk.addEventListener('error', onErr); wk.addEventListener('messageerror', onErr);
+      timer = setTimeout(() => done(null, true), BREAK_WAIT_MS);
+      wk.postMessage({ id, rows });
+    }
     // Road data whenever the app is open and the phone is mounted (calibration locked), not only during a drive
     // (owner 2026-10-26). Trips, privacy trims and gaps: ApexContributor.createAmbient. Members with ROAD DATA on only.
     const ambient = { sharer: null, allowed: null, checkedAt: -Infinity, checking: false, mounted: false };
@@ -3429,7 +3524,7 @@
       driveActive = true;
       setPlaying(false);
       drive.rec = new ApexSensors.Recorder(); drive.status = { gps: 'waiting', motion: 'off', wake: 'off', message: '' }; drive.frames = 0;
-      drive.live = null; drive.liveIdx = 0; drive.share = 'off'; drive.shareKm = 0; drive.shareErr = null; drive.roads = {}; drive.roadIdx = 0;
+      drive.live = null; drive.liveIdx = 0; drive.share = 'off'; drive.shareKm = 0; drive.shareErr = null; drive.roads = {}; drive.roadIdx = 0; drive.rest = null; breakSay = null; if (breakWorker) { breakWorker.terminate(); breakWorker = null; }
       if (NATIVE_SHELL) {   // the app's own GPS and IMU feed window.apex.live; no browser sensors to start
         drive.native = true;
         drive.status = { gps: performance.now() - state.liveAt < 5000 && state.live ? 'on' : 'waiting', motion: 'on', wake: 'on', message: '' };
@@ -3454,7 +3549,7 @@
             paintPerms();
             paintDriveStat();
           },
-          onFrame: (fr) => { if (!fr.has_fix) return; drive.frames++; drive.rec.add(fr); feedLive(); noteRoads(); window.apex.live(fr); paintDriveStat(); },
+          onFrame: (fr) => { if (!fr.has_fix) return; drive.frames++; drive.rec.add(fr); feedLive(); noteRoads(); noteRest(fr); window.apex.live(fr); paintDriveStat(); },
         });
         if (!driveActive || state.mode !== 'live') {
           sensors.stop();
@@ -3575,6 +3670,24 @@
     if (!flag('apex.onboarded') && !window.APEX_EMBED && !['invite', 'crew', 'add', 'convoy', 'drive', 'play', 'at', 'theme'].some(k => params.has(k))) runOnboarding();
     else if (!flag('apex.onboarded')) flag('apex.onboarded', '1');
 
+    // An invite, crew, friend or convoy link opened in iPhone Safari: offer to open it in the app instead (apexnav://open?...).
+    // Only the link keys go across, and only values the app accepts; the app checks them again.
+    (() => {
+      const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      if (window.APEX_EMBED || !ios) return;
+      const q = new URLSearchParams();
+      for (const k of ['invite', 'crew', 'add', 'convoy']) { const v = params.get(k); if (v && /^[A-Za-z0-9._-]{1,200}$/.test(v)) q.set(k, v); }
+      try { if (![...q.keys()].length || sessionStorage.getItem('apex.stayInBrowser')) return; } catch (_) { if (![...q.keys()].length) return; }
+      const bar = document.createElement('div');
+      bar.id = 'openInApp';
+      bar.style.cssText = 'position:fixed;left:50%;bottom:calc(76px + var(--safe-bottom, 0px));transform:translateX(-50%);z-index:40;display:flex;gap:12px;align-items:center;' +
+        'background:var(--panel);color:var(--panel-ink);border:1px solid var(--rule);padding:10px 14px;box-shadow:0 8px 24px rgba(0,0,0,.3);max-width:calc(100% - 32px)';
+      const a = document.createElement('a'); a.href = 'apexnav://open?' + q.toString(); a.textContent = 'Have the app? Open it there'; a.style.cssText = 'color:var(--accent);font-weight:600;white-space:nowrap';
+      const x = document.createElement('button'); x.type = 'button'; x.textContent = '×'; x.setAttribute('aria-label', 'Stay in the browser'); x.className = 'linkbtn';
+      x.onclick = () => { bar.remove(); try { sessionStorage.setItem('apex.stayInBrowser', '1'); } catch (_) {} };
+      bar.append(a, x); document.body.append(bar);
+    })();
+
     // =======================================================================
     // 11. NATIVE BRIDGE (ApexNavApp.swift pushes window.apex.live every 0.1 s)
     // =======================================================================
@@ -3583,8 +3696,21 @@
     // In a browser, frames come from the web sensors during a drive (or from tests) and go straight to live mode.
     // iOS ignores user-scalable=no: cancel Safari's page-zoom gesture. MapLibre's pinch uses touch events and keeps working.
     document.addEventListener('gesturestart', (e) => e.preventDefault(), { passive: false });
+    // An invite, crew, friend or convoy link opened while the app is running: take it in place (never reload mid-drive) and
+    // show the Crew sheet, where each one still waits for a tap.
+    function openAppLink(p) {
+      const ok = (v) => typeof v === 'string' && /^[A-Za-z0-9._-]{1,200}$/.test(v);
+      try {
+        if (ok(p.invite)) sessionStorage.setItem('apex.invite', p.invite);
+        if (ok(p.crew)) sessionStorage.setItem('apex.crew', p.crew);
+        if (ok(p.add)) sessionStorage.setItem('apex.add', p.add.toLowerCase());
+      } catch (_) {}
+      if (ok(p.convoy) && convoy && convoy.takeInvite) convoy.takeInvite(p.convoy);
+      showView('crew'); renderAccount();
+    }
     window.apex = {
       live(frame) {
+        if (frame) feedPower({ thermal: frame.thermal, lowPowerMode: frame.low_power_mode });
         if (!frame || !frame.has_fix || !Number.isFinite(frame.lat) || !Number.isFinite(frame.lon)) return;
         feedMotion(frame.speed_mps);
         state.lastPosition = { lat: frame.lat, lon: frame.lon }; state.lastPositionAt = performance.now();
@@ -3593,7 +3719,7 @@
         if (NATIVE_SHELL && !driveActive) { showIdleFix(frame); return; }
         state.live = frame; state.liveAt = performance.now();
         if (drive.native && drive.rec) {
-          drive.frames++; drive.rec.add(frame); feedLive(); noteRoads();
+          drive.frames++; drive.rec.add(frame); feedLive(); noteRoads(); noteRest(frame);
           const gps = Number.isFinite(frame.accuracy_m) && frame.accuracy_m > ApexSensors.MAX_ACCURACY_M ? 'weak' : 'on';
           if (drive.status.gps !== gps) drive.status.gps = gps;
           const cal = typeof frame.calibration === 'string' ? frame.calibration : null;
@@ -3612,6 +3738,7 @@
         if (msg && msg.type === 'recordingSaved') toast(`Saved ${msg.segments} road segments to ${msg.file}`);
         // App sign-in finished in the native shell: keep the session token and redraw whatever shows account state.
         if (msg && msg.type === 'session' && msg.token) { ApexSync.setSession(msg.token); toast('Signed in.'); location.reload(); }
+        if (msg && msg.type === 'link' && msg.params) { openAppLink(msg.params); return; }
         if (msg && msg.type === 'signInFailed' && msg.reason !== 'cancelled') toast('Couldn\'t sign in. Check signal and try again.');
       }
     };

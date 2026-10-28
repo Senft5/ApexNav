@@ -230,30 +230,30 @@ const out = {};
 (async () => {
   // 1. normal streaming drive
   { const st = { matches: 0, overpass: 0, failTimes: 0 }, posts = [], statuses = [];
-    const live = C.createLive({ Core, fetch: fake(st), driveId: 'd_live_test_01', drivenOn: '2026-10-25', post: async (c) => { posts.push(c); return true; }, onStatus: (s) => statuses.push(s.state) });
+    const live = C.createLive({ Core, skip: 200, lag: 200, fetch: fake(st), driveId: 'd_live_test_01', drivenOn: '2026-10-25', post: async (c) => { posts.push(c); return true; }, onStatus: (s) => statuses.push(s.state) });
     for (let i = 0; i < N; i++) { live.push(row(i)); if (i % 50 === 0) await new Promise((r) => setTimeout(r, 0)); }
     const stats = await live.finish();
     const bins = posts.flatMap((p) => p.bins.map((b) => b.i)), lo = Math.min(...bins), hi = Math.max(...bins);
     out.normal = { posts: posts.length, lo, hi, n: bins.length, unique: new Set(bins).size, overpass: st.overpass, ids: [...new Set(posts.map((p) => p.drive_id))], crest: [...new Set(posts.flatMap((p) => p.bins.map((b) => b.crest)))], keys: Object.keys(posts[0]).sort().join(), km: stats.km, firstState: statuses[0] }; }
   // 2. failures are retried, rows are not lost
   { const st = { matches: 0, overpass: 0, failTimes: 1 }, posts = []; let t = 0;
-    const live = C.createLive({ Core, fetch: fake(st), driveId: 'd_live_test_02', drivenOn: '2026-10-25', retryMs: 1000, now: () => t, post: async (c) => { posts.push(c); return true; } });
+    const live = C.createLive({ Core, skip: 200, lag: 200, fetch: fake(st), driveId: 'd_live_test_02', drivenOn: '2026-10-25', retryMs: 1000, now: () => t, post: async (c) => { posts.push(c); return true; } });
     for (let i = 0; i < N; i++) live.push(row(i));
     await live.finish(); out.afterFail = { posts: posts.length, error: !!live.stats().error };
     t += 2000; live.push(row(N)); await live.finish(); out.afterRetry = { posts: posts.length, error: !!live.stats().error }; }
   // 3. the server refusing stops everything
   { const st = { matches: 0, overpass: 0, failTimes: 0 }; let calls = 0;
-    const live = C.createLive({ Core, fetch: fake(st), driveId: 'd_live_test_03', drivenOn: '2026-10-25', post: async () => { calls++; return 'stop'; } });
+    const live = C.createLive({ Core, skip: 200, lag: 200, fetch: fake(st), driveId: 'd_live_test_03', drivenOn: '2026-10-25', post: async () => { calls++; return 'stop'; } });
     for (let i = 0; i < N; i++) live.push(row(i));
     await live.finish(); out.stopped = { stopped: live.stats().stopped, calls }; }
   // 4. a short drive sends nothing at all
   { const st = { matches: 0, overpass: 0, failTimes: 0 }, posts = [];
-    const live = C.createLive({ Core, fetch: fake(st), driveId: 'd_live_test_04', drivenOn: '2026-10-25', post: async (c) => { posts.push(c); return true; } });
+    const live = C.createLive({ Core, skip: 200, lag: 200, fetch: fake(st), driveId: 'd_live_test_04', drivenOn: '2026-10-25', post: async (c) => { posts.push(c); return true; } });
     for (let i = 0; i < 380; i++) live.push(row(i));          // 1.9 km: first km and last km stay private, only 0 rows remain
     await live.finish(); out.short = { posts: posts.length, matches: st.matches }; }
   // 5. a network blip or server error keeps the chunk and resends the same payload; sharing never stops
   { const st = { matches: 0, overpass: 0, failTimes: 0 }, calls = [], ok = []; let t = 0, blips = 2;
-    const live = C.createLive({ Core, fetch: fake(st), driveId: 'd_live_test_05', drivenOn: '2026-10-25', retryMs: 1000, now: () => t,
+    const live = C.createLive({ Core, skip: 200, lag: 200, fetch: fake(st), driveId: 'd_live_test_05', drivenOn: '2026-10-25', retryMs: 1000, now: () => t,
       post: async (c) => { calls.push(JSON.stringify(c)); if (blips-- > 0) return 'retry'; ok.push(c); return true; } });
     for (let i = 0; i < N; i++) { live.push(row(i)); if (i % 50 === 0) { await new Promise((r) => setTimeout(r, 0)); t += 1500; } }
     const stats = await live.finish(), bins = ok.flatMap((p) => p.bins.map((b) => b.i));
@@ -270,12 +270,18 @@ const out = {};
       return { ok: true, json: async () => ({ elements: Object.entries(ways).map(([id, g]) => ({ type: 'way', id: +id, geometry: g.map(([la, lo]) => ({ lat: la, lon: lo })) })) }) };
     };
     const posts = [];
-    const live = C.createLive({ Core, fetch: two, driveId: 'd_live_test_06', drivenOn: '2026-10-25', post: async (c) => { posts.push(c); return true; } });
+    const live = C.createLive({ Core, skip: 200, lag: 200, fetch: two, driveId: 'd_live_test_06', drivenOn: '2026-10-25', post: async (c) => { posts.push(c); return true; } });
     for (let i = 0; i < N; i++) { live.push(row(i)); if (i % 50 === 0) await new Promise((r) => setTimeout(r, 0)); }
     await live.finish();
     const keys = posts.flatMap((p) => p.bins.map((b) => p.way_id + ':' + b.i)), on = (w) => posts.filter((p) => p.way_id === w).flatMap((p) => p.bins.map((b) => b.i));
     out['split' + split] = { n: keys.length, unique: new Set(keys).size, max77: Math.max(...on(77)), min78: Math.min(...on(78)) };
   }
+  // 7. defaults: each trip keeps a random 0.5-1.5 km at each end; under 1 km in all is never sent
+  { const e = [0, 0.5, 0.999999].map((r) => C.privateEdge(() => r)), many = new Set(Array.from({ length: 50 }, () => C.privateEdge()));
+    const st = { matches: 0, overpass: 0, failTimes: 0 }, posts = [];
+    const live = C.createLive({ Core, fetch: fake(st), driveId: 'd_live_test_07', drivenOn: '2026-10-25', post: async (c) => { posts.push(c); return true; } });
+    for (let i = 0; i < 199; i++) live.push(row(i));
+    await live.finish(); out.edges = { e, distinct: many.size, min: Math.min(...many), max: Math.max(...many), shortPosts: posts.length, matches: st.matches }; }
   console.log(JSON.stringify(out));
 })();
 """
@@ -295,6 +301,13 @@ def test_live_never_sends_first_or_last_km(live):
     assert n["n"] == n["unique"] and n["n"] >= 780                    # about 800 settled rows, none sent twice
     assert n["ids"] == ["d_live_test_01"] and n["keys"] == "bins,dir,drive_id,driven_on,way_id"
     assert n["overpass"] == 1 and n["firstState"] == "on"             # way geometry fetched once, then cached
+
+
+def test_live_private_edges_are_random_half_to_one_and_a_half_km(live):
+    e = live["edges"]
+    assert e["e"] == [100, 200, 300]                                  # 0.5, 1.0 and 1.5 km in 5 m rows
+    assert e["distinct"] > 10 and 100 <= e["min"] and e["max"] <= 300  # drawn per trip, never a fixed distance
+    assert e["shortPosts"] == 0 and e["matches"] == 0                 # a trip under 1 km never leaves the phone, not even to the matcher
 
 
 def test_unknown_curvature_is_null_and_known_zero_stays_zero(result):

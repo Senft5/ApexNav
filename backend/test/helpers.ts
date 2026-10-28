@@ -8,6 +8,7 @@ import m6 from "../migrations/0006_crest_count.sql?raw";
 import m7 from "../migrations/0007_public_crews.sql?raw";
 import m8 from "../migrations/0008_garage.sql?raw";
 import m9 from "../migrations/0009_moderation.sql?raw";
+import m10 from "../migrations/0010_error_counts.sql?raw";
 import { sha256hex } from "../src/util";
 
 export const ORIGIN = "https://apexnav.test";
@@ -26,7 +27,7 @@ export async function freshDb(): Promise<void> {
     await env.DB.batch(tables.map((t) => env.DB.prepare(`DELETE FROM ${t.name}`)));
     return;
   }
-  await env.DB.batch([...splitSql(m1), ...splitSql(m2), ...splitSql(m3), ...splitSql(m4), ...splitSql(m5), ...splitSql(m6), ...splitSql(m7), ...splitSql(m8), ...splitSql(m9)].map((s) => env.DB.prepare(s)));
+  await env.DB.batch([...splitSql(m1), ...splitSql(m2), ...splitSql(m3), ...splitSql(m4), ...splitSql(m5), ...splitSql(m6), ...splitSql(m7), ...splitSql(m8), ...splitSql(m9), ...splitSql(m10)].map((s) => env.DB.prepare(s)));
 }
 
 export interface TestUser { id: string; handle: string; token: string }

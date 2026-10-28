@@ -677,6 +677,8 @@
       if (m.brake_m !== null && ref.brake_m !== null && m.brake_m - ref.brake_m >= TIP_BRAKE_M) return { kind: 'brake_later', value: m.brake_m - ref.brake_m, vs_best: true };
       if (m.throttle_m !== null && ref.throttle_m !== null && m.throttle_m - ref.throttle_m >= TIP_BRAKE_M) return { kind: 'throttle_sooner', value: m.throttle_m - ref.throttle_m, vs_best: true };
       if (m.coast_m - ref.coast_m >= TIP_COAST_M) return { kind: 'coast', value: m.coast_m - ref.coast_m, vs_best: true };
+      const ta = m.turn_in_m, tr = ref.turn_in_m;
+      if (ta !== null && ta !== undefined && tr !== null && tr !== undefined && ta - tr >= TIP_TURN_M) return { kind: 'turn_in_later', value: ta - tr, vs_best: true };
       return null;
     }
     if (m.late_brake_g >= SOLO_LATE_BRAKE_G) return { kind: 'brake_after_apex', value: m.late_brake_g, vs_best: false };
@@ -720,14 +722,36 @@
     }
     return [onset, slow];
   }
+  // Turn-in of one pass as an index into it, or null (port of drive_analysis._turn_in, IDEAS D-18): walking back from the
+  // corner's peak smoothed |lateral g|, the first bin of the run at 40 % of it; null on unknown g, a run past 40 m before the
+  // start, or load building again on the way back (a chicane, linked corners). GPS cannot place the car in its lane.
+  const TURN_MIN_G = 0.20, TURN_ONSET = 0.4, TURN_LEAD = 8, TURN_VALLEY_G = 0.05, TIP_TURN_M = 20;
+  function turnIn(d, start, end) {
+    const lat = d.lat_g, n = lat.length, lo = Math.max(1, start - TURN_LEAD);
+    for (let q = lo - 1; q <= Math.min(n - 1, end + 1); q++) if (!Number.isFinite(lat[q])) return null;
+    const sm = (i) => (lat[Math.max(0, i - 1)] + lat[i] + lat[Math.min(n - 1, i + 1)]) / 3;
+    let pk = start;
+    for (let i = start + 1; i <= end; i++) if (Math.abs(sm(i)) > Math.abs(sm(pk))) pk = i;
+    const side = sm(pk) > 0 ? 1 : -1, y = (i) => side * sm(i), peak = y(pk);
+    if (!(peak >= TURN_MIN_G)) return null;
+    let j = pk, low = peak;
+    while (y(j - 1) >= TURN_ONSET * peak) {
+      if (j - 1 <= lo) return null;
+      if (low < 0.7 * peak && y(j - 1) > low + TURN_VALLEY_G) return null;
+      j--;
+      low = Math.min(low, y(j));
+    }
+    return j;
+  }
   const ON_A_WINDOW = 10;
   function onA(a, near, b, i) {                                     // searched only around where the mark should fall
     const [j, dist] = nearestIndexWin(b.lat[i], b.lon[i], a.lat, a.lon, Math.max(0, near), ON_A_WINDOW);
     return dist <= MATCH_RADIUS_M ? j : null;
   }
-  function spread(brakes, mins, passes) {
+  function spread(brakes, mins, passes, froms) {
     const b = brakes.filter((x) => x !== null), m = mins.filter((x) => x !== null);
-    return { passes, brake_sd_m: sampleSd(b), brake_passes: b.length, min_sd_m: sampleSd(m), min_passes: m.length };
+    return { passes, brake_sd_m: sampleSd(b), brake_passes: b.length, min_sd_m: sampleSd(m), min_passes: m.length,
+             marks: froms.map((f, k) => [f, brakes[k], mins[k]]) };     // per pass: [-1 this drive | j in others, brake, slowest]
   }
   function coach(a, others) {
     const hints = others.map(() => -1), out = [];
@@ -737,7 +761,9 @@
       if (ma.min_mps < STOPPED_MPS) { out.push({ apex: c.apex, m: ma, best: null, gain_s: null, tip: null, passes: 0 }); continue; }
       let best = ma, bestFrom = -1, passes = 1;
       const [oa, sa] = passMarks(a, c.start, c.end, c.apex);             // D-07 marks, in m along A's road from its apex
-      const brakes = [oa === null ? null : (c.apex - oa) * 5], mins = [sa === null ? null : (sa - c.apex) * 5];
+      const ta = turnIn(a, c.start, c.end);
+      ma.turn_in_m = ta === null || ta > c.apex ? null : (c.apex - ta) * 5;
+      const brakes = [oa === null ? null : (c.apex - oa) * 5], mins = [sa === null ? null : (sa - c.apex) * 5], froms = [-1];
       others.forEach((b, j) => {
         const w = matchWindow(a, c.start, c.end, b, hints[j]);
         if (!w) return;
@@ -753,18 +779,43 @@
         passes++;
         let [ob, sb] = passMarks(b, bs, be, bApex).map((x) => (x === null ? null : onA(a, c.apex - (bApex - x), b, x)));
         if (ob !== null && ob > c.apex) ob = null;                       // braking cannot begin past the apex
-        brakes.push(ob === null ? null : (c.apex - ob) * 5); mins.push(sb === null ? null : (sb - c.apex) * 5);
+        let tt = turnIn(b, bs, be);
+        if (tt !== null) tt = onA(a, c.apex - (bApex - tt), b, tt);
+        mb.turn_in_m = tt === null || tt > c.apex ? null : (c.apex - tt) * 5;   // on A's road, m before its apex
+        brakes.push(ob === null ? null : (c.apex - ob) * 5); mins.push(sb === null ? null : (sb - c.apex) * 5); froms.push(j);
         if (mb.envelope_use <= PACE_CEILING && mb.time_s < best.time_s) { best = mb; bestFrom = j; }
       });
       const gain = ma.time_s - best.time_s;
       out.push({ apex: c.apex, m: ma, best: bestFrom < 0 ? null : best, best_from: bestFrom, gain_s: gain,
-                 tip: coachTip(ma, bestFrom >= 0 && gain >= TIP_GAIN_S ? best : null), passes, spread: spread(brakes, mins, passes) });
+                 tip: coachTip(ma, bestFrom >= 0 && gain >= TIP_GAIN_S ? best : null), passes, spread: spread(brakes, mins, passes, froms) });
     }
     const clean = out.filter(x => x.gain_s !== null);
     const thisS = clean.reduce((s, x) => s + x.m.time_s, 0), gainS = clean.reduce((s, x) => s + (x.gain_s >= TIP_GAIN_S ? x.gain_s : 0), 0);
     const top = out.map((x, k) => k).filter(k => out[k].gain_s !== null && out[k].gain_s >= TIP_GAIN_S)
       .sort((p, q) => out[q].gain_s - out[p].gain_s || p - q).slice(0, TOP_OPPORTUNITIES);
     return { corners: out, clean: clean.length, this_s: thisS, ideal_s: thisS - gainS, gain_s: gainS, top };
+  }
+  // How repeatably you braked within each period (port of drive_analysis.spread_by, IDEAS D-07 trend): keys[0] is a's
+  // period, keys[j + 1] others[j]'s (null when unknown); { key: [[apex, robust SD] per corner with TREND_MIN_PASSES+ marks in that period] }.
+  const TREND_MIN_PASSES = 5;
+  function spreadBy(co, keys) {
+    const out = {};
+    for (const c of co.corners) {
+      const sp = c.spread;
+      if (!sp) continue;
+      const groups = new Map();
+      for (const [f, b] of sp.marks) {
+        const k = f + 1 >= 0 && f + 1 < keys.length ? keys[f + 1] : null;
+        if (b === null || k === null || k === undefined) continue;
+        if (!groups.has(k)) groups.set(k, []);
+        groups.get(k).push(b);
+      }
+      for (const k of [...groups.keys()].sort()) {
+        const g = groups.get(k), sd = g.length >= TREND_MIN_PASSES ? sampleSd(g) : null;
+        if (sd !== null) (out[k] = out[k] || []).push([c.apex, sd]);
+      }
+    }
+    return out;
   }
   // Friction circle — port of core/drive_analysis.gg_envelope / grip_use (parity-tested).
   const GG_SECTORS = 16, GG_PCTL = 0.95, GG_MIN_POINTS = 8, GG_MIN_G = 0.05, GG_USE_MIN_G = 0.15;
@@ -919,7 +970,7 @@
 
   const api = {
     profileRecording,
-    driverScore, cornerTechnique, fatigue, segmentPass, segmentWindow,
+    driverScore, cornerTechnique, fatigue, spreadBy, turnIn, segmentPass, segmentWindow,
     removeSpurs, retracedShare,
     compareDrives, cornerMetrics, elapsedS, cornerPhases, coach, ggEnvelope, gripUse, ggSector, abruptMoments,
     G_STD, MPS_TO_MPH, ALPR_RADIUS_M,

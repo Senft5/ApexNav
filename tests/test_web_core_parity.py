@@ -39,7 +39,7 @@ def _run_js(payload: dict) -> dict:
 
 def _assert_parity(lat, lon, camber=None, crest=None, rough=None, resample=False, elev=None):
     payload = {"lat": list(map(float, lat)), "lon": list(map(float, lon)), "resample": resample,
-               "camber": None if camber is None else list(map(float, camber)),
+               "camber": None if camber is None else [float(x) if math.isfinite(x) else None for x in camber],   # unknown: null
                "crest": None if crest is None else list(map(float, crest)),
                "rough": None if rough is None else list(map(float, rough)),
                "elev": None if elev is None else list(map(float, elev))}
@@ -163,15 +163,21 @@ def test_parity_coach_on_real_drives():
     shifted = [dict(late, lat=[x + 3e-5 * math.sin(i / 7 + k) for i, x in enumerate(drives[1]["lat"])],
                     lon=[x + 4e-5 * math.cos(i / 5 + k) for i, x in enumerate(drives[1]["lon"])]) for k in (1, 2)]
     cases = [(drives[0], [drives[1]]), (drives[1], [drives[0], quick]), (drives[1], []), (drives[1], [quick, late, later]),
-             (drives[1], [*shifted, later])]
+             (drives[1], [*shifted, later]), (drives[1], [quick, late, later, *shifted])]
+    # and a slower pass that turned in 25 m sooner everywhere (D-18)
+    early = dict(drives[1], speed_mps=[v * 0.96 for v in drives[1]["speed_mps"]], lat_g=drives[1]["lat_g"][5:] + drives[1]["lat_g"][-5:])
+    cases.append((early, [drives[1]]))
     np_ = lambda d: {**d, "speed_mps": np.array(d["speed_mps"]), "lon_g": np.array(d["lon_g"]), "lat_g": np.array(d["lat_g"])}
     py = [da.coach(np_(a), [np_(o) for o in others]) for a, others in cases]
-    runner = ("const c=require(process.argv[1]);const cases=JSON.parse(require('fs').readFileSync(0,'utf8'));"
-              "process.stdout.write(JSON.stringify(cases.map(([a,o])=>c.coach(a,o))));")
+    keys = ["2026-09", "2026-09", "2026-09", "2026-09", "2026-09", "2026-10", None]
+    runner = (f"const KEYS={json.dumps(keys)};"
+              "const c=require(process.argv[1]);const cases=JSON.parse(require('fs').readFileSync(0,'utf8'));"
+              "process.stdout.write(JSON.stringify(cases.map(([a,o])=>{const r=c.coach(a,o);r.dev=c.spreadBy(r,KEYS);return r;})));")
     out = subprocess.run([NODE, "-e", runner, os.path.abspath("web/apex_core.js")], input=json.dumps(cases),
                          capture_output=True, text=True, check=True)
     tips = 0
-    for j, p in zip(json.loads(out.stdout), py):
+    js_all = json.loads(out.stdout)
+    for j, p in zip(js_all, py):
         assert (j["clean"], j["top"]) == (p["clean"], p["top"])
         assert j["ideal_s"] == pytest.approx(p["ideal_s"], rel=1e-9) and j["gain_s"] == pytest.approx(p["gain_s"], rel=1e-9, abs=1e-9)
         assert len(j["corners"]) == len(p["corners"])
@@ -185,6 +191,9 @@ def test_parity_coach_on_real_drives():
                 assert cj["tip"]["kind"] == cp["tip"]["kind"] and cj["tip"]["value"] == pytest.approx(cp["tip"]["value"], rel=1e-9)
             if "spread" in cp:
                 for k, v in cp["spread"].items():
+                    if k == "marks":
+                        assert cj["spread"][k] == v                                       # whole multiples of 5 m, or None
+                        continue
                     assert cj["spread"][k] == (None if v is None else pytest.approx(v, rel=1e-9, abs=1e-9)), k
             else:
                 assert "spread" not in cj
@@ -193,6 +202,19 @@ def test_parity_coach_on_real_drives():
                     for k, v in cp[side].items():
                         assert cj[side][k] == (None if v is None else pytest.approx(v, rel=1e-9, abs=1e-9)), k
     assert tips > 0 and py[1]["clean"] > 0 and py[1]["gain_s"] > 0
+    kinds = lambda r: [c["tip"]["kind"] for c in r["corners"] if c["tip"]]
+    assert "turn_in_later" in kinds(py[6])                                         # turned in sooner than the quicker pass
+    assert "turn_in_later" not in kinds(py[4]) + kinds(py[5])                      # same steering, other GPS traces: no such tip
+    for j, p in zip(js_all, py):                                                    # spread per period (D-07 trend)
+        by = da.spread_by(p, keys)
+        assert sorted(j["dev"]) == sorted(by)
+        for k, v in by.items():
+            assert [x[0] for x in j["dev"][k]] == [x[0] for x in v]
+            assert [x[1] for x in j["dev"][k]] == pytest.approx([x[1] for x in v], rel=1e-12)
+    assert da.spread_by(py[5], keys) and da.spread_by(py[3], keys) == {}             # five passes in a month give figures, four none
+    assert "2026-10" not in da.spread_by(py[5], keys)                                 # one pass in October says nothing
+    whole = [c["spread"]["brake_sd_m"] for c in py[5]["corners"] if c.get("spread") and c["spread"]["brake_passes"] >= 5]
+    assert whole and [x[1] for x in da.spread_by(py[5], ["x"] * 6)["x"]] == pytest.approx(whole)   # one period: the spreads               # one period: the corner spreads themselves
     spreads = [c["spread"]["brake_sd_m"] for c in py[3]["corners"] if c.get("spread") and c["spread"]["brake_sd_m"] is not None]
     assert spreads and max(spreads) > 0                                            # braking 0, 0, 10 and 20 m later: a spread
     assert all(c["spread"]["brake_sd_m"] is None for c in py[0]["corners"] if c.get("spread"))   # two passes say nothing

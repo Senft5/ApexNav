@@ -80,7 +80,7 @@ def profile_drive_dataframe(df: pd.DataFrame, R: np.ndarray, fs_hz: float = 100.
         vert_peak_g=('vert_peak_g', 'max'),
         engagement_score=('engagement_score', 'mean')
     )
-    grouped['camber_deg'] = grouped['camber_deg'].fillna(0.0)
+    # A bin with no cornering load has no camber reading: it stays NaN (unknown), never 0.0 (measured flat). CLAUDE.md rule 3.
 
     if len(grouped) > 1:
         d_elev = np.gradient(grouped['elevation_m'].to_numpy())
