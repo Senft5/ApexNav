@@ -129,7 +129,7 @@
       padding: 8px 14px 4px; box-shadow: -8px 8px 24px rgba(0, 0, 0, 0.22); }
     .edge-panel h3 { font-size: 13px; font-weight: 600; color: var(--panel-dim); margin-bottom: 2px; }
     #app.sheet-open .edge { display: none; }
-    #recenterBtn { display: none; } #recenterBtn.show { display: block; }
+    #recenterBtn { display: none; min-height: 44px; } #recenterBtn.show { display: block; }
     .toast { position: absolute; left: 50%; top: 12px; transform: translateX(-50%); z-index: 6; max-width: calc(100% - 32px);
       background: var(--panel); color: var(--panel-ink); border: 1px solid var(--accent); padding: 8px 12px; font-size: 12px; font-weight: 600; display: none; }
     .toast.show { display: block; }
@@ -1025,13 +1025,13 @@
       state.follow = false;
       clearTimeout(resumeTimer); clearInterval(resumeTick);
       $('recenterBtn').classList.add('show');
-      $('recenterBtn').textContent = 'FOLLOW';
+      $('recenterBtn').textContent = 'Recenter';
     }
     function scheduleResume() {
       clearTimeout(resumeTimer); clearInterval(resumeTick);
       let left = FOLLOW_RESUME_S;
-      $('recenterBtn').textContent = `FOLLOW IN ${left}`;
-      resumeTick = setInterval(() => { left -= 1; if (left > 0) $('recenterBtn').textContent = `FOLLOW IN ${left}`; }, 1000);
+      $('recenterBtn').textContent = `Recenter in ${left}s`;
+      resumeTick = setInterval(() => { left -= 1; if (left > 0) $('recenterBtn').textContent = `Recenter in ${left}s`; }, 1000);
       resumeTimer = setTimeout(resumeFollow, FOLLOW_RESUME_S * 1000);
     }
     function resumeFollow() {
@@ -3099,7 +3099,7 @@
               }
             }).catch(() => {});
           }
-        } catch (e) { toast(`Could not save the drive: ${e.message}`); }
+        } catch (e) { toast(e && e.name === 'QuotaExceededError' ? 'Couldn\'t save this drive. The phone is out of storage.' : 'Couldn\'t save this drive.'); console.error('save drive', e); }
       } else if (save && rec && rec.samples > 0) {
         toast('Too short to save. Drives under 0.2 mi are dropped.');
         if (live) live.finish().catch(() => {});
