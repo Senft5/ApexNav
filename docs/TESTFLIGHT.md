@@ -12,6 +12,8 @@ in TestFlight after Apple's processing, usually 5 to 30 minutes.
   summary says which secrets are missing. The upload waits for `apexkit-macos` and `simulator-tests` to pass.
 - **Unchanged:** `build-ipa` still builds the unsigned sideload `ApexNav-IPA` artifact.
 - **Export compliance:** `ITSAppUsesNonExemptEncryption = NO` (HTTPS only), so builds don't wait on the question.
+- **Xcode 26:** App Store Connect refuses builds made with an iOS SDK older than 26, so `testflight` runs on
+  `macos-26` and checks the SDK before archiving. The other macOS jobs stay on `macos-15`.
 - **iPhone only** (`TARGETED_DEVICE_FAMILY = 1`): an iPad build would have to support every orientation.
 
 ## One-time setup (owner)
@@ -40,3 +42,6 @@ in TestFlight after Apple's processing, usually 5 to 30 minutes.
 - "No Accounts" / "No signing certificate": the API key isn't Admin, or the membership isn't active yet.
 - "No suitable application records were found": step 3 not done, or the bundle ID differs.
 - "The bundle version must be higher": a build number was used already; re-run the workflow (new attempt number).
+- "Error Downloading App Information" at export: App Store Connect has no app record for `com.senft.ApexNav` that the
+  key can see (step 3 missing, a different bundle ID, or a key without Admin). The "Show the distribution log" step
+  prints Apple's actual reply.
