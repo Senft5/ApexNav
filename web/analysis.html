@@ -82,7 +82,7 @@
     .seglist { display: grid; gap: 6px; }
     .seg { text-align: left; border: 1px solid var(--rule); padding: 10px 12px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; cursor: pointer; background: transparent; color: inherit; font: inherit; }
     .seg.on { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
-    .stages-h { font-size: 22px; font-weight: 700; font-family: var(--font-num); }
+    .stages-h { font-size: 22px; font-weight: 700; font-family: var(--font-num); overflow-wrap: anywhere; }
     .empty { border: 1px solid var(--rule); padding: 16px; display: grid; gap: 8px; } .empty b { font-size: 17px; } .empty .note { font-size: 14px; }
     a.btn { display: inline-flex; align-items: center; text-decoration: none; font-weight: 600; }
     .seg b { font-size: 15px; } .seg span { font-size: 12px; color: var(--panel-dim); }
@@ -115,11 +115,12 @@
     <!-- ============================ DRIVE ============================ -->
     <section id="tab-drive" class="stack-12" hidden>
       <div><a href="#" class="back" data-to="history">‹ Log</a></div>
-      <div class="row"><select id="dvPick" aria-label="Choose a drive" style="flex:1;min-width:200px"></select><span class="note" id="dvNote"></span></div>
-      <div class="actions">
-        <button class="btn" id="dvReplay">Replay on map</button>
-        <button class="btn" id="dvCompare">Compare with…</button>
-        <button class="btn" id="dvShare">Share drive</button>
+      <select id="dvPick" aria-label="Choose a drive" hidden></select>
+      <div><h1 class="stages-h" id="dvTitle">--</h1><p class="note" id="dvNote"></p></div>
+      <div class="actions" role="group" aria-label="This drive">
+        <button class="btn solid" id="dvReplay">Replay</button>
+        <button class="btn" id="dvCompare">Compare</button>
+        <button class="btn" id="dvShare">Share</button>
       </div>
       <div id="dvRoot"></div>
       <div class="panel" id="dvRoad" hidden><h2>This road over time</h2><div id="dvRoadChart"></div><div class="scroll"><table id="dvRoadTable"></table></div></div>
@@ -591,7 +592,9 @@
       dvView = ApexDriveView.mount($('dvRoot'), d, { Core, C, MPH, reference });
       renderRoadHistory(d);
       loadRoadFeel(d, dvView);
-      $('dvNote').textContent = d.source === 'web-gps' ? 'recorded in the web app (GPS)' : d.source === 'imported' ? 'imported recording' : 'shipped example';
+      // The drive's name is the page title (you arrive from the Log list); the picker stays only as this view's state.
+      $('dvTitle').textContent = d.name;
+      $('dvNote').textContent = `${dateLabel(d)} · ${d.source === 'web-gps' ? 'Recorded on this phone' : d.source === 'imported' ? 'Imported' : 'Example drive'}`;
     }
     // Every drive that shares at least 30% of this drive's road, oldest to newest: is the driving getting better on this road?
     function renderRoadHistory(d) {
