@@ -37,20 +37,25 @@
   }
   // What a corner is worth: 2–5 are the good stuff; fast 6s and tight 1s a bit less; hairpins
   // are a moment, not a rhythm.
-  function cornerWeight(sev) {
-    if (sev === 'HP') return 0.6;
-    if (sev >= 2 && sev <= 5) return 1.0;
-    if (sev === 6) return 0.6;
-    if (sev === 1) return 0.5;
-    return 0;
+  function cornerWeight(sev, prefs = null) {
+    let w = sev === 'HP' ? 0.6 : sev >= 2 && sev <= 5 ? 1.0 : sev === 6 ? 0.6 : sev === 1 ? 0.5 : 0;
+    // Road character the driver asked for (IDEAS R-19): tight corners (hairpins, 1s and 2s) and fast sweepers (5s and 6s)
+    // count PREF_STEP more or less each; nothing asked, the weights above unchanged.
+    if (prefs && w) {
+      const tight = sev === 'HP' || sev === 1 || sev === 2, fast = sev === 5 || sev === 6;
+      if (tight && Number.isFinite(prefs.tight)) w *= 1 + PREF_STEP * Math.max(-1, Math.min(1, prefs.tight));
+      if (fast && Number.isFinite(prefs.fast)) w *= 1 + PREF_STEP * Math.max(-1, Math.min(1, prefs.fast));
+    }
+    return w;
   }
+  const PREF_STEP = 0.6;
 
   /**
    * Fun score of a routed track ({dist[], events[]}, as trackFromPolyline builds it).
    * turnsM: distances along the route of the router's turn maneuvers (left/right/sharp/U),
    * used to drop junction turns. Returns null when the line is too short to judge.
    */
-  function score(track, turnsM = []) {
+  function score(track, turnsM = [], prefs = null) {
     const dist = track && track.dist;
     if (!Array.isArray(dist) || dist.length < 2) return null;
     const totalM = dist[dist.length - 1];
@@ -63,7 +68,7 @@
     };
     const corners = (track.events || []).filter(isCorner)
       .filter(c => Number.isFinite(c.dist_m) && !nearTurn(c.dist_m))
-      .map(c => ({ at: c.dist_m, start: Number.isFinite(c.start_m) ? c.start_m : c.dist_m, end: Number.isFinite(c.end_m) ? c.end_m : c.dist_m, w: cornerWeight(c.severity), sev: c.severity }))
+      .map(c => ({ at: c.dist_m, start: Number.isFinite(c.start_m) ? c.start_m : c.dist_m, end: Number.isFinite(c.end_m) ? c.end_m : c.dist_m, w: cornerWeight(c.severity, prefs), sev: c.severity }))
       .filter(c => c.w > 0)
       .sort((a, b) => a.start - b.start);
     const km = totalM / 1000;

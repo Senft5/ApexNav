@@ -83,7 +83,7 @@ long-press pin (#61), Apple place search and nearby suggestions in the app (#73)
 | R-16 | Time budget routing: "I have 90 minutes, end at home" (orienteering with a hard time cap) | H | M | done (#122: 1 h / 2 h loops planned on drive time) | ROAD_INTELLIGENCE §7.1 |
 | R-17 | Day trip builder: start, stops (food, fuel, viewpoint), finish, with drag-to-reorder vias | H | L | todo | Roadtrippers, Calimoto tour planner |
 | R-18 | Drag the route line on the map to reshape it (adds a via) | M | M | todo | Google Maps, Kurviger |
-| R-19 | Archetype preferences in routing ("love esses, skip switchbacks"), sliders first, learned later | H | M | todo | ROAD_INTELLIGENCE §5.4 |
+| R-19 | Archetype preferences in routing ("love esses, skip switchbacks"), sliders first, learned later | H | M | partial (Plan → Hairpins fewer/more and Sweepers fewer/more weigh each route's fun, fun_route.js cornerWeight, ±60%; learning it from your choices is R-33) | ROAD_INTELLIGENCE §5.4 |
 | R-20 | Car-aware routing from the Garage (width, ride height, power: no goat tracks for a lowered car) | M | M | todo | SOCIAL §2.4 |
 | R-21 | Weather-aware routing: penalise wet, icy, foggy or very hot stages from a free forecast; show why | M | M | todo | Calimoto weather, REVER |
 | R-22 | Seasonal and time-of-day closures (OSM `conditional` tags, seasonal mountain passes) | M | M | todo | Kurviger |

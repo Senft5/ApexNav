@@ -446,6 +446,7 @@
               <div class="place-list" id="exploreList" hidden></div>
               <div class="plan-links fun-row" role="radiogroup" aria-label="Route style"><span>Roads</span><button class="chip" data-fun="quick" role="radio" aria-checked="false">Quick</button><button class="chip" data-fun="fun" role="radio" aria-checked="false">Fun</button><button class="chip" data-fun="max" role="radio" aria-checked="false">Max fun</button></div>
               <div class="plan-links fun-row" role="group" aria-label="Avoid"><span>Avoid</span><button class="chip" data-avoid="highways" aria-pressed="false">Highways</button><button class="chip" data-avoid="tolls" aria-pressed="false">Tolls</button><button class="chip" data-avoid="ferries" aria-pressed="false">Ferries</button><button class="chip" data-avoid="unpaved" aria-pressed="false">Unpaved</button><button class="chip" data-avoid="towns" aria-pressed="false">Towns</button></div>
+              <div class="plan-links fun-row" role="group" aria-label="Corners you like"><span>Hairpins</span><button class="chip" data-pref="tight" data-v="-1" aria-pressed="false">Fewer</button><button class="chip" data-pref="tight" data-v="1" aria-pressed="false">More</button><span>Sweepers</span><button class="chip" data-pref="fast" data-v="-1" aria-pressed="false">Fewer</button><button class="chip" data-pref="fast" data-v="1" aria-pressed="false">More</button></div>
             </section>
             <section id="routeCard" hidden>
               <h3 id="routeCardName"></h3>
@@ -1912,6 +1913,10 @@
     const AVOID = 'apex.avoid';
     let avoid = { ...FunRoute.AVOID_DEFAULT };
     try { const a = JSON.parse(localStorage.getItem(AVOID) || 'null'); if (a && typeof a === 'object') for (const k in avoid) if (typeof a[k] === 'boolean') avoid[k] = a[k]; } catch (_) { /* storage off */ }
+    // Corners you like (IDEAS R-19): more or fewer hairpins and fast sweepers weigh routes' fun (fun_route.js cornerWeight).
+    const ROAD_PREFS = 'apex.roadPrefs';
+    let roadPrefs = { tight: 0, fast: 0 };
+    try { const p = JSON.parse(localStorage.getItem(ROAD_PREFS) || 'null'); if (p && typeof p === 'object') for (const k of ['tight', 'fast']) if ([-1, 0, 1].includes(p[k])) roadPrefs[k] = p[k]; } catch (_) { /* storage off */ }
     // Junction turns (slight/normal/sharp left and right, U-turns, ramps, roundabouts): fun scoring drops the corners there.
     const TURN_TYPES = new Set([9, 10, 11, 12, 13, 14, 15, 16, 18, 19, 20, 21, 26, 27]);
     function routeOf(trip) {
@@ -2011,7 +2016,7 @@
     // Fun score of a routed track, with the router's junction turns placed on it (map only, docs/ROUTING.md).
     function funOf(t, turns = []) {
       const turnsM = turns.map(([lon, lat]) => { const h = Core.nearestIndex(lat, lon, t.lat, t.lon, -1); return h.distM < 40 ? t.dist[h.index] : null; });
-      return FunRoute.score(t, turnsM);
+      return FunRoute.score(t, turnsM, roadPrefs);
     }
     // OSM maxspeed per sample via Valhalla map matching (same as tools/export_web_profile.py).
     async function attachLimits(t) {
@@ -3084,6 +3089,19 @@
       if (!(await replanForLevel(was ? `Allowing ${label}` : `Avoiding ${label}`))) setAvoid({ [k]: was });   // the chips show what the route on screen avoids
     }));
     setAvoid({});
+    function setRoadPrefs(next) {
+      roadPrefs = { ...roadPrefs, ...next };
+      try { localStorage.setItem(ROAD_PREFS, JSON.stringify(roadPrefs)); } catch (_) { /* storage off: this session only */ }
+      document.querySelectorAll('[data-pref]').forEach(b => { const on = roadPrefs[b.dataset.pref] === Number(b.dataset.v); b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
+    }
+    document.querySelectorAll('[data-pref]').forEach(b => b.addEventListener('click', async () => {
+      if ($('planPanel').classList.contains('busy') || loopBusy) return;
+      const k = b.dataset.pref, v = Number(b.dataset.v), was = roadPrefs[k], now = was === v ? 0 : v;
+      setRoadPrefs({ [k]: now });
+      const what = `${now === 0 ? 'Any' : now > 0 ? 'More' : 'Fewer'} ${k === 'tight' ? 'hairpins' : 'fast sweepers'}`;
+      if (!(await replanForLevel(what))) setRoadPrefs({ [k]: was });
+    }));
+    setRoadPrefs({});
     $('routeDriveBtn').addEventListener('click', () => {
       if (!plannedRoute) return;
       booting = false;
@@ -3091,7 +3109,6 @@
       closeSheet();
       startDrive();
     });
-    // Owner only (IDEAS Y-16): the week's crash and server-error counts (backend/src/errors.ts), most frequent first. Anonymous.
     // Owner only (IDEAS Y-03): the week's app health totals, as rates where there is one (backend/src/health.ts). Anonymous.
     function healthSection() {
       const sec = el('div', { className: 'stack-8' }, el('h3', { textContent: 'App health this week' }));
@@ -3113,6 +3130,7 @@
       }).catch(() => sec.append(el('p', { className: 'note', textContent: 'Couldn\'t load the counts.' })));
       return sec;
     }
+    // Owner only (IDEAS Y-16): the week's crash and server-error counts (backend/src/errors.ts), most frequent first. Anonymous.
     function errorsSection() {
       const sec = el('div', { className: 'stack-8' }, el('h3', { textContent: 'Errors this week' }));
       apiCall('GET', '/api/ops/errors?days=7').then(jsonOf).then((r) => {
