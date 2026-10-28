@@ -350,3 +350,83 @@ def test_parity_abrupt_moments_on_a_real_drive():
     assert [x is None for x in js["jerk"]] == [x is None for x in py["jerk"]]
     assert [x for x in js["jerk"] if x is not None] == pytest.approx([x for x in py["jerk"] if x is not None], rel=1e-12)
     assert all(py["jerk"][i] is None for i in range(1000, 1401))                      # unmeasured g: no smoothness claimed
+
+
+def _long_drive(degrade: bool = False, tighter: bool = False):
+    """dry_ridge driven twice (~85 min moving). degrade adds steering chatter and braking past the apex late on;
+    tighter makes the late corners load the car 60 % harder, smoothly (a twistier road, not a tired driver)."""
+    text = open("web/data/dry_ridge.js", encoding="utf-8").read()
+    d = json.loads(text[text.index("push(") + 5:text.rindex(");")])
+    f = {name: i for i, name in enumerate(d["fields"])}
+    rows, n = d["rows"], len(d["rows"])
+    v = [r[f["speed_mph"]] / 2.2369362921 for r in rows] * 2
+    lat = [r[f["lat_g"]] for r in rows] * 2
+    lon = [r[f["lon_g"]] for r in rows] * 2
+    one = [{"start": int(round(e["start_m"] / 5)), "end": int(round(e["end_m"] / 5)), "apex": e["index"],
+            "apex_mps": e["apex_mph"] / 2.2369362921} for e in d["events"] if e["type"] == "corner"]
+    corners = one + [{**c, "start": c["start"] + n, "end": c["end"] + n, "apex": c["apex"] + n} for c in one]
+    for c in corners:
+        if c["apex"] <= n * 1.3:
+            continue
+        if degrade:
+            for q in range(c["start"], c["end"] + 1):
+                lat[q] += 0.08 if q % 2 else -0.08
+            lon[c["apex"] + 1 if c["apex"] < c["end"] else c["apex"]] = -0.4
+        if tighter:
+            for q in range(c["start"], c["end"] + 1):
+                lat[q] *= 1.6
+    return v, lat, lon, corners
+
+
+def _js_fatigue(v, lat, lon, corners, known=None):
+    runner = ("const c=require(process.argv[1]);const {v,lat,lon,corners,known}=JSON.parse(require('fs').readFileSync(0,'utf8'));"
+              "process.stdout.write(JSON.stringify(c.fatigue(v,lon,lat,corners,known)));")
+    out = subprocess.run([NODE, "-e", runner, os.path.abspath("web/apex_core.js")],
+                         input=json.dumps({"v": v, "lat": lat, "lon": lon, "corners": corners, "known": known}), capture_output=True, text=True, check=True)
+    return json.loads(out.stdout)
+
+
+def test_fatigue_flags_a_fade_late_in_a_long_drive_only():
+    from core import drive_analysis as da
+    if not os.path.exists("web/data/dry_ridge.js"):
+        pytest.skip("no shipped drive data")
+    v, lat, lon, corners = _long_drive()
+    steady = da.fatigue(v, lon, lat, corners)
+    assert steady is not None and steady["minutes"] > 60 and steady["cues"] == []      # the same road twice: nothing faded
+    v2, lat2, lon2, corners2 = _long_drive(degrade=True)
+    assert da.fatigue(v2, lon2, lat2, corners2)["cues"] == ["steering", "braking"]
+    v3, lat3, lon3, corners3 = _long_drive(tighter=True)
+    assert da.fatigue(v3, lon3, lat3, corners3)["cues"] == []                         # a harder road is not a tired driver
+    n = len(v) // 2
+    assert da.fatigue(v[:n], lon[:n], lat[:n], [c for c in corners if c["end"] < n]) is None   # 43 min: too short to ask
+    assert da.fatigue(v, lon, lat, corners[:10]) is None                                     # too few corners in a third
+
+
+def test_fatigue_leaves_unmeasured_g_out():
+    from core import drive_analysis as da
+    if not os.path.exists("web/data/dry_ridge.js"):
+        pytest.skip("no shipped drive data")
+    v, lat, lon, corners = _long_drive()
+    n = len(v)
+    # g blank (zero-filled) for the first third, as before the app solves the mount: those corners must not read as perfect
+    known = [0 if i < n // 3 else 1 for i in range(n)]
+    zl, zo = [0.0 if not k else x for x, k in zip(lat, known)], [0.0 if not k else x for x, k in zip(lon, known)]
+    assert da.fatigue(v, zo, zl, corners, known) is None
+    assert _js_fatigue(v, zl, zo, corners, known) is None
+    # NaN g inside a late corner, and a corner running past the end, are skipped rather than scored or crashing
+    late = [c for c in corners if c["apex"] > n * 0.7][0]
+    nl = list(lat)
+    nl[late["start"] + 1] = float("nan")
+    extra = corners + [{"start": n - 3, "end": n + 5, "apex": n - 1, "apex_mps": 20.0}]
+    py = da.fatigue(v, lon, nl, extra)
+    assert py["late"]["corners"] == da.fatigue(v, lon, lat, corners)["late"]["corners"] - 1
+
+
+def test_parity_fatigue():
+    from core import drive_analysis as da
+    if not os.path.exists("web/data/dry_ridge.js"):
+        pytest.skip("no shipped drive data")
+    for kw in ({}, {"degrade": True}, {"tighter": True}):
+        v, lat, lon, corners = _long_drive(**kw)
+        py, js = da.fatigue(v, lon, lat, corners), _js_fatigue(v, lat, lon, corners)
+        assert js == py
