@@ -1,9 +1,10 @@
 // ApexNav API Worker. Static files are served by Cloudflare's asset layer; only /api/* reaches this code
 // (wrangler.jsonc: assets.run_worker_first). Phones never talk to the database directly.
 import {
-  APP_ORIGIN, appExchange, csrfCheck, createInvite, googleCallback, googleStart, logout, redeemInvite, requireMember, requireUser, viewer,
+  APP_ORIGIN, appExchange, csrfCheck, createInvite, googleCallback, googleStart, logout, redeemInvite, requireMember, requireUser, sessionHash, viewer,
 } from "./auth";
-import { Env, HttpError, json } from "./util";
+import { convoyConnect, convoyCreate, convoyJoin, convoyRoom, unwrap } from "./convoy_routes";
+import { Env, HttpError, body, json, str } from "./util";
 import {
   blockUser, boardFor, crewCreate, crewDiscover, crewInvite, crewJoin, crewJoinPublic, crewLeave, crewList, crewMembers, crewUpdate, friendAccept, friendList, friendRequest,
   myGrants, publish, removePair, setGrant, setHandle,
@@ -14,6 +15,7 @@ import { contribute, setContribute } from "./contribute";
 import { pointsFor } from "./points";
 import { roadBins } from "./roads";
 import { highlightCreate, highlightDelete, highlightList, highlightRate, highlightReport } from "./highlights";
+export { ConvoyIndex, ConvoyRoom } from "./convoy";
 import { segmentAdopt, segmentCreate, segmentDelete, segmentList, segmentShare, segmentsSharedWithMe } from "./segments";
 
 type Handler = (req: Request, env: Env, m: RegExpMatchArray) => Promise<Response>;
@@ -89,6 +91,23 @@ on("DELETE", "/api/highlights/:id", async (req, env, m) => { await highlightDele
 on("POST", "/api/board", async (req, env) => json(await publish(env, await requireMember(req, env), req)));
 on("GET", "/api/board/:canon", async (req, env, m) => json(await boardFor(env, await requireMember(req, env), m.groups!.canon)));
 
+on("POST", "/api/convoy", async (req, env) => json(await convoyCreate(env, await requireMember(req, env), req), 201));
+on("POST", "/api/convoy/join", async (req, env) => json(await convoyJoin(env, await requireMember(req, env), req)));
+on("GET", "/api/convoy/:id", async (req, env, m) => json(await convoyRoom(env, m.groups!.id).status((await requireMember(req, env)).id).then(unwrap)));
+on("POST", "/api/convoy/:id/invite", async (req, env, m) => json(await convoyRoom(env, m.groups!.id).newInvite((await requireMember(req, env)).id).then(unwrap), 201));
+on("POST", "/api/convoy/:id/ticket", async (req, env, m) => {
+  const v = await requireMember(req, env);
+  return json(await convoyRoom(env, m.groups!.id).ticket(v.id, (await sessionHash(req))!).then(unwrap), 201);
+});
+on("POST", "/api/convoy/:id/leave", async (req, env, m) => json(await convoyRoom(env, m.groups!.id).leave((await requireMember(req, env)).id).then(unwrap)));
+on("POST", "/api/convoy/:id/remove", async (req, env, m) => {
+  const v = await requireMember(req, env), { member } = await body<{ member?: unknown }>(req);
+  await convoyRoom(env, m.groups!.id).remove(v.id, str(member, "member", 1, 20)).then(unwrap);
+  return noContent();
+});
+// No sign-in check here on purpose: the socket's first frame carries a single-use ticket minted by POST .../ticket.
+on("GET", "/api/convoy/:id/connect", async (req, env, m) => convoyConnect(req, env, m.groups!.id));
+
 // CORS for the iOS shell only (pages at apexnav://app call this Worker cross-origin with a bearer token).
 // No credentials: cookies never cross; any other origin gets no CORS headers at all.
 const APP_CORS: Record<string, string> = {
@@ -96,6 +115,7 @@ const APP_CORS: Record<string, string> = {
   "access-control-allow-headers": "authorization, content-type, x-apexnav", "access-control-max-age": "600", vary: "Origin",
 };
 function withAppCors(res: Response): Response {
+  if (res.status === 101 || res.webSocket) return res;   // a socket upgrade: CORS does not apply, and a 101 cannot be rebuilt
   const headers = new Headers(res.headers);
   for (const [k, v] of Object.entries(APP_CORS)) headers.set(k, v);
   return new Response(res.body, { status: res.status, statusText: res.statusText, headers });

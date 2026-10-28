@@ -180,6 +180,65 @@
     }
     return picked;
   }
+  // ---- loops ------------------------------------------------------------------------
+  /**
+   * Stages worth timing for a loop of targetKm from start: the best-scoring ones close enough to
+   * reach and come back from (crow fly out and back within the target), no duplicates. At most `k`;
+   * the matrix is (1 + 2k) x (2k + 1), split into calls of 100 pairs.
+   */
+  function loopShortlist(start, stages, targetKm, k = 6) {
+    const out = [];
+    for (const s of stages || []) {
+      if (2 * kmBetween(start, midOf(s)) + s.km > targetKm * 1.1) continue;
+      if (out.some(t => overlap(s, t))) continue;
+      out.push(s);
+      if (out.length === k) break;
+    }
+    return out;
+  }
+  /**
+   * Loops of 1–3 shortlisted stages in any order and direction, measured with real road distances
+   * (matrix km; null = no road): start→entry + stage + exit→next entry ... + exit→start. Crow-fly
+   * guesses ran 40–75 % long in hills. Kept within 25 % of the target; value = stage score x
+   * (1 − length error) − 0.08 per connector km (the old plans() formula). Best `count`, distinct lead stage.
+   */
+  function loopPlansFromMatrix(list, distKm, targetKm, count = 3) {
+    const n = list.length, home = 2 * n;
+    const D = (row, col) => { const v = distKm[row] && distKm[row][col]; return Number.isFinite(v) ? v : null; };
+    const out = [];
+    const walk = (legs, used, row, connector, stageKm, score) => {
+      if (legs.length) {
+        const back = D(row, home);
+        if (back != null) {
+          const total = stageKm + connector + back, err = Math.abs(total - targetKm) / targetKm;
+          if (err <= 0.25) out.push({ legs: legs.slice(), total, stageKm, value: score * (1 - err) - (connector + back) * 0.08, share: stageKm / total });
+        }
+      }
+      if (legs.length === 3) return;
+      for (let i = 0; i < n; i++) {
+        if (used & (1 << i)) continue;
+        for (const fwd of [true, false]) {
+          const entry = 2 * i + (fwd ? 0 : 1), exit = 2 * i + (fwd ? 1 : 0), c = D(row, entry);
+          if (c == null || stageKm + connector + c > targetKm * 1.25) continue;
+          legs.push({ s: list[i], fwd });
+          walk(legs, used | (1 << i), 1 + exit, connector + c, stageKm + list[i].km, score + list[i].score);
+          legs.pop();
+        }
+      }
+    };
+    walk([], 0, 0, 0, 0, 0);
+    out.sort((a, b) => b.value - a.value);
+    // Distinct stage sets (a loop and the same loop driven backwards are one choice), then distinct lead stages.
+    const picked = [], sets = new Set(), leads = new Set();
+    for (const p of out) {
+      const set = p.legs.map(l => list.indexOf(l.s)).sort().join(','), lead = p.legs[0].s;
+      if (sets.has(set) || leads.has(lead)) continue;
+      sets.add(set); leads.add(lead); picked.push(p);
+      if (picked.length === count) break;
+    }
+    return picked;
+  }
+
   /** Router locations: A, each stage's entry, midpoints while the 10-location budget lasts, exit, B. */
   function waypoints(from, to, plan, maxLocations = 10) {
     const legs = plan.legs.map(({ s, fwd }) => ({ lat: fwd ? s.lat : s.lat.slice().reverse(), lon: fwd ? s.lon : s.lon.slice().reverse(), km: s.km, mids: 0 }));
@@ -250,6 +309,6 @@
     }).filter(c => c.extraS === 0 || c.timeS <= limit).sort((a, b) => b.value - a.value);
   }
 
-  const api = { LEVELS, geometry, alongPoints, insertVia, score, shortlist, matrixPoints, plansFromMatrix, searchArea, waypoints, rank, along, kmBetween };
+  const api = { LEVELS, geometry, alongPoints, insertVia, loopShortlist, loopPlansFromMatrix, score, shortlist, matrixPoints, plansFromMatrix, searchArea, waypoints, rank, along, kmBetween };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexFunRoute = api;
 })(typeof window !== 'undefined' ? window : globalThis);
