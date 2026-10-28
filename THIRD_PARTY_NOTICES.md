@@ -12,6 +12,7 @@ Check each licence before redistributing a build; some notices must ship inside 
 | kNN-VC, WavLM, HiFi-GAN (bshall, Microsoft, Jungil Kong) | converting the owner's voice | MIT |
 | Chatterbox (Resemble AI) | experimental voice clone (not shipped) | MIT |
 | MapLibre GL JS | map rendering | BSD-3-Clause |
+| QR Code Generator 2.0.4 (Kazuhiko Arase), `web/vendor/qrcode.js` | the convoy QR code | MIT |
 | Valhalla (via FOSSGIS public server) | routing, map matching, speed limits | MIT |
 | OpenStreetMap data, OpenFreeMap tiles | roads, base map | ODbL 1.0; attribution required: © OpenStreetMap contributors |
 | AWS Terrain Tiles (Terrarium) | elevation | see https://registry.opendata.aws/terrain-tiles/ |
