@@ -264,7 +264,7 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 | O-09 | App Store listing: screenshots, preview video, privacy nutrition label, keywords | H | M | owner (Apple account) | launch |
 | O-10 | In-app "what's new" sheet after an update, one screen | L | S | todo | — |
 | O-11 | Privacy policy and terms of use pages, linked in Settings and at sign-in, policy URL in App Store Connect; terms carry the no-tolerance rule for objectionable content (guideline 1.2). Drafted from the real data flows, owner approves (Z-07) | H | S | partial (this PR: pages drafted and linked; owner approves the text and the contact line, then the URL goes into App Store Connect) | App Store guidelines 5.1.1(i), 1.2 |
-| O-12 | App Review access: a reviewer sign-in path that needs no invite, and review notes (drives need a car; replays show the cockpit) | H | S | todo | App Store guideline 2.1 |
+| O-12 | App Review access: a reviewer sign-in path that needs no invite, and review notes (drives need a car; replays show the cockpit) | H | S | partial (this PR: a long-lived review code, only its hash in the repo, makes a reviewer's account a member; the owner pastes the code and notes into App Store Connect) | App Store guideline 2.1 |
 | O-13 | Native surfaces that make the app more than a web view (Live Activity, widgets, CarPlay) named in the review notes | M | M | todo | App Store guideline 4.2 |
 
 ## 8. CarPlay, Android Auto and in-car (C)
