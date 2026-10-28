@@ -60,7 +60,8 @@
   // The last look, put back as soon as this file loads (in <head>), so a page change at night doesn't flash the day colours
   // before the page's own script picks the theme (review 2026-10-28).
   const LAST_KEY = 'apex.lastLook';
-  try { const last = JSON.parse(root.localStorage.getItem(LAST_KEY)); if (Array.isArray(last)) apply(last[0], last[1]); } catch (_) {}
+  function last() { try { const l = JSON.parse(root.localStorage.getItem(LAST_KEY)); return Array.isArray(l) ? { id: l[0], night: !!l[1] } : null; } catch (_) { return null; } }
+  { const l = last(); if (l) apply(l.id, l.night); }
 
-  root.ApexThemes = { THEMES, ACCENTS, get, apply, accent, setAccent };
+  root.ApexThemes = { THEMES, ACCENTS, get, apply, accent, setAccent, last };
 })(window);

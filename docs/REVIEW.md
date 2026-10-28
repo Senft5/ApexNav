@@ -37,6 +37,8 @@ Severity: **S1** wrong or unsafe (App Review risk, a lie on screen), **S2** look
 | 17 | hazard sheet | Titled "Report ahead of others" | S3 | "Report a hazard" · "Drivers coming this way get a warning." |
 | 18 | CarPlay bridge (new, caught in review before merge) | Turn-now directions and crests share the urgent speech lane with hazards, so the car would have shown every turn as a hazard alert | S1 | Only member, reported and convoy hazards alert the car (`alert: true`), tested |
 | 19 | keyboard, in the app (simulator run 1) | The web-only fix (#3) didn't work in the app: WKWebView still panned the Where to? field off the top and the tab bar stayed above the keyboard; the check only looked under the keyboard | S1 | The shell undoes the pan and tells the page how much the keyboard covers (`keyboardMoved`, `ApexKeyboard.native`); `testKeyboard` now also fails on a field off the top or a tab bar while typing, and reaches every tab (the Log page's tabs are links) |
+| 20 | app launch (simulator) | A plain white launch screen flashed before the dark cockpit | S2 | Launch screen in the night panel colour (`LaunchBackground`) |
+| 21 | Log at night (simulator) | The map was in night colours, the Log page in day colours: it read a saved toggle that auto night doesn't keep | S2 | The Log page takes the night the map last showed (`ApexThemes.last`) |
 
 ## Audio
 
