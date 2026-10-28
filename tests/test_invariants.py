@@ -83,3 +83,34 @@ def test_real_sensor_logger_dry_ridge_ingestion():
     assert len(segments) > 10000
     elev_span = segments['elevation_m'].max() - segments['elevation_m'].min()
     assert elev_span > 110.0
+
+
+def test_exporter_keeps_unknown_camber_null():
+    import pandas as pd
+    from tools import export_web_profile as ew
+    n = 400
+    lat = 39.0 + np.arange(n) * 4.5e-5                       # 5 m steps north, a straight road
+    seg = pd.DataFrame({"distance_m": np.arange(n) * 5.0, "lat": lat, "lon": np.full(n, -84.0),
+                        "elevation_m": np.full(n, 200.0), "grade_pct": np.zeros(n), "speed_mph": np.full(n, 40.0),
+                        "lon_g": np.zeros(n), "lat_g": np.zeros(n), "camber_deg": np.full(n, np.nan),
+                        "crest_vertical_g": np.zeros(n), "roughness_rms": np.full(n, 0.02), "vert_peak_g": np.zeros(n),
+                        "engagement_score": np.zeros(n)})
+    seg.loc[10, "roughness_rms"] = np.nan
+    seg.loc[20, "camber_deg"] = 3.0
+    p = ew.build_payload(seg, {"id": "t", "name": "t"}, limits=False)
+    f = p["fields"]
+    cam = [r[f.index("camber_deg")] for r in p["rows"]]
+    assert cam[20] == 3 and all(c is None for k, c in enumerate(cam) if k != 20)   # unknown stays null, never 0.0
+    assert p["rows"][10][f.index("roughness_rms")] == 0                          # other columns as before
+
+
+def test_bundled_drives_never_claim_a_flat_camber_they_did_not_measure():
+    import json
+    import os
+    for path in ("web/data/dry_ridge.js", "web/data/pebble_ridge.js"):
+        if not os.path.exists(path):
+            continue
+        text = open(path, encoding="utf-8").read()
+        d = json.loads(text[text.index("push(") + 5:text.rindex(");")])
+        k = d["fields"].index("camber_deg")
+        assert not any(r[k] == 0 for r in d["rows"]), path       # the old 0.0 fill; a real reading of exactly 0.0 is rare
