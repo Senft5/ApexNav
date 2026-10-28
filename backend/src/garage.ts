@@ -8,13 +8,13 @@ const MAX_CARS = 10;
 // Controls, format characters (bidi marks and overrides, zero-width), surrogates and private use; ZWJ stays for emoji.
 const UNSAFE_RE = /(?!\u200d)[\p{Cc}\p{Cf}\p{Cs}\p{Co}\u2028\u2029]/u;
 const VISIBLE_RE = /(?![\u115f\u1160\u3164\uffa0])[\p{L}\p{N}]/u;   // Hangul fillers are letters that draw nothing
-const COLS = "id, year, make, model, trim, nickname, color, power_hp, weight_kg, drivetrain, transmission, tyres, mods, shared, is_primary";
-export const PUBLIC_COLS = "c.id, c.year, c.make, c.model, c.trim, c.nickname, c.color, c.power_hp, c.weight_kg, c.drivetrain, c.transmission, c.tyres, c.mods, c.is_primary";
+const COLS = "id, year, make, model, trim, nickname, color, power_hp, weight_kg, drivetrain, transmission, tyres, mods, clearance, width_cm, shared, is_primary";
+export const PUBLIC_COLS = "c.id, c.year, c.make, c.model, c.trim, c.nickname, c.color, c.power_hp, c.weight_kg, c.drivetrain, c.transmission, c.tyres, c.mods, c.clearance, c.width_cm, c.is_primary";
 
 interface Car {
   year: number | null; make: string; model: string; trim: string | null; nickname: string | null; color: string | null;
   power_hp: number | null; weight_kg: number | null; drivetrain: string | null; transmission: string | null;
-  tyres: string | null; mods: string | null; shared: number; is_primary: number;
+  tyres: string | null; mods: string | null; clearance: string | null; width_cm: number | null; shared: number; is_primary: number;
 }
 
 /** Trimmed text or null. `lines` lets newlines through (the mods list); a required field needs a letter or digit. */
@@ -53,7 +53,8 @@ function parseFields(b: Record<string, unknown>): Car {
     trim: text(b.trim, "trim", 40), nickname: text(b.nickname, "nickname", 40), color: text(b.color, "color", 30),
     power_hp: whole(b.power_hp, "power_hp", 1, 3000), weight_kg: whole(b.weight_kg, "weight_kg", 200, 6000),
     drivetrain: oneOf(b.drivetrain, "drivetrain", ["fwd", "rwd", "awd"]), transmission: oneOf(b.transmission, "transmission", ["manual", "auto", "dct"]),
-    tyres: text(b.tyres, "tyres", 80), mods: text(b.mods, "mods", 500, false, true), shared: flag(b.shared, "shared"), is_primary: flag(b.is_primary, "is_primary"),
+    tyres: text(b.tyres, "tyres", 80), mods: text(b.mods, "mods", 500, false, true),
+    clearance: oneOf(b.clearance, "clearance", ["low", "stock", "high"]), width_cm: whole(b.width_cm, "width_cm", 120, 300), shared: flag(b.shared, "shared"), is_primary: flag(b.is_primary, "is_primary"),
   };
 }
 
@@ -67,11 +68,11 @@ export async function carCreate(env: Env, v: Viewer, req: Request): Promise<{ id
   // One batch is one transaction: the cap is checked by the insert itself, so parallel adds can't pass it.
   // The first car is the primary one; a new primary unmarks the rest.
   const [ins] = await env.DB.batch([
-    env.DB.prepare(`INSERT INTO cars (id, owner, year, make, model, trim, nickname, color, power_hp, weight_kg, drivetrain, transmission, tyres, mods, shared, is_primary)
+    env.DB.prepare(`INSERT INTO cars (id, owner, year, make, model, trim, nickname, color, power_hp, weight_kg, drivetrain, transmission, tyres, mods, shared, is_primary, clearance, width_cm)
                     SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15,
-                           CASE WHEN ?16 = 1 OR NOT EXISTS (SELECT 1 FROM cars WHERE owner = ?2) THEN 1 ELSE 0 END
+                           CASE WHEN ?16 = 1 OR NOT EXISTS (SELECT 1 FROM cars WHERE owner = ?2) THEN 1 ELSE 0 END, ?18, ?19
                      WHERE (SELECT COUNT(*) FROM cars WHERE owner = ?2) < ?17`)
-      .bind(id, v.id, c.year, c.make, c.model, c.trim, c.nickname, c.color, c.power_hp, c.weight_kg, c.drivetrain, c.transmission, c.tyres, c.mods, c.shared, c.is_primary, MAX_CARS),
+      .bind(id, v.id, c.year, c.make, c.model, c.trim, c.nickname, c.color, c.power_hp, c.weight_kg, c.drivetrain, c.transmission, c.tyres, c.mods, c.shared, c.is_primary, MAX_CARS, c.clearance, c.width_cm),
     env.DB.prepare("UPDATE cars SET is_primary = 0 WHERE owner = ?1 AND id != ?2 AND EXISTS (SELECT 1 FROM cars WHERE id = ?2 AND is_primary = 1)").bind(v.id, id),
   ]);
   if (!ins.meta.changes) throw new HttpError(429, "too_many_cars");
@@ -86,8 +87,8 @@ export async function carUpdate(env: Env, v: Viewer, id: string, req: Request): 
   const res = await env.DB.batch([
     ...(c.is_primary ? [env.DB.prepare("UPDATE cars SET is_primary = 0 WHERE owner = ?1 AND id != ?2 AND EXISTS (SELECT 1 FROM cars WHERE id = ?2 AND owner = ?1)").bind(v.id, id)] : []),
     env.DB.prepare(`UPDATE cars SET year = ?, make = ?, model = ?, trim = ?, nickname = ?, color = ?, power_hp = ?, weight_kg = ?, drivetrain = ?,
-                    transmission = ?, tyres = ?, mods = ?, shared = ?, is_primary = CASE WHEN ? = 1 THEN 1 ELSE is_primary END WHERE id = ? AND owner = ?`)
-      .bind(c.year, c.make, c.model, c.trim, c.nickname, c.color, c.power_hp, c.weight_kg, c.drivetrain, c.transmission, c.tyres, c.mods, c.shared, c.is_primary, id, v.id),
+                    transmission = ?, tyres = ?, mods = ?, clearance = ?, width_cm = ?, shared = ?, is_primary = CASE WHEN ? = 1 THEN 1 ELSE is_primary END WHERE id = ? AND owner = ?`)
+      .bind(c.year, c.make, c.model, c.trim, c.nickname, c.color, c.power_hp, c.weight_kg, c.drivetrain, c.transmission, c.tyres, c.mods, c.clearance, c.width_cm, c.shared, c.is_primary, id, v.id),
   ]);
   if (!res[res.length - 1].meta.changes) throw new HttpError(404, "no_car");
 }

@@ -515,11 +515,24 @@
       .map((n) => ({ lat: n.lat, lon: n.lon, k: off(n) })).sort((x, y) => x.k - y.k).slice(0, max).map(({ lat, lon }) => ({ lat, lon }));
   }
   /** Valhalla auto costing for the avoid options (preferences, not hard bans: the router may still need one). */
-  function costing(avoid = AVOID_DEFAULT) {
+  /**
+   * Router options for the avoid chips and the car you drive (IDEAS R-20, your Garage's daily car): a lowered car never gets
+   * unpaved roads, and a width (mirrors included) keeps to roads whose posted width fits. No car or unknown: nothing changes.
+   */
+  function costing(avoid = AVOID_DEFAULT, car = null) {
     const auto = { use_highways: avoid.highways ? 0 : 0.15, use_tolls: avoid.tolls ? 0 : 0.3 };
     if (avoid.ferries) auto.use_ferry = 0;
-    if (avoid.unpaved) auto.exclude_unpaved = true;
+    if (avoid.unpaved || (car && car.clearance === 'low')) auto.exclude_unpaved = true;
+    if (car && Number.isInteger(car.width_cm) && car.width_cm >= 120 && car.width_cm <= 300) auto.width = car.width_cm / 100;
     return { costing: 'auto', costing_options: { auto } };
+  }
+  /** What the car changed, for the route card: '' when nothing did. */
+  function carNote(car, avoid = AVOID_DEFAULT) {
+    if (!car) return '';
+    const bits = [];
+    if (car.clearance === 'low' && !avoid.unpaved) bits.push('no unpaved roads');
+    if (Number.isInteger(car.width_cm)) bits.push('roads wide enough');
+    return bits.length ? `Planned for your ${car.label || 'car'}: ${bits.join(', ')}.` : '';
   }
   /** Which avoided things a route still uses, from the router's summary flags (route.has = { highways, tolls, ferries }); unknown flags say nothing. */
   function unavoided(avoid, route) {
@@ -597,6 +610,6 @@
     return out;
   }
 
-  const api = { LEVELS, townKm, townCost, exploreShortlist, exploreTargets, explorePicks, distinctOptions, glare, glareCost, LOOP_BY_TIME, AVOID_DEFAULT, AVOID_LABELS, STAGE_KEPT, stageCoverage, keptStages, CAMERA_BOX_DEG, camerasToExclude, costing, unavoided, keepAvoiding, why, geometry, alongPoints, insertVia, loopValue, loopShortlist, loopPlansFromMatrix, score, shortlist, matrixPoints, plansFromMatrix, sectionCount, sectionPoints, combineSections, planKey, searchArea, waypoints, rank, along, kmBetween, directionBonus, setList, SET_FINISH, SET_FATIGUE, MAX_TECH_PER_KM };
+  const api = { LEVELS, townKm, townCost, exploreShortlist, exploreTargets, explorePicks, distinctOptions, glare, glareCost, LOOP_BY_TIME, AVOID_DEFAULT, AVOID_LABELS, STAGE_KEPT, stageCoverage, keptStages, CAMERA_BOX_DEG, camerasToExclude, costing, unavoided, keepAvoiding, why, geometry, alongPoints, insertVia, loopValue, loopShortlist, loopPlansFromMatrix, score, shortlist, matrixPoints, plansFromMatrix, sectionCount, sectionPoints, combineSections, planKey, searchArea, waypoints, rank, along, kmBetween, directionBonus, setList, SET_FINISH, SET_FATIGUE, MAX_TECH_PER_KM, carNote };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexFunRoute = api;
 })(typeof window !== 'undefined' ? window : globalThis);

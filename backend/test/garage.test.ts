@@ -26,7 +26,8 @@ describe("garage", () => {
     const a = await makeUser("alice");
     for (const bad of [{ make: "", model: "M3" }, { make: "BMW" }, { ...m3, year: 1700 }, { ...m3, power_hp: 1.5 }, { ...m3, drivetrain: "4wd" },
                        { ...m3, mods: "x".repeat(501) }, { ...m3, nickname: "Gr‮ace" }, { ...m3, weight_kg: "heavy" },
-                       { ...m3, nickname: "Gr\u200face" }, { ...m3, trim: "E46\u200bCSL" }, { ...m3, make: "\u200b", model: "\u200b" }, { ...m3, nickname: "a\nb" }, { ...m3, shared: "true" }, { ...m3, is_primary: 1 }, { ...m3, make: "\u3164" }]) {
+                       { ...m3, nickname: "Gr\u200face" }, { ...m3, trim: "E46\u200bCSL" }, { ...m3, make: "\u200b", model: "\u200b" }, { ...m3, nickname: "a\nb" }, { ...m3, shared: "true" }, { ...m3, is_primary: 1 }, { ...m3, make: "\u3164" },
+                       { ...m3, clearance: "slammed" }, { ...m3, width_cm: 90 }, { ...m3, width_cm: 180.5 }]) {
       expect((await api(a, "POST", "/api/garage", bad)).status, JSON.stringify(bad)).toBe(400);
     }
     for (const bad of [null, [], "car"]) expect((await api(a, "POST", "/api/garage", bad)).status, JSON.stringify(bad)).toBe(400);
@@ -34,6 +35,14 @@ describe("garage", () => {
     const id = await add(a, { ...m3, nickname: "Grace 👩‍🔧", mods: "Coilovers\r\nBucket seats\nLSD" });
     const car = (await mine(a)).find((c) => c.id === id)!;
     expect([car.nickname, car.mods]).toEqual(["Grace 👩‍🔧", "Coilovers\nBucket seats\nLSD"]);
+  });
+
+  it("keeps ride height and width for routing (IDEAS R-20); unknown stays null", async () => {
+    const a = await makeUser("alice");
+    const id = await add(a, { ...m3, clearance: "low", width_cm: 190 });
+    expect((await mine(a)).find((c) => c.id === id)).toMatchObject({ clearance: "low", width_cm: 190 });
+    await ok(api(a, "PUT", `/api/garage/${id}`, { ...m3, clearance: "stock" }));
+    expect((await mine(a)).find((c) => c.id === id)).toMatchObject({ clearance: "stock", width_cm: null });
   });
 
   it("ten cars at most, even when added all at once", async () => {

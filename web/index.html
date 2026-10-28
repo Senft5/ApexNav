@@ -2097,6 +2097,15 @@
     // Avoid options (Plan sheet, saved on the phone): router costing for routes and the connector matrix alike.
     const AVOID = 'apex.avoid';
     let avoid = { ...FunRoute.AVOID_DEFAULT };
+    // The car routing plans for (IDEAS R-20): your Garage's daily car, kept on the phone so planning works offline.
+    let carForRouting = null;
+    try { carForRouting = JSON.parse(localStorage.getItem('apex.routingCar') || 'null'); } catch (_) {}
+    const routingCar = () => carForRouting;
+    function setRoutingCars(list) {
+      const c = Array.isArray(list) ? list.find(x => x.is_primary) || null : null;
+      carForRouting = c && (c.clearance || c.width_cm) ? { clearance: c.clearance || null, width_cm: c.width_cm || null, label: c.nickname || [c.make, c.model].filter(Boolean).join(' ') } : null;
+      try { if (carForRouting) localStorage.setItem('apex.routingCar', JSON.stringify(carForRouting)); else localStorage.removeItem('apex.routingCar'); } catch (_) {}
+    }
     try { const a = JSON.parse(localStorage.getItem(AVOID) || 'null'); if (a && typeof a === 'object') for (const k in avoid) if (typeof a[k] === 'boolean') avoid[k] = a[k]; } catch (_) { /* storage off */ }
     // Corners you like (IDEAS R-19): more or fewer hairpins and fast sweepers weigh routes' fun (fun_route.js cornerWeight).
     const ROAD_PREFS = 'apex.roadPrefs';
@@ -2218,7 +2227,7 @@
           if (!end && p.shaping) return { lat: p.lat, lon: p.lon, type: 'through', radius: 25 };   // stay on the stage
           return { lat: p.lat, lon: p.lon, type: end ? 'break' : 'through', ...(throughRoadsOnly && !end ? { radius: 2500, search_filter: filter } : {}) };
         }),
-        ...FunRoute.costing(avoid), ...(alternates && points.length === 2 ? { alternates } : {}), ...(excl.length ? { exclude_locations: excl } : {}), ...extra }) });
+        ...FunRoute.costing(avoid, routingCar()), ...(alternates && points.length === 2 ? { alternates } : {}), ...(excl.length ? { exclude_locations: excl } : {}), ...extra }) });
       if (!json.trip) throw new Error(json.error || 'no route');
       return [json.trip, ...(json.alternates || []).map(a => a.trip).filter(Boolean)].map(routeOf);
     }
@@ -2231,7 +2240,7 @@
       for (let i = 0; i < sources.length; i += rows) {
         const src = sources.slice(i, i + rows);
         const json = await RouteLoading.json(`${VALHALLA}/sources_to_targets`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sources: src.map(p => ({ lat: p.lat, lon: p.lon })), targets: targets.map(p => ({ lat: p.lat, lon: p.lon })), ...FunRoute.costing(avoid) }) });
+          body: JSON.stringify({ sources: src.map(p => ({ lat: p.lat, lon: p.lon })), targets: targets.map(p => ({ lat: p.lat, lon: p.lon })), ...FunRoute.costing(avoid, routingCar()) }) });
         if (!Array.isArray(json.sources_to_targets)) throw new Error(json.error || 'no matrix');
         parts.push(json.sources_to_targets);
       }
@@ -2384,7 +2393,8 @@
       const sun = !(Array.isArray(t.sectors) && t.sectors.length) && t.glareMin >= 3 ? `Low sun ahead for ~${t.glareMin} min · ` : '';
       // Only on a route planned with Towns on (townKm undefined otherwise); null = the town check couldn't run.
       const towns = t.townKm === null ? 'Couldn\'t check towns · ' : t.townKm >= 1.6 ? `Through towns ~${ApexUnits.long(t.townKm * 1000, 0)} · ` : '';
-      $('routeCardSub').textContent = `${missed}${towns}${sun}Cameras ${cams} · ${feel}`;
+      const carLine = t.request ? FunRoute.carNote(routingCar(), avoid) : '';
+      $('routeCardSub').textContent = `${carLine ? carLine + ' · ' : ''}${missed}${towns}${sun}Cameras ${cams} · ${feel}`;
       $('routeCardWhy').textContent = t.why || '';
       $('routeCardWhy').hidden = !t.why;
       $('routeCardFun').hidden = t.id !== 'route_dest';           // the level re-plans destination routes only
@@ -3692,7 +3702,7 @@
     try { spotsFeed = window.ApexSpotsFeed ? ApexSpotsFeed.mount({ el, btn, toast, sync: window.ApexSync, report: safety && safety.report,
       here: () => state.lastPosition || (() => { const c = map.getCenter(); return { lat: c.lat, lon: c.lng }; })(), goTo: (p) => { closeSheet(); routeToPlace(p); } }) : null; } catch (e) { console.error('spots', e); }
     let garage = null;
-    try { garage = window.ApexGarageUI ? ApexGarageUI.mount({ el, btn, toast, apiCall, jsonOf, report: safety && safety.report }) : null; } catch (e) { console.error('garage', e); }
+    try { garage = window.ApexGarageUI ? ApexGarageUI.mount({ el, btn, toast, apiCall, jsonOf, report: safety && safety.report, onCars: setRoutingCars }) : null; } catch (e) { console.error('garage', e); }
     const switchRow = (label, on, change) => { const b = el('button', { className: 'ink-btn' + (on ? ' on' : ''), textContent: `${label}: ${on ? 'On' : 'Off'}`, onclick: change }); b.setAttribute('aria-pressed', String(!!on)); return b; };
     let openCrewId = null;
     const crewNear = () => { if (state.lastPosition) return state.lastPosition; const c = map.getCenter(); return { lat: c.lat, lon: c.lng }; };
@@ -3708,6 +3718,8 @@
       if (gen !== renderGen) return;
       accountMe = me && me.signed_in ? me : null;
       if (feedbackUi) feedbackUi.refresh();
+      if (me && !me.signed_in) setRoutingCars(null);
+      else if (me && me.member) apiCall('GET', '/api/garage').then(r => (r.ok ? r.json() : null)).then(list => { if (list) setRoutingCars(list); }).catch(() => {});
       body.innerHTML = '';
       const redo = () => renderAccount();
       const badge = $('crewTab').querySelector('.badge'); if (badge) badge.remove();
