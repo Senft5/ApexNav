@@ -207,7 +207,7 @@ Today: accounts with Google sign-in, friends, crews (public and private, crews n
 | S-10 | Octane redemptions that buy nothing safety-related: cosmetics, voice packs, early features | M | M | todo | SOCIAL §2.3 |
 | S-11 | Challenges: "drive 5 new roads this month", "pioneer 10 km", crew-vs-crew km | M | M | todo | Strava challenges, REVER |
 | S-12 | Highlights feed near you: viewpoints, cafés, meets, saved by members | M | M | todo | Roadtrippers, Google Maps contributions |
-| S-13 | Car meets map: public events and recurring Cars & Coffee, added by crews | H | M | partial (crew drives, S-06, are crew-only; public listings and recurrence are still to do) | car meet apps, Facebook groups |
+| S-13 | Car meets map: public events and recurring Cars & Coffee, added by crews | H | M | partial (a public crew lists a drive as a meet; Crew → Meets near you within 80 km, join the crew to answer; migration 0015. Recurring meets and pins on the map are still to do) | car meet apps, Facebook groups |
 | S-14 | Invite links that open the app (or the web) on the crew or route | H | S | done (custom scheme; Universal Links later) | growth |
 | S-15 | Profiles: handle, cars, crews, favourite roads, totals; private by default | M | M | todo | Strava profile |
 | S-16 | Block and report on every social surface; moderation queue for public crews and highlights | H | M | done (#120) | App Store requirement for UGC |

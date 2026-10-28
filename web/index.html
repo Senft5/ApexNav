@@ -3325,7 +3325,7 @@
       body.append(you);
       if (convoy) body.append(convoy.section());
       body.append(sharedRoutesSection());
-      if (crewEvents) body.append(crewEvents.section(Array.isArray(crews) ? crews.map((c) => ({ id: c.id, name: c.name })) : []));
+      if (crewEvents) body.append(crewEvents.section(Array.isArray(crews) ? crews.map((c) => ({ id: c.id, name: c.name, visibility: c.visibility })) : []));
       if (garage) body.append(garage.section());
 
       // friends: a side pop-up (owner decision), opened from the button under You; new requests light it up

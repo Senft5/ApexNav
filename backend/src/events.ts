@@ -25,7 +25,7 @@ const VISIBLE = (e: string) => `${e}.cancelled = 0 AND NOT ${reportedSql("event"
 
 export async function eventCreate(env: Env, v: Viewer, crewId: string, req: Request) {
   if (!(await isCrewMember(env, crewId, v.id))) throw new HttpError(404, "no_crew");
-  const b = await body<{ title?: unknown; starts_at?: unknown; meet?: { name?: unknown; lat?: unknown; lon?: unknown }; route_id?: unknown; notes?: unknown }>(req);
+  const b = await body<{ title?: unknown; starts_at?: unknown; meet?: { name?: unknown; lat?: unknown; lon?: unknown }; route_id?: unknown; notes?: unknown; public?: unknown }>(req);
   const title = cleanText(b.title, 60)?.trim();
   if (!title) throw new HttpError(400, "bad_title");
   const when = startsAt(b.starts_at);
@@ -44,26 +44,33 @@ export async function eventCreate(env: Env, v: Viewer, crewId: string, req: Requ
     if (!ok) throw new HttpError(400, "bad_route");
     routeId = b.route_id;
   }
+  // listed for everyone nearby (S-13): only a public crew's drive
+  if (b.public !== undefined && typeof b.public !== "boolean") throw new HttpError(400, "bad_public");
+  const listed = b.public === true;
+  if (listed) {
+    const c = await env.DB.prepare("SELECT visibility FROM crews WHERE id = ?").bind(crewId).first<{ visibility: string }>();
+    if (!c || c.visibility !== "public") throw new HttpError(400, "not_public_crew");
+  }
   const upcoming = await env.DB.prepare("SELECT COUNT(*) AS n FROM crew_events WHERE crew_id = ? AND cancelled = 0 AND starts_at > datetime('now')")
     .bind(crewId).first<{ n: number }>();
   if ((upcoming?.n ?? 0) >= MAX_UPCOMING) throw new HttpError(429, "too_many_events");
   const id = randomToken(12);
   await env.DB.batch([
-    env.DB.prepare(`INSERT INTO crew_events (id, crew_id, created_by, title, starts_at, meet_name, meet_lat, meet_lon, route_id, notes)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(id, crewId, v.id, title, when, meetName, Math.round(lat * 1e5) / 1e5, Math.round(lon * 1e5) / 1e5, routeId, notes),
+    env.DB.prepare(`INSERT INTO crew_events (id, crew_id, created_by, title, starts_at, meet_name, meet_lat, meet_lon, route_id, notes, public)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(id, crewId, v.id, title, when, meetName, Math.round(lat * 1e5) / 1e5, Math.round(lon * 1e5) / 1e5, routeId, notes, listed ? 1 : 0),
     env.DB.prepare("INSERT INTO crew_event_rsvps (event_id, user_id, status) VALUES (?, ?, 'going')").bind(id, v.id),
   ]);
   return { id };
 }
 
 interface EventRow { id: string; crew_id: string; crew_name: string; title: string; starts_at: string; meet_name: string | null; meet_lat: number; meet_lon: number;
-  route_id: string | null; notes: string | null; by_handle: string | null; mine: number; can_cancel: number; my_rsvp: string | null; going: string; maybe: number }
+  route_id: string | null; notes: string | null; public: number; by_handle: string | null; mine: number; can_cancel: number; my_rsvp: string | null; going: string; maybe: number }
 
 /** Upcoming drives (from SHOW_AFTER_START_H ago) in one crew, or in all your crews; each with who's going (handles). */
 export async function eventsList(env: Env, v: Viewer, crewId: string | null) {
   if (crewId && !(await isCrewMember(env, crewId, v.id))) throw new HttpError(404, "no_crew");
   const rows = (await env.DB.prepare(
-    `SELECT e.id, e.crew_id, c.name AS crew_name, e.title, e.starts_at, e.meet_name, e.meet_lat, e.meet_lon, e.route_id, e.notes,
+    `SELECT e.id, e.crew_id, c.name AS crew_name, e.title, e.starts_at, e.meet_name, e.meet_lat, e.meet_lon, e.route_id, e.notes, e.public,
             u.handle AS by_handle, (e.created_by = ?1) AS mine, (e.created_by = ?1 OR c.owner = ?1) AS can_cancel,
             (SELECT status FROM crew_event_rsvps r WHERE r.event_id = e.id AND r.user_id = ?1) AS my_rsvp,
             (SELECT json_group_array(COALESCE(gu.handle, '?')) FROM crew_event_rsvps g JOIN users gu ON gu.id = g.user_id
@@ -75,7 +82,33 @@ export async function eventsList(env: Env, v: Viewer, crewId: string | null) {
        LEFT JOIN users u ON u.id = e.created_by
       WHERE ${VISIBLE("e")} AND e.starts_at > datetime('now', '-${SHOW_AFTER_START_H} hours') ${crewId ? "AND e.crew_id = ?2" : ""}
       ORDER BY e.starts_at LIMIT 50`).bind(...(crewId ? [v.id, crewId] : [v.id])).all<EventRow>()).results;
-  return rows.map((r) => ({ ...r, mine: !!r.mine, can_cancel: !!r.can_cancel, starts_at: r.starts_at.replace(" ", "T") + "Z", going: JSON.parse(r.going) as string[] }));
+  return rows.map((r) => ({ ...r, public: !!r.public, mine: !!r.mine, can_cancel: !!r.can_cancel, starts_at: r.starts_at.replace(" ", "T") + "Z", going: JSON.parse(r.going) as string[] }));
+}
+
+export const NEAR_KM = 80;
+/**
+ * Meets near a point (S-13): public crews' listed drives coming up within NEAR_KM, nearest first, for any member. No handles
+ * here (the crew's members are its own business): how many are going, and whether you're in the crew already. A crew
+ * that goes private, a block either way with the planner, or enough reports takes it off.
+ */
+export async function eventsNear(env: Env, v: Viewer, url: URL) {
+  const q = (k: string) => { const s = url.searchParams.get(k); return s === null || s.trim() === "" ? NaN : Number(s); };
+  const lat = num(q("lat"), "lat", -85, 85), lon = num(q("lon"), "lon", -180, 180);
+  const dLat = NEAR_KM / 111.2, dLon = NEAR_KM / (111.32 * Math.max(0.2, Math.cos(lat * Math.PI / 180)));
+  const rows = (await env.DB.prepare(
+    `SELECT e.id, e.crew_id, c.name AS crew_name, e.title, e.starts_at, e.meet_name, e.meet_lat, e.meet_lon, e.notes,
+            (SELECT COUNT(*) FROM crew_event_rsvps g JOIN crew_members gm ON gm.crew_id = e.crew_id AND gm.user_id = g.user_id
+              WHERE g.event_id = e.id AND g.status = 'going') AS going,
+            EXISTS (SELECT 1 FROM crew_members me WHERE me.crew_id = e.crew_id AND me.user_id = ?1) AS member
+       FROM crew_events e JOIN crews c ON c.id = e.crew_id
+      WHERE e.public = 1 AND ${VISIBLE("e")} AND c.visibility = 'public' AND NOT ${reportedSql("crew", "c.id")}
+        AND e.starts_at > datetime('now') AND e.meet_lat BETWEEN ?2 AND ?3 AND e.meet_lon BETWEEN ?4 AND ?5
+        AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker = ?1 AND b.blocked = e.created_by) OR (b.blocker = e.created_by AND b.blocked = ?1))
+      ORDER BY e.starts_at LIMIT 100`).bind(v.id, lat - dLat, lat + dLat, lon - dLon, lon + dLon)
+    .all<{ id: string; crew_id: string; crew_name: string; title: string; starts_at: string; meet_name: string | null; meet_lat: number; meet_lon: number; notes: string | null; going: number; member: number }>()).results;
+  const km = (r: { meet_lat: number; meet_lon: number }) => Math.hypot((r.meet_lat - lat) * 111.2, (r.meet_lon - lon) * 111.32 * Math.cos(lat * Math.PI / 180));
+  return rows.map((r) => ({ ...r, member: !!r.member, starts_at: r.starts_at.replace(" ", "T") + "Z", km: Math.round(km(r)) }))
+    .filter((r) => r.km <= NEAR_KM).slice(0, 20);
 }
 
 async function visibleEvent(env: Env, v: Viewer, id: string) {
