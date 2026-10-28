@@ -94,7 +94,7 @@ on("POST", "/api/highlights", async (req, env) => json(await highlightCreate(env
 on("GET", "/api/highlights", async (req, env) => json(await highlightList(env, await requireMember(req, env), new URL(req.url))));
 on("POST", "/api/highlights/:id/rating", async (req, env, m) => { await highlightRate(env, await requireMember(req, env), m.groups!.id, req); return noContent(); });
 on("POST", "/api/highlights/:id/report", async (req, env, m) => {   // older route: same rules as POST /api/reports
-  const v = await requireMember(req, env), b = await body<{ note?: unknown } | null>(req);
+  const v = await requireMember(req, env), b = req.headers.get("content-length") === "0" ? null : await body<{ note?: unknown } | null>(req).catch(() => null);
   await fileReport(env, v, { kind: "highlight", target: m.groups!.id, reason: "other", note: b && typeof b === "object" ? b.note : undefined });
   return noContent();
 });

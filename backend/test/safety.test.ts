@@ -83,11 +83,22 @@ describe("report", () => {
   it("one member's spare accounts count once", async () => {
     const [own, a, b, c, x] = [await makeUser("olga"), await makeUser("abe"), await makeUser("bea"), await makeUser("cy"), await makeUser("xan")];
     const crew = await publicCrew(own);
-    await env.DB.prepare("UPDATE members SET invited_by = ? WHERE user_id IN (?, ?)").bind(a.id, b.id, c.id).run();   // a invited b and c
+    await env.DB.prepare("UPDATE members SET invited_by = ? WHERE user_id = ?").bind(a.id, b.id).run();   // a invited b, b invited c
+    await env.DB.prepare("UPDATE members SET invited_by = ? WHERE user_id = ?").bind(b.id, c.id).run();
     for (const r of [a, b, c]) await ok(reportIt(r, { kind: "crew", target: crew }));
     expect((await nearby(x)).map((k) => k.id)).toEqual([crew]);
     const q = await json<{ who: string[] }[]>(api(await makeUser("owner"), "GET", "/api/moderation"));
-    expect(q[0].who.sort()).toEqual(["@abe", "@bea (invited by @abe)", "@cy (invited by @abe)"]);
+    expect(q[0].who.sort()).toEqual(["@abe", "@bea (invited by @abe)", "@cy (invited by @bea)"]);
+    expect(q[0]).toMatchObject({ reporters: 3, hidden: false });
+  });
+
+  it("the owner's queue says hidden only for what is hidden", async () => {
+    const [own, x] = [await makeUser("olga"), await makeUser("xan")];
+    const [c1, c2] = [await publicCrew(own, "One"), await publicCrew(own, "Two")];
+    for (const r of [await makeUser("rae"), await makeUser("ron"), await makeUser("rex")]) await ok(reportIt(r, { kind: "crew", target: c1 }));
+    await ok(reportIt(x, { kind: "crew", target: c2 }));
+    const q = await json<{ target: string; hidden: boolean }[]>(api(await makeUser("owner"), "GET", "/api/moderation"));
+    expect(Object.fromEntries(q.map((i) => [i.target, i.hidden]))).toEqual({ [c1]: true, [c2]: false });
   });
 
   it("reported shared cars leave friends' garages", async () => {
@@ -160,6 +171,11 @@ describe("moderation", () => {
     expect((await api(again, "POST", "/api/invites/redeem", { token: fresh.token })).status).toBe(403);
     expect((await json<{ profile: { handle: string } }>(api(again, "GET", "/api/me/export"))).profile.handle).toBe("bob");
     await ok(api(again, "DELETE", "/api/me", { confirm: "DELETE" }));
+    // deleting the account doesn't lift the ban: the same Google account signs up again and still can't get in
+    const back = await makeUser("bobagain", false);
+    await env.DB.prepare("UPDATE users SET google_sub = 'sub-bob' WHERE id = ?").bind(back.id).run();
+    const inv = await json<{ token: string }>(api(a, "POST", "/api/invites"));
+    expect((await api(back, "POST", "/api/invites/redeem", { token: inv.token })).status).toBe(403);
   });
 
   it("you can't redeem your own invite", async () => {

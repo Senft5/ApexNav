@@ -177,7 +177,8 @@ export async function moderationResolve(env: Env, v: Viewer, req: Request): Prom
   const mark = env.DB.prepare("UPDATE reports SET status = 'removed' WHERE kind = ? AND target_id = ? AND status = 'open'").bind(kind, id);
   const act = {
     user: [
-      env.DB.prepare("INSERT OR IGNORE INTO bans (user_id) SELECT id FROM users WHERE id = ?").bind(id),
+      env.DB.prepare("INSERT OR IGNORE INTO bans (google_sub) SELECT google_sub FROM users WHERE id = ?").bind(id),
+      env.DB.prepare("UPDATE reports SET status = 'dismissed' WHERE reporter = ? AND status = 'open'").bind(id),   // their open reports stop counting
       env.DB.prepare("DELETE FROM members WHERE user_id = ?").bind(id),
       env.DB.prepare("DELETE FROM sessions WHERE user_id = ?").bind(id),
       env.DB.prepare("DELETE FROM app_auth_codes WHERE user_id = ?").bind(id),
