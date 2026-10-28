@@ -239,7 +239,7 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 | U-15 | Dynamic Type and VoiceOver pass on every screen, checked with the iOS simulator | H | M | todo | accessibility |
 | U-16 | Landscape cockpit layout for mounts in landscape | M | M | todo | Waze |
 | U-17 | Copy pass to BRAND voice on every remaining string (errors, empty states, permissions) | M | S | partial (#103) | docs/BRAND.md §2 |
-| U-18 | Native feel: replace remaining web-looking controls (selects, date inputs) with app-style ones | M | M | todo | STATE 2026-10-27 |
+| U-18 | Native feel: replace remaining web-looking controls (selects, date inputs) with app-style ones | M | M | partial (selects) | STATE 2026-10-27 |
 | U-19 | Search that understands roads and stages ("Tail of the Dragon"), not just addresses | H | M | todo | Google Maps |
 | U-20 | Saved places and lists (home, work, favourite stages) synced to the account | M | M | todo | Google Maps lists |
 | U-21 | Route preview: scrub along the route with elevation, notes and road character | M | M | todo | Calimoto, Komoot |
