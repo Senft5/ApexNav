@@ -16,13 +16,17 @@ describe("friend profiles", () => {
     const crew = ((await (await ok(api(a, "POST", "/api/crews", { name: "Ridge Runners", visibility: "public", area: { name: "Robbinsville", lat: 35.3, lon: -83.8 } }))).json()) as { id: string }).id;
     await ok(api(b, "POST", `/api/crews/${crew}/join`));
     const seg = await makeSegment(b, "Esses");
+    await ok(api(b, "POST", `/api/segments/${seg}/share`, { audience_type: "friend", audience_id: a.id }));
+    await ok(api(a, "POST", "/api/segments/adopt", { segment_id: seg }));            // alice has the stage too
+    const secret = await makeSegment(b, "Mum's lane");                             // she doesn't have this one
     await ok(api(b, "PUT", "/api/grants", { audience_type: "friend", audience_id: a.id, share_scores: true, share_times: true }));
     await ok(api(b, "POST", "/api/board", { segment_id: seg, driver_score: 812, time_s: 600, driven_on: today }));
+    await ok(api(b, "POST", "/api/board", { segment_id: secret, driver_score: 700, time_s: 500, driven_on: today }));
     const p = (await (await ok(profile(a, b))).json()) as Record<string, any>;
     expect(p).toMatchObject({ handle: "bob", name: "BOB", crews: ["Ridge Runners"], totals: { stages: 1, days_month: 1, best: 812 } });
     expect(p.cars.map((c: Record<string, unknown>) => c.model)).toEqual(["MX-5"]);
-    expect(p.stages).toEqual([{ stage: "Esses", best: 812, days_month: 1, last: today }]);
-    expect(JSON.stringify(p)).not.toMatch(/time_s|600|email/);
+    expect(p.stages).toEqual([{ stage: "Esses", best: 812, days_month: 1 }]);           // never a stage only they have
+    expect(JSON.stringify(p)).not.toMatch(/time_s|600|email|Mum/);
   });
 
   it("scores they don't share with you aren't there", async () => {

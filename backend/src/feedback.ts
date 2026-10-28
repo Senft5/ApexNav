@@ -29,8 +29,11 @@ export async function feedbackCreate(req: Request, env: Env, v: Viewer | null): 
   if (b.app !== "ios" && b.app !== "web") throw new HttpError(400, "bad_app");
   const message = str(b.message, "message", 1, MAX_MESSAGE * 2).trim().slice(0, MAX_MESSAGE);
   if (!message) throw new HttpError(400, "bad_message");
-  const today = await env.DB.prepare("SELECT COUNT(*) AS n FROM feedback WHERE created_at >= date('now')").first<{ n: number }>();
-  if ((today?.n ?? 0) >= DAY_CAP) throw new HttpError(429, "busy");
+  // the daily cap holds signed-out senders only, so junk from a few IPs can't shut members out (review 2026-10-28)
+  if (!v || !v.member) {
+    const today = await env.DB.prepare("SELECT COUNT(*) AS n FROM feedback WHERE created_at >= date('now')").first<{ n: number }>();
+    if ((today?.n ?? 0) >= DAY_CAP) throw new HttpError(429, "busy");
+  }
   const diag = cleanDiag(b.diag);
   const handle = b.reply === true && v && v.handle ? v.handle : null;
   const r = await env.DB.prepare("INSERT INTO feedback (kind, message, app, diag, handle) VALUES (?, ?, ?, ?, ?) RETURNING id")

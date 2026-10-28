@@ -1,6 +1,6 @@
 // A day out with stops (IDEAS R-17): the stops you added to a planned route (a pin's Add via, a dragged route, a viewpoint or
 // café tapped on the map) listed on the route card in order, to move up, down or take out; the route is rebuilt through
-// them. Shaping points the planner added are not stops: reordering keeps only your stops (the planner's shape was for the
+// them. Shaping points and a loop's waypoints (`planned`) are the planner's, not stops: reordering keeps only your stops (the planner's shape was for the
 // old order). Pure (tests/test_trip_stops.py).
 (function (root) {
   'use strict';
@@ -8,7 +8,7 @@
   function stops(request) {
     const via = (request && request.via) || [];
     let n = 0;
-    return via.map((v, i) => ({ v, i })).filter(({ v }) => !v.shaping && Number.isFinite(v.lat) && Number.isFinite(v.lon))
+    return via.map((v, i) => ({ v, i })).filter(({ v }) => !v.shaping && !v.planned && Number.isFinite(v.lat) && Number.isFinite(v.lon))
       .map(({ v, i }) => ({ i, label: v.label || `Stop ${++n}`, lat: v.lat, lon: v.lon }));
   }
   const clean = (v) => ({ lat: v.lat, lon: v.lon, ...(v.label ? { label: v.label } : {}) });

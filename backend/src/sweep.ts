@@ -5,6 +5,7 @@ import { HEALTH_SWEEP } from "./health";
 import { ETA_SWEEP } from "./eta_share";
 import { FEEDBACK_SWEEP } from "./feedback";
 import { KUDOS_SWEEP } from "./kudos";
+import { STATS_SWEEP } from "./stats";
 
 export const SWEEPS: Record<string, string> = {
   sessions: "DELETE FROM sessions WHERE expires_at <= datetime('now')",
@@ -20,6 +21,7 @@ export const SWEEPS: Record<string, string> = {
   eta_shares: ETA_SWEEP,
   feedback: FEEDBACK_SWEEP,
   kudos: KUDOS_SWEEP,
+  route_stats: STATS_SWEEP,
 };
 
 export async function sweepExpired(env: Env): Promise<Record<string, number>> {

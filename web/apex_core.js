@@ -149,7 +149,9 @@
   }
 
   // Geometric sight distance ahead of each sample (see core/road_dna.sight_distance_m).
+  // offsetM: one clearance (m) for the road, or one per sample (IDEAS Q-09), read where the sightline passes.
   function sightDistanceM(lat, lon, elevation = null, offsetM = SIGHT_OFFSET_M) {
+    const offAt = typeof offsetM === 'number' ? () => offsetM : (k) => (Number.isFinite(offsetM[k]) ? offsetM[k] : SIGHT_OFFSET_M);
     const n = lat.length, out = new Float64Array(n).fill(SIGHT_MAX_M);
     if (n < 3) return out;
     const { x, y } = localXY(lat, lon);
@@ -166,7 +168,7 @@
         let blocked = false;
         for (let k = i + 1; k < j && !blocked; k++) {
           const off = Math.abs(cx * (ys[k] - ys[i]) - cy * (xs[k] - xs[i])) / chord;
-          if (off > offsetM) blocked = true;
+          if (off > offAt(k)) blocked = true;
           else if (elevation) {
             const line = eye + (elevation[j] + OBJECT_HEIGHT_M - eye) * ((s[k] - s[i]) / (s[j] - s[i]));
             if (elevation[k] > line) blocked = true;

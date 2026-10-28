@@ -19,7 +19,8 @@ const cases = {
   edge: C.closedAt('Dec 1-Mar 31', at(2026, 3, 31)), months: C.closedAt('Nov-Apr', at(2026, 4, 30)), years: C.closedAt('2026 Nov 01-2027 Apr 30', at(2026, 12, 25)),
   night: C.closedAt('19:00-07:00', at(2026, 10, 28, 23)), day: C.closedAt('19:00-07:00', at(2026, 10, 28, 12)),
   weekday: C.closedAt('Mo-Fr 07:00-09:00', at(2026, 10, 28, 8)), weekend: C.closedAt('Mo-Fr 07:00-09:00', at(2026, 10, 31, 8)),
-  wrap: C.closedAt('Sa,Su 10:00-18:00', at(2026, 11, 1, 11)), odd: C.closedAt('wet', at(2026, 1, 1)), sunset: C.closedAt('sunset-sunrise', at(2026, 1, 1)),
+  wrap: C.closedAt('Sa,Su 10:00-18:00', at(2026, 11, 1, 11)),
+  satPart: C.closingRules('no @ (Mo-Fr 07:00-09:00; Sa 10:00-12:00)').map((r) => C.closedAt(r.cond, at(2026, 10, 31, 11))), odd: C.closedAt('wet', at(2026, 1, 1)), sunset: C.closedAt('sunset-sunrise', at(2026, 1, 1)),
 };
 const rules = C.closingRules('no @ (Nov 15-Apr 15); yes @ (Jul 4); destination @ (Mo-Fr 07:00-09:00)');
 const ways = [
@@ -43,6 +44,7 @@ def test_reading_rules(out):
     c = out["cases"]
     assert (c["winterIn"], c["winterOut"], c["edge"], c["months"], c["years"]) == (True, False, True, True, True)
     assert (c["night"], c["day"], c["weekday"], c["weekend"], c["wrap"]) == (True, False, True, False, True)
+    assert c["satPart"] == [True]                                            # the Saturday part of one rule (review fix)
     assert c.get("odd") is None and c.get("sunset") is None                  # can't read it: unknown, not open
     assert out["rules"] == [{"cond": "Nov 15-Apr 15"}]
 

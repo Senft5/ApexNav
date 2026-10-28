@@ -43,6 +43,11 @@ describe("GET /api/roads", () => {
     expect(Object.keys(j["9"])).toEqual(["0"]);                 // way 9 the other way: one driver
   });
 
+  it("one person can't hold both slots, so can't meet the two-driver rule alone", async () => {
+    await env.DB.prepare("INSERT INTO rank_slots (way_id, dir, slot, user_id, driven_on, holder) VALUES (12, 0, 1, NULL, '2026-10-01', X'01')").run();
+    await expect(env.DB.prepare("INSERT INTO rank_slots (way_id, dir, slot, user_id, driven_on, holder) VALUES (12, 0, 2, NULL, '2026-10-01', X'01')").run()).rejects.toThrow();
+  });
+
   it.each(["", "ways=", "ways=abc", "ways=-1", "ways=1.5", `ways=${Array.from({ length: 51 }, (_, i) => i + 1).join(",")}`])("rejects bad query %s", async (q) => {
     expect((await api(await makeUser("alice"), "GET", `/api/roads?${q}`)).status).toBe(400);
   });

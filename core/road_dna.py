@@ -166,7 +166,7 @@ def effective_mu(roughness_rms_g=None, mu_eff: float = MU_EFF_DEFAULT):
     return float(mu) if mu.ndim == 0 else mu
 
 
-def sight_distance_m(lat_deg, lon_deg, elevation_m=None, offset_m: float = SIGHT_OFFSET_M) -> np.ndarray:
+def sight_distance_m(lat_deg, lon_deg, elevation_m=None, offset_m=SIGHT_OFFSET_M) -> np.ndarray:
     """Geometric sight distance ahead of each sample (m), capped at SIGHT_MAX_M.
 
     Target j is visible from i when the straight sightline between them
@@ -174,6 +174,8 @@ def sight_distance_m(lat_deg, lon_deg, elevation_m=None, offset_m: float = SIGHT
         further off the road -- trees, banks, buildings -- is assumed to block), and
       * vertically clears the road surface from eye height to object height (crests).
     Sight ends at the first target that fails either test.
+    offset_m is one clearance for the whole road, or one per sample (IDEAS Q-09: wider beside open fields than
+    beside woods), read at the point the sightline passes.
     """
     x, y = local_xy_m(lat_deg, lon_deg)
     n = len(x)
@@ -184,6 +186,8 @@ def sight_distance_m(lat_deg, lon_deg, elevation_m=None, offset_m: float = SIGHT
     ys = moving_average(y, SMOOTH_WINDOW)
     s = np.concatenate([[0.0], np.cumsum(np.hypot(np.diff(xs), np.diff(ys)))])
     z = None if elevation_m is None else np.asarray(elevation_m, dtype=float)
+    offs = np.broadcast_to(np.asarray(offset_m, dtype=float), (n,))
+    offs = np.where(np.isfinite(offs), offs, SIGHT_OFFSET_M)           # unknown land beside the road: the cautious default
     for i in range(n - 2):
         end = int(np.searchsorted(s, s[i] + SIGHT_MAX_M, side="right"))
         js = np.arange(i + 2, end)
@@ -196,7 +200,7 @@ def sight_distance_m(lat_deg, lon_deg, elevation_m=None, offset_m: float = SIGHT
         px, py = xs[ks] - xs[i], ys[ks] - ys[i]
         between = ks[None, :] < js[:, None]
         off = np.abs(cx[:, None] * py[None, :] - cy[:, None] * px[None, :]) / chord[:, None]
-        blocked = between & (off > offset_m)
+        blocked = between & (off > offs[ks][None, :])
         if z is not None:
             eye = z[i] + EYE_HEIGHT_M
             frac = (s[ks][None, :] - s[i]) / (s[js] - s[i])[:, None]

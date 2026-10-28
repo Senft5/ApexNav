@@ -38,6 +38,8 @@ export async function kudosReceived(env: Env, v: Viewer) {
        LEFT JOIN segments s ON s.owner = ?1 AND COALESCE(s.origin_id, s.id) = k.canon_id
       WHERE k.owner_id = ?1 AND u.handle IS NOT NULL
         AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker = ?1 AND b.blocked = k.giver_id) OR (b.blocker = k.giver_id AND b.blocked = ?1))
+        AND (EXISTS (SELECT 1 FROM friendships f WHERE f.status = 'accepted' AND f.user_a = MIN(k.giver_id, ?1) AND f.user_b = MAX(k.giver_id, ?1))
+             OR EXISTS (SELECT 1 FROM crew_members a JOIN crew_members b ON b.crew_id = a.crew_id WHERE a.user_id = ?1 AND b.user_id = k.giver_id))
       GROUP BY k.giver_id, k.canon_id, k.driven_on ORDER BY k.created_at DESC LIMIT ${MAX_RECEIVED}`).bind(v.id).all()).results;
 }
 

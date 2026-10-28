@@ -12,7 +12,14 @@
 
   /** "no @ (Nov 15-Apr 15); yes @ (...)" → the closing rules: [{ cond }] with the condition text. */
   function closingRules(value) {
-    return String(value || '').split(';').map((p) => p.trim()).map((p) => {
+    const parts = [];
+    let depth = 0, cur = '';
+    for (const ch of String(value || '')) {                       // ';' inside "(Mo-Fr 07:00-09:00; Sa 10:00-12:00)" is the rule's own
+      if (ch === '(') depth++; else if (ch === ')') depth = Math.max(0, depth - 1);
+      if (ch === ';' && depth === 0) { parts.push(cur); cur = ''; } else cur += ch;
+    }
+    parts.push(cur);
+    return parts.map((p) => p.trim()).map((p) => {
       const m = p.match(/^([^@]+?)\s*@\s*\(?(.+?)\)?$/);
       return m && CLOSED.test(m[1].trim()) ? { cond: m[2].trim() } : null;
     }).filter(Boolean);
@@ -43,6 +50,11 @@
   }
   /** true closed, false open, undefined can't read it. */
   function closedAt(cond, d) {
+    const parts = String(cond).split(';').map((p) => p.trim()).filter(Boolean);
+    if (parts.length > 1) {                                       // "Mo-Fr 07:00-09:00; Sa 10:00-12:00": closed if any part is
+      const st = parts.map((p) => closedAt(p, d));
+      return st.some((s) => s === true) ? true : st.every((s) => s === false) ? false : undefined;
+    }
     const a = inDates(cond, d);
     if (a !== undefined) return a;
     return inTimes(cond, d);
