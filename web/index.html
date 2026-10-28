@@ -2098,9 +2098,9 @@
     }
     function scoreLoop(t, miles) {
       const km = totalOf(t) / 1000, targetKm = miles * 1.609344;
-      const good = t.events.filter(e => e.type === 'corner' && e.severity !== 'HP' && e.severity >= 2 && e.severity <= 5).length;
       const retraced = Core.retracedShare(t.lat, t.lon);
-      return { score: FunRoute.loopValue(t.fun, km, targetKm, retraced), good, retraced, km };
+      // good: corners off the router's junctions, as the fun score counts them
+      return { score: FunRoute.loopValue(t.fun, km, targetKm, retraced), good: t.fun ? t.fun.good : 0, retraced, km };
     }
     const totalOf = (t) => t.dist[t.dist.length - 1];
     // Busy state on the button that started a slow request: label and progress bar;
@@ -2174,7 +2174,7 @@
       const gotMi = best.km / 1.609344, near = Math.abs(gotMi - miles) <= 0.2 * miles;
       await buildRoute(null, `loop_${miles}`, `${Math.max(1, Math.round(gotMi))} mi loop`, best.t);
       toast(near ? `${best.good} good corners on this loop` : `${gotMi.toFixed(1)} mi: the closest good loop to ${miles} mi`);
-      window.apexDebug && (window.apexDebug.lastLoop = done.map(d => ({ kind: d.job.kind, score: d.score, km: d.km, good: d.good, retraced: d.retraced })));
+      window.apexDebug && (window.apexDebug.lastLoop = done.map(d => ({ kind: d.job.kind, fun: d.t.fun && d.t.fun.fun, score: d.score, km: d.km, good: d.good, retraced: d.retraced })));
     }
 
 
