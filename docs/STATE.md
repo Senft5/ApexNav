@@ -4,7 +4,7 @@
 - Read the whole backend, the iOS shell's web view and bridge, the live contributor, kinematics.py and sun.js. SQL is all bound parameters; auth, CSRF, invites, export/delete and the board/grant rules hold. pytest 253 green, vitest 169 green.
 - #132: real names (Google display name) only to yourself and accepted friends (public crews and pending friend requests leaked them); app sign-in code consumed atomically; expired sessions swept on sign-in; crew invite links respect the 10-crew cap.
 - #135: the iOS web view loads only apexnav:// pages; http(s) links open in Safari; the native bridge answers only the app's own top-level page.
-- This PR: crew discovery without lat/lon is a 400 (was a search around 0,0); client segment ids must be URL-safe; live road sharing keeps a random 0.5–1.5 km private at each end of a trip (was a fixed 1 km, which pointed exactly 1 km back to home).
+- #139: crew discovery without lat/lon is a 400 (was a search around 0,0); client segment ids must be URL-safe; live road sharing keeps a random 0.5–1.5 km private at each end of a trip (was a fixed 1 km, which pointed exactly 1 km back to home).
 - Not fixed, logged in docs/IDEAS.md: Z-09 to Z-15, Y-12 to Y-14, Q-23. Not reviewed in depth: convoy.ts transport (it has its own doc and tests), fun_route.js and stages.js scoring (routing threads are active there).
 - Exact next task: Z-09 (inspector off in release) and Q-23 (demo drives export null camber), both small.
 
