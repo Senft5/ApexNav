@@ -270,6 +270,35 @@
     }
     return out;
   }
+  // Explore (R-10): the best stages near here, at most `k`, no two the same road (by place or by name). Stages arrive best first.
+  function exploreShortlist(here, stages, maxKm, k = 8) {
+    const out = [];
+    for (const s of stages || []) {
+      const e = endsOf(s);
+      if (Math.min(kmBetween(here, e.a), kmBetween(here, e.b)) > maxKm) continue;
+      if (out.some(t => overlap(s, t) || (s.name && t.name === s.name))) continue;   // one entry per road
+      out.push(s);
+      if (out.length === k) break;
+    }
+    return out;
+  }
+  /** Matrix targets for exploreShortlist: stage i's ends are 2i and 2i+1. */
+  const exploreTargets = (list) => list.flatMap(s => { const e = endsOf(s); return [e.a, e.b]; });
+  /**
+   * The shortlisted stages you can reach within maxS by road (row 0 of a here → ends matrix in seconds, null = no road),
+   * each entered from its nearer end, still best first. awayS is the drive to its start.
+   */
+  function explorePicks(list, timesS, maxS, count = 5) {
+    const T = (col) => { const v = timesS && timesS[0] && timesS[0][col]; return Number.isFinite(v) ? v : null; };
+    const out = [];
+    list.forEach((s, i) => {
+      const a = T(2 * i), b = T(2 * i + 1);
+      if (a == null && b == null) return;
+      const fwd = b == null || (a != null && a <= b), awayS = fwd ? a : b;
+      if (awayS <= maxS && out.length < count) out.push({ s, fwd, awayS });
+    });
+    return out;
+  }
   // Loops by drive time ("home in 90 minutes", R-16): stages at 25 km/h, since the router times twisty back roads well
   // below STAGE_KMH (a 43 km Smokies loop: 83 min); a connector second costs what a connector km does at 60 km/h.
   const LOOP_BY_TIME = { stageCost: (s) => s.km / 25 * 3600, perUnit: 0.08 / 60 };
@@ -463,6 +492,6 @@
     return out;
   }
 
-  const api = { LEVELS, distinctOptions, glare, glareCost, LOOP_BY_TIME, AVOID_DEFAULT, AVOID_LABELS, costing, unavoided, keepAvoiding, why, geometry, alongPoints, insertVia, loopValue, loopShortlist, loopPlansFromMatrix, score, shortlist, matrixPoints, plansFromMatrix, sectionCount, sectionPoints, combineSections, planKey, searchArea, waypoints, rank, along, kmBetween };
+  const api = { LEVELS, exploreShortlist, exploreTargets, explorePicks, distinctOptions, glare, glareCost, LOOP_BY_TIME, AVOID_DEFAULT, AVOID_LABELS, costing, unavoided, keepAvoiding, why, geometry, alongPoints, insertVia, loopValue, loopShortlist, loopPlansFromMatrix, score, shortlist, matrixPoints, plansFromMatrix, sectionCount, sectionPoints, combineSections, planKey, searchArea, waypoints, rank, along, kmBetween };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexFunRoute = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -14,6 +14,10 @@ export async function isAcceptedFriend(env: Env, a: string, b: string): Promise<
 }
 export const isCrewMember = async (env: Env, crewId: string, userId: string) =>
   !!(await first(env, "SELECT 1 FROM crew_members WHERE crew_id = ? AND user_id = ?", crewId, userId));
+// A Google display name is a real name. It is shown to yourself and to accepted friends only: a handle is what crew-mates,
+// boards and strangers who type your handle see (anyone can join a public crew, and anyone who knows a handle can send a request).
+const NAME_FOR = (who: string, viewer: string) =>
+  `CASE WHEN ${who} = ${viewer} OR EXISTS (SELECT 1 FROM friendships nf WHERE nf.status = 'accepted' AND nf.user_a = MIN(${who}, ${viewer}) AND nf.user_b = MAX(${who}, ${viewer})) THEN u.display_name END`;
 const isBlocked = async (env: Env, a: string, b: string) =>
   !!(await first(env, "SELECT 1 FROM blocks WHERE (blocker = ?1 AND blocked = ?2) OR (blocker = ?2 AND blocked = ?1)", a, b));
 
@@ -49,7 +53,7 @@ export async function friendRequest(env: Env, v: Viewer, req: Request): Promise<
 
 export async function friendList(env: Env, v: Viewer) {
   return all<{ id: string; handle: string | null; name: string | null; status: string; incoming: number }>(env,
-    `SELECT u.id, u.handle, u.display_name AS name, f.status, (f.requested_by != ?1) AS incoming
+    `SELECT u.id, u.handle, CASE WHEN f.status = 'pending' AND f.requested_by = ?1 THEN NULL ELSE u.display_name END AS name, f.status, (f.requested_by != ?1) AS incoming
        FROM friendships f JOIN users u ON u.id = CASE WHEN f.user_a = ?1 THEN f.user_b ELSE f.user_a END
       WHERE f.user_a = ?1 OR f.user_b = ?1 ORDER BY u.handle`, v.id);
 }
@@ -151,7 +155,7 @@ export async function crewJoinPublic(env: Env, v: Viewer, crewId: string): Promi
 export async function crewMembers(env: Env, v: Viewer, crewId: string) {
   if (!(await isCrewMember(env, crewId, v.id))) throw new HttpError(404, "no_crew");
   return all<{ handle: string | null; name: string | null; role: string; mine: number }>(env,
-    `SELECT u.handle, u.display_name AS name, m.role, (m.user_id = ?2) AS mine
+    `SELECT u.handle, ${NAME_FOR("m.user_id", "?2")} AS name, m.role, (m.user_id = ?2) AS mine
        FROM crew_members m JOIN users u ON u.id = m.user_id
       WHERE m.crew_id = ?1
         AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker = ?2 AND b.blocked = m.user_id) OR (b.blocker = m.user_id AND b.blocked = ?2))
@@ -172,6 +176,8 @@ export async function crewJoin(env: Env, v: Viewer, req: Request): Promise<{ id:
   const inv = await first<{ crew_id: string }>(env,
     "SELECT crew_id FROM crew_invites WHERE token_hash = ? AND expires_at > datetime('now')", await sha256hex(str(token, "token", 10, 100)));
   if (!inv) throw new HttpError(400, "invalid_invite");
+  const n = await first<{ n: number }>(env, "SELECT COUNT(*) AS n FROM crew_members WHERE user_id = ? AND crew_id != ?", v.id, inv.crew_id);
+  if ((n?.n ?? 0) >= 10) throw new HttpError(429, "too_many_crews");                // same cap as creating or joining a public crew
   await run(env, "INSERT OR IGNORE INTO crew_members (crew_id, user_id) VALUES (?, ?)", inv.crew_id, v.id);
   return { id: inv.crew_id };
 }
@@ -250,7 +256,7 @@ export async function publish(env: Env, v: Viewer, req: Request): Promise<{ publ
 /** Only entries published TO the viewer (by someone who is still their friend / crew-mate, grant still on), plus their own. */
 export async function boardFor(env: Env, v: Viewer, canonId: string) {
   return all<{ user_id: string; handle: string | null; name: string | null; driver_score: number; time_s: number | null; driven_on: string; mine: number }>(env,
-    `SELECT be.user_id, u.handle, u.display_name AS name, MAX(be.driver_score) AS driver_score, MIN(be.time_s) AS time_s,
+    `SELECT be.user_id, u.handle, ${NAME_FOR("be.user_id", "?1")} AS name, MAX(be.driver_score) AS driver_score, MIN(be.time_s) AS time_s,
             MAX(be.driven_on) AS driven_on, (be.user_id = ?1) AS mine
        FROM board_entries be JOIN users u ON u.id = be.user_id
       WHERE be.canon_id = ?2

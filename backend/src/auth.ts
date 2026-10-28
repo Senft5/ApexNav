@@ -59,8 +59,12 @@ export async function requireMember(req: Request, env: Env): Promise<Viewer> {
 
 async function startSession(env: Env, userId: string): Promise<string> {
   const token = randomToken(32);
-  await env.DB.prepare("INSERT INTO sessions (id_hash, user_id, expires_at) VALUES (?, ?, ?)")
-    .bind(await sha256hex(token), userId, sqlTime(Date.now() + SESSION_DAYS * 86400_000)).run();
+  // no cron job: expired sessions (this person's) are swept whenever they sign in again
+  await env.DB.batch([
+    env.DB.prepare("DELETE FROM sessions WHERE user_id = ? AND expires_at <= datetime('now')").bind(userId),
+    env.DB.prepare("INSERT INTO sessions (id_hash, user_id, expires_at) VALUES (?, ?, ?)")
+      .bind(await sha256hex(token), userId, sqlTime(Date.now() + SESSION_DAYS * 86400_000)),
+  ]);
   return token;
 }
 
@@ -157,10 +161,11 @@ export async function appExchange(req: Request, env: Env): Promise<Response> {
   const b = await body<{ code?: unknown; verifier?: unknown }>(req);
   const code = str(b.code, "code", 20, 200), verifier = str(b.verifier, "verifier", 43, 128);
   const hash = await sha256hex(code);
-  const row = await env.DB.prepare("SELECT user_id, challenge FROM app_auth_codes WHERE code_hash = ? AND expires_at > datetime('now')")
-    .bind(hash).first<{ user_id: string; challenge: string }>();
-  await env.DB.prepare("DELETE FROM app_auth_codes WHERE code_hash = ? OR expires_at <= datetime('now')").bind(hash).run();   // single use
-  if (!row || (await sha256b64url(verifier)) !== row.challenge) throw new HttpError(401, "bad_code");
+  // single use in one statement: two exchanges racing for the same code cannot both get a row
+  const row = await env.DB.prepare("DELETE FROM app_auth_codes WHERE code_hash = ? RETURNING user_id, challenge, (expires_at > datetime('now')) AS live")
+    .bind(hash).first<{ user_id: string; challenge: string; live: number }>();
+  await env.DB.prepare("DELETE FROM app_auth_codes WHERE expires_at <= datetime('now')").run();
+  if (!row || !row.live || (await sha256b64url(verifier)) !== row.challenge) throw new HttpError(401, "bad_code");
   return new Response(JSON.stringify({ token: await startSession(env, row.user_id) }),
     { status: 200, headers: { "content-type": "application/json", "cache-control": "no-store" } });
 }
