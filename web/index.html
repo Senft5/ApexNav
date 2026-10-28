@@ -992,8 +992,8 @@
     const HEAVY_LAYERS = ['apex-hillshade', 'apex-contours', 'apex-contour-labels'];
     function applyPower() {
       if (!mapReady) return;
-      const dpr = window.devicePixelRatio || 1;
-      try { map.setPixelRatio(power.low ? Math.min(dpr, 2) : dpr); } catch (_) {}
+      const dpr = window.devicePixelRatio || 1;   // null hands the ratio back to MapLibre (follows zoom and screen changes)
+      if (power.low || map.getPixelRatio() !== dpr) try { map.setPixelRatio(power.low ? Math.min(dpr, 2) : null); } catch (_) {}
       for (const id of HEAVY_LAYERS) if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', power.low ? 'none' : 'visible');
     }
     function feedPower(info) {
