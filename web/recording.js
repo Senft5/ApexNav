@@ -88,6 +88,10 @@
   const scorableCorners = (d, corners) => (!d.g_known ? corners
     : corners.filter((c) => { for (let q = c.start; q <= c.end; q++) if (!d.g_known[q]) return false; return true; }));
 
+  /** A record's corner events in the shape Core.driverScore and Core.coach take (5 m bins). */
+  const cornersOf = (d) => d.events.filter((e) => e.type === 'corner').map((e) => ({ start: Math.round(e.start_m / 5), end: Math.round(e.end_m / 5), apex: e.index,
+    apex_mps: e.apex_mph / MPH, code: e.code, call: e.call, dir: e.dir, severity: e.severity, turn_rad: e.turn_rad, mods: e.mods || [] }));
+
   const HAZARDS = new Set(['bump', 'crest', 'dip']);
   const PASS_M = 15;        // another drive went over the spot (its path within this of the hazard)
   const SAME_SPOT_M = 25;   // and found the same kind of hazard this close (GPS at 1 Hz, 5 m samples)
@@ -159,6 +163,6 @@
     return `${s.hits >= 2 ? 'Confirmed' : 'Seen'} on ${s.hits} of ${s.passes} drives`;
   }
 
-  const api = { all, store, remove, parse, repair, scorableCorners, toTrack, corroborate, seenLabel };
+  const api = { all, store, remove, parse, repair, scorableCorners, toTrack, corroborate, seenLabel, cornersOf };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexRecording = api;
 })(typeof window !== 'undefined' ? window : globalThis);
