@@ -1994,10 +1994,10 @@
           };
           // Longer trips also try sections along the quickest route, each planned like a short trip and chained (2 sections,
           // 3 on Max fun): one circle round the middle can't reach the start and end of a long trip, and the public matrix
-          // gives up on long connections. Up to 2 sections the middle circle is planned too and both kinds compete; past
+          // gives up on long connections. Up to 48 km crow fly the middle circle is planned too and both kinds compete; past
           // that it only costs requests (its connectors are too long for the matrix).
           const n = FunRoute.sectionCount(from, to, level === 'max' ? 3 : 2);
-          const plans = n > 2 ? [] : await stretch(from, to, quickS, 'Finding fun roads…', 0.75);
+          const plans = FunRoute.kmBetween(from, to) > 48 ? [] : await stretch(from, to, quickS, 'Finding fun roads…', 0.75);
           if (n > 1) {
             try {
               const quick = cands.reduce((x, y) => (y.timeS < x.timeS ? y : x));
