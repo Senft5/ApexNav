@@ -31,7 +31,7 @@
     return {
       drives: (drives || []).length, miles: Math.round(miles * 10) / 10,
       spots: read('apex.highlights', '[]').length, zones: read('apex.privacyZones', '[]').length,
-      places: read('apex.recentPlaces', '[]').length, signedIn: !!storage.getItem('apex.session'),
+      places: read('apex.recentPlaces', '[]').length, signedIn: !!(storage.getItem('apex.session') || storage.getItem('apex.signedIn')),
     };
   }
 

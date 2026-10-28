@@ -21,6 +21,7 @@ Checked 2026-10-28 against main and App Store Connect (read through the API key 
 | guideline | how |
 |---|---|
 | 5.1.1(v) account deletion in the app | Account → Delete account (`DELETE /api/me`, erases the account and what others hold about it) |
+| 5.1.1 data security | the app's session token lives in the iOS Keychain (this device only, after first unlock); the shell makes the page's API calls (`ApexApiBridge`), so web content never holds it (IDEAS Z-10); every page runs under a Content-Security-Policy (Z-11) |
 | 5.1.1(ii) permission strings | location, always-location and motion strings in project.yml say what each is for |
 | 1.5 support | Settings → Feedback (L-05) sends to the owner in-app (GET /api/ops/feedback), with optional diagnostics and a handle only for a reply; the support URL and contact address still wait on the owner (O-11) |
 | 5.1.2 diagnostics | app health counts (Y-03) are anonymous daily totals with a switch in Settings → Your data, declared as Other diagnostic data, not linked (docs/LISTING.md) |

@@ -2,21 +2,48 @@
 // person is not a signed-in member, these calls resolve to null and local data is untouched.
 (function (root) {
   const list = (v) => (Array.isArray(v) ? v : []);
-  // The iOS app serves these pages from apexnav://app, so /api is the Worker, cross-origin, and the session travels as a
-  // bearer token the shell obtained through ASWebAuthenticationSession (stored in this origin's localStorage, never in
-  // the bundle). On the web it is same-origin with the session cookie.
+  // The iOS app serves these pages from apexnav://app, so /api is the Worker, cross-origin. The session token the shell got
+  // at sign-in lives in the iOS Keychain (IDEAS Z-10) and the shell makes the call (ApexApiBridge, `apexApi`), so page
+  // script never holds it. On the web it is same-origin with the session cookie (HttpOnly).
   const IN_APP = typeof location !== 'undefined' && location.protocol === 'apexnav:';
   const API_BASE = IN_APP ? 'https://apexnav.senftns.workers.dev' : '';
-  const TOKEN_KEY = 'apex.session';
-  const token = () => { try { return IN_APP ? localStorage.getItem(TOKEN_KEY) : null; } catch (_) { return null; } };
-  function setSession(t) { try { if (t) localStorage.setItem(TOKEN_KEY, t); else localStorage.removeItem(TOKEN_KEY); } catch (_) {} }
+  const TOKEN_KEY = 'apex.session', SIGNED_KEY = 'apex.signedIn';   // the token (older builds only) / a plain "signed in" flag
+  const bridge = () => (IN_APP && root.webkit && root.webkit.messageHandlers && root.webkit.messageHandlers.apexApi) || null;
+  const store = (k, v) => { try { if (v) localStorage.setItem(k, v); else localStorage.removeItem(k); } catch (_) {} };
+  const token = () => { try { return IN_APP && !bridge() ? localStorage.getItem(TOKEN_KEY) : null; } catch (_) { return null; } };
+  /** After a sign-in (`t` from an older shell, or true when the shell kept it) or a sign-out (null). */
+  let pending = null;                                                   // a Keychain change the next call waits for
+  function setSession(t) {
+    const b = bridge();
+    if (b) {
+      store(TOKEN_KEY, null);
+      if (typeof t === 'string') pending = Promise.resolve(b.postMessage({ cmd: 'adopt', token: t })).catch(() => {});
+      else if (!t) pending = Promise.resolve(b.postMessage({ cmd: 'signOut' })).catch(() => {});
+    } else if (typeof t === 'string' || !t) store(TOKEN_KEY, t || null);
+    store(SIGNED_KEY, t ? '1' : null);
+  }
+  // A session an older build left in page storage moves into the Keychain once, then leaves the page.
+  try { const old = bridge() && localStorage.getItem(TOKEN_KEY); if (old) { setSession(old); } } catch (_) {}
   /** fetch() for /api/* from either shell. Rejects when offline, like fetch. */
-  function apiFetch(path, init = {}) {
+  async function apiFetch(path, init = {}) {
     const headers = { 'x-apexnav': '1', ...(init.headers || {}) };
+    const b = bridge();
+    if (b) {
+      if (init.body != null && typeof init.body !== 'string') throw new TypeError('apiFetch: string bodies only in the app');
+      if (pending) await pending;
+      let r;
+      try { r = await b.postMessage({ cmd: 'fetch', path, method: init.method || 'GET', headers, body: init.body == null ? null : init.body }); }
+      catch (e) { throw new TypeError('Load failed'); }                       // offline, like fetch
+      const status = r && r.status >= 200 && r.status <= 599 ? r.status : 502;
+      const empty = [204, 205, 304].includes(status);
+      return new Response(empty ? null : (r && r.body) || '', { status, headers: r && r.type ? { 'content-type': r.type } : {} });
+    }
     const t = token();
     if (t) headers.authorization = 'Bearer ' + t;
     return fetch(API_BASE + path, { ...init, headers, credentials: IN_APP ? 'omit' : 'same-origin' });
   }
+  /** Does this phone hold a session? (The app keeps it in the Keychain; this is only the page's flag.) */
+  const signedIn = () => { try { return !!(localStorage.getItem(SIGNED_KEY) || localStorage.getItem(TOKEN_KEY)); } catch (_) { return false; } };
   /** Google sign-in: the web follows the Worker's redirect; the app asks the native shell (Google refuses embedded web views). */
   function signIn() {
     const native = IN_APP && root.webkit && root.webkit.messageHandlers && root.webkit.messageHandlers.apex;
@@ -108,6 +135,6 @@
   }
   const contributionEnabled = async () => { const e = await call('GET', '/api/me/export'); return !!(e && e.member && e.member.contribute); };
 
-  const api = { inApp: IN_APP, apiBase: API_BASE, apiFetch, signIn, signInApple, setSession, contribute, newSegmentId, contributionEnabled, publishScore, board, activity, kudos, kudosReceived, highlightsNear, shareHighlight, rateHighlight, member, pushSegments, sharedWithMe, adopt, shareSegment, friends, crews, crewMembers, removeRemote, toServer, fromServer };
+  const api = { inApp: IN_APP, apiBase: API_BASE, apiFetch, signIn, signInApple, setSession, signedIn, contribute, newSegmentId, contributionEnabled, publishScore, board, activity, kudos, kudosReceived, highlightsNear, shareHighlight, rateHighlight, member, pushSegments, sharedWithMe, adopt, shareSegment, friends, crews, crewMembers, removeRemote, toServer, fromServer };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexSync = api;
 })(typeof window !== 'undefined' ? window : globalThis);
