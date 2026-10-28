@@ -20,6 +20,7 @@
   <script src="sync.js"></script>
   <script src="sensors.js"></script>
   <script src="reroute.js"></script>
+  <script src="eta.js"></script>
   <script src="traffic.js"></script>
   <script src="in_car.js"></script>
   <script src="power.js"></script>
@@ -711,7 +712,9 @@
     const rerouter = new ApexReroute.RerouteMonitor();
     // Traffic on the route ahead (iOS app only, Apple via the shell): web/traffic.js decides, checkTraffic() (ROUTING) asks.
     const trafficMon = new ApexTraffic.TrafficMonitor();
-    const routeWatch = { note: null, frame: null, bestM: 0 };   // strip text while off route; last frame fed; furthest progress
+    const routeWatch = { note: null, frame: null, bestM: 0 };
+    const etaPace = ApexEta.createPace();   // live ETA pace on the current route (paintEta)
+    let etaText = '';   // strip text while off route; last frame fed; furthest progress
     try {
       const saved = JSON.parse(localStorage.getItem('apex.prefs') || 'null');
       if (saved) {
@@ -1616,6 +1619,7 @@
     }
     function setMode(mode) {
       state.mode = mode;
+      etaPace.reset(); etaText = '';                                  // a drive starts (or ends): the pace starts over
       if (mode === 'live') { cancelHold(); closePin(); $('hlOverlay').classList.remove('show'); }
       $('routeCardOptions').hidden = !optionsOffered(plannedRoute);
       paintAlternates();
@@ -1652,7 +1656,7 @@
       state.cursorM = Math.max(0, Math.min(totalM(), startM));
       refreshAutoNight();
       state.spoken.clear();
-      rerouter.routeChanged(); trafficMon.routeChanged(Date.now()); routeWatch.note = null; routeWatch.frame = null; routeWatch.bestM = 0;
+      rerouter.routeChanged(); trafficMon.routeChanged(Date.now()); etaPace.reset(); routeWatch.note = null; routeWatch.frame = null; routeWatch.bestM = 0;
       if (state.mode !== 'live') setMode(t.kind === 'drive' ? 'replay' : 'sim');
       loadTrackOnMap();
       fetchAlpr(t);
@@ -1744,10 +1748,13 @@
     // Junction turns (slight/normal/sharp left and right, U-turns, ramps, roundabouts): fun scoring drops the corners there.
     const TURN_TYPES = new Set([9, 10, 11, 12, 13, 14, 15, 16, 18, 19, 20, 21, 26, 27]);
     function routeOf(trip) {
-      const coords = [], turns = [];
+      const coords = [], turns = [], times = [];
+      let cumS = 0;
       trip.legs.forEach((leg, i) => {
         const shape = decodePolyline6(leg.shape);
         for (const m of leg.maneuvers || []) if (TURN_TYPES.has(m.type) && shape[m.begin_shape_index]) turns.push(shape[m.begin_shape_index]);
+        // the router's own clock along the route: [lon, lat, seconds so far] at each maneuver, for the live ETA (eta.js)
+        for (const m of leg.maneuvers || []) { if (shape[m.begin_shape_index]) times.push([...shape[m.begin_shape_index], cumS]); if (Number.isFinite(m.time)) cumS += m.time; }
         coords.push(...shape.slice(i ? 1 : 0));
       });
       // km on each named road, for "switching to <road>" (traffic detours)
@@ -1759,7 +1766,19 @@
       const sum = trip.summary || {};
       // what the route uses that the driver may have asked to avoid (undefined = the router didn't say)
       const has = { highways: sum.has_highway, tolls: sum.has_toll, ferries: sum.has_ferry };
-      return { coords, turns, names, has, timeS: Number.isFinite(sum.time) ? sum.time : null };
+      return { coords, turns, names, has, times, timeS: Number.isFinite(sum.time) ? sum.time : null };
+    }
+    // The router's maneuver times placed on a track: [[metres along it, seconds so far]], in order (ApexEta.routerLeft).
+    function timeMarksOf(t, r) {
+      const out = [];
+      if (!r || !Array.isArray(r.times) || !t || !Array.isArray(t.lat) || !t.lat.length) return out;
+      let hint = 0;
+      for (const [lon, lat, sec] of r.times) {
+        const h = Core.nearestIndex(lat, lon, t.lat, t.lon, hint, 2000);
+        if (h.distM > 60) continue;                        // a spur cut from a loop, or a point the track doesn't pass
+        hint = h.index; out.push([t.dist[h.index], sec]);
+      }
+      return out;
     }
     // [{ coords, turns: [[lon, lat]], names, timeS }]: the route, then up to `alternates` other ways (two-point requests
     // only). extra: more request options, e.g. { exclude_polygons }.
@@ -1988,7 +2007,7 @@
         let r = null;
         try { [r] = await valhallaRoutes(points); } catch (_) { try { [r] = await osrmRoutes(points); } catch (err) { toast('Couldn\'t build the route. Check signal and try again.'); return; } }
         t = await trackFromPolyline(r.coords, id, name);
-        Object.assign(t, { request, fun: funOf(t, r.turns), timeS: r.timeS, unavoided: FunRoute.unavoided(avoid, r) });
+        Object.assign(t, { request, fun: funOf(t, r.turns), timeS: r.timeS, timeMarks: timeMarksOf(t, r), unavoided: FunRoute.unavoided(avoid, r) });
       }
       if (explore) showExplore(null);                               // a route is up: the explore list has done its job
       if (t.request) for (const v of t.request.via) v.distM = t.dist[Core.nearestIndex(v.lat, v.lon, t.lat, t.lon, -1).index];
@@ -2069,12 +2088,21 @@
       const r = rerouter.update({ t: Date.now(), distToRouteM: hit.distM, accuracyM: Number.isFinite(L.accuracy_m) ? L.accuracy_m : null,
                                   speedMps: L.speed_mps, progressM: near ? track.dist[hit.index] : null });
       if (!r.off && near) routeWatch.bestM = Math.max(routeWatch.bestM, track.dist[hit.index]);
+      paintEta(!r.off && near ? track.dist[hit.index] : null);
       if (r.backOn) { routeWatch.note = null; say('Back on route'); }
       if (r.request) reroute(track);
     }
     // Farther than 40 m but not yet confirmed by the monitor (its 5 s hold): notes are blank, but don't call it off route yet.
     const offRouteText = () => rerouter.reason === 'wrong_way' ? (routeWatch.note && routeWatch.note.endsWith('no signal to reroute') ? 'Wrong way · no signal to reroute' : 'Wrong way')
                                                        : routeWatch.note || (!rerouter.off ? 'Checking route…' : 'Off route');
+    // Live time left and arrival on a planned route (eta.js): the router's time ahead at your pace on this route so far.
+    // Blank off route, on a recorded drive, or when the router gave no time (OSRM fallback without one, an old restore).
+    function paintEta(atM) {
+      const left = track && track.kind === 'route' && atM != null ? ApexEta.routerLeft(atM, totalM(), track.timeS, track.timeMarks) : null;
+      const now = Date.now(), est = ApexEta.estimate(left, etaPace.update(now, left), now);
+      const text = est ? `${est.leftS < 60 ? '<1' : Math.round(est.leftS / 60)} min left · ${new Date(est.arriveAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : '';
+      if (text !== etaText) { etaText = text; paintDriveStat(); }
+    }
     async function reroute(t) {
       const req = t.request, L = state.live;
       if (!req || !L) { routeWatch.note = 'Off route'; return; }   // a recorded drive has no plan to rebuild
@@ -2091,7 +2119,7 @@
       if (track !== t || state.mode !== 'live') return;           // the driver loaded something else meanwhile
       const nt = await trackFromPolyline(r.coords, t.id, t.name);
       if (track !== t || state.mode !== 'live') return;
-      Object.assign(nt, { request: { from: null, to: req.to, via: ahead }, fun: funOf(nt, r.turns), timeS: r.timeS });
+      Object.assign(nt, { request: { from: null, to: req.to, via: ahead }, fun: funOf(nt, r.turns), timeS: r.timeS, timeMarks: timeMarksOf(nt, r) });
       await buildRoute(null, t.id, t.name, nt);                     // activate() resets the monitor for the new route
     }
     // Traffic ahead (iOS app only; docs/ARCHITECTURE.md section 8). Every 2 min while on a planned route, Apple times the next
@@ -2186,7 +2214,7 @@
       }
       const at = (v) => Core.nearestIndex(v.lat, v.lon, nt.lat, nt.lon, -1).index;
       const via = [...ahead, ...along].map(v => ({ v, i: at(v) })).sort((a, b) => a.i - b.i).map(x => x.v);   // in order along it
-      Object.assign(nt, { request: { from: null, to: req.to, via }, fun: funOf(nt, route.turns), timeS: route.timeS, unavoided: FunRoute.unavoided(avoid, route) });
+      Object.assign(nt, { request: { from: null, to: req.to, via }, fun: funOf(nt, route.turns), timeS: route.timeS, timeMarks: timeMarksOf(nt, route), unavoided: FunRoute.unavoided(avoid, route) });
       await buildRoute(null, t.id, t.name, nt);                     // activate() restarts the traffic clock for the new route
     }
     // Members: what others measured on these roads (d.t.measured) and a score adjustment for it (d.adjust: rough
@@ -2295,7 +2323,7 @@
       if (was && (routeOptions !== o || plannedRoute !== was || state.mode === 'live')) return null;
       // A winning alternate is pinned with shaping points along it, so a reroute stays on it.
       const via = c.kind === 'router' && c.extraS > 0 ? FunRoute.alongPoints(c.route.coords) : c.via;
-      Object.assign(t, { measured: c.t.measured, fun: c.fun, timeS: c.timeS, extraS: c.extraS, funLevel: o.level, glareMin: c.glare ? Math.round(c.glare.minutes) : null, townKm: c.townKm,
+      Object.assign(t, { measured: c.t.measured, fun: c.fun, timeS: c.timeS, timeMarks: timeMarksOf(t, c.route), extraS: c.extraS, funLevel: o.level, glareMin: c.glare ? Math.round(c.glare.minutes) : null, townKm: c.townKm,
                          unavoided: FunRoute.unavoided(avoid, c.route), why: whyText(FunRoute.why(c, o.quickest), fewerTownKm(c, o.quickest), c.extraS),
                          request: { ...o.request, via: via.map(p => ({ lat: p.lat, lon: p.lon, shaping: true })) } });
       routeOptions = Object.assign(o, { picked: i, current: t });
@@ -2431,6 +2459,7 @@
         t.fun = funOf(t, r.turns);
         t.unavoided = FunRoute.unavoided(avoid, r);
         t.timeS = r.timeS;
+        t.timeMarks = timeMarksOf(t, r);
         const glare = FunRoute.glare(t, r.timeS, new Date());
         t.glareMin = glare ? Math.round(glare.minutes) : null;
         const s = scoreLoop(t, miles, targetS && Number.isFinite(r.timeS) ? { timeS: r.timeS, targetS } : null);
@@ -2543,7 +2572,7 @@
         const t = await trackFromPolyline(r.coords, 'explore', name);
         if (explore !== e || state.mode === 'live') return;         // cleared, or a drive started, while routing
         const glare = FunRoute.glare(t, r.timeS, new Date());
-        Object.assign(t, { fun: funOf(t, r.turns), timeS: r.timeS, unavoided: FunRoute.unavoided(avoid, r), glareMin: glare ? Math.round(glare.minutes) : null,
+        Object.assign(t, { fun: funOf(t, r.turns), timeS: r.timeS, timeMarks: timeMarksOf(t, r), unavoided: FunRoute.unavoided(avoid, r), glareMin: glare ? Math.round(glare.minutes) : null,
                            request: { from: null, to: { lat: end.lat, lon: end.lon }, via: pts.slice(1, -1).map(q => ({ lat: q.lat, lon: q.lon, shaping: true })) } });
         await buildRoute(null, 'explore', name, t);
         toast(`${name} · ${Math.max(1, Math.round(p.awayS / 60))} min to the start, then ${(p.s.km / 1.609344).toFixed(1)} mi`);
@@ -3444,6 +3473,7 @@
       if (s.gps === 'denied') main.push('Location is off');
       else if (r && r.samples > 0) main.push(`<b>● Rec</b> ${(r.km / 1.609344).toFixed(2)} mi`);
       else main.push(s.gps === 'on' ? 'Starting…' : 'Finding GPS…');
+      if (etaText) main.push(etaText);
       if (NATIVE_SHELL) { const a = ambientStats(); if (a) main.push(a.error ? 'Sharing · retrying' : a.paused ? 'Sharing paused' : `Sharing ${(a.km / 1.609344).toFixed(1)} mi`); }
       else if (drive.share === 'on') main.push(drive.shareErr ? 'Sharing · retrying' : `Sharing ${(drive.shareKm / 1.609344).toFixed(1)} mi`);
       else if (drive.share === 'stopped') main.push('Sharing paused');

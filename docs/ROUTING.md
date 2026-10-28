@@ -142,6 +142,15 @@ better road. The route card warns "Low sun ahead for ~N min" from 3 minutes. Che
 late October, every candidate has 22–34 min of it and the card says so. Not kept when a route is restored later
 (the time has moved on).
 
+## Time left while driving
+
+While a planned route (A→B, loop or Explore) is driven, the drive bar shows "48 min left · 5:12 PM" (web/eta.js,
+WORKER_QUEUE eta-1). The time is the router's own for the part ahead: its maneuver times placed along the track
+(`timeMarksOf`), else its total time spread evenly by distance. It is scaled by your pace on this route so far: real
+seconds over router seconds for the part driven, used only after 2 min and 1 router-minute of driving, bounded to
+0.6–1.8 and smoothed, so a red light or a jam doesn't swing it (tests/test_eta.py). A reroute or a new drive starts the pace
+over. Blank off route, on a recorded drive, or when the router gave no time. No traffic goes into it.
+
 ## Fun score (map only)
 
 `ApexFunRoute.score` on 5 m geometry (`geometry()`: resample, curvature, corner detection from the

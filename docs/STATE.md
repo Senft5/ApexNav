@@ -1,5 +1,10 @@
 # APEX NAV — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-10-28: live time left and arrival
+- #136 merged (avoid towns). #154: eta-1 / R-07, the drive bar shows "N min left · h:mm" on a planned route, from the router's maneuver times ahead scaled by your pace on this route (web/eta.js, docs/ROUTING.md "Time left while driving"). Checked in a desktop browser with fake GPS; not on a phone or CarPlay.
+- West Knoxville → Townsend on Fun (no stage detour) checked: the best stage plans route at 91–92 min against an 89 min budget (quickest is a 63 min highway alternate); not a bug. The matrix plan estimate ran ~9 min short of the routed time there.
+- Exact next task: R-11 stage direction by climb/descent; or show the ETA on CarPlay.
+
 ## Session 2026-10-28: web inspector off in release (Z-09)
 - #143: the iOS web view is inspectable only in DEBUG builds (Safari's Web Inspector could read the session token from a release IPA). The CI IPA is Release, so a phone trace through Web Inspector now needs a Debug build. (Q-23 landed separately in #147.)
 - Exact next task: the remaining audit rows (Z-10, Z-11, Z-15, Y-13 to Y-15).
