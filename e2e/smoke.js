@@ -191,6 +191,33 @@ flow('a reported road closure: routing asks the router to go around it (Worker a
   check(bodies.length && bodies.every((b) => JSON.stringify(b.exclude_locations) === JSON.stringify([{ lat: 35.86, lon: -83.95 }])), 'every route request goes around the closure, and only the closure: ' + JSON.stringify(bodies.map((b) => b.exclude_locations)));
 }, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
 
+flow('share your ETA: the route card makes a link; its page says who and when, never where (Worker stubbed, IDEAS S-19)', async (page, base) => {
+  await page.route('https://photon.komoot.io/**', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ features: [
+    { geometry: { coordinates: [-83.9700, 35.7565] }, properties: { name: 'Maryville', state: 'Tennessee' } }] }) }));
+  await page.route('https://valhalla1.openstreetmap.de/route', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify(stubTrip(JSON.parse(route.request().postData()).locations)) }));
+  const posts = [];
+  await page.route(base + '/api/**', (route) => {
+    const u = new URL(route.request().url()), m = route.request().method();
+    const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/eta' && m === 'POST') { posts.push(JSON.parse(route.request().postData())); return json({ token: 'TOKENTOKENTOKENTOKENTOKEN123' }, 201); }
+    if (u.pathname === '/api/eta/TOKENTOKENTOKENTOKENTOKEN123') return json({ handle: 'nate', arrive_at: new Date(Date.now() + 14 * 60000).toISOString(), updated_at: new Date().toISOString(), ended: null });
+    return json([]);
+  });
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map);
+  await page.click('#destInput'); await page.fill('#destInput', 'Maryville');
+  await page.waitForSelector('#placeList .place', { timeout: 10000 });
+  await page.click('#placeList .place');
+  await page.waitForFunction(() => !document.getElementById('etaShareBtn').hidden, null, { timeout: 20000 });
+  await page.evaluate(() => document.getElementById('etaShareBtn').click());
+  await page.waitForFunction(() => document.getElementById('etaShareBtn').textContent === 'Stop sharing ETA');
+  check(posts.length === 1 && posts[0].left_s === 900, 'started with the route time: ' + JSON.stringify(posts));
+  await page.goto(base + '/eta.html?t=TOKENTOKENTOKENTOKENTOKEN123');
+  await page.waitForFunction(() => /@nate is about 1[34] min away/.test(document.getElementById('title').textContent));
+  check(/Arriving around/.test(await page.textContent('#sub')) && /not where they are/.test(await page.textContent('footer')), 'who, when, and the promise');
+}, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
+
 flow('the car connects: CarPlay offers Start drive, and an apexnav://open?go=drive link starts one', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.goto(base + '/index.html');

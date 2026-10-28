@@ -35,6 +35,7 @@
   <script src="crew_events.js"></script>
   <script src="health.js"></script>
   <script src="scenic.js"></script>
+  <script src="eta_share.js"></script>
   <script src="incident.js"></script>
   <script src="traffic.js"></script>
   <script src="in_car.js"></script>
@@ -466,6 +467,7 @@
                 <button class="ink-btn" id="routePreviewBtn">Preview</button>
                 <button class="ink-btn" id="routeSaveBtn" aria-pressed="false">Save</button>
                 <button class="ink-btn" id="routeShareBtn">Share</button>
+                <button class="ink-btn" id="etaShareBtn" aria-pressed="false" hidden>Share ETA</button>
               </div>
               <div class="stack-8" id="routeSharePick"></div>
             </section>
@@ -2269,7 +2271,7 @@
       plannedRoute = t;
       activate(t, 0, { quiet: state.mode !== 'live' });
       renderRouteCard(t);
-      persistPlanned(t); paintSaveBtn();
+      persistPlanned(t); paintSaveBtn(); paintEtaShareBtn();
       openPlan(false);
       markDestination(t);
       if (state.mode !== 'live' && !booting) lockOnDestination(t);
@@ -2353,9 +2355,41 @@
     function paintEta(atM) {
       const left = track && track.kind === 'route' && atM != null ? ApexEta.routerLeft(atM, totalM(), track.timeS, track.timeMarks) : null;
       const now = Date.now(), est = ApexEta.estimate(left, etaPace.update(now, left), now);
+      if (est) pushEtaShare(est.leftS, atM);
       const text = est ? `${est.leftS < 60 ? '<1' : Math.round(est.leftS / 60)} min left · ${new Date(est.arriveAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : '';
       if (text !== etaText) { etaText = text; paintDriveStat(); }
     }
+    // Share your ETA (IDEAS S-19; backend/src/eta_share.ts, web/eta.html): a link that shows only the handle and arrival
+    // time, refreshed about once a minute while the route is driven, ended on arrival or with the button.
+    const etaShare = { token: null, at: 0, left: null };
+    async function pushEtaShare(leftS, atM) {
+      if (!etaShare.token || performance.now() - etaShare.at < 60000) return;
+      etaShare.at = performance.now();
+      const arrived = track && atM != null && totalM() - atM < 150;
+      try { await ApexSync.apiFetch(`/api/eta/${etaShare.token}`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(arrived ? { ended: 'arrived' } : { left_s: Math.round(leftS) }) }); } catch (_) { /* next minute */ }
+      if (arrived) { etaShare.token = null; paintEtaShareBtn(); toast('Arrived. Your shared ETA now says so.'); }
+    }
+    function paintEtaShareBtn() {
+      const b = $('etaShareBtn'), on = !!etaShare.token;
+      b.textContent = on ? 'Stop sharing ETA' : 'Share ETA'; b.setAttribute('aria-pressed', String(on));
+      b.hidden = !on && !(plannedRoute && Number.isFinite(plannedRoute.timeS));
+    }
+    $('etaShareBtn').addEventListener('click', async () => {
+      if (etaShare.token) {
+        const t = etaShare.token; etaShare.token = null; paintEtaShareBtn();
+        try { await ApexSync.apiFetch(`/api/eta/${t}`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ended: 'stopped' }) }); } catch (_) {}
+        toast('Stopped sharing your ETA.'); return;
+      }
+      const t = plannedRoute;
+      if (!t || !Number.isFinite(t.timeS)) return;
+      let r = null;
+      try { r = await ApexSync.apiFetch('/api/eta', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ left_s: Math.round(t.timeS) }) }); } catch (_) {}
+      if (!r) { toast('No signal. Try again in a moment.'); return; }
+      if (r.status === 401 || r.status === 403) { toast('Sign in (Crew) to share your ETA.'); return; }
+      if (!r.ok) { toast(r.status === 429 ? 'You\'re sharing three already. Stop one first.' : 'Couldn\'t share it. Try again.'); return; }
+      etaShare.token = (await r.json()).token; etaShare.at = performance.now(); paintEtaShareBtn();
+      copyText(`${shareOrigin()}/eta.html?t=${etaShare.token}`, 'Link copied. It shows when you\'ll arrive, never where you are.', 'My ETA');
+    });
     async function reroute(t) {
       const req = t.request, L = state.live;
       if (!req || !L) { routeWatch.note = 'Off route'; return; }   // a recorded drive has no plan to rebuild
@@ -2892,6 +2926,7 @@
       showExplore(null);
       markDestination(null);
       try { sessionStorage.removeItem(PLANNED); localStorage.removeItem(PLANNED); } catch (_) {}
+      paintEtaShareBtn();
       $('destInput').value = '';
       renderRouteCard(null);
       if (track && track.kind === 'route' && state.mode !== 'live') {

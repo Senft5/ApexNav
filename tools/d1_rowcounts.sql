@@ -35,5 +35,6 @@ SELECT
   (SELECT COUNT(*) FROM crew_events) AS crew_events,
   (SELECT COUNT(*) FROM crew_event_rsvps) AS crew_event_rsvps,
   (SELECT COUNT(*) FROM health_counts) AS health_counts,
+  (SELECT COUNT(*) FROM eta_shares) AS eta_shares,
   (SELECT COUNT(*) FROM d1_migrations) AS d1_migrations
 ;

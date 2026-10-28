@@ -2,6 +2,7 @@
 // them forever. Used account invites stay (they record who invited whom, which moderation reads as invite chains).
 import { Env } from "./util";
 import { HEALTH_SWEEP } from "./health";
+import { ETA_SWEEP } from "./eta_share";
 
 export const SWEEPS: Record<string, string> = {
   sessions: "DELETE FROM sessions WHERE expires_at <= datetime('now')",
@@ -14,6 +15,7 @@ export const SWEEPS: Record<string, string> = {
   crew_event_rsvps: "DELETE FROM crew_event_rsvps WHERE event_id IN (SELECT id FROM crew_events WHERE starts_at <= datetime('now', '-7 days'))",
   crew_events: "DELETE FROM crew_events WHERE starts_at <= datetime('now', '-7 days')",
   health_counts: HEALTH_SWEEP,
+  eta_shares: ETA_SWEEP,
 };
 
 export async function sweepExpired(env: Env): Promise<Record<string, number>> {

@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="robots" content="noindex" />
+  <title>ApexNav · Arrival time</title>
+  <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
+  <style>
+    :root { --paper: #ece3d3; --ink: #1b1914; --dim: #5f594d; --red: #c8102e; }
+    body { margin: 0; background: var(--paper); color: var(--ink); font: 18px/1.45 system-ui, -apple-system, sans-serif; }
+    main { max-width: 520px; margin: 0 auto; padding: 56px 20px; }
+    h1 { font-size: 34px; line-height: 1.15; margin: 0 0 10px; }
+    #sub { font-size: 22px; margin: 0 0 18px; }
+    #note, footer { color: var(--dim); font-size: 15px; }
+    footer { margin-top: 48px; }
+    footer a { color: var(--ink); }
+    .mark { width: 40px; height: 40px; margin-bottom: 28px; }
+  </style>
+</head>
+<body>
+<main>
+  <img class="mark" src="brand/mark.svg" alt="ApexNav" />
+  <h1 id="title" aria-live="polite">Loading…</h1>
+  <p id="sub"></p>
+  <p id="note"></p>
+  <footer>Shared from <a href="about.html">ApexNav</a>. Only the arrival time is shared: not where they are, their route or where they're going.</footer>
+</main>
+<script src="eta_share.js"></script>
+<script>
+  (() => {
+    const t = new URLSearchParams(location.search).get('t') || '';
+    const paint = (v) => { const x = ApexEtaShare.viewText(v); for (const k of ['title', 'sub', 'note']) document.getElementById(k).textContent = x[k]; return v; };
+    let last = null;
+    async function load() {
+      try {
+        const r = await fetch(`/api/eta/${encodeURIComponent(t)}`, { headers: { 'x-apexnav': '1' }, cache: 'no-store' });
+        last = r.ok ? await r.json() : (r.status === 404 ? null : last);
+      } catch (_) { /* offline: keep what we have */ }
+      paint(last);
+      if (!last || !last.ended) setTimeout(load, 30000);
+    }
+    setInterval(() => last && !last.ended && paint(last), 15000);   // the minutes count down between polls
+    load();
+  })();
+</script>
+</body>
+</html>
