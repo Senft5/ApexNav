@@ -251,6 +251,8 @@ struct ApexCockpitWebView: UIViewRepresentable {
         contentController.addUserScript(embedFlag)
         // WKUserContentController retains its handlers strongly; the bridge only holds the shell weakly.
         contentController.add(ApexScriptBridge(shell: shell), name: "apex")
+        // The Worker, on the page's behalf, with the session from the Keychain (IDEAS Z-10): the page never holds the token.
+        contentController.addScriptMessageHandler(ApexApiBridge(), contentWorld: .page, name: "apexApi")
 
         let config = WKWebViewConfiguration()
         config.userContentController = contentController
@@ -279,7 +281,7 @@ struct ApexCockpitWebView: UIViewRepresentable {
         webView.allowsLinkPreview = false
         webView.allowsBackForwardNavigationGestures = false
         #if DEBUG
-        // Safari's Web Inspector can read page storage, the session token included: debug builds only, never the release IPA.
+        // Safari's Web Inspector reads page storage (the session token is in the Keychain, IDEAS Z-10): debug builds only.
         webView.isInspectable = true
         #endif
         webView.navigationDelegate = context.coordinator
@@ -295,6 +297,7 @@ struct ApexCockpitWebView: UIViewRepresentable {
 
     static func dismantleUIView(_ uiView: WKWebView, coordinator: Coordinator) {
         uiView.configuration.userContentController.removeScriptMessageHandler(forName: "apex")
+        uiView.configuration.userContentController.removeScriptMessageHandler(forName: "apexApi", contentWorld: .page)
     }
 
     /// Lets bundled pages XHR/fetch sibling files (e.g. local styles/glyphs) from a file:// origin.
@@ -587,8 +590,8 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
 
     // MARK: Sign-in (Google refuses OAuth inside an embedded web view)
     // The system sheet runs the Worker's Google flow with a PKCE challenge; the Worker's callback redirects to
-    // apexnav://auth?code=... (single use, 2 min); the shell trades code + verifier for a session token and hands it to
-    // the page, which sends it as a bearer token. No secrets in the bundle.
+    // apexnav://auth?code=... (single use, 2 min); the shell trades code + verifier for a session token and keeps it in
+    // the Keychain; the page's /api calls go through ApexApiBridge, which adds it (IDEAS Z-10). No secrets in the bundle.
     private static let apiBase = URL(string: "https://apexnav.senftns.workers.dev")!
     private var authSession: ASWebAuthenticationSession?
 
@@ -633,7 +636,8 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
                   let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let token = obj["token"] as? String,
                   token.range(of: "^[A-Za-z0-9_-]{20,200}$", options: .regularExpression) != nil else { signInFailed("error"); return }
-            evaluate("window.apex && window.apex.onNative && window.apex.onNative({type:'session',token:'\(token)'}); void 0;")
+            guard ApexKeychain.setSession(token) else { signInFailed("error"); return }
+            evaluate("window.apex && window.apex.onNative && window.apex.onNative({type:'session',signedIn:true}); void 0;")
         } catch {
             signInFailed("offline")
         }
@@ -698,7 +702,8 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
                   let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let token = obj["token"] as? String,
                   token.range(of: "^[A-Za-z0-9_-]{20,200}$", options: .regularExpression) != nil else { signInFailed("error"); return }
-            evaluate("window.apex && window.apex.onNative && window.apex.onNative({type:'session',token:'\(token)'}); void 0;")
+            guard ApexKeychain.setSession(token) else { signInFailed("error"); return }
+            evaluate("window.apex && window.apex.onNative && window.apex.onNative({type:'session',signedIn:true}); void 0;")
         } catch {
             signInFailed("offline")
         }
@@ -1250,6 +1255,86 @@ final class ApexAppleSignIn: NSObject, ASAuthorizationControllerDelegate, ASAuth
     nonisolated func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
         MainActor.assumeIsolated {
             UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.keyWindow }.first ?? ASPresentationAnchor()
+        }
+    }
+}
+
+// MARK: Session in the Keychain (IDEAS Z-10)
+
+/// The app's session token: this device only, readable after the first unlock (a drive can start from the lock screen).
+enum ApexKeychain {
+    private static let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
+                                               kSecAttrService as String: "com.senft.ApexNav.session",
+                                               kSecAttrAccount as String: "session"]
+
+    static func session() -> String? {
+        var q = query
+        q[kSecReturnData as String] = true
+        q[kSecMatchLimit as String] = kSecMatchLimitOne
+        var out: CFTypeRef?
+        guard SecItemCopyMatching(q as CFDictionary, &out) == errSecSuccess, let data = out as? Data else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    @discardableResult
+    static func setSession(_ token: String?) -> Bool {
+        SecItemDelete(query as CFDictionary)
+        guard let token else { return true }
+        guard token.range(of: "^[A-Za-z0-9_-]{20,200}$", options: .regularExpression) != nil else { return false }
+        var q = query
+        q[kSecValueData as String] = Data(token.utf8)
+        q[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        return SecItemAdd(q as CFDictionary, nil) == errSecSuccess
+    }
+}
+
+/// /api/* for the page (web/sync.js apiFetch): the request goes out from here with the Keychain's bearer token and the
+/// answer comes back as { status, type, body }. Also takes the session over from older builds' page storage (`adopt`),
+/// forgets it (`signOut`) and says whether there is one (`hasSession`). Only the app's own top-level page is answered.
+@MainActor
+final class ApexApiBridge: NSObject, WKScriptMessageHandlerWithReply {
+    private static let base = "https://apexnav.senftns.workers.dev"
+    private static let userAgent: String = {
+        let info = Bundle.main.infoDictionary
+        return "ApexNav/\(info?["CFBundleShortVersionString"] as? String ?? "?") (\(info?["CFBundleVersion"] as? String ?? "?"))"
+    }()
+
+    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage,
+                               replyHandler: @escaping (Any?, String?) -> Void) {
+        guard message.frameInfo.isMainFrame, message.frameInfo.securityOrigin.protocol == ApexWebBundle.scheme,
+              let dict = message.body as? [String: Any] else { replyHandler(nil, "refused"); return }
+        switch dict["cmd"] as? String {
+        case "adopt":
+            replyHandler(ApexKeychain.setSession(dict["token"] as? String), nil)
+        case "signOut":
+            replyHandler(ApexKeychain.setSession(nil), nil)
+        case "hasSession":
+            replyHandler(ApexKeychain.session() != nil, nil)
+        case "fetch":
+            guard let path = dict["path"] as? String, path.hasPrefix("/api/"), !path.contains(".."), !path.contains("//"),
+                  let url = URL(string: Self.base + path) else { replyHandler(nil, "bad_path"); return }
+            var req = URLRequest(url: url, timeoutInterval: 30)
+            req.httpMethod = ((dict["method"] as? String) ?? "GET").uppercased()
+            for (k, v) in (dict["headers"] as? [String: String]) ?? [:] where ["content-type", "x-apexnav"].contains(k.lowercased()) {
+                req.setValue(v, forHTTPHeaderField: k)
+            }
+            req.setValue("1", forHTTPHeaderField: "x-apexnav")
+            req.setValue("\(ApexWebBundle.scheme)://app", forHTTPHeaderField: "origin")
+            req.setValue(Self.userAgent, forHTTPHeaderField: "user-agent")
+            if let token = ApexKeychain.session() { req.setValue("Bearer \(token)", forHTTPHeaderField: "authorization") }
+            if let body = dict["body"] as? String { req.httpBody = Data(body.utf8) }
+            Task {
+                do {
+                    let (data, resp) = try await URLSession.shared.data(for: req)
+                    let http = resp as? HTTPURLResponse
+                    replyHandler(["status": http?.statusCode ?? 0, "type": http?.value(forHTTPHeaderField: "content-type") ?? "",
+                                  "body": String(data: data, encoding: .utf8) ?? ""], nil)
+                } catch {
+                    replyHandler(nil, "offline")
+                }
+            }
+        default:
+            replyHandler(nil, "unknown")
         }
     }
 }
