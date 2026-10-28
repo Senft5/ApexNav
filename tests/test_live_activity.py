@@ -23,3 +23,14 @@ def test_shell_and_page():
     assert "await activity.end(nil, dismissalPolicy: .immediate)" in swift
     assert "activity('start'" in html and "activity('end')" in html and "if (live) pushActivity(notes);" in html
     assert "@main" in read("LiveActivity", "ApexLiveWidget.swift")
+
+
+def test_quick_drive_widget_and_control():
+    src = read("LiveActivity", "ApexQuickWidget.swift")
+    bundle = read("LiveActivity", "ApexLiveWidget.swift")
+    assert 'URL(string: "apexnav://open?go=drive")' in src                      # the link the app already takes (C-05)
+    assert ".widgetURL(driveURL)" in src and "OpenURLIntent(driveURL)" in src
+    assert "ApexQuickWidget()" in bundle and "if #available(iOS 18.0, *) { ApexDriveControl() }" in bundle
+    assert '"go"' in read("ApexNavApp.swift")                                    # the app accepts go=drive
+    yml = read(".github", "workflows", "build.yml")
+    assert "'LiveActivity/**'" in yml                                             # a PR that changes the extension builds it

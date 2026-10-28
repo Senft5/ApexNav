@@ -9,7 +9,7 @@ on:
     branches: [main]
     paths-ignore: ['docs/**', 'tests/**', 'tools/**', 'web/voices/**', 'backend/**', 'e2e/**', '**.md', 'LICENSE', 'wrangler.jsonc']
   pull_request:
-    paths: ['ApexNavApp.swift', 'Assets.xcassets/**', 'ApexKit/**', 'UITests/**', 'project.yml', '.github/workflows/build.yml']
+    paths: ['ApexNavApp.swift', 'LiveActivity/**', 'Assets.xcassets/**', 'ApexKit/**', 'UITests/**', 'project.yml', '.github/workflows/build.yml']
   workflow_dispatch:
 
 # A newer push to a PR cancels its older run. On main a run in progress always finishes (a newer merge waits, and only

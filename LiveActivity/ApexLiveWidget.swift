@@ -4,7 +4,11 @@ import WidgetKit
 
 @main
 struct ApexLiveBundle: WidgetBundle {
-    var body: some Widget { ApexDriveLiveActivity() }
+    var body: some Widget {
+        ApexDriveLiveActivity()
+        ApexQuickWidget()
+        if #available(iOS 18.0, *) { ApexDriveControl() }
+    }
 }
 
 /// The drive on the lock screen and in the Dynamic Island: the next note and how far it is, and time left on a route.

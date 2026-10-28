@@ -235,7 +235,7 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 | U-07 | Glanceable cockpit: one number and one note readable at arm's length in sunlight | H | M | partial (drive bar: big Rec mileage, problems only; lead pace note 32 px distance, 21 px call, 56 px tulip) | car HMI guidelines |
 | U-08 | Motion design pass: route reveal, sheet springs, note transitions, under 200 ms, reduced-motion respected | M | M | partial (pace notes slide on in 160 ms when one is passed) | Apple Maps |
 | U-09 | Haptics on notes and hazards (subtle, configurable) | M | S | done (this PR: a light tap on each pace note, a warning pattern on hazards, via the shell's Taptic Engine; Haptics switch, on by default) | Apple Maps turn haptics on Watch |
-| U-10 | Home screen and lock screen widgets: nearby best stage, last drive score, crew event | M | M | todo | iOS widgets |
+| U-10 | Home screen and lock screen widgets: nearby best stage, last drive score, crew event | M | M | partial (a Start-a-drive widget for the home and lock screen and a Control Center button on iOS 18, opening apexnav://open?go=drive; widgets with data (last score, next crew drive) need an App Group) | iOS widgets |
 | U-11 | Live Activity / Dynamic Island: next note, distance to stage, ETA | H | M | done (ApexNavLive widget extension; the cockpit pushes the next note while a drive runs) | Apple Maps, Uber |
 | U-12 | Apple Watch: next note as a tap on the wrist, drive summary | M | L | todo | Apple Maps on Watch |
 | U-13 | Map style polish: road character colours (twist, surface) as an optional layer | H | M | partial: Twisty roads switch (map shape); surface todo | Kurviger curvy colours, Calimoto |
@@ -265,7 +265,7 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 | O-10 | In-app "what's new" sheet after an update, one screen | L | S | done (web/whats_new.js: once per release, not on a first install or over a link; edit NEWS and its id when a release adds something drivers notice) | — |
 | O-11 | Privacy policy and terms of use pages, linked in Settings and at sign-in, policy URL in App Store Connect; terms carry the no-tolerance rule for objectionable content (guideline 1.2). Drafted from the real data flows, owner approves (Z-07) | H | S | partial (this PR: pages drafted and linked; owner approves the text and the contact line, then the URL goes into App Store Connect) | App Store guidelines 5.1.1(i), 1.2 |
 | O-12 | App Review access: a reviewer sign-in path that needs no invite, and review notes (drives need a car; replays show the cockpit) | H | S | partial (this PR: a long-lived review code, only its hash in the repo, makes a reviewer's account a member; the owner pastes the code and notes into App Store Connect) | App Store guideline 2.1 |
-| O-13 | Native surfaces that make the app more than a web view (Live Activity, widgets, CarPlay) named in the review notes | M | M | partial (Live Activity shipped; widgets U-10, CarPlay to come) | App Store guideline 4.2 |
+| O-13 | Native surfaces that make the app more than a web view (Live Activity, widgets, CarPlay) named in the review notes | M | M | partial (Live Activity, a Start-a-drive widget and Control Center button shipped; CarPlay to come) | App Store guideline 4.2 |
 
 ## 8. CarPlay, Android Auto and in-car (C)
 
