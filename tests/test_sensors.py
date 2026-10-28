@@ -42,7 +42,7 @@ out.accel = line(10, 20).lon_g; out.brake = line(20, 10).lon_g; out.straightLat 
 { const fb = new S.FrameBuilder(), rec = new S.Recorder();
   for (let t = 0; t <= 50; t++) rec.add(fb.addFix({ t: t * 1000, ...at(t * 20, 0), accuracy: 5, speed: 20, heading: 90, altitude: 100 + t }));
   const csv = rec.toCsv().trim().split('\n'), rows = csv.slice(1).map((l) => l.split(','));
-  out.rec = { n: rows.length, km: rec.km, head: csv[0], gaps: rows.slice(1).every((r, i) => Math.abs(+r[1] - +rows[i][1] - 5) < 1e-6), camberBlank: rows.every((r) => r[8] === ''), mph: +rows[10][5], src: rows[3][11], lonGBlankEarly: rows[0][6] }; }
+  out.rec = { n: rows.length, km: rec.km, head: csv[0], gaps: rows.slice(1).every((r, i) => Math.abs(+r[1] - +rows[i][1] - 5) < 1e-6), camberBlank: rows.every((r) => r[8] === ''), mph: +rows[10][5], src: rows[3][12], peakBlank: rows.every((r) => r[11] === ''), lonGBlankEarly: rows[0][6] }; }
 // native frames: camber and crest are kept only while the mount calibration is locked
 for (const cal of ['locked', 'default', 'awaitingPull']) {
   const rec = new S.Recorder();
@@ -50,6 +50,20 @@ for (const cal of ['locked', 'default', 'awaitingPull']) {
   const rows = rec.toCsv().trim().split('\n').slice(1).map((l) => l.split(','));
   out['native_' + cal] = { camber: [...new Set(rows.map((r) => r[8]))], crest: [...new Set(rows.map((r) => r[10]))], latG: [...new Set(rows.map((r) => r[7]))], n: rows.length };
 }
+// native frames at 10 Hz between 1 Hz fixes: each frame's vertical spike lands where the car was, only while locked and moving
+for (const cal of ['locked', 'default']) {
+  const rec = new S.Recorder();
+  for (let t = 0; t <= 200; t++) {                              // 20 m/s, a fix every 10 frames; position only moves on a fix
+    const fix = Math.floor(t / 10), spike = t === 104 ? 0.8 : (t === 150 ? null : 0.05);
+    rec.add({ t: t * 100, has_fix: true, ...at(fix * 20, 0), speed_mps: t >= 170 ? 0.5 : 20, lat_g: 0, lon_g: 0, roughness_rms: 0.05, calibration: cal, vert_peak_g: spike });
+  }
+  const rows = rec.toCsv().trim().split('\n').slice(1).map((l) => l.split(','));
+  out['peak_' + cal] = rows.map((r) => r[11]);
+}
+// a 5 s tunnel at 20 m/s: the frames inside cannot be placed, so they are dropped rather than guessed
+{ const rec = new S.Recorder(), fixAt = (t) => (t < 20 ? Math.floor(t / 10) : (t < 70 ? 2 : Math.floor(t / 10))) * 20;
+  for (let t = 0; t <= 100; t++) rec.add({ t: t * 100, has_fix: true, ...at(fixAt(t), 0), speed_mps: 20, calibration: 'locked', vert_peak_g: t === 50 ? 0.9 : 0.05 });
+  out.tunnel = rec.toCsv().trim().split('\n').slice(1).map((l) => l.split(',')[11]); }
 console.log(JSON.stringify(out));
 """
 
@@ -87,7 +101,8 @@ def test_recording_is_5m_samples_with_blanks(r):
     rec = r["rec"]
     assert rec["gaps"] and rec["km"] == pytest.approx(1.0, abs=0.01) and 195 <= rec["n"] <= 201
     assert rec["camberBlank"] and rec["src"] == "web-gps"
-    assert rec["head"] == "segment_index,distance_m,lat,lon,elevation_m,speed_mph,lon_g,lat_g,camber_deg,roughness_rms,crest_vertical_g,source"
+    assert rec["head"] == "segment_index,distance_m,lat,lon,elevation_m,speed_mph,lon_g,lat_g,camber_deg,roughness_rms,crest_vertical_g,vert_peak_g,source"
+    assert rec["peakBlank"]                                                                # a browser cannot measure the spike
     assert rec["mph"] == pytest.approx(44.7, abs=0.2)
 
 
@@ -96,3 +111,18 @@ def test_native_camber_and_crest_recorded_only_when_calibrated(r):
     assert locked["n"] > 50 and locked["camber"] == ["3.50"] and locked["crest"] == ["-0.120"] and locked["latG"] == ["0.1000"]
     for cal in ("default", "awaitingPull"):                                               # an unsolved mount: unknown, not a guess
         assert r[f"native_{cal}"]["camber"] == [""] and r[f"native_{cal}"]["crest"] == [""] and r[f"native_{cal}"]["latG"] == [""]
+
+
+def test_native_vertical_spike_lands_on_the_5m_sample_where_it_happened(r):
+    peak = r["peak_locked"]
+    # frame 104 is 0.4 s after the fix at 200 m (frame 100), 4/10 of the way to the one at 220 m (frame 110): 208 m, sample 41
+    assert peak[41] == "0.800" and all(p == "0.050" for i, p in enumerate(peak[1:68], 1) if i != 41)
+    # crawling (under 1 m/s from frame 170) records no spike: frame 169 is 338 m (sample 67), nothing after
+    assert len(peak) == 81 and all(p == "" for p in peak[68:])
+    assert set(r["peak_default"]) == {""}                                                # unsolved mount: unknown, not a guess
+
+
+def test_spikes_inside_a_gps_gap_are_dropped_not_guessed(r):
+    tunnel = r["tunnel"]
+    assert "0.900" not in tunnel
+    assert all(p == "" for p in tunnel[8:28]) and tunnel[3] == "0.050" and tunnel[-2] == "0.050"

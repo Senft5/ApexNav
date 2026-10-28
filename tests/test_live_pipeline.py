@@ -115,6 +115,23 @@ def test_a_saved_mount_is_trusted_only_when_gravity_agrees():
     assert states[-1] == "awaitingPull"
 
 
+def test_a_pothole_spike_shows_in_the_vertical_peak_and_each_take_starts_a_new_window():
+    R = Rotation.from_euler("xyz", [-70.0, 10.0, 95.0], degrees=True).as_matrix()
+    pipe = lp.IMUPipeline()
+    pipe.mount.restore([v for row in R.T for v in row])
+    t, v, _ = _drive(pipe, R, [(3.0, 0.0, 0.0)], v=15.0)                             # smooth road, mount locked
+    assert pipe.mount.state == "locked"
+    pipe.take_vert_peak()
+    _drive(pipe, R, [(0.5, 0.0, 0.0)], t=t, v=v)
+    smooth = pipe.take_vert_peak()
+    gravity = tuple(R @ [0.0, 0.0, -1.0])
+    for k, az in enumerate([0.0, 6.0, -6.0, 0.0, 0.0]):                              # a sharp 0.6 g up-down hit over 20 ms
+        pipe.step(tuple(R @ [0.0, 0.0, az]), (0.0, 0.0, 0.0), t + 0.5 + k * 0.01, v, gravity)
+    hit = pipe.take_vert_peak()
+    assert smooth < 0.01 and hit / lp.G > 0.35                                        # above road_dna's 0.35 g spike threshold
+    assert pipe.vert_peak == 0.0 and pipe.outputs()[-1] == 0.0                        # taken: the next window starts empty
+
+
 def test_without_gravity_the_mount_stays_unknown():
     pipe = lp.IMUPipeline()
     for i in range(500):
