@@ -122,6 +122,7 @@
     label.btn { display: inline-flex; align-items: center; cursor: pointer; }
     textarea { font: inherit; font-size: 15px; width: 100%; min-height: 64px; padding: 8px 10px; background: transparent; color: var(--panel-ink); border: 1px solid var(--panel-dim); box-sizing: border-box; }
     .tagline { color: var(--accent); }
+    .kudos-btn { height: 44px; font-size: 13px; padding: 0 10px; margin-left: 6px; vertical-align: middle; }
     .ch-bar { height: 6px; background: var(--rule); margin-top: 4px; } .ch-bar i { display: block; height: 100%; background: var(--accent); }
     details.more { border-top: 1px solid var(--rule); margin-top: 12px; }
     details.more summary { min-height: 44px; display: flex; align-items: center; font-size: 15px; font-weight: 600; cursor: pointer; list-style: none; }
@@ -180,6 +181,7 @@
       <div class="panel" id="weekPanel" hidden><h2>Your week</h2><div id="weekLines" class="stack-8"></div></div>
       <div class="panel" id="challengePanel" hidden><h2>This month's challenges</h2><div id="challengeList" class="stack-8"></div>
         <p class="note">Exploring and technique, never speed. From the drives on this phone.</p></div>
+      <div class="panel" id="kudosPanel" hidden><h2>Kudos for you</h2><div id="kudosList" class="stack-8"></div></div>
       <div class="panel" id="friendsPanel" hidden><h2>Friends lately</h2><div id="friendsList" class="stack-8"></div>
         <p class="note">From friends and crews who share scores with you, on stages you have. Scores only, never times.</p></div>
       <div class="panel" id="trendPanel" hidden><h2>Score over time</h2><div id="trend"></div></div>
@@ -316,7 +318,26 @@
         const who = document.createElement('b'); who.textContent = '@' + (r.handle || 'someone');
         const day = new Date(r.driven_on + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
         const you = r.you && r.you.rank ? ` · you're ${ordinal(r.you.rank)} of ${r.you.of}` : r.you ? ` · you haven't posted a score here` : '';
-        p.append(who, ` drove ${r.stage} · ${r.driver_score} · ${day}${you}`);
+        p.append(who, ` drove ${r.stage} · ${r.driver_score} · ${day}${you} `);
+        // Kudos (IDEAS S-07): a tap of thanks, no text; the count is everyone's, the pressed state yours
+        const k = document.createElement('button'); k.className = 'btn kudos-btn';
+        const paint = () => { k.textContent = `Kudos${r.kudos ? ' ' + r.kudos : ''}`; k.classList.toggle('on', !!r.my_kudos); k.setAttribute('aria-pressed', String(!!r.my_kudos)); };
+        k.setAttribute('aria-label', `Kudos to @${r.handle || 'someone'} for ${r.stage}`);
+        k.addEventListener('click', async () => {
+          const on = !r.my_kudos;
+          if (!(await ApexSync.kudos(r, on))) return;
+          r.my_kudos = on; r.kudos = Math.max(0, (r.kudos || 0) + (on ? 1 : -1)); paint();
+        });
+        paint(); p.append(k);
+        return p;
+      }));
+      // Kudos on your runs: who, which stage, which day (text)
+      const got = await ApexSync.kudosReceived();
+      $('kudosPanel').hidden = !got.length;
+      $('kudosList').replaceChildren(...got.map((g) => {
+        const p = document.createElement('p'); p.className = 'friend-act';
+        const day = new Date(g.driven_on + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+        p.textContent = `@${g.from_handle} gave you kudos for ${g.stage || 'a stage'} · ${day}`;
         return p;
       }));
     }

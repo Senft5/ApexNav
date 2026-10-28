@@ -90,6 +90,9 @@
   const board = async (canonId) => list(await call('GET', `/api/board/${encodeURIComponent(canonId)}`));
   /** Friends' activity on your stages (IDEAS S-03); [] signed out or offline. */
   const activity = async () => list(await call('GET', '/api/board/activity'));
+  /** Kudos (IDEAS S-07) on a friend's run (handle, stage canon id, day): true when it went through. Kudos on your runs: []. */
+  const kudos = async (run, on) => !!(await call(on ? 'POST' : 'DELETE', '/api/kudos', { handle: run.handle, canon_id: run.canon_id, driven_on: run.driven_on }));
+  const kudosReceived = async () => list(await call('GET', '/api/kudos'));
 
   /**
    * Uploads one road contribution. true = accepted, false = rejected (bad data: never resend), 'stop' = signed out or not enabled,
@@ -105,6 +108,6 @@
   }
   const contributionEnabled = async () => { const e = await call('GET', '/api/me/export'); return !!(e && e.member && e.member.contribute); };
 
-  const api = { inApp: IN_APP, apiBase: API_BASE, apiFetch, signIn, signInApple, setSession, contribute, newSegmentId, contributionEnabled, publishScore, board, activity, highlightsNear, shareHighlight, rateHighlight, member, pushSegments, sharedWithMe, adopt, shareSegment, friends, crews, crewMembers, removeRemote, toServer, fromServer };
+  const api = { inApp: IN_APP, apiBase: API_BASE, apiFetch, signIn, signInApple, setSession, contribute, newSegmentId, contributionEnabled, publishScore, board, activity, kudos, kudosReceived, highlightsNear, shareHighlight, rateHighlight, member, pushSegments, sharedWithMe, adopt, shareSegment, friends, crews, crewMembers, removeRemote, toServer, fromServer };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexSync = api;
 })(typeof window !== 'undefined' ? window : globalThis);

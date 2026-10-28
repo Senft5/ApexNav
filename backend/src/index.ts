@@ -28,6 +28,7 @@ import { eventCancel, eventCreate, eventRsvp, eventsList, eventsNear } from "./e
 import { healthReport, healthSummary } from "./health";
 import { feedbackCreate, feedbackDone, feedbackList } from "./feedback";
 import { friendProfile } from "./profile";
+import { kudosGive, kudosReceived, kudosTake } from "./kudos";
 import { etaStart, etaUpdate, etaView } from "./eta_share";
 import { highlightCreate, highlightDelete, highlightList, highlightRate } from "./highlights";
 export { ConvoyIndex, ConvoyRoom } from "./convoy";
@@ -164,6 +165,10 @@ on("POST", "/api/highlights/:id/report", async (req, env, m) => {   // older rou
 on("DELETE", "/api/highlights/:id", async (req, env, m) => { await highlightDelete(env, await requireMember(req, env), m.groups!.id); return noContent(); });
 
 on("POST", "/api/board", async (req, env) => json(await publish(env, await requireMember(req, env), req)));
+// Kudos (IDEAS S-07): a tap of thanks on a friend's run you can see; no text.
+on("POST", "/api/kudos", async (req, env) => { await kudosGive(env, await requireMember(req, env), req); return noContent(); });
+on("DELETE", "/api/kudos", async (req, env) => { await kudosTake(env, await requireMember(req, env), req); return noContent(); });
+on("GET", "/api/kudos", async (req, env) => json(await kudosReceived(env, await requireMember(req, env))));
 on("GET", "/api/board/activity", async (req, env) => json(await boardActivity(env, await requireMember(req, env))));
 on("GET", "/api/board/:canon", async (req, env, m) => json(await boardFor(env, await requireMember(req, env), m.groups!.canon)));
 

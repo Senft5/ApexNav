@@ -37,5 +37,6 @@ SELECT
   (SELECT COUNT(*) FROM health_counts) AS health_counts,
   (SELECT COUNT(*) FROM eta_shares) AS eta_shares,
   (SELECT COUNT(*) FROM feedback) AS feedback,
+  (SELECT COUNT(*) FROM kudos) AS kudos,
   (SELECT COUNT(*) FROM d1_migrations) AS d1_migrations
 ;

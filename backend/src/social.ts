@@ -3,6 +3,7 @@
 import { Env, HANDLE_RE, HttpError, body, num, pair, randomToken, sha256hex, sqlTime, str } from "./util";
 import type { Viewer } from "./auth";
 import { removedSql, reportedSql } from "./reports_sql";
+import { kudosFor } from "./kudos";
 
 const run = (env: Env, sql: string, ...args: unknown[]) => env.DB.prepare(sql).bind(...args).run();
 const all = async <T>(env: Env, sql: string, ...args: unknown[]) => (await env.DB.prepare(sql).bind(...args).all<T>()).results;
@@ -343,7 +344,11 @@ export async function boardActivity(env: Env, v: Viewer) {
     const i = board.findIndex((r) => r.mine);
     standing.set(canon, { rank: i < 0 ? null : i + 1, of: board.length, mine: i < 0 ? null : board[i].driver_score });
   }
-  return rows.map((r) => ({ handle: r.handle, name: r.name, canon_id: r.canon_id, stage: r.stage, driver_score: r.driver_score, driven_on: r.driven_on,
-    you: standing.get(r.canon_id)! }));
+  const kudos = await kudosFor(env, v, rows.map((r) => ({ owner: r.user_id, canon: r.canon_id, day: r.driven_on })));
+  return rows.map((r) => {
+    const k = kudos.get(`${r.user_id}|${r.canon_id}|${r.driven_on}`) ?? { n: 0, mine: false };
+    return { handle: r.handle, name: r.name, canon_id: r.canon_id, stage: r.stage, driver_score: r.driver_score, driven_on: r.driven_on,
+      you: standing.get(r.canon_id)!, kudos: k.n, my_kudos: k.mine };
+  });
 }
 
