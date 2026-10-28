@@ -36,6 +36,14 @@ it says "Couldn't check towns" instead of pretending there are none. Checked: we
 (Alcoa/Maryville) and no town-free alternate; Morristown → Rahway NJ, the winner has 29.5 km of town against 19.5–25 km for
 others, so the card says ~18 mi (fun outweighed the town cost there).
 
+## Along the route
+
+Once a route is planned, the `poi` layer of the same OpenFreeMap tiles at z14 is read under it (sampled every 1 km, at most
+160 tiles; `ApexStages.pois`) and web/scenic.js keeps viewpoints within 350 m of the road and cafés and fuel within 200 m,
+one per kind per 300 m (a named one kept). They are pinned on the map, and the route card says "7 viewpoints · 1 café", plus
+"no fuel for 62 mi (mi 10–72)" when a stretch of 50 mi or more has none (IDEAS R-24, R-23). Map data: a mapped viewpoint,
+a station that may be closed. Offline or a very long route: nothing is said.
+
 ## Reported closures
 
 Before each route request, live "Road closed" reports (IDEAS Q-15) within 50 km of the trip's middle are fetched for members
