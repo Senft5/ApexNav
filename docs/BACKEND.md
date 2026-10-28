@@ -55,7 +55,8 @@ Implemented in `backend/src/{auth,social,segments}.ts`, one router in `index.ts`
 - **State-changing requests** must carry our own `Origin` and an `X-ApexNav: 1` header (CSRF), on top of `SameSite=Lax`, `HttpOnly`, `__Host-` cookies.
 - **Sharing is opt-in per friend and per crew**: a score reaches an audience only through `POST /api/board` and only if a grant for that
   audience exists. `GET /api/board/:canon` returns only entries published **to the viewer**, by someone who is still their friend / crew-mate, whose grant is
-  still on, and not blocked either way. Times appear only with `share_times`.
+  still on, and not blocked either way. Times appear only with `share_times`. `GET /api/board/activity` (IDEAS S-03): the same visibility, the last
+  14 days of others' best per day on stages the viewer has, with the viewer's rank on each; scores only, never times.
 - Unfriend, block, leave crew, revoke grant: the grants and published entries between those people are deleted in the same transaction.
 - Friend requests answer identically for unknown, non-member and real handles (no handle enumeration). The requester cannot accept their own request.
 - **In-app convoy invites (IDEAS S-22):** `POST /api/convoy/:id/invite-people {handles}` (leader only, up to 15) invites accepted friends and private crew-mates; anyone else, and either side of a block, is skipped silently. The room keeps `invited[userId] = {at, until}` (30 min, never past the convoy), the invitee's `ConvoyIndex` keeps `{name, from, expiresAtMs}` (newest 10). `GET /api/convoy/invites` lists them, `POST /api/convoy/:id/accept {consent:true}` joins with the same checks as a link (an invite older than a leave can't bring someone back; it is used up by the join), `DELETE /api/convoy/invites/:id` dismisses. The leader's link is not rotated. The page polls once a minute while open and toasts a new one (`backend/test/convoy_invites.test.ts`).

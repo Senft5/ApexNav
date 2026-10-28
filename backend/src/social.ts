@@ -299,6 +299,17 @@ export async function publish(env: Env, v: Viewer, req: Request): Promise<{ publ
   return { published: stmts.length };
 }
 
+/** A board entry `be` someone else published TO the viewer ?1: still their friend or crew-mate, grant still on, no block. */
+const VISIBLE_FROM_OTHERS = `
+           NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker = ?1 AND b.blocked = be.user_id) OR (b.blocker = be.user_id AND b.blocked = ?1))
+           AND EXISTS (SELECT 1 FROM grants g WHERE g.user_id = be.user_id AND g.audience_type = be.audience_type AND g.audience_id = be.audience_id AND g.share_scores = 1)
+           AND ( (be.audience_type = 'friend' AND be.audience_id = ?1
+                  AND EXISTS (SELECT 1 FROM friendships f WHERE f.status = 'accepted'
+                               AND f.user_a = MIN(be.user_id, ?1) AND f.user_b = MAX(be.user_id, ?1)))
+              OR (be.audience_type = 'crew'
+                  AND EXISTS (SELECT 1 FROM crew_members me WHERE me.crew_id = be.audience_id AND me.user_id = ?1)
+                  AND EXISTS (SELECT 1 FROM crew_members th WHERE th.crew_id = be.audience_id AND th.user_id = be.user_id)) )`;
+
 /** Only entries published TO the viewer (by someone who is still their friend / crew-mate, grant still on), plus their own. */
 export async function boardFor(env: Env, v: Viewer, canonId: string) {
   return all<{ user_id: string; handle: string | null; name: string | null; driver_score: number; time_s: number | null; driven_on: string; mine: number }>(env,
@@ -306,14 +317,30 @@ export async function boardFor(env: Env, v: Viewer, canonId: string) {
             MAX(be.driven_on) AS driven_on, (be.user_id = ?1) AS mine
        FROM board_entries be JOIN users u ON u.id = be.user_id
       WHERE be.canon_id = ?2
-        AND (be.user_id = ?1
-          OR ( NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker = ?1 AND b.blocked = be.user_id) OR (b.blocker = be.user_id AND b.blocked = ?1))
-               AND EXISTS (SELECT 1 FROM grants g WHERE g.user_id = be.user_id AND g.audience_type = be.audience_type AND g.audience_id = be.audience_id AND g.share_scores = 1)
-               AND ( (be.audience_type = 'friend' AND be.audience_id = ?1
-                      AND EXISTS (SELECT 1 FROM friendships f WHERE f.status = 'accepted'
-                                   AND f.user_a = MIN(be.user_id, ?1) AND f.user_b = MAX(be.user_id, ?1)))
-                  OR (be.audience_type = 'crew'
-                      AND EXISTS (SELECT 1 FROM crew_members me WHERE me.crew_id = be.audience_id AND me.user_id = ?1)
-                      AND EXISTS (SELECT 1 FROM crew_members th WHERE th.crew_id = be.audience_id AND th.user_id = be.user_id)) ) ))
+        AND (be.user_id = ?1 OR (${VISIBLE_FROM_OTHERS}))
       GROUP BY be.user_id ORDER BY driver_score DESC LIMIT 100`, v.id, canonId);
+}
+
+export const ACTIVITY_DAYS = 14, ACTIVITY_MAX = 30;
+/**
+ * Friends' activity (IDEAS S-03): who drove one of YOUR stages lately (their best that day, as published to you), with
+ * where you stand on that stage's board. Scores only; times never appear here, whatever the grant says.
+ */
+export async function boardActivity(env: Env, v: Viewer) {
+  const rows = await all<{ user_id: string; handle: string | null; name: string | null; canon_id: string; stage: string; driver_score: number; driven_on: string }>(env,
+    `SELECT be.user_id, u.handle, ${NAME_FOR("be.user_id", "?1")} AS name, be.canon_id, MIN(s.name) AS stage,
+            MAX(be.driver_score) AS driver_score, be.driven_on
+       FROM board_entries be JOIN users u ON u.id = be.user_id
+       JOIN segments s ON s.owner = ?1 AND COALESCE(s.origin_id, s.id) = be.canon_id
+      WHERE be.user_id != ?1 AND be.driven_on >= date('now', '-${ACTIVITY_DAYS} days') AND (${VISIBLE_FROM_OTHERS})
+      GROUP BY be.user_id, be.canon_id, be.driven_on
+      ORDER BY be.driven_on DESC, driver_score DESC LIMIT ${ACTIVITY_MAX}`, v.id);
+  const standing = new Map<string, { rank: number | null; of: number; mine: number | null }>();
+  for (const canon of new Set(rows.map((r) => r.canon_id))) {
+    const board = await boardFor(env, v, canon);
+    const i = board.findIndex((r) => r.mine);
+    standing.set(canon, { rank: i < 0 ? null : i + 1, of: board.length, mine: i < 0 ? null : board[i].driver_score });
+  }
+  return rows.map((r) => ({ handle: r.handle, name: r.name, canon_id: r.canon_id, stage: r.stage, driver_score: r.driver_score, driven_on: r.driven_on,
+    you: standing.get(r.canon_id)! }));
 }

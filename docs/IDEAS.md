@@ -114,7 +114,7 @@ ideal drive and where to find time (#80), grip circle (#86), automatic mount cal
 | D-01 | Corner coach: brake zone, trail braking, coasting and throttle point per corner, timed over the same stretch | H | M | done (#80) | Harry's Lap Timer, Garmin Catalyst |
 | D-02 | Grip circle with the driver's own g-g envelope and per-corner grip use | H | M | done (#86) | RaceChrono, AiM |
 | D-03 | Live coaching on a known road: spoken "brake later" / "carry more speed" from your best pass | H | M | done (#100: technique tips only; speed tips stay on the analysis page by design) | STATE 2026-10-28, Garmin Catalyst |
-| D-04 | Ghost car on the map: your best pass (or a friend's shared ghost) as a moving marker with live delta | H | M | todo | SOCIAL §3, racing games, Strava Live Segments |
+| D-04 | Ghost car on the map: your best pass (or a friend's shared ghost) as a moving marker with live delta | H | M | parked: a ghost that moves by time is a race against the clock on public roads (guardrails: never reward speed). D-05 gives the same "better than last time" by technique; a ghost belongs in track mode (D-15) | SOCIAL §3, racing games, Strava Live Segments |
 | D-05 | Live delta bar during a known stage (green ahead / red behind your best, technique-scored, not speed-scored) | H | M | done (web/stage_delta.js: on a stage you marked in the Log, each finished corner is scored as the Driver Score does and compared with your best pass over the same corners; the result is said at the end) | Harry's Lap Timer |
 | D-06 | Smoothness heatmap on the drive map (lateral jerk, abrupt inputs) with the three worst moments | M | S | done (#104) | Garmin Catalyst |
 | D-07 | Consistency score across passes of the same road, and a trend over weeks | M | S | done (#114 per-corner repeatability; monthly braking-consistency trend) | Strava fitness trend |
@@ -197,7 +197,7 @@ Today: accounts with Google sign-in, friends, crews (public and private, crews n
 |---|---|---|---|---|---|
 | S-01 | Crews as groups: public/private, nearby discovery, tiles, owner settings | H | M | done (#76) | Strava clubs, REVER groups |
 | S-02 | Convoy client: create/join by code or QR, live positions, gap in time, leader hazard calls, regroup | H | L | done (#84, #89) | WORKER_QUEUE convoy-1..3, REVER, Waze |
-| S-03 | Friends' activity in the Log with rank on shared stages | H | M | todo | WORKER_QUEUE log-friends, Strava feed |
+| S-03 | Friends' activity in the Log with rank on shared stages | H | M | done (Log → Friends lately: GET /api/board/activity, the board's visibility rules, your rank on each stage, scores only) | WORKER_QUEUE log-friends, Strava feed |
 | S-04 | Garage: car profile (mass, power, tyres, ride height), shareable car cards, no location | H | M | done (#98; ride height and grip numbers not yet) | SOCIAL §2.4, Drivetribe |
 | S-05 | Share a planned route (geometry + notes) to a friend or crew, never a recorded drive | H | M | done (this PR: Share on the route card to friends and crews, the shape without the first 400 m, 30 days; Crew → Routes shared with you → Open rebuilds the notes; migration 0012) | SOCIAL §2.5, Calimoto, Roadtrippers |
 | S-06 | Crew events: a planned drive with time, meeting point, route, RSVPs and a convoy that opens on the day | H | L | todo | Meetup, REVER rides, car clubs |

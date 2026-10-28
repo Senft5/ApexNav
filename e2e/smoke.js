@@ -418,6 +418,24 @@ flow('a saved stage: the live delta shows while you drive it and the result at t
   check(!(await page.isVisible('#stageBar')), 'the bar goes when the stage ends');
 });
 
+flow("friends' activity: the Log lists who drove your stages lately and where you stand, as text (Worker stubbed, IDEAS S-03)", async (page, base) => {
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url());
+    const json = (b) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (u.pathname === '/api/board/activity') return json([
+      { handle: 'bob', name: 'Bob', canon_id: 'seg_1', stage: 'Esses <b>bold</b>', driver_score: 812, driven_on: '2026-10-26', you: { rank: 2, of: 3, mine: 700 } },
+      { handle: 'cara', name: null, canon_id: 'seg_2', stage: 'Dry Ridge', driver_score: 640, driven_on: '2026-10-25', you: { rank: null, of: 1, mine: null } }]);
+    return json([]);
+  });
+  await page.goto(base + '/analysis.html?tab=log');
+  await page.waitForSelector('#friendsPanel:not([hidden])');
+  const text = await page.textContent('#friendsList');
+  check(/@bob drove Esses <b>bold<\/b> · 812 · .* · you're 2nd of 3/.test(text), 'bob, the stage as typed (not as HTML), your rank: ' + text);
+  check(/@cara drove Dry Ridge · 640 .*you haven't posted a score here/.test(text), 'no rank when you have no score');
+  check(!(await page.$('#friendsList b b')), 'a stage name never becomes markup');
+});
+
 flow('the Log page opens', async (page, base) => {
   await page.goto(base + '/analysis.html');
   await page.waitForLoadState('load');

@@ -15,7 +15,7 @@ import { routeDelete, routeGet, routesSharedWithMe, shareRoute } from "./routes_
 
 const BACKUP_CRON = "0 7 * * 1";   // wrangler.jsonc triggers; the other cron is the daily sweep
 import {
-  boardFor, crewCreate, crewDiscover, crewInvite, crewInvitePreview, crewInvitesRevoke, crewJoin, crewJoinPublic, crewLeave, crewList, crewMembers, crewUpdate, friendAccept, friendList, friendRequest, friendRequestCancel,
+  boardActivity, boardFor, crewCreate, crewDiscover, crewInvite, crewInvitePreview, crewInvitesRevoke, crewJoin, crewJoinPublic, crewLeave, crewList, crewMembers, crewUpdate, friendAccept, friendList, friendRequest, friendRequestCancel,
   myGrants, publish, removePair, setGrant, setHandle,
 } from "./social";
 import { deleteAccount, exportMyData } from "./account";
@@ -131,6 +131,7 @@ on("POST", "/api/highlights/:id/report", async (req, env, m) => {   // older rou
 on("DELETE", "/api/highlights/:id", async (req, env, m) => { await highlightDelete(env, await requireMember(req, env), m.groups!.id); return noContent(); });
 
 on("POST", "/api/board", async (req, env) => json(await publish(env, await requireMember(req, env), req)));
+on("GET", "/api/board/activity", async (req, env) => json(await boardActivity(env, await requireMember(req, env))));
 on("GET", "/api/board/:canon", async (req, env, m) => json(await boardFor(env, await requireMember(req, env), m.groups!.canon)));
 
 on("POST", "/api/convoy", async (req, env) => json(await convoyCreate(env, await requireMember(req, env), req), 201));

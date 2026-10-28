@@ -71,6 +71,8 @@
   /** Publishes one pass; the server delivers it only to friends/crews you granted (Account). Safe to repeat. */
   const publishScore = (segmentId, score, timeS, day) => call('POST', '/api/board', { segment_id: segmentId, driver_score: Math.round(score), time_s: timeS == null ? null : Math.max(1, Math.round(timeS)), driven_on: day });
   const board = async (canonId) => list(await call('GET', `/api/board/${encodeURIComponent(canonId)}`));
+  /** Friends' activity on your stages (IDEAS S-03); [] signed out or offline. */
+  const activity = async () => list(await call('GET', '/api/board/activity'));
 
   /**
    * Uploads one road contribution. true = accepted, false = rejected (bad data: never resend), 'stop' = signed out or not enabled,
@@ -86,6 +88,6 @@
   }
   const contributionEnabled = async () => { const e = await call('GET', '/api/me/export'); return !!(e && e.member && e.member.contribute); };
 
-  const api = { inApp: IN_APP, apiBase: API_BASE, apiFetch, signIn, signInApple, setSession, contribute, contributionEnabled, publishScore, board, highlightsNear, shareHighlight, rateHighlight, member, pushSegments, sharedWithMe, adopt, shareSegment, friends, crews, crewMembers, removeRemote, toServer, fromServer };
+  const api = { inApp: IN_APP, apiBase: API_BASE, apiFetch, signIn, signInApple, setSession, contribute, contributionEnabled, publishScore, board, activity, highlightsNear, shareHighlight, rateHighlight, member, pushSegments, sharedWithMe, adopt, shareSegment, friends, crews, crewMembers, removeRemote, toServer, fromServer };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexSync = api;
 })(typeof window !== 'undefined' ? window : globalThis);
