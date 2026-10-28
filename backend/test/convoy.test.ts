@@ -82,7 +82,7 @@ describe("convoy: create, join, leave", () => {
     const ctx = await json(join(b, made.invite));
     expect(ctx).toMatchObject({ role: "member", sessionId: made.context.sessionId });
     expect(ctx.members.map((m: Msg) => m.handle)).toEqual(["alice", "bob"]);
-    expect(Object.keys(ctx.members[0]).sort()).toEqual(["handle", "key", "name", "online", "role"]);       // no account ids
+    expect(Object.keys(ctx.members[0]).sort()).toEqual(["handle", "key", "online", "role"]);       // no account ids, no real names
     expect((await json(api(b, "GET", `/api/convoy/${made.context.sessionId}`))).role).toBe("member");
     expect((await api(outsider, "GET", `/api/convoy/${made.context.sessionId}`)).status).toBe(403);
     expect((await api(b, "GET", "/api/convoy/not-a-room")).status).toBe(404);
@@ -136,14 +136,15 @@ describe("convoy: create, join, leave", () => {
     expect((await api(a, "POST", "/api/convoy", { consent: true })).status).toBe(429);
   });
 
-  it("names with control or bidi characters are cleaned; route names with them are refused", async () => {
+  it("members are shown by handle only, never their Google name; route names with control characters are refused", async () => {
     const { lead, f1, id } = await convoyOfThree();
-    await env.DB.prepare("UPDATE users SET display_name = ? WHERE id = ?").bind("Evil\u202eNAME", f1.id).run();
+    await env.DB.prepare("UPDATE users SET display_name = ? WHERE id = ?").bind("Real Name", f1.id).run();
     expect((await api(lead, "POST", "/api/convoy", { consent: true, name: "bad\u0007" })).status).toBe(400);
     const l = await connect(lead, id);
     await runInDurableObject(stub(id), (inst) => (inst as unknown as { sweep(): Promise<void> }).sweep());   // names refresh from the accounts
     const shown = (await json(api(lead, "GET", `/api/convoy/${id}`))).members.find((m: Msg) => m.handle === "fone");
-    expect(shown.name).toBe("EvilNAME");
+    expect(shown).toEqual({ key: expect.any(String), handle: "fone", role: "member", online: false });
+    expect(JSON.stringify(await json(api(lead, "GET", `/api/convoy/${id}`)))).not.toContain("Real Name");
     l.send({ type: "route", route: { name: "x\u202ey", polyline: "_p~iF~ps|U", version: 1 } });
     expect((await l.next("error")).error).toBe("bad_route");
   });

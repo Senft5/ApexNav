@@ -15,7 +15,7 @@ export function unwrap<T>(r: Result<T>): T {
   return r.data;
 }
 
-const who = (v: Viewer) => ({ id: v.id, handle: v.handle, name: v.displayName });
+const who = (v: Viewer) => ({ id: v.id, handle: v.handle });   // never the Google name (IDEAS Z-13)
 
 /** Joining shares your live position with everyone in the convoy, so both creating and joining ask for it explicitly. */
 function consent(b: { consent?: unknown }) {
