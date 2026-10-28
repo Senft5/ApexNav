@@ -1,5 +1,11 @@
 # APEX NAV — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-10-28 (night, autonomous): App Store readiness and IDEAS
+- TestFlight works end to end: every app-changing merge uploads (Xcode 26 on macos-26); internal group "First Testers" gets all builds. The session can read App Store Connect through `ASC_*` secrets (docs/APP_REVIEW.md).
+- Merged tonight: #160 Z-13, #161 Y-13/Y-15 (+ backend-only merges skip iOS), #162 Z-15, #163 V-03, #164 Z-02, #165 note timing at corner entry (owner report), #166 Sign in with Apple + privacy/terms + APP_REVIEW.md + OWNER_TODO.md, #167 S-21 garage lookup, #168 S-22 convoy invites + QR, #169 O-12 review code, #170 D-09 drive card, #171 Z-12, #172 Q-15/Q-16 hazard reports (migration 0011 applied by hand to both D1), #173 V-01 note lead from speed/reaction/braking. Open: #174 V-02 plain words; this PR U-09 haptics.
+- Owner items: docs/OWNER_TODO.md (legal text approval, SIWA key for token revocation, CarPlay entitlement, App Review notes paste, routing server decision).
+- Exact next task: keep working IDEAS by impact/effort (H/M next: D-04 ghost car, D-05 live delta, Q-13 road pages, S-05 share planned route, U-19 search roads, Z-03 privacy dashboard).
+
 ## Session 2026-10-28: TestFlight live; open PRs merged; audit leftovers
 - First TestFlight upload succeeded: build 342.1 (Xcode 26 on macos-26), processing in App Store Connect. The owner adds an Internal Testing group once.
 - Merged the other session's open PRs (#143, #152, #154, #155, #156, #157) after merging main into #154; #159 fixed a 1-in-64 convoy test flake.

@@ -457,6 +457,7 @@
         <button class="sw" data-toggle="voice"><i></i><span>Voice</span></button>
         <button class="sw" data-toggle="lpr"><i></i><span>Cameras</span></button>
         <button class="sw" data-toggle="twisty"><i></i><span>Twisty roads</span></button>
+        <button class="sw" data-toggle="haptics"><i></i><span>Haptics</span></button>
         <button class="sw sw-cycle" data-cycle="nightMode" aria-label="Night"><b></b><span>Night</span></button>
       </div>
       </div>
@@ -737,7 +738,7 @@
       theme: 'roadbook', camFeel: 'dynamic', voiceId: 'george', liveVoice: false, voiceStyle: 'codriver', voiceName: '', hlOn: false, hlStrength: 1,
       notesMode: 'auto', nightMode: 'auto',   // Notes: auto | full | quiet. Night: auto (sunset/sunrise) | on | off
       noteWords: 'plain',                     // rally ("Left 4 minus") | plain ("Medium left"), IDEAS V-02; a saved setting wins
-      toggles: { stage: false, voice: true, lpr: true, dna: false, night: false, twisty: false }   // stage and night are derived from the two modes; analysis.html reads toggles.night
+      toggles: { stage: false, voice: true, lpr: true, dna: false, night: false, twisty: false, haptics: true }   // stage and night are derived from the two modes; analysis.html reads toggles.night
     };
     const NOTES_MODES = ['auto', 'full', 'quiet'], NIGHT_MODES = ['auto', 'on', 'off'];
     const MODE_LABEL = { auto: 'Auto', full: 'Full', quiet: 'Quiet', on: 'On', off: 'Off' };
@@ -1455,6 +1456,13 @@
       if (speech.via === 'native') { clearTimeout(speech.nativeTimer); speech.busy = false; speech.interrupt = true; }
       else if (speech.via === 'web' && 'speechSynthesis' in window) speechSynthesis.cancel();   // onend pumps the hazard
     }
+    // A tap as a call starts (IDEAS U-09): the app's Taptic Engine, or a short buzz where the browser offers one. Off in Settings.
+    function haptic(kind) {
+      if (!state.toggles.haptics) return;
+      const native = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex;
+      if (native) { try { native.postMessage({ cmd: 'haptic', kind }); } catch (_) {} return; }
+      try { if (navigator.vibrate) navigator.vibrate(kind === 'hazard' ? [60, 60, 60] : 25); } catch (_) {}
+    }
     function stopSpeaking() {
       if ('speechSynthesis' in window) speechSynthesis.cancel();
       if (speech.via === 'native') { clearTimeout(speech.nativeTimer); speech.busy = false; speech.interrupt = true; }
@@ -1468,6 +1476,7 @@
       if (speech.busy) return;
       const item = speech.queue.take(performance.now(), queueCursor());
       if (!item) { speech.current = null; speech.via = null; return; }
+      if (item.kind === 'hazard' || item.chain || item.haptic) haptic(item.kind === 'hazard' ? 'hazard' : 'note');
       speech.busy = true; speech.current = item; speech.via = 'model';
       let played = false;
       try {
@@ -3557,6 +3566,7 @@
       state.toggles[k] = !state.toggles[k];
       paintSwitches();
       if (k === 'lpr') updatePins();
+      if (k === 'haptics' && state.toggles.haptics) haptic('note');   // feel it once
       if (k === 'twisty') {
         updateTwisty();
         if (state.toggles.twisty) toast(mapReady && map.getZoom() < ApexTwisty.MIN_ZOOM ? 'Zoom in to see twisty roads.' : 'Twisty roads come from the map\'s shape, not from drives.');
