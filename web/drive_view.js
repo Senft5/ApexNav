@@ -209,6 +209,8 @@
           const best = Math.min(...d.laps.map((x) => x.timeS)), t = `${Math.floor(l.timeS / 60)}:${(l.timeS % 60).toFixed(2).padStart(5, '0')}`;
           return `${l.n}. <b>${esc(t)}</b>${l.timeS === best ? ' best' : ''}${Array.isArray(l.sectors) ? ` (${l.sectors.map((s) => s.toFixed(2)).join(' / ')})` : ''}`;
         }).join(' · ')}</div>` : '')
+      // what it cost the battery (IDEAS P-01): said only for a drive that didn't charge and ran 10 minutes or more
+      + (d.battery && Number.isFinite(d.battery.perHour) ? `<div class="dv-meta">Battery: ${d.battery.usedPct}% in ${d.battery.minutes} min (about ${d.battery.perHour}% an hour)</div>` : '')
       // which car the score is for (IDEAS D-19); a lower limit is said, since it changes what Pace means
       + (d.car && d.car.label ? `<div class="dv-meta">Scored for your ${esc(d.car.label)}${finite(d.car.mu) && d.car.mu < 0.6 ? ` \u00b7 its own grip, ${d.car.mu.toFixed(2)} g (the default is 0.60 g)` : ''}</div>` : '')
       + (plain ? `<p class="dv-plain">${esc(plain)}</p>` : '')

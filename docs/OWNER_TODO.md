@@ -34,3 +34,5 @@ something blocks on you, delete it once it's done. Everything else is in docs/ID
 - TestFlight: internal group "First Testers" gets every build automatically; every main merge uploads one (377.1 onward VALID).
 - Tester feedback (Settings → Feedback, once #196 merges) shows in the app under Crew → your owner section, with Done to clear it.
 - An unused App ID `com.senft.ApexNav.JNX759T5W6` (from the first attempt) is still registered. Harmless; delete it in Identifiers if you like.
+
+- **P-01 battery figure (10 min, during any TestFlight drive):** drive an hour unplugged with the app open; afterwards the Log shows "Battery: X% in N min". Send me that number (and the phone model) and I'll publish it in the listing and the Help page. Nothing is published until it's measured.
