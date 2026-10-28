@@ -300,13 +300,17 @@
     }
 
     // a link `/?convoy=<invite>`: keep it (not in the address bar) until the person says yes in the Crew sheet
+    function takeInvite(fromLink) {
+      store.set('sessionStorage', INVITE_KEY, fromLink);
+      if (sectionHost) { lastKey = null; paint(); }
+      if (page.showView) page.showView('crew');
+    }
     try {
       const q = new URLSearchParams(location.search), fromLink = q.get('convoy');
       if (fromLink) {
-        store.set('sessionStorage', INVITE_KEY, fromLink);
         q.delete('convoy');
         history.replaceState(history.state, '', location.pathname + (q.toString() ? '?' + q : '') + location.hash);
-        if (page.showView) page.showView('crew');
+        takeInvite(fromLink);
       }
     } catch (_) { /* no history API */ }
     let resumeTry = 0;
@@ -325,6 +329,8 @@
       /** The Convoy section for the Crew sheet (re-rendered in place as the convoy changes). */
       section() { sectionHost = el('div', { className: 'stack-8' }); renderSection(); paintText(); return sectionHost; },
       get active() { return !!(snap && snap.id); },
+      /** A convoy link the app handed to the running page: waits for a yes in the Crew sheet, like one opened from the web. */
+      takeInvite,
     };
   }
 

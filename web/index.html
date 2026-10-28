@@ -2841,6 +2841,8 @@
     const switchRow = (label, on, change) => { const b = el('button', { className: 'ink-btn' + (on ? ' on' : ''), textContent: `${label}: ${on ? 'On' : 'Off'}`, onclick: change }); b.setAttribute('aria-pressed', String(!!on)); return b; };
     let openCrewId = null;
     const crewNear = () => { if (state.lastPosition) return state.lastPosition; const c = map.getCenter(); return { lat: c.lat, lon: c.lng }; };
+    // Links people share open the website (in the app the page's own origin is apexnav://app, which no one else can open).
+    const shareOrigin = () => (ApexSync.inApp ? ApexSync.apiBase : location.origin);
     async function renderAccount() {
       const body = $('accountBody');
       let me = null;
@@ -2855,6 +2857,11 @@
       }
       const inviteFromLink = params2.get('invite'), crewFromLink = params2.get('crew'), addFromLink = params2.get('add');
       try { if (inviteFromLink) sessionStorage.setItem('apex.invite', inviteFromLink); if (crewFromLink) sessionStorage.setItem('apex.crew', crewFromLink); if (addFromLink) sessionStorage.setItem('apex.add', addFromLink.toLowerCase()); } catch (_) {}
+      // Kept in the tab, gone from the address bar: a reload or a redraw must not act on the link again.
+      if (inviteFromLink || crewFromLink || addFromLink) {
+        try { for (const k of ['invite', 'crew', 'add']) params2.delete(k); history.replaceState(history.state, '', location.pathname + (params2.toString() ? '?' + params2 : '') + location.hash); } catch (_) {}
+        showView('crew');
+      }
       const stash = (k) => { try { return sessionStorage.getItem(k) || ''; } catch (_) { return ''; } };
       const unstash = (k) => { try { sessionStorage.removeItem(k); } catch (_) {} };
       if (!me.signed_in) {
@@ -2862,7 +2869,6 @@
           el('h3', { textContent: 'Drive with friends' }),
           el('p', { className: 'note', textContent: 'ApexNav is invite-only. Sign in to add friends, share scores and join boards. Nothing is shared unless you switch it on.' }),
           el('a', { className: 'ink-btn solid', href: '/api/auth/google/start', textContent: 'Sign in with Google', style: 'display:flex;align-items:center;justify-content:center;text-decoration:none' }));
-        if (inviteFromLink || crewFromLink || addFromLink) { showView('crew'); }
         return;
       }
       // Anyone signed in can take their data or close the account, member or not.
@@ -2878,7 +2884,6 @@
         body.append(el('h3', { textContent: 'Join with an invite' }), el('p', { className: 'note', textContent: 'ApexNav is invite-only. Paste your invite.' }), el('div', { className: 'row' }, inp, btn('Join', join, 'ink-btn solid')),
           el('div', { className: 'row' }, btn('Sign out', async () => { await apiCall('POST', '/api/auth/logout'); ApexSync.setSession(null); redo(); }, 'linkbtn'),
             btn('Download my data', downloadMyData, 'linkbtn'), btn('Delete account', deleteMyAccount, 'danger-btn')));
-        if (stash('apex.invite')) join();
         return;
       }
       if (!me.handle) {
@@ -2900,7 +2905,7 @@
       const invOut = el('p', { className: 'note' });
       you.append(el('div', { className: 'row' },
         btn('Invite someone', async () => { const r = await apiCall('POST', '/api/invites'); const j = await jsonOf(r); if (r.ok) copyText(j.url, 'Invite link copied. They\'ll be your friend the moment they join.'); else toast('Couldn\'t make an invite. Try again.'); }, 'ink-btn solid'),
-        btn('Share my handle', () => copyText(`${location.origin}/?add=${me.handle}`, 'Link copied. Anyone who opens it can ask to be your friend.'))), invOut);
+        btn('Share my handle', () => copyText(`${shareOrigin()}/?add=${me.handle}`, 'Link copied. Anyone who opens it can ask to be your friend.'))), invOut);
       body.append(you);
       if (convoy) body.append(convoy.section());
       if (garage) body.append(garage.section());
@@ -2954,9 +2959,17 @@
       // crews
       const csec = section('Crews');
       const crewList = Array.isArray(crews) ? crews : [];
-      if (crewFromLink || stash('apex.crew')) {
-        const tok = crewFromLink || stash('apex.crew'); unstash('apex.crew');
-        const r = await apiCall('POST', '/api/crews/join', { token: tok }); toast(r.ok ? 'You joined the crew.' : 'That crew invite didn\'t work. Ask for a new one.'); if (r.ok) { redo(); return; }
+      // A crew link asks first: joining shows your handle to its members, so it is never done for you by opening a link.
+      if (stash('apex.crew')) {
+        const tok = stash('apex.crew');
+        csec.append(el('div', { className: 'card stack-8' },
+          el('p', { textContent: 'You have a crew invite. Join? Its members will see your handle, and your car if you show it to crews.' }),
+          el('div', { className: 'row' }, btn('Join crew', async () => {
+            const r = await apiCall('POST', '/api/crews/join', { token: tok });
+            if (r.ok || (r.status >= 400 && r.status < 500)) unstash('apex.crew');
+            toast(r.ok ? 'You joined the crew.' : r.status < 500 ? 'That crew invite didn\'t work. Ask for a new one.' : 'Couldn\'t join. Check signal and try again.');
+            redo();
+          }, 'ink-btn solid'), btn('Not now', () => { unstash('apex.crew'); redo(); }, 'linkbtn'))));
       }
       if (!crewList.length) csec.append(el('p', { className: 'note', textContent: 'A crew is a group for a club or a weekend run. You can be in several. Make one below, or join one near you.' }));
       const tiles = el('div', { className: 'crew-tiles' });
@@ -2988,7 +3001,7 @@
             switchRow('Times', g.share_times, () => putGrant('crew', c.id, true, !g.share_times))),
           el('span', { textContent: g.share_scores ? (g.share_times ? `${c.name} sees your scores and times.` : `${c.name} sees your scores.`) : `${c.name} sees nothing of yours yet.` }),
           ownerBox,
-          el('div', { className: 'row' }, btn('Invite to crew', async () => { const r = await apiCall('POST', `/api/crews/${c.id}/invite`); const j = await jsonOf(r); if (r.ok) copyText(`${location.origin}/?crew=${j.token}`, 'Crew link copied.'); else toast('Only a crew\'s owner can invite.'); }),
+          el('div', { className: 'row' }, btn('Invite to crew', async () => { const r = await apiCall('POST', `/api/crews/${c.id}/invite`); const j = await jsonOf(r); if (r.ok) copyText(`${shareOrigin()}/?crew=${j.token}`, 'Crew link copied.'); else toast('Only a crew\'s owner can invite.'); }),
             btn('Leave', async () => { if (confirm(`Leave ${c.name}?`)) { if (openCrewId === c.id) openCrewId = null; await apiCall('DELETE', `/api/crews/${c.id}/membership`); redo(); } }, 'linkbtn')));
         const loadMembers = async () => {
           mbox.innerHTML = '';
@@ -3583,14 +3596,14 @@
       if (window.APEX_EMBED || !ios) return;
       const q = new URLSearchParams();
       for (const k of ['invite', 'crew', 'add', 'convoy']) { const v = params.get(k); if (v && /^[A-Za-z0-9._-]{1,200}$/.test(v)) q.set(k, v); }
-      if (![...q.keys()].length) return;
+      try { if (![...q.keys()].length || sessionStorage.getItem('apex.stayInBrowser')) return; } catch (_) { if (![...q.keys()].length) return; }
       const bar = document.createElement('div');
       bar.id = 'openInApp';
       bar.style.cssText = 'position:fixed;left:50%;bottom:calc(76px + var(--safe-bottom, 0px));transform:translateX(-50%);z-index:40;display:flex;gap:12px;align-items:center;' +
         'background:var(--panel);color:var(--panel-ink);border:1px solid var(--rule);padding:10px 14px;box-shadow:0 8px 24px rgba(0,0,0,.3);max-width:calc(100% - 32px)';
-      const a = document.createElement('a'); a.href = 'apexnav://open?' + q.toString(); a.textContent = 'Open in the ApexNav app'; a.style.cssText = 'color:var(--accent);font-weight:600;white-space:nowrap';
+      const a = document.createElement('a'); a.href = 'apexnav://open?' + q.toString(); a.textContent = 'Have the app? Open it there'; a.style.cssText = 'color:var(--accent);font-weight:600;white-space:nowrap';
       const x = document.createElement('button'); x.type = 'button'; x.textContent = '×'; x.setAttribute('aria-label', 'Stay in the browser'); x.className = 'linkbtn';
-      x.onclick = () => bar.remove();
+      x.onclick = () => { bar.remove(); try { sessionStorage.setItem('apex.stayInBrowser', '1'); } catch (_) {} };
       bar.append(a, x); document.body.append(bar);
     })();
 
@@ -3602,6 +3615,18 @@
     // In a browser, frames come from the web sensors during a drive (or from tests) and go straight to live mode.
     // iOS ignores user-scalable=no: cancel Safari's page-zoom gesture. MapLibre's pinch uses touch events and keeps working.
     document.addEventListener('gesturestart', (e) => e.preventDefault(), { passive: false });
+    // An invite, crew, friend or convoy link opened while the app is running: take it in place (never reload mid-drive) and
+    // show the Crew sheet, where each one still waits for a tap.
+    function openAppLink(p) {
+      const ok = (v) => typeof v === 'string' && /^[A-Za-z0-9._-]{1,200}$/.test(v);
+      try {
+        if (ok(p.invite)) sessionStorage.setItem('apex.invite', p.invite);
+        if (ok(p.crew)) sessionStorage.setItem('apex.crew', p.crew);
+        if (ok(p.add)) sessionStorage.setItem('apex.add', p.add.toLowerCase());
+      } catch (_) {}
+      if (ok(p.convoy) && convoy && convoy.takeInvite) convoy.takeInvite(p.convoy);
+      showView('crew'); renderAccount();
+    }
     window.apex = {
       live(frame) {
         if (frame) feedPower({ thermal: frame.thermal, lowPowerMode: frame.low_power_mode });
@@ -3632,6 +3657,7 @@
         if (msg && msg.type === 'recordingSaved') toast(`Saved ${msg.segments} road segments to ${msg.file}`);
         // App sign-in finished in the native shell: keep the session token and redraw whatever shows account state.
         if (msg && msg.type === 'session' && msg.token) { ApexSync.setSession(msg.token); toast('Signed in.'); location.reload(); }
+        if (msg && msg.type === 'link' && msg.params) { openAppLink(msg.params); return; }
         if (msg && msg.type === 'signInFailed' && msg.reason !== 'cancelled') toast('Couldn\'t sign in. Check signal and try again.');
       }
     };
