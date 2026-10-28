@@ -34,6 +34,7 @@
   <script src="saved_routes.js"></script>
   <script src="crew_events.js"></script>
   <script src="health.js"></script>
+  <script src="scenic.js"></script>
   <script src="incident.js"></script>
   <script src="traffic.js"></script>
   <script src="in_car.js"></script>
@@ -407,6 +408,9 @@
     .hz-ask span { flex: 1; font-weight: 700; }
     .hz-ask .key { min-height: 56px; }
     .hz-pin { font: 800 11px var(--font-ui, sans-serif); letter-spacing: 0.06em; padding: 2px 5px; border: 1.5px solid var(--signal, #c33); color: var(--signal, #c33); background: var(--panel, #fff); white-space: nowrap; }
+    /* Along the route (IDEAS R-24): viewpoints named, cafés and fuel small; map data, quieter than hazards. */
+    .poi-pin { font: 700 10px var(--font-ui, sans-serif); letter-spacing: 0.04em; padding: 1px 4px; border: 1px solid var(--panel-ink, #222); color: var(--panel-ink, #222); background: var(--panel, #fff); white-space: nowrap; max-width: 140px; overflow: hidden; text-overflow: ellipsis; opacity: 0.9; }
+    .poi-pin.poi-view { border-color: #2e7d5b; color: #2e7d5b; }
 </style>
 </head>
 <body>
@@ -451,6 +455,7 @@
             <section id="routeCard" hidden>
               <h3 id="routeCardName"></h3>
               <p class="route-meta" id="routeCardMeta"></p>
+              <p class="route-meta" id="routeCardAlong" hidden></p>
               <div class="bars mt-8" id="routeCardBars"></div>
               <p class="note" id="routeCardWhy" hidden></p>
               <p class="note" id="routeCardSub"></p>
@@ -2269,6 +2274,7 @@
       markDestination(t);
       if (state.mode !== 'live' && !booting) lockOnDestination(t);
       attachLimits(t);
+      attachScenic(t);
       if (!prebuilt) toast(`${name} · ${(totalM() / 1609.344).toFixed(1)} mi · ${t.events.filter(e => e.type === 'corner').length} corners`);
     }
     // A route just found: pin its destination and show it, so you can check you are routing to the right place. FOLLOW
@@ -4043,6 +4049,29 @@
         if (r.ok) { reported.list = await r.json(); paintReported(); }
       } catch (_) { /* offline or signed out: keep what we had */ }
       finally { reported.at = performance.now(); reported.busy = false; }
+    }
+    // Viewpoints, cafés and fuel along a planned route (IDEAS R-24, R-23; stages.js pois, scenic.js): pins on the map and a
+    // line on the route card. Map data: a mapped viewpoint, a fuel station that may be closed. Nothing found says nothing.
+    const scenicPins = [];
+    const SCENIC_LABEL = { view: 'VIEW', cafe: 'CAFÉ', fuel: 'FUEL' };
+    async function attachScenic(t) {
+      for (const mk of scenicPins.splice(0)) mk.remove();
+      $('routeCardAlong').hidden = true;
+      if (!t || !Array.isArray(t.lat) || t.lat.length < 2 || !window.ApexScenic) return;
+      const pts = [];
+      for (let i = 0; i < t.lat.length; i += 200) pts.push({ lat: t.lat[i], lon: t.lon[i] });   // every 1 km
+      let list = [];
+      try { list = ApexScenic.along(await ApexStages.pois(pts), t); } catch (_) { return; }      // offline or a very long route: say nothing
+      if (plannedRoute !== t) return;                                                          // another route came up meanwhile
+      t.scenic = list;
+      const line = ApexScenic.summary(list, t.dist[t.dist.length - 1]);
+      $('routeCardAlong').textContent = line; $('routeCardAlong').hidden = !line;
+      for (const p of list) {
+        const el = document.createElement('div'); el.className = `poi-pin poi-${p.kind}`;
+        el.textContent = p.kind === 'view' && p.name ? p.name : SCENIC_LABEL[p.kind];
+        el.title = p.name || SCENIC_LABEL[p.kind];
+        scenicPins.push(new maplibregl.Marker({ element: el }).setLngLat([p.lon, p.lat]).addTo(map));
+      }
     }
     function paintReported() {
       const keep = new Set(reported.list.map(h => h.id));

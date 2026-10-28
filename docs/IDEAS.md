@@ -87,8 +87,8 @@ long-press pin (#61), Apple place search and nearby suggestions in the app (#73)
 | R-20 | Car-aware routing from the Garage (width, ride height, power: no goat tracks for a lowered car) | M | M | todo | SOCIAL §2.4 |
 | R-21 | Weather-aware routing: penalise wet, icy, foggy or very hot stages from a free forecast; show why | M | M | todo | Calimoto weather, REVER |
 | R-22 | Seasonal and time-of-day closures (OSM `conditional` tags, seasonal mountain passes) | M | M | todo | Kurviger |
-| R-23 | Fuel and charge range: warn before a long stage with no fuel; EV charger stops on loops | M | M | todo | Google Maps, ABRP |
-| R-24 | Scenic layer: viewpoints, overlooks, waterfalls and car-friendly cafés along the route from OSM | M | M | todo | Roadtrippers, Scenic |
+| R-23 | Fuel and charge range: warn before a long stage with no fuel; EV charger stops on loops | M | M | partial (fuel stations from the map along a planned route; the route card warns of 50+ mi with none; EV chargers and the car's range still to do) | Google Maps, ABRP |
+| R-24 | Scenic layer: viewpoints, overlooks, waterfalls and car-friendly cafés along the route from OSM | M | M | partial (web/scenic.js + stages.js pois: OpenStreetMap viewpoints and cafés within reach of a planned route pinned on the map and counted on the route card, e.g. \"7 viewpoints · 1 café\" over Newfound Gap; waterfalls and car-friendly picks still to do) | Roadtrippers, Scenic |
 | R-25 | GPX import (follow someone's route with our notes) and GPX/KML export of planned routes | M | S | todo | Kurviger, Calimoto, REVER |
 | R-26 | Open a shared route link from Google/Apple Maps or a GPX in the app ("Open in ApexNav") | M | M | todo | Waze deep links |
 | R-27 | Our own routing graph with fun scores baked into edge costs (Valhalla custom costing) | H | XL | todo | ROAD_INTELLIGENCE §7.3 |

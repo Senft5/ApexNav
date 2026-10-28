@@ -162,6 +162,29 @@
     return [...want].flatMap(k => placeTiles.get(k));
   }
 
+  // Viewpoints, cafés and fuel along a route (IDEAS R-24, R-23): the 'poi' layer of the same tiles at z14, where they are
+  // (lower zooms drop most). Tiles under `points` (the route sampled every ~1 km) and their neighbours when a point is near
+  // an edge; at most POI_MAX_TILES (more is no data, not "nothing there"). Kept for the session.
+  const poiTiles = new Map();
+  const POI_Z = 14, POI_PAD_KM = 0.4, POI_MAX_TILES = 160;
+  const POI_KIND = (p) => (p.subclass === 'viewpoint' ? 'view' : p.class === 'cafe' ? 'cafe' : p.class === 'fuel' ? 'fuel' : null);
+  async function pois(points) {
+    if (!tileUrl) tileUrl = (await Loading.json(TILEJSON)).tiles[0];
+    const want = new Set();
+    for (const p of points || []) {
+      const dLat = POI_PAD_KM / 110.54, dLon = POI_PAD_KM / (111.32 * Math.cos(p.lat * Math.PI / 180));
+      for (const a of [-dLat, 0, dLat]) for (const b of [-dLon, 0, dLon]) want.add(tileOf(p.lat + a, p.lon + b, POI_Z).join('/'));
+    }
+    if (!want.size || want.size > POI_MAX_TILES) throw new Error('area too big');
+    await Promise.all([...want].filter(k => !poiTiles.has(k)).map(async (key) => {
+      const [x, y] = key.split('/').map(Number);
+      const buf = new Uint8Array(await Loading.arrayBuffer(tileUrl.replace('{z}', POI_Z).replace('{x}', x).replace('{y}', y)));
+      poiTiles.set(key, decodeLayer(buf, 'poi', POI_Z, x, y, 1).map(f => ({ kind: POI_KIND(f.props), name: f.props.name || null, pt: f.lines[0] && f.lines[0][0] }))
+        .filter(f => f.kind && f.pt).map(f => ({ kind: f.kind, name: f.name, lat: f.pt[1], lon: f.pt[0] })));
+    }));
+    return [...want].flatMap(k => poiTiles.get(k) || []);
+  }
+
   // Join pieces end to end into strokes, continuing straight-ish through each node (≤ 50°).
   const cellKey = (lon, lat) => `${Math.round(lon * 4000)},${Math.round(lat * 4000)}`;   // ~25 m cells
   function strokes(pieces) {
@@ -419,5 +442,5 @@
     return pts;
   }
 
-  root.ApexStages = { decodeLayer, discover, nameStages, places, applyHighlights, plans, waypoints, strokes, bestWindow, roadPieces };
+  root.ApexStages = { decodeLayer, discover, nameStages, places, pois, applyHighlights, plans, waypoints, strokes, bestWindow, roadPieces };
 })(typeof window !== 'undefined' ? window : globalThis);
