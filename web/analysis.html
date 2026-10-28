@@ -151,6 +151,7 @@
       </div>
       <div class="cards" id="historyCards"></div>
       <div class="panel" id="trendPanel" hidden><h2>Score over time</h2><div id="trend"></div></div>
+      <div class="panel" id="recordsPanel" hidden><h2>Your records</h2><div class="scroll"><table id="recordsTable"></table></div><p class="note" id="recordsNote"></p></div>
       <div class="panel" id="steadyPanel" hidden><h2>Braking consistency by month</h2><div id="steadyChart"></div><p class="note" id="steadyNote"></p></div>
       <div class="panel" id="historyPanel"><div class="scroll"><table id="historyTable"></table></div></div>
       <details class="more"><summary>How Score works</summary>
@@ -296,8 +297,40 @@
         <td><span class="score">${d.ds.score ?? '--'}</span></td>
         <td class="l wide">${bars(d.ds.components)}</td></tr>`).join('');
       $('historyTable').innerHTML = !drives.length ? '<tr><td class="l" colspan="5"><span class="note">No drives yet.</span></td></tr>' : `<tr><th class="l">Drive</th><th>Distance</th><th class="wide">Corners scored</th><th>Score</th><th class="l wide">Components</th></tr>${rows}`;
+      setTimeout(renderRecords, 0);
       setTimeout(renderSteadiness, 0);                                  // the coach runs per road: after the Log has painted
     }
+
+    // Your records (IDEAS D-08): the best Score on each road you have driven twice or more (roads by name), and this month's
+    // smoothest drive and best braking. Technique only: no speed, time or pace record, so nothing here rewards going faster.
+    // A drive whose date is unknown never counts for "this month".
+    function renderRecords() {
+      const scored = drives.filter(d => d.ds.score != null), roads = new Map();
+      for (const d of scored) { const r = roads.get(d.name) || []; r.push(d); roads.set(d.name, r); }
+      const when = (d) => d.date || '';
+      const rows = [...roads.entries()].filter(([, ds]) => ds.length >= 2).map(([name, ds]) => {
+        const best = ds.reduce((m, d) => (d.ds.score > m.ds.score || (d.ds.score === m.ds.score && when(d) < when(m)) ? d : m));
+        const last = ds.reduce((m, d) => (when(d) > when(m) ? d : m));
+        return { name, best, n: ds.length, fresh: last === best, last };
+      }).sort((p, q) => when(q.last).localeCompare(when(p.last))).slice(0, 6);
+      const month = new Date(), key = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, '0')}`;
+      const mine = scored.filter(d => monthOf(d) === key && d.ds.components);
+      const top = (k) => mine.filter(d => finiteNum(d.ds.components[k])).reduce((m, d) => (!m || d.ds.components[k] > m.ds.components[k] ? d : m), null);
+      const smooth = mine.length >= 2 ? top('smoothness') : null, brake = mine.length >= 2 ? top('braking') : null;
+      $('recordsPanel').hidden = !rows.length && !smooth && !brake;
+      if ($('recordsPanel').hidden) return;
+      const pct = (v) => `${Math.round(v * 100)}%`;
+      const day = (d) => (d.date_known === false ? 'date unknown' : (d.date || '').slice(0, 10));
+      const line = (what, d, value, sub) => `<tr class="row-link" data-drive="${d.id}" tabindex="0" role="link"><td class="l"><b></b><span class="sub">${what} · ${sub}</span></td><td><span class="score">${value}</span></td></tr>`;
+      const out = [], names = [];
+      for (const r of rows) { out.push(line(`Best Score on this road, of ${r.n} drives`, r.best, r.best.ds.score, r.fresh ? `${day(r.best)}, your latest here: a new best` : day(r.best))); names.push(r.name); }
+      if (smooth) { out.push(line(`Smoothest drive this month, of ${mine.length}`, smooth, pct(smooth.ds.components.smoothness), day(smooth))); names.push(smooth.name); }
+      if (brake) { out.push(line(`Best braking this month, of ${mine.length}`, brake, pct(brake.ds.components.braking), day(brake))); names.push(brake.name); }
+      $('recordsTable').innerHTML = out.join('');
+      $('recordsTable').querySelectorAll('tr td.l b').forEach((b, i) => { b.textContent = names[i]; });   // names are user text
+      $('recordsNote').textContent = 'Roads are matched by name. Score rates technique, not speed, so a record here is never a reason to drive faster.';
+    }
+    const finiteNum = (v) => typeof v === 'number' && Number.isFinite(v);
 
     // Braking consistency by month (IDEAS D-07 trend): on corners you drove five or more times in a month, how widely your
     // braking point spread inside that month (Core.spreadBy, a robust SD per corner), the median over the month's corners.
@@ -365,8 +398,10 @@
       });
     }
 
-    $('historyTable').addEventListener('click', (e) => { const r = e.target.closest('tr[data-drive]'); if (r) openDrive(r.dataset.drive); });
-    $('historyTable').addEventListener('keydown', (e) => { const r = e.target.closest('tr[data-drive]'); if (r && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openDrive(r.dataset.drive); } });
+    for (const id of ['historyTable', 'recordsTable']) {
+      $(id).addEventListener('click', (e) => { const r = e.target.closest('tr[data-drive]'); if (r) openDrive(r.dataset.drive); });
+      $(id).addEventListener('keydown', (e) => { const r = e.target.closest('tr[data-drive]'); if (r && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openDrive(r.dataset.drive); } });
+    }
     $('importFile').addEventListener('change', async (e) => {
       const file = e.target.files[0];
       if (!file) return;
