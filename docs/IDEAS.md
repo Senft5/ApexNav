@@ -229,7 +229,7 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 | U-05 | Audit the live cockpit with simulated GPS frames at phone size (day, night, glare) | H | S | done (this PR: browser GPS track, day and night; native frames and glare still need a phone) | STATE 2026-10-28 UI audit |
 | U-06 | Stages simplified: one list near you with your best and the leader, create from a drive in one step | H | M | partial (#77) | WORKER_QUEUE stages-1 |
 | U-07 | Glanceable cockpit: one number and one note readable at arm's length in sunlight | H | M | partial (drive bar: big Rec mileage, problems only) | car HMI guidelines |
-| U-08 | Motion design pass: route reveal, sheet springs, note transitions, under 200 ms, reduced-motion respected | M | M | todo | Apple Maps |
+| U-08 | Motion design pass: route reveal, sheet springs, note transitions, under 200 ms, reduced-motion respected | M | M | partial (pace notes slide on in 160 ms when one is passed) | Apple Maps |
 | U-09 | Haptics on notes and hazards (subtle, configurable) | M | S | todo | Apple Maps turn haptics on Watch |
 | U-10 | Home screen and lock screen widgets: nearby best stage, last drive score, crew event | M | M | todo | iOS widgets |
 | U-11 | Live Activity / Dynamic Island: next note, distance to stage, ETA | H | M | todo | Apple Maps, Uber |

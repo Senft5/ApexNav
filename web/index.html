@@ -54,6 +54,8 @@
     .notes-roadbook { display: grid; grid-template-columns: 1.25fr 1fr 1fr; gap: 0; padding-left: 0; padding-right: 0; }
     .rb-box { display: grid; grid-template-columns: auto 46px minmax(0, 1fr); gap: 6px; align-items: center; padding: 2px 8px; border-left: 1.5px solid var(--rule); min-width: 0; }
     .rb-box:first-child { border-left: none; }
+    .rb-box.advance { animation: rb-advance 160ms ease-out both; }
+    @keyframes rb-advance { from { transform: translateX(14%); opacity: 0.35; } to { transform: none; opacity: 1; } }
     /* The next note steps back in colour, not opacity, so its small text keeps 4.5:1 contrast (only the tulip fades) */
     .rb-box:not(.now) { color: var(--panel-dim); } .rb-box:not(.now) .rb-tulip { opacity: 0.62; } .rb-box:not(.now) .rb-call b { color: var(--panel-dim); }
     @media (max-width: 520px) { .notes-roadbook { grid-template-columns: 1.4fr 1fr; } .rb-box:nth-child(3) { display: none; } }
@@ -1392,7 +1394,7 @@
       const shown = ev.filter(e => spirited || noteworthyInCruise(e) || e.type !== 'corner').filter(e => e.dist_m - state.cursorM <= 3000).slice(0, 3);
       const notes = shown.map(e => {
         const d = distLabel(e.dist_m - state.cursorM);
-        return { type: e.type, code: e.code, call: e.call, sub: subFor(e) + linkLabel(e), dist: d.n, unit: d.u, distM: e.dist_m - state.cursorM,
+        return { key: `${e.type}:${e.index}:${e.dist_m}`, type: e.type, code: e.code, call: e.call, sub: subFor(e) + linkLabel(e), dist: d.n, unit: d.u, distM: e.dist_m - state.cursorM,
                  dir: e.dir, severity: e.severity, turnRad: e.turn_rad, mods: e.mods || [] };
       });
       notes.quietText = offRoute ? (!track ? 'No route planned' : offRouteText()) : track ? `${track.name} · ${spirited ? 'Full notes' : 'Quiet · bumps and cameras only'}` : 'Plan a route for notes';

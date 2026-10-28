@@ -84,9 +84,16 @@
       html('span', '', q, notes.quietText || '');
       return;
     }
+    // When the lead note changes (the old one was passed), the page slides on for 160 ms. The strip is rebuilt every
+    // frame, so each rebuild resumes the slide where it was (negative delay) instead of restarting it.
+    const lead = notes[0].key, t0 = typeof performance !== 'undefined' ? performance.now() : 0;
+    if (lead !== undefined && el._lead !== undefined && lead !== el._lead) el._advanceAt = t0;
+    el._lead = lead;
+    const since = el._advanceAt === undefined ? Infinity : t0 - el._advanceAt;
     // Road book page: up to three boxes, distance | tulip | note.
     notes.slice(0, 3).forEach((n, i) => {
       const box = html('div', 'rb-box' + (i === 0 ? ' now' : ''), el);
+      if (since < 160) { box.classList.add('advance'); box.style.animationDelay = `-${Math.round(since)}ms`; }
       const d = html('div', 'rb-dist', box);
       html('b', '', d, n.dist);
       html('small', '', d, n.unit);
