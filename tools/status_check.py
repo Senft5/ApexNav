@@ -8,7 +8,8 @@ their record in the run summary is the evidence for IDEAS Y-04 (our own router).
 
     python tools/status_check.py [--base https://apexnav.senftns.workers.dev]
 
-Prints a Markdown table (also appended to $GITHUB_STEP_SUMMARY) and exits 1 when a core check fails.
+Prints a Markdown table (also appended to $GITHUB_STEP_SUMMARY), writes status.json ({core_ok, failing}) for the
+workflow, and exits 1 when a core check fails. A crash writes no status.json, so the workflow can't mistake it for an outage.
 Standard library only; every request has a 10 s timeout and one retry so a single slow answer isn't an outage.
 """
 import argparse
@@ -16,6 +17,7 @@ import json
 import os
 import sys
 import time
+import urllib.error
 import urllib.request
 
 BASE = "https://apexnav.senftns.workers.dev"
@@ -95,8 +97,11 @@ def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("--base", default=BASE)
     args = p.parse_args(argv)
-    md, core_ok = summarize(run(args.base))
+    results = run(args.base)
+    md, core_ok = summarize(results)
     print(md)
+    with open("status.json", "w", encoding="utf-8") as f:
+        json.dump({"core_ok": core_ok, "failing": [r["name"] for r in results if r["core"] and not r["ok"]]}, f)
     if os.environ.get("GITHUB_STEP_SUMMARY"):
         with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as f:
             f.write(md)

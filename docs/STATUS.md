@@ -20,11 +20,18 @@ Each check gets a 10 s timeout and one retry 3 s later, so a single slow answer 
 
 ## What happens
 
-- **A core check fails:** the run goes red and opens one issue labelled `outage`, assigned to the owner, with the table.
-  GitHub e-mails the assignee. Later failures add a comment to the same issue. The first run where both core checks pass
-  closes the issue.
+- **A core check fails:** the run opens one issue labelled `outage`, assigned to the owner, with the table. GitHub
+  e-mails the assignee. While the outage lasts, the issue gets a comment only when the set of failing checks changes (not
+  every 30 minutes). The first run where both core checks pass comments "Back up" and closes the issue.
+- **The check itself crashes or hangs:** the run goes red (GitHub e-mails whoever last edited the schedule) and no issue
+  is opened, so a bug in the checker never reads as an outage.
 - **Only a dependency fails:** nothing is opened. The table in the run summary records it. These public services are free
   and best-effort, and a pattern of failures is the case for IDEAS Y-04 (our own router).
+
+## Keeping it running
+
+GitHub pauses scheduled workflows in a public repository after 60 days with no commits, and says so on the Actions tab.
+Re-enable it there ("Status" → Enable workflow). Any commit also resets the 60 days.
 
 ## When ApexNav is down
 

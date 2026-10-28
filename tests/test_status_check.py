@@ -63,7 +63,7 @@ def test_one_retry_absorbs_a_blip():
 
 
 def test_workflow_uses_pipefail_and_runs_on_a_schedule():
-    wf = Path(".github/workflows/status.yml").read_text()
-    assert "python tools/status_check.py | tee status.md" in wf
+    wf = (Path(__file__).resolve().parents[1] / ".github/workflows/status.yml").read_text()
+    assert "python tools/status_check.py | tee status.md" in wf and "status.json" in wf
     assert "shell: bash" in wf, "without pipefail the step would report tee's exit code"
     assert "schedule:" in wf and "cron:" in wf
