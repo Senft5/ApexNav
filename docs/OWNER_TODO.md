@@ -19,6 +19,7 @@ something blocks on you, delete it once it's done. Everything else is in docs/ID
 | what | options |
 |---|---|
 | **Routing server** (IDEAS Y-04). The app uses the free public Valhalla server, which has fair-use limits and no uptime promise | a) Cloudflare Workers Paid ($5/mo) + a Container with Southeast-US road tiles; b) a $5–7/mo VPS with the whole US; c) stay on the public server until users arrive. Claude's suggestion: (a) before an App Store launch |
+| **Hidden-difficulty corners (IDEAS Q-03)**: flag corners where everyone slows more than the shape predicts. It needs each pass's speed *relative to the corner's limit* in road data. The limit is public geometry, so that ratio gives the speed back within a few percent, which breaks the privacy page's "never speeds" | a) yes: send the ratio, rounded, merged anonymously like the rest; reword the privacy page; b) no (Claude's suggestion until there are enough drivers that a corner holds dozens of passes): keep "never speeds" |
 | **Repo visibility.** `Senft5/ApexNav` is public: anyone can read the code (the licence still reserves all rights). CI is free and unlimited while public | Keep public until launch (Claude's suggestion), or make it private (Settings → General → Danger Zone; about 13 iOS builds a month free after that) |
 
 ## Nice to know

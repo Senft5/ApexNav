@@ -260,6 +260,38 @@ def severity_for_radius(radius_m: float) -> int | None:
     return None
 
 
+CROWD_MIN_PASSES = 2          # a bin's crowd curvature counts once this many passes measured it
+CROWD_MIN_RUN = 6             # ... and only in runs of this many known bins (30 m): a lone bin is noise, not a corner
+
+
+def blend_curvature(kappa_map, kappa_crowd, passes):
+    """Curvature from members' driven paths over the map's (IDEAS Q-04): the map simplifies corners (a hairpin drawn with
+    three nodes), the crowd drove them. Where at least CROWD_MIN_PASSES passes measured a sample, in runs of at least
+    CROWD_MIN_RUN such samples, the crowd's mean replaces the map's; everywhere else the map stays. Returns (kappa, replaced).
+    """
+    k = np.asarray(kappa_map, dtype=float).copy()
+    n = len(k)
+    ok = np.zeros(n, dtype=bool)
+    for i in range(n):
+        c = kappa_crowd[i] if i < len(kappa_crowd) else None
+        p = passes[i] if i < len(passes) else None
+        ok[i] = c is not None and p is not None and np.isfinite(c) and p >= CROWD_MIN_PASSES
+    replaced = 0
+    i = 0
+    while i < n:
+        if not ok[i]:
+            i += 1
+            continue
+        j = i
+        while j < n and ok[j]:
+            j += 1
+        if j - i >= CROWD_MIN_RUN:
+            k[i:j] = [kappa_crowd[q] for q in range(i, j)]
+            replaced += j - i
+        i = j
+    return k, replaced
+
+
 def detect_corners(kappa, ds, camber_rad=None, crest_g=None, roughness_rms_g=None,
                    mu_eff: float = MU_EFF_DEFAULT) -> list[dict]:
     """Segment curvature into corners and grade them as rally pace notes.

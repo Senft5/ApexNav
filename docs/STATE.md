@@ -6,6 +6,7 @@
 - Merged #209 Q-14 coverage map (migration 0023 `road_ways`; privacy page says the road's public map line is sent).
 - This PR: R-12 set list, R-20 car-aware routing (migration 0024 cars.clearance/width_cm applied to both D1).
 - #210 also: Z-11 Content-Security-Policy on every page (tools/csp.py; rerun it after editing an inline script, CLAUDE.md says so).
+- Next PR also: Q-04 crowd curvature (migration 0027 applied), Q-03 asked of the owner, R-35 speed traps and S-07 comments dropped with reasons.
 - Next PR: S-11 pioneer km + crew-vs-crew km, S-08 smoothest crew (migration 0026 member_months + board_entries.smoothness, applied to both D1).
 - This PR: V-07 Siri next/skip stage (FunRoute.stageSpans), U-22 driving side in sight distance (NEAR_SIDE_M 0.8, a first estimate).
 - Merged #213: P-05 route analysis in a Web Worker (web/analysis_worker.js + analysis_client.js; inline fallback); D-19 scores per car (only ever gentler than the street default).

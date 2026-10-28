@@ -303,16 +303,18 @@
     if (!ids.length) return null;
     const [ways, roads] = await Promise.all([fetchWays(ids, opts.fetch), lookupAll(ids, lookup)]);
     if (!roads) return null;
-    return summarize(locate({ drive: route, match, ways }), roads, route.lat.length);
+    const runs = locate({ drive: route, match, ways }), s = seriesFrom(runs, roads, route.lat.length);
+    // the driven curvature along it (IDEAS Q-04), per sample, for correcting the map's corners
+    return { ...summarize(runs, roads, route.lat.length), crowdK: s.k, crowdKn: s.kn };
   }
   /**
-   * Per-sample measured series along a route: { cam[], rough[], n[], cn[], csd[], rsd[] } with null where no member has measured
+   * Per-sample measured series along a route: { cam[], rough[], n[], cn[], csd[], rsd[], k[], kn[] } with null where no member has measured
    * that 5 m. cn: passes that measured camber; csd/rsd: how much the passes disagree (sample SD; null under two passes or from
-   * a server that does not send it yet).
+   * a server that does not send it yet). k/kn: the driven paths' mean curvature and its passes (IDEAS Q-04).
    */
   function seriesFrom(runs, roads, total) {
     const blank = () => new Array(total).fill(null);
-    const cam = blank(), rough = blank(), n = blank(), cn = blank(), csd = blank(), rsd = blank();
+    const cam = blank(), rough = blank(), n = blank(), cn = blank(), csd = blank(), rsd = blank(), k = blank(), kn = blank();
     const at = (a, j) => (a && a[j] != null ? a[j] : null);
     for (const run of runs) {
       const d = roads[run.way] && roads[run.way][run.dir]; if (!d) continue;
@@ -321,9 +323,10 @@
         const j = idx.get(p.bin); if (j == null) continue;
         cam[p.i] = d.cam[j]; rough[p.i] = d.rough[j]; n[p.i] = d.n[j];
         cn[p.i] = d.cn ? d.cn[j] : null; csd[p.i] = at(d.csd, j); rsd[p.i] = at(d.rsd, j);
+        k[p.i] = at(d.k, j); kn[p.i] = at(d.kn, j);
       }
     }
-    return { cam, rough, n, cn, csd, rsd };
+    return { cam, rough, n, cn, csd, rsd, k, kn };
   }
 
   // Passes that agree within these spreads make a measurement trustworthy (camber: phone mounts and lines differ by ~1 deg;

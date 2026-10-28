@@ -146,8 +146,8 @@ pace-note grammar, ALPR from DeFlock/OSM, reference-lap scoring and archetypes.
 |---|---|---|---|---|---|
 | Q-01 | Road feel confidence: "N runs agree" / "runs differ" from per-bin spread | H | S | done (#87) | — |
 | Q-02 | Bayesian hazard verification: Beta posterior with recency decay; "Confirmed" when ≥ 2 drivers agree | H | M | partial (#95: your own drives, "Confirmed on N of M"; crowd Bayesian todo) | ROAD_INTELLIGENCE §4.3, WORKER_QUEUE brand-17b |
-| Q-03 | Pace-normalised corner deviation: hidden difficulty where everyone slows more than geometry predicts | H | M | todo | ROAD_INTELLIGENCE §4.1 |
-| Q-04 | Geometry correction: crowd yaw-rate curvature overrides simplified OSM corners | H | L | todo | ROAD_INTELLIGENCE §4.2 |
+| Q-03 | Pace-normalised corner deviation: hidden difficulty where everyone slows more than geometry predicts | H | M | owner: needs each pass's speed relative to the corner's limit in road data, and since the limit comes from public geometry that gives the speed back to a few percent: it would break the privacy page's "never speeds". Asked in OWNER_TODO | ROAD_INTELLIGENCE §4.1 |
+| Q-04 | Geometry correction: crowd yaw-rate curvature overrides simplified OSM corners | H | L | done: the server keeps each bin's mean driven curvature (`k_mean`, phones always sent `k`; migration 0027, kept through a repave); where 2+ passes measured 30 m runs, it replaces the map's curvature on a planned route and its corner notes and braking envelope are worked out again (`blend_curvature` / `Core.blendCurvature`, parity-tested; `applyCrowdCurvature`, never mid-drive); the measured note says how much | ROAD_INTELLIGENCE §4.2 |
 | Q-05 | Adaptive sectors by change-point detection, broken at junctions | M | M | todo | ROAD_INTELLIGENCE §5.3 |
 | Q-06 | Durable upload queue that survives page navigation and app restarts (IndexedDB) | H | M | partial (road-queue, unintegrated) | WORKER_QUEUE road-1, road-queue |
 | Q-07 | End-to-end verification of open app → upload → profile → routing change on preview data | H | M | todo | WORKER_QUEUE road-4 |

@@ -112,8 +112,9 @@ function mergeBin(env: Env, wayId: number, dir: number, b: Bin, day: string): D1
   const reset = `(${smoother} AND smooth_run + 1 >= ${FRESH.repavePasses})`;
   const cam = meanSql("camber_mean", "camber_m2", "camber_n", "?4"), rough = meanSql("rough_mean", "rough_m2", "n", "?5");
   return env.DB.prepare(
-    `INSERT INTO road_bins (way_id, dir, bin_idx, n, camber_mean, camber_m2, camber_n, rough_mean, rough_m2, crest_peak, crest_n, last_on, smooth_run)
-     VALUES (?1, ?2, ?3, 1, ?4, CASE WHEN ?4 IS NULL THEN NULL ELSE 0 END, CASE WHEN ?4 IS NULL THEN 0 ELSE 1 END, ?5, 0, ?6, CASE WHEN ?6 IS NULL THEN 0 ELSE 1 END, ?7, 0)
+    `INSERT INTO road_bins (way_id, dir, bin_idx, n, camber_mean, camber_m2, camber_n, rough_mean, rough_m2, crest_peak, crest_n, last_on, smooth_run, k_mean, k_n)
+     VALUES (?1, ?2, ?3, 1, ?4, CASE WHEN ?4 IS NULL THEN NULL ELSE 0 END, CASE WHEN ?4 IS NULL THEN 0 ELSE 1 END, ?5, 0, ?6, CASE WHEN ?6 IS NULL THEN 0 ELSE 1 END, ?7, 0,
+             ?8, CASE WHEN ?8 IS NULL THEN 0 ELSE 1 END)
      ON CONFLICT (way_id, dir, bin_idx) DO UPDATE SET
        camber_mean = CASE WHEN ${reset} THEN ?4 WHEN ?4 IS NULL THEN camber_mean WHEN camber_n = 0 OR camber_mean IS NULL THEN ?4 ELSE ${cam.mean} END,
        camber_m2   = CASE WHEN ${reset} THEN CASE WHEN ?4 IS NULL THEN NULL ELSE 0 END WHEN ?4 IS NULL THEN camber_m2 WHEN camber_n = 0 OR camber_mean IS NULL THEN 0 ELSE ${cam.m2} END,
@@ -124,10 +125,13 @@ function mergeBin(env: Env, wayId: number, dir: number, b: Bin, day: string): D1
                           ELSE crest_peak + (?6 - crest_peak) / (MIN(crest_n, ${FRESH.memory}) + 1) END,
        crest_n     = CASE WHEN ${reset} THEN (?6 IS NOT NULL) ELSE crest_n + (?6 IS NOT NULL) END,
        changed_on  = CASE WHEN ${reset} THEN ?7 ELSE changed_on END,
+       -- the road's shape (IDEAS Q-04) doesn't change when it's repaved: never reset
+       k_mean      = CASE WHEN ?8 IS NULL THEN k_mean WHEN k_n = 0 OR k_mean IS NULL THEN ?8 ELSE k_mean + (?8 - k_mean) / (MIN(k_n, ${FRESH.memory}) + 1) END,
+       k_n         = k_n + (?8 IS NOT NULL),
        smooth_run  = CASE WHEN ${reset} THEN 0 WHEN ${smoother} THEN smooth_run + 1 ELSE 0 END,
        last_on     = MAX(COALESCE(last_on, ''), ?7),
        n           = CASE WHEN ${reset} THEN 1 ELSE n + 1 END`,
-  ).bind(wayId, dir, b.i, b.cam, b.rough, b.crest, day);
+  ).bind(wayId, dir, b.i, b.cam, b.rough, b.crest, day, b.k);
 }
 
 /**

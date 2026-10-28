@@ -49,6 +49,19 @@ describe("road freshness (IDEAS Q-12)", () => {
     expect(j["4242"]["0"].ch[0]).toBe(daysAgo(1).slice(0, 7));     // the month, never the day
   });
 
+  it("keeps the driven curvature per bin, through a repave, and returns it (IDEAS Q-04)", async () => {
+    const curvy = (k: number) => Array.from({ length: 30 }, (_, j) => ({ i: j, cam: 2, rough: 0.5, crest: null, k }));
+    const send = async (u: TestUser, k: number, rough = 0.5) => ok(api(u, "POST", "/api/contribute", { way_id: 4242, dir: 0, driven_on: daysAgo(1),
+      drive_id: `drive-fresh-${String(++seq).padStart(4, "0")}`, bins: curvy(k).map((x) => ({ ...x, rough })) }));
+    for (const k of [0.02, 0.022, 0.018]) await send(a, k);
+    await send(b, 0.02, 0.1); await send(b, 0.02, 0.1);                  // repaved: the roughness restarts, the shape doesn't
+    const r = await env.DB.prepare("SELECT n, k_mean, k_n FROM road_bins WHERE way_id = 4242 AND dir = 0 AND bin_idx = 0").first<{ n: number; k_mean: number; k_n: number }>();
+    expect(r!.n).toBe(1);
+    expect([r!.k_n, Math.round(r!.k_mean * 1e4) / 1e4]).toEqual([5, 0.02]);
+    const j = await (await ok(api(a, "GET", "/api/roads?ways=4242"))).json() as Record<string, Record<string, { k: number[]; kn: number[] }>>;
+    expect([j["4242"]["0"].k[0], j["4242"]["0"].kn[0]]).toEqual([0.02, 5]);
+  });
+
   it("a rough pass on a smooth road is just a pass", async () => {
     for (const r of [0.1, 0.1, 0.12, 0.6, 0.6]) await pass(a, r);
     expect((await bin0())!).toMatchObject({ n: 5, changed_on: null, smooth_run: 0 });
