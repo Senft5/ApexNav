@@ -185,7 +185,11 @@
     if (st === 'ready') return { state: st, text: pendingRenders > 0 ? `Preparing names · ${doneRenders} of ${doneRenders + pendingRenders} done (about 10 s each)` : `Ready · ${doneRenders} name${doneRenders === 1 ? '' : 's'} prepared` };
     return { state: st, text: 'Off. Road and route names use the recorded voice or your phone voice.' };
   }
+  // Inside the iOS app the engine would be code downloaded at run time, which App Review guideline 2.5.2 forbids; the app
+  // speaks names with the phone's own voice instead (docs/APP_REVIEW.md). Only the website loads it.
+  const IN_APP = !!(root.webkit && root.webkit.messageHandlers && root.webkit.messageHandlers.apex);
   function warmLive() {
+    if (IN_APP) return Promise.resolve(null);
     if (tts || ttsLoading) return ttsLoading;
     // Quantised WASM (~90 MB, cached by the browser). The WebGPU build needs the ~320 MB fp32
     // model, too heavy for a phone; phrases are pre-rendered instead so speed rarely matters.

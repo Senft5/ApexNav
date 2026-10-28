@@ -85,6 +85,21 @@
     return out;
   }
 
-  const api = { due, phrase, distWords, atJunction, placeSteps, VERB };
+  // For the road-book strip: a short verb, the road, and how the tulip draws it (dir L/R/S/U/O/A, angle in degrees).
+  const SHORT = {
+    9: ['Bear right', 'R', 45], 10: ['Right', 'R', 90], 11: ['Sharp right', 'R', 135], 12: ['U-turn', 'U', 180], 13: ['U-turn', 'U', 180],
+    14: ['Sharp left', 'L', 135], 15: ['Left', 'L', 90], 16: ['Bear left', 'L', 45], 17: ['Ramp', 'S', 0], 18: ['Ramp right', 'R', 30],
+    19: ['Ramp left', 'L', 30], 20: ['Exit right', 'R', 30], 21: ['Exit left', 'L', 30], 23: ['Keep right', 'R', 20], 24: ['Keep left', 'L', 20],
+    25: ['Merge', 'S', 0], 37: ['Merge right', 'R', 20], 38: ['Merge left', 'L', 20], 26: ['Roundabout', 'O', 0], 4: ['Arrive', 'A', 0], 5: ['Arrive', 'A', 0], 6: ['Arrive', 'A', 0],
+  };
+  /** { code, call, dir, angle } for a maneuver in the strip, or null for one that isn't shown. */
+  function stripNote(s) {
+    const x = SHORT[s.type];
+    if (!x) return null;
+    const code = s.type === 26 && finite(s.exits) && s.exits > 0 ? `Roundabout · exit ${s.exits}` : x[0];
+    return { code, call: ARRIVE.has(s.type) ? 'Destination' : s.street || '', dir: x[1], angle: x[2] };
+  }
+
+  const api = { due, phrase, distWords, atJunction, placeSteps, stripNote, VERB };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexDirections = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -568,7 +568,7 @@
           </section>
           <section class="sources" data-panel="setup">
             <details class="more"><summary>Sources and licences</summary><p class="note">Map &copy; OpenStreetMap contributors via OpenFreeMap. Terrain: AWS Terrarium DEM. Routing, map matching and posted limits: Valhalla (FOSSGIS). Geocoding: Nominatim. Search suggestions: Photon (Komoot). Plate-reading cameras: OpenStreetMap (<code>surveillance:type=ALPR</code>, DeFlock) via Overpass. Voices: Kokoro-82M (Apache-2.0).</p></details>
-            <p class="note mt-8"><a href="https://apexnav.senftns.workers.dev/privacy.html" target="_blank" rel="noopener">Privacy</a> · <a href="https://apexnav.senftns.workers.dev/terms.html" target="_blank" rel="noopener">Terms of use</a></p>
+            <p class="note mt-8"><a href="https://apexnav.senftns.workers.dev/privacy.html" target="_blank" rel="noopener">Privacy</a> · <a href="https://apexnav.senftns.workers.dev/terms.html" target="_blank" rel="noopener">Terms of use</a> · <a href="licenses.html">Licences</a></p>
           </section>
         </div>
       </aside>
@@ -1611,12 +1611,22 @@
       const offRoute = live && state.cursorIdx < 0;
       const ev = offRoute ? [] : allEvents().filter(e => e.dist_m >= state.cursorM - 5 && (e.type !== 'alpr' || state.toggles.lpr)).sort((a, b) => noteM(a) - noteM(b));
       const spirited = isSpirited();
-      const shown = ev.filter(e => spirited || noteworthyInCruise(e) || e.type !== 'corner').filter(e => noteM(e) - state.cursorM <= 3000).slice(0, 3);
+      const steps = !offRoute && track && track.kind === 'route' ? track.steps : null;
+      const shown = ev.filter(e => spirited || noteworthyInCruise(e) || e.type !== 'corner').filter(e => noteM(e) - state.cursorM <= 3000)
+        .filter(e => !(e.type === 'corner' && ApexDirections.atJunction(steps, noteM(e)))).slice(0, 3);   // a junction shows once, as the direction
       const notes = shown.map(e => {
         const d = distLabel(Math.max(0, noteM(e) - state.cursorM));   // 0 once you're in the corner
         return { key: `${e.type}:${e.index}:${e.dist_m}`, type: e.type, code: e.code, call: state.noteWords === 'plain' ? ApexPlainNotes.plainCall(e) : e.call, sub: subFor(e) + linkLabel(e), dist: d.n, unit: d.u, distM: Math.max(0, noteM(e) - state.cursorM),
                  dir: e.dir, severity: e.severity, turnRad: e.turn_rad, mods: e.mods || [] };
       });
+      // The route's junctions in the same strip, in road order with the notes (IDEAS V-04).
+      (steps || []).forEach((st, i) => {
+        const ahead = st.m - state.cursorM, n = ahead >= -5 && ahead <= 3000 ? ApexDirections.stripNote(st) : null;
+        if (!n) return;
+        const d = distLabel(Math.max(0, ahead));
+        notes.push({ key: `turn:${i}`, type: 'turn', code: n.code, call: n.call, sub: '', dist: d.n, unit: d.u, distM: Math.max(0, ahead), dir: n.dir, angle: n.angle, mods: [] });
+      });
+      notes.sort((a, b) => a.distM - b.distM).splice(3);
       notes.quietText = offRoute ? (!track ? 'No route planned' : offRouteText()) : track ? `${track.name} · ${spirited ? 'Full notes' : 'Quiet · bumps and cameras only'}` : 'Plan a route for notes';
       Inst.renderNotes($('notes'), look.theme, notes);
       if (live) pushActivity(notes);
@@ -3719,6 +3729,8 @@
         note.classList.toggle('err', !!(state.liveVoice && (st === 'error' || info.error)));
       }
     }
+    // The app never loads the downloaded voice engine (guideline 2.5.2; web/voice.js): no switch, names use the phone voice.
+    if (IN_APP_SHELL) { state.liveVoice = false; $('liveVoiceBtn').hidden = true; $('liveNote').hidden = true; }
     $('liveVoiceBtn').addEventListener('click', () => {
       const retry = state.liveVoice && window.ApexVoice && ApexVoice.liveState() === 'error';   // a failed load: tapping again tries again instead of switching off
       if (!retry) state.liveVoice = !state.liveVoice;
@@ -4096,7 +4108,7 @@
     function pushActivity(notes) {
       if (!liveAct.on) return;
       const n = notes && notes[0];
-      const fields = { note: n ? n.call : (track ? 'No notes ahead' : 'Recording'), distance: n ? `${n.dist} ${n.unit}`.trim() : '', eta: etaText || '' };
+      const fields = { note: n ? (n.type === 'turn' ? `${n.code}${n.call ? ' · ' + n.call : ''}` : n.call) : (track ? 'No notes ahead' : 'Recording'), distance: n ? `${n.dist} ${n.unit}`.trim() : '', eta: etaText || '' };
       const key = JSON.stringify(fields), now = performance.now();
       if (key === liveAct.last || (now - liveAct.at < 3000 && liveAct.last && JSON.parse(liveAct.last).note === fields.note)) return;
       liveAct.last = key; liveAct.at = now;

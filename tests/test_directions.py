@@ -34,6 +34,7 @@ out.close = D.due([{ m: 100, type: 16, street: null }], 0, 25, s2, 'r2').map((l)
 // placing: maneuvers that aren't said are dropped, out-of-order or unplaced ones too
 out.placed = D.placeSteps([{ lat: 1, lon: 1, type: 1 }, { lat: 2, lon: 2, type: 15, street: 'A' }, { lat: 3, lon: 3, type: 10 }, { lat: 4, lon: 4, type: 9 }],
   (lat) => ({ 2: 500, 3: null, 4: 900 })[lat]);
+out.strip = [{ type: 15, street: 'Deals Gap Road' }, { type: 9, street: null }, { type: 26, street: 'X', exits: 3 }, { type: 4 }, { type: 8, street: 'Y' }].map(D.stripNote);
 console.log(JSON.stringify(out));
 """
 
@@ -73,3 +74,13 @@ def test_corner_notes_at_junctions_left_out(out):
 def test_close_start_and_placing(out):
     assert out["close"] == ["Bear left"]
     assert out["placed"] == [{"m": 500, "type": 15, "street": "A", "exits": None}, {"m": 900, "type": 9, "street": None, "exits": None}]
+
+
+def test_strip_notes(out):
+    assert out["strip"] == [
+        {"code": "Left", "call": "Deals Gap Road", "dir": "L", "angle": 90},
+        {"code": "Bear right", "call": "", "dir": "R", "angle": 45},
+        {"code": "Roundabout · exit 3", "call": "X", "dir": "O", "angle": 0},
+        {"code": "Arrive", "call": "Destination", "dir": "A", "angle": 0},
+        None,
+    ]
