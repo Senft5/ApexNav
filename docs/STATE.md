@@ -381,7 +381,7 @@ docs/SOCIAL.md.
   the map region. Now asserts RUN/ROUTE controls and a live pace note.
 
 ### Active bugs / limitations
-- Ramp loops (cloverleafs) read as "Switchbacks"; needs Valhalla road class to veto motorway links.
+- ~~Ramp loops (cloverleafs) read as "Switchbacks"~~: fixed by R-34 (edge use from map matching vetoes ramps) for profiles exported with limits.
 - Sight offset M is a constant 4 m; landcover (forest vs field) should set it per corner.
 - Single-pass bumps are unverified (1 of 7 repeat); multi-pass store still to build.
 - Route scoring (archetypes/axes) exists only in Python; routes in the browser get corners,

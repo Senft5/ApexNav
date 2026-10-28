@@ -515,7 +515,7 @@ def alpr_counts_by_sector(lat, lon, sector_ids, alpr_nodes) -> dict[int, int]:
 
 
 def score_sectors(dist_m, corners, camber_rad, roughness_rms_g, hazards, lap, sight_m,
-                  limit_mps=None, alpr_counts=None) -> list[dict]:
+                  limit_mps=None, alpr_counts=None, ramp=None) -> list[dict]:
     """Sectors of SECTOR_LENGTH_M scored 0-100 on TECH/FLOW/SURF/CLEAR plus an archetype.
 
     TECH and FLOW come from the reference lap (core/reference_lap.py), read over a
@@ -551,6 +551,13 @@ def score_sectors(dist_m, corners, camber_rad, roughness_rms_g, hazards, lap, si
             known = lim[np.isfinite(lim)]
             town = len(known) > 0 and float(np.mean(known <= TOWN_LIMIT_MPS)) > 0.5
 
+        # ramp: per sample, 1 on a motorway link / ramp (map matching's edge use), 0 off it, NaN unknown (IDEAS R-34)
+        on_ramp = False
+        if ramp is not None:
+            r = np.asarray(ramp, dtype=float)[lo:hi]
+            known = r[np.isfinite(r)]
+            on_ramp = len(known) > 0 and float(np.mean(known > 0.5)) > 0.5
+
         rough = np.asarray(roughness_rms_g)[lo:hi]
         haz = haz_by_sector.get(int(sid), [])
         surf = 100.0 - 300.0 * max(0.0, float(np.mean(rough)) - 0.03) - 12.0 * len(haz)
@@ -566,7 +573,7 @@ def score_sectors(dist_m, corners, camber_rad, roughness_rms_g, hazards, lap, si
             "start_m": float(dist_m[lo]),
             "end_m": float(dist_m[hi - 1]),
             "corners": sum(1 for c in corners if lo <= c["apex"] < hi),
-            "archetype": rl.archetype(f, town),
+            "archetype": rl.archetype(f, town, on_ramp),
             "tech": axes["tech"],
             "flow": int(round(np.clip(flow, 0, 100))),
             "surf": int(round(np.clip(surf, 0, 100))),

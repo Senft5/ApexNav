@@ -120,6 +120,27 @@ def test_sector_clear_is_unknown_without_alpr_data():
     assert all(s["clear"] == 100 for s in sectors if s["id"] != int(sids[150]))
 
 
+def test_a_cloverleaf_loop_is_a_connector_not_switchbacks():
+    """IDEAS R-34: a ramp bends like a hairpin; map matching's edge use says it is a motorway link."""
+    from core import reference_lap as rl
+    loop = [("straight", 200.0)] + sum([[("arc", 25.0, 270.0 * (-1) ** i), ("straight", 150.0)] for i in range(4)], []) + [("straight", 200.0)]
+    lat, lon = path_from_legs(loop)
+    kappa, ds = rd.compute_curvature(lat, lon)
+    n = len(lat)
+    dist = np.arange(n) * 5.0
+    sight = rd.sight_distance_m(lat, lon)
+    corners = rd.detect_corners(kappa, ds)
+    lap = rl.simulate(kappa, ds, sight)
+    args = (dist, corners, np.zeros(n), np.full(n, 0.05), [], lap, sight)
+    plain = rd.score_sectors(*args)
+    assert any(s["archetype"] == "Switchbacks" for s in plain)
+    ramp = rd.score_sectors(*args, ramp=np.ones(n))
+    assert all(s["archetype"] == "Connector" for s in ramp)
+    unknown = rd.score_sectors(*args, ramp=np.full(n, np.nan))           # unknown use: no veto
+    assert [s["archetype"] for s in unknown] == [s["archetype"] for s in plain]
+    assert rl.archetype({}, town=False, ramp=True) == "Connector"
+
+
 @pytest.mark.parametrize("path", sorted(glob.glob("web/data/*.js")))
 def test_shipped_drive_data_has_no_fabricated_events(path):
     text = open(path, encoding="utf-8").read()

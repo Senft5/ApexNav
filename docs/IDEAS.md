@@ -98,7 +98,7 @@ long-press pin (#61), Apple place search and nearby suggestions in the app (#73)
 | R-31 | "Why this route" explainer: the stages it uses, what each adds, and what it cost in minutes | M | S | done (#115) | trust-building |
 | R-32 | Benchmark roads (Tail of the Dragon, Big Sur, Stelvio, Route 33) must rank in their region's top decile; CI test | M | M | todo | ROAD_INTELLIGENCE §6.2 |
 | R-33 | Preference learning: after a drive, "which was better, A or B?" fits per-user and global weights | H | L | todo | ROAD_INTELLIGENCE §6.3 |
-| R-34 | Ramp/cloverleaf loops no longer read as Switchbacks (veto motorway links by road class) | M | S | todo | STATE 2026-10-25 (c) |
+| R-34 | Ramp/cloverleaf loops no longer read as Switchbacks (veto motorway links by road class) | M | S | done: the exporter's one map match also reads `edge.use`; a sector mostly on `ramp`/`turn_channel` is a Connector (`archetype(..., ramp=True)`); unknown use, no veto | STATE 2026-10-25 (c) |
 | R-35 | Avoid known speed traps and ALPR cameras as a routing option, not only a note | M | S | todo | DeFlock layer, Waze |
 | R-36 | Crowd quiet hours: prefer stages that are empty at the time you'll arrive (from anonymous counts) | M | L | todo | Strava heatmap, Google popular times |
 | R-37 | Return-to-start "home by" mode on a loop that shortens itself live if you're running late | M | M | partial (a loop's route card takes a Home by time; driving it, a live arrival more than 5 min late offers Head home: the quickest way back to the start. The loop doesn't yet shorten itself by dropping a stage) | Calimoto |
