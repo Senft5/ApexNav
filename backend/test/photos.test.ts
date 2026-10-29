@@ -1,4 +1,4 @@
-import { exports } from "cloudflare:workers";
+import { env, exports } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { ORIGIN, api, freshDb, makeUser, ok, type TestUser } from "./helpers";
 import { stripJpeg } from "../src/photos";
@@ -74,5 +74,18 @@ describe("photos", () => {
     expect((await api(c, "GET", `/api/photos/${id}`)).status).toBe(404);
     expect((await api(a, "GET", `/api/photos/${id}`)).status).toBe(200);
     expect((await api(a, "POST", "/api/reports", { kind: "photo", target: id, reason: "abuse" })).status).toBe(404);   // not your own
+  });
+
+  it("a crew's cover is its owner's; a crest of its own needs the Club livery (REVIEW.md 5.1)", async () => {
+    const a = await makeUser("alice"), b = await makeUser("bob");
+    const crew = ((await (await ok(api(a, "POST", "/api/crews", { name: "Ridge Runners" }))).json()) as { id: string }).id;
+    await ok(upload(a, `kind=crew&ref=${crew}`, jpeg()));
+    expect((await upload(b, `kind=crew&ref=${crew}`, jpeg())).status).toBe(404);
+    expect((await upload(a, `kind=crest&ref=${crew}`, jpeg())).status).toBe(404);          // Plain
+    await env.DB.prepare("INSERT INTO pro_entitlements (user_id, source, since) VALUES (?, 'founder', datetime('now', '-90 days'))").bind(a.id).run();
+    const tok = ((await (await ok(api(a, "POST", `/api/crews/${crew}/invite`))).json()) as { token: string }).token;
+    await ok(api(b, "POST", "/api/crews/join", { token: tok }));
+    await env.DB.prepare("INSERT INTO pro_entitlements (user_id, source, since) VALUES (?, 'founder', datetime('now', '-40 days'))").bind(b.id).run();
+    await ok(upload(a, `kind=crest&ref=${crew}`, jpeg()));                                  // 3 + 2 = Club
   });
 });

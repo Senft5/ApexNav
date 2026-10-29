@@ -15,8 +15,11 @@
   drive with Going, the Vetta Score board this month, crew chat (30 days). Migration 0031 applied to both D1.
 - [x] Roadmap 21: crew drives get lead and sweep roles (take or give up), up to five regroup points, roles on the crew
   page's card, and the morning-of reminder on the idle map (crew_events.js todayDrive). Migration 0032 applied to both D1.
-- Exact next task: roadmap 22, Decals and livery tiers (Club, Works, Factory) with the livery editor. Pro isn't on sale, so
-  Decals can't be earned yet: build the mechanics behind the `pro` flag.
+- [x] Roadmap 22 (core): Decals from verified Pro (backend/src/livery.ts, migration 0033 applied to both D1), tiers, the
+  livery box, Club (second colour, pinned route, crest photo) and Works (third colour, patterns) in the editor. Dormant
+  until StoreKit writes pro_entitlements. Postponed: chat pins, templates, badges, house stage, call sign, Factory.
+- Exact next task: roadmap 23, build threads (car header, stage bar, posts with photos and parts, replies vs suggestions
+  with "Tried it", follow; tables from migration 0030).
 
 ## Session 2026-10-29 (day): design phase 2
 

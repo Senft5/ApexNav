@@ -6,6 +6,20 @@ it says so. Things only you can do are in docs/OWNER_TODO.md.
 
 ## 2026-10-29
 
+**Decals and livery tiers (REVIEW.md 5.1, roadmap 22), built but dormant.** My calls:
+- *The server counts Pro only from `pro_entitlements`*, which nothing writes yet: StoreKit's App Store Server Notifications
+  will (with the founders' grant and earned Pro). So every crew is Plain today and the livery box says where Decals come
+  from. Migration 0033 is applied to both D1 databases.
+- *A Pro member's Decals go to every crew they're in* (1, then 2, then 3 from the third month of continuous Pro), unless
+  they keep them off one ("Take them off"). The review's "placed on a crew" became automatic with an opt-out, so nobody
+  has to manage them.
+- *Built now*: Club (5) unlocks a second stripe colour, a pinned route (kept past the usual 30-day route expiry while
+  pinned) and a crest photo; Works (12) a third colour and five stripe patterns. Gates are on the Worker. A crew that
+  drops a tier falls back to the look it still has, and gets the rest back when it climbs again.
+- *Postponed, not dropped* (they need parts that don't exist yet): Club's chat pins and event templates; Works' member
+  badges, house stage, convoy call sign and templates; all of Factory (animated crest, crew voice line, crew page in the
+  share card, custom hazard categories). They come after build threads and friends on the map.
+
 **Crew drives get roles, regroup points and a morning reminder (REVIEW.md roadmap 21).** My calls:
 - *Two roles, lead and sweep.* The planner leads unless they name someone; the sweep is named at planning or taken later
   by anyone in the crew ("I'll sweep"), which also marks them going. Saying you're not going frees your role. The planner

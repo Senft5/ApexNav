@@ -21,6 +21,7 @@ import {
 import { deleteAccount, exportMyData } from "./account";
 import { carCreate, carDelete, carUpdate, myCars, peoplesCars } from "./garage";
 import { chatDelete, chatList, chatPost, crewPage, crewPageUpdate } from "./crew_page";
+import { decalsPlace } from "./livery";
 import { photoDelete, photoList, photoServe, photoUpload, photoUse } from "./photos";
 import { block, blockList, fileReport, isModerator, moderationQueue, moderationResolve, report, unblock } from "./safety";
 import { contribute, setContribute } from "./contribute";
@@ -145,6 +146,7 @@ on("DELETE", "/api/events/:id", async (req, env, m) => { await eventCancel(env, 
 // the crew page (src/crew_page.ts, REVIEW.md roadmap 20)
 on("GET", "/api/crews/:id/page", async (req, env, m) => json(await crewPage(env, await requireMember(req, env), m.groups!.id)));
 on("PUT", "/api/crews/:id/page", async (req, env, m) => { await crewPageUpdate(env, await requireMember(req, env), m.groups!.id, req); return noContent(); });
+on("PUT", "/api/crews/:id/decals", async (req, env, m) => { await decalsPlace(env, await requireMember(req, env), m.groups!.id, req); return noContent(); });
 on("GET", "/api/crews/:id/chat", async (req, env, m) => json(await chatList(env, await requireMember(req, env), m.groups!.id, new URL(req.url))));
 on("POST", "/api/crews/:id/chat", async (req, env, m) => json(await chatPost(env, await requireMember(req, env), m.groups!.id, req), 201));
 on("DELETE", "/api/crews/:id/chat/:msg", async (req, env, m) => { await chatDelete(env, await requireMember(req, env), m.groups!.id, m.groups!.msg); return noContent(); });

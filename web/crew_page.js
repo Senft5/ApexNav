@@ -45,6 +45,30 @@
     return { faces, more: Math.max(0, list.length - max), n: list.length };
   }
   const stripeOk = (s) => typeof s === 'string' && /^#[0-9a-f]{6}$/i.test(s);
+  // Livery tiers (REVIEW.md 5.1; backend/src/livery.ts): what each unlocks on this page.
+  const TIER_AT = { plain: 0, club: 5, works: 12, factory: 20 };
+  const TIER_NAME = { plain: 'Plain', club: 'Club', works: 'Works', factory: 'Factory' };
+  const PATTERNS = ['blocks', 'bands', 'chevron', 'checker', 'pinstripe'];
+  const PATTERN_NAMES = { blocks: 'Blocks', bands: 'Bands', chevron: 'Chevron', checker: 'Checker', pinstripe: 'Pinstripe' };
+  const atLeast = (have, need) => (TIER_AT[have] ?? 0) >= (TIER_AT[need] ?? 0);
+  /** The livery line: "14 Decals from 5 supporters · Factory at 20"; Plain with none says where Decals come from. */
+  function liveryLine(l) {
+    if (!l || !l.decals) return 'Decals come from crew-mates with Vetta Pro.';
+    const n = (l.supporters || []).length;
+    const head = `${l.decals} Decal${l.decals === 1 ? '' : 's'} from ${n} supporter${n === 1 ? '' : 's'}`;
+    return l.next ? `${head} \u00b7 ${TIER_NAME[l.next.tier]} at ${l.next.at}` : head;
+  }
+  /** The stripe band's CSS background for a pattern and up to three colours (ink fills the gaps). */
+  function stripeCss(pattern, a, b, c, ink = 'var(--panel-ink)', k = 1) {
+    const A = stripeOk(a) ? a : 'var(--accent)', B = stripeOk(b) ? b : ink, C = stripeOk(c) ? c : B;
+    switch (pattern) {
+      case 'bands': return `linear-gradient(180deg, ${A} 0 34%, ${B} 34% 67%, ${C} 67% 100%)`;
+      case 'chevron': return `repeating-linear-gradient(135deg, ${A} 0 10px, ${B} 10px 16px, ${C} 16px 22px)`;
+      case 'checker': return `repeating-conic-gradient(${A} 0 25%, ${B} 0 50%) 0 0 / 12px 12px`;
+      case 'pinstripe': return `linear-gradient(180deg, ${B} 0 40%, ${A} 40% 60%, ${C} 60% 100%)`;
+      default: return `repeating-linear-gradient(90deg, ${ink} 0 ${92 * k}px, ${A} ${92 * k}px ${124 * k}px, ${B === ink ? ink : B} ${124 * k}px ${136 * k}px, transparent ${136 * k}px ${148 * k}px)`;
+    }
+  }
 
   function crestSvg(id, px = 64) {
     const d = root.document, svg = d.createElementNS(SVG, 'svg');
@@ -115,6 +139,20 @@
     .cp-swatches button { width: 40px; height: 40px; border: 2px solid var(--panel); outline: 1.5px solid var(--rule); }
     .cp-swatches button[aria-pressed="true"] { outline: 3px solid var(--panel-ink); }
     .cp-switch { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+    .cp-livery { border: 1.5px solid var(--panel-ink); padding: 12px 14px; display: grid; gap: 8px; }
+    .cp-livery h3 { margin: 0; font-size: 22px; border: 0; padding: 0; }
+    .cp-meter { position: relative; height: 12px; border: 1.5px solid var(--panel-ink); }
+    .cp-meter i { position: absolute; inset: 0 auto 0 0; background: var(--panel-ink); }
+    .cp-meter b { position: absolute; top: -5px; bottom: -5px; width: 1.5px; background: var(--panel-ink); }
+    .cp-stickers { display: flex; flex-wrap: wrap; gap: 6px; }
+    .cp-stickers span { width: 34px; height: 34px; border: 1.5px solid var(--panel-ink); display: grid; place-items: center; font-family: var(--font-num); font-size: 13px; color: #fff; }
+    .cp-pinned { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+    .cp-lock { display: inline-block; margin-left: 8px; padding: 1px 6px; border: 1.5px solid var(--panel-dim); color: var(--panel-dim); font-size: 13px; transform: rotate(-2deg); }
+    .cp-livery-ed fieldset[disabled] { opacity: 0.5; }
+    .cp-livery-ed fieldset { border: 0; padding: 0; margin: 0; display: grid; gap: 8px; }
+    .cp-patterns { display: flex; flex-wrap: wrap; gap: 8px; }
+    .cp-patterns button { width: 72px; height: 30px; border: 1.5px solid var(--rule); }
+    .cp-patterns button[aria-pressed="true"] { outline: 3px solid var(--panel-ink); }
   `;
 
   function mount(page) {
@@ -140,7 +178,7 @@
         const redoDrive = part((c2) => nextDrive(c2, redoDrive), () => driveSec, (n) => { driveSec = n; });
         const redoBoard = part((c2) => board(c2, redoBoard), () => boardSec, (n) => { boardSec = n; });
         driveSec = nextDrive(c, redoDrive); boardSec = board(c, redoBoard);
-        box.replaceChildren(header(c, draw), el('div', { className: 'cp-body' }, titleBlock(c), driveSec, boardSec, chat(c)));
+        box.replaceChildren(header(c, draw), el('div', { className: 'cp-body' }, titleBlock(c), liveryBox(c, draw), ...(c.pinned ? [pinnedRow(c)] : []), driveSec, boardSec, chat(c)));
       };
       draw();
       return box;
@@ -152,7 +190,9 @@
       if (c.is_owner) head.append(btn('Edit livery', () => editLivery(c, redo), 'ink-btn cp-edit'));
       const crest = el('div', { className: 'cp-crest' });
       crest.append(c.crest_photo_id && P() ? P().img(c.crest_photo_id, '', `${c.name}'s crest`) : crestSvg(c.crest || 'apex'));
-      return el('div', {}, head, el('div', { className: 'cp-stripe' }), crest);
+      const band = el('div', { className: 'cp-stripe' });
+      band.style.background = stripeCss(c.pattern, c.stripe, c.stripe2, c.stripe3);
+      return el('div', {}, head, band, crest);
     }
 
     function titleBlock(c) {
@@ -162,6 +202,41 @@
       left.append(el('p', { className: 'cp-meta', textContent: meta }));
       const right = c.is_owner && page.invite ? btn('Invite', () => page.invite(c), 'ink-btn') : '';
       return el('div', { className: 'cp-title' }, left, right);
+    }
+
+    // The livery (REVIEW.md 5.1, mockup 09): the tier, the Decals and the next threshold, supporters as tilted stickers.
+    function liveryBox(c, redo) {
+      const l = c.livery || { tier: 'plain', decals: 0, next: { tier: 'club', at: 5 }, supporters: [] };
+      const box = el('div', { className: 'cp-livery' }, el('h3', { textContent: `${TIER_NAME[l.tier] || 'Plain'} livery` }),
+        el('span', { className: 'note', textContent: liveryLine(l) }));
+      const meter = el('div', { className: 'cp-meter', role: 'img' });
+      meter.setAttribute('aria-label', `${l.decals} of 20 Decals`);
+      const fill = el('i'); fill.style.width = `${Math.min(100, (l.decals / 20) * 100)}%`; meter.append(fill);
+      for (const t of ['club', 'works']) { const tick = el('b'); tick.style.left = `${(TIER_AT[t] / 20) * 100}%`; meter.append(tick); }
+      box.append(meter);
+      if ((l.supporters || []).length) {
+        const stickers = el('div', { className: 'cp-stickers' });
+        l.supporters.forEach((s, i) => {
+          const tag = el('span', { textContent: String(s.decals), title: `@${s.handle || '?'}` });
+          tag.style.background = [c.stripe, c.stripe2, c.stripe3, '#111111'].filter(stripeOk)[i % 2] || 'var(--accent)';
+          tag.style.transform = `rotate(${[-6, 4, -3, 7, -5][i % 5]}deg)`;
+          tag.setAttribute('aria-label', `@${s.handle || '?'}: ${s.decals} Decal${s.decals === 1 ? '' : 's'}`);
+          stickers.append(tag);
+        });
+        box.append(stickers);
+      }
+      const mine = l.mine;
+      if (mine && mine.pro) {
+        box.append(btn(mine.on ? `Your ${mine.decals} Decal${mine.decals === 1 ? ' is' : 's are'} on ${c.name}. Take them off` : `Put your Decals on ${c.name}`, async () => {
+          const r = await apiCall('PUT', `/api/crews/${encodeURIComponent(c.id)}/decals`, { on: !mine.on }).catch(() => null);
+          if (r && r.ok) redo(); else toast('Couldn\u2019t change that. Try again.');
+        }, 'linkbtn'));
+      }
+      return box;
+    }
+    function pinnedRow(c) {
+      return el('div', { className: 'cp-pinned' }, el('span', { className: 'note', textContent: 'Pinned route' }), el('b', { textContent: c.pinned.name }),
+        page.openRoute ? btn('Open', () => page.openRoute(c.pinned.id), 'linkbtn') : '');
     }
 
     function nextDrive(c, redo) {
@@ -252,7 +327,7 @@
 
     // The owner's livery editor, Plain tier: motto, crest, stripe colour, cover photo.
     function editLivery(c, redo) {
-      const d = root.document, ov = el('div', { className: 'overlay show cp-livery' });
+      const d = root.document, ov = el('div', { className: 'overlay show cp-livery-ed' });
       ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true'); ov.setAttribute('aria-label', 'Edit livery');
       let crest = c.crest || 'apex', stripe = stripeOk(c.stripe) ? c.stripe.toLowerCase() : STRIPES[0];
       const motto = el('input', { className: 'field', maxLength: 80, value: c.motto || '', placeholder: 'A line under the name' });
@@ -271,17 +346,44 @@
       paint();
       const close = () => ov.remove();
       const save = btn('Save', async () => {
-        const r = await apiCall('PUT', `/api/crews/${encodeURIComponent(c.id)}/page`, { motto: motto.value.trim() || null, crest, stripe }).catch(() => null);
+        const body = { motto: motto.value.trim() || null, crest, stripe };
+        if (club) { body.stripe2 = stripe2; body.pinned_route_id = routeSel.value || null; }
+        if (works) { body.stripe3 = stripe3; body.pattern = pattern; }
+        const r = await apiCall('PUT', `/api/crews/${encodeURIComponent(c.id)}/page`, body).catch(() => null);
         if (r && r.ok) { close(); redo(); } else toast('Couldn’t save the livery. Try again.');
       }, 'ink-btn solid');
       const cover = P() ? P().picker(c.cover_photo_id ? 'Change cover photo' : 'Add a cover photo', 'crew', c.id, () => { close(); redo(); }, { toast }) : '';
+      const tier = (c.livery && c.livery.tier) || 'plain', club = atLeast(tier, 'club'), works = atLeast(tier, 'works');
+      const lock = (t) => el('span', { className: 'cp-lock', textContent: `${TIER_NAME[t]} livery` });
+      let stripe2 = c.stripe2 || null, stripe3 = c.stripe3 || null, pattern = c.pattern || 'blocks', pinned = c.pinned ? c.pinned.id : '';
+      const sw2 = el('div', { className: 'cp-swatches', role: 'group' }), sw3 = el('div', { className: 'cp-swatches', role: 'group' }), pats = el('div', { className: 'cp-patterns', role: 'group' });
+      sw2.setAttribute('aria-label', 'Second colour'); sw3.setAttribute('aria-label', 'Third colour'); pats.setAttribute('aria-label', 'Pattern');
+      const paintMore = () => {
+        const swatch = (cur, set, list) => list.map((s) => { const b = el('button', { type: 'button', style: `background:${s}`, onclick: () => { set(s); paintMore(); } });
+          b.setAttribute('aria-pressed', String(cur === s)); b.setAttribute('aria-label', STRIPE_NAMES[STRIPES.indexOf(s)]); return b; });
+        sw2.replaceChildren(...swatch(stripe2, (s) => { stripe2 = s; }, STRIPES));
+        sw3.replaceChildren(...swatch(stripe3, (s) => { stripe3 = s; }, STRIPES));
+        pats.replaceChildren(...PATTERNS.map((p) => { const b = el('button', { type: 'button', onclick: () => { pattern = p; paintMore(); } });
+          b.style.background = stripeCss(p, stripe, stripe2, stripe3, undefined, 0.35); b.setAttribute('aria-pressed', String(pattern === p)); b.setAttribute('aria-label', PATTERN_NAMES[p]); return b; }));
+      };
+      paintMore();
+      const routeSel = el('select', { className: 'field' });
+      routeSel.setAttribute('aria-label', 'Pinned route');
+      routeSel.append(el('option', { value: '', textContent: 'No pinned route' }), ...(c.routes || []).map((r) => el('option', { value: r.id, textContent: r.name, selected: r.id === pinned })));
+      if (c.pinned && !(c.routes || []).some((r) => r.id === c.pinned.id)) routeSel.append(el('option', { value: c.pinned.id, textContent: c.pinned.name, selected: true }));
+      const crestPick = P() ? P().picker(c.crest_photo_id ? 'Change crest photo' : 'Use a photo as the crest', 'crest', c.id, () => { close(); redo(); }, { toast }) : '';
+      const clubSet = el('fieldset', { disabled: !club }, el('legend', {}, el('b', { textContent: 'Second colour' }), club ? '' : lock('club')), sw2,
+        el('b', { textContent: 'Pinned route' }), routeSel, el('div', { className: 'row' }, crestPick));
+      const worksSet = el('fieldset', { disabled: !works }, el('legend', {}, el('b', { textContent: 'Third colour and pattern' }), works ? '' : lock('works')), sw3, pats);
       ov.append(el('div', { className: 'stack-8', style: 'max-width:520px' },
-        el('h2', { textContent: 'Plain livery' }),
+        el('h2', { textContent: `${TIER_NAME[tier]} livery` }),
         el('label', { className: 'stack-8' }, el('b', { textContent: 'Motto' }), motto),
         el('b', { textContent: 'Crest' }), crests,
         el('b', { textContent: 'Stripe' }), swatches,
         el('b', { textContent: 'Cover' }), el('div', { className: 'row' }, cover),
         el('p', { className: 'note', textContent: 'Photos lose their location data before they leave your phone.' }),
+        clubSet, worksSet,
+        el('p', { className: 'note', textContent: club ? liveryLine(c.livery) : `Club at 5 Decals, Works at 12. ${liveryLine(c.livery)}` }),
         el('div', { className: 'row' }, save, btn('Cancel', close, 'linkbtn'))));
       d.body.append(ov);
       motto.focus();
@@ -303,6 +405,6 @@
     return { view, switcher };
   }
 
-  const api = { mount, dateBlock, ago, goingFaces, stripeOk, crestSvg, CRESTS: Object.keys(CRESTS), STRIPES };
+  const api = { mount, dateBlock, ago, goingFaces, stripeOk, crestSvg, liveryLine, stripeCss, atLeast, CRESTS: Object.keys(CRESTS), STRIPES, PATTERNS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexCrewPage = api;
 })(typeof window !== 'undefined' ? window : globalThis);

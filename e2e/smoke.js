@@ -472,13 +472,15 @@ flow('crew page: the tab opens your crew; going, chat and the livery reach the W
   await page.click('.cp-edit');
   await page.click('.cp-crests button[aria-label="Peak"]');
   await page.click('.cp-swatches button[aria-label="Blue"]');
-  await page.click('.cp-livery button:has-text("Save")');
+  await page.click('.cp-livery-ed button:has-text("Save")');
   const find = (p) => sent.find((x) => x.p === p);
   for (let i = 0; i < 50 && !(find('/api/events/e1/rsvp') && find('/api/crews/k1/chat') && find('/api/crews/k1/page')); i++) await page.waitForTimeout(100);
   check(find('/api/events/e1/rsvp') && JSON.parse(find('/api/events/e1/rsvp').b).status === 'going', 'I\'m going sends going');
   check(find('/api/crews/k1/chat') && JSON.parse(find('/api/crews/k1/chat').b).body === 'Saturday it is', 'the message is sent');
   const liv = find('/api/crews/k1/page');
   check(liv && liv.m === 'PUT' && JSON.parse(liv.b).crest === 'peak' && JSON.parse(liv.b).stripe === '#1f5fa8', 'the livery saves the crest and stripe: ' + (liv && liv.b));
+  check(!('stripe2' in JSON.parse(liv.b)) && !('pattern' in JSON.parse(liv.b)), 'a Plain crew sends nothing past the Plain livery');
+  check(/Plain livery/.test(await page.textContent('.cp-livery')) && /Decals come from crew-mates with Vetta Pro/.test(await page.textContent('.cp-livery')), 'the livery box says Plain and where Decals come from');
 });
 
 flow('convoy: the leader shows a QR code of the link (Worker stubbed, IDEAS S-22)', async (page, base) => {

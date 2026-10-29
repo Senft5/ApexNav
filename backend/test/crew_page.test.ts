@@ -27,7 +27,7 @@ describe("crew page", () => {
     await ok(api(c, "POST", "/api/board", { segment_id: await makeSegment(c), driver_score: 900, driven_on: today() })); // carol shares nothing
     const p = await page(a, crew);
     expect(p.board.map((r: any) => [r.handle, r.score])).toEqual([["bob", 702], ["alice", null], ["carol", null]]);
-    expect(p).toMatchObject({ name: "Ridge Runners", members: 3, is_owner: true, livery: "plain", next: null, sharing_scores: false });
+    expect(p).toMatchObject({ name: "Ridge Runners", members: 3, is_owner: true, livery: { tier: "plain", decals: 0, next: { tier: "club", at: 5 }, supporters: [] }, next: null, sharing_scores: false });
     expect((await page(b, crew)).is_owner).toBe(false);
     expect((await api(out, "GET", `/api/crews/${crew}/page`)).status).toBe(404);
     await ok(api(a, "POST", "/api/blocks", { handle: "carol" }));
@@ -82,5 +82,46 @@ describe("crew page", () => {
     const res = await Promise.all(Array.from({ length: 33 }, (_, i) => api(a, "POST", `/api/crews/${crew}/chat`, { body: `line ${i}` })));
     expect(res.filter((r) => r.status === 201)).toHaveLength(30);
     expect(res.filter((r) => r.status === 429)).toHaveLength(3);
+  });
+
+  it("Decals: Pro crew-mates set the tier (1, 2, then 3 a member), each tier unlocks its part of the livery, opting out takes yours off", async () => {
+    const users = [await makeUser("alice"), await makeUser("bob"), await makeUser("carol"), await makeUser("dee")];
+    const [a, b, c, d] = users;
+    const crew = await crewOf(a, b, c, d);
+    const pro = (u: TestUser, daysAgo: number, expires: string | null = null) => env.DB.prepare(
+      "INSERT OR REPLACE INTO pro_entitlements (user_id, source, since, expires_at) VALUES (?, 'app_store', datetime('now', ?), ?)").bind(u.id, `-${daysAgo} days`, expires).run();
+    const route = ((await (await ok(api(a, "POST", "/api/routes", { name: "Skyway loop", geom: [[-84.1, 35.3], [-84.0, 35.4]], crews: [crew] }))).json()) as { id: string }).id;
+    // Plain: nothing past the Plain look
+    expect((await api(a, "PUT", `/api/crews/${crew}/page`, { stripe2: "#ffffff" })).status).toBe(403);
+    expect((await api(a, "PUT", `/api/crews/${crew}/page`, { pinned_route_id: route })).status).toBe(403);
+    // bob 3 decals (70 days), carol 2 (40 days): 5 = Club
+    await pro(b, 70); await pro(c, 40);
+    let p = await page(a, crew);
+    expect(p.livery).toMatchObject({ decals: 5, tier: "club", next: { tier: "works", at: 12 } });
+    expect(p.livery.supporters).toEqual([{ handle: "bob", decals: 3 }, { handle: "carol", decals: 2 }]);
+    await ok(api(a, "PUT", `/api/crews/${crew}/page`, { stripe2: "#FFFFFF", pinned_route_id: route }));
+    expect((await api(a, "PUT", `/api/crews/${crew}/page`, { stripe3: "#000000" })).status).toBe(403);   // Works
+    expect((await api(a, "PUT", `/api/crews/${crew}/page`, { pattern: "chevron" })).status).toBe(403);
+    expect((await api(a, "PUT", `/api/crews/${crew}/page`, { pattern: "zigzag" })).status).toBe(400);
+    p = await page(b, crew);
+    expect(p).toMatchObject({ stripe2: "#ffffff", pinned: { id: route, name: "Skyway loop" }, stripe3: null, pattern: null });
+    expect(p.livery.mine).toEqual({ pro: true, decals: 3, on: true });
+    expect(p.routes).toBeUndefined();                                                                  // only the owner picks
+    expect((await page(a, crew)).routes.map((r: any) => r.id)).toEqual([route]);
+    // carol keeps her Decals off: back to 3, Plain, and the Club look falls back without being lost
+    await ok(api(c, "PUT", `/api/crews/${crew}/decals`, { on: false }));
+    p = await page(a, crew);
+    expect(p.livery).toMatchObject({ decals: 3, tier: "plain" });
+    expect([p.stripe2, p.pinned]).toEqual([null, null]);
+    await ok(api(c, "PUT", `/api/crews/${crew}/decals`, { on: true }));
+    // dee and alice join in (3 each, a long time Pro), and an expired one counts nothing: 3 + 2 + 3 + 3 = 11, then 12 = Works
+    await pro(d, 400); await pro(a, 100, "2020-01-01 00:00:00");
+    expect((await page(a, crew)).livery).toMatchObject({ decals: 8, tier: "club" });
+    await pro(a, 100);
+    await env.DB.prepare("UPDATE pro_entitlements SET since = datetime('now', '-100 days') WHERE user_id = ?").bind(c.id).run();
+    expect((await page(a, crew)).livery).toMatchObject({ decals: 12, tier: "works", next: { tier: "factory", at: 20 } });
+    await ok(api(a, "PUT", `/api/crews/${crew}/page`, { stripe3: "#111111", pattern: "chevron" }));
+    expect(await page(c, crew)).toMatchObject({ stripe3: "#111111", pattern: "chevron" });
+    expect((await api(users[0], "PUT", `/api/crews/${crew}/decals`, { on: "yes" })).status).toBe(400);
   });
 });
