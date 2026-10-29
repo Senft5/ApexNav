@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-yrOKYWA5bw7vrpEc47BfWpsmLSQLQaFfkwSIyPC0APE=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-CES8NLLmD6kw55aXBeGfPwdZzAW/ASMM7LedQwxNU6c=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -45,6 +45,7 @@
   <script src="plain_notes.js"></script>
   <script src="hazard_reports.js"></script>
   <script src="route_card.js"></script>
+  <script src="plan_presets.js"></script>
   <script src="outbox.js"></script>
   <script src="stage_delta.js"></script>
   <script src="lanes.js"></script>
@@ -389,6 +390,34 @@
     .rc-tile.on { background: var(--panel-ink); color: var(--panel); } .rc-tile.on span { color: var(--panel); opacity: 0.8; }
     .rc-go { display: grid; grid-template-columns: 1.4fr 1fr; gap: 10px; margin-top: 14px; }
     .rc-go .ink-btn { min-height: 52px; font-size: 17px; }
+    /* ---------------- the plan sheet: basic level and More (REVIEW.md roadmap 6) ---------------- */
+    .loop-gauge { display: grid; grid-template-columns: 104px minmax(0, 1fr); gap: 12px; align-items: center; }
+    .loop-dial { position: relative; width: 104px; height: 104px; border-radius: 50%; border: 2.5px solid var(--panel-ink); display: flex; align-items: baseline;
+      justify-content: center; padding-top: 34px; background: var(--panel); box-shadow: inset 0 0 0 6px var(--panel), inset 0 0 0 7.5px var(--rule), 0 3px 0 var(--rule); }
+    .loop-dial i { position: absolute; left: 50%; top: 50%; width: 4px; height: 50px; margin: -50px 0 0 -2px; transform-origin: 50% 100%; transition: transform 0.2s ease-out; }
+    .loop-dial i::before { content: ""; position: absolute; left: 0; top: 4px; width: 4px; height: 16px; background: var(--accent); }
+    .loop-dial b { font: 800 36px/1 var(--font-num); font-variant-numeric: tabular-nums; }
+    .loop-dial small { font-size: 13px; font-weight: 600; color: var(--panel-dim); margin-left: 3px; }
+    .loop-side .note { margin: 6px 0 0; }
+    .plan-loop .detents > button { min-width: 0; font-size: 15px; padding: 0 2px; }
+    .plan-more { margin-top: 16px; border-top: 1px solid var(--rule); }
+    .plan-more > summary { list-style: none; cursor: pointer; display: flex; justify-content: space-between; align-items: center; min-height: 52px; font-size: 16px; font-weight: 700; }
+    .plan-more > summary::-webkit-details-marker { display: none; }
+    .plan-more > summary::after { content: ""; width: 9px; height: 9px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg); margin-right: 6px; transition: transform 0.15s; }
+    .plan-more[open] > summary::after { transform: rotate(45deg); }
+    .balance { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; min-height: 48px; font-size: 15px; font-weight: 600; }
+    .balance input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 30px; background:
+      linear-gradient(var(--panel-ink), var(--panel-ink)) center / 100% 2px no-repeat,
+      linear-gradient(var(--panel-ink), var(--panel-ink)) 25% center / 2px 12px no-repeat, linear-gradient(var(--panel-ink), var(--panel-ink)) 50% center / 2px 12px no-repeat,
+      linear-gradient(var(--panel-ink), var(--panel-ink)) 75% center / 2px 12px no-repeat; }
+    .balance input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 26px; height: 26px; border-radius: 50%; border: 2.5px solid var(--panel-ink); background: var(--panel); }
+    .balance input[type=range]::-moz-range-thumb { width: 22px; height: 22px; border-radius: 50%; border: 2.5px solid var(--panel-ink); background: var(--panel); }
+    .find-bar { position: sticky; bottom: 0; z-index: 2; margin: 16px -16px 0; padding: 10px 16px calc(10px + var(--safe-bottom)); background: var(--panel); border-top: 1px solid var(--rule); }
+    .plan.routed .find-bar, .plan:not(.open) .find-bar { display: none; }
+    .find-key { width: 100%; min-height: 52px; background: var(--panel-ink); color: var(--panel); font-size: 17px; font-weight: 700; box-shadow: inset 0 -3px 0 rgba(0,0,0,0.35); }
+    .find-key.busy { background: var(--panel-dim); }
+    .plan-presets { margin: 10px 0 2px; }
+    .place-all { display: block; margin: 6px 0 0; }
     .rc-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 18px; margin-top: 10px; }
     label.linkbtn { display: inline-flex; align-items: center; cursor: pointer; }
     .linkbtn { font: inherit; font-size: 15px; font-weight: 500; color: var(--panel-ink); text-decoration: underline; min-height: 44px; padding: 0 4px; background: none; border: none; }
@@ -610,27 +639,44 @@
         </div>
         <div class="plan-body" id="planBody">
             <section class="plan-search-section">
-              <div class="from-row">
-                <input class="field" id="fromInput" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="go" placeholder="From: current location" aria-label="From" autocomplete="off" />
-                <button class="icon-btn" id="swapBtn" aria-label="Swap From and To"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4v16M4 8l4-4 4 4M16 20V4M12 16l4 4 4-4"/></svg></button>
-              </div>
               <p class="plan-status" id="planStatus" role="status" aria-live="polite"></p>
               <div class="place-list" id="placeList" hidden></div>
+              <div class="stamps plan-presets" id="presetRow" role="group" aria-label="Your presets" hidden></div>
               <div class="plan-links">
                 <button class="linkbtn" id="tapRouteBtn">Tap the map</button>
-                <label class="linkbtn" id="gpxImportBtn">Open GPX<input type="file" id="gpxFile" accept=".gpx,application/gpx+xml,application/xml,text/xml" hidden /></label>
               </div>
-              <div class="ctl" role="group" aria-label="Loop from here"><div class="ctl-label">Loop <small>from here, back where you started</small></div>
-                <div class="detents"><button data-loop-mi="15">15 mi</button><button data-loop-mi="30">30 mi</button><button data-loop-mi="45">45 mi</button><button data-loop-min="60">1 h</button><button data-loop-min="120">2 h</button></div></div>
-              <div class="ctl" role="group" aria-label="Explore: the best roads near you"><div class="ctl-label">Explore <small>the best roads within</small></div>
-                <div class="detents"><button data-explore-min="15">15 min</button><button data-explore-min="30">30 min</button></div></div>
-              <div class="place-list" id="exploreList" hidden></div>
+              <!-- the basic level (REVIEW.md roadmap 6, mockup 02-plan-basic.html): a loop dial, the Roads switch, More -->
+              <div class="ctl plan-loop" role="group" aria-label="Loop from here"><div class="ctl-label">Or loop from here <small>back where you started</small></div>
+                <div class="loop-gauge">
+                  <div class="loop-dial" aria-hidden="true"><i id="loopDialMark"></i><b id="loopDialVal">45</b><small id="loopDialUnit">mi</small></div>
+                  <div class="loop-side">
+                    <div class="detents" id="loopDetents"><button data-loop-mi="15" aria-pressed="false">15 mi</button><button data-loop-mi="30" aria-pressed="false">30 mi</button><button data-loop-mi="45" aria-pressed="true">45 mi</button><button data-loop-min="60" aria-pressed="false">1 h</button><button data-loop-min="120" aria-pressed="false">2 h</button></div>
+                    <p class="note" id="loopNote">Turn the dial, then Find a loop. It starts and ends where you are.</p>
+                  </div>
+                </div>
+              </div>
               <div class="ctl"><div class="ctl-label">Roads <small>how much of the long way</small></div>
-                <div class="switch" role="radiogroup" aria-label="Route style"><button data-fun="quick" role="radio" aria-checked="false">Quick</button><button data-fun="fun" role="radio" aria-checked="false">Fun</button><button data-fun="max" role="radio" aria-checked="false">Max fun</button></div></div>
-              <div class="ctl"><div class="ctl-label">Avoid <small>stamped means avoided</small></div>
-                <div class="stamps" role="group" aria-label="Avoid"><button data-avoid="highways" aria-pressed="false">Highways</button><button data-avoid="tolls" aria-pressed="false">Tolls</button><button data-avoid="ferries" aria-pressed="false">Ferries</button><button data-avoid="unpaved" aria-pressed="false">Unpaved</button><button data-avoid="towns" aria-pressed="false">Towns</button><button data-avoid="cameras" aria-pressed="false">Cameras</button></div></div>
-              <div class="ctl" role="group" aria-label="Corners you like"><div class="ctl-label">Corner mix</div>
-                <div class="stamps"><button data-pref="tight" data-v="-1" aria-pressed="false">Fewer hairpins</button><button data-pref="tight" data-v="1" aria-pressed="false">More hairpins</button><button data-pref="fast" data-v="-1" aria-pressed="false">Fewer sweepers</button><button data-pref="fast" data-v="1" aria-pressed="false">More sweepers</button></div></div>
+                <div class="switch" role="radiogroup" aria-label="Route style"><button data-fun="quick" role="radio" aria-checked="false">Quick</button><button data-fun="fun" role="radio" aria-checked="false">Fun</button><button data-fun="max" role="radio" aria-checked="false">Max fun</button></div>
+                <p class="note" id="funNote"></p></div>
+              <details class="plan-more" id="planMore">
+                <summary>More: avoid, corner mix, explore, start point</summary>
+                <div class="ctl"><div class="ctl-label">Start from</div>
+                  <div class="from-row">
+                <input class="field" id="fromInput" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="go" placeholder="From: current location" aria-label="From" autocomplete="off" />
+                <button class="icon-btn" id="swapBtn" aria-label="Swap From and To"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4v16M4 8l4-4 4 4M16 20V4M12 16l4 4 4-4"/></svg></button>
+              </div></div>
+                <div class="ctl"><div class="ctl-label">Avoid <small>stamped means avoided</small></div>
+                  <div class="stamps" role="group" aria-label="Avoid"><button data-avoid="highways" aria-pressed="false">Highways</button><button data-avoid="tolls" aria-pressed="false">Tolls</button><button data-avoid="ferries" aria-pressed="false">Ferries</button><button data-avoid="unpaved" aria-pressed="false">Unpaved</button><button data-avoid="towns" aria-pressed="false">Towns</button><button data-avoid="cameras" aria-pressed="false">Cameras</button></div></div>
+                <div class="ctl" role="group" aria-label="Corner mix"><div class="ctl-label">Corner mix</div>
+                  <label class="balance"><span>Fewer hairpins</span><input type="range" min="-1" max="1" step="1" value="0" data-pref-range="tight" aria-label="Hairpins: fewer, any or more" /><span>More</span></label>
+                  <label class="balance"><span>Fewer sweepers</span><input type="range" min="-1" max="1" step="1" value="0" data-pref-range="fast" aria-label="Fast sweepers: fewer, any or more" /><span>More</span></label></div>
+                <div class="ctl" role="group" aria-label="Explore: the best roads near you"><div class="ctl-label">Explore <small>the best roads within</small></div>
+                  <div class="detents"><button data-explore-min="15">15 min</button><button data-explore-min="30">30 min</button></div></div>
+                <div class="place-list" id="exploreList" hidden></div>
+                <div class="ctl"><div class="ctl-label">Presets <small>this setup, one tap next time</small></div>
+                  <div class="row"><button class="ink-btn" id="presetSaveBtn">Save as a preset</button><label class="linkbtn" id="gpxImportBtn">Open GPX<input type="file" id="gpxFile" accept=".gpx,application/gpx+xml,application/xml,text/xml" hidden /></label></div></div>
+              </details>
+              <div class="find-bar"><button class="find-key" id="findLoopBtn">Find a loop</button></div>
             </section>
             <section id="routeCard" hidden>
               <h3 id="routeCardName"></h3>
@@ -3190,7 +3236,12 @@
       funLevel = level;
       try { localStorage.setItem(FUN_LEVEL, level); } catch (_) { /* storage off: this session only */ }
       document.querySelectorAll('[data-fun]').forEach(b => { const on = b.dataset.fun === level; b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); });
+      $('funNote').textContent = FUN_NOTES[level] || '';
+      paintPresets();
     }
+    // What each Roads position does, from fun_route.js LEVELS (the extra time each one may spend).
+    const FUN_NOTES = { quick: 'Quick: the quickest way, or a better road that adds no more than about a tenth.',
+      fun: 'Fun: twistier roads that add up to about a third to the trip.', max: 'Max fun: the twistiest roads around, up to nearly twice the time.' };
     function setAvoid(next) {
       avoid = { ...avoid, ...next };
       try { localStorage.setItem(AVOID, JSON.stringify(avoid)); } catch (_) { /* storage off: this session only */ }
@@ -3616,7 +3667,7 @@
       const reply = await askNative({ cmd: 'placeResolve', index: p.apple.index }, 8000);
       return reply && Number.isFinite(reply.lat) && Number.isFinite(reply.lon) ? { lat: reply.lat, lon: reply.lon } : null;
     }
-    let suggestTimer = null, suggestSeq = 0, shownRows = { q: '', rows: [] };
+    let suggestTimer = null, suggestSeq = 0, shownRows = { q: '', rows: [] }, allPlaces = false;
     $('destInput').addEventListener('input', () => { clearTimeout(suggestTimer); suggestTimer = setTimeout(renderPlaces, 300); });
     async function renderPlaces() {
       const q = $('destInput').value.trim(), seq = ++suggestSeq, box = $('placeList');
@@ -3636,6 +3687,9 @@
                 ...recentPlaces().map(p => ({ ...p, kind: 'Recent' })),
                 ...loadHighlights().filter(h => Number.isFinite(h.lat) && Number.isFinite(h.lon)).map(h => ({ label: h.name || 'Spot', lat: h.lat, lon: h.lon, kind: 'Spot' }))].slice(0, 10 + ApexPinnedPlaces.MAX);
       }
+      // with nothing typed, three places and a row for the rest (REVIEW.md: search and three recents, the default first)
+      const more = !q && !allPlaces && rows.length > 3 ? rows.length - 3 : 0;
+      if (more) rows = rows.slice(0, 3);
       shownRows = { q, rows: empty ? [] : rows };
       if (empty) { const n = document.createElement('p'); n.className = 'note'; n.textContent = empty; box.replaceChildren(n); box.hidden = false; return; }
       box.replaceChildren(...rows.map(p => {
@@ -3650,6 +3704,11 @@
         const row = document.createElement('div'); row.className = 'row pinned-row'; row.append(b, un);
         return row;
       }));
+      if (more) {
+        const all = document.createElement('button'); all.className = 'linkbtn place-all'; all.textContent = `All places (${more} more)`;
+        all.addEventListener('click', () => { allPlaces = true; renderPlaces(); });
+        box.append(all);
+      }
       box.hidden = !rows.length;
     }
     async function routeToPlace(p) {
@@ -3776,8 +3835,26 @@
     });
     // Loop lengths in the chosen units (U-22): 25/50/75 km in metric, kept as miles inside.
     if (ApexUnits.metric()) document.querySelectorAll('[data-loop-mi]').forEach((b, i, all) => { const km = [25, 50, 75][i]; b.dataset.loopMi = String(km / 1.609344); b.textContent = `${km} km`; });
-    document.querySelectorAll('[data-loop-mi]').forEach(b => b.addEventListener('click', () => loop(parseFloat(b.dataset.loopMi), b)));
-    document.querySelectorAll('[data-loop-min]').forEach(b => b.addEventListener('click', () => loop({ minutes: parseInt(b.dataset.loopMin, 10) }, b)));
+    // The loop dial (REVIEW.md roadmap 6): a detent picks the length, the dial shows it, Find a loop builds it.
+    const LOOP_PICK = 'apex.loopPick';
+    function pickLoop(b) {
+      if (!b) return;
+      document.querySelectorAll('#loopDetents button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+      const [val, ...unit] = b.textContent.trim().split(' ');
+      $('loopDialVal').textContent = val; $('loopDialUnit').textContent = unit.join(' ');
+      const all = [...document.querySelectorAll('#loopDetents button')], i = all.indexOf(b);
+      $('loopDialMark').style.transform = `rotate(${-120 + 240 * i / Math.max(1, all.length - 1)}deg)`;
+      try { localStorage.setItem(LOOP_PICK, String(i)); } catch (_) {}
+    }
+    document.querySelectorAll('#loopDetents button').forEach(b => b.addEventListener('click', () => pickLoop(b)));
+    { let i = 2; try { const v = parseInt(localStorage.getItem(LOOP_PICK), 10); if (v >= 0 && v < 5) i = v; } catch (_) {}
+      pickLoop(document.querySelectorAll('#loopDetents button')[i]); }
+    $('findLoopBtn').addEventListener('click', () => {
+      const b = document.querySelector('#loopDetents button[aria-pressed="true"]');
+      if (!b) return;
+      if (b.dataset.loopMin) loop({ minutes: parseInt(b.dataset.loopMin, 10) }, $('findLoopBtn'));
+      else loop(parseFloat(b.dataset.loopMi), $('findLoopBtn'));
+    });
     document.querySelectorAll('[data-explore-min]').forEach(b => b.addEventListener('click', () => exploreNear(parseInt(b.dataset.exploreMin, 10), b)));
     document.querySelectorAll('[data-fun]').forEach(b => b.addEventListener('click', () => {
       if (b.dataset.fun === funLevel || $('planPanel').classList.contains('busy')) return;
@@ -3795,16 +3872,49 @@
     function setRoadPrefs(next) {
       roadPrefs = { ...roadPrefs, ...next };
       try { localStorage.setItem(ROAD_PREFS, JSON.stringify(roadPrefs)); } catch (_) { /* storage off: this session only */ }
-      document.querySelectorAll('[data-pref]').forEach(b => { const on = roadPrefs[b.dataset.pref] === Number(b.dataset.v); b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
+      document.querySelectorAll('[data-pref-range]').forEach(r => { r.value = String(roadPrefs[r.dataset.prefRange] || 0); });
+      paintPresets();
     }
-    document.querySelectorAll('[data-pref]').forEach(b => b.addEventListener('click', async () => {
-      if ($('planPanel').classList.contains('busy') || loopBusy) return;
-      const k = b.dataset.pref, v = Number(b.dataset.v), was = roadPrefs[k], now = was === v ? 0 : v;
+    // corner mix as balance sliders with three detents: fewer, any, more (REVIEW.md mockup 03-plan-more.html)
+    document.querySelectorAll('[data-pref-range]').forEach(r => r.addEventListener('change', async () => {
+      const k = r.dataset.prefRange, was = roadPrefs[k] || 0, now = Math.max(-1, Math.min(1, Math.round(Number(r.value))));
+      if ($('planPanel').classList.contains('busy') || loopBusy) { r.value = String(was); return; }
+      if (now === was) return;
       setRoadPrefs({ [k]: now });
       const what = `${now === 0 ? 'Any' : now > 0 ? 'More' : 'Fewer'} ${k === 'tight' ? 'hairpins' : 'fast sweepers'}`;
       if (!(await replanForLevel(what))) setRoadPrefs({ [k]: was });
     }));
     setRoadPrefs({});
+    // Presets (plan_presets.js): this setup under a name, a stamp at the top of the sheet; tapping one sets it all at once.
+    function paintPresets() {
+      const row = $('presetRow');
+      if (!row || typeof roadPrefs === 'undefined') return;
+      const list = ApexPlanPresets.list(localStorage), on = ApexPlanPresets.matching(localStorage, { fun: funLevel, avoid, prefs: roadPrefs });
+      row.hidden = !list.length;
+      row.replaceChildren(...list.map(p => {
+        const b = document.createElement('button'); b.textContent = p.name;
+        b.setAttribute('aria-pressed', String(!!on && on.name === p.name));
+        b.addEventListener('click', async () => {
+          if ($('planPanel').classList.contains('busy') || loopBusy) return;
+          if (on && on.name === p.name) {                                   // already set: the one thing left to do is remove it
+            toast(`${p.name} is set.`, { label: 'Remove preset', ms: 6000, onClick: () => { ApexPlanPresets.remove(localStorage, p.name); paintPresets(); } });
+            return;
+          }
+          const was = { fun: funLevel, avoid: { ...avoid }, prefs: { ...roadPrefs } };
+          setFunLevel(p.fun); setAvoid(Object.fromEntries(Object.keys(FunRoute.AVOID_LABELS).map(k => [k, !!p.avoid[k]]))); setRoadPrefs(p.prefs);
+          if (!(await replanForLevel(p.name))) { setFunLevel(was.fun); setAvoid(was.avoid); setRoadPrefs(was.prefs); }
+        });
+        return b;
+      }));
+    }
+    $('presetSaveBtn').addEventListener('click', () => {
+      const name = prompt('Name this setup (for example Sunday loop or Night run)', '');
+      if (!name || !name.trim()) return;
+      const r = ApexPlanPresets.save(localStorage, { name, fun: funLevel, avoid, prefs: roadPrefs });
+      toast(r === 'saved' ? `${name.trim()} is a preset: it's at the top of the plan sheet.` : r === 'full' ? `You have ${ApexPlanPresets.MAX} presets. Tap one that is set to remove it.` : 'Couldn\u2019t save that preset.');
+      paintPresets();
+    });
+    paintPresets();
     $('routeDriveBtn').addEventListener('click', () => {
       if (!plannedRoute) return;
       booting = false;
