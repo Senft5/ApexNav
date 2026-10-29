@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-bGkIIWUrIwpPFV3c+zl0vaHz/EuAc/NZXeqZKdokRWo=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-dZ0DOfM75RYKFiygtl9BuqTKaEE7KhuCrYd7HBMfCOo=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -434,6 +434,8 @@
     .end-acts .ink-btn { min-height: 52px; }
     .end-links { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; }
     .end-links > * { margin: 0; padding: 8px 4px; line-height: 1.2; }
+    .ob-strip { width: 100%; max-width: 420px; margin: 26px auto 0; border-top: 2px solid var(--panel-ink); border-bottom: 1px solid var(--rule); text-align: left; }
+    .ob-strip .notes { position: static; min-height: 84px; }
     .rc-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 18px; margin-top: 10px; }
     label.linkbtn { display: inline-flex; align-items: center; cursor: pointer; }
     .linkbtn { font: inherit; font-size: 15px; font-weight: 500; color: var(--panel-ink); text-decoration: underline; min-height: 44px; padding: 0 4px; background: none; border: none; }
@@ -787,12 +789,6 @@
             <div class="switch" role="radiogroup" aria-label="Driving side" id="sideRow"><button data-side="auto" role="radio">From the map</button><button data-side="right" role="radio">Right</button><button data-side="left" role="radio">Left</button></div>
           </section>
           <section data-panel="setup">
-            <h3>Look</h3>
-            <p class="note" style="margin:0 0 8px">Colours for the route line and the cockpit, unlocked with the Octane you earn sharing road data. Warnings keep their colour.</p>
-            <div class="row" style="flex-wrap:wrap" id="lookRow"></div>
-            <p class="note" id="lookNote" style="margin:6px 0 0"></p>
-          </section>
-          <section data-panel="setup">
             <h3>Feedback</h3>
             <p class="note" style="margin:0 0 8px">Something wrong, or an idea? It goes straight to the person who makes Vetta.</p>
             <div class="stack-8" id="feedbackBox"></div>
@@ -955,18 +951,9 @@
         </g>
       </svg>
       <h1>Your co-driver for the long way home.</h1>
-      <p>Calls every corner and scores how cleanly you drove it.</p>
-    </div>
-    <div class="grow" data-step="2" hidden>
-      <h2>Pick your co-driver</h2>
-      <div class="stack-8" id="obVoices"></div>
-    </div>
-    <div class="grow" data-step="3" hidden>
-      <h2>Driving with friends?</h2>
-      <p>Sign in to join a crew and see its stages and boards. You can do this later in Crew.</p>
-      <button class="apple-btn" data-apple-signin hidden>&#xF8FF; Sign in with Apple</button>
-      <a class="ink-btn solid" href="/api/auth/google/start" style="display:flex;align-items:center;justify-content:center;text-decoration:none">Sign in with Google</a>
-      <p class="note">By signing in you agree to the <a href="https://apexnav.senftns.workers.dev/terms.html" target="_blank" rel="noopener">Terms</a> and <a href="https://apexnav.senftns.workers.dev/privacy.html" target="_blank" rel="noopener">Privacy</a> policy.</p>
+      <p>Calls every corner before you reach it.</p>
+      <!-- the product in one look (REVIEW.md 1.2, Onboarding 1): the road book calling a real road's corners, silent -->
+      <div class="ob-strip" aria-hidden="true"><div class="notes" id="obNotes"></div></div>
     </div>
     <div class="stack">
       <button class="ink-btn solid" id="obNext">Get started</button>
@@ -4128,29 +4115,9 @@
       document.querySelectorAll('[data-side]').forEach(b => b.addEventListener('click', () => { ApexDrivingSide.setChoice(b.dataset.side); paintSide(); toast('Used from the next route you plan.'); }));
       paintSide();
     }
-    // Look (themes.js accents, IDEAS S-10): cosmetic only, bought with earned Octane through /api/shop and /api/redeem.
-    async function renderLook() {
-      const row = $('lookRow'), note = $('lookNote');
-      if (!row || !Themes.ACCENTS) return;
-      let shop = null;
-      try { const r = await apiCall('GET', '/api/shop'); shop = r.ok ? await r.json() : null; } catch (_) { shop = null; }
-      if (!shop || !Array.isArray(shop.items) || !Array.isArray(shop.owned)) shop = null;   // signed out, or an answer of the wrong shape
-      const owned = new Set(shop ? shop.owned : []), current = Themes.accent();
-      const chip = (label, on, fn) => { const b = document.createElement('button'); b.className = 'chip' + (on ? ' on' : ''); b.textContent = label; b.setAttribute('aria-pressed', String(on)); b.addEventListener('click', fn); return b; };
-      const use = (a) => { Themes.setAccent(a); applyTheme(); renderLook(); };
-      row.replaceChildren(chip('Road book', !current, () => use(null)), ...Object.entries(Themes.ACCENTS).map(([k, a]) => {
-        const item = shop && shop.items.find(i => i.id === `accent_${k}`), have = owned.has(`accent_${k}`);
-        if (have) return chip(a.label, current === k, () => use(k));
-        return chip(`${a.label} · ${item ? item.octane : '--'} Octane`, false, async () => {
-          if (!shop) { toast('Sign in (Crew) to unlock colours with Octane.'); return; }
-          let r; try { r = await apiCall('POST', '/api/redeem', { item: `accent_${k}` }); } catch (_) { toast('No signal. Try again.'); return; }
-          if (r.ok) { toast(`${a.label} unlocked.`); use(k); } else toast(r.status === 402 ? 'Not enough Octane yet: share road data to earn more.' : 'Couldn\'t unlock that. Try again.');
-        });
-      }));
-      note.textContent = shop ? `${shop.balance} Octane to spend` : 'Sign in to unlock colours with Octane.';
-      if (current && shop && !owned.has(`accent_${current}`)) use(null);   // an accent you don't own (a shared phone): back to the road book
-    }
-    renderLook();
+    // Colour swaps are gone (REVIEW.md roadmap 8): theming is whole themes (Look and voice), not accents. An accent picked
+    // before stays off from now on.
+    if (Themes.accent && Themes.accent()) { Themes.setAccent(null); applyTheme(); }
     // feature flags (flags.js, IDEAS Y-06): fetched once a start, used from then on
     if (window.ApexFlags && window.ApexSync) ApexFlags.load((p) => ApexSync.apiFetch(p)).catch(() => {});
     // Send feedback (web/feedback.js, IDEAS L-05): Settings → Feedback; the owner reads it in Crew.
@@ -5633,29 +5600,29 @@
     // =======================================================================
     // 10c. FIRST RUN: three screens, shown once. No permissions here (they are asked at the first Start drive).
     // =======================================================================
+    // First run is one screen (REVIEW.md roadmap 8): the mark, a line, the road book calling corners on a loop, Get started.
+    // The voice comes with the theme and sign-in waits for the first social action, so neither is asked here.
+    const OB_NOTES = [
+      { type: 'corner', dir: 'L', severity: '4', mods: ['tightens'], call: 'Left 4 tightens', code: 'L4', dist: '300', unit: 'ft' },
+      { type: 'corner', dir: 'R', severity: '3', mods: [], call: 'Right 3', code: 'R3', dist: '150', unit: 'ft' },
+      { type: 'crest', dir: null, severity: null, mods: [], call: 'Crest', code: 'CREST', dist: '200', unit: 'ft' },
+      { type: 'corner', dir: 'L', severity: 'HP', mods: [], call: 'Left hairpin', code: 'LHP', dist: '400', unit: 'ft' },
+      { type: 'corner', dir: 'R', severity: '5', mods: ['long'], call: 'Right 5 long', code: 'R5', dist: '250', unit: 'ft' },
+    ];
     function runOnboarding() {
-      const ob = $('onboard'); let step = 1;
-      const steps = [...ob.querySelectorAll('[data-step]')];
-      const paint = () => {
-        steps.forEach(n => { n.hidden = Number(n.dataset.step) !== step; });
-        $('obNext').textContent = step === 1 ? 'Get started' : step === 2 ? 'Next' : 'Not now';
-        $('obNext').classList.toggle('solid', step < 3);   // on the sign-in step, Sign in is the one solid button
-        $('obAlt').textContent = 'Watch a replay';
-        $('obAlt').hidden = step === 2;
-        if (step === 2) {
-          const list = $('obVoices'); list.innerHTML = '';
-          for (const v of bankVoices.concat([{ id: 'device', name: 'Phone voice' }]).filter(v => v.id !== 'jarvis')) {
-            const b = document.createElement('button'); b.className = 'ink-btn' + (v.id === state.voiceId ? ' on' : ''); b.textContent = `▶  ${v.name}`; b.setAttribute('aria-pressed', String(v.id === state.voiceId));
-            b.addEventListener('click', () => { state.voiceId = v.id; state.voiceStyle = 'codriver'; savePrefs(); renderVoiceList(); if (window.ApexVoice) ApexVoice.unlock(); say('Left 4 tightens, one-fifty.', true, null, 'sys:test'); paint(); });
-            list.append(b);
-          }
-        }
+      const ob = $('onboard');
+      let k = 0;
+      const tick = () => {
+        if (!ob.classList.contains('show')) return;
+        Inst.renderNotes($('obNotes'), look.theme, [0, 1, 2].map(j => ({ ...OB_NOTES[(k + j) % OB_NOTES.length], key: k + j })));
+        k++;
+        setTimeout(tick, matchMedia('(prefers-reduced-motion: reduce)').matches ? 4000 : 1800);
       };
       const finish = () => { flag('apex.onboarded', '1'); ob.classList.remove('show'); };
-      $('obNext').onclick = () => { if (step < 3) { step++; paint(); } else finish(); };
+      $('obNext').onclick = finish;
       $('obAlt').onclick = () => { finish(); watchDryRidge(); };
       // Focus the dialog, not its button: VoiceOver reads the welcome, and no focus ring sits on Get started before a touch
-      ob.classList.add('show'); paint(); ob.tabIndex = -1; ob.focus();
+      ob.classList.add('show'); tick(); ob.tabIndex = -1; ob.focus();
     }
     setTimeout(() => health.flush(IN_APP_SHELL ? 'ios' : 'web').catch(() => {}), 5000);
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') health.flush(IN_APP_SHELL ? 'ios' : 'web').catch(() => {}); });
