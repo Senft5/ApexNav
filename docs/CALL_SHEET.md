@@ -6,6 +6,14 @@ it says so. Things only you can do are in docs/OWNER_TODO.md.
 
 ## 2026-10-29
 
+**Roadmap 2 item 16: the Limit sign (U-40).** The Limit readout is the white US sign in Roadbook, Tapedeck and Billet
+alike (theme contract 4.3.5): 44 x 52, a black edge with the sign's inset rule, SPEED LIMIT in small caps over the
+number in Barlow Condensed. No theme restyles it. My calls:
+- *Unknown, it is the same sign drawn in pencil with "--"*, not a blank box, so the shape is learnt before a limit shows.
+- *The 13 px binnacle floor exempts the sign's legend*: it is part of the drawn sign; its number (20 px) is what's read.
+  The e2e theme contract now checks the sign is white and 44 x 52 in every theme, day and night.
+Undo: the `.ro-limit` block in index.html.
+
 **Roadmap 2 item 15: placeholders and small words (U-34, U-41, U-42).** My calls:
 - *An unknown score is "--" in the numeral font, in pencil*, on the Log hero and rows, the drive page, stages, Compare
   and the drive-ended card; it was drawn as two black bars that read as a redaction.

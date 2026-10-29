@@ -265,7 +265,7 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 | U-37 | Capture stubs for every mockup surface in `tools/app_tour.js`: a routed route with corners, profile and alternatives; two friends and a home zone on the map; the Plan a drive form open; the crew board and chat; a Tapedeck drive, not only a replay | M | S | todo | REVIEW2.md §2 (Route card, Friends on the map, Plan a drive) |
 | U-38 | Kit redrawn at 80 px on a 16 x 14 grid with two idle frames and the four lean frames wired to the call's direction; the "KIT SAYS" line wraps to two | M | M | todo | REVIEW.md 4.1, REVIEW2.md §3 |
 | U-39 | The Pro-trial banner leaves the map (the hazard plate's place) for the status line: "Tapedeck · 9:40 left · Stop" | L | S | done | REVIEW2.md §2 Replay Tapedeck |
-| U-40 | The Limit readout as the white US sign (theme contract 4.3.5): 44 x 52 px, black border, SPEED LIMIT in 7 px caps | M | S | todo | REVIEW.md 4.3 |
+| U-40 | The Limit readout as the white US sign (theme contract 4.3.5): 44 x 52 px, black border, SPEED LIMIT in 7 px caps | M | S | done (Roadmap 2 item 16) | REVIEW.md 4.3 |
 | U-41 | "1,240 points" in the Garage header: remove, or name the unit | L | S | done (Roadmap 2 item 15) | REVIEW2.md §2 Garage |
 | U-42 | Works stickers carry the supporter's initial in the stripe colour, not a count | L | S | done (Roadmap 2 item 15) | REVIEW2.md §2 Crew Works livery |
 | U-43 | Shared ETA page never prints NaN or Invalid Date: "This link has ended", or "--" | M | S | done (#240) | REVIEW2.md §2 (honesty rule) |

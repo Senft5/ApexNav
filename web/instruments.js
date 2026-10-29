@@ -262,7 +262,7 @@
       html('span', '', c, label);
       return { c, value, v };
     };
-    const limit = cell('Limit', 'ro-limit');
+    const limit = cell('Speed limit', 'ro-limit');   // drawn as the US sign: SPEED LIMIT over the number (index.html .ro-limit)
     // Sight (owner, 2026-10-29): the speed you could stop from within what you can see ahead, and no faster than the
     // corner allows (the pace envelope). A braking range in speed units, not a target: it turns to the signal colour when
     // you're above it, and the eye shows when it's the sight line, not the corner, that sets it.

@@ -1295,11 +1295,13 @@ flow('theme contract on the page: the hazard plate, the speed, the call and the 
       const cs = getComputedStyle(p), pr = p.getBoundingClientRect(), st = document.querySelector('.stage').getBoundingClientRect();
       const speed = document.querySelector('.dial-digital').getBoundingClientRect().height;
       const call = document.querySelector('.rb-box.now .rb-call span');
-      const small = [...document.querySelectorAll('#cluster *')].filter((n) => !(n instanceof SVGElement) && n.childNodes.length && [...n.childNodes].some((c) => c.nodeType === 3 && c.textContent.trim()))
+      // the Limit sign's SPEED LIMIT legend is part of the drawn sign (REVIEW.md 4.3.5); its number is what you read
+      const small = [...document.querySelectorAll('#cluster *')].filter((n) => !(n instanceof SVGElement) && !n.closest('.ro-limit') && n.childNodes.length && [...n.childNodes].some((c) => c.nodeType === 3 && c.textContent.trim()))
         .map((n) => [n.className, parseFloat(getComputedStyle(n).fontSize)]).filter(([, px]) => px < 13);
       const bank = document.querySelector('.dial-digital.small'), bankPx = bank ? bank.getBoundingClientRect().height : 99;
       return { bg: cs.backgroundColor, edge: cs.borderTopColor, ink: cs.color, top: Math.round(pr.top - st.top), left: Math.round(pr.left - st.left),
-               speed, call: call ? parseFloat(getComputedStyle(call).fontSize) : 0, small, bankPx, limit: !!document.querySelector('.ro-limit') };
+               speed, call: call ? parseFloat(getComputedStyle(call).fontSize) : 0, small, bankPx, limit: (() => { const l = document.querySelector('.ro-limit'); if (!l) return null; const b = l.getBoundingClientRect(), c = getComputedStyle(l);
+                 return { w: Math.round(b.width), h: Math.round(b.height), bg: c.backgroundColor, unknown: l.classList.contains('unknown') }; })() };
     });
     const m = night ? 'night' : 'day';
     check(r.bg === 'rgb(17, 17, 17)' && r.edge === 'rgb(255, 122, 26)' && r.ink === 'rgb(255, 255, 255)', `${m}: the hazard plate's colours ` + JSON.stringify(r));
@@ -1307,7 +1309,7 @@ flow('theme contract on the page: the hazard plate, the speed, the call and the 
     check(r.speed >= 40, `${m}: speed numeral ${r.speed} px`);
     check(r.call >= 21, `${m}: the call ${r.call} px`);
     check(!r.small.length && r.bankPx >= 13, `${m}: nothing on the binnacle under 13 px: ` + JSON.stringify(r.small) + ' bank ' + r.bankPx);
-    check(r.limit, `${m}: the Limit sign is there`);
+    check(r.limit && r.limit.w === 44 && r.limit.h === 52 && (r.limit.unknown || r.limit.bg === 'rgb(255, 255, 255)'), `${m}: the Limit sign is the white sign: ` + JSON.stringify(r.limit));
   }
   // the Pro themes, tried on the demo replay from the picker: the same floors and the same hazard plate
   for (const id of ['tapedeck', 'billet']) {
@@ -1320,14 +1322,17 @@ flow('theme contract on the page: the hazard plate, the speed, the call and the 
       const p = document.getElementById('hzPlate'); p.hidden = false;
       const cs = getComputedStyle(p), speed = document.querySelector('.dial-digital, .vfd-seg');
       const call = document.querySelector('.rb-box.now .rb-call span');
-      const small = [...document.querySelectorAll('#cluster *')].filter((n) => !(n instanceof SVGElement) && n.childNodes.length && [...n.childNodes].some((c) => c.nodeType === 3 && c.textContent.trim()))
+      // the Limit sign's SPEED LIMIT legend is part of the drawn sign (REVIEW.md 4.3.5); its number is what you read
+      const small = [...document.querySelectorAll('#cluster *')].filter((n) => !(n instanceof SVGElement) && !n.closest('.ro-limit') && n.childNodes.length && [...n.childNodes].some((c) => c.nodeType === 3 && c.textContent.trim()))
         .map((n) => [n.className, parseFloat(getComputedStyle(n).fontSize)]).filter(([, px]) => px < 13);
       const seg = document.querySelector('.vfd-seg'), segH = seg ? seg.getBoundingClientRect().height * 100 / 200 : null;   // the digits are 100 of the 200 units
       return { bg: cs.backgroundColor, edge: cs.borderTopColor, speed: segH != null ? segH : speed.getBoundingClientRect().height,
-               call: call ? parseFloat(getComputedStyle(call).fontSize) : 0, small };
+               call: call ? parseFloat(getComputedStyle(call).fontSize) : 0, small, limit: (() => { const l = document.querySelector('.ro-limit'); if (!l) return null; const b = l.getBoundingClientRect(), c = getComputedStyle(l);
+                 return { w: Math.round(b.width), h: Math.round(b.height), bg: c.backgroundColor, unknown: l.classList.contains('unknown') }; })() };
     });
     check(r.bg === 'rgb(17, 17, 17)' && r.edge === 'rgb(255, 122, 26)', `${id}: the same hazard plate ` + JSON.stringify(r));
     check(r.speed >= 40 && r.call >= 21 && !r.small.length, `${id}: speed ${r.speed}, call ${r.call}, small ` + JSON.stringify(r.small));
+    check(r.limit && r.limit.w === 44 && r.limit.h === 52 && (r.limit.unknown || r.limit.bg === 'rgb(255, 255, 255)'), `${id}: the same Limit sign: ` + JSON.stringify(r.limit));
     const sc = await page.evaluate(() => { const g = document.querySelector('#cluster .g-score'), b = g && g.getBoundingClientRect(), m = document.querySelector('#cluster .dial-g').getBoundingClientRect();
       return g && { text: g.textContent, inside: b.bottom <= m.bottom + 1 && b.top >= m.top - 1 }; });
     check(sc && /^--SCORE$/.test(sc.text) && sc.inside, `${id}: the Score sits under the meter, -- on a replay: ` + JSON.stringify(sc));   // REVIEW.md 4.3
