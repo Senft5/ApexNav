@@ -18,7 +18,7 @@ Severity: **S1** wrong or unsafe (App Review risk, a lie on screen), **S2** look
 
 | # | where | what | sev | fix |
 |---|---|---|---|---|
-| 1 | binnacle, Road cell | Showed the road's pace above the limit (125 on a highway). A number above the limit reads as a target (App Review 1.4.1) | S1 | Pace and sight speed never read above the posted limit; with no known limit only paces under 55 mph show (`web/index.html` roadCap) |
+| 1 | binnacle, Road cell | Read as the road's own speed (125 on a highway), which looks like a target (App Review 1.4.1) | S1 | Owner, 2026-10-29: same number, named for what it is: **Sight**, the speed you could stop from within what you can see (and no faster than the corner allows), uncapped; signal colour when you're above it; **Open** when nothing limits you (the sight line at its 400 m cap and no corner asking for less: the 125 mph seen on the highway was only that cap). The App Review notes should describe it as a braking range |
 | 2 | demo replay | Drove up to 10% over the limit | S1 | The replay keeps to the limit |
 | 3 | keyboard, every text field (owner's phone) | The tab bar floated over the plan sheet or showed through behind the keyboard; the sheet's own search field could be panned out of sight; a focused field got a second, offset ring in the accent colour | S2 | `web/keyboard.js`: while a field has the keyboard the tab bar hides and the page fits above the keyboard; one ink border on the focused field. Checked on the simulator by `testKeyboard` |
 | 4 | route card, Options | Offered a route both slower and less fun than another ("Fun 64 · 102 min" next to "Fun 99 · 77 min") | S2 | Dominated options are dropped (`FunRoute.distinctOptions`) |
@@ -36,6 +36,10 @@ Severity: **S1** wrong or unsafe (App Review risk, a lie on screen), **S2** look
 | 16 | road book strip, next boxes | "LEFT 4 P…" in the smaller boxes | S3 | Long calls there wrap at a smaller size |
 | 17 | hazard sheet | Titled "Report ahead of others" | S3 | "Report a hazard" · "Drivers coming this way get a warning." |
 | 18 | CarPlay bridge (new, caught in review before merge) | Turn-now directions and crests share the urgent speech lane with hazards, so the car would have shown every turn as a hazard alert | S1 | Only member, reported and convoy hazards alert the car (`alert: true`), tested |
+| 19 | keyboard, in the app (simulator run 1) | The web-only fix (#3) didn't work in the app: WKWebView still panned the Where to? field off the top and the tab bar stayed above the keyboard; the check only looked under the keyboard | S1 | The shell undoes the pan and tells the page how much the keyboard covers (`keyboardMoved`, `ApexKeyboard.native`); `testKeyboard` now also fails on a field off the top or a tab bar while typing, and reaches every tab (the Log page's tabs are links) |
+| 20 | app launch (simulator) | A plain white launch screen flashed before the dark cockpit | S2 | Launch screen in the night panel colour (`LaunchBackground`) |
+| 21 | Log at night (simulator) | The map was in night colours, the Log page in day colours: it read a saved toggle that auto night doesn't keep | S2 | The Log page takes the night the map last showed (`ApexThemes.last`) |
+| 22 | every page load (owner) | Theme and map flashes while a page builds | S2 | An opening cover in the theme's colour with the mark, lifted once the map is styled and drawn (or the Log has rendered), never more than 2.5 s (`web/boot.js`) |
 
 ## Audio
 

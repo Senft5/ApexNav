@@ -221,8 +221,11 @@
       return { c, value, v };
     };
     const limit = cell('Limit', 'ro-limit');
-    const road = cell('Road', 'ro-pace');
-    const eye = svg('svg', { viewBox: '0 0 24 24', width: 12, height: 12, class: 'ro-eye', 'aria-hidden': 'true' }, road.value);
+    // Sight (owner, 2026-10-29): the speed you could stop from within what you can see ahead, and no faster than the
+    // corner allows (the pace envelope). A braking range in speed units, not a target: it turns to the signal colour when
+    // you're above it, and the eye shows when it's the sight line, not the corner, that sets it.
+    const sight = cell('Sight', 'ro-sight');
+    const eye = svg('svg', { viewBox: '0 0 24 24', width: 12, height: 12, class: 'ro-eye', 'aria-hidden': 'true' }, sight.value);
     svg('path', { d: 'M2 12 Q12 2 22 12 Q12 22 2 12 Z', fill: 'none', stroke: 'currentColor', 'stroke-width': 2 }, eye);
     svg('circle', { cx: 12, cy: 12, r: 3, fill: 'currentColor' }, eye);
     eye.style.display = 'none';
@@ -230,8 +233,12 @@
       limit.v.textContent = fmt(d.limitMph);
       limit.c.classList.toggle('unknown', !Number.isFinite(d.limitMph));   // a sign only when there is a limit to show
       const both = [d.paceMph, d.sightMph].filter(v => Number.isFinite(v));
-      road.v.textContent = fmt(both.length ? Math.min(...both) : null);
-      eye.style.display = both.length === 2 && d.sightMph < d.paceMph ? '' : 'none';
+      const v = both.length ? Math.min(...both) : null;
+      // "Open" when nothing limits you (the sight line at its cap, no corner asking for less): the number there would only
+      // be the cap's own speed (125 mph), not something the road says
+      sight.v.textContent = d.sightOpen ? 'Open' : fmt(v);
+      eye.style.display = !d.sightOpen && both.length === 2 && d.sightMph < d.paceMph ? '' : 'none';
+      sight.c.classList.toggle('short', !d.sightOpen && v != null && Number.isFinite(d.speedMph) && d.speedMph > v + 1);
     };
   }
 

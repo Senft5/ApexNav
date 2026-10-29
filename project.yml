@@ -61,7 +61,9 @@ targets:
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         # Only standard HTTPS/TLS: skips the export-compliance question on every TestFlight build.
         ITSAppUsesNonExemptEncryption: false
-        UILaunchScreen: {}
+        # the launch screen is the night panel colour, not white, so opening the app doesn't flash (review 2026-10-28)
+        UILaunchScreen:
+          UIColorName: LaunchBackground
         # The car's screen is its own scene (CarPlay/ApexCarPlay.swift); the phone keeps SwiftUI's window scene.
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: true

@@ -1,0 +1,79 @@
+name: CarPlay screenshots
+
+# The car's screen in the iPhone simulator (docs/CARPLAY.md): opens Simulator's I/O → External Displays → CarPlay by UI
+# scripting, then screenshots the CarPlay window every few seconds while AppTourTests.testTour plans a route on the phone
+# (the trip preview), starts the drive and simctl plays a GPS drive (guidance). Run by hand; the shots are the run's
+# `carplay` artifact. Simulator builds carry the CarPlay entitlement (CarPlay/Simulator.entitlements).
+on:
+  workflow_dispatch:
+
+jobs:
+  shots:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generate Xcode project
+        run: |
+          brew install xcodegen
+          xcodegen generate
+      - name: Boot an iPhone simulator
+        id: sim
+        run: |
+          UDID=$(xcrun simctl list devices available -j | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; print(next(x['udid'] for k,v in d.items() if 'iOS' in k for x in v if x['name'].startswith('iPhone 16') or x['name'].startswith('iPhone 15')))")
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+          xcrun simctl boot "$UDID" || true
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl privacy "$UDID" grant location-always com.senft.ApexNav || true
+          xcrun simctl privacy "$UDID" grant motion com.senft.ApexNav || true
+          xcrun simctl location "$UDID" set 35.3626,-84.2866
+      - name: Build for testing
+        run: xcodebuild build-for-testing -project ApexNav.xcodeproj -scheme ApexNav -destination "id=${{ steps.sim.outputs.udid }}" -derivedDataPath build
+      - name: Open the CarPlay display
+        env:
+          UDID: ${{ steps.sim.outputs.udid }}
+        run: |
+          open -a Simulator --args -CurrentDeviceUDID "$UDID"
+          sleep 20
+          # UI scripting needs Accessibility for the scripting process; the runner image has SIP off, so grant it in TCC
+          # (the column count differs between macOS versions: try the current one, then the older one)
+          NOW=$(date +%s)
+          for c in /usr/bin/osascript /bin/bash /bin/zsh /usr/local/opt/runner/provisioner/provisioner /Library/Developer/CommandLineTools/usr/bin/osascript; do
+            sudo sqlite3 "/Library/Application Support/com.apple.TCC/TCC.db" \
+              "INSERT OR REPLACE INTO access VALUES('kTCCServiceAccessibility','$c',1,2,4,1,NULL,NULL,0,'UNUSED',NULL,0,$NOW,NULL,NULL,'UNUSED',$NOW);" 2>/dev/null \
+            || sudo sqlite3 "/Library/Application Support/com.apple.TCC/TCC.db" \
+              "INSERT OR REPLACE INTO access VALUES('kTCCServiceAccessibility','$c',1,2,4,1,NULL,NULL,0,'UNUSED',NULL,0,$NOW);" || true
+          done
+          osascript -e 'tell application "Simulator" to activate'
+          sleep 2
+          for bar in "I/O" "Hardware"; do
+            osascript -e "tell application \"System Events\" to tell process \"Simulator\" to click menu item \"CarPlay\" of menu 1 of menu item \"External Displays\" of menu 1 of menu bar item \"$bar\" of menu bar 1" && break || true
+          done
+          sleep 10
+          osascript -e 'tell application "System Events" to tell process "Simulator" to get {name, position, size} of every window' | tee windows.txt || true
+          mkdir -p carplay && screencapture -x carplay/000-desktop.png
+      - name: Drive the tour and screenshot the car's screen
+        env:
+          UDID: ${{ steps.sim.outputs.udid }}
+        run: |
+          # the CarPlay window's bounds, from the window list (fall back to the whole screen)
+          REGION=$(osascript -e 'tell application "System Events" to tell process "Simulator" to get {position, size} of (first window whose name contains "CarPlay")' 2>/dev/null | tr -d ' {}' || true)
+          echo "CarPlay window: $REGION"
+          ( i=1; while true; do
+              if [ -n "$REGION" ]; then screencapture -x -R"$REGION" "carplay/$(printf %03d $i).png"; else screencapture -x "carplay/$(printf %03d $i).png"; fi
+              i=$((i+1)); sleep 6; done ) &
+          SHOTS=$!
+          ( sleep 120; xcrun simctl location "$UDID" start --speed=15 \
+              35.3626,-84.2866 35.3640,-84.2700 35.3580,-84.2400 35.3460,-84.2060 35.3420,-84.1700 35.3400,-84.1300 ) &
+          TEST_RUNNER_APEX_TOUR=1 xcodebuild test-without-building -project ApexNav.xcodeproj -scheme ApexNav \
+            -destination "id=$UDID" -derivedDataPath build -only-testing:ApexNavUITests/AppTourTests/testTour \
+            -resultBundlePath Tour.xcresult || true
+          kill $SHOTS || true
+          ls carplay | wc -l
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: carplay
+          path: |
+            carplay
+            windows.txt

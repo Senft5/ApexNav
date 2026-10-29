@@ -1,5 +1,7 @@
 # Needs the owner (Nate)
 
+**Calls Claude made for you (read first): docs/CALL_SHEET.md.**
+
 Things only you can do, newest decisions first within each group. Claude keeps this list current: add a row when
 something blocks on you, delete it once it's done. Everything else is in docs/IDEAS.md and done without asking.
 
@@ -11,6 +13,7 @@ something blocks on you, delete it once it's done. Everything else is in docs/ID
 | **Sign the Paid Applications Agreement** and add banking and tax: App Store Connect → Business (only the Account Holder can). Then **enrol in the Small Business Program** (developer.apple.com/app-store/small-business-program: 15% commission instead of 30%) | Apple won't sell any In-App Purchase without them; Claude then creates the products through the API key | 20 min |
 | **Buy a domain** (about $15/yr, vettadrive.com and vettadrive.app, free on 2026-10-28) in Cloudflare Registrar and turn on **Email Routing** to your Gmail with an address like hello@ and press@ | Email to clubs and press, a press page, road pages people can link to (docs/MARKETING.md section 7) | 15 min |
 | **Clear the name Vetta**: a trademark attorney's knockout search for VETTA in classes 9 and 42 (about $150–400 flat), then file with USPTO (TEAS, about $350 per class) once they say go. In App Store Connect → the app → App Information, set the **Name** to **Vetta** (if Apple says it's taken, use **Vetta Drive**, and tell Claude so LISTING.md matches) | The name is in the app, the listing and the marketing from 2026-10-28; the code, bundle id and `apexnav://` links keep the old working name, which users never see | 30 min + attorney |
+| **Uptime alert** (free, e.g. UptimeRobot or Better Stack): watch `https://apexnav.senftns.workers.dev/api/health` every 5 min and email you when it fails | Nobody hears about an outage otherwise (docs/LAUNCH.md section 2) | 5 min |
 | **Make the Vetta accounts**: YouTube, Instagram (Professional), TikTok, Bluesky, Threads, Facebook page, X; same handle everywhere. Tell Claude when they exist and it will walk you through each API token | The weekly road video posts itself (MARKETING.md section 6) | 45 min |
 | **Write 3–4 sentences about you**: why you built Vetta, what you drive, where. And a postal address for email footers (a PO box is fine) | Show HN, the press kit and every email need a real founder; Claude won't invent one. CAN-SPAM needs the address | 10 min |
 | **Pick the launch region** (Claude suggests the Southern Appalachians: Tail of the Dragon, Cherohala, NC-28, Blue Ridge Parkway) and say whether you can join one club drive there during the beta | Road data is what makes the app better than a map; concentrating the first 25 drivers on famous roads makes the first videos and road pages show real measured feel | 2 min |
