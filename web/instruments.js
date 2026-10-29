@@ -379,39 +379,52 @@
       paint(surf, hs, false); paint(load, hl, true);
     };
   }
-  // Kit (REVIEW.md 4.1): a dot-matrix fox on a 14 x 12 grid who belongs to the display. He leans into the corner (lateral
-  // g), sits up for a crest, curls up when you stop, and blinks when a hazard is confirmed. X lit, o an amber eye, . dark.
+  // Kit (REVIEW.md 4.1, REVIEW2.md U-38): a dot-matrix fox on a 16 x 14 grid who belongs to the display, drawn at 80 px.
+  // X a lit outline dot, b his body (lit, lighter), w the muzzle (lit), o an amber eye, . dark (the nose too). Two idle frames
+  // (the second flicks an ear), and four lean frames wired to the corner: he leans into it, further in a hard one. He sits
+  // up for a crest, curls up when you stop, and blinks when a hazard is confirmed.
+  const KIT_W = 16, KIT_H = 14;
   const KIT = {
-    up: ['..X........X..', '..XX......XX..', '..XXX....XXX..', '..XXXXXXXXXX..', '.XXXXXXXXXXXX.', '.XXoXXXXXXoXX.',
-         '.XXXXXXXXXXXX.', '..XXXX..XXXX..', '...XXXXXXXX...', '....XXXXXX....', '.....XXXX.....', '......XX......'],
-    curl: ['..............', '..............', '.....XXXXX....', '...XXXXXXXXX..', '..XXXXXXXXXXX.', '.XXXX.XXXXXXX.',
-           '.XXXXXXXXXXXX.', '.XXXXXXXXXXX..', '..XXXXXXXXXXX.', '...XXXXXXXXXX.', '.....XXXXX.XX.', '..............'],
+    up: ['..XX........XX..', '..XbX......XbX..', '..XbbX....XbbX..', '..XbbbXXXXbbbX..', '.XbbbbbbbbbbbbX.', '.XbobbbbbbbbobX.',
+         '.XbbbbbbbbbbbbX.', '..XbbbwwwwbbbX..', '...XbwwwwwwbX...', '....XwwwwwwX....', '.....Xw..wX.....', '......XwwX......',
+         '.......XX.......', '................'],
+    curl: ['................', '................', '................', '.....XXXXXX.....', '...XXbbbbbbXX...', '..XbbbbbbbbbbX..',
+           '.XbbXXbbbbbbbbX.', '.XbbbbbbbbbbbbX.', '.XbbbbbbbbbbbXX.', '..XbbbbbbbbbXwwX', '...XXbbbbbbXwwwX', '.....XXXXXXwwwX.',
+           '...........XXX..', '................'],
   };
-  const shear = (rows, dir) => rows.map((r, i) => { const k = Math.round((i - 6) * dir / 4); return k > 0 ? ('.'.repeat(k) + r).slice(0, 14) : k < 0 ? (r + '.'.repeat(-k)).slice(-k, 14 - k) : r; });
+  KIT.idle = ['............XX..', '.XXbX......XbX..', ...KIT.up.slice(2)];          // the left ear flicks
+  // lean: the head shears toward the corner about the chin, by `k` dots at the ear tips
+  const shear = (rows, k) => rows.map((r, i) => { const d = Math.round((KIT_H - 1 - i) * k / (KIT_H - 1));
+    return d > 0 ? (r.slice(d) + '.'.repeat(d)) : d < 0 ? ('.'.repeat(-d) + r).slice(0, KIT_W) : r; });
   KIT.left = shear(KIT.up, 1); KIT.right = shear(KIT.up, -1);       // the head goes the way the corner does
+  KIT.hardLeft = shear(KIT.up, 2); KIT.hardRight = shear(KIT.up, -2);
   KIT.blink = KIT.up.map((r) => r.replace(/o/g, 'X'));
-  KIT.crest = ['..X........X..', ...KIT.up.slice(0, 11)];
-  function kitPose(d) {
+  KIT.crest = ['..XX........XX..', ...KIT.up.slice(0, KIT_H - 1)];   // sits up: taller ears
+  function kitPose(d, now) {
     if (d.blink) return 'blink';
     if (d.speedMph != null && d.speedMph < 2) return 'curl';
     if (d.crestAhead) return 'crest';
+    if (d.latG != null && d.latG > 0.45) return 'hardLeft';
     if (d.latG != null && d.latG > 0.15) return 'left';
+    if (d.latG != null && d.latG < -0.45) return 'hardRight';
     if (d.latG != null && d.latG < -0.15) return 'right';
-    return 'up';
+    return now != null && now % 5000 < 260 ? 'idle' : 'up';        // an ear flick every five seconds
   }
+  const KIT_CLASS = { X: 'on', w: 'on', b: 'body', o: 'eye' };
   function kitRow(parent) {
     const row = html('div', 'kit-row', parent);
-    const s = svg('svg', { viewBox: '0 0 140 120', class: 'kit', 'aria-hidden': 'true' }, row);
+    const s = svg('svg', { viewBox: `0 0 ${KIT_W * 10} ${KIT_H * 10}`, class: 'kit', 'aria-hidden': 'true' }, row);
     const dots = [];
-    for (let y = 0; y < 12; y++) for (let x = 0; x < 14; x++) dots.push(svg('circle', { cx: 5 + x * 10, cy: 5 + y * 10, r: 3.6 }, s));
+    for (let y = 0; y < KIT_H; y++) for (let x = 0; x < KIT_W; x++) dots.push(svg('circle', { cx: 5 + x * 10, cy: 5 + y * 10, r: 3.8 }, s));
     const says = html('div', 'kit-says', row); html('span', 'vfd-cap', says, 'KIT SAYS'); const line = html('b', '', says, '--');
+    const still = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
     let pose = null;
     return (d) => {
-      const p = kitPose(d);
+      const p = kitPose(d, still ? null : (typeof performance !== 'undefined' ? performance.now() : Date.now()));
       if (p !== pose) {
         pose = p;
         const rows = KIT[p];
-        dots.forEach((c, i) => { const ch = rows[Math.floor(i / 14)][i % 14]; c.setAttribute('class', ch === 'X' ? 'on' : ch === 'o' ? 'eye' : ''); });
+        dots.forEach((c, i) => { c.setAttribute('class', KIT_CLASS[rows[Math.floor(i / KIT_W)][i % KIT_W]] || ''); });
       }
       if (d.kitLine !== undefined && line.textContent !== (d.kitLine || '--')) line.textContent = d.kitLine || '--';
     };

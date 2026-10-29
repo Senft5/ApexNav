@@ -1346,6 +1346,11 @@ flow('theme contract on the page: the hazard plate, the speed, the call and the 
     const sc = await page.evaluate(() => { const g = document.querySelector('#cluster .g-score'), b = g && g.getBoundingClientRect(), m = document.querySelector('#cluster .dial-g').getBoundingClientRect();
       return g && { text: g.textContent, inside: b.bottom <= m.bottom + 1 && b.top >= m.top - 1 }; });
     check(sc && /^--SCORE$/.test(sc.text) && sc.inside, `${id}: the Score sits under the meter, -- on a replay: ` + JSON.stringify(sc));   // REVIEW.md 4.3
+    if (id === 'tapedeck') {                                        // REVIEW2.md U-38: Kit at 80 px on 16 x 14, and his line wraps to two, never cut
+      const kit = await page.evaluate(() => { const k = document.querySelector('#cluster .kit'), b = document.querySelector('#cluster .kit-says b');
+        return { w: Math.round(k.getBoundingClientRect().width), dots: k.querySelectorAll('circle').length, clamp: getComputedStyle(b).webkitLineClamp, ellipsis: getComputedStyle(b).textOverflow }; });
+      check(kit.w === 80 && kit.dots === 16 * 14 && kit.clamp === '2' && kit.ellipsis !== 'ellipsis', 'tapedeck: Kit at 80 px and a two-line call: ' + JSON.stringify(kit));
+    }
   }
 });
 
