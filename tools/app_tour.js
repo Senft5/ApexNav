@@ -300,12 +300,19 @@ scene('plan-drive', async ({ page, base, cap, fresh, still }) => {
 
 scene('tapedeck-drive', async ({ page, base, cap, fresh, still }) => {
   await fresh();
-  await page.goto(`${base}/index.html?drive=dry_ridge`);
+  // the drive runs as it does in the app: the page sees the iOS shell (only with ?shell=1, so no other scene does),
+  // Start comes through the app link, and the shell's frames feed it; without this the status line could only say
+  // "Finding GPS", since nothing was recording (REVIEW3.md)
+  await page.addInitScript(() => { if (!/[?&]shell=1/.test(location.search)) return;
+    window.webkit = { messageHandlers: { apex: { postMessage: () => {} } } }; try { localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  await page.goto(`${base}/index.html?drive=dry_ridge&shell=1`);
   await page.waitForFunction(() => window.apexDebug && window.apexDebug.track && window.apex && typeof window.apex.live === 'function');
   await cap('Tapedeck: a live drive, not a replay');
   await page.evaluate(() => window.apexDebug.tryTheme('tapedeck'));   // the trial starts from the demo replay; then leave it and drive
   await page.waitForTimeout(1500);
   await page.click('#modePlate').catch(() => {});
+  await page.evaluate(() => window.apex.onNative({ type: 'link', params: { go: 'drive' } }));   // Start drive, as Siri or the widget would
+  await page.waitForTimeout(800);
   // drive the demo road live, frames as the iOS shell pushes them (window.apex.live): a fix every 0.1 s at 22 m/s
   const pts = await page.evaluate(() => { const t = window.apexDebug.track, out = [];
     for (let i = Math.floor(t.dist.length * 0.3); i < t.dist.length * 0.36; i++) out.push([t.lat[i], t.lon[i]]); return out; });
