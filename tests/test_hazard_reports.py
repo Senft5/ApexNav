@@ -35,6 +35,10 @@ const cl = [{ kind: 'closure', lat: 35.65, lon: -83.9 }, { kind: 'closure', lat:
   { kind: 'closure', lat: 35.61, lon: -83.95 }];
 out.closures = H.closuresFor(cl, [{ lat: 35.6, lon: -84.0 }, { lat: 35.7, lon: -83.8 }]);
 out.noPoints = H.closuresFor(cl, []);
+const mi = (m) => `${(m / 1609.344).toFixed(1)} mi`, now = Date.parse('2026-10-29T03:50:00Z');
+out.plate = H.plate({ kind: 'gravel', m: 640, created_at: '2026-10-29 01:50:00', confirms: 2 }, mi, now);
+out.plateFresh = H.plate({ kind: 'police', m: 300, created_at: '2026-10-29T03:49:40Z', confirms: 0 }, mi, now);
+out.plateBare = H.plate({ kind: 'mystery' }, mi, now);
 console.log(JSON.stringify(out));
 """
 
@@ -60,3 +64,10 @@ def test_closures_for_routing(out):
     # inside the trip's box (widened 15 km), closures only, nearest the middle first; one 140 km away left out
     assert out["closures"] == [{"lat": 35.65, "lon": -83.9}, {"lat": 35.61, "lon": -83.95}]
     assert out["noPoints"] == []
+
+
+def test_hazard_plate_text(out):
+    # docs/design/REVIEW.md 4.3: what it is, how far, how old, how many confirmed; never who reported it
+    assert out["plate"] == {"title": "Gravel", "detail": "in 0.4 mi · reported 2 h ago · 2 confirmed"}
+    assert out["plateFresh"] == {"title": "Police", "detail": "in 0.2 mi · reported just now"}
+    assert out["plateBare"] == {"title": "Hazard", "detail": ""}                        # unknown parts left out

@@ -6,6 +6,7 @@
 //   renderNotes(el, theme, notes)               notes = [{ type, code, call, sub, dist, unit,
 //                                                          dir, severity, turnRad, mods }]
 //   tulipSVG(note, ink, accent)                 roadbook tulip diagram (string)
+//   lockup(call, mods)                          the call split for the strip: { head, tail: [{ text, warn }] } (pure)
 (function (root) {
   'use strict';
   const NS = 'http://www.w3.org/2000/svg';
@@ -31,6 +32,27 @@
   // Tulip diagrams (FIA roadbook convention: entry dot at the bottom, the road as
   // the driver meets it, arrow on the exit). Radius encodes severity.
   // -------------------------------------------------------------------------
+  // The call lockup (docs/design/REVIEW.md roadmap 3): the call itself big ("Left 4 minus"), its modifiers and caution one
+  // size down ("tightens · long · care") so a long call never wraps to four lines. The modifiers that change what you do
+  // (tightens, off-camber, over crest) are marked to be drawn in the accent. Plain-words calls carry no modifiers: whole.
+  const WARN_MODS = new Set(['tightens', 'off-camber', 'over crest']);
+  function lockup(call, mods) {
+    const text = String(call || ''), low = text.toLowerCase();
+    let cut = text.indexOf(', ');
+    for (const m of mods || []) { const i = low.indexOf(' ' + String(m).toLowerCase()); if (i > 0 && (cut < 0 || i < cut)) cut = i; }
+    if (cut <= 0) return { head: text, tail: [] };
+    const [modPart, ...caution] = text.slice(cut).split(', ');
+    let rest = modPart.trim().toLowerCase();
+    const tail = [];
+    for (const m of mods || []) {                                          // in the order the call says them
+      const w = String(m).toLowerCase();
+      if (rest.startsWith(w)) { tail.push({ text: w, warn: WARN_MODS.has(w) }); rest = rest.slice(w.length).trim(); }
+    }
+    if (rest) tail.push({ text: rest, warn: false });                      // anything the list didn't name, kept as said
+    for (const c of caution) if (c.trim()) tail.push({ text: c.trim().toLowerCase(), warn: true });
+    return { head: text.slice(0, cut).trim(), tail };
+  }
+  const HAZARD_TYPES = new Set(['bump', 'crest', 'dip']);   // measured hazards: the hazard plate's colours when they are the call
   const TULIP_R = { HP: 8, 1: 10, 2: 14, 3: 19, 4: 25, 5: 32, 6: 40 };
 
   function tulipSVG(note, ink, accent) {
@@ -109,18 +131,25 @@
     const since = el._advanceAt === undefined ? Infinity : t0 - el._advanceAt;
     // Road book page: up to three boxes, distance | tulip | note.
     notes.slice(0, 3).forEach((n, i) => {
-      const box = html('div', 'rb-box' + (i === 0 ? ' now' : ''), el);
+      // a measured hazard that becomes the call takes the hazard plate's colours (docs/design/REVIEW.md 4.3)
+      const hz = HAZARD_TYPES.has(n.type);
+      const box = html('div', 'rb-box' + (i === 0 ? ' now' : '') + (hz && i === 0 ? ' hz' : ''), el);
       if (since < 160) { box.classList.add('advance'); box.style.animationDelay = `-${Math.round(since)}ms`; }
       const d = html('div', 'rb-dist', box);
       html('b', '', d, n.dist);
       html('small', '', d, n.unit);
       const t = html('div', 'rb-tulip', box);
-      t.innerHTML = tulipSVG(n, ink, n.type === 'corner' ? accent : signal);
+      t.innerHTML = hz && i === 0 ? tulipSVG(n, css('--hz-ink') || '#fff', css('--hz-edge') || '#FF7A1A') : tulipSVG(n, ink, n.type === 'corner' ? accent : hz ? (css('--hz-edge') || signal) : signal);
       const c = html('div', 'rb-call', box);
       if (n.type !== 'corner' && n.code.toLowerCase() !== n.call.toLowerCase()) html('b', '', c, n.code);
       // a long call ("Square left off-camber") steps down a size so it reads whole instead of ending in "..."
-      const len = String(n.call || '').length;
-      html('span', len > 18 ? 'xlong' : len > 11 ? 'long' : '', c, n.call);
+      const lk = n.type === 'corner' ? lockup(n.call, n.mods) : { head: String(n.call || ''), tail: [] };
+      const len = lk.head.length;
+      html('span', len > 18 ? 'xlong' : len > 11 ? 'long' : '', c, lk.head);
+      if (lk.tail.length) {
+        const m = html('span', 'rb-mods', c);
+        lk.tail.forEach((t, k) => { if (k) m.append(' · '); html('i', t.warn ? 'warn' : '', m, t.text); });
+      }
       // the lanes for the next junction (IDEAS R-29): one arrow per lane, left to right; the ones to use are lit
       if (i === 0 && Array.isArray(n.lanes) && n.lanes.length > 1) {
         const row = html('div', 'rb-lanes', box);
@@ -314,5 +343,6 @@
     return mountDials(el, theme);
   }
 
-  root.ApexInstruments = { mountCluster, renderNotes, tulipSVG, SPEED_MAX };
-})(window);
+  const api = { mountCluster, renderNotes, tulipSVG, lockup, SPEED_MAX };
+  if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexInstruments = api;
+})(typeof window !== 'undefined' ? window : globalThis);

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-b3pUDwRloyEIaNufneZaV30L9iCvAIuRFx0uNnmOoYs=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-/ygOgOJsYk3LAJGvg+zOFEWBfBcXP2INm21YVeeYqos=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -90,7 +90,18 @@
   <script src="garage_ui.js"></script>
   <script src="safety_ui.js"></script>
   <style>
-    :root { --safe-top: env(safe-area-inset-top, 0px); --safe-bottom: env(safe-area-inset-bottom, 0px); --dial: clamp(88px, 12dvh, 150px); }
+    :root { --safe-top: env(safe-area-inset-top, 0px); --safe-bottom: env(safe-area-inset-bottom, 0px); --dial: clamp(88px, 12dvh, 150px);
+      /* The hazard plate (docs/design/REVIEW.md 4.3): the same in every theme, day and night; no theme may set these. */
+      --hz-bg: #111111; --hz-edge: #FF7A1A; --hz-ink: #FFFFFF; }
+    .hz-plate { position: absolute; z-index: 5; top: 14px; left: 10px; max-width: calc(100% - 76px); display: grid; grid-template-columns: 28px minmax(0, 1fr);
+      gap: 2px 10px; align-items: center; padding: 8px 14px 8px 10px; background: var(--hz-bg); color: var(--hz-ink); border: 2px solid var(--hz-edge);
+      box-shadow: 0 2px 0 rgba(0,0,0,0.25); pointer-events: none; }
+    .hz-plate[hidden] { display: none; }
+    .hz-plate svg { grid-row: span 2; width: 28px; height: 25px; }
+    .hz-plate b { font: 800 20px/1.05 var(--font-num, var(--font-ui)); letter-spacing: 0.01em; }
+    .hz-plate span { font-size: 12px; font-weight: 600; color: var(--hz-edge); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .hz-tri { fill: var(--hz-edge); }
+    .hz-tri + path { stroke: var(--hz-bg); }
     * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
     html, body { width: 100%; height: 100%; overflow: hidden; background: var(--panel); color: var(--panel-ink);
       font-family: var(--font-ui); font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -116,6 +127,8 @@
     /* The lead note reads at arm's length (U-07): bigger distance, tulip and call than the note after it. The call may take
        two lines rather than lose its end to an ellipsis. */
     .rb-box.now { grid-template-columns: auto 56px minmax(0, 1fr); }
+    .rb-box.now.hz { background: var(--hz-bg); color: var(--hz-ink); outline: 2px solid var(--hz-edge); outline-offset: -2px; }
+    .rb-box.now.hz .rb-call b { color: var(--hz-edge); }
     @media (max-width: 520px) {
       .rb-box:not(.now) { grid-template-columns: auto 30px minmax(0, 1fr); gap: 4px; padding: 2px 6px; }
       .rb-box:not(.now) .rb-tulip { width: 30px; height: 30px; }
@@ -137,7 +150,13 @@
     .rb-call span:first-child { font-size: 16px; font-weight: 800; line-height: 1.1; }
     .rb-box.now .rb-call span.long:first-child { font-size: 17px; }
     .rb-box.now .rb-call span.xlong:first-child { font-size: 14px; }
-    .rb-box:not(.now) .rb-call span.long:first-child, .rb-box:not(.now) .rb-call span.xlong:first-child { font-size: 11px; white-space: normal; line-height: 1.1; }
+    .rb-box:not(.now) .rb-call span.long:first-child, .rb-box:not(.now) .rb-call span.xlong:first-child { font-size: 13px; line-height: 1.1; }
+    /* the call lockup (REVIEW.md roadmap 3): modifiers one size down in pencil, the ones that change what you do in the accent */
+    .rb-call span.rb-mods { font-size: 12px; font-weight: 700; color: var(--panel-dim); margin-top: 2px; }
+    .rb-call span.rb-mods i { font-style: normal; }
+    .rb-call span.rb-mods i.warn { color: var(--accent); }
+    .rb-box.now .rb-call span.rb-mods { font-size: 14px; line-height: 1.15; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+    .rb-box.now.hz .rb-call span.rb-mods, .rb-box.now.hz .rb-call span.rb-mods i.warn { color: var(--hz-edge); }
     .ds-main > span { white-space: nowrap; }
 
     /* ---------------- stage map ---------------- */
@@ -218,9 +237,7 @@
     .toast.show { display: block; }
     .pin { font-size: 11px; font-weight: 800; letter-spacing: 0.1em; padding: 2px 5px; border: 1.5px solid; background: var(--panel); white-space: nowrap; cursor: pointer; font-family: var(--font-ui); }
     .pin.alpr { color: var(--signal); border-color: var(--signal); }
-    .pin.bump { color: var(--amber); border-color: var(--amber); }
-    .pin.crest, .pin.dip { color: var(--panel-ink); border-color: var(--panel-dim); }
-    .puck { width: 26px; height: 26px; }
+        .puck { width: 26px; height: 26px; }
     .reshape-pin { cursor: grabbing; }
     .stop-row { align-items: center; gap: 6px; } .stop-row span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .poi-pin { cursor: pointer; }
@@ -245,8 +262,12 @@
     .dbstat { font-size: 13px; line-height: 1.35; color: var(--panel-ink); min-width: 0; flex: 1; }
     #driveEnd { flex: none; background: var(--panel-ink); color: var(--panel); border-color: var(--panel-ink); font-size: 15px; padding: 0 16px; }
     .dbstat b { color: var(--accent); }
-    .ds-main { font-size: 20px; font-weight: 600; line-height: 1.2; font-variant-numeric: tabular-nums; }
-    .ds-warn { margin-top: 2px; font-size: 13px; }
+    .ds-main { font-size: 15px; font-weight: 600; line-height: 1.25; font-variant-numeric: tabular-nums; }
+    .ds-main b { font-size: 17px; }
+    /* one status line under the record line (REVIEW.md 1.1 #4): the rest is cut, never wrapped over the binnacle */
+    .ds-warn { margin-top: 2px; font-size: 13px; color: var(--panel-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    /* driving is full-screen (REVIEW.md roadmap 1): no tab bar, so no way to leave the drive by accident; End is the way out */
+    #app.live .tabbar { display: none; }
     .key { height: 44px; min-width: 44px; padding: 0 12px; font-size: 15px; font-weight: 600; border: 1px solid var(--rule); color: var(--panel-ink); background: transparent; }
     .key.on { color: var(--accent); border-color: var(--accent); }
     .scrubber { position: relative; height: 28px; border: 1px solid var(--rule); cursor: ew-resize; touch-action: none; }
@@ -471,7 +492,12 @@
     .stage-bar.ahead { border-left-color: #2e9e5b; } .stage-bar.behind { border-left-color: #d0453a; }
     .hz-ask span { flex: 1; font-weight: 700; }
     .hz-ask .key { min-height: 56px; }
-    .hz-pin { font: 800 11px var(--font-ui, sans-serif); letter-spacing: 0.06em; padding: 2px 5px; border: 1.5px solid var(--signal, #c33); color: var(--signal, #c33); background: var(--panel, #fff); white-space: nowrap; }
+    .hz-pin, .pin.bump, .pin.crest, .pin.dip { font: 800 11px var(--font-ui, sans-serif); letter-spacing: 0.06em; padding: 2px 6px 2px 5px; border: 2px solid var(--hz-edge); color: var(--hz-ink); background: var(--hz-bg); white-space: nowrap; }
+    .hz-pin::before, .pin.bump::before, .pin.crest::before, .pin.dip::before { content: ""; display: inline-block; width: 0; height: 0; margin-right: 4px; vertical-align: -1px;
+      border-left: 5px solid transparent; border-right: 5px solid transparent; border-bottom: 9px solid var(--hz-edge); }
+    /* the report sheet's buttons are the plate others will see (REVIEW.md 1.2, Hazard report) */
+    .hz-grid .hz-btn { background: var(--hz-bg); color: var(--hz-ink); border: 2px solid var(--hz-edge); text-align: left; padding: 0 14px; display: flex; align-items: center; gap: 10px; }
+    .hz-grid .hz-btn::before { content: ""; flex: none; width: 0; height: 0; border-left: 9px solid transparent; border-right: 9px solid transparent; border-bottom: 16px solid var(--hz-edge); }
     /* Along the route (IDEAS R-24): viewpoints named, cafés and fuel small; map data, quieter than hazards. */
     .poi-pin { font: 700 10px var(--font-ui, sans-serif); letter-spacing: 0.04em; padding: 1px 4px; border: 1px solid var(--panel-ink, #222); color: var(--panel-ink, #222); background: var(--panel, #fff); white-space: nowrap; max-width: 140px; overflow: hidden; text-overflow: ellipsis; opacity: 0.9; }
     .poi-pin.poi-view { border-color: #2e7d5b; color: #2e7d5b; }
@@ -520,6 +546,7 @@
 
     <section class="stage">
       <div id="map"></div>
+      <div class="hz-plate" id="hzPlate" role="status" aria-live="assertive" hidden><svg viewBox="0 0 28 25" aria-hidden="true"><path class="hz-tri" d="M14 1 L27 24 H1 Z"/><path d="M14 9 V16 M14 19.5 V20.5" stroke-width="3" stroke-linecap="round"/></svg><b id="hzPlateTitle"></b><span id="hzPlateDetail"></span></div>
       <div class="plates">
         <div class="plate" id="modePlate" role="status">Replay</div>
         <button class="plate" id="recenterBtn">Recenter</button>
@@ -760,7 +787,7 @@
       <div class="drivebar" id="driveBar" hidden>
         <div class="dbstat" id="driveStat"><div class="ds-main" id="dsMain">Finding GPS…</div><div class="ds-warn" id="dsWarn" role="status" aria-live="polite" hidden></div></div>
         <button class="key" id="hzReportBtn" aria-label="Report a hazard">Report</button>
-        <button class="key" id="driveEnd">End drive</button>
+        <button class="key" id="driveEnd" aria-label="End drive">End</button>
       </div>
       <div class="transport" id="transport">
         <button class="key" id="playBtn">Play</button>
@@ -4669,6 +4696,7 @@
       const on = state.mode === 'live';
       $('driveBar').hidden = !on; $('transport').hidden = on;
       $('app').classList.toggle('live', on);
+      if (!on) $('hzPlate').hidden = true;
       if (on) { $('app').classList.remove('sheet-open'); openPlan(false); }
     }
     // In the iOS app the switch lives under the app, not Safari.
@@ -5009,9 +5037,20 @@
       const me = { lat: frame.lat, lon: frame.lon, heading: Number.isFinite(frame.course_deg) ? frame.course_deg : null };
       const v = Number.isFinite(frame.speed_mps) ? frame.speed_mps : 0;
       const next = ApexHazardReports.nextAhead(reported.list, me, Math.max(150, Math.min(600, v * 8)), reported.said);
+      paintHazardPlate(ApexHazardReports.nextAhead(reported.list, me, HZ_PLATE_M, null));
       if (next) { reported.said.add(next.id); say(next.text, false, null, null, { kind: 'hazard', key: `rep:${next.id}`, repeatMs: 10 * 60000, alert: true }); }
       const passed = reported.watch.update(reported.list, me, reported.mine);
       if (passed && !reported.asking) askStill(passed);
+    }
+    // The hazard plate (REVIEW.md 4.3): the nearest reported hazard ahead within a mile, fixed top-left of the map in every
+    // theme, until it is passed. Its words are hazard_reports.js plate(): what, how far, how old, how many confirmed.
+    const HZ_PLATE_M = 1609;
+    function paintHazardPlate(h) {
+      const p = h && state.mode === 'live' ? ApexHazardReports.plate(h, (m) => ApexUnits.long(m, 1), Date.now()) : null;
+      $('hzPlate').hidden = !p;
+      if (!p) return;
+      if ($('hzPlateTitle').textContent !== p.title) $('hzPlateTitle').textContent = p.title;
+      if ($('hzPlateDetail').textContent !== p.detail) $('hzPlateDetail').textContent = p.detail;
     }
     function askStill(h) {
       reported.asking = h;
@@ -5032,7 +5071,7 @@
     $('hzStill').addEventListener('click', () => answerStill(true));
     $('hzGone').addEventListener('click', () => answerStill(false));
     for (const k of ApexHazardReports.KINDS) {
-      const b = document.createElement('button'); b.className = 'ink-btn'; b.textContent = ApexHazardReports.LABEL[k];
+      const b = document.createElement('button'); b.className = 'ink-btn hz-btn'; b.textContent = ApexHazardReports.LABEL[k];
       b.addEventListener('click', () => reportHazard(k));
       $('hzKinds').append(b);
     }
