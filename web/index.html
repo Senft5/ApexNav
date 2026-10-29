@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-CES8NLLmD6kw55aXBeGfPwdZzAW/ASMM7LedQwxNU6c=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-bGkIIWUrIwpPFV3c+zl0vaHz/EuAc/NZXeqZKdokRWo=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -46,6 +46,8 @@
   <script src="hazard_reports.js"></script>
   <script src="route_card.js"></script>
   <script src="plan_presets.js"></script>
+  <script src="week_digest.js"></script>
+  <script src="drive_card.js"></script>
   <script src="outbox.js"></script>
   <script src="stage_delta.js"></script>
   <script src="lanes.js"></script>
@@ -418,6 +420,20 @@
     .find-key.busy { background: var(--panel-dim); }
     .plan-presets { margin: 10px 0 2px; }
     .place-all { display: block; margin: 6px 0 0; }
+    /* ---------------- the drive-ended card (REVIEW.md roadmap 7) ---------------- */
+    .end-card { text-align: left; }
+    .end-kicker { margin: 0; font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); }
+    .end-card h2 { margin: 4px 0 0; font-size: 28px; line-height: 1.1; }
+    .end-meta { margin: 4px 0 0; color: var(--panel-dim); font-size: 15px; }
+    .end-score { display: grid; grid-template-columns: auto 1fr; align-items: baseline; column-gap: 6px; margin: 18px 0 0; padding: 12px 0; border-top: 2px solid var(--panel-ink); border-bottom: 1px solid var(--rule); }
+    .end-score b { font: 800 84px/0.9 var(--font-num); font-variant-numeric: tabular-nums; }
+    .end-score small { font-size: 18px; font-weight: 600; color: var(--panel-dim); }
+    .end-score span { grid-column: 1 / -1; margin-top: 6px; font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--panel-dim); }
+    .end-line { margin: 12px 0 0; font-size: 16px; line-height: 1.35; }
+    .end-acts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 18px; }
+    .end-acts .ink-btn { min-height: 52px; }
+    .end-links { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; }
+    .end-links > * { margin: 0; padding: 8px 4px; line-height: 1.2; }
     .rc-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 18px; margin-top: 10px; }
     label.linkbtn { display: inline-flex; align-items: center; cursor: pointer; }
     .linkbtn { font: inherit; font-size: 15px; font-weight: 500; color: var(--panel-ink); text-decoration: underline; min-height: 44px; padding: 0 4px; background: none; border: none; }
@@ -853,6 +869,18 @@
           <button class="linkbtn" id="hzCancel">Cancel</button>
         </div>
       </div>
+      <!-- the drive-ended card (REVIEW.md roadmap 7): the drive's name, its Vetta Score big, one thing to work on -->
+      <div class="overlay dim" id="endCard" role="dialog" aria-modal="true" aria-labelledby="endName">
+        <div class="card-sheet end-card">
+          <p class="end-kicker">Drive saved</p>
+          <h2 id="endName">--</h2>
+          <p class="end-meta" id="endMeta"></p>
+          <div class="end-score"><b id="endScore">--</b><small>/1000</small><span>Vetta Score</span></div>
+          <p class="end-line" id="endLine"></p>
+          <div class="end-acts"><button class="ink-btn solid" id="endShare">Share card</button><button class="ink-btn" id="endStage">Mark a stage</button></div>
+          <div class="end-links"><a class="linkbtn" id="endLog" href="analysis.html">Open in the Log</a><button class="linkbtn" id="endDone">Done</button></div>
+        </div>
+      </div>
       <div class="stage-bar" id="stageBar" role="status" aria-live="polite" hidden><span id="stageName"></span><b id="stageDelta">--</b><small id="stageCount"></small></div>
       <div class="stage-bar" id="lapBar" role="status" aria-live="polite" hidden><span id="lapName">Track</span><b id="lapTime">--</b><small id="lapInfo"></small><button class="key" id="lapSetBtn" hidden>Start/finish here</button></div>
       <div class="hz-ask" id="hzAsk" role="alertdialog" aria-live="assertive" hidden><span id="hzAskText"></span><button class="key" id="hzStill">Still there</button><button class="key" id="hzGone">Gone</button></div>
@@ -1200,7 +1228,7 @@
     const map = new maplibregl.Map({ container: 'map', style: MAP_STYLE,
       center: startPos ? [startPos.lon, startPos.lat] : [-84.70, 39.24], zoom: 14.6, pitch: 45, maxPitch: 60, attributionControl: { compact: true }, fadeDuration: 0,
       transformRequest: window.ApexOfflineTiles ? ApexOfflineTiles.transform : undefined });
-    window.apexDebug = { map, get track() { return track; }, state, drives, buildRoute: (...a) => buildRoute(...a), renderRouteCard: (...a) => renderRouteCard(...a), openRoadPage: (...a) => openRoadPage(...a) };
+    window.apexDebug = { map, get track() { return track; }, state, drives, buildRoute: (...a) => buildRoute(...a), renderRouteCard: (...a) => renderRouteCard(...a), openRoadPage: (...a) => openRoadPage(...a), showEndCard: (...a) => showEndCard(...a) };
     let mapReady = false;
     // The map's box changes with the layout (idle hides the gauges, a drive shows them); keep the canvas the size of its box.
     if (window.ResizeObserver) new ResizeObserver(() => map.resize()).observe(document.getElementById('map'));
@@ -5464,6 +5492,37 @@
         }
       }
     }
+    // The drive-ended card (REVIEW.md roadmap 7): the moment after the Skyway gets the screen, not a toast. The drive is
+    // already saved; the card shows its name, distance and time, the Vetta Score big (-- without clean corners) and one
+    // thing to work on (the weakest Score part, week_digest.js tip), with Share card and Mark a stage.
+    let endDrive = null;
+    function showEndCard(d, startedAt) {
+      endDrive = d;
+      let ds = null;
+      try { ds = Core.driverScore(d.speed_mps, d.lon_g, d.lat_g, ApexRecording.scorableCorners(d, d.corners)); } catch (_) { ds = null; }
+      d.ds = ds && Number.isFinite(ds.score) ? ds : { ...(ds || {}), score: null };
+      const miles = Array.isArray(d.dist) && d.dist.length ? ApexUnits.long(d.dist[d.dist.length - 1], 1) : null;
+      const mins = Number.isFinite(startedAt) ? Math.round((Date.now() - startedAt) / 60000) : null;
+      $('endName').textContent = d.name || 'Your drive';
+      $('endMeta').textContent = [miles, mins != null ? (mins >= 60 ? `${Math.floor(mins / 60)} h ${mins % 60} min` : `${mins} min`) : null,
+        Array.isArray(d.corners) ? `${d.corners.length} corners` : null].filter(Boolean).join(' · ');
+      $('endScore').textContent = d.ds.score == null ? '--' : String(d.ds.score);
+      const t = d.ds.score != null && window.ApexWeekDigest ? ApexWeekDigest.tip(d.ds.components) : null;
+      $('endLine').textContent = d.ds.score == null ? 'Not enough clean corners for a score this time.'
+        : t ? `Next time, ${t.label.toLowerCase()}: ${t.tip}.` : '';
+      $('endLog').href = `analysis.html?tab=drive&drive=${encodeURIComponent(d.id)}`;
+      $('endCard').classList.add('show');
+    }
+    $('endDone').addEventListener('click', () => $('endCard').classList.remove('show'));
+    $('endStage').addEventListener('click', () => { if (endDrive) location.href = `analysis.html?tab=segments&drive=${encodeURIComponent(endDrive.id)}`; });
+    $('endShare').addEventListener('click', async () => {
+      if (!endDrive || !window.ApexDriveCard) return;
+      const css = getComputedStyle(document.documentElement), v = (k) => css.getPropertyValue(k).trim();
+      const cv = ApexDriveCard.drawCard(document.createElement('canvas'), ApexDriveCard.cardModel(endDrive),
+        { panel: v('--panel'), panelInk: v('--panel-ink'), panelDim: v('--panel-dim'), accent: v('--accent'), fontNum: v('--font-num'), fontUi: v('--font-ui') });
+      const out = await ApexDriveCard.shareCard(cv, `${(endDrive.name || 'drive').replace(/[^A-Za-z0-9 _-]+/g, '').trim() || 'drive'}.png`);
+      if (out === 'saved') toast('Card saved.');
+    });
     async function leaveDrive(save) {
       driveActive = false;
       stageWatch = null; $('stageBar').hidden = true;
@@ -5490,7 +5549,7 @@
           if (battery) d.battery = battery;                          // what the drive cost the battery (IDEAS P-01)
           await ApexRecording.store(d);
           await refreshSavedDrives();
-          toast(`Drive saved · ${ApexUnits.long((rec.km) * 1000, 1)}`, { label: 'View', href: `analysis.html?tab=drive&drive=${encodeURIComponent(d.id)}` });
+          showEndCard(d, rec.startedAt);
           if (live) {
             live.finish().then(async (shared) => {
               if (shared && shared.chunks > 0) {
