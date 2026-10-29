@@ -1,0 +1,154 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter+Tight:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* Mockups of Vetta in CarPlay, 1280 x 480 widescreen. Apple draws everything marked SYS (templates: cards, lists,
+     buttons, the dock); Vetta draws the map (the base view) and supplies images, text and colours to the templates. */
+  * { box-sizing: border-box; margin: 0; }
+  body { background: #2a2a2a; font-family: "Inter", system-ui, sans-serif; }
+  .frame { position: relative; width: 1280px; height: 480px; overflow: hidden; background: #000; }
+  .dock { position: absolute; left: 0; top: 0; bottom: 0; width: 92px; background: #0b0b0c; display: flex; flex-direction: column; align-items: center; padding: 16px 0; gap: 14px; z-index: 5; }
+  .dock .time { color: #fff; font: 600 17px Inter; } .dock .sig { color: #8e8e93; font: 500 12px Inter; margin-top: -10px; }
+  .dock .app { width: 56px; height: 56px; border-radius: 14px; background: #3a3a3c; }
+  .dock .app.on { background: #EDE4D3; display: grid; place-items: center; font: 800 22px "Barlow Condensed"; color: #1B1A17; outline: 3px solid #fff; outline-offset: 2px; }
+  .dock .grid { margin-top: auto; width: 34px; height: 34px; border-radius: 8px; background: #2c2c2e; }
+  .map { position: absolute; left: 92px; top: 0; right: 0; bottom: 0; }
+  .map svg { width: 100%; height: 100%; display: block; }
+  /* system template chrome (Apple's look, approximated) */
+  .sys { font-family: "Inter", system-ui; }
+  .navbar { position: absolute; top: 10px; left: 104px; display: flex; gap: 8px; z-index: 4; }
+  .navbar.right { left: auto; right: 12px; }
+  .pill { background: rgba(28,28,30,.86); color: #fff; font: 600 16px Inter; padding: 9px 16px; border-radius: 10px; }
+  .light .pill { background: rgba(255,255,255,.92); color: #000; }
+  .mapbtns { position: absolute; right: 12px; bottom: 12px; display: grid; gap: 8px; z-index: 4; }
+  .mbtn { width: 50px; height: 50px; border-radius: 12px; background: rgba(28,28,30,.86); display: grid; place-items: center; color: #fff; font: 600 20px Inter; }
+  .light .mbtn { background: rgba(255,255,255,.92); color: #000; }
+  .mbtn svg { width: 28px; height: 28px; }
+  .card { position: absolute; z-index: 4; border-radius: 14px; overflow: hidden; }
+  .man { left: 104px; top: 12px; width: 330px; }
+  .man .now { display: grid; grid-template-columns: 74px 1fr; gap: 10px; padding: 12px 14px; align-items: center; }
+  .man .now .d { font: 700 30px Inter; letter-spacing: -.5px; } .man .now .i { font: 600 19px Inter; line-height: 1.15; }
+  .man .next { display: flex; align-items: center; gap: 10px; padding: 8px 14px; font: 600 15px Inter; }
+  .est { position: absolute; left: 104px; bottom: 12px; width: 330px; z-index: 4; border-radius: 14px; display: grid; grid-template-columns: repeat(3, 1fr); padding: 10px 14px; }
+  .est b { display: block; font: 700 22px Inter; } .est span { font: 500 13px Inter; opacity: .7; }
+  .alert { position: absolute; left: 50%; top: 50%; transform: translate(-30%, -50%); width: 380px; border-radius: 16px; padding: 18px; z-index: 6; display: grid; grid-template-columns: 64px 1fr; gap: 14px; align-items: center; }
+  .alert b { font: 700 22px Inter; display: block; } .alert span { font: 500 16px Inter; opacity: .75; }
+  .alert .acts { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .alert .acts div { text-align: center; padding: 10px; border-radius: 10px; font: 600 17px Inter; }
+  .list { position: absolute; left: 92px; top: 0; bottom: 0; right: 0; z-index: 4; display: flex; flex-direction: column; }
+  .list .head { height: 58px; display: flex; align-items: center; justify-content: center; font: 600 19px Inter; position: relative; }
+  .list .head .back { position: absolute; left: 16px; font: 600 17px Inter; }
+  .list .row { display: grid; grid-template-columns: 56px 1fr auto; gap: 14px; align-items: center; padding: 10px 22px; height: 76px; }
+  .list .row img, .list .row .ic { width: 48px; height: 48px; border-radius: 10px; display: grid; place-items: center; }
+  .list .row b { font: 600 19px Inter; display: block; } .list .row span { font: 500 15px Inter; opacity: .65; }
+  .list .row .chev { font: 600 20px Inter; opacity: .5; }
+  .preview { position: absolute; left: 104px; top: 12px; bottom: 12px; width: 330px; z-index: 4; border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+  .preview .title { font: 700 21px Inter; } .preview .sub { font: 500 15px Inter; opacity: .7; margin-top: -6px; }
+  .preview .choice { border-radius: 10px; padding: 10px 12px; font: 600 16px Inter; display: grid; gap: 2px; }
+  .preview .choice small { font: 500 14px Inter; opacity: .7; }
+  .preview .go { margin-top: auto; text-align: center; padding: 12px; border-radius: 11px; font: 700 18px Inter; }
+  .tag { position: absolute; z-index: 9; font: 700 11px Inter; letter-spacing: .08em; padding: 3px 6px; border-radius: 4px; }
+  .tag.sys { background: #5ac8fa; color: #002; } .tag.us { background: #ffd60a; color: #221; }
+  .caption { color: #ddd; font: 500 14px Inter; padding: 8px 4px 22px; max-width: 1280px; }
+  .caption b { color: #fff; }
+</style></head>
+<body><div id="out"></div>
+<script>
+// ---- the base view: Vetta's own map, in the theme's colours (this is the part Apple leaves entirely to the app) ----
+const THEMES = {
+  roadbook: { paper: '#EDE4D3', ink: '#1B1A17', minor: '#FFFFFF', minorEdge: '#9b9282', contour: '#c9b99b', water: '#bcd3d6', route: '#C8102E', routeCase: '#1B1A17', puck: '#C8102E', label: '#5a5348' },
+  tapedeck: { paper: '#0A0C0B', ink: '#7DF5DE', minor: '#0A0C0B', minorEdge: '#2b5a52', contour: '#14302B', water: '#0e2a2a', route: '#FFB347', routeCase: '#0A0C0B', puck: '#FFB347', label: '#4f9e90' },
+};
+const ROUTE = 'M 120 470 C 180 400, 140 360, 230 330 S 330 330, 360 270 S 300 190, 400 170 S 520 210, 560 150 S 610 70, 700 90 S 800 160, 860 120 S 930 40, 1010 60 S 1120 120, 1190 70';
+function map(t, { route = true, done = 0.38, corners = true, hazard = true, alt = false, zoomOut = false } = {}) {
+  const c = THEMES[t];
+  let s = `<svg viewBox="0 0 1188 480" preserveAspectRatio="xMidYMid slice"><rect width="1188" height="480" fill="${c.paper}"/>`;
+  for (let i = 0; i < 14; i++) s += `<path d="M ${-40 + i * 30} ${520} C ${200 + i * 40} ${380 - i * 18}, ${420 + i * 25} ${470 - i * 30}, ${1220} ${200 - i * 22}" fill="none" stroke="${c.contour}" stroke-width="1"/>`;
+  s += `<path d="M 0 140 C 160 120, 260 60, 420 40 L 520 0 L 0 0 Z" fill="${c.water}" opacity=".7"/>`;
+  s += `<text x="150" y="70" fill="${c.label}" font-family="Inter" font-style="italic" font-size="15" letter-spacing="2" transform="rotate(-12 150 70)">Tellico River</text>`;
+  const minors = ['M 0 300 C 200 280, 260 250, 420 300 S 700 380, 1188 330', 'M 640 480 C 650 380, 600 300, 680 200 S 760 60, 740 0', 'M 900 480 C 880 400, 960 300, 940 200'];
+  for (const m of minors) s += `<path d="${m}" fill="none" stroke="${c.minorEdge}" stroke-width="9"/><path d="${m}" fill="none" stroke="${c.minor}" stroke-width="6"/>`;
+  if (alt) s += `<path d="M 120 470 C 300 460, 500 420, 700 380 S 1000 300, 1190 70" fill="none" stroke="${c.ink}" stroke-width="5" stroke-dasharray="2 9" stroke-linecap="round" opacity=".55"/>`;
+  if (route) {
+    s += `<path id="r" d="${ROUTE}" fill="none" stroke="${c.routeCase}" stroke-width="13" stroke-linecap="round"/><path d="${ROUTE}" fill="none" stroke="${c.route}" stroke-width="8" stroke-linecap="round"/>`;
+    if (done) s += `<path d="${ROUTE}" fill="none" stroke="${c.paper}" stroke-width="8" stroke-linecap="round" pathLength="1" stroke-dasharray="${done} 1" opacity=".8"/>`;
+  }
+  s += `<text x="470" y="250" fill="${c.label}" font-family="Inter" font-size="14" font-weight="600" letter-spacing="1.5">CHEROHALA SKYWAY</text>`;
+  if (route && corners) {   // the road book on the map: each corner's severity at its apex, the way the strip calls it
+    const pts = [[400, 170, 'L4'], [560, 150, 'R3'], [700, 90, 'L2', true], [860, 120, 'R4'], [1010, 60, 'L5']];
+    for (const [x, y, n, hp] of pts) s += `<g transform="translate(${x} ${y - 30})"><rect x="-19" y="-14" width="38" height="26" rx="3" fill="${hp ? c.ink : c.paper}" stroke="${c.ink}" stroke-width="2"/><text y="5" text-anchor="middle" font-family="Barlow Condensed" font-weight="700" font-size="19" fill="${hp ? c.paper : c.ink}">${n}</text></g>`;
+  }
+  if (route && hazard) s += `<g transform="translate(990 150)"><rect x="-50" y="-15" width="100" height="30" fill="#111" stroke="#FF7A1A" stroke-width="2.5"/><path d="M -40 7 L -32 -8 L -24 7 Z" fill="#FF7A1A"/><text x="10" y="6" text-anchor="middle" font-family="Inter" font-weight="700" font-size="14" fill="#fff">GRAVEL</text></g>`;
+  if (route) s += `<g transform="translate(360 270)"><circle r="17" fill="${c.paper}" stroke="${c.ink}" stroke-width="3"/><path d="M 0 -10 L 8 8 L 0 3 L -8 8 Z" fill="${c.puck}"/></g>`;
+  else s += `<g transform="translate(600 260)"><circle r="17" fill="${c.paper}" stroke="${c.ink}" stroke-width="3"/><path d="M 0 -10 L 8 8 L 0 3 L -8 8 Z" fill="${c.puck}"/></g>`;
+  return s + '</svg>';
+}
+// a tulip, as a maneuver symbol image (Vetta supplies it; CarPlay places it)
+const tulip = (stroke, dir = 1) => `<svg viewBox="0 0 64 64" width="64" height="64"><path d="M 32 58 L 32 30" stroke="${stroke}" stroke-width="5" stroke-linecap="round"/><path d="M 32 32 C 32 18, ${32 + dir * 6} 12, ${32 + dir * 22} 10" stroke="${stroke}" stroke-width="5" fill="none" stroke-linecap="round"/><path d="M ${32 + dir * 22} 10 l ${-dir * 9} -6 M ${32 + dir * 22} 10 l ${-dir * 7} 8" stroke="${stroke}" stroke-width="5" stroke-linecap="round"/><circle cx="32" cy="58" r="4" fill="${stroke}"/></svg>`;
+const icon = { search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="11" cy="11" r="6"/><path d="M16 16l5 5"/></svg>',
+  report: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 3 L22 20 H2 Z"/><path d="M12 10v4M12 17v.5"/></svg>',
+  voice: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M4 10v4h4l5 4V6L8 10H4z"/><path d="M16 9c1.5 1.5 1.5 4.5 0 6M18.5 6.5c3 3 3 8 0 11"/></svg>',
+  center: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3 L19 20 L12 16 L5 20 Z"/></svg>' };
+const dock = (t) => `<div class="dock sys"><div class="time">4:12</div><div class="sig">5G</div><div class="app on">V</div><div class="app"></div><div class="app"></div><div class="grid"></div></div>`;
+const T = (cls, txt, x, y) => `<div class="tag ${cls}" style="left:${x}px;top:${y}px">${txt}</div>`;
+
+const frames = [];
+// 1 Idle: our map, Where to? / Loops in the nav bar, map buttons
+frames.push(['1-idle', 'light', `${dock()}<div class="map">${map('roadbook', { route: false })}</div>
+  <div class="navbar sys"><div class="pill">Where to?</div><div class="pill">Loops</div><div class="pill">Places</div></div>
+  <div class="mapbtns sys"><div class="mbtn">${icon.voice}</div><div class="mbtn">+</div><div class="mbtn">−</div><div class="mbtn">${icon.center}</div></div>
+  ${T('us', 'VETTA: THE WHOLE MAP (ROADBOOK)', 520, 440)}${T('sys', 'APPLE: NAV BAR, MAP BUTTONS, DOCK', 104, 62)}`,
+  '<b>Idle.</b> The map is ours, in the theme (Roadbook here): paper, ink roads, contours. Apple draws the buttons. Up to four map buttons (voice, zoom, recentre) and a few nav-bar buttons: Where to?, Loops, Places. This is where Apple Maps currently sits.']);
+// 2 Loops list
+frames.push(['2-loops', 'light', `${dock()}<div class="list sys" style="background:#fff;color:#000">
+  <div class="head"><span class="back">‹ Map</span>Loops from here</div>
+  ${[['30 min', 'Twisty loop · 14 corners rated 3+', '42 mi'], ['1 hour', 'Cherohala Skyway and back · 38 corners', '61 mi'], ['2 hours', 'Skyway, Tail of the Dragon · 112 corners', '118 mi'], ['Explore', 'Roads nearby you have not driven', '--']]
+    .map(([a, b, c]) => `<div class="row" style="border-bottom:1px solid #e5e5ea"><div class="ic" style="background:#EDE4D3;color:#1B1A17;font:700 20px 'Barlow Condensed'">${a.split(' ')[0]}</div><div><b>${a}</b><span>${b}</span></div><div><span style="opacity:.6">${c}</span> <span class="chev">›</span></div></div>`).join('')}</div>
+  ${T('sys', 'APPLE: LIST TEMPLATE (ROWS, FONTS, SCROLL)', 300, 66)}${T('us', 'VETTA: ROW TEXT AND IMAGES', 820, 66)}`,
+  '<b>Loops (CPListTemplate).</b> The feature no other CarPlay nav app has: a twisty loop from where you are, picked in two taps. Apple draws the list; we supply the words and small images. Lists are capped while moving (Apple limits rows), so presets, not a planner.']);
+// 3 Trip preview with route choices
+frames.push(['3-preview', 'light', `${dock()}<div class="map">${map('roadbook', { done: 0, hazard: true, alt: true })}</div>
+  <div class="preview sys" style="background:rgba(255,255,255,.95);color:#000"><div class="title">Robbinsville</div><div class="sub">via Cherohala Skyway</div>
+  <div class="choice" style="background:#1c1c1e;color:#fff">Fun · 55 min<small>32.6 mi · 186 corners · 1 hazard</small></div>
+  <div class="choice" style="background:#f2f2f7">Quick · 45 min<small>28.1 mi · mostly highway</small></div>
+  <div class="choice" style="background:#f2f2f7">Max fun · 1 h 10<small>41 mi · 240 corners</small></div>
+  <div class="go" style="background:#C8102E;color:#fff">Drive</div></div>
+  <div class="mapbtns sys"><div class="mbtn">+</div><div class="mbtn">−</div></div>
+  ${T('sys', 'APPLE: TRIP PREVIEW CARD', 104, 452)}${T('us', 'VETTA: ROUTE, CORNER RATINGS, HAZARD ON THE MAP', 600, 440)}`,
+  '<b>Trip preview (CPTrip, up to 3 CPRouteChoice).</b> Fun / Quick / Max fun as route choices, with our summary lines (corners, hazards). The map shows the route with the road book on it: each corner\'s severity at its apex (map labels, which Apple allows; they are map content, not controls). Apple tints the Drive key, not us; its colour here is illustrative.']);
+// 4 Guidance, Roadbook day
+frames.push(['4-guidance-day', 'light', `${dock()}<div class="map">${map('roadbook')}</div>
+  <div class="card man sys" style="background:#1B1A17;color:#EDE4D3"><div class="now">${tulip('#EDE4D3', 1)}<div><div class="d">0.4 mi</div><div class="i">Right onto Cherohala Skyway</div></div></div>
+  <div class="next" style="background:#2a2823">Then ${'<svg width="22" height="22" viewBox="0 0 64 64"><path d="M32 58V30C32 18 26 12 10 10" stroke="#EDE4D3" stroke-width="7" fill="none"/></svg>'} Left onto NC-143</div></div>
+  <div class="est sys" style="background:rgba(255,255,255,.95);color:#000"><div><b>4:58</b><span>arrival</span></div><div><b>46</b><span>min</span></div><div><b>31.2</b><span>mi</span></div></div>
+  <div class="mapbtns sys"><div class="mbtn">${icon.report}</div><div class="mbtn">${icon.voice}</div><div class="mbtn">${icon.center}</div></div>
+  <div class="navbar right sys"><div class="pill">End</div></div>
+  ${T('us', 'VETTA: SYMBOL (TULIP), TEXT, GUIDANCE COLOUR', 440, 20)}${T('sys', 'APPLE: CARD LAYOUT, ESTIMATES', 440, 440)}${T('us', 'VETTA: CORNERS ON THE ROUTE', 900, 200)}`,
+  '<b>Guidance, day.</b> Apple lays out the maneuver card, but we choose its background colour (guidanceBackgroundColor: Roadbook ink here) and supply the symbol: our tulip, not an SF arrow. The road book lives on the map as corner ratings at each apex, plus the hazard plate. Pace notes stay spoken, in the theme\'s voice, because a corner is not a maneuver in Apple\'s rules.']);
+// 5 Guidance, Tapedeck night
+frames.push(['5-guidance-tapedeck', 'dark', `${dock()}<div class="map">${map('tapedeck')}</div>
+  <div class="card man sys" style="background:#0E1A18;color:#7DF5DE"><div class="now">${tulip('#7DF5DE', -1)}<div><div class="d">800 ft</div><div class="i">Left onto NC-143</div></div></div>
+  <div class="next" style="background:#132623">Then Right in 2.1 mi</div></div>
+  <div class="est sys" style="background:rgba(28,28,30,.9);color:#fff"><div><b>4:58</b><span>arrival</span></div><div><b>46</b><span>min</span></div><div><b>31.2</b><span>mi</span></div></div>
+  <div class="mapbtns sys"><div class="mbtn">${icon.report}</div><div class="mbtn">${icon.voice}</div><div class="mbtn">${icon.center}</div></div>
+  <div class="navbar right sys"><div class="pill">End</div></div>
+  ${T('us', 'VETTA: TAPEDECK MAP AND GUIDANCE COLOUR', 640, 440)}`,
+  '<b>Guidance, Tapedeck at night.</b> The same templates, our colours: a dark teal map, amber route, the card in the theme\'s dark. Apple sets the card\'s fonts (system font), so the VFD look lives in the map and the symbol, not the text. We can\'t draw our binnacle (speed, Limit, meters, Kit) on the car screen: the base view is map only.']);
+// 6 Hazard alert
+frames.push(['6-hazard', 'dark', `${dock()}<div class="map">${map('roadbook', { done: 0.55 })}</div>
+  <div class="alert sys" style="background:rgba(28,28,30,.95);color:#fff"><div style="width:64px;height:64px;background:#111;border:3px solid #FF7A1A;display:grid;place-items:center"><svg width="36" height="36" viewBox="0 0 24 24"><path d="M12 3 L22 20 H2 Z" fill="#FF7A1A"/></svg></div>
+  <div><b>Gravel in 0.3 mi</b><span>Reported 12 min ago · on the apex of R3</span></div><div class="acts"><div style="background:#3a3a3c">Still there</div><div style="background:#3a3a3c">Gone</div></div></div>
+  ${T('sys', 'APPLE: ALERT CARD', 560, 120)}${T('us', 'VETTA: IMAGE, TEXT, TWO ANSWERS', 760, 380)}`,
+  '<b>Hazard (CPNavigationAlert).</b> Our hazard glyph and words in Apple\'s alert card, with two buttons, which makes confirming a report one tap without looking for long. A Report map button opens a grid of hazard kinds (CPGridTemplate, up to 8), like Waze does.']);
+// 7 Dashboard + cluster
+frames.push(['7-dashboard', 'dark', `<div style="position:absolute;inset:0;background:#000;display:grid;grid-template-columns:92px 1.2fr 1fr;gap:10px;padding:10px">
+  <div class="dock sys" style="position:relative;border-radius:12px"><div class="time">4:12</div><div class="sig">5G</div></div>
+  <div style="position:relative;border-radius:16px;overflow:hidden">${map('roadbook')}<div class="card sys" style="left:10px;top:10px;width:260px;background:#1B1A17;color:#EDE4D3;padding:8px 12px;display:flex;gap:10px;align-items:center">${tulip('#EDE4D3', 1).replace('width="64" height="64"', 'width="40" height="40"')}<div><b style="font:700 22px Inter">0.4 mi</b><div style="font:600 14px Inter">Cherohala Skyway</div></div></div></div>
+  <div style="display:grid;gap:10px"><div style="border-radius:16px;background:#1c1c1e;color:#fff;padding:16px;font:600 17px Inter">Now playing</div><div style="border-radius:16px;background:#1c1c1e;color:#fff;padding:16px;font:600 15px Inter;opacity:.8">Calendar · Weather</div></div></div>
+  ${T('us', 'VETTA: DASHBOARD MAP + MANEUVER', 300, 440)}`,
+  '<b>Dashboard and instrument cluster.</b> A second, smaller map with the next maneuver in the CarPlay Dashboard, and turn-by-turn in the car\'s own instrument cluster where the car supports it. Both are separate scenes we add (Info.plist keys); both use our map and our symbols.']);
+
+const theme = new URLSearchParams(location.search).get('f');
+document.getElementById('out').innerHTML = frames.filter(([id]) => !theme || id === theme)
+  .map(([id, mode, html, cap]) => `<div class="frame ${mode}" id="${id}">${html}</div>${theme ? '' : `<div class="caption">${cap}</div>`}`).join('');
+</script></body></html>

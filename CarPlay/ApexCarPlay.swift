@@ -1,47 +1,84 @@
-// CarPlay (IDEAS C-01, C-02; docs/CARPLAY.md): the navigation flow on the car's screen with Apple's navigation templates.
+// CarPlay (IDEAS C-01, C-02; docs/CARPLAY.md; mockups in docs/design/carplay): the navigation flow on the car's screen.
 //
-// The web cockpit stays the single brain. It plans routes, places the maneuvers, calls hazards and speaks; CarPlay shows
-// what it decides and sends back what the driver picks on the car's screen. Page -> car: `{cmd:'car', kind:...}` messages
-// (route, clear, guide, end, hazard, places), handled by ApexCar.receive. Car -> page: `onNative({type:'carplay', action})`
-// with go (a place to route to), pick (a route option), start, end.
+// The cockpit page stays the single brain (ApexEngine, ApexNavApp.swift: it runs whether or not the phone's window was ever
+// opened). It plans routes, places the maneuvers, calls notes and hazards and speaks; CarPlay shows what it decides and
+// sends back what the driver picks. Page -> car: `{cmd:'car', kind:...}` messages (route, clear, guide, end, hazard, ask,
+// places, corners, hazards, look), handled by ApexCar.receive. Car -> page: `onNative({type:'carplay', action})` with go,
+// pick, start, end, loop, report, still, voice, places, hello.
 //
-// The car's screen has no scores, social features, settings or text entry beyond the system search keyboard, and nothing
-// in it asks the driver to use the phone (CarPlay Developer Guide, "Guidelines for all CarPlay apps"). Our own map is drawn
-// in the base view: the route line and the car's position, with zoom, recentre and panning.
+// What Apple leaves to the app, we draw: the base view is our own map in the phone's theme (web/carmap.html, the same
+// OpenFreeMap style and palettes as the phone) with the route, every corner's rating at its apex and the hazard plates; the
+// maneuver symbols are the road book's tulips; the guidance card takes the theme's dark. Everything you touch is Apple's
+// templates. Nothing in the car shows scores, social features or settings, and nothing asks the driver to use the phone
+// (CarPlay Developer Guide, "Guidelines for all CarPlay apps").
 
 import CarPlay
 import MapKit
 import UIKit
+import WebKit
 
-// MARK: - The hub between the page and the car's screen
+// MARK: - The hub between the page and the car's screens
 
 @MainActor
 final class ApexCar {
     static let shared = ApexCar()
 
-    /// Sends a message to the page (set by the shell once the page is ready).
-    var toPage: (([String: Any]) -> Void)?
+    /// Sends a message to the page (set by the shell once the page is ready). What the car sent before that waits here:
+    /// a car that opened the app cold asks for a route while the cockpit page is still loading.
+    var toPage: (([String: Any]) -> Void)? {
+        didSet { if let toPage { let q = waiting; waiting = []; q.forEach(toPage) } }
+    }
+    private var waiting: [[String: Any]] = []
     /// The connected car screen, if any.
     weak var scene: ApexCarPlaySceneDelegate?
+    /// Every car map showing now: the main screen, the Dashboard, the instrument cluster.
+    private var maps: [WeakMap] = []
+    private struct WeakMap { weak var map: ApexCarMapViewController? }
 
     struct Option { let summary: String; let detail: String; let timeS: Double?; let distM: Double? }
     struct Route { let name: String; let coords: [CLLocationCoordinate2D]; let dest: CLLocationCoordinate2D; let options: [Option]; let picked: Int }
-    struct Guide { let key: String; let instruction: String; let street: String; let type: Int; let distM: Double; let timeS: Double?; let remainM: Double?; let remainS: Double? }
+    struct Guide { let key: String; let instruction: String; let street: String; let type: Int; let distM: Double; let timeS: Double?; let remainM: Double?; let remainS: Double?; let symbol: UIImage? }
+    struct Look { var theme = "roadbook"; var card = UIColor(white: 0.08, alpha: 1); var cardInk = UIColor(white: 0.93, alpha: 1); var accent = UIColor.systemRed; var voice = true }
 
     private(set) var route: Route?
     private(set) var guide: Guide?
     private(set) var driving = false
     private(set) var places: [(name: String, coord: CLLocationCoordinate2D)] = []
+    private(set) var look = Look()
+    /// The car's map data as JSON for web/carmap.js: the route line, the corners and the hazards, kept to repaint a map that connects later.
+    private(set) var routeJSON = "[]"
+    private(set) var cornersJSON = "[]"
+    private(set) var hazardsJSON = "[]"
+    private(set) var position: (lat: Double, lon: Double, course: Double)?
+    private var positionSentAt = Date.distantPast
 
     func send(_ action: String, _ fields: [String: Any] = [:]) {
-        toPage?(["type": "carplay", "action": action].merging(fields) { a, _ in a })
+        let msg: [String: Any] = ["type": "carplay", "action": action].merging(fields) { a, _ in a }
+        if let toPage { toPage(msg) } else { waiting.append(msg); if waiting.count > 8 { waiting.removeFirst() } }
     }
+
+    func register(_ map: ApexCarMapViewController) {
+        maps.removeAll { $0.map == nil || $0.map === map }
+        maps.append(WeakMap(map: map))
+    }
+    private func eachMap(_ f: (ApexCarMapViewController) -> Void) { maps.compactMap(\.map).forEach(f) }
 
     private static func num(_ v: Any?) -> Double? { (v as? NSNumber)?.doubleValue }
     private static func coord(_ v: Any?) -> CLLocationCoordinate2D? {
         guard let p = v as? [Any], p.count == 2, let lat = num(p[0]), let lon = num(p[1]),
               abs(lat) <= 90, abs(lon) <= 180 else { return nil }
         return CLLocationCoordinate2D(latitude: lat, longitude: lon)
+    }
+    private static func json(_ v: Any) -> String {
+        guard JSONSerialization.isValidJSONObject(v), let d = try? JSONSerialization.data(withJSONObject: v),
+              let s = String(data: d, encoding: .utf8) else { return "[]" }
+        return s
+    }
+    static func color(_ v: Any?) -> UIColor? {
+        guard var hex = v as? String, hex.hasPrefix("#") else { return nil }
+        hex.removeFirst()
+        guard hex.count == 6, let n = UInt32(hex, radix: 16) else { return nil }
+        return UIColor(red: CGFloat((n >> 16) & 0xFF) / 255, green: CGFloat((n >> 8) & 0xFF) / 255, blue: CGFloat(n & 0xFF) / 255, alpha: 1)
     }
 
     /// A message from the page. Malformed fields are dropped, never guessed.
@@ -57,23 +94,48 @@ final class ApexCar {
             route = Route(name: (dict["name"] as? String) ?? "Route", coords: coords, dest: Self.coord(dict["dest"]) ?? coords[coords.count - 1],
                           options: options.isEmpty ? [Option(summary: "Route", detail: "", timeS: nil, distM: nil)] : options,
                           picked: max(0, min(options.count - 1, Int(Self.num(dict["picked"]) ?? 0))))
+            routeJSON = Self.json(coords.map { [$0.latitude, $0.longitude] })
+            eachMap { $0.showRoute(); $0.setMode() }
             scene?.routeChanged()
         case "clear":
             route = nil
+            routeJSON = "[]"
+            eachMap { $0.showRoute(); $0.setMode() }
             scene?.routeChanged()
+        case "corners":
+            cornersJSON = Self.json((dict["list"] as? [Any]) ?? [])
+            eachMap { $0.showCorners() }
+        case "hazards":
+            hazardsJSON = Self.json((dict["list"] as? [Any]) ?? [])
+            eachMap { $0.showHazards() }
+        case "look":
+            var l = Look()
+            if let t = dict["theme"] as? String, t.range(of: "^[a-z]{1,20}$", options: .regularExpression) != nil { l.theme = t }
+            l.card = Self.color(dict["card"]) ?? l.card
+            l.cardInk = Self.color(dict["cardInk"]) ?? l.cardInk
+            l.accent = Self.color(dict["accent"]) ?? l.accent
+            l.voice = (dict["voice"] as? Bool) ?? true
+            look = l
+            eachMap { $0.showLook() }
+            scene?.lookChanged()
         case "guide":
             guard let key = dict["key"] as? String, let text = dict["instruction"] as? String, let d = Self.num(dict["distM"]) else { return }
+            let symbol = (dict["symbol"] as? String).flatMap { Data(base64Encoded: $0) }.flatMap { UIImage(data: $0, scale: 3) }
             guide = Guide(key: key, instruction: text, street: (dict["street"] as? String) ?? "", type: Int(Self.num(dict["type"]) ?? 0),
-                          distM: max(0, d), timeS: Self.num(dict["timeS"]), remainM: Self.num(dict["remainM"]), remainS: Self.num(dict["remainS"]))
-            if !driving { driving = true; scene?.driveStarted() }
+                          distM: max(0, d), timeS: Self.num(dict["timeS"]), remainM: Self.num(dict["remainM"]), remainS: Self.num(dict["remainS"]), symbol: symbol)
+            if !driving { driving = true; eachMap { $0.setMode() }; scene?.driveStarted() }
             scene?.guideChanged()
         case "end":
             driving = false
             guide = nil
+            eachMap { $0.setMode() }
             scene?.driveEnded()
         case "hazard":
             guard let title = dict["title"] as? String else { return }
             scene?.showHazard(title: title, detail: (dict["detail"] as? String) ?? "")
+        case "ask":
+            guard let title = dict["title"] as? String else { return }
+            scene?.askStill(title: title)
         case "places":
             places = ((dict["list"] as? [[String: Any]]) ?? []).prefix(12).compactMap { p in
                 guard let name = p["name"] as? String, let c = Self.coord(p["at"]) else { return nil }
@@ -84,8 +146,15 @@ final class ApexCar {
         }
     }
 
-    /// SF Symbol for a Valhalla maneuver type (web/directions.js VERB), drawn as a template so CarPlay tints it for the
-    /// light and dark map.
+    /// The car's position from the shell's GPS (ApexNavApp.swift, every live frame), a few times a second to the car maps.
+    func position(lat: Double, lon: Double, course: Double) {
+        guard abs(lat) <= 90, abs(lon) <= 180, Date().timeIntervalSince(positionSentAt) > 0.3 else { return }
+        positionSentAt = Date()
+        position = (lat, lon, course)
+        eachMap { $0.showPosition() }
+    }
+
+    /// SF Symbol for a Valhalla maneuver type (web/directions.js VERB), until the page's tulip for it arrives.
     static func symbol(_ type: Int) -> UIImage? {
         let name: String
         switch type {
@@ -106,6 +175,26 @@ final class ApexCar {
         let config = UIImage.SymbolConfiguration(pointSize: 40, weight: .semibold)
         return UIImage(systemName: name, withConfiguration: config)?.withRenderingMode(.alwaysTemplate)
     }
+
+    /// The hazard plate (REVIEW.md 4.3: black, an orange edge and triangle) as the alert's image.
+    static let hazardPlate: UIImage = {
+        UIGraphicsImageRenderer(size: CGSize(width: 64, height: 64)).image { ctx in
+            UIColor(white: 0.067, alpha: 1).setFill()
+            ctx.fill(CGRect(x: 0, y: 0, width: 64, height: 64))
+            let orange = UIColor(red: 1, green: 0x7A / 255, blue: 0x1A / 255, alpha: 1)
+            orange.setStroke()
+            let edge = UIBezierPath(rect: CGRect(x: 2, y: 2, width: 60, height: 60))
+            edge.lineWidth = 4
+            edge.stroke()
+            orange.setFill()
+            let tri = UIBezierPath()
+            tri.move(to: CGPoint(x: 32, y: 14))
+            tri.addLine(to: CGPoint(x: 52, y: 50))
+            tri.addLine(to: CGPoint(x: 12, y: 50))
+            tri.close()
+            tri.fill()
+        }
+    }()
 }
 
 // MARK: - The CarPlay scene
@@ -113,13 +202,13 @@ final class ApexCar {
 final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
     private var interfaceController: CPInterfaceController?
     private var carWindow: CPWindow?
-    private let mapController = ApexCarMapViewController()
+    private var mapController: ApexCarMapViewController?
     private var mapTemplate: CPMapTemplate?
     private var session: CPNavigationSession?
     private var trip: CPTrip?
     private var maneuver: CPManeuver?
     private var maneuverKey = ""
-    private var searchItems: [CPListItem] = []
+    private var maneuverHasTulip = false
     private var search: MKLocalSearch?
     private let mapDelegate = MapDelegate()
     private let searchDelegate = SearchDelegate()
@@ -127,25 +216,27 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
     func templateApplicationScene(_ templateApplicationScene: CPTemplateApplicationScene,
                                   didConnect interfaceController: CPInterfaceController, to window: CPWindow) {
         MainActor.assumeIsolated {
+            // the route engine runs whether or not the phone's window was ever opened (ApexEngine, the cold launch)
+            _ = ApexEngine.shared.cockpit()
             self.interfaceController = interfaceController
             carWindow = window
-            window.rootViewController = mapController
+            let mc = ApexCarMapViewController(role: .main)
+            mapController = mc
+            window.rootViewController = mc
             let map = CPMapTemplate()
             map.mapDelegate = mapDelegate
             mapDelegate.owner = self
             searchDelegate.owner = self
             map.automaticallyHidesNavigationBar = false
-            map.leadingNavigationBarButtons = [CPBarButton(title: "Search") { [weak self] _ in self?.openSearch() },
-                                               CPBarButton(title: "Places") { [weak self] _ in self?.openPlaces() }]
-            map.mapButtons = [mapButton("plus.magnifyingglass") { [weak self] in self?.mapController.zoom(by: 0.5) },
-                              mapButton("minus.magnifyingglass") { [weak self] in self?.mapController.zoom(by: 2) },
-                              mapButton("location.fill") { [weak self] in self?.mapController.recentre() },
-                              mapButton("arrow.up.and.down.and.arrow.left.and.right") { [weak self] in self?.mapTemplate?.showPanningInterface(animated: true) }]
+            map.tripEstimateStyle = .dark
             mapTemplate = map
+            idleBars()
+            lookChanged()
             interfaceController.setRootTemplate(map, animated: false, completion: nil)
             ApexCar.shared.scene = self
             routeChanged()
             if ApexCar.shared.driving { driveStarted(); guideChanged() }
+            ApexCar.shared.send("hello")                       // the page sends the route, the corners, the look and the places again
         }
     }
 
@@ -157,21 +248,67 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
             self.interfaceController = nil
             carWindow = nil
             mapTemplate = nil
+            mapController = nil
         }
     }
 
     private func mapButton(_ symbol: String, _ action: @escaping () -> Void) -> CPMapButton {
         let b = CPMapButton { _ in action() }
-        b.image = UIImage(systemName: symbol)
+        b.image = UIImage(systemName: symbol, withConfiguration: UIImage.SymbolConfiguration(pointSize: 22, weight: .semibold))
         return b
     }
 
-    // MARK: Search and places
+    // MARK: Bars and buttons
+
+    /// Not driving: Where to? and Loops on the left, Places on the right; pan, zoom and the voice as map buttons.
+    @MainActor private func idleBars() {
+        guard let map = mapTemplate else { return }
+        map.leadingNavigationBarButtons = [CPBarButton(title: "Where to?") { [weak self] _ in self?.openSearch() },
+                                           CPBarButton(title: "Loops") { [weak self] _ in self?.openLoops() }]
+        map.trailingNavigationBarButtons = [CPBarButton(title: "Places") { [weak self] _ in self?.openPlaces() }]
+        mapButtons()
+    }
+
+    @MainActor private func mapButtons() {
+        guard let map = mapTemplate else { return }
+        let voice = mapButton(ApexCar.shared.look.voice ? "speaker.wave.2.fill" : "speaker.slash.fill") { ApexCar.shared.send("voice") }
+        let zoomIn = mapButton("plus.magnifyingglass") { [weak self] in self?.mapController?.zoom(1) }
+        let zoomOut = mapButton("minus.magnifyingglass") { [weak self] in self?.mapController?.zoom(-1) }
+        if ApexCar.shared.driving {
+            map.mapButtons = [mapButton("exclamationmark.triangle.fill") { [weak self] in self?.openReport() }, voice, zoomIn, zoomOut]
+        } else {
+            map.mapButtons = [mapButton("arrow.up.and.down.and.arrow.left.and.right") { [weak self] in self?.mapTemplate?.showPanningInterface(animated: true) },
+                              zoomIn, zoomOut, voice]
+        }
+    }
+
+    /// The theme came in (or changed): the guidance card in the theme's dark, the voice button's state.
+    @MainActor func lookChanged() {
+        guard let map = mapTemplate else { return }
+        map.guidanceBackgroundColor = ApexCar.shared.look.card
+        mapButtons()
+    }
+
+    // MARK: Where to?, Loops, Places, Report
 
     @MainActor private func openSearch() {
         let t = CPSearchTemplate()
         t.delegate = searchDelegate
         interfaceController?.pushTemplate(t, animated: true, completion: nil)
+    }
+
+    @MainActor private func openLoops() {
+        let loops: [(String, Int)] = [("30 minutes", 30), ("1 hour", 60), ("2 hours", 120)]
+        let items: [CPListItem] = loops.map { label, minutes in
+            let item = CPListItem(text: label, detailText: "A twisty loop from here, back where you started")
+            item.handler = { [weak self] _, done in
+                ApexCar.shared.send("loop", ["minutes": minutes])
+                self?.interfaceController?.popToRootTemplate(animated: true, completion: nil)
+                done()
+            }
+            return item
+        }
+        interfaceController?.pushTemplate(CPListTemplate(title: "Loops from here", sections: [CPListSection(items: items)]), animated: true, completion: nil)
     }
 
     @MainActor private func openPlaces() {
@@ -180,9 +317,23 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
             item.handler = { [weak self] _, done in self?.go(to: p.coord, name: p.name); done() }
             return item
         }
-        let empty = CPListItem(text: "No recent places yet", detailText: "Search for a place, or plan one on the phone while parked")
+        let empty = CPListItem(text: "No recent places yet", detailText: "Where to? finds one")
         let t = CPListTemplate(title: "Places", sections: [CPListSection(items: items.isEmpty ? [empty] : items)])
         interfaceController?.pushTemplate(t, animated: true, completion: nil)
+    }
+
+    /// Report a hazard (the phone's report sheet's kinds): one tap on a grid, then back to the map.
+    @MainActor private func openReport() {
+        let kinds: [(String, String, String)] = [("pothole", "Pothole", "circle.bottomhalf.filled"), ("gravel", "Gravel", "circle.grid.3x3.fill"),
+                                                 ("debris", "Debris", "shippingbox.fill"), ("animal", "Animal", "pawprint.fill"),
+                                                 ("police", "Police", "light.beacon.max.fill"), ("closure", "Road closed", "nosign")]
+        let buttons: [CPGridButton] = kinds.map { kind, title, symbol in
+            CPGridButton(titleVariants: [title], image: UIImage(systemName: symbol) ?? UIImage()) { [weak self] _ in
+                ApexCar.shared.send("report", ["kind": kind])
+                self?.interfaceController?.popToRootTemplate(animated: true, completion: nil)
+            }
+        }
+        interfaceController?.pushTemplate(CPGridTemplate(title: "Report a hazard", gridButtons: buttons), animated: true, completion: nil)
     }
 
     @MainActor fileprivate func searchUpdated(_ text: String, done: @escaping ([CPListItem]) -> Void) {
@@ -192,17 +343,18 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
         let req = MKLocalSearch.Request()
         req.naturalLanguageQuery = q
         req.resultTypes = [.address, .pointOfInterest]
-        if let here = mapController.here { req.region = MKCoordinateRegion(center: here, latitudinalMeters: 150_000, longitudinalMeters: 150_000) }
+        if let p = ApexCar.shared.position {
+            req.region = MKCoordinateRegion(center: CLLocationCoordinate2D(latitude: p.lat, longitude: p.lon), latitudinalMeters: 150_000, longitudinalMeters: 150_000)
+        }
         let s = MKLocalSearch(request: req)
         search = s
-        s.start { [weak self] resp, _ in
+        s.start { resp, _ in
             MainActor.assumeIsolated {
                 let items: [CPListItem] = (resp?.mapItems ?? []).prefix(12).map { m in
                     let item = CPListItem(text: m.name ?? "Place", detailText: m.placemark.title)
                     item.userInfo = m
                     return item
                 }
-                self?.searchItems = items
                 done(items)
             }
         }
@@ -210,21 +362,13 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
 
     @MainActor fileprivate func searchPicked(_ item: CPListItem) {
         guard let m = item.userInfo as? MKMapItem else { return }
-        interfaceController?.popToRootTemplate(animated: true, completion: nil)
         go(to: m.placemark.coordinate, name: m.name ?? "Destination")
     }
 
     /// Asks the page to plan a route there; the page answers with a `route` message, which shows the trip preview.
     @MainActor private func go(to c: CLLocationCoordinate2D, name: String) {
         interfaceController?.popToRootTemplate(animated: true, completion: nil)
-        guard ApexCar.shared.toPage != nil else {
-            // the route engine (the cockpit page) isn't running yet: say what happened, never "use your iPhone"
-            let alert = CPAlertTemplate(titleVariants: ["Couldn't plan the route yet. Try again in a moment."],
-                                        actions: [CPAlertAction(title: "OK", style: .cancel) { [weak self] _ in self?.interfaceController?.dismissTemplate(animated: true, completion: nil) }])
-            interfaceController?.presentTemplate(alert, animated: true, completion: nil)
-            return
-        }
-        ApexCar.shared.send("go", ["lat": c.latitude, "lon": c.longitude, "name": name])
+        ApexCar.shared.send("go", ["lat": c.latitude, "lon": c.longitude, "name": name])   // waits for the page if it is still loading
     }
 
     // MARK: Route preview
@@ -232,7 +376,6 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
     @MainActor func routeChanged() {
         guard let map = mapTemplate else { return }
         let car = ApexCar.shared
-        mapController.show(route: car.route?.coords ?? [])
         guard let r = car.route, !car.driving else {
             if car.route == nil { map.hideTripPreviews(); trip = nil }
             return
@@ -273,21 +416,27 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
         trip = t
         session = map.startNavigationSession(for: t)
         maneuverKey = ""
+        map.leadingNavigationBarButtons = []
         map.trailingNavigationBarButtons = [CPBarButton(title: "End") { _ in ApexCar.shared.send("end") }]
-        mapController.guiding = true
+        mapButtons()
     }
 
     @MainActor func guideChanged() {
         guard let g = ApexCar.shared.guide, let session else { return }
         // time to the turn only when the page knows it (the router's times); 0 shows distance alone
         let est = CPTravelEstimates(distanceRemaining: Measurement(value: g.distM, unit: UnitLength.meters), timeRemaining: max(0, g.timeS ?? 0))
-        if g.key != maneuverKey {
+        if g.key != maneuverKey || (g.symbol != nil && !maneuverHasTulip) {
             let m = CPManeuver()
             m.instructionVariants = [g.instruction, g.street].filter { !$0.isEmpty }
-            m.symbolImage = ApexCar.symbol(g.type)
+            if let tulip = g.symbol {
+                m.symbolImage = tulip.withRenderingMode(.alwaysOriginal)    // the road book's tulip, in the card's ink
+            } else {
+                m.symbolImage = ApexCar.symbol(g.type)
+            }
             m.initialTravelEstimates = est
             maneuver = m
             maneuverKey = g.key
+            maneuverHasTulip = g.symbol != nil
             session.upcomingManeuvers = [m]
         } else if let m = maneuver {
             session.updateEstimates(est, for: m)
@@ -300,20 +449,29 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
     @MainActor func driveEnded() {
         session?.finishTrip()
         session = nil; maneuver = nil; maneuverKey = ""
-        mapTemplate?.trailingNavigationBarButtons = []
-        mapController.guiding = false
+        idleBars()
         routeChanged()
     }
 
     @MainActor func showHazard(title: String, detail: String) {
         guard let map = mapTemplate, ApexCar.shared.driving else { return }
-        let alert = CPNavigationAlert(titleVariants: [title], subtitleVariants: [detail].filter { !$0.isEmpty }, image: UIImage(systemName: "exclamationmark.triangle.fill"),
+        let alert = CPNavigationAlert(titleVariants: [title], subtitleVariants: [detail].filter { !$0.isEmpty }, image: ApexCar.hazardPlate,
                                       primaryAction: CPAlertAction(title: "OK", style: .default) { _ in }, secondaryAction: nil, duration: 8)
         map.present(navigationAlert: alert, animated: true)
     }
 
-    @MainActor fileprivate func pan(_ d: CPMapTemplate.PanDirection) { mapController.pan(d) }
-    @MainActor fileprivate func panEnded() { mapTemplate?.dismissPanningInterface(animated: true) }
+    /// Passed a reported hazard: is it still there? One tap on the car's screen answers the phone's question.
+    @MainActor func askStill(title: String) {
+        guard let map = mapTemplate else { return }
+        let alert = CPNavigationAlert(titleVariants: [title], subtitleVariants: [], image: ApexCar.hazardPlate,
+                                      primaryAction: CPAlertAction(title: "Still there", style: .default) { _ in ApexCar.shared.send("still", ["still": true]) },
+                                      secondaryAction: CPAlertAction(title: "Gone", style: .default) { _ in ApexCar.shared.send("still", ["still": false]) },
+                                      duration: 12)
+        map.present(navigationAlert: alert, animated: true)
+    }
+
+    @MainActor fileprivate func pan(_ d: CPMapTemplate.PanDirection) { mapController?.pan(d) }
+    @MainActor fileprivate func panEnded() { mapController?.recentre() }
 
     // Template delegates are separate small objects so the scene delegate stays a plain UIResponder.
     private final class MapDelegate: NSObject, CPMapTemplateDelegate {
@@ -327,7 +485,9 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
         func mapTemplate(_ mapTemplate: CPMapTemplate, panWith direction: CPMapTemplate.PanDirection) {
             MainActor.assumeIsolated { owner?.pan(direction) }
         }
-        func mapTemplateDidDismissPanningInterface(_ mapTemplate: CPMapTemplate) {}
+        func mapTemplateDidDismissPanningInterface(_ mapTemplate: CPMapTemplate) {
+            MainActor.assumeIsolated { owner?.panEnded() }
+        }
         /// The car's own navigation started: stop guidance at once (CarPlay Developer Guide, navigation apps).
         func mapTemplateDidCancelNavigation(_ mapTemplate: CPMapTemplate) {
             MainActor.assumeIsolated { ApexCar.shared.send("end") }
@@ -347,62 +507,143 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
     }
 }
 
-// MARK: - The base view: our map
+// MARK: - The Dashboard and the instrument cluster: our map again, with the system's maneuver from the navigation session
 
-final class ApexCarMapViewController: UIViewController, MKMapViewDelegate {
-    private let map = MKMapView()
-    private var line: MKPolyline?
-    var here: CLLocationCoordinate2D? { map.userLocation.location?.coordinate }
-    var guiding = false { didSet { recentre() } }
+final class ApexCarDashboardSceneDelegate: UIResponder, CPTemplateApplicationDashboardSceneDelegate {
+    private var mapController: ApexCarMapViewController?
+
+    func templateApplicationDashboardScene(_ templateApplicationDashboardScene: CPTemplateApplicationDashboardScene,
+                                           didConnect dashboardController: CPDashboardController, to window: UIWindow) {
+        MainActor.assumeIsolated {
+            _ = ApexEngine.shared.cockpit()
+            let m = ApexCarMapViewController(role: .dashboard)
+            mapController = m
+            window.rootViewController = m
+        }
+    }
+
+    func templateApplicationDashboardScene(_ templateApplicationDashboardScene: CPTemplateApplicationDashboardScene,
+                                           didDisconnect dashboardController: CPDashboardController, from window: UIWindow) {
+        MainActor.assumeIsolated { mapController = nil }
+    }
+}
+
+final class ApexCarClusterSceneDelegate: UIResponder, CPTemplateApplicationInstrumentClusterSceneDelegate, CPInstrumentClusterControllerDelegate {
+    private var mapController: ApexCarMapViewController?
+
+    func templateApplicationInstrumentClusterScene(_ templateApplicationInstrumentClusterScene: CPTemplateApplicationInstrumentClusterScene,
+                                                   didConnect instrumentClusterController: CPInstrumentClusterController) {
+        MainActor.assumeIsolated {
+            _ = ApexEngine.shared.cockpit()
+            instrumentClusterController.delegate = self
+        }
+    }
+
+    func templateApplicationInstrumentClusterScene(_ templateApplicationInstrumentClusterScene: CPTemplateApplicationInstrumentClusterScene,
+                                                   didDisconnectInstrumentClusterController instrumentClusterController: CPInstrumentClusterController) {}
+
+    func instrumentClusterControllerDidConnect(_ instrumentClusterWindow: UIWindow) {
+        MainActor.assumeIsolated {
+            let m = ApexCarMapViewController(role: .cluster)
+            mapController = m
+            instrumentClusterWindow.rootViewController = m
+        }
+    }
+
+    func instrumentClusterControllerDidDisconnectWindow(_ instrumentClusterWindow: UIWindow) {
+        MainActor.assumeIsolated { mapController = nil }
+    }
+
+    func instrumentClusterControllerDidZoom(in instrumentClusterController: CPInstrumentClusterController) {
+        MainActor.assumeIsolated { mapController?.zoom(1) }
+    }
+
+    func instrumentClusterControllerDidZoomOut(_ instrumentClusterController: CPInstrumentClusterController) {
+        MainActor.assumeIsolated { mapController?.zoom(-1) }
+    }
+
+    func instrumentClusterController(_ instrumentClusterController: CPInstrumentClusterController, didChangeCompassSetting compassSetting: CPInstrumentClusterSetting) {}
+    func instrumentClusterController(_ instrumentClusterController: CPInstrumentClusterController, didChangeSpeedLimitSetting speedLimitSetting: CPInstrumentClusterSetting) {}
+}
+
+// MARK: - The base view: our map (web/carmap.html), in the phone's theme and the car screen's day or night
+
+final class ApexCarMapViewController: UIViewController, WKNavigationDelegate {
+    enum Role { case main, dashboard, cluster }
+    let role: Role
+    private var web: WKWebView?
+    private var loaded = false
+
+    init(role: Role) {
+        self.role = role
+        super.init(nibName: nil, bundle: nil)
+    }
+    required init?(coder: NSCoder) { fatalError("not from a storyboard") }
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        map.frame = view.bounds
-        map.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        map.delegate = self
-        map.showsUserLocation = true
-        map.pointOfInterestFilter = .excludingAll
-        map.showsCompass = false
-        view.addSubview(map)
-        map.setUserTrackingMode(.follow, animated: false)
+        view.backgroundColor = UIColor(red: 0x1A / 255, green: 0x18 / 255, blue: 0x14 / 255, alpha: 1)
+        guard let index = ApexWebBundle.indexURL else { return }
+        let config = WKWebViewConfiguration()
+        config.setURLSchemeHandler(ApexBundleSchemeHandler(root: index.deletingLastPathComponent()), forURLScheme: ApexWebBundle.scheme)
+        let w = WKWebView(frame: view.bounds, configuration: config)
+        w.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        w.isOpaque = false
+        w.backgroundColor = view.backgroundColor
+        w.scrollView.isScrollEnabled = false
+        w.isUserInteractionEnabled = false                  // the base view takes no touches: Apple's templates own every control
+        w.navigationDelegate = self
+        view.addSubview(w)
+        web = w
+        w.load(URLRequest(url: URL(string: "\(ApexWebBundle.scheme)://app/carmap.html")!))
+        MainActor.assumeIsolated { ApexCar.shared.register(self) }
     }
 
-    func show(route coords: [CLLocationCoordinate2D]) {
-        if let line { map.removeOverlay(line) }
-        line = nil
-        guard coords.count >= 2 else { recentre(); return }
-        let l = MKPolyline(coordinates: coords, count: coords.count)
-        line = l
-        map.addOverlay(l, level: .aboveRoads)
-        if !guiding { map.setVisibleMapRect(l.boundingMapRect, edgePadding: UIEdgeInsets(top: 60, left: 60, bottom: 60, right: 60), animated: true) }
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        loaded = true
+        MainActor.assumeIsolated {
+            showLook(); showRoute(); showCorners(); showHazards(); setMode(); showPosition()
+        }
     }
 
-    func recentre() { map.setUserTrackingMode(guiding ? .followWithHeading : .follow, animated: true) }
-
-    func zoom(by f: Double) {
-        var r = map.region
-        r.span.latitudeDelta = min(90, max(0.002, r.span.latitudeDelta * f))
-        r.span.longitudeDelta = min(180, max(0.002, r.span.longitudeDelta * f))
-        map.setRegion(r, animated: true)
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        MainActor.assumeIsolated { showLook() }            // the car's screen went from day to night, or back
     }
 
-    func pan(_ d: CPMapTemplate.PanDirection) {
-        var c = map.centerCoordinate
-        let dLat = map.region.span.latitudeDelta / 3, dLon = map.region.span.longitudeDelta / 3
-        if d.contains(.up) { c.latitude += dLat }
-        if d.contains(.down) { c.latitude -= dLat }
-        if d.contains(.left) { c.longitude -= dLon }
-        if d.contains(.right) { c.longitude += dLon }
-        map.setCenter(c, animated: true)
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        MainActor.assumeIsolated { setMode() }               // Apple's cards cover a share of the left that depends on the width
     }
 
-    func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
-        guard let l = overlay as? MKPolyline else { return MKOverlayRenderer(overlay: overlay) }
-        let r = MKPolylineRenderer(polyline: l)
-        r.strokeColor = UIColor(red: 0xC8 / 255, green: 0x10 / 255, blue: 0x2E / 255, alpha: 1)   // brand accent (BRAND.md)
-        r.lineWidth = 7
-        r.lineCap = .round
-        r.lineJoin = .round
-        return r
+    private func js(_ code: String) {
+        guard loaded, let web else { return }
+        web.evaluateJavaScript("window.car && (\(code)); void 0;", completionHandler: nil)
+    }
+
+    @MainActor func showLook() {
+        let night = traitCollection.userInterfaceStyle == .dark
+        js("car.look('\(ApexCar.shared.look.theme)', \(night))")
+    }
+    @MainActor func showRoute() { js("car.route(\(ApexCar.shared.routeJSON))") }
+    @MainActor func showCorners() { js("car.corners(\(ApexCar.shared.cornersJSON))") }
+    @MainActor func showHazards() { js("car.hazards(\(ApexCar.shared.hazardsJSON))") }
+    @MainActor func showPosition() {
+        guard let p = ApexCar.shared.position else { return }
+        js("car.position(\(p.lat), \(p.lon), \(p.course))")
+    }
+    /// Following the car while driving, the whole route in a trip preview (main screen only), the car otherwise.
+    @MainActor func setMode() {
+        let car = ApexCar.shared
+        let mode = car.driving ? "guide" : (role == .main && car.route != nil ? "preview" : "idle")
+        let inset = role == .main && (car.driving || car.route != nil) ? Int(view.bounds.width * 0.36) : 0
+        js("car.inset(\(inset)), car.mode('\(mode)')")
+    }
+    @MainActor func zoom(_ dir: Int) { js("car.zoom(\(dir))") }
+    @MainActor func recentre() { js("car.recentre()") }
+    @MainActor func pan(_ d: CPMapTemplate.PanDirection) {
+        let dx = d.contains(.left) ? -1 : d.contains(.right) ? 1 : 0
+        let dy = d.contains(.up) ? -1 : d.contains(.down) ? 1 : 0
+        js("car.pan(\(dx), \(dy))")
     }
 }

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-E3uUciusHi/DUZATItoipFL9lfrb1l93u9rnyvFUld0=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-LP+xivHV2+bpI0s4UUHRxmJqP9puJmoUYldpJLm9pcY=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -17,6 +17,7 @@
   <script src="vendor/maplibre-gl.js"></script>
   <script src="offline_tiles.js"></script>
   <script src="vendor/maplibre-contour.min.js"></script>
+  <script src="basemap.js"></script>
   <script src="apex_core.js"></script>
   <script src="analysis_client.js"></script>
   <script src="driving_side.js"></script>
@@ -1425,7 +1426,7 @@
     const routeWatch = { note: null, frame: null, bestM: 0 };
     const etaPace = ApexEta.createPace();   // live ETA pace on the current route (paintEta)
     let etaText = '', etaLeftS = null;
-    const car = { route: '', guideAt: 0, guideKey: '' };   // what the car's screen was last sent (carRoute, carGuide below)   // strip text while off route; last frame fed; furthest progress
+    const car = { route: '', guideAt: 0, guideKey: '', look: '', hazards: '', symbols: new Map() };   // what the car's screen was last sent (carRoute, carGuide below)   // strip text while off route; last frame fed; furthest progress
     try {
       const saved = JSON.parse(localStorage.getItem('apex.prefs') || 'null');
       if (saved) {
@@ -1458,6 +1459,7 @@
       () => !!state.toggles.health) : { bump() {}, flush: async () => 0 };
     function savePrefs() { try { localStorage.setItem('apex.prefs', JSON.stringify({ theme: state.theme, themeV: 2, camFeel: state.camFeel, voiceId: state.voiceId, liveVoice: state.liveVoice, liveVoiceV: 2, voiceName: state.voiceName, hlOn: state.hlOn, hlStrength: state.hlStrength, notesMode: state.notesMode, noteWords: state.noteWords, nightMode: state.nightMode, toggles: state.toggles })); } catch (_) {} }
     function paintSwitches() {
+      try { carLook(); } catch (_) {}                                     // the car's screen follows the theme and the voice switch
       document.querySelectorAll('[data-toggle]').forEach(b => { const on = !!state.toggles[b.dataset.toggle]; b.classList.toggle('on', on); b.setAttribute('role', 'switch'); b.setAttribute('aria-checked', String(on)); });
       document.querySelectorAll('#nightSwitch [data-night]').forEach(b => b.setAttribute('aria-checked', String(b.dataset.night === state.nightMode)));
       document.querySelectorAll('[data-cycle]').forEach(b => { const v = state[b.dataset.cycle]; b.querySelector('b').textContent = MODE_LABEL[v]; b.setAttribute('aria-label', `${b.querySelector('span').textContent}: ${MODE_LABEL[v]}`); });
@@ -1572,35 +1574,8 @@
       drawPuck();
       if (!mapReady) return;
       const P = look.map, C = look.colors;
-      for (const lyr of map.getStyle().layers) {
-        const id = lyr.id.toLowerCase();
-        if (id.startsWith('apex-')) continue;
-        const set = (k, v) => { try { map.setPaintProperty(lyr.id, k, v); } catch (_) {} };
-        if (/building|poi|housenumber|aeroway|ferry/.test(id)) { try { map.setLayoutProperty(lyr.id, 'visibility', 'none'); } catch (_) {} continue; }
-        if (lyr.type === 'background') set('background-color', P.bg);
-        else if (lyr.type === 'fill') {
-          if (id.includes('water')) set('fill-color', P.water);
-          else if (/wood|forest|park|grass|scrub|wetland/.test(id)) { set('fill-color', P.wood); set('fill-opacity', 0.7); }
-          else { set('fill-color', P.land); set('fill-opacity', 0.5); }
-          set('fill-outline-color', 'rgba(0,0,0,0)');
-        } else if (lyr.type === 'line') {
-          if (id.includes('water')) set('line-color', P.waterLine);
-          else if (id.includes('boundary')) set('line-color', P.boundary);
-          else if (/road|transportation|highway|bridge|tunnel|street|path/.test(id)) {
-            const minor = /minor|service|track|path|street|residential/.test(id);
-            set('line-color', id.includes('casing') ? P.casing : (minor ? P.roadMinor : P.road));
-          } else if (/rail/.test(id)) set('line-color', P.boundary);
-        } else if (lyr.type === 'symbol') { set('text-color', P.label); set('text-halo-color', P.halo); set('text-halo-width', 1.4); set('icon-opacity', 0); }
-      }
+      ApexBasemap.restyle(map, P);                                         // web/basemap.js: shared with the car's screen
       const has = (id) => map.getLayer(id);
-      if (has('apex-hillshade')) {
-        map.setPaintProperty('apex-hillshade', 'hillshade-shadow-color', P.shadow);
-        map.setPaintProperty('apex-hillshade', 'hillshade-highlight-color', P.highlight);
-        map.setPaintProperty('apex-hillshade', 'hillshade-accent-color', P.accentShade);
-        map.setPaintProperty('apex-hillshade', 'hillshade-exaggeration', 0.36);
-      }
-      if (has('apex-contours')) map.setPaintProperty('apex-contours', 'line-color', P.contour);
-      if (has('apex-contour-labels')) { map.setPaintProperty('apex-contour-labels', 'text-color', P.contour); map.setPaintProperty('apex-contour-labels', 'text-halo-color', P.bg); }
       if (has('apex-route-casing')) map.setPaintProperty('apex-route-casing', 'line-color', C.routeCasing);
       if (has('apex-route')) map.setPaintProperty('apex-route', 'line-color', C.route);
       if (has('apex-alt')) map.setPaintProperty('apex-alt', 'line-color', C.route);
@@ -5599,7 +5574,7 @@
       reported.busy = true;
       try {
         const r = await ApexSync.apiFetch(`/api/hazards?lat=${p.lat.toFixed(5)}&lon=${p.lon.toFixed(5)}&km=20`, { method: 'GET' });
-        if (r.ok) { reported.list = await r.json(); paintReported(); }
+        if (r.ok) { reported.list = await r.json(); paintReported(); carHazards(); }
       } catch (_) { /* offline or signed out: keep what we had */ }
       finally { reported.at = performance.now(); reported.busy = false; }
     }
@@ -5852,6 +5827,7 @@
     function askStill(h) {
       reported.asking = h;
       $('hzAskText').textContent = `${h.label || ApexHazardReports.LABEL[h.kind] || 'Hazard'} still there?`;
+      carPost({ kind: 'ask', title: $('hzAskText').textContent });         // the car asks too, with Still there and Gone
       $('hzAsk').hidden = false;
       clearTimeout(reported.askTimer);
       reported.askTimer = setTimeout(() => { $('hzAsk').hidden = true; reported.asking = null; }, 12000);
@@ -5967,16 +5943,47 @@
       const key = t ? `${t.id}|${t.lat.length}|${o ? o.picked : -1}` : '';
       if (key === car.route) return;
       car.route = key;
-      if (!t) { carPost({ kind: 'clear' }); return; }
+      if (!t) { carPost({ kind: 'clear' }); carPost({ kind: 'corners', list: [] }); return; }
       carPost(ApexCarPlay.routeMessage(t, o ? o.list.map(c => ({ fun: c.fun, timeS: c.timeS, distM: c.t && c.t.dist ? c.t.dist[c.t.dist.length - 1] : null })) : null,
         o ? o.picked : 0, (m) => ApexUnits.long(m, 1)));
+      carPost(ApexCarPlay.cornersMessage(t, (m) => sample(t, m)));        // the road book on the car's map (web/carmap.js)
+    }
+    // The theme and the voice switch for the car's screen: its map paints the theme, its guidance card takes the theme's dark.
+    function carLook() {
+      if (!look || !look.theme) return;
+      const msg = ApexCarPlay.lookMessage(look.theme, !!state.toggles.voice), key = JSON.stringify(msg);
+      if (key === car.look) return;
+      car.look = key;
+      carPost(msg);
+    }
+    function carHazards() {
+      const msg = ApexCarPlay.hazardsMessage(reported.list, ApexHazardReports.LABEL), key = msg.list.map((h) => h.id).join(',');
+      if (key === car.hazards) return;
+      car.hazards = key;
+      carPost(msg);
+    }
+    // The turn's tulip as a PNG for the car's guidance card, drawn once per turn type and ink; the first guide message for a new
+    // type goes without it (the shell shows its own symbol) and the next one, a second later, carries it.
+    function carSymbol(type) {
+      const ink = (look && look.theme && look.theme.night && look.theme.night.panelInk) || '#EDE4D3', key = `${type}|${ink}`;
+      if (car.symbols.has(key)) return car.symbols.get(key);
+      car.symbols.set(key, null);
+      const img = new Image();
+      img.onload = () => {
+        const c = document.createElement('canvas'); c.width = c.height = 120;
+        c.getContext('2d').drawImage(img, 0, 0, 120, 120);
+        try { car.symbols.set(key, c.toDataURL('image/png').split(',')[1]); } catch (_) {}
+      };
+      img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(ApexCarPlay.tulipSVG(type, ink));
+      return null;
     }
     function carGuide() {
       if (!driveActive || !track || track.kind !== 'route') return;
       const now = performance.now(), g = ApexCarPlay.guideMessage(track, state.cursorM, etaLeftS, ApexDirections.phrase);
       if (!g || (g.key === car.guideKey && now - car.guideAt < 1000)) return;
       car.guideKey = g.key; car.guideAt = now;
-      carPost(g);
+      const sym = carSymbol(g.type);
+      carPost(sym ? { ...g, symbol: sym } : g);
     }
     function activity(action, fields = {}) {
       const native = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex;
@@ -6260,6 +6267,12 @@
       else if (m.action === 'start' && state.mode !== 'live' && !locDenied) enterDrive();
       else if (m.action === 'end' && driveActive) leaveDrive(true);
       else if (m.action === 'places') carPost(ApexCarPlay.placesMessage(recentPlaces()));
+      else if (m.action === 'loop' && [30, 60, 120].includes(m.minutes) && !driveActive) loop({ minutes: m.minutes });
+      else if (m.action === 'report' && ApexHazardReports.KINDS.includes(m.kind)) reportHazard(m.kind);
+      else if (m.action === 'still' && typeof m.still === 'boolean') answerStill(m.still);
+      else if (m.action === 'voice') { state.toggles.voice = !state.toggles.voice; savePrefs(); paintSwitches(); if (!state.toggles.voice) stopSpeaking(); }
+      else if (m.action === 'hello') { car.route = ''; car.look = ''; car.hazards = ''; carRoute(track && track.kind === 'route' ? track : null); carLook(); carHazards();
+        carPost(ApexCarPlay.placesMessage(recentPlaces())); }                 // a car screen that just connected gets everything again
     }
     carPost(ApexCarPlay.placesMessage(recentPlaces()));
     function startDrive() {

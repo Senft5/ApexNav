@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>Vetta car map</title>
+  <!-- The car's screen (CarPlay's base view, CarPlay/ApexCarPlay.swift): only the map, in the phone's theme. Apple's templates
+       draw every control over it; nothing here takes a touch. The engine (the cockpit page) feeds it through window.car. -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700&display=swap" />
+  <link rel="stylesheet" href="vendor/maplibre-gl.css" />
+  <style>
+    html, body, #map { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #1A1814; }
+    .car-puck { pointer-events: none; }
+    .car-plate { pointer-events: none; font: 700 17px/1 "Barlow Condensed", "Arial Narrow", sans-serif; letter-spacing: 0.02em; padding: 3px 7px 2px; white-space: nowrap; }
+    .car-corner { background: var(--plate, #EDE4D3); color: var(--plate-ink, #1C1A17); border: 2px solid var(--plate-ink, #1C1A17); }
+    .car-corner.tight { background: var(--plate-ink, #1C1A17); color: var(--plate, #EDE4D3); }
+    .car-hazard { display: flex; align-items: center; gap: 6px; background: #111111; color: #FFFFFF; border: 2.5px solid #FF7A1A; font: 700 15px/1 -apple-system, system-ui, sans-serif; padding: 5px 9px; }
+    .car-hazard i { width: 0; height: 0; border-left: 7px solid transparent; border-right: 7px solid transparent; border-bottom: 12px solid #FF7A1A; }
+    #credit { position: absolute; right: 6px; bottom: 4px; font: 500 10px/1 -apple-system, system-ui, sans-serif; opacity: 0.6; pointer-events: none; }
+    .maplibregl-ctrl-attrib, .maplibregl-ctrl-logo { display: none !important; }   /* no tappable controls in the base view: the credit is plain text */
+  </style>
+  <script src="vendor/maplibre-gl.js"></script>
+  <script src="vendor/maplibre-contour.min.js"></script>
+  <script src="themes.js"></script>
+  <script src="basemap.js"></script>
+  <script src="carmap.js"></script>
+</head>
+<body>
+  <div id="map"></div>
+  <div id="credit">© OpenStreetMap · OpenFreeMap</div>
+</body>
+</html>
