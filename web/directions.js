@@ -48,6 +48,19 @@
     return verb + onto;
   }
 
+  // The same line from the voice pack's clips (web/voice_lines.js), without the street name, which stays on the screen;
+  // null when a piece isn't in the packs (the caller then says the full text another way).
+  function packTokens(dist, s, next, lane) {
+    const L = root.ApexVoiceLines;
+    if (!L) return null;
+    const out = [];
+    if (dist) { const d = L.distToken(dist); if (!d) return null; out.push(d); }
+    const v = L.maneuver(s); if (!v) return null; out.push(...v);
+    if (next) { const n = L.maneuver(next); if (!n) return null; out.push('nav:then', ...n); }
+    if (lane) { const l = L.laneToken(lane); if (l) out.push(l); }
+    return out;
+  }
+
   /** When to call: early from max(400 m, 30 s) out but not inside max(150 m, 10 s); at the turn inside max(40 m, 5 s). */
   const earlyFar = (v) => Math.max(400, v * 30), earlyNear = (v) => Math.max(150, v * 10), nowAt = (v) => Math.max(40, v * 5);
 
@@ -68,14 +81,16 @@
       if (d <= nowAt(v)) {
         if (said.has(kNow)) continue;
         const next = steps[i + 1], nextText = next && next.m - s.m <= THEN_M && !ARRIVE.has(next.type) ? phrase(next) : null;
-        out.push({ key: kNow, text: nextText ? `${text}, then ${lower(nextText)}` : text, now: true, atM: s.m });
+        out.push({ key: kNow, text: nextText ? `${text}, then ${lower(nextText)}` : text, now: true, atM: s.m,
+                   tokens: packTokens(null, s, nextText ? next : null, null) });
         said.add(kEarly);
         if (nextText) said.add(`${id}:dir:${i + 1}:early`);
       } else if (d >= earlyNear(v) && !said.has(kEarly) && !ARRIVE.has(s.type)
                  && !(i > 0 && s.m - steps[i - 1].m <= THEN_M && phrase(steps[i - 1]))) {   // said as the "then" of the one before
         // the lanes go with the early call, while there is time to move over: ", use the left 2 lanes"
         const lane = root.ApexLanes && s.lanes ? root.ApexLanes.hint(s.lanes) : null;
-        out.push({ key: kEarly, text: `In ${distWords(d)}, ${lower(text)}${lane ? `, use ${lane}` : ''}`, now: false, atM: s.m });
+        out.push({ key: kEarly, text: `In ${distWords(d)}, ${lower(text)}${lane ? `, use ${lane}` : ''}`, now: false, atM: s.m,
+                   tokens: packTokens(distWords(d), s, null, lane) });
       }
     }
     return out;

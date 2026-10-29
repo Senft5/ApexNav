@@ -10,6 +10,12 @@ struct ApexDriveAttributes: ActivityAttributes {
         var distance: String
         /// Time left and arrival on a planned route ("48 min left · 5:12 PM"); empty when unknown.
         var eta: String
+        /// The note in a few characters for the island's compact view ("R1+", "CREST"); nil from an older page.
+        var short: String? = nil
+        /// The next call is a hazard: the island's keyline and glyph turn signal orange (REVIEW.md 4.3.1).
+        var hazard: Bool? = nil
+        /// Time left only ("48 min"), for the expanded view's trailing slot.
+        var etaShort: String? = nil
     }
     /// The drive or route name.
     var title: String

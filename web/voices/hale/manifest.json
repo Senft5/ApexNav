@@ -99,8 +99,10 @@
   },
   "head:LHP": {
    "file": "head_LHP.m4a",
-   "dur": 0.918,
-   "text": "Left hairpin"
+   "dur": 0.91,
+   "text": "Left hairpin",
+   "heard": 1.0,
+   "voice": "bm_lewis"
   },
   "head:LSQ": {
    "file": "head_LSQ.m4a",
@@ -204,8 +206,10 @@
   },
   "head:RHP": {
    "file": "head_RHP.m4a",
-   "dur": 0.857,
-   "text": "Right hairpin"
+   "dur": 1.034,
+   "text": "Right hairpin",
+   "heard": 1.0,
+   "voice": "bm_lewis"
   },
   "head:RSQ": {
    "file": "head_RSQ.m4a",
@@ -224,8 +228,10 @@
   },
   "mod:short": {
    "file": "mod_short.m4a",
-   "dur": 0.522,
-   "text": "short"
+   "dur": 0.52,
+   "text": "short",
+   "heard": 1.0,
+   "voice": "bm_lewis"
   },
   "mod:tightens": {
    "file": "mod_tightens.m4a",
@@ -254,8 +260,10 @@
   },
   "caution:1": {
    "file": "caution_1.m4a",
-   "dur": 0.489,
-   "text": "care"
+   "dur": 0.51,
+   "text": "care",
+   "heard": 1.0,
+   "voice": "bm_lewis"
   },
   "caution:2": {
    "file": "caution_2.m4a",
@@ -279,8 +287,10 @@
   },
   "link:and": {
    "file": "link_and.m4a",
-   "dur": 0.397,
-   "text": "and"
+   "dur": 0.398,
+   "text": "and",
+   "heard": 0.0,
+   "voice": "bm_lewis"
   },
   "dist:30": {
    "file": "dist_30.m4a",
@@ -294,13 +304,17 @@
   },
   "dist:50": {
    "file": "dist_50.m4a",
-   "dur": 0.633,
-   "text": "fifty"
+   "dur": 0.576,
+   "text": "fifty",
+   "heard": 1.0,
+   "voice": "bm_lewis"
   },
   "dist:60": {
    "file": "dist_60.m4a",
-   "dur": 0.684,
-   "text": "sixty"
+   "dur": 0.685,
+   "text": "sixty",
+   "heard": 0.0,
+   "voice": "bm_lewis"
   },
   "dist:70": {
    "file": "dist_70.m4a",
@@ -374,8 +388,10 @@
   },
   "hazard:dip": {
    "file": "hazard_dip.m4a",
-   "dur": 0.486,
-   "text": "Dip"
+   "dur": 0.472,
+   "text": "Dip",
+   "heard": 1.0,
+   "voice": "bm_lewis"
   },
   "hazard:alpr": {
    "file": "hazard_alpr.m4a",
@@ -384,8 +400,10 @@
   },
   "sys:stage": {
    "file": "sys_stage.m4a",
-   "dur": 0.78,
-   "text": "Full notes."
+   "dur": 0.757,
+   "text": "Full notes.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
   },
   "sys:cruise": {
    "file": "sys_cruise.m4a",
@@ -394,8 +412,10 @@
   },
   "sys:test": {
    "file": "sys_test.m4a",
-   "dur": 0.856,
-   "text": "Route loaded."
+   "dur": 0.855,
+   "text": "Route loaded.",
+   "heard": 0.5,
+   "voice": "bm_lewis"
   },
   "sys:end": {
    "file": "sys_end.m4a",
@@ -574,13 +594,17 @@
   },
   "head:LSQ+caution:1+dist:150": {
    "file": "p_2471d9c8a3f2.m4a",
-   "dur": 2.352,
-   "text": "Square left, care, one fifty."
+   "dur": 2.354,
+   "text": "Square left, care, one fifty.",
+   "heard": 0.8,
+   "voice": "bm_lewis"
   },
   "hazard:bump+dist:450": {
    "file": "p_462e1a1815fe.m4a",
-   "dur": 1.383,
-   "text": "Bump, four fifty."
+   "dur": 1.395,
+   "text": "Bump, four fifty.",
+   "heard": 0.67,
+   "voice": "bm_lewis"
   },
   "head:L1+mod:banked+caution:1+link:into+head:L2+mod:long+mod:opens+mod:banked+link:and+head:R2-": {
    "file": "p_bdb06caaf83f.m4a",
@@ -659,8 +683,10 @@
   },
   "hazard:bump+dist:500": {
    "file": "p_5819e82b0108.m4a",
-   "dur": 1.426,
-   "text": "Bump, five hundred."
+   "dur": 1.6,
+   "text": "Bump, five hundred.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
   },
   "head:LAC+mod:long+caution:1+dist:400": {
    "file": "p_87a6e30fc4f5.m4a",
@@ -699,8 +725,10 @@
   },
   "mod:long+link:into": {
    "file": "p_183ec63d6d0e.m4a",
-   "dur": 0.835,
-   "text": "Long into."
+   "dur": 0.836,
+   "text": "Long into.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
   },
   "caution:1+link:into": {
    "file": "p_0b0e0cc91b25.m4a",
@@ -709,18 +737,24 @@
   },
   "mod:long+link:and": {
    "file": "p_388e69a1ba05.m4a",
-   "dur": 0.723,
-   "text": "Long and."
+   "dur": 0.722,
+   "text": "Long and.",
+   "heard": 0.5,
+   "voice": "bm_lewis"
   },
   "link:into+head:L3": {
    "file": "p_e0f47156053f.m4a",
-   "dur": 1.25,
-   "text": "Into Left three."
+   "dur": 1.131,
+   "text": "Into Left three.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
   },
   "mod:long+caution:1": {
    "file": "p_0aec40b6dfd1.m4a",
-   "dur": 1.141,
-   "text": "Long, care."
+   "dur": 1.109,
+   "text": "Long, care.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
   },
   "head:RSQ+caution:1": {
    "file": "p_55bb2f322c1e.m4a",
@@ -789,8 +823,10 @@
   },
   "link:into+head:LAC+mod:long": {
    "file": "p_8309bf92297d.m4a",
-   "dur": 1.776,
-   "text": "Into Acute left long."
+   "dur": 1.779,
+   "text": "Into Acute left long.",
+   "heard": 0.67,
+   "voice": "bm_lewis"
   },
   "mod:long+dist:120": {
    "file": "p_cb662598b2a3.m4a",
@@ -854,8 +890,10 @@
   },
   "link:into+head:RAC+mod:long": {
    "file": "p_cb93d581e90d.m4a",
-   "dur": 1.678,
-   "text": "Into Acute right long."
+   "dur": 1.668,
+   "text": "Into Acute right long.",
+   "heard": 0.67,
+   "voice": "bm_lewis"
   },
   "mod:long+dist:80": {
    "file": "p_2024a6a72f55.m4a",
@@ -959,8 +997,10 @@
   },
   "link:into+head:LHP+caution:1": {
    "file": "p_5edfc54ef0e8.m4a",
-   "dur": 1.934,
-   "text": "Into Left hairpin, care."
+   "dur": 1.963,
+   "text": "Into Left hairpin, care.",
+   "heard": 0.75,
+   "voice": "bm_lewis"
   },
   "link:into+head:R3+": {
    "file": "p_27d52e66d534.m4a",
@@ -1045,7 +1085,9 @@
   "link:into+head:LAC+mod:long+caution:1": {
    "file": "p_e6ce4747a105.m4a",
    "dur": 2.481,
-   "text": "Into Acute left long, care."
+   "text": "Into Acute left long, care.",
+   "heard": 0.73,
+   "voice": "bm_lewis"
   },
   "link:into+head:L2+mod:long": {
    "file": "p_d3942768fc3c.m4a",
@@ -1194,8 +1236,10 @@
   },
   "head:RSQ+caution:1+dist:250": {
    "file": "p_9c6bc2ff82d6.m4a",
-   "dur": 2.21,
-   "text": "Square right, care, two fifty."
+   "dur": 2.209,
+   "text": "Square right, care, two fifty.",
+   "heard": 0.8,
+   "voice": "bm_lewis"
   },
   "link:into+head:L2-+mod:long": {
    "file": "p_317bc938e2bd.m4a",
@@ -1234,8 +1278,10 @@
   },
   "head:R2+mod:long+link:into": {
    "file": "p_5eeabe2230b5.m4a",
-   "dur": 1.221,
-   "text": "Right two long into."
+   "dur": 1.224,
+   "text": "Right two long into.",
+   "heard": 0.75,
+   "voice": "bm_lewis"
   },
   "head:LSQ+mod:long+link:into+head:R2-": {
    "file": "p_d5fb19ef082b.m4a",
@@ -1399,8 +1445,10 @@
   },
   "head:RAC+mod:long+caution:2": {
    "file": "p_d92afbe698e8.m4a",
-   "dur": 1.94,
-   "text": "Acute right long, caution."
+   "dur": 1.91,
+   "text": "Acute right long, caution.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
   },
   "head:R4+mod:long+dist:120": {
    "file": "p_8bfd54806ba0.m4a",
@@ -1645,7 +1693,9 @@
   "mod:tightens+caution:1+link:into+head:RAC+mod:long": {
    "file": "p_e2212304310e.m4a",
    "dur": 2.521,
-   "text": "Tightens, care into Acute right long."
+   "text": "Tightens, care into Acute right long.",
+   "heard": 0.77,
+   "voice": "bm_lewis"
   },
   "head:R3+mod:tightens+caution:1+link:and": {
    "file": "p_5f71a6348017.m4a",
@@ -1824,8 +1874,10 @@
   },
   "head:R2+link:into+head:L2+dist:80": {
    "file": "p_5c9396833d22.m4a",
-   "dur": 2.059,
-   "text": "Right two into Left two, eighty."
+   "dur": 2.056,
+   "text": "Right two into Left two, eighty.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
   },
   "head:L5-+link:and+head:L5-": {
    "file": "p_2de4165578fe.m4a",
@@ -1890,7 +1942,9 @@
   "head:RSQ+caution:1+dist:350": {
    "file": "p_8894ca50a031.m4a",
    "dur": 2.284,
-   "text": "Square right, care, three fifty."
+   "text": "Square right, care, three fifty.",
+   "heard": 0.8,
+   "voice": "bm_lewis"
   },
   "head:L3++mod:tightens+caution:1": {
    "file": "p_8841fe761b9e.m4a",
@@ -2005,7 +2059,9 @@
   "head:L3+mod:long+link:into": {
    "file": "p_54695605dcc7.m4a",
    "dur": 1.425,
-   "text": "Left three long into."
+   "text": "Left three long into.",
+   "heard": 0.75,
+   "voice": "bm_lewis"
   },
   "head:LSQ+caution:1+dist:400": {
    "file": "p_86b353d3ce2b.m4a",
@@ -2489,8 +2545,10 @@
   },
   "head:R4+mod:long+link:into": {
    "file": "p_5b8320a82ffd.m4a",
-   "dur": 1.252,
-   "text": "Right four long into."
+   "dur": 1.37,
+   "text": "Right four long into.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
   },
   "head:L3+link:into+head:R3-+link:into": {
    "file": "p_6ebf0d670bc2.m4a",
@@ -2595,7 +2653,9 @@
   "mod:opens+link:into+head:RAC+mod:long": {
    "file": "p_29e189476b03.m4a",
    "dur": 1.868,
-   "text": "Opens into Acute right long."
+   "text": "Opens into Acute right long.",
+   "heard": 0.73,
+   "voice": "bm_lewis"
   },
   "head:R2-+dist:100": {
    "file": "p_eeb3c234a7c4.m4a",
@@ -2639,8 +2699,10 @@
   },
   "caution:1+dist:80": {
    "file": "p_07bf3619c4d1.m4a",
-   "dur": 0.909,
-   "text": "Care, eighty."
+   "dur": 0.913,
+   "text": "Care, eighty.",
+   "heard": 0.5,
+   "voice": "bm_lewis"
   },
   "head:R2++link:and": {
    "file": "p_373d7536c622.m4a",
@@ -2760,7 +2822,9 @@
   "head:R2+link:into+head:LAC+mod:long": {
    "file": "p_ebc01c71eb2f.m4a",
    "dur": 2.074,
-   "text": "Right two into Acute left long."
+   "text": "Right two into Acute left long.",
+   "heard": 0.77,
+   "voice": "bm_lewis"
   },
   "caution:1+link:and": {
    "file": "p_8ae31ea75273.m4a",
@@ -2799,8 +2863,10 @@
   },
   "head:LSQ+caution:1+link:and": {
    "file": "p_0e2e2d92a92b.m4a",
-   "dur": 1.597,
-   "text": "Square left, care and."
+   "dur": 1.644,
+   "text": "Square left, care and.",
+   "heard": 0.89,
+   "voice": "bm_lewis"
   },
   "head:R1++dist:60": {
    "file": "p_a9fb29dfb809.m4a",
@@ -2884,8 +2950,10 @@
   },
   "head:LHP+caution:2+link:into": {
    "file": "p_023d6c0df0f4.m4a",
-   "dur": 2.009,
-   "text": "Left hairpin, caution into."
+   "dur": 2.01,
+   "text": "Left hairpin, caution into.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
   },
   "head:R3-+link:into+head:L3": {
    "file": "p_11932cd0c8db.m4a",
@@ -2949,8 +3017,10 @@
   },
   "head:L4+dist:450": {
    "file": "p_2b72d64c40da.m4a",
-   "dur": 1.671,
-   "text": "Left four, four fifty."
+   "dur": 1.67,
+   "text": "Left four, four fifty.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
   },
   "head:L4+mod:long+dist:450": {
    "file": "p_f16a951095a6.m4a",
@@ -2959,8 +3029,10 @@
   },
   "head:R4+mod:long+link:and": {
    "file": "p_0d01589101d5.m4a",
-   "dur": 1.193,
-   "text": "Right four long and."
+   "dur": 1.191,
+   "text": "Right four long and.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
   },
   "head:R4-+dist:120": {
    "file": "p_8f66db0da2b9.m4a",
@@ -3080,7 +3152,9 @@
   "link:into+head:LHP": {
    "file": "p_8a67513716c1.m4a",
    "dur": 1.408,
-   "text": "Into Left hairpin."
+   "text": "Into Left hairpin.",
+   "heard": 0.67,
+   "voice": "bm_lewis"
   },
   "head:L3+link:into+head:R3": {
    "file": "p_1588523c8506.m4a",
@@ -3124,8 +3198,10 @@
   },
   "head:L2+link:into+head:RAC+mod:long": {
    "file": "p_74969cc48610.m4a",
-   "dur": 1.819,
-   "text": "Left two into Acute right long."
+   "dur": 1.821,
+   "text": "Left two into Acute right long.",
+   "heard": 0.77,
+   "voice": "bm_lewis"
   },
   "caution:1+dist:120": {
    "file": "p_5a30e06180be.m4a",
@@ -3134,8 +3210,10 @@
   },
   "head:L2+link:and": {
    "file": "p_75bcb0ceab20.m4a",
-   "dur": 0.999,
-   "text": "Left two and."
+   "dur": 0.974,
+   "text": "Left two and.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
   },
   "head:RAC+mod:long+link:into+head:L3": {
    "file": "p_cf20765a5366.m4a",
@@ -3199,8 +3277,10 @@
   },
   "n:4": {
    "file": "n_4.m4a",
-   "dur": 0.524,
-   "text": "four"
+   "dur": 0.526,
+   "text": "four",
+   "heard": 0.0,
+   "voice": "bm_lewis"
   },
   "n:5": {
    "file": "n_5.m4a",
@@ -3429,8 +3509,10 @@
   },
   "n:50": {
    "file": "n_50.m4a",
-   "dur": 0.633,
-   "text": "fifty"
+   "dur": 0.575,
+   "text": "fifty",
+   "heard": 1.0,
+   "voice": "bm_lewis"
   },
   "n:51": {
    "file": "n_51.m4a",
@@ -3479,8 +3561,10 @@
   },
   "n:60": {
    "file": "n_60.m4a",
-   "dur": 0.685,
-   "text": "sixty"
+   "dur": 0.667,
+   "text": "sixty",
+   "heard": 0.0,
+   "voice": "bm_lewis"
   },
   "n:61": {
    "file": "n_61.m4a",
@@ -3674,8 +3758,10 @@
   },
   "n:99": {
    "file": "n_99.m4a",
-   "dur": 0.753,
-   "text": "ninety-nine"
+   "dur": 0.752,
+   "text": "ninety-nine",
+   "heard": 1.0,
+   "voice": "bm_lewis"
   },
   "n:h1": {
    "file": "n_h1.m4a",
@@ -3724,18 +3810,687 @@
   },
   "n:k1": {
    "file": "n_k1.m4a",
-   "dur": 1.043,
-   "text": "one thousand"
+   "dur": 1.037,
+   "text": "one thousand",
+   "heard": 1.0,
+   "voice": "bm_lewis"
   },
   "end:score": {
    "file": "end_score.m4a",
    "dur": 0.558,
-   "text": "Score,"
+   "text": "Score,",
+   "heard": 1.0,
+   "voice": "bm_lewis"
   },
   "end:best": {
    "file": "end_best.m4a",
    "dur": 1.232,
    "text": "Best on this road."
+  },
+  "nav:bear_right": {
+   "file": "nav_bear_right.m4a",
+   "dur": 0.727,
+   "text": "Bear right.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "nav:turn_right": {
+   "file": "nav_turn_right.m4a",
+   "dur": 0.724,
+   "text": "Turn right.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "nav:sharp_right": {
+   "file": "nav_sharp_right.m4a",
+   "dur": 0.758,
+   "text": "Sharp right.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "nav:u_turn": {
+   "file": "nav_u_turn.m4a",
+   "dur": 1.0,
+   "text": "Make a U-turn.",
+   "heard": 0.75,
+   "voice": "bm_lewis"
+  },
+  "nav:sharp_left": {
+   "file": "nav_sharp_left.m4a",
+   "dur": 0.794,
+   "text": "Sharp left.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "nav:turn_left": {
+   "file": "nav_turn_left.m4a",
+   "dur": 0.765,
+   "text": "Turn left.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "nav:bear_left": {
+   "file": "nav_bear_left.m4a",
+   "dur": 0.727,
+   "text": "Bear left.",
+   "heard": 0.5,
+   "voice": "bm_lewis"
+  },
+  "nav:ramp": {
+   "file": "nav_ramp.m4a",
+   "dur": 0.839,
+   "text": "Take the ramp.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "nav:ramp_right": {
+   "file": "nav_ramp_right.m4a",
+   "dur": 1.537,
+   "text": "Take the ramp on the right.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "nav:ramp_left": {
+   "file": "nav_ramp_left.m4a",
+   "dur": 1.523,
+   "text": "Take the ramp on the left.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "nav:exit_right": {
+   "file": "nav_exit_right.m4a",
+   "dur": 1.635,
+   "text": "Take the exit on the right.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "nav:exit_left": {
+   "file": "nav_exit_left.m4a",
+   "dur": 1.599,
+   "text": "Take the exit on the left.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "nav:keep_right": {
+   "file": "nav_keep_right.m4a",
+   "dur": 0.698,
+   "text": "Keep right.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "nav:keep_left": {
+   "file": "nav_keep_left.m4a",
+   "dur": 0.762,
+   "text": "Keep left.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "nav:merge": {
+   "file": "nav_merge.m4a",
+   "dur": 0.608,
+   "text": "Merge.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "nav:merge_right": {
+   "file": "nav_merge_right.m4a",
+   "dur": 0.841,
+   "text": "Merge right.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "nav:merge_left": {
+   "file": "nav_merge_left.m4a",
+   "dur": 0.895,
+   "text": "Merge left.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "nav:arrive": {
+   "file": "nav_arrive.m4a",
+   "dur": 1.821,
+   "text": "Arriving at your destination.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "nav:rb1": {
+   "file": "nav_rb1.m4a",
+   "dur": 2.355,
+   "text": "At the roundabout, take the first exit.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "nav:rb2": {
+   "file": "nav_rb2.m4a",
+   "dur": 2.432,
+   "text": "At the roundabout, take the second exit.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "nav:rb3": {
+   "file": "nav_rb3.m4a",
+   "dur": 2.374,
+   "text": "At the roundabout, take the third exit.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "nav:rb4": {
+   "file": "nav_rb4.m4a",
+   "dur": 2.376,
+   "text": "At the roundabout, take the fourth exit.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "nav:rb5": {
+   "file": "nav_rb5.m4a",
+   "dur": 2.351,
+   "text": "At the roundabout, take the fifth exit.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "nav:rb6": {
+   "file": "nav_rb6.m4a",
+   "dur": 2.357,
+   "text": "At the roundabout, take the sixth exit.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "nav:rbnext": {
+   "file": "nav_rbnext.m4a",
+   "dur": 2.276,
+   "text": "At the roundabout, take the next exit.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "nav:then": {
+   "file": "nav_then.m4a",
+   "dur": 0.506,
+   "text": "then",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "lane:left1": {
+   "file": "lane_left1.m4a",
+   "dur": 1.213,
+   "text": "use the left lane.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "lane:left2": {
+   "file": "lane_left2.m4a",
+   "dur": 1.477,
+   "text": "use the left two lanes.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "lane:left3": {
+   "file": "lane_left3.m4a",
+   "dur": 1.705,
+   "text": "use the left three lanes.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "lane:right1": {
+   "file": "lane_right1.m4a",
+   "dur": 1.165,
+   "text": "use the right lane.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "lane:right2": {
+   "file": "lane_right2.m4a",
+   "dur": 1.481,
+   "text": "use the right two lanes.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "lane:right3": {
+   "file": "lane_right3.m4a",
+   "dur": 1.571,
+   "text": "use the right three lanes.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "lane:middle1": {
+   "file": "lane_middle1.m4a",
+   "dur": 1.065,
+   "text": "use a middle lane.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "lane:middle2": {
+   "file": "lane_middle2.m4a",
+   "dur": 1.566,
+   "text": "use the middle two lanes.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "navd:100ft": {
+   "file": "navd_100ft.m4a",
+   "dur": 1.425,
+   "text": "In one hundred feet,",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "navd:200ft": {
+   "file": "navd_200ft.m4a",
+   "dur": 1.305,
+   "text": "In two hundred feet,",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "navd:300ft": {
+   "file": "navd_300ft.m4a",
+   "dur": 1.471,
+   "text": "In three hundred feet,",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "navd:400ft": {
+   "file": "navd_400ft.m4a",
+   "dur": 1.376,
+   "text": "In four hundred feet,",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "navd:500ft": {
+   "file": "navd_500ft.m4a",
+   "dur": 1.447,
+   "text": "In five hundred feet,",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "navd:600ft": {
+   "file": "navd_600ft.m4a",
+   "dur": 1.375,
+   "text": "In six hundred feet,",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "navd:700ft": {
+   "file": "navd_700ft.m4a",
+   "dur": 1.6,
+   "text": "In seven hundred feet,",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "navd:800ft": {
+   "file": "navd_800ft.m4a",
+   "dur": 1.354,
+   "text": "In eight hundred feet,",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "navd:0.2mi": {
+   "file": "navd_0_2mi.m4a",
+   "dur": 1.188,
+   "text": "In point two miles,",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "navd:0.3mi": {
+   "file": "navd_0_3mi.m4a",
+   "dur": 1.288,
+   "text": "In point three miles,",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "navd:0.4mi": {
+   "file": "navd_0_4mi.m4a",
+   "dur": 1.255,
+   "text": "In point four miles,",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "navd:0.5mi": {
+   "file": "navd_0_5mi.m4a",
+   "dur": 1.043,
+   "text": "In half a mile,",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "navd:0.6mi": {
+   "file": "navd_0_6mi.m4a",
+   "dur": 1.27,
+   "text": "In point six miles,",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "navd:0.7mi": {
+   "file": "navd_0_7mi.m4a",
+   "dur": 1.42,
+   "text": "In point seven miles,",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "navd:0.8mi": {
+   "file": "navd_0_8mi.m4a",
+   "dur": 1.216,
+   "text": "In point eight miles,",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "navd:0.9mi": {
+   "file": "navd_0_9mi.m4a",
+   "dur": 1.329,
+   "text": "In point nine miles,",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "navd:1mi": {
+   "file": "navd_1mi.m4a",
+   "dur": 0.826,
+   "text": "In one mile,",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "navd:1.1mi": {
+   "file": "navd_1_1mi.m4a",
+   "dur": 1.552,
+   "text": "In one point one miles,",
+   "heard": 0.89,
+   "voice": "bm_lewis"
+  },
+  "navd:1.2mi": {
+   "file": "navd_1_2mi.m4a",
+   "dur": 1.477,
+   "text": "In one point two miles,",
+   "heard": 0.89,
+   "voice": "bm_lewis"
+  },
+  "navd:1.3mi": {
+   "file": "navd_1_3mi.m4a",
+   "dur": 1.499,
+   "text": "In one point three miles,",
+   "heard": 0.89,
+   "voice": "bm_lewis"
+  },
+  "navd:100m": {
+   "file": "navd_100m.m4a",
+   "dur": 1.555,
+   "text": "In one hundred metres,",
+   "heard": 0.75,
+   "voice": "bm_lewis"
+  },
+  "navd:200m": {
+   "file": "navd_200m.m4a",
+   "dur": 1.406,
+   "text": "In two hundred metres,",
+   "heard": 0.75,
+   "voice": "bm_lewis"
+  },
+  "navd:300m": {
+   "file": "navd_300m.m4a",
+   "dur": 1.59,
+   "text": "In three hundred metres,",
+   "heard": 0.75,
+   "voice": "bm_lewis"
+  },
+  "navd:400m": {
+   "file": "navd_400m.m4a",
+   "dur": 1.474,
+   "text": "In four hundred metres,",
+   "heard": 0.75,
+   "voice": "bm_lewis"
+  },
+  "navd:500m": {
+   "file": "navd_500m.m4a",
+   "dur": 1.578,
+   "text": "In five hundred metres,",
+   "heard": 0.75,
+   "voice": "bm_lewis"
+  },
+  "navd:600m": {
+   "file": "navd_600m.m4a",
+   "dur": 1.59,
+   "text": "In six hundred metres,",
+   "heard": 0.75,
+   "voice": "bm_lewis"
+  },
+  "navd:700m": {
+   "file": "navd_700m.m4a",
+   "dur": 1.722,
+   "text": "In seven hundred metres,",
+   "heard": 0.75,
+   "voice": "bm_lewis"
+  },
+  "navd:800m": {
+   "file": "navd_800m.m4a",
+   "dur": 1.532,
+   "text": "In eight hundred metres,",
+   "heard": 0.75,
+   "voice": "bm_lewis"
+  },
+  "navd:900m": {
+   "file": "navd_900m.m4a",
+   "dur": 1.634,
+   "text": "In nine hundred metres,",
+   "heard": 0.75,
+   "voice": "bm_lewis"
+  },
+  "navd:1km": {
+   "file": "navd_1km.m4a",
+   "dur": 1.369,
+   "text": "In one kilometre,",
+   "heard": 0.67,
+   "voice": "bm_lewis"
+  },
+  "navd:1.1km": {
+   "file": "navd_1_1km.m4a",
+   "dur": 1.906,
+   "text": "In one point one kilometres,",
+   "heard": 0.67,
+   "voice": "bm_lewis"
+  },
+  "navd:1.2km": {
+   "file": "navd_1_2km.m4a",
+   "dur": 1.813,
+   "text": "In one point two kilometres,",
+   "heard": 0.67,
+   "voice": "bm_lewis"
+  },
+  "navd:1.3km": {
+   "file": "navd_1_3km.m4a",
+   "dur": 1.838,
+   "text": "In one point three kilometres,",
+   "heard": 0.67,
+   "voice": "bm_lewis"
+  },
+  "navd:1.4km": {
+   "file": "navd_1_4km.m4a",
+   "dur": 1.84,
+   "text": "In one point four kilometres,",
+   "heard": 0.67,
+   "voice": "bm_lewis"
+  },
+  "navd:1.5km": {
+   "file": "navd_1_5km.m4a",
+   "dur": 1.921,
+   "text": "In one point five kilometres,",
+   "heard": 0.67,
+   "voice": "bm_lewis"
+  },
+  "line:rerouting": {
+   "file": "line_rerouting.m4a",
+   "dur": 0.709,
+   "text": "Rerouting.",
+   "heard": 0.0,
+   "voice": "bm_lewis"
+  },
+  "line:back_on_route": {
+   "file": "line_back_on_route.m4a",
+   "dur": 0.876,
+   "text": "Back on route.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "line:staying": {
+   "file": "line_staying.m4a",
+   "dur": 1.201,
+   "text": "Staying on this route.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "line:traffic_ahead": {
+   "file": "line_traffic_ahead.m4a",
+   "dur": 0.893,
+   "text": "Traffic ahead.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "line:minute_slower": {
+   "file": "line_minute_slower.m4a",
+   "dur": 0.97,
+   "text": "minute slower.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "line:minutes_slower": {
+   "file": "line_minutes_slower.m4a",
+   "dur": 0.952,
+   "text": "minutes slower.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "line:switching": {
+   "file": "line_switching.m4a",
+   "dur": 1.714,
+   "text": "Switching to a faster road.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "line:bump_ahead": {
+   "file": "line_bump_ahead.m4a",
+   "dur": 0.765,
+   "text": "Bump ahead.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "line:rep_pothole": {
+   "file": "line_rep_pothole.m4a",
+   "dur": 1.572,
+   "text": "Pothole reported ahead.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "line:rep_gravel": {
+   "file": "line_rep_gravel.m4a",
+   "dur": 1.591,
+   "text": "Gravel reported ahead.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "line:rep_debris": {
+   "file": "line_rep_debris.m4a",
+   "dur": 1.64,
+   "text": "Debris reported ahead.",
+   "heard": 0.67,
+   "voice": "bm_lewis"
+  },
+  "line:rep_animal": {
+   "file": "line_rep_animal.m4a",
+   "dur": 1.564,
+   "text": "Animal reported ahead.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "line:rep_police": {
+   "file": "line_rep_police.m4a",
+   "dur": 1.684,
+   "text": "Police reported ahead.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "line:rep_closure": {
+   "file": "line_rep_closure.m4a",
+   "dur": 2.039,
+   "text": "Road closed reported ahead.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "line:rep_hazard": {
+   "file": "line_rep_hazard.m4a",
+   "dur": 1.606,
+   "text": "Hazard reported ahead.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "line:memo_brake_after_apex": {
+   "file": "line_memo_brake_after_apex.m4a",
+   "dur": 3.281,
+   "text": "Last time, braking past the apex. Brake earlier.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "line:memo_coast": {
+   "file": "line_memo_coast.m4a",
+   "dur": 3.125,
+   "text": "Last time, coasting here. Brake, then throttle.",
+   "heard": 0.86,
+   "voice": "bm_lewis"
+  },
+  "line:memo_early_apex": {
+   "file": "line_memo_early_apex.m4a",
+   "dur": 2.791,
+   "text": "Last time, an early apex. Turn in later.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "line:break_steering": {
+   "file": "line_break_steering.m4a",
+   "dur": 2.749,
+   "text": "Steering is getting busier. Time for a break?",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "line:break_braking": {
+   "file": "line_break_braking.m4a",
+   "dur": 2.705,
+   "text": "Braking is getting later. Time for a break?",
+   "heard": 0.88,
+   "voice": "bm_lewis"
+  },
+  "line:break_time": {
+   "file": "line_break_time.m4a",
+   "dur": 2.537,
+   "text": "Two hours on the road. Time for a break?",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "line:regroup": {
+   "file": "line_regroup.m4a",
+   "dur": 0.688,
+   "text": "Regroup.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "line:regroup_set": {
+   "file": "line_regroup_set.m4a",
+   "dur": 1.133,
+   "text": "Regroup point set.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "line:track_mode": {
+   "file": "line_track_mode.m4a",
+   "dur": 3.1,
+   "text": "Track mode. Tap start finish when you cross the line.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "line:lap": {
+   "file": "line_lap.m4a",
+   "dur": 0.532,
+   "text": "Lap",
+   "heard": 0.0,
+   "voice": "bm_lewis"
+  },
+  "line:best": {
+   "file": "line_best.m4a",
+   "dur": 0.558,
+   "text": "Best.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
   }
  }
 }

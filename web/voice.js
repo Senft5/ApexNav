@@ -11,6 +11,33 @@
     if (ctx.state !== 'running') ctx.resume().catch(() => {});   // iOS leaves it 'interrupted' after the audio route changes
     return ctx;
   }
+  // The context running before anything is scheduled: on iOS it is 'interrupted' after the app's audio session changes
+  // (each call opens and closes it), and clips scheduled on a stopped clock play late, piled up or cut off.
+  async function running() {
+    const c = audio();
+    if (c.state !== 'running') { try { await Promise.race([c.resume(), new Promise((r) => setTimeout(r, 500))]); } catch (_) {} }
+    return c.state === 'running' ? c : null;
+  }
+  // Plays buffers back to back (gaps[i] before buffer i) and resolves when the last one has really ended, not on a guess:
+  // the shell releases the audio route then, and the next line starts after this one, never on top of it.
+  function playAll(c, bufs, gaps = []) {
+    let t = c.currentTime + 0.03, last = null;
+    bufs.forEach((b, i) => {
+      if (i > 0) t += gaps[i] || 0;
+      const src = c.createBufferSource();
+      src.buffer = b;
+      src.connect(c.destination);
+      src.start(t);
+      t += b.duration;
+      last = src;
+    });
+    const expect = (t - c.currentTime) * 1000;
+    return new Promise((r) => {
+      const done = () => { clearTimeout(guard); r(); };
+      const guard = setTimeout(done, expect + 1500);          // a context that stops mid-call must not hold the queue
+      if (last) last.onended = done; else done();
+    });
+  }
 
   async function load(id) {
     if (bankId === id && bank) return bank;
@@ -84,20 +111,11 @@
     if (!bank) return false;
     tokens = cover(tokens);
     if (tokens.some(t => !bank.tokens[t])) return false;
-    const bufs = await Promise.all(tokens.map(buffer));
+    const bufs = await Promise.all(tokens.map((t) => buffer(t).catch(() => null)));
     if (bufs.some(b => !b)) return false;
-    const c = audio();
-    let t = c.currentTime + 0.03;
-    bufs.forEach((b, i) => {
-      if (i > 0) t += GAP(tokens[i]);
-      const src = c.createBufferSource();
-      src.buffer = b;
-      src.connect(c.destination);
-      src.start(t);
-      t += b.duration;
-    });
-    const ms = (t - c.currentTime) * 1000 + 60;
-    await new Promise(r => setTimeout(r, ms));
+    const c = await running();
+    if (!c) return false;                                     // the caller says it with the device voice instead
+    await playAll(c, bufs, tokens.map(GAP));
     return true;
   }
 
@@ -190,13 +208,10 @@
     return { audio: waveform.data, sampling_rate: 24000 };
   }
   async function playBuffer(buf) {
-    const c = audio();
-    let t = c.currentTime + 0.03;
-    const src = c.createBufferSource();
-    src.buffer = buf;
-    src.connect(c.destination);
-    src.start(t);
-    await new Promise(r => setTimeout(r, (t + buf.duration - c.currentTime) * 1000 + 60));
+    const c = await running();
+    if (!c) return false;
+    await playAll(c, [buf]);
+    return true;
   }
   // Render (or reuse) a phrase in the active bank's voice; one render at a time.
   let renderChain = Promise.resolve();
@@ -223,8 +238,7 @@
     if (!bank || bank.engine !== 'kokoro') return false;
     const key = `${bankId}|${text}`;
     if (!ready.has(key)) return false;
-    await playBuffer(await phraseCache.get(key));
-    return true;
+    return playBuffer(await phraseCache.get(key));
   }
   const joins = (tokens) => cover(tokens).length - 1;
   // Pre-render phrases we know are coming (route names) so they're instant when needed.
@@ -241,8 +255,7 @@
     const pending = render(text);
     const buf = await Promise.race([pending.catch(() => null), new Promise(r => setTimeout(() => r(null), maxWaitMs))]);
     if (!buf) return false;
-    await playBuffer(buf);
-    return true;
+    return playBuffer(buf);
   }
 
   // A line in any pack's Kokoro voice, for the crew regroup line (crew_voice.js): { audio, sampling_rate }, or null where

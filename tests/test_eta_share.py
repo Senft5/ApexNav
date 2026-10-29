@@ -20,7 +20,7 @@ console.log(JSON.stringify({
   live: E.viewText(v({}), now, 'en-US'), stale: E.viewText(v({ updated_at: '2026-10-30T21:20:00Z' }), now, 'en-US'),
   due: E.viewText(v({ arrive_at: '2026-10-30T21:30:30Z' }), now, 'en-US'),
   arrived: E.viewText(v({ ended: 'arrived' }), now), stopped: E.viewText(v({ ended: 'stopped' }), now), expired: E.viewText(v({ ended: 'expired' }), now),
-  bad: E.viewText(null, now),
+  bad: E.viewText(null, now), unknown: E.viewText([], now), noTime: E.viewText(v({ arrive_at: null, updated_at: null }), now),
 }));
 """
 
@@ -46,3 +46,10 @@ def test_ended_and_broken(out):
 def test_page_promises_no_position():
     page = open(os.path.join(ROOT, "web", "eta.html"), encoding="utf-8").read()
     assert "not where they are" in page and 'name="robots" content="noindex"' in page
+
+
+def test_never_nan_or_invalid_date(out):
+    for k in ("unknown", "noTime"):
+        text = json.dumps(out[k])
+        assert "NaN" not in text and "Invalid" not in text, out[k]
+    assert out["noTime"]["title"] == "@nate's arrival time isn't known yet"

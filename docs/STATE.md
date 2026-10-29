@@ -36,10 +36,19 @@
   the signed-out Crew pitch. The friend-profile test's random failure (a car id holding "600") is fixed.
 - [x] Safe areas: an e2e flow emulates the iPhone 15 Pro's Dynamic Island, home indicator and corners, upright and on
   its side; landscape now pads every sheet, overlay, plate and the tab rail, and the suggested loop floats over the map.
+- [x] Second Fable review (docs/design/REVIEW2.md, screenshots in docs/design/screens-v2, IDEAS U-23 to U-46): its 22
+  safe-area rows are fixed and the e2e "safe areas" flow checks 14 screens on four devices (15 Pro upright and on its
+  side, mini on its side, SE); a full 156-shot re-capture on 15 Pro and mini on their sides, the mini and the SE is
+  clean. The Live Activity follows the HIG's Dynamic Island layouts (short call, hazard keyline and glyph, ETA).
+- [x] Voices: every clip transcribed with Whisper; Marguerite is now Kokoro af_bella (the British voices added a syllable);
+  every bank re-rendered where misheard (`--rebuild-checked`, best of six takes), levelled to -20 dB RMS; directions,
+  route, traffic, reported-hazard, coaching and track lines are in each pack (web/voice_lines.js) so a drive keeps one
+  voice; iOS playback waits for the audio context and ends on the last clip. Kit's tens (40-80) were heard as teens at
+  his speed; the slower take fixes them.
 - Every REVIEW.md suggestion is built. Pro, Decals and the Pro themes wait on StoreKit (the owner's Paid Applications
   Agreement); photos wait on R2 to move out of KV.
-- Exact next task: StoreKit (needs the owner's Paid
-  Applications Agreement) so Pro, Decals and the Pro themes can go on sale.
+- Exact next task: docs/design/REVIEW2.md Roadmap 2 from item 10 (the IDEAS rows still marked todo), and StoreKit when
+  the owner's Paid Applications Agreement is in, so Pro, Decals and the Pro themes can go on sale.
 
 ## Session 2026-10-29 (day): design phase 2
 

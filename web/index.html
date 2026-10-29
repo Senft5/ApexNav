@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-T0WyZW+iQJyYHbQoBaV+/e1lxwmoS/Ti2MKt8FDzzc8=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-naVHzbUeomUzD/4v25jC/f6sWDYmtZLTXhGOOB+epvQ=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -56,6 +56,7 @@
   <script src="outbox.js"></script>
   <script src="stage_delta.js"></script>
   <script src="lanes.js"></script>
+  <script src="voice_lines.js"></script>
   <script src="directions.js"></script>
   <script src="carplay.js"></script>
   <script src="whats_new.js"></script>
@@ -127,13 +128,14 @@
     #app { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; height: 100vh; height: 100dvh; }
 
     /* ---------------- pace-note strip ---------------- */
-    .notes { background: var(--panel); color: var(--panel-ink); padding: calc(6px + var(--safe-top)) 10px 6px; border-bottom: 1px solid var(--rule); min-height: 64px; }
-    .note-quiet { display: flex; gap: 10px; align-items: baseline; padding: 10px 2px; }
+    .notes { background: var(--panel); color: var(--panel-ink); padding: calc(6px + var(--safe-top)) 14px 6px; border-bottom: 1px solid var(--rule); min-height: 64px; }
+    .note-quiet { display: flex; gap: 10px; align-items: baseline; padding: 10px 6px; }
     .note-quiet b { font-size: 20px; font-weight: 700; }
     .note-quiet span { font-size: 13px; color: var(--panel-dim); }
     .tulip { width: 100%; height: 100%; display: block; }
     .rb-dist small { font-size: 11px; color: var(--panel-dim); }
-    .notes-roadbook { display: grid; grid-template-columns: 1.25fr 1fr 1fr; gap: 0; padding-left: 0; padding-right: 0; }
+    .notes-roadbook { display: grid; grid-template-columns: 1.25fr 1fr 1fr; gap: 0; padding-left: 8px; padding-right: 8px; }
+    .notes-roadbook > .note-quiet { padding-left: 8px; }   /* 16 pt from the edge like the deck (docs/design/REVIEW2.md 1.17) */
     .rb-box { display: grid; grid-template-columns: auto 46px minmax(0, 1fr); gap: 6px; align-items: center; padding: 2px 8px; border-left: 1.5px solid var(--rule); min-width: 0; }
     .rb-box:first-child { border-left: none; }
     .rb-box.advance { animation: rb-advance 160ms ease-out both; }
@@ -145,7 +147,10 @@
        two lines rather than lose its end to an ellipsis. */
     .rb-box.now { grid-template-columns: auto 56px minmax(0, 1fr); }
     .rb-box.now.hz { background: var(--hz-bg); color: var(--hz-ink); outline: 2px solid var(--hz-edge); outline-offset: -2px; }
-    .rb-box.now.hz .rb-call b { color: var(--hz-edge); }
+    .rb-box.now.hz .rb-call b { color: var(--hz-edge); white-space: nowrap; }
+    /* a hazard word never breaks mid-word ("CRES / T" on a 375 pt phone): its box takes the room, the next note gives way (REVIEW2.md 1.13) */
+    .rb-box.now.hz, .rb-box.now.hz .rb-call { min-width: min-content; }
+    .rb-box.now.hz .rb-call span:first-child { overflow-wrap: normal; }
     @media (max-width: 520px) {
       .rb-box:not(.now) { grid-template-columns: auto 30px minmax(0, 1fr); gap: 4px; padding: 2px 6px; }
       .rb-box:not(.now) .rb-tulip { width: 30px; height: 30px; }
@@ -212,7 +217,7 @@
     .route-bar span { font-size: 12px; color: var(--panel-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .plan-clear, .icon-btn { flex: none; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; color: var(--panel-dim); }
     .plan-clear svg, .icon-btn svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-    .plan-body { display: grid; align-content: start; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding: 2px 16px 20px; gap: 16px; flex: 1; min-height: 0; }
+    .plan-body { display: grid; align-content: start; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding: 2px 16px 20px; scroll-padding-bottom: 80px; gap: 16px; flex: 1; min-height: 0; }
     .from-row { display: flex; gap: 4px; align-items: center; }
     .from-row .field { height: 40px; border-color: var(--hair, var(--panel-dim)); }
     /* Selects drawn like the app's other controls on every platform: square, ink border, a drawn chevron (iOS otherwise adds its own rounded bubble) */
@@ -239,16 +244,17 @@
     /* ---------------- while-you-drive switches: an edge tab that slides a small panel over the map ---------------- */
     .edge { position: absolute; right: 0; top: 38%; z-index: 4; display: flex; align-items: flex-start;
       transform: translateX(var(--edge-w, 236px)); transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1); }
-    .edge.open { transform: none; }
+    .edge.open { transform: none; top: calc(12px + var(--safe-top)); }   /* opened: from the top down, clear of the deck (REVIEW2.md 1.9) */
+    #app.live .edge.open { top: 12px; }
     .edge-tab { flex: none; width: 40px; height: 52px; background: var(--panel); color: var(--panel-ink);
       border: 1px solid var(--rule); border-right: 0; display: flex; align-items: center; justify-content: center; box-shadow: -4px 4px 12px rgba(0, 0, 0, 0.18); }
     .edge-tab svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
     .edge-tab[aria-expanded="true"] { color: var(--accent); }
     /* the Layers key: a physical key on the map, a 2 px drop under it (REVIEW.md principle 4) */
-    .map-key { width: 48px; height: 48px; margin-right: 10px; border: 1.5px solid var(--panel-ink); box-shadow: 0 3px 0 var(--rule); }
+    .map-key { width: 48px; height: 48px; margin-right: 16px; border: 1.5px solid var(--panel-ink); box-shadow: 0 3px 0 var(--rule); }
     .map-key svg { width: 24px; height: 24px; stroke-linejoin: round; }
     .edge.open .map-key { margin-right: 0; border-right: 0; }
-    .edge-panel { width: 236px; background: var(--panel); color: var(--panel-ink); border: 1px solid var(--rule); border-right: 0;
+    .edge-panel { max-height: calc(100dvh - var(--safe-top) - var(--plan-bar, 62px) - var(--safe-bottom) - 120px); overflow-y: auto; overscroll-behavior: contain; width: 236px; background: var(--panel); color: var(--panel-ink); border: 1px solid var(--rule); border-right: 0;
       padding: 8px 14px 4px; box-shadow: -8px 8px 24px rgba(0, 0, 0, 0.22); }
     .edge-panel h3 { font-size: 13px; font-weight: 600; color: var(--panel-dim); margin-bottom: 2px; }
     #app.sheet-open .edge { display: none; }
@@ -281,8 +287,14 @@
     .spot-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
     .overlay.dim.spot-photo { flex-direction: column; justify-content: center; align-items: center; gap: 12px; padding: 16px; z-index: 60; }
     .spot-photo img { max-width: 100%; max-height: 80vh; object-fit: contain; }
-    .overlay.dim.photo-view { flex-direction: column; justify-content: center; align-items: center; gap: 12px; padding: 16px; z-index: 60; }
-    .photo-view .photo-full { max-width: 100%; max-height: 78vh; object-fit: contain; }
+    /* the photo viewer: the photo full screen on black, its actions in a bar along the bottom, all inside the insets (REVIEW2.md 1.10) */
+    .overlay.dim.photo-view { position: fixed; inset: 0; z-index: 70; background: #000; display: grid; grid-template-rows: minmax(0, 1fr) auto; gap: 12px; justify-items: center;
+      padding: calc(12px + var(--safe-top)) calc(12px + var(--safe-right)) calc(16px + var(--safe-bottom)) calc(12px + var(--safe-left)); }
+    .overlay.dim.photo-view > :first-child { margin-top: 0; }
+    .photo-view .photo-full { width: 100%; height: 100%; max-height: none; object-fit: contain; min-height: 0; }
+    .photo-view .row { justify-content: center; }
+    .photo-view .ink-btn { color: #fff; border-color: rgba(255, 255, 255, 0.6); background: transparent; }
+    .photo-view .ink-btn.solid { background: #fff; color: #000; border-color: #fff; }
     /* a face (REVIEW.md 5.2): the photo in a bezelled circle, or the initial when there is none */
     .avatar { position: relative; flex: none; width: var(--av, 40px); height: var(--av, 40px); border-radius: 50%; overflow: hidden; display: inline-grid; place-items: center;
       background: var(--panel-dim); color: var(--panel); box-shadow: inset 0 0 0 2px var(--panel-ink), inset 0 0 0 4px var(--panel); }
@@ -297,7 +309,7 @@
     .dbstat { font-size: 13px; line-height: 1.35; color: var(--panel-ink); min-width: 0; flex: 1; }
     #driveEnd { flex: none; background: var(--panel-ink); color: var(--panel); border-color: var(--panel-ink); font-size: 15px; padding: 0 16px; }
     .dbstat b { color: var(--accent); }
-    .ds-main { font-size: 15px; font-weight: 600; line-height: 1.25; font-variant-numeric: tabular-nums; }
+    .ds-main { font-size: 15px; font-weight: 600; line-height: 1.25; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .ds-main b { font-size: 17px; }
     /* one status line under the record line (REVIEW.md 1.1 #4): the rest is cut, never wrapped over the binnacle */
     .ds-warn { margin-top: 2px; font-size: 13px; color: var(--panel-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -443,6 +455,7 @@
     .loop-dial small { font-size: 13px; font-weight: 600; color: var(--panel-dim); margin-left: 3px; }
     .loop-side .note { margin: 6px 0 0; }
     .plan-loop .detents > button { min-width: 0; font-size: 15px; padding: 0 2px; }
+    @media (max-width: 380px) { .plan-loop .detents { gap: 4px; } .plan-loop .detents > button { font-size: 13px; } }   /* "15 mi" fits a 375 pt phone */
     .plan-more { margin-top: 16px; border-top: 1px solid var(--rule); }
     .plan-more > summary { list-style: none; cursor: pointer; display: flex; justify-content: space-between; align-items: center; min-height: 52px; font-size: 16px; font-weight: 700; }
     .plan-more > summary::-webkit-details-marker { display: none; }
@@ -455,7 +468,8 @@
       linear-gradient(var(--panel-ink), var(--panel-ink)) 75% center / 2px 12px no-repeat; }
     .balance input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 26px; height: 26px; border-radius: 50%; border: 2.5px solid var(--panel-ink); background: var(--panel); }
     .balance input[type=range]::-moz-range-thumb { width: 22px; height: 22px; border-radius: 50%; border: 2.5px solid var(--panel-ink); background: var(--panel); }
-    .find-bar { position: sticky; bottom: 0; z-index: 2; margin: 16px -16px 0; padding: 10px 16px calc(10px + var(--safe-bottom)); background: var(--panel); border-top: 1px solid var(--rule); }
+    .find-bar::before { content: ""; position: absolute; left: 0; right: 0; top: -17px; height: 16px; background: linear-gradient(transparent, var(--panel)); pointer-events: none; }
+    .find-bar { position: sticky; bottom: -20px; z-index: 2; margin: 16px -16px -20px; padding: 10px 16px calc(10px + var(--safe-bottom)); background: var(--panel); border-top: 1px solid var(--rule); }
     .plan.routed .find-bar, .plan:not(.open) .find-bar { display: none; }
     .find-key { width: 100%; min-height: 52px; background: var(--panel-ink); color: var(--panel); font-size: 17px; font-weight: 700; box-shadow: inset 0 -3px 0 rgba(0,0,0,0.35); }
     .find-key.busy { background: var(--panel-dim); }
@@ -476,7 +490,7 @@
     .end-links { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; }
     .end-links > * { margin: 0; padding: 8px 4px; line-height: 1.2; }
     .ob-strip { width: 100%; max-width: 420px; margin: 26px auto 0; border-top: 2px solid var(--panel-ink); border-bottom: 1px solid var(--rule); text-align: left; }
-    .ob-strip .notes { position: static; min-height: 84px; }
+    .ob-strip .notes { position: static; min-height: 84px; padding-left: 0; padding-right: 0; }
     /* Night is a mode, not a token swap (REVIEW.md roadmap 11): bigger numbers, fewer things, the map quieter (themes.js) */
     html[data-mode="night"] .rb-box.now .rb-dist b { font-size: 38px; }
     html[data-mode="night"] .rb-box.now .rb-call span:first-child { font-size: 24px; }
@@ -554,6 +568,7 @@
     html[data-theme="billet"] .dial-digital { fill: var(--accent); filter: drop-shadow(0 0 4px rgba(255, 74, 61, 0.7)); }
     html[data-theme="billet"] .key, html[data-theme="billet"] .ink-btn { border-color: var(--rule); background: linear-gradient(#2E2F33, #1C1D1F); box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 2px 0 #000; }
     html[data-theme="billet"] .odo.boxed .dg { background: #0D0D0E; border-color: var(--rule); }
+    html[data-theme="billet"] .odo.boxed .dg:last-child { background: var(--accent); color: #0D0D0E; text-shadow: none; }   /* the tenths wheel, inverted (it was dark on dark, REVIEW2.md U-29) */
     html[data-theme="billet"] .ro-limit:not(.unknown) { background: #FFFFFF; color: #111111; border-color: #111111; }   /* the white sign, exactly as on the road */
     html[data-theme="billet"] .ro-limit:not(.unknown) span { color: #111111; }
     .bezelled { position: relative; }
@@ -589,6 +604,8 @@
     .crew-detail { border-top: 1px solid var(--hair, var(--panel-dim)); padding-top: 8px; margin-top: 4px; }
     .overlay { position: fixed; inset: 0; z-index: 40; background: var(--panel); color: var(--panel-ink); display: none; flex-direction: column; padding: calc(24px + var(--safe-top)) calc(24px + var(--safe-right)) calc(24px + var(--safe-bottom)) calc(24px + var(--safe-left)); overflow-y: auto; }
     .overlay.show { display: flex; }
+    /* a sheet over the screen covers the map's chrome too: the tab rail and the Layers key (docs/design/REVIEW2.md 1.3, 1.18) */
+    body:has(.overlay.show) #app .tabbar, body:has(.overlay.show) .edge { visibility: hidden; }
     /* pinned to the bottom with an auto margin, not flex-end: a sheet taller than a landscape screen still scrolls to its top */
     .overlay.dim { background: rgba(0,0,0,0.5); justify-content: flex-start; padding: 0; }
     .overlay.dim > :first-child { margin-top: auto; }
@@ -644,7 +661,8 @@
     .ink-btn.busy { position: relative; overflow: hidden; color: var(--panel); background: var(--panel-dim); border-color: var(--panel-dim); pointer-events: none; }
     .ink-btn.busy::after { content: ""; position: absolute; left: 0; bottom: 0; height: 3px; width: var(--progress, 0%); background: var(--accent); transition: width 0.3s ease-out; }
         .ink-btn[disabled], .btn-start[disabled] { opacity: 0.45; pointer-events: none; }
-    .sheet header { display: flex; justify-content: space-between; align-items: center; padding: calc(14px + var(--safe-top)) 16px 14px; border-bottom: 1px solid var(--rule); }
+    .sheet header::after { content: ""; position: absolute; left: 0; right: 0; bottom: -17px; height: 16px; background: linear-gradient(var(--panel), transparent); pointer-events: none; z-index: 2; }
+    .sheet header { position: relative; display: flex; justify-content: space-between; align-items: center; padding: calc(14px + var(--safe-top)) 16px 14px; border-bottom: 1px solid var(--rule); }
     .sheet header h2 { font-size: 22px; font-weight: 700; font-family: var(--font-num); }
     .sheet .body { overflow-y: auto; padding: 14px 16px 24px; display: grid; gap: 20px; }
     .sheet .body { zoom: var(--type-scale, 1); }   /* the phone's text size (format.js applyTypeScale) */
@@ -742,7 +760,7 @@
     @media (orientation: landscape) and (max-height: 540px) {
       :root { --dial: clamp(76px, 24dvh, 96px); }
       #app { grid-template-columns: minmax(0, 1fr) clamp(320px, 42vw, 420px); grid-template-rows: auto minmax(0, 1fr); grid-template-areas: "notes notes" "stage binnacle"; }
-      .notes { grid-area: notes; min-height: 56px; padding-left: calc(10px + env(safe-area-inset-left, 0px)); padding-right: calc(10px + env(safe-area-inset-right, 0px)); }
+      .notes { grid-area: notes; min-height: 56px; padding-left: calc(16px + env(safe-area-inset-left, 0px)); padding-right: calc(16px + env(safe-area-inset-right, 0px)); }
       .stage { grid-area: stage; padding-left: env(safe-area-inset-left, 0px); }
       .binnacle { grid-area: binnacle; border-top: 0; border-left: 1px solid var(--rule); overflow-y: auto; align-content: start;
         grid-template-columns: minmax(0, 1fr); grid-template-areas: none; padding-right: calc(10px + env(safe-area-inset-right, 0px)); }
@@ -763,6 +781,38 @@
       #app.sheet-open .tabbar, #app.idle .tabbar { grid-template-columns: minmax(0, 1fr); border-top: 0; margin: 0 -10px; padding: 0; }
       #app.sheet-open .notes { display: none; }
       #app.sheet-open { grid-template-areas: "stage binnacle" "stage binnacle"; }
+      /* docs/design/REVIEW2.md 1: what still crowded the island, the corners and the home bar on its side */
+      #app.sheet-open .tabbar, #app.idle .tabbar { padding-top: 28px; align-content: start; }                 /* 2: clear of the top corner */
+      #app.sheet-open .tab.on::before, #app.idle .tab.on::before { top: 20%; bottom: 20%; left: 0; right: auto; width: 2px; height: auto; }
+      .binnacle > .tabbar { position: sticky; bottom: calc(-8px - var(--safe-bottom)); padding-bottom: calc(8px + var(--safe-bottom)); margin-bottom: calc(-8px - var(--safe-bottom)); background: var(--panel); z-index: 2; }                /* 7: never scrolls away */
+      #onboard.show { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 32px; align-content: center; align-items: center; }   /* 1 */
+      #onboard .grow { display: contents; }
+      #onboard .grow > svg, #onboard h1, #onboard .grow > p { grid-column: 1; }
+      #onboard .ob-strip { grid-column: 2; grid-row: 1 / span 2; margin: 0; flex: none; }
+      #onboard .stack { grid-column: 2; margin-top: 12px; }
+      #hzOverlay .hz-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }                                 /* 4 */
+      #hzOverlay .hz-grid button { min-height: 56px; }
+      .overlay.dim .card-sheet { max-height: 100dvh; overflow-y: auto; }
+      #endCard .end-card { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); column-gap: 28px; align-items: start; }   /* 5 */
+      #endCard .end-card > * { grid-column: 1; }
+      #endCard .end-card > .end-line, #endCard .end-card > .end-acts, #endCard .end-card > .end-links { grid-column: 2; }
+      #endCard .end-card > .end-line { grid-row: 1 / span 2; }
+      html[data-theme="tapedeck"] .cluster-dials { grid-template-columns: var(--dial) minmax(0, 1fr); }        /* 6: the meters get a row */
+      html[data-theme="tapedeck"] .cluster-dials > .vfd-meters { grid-column: 1 / -1; grid-template-columns: 1fr 1fr; height: auto; }
+      #app.idle:has(.edge.open) .loop-suggest { display: none; }                                                 /* 8: the panel is the task */
+      .plan.open { height: calc(100% - var(--safe-bottom)); }                                                     /* 14 */
+      /* 14: two columns, so the basic level fits without scrolling: places and the loop left, Roads, More and Find right */
+      .plan.open .plan-search-section { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 24px; row-gap: 12px; grid-auto-flow: row dense; align-items: start; }
+      .plan.open .plan-search-section > * { grid-column: 1; }
+      .plan.open .plan-search-section > .ctl:not(.plan-loop), .plan.open .plan-search-section > .plan-more, .plan.open .plan-search-section > .find-bar { grid-column: 2; }
+      .plan.open .plan-search-section > .find-bar { position: static; order: -1; margin: 0; padding: 0; border-top: 0; }   /* first in its column: nothing scrolls under it */
+      .plan.open .find-bar::before { display: none; }
+      .plan.open .plan-loop .loop-dial { display: none; }
+      .plan.open #loopNote { display: none; }                         /* the detents carry the length; the dial needs the room upright */
+      .plan.open .plan-loop .loop-gauge { grid-template-columns: minmax(0, 1fr); display: grid; }
+      .confirm-sheet { align-items: center; }                                                                     /* 19 */
+      .confirm-sheet .cs-box { border: 1.5px solid var(--panel-ink); margin-bottom: 16px; }
+      .plates, .place-plate, .hz-plate { left: calc(16px + var(--safe-left)); }                                  /* 21 */
     }
 
     /* The opening cover (web/boot.js): the theme's panel and the mark until the page has drawn. */
@@ -1569,7 +1619,7 @@
         const el = document.createElement('div');
         el.className = `pin ${e.type}`;
         el.textContent = e.code;
-        el.addEventListener('click', (ev) => { ev.stopPropagation(); say(`${e.call}.`, true); });
+        el.addEventListener('click', (ev) => { ev.stopPropagation(); say(`${e.call}.`, true, [e]); });
         pins.push({ e, el, marker: new maplibregl.Marker({ element: el }).setLngLat([e.lon, e.lat]).addTo(map) });
       }
       updatePins();
@@ -2048,6 +2098,8 @@
       if (text) state.kitLine = String(text).replace(/\.$/, '').toUpperCase().slice(0, 40);   // what Kit says (Tapedeck)
       if (!text || (!state.toggles.voice && !force)) return;
       if (force) { speech.queue.clear(); stopSpeaking(); opts = { duck: true, ...opts }; }   // a line you asked for is heard
+      // a fixed line ("Rerouting", "Bump ahead") is in every voice pack (web/voice_lines.js): the pack says it, not the phone
+      if (!chain && !sysToken && !opts.tokens && window.ApexVoiceLines) { const t = ApexVoiceLines.forText(text); if (t) opts = { ...opts, tokens: t }; }
       speech.queue.push({ text, chain, sysToken, ...opts }, performance.now());
       if (!force) preemptForHazard();
       pumpSpeech(force);
@@ -2109,7 +2161,7 @@
           try {
             // A call the bank can only voice by joining clips plays as one whole render when the
             // route-load prefetch has it; the join is the audible seam we are avoiding.
-            if (tokens && state.liveVoice && ApexVoice.joins(tokens) > 0) played = await ApexVoice.playWhole(spokenTextFor(item.text, ApexVoice.bank.style));
+            if (tokens && state.liveVoice && (item.named || ApexVoice.joins(tokens) > 0)) played = await ApexVoice.playWhole(item.named ? item.text : spokenTextFor(item.text, ApexVoice.bank.style));
             if (!played && tokens) played = await ApexVoice.play(tokens);
             // Not in the bank (drive names, route summaries): synthesise live with the same model.
             if (!played && state.liveVoice) played = await ApexVoice.speakLive(spokenTextFor(item.text, ApexVoice.bank.style));
@@ -2237,7 +2289,7 @@
       if (track && track.kind === 'route' && !offRoute) {
         for (const line of ApexDirections.due(track.steps, state.cursorM, vMps, state.spoken, track.id)) {
           state.spoken.add(line.key); health.bump('directions_said');
-          say(line.text, false, null, null, { kind: line.now ? 'hazard' : 'ordinary', key: line.key, atM: line.atM, duck: true });
+          say(line.text, false, null, null, { kind: line.now ? 'hazard' : 'ordinary', key: line.key, atM: line.atM, duck: true, tokens: line.tokens || undefined, named: true });
         }
       }
       // Roads you have driven: one technique tip per remembered corner, only with full notes on (never over a commute),
@@ -2416,6 +2468,8 @@
             if (ApexVoice.joins(ApexVoice.tokensFor(voiced, style)) > 0) texts.push(spokenTextFor(voiced.map((n, i) => (i ? `${voiced[i - 1].link} ` : '') + n.call).join(' ') + (cur.link && cur.link !== 'into' && cur.link !== 'and' ? `, ${cur.link}` : ''), style));
           }
         }
+        // the directions at each turn with their street names (the clips say them without; this says them whole)
+        for (const st of t.steps || []) { const p = window.ApexDirections && ApexDirections.phrase(st); if (p && / onto | toward /.test(p)) texts.push(p); }
         ApexVoice.prefetch(texts);
       }).catch(() => {});
     }
@@ -3225,7 +3279,8 @@
       if (!L || !trafficMon.shouldSay(jams.map(p => [p.startM, p.endM]), Date.now())) return;
       const delayS = probes.reduce((a, p) => a + (p.level === 'jam' || p.level === 'slow' ? p.delayS : 0), 0);
       const delayMin = Math.max(1, Math.round(delayS / 60));
-      const stay = () => { toast(`Traffic ahead · ${delayMin} min`); say(`Traffic ahead. ${delayMin} minute${delayMin === 1 ? '' : 's'} slower`); };
+      const stay = () => { toast(`Traffic ahead · ${delayMin} min`); const n = ApexVoiceLines.num(delayMin);
+        say(`Traffic ahead. ${delayMin} minute${delayMin === 1 ? '' : 's'} slower`, false, null, null, n ? { tokens: ['line:traffic_ahead', n, delayMin === 1 ? 'line:minute_slower' : 'line:minutes_slower'] } : {}); };
       // Only the driver's own stops still ahead: old shaping points may sit in the jam, and a detour gets its own.
       const ahead = req.via.filter(v => !v.shaping && (v.distM == null || v.distM > routeWatch.bestM)).map(v => ({ lat: v.lat, lon: v.lon }));
       const points = [{ lat: L.lat, lon: L.lon }, ...ahead, req.to];
@@ -3260,7 +3315,7 @@
       const sw = { cancelled: false };
       toast(`Traffic ahead · switching to ${road}${extraMin > 0 ? ` (+${extraMin} min)` : ''}`,
             { label: 'Cancel', ms: 6000, onClick: () => { sw.cancelled = true; say('Staying on this route'); } });
-      say(`Traffic ahead. Switching to ${road}${extraMin > 0 ? `, ${extraMin} minute${extraMin === 1 ? '' : 's'} longer` : ''}`);
+      say(`Traffic ahead. Switching to ${road}${extraMin > 0 ? `, ${extraMin} minute${extraMin === 1 ? '' : 's'} longer` : ''}`, false, null, null, { tokens: ['line:traffic_ahead', 'line:switching'], named: true });
       await new Promise(r => setTimeout(r, 6000));
       if (sw.cancelled || track !== t || state.mode !== 'live' || rerouter.off) return;
       // Pinned with shaping points along it, like a winning alternate in Plan, so a reroute stays on the detour (a short
@@ -4326,7 +4381,7 @@
           }
         } catch (_) { /* no clip after all: the plain line */ }
       }
-      say(ApexCrewVoice.regroupText(rg), false);
+      say(ApexCrewVoice.regroupText(rg), false, null, null, { tokens: [rg && rg.note ? 'line:regroup' : 'line:regroup_set'], named: true });
     }
     // The crew page (web/crew_page.js, REVIEW.md roadmap 20): the Crew tab opens your crew.
     let crewPage = null, crewDrivesEl = null;
@@ -5154,7 +5209,7 @@
     function renderCamList() { document.querySelectorAll('[data-cam]').forEach(b => b.classList.toggle('on', b.dataset.cam === state.camFeel)); }
     document.querySelectorAll('[data-cam]').forEach(b => b.addEventListener('click', () => { state.camFeel = b.dataset.cam; renderCamList(); savePrefs(); }));
     renderCamList();
-    $('playBtn').addEventListener('click', () => { setPlaying(!state.playing); if (state.playing && track) say(`${track.name}.`, true); });
+    $('playBtn').addEventListener('click', () => { setPlaying(!state.playing); });   // the name is on the plate; the pack's voice is for the road
     $('rateBtn').addEventListener('click', () => {
       const rates = [1, 2, 4, 8];
       state.rate = rates[(rates.indexOf(state.rate) + 1) % rates.length];
@@ -5634,7 +5689,8 @@
       const v = Number.isFinite(frame.speed_mps) ? frame.speed_mps : 0;
       const next = ApexHazardReports.nextAhead(reported.list, me, Math.max(150, Math.min(600, v * 8)), reported.said);
       paintHazardPlate(ApexHazardReports.nextAhead(reported.list, me, HZ_PLATE_M, null));
-      if (next) { reported.said.add(next.id); say(next.text, false, null, null, { kind: 'hazard', key: `rep:${next.id}`, repeatMs: 10 * 60000, alert: true }); }
+      if (next) { reported.said.add(next.id); say(next.text, false, null, null, { kind: 'hazard', key: `rep:${next.id}`, repeatMs: 10 * 60000, alert: true,
+        tokens: [!next.label && ApexVoiceLines.TEXT[`line:rep_${next.kind}`] ? `line:rep_${next.kind}` : 'line:rep_hazard'], named: !!next.label }); }
       const passed = reported.watch.update(reported.list, me, reported.mine);
       if (passed && !reported.asking) askStill(passed);
     }
@@ -5789,7 +5845,9 @@
     function pushActivity(notes) {
       if (!liveAct.on) return;
       const n = notes && notes[0];
-      const fields = { note: n ? (n.type === 'turn' ? `${n.code}${n.call ? ' · ' + n.call : ''}` : n.call) : (track ? 'No notes ahead' : 'Recording'), distance: n ? `${n.dist} ${n.unit}`.trim() : '', eta: etaText || '' };
+      const fields = { note: n ? (n.type === 'turn' ? `${n.code}${n.call ? ' · ' + n.call : ''}` : n.call) : (track ? 'No notes ahead' : 'Recording'), distance: n ? `${n.dist} ${n.unit}`.trim() : '', eta: etaText || '',
+        // the island's compact view: a few characters, never a sentence; a hazard turns its keyline orange (LiveActivity/ApexLiveWidget.swift)
+        short: n ? String(n.code || '').slice(0, 6) : '', hazard: !!(n && n.type !== 'corner' && n.type !== 'turn'), etaShort: (etaText || '').split('·')[0].trim() };
       const key = JSON.stringify(fields), now = performance.now();
       if (key === liveAct.last || (now - liveAct.at < 3000 && liveAct.last && JSON.parse(liveAct.last).note === fields.note)) return;
       liveAct.last = key; liveAct.at = now;
@@ -5844,7 +5902,9 @@
       }
       if (circuit.timer) {
         const r = circuit.timer.feed({ lat: fr.lat, lon: fr.lon, t: now }), st = circuit.timer.state(now);
-        if (r) { const L = r.lap; say(`Lap ${L.n}. ${ApexTrackMode.lapText(L.timeS).replace(':', ' ')}${st.best === L ? '. Best' : ''}`, true); }
+        if (r) { const L = r.lap, mm = Math.floor(L.timeS / 60), ss = Math.floor(L.timeS % 60), hh = Math.floor((L.timeS * 100) % 100), N = ApexVoiceLines.num;
+          const tk = [N(L.n), N(mm), N(ss), N(hh)].every(Boolean) ? ['line:lap', N(L.n), N(mm), N(ss), N(hh), ...(st.best === L ? ['line:best'] : [])] : undefined;
+          say(`Lap ${L.n}. ${ApexTrackMode.lapText(L.timeS).replace(':', ' ')}${st.best === L ? '. Best' : ''}`, true, null, null, { tokens: tk }); }
         $('lapName').textContent = `Lap ${st.laps.length + (st.running ? 1 : 0)}`;
         $('lapTime').textContent = st.delta == null ? ApexTrackMode.lapText(st.elapsedS) : `${st.delta > 0 ? '+' : ''}${st.delta.toFixed(2)}`;
         $('lapInfo').textContent = [st.last ? `last ${ApexTrackMode.lapText(st.last.timeS)}` : '', st.best ? `best ${ApexTrackMode.lapText(st.best.timeS)}` : ''].filter(Boolean).join(' · ');

@@ -224,8 +224,10 @@
   },
   "mod:short": {
    "file": "mod_short.m4a",
-   "dur": 0.543,
-   "text": "short"
+   "dur": 0.619,
+   "text": "short",
+   "heard": 1.0,
+   "voice": "bm_fable"
   },
   "mod:tightens": {
    "file": "mod_tightens.m4a",
@@ -254,8 +256,10 @@
   },
   "caution:1": {
    "file": "caution_1.m4a",
-   "dur": 0.513,
-   "text": "care"
+   "dur": 0.58,
+   "text": "care",
+   "heard": 1.0,
+   "voice": "bm_fable"
   },
   "caution:2": {
    "file": "caution_2.m4a",
@@ -274,8 +278,10 @@
   },
   "link:into": {
    "file": "link_into.m4a",
-   "dur": 0.649,
-   "text": "into"
+   "dur": 0.648,
+   "text": "into",
+   "heard": 1.0,
+   "voice": "bm_fable"
   },
   "link:and": {
    "file": "link_and.m4a",
@@ -289,18 +295,24 @@
   },
   "dist:40": {
    "file": "dist_40.m4a",
-   "dur": 0.644,
-   "text": "forty"
+   "dur": 0.781,
+   "text": "forty",
+   "heard": 1.0,
+   "voice": "bm_fable"
   },
   "dist:50": {
    "file": "dist_50.m4a",
-   "dur": 0.651,
-   "text": "fifty"
+   "dur": 0.838,
+   "text": "fifty",
+   "heard": 1.0,
+   "voice": "bm_fable"
   },
   "dist:60": {
    "file": "dist_60.m4a",
-   "dur": 0.632,
-   "text": "sixty"
+   "dur": 0.867,
+   "text": "sixty",
+   "heard": 0.0,
+   "voice": "bm_fable"
   },
   "dist:70": {
    "file": "dist_70.m4a",
@@ -309,8 +321,10 @@
   },
   "dist:80": {
    "file": "dist_80.m4a",
-   "dur": 0.637,
-   "text": "eighty"
+   "dur": 0.752,
+   "text": "eighty",
+   "heard": 0.0,
+   "voice": "bm_fable"
   },
   "dist:100": {
    "file": "dist_100.m4a",
@@ -354,8 +368,10 @@
   },
   "dist:450": {
    "file": "dist_450.m4a",
-   "dur": 0.91,
-   "text": "four fifty"
+   "dur": 0.909,
+   "text": "four fifty",
+   "heard": 0.5,
+   "voice": "bm_fable"
   },
   "dist:500": {
    "file": "dist_500.m4a",
@@ -364,8 +380,10 @@
   },
   "hazard:bump": {
    "file": "hazard_bump.m4a",
-   "dur": 0.463,
-   "text": "Bump"
+   "dur": 0.599,
+   "text": "Bump",
+   "heard": 1.0,
+   "voice": "bm_fable"
   },
   "hazard:crest": {
    "file": "hazard_crest.m4a",
@@ -374,8 +392,10 @@
   },
   "hazard:dip": {
    "file": "hazard_dip.m4a",
-   "dur": 0.533,
-   "text": "Dip"
+   "dur": 0.58,
+   "text": "Dip",
+   "heard": 1.0,
+   "voice": "bm_fable"
   },
   "hazard:alpr": {
    "file": "hazard_alpr.m4a",
@@ -389,8 +409,10 @@
   },
   "sys:cruise": {
    "file": "sys_cruise.m4a",
-   "dur": 2.093,
-   "text": "Quiet now. Hazards only."
+   "dur": 2.092,
+   "text": "Quiet now. Hazards only.",
+   "heard": 0.67,
+   "voice": "bm_fable"
   },
   "sys:test": {
    "file": "sys_test.m4a",
@@ -414,8 +436,10 @@
   },
   "hazard:bump+dist:120": {
    "file": "p_eda2ba31a7a5.m4a",
-   "dur": 1.685,
-   "text": "Bump, one twenty."
+   "dur": 1.618,
+   "text": "Bump, one twenty.",
+   "heard": 0.86,
+   "voice": "bm_fable"
   },
   "head:R2-+mod:off-camber+caution:1+dist:200": {
    "file": "p_f8abd6dfe583.m4a",
@@ -425,12 +449,16 @@
   "head:LAC+mod:long+caution:1": {
    "file": "p_a4919cfc4013.m4a",
    "dur": 1.92,
-   "text": "Acute left long, care."
+   "text": "Acute left long, care.",
+   "heard": 0.75,
+   "voice": "bm_fable"
   },
   "hazard:dip+dist:400": {
    "file": "p_53e70fc14bdf.m4a",
-   "dur": 1.641,
-   "text": "Dip, four hundred."
+   "dur": 1.867,
+   "text": "Dip, four hundred.",
+   "heard": 0.86,
+   "voice": "bm_fable"
   },
   "head:L5-+dist:120": {
    "file": "p_a28e92d54524.m4a",
@@ -449,13 +477,17 @@
   },
   "hazard:crest+dist:150": {
    "file": "p_9e50b417d02a.m4a",
-   "dur": 1.845,
-   "text": "Crest, one fifty."
+   "dur": 2.043,
+   "text": "Crest, one fifty.",
+   "heard": 0.86,
+   "voice": "bm_fable"
   },
   "hazard:dip+dist:100": {
    "file": "p_d0df839e92a8.m4a",
-   "dur": 1.704,
-   "text": "Dip, one hundred."
+   "dur": 1.703,
+   "text": "Dip, one hundred.",
+   "heard": 0.67,
+   "voice": "bm_fable"
   },
   "hazard:crest+dist:300": {
    "file": "p_4cfc3d05c19a.m4a",
@@ -469,8 +501,10 @@
   },
   "hazard:crest+dist:250": {
    "file": "p_648299dee0b3.m4a",
-   "dur": 1.809,
-   "text": "Crest, two fifty."
+   "dur": 1.798,
+   "text": "Crest, two fifty.",
+   "heard": 0.86,
+   "voice": "bm_fable"
   },
   "head:R4+mod:tightens+caution:1+dist:100": {
    "file": "p_9950c9a47913.m4a",
@@ -489,8 +523,10 @@
   },
   "hazard:bump+dist:150": {
    "file": "p_106612d8ca2d.m4a",
-   "dur": 1.699,
-   "text": "Bump, one fifty."
+   "dur": 1.697,
+   "text": "Bump, one fifty.",
+   "heard": 0.86,
+   "voice": "bm_fable"
   },
   "hazard:crest+link:and+hazard:dip+dist:150": {
    "file": "p_815a79d72d0d.m4a",
@@ -499,13 +535,17 @@
   },
   "hazard:dip+dist:150": {
    "file": "p_4d25c3a9fce0.m4a",
-   "dur": 1.642,
-   "text": "Dip, one fifty."
+   "dur": 1.506,
+   "text": "Dip, one fifty.",
+   "heard": 0.86,
+   "voice": "bm_fable"
   },
   "hazard:crest+dist:120": {
    "file": "p_3f323d523baf.m4a",
    "dur": 1.87,
-   "text": "Crest, one twenty."
+   "text": "Crest, one twenty.",
+   "heard": 0.86,
+   "voice": "bm_fable"
   },
   "hazard:dip+link:and+hazard:crest+dist:150": {
    "file": "p_2d79e7fad7a3.m4a",
@@ -559,8 +599,10 @@
   },
   "hazard:bump+dist:350": {
    "file": "p_614064d9c639.m4a",
-   "dur": 1.689,
-   "text": "Bump, three fifty."
+   "dur": 1.684,
+   "text": "Bump, three fifty.",
+   "heard": 0.86,
+   "voice": "bm_fable"
   },
   "head:R6++mod:long+mod:banked+caution:1+dist:120": {
    "file": "p_78a0fcfb39dd.m4a",
@@ -580,7 +622,9 @@
   "hazard:bump+dist:450": {
    "file": "p_462e1a1815fe.m4a",
    "dur": 1.596,
-   "text": "Bump, four fifty."
+   "text": "Bump, four fifty.",
+   "heard": 0.86,
+   "voice": "bm_fable"
   },
   "head:L1+mod:banked+caution:1+link:into+head:L2+mod:long+mod:opens+mod:banked+link:and+head:R2-": {
    "file": "p_bdb06caaf83f.m4a",
@@ -615,7 +659,9 @@
   "hazard:crest+dist:450": {
    "file": "p_48aef6a5bf9d.m4a",
    "dur": 1.798,
-   "text": "Crest, four fifty."
+   "text": "Crest, four fifty.",
+   "heard": 0.86,
+   "voice": "bm_fable"
   },
   "head:L1++caution:1+link:into+head:R3-": {
    "file": "p_fa2265d4e3b3.m4a",
@@ -629,8 +675,10 @@
   },
   "head:RSQ+mod:off-camber+caution:1+dist:450": {
    "file": "p_7e05edc31730.m4a",
-   "dur": 2.843,
-   "text": "Square right off camber, care, four fifty."
+   "dur": 2.768,
+   "text": "Square right off camber, care, four fifty.",
+   "heard": 0.83,
+   "voice": "bm_fable"
   },
   "head:LSQ+caution:1+link:and+head:R3+mod:long+mod:banked+dist:120": {
    "file": "p_da248c65bed0.m4a",
@@ -659,13 +707,17 @@
   },
   "hazard:bump+dist:500": {
    "file": "p_5819e82b0108.m4a",
-   "dur": 1.702,
-   "text": "Bump, five hundred."
+   "dur": 1.669,
+   "text": "Bump, five hundred.",
+   "heard": 0.86,
+   "voice": "bm_fable"
   },
   "head:LAC+mod:long+caution:1+dist:400": {
    "file": "p_87a6e30fc4f5.m4a",
-   "dur": 2.625,
-   "text": "Acute left long, care, four hundred."
+   "dur": 2.627,
+   "text": "Acute left long, care, four hundred.",
+   "heard": 0.83,
+   "voice": "bm_fable"
   },
   "head:R3+mod:banked": {
    "file": "p_f5e1c29a0ef0.m4a",
@@ -684,8 +736,10 @@
   },
   "head:LSQ+caution:1+dist:450": {
    "file": "p_54ff28cb1827.m4a",
-   "dur": 2.387,
-   "text": "Square left, care, four fifty."
+   "dur": 2.381,
+   "text": "Square left, care, four fifty.",
+   "heard": 0.73,
+   "voice": "bm_fable"
   },
   "mod:long+mod:tightens+caution:1": {
    "file": "p_cadf79146b67.m4a",
@@ -710,7 +764,9 @@
   "mod:long+link:and": {
    "file": "p_388e69a1ba05.m4a",
    "dur": 0.945,
-   "text": "Long and."
+   "text": "Long and.",
+   "heard": 0.5,
+   "voice": "bm_fable"
   },
   "link:into+head:L3": {
    "file": "p_e0f47156053f.m4a",
@@ -719,8 +775,10 @@
   },
   "mod:long+caution:1": {
    "file": "p_0aec40b6dfd1.m4a",
-   "dur": 1.131,
-   "text": "Long, care."
+   "dur": 1.126,
+   "text": "Long, care.",
+   "heard": 0.5,
+   "voice": "bm_fable"
   },
   "head:RSQ+caution:1": {
    "file": "p_55bb2f322c1e.m4a",
@@ -769,8 +827,10 @@
   },
   "head:LHP+caution:1": {
    "file": "p_a4211f88ed2a.m4a",
-   "dur": 1.769,
-   "text": "Left hairpin, care."
+   "dur": 1.618,
+   "text": "Left hairpin, care.",
+   "heard": 1.0,
+   "voice": "bm_fable"
   },
   "head:RAC+mod:long": {
    "file": "p_6418b4ac1cb3.m4a",
@@ -789,13 +849,17 @@
   },
   "link:into+head:LAC+mod:long": {
    "file": "p_8309bf92297d.m4a",
-   "dur": 1.833,
-   "text": "Into Acute left long."
+   "dur": 2.026,
+   "text": "Into Acute left long.",
+   "heard": 1.0,
+   "voice": "bm_fable"
   },
   "mod:long+dist:120": {
    "file": "p_cb662598b2a3.m4a",
-   "dur": 1.74,
-   "text": "Long, one twenty."
+   "dur": 1.739,
+   "text": "Long, one twenty.",
+   "heard": 0.67,
+   "voice": "bm_fable"
   },
   "mod:long+mod:opens+link:and": {
    "file": "p_15d690fd2e6b.m4a",
@@ -859,13 +923,17 @@
   },
   "mod:long+dist:80": {
    "file": "p_2024a6a72f55.m4a",
-   "dur": 1.222,
-   "text": "Long, eighty."
+   "dur": 1.221,
+   "text": "Long, eighty.",
+   "heard": 0.8,
+   "voice": "bm_fable"
   },
   "link:into+head:R4-": {
    "file": "p_9846bc8a5c89.m4a",
-   "dur": 1.883,
-   "text": "Into Right four minus."
+   "dur": 1.838,
+   "text": "Into Right four minus.",
+   "heard": 1.0,
+   "voice": "bm_fable"
   },
   "link:and+head:L3-": {
    "file": "p_c4f3ec265a5d.m4a",
@@ -894,8 +962,10 @@
   },
   "mod:long+dist:60": {
    "file": "p_f22e744ffaa6.m4a",
-   "dur": 1.505,
-   "text": "Long, sixty."
+   "dur": 1.504,
+   "text": "Long, sixty.",
+   "heard": 0.5,
+   "voice": "bm_fable"
   },
   "link:and+head:L4-": {
    "file": "p_561a2e7d2251.m4a",
@@ -914,8 +984,10 @@
   },
   "head:RHP+mod:opens": {
    "file": "p_ab3a7477f715.m4a",
-   "dur": 1.738,
-   "text": "Right hairpin opens."
+   "dur": 1.722,
+   "text": "Right hairpin opens.",
+   "heard": 0.67,
+   "voice": "bm_fable"
   },
   "head:L3+mod:long": {
    "file": "p_7893b98e1453.m4a",
@@ -929,13 +1001,17 @@
   },
   "mod:long+dist:100": {
    "file": "p_b959e83749bf.m4a",
-   "dur": 1.745,
-   "text": "Long, one hundred."
+   "dur": 1.747,
+   "text": "Long, one hundred.",
+   "heard": 0.67,
+   "voice": "bm_fable"
   },
   "link:into+head:L4-": {
    "file": "p_dd0417d8099f.m4a",
-   "dur": 1.881,
-   "text": "Into Left four minus."
+   "dur": 2.174,
+   "text": "Into Left four minus.",
+   "heard": 1.0,
+   "voice": "bm_fable"
   },
   "link:and+head:R4": {
    "file": "p_470de1afe9c3.m4a",
@@ -954,13 +1030,17 @@
   },
   "mod:long+dist:150": {
    "file": "p_d2882ef88a90.m4a",
-   "dur": 1.754,
-   "text": "Long, one fifty."
+   "dur": 1.752,
+   "text": "Long, one fifty.",
+   "heard": 0.67,
+   "voice": "bm_fable"
   },
   "link:into+head:LHP+caution:1": {
    "file": "p_5edfc54ef0e8.m4a",
-   "dur": 2.07,
-   "text": "Into Left hairpin, care."
+   "dur": 2.074,
+   "text": "Into Left hairpin, care.",
+   "heard": 1.0,
+   "voice": "bm_fable"
   },
   "link:into+head:R3+": {
    "file": "p_27d52e66d534.m4a",
@@ -974,8 +1054,10 @@
   },
   "head:RAC+mod:long+caution:1": {
    "file": "p_5ad82641fad8.m4a",
-   "dur": 1.892,
-   "text": "Acute right long, care."
+   "dur": 1.891,
+   "text": "Acute right long, care.",
+   "heard": 0.75,
+   "voice": "bm_fable"
   },
   "link:and+head:L4+": {
    "file": "p_fa136fa69835.m4a",
@@ -984,8 +1066,10 @@
   },
   "link:into+head:RHP+caution:1+dist:60": {
    "file": "p_f2a9e1c45f2a.m4a",
-   "dur": 2.475,
-   "text": "Into Right hairpin, care, sixty."
+   "dur": 3.068,
+   "text": "Into Right hairpin, care, sixty.",
+   "heard": 0.67,
+   "voice": "bm_fable"
   },
   "head:L4+mod:opens+link:and+head:R4-": {
    "file": "p_8379731c26e8.m4a",
@@ -1020,7 +1104,9 @@
   "mod:long+dist:200": {
    "file": "p_b4902d338a49.m4a",
    "dur": 1.721,
-   "text": "Long, two hundred."
+   "text": "Long, two hundred.",
+   "heard": 0.67,
+   "voice": "bm_fable"
   },
   "head:LSQ+link:into+head:L3-+mod:long+mod:opens": {
    "file": "p_6be78aa264f7.m4a",
@@ -1089,8 +1175,10 @@
   },
   "mod:long+dist:350": {
    "file": "p_a503f54e1ff4.m4a",
-   "dur": 1.752,
-   "text": "Long, three fifty."
+   "dur": 1.753,
+   "text": "Long, three fifty.",
+   "heard": 0.67,
+   "voice": "bm_fable"
   },
   "head:L1++caution:1": {
    "file": "p_5508e4b95208.m4a",
@@ -1124,8 +1212,10 @@
   },
   "link:into+head:R2+mod:long+mod:tightens+caution:1": {
    "file": "p_552f6411aa10.m4a",
-   "dur": 2.554,
-   "text": "Into Right two long tightens, care."
+   "dur": 2.551,
+   "text": "Into Right two long tightens, care.",
+   "heard": 0.73,
+   "voice": "bm_fable"
   },
   "link:into+head:L2+mod:long+mod:opens": {
    "file": "p_435dcd510b0b.m4a",
@@ -1155,7 +1245,9 @@
   "head:L4+dist:100": {
    "file": "p_8a0ceea35041.m4a",
    "dur": 2.016,
-   "text": "Left four, one hundred."
+   "text": "Left four, one hundred.",
+   "heard": 0.89,
+   "voice": "bm_fable"
   },
   "head:R4++mod:long": {
    "file": "p_cac2cdf56ef9.m4a",
@@ -1194,8 +1286,10 @@
   },
   "head:RSQ+caution:1+dist:250": {
    "file": "p_9c6bc2ff82d6.m4a",
-   "dur": 2.362,
-   "text": "Square right, care, two fifty."
+   "dur": 2.364,
+   "text": "Square right, care, two fifty.",
+   "heard": 0.73,
+   "voice": "bm_fable"
   },
   "link:into+head:L2-+mod:long": {
    "file": "p_317bc938e2bd.m4a",
@@ -1214,8 +1308,10 @@
   },
   "head:RHP+caution:2": {
    "file": "p_7e9027008c10.m4a",
-   "dur": 1.865,
-   "text": "Right hairpin, caution."
+   "dur": 1.794,
+   "text": "Right hairpin, caution.",
+   "heard": 0.86,
+   "voice": "bm_fable"
   },
   "head:L4+dist:120": {
    "file": "p_5716b06d7762.m4a",
@@ -1234,8 +1330,10 @@
   },
   "head:R2+mod:long+link:into": {
    "file": "p_5eeabe2230b5.m4a",
-   "dur": 1.548,
-   "text": "Right two long into."
+   "dur": 1.547,
+   "text": "Right two long into.",
+   "heard": 1.0,
+   "voice": "bm_fable"
   },
   "head:LSQ+mod:long+link:into+head:R2-": {
    "file": "p_d5fb19ef082b.m4a",
@@ -1255,12 +1353,16 @@
   "link:into+head:RHP+mod:opens": {
    "file": "p_25064dd40679.m4a",
    "dur": 2.038,
-   "text": "Into Right hairpin opens."
+   "text": "Into Right hairpin opens.",
+   "heard": 0.75,
+   "voice": "bm_fable"
   },
   "head:LHP+mod:opens+caution:1": {
    "file": "p_dfca63b5fef5.m4a",
-   "dur": 2.151,
-   "text": "Left hairpin opens, care."
+   "dur": 2.152,
+   "text": "Left hairpin opens, care.",
+   "heard": 0.75,
+   "voice": "bm_fable"
   },
   "head:R4+link:into+head:L3": {
    "file": "p_ae11c36b3c32.m4a",
@@ -1269,8 +1371,10 @@
   },
   "head:L5+dist:300": {
    "file": "p_221b6fc384f3.m4a",
-   "dur": 2.043,
-   "text": "Left five, three hundred."
+   "dur": 2.042,
+   "text": "Left five, three hundred.",
+   "heard": 0.75,
+   "voice": "bm_fable"
   },
   "head:R5+link:and": {
    "file": "p_211ba77149d1.m4a",
@@ -1284,8 +1388,10 @@
   },
   "head:L3+dist:100": {
    "file": "p_2b27b1a251a1.m4a",
-   "dur": 2.04,
-   "text": "Left three, one hundred."
+   "dur": 2.041,
+   "text": "Left three, one hundred.",
+   "heard": 0.75,
+   "voice": "bm_fable"
   },
   "head:R3+link:into": {
    "file": "p_ac90308703a9.m4a",
@@ -1324,8 +1430,10 @@
   },
   "head:L2++link:into+head:R3-+link:into+head:L3-": {
    "file": "p_7b623799b881.m4a",
-   "dur": 3.419,
-   "text": "Left two plus into Right three minus into Left three minus."
+   "dur": 3.406,
+   "text": "Left two plus into Right three minus into Left three minus.",
+   "heard": 0.75,
+   "voice": "bm_fable"
   },
   "head:L4-+dist:70": {
    "file": "p_5e8d08122974.m4a",
@@ -1334,8 +1442,10 @@
   },
   "head:L6+caution:1+dist:150": {
    "file": "p_a02358c3e49f.m4a",
-   "dur": 2.403,
-   "text": "Left six, care, one fifty."
+   "dur": 2.71,
+   "text": "Left six, care, one fifty.",
+   "heard": 0.83,
+   "voice": "bm_fable"
   },
   "head:L4-+link:and+head:L5+dist:120": {
    "file": "p_4e9c760a17ad.m4a",
@@ -1374,13 +1484,17 @@
   },
   "head:LAC+mod:long+caution:2": {
    "file": "p_85ffbcf46869.m4a",
-   "dur": 2.098,
-   "text": "Acute left long, caution."
+   "dur": 2.099,
+   "text": "Acute left long, caution.",
+   "heard": 0.75,
+   "voice": "bm_fable"
   },
   "head:R4+dist:400": {
    "file": "p_fd3c08babb81.m4a",
-   "dur": 1.963,
-   "text": "Right four, four hundred."
+   "dur": 1.96,
+   "text": "Right four, four hundred.",
+   "heard": 0.75,
+   "voice": "bm_fable"
   },
   "head:R4++link:and": {
    "file": "p_09d45173e9be.m4a",
@@ -1399,13 +1513,17 @@
   },
   "head:RAC+mod:long+caution:2": {
    "file": "p_d92afbe698e8.m4a",
-   "dur": 2.13,
-   "text": "Acute right long, caution."
+   "dur": 2.128,
+   "text": "Acute right long, caution.",
+   "heard": 0.75,
+   "voice": "bm_fable"
   },
   "head:R4+mod:long+dist:120": {
    "file": "p_8bfd54806ba0.m4a",
-   "dur": 2.196,
-   "text": "Right four long, one twenty."
+   "dur": 2.194,
+   "text": "Right four long, one twenty.",
+   "heard": 0.8,
+   "voice": "bm_fable"
   },
   "head:L6-+caution:1": {
    "file": "p_f601406d05ce.m4a",
@@ -1424,8 +1542,10 @@
   },
   "link:into+head:L4+": {
    "file": "p_5712527bf553.m4a",
-   "dur": 1.832,
-   "text": "Into Left four plus."
+   "dur": 1.831,
+   "text": "Into Left four plus.",
+   "heard": 1.0,
+   "voice": "bm_fable"
   },
   "head:L3+link:and": {
    "file": "p_f741bb6f9e6e.m4a",
@@ -1499,8 +1619,10 @@
   },
   "head:RHP+caution:1+dist:100": {
    "file": "p_94e1b0d3806e.m4a",
-   "dur": 2.468,
-   "text": "Right hairpin, care, one hundred."
+   "dur": 2.469,
+   "text": "Right hairpin, care, one hundred.",
+   "heard": 0.6,
+   "voice": "bm_fable"
   },
   "head:L3+link:into+head:RAC+mod:long+mod:opens": {
    "file": "p_7158487bedef.m4a",
@@ -1555,7 +1677,9 @@
   "head:R5+dist:300": {
    "file": "p_e8ffc8b83d0f.m4a",
    "dur": 2.046,
-   "text": "Right five, three hundred."
+   "text": "Right five, three hundred.",
+   "heard": 0.75,
+   "voice": "bm_fable"
   },
   "head:L5-+mod:long": {
    "file": "p_5da5b231a816.m4a",
@@ -1564,8 +1688,10 @@
   },
   "link:and+head:R3+mod:long": {
    "file": "p_22e4bad7cdbe.m4a",
-   "dur": 1.549,
-   "text": "And Right three long."
+   "dur": 1.55,
+   "text": "And Right three long.",
+   "heard": 0.75,
+   "voice": "bm_fable"
   },
   "head:R5+dist:200": {
    "file": "p_c54ee9e1181f.m4a",
@@ -1614,8 +1740,10 @@
   },
   "head:L5+mod:long+link:and": {
    "file": "p_189f1909062e.m4a",
-   "dur": 1.743,
-   "text": "Left five long and."
+   "dur": 1.74,
+   "text": "Left five long and.",
+   "heard": 1.0,
+   "voice": "bm_fable"
   },
   "head:R4+dist:200": {
    "file": "p_fef8e9eebe8e.m4a",
@@ -1629,8 +1757,10 @@
   },
   "mod:long+dist:450": {
    "file": "p_7dbc6b4fd867.m4a",
-   "dur": 1.667,
-   "text": "Long, four fifty."
+   "dur": 1.668,
+   "text": "Long, four fifty.",
+   "heard": 0.33,
+   "voice": "bm_fable"
   },
   "head:R3+link:and": {
    "file": "p_87ca06794bfc.m4a",
@@ -1639,8 +1769,10 @@
   },
   "head:L5+dist:200": {
    "file": "p_211446a936b3.m4a",
-   "dur": 1.994,
-   "text": "Left five, two hundred."
+   "dur": 2.214,
+   "text": "Left five, two hundred.",
+   "heard": 1.0,
+   "voice": "bm_fable"
   },
   "mod:tightens+caution:1+link:into+head:RAC+mod:long": {
    "file": "p_e2212304310e.m4a",
@@ -1749,8 +1881,10 @@
   },
   "head:RSQ+mod:long+caution:1": {
    "file": "p_dad63a73a974.m4a",
-   "dur": 1.798,
-   "text": "Square right long, care."
+   "dur": 1.626,
+   "text": "Square right long, care.",
+   "heard": 1.0,
+   "voice": "bm_fable"
   },
   "head:R2+link:into+head:L3-": {
    "file": "p_47119a1d4b86.m4a",
@@ -1769,8 +1903,10 @@
   },
   "head:LHP+caution:1+dist:150": {
    "file": "p_79349f4f5e63.m4a",
-   "dur": 2.48,
-   "text": "Left hairpin, care, one fifty."
+   "dur": 2.482,
+   "text": "Left hairpin, care, one fifty.",
+   "heard": 0.73,
+   "voice": "bm_fable"
   },
   "head:LHP+mod:tightens+caution:2+link:into": {
    "file": "p_abd6a6aa8f65.m4a",
@@ -1794,8 +1930,10 @@
   },
   "head:RSQ+caution:1+dist:120": {
    "file": "p_4d5c8261b5c9.m4a",
-   "dur": 2.347,
-   "text": "Square right, care, one twenty."
+   "dur": 2.346,
+   "text": "Square right, care, one twenty.",
+   "heard": 1.0,
+   "voice": "bm_fable"
   },
   "head:LHP+caution:2": {
    "file": "p_932835a8b613.m4a",
@@ -1809,8 +1947,10 @@
   },
   "head:RHP+caution:1+dist:60": {
    "file": "p_aa5dc68fe0af.m4a",
-   "dur": 2.199,
-   "text": "Right hairpin, care, sixty."
+   "dur": 2.651,
+   "text": "Right hairpin, care, sixty.",
+   "heard": 0.8,
+   "voice": "bm_fable"
   },
   "link:and+head:R3++dist:100": {
    "file": "p_fc02dbe3d94d.m4a",
@@ -1824,8 +1964,10 @@
   },
   "head:R2+link:into+head:L2+dist:80": {
    "file": "p_5c9396833d22.m4a",
-   "dur": 2.354,
-   "text": "Right two into Left two, eighty."
+   "dur": 2.28,
+   "text": "Right two into Left two, eighty.",
+   "heard": 1.0,
+   "voice": "bm_fable"
   },
   "head:L5-+link:and+head:L5-": {
    "file": "p_2de4165578fe.m4a",
@@ -1839,8 +1981,10 @@
   },
   "head:L5+dist:100": {
    "file": "p_14c2fff89294.m4a",
-   "dur": 2.068,
-   "text": "Left five, one hundred."
+   "dur": 2.069,
+   "text": "Left five, one hundred.",
+   "heard": 0.75,
+   "voice": "bm_fable"
   },
   "head:L3-+mod:long+dist:350": {
    "file": "p_83c51f1d7da3.m4a",
@@ -1874,13 +2018,17 @@
   },
   "caution:1+dist:300": {
    "file": "p_c4fca71936b8.m4a",
-   "dur": 1.591,
-   "text": "Care, three hundred."
+   "dur": 1.593,
+   "text": "Care, three hundred.",
+   "heard": 0.67,
+   "voice": "bm_fable"
   },
   "head:L4+mod:long+dist:350": {
    "file": "p_963e253091a4.m4a",
-   "dur": 2.232,
-   "text": "Left four long, three fifty."
+   "dur": 2.234,
+   "text": "Left four long, three fifty.",
+   "heard": 0.8,
+   "voice": "bm_fable"
   },
   "head:R5-+mod:long": {
    "file": "p_2a50464e9cf3.m4a",
@@ -1889,8 +2037,10 @@
   },
   "head:RSQ+caution:1+dist:350": {
    "file": "p_8894ca50a031.m4a",
-   "dur": 2.373,
-   "text": "Square right, care, three fifty."
+   "dur": 2.372,
+   "text": "Square right, care, three fifty.",
+   "heard": 0.73,
+   "voice": "bm_fable"
   },
   "head:L3++mod:tightens+caution:1": {
    "file": "p_8841fe761b9e.m4a",
@@ -1909,8 +2059,10 @@
   },
   "mod:tightens+caution:1+link:into+head:R3": {
    "file": "p_6d579ffe2f51.m4a",
-   "dur": 2.215,
-   "text": "Tightens, care into Right three."
+   "dur": 2.46,
+   "text": "Tightens, care into Right three.",
+   "heard": 0.91,
+   "voice": "bm_fable"
   },
   "head:R5-+mod:long+mod:opens": {
    "file": "p_a4f3fdbe2ed4.m4a",
@@ -2029,8 +2181,10 @@
   },
   "head:L3+mod:long+dist:120": {
    "file": "p_65c2ce862b17.m4a",
-   "dur": 2.255,
-   "text": "Left three long, one twenty."
+   "dur": 2.256,
+   "text": "Left three long, one twenty.",
+   "heard": 0.8,
+   "voice": "bm_fable"
   },
   "head:RSQ+caution:1+link:into": {
    "file": "p_099835398757.m4a",
@@ -2039,8 +2193,10 @@
   },
   "head:L5+mod:long+dist:120": {
    "file": "p_53394275eea8.m4a",
-   "dur": 2.329,
-   "text": "Left five long, one twenty."
+   "dur": 2.33,
+   "text": "Left five long, one twenty.",
+   "heard": 0.8,
+   "voice": "bm_fable"
   },
   "head:L2+link:and+head:L3-": {
    "file": "p_9bb5a390a818.m4a",
@@ -2079,8 +2235,10 @@
   },
   "head:RHP+caution:1+link:into": {
    "file": "p_111541c2736d.m4a",
-   "dur": 2.113,
-   "text": "Right hairpin, care into."
+   "dur": 2.112,
+   "text": "Right hairpin, care into.",
+   "heard": 0.75,
+   "voice": "bm_fable"
   },
   "head:L3++dist:60": {
    "file": "p_e17c0528e22b.m4a",
@@ -2114,8 +2272,10 @@
   },
   "head:R2+mod:long": {
    "file": "p_131ac31e3bfa.m4a",
-   "dur": 1.348,
-   "text": "Right two long."
+   "dur": 1.349,
+   "text": "Right two long.",
+   "heard": 1.0,
+   "voice": "bm_fable"
   },
   "link:into+head:L4+dist:150": {
    "file": "p_afcc30871662.m4a",
@@ -2200,7 +2360,9 @@
   "head:LAC+mod:long+caution:1+link:into+head:R2+mod:long": {
    "file": "p_f776ba815486.m4a",
    "dur": 2.826,
-   "text": "Acute left long, care into Right two long."
+   "text": "Acute left long, care into Right two long.",
+   "heard": 0.35,
+   "voice": "bm_fable"
   },
   "head:LAC+mod:long+dist:150": {
    "file": "p_221f0e326d81.m4a",
@@ -2279,8 +2441,10 @@
   },
   "head:L2+mod:long+link:and": {
    "file": "p_79971acbc705.m4a",
-   "dur": 1.587,
-   "text": "Left two long and."
+   "dur": 1.528,
+   "text": "Left two long and.",
+   "heard": 1.0,
+   "voice": "bm_fable"
   },
   "head:R3++dist:100": {
    "file": "p_dd1a1a381df7.m4a",
@@ -2314,8 +2478,10 @@
   },
   "head:RHP+dist:100": {
    "file": "p_7590945f8de0.m4a",
-   "dur": 2.145,
-   "text": "Right hairpin, one hundred."
+   "dur": 2.146,
+   "text": "Right hairpin, one hundred.",
+   "heard": 0.75,
+   "voice": "bm_fable"
   },
   "head:L4++link:into": {
    "file": "p_9fd34ca51204.m4a",
@@ -2359,8 +2525,10 @@
   },
   "head:LSQ+caution:1+dist:80": {
    "file": "p_8695805f7c2a.m4a",
-   "dur": 2.117,
-   "text": "Square left, care, eighty."
+   "dur": 2.137,
+   "text": "Square left, care, eighty.",
+   "heard": 0.89,
+   "voice": "bm_fable"
   },
   "head:L1++dist:60": {
    "file": "p_0bbd68314570.m4a",
@@ -2369,8 +2537,10 @@
   },
   "head:L4+dist:250": {
    "file": "p_1207741cc90f.m4a",
-   "dur": 2.032,
-   "text": "Left four, two fifty."
+   "dur": 2.033,
+   "text": "Left four, two fifty.",
+   "heard": 0.75,
+   "voice": "bm_fable"
   },
   "head:R3+dist:400": {
    "file": "p_d9d150891d0a.m4a",
@@ -2379,13 +2549,17 @@
   },
   "caution:1+dist:200": {
    "file": "p_1f86b5c983bd.m4a",
-   "dur": 1.533,
-   "text": "Care, two hundred."
+   "dur": 1.541,
+   "text": "Care, two hundred.",
+   "heard": 0.67,
+   "voice": "bm_fable"
   },
   "head:R5+mod:long+dist:350": {
    "file": "p_4b8b9b794147.m4a",
-   "dur": 2.321,
-   "text": "Right five long, three fifty."
+   "dur": 2.323,
+   "text": "Right five long, three fifty.",
+   "heard": 0.8,
+   "voice": "bm_fable"
   },
   "head:R4++link:into": {
    "file": "p_1e665e6d3588.m4a",
@@ -2395,17 +2569,23 @@
   "head:L2+mod:long+link:into+head:RHP+caution:1+dist:60": {
    "file": "p_e3b37d17ccd8.m4a",
    "dur": 2.942,
-   "text": "Left two long into Right hairpin, care, sixty."
+   "text": "Left two long into Right hairpin, care, sixty.",
+   "heard": 0.82,
+   "voice": "bm_fable"
   },
   "head:L3+dist:80": {
    "file": "p_2daa65a029e7.m4a",
-   "dur": 1.734,
-   "text": "Left three, eighty."
+   "dur": 1.753,
+   "text": "Left three, eighty.",
+   "heard": 1.0,
+   "voice": "bm_fable"
   },
   "head:LAC+mod:long+caution:1+dist:450": {
    "file": "p_24d7b9636b63.m4a",
-   "dur": 2.63,
-   "text": "Acute left long, care, four fifty."
+   "dur": 2.861,
+   "text": "Acute left long, care, four fifty.",
+   "heard": 0.67,
+   "voice": "bm_fable"
   },
   "head:L3-+dist:200": {
    "file": "p_2c6ddbfdf183.m4a",
@@ -2504,8 +2684,10 @@
   },
   "head:L4+dist:70": {
    "file": "p_a7908731a1e3.m4a",
-   "dur": 1.716,
-   "text": "Left four, seventy."
+   "dur": 1.719,
+   "text": "Left four, seventy.",
+   "heard": 0.67,
+   "voice": "bm_fable"
   },
   "mod:opens+link:and+head:R3": {
    "file": "p_ce80029da834.m4a",
@@ -2534,8 +2716,10 @@
   },
   "link:and+head:RAC+mod:long": {
    "file": "p_798b022cffd5.m4a",
-   "dur": 1.692,
-   "text": "And Acute right long."
+   "dur": 1.599,
+   "text": "And Acute right long.",
+   "heard": 1.0,
+   "voice": "bm_fable"
   },
   "head:R3++mod:long+link:into": {
    "file": "p_4b0f4b06ac63.m4a",
@@ -2594,8 +2778,10 @@
   },
   "mod:opens+link:into+head:RAC+mod:long": {
    "file": "p_29e189476b03.m4a",
-   "dur": 2.201,
-   "text": "Opens into Acute right long."
+   "dur": 2.199,
+   "text": "Opens into Acute right long.",
+   "heard": 0.73,
+   "voice": "bm_fable"
   },
   "head:R2-+dist:100": {
    "file": "p_eeb3c234a7c4.m4a",
@@ -2639,8 +2825,10 @@
   },
   "caution:1+dist:80": {
    "file": "p_07bf3619c4d1.m4a",
-   "dur": 1.132,
-   "text": "Care, eighty."
+   "dur": 1.255,
+   "text": "Care, eighty.",
+   "heard": 0.5,
+   "voice": "bm_fable"
   },
   "head:R2++link:and": {
    "file": "p_373d7536c622.m4a",
@@ -2659,8 +2847,10 @@
   },
   "head:L3+dist:350": {
    "file": "p_5d68637c3583.m4a",
-   "dur": 2.1,
-   "text": "Left three, three fifty."
+   "dur": 2.071,
+   "text": "Left three, three fifty.",
+   "heard": 0.89,
+   "voice": "bm_fable"
   },
   "head:R5+dist:150": {
    "file": "p_504f33193d38.m4a",
@@ -2679,13 +2869,17 @@
   },
   "head:R3++link:into": {
    "file": "p_4d9bec75f060.m4a",
-   "dur": 1.746,
-   "text": "Right three plus into."
+   "dur": 1.673,
+   "text": "Right three plus into.",
+   "heard": 1.0,
+   "voice": "bm_fable"
   },
   "head:LHP+caution:1+dist:100": {
    "file": "p_7822a2f2c001.m4a",
-   "dur": 2.493,
-   "text": "Left hairpin, care, one hundred."
+   "dur": 2.494,
+   "text": "Left hairpin, care, one hundred.",
+   "heard": 0.73,
+   "voice": "bm_fable"
   },
   "head:R2+mod:long+mod:tightens+caution:1+dist:150": {
    "file": "p_a335f6e4002d.m4a",
@@ -2709,8 +2903,10 @@
   },
   "head:LAC+mod:long+dist:80": {
    "file": "p_172b6f254872.m4a",
-   "dur": 1.985,
-   "text": "Acute left long, eighty."
+   "dur": 2.233,
+   "text": "Acute left long, eighty.",
+   "heard": 1.0,
+   "voice": "bm_fable"
   },
   "head:L2++link:into+head:R3-": {
    "file": "p_1f8582d361ec.m4a",
@@ -2760,7 +2956,9 @@
   "head:R2+link:into+head:LAC+mod:long": {
    "file": "p_ebc01c71eb2f.m4a",
    "dur": 2.278,
-   "text": "Right two into Acute left long."
+   "text": "Right two into Acute left long.",
+   "heard": 0.77,
+   "voice": "bm_fable"
   },
   "caution:1+link:and": {
    "file": "p_8ae31ea75273.m4a",
@@ -2855,7 +3053,9 @@
   "head:R4+dist:100": {
    "file": "p_02ce1319e992.m4a",
    "dur": 2.042,
-   "text": "Right four, one hundred."
+   "text": "Right four, one hundred.",
+   "heard": 0.75,
+   "voice": "bm_fable"
   },
   "head:L4++mod:long+link:and": {
    "file": "p_f0ed9ddba183.m4a",
@@ -2874,8 +3074,10 @@
   },
   "link:into+head:L4+mod:opens": {
    "file": "p_387408a5fd65.m4a",
-   "dur": 1.898,
-   "text": "Into Left four opens."
+   "dur": 1.899,
+   "text": "Into Left four opens.",
+   "heard": 1.0,
+   "voice": "bm_fable"
   },
   "head:L4+mod:opens+dist:60": {
    "file": "p_6d4775f62ba4.m4a",
@@ -2884,8 +3086,10 @@
   },
   "head:LHP+caution:2+link:into": {
    "file": "p_023d6c0df0f4.m4a",
-   "dur": 2.186,
-   "text": "Left hairpin, caution into."
+   "dur": 2.422,
+   "text": "Left hairpin, caution into.",
+   "heard": 1.0,
+   "voice": "bm_fable"
   },
   "head:R3-+link:into+head:L3": {
    "file": "p_11932cd0c8db.m4a",
@@ -2949,18 +3153,24 @@
   },
   "head:L4+dist:450": {
    "file": "p_2b72d64c40da.m4a",
-   "dur": 1.975,
-   "text": "Left four, four fifty."
+   "dur": 1.974,
+   "text": "Left four, four fifty.",
+   "heard": 0.5,
+   "voice": "bm_fable"
   },
   "head:L4+mod:long+dist:450": {
    "file": "p_f16a951095a6.m4a",
-   "dur": 2.161,
-   "text": "Left four long, four fifty."
+   "dur": 2.159,
+   "text": "Left four long, four fifty.",
+   "heard": 0.6,
+   "voice": "bm_fable"
   },
   "head:R4+mod:long+link:and": {
    "file": "p_0d01589101d5.m4a",
-   "dur": 1.641,
-   "text": "Right four long and."
+   "dur": 1.594,
+   "text": "Right four long and.",
+   "heard": 1.0,
+   "voice": "bm_fable"
   },
   "head:R4-+dist:120": {
    "file": "p_8f66db0da2b9.m4a",
@@ -3014,13 +3224,17 @@
   },
   "mod:long+caution:1+dist:450": {
    "file": "p_1c71da745357.m4a",
-   "dur": 2.051,
-   "text": "Long, care, four fifty."
+   "dur": 1.991,
+   "text": "Long, care, four fifty.",
+   "heard": 0.67,
+   "voice": "bm_fable"
   },
   "caution:1+dist:400": {
    "file": "p_f7579237fd82.m4a",
-   "dur": 1.594,
-   "text": "Care, four hundred."
+   "dur": 1.595,
+   "text": "Care, four hundred.",
+   "heard": 0.67,
+   "voice": "bm_fable"
   },
   "head:L3+link:into+head:R4": {
    "file": "p_26b2985beb8e.m4a",
@@ -3044,8 +3258,10 @@
   },
   "head:L1+caution:1+link:into": {
    "file": "p_d8bd678cbd73.m4a",
-   "dur": 1.9,
-   "text": "Left one, care into."
+   "dur": 1.773,
+   "text": "Left one, care into.",
+   "heard": 0.89,
+   "voice": "bm_fable"
   },
   "mod:opens+link:and": {
    "file": "p_af50396b6a12.m4a",
@@ -3094,8 +3310,10 @@
   },
   "head:RAC+mod:long+caution:1+dist:300": {
    "file": "p_1953f0e04efc.m4a",
-   "dur": 2.586,
-   "text": "Acute right long, care, three hundred."
+   "dur": 2.584,
+   "text": "Acute right long, care, three hundred.",
+   "heard": 0.67,
+   "voice": "bm_fable"
   },
   "head:L5+link:and": {
    "file": "p_5565de18a710.m4a",
@@ -3129,8 +3347,10 @@
   },
   "caution:1+dist:120": {
    "file": "p_5a30e06180be.m4a",
-   "dur": 1.507,
-   "text": "Care, one twenty."
+   "dur": 1.508,
+   "text": "Care, one twenty.",
+   "heard": 0.67,
+   "voice": "bm_fable"
   },
   "head:L2+link:and": {
    "file": "p_75bcb0ceab20.m4a",
@@ -3159,8 +3379,10 @@
   },
   "head:RHP+mod:opens+caution:1": {
    "file": "p_d31ce9d1aa24.m4a",
-   "dur": 2.14,
-   "text": "Right hairpin opens, care."
+   "dur": 2.139,
+   "text": "Right hairpin opens, care.",
+   "heard": 0.75,
+   "voice": "bm_fable"
   },
   "mod:long+link:into+head:RSQ": {
    "file": "p_a173de09dee0.m4a",
@@ -3175,7 +3397,9 @@
   "head:RHP+mod:opens+dist:60": {
    "file": "p_3c288e9e8055.m4a",
    "dur": 2.268,
-   "text": "Right hairpin opens, sixty."
+   "text": "Right hairpin opens, sixty.",
+   "heard": 0.75,
+   "voice": "bm_fable"
   },
   "n:0": {
    "file": "n_0.m4a",
@@ -3199,8 +3423,10 @@
   },
   "n:4": {
    "file": "n_4.m4a",
-   "dur": 0.544,
-   "text": "four"
+   "dur": 0.598,
+   "text": "four",
+   "heard": 1.0,
+   "voice": "bm_fable"
   },
   "n:5": {
    "file": "n_5.m4a",
@@ -3209,8 +3435,10 @@
   },
   "n:6": {
    "file": "n_6.m4a",
-   "dur": 0.63,
-   "text": "six"
+   "dur": 0.741,
+   "text": "six",
+   "heard": 0.5,
+   "voice": "bm_fable"
   },
   "n:7": {
    "file": "n_7.m4a",
@@ -3379,8 +3607,10 @@
   },
   "n:40": {
    "file": "n_40.m4a",
-   "dur": 0.641,
-   "text": "forty"
+   "dur": 0.726,
+   "text": "forty",
+   "heard": 1.0,
+   "voice": "bm_fable"
   },
   "n:41": {
    "file": "n_41.m4a",
@@ -3399,8 +3629,10 @@
   },
   "n:44": {
    "file": "n_44.m4a",
-   "dur": 0.792,
-   "text": "forty-four"
+   "dur": 0.793,
+   "text": "forty-four",
+   "heard": 1.0,
+   "voice": "bm_fable"
   },
   "n:45": {
    "file": "n_45.m4a",
@@ -3429,8 +3661,10 @@
   },
   "n:50": {
    "file": "n_50.m4a",
-   "dur": 0.654,
-   "text": "fifty"
+   "dur": 0.838,
+   "text": "fifty",
+   "heard": 1.0,
+   "voice": "bm_fable"
   },
   "n:51": {
    "file": "n_51.m4a",
@@ -3459,8 +3693,10 @@
   },
   "n:56": {
    "file": "n_56.m4a",
-   "dur": 0.901,
-   "text": "fifty-six"
+   "dur": 0.896,
+   "text": "fifty-six",
+   "heard": 1.0,
+   "voice": "bm_fable"
   },
   "n:57": {
    "file": "n_57.m4a",
@@ -3480,7 +3716,9 @@
   "n:60": {
    "file": "n_60.m4a",
    "dur": 0.632,
-   "text": "sixty"
+   "text": "sixty",
+   "heard": 0.0,
+   "voice": "bm_fable"
   },
   "n:61": {
    "file": "n_61.m4a",
@@ -3509,8 +3747,10 @@
   },
   "n:66": {
    "file": "n_66.m4a",
-   "dur": 0.98,
-   "text": "sixty-six"
+   "dur": 0.99,
+   "text": "sixty-six",
+   "heard": 1.0,
+   "voice": "bm_fable"
   },
   "n:67": {
    "file": "n_67.m4a",
@@ -3579,8 +3819,10 @@
   },
   "n:80": {
    "file": "n_80.m4a",
-   "dur": 0.638,
-   "text": "eighty"
+   "dur": 0.637,
+   "text": "eighty",
+   "heard": 0.0,
+   "voice": "bm_fable"
   },
   "n:81": {
    "file": "n_81.m4a",
@@ -3589,13 +3831,17 @@
   },
   "n:82": {
    "file": "n_82.m4a",
-   "dur": 0.812,
-   "text": "eighty-two"
+   "dur": 1.008,
+   "text": "eighty-two",
+   "heard": 1.0,
+   "voice": "bm_fable"
   },
   "n:83": {
    "file": "n_83.m4a",
-   "dur": 0.875,
-   "text": "eighty-three"
+   "dur": 1.015,
+   "text": "eighty-three",
+   "heard": 1.0,
+   "voice": "bm_fable"
   },
   "n:84": {
    "file": "n_84.m4a",
@@ -3609,8 +3855,10 @@
   },
   "n:86": {
    "file": "n_86.m4a",
-   "dur": 0.97,
-   "text": "eighty-six"
+   "dur": 0.96,
+   "text": "eighty-six",
+   "heard": 0.5,
+   "voice": "bm_fable"
   },
   "n:87": {
    "file": "n_87.m4a",
@@ -3619,8 +3867,10 @@
   },
   "n:88": {
    "file": "n_88.m4a",
-   "dur": 0.739,
-   "text": "eighty-eight"
+   "dur": 0.74,
+   "text": "eighty-eight",
+   "heard": 0.5,
+   "voice": "bm_fable"
   },
   "n:89": {
    "file": "n_89.m4a",
@@ -3674,8 +3924,10 @@
   },
   "n:99": {
    "file": "n_99.m4a",
-   "dur": 0.847,
-   "text": "ninety-nine"
+   "dur": 0.944,
+   "text": "ninety-nine",
+   "heard": 0.5,
+   "voice": "bm_fable"
   },
   "n:h1": {
    "file": "n_h1.m4a",
@@ -3725,12 +3977,679 @@
   "n:k1": {
    "file": "n_k1.m4a",
    "dur": 1.023,
-   "text": "one thousand"
+   "text": "one thousand",
+   "heard": 0.5,
+   "voice": "bm_fable"
   },
   "end:best": {
    "file": "end_best.m4a",
    "dur": 1.51,
    "text": "Best yet on this road."
+  },
+  "nav:bear_right": {
+   "file": "nav_bear_right.m4a",
+   "dur": 0.86,
+   "text": "Bear right.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "nav:turn_right": {
+   "file": "nav_turn_right.m4a",
+   "dur": 0.947,
+   "text": "Turn right.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "nav:sharp_right": {
+   "file": "nav_sharp_right.m4a",
+   "dur": 0.946,
+   "text": "Sharp right.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "nav:u_turn": {
+   "file": "nav_u_turn.m4a",
+   "dur": 1.261,
+   "text": "Make a U-turn.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "nav:sharp_left": {
+   "file": "nav_sharp_left.m4a",
+   "dur": 0.969,
+   "text": "Sharp left.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "nav:turn_left": {
+   "file": "nav_turn_left.m4a",
+   "dur": 0.951,
+   "text": "Turn left.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "nav:bear_left": {
+   "file": "nav_bear_left.m4a",
+   "dur": 0.927,
+   "text": "Bear left.",
+   "heard": 0.5,
+   "voice": "bm_fable"
+  },
+  "nav:ramp": {
+   "file": "nav_ramp.m4a",
+   "dur": 1.058,
+   "text": "Take the ramp.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "nav:ramp_right": {
+   "file": "nav_ramp_right.m4a",
+   "dur": 1.768,
+   "text": "Take the ramp on the right.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "nav:ramp_left": {
+   "file": "nav_ramp_left.m4a",
+   "dur": 1.839,
+   "text": "Take the ramp on the left.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "nav:exit_right": {
+   "file": "nav_exit_right.m4a",
+   "dur": 1.841,
+   "text": "Take the exit on the right.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "nav:exit_left": {
+   "file": "nav_exit_left.m4a",
+   "dur": 1.869,
+   "text": "Take the exit on the left.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "nav:keep_right": {
+   "file": "nav_keep_right.m4a",
+   "dur": 0.898,
+   "text": "Keep right.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "nav:keep_left": {
+   "file": "nav_keep_left.m4a",
+   "dur": 0.924,
+   "text": "Keep left.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "nav:merge": {
+   "file": "nav_merge.m4a",
+   "dur": 0.843,
+   "text": "Merge.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "nav:merge_right": {
+   "file": "nav_merge_right.m4a",
+   "dur": 1.039,
+   "text": "Merge right.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "nav:merge_left": {
+   "file": "nav_merge_left.m4a",
+   "dur": 1.018,
+   "text": "Merge left.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "nav:arrive": {
+   "file": "nav_arrive.m4a",
+   "dur": 2.147,
+   "text": "Arriving at your destination.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "nav:rb1": {
+   "file": "nav_rb1.m4a",
+   "dur": 2.555,
+   "text": "At the roundabout, take the first exit.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "nav:rb2": {
+   "file": "nav_rb2.m4a",
+   "dur": 2.629,
+   "text": "At the roundabout, take the second exit.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "nav:rb3": {
+   "file": "nav_rb3.m4a",
+   "dur": 2.578,
+   "text": "At the roundabout, take the third exit.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "nav:rb4": {
+   "file": "nav_rb4.m4a",
+   "dur": 2.581,
+   "text": "At the roundabout, take the fourth exit.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "nav:rb5": {
+   "file": "nav_rb5.m4a",
+   "dur": 2.454,
+   "text": "At the roundabout, take the fifth exit.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "nav:rb6": {
+   "file": "nav_rb6.m4a",
+   "dur": 2.529,
+   "text": "At the roundabout, take the sixth exit.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "nav:rbnext": {
+   "file": "nav_rbnext.m4a",
+   "dur": 2.508,
+   "text": "At the roundabout, take the next exit.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "nav:then": {
+   "file": "nav_then.m4a",
+   "dur": 0.566,
+   "text": "then",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "lane:left1": {
+   "file": "lane_left1.m4a",
+   "dur": 1.547,
+   "text": "use the left lane.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "lane:left2": {
+   "file": "lane_left2.m4a",
+   "dur": 1.844,
+   "text": "use the left two lanes.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "lane:left3": {
+   "file": "lane_left3.m4a",
+   "dur": 1.978,
+   "text": "use the left three lanes.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "lane:right1": {
+   "file": "lane_right1.m4a",
+   "dur": 1.622,
+   "text": "use the right lane.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "lane:right2": {
+   "file": "lane_right2.m4a",
+   "dur": 1.864,
+   "text": "use the right two lanes.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "lane:right3": {
+   "file": "lane_right3.m4a",
+   "dur": 1.964,
+   "text": "use the right three lanes.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "lane:middle1": {
+   "file": "lane_middle1.m4a",
+   "dur": 1.441,
+   "text": "use a middle lane.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "lane:middle2": {
+   "file": "lane_middle2.m4a",
+   "dur": 1.868,
+   "text": "use the middle two lanes.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "navd:100ft": {
+   "file": "navd_100ft.m4a",
+   "dur": 1.618,
+   "text": "In one hundred feet,",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "navd:200ft": {
+   "file": "navd_200ft.m4a",
+   "dur": 1.545,
+   "text": "In two hundred feet,",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "navd:300ft": {
+   "file": "navd_300ft.m4a",
+   "dur": 1.774,
+   "text": "In three hundred feet,",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "navd:400ft": {
+   "file": "navd_400ft.m4a",
+   "dur": 1.576,
+   "text": "In four hundred feet,",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "navd:500ft": {
+   "file": "navd_500ft.m4a",
+   "dur": 1.693,
+   "text": "In five hundred feet,",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "navd:600ft": {
+   "file": "navd_600ft.m4a",
+   "dur": 1.623,
+   "text": "In six hundred feet,",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "navd:700ft": {
+   "file": "navd_700ft.m4a",
+   "dur": 1.746,
+   "text": "In seven hundred feet,",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "navd:800ft": {
+   "file": "navd_800ft.m4a",
+   "dur": 1.62,
+   "text": "In eight hundred feet,",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "navd:0.2mi": {
+   "file": "navd_0_2mi.m4a",
+   "dur": 1.45,
+   "text": "In point two miles,",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "navd:0.3mi": {
+   "file": "navd_0_3mi.m4a",
+   "dur": 1.532,
+   "text": "In point three miles,",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "navd:0.4mi": {
+   "file": "navd_0_4mi.m4a",
+   "dur": 1.57,
+   "text": "In point four miles,",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "navd:0.5mi": {
+   "file": "navd_0_5mi.m4a",
+   "dur": 1.159,
+   "text": "In half a mile,",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "navd:0.6mi": {
+   "file": "navd_0_6mi.m4a",
+   "dur": 1.583,
+   "text": "In point six miles,",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "navd:0.7mi": {
+   "file": "navd_0_7mi.m4a",
+   "dur": 1.843,
+   "text": "In point seven miles,",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "navd:0.8mi": {
+   "file": "navd_0_8mi.m4a",
+   "dur": 1.485,
+   "text": "In point eight miles,",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "navd:0.9mi": {
+   "file": "navd_0_9mi.m4a",
+   "dur": 1.508,
+   "text": "In point nine miles,",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "navd:1mi": {
+   "file": "navd_1mi.m4a",
+   "dur": 1.064,
+   "text": "In one mile,",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "navd:1.1mi": {
+   "file": "navd_1_1mi.m4a",
+   "dur": 1.843,
+   "text": "In one point one miles,",
+   "heard": 0.89,
+   "voice": "bm_fable"
+  },
+  "navd:1.2mi": {
+   "file": "navd_1_2mi.m4a",
+   "dur": 1.841,
+   "text": "In one point two miles,",
+   "heard": 0.89,
+   "voice": "bm_fable"
+  },
+  "navd:1.3mi": {
+   "file": "navd_1_3mi.m4a",
+   "dur": 1.865,
+   "text": "In one point three miles,",
+   "heard": 0.89,
+   "voice": "bm_fable"
+  },
+  "navd:100m": {
+   "file": "navd_100m.m4a",
+   "dur": 1.626,
+   "text": "In one hundred metres,",
+   "heard": 0.75,
+   "voice": "bm_fable"
+  },
+  "navd:200m": {
+   "file": "navd_200m.m4a",
+   "dur": 1.579,
+   "text": "In two hundred metres,",
+   "heard": 0.75,
+   "voice": "bm_fable"
+  },
+  "navd:300m": {
+   "file": "navd_300m.m4a",
+   "dur": 1.609,
+   "text": "In three hundred metres,",
+   "heard": 0.75,
+   "voice": "bm_fable"
+  },
+  "navd:400m": {
+   "file": "navd_400m.m4a",
+   "dur": 1.633,
+   "text": "In four hundred metres,",
+   "heard": 0.75,
+   "voice": "bm_fable"
+  },
+  "navd:500m": {
+   "file": "navd_500m.m4a",
+   "dur": 1.795,
+   "text": "In five hundred metres,",
+   "heard": 0.75,
+   "voice": "bm_fable"
+  },
+  "navd:600m": {
+   "file": "navd_600m.m4a",
+   "dur": 1.734,
+   "text": "In six hundred metres,",
+   "heard": 0.75,
+   "voice": "bm_fable"
+  },
+  "navd:700m": {
+   "file": "navd_700m.m4a",
+   "dur": 1.816,
+   "text": "In seven hundred metres,",
+   "heard": 0.75,
+   "voice": "bm_fable"
+  },
+  "navd:800m": {
+   "file": "navd_800m.m4a",
+   "dur": 1.63,
+   "text": "In eight hundred metres,",
+   "heard": 0.75,
+   "voice": "bm_fable"
+  },
+  "navd:900m": {
+   "file": "navd_900m.m4a",
+   "dur": 1.657,
+   "text": "In nine hundred metres,",
+   "heard": 0.75,
+   "voice": "bm_fable"
+  },
+  "navd:1km": {
+   "file": "navd_1km.m4a",
+   "dur": 1.397,
+   "text": "In one kilometre,",
+   "heard": 0.67,
+   "voice": "bm_fable"
+  },
+  "navd:1.1km": {
+   "file": "navd_1_1km.m4a",
+   "dur": 2.187,
+   "text": "In one point one kilometres,",
+   "heard": 0.67,
+   "voice": "bm_fable"
+  },
+  "navd:1.2km": {
+   "file": "navd_1_2km.m4a",
+   "dur": 2.151,
+   "text": "In one point two kilometres,",
+   "heard": 0.67,
+   "voice": "bm_fable"
+  },
+  "navd:1.3km": {
+   "file": "navd_1_3km.m4a",
+   "dur": 2.2,
+   "text": "In one point three kilometres,",
+   "heard": 0.67,
+   "voice": "bm_fable"
+  },
+  "navd:1.4km": {
+   "file": "navd_1_4km.m4a",
+   "dur": 2.149,
+   "text": "In one point four kilometres,",
+   "heard": 0.67,
+   "voice": "bm_fable"
+  },
+  "navd:1.5km": {
+   "file": "navd_1_5km.m4a",
+   "dur": 2.313,
+   "text": "In one point five kilometres,",
+   "heard": 0.67,
+   "voice": "bm_fable"
+  },
+  "line:rerouting": {
+   "file": "line_rerouting.m4a",
+   "dur": 0.939,
+   "text": "Rerouting.",
+   "heard": 0.0,
+   "voice": "bm_fable"
+  },
+  "line:back_on_route": {
+   "file": "line_back_on_route.m4a",
+   "dur": 1.07,
+   "text": "Back on route.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "line:staying": {
+   "file": "line_staying.m4a",
+   "dur": 1.467,
+   "text": "Staying on this route.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "line:traffic_ahead": {
+   "file": "line_traffic_ahead.m4a",
+   "dur": 1.17,
+   "text": "Traffic ahead.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "line:minute_slower": {
+   "file": "line_minute_slower.m4a",
+   "dur": 1.143,
+   "text": "minute slower.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "line:minutes_slower": {
+   "file": "line_minutes_slower.m4a",
+   "dur": 1.04,
+   "text": "minutes slower.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "line:switching": {
+   "file": "line_switching.m4a",
+   "dur": 1.963,
+   "text": "Switching to a faster road.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "line:bump_ahead": {
+   "file": "line_bump_ahead.m4a",
+   "dur": 1.062,
+   "text": "Bump ahead.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "line:rep_pothole": {
+   "file": "line_rep_pothole.m4a",
+   "dur": 1.782,
+   "text": "Pothole reported ahead.",
+   "heard": 0.57,
+   "voice": "bm_fable"
+  },
+  "line:rep_gravel": {
+   "file": "line_rep_gravel.m4a",
+   "dur": 1.795,
+   "text": "Gravel reported ahead.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "line:rep_debris": {
+   "file": "line_rep_debris.m4a",
+   "dur": 1.642,
+   "text": "Debris reported ahead.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "line:rep_animal": {
+   "file": "line_rep_animal.m4a",
+   "dur": 1.796,
+   "text": "Animal reported ahead.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "line:rep_police": {
+   "file": "line_rep_police.m4a",
+   "dur": 1.871,
+   "text": "Police reported ahead.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "line:rep_closure": {
+   "file": "line_rep_closure.m4a",
+   "dur": 2.192,
+   "text": "Road closed reported ahead.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "line:rep_hazard": {
+   "file": "line_rep_hazard.m4a",
+   "dur": 1.816,
+   "text": "Hazard reported ahead.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "line:memo_brake_after_apex": {
+   "file": "line_memo_brake_after_apex.m4a",
+   "dur": 3.31,
+   "text": "Last time, braking past the apex. Brake earlier.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "line:memo_coast": {
+   "file": "line_memo_coast.m4a",
+   "dur": 3.075,
+   "text": "Last time, coasting here. Brake, then throttle.",
+   "heard": 0.86,
+   "voice": "bm_fable"
+  },
+  "line:memo_early_apex": {
+   "file": "line_memo_early_apex.m4a",
+   "dur": 2.981,
+   "text": "Last time, an early apex. Turn in later.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "line:break_steering": {
+   "file": "line_break_steering.m4a",
+   "dur": 2.739,
+   "text": "Steering is getting busier. Time for a break?",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "line:break_braking": {
+   "file": "line_break_braking.m4a",
+   "dur": 2.684,
+   "text": "Braking is getting later. Time for a break?",
+   "heard": 0.88,
+   "voice": "bm_fable"
+  },
+  "line:break_time": {
+   "file": "line_break_time.m4a",
+   "dur": 2.469,
+   "text": "Two hours on the road. Time for a break?",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "line:regroup": {
+   "file": "line_regroup.m4a",
+   "dur": 0.837,
+   "text": "Regroup.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "line:regroup_set": {
+   "file": "line_regroup_set.m4a",
+   "dur": 1.635,
+   "text": "Regroup point set.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "line:track_mode": {
+   "file": "line_track_mode.m4a",
+   "dur": 3.015,
+   "text": "Track mode. Tap start finish when you cross the line.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "line:lap": {
+   "file": "line_lap.m4a",
+   "dur": 0.581,
+   "text": "Lap",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "line:best": {
+   "file": "line_best.m4a",
+   "dur": 0.737,
+   "text": "Best.",
+   "heard": 1.0,
+   "voice": "bm_fable"
   }
  }
 }
