@@ -6,6 +6,16 @@ it says so. Things only you can do are in docs/OWNER_TODO.md.
 
 ## 2026-10-29
 
+**CarPlay granted: the entitlement in every build.** Apple assigned `com.apple.developer.carplay-maps` to the account.
+`project.yml` now puts it in ApexNav.entitlements for device builds too; `CarPlay/Simulator.entitlements` (the
+simulator-only stand-in) is gone. My calls:
+- *The App Store Connect API can't switch it on*: I asked it to (POST bundleIdCapabilities, CARPLAY_NAVIGATION) and it
+  answered that its 28 capability types hold no CarPlay; nothing changed. So the TestFlight run's cloud signing
+  (`-allowProvisioningUpdates` with the API key) is what adds it to the App ID and the profile.
+- *If that run fails to sign*, the fix is one tick in the portal: Identifiers → com.senft.ApexNav → CarPlay Navigation
+  → Save (OWNER_TODO), then re-run the workflow.
+Undo: drop the `com.apple.developer.carplay-maps` line from project.yml (device builds then sign without CarPlay).
+
 **The fourth promise and open themes (owner, 2026-10-29).** The owner chose Fable's words with one change: "Free to drive.
 No ads, no personal data sold, nothing you made ever behind a paywall" (About, the landing page, MARKETING.md and the
 landing-page test). "Personal" matters: MONETIZATION.md 5 licenses anonymous road answers, never data about people,

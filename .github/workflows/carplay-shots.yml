@@ -3,7 +3,7 @@ name: CarPlay screenshots
 # The car's screen in the iPhone simulator (docs/CARPLAY.md): opens Simulator's I/O → External Displays → CarPlay by UI
 # scripting, then screenshots the CarPlay window every few seconds while AppTourTests.testTour plans a route on the phone
 # (the trip preview), starts the drive and simctl plays a GPS drive (guidance). Run by hand; the shots are the run's
-# `carplay` artifact. Simulator builds carry the CarPlay entitlement (CarPlay/Simulator.entitlements).
+# `carplay` artifact. Every build carries the CarPlay entitlement (project.yml; Apple granted it 2026-10-29).
 on:
   workflow_dispatch:
 
