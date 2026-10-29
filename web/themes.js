@@ -28,7 +28,7 @@
       },
       map: {
         day: { bg: '#F2EBDD', water: '#CFD8D3', waterLine: '#7F9A9A', land: '#EFE7D8', wood: '#E3DCC5', road: '#FFFFFF', roadMinor: '#FFFFFF', casing: '#1C1A17', label: '#1C1A17', halo: '#F2EBDD', boundary: '#8C8373', contour: '#8B6B4A', shadow: '#A08F6E', highlight: '#FFFFFF', accentShade: '#B59E78' },
-        night: { bg: '#1A1814', water: '#10161A', waterLine: '#2A3A40', land: '#1C1A16', wood: '#1E1D17', road: '#3A362E', roadMinor: '#2E2B25', casing: '#EDE4D3', label: '#D8CFBE', halo: '#1A1814', boundary: '#3A362E', contour: '#4E4230', shadow: '#080706', highlight: '#2A2620', accentShade: '#14120E' }
+        night: { bg: '#1B1712', water: '#10161A', waterLine: '#26343A', land: '#1D1914', wood: '#1F1C15', road: '#36312A', roadMinor: '#2B2721', casing: '#A99F8C', label: '#A89E8C', halo: '#1B1712', boundary: '#332F28', contour: '#3A3126', shadow: '#080706', highlight: '#28231C', accentShade: '#14120E' }
       }
     }
   };

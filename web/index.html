@@ -444,6 +444,13 @@
     .end-links > * { margin: 0; padding: 8px 4px; line-height: 1.2; }
     .ob-strip { width: 100%; max-width: 420px; margin: 26px auto 0; border-top: 2px solid var(--panel-ink); border-bottom: 1px solid var(--rule); text-align: left; }
     .ob-strip .notes { position: static; min-height: 84px; }
+    /* Night is a mode, not a token swap (REVIEW.md roadmap 11): bigger numbers, fewer things, the map quieter (themes.js) */
+    html[data-mode="night"] .rb-box.now .rb-dist b { font-size: 38px; }
+    html[data-mode="night"] .rb-box.now .rb-call span:first-child { font-size: 24px; }
+    html[data-mode="night"] .rb-box:not(.now) .rb-call span.rb-mods, html[data-mode="night"] #lapBar small, html[data-mode="night"] .rb-lanes .lane:not(.use):not(.ok) { display: none; }
+    html[data-mode="night"] #app.live .ds-warn { display: none; }
+    html[data-mode="night"] #app.live .ds-main { font-size: 17px; }
+    html[data-mode="night"] .dial-num { font-size: 18px; } html[data-mode="night"] .ro b { font-size: 21px; }
     .rc-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 18px; margin-top: 10px; }
     label.linkbtn { display: inline-flex; align-items: center; cursor: pointer; }
     .linkbtn { font: inherit; font-size: 15px; font-weight: 500; color: var(--panel-ink); text-decoration: underline; min-height: 44px; padding: 0 4px; background: none; border: none; }
