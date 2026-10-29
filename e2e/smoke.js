@@ -366,6 +366,43 @@ flow('routes from elsewhere: a GPX track is followed as drawn; a pasted Google M
   check(JSON.stringify(locs) === JSON.stringify([[35.9606, -83.9207], [35.8, -83.95], [35.7565, -83.97]]), 'the link\'s stops, in order: ' + JSON.stringify(locs));
 }, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
 
+flow('CarPlay feed: a planned route sends its line, every corner and the theme; the car can mute and ask again (CarPlay/ApexCarPlay.swift)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
+    window.__car = []; window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'car') window.__car.push(m); } } } }; });
+  await page.route('https://photon.komoot.io/**', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ features: [
+    { geometry: { coordinates: [-83.9700, 35.7565] }, properties: { name: 'Maryville', state: 'Tennessee' } }] }) }));
+  await page.route('https://valhalla1.openstreetmap.de/**', (route) => {
+    const req = JSON.parse(route.request().postData() || '{}');
+    if (!req.locations) return route.abort();
+    const t = stubTrip(req.locations), a = req.locations[0], b = req.locations[req.locations.length - 1], pts = [];
+    for (let i = 0; i <= 3000; i++) {   // a mountain road: tight bends (about 70 m radius), so the route has corners to rate
+      const f = i / 3000, w = Math.sin(f * Math.PI * 220) * 0.0007 * Math.sin(f * Math.PI);
+      pts.push([a.lat + (b.lat - a.lat) * f + w, a.lon + (b.lon - a.lon) * f - w]);
+    }
+    t.trip.legs[0].shape = polyline6(pts); t.trip.legs[0].maneuvers[1].begin_shape_index = 1500; t.trip.legs[0].maneuvers[2].begin_shape_index = 3000;
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify(t) });
+  });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && typeof window.apex.onNative === 'function');
+  const kinds = () => page.evaluate(() => window.__car.map((m) => m.kind));
+  check((await kinds()).includes('look'), 'the theme goes to the car at start');
+  await page.evaluate(() => window.apex.live({ lat: 35.6, lon: -84.1, accuracy_m: 5, speed_mps: 0, course_deg: 0, has_fix: true }));   // the shell's fix, as in the app
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'go', lat: 35.7565, lon: -83.97, name: 'Maryville' }));
+  await page.waitForFunction(() => window.__car.some((m) => m.kind === 'route') && window.__car.some((m) => m.kind === 'corners' && m.list.length), null, { timeout: 20000 });
+  const r = await page.evaluate(() => ({ route: window.__car.find((m) => m.kind === 'route'), corners: window.__car.filter((m) => m.kind === 'corners').pop(),
+    look: window.__car.filter((m) => m.kind === 'look').pop() }));
+  check(r.route.options[0].detail.includes('corner'), 'the route choice says its corners: ' + JSON.stringify(r.route.options[0]));
+  check(r.corners.list.every((c) => Array.isArray(c.at) && /^[LR](HP|\d)$/.test(c.text)), 'every corner placed and rated: ' + JSON.stringify(r.corners.list.slice(0, 3)));
+  check(r.look.theme === 'roadbook' && r.look.voice === true && /^#/.test(r.look.card), 'the look: ' + JSON.stringify(r.look));
+  // a car screen that connects later asks again and gets the route and the look again
+  await page.evaluate(() => { window.__car = []; window.apex.onNative({ type: 'carplay', action: 'hello' }); });
+  await page.waitForFunction(() => ['route', 'corners', 'look', 'places'].every((k) => window.__car.some((m) => m.kind === k)));
+  // the mute map button
+  await page.evaluate(() => { window.__car = []; window.apex.onNative({ type: 'carplay', action: 'voice' }); });
+  await page.waitForFunction(() => window.__car.some((m) => m.kind === 'look' && m.voice === false));
+  check(await page.evaluate(() => apexDebug.state.toggles.voice === false), 'the voice is off on the phone too');
+});
+
 flow('the car connects: CarPlay offers Start drive, and an apexnav://open?go=drive link starts one', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.goto(base + '/index.html');

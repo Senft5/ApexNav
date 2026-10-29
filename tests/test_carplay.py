@@ -65,3 +65,51 @@ def test_only_road_hazards_alert_the_car():
     assert "if (text && opts.alert && driveActive) carPost({ kind: 'hazard'" in html
     # the urgent speech lane also carries turn-now directions and crests: only member, reported and convoy hazards set alert
     assert html.count("alert: true") == 3
+
+
+MAPRUN = r"""
+const C = require(process.argv[1] + '/web/carplay.js');
+const t = { events: [{ type: 'corner', dir: 'L', severity: 4, lat: 35.1, lon: -83.9 }, { type: 'corner', dir: 'R', severity: 'HP', dist_m: 500 },
+  { type: 'corner', dir: 'R', severity: 2, dist_m: 900 }, { type: 'bump', dist_m: 100 }, { type: 'corner', dir: 'R', severity: 3 }] };
+const at = (m) => ({ lat: 35 + m / 1e5, lon: -84 });
+console.log(JSON.stringify({
+  corners: C.cornersMessage(t, at), none: C.cornersMessage(null, at),
+  hazards: C.hazardsMessage([{ id: 7, kind: 'gravel', lat: 35.2, lon: -83.5 }, { id: 8, label: 'Cattle grid', lat: 35, lon: -83 }, { id: 9, kind: 'x' }], { gravel: 'Gravel' }),
+  look: C.lookMessage({ id: 'tapedeck', night: { panel: '#0A0C0B', panelInk: '#7DF5DE', accent: '#FFB347' } }, false),
+  tulips: [10, 15, 17, 12, 4, 26].map((k) => C.tulipSVG(k, '#7DF5DE')), bad: C.tulipSVG(10, 'red;x'),
+  withCorners: C.routeMessage({ lat: [35, 35.01], lon: [-84, -84], dist: [0, 1100], timeS: 120, events: t.events }, null, 0, (m) => `${m} m`).options[0].detail,
+}));
+"""
+
+
+@pytest.fixture(scope="module")
+def maps():
+    return json.loads(subprocess.run([NODE, "-e", MAPRUN, ROOT], capture_output=True, text=True, check=True).stdout)
+
+
+def test_the_cars_map_gets_every_rated_corner_at_its_apex(maps):
+    # a corner with no position of its own is placed along the route; one with neither, or no direction, is left out
+    assert maps["corners"]["list"] == [
+        {"at": [35.1, -83.9], "text": "L4", "tight": False},
+        {"at": [35.005, -84], "text": "RHP", "tight": True},
+        {"at": [35.009, -84], "text": "R2", "tight": True},
+    ]
+    assert maps["none"]["list"] == []
+
+
+def test_hazards_are_named_and_unplaceable_ones_dropped(maps):
+    assert maps["hazards"]["list"] == [{"id": "7", "at": [35.2, -83.5], "title": "Gravel"}, {"id": "8", "at": [35, -83], "title": "Cattle grid"}]
+
+
+def test_the_look_carries_the_theme_and_its_dark_card(maps):
+    assert maps["look"] == {"kind": "look", "theme": "tapedeck", "card": "#0A0C0B", "cardInk": "#7DF5DE", "accent": "#FFB347", "voice": False}
+
+
+def test_turn_symbols_are_tulips_in_the_cards_ink_and_never_take_markup(maps):
+    assert all(s.startswith("<svg") and 'stroke="#7DF5DE"' in s for s in maps["tulips"])
+    assert len(set(maps["tulips"])) == len(maps["tulips"])          # each turn draws differently
+    assert "red;x" not in maps["bad"] and 'stroke="#EDE4D3"' in maps["bad"]
+
+
+def test_a_route_choice_says_its_distance_and_corners(maps):
+    assert maps["withCorners"] == "1100 m · 4 corners"   # every corner counts, placeable on the map or not

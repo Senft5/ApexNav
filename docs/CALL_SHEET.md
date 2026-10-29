@@ -6,6 +6,20 @@ it says so. Things only you can do are in docs/OWNER_TODO.md.
 
 ## 2026-10-29
 
+**CarPlay, parts 2 and 3: our map, the road book and the full template set.** Built to the mockups the owner approved
+(docs/design/carplay). My calls:
+- *The car's map is a web page* (web/carmap.html in a WKWebView in the base view), sharing the phone's style, palettes,
+  hill shading and contours (web/basemap.js), so the three themes look the same in the car with no second map engine. It
+  draws only map content and takes no touches, which is what the guide asks of the base view.
+- *Corner ratings and hazards are DOM plates near the car*, not every corner of a long route: the 40 nearest within about
+  6 km while driving, up to 160 in a trip preview.
+- *The guidance card takes the theme's night panel* in day and night alike, so the tulip (drawn in its ink) and Apple's
+  white text read on it whatever the car's screen does.
+- *Loops in the car are 30 minutes, 1 hour and 2 hours*; Explore stays on the phone (it is a list of roads to read).
+- *Report in the car is the six fixed kinds*; a Factory crew's own categories stay on the phone.
+- *Lane guidance is not in this build*: CPLaneGuidance needs per-maneuver lane data the page doesn't carry yet (CARPLAY.md 4).
+Undo: revert CarPlay/ApexCarPlay.swift, web/carmap.*, web/basemap.js and the car wiring in web/index.html and web/carplay.js.
+
 **CarPlay, part 1: the engine without the phone, and the pack's voice in the car.** The owner tried CarPlay: Apple Maps
 under our route, SF arrows, and the system voice. Two causes, both ours. The cockpit page (the route engine) was made by
 the phone's window, so a car that opened the app cold had nothing to plan with; now `ApexEngine` owns the page and the

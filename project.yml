@@ -73,6 +73,17 @@ targets:
               - UISceneClassName: CPTemplateApplicationScene
                 UISceneConfigurationName: CarPlay
                 UISceneDelegateClassName: $(PRODUCT_MODULE_NAME).ApexCarPlaySceneDelegate
+            # the CarPlay Dashboard's map and the car's own instrument cluster (supported cars): our map again
+            CPTemplateApplicationDashboardSceneSessionRoleApplication:
+              - UISceneClassName: CPTemplateApplicationDashboardScene
+                UISceneConfigurationName: CarPlay-Dashboard
+                UISceneDelegateClassName: $(PRODUCT_MODULE_NAME).ApexCarDashboardSceneDelegate
+            CPTemplateApplicationInstrumentClusterSceneSessionRoleApplication:
+              - UISceneClassName: CPTemplateApplicationInstrumentClusterScene
+                UISceneConfigurationName: CarPlay-Cluster
+                UISceneDelegateClassName: $(PRODUCT_MODULE_NAME).ApexCarClusterSceneDelegate
+        CPSupportsDashboardNavigationScene: true
+        CPSupportsInstrumentClusterNavigationScene: true
         # Portrait, or landscape for landscape mounts (IDEAS U-16: the cockpit has a landscape layout)
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
         NSLocationWhenInUseUsageDescription: "Required for live turn-by-turn navigation and road-feel mapping."

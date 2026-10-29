@@ -169,13 +169,13 @@ final class ApexEngine {
     static let shared = ApexEngine()
     let shell = ApexSensorShell()
     private var webView: WKWebView?
-    private var coordinator: ApexCockpitWebView.Coordinator?
+    private var coordinator: ApexCockpitWebView.PageDelegate?
 
     /// The cockpit page, made and loaded the first time a scene needs it.
     func cockpit() -> WKWebView? {
         if let webView { return webView }
         guard let indexURL = ApexWebBundle.indexURL else { return nil }
-        let c = ApexCockpitWebView.Coordinator(shell: shell)
+        let c = ApexCockpitWebView.PageDelegate(shell: shell)
         let wv = ApexCockpitWebView.makeWebView(shell: shell, indexURL: indexURL, coordinator: c)
         coordinator = c
         webView = wv
@@ -189,7 +189,7 @@ final class ApexEngine {
 struct ApexCockpitWebView: UIViewRepresentable {
 
     @MainActor
-    final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
+    final class PageDelegate: NSObject, WKNavigationDelegate, WKUIDelegate {   // held by ApexEngine, not SwiftUI
         let shell: ApexSensorShell
 
         init(shell: ApexSensorShell) {
@@ -272,7 +272,7 @@ struct ApexCockpitWebView: UIViewRepresentable {
     func updateUIView(_ uiView: WKWebView, context: Context) {}
 
     @MainActor
-    static func makeWebView(shell: ApexSensorShell, indexURL: URL, coordinator: Coordinator) -> WKWebView {
+    static func makeWebView(shell: ApexSensorShell, indexURL: URL, coordinator: PageDelegate) -> WKWebView {
         let contentController = WKUserContentController()
         let embedFlag = WKUserScript(
             source: "window.APEX_EMBED = true; window.APEX_PLATFORM = 'ios';",
@@ -943,6 +943,7 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
     private func pushLiveFrame() {
         let vertPeak = pipeline.takeVertPeak()   // this frame's spike window; the web Recorder places it on the road
         let impact = frameImpactMps2; frameImpactMps2 = 0
+        if hasFix { ApexCar.shared.position(lat: latDeg, lon: lonDeg, course: courseDeg ?? -1) }   // the car's maps (CarPlay), even before the page is ready
         guard webReady, webView != nil else { return }
         let live = imuLive   // false while the thermal guard has motion paused: g, camber, crest and roughness are unknown
         func imu(_ v: Double) -> Double? { live ? v : nil }

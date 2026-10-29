@@ -76,43 +76,39 @@ From the guide's "Guidelines for all CarPlay apps" and "Additional guidelines fo
 | Widgets in CarPlay (iOS 26): a widget that only opens the app on iPhone sets `disfavoredLocations([.carPlay])` | The Start-a-drive widget opens the app; once Vetta is a CarPlay app it opens it in CarPlay too, so it is set when the CarPlay build lands |
 | Live Activities in CarPlay (iOS 26) | Already shown: without the small family CarPlay uses the compact Dynamic Island views (distance, next note). The small family can be added with the CarPlay build |
 
-## 3. What is built (2026-10-28) and how to try it
+## 3. What is built (2026-10-29, rebuilt after the owner's first drive) and how to try it
 
-`CarPlay/ApexCarPlay.swift` and `web/carplay.js`: the page stays the one brain (routing, directions, notes, hazards); the
-car's screen shows what it decides and sends back what the driver picks.
+`CarPlay/ApexCarPlay.swift`, `web/carplay.js` and the car's map (`web/carmap.html`, `web/carmap.js`). The cockpit page stays
+the one brain (routing, directions, notes, hazards, the voice); it runs in `ApexEngine` (ApexNavApp.swift) whether or not
+the phone's window was ever opened, so the car can open Vetta cold. Mockups: docs/design/carplay (blue tags Apple draws,
+yellow tags we do).
 
-- **Root:** our map (route line, position, follow / follow with heading while guiding), Search and Places buttons, zoom,
-  recentre and pan map buttons.
-- **Search:** Apple's place search near you (CPSearchTemplate); **Places:** recent destinations from the phone.
-- **Trip preview:** the cockpit's route options ("Fun 99 · 77 min") as up to three route choices with distance and time;
-  picking one switches the route on the phone too; Drive starts the drive.
-- **Guidance:** CPNavigationSession with the next maneuver (instruction, street, symbol, distance to it) and the trip's
-  distance and time left; End on the car ends the drive; the car's own navigation starting ends it too.
-- **Hazards:** every hazard the co-driver calls shows as a navigation alert for 8 s.
+- **Our map in the base view:** the phone's theme (Roadbook, Tapedeck, Billet: the same OpenFreeMap style, palettes, hill
+  shading and contours, web/basemap.js), day or night from the car's screen; the route, every corner's rating at its apex
+  (tight ones filled), the hazard plate for reported hazards, the position puck; following the car heading-up while
+  guiding, the whole route in a trip preview. It takes no touches: Apple's templates own every control.
+- **Root:** Where to? and Loops on the left, Places on the right; pan, zoom in, zoom out and the voice (mute) as map buttons.
+- **Where to?:** Apple's place search near you; **Loops:** 30 minutes, 1 hour or 2 hours, a twisty loop from where you are;
+  **Places:** recent destinations from the phone.
+- **Trip preview:** up to three route choices ("Fun 99 · 77 min", "32.6 mi · 186 corners"); picking one switches the route on
+  the phone too; Drive starts the drive.
+- **Guidance:** the maneuver card in the theme's dark (`guidanceBackgroundColor`) with the road book's tulip as the symbol
+  (drawn by the page, web/carplay.js tulipSVG), distance and time to it, trip estimates; End; the car's own navigation
+  starting ends ours. While driving the map buttons are Report, voice, zoom in and zoom out.
+- **Hazards:** a called hazard is a navigation alert with the hazard plate; passing a reported one asks "Still there?" with
+  Still there and Gone; Report opens a grid of the six kinds.
+- **Voice:** the theme's voice pack, played by the shell (`ApexClipPlayer`), so a locked phone still speaks in the pack's
+  voice, ducking the car's audio.
+- **Dashboard and instrument cluster:** our map again in the CarPlay Dashboard and, in cars that have one, the instrument
+  cluster; the system shows the maneuver from the navigation session.
 - **Not in CarPlay:** scores, crews, friends, Log, settings (guideline: nothing unrelated to the drive).
 
-**Trying it** (Xcode on a Mac): every build carries `com.apple.developer.carplay-maps` (`project.yml`; Apple assigned it to
-the account on 2026-10-29). Run the app in an iPhone simulator, then I/O → External
-Displays → CarPlay. Screenshots of it are what the entitlement form wants.
+**Trying it** (Xcode on a Mac): run the app in an iPhone simulator, then I/O → External Displays → CarPlay; or the
+`carplay-shots` workflow on GitHub's Mac (workflow_dispatch) for screenshots.
 
-## 4. Still to build (after the entitlement arrives)
+## 4. Still to do
 
-1. **Entitlement and profile.** Granted 2026-10-29. `com.apple.developer.carplay-maps` is in ApexNav.entitlements for every
-   build (project.yml). The App Store Connect API has no CarPlay capability type (it accepts 28, none of them CarPlay),
-   so the App ID gets it either from cloud signing (`-allowProvisioningUpdates` on the TestFlight run) or, if that run
-   fails to sign, from the portal: Identifiers → com.senft.ApexNav → Capabilities → CarPlay Navigation (OWNER_TODO).
-2. **Scenes.** `UIApplicationSceneManifest` with the phone scene, `CPTemplateApplicationScene` and the Dashboard and
-   instrument cluster scenes (guide p. 64); delegates keep the interface controller and window.
-3. **Engine without the phone screen.** A shared drive engine the CarPlay scene can start on its own: the existing web
-   cockpit in a window-less web view (it already runs routing, directions, notes and hazards), talking to the CarPlay
-   scene through the same message bridge.
-4. **Map.** MapKit in the base view with the route line, position and hazard pins, light or dark from `contentStyle`;
-   map buttons for zoom in, zoom out and pan.
-5. **Flow.** Root: map template with "Where to?" (search) and "Saved" (pinned places, saved routes, stages near you) →
-   trip preview with up to three CPRouteChoices ("Quickest", "Twistiest", "Scenic") → navigation session with
-   maneuvers, estimates and reroute → end.
-6. **Hazards.** CPNavigationAlert for confirmed hazards ahead (gravel, debris, animal, closure), dismissed by time.
-7. **Dashboard and cluster.** The second map and next maneuver; maneuver metadata for the instrument cluster or HUD.
-8. **Testing.** CarPlay Simulator presets (748×456, 800×480, 1920×720, 900×1200; cluster presets), light and dark, a
-   locked phone, radio playing, a phone call during a prompt (promptStyle none), then a real car.
-9. **Review.** APP_REVIEW.md and LISTING.md updated (the listing may say CarPlay only once the build has it).
+1. **Lane guidance** (`CPLaneGuidance`, iOS 17.4+) once the router's lane data reaches the page's steps.
+2. **Testing in cars and presets:** CarPlay Simulator presets (748×456, 800×480, 1920×720, 900×1200; cluster presets), light
+   and dark, a locked phone, radio playing, a phone call during a prompt (promptStyle none), then a real car.
+3. **Review.** APP_REVIEW.md and LISTING.md updated (the listing may say CarPlay only once the build has it).
