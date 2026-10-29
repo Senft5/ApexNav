@@ -50,6 +50,7 @@
     let snap = null, undo = null, sectionHost = null, lastKey = null;
     const spoken = new Map();                                   // eventId -> 'far' | 'near': each hazard is called at most twice
     const markers = { cars: new Map(), hazards: new Map(), regroup: null };
+    let lastRegroup = null;
     const live = { headline: null, regroup: null, gaps: new Map() };   // text nodes updated in place
 
     const client = new C.ConvoyClient({
@@ -119,6 +120,10 @@
         const pin = el('div', { className: 'convoy-pin', textContent: (C.KINDS[e.type] || 'Hazard').toUpperCase() });
         markers.hazards.set(k, new maplibregl.Marker({ element: pin }).setLngLat([e.anchor.lon, e.anchor.lat]).addTo(map));
       }
+      // a new regroup point: the page says it (crew_voice.js: a Factory crew's own line, else "Regroup at ...")
+      const rgKey = client.regroup ? `${client.regroup.lat},${client.regroup.lon},${client.regroup.note || ''}` : null;
+      if (want && rgKey && rgKey !== lastRegroup && page.onRegroup) page.onRegroup(client.regroup, want && want.ctx ? want.ctx.name : '');
+      lastRegroup = rgKey;
       const rg = want && client.regroup;
       if (!rg && markers.regroup) { markers.regroup.remove(); markers.regroup = null; }
       if (rg) {

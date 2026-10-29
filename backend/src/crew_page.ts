@@ -20,7 +20,7 @@ const NOT_BLOCKED = (who: string) =>
 interface CrewRow { id: string; name: string; owner: string; visibility: string; about: string | null; area_name: string | null; motto: string | null;
   crest: string | null; stripe: string | null; cover_photo_id: string | null; crest_photo_id: string | null; members: number;
   stripe2: string | null; stripe3: string | null; pattern: string | null; pinned_route_id: string | null; pinned_name: string | null;
-  pinned_chat_id: string | null; house_canon_id: string | null; call_sign: string | null; hazard_kinds: string }
+  pinned_chat_id: string | null; house_canon_id: string | null; call_sign: string | null; hazard_kinds: string; regroup_line: string | null }
 interface BoardRow { handle: string | null; photo_id: string | null; score: number | null; mine: number; car: string | null; badge: string | null }
 
 /** GET /api/crews/:id/page */
@@ -28,7 +28,7 @@ export async function crewPage(env: Env, v: Viewer, crewId: string) {
   if (!(await isCrewMember(env, crewId, v.id))) throw new HttpError(404, "no_crew");
   const c = await env.DB.prepare(`SELECT c.id, c.name, c.owner, c.visibility, c.about, c.area_name, c.motto, c.crest, c.stripe, c.cover_photo_id, c.crest_photo_id,
       c.stripe2, c.stripe3, c.pattern, c.pinned_route_id, (SELECT r.name FROM shared_routes r WHERE r.id = c.pinned_route_id) AS pinned_name,
-      c.pinned_chat_id, c.house_canon_id, c.call_sign, c.hazard_kinds,
+      c.pinned_chat_id, c.house_canon_id, c.call_sign, c.hazard_kinds, c.regroup_line,
       (SELECT COUNT(*) FROM crew_members x WHERE x.crew_id = c.id) AS members FROM crews c WHERE c.id = ?`).bind(crewId).first<CrewRow>();
   if (!c) throw new HttpError(404, "no_crew");
   // The board: every member you can see, with their best Score this month as published to this crew (grant on), else
@@ -63,7 +63,9 @@ export async function crewPage(env: Env, v: Viewer, crewId: string) {
     livery: { ...livery, mine }, stripe2: club ? c.stripe2 : null, stripe3: works ? c.stripe3 : null, pattern: works ? c.pattern : null,
     crest_photo_id: club ? c.crest_photo_id : null, pinned: club && c.pinned_route_id && c.pinned_name ? { id: c.pinned_route_id, name: c.pinned_name } : null, routes,
     pinned_chat: pinnedChat, house, stages, call_sign: works ? c.call_sign : null,
-    hazard_kinds: atLeast(livery.tier, "factory") ? (JSON.parse(c.hazard_kinds) as string[]) : [], templates_cap: templateCap(livery.tier), board: board.map((r) => ({ ...r, mine: !!r.mine, badge: works ? r.badge : null })), next, sharing_scores: !!grant?.share_scores,
+    hazard_kinds: atLeast(livery.tier, "factory") ? (JSON.parse(c.hazard_kinds) as string[]) : [],
+    regroup_line: atLeast(livery.tier, "factory") ? c.regroup_line : null,
+    voice_packs: atLeast(livery.tier, "factory") ? (await env.DB.prepare("SELECT pack FROM crew_voice WHERE crew_id = ?").bind(crewId).all<{ pack: string }>()).results.map((r) => r.pack) : [], templates_cap: templateCap(livery.tier), board: board.map((r) => ({ ...r, mine: !!r.mine, badge: works ? r.badge : null })), next, sharing_scores: !!grant?.share_scores,
   };
 }
 
@@ -72,7 +74,7 @@ export async function crewPageUpdate(env: Env, v: Viewer, crewId: string, req: R
   const own = await env.DB.prepare("SELECT 1 FROM crews WHERE id = ? AND owner = ?").bind(crewId, v.id).first();
   if (!own) throw new HttpError(404, "no_crew");
   const b = await body<{ motto?: unknown; crest?: unknown; stripe?: unknown; stripe2?: unknown; stripe3?: unknown; pattern?: unknown; pinned_route_id?: unknown;
-    pinned_chat_id?: unknown; house_canon_id?: unknown; call_sign?: unknown; hazard_kinds?: unknown }>(req);
+    pinned_chat_id?: unknown; house_canon_id?: unknown; call_sign?: unknown; hazard_kinds?: unknown; regroup_line?: unknown }>(req);
   const sets: string[] = [], args: unknown[] = [];
   let tier: Tier | null = null;
   const need = async (t: Tier) => { tier = tier ?? (await liveryOf(env, crewId)).tier; if (!atLeast(tier, t)) throw new HttpError(403, `needs_${t}`); };
@@ -138,6 +140,16 @@ export async function crewPageUpdate(env: Env, v: Viewer, crewId: string, req: R
     if (kinds.length) await need("factory");
     sets.push("hazard_kinds = ?"); args.push(JSON.stringify(kinds));
   }
+  let lineChanged = false;
+  if (b.regroup_line !== undefined) {   // Factory: the crew's regroup line; a new line drops the clips of the old one
+    const l = b.regroup_line === null || b.regroup_line === "" ? null : cleanText(b.regroup_line, 60)?.replace(/\s+/g, " ").trim() || null;
+    if (b.regroup_line && !l) throw new HttpError(400, "bad_regroup_line");
+    if (l) await need("factory");
+    const now = await env.DB.prepare("SELECT regroup_line FROM crews WHERE id = ?").bind(crewId).first<{ regroup_line: string | null }>();
+    lineChanged = (now?.regroup_line ?? null) !== l;
+    sets.push("regroup_line = ?"); args.push(l);
+  }
+  if (lineChanged) await crewVoiceClear(env, crewId);
   if (!sets.length) return;
   await env.DB.prepare(`UPDATE crews SET ${sets.join(", ")} WHERE id = ?`).bind(...args, crewId).run();
 }
@@ -237,4 +249,48 @@ export async function templateDelete(env: Env, v: Viewer, crewId: string, tid: s
   const r = await env.DB.prepare(`DELETE FROM crew_event_templates WHERE id = ? AND crew_id = ? AND EXISTS (SELECT 1 FROM crews WHERE id = ? AND owner = ?)`)
     .bind(tid, crewId, crewId, v.id).run();
   if (!r.meta.changes) throw new HttpError(404, "no_template");
+}
+
+// ---- the crew's regroup line in each pack's voice (Factory) --------------------------------------------------------
+export const VOICE_PACKS = ["marguerite", "kit", "hale"] as const;
+export const VOICE_MAX_BYTES = 400_000;
+async function crewVoiceClear(env: Env, crewId: string) {
+  if (env.PHOTOS) for (const p of VOICE_PACKS) await env.PHOTOS.delete(`cv/${crewId}/${p}`);
+  await env.DB.prepare("DELETE FROM crew_voice WHERE crew_id = ?").bind(crewId).run();
+}
+
+/** PUT /api/crews/:id/voice/:pack (owner, Factory, a line set): the line rendered in that pack's voice, as WAV. */
+export async function crewVoicePut(env: Env, v: Viewer, crewId: string, pack: string, req: Request): Promise<void> {
+  if (!env.PHOTOS) throw new HttpError(503, "voice_off");
+  if (!VOICE_PACKS.includes(pack as typeof VOICE_PACKS[number])) throw new HttpError(400, "bad_pack");
+  const c = await env.DB.prepare("SELECT regroup_line FROM crews WHERE id = ? AND owner = ?").bind(crewId, v.id).first<{ regroup_line: string | null }>();
+  if (!c) throw new HttpError(404, "no_crew");
+  if (!c.regroup_line) throw new HttpError(400, "no_line");
+  if (!atLeast((await liveryOf(env, crewId)).tier, "factory")) throw new HttpError(403, "needs_factory");
+  if (!(req.headers.get("content-type") || "").startsWith("audio/wav")) throw new HttpError(415, "wav_only");
+  const bytes = new Uint8Array(await req.arrayBuffer());
+  if (!bytes.length || bytes.length > VOICE_MAX_BYTES) throw new HttpError(413, "too_big");
+  const tag = String.fromCharCode(...bytes.subarray(0, 4)) + String.fromCharCode(...bytes.subarray(8, 12));
+  if (tag !== "RIFFWAVE") throw new HttpError(400, "not_wav");
+  await env.PHOTOS.put(`cv/${crewId}/${pack}`, bytes);
+  await env.DB.prepare(`INSERT INTO crew_voice (crew_id, pack, bytes) VALUES (?, ?, ?) ON CONFLICT (crew_id, pack) DO UPDATE SET bytes = excluded.bytes, created_at = datetime('now')`)
+    .bind(crewId, pack, bytes.length).run();
+}
+
+/** GET /api/crews/:id/voice/:pack: the clip, to the crew's members, while the crew is Factory. */
+export async function crewVoiceGet(env: Env, v: Viewer, crewId: string, pack: string): Promise<Response> {
+  if (!env.PHOTOS || !(await isCrewMember(env, crewId, v.id))) throw new HttpError(404, "no_voice");
+  if (!atLeast((await liveryOf(env, crewId)).tier, "factory")) throw new HttpError(404, "no_voice");
+  const bytes = await env.PHOTOS.get(`cv/${crewId}/${pack}`, "arrayBuffer");
+  if (!bytes) throw new HttpError(404, "no_voice");
+  return new Response(bytes, { headers: { "content-type": "audio/wav", "cache-control": "private, max-age=86400", "x-content-type-options": "nosniff" } });
+}
+
+/** GET /api/crews/voices: your Factory crews with a regroup line, the packs it's rendered in, and how a convoy names them. */
+export async function crewVoices(env: Env, v: Viewer) {
+  const rows = (await env.DB.prepare(`SELECT c.id, c.name, c.call_sign, c.regroup_line, (SELECT json_group_array(pack) FROM crew_voice cv WHERE cv.crew_id = c.id) AS packs
+      FROM crews c JOIN crew_members m ON m.crew_id = c.id AND m.user_id = ? WHERE c.regroup_line IS NOT NULL`).bind(v.id).all<{ id: string; name: string; call_sign: string | null; regroup_line: string; packs: string }>()).results;
+  const out = [];
+  for (const r of rows) if (atLeast((await liveryOf(env, r.id)).tier, "factory")) out.push({ ...r, packs: JSON.parse(r.packs) as string[] });
+  return out;
 }

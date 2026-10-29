@@ -115,7 +115,12 @@
         else {
           const f = btn(b.following ? 'Following' : 'Follow', async () => {
             const x = await call(b.following ? 'DELETE' : 'PUT', `/api/builds/${encodeURIComponent(id)}/follow`);
-            if (x && x.ok) draw(); else toast('Couldn’t change that. Try again.');
+            if (x && x.ok) {
+              // in the app: may it notify about new steps (ApexBuildNotifier.swift)? asked now, when it means something
+              const native = root.webkit && root.webkit.messageHandlers && root.webkit.messageHandlers.apex;
+              if (!b.following && native) { try { native.postMessage({ cmd: 'notifyBuilds' }); } catch (_) {} }
+              draw();
+            } else toast('Couldn’t change that. Try again.');
           }, b.following ? 'ink-btn solid' : 'ink-btn');
           f.setAttribute('aria-pressed', String(!!b.following));
           top.append(f);

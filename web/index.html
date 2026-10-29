@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-DsomX75rA1K7ZvQy5tpb2+v9Yd0visaQwcWBeDXEI5Q=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-8SjKM9gePCKz5zciwG0t0xqFGTESXP2n2duop5mcH3c=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -62,6 +62,7 @@
   <script src="saved_routes.js"></script>
   <script src="crew_events.js"></script>
   <script src="crew_page.js"></script>
+  <script src="crew_voice.js"></script>
   <script src="health.js"></script>
   <script src="scenic.js"></script>
   <script src="eta_share.js"></script>
@@ -4267,6 +4268,7 @@
       getRoute: () => (track && track.kind === 'route' && track.lat.length > 1 ? { name: track.name, pts: track.lat.map((la, i) => [la, track.lon[i]]) } : null),
       // A close hazard cuts in; a far one goes next, after the pace note being spoken (never dropping the notes queued).
       speak: (text, urgent) => { if (!state.toggles.voice) toast(text); else if (urgent) say(text, true, null, null, { kind: 'hazard', alert: true }); else sayNext(text, `convoy:${text}`); },
+      onRegroup: (rg, convoyName) => regroupSay(rg, convoyName),
     }) : null; } catch (e) { console.error('convoy', e); convoy = null; }   // the convoy never takes the page down
     // Garage (web/garage_ui.js): your cars, and the ones friends and crew-mates show.
     // Block and report (web/safety_ui.js) on every social surface below; the garage uses it for friends' cars.
@@ -4281,6 +4283,26 @@
       goTo: (p) => { closeSheet(); routeToPlace(p); }, openRoute: (id) => openSharedRoute(id),
       startConvoy: (name, handles) => (convoy && convoy.startFor ? convoy.startFor(name, handles) : Promise.resolve({ ok: false, status: 0 })),
     }) : null; } catch (e) { console.error('crew drives', e); }
+    // A regroup call in a convoy (crew_voice.js): a Factory crew's own line in the theme pack's voice when the convoy is the
+    // crew's and the clip exists; otherwise "Regroup at <note>" like any other line. The note is always on screen.
+    let crewVoiceList = null;
+    async function regroupSay(rg, convoyName) {
+      if (!state.toggles.voice) { toast(ApexCrewVoice.regroupText(rg)); return; }
+      if (crewVoiceList === null && accountMe && accountMe.member) crewVoiceList = await apiCall('GET', '/api/crews/voices').then(jsonOf).catch(() => []) || [];
+      const crew = ApexCrewVoice.crewOf(convoyName, crewVoiceList || []), pack = ['marguerite', 'kit', 'hale'].includes(state.voiceId) ? state.voiceId : 'marguerite';
+      if (crew && crew.packs.includes(pack)) {
+        try {
+          const r = await ApexSync.apiFetch(`/api/crews/${encodeURIComponent(crew.id)}/voice/${pack}`);
+          if (r.ok) {
+            const c = ApexVoice.unlock(), buf = await c.decodeAudioData(await r.arrayBuffer()), src = c.createBufferSource();
+            src.buffer = buf; src.connect(c.destination); src.start();
+            if (rg.note) toast(`Regroup at ${rg.note}`);
+            return;
+          }
+        } catch (_) { /* no clip after all: the plain line */ }
+      }
+      say(ApexCrewVoice.regroupText(rg), false);
+    }
     // The crew page (web/crew_page.js, REVIEW.md roadmap 20): the Crew tab opens your crew.
     let crewPage = null, crewDrivesEl = null;
     const toDrives = () => { if (crewDrivesEl) crewDrivesEl.scrollIntoView({ behavior: 'smooth', block: 'start' }); };

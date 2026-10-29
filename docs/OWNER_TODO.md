@@ -9,7 +9,6 @@ something blocks on you, delete it once it's done. Everything else is in docs/ID
 
 | what | why | how long |
 |---|---|---|
-| **Create an APNs key**: developer.apple.com → Certificates, IDs & Profiles → Keys → + → Apple Push Notifications service; download the .p8 once and tell Claude its Key ID (Claude stores it as a Worker secret) | Following a build thread can then send a notification per new step (REVIEW.md 5.3); today "Builds you follow" just counts new steps | 5 min |
 | **Turn on R2** in the Cloudflare dashboard (R2 → Purchase/Enable; the free tier is 10 GB with no egress fees, a card is needed on file) and tell Claude | Photos (profiles, cars, crews, build threads) live in Workers KV for now, which costs more per GB and caps a photo at 25 MB (ours are under 0.7 MB, so it works). Claude moves them to R2 once it's on | 5 min |
 
 ## Money and marketing (new, 2026-10-28)

@@ -110,7 +110,7 @@
         document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 10000);
       }, 'linkbtn'));
       if (convoyOpen(e)) acts.append(btn('Start the convoy', async () => {
-        const r = await page.startConvoy(e.call_sign ? `${e.call_sign} \u00b7 ${e.title}` : e.title, e.going);   // a Works crew's call sign
+        const r = await page.startConvoy(`${e.call_sign || e.crew_name} \u00b7 ${e.title}`, e.going);   // named after the crew (its call sign at Works): crew_voice.js finds it
         if (!r.ok) toast(r.status === 'busy' ? 'You\'re already in a convoy.' : r.status === 429 ? 'You already lead two convoys. End one first.' : 'Couldn\'t start the convoy. Try again.');
         else toast(r.invited ? `Convoy started. Invited ${r.invited} going.` : 'Convoy started.');
       }, 'ink-btn solid'));

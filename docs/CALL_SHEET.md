@@ -30,9 +30,14 @@ to 45 mi"). Undo: the two toasts are in git history.
   (crest, name, motto, tier, members, next drive; no photos, nobody's position), and up to four crew hazard categories
   ("Cattle grid"). *A crew's category is read only by its members*; everyone else's plate says Debris, so a label typed
   by one crew's owner never reaches strangers.
-- *Postponed with a technical reason*: the crew's spoken regroup line ("Ridge Runners, regroup at the overlook") needs the
-  pack's voice to say any crew's name. The packs are prerendered clips; saying an arbitrary name would need a voice model
-  on the phone (refused in the app by App Store 2.5.2) or a speech server. It comes if either exists.
+- *The crew's regroup line* (Factory) is rendered on the website, where the same Kokoro voices as the packs already run in
+  the browser, once per pack, and uploaded as WAV; the app only plays audio (App Store 2.5.2 allows that). Verified: Kit's
+  voice renders "Ridge Runners, regroup." as a 2.3 s, 112 KB clip in about 15 s. A convoy is the crew's when its name
+  starts with the crew's call sign or name (crew drives name their convoys that way now). Every regroup call is now spoken
+  to the convoy ("Regroup at the overlook."); before, it was only drawn. Migration 0039 is applied to both D1 databases.
+- *Notifications for builds you follow come without APNs*: a background app refresh (iOS picks the time, every few hours
+  at best) checks for new steps and posts a local notification. Permission is asked on Follow. The OWNER_TODO APNs row is
+  gone. Undo: drop ApexBuildNotifier.swift and the fetch background mode.
 - Migrations 0037 and 0038 are applied to both D1 databases.
 
 **The end of a drive speaks, and the plan sheet gets its Prefer stamps (REVIEW.md 4.4, 3.3).** My calls:

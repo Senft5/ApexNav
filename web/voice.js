@@ -245,9 +245,16 @@
     return true;
   }
 
+  // A line in any pack's Kokoro voice, for the crew regroup line (crew_voice.js): { audio, sampling_rate }, or null where
+  // the model can't run (the app: App Store 2.5.2) or a word can't be phonemised.
+  async function renderLine(text, kokoroVoice, speed = 1) {
+    if (IN_APP || !(await warmLive())) return null;
+    try { return await synthesize(text, kokoroVoice, speed); } catch (_) { return null; }
+  }
+
   async function voices() {
     try { return (await (await fetch('voices/index.json')).json()).voices; } catch (_) { return []; }
   }
 
-  root.ApexVoice = { load, play, tokensFor, cover, joins, playWhole, voices, speakLive, prefetch, warmLive, liveState, liveInfo, renderLive: render, unlock: audio, get bank() { return bank; } };
+  root.ApexVoice = { load, play, tokensFor, cover, joins, playWhole, voices, speakLive, prefetch, warmLive, liveState, liveInfo, renderLive: render, renderLine, canRenderLine: () => !IN_APP, unlock: audio, get bank() { return bank; } };
 })(window);

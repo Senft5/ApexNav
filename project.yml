@@ -13,6 +13,7 @@ targets:
     sources:
       - path: ApexNavApp.swift
       - path: ApexIntents.swift                         # Siri and Shortcuts (IDEAS V-07)
+      - path: ApexBuildNotifier.swift                   # new steps on builds you follow (REVIEW.md 5.3)
       - path: CarPlay/ApexCarPlay.swift                 # the car's screen (docs/CARPLAY.md)
       - path: LiveActivity/ApexDriveAttributes.swift   # shared with the ApexNavLive extension
       - path: Assets.xcassets      # AppIcon: web/brand/icon-1024.png (single-size iOS icon)
@@ -82,6 +83,9 @@ targets:
         UIBackgroundModes:
           - location
           - audio
+          - fetch                                         # builds you follow: a local notification per new step (ApexBuildNotifier.swift)
+        BGTaskSchedulerPermittedIdentifiers:
+          - com.senft.ApexNav.builds
         # Exports show in Files → On My iPhone → APEX NAV (needs both); a GPX opened from Files is read in place, never written
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true

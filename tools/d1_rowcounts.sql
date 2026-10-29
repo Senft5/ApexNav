@@ -54,5 +54,6 @@ SELECT
   (SELECT COUNT(*) FROM presence_samples) AS presence_samples,
   (SELECT COUNT(*) FROM build_chat) AS build_chat,
   (SELECT COUNT(*) FROM crew_event_templates) AS crew_event_templates,
+  (SELECT COUNT(*) FROM crew_voice) AS crew_voice,
   (SELECT COUNT(*) FROM d1_migrations) AS d1_migrations
 ;

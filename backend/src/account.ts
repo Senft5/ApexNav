@@ -55,6 +55,7 @@ export async function deleteAccount(env: Env, v: Viewer, req: Request): Promise<
   await convoysLeaveAll(env, v.id);                                  // live convoys first: leave them, or end the ones they lead
   await photosEraseOwner(env, v.id);                                 // the JPEGs in KV, then their rows (REVIEW.md 5.2)
   const owned = (await all<{ id: string }>(env, "SELECT id FROM crews WHERE owner = ?", v.id)).map((c) => c.id);
+  if (env.PHOTOS) for (const id of owned) for (const p of ["marguerite", "kit", "hale"]) await env.PHOTOS.delete(`cv/${id}/${p}`);   // crews' regroup clips
   const stmts: D1PreparedStatement[] = [];
   const run = (sql: string, ...a: unknown[]) => stmts.push(env.DB.prepare(sql).bind(...a));
   // things other people hold that point at this person (no foreign key, so removed by hand)

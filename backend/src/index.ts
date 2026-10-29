@@ -20,7 +20,7 @@ import {
 } from "./social";
 import { deleteAccount, exportMyData } from "./account";
 import { carCreate, carDelete, carUpdate, myCars, peoplesCars } from "./garage";
-import { chatDelete, chatList, chatPost, crewBadge, crewPage, crewPageUpdate, templateCreate, templateDelete, templatesList } from "./crew_page";
+import { chatDelete, chatList, chatPost, crewBadge, crewPage, crewPageUpdate, crewVoiceGet, crewVoicePut, crewVoices, templateCreate, templateDelete, templatesList } from "./crew_page";
 import { decalsPlace } from "./livery";
 import { presencePublish, presenceSettingsGet, presenceSettingsPut, presenceView } from "./presence";
 import { buildChatDelete, buildChatList, buildChatPost, buildCreate, buildDelete, buildFind, buildFollow, buildGet, buildUpdate, buildsFollowing, postCreate, postDelete, replyCreate, replyDelete, replyTried } from "./builds";
@@ -161,6 +161,9 @@ on("POST", "/api/crews/join", async (req, env) => json(await crewJoin(env, await
 on("POST", "/api/crews/invite/preview", async (req, env) => json(await crewInvitePreview(env, await requireMember(req, env), req)));
 on("POST", "/api/crews/:id/invite", async (req, env, m) => json(await crewInvite(env, await requireMember(req, env), m.groups!.id), 201));
 on("DELETE", "/api/crews/:id/invites", async (req, env, m) => json(await crewInvitesRevoke(env, await requireMember(req, env), m.groups!.id)));
+on("GET", "/api/crews/voices", async (req, env) => json(await crewVoices(env, await requireMember(req, env))));
+on("PUT", "/api/crews/:id/voice/:pack", async (req, env, m) => { await crewVoicePut(env, await requireMember(req, env), m.groups!.id, m.groups!.pack, req); return noContent(); });
+on("GET", "/api/crews/:id/voice/:pack", async (req, env, m) => crewVoiceGet(env, await requireMember(req, env), m.groups!.id, m.groups!.pack));
 on("GET", "/api/crews/discover", async (req, env) => json(await crewDiscover(env, await requireMember(req, env), new URL(req.url))));
 on("GET", "/api/crews/standings", async (req, env) => json(await crewStandings(env, await requireMember(req, env))));
 on("PUT", "/api/crews/:id", async (req, env, m) => { await crewUpdate(env, await requireMember(req, env), m.groups!.id, req); return noContent(); });

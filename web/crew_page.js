@@ -387,6 +387,7 @@
       const save = btn('Save', async () => {
         const body = { motto: motto.value.trim() || null, crest, stripe };
         if (club) { body.stripe2 = stripe2; body.pinned_route_id = routeSel.value || null; }
+        if (factory && regroupLine.value.trim() !== (c.regroup_line || '')) body.regroup_line = regroupLine.value.trim() || null;
         if (factory) body.hazard_kinds = hazardKinds.value.split(',').map((k) => k.trim()).filter(Boolean).slice(0, 4);
         if (works) { body.stripe3 = stripe3; body.pattern = pattern; body.call_sign = callSign.value.trim() || null; body.house_canon_id = houseSel.value || null; }
         const r = await apiCall('PUT', `/api/crews/${encodeURIComponent(c.id)}/page`, body).catch(() => null);
@@ -429,8 +430,32 @@
       const factory = atLeast(tier, 'factory');
       const hazardKinds = el('input', { className: 'field', maxLength: 90, value: (c.hazard_kinds || []).join(', '), placeholder: 'Up to four, e.g. Cattle grid, Logging trucks', autocomplete: 'off' });
       hazardKinds.setAttribute('aria-label', 'Crew hazard categories');
+      // the crew's regroup line in each pack's voice: rendered here on the website by the packs' own Kokoro voices, then uploaded
+      const regroupLine = el('input', { className: 'field', maxLength: 60, value: c.regroup_line || '', placeholder: `${c.name}, regroup.`, autocomplete: 'off' });
+      regroupLine.setAttribute('aria-label', 'Crew regroup line');
+      const V = root.ApexVoice, canRender = !!(V && V.canRenderLine && V.canRenderLine());
+      const voiceNote = el('p', { className: 'note', textContent: (c.voice_packs || []).length ? `Recorded in ${(c.voice_packs || []).length} of 3 voices.` : 'Not recorded yet.' });
+      const renderVoices = btn('Record it in the three voices', async () => {
+        const line = regroupLine.value.trim(); if (!line) { toast('Write the line first.'); return; }
+        const s1 = await apiCall('PUT', `/api/crews/${encodeURIComponent(c.id)}/page`, { regroup_line: line }).catch(() => null);
+        if (!s1 || !s1.ok) { toast('Couldn\u2019t save the line.'); return; }
+        let done = 0;
+        for (const pack of ['marguerite', 'kit', 'hale']) {
+          voiceNote.textContent = `Recording in ${pack[0].toUpperCase() + pack.slice(1)}\u2019s voice\u2026 (the voice model loads once, about 90 MB)`;
+          const m = await fetch(`voices/${pack}/manifest.json`).then((r) => r.json()).catch(() => null);
+          const out = m && m.kokoro_voice ? await V.renderLine(line, m.kokoro_voice, m.speed || 1) : null;
+          if (!out) continue;
+          const r = await root.ApexSync.apiFetch(`/api/crews/${encodeURIComponent(c.id)}/voice/${pack}`, { method: 'PUT', headers: { 'content-type': 'audio/wav' }, body: root.ApexCrewVoice.wav(out.audio, out.sampling_rate) }).catch(() => null);
+          if (r && r.ok) done++;
+        }
+        voiceNote.textContent = done === 3 ? 'Recorded in all three voices.' : `Recorded in ${done} of 3 voices. Try again for the rest.`;
+      }, 'ink-btn');
+      renderVoices.disabled = !canRender;
       const factorySet = el('fieldset', { disabled: !factory }, el('legend', {}, el('b', { textContent: 'Crew hazard categories' }), factory ? '' : lock('factory')), hazardKinds,
-        el('p', { className: 'note', textContent: 'Members report them from the report sheet and read your word on the plate; other drivers see Debris.' }));
+        el('p', { className: 'note', textContent: 'Members report them from the report sheet and read your word on the plate; other drivers see Debris.' }),
+        el('b', { textContent: 'Crew regroup line' }), regroupLine,
+        el('div', { className: 'row' }, renderVoices),
+        el('p', { className: 'note', textContent: canRender ? 'Members hear it in their co-driver\u2019s voice when your convoy regroups.' : 'Record it on the Vetta website: the voices are made there, the app only plays them.' }), voiceNote);
       const worksSet = el('fieldset', { disabled: !works }, el('legend', {}, el('b', { textContent: 'Third colour and pattern' }), works ? '' : lock('works')), sw3, pats,
         el('b', { textContent: 'Convoy call sign' }), callSign, el('b', { textContent: 'House stage' }), houseSel,
         el('b', { textContent: 'Member badges' }), el('div', { className: 'row' }, badgeWho, badgeText, setBadge));

@@ -29,8 +29,10 @@
   import hints point to Garage.
 - [x] Livery extras: Club (chat pin, 3 templates), Works (badges, house stage, call sign, 10 templates), Factory (drawn
   crest, share card, crew hazard categories). Migrations 0037-0038 applied to both D1.
-- Postponed (CALL_SHEET, technical): the crew's spoken regroup line (needs a voice model or a speech server), push
-  notifications for followed builds (needs APNs; owner account action).
+- [x] The crew's regroup line in each pack's voice (rendered on the website, played in the app; migration 0039) and every
+  convoy regroup spoken; notifications for followed builds from a background refresh (ApexBuildNotifier.swift).
+- Every REVIEW.md suggestion is built. Pro, Decals and the Pro themes wait on StoreKit (the owner's Paid Applications
+  Agreement); photos wait on R2 to move out of KV.
 - Exact next task: StoreKit (needs the owner's Paid
   Applications Agreement) so Pro, Decals and the Pro themes can go on sale.
 
