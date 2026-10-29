@@ -8,7 +8,7 @@ import { Env, HttpError } from "./util";
 import { removedSql, reportedSql } from "./reports_sql";
 import { atLeast, tierOf } from "./livery";
 
-export const MAX_BYTES = 700_000, MAX_SIDE = 2400, MAX_PER_OWNER = 300, MAX_PER_REF = 12;
+export const MAX_BYTES = 700_000, MAX_SIDE = 2400, MAX_PER_OWNER = 300, MAX_PER_REF = 12, MAX_PER_POST = 8;
 export const KINDS = ["profile", "car", "crew", "crest", "post"] as const;
 type Kind = typeof KINDS[number];
 
@@ -84,7 +84,7 @@ export async function photoUpload(env: Env, v: Viewer, req: Request): Promise<{ 
     `INSERT INTO photos (id, owner, kind, ref_id, bytes, w, h) SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7
       WHERE (SELECT COUNT(*) FROM photos WHERE owner = ?2) < ?8
         AND (?4 IS NULL OR (SELECT COUNT(*) FROM photos WHERE kind = ?3 AND ref_id = ?4) < ?9)`,
-  ).bind(id, v.id, kind, ref, bytes.length, w, h, MAX_PER_OWNER, MAX_PER_REF).run();
+  ).bind(id, v.id, kind, ref, bytes.length, w, h, MAX_PER_OWNER, kind === "post" ? MAX_PER_POST : MAX_PER_REF).run();
   if (!ins.meta.changes) throw new HttpError(429, "too_many_photos");
   await env.PHOTOS.put(`p/${id}`, bytes);
   const cover = u.searchParams.get("cover") === "1";

@@ -193,6 +193,7 @@
         for (const c of mine) {
           if (editing === c.id) { cards.append(form(c, () => { editing = null; render(); })); continue; }
           const acts = el('div', { className: 'row' },
+            ...(page.builds ? [btn(c.build_id ? 'Build thread' : 'Start a build thread', () => (c.build_id ? page.builds.open(c.build_id, { onClose: render }) : page.builds.start(c, render)), 'ink-btn')] : []),
             btn('Edit', () => { editing = c.id; render(); }, 'linkbtn'),
             btn(c.shared ? 'Shown to friends' : 'Show to friends', act(() => apiCall('PUT', `/api/garage/${encodeURIComponent(c.id)}`, { ...c, shared: !c.shared, is_primary: !!c.is_primary }), 'Couldn\'t change that. Try again.'), 'ink-btn' + (c.shared ? ' on' : '')),
             ...(c.is_primary ? [] : [btn('Make daily', act(() => apiCall('PUT', `/api/garage/${encodeURIComponent(c.id)}`, { ...c, shared: !!c.shared, is_primary: true }), 'Couldn\'t change that. Try again.'), 'linkbtn')]),
@@ -208,6 +209,7 @@
           for (const p of theirs) for (const c of p.cars) {
             list.append(card({ ...c, is_primary: 0 }, el('div', { className: 'row', style: 'justify-content:space-between;align-items:center' },
               el('span', { className: 'note', textContent: '@' + p.handle }),
+              ...(c.build_id && page.builds ? [btn('Build thread', () => page.builds.open(c.build_id), 'ink-btn')] : []),
               ...(report ? [btn('Report', () => report({ kind: 'car', target: c.id, label: `${title(c)} · @${p.handle}`, who: p.handle, done: render }), 'linkbtn')] : []))));
           }
           kids.push(list);

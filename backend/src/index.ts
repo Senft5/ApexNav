@@ -22,6 +22,7 @@ import { deleteAccount, exportMyData } from "./account";
 import { carCreate, carDelete, carUpdate, myCars, peoplesCars } from "./garage";
 import { chatDelete, chatList, chatPost, crewPage, crewPageUpdate } from "./crew_page";
 import { decalsPlace } from "./livery";
+import { buildCreate, buildDelete, buildFind, buildFollow, buildGet, buildUpdate, buildsFollowing, postCreate, postDelete, replyCreate, replyDelete, replyTried } from "./builds";
 import { photoDelete, photoList, photoServe, photoUpload, photoUse } from "./photos";
 import { block, blockList, fileReport, isModerator, moderationQueue, moderationResolve, report, unblock } from "./safety";
 import { contribute, setContribute } from "./contribute";
@@ -169,6 +170,20 @@ on("GET", "/api/garage/people", async (req, env) => json(await peoplesCars(env, 
 on("POST", "/api/garage", async (req, env) => json(await carCreate(env, await requireMember(req, env), req), 201));
 on("PUT", "/api/garage/:id", async (req, env, m) => { await carUpdate(env, await requireMember(req, env), m.groups!.id, req); return noContent(); });
 on("DELETE", "/api/garage/:id", async (req, env, m) => { await carDelete(env, await requireMember(req, env), m.groups!.id); return noContent(); });
+// build threads (src/builds.ts, REVIEW.md 5.3, roadmap 23); /following before /:id
+on("GET", "/api/builds/following", async (req, env) => json(await buildsFollowing(env, await requireMember(req, env))));
+on("GET", "/api/builds", async (req, env) => json(await buildFind(env, await requireMember(req, env), new URL(req.url))));
+on("POST", "/api/builds", async (req, env) => json(await buildCreate(env, await requireMember(req, env), req), 201));
+on("POST", "/api/builds/posts/:post/replies", async (req, env, m) => json(await replyCreate(env, await requireMember(req, env), m.groups!.post, req), 201));
+on("DELETE", "/api/builds/posts/:post", async (req, env, m) => { await postDelete(env, await requireMember(req, env), m.groups!.post); return noContent(); });
+on("PUT", "/api/builds/replies/:reply/tried", async (req, env, m) => { await replyTried(env, await requireMember(req, env), m.groups!.reply, req); return noContent(); });
+on("DELETE", "/api/builds/replies/:reply", async (req, env, m) => { await replyDelete(env, await requireMember(req, env), m.groups!.reply); return noContent(); });
+on("GET", "/api/builds/:id", async (req, env, m) => json(await buildGet(env, await requireMember(req, env), m.groups!.id)));
+on("PUT", "/api/builds/:id", async (req, env, m) => { await buildUpdate(env, await requireMember(req, env), m.groups!.id, req); return noContent(); });
+on("DELETE", "/api/builds/:id", async (req, env, m) => { await buildDelete(env, await requireMember(req, env), m.groups!.id); return noContent(); });
+on("POST", "/api/builds/:id/posts", async (req, env, m) => json(await postCreate(env, await requireMember(req, env), m.groups!.id, req), 201));
+on("PUT", "/api/builds/:id/follow", async (req, env, m) => { await buildFollow(env, await requireMember(req, env), m.groups!.id, true); return noContent(); });
+on("DELETE", "/api/builds/:id/follow", async (req, env, m) => { await buildFollow(env, await requireMember(req, env), m.groups!.id, false); return noContent(); });
 // photos (src/photos.ts, REVIEW.md 5.2): JPEG in, metadata out; members only
 on("POST", "/api/photos", async (req, env) => json(await photoUpload(env, await requireMember(req, env), req), 201));
 on("GET", "/api/photos", async (req, env) => json(await photoList(env, await requireMember(req, env), new URL(req.url))));

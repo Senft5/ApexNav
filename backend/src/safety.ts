@@ -7,6 +7,7 @@ import { Env, HANDLE_RE, HttpError, body, str } from "./util";
 import { convoysLeaveAll, convoysRecheck } from "./convoy";
 import { removePair } from "./social";
 import { REPORT_KINDS, type ReportKind, reportedSql } from "./reports_sql";
+import { CAR_SEEN } from "./builds";
 
 const REPORTS_PER_DAY = 20;
 const REASONS = ["spam", "abuse", "impersonation", "unsafe", "other"] as const;
@@ -15,7 +16,7 @@ const UNSAFE_RE = /(?!\u200d)[\p{Cc}\p{Cf}\p{Cs}\p{Co}\p{Cn}\u2028\u2029]/u;
 const HIDES: Record<ReportKind, string | null> = {
   user: null, car: "1",
   crew: "(SELECT visibility FROM crews WHERE id = r.target_id) = 'public'",
-  highlight: "1", event: "1", photo: "1", chat: "1",
+  highlight: "1", event: "1", photo: "1", chat: "1", post: "1", reply: "1",
 };
 
 const first = <T>(env: Env, sql: string, ...args: unknown[]) => env.DB.prepare(sql).bind(...args).first<T>();
@@ -96,6 +97,14 @@ async function resolveTarget(env: Env, v: Viewer, kind: ReportKind, target: unkn
     if (!p) throw new HttpError(404, "no_photo");
     return { id, person: p.owner };
   }
+  if (kind === "post" || kind === "reply") {   // a build thread's step or reply: whoever can see the car (builds.ts); never your own
+    const m = await first<{ person: string }>(env, kind === "post"
+      ? `SELECT b.owner AS person FROM build_posts p JOIN builds b ON b.id = p.build_id JOIN cars c ON c.id = b.car_id WHERE p.id = ?2 AND b.owner != ?1 AND ${CAR_SEEN("c")}`
+      : `SELECT r.author AS person FROM build_replies r JOIN build_posts p ON p.id = r.post_id JOIN builds b ON b.id = p.build_id JOIN cars c ON c.id = b.car_id
+          WHERE r.id = ?2 AND r.author != ?1 AND ${CAR_SEEN("c")}`, v.id, id);
+    if (!m) throw new HttpError(404, kind === "post" ? "no_post" : "no_reply");
+    return { id, person: m.person };
+  }
   if (kind === "chat") {   // a crew chat message: its crew's members (crew_page.ts); never your own
     const m = await first<{ author: string }>(env,
       "SELECT c.author FROM crew_chat c JOIN crew_members me ON me.crew_id = c.crew_id AND me.user_id = ?2 WHERE c.id = ?1 AND c.author != ?2", id, v.id);
@@ -168,6 +177,10 @@ export async function moderationQueue(env: Env, v: Viewer) {
   await each("photo", (q) => `SELECT p.id, p.kind, u.handle FROM photos p JOIN users u ON u.id = p.owner WHERE p.id IN (${q})`, (r) => `a ${r.kind} photo · @${r.handle ?? "?"} · /api/photos/${r.id}`);
   await each("chat", (q) => `SELECT m.id, m.body, c.name AS crew, u.handle FROM crew_chat m JOIN crews c ON c.id = m.crew_id JOIN users u ON u.id = m.author WHERE m.id IN (${q})`,
     (r) => `"${String(r.body).slice(0, 120)}" · ${r.crew} chat · @${r.handle ?? "?"}`);
+  await each("post", (q) => `SELECT p.id, p.title, u.handle FROM build_posts p JOIN builds b ON b.id = p.build_id JOIN users u ON u.id = b.owner WHERE p.id IN (${q})`,
+    (r) => `build post "${String(r.title).slice(0, 80)}" · @${r.handle ?? "?"}`);
+  await each("reply", (q) => `SELECT r.id, r.body, u.handle FROM build_replies r JOIN users u ON u.id = r.author WHERE r.id IN (${q})`,
+    (r) => `build reply "${String(r.body).slice(0, 120)}" · @${r.handle ?? "?"}`);
   await each("event", (q) => `SELECT e.id, e.title, c.name AS crew, u.handle FROM crew_events e JOIN crews c ON c.id = e.crew_id LEFT JOIN users u ON u.id = e.created_by WHERE e.id IN (${q})`,
     (r) => `${r.title} · ${r.crew} · @${r.handle ?? "?"}`);
   return rows.map((r) => {
@@ -214,6 +227,8 @@ export async function moderationResolve(env: Env, v: Viewer, req: Request): Prom
     highlight: [env.DB.prepare("UPDATE highlights SET status = 'hidden' WHERE id = ?").bind(id)],
     event: [env.DB.prepare("UPDATE crew_events SET cancelled = 1 WHERE id = ?").bind(id)],
     chat: [env.DB.prepare("DELETE FROM crew_chat WHERE id = ?").bind(id)],
+    post: [env.DB.prepare("DELETE FROM build_posts WHERE id = ?").bind(id)],
+    reply: [env.DB.prepare("DELETE FROM build_replies WHERE id = ?").bind(id)],
     photo: [],                                                        // stays down: removed reports hide it for good (photos.ts)
   }[kind];
   await env.DB.batch([mark, ...act]);

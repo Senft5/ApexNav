@@ -6,6 +6,16 @@ it says so. Things only you can do are in docs/OWNER_TODO.md.
 
 ## 2026-10-29
 
+**Build threads (REVIEW.md 5.3, roadmap 23).** My calls:
+- *A build is seen by whoever sees the car*: its owner, and friends and private-crew mates when the car is shown. Hiding
+  the car hides the thread. Builds show on your car card, a friend's car card and the crew page's Builds row.
+- *A step's Vetta Score comes only from a drive in your Log* (picked from a list), never typed in, so it's evidence.
+- *Following lists new steps* ("Builds you follow" in the Garage, "2 new") instead of a notification: the app has no push
+  service yet. Notifications come when it does. Migration 0034 is applied to both D1 databases.
+- *A step holds up to eight photos*, added after it's posted. Deleting a step deletes its photos and replies.
+- *The per-thread chat (REVIEW.md 5.3) isn't built*: it isn't in roadmap item 23's list, and replies cover the back and
+  forth for now. It's postponed, not dropped.
+
 **Decals and livery tiers (REVIEW.md 5.1, roadmap 22), built but dormant.** My calls:
 - *The server counts Pro only from `pro_entitlements`*, which nothing writes yet: StoreKit's App Store Server Notifications
   will (with the founders' grant and earned Pro). So every crew is Plain today and the livery box says where Decals come

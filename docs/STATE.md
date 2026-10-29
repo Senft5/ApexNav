@@ -18,8 +18,10 @@
 - [x] Roadmap 22 (core): Decals from verified Pro (backend/src/livery.ts, migration 0033 applied to both D1), tiers, the
   livery box, Club (second colour, pinned route, crest photo) and Works (third colour, patterns) in the editor. Dormant
   until StoreKit writes pro_entitlements. Postponed: chat pins, templates, badges, house stage, call sign, Factory.
-- Exact next task: roadmap 23, build threads (car header, stage bar, posts with photos and parts, replies vs suggestions
-  with "Tried it", follow; tables from migration 0030).
+- [x] Roadmap 23: build threads (backend/src/builds.ts, web/builds.js): car header, stage bar, numbered steps with photos,
+  parts and a Log drive's Vetta Score, replies and suggestions with Tried it, follow with new-step counts. Migration 0034.
+- Exact next task: roadmap 24, friends on the map (layer, Show me to Nobody/Crew/Friends, delay, position fuzz, only while
+  driving, home zones on the server, nothing kept after off).
 
 ## Session 2026-10-29 (day): design phase 2
 

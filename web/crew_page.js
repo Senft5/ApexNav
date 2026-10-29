@@ -178,7 +178,7 @@
         const redoDrive = part((c2) => nextDrive(c2, redoDrive), () => driveSec, (n) => { driveSec = n; });
         const redoBoard = part((c2) => board(c2, redoBoard), () => boardSec, (n) => { boardSec = n; });
         driveSec = nextDrive(c, redoDrive); boardSec = board(c, redoBoard);
-        box.replaceChildren(header(c, draw), el('div', { className: 'cp-body' }, titleBlock(c), liveryBox(c, draw), ...(c.pinned ? [pinnedRow(c)] : []), driveSec, boardSec, chat(c)));
+        box.replaceChildren(header(c, draw), el('div', { className: 'cp-body' }, titleBlock(c), liveryBox(c, draw), ...(c.pinned ? [pinnedRow(c)] : []), driveSec, boardSec, buildsRow(c), chat(c)));
       };
       draw();
       return box;
@@ -285,6 +285,16 @@
           if (r && r.ok) { toast(`${c.name} sees your Scores from your next drive on.`); redo(); } else toast('Couldn’t change that. Try again.');
         }, 'ink-btn'));
       }
+      return sec;
+    }
+
+    // Builds (REVIEW.md 5.3): crew-mates' build threads you can see; nothing at all when there are none.
+    function buildsRow(c) {
+      const sec = el('div', { className: 'stack-8' }), B = page.builds && page.builds();
+      if (!B) return sec;
+      apiCall('GET', `/api/builds?crew=${encodeURIComponent(c.id)}`).then((r) => (r && r.ok ? r.json() : [])).catch(() => []).then((list) => {
+        if (Array.isArray(list) && list.length) sec.replaceChildren(el('div', { className: 'cp-sec' }, el('h3', { textContent: 'Builds' })), B.rows(list));
+      });
       return sec;
     }
 

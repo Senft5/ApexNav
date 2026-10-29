@@ -483,6 +483,56 @@ flow('crew page: the tab opens your crew; going, chat and the livery reach the W
   check(/Plain livery/.test(await page.textContent('.cp-livery')) && /Decals come from crew-mates with Vetta Pro/.test(await page.textContent('.cp-livery')), 'the livery box says Plain and where Decals come from');
 });
 
+flow('build threads: start one from a car, add a step, a friend suggests and it shows on a red rule (Worker stubbed, REVIEW.md roadmap 23)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  const sent = [];
+  let build = null;
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url()), m = route.request().method(), p = u.pathname;
+    const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (m !== 'GET') {
+      const b = JSON.parse(route.request().postData() || 'null'); sent.push({ m, p, b });
+      if (p === '/api/builds') { build = { id: 'b1', mine: true, stages: b.stages, make: 'Mazda', model: 'Miata', year: 2004, nickname: null, mods: null, handle: 'me', followers: 0, following: false, posts: [] }; return json({ id: 'b1' }, 201); }
+      if (p === '/api/builds/b1/posts') { build.posts.unshift({ id: 'po1', n: 1, stage: b.stage, title: b.title, body: b.body, parts: b.parts, score: b.score, created_at: '2026-10-29 08:00:00', photos: [], replies: [] }); return json({ id: 'po1', n: 1 }, 201); }
+      if (p === '/api/builds/posts/po1/replies') { build.posts[0].replies.push({ id: 'r1', handle: 'sam', body: b.body, suggestion: b.suggestion, tried: null, created_at: '2026-10-29 09:00:00', mine: true }); return json({ id: 'r1' }, 201); }
+      return route.fulfill({ status: 204 });
+    }
+    if (p === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (p === '/api/garage') return json([{ id: 'c1', make: 'Mazda', model: 'Miata', year: 2004, is_primary: 1, shared: 1, cover_photo_id: null, build_id: build ? 'b1' : null }]);
+    if (p === '/api/builds/b1') return json(build);
+    return json([]);
+  });
+  await page.goto(base + '/index.html?view=garage');
+  await page.click('button:has-text("Start a build thread")');
+  for (const st of ['Suspension', 'Brakes']) { await page.fill('input[aria-label="New stage"]', st); await page.click('.bv-form button:has-text("Add")'); }
+  await page.click('button:has-text("Start the thread")');
+  await page.waitForSelector('.build-view .bv-head h2');
+  check(JSON.stringify(sent.find((x) => x.p === '/api/builds').b) === JSON.stringify({ car_id: 'c1', stages: ['Suspension', 'Brakes'] }), 'the thread starts with its stages');
+  check(/2 stages planned/.test(await page.textContent('.bv-stages')), 'the stage bar before any step');
+  await page.click('button:has-text("Add a step")');
+  await page.fill('input[aria-label="Step title"]', 'Coilovers <b>in</b>');
+  await page.selectOption('select[aria-label="Stage"]', '0');
+  await page.fill('input[aria-label="Parts"]', 'Ohlins DFV R&T, 7k / 5k springs');
+  await page.click('button:has-text("Post the step")');
+  await page.waitForSelector('.bv-post h3');
+  const step = sent.find((x) => x.p === '/api/builds/b1/posts').b;
+  check(step.title === 'Coilovers <b>in</b>' && step.stage === 0 && JSON.stringify(step.parts) === JSON.stringify(['Ohlins DFV R&T', '7k / 5k springs']) && step.score === null, 'the step: ' + JSON.stringify(step));
+  check(await page.$eval('.bv-post h3', (h) => h.textContent === 'Coilovers <b>in</b>' && !h.querySelector('b')), 'the title is set as text');
+  check(/Stage 1 of 2 · Suspension/.test(await page.textContent('.bv-stages')), 'the stage bar moves');
+  // a friend's view: suggestion on
+  build.mine = false; build.handle = 'nate';
+  await page.click('.bv-top button:has-text("Back")');
+  await page.evaluate(() => document.querySelectorAll('.build-view').forEach((o) => o.remove()));
+  await page.evaluate(() => [...document.querySelectorAll('button')].find((b) => b.textContent === 'Build thread').click());
+  await page.waitForSelector('.bv-say input');
+  await page.fill('.bv-say input', 'One click softer on the rear rebound');
+  await page.click('.bv-say button:has-text("Suggestion")');
+  await page.click('.bv-say button:has-text("Post")');
+  await page.waitForSelector('.bv-reply.sugg');
+  const r = sent.find((x) => x.p === '/api/builds/posts/po1/replies').b;
+  check(r.suggestion === true && r.body === 'One click softer on the rear rebound', 'the suggestion is sent');
+});
+
 flow('convoy: the leader shows a QR code of the link (Worker stubbed, IDEAS S-22)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   const id = 'BBBBBBBBBBBBBBBBBBBBBB', until = Date.now() + 120 * 60000;
