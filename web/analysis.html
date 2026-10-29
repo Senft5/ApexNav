@@ -50,6 +50,8 @@
     main { max-width: 1180px; margin: 0 auto; padding: calc(14px + env(safe-area-inset-top, 0px)) calc(16px + env(safe-area-inset-right, 0px)) calc(80px + env(safe-area-inset-bottom, 0px)) calc(16px + env(safe-area-inset-left, 0px)); display: grid; gap: 18px; }
     /* grid columns never grow past the screen for one wide child (a trace, the Score bars): the child scrolls or shrinks */
     main, .stack-8, .stack-12 { grid-template-columns: minmax(0, 1fr); }
+    /* the status bar's band: text scrolling up passes under it, never visibly behind the Dynamic Island or notch */
+    body::before { content: ""; position: fixed; z-index: 30; left: 0; right: 0; top: 0; height: env(safe-area-inset-top, 0px); background: var(--panel); }
     h2 { font-size: 18px; font-weight: 700; font-family: var(--font-num); margin-bottom: 8px; }
     a { color: inherit; }
     .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; font-size: 12px; }

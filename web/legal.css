@@ -6,7 +6,9 @@
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
 body { margin: 0; background: var(--bg); color: var(--ink); font: 17px/1.55 -apple-system, BlinkMacSystemFont, "Inter Tight", system-ui, sans-serif; }
-main { max-width: 680px; margin: 0 auto; padding: max(24px, env(safe-area-inset-top)) 20px 48px; }
+main { max-width: 680px; margin: 0 auto; padding: max(24px, env(safe-area-inset-top)) calc(20px + env(safe-area-inset-right, 0px)) calc(48px + env(safe-area-inset-bottom, 0px)) calc(20px + env(safe-area-inset-left, 0px)); }
+/* the status bar's band: text scrolling up passes under it, never visibly behind the Dynamic Island or notch */
+body::before { content: ""; position: fixed; z-index: 100; left: 0; right: 0; top: 0; height: env(safe-area-inset-top, 0px); background: var(--bg); }
 h1 { font-size: 2rem; line-height: 1.15; margin: 8px 0 12px; }
 h2 { font-size: 1.15rem; margin: 28px 0 8px; padding-top: 16px; border-top: 1px solid var(--rule); }
 p, ul { margin: 0 0 12px; }

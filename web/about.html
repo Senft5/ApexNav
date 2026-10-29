@@ -12,7 +12,9 @@
     :root { --paper: #ece3d3; --ink: #1b1914; --dim: #5f594d; --red: #c8102e; --rule: #cfc4b0; }
     * { box-sizing: border-box; }
     body { margin: 0; background: var(--paper); color: var(--ink); font: 17px/1.5 "Inter Tight", system-ui, -apple-system, sans-serif; }
-    main { max-width: 980px; margin: 0 auto; padding: 32px 16px 64px; }
+    main { max-width: 980px; margin: 0 auto; padding: calc(32px + env(safe-area-inset-top, 0px)) calc(16px + env(safe-area-inset-right, 0px)) calc(64px + env(safe-area-inset-bottom, 0px)) calc(16px + env(safe-area-inset-left, 0px)); }
+    /* the status bar's band: text scrolling up passes under it, never visibly behind the Dynamic Island or notch */
+    body::before { content: ""; position: fixed; z-index: 100; left: 0; right: 0; top: 0; height: env(safe-area-inset-top, 0px); background: var(--paper); }
     header { display: flex; align-items: center; gap: 12px; }
     header img { width: 44px; height: 44px; }
     header b { font-size: 22px; letter-spacing: 0.02em; }
