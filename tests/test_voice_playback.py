@@ -60,3 +60,23 @@ def test_a_context_that_wont_run_hands_the_line_to_the_device_voice():
 def test_a_clip_that_never_reports_its_end_does_not_hold_the_queue():
     r = run("noend")
     assert r["log"][-1] == "resolved true" and r["ms"] < 3000, r
+
+
+NATIVE = r"""
+global.window = { webkit: { messageHandlers: { apex: { postMessage: (m) => { sent.push(m); if (process.argv[2] === 'ok') setTimeout(() => window.ApexVoice.nativeDone(m.id, true), 10); } } } } };
+const sent = [];
+window.AudioContext = class { constructor() { throw new Error('the app never decodes clips itself'); } };
+require(process.argv[1] + '/web/voice.js');
+const V = window.ApexVoice;
+const bank = { id: 't', style: 'codriver', tokens: { 'head:L4': { file: 'a.m4a' }, 'dist:150': { file: 'b.m4a' } } };
+global.fetch = async (u) => ({ ok: true, json: async () => bank });
+(async () => { await V.load('kit'); const played = await V.play(['head:L4', 'dist:150']); process.stdout.write(JSON.stringify({ played, sent })); })();
+"""
+
+
+@pytest.mark.skipif(NODE is None, reason="node not installed")
+def test_in_the_app_the_shell_plays_the_clip_files():
+    # a locked phone stops WebAudio in WebKit: the app's shell plays the bank's files, the page only names them and waits
+    out = json.loads(subprocess.run([NODE, "-e", NATIVE, os.path.abspath("."), "ok"], capture_output=True, text=True, check=True, timeout=30).stdout)
+    assert out["played"] is True
+    assert out["sent"] == [{"cmd": "clips", "id": 1, "files": ["voices/kit/a.m4a", "voices/kit/b.m4a"], "gaps": [0.06, 0.11]}], out

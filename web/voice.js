@@ -106,11 +106,28 @@
 
   const GAP = (token) => (token.startsWith('link:') ? 0.03 : token.startsWith('dist:') ? 0.11 : 0.06);
 
+  // In the app the shell plays the bank's clip files itself (ApexNavApp.swift ApexClipPlayer): WebKit stops a page's
+  // WebAudio when the phone is locked or the app is in the background, which is how a car usually has it, and every
+  // line then fell to the device voice. The page names the files and waits for the shell's nativeDone(id, ok).
+  const nativeWaits = new Map();
+  let nativeSeq = 0;
+  function nativePlay(tokens) {
+    const files = tokens.map((t) => `voices/${bankId}/${bank.tokens[t].file}`), id = ++nativeSeq;
+    return new Promise((resolve) => {
+      const guard = setTimeout(() => { nativeWaits.delete(id); resolve(false); }, 20000);   // a shell that never answers must not hold the queue
+      nativeWaits.set(id, (ok) => { clearTimeout(guard); resolve(!!ok); });
+      try { root.webkit.messageHandlers.apex.postMessage({ cmd: 'clips', id, files, gaps: tokens.map(GAP) }); }
+      catch (_) { nativeWaits.delete(id); clearTimeout(guard); resolve(false); }
+    });
+  }
+  function nativeDone(id, ok) { const f = nativeWaits.get(id); if (f) { nativeWaits.delete(id); f(ok); } }
+
   // Plays tokens; resolves true when finished, false if the bank can't voice them (caller falls back).
   async function play(tokens) {
     if (!bank) return false;
     tokens = cover(tokens);
     if (tokens.some(t => !bank.tokens[t])) return false;
+    if (IN_APP) return nativePlay(tokens);
     const bufs = await Promise.all(tokens.map((t) => buffer(t).catch(() => null)));
     if (bufs.some(b => !b)) return false;
     const c = await running();
@@ -269,5 +286,5 @@
     try { return (await (await fetch('voices/index.json')).json()).voices; } catch (_) { return []; }
   }
 
-  root.ApexVoice = { load, play, tokensFor, cover, joins, playWhole, voices, speakLive, prefetch, warmLive, liveState, liveInfo, renderLive: render, renderLine, canRenderLine: () => !IN_APP, unlock: audio, get bank() { return bank; } };
+  root.ApexVoice = { load, play, nativeDone, tokensFor, cover, joins, playWhole, voices, speakLive, prefetch, warmLive, liveState, liveInfo, renderLive: render, renderLine, canRenderLine: () => !IN_APP, unlock: audio, get bank() { return bank; } };
 })(window);

@@ -48,14 +48,14 @@ struct ApexNavApp: App {
 // MARK: - Root View
 
 struct ApexShellRootView: View {
-    @StateObject private var shell = ApexSensorShell()
+    @ObservedObject private var shell = ApexEngine.shared.shell
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         ZStack {
             Color(uiColor: .launchPanel).ignoresSafeArea()
-            if let indexURL = ApexWebBundle.indexURL {
-                ApexCockpitWebView(shell: shell, indexURL: indexURL)
+            if ApexWebBundle.indexURL != nil {
+                ApexCockpitWebView()
                     .ignoresSafeArea()
             } else {
                 VStack(spacing: 10) {
@@ -158,11 +158,35 @@ struct ActivityShareSheet: UIViewControllerRepresentable {
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 
+// MARK: - The engine: one cockpit page and one sensor shell per app process
+// The phone's window and the car's screen (CarPlay/ApexCarPlay.swift) both need the cockpit page: it plans, guides, calls the
+// notes and speaks. The phone's window used to make it, so CarPlay opened with the phone app closed had no route engine
+// (the CarPlay cold launch). Now whichever scene comes first makes it; the phone's window shows the same page when it opens,
+// and a drive started from the car keeps running when the phone's window comes and goes.
+
+@MainActor
+final class ApexEngine {
+    static let shared = ApexEngine()
+    let shell = ApexSensorShell()
+    private var webView: WKWebView?
+    private var coordinator: ApexCockpitWebView.Coordinator?
+
+    /// The cockpit page, made and loaded the first time a scene needs it.
+    func cockpit() -> WKWebView? {
+        if let webView { return webView }
+        guard let indexURL = ApexWebBundle.indexURL else { return nil }
+        let c = ApexCockpitWebView.Coordinator(shell: shell)
+        let wv = ApexCockpitWebView.makeWebView(shell: shell, indexURL: indexURL, coordinator: c)
+        coordinator = c
+        webView = wv
+        return wv
+    }
+}
+
 // MARK: - Full-Screen Web Cockpit
 
+/// The phone's window onto the engine's cockpit page (ApexEngine): the page outlives the window, so this never tears it down.
 struct ApexCockpitWebView: UIViewRepresentable {
-    let shell: ApexSensorShell
-    let indexURL: URL
 
     @MainActor
     final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
@@ -241,11 +265,14 @@ struct ApexCockpitWebView: UIViewRepresentable {
         }
     }
 
-    func makeCoordinator() -> Coordinator {
-        Coordinator(shell: shell)
+    func makeUIView(context: Context) -> WKWebView {
+        ApexEngine.shared.cockpit() ?? WKWebView()
     }
 
-    func makeUIView(context: Context) -> WKWebView {
+    func updateUIView(_ uiView: WKWebView, context: Context) {}
+
+    @MainActor
+    static func makeWebView(shell: ApexSensorShell, indexURL: URL, coordinator: Coordinator) -> WKWebView {
         let contentController = WKUserContentController()
         let embedFlag = WKUserScript(
             source: "window.APEX_EMBED = true; window.APEX_PLATFORM = 'ios';",
@@ -269,7 +296,8 @@ struct ApexCockpitWebView: UIViewRepresentable {
                                    forURLScheme: ApexWebBundle.scheme)
         Self.enableLocalFileAccess(config)
 
-        let webView = WKWebView(frame: .zero, configuration: config)
+        // A phone-sized frame until a window sizes it: a page started by the car's screen lays out as it would on the phone.
+        let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 390, height: 844), configuration: config)
         webView.isOpaque = false
         webView.backgroundColor = .launchPanel        // the launch screen's colour until the page's cover paints
         webView.scrollView.backgroundColor = .launchPanel
@@ -288,20 +316,13 @@ struct ApexCockpitWebView: UIViewRepresentable {
         // Safari's Web Inspector reads page storage (the session token is in the Keychain, IDEAS Z-10): debug builds only.
         webView.isInspectable = true
         #endif
-        webView.navigationDelegate = context.coordinator
-        webView.uiDelegate = context.coordinator
+        webView.navigationDelegate = coordinator
+        webView.uiDelegate = coordinator
         webView.hideKeyboardAccessoryBar()
 
         shell.attach(webView: webView)
         webView.load(URLRequest(url: shell.takePendingLink() ?? ApexWebBundle.entryURL))
         return webView
-    }
-
-    func updateUIView(_ uiView: WKWebView, context: Context) {}
-
-    static func dismantleUIView(_ uiView: WKWebView, coordinator: Coordinator) {
-        uiView.configuration.userContentController.removeScriptMessageHandler(forName: "apex")
-        uiView.configuration.userContentController.removeScriptMessageHandler(forName: "apexApi", contentWorld: .page)
     }
 
     /// Lets bundled pages XHR/fetch sibling files (e.g. local styles/glyphs) from a file:// origin.
@@ -351,6 +372,12 @@ final class ApexScriptBridge: NSObject, WKScriptMessageHandler {
         }
         if cmd == "voiceBegin" {
             shell?.webVoiceBegin(duck: speechDuck)
+            return
+        }
+        // A pace note or direction from the voice bank (web/voice.js nativePlay): the shell plays the clip files itself.
+        if cmd == "clips", let dict = body as? [String: Any], let id = (dict["id"] as? NSNumber)?.intValue, let files = dict["files"] as? [String] {
+            let gaps = ((dict["gaps"] as? [Any]) ?? []).map { ($0 as? NSNumber)?.doubleValue ?? 0 }
+            shell?.playClips(id: id, files: files, gaps: gaps)
             return
         }
         // Following a build (web/builds.js): may Vetta notify about new steps? Asked at that moment, not at launch.
@@ -1171,6 +1198,23 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         evaluate("window.apex && window.apex.onNative && window.apex.onNative({type:'promptStyle',style:'\(name)'}); void 0;")
     }
 
+    /// The voice bank's clips, played here rather than by the page's WebAudio, which WebKit stops while the phone is locked.
+    /// Only files under the bundle's web/voices/ are played; the page hears back through ApexVoice.nativeDone(id, ok).
+    private let clipPlayer = ApexClipPlayer()
+    func playClips(id: Int, files: [String], gaps: [Double]) {
+        guard let root = ApexWebBundle.indexURL?.deletingLastPathComponent().standardizedFileURL else { return clipsDone(id, false) }
+        let voices = root.appendingPathComponent("voices").path + "/"
+        let urls = files.compactMap { f -> URL? in
+            let u = root.appendingPathComponent(f).standardizedFileURL
+            return u.path.hasPrefix(voices) ? u : nil
+        }
+        guard urls.count == files.count, !urls.isEmpty else { return clipsDone(id, false) }
+        clipPlayer.play(urls, gaps: gaps) { [weak self] ok in self?.clipsDone(id, ok) }
+    }
+    private func clipsDone(_ id: Int, _ ok: Bool) {
+        evaluate("window.ApexVoice && window.ApexVoice.nativeDone && window.ApexVoice.nativeDone(\(id), \(ok)); void 0;")
+    }
+
     private static let robotVoiceNames = ["Zarvox", "Trinoids", "Fred", "Ralph", "Cellos"]
 
     /// Co-driver: the highest-quality English voice installed (Premium > Enhanced > default),
@@ -1346,6 +1390,57 @@ extension ApexSensorShell: AVSpeechSynthesizerDelegate {
 
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
         Task { @MainActor in self.endVoiceIfIdle() }
+    }
+}
+
+/// Plays a voice-bank call (one to a few clips) back to back with the page's gaps between them, in the voice session the
+/// page opened with voiceBegin. A new call stops the one playing (the page sends one call at a time; a hazard can cut in).
+@MainActor
+final class ApexClipPlayer: NSObject, AVAudioPlayerDelegate {
+    private var queue: [(player: AVAudioPlayer, gap: Double)] = []
+    private var current: AVAudioPlayer?
+    private var done: ((Bool) -> Void)?
+
+    func play(_ files: [URL], gaps: [Double], done: @escaping (Bool) -> Void) {
+        finish(false)
+        var players: [(player: AVAudioPlayer, gap: Double)] = []
+        for (i, url) in files.enumerated() {
+            guard let p = try? AVAudioPlayer(contentsOf: url) else { done(false); return }
+            p.prepareToPlay()
+            players.append((p, i > 0 && i < gaps.count ? max(0, gaps[i]) : 0))
+        }
+        queue = players
+        self.done = done
+        next()
+    }
+
+    private func next() {
+        guard !queue.isEmpty else { finish(true); return }
+        let (p, gap) = queue.removeFirst()
+        p.delegate = self
+        current = p
+        let started = gap > 0 ? p.play(atTime: p.deviceCurrentTime + gap) : p.play()
+        if !started { finish(false) }
+    }
+
+    private func finish(_ ok: Bool) {
+        current?.stop()
+        current = nil
+        queue = []
+        let d = done
+        done = nil
+        d?(ok)
+    }
+
+    nonisolated func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+        Task { @MainActor in
+            guard player === self.current else { return }
+            if flag { self.next() } else { self.finish(false) }
+        }
+    }
+
+    nonisolated func audioPlayerDecodeErrorDidOccur(_ player: AVAudioPlayer, error: Error?) {
+        Task { @MainActor in if player === self.current { self.finish(false) } }
     }
 }
 

@@ -19,8 +19,12 @@ import UIKit
 final class ApexCar {
     static let shared = ApexCar()
 
-    /// Sends a message to the page (set by the shell once the page is ready).
-    var toPage: (([String: Any]) -> Void)?
+    /// Sends a message to the page (set by the shell once the page is ready). What the car sent before that waits here:
+    /// a car that opened the app cold asks for a route while the cockpit page is still loading.
+    var toPage: (([String: Any]) -> Void)? {
+        didSet { if let toPage { let q = waiting; waiting = []; q.forEach(toPage) } }
+    }
+    private var waiting: [[String: Any]] = []
     /// The connected car screen, if any.
     weak var scene: ApexCarPlaySceneDelegate?
 
@@ -34,7 +38,8 @@ final class ApexCar {
     private(set) var places: [(name: String, coord: CLLocationCoordinate2D)] = []
 
     func send(_ action: String, _ fields: [String: Any] = [:]) {
-        toPage?(["type": "carplay", "action": action].merging(fields) { a, _ in a })
+        let msg: [String: Any] = ["type": "carplay", "action": action].merging(fields) { a, _ in a }
+        if let toPage { toPage(msg) } else { waiting.append(msg); if waiting.count > 8 { waiting.removeFirst() } }
     }
 
     private static func num(_ v: Any?) -> Double? { (v as? NSNumber)?.doubleValue }
@@ -127,6 +132,8 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
     func templateApplicationScene(_ templateApplicationScene: CPTemplateApplicationScene,
                                   didConnect interfaceController: CPInterfaceController, to window: CPWindow) {
         MainActor.assumeIsolated {
+            // the route engine runs whether or not the phone's window was ever opened (ApexEngine, the cold launch)
+            _ = ApexEngine.shared.cockpit()
             self.interfaceController = interfaceController
             carWindow = window
             window.rootViewController = mapController
@@ -217,14 +224,7 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
     /// Asks the page to plan a route there; the page answers with a `route` message, which shows the trip preview.
     @MainActor private func go(to c: CLLocationCoordinate2D, name: String) {
         interfaceController?.popToRootTemplate(animated: true, completion: nil)
-        guard ApexCar.shared.toPage != nil else {
-            // the route engine (the cockpit page) isn't running yet: say what happened, never "use your iPhone"
-            let alert = CPAlertTemplate(titleVariants: ["Couldn't plan the route yet. Try again in a moment."],
-                                        actions: [CPAlertAction(title: "OK", style: .cancel) { [weak self] _ in self?.interfaceController?.dismissTemplate(animated: true, completion: nil) }])
-            interfaceController?.presentTemplate(alert, animated: true, completion: nil)
-            return
-        }
-        ApexCar.shared.send("go", ["lat": c.latitude, "lon": c.longitude, "name": name])
+        ApexCar.shared.send("go", ["lat": c.latitude, "lon": c.longitude, "name": name])   // waits for the page if it is still loading
     }
 
     // MARK: Route preview

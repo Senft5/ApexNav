@@ -6,6 +6,19 @@ it says so. Things only you can do are in docs/OWNER_TODO.md.
 
 ## 2026-10-29
 
+**CarPlay, part 1: the engine without the phone, and the pack's voice in the car.** The owner tried CarPlay: Apple Maps
+under our route, SF arrows, and the system voice. Two causes, both ours. The cockpit page (the route engine) was made by
+the phone's window, so a car that opened the app cold had nothing to plan with; now `ApexEngine` owns the page and the
+sensor shell, whichever scene starts first makes them, and the phone's window shows the same page. And the voice packs
+played through the page's WebAudio, which WebKit stops while the phone is locked (in its mount, in a car), so every line
+fell to the device voice; now the shell plays the bank's clip files itself (`ApexClipPlayer`, `ApexVoice.nativePlay`).
+My calls:
+- *The car asks once and waits.* A place picked on the car's screen before the page has loaded is held and sent when it
+  is ready, instead of the old "Couldn't plan the route yet" alert.
+- *The theme follows the phone; day and night follow the car's screen; every corner rating is on the car's map;
+  hazard reporting is one map button.* The owner left those four open; these are the defaults that change least.
+Undo: revert ApexEngine and ApexClipPlayer (ApexNavApp.swift), `nativePlay` in web/voice.js.
+
 **CarPlay granted: the entitlement in every build.** Apple assigned `com.apple.developer.carplay-maps` to the account.
 `project.yml` now puts it in ApexNav.entitlements for device builds too; `CarPlay/Simulator.entitlements` (the
 simulator-only stand-in) is gone. My calls:
