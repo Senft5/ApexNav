@@ -960,7 +960,7 @@ flow('crew drives: an upcoming drive shows in Crew with who is going; Going answ
   await page.waitForSelector('.meet-card');
   check(/Sunday coffee/.test(await page.textContent('.meet-card')) && /7 going/.test(await page.textContent('.meet-card')) && /Meets near you/.test(await page.evaluate(() => document.querySelector('.meet-card').closest('.side-pop, #sheet').textContent)), 'a public meet nearby');   // in a crew: the Crew drives row's sheet
   await page.click('.drive-card:not(.meet-card) button:has-text("Going")');
-  await page.waitForFunction(() => document.querySelector('.drive-card:not(.meet-card) button[aria-pressed="true"]')?.textContent === 'Going');
+  await page.waitForFunction(() => document.querySelector('.drive-card:not(.meet-card) .switch button[aria-checked="true"]')?.textContent === 'Going');   // the answer is a slide switch
   check(posted.some(([p, b]) => p === '/api/events/EVT1AAAAAAAAAAAA/rsvp' && b.status === 'going'), 'the answer was sent');
   // roles and regroup points (roadmap 21)
   const roles = await page.textContent('.drive-card:not(.meet-card)');
@@ -985,8 +985,12 @@ flow('crew drives: an upcoming drive shows in Crew with who is going; Going answ
   await page.click('.side-pop.open button:has-text("Plan a drive")');
   await page.fill('.side-pop.open input[aria-label="Drive name"]', 'Dragon run');
   await page.click('.side-pop.open button:has-text("Map centre")');
+  // the sweep is picked from the app's row list (row_select.js), the select underneath only holds the value
   await page.waitForSelector('.side-pop.open select[aria-label="Sweep"] option[value="bob"]', { state: 'attached' });
-  await page.selectOption('.side-pop.open select[aria-label="Sweep"]', 'bob');
+  check(!(await page.$$('.side-pop.open select:not(.row-pick-native), .side-pop.open input[type=checkbox], .side-pop.open input[type=date], .side-pop.open input[type=time]')).length, 'the form shows none of the browser\'s own controls');
+  await page.click('.side-pop.open .row-pick[aria-label^="Sweep"]');
+  await page.click('.row-pick-sheet [role="option"]:has-text("@bob sweeps")');
+  check(/Tmrw|Today/.test(await page.textContent('.side-pop.open .detents.scroll [aria-checked="true"]')), 'tomorrow is the day by default');
   await page.fill('.side-pop.open input[aria-label="Regroup point name"]', 'Gas at Robbinsville');
   await page.click('.side-pop.open button:has-text("Add at the map centre")');
   await page.click('.side-pop.open button:has-text("Plan it")');
