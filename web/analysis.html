@@ -166,6 +166,7 @@
     #boot.gone { opacity: 0; pointer-events: none; }
     @media (prefers-reduced-motion: reduce) { #boot { transition: none; } }
 </style>
+  <link rel="stylesheet" href="controls.css" />
 </head>
 <body>
   <div id="boot" aria-hidden="true"><img src="brand/mark.svg" alt="" /></div>
@@ -182,7 +183,7 @@
         <button class="btn" id="dvCard">Share card</button>
       </div>
       <div class="panel" id="dvTagsPanel"><h2>Tags and note</h2>
-        <div class="actions" id="dvTags" role="group" aria-label="Tags for this drive"></div>
+        <div class="stamps" id="dvTags" role="group" aria-label="Tags for this drive"></div>
         <div class="actions mt-8"><input id="dvTagNew" maxlength="24" placeholder="Add a tag: the car, who came" aria-label="Add a tag" /><button class="btn" id="dvTagAdd">Add</button></div>
         <textarea class="mt-8" id="dvNoteText" maxlength="280" placeholder="A note for yourself (stays on this phone)" aria-label="Note"></textarea>
         <p class="note" id="dvTagsNote">Tags and notes stay on this phone. Filter the Log by them.</p></div>
@@ -220,7 +221,7 @@
       <div class="panel" id="trendPanel" hidden><h2>Score over time</h2><div id="trend"></div></div>
       <div class="panel" id="recordsPanel" hidden><h2>Your records</h2><div class="scroll"><table id="recordsTable"></table></div><p class="note" id="recordsNote"></p></div>
       <div class="panel" id="steadyPanel" hidden><h2>Braking consistency by month</h2><div id="steadyChart"></div><p class="note" id="steadyNote"></p></div>
-      <div class="actions" id="historyFilter" role="group" aria-label="Show drives tagged" hidden></div>
+      <div class="stamps" id="historyFilter" role="group" aria-label="Show drives tagged" hidden></div>
       <div class="panel" id="historyPanel"><div class="scroll"><table id="historyTable"></table></div></div>
     </section>
 

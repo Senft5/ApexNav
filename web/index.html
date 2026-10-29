@@ -538,6 +538,7 @@
     #boot.gone { opacity: 0; pointer-events: none; }
     @media (prefers-reduced-motion: reduce) { #boot { transition: none; } }
 </style>
+  <link rel="stylesheet" href="controls.css" />
 </head>
 <body>
   <div id="boot" aria-hidden="true"><img src="brand/mark.svg" alt="" /></div>
@@ -574,13 +575,17 @@
                 <button class="linkbtn" id="tapRouteBtn">Tap the map</button>
                 <label class="linkbtn" id="gpxImportBtn">Open GPX<input type="file" id="gpxFile" accept=".gpx,application/gpx+xml,application/xml,text/xml" hidden /></label>
               </div>
-              <div class="plan-links fun-row" role="group" aria-label="Loop from here"><span class="loop-row"><span>Loop</span><button class="chip" data-loop-mi="15">15 mi</button><button class="chip" data-loop-mi="30">30 mi</button><button class="chip" data-loop-mi="45">45 mi</button><button class="chip" data-loop-min="60">1 h</button><button class="chip" data-loop-min="120">2 h</button></span>
-              </div>
-              <div class="plan-links fun-row" role="group" aria-label="Explore: the best roads near you"><span>Explore</span><button class="chip" data-explore-min="15">15 min</button><button class="chip" data-explore-min="30">30 min</button></div>
+              <div class="ctl" role="group" aria-label="Loop from here"><div class="ctl-label">Loop <small>from here, back where you started</small></div>
+                <div class="detents"><button data-loop-mi="15">15 mi</button><button data-loop-mi="30">30 mi</button><button data-loop-mi="45">45 mi</button><button data-loop-min="60">1 h</button><button data-loop-min="120">2 h</button></div></div>
+              <div class="ctl" role="group" aria-label="Explore: the best roads near you"><div class="ctl-label">Explore <small>the best roads within</small></div>
+                <div class="detents"><button data-explore-min="15">15 min</button><button data-explore-min="30">30 min</button></div></div>
               <div class="place-list" id="exploreList" hidden></div>
-              <div class="plan-links fun-row" role="radiogroup" aria-label="Route style"><span>Roads</span><button class="chip" data-fun="quick" role="radio" aria-checked="false">Quick</button><button class="chip" data-fun="fun" role="radio" aria-checked="false">Fun</button><button class="chip" data-fun="max" role="radio" aria-checked="false">Max fun</button></div>
-              <div class="plan-links fun-row" role="group" aria-label="Avoid"><span>Avoid</span><button class="chip" data-avoid="highways" aria-pressed="false">Highways</button><button class="chip" data-avoid="tolls" aria-pressed="false">Tolls</button><button class="chip" data-avoid="ferries" aria-pressed="false">Ferries</button><button class="chip" data-avoid="unpaved" aria-pressed="false">Unpaved</button><button class="chip" data-avoid="towns" aria-pressed="false">Towns</button><button class="chip" data-avoid="cameras" aria-pressed="false">Cameras</button></div>
-              <div class="plan-links fun-row" role="group" aria-label="Corners you like"><span>Hairpins</span><button class="chip" data-pref="tight" data-v="-1" aria-pressed="false">Fewer</button><button class="chip" data-pref="tight" data-v="1" aria-pressed="false">More</button><span>Sweepers</span><button class="chip" data-pref="fast" data-v="-1" aria-pressed="false">Fewer</button><button class="chip" data-pref="fast" data-v="1" aria-pressed="false">More</button></div>
+              <div class="ctl"><div class="ctl-label">Roads <small>how much of the long way</small></div>
+                <div class="switch" role="radiogroup" aria-label="Route style"><button data-fun="quick" role="radio" aria-checked="false">Quick</button><button data-fun="fun" role="radio" aria-checked="false">Fun</button><button data-fun="max" role="radio" aria-checked="false">Max fun</button></div></div>
+              <div class="ctl"><div class="ctl-label">Avoid <small>stamped means avoided</small></div>
+                <div class="stamps" role="group" aria-label="Avoid"><button data-avoid="highways" aria-pressed="false">Highways</button><button data-avoid="tolls" aria-pressed="false">Tolls</button><button data-avoid="ferries" aria-pressed="false">Ferries</button><button data-avoid="unpaved" aria-pressed="false">Unpaved</button><button data-avoid="towns" aria-pressed="false">Towns</button><button data-avoid="cameras" aria-pressed="false">Cameras</button></div></div>
+              <div class="ctl" role="group" aria-label="Corners you like"><div class="ctl-label">Corner mix</div>
+                <div class="stamps"><button data-pref="tight" data-v="-1" aria-pressed="false">Fewer hairpins</button><button data-pref="tight" data-v="1" aria-pressed="false">More hairpins</button><button data-pref="fast" data-v="-1" aria-pressed="false">Fewer sweepers</button><button data-pref="fast" data-v="1" aria-pressed="false">More sweepers</button></div></div>
             </section>
             <section id="routeCard" hidden>
               <h3 id="routeCardName"></h3>
@@ -595,7 +600,7 @@
               <p class="note" id="routeCardWhy" hidden></p>
               <p class="note" id="routeCardSub"></p>
               <div class="plan-links fun-row" id="routeCardOptions" role="radiogroup" aria-label="Route options" hidden></div>
-              <div class="plan-links fun-row" id="routeCardFun" role="radiogroup" aria-label="Route style"><span>Roads</span><button class="chip" data-fun="quick" role="radio" aria-checked="false">Quick</button><button class="chip" data-fun="fun" role="radio" aria-checked="false">Fun</button><button class="chip" data-fun="max" role="radio" aria-checked="false">Max fun</button></div>
+              <div class="switch mt-8" id="routeCardFun" role="radiogroup" aria-label="Route style"><button data-fun="quick" role="radio" aria-checked="false">Quick</button><button data-fun="fun" role="radio" aria-checked="false">Fun</button><button data-fun="max" role="radio" aria-checked="false">Max fun</button></div>
               <div class="row mt-8">
                 <button class="ink-btn solid" id="routeDriveBtn">Drive it</button>
                 <button class="ink-btn" id="routePreviewBtn">Preview</button>
@@ -643,10 +648,10 @@
           <section data-panel="setup">
             <h3>Privacy zones</h3>
             <p class="note" style="margin:0 0 8px">Places like home and work. Inside one, nothing is recorded or shared, and convoys don't see you. Kept on this phone only.</p>
-            <div class="row" id="zoneRadius" role="group" aria-label="Zone size">
-              <button class="ink-btn" data-zone-r="200">200 m</button>
-              <button class="ink-btn" data-zone-r="500">500 m</button>
-              <button class="ink-btn" data-zone-r="1000">1 km</button>
+            <div class="detents" id="zoneRadius" role="group" aria-label="Zone size">
+              <button data-zone-r="200">200 m</button>
+              <button data-zone-r="500">500 m</button>
+              <button data-zone-r="1000">1 km</button>
             </div>
             <div class="row mt-8"><button class="ink-btn" id="zoneHereBtn">Add where I am</button><button class="ink-btn" id="zoneMapBtn">Add at map centre</button></div>
             <div id="zoneList" class="stack-8 mt-8"></div>
@@ -664,9 +669,9 @@
           </section>
           <section data-panel="setup">
             <h3>Units</h3>
-            <div class="row" role="radiogroup" aria-label="Units" id="unitsRow"><button class="chip" data-units="imperial" role="radio">Miles and feet</button><button class="chip" data-units="metric" role="radio">Kilometres and metres</button></div>
+            <div class="switch" role="radiogroup" aria-label="Units" id="unitsRow"><button data-units="imperial" role="radio">Miles and feet</button><button data-units="metric" role="radio">Kilometres and metres</button></div>
             <p class="note" style="margin:8px 0 4px">Driving side: bends toward your own side of the road get more caution, since you see less round them.</p>
-            <div class="row" role="radiogroup" aria-label="Driving side" id="sideRow"><button class="chip" data-side="auto" role="radio">From the map</button><button class="chip" data-side="right" role="radio">Right</button><button class="chip" data-side="left" role="radio">Left</button></div>
+            <div class="switch" role="radiogroup" aria-label="Driving side" id="sideRow"><button data-side="auto" role="radio">From the map</button><button data-side="right" role="radio">Right</button><button data-side="left" role="radio">Left</button></div>
           </section>
           <section data-panel="setup">
             <h3>Look</h3>
@@ -701,11 +706,11 @@
         <section data-panel="setup">
             <h3>Spots</h3>
             <p class="note" style="margin:0 0 8px">Loops lean toward spots you rate 3★ or more. Your spots stay on this phone until you share one.</p>
-            <div class="row" id="detourList" role="group" aria-label="Detour">
-              <button class="ink-btn" data-detour="0">Off</button>
-              <button class="ink-btn" data-detour="0.5">Little</button>
-              <button class="ink-btn" data-detour="1">Some</button>
-              <button class="ink-btn" data-detour="2">More</button>
+            <div class="detents" id="detourList" role="group" aria-label="Detour">
+              <button data-detour="0">Off</button>
+              <button data-detour="0.5">Little</button>
+              <button data-detour="1">Some</button>
+              <button data-detour="2">More</button>
             </div>
             <button class="linkbtn" id="hlOpenBtn">Add a spot here</button>
             <div id="hlList" class="stack-8 mt-8"></div>
@@ -720,9 +725,9 @@
             </div>
             <div class="row mt-8"><select class="field" id="voiceSelect"></select></div>
             <div class="row mt-8"><button class="ink-btn" id="voiceTestBtn">▶ Sample</button></div>
-            <div class="row mt-8" id="noteWordsList" role="group" aria-label="Note words">
-              <button class="ink-btn" data-words="plain">Plain words</button>
-              <button class="ink-btn" data-words="rally">Rally notes</button>
+            <div class="switch mt-8" id="noteWordsList" role="group" aria-label="Note words">
+              <button data-words="plain">Plain words</button>
+              <button data-words="rally">Rally notes</button>
             </div>
             <p class="note" id="noteWordsNote"></p>
             <button class="sw mt-8" id="liveVoiceBtn" role="switch" aria-checked="false"><i></i><span>Speak road names</span></button>
@@ -730,10 +735,10 @@
           </section>
           <section data-panel="setup">
             <h3>Map motion</h3>
-            <div class="row" id="camList">
-              <button class="ink-btn" data-cam="steady">Steady</button>
-              <button class="ink-btn" data-cam="dynamic">Lean</button>
-              <button class="ink-btn" data-cam="whip">Whip</button>
+            <div class="switch" id="camList">
+              <button data-cam="steady">Steady</button>
+              <button data-cam="dynamic">Lean</button>
+              <button data-cam="whip">Whip</button>
             </div>
             <p class="note">How far the map leans into corners ahead.</p>
           </section>
@@ -770,7 +775,7 @@
         <div class="card-sheet">
           <h2>Add a spot</h2>
           <label class="spot-dialog-field">Name<input class="field" id="hlName" maxlength="60" autocomplete="off" /></label>
-          <div class="spot-dialog-field">Category<div class="spot-chips" id="hlCategories" role="group" aria-label="Category">
+          <div class="spot-dialog-field">Category<div class="spot-chips stamps" id="hlCategories" role="group" aria-label="Category">
             <button type="button" data-category="overlook">Overlook</button><button type="button" data-category="photo">Photo</button><button type="button" data-category="bridge">Bridge</button><button type="button" data-category="water">Water</button><button type="button" data-category="cafe">Cafe</button><button type="button" data-category="trailhead">Trailhead</button><button type="button" data-category="landmark">Landmark</button><button type="button" data-category="other">Other</button>
           </div></div>
           <div class="spot-dialog-field">Rating<div class="spot-stars" id="hlRating" role="group" aria-label="Rating">
