@@ -1,5 +1,13 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-10-29 (early hours): keyboard, Sight, CarPlay screens, lanes
+- Merged #229 (CarPlay app, single-pass roads, road export; migration 0029 applied to both D1), #230 (keyboard fix in the app: the shell reports the keyboard height and undoes WKWebView's pan, checked on the simulator's real keyboard by AppTourTests.testKeyboard; Sight cell; opening cover; launch colours; docs/LAUNCH.md; docs/CALL_SHEET.md), #231 (carplay-shots workflow), #232 (R-29 lane guidance).
+- Owner rule: make the calls and log them at the top of docs/CALL_SHEET.md (CLAUDE.md item 6).
+- Sight = the old road speed (stop within what you can see, no faster than the corner), uncapped, "Open" at the 400 m sight cap; alert-driver inputs kept and sourced in ROAD_INTELLIGENCE.
+- CarPlay: the simulator's CarPlay display shows Vetta's icon on GitHub's Mac, but the runner ignores synthetic clicks; the entitlement-form screenshots need 10 minutes in Xcode (CALL_SHEET).
+- Open: CarPlay cold launch (route engine without the phone's window scene); testKeyboard covers Map and Settings only (Log, Stages, Crew have no fields signed out).
+- Exact next task: IDEAS P-03 (split index.html into modules), then U-15 (VoiceOver and Dynamic Type pass on the simulator, a testAccessibility in AppTourTests).
+
 ## Session 2026-10-28 (night): app review, Vetta, CarPlay
 - Merged #228: recorded app tour (tools/app_tour.js with the co-driver's audio and captions; app-tour workflow with a simulator video and AppTourTests.testKeyboard over every text field), web/keyboard.js (owner's screenshots), 14 review fixes (docs/REVIEW.md), the Vetta name, MONETIZATION.md rewritten (free forever; Pro monthly/yearly/lifetime; founders; earned Pro; road-data framework).
 - This PR (#229): CarPlay navigation app (CarPlay/ApexCarPlay.swift + web/carplay.js; entitlement only in simulator builds), single-pass roads (migration 0029 `road_ways.cls/len_m`: apply to both D1 when merged), owner-only road GeoJSON export (docs/ROAD_DATA.md), more review fixes.
