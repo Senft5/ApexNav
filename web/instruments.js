@@ -121,6 +121,16 @@
       // a long call ("Square left off-camber") steps down a size so it reads whole instead of ending in "..."
       const len = String(n.call || '').length;
       html('span', len > 18 ? 'xlong' : len > 11 ? 'long' : '', c, n.call);
+      // the lanes for the next junction (IDEAS R-29): one arrow per lane, left to right; the ones to use are lit
+      if (i === 0 && Array.isArray(n.lanes) && n.lanes.length > 1) {
+        const row = html('div', 'rb-lanes', box);
+        row.setAttribute('aria-label', `Lanes: ${n.lanes.map(l => (l.use ? 'use' : l.ok ? 'also' : 'not')).join(', ')}`);
+        for (const l of n.lanes) {
+          const a = svg('svg', { viewBox: '-12 -12 24 24', width: 22, height: 22, class: 'lane' + (l.use ? ' use' : l.ok ? ' ok' : '') }, row);
+          const g = svg('g', { transform: Math.abs(l.angle) >= 170 ? '' : `rotate(${l.angle})` }, a);   // the U-turn is drawn as one
+          svg('path', { d: Math.abs(l.angle) >= 170 ? 'M4 10 V-2 A4 4 0 0 0 -4 -2 V4 M-7 1 L-4 4 L-1 1' : 'M0 10 V-8 M-5 -3 L0 -8 L5 -3', fill: 'none', stroke: 'currentColor', 'stroke-width': 2.4, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, g);
+        }
+      }
     });
   }
 

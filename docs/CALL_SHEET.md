@@ -6,6 +6,11 @@ it says so. Things only you can do are in docs/OWNER_TODO.md.
 
 ## 2026-10-29
 
+**Lane guidance (IDEAS R-29) is in; junction pictures are not.** Lanes show from a mile before a junction and are spoken
+only when they are one block on the left, right or middle ("use the right 2 lanes"); split lanes are left to the drawing so
+the voice never says something confusing. Junction pictures need a paid map source, so they wait. Undo: drop
+`turn_lanes: true` from the router request in web/index.html.
+
 **CarPlay screenshots: scripting reaches CarPlay's home screen, not inside Vetta.** On GitHub's Mac the simulator's CarPlay
 display opens and Vetta's icon is there (the CarPlay entitlement and scene work), but the runner ignores synthetic clicks,
 so nothing opens the app (3 runs). The workflow stays (`carplay-shots.yml`) for the home screen. For the screenshots Apple's

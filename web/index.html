@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-ld5tc5LmOOIhtSMNDBYjD3yr1N1GKiBWbiBM61JsS5s=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-b3pUDwRloyEIaNufneZaV30L9iCvAIuRFx0uNnmOoYs=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -46,6 +46,7 @@
   <script src="hazard_reports.js"></script>
   <script src="outbox.js"></script>
   <script src="stage_delta.js"></script>
+  <script src="lanes.js"></script>
   <script src="directions.js"></script>
   <script src="carplay.js"></script>
   <script src="whats_new.js"></script>
@@ -126,6 +127,8 @@
     .rb-box.now .rb-call b { font-size: 24px; }
     .rb-box.now .rb-call span:first-child { font-size: 21px; line-height: 1.05; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
     .rb-dist { font-family: var(--font-num); text-align: right; }
+    .rb-lanes { grid-column: 1 / -1; display: flex; justify-content: center; gap: 4px; padding: 2px 0 1px; }
+    .rb-lanes .lane { color: var(--panel-dim); opacity: 0.45; } .rb-lanes .lane.ok { opacity: 0.8; } .rb-lanes .lane.use { color: var(--accent); opacity: 1; }
     .rb-dist b { display: block; font-size: 22px; line-height: 1; font-weight: 700; }
     .rb-tulip { width: 46px; height: 46px; }
     .rb-call { min-width: 0; }
@@ -1912,7 +1915,8 @@
         const ahead = st.m - state.cursorM, n = ahead >= -5 && ahead <= 3000 ? ApexDirections.stripNote(st) : null;
         if (!n) return;
         const d = distLabel(Math.max(0, ahead));
-        notes.push({ key: `turn:${i}`, type: 'turn', code: n.code, call: n.call, sub: '', dist: d.n, unit: d.u, distM: Math.max(0, ahead), dir: n.dir, angle: n.angle, mods: [] });
+        notes.push({ key: `turn:${i}`, type: 'turn', code: n.code, call: n.call, sub: '', dist: d.n, unit: d.u, distM: Math.max(0, ahead), dir: n.dir, angle: n.angle, mods: [],
+                     lanes: n.lanes && ahead <= 1600 ? ApexLanes.lanes(n.lanes) : null });   // the lanes from a mile out
       });
       notes.sort((a, b) => a.distM - b.distM).splice(3);
       notes.quietText = offRoute ? (!track ? 'No route planned' : offRouteText()) : track ? `${track.name} · ${spirited ? 'Full notes' : 'Quiet · bumps and cameras only'}` : 'Plan a route for notes';
@@ -2252,7 +2256,12 @@
         const shape = decodePolyline6(leg.shape);
         for (const m of leg.maneuvers || []) if (TURN_TYPES.has(m.type) && shape[m.begin_shape_index]) turns.push(shape[m.begin_shape_index]);
         // spoken directions (IDEAS V-04): where each maneuver is, its type, the road it turns onto, roundabout exits
-        for (const m of leg.maneuvers || []) { const p = shape[m.begin_shape_index]; if (p) steps.push({ lon: p[0], lat: p[1], type: m.type, street: (m.street_names && m.street_names[0]) || null, exits: m.roundabout_exit_count }); }
+        for (const m of leg.maneuvers || []) {
+          const p = shape[m.begin_shape_index], sign = m.sign || {}, first = (k) => (Array.isArray(sign[k]) && sign[k][0] && sign[k][0].text) || null;
+          // lanes and the exit sign (IDEAS R-29): which lanes to use, the exit number and where it goes
+          if (p) steps.push({ lon: p[0], lat: p[1], type: m.type, street: (m.street_names && m.street_names[0]) || null, exits: m.roundabout_exit_count,
+            lanes: ApexLanes.pack(m.lanes), exit: first('exit_number_elements'), toward: first('exit_toward_elements') });
+        }
         // the router's own clock along the route: [lon, lat, seconds so far] at each maneuver, for the live ETA (eta.js)
         for (const m of leg.maneuvers || []) { if (shape[m.begin_shape_index]) times.push([...shape[m.begin_shape_index], cumS]); if (Number.isFinite(m.time)) cumS += m.time; }
         coords.push(...shape.slice(i ? 1 : 0));
@@ -2359,7 +2368,8 @@
           if (!end && p.shaping) return { lat: p.lat, lon: p.lon, type: 'through', radius: 25 };   // stay on the stage
           return { lat: p.lat, lon: p.lon, type: end ? 'break' : 'through', ...(throughRoadsOnly && !end ? { radius: 2500, search_filter: filter } : {}) };
         }),
-        ...FunRoute.costing(avoid, routingCar()), ...(alternates && points.length === 2 ? { alternates } : {}), ...(excl.length ? { exclude_locations: excl } : {}), ...extra }) });
+        ...FunRoute.costing(avoid, routingCar()), ...(alternates && points.length === 2 ? { alternates } : {}), ...(excl.length ? { exclude_locations: excl } : {}),
+        turn_lanes: true, ...extra }) });   // turn_lanes: lane data on each maneuver (IDEAS R-29)
       if (!json.trip) throw new Error(json.error || 'no route');
       return [json.trip, ...(json.alternates || []).map(a => a.trip).filter(Boolean)].map(routeOf);
     }
