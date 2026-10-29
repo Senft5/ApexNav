@@ -203,7 +203,7 @@
       crew.addEventListener('change', fillTemplates); fillTemplates();
       // regroup points: up to five, each named, set at the map's centre
       const regroup = [], regroupList = el('div', { className: 'stack-8' });
-      const regroupName = el('input', { className: 'field', maxLength: 40, placeholder: 'Regroup point name, e.g. the overlook', autocomplete: 'off' });
+      const regroupName = el('input', { className: 'field', maxLength: 40, placeholder: 'Regroup point name, like the overlook', autocomplete: 'off' });
       regroupName.setAttribute('aria-label', 'Regroup point name');
       const paintRegroup = () => regroupList.replaceChildren(...regroup.map((p, i) => el('div', { className: 'row', style: 'align-items:baseline' },
         el('span', { textContent: `${i + 1}. ${p.name}` }), btn('Remove', () => { regroup.splice(i, 1); paintRegroup(); }, 'linkbtn'))));

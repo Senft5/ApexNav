@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-zgtPcU8iTq8aRzBhkNJXaL+hHVMCpUlp/UKMfkNN6R0=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-LYeIJ6xMPcjAhNQymOC4X/1sEa08k9OE2YxSshZDa+g=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta · Log</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -141,7 +141,8 @@
     .empty-line { margin: 4px 0; font-size: 16px; line-height: 1.45; } .empty-line a { display: inline-block; color: var(--panel-ink); font-weight: 600; }   /* a link never breaks across lines */
     a.btn { display: inline-flex; align-items: center; text-decoration: none; font-weight: 600; }
     .seg b { font-size: 15px; } .seg span { font-size: 12px; color: var(--panel-dim); }
-    :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    :focus-visible { outline: 2px solid var(--panel-ink); outline-offset: 2px; }
+    html:not(.kbd) :focus-visible { outline: none; }   /* the ring is for the keyboard; a key the page focused draws none */
 
     /* The keyboard (web/keyboard.js): one clean ink border on the field that has it, no tab bar while typing, and the page
        fits above the keyboard. */
@@ -155,7 +156,7 @@
     a.back { display: inline-flex; align-items: center; min-height: 44px; font-size: 15px; font-weight: 600; text-decoration: none; color: var(--panel-dim); }
     .bar-top { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; min-height: 44px; }   /* page titles sit at the same height on every tab */
     label.btn { display: inline-flex; align-items: center; cursor: pointer; }
-    textarea { font: inherit; font-size: 15px; width: 100%; min-height: 64px; padding: 8px 10px; background: transparent; color: var(--panel-ink); border: 1px solid var(--panel-dim); box-sizing: border-box; }
+    textarea { resize: none; font: inherit; font-size: 15px; width: 100%; min-height: 64px; padding: 8px 10px; background: transparent; color: var(--panel-ink); border: 1px solid var(--panel-dim); box-sizing: border-box; }
     .tagline { color: var(--accent); }
     .recce-row { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 8px; align-items: center; } .recce-row input { width: 100%; }
     .kudos-btn { height: 44px; font-size: 13px; padding: 0 10px; margin-left: 6px; vertical-align: middle; }
@@ -304,7 +305,7 @@
         </div>
         <div class="strip" id="segStrip"><div class="sel" id="segSel" hidden></div><div id="segStripSvg"></div></div>
         <div class="row mt-8">
-          <input id="segName" aria-label="Stage name" placeholder="Stage name, e.g. Dry Ridge climb" style="flex:1;min-width:200px" />
+          <input id="segName" aria-label="Stage name" placeholder="Stage name, like Dry Ridge climb" style="flex:1;min-width:200px" />
           <button class="btn solid" id="segSave">Save stage</button>
           <span class="note" id="segInfo"></span>
         </div>
@@ -1137,6 +1138,9 @@
     function toTop() { document.body.scrollTop = 0; window.scrollTo(0, 0); }
     // iOS ignores user-scalable=no: cancel Safari's page-zoom gesture (charts and maps use their own touch handling).
     document.addEventListener('gesturestart', (e) => e.preventDefault(), { passive: false });
+    // the focus ring is for the keyboard: it shows once a key has been pressed to move focus, never after a tap or a sheet's own focus()
+    document.addEventListener('keydown', (e) => { if (e.key === 'Tab' || e.key.startsWith('Arrow')) document.documentElement.classList.add('kbd'); }, true);
+    document.addEventListener('pointerdown', () => document.documentElement.classList.remove('kbd'), true);
     function openDrive(id) { $('dvPick').value = id; renderDrive(); showTab('drive'); toTop(); }
     $('dvReplay').addEventListener('click', () => {
       const id = $('dvPick').value;

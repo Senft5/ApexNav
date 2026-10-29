@@ -231,13 +231,14 @@
         const x = await call('DELETE', `/api/builds/replies/${encodeURIComponent(r.id)}`); if (x && x.ok) redo(); else toast('Couldn’t delete it. Try again.');
       }, 'linkbtn'));
       if (!r.mine && page.report) acts.push(btn('Report', () => page.report({ kind: 'reply', target: r.id, label: `a reply from @${r.handle}`, who: r.handle, done: redo }), 'linkbtn'));
-      if (r.suggestion && b.mine) acts.push(btn(r.tried ? 'Change result' : 'Tried it', () => {
-        const res = prompt('What happened when you tried it?', r.tried || '');
+      if (r.suggestion && b.mine) acts.push(btn(r.tried ? 'Change result' : 'Tried it', async () => {
+        const res = await ApexConfirm.prompt('What happened when you tried it?', { action: 'Save', value: r.tried || '', maxLength: 200 });
         if (res === null) return;
         call('PUT', `/api/builds/replies/${encodeURIComponent(r.id)}/tried`, { tried: res.trim() || null }).then((x) => { if (x && x.ok) redo(); else toast('Couldn’t save that. Try again.'); });
       }, 'linkbtn'));
-      box.append(el('div', { className: 'row' }, el('b', { textContent: `@${r.handle || '?'}` }), el('span', { className: 'note', textContent: [r.suggestion ? 'Suggestion' : '', day(r.created_at)].filter(Boolean).join(' · ') }), ...acts),
-        el('p', { textContent: r.body }));
+      // what was said, then what you can do about it
+      box.append(el('div', { className: 'row' }, el('b', { textContent: `@${r.handle || '?'}` }), el('span', { className: 'note', textContent: [r.suggestion ? 'Suggestion' : '', day(r.created_at)].filter(Boolean).join(' · ') })),
+        el('p', { textContent: r.body }), ...(acts.length ? [el('div', { className: 'row' }, ...acts)] : []));
       if (r.tried) box.append(el('p', { className: 'tried', textContent: `Tried it: ${r.tried}` }));
       return box;
     }
@@ -252,7 +253,7 @@
     }
 
     function postForm(b, redo) {
-      const title = el('input', { className: 'field', maxLength: 80, placeholder: 'What you did, e.g. Coilovers in', autocomplete: 'off' });
+      const title = el('input', { className: 'field', maxLength: 80, placeholder: 'What you did, like Coilovers in', autocomplete: 'off' });
       const stage = el('select', { className: 'field' }, el('option', { value: '', textContent: 'No stage' }), ...b.stages.map((s, i) => el('option', { value: String(i), textContent: s })));
       const text = el('textarea', { className: 'field', maxLength: 4000, rows: 5, placeholder: 'How it went' });
       const parts = el('input', { className: 'field', maxLength: 500, placeholder: 'Parts, separated by commas', autocomplete: 'off' });
@@ -267,12 +268,13 @@
             stage: stage.value === '' ? null : Number(stage.value), parts: partsOf(parts.value), score: drive.value === '' ? null : Number(drive.value) });
           if (x && x.ok) { close(); redo(); } else toast('Couldn’t post the step. Check signal.');
         }, 'ink-btn solid'))]);
+      if (root.ApexRowSelect) { root.ApexRowSelect.enhance(stage); root.ApexRowSelect.enhance(drive); }   // the app's row lists, now that they are on the sheet
       title.focus();
     }
 
     function stagesField(initial) {
       const list = [...initial], box = el('div', { className: 'stack-8' });
-      const input = el('input', { className: 'field', maxLength: 24, placeholder: 'A stage, e.g. Suspension', autocomplete: 'off' });
+      const input = el('input', { className: 'field', maxLength: 24, placeholder: 'A stage, like Suspension', autocomplete: 'off' });
       input.setAttribute('aria-label', 'New stage');
       const paint = () => box.replaceChildren(...list.map((s, i) => el('div', { className: 'row', style: 'align-items:baseline;justify-content:space-between' },
         el('span', { textContent: `${i + 1}. ${s}` }), btn('Remove', () => { list.splice(i, 1); paint(); }, 'linkbtn'))));

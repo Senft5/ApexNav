@@ -10,7 +10,10 @@
     .car-card { border: 1px solid var(--rule); padding: 10px 12px; display: grid; gap: 4px; overflow: hidden; overflow-wrap: anywhere; }
     .car-card .car-title { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
     .car-card .car-title b { font-size: 17px; }
-    .car-card .car-nick { font-family: var(--font-num); font-size: 12px; color: var(--panel-dim); text-transform: uppercase; letter-spacing: 0.06em; }
+    .car-card .car-nick { font-size: 14px; font-style: italic; color: var(--panel-dim); }
+    .car-form .car-field { display: grid; gap: 2px; min-width: 0; }
+    .car-form .car-field small { font-size: 12px; font-weight: 600; color: var(--panel-dim); }
+    .car-form .car-field .field { width: 100%; }
     .car-card .car-spec { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 13px; }
     .car-card .car-spec span b { font-family: var(--font-num); }
     .car-card .car-mods { font-size: 13px; color: var(--panel-dim); white-space: pre-wrap; }
@@ -49,7 +52,7 @@
       const kids = [];
       if (c.cover_photo_id && P) kids.push(P.img(c.cover_photo_id, 'car-cover', title(c)));   // the car's cover (REVIEW.md 5.2)
       kids.push(el('div', { className: 'car-title' }, el('b', { textContent: title(c) }), c.is_primary ? el('span', { className: 'note', textContent: 'Daily' }) : ''));
-      if (c.nickname) kids.push(el('div', { className: 'car-nick', textContent: `“${c.nickname}”` }));
+      if (c.nickname) kids.push(el('div', { className: 'car-nick', textContent: c.nickname }));
       if (spec.childNodes.length) kids.push(spec);
       if (c.color) kids.push(el('div', { className: 'note', textContent: c.color }));
       if (c.mods) kids.push(el('div', { className: 'car-mods', textContent: c.mods }));
@@ -115,7 +118,7 @@
         lookupNote.textContent = (typical ? 'Filled with typical factory specs. ' : 'Filled in. ') +
           (missing.length ? `Add ${missing.join(', ')} yourself. ` : '') + 'Change anything that differs on yours.';
       };
-      const vin = f('vin', 'VIN (optional)', '', { maxLength: 17, autocapitalize: 'characters' });
+      const vin = f('vin', 'VIN, if you have it', '', { maxLength: 17, autocapitalize: 'characters' });
       const lookups = L ? el('div', { className: 'stack-8' },
         el('div', { className: 'row' }, vin, btn('Look up VIN', async () => {
           lookupNote.textContent = 'Looking up…';
@@ -143,7 +146,13 @@
         inputs.make.addEventListener('change', loadModels); inputs.year.addEventListener('change', loadModels);
         lookups.append(makes, models);
       }
-      const share = el('input', { type: 'checkbox', checked: !!c.shared });
+      // shown to friends and private crews: the slide switch, read through .checked like the box it replaces
+      const share = el('button', { type: 'button', className: 'sw' + (c.shared ? ' on' : '') }, el('i'), el('span', { textContent: 'Show to my friends and private crews' }));
+      share.setAttribute('role', 'switch'); share.setAttribute('aria-checked', String(!!c.shared));
+      Object.defineProperty(share, 'checked', { get: () => share.classList.contains('on'), set: (v) => { share.classList.toggle('on', !!v); share.setAttribute('aria-checked', String(!!v)); } });
+      share.addEventListener('click', () => { share.checked = !share.checked; });
+      // every field keeps its name over it once filled (a filled "Red" next to "Classic Red" said nothing)
+      const named = (k, text) => el('label', { className: 'car-field' }, el('small', { textContent: text }), inputs[k]);
       const int = (v) => (v.trim() === '' ? null : Number(v.trim().replace(/,/g, '')));
       const save = async () => {
         const v = (k) => inputs[k].value;
@@ -160,15 +169,21 @@
         if (r.ok) { toast(c.id ? 'Car saved.' : 'Car added to your garage.'); onDone(); }
         else { const j = await jsonOf(r); toast(r.status === 429 ? 'Your garage is full (10 cars).' : (FIELD_HINT[j && j.error] || 'Check the details and try again.')); }
       };
-      return el('div', { className: 'stack-8' },
+      const built = el('div', { className: 'stack-8' },
         lookups,
-        el('div', { className: 'car-form' }, inputs.year, inputs.make, inputs.model, inputs.trim, inputs.nickname, inputs.color, inputs.power_hp, inputs.weight_lb,
-          inputs.drivetrain, inputs.transmission, el('div', { className: 'wide' }, inputs.tyres), inputs.clearance, inputs.width, el('div', { className: 'wide' }, inputs.mods)),
+        el('div', { className: 'car-form' }, named('year', 'Year'), named('make', 'Make'), named('model', 'Model'), named('trim', 'Trim'), named('nickname', 'Nickname'), named('color', 'Colour'),
+          named('power_hp', 'Power (hp)'), named('weight_lb', 'Weight (lb)'), named('drivetrain', 'Drive'), named('transmission', 'Gearbox'),
+          el('div', { className: 'wide' }, named('tyres', 'Tyres')), named('clearance', 'Ride height'), named('width', metric() ? 'Width with mirrors (cm)' : 'Width with mirrors (in)'), el('div', { className: 'wide' }, named('mods', 'Mods'))),
         el('p', { className: 'note', textContent: 'Ride height and width plan your daily car\'s routes: a lowered car stays off unpaved roads.' }),
-        el('label', { className: 'row', style: 'gap:8px;align-items:center' }, share, document.createTextNode('Show to my friends and private crews')),
+        share,
         el('div', { className: 'row' }, btn(c.id ? 'Save' : 'Add car', save, 'ink-btn solid'), btn('Cancel', onDone, 'linkbtn')));
+      if (root.ApexRowSelect) for (const k of ['drivetrain', 'transmission', 'clearance']) root.ApexRowSelect.enhance(inputs[k]);   // the app's row lists (row_select.js)
+      return built;
     }
 
+    // Shown to friends and private crews, or not: a slide switch on the card (it is a state, not a key)
+    const shownSwitch = (c, flip) => { const b = el('button', { type: 'button', className: 'sw' + (c.shared ? ' on' : ''), onclick: flip }, el('i'), el('span', { textContent: 'Show to friends' }));
+      b.setAttribute('role', 'switch'); b.setAttribute('aria-checked', String(!!c.shared)); return b; };
     /** The Garage section: mine, then theirs. */
     function section() {
       const host = el('div', { className: 'stack-8' });
@@ -186,7 +201,7 @@
         catch (_) { mineR = { ok: false }; theirsR = { ok: false }; }
         const mine = mineR.ok ? (await jsonOf(mineR)) || [] : null, theirs = theirsR.ok ? (await jsonOf(theirsR)) || [] : [];
         if (mine && page.onCars) page.onCars(mine);
-        const kids = [el('h3', { textContent: 'Garage' })];
+        const kids = [el('h3', { textContent: 'Your cars' })];
         if (mine === null) { kids.push(el('p', { className: 'note', textContent: 'Couldn\'t load your garage. Check signal.' })); host.replaceChildren(...kids); return; }
         if (!mine.length && editing !== 'new') kids.push(el('p', { className: 'note', textContent: 'Add your car: friends and private crews see it next to your name when you show it. No location or drives are on a car card.' }));
         const cards = el('div', { className: 'garage-cards' });
@@ -195,9 +210,9 @@
           const acts = el('div', { className: 'row' },
             ...(page.builds ? [btn(c.build_id ? 'Build thread' : 'Start a build thread', () => (c.build_id ? page.builds.open(c.build_id, { onClose: render }) : page.builds.start(c, render)), 'ink-btn')] : []),
             btn('Edit', () => { editing = c.id; render(); }, 'linkbtn'),
-            btn(c.shared ? 'Shown to friends' : 'Show to friends', act(() => apiCall('PUT', `/api/garage/${encodeURIComponent(c.id)}`, { ...c, shared: !c.shared, is_primary: !!c.is_primary }), 'Couldn\'t change that. Try again.'), 'ink-btn' + (c.shared ? ' on' : '')),
+            shownSwitch(c, act(() => apiCall('PUT', `/api/garage/${encodeURIComponent(c.id)}`, { ...c, shared: !c.shared, is_primary: !!c.is_primary }), 'Couldn\'t change that. Try again.')),
             ...(c.is_primary ? [] : [btn('Make daily', act(() => apiCall('PUT', `/api/garage/${encodeURIComponent(c.id)}`, { ...c, shared: !!c.shared, is_primary: true }), 'Couldn\'t change that. Try again.'), 'linkbtn')]),
-            btn('Remove', async () => { if (await ApexConfirm.ask(`Remove ${title(c)} from your garage?`, 'Remove')) act(() => apiCall('DELETE', `/api/garage/${encodeURIComponent(c.id)}`), 'Couldn\'t remove it. Try again.')(); }, 'linkbtn'));
+            btn('Remove', async () => { if (await ApexConfirm.ask(`Remove ${title(c)} from your garage?`, 'Remove')) act(() => apiCall('DELETE', `/api/garage/${encodeURIComponent(c.id)}`), 'Couldn\'t remove it. Try again.')(); }, 'danger-btn'));
           cards.append(card(c, acts));
         }
         if (editing === 'new') cards.append(form({}, () => { editing = null; render(); }));

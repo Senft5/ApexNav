@@ -133,7 +133,7 @@
     .cp-msg p { margin: 2px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
     .cp-msg .row { gap: 10px; align-items: baseline; }
     .cp-say { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: end; }
-    .cp-say textarea { min-height: 44px; resize: vertical; }
+    .cp-say textarea { min-height: 44px; resize: none; }
     .cp-crests { display: flex; flex-wrap: wrap; gap: 8px; }
     .cp-crests button { width: 64px; height: 64px; display: grid; place-items: center; background: var(--panel); color: var(--panel-ink); border: 1.5px solid var(--rule); }
     .cp-crests button[aria-pressed="true"] { border: 2.5px solid var(--panel-ink); box-shadow: 0 2px 0 var(--panel-dim); }
@@ -420,20 +420,20 @@
       const crestPick = P() ? P().picker(c.crest_photo_id ? 'Change crest photo' : 'Use a photo as the crest', 'crest', c.id, () => { close(); redo(); }, { toast }) : '';
       const clubSet = el('fieldset', { disabled: !club }, el('legend', {}, el('b', { textContent: 'Second colour' }), club ? '' : lock('club')), sw2,
         el('b', { textContent: 'Pinned route' }), routeSel, el('div', { className: 'row' }, crestPick));
-      const callSign = el('input', { className: 'field', maxLength: 12, value: c.call_sign || '', placeholder: 'Convoy call sign, e.g. RIDGE', autocomplete: 'off' });
+      const callSign = el('input', { className: 'field', maxLength: 12, value: c.call_sign || '', placeholder: 'Convoy call sign, like RIDGE', autocomplete: 'off' });
       callSign.setAttribute('aria-label', 'Convoy call sign');
       const houseSel = el('select', { className: 'field' }, el('option', { value: '', textContent: 'No house stage' }),
         ...(c.stages || []).map((st) => el('option', { value: st.id, textContent: st.name, selected: c.house && c.house.id === st.id })));
       houseSel.setAttribute('aria-label', 'House stage');
       const badgeWho = el('select', { className: 'field' }, ...(c.board || []).map((r) => el('option', { value: r.handle || '', textContent: `@${r.handle}` })));
-      const badgeText = el('input', { className: 'field', maxLength: 16, placeholder: 'Badge, e.g. Sweep', autocomplete: 'off' });
+      const badgeText = el('input', { className: 'field', maxLength: 16, placeholder: 'Badge, like Sweep', autocomplete: 'off' });
       badgeWho.setAttribute('aria-label', 'Member'); badgeText.setAttribute('aria-label', 'Badge');
       const setBadge = btn('Set badge', async () => {
         const r = await apiCall('PUT', `/api/crews/${encodeURIComponent(c.id)}/badges`, { handle: badgeWho.value, badge: badgeText.value.trim() || null }).catch(() => null);
         if (r && r.ok) { badgeText.value = ''; toast('Badge set.'); } else toast('Couldn\u2019t set the badge.');
       }, 'ink-btn');
       const factory = atLeast(tier, 'factory');
-      const hazardKinds = el('input', { className: 'field', maxLength: 90, value: (c.hazard_kinds || []).join(', '), placeholder: 'Up to four, e.g. Cattle grid, Logging trucks', autocomplete: 'off' });
+      const hazardKinds = el('input', { className: 'field', maxLength: 90, value: (c.hazard_kinds || []).join(', '), placeholder: 'Up to four, like Cattle grid, Logging trucks', autocomplete: 'off' });
       hazardKinds.setAttribute('aria-label', 'Crew hazard categories');
       // the crew's regroup line in each pack's voice: rendered here on the website by the packs' own Kokoro voices, then uploaded
       const regroupLine = el('input', { className: 'field', maxLength: 60, value: c.regroup_line || '', placeholder: `${c.name}, regroup.`, autocomplete: 'off' });
@@ -475,6 +475,7 @@
         el('p', { className: 'note', textContent: club ? liveryLine(c.livery) : `Club at 5 Decals, Works at 12. ${liveryLine(c.livery)}` }),
         el('div', { className: 'row' }, save, btn('Cancel', close, 'linkbtn'))));
       d.body.append(ov);
+      if (root.ApexRowSelect) for (const s of [routeSel, houseSel, badgeWho]) root.ApexRowSelect.enhance(s);   // the app's row lists, now that they are on the sheet
       motto.focus();
     }
 

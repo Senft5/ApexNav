@@ -168,8 +168,8 @@ flow('Where to?: a suggestion builds a route with a card and a Start button (sea
   for (let k = 0; k < 50 && !asked.some((r) => (r.exclude_locations || []).some((e) => Math.abs(e.lat - 35.7565) < 1e-4)); k++) await page.waitForTimeout(100);
   check(asked.some((r) => (r.exclude_locations || []).some((e) => Math.abs(e.lat - 35.7565) < 1e-4 && Math.abs(e.lon + 83.97) < 1e-4)), 'the closed road is excluded');
   // pin it as Home (IDEAS U-20): first in Where to?, on this phone; Unpin removes it
-  page.once('dialog', (d) => d.accept('Home'));
   await page.evaluate(() => document.getElementById('routePinBtn').click());
+  await page.fill('.confirm-sheet .cs-field', 'Home'); await page.click('.confirm-sheet .cs-ok');   // the name is asked for on the app's own sheet, not the browser's prompt
   // the pin itself, not its toast: the replan around the closure can toast over it
   await page.waitForFunction(() => (JSON.parse(localStorage.getItem('apex.pinnedPlaces') || '[]') || []).length === 1);
   const pinned = await page.evaluate(() => JSON.parse(localStorage.getItem('apex.pinnedPlaces')));
@@ -406,8 +406,8 @@ flow('privacy zones: add one at the map centre, kept on the phone only, then rem
   await page.waitForFunction(() => window.apex && typeof window.apex.live === 'function');
   await page.click('.tab[data-view="garage"]');
   await page.click('#zoneRadius [data-zone-r="200"]');
-  page.once('dialog', (d) => d.accept('Home'));
   await page.click('#zoneMapBtn');
+  await page.fill('.confirm-sheet .cs-field', 'Home'); await page.click('.confirm-sheet .cs-ok');
   await page.waitForFunction(() => /Home · 200 m/.test(document.getElementById('zoneList').textContent));
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('apex.privacyZones')));
   check(saved.length === 1 && saved[0].name === 'Home' && saved[0].r === 200, 'the zone is saved on the phone');
@@ -519,7 +519,7 @@ flow('build threads: start one from a car, add a step, a friend suggests and it 
   check(/2 stages planned/.test(await page.textContent('.bv-stages')), 'the stage bar before any step');
   await page.click('button:has-text("Add a step")');
   await page.fill('input[aria-label="Step title"]', 'Coilovers <b>in</b>');
-  await page.selectOption('select[aria-label="Stage"]', '0');
+  await page.click('.build-view .row-pick[aria-label^="Stage"]'); await page.click('.row-pick-sheet [role="option"]:has-text("Suspension")');   // the app's row list
   await page.fill('input[aria-label="Parts"]', 'Ohlins DFV R&T, 7k / 5k springs');
   await page.click('button:has-text("Post the step")');
   await page.waitForSelector('.bv-post h3');
@@ -662,7 +662,7 @@ flow('garage: a VIN fills the car in, the owner keeps the colour (NHTSA stubbed,
   check(v.color === 'Soul Red', 'the colour the owner typed is kept');
   check(/typical factory specs/.test(await page.textContent('#e2eGarage [role="status"]')), 'says the specs are typical');
   // ride height and width for routing (IDEAS R-20), in inches by default, kept in cm
-  await page.selectOption('#e2eGarage select[name="clearance"]', 'low');
+  await page.click('#e2eGarage .row-pick[aria-label^="Ride height"]'); await page.click('.row-pick-sheet [role="option"]:has-text("Lowered")');   // the app's row list
   await page.fill('#e2eGarage input[name="width"]', '75');
   await page.click('#e2eGarage button:has-text("Add car")');
   const sent = await page.evaluate(() => window.__garage.calls.find((c) => c.m === 'POST'));
