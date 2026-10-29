@@ -721,6 +721,8 @@ flow('reported hazards: a call ahead, "still there?" after passing, and a one-ta
   await page.waitForFunction(() => window.apex && typeof window.apex.live === 'function');
   await page.evaluate(async () => {   // heading north at 15 m/s, 1.5 m per 100 ms, from 0 m to 330 m
     for (let i = 0; i <= 220; i++) { window.apex.live({ lat: 35.6 + (i * 1.5) / 110540, lon: -83.9, accuracy_m: 5, speed_mps: 15, course_deg: 0, has_fix: true, calibration: 'locked' });
+      const k = window.apexDebug.state.kitLine;   // a line the voice pack says (web/voice_lines.js) never reaches speechSynthesis
+      if (k && window.__said[window.__said.length - 1] !== k) window.__said.push(k);
       await new Promise(r => setTimeout(r, 20)); }
   });
   await page.waitForFunction(() => !document.getElementById('hzAsk').hidden, null, { timeout: 5000 });
