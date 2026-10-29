@@ -14,7 +14,7 @@ owner's rows are also in docs/OWNER_TODO.md. Apple's rules in detail: docs/APP_R
 | Review access past the invite-only sign-up (2.1) | Built (review code, only its hash in the repo); the notes and code go only into App Store Connect, never the public repo | owner pastes |
 | Sign in with Apple next to Google (4.8) | Built | — |
 | Account deletion in the app (5.1.1(v)) | Built; revoking the Apple token needs the owner's Sign in with Apple key | owner: key |
-| No speeding prompts (1.4.1): never a speed above the limit as a target | Built: scores are smoothness, the binnacle shows sight distance (not a speed), pace marks are capped at the limit, the replay keeps to it (docs/REVIEW.md #1–2) | — |
+| No speeding prompts (1.4.1): never a speed above the limit as a target | Built: scores are smoothness, the binnacle's Sight cell is a braking range (the speed you could stop from within what you can see), shown red when you're above it, and the review notes say so; the demo replay keeps to the limit (docs/REVIEW.md #1–2) | — |
 | Driver distraction: typing locked while moving, no Pro sheet while moving | Built (in_car.js); Pro rules are tests once Pro ships | — |
 | In-app purchases (3.1.1 / 3.1.2) | Not shipped. Plan in MONETIZATION.md; needs the owner's yes to the prices and the Paid Applications Agreement | owner |
 | CarPlay entitlement | Built and in simulator builds; the owner submits the request (CARPLAY.md section 1) with simulator screenshots | owner submits |

@@ -18,7 +18,7 @@ Severity: **S1** wrong or unsafe (App Review risk, a lie on screen), **S2** look
 
 | # | where | what | sev | fix |
 |---|---|---|---|---|
-| 1 | binnacle, Road cell | Showed the road's pace above the limit (125 on a highway). A number above the limit reads as a target (App Review 1.4.1) | S1 | The cell is now **Sight** (owner, 2026-10-29): how far ahead the road can be seen, as a distance, red when stopping from your speed (1.5 s reaction, 0.5 g braking) takes longer. No speed to aim for at all; the dial's pace marks stay capped at the limit |
+| 1 | binnacle, Road cell | Read as the road's own speed (125 on a highway), which looks like a target (App Review 1.4.1) | S1 | Owner, 2026-10-29: same number, named for what it is: **Sight**, the speed you could stop from within what you can see (and no faster than the corner allows), uncapped; signal colour when you're above it. The App Review notes should describe it as a braking range |
 | 2 | demo replay | Drove up to 10% over the limit | S1 | The replay keeps to the limit |
 | 3 | keyboard, every text field (owner's phone) | The tab bar floated over the plan sheet or showed through behind the keyboard; the sheet's own search field could be panned out of sight; a focused field got a second, offset ring in the accent colour | S2 | `web/keyboard.js`: while a field has the keyboard the tab bar hides and the page fits above the keyboard; one ink border on the focused field. Checked on the simulator by `testKeyboard` |
 | 4 | route card, Options | Offered a route both slower and less fun than another ("Fun 64 · 102 min" next to "Fun 99 · 77 min") | S2 | Dominated options are dropped (`FunRoute.distinctOptions`) |

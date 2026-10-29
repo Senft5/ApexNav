@@ -1,7 +1,7 @@
 // ApexInstruments — Road book renderers for the binnacle and pace-note strip.
 // Flat vector only: precision comes from linework and type, never from fake materials.
 //
-//   mountCluster(el, theme) -> { update(d) }   d = { speedMph, paceMph, sightMph, limitMph, sightM, stopM,
+//   mountCluster(el, theme) -> { update(d) }   d = { speedMph, paceMph, sightMph, limitMph,
 //                                                   latG, lonG, camberDeg, tripMi, totalMi, sector }
 //   renderNotes(el, theme, notes)               notes = [{ type, code, call, sub, dist, unit,
 //                                                          dir, severity, turnRad, mods }]
@@ -26,7 +26,6 @@
   }
   const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
   const fmt = (v) => (v == null || !isFinite(v) ? '--' : String(Math.round(v)));
-  const SIGHT_CAP_M = 399;   // apex_core SIGHT_MAX_M is 400: at the cap the road is open further than it looks ahead
 
   // -------------------------------------------------------------------------
   // Tulip diagrams (FIA roadbook convention: entry dot at the bottom, the road as
@@ -222,18 +221,22 @@
       return { c, value, v };
     };
     const limit = cell('Limit', 'ro-limit');
-    // Sight (review 2026-10-29): how far ahead the road can be seen, a distance, never a speed to aim for. It turns to the
-    // signal colour when stopping from your speed (reaction + braking) would take longer than that.
+    // Sight (owner, 2026-10-29): the speed you could stop from within what you can see ahead, and no faster than the
+    // corner allows (the pace envelope). A braking range in speed units, not a target: it turns to the signal colour when
+    // you're above it, and the eye shows when it's the sight line, not the corner, that sets it.
     const sight = cell('Sight', 'ro-sight');
-    const unit = html('small', 'ro-unit', sight.value, '');
+    const eye = svg('svg', { viewBox: '0 0 24 24', width: 12, height: 12, class: 'ro-eye', 'aria-hidden': 'true' }, sight.value);
+    svg('path', { d: 'M2 12 Q12 2 22 12 Q12 22 2 12 Z', fill: 'none', stroke: 'currentColor', 'stroke-width': 2 }, eye);
+    svg('circle', { cx: 12, cy: 12, r: 3, fill: 'currentColor' }, eye);
+    eye.style.display = 'none';
     return (d) => {
       limit.v.textContent = fmt(d.limitMph);
       limit.c.classList.toggle('unknown', !Number.isFinite(d.limitMph));   // a sign only when there is a limit to show
-      const known = Number.isFinite(d.sightM);
-      const s = known && U() ? U().short(d.sightM) : null;
-      sight.v.textContent = s ? `${s.n}${d.sightM >= SIGHT_CAP_M ? '+' : ''}` : '--';
-      unit.textContent = s ? s.u.toLowerCase() : '';
-      sight.c.classList.toggle('short', known && Number.isFinite(d.stopM) && d.stopM > d.sightM);
+      const both = [d.paceMph, d.sightMph].filter(v => Number.isFinite(v));
+      const v = both.length ? Math.min(...both) : null;
+      sight.v.textContent = fmt(v);
+      eye.style.display = both.length === 2 && d.sightMph < d.paceMph ? '' : 'none';
+      sight.c.classList.toggle('short', v != null && Number.isFinite(d.speedMph) && d.speedMph > v + 1);
     };
   }
 

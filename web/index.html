@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-pvX2Yx7DT/ctr1mXJV/fZyYlp7HkGA8fSN52duMsyoE=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-YVzfkNeSp2pvZXNNG0kM/3nptq6d6e4oClWureiH3uc=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -264,7 +264,8 @@
     .ro { display: grid; justify-items: center; gap: 1px; padding: 3px 0; border: 1px solid var(--rule); }
     .ro-value { display: flex; align-items: center; justify-content: center; gap: 4px; }
     .ro b { font-family: var(--font-num); font-size: 17px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
-    .ro-unit { font-size: 10px; font-weight: 700; color: var(--panel-dim); align-self: flex-end; padding-bottom: 2px; }
+    .ro-eye { display: block; flex: none; color: var(--accent); }
+    .ro-sight b { color: var(--accent); }
     .ro-sight.short { border-color: var(--signal); } .ro-sight.short b { color: var(--signal); }
     .ro span { font-size: 11px; font-weight: 600; color: var(--panel-dim); }
     .ro-limit { background: var(--panel-ink); color: var(--panel); border-color: var(--panel-ink); }
@@ -2018,18 +2019,12 @@
       const at = (arr) => (idx >= 0 && arr && arr[idx] != null ? arr[idx] : null);
       const sight = at(track && track.sightM);
       const limit = at(track && track.limitMps);
-      // The road's own pace never reads above the posted limit (App Review 1.4.1: no prompts to speed). With no
-      // known limit, only paces under 55 mph are shown: above that the road isn't what sets the speed.
-      const roadCap = (mps) => (mps == null ? null : limit != null ? Math.min(mps, limit) : (mps < 24.6 ? mps : null));
-      const pace = roadCap(at(track && track.envMps)), sightMps = roadCap(sight != null ? Core.sightSpeedMps(sight) : null);
+      const pace = at(track && track.envMps), sightMps = sight != null ? Core.sightSpeedMps(sight) : null;
       cluster.update({
         // in the chosen units (mph or km/h, U-22); the names are the cluster's
         speedMph: vMps != null ? ApexUnits.speed(vMps) : null,
         paceMph: pace != null ? ApexUnits.speed(pace) : null,
         sightMph: sightMps != null ? ApexUnits.speed(sightMps) : null,
-        // the Sight cell: the distance itself, and what stopping from this speed takes (the same reaction and braking
-        // the envelope assumes, apex_core REACTION_S and BRAKE_DECEL_MPS2)
-        sightM: sight, stopM: vMps != null && vMps > 1 ? vMps * 1.5 + vMps * vMps / (2 * 0.5 * Core.G_STD) : null,
         limitMph: limit != null ? ApexUnits.speed(limit) : null,
         latG, lonG, camberDeg: camber,
         tripMi: ApexUnits.longN(live && idx < 0 ? (drive.rec ? drive.rec.km * 1000 : 0) : state.cursorM), totalMi: track && !(live && idx < 0) ? ApexUnits.longN(totalM()) : null,
