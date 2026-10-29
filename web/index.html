@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-Qg0LbcQik413GGPLuqbP/Zr/uo494PLFfcLGIcGApBY=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-v0fRax0pRIpDOzxb3iT1tbogc2A2MivmLd102C4vSTI=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -47,6 +47,7 @@
   <script src="route_card.js"></script>
   <script src="plan_presets.js"></script>
   <script src="place_plate.js"></script>
+  <script src="horizon.js"></script>
   <script src="week_digest.js"></script>
   <script src="drive_card.js"></script>
   <script src="outbox.js"></script>
@@ -1277,7 +1278,7 @@
     const map = new maplibregl.Map({ container: 'map', style: MAP_STYLE,
       center: startPos ? [startPos.lon, startPos.lat] : [-84.70, 39.24], zoom: 14.6, pitch: 45, maxPitch: 60, attributionControl: { compact: true }, fadeDuration: 0,
       transformRequest: window.ApexOfflineTiles ? ApexOfflineTiles.transform : undefined });
-    window.apexDebug = { map, get track() { return track; }, state, drives, buildRoute: (...a) => buildRoute(...a), renderRouteCard: (...a) => renderRouteCard(...a), openRoadPage: (...a) => openRoadPage(...a), showEndCard: (...a) => showEndCard(...a) };
+    window.apexDebug = { map, get track() { return track; }, state, drives, buildRoute: (...a) => buildRoute(...a), renderRouteCard: (...a) => renderRouteCard(...a), openRoadPage: (...a) => openRoadPage(...a), showEndCard: (...a) => showEndCard(...a), get driveActive() { return driveActive; } };
     let mapReady = false;
     // The map's box changes with the layout (idle hides the gauges, a drive shows them); keep the canvas the size of its box.
     if (window.ResizeObserver) new ResizeObserver(() => map.resize()).observe(document.getElementById('map'));
@@ -2208,10 +2209,12 @@
         bearing = L.course_deg != null ? L.course_deg : state.bearing;
         if (track) {
           // Off route the rejoin can be anywhere on the route, so search all of it (hint -1).
-          const hit = Core.nearestIndex(lat, lon, track.lat, track.lon, rerouter.off ? -1 : state.cursorIdx, 600);
-          if (L !== routeWatch.frame) { routeWatch.frame = L; feedRerouter(L, hit); trafficTick(L, hit); }
-          if (hit.distM < 40 && !rerouter.off) { idx = hit.index; state.cursorM = track.dist[idx]; }
+          const free = track.kind === 'horizon';                         // the road ahead is not a route: no rerouting, ETA or traffic
+          const hit = Core.nearestIndex(lat, lon, track.lat, track.lon, rerouter.off && !free ? -1 : state.cursorIdx, 600);
+          if (L !== routeWatch.frame && !free) { routeWatch.frame = L; feedRerouter(L, hit); trafficTick(L, hit); }
+          if (hit.distM < 40 && (free || !rerouter.off)) { idx = hit.index; state.cursorM = track.dist[idx]; }
         }
+        if (onFreeRoad()) maybeHorizon(L, idx);
       } else if (track && replayOn) {
         const s = sample(track, state.cursorM);
         idx = s.i; lat = s.lat; lon = s.lon; bearing = s.bearing;
@@ -2239,7 +2242,7 @@
         sightOpen: sight != null && sight >= Core.SIGHT_MAX_M - 1 && (pace == null || pace >= sightMps - 0.5),
         limitMph: limit != null ? ApexUnits.speed(limit) : null,
         latG, lonG, camberDeg: camber,
-        tripMi: ApexUnits.longN(live && idx < 0 ? (drive.rec ? drive.rec.km * 1000 : 0) : state.cursorM), totalMi: track && !(live && idx < 0) ? ApexUnits.longN(totalM()) : null,
+        tripMi: ApexUnits.longN(live && (idx < 0 || track.kind === 'horizon') ? (drive.rec ? drive.rec.km * 1000 : 0) : state.cursorM), totalMi: track && track.kind !== 'horizon' && !(live && idx < 0) ? ApexUnits.longN(totalM()) : null,
         sector: sectorAt(idx), routeOnly: track && track.kind === 'route'
       });
       updateRibbon(vMps, idx, snap);
@@ -2331,6 +2334,49 @@
         ApexVoice.prefetch(texts);
       }).catch(() => {});
     }
+    }
+    // Free driving (REVIEW.md 3.1): Start with no route still calls the corners of the road you're on. The road ahead comes
+    // from the map's own road lines (horizon.js: followed through plain junctions only, never a guessed turn) and becomes a
+    // track of its own kind, 'horizon', that the notes and the co-driver read like a route's. It is not drawn, rerouted or
+    // timed; it is rebuilt near its end, after a junction, or once you leave it; corners already called aren't called again.
+    const FREE_CLASSES = new Set(['motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'minor', 'service', 'track', 'raceway', 'busway']);
+    const free = { busy: false, at: 0, offSince: 0 };
+    function onFreeRoad() { return driveActive && state.mode === 'live' && !(track && track.kind === 'route'); }
+    function maybeHorizon(L, idx) {
+      const now = performance.now(), t = track && track.kind === 'horizon' ? track : null;
+      const off = !!t && idx < 0;
+      free.offSince = off ? (free.offSince || now) : 0;
+      if (free.busy || now - free.at < 2000) return;
+      if (t && !(off && now - free.offSince > 3000) && !(totalM() - state.cursorM < 600)) return;
+      if (!Number.isFinite(L.course_deg) || !(L.speed_mps > 3) || !mapReady) return;   // a heading needs motion
+      free.at = now; free.busy = true;
+      buildHorizon(L).catch(() => {}).finally(() => { free.busy = false; });
+    }
+    async function buildHorizon(L) {
+      let feats = [];
+      try { feats = map.querySourceFeatures('openmaptiles', { sourceLayer: 'transportation' }); } catch (_) { return; }
+      const dLat = 0.03, dLon = dLat / Math.max(0.2, Math.cos(L.lat * Math.PI / 180)), lines = [];   // about 3 km round you
+      for (const f of feats) {
+        const cls = f.properties && f.properties.class, g = f.geometry;
+        if (!FREE_CLASSES.has(cls) || !g) continue;
+        const parts = g.type === 'LineString' ? [g.coordinates] : g.type === 'MultiLineString' ? g.coordinates : [];
+        for (const p of parts) if (p.some(([lo, la]) => Math.abs(la - L.lat) < dLat && Math.abs(lo - L.lon) < dLon)) lines.push({ coords: p, cls });
+      }
+      const h = window.ApexHorizon ? ApexHorizon.ahead(lines, { lat: L.lat, lon: L.lon, heading: L.course_deg }, 2500) : null;
+      if (!h || !onFreeRoad()) return;
+      const t = await trackFromPolyline(h.coords, 'horizon', 'The road ahead');
+      if (!onFreeRoad()) return;
+      t.kind = 'horizon'; t.subtitle = 'The road ahead, from the map'; t.horizonEnd = h.end;
+      useHorizon(t);
+    }
+    function useHorizon(t) {
+      const old = track && track.kind === 'horizon' ? track : null, cos = Math.cos(t.lat[0] * Math.PI / 180);
+      const said = old ? old.events.filter(e => state.spoken.has(`${old.id}:${e.type}:${e.index}`)) : [];
+      track = t; state.cursorM = 0; state.spoken.clear();
+      for (const e of t.events) if (said.some(k => k.type === e.type && Math.hypot((k.lat - e.lat) * 110540, (k.lon - e.lon) * 111320 * cos) < 25)) state.spoken.add(`${t.id}:${e.type}:${e.index}`);
+      if (mapReady) map.getSource('apex-route-src').setData({ type: 'FeatureCollection', features: [] });   // not a route: not drawn
+      rebuildPins();
+      render(false);
     }
     function activate(t, startM = 0, { quiet = false } = {}) {
       if (!booting && !quiet) { replayOn = true; }
@@ -5637,6 +5683,7 @@
       if (sensors) sensors.stop();
       state.live = null;
       refreshAutoNight();
+      if (track && track.kind === 'horizon') { track = null; if (plannedRoute) activate(plannedRoute, 0, { quiet: true }); }   // the road ahead ends with the drive
       replayOn = false; setMode(track && track.kind === 'route' ? 'sim' : 'replay'); paintModeSwitch(); render(true);
       if (save && rec && rec.km >= 0.3 && rec.samples >= 60) {
         try {
@@ -5910,6 +5957,7 @@
         return;
       }
       if (state.mode === 'live' && !drive.sensors && performance.now() - state.liveAt > 5000) {
+        if (track && track.kind === 'horizon') track = null;
         state.live = null; setMode(track && track.kind === 'route' ? 'sim' : 'replay'); paintModeSwitch(); toast('GPS lost. Back to the replay.');
         refreshAutoNight();
       }
