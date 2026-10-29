@@ -66,9 +66,12 @@ final class AppTourTests: XCTestCase {
             for i in Array(0..<min(fields.count, 16)) + Array(0..<min(fields.count, 16)) {
                 let f = fields.element(boundBy: i)
                 guard f.exists, !f.frame.isEmpty else { continue }   // a field in a hidden view has no frame
+                // only fields on this page: one below the fold is scrolled to; one in a hidden sheet never comes on screen
+                // (asking it isHittable then fails the test instead of answering no)
+                let onScreen = { f.frame.width > 4 && f.frame.height > 4 && app.frame.contains(CGPoint(x: f.frame.midX, y: f.frame.midY)) }
                 var tries = 0
-                while !f.isHittable && tries < 6 { web.swipeUp(velocity: .slow); pause(0.6); tries += 1 }
-                guard f.isHittable else { continue }
+                while !onScreen() && f.frame.minY > app.frame.maxY && tries < 6 { web.swipeUp(velocity: .slow); pause(0.6); tries += 1 }
+                guard onScreen(), f.isHittable else { continue }
                 let label = [f.label, f.placeholderValue ?? ""].first { !$0.isEmpty } ?? "field \(i)"
                 guard !done.contains(label) else { continue }
                 done.insert(label)
