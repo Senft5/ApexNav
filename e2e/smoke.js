@@ -1066,6 +1066,26 @@ flow('theme contract on the page: the hazard plate, the speed, the call and the 
     check(!r.small.length && r.bankPx >= 13, `${m}: nothing on the binnacle under 13 px: ` + JSON.stringify(r.small) + ' bank ' + r.bankPx);
     check(r.limit, `${m}: the Limit sign is there`);
   }
+  // the Pro themes, tried on the demo replay from the picker: the same floors and the same hazard plate
+  for (const id of ['tapedeck', 'billet']) {
+    await page.evaluate((t) => window.apexDebug.tryTheme(t), id);
+    await page.waitForFunction((t) => document.documentElement.dataset.theme === t, id);
+    await page.waitForFunction(() => window.apexDebug.track && window.apexDebug.track.events.length);
+    await page.evaluate(() => { const st = window.apexDebug.state, t = window.apexDebug.track; st.cursorM = t.dist[t.dist.length - 1] * 0.45; });
+    await page.waitForTimeout(2500);
+    const r = await page.evaluate(() => {
+      const p = document.getElementById('hzPlate'); p.hidden = false;
+      const cs = getComputedStyle(p), speed = document.querySelector('.dial-digital, .vfd-seg');
+      const call = document.querySelector('.rb-box.now .rb-call span');
+      const small = [...document.querySelectorAll('#cluster *')].filter((n) => !(n instanceof SVGElement) && n.childNodes.length && [...n.childNodes].some((c) => c.nodeType === 3 && c.textContent.trim()))
+        .map((n) => [n.className, parseFloat(getComputedStyle(n).fontSize)]).filter(([, px]) => px < 13);
+      const seg = document.querySelector('.vfd-seg'), segH = seg ? seg.getBoundingClientRect().height * 100 / 200 : null;   // the digits are 100 of the 200 units
+      return { bg: cs.backgroundColor, edge: cs.borderTopColor, speed: segH != null ? segH : speed.getBoundingClientRect().height,
+               call: call ? parseFloat(getComputedStyle(call).fontSize) : 0, small };
+    });
+    check(r.bg === 'rgb(17, 17, 17)' && r.edge === 'rgb(255, 122, 26)', `${id}: the same hazard plate ` + JSON.stringify(r));
+    check(r.speed >= 40 && r.call >= 21 && !r.small.length, `${id}: speed ${r.speed}, call ${r.call}, small ` + JSON.stringify(r.small));
+  }
 });
 
 flow('flyover video: Video records the replay with the note on it and hands over a file (IDEAS D-10)', async (page, base) => {

@@ -13,11 +13,14 @@
    (ONNX, quantised WASM, ~90 MB one-time download, cached); text becomes phonemes in `web/g2p.js`, not espeak-ng. Known phrases (a route's name) are
    pre-rendered in the background when the route loads; a phrase that isn't ready within 1.5 s
    falls back to the device voice so pace notes are never delayed. Toggle: LIVE in the route book.
-3. **Jarvis** — a machine-speak vocabulary rendered with a deep Kokoro voice, played through a
-   cartoon-robot chain (ring modulator 58 Hz, 9 ms comb, soft clip) with a chirp before each call.
-4. **DEVICE** — the phone's own voices, for anyone who prefers them.
+3. **Voice packs come with themes** (docs/design/REVIEW.md 4.4, 2026-10-29): Roadbook's **Marguerite** (calm, exact;
+   Kokoro `bf_isabella`), Tapedeck's **Kit** (quick, dry, a little cheeky; `bm_fable`), Billet's **Hale** (low, even;
+   `bm_lewis`). The calls are identical in every pack; each pack has its own system lines (`PACK_LINES` in
+   tools/voicebank.py: ready, full, quiet, end, and the sample the theme picker's Hear key plays). The voice list,
+   custom voices ("My Voice") and Jarvis are retired, and so are the George, Daniel, Emma and Michael banks.
+4. **DEVICE** — the phone's own voice, used only when a pack's bank isn't on the phone or a word isn't in it.
 
-Voices shipped: George, Daniel (British male), Emma (British female), Jarvis.
+Voices shipped: Marguerite, Kit, Hale.
 Model: Kokoro-82M, Apache-2.0 (hexgrad/Kokoro-82M).
 
 ## Building banks

@@ -46,8 +46,20 @@ def codriver_distance(d: int) -> str:
     return f"{NUM[h]} {TENS.get(r, 'twenty' if r == 20 else str(r))}"
 
 
-def codriver_vocabulary() -> dict[str, str]:
-    """token -> text. Tokens are what web/voice.js asks for."""
+# The theme voice packs (docs/design/REVIEW.md 4.4): one co-driver per theme. The calls are the same in every pack; the
+# character is in the lines around them. No speed numbers, no praise for pace, "score" the only score word.
+PACK_LINES = {
+    "marguerite": {"sys:test": "Notes ready. Have a good one.", "sys:stage": "Full notes.", "sys:cruise": "Quiet from here. Bumps and cameras only.",
+                   "sys:end": "That's the drive.", "sys:sample": "Left four, tightens. Long. Care."},
+    "kit": {"sys:test": "Tape's in. Let's keep it tidy.", "sys:stage": "Full notes. Here we go.", "sys:cruise": "Quiet now. Hazards only.",
+            "sys:end": "That's a wrap.", "sys:sample": "Left four, tightens. Easy in, late out."},
+    "hale": {"sys:test": "Route loaded.", "sys:stage": "Full notes.", "sys:cruise": "Hazards only.",
+             "sys:end": "Complete.", "sys:sample": "Left four. Tightens. Long."},
+}
+
+
+def codriver_vocabulary(pack: str = None) -> dict[str, str]:
+    """token -> text. Tokens are what web/voice.js asks for; a pack's own lines replace the plain ones."""
     v = {}
     for d, word in (("L", "Left"), ("R", "Right")):
         for sev in range(1, 7):
@@ -69,6 +81,7 @@ def codriver_vocabulary() -> dict[str, str]:
     v["sys:stage"] = "Stage mode. Full notes."
     v["sys:cruise"] = "Cruise. Hazards only."
     v["sys:test"] = "Co-driver ready."
+    v.update(PACK_LINES.get(pack, {}))
     return v
 
 
@@ -143,6 +156,9 @@ def jarvis_vocabulary() -> dict[str, str]:
 
 
 VOICES = {
+    "marguerite": {"name": "Marguerite", "style": "codriver", "engine": "kokoro", "kokoro_voice": "bf_isabella", "lang": "b", "speed": 1.05},
+    "kit": {"name": "Kit", "style": "codriver", "engine": "kokoro", "kokoro_voice": "bm_fable", "lang": "b", "speed": 1.12},
+    "hale": {"name": "Hale", "style": "codriver", "engine": "kokoro", "kokoro_voice": "bm_lewis", "lang": "b", "speed": 0.98},
     "george": {"name": "George", "style": "codriver", "engine": "kokoro", "kokoro_voice": "bm_george", "lang": "b", "speed": 1.08},
     "daniel": {"name": "Daniel", "style": "codriver", "engine": "kokoro", "kokoro_voice": "bm_daniel", "lang": "b", "speed": 1.08},
     "emma": {"name": "Emma", "style": "codriver", "engine": "kokoro", "kokoro_voice": "bf_emma", "lang": "b", "speed": 1.08},
@@ -226,7 +242,7 @@ def encode_m4a(audio: np.ndarray, path: str) -> None:
 
 def build(voice_id: str, ref: str = None) -> dict:
     cfg = VOICES[voice_id]
-    vocab = jarvis_vocabulary() if cfg["style"] == "jarvis" else codriver_vocabulary()
+    vocab = jarvis_vocabulary() if cfg["style"] == "jarvis" else codriver_vocabulary(voice_id)
     expect = {}
     if cfg["engine"] == "chatterbox":
         if not ref:

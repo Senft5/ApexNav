@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-4dgAe+CotmkSVq+EDqZMkWdzxQPVdmJD0gLOY2Okvrg=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-Y12NnszLYovpB3ILWjeyjm9RCaoMRwGU5REVORZaWsY=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -49,6 +49,7 @@
   <script src="place_plate.js"></script>
   <script src="horizon.js"></script>
   <script src="pro.js"></script>
+  <script src="theme_sounds.js"></script>
   <script src="week_digest.js"></script>
   <script src="drive_card.js"></script>
   <script src="outbox.js"></script>
@@ -946,19 +947,14 @@
               <button class="sw sw-cycle" data-cycle="notesMode" aria-label="Notes"><b></b><span>Notes</span></button>
               <button class="sw" data-toggle="voice"><i></i><span>Voice</span></button>
               <button class="sw" data-toggle="haptics"><i></i><span>Haptics</span></button>
+              <button class="sw" data-toggle="keys"><i></i><span>Key sounds</span></button>
               <button class="sw sw-cycle" data-cycle="nightMode" aria-label="Night"><b></b><span>Night</span></button>
             </div>
             <p class="note">Notes: Full calls every corner; Quiet only hazards and cameras; Auto calls corners once you are cornering with some purpose, quiet otherwise. Night: Auto turns the page over after sunset.</p>
           </section>
           <section data-panel="garage">
-            <h3>Voice</h3>
-            <p class="note" style="margin:0 0 8px">Who reads your notes. Works offline.</p>
-            <div class="row" id="voiceList">
-              <span id="voiceCards" style="display:contents"></span>
-              <button class="ink-btn" data-voice="device">Phone voice</button>
-            </div>
-            <div class="row mt-8"><select class="field" id="voiceSelect"></select></div>
-            <div class="row mt-8"><button class="ink-btn" id="voiceTestBtn">▶ Sample</button></div>
+            <h3>The words</h3>
+            <p class="note" style="margin:0 0 8px">Your co-driver comes with your theme (Look and voice above). Works offline.</p>
             <div class="switch mt-8" id="noteWordsList" role="group" aria-label="Note words">
               <button data-words="plain">Plain words</button>
               <button data-words="rally">Rally notes</button>
@@ -1223,7 +1219,7 @@
       theme: 'roadbook', camFeel: 'dynamic', voiceId: 'george', liveVoice: false, voiceStyle: 'codriver', voiceName: '', hlOn: false, hlStrength: 1,
       notesMode: 'auto', nightMode: 'auto',   // Notes: auto | full | quiet. Night: auto (sunset/sunrise) | on | off
       noteWords: 'plain',                     // rally ("Left 4 minus") | plain ("Medium left"), IDEAS V-02; a saved setting wins
-      toggles: { stage: false, voice: true, lpr: true, dna: false, night: false, twisty: false, haptics: true, crash: true, health: true, terrain: false, coverage: false }   // stage and night are derived from the two modes; analysis.html reads toggles.night
+      toggles: { stage: false, voice: true, lpr: true, dna: false, night: false, twisty: false, haptics: true, crash: true, health: true, terrain: false, coverage: false, keys: true }   // stage and night are derived from the two modes; analysis.html reads toggles.night
     };
     const NOTES_MODES = ['auto', 'full', 'quiet'], NIGHT_MODES = ['auto', 'on', 'off'];
     const MODE_LABEL = { auto: 'Auto', full: 'Full', quiet: 'Quiet', on: 'On', off: 'Off' };
@@ -1270,6 +1266,7 @@
     if (params.has('voice')) state.voiceId = params.get('voice');
     state.voiceStyle = state.voiceId === 'jarvis' ? 'jarvis' : 'codriver';
 
+    let bankVoices = [];                                             // the voice banks on the phone (web/voices/index.json)
     let look = Themes.apply(state.theme, state.toggles.night);
     ApexFormat.applyTypeScale(document);
     document.addEventListener('visibilitychange', () => { if (!document.hidden) ApexFormat.applyTypeScale(document); });   // text size changed in Settings
@@ -1287,6 +1284,7 @@
     function applyTheme() {
       syncDerivedToggles();
       look = Themes.apply(state.theme, state.toggles.night);
+      if (typeof themeVoice === 'function') themeVoice();               // the co-driver comes with the theme
       cluster = Inst.mountCluster($('cluster'), look.theme);
       paintSwitches();
       restyleBasemap();
@@ -1342,7 +1340,7 @@
     const map = new maplibregl.Map({ container: 'map', style: MAP_STYLE,
       center: startPos ? [startPos.lon, startPos.lat] : [-84.70, 39.24], zoom: 14.6, pitch: 45, maxPitch: 60, attributionControl: { compact: true }, fadeDuration: 0,
       transformRequest: window.ApexOfflineTiles ? ApexOfflineTiles.transform : undefined });
-    window.apexDebug = { map, get track() { return track; }, state, drives, buildRoute: (...a) => buildRoute(...a), renderRouteCard: (...a) => renderRouteCard(...a), openRoadPage: (...a) => openRoadPage(...a), showEndCard: (...a) => showEndCard(...a), get driveActive() { return driveActive; } };
+    window.apexDebug = { map, get track() { return track; }, state, drives, buildRoute: (...a) => buildRoute(...a), renderRouteCard: (...a) => renderRouteCard(...a), openRoadPage: (...a) => openRoadPage(...a), showEndCard: (...a) => showEndCard(...a), get driveActive() { return driveActive; }, tryTheme: (id) => tryTheme(id) };
     let mapReady = false;
     // The map's box changes with the layout (idle hides the gauges, a drive shows them); keep the canvas the size of its box.
     if (window.ResizeObserver) new ResizeObserver(() => map.resize()).observe(document.getElementById('map'));
@@ -2079,6 +2077,11 @@
       if (!item) { speech.current = null; speech.via = null; return; }
       if (item.kind === 'hazard' || item.chain || item.haptic) haptic(item.kind === 'hazard' ? 'hazard' : 'note');
       speech.busy = true; speech.current = item; speech.via = 'model';
+      // the theme's pre-call sound before a call, and the one hazard two-tone (the same in every theme) before a hazard
+      const cue = item.kind === 'hazard' ? 'hazard' : item.chain ? 'pre' : null;
+      if (cue && window.ApexThemeSounds && window.ApexVoice) {
+        try { const len = ApexThemeSounds.play(ApexVoice.unlock(), ApexThemeSounds.recipe(state.theme, cue)); await new Promise(r => setTimeout(r, len * 1000 + 40)); } catch (_) {}
+      }
       const duck = ApexSpeechQueue.ducks(item, isSpirited());
       let played = false;
       try {
@@ -4908,7 +4911,7 @@
         const ok = themeAllowed(t.id), inUse = state.theme === t.id && !themeTrial;
         const act = inUse ? el('span', { className: 'tc-inuse', textContent: 'In use' })
           : ok ? btn('Use', () => useTheme(t.id), 'ink-btn') : btn('Try it', () => tryTheme(t.id), 'ink-btn');
-        const hear = btn('Hear', () => { if (window.ApexVoice) ApexVoice.unlock(); say(t.voice ? t.voice.sample : 'Left four, tightens.', true, null, null, { voicePack: t.voice && t.voice.id }); }, 'ink-btn tc-hear');
+        const hear = btn('Hear', () => hearPack(t.voice && t.voice.id, t.voice ? t.voice.sample : 'Left four, tightens.'), 'ink-btn tc-hear');
         hear.setAttribute('aria-label', `Hear ${t.voice ? t.voice.name : t.label}`);
         card.append(themePreview(t),
           el('div', { className: 'tc-head' }, el('b', { textContent: t.label }), ...(t.pro ? [el('span', { className: 'tc-pro', textContent: 'PRO' })] : []), act),
@@ -4993,35 +4996,27 @@
       closeHighlightDialog(); renderHighlights(); toast(`Spot saved · ${name}`);
     });
 
-    // Voice picker: open-model banks (web/voices/index.json) + the device's own voice.
-    let bankVoices = [];
-    function renderVoiceList() {
-      const cards = $('voiceCards');
-      cards.innerHTML = '';
-      for (const v of bankVoices) {
-        const btn = document.createElement('button');
-        btn.className = 'ink-btn';
-        btn.dataset.voice = v.id;
-        btn.textContent = v.name;
-        btn.title = v.license;
-        cards.appendChild(btn);
-      }
-      document.querySelectorAll('[data-voice]').forEach(b => {
-        b.classList.toggle('on', b.dataset.voice === state.voiceId);
-        b.onclick = () => {
-          state.voiceId = b.dataset.voice; state.voiceStyle = state.voiceId === 'jarvis' ? 'jarvis' : 'codriver';
-          renderVoiceList(); savePrefs();
-          if (window.ApexVoice) ApexVoice.unlock();
-          say('Co-driver ready.', true, null, state.voiceId === 'jarvis' ? 'w:test' : 'sys:test');
-        };
-      });
-      const sel = $('voiceSelect');
-      const voices = ('speechSynthesis' in window) ? speechSynthesis.getVoices().filter(v => /^en/i.test(v.lang)) : [];
-      sel.innerHTML = '';
-      sel.add(new Option(`Automatic (${(pickVoice(state.voiceStyle) || { name: 'device default' }).name})`, ''));
-      voices.forEach(v => sel.add(new Option(`${v.name} · ${v.lang}`, v.name)));
-      sel.value = state.voiceName || '';
-      sel.style.display = state.voiceId === 'device' && voices.length ? '' : 'none';
+    // Voices come with themes (REVIEW.md 4.4, roadmap 18): Roadbook's Marguerite, Tapedeck's Kit, Billet's Hale. The voice
+    // list and custom voices are gone; the theme's pack is used whenever its bank is on the phone, the phone's own voice
+    // only when it isn't (or for words no bank has). (bankVoices is declared with the state, before the first applyTheme.)
+    function themeVoice() {
+      const want = look && look.theme && look.theme.voice ? look.theme.voice.id : null;
+      if (want && bankVoices.some(v => v.id === want)) { state.voiceId = want; state.voiceStyle = 'codriver'; }
+      else if (!bankVoices.some(v => v.id === state.voiceId)) { state.voiceId = 'device'; state.voiceStyle = 'codriver'; }
+    }
+    function renderVoiceList() { themeVoice(); }
+    // Key sounds (REVIEW.md 4.2): the theme's own click on its keys; off in Garage > Co-driver
+    document.addEventListener('pointerdown', (e) => {
+      const k = e.target.closest && e.target.closest('.key, .ink-btn, .rec-key, .btn-start, .map-key, .find-key, .switch > button, .detents > button, .stamps > button');
+      if (!k || state.toggles.keys === false || !window.ApexThemeSounds || !window.ApexVoice) return;
+      try { ApexThemeSounds.play(ApexVoice.unlock(), ApexThemeSounds.recipe(state.theme, 'key')); } catch (_) {}
+    }, { passive: true });
+    // Hear on a theme card: that pack's own sample line, then back to the voice in use
+    async function hearPack(id, fallback) {
+      if (!window.ApexVoice || !bankVoices.some(v => v.id === id)) { say(fallback, true); return; }
+      ApexVoice.unlock();
+      try { await ApexVoice.load(id); if (!(await ApexVoice.play(['sys:sample']))) say(fallback, true); } catch (_) { say(fallback, true); }
+      try { if (state.voiceId !== 'device') await ApexVoice.load(state.voiceId); } catch (_) {}
     }
     function renderLive() {
       const st = window.ApexVoice ? ApexVoice.liveState() : 'idle';
@@ -5049,14 +5044,6 @@
     });
     setInterval(renderLive, 1500);
     renderLive();
-    $('voiceSelect').addEventListener('change', (e) => { state.voiceName = e.target.value; savePrefs(); renderVoiceList(); });
-    $('voiceTestBtn').addEventListener('click', () => {
-      if (window.ApexVoice) ApexVoice.unlock();
-      const demo = [{ type: 'corner', dir: 'L', severity: 4, grade: '-', shape: null, mods: ['long', 'tightens'], caution: 1, link: 'into' },
-                    { type: 'corner', dir: 'R', severity: 2, grade: '', shape: null, mods: [], caution: 0, link: '150' }];
-      say('Left 4 minus long tightens, care into Right 2, 150', true, demo);
-    });
-    if ('speechSynthesis' in window) speechSynthesis.onvoiceschanged = renderVoiceList;
     if (window.ApexVoice) ApexVoice.voices().then(v => { bankVoices = v; renderVoiceList(); });
     renderVoiceList();
     // Browsers only allow audio after a user gesture: unlock WebAudio on the first touch.
