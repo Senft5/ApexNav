@@ -443,6 +443,44 @@ flow('convoy: an in-app invite toasts and Join gets you in, no link (Worker stub
   check(accepted, 'joined with consent, without a link');
 });
 
+flow('crew page: the tab opens your crew; going, chat and the livery reach the Worker (Worker stubbed, REVIEW.md roadmap 20)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  const sent = [], soon = new Date(Date.now() + 3 * 86400e3).toISOString();
+  const crewPage = { id: 'k1', name: 'Ridge Runners', motto: 'Slow in, smooth out.', visibility: 'private', area_name: null, members: 3, is_owner: true,
+    crest: null, crest_photo_id: null, stripe: null, cover_photo_id: null, livery: 'plain', sharing_scores: true,
+    board: [{ handle: 'sam', score: 811, car: 'Mazda MX-5', mine: false }, { handle: 'me', score: null, car: null, mine: true }],
+    next: { id: 'e1', title: 'Dawn run', starts_at: soon, meet_name: 'The Hardee\'s', going: ['sam'], my_rsvp: null } };
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url()), m = route.request().method();
+    const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (m !== 'GET') { sent.push({ m, p: u.pathname, b: route.request().postData() }); return m === 'POST' ? json({ id: 'x' }, 201) : route.fulfill({ status: 204 }); }
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (u.pathname === '/api/crews') return json([{ id: 'k1', name: 'Ridge Runners', role: 'owner', visibility: 'private', members: 3 }]);
+    if (u.pathname === '/api/crews/k1/page') return json(crewPage);
+    if (u.pathname === '/api/crews/k1/chat') return json([{ id: 'm1', handle: 'sam', body: '<b>Fog</b> by 7?', created_at: '2026-10-29 10:00:00', mine: false, photo_id: null }]);
+    return json([]);
+  });
+  await page.goto(base + '/index.html?view=crew');
+  await page.waitForSelector('.crew-page .cp-title h2');
+  check((await page.textContent('.crew-page h2')) === 'Ridge Runners', 'the Crew tab opens the crew');
+  const rows = await page.$$eval('.cp-board-row', (r) => r.map((x) => [x.querySelector('.who b').textContent, x.querySelector('.score').textContent]));
+  check(JSON.stringify(rows) === JSON.stringify([['@sam', '811'], ['@me', '--']]), 'the board: a Score, then -- for no Score: ' + JSON.stringify(rows));
+  check(await page.$eval('.cp-msg p', (p) => p.textContent === '<b>Fog</b> by 7?' && !p.querySelector('b')), 'chat is set as text');
+  await page.click('.cp-drive button:has-text("going")');
+  await page.fill('.cp-say textarea', 'Saturday it is');
+  await page.click('.cp-say button:has-text("Send")');
+  await page.click('.cp-edit');
+  await page.click('.cp-crests button[aria-label="Peak"]');
+  await page.click('.cp-swatches button[aria-label="Blue"]');
+  await page.click('.cp-livery button:has-text("Save")');
+  await page.waitForTimeout(300);
+  const find = (p) => sent.find((x) => x.p === p);
+  check(find('/api/events/e1/rsvp') && JSON.parse(find('/api/events/e1/rsvp').b).status === 'going', 'I\'m going sends going');
+  check(find('/api/crews/k1/chat') && JSON.parse(find('/api/crews/k1/chat').b).body === 'Saturday it is', 'the message is sent');
+  const liv = find('/api/crews/k1/page');
+  check(liv && liv.m === 'PUT' && JSON.parse(liv.b).crest === 'peak' && JSON.parse(liv.b).stripe === '#1f5fa8', 'the livery saves the crest and stripe: ' + (liv && liv.b));
+});
+
 flow('convoy: the leader shows a QR code of the link (Worker stubbed, IDEAS S-22)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   const id = 'BBBBBBBBBBBBBBBBBBBBBB', until = Date.now() + 120 * 60000;

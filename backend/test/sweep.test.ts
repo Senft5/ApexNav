@@ -38,7 +38,7 @@ describe("daily sweep", () => {
     expect((await env.DB.prepare("SELECT token_hash FROM invites ORDER BY token_hash").all()).results.map((r) => r.token_hash)).toEqual(["i-new", "i-used"]);
     expect((await env.DB.prepare("SELECT token_hash FROM crew_invites").all()).results).toEqual([{ token_hash: "ci-new" }]);
     const line = JSON.parse(log.mock.calls.map((c) => c[0] as string).find((l) => l.includes('"sweep"'))!);
-    expect(line).toEqual({ event: "sweep", deleted: { sessions: 1, app_auth_codes: 1, invites: 1, crew_invites: 1, hazard_reports: 0, shared_routes: 0, crew_event_rsvps: 0, crew_events: 0, health_counts: 0, eta_shares: 0, feedback: 0, kudos: 0, route_stats: 0 } });
+    expect(line).toEqual({ event: "sweep", deleted: { sessions: 1, app_auth_codes: 1, invites: 1, crew_invites: 1, hazard_reports: 0, shared_routes: 0, crew_event_rsvps: 0, crew_events: 0, health_counts: 0, eta_shares: 0, feedback: 0, kudos: 0, route_stats: 0, crew_chat: 0 } });
     log.mockRestore();
   });
 

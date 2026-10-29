@@ -29,6 +29,7 @@ import m27 from "../migrations/0027_bin_curvature.sql?raw";
 import m28 from "../migrations/0028_redemptions.sql?raw";
 import m29 from "../migrations/0029_open_roads.sql?raw";
 import m30 from "../migrations/0030_photos_crew_page_builds.sql?raw";
+import m31 from "../migrations/0031_crew_crest.sql?raw";
 import { sha256hex } from "../src/util";
 
 export const ORIGIN = "https://apexnav.test";
@@ -47,7 +48,7 @@ export async function freshDb(): Promise<void> {
     await env.DB.batch(tables.map((t) => env.DB.prepare(`DELETE FROM ${t.name}`)));
     return;
   }
-  await env.DB.batch([...splitSql(m1), ...splitSql(m2), ...splitSql(m3), ...splitSql(m4), ...splitSql(m5), ...splitSql(m6), ...splitSql(m7), ...splitSql(m8), ...splitSql(m9), ...splitSql(m10), ...splitSql(m11), ...splitSql(m12), ...splitSql(m13), ...splitSql(m14), ...splitSql(m15), ...splitSql(m16), ...splitSql(m17), ...splitSql(m18), ...splitSql(m19), ...splitSql(m20), ...splitSql(m21), ...splitSql(m22), ...splitSql(m23), ...splitSql(m24), ...splitSql(m25), ...splitSql(m26), ...splitSql(m27), ...splitSql(m28), ...splitSql(m29), ...splitSql(m30)].map((s) => env.DB.prepare(s)));
+  await env.DB.batch([...splitSql(m1), ...splitSql(m2), ...splitSql(m3), ...splitSql(m4), ...splitSql(m5), ...splitSql(m6), ...splitSql(m7), ...splitSql(m8), ...splitSql(m9), ...splitSql(m10), ...splitSql(m11), ...splitSql(m12), ...splitSql(m13), ...splitSql(m14), ...splitSql(m15), ...splitSql(m16), ...splitSql(m17), ...splitSql(m18), ...splitSql(m19), ...splitSql(m20), ...splitSql(m21), ...splitSql(m22), ...splitSql(m23), ...splitSql(m24), ...splitSql(m25), ...splitSql(m26), ...splitSql(m27), ...splitSql(m28), ...splitSql(m29), ...splitSql(m30), ...splitSql(m31)].map((s) => env.DB.prepare(s)));
 }
 
 export interface TestUser { id: string; handle: string; token: string }

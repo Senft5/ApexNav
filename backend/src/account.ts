@@ -30,6 +30,7 @@ export async function exportMyData(env: Env, v: Viewer) {
                        JOIN segments s ON s.id = e.segment_id LEFT JOIN users u ON e.audience_type = 'friend' AND u.id = e.audience_id
                        LEFT JOIN crews c ON e.audience_type = 'crew' AND c.id = e.audience_id WHERE e.user_id = ?`),
     photos: await q("SELECT id, kind, ref_id, bytes, w, h, created_at FROM photos WHERE owner = ?"),
+    crew_chat: await q("SELECT c.name AS crew, m.body, m.created_at FROM crew_chat m JOIN crews c ON c.id = m.crew_id WHERE m.author = ?"),
     cars: await q("SELECT year, make, model, trim, nickname, color, power_hp, weight_kg, drivetrain, transmission, tyres, mods, shared, is_primary, created_at FROM cars WHERE owner = ?"),
     highlights: await q("SELECT id, name, category, note, lat, lon, status, created_at FROM highlights WHERE author_id = ?"),
     reports_you_made: await q("SELECT kind, note, status, created_at FROM reports WHERE reporter = ?"),

@@ -6,6 +6,17 @@ it says so. Things only you can do are in docs/OWNER_TODO.md.
 
 ## 2026-10-29
 
+**The crew page (REVIEW.md roadmap 20).** The Crew tab opens your crew (a row of names to switch when you're in several). My calls:
+- *Plain livery only*: the owner sets a motto, one of six drawn stock crests (Apex, Peak, Tulip, Wheel, Wing, Crown) and one
+  of eight stripe colours, and adds a cover photo. Crest uploads and the higher tiers wait for Decals (roadmap 22). Migration
+  0031 (the stock crest column) is applied to both D1 databases.
+- *The board is the Vetta Score only*, best this month as each member published it to the crew; members who don't share
+  show `--`. A member's car is named only in a private crew, where crew-mates already see shown cars.
+- *Crew chat is kept 30 days*, plain text, 500 characters, 30 messages an hour a person. The author or the crew's owner
+  deletes; three reports hide a message, a moderator's remove deletes it.
+- *The old crew list stays below the page* (invite links, public/private, members, leave, create) until those move into
+  the page's own settings.
+
 **Photos (REVIEW.md roadmap 19, 5.2): a profile photo and a car's cover and gallery.** My calls:
 - *Photos are kept in Workers KV, not R2,* because R2 isn't turned on for the account (only you can: OWNER_TODO). I
   made two KV namespaces (PHOTOS, prod and preview) and bound them. Undo: once R2 is on, move the bytes and change the

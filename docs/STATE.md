@@ -11,8 +11,10 @@
   EXIF gone on the phone and stripped again on the Worker; KV `PHOTOS` until R2 is on (OWNER_TODO). Migration 0030
   (photos, crew page columns, crew chat, build threads) applied to both D1.
 - Active bugs: none new.
-- Exact next task: roadmap 20, the crew page v1 (cover, stock crest, motto, stripe, next drive, Vetta Score board,
-  chat; the Crew tab opens your crew).
+- [x] Roadmap 20: the crew page (web/crew_page.js, backend/src/crew_page.ts): cover, stock crest, motto, stripe, next
+  drive with Going, the Vetta Score board this month, crew chat (30 days). Migration 0031 applied to both D1.
+- Exact next task: roadmap 21, events (Plan a drive with roles and regroup points from the plan sheet, the event card,
+  a morning reminder in the cockpit).
 
 ## Session 2026-10-29 (day): design phase 2
 
