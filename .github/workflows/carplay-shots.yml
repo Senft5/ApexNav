@@ -71,12 +71,17 @@ jobs:
           SHOTS=$!
           # once the phone app is running, open Vetta on the car's screen: its icon on the CarPlay home page (second row,
           # first column), then its icon in the side bar as a fallback
-          ( sleep 45
+          # once the phone app is running Vetta's icon appears on the CarPlay home page (second row, first column; about two
+          # minutes in on run 2): click it every 15 s for 3 minutes. Once Vetta is open that spot is just map. Two ways of
+          # clicking, in case one isn't allowed on the runner.
+          ( sleep 60
             if [ -n "$REGION" ]; then
               IFS=, read X Y W H <<< "$REGION"
-              # fractions of the content under the 28 px title bar, measured on the first run's screenshots
-              cliclick c:$((X + W * 245 / 1000)),$((Y + 28 + (H - 28) * 612 / 1000)); sleep 8
-              cliclick c:$((X + W * 55 / 1000)),$((Y + 28 + (H - 28) * 417 / 1000))
+              CX=$((X + W * 242 / 1000)); CY=$((Y + 28 + (H - 28) * 595 / 1000))
+              for k in $(seq 1 12); do
+                cliclick c:$CX,$CY || osascript -e "tell application \"System Events\" to click at {$CX, $CY}" || true
+                sleep 15
+              done
             fi ) &
           ( sleep 120; xcrun simctl location "$UDID" start --speed=15 \
               35.3626,-84.2866 35.3640,-84.2700 35.3580,-84.2400 35.3460,-84.2060 35.3420,-84.1700 35.3400,-84.1300 ) &
