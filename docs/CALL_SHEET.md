@@ -6,6 +6,21 @@ it says so. Things only you can do are in docs/OWNER_TODO.md.
 
 ## 2026-10-29
 
+**The Log opens over the map, and the sight-line speed rides on the arrow.**
+- *The Log is a frame over the map, never in its place.* The owner: "the crew page still does a full reload every time".
+  Yesterday's fix sent the Log's tabs back in history, but it relied on the page's referrer (likely empty on the app's
+  apexnav:// pages) and on WebKit keeping the map cached, so the map still loaded from scratch. Now the map page opens
+  analysis.html in a full-screen iframe and never leaves: the Log's Map, Crew and Garage tabs just close the frame and
+  open that tab. Side benefit: a drive and the car's screen keep running while you read the Log. The frame is kept and
+  shown again as it was, and loaded fresh only after a new drive, a theme or units change, or for a different page of
+  the Log. Its notch and home-bar insets come from the map page (env() is zero inside a frame), and its native calls
+  (signed-in API, Save/Share) go through the map page's bridge, which the shell accepts as the main frame. A replay
+  link from the Log still loads the map with that drive. Undo: `openLog` in web/index.html back to `location.href`.
+- *Sight-line speed on the position arrow*, the owner's ask: a small plate under the arrow on the phone's map and the
+  car's, with the speed you can stop within what you can see (the cluster's Sight cell), OPEN when nothing limits you,
+  red when you are going faster than it, hidden when unknown. It is its own marker so it stays upright while the arrow
+  turns. The car gets it only during a drive. Undo: `paintSight` in web/index.html and `drawSight` in web/carmap.js.
+
 **Fixes after the first drive with CarPlay: switches, presses, reloads, Live Activities, corners on the car's card.**
 - *Every corner is guidance in the car.* The owner: "if you take a R5 when you're supposed to take a RHP you're gonna have
   a bad time". The car's guidance card shows whichever comes first, the next turn or the next corner, at every rating,

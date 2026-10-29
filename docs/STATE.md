@@ -13,10 +13,14 @@
   without a reload; the Log's tabs go back to the map (web/page_return.js); Live Activities end with the drive, at
   launch and at quit, and go stale after two minutes. e2e: the units flow checks there is no reload; a new flow checks
   the Log's tabs go back and the switch's two states differ.
+- [x] Follow-up (the owner: "the crew page still does a full reload every time"; "sightline speed as part of the current
+  location marker"): the Log and Stages open in a frame over the map (openLog, web/page_return.js), so the map page never
+  reloads from the Log's tabs and a drive and the car keep running behind it; the sight-line speed rides under the
+  position arrow on the phone and the car (sightMessage, paintSight, carmap drawSight). e2e flows for both.
 - Answered for the owner: the UI is a WKWebView; the IMU and GPS run with the phone locked once CarPlay starts the engine,
   but location and motion permission must have been granted once on the phone.
-- Active bugs: none known. Unverified on a device: WebKit's back-forward cache in the app's WKWebView (if it drops the
-  map page, the Log's tabs load it as before), and how App Review reads corners as maneuvers.
+- Active bugs: none known. Unverified on a device: the Log frame's native calls through the map page's bridge (Save/Share, signed-in
+  calls from the Log), and how App Review reads corners as maneuvers.
 - Exact next task: run the carplay-shots workflow to see the real car screen, then REVIEW3.md Roadmap 3 from item 1
   (stash@{0} in the old session holds a half-built version; rebuild it on main) and items 2, 4-9.
 

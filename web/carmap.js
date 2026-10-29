@@ -1,7 +1,7 @@
 // The car's map (web/carmap.html in CarPlay's base view, CarPlay/ApexCarPlay.swift): the phone's theme on OpenFreeMap with
 // the route, every corner's rating at its apex (the road book on the map), reported hazards as the hazard plate and the
-// car's position. Apple's templates own every control, so this page takes no touches: the shell drives it through
-// window.car (look, route, corners, hazards, position, mode, zoom, pan, recentre, inset).
+// car's position with its sight-line speed. Apple's templates own every control, so this page takes no touches: the shell
+// drives it through window.car (look, route, corners, hazards, position, sight, mode, zoom, pan, recentre, inset).
 (function (root) {
   'use strict';
   const MAP_STYLE = 'https://tiles.openfreemap.org/styles/liberty';
@@ -10,8 +10,8 @@
   const finite = (v) => typeof v === 'number' && Number.isFinite(v);
   const line = (coords) => ({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: coords.map(([lat, lon]) => [lon, lat]) } });
 
-  const state = { theme: 'roadbook', night: false, route: [], corners: [], hazards: [], pos: null, mode: 'idle', follow: true, inset: 0 };
-  let map = null, ready = false, puck = null;
+  const state = { theme: 'roadbook', night: false, route: [], corners: [], hazards: [], pos: null, sight: null, mode: 'idle', follow: true, inset: 0 };
+  let map = null, ready = false, puck = null, sightTag = null;
 
   const look = () => { const t = root.ApexThemes.get(state.theme); return { P: t.map[state.night ? 'night' : 'day'], C: t[state.night ? 'night' : 'day'] }; };
 
@@ -50,6 +50,20 @@
   function drawPuck() {
     const { C } = look();
     puck.getElement().innerHTML = `<svg viewBox="0 0 34 34" width="34" height="34"><circle cx="17" cy="17" r="14" fill="${C.panel}" stroke="${C.panelInk}" stroke-width="2.5"/><path d="M17 7 L25 24 L17 19.8 L9 24 Z" fill="${C.accent}"/></svg>`;
+  }
+
+  // The sight-line speed under the arrow (web/carplay.js sightMessage): its own marker, so it stays upright while the
+  // arrow turns with the car; red when you are going faster than it; hidden when unknown.
+  const EYE = '<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6S2 12 2 12z" fill="none" stroke="currentColor" stroke-width="2.4"/><circle cx="12" cy="12" r="2.8" fill="currentColor"/></svg>';
+  function drawSight() {
+    if (!sightTag) return;
+    const el = sightTag.getElement(), s = state.sight;
+    if (!s || !s.text || !state.pos) { el.hidden = true; return; }
+    el.hidden = false;
+    el.classList.toggle('short', s.short);                            // classList: MapLibre's own marker classes stay
+    const b = document.createElement('b'); b.textContent = s.text;
+    const u = document.createElement('small'); u.textContent = s.unit || '';
+    el.innerHTML = EYE; el.append(b); if (s.unit) el.append(u);
   }
 
   function addLayers() {
@@ -104,9 +118,11 @@
       if (!finite(lat) || !finite(lon)) return;
       state.pos = { lat, lon, course: finite(course) && course >= 0 ? course : null };
       if (puck) { puck.setLngLat([lon, lat]); puck.setRotation(state.pos.course || 0); }
+      if (sightTag) { sightTag.setLngLat([lon, lat]); if (sightTag.getElement().hidden && state.sight && state.sight.text) drawSight(); }
       if (!state.placedAt || distM(state.placedAt, [lat, lon]) > 800) { state.placedAt = [lat, lon]; placePlates(); }   // plates follow the car, a few times a mile
       if (state.mode !== 'preview') camera(false);
     },
+    sight(s) { state.sight = s && typeof s.text === 'string' ? { text: s.text.slice(0, 6), unit: String(s.unit || '').slice(0, 5), short: !!s.short } : null; drawSight(); },
     mode(m) { state.mode = m === 'guide' || m === 'preview' ? m : 'idle'; state.follow = true; placePlates(); camera(); },
     zoom(dir) { if (ready) map.easeTo({ zoom: map.getZoom() + (dir > 0 ? 1 : -1), duration: 300 }); },
     pan(dx, dy) { if (!ready) return; state.follow = false; map.panBy([dx * map.getContainer().clientWidth / 3, dy * map.getContainer().clientHeight / 3], { duration: 300 }); },
@@ -122,6 +138,8 @@
     const el = document.createElement('div'); el.className = 'car-puck';
     puck = new root.maplibregl.Marker({ element: el, rotationAlignment: 'map', pitchAlignment: 'map' }).setLngLat([-84.29, 35.36]).addTo(map);
     drawPuck();
+    const tag = document.createElement('div'); tag.className = 'car-sight'; tag.hidden = true;
+    sightTag = new root.maplibregl.Marker({ element: tag, anchor: 'top', offset: [0, 21] }).setLngLat([-84.29, 35.36]).addTo(map);
     map.on('load', () => { addLayers(); ready = true; paint(); setData(); camera(false); });
     map.on('styleimagemissing', () => {});
   }

@@ -35,6 +35,7 @@ console.log(JSON.stringify({
       c3: C.guideMessage(c, 1300, null, D.phrase), tight: C.guideMessage(c, 100, null, D.phrase, { corners: 'tight' }),
       off: C.guideMessage(c, 100, null, D.phrase, { corners: 'off' }), plain: C.guideMessage(c, 100, null, D.phrase, { call: (e) => 'plain ' + e.dir }),
       tulips2: [1, 4, 6, 'HP'].map((v) => C.cornerTulipSVG('L', v, '#7DF5DE')).concat([C.cornerTulipSVG('R', 3, 'red;x')]) }; })(),
+  sight: [C.sightMessage(52.4, false, 40, 'mph'), C.sightMessage(30, false, 45.5, 'km/h'), C.sightMessage(30, true, 99, 'mph'), C.sightMessage(null, false, 40, 'mph'), C.sightMessage(NaN, false, 1, 'mph')],
   places: C.placesMessage([{ label: 'Home', lat: 35.1, lon: -83.2 }, { label: 'Bad', lat: null, lon: 1 }, null]),
 }));
 """
@@ -149,3 +150,12 @@ def test_corner_tulips(out):
     assert len(set(svgs[:4])) == 4, "each rating bends differently"
     assert all(s.startswith("<svg") and "#7DF5DE" in s and "<circle" not in s for s in svgs[:4]), "no junction dot: a corner is not a turn"
     assert "red;x" not in svgs[4] and "#EDE4D3" in svgs[4]
+
+
+def test_sight_tag(out):
+    """The sight-line speed on the arrow: the number in the chosen units, OPEN, red when faster, hidden when unknown."""
+    a, b, o, n, nan = out["sight"]
+    assert a == {"kind": "sight", "text": "52", "unit": "MPH", "short": False}
+    assert b == {"kind": "sight", "text": "30", "unit": "KM/H", "short": True}
+    assert o == {"kind": "sight", "text": "OPEN", "unit": "", "short": False}
+    assert n["text"] is None and nan["text"] is None, "unknown stays unknown"

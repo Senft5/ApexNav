@@ -2,7 +2,7 @@
 //
 // The cockpit page stays the single brain (ApexEngine, ApexNavApp.swift: it runs whether or not the phone's window was ever
 // opened). It plans routes, places the maneuvers, calls notes and hazards and speaks; CarPlay shows what it decides and
-// sends back what the driver picks. Page -> car: `{cmd:'car', kind:...}` messages (route, clear, guide, end, hazard, ask,
+// sends back what the driver picks. Page -> car: `{cmd:'car', kind:...}` messages (route, clear, guide, sight, end, hazard, ask,
 // places, corners, hazards, look), handled by ApexCar.receive. Car -> page: `onNative({type:'carplay', action})` with go,
 // pick, start, end, loop, report, still, voice, places, hello.
 //
@@ -49,6 +49,8 @@ final class ApexCar {
     private(set) var routeJSON = "[]"
     private(set) var cornersJSON = "[]"
     private(set) var hazardsJSON = "[]"
+    /// The sight-line speed under the car's arrow (web/carplay.js sightMessage), null when unknown or not driving.
+    private(set) var sightJSON = "null"
     private(set) var position: (lat: Double, lon: Double, course: Double)?
     private var positionSentAt = Date.distantPast
 
@@ -108,6 +110,13 @@ final class ApexCar {
         case "hazards":
             hazardsJSON = Self.json((dict["list"] as? [Any]) ?? [])
             eachMap { $0.showHazards() }
+        case "sight":
+            if let text = dict["text"] as? String {
+                sightJSON = Self.json(["text": String(text.prefix(6)), "unit": String(((dict["unit"] as? String) ?? "").prefix(5)), "short": (dict["short"] as? Bool) ?? false] as [String: Any])
+            } else {
+                sightJSON = "null"
+            }
+            eachMap { $0.showSight() }
         case "look":
             var l = Look()
             if let t = dict["theme"] as? String, t.range(of: "^[a-z]{1,20}$", options: .regularExpression) != nil { l.theme = t }
@@ -128,6 +137,8 @@ final class ApexCar {
         case "end":
             driving = false
             guide = nil
+            sightJSON = "null"
+            eachMap { $0.showSight() }
             eachMap { $0.setMode() }
             scene?.driveEnded()
         case "hazard":
@@ -602,7 +613,7 @@ final class ApexCarMapViewController: UIViewController, WKNavigationDelegate {
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         loaded = true
         MainActor.assumeIsolated {
-            showLook(); showRoute(); showCorners(); showHazards(); setMode(); showPosition()
+            showLook(); showRoute(); showCorners(); showHazards(); setMode(); showPosition(); showSight()
         }
     }
 
@@ -628,6 +639,7 @@ final class ApexCarMapViewController: UIViewController, WKNavigationDelegate {
     @MainActor func showRoute() { js("car.route(\(ApexCar.shared.routeJSON))") }
     @MainActor func showCorners() { js("car.corners(\(ApexCar.shared.cornersJSON))") }
     @MainActor func showHazards() { js("car.hazards(\(ApexCar.shared.hazardsJSON))") }
+    @MainActor func showSight() { js("car.sight(\(ApexCar.shared.sightJSON))") }
     @MainActor func showPosition() {
         guard let p = ApexCar.shared.position else { return }
         js("car.position(\(p.lat), \(p.lon), \(p.course))")

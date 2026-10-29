@@ -403,6 +403,26 @@ flow('CarPlay feed: a planned route sends its line, every corner and the theme; 
   check(await page.evaluate(() => apexDebug.state.toggles.voice === false), 'the voice is off on the phone too');
 });
 
+flow('the sight-line speed rides under the position arrow, on the phone and on the car map (the owner, 2026-10-29)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html?drive=dry_ridge&play=1');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.track, null, { timeout: 15000 });
+  await page.waitForFunction(() => { const t = document.querySelector('.sight-tag'); return t && !t.hidden; }, null, { timeout: 10000 });
+  const tag = await page.textContent('.sight-tag');
+  const cell = await page.textContent('#cluster');
+  check(/^(\d+(MPH|KM\/H)|OPEN)$/.test(tag.trim()), 'the tag reads a speed or OPEN: ' + tag);
+  check(/OPEN/.test(tag) ? /Open/.test(cell) : cell.includes(tag.replace(/\D/g, '')), 'the same value as the Sight cell: ' + tag);
+  // the car's map: the same tag under its arrow, hidden when unknown, red when short
+  await page.goto(base + '/carmap.html');
+  await page.waitForFunction(() => window.car && document.querySelector('.car-sight'));
+  const read = () => page.evaluate(() => { const t = document.querySelector('.car-sight'); return { hidden: t.hidden, text: t.textContent, short: t.classList.contains('short') }; });
+  await page.evaluate(() => { car.position(35.4, -84.1, 90); car.sight({ text: null }); });
+  check((await read()).hidden, 'unknown: no tag');
+  await page.evaluate(() => car.sight({ text: '43', unit: 'MPH', short: true }));
+  const r = await read();
+  check(!r.hidden && r.text === '43MPH' && r.short, 'the car tag: ' + JSON.stringify(r));
+});
+
 flow('the car connects: CarPlay offers Start drive, and an apexnav://open?go=drive link starts one', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.goto(base + '/index.html');
@@ -1226,19 +1246,32 @@ flow('units: kilometres in Settings redraw the dial, the notes and the replay in
   check(/ km$/.test(await page.getAttribute('#scrubber', 'aria-valuetext')), 'the replay position in km');
 });
 
-flow('Log tabs go back to the map instead of loading it again; switches read on and off (the owner, 2026-10-29)', async (page, base) => {
+flow('the Log opens over the map and its tabs come back without loading the map again; switches read on and off (the owner, 2026-10-29)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.goto(base + '/index.html');
   await page.waitForFunction(() => window.apex && window.apexDebug);
   await page.waitForFunction(() => !document.getElementById('boot'), null, { timeout: 5000 });
-  const depth = await page.evaluate(() => history.length);
-  await Promise.all([page.waitForNavigation(), page.click('.tab[data-view="log"]')]);
-  check(/analysis\.html/.test(page.url()), 'the Log page');
-  await Promise.all([page.waitForNavigation(), page.click('nav.tabbar a:has-text("Garage")')]);
-  check(/\/index\.html$/.test(page.url()), 'went back to the map page itself, not index.html?view=garage: ' + page.url());
-  check(await page.evaluate(() => history.length) === depth + 1, 'history did not grow');
-  await page.waitForFunction(() => window.apexDebug && document.querySelector('#sheet.open[data-view="garage"]'), null, { timeout: 8000 });
-  check(await page.textContent('#sheetTitle') === 'Garage', 'the Garage tab opened on arrival');
+  await page.evaluate(() => { window.__samePage = true; });
+  await page.click('.tab[data-view="log"]');
+  await page.waitForSelector('#logFrame:not([hidden])');
+  const log = page.frameLocator('#logFrame');
+  await log.locator('nav.tabbar a:has-text("Garage")').waitFor();
+  check(/\/index\.html$/.test(page.url()), 'the map page stays: ' + page.url());
+  // the frame gets the map page's safe areas (env() is zero inside a frame)
+  check(await page.evaluate(() => /px$/.test(document.getElementById('logFrame').contentDocument.documentElement.style.getPropertyValue('--sa-bottom'))), 'insets handed to the Log');
+  await log.locator('nav.tabbar a:has-text("Garage")').click();
+  await page.waitForSelector('#logFrame', { state: 'hidden' });
+  await page.waitForFunction(() => document.querySelector('#sheet.open[data-view="garage"]'));
+  check(await page.evaluate(() => window.__samePage === true), 'the map page was never reloaded');
+  check(await page.textContent('#sheetTitle') === 'Garage', 'the Garage tab opened');
+  // back to the Log: the same frame, shown again as it was (not loaded again)
+  await page.evaluate(() => { document.getElementById('logFrame').contentWindow.__kept = true; });
+  await page.click('.tab[data-view="log"]');
+  await page.waitForSelector('#logFrame:not([hidden])');
+  check(await page.evaluate(() => document.getElementById('logFrame').contentWindow.__kept === true), 'the Log was kept, not loaded again');
+  await log.locator('nav.tabbar a:has-text("Crew")').click();
+  await page.waitForFunction(() => document.querySelector('#sheet.open[data-view="crew"]'));
+  check(await page.evaluate(() => window.__samePage === true), 'Crew from the Log: still no reload');
   // a switch: off is hollow with a dim border, on is filled with ink (two cues besides the thumb's position)
   const sw = await page.evaluate(() => {
     const b = document.querySelector('.sw[data-toggle]'); if (!b) return null;

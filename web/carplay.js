@@ -179,6 +179,18 @@
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="120" height="120"><g fill="none" stroke="${c}" stroke-width="9" stroke-linecap="round" stroke-linejoin="round">${path}</g></svg>`;
   }
 
-  const api = { line, routeMessage, guideMessage, placesMessage, cornersMessage, hazardsMessage, lookMessage, tulipSVG, cornerTulipSVG, CORNER_MODES, MAX_POINTS };
+  /**
+   * The sight-line speed on the position arrow (the owner, 2026-10-29), for the car's map and the phone's: the speed you
+   * can stop within what you can see, in the chosen units. { kind:'sight', text, unit, short }: text '52' and unit 'MPH',
+   * or 'OPEN' with no unit when nothing limits you; short when you are going faster than it. text null when unknown
+   * (no route under you, no sight line measured): the tag is hidden, never a guess. Numbers come in display units.
+   */
+  function sightMessage(sight, open, speed, unit) {
+    if (open) return { kind: 'sight', text: 'OPEN', unit: '', short: false };
+    if (!finite(sight) || sight < 0) return { kind: 'sight', text: null, unit: '', short: false };
+    return { kind: 'sight', text: String(Math.round(sight)), unit: String(unit || '').toUpperCase(), short: finite(speed) && speed > sight + 1 };
+  }
+
+  const api = { sightMessage, line, routeMessage, guideMessage, placesMessage, cornersMessage, hazardsMessage, lookMessage, tulipSVG, cornerTulipSVG, CORNER_MODES, MAX_POINTS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexCarPlay = api;
 })(typeof window !== 'undefined' ? window : globalThis);

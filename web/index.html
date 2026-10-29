@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-YTPSegfj7qdAwezsPX9w5yRu+uVsNN4lqnLd9mRvxaE=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-wJudljtWb3+VyTroQfDk1JoXGKvIP9HSIC6r+cfBlKw=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -96,7 +96,6 @@
   <script src="keyboard.js"></script>
   <script src="boot.js"></script>
   <script src="press.js"></script>
-  <script src="page_return.js"></script>
   <script src="themes.js"></script>
   <script src="theme_contract.js"></script>
   <script src="units.js"></script>
@@ -403,6 +402,16 @@
     .dna-bar u { display: block; height: 100%; background: var(--accent); text-decoration: none; }
     .dna-cell span { font-size: 11px; color: var(--panel-dim); font-weight: 700; }
 
+
+    /* The Log over the map (openLog): a full-screen frame; the map page keeps running behind it */
+    /* the sight-line speed under the position arrow (paintSight) */
+    .sight-tag { pointer-events: none; display: flex; align-items: center; gap: 3px; padding: 2px 5px 1px; background: var(--panel); color: var(--panel-ink);
+      border: 1.5px solid var(--panel-ink); font: 700 15px/1 var(--font-num); white-space: nowrap; }
+    .sight-tag small { font-size: 9px; letter-spacing: 0.04em; }
+    .sight-tag.short { background: var(--signal); color: var(--panel); border-color: var(--panel); }   /* faster than you can see */
+    .sight-tag[hidden] { display: none; }
+    #logFrame { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; z-index: 10000; background: var(--panel); }
+    #logFrame[hidden] { display: none; }
 
     .switches { display: flex; justify-content: space-between; align-items: flex-start; gap: 4px; flex-wrap: wrap; }
     .sw { display: grid; justify-items: center; gap: 4px; min-width: 44px; padding: 4px 2px; }
@@ -1374,6 +1383,7 @@
     let savedDriveIds = new Set();
     let refreshDriveVersion = 0;
     async function refreshSavedDrives() {
+      if (window.ApexLogHost && !(logFrame.el && !logFrame.el.hidden)) ApexLogHost.stale();   // the Log shows them fresh next time
       const version = ++refreshDriveVersion;
       const saved = await ApexRecording.all();
       if (version !== refreshDriveVersion) return;
@@ -1431,7 +1441,7 @@
     const routeWatch = { note: null, frame: null, bestM: 0 };
     const etaPace = ApexEta.createPace();   // live ETA pace on the current route (paintEta)
     let etaText = '', etaLeftS = null;
-    const car = { route: '', guideAt: 0, guideKey: '', look: '', hazards: '', symbols: new Map() };   // what the car's screen was last sent (carRoute, carGuide below)   // strip text while off route; last frame fed; furthest progress
+    const car = { route: '', guideAt: 0, guideKey: '', sightKey: '', look: '', hazards: '', symbols: new Map() };   // what the car's screen was last sent (carRoute, carGuide below)   // strip text while off route; last frame fed; furthest progress
     try {
       const saved = JSON.parse(localStorage.getItem('apex.prefs') || 'null');
       if (saved) {
@@ -1470,6 +1480,7 @@
       document.querySelectorAll('[data-cycle]').forEach(b => { const v = state[b.dataset.cycle]; b.querySelector('b').textContent = MODE_LABEL[v]; b.setAttribute('aria-label', `${b.querySelector('span').textContent}: ${MODE_LABEL[v]}`); });
     }
     function applyTheme() {
+      if (window.ApexLogHost) ApexLogHost.stale();
       syncDerivedToggles();
       look = Themes.apply(state.theme, state.toggles.night);
       if (typeof themeVoice === 'function') themeVoice();               // the co-driver comes with the theme
@@ -1570,6 +1581,27 @@
     puckEl.setAttribute('role', 'img');
     const puck = new maplibregl.Marker({ element: puckEl, rotationAlignment: 'map', pitchAlignment: 'map' }).setLngLat([-84.70, 39.24]).addTo(map);
     puckEl.setAttribute('aria-label', 'Your position');                  // after the Marker, which labels it "Map marker"
+    // The sight-line speed under the arrow (the owner, 2026-10-29; web/carplay.js sightMessage): upright while the arrow
+    // turns, red when you are faster than it, hidden when unknown. The car's map gets the same tag while you drive.
+    const sightEl = document.createElement('div');
+    sightEl.className = 'sight-tag'; sightEl.hidden = true; sightEl.setAttribute('role', 'img');
+    const sightTag = new maplibregl.Marker({ element: sightEl, anchor: 'top', offset: [0, 15] }).setLngLat([-84.70, 39.24]).addTo(map);
+    const SIGHT_EYE = '<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6S2 12 2 12z" fill="none" stroke="currentColor" stroke-width="2.6"/><circle cx="12" cy="12" r="2.8" fill="currentColor"/></svg>';
+    let sightKey = '';
+    function paintSight(m, live) {
+      const key = JSON.stringify(m);
+      if (key !== sightKey) {
+        sightKey = key;
+        sightEl.hidden = !m.text;
+        if (m.text) {
+          sightEl.classList.toggle('short', m.short);
+          sightEl.innerHTML = SIGHT_EYE;
+          sightEl.append(el('b', { textContent: m.text }), ...(m.unit ? [el('small', { textContent: m.unit })] : []));
+          sightEl.setAttribute('aria-label', m.text === 'OPEN' ? 'Sight line open' : `Sight-line speed ${m.text} ${m.unit.toLowerCase()}${m.short ? ', faster than you can see' : ''}`);
+        }
+      }
+      if (live && key !== car.sightKey) { car.sightKey = key; carPost(m); }
+    }
     function drawPuck() {
       const c = look.colors;
       puckEl.innerHTML = `<svg viewBox="0 0 26 26" width="26" height="26"><circle cx="13" cy="13" r="11" fill="${c.panel}" stroke="${c.panelInk}" stroke-width="2"/><path d="M13 5 L19 18 L13 14.8 L7 18 Z" fill="${c.accent}"/></svg>`;
@@ -1879,6 +1911,7 @@
       [cam.pLon, cam.pvLon] = spring(cam.pLon, cam.pvLon, vehicle.lon, 14, 1, dt);
       [cam.pBear, cam.pvBear] = spring(cam.pBear, cam.pvBear, cam.pBear + angleDelta(cam.pBear, vehicle.bearing), 10, 1, dt);
       puck.setLngLat([cam.pLon, cam.pLat]).setRotation(cam.pBear);
+      sightTag.setLngLat([cam.pLon, cam.pLat]);
       if (!state.follow) return;
       const f = CAM_FEEL[state.camFeel] || CAM_FEEL.dynamic, t = camTargets();
       [cam.lat, cam.vLat] = spring(cam.lat, cam.vLat, t.lat, f.wPos, f.zPos, dt);
@@ -2418,7 +2451,7 @@
         idx = s.i; lat = s.lat; lon = s.lon; bearing = s.bearing;
         vMps = state.mode === 'sim' ? simSpeed(idx) : s.speedMps;
         latG = s.latG; lonG = s.lonG; camber = s.camberDeg;
-      } else { cluster.update({ speedMph: null }); return; }
+      } else { cluster.update({ speedMph: null }); paintSight(ApexCarPlay.sightMessage(null), false); return; }
       state.cursorIdx = idx;
       if (latG != null && (Math.abs(latG) > 0.30 || Math.abs(lonG) > 0.35)) state.spiritedAt = performance.now();
 
@@ -2431,13 +2464,15 @@
       const sight = at(track && track.sightM);
       const limit = at(track && track.limitMps);
       const pace = at(track && track.envMps), sightMps = sight != null ? Core.sightSpeedMps(sight) : null;
+      // nothing limits you here: the sight line runs to its 400 m cap and no corner asks for less (the Sight cell says Open)
+      const sightOpen = sight != null && sight >= Core.SIGHT_MAX_M - 1 && (pace == null || pace >= sightMps - 0.5);
+      paintSight(ApexCarPlay.sightMessage(sightMps != null ? ApexUnits.speed(sightMps) : null, sightOpen, vMps != null ? ApexUnits.speed(vMps) : null, ApexUnits.speedU()), !!live);
       cluster.update({
         // in the chosen units (mph or km/h, U-22); the names are the cluster's
         speedMph: vMps != null ? ApexUnits.speed(vMps) : null,
         paceMph: pace != null ? ApexUnits.speed(pace) : null,
         sightMph: sightMps != null ? ApexUnits.speed(sightMps) : null,
-        // nothing limits you here: the sight line runs to its 400 m cap and no corner asks for less (the Sight cell says Open)
-        sightOpen: sight != null && sight >= Core.SIGHT_MAX_M - 1 && (pace == null || pace >= sightMps - 0.5),
+        sightOpen,
         limitMph: limit != null ? ApexUnits.speed(limit) : null,
         latG, lonG, camberDeg: camber,
         tripMi: ApexUnits.longN(live && (idx < 0 || track.kind === 'horizon') ? (drive.rec ? drive.rec.km * 1000 : 0) : state.cursorM), totalMi: track && track.kind !== 'horizon' && !(live && idx < 0) ? ApexUnits.longN(totalM()) : null,
@@ -3862,8 +3897,8 @@
     const VIEW_TITLES = { crew: 'Crew', garage: 'Garage' };
     let view = null, friendsOpen = false;                                  // friendsOpen: the Crew sheet's friends pop-up
     function showView(v) {
-      if (v === 'log') { location.href = 'analysis.html?tab=log'; return; }
-      if (v === 'stages') { location.href = 'analysis.html?tab=stages'; return; }
+      if (v === 'log') { openLog('analysis.html?tab=log'); return; }
+      if (v === 'stages') { openLog('analysis.html?tab=stages'); return; }
       if (v === 'setup') v = 'garage';                                   // Settings live in the Garage now (REVIEW.md roadmap 9)
       if (v === 'route') { showView(null); openPlan(true); return; }
       if (v === 'map') v = null;
@@ -3878,6 +3913,47 @@
       document.querySelectorAll('#tabbar .tab').forEach(t => t.classList.toggle('on', v ? t.dataset.view === v : t.dataset.view === 'map'));
     }
     const openSheet = (v = view || 'route') => showView(v);
+    // The Log and Stages (analysis.html) open in a full-screen frame over the map, never in its place (the owner,
+    // 2026-10-29: no page reloads): the map, a drive in progress and the car's screen keep running behind it, and its
+    // Map, Crew and Garage tabs close the frame (web/page_return.js). The frame is kept and shown again as it was, unless
+    // a drive, the theme or the units changed since, or a different page of the Log is asked for.
+    const logFrame = { el: null, url: null, stale: false };
+    function logInsets() {
+      const f = logFrame.el;
+      let probe = $('saProbe');
+      if (!probe) { probe = el('div', { id: 'saProbe' }); probe.style.cssText = 'position:fixed;visibility:hidden;pointer-events:none;padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)'; document.body.append(probe); }
+      const cs = getComputedStyle(probe);
+      try { const st = f.contentDocument.documentElement.style; for (const k of ['top', 'right', 'bottom', 'left']) st.setProperty(`--sa-${k}`, cs[`padding${k[0].toUpperCase()}${k.slice(1)}`]); } catch (_) {}
+    }
+    function openLog(url) {
+      let f = logFrame.el;
+      if (!f) {
+        f = logFrame.el = el('iframe', { id: 'logFrame', title: 'Log' });
+        f.addEventListener('load', logInsets);
+        document.body.append(f);
+      }
+      if (logFrame.url !== url || logFrame.stale) { logFrame.url = url; logFrame.stale = false; f.src = url; }
+      else logInsets();
+      f.hidden = false;
+      document.documentElement.classList.add('log-open');
+    }
+    window.addEventListener('resize', () => { if (logFrame.el && !logFrame.el.hidden) logInsets(); });
+    window.ApexLogHost = {
+      close(v) {
+        refreshSavedDrives().catch(() => {});                          // a drive renamed or deleted in the Log (the frame is still open: not stale)
+        if (logFrame.el) logFrame.el.hidden = true;
+        document.documentElement.classList.remove('log-open');
+        showView(VIEW_TITLES[v] ? v : null);
+      },
+      load(url) { location.href = url; },                              // a replay: the map page loads with that drive
+      stale() { logFrame.stale = true; },
+    };
+    // links into the Log anywhere on the map page (the drive-ended card, a toast's Open) open the frame too
+    document.addEventListener('click', (e) => {
+      const a = e.target && e.target.closest ? e.target.closest('a[href^="analysis.html"]') : null;
+      if (!a || e.defaultPrevented) return;
+      e.preventDefault(); openLog(a.getAttribute('href'));
+    });
     // Plan: the bar is always there (not while driving); tap it, or drag it up, for From / To, places, loops and the route card.
     function openPlan(open) {
       const panel = $('planPanel');
@@ -4484,7 +4560,7 @@
       document.querySelectorAll('[data-units]').forEach(b => b.addEventListener('click', () => {
         if (b.dataset.units === ApexUnits.system()) return;
         if (state.mode === 'live') { toast('Change units when the drive has ended.'); return; }
-        ApexUnits.set(b.dataset.units); paintUnits();
+        ApexUnits.set(b.dataset.units); paintUnits(); ApexLogHost.stale();
         cluster = Inst.mountCluster($('cluster'), look.theme);
         labelLoops();
         if (plannedRoute && !$('routeCard').hidden) { try { renderRouteCard(); } catch (_) {} }
@@ -6190,7 +6266,7 @@
       $('endCard').classList.add('show');
     }
     $('endDone').addEventListener('click', () => $('endCard').classList.remove('show'));
-    $('endStage').addEventListener('click', () => { if (endDrive) location.href = `analysis.html?tab=segments&drive=${encodeURIComponent(endDrive.id)}`; });
+    $('endStage').addEventListener('click', () => { if (endDrive) openLog(`analysis.html?tab=segments&drive=${encodeURIComponent(endDrive.id)}`); });
     $('endShare').addEventListener('click', async () => {
       if (!endDrive || !window.ApexDriveCard) return;
       const css = getComputedStyle(document.documentElement), v = (k) => css.getPropertyValue(k).trim();
@@ -6206,7 +6282,7 @@
       const battery = window.ApexBattery ? ApexBattery.summary(drive.battery) : null; drive.battery = null;
       resetCircuit();
       activity('end');
-      carPost({ kind: 'end' }); car.guideKey = '';
+      carPost({ kind: 'end' }); car.guideKey = ''; car.sightKey = '';
       const rec = drive.rec, sensors = drive.sensors, live = drive.live, road = rec && window.ApexRoadNames ? ApexRoadNames.mainRoad(drive.roads, rec.km * 1000) : null;
       drive.sensors = null; drive.rec = null; drive.live = null; drive.share = 'off'; drive.native = false;
       if (sensors) sensors.stop();
@@ -6529,21 +6605,10 @@
       }
       if (params.get('book') === '1' || params.get('view') === 'route' || params.get('view') === 'drives') openPlan(true);
       if (VIEW_TITLES[params.get('view')] || params.get('view') === 'setup') openSheet(params.get('view'));
-      const back = window.ApexReturn && ApexReturn.take();             // a tab on the Log page, when WebKit had to load the map again
-      if (VIEW_TITLES[back]) openSheet(back);
       if (params.get('go') === 'drive') driveFromLink();   // the app opened from apexnav://open?go=drive (IDEAS C-05)
     }
     bootDrives();
     if (document.fonts) document.fonts.ready.then(() => render(true));
-    // Back from the Log page (web/page_return.js): the map comes back from WebKit's back-forward cache as it was left; open
-    // the tab that was tapped there (Crew, Garage) or show the bare map, and redraw at the current size.
-    window.addEventListener('pageshow', (e) => {
-      if (!e.persisted) return;
-      const back = window.ApexReturn && ApexReturn.take();
-      if (VIEW_TITLES[back]) openSheet(back); else if (back === 'map') showView(null);
-      try { map.resize(); } catch (_) {}
-      render(true);
-    });
   })();
   </script>
   <script>
