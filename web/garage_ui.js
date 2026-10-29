@@ -16,6 +16,9 @@
     .car-card .car-mods { font-size: 13px; color: var(--panel-dim); white-space: pre-wrap; }
     .car-form { display: grid; gap: 6px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .car-form .wide { grid-column: 1 / -1; }
+    .car-card .car-cover { width: calc(100% + 24px); margin: -10px -12px 6px; aspect-ratio: 16 / 9; object-fit: cover; display: block; }
+    .car-gallery { display: flex; gap: 6px; overflow-x: auto; padding: 2px 0; }
+    .car-gallery img { width: 64px; height: 64px; object-fit: cover; flex: none; border: 1px solid var(--rule); }
   `;
 
   const FIELD_HINT = {
@@ -42,13 +45,39 @@
       add('', [DRIVE[c.drivetrain], TRANS[c.transmission]].filter(Boolean).join(' · '));
       add('', c.tyres || '');
       add('', c.clearance === 'low' ? 'Lowered' : c.clearance === 'high' ? 'Lifted' : '');
-      const kids = [el('div', { className: 'car-title' }, el('b', { textContent: title(c) }), c.is_primary ? el('span', { className: 'note', textContent: 'Daily' }) : '')];
+      const P = root.ApexPhotos;
+      const kids = [];
+      if (c.cover_photo_id && P) kids.push(P.img(c.cover_photo_id, 'car-cover', title(c)));   // the car's cover (REVIEW.md 5.2)
+      kids.push(el('div', { className: 'car-title' }, el('b', { textContent: title(c) }), c.is_primary ? el('span', { className: 'note', textContent: 'Daily' }) : ''));
       if (c.nickname) kids.push(el('div', { className: 'car-nick', textContent: `“${c.nickname}”` }));
       if (spec.childNodes.length) kids.push(spec);
       if (c.color) kids.push(el('div', { className: 'note', textContent: c.color }));
       if (c.mods) kids.push(el('div', { className: 'car-mods', textContent: c.mods }));
+      if (P && c.id) kids.push(gallery(c, !!actions && !c.handle));
       if (actions) kids.push(actions);
       return el('div', { className: 'car-card' }, ...kids);
+    }
+
+    // A car's photos (REVIEW.md 5.2): the gallery as thumbnails; yours with Add photo, Make cover and Remove; theirs with Report.
+    function gallery(c, mine) {
+      const P = root.ApexPhotos, strip = el('div', { className: 'car-gallery' }), box = el('div', { className: 'stack-8' }, strip);
+      const fill = async () => {
+        const list = await P.list('car', c.id).catch(() => []);
+        strip.replaceChildren(...list.map((p) => {
+          const t = P.img(p.id, '', 'Photo of ' + title(c));
+          t.tabIndex = 0; t.setAttribute('role', 'button');
+          t.addEventListener('click', () => P.view(p.id, mine
+            ? [['Make cover', async () => { await apiCall('PUT', `/api/photos/${encodeURIComponent(p.id)}/use`); page.onPhotos && page.onPhotos(); }],
+               ['Remove', async () => { if (confirm('Remove this photo?')) { await P.remove(p.id); fill(); } }]]
+            : (report ? [['Report', () => report({ kind: 'photo', target: p.id, label: 'a photo of ' + title(c), done: fill })]] : [])));
+          return t;
+        }));
+      };
+      fill();
+      if (mine) {
+        box.append(el('div', { className: 'row' }, P.picker(c.cover_photo_id ? 'Add photo' : 'Add a cover photo', 'car', c.id, () => { fill(); if (!c.cover_photo_id && page.onPhotos) page.onPhotos(); }, { cover: !c.cover_photo_id, toast })));
+      }
+      return box;
     }
 
     function form(c, onDone) {

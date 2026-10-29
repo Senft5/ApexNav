@@ -24,7 +24,8 @@
   ],
   // Weekly database backup into KV (backend/src/backup.ts, docs/BACKUPS.md): Mondays 07:00 UTC, a quiet hour in the US.
   "triggers": { "crons": ["0 7 * * 1", "23 6 * * *"] },   // weekly backup (Mon 07:00 UTC), daily sweep of expired rows
-  "kv_namespaces": [{ "binding": "BACKUPS", "id": "3be0be04839649c0a5b474c8389e8e4b" }],
+  // PHOTOS: profile, car, crew and build-thread photos (backend/src/photos.ts); KV until the owner turns R2 on (OWNER_TODO).
+  "kv_namespaces": [{ "binding": "BACKUPS", "id": "3be0be04839649c0a5b474c8389e8e4b" }, { "binding": "PHOTOS", "id": "3c0508c2f35b44b38152ae7bec2bc468" }],
   "d1_databases": [
     { "binding": "DB", "database_name": "apexnav-db", "database_id": "b0c559d5-48c2-462c-bd97-cf375233f7c1", "migrations_dir": "backend/migrations" }
   ],
@@ -36,6 +37,7 @@
       { "name": "AUTH_LIMIT", "namespace_id": "1004", "simple": { "limit": 20, "period": 60 } }
     ],
     "durable_objects": { "bindings": [{ "name": "CONVOY", "class_name": "ConvoyRoom" }, { "name": "CONVOY_INDEX", "class_name": "ConvoyIndex" }] },
+    "kv_namespaces": [{ "binding": "PHOTOS", "id": "6e4423e88b224430ba9d4bf8c9107deb" }],
     "d1_databases": [
       { "binding": "DB", "database_name": "apexnav-preview-db", "database_id": "9103ab07-0041-4bb1-ae9f-3a9f324aa543" }
     ]

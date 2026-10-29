@@ -15,7 +15,7 @@ const UNSAFE_RE = /(?!\u200d)[\p{Cc}\p{Cf}\p{Cs}\p{Co}\p{Cn}\u2028\u2029]/u;
 const HIDES: Record<ReportKind, string | null> = {
   user: null, car: "1",
   crew: "(SELECT visibility FROM crews WHERE id = r.target_id) = 'public'",
-  highlight: "1", event: "1",
+  highlight: "1", event: "1", photo: "1",
 };
 
 const first = <T>(env: Env, sql: string, ...args: unknown[]) => env.DB.prepare(sql).bind(...args).first<T>();
@@ -91,6 +91,11 @@ async function resolveTarget(env: Env, v: Viewer, kind: ReportKind, target: unkn
     if (!e) throw new HttpError(404, "no_event");
     return { id, person: e.created_by };
   }
+  if (kind === "photo") {   // any member can see a photo that isn't hidden (photos.ts); never your own
+    const p = await first<{ owner: string }>(env, "SELECT owner FROM photos WHERE id = ?1 AND owner != ?2", id, v.id);
+    if (!p) throw new HttpError(404, "no_photo");
+    return { id, person: p.owner };
+  }
   const h = await first<{ author_id: string | null }>(env, "SELECT author_id FROM highlights WHERE id = ? AND status = 'active'", id);
   if (!h) throw new HttpError(404, "no_highlight");
   return { id, person: h.author_id };
@@ -154,6 +159,7 @@ export async function moderationQueue(env: Env, v: Viewer) {
   await each("car", (q) => `SELECT c.id, c.make, c.model, c.nickname, u.handle FROM cars c JOIN users u ON u.id = c.owner WHERE c.id IN (${q})`,
     (r) => `${r.make} ${r.model}${r.nickname ? ` "${r.nickname}"` : ""} · @${r.handle ?? "?"}`);
   await each("highlight", (q) => `SELECT id, name FROM highlights WHERE id IN (${q})`, (r) => r.name);
+  await each("photo", (q) => `SELECT p.id, p.kind, u.handle FROM photos p JOIN users u ON u.id = p.owner WHERE p.id IN (${q})`, (r) => `a ${r.kind} photo · @${r.handle ?? "?"} · /api/photos/${r.id}`);
   await each("event", (q) => `SELECT e.id, e.title, c.name AS crew, u.handle FROM crew_events e JOIN crews c ON c.id = e.crew_id LEFT JOIN users u ON u.id = e.created_by WHERE e.id IN (${q})`,
     (r) => `${r.title} · ${r.crew} · @${r.handle ?? "?"}`);
   return rows.map((r) => {
@@ -199,6 +205,7 @@ export async function moderationResolve(env: Env, v: Viewer, req: Request): Prom
     car: [env.DB.prepare("UPDATE cars SET shared = 0 WHERE id = ?").bind(id)],
     highlight: [env.DB.prepare("UPDATE highlights SET status = 'hidden' WHERE id = ?").bind(id)],
     event: [env.DB.prepare("UPDATE crew_events SET cancelled = 1 WHERE id = ?").bind(id)],
+    photo: [],                                                        // stays down: removed reports hide it for good (photos.ts)
   }[kind];
   await env.DB.batch([mark, ...act]);
   if (kind === "user") await convoysLeaveAll(env, id);

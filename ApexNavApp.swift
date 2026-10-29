@@ -1462,12 +1462,18 @@ final class ApexApiBridge: NSObject, WKScriptMessageHandlerWithReply {
             req.setValue(Self.userAgent, forHTTPHeaderField: "user-agent")
             if let token = ApexKeychain.session() { req.setValue("Bearer \(token)", forHTTPHeaderField: "authorization") }
             if let body = dict["body"] as? String { req.httpBody = Data(body.utf8) }
+            // a photo (backend/src/photos.ts) crosses the bridge as base64, both ways; text stays text
+            if let b64 = dict["bodyBase64"] as? String, let data = Data(base64Encoded: b64) { req.httpBody = data }
             Task {
                 do {
                     let (data, resp) = try await URLSession.shared.data(for: req)
                     let http = resp as? HTTPURLResponse
-                    replyHandler(["status": http?.statusCode ?? 0, "type": http?.value(forHTTPHeaderField: "content-type") ?? "",
-                                  "body": String(data: data, encoding: .utf8) ?? ""], nil)
+                    let type = http?.value(forHTTPHeaderField: "content-type") ?? ""
+                    if type.hasPrefix("image/") {
+                        replyHandler(["status": http?.statusCode ?? 0, "type": type, "bodyBase64": data.base64EncodedString()], nil)
+                    } else {
+                        replyHandler(["status": http?.statusCode ?? 0, "type": type, "body": String(data: data, encoding: .utf8) ?? ""], nil)
+                    }
                 } catch {
                     replyHandler(nil, "offline")
                 }
