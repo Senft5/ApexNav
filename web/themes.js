@@ -34,6 +34,33 @@
         day: { bg: '#F2EBDD', water: '#CFD8D3', waterLine: '#7F9A9A', land: '#EFE7D8', wood: '#E3DCC5', road: '#FFFFFF', roadMinor: '#FFFFFF', casing: '#1C1A17', label: '#1C1A17', halo: '#F2EBDD', boundary: '#8C8373', contour: '#8B6B4A', shadow: '#A08F6E', highlight: '#FFFFFF', accentShade: '#B59E78' },
         night: { bg: '#1B1712', water: '#10161A', waterLine: '#26343A', land: '#1D1914', wood: '#1F1C15', road: '#36312A', roadMinor: '#2B2721', casing: '#A99F8C', label: '#A89E8C', halo: '#1B1712', boundary: '#332F28', contour: '#3A3126', shadow: '#080706', highlight: '#28231C', accentShade: '#14120E' }
       }
+    },
+    // Tapedeck (Pro, REVIEW.md 4.1): a late-90s head unit. Near-black glass, blue-green VFD glow, amber for what changes
+    // what you do, seven-segment speed, bar meters that are instruments (live surface; brake and turn), and Kit, a
+    // dot-matrix fox who leans into the corner being called. The panel is always dark: day and night are the same glass.
+    tapedeck: {
+      id: 'tapedeck', label: 'Tapedeck', tag: 'B', blurb: 'A late-90s head unit.', pro: true,
+      about: 'A late-90s head unit: blue-green VFD, seven-segment speed, spectrum bars that show the road surface, and Kit, who leans into every corner.',
+      voice: { id: 'kit', name: 'Kit', who: 'Quick, dry, a little cheeky, never silly.', sample: 'Left four, tightens. Easy in, late out.' },
+      fonts: { ui: '"SF Mono", "Menlo", "Roboto Mono", "Consolas", monospace', num: '"SF Mono", "Menlo", "Roboto Mono", "Consolas", monospace' },
+      cluster: 'dials', notes: 'roadbook', gauge: 'vfd', mascot: 'kit',
+      renderers: { dial: 'sevenseg', meter: 'bars', strip: 'vfd' },
+      day: {
+        stage: '#0B0E0D', ink: '#7DF5DE', dim: '#5FB3A5', route: '#FFB347', routeCasing: '#0B0E0D',
+        panel: '#0A0C0B', panelInk: '#7DF5DE', panelDim: '#5FB3A5', rule: '#2A5A52', accent: '#FFB347',
+        signal: '#FF8A4D', amber: '#FFB347', calm: '#7DF5DE',
+        face: '#0A0C0B', faceInk: '#7DF5DE', faceDim: '#5FB3A5', hair: '#16302B', gain: '#7DF5DE'
+      },
+      night: {
+        stage: '#080A09', ink: '#6FE3CD', dim: '#55A396', route: '#F5A63C', routeCasing: '#080A09',
+        panel: '#070908', panelInk: '#6FE3CD', panelDim: '#55A396', rule: '#24504A', accent: '#F5A63C',
+        signal: '#FF8A4D', amber: '#F5A63C', calm: '#6FE3CD',
+        face: '#070908', faceInk: '#6FE3CD', faceDim: '#55A396', hair: '#132925', gain: '#6FE3CD'
+      },
+      map: {
+        day: { bg: '#0B0E0D', water: '#0E1A1C', waterLine: '#1F4A48', land: '#0C100F', wood: '#0D1211', road: '#0F1615', roadMinor: '#0D1312', casing: '#3FA595', label: '#5FB3A5', halo: '#0B0E0D', boundary: '#1D3B36', contour: '#16302B', shadow: '#050606', highlight: '#13201E', accentShade: '#0A0D0C' },
+        night: { bg: '#080A09', water: '#0B1517', waterLine: '#1A3E3C', land: '#090C0B', wood: '#0A0F0E', road: '#0D1312', roadMinor: '#0B100F', casing: '#2E8577', label: '#4C9387', halo: '#080A09', boundary: '#18322E', contour: '#122824', shadow: '#040505', highlight: '#101A18', accentShade: '#080B0A' }
+      }
     }
   };
   function get(id) { return typeof id === 'string' && Object.prototype.hasOwnProperty.call(THEMES, id) ? THEMES[id] : THEMES.roadbook; }   // unknown or retired: the road book

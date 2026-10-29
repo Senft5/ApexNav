@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-NZxRVn77zTMv6VcscD9unCZ2hH7rRh/ua83AViHT4cw=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-4dgAe+CotmkSVq+EDqZMkWdzxQPVdmJD0gLOY2Okvrg=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -489,6 +489,33 @@
     .tc-inuse { font-size: 13px; font-weight: 700; color: var(--panel-dim); }
     .tc-voice { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; font-size: 14px; }
     .tc-voice p { margin: 0; }
+    /* ---------------- Tapedeck (Pro, REVIEW.md 4.1): the VFD skin over the same layout; glow is additive, the tokens pass
+       the contract without it (theme_contract.js) ---------------- */
+    html[data-theme="tapedeck"] body { letter-spacing: 0.02em; }
+    html[data-theme="tapedeck"] .notes, html[data-theme="tapedeck"] .binnacle { text-transform: uppercase; }
+    html[data-theme="tapedeck"] .rb-call span, html[data-theme="tapedeck"] .rb-dist b, html[data-theme="tapedeck"] .ds-main,
+    html[data-theme="tapedeck"] .ro b, html[data-theme="tapedeck"] .odo-digits { text-shadow: 0 0 6px color-mix(in srgb, currentColor 60%, transparent); }
+    html[data-theme="tapedeck"] .rb-call span.rb-mods i.warn { color: var(--amber); }
+    html[data-theme="tapedeck"] .binnacle { background: linear-gradient(transparent 50%, rgba(125, 245, 222, 0.025) 50%) 0 0 / 100% 3px, var(--panel); }
+    html[data-theme="tapedeck"] .key, html[data-theme="tapedeck"] .ink-btn { border-color: var(--rule); box-shadow: inset 0 -3px 0 #000; }
+    html[data-theme="tapedeck"] #driveEnd { background: transparent; color: var(--accent); border: 1.5px solid var(--accent); }
+    html[data-theme="tapedeck"] .odo.boxed .dg { border-color: var(--rule); }
+    html[data-theme="tapedeck"] .odo-meta, html[data-theme="tapedeck"] .dna-arch, html[data-theme="tapedeck"] .ro span { letter-spacing: 0; white-space: nowrap; }
+    .vfd-seg .seg { fill: var(--face-ink); opacity: 0.07; } .vfd-seg .seg.lit { opacity: 1; filter: drop-shadow(0 0 3px var(--face-ink)); }
+    .vfd-seg .vfd-shadow { fill: transparent; }
+    .vfd-label { fill: var(--face-dim); font-family: var(--font-ui); }
+    .vfd-meters { display: grid; gap: 8px; align-content: center; height: 100%; }
+    .vfd-cap { display: block; font: 600 13px var(--font-ui); letter-spacing: 0.12em; color: var(--panel-dim); }
+    .vfd-bars { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 2px; height: 40px; }
+    .vfd-bars i { display: flex; flex-direction: column-reverse; gap: 1px; }
+    .vfd-bars b { flex: 1; background: var(--hair); }
+    .vfd-bars b.on { background: var(--panel-ink); box-shadow: 0 0 4px color-mix(in srgb, var(--panel-ink) 70%, transparent); }
+    .vfd-bars b.on.amber { background: var(--amber); }
+    .kit-row { grid-column: 1 / -1; display: grid; grid-template-columns: 70px minmax(0, 1fr); gap: 14px; align-items: center; padding-top: 6px; border-top: 1px solid var(--rule); }
+    .kit { width: 70px; height: 60px; display: block; }
+    .kit circle { fill: var(--hair); } .kit circle.on { fill: var(--panel-ink); } .kit circle.eye { fill: var(--amber); }
+    .kit-says b { display: block; font: 700 15px var(--font-ui); letter-spacing: 0.06em; color: var(--panel-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tp-tapedeck { background: #0A0C0B; } .tp-tapedeck .tp-call b, .tp-tapedeck .tp-speed b { text-shadow: 0 0 6px rgba(125, 245, 222, 0.6); }
     .rc-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 18px; margin-top: 10px; }
     label.linkbtn { display: inline-flex; align-items: center; cursor: pointer; }
     .linkbtn { font: inherit; font-size: 15px; font-weight: 500; color: var(--panel-ink); text-decoration: underline; min-height: 44px; padding: 0 4px; background: none; border: none; }
@@ -1990,6 +2017,7 @@
     function say(text, force, chain = null, sysToken = null, opts = {}) {
       // a road hazard (not a turn or a crest, which share the urgent speech lane) also alerts on the car's screen
       if (text && opts.alert && driveActive) carPost({ kind: 'hazard', title: text });
+      if (text) state.kitLine = String(text).replace(/\.$/, '').toUpperCase().slice(0, 40);   // what Kit says (Tapedeck)
       if (!text || (!state.toggles.voice && !force)) return;
       if (force) { speech.queue.clear(); stopSpeaking(); opts = { duck: true, ...opts }; }   // a line you asked for is heard
       speech.queue.push({ text, chain, sysToken, ...opts }, performance.now());
@@ -2151,6 +2179,7 @@
       notes.sort((a, b) => a.distM - b.distM).splice(3);
       notes.quietText = offRoute ? (!track ? 'No route planned' : offRouteText()) : track ? `${track.name} · ${spirited ? 'Full notes' : 'Quiet · bumps and cameras only'}` : 'Plan a route for notes';
       Inst.renderNotes($('notes'), look.theme, notes);
+      state.crestAhead = !!(notes[0] && notes[0].type === 'crest' && notes[0].distM < 150);   // Kit sits up for it
       lastNotes = notes;
       if (live) pushActivity(notes);
       if (live) carGuide();
@@ -2266,7 +2295,9 @@
         limitMph: limit != null ? ApexUnits.speed(limit) : null,
         latG, lonG, camberDeg: camber,
         tripMi: ApexUnits.longN(live && (idx < 0 || track.kind === 'horizon') ? (drive.rec ? drive.rec.km * 1000 : 0) : state.cursorM), totalMi: track && track.kind !== 'horizon' && !(live && idx < 0) ? ApexUnits.longN(totalM()) : null,
-        sector: sectorAt(idx), routeOnly: track && track.kind === 'route'
+        sector: sectorAt(idx), routeOnly: track && track.kind === 'route',
+        // for Tapedeck's meters and Kit (instruments.js): the live roughness, the last line said, a crest close ahead, a blink
+        rough, kitLine: state.kitLine, crestAhead: !!state.crestAhead, blink: performance.now() < (state.blinkUntil || 0)
       });
       updateRibbon(vMps, idx, snap);
       updatePins();
@@ -5454,6 +5485,7 @@
     const HZ_PLATE_M = 1609;
     function paintHazardPlate(h) {
       const p = h && state.mode === 'live' ? ApexHazardReports.plate(h, (m) => ApexUnits.long(m, 1), Date.now()) : null;
+      if (p && $('hzPlate').hidden) state.blinkUntil = performance.now() + 1200;   // Kit blinks at a hazard (Tapedeck)
       $('hzPlate').hidden = !p;
       if (!p) return;
       if ($('hzPlateTitle').textContent !== p.title) $('hzPlateTitle').textContent = p.title;

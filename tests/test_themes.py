@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 @pytest.mark.skipif(NODE is None, reason="node not installed")
-def test_roadbook_only_and_day_night():
+def test_themes_by_id_unknown_is_roadbook_and_day_night():
     runner = r"""
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -24,7 +24,8 @@ const element = {
 const browser = { window: {}, document: { documentElement: element } };
 vm.runInNewContext(fs.readFileSync(process.argv[1], 'utf8'), browser);
 const themes = browser.window.ApexThemes;
-assert.deepEqual(Object.keys(themes.THEMES), ['roadbook']);
+assert.equal(Object.keys(themes.THEMES)[0], 'roadbook');                    // the road book first and free
+for (const [id, t] of Object.entries(themes.THEMES)) { assert.equal(themes.get(id), t); assert.equal(t.id, id); assert.equal(!!t.pro, id !== 'roadbook'); }
 const ids = [undefined, null, '', 'roadbook', 'stage', 'instrument', 'telemetry',
   'unknown', '__proto__', 'constructor', 'toString', 'hasOwnProperty'];
 for (const id of ids) {
@@ -67,22 +68,22 @@ def test_text_tokens_meet_wcag_aa_contrast():
     out = subprocess.run(
         [NODE, "-e", "const vm=require('node:vm'),fs=require('node:fs');const w={};"
          "vm.runInNewContext(fs.readFileSync(process.argv[1],'utf8'),{window:w});"
-         "console.log(JSON.stringify(w.ApexThemes.THEMES.roadbook))",
+         "console.log(JSON.stringify(w.ApexThemes.THEMES))",
          str(ROOT / "web" / "themes.js")],
         check=True, capture_output=True, text=True,
     ).stdout
-    theme = json.loads(out)
+    themes = json.loads(out)
     failures = []
-    for mode in ("day", "night"):
+    for (tid, theme), mode in [((k, v), m) for k, v in themes.items() for m in ("day", "night")]:
         c = theme[mode]
         for fg in ("ink", "dim", "panelInk", "panelDim", "accent", "signal", "amber"):
             for bg in ("panel", "stage"):
                 ratio = _contrast(c[fg], c[bg])
                 if ratio < 4.5:
-                    failures.append(f"{mode} {fg} on {bg}: {ratio:.2f}")
+                    failures.append(f"{tid} {mode} {fg} on {bg}: {ratio:.2f}")
         ratio = _contrast(c["stage"] if mode == "night" else c["panel"], c["accent"])
         if ratio < 4.5:
-            failures.append(f"{mode} label on accent: {ratio:.2f}")
+            failures.append(f"{tid} {mode} label on accent: {ratio:.2f}")
     assert not failures, failures
 
 

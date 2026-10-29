@@ -325,9 +325,102 @@
     };
   }
 
+  // ---- Tapedeck (Pro, REVIEW.md 4.1): seven-segment speed, bar meters, Kit --------------------------------------------
+  // Seven-segment digits drawn as SVG polygons: lit segments in the VFD ink, the rest ghosted, the way the glass shows them.
+  const SEG = { a: 'M12 4 H44 L40 10 H16 Z', b: 'M46 6 V46 L40 42 V12 Z', c: 'M46 54 V94 L40 88 V58 Z', d: 'M12 96 H44 L40 90 H16 Z',
+    e: 'M10 54 V94 L16 88 V58 Z', f: 'M10 6 V46 L16 42 V12 Z', g: 'M13 50 L18 46 H38 L43 50 L38 54 H18 Z' };
+  const DIGIT = { 0: 'abcdef', 1: 'bc', 2: 'abged', 3: 'abgcd', 4: 'fgbc', 5: 'afgcd', 6: 'afgedc', 7: 'abc', 8: 'abcdefg', 9: 'abcdfg', '-': 'g', ' ': '' };
+  function sevenSeg(parent) {
+    const s = svg('svg', { viewBox: '0 0 200 200', class: 'dial-svg vfd-seg' }, parent);
+    const digits = [0, 1, 2].map((k) => {
+      const g = svg('g', { transform: `translate(${14 + k * 60} 30) skewX(-6)` }, s), segs = {};
+      for (const [n, d] of Object.entries(SEG)) segs[n] = svg('path', { d, class: 'seg' }, g);
+      return segs;
+    });
+    svg('text', { x: 18, y: 160, class: 'dial-label vfd-label' }, s).textContent = U() ? U().speedU().toUpperCase() : 'MPH';
+    const sub = svg('text', { x: 186, y: 160, 'text-anchor': 'end', class: 'dial-label vfd-label' }, s);
+    const digital = svg('text', { x: 100, y: 150, 'text-anchor': 'middle', class: 'dial-digital vfd-shadow' }, s);   // read by the contract and screen readers
+    s.setAttribute('role', 'img');
+    return (d) => {
+      const v = d.speedMph != null && isFinite(d.speedMph) ? String(Math.min(999, Math.round(d.speedMph))) : '--';
+      const text = v.padStart(3, ' ');
+      digits.forEach((segs, k) => { const on = DIGIT[text[k]] || ''; for (const [n, p] of Object.entries(segs)) p.classList.toggle('lit', on.includes(n)); });
+      digital.textContent = v; s.setAttribute('aria-label', `${v} ${U() ? U().speedU() : 'mph'}`);
+      sub.textContent = d.limitMph != null ? `LIMIT ${Math.round(d.limitMph)}` : '';
+    };
+  }
+  // Bar meters that are instruments, not decoration: SURFACE (roughness, the last 10 readings) and BRAKE / TURN (how hard
+  // you braked or turned, the last 10 readings; amber when braking). Unknown readings stay dark.
+  function barMeters(parent) {
+    const box = html('div', 'vfd-meters', parent);
+    const meter = (label) => {
+      const m = html('div', 'vfd-meter', box); html('span', 'vfd-cap', m, label);
+      const grid = html('div', 'vfd-bars', m), cols = [];
+      for (let c = 0; c < 10; c++) { const col = html('i', '', grid); const cells = []; for (let r = 0; r < 8; r++) cells.push(html('b', '', col)); cols.push(cells); }
+      return cols;
+    };
+    const surf = meter('SURFACE'), load = meter('BRAKE / TURN');
+    const hs = [], hl = [];
+    let last = 0;
+    const paint = (cols, hist, amber) => cols.forEach((cells, c) => {
+      const v = hist[hist.length - 10 + c];
+      const n = v == null ? 0 : Math.max(1, Math.min(8, Math.round(v.h * 8)));
+      cells.forEach((cell, r) => { cell.className = r < n ? (amber && v && v.amber ? 'on amber' : 'on') : ''; });
+    });
+    return (d) => {
+      const now = Date.now();
+      if (now - last < 400) return;
+      last = now;
+      hs.push(d.rough != null && isFinite(d.rough) ? { h: Math.min(1, d.rough / 0.6) } : null);
+      const g = d.latG != null && d.lonG != null ? Math.hypot(d.latG, d.lonG) : null;
+      hl.push(g == null ? null : { h: Math.min(1, g / 0.8), amber: d.lonG < -0.1 });
+      if (hs.length > 10) hs.shift(); if (hl.length > 10) hl.shift();
+      while (hs.length < 10) hs.unshift(null); while (hl.length < 10) hl.unshift(null);
+      paint(surf, hs, false); paint(load, hl, true);
+    };
+  }
+  // Kit (REVIEW.md 4.1): a dot-matrix fox on a 14 x 12 grid who belongs to the display. He leans into the corner (lateral
+  // g), sits up for a crest, curls up when you stop, and blinks when a hazard is confirmed. X lit, o an amber eye, . dark.
+  const KIT = {
+    up: ['..X........X..', '..XX......XX..', '..XXX....XXX..', '..XXXXXXXXXX..', '.XXXXXXXXXXXX.', '.XXoXXXXXXoXX.',
+         '.XXXXXXXXXXXX.', '..XXXX..XXXX..', '...XXXXXXXX...', '....XXXXXX....', '.....XXXX.....', '......XX......'],
+    curl: ['..............', '..............', '.....XXXXX....', '...XXXXXXXXX..', '..XXXXXXXXXXX.', '.XXXX.XXXXXXX.',
+           '.XXXXXXXXXXXX.', '.XXXXXXXXXXX..', '..XXXXXXXXXXX.', '...XXXXXXXXXX.', '.....XXXXX.XX.', '..............'],
+  };
+  const shear = (rows, dir) => rows.map((r, i) => { const k = Math.round((i - 6) * dir / 4); return k > 0 ? ('.'.repeat(k) + r).slice(0, 14) : k < 0 ? (r + '.'.repeat(-k)).slice(-k, 14 - k) : r; });
+  KIT.left = shear(KIT.up, 1); KIT.right = shear(KIT.up, -1);       // the head goes the way the corner does
+  KIT.blink = KIT.up.map((r) => r.replace(/o/g, 'X'));
+  KIT.crest = ['..X........X..', ...KIT.up.slice(0, 11)];
+  function kitPose(d) {
+    if (d.blink) return 'blink';
+    if (d.speedMph != null && d.speedMph < 2) return 'curl';
+    if (d.crestAhead) return 'crest';
+    if (d.latG != null && d.latG > 0.15) return 'left';
+    if (d.latG != null && d.latG < -0.15) return 'right';
+    return 'up';
+  }
+  function kitRow(parent) {
+    const row = html('div', 'kit-row', parent);
+    const s = svg('svg', { viewBox: '0 0 140 120', class: 'kit', 'aria-hidden': 'true' }, row);
+    const dots = [];
+    for (let y = 0; y < 12; y++) for (let x = 0; x < 14; x++) dots.push(svg('circle', { cx: 5 + x * 10, cy: 5 + y * 10, r: 3.6 }, s));
+    const says = html('div', 'kit-says', row); html('span', 'vfd-cap', says, 'KIT SAYS'); const line = html('b', '', says, '--');
+    let pose = null;
+    return (d) => {
+      const p = kitPose(d);
+      if (p !== pose) {
+        pose = p;
+        const rows = KIT[p];
+        dots.forEach((c, i) => { const ch = rows[Math.floor(i / 14)][i % 14]; c.setAttribute('class', ch === 'X' ? 'on' : ch === 'o' ? 'eye' : ''); });
+      }
+      if (d.kitLine !== undefined && line.textContent !== (d.kitLine || '--')) line.textContent = d.kitLine || '--';
+    };
+  }
+
   // The theme contract's three renderers (theme_contract.js): a theme names its dial, meter and strip; Pro themes register
   // theirs here (register(slot, id, fn)). Everything around them, and the hazard plate, stays the page's.
-  const RENDER = { dial: { printed: (el) => speedDial(el, true) }, meter: { gball: (el) => gDial(el, true) }, strip: { roadbook: null } };
+  const RENDER = { dial: { printed: (el) => speedDial(el, true), sevenseg: sevenSeg }, meter: { gball: (el) => gDial(el, true), bars: barMeters },
+    strip: { roadbook: null, vfd: null } };                          // the VFD strip is the road book's, in the VFD skin
   function register(slot, id, fn) { if (RENDER[slot]) RENDER[slot][id] = fn; }
   const pick = (theme, slot, fallback) => (theme.renderers && RENDER[slot][theme.renderers[slot]]) || RENDER[slot][fallback];
 
@@ -339,6 +432,7 @@
     const center = html('div', 'cluster-center', el);
     const gg = html('div', 'dial dial-g', el);
     const u = [pick(theme, 'dial', 'printed')(sp), readouts(center), odometer(center, printed), pick(theme, 'meter', 'gball')(gg)];
+    if (theme.mascot === 'kit') u.push(kitRow(el));                  // Tapedeck's fox, a row of its own under the gauges
     // Keep the road type below Trip; a route without sector data has no known type.
     const roadType = html('div', 'dna-arch', center, 'Road: --');
     u.push(d => {
@@ -353,6 +447,6 @@
     return mountDials(el, theme);
   }
 
-  const api = { mountCluster, renderNotes, tulipSVG, lockup, register, SPEED_MAX };
+  const api = { mountCluster, renderNotes, tulipSVG, lockup, register, kitPose, KIT, SPEED_MAX };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexInstruments = api;
 })(typeof window !== 'undefined' ? window : globalThis);

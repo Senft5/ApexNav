@@ -1,0 +1,39 @@
+"""Kit, Tapedeck's dot-matrix fox (web/instruments.js, docs/design/REVIEW.md 4.1): every frame on the 14 x 12 grid, and
+the pose follows the drive (lean into the corner, sit up for a crest, curl up stopped, blink at a hazard)."""
+import json
+import os
+import shutil
+import subprocess
+
+import pytest
+
+NODE = shutil.which("node")
+pytestmark = pytest.mark.skipif(NODE is None, reason="node not installed")
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+RUNNER = r"""
+const I = require(process.argv[1] + '/web/instruments.js');
+const poses = [{ speedMph: 40, latG: 0.3 }, { speedMph: 40, latG: -0.3 }, { speedMph: 40, latG: 0.05 }, { speedMph: 0, latG: 0.3 },
+  { speedMph: 40, crestAhead: true, latG: 0.3 }, { speedMph: 0, blink: true }, { speedMph: null, latG: null }].map(I.kitPose);
+console.log(JSON.stringify({ frames: I.KIT, poses }));
+"""
+
+
+@pytest.fixture(scope="module")
+def out():
+    return json.loads(subprocess.run([NODE, "-e", RUNNER, ROOT], capture_output=True, text=True, check=True).stdout)
+
+
+def test_every_frame_fits_the_grid(out):
+    for name, rows in out["frames"].items():
+        assert len(rows) == 12 and all(len(r) == 14 and set(r) <= set(".Xo") for r in rows), name
+
+
+def test_leans_go_the_way_of_the_corner(out):
+    f = out["frames"]
+    # into a left corner the ears go left of upright, into a right corner right of it
+    assert f["left"][0].index("X") < f["up"][0].index("X") < f["right"][0].index("X")
+
+
+def test_pose_follows_the_drive(out):
+    assert out["poses"] == ["left", "right", "up", "curl", "crest", "blink", "up"]
