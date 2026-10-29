@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-T0WyZW+iQJyYHbQoBaV+/e1lxwmoS/Ti2MKt8FDzzc8=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-/5zOjoRCjyzDeBe5WaxehBIEtBwVk4pONGBBZXXzZQc=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -56,6 +56,7 @@
   <script src="outbox.js"></script>
   <script src="stage_delta.js"></script>
   <script src="lanes.js"></script>
+  <script src="voice_lines.js"></script>
   <script src="directions.js"></script>
   <script src="carplay.js"></script>
   <script src="whats_new.js"></script>
@@ -1571,7 +1572,7 @@
         const el = document.createElement('div');
         el.className = `pin ${e.type}`;
         el.textContent = e.code;
-        el.addEventListener('click', (ev) => { ev.stopPropagation(); say(`${e.call}.`, true); });
+        el.addEventListener('click', (ev) => { ev.stopPropagation(); say(`${e.call}.`, true, [e]); });
         pins.push({ e, el, marker: new maplibregl.Marker({ element: el }).setLngLat([e.lon, e.lat]).addTo(map) });
       }
       updatePins();
@@ -2050,6 +2051,8 @@
       if (text) state.kitLine = String(text).replace(/\.$/, '').toUpperCase().slice(0, 40);   // what Kit says (Tapedeck)
       if (!text || (!state.toggles.voice && !force)) return;
       if (force) { speech.queue.clear(); stopSpeaking(); opts = { duck: true, ...opts }; }   // a line you asked for is heard
+      // a fixed line ("Rerouting", "Bump ahead") is in every voice pack (web/voice_lines.js): the pack says it, not the phone
+      if (!chain && !sysToken && !opts.tokens && window.ApexVoiceLines) { const t = ApexVoiceLines.forText(text); if (t) opts = { ...opts, tokens: t }; }
       speech.queue.push({ text, chain, sysToken, ...opts }, performance.now());
       if (!force) preemptForHazard();
       pumpSpeech(force);
@@ -2111,7 +2114,7 @@
           try {
             // A call the bank can only voice by joining clips plays as one whole render when the
             // route-load prefetch has it; the join is the audible seam we are avoiding.
-            if (tokens && state.liveVoice && ApexVoice.joins(tokens) > 0) played = await ApexVoice.playWhole(spokenTextFor(item.text, ApexVoice.bank.style));
+            if (tokens && state.liveVoice && (item.named || ApexVoice.joins(tokens) > 0)) played = await ApexVoice.playWhole(item.named ? item.text : spokenTextFor(item.text, ApexVoice.bank.style));
             if (!played && tokens) played = await ApexVoice.play(tokens);
             // Not in the bank (drive names, route summaries): synthesise live with the same model.
             if (!played && state.liveVoice) played = await ApexVoice.speakLive(spokenTextFor(item.text, ApexVoice.bank.style));
@@ -2239,7 +2242,7 @@
       if (track && track.kind === 'route' && !offRoute) {
         for (const line of ApexDirections.due(track.steps, state.cursorM, vMps, state.spoken, track.id)) {
           state.spoken.add(line.key); health.bump('directions_said');
-          say(line.text, false, null, null, { kind: line.now ? 'hazard' : 'ordinary', key: line.key, atM: line.atM, duck: true });
+          say(line.text, false, null, null, { kind: line.now ? 'hazard' : 'ordinary', key: line.key, atM: line.atM, duck: true, tokens: line.tokens || undefined, named: true });
         }
       }
       // Roads you have driven: one technique tip per remembered corner, only with full notes on (never over a commute),
@@ -2418,6 +2421,8 @@
             if (ApexVoice.joins(ApexVoice.tokensFor(voiced, style)) > 0) texts.push(spokenTextFor(voiced.map((n, i) => (i ? `${voiced[i - 1].link} ` : '') + n.call).join(' ') + (cur.link && cur.link !== 'into' && cur.link !== 'and' ? `, ${cur.link}` : ''), style));
           }
         }
+        // the directions at each turn with their street names (the clips say them without; this says them whole)
+        for (const st of t.steps || []) { const p = window.ApexDirections && ApexDirections.phrase(st); if (p && / onto | toward /.test(p)) texts.push(p); }
         ApexVoice.prefetch(texts);
       }).catch(() => {});
     }
@@ -3227,7 +3232,8 @@
       if (!L || !trafficMon.shouldSay(jams.map(p => [p.startM, p.endM]), Date.now())) return;
       const delayS = probes.reduce((a, p) => a + (p.level === 'jam' || p.level === 'slow' ? p.delayS : 0), 0);
       const delayMin = Math.max(1, Math.round(delayS / 60));
-      const stay = () => { toast(`Traffic ahead · ${delayMin} min`); say(`Traffic ahead. ${delayMin} minute${delayMin === 1 ? '' : 's'} slower`); };
+      const stay = () => { toast(`Traffic ahead · ${delayMin} min`); const n = ApexVoiceLines.num(delayMin);
+        say(`Traffic ahead. ${delayMin} minute${delayMin === 1 ? '' : 's'} slower`, false, null, null, n ? { tokens: ['line:traffic_ahead', n, delayMin === 1 ? 'line:minute_slower' : 'line:minutes_slower'] } : {}); };
       // Only the driver's own stops still ahead: old shaping points may sit in the jam, and a detour gets its own.
       const ahead = req.via.filter(v => !v.shaping && (v.distM == null || v.distM > routeWatch.bestM)).map(v => ({ lat: v.lat, lon: v.lon }));
       const points = [{ lat: L.lat, lon: L.lon }, ...ahead, req.to];
@@ -3262,7 +3268,7 @@
       const sw = { cancelled: false };
       toast(`Traffic ahead · switching to ${road}${extraMin > 0 ? ` (+${extraMin} min)` : ''}`,
             { label: 'Cancel', ms: 6000, onClick: () => { sw.cancelled = true; say('Staying on this route'); } });
-      say(`Traffic ahead. Switching to ${road}${extraMin > 0 ? `, ${extraMin} minute${extraMin === 1 ? '' : 's'} longer` : ''}`);
+      say(`Traffic ahead. Switching to ${road}${extraMin > 0 ? `, ${extraMin} minute${extraMin === 1 ? '' : 's'} longer` : ''}`, false, null, null, { tokens: ['line:traffic_ahead', 'line:switching'], named: true });
       await new Promise(r => setTimeout(r, 6000));
       if (sw.cancelled || track !== t || state.mode !== 'live' || rerouter.off) return;
       // Pinned with shaping points along it, like a winning alternate in Plan, so a reroute stays on the detour (a short
@@ -4328,7 +4334,7 @@
           }
         } catch (_) { /* no clip after all: the plain line */ }
       }
-      say(ApexCrewVoice.regroupText(rg), false);
+      say(ApexCrewVoice.regroupText(rg), false, null, null, { tokens: [rg && rg.note ? 'line:regroup' : 'line:regroup_set'], named: true });
     }
     // The crew page (web/crew_page.js, REVIEW.md roadmap 20): the Crew tab opens your crew.
     let crewPage = null, crewDrivesEl = null;
@@ -5156,7 +5162,7 @@
     function renderCamList() { document.querySelectorAll('[data-cam]').forEach(b => b.classList.toggle('on', b.dataset.cam === state.camFeel)); }
     document.querySelectorAll('[data-cam]').forEach(b => b.addEventListener('click', () => { state.camFeel = b.dataset.cam; renderCamList(); savePrefs(); }));
     renderCamList();
-    $('playBtn').addEventListener('click', () => { setPlaying(!state.playing); if (state.playing && track) say(`${track.name}.`, true); });
+    $('playBtn').addEventListener('click', () => { setPlaying(!state.playing); });   // the name is on the plate; the pack's voice is for the road
     $('rateBtn').addEventListener('click', () => {
       const rates = [1, 2, 4, 8];
       state.rate = rates[(rates.indexOf(state.rate) + 1) % rates.length];
@@ -5636,7 +5642,8 @@
       const v = Number.isFinite(frame.speed_mps) ? frame.speed_mps : 0;
       const next = ApexHazardReports.nextAhead(reported.list, me, Math.max(150, Math.min(600, v * 8)), reported.said);
       paintHazardPlate(ApexHazardReports.nextAhead(reported.list, me, HZ_PLATE_M, null));
-      if (next) { reported.said.add(next.id); say(next.text, false, null, null, { kind: 'hazard', key: `rep:${next.id}`, repeatMs: 10 * 60000, alert: true }); }
+      if (next) { reported.said.add(next.id); say(next.text, false, null, null, { kind: 'hazard', key: `rep:${next.id}`, repeatMs: 10 * 60000, alert: true,
+        tokens: [!next.label && ApexVoiceLines.TEXT[`line:rep_${next.kind}`] ? `line:rep_${next.kind}` : 'line:rep_hazard'], named: !!next.label }); }
       const passed = reported.watch.update(reported.list, me, reported.mine);
       if (passed && !reported.asking) askStill(passed);
     }
@@ -5846,7 +5853,9 @@
       }
       if (circuit.timer) {
         const r = circuit.timer.feed({ lat: fr.lat, lon: fr.lon, t: now }), st = circuit.timer.state(now);
-        if (r) { const L = r.lap; say(`Lap ${L.n}. ${ApexTrackMode.lapText(L.timeS).replace(':', ' ')}${st.best === L ? '. Best' : ''}`, true); }
+        if (r) { const L = r.lap, mm = Math.floor(L.timeS / 60), ss = Math.floor(L.timeS % 60), hh = Math.floor((L.timeS * 100) % 100), N = ApexVoiceLines.num;
+          const tk = [N(L.n), N(mm), N(ss), N(hh)].every(Boolean) ? ['line:lap', N(L.n), N(mm), N(ss), N(hh), ...(st.best === L ? ['line:best'] : [])] : undefined;
+          say(`Lap ${L.n}. ${ApexTrackMode.lapText(L.timeS).replace(':', ' ')}${st.best === L ? '. Best' : ''}`, true, null, null, { tokens: tk }); }
         $('lapName').textContent = `Lap ${st.laps.length + (st.running ? 1 : 0)}`;
         $('lapTime').textContent = st.delta == null ? ApexTrackMode.lapText(st.elapsedS) : `${st.delta > 0 ? '+' : ''}${st.delta.toFixed(2)}`;
         $('lapInfo').textContent = [st.last ? `last ${ApexTrackMode.lapText(st.last.timeS)}` : '', st.best ? `best ${ApexTrackMode.lapText(st.best.timeS)}` : ''].filter(Boolean).join(' · ');

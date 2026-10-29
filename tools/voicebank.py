@@ -83,8 +83,17 @@ def codriver_vocabulary(pack: str = None) -> dict[str, str]:
     v["sys:cruise"] = "Cruise. Hazards only."
     v["sys:test"] = "Co-driver ready."
     v.update(score_vocabulary())
+    v.update(voice_lines())
     v.update(PACK_LINES.get(pack, {}))
     return v
+
+
+def voice_lines() -> dict[str, str]:
+    """The directions, route, traffic, hazard-report, coaching and track lines (web/voice_lines.js, the JSON between its
+    markers): in every pack so a drive is said in one voice, never half by the phone's own."""
+    src = open(os.path.join(ROOT, "web", "voice_lines.js"), encoding="utf-8").read()
+    body = src.split("/* VOICE_LINES_JSON */", 1)[1].split("/* END_VOICE_LINES_JSON */", 1)[0]
+    return json.loads(body)
 
 
 def score_vocabulary() -> dict[str, str]:
