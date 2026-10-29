@@ -6,6 +6,12 @@ it says so. Things only you can do are in docs/OWNER_TODO.md.
 
 ## 2026-10-29
 
+**Review 3 merged, with one correction.** Fable's branch replaced #252's Plan a drive, friend tag and tour scene with its
+own (broader) versions; #252's unused checkbox switch and stepper rules came out of controls.css. My call: `noEmoji`
+keeps the old text symbols that Unicode also files as pictographic (© ® ™ ‼, everything below U+2190), so a build
+reply naming "Bilstein® B6" or a "© 2026" sticker reads as typed; arrows and emoji above it still go. Undo: drop the
+callback in web/format.js `noEmoji` and the © case in tests/test_format.py.
+
 **Review 3 (docs/design/REVIEW3.md): fixed in the branch, not only written up.** Fable had the code this time. My calls:
 - *Plan a drive is the app's own form*: the crew, lead, sweep and template as row lists (web/row_select.js, now loaded by
   index.html too), the day as a strip of the next thirty stops and the time as a stepper in quarter hours (both new in
