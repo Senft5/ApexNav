@@ -1120,6 +1120,7 @@ flow('landscape mount: the map takes the left, the instruments a column on the r
   check(bin.x >= stage.x + stage.w - 1 && bin.y < 120, 'the instruments are a column on the right: ' + JSON.stringify(bin));
   check(notes.w > 800, 'the notes run across the top');
   check(await page.evaluate(() => document.documentElement.scrollWidth <= 844), 'no sideways scroll');
+  await page.click('#modePlate');                                   // a replay is full-screen: its plate is the way back to the tabs (U-45)
   await page.click('.tab[data-view="garage"]');
   await page.waitForTimeout(400);
   const rail = await box('#binnacle');
@@ -1154,6 +1155,7 @@ flow('units: kilometres in Settings redraw the dial, the notes and the replay in
   await page.goto(base + '/index.html?drive=dry_ridge');
   await page.waitForFunction(() => window.apexDebug && window.apexDebug.track, null, { timeout: 15000 });
   check(await page.evaluate(() => ApexUnits.system()) === 'imperial', 'miles by default in en-US');
+  await page.click('#modePlate');                                   // out of the full-screen replay to the tabs (U-45)
   await page.click('.tab[data-view="garage"]');
   await Promise.all([page.waitForNavigation(), page.click('[data-units="metric"]')]);
   await page.waitForFunction(() => window.apexDebug && window.apexDebug.track, null, { timeout: 15000 });
