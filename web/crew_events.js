@@ -18,6 +18,25 @@
     return `${t.toLocaleDateString(locale, { weekday: 'short', month: 'short', day: 'numeric' })} · ${time}`;
   }
 
+  /** Who leads and who sweeps (roadmap 21): "Lead @bob · Sweep open". */
+  function rolesLine(e) {
+    const who = (h) => (h ? '@' + h : 'open');
+    return `Lead ${who(e && e.lead)} \u00b7 Sweep ${who(e && e.sweep)}`;
+  }
+  /** The drive you're going to today, for the cockpit's morning reminder (roadmap 21): from 4 AM on its day until an hour
+   *  after it starts, the earliest; null otherwise. Local time. */
+  function todayDrive(events, now = new Date()) {
+    const n = now.getTime(), morning = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 4).getTime();
+    const ok = (Array.isArray(events) ? events : []).filter((e) => {
+      const t = Date.parse(e && e.starts_at);
+      if (!Number.isFinite(t) || e.my_rsvp !== 'going') return false;
+      const d = new Date(t), sameDay = d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+      return sameDay && n >= morning && n <= t + 3600_000;
+    });
+    ok.sort((a, b) => Date.parse(a.starts_at) - Date.parse(b.starts_at));
+    return ok[0] || null;
+  }
+
   /** The planner may start the drive's convoy from 2 h before it starts until 4 h after. */
   function convoyOpen(e, now = Date.now()) {
     const t = Date.parse(e.starts_at);
@@ -58,6 +77,20 @@
         el('p', { className: 'note', textContent: `${whenText(e.starts_at)} · ${e.crew_name} · by @${e.by_handle || '?'}` }),
         el('p', { className: 'note', textContent: `Meet: ${e.meet_name || 'the pin'}${e.notes ? ` · ${e.notes}` : ''}` }),
         el('p', { className: 'note', textContent: e.going.length ? `Going: ${e.going.map((h) => '@' + h).join(', ')}${e.maybe ? ` · ${e.maybe} maybe` : ''}` : 'Nobody going yet.' }));
+      // roles (roadmap 21): an open one can be taken by anyone in the crew, which means going
+      const roles = el('div', { className: 'row', style: 'flex-wrap:wrap;align-items:baseline' }, el('b', { textContent: rolesLine(e) }));
+      const role = (k, take) => async () => {
+        const r = await apiCall('POST', `/api/events/${encodeURIComponent(e.id)}/role`, { role: k, take }).catch(() => null);
+        if (r && r.ok) redo(); else toast(r && r.status === 409 ? 'Someone took it first.' : 'Couldn\'t change that. Check signal.');
+      };
+      const me = page.myHandle ? page.myHandle() : null, held = me && (e.lead === me ? 'lead' : e.sweep === me ? 'sweep' : null);
+      if (held) roles.append(btn(`Stop being ${held}`, role(held, false), 'linkbtn'));
+      else for (const k of ['lead', 'sweep']) if (!e[k]) roles.append(btn(k === 'lead' ? 'I\'ll lead' : 'I\'ll sweep', role(k, true), 'linkbtn'));
+      box.append(roles);
+      if (Array.isArray(e.regroup) && e.regroup.length) {
+        box.append(el('div', { className: 'row', style: 'flex-wrap:wrap;align-items:baseline' }, el('span', { className: 'note', textContent: 'Regroup:' }),
+          ...e.regroup.map((p) => btn(p.name, () => page.goTo({ label: p.name, lat: p.lat, lon: p.lon }), 'linkbtn'))));
+      }
       const answers = el('div', { className: 'row', role: 'group' });
       answers.setAttribute('aria-label', 'Your answer');
       for (const [k, label] of RSVP) {
@@ -91,11 +124,34 @@
       return box;
     }
 
-    function planForm(crews, done) {
+    function planForm(crews, done, pick) {
       const form = el('div', { className: 'stack-8' });
       const crew = el('select', { className: 'field' });
       crew.setAttribute('aria-label', 'Crew');
-      for (const c of crews) crew.append(el('option', { value: c.id, textContent: c.name }));
+      for (const c of crews) crew.append(el('option', { value: c.id, textContent: c.name, selected: c.id === pick }));
+      // roles (roadmap 21): you lead unless you name someone; a sweep can be named now or volunteer later
+      const lead = el('select', { className: 'field' }), sweep = el('select', { className: 'field' });
+      lead.setAttribute('aria-label', 'Lead'); sweep.setAttribute('aria-label', 'Sweep');
+      const fillRoles = async () => {
+        const list = await apiCall('GET', `/api/crews/${encodeURIComponent(crew.value)}/members`).then(jsonOf).catch(() => null);
+        const handles = (Array.isArray(list) ? list : []).filter((m) => m && m.handle);
+        lead.replaceChildren(...handles.map((m) => el('option', { value: m.mine ? '' : m.handle, textContent: m.mine ? 'You lead' : `@${m.handle} leads`, selected: !!m.mine })));
+        sweep.replaceChildren(el('option', { value: '', textContent: 'Sweep: someone going takes it' }),
+          ...handles.map((m) => el('option', { value: m.handle, textContent: m.mine ? 'You sweep' : `@${m.handle} sweeps` })));
+      };
+      crew.addEventListener('change', fillRoles); fillRoles();
+      // regroup points: up to five, each named, set at the map's centre
+      const regroup = [], regroupList = el('div', { className: 'stack-8' });
+      const regroupName = el('input', { className: 'field', maxLength: 40, placeholder: 'Regroup point name, e.g. the overlook', autocomplete: 'off' });
+      regroupName.setAttribute('aria-label', 'Regroup point name');
+      const paintRegroup = () => regroupList.replaceChildren(...regroup.map((p, i) => el('div', { className: 'row', style: 'align-items:baseline' },
+        el('span', { textContent: `${i + 1}. ${p.name}` }), btn('Remove', () => { regroup.splice(i, 1); paintRegroup(); }, 'linkbtn'))));
+      const addRegroup = btn('Add at the map centre', () => {
+        const name = regroupName.value.trim(), c = page.mapCentre();
+        if (!name) { toast('Name the regroup point first.'); return; }
+        if (regroup.length >= 5) { toast('Five regroup points at most.'); return; }
+        regroup.push({ name, lat: c.lat, lon: c.lon }); regroupName.value = ''; paintRegroup();
+      }, 'ink-btn');
       const title = el('input', { className: 'field', maxLength: 60, placeholder: 'What (e.g. Cherohala Saturday)', autocomplete: 'off' });
       title.setAttribute('aria-label', 'Drive name');
       const tomorrow = new Date(Date.now() + 86400000);
@@ -124,6 +180,8 @@
         el('div', { className: 'row', style: 'flex-wrap:wrap' }, btn('Where I am', () => setMeet(page.here(), 'where you are'), 'ink-btn'), btn('Map centre', () => setMeet(page.mapCentre(), 'map centre'), 'ink-btn')),
         meetNote, meetName,
         el('label', { className: 'row', style: 'align-items:center;gap:8px' }, withRoute, el('span', { textContent: route ? `Add the planned route (${route.name})` : 'Plan a route first to add it' })),
+        el('b', { textContent: 'Roles' }), el('div', { className: 'row' }, lead, sweep),
+        el('b', { textContent: 'Regroup points' }), regroupList, el('div', { className: 'row' }, regroupName, addRegroup),
         notes,
         el('label', { className: 'row', style: 'align-items:center;gap:8px' }, listed, listedLabel),
         el('div', { className: 'row' }, btn('Plan it', async () => {
@@ -139,8 +197,10 @@
             routeId = j.id;
           }
           const r = await apiCall('POST', `/api/crews/${encodeURIComponent(crew.value)}/events`, {
-            title: title.value.trim(), starts_at: when, meet: { name: meetName.value.trim() || null, lat: meet.lat, lon: meet.lon }, route_id: routeId, notes: notes.value.trim() || null, public: listed.checked });
-          if (!r.ok) { toast(r.status === 429 ? 'That crew has 10 drives coming up already.' : r.status === 400 ? 'Pick a time in the next 30 days.' : 'Couldn\'t plan it. Check signal.'); return; }
+            title: title.value.trim(), starts_at: when, meet: { name: meetName.value.trim() || null, lat: meet.lat, lon: meet.lon }, route_id: routeId, notes: notes.value.trim() || null, public: listed.checked,
+            lead: lead.value || undefined, sweep: sweep.value || null, regroup });
+          if (!r.ok) { const j = await jsonOf(r).catch(() => null); if (j && j.error === 'bad_role') { toast('One person can\'t both lead and sweep.'); return; }
+            toast(r.status === 429 ? 'That crew has 10 drives coming up already.' : r.status === 400 ? 'Pick a time in the next 30 days.' : 'Couldn\'t plan it. Check signal.'); return; }
           toast('Drive planned. The crew sees it in Crew.');
           done();
         }, 'ink-btn solid'), btn('Cancel', done, 'linkbtn')));
@@ -188,14 +248,19 @@
           list.replaceChildren(...(rows.length ? rows.map((e) => card(e, redo)) : [el('p', { className: 'note', textContent: crews.length ? 'No drives planned. Plan one for your crew.' : 'Join or start a crew to plan drives together.' })]));
         }).catch(() => list.replaceChildren(el('p', { className: 'note', textContent: 'Couldn\'t load crew drives. Check signal.' })));
       };
-      if (crews.length) sec.append(btn('Plan a drive', () => formHost.replaceChildren(planForm(crews, () => { formHost.replaceChildren(); redo(); })), 'ink-btn'));
+      const openPlan = (pick) => formHost.replaceChildren(planForm(crews, () => { formHost.replaceChildren(); redo(); }, pick));
+      if (crews.length) sec.append(btn('Plan a drive', () => openPlan(), 'ink-btn'));
       sec.append(formHost, list, meets);
+      lastPlan = openPlan;
       redo();
       return sec;
     }
-    return { section };
+    let lastPlan = null;
+    /** Opens the plan form for one crew in the section last drawn (the crew page's "Plan a drive"). */
+    function plan(crewId) { if (lastPlan) lastPlan(crewId); }
+    return { section, plan };
   }
 
-  const api = { whenText, convoyOpen, icsFor, isoFromInputs, mount };
+  const api = { whenText, convoyOpen, icsFor, isoFromInputs, rolesLine, todayDrive, mount };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexCrewEvents = api;
 })(typeof window !== 'undefined' ? window : globalThis);

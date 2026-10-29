@@ -473,8 +473,8 @@ flow('crew page: the tab opens your crew; going, chat and the livery reach the W
   await page.click('.cp-crests button[aria-label="Peak"]');
   await page.click('.cp-swatches button[aria-label="Blue"]');
   await page.click('.cp-livery button:has-text("Save")');
-  await page.waitForTimeout(300);
   const find = (p) => sent.find((x) => x.p === p);
+  for (let i = 0; i < 50 && !(find('/api/events/e1/rsvp') && find('/api/crews/k1/chat') && find('/api/crews/k1/page')); i++) await page.waitForTimeout(100);
   check(find('/api/events/e1/rsvp') && JSON.parse(find('/api/events/e1/rsvp').b).status === 'going', 'I\'m going sends going');
   check(find('/api/crews/k1/chat') && JSON.parse(find('/api/crews/k1/chat').b).body === 'Saturday it is', 'the message is sent');
   const liv = find('/api/crews/k1/page');
@@ -807,7 +807,9 @@ flow('crew drives: an upcoming drive shows in Crew with who is going; Going answ
     if (u.pathname === '/api/events/near') return json([{ id: 'MEET1AAAAAAAAAAA', crew_id: 'CREW9', crew_name: 'Coffee & Cars', title: 'Sunday coffee', starts_at: starts,
       meet_name: 'Kroger lot', meet_lat: 35.76, meet_lon: -83.96, notes: null, going: 7, member: false, km: 12 }]);
     if (u.pathname === '/api/events') return json([{ id: 'EVT1AAAAAAAAAAAA', crew_id: 'CREW1', crew_name: 'Ridge Runners', title: 'Cherohala <i>Saturday</i>', starts_at: starts,
-      meet_name: 'Tellico Shell', meet_lat: 35.36, meet_lon: -84.29, route_id: null, notes: null, by_handle: 'bob', mine: false, can_cancel: false, my_rsvp: mine, going: ['bob', 'cara'], maybe: 1 }]);
+      meet_name: 'Tellico Shell', meet_lat: 35.36, meet_lon: -84.29, route_id: null, notes: null, by_handle: 'bob', mine: false, can_cancel: false, my_rsvp: mine, going: ['bob', 'cara'], maybe: 1,
+      lead: 'bob', sweep: null, regroup: [{ name: 'The overlook', lat: 35.33, lon: -84.12 }] }]);
+    if (u.pathname === '/api/crews/CREW1/members') return json([{ handle: 'me', mine: true }, { handle: 'bob', mine: false }]);
     if (u.pathname === '/api/highlights' && m === 'GET') return json([{ id: 'HL1', name: 'Look Rock <b>view</b>', lat: 35.64, lon: -83.94, score: 4.5, ratings: 6, mine: false,
       category: 'overlook', note: 'Best at sunset', visits: 9, my_stars: null }, { id: 'HL2', name: 'Bean Stop', lat: 35.75, lon: -83.97, score: 3.9, ratings: 2, mine: true, category: 'cafe' }]);
     if (m === 'POST') { posted.push([u.pathname, JSON.parse(route.request().postData() || 'null')]); return u.pathname.endsWith('/rsvp') ? (mine = 'going', route.fulfill({ status: 204 })) : json({ id: 'NEWEVTAAAAAAAAAA' }, 201); }
@@ -826,6 +828,12 @@ flow('crew drives: an upcoming drive shows in Crew with who is going; Going answ
   await page.click('.drive-card:not(.meet-card) button:has-text("Going")');
   await page.waitForFunction(() => document.querySelector('.drive-card:not(.meet-card) button[aria-pressed="true"]')?.textContent === 'Going');
   check(posted.some(([p, b]) => p === '/api/events/EVT1AAAAAAAAAAAA/rsvp' && b.status === 'going'), 'the answer was sent');
+  // roles and regroup points (roadmap 21)
+  const roles = await page.textContent('.drive-card:not(.meet-card)');
+  check(roles.includes('Lead @bob · Sweep open') && roles.includes('The overlook'), 'roles and the regroup point show: ' + roles);
+  await page.click('.drive-card:not(.meet-card) button:has-text("I\'ll sweep")');
+  await page.waitForTimeout(300);
+  check(posted.some(([p, b]) => p === '/api/events/EVT1AAAAAAAAAAAA/role' && b.role === 'sweep' && b.take === true), 'I\'ll sweep was sent');
   // spots near you (IDEAS S-12): best rated first, as text, filterable; a rating is sent
   await page.waitForSelector('.spot-card');
   const spots = await page.$$eval('.spot-card', (els) => els.map((e) => e.textContent));
@@ -841,10 +849,37 @@ flow('crew drives: an upcoming drive shows in Crew with who is going; Going answ
   await page.click('button:has-text("Plan a drive")');
   await page.fill('input[aria-label="Drive name"]', 'Dragon run');
   await page.click('button:has-text("Map centre")');
+  await page.waitForSelector('select[aria-label="Sweep"] option[value="bob"]', { state: 'attached' });
+  await page.selectOption('select[aria-label="Sweep"]', 'bob');
+  await page.fill('input[aria-label="Regroup point name"]', 'Gas at Robbinsville');
+  await page.click('button:has-text("Add at the map centre")');
   await page.click('button:has-text("Plan it")');
   await page.waitForFunction(() => /Drive planned/.test(document.getElementById('toast').textContent));
   const plan = posted.find(([p]) => p === '/api/crews/CREW1/events');
   check(plan && plan[1].title === 'Dragon run' && /Z$/.test(plan[1].starts_at) && Number.isFinite(plan[1].meet.lat) && plan[1].route_id === null && plan[1].public === false, 'the plan was sent: ' + JSON.stringify(plan));
+  check(plan[1].lead === undefined && plan[1].sweep === 'bob' && plan[1].regroup.length === 1 && plan[1].regroup[0].name === 'Gas at Robbinsville', 'with roles and a regroup point');
+});
+
+flow('crew drive morning: the idle map offers directions to today\'s meeting point instead of the loop (Worker stubbed, REVIEW.md roadmap 21)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  const at = new Date(Date.now() + 40 * 60000);   // 40 minutes from now, today (unless that crosses midnight)
+  if (at.getDate() !== new Date().getDate() || new Date().getHours() < 4) { check(true, 'skipped: too close to midnight or before 4 AM'); return; }
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url());
+    const json = (b) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (u.pathname === '/api/events') return json([{ id: 'EVT1AAAAAAAAAAAA', crew_id: 'C', crew_name: 'Ridge Runners', title: 'Dawn run', starts_at: at.toISOString(), meet_name: 'Tellico Shell',
+      meet_lat: 35.36, meet_lon: -84.29, my_rsvp: 'going', going: ['me', 'bob'], maybe: 0, lead: 'bob', sweep: null, regroup: [] }]);
+    return json([]);
+  });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && typeof window.apex.live === 'function');
+  await page.evaluate(() => document.querySelector('.tab[data-view="crew"]').click());   // signs the page in (renderAccount)
+  await page.evaluate(() => document.querySelector('.tab[data-view="map"]').click());
+  await page.waitForSelector('#driveToday:not([hidden])', { timeout: 15000 });
+  const t = await page.textContent('#driveToday');
+  check(/Dawn run/.test(t) && /Meet at Tellico Shell/.test(t) && /2 going/.test(t) && /Lead @bob/.test(t), 'the reminder: ' + t);
+  check(await page.$eval('#loopSuggest', (b) => getComputedStyle(b).display === 'none'), 'it takes the loop invitation\'s place');
 });
 
 flow('drive tags: tag a drive in the Log, filter by it, the note stays on the phone (IDEAS D-23)', async (page, base) => {

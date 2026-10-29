@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-YfE/A15Ru16ZcXWHSKLU7dPnvkMO5YxjR2Y2REoCEhs=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-31wodq6SWbKe8quosUV0XTEJicaP1zYeS9Dd+7XW20k=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -477,6 +477,9 @@
     .loop-suggest svg { width: 40px; height: 40px; border: 1.5px solid var(--panel-ink); padding: 3px; fill: none; stroke: var(--panel-ink); stroke-width: 2.4; stroke-linecap: round; }
     .loop-suggest svg circle { fill: var(--panel-ink); }
     .loop-suggest b { display: block; font-size: 16px; } .loop-suggest small { display: block; font-size: 13px; color: var(--panel-dim); }
+    .drive-today[hidden], #app.drive-today-on .loop-suggest:not(.drive-today) { display: none !important; }
+    .drive-today .dt-date { width: 40px; height: 40px; background: var(--panel-ink); color: var(--panel); display: grid; place-content: center; text-align: center; font-family: var(--font-num); line-height: 1; }
+    .drive-today .dt-date b { font-size: 18px; } .drive-today .dt-date small { font-size: 10px; letter-spacing: 0.06em; color: var(--panel); }
     .loop-suggest em { font-style: normal; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
     #hzReportBtn.undo { background: var(--hz-bg); color: var(--hz-ink); border: 2px solid var(--hz-edge); }
     .crew-gets { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 4px 0 8px; }
@@ -1056,6 +1059,9 @@
       <!-- one invitation on the idle map (REVIEW.md 3.1, mockup 01): a loop from here, drawn as a tulip -->
         <button class="loop-suggest" id="loopSuggest" aria-label="Plan a loop from here"><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M14 36 V22 Q14 10 26 8"/><path d="M22 3 L29 8 L23 13"/><circle cx="14" cy="36" r="2.4"/></svg>
           <span><b id="loopSuggestTitle">Loop from here</b><small>On the twistiest roads nearby · map only until driven</small></span><em>Plan</em></button>
+      <!-- the morning of a crew drive you're going to, it takes the invitation's place (REVIEW.md roadmap 21) -->
+        <button class="loop-suggest drive-today" id="driveToday" hidden><span class="dt-date" aria-hidden="true"><b id="driveTodayDay"></b><small id="driveTodayMon"></small></span>
+          <span><b id="driveTodayTitle"></b><small id="driveTodayMeta"></small></span><em>Go</em></button>
       <nav class="tabbar" id="tabbar" aria-label="Views">
         <button class="tab on" data-view="map" aria-label="Map"><svg viewBox="0 0 24 24"><path d="M12 3l6 15-6-3-6 3z"/></svg><span>Map</span></button>
         <button class="tab" data-view="log" aria-label="Log"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg><span>Log</span></button>
@@ -4245,6 +4251,7 @@
     let crewEvents = null;
     try { crewEvents = window.ApexCrewEvents ? ApexCrewEvents.mount({ el, btn, toast, apiCall, jsonOf, report: safety && safety.report,
       here: () => state.lastPosition || null, mapCentre: () => { const c = map.getCenter(); return { lat: c.lat, lon: c.lng }; },
+      myHandle: () => (accountMe && accountMe.handle) || null,
       plannedRoute: () => (plannedRoute && plannedRoute.lat.length > 1 ? { name: plannedRoute.name, geom: sharedGeom(plannedRoute) } : null),
       goTo: (p) => { closeSheet(); routeToPlace(p); }, openRoute: (id) => openSharedRoute(id),
       startConvoy: (name, handles) => (convoy && convoy.startFor ? convoy.startFor(name, handles) : Promise.resolve({ ok: false, status: 0 })),
@@ -4254,7 +4261,7 @@
     const toDrives = () => { if (crewDrivesEl) crewDrivesEl.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
     try { crewPage = window.ApexCrewPage ? ApexCrewPage.mount({ el, btn, toast, apiCall, jsonOf, report: safety && safety.report,
       invite: async (c) => { const r = await apiCall('POST', `/api/crews/${c.id}/invite`); const j = await jsonOf(r); if (r.ok) copyText(`${shareOrigin()}/?crew=${j.token}`, 'Crew link copied.'); else toast(j && j.error === 'too_many_open_invites' ? 'You have 10 open crew links. Turn some off first.' : 'Couldn\'t make a link. Try again.'); },
-      onAllDrives: toDrives, onPlan: toDrives }) : null; } catch (e) { console.error('crew page', e); }
+      onAllDrives: toDrives, onPlan: (c) => { if (crewEvents) crewEvents.plan(c.id); toDrives(); } }) : null; } catch (e) { console.error('crew page', e); }
     // Units (web/units.js, IDEAS U-22): the page reloads to redraw every number; never mid-drive (the drive lives in this page).
     {
       const paintUnits = () => document.querySelectorAll('[data-units]').forEach(b => { const on = b.dataset.units === ApexUnits.system(); b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); });
@@ -4860,6 +4867,27 @@
       $('loopSuggestTitle').textContent = `Loop from here · ${b ? b.textContent : '45 mi'}`;
     }
     $('loopSuggest').addEventListener('click', () => { if (!loopBusy) $('findLoopBtn').click(); });
+    // The morning of a crew drive you said you're going to (REVIEW.md roadmap 21, crew_events.js todayDrive): from 4 AM until an
+    // hour after it starts, the idle map offers directions to the meeting point instead of the loop. Members only, every 10 min.
+    let driveTodayEvent = null;
+    async function refreshDriveToday() {
+      let e = null;
+      if (accountMe && accountMe.member && window.ApexCrewEvents && navigator.onLine !== false) {
+        const rows = await apiCall('GET', '/api/events').then(jsonOf).catch(() => null);
+        e = ApexCrewEvents.todayDrive(rows);
+      }
+      driveTodayEvent = e;
+      $('driveToday').hidden = !e;
+      $('app').classList.toggle('drive-today-on', !!e);
+      if (!e) return;
+      const d = ApexCrewPage ? ApexCrewPage.dateBlock(e.starts_at) : { day: '', mon: '' };
+      $('driveTodayDay').textContent = d.day; $('driveTodayMon').textContent = d.mon;
+      $('driveTodayTitle').textContent = `${e.title} \u00b7 ${new Date(e.starts_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+      $('driveTodayMeta').textContent = [`Meet at ${e.meet_name || 'the pin'}`, `${e.going.length} going`, ApexCrewEvents.rolesLine(e)].join(' \u00b7 ');
+      $('driveToday').setAttribute('aria-label', `Today: ${e.title}. Directions to the meeting point.`);
+    }
+    $('driveToday').addEventListener('click', () => { const e = driveTodayEvent; if (e) routeToPlace({ label: e.meet_name || e.title, lat: e.meet_lat, lon: e.meet_lon }); });
+    setTimeout(refreshDriveToday, 5000); setInterval(refreshDriveToday, 10 * 60000);
     document.querySelectorAll('#loopDetents button').forEach(b => b.addEventListener('click', paintLoopSuggest));
     paintLoopSuggest();
     // ---- Look and voice: the theme picker (REVIEW.md 4.5) ---------------------------------------------------------------

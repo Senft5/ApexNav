@@ -6,6 +6,18 @@ it says so. Things only you can do are in docs/OWNER_TODO.md.
 
 ## 2026-10-29
 
+**Crew drives get roles, regroup points and a morning reminder (REVIEW.md roadmap 21).** My calls:
+- *Two roles, lead and sweep.* The planner leads unless they name someone; the sweep is named at planning or taken later
+  by anyone in the crew ("I'll sweep"), which also marks them going. Saying you're not going frees your role. The planner
+  or the crew's owner can clear a role. Migration 0032 is applied to both D1 databases.
+- *Up to five named regroup points*, set at the map's centre in the plan form; each one is a Directions link on the card.
+- *The morning reminder replaces the loop invitation on the idle map* (one invitation at a time) from 4 AM on the day of a
+  drive you said you're going to, until an hour after it starts. It shows the time, the meeting point, how many are going
+  and the roles; Go routes to the meeting point. It's never shown while driving.
+- *The plan form stays in Crew drives* rather than a new sheet built from the plan sheet: it already takes the route you
+  planned on the map, and the crew page's "Plan a drive" opens it for that crew.
+- *Tapping Going or Share on the crew page redraws only that part*, so a half-typed chat message isn't lost.
+
 **The crew page (REVIEW.md roadmap 20).** The Crew tab opens your crew (a row of names to switch when you're in several). My calls:
 - *Plain livery only*: the owner sets a motto, one of six drawn stock crests (Apex, Peak, Tulip, Wheel, Wing, Crown) and one
   of eight stripe colours, and adds a cover photo. Crest uploads and the higher tiers wait for Decals (roadmap 22). Migration

@@ -13,8 +13,10 @@
 - Active bugs: none new.
 - [x] Roadmap 20: the crew page (web/crew_page.js, backend/src/crew_page.ts): cover, stock crest, motto, stripe, next
   drive with Going, the Vetta Score board this month, crew chat (30 days). Migration 0031 applied to both D1.
-- Exact next task: roadmap 21, events (Plan a drive with roles and regroup points from the plan sheet, the event card,
-  a morning reminder in the cockpit).
+- [x] Roadmap 21: crew drives get lead and sweep roles (take or give up), up to five regroup points, roles on the crew
+  page's card, and the morning-of reminder on the idle map (crew_events.js todayDrive). Migration 0032 applied to both D1.
+- Exact next task: roadmap 22, Decals and livery tiers (Club, Works, Factory) with the livery editor. Pro isn't on sale, so
+  Decals can't be earned yet: build the mechanics behind the `pro` flag.
 
 ## Session 2026-10-29 (day): design phase 2
 

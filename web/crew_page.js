@@ -134,7 +134,13 @@
         const c = await load(id);
         if (!c || !c.id || !Array.isArray(c.board)) { box.replaceChildren(el('p', { className: 'note', style: 'padding:0 16px', textContent: 'Couldn’t load the crew. Check signal.' }), btn('Try again', draw, 'ink-btn')); return; }
         if (stripeOk(c.stripe)) box.style.setProperty('--cp-stripe', c.stripe);
-        box.replaceChildren(header(c, draw), el('div', { className: 'cp-body' }, titleBlock(c), nextDrive(c, draw), board(c, draw), chat(c)));
+        // Going and Share redraw only their own part, so a half-typed chat message stays put
+        let driveSec = null, boardSec = null;
+        const part = (make, get, set) => async () => { const c2 = await load(id); if (c2 && Array.isArray(c2.board)) { const n = make(c2); get().replaceWith(n); set(n); } };
+        const redoDrive = part((c2) => nextDrive(c2, redoDrive), () => driveSec, (n) => { driveSec = n; });
+        const redoBoard = part((c2) => board(c2, redoBoard), () => boardSec, (n) => { boardSec = n; });
+        driveSec = nextDrive(c, redoDrive); boardSec = board(c, redoBoard);
+        box.replaceChildren(header(c, draw), el('div', { className: 'cp-body' }, titleBlock(c), driveSec, boardSec, chat(c)));
       };
       draw();
       return box;
@@ -182,6 +188,7 @@
         el('div', { className: 'cp-date' }, el('b', { textContent: d.day }), el('span', { textContent: d.mon })),
         el('div', { className: 'cp-drive-body' }, el('b', { textContent: e.title }),
           el('span', { className: 'note', textContent: [time, e.meet_name ? `Meet at ${e.meet_name}` : 'Meet at the pin'].filter(Boolean).join(' · ') }),
+          el('span', { className: 'note', textContent: root.ApexCrewEvents ? root.ApexCrewEvents.rolesLine(e) : '' }),
           el('div', { className: 'cp-going' }, g.n ? faces : '', el('span', { className: 'note', textContent: g.n ? `${g.n} going` : 'Nobody going yet' }), el('span', { style: 'flex:1' }), rsvp))));
       return sec;
     }

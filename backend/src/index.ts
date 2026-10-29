@@ -29,7 +29,7 @@ import { redeem, shop } from "./redeem";
 import { flagsFor } from "./flags";
 import { coverage, exportRoads, roadBins } from "./roads";
 import { crewStandings } from "./standings";
-import { eventCancel, eventCreate, eventRsvp, eventsList, eventsNear } from "./events";
+import { eventCancel, eventCreate, eventRole, eventRsvp, eventsList, eventsNear } from "./events";
 import { healthReport, healthSummary } from "./health";
 import { feedbackCreate, feedbackDone, feedbackList } from "./feedback";
 import { friendProfile } from "./profile";
@@ -140,6 +140,7 @@ on("GET", "/api/eta/:token", async (_req, env, m) => json(await etaView(env, m.g
 on("GET", "/api/events/near", async (req, env) => json(await eventsNear(env, await requireMember(req, env), new URL(req.url))));
 on("GET", "/api/events", async (req, env) => json(await eventsList(env, await requireMember(req, env), null)));
 on("POST", "/api/events/:id/rsvp", async (req, env, m) => { await eventRsvp(env, await requireMember(req, env), m.groups!.id, req); return noContent(); });
+on("POST", "/api/events/:id/role", async (req, env, m) => { await eventRole(env, await requireMember(req, env), m.groups!.id, req); return noContent(); });
 on("DELETE", "/api/events/:id", async (req, env, m) => { await eventCancel(env, await requireMember(req, env), m.groups!.id); return noContent(); });
 // the crew page (src/crew_page.ts, REVIEW.md roadmap 20)
 on("GET", "/api/crews/:id/page", async (req, env, m) => json(await crewPage(env, await requireMember(req, env), m.groups!.id)));
