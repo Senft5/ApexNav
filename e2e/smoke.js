@@ -533,6 +533,40 @@ flow('build threads: start one from a car, add a step, a friend suggests and it 
   check(r.suggestion === true && r.body === 'One click softer on the rear rebound', 'the suggestion is sent');
 });
 
+flow('friends on the map: off by default; the first time on explains both choices; Show me to sends no zones for Nobody; pucks say how old (Worker stubbed, REVIEW.md roadmap 24)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.privacyZones', JSON.stringify([{ id: 'z1', name: 'Home', lat: 35.37, lon: -84.28, r: 300 }])); } catch (_) {} });
+  const sent = [];
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url()), m = route.request().method(), p = u.pathname;
+    const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (m !== 'GET') { sent.push({ m, p, b: JSON.parse(route.request().postData() || 'null') }); return route.fulfill({ status: 204 }); }
+    if (p === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (p === '/api/presence/settings') return json({ audience: 'nobody', delay_s: 600, fuzz: true });
+    if (p === '/api/presence') return json([{ handle: 'sam', photo_id: null, delay_s: 600, fuzz: true, lat: 35.36, lon: -84.29, road: null, at: new Date(Date.now() - 12 * 60000).toISOString() }]);
+    return json([]);
+  });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && typeof window.apex.live === 'function');
+  check(await page.evaluate(() => apexDebug.state.toggles.friends === false && !document.querySelector('.fm-puck')), 'the layer is off by default');
+  await page.waitForFunction(() => document.querySelector('#app') && window.apexDebug);
+  await page.waitForTimeout(1500);                                                        // the account is known
+  await page.click('#swTab');
+  await page.click('[data-toggle="friends"]');
+  await page.waitForSelector('[aria-label="Friends on the map"]');
+  check(/Nobody sees you until you choose/.test(await page.textContent('[aria-label="Friends on the map"]')), 'the first time, the sheet explains: seeing is not sharing');
+  await page.waitForSelector('.fm-puck');
+  check(/@sam, about 12 min ago · within a mile/.test(await page.$eval('.fm-puck', (e) => e.closest('[aria-label]').getAttribute('aria-label'))), 'the puck says how old and how rough');
+  await page.click('[aria-label="Show me to"] button:has-text("Friends")');
+  await page.waitForFunction(() => /Your friends see you 10 minutes late, within a mile/.test(document.querySelector('[aria-label="Friends on the map"]').textContent));
+  const put = sent.find((x) => x.p === '/api/presence/settings');
+  check(put && put.b.audience === 'friends' && put.b.delay_s === 600 && put.b.fuzz === true && put.b.zones.length === 1, 'sharing sends the choices and the home zones: ' + JSON.stringify(put && put.b));
+  await page.click('[aria-label="Show me to"] button:has-text("Nobody")');
+  await page.waitForTimeout(300);
+  const off = sent.filter((x) => x.p === '/api/presence/settings').pop();
+  check(JSON.stringify(off.b) === JSON.stringify({ audience: 'nobody' }), 'Nobody sends nothing else');
+  check(!sent.some((x) => x.p === '/api/presence' && x.m === 'POST'), 'nothing is sent while not driving');
+});
+
 flow('convoy: the leader shows a QR code of the link (Worker stubbed, IDEAS S-22)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   const id = 'BBBBBBBBBBBBBBBBBBBBBB', until = Date.now() + 120 * 60000;

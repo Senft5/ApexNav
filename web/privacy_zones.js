@@ -1,5 +1,6 @@
-// Privacy zones (IDEAS Z-02): circles you place (home, work) where nothing is recorded or shared. They live on this phone
-// only (localStorage), never on the server. Inside one, the cockpit still shows where you are, but no drive samples are kept,
+// Privacy zones (IDEAS Z-02), "home zones" on the friends layer: circles you place (home, work) where nothing is recorded
+// or shared. They live on this phone (localStorage); only while you show yourself on the map (friends_map.js) does a copy
+// go to the server, so it can drop a position inside one too, and choosing Nobody deletes it. Inside one, the cockpit still shows where you are, but no drive samples are kept,
 // no road data is sent, and convoys get no position. Pure apart from load/save, which take the storage to use.
 (function (root) {
   'use strict';

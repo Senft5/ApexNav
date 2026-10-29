@@ -22,6 +22,7 @@ import { deleteAccount, exportMyData } from "./account";
 import { carCreate, carDelete, carUpdate, myCars, peoplesCars } from "./garage";
 import { chatDelete, chatList, chatPost, crewPage, crewPageUpdate } from "./crew_page";
 import { decalsPlace } from "./livery";
+import { presencePublish, presenceSettingsGet, presenceSettingsPut, presenceView } from "./presence";
 import { buildCreate, buildDelete, buildFind, buildFollow, buildGet, buildUpdate, buildsFollowing, postCreate, postDelete, replyCreate, replyDelete, replyTried } from "./builds";
 import { photoDelete, photoList, photoServe, photoUpload, photoUse } from "./photos";
 import { block, blockList, fileReport, isModerator, moderationQueue, moderationResolve, report, unblock } from "./safety";
@@ -184,6 +185,11 @@ on("DELETE", "/api/builds/:id", async (req, env, m) => { await buildDelete(env, 
 on("POST", "/api/builds/:id/posts", async (req, env, m) => json(await postCreate(env, await requireMember(req, env), m.groups!.id, req), 201));
 on("PUT", "/api/builds/:id/follow", async (req, env, m) => { await buildFollow(env, await requireMember(req, env), m.groups!.id, true); return noContent(); });
 on("DELETE", "/api/builds/:id/follow", async (req, env, m) => { await buildFollow(env, await requireMember(req, env), m.groups!.id, false); return noContent(); });
+// friends on the map (src/presence.ts, REVIEW.md 5.4, roadmap 24)
+on("GET", "/api/presence/settings", async (req, env) => json(await presenceSettingsGet(env, await requireMember(req, env))));
+on("PUT", "/api/presence/settings", async (req, env) => { await presenceSettingsPut(env, await requireMember(req, env), req); return noContent(); });
+on("GET", "/api/presence", async (req, env) => json(await presenceView(env, await requireMember(req, env))));
+on("POST", "/api/presence", async (req, env) => { await presencePublish(env, await requireMember(req, env), req); return noContent(); });
 // photos (src/photos.ts, REVIEW.md 5.2): JPEG in, metadata out; members only
 on("POST", "/api/photos", async (req, env) => json(await photoUpload(env, await requireMember(req, env), req), 201));
 on("GET", "/api/photos", async (req, env) => json(await photoList(env, await requireMember(req, env), new URL(req.url))));

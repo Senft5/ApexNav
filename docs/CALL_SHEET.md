@@ -6,6 +6,19 @@ it says so. Things only you can do are in docs/OWNER_TODO.md.
 
 ## 2026-10-29
 
+**Friends on the map (REVIEW.md 5.4, roadmap 24).** My calls:
+- *Defaults as the review set them*: the layer off, Show me to Nobody, a 10-minute delay, within a mile, only while
+  driving. The first time you turn the layer on, the sheet explains that seeing isn't sharing.
+- *The delay is applied on the server*: a viewer gets your newest position that is at least that old, never a newer one,
+  and positions older than the delay plus 30 minutes aren't shown at all. The server keeps only what the delay needs.
+- *"Within a mile" is snapped to a fixed grid before it's stored*, so the exact point never reaches the database and
+  repeated reads can't be averaged back. Switching from Exact to within a mile deletes what was stored.
+- *Home zones go to the server while you're shown*, so it can refuse a position inside one even if the phone slipped;
+  choosing Nobody deletes them. This changes "zones never leave the phone"; the privacy policy says so now. Undo: drop the
+  zones from the settings call; the phone's own check stays.
+- *The road name appears only for Live and Exact* ("Driving · Cherohala Skyway"); every other tag says how old and how
+  rough. Migration 0035 is applied to both D1 databases.
+
 **Build threads (REVIEW.md 5.3, roadmap 23).** My calls:
 - *A build is seen by whoever sees the car*: its owner, and friends and private-crew mates when the car is shown. Hiding
   the car hides the thread. Builds show on your car card, a friend's car card and the crew page's Builds row.
