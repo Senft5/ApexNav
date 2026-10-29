@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-/ygOgOJsYk3LAJGvg+zOFEWBfBcXP2INm21YVeeYqos=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-yrOKYWA5bw7vrpEc47BfWpsmLSQLQaFfkwSIyPC0APE=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -44,6 +44,7 @@
   <script src="note_timing.js"></script>
   <script src="plain_notes.js"></script>
   <script src="hazard_reports.js"></script>
+  <script src="route_card.js"></script>
   <script src="outbox.js"></script>
   <script src="stage_delta.js"></script>
   <script src="lanes.js"></script>
@@ -347,6 +348,48 @@
     /* ---------------- start drive + first-run + permission sheets ---------------- */
     .btn-start { height: 44px; padding: 0 16px; background: var(--accent); color: var(--stage); font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 8px; flex: none; }
     .btn-start i { width: 10px; height: 10px; border-radius: 50%; background: currentColor; }
+    .btn-start { box-shadow: inset 0 -3px 0 rgba(0,0,0,0.28); }
+    /* ---------------- the route card as instruments (REVIEW.md roadmap 5) ---------------- */
+    #routeCard h3 { font-size: 26px; line-height: 1.1; }
+    .rc-via { margin: 4px 0 0; }
+    .rc-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 12px; border-top: 2px solid var(--panel-ink); border-bottom: 1px solid var(--rule); }
+    .rc-stats > div { padding: 8px 8px 8px 0; min-width: 0; }
+    .rc-stats > div + div { border-left: 1px solid var(--rule); padding-left: 8px; }
+    .rc-stats b { display: block; font: 800 34px/1 var(--font-num); font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .rc-stats b small { font: 600 13px var(--font-ui); color: var(--panel-dim); margin-left: 2px; }
+    .rc-stats span { display: block; margin-top: 4px; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--panel-dim); line-height: 1.2; }
+    .rc-profile { display: block; width: 100%; height: 92px; margin-top: 10px; }
+    .rc-ground { fill: var(--rule); opacity: 0.3; } .rc-line { fill: none; stroke: var(--panel-ink); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+    .rc-base { stroke: var(--rule); stroke-width: 1; vector-effect: non-scaling-stroke; }
+    .rc-ticks path { stroke: var(--accent); stroke-width: 1; opacity: 0.75; vector-effect: non-scaling-stroke; }
+    .rc-profile text { font: 600 10px var(--font-ui); fill: var(--panel-dim); }
+    .rc-dials { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin-top: 12px; text-align: center; }
+    .rc-dial svg { width: 60px; height: 36px; display: block; margin: 0 auto; }
+    .rc-dial .rc-track { fill: none; stroke: var(--rule); stroke-width: 3; }
+    .rc-dial.unknown .rc-track { stroke-dasharray: 2 3; }
+    .rc-dial .rc-arc { fill: none; stroke: var(--accent); stroke-width: 3.5; }
+    .rc-dial .rc-needle { stroke: var(--panel-ink); stroke-width: 2.4; stroke-linecap: round; } .rc-dial circle { fill: var(--panel-ink); }
+    .rc-dial b { display: block; font: 800 26px/1 var(--font-num); font-variant-numeric: tabular-nums; }
+    .rc-dial span { display: block; margin-top: 3px; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--panel-dim); }
+    .rc-facts { display: grid; gap: 6px; margin-top: 10px; }
+    .rc-facts .fact { margin: 0; display: flex; gap: 10px; align-items: flex-start; font-size: 15px; font-weight: 600; color: var(--panel-ink); line-height: 1.3; }
+    .rc-facts .fact[hidden] { display: none; }
+    .rc-facts .fact::before { content: ""; flex: none; width: 18px; height: 18px; margin-top: 1px; background: currentColor;
+      -webkit-mask: var(--glyph) center / contain no-repeat; mask: var(--glyph) center / contain no-repeat; }
+    .f-along { --glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linejoin='round'%3E%3Cpath d='M2 20 L9 8 L13 14 L16 10 L22 20 Z'/%3E%3C/svg%3E"); }
+    .f-climb { --glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'%3E%3Cpath d='M2 19 Q8 18 11 11 T22 5'/%3E%3Cpath d='M2 22 H22'/%3E%3C/svg%3E"); }
+    .f-ahead { --glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round'%3E%3Cpath d='M8 22 V14 Q8 7 16 5'/%3E%3Cpath d='M12 2 L17 5 L13 9'/%3E%3Ccircle cx='8' cy='22' r='1.5' fill='black'/%3E%3C/svg%3E"); }
+    .f-sky { --glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='12' cy='12' r='4'/%3E%3Cpath d='M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2'/%3E%3C/svg%3E"); }
+    .f-closed { --glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'%3E%3Crect x='2' y='8' width='20' height='6'/%3E%3Cpath d='M6 8 L10 14 M12 8 L16 14 M18 8 L22 14 M5 14 V21 M19 14 V21'/%3E%3C/svg%3E"); }
+    .rc-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 8px; margin-top: 12px; }
+    .rc-tiles[hidden] { display: none; }
+    .rc-tile { text-align: left; padding: 10px; border: 1.5px solid var(--panel-ink); background: transparent; color: var(--panel-ink); min-height: 64px; }
+    .rc-tile b { display: block; font-size: 16px; font-weight: 800; line-height: 1.15; }
+    .rc-tile span { display: block; margin-top: 2px; font-size: 13px; color: var(--panel-dim); }
+    .rc-tile.on { background: var(--panel-ink); color: var(--panel); } .rc-tile.on span { color: var(--panel); opacity: 0.8; }
+    .rc-go { display: grid; grid-template-columns: 1.4fr 1fr; gap: 10px; margin-top: 14px; }
+    .rc-go .ink-btn { min-height: 52px; font-size: 17px; }
+    .rc-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 18px; margin-top: 10px; }
     label.linkbtn { display: inline-flex; align-items: center; cursor: pointer; }
     .linkbtn { font: inherit; font-size: 15px; font-weight: 500; color: var(--panel-ink); text-decoration: underline; min-height: 44px; padding: 0 4px; background: none; border: none; }
     .danger-btn { font: inherit; font-size: 15px; font-weight: 600; color: var(--accent); text-decoration: none; min-height: 44px; padding: 0 4px; background: none; border: none; text-align: left; justify-self: start; }
@@ -393,6 +436,7 @@
     .sheet.open { transform: none; }
     .sheet.dragging { transition: none; }
     [hidden] { display: none !important; }
+    .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
     /* Menu views (Route / Drives / Setup) get the whole screen above the tab bar: the gauge cluster belongs to the map view only. */
     #app.sheet-open .binnacle > :not(.tabbar) { display: none !important; }
     #app.sheet-open .notes { visibility: hidden; height: 0; min-height: 0; padding: 0; border: 0; overflow: hidden; }
@@ -553,6 +597,7 @@
         <button class="plate" id="recenterBtn">Recenter</button>
       </div>
       <div class="toast" id="toast" role="status" aria-live="polite"></div>
+      <div class="sr-only" id="announcer" role="status" aria-live="polite"></div>
 
       <section class="plan" id="planPanel" aria-label="Plan">
         <div class="plan-bar" id="planBar">
@@ -589,24 +634,30 @@
             </section>
             <section id="routeCard" hidden>
               <h3 id="routeCardName"></h3>
-              <p class="route-meta" id="routeCardMeta"></p>
-              <p class="route-meta" id="routeCardAlong" hidden></p>
-              <p class="route-meta" id="routeCardClimb" hidden></p>
-              <p class="route-meta" id="routeCardCharacter" hidden></p>
-              <p class="route-meta" id="routeCardWeather" hidden></p>
-              <p class="route-meta" id="routeCardClosures" hidden></p>
+              <p class="note rc-via" id="routeCardWhy" hidden></p>
+              <div class="rc-stats" id="routeCardStats"></div>
+              <div id="routeCardProfile"></div>
+              <p class="route-meta" id="routeCardMeta" hidden></p>
+              <div class="rc-facts">
+                <p class="fact f-along" id="routeCardAlong" hidden></p>
+                <p class="fact f-climb" id="routeCardClimb" hidden></p>
+                <p class="fact f-ahead" id="routeCardCharacter" hidden></p>
+                <p class="fact f-sky" id="routeCardWeather" hidden></p>
+                <p class="fact f-closed" id="routeCardClosures" hidden></p>
+              </div>
               <div class="stack-8" id="routeStops" hidden></div>
-              <div class="bars mt-8" id="routeCardBars"></div>
-              <p class="note" id="routeCardWhy" hidden></p>
+              <div class="rc-dials" id="routeCardBars"></div>
               <p class="note" id="routeCardSub"></p>
-              <div class="plan-links fun-row" id="routeCardOptions" role="radiogroup" aria-label="Route options" hidden></div>
+              <div class="rc-tiles" id="routeCardOptions" role="radiogroup" aria-label="Route options" hidden></div>
               <div class="switch mt-8" id="routeCardFun" role="radiogroup" aria-label="Route style"><button data-fun="quick" role="radio" aria-checked="false">Quick</button><button data-fun="fun" role="radio" aria-checked="false">Fun</button><button data-fun="max" role="radio" aria-checked="false">Max fun</button></div>
-              <div class="row mt-8">
-                <button class="ink-btn solid" id="routeDriveBtn">Drive it</button>
+              <div class="rc-go">
+                <button class="rec-key" id="routeDriveBtn"><i></i>Drive it</button>
                 <button class="ink-btn" id="routePreviewBtn">Preview</button>
-                <button class="ink-btn" id="routeSaveBtn" aria-pressed="false">Save</button>
-                <button class="ink-btn" id="routeShareBtn">Share</button>
-                <button class="ink-btn" id="etaShareBtn" aria-pressed="false" hidden>Share ETA</button>
+              </div>
+              <div class="rc-links">
+                <button class="linkbtn" id="routeSaveBtn" aria-pressed="false">Save</button>
+                <button class="linkbtn" id="routeShareBtn">Share</button>
+                <button class="linkbtn" id="etaShareBtn" aria-pressed="false" hidden>Share ETA</button>
                 <button class="linkbtn" id="routeGpxBtn">GPX</button>
                 <button class="linkbtn" id="routePinBtn">Pin place</button>
                 <label class="linkbtn" id="homeByRow" hidden>Home by <input type="time" id="homeByInput" aria-label="Home by" /></label>
@@ -1940,7 +1991,7 @@
       const notes = shown.map(e => {
         const d = distLabel(Math.max(0, noteM(e) - state.cursorM));   // 0 once you're in the corner
         return { key: `${e.type}:${e.index}:${e.dist_m}`, type: e.type, code: e.code, call: state.noteWords === 'plain' && !e.recce ? ApexPlainNotes.plainCall(e) : e.call, sub: subFor(e) + linkLabel(e), dist: d.n, unit: d.u, distM: Math.max(0, noteM(e) - state.cursorM),
-                 dir: e.dir, severity: e.severity, turnRad: e.turn_rad, mods: e.mods || [] };
+                 dir: e.dir, severity: e.severity, turnRad: e.turn_rad, mods: e.mods || [], recce: !!e.recce };
       });
       // The route's junctions in the same strip, in road order with the notes (IDEAS V-04).
       (steps || []).forEach((st, i) => {
@@ -2541,6 +2592,10 @@
       const min = Number.isFinite(t.timeS) ? `${Math.round(t.timeS / 60)} min` : null;
       const extra = Number.isFinite(t.extraS) && t.extraS >= 60 ? ` (+${Math.round(t.extraS / 60)} for fun)` : '';
       $('routeCardMeta').textContent = [mi, min && min + extra, corners, roadTypeOf(t)].filter(v => v && v !== '--').join(' · ');
+      // the card as instruments (REVIEW.md roadmap 5): three stamped numbers and the profile with a tick per corner
+      $('routeCardStats').innerHTML = ApexRouteCard.stats(t, (m) => ApexUnits.long(m, 1)).map((x) =>
+        `<div><b>${x.value}${x.unit ? `<small>${x.unit}</small>` : ''}</b><span>${x.label}</span></div>`).join('');
+      $('routeCardProfile').innerHTML = ApexRouteCard.profile(t, 340, 92, heightLabel) || '';
       const avgSector = (k) => {
         if (!Array.isArray(t.sectors) || !t.sectors.length) return null;
         const vals = t.sectors.map(s => s && s[k]).filter(Number.isFinite);
@@ -2552,12 +2607,14 @@
         : [['Fun', t.fun ? t.fun.fun : null], ['Twist', t.fun ? t.fun.twist : null], ['Flow', t.fun ? t.fun.flow : null],
            // Surface only once members have measured enough of it; map geometry can't know pavement.
            ...(window.ApexContributor && ApexContributor.surfaceScore(t.measured) != null ? [['Surface', ApexContributor.surfaceScore(t.measured)]] : [])];
-      $('routeCardBars').style.gridTemplateColumns = `repeat(${bars.length}, minmax(0, 1fr))`;
-      $('routeCardBars').innerHTML = bars.map(([label, v]) =>
-        `<div class="bar"><span>${label} <b>${v != null ? v : '--'}</b></span><i><u style="width:${v != null ? v : 0}%"></u></i></div>`
-      ).join('');
+      // small half-dials, "--" when unknown; Fun is the options' tile, so the card shows what makes it up. Surface only once
+      // members have measured it; cameras once the camera check has run.
+      const dials = bars.filter(([label]) => label !== 'Fun');
+      if (!dials.some(([label]) => label === 'Surface')) dials.push(['Surface', null]);
+      $('routeCardBars').innerHTML = dials.map(([label, v]) => ApexRouteCard.dial(label, v)).join('')
+        + ApexRouteCard.count('Cameras', Array.isArray(t.alpr) ? t.alpr.length : null);
       // Plate cameras along it, only once the camera check has run (unknown stays off the card).
-      const cams = !Array.isArray(t.alpr) ? '' : t.alpr.length ? `${t.alpr.length} plate camera${t.alpr.length === 1 ? '' : 's'} · ` : 'No known plate cameras · ';
+      const cams = '';                                              // on the Cameras dial
       const mCov = t.measured && Number.isFinite(t.measured.coverage) && t.measured.coverage > 0
         ? Math.round(t.measured.coverage * 100)
         : (Array.isArray(t.roughG) && t.roughG.length && t.roughG.some(Number.isFinite))
@@ -2578,19 +2635,18 @@
       box.hidden = !optionsOffered(t);
       // Built once per pick (not on every card refresh), so keyboard focus survives camera and measured updates.
       if (o && o.current === t && box._t !== t) {
-        const label = document.createElement('span'); label.textContent = 'Options';
-        const refocus = box.contains(document.activeElement);
-        box.replaceChildren(label, ...o.list.map((c, i) => {
+        const refocus = box.contains(document.activeElement), tl = ApexRouteCard.tiles(o.list, o.picked);
+        box.replaceChildren(...o.list.map((c, i) => {
           const b = document.createElement('button');
-          b.className = 'chip' + (i === o.picked ? ' on' : '');
-          b.textContent = `Fun ${c.fun ? c.fun.fun : '--'} · ${Number.isFinite(c.timeS) ? Math.round(c.timeS / 60) : '--'} min`;
+          b.className = 'rc-tile' + (i === o.picked ? ' on' : '');
+          b.innerHTML = `<b></b><span></span>`; b.firstChild.textContent = tl[i].title; b.lastChild.textContent = tl[i].sub;
           b.setAttribute('role', 'radio');
           b.setAttribute('aria-checked', String(i === o.picked));
           b.addEventListener('click', () => pickOption(i));
           return b;
         }));
         box._t = t;
-        if (refocus) box.children[o.picked + 1].focus();
+        if (refocus) box.children[o.picked].focus();
       }
       paintAlternates();
     }
@@ -2677,7 +2733,8 @@
       paintStops(t);
       attachWeather(t);
       attachClosures(t);
-      if (!prebuilt) toast(`${name} · ${ApexUnits.long(totalM(), 1)} · ${t.events.filter(e => e.type === 'corner').length} corners`);
+      // the route bar shows this; screen readers hear it (REVIEW.md: the bar is the toast)
+      if (!prebuilt) announce(`${name} · ${ApexUnits.long(totalM(), 1)} · ${t.events.filter(e => e.type === 'corner').length} corners`);
     }
     // A route just found: pin its destination and show it, so you can check you are routing to the right place. FOLLOW
     // (or Start drive) goes back to your position. A loop has no destination: show the whole loop instead.
@@ -4964,10 +5021,14 @@
         $('routeCardCharacter').hidden = !line;
       } catch (_) { /* unknown: nothing said */ }
     }
+    // Said to screen readers only, for what the screen already shows (the route bar after a route is found).
+    function announce(text) { const a = $('announcer'); a.textContent = ''; setTimeout(() => { a.textContent = text; }, 50); }
+    function heightLabel(m) { return ApexUnits.metric() ? `${Math.round(m)} m` : `${Math.round(m * 3.28084).toLocaleString('en-US')} ft`; }
     function paintClimb(t) {
       const up = ApexStages.climbM(t.elev), lo = Math.min(...t.elev), hi = Math.max(...t.elev);
+      if (plannedRoute === t) $('routeCardProfile').innerHTML = ApexRouteCard.profile(t, 340, 92, heightLabel) || '';
       if (up == null) return;
-      const h = (m) => (ApexUnits.metric() ? `${Math.round(m)} m` : `${Math.round(m * 3.28084).toLocaleString('en-US')} ft`);
+      const h = heightLabel;
       $('routeCardClimb').textContent = `Climbs ${h(up)} in all · highest ${h(hi)}`;
       $('routeCardClimb').hidden = false;
     }

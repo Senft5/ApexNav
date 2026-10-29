@@ -143,11 +143,12 @@
       const c = html('div', 'rb-call', box);
       if (n.type !== 'corner' && n.code.toLowerCase() !== n.call.toLowerCase()) html('b', '', c, n.code);
       // a long call ("Square left off-camber") steps down a size so it reads whole instead of ending in "..."
-      const lk = n.type === 'corner' ? lockup(n.call, n.mods) : { head: String(n.call || ''), tail: [] };
+      const lk = n.type === 'corner' && !n.recce ? lockup(n.call, n.mods) : { head: String(n.call || ''), tail: [] };   // your own recce call stays as you wrote it
       const len = lk.head.length;
       html('span', len > 18 ? 'xlong' : len > 11 ? 'long' : '', c, lk.head);
       if (lk.tail.length) {
         const m = html('span', 'rb-mods', c);
+        m.append(' ');                                                     // read as one call, not "plustightens"
         lk.tail.forEach((t, k) => { if (k) m.append(' · '); html('i', t.warn ? 'warn' : '', m, t.text); });
       }
       // the lanes for the next junction (IDEAS R-29): one arrow per lane, left to right; the ones to use are lit
