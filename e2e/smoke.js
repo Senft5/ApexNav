@@ -66,6 +66,14 @@ flow('first run: onboarding, Watch a replay loads the bundled drive and Play mov
   check(!(await page.isVisible('#onboard.show')), 'onboarding should close');
   await page.evaluate(() => document.getElementById('playBtn').click());
   await page.waitForFunction(() => window.apexDebug.state.playing && window.apexDebug.state.cursorM > 0, null, { timeout: 10000 });
+  // REVIEW2.md U-45: Play is one slide switch, speed a detent, and a replay is full-screen like a drive (the plate's × is the exit)
+  const tp = await page.evaluate(() => { document.querySelector('#rateDetents [data-rate="4"]').click();
+    const tb = document.querySelector('.tabbar');
+    return { on: document.getElementById('playBtn').getAttribute('aria-checked'), rate: window.apexDebug.state.rate,
+      lit: [...document.querySelectorAll('#rateDetents [aria-checked="true"]')].map((b) => b.dataset.rate).join(),
+      tabbar: tb ? getComputedStyle(tb).display : 'none' }; });
+  check(tp.on === 'true' && tp.rate === 4 && tp.lit === '4', `the Play switch and the speed detent should drive the replay: ${JSON.stringify(tp)}`);
+  check(tp.tabbar === 'none', 'the tab bar should hide during a replay');
 });
 
 flow('returning driver: live frames switch to the cockpit, big targets and no keyboard while moving', async (page, base) => {
@@ -1594,12 +1602,12 @@ flow('REVIEW.md 1.2 screen by screen: first run, the map, planning, the route, d
   check(!(await page.isVisible('#hzOverlay.show')) && !(await page.$('.confirm-sheet')) && /^Undo /.test(await page.textContent('#hzReportBtn')), 'one tap, no confirm, Undo in the status line');
   await page.click('#hzReportBtn');
   check((await page.textContent('#hzReportBtn')) === 'Report', 'Undo takes it back');
-  // Replay: crest and dip pins wear the hazard plate; the transport is keys; no unlabelled "Fast & open"
+  // Replay: crest and dip pins wear the hazard plate; the transport is shaped controls (a switch, detents, keys; U-45); no unlabelled "Fast & open"
   await page.goto(base + '/index.html?drive=dry_ridge&play=1');
   await page.waitForFunction(() => window.apexDebug && window.apexDebug.track && window.apexDebug.track.events.length);
   const rp = await page.evaluate(() => { const pin = document.createElement('div'); pin.className = 'pin crest'; document.body.append(pin); const cs = getComputedStyle(pin);
-    return { pin: cs.backgroundColor + '/' + cs.borderTopColor, transport: [...document.querySelectorAll('#transport button')].map((b) => b.className), fast: /Fast & open/.test(document.getElementById('cluster').innerText) }; });
-  check(rp.pin === 'rgb(17, 17, 17)/rgb(255, 122, 26)' && rp.transport.every((c) => /\bkey\b/.test(c)) && !rp.fast, 'Replay: ' + JSON.stringify(rp));
+    return { pin: cs.backgroundColor + '/' + cs.borderTopColor, transport: [...document.querySelectorAll('#transport button')].map((b) => b.className || b.parentElement.className), fast: /Fast & open/.test(document.getElementById('cluster').innerText) }; });
+  check(rp.pin === 'rgb(17, 17, 17)/rgb(255, 122, 26)' && rp.transport.every((c) => /\b(key|sw|detents)\b/.test(c)) && !rp.fast, 'Replay: ' + JSON.stringify(rp));
 }, { geolocation: { latitude: 35.3626, longitude: -84.2866 }, permissions: ['geolocation'] });
 
 flow('REVIEW.md 1.2 screen by screen: the Log, drive detail, Stages, Crew signed out and the Garage with its confirm sheet', async (page, base) => {
