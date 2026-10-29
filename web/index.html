@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-dZ0DOfM75RYKFiygtl9BuqTKaEE7KhuCrYd7HBMfCOo=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-Qg0LbcQik413GGPLuqbP/Zr/uo494PLFfcLGIcGApBY=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -46,6 +46,7 @@
   <script src="hazard_reports.js"></script>
   <script src="route_card.js"></script>
   <script src="plan_presets.js"></script>
+  <script src="place_plate.js"></script>
   <script src="week_digest.js"></script>
   <script src="drive_card.js"></script>
   <script src="outbox.js"></script>
@@ -84,6 +85,7 @@
   <script src="keyboard.js"></script>
   <script src="boot.js"></script>
   <script src="themes.js"></script>
+  <script src="theme_contract.js"></script>
   <script src="units.js"></script>
   <script src="instruments.js"></script>
   <script src="g2p.js"></script>
@@ -94,7 +96,7 @@
   <script src="garage_ui.js"></script>
   <script src="safety_ui.js"></script>
   <style>
-    :root { --safe-top: env(safe-area-inset-top, 0px); --safe-bottom: env(safe-area-inset-bottom, 0px); --dial: clamp(88px, 12dvh, 150px);
+    :root { --safe-top: env(safe-area-inset-top, 0px); --safe-bottom: env(safe-area-inset-bottom, 0px); --dial: clamp(112px, 14dvh, 150px);
       /* The hazard plate (docs/design/REVIEW.md 4.3): the same in every theme, day and night; no theme may set these. */
       --hz-bg: #111111; --hz-edge: #FF7A1A; --hz-ink: #FFFFFF; }
     .hz-plate { position: absolute; z-index: 5; top: 14px; left: 10px; max-width: calc(100% - 76px); display: grid; grid-template-columns: 28px minmax(0, 1fr);
@@ -152,8 +154,8 @@
     .rb-call b { display: block; font-size: 20px; font-weight: 800; color: var(--accent); line-height: 1; }
     .rb-call span { display: block; font-size: 11px; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: 0.04em; }
     .rb-call span:first-child { font-size: 16px; font-weight: 800; line-height: 1.1; }
-    .rb-box.now .rb-call span.long:first-child { font-size: 17px; }
-    .rb-box.now .rb-call span.xlong:first-child { font-size: 14px; }
+    /* never under the contract's 21 px (theme_contract.js): a long call takes another line instead of a smaller size */
+    .rb-box.now .rb-call span.xlong:first-child { -webkit-line-clamp: 3; }
     .rb-box:not(.now) .rb-call span.long:first-child, .rb-box:not(.now) .rb-call span.xlong:first-child { font-size: 13px; line-height: 1.1; }
     /* the call lockup (REVIEW.md roadmap 3): modifiers one size down in pencil, the ones that change what you do in the accent */
     .rb-call span.rb-mods { font-size: 12px; font-weight: 700; color: var(--panel-dim); margin-top: 2px; }
@@ -231,6 +233,10 @@
       border: 1px solid var(--rule); border-right: 0; display: flex; align-items: center; justify-content: center; box-shadow: -4px 4px 12px rgba(0, 0, 0, 0.18); }
     .edge-tab svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
     .edge-tab[aria-expanded="true"] { color: var(--accent); }
+    /* the Layers key: a physical key on the map, a 2 px drop under it (REVIEW.md principle 4) */
+    .map-key { width: 48px; height: 48px; margin-right: 10px; border: 1.5px solid var(--panel-ink); box-shadow: 0 3px 0 var(--rule); }
+    .map-key svg { width: 24px; height: 24px; stroke-linejoin: round; }
+    .edge.open .map-key { margin-right: 0; border-right: 0; }
     .edge-panel { width: 236px; background: var(--panel); color: var(--panel-ink); border: 1px solid var(--rule); border-right: 0;
       padding: 8px 14px 4px; box-shadow: -8px 8px 24px rgba(0, 0, 0, 0.22); }
     .edge-panel h3 { font-size: 13px; font-weight: 600; color: var(--panel-dim); margin-bottom: 2px; }
@@ -281,11 +287,12 @@
     .dial { width: var(--dial); height: var(--dial); }
     .dial-svg { width: 100%; height: 100%; display: block; }
     .dial-num { font-family: var(--font-num); font-size: 15px; font-weight: 600; fill: var(--face-ink); }
-    .dial-label { font-size: 11px; font-weight: 700; letter-spacing: 2px; fill: var(--face-dim); }
+    .dial-label { font-size: 14px; font-weight: 700; letter-spacing: 2px; fill: var(--face-dim); }
     .dial-tiny { font-size: 11px; fill: var(--face-dim); }
-    /* Speed is the one number read at a glance: the dial draws at about half size, so 44 here is ~22 px on a phone. */
-    .dial-digital { font-family: var(--font-num); font-size: 44px; font-weight: 700; fill: var(--face-ink); }
-    .dial-digital.small { font-size: 15px; fill: var(--accent); }
+    /* Speed is the one number read at a glance: the dial draws at a bit over half size, so 70 here is at least 40 px on a
+       phone (the theme contract's floor, theme_contract.js); the bank readout at least 13 px. */
+    .dial-digital { font-family: var(--font-num); font-size: 70px; font-weight: 700; fill: var(--face-ink); }
+    .dial-digital.small { font-size: 24px; fill: var(--accent); }
     .gauge-printed .dial-num { font-size: 17px; font-weight: 700; }
     .cluster-center { min-width: 0; display: grid; gap: 4px; justify-items: center; align-content: center; }
     .readouts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; width: min(100%, 250px); }
@@ -295,7 +302,7 @@
     .ro-eye { display: block; flex: none; color: var(--accent); }
     .ro-sight b { color: var(--accent); }
     .ro-sight.short { border-color: var(--signal); } .ro-sight.short b { color: var(--signal); }
-    .ro span { font-size: 11px; font-weight: 600; color: var(--panel-dim); }
+    .ro span { font-size: 13px; font-weight: 600; color: var(--panel-dim); }
     .ro-limit { background: var(--panel-ink); color: var(--panel); border-color: var(--panel-ink); }
     .ro-limit span { color: var(--panel); opacity: 0.7; }
     .ro-limit.unknown { background: none; color: var(--panel-dim); border-color: var(--rule); }
@@ -304,7 +311,7 @@
     .odo-digits { display: flex; gap: 1px; font-family: var(--font-num); font-size: 22px; font-weight: 700; line-height: 1; }
     .odo.boxed .dg { border: 1.5px solid var(--panel-ink); padding: 1px 3px; min-width: 18px; text-align: center; }
     .odo.boxed .dg:last-child { background: var(--panel-ink); color: var(--panel); }
-    .odo-meta { display: flex; gap: 8px; font-size: 11px; font-weight: 600; color: var(--panel-dim); }
+    .odo-meta { display: flex; gap: 8px; font-size: 13px; font-weight: 600; color: var(--panel-dim); }
     .dna { width: min(100%, 250px); display: grid; gap: 4px; }
     .dna-arch { text-align: center; font-size: 13px; font-weight: 600; color: var(--panel-ink); min-height: 13px; }
     .dna-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
@@ -322,7 +329,11 @@
     .sw.on i { border-color: var(--accent); }
     .sw.on i::after { left: 17px; background: var(--accent); }
     .sw span { font-size: 11px; font-weight: 600; color: var(--panel-dim); }
-    #switchRow { display: grid; gap: 0; }
+    #switchRow, .edge-panel .switches, .sheet .switches { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; }
+    /* toggles with travel and depth (REVIEW.md 1.1 #6: not a square sliding in a rectangle) */
+    .sheet .sw i, .edge-panel .sw i { box-shadow: inset 0 2px 3px rgba(0,0,0,0.18); transition: border-color 0.15s, background-color 0.15s; }
+    .sheet .sw i::after, .edge-panel .sw i::after { box-shadow: 0 2px 0 rgba(0,0,0,0.3); transition: left 0.15s ease-out, background-color 0.15s; }
+    .sheet .sw.on i, .edge-panel .sw.on i { background: color-mix(in srgb, var(--accent) 14%, transparent); }
     .sheet .sw, .edge-panel .sw { display: flex; flex-direction: row-reverse; justify-content: space-between; align-items: center; width: 100%; min-height: 48px; padding: 0; border-top: 1px solid var(--hair, var(--panel-dim)); }
     .sheet .sw span, .edge-panel .sw span { font-size: 15px; font-weight: 500; color: var(--panel-ink); }
     /* In a list the switch is read at arm's length: a track big enough to see On from Off at a glance. */
@@ -436,9 +447,39 @@
     .end-links > * { margin: 0; padding: 8px 4px; line-height: 1.2; }
     .ob-strip { width: 100%; max-width: 420px; margin: 26px auto 0; border-top: 2px solid var(--panel-ink); border-bottom: 1px solid var(--rule); text-align: left; }
     .ob-strip .notes { position: static; min-height: 84px; }
+    /* Night is a mode, not a token swap (REVIEW.md roadmap 11): bigger numbers, fewer things, the map quieter (themes.js) */
+    html[data-mode="night"] .rb-box.now .rb-dist b { font-size: 38px; }
+    html[data-mode="night"] .rb-box.now .rb-call span:first-child { font-size: 24px; }
+    html[data-mode="night"] .rb-box:not(.now) .rb-call span.rb-mods, html[data-mode="night"] #lapBar small, html[data-mode="night"] .rb-lanes .lane:not(.use):not(.ok) { display: none; }
+    html[data-mode="night"] #app.live .ds-warn { display: none; }
+    html[data-mode="night"] #app.live .ds-main { font-size: 17px; }
+    html[data-mode="night"] .dial-num { font-size: 18px; } html[data-mode="night"] .ro b { font-size: 21px; }
+    /* the idle map (REVIEW.md 3.1, mockup 01): a place plate and one invitation on the deck */
+    .place-plate { position: absolute; z-index: 4; top: calc(12px + var(--safe-top)); left: 10px; padding: 7px 12px; background: var(--panel); color: var(--panel-ink);
+      border: 1.5px solid var(--panel-ink); font-size: 14px; font-weight: 600; box-shadow: 0 2px 0 var(--rule); }
+    .place-plate[hidden], #app:not(.idle) .place-plate, #app.plan-open .place-plate { display: none; }
+    .loop-suggest { display: none; width: 100%; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 12px; align-items: center; text-align: left;
+      padding: 10px 2px 4px; border-top: 1px solid var(--rule); margin-top: 8px; background: none; color: var(--panel-ink); }
+    #app.idle:not(.plan-open):not(.routed) .loop-suggest { display: grid; }
+    .loop-suggest svg { width: 40px; height: 40px; border: 1.5px solid var(--panel-ink); padding: 3px; fill: none; stroke: var(--panel-ink); stroke-width: 2.4; stroke-linecap: round; }
+    .loop-suggest svg circle { fill: var(--panel-ink); }
+    .loop-suggest b { display: block; font-size: 16px; } .loop-suggest small { display: block; font-size: 13px; color: var(--panel-dim); }
+    .loop-suggest em { font-style: normal; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+    #hzReportBtn.undo { background: var(--hz-bg); color: var(--hz-ink); border: 2px solid var(--hz-edge); }
+    .crew-gets { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 4px 0 8px; }
+    .crew-gets span { display: grid; justify-items: center; gap: 6px; font-size: 13px; font-weight: 600; text-align: center; }
+    .crew-gets svg { width: 34px; height: 34px; fill: none; stroke: var(--panel-ink); stroke-width: 1.8; stroke-linecap: round; border: 1.5px solid var(--panel-ink); padding: 4px; }
+    /* the replay's keys get the same bevel as every other key (REVIEW.md 1.2, Replay: one button language) */
+    .transport .key { box-shadow: inset 0 -3px 0 var(--rule); }
+    .transport .key.on { box-shadow: inset 0 -3px 0 var(--accent); }
     .rc-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 18px; margin-top: 10px; }
     label.linkbtn { display: inline-flex; align-items: center; cursor: pointer; }
     .linkbtn { font: inherit; font-size: 15px; font-weight: 500; color: var(--panel-ink); text-decoration: underline; min-height: 44px; padding: 0 4px; background: none; border: none; }
+    details.how { margin: 2px 0 6px; }
+    details.how > summary { cursor: pointer; font-size: 14px; font-weight: 600; color: var(--panel-dim); min-height: 36px; display: flex; align-items: center; list-style: none; }
+    details.how > summary::-webkit-details-marker { display: none; }
+    details.how > summary::after { content: "+"; margin-left: 8px; font-weight: 700; }
+    details.how[open] > summary::after { content: "\2212"; }
     .danger-btn { font: inherit; font-size: 15px; font-weight: 600; color: var(--accent); text-decoration: none; min-height: 44px; padding: 0 4px; background: none; border: none; text-align: left; justify-self: start; }
     .crew-row { width: 100%; min-height: 44px; display: flex; justify-content: space-between; align-items: center; gap: 8px; text-align: left; }
     /* Crews as tiles (two across); an open tile spans the row with its details. */
@@ -498,10 +539,10 @@
     .scrim.show { display: block; }
     .sheet [data-panel] { display: none; }
     .sheet[data-view="crew"] [data-panel~="crew"],
-    .sheet[data-view="setup"] [data-panel~="setup"] { display: block; }
+    .sheet[data-view="garage"] [data-panel~="garage"] { display: block; }
 
     /* ---------------- tab bar (switch views; tapping the open tab closes it) ---------------- */
-    .tabbar { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); border-top: 1px solid var(--rule); margin: 2px -10px 0; padding: 0 6px; }
+    .tabbar { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-top: 1px solid var(--rule); margin: 2px -10px 0; padding: 0 6px; }
     .tab { height: 52px; display: grid; grid-template-rows: 20px auto; justify-items: center; align-content: center; gap: 2px; color: var(--panel-dim);
       font-size: 11px; font-weight: 600; position: relative; }
     .tab svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
@@ -519,7 +560,7 @@
     .sheet h3, .plan h3 { font-size: 18px; font-weight: 700; font-family: var(--font-num); border-top: 1px solid var(--hair, var(--panel-dim)); padding-top: 12px; margin-bottom: 8px; }
     .sheet p.note.err, .plan p.note.err { color: var(--accent); }
     /* The sheet header already draws a rule: the first heading under it doesn't draw a second. */
-    #accountBody > h3:first-child, #accountBody > :first-child > h3:first-child, #accountSection + [data-panel~="setup"] > h3:first-child { border-top: 0; padding-top: 0; }
+    #accountBody > h3:first-child, #accountBody > :first-child > h3:first-child, #accountSection + [data-panel~="garage"] > h3:first-child { border-top: 0; padding-top: 0; }
     .sheet p.note, .plan p.note { font-size: 13px; color: var(--panel-dim); line-height: 1.45; margin-top: 6px; }
     .row { display: flex; gap: 6px; flex-wrap: wrap; }
     .plan-fields { display: grid; gap: 6px; } .plan-fields .ink-btn { min-width: 64px; }
@@ -638,6 +679,7 @@
 
     <section class="stage">
       <div id="map"></div>
+      <div class="place-plate" id="placePlate" role="status" hidden></div>
       <div class="hz-plate" id="hzPlate" role="status" aria-live="assertive" hidden><svg viewBox="0 0 28 25" aria-hidden="true"><path class="hz-tri" d="M14 1 L27 24 H1 Z"/><path d="M14 9 V16 M14 19.5 V20.5" stroke-width="3" stroke-linecap="round"/></svg><b id="hzPlateTitle"></b><span id="hzPlateDetail"></span></div>
       <div class="plates">
         <div class="plate" id="modePlate" role="status">Replay</div>
@@ -733,34 +775,41 @@
             </section>
         </div>
       </section>
+      <!-- the Layers key (REVIEW.md roadmap 10): map things with the map; co-driver settings live in the Garage, with
+           Notes and Voice repeated here because the Garage is out of reach while driving -->
       <div class="edge" id="swEdge">
-      <button class="edge-tab" id="swTab" aria-label="While you drive" aria-expanded="false" aria-controls="swPanel"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg></button>
-      <div class="edge-panel" id="swPanel" role="group" aria-label="While you drive">
-        <h3>While you drive</h3>
+      <button class="edge-tab map-key" id="swTab" aria-label="Map layers" aria-expanded="false" aria-controls="swPanel"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 L22 8 L12 13 L2 8 Z"/><path d="M2 12.5 L12 17.5 L22 12.5"/><path d="M2 17 L12 22 L22 17"/></svg></button>
+      <div class="edge-panel" id="swPanel" role="group" aria-label="Map layers">
+        <h3>Map layers</h3>
         <div class="switches" id="switchRow">
-        <button class="sw sw-cycle" data-cycle="notesMode" aria-label="Notes"><b></b><span>Notes</span></button>
-        <button class="sw" data-toggle="voice"><i></i><span>Voice</span></button>
         <button class="sw" data-toggle="lpr"><i></i><span>Cameras</span></button>
         <button class="sw" data-toggle="twisty"><i></i><span>Twisty roads</span></button>
         <button class="sw" data-toggle="coverage"><i></i><span>Measured roads</span></button>
         <button class="sw" data-toggle="terrain"><i></i><span>3D terrain</span></button>
-        <button class="sw" data-toggle="haptics"><i></i><span>Haptics</span></button>
-        <button class="sw sw-cycle" data-cycle="nightMode" aria-label="Night"><b></b><span>Night</span></button>
-      </div>
+        </div>
+        <h3 class="mt-8">Co-driver</h3>
+        <div class="switches">
+        <button class="sw sw-cycle" data-cycle="notesMode" aria-label="Notes"><b></b><span>Notes</span></button>
+        <button class="sw" data-toggle="voice"><i></i><span>Voice</span></button>
+        </div>
       </div>
       </div>
       <div class="scrim" id="scrim"></div>
-      <aside class="sheet" id="sheet" aria-label="Menu" data-view="setup">
+      <aside class="sheet" id="sheet" aria-label="Menu" data-view="garage">
         <header><h2 id="sheetTitle">Settings</h2></header>
         <div class="body">
           <section data-panel="crew" id="accountSection">
             <div id="accountBody" class="stack-12"></div>
           </section>
-          <section data-panel="setup">
+          <!-- the Garage (REVIEW.md 3.2): you and your cars first, then the co-driver, privacy, your data and the rest -->
+          <section data-panel="garage" id="garageMe">
+            <div id="garageMeBody" class="stack-12"></div>
+          </section>
+          <section data-panel="garage">
             <h3>Road data</h3>
             <p class="note" id="ambientNote" role="status" aria-live="polite">--</p>
           </section>
-          <section data-panel="setup">
+          <section data-panel="garage">
             <h3>Privacy zones</h3>
             <p class="note" style="margin:0 0 8px">Places like home and work. Inside one, nothing is recorded or shared, and convoys don't see you. Kept on this phone only.</p>
             <div class="detents" id="zoneRadius" role="group" aria-label="Zone size">
@@ -771,7 +820,7 @@
             <div class="row mt-8"><button class="ink-btn" id="zoneHereBtn">Add where I am</button><button class="ink-btn" id="zoneMapBtn">Add at map centre</button></div>
             <div id="zoneList" class="stack-8 mt-8"></div>
           </section>
-          <section data-panel="setup">
+          <section data-panel="garage">
             <h3>Crash check</h3>
             <p class="note" style="margin:0 0 8px">After a hard impact and a stop, Vetta asks if you're OK. If you don't answer within a minute it shows buttons to call emergency services or text this person your location. Your phone never calls or texts by itself. This is a backup to your phone's own crash detection, not a replacement for it. The contact stays on this phone.</p>
             <div class="row" style="flex-wrap:wrap">
@@ -782,37 +831,38 @@
               <input class="field" id="crashPhone" type="tel" autocomplete="off" maxlength="24" placeholder="Phone number" aria-label="Emergency contact phone number">
             </div>
           </section>
-          <section data-panel="setup">
+          <section data-panel="garage">
             <h3>Units</h3>
             <div class="switch" role="radiogroup" aria-label="Units" id="unitsRow"><button data-units="imperial" role="radio">Miles and feet</button><button data-units="metric" role="radio">Kilometres and metres</button></div>
             <p class="note" style="margin:8px 0 4px">Driving side: bends toward your own side of the road get more caution, since you see less round them.</p>
             <div class="switch" role="radiogroup" aria-label="Driving side" id="sideRow"><button data-side="auto" role="radio">From the map</button><button data-side="right" role="radio">Right</button><button data-side="left" role="radio">Left</button></div>
           </section>
-          <section data-panel="setup">
+          <section data-panel="garage">
             <h3>Feedback</h3>
             <p class="note" style="margin:0 0 8px">Something wrong, or an idea? It goes straight to the person who makes Vetta.</p>
             <div class="stack-8" id="feedbackBox"></div>
           </section>
-          <section data-panel="setup">
+          <section data-panel="garage">
             <h3>Your data</h3>
             <p class="note" id="myDataNote" role="status">--</p>
             <p class="note" id="myOfflineNote">--</p>
             <div class="stack-8" id="myAreas"></div>
             <div class="row" style="flex-wrap:wrap">
               <button class="ink-btn" id="myGpxBtn">Download drives (GPX)</button>
+              <label class="ink-btn" id="importCsvBtn">Import a drive (.csv)<input type="file" id="importFile" accept=".csv,text/csv" aria-label="Import a recording" hidden /></label>
               <button class="ink-btn" id="myAccountBtn">Download account data</button>
             </div>
             <div class="row mt-8" style="flex-wrap:wrap">
               <button class="ink-btn" id="myAreaBtn">Save the map here for offline</button>
               <button class="linkbtn" id="myOfflineDelBtn">Delete offline data</button>
               <button class="linkbtn" id="myDrivesDelBtn">Delete drives on this phone</button>
-              <button class="linkbtn" id="myEraseBtn">Erase everything on this phone</button>
+              <button class="danger-btn" id="myEraseBtn">Erase everything on this phone</button>
             </div>
-            <p class="note">Your account (friends, crews, shared spots, routes and results) is deleted from the server in Crew → Delete account.</p>
+            <p class="note">Your account (friends, crews, shared spots, routes and results) is deleted from the server in Garage → Account → Delete account.</p>
             <button class="sw mt-8" data-toggle="health"><i></i><span>Share app health</span></button>
             <p class="note">Once a day, totals like "3 routes found, 1 failed" go to Vetta with no account, phone or place in them, so problems get fixed. Off: nothing is counted or sent.</p>
           </section>
-        <section data-panel="setup">
+        <section data-panel="garage">
             <h3>Spots</h3>
             <p class="note" style="margin:0 0 8px">Loops lean toward spots you rate 3★ or more. Your spots stay on this phone until you share one.</p>
             <div class="detents" id="detourList" role="group" aria-label="Detour">
@@ -825,7 +875,17 @@
             <div id="hlList" class="stack-8 mt-8"></div>
             <div id="hlNearby" class="stack-8 mt-8"></div>
           </section>
-          <section data-panel="setup">
+          <section data-panel="garage">
+            <h3>Co-driver</h3>
+            <div class="switches">
+              <button class="sw sw-cycle" data-cycle="notesMode" aria-label="Notes"><b></b><span>Notes</span></button>
+              <button class="sw" data-toggle="voice"><i></i><span>Voice</span></button>
+              <button class="sw" data-toggle="haptics"><i></i><span>Haptics</span></button>
+              <button class="sw sw-cycle" data-cycle="nightMode" aria-label="Night"><b></b><span>Night</span></button>
+            </div>
+            <p class="note">Notes: Full calls every corner; Quiet only hazards and cameras; Auto calls corners once you are cornering with some purpose, quiet otherwise. Night: Auto turns the page over after sunset.</p>
+          </section>
+          <section data-panel="garage">
             <h3>Voice</h3>
             <p class="note" style="margin:0 0 8px">Who reads your notes. Works offline.</p>
             <div class="row" id="voiceList">
@@ -842,7 +902,7 @@
             <button class="sw mt-8" id="liveVoiceBtn" role="switch" aria-checked="false"><i></i><span>Speak road names</span></button>
             <p class="note" id="liveNote" role="status" aria-live="polite"></p>
           </section>
-          <section data-panel="setup">
+          <section data-panel="garage">
             <h3>Map motion</h3>
             <div class="switch" id="camList">
               <button data-cam="steady">Steady</button>
@@ -851,7 +911,7 @@
             </div>
             <p class="note">How far the map leans into corners ahead.</p>
           </section>
-          <section class="sources" data-panel="setup">
+          <section class="sources" data-panel="garage">
             <details class="more"><summary>Sources and licences</summary><p class="note">Map &copy; OpenStreetMap contributors via OpenFreeMap. Terrain: AWS Terrarium DEM. Routing, map matching and posted limits: Valhalla (FOSSGIS). Geocoding: Nominatim. Search suggestions: Photon (Komoot). Plate-reading cameras: OpenStreetMap (<code>surveillance:type=ALPR</code>, DeFlock) via Overpass. Voices: Kokoro-82M (Apache-2.0).</p></details>
             <p class="note mt-8"><a href="https://apexnav.senftns.workers.dev/privacy.html" target="_blank" rel="noopener">Privacy</a> · <a href="https://apexnav.senftns.workers.dev/terms.html" target="_blank" rel="noopener">Terms of use</a> · <a href="licenses.html">Licences</a></p>
           </section>
@@ -922,12 +982,14 @@
         <div class="scrubber" id="scrubber" role="slider" tabindex="0" aria-label="Replay position" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><canvas id="scrubCanvas" aria-hidden="true"></canvas></div>
       </div>
       <div id="cluster"></div>
+      <!-- one invitation on the idle map (REVIEW.md 3.1, mockup 01): a loop from here, drawn as a tulip -->
+        <button class="loop-suggest" id="loopSuggest" aria-label="Plan a loop from here"><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M14 36 V22 Q14 10 26 8"/><path d="M22 3 L29 8 L23 13"/><circle cx="14" cy="36" r="2.4"/></svg>
+          <span><b id="loopSuggestTitle">Loop from here</b><small>On the twistiest roads nearby · map only until driven</small></span><em>Plan</em></button>
       <nav class="tabbar" id="tabbar" aria-label="Views">
         <button class="tab on" data-view="map" aria-label="Map"><svg viewBox="0 0 24 24"><path d="M12 3l6 15-6-3-6 3z"/></svg><span>Map</span></button>
         <button class="tab" data-view="log" aria-label="Log"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg><span>Log</span></button>
-        <button class="tab" data-view="stages" aria-label="Stages"><svg viewBox="0 0 24 24"><path d="M12 3v18M7 7h10M7 17h10"/></svg><span>Stages</span></button>
         <button class="tab" data-view="crew" id="crewTab" aria-label="Crew"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.2"/><path d="M3 20c0-3.5 2.7-6 6-6s6 2.5 6 6M15.5 14.2c2.6 0 5 1.8 5 5"/></svg><span>Crew</span></button>
-        <button class="tab" data-view="setup" aria-label="Settings"><svg viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg><span>Settings</span></button>
+        <button class="tab" data-view="garage" aria-label="Garage"><svg viewBox="0 0 24 24"><path d="M3 10l9-6 9 6v10H3z"/><path d="M7 20v-7h10v7M7 16h10"/></svg><span>Garage</span></button>
       </nav>
     </section>
   </div>
@@ -2637,6 +2699,7 @@
     function renderRouteCard(t = plannedRoute) {
       const card = $('routeCard');
       $('planPanel').classList.toggle('routed', !!t);
+      $('app').classList.toggle('routed', !!t);
       if (t) {
         const mi = Array.isArray(t.dist) && t.dist.length ? `${ApexUnits.long(t.dist[t.dist.length - 1], 1)}` : '--';
         $('routeBarName').textContent = t.name || 'Route';
@@ -3545,11 +3608,12 @@
     // Views: ROUTE / DRIVES / SETUP open the side panel; tapping the open tab again, the map
     // behind it, or swiping it right closes it. ANALYSIS is its own page.
     const LEGAL_SITE = 'https://apexnav.senftns.workers.dev';   // the published privacy and terms pages (web/privacy.html, web/terms.html)
-    const VIEW_TITLES = { crew: 'Crew', setup: 'Settings' };
+    const VIEW_TITLES = { crew: 'Crew', garage: 'Garage' };
     let view = null, friendsOpen = false;                                  // friendsOpen: the Crew sheet's friends pop-up
     function showView(v) {
       if (v === 'log') { location.href = 'analysis.html?tab=log'; return; }
       if (v === 'stages') { location.href = 'analysis.html?tab=stages'; return; }
+      if (v === 'setup') v = 'garage';                                   // Settings live in the Garage now (REVIEW.md roadmap 9)
       if (v === 'route') { showView(null); openPlan(true); return; }
       if (v === 'map') v = null;
       if (v !== 'crew') { friendsOpen = false; document.querySelectorAll('.side-pop.open').forEach(n => n.classList.remove('open')); }
@@ -4156,6 +4220,7 @@
       if (me && !me.signed_in) setRoutingCars(null);
       else if (me && me.member) apiCall('GET', '/api/garage').then(r => (r.ok ? r.json() : null)).then(list => { if (list) setRoutingCars(list); }).catch(() => {});
       body.innerHTML = '';
+      const gbody = $('garageMeBody'); gbody.innerHTML = '';
       const redo = () => renderAccount();
       const badge = $('crewTab').querySelector('.badge'); if (badge) badge.remove();
       const params2 = new URLSearchParams(location.search);
@@ -4179,10 +4244,16 @@
       if (!me.signed_in) {
         body.append(el('img', { src: 'brand/logo.svg', alt: 'Vetta', width: 200, style: 'max-width:60%' }),
           el('h3', { textContent: 'Drive with friends' }),
-          el('p', { className: 'note', textContent: 'Vetta is invite-only. Sign in to add friends, share scores and join boards. Nothing is shared unless you switch it on.' }),
+          // what you get, in three glyphs (REVIEW.md 1.2, Crew signed out)
+          el('div', { className: 'crew-gets' },
+            el('span', { innerHTML: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="9" r="3"/><circle cx="16" cy="15" r="3"/><path d="M8 12v3M16 12V9"/></svg>Convoys' }),
+            el('span', { innerHTML: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20V10M12 20V4M19 20v-7"/></svg>The board' }),
+            el('span', { innerHTML: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="15"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>Crew drives' })),
+          el('p', { className: 'note', textContent: 'Vetta is invite-only. Nothing is shared unless you switch it on.' }),
           appleButton(),
           el('a', { className: 'ink-btn solid', href: '/api/auth/google/start', textContent: 'Sign in with Google', style: 'display:flex;align-items:center;justify-content:center;text-decoration:none' }),
           legalNote('By signing in you agree to the '));
+        gbody.append(el('h3', { textContent: 'Your cars' }), el('p', { className: 'note', textContent: 'Sign in (Crew) to keep your cars, a profile and build threads here. Everything below works without it.' }));
         return;
       }
       // Anyone signed in can take their data or close the account, member or not.
@@ -4213,7 +4284,7 @@
       const friends = Array.isArray(fr) ? fr : [], grants = new Map((Array.isArray(gr) ? gr : []).map(g => [g.audience_type + ':' + g.audience_id, g]));
       const putGrant = async (type, id, scores, times) => { await apiCall('PUT', '/api/grants', { audience_type: type, audience_id: id, share_scores: scores, share_times: times }); redo(); };
 
-      // you
+      // you (in the Garage: REVIEW.md 3.2, your own identity lives with your cars)
       const you = section('You');
       you.append(el('div', { className: 'row', style: 'align-items:baseline;gap:12px' }, el('b', { textContent: `@${me.handle}`, style: 'font-size:22px;font-family:var(--font-num)' }),
         el('span', { className: 'note', textContent: pts && Number.isFinite(pts.total) ? `${Math.round(pts.total).toLocaleString()} points` : '' })));
@@ -4221,16 +4292,18 @@
       const pio = pts && pts.pioneer;
       if (pio && (pio.firsts || pio.seconds)) you.append(el('p', { className: 'note pioneer', textContent: [pio.firsts ? `Pioneer of ${pio.firsts} road${pio.firsts === 1 ? '' : 's'}` : '', pio.seconds ? `second to map ${pio.seconds}` : ''].filter(Boolean).join(' · ') }));
       const invOut = el('p', { className: 'note' });
-      you.append(el('div', { className: 'row' },
+      const invite = section('Invite');
+      invite.append(el('div', { className: 'row' },
         btn('Invite someone', async () => { const r = await apiCall('POST', '/api/invites'); const j = await jsonOf(r); if (r.ok) copyText(j.url, 'Invite link copied. They\'ll be your friend the moment they join, and you both get 5 points when they first share road data.'); else toast('Couldn\'t make an invite. Try again.'); }, 'ink-btn solid'),
         btn('Share my handle', () => copyText(`${shareOrigin()}/?add=${me.handle}`, 'Link copied. Anyone who opens it can ask to be your friend.'))), invOut);
-      body.append(you);
+      gbody.append(you);
+      body.append(invite);
       if (convoy) body.append(convoy.section());
       body.append(sharedRoutesSection());
       if (spotsFeed) body.append(spotsFeed.section());
       if (crewStandings) body.append(crewStandings.section());
       if (crewEvents) body.append(crewEvents.section(Array.isArray(crews) ? crews.map((c) => ({ id: c.id, name: c.name, visibility: c.visibility })) : []));
-      if (garage) body.append(garage.section());
+      if (garage) gbody.append(garage.section());
 
       // friends: a side pop-up (owner decision), opened from the button under You; new requests light it up
       if (stash('apex.add')) friendsOpen = true;
@@ -4239,7 +4312,7 @@
       const closePop = () => { friendsOpen = false; unstash('apex.add'); fpop.classList.remove('open'); };
       fpop.append(el('div', { className: 'side-pop-head' }, el('h3', { textContent: 'Friends' }), btn('Done', closePop, 'linkbtn')));
       const nFriends = friends.filter(f => f.status === 'accepted').length, nReq = friends.filter(f => f.status === 'pending' && f.incoming).length;
-      you.append(el('div', { className: 'row' }, btn(`Friends · ${nFriends}${nReq ? ` · ${nReq} new` : ''}`, () => { friendsOpen = true; fpop.classList.add('open'); }, nReq ? 'ink-btn solid' : 'ink-btn')));
+      invite.append(el('div', { className: 'row' }, btn(`Friends · ${nFriends}${nReq ? ` · ${nReq} new` : ''}`, () => { friendsOpen = true; fpop.classList.add('open'); }, nReq ? 'ink-btn solid' : 'ink-btn')));
 
       // requests waiting on you
       const incoming = friends.filter(f => f.status === 'pending' && f.incoming);
@@ -4448,14 +4521,14 @@
       const dsec = section('Road feel');
       dsec.append(switchRow('Share road feel', contribOn, async () => { await apiCall('PUT', '/api/me/contribute', { on: !contribOn }); redo(); }),
         el('p', { className: 'note', textContent: 'Banking, bumps and surface. Never where you went or how fast. First to map a road earns 3×.' }));
-      body.append(dsec);
+      gbody.append(dsec);
       const asec = section('Account');
       asec.append(el('div', { className: 'row' },
         btn('Download my data', downloadMyData),
         btn('Sign out', async () => { await apiCall('POST', '/api/auth/logout'); ApexSync.setSession(null); redo(); })),
         btn('Delete account', deleteMyAccount, 'danger-btn'));
-      body.append(asec);
-      if (safety) { body.append(safety.blockedSection()); if (me.moderator) body.append(safety.moderationSection()); }
+      gbody.append(asec);                                                   // your account lives with you, in the Garage
+      if (safety) { gbody.append(safety.blockedSection()); if (me.moderator) body.append(safety.moderationSection()); }
       if (me.moderator) body.append(errorsSection(), healthSection(), latencySection(), ...(window.ApexFeedback ? [ApexFeedback.ownerSection({ el, btn, apiCall, jsonOf })] : []));
     }
 
@@ -4644,7 +4717,7 @@
       toast('Drives deleted from this phone.'); renderMyData();
     });
     $('myEraseBtn').addEventListener('click', async () => {
-      if (!confirm('Erase drives, spots, zones, settings and sign-in from this phone? Your account on the server stays until you delete it in Crew.')) return;
+      if (!confirm('Erase drives, spots, zones, settings and sign-in from this phone? Your account on the server stays until you delete it in Garage → Account.')) return;
       const list = await ApexRecording.all();
       for (const d of list) { try { await ApexRecording.remove(d.id); } catch (_) {} }
       ApexSync.setSession(null);                                   // the app's Keychain session too (IDEAS Z-10)
@@ -4656,7 +4729,51 @@
       location.reload();
     });
     renderMyData();
-    document.querySelector('.tab[data-view="setup"]') && document.querySelector('.tab[data-view="setup"]').addEventListener('click', renderMyData);
+    // The place plate (place_plate.js): the town and the sky on the idle map. Asked with the position rounded to about a km,
+    // again after 20 minutes or 5 km; each part only when it came back. Hidden while driving (the hazard plate's place).
+    const placeAsk = { at: 0, lat: null, lon: null, data: {} };
+    async function refreshPlacePlate() {
+      const p = state.lastPosition;
+      $('placePlate').hidden = !$('placePlate').textContent || state.mode === 'live' || !$('app').classList.contains('idle');
+      if (!p || navigator.onLine === false) return;
+      const moved = placeAsk.lat == null ? Infinity : Math.hypot((p.lat - placeAsk.lat) * 111, (p.lon - placeAsk.lon) * 111 * Math.cos(p.lat * Math.PI / 180));
+      if (Date.now() - placeAsk.at < 20 * 60000 && moved < 5) return;
+      placeAsk.at = Date.now(); placeAsk.lat = p.lat; placeAsk.lon = p.lon;
+      const la = p.lat.toFixed(2), lo = p.lon.toFixed(2), d = {};
+      try { const r = await RouteLoading.json(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${la}&lon=${lo}&zoom=12&addressdetails=1`, {}, 6000); d.place = ApexPlacePlate.town(r); } catch (_) {}
+      try { const w = await RouteLoading.json(`https://api.open-meteo.com/v1/forecast?latitude=${la}&longitude=${lo}&current=temperature_2m,weather_code`, {}, 6000);
+        if (w && w.current) { d.tempC = w.current.temperature_2m; d.code = w.current.weather_code; } } catch (_) {}
+      placeAsk.data = d;
+      $('placePlate').textContent = ApexPlacePlate.text(d, ApexUnits.metric());
+      $('placePlate').hidden = !$('placePlate').textContent || state.mode === 'live' || !$('app').classList.contains('idle');
+    }
+    setTimeout(refreshPlacePlate, 4000); setInterval(refreshPlacePlate, 60000);
+    // The suggested loop on the deck: the length you last picked on the loop dial; tapping it builds that loop.
+    function paintLoopSuggest() {
+      const b = document.querySelector('#loopDetents button[aria-pressed="true"]');
+      $('loopSuggestTitle').textContent = `Loop from here · ${b ? b.textContent : '45 mi'}`;
+    }
+    $('loopSuggest').addEventListener('click', () => { if (!loopBusy) $('findLoopBtn').click(); });
+    document.querySelectorAll('#loopDetents button').forEach(b => b.addEventListener('click', paintLoopSuggest));
+    paintLoopSuggest();
+    // Long help in the Garage folds under "How this works" (REVIEW.md 1.2, Settings): the control first, the essay on demand.
+    document.querySelectorAll('#sheet [data-panel~="garage"] > p.note').forEach((p) => {
+      if (p.id || p.textContent.trim().length < 140) return;                // short notes and live status lines stay as they are
+      const d = el('details', { className: 'how' }, el('summary', { textContent: 'How this works' }));
+      p.replaceWith(d); d.append(p);
+    });
+    // Import a drive log (moved here from the Log, REVIEW.md 1.2): a Vetta .csv lands in the Log like any drive.
+    $('importFile').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      try {
+        const d = ApexRecording.parse(Core, await file.text(), file.name);
+        await ApexRecording.store(d); await refreshSavedDrives();
+        toast(`${d.name || file.name} is in your Log.`, { label: 'Open', href: `analysis.html?tab=drive&drive=${encodeURIComponent(d.id)}` });
+      } catch (err) { toast(/^missing column/.test(err.message) ? `Couldn't import ${file.name}. It isn't a Vetta drive log.` : `Couldn't import ${file.name}. The file may be damaged.`); }
+      e.target.value = '';
+    });
+    document.querySelector('.tab[data-view="garage"]') && document.querySelector('.tab[data-view="garage"]').addEventListener('click', renderMyData);
 
     // Privacy zones (Settings): a circle at where you are or at the map's centre; remove any. Phone only.
     let zoneR = 500;
@@ -4829,7 +4946,7 @@
       }
       if (k === 'coverage') {
         updateCoverage();
-        if (state.toggles.coverage) toast(mapReady && map.getZoom() < ApexCoverage.MIN_ZOOM ? 'Zoom in to see measured roads.' : 'Green: measured roads, bolder the surer. A road without a line is waiting for a pioneer: the first drivers earn extra Octane.');
+        if (state.toggles.coverage) toast(mapReady && map.getZoom() < ApexCoverage.MIN_ZOOM ? 'Zoom in to see measured roads.' : 'Green: measured roads, bolder the surer. A road without a line is waiting for a pioneer: the first drivers to map it earn extra points.');
       }
       if (k === 'twisty') {
         updateTwisty();
@@ -5246,14 +5363,31 @@
       b.addEventListener('click', () => reportHazard(k));
       $('hzKinds').append(b);
     }
-    $('hzReportBtn').addEventListener('click', () => $('hzOverlay').classList.add('show'));
+    // One tap reports; for 3 s the Report key is Undo (REVIEW.md 1.2, Hazard report): nothing is sent until then.
+    let pendingHz = null;
+    function paintHzUndo() {
+      const b = $('hzReportBtn');
+      b.textContent = pendingHz ? `Undo ${ApexHazardReports.LABEL[pendingHz.body.kind] || 'report'}` : 'Report';
+      b.setAttribute('aria-label', pendingHz ? 'Undo the hazard report' : 'Report a hazard');
+      b.classList.toggle('undo', !!pendingHz);
+    }
+    $('hzReportBtn').addEventListener('click', () => {
+      if (pendingHz) { clearTimeout(pendingHz.timer); pendingHz = null; paintHzUndo(); toast('Not sent.'); return; }
+      $('hzOverlay').classList.add('show');
+    });
     $('hzCancel').addEventListener('click', () => $('hzOverlay').classList.remove('show'));
     async function reportHazard(kind) {
       $('hzOverlay').classList.remove('show');
       const p = state.lastPosition, heading = state.lastMotion && state.lastMotion.heading;
       if (!p || !state.lastPositionAt || performance.now() - state.lastPositionAt > 10000) { toast('No GPS fix yet. Try again in a moment.'); return; }
-      let r = null;
       const body = { kind, lat: p.lat, lon: p.lon, heading: Number.isFinite(heading) ? Math.round((heading % 360 + 360) % 360) : null };
+      if (pendingHz) { clearTimeout(pendingHz.timer); const was = pendingHz.body; pendingHz = null; sendHazard(was); }   // the one before goes now
+      pendingHz = { body, timer: setTimeout(() => { const b = pendingHz && pendingHz.body; pendingHz = null; paintHzUndo(); if (b) sendHazard(b); }, 3000) };
+      paintHzUndo();
+    }
+    async function sendHazard(body) {
+      const kind = body.kind;
+      let r = null;
       try { r = await ApexSync.apiFetch('/api/hazards', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }); } catch (_) {}
       if (!r || r.status >= 500) { outbox.add('/api/hazards', body, true); health.bump('hazard_queued'); toast(`No signal. ${ApexHazardReports.LABEL[kind]} saved; it's sent when you have one.`); return; }
       if (r.status === 401 || r.status === 403) { toast('Sign in (Crew) to report hazards for others.'); return; }
@@ -5806,7 +5940,7 @@
         booting = false; paintIdle();
       }
       if (params.get('book') === '1' || params.get('view') === 'route' || params.get('view') === 'drives') openPlan(true);
-      if (VIEW_TITLES[params.get('view')]) openSheet(params.get('view'));
+      if (VIEW_TITLES[params.get('view')] || params.get('view') === 'setup') openSheet(params.get('view'));
       if (params.get('go') === 'drive') driveFromLink();   // the app opened from apexnav://open?go=drive (IDEAS C-05)
     }
     bootDrives();

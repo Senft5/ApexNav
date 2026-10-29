@@ -396,7 +396,7 @@ flow('privacy zones: add one at the map centre, kept on the phone only, then rem
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.goto(base + '/index.html');
   await page.waitForFunction(() => window.apex && typeof window.apex.live === 'function');
-  await page.click('.tab[data-view="setup"]');
+  await page.click('.tab[data-view="garage"]');
   await page.click('#zoneRadius [data-zone-r="200"]');
   page.once('dialog', (d) => d.accept('Home'));
   await page.click('#zoneMapBtn');
@@ -542,7 +542,7 @@ flow('your data: Settings counts what the phone holds and downloads drives as GP
   await page.waitForFunction(() => window.ApexRecording && window.ApexMyData);
   await page.evaluate(() => ApexRecording.store({ id: 'e2e_drive', name: 'Test road', date: '2026-10-20T15:00:00Z',
     lat: [35.6, 35.601, 35.602], lon: [-83.9, -83.901, -83.902], elev: null, dist: [0, 150, 300] }));
-  await page.click('.tab[data-view="setup"]');
+  await page.click('.tab[data-view="garage"]');
   await page.waitForFunction(() => /1 drive \(0.2 mi\)/.test(document.getElementById('myDataNote').textContent));
   const [dl] = await Promise.all([page.waitForEvent('download'), page.click('#myGpxBtn')]);
   const gpx = require('fs').readFileSync(await dl.path(), 'utf8');
@@ -551,7 +551,7 @@ flow('your data: Settings counts what the phone holds and downloads drives as GP
   await page.click('#myDrivesDelBtn');
   await page.waitForFunction(() => /0 drives/.test(document.getElementById('myDataNote').textContent));
   // offline data (IDEAS F-06): a saved route counted, then deleted; the drives are not touched by it
-  await page.evaluate(() => { localStorage.setItem('apex.savedRoutes', JSON.stringify([{ id: 'r1', coords: [[0, 0], [1, 1]] }])); document.querySelector('.tab[data-view="setup"]').click(); });
+  await page.evaluate(() => { localStorage.setItem('apex.savedRoutes', JSON.stringify([{ id: 'r1', coords: [[0, 0], [1, 1]] }])); document.querySelector('.tab[data-view="garage"]').click(); });
   await page.waitForFunction(() => /Offline data: 1 saved route /.test(document.getElementById('myOfflineNote').textContent));
   page.once('dialog', (d) => d.accept());
   await page.click('#myOfflineDelBtn');
@@ -785,6 +785,7 @@ flow('drive tags: tag a drive in the Log, filter by it, the note stays on the ph
   await page.fill('#dvTagNew', 'E46');
   await page.press('#dvTagNew', 'Enter');
   await page.waitForSelector('#dvTags button[aria-pressed="true"]:has-text("E46")');
+  await page.click('.dv-notebox summary');                            // the note folds under the tag row (REVIEW.md 14)
   await page.fill('#dvNoteText', 'Puddles at the bridge');
   await page.dispatchEvent('#dvNoteText', 'change');
   await page.waitForFunction(() => /Note saved/.test(document.getElementById('dvTagsNote').textContent));
@@ -848,7 +849,7 @@ flow('feedback: Settings sends what you typed with the diagnostics, never a plac
   });
   await page.goto(base + '/index.html');
   await page.waitForFunction(() => window.ApexFeedback && document.querySelector('#feedbackBox textarea'));
-  await page.click('.tab[data-view="setup"]');
+  await page.click('.tab[data-view="garage"]');
   await page.click('#feedbackBox button:has-text("An idea")');
   await page.fill('#feedbackBox textarea', 'A night theme please');
   await page.click('#feedbackBox button:has-text("Send")');
@@ -868,7 +869,7 @@ flow('landscape mount: the map takes the left, the instruments a column on the r
   check(bin.x >= stage.x + stage.w - 1 && bin.y < 120, 'the instruments are a column on the right: ' + JSON.stringify(bin));
   check(notes.w > 800, 'the notes run across the top');
   check(await page.evaluate(() => document.documentElement.scrollWidth <= 844), 'no sideways scroll');
-  await page.click('.tab[data-view="setup"]');
+  await page.click('.tab[data-view="garage"]');
   await page.waitForTimeout(400);
   const rail = await box('#binnacle');
   check(rail.w < 100, 'a sheet leaves a narrow tab rail: ' + JSON.stringify(rail));
@@ -902,7 +903,7 @@ flow('units: kilometres in Settings redraw the dial, the notes and the replay in
   await page.goto(base + '/index.html?drive=dry_ridge');
   await page.waitForFunction(() => window.apexDebug && window.apexDebug.track, null, { timeout: 15000 });
   check(await page.evaluate(() => ApexUnits.system()) === 'imperial', 'miles by default in en-US');
-  await page.click('.tab[data-view="setup"]');
+  await page.click('.tab[data-view="garage"]');
   await Promise.all([page.waitForNavigation(), page.click('[data-units="metric"]')]);
   await page.waitForFunction(() => window.apexDebug && window.apexDebug.track, null, { timeout: 15000 });
   check(await page.evaluate(() => localStorage.getItem('apex.units')) === 'metric', 'saved');
@@ -1039,6 +1040,34 @@ flow('no colour swaps or Octane: an accent picked before is cleared, Settings se
   check(!(await page.$('#lookRow')), 'no colour-swap Look section');
 });
 
+flow('theme contract on the page: the hazard plate, the speed, the call and the binnacle floors, day and night (REVIEW.md 4.3)', async (page, base) => {
+  for (const night of [false, true]) {
+    await page.addInitScript((n) => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.prefs', JSON.stringify({ notesMode: 'full', nightMode: n ? 'on' : 'off' })); } catch (_) {} }, night);
+    await page.goto(base + '/index.html?drive=dry_ridge&play=1');
+    await page.waitForFunction(() => window.apexDebug && window.apexDebug.track && window.apexDebug.track.events.length);
+    await page.evaluate(() => { const st = window.apexDebug.state, t = window.apexDebug.track; st.cursorM = t.dist[t.dist.length - 1] * 0.45; });
+    await page.waitForTimeout(2500);
+    const r = await page.evaluate(() => {
+      const p = document.getElementById('hzPlate'); p.hidden = false; document.getElementById('hzPlateTitle').textContent = 'Gravel';
+      const cs = getComputedStyle(p), pr = p.getBoundingClientRect(), st = document.querySelector('.stage').getBoundingClientRect();
+      const speed = document.querySelector('.dial-digital').getBoundingClientRect().height;
+      const call = document.querySelector('.rb-box.now .rb-call span');
+      const small = [...document.querySelectorAll('#cluster *')].filter((n) => !(n instanceof SVGElement) && n.childNodes.length && [...n.childNodes].some((c) => c.nodeType === 3 && c.textContent.trim()))
+        .map((n) => [n.className, parseFloat(getComputedStyle(n).fontSize)]).filter(([, px]) => px < 13);
+      const bank = document.querySelector('.dial-digital.small'), bankPx = bank ? bank.getBoundingClientRect().height : 99;
+      return { bg: cs.backgroundColor, edge: cs.borderTopColor, ink: cs.color, top: Math.round(pr.top - st.top), left: Math.round(pr.left - st.left),
+               speed, call: call ? parseFloat(getComputedStyle(call).fontSize) : 0, small, bankPx, limit: !!document.querySelector('.ro-limit') };
+    });
+    const m = night ? 'night' : 'day';
+    check(r.bg === 'rgb(17, 17, 17)' && r.edge === 'rgb(255, 122, 26)' && r.ink === 'rgb(255, 255, 255)', `${m}: the hazard plate's colours ` + JSON.stringify(r));
+    check(r.top === 14 && r.left === 10, `${m}: the plate sits top-left, 14 px under the strip: ${r.top},${r.left}`);
+    check(r.speed >= 40, `${m}: speed numeral ${r.speed} px`);
+    check(r.call >= 21, `${m}: the call ${r.call} px`);
+    check(!r.small.length && r.bankPx >= 13, `${m}: nothing on the binnacle under 13 px: ` + JSON.stringify(r.small) + ' bank ' + r.bankPx);
+    check(r.limit, `${m}: the Limit sign is there`);
+  }
+});
+
 flow('flyover video: Video records the replay with the note on it and hands over a file (IDEAS D-10)', async (page, base) => {
   await page.route('https://tiles.openfreemap.org/**', (route) => (route.request().url().includes('/styles/')
     ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 8, sources: {}, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#eee' } }] }) })
@@ -1096,7 +1125,7 @@ flow('desk: on a big screen Where to? is a column on the left and sheets a panel
   await page.waitForFunction(() => document.getElementById('planPanel').getBoundingClientRect().height > 600, null, { timeout: 3000 }).catch(() => {});
   const plan = await box('#planPanel');
   check(plan.w === 440 && plan.x < 40 && plan.h > 600, 'Where to? is a left column: ' + JSON.stringify(plan));
-  await page.click('.tab[data-view="setup"]');
+  await page.click('.tab[data-view="garage"]');
   await page.waitForTimeout(400);
   const sheet = await box('.sheet.open');
   check(sheet.w === 480 && sheet.x > 900, 'Settings is a right panel: ' + JSON.stringify(sheet));

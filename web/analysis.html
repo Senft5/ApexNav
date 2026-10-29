@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-whHGXZBw8MLzvg6RXW2em5lGOuxqz5Gv/HntESsR1Lk=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-r/tKIFUSU6Lxwg36YyGlgVRS32N2sIodrKyFimcLFO4=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta · Log</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -149,9 +149,44 @@
     details.more summary::after { content: "+"; margin-left: auto; font-size: 20px; }
     details.more[open] summary::after { content: "–"; }
     tr.row-link { cursor: pointer; }
+    .linkbtn { font: inherit; font-size: 15px; font-weight: 600; background: none; border: 0; padding: 10px 2px; min-height: 44px; color: var(--panel-ink);
+      text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+    /* the drive (REVIEW.md roadmap 14) */
+    .dv-head .score.big { font-size: 80px; line-height: 0.9; letter-spacing: 0.02em; }
+    .dv-head .dv-plain { font-size: 17px; line-height: 1.35; font-weight: 600; }
+    .dv-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; margin: 12px 0 4px; }
+    .dv-acts .dv-replay { min-width: 140px; height: 52px; font-size: 17px; box-shadow: inset 0 -3px 0 rgba(0,0,0,0.3); }
+    .dv-tagrow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); }
+    .dv-tagrow #dvTagNew { width: 110px; height: 36px; }
+    .dv-tagrow .dv-notebox { flex-basis: 100%; border-bottom: 0; }
+    .dv-tagrow .dv-notebox textarea { width: 100%; }
+    .dv-tagrow #dvTagsNote { flex-basis: 100%; margin: 0; }
+    /* the Log (REVIEW.md roadmap 13) */
+    .log-hero { padding: 6px 0 10px; border-bottom: 1px solid var(--rule); }
+    .hero-score b { font: 800 88px/0.9 var(--font-num); font-variant-numeric: tabular-nums; letter-spacing: 0.04em; }
+    .hero-score small { font-size: 18px; font-weight: 600; color: var(--panel-dim); margin-left: 4px; }
+    .hero-what { margin: 6px 0 0; font-size: 15px; font-weight: 600; }
+    .hero-best { margin: 2px 0 0; font-size: 14px; color: var(--panel-dim); }
+    details.quiet { border-bottom: 1px solid var(--rule); }
+    details.quiet > summary { cursor: pointer; list-style: none; min-height: 44px; display: flex; align-items: center; justify-content: space-between; font-size: 15px; font-weight: 600; }
+    details.quiet > summary::-webkit-details-marker { display: none; }
+    details.quiet > summary::after { content: "+"; font-weight: 700; color: var(--panel-dim); margin-left: 10px; }
+    details.quiet[open] > summary::after { content: "\2212"; }
+    details.quiet > :not(summary) { margin-bottom: 10px; }
+    .index-panel { padding: 0; border: 0; }
+    table.road-index { width: 100%; border-collapse: collapse; }
+    table.road-index td { padding: 10px 0; border-bottom: 1px solid var(--rule); vertical-align: middle; }
+    .road-index .ix-date { width: 56px; padding-right: 12px; }
+    .stamp-d { display: inline-grid; justify-items: center; width: 42px; padding: 3px 0; border: 1.5px solid var(--panel-ink); font-size: 10px; font-weight: 700; letter-spacing: 0.06em; }
+    .stamp-d b { font: 800 18px/1 var(--font-num); }
+    .road-index .ix-road b { display: block; font-size: 16px; }
+    .road-index .spark { display: block; width: 100%; height: 10px; margin: 4px 0 2px; }
+    .road-index .spark line { stroke: var(--accent); stroke-width: 1; vector-effect: non-scaling-stroke; } .road-index .spark .base { stroke: var(--rule); }
+    .road-index .ix-score { width: 64px; text-align: right; }
+    .road-index .ix-score .score { font-size: 28px; }
     .actions { display: flex; gap: 8px; flex-wrap: wrap; }
     /* Same tab bar as the cockpit: ANALYSIS is this page, the others return to the cockpit view. */
-    .tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
+    .tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
       background: var(--panel); border-top: 1px solid var(--rule); padding: 0 6px env(safe-area-inset-bottom, 0px); }
     .tabbar a { height: 52px; display: grid; grid-template-rows: 20px auto; justify-items: center; align-content: center; gap: 2px; color: var(--panel-dim);
       font-size: 11px; font-weight: 600; text-decoration: none; position: relative; }
@@ -176,18 +211,21 @@
       <div><a href="#" class="back" data-to="history">‹ Log</a></div>
       <select id="dvPick" aria-label="Choose a drive" hidden></select>
       <div><h1 class="stages-h" id="dvTitle">--</h1><p class="note" id="dvNote"></p></div>
-      <div class="actions" role="group" aria-label="This drive">
-        <button class="btn solid" id="dvReplay">Replay</button>
-        <button class="btn" id="dvCompare">Compare</button>
-        <button class="btn" id="dvShare">Share</button>
-        <button class="btn" id="dvCard">Share card</button>
+      <!-- the drive (REVIEW.md roadmap 14): the score first with its coaching line (drive_view.js head), Replay the primary,
+           the tags one row of stamps; the actions are moved under the score once it is drawn -->
+      <div class="dv-acts" id="dvActs" role="group" aria-label="This drive">
+        <button class="btn solid dv-replay" id="dvReplay">Replay</button>
+        <button class="linkbtn" id="dvCompare">Compare</button>
+        <button class="linkbtn" id="dvShare">Share</button>
+        <button class="linkbtn" id="dvCard">Share card</button>
       </div>
-      <div class="panel" id="dvTagsPanel"><h2>Tags and note</h2>
-        <div class="stamps" id="dvTags" role="group" aria-label="Tags for this drive"></div>
-        <div class="actions mt-8"><input id="dvTagNew" maxlength="24" placeholder="Add a tag: the car, who came" aria-label="Add a tag" /><button class="btn" id="dvTagAdd">Add</button></div>
-        <textarea class="mt-8" id="dvNoteText" maxlength="280" placeholder="A note for yourself (stays on this phone)" aria-label="Note"></textarea>
-        <p class="note" id="dvTagsNote">Tags and notes stay on this phone. Filter the Log by them.</p></div>
       <div id="dvRoot"></div>
+      <div class="dv-tagrow" id="dvTagsPanel">
+        <div class="stamps" id="dvTags" role="group" aria-label="Tags for this drive"></div>
+        <input id="dvTagNew" maxlength="24" placeholder="+ tag" aria-label="Add a tag" /><button class="linkbtn" id="dvTagAdd">Add</button>
+        <details class="quiet dv-notebox"><summary>Note</summary>
+          <textarea id="dvNoteText" maxlength="280" placeholder="A note for yourself (stays on this phone)" aria-label="Note"></textarea></details>
+        <p class="note" id="dvTagsNote">Tags and notes stay on this phone. Filter the Log by them.</p></div>
       <div id="dvDashcam"></div>
       <div class="panel" id="dvRecce"><h2>Your notes</h2>
         <p class="note" id="dvRecceNote">Keep this drive's notes as yours, change any call, and the co-driver reads yours the next time you drive these corners this way. On this phone only.</p>
@@ -201,33 +239,35 @@
 
     <!-- ============================ HISTORY ============================ -->
     <section id="tab-history" class="stack-12">
-      <div class="bar-top"><h1 class="stages-h">Log</h1>
-        <label class="btn">Import .csv<input type="file" id="importFile" accept=".csv,text/csv" aria-label="Import a recording" hidden /></label></div>
+      <div class="bar-top"><h1 class="stages-h">Log</h1></div>
+      <div class="switch log-seg" role="radiogroup" aria-label="Drives or stages"><button data-seg="history" role="radio" aria-checked="true">Drives</button><button data-seg="segments" role="radio" aria-checked="false">Stages</button></div>
       <div class="empty" id="historyEmpty" hidden>
         <b>No drives yet</b>
         <p class="note">Start a drive on the map. It lands here with a score for every corner.</p>
         <div class="actions"><a class="btn solid" href="index.html">Go to the map</a><a class="btn" href="index.html?drive=dry_ridge&amp;play=1">Watch a replay</a></div>
       </div>
-      <div class="cards" id="historyCards"></div>
-      <div class="panel" id="yearPanel" hidden><h2 id="yearTitle">--</h2><div id="yearLines" class="stack-8"></div>
-        <div class="row mt-8"><button class="btn" id="yearShare">Share</button></div></div>
-      <div class="panel" id="roadsPanel" hidden><h2>Your roads</h2><div id="roadsList" class="stack-8"></div></div>
+      <!-- the Log (REVIEW.md roadmap 13): one hero number, a quiet year line, challenges in one line, then the drives -->
+      <div class="log-hero" id="historyCards"></div>
+      <details class="quiet" id="yearPanel" hidden><summary id="yearTitle">--</summary><div id="yearLines" class="stack-8"></div>
+        <div class="row mt-8"><button class="btn" id="yearShare">Share</button></div></details>
+      <details class="quiet" id="challengePanel" hidden><summary id="challengeSum">This month's challenges</summary><div id="challengeList" class="stack-8"></div>
+        <p class="note">Exploring and technique, never speed. From the drives on this phone.</p></details>
+      <div class="stamps" id="historyFilter" role="group" aria-label="Show drives tagged" hidden></div>
+      <div class="panel index-panel" id="historyPanel"><table id="historyTable" class="road-index"></table></div>
       <div class="panel" id="weekPanel" hidden><h2>Your week</h2><div id="weekLines" class="stack-8"></div></div>
-      <div class="panel" id="challengePanel" hidden><h2>This month's challenges</h2><div id="challengeList" class="stack-8"></div>
-        <p class="note">Exploring and technique, never speed. From the drives on this phone.</p></div>
+      <div class="panel" id="roadsPanel" hidden><h2>Your roads</h2><div id="roadsList" class="stack-8"></div></div>
       <div class="panel" id="kudosPanel" hidden><h2>Kudos for you</h2><div id="kudosList" class="stack-8"></div></div>
       <div class="panel" id="friendsPanel" hidden><h2>Friends lately</h2><div id="friendsList" class="stack-8"></div>
         <p class="note">From friends and crews who share scores with you, on stages you have. Scores only, never times.</p></div>
       <div class="panel" id="trendPanel" hidden><h2>Score over time</h2><div id="trend"></div></div>
       <div class="panel" id="recordsPanel" hidden><h2>Your records</h2><div class="scroll"><table id="recordsTable"></table></div><p class="note" id="recordsNote"></p></div>
       <div class="panel" id="steadyPanel" hidden><h2>Braking consistency by month</h2><div id="steadyChart"></div><p class="note" id="steadyNote"></p></div>
-      <div class="stamps" id="historyFilter" role="group" aria-label="Show drives tagged" hidden></div>
-      <div class="panel" id="historyPanel"><div class="scroll"><table id="historyTable"></table></div></div>
     </section>
 
     <!-- ============================ SEGMENTS ============================ -->
     <section id="tab-segments" hidden class="stack-12">
-      <div class="bar-top"><h1 class="stages-h">Stages</h1><button class="btn solid" id="newStageBtn">New stage</button></div>
+      <div class="bar-top"><h1 class="stages-h">Log</h1><button class="btn solid" id="newStageBtn">New stage</button></div>
+      <div class="switch log-seg" role="radiogroup" aria-label="Drives or stages"><button data-seg="history" role="radio" aria-checked="false">Drives</button><button data-seg="segments" role="radio" aria-checked="true">Stages</button></div>
       <div class="seglist" id="segList"></div>
       <div class="grid2" id="segDetail" hidden>
       <div class="panel" id="segSyncPanel" hidden><h2>Board</h2><div class="row" id="segBoardFilter" role="group" aria-label="Board filter"></div><p class="note" id="segLegend"></p><div class="scroll mt-8"><table id="segBoard"></table></div><div class="row mt-8" id="segShareRow"></div><div id="segShared" class="stack-8 mt-8"></div><div class="note mt-8" id="segSyncNote"></div></div>
@@ -274,9 +314,8 @@
   <nav class="tabbar" aria-label="Views">
     <a href="index.html"><svg viewBox="0 0 24 24"><path d="M12 3l6 15-6-3-6 3z"/></svg><span>Map</span></a>
     <a href="analysis.html?tab=log" id="navLog"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg><span>Log</span></a>
-    <a href="analysis.html?tab=stages" id="navStages"><svg viewBox="0 0 24 24"><path d="M12 3v18M7 7h10M7 17h10"/></svg><span>Stages</span></a>
     <a href="index.html?view=crew"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.2"/><path d="M3 20c0-3.5 2.7-6 6-6s6 2.5 6 6M15.5 14.2c2.6 0 5 1.8 5 5"/></svg><span>Crew</span></a>
-    <a href="index.html?view=setup"><svg viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg><span>Settings</span></a>
+    <a href="index.html?view=garage"><svg viewBox="0 0 24 24"><path d="M3 10l9-6 9 6v10H3z"/><path d="M7 20v-7h10v7M7 16h10"/></svg><span>Garage</span></a>
   </nav>
 
   <script>
@@ -448,6 +487,9 @@
         fill.style.width = `${Math.round(100 * c.done / c.goal)}%`; bar.append(fill); row.append(t, bar);
         return row;
       }));
+      // one line until opened (REVIEW.md roadmap 13)
+      const all = ApexChallenges.progress(list, month, challengeServer || null, kmText), done = all.filter((c) => c.complete).length;
+      $('challengeSum').textContent = `This month: ${done} of ${all.length} challenge${all.length === 1 ? '' : 's'} done`;
     }
     function renderYear() {
       const year = new Date().getFullYear();
@@ -455,7 +497,7 @@
       $('yearPanel').hidden = !s;
       if (!s) return;
       const ls = ApexYearReview.lines(s);
-      $('yearTitle').textContent = `${year} so far`;
+      $('yearTitle').textContent = `${year} so far: ${ls[0] || ''}`;   // one quiet line; the rest when opened
       $('yearLines').replaceChildren(...ls.map((t) => Object.assign(document.createElement('p'), { textContent: t })));
       yearText = [`My ${year} on the road with Vetta`, ...ls].join('\n');
     }
@@ -470,12 +512,14 @@
       const avg = scored.length ? Math.round(scored.reduce((s, d) => s + d.ds.score, 0) / scored.length) : null;
       const totalKm = drives.reduce((s, d) => s + d.km, 0);
       const latest = scored[scored.length - 1];
-      const c = (v, label, extra) => `<div class="card"><b>${v}</b><span>${label}</span>${extra ? `<em>${extra}</em>` : ''}</div>`;
       $('historyEmpty').hidden = !drivesLoaded || drives.length > 0;   // never claim "no drives" before the store has answered
       $('historyCards').hidden = $('historyPanel').hidden = !drives.length;
-      $('historyCards').innerHTML =
-        c(latest ? latest.ds.score : '--', 'Latest', latest ? latest.name : '') +
-        c(best ? best.ds.score : '--', 'Best', best ? best.name : '');
+      // the hero (REVIEW.md roadmap 13): your latest Vetta Score, big, with its road; the best one quietly under it
+      $('historyCards').innerHTML = `<div class="hero-score"><b>${latest ? latest.ds.score : '--'}</b><small>/1000</small></div>`
+        + `<p class="hero-what">Latest Vetta Score${latest ? ` · <span></span> · ${dateLabel(latest)}` : ''}</p>`
+        + (best && best !== latest ? `<p class="hero-best">Best ${best.ds.score} · <span></span></p>` : '');
+      if (latest) $('historyCards').querySelector('.hero-what span').textContent = latest.name;   // names are user text
+      if (best && best !== latest) $('historyCards').querySelector('.hero-best span').textContent = best.name;
       $('trendPanel').hidden = scored.length < 3;
       renderYear();
       renderChallenges();
@@ -501,13 +545,21 @@
         return b;
       }));
       const shown = drives.filter((d) => ApexDriveTags.matches(d, tagFilter));
+      // the drive list as a road-book index (REVIEW.md roadmap 13): the date stamped, the road, a tick per corner along it
+      // (where the drive was busy), the distance and the score
+      const spark = (d) => {
+        const n = Array.isArray(d.dist) ? d.dist.length : 0;
+        if (n < 2 || !Array.isArray(d.corners) || !d.corners.length) return '';
+        const ticks = d.corners.map(c => { const x = (100 * c.apex / (n - 1)).toFixed(1); return `<line x1="${x}" x2="${x}" y1="1" y2="9"/>`; }).join('');
+        return `<svg class="spark" viewBox="0 0 100 10" preserveAspectRatio="none" aria-hidden="true"><line class="base" x1="0" x2="100" y1="9" y2="9"/>${ticks}</svg>`;
+      };
+      const stamp = (d) => { const m = monthOf(d) ? new Date(d.date.slice(0, 10) + 'T12:00:00') : null;
+        return m ? `<span class="stamp-d"><b>${m.getDate()}</b>${m.toLocaleDateString('en-US', { month: 'short' }).toUpperCase()}</span>` : '<span class="stamp-d"><b>--</b></span>'; };
       const rows = shown.slice().reverse().map(d => `<tr class="row-link" data-drive="${d.id}" tabindex="0" role="link" aria-label="Open ${escH(d.name)}">
-        <td class="l"><b>${escH(d.name)}</b><span class="sub">${dateLabel(d)}${ApexDriveTags.normalize(d.tags).length ? ` · <span class="tagline">${escH(ApexDriveTags.normalize(d.tags).join(', '))}</span>` : ''}</span></td>
-        <td>${ApexUnits.long(d.km * 1000)}</td>
-        <td class="wide">${d.ds.corners}</td>
-        <td><span class="score">${d.ds.score ?? '--'}</span></td>
-        <td class="l wide">${bars(d.ds.components)}</td></tr>`).join('');
-      $('historyTable').innerHTML = !drives.length ? '<tr><td class="l" colspan="5"><span class="note">No drives yet.</span></td></tr>' : !shown.length ? '<tr><td class="l" colspan="5"><span class="note">No drives with those tags.</span></td></tr>' : `<tr><th class="l">Drive</th><th>Distance</th><th class="wide">Corners scored</th><th>Score</th><th class="l wide">Components</th></tr>${rows}`;
+        <td class="ix-date">${stamp(d)}</td>
+        <td class="l ix-road"><b>${escH(d.name)}</b>${spark(d)}<span class="sub">${ApexUnits.long(d.km * 1000)} · ${d.ds.corners} corners${ApexDriveTags.normalize(d.tags).length ? ` · <span class="tagline">${escH(ApexDriveTags.normalize(d.tags).join(', '))}</span>` : ''}</span></td>
+        <td class="ix-score"><span class="score">${d.ds.score ?? '--'}</span></td></tr>`).join('');
+      $('historyTable').innerHTML = !drives.length ? '<tr><td class="l" colspan="3"><span class="note">No drives yet.</span></td></tr>' : !shown.length ? '<tr><td class="l" colspan="3"><span class="note">No drives with those tags.</span></td></tr>' : rows;
       setTimeout(renderRecords, 0);
       setTimeout(renderSteadiness, 0);                                  // the coach runs per road: after the Log has painted
     }
@@ -617,18 +669,6 @@
       $(id).addEventListener('click', (e) => { const r = e.target.closest('tr[data-drive]'); if (r) openDrive(r.dataset.drive); });
       $(id).addEventListener('keydown', (e) => { const r = e.target.closest('tr[data-drive]'); if (r && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openDrive(r.dataset.drive); } });
     }
-    $('importFile').addEventListener('change', async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      try {
-        const d = parseRecording(await file.text(), file.name);
-        await storeDrive(d);
-        await loadDrives();
-        renderAll();
-      } catch (err) { alert(/^missing column/.test(err.message) ? `Couldn't import ${file.name}. It isn't an Vetta drive log.` : `Couldn't import ${file.name}. The file may be damaged.`); }
-      e.target.value = '';
-    });
-
     // ---------------------------------------------------------------------
     // SEGMENTS (custom stretches, stored locally; ranked by Score)
     // ---------------------------------------------------------------------
@@ -816,7 +856,7 @@
       // Nothing to mark a stage on until there is a drive: say so instead of showing an empty picker.
       $('newStageBtn').hidden = $('newStage').hidden = $('shareOlder').hidden = !drives.length;
       if (view === 'segments' && !segs.length && drives.length && !$('newStage').dataset.auto) { $('newStage').open = true; $('newStage').dataset.auto = '1'; }   // first visit: open the marker once
-      list.innerHTML = segs.length ? '' : `<div class="empty"><b>No stages yet</b><p class="note">A stage is a stretch you drive often; every run on it gets a score. ${drives.length ? 'Mark one on a drive below.' : 'Record a drive first, then mark a stretch of it here.'}</p></div>`;
+      list.innerHTML = segs.length ? '' : `<div class="empty"><b>No stages yet</b><p class="note">${drives.length ? 'Mark a stretch you drive often, below. Every run on it gets a score.' : 'A drive first; then Mark a stage at its end.'}</p></div>`;
       for (const s of segs) {
         const passes = passesFor(s), best = passes.reduce((m, x) => (x.p.score != null && (m == null || x.p.score > m) ? x.p.score : m), null);
         const b = document.createElement('button');
@@ -931,7 +971,10 @@
       }
       // corner coach: every other drive whose box overlaps this one is a candidate pass (Core.coach decides what is the same corner)
       const coach = coachFor(d);
+      $('tab-drive').insertBefore(dvActs, $('dvRoot'));                // out of the root before it is redrawn
       dvView = ApexDriveView.mount($('dvRoot'), d, { Core, C, MPH, reference, coach });
+      const dvHead = $('dvRoot').querySelector('.dv-head');
+      if (dvHead) dvHead.after(dvActs);                                  // the score first, then Replay
       // a video from this drive with its numbers on it (dashcam.js, IDEAS D-11)
       if (window.ApexDashcam && window.MediaRecorder && Array.isArray(d.speed_mps) && d.speed_mps.length > 20) {
         const mk = (tag, props = {}, ...kids) => { const n = Object.assign(document.createElement(tag), props); n.append(...kids); return n; };
@@ -1043,13 +1086,16 @@
     function showTab(t) {
       view = t;
       for (const v of ['drive', 'history', 'segments', 'compare']) $(`tab-${v}`).hidden = v !== t;
-      $('navLog').classList.toggle('on', t !== 'segments'); $('navStages').classList.toggle('on', t === 'segments');
-      for (const [id, on] of [['navLog', t !== 'segments'], ['navStages', t === 'segments']]) on ? $(id).setAttribute('aria-current', 'page') : $(id).removeAttribute('aria-current');
+      // Stages are part of the Log (REVIEW.md roadmap 9): one tab, a Drives / Stages switch
+      $('navLog').classList.add('on'); $('navLog').setAttribute('aria-current', 'page');
+      document.querySelectorAll('[data-seg]').forEach(b => { const on = b.dataset.seg === (t === 'segments' ? 'segments' : 'history'); b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); });
       if (t === 'segments') { if (!segs.length && drives.length) { $('newStage').open = true; $('newStage').dataset.auto = '1'; } renderSegStrip(); }
       if (t === 'history') renderHistory();
     }
     document.querySelectorAll('a.back').forEach(a => a.addEventListener('click', (e) => { e.preventDefault(); showTab(a.dataset.to); toTop(); }));
     const TAB_ALIAS = { log: 'history', stages: 'segments' };
+    const dvActs = $('dvActs');
+    document.querySelectorAll('[data-seg]').forEach(b => b.addEventListener('click', () => { showTab(b.dataset.seg); toTop(); }));
     // The page scrolls inside <body> (the iOS shell turns off the web view's own scrolling), so reset both.
     function toTop() { document.body.scrollTop = 0; window.scrollTo(0, 0); }
     // iOS ignores user-scalable=no: cancel Safari's page-zoom gesture (charts and maps use their own touch handling).

@@ -304,7 +304,10 @@
       const kids = [el('h3', { textContent: 'Convoy' })];
       const pending = store.get('sessionStorage', INVITE_KEY);
       if (!s || !s.id) {
-        kids.push(el('p', { className: 'note', textContent: 'Drive together live: everyone in the convoy sees where everyone is, the leader can call hazards and a regroup point, and the co-driver warns you before you get there. Nothing is kept: it ends when the leader leaves or after two hours.' }));
+        // one line, the rest on demand (REVIEW.md 1.1 #7: show, don't explain)
+        kids.push(el('p', { className: 'note', textContent: 'Drive together, live, for up to two hours.' }),
+          el('details', { className: 'how' }, el('summary', { textContent: 'How this works' }),
+            el('p', { className: 'note', textContent: 'Everyone in the convoy sees where everyone is, the leader can call hazards and a regroup point, and the co-driver warns you before you get there. Nothing is kept: it ends when the leader leaves or after two hours.' })));
         loadAsked();
         const at = (ms) => new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
         for (const inv of asked.list) {
