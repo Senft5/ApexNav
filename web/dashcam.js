@@ -43,12 +43,15 @@
   /** page: el, Core, drive d, fmtSpeed, save(blob, name, type) → Promise. Returns the panel element. */
   function mount(page) {
     const { el, Core, d } = page, T = Core.elapsedS(d.speed_mps), total = T[T.length - 1] || 0;
-    const box = el('div', { className: 'panel' }, el('h2', { textContent: 'Dashcam overlay' }));
-    const input = el('input', { type: 'file', accept: 'video/*' }); input.setAttribute('aria-label', 'A video from this drive');
+    // a rule-separated section, not a box; the picker is an ink key, the offset the balance slider (REVIEW2.md U-18)
+    const box = el('section', { className: 'dc-section' }, el('h2', { textContent: 'Dashcam overlay' }));
+    const input = el('input', { type: 'file', accept: 'video/*', hidden: true }); input.setAttribute('aria-label', 'A video from this drive');
+    const pick = el('label', { className: 'btn' }, 'Pick a video', input);
     const video = el('video', { muted: true, playsInline: true }); video.style.display = 'none';
     const canvas = el('canvas'), g = canvas.getContext('2d');
     canvas.style.cssText = 'width:100%;max-width:640px;display:none;background:#000';
     const offset = el('input', { type: 'range', min: '-600', max: String(Math.max(600, Math.ceil(total))), step: '1', value: '0' }); offset.setAttribute('aria-label', 'When the video starts in the drive (s)');
+    const balance = el('label', { className: 'balance' }, el('span', { textContent: 'Earlier' }), offset, el('span', { textContent: 'Later' }));
     const offsetNote = el('p', { className: 'note', textContent: 'Video starts 0 s into the drive' });
     const exportBtn = el('button', { className: 'btn', textContent: 'Make the video', disabled: true });
     const note = el('p', { className: 'note', textContent: 'Pick a video you filmed on this drive, slide until the corner calls line up, then make the video. It stays on this phone.' });
@@ -61,6 +64,7 @@
     input.addEventListener('change', () => {
       const f = input.files && input.files[0];
       if (!f) return;
+      pick.firstChild.textContent = 'Pick another video';
       video.src = URL.createObjectURL(f);
       video.addEventListener('loadeddata', () => { canvas.style.display = 'block'; exportBtn.disabled = false; video.currentTime = Math.min(5, video.duration / 2); }, { once: true });
     });
@@ -81,7 +85,7 @@
       await page.save(blob, root.ApexFlyoverVideo.fileName(`${d.name || 'drive'}-dashcam`, mime), mime.split(';')[0]);
       note.textContent = 'Done. The sound isn’t kept.'; exportBtn.disabled = false;
     });
-    box.append(note, input, video, canvas, offset, offsetNote, exportBtn);
+    box.append(note, pick, video, canvas, balance, offsetNote, exportBtn);
     return box;
   }
 

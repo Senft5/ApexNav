@@ -59,3 +59,34 @@
 .confirm-sheet button { flex: 1 1 0; min-height: 52px; font: inherit; font-size: 17px; font-weight: 700; background: transparent; }
 .confirm-sheet .cs-no { border: 1.5px solid var(--panel-ink); color: var(--panel-ink); box-shadow: 0 3px 0 var(--rule); }
 .confirm-sheet .cs-yes { border: 0; color: var(--accent); }
+
+/* The balance slider: a quantity with a middle (Corner mix, the dashcam's offset), a ruled track with ticks and a ring thumb.
+   Never the browser's blue range. */
+.balance { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; min-height: 48px; font-size: 15px; font-weight: 600; }
+.balance input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 30px; padding: 0; border: 0; background:
+  linear-gradient(var(--panel-ink), var(--panel-ink)) center / 100% 2px no-repeat,
+  linear-gradient(var(--panel-ink), var(--panel-ink)) 25% center / 2px 12px no-repeat, linear-gradient(var(--panel-ink), var(--panel-ink)) 50% center / 2px 12px no-repeat,
+  linear-gradient(var(--panel-ink), var(--panel-ink)) 75% center / 2px 12px no-repeat; }
+.balance input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 26px; height: 26px; border-radius: 50%; border: 2.5px solid var(--panel-ink); background: var(--panel); }
+.balance input[type=range]::-moz-range-thumb { width: 22px; height: 22px; border-radius: 50%; border: 2.5px solid var(--panel-ink); background: var(--panel); }
+
+/* A choice from a list (web/row_select.js, REVIEW2.md U-18): a row with the chosen option and a chevron, then a sheet of rows.
+   The browser's <select> stays underneath, hidden, so the page reads it as before. */
+.row-pick-native { display: none !important; }
+.row-pick { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-height: 48px; padding: 0 2px;
+  border: 0; border-top: 1px solid var(--hair, var(--panel-dim)); border-bottom: 1px solid var(--hair, var(--panel-dim)); background: transparent;
+  color: var(--panel-ink); font: inherit; font-size: 16px; font-weight: 600; text-align: left; }
+.row-pick span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row-pick i { flex: none; width: 9px; height: 9px; margin-right: 6px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg) translateY(-3px); }
+.row-pick[disabled] { color: var(--panel-dim); }
+.row-pick-sheet { position: fixed; inset: 0; z-index: 60; background: rgba(0, 0, 0, 0.45); display: flex; align-items: flex-end; justify-content: center; }
+.row-pick-sheet .rp-box { width: 100%; max-width: 480px; max-height: 72dvh; display: flex; flex-direction: column; background: var(--panel); color: var(--panel-ink);
+  border-top: 2px solid var(--panel-ink); padding: 12px calc(16px + env(safe-area-inset-right, 0px)) calc(10px + env(safe-area-inset-bottom, 0px)) calc(16px + env(safe-area-inset-left, 0px)); }
+.row-pick-sheet .rp-head { margin: 0 0 6px; font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--panel-dim); }
+.row-pick-sheet .rp-list { overflow-y: auto; overscroll-behavior: contain; }
+.row-pick-sheet .rp-list button { display: block; width: 100%; min-height: 48px; padding: 0 2px 0 14px; border: 0; border-bottom: 1px solid var(--hair, var(--panel-dim));
+  background: transparent; color: var(--panel-ink); font: inherit; font-size: 16px; text-align: left; position: relative; }
+.row-pick-sheet .rp-list button[aria-selected="true"] { font-weight: 800; }
+.row-pick-sheet .rp-list button[aria-selected="true"]::before { content: ""; position: absolute; left: 0; top: 14px; bottom: 14px; width: 3px; background: var(--accent); }
+.row-pick-sheet .rp-cancel { margin-top: 8px; min-height: 48px; border: 1.5px solid var(--panel-ink); background: transparent; color: var(--panel-ink); font: inherit; font-size: 16px; font-weight: 700; }
+@media (orientation: landscape) and (max-height: 540px) { .row-pick-sheet { align-items: center; } .row-pick-sheet .rp-box { max-height: 90dvh; border: 1.5px solid var(--panel-ink); } }

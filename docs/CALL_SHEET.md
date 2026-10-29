@@ -6,6 +6,16 @@ it says so. Things only you can do are in docs/OWNER_TODO.md.
 
 ## 2026-10-29
 
+**Roadmap 2 item 12: the browser's own controls are gone from the drive page, Stages and Compare (U-18).** My calls:
+- *A list choice is a row and a sheet of rows* (`web/row_select.js`): the chosen option with a chevron; tap it for a
+  sheet, the chosen row marked in red. The `<select>` stays underneath, hidden, so nothing that reads it changed. Used
+  for the Stages drive picker, Compare's two drives (now stacked, Swap beside them) and "share a stage with".
+- *Dashcam overlay is a ruled section*: "Pick a video" is an ink key over the hidden file input; the offset is the
+  balance slider from the plan sheet (Earlier / Later), whose style moved to controls.css so both pages share it.
+- *The other selects (car details, build steps, crew drive roles, the crash reason) keep the browser's for now*: they
+  are on forms the next items rework (crew settings, the event sheet); `ApexRowSelect.enhance` is one line each.
+Undo: drop the `ApexRowSelect.enhance` calls.
+
 **Roadmap 2 item 11: the plan sheet has one loop control (U-31).** The dial is the control: the five lengths sit as
 ticks around it (tap one, or turn the dial and it clicks to the nearest), the value in its face. My calls:
 - *The detent chips and both helper sentences are gone.* The Roads keys carry their sentence as a description
