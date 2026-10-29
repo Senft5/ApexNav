@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-r/tKIFUSU6Lxwg36YyGlgVRS32N2sIodrKyFimcLFO4=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-OqM41I+IG/3469WtPV1x+ttYXsAkngiBfBcovxTwjMM=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta · Log</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -532,7 +532,7 @@
       const grid = [0, 250, 500, 750, 1000].map(v => { const y = T + (1 - v / 1000) * (H - T - B); return `<line x1="${L}" x2="${W - R}" y1="${y}" y2="${y}" stroke="${C.rule}"/><text x="${L - 6}" y="${y + 3}" text-anchor="end" font-size="10" fill="${C.panelDim}">${v}</text>`; }).join('');
       const line = pts.map((p, i) => `${i ? 'L' : 'M'}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join('');
       const dots = pts.map(p => `<circle cx="${p[0]}" cy="${p[1]}" r="5" fill="${C.accent}"/><text x="${p[0]}" y="${H - 8}" text-anchor="middle" font-size="10" fill="${C.panelDim}">${p[2].date.slice(5, 10)}</text>`).join('');
-      if (!scored.length) { $('trend').innerHTML = '<p class="note">No scored drives yet. Import a recording, or start a drive on the map; a drive needs a few clean corners to get a Score.</p>'; }
+      if (!scored.length) { $('trend').innerHTML = '<p class="note">No scored drives yet. Start a drive on the map, or import a recording in Garage, Your data; a drive needs a few clean corners to get a Score.</p>'; }
       else $('trend').innerHTML = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Score over time">${grid}<path d="${line}" fill="none" stroke="${C.accent}" stroke-width="2"/>${dots}</svg>`;
 
       // filter by tag (drive_tags.js, IDEAS D-23): chips for the tags in use; a chip toggles; a drive must carry every one picked
@@ -959,7 +959,7 @@
       const list = drives.slice().reverse();
       list.forEach(d => pick.add(new Option(driveLabel(d), d.id)));
       const actions = document.querySelector('#tab-drive .actions'); actions.hidden = !list.length;
-      if (!list.length) { $('dvTitle').textContent = 'No drives yet'; $('dvNote').textContent = ''; $('dvRoot').innerHTML = '<p class="note">Start a drive on the map, or import a recording from the Log.</p>'; return; }
+      if (!list.length) { $('dvTitle').textContent = 'No drives yet'; $('dvNote').textContent = ''; $('dvRoot').innerHTML = '<p class="note">Start a drive on the map, or import a recording in Garage, Your data.</p>'; return; }
       pick.value = list.some(d => d.id === keep) ? keep : list[0].id;
       const d = drives.find(x => x.id === pick.value);
       if (dvView) dvView.destroy();

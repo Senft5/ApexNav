@@ -25,6 +25,8 @@
 - All 24 roadmap items are built. Also done: the packs' closing lines with the score and "best on this road"
   (web/end_line.js, number clips in each bank), the Prefer stamps (web/prefer.js).
 - [x] Build-thread chat (30 days, migration 0036).
+- [x] REVIEW.md 1.2 pass: the live Vetta Score under the meter in every theme (contract-tested), Start on onboarding,
+  import hints point to Garage.
 - [x] Livery extras: Club (chat pin, 3 templates), Works (badges, house stage, call sign, 10 templates), Factory (drawn
   crest, share card, crew hazard categories). Migrations 0037-0038 applied to both D1.
 - Postponed (CALL_SHEET, technical): the crew's spoken regroup line (needs a voice model or a speech server), push

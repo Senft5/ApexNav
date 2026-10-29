@@ -1319,6 +1319,9 @@ flow('theme contract on the page: the hazard plate, the speed, the call and the 
     });
     check(r.bg === 'rgb(17, 17, 17)' && r.edge === 'rgb(255, 122, 26)', `${id}: the same hazard plate ` + JSON.stringify(r));
     check(r.speed >= 40 && r.call >= 21 && !r.small.length, `${id}: speed ${r.speed}, call ${r.call}, small ` + JSON.stringify(r.small));
+    const sc = await page.evaluate(() => { const g = document.querySelector('#cluster .g-score'), b = g && g.getBoundingClientRect(), m = document.querySelector('#cluster .dial-g').getBoundingClientRect();
+      return g && { text: g.textContent, inside: b.bottom <= m.bottom + 1 && b.top >= m.top - 1 }; });
+    check(sc && /^--SCORE$/.test(sc.text) && sc.inside, `${id}: the Score sits under the meter, -- on a replay: ` + JSON.stringify(sc));   // REVIEW.md 4.3
   }
 });
 

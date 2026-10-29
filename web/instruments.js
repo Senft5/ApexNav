@@ -458,6 +458,10 @@
     const center = html('div', 'cluster-center', el);
     const gg = html('div', 'dial dial-g', el);
     const u = [pick(theme, 'dial', 'printed')(sp), readouts(center), odometer(center, printed), pick(theme, 'meter', 'gball')(gg)];
+    // the live Vetta Score under the meter, in every theme (REVIEW.md 4.3: speed left, Limit centre, Score right); "--" until known
+    const sc = html('div', 'g-score', gg), scV = html('b', '', sc, '--');
+    html('span', '', sc, 'SCORE');
+    u.push(d => { const t = Number.isFinite(d.score) ? String(Math.round(d.score)) : '--'; if (scV.textContent !== t) scV.textContent = t; });
     if (theme.mascot === 'kit') u.push(kitRow(el));                  // Tapedeck's fox, a row of its own under the gauges
     // Keep the road type below Trip; a route without sector data has no known type.
     const roadType = html('div', 'dna-arch', center, 'Road: --');

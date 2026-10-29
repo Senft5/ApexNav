@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-laHjqVv65JNxrkI6nD4xXN68CpWbQFhK1I7yQtC2hYc=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-DsomX75rA1K7ZvQy5tpb2+v9Yd0visaQwcWBeDXEI5Q=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -303,13 +303,18 @@
     .cluster-dials { display: grid; grid-template-columns: var(--dial) minmax(0, 1fr) var(--dial); gap: 8px; align-items: center; }
     .dial { width: var(--dial); height: var(--dial); }
     .dial-svg { width: 100%; height: 100%; display: block; }
+    /* the meter's column makes room under it for the live Score (REVIEW.md 4.3) in every theme */
+    .dial.dial-g { display: flex; flex-direction: column; align-items: stretch; }
+    .dial.dial-g > :not(.g-score) { flex: 1 1 0; min-height: 0; width: 100%; }
+    .dial.dial-g > .g-score { flex: none; height: 44px; }
+    .dial-g.bezelled .bezel-ring { height: calc(100% - 44px); }   /* Billet's ring rounds the meter, not the Score */
     .dial-num { font-family: var(--font-num); font-size: 15px; font-weight: 600; fill: var(--face-ink); }
     .dial-label { font-size: 14px; font-weight: 700; letter-spacing: 2px; fill: var(--face-dim); }
     .dial-tiny { font-size: 11px; fill: var(--face-dim); }
     /* Speed is the one number read at a glance: the dial draws at a bit over half size, so 70 here is at least 40 px on a
        phone (the theme contract's floor, theme_contract.js); the bank readout at least 13 px. */
     .dial-digital { font-family: var(--font-num); font-size: 70px; font-weight: 700; fill: var(--face-ink); }
-    .dial-digital.small { font-size: 24px; fill: var(--accent); }
+    .dial-digital.small { font-size: 36px; fill: var(--accent); }   /* the g-ball shares its column with the Score: 36 keeps BANK over 13 px */
     .gauge-printed .dial-num { font-size: 17px; font-weight: 700; }
     .cluster-center { min-width: 0; display: grid; gap: 4px; justify-items: center; align-content: center; }
     .readouts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; width: min(100%, 250px); }
@@ -700,6 +705,7 @@
     .stage-bar.ahead { border-left-color: #2e9e5b; } .stage-bar.behind { border-left-color: #d0453a; }
     .hz-ask span { flex: 1; font-weight: 700; }
     .hz-ask .key { min-height: 56px; }
+    .g-score { text-align: center; line-height: 1; margin-top: 2px; } .g-score b { display: block; font: 700 26px var(--font-num); color: var(--panel-ink); letter-spacing: 0.04em; } .g-score span { font-size: 13px; letter-spacing: 0.08em; color: var(--panel-dim); }
     .hz-pin, .pin.bump, .pin.crest, .pin.dip { font: 800 11px var(--font-ui, sans-serif); letter-spacing: 0.06em; padding: 2px 6px 2px 5px; border: 2px solid var(--hz-edge); color: var(--hz-ink); background: var(--hz-bg); white-space: nowrap; }
     .hz-pin::before, .pin.bump::before, .pin.crest::before, .pin.dip::before { content: ""; display: inline-block; width: 0; height: 0; margin-right: 4px; vertical-align: -1px;
       border-left: 5px solid transparent; border-right: 5px solid transparent; border-bottom: 9px solid var(--hz-edge); }
@@ -1103,7 +1109,7 @@
       <div class="ob-strip" aria-hidden="true"><div class="notes" id="obNotes"></div></div>
     </div>
     <div class="stack">
-      <button class="ink-btn solid" id="obNext">Get started</button>
+      <button class="ink-btn solid" id="obNext">Start</button>
       <button class="linkbtn" id="obAlt">Watch a replay</button>
     </div>
   </div>
@@ -2295,7 +2301,8 @@
         tripMi: ApexUnits.longN(live && (idx < 0 || track.kind === 'horizon') ? (drive.rec ? drive.rec.km * 1000 : 0) : state.cursorM), totalMi: track && track.kind !== 'horizon' && !(live && idx < 0) ? ApexUnits.longN(totalM()) : null,
         sector: sectorAt(idx), routeOnly: track && track.kind === 'route',
         // for Tapedeck's meters and Kit (instruments.js): the live roughness, the last line said, a crest close ahead, a blink
-        rough, kitLine: state.kitLine, crestAhead: !!state.crestAhead, blink: performance.now() < (state.blinkUntil || 0)
+        rough, kitLine: state.kitLine, crestAhead: !!state.crestAhead, blink: performance.now() < (state.blinkUntil || 0),
+        score: live ? liveScore.value : null   // the drive's Vetta Score so far (liveScoreTick), only while recording
       });
       updateRibbon(vMps, idx, snap);
       updatePins();
@@ -5247,9 +5254,26 @@
       const L = drive.live, r = drive.rec; if (!L || !r) return;
       while (drive.liveIdx < r.rows.length) { const x = r.rows[drive.liveIdx++]; L.push({ lat: x.lat, lon: x.lon, roughness_rms: x.roughness_rms, camber_deg: x.camber_deg, crest: x.crest_vertical_g }); }
     }
+    // The live Vetta Score (REVIEW.md 1.2, Driving; 4.3): the drive so far scored the way the end card scores it, every 30 s
+    // while recording; null (shown "--") until there are enough clean corners.
+    const liveScore = { value: null, at: 0, busy: false };
+    function liveScoreTick() {
+      const r = drive.rec;
+      if (!r || r.samples < 200) { liveScore.value = null; return; }   // a new drive starts at --
+      if (liveScore.busy || performance.now() - liveScore.at < 30000) return;
+      liveScore.busy = true; liveScore.at = performance.now();
+      setTimeout(() => {
+        try {
+          const d = ApexRecording.parse(Core, r.toCsv(), 'live.csv', { source: 'web-gps' });
+          const s = Core.driverScore(d.speed_mps, d.lon_g, d.lat_g, ApexRecording.scorableCorners(d, d.corners)).score;
+          liveScore.value = Number.isFinite(s) ? Math.round(s) : null;
+        } catch (_) { liveScore.value = null; } finally { liveScore.busy = false; }
+      }, 0);
+    }
     // Which road the drive is on, every 150 m (30 rows), read from the map's own vector tiles (ApexRoadNames):
     // the saved drive is named after the road that carried most of it. Nothing leaves the phone for this.
     function noteRoads() {
+      liveScoreTick();
       const r = drive.rec; if (!r || !window.ApexRoadNames) return;
       while (drive.roadIdx + 30 <= r.rows.length) {
         drive.roadIdx += 30;
@@ -6003,7 +6027,7 @@
     // =======================================================================
     // 10c. FIRST RUN: three screens, shown once. No permissions here (they are asked at the first Start drive).
     // =======================================================================
-    // First run is one screen (REVIEW.md roadmap 8): the mark, a line, the road book calling corners on a loop, Get started.
+    // First run is one screen (REVIEW.md roadmap 8): the mark, a line, the road book calling corners on a loop, Start.
     // The voice comes with the theme and sign-in waits for the first social action, so neither is asked here.
     const OB_NOTES = [
       { type: 'corner', dir: 'L', severity: '4', mods: ['tightens'], call: 'Left 4 tightens', code: 'L4', dist: '300', unit: 'ft' },
@@ -6024,7 +6048,7 @@
       const finish = () => { flag('apex.onboarded', '1'); ob.classList.remove('show'); };
       $('obNext').onclick = finish;
       $('obAlt').onclick = () => { finish(); watchDryRidge(); };
-      // Focus the dialog, not its button: VoiceOver reads the welcome, and no focus ring sits on Get started before a touch
+      // Focus the dialog, not its button: VoiceOver reads the welcome, and no focus ring sits on Start before a touch
       ob.classList.add('show'); tick(); ob.tabIndex = -1; ob.focus();
     }
     setTimeout(() => health.flush(IN_APP_SHELL ? 'ios' : 'web').catch(() => {}), 5000);

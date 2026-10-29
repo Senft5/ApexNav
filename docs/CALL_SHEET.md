@@ -6,6 +6,17 @@ it says so. Things only you can do are in docs/OWNER_TODO.md.
 
 ## 2026-10-29
 
+**The binnacle shows the live Vetta Score (REVIEW.md 1.2 Driving, 4.3), and a last pass over the 1.2 screen list.** My calls:
+- *The Score sits under the meter in every theme* (speed left, Limit centre, Score right): the drive so far, scored the way
+  the end card scores it, every 30 s while recording; "--" until there are enough clean corners, and on a replay. The
+  meter shrinks to make room; Billet's bezel rounds the meter only; the g-ball's BANK text grew so it stays over 13 px.
+- *Onboarding's one button says Start* (REVIEW.md 1.2, Onboarding 1); Watch a replay stays as a text link, since it's how
+  someone without a car (an App Store reviewer) sees the product.
+- *The Log's empty states point to Garage, Your data for import*, where import moved in phase 2.
+- Checked and already in place from phases 1-2: the place plate, Layers key, plan basic/More, route card dials (Twist,
+  Flow, Surface, Cameras), the hazard-style report buttons and CREST/DIP pins, the drive-ended card, the Log hero and
+  index, drive detail, Stages in Log, the Crew signed-out line, red destructive actions behind a confirm.
+
 **No toast repeats the route bar (REVIEW.md 1.2, Route bar).** A planned route no longer toasts its name, length and fun
 score; the bar and the card say them. A loop toasts only when it couldn't match what you asked ("the closest good loop
 to 45 mi"). Undo: the two toasts are in git history.
