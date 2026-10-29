@@ -4291,28 +4291,28 @@
   },
   "navd:1.3km": {
    "file": "navd_1_3km.m4a",
-   "dur": 1.84,
+   "dur": 1.838,
    "text": "In one point three kilometres,",
    "heard": 0.67,
    "voice": "bm_lewis"
   },
   "navd:1.4km": {
    "file": "navd_1_4km.m4a",
-   "dur": 1.837,
+   "dur": 1.84,
    "text": "In one point four kilometres,",
    "heard": 0.67,
    "voice": "bm_lewis"
   },
   "navd:1.5km": {
    "file": "navd_1_5km.m4a",
-   "dur": 1.923,
+   "dur": 1.921,
    "text": "In one point five kilometres,",
    "heard": 0.67,
    "voice": "bm_lewis"
   },
   "line:rerouting": {
    "file": "line_rerouting.m4a",
-   "dur": 0.703,
+   "dur": 0.709,
    "text": "Rerouting.",
    "heard": 0.0,
    "voice": "bm_lewis"
@@ -4342,7 +4342,7 @@
    "file": "line_minute_slower.m4a",
    "dur": 0.97,
    "text": "minute slower.",
-   "heard": 0.5,
+   "heard": 1.0,
    "voice": "bm_lewis"
   },
   "line:minutes_slower": {

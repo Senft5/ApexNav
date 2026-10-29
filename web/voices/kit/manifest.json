@@ -1769,9 +1769,9 @@
   },
   "head:L5+dist:200": {
    "file": "p_211446a936b3.m4a",
-   "dur": 1.993,
+   "dur": 2.214,
    "text": "Left five, two hundred.",
-   "heard": 0.75,
+   "heard": 1.0,
    "voice": "bm_fable"
   },
   "mod:tightens+caution:1+link:into+head:RAC+mod:long": {
@@ -1964,9 +1964,9 @@
   },
   "head:R2+link:into+head:L2+dist:80": {
    "file": "p_5c9396833d22.m4a",
-   "dur": 2.354,
+   "dur": 2.28,
    "text": "Right two into Left two, eighty.",
-   "heard": 0.77,
+   "heard": 1.0,
    "voice": "bm_fable"
   },
   "head:L5-+link:and+head:L5-": {
@@ -2037,7 +2037,7 @@
   },
   "head:RSQ+caution:1+dist:350": {
    "file": "p_8894ca50a031.m4a",
-   "dur": 2.373,
+   "dur": 2.372,
    "text": "Square right, care, three fifty.",
    "heard": 0.73,
    "voice": "bm_fable"
@@ -2059,9 +2059,9 @@
   },
   "mod:tightens+caution:1+link:into+head:R3": {
    "file": "p_6d579ffe2f51.m4a",
-   "dur": 2.214,
+   "dur": 2.46,
    "text": "Tightens, care into Right three.",
-   "heard": 0.55,
+   "heard": 0.91,
    "voice": "bm_fable"
   },
   "head:R5-+mod:long+mod:opens": {
@@ -2235,7 +2235,7 @@
   },
   "head:RHP+caution:1+link:into": {
    "file": "p_111541c2736d.m4a",
-   "dur": 2.093,
+   "dur": 2.112,
    "text": "Right hairpin, care into.",
    "heard": 0.75,
    "voice": "bm_fable"
@@ -2359,7 +2359,7 @@
   },
   "head:LAC+mod:long+caution:1+link:into+head:R2+mod:long": {
    "file": "p_f776ba815486.m4a",
-   "dur": 2.827,
+   "dur": 2.826,
    "text": "Acute left long, care into Right two long.",
    "heard": 0.35,
    "voice": "bm_fable"
@@ -2525,9 +2525,9 @@
   },
   "head:LSQ+caution:1+dist:80": {
    "file": "p_8695805f7c2a.m4a",
-   "dur": 2.136,
+   "dur": 2.137,
    "text": "Square left, care, eighty.",
-   "heard": 0.67,
+   "heard": 0.89,
    "voice": "bm_fable"
   },
   "head:L1++dist:60": {
@@ -2537,7 +2537,7 @@
   },
   "head:L4+dist:250": {
    "file": "p_1207741cc90f.m4a",
-   "dur": 2.002,
+   "dur": 2.033,
    "text": "Left four, two fifty.",
    "heard": 0.75,
    "voice": "bm_fable"
@@ -2549,7 +2549,7 @@
   },
   "caution:1+dist:200": {
    "file": "p_1f86b5c983bd.m4a",
-   "dur": 1.543,
+   "dur": 1.541,
    "text": "Care, two hundred.",
    "heard": 0.67,
    "voice": "bm_fable"
@@ -2575,16 +2575,16 @@
   },
   "head:L3+dist:80": {
    "file": "p_2daa65a029e7.m4a",
-   "dur": 1.734,
+   "dur": 1.753,
    "text": "Left three, eighty.",
-   "heard": 0.67,
+   "heard": 1.0,
    "voice": "bm_fable"
   },
   "head:LAC+mod:long+caution:1+dist:450": {
    "file": "p_24d7b9636b63.m4a",
-   "dur": 2.518,
+   "dur": 2.861,
    "text": "Acute left long, care, four fifty.",
-   "heard": 0.62,
+   "heard": 0.67,
    "voice": "bm_fable"
   },
   "head:L3-+dist:200": {
@@ -2684,7 +2684,7 @@
   },
   "head:L4+dist:70": {
    "file": "p_a7908731a1e3.m4a",
-   "dur": 1.718,
+   "dur": 1.719,
    "text": "Left four, seventy.",
    "heard": 0.67,
    "voice": "bm_fable"
@@ -2778,7 +2778,7 @@
   },
   "mod:opens+link:into+head:RAC+mod:long": {
    "file": "p_29e189476b03.m4a",
-   "dur": 2.2,
+   "dur": 2.199,
    "text": "Opens into Acute right long.",
    "heard": 0.73,
    "voice": "bm_fable"
