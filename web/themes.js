@@ -12,7 +12,10 @@
 
   const THEMES = {
     roadbook: {
-      id: 'roadbook', label: 'Road book', tag: 'A', blurb: 'Paper and red ink.',
+      id: 'roadbook', label: 'Roadbook', tag: 'A', blurb: 'Paper and red ink.', pro: false,
+      about: 'Paper, ink and one red pen. Reads in direct sun; night turns the page over after sunset.',
+      // the theme's co-driver (REVIEW.md 4.4): who reads the notes comes with the look
+      voice: { id: 'marguerite', name: 'Marguerite', who: 'Calm, exact, a step ahead.', sample: 'Left four, tightens. Long. Care.' },
       fonts: FONT, cluster: 'dials', notes: 'roadbook', gauge: 'printed',
       renderers: { dial: 'printed', meter: 'gball', strip: 'roadbook' },   // the theme contract's three renderers (theme_contract.js)
       day: {
@@ -33,7 +36,7 @@
       }
     }
   };
-  function get() { return THEMES.roadbook; }
+  function get(id) { return typeof id === 'string' && Object.prototype.hasOwnProperty.call(THEMES, id) ? THEMES[id] : THEMES.roadbook; }   // unknown or retired: the road book
 
   // Accents (IDEAS S-10): cosmetic colours for the route line and the cockpit's accent, unlocked with earned Octane
   // (Settings → Look). Warnings keep their own colour (signal) whatever the accent: nothing here changes what a hazard looks like.

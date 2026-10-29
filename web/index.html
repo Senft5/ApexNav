@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-v0fRax0pRIpDOzxb3iT1tbogc2A2MivmLd102C4vSTI=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-NZxRVn77zTMv6VcscD9unCZ2hH7rRh/ua83AViHT4cw=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -48,6 +48,7 @@
   <script src="plan_presets.js"></script>
   <script src="place_plate.js"></script>
   <script src="horizon.js"></script>
+  <script src="pro.js"></script>
   <script src="week_digest.js"></script>
   <script src="drive_card.js"></script>
   <script src="outbox.js"></script>
@@ -473,6 +474,21 @@
     /* the replay's keys get the same bevel as every other key (REVIEW.md 1.2, Replay: one button language) */
     .transport .key { box-shadow: inset 0 -3px 0 var(--rule); }
     .transport .key.on { box-shadow: inset 0 -3px 0 var(--accent); }
+    /* ---------------- Look and voice (REVIEW.md 4.5, mockup 11) ---------------- */
+    .theme-cards { display: grid; gap: 12px; margin-top: 8px; }
+    .theme-card { border: 1.5px solid var(--panel-ink); padding: 0 0 12px; }
+    .theme-card.in-use { border-width: 2.5px; }
+    .theme-preview { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 14px 14px; margin-bottom: 10px;
+      background: var(--panel); color: var(--panel-ink); border-bottom: 1.5px solid var(--panel-ink); }
+    .tp-tulip svg { width: 44px; height: 44px; display: block; }
+    .tp-call b { display: block; font: 800 22px/1 var(--font-ui); } .tp-call i { display: block; font: 800 18px/1.1 var(--font-ui); font-style: normal; color: var(--accent); }
+    .tp-speed { text-align: right; } .tp-speed b { font: 800 40px/0.9 var(--font-num); } .tp-speed small { display: block; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; color: var(--panel-dim); }
+    .tc-head, .tc-voice, .theme-card > .note { padding: 0 14px; }
+    .tc-head { display: flex; align-items: center; gap: 10px; } .tc-head b { font-size: 20px; flex: 1; }
+    .tc-pro { font-size: 11px; font-weight: 800; letter-spacing: 0.12em; padding: 2px 6px; border: 1.5px solid var(--panel-ink); }
+    .tc-inuse { font-size: 13px; font-weight: 700; color: var(--panel-dim); }
+    .tc-voice { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; font-size: 14px; }
+    .tc-voice p { margin: 0; }
     .rc-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 18px; margin-top: 10px; }
     label.linkbtn { display: inline-flex; align-items: center; cursor: pointer; }
     .linkbtn { font: inherit; font-size: 15px; font-weight: 500; color: var(--panel-ink); text-decoration: underline; min-height: 44px; padding: 0 4px; background: none; border: none; }
@@ -876,6 +892,13 @@
             <div id="hlList" class="stack-8 mt-8"></div>
             <div id="hlNearby" class="stack-8 mt-8"></div>
           </section>
+          <!-- Look and voice (REVIEW.md 4.5, mockup 11-theme-picker.html): each theme with a live preview, its co-driver and
+               a Hear key. Pro themes carry a PRO tag (never a padlock) and can be tried in full on the demo replay. -->
+          <section data-panel="garage" id="lookSection">
+            <h3>Look and voice</h3>
+            <p class="note">A theme changes the type, colours, gauges, map, motion and the co-driver's voice. The calls, the hazards and where things sit never change.</p>
+            <div class="theme-cards" id="themeCards"></div>
+          </section>
           <section data-panel="garage">
             <h3>Co-driver</h3>
             <div class="switches">
@@ -1226,7 +1249,7 @@
       cluster = Inst.mountCluster($('cluster'), look.theme);
       paintSwitches();
       restyleBasemap();
-      if (track) loadTrackOnMap();
+      if (track && track.kind !== 'horizon') loadTrackOnMap();   // the road ahead is never drawn
       savePrefs();
       render(false);
     }
@@ -4802,6 +4825,56 @@
     $('loopSuggest').addEventListener('click', () => { if (!loopBusy) $('findLoopBtn').click(); });
     document.querySelectorAll('#loopDetents button').forEach(b => b.addEventListener('click', paintLoopSuggest));
     paintLoopSuggest();
+    // ---- Look and voice: the theme picker (REVIEW.md 4.5) ---------------------------------------------------------------
+    // A card per theme: a live preview of its strip and speed in its own tokens, its name, two lines, its co-driver with one
+    // sample line and a Hear key. Roadbook is free; a Pro theme can be tried on the demo replay for 10 minutes, then the
+    // look comes back and one line says what it is (pro.js: Pro isn't on sale yet, and says so).
+    const proFlags = () => (window.ApexFlags ? { pro: ApexFlags.on('pro', false), proOnSale: ApexFlags.on('proOnSale', false) } : {});   // both off unless the server turns them on
+    const themeAllowed = (id) => { const t = Themes.THEMES[id]; return !!t && (!t.pro || ApexPro.allowed(`theme_${id}`, localStorage, proFlags())); };
+    let themeTrial = null;                                            // { id, was, timer } while a Pro theme is being tried
+    function useTheme(id) { state.theme = id; savePrefs(); applyTheme(); renderThemePicker(); }
+    function endThemeTrial(say) {
+      if (!themeTrial) return;
+      clearTimeout(themeTrial.timer);
+      const { id, was } = themeTrial; themeTrial = null;
+      useTheme(was);
+      if (say) toast(ApexPro.line(`theme_${id}`, proFlags()) || '', { ms: 8000 });
+    }
+    function tryTheme(id) {
+      if (themeTrial) endThemeTrial(false);
+      themeTrial = { id, was: themeAllowed(state.theme) ? state.theme : 'roadbook', timer: setTimeout(() => endThemeTrial(true), 10 * 60000) };
+      useTheme(id); closeSheet();
+      if (typeof watchDryRidge === 'function') watchDryRidge();
+      toast(`Trying ${Themes.THEMES[id].label} for 10 minutes on the demo replay.`, { label: 'Stop', ms: 6000, onClick: () => endThemeTrial(false) });
+    }
+    function themePreview(t) {
+      const c = t.day, box = document.createElement('div');
+      box.className = `theme-preview tp-${t.id}`;
+      for (const [k, v] of Object.entries(c)) box.style.setProperty(`--${k.replace(/[A-Z]/g, m => '-' + m.toLowerCase())}`, v);
+      box.style.setProperty('--font-ui', t.fonts.ui); box.style.setProperty('--font-num', t.fonts.num);
+      box.innerHTML = `<span class="tp-tulip">${Inst.tulipSVG({ type: 'corner', dir: 'L', severity: '4', mods: ['tightens'], turnRad: 1.2 }, c.panelInk, c.accent)}</span>`
+        + '<span class="tp-call"><b>LEFT 4</b><i>TIGHTENS</i></span><span class="tp-speed"><b>42</b><small>MPH</small></span>';
+      return box;
+    }
+    function renderThemePicker() {
+      const box = $('themeCards'); if (!box) return;
+      box.replaceChildren(...Object.values(Themes.THEMES).map((t) => {
+        const card = el('div', { className: 'theme-card' + (state.theme === t.id ? ' in-use' : '') });
+        const ok = themeAllowed(t.id), inUse = state.theme === t.id && !themeTrial;
+        const act = inUse ? el('span', { className: 'tc-inuse', textContent: 'In use' })
+          : ok ? btn('Use', () => useTheme(t.id), 'ink-btn') : btn('Try it', () => tryTheme(t.id), 'ink-btn');
+        const hear = btn('Hear', () => { if (window.ApexVoice) ApexVoice.unlock(); say(t.voice ? t.voice.sample : 'Left four, tightens.', true, null, null, { voicePack: t.voice && t.voice.id }); }, 'ink-btn tc-hear');
+        hear.setAttribute('aria-label', `Hear ${t.voice ? t.voice.name : t.label}`);
+        card.append(themePreview(t),
+          el('div', { className: 'tc-head' }, el('b', { textContent: t.label }), ...(t.pro ? [el('span', { className: 'tc-pro', textContent: 'PRO' })] : []), act),
+          el('p', { className: 'note', textContent: t.about || t.blurb || '' }),
+          el('div', { className: 'tc-voice' }, el('p', {}, el('b', { textContent: `Voice: ${t.voice ? t.voice.name : '--'}. ` }), document.createTextNode(t.voice ? `${t.voice.who} "${t.voice.sample}"` : '')), hear));
+        return card;
+      }));
+    }
+    // a Pro theme without Pro (a shared phone, Pro lapsed) goes back to the road book, never silently kept
+    if (!themeAllowed(state.theme)) { state.theme = 'roadbook'; savePrefs(); applyTheme(); }
+    renderThemePicker();
     // Long help in the Garage folds under "How this works" (REVIEW.md 1.2, Settings): the control first, the essay on demand.
     document.querySelectorAll('#sheet [data-panel~="garage"] > p.note').forEach((p) => {
       if (p.id || p.textContent.trim().length < 140) return;                // short notes and live status lines stay as they are
