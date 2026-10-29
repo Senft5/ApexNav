@@ -111,7 +111,9 @@
     .cp-title { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
     .cp-title h2 { margin: 0; font-size: 30px; line-height: 1.05; overflow-wrap: anywhere; }
     .cp-motto { font-style: italic; color: var(--panel-dim); margin: 2px 0 0; }
-    .cp-meta { font-weight: 600; margin: 4px 0 0; }
+    .cp-meta { font-weight: 600; font-size: 13px; margin: 4px 0 0; }   /* fits one line at 361 pt */
+    .cp-livery-line { margin: 0; }
+    .cp-livery > .linkbtn { justify-self: start; color: var(--panel-dim); }   /* Take them off: left, in pencil */
     .cp-sec { display: flex; justify-content: space-between; align-items: baseline; }
     .crew-page .cp-sec h3 { margin: 0; font-size: 22px; border: 0; padding: 0; }
     .cp-sec { margin-top: 10px; }
@@ -145,7 +147,7 @@
     .cp-meter i { position: absolute; inset: 0 auto 0 0; background: var(--panel-ink); }
     .cp-meter b { position: absolute; top: -5px; bottom: -5px; width: 1.5px; background: var(--panel-ink); }
     .cp-stickers { display: flex; flex-wrap: wrap; gap: 6px; }
-    .cp-stickers span { width: 34px; height: 34px; border: 1.5px solid var(--panel-ink); display: grid; place-items: center; font-family: var(--font-num); font-size: 13px; color: #fff; }
+    .cp-stickers span { width: 34px; height: 34px; border: 1.5px solid var(--panel-ink); display: grid; place-items: center; font-family: var(--font-num); font-size: 17px; font-weight: 800; color: #fff; }
     .cp-badge { display: inline-block; margin-left: 6px; padding: 0 6px; border: 1.5px solid var(--panel-ink); font-size: 13px; font-weight: 600; transform: rotate(-2deg); }
     .cp-pin { border-left: 3px solid var(--cp-stripe); padding: 4px 0 4px 10px; }
     .cp-pin .cp-badge { margin: 0 8px 0 0; }
@@ -218,6 +220,8 @@
     // The livery (REVIEW.md 5.1, mockup 09): the tier, the Decals and the next threshold, supporters as tilted stickers.
     function liveryBox(c, redo) {
       const l = c.livery || { tier: 'plain', decals: 0, next: { tier: 'club', at: 5 }, supporters: [] };
+      // nothing to count yet: one pencil line, no box and no empty gauge (REVIEW2.md crew page)
+      if (!l.decals && !(l.mine && l.mine.pro)) return el('p', { className: 'note cp-livery-line', textContent: `${TIER_NAME[l.tier] || 'Plain'} livery · Decals come from crew-mates with Vetta Pro` });
       const box = el('div', { className: 'cp-livery' }, el('h3', { textContent: `${TIER_NAME[l.tier] || 'Plain'} livery` }),
         el('span', { className: 'note', textContent: liveryLine(l) }));
       const meter = el('div', { className: 'cp-meter', role: 'img' });
@@ -228,9 +232,10 @@
       if ((l.supporters || []).length) {
         const stickers = el('div', { className: 'cp-stickers' });
         l.supporters.forEach((s, i) => {
-          const tag = el('span', { textContent: String(s.decals), title: `@${s.handle || '?'}` });
+          // the supporter's initial, not a count: numbers on tilted squares read as dice (REVIEW2.md U-42)
+          const tag = el('span', { textContent: (String(s.handle || '?').replace(/^@/, '')[0] || '?').toUpperCase(), title: `@${s.handle || '?'}` });
           tag.style.background = [c.stripe, c.stripe2, c.stripe3, '#111111'].filter(stripeOk)[i % 2] || 'var(--accent)';
-          tag.style.transform = `rotate(${[-6, 4, -3, 7, -5][i % 5]}deg)`;
+          tag.style.transform = `rotate(${[-6, 4, -5, 7, -8][i % 5]}deg)`;
           tag.setAttribute('aria-label', `@${s.handle || '?'}: ${s.decals} Decal${s.decals === 1 ? '' : 's'}`);
           stickers.append(tag);
         });

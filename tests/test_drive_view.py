@@ -143,7 +143,7 @@ def test_summary_hierarchy_and_scrub_readout(r):
     for removed in ("Top speed", "Peak lateral", "Peak braking", "Climb"):
         assert removed not in h
     u = r["unscoredHeadHtml"]
-    assert "><b class=\"score big\">--</b> <small>/1000</small>" in u
+    assert "><b class=\"score big\"><i class=\"unk\">--</i></b> <small>/1000</small>" in u   # unknown stays "--", in pencil (REVIEW2.md U-34)
     assert "Pace --" in u and "Smooth --" in u and "Brakes --" in u and "Rhythm --" in u
     assert r["hiddenBeforeScrub"] is True and r["hiddenAfterKeyScrub"] is False
     assert r["hiddenBeforeZoom"] is True and r["hiddenAfterZoom"] is False

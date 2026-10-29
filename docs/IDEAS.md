@@ -259,15 +259,15 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 | U-31 | Plan sheet: one loop control (the dial with five drawn detents and the value in its face), no chips, no helper sentences | M | S | done (Roadmap 2 item 11) | REVIEW2.md §2 Plan sheet, mockup 02 |
 | U-32 | Log index: hero, one quiet summary row, then the drive list with a corner-density sparkline per row; Your week as the list's first row | M | M | done (Roadmap 2 item 14) | REVIEW.md roadmap 13, REVIEW2.md §2 Log |
 | U-33 | Empty states as one line and one action, never a bordered box (Stages, Crews near you, Spots near you, Routes shared) | M | S | partial (Roadmap 2 item 14: the Log and Stages; Crews and Spots near you still explain in a line) | REVIEW.md 1.1 (7), REVIEW2.md §2 |
-| U-34 | The score placeholder "--" drawn in the numeral font at the score's size, not as two filled bars (drive-ended card, Log hero, drive detail) | L | S | todo | REVIEW2.md §2 |
+| U-34 | The score placeholder "--" drawn in the numeral font at the score's size, not as two filled bars (drive-ended card, Log hero, drive detail) | L | S | done (Roadmap 2 item 15) | REVIEW2.md §2 |
 | U-35 | Live Activity to the HIG: compact trailing shows the tulip and a short call ("R1+"), minimal shows a glyph only, expanded regions get 10 pt margins and a two-line note, a hazard turns the keyline and triangle signal orange | M | S | done (#240: short call, glyph minimal, 10 pt margins, two-line note, hazard keyline orange) | REVIEW2.md §1 Live Activity |
 | U-36 | Night as a mode on the binnacle: larger speed numeral, Limit and Sight on one row, the trip readout hidden until tapped | M | M | todo | REVIEW.md roadmap 11 remainder |
 | U-37 | Capture stubs for every mockup surface in `tools/app_tour.js`: a routed route with corners, profile and alternatives; two friends and a home zone on the map; the Plan a drive form open; the crew board and chat; a Tapedeck drive, not only a replay | M | S | todo | REVIEW2.md §2 (Route card, Friends on the map, Plan a drive) |
 | U-38 | Kit redrawn at 80 px on a 16 x 14 grid with two idle frames and the four lean frames wired to the call's direction; the "KIT SAYS" line wraps to two | M | M | todo | REVIEW.md 4.1, REVIEW2.md §3 |
 | U-39 | The Pro-trial banner leaves the map (the hazard plate's place) for the status line: "Tapedeck · 9:40 left · Stop" | L | S | done | REVIEW2.md §2 Replay Tapedeck |
 | U-40 | The Limit readout as the white US sign (theme contract 4.3.5): 44 x 52 px, black border, SPEED LIMIT in 7 px caps | M | S | todo | REVIEW.md 4.3 |
-| U-41 | "1,240 points" in the Garage header: remove, or name the unit | L | S | todo | REVIEW2.md §2 Garage |
-| U-42 | Works stickers carry the supporter's initial in the stripe colour, not a count | L | S | todo | REVIEW2.md §2 Crew Works livery |
+| U-41 | "1,240 points" in the Garage header: remove, or name the unit | L | S | done (Roadmap 2 item 15) | REVIEW2.md §2 Garage |
+| U-42 | Works stickers carry the supporter's initial in the stripe colour, not a count | L | S | done (Roadmap 2 item 15) | REVIEW2.md §2 Crew Works livery |
 | U-43 | Shared ETA page never prints NaN or Invalid Date: "This link has ended", or "--" | M | S | done (#240) | REVIEW2.md §2 (honesty rule) |
 | U-44 | The slide switch component: 44 x 24 track, 20 px thumb with travel and a 2 px drop, used in Layers, Garage and Friends in place of the 36 x 20 toggle | M | S | done (Roadmap 2 item 10) | REVIEW.md 2.1, REVIEW2.md §2 Layers |
 | U-45 | Replay controls as one slide switch (Pause / Play) and a speed detent; the elevation thumbnail as a full-width scrubber; the tab bar hidden during replay as during a drive | M | S | todo | REVIEW2.md §2 Replay Roadbook |

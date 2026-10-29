@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-GCOOS/k9a6dAPJbW0k8Gbi+TOF8UuvD9nR+71hrKlhw=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-BFDqTz9ev3+FPi91O6/B3U1ZIetHLYIvwVUC1OzNsrE=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -492,6 +492,7 @@
     .end-meta { margin: 4px 0 0; color: var(--panel-dim); font-size: 15px; }
     .end-score { display: grid; grid-template-columns: auto 1fr; align-items: baseline; column-gap: 6px; margin: 18px 0 0; padding: 12px 0; border-top: 2px solid var(--panel-ink); border-bottom: 1px solid var(--rule); }
     .end-score b { font: 800 84px/0.9 var(--font-num); font-variant-numeric: tabular-nums; }
+    .end-score b.unk { font-weight: 600; color: var(--panel-dim); letter-spacing: 0.06em; }
     .end-score small { font-size: 18px; font-weight: 600; color: var(--panel-dim); }
     .end-score span { grid-column: 1 / -1; margin-top: 6px; font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--panel-dim); }
     .end-line { margin: 12px 0 0; font-size: 16px; line-height: 1.35; }
@@ -587,6 +588,8 @@
     .bezel-ring .screw { fill: #3A3C40; stroke: #8A8D93; stroke-width: 0.8; }
     .tp-billet { background: linear-gradient(180deg, #2A2B2E, #1C1D1F); } .tp-billet .tp-speed b { color: #FF5A4C; text-shadow: 0 0 8px rgba(255, 74, 61, 0.6); }
     .rc-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 18px; margin-top: 10px; }
+    /* two weights: Save and Share in ink, the rest in pencil (REVIEW2.md route card) */
+    .rc-links .linkbtn { color: var(--panel-dim); font-weight: 500; } .rc-links #routeSaveBtn, .rc-links #routeShareBtn { color: var(--panel-ink); font-weight: 700; }
     label.linkbtn { display: inline-flex; align-items: center; cursor: pointer; }
     .linkbtn { font: inherit; font-size: 15px; font-weight: 500; color: var(--panel-ink); text-decoration: underline; min-height: 44px; padding: 0 4px; background: none; border: none; }
     details.how { margin: 2px 0 6px; }
@@ -4582,8 +4585,7 @@
       const you = section('You');
       // your profile photo (REVIEW.md 5.2): a round face beside your handle, or your initial until you add one
       const face = window.ApexPhotos ? ApexPhotos.avatar(me.photo_id, me.handle, 72) : null;
-      you.append(el('div', { className: 'row', style: 'align-items:center;gap:12px' }, ...(face ? [face] : []), el('b', { textContent: `@${me.handle}`, style: 'font-size:22px;font-family:var(--font-num)' }),
-        el('span', { className: 'note', textContent: pts && Number.isFinite(pts.total) ? `${Math.round(pts.total).toLocaleString()} points` : '' })));
+      you.append(el('div', { className: 'row', style: 'align-items:center;gap:12px' }, ...(face ? [face] : []), el('b', { textContent: `@${me.handle}`, style: 'font-size:22px;font-family:var(--font-num)' })));   // no "points": a number with no unit (REVIEW2.md U-41)
       if (face && me.member) you.append(el('div', { className: 'row' }, ApexPhotos.picker(me.photo_id ? 'Change photo' : 'Add a photo', 'profile', null, redo, { toast }),
         ...(me.photo_id ? [btn('Remove photo', async () => { if (await ApexPhotos.remove(me.photo_id)) redo(); else toast('Couldn\u2019t remove it. Try again.'); }, 'linkbtn')] : [])),
         el('p', { className: 'note', textContent: 'Photos lose their location data before they leave your phone.' }));
@@ -6080,6 +6082,7 @@
       $('endMeta').textContent = [miles, mins != null ? (mins >= 60 ? `${Math.floor(mins / 60)} h ${mins % 60} min` : `${mins} min`) : null,
         Array.isArray(d.corners) ? `${d.corners.length} corners` : null].filter(Boolean).join(' · ');
       $('endScore').textContent = d.ds.score == null ? '--' : String(d.ds.score);
+      $('endScore').classList.toggle('unk', d.ds.score == null);   // unknown in pencil, not two black bars (REVIEW2.md U-34)
       const t = d.ds.score != null && window.ApexWeekDigest ? ApexWeekDigest.tip(d.ds.components) : null;
       const tipLine = d.ds.score == null ? 'Not enough clean corners for a score this time.' : t ? `Next time, ${t.label.toLowerCase()}: ${t.tip}.` : '';
       $('endLine').textContent = tipLine;

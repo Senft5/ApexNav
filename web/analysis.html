@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-jaW6gfdHsqvOsByXtcqys3L5ydWScRrD1lN5roktR6c=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-zgtPcU8iTq8aRzBhkNJXaL+hHVMCpUlp/UKMfkNN6R0=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta · Log</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -84,6 +84,7 @@
     tr.stopped td { opacity: 0.55; }
     tr.best td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
     .score { font-family: var(--font-num); font-weight: 700; font-size: 26px; }
+    .unk { font-style: normal; font-weight: 600; color: var(--panel-dim); letter-spacing: 0.06em; }
     .score.big { font-size: 44px; line-height: 1; }
     .bars { display: grid; grid-template-columns: repeat(4, minmax(50px, 1fr)); gap: 6px; min-width: 220px; }
     .bar { display: grid; gap: 2px; font-size: 11px; color: var(--panel-dim); text-align: left; font-family: var(--font-ui); }
@@ -346,6 +347,7 @@
     'use strict';
     const Core = window.ApexCore, Inst = window.ApexInstruments, MPH = window.ApexUnits ? ApexUnits.speed(1) : Core.MPS_TO_MPH;   // mph or km/h per m/s (U-22)
     const $ = (id) => document.getElementById(id);
+    const UNK = '<i class="unk">--</i>';   // a score we don't know: "--" in the numeral font, in pencil, never two black bars (REVIEW2.md U-34)
     for (const id of ['segDrive', 'selA', 'selB']) ApexRowSelect.enhance($(id));   // the app's row list, not the browser's select (REVIEW2.md U-18)
     let prefs = { theme: 'roadbook', toggles: { night: false } };
     try { prefs = Object.assign(prefs, JSON.parse(localStorage.getItem('apex.prefs') || 'null') || {}); if (prefs.themeV !== 2) prefs.theme = 'roadbook'; } catch (_) {}
@@ -551,7 +553,7 @@
       $('historyEmpty').hidden = !drivesLoaded || drives.length > 0;   // never claim "no drives" before the store has answered
       $('historyCards').hidden = $('historyPanel').hidden = !drives.length;
       // the hero (REVIEW.md roadmap 13): your latest Vetta Score, big, with its road; the best one quietly under it
-      $('historyCards').innerHTML = `<div class="hero-score"><b>${latest ? latest.ds.score : '--'}</b><small>/1000</small></div>`
+      $('historyCards').innerHTML = `<div class="hero-score"><b>${latest ? latest.ds.score : UNK}</b><small>/1000</small></div>`
         + `<p class="hero-what">Latest Vetta Score${latest ? ` · <span></span> · ${dateLabel(latest)}` : ''}</p>`
         + (best && best !== latest ? `<p class="hero-best">Best ${best.ds.score} · <span></span></p>` : '');
       if (latest) $('historyCards').querySelector('.hero-what span').textContent = latest.name;   // names are user text
@@ -594,7 +596,7 @@
       const rows = shown.slice().reverse().map(d => `<tr class="row-link" data-drive="${d.id}" tabindex="0" role="link" aria-label="Open ${escH(d.name)}">
         <td class="ix-date">${stamp(d)}</td>
         <td class="l ix-road"><b>${escH(d.name)}</b>${spark(d)}<span class="sub">${ApexUnits.long(d.km * 1000)} · ${d.ds.corners} corners${ApexDriveTags.normalize(d.tags).length ? ` · <span class="tagline">${escH(ApexDriveTags.normalize(d.tags).join(', '))}</span>` : ''}</span></td>
-        <td class="ix-score"><span class="score">${d.ds.score ?? '--'}</span></td></tr>`).join('');
+        <td class="ix-score"><span class="score">${d.ds.score ?? UNK}</span></td></tr>`).join('');
       $('historyTable').innerHTML = !drives.length ? '<tr><td class="l" colspan="3"><span class="note">No drives yet.</span></td></tr>' : !shown.length ? '<tr><td class="l" colspan="3"><span class="note">No drives with those tags.</span></td></tr>' : rows;
       setTimeout(renderRecords, 0);
       setTimeout(renderSteadiness, 0);                                  // the coach runs per road: after the Log has painted
@@ -896,7 +898,7 @@
         const passes = passesFor(s), best = passes.reduce((m, x) => (x.p.score != null && (m == null || x.p.score > m) ? x.p.score : m), null);
         const b = document.createElement('button');
         b.className = 'seg' + (s.id === activeSeg ? ' on' : '');
-        b.innerHTML = `<b></b><span class="score" style="font-size:20px">${best ?? '--'}</span><span></span><span>best</span>`;
+        b.innerHTML = `<b></b><span class="score" style="font-size:20px">${best ?? UNK}</span><span></span><span>best</span>`;
         b.querySelector('b').textContent = s.name;
         b.querySelectorAll('span')[1].textContent = `${ApexUnits.long(s.length_m, 2)} · ${passes.length} run${passes.length === 1 ? '' : 's'}`;
         b.onclick = () => { activeSeg = activeSeg === s.id ? null : s.id; renderSegments(); syncSegments(); };
@@ -911,7 +913,7 @@
       const bestTime = Math.min(...passes.map(x => x.p.time_s));
       $('segTable').innerHTML = `<tr><th class="l">#</th><th class="l">Run</th><th>Score</th><th class="l">Components</th><th>Time (private)</th></tr>` +
         passes.map((x, i) => `<tr class="${i === 0 ? 'best' : ''}"><td class="l">${i + 1}</td><td class="l"><b>${x.d.name}</b><span class="sub">${dateLabel(x.d)}</span></td>
-          <td><span class="score">${x.p.score ?? '--'}</span></td><td class="l">${bars(x.p.components)}</td>
+          <td><span class="score">${x.p.score ?? UNK}</span></td><td class="l">${bars(x.p.components)}</td>
           <td>${mmss(x.p.time_s)}<span class="sub">${x.p.time_s === bestTime ? 'quickest' : '+' + (x.p.time_s - bestTime).toFixed(1) + ' s'}</span></td></tr>`).join('') +
         (passes.length ? '' : '<tr><td class="l" colspan="5"><span class="note">No drive covers this stage in its direction yet.</span></td></tr>');
       const byDate = passes.slice().sort((a, b) => (a.d.date < b.d.date ? -1 : 1)).filter(x => x.p.score != null);
@@ -1097,7 +1099,7 @@
       const first = sc[0], last = sc[sc.length - 1], gain = last.ds.score - first.ds.score;
       $('dvRoadTable').innerHTML = '<tr><th class="l">Drive</th><th>Score</th><th>Corners</th><th class="l">vs this drive</th></tr>' + same.map(o => {
         const r = o === d ? null : Core.compareDrives(d, o);
-        return `<tr class="${o === d ? 'best' : ''}"><td class="l"><b></b><span class="sub">${dateLabel(o)}</span></td><td><span class="score">${o.ds.score ?? '--'}</span></td><td>${o.ds.corners}</td><td class="l">${o === d ? 'this drive' : r.matched_corners ? `${fmtS(r.corner_delta_s)} on ${r.matched_corners} corners (positive = it was slower)` : '--'}</td></tr>`;
+        return `<tr class="${o === d ? 'best' : ''}"><td class="l"><b></b><span class="sub">${dateLabel(o)}</span></td><td><span class="score">${o.ds.score ?? UNK}</span></td><td>${o.ds.corners}</td><td class="l">${o === d ? 'this drive' : r.matched_corners ? `${fmtS(r.corner_delta_s)} on ${r.matched_corners} corners (positive = it was slower)` : '--'}</td></tr>`;
       }).join('') + `<tr><td class="l" colspan="4"><span class="note">${sc.length > 1 ? `Score ${gain >= 0 ? 'up' : 'down'} ${Math.abs(gain)} points from the first to the latest drive on this road.` : ''}</span></td></tr>`;
       $('dvRoadTable').querySelectorAll('tr td.l b').forEach((b, i) => { if (same[i]) b.textContent = same[i].name; });
     }
