@@ -21,7 +21,7 @@ accounts in section 7 and approved the first batch. The money side is in docs/MO
 1. **It reads the road out loud**: pace notes before every corner, timed to your speed, with no signal.
 2. **It knows how the road feels, not just its shape**: every member's phone measures banking, crests and rough
    surface, so the good roads float up and the broken ones sink.
-3. **No subscription, no ads, no tracking.** Free, or one payment for Pro, once.
+3. **Free to drive, no ads, no personal data sold.** Pro is a subscription or lifetime, and nothing you made is ever behind it.
 
 Words we use: flow, smooth, technique, the long way, co-driver, crew. Words we never use: fast, speed, race, beat
 the time, police alerts, "evade". Every image and video: no speedometer, no speeds, no street racing, no

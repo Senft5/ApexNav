@@ -6,6 +6,17 @@ it says so. Things only you can do are in docs/OWNER_TODO.md.
 
 ## 2026-10-29
 
+**The fourth promise and open themes (owner, 2026-10-29).** The owner chose Fable's words with one change: "Free to drive.
+No ads, no personal data sold, nothing you made ever behind a paywall" (About, the landing page, MARKETING.md and the
+landing-page test). "Personal" matters: MONETIZATION.md 5 licenses anonymous road answers, never data about people,
+so "no data sold" would not be true. And every theme is open to everyone until Vetta Pro goes on sale. My calls:
+- *The switch is `THEMES_OPEN` in web/pro.js, and the `proOnSale` flag closes the themes by itself*, so the App Store
+  release can't forget it; it is also in OWNER_TODO under "Before the first App Store submission".
+- *Liveries stay Pro.* Only themes were asked for, and Decals come from verified Pro on the Worker.
+- *The PRO tag stays on the two cards*: it is still true, and the picker now offers Use instead of Try it.
+Undo: `THEMES_OPEN = false` in web/pro.js (and the early-access test in tests/test_pro.py); the promise's old words are
+in git.
+
 **Review 3 merged, with one correction.** Fable's branch replaced #252's Plan a drive, friend tag and tour scene with its
 own (broader) versions; #252's unused checkbox switch and stepper rules came out of controls.css. My call: `noEmoji`
 keeps the old text symbols that Unicode also files as pictographic (© ® ™ ‼, everything below U+2190), so a build
