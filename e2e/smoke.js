@@ -1680,12 +1680,14 @@ const unsafe = (page, d) => page.evaluate(({ d, R }) => {
       }
       const label = `${e.tagName.toLowerCase()}${e.id ? '#' + e.id : ''}.${String(e.className && e.className.baseVal !== undefined ? e.className.baseVal : e.className).split(' ')[0]} "${(e.innerText || e.value || e.getAttribute('aria-label') || '').trim().slice(0, 24)}"`;
       if (why.length) out.push(`${label} ${why.join(',')}`);
-      if (e.matches('button, a, input, textarea, select, summary, [role="button"], [role="radio"], [role="tab"]')) keys.push({ e, box, label });
+      const pinned = (() => { for (let a = e; a; a = a.parentElement) if (getComputedStyle(a).position === 'sticky') return true; return false; })();
+      if (e.matches('button, a, input, textarea, select, summary, [role="button"], [role="radio"], [role="tab"]')) keys.push({ e, box, label, pinned, scrolled });
     }
     // the overlap test: two keys you can see never sit on each other (a panel under a panel, a plate over a key)
     for (let a = 0; a < keys.length; a++) for (let b = a + 1; b < keys.length; b++) {
       const A = keys[a], B = keys[b];
       if (A.e.contains(B.e) || B.e.contains(A.e)) continue;
+      if ((A.pinned && B.scrolled && !B.pinned) || (B.pinned && A.scrolled && !A.pinned)) continue;   // content scrolling under a pinned bar, as on iOS
       const w = Math.min(A.box.right, B.box.right) - Math.max(A.box.left, B.box.left), h = Math.min(A.box.bottom, B.box.bottom) - Math.max(A.box.top, B.box.top);
       if (w > 2 && h > 2) out.push(`${A.label} overlaps ${B.label}`);
     }
