@@ -1,5 +1,21 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-10-29 (night): design review 3, fixed in the branch
+
+- [x] docs/design/REVIEW3.md (Fable, with the code): the verdict against each principle, 40 screens judged on three
+  phone shapes with real fonts, a code-level section, IDEAS U-47 to U-57, Roadmap 3. Screenshots in docs/design/screens-v3.
+- [x] Fixed in the review's own commits: Plan a drive on the app's controls (row lists, a 30-day strip, a time stepper,
+  slide switches; STATE's first active bug); every other select, checkbox and system prompt the app drew (Add a step,
+  the car form, the report sheet, the livery editor, Feedback, Pin place, presets, zones, Tried it, DELETE) replaced
+  by row lists, slide switches and `ApexConfirm.prompt`; the friend-label edge collision (STATE's second bug); the
+  "Finding GPS…" Tapedeck still (STATE's third: the tour's, not the app's); the lead call's cut modifiers; Tapedeck's
+  meters over Sight on a 15 Pro; the dial's end labels under the numeral; duplicate headings in the crew pops; red
+  where it was not record or destructive; emoji stripped from chat and build replies (U-46, tested).
+- Active bugs: none new. Open from the review: Roadmap 3 (the Garage's settings behind rows, fonts in the bundle, the
+  "No subscription" promise for the owner, the café glyph, the mockups' motion).
+- Exact next task: REVIEW3.md Roadmap 3 from item 1 (U-49, the Garage's settings as rows that open side pops), then
+  item 2 (U-47, bundle the fonts). U-48 waits on the owner's words.
+
 ## Session 2026-10-29 (evening): Roadmap 2 complete
 
 - [x] docs/design/REVIEW2.md Roadmap 2, items 1-20, each its own PR (the last four: #248 replay controls, #249 Kit,

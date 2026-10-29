@@ -6,6 +6,29 @@ it says so. Things only you can do are in docs/OWNER_TODO.md.
 
 ## 2026-10-29
 
+**Review 3 (docs/design/REVIEW3.md): fixed in the branch, not only written up.** Fable had the code this time. My calls:
+- *Plan a drive is the app's own form*: the crew, lead, sweep and template as row lists (web/row_select.js, now loaded by
+  index.html too), the day as a strip of the next thirty stops and the time as a stepper in quarter hours (both new in
+  controls.css), the yes/no choices as slide switches read through `.checked`, Going / Maybe / Can't as one switch. No
+  calendar picker: the Worker takes a drive up to 30 days out, so thirty stops is the whole scale.
+- *Every other select and checkbox the app drew is its own too* (Add a step, the car form, the report sheet, the livery
+  editor, Feedback); a name is asked for on the confirm sheet (`ApexConfirm.prompt`), never the system's prompt box,
+  and "Type DELETE" waits for the word. The clipboard fallback prompt on the website stays, as a last resort.
+- *Red only for record and destructive, applied again*: the open Layers key, the Crew tab's count and the focus ring are
+  ink; Remove a car, Leave a crew, Unfriend and Delete drives are red behind their confirm. The ring shows only after a
+  Tab or arrow key (`html.kbd`), so a sheet's own focus() never draws one.
+- *The lead call keeps its modifiers whole on a phone* (2fr to the lead note; Tapedeck's dot font may take a third
+  line); Tapedeck's meters take their own row up to 480 px; the dial's 0 and top labels give way by day under 480 px.
+- *A friend's tag swaps sides near the right edge*, and again after the map moves (friends_map.js `reflow`).
+- *The tour's Tapedeck drive is a shell drive* (`?shell=1` fakes the shell, Start comes through the app link), so the
+  still reads "Rec", which is what the app does; "Finding GPS…" was the tour feeding frames to a page with no drive.
+- *Kept, after trying*: the unknown score "--" at 56 px is two bars in any face; the g-ball's BRAKE engraving names the
+  direction the ball rolls under braking, the BANK readout is a different fact.
+- *Toasts and the route card's corner ticks are ink*, not red: a message and information are neither record nor
+  destructive. The camera toast says BRAND's line.
+- *Not mine*: "No subscription." in About and on the landing page while Pro is planned as one (IDEAS U-48, owner).
+Undo: the five commits named in REVIEW3.md §2, each on its own.
+
 **Roadmap 2 item 20: stills of every mockup surface (U-37).** `node tools/app_tour.js route-card friends-map
 plan-drive crew-board tapedeck-drive` saves OUT/stills/*.png: a routed mountain road with 186 corners, the profile
 with its corner ticks, named legs and two alternatives; two friends (one late and fuzzed, one live on a road) and a
