@@ -6,6 +6,110 @@ it says so. Things only you can do are in docs/OWNER_TODO.md.
 
 ## 2026-10-29
 
+**Nothing you read or tap sits under the Dynamic Island, the home indicator or the rounded corners, upright or on
+its side.** The app draws edge to edge (`contentInsetAdjustmentBehavior = .never`), so the page owns the safe areas. A new
+e2e flow ("safe areas") emulates an iPhone 15 Pro's insets in both orientations and fails on any control or text in
+them; upright was already clean, on its side was not. My calls:
+- *The map and the panels' backgrounds still run edge to edge*; only content is inset (`--safe-left`, `--safe-right`
+  join `--safe-top` and `--safe-bottom`). Scrolling content may pass under the home indicator, as on iOS.
+- *On its side the tab rail widens by the inset*; sheets, the plan deck, the plates, overlays, the build thread, the
+  report and crash sheets and the Log pad by it.
+- *On its side the suggested loop floats over the map above the deck*: it was crushed into the tab rail.
+- *Bottom sheets sit on an auto margin, not flex-end*, so a sheet taller than a landscape screen scrolls to its top
+  (the hazard report's title was cut off).
+Undo: the `env(safe-area-inset-*)` paddings in index.html, analysis.html, controls.css, builds.js, incident.js and
+safety_ui.js.
+
+**A fresh pass over REVIEW.md 1.2, screen by screen, now an e2e check; five gaps fixed.** Two flows in `e2e/smoke.js`
+("REVIEW.md 1.2 screen by screen") walk every row on the running app and assert what the review asked for. My calls:
+- *Recenter is the second map key under Layers*, a crosshair (the mockup), with the seconds until it recenters on its
+  own in place of the glyph. It was a text plate bottom-left. Undo: restore `<button class="plate" id="recenterBtn">`.
+- *Destructive actions ask on Vetta's own confirm sheet* (`web/confirm.js`): red action text, Cancel focused and the
+  default (Escape, a tap outside). All 19 system `confirm()` boxes are gone; `tests/test_confirm_sheet.py` keeps them out.
+  Undo: `ApexConfirm.ask(text)` back to `confirm(text)`.
+- *The rest of the Log is quiet lines*: Your week, Your roads and Kudos fold like the year and challenges; only the
+  drive list keeps a border. Undo: the three `<details class="quiet">` back to `<div class="panel">` with an h2.
+- *Drive detail fits the phone*: a grid column grew past the screen for one wide child (the Score bars); grid columns are
+  now `minmax(0, 1fr)`. Not a call, a bug.
+- *Signed-out Crew promises Friends on the map, the board and crew drives* (the review's three), not Convoys.
+
+**Followed-build notifications are decided in ApexKit, and a flaky profile test is fixed.** My calls:
+- *Which builds get a notification, and its words, moved to `ApexKit/Sources/ApexKit/BuildAlerts.swift`* with unit tests
+  (`BuildAlertsTests.swift`) that CI runs on Linux and macOS for every PR; `ApexBuildNotifier.swift` keeps only the iOS
+  calls (background refresh, permission, posting). Undo: move `due`/`words` back into the notifier.
+- *`profile.test.ts` no longer fails at random*: it checked the profile JSON never contained "600" (the hidden time),
+  but random car ids sometimes do. It now checks for the value `:600`. Undo: revert the one line.
+
+**The binnacle shows the live Vetta Score (REVIEW.md 1.2 Driving, 4.3), and a last pass over the 1.2 screen list.** My calls:
+- *The Score sits under the meter in every theme* (speed left, Limit centre, Score right): the drive so far, scored the way
+  the end card scores it, every 30 s while recording; "--" until there are enough clean corners, and on a replay. The
+  meter shrinks to make room; Billet's bezel rounds the meter only; the g-ball's BANK text grew so it stays over 13 px.
+- *Onboarding's one button says Start* (REVIEW.md 1.2, Onboarding 1); Watch a replay stays as a text link, since it's how
+  someone without a car (an App Store reviewer) sees the product.
+- *The Log's empty states point to Garage, Your data for import*, where import moved in phase 2.
+- Checked and already in place from phases 1-2: the place plate, Layers key, plan basic/More, route card dials (Twist,
+  Flow, Surface, Cameras), the hazard-style report buttons and CREST/DIP pins, the drive-ended card, the Log hero and
+  index, drive detail, Stages in Log, the Crew signed-out line, red destructive actions behind a confirm.
+
+**No toast repeats the route bar (REVIEW.md 1.2, Route bar).** A planned route no longer toasts its name, length and fun
+score; the bar and the card say them. A loop toasts only when it couldn't match what you asked ("the closest good loop
+to 45 mi"). Undo: the two toasts are in git history.
+
+**The livery tiers' extras (REVIEW.md 5.1), dormant until Pro ships like the tiers themselves.** My calls:
+- *Club*: the owner pins one chat message; the crew keeps 3 event templates (the owner keeps one when planning a drive;
+  anyone planning picks one to fill the form).
+- *Works*: member badges (owner-set, 16 characters, shown on the board), a house stage with its own board (a stage shared
+  with the crew), a convoy call sign that names the crew's convoys ("RIDGE · Dawn run"), 10 templates.
+- *Factory*: the crest draws itself in the theme's accent (still with reduced motion), the crew page as a share card
+  (crest, name, motto, tier, members, next drive; no photos, nobody's position), and up to four crew hazard categories
+  ("Cattle grid"). *A crew's category is read only by its members*; everyone else's plate says Debris, so a label typed
+  by one crew's owner never reaches strangers.
+- *The crew's regroup line* (Factory) is rendered on the website, where the same Kokoro voices as the packs already run in
+  the browser, once per pack, and uploaded as WAV; the app only plays audio (App Store 2.5.2 allows that). Verified: Kit's
+  voice renders "Ridge Runners, regroup." as a 2.3 s, 112 KB clip in about 15 s. A convoy is the crew's when its name
+  starts with the crew's call sign or name (crew drives name their convoys that way now). Every regroup call is now spoken
+  to the convoy ("Regroup at the overlook."); before, it was only drawn. Migration 0039 is applied to both D1 databases.
+- *Notifications for builds you follow come without APNs*: a background app refresh (iOS picks the time, every few hours
+  at best) checks for new steps and posts a local notification. Permission is asked on Follow. The OWNER_TODO APNs row is
+  gone. Undo: drop ApexBuildNotifier.swift and the fetch background mode.
+- Migrations 0037 and 0038 are applied to both D1 databases.
+
+**The end of a drive speaks, and the plan sheet gets its Prefer stamps (REVIEW.md 4.4, 3.3).** My calls:
+- *Each pack closes in its own words around the Vetta Score* ("That's the drive. Score seven hundred two, your best on
+  this road." / "Seven hundred two. Best yet on this road. That's a wrap." / "Complete. Score, seven hundred two."). The
+  score is spoken from number clips rendered in each pack's voice, never from a second voice. Before this, nothing was
+  said at the end of a drive.
+- *"Your best on this road"* means better than every earlier drive in your Log named after the same road, and it needs at
+  least one; a first drive or a tie isn't a best. It shows on the end card too.
+- *Kit's review line "Told you late out works"* isn't used: it would claim coaching the app didn't give. His close is
+  "That's a wrap."
+- *Prefer (Measured roads, New to me, Crew favourites) ranks the router's candidates* rather than steering the router,
+  which can't take them: up to six fun points each for the share of a route that members measured, that you haven't
+  driven (your Log, on the phone) or that your crews shared. Presets keep them.
+
+**Friends on the map (REVIEW.md 5.4, roadmap 24).** My calls:
+- *Defaults as the review set them*: the layer off, Show me to Nobody, a 10-minute delay, within a mile, only while
+  driving. The first time you turn the layer on, the sheet explains that seeing isn't sharing.
+- *The delay is applied on the server*: a viewer gets your newest position that is at least that old, never a newer one,
+  and positions older than the delay plus 30 minutes aren't shown at all. The server keeps only what the delay needs.
+- *"Within a mile" is snapped to a fixed grid before it's stored*, so the exact point never reaches the database and
+  repeated reads can't be averaged back. Switching from Exact to within a mile deletes what was stored.
+- *Home zones go to the server while you're shown*, so it can refuse a position inside one even if the phone slipped;
+  choosing Nobody deletes them. This changes "zones never leave the phone"; the privacy policy says so now. Undo: drop the
+  zones from the settings call; the phone's own check stays.
+- *The road name appears only for Live and Exact* ("Driving · Cherohala Skyway"); every other tag says how old and how
+  rough. Migration 0035 is applied to both D1 databases.
+
+**Build threads (REVIEW.md 5.3, roadmap 23).** My calls:
+- *A build is seen by whoever sees the car*: its owner, and friends and private-crew mates when the car is shown. Hiding
+  the car hides the thread. Builds show on your car card, a friend's car card and the crew page's Builds row.
+- *A step's Vetta Score comes only from a drive in your Log* (picked from a list), never typed in, so it's evidence.
+- *Following lists new steps* ("Builds you follow" in the Garage, "2 new") instead of a notification: the app has no push
+  service yet. Notifications come when it does. Migration 0034 is applied to both D1 databases.
+- *A step holds up to eight photos*, added after it's posted. Deleting a step deletes its photos and replies.
+- *The per-thread chat (REVIEW.md 5.3)* is folded under the steps ("Chat · kept 30 days") so the log stays the thread;
+  it shares the replies' 30-an-hour cap. Migration 0036 is applied to both D1 databases.
+
 **Decals and livery tiers (REVIEW.md 5.1, roadmap 22), built but dormant.** My calls:
 - *The server counts Pro only from `pro_entitlements`*, which nothing writes yet: StoreKit's App Store Server Notifications
   will (with the founders' grant and earned Pro). So every crew is Plain today and the livery box says where Decals come

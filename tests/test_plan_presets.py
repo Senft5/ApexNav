@@ -39,7 +39,7 @@ def out():
 
 def test_saves_cleaned_and_replaces_by_name(out):
     assert out["first"] == "saved" and out["bad"] == ["bad", "bad"] and out["replace"] == "saved"
-    assert out["sunday"] == {"name": "SUNDAY LOOP", "fun": "quick", "avoid": {}, "prefs": {"tight": 0, "fast": 0}}
+    assert out["sunday"] == {"name": "SUNDAY LOOP", "fun": "quick", "avoid": {}, "prefs": {"tight": 0, "fast": 0, "measured": False, "novel": False, "crew": False}}
 
 
 def test_at_most_six_newest_first(out):

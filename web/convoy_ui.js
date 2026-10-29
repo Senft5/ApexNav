@@ -50,6 +50,7 @@
     let snap = null, undo = null, sectionHost = null, lastKey = null;
     const spoken = new Map();                                   // eventId -> 'far' | 'near': each hazard is called at most twice
     const markers = { cars: new Map(), hazards: new Map(), regroup: null };
+    let lastRegroup = null;
     const live = { headline: null, regroup: null, gaps: new Map() };   // text nodes updated in place
 
     const client = new C.ConvoyClient({
@@ -119,6 +120,10 @@
         const pin = el('div', { className: 'convoy-pin', textContent: (C.KINDS[e.type] || 'Hazard').toUpperCase() });
         markers.hazards.set(k, new maplibregl.Marker({ element: pin }).setLngLat([e.anchor.lon, e.anchor.lat]).addTo(map));
       }
+      // a new regroup point: the page says it (crew_voice.js: a Factory crew's own line, else "Regroup at ...")
+      const rgKey = client.regroup ? `${client.regroup.lat},${client.regroup.lon},${client.regroup.note || ''}` : null;
+      if (want && rgKey && rgKey !== lastRegroup && page.onRegroup) page.onRegroup(client.regroup, want && want.ctx ? want.ctx.name : '');
+      lastRegroup = rgKey;
       const rg = want && client.regroup;
       if (!rg && markers.regroup) { markers.regroup.remove(); markers.regroup = null; }
       if (rg) {
@@ -364,21 +369,21 @@
           const row = el('div', { className: 'cv-member' },
             el('span', {}, el('span', { className: 'cv-on' + (m.online || m.key === c.you ? ' live' : '') }), document.createTextNode(label(m) + (m.role === 'leader' ? ' · leader' : '')),
               ...(car ? [el('span', { className: 'cv-car', textContent: car })] : [])), gap);
-          if (c.role === 'leader' && m.key !== c.you) row.append(btn('Remove', async () => { if (confirm(`Remove ${label(m)} from the convoy? They can't come back into it.`)) { if (!(await client.removeMember(m.key))) toast('Couldn\'t remove them. Try again.'); } }, 'linkbtn'));
+          if (c.role === 'leader' && m.key !== c.you) row.append(btn('Remove', async () => { if (await ApexConfirm.ask(`Remove ${label(m)} from the convoy? They can't come back into it.`, 'Remove')) { if (!(await client.removeMember(m.key))) toast('Couldn\'t remove them. Try again.'); } }, 'linkbtn'));
           list.append(row);
         }
         kids.push(list);
         const actions = el('div', { className: 'row' }), picker = el('div', { className: 'stack-8' });
         if (c.role === 'leader') {
           actions.append(btn('Invite friends', () => invitePeople(picker), 'ink-btn solid'), btn('Show QR', () => showQr(picker)), btn('Share link', () => shareInvite(false)),
-            btn('New link', () => { if (confirm('Make a new link? The old one stops working for anyone who hasn\'t joined yet.')) shareInvite(true); }, 'linkbtn'));
+            btn('New link', async () => { if (await ApexConfirm.ask('Make a new link? The old one stops working for anyone who hasn\'t joined yet.', 'New link')) shareInvite(true); }, 'linkbtn'));
           const r = getRoute();
           const shareMsg = { sent: (n) => `${n} shared with the convoy.`, offline: () => 'Not connected to the convoy.', too_long: () => 'That route is too long to share.' };
           if (r) actions.append(btn(client.route ? 'Update shared route' : 'Share my route', () => { const out = client.shareRoute(r.name, r.pts); toast(shareMsg[out](r.name)); }));
           else if (client.route) actions.append(btn('Stop sharing route', () => { if (!client.clearRoute()) toast('Not connected to the convoy.'); }));
         }
         actions.append(btn(c.role === 'leader' ? 'End convoy' : 'Leave', async () => {
-          if (!confirm(c.role === 'leader' ? 'End the convoy for everyone?' : 'Leave the convoy?')) return;
+          if (!(await ApexConfirm.ask(c.role === 'leader' ? 'End the convoy for everyone?' : 'Leave the convoy?', c.role === 'leader' ? 'End convoy' : 'Leave'))) return;
           await client.leave(); toast(c.role === 'leader' ? 'Convoy ended.' : 'You left the convoy.');
         }, c.role === 'leader' ? 'ink-btn' : 'linkbtn'));
         kids.push(actions);

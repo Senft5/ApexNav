@@ -22,7 +22,7 @@
     function push(line, now) {
       if (!line || !line.text) return false;
       const it = { kind: line.kind === 'hazard' ? 'hazard' : 'ordinary', text: line.text, chain: line.chain || null,
-                   sysToken: line.sysToken || null, duck: line.duck === true, key: line.key || null, atM: typeof line.atM === 'number' ? line.atM : null,
+                   sysToken: line.sysToken || null, tokens: Array.isArray(line.tokens) ? line.tokens : null, duck: line.duck === true, key: line.key || null, atM: typeof line.atM === 'number' ? line.atM : null,
                    at: now, repeatMs: line.repeatMs ?? REPEAT_MS,
                    maxAgeMs: line.maxAgeMs ?? (line.kind === 'hazard' ? HAZARD_AGE_MS : ORDINARY_AGE_MS) };
       if (it.key && (items.some((q) => q.key === it.key) || now - (said.get(it.key) ?? -Infinity) < it.repeatMs)) return false;

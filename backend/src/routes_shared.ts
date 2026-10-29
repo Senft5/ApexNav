@@ -63,7 +63,10 @@ export async function shareRoute(env: Env, v: Viewer, req: Request) {
 /** Routes others shared with you (newest first): no shape here, just enough to pick one. */
 export async function routesSharedWithMe(env: Env, v: Viewer) {
   return (await env.DB.prepare(
-    `SELECT r.id, r.name, r.created_at, u.handle AS from_handle FROM shared_routes r JOIN users u ON u.id = r.owner
+    `SELECT r.id, r.name, r.created_at, u.handle AS from_handle,
+            EXISTS (SELECT 1 FROM shared_route_audience a JOIN crew_members m ON m.crew_id = a.audience_id AND m.user_id = ?1
+                     WHERE a.route_id = r.id AND a.audience_type = 'crew') AS crew
+       FROM shared_routes r JOIN users u ON u.id = r.owner
       WHERE r.owner != ?1 AND ${CAN_SEE} ORDER BY r.created_at DESC LIMIT 50`).bind(v.id).all()).results;
 }
 

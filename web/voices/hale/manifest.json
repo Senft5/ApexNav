@@ -3176,6 +3176,566 @@
    "file": "p_3c288e9e8055.m4a",
    "dur": 2.109,
    "text": "Right hairpin opens, sixty."
+  },
+  "n:0": {
+   "file": "n_0.m4a",
+   "dur": 0.564,
+   "text": "zero"
+  },
+  "n:1": {
+   "file": "n_1.m4a",
+   "dur": 0.499,
+   "text": "one"
+  },
+  "n:2": {
+   "file": "n_2.m4a",
+   "dur": 0.484,
+   "text": "two"
+  },
+  "n:3": {
+   "file": "n_3.m4a",
+   "dur": 0.54,
+   "text": "three"
+  },
+  "n:4": {
+   "file": "n_4.m4a",
+   "dur": 0.524,
+   "text": "four"
+  },
+  "n:5": {
+   "file": "n_5.m4a",
+   "dur": 0.525,
+   "text": "five"
+  },
+  "n:6": {
+   "file": "n_6.m4a",
+   "dur": 0.559,
+   "text": "six"
+  },
+  "n:7": {
+   "file": "n_7.m4a",
+   "dur": 0.622,
+   "text": "seven"
+  },
+  "n:8": {
+   "file": "n_8.m4a",
+   "dur": 0.436,
+   "text": "eight"
+  },
+  "n:9": {
+   "file": "n_9.m4a",
+   "dur": 0.572,
+   "text": "nine"
+  },
+  "n:10": {
+   "file": "n_10.m4a",
+   "dur": 0.494,
+   "text": "ten"
+  },
+  "n:11": {
+   "file": "n_11.m4a",
+   "dur": 0.644,
+   "text": "eleven"
+  },
+  "n:12": {
+   "file": "n_12.m4a",
+   "dur": 0.595,
+   "text": "twelve"
+  },
+  "n:13": {
+   "file": "n_13.m4a",
+   "dur": 0.753,
+   "text": "thirteen"
+  },
+  "n:14": {
+   "file": "n_14.m4a",
+   "dur": 0.748,
+   "text": "fourteen"
+  },
+  "n:15": {
+   "file": "n_15.m4a",
+   "dur": 0.767,
+   "text": "fifteen"
+  },
+  "n:16": {
+   "file": "n_16.m4a",
+   "dur": 0.768,
+   "text": "sixteen"
+  },
+  "n:17": {
+   "file": "n_17.m4a",
+   "dur": 0.792,
+   "text": "seventeen"
+  },
+  "n:18": {
+   "file": "n_18.m4a",
+   "dur": 0.705,
+   "text": "eighteen"
+  },
+  "n:19": {
+   "file": "n_19.m4a",
+   "dur": 0.796,
+   "text": "nineteen"
+  },
+  "n:20": {
+   "file": "n_20.m4a",
+   "dur": 0.65,
+   "text": "twenty"
+  },
+  "n:21": {
+   "file": "n_21.m4a",
+   "dur": 0.76,
+   "text": "twenty-one"
+  },
+  "n:22": {
+   "file": "n_22.m4a",
+   "dur": 0.856,
+   "text": "twenty-two"
+  },
+  "n:23": {
+   "file": "n_23.m4a",
+   "dur": 0.791,
+   "text": "twenty-three"
+  },
+  "n:24": {
+   "file": "n_24.m4a",
+   "dur": 0.834,
+   "text": "twenty-four"
+  },
+  "n:25": {
+   "file": "n_25.m4a",
+   "dur": 0.778,
+   "text": "twenty-five"
+  },
+  "n:26": {
+   "file": "n_26.m4a",
+   "dur": 0.903,
+   "text": "twenty-six"
+  },
+  "n:27": {
+   "file": "n_27.m4a",
+   "dur": 0.934,
+   "text": "twenty-seven"
+  },
+  "n:28": {
+   "file": "n_28.m4a",
+   "dur": 0.777,
+   "text": "twenty-eight"
+  },
+  "n:29": {
+   "file": "n_29.m4a",
+   "dur": 0.78,
+   "text": "twenty-nine"
+  },
+  "n:30": {
+   "file": "n_30.m4a",
+   "dur": 0.605,
+   "text": "thirty"
+  },
+  "n:31": {
+   "file": "n_31.m4a",
+   "dur": 0.761,
+   "text": "thirty-one"
+  },
+  "n:32": {
+   "file": "n_32.m4a",
+   "dur": 0.84,
+   "text": "thirty-two"
+  },
+  "n:33": {
+   "file": "n_33.m4a",
+   "dur": 0.881,
+   "text": "thirty-three"
+  },
+  "n:34": {
+   "file": "n_34.m4a",
+   "dur": 0.838,
+   "text": "thirty-four"
+  },
+  "n:35": {
+   "file": "n_35.m4a",
+   "dur": 0.787,
+   "text": "thirty-five"
+  },
+  "n:36": {
+   "file": "n_36.m4a",
+   "dur": 0.878,
+   "text": "thirty-six"
+  },
+  "n:37": {
+   "file": "n_37.m4a",
+   "dur": 0.923,
+   "text": "thirty-seven"
+  },
+  "n:38": {
+   "file": "n_38.m4a",
+   "dur": 0.77,
+   "text": "thirty-eight"
+  },
+  "n:39": {
+   "file": "n_39.m4a",
+   "dur": 0.839,
+   "text": "thirty-nine"
+  },
+  "n:40": {
+   "file": "n_40.m4a",
+   "dur": 0.621,
+   "text": "forty"
+  },
+  "n:41": {
+   "file": "n_41.m4a",
+   "dur": 0.767,
+   "text": "forty-one"
+  },
+  "n:42": {
+   "file": "n_42.m4a",
+   "dur": 0.817,
+   "text": "forty-two"
+  },
+  "n:43": {
+   "file": "n_43.m4a",
+   "dur": 0.839,
+   "text": "forty-three"
+  },
+  "n:44": {
+   "file": "n_44.m4a",
+   "dur": 0.797,
+   "text": "forty-four"
+  },
+  "n:45": {
+   "file": "n_45.m4a",
+   "dur": 0.76,
+   "text": "forty-five"
+  },
+  "n:46": {
+   "file": "n_46.m4a",
+   "dur": 0.856,
+   "text": "forty-six"
+  },
+  "n:47": {
+   "file": "n_47.m4a",
+   "dur": 0.904,
+   "text": "forty-seven"
+  },
+  "n:48": {
+   "file": "n_48.m4a",
+   "dur": 0.748,
+   "text": "forty-eight"
+  },
+  "n:49": {
+   "file": "n_49.m4a",
+   "dur": 0.773,
+   "text": "forty-nine"
+  },
+  "n:50": {
+   "file": "n_50.m4a",
+   "dur": 0.633,
+   "text": "fifty"
+  },
+  "n:51": {
+   "file": "n_51.m4a",
+   "dur": 0.737,
+   "text": "fifty-one"
+  },
+  "n:52": {
+   "file": "n_52.m4a",
+   "dur": 0.83,
+   "text": "fifty-two"
+  },
+  "n:53": {
+   "file": "n_53.m4a",
+   "dur": 0.793,
+   "text": "fifty-three"
+  },
+  "n:54": {
+   "file": "n_54.m4a",
+   "dur": 0.835,
+   "text": "fifty-four"
+  },
+  "n:55": {
+   "file": "n_55.m4a",
+   "dur": 0.778,
+   "text": "fifty-five"
+  },
+  "n:56": {
+   "file": "n_56.m4a",
+   "dur": 0.852,
+   "text": "fifty-six"
+  },
+  "n:57": {
+   "file": "n_57.m4a",
+   "dur": 0.923,
+   "text": "fifty-seven"
+  },
+  "n:58": {
+   "file": "n_58.m4a",
+   "dur": 0.767,
+   "text": "fifty-eight"
+  },
+  "n:59": {
+   "file": "n_59.m4a",
+   "dur": 0.782,
+   "text": "fifty-nine"
+  },
+  "n:60": {
+   "file": "n_60.m4a",
+   "dur": 0.685,
+   "text": "sixty"
+  },
+  "n:61": {
+   "file": "n_61.m4a",
+   "dur": 0.795,
+   "text": "sixty-one"
+  },
+  "n:62": {
+   "file": "n_62.m4a",
+   "dur": 0.841,
+   "text": "sixty-two"
+  },
+  "n:63": {
+   "file": "n_63.m4a",
+   "dur": 0.854,
+   "text": "sixty-three"
+  },
+  "n:64": {
+   "file": "n_64.m4a",
+   "dur": 0.875,
+   "text": "sixty-four"
+  },
+  "n:65": {
+   "file": "n_65.m4a",
+   "dur": 0.814,
+   "text": "sixty-five"
+  },
+  "n:66": {
+   "file": "n_66.m4a",
+   "dur": 0.9,
+   "text": "sixty-six"
+  },
+  "n:67": {
+   "file": "n_67.m4a",
+   "dur": 0.953,
+   "text": "sixty-seven"
+  },
+  "n:68": {
+   "file": "n_68.m4a",
+   "dur": 0.747,
+   "text": "sixty-eight"
+  },
+  "n:69": {
+   "file": "n_69.m4a",
+   "dur": 0.816,
+   "text": "sixty-nine"
+  },
+  "n:70": {
+   "file": "n_70.m4a",
+   "dur": 0.7,
+   "text": "seventy"
+  },
+  "n:71": {
+   "file": "n_71.m4a",
+   "dur": 0.771,
+   "text": "seventy-one"
+  },
+  "n:72": {
+   "file": "n_72.m4a",
+   "dur": 0.873,
+   "text": "seventy-two"
+  },
+  "n:73": {
+   "file": "n_73.m4a",
+   "dur": 0.834,
+   "text": "seventy-three"
+  },
+  "n:74": {
+   "file": "n_74.m4a",
+   "dur": 0.923,
+   "text": "seventy-four"
+  },
+  "n:75": {
+   "file": "n_75.m4a",
+   "dur": 0.86,
+   "text": "seventy-five"
+  },
+  "n:76": {
+   "file": "n_76.m4a",
+   "dur": 0.915,
+   "text": "seventy-six"
+  },
+  "n:77": {
+   "file": "n_77.m4a",
+   "dur": 0.97,
+   "text": "seventy-seven"
+  },
+  "n:78": {
+   "file": "n_78.m4a",
+   "dur": 0.782,
+   "text": "seventy-eight"
+  },
+  "n:79": {
+   "file": "n_79.m4a",
+   "dur": 0.83,
+   "text": "seventy-nine"
+  },
+  "n:80": {
+   "file": "n_80.m4a",
+   "dur": 0.57,
+   "text": "eighty"
+  },
+  "n:81": {
+   "file": "n_81.m4a",
+   "dur": 0.708,
+   "text": "eighty-one"
+  },
+  "n:82": {
+   "file": "n_82.m4a",
+   "dur": 0.806,
+   "text": "eighty-two"
+  },
+  "n:83": {
+   "file": "n_83.m4a",
+   "dur": 0.782,
+   "text": "eighty-three"
+  },
+  "n:84": {
+   "file": "n_84.m4a",
+   "dur": 0.779,
+   "text": "eighty-four"
+  },
+  "n:85": {
+   "file": "n_85.m4a",
+   "dur": 0.727,
+   "text": "eighty-five"
+  },
+  "n:86": {
+   "file": "n_86.m4a",
+   "dur": 0.856,
+   "text": "eighty-six"
+  },
+  "n:87": {
+   "file": "n_87.m4a",
+   "dur": 0.872,
+   "text": "eighty-seven"
+  },
+  "n:88": {
+   "file": "n_88.m4a",
+   "dur": 0.706,
+   "text": "eighty-eight"
+  },
+  "n:89": {
+   "file": "n_89.m4a",
+   "dur": 0.726,
+   "text": "eighty-nine"
+  },
+  "n:90": {
+   "file": "n_90.m4a",
+   "dur": 0.61,
+   "text": "ninety"
+  },
+  "n:91": {
+   "file": "n_91.m4a",
+   "dur": 0.722,
+   "text": "ninety-one"
+  },
+  "n:92": {
+   "file": "n_92.m4a",
+   "dur": 0.829,
+   "text": "ninety-two"
+  },
+  "n:93": {
+   "file": "n_93.m4a",
+   "dur": 0.804,
+   "text": "ninety-three"
+  },
+  "n:94": {
+   "file": "n_94.m4a",
+   "dur": 0.843,
+   "text": "ninety-four"
+  },
+  "n:95": {
+   "file": "n_95.m4a",
+   "dur": 0.808,
+   "text": "ninety-five"
+  },
+  "n:96": {
+   "file": "n_96.m4a",
+   "dur": 0.943,
+   "text": "ninety-six"
+  },
+  "n:97": {
+   "file": "n_97.m4a",
+   "dur": 0.951,
+   "text": "ninety-seven"
+  },
+  "n:98": {
+   "file": "n_98.m4a",
+   "dur": 0.767,
+   "text": "ninety-eight"
+  },
+  "n:99": {
+   "file": "n_99.m4a",
+   "dur": 0.753,
+   "text": "ninety-nine"
+  },
+  "n:h1": {
+   "file": "n_h1.m4a",
+   "dur": 0.896,
+   "text": "one hundred"
+  },
+  "n:h2": {
+   "file": "n_h2.m4a",
+   "dur": 0.775,
+   "text": "two hundred"
+  },
+  "n:h3": {
+   "file": "n_h3.m4a",
+   "dur": 0.853,
+   "text": "three hundred"
+  },
+  "n:h4": {
+   "file": "n_h4.m4a",
+   "dur": 0.803,
+   "text": "four hundred"
+  },
+  "n:h5": {
+   "file": "n_h5.m4a",
+   "dur": 0.904,
+   "text": "five hundred"
+  },
+  "n:h6": {
+   "file": "n_h6.m4a",
+   "dur": 0.86,
+   "text": "six hundred"
+  },
+  "n:h7": {
+   "file": "n_h7.m4a",
+   "dur": 0.945,
+   "text": "seven hundred"
+  },
+  "n:h8": {
+   "file": "n_h8.m4a",
+   "dur": 0.845,
+   "text": "eight hundred"
+  },
+  "n:h9": {
+   "file": "n_h9.m4a",
+   "dur": 0.932,
+   "text": "nine hundred"
+  },
+  "n:k1": {
+   "file": "n_k1.m4a",
+   "dur": 1.043,
+   "text": "one thousand"
+  },
+  "end:score": {
+   "file": "end_score.m4a",
+   "dur": 0.558,
+   "text": "Score,"
+  },
+  "end:best": {
+   "file": "end_best.m4a",
+   "dur": 1.232,
+   "text": "Best on this road."
   }
  }
 }

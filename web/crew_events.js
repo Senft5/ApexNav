@@ -110,12 +110,12 @@
         document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 10000);
       }, 'linkbtn'));
       if (convoyOpen(e)) acts.append(btn('Start the convoy', async () => {
-        const r = await page.startConvoy(e.title, e.going);
+        const r = await page.startConvoy(`${e.call_sign || e.crew_name} \u00b7 ${e.title}`, e.going);   // named after the crew (its call sign at Works): crew_voice.js finds it
         if (!r.ok) toast(r.status === 'busy' ? 'You\'re already in a convoy.' : r.status === 429 ? 'You already lead two convoys. End one first.' : 'Couldn\'t start the convoy. Try again.');
         else toast(r.invited ? `Convoy started. Invited ${r.invited} going.` : 'Convoy started.');
       }, 'ink-btn solid'));
       if (e.can_cancel) acts.append(btn('Cancel the drive', async () => {
-        if (!confirm(`Cancel ${e.title}? Everyone in the crew stops seeing it.`)) return;
+        if (!(await ApexConfirm.ask(`Cancel ${e.title}? Everyone in the crew stops seeing it.`, 'Cancel the drive'))) return;
         const r = await apiCall('DELETE', `/api/events/${encodeURIComponent(e.id)}`);
         if (r.ok) { toast('Drive cancelled.'); redo(); } else toast('Couldn\'t cancel it. Try again.');
       }, 'linkbtn'));
@@ -140,6 +140,23 @@
           ...handles.map((m) => el('option', { value: m.handle, textContent: m.mine ? 'You sweep' : `@${m.handle} sweeps` })));
       };
       crew.addEventListener('change', fillRoles); fillRoles();
+      // event templates (Club and Works livery): one fills the form; the crew's owner can keep this one as a template
+      const tplSel = el('select', { className: 'field', hidden: true }), keep = el('input', { type: 'checkbox' }), keepLabel = el('label', { className: 'row', style: 'align-items:center;gap:8px', hidden: true }, keep, el('span', { textContent: 'Keep it as a template for the crew' }));
+      tplSel.setAttribute('aria-label', 'From a template');
+      let templates = [];
+      const fillTemplates = async () => {
+        const list = await apiCall('GET', `/api/crews/${encodeURIComponent(crew.value)}/templates`).then(jsonOf).catch(() => null);
+        templates = Array.isArray(list) ? list : [];
+        tplSel.replaceChildren(el('option', { value: '', textContent: 'From a template' }), ...templates.map((t) => el('option', { value: t.id, textContent: t.name })));
+        tplSel.hidden = !templates.length;
+        keepLabel.hidden = (crews.find((c) => c.id === crew.value) || {}).role !== 'owner';
+      };
+      tplSel.addEventListener('change', () => {
+        const t = templates.find((x) => x.id === tplSel.value); if (!t) return;
+        title.value = t.title; meetName.value = t.meet_name || ''; notes.value = t.notes || '';
+        setMeet({ lat: t.meet_lat, lon: t.meet_lon }, t.meet_name || 'the template\u2019s pin');
+      });
+      crew.addEventListener('change', fillTemplates); fillTemplates();
       // regroup points: up to five, each named, set at the map's centre
       const regroup = [], regroupList = el('div', { className: 'stack-8' });
       const regroupName = el('input', { className: 'field', maxLength: 40, placeholder: 'Regroup point name, e.g. the overlook', autocomplete: 'off' });
@@ -176,14 +193,14 @@
         listedLabel.textContent = pub ? 'List it for everyone nearby (a meet)' : 'Only public crews can list a meet for everyone';
       };
       crew.addEventListener('change', paintListed); paintListed();
-      form.append(crew, title, el('div', { className: 'row' }, date, time),
+      form.append(crew, tplSel, title, el('div', { className: 'row' }, date, time),
         el('div', { className: 'row', style: 'flex-wrap:wrap' }, btn('Where I am', () => setMeet(page.here(), 'where you are'), 'ink-btn'), btn('Map centre', () => setMeet(page.mapCentre(), 'map centre'), 'ink-btn')),
         meetNote, meetName,
         el('label', { className: 'row', style: 'align-items:center;gap:8px' }, withRoute, el('span', { textContent: route ? `Add the planned route (${route.name})` : 'Plan a route first to add it' })),
         el('b', { textContent: 'Roles' }), el('div', { className: 'row' }, lead, sweep),
         el('b', { textContent: 'Regroup points' }), regroupList, el('div', { className: 'row' }, regroupName, addRegroup),
         notes,
-        el('label', { className: 'row', style: 'align-items:center;gap:8px' }, listed, listedLabel),
+        el('label', { className: 'row', style: 'align-items:center;gap:8px' }, listed, listedLabel), keepLabel,
         el('div', { className: 'row' }, btn('Plan it', async () => {
           const when = isoFromInputs(date.value, time.value);
           if (!title.value.trim()) { toast('Give the drive a name.'); return; }
@@ -201,6 +218,11 @@
             lead: lead.value || undefined, sweep: sweep.value || null, regroup });
           if (!r.ok) { const j = await jsonOf(r).catch(() => null); if (j && j.error === 'bad_role') { toast('One person can\'t both lead and sweep.'); return; }
             toast(r.status === 429 ? 'That crew has 10 drives coming up already.' : r.status === 400 ? 'Pick a time in the next 30 days.' : 'Couldn\'t plan it. Check signal.'); return; }
+          if (keep.checked) {
+            const k = await apiCall('POST', `/api/crews/${encodeURIComponent(crew.value)}/templates`, { name: title.value.trim().slice(0, 24), title: title.value.trim(),
+              meet: { name: meetName.value.trim() || null, lat: meet.lat, lon: meet.lon }, notes: notes.value.trim() || null }).catch(() => null);
+            if (!k || !k.ok) toast(k && k.status === 403 ? 'Templates come with the Club livery.' : k && k.status === 429 ? 'The crew keeps as many templates as its livery allows.' : 'The drive is planned; the template wasn\u2019t kept.');
+          }
           toast('Drive planned. The crew sees it in Crew.');
           done();
         }, 'ink-btn solid'), btn('Cancel', done, 'linkbtn')));

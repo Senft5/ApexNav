@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-r/tKIFUSU6Lxwg36YyGlgVRS32N2sIodrKyFimcLFO4=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-A54FG/lpt0vnBbPVV5czgA2EuxqBTdAZFCv86e7ko/c=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta · Log</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -37,6 +37,7 @@
   <script src="save_file.js"></script>
   <script src="dashcam.js"></script>
   <script src="recce.js"></script>
+  <script src="confirm.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { background: var(--panel); color: var(--panel-ink); font-family: var(--font-ui); font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -46,7 +47,9 @@
     /* The phone's text size (format.js applyTypeScale) on the text blocks; charts and the stage strip measure their
        own width and stay unzoomed, so they still fit and track the finger. */
     #tab-history > :not(#trendPanel):not(#steadyPanel), #tab-segments > .bar-top, #segList, #segDetail table, #tab-segments .more > summary, #contribPanel { zoom: var(--type-scale, 1); }
-    main { max-width: 1180px; margin: 0 auto; padding: calc(14px + env(safe-area-inset-top, 0px)) 16px calc(80px + env(safe-area-inset-bottom, 0px)); display: grid; gap: 18px; }
+    main { max-width: 1180px; margin: 0 auto; padding: calc(14px + env(safe-area-inset-top, 0px)) calc(16px + env(safe-area-inset-right, 0px)) calc(80px + env(safe-area-inset-bottom, 0px)) calc(16px + env(safe-area-inset-left, 0px)); display: grid; gap: 18px; }
+    /* grid columns never grow past the screen for one wide child (a trace, the Score bars): the child scrolls or shrinks */
+    main, .stack-8, .stack-12 { grid-template-columns: minmax(0, 1fr); }
     h2 { font-size: 18px; font-weight: 700; font-family: var(--font-num); margin-bottom: 8px; }
     a { color: inherit; }
     .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; font-size: 12px; }
@@ -116,7 +119,7 @@
     .dv-time b { font-family: var(--font-num); color: var(--signal); } .dv-time em { font-style: normal; font-family: var(--font-num); }
     .dv-time span.note { grid-column: 2 / 4; }
     /* One column on a phone: the map scrolls with the page (pinned, it covered everything scrolling under it). */
-    @media (max-width: 760px) { .dv-grid { grid-template-columns: 1fr; } .dv-map { position: static; } }
+    @media (max-width: 760px) { .dv-grid { grid-template-columns: minmax(0, 1fr); } .dv-map { position: static; } }
     .seglist { display: grid; gap: 6px; }
     .seg { text-align: left; border: 1px solid var(--rule); padding: 10px 12px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; cursor: pointer; background: transparent; color: inherit; font: inherit; }
     .seg.on { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
@@ -187,7 +190,7 @@
     .actions { display: flex; gap: 8px; flex-wrap: wrap; }
     /* Same tab bar as the cockpit: ANALYSIS is this page, the others return to the cockpit view. */
     .tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
-      background: var(--panel); border-top: 1px solid var(--rule); padding: 0 6px env(safe-area-inset-bottom, 0px); }
+      background: var(--panel); border-top: 1px solid var(--rule); padding: 0 calc(6px + env(safe-area-inset-right, 0px)) env(safe-area-inset-bottom, 0px) calc(6px + env(safe-area-inset-left, 0px)); }
     .tabbar a { height: 52px; display: grid; grid-template-rows: 20px auto; justify-items: center; align-content: center; gap: 2px; color: var(--panel-dim);
       font-size: 11px; font-weight: 600; text-decoration: none; position: relative; }
     .tabbar svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
@@ -254,9 +257,10 @@
         <p class="note">Exploring and technique, never speed. From the drives on this phone.</p></details>
       <div class="stamps" id="historyFilter" role="group" aria-label="Show drives tagged" hidden></div>
       <div class="panel index-panel" id="historyPanel"><table id="historyTable" class="road-index"></table></div>
-      <div class="panel" id="weekPanel" hidden><h2>Your week</h2><div id="weekLines" class="stack-8"></div></div>
-      <div class="panel" id="roadsPanel" hidden><h2>Your roads</h2><div id="roadsList" class="stack-8"></div></div>
-      <div class="panel" id="kudosPanel" hidden><h2>Kudos for you</h2><div id="kudosList" class="stack-8"></div></div>
+      <!-- the rest of the Log is quiet lines too (REVIEW.md 1.2 Log): one line each, the detail one tap down -->
+      <details class="quiet" id="weekPanel" hidden><summary id="weekSum">Your week</summary><div id="weekLines" class="stack-8"></div></details>
+      <details class="quiet" id="roadsPanel" hidden><summary>Your roads</summary><div id="roadsList" class="stack-8"></div></details>
+      <details class="quiet" id="kudosPanel" hidden><summary id="kudosSum">Kudos for you</summary><div id="kudosList" class="stack-8"></div></details>
       <div class="panel" id="friendsPanel" hidden><h2>Friends lately</h2><div id="friendsList" class="stack-8"></div>
         <p class="note">From friends and crews who share scores with you, on stages you have. Scores only, never times.</p></div>
       <div class="panel" id="trendPanel" hidden><h2>Score over time</h2><div id="trend"></div></div>
@@ -409,6 +413,7 @@
       // Kudos on your runs: who, which stage, which day (text)
       const got = await ApexSync.kudosReceived();
       $('kudosPanel').hidden = !got.length;
+      $('kudosSum').textContent = `Kudos for you: ${got.length}`;
       $('kudosList').replaceChildren(...got.map((g) => {
         const p = document.createElement('p'); p.className = 'friend-act';
         const day = new Date(g.driven_on + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
@@ -427,7 +432,7 @@
       $('dvRecce').hidden = !corners;
       $('dvRecceActs').replaceChildren(
         b(mine.length ? 'Update from this drive' : 'Keep these notes as mine', () => { ApexRecce.save(localStorage, ApexRecce.keep(ApexRecce.load(localStorage), t)); renderRecce(d); }, 'btn solid'),
-        ...(mine.length ? [b('Forget them', () => { if (confirm('Forget your notes for these corners? The map\u2019s notes are read again.')) { ApexRecce.save(localStorage, ApexRecce.forget(ApexRecce.load(localStorage), t)); renderRecce(d); } })] : []));
+        ...(mine.length ? [b('Forget them', async () => { if (await ApexConfirm.ask('Forget your notes for these corners? The map\u2019s notes are read again.', 'Forget them')) { ApexRecce.save(localStorage, ApexRecce.forget(ApexRecce.load(localStorage), t)); renderRecce(d); } })] : []));
       $('dvRecceList').replaceChildren(...mine.map(({ note }, k) => {
         const row = document.createElement('label'); row.className = 'recce-row';
         const num = document.createElement('span'); num.textContent = String(k + 1);
@@ -466,7 +471,10 @@
     function renderWeek() {
       const w = ApexWeekDigest.digest(drives.map((d) => ({ ...d, dateKnown: monthOf(d) !== null })));
       $('weekPanel').hidden = !w;
-      if (w) $('weekLines').replaceChildren(...ApexWeekDigest.lines(w).map((t) => { const p = document.createElement('p'); p.className = 'friend-act'; p.textContent = t; return p; }));
+      if (!w) return;
+      const [first, ...rest] = ApexWeekDigest.lines(w);
+      $('weekSum').textContent = `Your week: ${first}`;
+      $('weekLines').replaceChildren(...rest.map((t) => { const p = document.createElement('p'); p.className = 'friend-act'; p.textContent = t; return p; }));
     }
     let challengeServer;   // undefined: not asked yet; null: unknown (signed out, offline)
     function renderChallenges() {
@@ -532,7 +540,7 @@
       const grid = [0, 250, 500, 750, 1000].map(v => { const y = T + (1 - v / 1000) * (H - T - B); return `<line x1="${L}" x2="${W - R}" y1="${y}" y2="${y}" stroke="${C.rule}"/><text x="${L - 6}" y="${y + 3}" text-anchor="end" font-size="10" fill="${C.panelDim}">${v}</text>`; }).join('');
       const line = pts.map((p, i) => `${i ? 'L' : 'M'}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join('');
       const dots = pts.map(p => `<circle cx="${p[0]}" cy="${p[1]}" r="5" fill="${C.accent}"/><text x="${p[0]}" y="${H - 8}" text-anchor="middle" font-size="10" fill="${C.panelDim}">${p[2].date.slice(5, 10)}</text>`).join('');
-      if (!scored.length) { $('trend').innerHTML = '<p class="note">No scored drives yet. Import a recording, or start a drive on the map; a drive needs a few clean corners to get a Score.</p>'; }
+      if (!scored.length) { $('trend').innerHTML = '<p class="note">No scored drives yet. Start a drive on the map, or import a recording in Garage, Your data; a drive needs a few clean corners to get a Score.</p>'; }
       else $('trend').innerHTML = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Score over time">${grid}<path d="${line}" fill="none" stroke="${C.accent}" stroke-width="2"/>${dots}</svg>`;
 
       // filter by tag (drive_tags.js, IDEAS D-23): chips for the tags in use; a chip toggles; a drive must carry every one picked
@@ -959,7 +967,7 @@
       const list = drives.slice().reverse();
       list.forEach(d => pick.add(new Option(driveLabel(d), d.id)));
       const actions = document.querySelector('#tab-drive .actions'); actions.hidden = !list.length;
-      if (!list.length) { $('dvTitle').textContent = 'No drives yet'; $('dvNote').textContent = ''; $('dvRoot').innerHTML = '<p class="note">Start a drive on the map, or import a recording from the Log.</p>'; return; }
+      if (!list.length) { $('dvTitle').textContent = 'No drives yet'; $('dvNote').textContent = ''; $('dvRoot').innerHTML = '<p class="note">Start a drive on the map, or import a recording in Garage, Your data.</p>'; return; }
       pick.value = list.some(d => d.id === keep) ? keep : list[0].id;
       const d = drives.find(x => x.id === pick.value);
       if (dvView) dvView.destroy();

@@ -34,6 +34,9 @@ import ApexKit
 
 @main
 struct ApexNavApp: App {
+    // the builds-you-follow refresh (ApexBuildNotifier.swift) must be registered before launch finishes
+    init() { ApexBuildNotifier.register() }
+
     var body: some Scene {
         WindowGroup {
             ApexShellRootView()
@@ -73,6 +76,7 @@ struct ApexShellRootView: View {
         .onAppear { UIApplication.shared.isIdleTimerDisabled = true }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { shell.reloadIfWebContentDied() }
+            if phase == .background { ApexBuildNotifier.schedule() }      // new steps on builds you follow, while away
         }
         .onOpenURL { shell.openLink($0) }
         // Siri and Shortcuts (ApexIntents.swift, IDEAS V-07): the intent's link, now or from before the view listened
@@ -347,6 +351,11 @@ final class ApexScriptBridge: NSObject, WKScriptMessageHandler {
         }
         if cmd == "voiceBegin" {
             shell?.webVoiceBegin(duck: speechDuck)
+            return
+        }
+        // Following a build (web/builds.js): may Vetta notify about new steps? Asked at that moment, not at launch.
+        if cmd == "notifyBuilds" {
+            ApexBuildNotifier.requestPermission()
             return
         }
         // CarPlay (CarPlay/ApexCarPlay.swift): the route, the next maneuver and hazards for the car's screen.

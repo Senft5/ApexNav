@@ -146,6 +146,14 @@
     .cp-meter b { position: absolute; top: -5px; bottom: -5px; width: 1.5px; background: var(--panel-ink); }
     .cp-stickers { display: flex; flex-wrap: wrap; gap: 6px; }
     .cp-stickers span { width: 34px; height: 34px; border: 1.5px solid var(--panel-ink); display: grid; place-items: center; font-family: var(--font-num); font-size: 13px; color: #fff; }
+    .cp-badge { display: inline-block; margin-left: 6px; padding: 0 6px; border: 1.5px solid var(--panel-ink); font-size: 13px; font-weight: 600; transform: rotate(-2deg); }
+    .cp-pin { border-left: 3px solid var(--cp-stripe); padding: 4px 0 4px 10px; }
+    .cp-pin .cp-badge { margin: 0 8px 0 0; }
+    .cp-pin p { margin: 2px 0 0; overflow-wrap: anywhere; }
+    .cp-factory { color: var(--accent); }
+    .cp-factory .cp-crest-svg path, .cp-factory .cp-crest-svg circle { stroke-dasharray: 160; stroke-dashoffset: 160; animation: cp-draw 1.6s ease-out forwards; }
+    @keyframes cp-draw { to { stroke-dashoffset: 0; } }
+    @media (prefers-reduced-motion: reduce) { .cp-factory .cp-crest-svg path, .cp-factory .cp-crest-svg circle { animation: none; stroke-dashoffset: 0; } }
     .cp-pinned { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
     .cp-lock { display: inline-block; margin-left: 8px; padding: 1px 6px; border: 1.5px solid var(--panel-dim); color: var(--panel-dim); font-size: 13px; transform: rotate(-2deg); }
     .cp-livery-ed fieldset[disabled] { opacity: 0.5; }
@@ -178,7 +186,8 @@
         const redoDrive = part((c2) => nextDrive(c2, redoDrive), () => driveSec, (n) => { driveSec = n; });
         const redoBoard = part((c2) => board(c2, redoBoard), () => boardSec, (n) => { boardSec = n; });
         driveSec = nextDrive(c, redoDrive); boardSec = board(c, redoBoard);
-        box.replaceChildren(header(c, draw), el('div', { className: 'cp-body' }, titleBlock(c), liveryBox(c, draw), ...(c.pinned ? [pinnedRow(c)] : []), driveSec, boardSec, chat(c)));
+        box.replaceChildren(header(c, draw), el('div', { className: 'cp-body' }, titleBlock(c), liveryBox(c, draw), ...(c.pinned ? [pinnedRow(c)] : []), driveSec, boardSec,
+          ...(c.house ? [houseBoard(c)] : []), buildsRow(c), chat(c, draw)));
       };
       draw();
       return box;
@@ -190,6 +199,7 @@
       if (c.is_owner) head.append(btn('Edit livery', () => editLivery(c, redo), 'ink-btn cp-edit'));
       const crest = el('div', { className: 'cp-crest' });
       crest.append(c.crest_photo_id && P() ? P().img(c.crest_photo_id, '', `${c.name}'s crest`) : crestSvg(c.crest || 'apex'));
+      if (atLeast(c.livery && c.livery.tier, 'factory')) crest.classList.add('cp-factory');   // Factory: the crest draws itself in the theme's accent
       const band = el('div', { className: 'cp-stripe' });
       band.style.background = stripeCss(c.pattern, c.stripe, c.stripe2, c.stripe3);
       return el('div', {}, head, band, crest);
@@ -200,7 +210,8 @@
       const left = el('div', { style: 'min-width:0' }, el('h2', { textContent: c.name }));
       if (c.motto) left.append(el('p', { className: 'cp-motto', textContent: c.motto }));
       left.append(el('p', { className: 'cp-meta', textContent: meta }));
-      const right = c.is_owner && page.invite ? btn('Invite', () => page.invite(c), 'ink-btn') : '';
+      const right = el('div', { className: 'stack-8', style: 'align-items:flex-end' }, ...(c.is_owner && page.invite ? [btn('Invite', () => page.invite(c), 'ink-btn')] : []),
+        ...(atLeast(c.livery && c.livery.tier, 'factory') && page.shareImage ? [btn('Share', () => shareCrew(c), 'linkbtn')] : []));
       return el('div', { className: 'cp-title' }, left, right);
     }
 
@@ -273,6 +284,7 @@
       const list = el('div');
       c.board.forEach((r, i) => {
         const who = el('span', { className: 'who' }, el('b', { textContent: `@${r.handle || '?'}` }));
+        if (r.badge) who.append(el('span', { className: 'cp-badge', textContent: r.badge }));   // Works livery
         if (r.car) who.append(el('small', { textContent: r.car }));
         list.append(el('div', { className: 'cp-board-row' + (r.mine ? ' mine' : '') },
           el('span', { className: 'rank', textContent: r.score == null ? '' : String(i + 1) }), who,
@@ -288,9 +300,35 @@
       return sec;
     }
 
-    function chat(c) {
+    // Builds (REVIEW.md 5.3): crew-mates' build threads you can see; nothing at all when there are none.
+    function buildsRow(c) {
+      const sec = el('div', { className: 'stack-8' }), B = page.builds && page.builds();
+      if (!B) return sec;
+      apiCall('GET', `/api/builds?crew=${encodeURIComponent(c.id)}`).then((r) => (r && r.ok ? r.json() : [])).catch(() => []).then((list) => {
+        if (Array.isArray(list) && list.length) sec.replaceChildren(el('div', { className: 'cp-sec' }, el('h3', { textContent: 'Builds' })), B.rows(list));
+      });
+      return sec;
+    }
+
+    // The house stage (Works livery): the stage the crew calls its own, best Score as published to the crew.
+    function houseBoard(c) {
+      const h = c.house, list = el('div');
+      h.board.forEach((r, i) => list.append(el('div', { className: 'cp-board-row' }, el('span', { className: 'rank', textContent: String(i + 1) }),
+        el('span', { className: 'who' }, el('b', { textContent: `@${r.handle || '?'}` })), el('span', { className: 'score', textContent: String(r.score) }))));
+      if (!h.board.length) list.append(el('p', { className: 'note', textContent: 'Nobody has shared a Score on it yet.' }));
+      return el('div', { className: 'stack-8' }, el('div', { className: 'cp-sec' }, el('h3', { textContent: 'House stage' }), el('span', { className: 'note', textContent: h.name })), list);
+    }
+
+    function chat(c, redraw) {
       const list = el('div'); list.setAttribute('aria-live', 'polite');
-      const sec = el('div', { className: 'stack-8' }, el('div', { className: 'cp-sec' }, el('h3', { textContent: 'Chat' }), el('span', { className: 'note', textContent: 'Kept 30 days' })), list);
+      const club = atLeast(c.livery && c.livery.tier, 'club'), pinnedId = c.pinned_chat ? c.pinned_chat.id : null;
+      const pin = (id) => async () => {
+        const r = await apiCall('PUT', `/api/crews/${encodeURIComponent(c.id)}/page`, { pinned_chat_id: id }).catch(() => null);
+        if (r && r.ok) redraw(); else toast('Couldn\u2019t change the pin. Try again.');
+      };
+      const pinned = c.pinned_chat ? el('div', { className: 'cp-pin' }, el('span', { className: 'cp-badge', textContent: 'Pinned' }),
+        el('b', { textContent: `@${c.pinned_chat.handle || '?'}` }), el('p', { textContent: c.pinned_chat.body }), ...(c.is_owner ? [btn('Unpin', pin(null), 'linkbtn')] : [])) : '';
+      const sec = el('div', { className: 'stack-8' }, el('div', { className: 'cp-sec' }, el('h3', { textContent: 'Chat' }), el('span', { className: 'note', textContent: 'Kept 30 days' })), pinned, list);
       const fill = async () => {
         const r = await apiCall('GET', `/api/crews/${encodeURIComponent(c.id)}/chat`).catch(() => null);
         const msgs = r && r.ok ? await r.json() : null;
@@ -299,11 +337,12 @@
         list.replaceChildren(...msgs.map((m) => {
           const acts = [];
           if (m.mine || c.is_owner) acts.push(btn('Delete', async () => {
-            if (!confirm('Delete this message?')) return;
+            if (!(await ApexConfirm.ask('Delete this message?', 'Delete'))) return;
             const d = await apiCall('DELETE', `/api/crews/${encodeURIComponent(c.id)}/chat/${encodeURIComponent(m.id)}`).catch(() => null);
             if (d && d.ok) fill(); else toast('Couldn’t delete it. Try again.');
           }, 'linkbtn'));
           if (!m.mine && page.report) acts.push(btn('Report', () => page.report({ kind: 'chat', target: m.id, label: `a message from @${m.handle} in ${c.name}`, who: m.handle, done: fill }), 'linkbtn'));
+          if (c.is_owner && club && m.id !== pinnedId) acts.push(btn('Pin', pin(m.id), 'linkbtn'));   // Club livery
           return el('div', { className: 'cp-msg' }, P() ? P().avatar(m.photo_id, m.handle, 40) : el('span'),
             el('div', { style: 'min-width:0' }, el('div', { className: 'row' }, el('b', { textContent: `@${m.handle || '?'}` }), el('span', { className: 'note', textContent: ago(m.created_at) }), ...acts),
               el('p', { textContent: m.body })));
@@ -348,7 +387,9 @@
       const save = btn('Save', async () => {
         const body = { motto: motto.value.trim() || null, crest, stripe };
         if (club) { body.stripe2 = stripe2; body.pinned_route_id = routeSel.value || null; }
-        if (works) { body.stripe3 = stripe3; body.pattern = pattern; }
+        if (factory && regroupLine.value.trim() !== (c.regroup_line || '')) body.regroup_line = regroupLine.value.trim() || null;
+        if (factory) body.hazard_kinds = hazardKinds.value.split(',').map((k) => k.trim()).filter(Boolean).slice(0, 4);
+        if (works) { body.stripe3 = stripe3; body.pattern = pattern; body.call_sign = callSign.value.trim() || null; body.house_canon_id = houseSel.value || null; }
         const r = await apiCall('PUT', `/api/crews/${encodeURIComponent(c.id)}/page`, body).catch(() => null);
         if (r && r.ok) { close(); redo(); } else toast('Couldn’t save the livery. Try again.');
       }, 'ink-btn solid');
@@ -374,7 +415,50 @@
       const crestPick = P() ? P().picker(c.crest_photo_id ? 'Change crest photo' : 'Use a photo as the crest', 'crest', c.id, () => { close(); redo(); }, { toast }) : '';
       const clubSet = el('fieldset', { disabled: !club }, el('legend', {}, el('b', { textContent: 'Second colour' }), club ? '' : lock('club')), sw2,
         el('b', { textContent: 'Pinned route' }), routeSel, el('div', { className: 'row' }, crestPick));
-      const worksSet = el('fieldset', { disabled: !works }, el('legend', {}, el('b', { textContent: 'Third colour and pattern' }), works ? '' : lock('works')), sw3, pats);
+      const callSign = el('input', { className: 'field', maxLength: 12, value: c.call_sign || '', placeholder: 'Convoy call sign, e.g. RIDGE', autocomplete: 'off' });
+      callSign.setAttribute('aria-label', 'Convoy call sign');
+      const houseSel = el('select', { className: 'field' }, el('option', { value: '', textContent: 'No house stage' }),
+        ...(c.stages || []).map((st) => el('option', { value: st.id, textContent: st.name, selected: c.house && c.house.id === st.id })));
+      houseSel.setAttribute('aria-label', 'House stage');
+      const badgeWho = el('select', { className: 'field' }, ...(c.board || []).map((r) => el('option', { value: r.handle || '', textContent: `@${r.handle}` })));
+      const badgeText = el('input', { className: 'field', maxLength: 16, placeholder: 'Badge, e.g. Sweep', autocomplete: 'off' });
+      badgeWho.setAttribute('aria-label', 'Member'); badgeText.setAttribute('aria-label', 'Badge');
+      const setBadge = btn('Set badge', async () => {
+        const r = await apiCall('PUT', `/api/crews/${encodeURIComponent(c.id)}/badges`, { handle: badgeWho.value, badge: badgeText.value.trim() || null }).catch(() => null);
+        if (r && r.ok) { badgeText.value = ''; toast('Badge set.'); } else toast('Couldn\u2019t set the badge.');
+      }, 'ink-btn');
+      const factory = atLeast(tier, 'factory');
+      const hazardKinds = el('input', { className: 'field', maxLength: 90, value: (c.hazard_kinds || []).join(', '), placeholder: 'Up to four, e.g. Cattle grid, Logging trucks', autocomplete: 'off' });
+      hazardKinds.setAttribute('aria-label', 'Crew hazard categories');
+      // the crew's regroup line in each pack's voice: rendered here on the website by the packs' own Kokoro voices, then uploaded
+      const regroupLine = el('input', { className: 'field', maxLength: 60, value: c.regroup_line || '', placeholder: `${c.name}, regroup.`, autocomplete: 'off' });
+      regroupLine.setAttribute('aria-label', 'Crew regroup line');
+      const V = root.ApexVoice, canRender = !!(V && V.canRenderLine && V.canRenderLine());
+      const voiceNote = el('p', { className: 'note', textContent: (c.voice_packs || []).length ? `Recorded in ${(c.voice_packs || []).length} of 3 voices.` : 'Not recorded yet.' });
+      const renderVoices = btn('Record it in the three voices', async () => {
+        const line = regroupLine.value.trim(); if (!line) { toast('Write the line first.'); return; }
+        const s1 = await apiCall('PUT', `/api/crews/${encodeURIComponent(c.id)}/page`, { regroup_line: line }).catch(() => null);
+        if (!s1 || !s1.ok) { toast('Couldn\u2019t save the line.'); return; }
+        let done = 0;
+        for (const pack of ['marguerite', 'kit', 'hale']) {
+          voiceNote.textContent = `Recording in ${pack[0].toUpperCase() + pack.slice(1)}\u2019s voice\u2026 (the voice model loads once, about 90 MB)`;
+          const m = await fetch(`voices/${pack}/manifest.json`).then((r) => r.json()).catch(() => null);
+          const out = m && m.kokoro_voice ? await V.renderLine(line, m.kokoro_voice, m.speed || 1) : null;
+          if (!out) continue;
+          const r = await root.ApexSync.apiFetch(`/api/crews/${encodeURIComponent(c.id)}/voice/${pack}`, { method: 'PUT', headers: { 'content-type': 'audio/wav' }, body: root.ApexCrewVoice.wav(out.audio, out.sampling_rate) }).catch(() => null);
+          if (r && r.ok) done++;
+        }
+        voiceNote.textContent = done === 3 ? 'Recorded in all three voices.' : `Recorded in ${done} of 3 voices. Try again for the rest.`;
+      }, 'ink-btn');
+      renderVoices.disabled = !canRender;
+      const factorySet = el('fieldset', { disabled: !factory }, el('legend', {}, el('b', { textContent: 'Crew hazard categories' }), factory ? '' : lock('factory')), hazardKinds,
+        el('p', { className: 'note', textContent: 'Members report them from the report sheet and read your word on the plate; other drivers see Debris.' }),
+        el('b', { textContent: 'Crew regroup line' }), regroupLine,
+        el('div', { className: 'row' }, renderVoices),
+        el('p', { className: 'note', textContent: canRender ? 'Members hear it in their co-driver\u2019s voice when your convoy regroups.' : 'Record it on the Vetta website: the voices are made there, the app only plays them.' }), voiceNote);
+      const worksSet = el('fieldset', { disabled: !works }, el('legend', {}, el('b', { textContent: 'Third colour and pattern' }), works ? '' : lock('works')), sw3, pats,
+        el('b', { textContent: 'Convoy call sign' }), callSign, el('b', { textContent: 'House stage' }), houseSel,
+        el('b', { textContent: 'Member badges' }), el('div', { className: 'row' }, badgeWho, badgeText, setBadge));
       ov.append(el('div', { className: 'stack-8', style: 'max-width:520px' },
         el('h2', { textContent: `${TIER_NAME[tier]} livery` }),
         el('label', { className: 'stack-8' }, el('b', { textContent: 'Motto' }), motto),
@@ -382,11 +466,35 @@
         el('b', { textContent: 'Stripe' }), swatches,
         el('b', { textContent: 'Cover' }), el('div', { className: 'row' }, cover),
         el('p', { className: 'note', textContent: 'Photos lose their location data before they leave your phone.' }),
-        clubSet, worksSet,
+        clubSet, worksSet, factorySet,
         el('p', { className: 'note', textContent: club ? liveryLine(c.livery) : `Club at 5 Decals, Works at 12. ${liveryLine(c.livery)}` }),
         el('div', { className: 'row' }, save, btn('Cancel', close, 'linkbtn'))));
       d.body.append(ov);
       motto.focus();
+    }
+
+    // Factory: the crew page as a share card (crest, name, motto, tier, members, the next drive). Text only, no photo.
+    async function shareCrew(c) {
+      const W = 1080, H = 1350, cv = root.document.createElement('canvas'); cv.width = W; cv.height = H;
+      const x = cv.getContext('2d'), css = getComputedStyle(root.document.documentElement), v = (k, f) => css.getPropertyValue(k).trim() || f;
+      const ink = v('--panel-ink', '#1c1a17'), paper = v('--panel', '#ece3d3'), dim = v('--panel-dim', '#6c6455'), stripe = stripeOk(c.stripe) ? c.stripe : v('--accent', '#c8102e');
+      x.fillStyle = paper; x.fillRect(0, 0, W, H);
+      x.fillStyle = ink; x.fillRect(0, 300, W, 30); x.fillStyle = stripe; for (let i = 0; i < W; i += 220) x.fillRect(i + 150, 300, 50, 30);
+      const svg = crestSvg(c.crest || 'apex', 240); svg.setAttribute('color', ink);
+      const img = new Image(); img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(new XMLSerializer().serializeToString(svg).replace(/var\(--cp-stripe, var\(--accent\)\)/g, stripe));
+      await new Promise((r) => { img.onload = r; img.onerror = r; });
+      x.fillStyle = paper; x.fillRect(80, 180, 280, 280); x.strokeStyle = ink; x.lineWidth = 6; x.strokeRect(80, 180, 280, 280);
+      try { x.drawImage(img, 100, 200, 240, 240); } catch (_) {}
+      const fNum = v('--font-num', 'sans-serif'), fUi = v('--font-ui', 'sans-serif');
+      const wrap = (t, y, size, font, color, maxW = W - 160, style = '') => { x.font = `${style} ${size}px ${font}`.trim(); x.fillStyle = color; let line = '', yy = y;
+        for (const w of String(t).split(' ')) { const test = line ? `${line} ${w}` : w; if (x.measureText(test).width > maxW && line) { x.fillText(line, 80, yy); line = w; yy += size * 1.2; } else line = test; }
+        if (line) x.fillText(line, 80, yy); return yy + size * 1.4; };
+      let y = wrap(c.name, 600, 96, fNum, ink, undefined, '700');
+      if (c.motto) y = wrap(c.motto, y, 44, fUi, dim, undefined, 'italic');
+      y = wrap(`${c.members} members \u00b7 ${(c.livery && c.livery.tier) ? c.livery.tier[0].toUpperCase() + c.livery.tier.slice(1) : 'Plain'} livery`, y + 10, 40, fUi, ink, undefined, '600');
+      if (c.next) y = wrap(`Next drive: ${c.next.title}`, y + 20, 40, fUi, ink);
+      wrap('Vetta', H - 90, 40, fNum, dim, undefined, '700');
+      page.shareImage(cv, `${String(c.name).replace(/[^A-Za-z0-9 _-]+/g, '').trim() || 'crew'}.png`);
     }
 
     /** Several crews: a row of their names to switch between; `pick(id)` opens one. */

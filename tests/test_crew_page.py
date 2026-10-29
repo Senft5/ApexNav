@@ -77,3 +77,10 @@ def test_stripe_patterns_match_the_worker_and_never_inject():
         assert "#c8102e" in css
     # anything that isn't a #rrggbb colour never reaches the CSS
     assert "red;" not in run("C.stripeCss('bands', 'red;background:url(x)', null, null)")
+
+
+@needs_node
+def test_a_crew_category_reads_its_own_word_on_every_plate():
+    src = f"const H = require({json.dumps(str(ROOT / 'web' / 'hazard_reports.js'))});"
+    js = src + " console.log(JSON.stringify([H.plate({ kind: 'debris', label: 'Cattle grid' }, null, 0).title, H.plate({ kind: 'debris' }, null, 0).title]));"
+    assert json.loads(subprocess.run([NODE, "-e", js], capture_output=True, text=True, check=True).stdout) == ["Cattle grid", "Debris"]

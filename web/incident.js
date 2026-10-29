@@ -59,7 +59,7 @@
 
   const CSS = `
     .crash-sheet { position: fixed; inset: 0; z-index: 60; background: var(--panel); color: var(--panel-ink); display: grid; align-content: center;
-      gap: 16px; padding: 24px 20px calc(24px + var(--safe-bottom, 0px)); text-align: center; }
+      gap: 16px; padding: calc(24px + var(--safe-top, 0px)) calc(20px + var(--safe-right, 0px)) calc(24px + var(--safe-bottom, 0px)) calc(20px + var(--safe-left, 0px)); text-align: center; }
     .crash-sheet h2 { margin: 0; font-size: 34px; }
     .crash-sheet .big { font-size: 22px; padding: 18px; width: 100%; max-width: 420px; justify-self: center; }
     .crash-sheet .count { font-size: 15px; color: var(--panel-dim); }

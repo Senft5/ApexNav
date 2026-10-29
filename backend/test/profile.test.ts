@@ -26,7 +26,8 @@ describe("friend profiles", () => {
     expect(p).toMatchObject({ handle: "bob", name: "BOB", crews: ["Ridge Runners"], totals: { stages: 1, days_month: 1, best: 812 } });
     expect(p.cars.map((c: Record<string, unknown>) => c.model)).toEqual(["MX-5"]);
     expect(p.stages).toEqual([{ stage: "Esses", best: 812, days_month: 1 }]);           // never a stage only they have
-    expect(JSON.stringify(p)).not.toMatch(/time_s|600|email|Mum/);
+    expect(JSON.stringify(p)).not.toMatch(/time_s|email|Mum/);
+    expect(JSON.stringify(p)).not.toMatch(/:600[,}]/);                                // the time as a value (ids are random and may hold "600")
   });
 
   it("scores they don't share with you aren't there", async () => {

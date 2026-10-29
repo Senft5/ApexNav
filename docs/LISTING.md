@@ -75,10 +75,12 @@ positions, routing and search requests) is not "collected" by Apple's definition
 |---|---|---|---|---|
 | Precise location | Yes: hazard reports and shared routes you make | Yes (kept with your account; never shown with your name) | No | App functionality |
 | Precise location | Yes: road data, only with the switch on (map road id, 5 m section, four road measurements, the road's public map line; never your position or path) | No | No | App functionality, product improvement |
+| Precise location | Yes, only if you choose to be shown on the friends map with Exact (sent while driving, delayed as you choose, shown to friends or crews you pick, deleted when you choose Nobody) | Yes | No | App functionality |
+| Coarse location | Yes, only if you choose to be shown on the friends map (the default is within a mile, 10 minutes late) | Yes | No | App functionality |
 | Name | Yes (from Google or Apple sign-in) | Yes | No | App functionality |
 | Email address | Yes (sign-in) | Yes | No | App functionality |
 | User ID | Yes (account id, handle) | Yes | No | App functionality |
-| Other user content | Yes (crew names and mottos, crew chat messages, spots, shared routes, scores you publish) | Yes | No | App functionality |
+| Other user content | Yes (crew names and mottos, crew chat messages, build threads and replies, spots, shared routes, scores you publish) | Yes | No | App functionality |
 | Photos or videos | Yes: photos you add to your profile, your cars, a crew or a build thread (redrawn on the phone, every metadata segment removed on the server; no location) | Yes | No | App functionality |
 | Crash data | Yes (error counts with a scrubbed message, no identifiers) | No | No | App functionality |
 | Other diagnostic data | Yes (daily totals: routes found/failed, uploads failed, mount set time; switch in Settings) | No | No | App functionality, analytics |

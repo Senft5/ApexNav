@@ -32,6 +32,11 @@ export async function exportMyData(env: Env, v: Viewer) {
     photos: await q("SELECT id, kind, ref_id, bytes, w, h, created_at FROM photos WHERE owner = ?"),
     pro: await q("SELECT source, since, expires_at FROM pro_entitlements WHERE user_id = ?"),
     decals_kept_off: await q("SELECT c.name FROM decal_optouts o JOIN crews c ON c.id = o.crew_id WHERE o.user_id = ?"),
+    builds: await q("SELECT b.id, c.make, c.model, b.stages, b.created_at FROM builds b JOIN cars c ON c.id = b.car_id WHERE b.owner = ?"),
+    build_posts: await q("SELECT p.n, p.title, p.body, p.parts, p.score, p.created_at FROM build_posts p JOIN builds b ON b.id = p.build_id WHERE b.owner = ?"),
+    build_replies: await q("SELECT body, suggestion, tried, created_at FROM build_replies WHERE author = ?"),
+    sharing_on_map: await q("SELECT audience, delay_s, fuzz, updated_at FROM presence_settings WHERE user_id = ?"),
+    build_chat: await q("SELECT body, created_at FROM build_chat WHERE author = ?"),
     crew_chat: await q("SELECT c.name AS crew, m.body, m.created_at FROM crew_chat m JOIN crews c ON c.id = m.crew_id WHERE m.author = ?"),
     cars: await q("SELECT year, make, model, trim, nickname, color, power_hp, weight_kg, drivetrain, transmission, tyres, mods, shared, is_primary, created_at FROM cars WHERE owner = ?"),
     highlights: await q("SELECT id, name, category, note, lat, lon, status, created_at FROM highlights WHERE author_id = ?"),
@@ -50,6 +55,7 @@ export async function deleteAccount(env: Env, v: Viewer, req: Request): Promise<
   await convoysLeaveAll(env, v.id);                                  // live convoys first: leave them, or end the ones they lead
   await photosEraseOwner(env, v.id);                                 // the JPEGs in KV, then their rows (REVIEW.md 5.2)
   const owned = (await all<{ id: string }>(env, "SELECT id FROM crews WHERE owner = ?", v.id)).map((c) => c.id);
+  if (env.PHOTOS) for (const id of owned) for (const p of ["marguerite", "kit", "hale"]) await env.PHOTOS.delete(`cv/${id}/${p}`);   // crews' regroup clips
   const stmts: D1PreparedStatement[] = [];
   const run = (sql: string, ...a: unknown[]) => stmts.push(env.DB.prepare(sql).bind(...a));
   // things other people hold that point at this person (no foreign key, so removed by hand)

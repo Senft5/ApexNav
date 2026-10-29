@@ -1,6 +1,6 @@
 // SQL for "is this hidden by reports?", shared by discovery, garages, highlights and the owner's queue (a leaf module: no imports).
 export const HIDE_AFTER_REPORTS = 3;
-export const REPORT_KINDS = ["user", "crew", "car", "highlight", "event", "photo", "chat"] as const;
+export const REPORT_KINDS = ["user", "crew", "car", "highlight", "event", "photo", "chat", "post", "reply", "build_chat"] as const;
 export type ReportKind = typeof REPORT_KINDS[number];
 
 const kindOk = (kind: ReportKind) => { if (!REPORT_KINDS.includes(kind)) throw new Error("bad kind"); return kind; };

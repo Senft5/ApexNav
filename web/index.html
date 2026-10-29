@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-OU/jF9tQixbYSysghPOzBmJt8oTAeasryI4ltYH6Owg=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-T0WyZW+iQJyYHbQoBaV+/e1lxwmoS/Ti2MKt8FDzzc8=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -23,6 +23,7 @@
   <script src="crew_standings.js"></script>
   <script src="road_page.js"></script>
   <script src="taste.js"></script>
+  <script src="prefer.js"></script>
   <script src="track_mode.js"></script>
   <script src="flags.js"></script>
   <script src="save_file.js"></script>
@@ -60,7 +61,9 @@
   <script src="whats_new.js"></script>
   <script src="saved_routes.js"></script>
   <script src="crew_events.js"></script>
+  <script src="confirm.js"></script>
   <script src="crew_page.js"></script>
+  <script src="crew_voice.js"></script>
   <script src="health.js"></script>
   <script src="scenic.js"></script>
   <script src="eta_share.js"></script>
@@ -84,6 +87,7 @@
   <script src="twisty.js"></script>
   <script src="coverage.js"></script>
   <script src="recording.js"></script>
+  <script src="end_line.js"></script>
   <script src="road_memory.js"></script>
   <script src="contributor.js"></script>
   <script src="keyboard.js"></script>
@@ -98,10 +102,12 @@
   <script src="convoy_ui.js"></script>
   <script src="car_lookup.js"></script>
   <script src="photos.js"></script>
+  <script src="builds.js"></script>
+  <script src="friends_map.js"></script>
   <script src="garage_ui.js"></script>
   <script src="safety_ui.js"></script>
   <style>
-    :root { --safe-top: env(safe-area-inset-top, 0px); --safe-bottom: env(safe-area-inset-bottom, 0px); --dial: clamp(112px, 14dvh, 150px);
+    :root { --safe-top: env(safe-area-inset-top, 0px); --safe-bottom: env(safe-area-inset-bottom, 0px); --safe-left: env(safe-area-inset-left, 0px); --safe-right: env(safe-area-inset-right, 0px); --dial: clamp(112px, 14dvh, 150px);
       /* The hazard plate (docs/design/REVIEW.md 4.3): the same in every theme, day and night; no theme may set these. */
       --hz-bg: #111111; --hz-edge: #FF7A1A; --hz-ink: #FFFFFF; }
     .hz-plate { position: absolute; z-index: 5; top: 14px; left: 10px; max-width: calc(100% - 76px); display: grid; grid-template-columns: 28px minmax(0, 1fr);
@@ -246,7 +252,13 @@
       padding: 8px 14px 4px; box-shadow: -8px 8px 24px rgba(0, 0, 0, 0.22); }
     .edge-panel h3 { font-size: 13px; font-weight: 600; color: var(--panel-dim); margin-bottom: 2px; }
     #app.sheet-open .edge { display: none; }
-    #recenterBtn { display: none; min-height: 44px; } #recenterBtn.show { display: block; }
+    /* Recenter: the second map key, under Layers (REVIEW.md 1.2 Map idle); the seconds left replace the glyph */
+    #recenterBtn { display: none; position: absolute; right: 0; top: calc(38% + 62px); z-index: 4; background: var(--panel); color: var(--panel-ink); padding: 0; }
+    #recenterBtn.show { display: flex; align-items: center; justify-content: center; }
+    #recenterBtn svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
+    #recenterBtn .rc-left { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
+    #recenterBtn.counting svg { display: none; }
+    #app.plan-open #recenterBtn, #app.sheet-open #recenterBtn { display: none; }
     .toast { position: absolute; left: 50%; top: 12px; transform: translateX(-50%); z-index: 6; max-width: calc(100% - 32px);
       background: var(--panel); color: var(--panel-ink); border: 1px solid var(--accent); padding: 8px 12px; font-size: 12px; font-weight: 600; display: none; }
     .toast.show { display: block; }
@@ -299,13 +311,18 @@
     .cluster-dials { display: grid; grid-template-columns: var(--dial) minmax(0, 1fr) var(--dial); gap: 8px; align-items: center; }
     .dial { width: var(--dial); height: var(--dial); }
     .dial-svg { width: 100%; height: 100%; display: block; }
+    /* the meter's column makes room under it for the live Score (REVIEW.md 4.3) in every theme */
+    .dial.dial-g { display: flex; flex-direction: column; align-items: stretch; }
+    .dial.dial-g > :not(.g-score) { flex: 1 1 0; min-height: 0; width: 100%; }
+    .dial.dial-g > .g-score { flex: none; height: 44px; }
+    .dial-g.bezelled .bezel-ring { height: calc(100% - 44px); }   /* Billet's ring rounds the meter, not the Score */
     .dial-num { font-family: var(--font-num); font-size: 15px; font-weight: 600; fill: var(--face-ink); }
     .dial-label { font-size: 14px; font-weight: 700; letter-spacing: 2px; fill: var(--face-dim); }
     .dial-tiny { font-size: 11px; fill: var(--face-dim); }
     /* Speed is the one number read at a glance: the dial draws at a bit over half size, so 70 here is at least 40 px on a
        phone (the theme contract's floor, theme_contract.js); the bank readout at least 13 px. */
     .dial-digital { font-family: var(--font-num); font-size: 70px; font-weight: 700; fill: var(--face-ink); }
-    .dial-digital.small { font-size: 24px; fill: var(--accent); }
+    .dial-digital.small { font-size: 36px; fill: var(--accent); }   /* the g-ball shares its column with the Score: 36 keeps BANK over 13 px */
     .gauge-printed .dial-num { font-size: 17px; font-weight: 700; }
     .cluster-center { min-width: 0; display: grid; gap: 4px; justify-items: center; align-content: center; }
     .readouts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; width: min(100%, 250px); }
@@ -564,16 +581,18 @@
     .crew-tile-head em { font-style: normal; font-size: 12px; color: var(--panel-dim); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
     /* Friends: a side pop-up over the Crew sheet. */
     .side-pop { position: fixed; top: 0; right: 0; bottom: 0; width: min(360px, 88vw); z-index: 30; background: var(--panel); color: var(--panel-ink);
-      border-left: 1px solid var(--rule); box-shadow: -12px 0 32px rgba(0, 0, 0, 0.3); padding: calc(14px + var(--safe-top)) 16px calc(24px + var(--safe-bottom));
+      border-left: 1px solid var(--rule); box-shadow: -12px 0 32px rgba(0, 0, 0, 0.3); padding: calc(14px + var(--safe-top)) calc(16px + var(--safe-right)) calc(24px + var(--safe-bottom)) 16px;
       overflow-y: auto; display: grid; gap: 16px; align-content: start; transform: translateX(105%); transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1); }
     .side-pop.open { transform: none; }
     .side-pop-head { display: flex; justify-content: space-between; align-items: center; }
     .side-pop-head h3 { border: 0; padding: 0; margin: 0; }
     .crew-detail { border-top: 1px solid var(--hair, var(--panel-dim)); padding-top: 8px; margin-top: 4px; }
-    .overlay { position: fixed; inset: 0; z-index: 40; background: var(--panel); color: var(--panel-ink); display: none; flex-direction: column; padding: 24px 24px calc(24px + env(safe-area-inset-bottom)); overflow-y: auto; }
+    .overlay { position: fixed; inset: 0; z-index: 40; background: var(--panel); color: var(--panel-ink); display: none; flex-direction: column; padding: calc(24px + var(--safe-top)) calc(24px + var(--safe-right)) calc(24px + var(--safe-bottom)) calc(24px + var(--safe-left)); overflow-y: auto; }
     .overlay.show { display: flex; }
-    .overlay.dim { background: rgba(0,0,0,0.5); justify-content: flex-end; padding: 0; }
-    .overlay .card-sheet { background: var(--panel); color: var(--panel-ink); border-top: 2px solid var(--rule); padding: 24px 24px calc(24px + env(safe-area-inset-bottom)); display: grid; gap: 12px; }
+    /* pinned to the bottom with an auto margin, not flex-end: a sheet taller than a landscape screen still scrolls to its top */
+    .overlay.dim { background: rgba(0,0,0,0.5); justify-content: flex-start; padding: 0; }
+    .overlay.dim > :first-child { margin-top: auto; }
+    .overlay .card-sheet { background: var(--panel); color: var(--panel-ink); border-top: 2px solid var(--rule); padding: 24px calc(24px + var(--safe-right)) calc(24px + var(--safe-bottom)) calc(24px + var(--safe-left)); display: grid; gap: 12px; }
     .overlay h1 { font-family: var(--font-num); font-size: 36px; line-height: 1.05; font-weight: 800; }
     .overlay h2 { font-family: var(--font-num); font-size: 28px; font-weight: 700; }
     .overlay p { font-size: 15px; line-height: 1.45; color: var(--panel-dim); }
@@ -696,6 +715,7 @@
     .stage-bar.ahead { border-left-color: #2e9e5b; } .stage-bar.behind { border-left-color: #d0453a; }
     .hz-ask span { flex: 1; font-weight: 700; }
     .hz-ask .key { min-height: 56px; }
+    .g-score { text-align: center; line-height: 1; margin-top: 2px; } .g-score b { display: block; font: 700 26px var(--font-num); color: var(--panel-ink); letter-spacing: 0.04em; } .g-score span { font-size: 13px; letter-spacing: 0.08em; color: var(--panel-dim); }
     .hz-pin, .pin.bump, .pin.crest, .pin.dip { font: 800 11px var(--font-ui, sans-serif); letter-spacing: 0.06em; padding: 2px 6px 2px 5px; border: 2px solid var(--hz-edge); color: var(--hz-ink); background: var(--hz-bg); white-space: nowrap; }
     .hz-pin::before, .pin.bump::before, .pin.crest::before, .pin.dip::before { content: ""; display: inline-block; width: 0; height: 0; margin-right: 4px; vertical-align: -1px;
       border-left: 5px solid transparent; border-right: 5px solid transparent; border-bottom: 9px solid var(--hz-edge); }
@@ -730,7 +750,16 @@
       .switches { display: flex; flex-wrap: wrap; justify-content: flex-start; }
       .cluster-dials { grid-template-columns: var(--dial) minmax(0, 1fr) var(--dial); justify-content: stretch; }
       .tabbar { margin: 2px -10px 0; }
-      #app.sheet-open, #app.idle { grid-template-columns: minmax(0, 1fr) 76px; }
+      /* the Dynamic Island and the rounded corners sit on the short sides: the map runs under them, nothing you read or tap does */
+      #app.sheet-open, #app.idle { grid-template-columns: minmax(0, 1fr) calc(76px + var(--safe-right)); }
+      .sheet { padding-left: var(--safe-left); }
+      .plan { padding-left: var(--safe-left); transform: translateY(calc(100% - var(--plan-bar, 62px) - var(--safe-bottom))); }
+      .plan.open { padding-bottom: var(--safe-bottom); }
+      .plates, .place-plate, .hz-plate { left: calc(10px + var(--safe-left)); }
+      .binnacle { padding-bottom: calc(8px + var(--safe-bottom)); }
+      /* the suggested loop can't live in the tab rail: it floats over the map, just above the deck */
+      #app.idle .loop-suggest { position: fixed; z-index: 6; left: calc(10px + var(--safe-left)); bottom: calc(var(--plan-bar, 62px) + var(--safe-bottom) + 10px);
+        width: min(440px, calc(100vw - 200px)); padding: 10px 12px; background: var(--panel); border: 1px solid var(--rule); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18); }
       #app.sheet-open .tabbar, #app.idle .tabbar { grid-template-columns: minmax(0, 1fr); border-top: 0; margin: 0 -10px; padding: 0; }
       #app.sheet-open .notes { display: none; }
       #app.sheet-open { grid-template-areas: "stage binnacle" "stage binnacle"; }
@@ -755,8 +784,8 @@
       <div class="hz-plate" id="hzPlate" role="status" aria-live="assertive" hidden><svg viewBox="0 0 28 25" aria-hidden="true"><path class="hz-tri" d="M14 1 L27 24 H1 Z"/><path d="M14 9 V16 M14 19.5 V20.5" stroke-width="3" stroke-linecap="round"/></svg><b id="hzPlateTitle"></b><span id="hzPlateDetail"></span></div>
       <div class="plates">
         <div class="plate" id="modePlate" role="status">Replay</div>
-        <button class="plate" id="recenterBtn">Recenter</button>
       </div>
+      <button class="map-key recenter-key" id="recenterBtn" aria-label="Recenter"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/><circle cx="12" cy="12" r="1.5"/></svg><span class="rc-left"></span></button>
       <div class="toast" id="toast" role="status" aria-live="polite"></div>
       <div class="sr-only" id="announcer" role="status" aria-live="polite"></div>
 
@@ -802,6 +831,8 @@
                 <div class="ctl" role="group" aria-label="Corner mix"><div class="ctl-label">Corner mix</div>
                   <label class="balance"><span>Fewer hairpins</span><input type="range" min="-1" max="1" step="1" value="0" data-pref-range="tight" aria-label="Hairpins: fewer, any or more" /><span>More</span></label>
                   <label class="balance"><span>Fewer sweepers</span><input type="range" min="-1" max="1" step="1" value="0" data-pref-range="fast" aria-label="Fast sweepers: fewer, any or more" /><span>More</span></label></div>
+                <div class="ctl"><div class="ctl-label">Prefer <small>stamped ranks higher</small></div>
+                  <div class="stamps" role="group" aria-label="Prefer"><button data-prefer="measured" aria-pressed="false">Measured roads</button><button data-prefer="novel" aria-pressed="false">New to me</button><button data-prefer="crew" aria-pressed="false">Crew favourites</button></div></div>
                 <div class="ctl" role="group" aria-label="Explore: the best roads near you"><div class="ctl-label">Explore <small>the best roads within</small></div>
                   <div class="detents"><button data-explore-min="15">15 min</button><button data-explore-min="30">30 min</button></div></div>
                 <div class="place-list" id="exploreList" hidden></div>
@@ -854,11 +885,13 @@
       <div class="edge-panel" id="swPanel" role="group" aria-label="Map layers">
         <h3>Map layers</h3>
         <div class="switches" id="switchRow">
+        <button class="sw" data-toggle="friends"><i></i><span>Friends</span></button>
         <button class="sw" data-toggle="lpr"><i></i><span>Cameras</span></button>
         <button class="sw" data-toggle="twisty"><i></i><span>Twisty roads</span></button>
         <button class="sw" data-toggle="coverage"><i></i><span>Measured roads</span></button>
         <button class="sw" data-toggle="terrain"><i></i><span>3D terrain</span></button>
         </div>
+        <button class="linkbtn" id="friendsSheetBtn">Who sees me</button>
         <h3 class="mt-8">Co-driver</h3>
         <div class="switches">
         <button class="sw sw-cycle" data-cycle="notesMode" aria-label="Notes"><b></b><span>Notes</span></button>
@@ -1095,7 +1128,7 @@
       <div class="ob-strip" aria-hidden="true"><div class="notes" id="obNotes"></div></div>
     </div>
     <div class="stack">
-      <button class="ink-btn solid" id="obNext">Get started</button>
+      <button class="ink-btn solid" id="obNext">Start</button>
       <button class="linkbtn" id="obAlt">Watch a replay</button>
     </div>
   </div>
@@ -1235,7 +1268,7 @@
       theme: 'roadbook', camFeel: 'dynamic', voiceId: 'marguerite', liveVoice: false, voiceStyle: 'codriver', voiceName: '', hlOn: false, hlStrength: 1,
       notesMode: 'auto', nightMode: 'auto',   // Notes: auto | full | quiet. Night: auto (sunset/sunrise) | on | off
       noteWords: 'plain',                     // rally ("Left 4 minus") | plain ("Medium left"), IDEAS V-02; a saved setting wins
-      toggles: { stage: false, voice: true, lpr: true, dna: false, night: false, twisty: false, haptics: true, crash: true, health: true, terrain: false, coverage: false, keys: true }   // stage and night are derived from the two modes; analysis.html reads toggles.night
+      toggles: { stage: false, voice: true, lpr: true, dna: false, night: false, twisty: false, haptics: true, crash: true, health: true, terrain: false, coverage: false, keys: true, friends: false }   // stage and night are derived from the two modes; analysis.html reads toggles.night
     };
     const NOTES_MODES = ['auto', 'full', 'quiet'], NIGHT_MODES = ['auto', 'on', 'off'];
     const MODE_LABEL = { auto: 'Auto', full: 'Full', quiet: 'Quiet', on: 'On', off: 'Off' };
@@ -1763,14 +1796,21 @@
       state.follow = false;
       clearTimeout(resumeTimer); clearInterval(resumeTick);
       $('recenterBtn').classList.add('show');
-      $('recenterBtn').textContent = 'Recenter';
+      recenterLeft(0);
     }
     function scheduleResume() {
       clearTimeout(resumeTimer); clearInterval(resumeTick);
       let left = FOLLOW_RESUME_S;
-      $('recenterBtn').textContent = `Recenter in ${left}s`;
-      resumeTick = setInterval(() => { left -= 1; if (left > 0) $('recenterBtn').textContent = `Recenter in ${left}s`; }, 1000);
+      recenterLeft(left);
+      resumeTick = setInterval(() => { left -= 1; if (left > 0) recenterLeft(left); }, 1000);
       resumeTimer = setTimeout(resumeFollow, FOLLOW_RESUME_S * 1000);
+    }
+    // the key's face: the glyph, or the seconds until it recenters on its own
+    function recenterLeft(s) {
+      const b = $('recenterBtn');
+      b.classList.toggle('counting', s > 0);
+      b.querySelector('.rc-left').textContent = s > 0 ? `${s}s` : '';
+      b.setAttribute('aria-label', s > 0 ? `Recenter (on its own in ${s} s)` : 'Recenter');
     }
     function resumeFollow() {
       clearTimeout(resumeTimer); clearInterval(resumeTick);
@@ -2063,13 +2103,13 @@
       try {
         if (state.voiceId !== 'device' && window.ApexVoice) {
           await ApexVoice.load(state.voiceId);
-          const tokens = item.chain ? ApexVoice.tokensFor(item.chain, ApexVoice.bank.style) : item.sysToken ? [item.sysToken] : null;
+          const tokens = item.tokens || (item.chain ? ApexVoice.tokensFor(item.chain, ApexVoice.bank.style) : item.sysToken ? [item.sysToken] : null);
           const promptStyle = await voiceBracket(true, duck);
           if (promptStyle !== 'normal') { voiceBracket(false); speech.busy = false; pumpSpeech(); return; }   // silent or a tone: skip the words
           try {
             // A call the bank can only voice by joining clips plays as one whole render when the
             // route-load prefetch has it; the join is the audible seam we are avoiding.
-            if (tokens && ApexVoice.joins(tokens) > 0 && state.liveVoice) played = await ApexVoice.playWhole(spokenTextFor(item.text, ApexVoice.bank.style));
+            if (tokens && state.liveVoice && ApexVoice.joins(tokens) > 0) played = await ApexVoice.playWhole(spokenTextFor(item.text, ApexVoice.bank.style));
             if (!played && tokens) played = await ApexVoice.play(tokens);
             // Not in the bank (drive names, route summaries): synthesise live with the same model.
             if (!played && state.liveVoice) played = await ApexVoice.speakLive(spokenTextFor(item.text, ApexVoice.bank.style));
@@ -2287,7 +2327,8 @@
         tripMi: ApexUnits.longN(live && (idx < 0 || track.kind === 'horizon') ? (drive.rec ? drive.rec.km * 1000 : 0) : state.cursorM), totalMi: track && track.kind !== 'horizon' && !(live && idx < 0) ? ApexUnits.longN(totalM()) : null,
         sector: sectorAt(idx), routeOnly: track && track.kind === 'route',
         // for Tapedeck's meters and Kit (instruments.js): the live roughness, the last line said, a crest close ahead, a blink
-        rough, kitLine: state.kitLine, crestAhead: !!state.crestAhead, blink: performance.now() < (state.blinkUntil || 0)
+        rough, kitLine: state.kitLine, crestAhead: !!state.crestAhead, blink: performance.now() < (state.blinkUntil || 0),
+        score: live ? liveScore.value : null   // the drive's Vetta Score so far (liveScoreTick), only while recording
       });
       updateRibbon(vMps, idx, snap);
       updatePins();
@@ -2541,8 +2582,8 @@
     try { const a = JSON.parse(localStorage.getItem(AVOID) || 'null'); if (a && typeof a === 'object') for (const k in avoid) if (typeof a[k] === 'boolean') avoid[k] = a[k]; } catch (_) { /* storage off */ }
     // Corners you like (IDEAS R-19): more or fewer hairpins and fast sweepers weigh routes' fun (fun_route.js cornerWeight).
     const ROAD_PREFS = 'apex.roadPrefs';
-    let roadPrefs = { tight: 0, fast: 0 };
-    try { const p = JSON.parse(localStorage.getItem(ROAD_PREFS) || 'null'); if (p && typeof p === 'object') for (const k of ['tight', 'fast']) if ([-1, 0, 1].includes(p[k])) roadPrefs[k] = p[k]; } catch (_) { /* storage off */ }
+    let roadPrefs = { tight: 0, fast: 0, measured: false, novel: false, crew: false };
+    try { const p = JSON.parse(localStorage.getItem(ROAD_PREFS) || 'null'); if (p && typeof p === 'object') { for (const k of ['tight', 'fast']) if ([-1, 0, 1].includes(p[k])) roadPrefs[k] = p[k]; for (const k of ['measured', 'novel', 'crew']) roadPrefs[k] = p[k] === true; } } catch (_) { /* storage off */ }
     // Junction turns (slight/normal/sharp left and right, U-turns, ramps, roundabouts): fun scoring drops the corners there.
     const TURN_TYPES = new Set([9, 10, 11, 12, 13, 14, 15, 16, 18, 19, 20, 21, 26, 27]);
     function routeOf(trip) {
@@ -3357,12 +3398,12 @@
       await weatherOn(pool, level);
       tasteOn(pool);
       await applyMeasured(FunRoute.rank(pool, level).slice(0, 3).map(r => pool.find(c => c.t === r.t)), ui);   // the top few only
+      await preferOn(pool, level);
       const ranked = FunRoute.rank(pool, level), best = ranked[0];
       const quickest = pool.filter(c => Number.isFinite(c.timeS)).reduce((x, y) => (y.timeS < x.timeS ? y : x), best);
       // The best and up to two really different others stay on the card (and faint on the map) to pick from.
       const t = await useOption({ id, name, request, level, quickest, list: FunRoute.distinctOptions(ranked, 3) }, 0);
-      const mi = ApexUnits.long(totalOf(t)), extra = best.extraS >= 60 ? ` · +${Math.round(best.extraS / 60)} min for ${fewerTownKm(best, quickest) < 1 ? 'fun' : best.fun && quickest.fun && best.fun.good > quickest.fun.good ? 'fun and fewer towns' : 'fewer towns'}` : '';
-      toast(`${name} · ${mi} · Fun ${best.fun ? best.fun.fun : '--'}${extra}`);
+      if (!t) return false;   // no toast: the route bar and card say it (REVIEW.md 1.2, Route bar: the bar is the toast)
       window.apexDebug && (window.apexDebug.lastFun = FunRoute.rank(pool, level).map(c => ({ kind: c.kind, fun: c.fun, timeS: c.timeS, value: c.value, adjust: c.adjust || 0, glare: c.glare, townKm: c.townKm })));
       return true;
     }
@@ -3535,6 +3576,8 @@
         for (const d of done) d.score += d.adjust || 0;
         done.sort((a, b) => b.score - a.score);
       }
+      await preferApply(done.slice(0, 4));                                   // the Prefer stamps (prefer.js)
+      if (done.some(d => d.preferBonus)) { for (const d of done) d.score += d.preferBonus || 0; done.sort((a, b) => b.score - a.score); }
       const best = done[0];
       best.t.request = { from: null, to: { lat: c.lat, lon: c.lon }, via: best.job.pts.slice(1, -1).map(p => ({ lat: p.lat, lon: p.lon, planned: true })) };
       ui.step('Building route', 0.92);
@@ -3544,12 +3587,12 @@
         const gotMin = Math.round(best.t.timeS / 60), near = Math.abs(best.t.timeS - targetS) <= 0.2 * targetS;
         best.t.name = `${gotMin} min loop`;
         await buildRoute(null, loopId, best.t.name, best.t);
-        toast(near ? `${best.good} good corners · home in about ${gotMin} min` : `${gotMin} min: the closest good loop to ${asked}`);
+        if (!near) toast(`${gotMin} min: the closest good loop to ${asked}`);   // the bar says the rest
       } else {
         const near = Math.abs(gotMi - miles) <= 0.2 * miles;
         best.t.name = `${Math.max(1, Math.round(ApexUnits.longN(best.km * 1000)))} ${ApexUnits.longU()} loop`;
         await buildRoute(null, loopId, best.t.name, best.t);
-        toast(near ? `${best.good} good corners on this loop` : `${ApexUnits.long(best.km * 1000)}: the closest good loop to ${asked}`);
+        if (!near) toast(`${ApexUnits.long(best.km * 1000)}: the closest good loop to ${asked}`);
       }
       window.apexDebug && (window.apexDebug.lastLoop = done.map(d => ({ kind: d.job.kind, fun: d.t.fun && d.t.fun.fun, score: d.score, km: d.km, good: d.good, retraced: d.retraced })));
     }
@@ -3720,7 +3763,7 @@
     // Plan: the bar is always there (not while driving); tap it, or drag it up, for From / To, places, loops and the route card.
     function openPlan(open) {
       const panel = $('planPanel');
-      panel.style.setProperty('--plan-bar', `${$('planBar').offsetHeight + 2}px`);
+      panel.style.setProperty('--plan-bar', `${$('planBar').offsetHeight + 2}px`); document.documentElement.style.setProperty('--plan-bar', `${$('planBar').offsetHeight + 2}px`);   // the floating loop (landscape) sits above it
       panel.classList.toggle('open', open);
       $('app').classList.toggle('plan-open', open);
       $('destInput').setAttribute('aria-expanded', String(open));
@@ -4042,8 +4085,16 @@
       roadPrefs = { ...roadPrefs, ...next };
       try { localStorage.setItem(ROAD_PREFS, JSON.stringify(roadPrefs)); } catch (_) { /* storage off: this session only */ }
       document.querySelectorAll('[data-pref-range]').forEach(r => { r.value = String(roadPrefs[r.dataset.prefRange] || 0); });
+      document.querySelectorAll('[data-prefer]').forEach(b => { const on = !!roadPrefs[b.dataset.prefer]; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
       paintPresets();
     }
+    // Prefer stamps (prefer.js, REVIEW.md 3.3): rank what the router gave toward measured, new-to-you or crew-shared roads
+    document.querySelectorAll('[data-prefer]').forEach(b => b.addEventListener('click', async () => {
+      if ($('planPanel').classList.contains('busy') || loopBusy) return;
+      const k = b.dataset.prefer, was = !!roadPrefs[k];
+      setRoadPrefs({ [k]: !was });
+      if (!(await replanForLevel(`${was ? 'Not preferring' : 'Preferring'} ${ApexPrefer.LABELS[k].toLowerCase()}`))) setRoadPrefs({ [k]: was });
+    }));
     // corner mix as balance sliders with three detents: fewer, any, more (REVIEW.md mockup 03-plan-more.html)
     document.querySelectorAll('[data-pref-range]').forEach(r => r.addEventListener('change', async () => {
       const k = r.dataset.prefRange, was = roadPrefs[k] || 0, now = Math.max(-1, Math.min(1, Math.round(Number(r.value))));
@@ -4242,6 +4293,7 @@
       getRoute: () => (track && track.kind === 'route' && track.lat.length > 1 ? { name: track.name, pts: track.lat.map((la, i) => [la, track.lon[i]]) } : null),
       // A close hazard cuts in; a far one goes next, after the pace note being spoken (never dropping the notes queued).
       speak: (text, urgent) => { if (!state.toggles.voice) toast(text); else if (urgent) say(text, true, null, null, { kind: 'hazard', alert: true }); else sayNext(text, `convoy:${text}`); },
+      onRegroup: (rg, convoyName) => regroupSay(rg, convoyName),
     }) : null; } catch (e) { console.error('convoy', e); convoy = null; }   // the convoy never takes the page down
     // Garage (web/garage_ui.js): your cars, and the ones friends and crew-mates show.
     // Block and report (web/safety_ui.js) on every social surface below; the garage uses it for friends' cars.
@@ -4256,12 +4308,32 @@
       goTo: (p) => { closeSheet(); routeToPlace(p); }, openRoute: (id) => openSharedRoute(id),
       startConvoy: (name, handles) => (convoy && convoy.startFor ? convoy.startFor(name, handles) : Promise.resolve({ ok: false, status: 0 })),
     }) : null; } catch (e) { console.error('crew drives', e); }
+    // A regroup call in a convoy (crew_voice.js): a Factory crew's own line in the theme pack's voice when the convoy is the
+    // crew's and the clip exists; otherwise "Regroup at <note>" like any other line. The note is always on screen.
+    let crewVoiceList = null;
+    async function regroupSay(rg, convoyName) {
+      if (!state.toggles.voice) { toast(ApexCrewVoice.regroupText(rg)); return; }
+      if (crewVoiceList === null && accountMe && accountMe.member) crewVoiceList = await apiCall('GET', '/api/crews/voices').then(jsonOf).catch(() => []) || [];
+      const crew = ApexCrewVoice.crewOf(convoyName, crewVoiceList || []), pack = ['marguerite', 'kit', 'hale'].includes(state.voiceId) ? state.voiceId : 'marguerite';
+      if (crew && crew.packs.includes(pack)) {
+        try {
+          const r = await ApexSync.apiFetch(`/api/crews/${encodeURIComponent(crew.id)}/voice/${pack}`);
+          if (r.ok) {
+            const c = ApexVoice.unlock(), buf = await c.decodeAudioData(await r.arrayBuffer()), src = c.createBufferSource();
+            src.buffer = buf; src.connect(c.destination); src.start();
+            if (rg.note) toast(`Regroup at ${rg.note}`);
+            return;
+          }
+        } catch (_) { /* no clip after all: the plain line */ }
+      }
+      say(ApexCrewVoice.regroupText(rg), false);
+    }
     // The crew page (web/crew_page.js, REVIEW.md roadmap 20): the Crew tab opens your crew.
     let crewPage = null, crewDrivesEl = null;
     const toDrives = () => { if (crewDrivesEl) crewDrivesEl.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
     try { crewPage = window.ApexCrewPage ? ApexCrewPage.mount({ el, btn, toast, apiCall, jsonOf, report: safety && safety.report,
       invite: async (c) => { const r = await apiCall('POST', `/api/crews/${c.id}/invite`); const j = await jsonOf(r); if (r.ok) copyText(`${shareOrigin()}/?crew=${j.token}`, 'Crew link copied.'); else toast(j && j.error === 'too_many_open_invites' ? 'You have 10 open crew links. Turn some off first.' : 'Couldn\'t make a link. Try again.'); },
-      openRoute: (id) => openSharedRoute(id), onAllDrives: toDrives, onPlan: (c) => { if (crewEvents) crewEvents.plan(c.id); toDrives(); } }) : null; } catch (e) { console.error('crew page', e); }
+      openRoute: (id) => openSharedRoute(id), builds: () => builds, shareImage: (cv, name) => (window.ApexDriveCard ? ApexDriveCard.shareCard(cv, name) : null), onAllDrives: toDrives, onPlan: (c) => { if (crewEvents) crewEvents.plan(c.id); toDrives(); } }) : null; } catch (e) { console.error('crew page', e); }
     // Units (web/units.js, IDEAS U-22): the page reloads to redraw every number; never mid-drive (the drive lives in this page).
     {
       const paintUnits = () => document.querySelectorAll('[data-units]').forEach(b => { const on = b.dataset.units === ApexUnits.system(); b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); });
@@ -4298,7 +4370,17 @@
     try { spotsFeed = window.ApexSpotsFeed ? ApexSpotsFeed.mount({ el, btn, toast, sync: window.ApexSync, report: safety && safety.report,
       here: () => state.lastPosition || (() => { const c = map.getCenter(); return { lat: c.lat, lon: c.lng }; })(), goTo: (p) => { closeSheet(); routeToPlace(p); } }) : null; } catch (e) { console.error('spots', e); }
     let garage = null;
-    try { garage = window.ApexGarageUI ? ApexGarageUI.mount({ el, btn, toast, apiCall, jsonOf, report: safety && safety.report, onCars: setRoutingCars, onPhotos: () => renderAccount() }) : null; } catch (e) { console.error('garage', e); }
+    // Build threads (web/builds.js, REVIEW.md 5.3): from a car card, the crew page and Builds you follow.
+    let builds = null;
+    try { builds = window.ApexBuilds ? ApexBuilds.mount({ el, btn, toast, apiCall, jsonOf, report: safety && safety.report }) : null; } catch (e) { console.error('builds', e); }
+    // Friends on the map (web/friends_map.js, REVIEW.md 5.4): the Friends layer and who sees you, sent only while you drive
+    let friendsMap = null;
+    try { friendsMap = window.ApexFriendsMap ? ApexFriendsMap.mount({ el, btn, toast, apiCall, map, zones: () => privacyZones, inZone: inPrivacyZone,
+      position: () => state.lastPosition || null, driving: () => driveActive,
+      roadName: (lat, lon) => { try { return window.ApexRoadNames ? ApexRoadNames.nearestRoadName(map.querySourceFeatures('openmaptiles', { sourceLayer: 'transportation_name' }), lat, lon) : null; } catch (_) { return null; } },
+      setLayerToggle: (on) => { state.toggles.friends = on; paintSwitches(); friendsMap.setLayer(on); savePrefs(); } }) : null; } catch (e) { console.error('friends map', e); }
+    if (friendsMap) $('friendsSheetBtn').addEventListener('click', () => friendsMap.sheet());
+    try { garage = window.ApexGarageUI ? ApexGarageUI.mount({ el, btn, toast, apiCall, jsonOf, report: safety && safety.report, onCars: setRoutingCars, onPhotos: () => renderAccount(), builds }) : null; } catch (e) { console.error('garage', e); }
     const switchRow = (label, on, change) => { const b = el('button', { className: 'ink-btn' + (on ? ' on' : ''), textContent: `${label}: ${on ? 'On' : 'Off'}`, onclick: change }); b.setAttribute('aria-pressed', String(!!on)); return b; };
     let openCrewId = null;
     const crewNear = () => { if (state.lastPosition) return state.lastPosition; const c = map.getCenter(); return { lat: c.lat, lon: c.lng }; };
@@ -4313,6 +4395,9 @@
       try { const r = await apiCall('GET', '/api/me'); if (r.ok && (r.headers.get('content-type') || '').includes('json')) me = await r.json(); } catch (_) {}
       if (gen !== renderGen) return;
       accountMe = me && me.signed_in ? me : null;
+      if (accountMe && accountMe.member) loadCrewHazardKinds();
+      if (friendsMap && accountMe && accountMe.member) { friendsMap.start(); if (state.toggles.friends) friendsMap.setLayer(true); }
+      else if (state.toggles.friends) { state.toggles.friends = false; paintSwitches(); }
       if (feedbackUi) feedbackUi.refresh();
       if (me && !me.signed_in) setRoutingCars(null);
       else if (me && me.member) apiCall('GET', '/api/garage').then(r => (r.ok ? r.json() : null)).then(list => { if (list) setRoutingCars(list); }).catch(() => {});
@@ -4343,7 +4428,7 @@
           el('h3', { textContent: 'Drive with friends' }),
           // what you get, in three glyphs (REVIEW.md 1.2, Crew signed out)
           el('div', { className: 'crew-gets' },
-            el('span', { innerHTML: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="9" r="3"/><circle cx="16" cy="15" r="3"/><path d="M8 12v3M16 12V9"/></svg>Convoys' }),
+            el('span', { innerHTML: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-6-6.2-6-11a6 6 0 0 1 12 0c0 4.8-6 11-6 11z"/><circle cx="12" cy="10" r="2.2"/></svg>Friends on the map' }),
             el('span', { innerHTML: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20V10M12 20V4M19 20v-7"/></svg>The board' }),
             el('span', { innerHTML: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="15"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>Crew drives' })),
           el('p', { className: 'note', textContent: 'Vetta is invite-only. Nothing is shared unless you switch it on.' }),
@@ -4415,8 +4500,9 @@
       body.append(sharedRoutesSection());
       if (spotsFeed) body.append(spotsFeed.section());
       if (crewStandings) body.append(crewStandings.section());
-      if (crewEvents) body.append(crewDrivesEl = crewEvents.section(Array.isArray(crews) ? crews.map((c) => ({ id: c.id, name: c.name, visibility: c.visibility })) : []));
+      if (crewEvents) body.append(crewDrivesEl = crewEvents.section(Array.isArray(crews) ? crews.map((c) => ({ id: c.id, name: c.name, visibility: c.visibility, role: c.role })) : []));
       if (garage) gbody.append(garage.section());
+      if (builds) gbody.append(builds.followingSection());
 
       // friends: a side pop-up (owner decision), opened from the button under You; new requests light it up
       if (stash('apex.add')) friendsOpen = true;
@@ -4464,7 +4550,7 @@
           el('span', { textContent: g.share_scores ? (g.share_times ? `@${f.handle} sees your scores and times.` : `@${f.handle} sees your scores.`) : `@${f.handle} sees nothing of yours yet.` }),
           el('div', { className: 'row' },
             ...(window.ApexProfileView ? [btn('Profile', () => openProfile(f), 'linkbtn')] : []),
-            btn('Unfriend', async () => { if (confirm(`Unfriend @${f.handle}? This also stops all sharing.`)) { await apiCall('DELETE', `/api/friends/${f.id}`); redo(); } }, 'linkbtn'),
+            btn('Unfriend', async () => { if (await ApexConfirm.ask(`Unfriend @${f.handle}? This also stops all sharing.`, 'Unfriend')) { await apiCall('DELETE', `/api/friends/${f.id}`); redo(); } }, 'linkbtn'),
             ...(safety && f.handle ? [btn('Report', () => safety.report({ kind: 'user', target: f.handle, label: `@${f.handle}`, who: f.handle, done: redo }), 'linkbtn'),
                                       btn('Block', () => safety.block(f.handle, redo), 'linkbtn')] : [])));
         fsec.append(card);
@@ -4533,7 +4619,7 @@
         const ownerBox = el('div', { className: 'stack-8' });
         if (c.role === 'owner') {
           ownerBox.append(btn('Turn off invite links', async () => {
-            if (!confirm(`Turn off every invite link to ${c.name}? People already in stay in.`)) return;
+            if (!(await ApexConfirm.ask(`Turn off every invite link to ${c.name}? People already in stay in.`, 'Turn off'))) return;
             const r = await apiCall('DELETE', `/api/crews/${c.id}/invites`); const j = await jsonOf(r);
             toast(r.ok ? (j.revoked ? `Old links to ${c.name} no longer work.` : `${c.name} had no open links.`) : 'Couldn\'t change that. Try again.');
           }, 'linkbtn'));
@@ -4556,7 +4642,7 @@
           el('span', { textContent: g.share_scores ? (g.share_times ? `${c.name} sees your scores and times.` : `${c.name} sees your scores.`) : `${c.name} sees nothing of yours yet.` }),
           ownerBox,
           el('div', { className: 'row' }, btn('Invite to crew', async () => { const r = await apiCall('POST', `/api/crews/${c.id}/invite`); const j = await jsonOf(r); if (r.ok) copyText(`${shareOrigin()}/?crew=${j.token}`, 'Crew link copied.'); else toast(j && j.error === 'too_many_open_invites' ? 'You have 10 open crew links. Turn some off first.' : 'Only a crew\'s owner can invite.'); }),
-            btn('Leave', async () => { if (confirm(`Leave ${c.name}?`)) { if (openCrewId === c.id) openCrewId = null; await apiCall('DELETE', `/api/crews/${c.id}/membership`); redo(); } }, 'linkbtn')));
+            btn('Leave', async () => { if (await ApexConfirm.ask(`Leave ${c.name}?`, 'Leave')) { if (openCrewId === c.id) openCrewId = null; await apiCall('DELETE', `/api/crews/${c.id}/membership`); redo(); } }, 'linkbtn')));
         const loadMembers = async () => {
           mbox.innerHTML = '';
           let list = Array.isArray(c.member_list) ? c.member_list : Array.isArray(c.members) ? c.members : null;
@@ -4816,7 +4902,7 @@
       }));
     }
     $('myOfflineDelBtn').addEventListener('click', async () => {
-      if (!confirm('Delete routes and map areas saved for offline, and downloaded voices? Your drives, spots and settings stay.')) return;
+      if (!(await ApexConfirm.ask('Delete routes and map areas saved for offline, and downloaded voices? Your drives, spots and settings stay.', 'Delete'))) return;
       try { localStorage.removeItem(ApexSavedRoutes.KEY); } catch (_) {}
       try { if (window.ApexOfflineTiles) await ApexOfflineTiles.clear(); } catch (_) {}
       try { if (window.caches) { await caches.delete('kokoro-voices'); for (const k of await caches.keys()) if (k.startsWith('apexnav-shell-')) await caches.delete(k); } } catch (_) {}
@@ -4825,12 +4911,12 @@
     $('myDrivesDelBtn').addEventListener('click', async () => {
       const list = await ApexRecording.all();
       if (!list.length) { toast('No drives on this phone.'); return; }
-      if (!confirm(`Delete all ${list.length} drives from this phone? Download them first if you want to keep them.`)) return;
+      if (!(await ApexConfirm.ask(`Delete all ${list.length} drives from this phone? Download them first if you want to keep them.`, 'Delete drives'))) return;
       for (const d of list) { try { await ApexRecording.remove(d.id); } catch (_) {} }
       toast('Drives deleted from this phone.'); renderMyData();
     });
     $('myEraseBtn').addEventListener('click', async () => {
-      if (!confirm('Erase drives, spots, zones, settings and sign-in from this phone? Your account on the server stays until you delete it in Garage → Account.')) return;
+      if (!(await ApexConfirm.ask('Erase drives, spots, zones, settings and sign-in from this phone? Your account on the server stays until you delete it in Garage → Account.', 'Erase everything'))) return;
       const list = await ApexRecording.all();
       for (const d of list) { try { await ApexRecording.remove(d.id); } catch (_) {} }
       ApexSync.setSession(null);                                   // the app's Keychain session too (IDEAS Z-10)
@@ -5112,6 +5198,12 @@
         if (state.toggles.terrain && mapReady && state.mode !== 'live' && map.getPitch() < 40) map.easeTo({ pitch: 60, duration: 800 });
         if (state.toggles.terrain && power.low) toast('3D terrain waits until the phone stops saving battery.');
       }
+      if (k === 'friends') {   // REVIEW.md 5.4: seeing friends; the first time, the sheet explains both choices
+        if (!accountMe || !accountMe.member) { state.toggles.friends = false; paintSwitches(); toast('Sign in (Crew) to see friends on the map.'); return; }
+        if (friendsMap) friendsMap.setLayer(state.toggles.friends);
+        let seen = false; try { seen = localStorage.getItem('apex.friendsExplained') === '1'; localStorage.setItem('apex.friendsExplained', '1'); } catch (_) {}
+        if (state.toggles.friends && !seen && friendsMap) friendsMap.sheet();
+      }
       if (k === 'coverage') {
         updateCoverage();
         if (state.toggles.coverage) toast(mapReady && map.getZoom() < ApexCoverage.MIN_ZOOM ? 'Zoom in to see measured roads.' : 'Green: measured roads, bolder the surer. A road without a line is waiting for a pioneer: the first drivers to map it earn extra points.');
@@ -5209,9 +5301,26 @@
       const L = drive.live, r = drive.rec; if (!L || !r) return;
       while (drive.liveIdx < r.rows.length) { const x = r.rows[drive.liveIdx++]; L.push({ lat: x.lat, lon: x.lon, roughness_rms: x.roughness_rms, camber_deg: x.camber_deg, crest: x.crest_vertical_g }); }
     }
+    // The live Vetta Score (REVIEW.md 1.2, Driving; 4.3): the drive so far scored the way the end card scores it, every 30 s
+    // while recording; null (shown "--") until there are enough clean corners.
+    const liveScore = { value: null, at: 0, busy: false };
+    function liveScoreTick() {
+      const r = drive.rec;
+      if (!r || r.samples < 200) { liveScore.value = null; return; }   // a new drive starts at --
+      if (liveScore.busy || performance.now() - liveScore.at < 30000) return;
+      liveScore.busy = true; liveScore.at = performance.now();
+      setTimeout(() => {
+        try {
+          const d = ApexRecording.parse(Core, r.toCsv(), 'live.csv', { source: 'web-gps' });
+          const s = Core.driverScore(d.speed_mps, d.lon_g, d.lat_g, ApexRecording.scorableCorners(d, d.corners)).score;
+          liveScore.value = Number.isFinite(s) ? Math.round(s) : null;
+        } catch (_) { liveScore.value = null; } finally { liveScore.busy = false; }
+      }, 0);
+    }
     // Which road the drive is on, every 150 m (30 rows), read from the map's own vector tiles (ApexRoadNames):
     // the saved drive is named after the road that carried most of it. Nothing leaves the phone for this.
     function noteRoads() {
+      liveScoreTick();
       const r = drive.rec; if (!r || !window.ApexRoadNames) return;
       while (drive.roadIdx + 30 <= r.rows.length) {
         drive.roadIdx += 30;
@@ -5357,6 +5466,37 @@
       if (costs.some(x => x == null)) return;
       const least = Math.min(...costs);
       top.forEach((c, i) => { c.weatherCost = costs[i] - least; });
+    }
+    // The Prefer stamps (prefer.js): the share of each contender that members measured (applyMeasured), that you haven't
+    // driven (your Log, on this phone) and that your crews shared (their routes, members only), as a few fun points each.
+    const preferCache = { driven: null, crew: null, at: 0 };
+    async function preferGrids(want) {
+      if (Date.now() - preferCache.at > 10 * 60000) { preferCache.driven = null; preferCache.crew = null; preferCache.at = Date.now(); }
+      if (want.novel && !preferCache.driven && window.ApexRecording) {
+        try { preferCache.driven = ApexPrefer.grid((await ApexRecording.all()).map(d => ({ lat: d.lat, lon: d.lon }))); } catch (_) { preferCache.driven = new Set(); }
+      }
+      if (want.crew && !preferCache.crew) {
+        try {
+          const list = (await apiCall('GET', '/api/routes/shared').then(jsonOf)) || [];
+          const geoms = await Promise.all(list.filter(r => r.crew).slice(0, 12).map(r => apiCall('GET', `/api/routes/${encodeURIComponent(r.id)}`).then(jsonOf).then(x => (x && x.geom) || []).catch(() => [])));
+          preferCache.crew = ApexPrefer.grid(geoms);
+        } catch (_) { preferCache.crew = new Set(); }
+      }
+      return preferCache;
+    }
+    async function preferOn(pool, level) {
+      for (const c of pool) c.preferBonus = 0;
+      await preferApply(FunRoute.rank(pool, level).slice(0, 4).map(r => pool.find(c => c.t === r.t)).filter(Boolean));   // the contenders only
+    }
+    async function preferApply(top) {
+      const want = { measured: roadPrefs.measured, novel: roadPrefs.novel, crew: roadPrefs.crew };
+      if (!window.ApexPrefer || !(want.measured || want.novel || want.crew)) return;
+      const g = await preferGrids(want);
+      for (const c of top) {
+        const f = { measured: c.t.measured && Number.isFinite(c.t.measured.coverage) ? c.t.measured.coverage : null,
+                    driven: g.driven ? ApexPrefer.share(c.t, g.driven) ?? 0 : null, crew: g.crew && g.crew.size ? ApexPrefer.share(c.t, g.crew) : null };
+        c.preferBonus = ApexPrefer.bonus(want, f);
+      }
     }
     // Your taste (taste.js, IDEAS R-33): with five or more "which road was better?" answers, each candidate's TECH, FLOW and
     // known smoothness from the reference lap, and a few fun points toward what you pick. No answers: nothing changes.
@@ -5511,7 +5651,7 @@
     }
     function askStill(h) {
       reported.asking = h;
-      $('hzAskText').textContent = `${ApexHazardReports.LABEL[h.kind] || 'Hazard'} still there?`;
+      $('hzAskText').textContent = `${h.label || ApexHazardReports.LABEL[h.kind] || 'Hazard'} still there?`;
       $('hzAsk').hidden = false;
       clearTimeout(reported.askTimer);
       reported.askTimer = setTimeout(() => { $('hzAsk').hidden = true; reported.asking = null; }, 12000);
@@ -5532,11 +5672,21 @@
       b.addEventListener('click', () => reportHazard(k));
       $('hzKinds').append(b);
     }
+    // A Factory crew's own categories (REVIEW.md 5.1, e.g. "Cattle grid"): extra buttons for its members, sent as a labelled report.
+    async function loadCrewHazardKinds() {
+      document.querySelectorAll('#hzKinds .hz-custom').forEach((b) => b.remove());
+      const list = accountMe && accountMe.member ? await apiCall('GET', '/api/hazards/kinds').then(jsonOf).catch(() => null) : null;
+      for (const label of Array.isArray(list) ? list : []) {
+        const b = document.createElement('button'); b.className = 'ink-btn hz-btn hz-custom'; b.textContent = label;
+        b.addEventListener('click', () => reportHazard('debris', label));
+        $('hzKinds').append(b);
+      }
+    }
     // One tap reports; for 3 s the Report key is Undo (REVIEW.md 1.2, Hazard report): nothing is sent until then.
     let pendingHz = null;
     function paintHzUndo() {
       const b = $('hzReportBtn');
-      b.textContent = pendingHz ? `Undo ${ApexHazardReports.LABEL[pendingHz.body.kind] || 'report'}` : 'Report';
+      b.textContent = pendingHz ? `Undo ${pendingHz.body.label || ApexHazardReports.LABEL[pendingHz.body.kind] || 'report'}` : 'Report';
       b.setAttribute('aria-label', pendingHz ? 'Undo the hazard report' : 'Report a hazard');
       b.classList.toggle('undo', !!pendingHz);
     }
@@ -5545,24 +5695,24 @@
       $('hzOverlay').classList.add('show');
     });
     $('hzCancel').addEventListener('click', () => $('hzOverlay').classList.remove('show'));
-    async function reportHazard(kind) {
+    async function reportHazard(kind, label = null) {
       $('hzOverlay').classList.remove('show');
       const p = state.lastPosition, heading = state.lastMotion && state.lastMotion.heading;
       if (!p || !state.lastPositionAt || performance.now() - state.lastPositionAt > 10000) { toast('No GPS fix yet. Try again in a moment.'); return; }
-      const body = { kind, lat: p.lat, lon: p.lon, heading: Number.isFinite(heading) ? Math.round((heading % 360 + 360) % 360) : null };
+      const body = { kind, lat: p.lat, lon: p.lon, heading: Number.isFinite(heading) ? Math.round((heading % 360 + 360) % 360) : null, ...(label ? { label } : {}) };
       if (pendingHz) { clearTimeout(pendingHz.timer); const was = pendingHz.body; pendingHz = null; sendHazard(was); }   // the one before goes now
       pendingHz = { body, timer: setTimeout(() => { const b = pendingHz && pendingHz.body; pendingHz = null; paintHzUndo(); if (b) sendHazard(b); }, 3000) };
       paintHzUndo();
     }
     async function sendHazard(body) {
-      const kind = body.kind;
+      const kind = body.kind, word = body.label || ApexHazardReports.LABEL[kind];
       let r = null;
       try { r = await ApexSync.apiFetch('/api/hazards', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }); } catch (_) {}
-      if (!r || r.status >= 500) { outbox.add('/api/hazards', body, true); health.bump('hazard_queued'); toast(`No signal. ${ApexHazardReports.LABEL[kind]} saved; it's sent when you have one.`); return; }
+      if (!r || r.status >= 500) { outbox.add('/api/hazards', body, true); health.bump('hazard_queued'); toast(`No signal. ${word} saved; it's sent when you have one.`); return; }
       if (r.status === 401 || r.status === 403) { toast('Sign in (Crew) to report hazards for others.'); return; }
       if (!r.ok) { toast(r.status === 429 ? 'That\'s a lot of reports today.' : 'Couldn\'t send that. Try again.'); return; }
       const j = await r.json(); reported.mine.add(j.id); reported.said.add(j.id);
-      toast(j.confirmed ? `${ApexHazardReports.LABEL[kind]}: someone reported it already. You confirmed it.` : `${ApexHazardReports.LABEL[kind]} reported. Drivers behind you will hear about it.`);
+      toast(j.confirmed ? `${word}: someone reported it already. You confirmed it.` : `${word} reported. Drivers behind you will hear about it.`);
       loadReported(true);
     }
 
@@ -5778,8 +5928,28 @@
         Array.isArray(d.corners) ? `${d.corners.length} corners` : null].filter(Boolean).join(' · ');
       $('endScore').textContent = d.ds.score == null ? '--' : String(d.ds.score);
       const t = d.ds.score != null && window.ApexWeekDigest ? ApexWeekDigest.tip(d.ds.components) : null;
-      $('endLine').textContent = d.ds.score == null ? 'Not enough clean corners for a score this time.'
-        : t ? `Next time, ${t.label.toLowerCase()}: ${t.tip}.` : '';
+      const tipLine = d.ds.score == null ? 'Not enough clean corners for a score this time.' : t ? `Next time, ${t.label.toLowerCase()}: ${t.tip}.` : '';
+      $('endLine').textContent = tipLine;
+      // your best on this road (REVIEW.md 4.4): against your earlier drives named after the same road; then the pack's closing line
+      (async () => {
+        let best = false;
+        if (d.ds.score != null && window.ApexEndLine) {
+          try {
+            const others = (await ApexRecording.all()).filter((o) => o.id !== d.id && o.name === d.name).map((o) => {
+              const x = ApexRecording.repair(Core, o);
+              try { const s = Core.driverScore(x.speed_mps, x.lon_g, x.lat_g, ApexRecording.scorableCorners(x, ApexRecording.cornersOf(x))).score; return { id: o.id, name: o.name, score: Number.isFinite(s) ? Math.round(s) : null }; }
+              catch (_) { return null; }
+            }).filter(Boolean);
+            best = ApexEndLine.bestOnRoad({ id: d.id, name: d.name, score: d.ds.score }, others);
+          } catch (_) { best = false; }
+        }
+        if (best) $('endLine').textContent = ['Your best on this road.', tipLine].filter(Boolean).join(' ');
+        if (window.ApexEndLine) {
+          const pack = ['marguerite', 'kit', 'hale'].includes(state.voiceId) ? state.voiceId : 'marguerite';
+          const line = ApexEndLine.endLine(pack, d.ds.score == null ? null : Math.round(d.ds.score), best);
+          say(line.text, false, null, null, state.voiceId === 'device' ? {} : { tokens: line.tokens });
+        }
+      })();
       $('endLog').href = `analysis.html?tab=drive&drive=${encodeURIComponent(d.id)}`;
       $('endCard').classList.add('show');
     }
@@ -5904,7 +6074,7 @@
     // =======================================================================
     // 10c. FIRST RUN: three screens, shown once. No permissions here (they are asked at the first Start drive).
     // =======================================================================
-    // First run is one screen (REVIEW.md roadmap 8): the mark, a line, the road book calling corners on a loop, Get started.
+    // First run is one screen (REVIEW.md roadmap 8): the mark, a line, the road book calling corners on a loop, Start.
     // The voice comes with the theme and sign-in waits for the first social action, so neither is asked here.
     const OB_NOTES = [
       { type: 'corner', dir: 'L', severity: '4', mods: ['tightens'], call: 'Left 4 tightens', code: 'L4', dist: '300', unit: 'ft' },
@@ -5925,7 +6095,7 @@
       const finish = () => { flag('apex.onboarded', '1'); ob.classList.remove('show'); };
       $('obNext').onclick = finish;
       $('obAlt').onclick = () => { finish(); watchDryRidge(); };
-      // Focus the dialog, not its button: VoiceOver reads the welcome, and no focus ring sits on Get started before a touch
+      // Focus the dialog, not its button: VoiceOver reads the welcome, and no focus ring sits on Start before a touch
       ob.classList.add('show'); tick(); ob.tabIndex = -1; ob.focus();
     }
     setTimeout(() => health.flush(IN_APP_SHELL ? 'ios' : 'web').catch(() => {}), 5000);

@@ -18,8 +18,28 @@
 - [x] Roadmap 22 (core): Decals from verified Pro (backend/src/livery.ts, migration 0033 applied to both D1), tiers, the
   livery box, Club (second colour, pinned route, crest photo) and Works (third colour, patterns) in the editor. Dormant
   until StoreKit writes pro_entitlements. Postponed: chat pins, templates, badges, house stage, call sign, Factory.
-- Exact next task: roadmap 23, build threads (car header, stage bar, posts with photos and parts, replies vs suggestions
-  with "Tried it", follow; tables from migration 0030).
+- [x] Roadmap 23: build threads (backend/src/builds.ts, web/builds.js): car header, stage bar, numbered steps with photos,
+  parts and a Log drive's Vetta Score, replies and suggestions with Tried it, follow with new-step counts. Migration 0034.
+- [x] Roadmap 24: friends on the map (backend/src/presence.ts, web/friends_map.js): the Friends layer, Show me to, delay
+  and grid fuzz on the server, only while driving, home zones on both sides and hatched on your map. Migration 0035.
+- All 24 roadmap items are built. Also done: the packs' closing lines with the score and "best on this road"
+  (web/end_line.js, number clips in each bank), the Prefer stamps (web/prefer.js).
+- [x] Build-thread chat (30 days, migration 0036).
+- [x] REVIEW.md 1.2 pass: the live Vetta Score under the meter in every theme (contract-tested), Start on onboarding,
+  import hints point to Garage.
+- [x] Livery extras: Club (chat pin, 3 templates), Works (badges, house stage, call sign, 10 templates), Factory (drawn
+  crest, share card, crew hazard categories). Migrations 0037-0038 applied to both D1.
+- [x] The crew's regroup line in each pack's voice (rendered on the website, played in the app; migration 0039) and every
+  convoy regroup spoken; notifications for followed builds from a background refresh (ApexBuildNotifier.swift; the rule is ApexKit BuildAlerts, unit-tested).
+- [x] A fresh REVIEW.md 1.2 pass, now two e2e flows ("REVIEW.md 1.2 screen by screen"): Recenter a map key, the confirm
+  sheet (web/confirm.js) for every destructive action, the rest of the Log as quiet lines, drive detail fits a phone,
+  the signed-out Crew pitch. The friend-profile test's random failure (a car id holding "600") is fixed.
+- [x] Safe areas: an e2e flow emulates the iPhone 15 Pro's Dynamic Island, home indicator and corners, upright and on
+  its side; landscape now pads every sheet, overlay, plate and the tab rail, and the suggested loop floats over the map.
+- Every REVIEW.md suggestion is built. Pro, Decals and the Pro themes wait on StoreKit (the owner's Paid Applications
+  Agreement); photos wait on R2 to move out of KV.
+- Exact next task: StoreKit (needs the owner's Paid
+  Applications Agreement) so Pro, Decals and the Pro themes can go on sale.
 
 ## Session 2026-10-29 (day): design phase 2
 

@@ -50,5 +50,10 @@ SELECT
   (SELECT COUNT(*) FROM build_follows) AS build_follows,
   (SELECT COUNT(*) FROM pro_entitlements) AS pro_entitlements,
   (SELECT COUNT(*) FROM decal_optouts) AS decal_optouts,
+  (SELECT COUNT(*) FROM presence_settings) AS presence_settings,
+  (SELECT COUNT(*) FROM presence_samples) AS presence_samples,
+  (SELECT COUNT(*) FROM build_chat) AS build_chat,
+  (SELECT COUNT(*) FROM crew_event_templates) AS crew_event_templates,
+  (SELECT COUNT(*) FROM crew_voice) AS crew_voice,
   (SELECT COUNT(*) FROM d1_migrations) AS d1_migrations
 ;

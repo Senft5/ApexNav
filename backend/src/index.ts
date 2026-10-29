@@ -10,7 +10,7 @@ import { clientError, errorSummary, serverError } from "./errors";
 import { backupDatabase } from "./backup";
 import { sweepExpired } from "./sweep";
 import { appleSignIn } from "./apple";
-import { hazardsNear, reportHazard, voteHazard } from "./hazards";
+import { crewHazardKinds, hazardsNear, reportHazard, voteHazard } from "./hazards";
 import { routeDelete, routeGet, routesSharedWithMe, shareRoute } from "./routes_shared";
 
 const BACKUP_CRON = "0 7 * * 1";   // wrangler.jsonc triggers; the other cron is the daily sweep
@@ -20,8 +20,10 @@ import {
 } from "./social";
 import { deleteAccount, exportMyData } from "./account";
 import { carCreate, carDelete, carUpdate, myCars, peoplesCars } from "./garage";
-import { chatDelete, chatList, chatPost, crewPage, crewPageUpdate } from "./crew_page";
+import { chatDelete, chatList, chatPost, crewBadge, crewPage, crewPageUpdate, crewVoiceGet, crewVoicePut, crewVoices, templateCreate, templateDelete, templatesList } from "./crew_page";
 import { decalsPlace } from "./livery";
+import { presencePublish, presenceSettingsGet, presenceSettingsPut, presenceView } from "./presence";
+import { buildChatDelete, buildChatList, buildChatPost, buildCreate, buildDelete, buildFind, buildFollow, buildGet, buildUpdate, buildsFollowing, postCreate, postDelete, replyCreate, replyDelete, replyTried } from "./builds";
 import { photoDelete, photoList, photoServe, photoUpload, photoUse } from "./photos";
 import { block, blockList, fileReport, isModerator, moderationQueue, moderationResolve, report, unblock } from "./safety";
 import { contribute, setContribute } from "./contribute";
@@ -146,6 +148,10 @@ on("DELETE", "/api/events/:id", async (req, env, m) => { await eventCancel(env, 
 // the crew page (src/crew_page.ts, REVIEW.md roadmap 20)
 on("GET", "/api/crews/:id/page", async (req, env, m) => json(await crewPage(env, await requireMember(req, env), m.groups!.id)));
 on("PUT", "/api/crews/:id/page", async (req, env, m) => { await crewPageUpdate(env, await requireMember(req, env), m.groups!.id, req); return noContent(); });
+on("PUT", "/api/crews/:id/badges", async (req, env, m) => { await crewBadge(env, await requireMember(req, env), m.groups!.id, req); return noContent(); });
+on("GET", "/api/crews/:id/templates", async (req, env, m) => json(await templatesList(env, await requireMember(req, env), m.groups!.id)));
+on("POST", "/api/crews/:id/templates", async (req, env, m) => json(await templateCreate(env, await requireMember(req, env), m.groups!.id, req), 201));
+on("DELETE", "/api/crews/:id/templates/:tid", async (req, env, m) => { await templateDelete(env, await requireMember(req, env), m.groups!.id, m.groups!.tid); return noContent(); });
 on("PUT", "/api/crews/:id/decals", async (req, env, m) => { await decalsPlace(env, await requireMember(req, env), m.groups!.id, req); return noContent(); });
 on("GET", "/api/crews/:id/chat", async (req, env, m) => json(await chatList(env, await requireMember(req, env), m.groups!.id, new URL(req.url))));
 on("POST", "/api/crews/:id/chat", async (req, env, m) => json(await chatPost(env, await requireMember(req, env), m.groups!.id, req), 201));
@@ -155,6 +161,9 @@ on("POST", "/api/crews/join", async (req, env) => json(await crewJoin(env, await
 on("POST", "/api/crews/invite/preview", async (req, env) => json(await crewInvitePreview(env, await requireMember(req, env), req)));
 on("POST", "/api/crews/:id/invite", async (req, env, m) => json(await crewInvite(env, await requireMember(req, env), m.groups!.id), 201));
 on("DELETE", "/api/crews/:id/invites", async (req, env, m) => json(await crewInvitesRevoke(env, await requireMember(req, env), m.groups!.id)));
+on("GET", "/api/crews/voices", async (req, env) => json(await crewVoices(env, await requireMember(req, env))));
+on("PUT", "/api/crews/:id/voice/:pack", async (req, env, m) => { await crewVoicePut(env, await requireMember(req, env), m.groups!.id, m.groups!.pack, req); return noContent(); });
+on("GET", "/api/crews/:id/voice/:pack", async (req, env, m) => crewVoiceGet(env, await requireMember(req, env), m.groups!.id, m.groups!.pack));
 on("GET", "/api/crews/discover", async (req, env) => json(await crewDiscover(env, await requireMember(req, env), new URL(req.url))));
 on("GET", "/api/crews/standings", async (req, env) => json(await crewStandings(env, await requireMember(req, env))));
 on("PUT", "/api/crews/:id", async (req, env, m) => { await crewUpdate(env, await requireMember(req, env), m.groups!.id, req); return noContent(); });
@@ -169,6 +178,28 @@ on("GET", "/api/garage/people", async (req, env) => json(await peoplesCars(env, 
 on("POST", "/api/garage", async (req, env) => json(await carCreate(env, await requireMember(req, env), req), 201));
 on("PUT", "/api/garage/:id", async (req, env, m) => { await carUpdate(env, await requireMember(req, env), m.groups!.id, req); return noContent(); });
 on("DELETE", "/api/garage/:id", async (req, env, m) => { await carDelete(env, await requireMember(req, env), m.groups!.id); return noContent(); });
+// build threads (src/builds.ts, REVIEW.md 5.3, roadmap 23); /following before /:id
+on("GET", "/api/builds/following", async (req, env) => json(await buildsFollowing(env, await requireMember(req, env))));
+on("GET", "/api/builds", async (req, env) => json(await buildFind(env, await requireMember(req, env), new URL(req.url))));
+on("POST", "/api/builds", async (req, env) => json(await buildCreate(env, await requireMember(req, env), req), 201));
+on("POST", "/api/builds/posts/:post/replies", async (req, env, m) => json(await replyCreate(env, await requireMember(req, env), m.groups!.post, req), 201));
+on("DELETE", "/api/builds/posts/:post", async (req, env, m) => { await postDelete(env, await requireMember(req, env), m.groups!.post); return noContent(); });
+on("PUT", "/api/builds/replies/:reply/tried", async (req, env, m) => { await replyTried(env, await requireMember(req, env), m.groups!.reply, req); return noContent(); });
+on("DELETE", "/api/builds/replies/:reply", async (req, env, m) => { await replyDelete(env, await requireMember(req, env), m.groups!.reply); return noContent(); });
+on("GET", "/api/builds/:id", async (req, env, m) => json(await buildGet(env, await requireMember(req, env), m.groups!.id)));
+on("PUT", "/api/builds/:id", async (req, env, m) => { await buildUpdate(env, await requireMember(req, env), m.groups!.id, req); return noContent(); });
+on("DELETE", "/api/builds/:id", async (req, env, m) => { await buildDelete(env, await requireMember(req, env), m.groups!.id); return noContent(); });
+on("GET", "/api/builds/:id/chat", async (req, env, m) => json(await buildChatList(env, await requireMember(req, env), m.groups!.id)));
+on("POST", "/api/builds/:id/chat", async (req, env, m) => json(await buildChatPost(env, await requireMember(req, env), m.groups!.id, req), 201));
+on("DELETE", "/api/builds/:id/chat/:msg", async (req, env, m) => { await buildChatDelete(env, await requireMember(req, env), m.groups!.id, m.groups!.msg); return noContent(); });
+on("POST", "/api/builds/:id/posts", async (req, env, m) => json(await postCreate(env, await requireMember(req, env), m.groups!.id, req), 201));
+on("PUT", "/api/builds/:id/follow", async (req, env, m) => { await buildFollow(env, await requireMember(req, env), m.groups!.id, true); return noContent(); });
+on("DELETE", "/api/builds/:id/follow", async (req, env, m) => { await buildFollow(env, await requireMember(req, env), m.groups!.id, false); return noContent(); });
+// friends on the map (src/presence.ts, REVIEW.md 5.4, roadmap 24)
+on("GET", "/api/presence/settings", async (req, env) => json(await presenceSettingsGet(env, await requireMember(req, env))));
+on("PUT", "/api/presence/settings", async (req, env) => { await presenceSettingsPut(env, await requireMember(req, env), req); return noContent(); });
+on("GET", "/api/presence", async (req, env) => json(await presenceView(env, await requireMember(req, env))));
+on("POST", "/api/presence", async (req, env) => { await presencePublish(env, await requireMember(req, env), req); return noContent(); });
 // photos (src/photos.ts, REVIEW.md 5.2): JPEG in, metadata out; members only
 on("POST", "/api/photos", async (req, env) => json(await photoUpload(env, await requireMember(req, env), req), 201));
 on("GET", "/api/photos", async (req, env) => json(await photoList(env, await requireMember(req, env), new URL(req.url))));
@@ -187,8 +218,9 @@ on("POST", "/api/routes", async (req, env) => json(await shareRoute(env, await r
 on("GET", "/api/routes/shared", async (req, env) => json(await routesSharedWithMe(env, await requireMember(req, env))));
 on("GET", "/api/routes/:id", async (req, env, m) => json(await routeGet(env, await requireMember(req, env), m.groups!.id)));
 on("DELETE", "/api/routes/:id", async (req, env, m) => json(await routeDelete(env, await requireMember(req, env), m.groups!.id)));
+on("GET", "/api/hazards/kinds", async (req, env) => json(await crewHazardKinds(env, await requireMember(req, env))));
 on("POST", "/api/hazards", async (req, env) => json(await reportHazard(env, await requireMember(req, env), req), 201));
-on("GET", "/api/hazards", async (req, env) => { await requireMember(req, env); return json(await hazardsNear(env, new URL(req.url))); });
+on("GET", "/api/hazards", async (req, env) => json(await hazardsNear(env, new URL(req.url), await requireMember(req, env))));
 on("POST", "/api/hazards/:id/vote", async (req, env, m) => json(await voteHazard(env, await requireMember(req, env), m.groups!.id, req)));
 on("POST", "/api/highlights", async (req, env) => json(await highlightCreate(env, await requireMember(req, env), req), 201));
 on("GET", "/api/highlights", async (req, env) => json(await highlightList(env, await requireMember(req, env), new URL(req.url))));

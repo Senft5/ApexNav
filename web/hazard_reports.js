@@ -27,7 +27,7 @@
       if (finite(h.heading) && angle(h.heading, me.heading) > SAME_WAY_DEG) continue;   // the other side of the road
       if (!best || r.m < best.m) best = { h, m: r.m };
     }
-    return best && { ...best.h, m: Math.round(best.m), text: `${LABEL[best.h.kind] || 'Hazard'} reported ahead` };
+    return best && { ...best.h, m: Math.round(best.m), text: `${best.h.label || LABEL[best.h.kind] || 'Hazard'} reported ahead` };   // a Factory crew's own word when it has one
   }
 
   /**
@@ -85,7 +85,7 @@
       parts.push(min < 1 ? 'reported just now' : min < 60 ? `reported ${min} min ago` : min < 48 * 60 ? `reported ${Math.round(min / 60)} h ago` : `reported ${Math.round(min / 1440)} days ago`);
     }
     if (finite(h.confirms) && h.confirms > 0) parts.push(`${h.confirms} confirmed`);
-    return { title: LABEL[h.kind] || 'Hazard', detail: parts.join(' · ') };
+    return { title: h.label || LABEL[h.kind] || 'Hazard', detail: parts.join(' · ') };
   }
 
   const api = { nextAhead, createPassWatch, closuresFor, plate, LABEL, KINDS: Object.keys(LABEL) };

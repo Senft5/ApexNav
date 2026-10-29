@@ -1,4 +1,4 @@
-// Plan presets (docs/design/REVIEW.md 3.3): a power user's setup (Roads, Avoid, corner mix) saved under a name, shown as a
+// Plan presets (docs/design/REVIEW.md 3.3): a power user's setup (Roads, Avoid, corner mix, Prefer) saved under a name, shown as a
 // stamp on the plan sheet so it is one tap next time. On this phone only. Pure over a Storage (tests/test_plan_presets.py).
 (function (root) {
   'use strict';
@@ -14,6 +14,7 @@
     for (const [k, v] of Object.entries(p.avoid || {})) if (/^[a-z]+$/.test(k)) avoid[k] = !!v;
     const prefs = {};
     for (const k of ['tight', 'fast']) { const v = p.prefs && p.prefs[k]; prefs[k] = finite(v) ? Math.max(-1, Math.min(1, Math.round(v))) : 0; }
+    for (const k of ['measured', 'novel', 'crew']) prefs[k] = !!(p.prefs && p.prefs[k]);   // the Prefer stamps (prefer.js)
     return { name, fun: LEVELS.includes(p.fun) ? p.fun : 'fun', avoid, prefs };
   }
 
@@ -42,7 +43,7 @@
   function matching(store, now) {
     const c = clean({ ...now, name: 'x' });
     if (!c) return null;
-    const key = (p) => JSON.stringify([p.fun, Object.keys(p.avoid).filter((k) => p.avoid[k]).sort(), p.prefs.tight, p.prefs.fast]);
+    const key = (p) => JSON.stringify([p.fun, Object.keys(p.avoid).filter((k) => p.avoid[k]).sort(), p.prefs.tight, p.prefs.fast, p.prefs.measured, p.prefs.novel, p.prefs.crew]);
     return list(store).find((p) => key(p) === key(c)) || null;
   }
 

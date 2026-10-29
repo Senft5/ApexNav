@@ -50,11 +50,12 @@ def codriver_distance(d: int) -> str:
 # character is in the lines around them. No speed numbers, no praise for pace, "score" the only score word.
 PACK_LINES = {
     "marguerite": {"sys:test": "Notes ready. Have a good one.", "sys:stage": "Full notes.", "sys:cruise": "Quiet from here. Bumps and cameras only.",
-                   "sys:end": "That's the drive.", "sys:sample": "Left four, tightens. Long. Care."},
+                   "sys:end": "That's the drive.", "sys:sample": "Left four, tightens. Long. Care.",
+                   "end:score": "Score", "end:best": "your best on this road."},
     "kit": {"sys:test": "Tape's in. Let's keep it tidy.", "sys:stage": "Full notes. Here we go.", "sys:cruise": "Quiet now. Hazards only.",
-            "sys:end": "That's a wrap.", "sys:sample": "Left four, tightens. Easy in, late out."},
+            "sys:end": "That's a wrap.", "sys:sample": "Left four, tightens. Easy in, late out.", "end:best": "Best yet on this road."},
     "hale": {"sys:test": "Route loaded.", "sys:stage": "Full notes.", "sys:cruise": "Hazards only.",
-             "sys:end": "Complete.", "sys:sample": "Left four. Tightens. Long."},
+             "sys:end": "Complete.", "sys:sample": "Left four. Tightens. Long.", "end:score": "Score,", "end:best": "Best on this road."},
 }
 
 
@@ -81,8 +82,40 @@ def codriver_vocabulary(pack: str = None) -> dict[str, str]:
     v["sys:stage"] = "Stage mode. Full notes."
     v["sys:cruise"] = "Cruise. Hazards only."
     v["sys:test"] = "Co-driver ready."
+    v.update(score_vocabulary())
     v.update(PACK_LINES.get(pack, {}))
     return v
+
+
+def score_vocabulary() -> dict[str, str]:
+    """The Vetta Score at the end of a drive (web/end_line.js): 0-99, the hundreds and a thousand, so 702 is
+    "seven hundred" + "two" in the pack's own voice."""
+    ones = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve", "thirteen",
+            "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen"]
+    tens = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"]
+    v = {f"n:{n}": ones[n] if n < 20 else tens[n // 10] + (f"-{ones[n % 10]}" if n % 10 else "") for n in range(100)}
+    v.update({f"n:h{h}": f"{ones[h]} hundred" for h in range(1, 10)})
+    v["n:k1"] = "one thousand"
+    return v
+
+
+def add_missing(voice_id: str) -> int:
+    """Renders only the tokens a bank doesn't have yet and merges them into its manifest (phrase clips are kept)."""
+    cfg = VOICES[voice_id]
+    mpath = os.path.join(OUT, voice_id, "manifest.json")
+    manifest = json.load(open(mpath, encoding="utf-8"))
+    vocab = codriver_vocabulary(voice_id)
+    todo = [(t, x) for t, x in vocab.items() if t not in manifest["tokens"] or manifest["tokens"][t].get("text") != x]
+    engine = KokoroEngine(cfg["lang"])
+    for n, (token, text) in enumerate(todo, 1):
+        audio = trim(engine.render(text, cfg["kokoro_voice"], cfg["speed"]))
+        fname = safe_name(token) + ".m4a"
+        encode_m4a(audio, os.path.join(OUT, voice_id, fname))
+        manifest["tokens"][token] = {"file": fname, "dur": round(len(audio) / SR, 3), "text": text}
+        with open(mpath, "w", encoding="utf-8") as f:       # resumable
+            json.dump(manifest, f, indent=1)
+        print(f"  {voice_id}: [{n}/{len(todo)}] {token} {text}", flush=True)
+    return len(todo)
 
 
 def phrase_key(tokens) -> str:
@@ -327,6 +360,7 @@ def main(argv=None) -> int:
     ap.add_argument("--voice", choices=sorted(VOICES))
     ap.add_argument("--all", action="store_true", help="every Kokoro voice (cloned voices need --voice and --ref)")
     ap.add_argument("--phrases", choices=["calls", "core", "units", "mined"], help="add whole-phrase clips to an existing bank")
+    ap.add_argument("--missing", action="store_true", help="render only tokens the bank doesn't have yet (keeps phrase clips)")
     ap.add_argument("--redo", action="store_true", help="re-render every phrase clip (e.g. after changing tts_text)")
     ap.add_argument("--recorded", help="dir with recorded_keep.json from tools/split_recording.py")
     ap.add_argument("--ref", help="reference recording for a cloned voice (keep it out of git)")
@@ -335,7 +369,9 @@ def main(argv=None) -> int:
     if not ids:
         ap.error("--voice ID or --all")
     for vid in ids:
-        if args.phrases:
+        if args.missing:
+            add_missing(vid)
+        elif args.phrases:
             build_phrases(vid, args.ref, args.phrases, args.recorded, args.redo)
         else:
             build(vid, args.ref)
