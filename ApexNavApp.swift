@@ -247,12 +247,8 @@ struct ApexCockpitWebView: UIViewRepresentable {
 
     func makeUIView(context: Context) -> WKWebView {
         let contentController = WKUserContentController()
-        // the version for the Garage's About (REVIEW2.md U-26); the page shows "--" without it
-        let info = Bundle.main.infoDictionary
-        let version = "\(info?["CFBundleShortVersionString"] as? String ?? "") (\(info?["CFBundleVersion"] as? String ?? ""))"
-            .replacingOccurrences(of: "'", with: "")
         let embedFlag = WKUserScript(
-            source: "window.APEX_EMBED = true; window.APEX_PLATFORM = 'ios'; window.APEX_VERSION = '\(version)';",
+            source: "window.APEX_EMBED = true; window.APEX_PLATFORM = 'ios';",
             injectionTime: .atDocumentStart,
             forMainFrameOnly: true
         )

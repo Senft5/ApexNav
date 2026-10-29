@@ -19,8 +19,8 @@ Undo: the `.sw` block in index.html, `switchRow`, `#nightSwitch`.
 - *Privacy, Terms and Licences use the app's Roadbook paper, ink and Inter Tight*, with a "‹ Garage" row and the draft
   notice as an ink rule (U-26). The words are unchanged. The `?view=garage` link they use now opens the Garage (it was
   ignored). Undo: web/legal.css from git.
-- *About is a section in the Garage* (version, the four promises); the landing page stays on the website. The iOS shell
-  injects the version (`window.APEX_VERSION`); the website shows "Website".
+- *About is a section in the Garage* (version, the four promises); the landing page stays on the website. The version
+  comes from the iOS shell's user agent (`ApexNav/1.0 (12)`); the website shows "Website".
 - *The Log page gets the right-hand tab rail on its side*, like the other tabs (U-27).
 - *A Pro theme on trial says so in a status plate next to the replay plate* ("Tapedeck · 9:40 left · Stop"), not a
   toast over the hazard plate's place (U-39).
