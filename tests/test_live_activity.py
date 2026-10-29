@@ -20,7 +20,11 @@ def test_extension_target():
 def test_shell_and_page():
     swift, html = read("ApexNavApp.swift"), read("web", "index.html")
     assert 'if cmd == "activity"' in swift and "Activity.request(attributes: ApexDriveAttributes" in swift
-    assert "await activity.end(nil, dismissalPolicy: .immediate)" in swift
+    # never stuck after the drive (the owner, 2026-10-29): End ends all of ours, leftovers end at launch and quit, updates go stale
+    assert "for a in all { await a.end(nil, dismissalPolicy: .immediate) }" in swift and "Activity<ApexDriveAttributes>.activities" in swift
+    assert "staleDate: Date().addingTimeInterval(activityStaleAfter)" in swift and "staleDate: nil" not in swift
+    assert "UIApplication.willTerminateNotification" in swift and swift.count("endAllActivities(") >= 4
+    assert "if (action === 'end') { liveAct.on = false;" in html, "the page always says end, even after a reload"
     assert "activity('start'" in html and "activity('end')" in html and "if (live) pushActivity(notes);" in html
     assert "@main" in read("LiveActivity", "ApexLiveWidget.swift")
 

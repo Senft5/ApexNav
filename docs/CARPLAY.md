@@ -64,7 +64,7 @@ From the guide's "Guidelines for all CarPlay apps" and "Additional guidelines fo
 | Check `promptStyle` before each prompt: none = silent, short = a tone, normal = speak | Done: native speech and the web voice clips both ask the shell first; the shell plays a short tone for `short` |
 | Base view draws only the map; all controls through templates | Built (`CarPlay/ApexCarPlay.swift`): MapKit route line and position; search, places, End and map buttons are templates |
 | Pan button when panning exists; touch gestures only for pan, zoom, pitch, rotate | Built: zoom in, zoom out, recentre and pan map buttons; panning through the template's panning interface |
-| Each template used for its purpose: maneuver images show maneuvers only | Design decision: corner calls stay voice-only in CarPlay (a corner isn't a maneuver); hazards use navigation alerts |
+| Each template used for its purpose: maneuver images show maneuvers only | Design decision (reversed 2026-10-29, docs/CALL_SHEET.md): a corner you must slow for is a maneuver, so the next corner or turn, whichever is first, is the card's maneuver, with a corner tulip; `CAR_CORNERS = 'tight'` (web/index.html) keeps only 1, 2 and hairpins if review disagrees. Hazards use navigation alerts |
 | Stop guidance immediately when the car's own navigation starts (`mapTemplateDidCancelNavigation`) | Built: ends the drive |
 | All CarPlay flows possible without touching the iPhone, including with it locked | Partly: search, route choice, start, guidance and end all work from the car while the app is running on the phone (locked is fine: background location and audio keep it alive). Still to build: starting the route engine (the cockpit page) when CarPlay launches the app cold, in a window-less web view |
 | Never tell the driver to pick up the iPhone | Built: the only CarPlay error says what happened ("Couldn't plan the route yet. Try again in a moment."); starting from the car skips the phone's explainer sheet |
@@ -93,7 +93,7 @@ yellow tags we do).
 - **Trip preview:** up to three route choices ("Fun 99 · 77 min", "32.6 mi · 186 corners"); picking one switches the route on
   the phone too; Drive starts the drive.
 - **Guidance:** the maneuver card in the theme's dark (`guidanceBackgroundColor`) with the road book's tulip as the symbol
-  (drawn by the page, web/carplay.js tulipSVG), distance and time to it, trip estimates; End; the car's own navigation
+  (drawn by the page, web/carplay.js tulipSVG; corners, interleaved with turns, cornerTulipSVG), distance and time to it, trip estimates; End; the car's own navigation
   starting ends ours. While driving the map buttons are Report, voice, zoom in and zoom out.
 - **Hazards:** a called hazard is a navigation alert with the hazard plate; passing a reported one asks "Still there?" with
   Still there and Gone; Report opens a grid of the six kinds.

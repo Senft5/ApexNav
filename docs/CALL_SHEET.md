@@ -6,6 +6,30 @@ it says so. Things only you can do are in docs/OWNER_TODO.md.
 
 ## 2026-10-29
 
+**Fixes after the first drive with CarPlay: switches, presses, reloads, Live Activities, corners on the car's card.**
+- *Every corner is guidance in the car.* The owner: "if you take a R5 when you're supposed to take a RHP you're gonna have
+  a bad time". The car's guidance card shows whichever comes first, the next turn or the next corner, at every rating,
+  worded as the phone words it (the plain-words setting too), with a corner tulip (one smooth bend per rating, no
+  junction dot, so it never reads as a turn onto another road). A corner within 40 m of a turn is the turn. Apple's
+  guidelines ask CarPlay navigation apps for turn-by-turn guidance; a corner you must slow for is a maneuver, so I read
+  this as inside them. Undo or fall back: `CAR_CORNERS` in web/index.html, `'tight'` (1, 2 and hairpins only, for if App
+  Review objects) or `'off'` (turns alone). Noted in docs/APP_REVIEW.md.
+- *The slide switch reads at a glance.* A 52 x 30 track; off is hollow (dim border, dim thumb left, an O mark); on is
+  filled with ink (paper thumb right, an I mark). Two cues besides position. Undo: the `.sw i` rules in web/index.html.
+- *Press feedback everywhere.* iOS only applies `:active` when the page has a touchstart listener, so nothing reacted
+  to a finger; web/press.js adds an empty passive one and web/controls.css dims anything tappable while pressed (0.62)
+  and drops the double-tap wait (`touch-action: manipulation`). Undo: remove press.js and the last rule in controls.css.
+- *No page reloads for settings.* Units redraw in place (the dial, loop lengths, an open route card, Your data, offline
+  areas; anything else picks them up when it next draws). App sign-in redraws the account instead of reloading. Erase
+  everything still reloads (it is meant to start the page from nothing), and so does the map's WebGL recovery.
+- *Log and Stages go back to the map.* They are their own page; their Map, Crew and Garage tabs now go back in history
+  (web/page_return.js) when the map is the page behind, so WebKit's back-forward cache can return the map as you left
+  it, and the tab you tapped opens there. If WebKit drops the cached page it loads as before. Moving the Log into the
+  map page would remove this for good; it is a bigger change and I haven't made it.
+- *Live Activities end with the drive.* Ending a drive now ends every one of ours, not only the one this launch started
+  (a reload or relaunch forgot it, which is why it stuck); launch and quit end any left over; updates are marked stale
+  two minutes on and resent once a minute, so a killed app shows an out-of-date card instead of a live-looking one.
+
 **CarPlay, parts 2 and 3: our map, the road book and the full template set.** Built to the mockups the owner approved
 (docs/design/carplay). My calls:
 - *The car's map is a web page* (web/carmap.html in a WKWebView in the base view), sharing the phone's style, palettes,

@@ -521,6 +521,11 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         }
         carRouteChanged()
         startPushTimer()
+        // a drive never survives the process, so neither does its Live Activity: end any a killed launch left on the lock screen
+        Self.endAllActivities()
+        NotificationCenter.default.addObserver(forName: UIApplication.willTerminateNotification, object: nil, queue: .main) { _ in
+            ApexSensorShell.endAllActivities(wait: true)
+        }
     }
 
     // MARK: Web bridge
@@ -731,7 +736,28 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
     }
 
     // MARK: Live Activity (IDEAS U-11): next note, distance and time left on the lock screen and in the Dynamic Island.
+    // It never outlives the drive (the owner, 2026-10-29: "live activities stay stuck on even after ending a route and
+    // closing the app"): End ends every one of ours, not only the one this launch started (a page reload or a relaunch
+    // forgets that one); launch and quit end any left over; and each update says it is stale two minutes on, so if the
+    // app is killed mid-drive the lock screen shows it as out of date instead of a live-looking note.
     private var liveActivity: Activity<ApexDriveAttributes>?
+    private static let activityStaleAfter: TimeInterval = 120
+
+    private static func content(_ state: ApexDriveAttributes.ContentState) -> ActivityContent<ApexDriveAttributes.ContentState> {
+        ActivityContent(state: state, staleDate: Date().addingTimeInterval(activityStaleAfter))
+    }
+
+    /// Ends every drive activity this app has on screen, now. `wait` blocks up to a second for it (app quitting).
+    nonisolated static func endAllActivities(wait: Bool = false) {
+        let all = Activity<ApexDriveAttributes>.activities
+        guard !all.isEmpty else { return }
+        let done = DispatchSemaphore(value: 0)
+        Task.detached {
+            for a in all { await a.end(nil, dismissalPolicy: .immediate) }
+            done.signal()
+        }
+        if wait { _ = done.wait(timeout: .now() + 1) }
+    }
 
     func handleActivity(_ dict: [String: Any]) {
         let state = ApexDriveAttributes.ContentState(note: (dict["note"] as? String) ?? "", distance: (dict["distance"] as? String) ?? "",
@@ -739,16 +765,18 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
                                                      hazard: dict["hazard"] as? Bool, etaShort: dict["etaShort"] as? String)
         switch dict["action"] as? String {
         case "start":
-            guard liveActivity == nil, ActivityAuthorizationInfo().areActivitiesEnabled else { return }
+            guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
+            if liveActivity == nil { liveActivity = Activity<ApexDriveAttributes>.activities.first }   // the page reloaded mid-drive
+            if let activity = liveActivity { Task { await activity.update(Self.content(state)) }; return }
             liveActivity = try? Activity.request(attributes: ApexDriveAttributes(title: (dict["title"] as? String) ?? "Drive"),
-                                                 content: ActivityContent(state: state, staleDate: nil), pushType: nil)
+                                                 content: Self.content(state), pushType: nil)
         case "update":
+            if liveActivity == nil { liveActivity = Activity<ApexDriveAttributes>.activities.first }
             guard let activity = liveActivity else { return }
-            Task { await activity.update(ActivityContent(state: state, staleDate: nil)) }
+            Task { await activity.update(Self.content(state)) }
         case "end":
-            guard let activity = liveActivity else { return }
             liveActivity = nil
-            Task { await activity.end(nil, dismissalPolicy: .immediate) }
+            Self.endAllActivities()
         default:
             break
         }

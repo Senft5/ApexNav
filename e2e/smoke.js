@@ -1208,16 +1208,45 @@ flow('units: kilometres in Settings redraw the dial, the notes and the replay in
   check(await page.evaluate(() => ApexUnits.system()) === 'imperial', 'miles by default in en-US');
   await page.click('#modePlate');                                   // out of the full-screen replay to the tabs (U-45)
   await page.click('.tab[data-view="garage"]');
-  await Promise.all([page.waitForNavigation(), page.click('[data-units="metric"]')]);
-  await page.waitForFunction(() => window.apexDebug && window.apexDebug.track, null, { timeout: 15000 });
+  await page.evaluate(() => { window.__samePage = true; });
+  await page.click('[data-units="metric"]');                       // redrawn in place, no reload (the owner, 2026-10-29)
+  await page.waitForTimeout(400);
+  check(await page.evaluate(() => window.__samePage === true), 'the page was not reloaded');
   check(await page.evaluate(() => localStorage.getItem('apex.units')) === 'metric', 'saved');
+  check(await page.getAttribute('[data-units="metric"]', 'aria-checked') === 'true', 'the switch shows metric');
+  check((await page.$$eval('[data-loop-mi]', (b) => b.map((x) => x.textContent))).join() === '25 km,50 km,75 km', 'the loop lengths in km');
   const dial = await page.textContent('#cluster');
-  check(/KM\/H/.test(dial) && /Trip km/.test(dial) && /200/.test(dial), 'the dial in km/h: ' + dial.slice(0, 200));
+  check(/KM\/H/.test(dial) && /Trip km/.test(dial) && /200/.test(dial), 'the dial in km/h, redrawn in place: ' + dial.slice(0, 200));
+  await page.goto(base + '/index.html?drive=dry_ridge');            // the replay again: the setting is kept
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.track, null, { timeout: 15000 });
   await page.evaluate(() => document.getElementById('playBtn').click());
   await page.waitForTimeout(1500);
   const notes = await page.textContent('#notes');
   check(/\d\s*(M|KM)/.test(notes) && !/\d\s*(FT|MI)/.test(notes), 'note distances in metres: ' + notes);
   check(/ km$/.test(await page.getAttribute('#scrubber', 'aria-valuetext')), 'the replay position in km');
+});
+
+flow('Log tabs go back to the map instead of loading it again; switches read on and off (the owner, 2026-10-29)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && window.apexDebug);
+  await page.waitForFunction(() => !document.getElementById('boot'), null, { timeout: 5000 });
+  const depth = await page.evaluate(() => history.length);
+  await Promise.all([page.waitForNavigation(), page.click('.tab[data-view="log"]')]);
+  check(/analysis\.html/.test(page.url()), 'the Log page');
+  await Promise.all([page.waitForNavigation(), page.click('nav.tabbar a:has-text("Garage")')]);
+  check(/\/index\.html$/.test(page.url()), 'went back to the map page itself, not index.html?view=garage: ' + page.url());
+  check(await page.evaluate(() => history.length) === depth + 1, 'history did not grow');
+  await page.waitForFunction(() => window.apexDebug && document.querySelector('#sheet.open[data-view="garage"]'), null, { timeout: 8000 });
+  check(await page.textContent('#sheetTitle') === 'Garage', 'the Garage tab opened on arrival');
+  // a switch: off is hollow with a dim border, on is filled with ink (two cues besides the thumb's position)
+  const sw = await page.evaluate(() => {
+    const b = document.querySelector('.sw[data-toggle]'); if (!b) return null;
+    const i = b.querySelector('i'), read = () => { const c = getComputedStyle(i); return { bg: c.backgroundColor, border: c.borderTopColor, mark: getComputedStyle(i, '::before').width }; };
+    const was = b.classList.contains('on'); b.classList.remove('on'); const off = read(); b.classList.add('on'); const on = read(); b.classList.toggle('on', was);
+    return { off, on };
+  });
+  check(sw && sw.off.bg !== sw.on.bg && sw.off.border !== sw.on.border && sw.off.mark !== sw.on.mark, 'on and off differ in fill, border and mark: ' + JSON.stringify(sw));
 });
 
 flow('Siri links: report and end act only during a drive, and say so otherwise (IDEAS V-07)', async (page, base) => {

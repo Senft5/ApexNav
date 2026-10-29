@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-LP+xivHV2+bpI0s4UUHRxmJqP9puJmoUYldpJLm9pcY=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-YTPSegfj7qdAwezsPX9w5yRu+uVsNN4lqnLd9mRvxaE=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -95,6 +95,8 @@
   <script src="contributor.js"></script>
   <script src="keyboard.js"></script>
   <script src="boot.js"></script>
+  <script src="press.js"></script>
+  <script src="page_return.js"></script>
   <script src="themes.js"></script>
   <script src="theme_contract.js"></script>
   <script src="units.js"></script>
@@ -404,15 +406,18 @@
 
     .switches { display: flex; justify-content: space-between; align-items: flex-start; gap: 4px; flex-wrap: wrap; }
     .sw { display: grid; justify-items: center; gap: 4px; min-width: 44px; padding: 4px 2px; }
-    /* The slide switch (REVIEW.md 2.1, REVIEW2.md U-44): one component in Layers, the Garage and Friends. A 44 x 24 track, a
-       20 px thumb that travels 20 px with a 2 px drop; on, the track fills with ink. Not a checkbox, not red. */
-    .sw i { width: 44px; height: 24px; flex: none; border: 1.5px solid var(--panel-ink); background: var(--panel); position: relative; display: block;
-      box-shadow: inset 0 2px 3px rgba(0, 0, 0, 0.18); transition: background-color 0.15s ease-out; }
-    .sw i::after { content: ""; position: absolute; top: 0.5px; left: 0.5px; width: 20px; height: 20px; background: var(--panel-dim);   /* off: a pencil thumb on paper */
-      box-shadow: 0 2px 0 rgba(0, 0, 0, 0.3); transition: transform 0.15s ease-out, background-color 0.15s ease-out;
-      background-image: linear-gradient(90deg, transparent 42%, rgba(0, 0, 0, 0.35) 42%, rgba(0, 0, 0, 0.35) 58%, transparent 58%); }   /* a grip line: the thumb is the knob in both positions */
-    .sw.on i { background: var(--panel-ink); }
-    .sw.on i::after { transform: translateX(20px); background-color: var(--panel); }
+    /* The slide switch (REVIEW.md 2.1, REVIEW2.md U-44; the owner, 2026-10-29: "hard to tell if they're on or off"): one
+       component in Layers, the Garage and Friends. A 52 x 30 track. Off is hollow: a dim border, a dim thumb on the left
+       and an O mark in the empty half. On is solid: the track fills with ink, the thumb turns paper and slides right, and
+       an I mark shows in the half it left. Two cues besides position (fill and the I/O mark), so it reads at a glance. */
+    .sw i { width: 52px; height: 30px; flex: none; box-sizing: border-box; border: 2px solid var(--panel-dim); background: var(--panel); position: relative; display: block;
+      transition: background-color 0.15s ease-out, border-color 0.15s ease-out; }
+    .sw i::after { content: ""; position: absolute; top: 2px; left: 2px; width: 22px; height: 22px; background: var(--panel-dim);
+      transition: transform 0.15s ease-out, background-color 0.15s ease-out; }
+    .sw i::before { content: ""; position: absolute; top: 50%; right: 7px; width: 6px; height: 6px; margin-top: -5px; border: 2px solid var(--panel-dim); border-radius: 50%; }   /* O */
+    .sw.on i { background: var(--panel-ink); border-color: var(--panel-ink); }
+    .sw.on i::after { transform: translateX(22px); background: var(--panel); }
+    .sw.on i::before { right: auto; left: 12px; width: 2px; height: 12px; margin-top: -6px; border: 0; border-radius: 0; background: var(--panel); }   /* I */
     .sw span { font-size: 11px; font-weight: 600; color: var(--panel-dim); }
     @media (prefers-reduced-motion: reduce) { .sw i, .sw i::after { transition: none; } }
     .sheet .sw, .edge-panel .sw, .side-pop .sw { display: flex; flex-direction: row-reverse; justify-content: space-between; align-items: center; width: 100%; min-height: 48px; padding: 0; border-top: 1px solid var(--hair, var(--panel-dim)); }
@@ -4165,7 +4170,13 @@
       if (state.tapToRoute) { closeSheet(); openPlan(false); toast(state.planField === 'fromInput' ? 'Tap the map where you want to start.' : 'Tap the map where you want to go.'); }
     });
     // Loop lengths in the chosen units (U-22): 25/50/75 km in metric, kept as miles inside.
-    if (ApexUnits.metric()) document.querySelectorAll('[data-loop-mi]').forEach((b, i, all) => { const km = [25, 50, 75][i]; b.dataset.loopMi = String(km / 1.609344); b.textContent = `${km} km`; });
+    function labelLoops() {
+      document.querySelectorAll('[data-loop-mi]').forEach((b, i) => {
+        const km = [25, 50, 75][i], mi = [15, 30, 45][i];
+        b.dataset.loopMi = String(ApexUnits.metric() ? km / 1.609344 : mi); b.textContent = ApexUnits.metric() ? `${km} km` : `${mi} mi`;
+      });
+    }
+    labelLoops();
     // The loop dial (REVIEW.md roadmap 6): a detent picks the length, the dial shows it, Find a loop builds it.
     const LOOP_PICK = 'apex.loopPick';
     function pickLoop(b) {
@@ -4465,13 +4476,20 @@
     try { crewPage = window.ApexCrewPage ? ApexCrewPage.mount({ el, btn, toast, apiCall, jsonOf, report: safety && safety.report,
       invite: async (c) => { const r = await apiCall('POST', `/api/crews/${c.id}/invite`); const j = await jsonOf(r); if (r.ok) copyText(`${shareOrigin()}/?crew=${j.token}`, 'Crew link copied.'); else toast(j && j.error === 'too_many_open_invites' ? 'You have 10 open crew links. Turn some off first.' : 'Couldn\'t make a link. Try again.'); },
       openRoute: (id) => openSharedRoute(id), builds: () => builds, shareImage: (cv, name) => (window.ApexDriveCard ? ApexDriveCard.shareCard(cv, name) : null), onAllDrives: toDrives, onPlan: (c) => { if (crewEvents) crewEvents.plan(c.id); toDrives(); } }) : null; } catch (e) { console.error('crew page', e); }
-    // Units (web/units.js, IDEAS U-22): the page reloads to redraw every number; never mid-drive (the drive lives in this page).
+    // Units (web/units.js, IDEAS U-22): every number is formatted when it is drawn, so a change redraws in place (the owner,
+    // 2026-10-29: no page reloads). The cluster's unit labels, the loop lengths, the route card and the open sheet are redrawn
+    // now; anything else picks the units up the next time it draws. Never mid-drive: the cluster would change under the driver.
     {
       const paintUnits = () => document.querySelectorAll('[data-units]').forEach(b => { const on = b.dataset.units === ApexUnits.system(); b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); });
       document.querySelectorAll('[data-units]').forEach(b => b.addEventListener('click', () => {
         if (b.dataset.units === ApexUnits.system()) return;
         if (state.mode === 'live') { toast('Change units when the drive has ended.'); return; }
-        ApexUnits.set(b.dataset.units); paintUnits(); location.reload();
+        ApexUnits.set(b.dataset.units); paintUnits();
+        cluster = Inst.mountCluster($('cluster'), look.theme);
+        labelLoops();
+        if (plannedRoute && !$('routeCard').hidden) { try { renderRouteCard(); } catch (_) {} }
+        renderMyData();                                                    // and the offline areas with it
+        render(true);
       }));
       paintUnits();
       // driving side (IDEAS U-22): the next route planned uses it
@@ -5964,8 +5982,12 @@
     }
     // The turn's tulip as a PNG for the car's guidance card, drawn once per turn type and ink; the first guide message for a new
     // type goes without it (the shell shows its own symbol) and the next one, a second later, carries it.
-    function carSymbol(type) {
-      const ink = (look && look.theme && look.theme.night && look.theme.night.panelInk) || '#EDE4D3', key = `${type}|${ink}`;
+    // Corners on the car's guidance card (web/carplay.js guideMessage): 'all' ratings, or 'tight' (1, 2, hairpins) if App
+    // Review asks for turn-by-turn only (docs/APP_REVIEW.md, CarPlay row). One line to change; 'off' is turns alone.
+    const CAR_CORNERS = 'all';
+    function carSymbol(type, corner) {
+      const ink = (look && look.theme && look.theme.night && look.theme.night.panelInk) || '#EDE4D3';
+      const key = corner ? `c${corner.dir}${corner.sev}|${ink}` : `${type}|${ink}`;
       if (car.symbols.has(key)) return car.symbols.get(key);
       car.symbols.set(key, null);
       const img = new Image();
@@ -5974,22 +5996,23 @@
         c.getContext('2d').drawImage(img, 0, 0, 120, 120);
         try { car.symbols.set(key, c.toDataURL('image/png').split(',')[1]); } catch (_) {}
       };
-      img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(ApexCarPlay.tulipSVG(type, ink));
+      img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(corner ? ApexCarPlay.cornerTulipSVG(corner.dir, corner.sev, ink) : ApexCarPlay.tulipSVG(type, ink));
       return null;
     }
     function carGuide() {
       if (!driveActive || !track || track.kind !== 'route') return;
-      const now = performance.now(), g = ApexCarPlay.guideMessage(track, state.cursorM, etaLeftS, ApexDirections.phrase);
+      const now = performance.now(), g = ApexCarPlay.guideMessage(track, state.cursorM, etaLeftS, ApexDirections.phrase,
+        { corners: CAR_CORNERS, call: (e) => (state.noteWords === 'plain' && !e.recce && window.ApexPlainNotes ? ApexPlainNotes.plainCall(e) : e.call) });
       if (!g || (g.key === car.guideKey && now - car.guideAt < 1000)) return;
       car.guideKey = g.key; car.guideAt = now;
-      const sym = carSymbol(g.type);
+      const sym = carSymbol(g.type, g.corner);
       carPost(sym ? { ...g, symbol: sym } : g);
     }
     function activity(action, fields = {}) {
       const native = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex;
       if (!native) return;
       if (action === 'start') liveAct.on = true;
-      if (action === 'end') { if (!liveAct.on) return; liveAct.on = false; liveAct.last = ''; }
+      if (action === 'end') { liveAct.on = false; liveAct.last = ''; }   // always sent: the shell ends any left over, even one this page didn't start
       if (action === 'update' && !liveAct.on) return;
       try { native.postMessage({ cmd: 'activity', action, ...fields }); } catch (_) {}
     }
@@ -6000,7 +6023,8 @@
         // the island's compact view: a few characters, never a sentence; a hazard turns its keyline orange (LiveActivity/ApexLiveWidget.swift)
         short: n ? String(n.code || '').slice(0, 6) : '', hazard: !!(n && n.type !== 'corner' && n.type !== 'turn'), etaShort: (etaText || '').split('·')[0].trim() };
       const key = JSON.stringify(fields), now = performance.now();
-      if (key === liveAct.last || (now - liveAct.at < 3000 && liveAct.last && JSON.parse(liveAct.last).note === fields.note)) return;
+      // unchanged notes are resent once a minute: the shell marks each update stale two minutes on (a stop at a light stays live)
+      if ((key === liveAct.last && now - liveAct.at < 60000) || (now - liveAct.at < 3000 && liveAct.last && JSON.parse(liveAct.last).note === fields.note)) return;
       liveAct.last = key; liveAct.at = now;
       activity('update', fields);
     }
@@ -6447,7 +6471,8 @@
         if (msg && msg.type === 'recordingSaved') toast(`Saved ${msg.segments} road segments to ${msg.file}`);
         // App sign-in finished in the native shell: keep the session token and redraw whatever shows account state.
         // the shell keeps the token in the Keychain and says signedIn (IDEAS Z-10); an older shell hands the token over
-        if (msg && msg.type === 'session' && (msg.token || msg.signedIn)) { ApexSync.setSession(msg.token || true); toast('Signed in.'); location.reload(); }
+        // Redrawn in place (the owner, 2026-10-29: no page reloads): the account and Garage, and drive sharing asks again.
+        if (msg && msg.type === 'session' && (msg.token || msg.signedIn)) { ApexSync.setSession(msg.token || true); toast('Signed in.'); ambient.checkedAt = -Infinity; renderAccount(); checkAmbientAllowed(); }
         if (msg && msg.type === 'promptStyle') { if (promptStyleWaiter) promptStyleWaiter(msg.style || 'normal'); return; }
         if (msg && msg.type === 'link' && msg.params) { openAppLink(msg.params); return; }
         if (msg && msg.type === 'gpx' && typeof msg.text === 'string') { openGpx(msg.text, msg.name); return; }
@@ -6504,10 +6529,21 @@
       }
       if (params.get('book') === '1' || params.get('view') === 'route' || params.get('view') === 'drives') openPlan(true);
       if (VIEW_TITLES[params.get('view')] || params.get('view') === 'setup') openSheet(params.get('view'));
+      const back = window.ApexReturn && ApexReturn.take();             // a tab on the Log page, when WebKit had to load the map again
+      if (VIEW_TITLES[back]) openSheet(back);
       if (params.get('go') === 'drive') driveFromLink();   // the app opened from apexnav://open?go=drive (IDEAS C-05)
     }
     bootDrives();
     if (document.fonts) document.fonts.ready.then(() => render(true));
+    // Back from the Log page (web/page_return.js): the map comes back from WebKit's back-forward cache as it was left; open
+    // the tab that was tapped there (Crew, Garage) or show the bare map, and redraw at the current size.
+    window.addEventListener('pageshow', (e) => {
+      if (!e.persisted) return;
+      const back = window.ApexReturn && ApexReturn.take();
+      if (VIEW_TITLES[back]) openSheet(back); else if (back === 'map') showView(null);
+      try { map.resize(); } catch (_) {}
+      render(true);
+    });
   })();
   </script>
   <script>
