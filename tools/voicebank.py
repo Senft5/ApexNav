@@ -179,7 +179,9 @@ def route_phrases() -> list[list[str]]:
 
 
 VOICES = {
-    "marguerite": {"name": "Marguerite", "style": "codriver", "engine": "kokoro", "kokoro_voice": "bf_isabella", "lang": "b", "speed": 1.05},
+    # Marguerite was bf_isabella; every British female Kokoro voice ends a short call with an extra syllable ("Left four
+    # plus-es", "Crest-ed"; checked with --rebuild-checked), so she is af_bella, the one that says all of them clean.
+    "marguerite": {"name": "Marguerite", "style": "codriver", "engine": "kokoro", "kokoro_voice": "af_bella", "lang": "a", "speed": 1.05},
     "kit": {"name": "Kit", "style": "codriver", "engine": "kokoro", "kokoro_voice": "bm_fable", "lang": "b", "speed": 1.12},
     "hale": {"name": "Hale", "style": "codriver", "engine": "kokoro", "kokoro_voice": "bm_lewis", "lang": "b", "speed": 0.98},
 }
@@ -247,9 +249,21 @@ def safe_name(token: str) -> str:
     return re.sub(r"[^A-Za-z0-9_]+", "_", name)
 
 
-def encode_m4a(audio: np.ndarray, path: str) -> None:
+TARGET_RMS_DB = -20.0   # every clip in every pack at the same speech level, so a call stitched from clips, and a change of
+                        # theme, never jumps in volume; peaks are held under -1 dBFS (a loud plosive lowers its clip instead)
+
+
+def level(audio: np.ndarray) -> np.ndarray:
     peak = max(1e-6, float(np.max(np.abs(audio))))
-    pcm = (np.clip(audio / peak * 0.89, -1, 1) * 32767).astype("<i2").tobytes()   # -1 dBFS peak
+    env = np.abs(audio)
+    voiced = audio[env > 10 ** (-40 / 20) * peak]
+    rms = float(np.sqrt(np.mean(voiced ** 2))) if len(voiced) else peak / 4
+    gain = min(10 ** (TARGET_RMS_DB / 20) / max(rms, 1e-6), 0.89 / peak)
+    return audio * gain
+
+
+def encode_m4a(audio: np.ndarray, path: str) -> None:
+    pcm = (np.clip(level(audio), -1, 1) * 32767).astype("<i2").tobytes()
     subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-f", "s16le", "-ar", str(SR), "-ac", "1", "-i", "-",
                     "-c:a", "aac", "-strict", "-2", "-b:a", "56k", "-movflags", "+faststart", path], input=pcm, check=True)
 
@@ -353,6 +367,113 @@ def build_phrases(voice_id: str, ref: str = None, tier: str = "calls", recorded:
         print(f"  {voice_id}: [{n}/{len(todo)}] {text}", flush=True)
 
 
+TOKEN_START = re.compile(r"\+(?=(?:head|mod|caution|link|dist|hazard|n|end|sys|nav|navd|lane|line):)")
+
+
+def split_key(key: str) -> list[str]:
+    """'head:R1++mod:long' -> ['head:R1+', 'mod:long'] (a '+' that starts a token, not the one in 'R1+')."""
+    return TOKEN_START.split(key)
+
+
+class Listener:
+    """Whisper (base.en) checks a render says its words: --rebuild-checked keeps the first variant that does."""
+    PROMPT = ("Rally pace notes: left four, right two minus, square left, hairpin, into, and, care, caution, off camber, "
+              "tightens, opens, banked, crest, dip, bump, one-fifty. Directions: in half a mile, turn left, keep right.")
+
+    def __init__(self):
+        from faster_whisper import WhisperModel
+        self.model = WhisperModel("base.en", device="cpu", compute_type="int8")
+
+    @staticmethod
+    def words(s: str) -> list[str]:
+        ones = "zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen".split()
+        tens = {2: "twenty", 3: "thirty", 4: "forty", 5: "fifty", 6: "sixty", 7: "seventy", 8: "eighty", 9: "ninety"}
+        def say(n: int) -> str:
+            if n < 20: return ones[n]
+            if n < 100: return tens[n // 10] + ("" if n % 10 == 0 else " " + ones[n % 10])
+            if n < 1000: return ones[n // 100] + " " + (say(n % 100) if n % 100 else "hundred") if n % 100 and n // 100 and n % 100 >= 10 else ones[n // 100] + " hundred" + ("" if n % 100 == 0 else " " + say(n % 100))
+            return "one thousand"
+        s = s.lower().replace("-", " ").replace("off camber", "offcamber")
+        s = re.sub(r"\d+", lambda m: " " + say(int(m.group())) + " ", s)
+        return re.sub(r"[^a-z ]+", " ", s).split()
+
+    def score(self, audio: np.ndarray, want: str) -> tuple[float, str]:
+        import difflib
+        x = np.interp(np.arange(0, len(audio), SR / 16000), np.arange(len(audio)), audio).astype(np.float32)
+        x = np.concatenate([np.zeros(4000, np.float32), x / max(1e-6, float(np.max(np.abs(x)))) * 0.5, np.zeros(4000, np.float32)])
+        segs, _ = self.model.transcribe(x, language="en", beam_size=5, without_timestamps=True, condition_on_previous_text=False, initial_prompt=self.PROMPT)
+        heard = " ".join(s.text for s in segs).strip()
+        a, b = self.words(want), self.words(heard)
+        # "three fifty" is how a co-driver says 350: compare the words, and the numbers as Whisper writes them
+        return difflib.SequenceMatcher(None, a, b).ratio(), heard
+
+
+def rebuild_checked(voice_id: str, only: list[str] | None = None, threshold: float = 0.8) -> None:
+    """Re-render a bank's every clip (or `only`), each checked by ear: up to three spellings of the line, at the voice's
+    speed and then 12 % slower, are rendered and the first Whisper hears as its words is kept, else the closest. Phrase keys are kept as they are; new vocabulary
+    (web/voice_lines.js) is added. Writes the score into the manifest ("heard": 0-1) so a later pass can find weak clips."""
+    cfg = VOICES[voice_id]
+    vocab = codriver_vocabulary(voice_id)
+    out_dir = os.path.join(OUT, voice_id)
+    mpath = os.path.join(out_dir, "manifest.json")
+    manifest = json.load(open(mpath, encoding="utf-8")) if os.path.exists(mpath) else {"tokens": {}}
+    manifest.update({"id": voice_id, "name": cfg["name"], "style": cfg["style"], "engine": cfg["engine"], "kokoro_voice": cfg["kokoro_voice"],
+                     "speed": cfg["speed"], "license": LICENSES[cfg["engine"]]})
+    keys = list(dict.fromkeys(list(manifest["tokens"]) + list(vocab)))
+    if only:
+        keys = [k for k in keys if k in set(only)]
+    engine, ear = KokoroEngine(cfg["lang"]), Listener()
+    for n, key in enumerate(keys, 1):
+        toks = split_key(key)
+        if not all(t in vocab for t in toks):
+            continue
+        done = manifest["tokens"].get(key)
+        if done and "heard" in done and done.get("voice") == cfg["kokoro_voice"] and done["heard"] >= threshold:
+            continue                                           # resumable: already rendered and heard right in this voice
+        multi = len(toks) > 1
+        want = phrase_text(toks, vocab) if multi else vocab[key]
+        base = tts_text(toks, vocab) if multi else vocab[key]
+        stem = base.rstrip(".,!?")
+        # then the same a little slower: at Kit's 1.12 "forty" comes out as "fourteen" (heard so by Whisper base and small)
+        tries = [(t, sp) for sp in dict.fromkeys([cfg["speed"], round(cfg["speed"] * 0.88, 2)])
+                 for t in dict.fromkeys([base, stem + ",", stem + "."])]
+        best = None
+        for text, speed in tries:
+            audio = trim(engine.render(text, cfg["kokoro_voice"], speed))
+            sc, heard = ear.score(audio, want)
+            if best is None or sc > best[0]:
+                best = (sc, audio, heard, text)
+            if sc >= threshold:
+                break
+        sc, audio, heard, text = best
+        fname = (safe_name(key) if not multi else "p_" + hashlib.sha1(key.encode()).hexdigest()[:12]) + ".m4a"
+        encode_m4a(audio, os.path.join(out_dir, fname))
+        manifest["tokens"][key] = {"file": fname, "dur": round(len(audio) / SR, 3), "text": want, "heard": round(sc, 2), "voice": cfg["kokoro_voice"]}
+        if n % 20 == 0 or n == len(keys):
+            with open(mpath, "w", encoding="utf-8") as f:   # resumable
+                json.dump(manifest, f, indent=1)
+        print(f"  {voice_id}: [{n}/{len(keys)}] {sc:.2f} {key} | {want} | heard {heard!r}", flush=True)
+    with open(mpath, "w", encoding="utf-8") as f:
+        json.dump(manifest, f, indent=1)
+
+
+def relevel(voice_id: str) -> int:
+    """Bring every clip a checked rebuild didn't render to the common speech level (TARGET_RMS_DB): decode, level, encode."""
+    out_dir = os.path.join(OUT, voice_id)
+    manifest = json.load(open(os.path.join(out_dir, "manifest.json"), encoding="utf-8"))
+    n = 0
+    for key, info in manifest["tokens"].items():
+        if "heard" in info:
+            continue
+        path = os.path.join(out_dir, info["file"])
+        raw = subprocess.run(["ffmpeg", "-v", "error", "-i", path, "-f", "s16le", "-ac", "1", "-ar", str(SR), "-"], capture_output=True, check=True).stdout
+        audio = np.frombuffer(raw, dtype="<i2").astype(np.float32) / 32768
+        if len(audio):
+            encode_m4a(audio, path)
+            n += 1
+    return n
+
+
 def write_index() -> None:
     voices = []
     for vid in sorted(os.listdir(OUT)):
@@ -373,12 +494,20 @@ def main(argv=None) -> int:
     ap.add_argument("--redo", action="store_true", help="re-render every phrase clip (e.g. after changing tts_text)")
     ap.add_argument("--recorded", help="dir with recorded_keep.json from tools/split_recording.py")
     ap.add_argument("--ref", help="reference recording for a cloned voice (keep it out of git)")
+    ap.add_argument("--rebuild-checked", action="store_true", help="re-render every clip, each checked by Whisper (needs faster-whisper)")
+    ap.add_argument("--only", help="with --rebuild-checked: a file of token keys, one per line")
+    ap.add_argument("--relevel", action="store_true", help="bring clips not re-rendered to the common speech level")
     args = ap.parse_args(argv)
     ids = sorted(v for v in VOICES if VOICES[v]["engine"] == "kokoro") if args.all else [args.voice] if args.voice else []
     if not ids:
         ap.error("--voice ID or --all")
     for vid in ids:
-        if args.missing:
+        if args.relevel:
+            print(f"  {vid}: relevelled {relevel(vid)} clips", flush=True)
+        elif args.rebuild_checked:
+            only = [l.strip() for l in open(args.only, encoding="utf-8") if l.strip()] if args.only else None
+            rebuild_checked(vid, only)
+        elif args.missing:
             add_missing(vid)
         elif args.phrases:
             build_phrases(vid, args.ref, args.phrases, args.recorded, args.redo)

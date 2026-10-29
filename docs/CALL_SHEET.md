@@ -6,6 +6,41 @@ it says so. Things only you can do are in docs/OWNER_TODO.md.
 
 ## 2026-10-29
 
+**The voices: one voice per drive, every clip heard right, one loudness.** You said the voices were messed up in the app
+and on the website. What I found, by transcribing every clip with Whisper and measuring them: Marguerite (`bf_isabella`)
+added a syllable to short calls ("Left four plus-es", "Crest-ed"), 103 of her clips misheard; Kit had 89 and Hale 32
+(mostly "care" said unclearly); the packs differed by up to 5.5 dB and clips inside a pack by more; every line that
+wasn't a pace note (directions, rerouting, traffic, reported hazards, coaching) went to the phone's own voice, so a
+drive kept switching voices; and on iOS, playback after a call or Siri started on a suspended audio context and ended on
+a timer, so calls were cut off or silent. My calls:
+- *Marguerite is Kokoro `af_bella`*, an American voice: every British female Kokoro voice has the same trailing
+  syllable, and she was the only one to say all fifteen test calls clean. Undo: `kokoro_voice` in tools/voicebank.py,
+  then `--rebuild-checked`.
+- *Directions, route, traffic, reported-hazard, coaching, break, regroup and track lines are in each pack*
+  (`web/voice_lines.js`). A street name isn't: the fixed part plays in the pack's voice and the name stays on screen
+  (on the website with the live voice loaded, the whole sentence is rendered in the pack's voice). Undo: drop `tokens`
+  from `say()` calls.
+- *The convoy lines with a friend's handle stay on the phone's voice* for now; they can't be pre-rendered.
+- *The replay's play button no longer says the drive's name*: it was the one line always in the phone's voice.
+- *Every clip is levelled to -20 dB RMS*, peaks at 0.89. Undo: `TARGET_RMS_DB` in tools/voicebank.py and `--relevel`.
+- *Clips are rendered up to three times and the take Whisper hears best is kept* (`--rebuild-checked`); the manifest
+  records what was heard. Clips that still score under 0.8 are listed in the build log.
+
+**The Dynamic Island, corners and home bar, second pass (docs/design/REVIEW2.md).** You said it wasn't fixed everywhere;
+a second Fable review with docs/IDEAS.md and the screenshots found 22 places. All are fixed except where noted there,
+and the e2e "safe areas" flow now checks 14 screens on four devices (15 Pro upright and on its side, mini on its side,
+SE), with no exemption for scrolled content inside a sheet. My calls:
+- *On its side, the Layers panel opens from the top of the map*, below the island's row, not mid-screen.
+- *On its side, the plan sheet is two columns and drops the loop dial* (the loop length stays as the chips); it didn't fit.
+- *On its side, onboarding, the hazard report, the drive-ended card and the Tapedeck cluster use two or three columns*.
+- *The photo viewer is a black full-screen lightbox* inside the safe areas, not a card.
+- *While a sheet or overlay is open, the tab bar and the map's edge keys hide* so nothing shows through the dim.
+- *The Live Activity follows Apple's Dynamic Island layout*: distance leading, arrival trailing, the call and note
+  below; compact shows the distance and a short call, minimal an arrow or a hazard triangle, and the island's keyline
+  goes orange for a hazard. Undo: LiveActivity/ApexLiveWidget.swift.
+- *The shared arrival page says "isn't known yet" and `--`* instead of NaN when the time can't be read.
+- *The e2e job's timeout is 15 minutes*: the safe-area flow takes about 3.5.
+
 **Nothing you read or tap sits under the Dynamic Island, the home indicator or the rounded corners, upright or on
 its side.** The app draws edge to edge (`contentInsetAdjustmentBehavior = .never`), so the page owns the safe areas. A new
 e2e flow ("safe areas") emulates an iPhone 15 Pro's insets in both orientations and fails on any control or text in

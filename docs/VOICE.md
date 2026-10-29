@@ -14,14 +14,30 @@
    pre-rendered in the background when the route loads; a phrase that isn't ready within 1.5 s
    falls back to the device voice so pace notes are never delayed. Toggle: LIVE in the route book.
 3. **Voice packs come with themes** (docs/design/REVIEW.md 4.4, 2026-10-29): Roadbook's **Marguerite** (calm, exact;
-   Kokoro `bf_isabella`), Tapedeck's **Kit** (quick, dry, a little cheeky; `bm_fable`), Billet's **Hale** (low, even;
+   Kokoro `af_bella`; she was `bf_isabella`, but every British female Kokoro voice adds a syllable to short calls), Tapedeck's **Kit** (quick, dry, a little cheeky; `bm_fable`), Billet's **Hale** (low, even;
    `bm_lewis`). The calls are identical in every pack; each pack has its own system lines (`PACK_LINES` in
    tools/voicebank.py: ready, full, quiet, end, and the sample the theme picker's Hear key plays). The voice list,
    custom voices ("My Voice") and Jarvis are retired, and so are the George, Daniel, Emma and Michael banks.
    The end of a drive (web/end_line.js): each pack closes in its own words around the Vetta Score, spoken from the
    pack's own number clips (`n:0`-`n:99`, `n:h1`-`n:h9`, `n:k1`) and `end:score` / `end:best`, so no second voice
    joins in. Add new tokens to a bank without re-rendering it: `voicebank.py --voice ID --missing`.
-4. **DEVICE** — the phone's own voice, used only when a pack's bank isn't on the phone or a word isn't in it.
+4. **The rest of a drive in the pack's voice** (2026-10-29): directions without the street name, rerouting and traffic,
+   reported hazards, coaching memos, break nudges, regroup and track-mode lines are in every bank too (`web/voice_lines.js`,
+   one JSON table the bank builder reads). A line with a name in it plays its fixed part from the bank and leaves the
+   name on screen; on the website with the live voice loaded, the whole sentence is rendered in the pack's voice instead.
+5. **DEVICE** — the phone's own voice, used only when a pack's bank isn't on the phone or a line isn't in it (the convoy
+   lines with a friend's handle and hazard, for now).
+
+### Checked rendering and loudness
+`voicebank.py --voice ID --rebuild-checked [--only FILE]` renders each clip, transcribes it with Whisper (base.en,
+faster-whisper) and keeps the best of up to six takes (three spellings, at the voice's speed and 12 % slower: Kit's
+fast "forty" was heard as "fourteen"); a clip scoring under 0.8 is listed for a look. Each manifest entry
+records what was `heard` and the `voice` that said it, and a re-run skips entries already heard right in that voice.
+Every clip is levelled to -20 dB RMS over its voiced part with peaks at 0.89 or lower (`--relevel` redoes a bank
+without re-rendering), so the three packs and the clips inside each play at one loudness.
+Playback (`web/voice.js`) waits for the audio context to actually run (iOS suspends it after a call or Siri) and ends a
+stitched call when its last clip ends, not on a timer; if the context won't start, the device voice speaks instead of
+silence.
 
 Voices shipped: Marguerite, Kit, Hale.
 Model: Kokoro-82M, Apache-2.0 (hexgrad/Kokoro-82M).

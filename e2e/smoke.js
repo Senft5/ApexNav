@@ -1638,7 +1638,8 @@ flow('REVIEW.md 1.2 screen by screen: the Log, drive detail, Stages, Crew signed
 // Safe areas (iPhone 15 Pro): nothing you read or tap sits under the Dynamic Island, the home indicator or the rounded
 // display corners, upright or on its side. The map and panel backgrounds run edge to edge; text and controls don't.
 // Content inside a scroller may pass under the home indicator while it scrolls, as on iOS.
-const SAFE = { portrait: { w: 393, h: 852, i: { top: 59, bottom: 34, left: 0, right: 0 } }, landscape: { w: 852, h: 393, i: { top: 0, bottom: 21, left: 59, right: 59 } } };
+const SAFE = { portrait: { w: 393, h: 852, R: 55, i: { top: 59, bottom: 34, left: 0, right: 0 } }, landscape: { w: 852, h: 393, R: 55, i: { top: 0, bottom: 21, left: 59, right: 59 } },
+  'mini on its side': { w: 812, h: 375, R: 44, i: { top: 0, bottom: 21, left: 50, right: 50 } }, SE: { w: 375, h: 667, R: 0, i: { top: 20, bottom: 0, left: 0, right: 0 } } };
 const unsafe = (page, d) => page.evaluate(({ d, R }) => {
     const out = [], W = innerWidth, H = innerHeight, i = d.i;
     const inCornerOut = (x, y) => { const cx = x < R ? R : x > W - R ? W - R : null, cy = y < R ? R : y > H - R ? H - R : null; return cx !== null && cy !== null && Math.hypot(x - cx, y - cy) > R; };
@@ -1649,7 +1650,12 @@ const unsafe = (page, d) => page.evaluate(({ d, R }) => {
     for (const e of new Set(nodes)) {
       if (!vis(e) || e.closest('.maplibregl-ctrl-attrib, .maplibregl-canvas-container, .maplibregl-marker, #map .maplibregl-popup, .sr-only')) continue;
       // an element inside a scroller is fine when the scroller itself sits in the safe area (it scrolls into view)
-      let sc = e.parentElement, scrolled = false; for (; sc && sc !== document.body; sc = sc.parentElement) { const cs = getComputedStyle(sc); if (/(auto|scroll)/.test(cs.overflowY + cs.overflowX) && (sc.scrollHeight > sc.clientHeight + 1 || sc.scrollWidth > sc.clientWidth + 1)) { scrolled = true; break; } }
+      const fixedAnc = (() => { for (let a = e; a; a = a.parentElement) if (getComputedStyle(a).position === 'fixed') return true; return false; })();
+      const se = document.scrollingElement, bodyScr = document.body.scrollHeight > document.body.clientHeight + 1 && /(auto|scroll)/.test(getComputedStyle(document.body).overflowY);
+      const docScrolled = !fixedAnc && (se.scrollHeight > innerHeight + 1 || bodyScr);
+      const bb = getComputedStyle(document.body, '::before'), band = bb.position === 'fixed' ? parseFloat(bb.height) || 0 : 0;
+      const inSheet = !!e.closest('.overlay, .confirm-sheet, .crash-sheet, .report-sheet, .photo-view');   // a sheet's keys are where they are, not "after a scroll"
+      let sc = e.parentElement, scrolled = docScrolled && !inSheet; for (; sc && sc !== document.body; sc = sc.parentElement) { const cs = getComputedStyle(sc); if (/(auto|scroll)/.test(cs.overflowY + cs.overflowX) && (sc.scrollHeight > sc.clientHeight + 1 || sc.scrollWidth > sc.clientWidth + 1)) { scrolled = !inSheet; break; } }
       const r = e.getBoundingClientRect();
       // clipped by an overflow ancestor (an ellipsis box): only the visible part counts
       let clipR = { left: r.left, right: r.right, top: r.top, bottom: r.bottom };
@@ -1658,46 +1664,55 @@ const unsafe = (page, d) => page.evaluate(({ d, R }) => {
       let box = clipR; if (scrolled) { const s = sc.getBoundingClientRect(); box = { left: Math.max(clipR.left, s.left), right: Math.min(clipR.right, s.right), top: Math.max(clipR.top, s.top), bottom: Math.min(clipR.bottom, s.bottom) }; if (box.right <= box.left || box.bottom <= box.top) continue; }
       if (covered(e, r)) continue;
       const why = [];
-      if (box.top < i.top - 0.5) why.push('top ' + Math.round(box.top));
+      if (box.top < i.top - 0.5 && !(docScrolled && band >= i.top - 0.5)) why.push('top ' + Math.round(box.top));   // under the status-bar band while scrolling
       if (box.bottom > H - i.bottom + 0.5 && !scrolled) why.push('bottom ' + Math.round(H - box.bottom));   // scrolled content may pass under the home indicator, as on iOS
       if (box.left < i.left - 0.5) why.push('left ' + Math.round(box.left));
       if (box.right > W - i.right + 0.5) why.push('right ' + Math.round(W - box.right));
-      for (const [x, y] of (scrolled ? [[box.left, box.top], [box.right, box.top]] : [[box.left, box.top], [box.right, box.top], [box.left, box.bottom], [box.right, box.bottom]])) if (inCornerOut(x, y)) { why.push('corner'); break; }
+      for (const [x, y] of (scrolled ? [[box.left, box.top], [box.right, box.top]] : [[box.left, box.top], [box.right, box.top], [box.left, box.bottom], [box.right, box.bottom]])) if (inCornerOut(x, y) && !(docScrolled && y < band) && !(scrolled && y > H - R)) { why.push('corner'); break; }
       if (why.length) out.push(`${e.tagName.toLowerCase()}${e.id ? '#' + e.id : ''}.${String(e.className && e.className.baseVal !== undefined ? e.className.baseVal : e.className).split(' ')[0]} "${(e.innerText || e.value || e.getAttribute('aria-label') || '').trim().slice(0, 24)}" ${why.join(',')}`);
     }
     return out;
-  }, { d, R: 55 });
-flow('safe areas: the Dynamic Island, the home indicator and the rounded corners clear every control, upright and on its side', async (page, base) => {
+  }, { d, R: d.R });
+flow('safe areas: the Dynamic Island, the home indicator and the rounded corners clear every control, upright, on its side and on small phones', async (page, base) => {
   await page.route(base + '/api/**', (route) => { const p = new URL(route.request().url()).pathname;
     route.fulfill({ contentType: 'application/json', body: p === '/api/me' ? '{"signed_in":true,"member":true,"handle":"kit_r"}' : '[]' }); });
-  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', localStorage.getItem('e2e.fresh') ? '' : '1'); } catch (_) {} });
   const cdp = await page.context().newCDPSession(page);
-  const live = async () => { for (let i = 0; i < 40; i++) { window.apex.live({ lat: 35.36 + i * 1e-5, lon: -84.29, accuracy_m: 5, speed_mps: 12, course_deg: 0, has_fix: true, calibration: 'locked', lat_g: 0.1, lon_g: 0 }); await new Promise((r) => setTimeout(r, 60)); } };
+  const live = 'for (let i = 0; i < 40; i++) { window.apex.live({ lat: 35.36 + i * 1e-5, lon: -84.29, accuracy_m: 5, speed_mps: 12, course_deg: 0, has_fix: true, calibration: "locked", lat_g: 0.1, lon_g: 0 }); await new Promise((r) => setTimeout(r, 40)); }';
+  const endCard = 'const lat = [], lon = []; for (let i = 0; i < 300; i++) { lat.push(35.36 + i * 5 / 110540); lon.push(-84.29); } apexDebug.showEndCard({ id: "x", name: "Cherohala Skyway", date: new Date().toISOString(), lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: lat.map(() => 15), lon_g: lat.map(() => 0), lat_g: lat.map(() => 0), g_known: null, events: [], elev: null, hz: 1, source: "web-gps", corners: [] }, Date.now() - 1800e3);';
   const screens = [
+    ['onboarding', '/index.html', null, true],
     ['map idle', '/index.html', null],
-    ['plan sheet, More open', '/index.html', () => { document.getElementById('destInput').focus(); document.getElementById('planMore').open = true; }],
+    ['Layers open', '/index.html', 'document.getElementById("swTab").click()'],
+    ['plan sheet, More open', '/index.html', 'document.getElementById("destInput").focus(); document.getElementById("planMore").open = true;'],
     ['driving', '/index.html', live],
-    ['hazard report', '/index.html', async () => { for (let i = 0; i < 40; i++) { window.apex.live({ lat: 35.36 + i * 1e-5, lon: -84.29, accuracy_m: 5, speed_mps: 12, course_deg: 0, has_fix: true, calibration: 'locked' }); await new Promise((r) => setTimeout(r, 60)); } document.getElementById('hzReportBtn').click(); }],
-    ['permission sheet', '/index.html', () => document.getElementById('permSheet').classList.add('show')],
-    ['replay', '/index.html?drive=dry_ridge&play=1', null],
+    ['hazard report', '/index.html', live + ' document.getElementById("hzReportBtn").click();'],
+    ['drive ended', '/index.html', endCard],
+    ['permission sheet', '/index.html', 'document.getElementById("permSheet").classList.add("show")'],
+    ['replay, Tapedeck', '/index.html?drive=dry_ridge&play=1', 'apexDebug.tryTheme("tapedeck")'],
+    ['replay, Billet', '/index.html?drive=dry_ridge&play=1', 'apexDebug.tryTheme("billet")'],
     ['garage', '/index.html?view=garage', null],
-    ['confirm sheet', '/index.html?view=garage', () => document.getElementById('myEraseBtn').click()],
+    ['confirm sheet', '/index.html?view=garage', 'document.getElementById("myEraseBtn").click()'],
     ['log', '/analysis.html?tab=log', null],
+    ['privacy', '/privacy.html', null],
   ];
   const bad = [];
   for (const [orient, d] of Object.entries(SAFE)) {
     await page.setViewportSize({ width: d.w, height: d.h });
     await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets: d.i });
-    for (const [name, url, act] of screens) {
+    for (const [name, url, act, fresh] of screens) {
+      await page.goto(base + '/index.html?blank=1');
+      await page.evaluate((f) => { if (f) localStorage.setItem('e2e.fresh', '1'); else localStorage.removeItem('e2e.fresh'); }, !!fresh);
       await page.goto(base + url);
       await page.waitForFunction(() => document.readyState === 'complete' && (!document.getElementById('app') || (window.apex && window.apexDebug)));
-      await page.waitForTimeout(1200);
-      if (act) { await page.evaluate(act); await page.waitForTimeout(700); }
+      await page.waitForTimeout(900);
+      if (act) { await page.evaluate('(async () => { ' + act + ' })()'); await page.waitForTimeout(700); }
       for (const b of await unsafe(page, d)) bad.push(`${orient} · ${name}: ${b}`);
     }
   }
   check(!bad.length, 'under the island, the home indicator or a corner:\n  ' + bad.join('\n  '));
 }, { hasTouch: true });
+
 
 (async () => {
   const server = await serve();

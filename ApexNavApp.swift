@@ -708,7 +708,8 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
 
     func handleActivity(_ dict: [String: Any]) {
         let state = ApexDriveAttributes.ContentState(note: (dict["note"] as? String) ?? "", distance: (dict["distance"] as? String) ?? "",
-                                                     eta: (dict["eta"] as? String) ?? "")
+                                                     eta: (dict["eta"] as? String) ?? "", short: dict["short"] as? String,
+                                                     hazard: dict["hazard"] as? Bool, etaShort: dict["etaShort"] as? String)
         switch dict["action"] as? String {
         case "start":
             guard liveActivity == nil, ActivityAuthorizationInfo().areActivitiesEnabled else { return }
