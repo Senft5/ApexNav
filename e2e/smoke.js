@@ -571,6 +571,16 @@ flow('friends on the map: off by default; the first time on explains both choice
   check(/Nobody sees you until you choose/.test(await page.textContent('[aria-label="Friends on the map"]')), 'the first time, the sheet explains: seeing is not sharing');
   await page.waitForSelector('.fm-puck');
   check(/@sam, about 12 min ago · within a mile/.test(await page.$eval('.fm-puck', (e) => e.closest('[aria-label]').getAttribute('aria-label'))), 'the puck says how old and how rough');
+  // a friend near the right edge: the label goes on the face's left, clear of the Layers key and the screen
+  const edge = await page.evaluate(async () => { const m = apexDebug.map, w = m.getContainer().clientWidth, mk = document.querySelector('.fm-puck').parentElement;
+    apexDebug.state.follow = false;
+    m.jumpTo({ pitch: 0, bearing: 0 });
+    const at = m.project([-84.29, 35.36]), h = m.getContainer().clientHeight;
+    m.jumpTo({ center: m.unproject([w / 2 + at.x - (w - 40), h / 2]) });
+    await new Promise((r) => setTimeout(r, 300));
+    const t = document.querySelector('.fm-tag').getBoundingClientRect(), k = document.getElementById('swTab').getBoundingClientRect();
+    return { x: Math.round(m.project([-84.29, 35.36]).x), flip: document.querySelector('.fm-puck').classList.contains('flip'), right: Math.round(t.right), w, clear: t.right <= k.left || t.top >= k.bottom || t.bottom <= k.top }; });
+  check(edge.flip && edge.right <= edge.w && edge.clear, 'a friend at the right edge keeps the label on screen and off the Layers key: ' + JSON.stringify(edge));
   await page.click('[aria-label="Show me to"] button:has-text("Friends")');
   await page.waitForFunction(() => /Your friends see you 10 minutes late, within a mile/.test(document.querySelector('[aria-label="Friends on the map"]').textContent));
   const put = sent.find((x) => x.p === '/api/presence/settings');
@@ -985,8 +995,17 @@ flow('crew drives: an upcoming drive shows in Crew with who is going; Going answ
   await page.click('.side-pop.open button:has-text("Plan a drive")');
   await page.fill('.side-pop.open input[aria-label="Drive name"]', 'Dragon run');
   await page.click('.side-pop.open button:has-text("Map centre")');
+  // the form's choices are the app's rows, its day and time steppers, its yes-or-no switches (REVIEW2.md U-18)
+  check(await page.evaluate(() => { const f = document.querySelector('.side-pop.open');
+    return !f.querySelector('select:not(.row-pick-native), input[type="date"], input[type="time"], input[type="checkbox"]:not(.tick-sw)') && f.querySelectorAll('.stepper').length === 2; }),
+    'no browser controls in Plan a drive');
+  const day0 = await page.textContent('.side-pop.open .stepper[aria-label="Day"] output');
+  await page.click('.side-pop.open .stepper[aria-label="Day"] button[aria-label="Later day"]');
+  await page.click('.side-pop.open .stepper[aria-label="Day"] button[aria-label="Earlier day"]');
+  check(day0 === 'Tomorrow' && await page.textContent('.side-pop.open .stepper[aria-label="Day"] output') === 'Tomorrow', 'the day steps out and back: ' + day0);
   await page.waitForSelector('.side-pop.open select[aria-label="Sweep"] option[value="bob"]', { state: 'attached' });
-  await page.selectOption('.side-pop.open select[aria-label="Sweep"]', 'bob');
+  await page.click('.side-pop.open .row-pick[aria-label^="Sweep:"]');
+  await page.click('.row-pick-sheet button:has-text("@bob sweeps")');
   await page.fill('.side-pop.open input[aria-label="Regroup point name"]', 'Gas at Robbinsville');
   await page.click('.side-pop.open button:has-text("Add at the map centre")');
   await page.click('.side-pop.open button:has-text("Plan it")');

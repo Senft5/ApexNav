@@ -39,6 +39,8 @@
   const STYLE = `
     .fm-puck { display: grid; grid-template-columns: auto auto; gap: 6px; align-items: center; pointer-events: none; }
     .fm-puck .avatar { box-shadow: inset 0 0 0 2px var(--panel-ink), 0 0 0 2px var(--panel); }
+    /* near the right edge (and the Layers key) the label goes on the left, the face staying on the friend's spot */
+    .fm-puck.flip { transform: translateX(calc(-100% + 34px)); } .fm-puck.flip .fm-tag { order: -1; }
     .fm-tag { background: var(--panel); color: var(--panel-ink); border: 1.5px solid var(--panel-ink); padding: 2px 6px; line-height: 1.15; white-space: nowrap; }
     .fm-tag b { display: block; font-size: 14px; } .fm-tag small { display: block; font-size: 13px; color: var(--panel-dim); }
     .fm-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--rule); flex-wrap: wrap; }
@@ -74,8 +76,22 @@
     function puckEl(p) {
       const P = root.ApexPhotos, face = P ? P.avatar(p.photo_id, p.handle, 34) : el('b', { textContent: (p.handle || '?')[0].toUpperCase() });
       const t = el('span', { className: 'fm-tag' }, el('b', { textContent: `@${p.handle}` }), el('small', { textContent: tag(p) }));
-      return el('div', { className: 'fm-puck' }, face, t);
+      return el('div', {}, el('div', { className: 'fm-puck' }, face, t));   // the marker moves the outer box, the flip the inner
     }
+    // A label that would run under the Layers key or off the screen goes on the face's left instead.
+    const RIGHT_KEEP = 76;   // the Layers key's column, with its margin
+    function flipPucks() {
+      if (!map || !pucks.size) return;
+      const w = map.getContainer().clientWidth;
+      for (const m of pucks.values()) {
+        const inner = m.getElement().firstChild; if (!inner) continue;
+        const x = map.project(m.getLngLat()).x;
+        inner.classList.toggle('flip', x + inner.offsetWidth > w - RIGHT_KEEP && x - inner.offsetWidth + 34 > 8);
+      }
+    }
+    let flipQueued = false;
+    const queueFlip = () => { if (flipQueued) return; flipQueued = true; root.requestAnimationFrame(() => { flipQueued = false; flipPucks(); }); };
+    if (map && map.on) map.on('move', queueFlip);
     async function poll() {
       if (!layerOn || !map) return;
       const r = await apiCall('GET', '/api/presence').catch(() => null);
@@ -91,6 +107,7 @@
         pucks.set(p.handle, m);
       }
       for (const [h, m] of pucks) if (!seen.has(h)) { m.remove(); pucks.delete(h); }
+      flipPucks();
       paintZones();   // the style may not have been ready when the layer came on
     }
     // Your own home zones, hatched, while the layer is on: nobody else ever sees them.
