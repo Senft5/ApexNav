@@ -5606,6 +5606,293 @@
    "text": "In one point three miles,",
    "heard": 0.89,
    "voice": "af_bella"
+  },
+  "navd:100m": {
+   "file": "navd_100m.m4a",
+   "dur": 1.081,
+   "text": "In one hundred metres,",
+   "heard": 0.75,
+   "voice": "af_bella"
+  },
+  "navd:200m": {
+   "file": "navd_200m.m4a",
+   "dur": 1.103,
+   "text": "In two hundred metres,",
+   "heard": 0.75,
+   "voice": "af_bella"
+  },
+  "navd:300m": {
+   "file": "navd_300m.m4a",
+   "dur": 1.082,
+   "text": "In three hundred metres,",
+   "heard": 0.75,
+   "voice": "af_bella"
+  },
+  "navd:400m": {
+   "file": "navd_400m.m4a",
+   "dur": 1.153,
+   "text": "In four hundred metres,",
+   "heard": 0.75,
+   "voice": "af_bella"
+  },
+  "navd:500m": {
+   "file": "navd_500m.m4a",
+   "dur": 1.151,
+   "text": "In five hundred metres,",
+   "heard": 0.75,
+   "voice": "af_bella"
+  },
+  "navd:600m": {
+   "file": "navd_600m.m4a",
+   "dur": 1.147,
+   "text": "In six hundred metres,",
+   "heard": 0.75,
+   "voice": "af_bella"
+  },
+  "navd:700m": {
+   "file": "navd_700m.m4a",
+   "dur": 1.27,
+   "text": "In seven hundred metres,",
+   "heard": 0.75,
+   "voice": "af_bella"
+  },
+  "navd:800m": {
+   "file": "navd_800m.m4a",
+   "dur": 1.105,
+   "text": "In eight hundred metres,",
+   "heard": 0.75,
+   "voice": "af_bella"
+  },
+  "navd:900m": {
+   "file": "navd_900m.m4a",
+   "dur": 1.152,
+   "text": "In nine hundred metres,",
+   "heard": 0.75,
+   "voice": "af_bella"
+  },
+  "navd:1km": {
+   "file": "navd_1km.m4a",
+   "dur": 0.906,
+   "text": "In one kilometre,",
+   "heard": 0.67,
+   "voice": "af_bella"
+  },
+  "navd:1.1km": {
+   "file": "navd_1_1km.m4a",
+   "dur": 1.469,
+   "text": "In one point one kilometres,",
+   "heard": 0.67,
+   "voice": "af_bella"
+  },
+  "navd:1.2km": {
+   "file": "navd_1_2km.m4a",
+   "dur": 1.441,
+   "text": "In one point two kilometres,",
+   "heard": 0.67,
+   "voice": "af_bella"
+  },
+  "navd:1.3km": {
+   "file": "navd_1_3km.m4a",
+   "dur": 1.517,
+   "text": "In one point three kilometres,",
+   "heard": 0.67,
+   "voice": "af_bella"
+  },
+  "navd:1.4km": {
+   "file": "navd_1_4km.m4a",
+   "dur": 1.445,
+   "text": "In one point four kilometres,",
+   "heard": 0.67,
+   "voice": "af_bella"
+  },
+  "navd:1.5km": {
+   "file": "navd_1_5km.m4a",
+   "dur": 1.563,
+   "text": "In one point five kilometres,",
+   "heard": 0.67,
+   "voice": "af_bella"
+  },
+  "line:rerouting": {
+   "file": "line_rerouting.m4a",
+   "dur": 0.568,
+   "text": "Rerouting.",
+   "heard": 0.0,
+   "voice": "af_bella"
+  },
+  "line:back_on_route": {
+   "file": "line_back_on_route.m4a",
+   "dur": 0.752,
+   "text": "Back on route.",
+   "heard": 1.0,
+   "voice": "af_bella"
+  },
+  "line:staying": {
+   "file": "line_staying.m4a",
+   "dur": 0.955,
+   "text": "Staying on this route.",
+   "heard": 1.0,
+   "voice": "af_bella"
+  },
+  "line:traffic_ahead": {
+   "file": "line_traffic_ahead.m4a",
+   "dur": 0.73,
+   "text": "Traffic ahead.",
+   "heard": 1.0,
+   "voice": "af_bella"
+  },
+  "line:minute_slower": {
+   "file": "line_minute_slower.m4a",
+   "dur": 0.739,
+   "text": "minute slower.",
+   "heard": 1.0,
+   "voice": "af_bella"
+  },
+  "line:minutes_slower": {
+   "file": "line_minutes_slower.m4a",
+   "dur": 0.771,
+   "text": "minutes slower.",
+   "heard": 1.0,
+   "voice": "af_bella"
+  },
+  "line:switching": {
+   "file": "line_switching.m4a",
+   "dur": 1.235,
+   "text": "Switching to a faster road.",
+   "heard": 0.89,
+   "voice": "af_bella"
+  },
+  "line:bump_ahead": {
+   "file": "line_bump_ahead.m4a",
+   "dur": 0.623,
+   "text": "Bump ahead.",
+   "heard": 1.0,
+   "voice": "af_bella"
+  },
+  "line:rep_pothole": {
+   "file": "line_rep_pothole.m4a",
+   "dur": 1.147,
+   "text": "Pothole reported ahead.",
+   "heard": 1.0,
+   "voice": "af_bella"
+  },
+  "line:rep_gravel": {
+   "file": "line_rep_gravel.m4a",
+   "dur": 1.146,
+   "text": "Gravel reported ahead.",
+   "heard": 1.0,
+   "voice": "af_bella"
+  },
+  "line:rep_debris": {
+   "file": "line_rep_debris.m4a",
+   "dur": 1.072,
+   "text": "Debris reported ahead.",
+   "heard": 1.0,
+   "voice": "af_bella"
+  },
+  "line:rep_animal": {
+   "file": "line_rep_animal.m4a",
+   "dur": 1.187,
+   "text": "Animal reported ahead.",
+   "heard": 1.0,
+   "voice": "af_bella"
+  },
+  "line:rep_police": {
+   "file": "line_rep_police.m4a",
+   "dur": 1.139,
+   "text": "Police reported ahead.",
+   "heard": 1.0,
+   "voice": "af_bella"
+  },
+  "line:rep_closure": {
+   "file": "line_rep_closure.m4a",
+   "dur": 1.38,
+   "text": "Road closed reported ahead.",
+   "heard": 1.0,
+   "voice": "af_bella"
+  },
+  "line:rep_hazard": {
+   "file": "line_rep_hazard.m4a",
+   "dur": 1.145,
+   "text": "Hazard reported ahead.",
+   "heard": 1.0,
+   "voice": "af_bella"
+  },
+  "line:memo_brake_after_apex": {
+   "file": "line_memo_brake_after_apex.m4a",
+   "dur": 3.03,
+   "text": "Last time, braking past the apex. Brake earlier.",
+   "heard": 0.88,
+   "voice": "af_bella"
+  },
+  "line:memo_coast": {
+   "file": "line_memo_coast.m4a",
+   "dur": 2.707,
+   "text": "Last time, coasting here. Brake, then throttle.",
+   "heard": 1.0,
+   "voice": "af_bella"
+  },
+  "line:memo_early_apex": {
+   "file": "line_memo_early_apex.m4a",
+   "dur": 2.672,
+   "text": "Last time, an early apex. Turn in later.",
+   "heard": 0.88,
+   "voice": "af_bella"
+  },
+  "line:break_steering": {
+   "file": "line_break_steering.m4a",
+   "dur": 2.425,
+   "text": "Steering is getting busier. Time for a break?",
+   "heard": 1.0,
+   "voice": "af_bella"
+  },
+  "line:break_braking": {
+   "file": "line_break_braking.m4a",
+   "dur": 2.397,
+   "text": "Braking is getting later. Time for a break?",
+   "heard": 0.88,
+   "voice": "af_bella"
+  },
+  "line:break_time": {
+   "file": "line_break_time.m4a",
+   "dur": 2.233,
+   "text": "Two hours on the road. Time for a break?",
+   "heard": 1.0,
+   "voice": "af_bella"
+  },
+  "line:regroup": {
+   "file": "line_regroup.m4a",
+   "dur": 0.604,
+   "text": "Regroup.",
+   "heard": 1.0,
+   "voice": "af_bella"
+  },
+  "line:regroup_set": {
+   "file": "line_regroup_set.m4a",
+   "dur": 0.963,
+   "text": "Regroup point set.",
+   "heard": 1.0,
+   "voice": "af_bella"
+  },
+  "line:track_mode": {
+   "file": "line_track_mode.m4a",
+   "dur": 2.8,
+   "text": "Track mode. Tap start finish when you cross the line.",
+   "heard": 1.0,
+   "voice": "af_bella"
+  },
+  "line:lap": {
+   "file": "line_lap.m4a",
+   "dur": 0.391,
+   "text": "Lap",
+   "heard": 1.0,
+   "voice": "af_bella"
+  },
+  "line:best": {
+   "file": "line_best.m4a",
+   "dur": 0.419,
+   "text": "Best.",
+   "heard": 1.0,
+   "voice": "af_bella"
   }
  }
 }

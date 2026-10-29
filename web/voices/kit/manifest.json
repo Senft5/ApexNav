@@ -295,7 +295,7 @@
   },
   "dist:40": {
    "file": "dist_40.m4a",
-   "dur": 0.726,
+   "dur": 0.781,
    "text": "forty",
    "heard": 1.0,
    "voice": "bm_fable"
@@ -309,7 +309,7 @@
   },
   "dist:60": {
    "file": "dist_60.m4a",
-   "dur": 0.631,
+   "dur": 0.867,
    "text": "sixty",
    "heard": 0.0,
    "voice": "bm_fable"
@@ -321,7 +321,7 @@
   },
   "dist:80": {
    "file": "dist_80.m4a",
-   "dur": 0.637,
+   "dur": 0.752,
    "text": "eighty",
    "heard": 0.0,
    "voice": "bm_fable"
@@ -962,7 +962,7 @@
   },
   "mod:long+dist:60": {
    "file": "p_f22e744ffaa6.m4a",
-   "dur": 1.505,
+   "dur": 1.504,
    "text": "Long, sixty.",
    "heard": 0.5,
    "voice": "bm_fable"
@@ -1066,9 +1066,9 @@
   },
   "link:into+head:RHP+caution:1+dist:60": {
    "file": "p_f2a9e1c45f2a.m4a",
-   "dur": 2.722,
+   "dur": 3.068,
    "text": "Into Right hairpin, care, sixty.",
-   "heard": 0.6,
+   "heard": 0.67,
    "voice": "bm_fable"
   },
   "head:L4+mod:opens+link:and+head:R4-": {
@@ -1947,9 +1947,9 @@
   },
   "head:RHP+caution:1+dist:60": {
    "file": "p_aa5dc68fe0af.m4a",
-   "dur": 2.199,
+   "dur": 2.651,
    "text": "Right hairpin, care, sixty.",
-   "heard": 0.44,
+   "heard": 0.8,
    "voice": "bm_fable"
   },
   "link:and+head:R3++dist:100": {
@@ -2825,9 +2825,9 @@
   },
   "caution:1+dist:80": {
    "file": "p_07bf3619c4d1.m4a",
-   "dur": 1.131,
+   "dur": 1.255,
    "text": "Care, eighty.",
-   "heard": 0.0,
+   "heard": 0.5,
    "voice": "bm_fable"
   },
   "head:R2++link:and": {
@@ -2876,7 +2876,7 @@
   },
   "head:LHP+caution:1+dist:100": {
    "file": "p_7822a2f2c001.m4a",
-   "dur": 2.493,
+   "dur": 2.494,
    "text": "Left hairpin, care, one hundred.",
    "heard": 0.73,
    "voice": "bm_fable"
@@ -2903,9 +2903,9 @@
   },
   "head:LAC+mod:long+dist:80": {
    "file": "p_172b6f254872.m4a",
-   "dur": 1.984,
+   "dur": 2.233,
    "text": "Acute left long, eighty.",
-   "heard": 0.75,
+   "heard": 1.0,
    "voice": "bm_fable"
   },
   "head:L2++link:into+head:R3-": {
@@ -2955,7 +2955,7 @@
   },
   "head:R2+link:into+head:LAC+mod:long": {
    "file": "p_ebc01c71eb2f.m4a",
-   "dur": 2.281,
+   "dur": 2.278,
    "text": "Right two into Acute left long.",
    "heard": 0.77,
    "voice": "bm_fable"
@@ -3086,9 +3086,9 @@
   },
   "head:LHP+caution:2+link:into": {
    "file": "p_023d6c0df0f4.m4a",
-   "dur": 2.184,
+   "dur": 2.422,
    "text": "Left hairpin, caution into.",
-   "heard": 0.75,
+   "heard": 1.0,
    "voice": "bm_fable"
   },
   "head:R3-+link:into+head:L3": {
@@ -3153,7 +3153,7 @@
   },
   "head:L4+dist:450": {
    "file": "p_2b72d64c40da.m4a",
-   "dur": 1.972,
+   "dur": 1.974,
    "text": "Left four, four fifty.",
    "heard": 0.5,
    "voice": "bm_fable"
@@ -3224,14 +3224,14 @@
   },
   "mod:long+caution:1+dist:450": {
    "file": "p_1c71da745357.m4a",
-   "dur": 1.992,
+   "dur": 1.991,
    "text": "Long, care, four fifty.",
    "heard": 0.67,
    "voice": "bm_fable"
   },
   "caution:1+dist:400": {
    "file": "p_f7579237fd82.m4a",
-   "dur": 1.584,
+   "dur": 1.595,
    "text": "Care, four hundred.",
    "heard": 0.67,
    "voice": "bm_fable"
@@ -3310,7 +3310,7 @@
   },
   "head:RAC+mod:long+caution:1+dist:300": {
    "file": "p_1953f0e04efc.m4a",
-   "dur": 2.602,
+   "dur": 2.584,
    "text": "Acute right long, care, three hundred.",
    "heard": 0.67,
    "voice": "bm_fable"
@@ -3347,7 +3347,7 @@
   },
   "caution:1+dist:120": {
    "file": "p_5a30e06180be.m4a",
-   "dur": 1.518,
+   "dur": 1.508,
    "text": "Care, one twenty.",
    "heard": 0.67,
    "voice": "bm_fable"
@@ -3396,7 +3396,7 @@
   },
   "head:RHP+mod:opens+dist:60": {
    "file": "p_3c288e9e8055.m4a",
-   "dur": 2.269,
+   "dur": 2.268,
    "text": "Right hairpin opens, sixty.",
    "heard": 0.75,
    "voice": "bm_fable"
@@ -3435,9 +3435,9 @@
   },
   "n:6": {
    "file": "n_6.m4a",
-   "dur": 0.688,
+   "dur": 0.741,
    "text": "six",
-   "heard": 0.4,
+   "heard": 0.5,
    "voice": "bm_fable"
   },
   "n:7": {
@@ -3661,9 +3661,9 @@
   },
   "n:50": {
    "file": "n_50.m4a",
-   "dur": 0.653,
+   "dur": 0.838,
    "text": "fifty",
-   "heard": 0.0,
+   "heard": 1.0,
    "voice": "bm_fable"
   },
   "n:51": {
@@ -3715,7 +3715,7 @@
   },
   "n:60": {
    "file": "n_60.m4a",
-   "dur": 0.633,
+   "dur": 0.632,
    "text": "sixty",
    "heard": 0.0,
    "voice": "bm_fable"
@@ -3819,7 +3819,7 @@
   },
   "n:80": {
    "file": "n_80.m4a",
-   "dur": 0.636,
+   "dur": 0.637,
    "text": "eighty",
    "heard": 0.0,
    "voice": "bm_fable"
@@ -3831,9 +3831,9 @@
   },
   "n:82": {
    "file": "n_82.m4a",
-   "dur": 0.851,
+   "dur": 1.008,
    "text": "eighty-two",
-   "heard": 0.5,
+   "heard": 1.0,
    "voice": "bm_fable"
   },
   "n:83": {
@@ -3855,7 +3855,7 @@
   },
   "n:86": {
    "file": "n_86.m4a",
-   "dur": 0.97,
+   "dur": 0.96,
    "text": "eighty-six",
    "heard": 0.5,
    "voice": "bm_fable"
@@ -3867,7 +3867,7 @@
   },
   "n:88": {
    "file": "n_88.m4a",
-   "dur": 0.739,
+   "dur": 0.74,
    "text": "eighty-eight",
    "heard": 0.5,
    "voice": "bm_fable"
@@ -3924,7 +3924,7 @@
   },
   "n:99": {
    "file": "n_99.m4a",
-   "dur": 0.99,
+   "dur": 0.944,
    "text": "ninety-nine",
    "heard": 0.5,
    "voice": "bm_fable"
@@ -3976,7 +3976,7 @@
   },
   "n:k1": {
    "file": "n_k1.m4a",
-   "dur": 1.022,
+   "dur": 1.023,
    "text": "one thousand",
    "heard": 0.5,
    "voice": "bm_fable"
@@ -4086,9 +4086,9 @@
   },
   "nav:merge": {
    "file": "nav_merge.m4a",
-   "dur": 0.714,
+   "dur": 0.843,
    "text": "Merge.",
-   "heard": 0.0,
+   "heard": 1.0,
    "voice": "bm_fable"
   },
   "nav:merge_right": {
@@ -4366,21 +4366,21 @@
   },
   "navd:100m": {
    "file": "navd_100m.m4a",
-   "dur": 1.629,
+   "dur": 1.626,
    "text": "In one hundred metres,",
    "heard": 0.75,
    "voice": "bm_fable"
   },
   "navd:200m": {
    "file": "navd_200m.m4a",
-   "dur": 1.581,
+   "dur": 1.579,
    "text": "In two hundred metres,",
    "heard": 0.75,
    "voice": "bm_fable"
   },
   "navd:300m": {
    "file": "navd_300m.m4a",
-   "dur": 1.608,
+   "dur": 1.609,
    "text": "In three hundred metres,",
    "heard": 0.75,
    "voice": "bm_fable"
@@ -4394,7 +4394,7 @@
   },
   "navd:500m": {
    "file": "navd_500m.m4a",
-   "dur": 1.794,
+   "dur": 1.795,
    "text": "In five hundred metres,",
    "heard": 0.75,
    "voice": "bm_fable"
@@ -4408,49 +4408,49 @@
   },
   "navd:700m": {
    "file": "navd_700m.m4a",
-   "dur": 1.817,
+   "dur": 1.816,
    "text": "In seven hundred metres,",
    "heard": 0.75,
    "voice": "bm_fable"
   },
   "navd:800m": {
    "file": "navd_800m.m4a",
-   "dur": 1.631,
+   "dur": 1.63,
    "text": "In eight hundred metres,",
    "heard": 0.75,
    "voice": "bm_fable"
   },
   "navd:900m": {
    "file": "navd_900m.m4a",
-   "dur": 1.655,
+   "dur": 1.657,
    "text": "In nine hundred metres,",
    "heard": 0.75,
    "voice": "bm_fable"
   },
   "navd:1km": {
    "file": "navd_1km.m4a",
-   "dur": 1.421,
+   "dur": 1.397,
    "text": "In one kilometre,",
    "heard": 0.67,
    "voice": "bm_fable"
   },
   "navd:1.1km": {
    "file": "navd_1_1km.m4a",
-   "dur": 2.15,
+   "dur": 2.187,
    "text": "In one point one kilometres,",
    "heard": 0.67,
    "voice": "bm_fable"
   },
   "navd:1.2km": {
    "file": "navd_1_2km.m4a",
-   "dur": 2.149,
+   "dur": 2.151,
    "text": "In one point two kilometres,",
    "heard": 0.67,
    "voice": "bm_fable"
   },
   "navd:1.3km": {
    "file": "navd_1_3km.m4a",
-   "dur": 2.199,
+   "dur": 2.2,
    "text": "In one point three kilometres,",
    "heard": 0.67,
    "voice": "bm_fable"
@@ -4464,7 +4464,7 @@
   },
   "navd:1.5km": {
    "file": "navd_1_5km.m4a",
-   "dur": 2.311,
+   "dur": 2.313,
    "text": "In one point five kilometres,",
    "heard": 0.67,
    "voice": "bm_fable"
@@ -4527,7 +4527,7 @@
   },
   "line:rep_pothole": {
    "file": "line_rep_pothole.m4a",
-   "dur": 1.805,
+   "dur": 1.782,
    "text": "Pothole reported ahead.",
    "heard": 0.57,
    "voice": "bm_fable"
@@ -4646,9 +4646,9 @@
   },
   "line:best": {
    "file": "line_best.m4a",
-   "dur": 0.65,
+   "dur": 0.737,
    "text": "Best.",
-   "heard": 0.67,
+   "heard": 1.0,
    "voice": "bm_fable"
   }
  }

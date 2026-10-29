@@ -23,8 +23,14 @@ a timer, so calls were cut off or silent. My calls:
 - *The convoy lines with a friend's handle stay on the phone's voice* for now; they can't be pre-rendered.
 - *The replay's play button no longer says the drive's name*: it was the one line always in the phone's voice.
 - *Every clip is levelled to -20 dB RMS*, peaks at 0.89. Undo: `TARGET_RMS_DB` in tools/voicebank.py and `--relevel`.
-- *Clips are rendered up to three times and the take Whisper hears best is kept* (`--rebuild-checked`); the manifest
-  records what was heard. Clips that still score under 0.8 are listed in the build log.
+- *Clips are rendered up to six times (three spellings, at the voice's speed and 12 % slower) and the take Whisper hears
+  best is kept* (`--rebuild-checked`); the manifest records the score. Still under 0.8 after that: Marguerite 56 of 841,
+  Kit 82 and Hale 39 of the clips re-checked. Most are the recogniser, not the voice ("Acute" heard as "a cute", "four
+  fifty" as "for 50", a bare "and" as "End").
+- *Kit's tens were a real fault*: at his speed "forty", "fifty", "sixty" and "eighty" were heard as fourteen to
+  eighteen by two Whisper models, a wrong distance in a call. His tens are now rendered at 0.9 speed (eighty with the
+  American pronunciation rules); `TOKEN_OVERRIDES` in tools/voicebank.py keeps that for future rebuilds. Hale's bare
+  "sixty" is heard as "six day": not a teen, so it stays. Undo: empty `TOKEN_OVERRIDES` and rebuild those clips.
 
 **The Dynamic Island, corners and home bar, second pass (docs/design/REVIEW2.md).** You said it wasn't fixed everywhere;
 a second Fable review with docs/IDEAS.md and the screenshots found 22 places. All are fixed except where noted there,

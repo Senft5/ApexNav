@@ -408,6 +408,11 @@ class Listener:
         return difflib.SequenceMatcher(None, a, b).ratio(), heard
 
 
+# Clips a voice says wrong at its own setting, by Whisper base and small: Kit's fast "sixty" and "eighty" are "sixteen" and
+# "eighteen". The bare clip uses this pronunciation (lang) and speed; a phrase holding the token also gets a take at it.
+TOKEN_OVERRIDES = {"kit": {"dist:40": ("b", 0.9), "dist:50": ("b", 0.9), "dist:60": ("b", 0.9), "dist:80": ("a", 0.9)}}
+
+
 def rebuild_checked(voice_id: str, only: list[str] | None = None, threshold: float = 0.8) -> None:
     """Re-render a bank's every clip (or `only`), each checked by ear: up to three spellings of the line, at the voice's
     speed and then 12 % slower, are rendered and the first Whisper hears as its words is kept, else the closest. Phrase keys are kept as they are; new vocabulary
@@ -422,7 +427,7 @@ def rebuild_checked(voice_id: str, only: list[str] | None = None, threshold: flo
     keys = list(dict.fromkeys(list(manifest["tokens"]) + list(vocab)))
     if only:
         keys = [k for k in keys if k in set(only)]
-    engine, ear = KokoroEngine(cfg["lang"]), Listener()
+    engines, ear = {cfg["lang"]: KokoroEngine(cfg["lang"])}, Listener()
     for n, key in enumerate(keys, 1):
         toks = split_key(key)
         if not all(t in vocab for t in toks):
@@ -435,11 +440,18 @@ def rebuild_checked(voice_id: str, only: list[str] | None = None, threshold: flo
         base = tts_text(toks, vocab) if multi else vocab[key]
         stem = base.rstrip(".,!?")
         # then the same a little slower: at Kit's 1.12 "forty" comes out as "fourteen" (heard so by Whisper base and small)
-        tries = [(t, sp) for sp in dict.fromkeys([cfg["speed"], round(cfg["speed"] * 0.88, 2)])
+        over = TOKEN_OVERRIDES.get(voice_id, {})
+        slow = [o[1] for t, o in over.items() if t in toks]
+        tries = [(t, sp, cfg["lang"]) for sp in dict.fromkeys([cfg["speed"], round(cfg["speed"] * 0.88, 2)] + slow)
                  for t in dict.fromkeys([base, stem + ",", stem + "."])]
+        if not multi and key in over:
+            lang, sp = over[key]
+            tries = [(t, sp, lang) for t in dict.fromkeys([base, stem + ",", stem + "."])]
         best = None
-        for text, speed in tries:
-            audio = trim(engine.render(text, cfg["kokoro_voice"], speed))
+        for text, speed, lang in tries:
+            if lang not in engines:
+                engines[lang] = KokoroEngine(lang)
+            audio = trim(engines[lang].render(text, cfg["kokoro_voice"], speed))
             sc, heard = ear.score(audio, want)
             if best is None or sc > best[0]:
                 best = (sc, audio, heard, text)
