@@ -137,7 +137,7 @@
     .stages-h { font-size: 22px; font-weight: 700; font-family: var(--font-num); overflow-wrap: anywhere; }
     .empty { border: 1px solid var(--rule); padding: 16px; display: grid; gap: 8px; } .empty b { font-size: 17px; } .empty .note { font-size: 14px; }
     /* an empty state is one line and its action, never a box of explanation (REVIEW2.md U-33) */
-    .empty-line { margin: 4px 0; font-size: 16px; line-height: 1.45; } .empty-line a { color: var(--panel-ink); font-weight: 600; }
+    .empty-line { margin: 4px 0; font-size: 16px; line-height: 1.45; } .empty-line a { display: inline-block; color: var(--panel-ink); font-weight: 600; }   /* a link never breaks across lines */
     a.btn { display: inline-flex; align-items: center; text-decoration: none; font-weight: 600; }
     .seg b { font-size: 15px; } .seg span { font-size: 12px; color: var(--panel-dim); }
     :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
