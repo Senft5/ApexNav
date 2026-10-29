@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-d9zfi5mJPFNxAN6RI74uSk/whZsBxGsNNN4lkbUwMQo=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-Nvp+NVEEUPSKcthH5qom4lrAYU94RQbjoA/p+HO5AIY=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -23,6 +23,7 @@
   <script src="crew_standings.js"></script>
   <script src="road_page.js"></script>
   <script src="taste.js"></script>
+  <script src="prefer.js"></script>
   <script src="track_mode.js"></script>
   <script src="flags.js"></script>
   <script src="save_file.js"></script>
@@ -84,6 +85,7 @@
   <script src="twisty.js"></script>
   <script src="coverage.js"></script>
   <script src="recording.js"></script>
+  <script src="end_line.js"></script>
   <script src="road_memory.js"></script>
   <script src="contributor.js"></script>
   <script src="keyboard.js"></script>
@@ -804,6 +806,8 @@
                 <div class="ctl" role="group" aria-label="Corner mix"><div class="ctl-label">Corner mix</div>
                   <label class="balance"><span>Fewer hairpins</span><input type="range" min="-1" max="1" step="1" value="0" data-pref-range="tight" aria-label="Hairpins: fewer, any or more" /><span>More</span></label>
                   <label class="balance"><span>Fewer sweepers</span><input type="range" min="-1" max="1" step="1" value="0" data-pref-range="fast" aria-label="Fast sweepers: fewer, any or more" /><span>More</span></label></div>
+                <div class="ctl"><div class="ctl-label">Prefer <small>stamped ranks higher</small></div>
+                  <div class="stamps" role="group" aria-label="Prefer"><button data-prefer="measured" aria-pressed="false">Measured roads</button><button data-prefer="novel" aria-pressed="false">New to me</button><button data-prefer="crew" aria-pressed="false">Crew favourites</button></div></div>
                 <div class="ctl" role="group" aria-label="Explore: the best roads near you"><div class="ctl-label">Explore <small>the best roads within</small></div>
                   <div class="detents"><button data-explore-min="15">15 min</button><button data-explore-min="30">30 min</button></div></div>
                 <div class="place-list" id="exploreList" hidden></div>
@@ -2067,13 +2071,13 @@
       try {
         if (state.voiceId !== 'device' && window.ApexVoice) {
           await ApexVoice.load(state.voiceId);
-          const tokens = item.chain ? ApexVoice.tokensFor(item.chain, ApexVoice.bank.style) : item.sysToken ? [item.sysToken] : null;
+          const tokens = item.tokens || (item.chain ? ApexVoice.tokensFor(item.chain, ApexVoice.bank.style) : item.sysToken ? [item.sysToken] : null);
           const promptStyle = await voiceBracket(true, duck);
           if (promptStyle !== 'normal') { voiceBracket(false); speech.busy = false; pumpSpeech(); return; }   // silent or a tone: skip the words
           try {
             // A call the bank can only voice by joining clips plays as one whole render when the
             // route-load prefetch has it; the join is the audible seam we are avoiding.
-            if (tokens && ApexVoice.joins(tokens) > 0 && state.liveVoice) played = await ApexVoice.playWhole(spokenTextFor(item.text, ApexVoice.bank.style));
+            if (tokens && state.liveVoice && ApexVoice.joins(tokens) > 0) played = await ApexVoice.playWhole(spokenTextFor(item.text, ApexVoice.bank.style));
             if (!played && tokens) played = await ApexVoice.play(tokens);
             // Not in the bank (drive names, route summaries): synthesise live with the same model.
             if (!played && state.liveVoice) played = await ApexVoice.speakLive(spokenTextFor(item.text, ApexVoice.bank.style));
@@ -2545,8 +2549,8 @@
     try { const a = JSON.parse(localStorage.getItem(AVOID) || 'null'); if (a && typeof a === 'object') for (const k in avoid) if (typeof a[k] === 'boolean') avoid[k] = a[k]; } catch (_) { /* storage off */ }
     // Corners you like (IDEAS R-19): more or fewer hairpins and fast sweepers weigh routes' fun (fun_route.js cornerWeight).
     const ROAD_PREFS = 'apex.roadPrefs';
-    let roadPrefs = { tight: 0, fast: 0 };
-    try { const p = JSON.parse(localStorage.getItem(ROAD_PREFS) || 'null'); if (p && typeof p === 'object') for (const k of ['tight', 'fast']) if ([-1, 0, 1].includes(p[k])) roadPrefs[k] = p[k]; } catch (_) { /* storage off */ }
+    let roadPrefs = { tight: 0, fast: 0, measured: false, novel: false, crew: false };
+    try { const p = JSON.parse(localStorage.getItem(ROAD_PREFS) || 'null'); if (p && typeof p === 'object') { for (const k of ['tight', 'fast']) if ([-1, 0, 1].includes(p[k])) roadPrefs[k] = p[k]; for (const k of ['measured', 'novel', 'crew']) roadPrefs[k] = p[k] === true; } } catch (_) { /* storage off */ }
     // Junction turns (slight/normal/sharp left and right, U-turns, ramps, roundabouts): fun scoring drops the corners there.
     const TURN_TYPES = new Set([9, 10, 11, 12, 13, 14, 15, 16, 18, 19, 20, 21, 26, 27]);
     function routeOf(trip) {
@@ -3361,6 +3365,7 @@
       await weatherOn(pool, level);
       tasteOn(pool);
       await applyMeasured(FunRoute.rank(pool, level).slice(0, 3).map(r => pool.find(c => c.t === r.t)), ui);   // the top few only
+      await preferOn(pool, level);
       const ranked = FunRoute.rank(pool, level), best = ranked[0];
       const quickest = pool.filter(c => Number.isFinite(c.timeS)).reduce((x, y) => (y.timeS < x.timeS ? y : x), best);
       // The best and up to two really different others stay on the card (and faint on the map) to pick from.
@@ -3539,6 +3544,8 @@
         for (const d of done) d.score += d.adjust || 0;
         done.sort((a, b) => b.score - a.score);
       }
+      await preferApply(done.slice(0, 4));                                   // the Prefer stamps (prefer.js)
+      if (done.some(d => d.preferBonus)) { for (const d of done) d.score += d.preferBonus || 0; done.sort((a, b) => b.score - a.score); }
       const best = done[0];
       best.t.request = { from: null, to: { lat: c.lat, lon: c.lon }, via: best.job.pts.slice(1, -1).map(p => ({ lat: p.lat, lon: p.lon, planned: true })) };
       ui.step('Building route', 0.92);
@@ -4046,8 +4053,16 @@
       roadPrefs = { ...roadPrefs, ...next };
       try { localStorage.setItem(ROAD_PREFS, JSON.stringify(roadPrefs)); } catch (_) { /* storage off: this session only */ }
       document.querySelectorAll('[data-pref-range]').forEach(r => { r.value = String(roadPrefs[r.dataset.prefRange] || 0); });
+      document.querySelectorAll('[data-prefer]').forEach(b => { const on = !!roadPrefs[b.dataset.prefer]; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
       paintPresets();
     }
+    // Prefer stamps (prefer.js, REVIEW.md 3.3): rank what the router gave toward measured, new-to-you or crew-shared roads
+    document.querySelectorAll('[data-prefer]').forEach(b => b.addEventListener('click', async () => {
+      if ($('planPanel').classList.contains('busy') || loopBusy) return;
+      const k = b.dataset.prefer, was = !!roadPrefs[k];
+      setRoadPrefs({ [k]: !was });
+      if (!(await replanForLevel(`${was ? 'Not preferring' : 'Preferring'} ${ApexPrefer.LABELS[k].toLowerCase()}`))) setRoadPrefs({ [k]: was });
+    }));
     // corner mix as balance sliders with three detents: fewer, any, more (REVIEW.md mockup 03-plan-more.html)
     document.querySelectorAll('[data-pref-range]').forEach(r => r.addEventListener('change', async () => {
       const k = r.dataset.prefRange, was = roadPrefs[k] || 0, now = Math.max(-1, Math.min(1, Math.round(Number(r.value))));
@@ -5381,6 +5396,37 @@
       const least = Math.min(...costs);
       top.forEach((c, i) => { c.weatherCost = costs[i] - least; });
     }
+    // The Prefer stamps (prefer.js): the share of each contender that members measured (applyMeasured), that you haven't
+    // driven (your Log, on this phone) and that your crews shared (their routes, members only), as a few fun points each.
+    const preferCache = { driven: null, crew: null, at: 0 };
+    async function preferGrids(want) {
+      if (Date.now() - preferCache.at > 10 * 60000) { preferCache.driven = null; preferCache.crew = null; preferCache.at = Date.now(); }
+      if (want.novel && !preferCache.driven && window.ApexRecording) {
+        try { preferCache.driven = ApexPrefer.grid((await ApexRecording.all()).map(d => ({ lat: d.lat, lon: d.lon }))); } catch (_) { preferCache.driven = new Set(); }
+      }
+      if (want.crew && !preferCache.crew) {
+        try {
+          const list = (await apiCall('GET', '/api/routes/shared').then(jsonOf)) || [];
+          const geoms = await Promise.all(list.filter(r => r.crew).slice(0, 12).map(r => apiCall('GET', `/api/routes/${encodeURIComponent(r.id)}`).then(jsonOf).then(x => (x && x.geom) || []).catch(() => [])));
+          preferCache.crew = ApexPrefer.grid(geoms);
+        } catch (_) { preferCache.crew = new Set(); }
+      }
+      return preferCache;
+    }
+    async function preferOn(pool, level) {
+      for (const c of pool) c.preferBonus = 0;
+      await preferApply(FunRoute.rank(pool, level).slice(0, 4).map(r => pool.find(c => c.t === r.t)).filter(Boolean));   // the contenders only
+    }
+    async function preferApply(top) {
+      const want = { measured: roadPrefs.measured, novel: roadPrefs.novel, crew: roadPrefs.crew };
+      if (!window.ApexPrefer || !(want.measured || want.novel || want.crew)) return;
+      const g = await preferGrids(want);
+      for (const c of top) {
+        const f = { measured: c.t.measured && Number.isFinite(c.t.measured.coverage) ? c.t.measured.coverage : null,
+                    driven: g.driven ? ApexPrefer.share(c.t, g.driven) ?? 0 : null, crew: g.crew && g.crew.size ? ApexPrefer.share(c.t, g.crew) : null };
+        c.preferBonus = ApexPrefer.bonus(want, f);
+      }
+    }
     // Your taste (taste.js, IDEAS R-33): with five or more "which road was better?" answers, each candidate's TECH, FLOW and
     // known smoothness from the reference lap, and a few fun points toward what you pick. No answers: nothing changes.
     function tasteOn(pool) {
@@ -5801,8 +5847,28 @@
         Array.isArray(d.corners) ? `${d.corners.length} corners` : null].filter(Boolean).join(' · ');
       $('endScore').textContent = d.ds.score == null ? '--' : String(d.ds.score);
       const t = d.ds.score != null && window.ApexWeekDigest ? ApexWeekDigest.tip(d.ds.components) : null;
-      $('endLine').textContent = d.ds.score == null ? 'Not enough clean corners for a score this time.'
-        : t ? `Next time, ${t.label.toLowerCase()}: ${t.tip}.` : '';
+      const tipLine = d.ds.score == null ? 'Not enough clean corners for a score this time.' : t ? `Next time, ${t.label.toLowerCase()}: ${t.tip}.` : '';
+      $('endLine').textContent = tipLine;
+      // your best on this road (REVIEW.md 4.4): against your earlier drives named after the same road; then the pack's closing line
+      (async () => {
+        let best = false;
+        if (d.ds.score != null && window.ApexEndLine) {
+          try {
+            const others = (await ApexRecording.all()).filter((o) => o.id !== d.id && o.name === d.name).map((o) => {
+              const x = ApexRecording.repair(Core, o);
+              try { const s = Core.driverScore(x.speed_mps, x.lon_g, x.lat_g, ApexRecording.scorableCorners(x, ApexRecording.cornersOf(x))).score; return { id: o.id, name: o.name, score: Number.isFinite(s) ? Math.round(s) : null }; }
+              catch (_) { return null; }
+            }).filter(Boolean);
+            best = ApexEndLine.bestOnRoad({ id: d.id, name: d.name, score: d.ds.score }, others);
+          } catch (_) { best = false; }
+        }
+        if (best) $('endLine').textContent = ['Your best on this road.', tipLine].filter(Boolean).join(' ');
+        if (window.ApexEndLine) {
+          const pack = ['marguerite', 'kit', 'hale'].includes(state.voiceId) ? state.voiceId : 'marguerite';
+          const line = ApexEndLine.endLine(pack, d.ds.score == null ? null : Math.round(d.ds.score), best);
+          say(line.text, false, null, null, state.voiceId === 'device' ? {} : { tokens: line.tokens });
+        }
+      })();
       $('endLog').href = `analysis.html?tab=drive&drive=${encodeURIComponent(d.id)}`;
       $('endCard').classList.add('show');
     }

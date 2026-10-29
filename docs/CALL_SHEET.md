@@ -6,6 +6,19 @@ it says so. Things only you can do are in docs/OWNER_TODO.md.
 
 ## 2026-10-29
 
+**The end of a drive speaks, and the plan sheet gets its Prefer stamps (REVIEW.md 4.4, 3.3).** My calls:
+- *Each pack closes in its own words around the Vetta Score* ("That's the drive. Score seven hundred two, your best on
+  this road." / "Seven hundred two. Best yet on this road. That's a wrap." / "Complete. Score, seven hundred two."). The
+  score is spoken from number clips rendered in each pack's voice, never from a second voice. Before this, nothing was
+  said at the end of a drive.
+- *"Your best on this road"* means better than every earlier drive in your Log named after the same road, and it needs at
+  least one; a first drive or a tie isn't a best. It shows on the end card too.
+- *Kit's review line "Told you late out works"* isn't used: it would claim coaching the app didn't give. His close is
+  "That's a wrap."
+- *Prefer (Measured roads, New to me, Crew favourites) ranks the router's candidates* rather than steering the router,
+  which can't take them: up to six fun points each for the share of a route that members measured, that you haven't
+  driven (your Log, on the phone) or that your crews shared. Presets keep them.
+
 **Friends on the map (REVIEW.md 5.4, roadmap 24).** My calls:
 - *Defaults as the review set them*: the layer off, Show me to Nobody, a 10-minute delay, within a mile, only while
   driving. The first time you turn the layer on, the sheet explains that seeing isn't sharing.

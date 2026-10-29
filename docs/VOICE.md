@@ -18,6 +18,9 @@
    `bm_lewis`). The calls are identical in every pack; each pack has its own system lines (`PACK_LINES` in
    tools/voicebank.py: ready, full, quiet, end, and the sample the theme picker's Hear key plays). The voice list,
    custom voices ("My Voice") and Jarvis are retired, and so are the George, Daniel, Emma and Michael banks.
+   The end of a drive (web/end_line.js): each pack closes in its own words around the Vetta Score, spoken from the
+   pack's own number clips (`n:0`-`n:99`, `n:h1`-`n:h9`, `n:k1`) and `end:score` / `end:best`, so no second voice
+   joins in. Add new tokens to a bank without re-rendering it: `voicebank.py --voice ID --missing`.
 4. **DEVICE** — the phone's own voice, used only when a pack's bank isn't on the phone or a word isn't in it.
 
 Voices shipped: Marguerite, Kit, Hale.
