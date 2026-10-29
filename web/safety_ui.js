@@ -71,7 +71,7 @@
     let blocking = false;
     async function block(handle, done) {
       if (blocking) return;
-      if (!confirm(`Block @${handle}? You won't see each other, friendship and sharing end, and a convoy you share drops one of you.`)) return;
+      if (!(await ApexConfirm.ask(`Block @${handle}? You won't see each other, friendship and sharing end, and a convoy you share drops one of you.`, 'Block'))) return;
       let r = null;
       blocking = true;
       try { r = await apiCall('POST', '/api/blocks', { handle }); } catch (_) {}
@@ -115,7 +115,7 @@
         else if (!items.length) kids.push(el('p', { className: 'note', textContent: 'Nothing reported.' }));
         else for (const it of items) {
           const resolve = (action, ask) => async () => {
-            if (ask && !confirm(ask)) return;
+            if (ask && !(await ApexConfirm.ask(ask, action === 'remove' ? 'Remove' : 'Dismiss'))) return;
             let r = null;
             try { r = await apiCall('POST', '/api/moderation/resolve', { kind: it.kind, target: it.target, action }); } catch (_) {}
             if (!r || !r.ok) toast('Couldn\'t do that. Try again.');

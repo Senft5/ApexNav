@@ -214,7 +214,7 @@
       if (b.mine) {
         if (P() && (p.photos || []).length < 8) acts.append(P().picker('Add a photo', 'post', p.id, redo, { toast }));
         acts.append(btn('Delete step', async () => {
-          if (!confirm(`Delete step ${p.n}, its photos and replies?`)) return;
+          if (!(await ApexConfirm.ask(`Delete step ${p.n}, its photos and replies?`, 'Delete'))) return;
           const x = await call('DELETE', `/api/builds/posts/${encodeURIComponent(p.id)}`); if (x && x.ok) redo(); else toast('Couldn’t delete it. Try again.');
         }, 'linkbtn'));
       } else if (page.report) acts.append(btn('Report', () => page.report({ kind: 'post', target: p.id, label: `step ${p.n} of ${carName(b)}'s build`, who: b.handle, done: redo }), 'linkbtn'));
@@ -227,7 +227,7 @@
       const box = el('div', { className: 'bv-reply' + (r.suggestion ? ' sugg' : '') });
       const acts = [];
       if (r.mine || b.mine) acts.push(btn('Delete', async () => {
-        if (!confirm('Delete this reply?')) return;
+        if (!(await ApexConfirm.ask('Delete this reply?', 'Delete'))) return;
         const x = await call('DELETE', `/api/builds/replies/${encodeURIComponent(r.id)}`); if (x && x.ok) redo(); else toast('Couldn’t delete it. Try again.');
       }, 'linkbtn'));
       if (!r.mine && page.report) acts.push(btn('Report', () => page.report({ kind: 'reply', target: r.id, label: `a reply from @${r.handle}`, who: r.handle, done: redo }), 'linkbtn'));

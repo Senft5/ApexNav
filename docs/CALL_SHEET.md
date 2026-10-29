@@ -6,6 +6,19 @@ it says so. Things only you can do are in docs/OWNER_TODO.md.
 
 ## 2026-10-29
 
+**A fresh pass over REVIEW.md 1.2, screen by screen, now an e2e check; five gaps fixed.** Two flows in `e2e/smoke.js`
+("REVIEW.md 1.2 screen by screen") walk every row on the running app and assert what the review asked for. My calls:
+- *Recenter is the second map key under Layers*, a crosshair (the mockup), with the seconds until it recenters on its
+  own in place of the glyph. It was a text plate bottom-left. Undo: restore `<button class="plate" id="recenterBtn">`.
+- *Destructive actions ask on Vetta's own confirm sheet* (`web/confirm.js`): red action text, Cancel focused and the
+  default (Escape, a tap outside). All 19 system `confirm()` boxes are gone; `tests/test_confirm_sheet.py` keeps them out.
+  Undo: `ApexConfirm.ask(text)` back to `confirm(text)`.
+- *The rest of the Log is quiet lines*: Your week, Your roads and Kudos fold like the year and challenges; only the
+  drive list keeps a border. Undo: the three `<details class="quiet">` back to `<div class="panel">` with an h2.
+- *Drive detail fits the phone*: a grid column grew past the screen for one wide child (the Score bars); grid columns are
+  now `minmax(0, 1fr)`. Not a call, a bug.
+- *Signed-out Crew promises Friends on the map, the board and crew drives* (the review's three), not Convoys.
+
 **Followed-build notifications are decided in ApexKit, and a flaky profile test is fixed.** My calls:
 - *Which builds get a notification, and its words, moved to `ApexKit/Sources/ApexKit/BuildAlerts.swift`* with unit tests
   (`BuildAlertsTests.swift`) that CI runs on Linux and macOS for every PR; `ApexBuildNotifier.swift` keeps only the iOS

@@ -31,6 +31,9 @@
   crest, share card, crew hazard categories). Migrations 0037-0038 applied to both D1.
 - [x] The crew's regroup line in each pack's voice (rendered on the website, played in the app; migration 0039) and every
   convoy regroup spoken; notifications for followed builds from a background refresh (ApexBuildNotifier.swift; the rule is ApexKit BuildAlerts, unit-tested).
+- [x] A fresh REVIEW.md 1.2 pass, now two e2e flows ("REVIEW.md 1.2 screen by screen"): Recenter a map key, the confirm
+  sheet (web/confirm.js) for every destructive action, the rest of the Log as quiet lines, drive detail fits a phone,
+  the signed-out Crew pitch. The friend-profile test's random failure (a car id holding "600") is fixed.
 - Every REVIEW.md suggestion is built. Pro, Decals and the Pro themes wait on StoreKit (the owner's Paid Applications
   Agreement); photos wait on R2 to move out of KV.
 - Exact next task: StoreKit (needs the owner's Paid

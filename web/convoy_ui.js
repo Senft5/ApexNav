@@ -369,21 +369,21 @@
           const row = el('div', { className: 'cv-member' },
             el('span', {}, el('span', { className: 'cv-on' + (m.online || m.key === c.you ? ' live' : '') }), document.createTextNode(label(m) + (m.role === 'leader' ? ' · leader' : '')),
               ...(car ? [el('span', { className: 'cv-car', textContent: car })] : [])), gap);
-          if (c.role === 'leader' && m.key !== c.you) row.append(btn('Remove', async () => { if (confirm(`Remove ${label(m)} from the convoy? They can't come back into it.`)) { if (!(await client.removeMember(m.key))) toast('Couldn\'t remove them. Try again.'); } }, 'linkbtn'));
+          if (c.role === 'leader' && m.key !== c.you) row.append(btn('Remove', async () => { if (await ApexConfirm.ask(`Remove ${label(m)} from the convoy? They can't come back into it.`, 'Remove')) { if (!(await client.removeMember(m.key))) toast('Couldn\'t remove them. Try again.'); } }, 'linkbtn'));
           list.append(row);
         }
         kids.push(list);
         const actions = el('div', { className: 'row' }), picker = el('div', { className: 'stack-8' });
         if (c.role === 'leader') {
           actions.append(btn('Invite friends', () => invitePeople(picker), 'ink-btn solid'), btn('Show QR', () => showQr(picker)), btn('Share link', () => shareInvite(false)),
-            btn('New link', () => { if (confirm('Make a new link? The old one stops working for anyone who hasn\'t joined yet.')) shareInvite(true); }, 'linkbtn'));
+            btn('New link', async () => { if (await ApexConfirm.ask('Make a new link? The old one stops working for anyone who hasn\'t joined yet.', 'New link')) shareInvite(true); }, 'linkbtn'));
           const r = getRoute();
           const shareMsg = { sent: (n) => `${n} shared with the convoy.`, offline: () => 'Not connected to the convoy.', too_long: () => 'That route is too long to share.' };
           if (r) actions.append(btn(client.route ? 'Update shared route' : 'Share my route', () => { const out = client.shareRoute(r.name, r.pts); toast(shareMsg[out](r.name)); }));
           else if (client.route) actions.append(btn('Stop sharing route', () => { if (!client.clearRoute()) toast('Not connected to the convoy.'); }));
         }
         actions.append(btn(c.role === 'leader' ? 'End convoy' : 'Leave', async () => {
-          if (!confirm(c.role === 'leader' ? 'End the convoy for everyone?' : 'Leave the convoy?')) return;
+          if (!(await ApexConfirm.ask(c.role === 'leader' ? 'End the convoy for everyone?' : 'Leave the convoy?', c.role === 'leader' ? 'End convoy' : 'Leave'))) return;
           await client.leave(); toast(c.role === 'leader' ? 'Convoy ended.' : 'You left the convoy.');
         }, c.role === 'leader' ? 'ink-btn' : 'linkbtn'));
         kids.push(actions);

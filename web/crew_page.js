@@ -337,7 +337,7 @@
         list.replaceChildren(...msgs.map((m) => {
           const acts = [];
           if (m.mine || c.is_owner) acts.push(btn('Delete', async () => {
-            if (!confirm('Delete this message?')) return;
+            if (!(await ApexConfirm.ask('Delete this message?', 'Delete'))) return;
             const d = await apiCall('DELETE', `/api/crews/${encodeURIComponent(c.id)}/chat/${encodeURIComponent(m.id)}`).catch(() => null);
             if (d && d.ok) fill(); else toast('Couldn’t delete it. Try again.');
           }, 'linkbtn'));

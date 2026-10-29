@@ -68,7 +68,7 @@
           t.tabIndex = 0; t.setAttribute('role', 'button');
           t.addEventListener('click', () => P.view(p.id, mine
             ? [['Make cover', async () => { await apiCall('PUT', `/api/photos/${encodeURIComponent(p.id)}/use`); page.onPhotos && page.onPhotos(); }],
-               ['Remove', async () => { if (confirm('Remove this photo?')) { await P.remove(p.id); fill(); } }]]
+               ['Remove', async () => { if (await ApexConfirm.ask('Remove this photo?', 'Remove')) { await P.remove(p.id); fill(); } }]]
             : (report ? [['Report', () => report({ kind: 'photo', target: p.id, label: 'a photo of ' + title(c), done: fill })]] : [])));
           return t;
         }));
@@ -197,7 +197,7 @@
             btn('Edit', () => { editing = c.id; render(); }, 'linkbtn'),
             btn(c.shared ? 'Shown to friends' : 'Show to friends', act(() => apiCall('PUT', `/api/garage/${encodeURIComponent(c.id)}`, { ...c, shared: !c.shared, is_primary: !!c.is_primary }), 'Couldn\'t change that. Try again.'), 'ink-btn' + (c.shared ? ' on' : '')),
             ...(c.is_primary ? [] : [btn('Make daily', act(() => apiCall('PUT', `/api/garage/${encodeURIComponent(c.id)}`, { ...c, shared: !!c.shared, is_primary: true }), 'Couldn\'t change that. Try again.'), 'linkbtn')]),
-            btn('Remove', () => { if (confirm(`Remove ${title(c)} from your garage?`)) act(() => apiCall('DELETE', `/api/garage/${encodeURIComponent(c.id)}`), 'Couldn\'t remove it. Try again.')(); }, 'linkbtn'));
+            btn('Remove', async () => { if (await ApexConfirm.ask(`Remove ${title(c)} from your garage?`, 'Remove')) act(() => apiCall('DELETE', `/api/garage/${encodeURIComponent(c.id)}`), 'Couldn\'t remove it. Try again.')(); }, 'linkbtn'));
           cards.append(card(c, acts));
         }
         if (editing === 'new') cards.append(form({}, () => { editing = null; render(); }));

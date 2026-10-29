@@ -115,7 +115,7 @@
         else toast(r.invited ? `Convoy started. Invited ${r.invited} going.` : 'Convoy started.');
       }, 'ink-btn solid'));
       if (e.can_cancel) acts.append(btn('Cancel the drive', async () => {
-        if (!confirm(`Cancel ${e.title}? Everyone in the crew stops seeing it.`)) return;
+        if (!(await ApexConfirm.ask(`Cancel ${e.title}? Everyone in the crew stops seeing it.`, 'Cancel the drive'))) return;
         const r = await apiCall('DELETE', `/api/events/${encodeURIComponent(e.id)}`);
         if (r.ok) { toast('Drive cancelled.'); redo(); } else toast('Couldn\'t cancel it. Try again.');
       }, 'linkbtn'));

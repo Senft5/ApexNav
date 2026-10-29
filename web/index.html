@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-8SjKM9gePCKz5zciwG0t0xqFGTESXP2n2duop5mcH3c=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-r/XqJHwUvHMzS1fxJf1tAURWesH3ATkqs/9vYGuXgUY=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -61,6 +61,7 @@
   <script src="whats_new.js"></script>
   <script src="saved_routes.js"></script>
   <script src="crew_events.js"></script>
+  <script src="confirm.js"></script>
   <script src="crew_page.js"></script>
   <script src="crew_voice.js"></script>
   <script src="health.js"></script>
@@ -251,7 +252,13 @@
       padding: 8px 14px 4px; box-shadow: -8px 8px 24px rgba(0, 0, 0, 0.22); }
     .edge-panel h3 { font-size: 13px; font-weight: 600; color: var(--panel-dim); margin-bottom: 2px; }
     #app.sheet-open .edge { display: none; }
-    #recenterBtn { display: none; min-height: 44px; } #recenterBtn.show { display: block; }
+    /* Recenter: the second map key, under Layers (REVIEW.md 1.2 Map idle); the seconds left replace the glyph */
+    #recenterBtn { display: none; position: absolute; right: 0; top: calc(38% + 62px); z-index: 4; background: var(--panel); color: var(--panel-ink); padding: 0; }
+    #recenterBtn.show { display: flex; align-items: center; justify-content: center; }
+    #recenterBtn svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
+    #recenterBtn .rc-left { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
+    #recenterBtn.counting svg { display: none; }
+    #app.plan-open #recenterBtn, #app.sheet-open #recenterBtn { display: none; }
     .toast { position: absolute; left: 50%; top: 12px; transform: translateX(-50%); z-index: 6; max-width: calc(100% - 32px);
       background: var(--panel); color: var(--panel-ink); border: 1px solid var(--accent); padding: 8px 12px; font-size: 12px; font-weight: 600; display: none; }
     .toast.show { display: block; }
@@ -766,8 +773,8 @@
       <div class="hz-plate" id="hzPlate" role="status" aria-live="assertive" hidden><svg viewBox="0 0 28 25" aria-hidden="true"><path class="hz-tri" d="M14 1 L27 24 H1 Z"/><path d="M14 9 V16 M14 19.5 V20.5" stroke-width="3" stroke-linecap="round"/></svg><b id="hzPlateTitle"></b><span id="hzPlateDetail"></span></div>
       <div class="plates">
         <div class="plate" id="modePlate" role="status">Replay</div>
-        <button class="plate" id="recenterBtn">Recenter</button>
       </div>
+      <button class="map-key recenter-key" id="recenterBtn" aria-label="Recenter"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/><circle cx="12" cy="12" r="1.5"/></svg><span class="rc-left"></span></button>
       <div class="toast" id="toast" role="status" aria-live="polite"></div>
       <div class="sr-only" id="announcer" role="status" aria-live="polite"></div>
 
@@ -1778,14 +1785,21 @@
       state.follow = false;
       clearTimeout(resumeTimer); clearInterval(resumeTick);
       $('recenterBtn').classList.add('show');
-      $('recenterBtn').textContent = 'Recenter';
+      recenterLeft(0);
     }
     function scheduleResume() {
       clearTimeout(resumeTimer); clearInterval(resumeTick);
       let left = FOLLOW_RESUME_S;
-      $('recenterBtn').textContent = `Recenter in ${left}s`;
-      resumeTick = setInterval(() => { left -= 1; if (left > 0) $('recenterBtn').textContent = `Recenter in ${left}s`; }, 1000);
+      recenterLeft(left);
+      resumeTick = setInterval(() => { left -= 1; if (left > 0) recenterLeft(left); }, 1000);
       resumeTimer = setTimeout(resumeFollow, FOLLOW_RESUME_S * 1000);
+    }
+    // the key's face: the glyph, or the seconds until it recenters on its own
+    function recenterLeft(s) {
+      const b = $('recenterBtn');
+      b.classList.toggle('counting', s > 0);
+      b.querySelector('.rc-left').textContent = s > 0 ? `${s}s` : '';
+      b.setAttribute('aria-label', s > 0 ? `Recenter (on its own in ${s} s)` : 'Recenter');
     }
     function resumeFollow() {
       clearTimeout(resumeTimer); clearInterval(resumeTick);
@@ -4403,7 +4417,7 @@
           el('h3', { textContent: 'Drive with friends' }),
           // what you get, in three glyphs (REVIEW.md 1.2, Crew signed out)
           el('div', { className: 'crew-gets' },
-            el('span', { innerHTML: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="9" r="3"/><circle cx="16" cy="15" r="3"/><path d="M8 12v3M16 12V9"/></svg>Convoys' }),
+            el('span', { innerHTML: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-6-6.2-6-11a6 6 0 0 1 12 0c0 4.8-6 11-6 11z"/><circle cx="12" cy="10" r="2.2"/></svg>Friends on the map' }),
             el('span', { innerHTML: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20V10M12 20V4M19 20v-7"/></svg>The board' }),
             el('span', { innerHTML: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="15"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>Crew drives' })),
           el('p', { className: 'note', textContent: 'Vetta is invite-only. Nothing is shared unless you switch it on.' }),
@@ -4525,7 +4539,7 @@
           el('span', { textContent: g.share_scores ? (g.share_times ? `@${f.handle} sees your scores and times.` : `@${f.handle} sees your scores.`) : `@${f.handle} sees nothing of yours yet.` }),
           el('div', { className: 'row' },
             ...(window.ApexProfileView ? [btn('Profile', () => openProfile(f), 'linkbtn')] : []),
-            btn('Unfriend', async () => { if (confirm(`Unfriend @${f.handle}? This also stops all sharing.`)) { await apiCall('DELETE', `/api/friends/${f.id}`); redo(); } }, 'linkbtn'),
+            btn('Unfriend', async () => { if (await ApexConfirm.ask(`Unfriend @${f.handle}? This also stops all sharing.`, 'Unfriend')) { await apiCall('DELETE', `/api/friends/${f.id}`); redo(); } }, 'linkbtn'),
             ...(safety && f.handle ? [btn('Report', () => safety.report({ kind: 'user', target: f.handle, label: `@${f.handle}`, who: f.handle, done: redo }), 'linkbtn'),
                                       btn('Block', () => safety.block(f.handle, redo), 'linkbtn')] : [])));
         fsec.append(card);
@@ -4594,7 +4608,7 @@
         const ownerBox = el('div', { className: 'stack-8' });
         if (c.role === 'owner') {
           ownerBox.append(btn('Turn off invite links', async () => {
-            if (!confirm(`Turn off every invite link to ${c.name}? People already in stay in.`)) return;
+            if (!(await ApexConfirm.ask(`Turn off every invite link to ${c.name}? People already in stay in.`, 'Turn off'))) return;
             const r = await apiCall('DELETE', `/api/crews/${c.id}/invites`); const j = await jsonOf(r);
             toast(r.ok ? (j.revoked ? `Old links to ${c.name} no longer work.` : `${c.name} had no open links.`) : 'Couldn\'t change that. Try again.');
           }, 'linkbtn'));
@@ -4617,7 +4631,7 @@
           el('span', { textContent: g.share_scores ? (g.share_times ? `${c.name} sees your scores and times.` : `${c.name} sees your scores.`) : `${c.name} sees nothing of yours yet.` }),
           ownerBox,
           el('div', { className: 'row' }, btn('Invite to crew', async () => { const r = await apiCall('POST', `/api/crews/${c.id}/invite`); const j = await jsonOf(r); if (r.ok) copyText(`${shareOrigin()}/?crew=${j.token}`, 'Crew link copied.'); else toast(j && j.error === 'too_many_open_invites' ? 'You have 10 open crew links. Turn some off first.' : 'Only a crew\'s owner can invite.'); }),
-            btn('Leave', async () => { if (confirm(`Leave ${c.name}?`)) { if (openCrewId === c.id) openCrewId = null; await apiCall('DELETE', `/api/crews/${c.id}/membership`); redo(); } }, 'linkbtn')));
+            btn('Leave', async () => { if (await ApexConfirm.ask(`Leave ${c.name}?`, 'Leave')) { if (openCrewId === c.id) openCrewId = null; await apiCall('DELETE', `/api/crews/${c.id}/membership`); redo(); } }, 'linkbtn')));
         const loadMembers = async () => {
           mbox.innerHTML = '';
           let list = Array.isArray(c.member_list) ? c.member_list : Array.isArray(c.members) ? c.members : null;
@@ -4877,7 +4891,7 @@
       }));
     }
     $('myOfflineDelBtn').addEventListener('click', async () => {
-      if (!confirm('Delete routes and map areas saved for offline, and downloaded voices? Your drives, spots and settings stay.')) return;
+      if (!(await ApexConfirm.ask('Delete routes and map areas saved for offline, and downloaded voices? Your drives, spots and settings stay.', 'Delete'))) return;
       try { localStorage.removeItem(ApexSavedRoutes.KEY); } catch (_) {}
       try { if (window.ApexOfflineTiles) await ApexOfflineTiles.clear(); } catch (_) {}
       try { if (window.caches) { await caches.delete('kokoro-voices'); for (const k of await caches.keys()) if (k.startsWith('apexnav-shell-')) await caches.delete(k); } } catch (_) {}
@@ -4886,12 +4900,12 @@
     $('myDrivesDelBtn').addEventListener('click', async () => {
       const list = await ApexRecording.all();
       if (!list.length) { toast('No drives on this phone.'); return; }
-      if (!confirm(`Delete all ${list.length} drives from this phone? Download them first if you want to keep them.`)) return;
+      if (!(await ApexConfirm.ask(`Delete all ${list.length} drives from this phone? Download them first if you want to keep them.`, 'Delete drives'))) return;
       for (const d of list) { try { await ApexRecording.remove(d.id); } catch (_) {} }
       toast('Drives deleted from this phone.'); renderMyData();
     });
     $('myEraseBtn').addEventListener('click', async () => {
-      if (!confirm('Erase drives, spots, zones, settings and sign-in from this phone? Your account on the server stays until you delete it in Garage → Account.')) return;
+      if (!(await ApexConfirm.ask('Erase drives, spots, zones, settings and sign-in from this phone? Your account on the server stays until you delete it in Garage → Account.', 'Erase everything'))) return;
       const list = await ApexRecording.all();
       for (const d of list) { try { await ApexRecording.remove(d.id); } catch (_) {} }
       ApexSync.setSession(null);                                   // the app's Keychain session too (IDEAS Z-10)

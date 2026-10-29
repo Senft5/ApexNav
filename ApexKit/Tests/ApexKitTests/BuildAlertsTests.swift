@@ -8,9 +8,11 @@ final class BuildAlertsTests: XCTestCase {
     }
 
     func testNamesTheCarAndTheOwner() {
-        let list = following(#"[{"id":"b1","nickname":"Nate's NB","year":2004,"make":"Mazda","model":"Miata","handle":"nate","new_posts":2},
-                                {"id":"b2","nickname":"","year":2004,"make":"Mazda","model":"Miata","handle":"kit","new_posts":1},
-                                {"id":"b3","new_posts":1}]"#)
+        let list = following(#"""
+            [{"id":"b1","nickname":"Nate's NB","year":2004,"make":"Mazda","model":"Miata","handle":"nate","new_posts":2},
+             {"id":"b2","nickname":"","year":2004,"make":"Mazda","model":"Miata","handle":"kit","new_posts":1},
+             {"id":"b3","new_posts":1}]
+            """#)
         let alerts = BuildAlerts.due(list, announced: [:]).alerts
         XCTAssertEqual(alerts.map(\.title), ["Nate's NB", "2004 Mazda Miata", "A build you follow"])
         XCTAssertEqual(alerts.map(\.body), ["@nate posted 2 new steps.", "@kit posted 1 new step.", "Its owner posted 1 new step."])
