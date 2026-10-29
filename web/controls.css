@@ -107,3 +107,8 @@
 .row-pick-sheet .rp-list button[aria-selected="true"]::before { content: ""; position: absolute; left: 0; top: 14px; bottom: 14px; width: 3px; background: var(--accent); }
 .row-pick-sheet .rp-cancel { margin-top: 8px; min-height: 48px; border: 1.5px solid var(--panel-ink); background: transparent; color: var(--panel-ink); font: inherit; font-size: 16px; font-weight: 700; }
 @media (orientation: landscape) and (max-height: 540px) { .row-pick-sheet { align-items: center; } .row-pick-sheet .rp-box { max-height: 90dvh; border: 1.5px solid var(--panel-ink); } }
+
+/* Press feedback (web/press.js makes :active fire on iOS): anything tappable dims while the finger is on it, and taps
+   skip the double-tap-zoom wait. The controls above keep their own pressed look on top of this. */
+button, a[href], [role="button"], [role="switch"], .sw, label, summary { touch-action: manipulation; }
+button:not(:disabled):active, a[href]:active, [role="button"]:active, [role="switch"]:active, .sw:active, summary:active { opacity: 0.62; }

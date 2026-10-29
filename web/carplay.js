@@ -39,18 +39,52 @@
              picked: Number.isInteger(picked) && picked >= 0 && picked < list.length ? picked : 0 };
   }
 
+  // A corner as guidance (the owner, 2026-10-29: "if you take a R5 when you're supposed to take a RHP you're gonna have a
+  // bad time"): the card shows whichever comes first, the next turn or the next corner. `corners` picks which corners:
+  // 'all' (every rating, the default), 'tight' (1, 2 and hairpins only: the fallback if App Review objects, docs/APP_REVIEW.md)
+  // or 'off'. A corner within 40 m of a turn is the turn itself and is left to the turn.
+  const CORNER_MODES = ['all', 'tight', 'off'];
+  const isHairpin = (e) => e.severity === 'HP' || e.shape === 'hairpin';
+  const sevOf = (e) => (isHairpin(e) ? 'HP' : (finite(+e.severity) && +e.severity >= 1 && +e.severity <= 6 ? Math.round(+e.severity) : null));
+  const tightCorner = (e) => { const v = sevOf(e); return v === 'HP' || (v != null && v <= 2); };
+  const cornerAt = (e) => (finite(e.start_m) && (!finite(e.dist_m) || e.start_m <= e.dist_m) ? e.start_m : e.dist_m);
+  // the Valhalla turn with the same bend, for the car's stock arrow until the page's corner tulip is drawn
+  const cornerType = (dir, v) => (dir === 'L' ? (v === 'HP' ? 13 : v <= 2 ? 14 : v <= 4 ? 15 : 16) : (v === 'HP' ? 12 : v <= 2 ? 11 : v <= 4 ? 10 : 9));
+  const cornerWords = (e, v) => `${e.dir === 'L' ? 'Left' : 'Right'} ${v === 'HP' ? 'hairpin' : v}`;
+
   /**
    * The next maneuver ahead of `cursorM`: { kind:'guide', key, instruction, street, type, distM, remainM, remainS }, or null
-   * with none ahead. `phrase` is ApexDirections.phrase; `leftS` the live time left (eta.js), null when unknown.
+   * with none ahead. `phrase` is ApexDirections.phrase; `leftS` the live time left (eta.js), null when unknown. A corner
+   * ahead of the next turn comes first, with `corner: { dir, sev }` (sev 1-6 or 'HP') for its tulip. `opts.corners` is
+   * one of CORNER_MODES; `opts.call(e)` words a corner as the phone does (the plain-words setting), else its own call.
    */
-  function guideMessage(t, cursorM, leftS, phrase) {
+  function guideMessage(t, cursorM, leftS, phrase, opts = {}) {
     if (!t || !Array.isArray(t.steps) || !finite(cursorM)) return null;
     const total = Array.isArray(t.dist) && t.dist.length ? t.dist[t.dist.length - 1] : null;
-    const st = t.steps.find((s) => s.m > cursorM - 5 && phrase(s));
+    const remain = { remainM: finite(total) ? Math.max(0, Math.round(total - cursorM)) : null, remainS: finite(leftS) ? Math.round(leftS) : null };
+    const turns = t.steps.filter((s) => s && finite(s.m) && phrase(s));
+    const st = turns.find((s) => s.m > cursorM - 5);
+    const mode = CORNER_MODES.includes(opts.corners) ? opts.corners : 'all';
+    let co = null, coM = Infinity;
+    if (mode !== 'off') {
+      for (const e of (Array.isArray(t.events) ? t.events : [])) {
+        if (!e || e.type !== 'corner' || (e.dir !== 'L' && e.dir !== 'R') || sevOf(e) == null) continue;
+        const m = cornerAt(e);
+        if (!finite(m) || m <= cursorM - 5 || m >= coM || (st && m >= st.m)) continue;
+        if (mode === 'tight' && !tightCorner(e)) continue;
+        if (turns.some((s) => Math.abs(s.m - m) < 40)) continue;
+        co = e; coM = m;
+      }
+    }
+    if (co) {
+      const v = sevOf(co), said = typeof opts.call === 'function' ? opts.call(co) : co.call;
+      return { kind: 'guide', key: `${t.id || ''}:c${Math.round(coM)}`, instruction: String(said || cornerWords(co, v)),
+               street: `${co.dir}${v}`,                                  // the short variant (CPManeuver instructionVariants) where the call doesn't fit
+               type: cornerType(co.dir, v), corner: { dir: co.dir, sev: v }, distM: Math.max(0, Math.round(coM - cursorM)), ...remain };
+    }
     if (!st) return null;
     return { kind: 'guide', key: `${t.id || ''}:${Math.round(st.m)}`, instruction: phrase(st), street: st.street || '', type: st.type,
-             distM: Math.max(0, Math.round(st.m - cursorM)), remainM: finite(total) ? Math.max(0, Math.round(total - cursorM)) : null,
-             remainS: finite(leftS) ? Math.round(leftS) : null };
+             distM: Math.max(0, Math.round(st.m - cursorM)), ...remain };
   }
 
   /** Recent places for the car's Places list: [{ name, at: [lat, lon] }], newest first. */
@@ -123,6 +157,28 @@
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="120" height="120"><g fill="none" stroke="${c}" stroke-width="9" stroke-linecap="round" stroke-linejoin="round">${path}</g><circle cx="50" cy="92" r="7" fill="${c}"/></svg>`;
   }
 
-  const api = { line, routeMessage, guideMessage, placesMessage, cornersMessage, hazardsMessage, lookMessage, tulipSVG, MAX_POINTS };
+  /**
+   * A corner's tulip: the road bending by its rating (6 a kink, 1 nearly doubling back, a hairpin all the way round), one
+   * unbroken line with no junction dot, so a corner never reads as a turn onto another road. `sev` is 1-6 or 'HP'.
+   */
+  const CORNER_BEND = { 1: 140, 2: 115, 3: 90, 4: 65, 5: 45, 6: 25 };
+  function cornerTulipSVG(dir, sev, ink) {
+    const c = /^#[0-9A-Fa-f]{3,8}$/.test(ink || '') ? ink : '#EDE4D3', s = dir === 'L' ? -1 : 1;
+    let path;
+    if (sev === 'HP') {
+      path = `<path d="M50 92 V44 A16 16 0 0 ${s > 0 ? 1 : 0} ${50 + 32 * s} 44 V70"/><path d="M${50 + 32 * s - 11} 59 L${50 + 32 * s} 71 L${50 + 32 * s + 11} 59"/>`;
+    } else {
+      const deg = CORNER_BEND[sev] || 45, a = s * deg * Math.PI / 180;
+      const top = deg > 100 ? 40 : 50, r = 36;
+      const ex = 50 + Math.sin(a) * r, ey = top - Math.cos(a) * r;
+      const hx = Math.sin(a), hy = -Math.cos(a), px = -hy, py = hx;
+      // a smooth bend: the control point sits up the stem, so the line arcs instead of kinking at a junction
+      path = `<path d="M50 92 V${top + 14} C50 ${top - 6} ${(ex - hx * 20).toFixed(1)} ${(ey - hy * 20).toFixed(1)} ${ex.toFixed(1)} ${ey.toFixed(1)}"/>`
+        + `<path d="M${(ex - hx * 12 + px * 9).toFixed(1)} ${(ey - hy * 12 + py * 9).toFixed(1)} L${ex.toFixed(1)} ${ey.toFixed(1)} L${(ex - hx * 12 - px * 9).toFixed(1)} ${(ey - hy * 12 - py * 9).toFixed(1)}"/>`;
+    }
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="120" height="120"><g fill="none" stroke="${c}" stroke-width="9" stroke-linecap="round" stroke-linejoin="round">${path}</g></svg>`;
+  }
+
+  const api = { line, routeMessage, guideMessage, placesMessage, cornersMessage, hazardsMessage, lookMessage, tulipSVG, cornerTulipSVG, CORNER_MODES, MAX_POINTS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexCarPlay = api;
 })(typeof window !== 'undefined' ? window : globalThis);

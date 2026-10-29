@@ -1,5 +1,25 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-10-29 (late): CarPlay, then the owner's first-drive fixes
+
+- [x] #254 the promise ("no personal data sold") and every theme open until the App Store release; #255 the CarPlay
+  entitlement in every build (granted the same day; TestFlight signed and uploaded).
+- [x] #256 CarPlay rebuilt to the mockups (docs/design/carplay): the engine runs without the phone's window (ApexEngine),
+  the voice pack plays natively in the car (ApexClipPlayer), our themed map in the base view (web/carmap.html,
+  web/basemap.js), tulip maneuvers on the theme's card, Where to?, Loops, Places, Report, Still there, mute, the
+  Dashboard and the instrument cluster.
+- [x] This branch: every corner on the car's guidance card, interleaved with turns (`CAR_CORNERS`, fallback 'tight');
+  switches that read on and off (fill plus an I/O mark); press feedback on iOS (web/press.js); units and app sign-in
+  without a reload; the Log's tabs go back to the map (web/page_return.js); Live Activities end with the drive, at
+  launch and at quit, and go stale after two minutes. e2e: the units flow checks there is no reload; a new flow checks
+  the Log's tabs go back and the switch's two states differ.
+- Answered for the owner: the UI is a WKWebView; the IMU and GPS run with the phone locked once CarPlay starts the engine,
+  but location and motion permission must have been granted once on the phone.
+- Active bugs: none known. Unverified on a device: WebKit's back-forward cache in the app's WKWebView (if it drops the
+  map page, the Log's tabs load it as before), and how App Review reads corners as maneuvers.
+- Exact next task: run the carplay-shots workflow to see the real car screen, then REVIEW3.md Roadmap 3 from item 1
+  (stash@{0} in the old session holds a half-built version; rebuild it on main) and items 2, 4-9.
+
 ## Session 2026-10-29 (night): design review 3, fixed in the branch
 
 - [x] docs/design/REVIEW3.md (Fable, with the code): the verdict against each principle, 40 screens judged on three

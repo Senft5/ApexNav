@@ -23,6 +23,18 @@ console.log(JSON.stringify({
   two: C.routeMessage(t, opts, 1, null),
   none: C.routeMessage({ lat: [1], lon: [1], dist: [0] }, null, 0),
   g0: C.guideMessage(t, 100, 3600, D.phrase), g1: C.guideMessage(t, 1300, null, D.phrase), g2: C.guideMessage(t, 4995, 0, D.phrase),
+  // corners interleaved with turns: an R5 at 300 m, an L2 at 700 m, a corner on the turn at 1190 m, a hairpin past it
+  ...(() => { const c = { ...t, events: [
+    { type: 'corner', dir: 'R', severity: 5, start_m: 300, dist_m: 340, call: 'Right 5 long' },
+    { type: 'corner', dir: 'L', severity: '2', start_m: 700, dist_m: 730, call: 'Left 2 tightens' },
+    { type: 'corner', dir: 'L', severity: 3, start_m: 1190, dist_m: 1210, call: 'Left 3' },
+    { type: 'corner', dir: 'R', severity: 'HP', start_m: 1500, dist_m: 1530, call: 'Right hairpin' },
+    { type: 'corner', dir: 'R', severity: null, start_m: 1600, dist_m: 1610 }, { type: 'crest', start_m: 200, dist_m: 200 }] };
+    return {
+      c0: C.guideMessage(c, 100, 3600, D.phrase), c1: C.guideMessage(c, 400, 3600, D.phrase), c2: C.guideMessage(c, 800, null, D.phrase),
+      c3: C.guideMessage(c, 1300, null, D.phrase), tight: C.guideMessage(c, 100, null, D.phrase, { corners: 'tight' }),
+      off: C.guideMessage(c, 100, null, D.phrase, { corners: 'off' }), plain: C.guideMessage(c, 100, null, D.phrase, { call: (e) => 'plain ' + e.dir }),
+      tulips2: [1, 4, 6, 'HP'].map((v) => C.cornerTulipSVG('L', v, '#7DF5DE')).concat([C.cornerTulipSVG('R', 3, 'red;x')]) }; })(),
   places: C.placesMessage([{ label: 'Home', lat: 35.1, lon: -83.2 }, { label: 'Bad', lat: null, lon: 1 }, null]),
 }));
 """
@@ -113,3 +125,27 @@ def test_turn_symbols_are_tulips_in_the_cards_ink_and_never_take_markup(maps):
 
 def test_a_route_choice_says_its_distance_and_corners(maps):
     assert maps["withCorners"] == "1100 m · 4 corners"   # every corner counts, placeable on the map or not
+
+
+def test_corners_come_before_the_next_turn(out):
+    """Every corner is guidance too (the owner, 2026-10-29): whichever is first, the next corner or the next turn."""
+    c0 = out["c0"]
+    assert c0["key"] == "route_dest:c300" and c0["instruction"] == "Right 5 long" and c0["street"] == "R5"
+    assert c0["distM"] == 200 and c0["corner"] == {"dir": "R", "sev": 5} and c0["type"] == 9 and c0["remainS"] == 3600
+    assert out["c1"]["corner"] == {"dir": "L", "sev": 2} and out["c1"]["type"] == 14, "a 2 shows as a sharp bend"
+    assert out["c2"]["key"] == "route_dest:1200" and "corner" not in out["c2"], "a corner on the turn is the turn"
+    assert out["c3"]["corner"] == {"dir": "R", "sev": "HP"} and out["c3"]["type"] == 12
+    assert out["c3"]["distM"] == 200
+
+
+def test_corner_modes_and_words(out):
+    assert out["tight"]["key"] == "route_dest:c700", "tight only (the App Review fallback) skips the 5"
+    assert out["off"]["key"] == "route_dest:1200" and "corner" not in out["off"]
+    assert out["plain"]["instruction"] == "plain R", "worded as the phone words it"
+
+
+def test_corner_tulips(out):
+    svgs = out["tulips2"]
+    assert len(set(svgs[:4])) == 4, "each rating bends differently"
+    assert all(s.startswith("<svg") and "#7DF5DE" in s and "<circle" not in s for s in svgs[:4]), "no junction dot: a corner is not a turn"
+    assert "red;x" not in svgs[4] and "#EDE4D3" in svgs[4]
