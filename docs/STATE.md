@@ -1,5 +1,14 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-10-29 (day): design phase 2
+
+- [x] REVIEW.md roadmap 9-14: four tabs (Map, Log, Crew, Garage; Stages a Log segment; Settings, you, cars and account in
+  the Garage; help folds under "How this works"); the Layers key; night as a mode; the theme contract
+  (web/theme_contract.js, renderers in themes.js and instruments.js `register`, an e2e flow on the rendered page); the
+  Log (hero score, quiet lines, road-book index); the drive page (score first, Replay primary, tag row, g-ball grip).
+- Exact next task: REVIEW.md 1.2 screen items not in the roadmap (cockpit idle place plate and suggested loop, one-tap
+  hazard report with undo, crew signed-out line, empty states), then phase 3 item 15 (theme picker).
+
 ## Session 2026-10-29 (day): design phase 1
 
 - [x] REVIEW.md roadmap 1-8: driving full-screen (no tab bar, one status line, End); the hazard plate (fixed tokens

@@ -6,6 +6,20 @@ it says so. Things only you can do are in docs/OWNER_TODO.md.
 
 ## 2026-10-29
 
+**Design phase 2 is built (REVIEW.md roadmap 9-14).** My calls inside it:
+- *Notes and Voice are in the Garage and also under the Layers key.* The review moves them to the Garage, but the
+  Garage can't be reached while driving (no tab bar), and muting the voice mid-drive has to stay one tap away.
+- *Your handle, cars, road feel, account and blocked list moved to the Garage; Invite and Friends stay in Crew.*
+- *The theme contract exempts the dial's printed scale numbers (0, 20, 40...) from the 13 px floor.* They are engraving,
+  like a real gauge's; every readout (speed, Limit, Sight, trip, bank, labels) meets it. The speed numeral is now about
+  41 px (it was about 22) and the dial is a little bigger to make room.
+- *Long calls take another line rather than a smaller size* (the contract's 21 px floor).
+- *The dial's dim engraving colour got darker* (day #9A9080 to #736A5A, night #6A6255 to #968C7B): it was 2.8:1, the
+  contract asks 4.5:1.
+- *Night keeps both calls in the strip* but drops the next call's modifiers, the second status line and unused lane
+  arrows; the map's casings, labels and contours are dimmer.
+- *The Log keeps its deeper panels (week, roads, trend, records) below the drive list* rather than removing them.
+
 **Design phase 1 is built (docs/design/REVIEW.md roadmap 1-8).** My calls inside it:
 - *The hazard plate never names who reported a hazard.* The mockup says "reported by @sam"; reports are anonymous today
   and naming people would be a privacy change, so the plate says what, how far, how old and how many confirmed. Undo:
