@@ -1,5 +1,15 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-10-29 (morning): design review, Vetta Score
+
+- [x] Design review by a design agent (Fable) from 54 screenshots: docs/design/ (REVIEW.md, 12 HTML mockups with PNG
+  renders, the brief, the screenshots, the mockup generator). The owner approved the direction.
+- [x] The score is the Vetta Score in every visible place; the "How Score works" note and formula lines are gone; About's
+  first promise is "No races". Calls logged in docs/CALL_SHEET.md.
+- Active bugs: none new. Still open: CarPlay cold launch, CarPlay screenshots need Xcode on a Mac.
+- Exact next task: docs/design/REVIEW.md roadmap phase 1 (control shapes, the plan sheet split into basic and More, the
+  driving screen without the tab bar and with the fixed hazard plate), then P-03 and U-15.
+
 ## Session 2026-10-29 (early hours): keyboard, Sight, CarPlay screens, lanes
 - Merged #229 (CarPlay app, single-pass roads, road export; migration 0029 applied to both D1), #230 (keyboard fix in the app: the shell reports the keyboard height and undoes WKWebView's pan, checked on the simulator's real keyboard by AppTourTests.testKeyboard; Sight cell; opening cover; launch colours; docs/LAUNCH.md; docs/CALL_SHEET.md), #231 (carplay-shots workflow), #232 (R-29 lane guidance).
 - Owner rule: make the calls and log them at the top of docs/CALL_SHEET.md (CLAUDE.md item 6).

@@ -1,7 +1,7 @@
 {
   "name": "Vetta",
   "short_name": "Vetta",
-  "description": "A co-driver for the long way home: pace notes, good roads, a Driver Score for technique, never speed.",
+  "description": "A co-driver for the long way home: pace notes, good roads, and a Vetta Score for every drive.",
   "start_url": "/index.html",
   "scope": "/",
   "display": "standalone",

@@ -84,7 +84,7 @@
     g.fillStyle = C.panelInk || '#fff'; g.font = font(800, 150, C.fontNum);
     g.fillText(m.score == null ? '--' : String(m.score), 90, y0);
     g.fillStyle = C.panelDim || '#999'; g.font = font(600, 30);
-    g.fillText('DRIVER SCORE / 1000', 96, y0 + 160);
+    g.fillText('VETTA SCORE / 1000', 96, y0 + 160);
     g.font = font(600, 32);
     m.parts.forEach(([label, v], i) => {
       const y = y0 + 6 + i * 52;

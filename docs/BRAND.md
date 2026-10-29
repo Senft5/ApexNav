@@ -88,7 +88,7 @@ out loud, scores how cleanly you drove it, and keeps a shared road book with you
 - **Not:** a gamer dashboard (no neon, no XP, no robot voice, no top-speed brag), not a nav app
   (no turn-by-turn to an address as the main job), not a lab tool (no raw g traces up front).
 - **Promise to keep:** unknown stays unknown (`--`), nothing is shared until you share it,
-  and the score rewards technique, never speed.
+  and there are no speed or time leaderboards.
 
 ---
 
@@ -145,7 +145,7 @@ Vague errors: *something went wrong, unavailable, oops, invalid* (say what is wr
 
 | Concept | Call it | Replaces | Notes |
 |---|---|---|---|
-| Driver Score (0–1000) | **Score** | Driver Score, LATEST DRIVER SCORE | Always shown as `673` with small `/1000` |
+| Vetta Score (0–1000) | **Vetta Score**, **Score** once named | Driver Score, Smoothness score, LATEST DRIVER SCORE | Always shown as `673` with small `/1000`. How it is worked out is not explained in the app or the store copy |
 | Score parts | **Pace · Smooth · Brakes · Rhythm** | pace, smoothness, braking, consistency | Rhythm = even commitment corner to corner |
 | Crowd reward | **Points** | Octane, OCT, Pioneer bounty | First to map a road and direction ×3, second ×2, then ×1 |
 | People you added | **Friends** | — | `@handle` |

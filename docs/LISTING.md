@@ -33,8 +33,8 @@ Corners are called before you reach them, in plain words or rally notes ("left 4
 FIND THE GOOD ROADS
 Ask for a loop of the length you want and Vetta builds one from the twistiest roads around you, or plans a fun route to a destination. Mark the spots you love and loops lean toward them.
 
-A SCORE FOR TECHNIQUE
-Every drive gets a Driver Score from smoothness, braking and consistency. The Log shows your drives on the map, corner by corner, and how you are improving on the roads you drive most. Share a drive card with the road's outline and your score.
+A SCORE FOR EVERY DRIVE
+Every drive gets a Vetta Score. The Log shows your drives on the map, corner by corner, and how you are improving on the roads you drive most. Share a drive card with the road's outline and your score.
 
 DRIVE TOGETHER
 Start a convoy with friends and see each other on the map while you drive. Share planned routes with friends and crews, and report hazards (gravel, debris, an animal on the road) so the drivers behind you hear about them.

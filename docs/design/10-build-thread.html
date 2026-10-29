@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Build thread</title>
+<meta name="description" content="A car's build log over time, with feedback and suggestions">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:#3A3A3A;font-family:-apple-system, 'SF Pro Text', 'Helvetica Neue', Inter, Arial, sans-serif;color:#1C1A17;-webkit-font-smoothing:antialiased;display:flex;align-items:flex-start;justify-content:center;padding:24px 0}
+.phone{position:relative;width:390px;height:844px;background:#EDE4D3;overflow:hidden;color:#1C1A17;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.status{position:absolute;top:0;left:0;right:0;height:47px;display:flex;justify-content:space-between;align-items:flex-end;padding:0 28px 8px;font-size:15px;font-weight:600;z-index:30;pointer-events:none}
+.status .cell{display:flex;gap:5px;align-items:center}
+.cond{font-family:'SF Pro Display', 'Avenir Next Condensed', 'Arial Narrow', 'Helvetica Neue', Arial, sans-serif;font-weight:800;font-variant-numeric:tabular-nums}
+.mono{font-family:ui-monospace, 'SF Mono', Menlo, 'DejaVu Sans Mono', monospace}
+.tabs{position:absolute;left:0;right:0;bottom:0;height:82px;background:#EDE4D3;border-top:2px solid #1C1A17;display:flex;padding:8px 6px 0;z-index:20}
+.tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:11px;font-weight:600;color:#6A6255;position:relative}
+.tab svg{width:26px;height:26px;stroke:currentColor;fill:none;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round}
+.tab.on{color:#C8102E}
+.tab.on::before{content:"";position:absolute;top:-10px;left:22px;right:22px;height:3px;background:#C8102E}
+.home{position:absolute;bottom:8px;left:125px;width:140px;height:5px;border-radius:3px;background:#1C1A17;opacity:.8;z-index:31}
+.rule{border-top:1px solid #CFC4AE}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:48px;padding:0 18px;font-size:15px;font-weight:600;border:1.5px solid #1C1A17;color:#1C1A17;background:transparent;font-family:-apple-system, 'SF Pro Text', 'Helvetica Neue', Inter, Arial, sans-serif}
+.btn.primary{background:#1C1A17;color:#EDE4D3;border-color:#1C1A17}
+.btn.record{background:#C8102E;color:#FFFFFF;border-color:#C8102E;height:52px;font-size:16px;font-weight:700;box-shadow:inset 0 -3px 0 rgba(0,0,0,.28)}
+.btn.record .dot{width:12px;height:12px;border-radius:50%;background:#FFFFFF}
+.btn.text{border:none;text-decoration:underline;text-underline-offset:3px;padding:0 6px}
+.label{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#6A6255}
+.pencil{color:#6A6255}
+.red{color:#C8102E}
+
+.hazard{position:absolute;left:12px;display:flex;align-items:center;gap:10px;background:#111111;border:2px solid #FF7A1A;
+  color:#FFFFFF;padding:8px 12px 8px 10px;font-family:'SF Pro Display', 'Avenir Next Condensed', 'Arial Narrow', 'Helvetica Neue', Arial, sans-serif;font-weight:800;font-size:20px;letter-spacing:.02em;line-height:1;
+  box-shadow:0 2px 0 rgba(0,0,0,.35)}
+.hazard .glyph{width:26px;height:26px;flex:none}
+.hazard small{display:block;font-family:-apple-system, 'SF Pro Text', 'Helvetica Neue', Inter, Arial, sans-serif;font-weight:600;font-size:12px;letter-spacing:0;color:#FFB27A;margin-top:3px}
+
+
+.scroll{position:absolute;top:0;left:0;right:0;bottom:82px;overflow:hidden}
+.bar{height:92px;display:flex;align-items:flex-end;justify-content:space-between;padding:0 16px 10px;border-bottom:2px solid #1C1A17}
+.bar h1{font-family:'SF Pro Display', 'Avenir Next Condensed', 'Arial Narrow', 'Helvetica Neue', Arial, sans-serif;font-weight:800;font-size:26px;line-height:1}
+.bar .back{font-size:15px;font-weight:600}
+.bar .act{font-size:14px;font-weight:600;text-decoration:underline;text-underline-offset:3px}
+section{padding:14px 16px 0}
+h2{font-family:'SF Pro Display', 'Avenir Next Condensed', 'Arial Narrow', 'Helvetica Neue', Arial, sans-serif;font-weight:800;font-size:20px;display:flex;align-items:baseline;justify-content:space-between;margin-bottom:8px}
+h2 a{font-family:-apple-system, 'SF Pro Text', 'Helvetica Neue', Inter, Arial, sans-serif;font-size:13px;font-weight:600;text-decoration:underline;text-underline-offset:3px;color:#1C1A17}
+.hr{border-top:1px solid #CFC4AE;margin-top:14px}
+.photo{background:#CFC4AE;position:relative;overflow:hidden}
+.photo svg{display:block;width:100%;height:100%}
+.cap{position:absolute;right:8px;bottom:16px;font-size:10px;font-weight:600;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.6)}
+.avatar{width:40px;height:40px;border-radius:50%;background:#CFC4AE;border:1.5px solid #1C1A17;flex:none;display:flex;align-items:center;justify-content:center;font-family:'SF Pro Display', 'Avenir Next Condensed', 'Arial Narrow', 'Helvetica Neue', Arial, sans-serif;font-weight:800;font-size:16px}
+.small{font-size:13px;color:#6A6255}
+
+.carhead{padding:12px 16px 0;display:flex;gap:12px;align-items:center}
+.carhead h1{font-family:'SF Pro Display', 'Avenir Next Condensed', 'Arial Narrow', 'Helvetica Neue', Arial, sans-serif;font-weight:800;font-size:24px;line-height:1}
+.carhead .spec{font-size:12px;color:#6A6255;margin-top:4px}
+.carhead .own{font-size:13px;font-weight:600;margin-top:4px}
+.cover{height:150px;margin-top:10px}
+.stages{display:flex;gap:6px;padding:12px 16px 0;align-items:center}
+.stages .st{flex:1;height:6px;background:#1C1A17}
+.stages .st.todo{background:#CFC4AE}
+.stages span{font-size:11px;font-weight:600;color:#6A6255;margin-left:6px;white-space:nowrap}
+.post{padding:14px 16px 0;position:relative}
+.post::before{content:"";position:absolute;left:31px;top:46px;bottom:-14px;width:1.5px;background:#CFC4AE}
+.post .ph{display:flex;gap:10px;align-items:center}
+.post .ph .dot{width:32px;height:32px;border-radius:50%;border:2px solid #1C1A17;background:#EDE4D3;display:flex;align-items:center;justify-content:center;font-family:'SF Pro Display', 'Avenir Next Condensed', 'Arial Narrow', 'Helvetica Neue', Arial, sans-serif;font-weight:800;font-size:14px;z-index:1}
+.post .ph b{display:block;font-size:16px}
+.post .ph span{font-size:12px;color:#6A6255}
+.post .txt{margin:8px 0 0 42px;font-size:14px;line-height:1.4}
+.post .pics{margin:8px 0 0 42px;display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.post .pics .photo{height:90px}
+.post .parts{margin:8px 0 0 42px;font-size:12px;color:#6A6255;display:flex;flex-wrap:wrap;gap:6px}
+.post .parts span{border:1px solid #CFC4AE;padding:2px 6px}
+.react{margin:10px 0 0 42px;display:flex;gap:16px;font-size:13px;font-weight:600}
+.react span{display:inline-flex;align-items:center;gap:6px}
+.react svg{width:16px;height:16px;stroke:#1C1A17;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.sugg{margin:10px 0 0 42px;border-left:3px solid #C8102E;padding:8px 10px;background:#F3ECDD;font-size:13px}
+.sugg b{font-weight:700}
+.sugg .tag{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#C8102E;margin-right:6px}
+.compose{position:absolute;left:0;right:0;bottom:82px;border-top:2px solid #1C1A17;background:#EDE4D3;padding:10px 16px;display:flex;gap:8px;align-items:center}
+.compose .in{flex:1;height:44px;border:1.5px solid #1C1A17;display:flex;align-items:center;padding:0 12px;color:#6A6255;font-size:14px;background:#F3ECDD}
+.compose .btn{height:44px;padding:0 12px;font-size:13px}
+
+</style></head>
+<body><div class="phone"><div class="status" style="color:inherit"><div class="cell">9:41</div><div class="cell">
+<svg width="18" height="12" viewBox="0 0 18 12"><rect x="0" y="8" width="3" height="4" fill="currentColor"/><rect x="5" y="5.5" width="3" height="6.5" fill="currentColor"/><rect x="10" y="3" width="3" height="9" fill="currentColor"/><rect x="15" y="0" width="3" height="12" fill="currentColor"/></svg>
+<svg width="27" height="13" viewBox="0 0 27 13"><rect x=".5" y=".5" width="22" height="12" rx="3" fill="none" stroke="currentColor" opacity=".5"/><rect x="2" y="2" width="16" height="9" rx="1.5" fill="currentColor"/><path d="M24 4.5v4a2 2 0 0 0 0-4Z" fill="currentColor" opacity=".5"/></svg></div></div>
+<div class="scroll">
+  <div class="bar" style="height:84px"><span class="back">‹ Garage</span><span class="act">Follow</span></div>
+  <div class="carhead"><svg viewBox="0 0 120 52" width="110" height="48"><path d="M8 38 L14 24 C 24 12, 44 8, 62 10 L 84 14 C 96 16, 104 24, 110 32 L 112 38 Z" fill="#C8102E"/><path d="M30 24 C 38 16, 52 14, 64 15 L 78 18 L 82 24 Z" fill="#1C1A17" opacity=".75"/><circle cx="30" cy="40" r="9" fill="#1C1A17"/><circle cx="30" cy="40" r="4" fill="#8A8373"/><circle cx="92" cy="40" r="9" fill="#1C1A17"/><circle cx="92" cy="40" r="4" fill="#8A8373"/><rect x="6" y="36" width="108" height="3" fill="#1C1A17" opacity=".3"/></svg><div><h1>Nate's NB Miata</h1><div class="spec">2004 · Mazdaspeed · 1.8 turbo · 178 hp on the stock dyno sheet</div><div class="own">@nate · Ridge Runners · 23 followers</div></div></div>
+  <div class="photo cover"><svg viewBox="0 0 390 150" preserveAspectRatio="xMidYMid slice"><rect width="390" height="150" fill="#C4B899"/>
+<path d="M0 82.5 C 78.0 52.5, 136.5 90.0, 214.50000000000003 60.0 S 331.5 45.0, 390 75.0 V150 H0Z" fill="#6E6757"/>
+<path d="M0 105.0 C 97.5 90.0, 156.0 120.0, 253.5 93.0 S 351.0 90.0, 390 108.0 V150 H0Z" fill="#5E584C"/>
+<path d="M47.0 150 C 117.0 127.5, 195.0 142.5, 234.0 117.0 S 312.0 105.0, 370.5 99.0" fill="none" stroke="#EDE4D3" stroke-width="10.500000000000002" stroke-linecap="round"/>
+<path d="M47.0 150 C 117.0 127.5, 195.0 142.5, 234.0 117.0 S 312.0 105.0, 370.5 99.0" fill="none" stroke="#C9A24A" stroke-width="1" stroke-dasharray="6 6"/></svg><span class="cap">After the alignment, Oct 27</span></div>
+  <div class="stages"><i class="st"></i><i class="st"></i><i class="st"></i><i class="st"></i><i class="st todo"></i><i class="st todo"></i><span>Stage 4 of 6 · Suspension</span></div>
+
+  <div class="post">
+    <div class="ph"><span class="dot">4</span><div><b>Coilovers in, and a first alignment</b><span>Oct 27 · 2 days ago</span></div></div>
+    <div class="txt">Finally. Ohlins Road and Track, 7k/5k. Set it at -2.2 front, -1.8 rear, a little toe out up front. First run up the Skyway felt planted but the rear is busier than I want over the crests near the top. My Score went from the 640s to 702 on the same road, so something is working.</div>
+    <div class="pics"><div class="photo"><svg viewBox="0 0 170 90" preserveAspectRatio="xMidYMid slice"><rect width="170" height="90" fill="#9A927E"/>
+<path d="M0 49.50000000000001 C 34.0 31.499999999999996, 59.49999999999999 54.0, 93.50000000000001 36.0 S 144.5 27.0, 170 45.0 V90 H0Z" fill="#55503F"/>
+<path d="M0 62.99999999999999 C 42.5 54.0, 68.0 72.0, 110.5 55.8 S 153.0 54.0, 170 64.8 V90 H0Z" fill="#5E584C"/>
+<path d="M20.0 90 C 51.0 76.5, 85.0 85.5, 102.0 70.2 S 136.0 62.99999999999999, 161.5 59.400000000000006" fill="none" stroke="#EDE4D3" stroke-width="6.300000000000001" stroke-linecap="round"/>
+<path d="M20.0 90 C 51.0 76.5, 85.0 85.5, 102.0 70.2 S 136.0 62.99999999999999, 161.5 59.400000000000006" fill="none" stroke="#C9A24A" stroke-width="1" stroke-dasharray="6 6"/></svg><span class="cap">Front, ride height</span></div><div class="photo"><svg viewBox="0 0 170 90" preserveAspectRatio="xMidYMid slice"><rect width="170" height="90" fill="#8E8674"/>
+<path d="M0 49.50000000000001 C 34.0 31.499999999999996, 59.49999999999999 54.0, 93.50000000000001 36.0 S 144.5 27.0, 170 45.0 V90 H0Z" fill="#4E4A3C"/>
+<path d="M0 62.99999999999999 C 42.5 54.0, 68.0 72.0, 110.5 55.8 S 153.0 54.0, 170 64.8 V90 H0Z" fill="#5E584C"/>
+<path d="M57.0 90 C 51.0 76.5, 85.0 85.5, 102.0 70.2 S 136.0 62.99999999999999, 161.5 59.400000000000006" fill="none" stroke="#EDE4D3" stroke-width="6.300000000000001" stroke-linecap="round"/>
+<path d="M57.0 90 C 51.0 76.5, 85.0 85.5, 102.0 70.2 S 136.0 62.99999999999999, 161.5 59.400000000000006" fill="none" stroke="#C9A24A" stroke-width="1" stroke-dasharray="6 6"/></svg><span class="cap">Alignment sheet</span></div></div>
+    <div class="parts"><span>Ohlins DFV R&T</span><span>7k / 5k springs</span><span>-2.2 / -1.8 camber</span></div>
+    <div class="react"><span><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-3-6.2"/><path d="M20 4v5h-5"/></svg>6 replies</span><span><svg viewBox="0 0 24 24"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10Z"/></svg>14</span><span><svg viewBox="0 0 24 24"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2Z"/></svg>2 suggestions</span></div>
+    <div class="sugg"><span class="tag">Suggestion</span><b>@jules</b> Rear busy over crests at 5k usually means rebound is a click or two too soft for that spring. Try +2 rear, drive the same stretch, compare the Smooth trace.</div>
+    <div class="sugg" style="border-color:#1C1A17"><span class="tag" style="color:#6A6255">Reply</span><b>@sam</b> Looks great. Same road Sunday, let's compare runs on the Skyway stage.</div>
+  </div>
+
+  <div class="post">
+    <div class="ph"><span class="dot">3</span><div><b>Brakes and fluid, before the suspension</b><span>Sep 30 · 9 replies · 3 suggestions</span></div></div>
+    <div class="txt">Pads, rotors, braided lines, RBF600. Boring but the pedal is a different car now.</div>
+  </div>
+</div>
+<div class="compose"><div class="in">Reply, or suggest something</div><button class="btn">Photo</button><button class="btn primary">Post</button></div>
+<nav class="tabs"><a class="tab"><svg viewBox="0 0 26 26"><path d="M13 3.5 4.5 22l8.5-4 8.5 4Z"/></svg><span>Map</span></a><a class="tab"><svg viewBox="0 0 26 26"><path d="M4 7h18M4 13h18M4 19h11"/></svg><span>Log</span></a><a class="tab"><svg viewBox="0 0 26 26"><circle cx="9.5" cy="9" r="3.5"/><circle cx="17.5" cy="10.5" r="3"/><path d="M3.5 21c0-4 2.7-6.5 6-6.5s6 2.5 6 6.5M15.5 20.5c.4-3 2.3-5 5-5 1.2 0 2.5.5 3 1.5"/></svg><span>Crew</span></a><a class="tab on"><svg viewBox="0 0 26 26"><path d="M3.5 11.5 13 4.5l9.5 7V22h-19Z"/><path d="M7.5 22v-7h11v7M7.5 18h11"/></svg><span>Garage</span></a></nav><div class="home"></div></div></body></html>

@@ -28,7 +28,7 @@ def test_full_profile(out):
     f = out["full"]
     assert f["title"] == "@bob" and f["sub"] == "Bob Smith · friends since 2026-09-01"
     heads = {s["head"]: s["rows"] for s in f["sections"]}
-    assert heads["This month"] == ["2 stages shared with you · 3 days on them this month · best Driver Score 812"]
+    assert heads["This month"] == ["2 stages shared with you · 3 days on them this month · best Vetta Score 812"]
     assert heads["Favourite roads"] == ["Esses · best 812 · 3 days this month", "Dry Ridge · best 700"]
     assert heads["Garage"] == ['1990 Mazda MX-5 "Pip" · daily'] and heads["Crews you share"] == ["Ridge Runners"]
 

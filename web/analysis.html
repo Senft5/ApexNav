@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-ekEhzkdjOueo72WZGEbVF4U1W5XTq4lOjjQlIvCoPew=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-SdBaUps8dEA8biSvKlai64iF19gRSVd+kORKS+N/QzM=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta · Log</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -222,8 +222,6 @@
       <div class="panel" id="steadyPanel" hidden><h2>Braking consistency by month</h2><div id="steadyChart"></div><p class="note" id="steadyNote"></p></div>
       <div class="actions" id="historyFilter" role="group" aria-label="Show drives tagged" hidden></div>
       <div class="panel" id="historyPanel"><div class="scroll"><table id="historyTable"></table></div></div>
-      <details class="more"><summary>How Score works</summary>
-        <p class="note">Score rates how you drive the corners, not how fast. <b>Pace</b>: corner speed against its safe grip limit, full credit from 85 % to 100 %. <b>Smooth</b>: how gently cornering load builds. <b>Brakes</b>: no hard braking after the apex. <b>Rhythm</b>: even commitment from corner to corner. Speed limits never enter it. 1000 is a closed-course number, not something to chase on public roads.</p></details>
     </section>
 
     <!-- ============================ SEGMENTS ============================ -->
@@ -543,7 +541,7 @@
       if (brake) { out.push(line(`Best braking this month, of ${of('braking').length}`, brake, pct(brake.ds.components.braking), day(brake))); names.push(brake.name); }
       $('recordsTable').innerHTML = out.join('');
       $('recordsTable').querySelectorAll('tr td.l b').forEach((b, i) => { b.textContent = names[i]; });   // names are user text
-      $('recordsNote').textContent = 'Roads are matched by name. Score counts pace only up to a margin inside the grip limit and takes points off past it; smoothness, braking and consistency make up the rest.';
+      $('recordsNote').textContent = 'Roads are matched by name.';
     }
     const finiteNum = (v) => typeof v === 'number' && Number.isFinite(v);
     window.apexLogDebug = { loaded: () => drivesLoaded, records: (ds) => renderRecords(ds) };   // e2e/smoke.js seeds the panel (the library itself is untouched)
