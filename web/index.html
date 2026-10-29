@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-qj4qnvocckh9AWyJlV3ONGACp8gvOzejy2DuVQULjjk=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-HK2FJsyjvdhoWak/uj+HkPGJKOd4cgK2zXiJiWM4yTg=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -231,6 +231,10 @@
       border: 1px solid var(--rule); border-right: 0; display: flex; align-items: center; justify-content: center; box-shadow: -4px 4px 12px rgba(0, 0, 0, 0.18); }
     .edge-tab svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
     .edge-tab[aria-expanded="true"] { color: var(--accent); }
+    /* the Layers key: a physical key on the map, a 2 px drop under it (REVIEW.md principle 4) */
+    .map-key { width: 48px; height: 48px; margin-right: 10px; border: 1.5px solid var(--panel-ink); box-shadow: 0 3px 0 var(--rule); }
+    .map-key svg { width: 24px; height: 24px; stroke-linejoin: round; }
+    .edge.open .map-key { margin-right: 0; border-right: 0; }
     .edge-panel { width: 236px; background: var(--panel); color: var(--panel-ink); border: 1px solid var(--rule); border-right: 0;
       padding: 8px 14px 4px; box-shadow: -8px 8px 24px rgba(0, 0, 0, 0.22); }
     .edge-panel h3 { font-size: 13px; font-weight: 600; color: var(--panel-dim); margin-bottom: 2px; }
@@ -322,7 +326,11 @@
     .sw.on i { border-color: var(--accent); }
     .sw.on i::after { left: 17px; background: var(--accent); }
     .sw span { font-size: 11px; font-weight: 600; color: var(--panel-dim); }
-    #switchRow { display: grid; gap: 0; }
+    #switchRow, .edge-panel .switches, .sheet .switches { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; }
+    /* toggles with travel and depth (REVIEW.md 1.1 #6: not a square sliding in a rectangle) */
+    .sheet .sw i, .edge-panel .sw i { box-shadow: inset 0 2px 3px rgba(0,0,0,0.18); transition: border-color 0.15s, background-color 0.15s; }
+    .sheet .sw i::after, .edge-panel .sw i::after { box-shadow: 0 2px 0 rgba(0,0,0,0.3); transition: left 0.15s ease-out, background-color 0.15s; }
+    .sheet .sw.on i, .edge-panel .sw.on i { background: color-mix(in srgb, var(--accent) 14%, transparent); }
     .sheet .sw, .edge-panel .sw { display: flex; flex-direction: row-reverse; justify-content: space-between; align-items: center; width: 100%; min-height: 48px; padding: 0; border-top: 1px solid var(--hair, var(--panel-dim)); }
     .sheet .sw span, .edge-panel .sw span { font-size: 15px; font-weight: 500; color: var(--panel-ink); }
     /* In a list the switch is read at arm's length: a track big enough to see On from Off at a glance. */
@@ -738,20 +746,23 @@
             </section>
         </div>
       </section>
+      <!-- the Layers key (REVIEW.md roadmap 10): map things with the map; co-driver settings live in the Garage, with
+           Notes and Voice repeated here because the Garage is out of reach while driving -->
       <div class="edge" id="swEdge">
-      <button class="edge-tab" id="swTab" aria-label="While you drive" aria-expanded="false" aria-controls="swPanel"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg></button>
-      <div class="edge-panel" id="swPanel" role="group" aria-label="While you drive">
-        <h3>While you drive</h3>
+      <button class="edge-tab map-key" id="swTab" aria-label="Map layers" aria-expanded="false" aria-controls="swPanel"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 L22 8 L12 13 L2 8 Z"/><path d="M2 12.5 L12 17.5 L22 12.5"/><path d="M2 17 L12 22 L22 17"/></svg></button>
+      <div class="edge-panel" id="swPanel" role="group" aria-label="Map layers">
+        <h3>Map layers</h3>
         <div class="switches" id="switchRow">
-        <button class="sw sw-cycle" data-cycle="notesMode" aria-label="Notes"><b></b><span>Notes</span></button>
-        <button class="sw" data-toggle="voice"><i></i><span>Voice</span></button>
         <button class="sw" data-toggle="lpr"><i></i><span>Cameras</span></button>
         <button class="sw" data-toggle="twisty"><i></i><span>Twisty roads</span></button>
         <button class="sw" data-toggle="coverage"><i></i><span>Measured roads</span></button>
         <button class="sw" data-toggle="terrain"><i></i><span>3D terrain</span></button>
-        <button class="sw" data-toggle="haptics"><i></i><span>Haptics</span></button>
-        <button class="sw sw-cycle" data-cycle="nightMode" aria-label="Night"><b></b><span>Night</span></button>
-      </div>
+        </div>
+        <h3 class="mt-8">Co-driver</h3>
+        <div class="switches">
+        <button class="sw sw-cycle" data-cycle="notesMode" aria-label="Notes"><b></b><span>Notes</span></button>
+        <button class="sw" data-toggle="voice"><i></i><span>Voice</span></button>
+        </div>
       </div>
       </div>
       <div class="scrim" id="scrim"></div>
@@ -834,6 +845,16 @@
             <button class="linkbtn" id="hlOpenBtn">Add a spot here</button>
             <div id="hlList" class="stack-8 mt-8"></div>
             <div id="hlNearby" class="stack-8 mt-8"></div>
+          </section>
+          <section data-panel="garage">
+            <h3>Co-driver</h3>
+            <div class="switches">
+              <button class="sw sw-cycle" data-cycle="notesMode" aria-label="Notes"><b></b><span>Notes</span></button>
+              <button class="sw" data-toggle="voice"><i></i><span>Voice</span></button>
+              <button class="sw" data-toggle="haptics"><i></i><span>Haptics</span></button>
+              <button class="sw sw-cycle" data-cycle="nightMode" aria-label="Night"><b></b><span>Night</span></button>
+            </div>
+            <p class="note">Notes: Full calls every corner; Quiet only hazards and cameras; Auto calls corners once you are cornering with some purpose, quiet otherwise. Night: Auto turns the page over after sunset.</p>
           </section>
           <section data-panel="garage">
             <h3>Voice</h3>
@@ -4860,7 +4881,7 @@
       }
       if (k === 'coverage') {
         updateCoverage();
-        if (state.toggles.coverage) toast(mapReady && map.getZoom() < ApexCoverage.MIN_ZOOM ? 'Zoom in to see measured roads.' : 'Green: measured roads, bolder the surer. A road without a line is waiting for a pioneer: the first drivers earn extra Octane.');
+        if (state.toggles.coverage) toast(mapReady && map.getZoom() < ApexCoverage.MIN_ZOOM ? 'Zoom in to see measured roads.' : 'Green: measured roads, bolder the surer. A road without a line is waiting for a pioneer: the first drivers to map it earn extra points.');
       }
       if (k === 'twisty') {
         updateTwisty();
