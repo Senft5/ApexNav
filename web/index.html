@@ -358,10 +358,15 @@
     .ro-sight b { color: var(--accent); }
     .ro-sight.short { border-color: var(--signal); } .ro-sight.short b { color: var(--signal); }
     .ro span { font-size: 13px; font-weight: 600; color: var(--panel-dim); }
-    .ro-limit { background: var(--panel-ink); color: var(--panel); border-color: var(--panel-ink); }
-    .ro-limit span { color: var(--panel); opacity: 0.7; }
-    .ro-limit.unknown { background: none; color: var(--panel-dim); border-color: var(--rule); }
-    .ro-limit.unknown span { color: var(--panel-dim); opacity: 1; }
+    /* The Limit sign (theme contract 4.3.5, REVIEW2.md U-40): the white US sign in every theme, the one real-world object on
+       the screen. 44 x 52, a black edge with the sign's inset rule, SPEED LIMIT in small caps over the number. No theme
+       restyles it (no glow, no tokens); unknown, the same sign in pencil with "--". */
+    html .readouts .ro.ro-limit { justify-self: center; width: 44px; height: 52px; padding: 0; display: flex; flex-direction: column-reverse; align-items: center; justify-content: center; gap: 1px;
+      background: #FFFFFF; color: #111111; border: 1.5px solid #111111; border-radius: 4px; box-shadow: inset 0 0 0 2px #FFFFFF, inset 0 0 0 3px #111111; }
+    html .readouts .ro.ro-limit span { font: 700 7px/1.05 "Inter Tight", "Helvetica Neue", Arial, sans-serif; letter-spacing: 0.04em; text-transform: uppercase; color: #111111; opacity: 1; width: 30px; text-align: center; white-space: normal; text-shadow: none; }
+    html .readouts .ro.ro-limit b { font: 700 20px/1 "Barlow Condensed", "Arial Narrow", sans-serif; color: #111111; text-shadow: none; }
+    html .readouts .ro.ro-limit.unknown { background: transparent; border-color: var(--panel-dim); box-shadow: inset 0 0 0 2px transparent, inset 0 0 0 3px var(--panel-dim); }
+    html .readouts .ro.ro-limit.unknown span, html .readouts .ro.ro-limit.unknown b { color: var(--panel-dim); }
     .odo { display: grid; justify-items: center; gap: 2px; }
     .odo-digits { display: flex; gap: 1px; font-family: var(--font-num); font-size: 22px; font-weight: 700; line-height: 1; }
     .odo.boxed .dg { border: 1.5px solid var(--panel-ink); padding: 1px 3px; min-width: 18px; text-align: center; }
@@ -580,8 +585,6 @@
     html[data-theme="billet"] .key, html[data-theme="billet"] .ink-btn { border-color: var(--rule); background: linear-gradient(#2E2F33, #1C1D1F); box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 2px 0 #000; }
     html[data-theme="billet"] .odo.boxed .dg { background: #0D0D0E; border-color: var(--rule); }
     html[data-theme="billet"] .odo.boxed .dg:last-child { background: var(--accent); color: #0D0D0E; text-shadow: none; }   /* the tenths wheel, inverted (it was dark on dark, REVIEW2.md U-29) */
-    html[data-theme="billet"] .ro-limit:not(.unknown) { background: #FFFFFF; color: #111111; border-color: #111111; }   /* the white sign, exactly as on the road */
-    html[data-theme="billet"] .ro-limit:not(.unknown) span { color: #111111; }
     .bezelled { position: relative; }
     .bezel-ring { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
     .bezel-ring .knurl { fill: none; stroke: #6B6E74; stroke-width: 5; stroke-dasharray: 1.2 1.6; }
