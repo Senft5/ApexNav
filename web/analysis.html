@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-8ZltCmJZxpQdBtB1UbNbNiaUUvKOYNOWfSEqeTeRc9g=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-g4BgedyQyw6/UYZHzYtBLmWVK2qjHOy28LPyRPJKzvU=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta · Log</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -149,6 +149,18 @@
     details.more summary::after { content: "+"; margin-left: auto; font-size: 20px; }
     details.more[open] summary::after { content: "–"; }
     tr.row-link { cursor: pointer; }
+    .linkbtn { font: inherit; font-size: 15px; font-weight: 600; background: none; border: 0; padding: 10px 2px; min-height: 44px; color: var(--panel-ink);
+      text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+    /* the drive (REVIEW.md roadmap 14) */
+    .dv-head .score.big { font-size: 80px; line-height: 0.9; letter-spacing: 0.02em; }
+    .dv-head .dv-plain { font-size: 17px; line-height: 1.35; font-weight: 600; }
+    .dv-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; margin: 12px 0 4px; }
+    .dv-acts .dv-replay { min-width: 140px; height: 52px; font-size: 17px; box-shadow: inset 0 -3px 0 rgba(0,0,0,0.3); }
+    .dv-tagrow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); }
+    .dv-tagrow #dvTagNew { width: 110px; height: 36px; }
+    .dv-tagrow .dv-notebox { flex-basis: 100%; border-bottom: 0; }
+    .dv-tagrow .dv-notebox textarea { width: 100%; }
+    .dv-tagrow #dvTagsNote { flex-basis: 100%; margin: 0; }
     /* the Log (REVIEW.md roadmap 13) */
     .log-hero { padding: 6px 0 10px; border-bottom: 1px solid var(--rule); }
     .hero-score b { font: 800 88px/0.9 var(--font-num); font-variant-numeric: tabular-nums; letter-spacing: 0.04em; }
@@ -199,18 +211,21 @@
       <div><a href="#" class="back" data-to="history">‹ Log</a></div>
       <select id="dvPick" aria-label="Choose a drive" hidden></select>
       <div><h1 class="stages-h" id="dvTitle">--</h1><p class="note" id="dvNote"></p></div>
-      <div class="actions" role="group" aria-label="This drive">
-        <button class="btn solid" id="dvReplay">Replay</button>
-        <button class="btn" id="dvCompare">Compare</button>
-        <button class="btn" id="dvShare">Share</button>
-        <button class="btn" id="dvCard">Share card</button>
+      <!-- the drive (REVIEW.md roadmap 14): the score first with its coaching line (drive_view.js head), Replay the primary,
+           the tags one row of stamps; the actions are moved under the score once it is drawn -->
+      <div class="dv-acts" id="dvActs" role="group" aria-label="This drive">
+        <button class="btn solid dv-replay" id="dvReplay">Replay</button>
+        <button class="linkbtn" id="dvCompare">Compare</button>
+        <button class="linkbtn" id="dvShare">Share</button>
+        <button class="linkbtn" id="dvCard">Share card</button>
       </div>
-      <div class="panel" id="dvTagsPanel"><h2>Tags and note</h2>
-        <div class="stamps" id="dvTags" role="group" aria-label="Tags for this drive"></div>
-        <div class="actions mt-8"><input id="dvTagNew" maxlength="24" placeholder="Add a tag: the car, who came" aria-label="Add a tag" /><button class="btn" id="dvTagAdd">Add</button></div>
-        <textarea class="mt-8" id="dvNoteText" maxlength="280" placeholder="A note for yourself (stays on this phone)" aria-label="Note"></textarea>
-        <p class="note" id="dvTagsNote">Tags and notes stay on this phone. Filter the Log by them.</p></div>
       <div id="dvRoot"></div>
+      <div class="dv-tagrow" id="dvTagsPanel">
+        <div class="stamps" id="dvTags" role="group" aria-label="Tags for this drive"></div>
+        <input id="dvTagNew" maxlength="24" placeholder="+ tag" aria-label="Add a tag" /><button class="linkbtn" id="dvTagAdd">Add</button>
+        <details class="quiet dv-notebox"><summary>Note</summary>
+          <textarea id="dvNoteText" maxlength="280" placeholder="A note for yourself (stays on this phone)" aria-label="Note"></textarea></details>
+        <p class="note" id="dvTagsNote">Tags and notes stay on this phone. Filter the Log by them.</p></div>
       <div id="dvDashcam"></div>
       <div class="panel" id="dvRecce"><h2>Your notes</h2>
         <p class="note" id="dvRecceNote">Keep this drive's notes as yours, change any call, and the co-driver reads yours the next time you drive these corners this way. On this phone only.</p>
@@ -956,7 +971,10 @@
       }
       // corner coach: every other drive whose box overlaps this one is a candidate pass (Core.coach decides what is the same corner)
       const coach = coachFor(d);
+      $('tab-drive').insertBefore(dvActs, $('dvRoot'));                // out of the root before it is redrawn
       dvView = ApexDriveView.mount($('dvRoot'), d, { Core, C, MPH, reference, coach });
+      const dvHead = $('dvRoot').querySelector('.dv-head');
+      if (dvHead) dvHead.after(dvActs);                                  // the score first, then Replay
       // a video from this drive with its numbers on it (dashcam.js, IDEAS D-11)
       if (window.ApexDashcam && window.MediaRecorder && Array.isArray(d.speed_mps) && d.speed_mps.length > 20) {
         const mk = (tag, props = {}, ...kids) => { const n = Object.assign(document.createElement(tag), props); n.append(...kids); return n; };
@@ -1076,6 +1094,7 @@
     }
     document.querySelectorAll('a.back').forEach(a => a.addEventListener('click', (e) => { e.preventDefault(); showTab(a.dataset.to); toTop(); }));
     const TAB_ALIAS = { log: 'history', stages: 'segments' };
+    const dvActs = $('dvActs');
     document.querySelectorAll('[data-seg]').forEach(b => b.addEventListener('click', () => { showTab(b.dataset.seg); toTop(); }));
     // The page scrolls inside <body> (the iOS shell turns off the web view's own scrolling), so reset both.
     function toTop() { document.body.scrollTop = 0; window.scrollTo(0, 0); }

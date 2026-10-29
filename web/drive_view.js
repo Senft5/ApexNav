@@ -129,16 +129,19 @@
       const a = (q % N) * 2 * half, [x, y] = xy(r * Math.sin(a), r * Math.cos(a));   // slices are centred on their angle
       hull += `${open ? 'L' : 'M'}${x.toFixed(1)} ${y.toFixed(1)}`; open = true;
     }
-    const ring = (g) => `<circle cx="${c0}" cy="${c0}" r="${(g * k).toFixed(1)}" fill="none" stroke="${C.rule}" stroke-dasharray="2 4"/><text x="${c0 + 3}" y="${(c0 - g * k - 3).toFixed(1)}" font-size="9" fill="${C.panelDim}">${g.toFixed(1)} g</text>`;
-    const txt = (x, y, a, t) => `<text x="${x}" y="${y}" text-anchor="${a}" font-size="10" fill="${C.panelDim}">${t}</text>`;
+    // the same g-ball face as the binnacle's (REVIEW.md 1.2, Drive detail): a bezel, solid hair rings, the drive's dots
+    const ring = (g) => `<circle cx="${c0}" cy="${c0}" r="${(g * k).toFixed(1)}" fill="none" stroke="${C.hair || C.rule}" stroke-width="1.2"/><text x="${c0 + 3}" y="${(c0 - g * k - 3).toFixed(1)}" font-size="10" fill="${C.faceDim || C.panelDim}">${g.toFixed(1)} g</text>`;
+    const bezel = `<circle cx="${c0}" cy="${c0}" r="${c0 - 3}" fill="${C.face || C.panel}" stroke="${C.panelInk}" stroke-width="4"/>`
+      + `<circle cx="${c0}" cy="${c0}" r="${c0 - 9}" fill="none" stroke="${C.hair || C.rule}" stroke-width="1"/>`;
+    const txt = (x, y, a, t) => `<text x="${x}" y="${y}" text-anchor="${a}" font-size="10" font-weight="700" letter-spacing="1.5" fill="${C.faceDim || C.panelDim}">${t}</text>`;
     const box = el('div', 'dv-gg'), pic = el('div', 'dv-gg-pic'), hot = el('div', 'dv-gg-hot'), cap = el('p', 'note');
     cap.setAttribute('aria-live', 'polite');
     pic.innerHTML = `<svg viewBox="0 0 ${S} ${S}" role="img" aria-label="Friction circle: cornering against braking and throttle g">`
-      + ring(0.5) + (R > 1.05 ? ring(1.0) : '')
-      + `<line x1="${c0}" x2="${c0}" y1="6" y2="${S - 6}" stroke="${C.rule}"/><line y1="${c0}" y2="${c0}" x1="6" x2="${S - 6}" stroke="${C.rule}"/>`
+      + bezel + ring(0.5) + (R > 1.05 ? ring(1.0) : '')
+      + `<line x1="${c0}" x2="${c0}" y1="12" y2="${S - 12}" stroke="${C.hair || C.rule}"/><line y1="${c0}" y2="${c0}" x1="12" x2="${S - 12}" stroke="${C.hair || C.rule}"/>`
       + `<path d="${dots}" stroke="${C.panelDim}" stroke-width="3" stroke-linecap="round" opacity="0.35"/>`
       + `<path d="${hull}" fill="none" stroke="${C.panelInk}" stroke-width="1.6" stroke-linejoin="round"/>`
-      + txt(c0, 12, 'middle', 'Throttle') + txt(c0, S - 4, 'middle', 'Brake') + txt(4, c0 - 4, 'start', 'Left') + txt(S - 4, c0 - 4, 'end', 'Right') + '</svg>';
+      + txt(c0, 26, 'middle', 'THROTTLE') + txt(c0, S - 18, 'middle', 'BRAKE') + txt(16, c0 - 4, 'start', 'L') + txt(S - 16, c0 - 4, 'end', 'R') + '</svg>';
     const g2 = (v) => (v == null ? '--' : `${v.toFixed(2)} g`);
     const base = `Your grip on this drive: braking ${g2(env.brake_g)}, cornering left ${g2(env.left_g)} and right ${g2(env.right_g)}, throttle ${g2(env.throttle_g)}.`;
     cap.textContent = base;

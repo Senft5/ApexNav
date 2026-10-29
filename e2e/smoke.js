@@ -785,6 +785,7 @@ flow('drive tags: tag a drive in the Log, filter by it, the note stays on the ph
   await page.fill('#dvTagNew', 'E46');
   await page.press('#dvTagNew', 'Enter');
   await page.waitForSelector('#dvTags button[aria-pressed="true"]:has-text("E46")');
+  await page.click('.dv-notebox summary');                            // the note folds under the tag row (REVIEW.md 14)
   await page.fill('#dvNoteText', 'Puddles at the bridge');
   await page.dispatchEvent('#dvNoteText', 'change');
   await page.waitForFunction(() => /Note saved/.test(document.getElementById('dvTagsNote').textContent));
