@@ -234,9 +234,11 @@
       limit.c.classList.toggle('unknown', !Number.isFinite(d.limitMph));   // a sign only when there is a limit to show
       const both = [d.paceMph, d.sightMph].filter(v => Number.isFinite(v));
       const v = both.length ? Math.min(...both) : null;
-      sight.v.textContent = fmt(v);
-      eye.style.display = both.length === 2 && d.sightMph < d.paceMph ? '' : 'none';
-      sight.c.classList.toggle('short', v != null && Number.isFinite(d.speedMph) && d.speedMph > v + 1);
+      // "Open" when nothing limits you (the sight line at its cap, no corner asking for less): the number there would only
+      // be the cap's own speed (125 mph), not something the road says
+      sight.v.textContent = d.sightOpen ? 'Open' : fmt(v);
+      eye.style.display = !d.sightOpen && both.length === 2 && d.sightMph < d.paceMph ? '' : 'none';
+      sight.c.classList.toggle('short', !d.sightOpen && v != null && Number.isFinite(d.speedMph) && d.speedMph > v + 1);
     };
   }
 
