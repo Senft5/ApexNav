@@ -6,6 +6,15 @@ it says so. Things only you can do are in docs/OWNER_TODO.md.
 
 ## 2026-10-29
 
+**Roadmap 2 item 11: the plan sheet has one loop control (U-31).** The dial is the control: the five lengths sit as
+ticks around it (tap one, or turn the dial and it clicks to the nearest), the value in its face. My calls:
+- *The detent chips and both helper sentences are gone.* The Roads keys carry their sentence as a description
+  (title and screen reader), not as prose under them.
+- *On its side the dial stays* (it was hidden there); the loop spans the left column and Roads, More and Find a loop
+  stack on the right.
+- *Start from is a row with the ink pin*, like a recent place, and edits in place.
+Undo: the `.loop-gauge` block and `#loopGauge` markup in index.html.
+
 **Roadmap 2 item 10: one slide switch (U-44).** Every on/off setting (Layers, Garage, Friends, a friend's and a crew's
 Scores and Times, Share road feel) is the same switch: a 44 x 24 track, a 20 px thumb that travels 20 px with a 2 px drop;
 off is a pencil thumb on paper, on is an ink track. My calls:

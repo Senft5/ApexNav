@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-PqGSnTFk1VsBgl98MW8QublMHmaUzKP6Zv+UWKC3z3M=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-fQUfCHNjKwjmO0OGlaKntgzdwaJITcvqIY9ONUm63Gg=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -225,7 +225,14 @@
     .plan-clear svg, .icon-btn svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
     .plan-body { display: grid; align-content: start; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding: 2px 16px 20px; scroll-padding-bottom: 80px; gap: 16px; flex: 1; min-height: 0; }
     .from-row { display: flex; gap: 4px; align-items: center; }
-    .from-row .field { height: 40px; border-color: var(--hair, var(--panel-dim)); }
+    /* Start from reads as a row like a recent place, the ink pin first; tap it to change it (REVIEW2.md U-31) */
+    .from-row { border-top: 1px solid var(--hair, var(--panel-dim)); border-bottom: 1px solid var(--hair, var(--panel-dim)); }
+    .from-row::before { content: ""; flex: none; width: 14px; height: 18px; margin-left: 2px; background: var(--panel-ink);
+      -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 18'%3E%3Cpath d='M7 0a7 7 0 0 0-7 7c0 5 7 11 7 11s7-6 7-11a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 7 4.5a2.5 2.5 0 0 1 0 5z'/%3E%3C/svg%3E") center / contain no-repeat;
+      mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 18'%3E%3Cpath d='M7 0a7 7 0 0 0-7 7c0 5 7 11 7 11s7-6 7-11a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 7 4.5a2.5 2.5 0 0 1 0 5z'/%3E%3C/svg%3E") center / contain no-repeat; }
+    .from-row .field { height: 48px; border: 0; padding-left: 8px; }
+    .from-row .field::placeholder { color: var(--panel-ink); opacity: 1; }
+    .from-row .field:focus { outline: none; box-shadow: inset 0 -2px 0 var(--panel-ink); }
     /* Selects drawn like the app's other controls on every platform: square, ink border, a drawn chevron (iOS otherwise adds its own rounded bubble) */
     select, select.field { -webkit-appearance: none; appearance: none; border-radius: 0; padding-right: 30px; text-overflow: ellipsis;
       background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%);
@@ -448,16 +455,24 @@
     .rc-go { display: grid; grid-template-columns: 1.4fr 1fr; gap: 10px; margin-top: 14px; }
     .rc-go .ink-btn { min-height: 52px; font-size: 17px; }
     /* ---------------- the plan sheet: basic level and More (REVIEW.md roadmap 6) ---------------- */
-    .loop-gauge { display: grid; grid-template-columns: 104px minmax(0, 1fr); gap: 12px; align-items: center; }
-    .loop-dial { position: relative; width: 104px; height: 104px; border-radius: 50%; border: 2.5px solid var(--panel-ink); display: flex; align-items: baseline;
-      justify-content: center; padding-top: 34px; background: var(--panel); box-shadow: inset 0 0 0 6px var(--panel), inset 0 0 0 7.5px var(--rule), 0 3px 0 var(--rule); }
-    .loop-dial i { position: absolute; left: 50%; top: 50%; width: 4px; height: 50px; margin: -50px 0 0 -2px; transform-origin: 50% 100%; transition: transform 0.2s ease-out; }
-    .loop-dial i::before { content: ""; position: absolute; left: 0; top: 4px; width: 4px; height: 16px; background: var(--accent); }
-    .loop-dial b { font: 800 36px/1 var(--font-num); font-variant-numeric: tabular-nums; }
+    /* the loop dial: one control, the value in its face, five lengths as ticks on an arc around it (REVIEW2.md U-31) */
+    .loop-gauge { position: relative; width: 272px; height: 172px; margin: 6px auto 0; touch-action: none; }
+    .loop-dial { position: absolute; left: 76px; top: 48px; width: 120px; height: 120px; border-radius: 50%; border: 2.5px solid var(--panel-ink); display: flex; align-items: baseline;
+      justify-content: center; padding-top: 40px; background: var(--panel); box-shadow: inset 0 0 0 6px var(--panel), inset 0 0 0 7.5px var(--rule), 0 3px 0 var(--rule); cursor: grab; }
+    .loop-ticks { position: absolute; inset: -2.5px; width: 120px; height: 120px; pointer-events: none; }
+    .loop-ticks line { stroke: var(--panel-ink); stroke-width: 2; } .loop-ticks line.on { stroke: var(--accent); stroke-width: 3; }
+    .loop-dial i { position: absolute; left: 50%; top: 50%; width: 4px; height: 58px; margin: -58px 0 0 -2px; transform-origin: 50% 100%; transition: transform 0.2s ease-out; }
+    .loop-dial i::before { content: ""; position: absolute; left: 0; top: 4px; width: 4px; height: 18px; background: var(--accent); }
+    .loop-dial b { font: 800 40px/1 var(--font-num); font-variant-numeric: tabular-nums; }
     .loop-dial small { font-size: 13px; font-weight: 600; color: var(--panel-dim); margin-left: 3px; }
-    .loop-side .note { margin: 6px 0 0; }
-    .plan-loop .detents > button { min-width: 0; font-size: 15px; padding: 0 2px; }
-    @media (max-width: 380px) { .plan-loop .detents { gap: 4px; } .plan-loop .detents > button { font-size: 13px; } }   /* "15 mi" fits a 375 pt phone */
+    .plan-loop .detents { display: block; }
+    .plan-loop .detents > button { position: absolute; width: 56px; min-width: 0; min-height: 36px; padding: 0; border: 0; background: transparent; color: var(--panel-dim); font-size: 17px; }
+    .plan-loop .detents > button::after { display: none; }
+    .plan-loop .detents > button[aria-pressed="true"] { background: transparent; color: var(--panel-ink); font-weight: 800; text-decoration: underline 2px var(--accent); text-underline-offset: 5px; }
+    .plan-loop .detents > button:nth-child(1) { left: 32px; top: 134px; } .plan-loop .detents > button:nth-child(2) { left: 32px; top: 46px; }
+    .plan-loop .detents > button:nth-child(3) { left: 108px; top: 2px; } .plan-loop .detents > button:nth-child(4) { left: 184px; top: 46px; }
+    .plan-loop .detents > button:nth-child(5) { left: 184px; top: 134px; }
+    @media (prefers-reduced-motion: reduce) { .loop-dial i { transition: none; } }
     .plan-more { margin-top: 16px; border-top: 1px solid var(--rule); }
     .plan-more > summary { list-style: none; cursor: pointer; display: flex; justify-content: space-between; align-items: center; min-height: 52px; font-size: 16px; font-weight: 700; }
     .plan-more > summary::-webkit-details-marker { display: none; }
@@ -807,11 +822,9 @@
       .plan.open .plan-search-section { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 24px; row-gap: 12px; grid-auto-flow: row dense; align-items: start; }
       .plan.open .plan-search-section > * { grid-column: 1; }
       .plan.open .plan-search-section > .ctl:not(.plan-loop), .plan.open .plan-search-section > .plan-more, .plan.open .plan-search-section > .find-bar { grid-column: 2; }
+      .plan.open .plan-search-section > .plan-loop { grid-row: span 3; }   /* the dial is tall: Roads and More stack beside it, not below it */
       .plan.open .plan-search-section > .find-bar { position: static; order: -1; margin: 0; padding: 0; border-top: 0; }   /* first in its column: nothing scrolls under it */
       .plan.open .find-bar::before { display: none; }
-      .plan.open .plan-loop .loop-dial { display: none; }
-      .plan.open #loopNote { display: none; }                         /* the detents carry the length; the dial needs the room upright */
-      .plan.open .plan-loop .loop-gauge { grid-template-columns: minmax(0, 1fr); display: grid; }
       .confirm-sheet { align-items: center; }                                                                     /* 19 */
       .confirm-sheet .cs-box { border: 1.5px solid var(--panel-ink); margin-bottom: 16px; }
       .plates, .place-plate, .hz-plate { left: calc(16px + var(--safe-left)); }                                  /* 21 */
@@ -862,17 +875,15 @@
               </div>
               <!-- the basic level (REVIEW.md roadmap 6, mockup 02-plan-basic.html): a loop dial, the Roads switch, More -->
               <div class="ctl plan-loop" role="group" aria-label="Loop from here"><div class="ctl-label">Or loop from here <small>back where you started</small></div>
-                <div class="loop-gauge">
-                  <div class="loop-dial" aria-hidden="true"><i id="loopDialMark"></i><b id="loopDialVal">45</b><small id="loopDialUnit">mi</small></div>
-                  <div class="loop-side">
-                    <div class="detents" id="loopDetents"><button data-loop-mi="15" aria-pressed="false">15 mi</button><button data-loop-mi="30" aria-pressed="false">30 mi</button><button data-loop-mi="45" aria-pressed="true">45 mi</button><button data-loop-min="60" aria-pressed="false">1 h</button><button data-loop-min="120" aria-pressed="false">2 h</button></div>
-                    <p class="note" id="loopNote">Turn the dial, then Find a loop. It starts and ends where you are.</p>
-                  </div>
+                <!-- one control (REVIEW2.md U-31): the dial, its five detents as ticks around it; tap a tick or turn the dial -->
+                <div class="loop-gauge" id="loopGauge">
+                  <div class="loop-dial" aria-hidden="true"><svg class="loop-ticks" id="loopTicks" viewBox="0 0 120 120"></svg><i id="loopDialMark"></i><b id="loopDialVal">45</b><small id="loopDialUnit">mi</small></div>
+                  <div class="detents" id="loopDetents"><button data-loop-mi="15" aria-pressed="false">15 mi</button><button data-loop-mi="30" aria-pressed="false">30 mi</button><button data-loop-mi="45" aria-pressed="true">45 mi</button><button data-loop-min="60" aria-pressed="false">1 h</button><button data-loop-min="120" aria-pressed="false">2 h</button></div>
                 </div>
               </div>
               <div class="ctl"><div class="ctl-label">Roads <small>how much of the long way</small></div>
                 <div class="switch" role="radiogroup" aria-label="Route style"><button data-fun="quick" role="radio" aria-checked="false">Quick</button><button data-fun="fun" role="radio" aria-checked="false">Fun</button><button data-fun="max" role="radio" aria-checked="false">Max fun</button></div>
-                <p class="note" id="funNote"></p></div>
+</div>
               <details class="plan-more" id="planMore">
                 <summary>More: avoid, corner mix, explore, start point</summary>
                 <div class="ctl"><div class="ctl-label">Start from</div>
@@ -3520,7 +3531,7 @@
       funLevel = level;
       try { localStorage.setItem(FUN_LEVEL, level); } catch (_) { /* storage off: this session only */ }
       document.querySelectorAll('[data-fun]').forEach(b => { const on = b.dataset.fun === level; b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); });
-      $('funNote').textContent = FUN_NOTES[level] || '';
+      document.querySelectorAll('[data-fun]').forEach(b => b.title = FUN_NOTES[b.dataset.fun] || '');   // the sentence is the key's description, not prose under it
       paintPresets();
     }
     // What each Roads position does, from fun_route.js LEVELS (the extra time each one may spend).
@@ -4137,9 +4148,20 @@
       $('loopDialVal').textContent = val; $('loopDialUnit').textContent = unit.join(' ');
       const all = [...document.querySelectorAll('#loopDetents button')], i = all.indexOf(b);
       $('loopDialMark').style.transform = `rotate(${-120 + 240 * i / Math.max(1, all.length - 1)}deg)`;
+      document.querySelectorAll('#loopTicks line').forEach((l, k) => l.classList.toggle('on', k === i));
       try { localStorage.setItem(LOOP_PICK, String(i)); } catch (_) {}
     }
     document.querySelectorAll('#loopDetents button').forEach(b => b.addEventListener('click', () => pickLoop(b)));
+    // the ticks on the dial's rim, and turning it: drag round the dial and it clicks to the nearest length
+    $('loopTicks').innerHTML = [-120, -60, 0, 60, 120].map((a) => { const r = (a * Math.PI) / 180, s = Math.sin(r), c = Math.cos(r);
+      return `<line x1="${(60 + 50 * s).toFixed(1)}" y1="${(60 - 50 * c).toFixed(1)}" x2="${(60 + 58 * s).toFixed(1)}" y2="${(60 - 58 * c).toFixed(1)}"/>`; }).join('');
+    { const g = $('loopGauge'); let turning = false;
+      const turn = (e) => { const r = g.querySelector('.loop-dial').getBoundingClientRect(), a = Math.atan2(e.clientX - (r.left + r.width / 2), (r.top + r.height / 2) - e.clientY) * 180 / Math.PI;
+        const i = Math.max(0, Math.min(4, Math.round((Math.max(-150, Math.min(150, a)) + 120) / 60))), b = document.querySelectorAll('#loopDetents button')[i];
+        if (b && b.getAttribute('aria-pressed') !== 'true') { pickLoop(b); b.dispatchEvent(new Event('click')); } };
+      g.querySelector('.loop-dial').addEventListener('pointerdown', (e) => { turning = true; g.setPointerCapture(e.pointerId); turn(e); });
+      g.addEventListener('pointermove', (e) => { if (turning) turn(e); });
+      g.addEventListener('pointerup', () => { turning = false; }); g.addEventListener('pointercancel', () => { turning = false; }); }
     { let i = 2; try { const v = parseInt(localStorage.getItem(LOOP_PICK), 10); if (v >= 0 && v < 5) i = v; } catch (_) {}
       pickLoop(document.querySelectorAll('#loopDetents button')[i]); }
     $('findLoopBtn').addEventListener('click', () => {
