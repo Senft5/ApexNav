@@ -348,6 +348,14 @@
     .dial.dial-g { display: flex; flex-direction: column; align-items: stretch; }
     .dial.dial-g > :not(.g-score) { flex: 1 1 0; min-height: 0; width: 100%; }
     .dial.dial-g > .g-score { flex: none; height: 44px; }
+    .dial.dial-g > .vfd-meters { flex: 1 0 auto; }
+    html[data-theme="tapedeck"] .dial.dial-g { height: auto; }   /* and the box holds them and the Score */
+    /* a small phone upright: the bar meters get their own row under the speed and the readouts, as on its side (6) */
+    @media (max-width: 359px) {
+      html[data-theme="tapedeck"] .cluster-dials { grid-template-columns: var(--dial) minmax(0, 1fr); }
+      html[data-theme="tapedeck"] .cluster-dials > .dial-g { grid-column: 1 / -1; width: 100%; height: auto; aspect-ratio: auto; }
+      html[data-theme="tapedeck"] .dial-g > .vfd-meters { grid-template-columns: 1fr 1fr; column-gap: 16px; }
+    }   /* Tapedeck's bar meters keep their own height; squeezed, they overprinted the replay keys */
     .dial-g.bezelled .bezel-ring { height: calc(100% - 44px); }   /* Billet's ring rounds the meter, not the Score */
     .dial-num { font-family: var(--font-num); font-size: 15px; font-weight: 600; fill: var(--face-ink); }
     .dial-label { font-size: 14px; font-weight: 700; letter-spacing: 2px; fill: var(--face-dim); }
@@ -836,7 +844,8 @@
       #endCard .end-card > .end-line, #endCard .end-card > .end-acts, #endCard .end-card > .end-links { grid-column: 2; }
       #endCard .end-card > .end-line { grid-row: 1 / span 2; }
       html[data-theme="tapedeck"] .cluster-dials { grid-template-columns: var(--dial) minmax(0, 1fr); }        /* 6: the meters get a row */
-      html[data-theme="tapedeck"] .cluster-dials > .vfd-meters { grid-column: 1 / -1; grid-template-columns: 1fr 1fr; height: auto; }
+      html[data-theme="tapedeck"] .cluster-dials > .dial-g { grid-column: 1 / -1; width: 100%; height: auto; aspect-ratio: auto; }
+      html[data-theme="tapedeck"] .dial-g > .vfd-meters { grid-template-columns: 1fr 1fr; column-gap: 16px; }
       #app.idle:has(.edge.open) .loop-suggest { display: none; }                                                 /* 8: the panel is the task */
       .plan.open { height: calc(100% - var(--safe-bottom)); }                                                     /* 14 */
       /* 14: two columns, so the basic level fits without scrolling: places and the loop left, Roads, More and Find right */
