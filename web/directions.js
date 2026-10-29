@@ -36,12 +36,14 @@
     return `${r} miles`;
   }
 
-  /** What to say for a maneuver { type, street, exits }, or null for one that isn't said. */
+  /** What to say for a maneuver { type, street, exits, exit, toward }, or null for one that isn't said. */
   function phrase(s) {
     const verb = VERB[s.type];
     if (!verb) return null;
     if (ARRIVE.has(s.type)) return 'Arriving at your destination';
-    const onto = s.street ? ` onto ${s.street}` : '';
+    // a numbered exit says its number and where it goes, as the sign does (IDEAS R-29): "Take exit 386B toward Airport"
+    if (s.exit && s.type >= 17 && s.type <= 21) return `Take exit ${s.exit}${s.toward ? ` toward ${s.toward}` : s.street ? ` onto ${s.street}` : ''}`;
+    const onto = s.street ? ` onto ${s.street}` : s.toward && s.type >= 17 && s.type <= 25 ? ` toward ${s.toward}` : '';
     if (s.type === 26) return `At the roundabout, take the ${finite(s.exits) && s.exits > 0 ? ord(s.exits) : 'next'} exit${onto}`;
     return verb + onto;
   }
@@ -71,7 +73,9 @@
         if (nextText) said.add(`${id}:dir:${i + 1}:early`);
       } else if (d >= earlyNear(v) && !said.has(kEarly) && !ARRIVE.has(s.type)
                  && !(i > 0 && s.m - steps[i - 1].m <= THEN_M && phrase(steps[i - 1]))) {   // said as the "then" of the one before
-        out.push({ key: kEarly, text: `In ${distWords(d)}, ${lower(text)}`, now: false, atM: s.m });
+        // the lanes go with the early call, while there is time to move over: ", use the left 2 lanes"
+        const lane = root.ApexLanes && s.lanes ? root.ApexLanes.hint(s.lanes) : null;
+        out.push({ key: kEarly, text: `In ${distWords(d)}, ${lower(text)}${lane ? `, use ${lane}` : ''}`, now: false, atM: s.m });
       }
     }
     return out;
@@ -88,7 +92,8 @@
     for (const r of raw || []) {
       if (!VERB[r.type]) continue;
       const m = place(r.lat, r.lon);
-      if (finite(m) && (!out.length || m >= out[out.length - 1].m)) out.push({ m, type: r.type, street: r.street || null, exits: finite(r.exits) ? r.exits : null });
+      if (finite(m) && (!out.length || m >= out[out.length - 1].m)) out.push({ m, type: r.type, street: r.street || null, exits: finite(r.exits) ? r.exits : null,
+        ...(r.lanes ? { lanes: r.lanes } : {}), ...(r.exit ? { exit: r.exit } : {}), ...(r.toward ? { toward: r.toward } : {}) });
     }
     return out;
   }
@@ -104,8 +109,8 @@
   function stripNote(s) {
     const x = SHORT[s.type];
     if (!x) return null;
-    const code = s.type === 26 && finite(s.exits) && s.exits > 0 ? `Roundabout · exit ${s.exits}` : x[0];
-    return { code, call: ARRIVE.has(s.type) ? 'Destination' : s.street || '', dir: x[1], angle: x[2] };
+    const code = s.type === 26 && finite(s.exits) && s.exits > 0 ? `Roundabout · exit ${s.exits}` : s.exit && s.type >= 17 && s.type <= 21 ? `Exit ${s.exit}` : x[0];
+    return { code, call: ARRIVE.has(s.type) ? 'Destination' : s.street || s.toward || '', dir: x[1], angle: x[2], ...(s.lanes ? { lanes: s.lanes } : {}) };
   }
 
   const api = { due, phrase, distWords, atJunction, placeSteps, stripNote, VERB };
