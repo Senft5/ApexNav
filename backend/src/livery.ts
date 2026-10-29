@@ -11,6 +11,8 @@ export const TIERS = [{ name: "plain", at: 0 }, { name: "club", at: 5 }, { name:
 export type Tier = typeof TIERS[number]["name"];
 export const MAX_PER_MEMBER = 3;
 export const PATTERNS = ["blocks", "bands", "chevron", "checker", "pinstripe"] as const;
+/** Event templates a crew may keep at its tier (REVIEW.md 5.1): none Plain, 3 Club, 10 Works and up. */
+export const templateCap = (t: Tier) => (t === "plain" ? 0 : t === "club" ? 3 : 10);
 const RANK: Record<Tier, number> = { plain: 0, club: 1, works: 2, factory: 3 };
 
 /** The tier for a Decal count, and the next one to reach (null at Factory). */

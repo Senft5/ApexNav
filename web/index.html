@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-Nvp+NVEEUPSKcthH5qom4lrAYU94RQbjoA/p+HO5AIY=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-X5ofmGO6XsgPls9brbKQsDmkncRSJ4rl1KXFYJdOkec=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -4280,7 +4280,7 @@
     const toDrives = () => { if (crewDrivesEl) crewDrivesEl.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
     try { crewPage = window.ApexCrewPage ? ApexCrewPage.mount({ el, btn, toast, apiCall, jsonOf, report: safety && safety.report,
       invite: async (c) => { const r = await apiCall('POST', `/api/crews/${c.id}/invite`); const j = await jsonOf(r); if (r.ok) copyText(`${shareOrigin()}/?crew=${j.token}`, 'Crew link copied.'); else toast(j && j.error === 'too_many_open_invites' ? 'You have 10 open crew links. Turn some off first.' : 'Couldn\'t make a link. Try again.'); },
-      openRoute: (id) => openSharedRoute(id), builds: () => builds, onAllDrives: toDrives, onPlan: (c) => { if (crewEvents) crewEvents.plan(c.id); toDrives(); } }) : null; } catch (e) { console.error('crew page', e); }
+      openRoute: (id) => openSharedRoute(id), builds: () => builds, shareImage: (cv, name) => (window.ApexDriveCard ? ApexDriveCard.shareCard(cv, name) : null), onAllDrives: toDrives, onPlan: (c) => { if (crewEvents) crewEvents.plan(c.id); toDrives(); } }) : null; } catch (e) { console.error('crew page', e); }
     // Units (web/units.js, IDEAS U-22): the page reloads to redraw every number; never mid-drive (the drive lives in this page).
     {
       const paintUnits = () => document.querySelectorAll('[data-units]').forEach(b => { const on = b.dataset.units === ApexUnits.system(); b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); });
@@ -4342,6 +4342,7 @@
       try { const r = await apiCall('GET', '/api/me'); if (r.ok && (r.headers.get('content-type') || '').includes('json')) me = await r.json(); } catch (_) {}
       if (gen !== renderGen) return;
       accountMe = me && me.signed_in ? me : null;
+      if (accountMe && accountMe.member) loadCrewHazardKinds();
       if (friendsMap && accountMe && accountMe.member) { friendsMap.start(); if (state.toggles.friends) friendsMap.setLayer(true); }
       else if (state.toggles.friends) { state.toggles.friends = false; paintSwitches(); }
       if (feedbackUi) feedbackUi.refresh();
@@ -4446,7 +4447,7 @@
       body.append(sharedRoutesSection());
       if (spotsFeed) body.append(spotsFeed.section());
       if (crewStandings) body.append(crewStandings.section());
-      if (crewEvents) body.append(crewDrivesEl = crewEvents.section(Array.isArray(crews) ? crews.map((c) => ({ id: c.id, name: c.name, visibility: c.visibility })) : []));
+      if (crewEvents) body.append(crewDrivesEl = crewEvents.section(Array.isArray(crews) ? crews.map((c) => ({ id: c.id, name: c.name, visibility: c.visibility, role: c.role })) : []));
       if (garage) gbody.append(garage.section());
       if (builds) gbody.append(builds.followingSection());
 
@@ -5580,7 +5581,7 @@
     }
     function askStill(h) {
       reported.asking = h;
-      $('hzAskText').textContent = `${ApexHazardReports.LABEL[h.kind] || 'Hazard'} still there?`;
+      $('hzAskText').textContent = `${h.label || ApexHazardReports.LABEL[h.kind] || 'Hazard'} still there?`;
       $('hzAsk').hidden = false;
       clearTimeout(reported.askTimer);
       reported.askTimer = setTimeout(() => { $('hzAsk').hidden = true; reported.asking = null; }, 12000);
@@ -5601,11 +5602,21 @@
       b.addEventListener('click', () => reportHazard(k));
       $('hzKinds').append(b);
     }
+    // A Factory crew's own categories (REVIEW.md 5.1, e.g. "Cattle grid"): extra buttons for its members, sent as a labelled report.
+    async function loadCrewHazardKinds() {
+      document.querySelectorAll('#hzKinds .hz-custom').forEach((b) => b.remove());
+      const list = accountMe && accountMe.member ? await apiCall('GET', '/api/hazards/kinds').then(jsonOf).catch(() => null) : null;
+      for (const label of Array.isArray(list) ? list : []) {
+        const b = document.createElement('button'); b.className = 'ink-btn hz-btn hz-custom'; b.textContent = label;
+        b.addEventListener('click', () => reportHazard('debris', label));
+        $('hzKinds').append(b);
+      }
+    }
     // One tap reports; for 3 s the Report key is Undo (REVIEW.md 1.2, Hazard report): nothing is sent until then.
     let pendingHz = null;
     function paintHzUndo() {
       const b = $('hzReportBtn');
-      b.textContent = pendingHz ? `Undo ${ApexHazardReports.LABEL[pendingHz.body.kind] || 'report'}` : 'Report';
+      b.textContent = pendingHz ? `Undo ${pendingHz.body.label || ApexHazardReports.LABEL[pendingHz.body.kind] || 'report'}` : 'Report';
       b.setAttribute('aria-label', pendingHz ? 'Undo the hazard report' : 'Report a hazard');
       b.classList.toggle('undo', !!pendingHz);
     }
@@ -5614,24 +5625,24 @@
       $('hzOverlay').classList.add('show');
     });
     $('hzCancel').addEventListener('click', () => $('hzOverlay').classList.remove('show'));
-    async function reportHazard(kind) {
+    async function reportHazard(kind, label = null) {
       $('hzOverlay').classList.remove('show');
       const p = state.lastPosition, heading = state.lastMotion && state.lastMotion.heading;
       if (!p || !state.lastPositionAt || performance.now() - state.lastPositionAt > 10000) { toast('No GPS fix yet. Try again in a moment.'); return; }
-      const body = { kind, lat: p.lat, lon: p.lon, heading: Number.isFinite(heading) ? Math.round((heading % 360 + 360) % 360) : null };
+      const body = { kind, lat: p.lat, lon: p.lon, heading: Number.isFinite(heading) ? Math.round((heading % 360 + 360) % 360) : null, ...(label ? { label } : {}) };
       if (pendingHz) { clearTimeout(pendingHz.timer); const was = pendingHz.body; pendingHz = null; sendHazard(was); }   // the one before goes now
       pendingHz = { body, timer: setTimeout(() => { const b = pendingHz && pendingHz.body; pendingHz = null; paintHzUndo(); if (b) sendHazard(b); }, 3000) };
       paintHzUndo();
     }
     async function sendHazard(body) {
-      const kind = body.kind;
+      const kind = body.kind, word = body.label || ApexHazardReports.LABEL[kind];
       let r = null;
       try { r = await ApexSync.apiFetch('/api/hazards', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }); } catch (_) {}
-      if (!r || r.status >= 500) { outbox.add('/api/hazards', body, true); health.bump('hazard_queued'); toast(`No signal. ${ApexHazardReports.LABEL[kind]} saved; it's sent when you have one.`); return; }
+      if (!r || r.status >= 500) { outbox.add('/api/hazards', body, true); health.bump('hazard_queued'); toast(`No signal. ${word} saved; it's sent when you have one.`); return; }
       if (r.status === 401 || r.status === 403) { toast('Sign in (Crew) to report hazards for others.'); return; }
       if (!r.ok) { toast(r.status === 429 ? 'That\'s a lot of reports today.' : 'Couldn\'t send that. Try again.'); return; }
       const j = await r.json(); reported.mine.add(j.id); reported.said.add(j.id);
-      toast(j.confirmed ? `${ApexHazardReports.LABEL[kind]}: someone reported it already. You confirmed it.` : `${ApexHazardReports.LABEL[kind]} reported. Drivers behind you will hear about it.`);
+      toast(j.confirmed ? `${word}: someone reported it already. You confirmed it.` : `${word} reported. Drivers behind you will hear about it.`);
       loadReported(true);
     }
 

@@ -6,6 +6,20 @@ it says so. Things only you can do are in docs/OWNER_TODO.md.
 
 ## 2026-10-29
 
+**The livery tiers' extras (REVIEW.md 5.1), dormant until Pro ships like the tiers themselves.** My calls:
+- *Club*: the owner pins one chat message; the crew keeps 3 event templates (the owner keeps one when planning a drive;
+  anyone planning picks one to fill the form).
+- *Works*: member badges (owner-set, 16 characters, shown on the board), a house stage with its own board (a stage shared
+  with the crew), a convoy call sign that names the crew's convoys ("RIDGE · Dawn run"), 10 templates.
+- *Factory*: the crest draws itself in the theme's accent (still with reduced motion), the crew page as a share card
+  (crest, name, motto, tier, members, next drive; no photos, nobody's position), and up to four crew hazard categories
+  ("Cattle grid"). *A crew's category is read only by its members*; everyone else's plate says Debris, so a label typed
+  by one crew's owner never reaches strangers.
+- *Postponed with a technical reason*: the crew's spoken regroup line ("Ridge Runners, regroup at the overlook") needs the
+  pack's voice to say any crew's name. The packs are prerendered clips; saying an arbitrary name would need a voice model
+  on the phone (refused in the app by App Store 2.5.2) or a speech server. It comes if either exists.
+- Migrations 0037 and 0038 are applied to both D1 databases.
+
 **The end of a drive speaks, and the plan sheet gets its Prefer stamps (REVIEW.md 4.4, 3.3).** My calls:
 - *Each pack closes in its own words around the Vetta Score* ("That's the drive. Score seven hundred two, your best on
   this road." / "Seven hundred two. Best yet on this road. That's a wrap." / "Complete. Score, seven hundred two."). The

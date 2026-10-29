@@ -10,7 +10,7 @@ import { clientError, errorSummary, serverError } from "./errors";
 import { backupDatabase } from "./backup";
 import { sweepExpired } from "./sweep";
 import { appleSignIn } from "./apple";
-import { hazardsNear, reportHazard, voteHazard } from "./hazards";
+import { crewHazardKinds, hazardsNear, reportHazard, voteHazard } from "./hazards";
 import { routeDelete, routeGet, routesSharedWithMe, shareRoute } from "./routes_shared";
 
 const BACKUP_CRON = "0 7 * * 1";   // wrangler.jsonc triggers; the other cron is the daily sweep
@@ -20,7 +20,7 @@ import {
 } from "./social";
 import { deleteAccount, exportMyData } from "./account";
 import { carCreate, carDelete, carUpdate, myCars, peoplesCars } from "./garage";
-import { chatDelete, chatList, chatPost, crewPage, crewPageUpdate } from "./crew_page";
+import { chatDelete, chatList, chatPost, crewBadge, crewPage, crewPageUpdate, templateCreate, templateDelete, templatesList } from "./crew_page";
 import { decalsPlace } from "./livery";
 import { presencePublish, presenceSettingsGet, presenceSettingsPut, presenceView } from "./presence";
 import { buildChatDelete, buildChatList, buildChatPost, buildCreate, buildDelete, buildFind, buildFollow, buildGet, buildUpdate, buildsFollowing, postCreate, postDelete, replyCreate, replyDelete, replyTried } from "./builds";
@@ -148,6 +148,10 @@ on("DELETE", "/api/events/:id", async (req, env, m) => { await eventCancel(env, 
 // the crew page (src/crew_page.ts, REVIEW.md roadmap 20)
 on("GET", "/api/crews/:id/page", async (req, env, m) => json(await crewPage(env, await requireMember(req, env), m.groups!.id)));
 on("PUT", "/api/crews/:id/page", async (req, env, m) => { await crewPageUpdate(env, await requireMember(req, env), m.groups!.id, req); return noContent(); });
+on("PUT", "/api/crews/:id/badges", async (req, env, m) => { await crewBadge(env, await requireMember(req, env), m.groups!.id, req); return noContent(); });
+on("GET", "/api/crews/:id/templates", async (req, env, m) => json(await templatesList(env, await requireMember(req, env), m.groups!.id)));
+on("POST", "/api/crews/:id/templates", async (req, env, m) => json(await templateCreate(env, await requireMember(req, env), m.groups!.id, req), 201));
+on("DELETE", "/api/crews/:id/templates/:tid", async (req, env, m) => { await templateDelete(env, await requireMember(req, env), m.groups!.id, m.groups!.tid); return noContent(); });
 on("PUT", "/api/crews/:id/decals", async (req, env, m) => { await decalsPlace(env, await requireMember(req, env), m.groups!.id, req); return noContent(); });
 on("GET", "/api/crews/:id/chat", async (req, env, m) => json(await chatList(env, await requireMember(req, env), m.groups!.id, new URL(req.url))));
 on("POST", "/api/crews/:id/chat", async (req, env, m) => json(await chatPost(env, await requireMember(req, env), m.groups!.id, req), 201));
@@ -211,8 +215,9 @@ on("POST", "/api/routes", async (req, env) => json(await shareRoute(env, await r
 on("GET", "/api/routes/shared", async (req, env) => json(await routesSharedWithMe(env, await requireMember(req, env))));
 on("GET", "/api/routes/:id", async (req, env, m) => json(await routeGet(env, await requireMember(req, env), m.groups!.id)));
 on("DELETE", "/api/routes/:id", async (req, env, m) => json(await routeDelete(env, await requireMember(req, env), m.groups!.id)));
+on("GET", "/api/hazards/kinds", async (req, env) => json(await crewHazardKinds(env, await requireMember(req, env))));
 on("POST", "/api/hazards", async (req, env) => json(await reportHazard(env, await requireMember(req, env), req), 201));
-on("GET", "/api/hazards", async (req, env) => { await requireMember(req, env); return json(await hazardsNear(env, new URL(req.url))); });
+on("GET", "/api/hazards", async (req, env) => json(await hazardsNear(env, new URL(req.url), await requireMember(req, env))));
 on("POST", "/api/hazards/:id/vote", async (req, env, m) => json(await voteHazard(env, await requireMember(req, env), m.groups!.id, req)));
 on("POST", "/api/highlights", async (req, env) => json(await highlightCreate(env, await requireMember(req, env), req), 201));
 on("GET", "/api/highlights", async (req, env) => json(await highlightList(env, await requireMember(req, env), new URL(req.url))));

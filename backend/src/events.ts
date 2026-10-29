@@ -7,6 +7,7 @@ import { Env, HttpError, body, num, randomToken } from "./util";
 import { cleanText } from "./convoy";
 import { isCrewMember } from "./social";
 import { reportedSql } from "./reports_sql";
+import { atLeast, tierOf } from "./livery";
 
 export const MAX_UPCOMING = 10, MAX_AHEAD_DAYS = 30, SHOW_AFTER_START_H = 6, KEEP_AFTER_START_DAYS = 7, MAX_REGROUP = 5;
 export const ROLES = ["lead", "sweep"] as const;
@@ -94,14 +95,14 @@ export async function eventCreate(env: Env, v: Viewer, crewId: string, req: Requ
 
 interface EventRow { id: string; crew_id: string; crew_name: string; title: string; starts_at: string; meet_name: string | null; meet_lat: number; meet_lon: number;
   route_id: string | null; notes: string | null; public: number; by_handle: string | null; mine: number; can_cancel: number; my_rsvp: string | null; going: string; maybe: number;
-  lead: string | null; sweep: string | null; regroup: string }
+  lead: string | null; sweep: string | null; regroup: string; call_sign: string | null }
 
 /** Upcoming drives (from SHOW_AFTER_START_H ago) in one crew, or in all your crews; each with who's going (handles). */
 export async function eventsList(env: Env, v: Viewer, crewId: string | null) {
   if (crewId && !(await isCrewMember(env, crewId, v.id))) throw new HttpError(404, "no_crew");
   const rows = (await env.DB.prepare(
     `SELECT e.id, e.crew_id, c.name AS crew_name, e.title, e.starts_at, e.meet_name, e.meet_lat, e.meet_lon, e.route_id, e.notes, e.public,
-            u.handle AS by_handle, (e.created_by = ?1) AS mine, e.regroup,
+            u.handle AS by_handle, (e.created_by = ?1) AS mine, e.regroup, c.call_sign,
             (SELECT lu.handle FROM users lu JOIN crew_members lm ON lm.user_id = lu.id AND lm.crew_id = e.crew_id WHERE lu.id = e.lead_id) AS lead,
             (SELECT su.handle FROM users su JOIN crew_members sm ON sm.user_id = su.id AND sm.crew_id = e.crew_id WHERE su.id = e.sweep_id) AS sweep, (e.created_by = ?1 OR c.owner = ?1) AS can_cancel,
             (SELECT status FROM crew_event_rsvps r WHERE r.event_id = e.id AND r.user_id = ?1) AS my_rsvp,
@@ -114,7 +115,10 @@ export async function eventsList(env: Env, v: Viewer, crewId: string | null) {
        LEFT JOIN users u ON u.id = e.created_by
       WHERE ${VISIBLE("e")} AND e.starts_at > datetime('now', '-${SHOW_AFTER_START_H} hours') ${crewId ? "AND e.crew_id = ?2" : ""}
       ORDER BY e.starts_at LIMIT 50`).bind(...(crewId ? [v.id, crewId] : [v.id])).all<EventRow>()).results;
-  return rows.map((r) => ({ ...r, public: !!r.public, mine: !!r.mine, can_cancel: !!r.can_cancel, starts_at: r.starts_at.replace(" ", "T") + "Z", going: JSON.parse(r.going) as string[],
+  // the crew's convoy call sign is Works livery (REVIEW.md 5.1): shown only while the crew's tier reaches it
+  const works = new Map<string, boolean>();
+  for (const id of new Set(rows.filter((r) => r.call_sign).map((r) => r.crew_id))) works.set(id, atLeast(await tierOf(env, id), "works"));
+  return rows.map((r) => ({ ...r, call_sign: r.call_sign && works.get(r.crew_id) ? r.call_sign : null, public: !!r.public, mine: !!r.mine, can_cancel: !!r.can_cancel, starts_at: r.starts_at.replace(" ", "T") + "Z", going: JSON.parse(r.going) as string[],
     regroup: JSON.parse(r.regroup || "[]") as { name: string; lat: number; lon: number }[] }));
 }
 
