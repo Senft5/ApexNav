@@ -50,7 +50,7 @@ struct ApexShellRootView: View {
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            Color(uiColor: .launchPanel).ignoresSafeArea()
             if let indexURL = ApexWebBundle.indexURL {
                 ApexCockpitWebView(shell: shell, indexURL: indexURL)
                     .ignoresSafeArea()
@@ -267,8 +267,8 @@ struct ApexCockpitWebView: UIViewRepresentable {
 
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.isOpaque = false
-        webView.backgroundColor = .black
-        webView.scrollView.backgroundColor = .black
+        webView.backgroundColor = .launchPanel        // the launch screen's colour until the page's cover paints
+        webView.scrollView.backgroundColor = .launchPanel
         webView.scrollView.contentInsetAdjustmentBehavior = .never
         webView.scrollView.isScrollEnabled = false
         webView.scrollView.bounces = false
@@ -1300,6 +1300,12 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         }
         synth.speak(utterance)
     }
+}
+
+extension UIColor {
+    /// The night panel colour (#151310): the launch screen (Assets LaunchBackground), the shell behind the web view and the
+    /// page's opening cover all match, so opening the app never flashes another colour.
+    static let launchPanel = UIColor(red: 0x15 / 255.0, green: 0x13 / 255.0, blue: 0x10 / 255.0, alpha: 1)
 }
 
 extension WKWebView {
