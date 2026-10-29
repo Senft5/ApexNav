@@ -1643,7 +1643,7 @@ flow('REVIEW.md 1.2 screen by screen: the Log, drive detail, Stages, Crew signed
 const SAFE = { portrait: { w: 393, h: 852, R: 55, i: { top: 59, bottom: 34, left: 0, right: 0 } }, landscape: { w: 852, h: 393, R: 55, i: { top: 0, bottom: 21, left: 59, right: 59 } },
   'mini on its side': { w: 812, h: 375, R: 44, i: { top: 0, bottom: 21, left: 50, right: 50 } }, SE: { w: 375, h: 667, R: 0, i: { top: 20, bottom: 0, left: 0, right: 0 } } };
 const unsafe = (page, d) => page.evaluate(({ d, R }) => {
-    const out = [], W = innerWidth, H = innerHeight, i = d.i;
+    const out = [], keys = [], W = innerWidth, H = innerHeight, i = d.i;
     const inCornerOut = (x, y) => { const cx = x < R ? R : x > W - R ? W - R : null, cy = y < R ? R : y > H - R ? H - R : null; return cx !== null && cy !== null && Math.hypot(x - cx, y - cy) > R; };
     const vis = (e) => { const cs = getComputedStyle(e); if (cs.visibility === 'hidden' || cs.display === 'none' || +cs.opacity === 0) return false; const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && r.bottom > 0 && r.right > 0 && r.top < H && r.left < W; };
     const covered = (e, r) => { const x = Math.min(Math.max(r.left + r.width / 2, 0), W - 1), y = Math.min(Math.max(r.top + r.height / 2, 0), H - 1); const t = document.elementFromPoint(x, y); return t && t !== e && !e.contains(t) && !t.contains(e); };
@@ -1671,7 +1671,23 @@ const unsafe = (page, d) => page.evaluate(({ d, R }) => {
       if (box.left < i.left - 0.5) why.push('left ' + Math.round(box.left));
       if (box.right > W - i.right + 0.5) why.push('right ' + Math.round(W - box.right));
       for (const [x, y] of (scrolled ? [[box.left, box.top], [box.right, box.top]] : [[box.left, box.top], [box.right, box.top], [box.left, box.bottom], [box.right, box.bottom]])) if (inCornerOut(x, y) && !(docScrolled && y < band) && !(scrolled && y > H - R)) { why.push('corner'); break; }
-      if (why.length) out.push(`${e.tagName.toLowerCase()}${e.id ? '#' + e.id : ''}.${String(e.className && e.className.baseVal !== undefined ? e.className.baseVal : e.className).split(' ')[0]} "${(e.innerText || e.value || e.getAttribute('aria-label') || '').trim().slice(0, 24)}" ${why.join(',')}`);
+      // the gap test: text and keys at least 8 pt from a display edge the insets don't already cover (REVIEW2.md 1, U-23)
+      const sideScroll = sc && sc !== document.body && sc.scrollWidth > sc.clientWidth + 1;   // a row that scrolls sideways may run to the edge
+      if (!sideScroll && !fixedAnc && !e.closest('.tabbar, .map-key, .edge, .plates, .place-plate, .hz-plate, .toast')) {
+        const g = 7.5;
+        if (i.left < 1 && box.left < g && box.left > -1) why.push('gap left ' + Math.round(box.left));
+        if (i.right < 1 && W - box.right < g && W - box.right > -1) why.push('gap right ' + Math.round(W - box.right));
+      }
+      const label = `${e.tagName.toLowerCase()}${e.id ? '#' + e.id : ''}.${String(e.className && e.className.baseVal !== undefined ? e.className.baseVal : e.className).split(' ')[0]} "${(e.innerText || e.value || e.getAttribute('aria-label') || '').trim().slice(0, 24)}"`;
+      if (why.length) out.push(`${label} ${why.join(',')}`);
+      if (e.matches('button, a, input, textarea, select, summary, [role="button"], [role="radio"], [role="tab"]')) keys.push({ e, box, label });
+    }
+    // the overlap test: two keys you can see never sit on each other (a panel under a panel, a plate over a key)
+    for (let a = 0; a < keys.length; a++) for (let b = a + 1; b < keys.length; b++) {
+      const A = keys[a], B = keys[b];
+      if (A.e.contains(B.e) || B.e.contains(A.e)) continue;
+      const w = Math.min(A.box.right, B.box.right) - Math.max(A.box.left, B.box.left), h = Math.min(A.box.bottom, B.box.bottom) - Math.max(A.box.top, B.box.top);
+      if (w > 2 && h > 2) out.push(`${A.label} overlaps ${B.label}`);
     }
     return out;
   }, { d, R: d.R });
@@ -1698,7 +1714,14 @@ flow('safe areas: the Dynamic Island, the home indicator and the rounded corners
     ['log', '/analysis.html?tab=log', null],
     ['privacy', '/privacy.html', null],
   ];
-  const bad = [];
+  // the scanner catches what it says it does: two planted keys that overlap, and one 3 pt from the edge
+  await page.setViewportSize({ width: SAFE.portrait.w, height: SAFE.portrait.h });
+  await page.goto(base + '/privacy.html');
+  await page.evaluate(() => { const k = (l, t) => { const b = document.createElement('button'); b.textContent = 'X'; b.style.cssText = `position:absolute;left:${l}px;top:${t}px;width:60px;height:60px;z-index:99`; document.body.append(b); };
+    k(100, 300); k(150, 330); k(3, 500); });
+  const planted = await unsafe(page, SAFE.portrait);
+  check(planted.some((b) => /X" overlaps/.test(b)) && planted.some((b) => /gap left 3/.test(b)), 'the scanner finds a planted overlap and gap: ' + planted.join(' | '));
+  const bad = [], shots = [];
   for (const [orient, d] of Object.entries(SAFE)) {
     await page.setViewportSize({ width: d.w, height: d.h });
     await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets: d.i });
@@ -1707,9 +1730,22 @@ flow('safe areas: the Dynamic Island, the home indicator and the rounded corners
       await page.evaluate((f) => { if (f) localStorage.setItem('e2e.fresh', '1'); else localStorage.removeItem('e2e.fresh'); }, !!fresh);
       await page.goto(base + url);
       await page.waitForFunction(() => document.readyState === 'complete' && (!document.getElementById('app') || (window.apex && window.apexDebug)));
-      await page.waitForTimeout(900);
+      await page.waitForFunction(() => !document.getElementById('boot'), null, { timeout: 5000 });   // the opening cover (boot.js) hides everything for up to 2.5 s
+      await page.waitForTimeout(300);
       if (act) { await page.evaluate('(async () => { ' + act + ' })()'); await page.waitForTimeout(700); }
       for (const b of await unsafe(page, d)) bad.push(`${orient} · ${name}: ${b}`);
+      if (process.env.SHOTS) shots.push({ orient, name, png: (await page.screenshot()).toString('base64'), w: d.w });
+    }
+  }
+  // SHOTS=<dir>: one contact sheet per phone shape, for the next design review (CI keeps them as an artefact, U-05)
+  if (process.env.SHOTS) {
+    require('fs').mkdirSync(process.env.SHOTS, { recursive: true });
+    for (const orient of Object.keys(SAFE)) {
+      const set = shots.filter((x) => x.orient === orient), w = Math.round(set[0].w / 2);
+      await page.setViewportSize({ width: 4 * (w + 16) + 16, height: 600 });
+      await page.setContent(`<body style="margin:0;padding:8px;background:#2b2b2b;font:12px sans-serif;color:#ddd;display:flex;flex-wrap:wrap;gap:16px">${
+        set.map((x) => `<figure style="margin:0;width:${w}px"><img style="width:100%" src="data:image/png;base64,${x.png}"><figcaption>${x.name}</figcaption></figure>`).join('')}</body>`);
+      await page.screenshot({ path: `${process.env.SHOTS}/${orient.replace(/\W+/g, '-')}.png`, fullPage: true });
     }
   }
   check(!bad.length, 'under the island, the home indicator or a corner:\n  ' + bad.join('\n  '));

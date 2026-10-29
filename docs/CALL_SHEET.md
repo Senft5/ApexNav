@@ -6,6 +6,28 @@ it says so. Things only you can do are in docs/OWNER_TODO.md.
 
 ## 2026-10-29
 
+**Roadmap 2 item 10: one slide switch (U-44).** Every on/off setting (Layers, Garage, Friends, a friend's and a crew's
+Scores and Times, Share road feel) is the same switch: a 44 x 24 track, a 20 px thumb that travels 20 px with a 2 px drop;
+off is a pencil thumb on paper, on is an ink track. My calls:
+- *No red in a switch or a value*: "Notes Auto" and the like are ink. Red stays record and destructive.
+- *Night is a three-position switch in the Garage* (Auto / Day / Night) instead of a value that cycles. Notes keeps its
+  cycling row for now (its three values have words of their own in Layers).
+- *The drive page's Speed / Smoothness map colour is the mode switch*, not two boxes.
+Undo: the `.sw` block in index.html, `switchRow`, `#nightSwitch`.
+
+**Roadmap 2 (docs/design/REVIEW2.md 5), the leftovers of items 2, 4, 6 and 7.** My calls:
+- *Privacy, Terms and Licences use the app's Roadbook paper, ink and Inter Tight*, with a "‹ Garage" row and the draft
+  notice as an ink rule (U-26). The words are unchanged. The `?view=garage` link they use now opens the Garage (it was
+  ignored). Undo: web/legal.css from git.
+- *About is a section in the Garage* (version, the four promises); the landing page stays on the website. The iOS shell
+  injects the version (`window.APEX_VERSION`); the website shows "Website".
+- *The Log page gets the right-hand tab rail on its side*, like the other tabs (U-27).
+- *A Pro theme on trial says so in a status plate next to the replay plate* ("Tapedeck · 9:40 left · Stop"), not a
+  toast over the hazard plate's place (U-39).
+- *The safe-area e2e flow also fails on overlapping keys and on text or keys under 8 pt from an edge the insets don't
+  cover*, checks its own scanner on planted faults first, and waits for the opening cover to lift: until now it had been
+  scanning the cover on most screens. CI keeps one contact sheet per phone shape (`safe-area-contact-sheets`).
+
 **The voices: one voice per drive, every clip heard right, one loudness.** You said the voices were messed up in the app
 and on the website. What I found, by transcribing every clip with Whisper and measuring them: Marguerite (`bf_isabella`)
 added a syllable to short calls ("Left four plus-es", "Crest-ed"), 103 of her clips misheard; Kit had 89 and Hale 32

@@ -1,22 +1,27 @@
-/* Privacy and terms pages: plain reading pages, light and dark, phone first. */
-:root { --bg: #f7f6f2; --ink: #16181d; --muted: #5d636e; --rule: #dcd9d0; --accent: #c2410c; --warn-bg: #fff4d6; --warn-ink: #6b4a00; }
+/* Privacy, terms and licences: reading pages on the app's own tokens (Roadbook paper and ink, Inter Tight; REVIEW2.md U-26),
+   light and dark (the night page), phone first. */
+@import url("https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;600;700&display=swap");
+:root { --panel: #EDE4D3; --panel-ink: #1C1A17; --panel-dim: #6A6255; --rule: #1C1A17; --hair: #CFC4AE; --accent: #C8102E; }
 @media (prefers-color-scheme: dark) {
-  :root { --bg: #111317; --ink: #eceae4; --muted: #a2a7b0; --rule: #2a2e35; --accent: #fb923c; --warn-bg: #3a2f12; --warn-ink: #f6dd9a; }
+  :root { --panel: #151310; --panel-ink: #EDE4D3; --panel-dim: #8C8373; --rule: #EDE4D3; --hair: #2E2A23; --accent: #E65252; }
 }
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
-body { margin: 0; background: var(--bg); color: var(--ink); font: 17px/1.55 -apple-system, BlinkMacSystemFont, "Inter Tight", system-ui, sans-serif; }
+body { margin: 0; background: var(--panel); color: var(--panel-ink); font: 17px/1.55 "Inter Tight", "Helvetica Neue", Arial, sans-serif; }
 main { max-width: 680px; margin: 0 auto; padding: calc(16px + env(safe-area-inset-top, 0px)) calc(20px + env(safe-area-inset-right, 0px)) calc(48px + env(safe-area-inset-bottom, 0px)) calc(20px + env(safe-area-inset-left, 0px)); }
 /* the status bar's band: text scrolling up passes under it, never visibly behind the Dynamic Island or notch */
-body::before { content: ""; position: fixed; z-index: 100; left: 0; right: 0; top: 0; height: env(safe-area-inset-top, 0px); background: var(--bg); }
+body::before { content: ""; position: fixed; z-index: 100; left: 0; right: 0; top: 0; height: env(safe-area-inset-top, 0px); background: var(--panel); }
 h1 { font-size: 2rem; line-height: 1.15; margin: 8px 0 12px; }
-h2 { font-size: 1.15rem; margin: 28px 0 8px; padding-top: 16px; border-top: 1px solid var(--rule); }
+h2 { font-size: 1.15rem; margin: 28px 0 8px; padding-top: 16px; border-top: 1px solid var(--hair); }
 p, ul { margin: 0 0 12px; }
 ul { padding-left: 1.2em; }
 li { margin-bottom: 6px; }
 .lede { font-size: 1.08rem; }
-.meta { color: var(--muted); font-size: 0.92rem; }
-a { color: var(--accent); }
-.draft { background: var(--warn-bg); color: var(--warn-ink); padding: 8px 12px; border-radius: 8px; font-size: 0.92rem; }
+.meta { color: var(--panel-dim); font-size: 0.92rem; }
+a { color: var(--panel-ink); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+/* the way back, as drive detail's "‹ Log": one glyph everywhere */
+.back { display: inline-block; min-height: 44px; padding: 10px 0; font-weight: 600; text-decoration: none; }
+/* until the owner approves the words: an ink rule with pencil text, not a yellow box */
+.draft { border-top: 2px solid var(--rule); padding: 8px 0 0; color: var(--panel-dim); font-size: 0.92rem; }
 
 .license { font-size: 13px; line-height: 1.45; }

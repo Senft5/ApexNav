@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-naVHzbUeomUzD/4v25jC/f6sWDYmtZLTXhGOOB+epvQ=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-JE+J7kpVeyIVjfaV9gXchQkU3/RmoVZ5Q5GqMPVB/p0=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -129,6 +129,11 @@
 
     /* ---------------- pace-note strip ---------------- */
     .notes { background: var(--panel); color: var(--panel-ink); padding: calc(6px + var(--safe-top)) 14px 6px; border-bottom: 1px solid var(--rule); min-height: 64px; }
+    /* About in the Garage (REVIEW2.md U-26): the app's own words, not the website's landing page */
+    .about-vetta .row { display: flex; justify-content: space-between; align-items: baseline; padding: 10px 0; border-bottom: 1px solid var(--hair); }
+    .about-vetta .row b { font-variant-numeric: tabular-nums; }
+    .about-vetta .promises { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 8px; font-size: 14px; color: var(--panel-dim); }
+    .about-vetta .promises b { color: var(--panel-ink); }
     .note-quiet { display: flex; gap: 10px; align-items: baseline; padding: 10px 6px; }
     .note-quiet b { font-size: 20px; font-weight: 700; }
     .note-quiet span { font-size: 13px; color: var(--panel-dim); }
@@ -186,7 +191,8 @@
     #map { position: absolute; inset: 0; }
     .maplibregl-ctrl-top-left, .maplibregl-ctrl-top-right, .maplibregl-ctrl-bottom-left { display: none !important; }
     .maplibregl-ctrl-attrib { font-size: 10px; }
-    .plates { position: absolute; left: 10px; bottom: 10px; z-index: 4; display: flex; gap: 6px; }
+    .plates { position: absolute; left: 10px; bottom: 10px; z-index: 4; display: flex; flex-wrap: wrap; gap: 6px; max-width: calc(100% - 90px); }
+    .trial-plate { font-variant-numeric: tabular-nums; } .trial-plate .linkbtn { font: inherit; color: inherit; text-decoration: underline; padding: 0; min-height: 0; }
     .plate { background: var(--panel); color: var(--panel-ink); border: 1px solid var(--rule); padding: 8px 12px; font-size: 13px; font-weight: 600; min-height: 36px; }
     .plate.gear { width: 44px; height: 44px; min-height: 44px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
     .plate.gear svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; }
@@ -366,25 +372,21 @@
 
     .switches { display: flex; justify-content: space-between; align-items: flex-start; gap: 4px; flex-wrap: wrap; }
     .sw { display: grid; justify-items: center; gap: 4px; min-width: 44px; padding: 4px 2px; }
-    .sw i { width: 30px; height: 14px; border: 1.5px solid var(--panel-dim); position: relative; display: block; }
-    .sw i::after { content: ""; position: absolute; top: 2px; left: 2px; width: 8px; height: 7px; background: var(--panel-dim); transition: left 0.12s; }
-    .sw.on i { border-color: var(--accent); }
-    .sw.on i::after { left: 17px; background: var(--accent); }
+    /* The slide switch (REVIEW.md 2.1, REVIEW2.md U-44): one component in Layers, the Garage and Friends. A 44 x 24 track, a
+       20 px thumb that travels 20 px with a 2 px drop; on, the track fills with ink. Not a checkbox, not red. */
+    .sw i { width: 44px; height: 24px; flex: none; border: 1.5px solid var(--panel-ink); background: var(--panel); position: relative; display: block;
+      box-shadow: inset 0 2px 3px rgba(0, 0, 0, 0.18); transition: background-color 0.15s ease-out; }
+    .sw i::after { content: ""; position: absolute; top: 0.5px; left: 0.5px; width: 20px; height: 20px; background: var(--panel-dim);   /* off: a pencil thumb on paper */
+      box-shadow: 0 2px 0 rgba(0, 0, 0, 0.3); transition: transform 0.15s ease-out, background-color 0.15s ease-out; }
+    .sw.on i { background: var(--panel-ink); }
+    .sw.on i::after { transform: translateX(20px); background: var(--panel); }
     .sw span { font-size: 11px; font-weight: 600; color: var(--panel-dim); }
-    #switchRow, .edge-panel .switches, .sheet .switches { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; }
-    /* toggles with travel and depth (REVIEW.md 1.1 #6: not a square sliding in a rectangle) */
-    .sheet .sw i, .edge-panel .sw i { box-shadow: inset 0 2px 3px rgba(0,0,0,0.18); transition: border-color 0.15s, background-color 0.15s; }
-    .sheet .sw i::after, .edge-panel .sw i::after { box-shadow: 0 2px 0 rgba(0,0,0,0.3); transition: left 0.15s ease-out, background-color 0.15s; }
-    .sheet .sw.on i, .edge-panel .sw.on i { background: color-mix(in srgb, var(--accent) 14%, transparent); }
-    .sheet .sw, .edge-panel .sw { display: flex; flex-direction: row-reverse; justify-content: space-between; align-items: center; width: 100%; min-height: 48px; padding: 0; border-top: 1px solid var(--hair, var(--panel-dim)); }
-    .sheet .sw span, .edge-panel .sw span { font-size: 15px; font-weight: 500; color: var(--panel-ink); }
-    /* In a list the switch is read at arm's length: a track big enough to see On from Off at a glance. */
-    .sheet .sw i, .edge-panel .sw i { width: 44px; height: 24px; flex: none; }
-    .sheet .sw i::after, .edge-panel .sw i::after { top: 3px; left: 3px; width: 15px; height: 15px; }
-    .sheet .sw.on i::after, .edge-panel .sw.on i::after { left: 23px; }
+    @media (prefers-reduced-motion: reduce) { .sw i, .sw i::after { transition: none; } }
+    .sheet .sw, .edge-panel .sw, .side-pop .sw { display: flex; flex-direction: row-reverse; justify-content: space-between; align-items: center; width: 100%; min-height: 48px; padding: 0; border-top: 1px solid var(--hair, var(--panel-dim)); }
+    .sheet .sw span, .edge-panel .sw span, .side-pop .sw span { font-size: 15px; font-weight: 500; color: var(--panel-ink); }
     .sw.on span { color: var(--panel-ink); }
     .sw-cycle { min-height: 44px; }
-    .sw-cycle b { min-width: 30px; font-size: 11px; font-weight: 700; color: var(--accent); }
+    .sw-cycle b { min-width: 30px; font-size: 11px; font-weight: 700; color: var(--panel-ink); }   /* a value is ink: red is record and destructive */
     .sheet .sw-cycle b, .edge-panel .sw-cycle b { font-size: 15px; font-weight: 600; }
     .route-key { height: 34px; padding: 0 14px; }
 
@@ -834,6 +836,8 @@
       <div class="hz-plate" id="hzPlate" role="status" aria-live="assertive" hidden><svg viewBox="0 0 28 25" aria-hidden="true"><path class="hz-tri" d="M14 1 L27 24 H1 Z"/><path d="M14 9 V16 M14 19.5 V20.5" stroke-width="3" stroke-linecap="round"/></svg><b id="hzPlateTitle"></b><span id="hzPlateDetail"></span></div>
       <div class="plates">
         <div class="plate" id="modePlate" role="status">Replay</div>
+        <!-- a Pro theme on trial: its status line, not a box over the hazard plate's place (REVIEW2.md U-39) -->
+        <div class="plate trial-plate" id="trialPlate" role="status" hidden><span id="trialText"></span> · <button class="linkbtn" id="trialStop">Stop</button></div>
       </div>
       <button class="map-key recenter-key" id="recenterBtn" aria-label="Recenter"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/><circle cx="12" cy="12" r="1.5"/></svg><span class="rc-left"></span></button>
       <div class="toast" id="toast" role="status" aria-live="polite"></div>
@@ -1044,8 +1048,11 @@
               <button class="sw" data-toggle="voice"><i></i><span>Voice</span></button>
               <button class="sw" data-toggle="haptics"><i></i><span>Haptics</span></button>
               <button class="sw" data-toggle="keys"><i></i><span>Key sounds</span></button>
-              <button class="sw sw-cycle" data-cycle="nightMode" aria-label="Night"><b></b><span>Night</span></button>
             </div>
+            <div class="ctl"><p class="ctl-label">Night</p>
+              <div class="switch" id="nightSwitch" role="radiogroup" aria-label="Night">
+                <button data-night="auto" role="radio">Auto</button><button data-night="off" role="radio">Day</button><button data-night="on" role="radio">Night</button>
+              </div></div>
             <p class="note">Notes: Full calls every corner; Quiet only hazards and cameras; Auto calls corners once you are cornering with some purpose, quiet otherwise. Night: Auto turns the page over after sunset.</p>
           </section>
           <section data-panel="garage">
@@ -1067,6 +1074,16 @@
               <button data-cam="whip">Whip</button>
             </div>
             <p class="note">How far the map leans into corners ahead.</p>
+          </section>
+          <section class="about-vetta" data-panel="garage">
+            <h3>About Vetta</h3>
+            <div class="row"><span>Version</span><b id="aboutVersion">--</b></div>
+            <ul class="promises">
+              <li><b>No races.</b> No speed or time leaderboards, and no record of how fast anyone went.</li>
+              <li><b>Yours until you share it.</b> Drives stay on this phone; privacy zones keep home and work out of everything.</li>
+              <li><b>Unknown stays unknown.</b> When the app doesn't know, it shows --, never a guess.</li>
+              <li><b>No subscription.</b> No ads, and no data sold.</li>
+            </ul>
           </section>
           <section class="sources" data-panel="garage">
             <details class="more"><summary>Sources and licences</summary><p class="note">Map &copy; OpenStreetMap contributors via OpenFreeMap. Terrain: AWS Terrarium DEM. Routing, map matching and posted limits: Valhalla (FOSSGIS). Geocoding: Nominatim. Search suggestions: Photon (Komoot). Plate-reading cameras: OpenStreetMap (<code>surveillance:type=ALPR</code>, DeFlock) via Overpass. Voices: Kokoro-82M (Apache-2.0).</p></details>
@@ -1378,6 +1395,7 @@
     function savePrefs() { try { localStorage.setItem('apex.prefs', JSON.stringify({ theme: state.theme, themeV: 2, camFeel: state.camFeel, voiceId: state.voiceId, liveVoice: state.liveVoice, liveVoiceV: 2, voiceName: state.voiceName, hlOn: state.hlOn, hlStrength: state.hlStrength, notesMode: state.notesMode, noteWords: state.noteWords, nightMode: state.nightMode, toggles: state.toggles })); } catch (_) {} }
     function paintSwitches() {
       document.querySelectorAll('[data-toggle]').forEach(b => { const on = !!state.toggles[b.dataset.toggle]; b.classList.toggle('on', on); b.setAttribute('role', 'switch'); b.setAttribute('aria-checked', String(on)); });
+      document.querySelectorAll('#nightSwitch [data-night]').forEach(b => b.setAttribute('aria-checked', String(b.dataset.night === state.nightMode)));
       document.querySelectorAll('[data-cycle]').forEach(b => { const v = state[b.dataset.cycle]; b.querySelector('b').textContent = MODE_LABEL[v]; b.setAttribute('aria-label', `${b.querySelector('span').textContent}: ${MODE_LABEL[v]}`); });
     }
     function applyTheme() {
@@ -1439,6 +1457,7 @@
     const map = new maplibregl.Map({ container: 'map', style: MAP_STYLE,
       center: startPos ? [startPos.lon, startPos.lat] : [-84.70, 39.24], zoom: 14.6, pitch: 45, maxPitch: 60, attributionControl: { compact: true }, fadeDuration: 0,
       transformRequest: window.ApexOfflineTiles ? ApexOfflineTiles.transform : undefined });
+    { const v = document.getElementById('aboutVersion'); if (v) v.textContent = window.APEX_VERSION || (window.APEX_EMBED ? '--' : 'Website'); }   // the shell injects it
     window.apexDebug = { map, get track() { return track; }, state, drives, buildRoute: (...a) => buildRoute(...a), renderRouteCard: (...a) => renderRouteCard(...a), openRoadPage: (...a) => openRoadPage(...a), showEndCard: (...a) => showEndCard(...a), get driveActive() { return driveActive; }, tryTheme: (id) => tryTheme(id) };
     let mapReady = false;
     // The map's box changes with the layout (idle hides the gauges, a drive shows them); keep the canvas the size of its box.
@@ -4433,10 +4452,11 @@
     try { friendsMap = window.ApexFriendsMap ? ApexFriendsMap.mount({ el, btn, toast, apiCall, map, zones: () => privacyZones, inZone: inPrivacyZone,
       position: () => state.lastPosition || null, driving: () => driveActive,
       roadName: (lat, lon) => { try { return window.ApexRoadNames ? ApexRoadNames.nearestRoadName(map.querySourceFeatures('openmaptiles', { sourceLayer: 'transportation_name' }), lat, lon) : null; } catch (_) { return null; } },
-      setLayerToggle: (on) => { state.toggles.friends = on; paintSwitches(); friendsMap.setLayer(on); savePrefs(); } }) : null; } catch (e) { console.error('friends map', e); }
+      setLayerToggle: (on) => { state.toggles.friends = on; paintSwitches(); friendsMap.setLayer(on); savePrefs(); }, openGarage: () => showView('garage') }) : null; } catch (e) { console.error('friends map', e); }
     if (friendsMap) $('friendsSheetBtn').addEventListener('click', () => friendsMap.sheet());
     try { garage = window.ApexGarageUI ? ApexGarageUI.mount({ el, btn, toast, apiCall, jsonOf, report: safety && safety.report, onCars: setRoutingCars, onPhotos: () => renderAccount(), builds }) : null; } catch (e) { console.error('garage', e); }
-    const switchRow = (label, on, change) => { const b = el('button', { className: 'ink-btn' + (on ? ' on' : ''), textContent: `${label}: ${on ? 'On' : 'Off'}`, onclick: change }); b.setAttribute('aria-pressed', String(!!on)); return b; };
+    // an on/off setting is the slide switch (U-44), the label beside it, never a key that reads "Off"
+    const switchRow = (label, on, change) => { const b = el('button', { className: 'sw' + (on ? ' on' : ''), onclick: change }, el('i'), el('span', { textContent: label })); b.setAttribute('role', 'switch'); b.setAttribute('aria-checked', String(!!on)); return b; };
     let openCrewId = null;
     const crewNear = () => { if (state.lastPosition) return state.lastPosition; const c = map.getCenter(); return { lat: c.lat, lon: c.lng }; };
     // Links people share open the website (in the app the page's own origin is apexnav://app, which no one else can open).
@@ -5039,19 +5059,27 @@
     const themeAllowed = (id) => { const t = Themes.THEMES[id]; return !!t && (!t.pro || ApexPro.allowed(`theme_${id}`, localStorage, proFlags())); };
     let themeTrial = null;                                            // { id, was, timer } while a Pro theme is being tried
     function useTheme(id) { state.theme = id; savePrefs(); applyTheme(); renderThemePicker(); }
+    function paintTrial() {
+      const p = $('trialPlate'); if (!p) return;
+      p.hidden = !themeTrial;
+      if (!themeTrial) return;
+      const left = Math.max(0, themeTrial.ends - Date.now()), m = Math.floor(left / 60000), sec = Math.floor(left / 1000) % 60;
+      $('trialText').textContent = `${Themes.THEMES[themeTrial.id].label} · ${m}:${String(sec).padStart(2, '0')} left`;
+    }
     function endThemeTrial(say) {
       if (!themeTrial) return;
-      clearTimeout(themeTrial.timer);
+      clearTimeout(themeTrial.timer); clearInterval(themeTrial.tick);
       const { id, was } = themeTrial; themeTrial = null;
-      useTheme(was);
+      useTheme(was); paintTrial();
       if (say) toast(ApexPro.line(`theme_${id}`, proFlags()) || '', { ms: 8000 });
     }
     function tryTheme(id) {
       if (themeTrial) endThemeTrial(false);
-      themeTrial = { id, was: themeAllowed(state.theme) ? state.theme : 'roadbook', timer: setTimeout(() => endThemeTrial(true), 10 * 60000) };
+      themeTrial = { id, was: themeAllowed(state.theme) ? state.theme : 'roadbook', ends: Date.now() + 10 * 60000,
+        timer: setTimeout(() => endThemeTrial(true), 10 * 60000), tick: setInterval(paintTrial, 1000) };
       useTheme(id); closeSheet();
       if (typeof watchDryRidge === 'function') watchDryRidge();
-      toast(`Trying ${Themes.THEMES[id].label} for 10 minutes on the demo replay.`, { label: 'Stop', ms: 6000, onClick: () => endThemeTrial(false) });
+      paintTrial();
     }
     function themePreview(t) {
       const c = t.day, box = document.createElement('div');
@@ -5270,6 +5298,7 @@
       savePrefs();
       render(true);
     }));
+    document.querySelectorAll('#nightSwitch [data-night]').forEach(b => b.addEventListener('click', () => { state.nightMode = b.dataset.night; applyTheme(); }));
     document.querySelectorAll('[data-cycle]').forEach(b => b.addEventListener('click', () => {
       const k = b.dataset.cycle, order = k === 'notesMode' ? NOTES_MODES : NIGHT_MODES;
       state[k] = order[(order.indexOf(state[k]) + 1) % order.length];
@@ -6128,6 +6157,7 @@
     $('permGo').addEventListener('click', () => { if (locDenied) return; flag('apex.permsExplained', '1'); $('permSheet').classList.remove('show'); enterDrive(); });
     $('permNo').addEventListener('click', () => $('permSheet').classList.remove('show'));
     $('startDrive').addEventListener('click', startDrive);
+    $('trialStop').addEventListener('click', () => endThemeTrial(false));
     $('modePlate').addEventListener('click', () => { if (state.mode === 'live' || !replayOn) return; replayOn = false; setPlaying(false); paintIdle(); });
     $('driveEnd').addEventListener('click', () => leaveDrive(true));
 
