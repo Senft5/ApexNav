@@ -133,7 +133,7 @@
     .cp-msg p { margin: 2px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
     .cp-msg .row { gap: 10px; align-items: baseline; }
     .cp-say { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: end; }
-    .cp-say textarea { min-height: 44px; resize: vertical; }
+    .cp-say textarea { min-height: 44px; resize: none; }
     .cp-crests { display: flex; flex-wrap: wrap; gap: 8px; }
     .cp-crests button { width: 64px; height: 64px; display: grid; place-items: center; background: var(--panel); color: var(--panel-ink); border: 1.5px solid var(--rule); }
     .cp-crests button[aria-pressed="true"] { border: 2.5px solid var(--panel-ink); box-shadow: 0 2px 0 var(--panel-dim); }
@@ -324,6 +324,7 @@
       return el('div', { className: 'stack-8' }, el('div', { className: 'cp-sec' }, el('h3', { textContent: 'House stage' }), el('span', { className: 'note', textContent: h.name })), list);
     }
 
+    const plain = (s) => (root.ApexFormat && root.ApexFormat.noEmoji ? root.ApexFormat.noEmoji(s) : s);   // chat renders emoji as text: none (REVIEW.md "Not doing")
     function chat(c, redraw) {
       const list = el('div'); list.setAttribute('aria-live', 'polite');
       const club = atLeast(c.livery && c.livery.tier, 'club'), pinnedId = c.pinned_chat ? c.pinned_chat.id : null;
@@ -332,7 +333,7 @@
         if (r && r.ok) redraw(); else toast('Couldn\u2019t change the pin. Try again.');
       };
       const pinned = c.pinned_chat ? el('div', { className: 'cp-pin' }, el('span', { className: 'cp-badge', textContent: 'Pinned' }),
-        el('b', { textContent: `@${c.pinned_chat.handle || '?'}` }), el('p', { textContent: c.pinned_chat.body }), ...(c.is_owner ? [btn('Unpin', pin(null), 'linkbtn')] : [])) : '';
+        el('b', { textContent: `@${c.pinned_chat.handle || '?'}` }), el('p', { textContent: plain(c.pinned_chat.body) }), ...(c.is_owner ? [btn('Unpin', pin(null), 'linkbtn')] : [])) : '';
       const sec = el('div', { className: 'stack-8' }, el('div', { className: 'cp-sec' }, el('h3', { textContent: 'Chat' }), el('span', { className: 'note', textContent: 'Kept 30 days' })), pinned, list);
       const fill = async () => {
         const r = await apiCall('GET', `/api/crews/${encodeURIComponent(c.id)}/chat`).catch(() => null);
@@ -350,7 +351,7 @@
           if (c.is_owner && club && m.id !== pinnedId) acts.push(btn('Pin', pin(m.id), 'linkbtn'));   // Club livery
           return el('div', { className: 'cp-msg' }, P() ? P().avatar(m.photo_id, m.handle, 40) : el('span'),
             el('div', { style: 'min-width:0' }, el('div', { className: 'row' }, el('b', { textContent: `@${m.handle || '?'}` }), el('span', { className: 'note', textContent: ago(m.created_at) }), ...acts),
-              el('p', { textContent: m.body })));
+              el('p', { textContent: plain(m.body) })));
         }));
       };
       const input = el('textarea', { className: 'field', maxLength: 500, rows: 2, placeholder: `Say something to ${c.name}` });
@@ -420,20 +421,20 @@
       const crestPick = P() ? P().picker(c.crest_photo_id ? 'Change crest photo' : 'Use a photo as the crest', 'crest', c.id, () => { close(); redo(); }, { toast }) : '';
       const clubSet = el('fieldset', { disabled: !club }, el('legend', {}, el('b', { textContent: 'Second colour' }), club ? '' : lock('club')), sw2,
         el('b', { textContent: 'Pinned route' }), routeSel, el('div', { className: 'row' }, crestPick));
-      const callSign = el('input', { className: 'field', maxLength: 12, value: c.call_sign || '', placeholder: 'Convoy call sign, e.g. RIDGE', autocomplete: 'off' });
+      const callSign = el('input', { className: 'field', maxLength: 12, value: c.call_sign || '', placeholder: 'Convoy call sign, like RIDGE', autocomplete: 'off' });
       callSign.setAttribute('aria-label', 'Convoy call sign');
       const houseSel = el('select', { className: 'field' }, el('option', { value: '', textContent: 'No house stage' }),
         ...(c.stages || []).map((st) => el('option', { value: st.id, textContent: st.name, selected: c.house && c.house.id === st.id })));
       houseSel.setAttribute('aria-label', 'House stage');
       const badgeWho = el('select', { className: 'field' }, ...(c.board || []).map((r) => el('option', { value: r.handle || '', textContent: `@${r.handle}` })));
-      const badgeText = el('input', { className: 'field', maxLength: 16, placeholder: 'Badge, e.g. Sweep', autocomplete: 'off' });
+      const badgeText = el('input', { className: 'field', maxLength: 16, placeholder: 'Badge, like Sweep', autocomplete: 'off' });
       badgeWho.setAttribute('aria-label', 'Member'); badgeText.setAttribute('aria-label', 'Badge');
       const setBadge = btn('Set badge', async () => {
         const r = await apiCall('PUT', `/api/crews/${encodeURIComponent(c.id)}/badges`, { handle: badgeWho.value, badge: badgeText.value.trim() || null }).catch(() => null);
         if (r && r.ok) { badgeText.value = ''; toast('Badge set.'); } else toast('Couldn\u2019t set the badge.');
       }, 'ink-btn');
       const factory = atLeast(tier, 'factory');
-      const hazardKinds = el('input', { className: 'field', maxLength: 90, value: (c.hazard_kinds || []).join(', '), placeholder: 'Up to four, e.g. Cattle grid, Logging trucks', autocomplete: 'off' });
+      const hazardKinds = el('input', { className: 'field', maxLength: 90, value: (c.hazard_kinds || []).join(', '), placeholder: 'Up to four, like Cattle grid, Logging trucks', autocomplete: 'off' });
       hazardKinds.setAttribute('aria-label', 'Crew hazard categories');
       // the crew's regroup line in each pack's voice: rendered here on the website by the packs' own Kokoro voices, then uploaded
       const regroupLine = el('input', { className: 'field', maxLength: 60, value: c.regroup_line || '', placeholder: `${c.name}, regroup.`, autocomplete: 'off' });
@@ -475,6 +476,7 @@
         el('p', { className: 'note', textContent: club ? liveryLine(c.livery) : `Club at 5 Decals, Works at 12. ${liveryLine(c.livery)}` }),
         el('div', { className: 'row' }, save, btn('Cancel', close, 'linkbtn'))));
       d.body.append(ov);
+      if (root.ApexRowSelect) for (const s of [routeSel, houseSel, badgeWho]) root.ApexRowSelect.enhance(s);   // the app's row lists, now that they are on the sheet
       motto.focus();
     }
 

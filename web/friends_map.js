@@ -38,9 +38,8 @@
 
   const STYLE = `
     .fm-puck { display: grid; grid-template-columns: auto auto; gap: 6px; align-items: center; pointer-events: none; }
+    .fm-puck.flip .fm-tag { order: -1; text-align: right; }   /* near the right edge the tag sits on the puck's left */
     .fm-puck .avatar { box-shadow: inset 0 0 0 2px var(--panel-ink), 0 0 0 2px var(--panel); }
-    /* near the right edge (and the Layers key) the label goes on the left, the face staying on the friend's spot */
-    .fm-puck.flip { transform: translateX(calc(-100% + 34px)); } .fm-puck.flip .fm-tag { order: -1; }
     .fm-tag { background: var(--panel); color: var(--panel-ink); border: 1.5px solid var(--panel-ink); padding: 2px 6px; line-height: 1.15; white-space: nowrap; }
     .fm-tag b { display: block; font-size: 14px; } .fm-tag small { display: block; font-size: 13px; color: var(--panel-dim); }
     .fm-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--rule); flex-wrap: wrap; }
@@ -73,43 +72,37 @@
     }
 
     // ---- the layer: friends' pucks, refreshed every minute while it's on ----
-    function puckEl(p) {
+    function puckEl(p, flip) {
       const P = root.ApexPhotos, face = P ? P.avatar(p.photo_id, p.handle, 34) : el('b', { textContent: (p.handle || '?')[0].toUpperCase() });
       const t = el('span', { className: 'fm-tag' }, el('b', { textContent: `@${p.handle}` }), el('small', { textContent: tag(p) }));
-      return el('div', {}, el('div', { className: 'fm-puck' }, face, t));   // the marker moves the outer box, the flip the inner
+      return el('div', { className: 'fm-puck' + (flip ? ' flip' : '') }, face, t);
     }
-    // A label that would run under the Layers key or off the screen goes on the face's left instead.
-    const RIGHT_KEEP = 76;   // the Layers key's column, with its margin
-    function flipPucks() {
-      if (!map || !pucks.size) return;
-      const w = map.getContainer().clientWidth;
-      for (const m of pucks.values()) {
-        const inner = m.getElement().firstChild; if (!inner) continue;
-        const x = map.project(m.getLngLat()).x;
-        inner.classList.toggle('flip', x + inner.offsetWidth > w - RIGHT_KEEP && x - inner.offsetWidth + 34 > 8);
-      }
-    }
-    let flipQueued = false;
-    const queueFlip = () => { if (flipQueued) return; flipQueued = true; root.requestAnimationFrame(() => { flipQueued = false; flipPucks(); }); };
-    if (map && map.on) map.on('move', queueFlip);
+    // the tag reads to the right of the puck, unless that would run it under the Layers key or off the screen
+    const flipped = (p) => { try { return map.project([p.lon, p.lat]).x > map.getContainer().clientWidth - 200; } catch (_) { return false; } };
     async function poll() {
       if (!layerOn || !map) return;
       const r = await apiCall('GET', '/api/presence').catch(() => null);
       const list = r && r.ok ? await r.json() : null;
       if (!list) return;
       const seen = new Set();
-      for (const p of list) {
-        seen.add(p.handle);
-        const old = pucks.get(p.handle);
-        if (old) old.remove();
-        const m = new root.maplibregl.Marker({ element: puckEl(p), anchor: 'left' }).setLngLat([p.lon, p.lat]).addTo(map);
-        m.getElement().setAttribute('aria-label', `@${p.handle}, ${tag(p)}`);   // the marker sets its own generic label
-        pucks.set(p.handle, m);
-      }
+      shown = list;
+      for (const p of list) { seen.add(p.handle); place(p); }
       for (const [h, m] of pucks) if (!seen.has(h)) { m.remove(); pucks.delete(h); }
-      flipPucks();
       paintZones();   // the style may not have been ready when the layer came on
     }
+    let shown = [];
+    function place(p) {
+      const old = pucks.get(p.handle);
+      if (old) old.remove();
+      const flip = flipped(p);
+      const m = new root.maplibregl.Marker({ element: puckEl(p, flip), anchor: flip ? 'right' : 'left' }).setLngLat([p.lon, p.lat]).addTo(map);
+      m.getElement().setAttribute('aria-label', `@${p.handle}, ${tag(p)}`);   // the marker sets its own generic label
+      m._flip = flip;
+      pucks.set(p.handle, m);
+    }
+    // after the map moves, a tag that would now run off the right edge swaps sides (and back)
+    function reflow() { for (const p of shown) { const m = pucks.get(p.handle); if (m && m._flip !== flipped(p)) place(p); } }
+    if (map && map.on) map.on('moveend', reflow);
     // Your own home zones, hatched, while the layer is on: nobody else ever sees them.
     function circle(z, n = 48) {
       const ring = [];

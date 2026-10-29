@@ -43,6 +43,12 @@
     doc.documentElement.style.setProperty('--type-scale', String(scale));
     return scale;
   }
-  const api = { clock12, dateTime, driveName, typeScale, applyTypeScale };
+  /** Text people typed, with its emoji taken out (docs/design/REVIEW.md "Not doing": no emoji anywhere, chat included). */
+  function noEmoji(s) {
+    // Extended_Pictographic also holds the old text symbols (© ® ‼ ™ ...): only what sits at U+2190 and above goes
+    return String(s == null ? '' : s).replace(/[\p{Extended_Pictographic}\u{FE0F}\u{200D}\u{1F3FB}-\u{1F3FF}\u{E0020}-\u{E007F}]/gu, (c) => (c.codePointAt(0) < 0x2190 ? c : ''))
+      .replace(/ {2,}/g, ' ').trim();
+  }
+  const api = { clock12, dateTime, driveName, typeScale, applyTypeScale, noEmoji };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexFormat = api;
 })(typeof window !== 'undefined' ? window : globalThis);

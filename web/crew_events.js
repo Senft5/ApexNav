@@ -91,15 +91,16 @@
         box.append(el('div', { className: 'row', style: 'flex-wrap:wrap;align-items:baseline' }, el('span', { className: 'note', textContent: 'Regroup:' }),
           ...e.regroup.map((p) => btn(p.name, () => page.goTo({ label: p.name, lat: p.lat, lon: p.lon }), 'linkbtn'))));
       }
-      const answers = el('div', { className: 'row', role: 'group' });
+      // your answer is one of three: a slide switch, not three keys (REVIEW.md principle 1)
+      const answers = el('div', { className: 'switch', role: 'radiogroup' });
       answers.setAttribute('aria-label', 'Your answer');
       for (const [k, label] of RSVP) {
         const b = btn(label, async () => {
           const r = await apiCall('POST', `/api/events/${encodeURIComponent(e.id)}/rsvp`, { status: k });
           if (!r.ok) { toast('Couldn\'t save that. Check signal.'); return; }
           redo();
-        }, 'ink-btn' + (e.my_rsvp === k ? ' on' : ''));
-        b.setAttribute('aria-pressed', String(e.my_rsvp === k));
+        }, '');
+        b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', String(e.my_rsvp === k));
         answers.append(b);
       }
       const acts = el('div', { className: 'row', style: 'flex-wrap:wrap' },
@@ -124,34 +125,57 @@
       return box;
     }
 
-    // A stepped value (REVIEW2.md U-18): a minus key, the value, a plus key, in place of the browser's date and time
-    // pickers. A tap moves one step; holding a key keeps stepping.
-    function stepper(label, paint, step) {
-      const out = el('output', {}), box = el('div', { className: 'stepper', role: 'group' });
-      box.setAttribute('aria-label', label); out.setAttribute('aria-live', 'polite');
-      const key = (dir, text, name) => {
-        const b = el('button', { type: 'button', textContent: text }); b.setAttribute('aria-label', name);
-        let wait = 0, rep = 0;
-        const stop = () => { clearTimeout(wait); clearInterval(rep); };
-        b.addEventListener('pointerdown', (e) => { e.preventDefault(); step(dir); out.textContent = paint();
-          wait = setTimeout(() => { rep = setInterval(() => { step(dir); out.textContent = paint(); }, 110); }, 420); });
-        ['pointerup', 'pointerleave', 'pointercancel'].forEach((t) => b.addEventListener(t, stop));
-        b.addEventListener('click', (e) => { if (e.detail === 0) { step(dir); out.textContent = paint(); } });   // keyboard and VoiceOver
-        return b;
-      };
-      box.append(key(-1, '\u2212', `Earlier ${label.toLowerCase()}`), out, key(1, '+', `Later ${label.toLowerCase()}`));
-      out.textContent = paint();
+    // The form's own controls (REVIEW2.md U-18, REVIEW3.md): a select stays underneath as the page's value, drawn as the
+    // app's row list; a yes/no is the slide switch, read through `.checked` like the checkbox it replaces.
+    const rowSel = (label) => { const s = el('select', { className: 'field' }); s.setAttribute('aria-label', label); return s; };   // enhanced once it is in the form
+    const sw = (label, on, disabled) => {
+      const b = el('button', { type: 'button', className: 'sw' + (on ? ' on' : ''), disabled: !!disabled }, el('i'), el('span', { textContent: label }));
+      b.setAttribute('role', 'switch'); b.setAttribute('aria-checked', String(!!on));
+      Object.defineProperty(b, 'checked', { get: () => b.classList.contains('on'), set: (v) => { b.classList.toggle('on', !!v); b.setAttribute('aria-checked', String(!!v)); } });
+      b.addEventListener('click', () => { b.checked = !b.checked; b.dispatchEvent(new Event('change')); });
+      return b;
+    };
+    const pad2 = (n) => String(n).padStart(2, '0');
+    const dayKey = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+    /** The day as a row of stops, the next 30 days (the Worker takes a drive up to 30 days out); reads like the date tile. */
+    function dayStrip(initial, now = new Date()) {
+      const strip = el('div', { className: 'detents scroll', role: 'radiogroup' });
+      strip.setAttribute('aria-label', 'Day');
+      strip.value = initial;
+      const paint = () => strip.querySelectorAll('button').forEach((b) => { const on = b.dataset.day === strip.value; b.setAttribute('aria-checked', String(on)); b.classList.toggle('on', on); });
+      for (let i = 0; i < 30; i++) {
+        const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i), key = dayKey(d);
+        const b = el('button', { type: 'button', role: 'radio' }, el('b', { textContent: String(d.getDate()) }),
+          el('small', { textContent: i === 0 ? 'Today' : i === 1 ? 'Tmrw' : d.toLocaleDateString(undefined, { weekday: 'short' }) }));
+        b.dataset.day = key;
+        b.setAttribute('aria-label', d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' }));
+        b.addEventListener('click', () => { strip.value = key; paint(); });
+        strip.append(b);
+      }
+      paint();
+      return strip;
+    }
+    /** The time as a stepper, quarter hours; `.value` is "HH:MM" as the time input gave. */
+    function timeStepper(initial) {
+      const box = el('div', { className: 'stepper', role: 'group' }), out = el('output');
+      box.setAttribute('aria-label', 'Time');
+      box.value = initial;
+      const paint = () => { const [h, m] = box.value.split(':').map(Number); const d = new Date(2000, 0, 1, h, m); out.textContent = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }); };
+      const step = (dir) => () => { const [h, m] = box.value.split(':').map(Number); const t = ((h * 60 + m + dir * 15) % 1440 + 1440) % 1440; box.value = `${pad2(Math.floor(t / 60))}:${pad2(t % 60)}`; paint(); };
+      const minus = el('button', { type: 'button', textContent: '−' }), plus = el('button', { type: 'button', textContent: '+' });
+      minus.setAttribute('aria-label', 'A quarter hour earlier'); plus.setAttribute('aria-label', 'A quarter hour later');
+      minus.addEventListener('click', step(-1)); plus.addEventListener('click', step(1));
+      box.append(minus, out, plus);
+      paint();
       return box;
     }
 
     function planForm(crews, done, pick) {
-      const form = el('div', { className: 'stack-8' });
-      const crew = el('select', { className: 'field' });
-      crew.setAttribute('aria-label', 'Crew');
+      const form = el('div', { className: 'stack-8 plan-drive' });
+      const crew = rowSel('Crew');
       for (const c of crews) crew.append(el('option', { value: c.id, textContent: c.name, selected: c.id === pick }));
       // roles (roadmap 21): you lead unless you name someone; a sweep can be named now or volunteer later
-      const lead = el('select', { className: 'field' }), sweep = el('select', { className: 'field' });
-      lead.setAttribute('aria-label', 'Lead'); sweep.setAttribute('aria-label', 'Sweep');
+      const lead = rowSel('Lead'), sweep = rowSel('Sweep');
       const fillRoles = async () => {
         const list = await apiCall('GET', `/api/crews/${encodeURIComponent(crew.value)}/members`).then(jsonOf).catch(() => null);
         const handles = (Array.isArray(list) ? list : []).filter((m) => m && m.handle);
@@ -161,8 +185,8 @@
       };
       crew.addEventListener('change', fillRoles); fillRoles();
       // event templates (Club and Works livery): one fills the form; the crew's owner can keep this one as a template
-      const tplSel = el('select', { className: 'field', hidden: true }), keep = el('input', { type: 'checkbox', className: 'tick-sw' }), keepLabel = el('label', { className: 'sw-row', hidden: true }, el('span', { textContent: 'Keep it as a template for the crew' }), keep);
-      tplSel.setAttribute('aria-label', 'From a template');
+      const tplSel = rowSel('From a template'), keep = sw('Keep it as a template for the crew', false), keepLabel = el('div', { hidden: true }, keep);
+      tplSel.hidden = true;
       let templates = [];
       const fillTemplates = async () => {
         const list = await apiCall('GET', `/api/crews/${encodeURIComponent(crew.value)}/templates`).then(jsonOf).catch(() => null);
@@ -179,7 +203,7 @@
       crew.addEventListener('change', fillTemplates); fillTemplates();
       // regroup points: up to five, each named, set at the map's centre
       const regroup = [], regroupList = el('div', { className: 'stack-8' });
-      const regroupName = el('input', { className: 'field', maxLength: 40, placeholder: 'Regroup point name, e.g. the overlook', autocomplete: 'off' });
+      const regroupName = el('input', { className: 'field', maxLength: 40, placeholder: 'Regroup point name, like the overlook', autocomplete: 'off' });
       regroupName.setAttribute('aria-label', 'Regroup point name');
       const paintRegroup = () => regroupList.replaceChildren(...regroup.map((p, i) => el('div', { className: 'row', style: 'align-items:baseline' },
         el('span', { textContent: `${i + 1}. ${p.name}` }), btn('Remove', () => { regroup.splice(i, 1); paintRegroup(); }, 'linkbtn'))));
@@ -189,44 +213,37 @@
         if (regroup.length >= 5) { toast('Five regroup points at most.'); return; }
         regroup.push({ name, lat: c.lat, lon: c.lon }); regroupName.value = ''; paintRegroup();
       }, 'ink-btn');
-      const title = el('input', { className: 'field', maxLength: 60, placeholder: 'What (e.g. Cherohala Saturday)', autocomplete: 'off' });
+      const title = el('input', { className: 'field', maxLength: 60, placeholder: 'Name it, like Cherohala Saturday', autocomplete: 'off' });
       title.setAttribute('aria-label', 'Drive name');
-      // the day (today to 29 days out, as the Worker allows) and the time (15-minute steps), as steppers
-      const pad = (n) => String(n).padStart(2, '0');
-      let dayOff = 1, mins = 9 * 60;
-      const date = { get value() { const d = new Date(); d.setDate(d.getDate() + dayOff); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; } };
-      const time = { get value() { return `${pad(Math.floor(mins / 60))}:${pad(mins % 60)}`; } };
-      const dayStep = stepper('Day', () => { const d = new Date(); d.setDate(d.getDate() + dayOff);
-        return dayOff === 0 ? 'Today' : dayOff === 1 ? 'Tomorrow' : d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' }); },
-        (dir) => { dayOff = Math.max(0, Math.min(29, dayOff + dir)); });
-      const timeStep = stepper('Time', () => { const d = new Date(2000, 0, 1, Math.floor(mins / 60), mins % 60); return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }); },
-        (dir) => { mins = (mins + dir * 15 + 1440) % 1440; });
+      // when: the day as a row of stops, the time as a stepper (never the browser's pickers)
+      const date = dayStrip(dayKey(new Date(Date.now() + 86400000))), time = timeStepper('09:00');
       const meetName = el('input', { className: 'field', maxLength: 60, placeholder: 'Meeting point name', autocomplete: 'off' });
       meetName.setAttribute('aria-label', 'Meeting point name');
       let meet = null;
       const meetNote = el('p', { className: 'note', textContent: 'Set the meeting point: where you are, or the centre of the map.' });
       const setMeet = (p, how) => { if (!p) { toast('No GPS fix yet.'); return; } meet = p; meetNote.textContent = `Meeting point: ${how} (${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}).`; };
       const route = page.plannedRoute();
-      const withRoute = el('input', { type: 'checkbox', className: 'tick-sw', checked: !!route, disabled: !route });
-      const notes = el('input', { className: 'field', maxLength: 280, placeholder: 'Notes (optional)', autocomplete: 'off' });
+      const withRoute = sw(route ? `Add the planned route (${route.name})` : 'Plan a route first to add it', !!route, !route);
+      const notes = el('input', { className: 'field', maxLength: 280, placeholder: 'Notes', autocomplete: 'off' });
       notes.setAttribute('aria-label', 'Notes');
       // a public crew can list it for everyone nearby (car meets, S-13)
-      const listed = el('input', { type: 'checkbox', className: 'tick-sw' });
-      const listedLabel = el('span');
+      const listed = sw('List it for everyone nearby (a meet)', false);
+      const listedLabel = listed.querySelector('span');
       const paintListed = () => {
         const pub = (crews.find((c) => c.id === crew.value) || {}).visibility === 'public';
         listed.disabled = !pub; if (!pub) listed.checked = false;
         listedLabel.textContent = pub ? 'List it for everyone nearby (a meet)' : 'Only public crews can list a meet for everyone';
       };
       crew.addEventListener('change', paintListed); paintListed();
-      form.append(crew, tplSel, title, el('div', { className: 'plan-when' }, dayStep, timeStep),
-        el('div', { className: 'row', style: 'flex-wrap:wrap' }, btn('Where I am', () => setMeet(page.here(), 'where you are'), 'ink-btn'), btn('Map centre', () => setMeet(page.mapCentre(), 'map centre'), 'ink-btn')),
+      const label = (text) => el('p', { className: 'ctl-label', textContent: text });
+      form.append(crew, tplSel, title, label('When'), date, time,
+        label('Meet'), el('div', { className: 'row', style: 'flex-wrap:wrap' }, btn('Where I am', () => setMeet(page.here(), 'where you are'), 'ink-btn'), btn('Map centre', () => setMeet(page.mapCentre(), 'map centre'), 'ink-btn')),
         meetNote, meetName,
-        el('label', { className: 'sw-row' }, el('span', { textContent: route ? `Add the planned route (${route.name})` : 'Plan a route first to add it' }), withRoute),
-        el('b', { textContent: 'Roles' }), lead, sweep,
-        el('b', { textContent: 'Regroup points' }), regroupList, el('div', { className: 'row' }, regroupName, addRegroup),
+        withRoute,
+        label('Roles'), lead, sweep,
+        label('Regroup points'), regroupList, el('div', { className: 'row' }, regroupName, addRegroup),
         notes,
-        el('label', { className: 'sw-row' }, listedLabel, listed), keepLabel,
+        listed, keepLabel,
         el('div', { className: 'row' }, btn('Plan it', async () => {
           const when = isoFromInputs(date.value, time.value);
           if (!title.value.trim()) { toast('Give the drive a name.'); return; }
@@ -252,8 +269,7 @@
           toast('Drive planned. The crew sees it in Crew.');
           done();
         }, 'ink-btn solid'), btn('Cancel', done, 'linkbtn')));
-      // the choices as the app's own rows, not the browser's select (REVIEW2.md U-18)
-      if (window.ApexRowSelect) [crew, tplSel, lead, sweep].forEach((x) => ApexRowSelect.enhance(x));
+      if (root.ApexRowSelect) for (const s of [crew, tplSel, lead, sweep]) root.ApexRowSelect.enhance(s);   // in the form now: the rows go beside them
       return form;
     }
 
@@ -298,8 +314,10 @@
           list.replaceChildren(...(rows.length ? rows.map((e) => card(e, redo)) : [el('p', { className: 'note', textContent: crews.length ? 'No drives planned. Plan one for your crew.' : 'Join or start a crew to plan drives together.' })]));
         }).catch(() => list.replaceChildren(el('p', { className: 'note', textContent: 'Couldn\'t load crew drives. Check signal.' })));
       };
-      const openPlan = (pick) => formHost.replaceChildren(planForm(crews, () => { formHost.replaceChildren(); redo(); }, pick));
-      if (crews.length) sec.append(btn('Plan a drive', () => openPlan(), 'ink-btn'));
+      // the key gives way to the form while it is open: one way to plan a drive on the screen at a time
+      const planKey = crews.length ? btn('Plan a drive', () => openPlan(), 'ink-btn') : null;
+      const openPlan = (pick) => { formHost.replaceChildren(planForm(crews, () => { formHost.replaceChildren(); if (planKey) planKey.hidden = false; redo(); }, pick)); if (planKey) planKey.hidden = true; };
+      if (planKey) sec.append(planKey);
       sec.append(formHost, list, meets);
       lastPlan = openPlan;
       redo();

@@ -44,7 +44,14 @@
     paint();
     const text = el('textarea', { className: 'field', maxLength: MAX, rows: 4, placeholder: 'What happened, or what would make it better?', style: 'width:100%;box-sizing:border-box' });
     text.setAttribute('aria-label', 'Your feedback');
-    const tick = (label, on) => { const i = el('input', { type: 'checkbox', checked: on }); return [i, el('label', { className: 'note', style: 'display:flex;gap:8px;align-items:center' }, i, label)]; };
+    // a yes/no is the slide switch (never the browser's box); read through .checked like the box it replaces
+    const tick = (label, on) => {
+      const b = el('button', { type: 'button', className: 'sw' + (on ? ' on' : '') }, el('i'), el('span', { textContent: label }));
+      b.setAttribute('role', 'switch'); b.setAttribute('aria-checked', String(on));
+      Object.defineProperty(b, 'checked', { get: () => b.classList.contains('on'), set: (v) => { b.classList.toggle('on', !!v); b.setAttribute('aria-checked', String(!!v)); } });
+      b.addEventListener('click', () => { b.checked = !b.checked; });
+      return [b, b];
+    };
     const [attach, attachRow] = tick('Attach diagnostics: app version, device type, screen size, language, error count. Never your position or drives.', true);
     const [reply, replyRow] = tick('I’d like a reply (shares your handle with the owner)', false);
     const send = btn('Send', async () => {

@@ -300,28 +300,31 @@ scene('plan-drive', async ({ page, base, cap, fresh, still }) => {
 
 scene('tapedeck-drive', async ({ page, base, cap, fresh, still }) => {
   await fresh();
-  // as on a phone: the iOS shell's bridge is there (so frames feed a recorded drive), the drive starts from its link
-  await page.addInitScript(() => { window.webkit = { messageHandlers: { apex: { postMessage() {} } } }; });
-  await page.goto(`${base}/index.html?drive=dry_ridge`);
-  await page.waitForFunction(() => window.apexDebug && window.apexDebug.track && window.apex && typeof window.apex.onNative === 'function');
+  // the drive runs as it does in the app: the page sees the iOS shell (only with ?shell=1, so no other scene does),
+  // Start comes through the app link, and the shell's frames feed it; without this the status line could only say
+  // "Finding GPS", since nothing was recording (REVIEW3.md)
+  await page.addInitScript(() => { if (!/[?&]shell=1/.test(location.search)) return;
+    window.webkit = { messageHandlers: { apex: { postMessage: () => {} } } }; try { localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  await page.goto(`${base}/index.html?drive=dry_ridge&shell=1`);
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.track && window.apex && typeof window.apex.live === 'function');
   await cap('Tapedeck: a live drive, not a replay');
-  await page.evaluate(() => window.apexDebug.tryTheme('tapedeck'));   // the trial starts from the demo replay; then drive
+  await page.evaluate(() => window.apexDebug.tryTheme('tapedeck'));   // the trial starts from the demo replay; then leave it and drive
   await page.waitForTimeout(1500);
+  await page.click('#modePlate').catch(() => {});
+  await page.evaluate(() => window.apex.onNative({ type: 'link', params: { go: 'drive' } }));   // Start drive, as Siri or the widget would
+  await page.waitForTimeout(800);
+  // drive the demo road live, frames as the iOS shell pushes them (window.apex.live): a fix every 0.1 s at 22 m/s
   const pts = await page.evaluate(() => { const t = window.apexDebug.track, out = [];
     for (let i = Math.floor(t.dist.length * 0.3); i < t.dist.length * 0.36; i++) out.push([t.lat[i], t.lon[i]]); return out; });
-  await page.evaluate(() => window.apex.onNative({ type: 'link', params: { go: 'drive' } }));
-  await page.waitForTimeout(600);
-  if (await page.isVisible('#permSheet.show')) await page.click('#permGo');
-  // frames as the shell pushes them (window.apex.live): a fix every 0.1 s at 22 m/s along the demo road
   let at = 1e6;
   for (let i = 1; i < pts.length; i++) {
     const [la, lo] = pts[i], [pa, po] = pts[i - 1], course = (Math.atan2((lo - po) * Math.cos(la * Math.PI / 180), la - pa) * 180 / Math.PI + 360) % 360;
     at += 100;
-    await page.evaluate((f) => window.apex.live(f), { lat: la, lon: lo, t: at, accuracy_m: 4, speed_mps: 22, course_deg: course, has_fix: true, lat_g: 0.3 * Math.sin(i / 9), lon_g: 0, calibration: 'locked', recording: true, segments: i });
+    await page.evaluate((f) => window.apex.live(f), { lat: la, lon: lo, t: at, accuracy_m: 4, speed_mps: 22, course_deg: course, has_fix: true, lat_g: 0.3 * Math.sin(i / 9), lon_g: 0, calibration: 'locked', recording: true });
     await page.waitForTimeout(100);
     if (i === Math.floor(pts.length / 2)) await still('tapedeck-drive');
   }
-  console.log('  mode:', await page.evaluate(() => window.apexDebug.state.mode), '·', await page.textContent('#dsMain'));
+  console.log('  mode:', await page.evaluate(() => window.apexDebug.state.mode), 'theme:', await page.evaluate(() => document.documentElement.dataset.theme));
   await still('tapedeck-drive-2');
 });
 

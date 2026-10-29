@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-cjBfX9suGDs2zZBCBU8Acs2K8LzGbDwn+LxYr/KU/Pk=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-E3uUciusHi/DUZATItoipFL9lfrb1l93u9rnyvFUld0=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -148,7 +148,7 @@
     @keyframes rb-advance { from { transform: translateX(14%); opacity: 0.35; } to { transform: none; opacity: 1; } }
     /* The next note steps back in colour, not opacity, so its small text keeps 4.5:1 contrast (only the tulip fades) */
     .rb-box:not(.now) { color: var(--panel-dim); } .rb-box:not(.now) .rb-tulip { opacity: 0.62; } .rb-box:not(.now) .rb-call b { color: var(--panel-dim); }
-    @media (max-width: 520px) { .notes-roadbook { grid-template-columns: 1.6fr 1fr; } .rb-box:nth-child(3) { display: none; } }
+    @media (max-width: 520px) { .notes-roadbook { grid-template-columns: 2fr 1fr; } .rb-box:nth-child(3) { display: none; } }   /* the lead call keeps "OVER CREST" whole; the next note is the one that shortens */
     /* The lead note reads at arm's length (U-07): bigger distance, tulip and call than the note after it. The call may take
        two lines rather than lose its end to an ellipsis. */
     .rb-box.now { grid-template-columns: auto 56px minmax(0, 1fr); }
@@ -185,6 +185,7 @@
     .rb-call span.rb-mods i.warn { color: var(--accent); }
     .rb-box.now .rb-call span.rb-mods { font-size: 14px; line-height: 1.15; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
     .rb-box.now.hz .rb-call span.rb-mods, .rb-box.now.hz .rb-call span.rb-mods i.warn { color: var(--hz-edge); }
+    html[data-theme="tapedeck"] .rb-box.now .rb-call span.rb-mods { -webkit-line-clamp: 3; }   /* the dot font is wide: "OVER CREST · CARE" takes a third line on an SE rather than an ellipsis */
     .ds-main > span { white-space: nowrap; }
 
     /* ---------------- stage map ---------------- */
@@ -263,7 +264,7 @@
     .edge-tab { flex: none; width: 40px; height: 52px; background: var(--panel); color: var(--panel-ink);
       border: 1px solid var(--rule); border-right: 0; display: flex; align-items: center; justify-content: center; box-shadow: -4px 4px 12px rgba(0, 0, 0, 0.18); }
     .edge-tab svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
-    .edge-tab[aria-expanded="true"] { color: var(--accent); }
+    .edge-tab[aria-expanded="true"] { background: var(--panel-ink); color: var(--panel); }
     /* the Layers key: a physical key on the map, a 2 px drop under it (REVIEW.md principle 4) */
     .map-key { width: 48px; height: 48px; margin-right: 16px; border: 1.5px solid var(--panel-ink); box-shadow: 0 3px 0 var(--rule); }
     .map-key svg { width: 24px; height: 24px; stroke-linejoin: round; }
@@ -280,7 +281,7 @@
     #recenterBtn.counting svg { display: none; }
     #app.plan-open #recenterBtn, #app.sheet-open #recenterBtn { display: none; }
     .toast { position: absolute; left: 50%; top: 12px; transform: translateX(-50%); z-index: 6; max-width: calc(100% - 32px);
-      background: var(--panel); color: var(--panel-ink); border: 1px solid var(--accent); padding: 8px 12px; font-size: 12px; font-weight: 600; display: none; }
+      background: var(--panel); color: var(--panel-ink); border: 1px solid var(--panel-ink); padding: 8px 12px; font-size: 12px; font-weight: 600; display: none; }   /* a message: ink, never the red pen */
     .toast.show { display: block; }
     .pin { font-size: 11px; font-weight: 800; letter-spacing: 0.1em; padding: 2px 5px; border: 1.5px solid; background: var(--panel); white-space: nowrap; cursor: pointer; font-family: var(--font-ui); }
     .pin.alpr { color: var(--signal); border-color: var(--signal); }
@@ -351,8 +352,9 @@
     .dial.dial-g > .g-score { flex: none; height: 44px; }
     .dial.dial-g > .vfd-meters { flex: 1 0 auto; }
     html[data-theme="tapedeck"] .dial.dial-g { height: auto; }   /* and the box holds them and the Score */
-    /* a small phone upright: the bar meters get their own row under the speed and the readouts, as on its side (6) */
-    @media (max-width: 359px) {
+    /* a phone upright: the bar meters get their own row under the speed and the readouts, as on its side (6); in the
+       third column they overprinted Sight and the trip on a 15 Pro as well as an SE */
+    @media (max-width: 480px) {
       html[data-theme="tapedeck"] .cluster-dials { grid-template-columns: var(--dial) minmax(0, 1fr); }
       html[data-theme="tapedeck"] .cluster-dials > .dial-g { grid-column: 1 / -1; width: 100%; height: auto; aspect-ratio: auto; }
       html[data-theme="tapedeck"] .dial-g > .vfd-meters { grid-template-columns: 1fr 1fr; column-gap: 16px; }
@@ -406,13 +408,14 @@
     .sw i { width: 44px; height: 24px; flex: none; border: 1.5px solid var(--panel-ink); background: var(--panel); position: relative; display: block;
       box-shadow: inset 0 2px 3px rgba(0, 0, 0, 0.18); transition: background-color 0.15s ease-out; }
     .sw i::after { content: ""; position: absolute; top: 0.5px; left: 0.5px; width: 20px; height: 20px; background: var(--panel-dim);   /* off: a pencil thumb on paper */
-      box-shadow: 0 2px 0 rgba(0, 0, 0, 0.3); transition: transform 0.15s ease-out, background-color 0.15s ease-out; }
+      box-shadow: 0 2px 0 rgba(0, 0, 0, 0.3); transition: transform 0.15s ease-out, background-color 0.15s ease-out;
+      background-image: linear-gradient(90deg, transparent 42%, rgba(0, 0, 0, 0.35) 42%, rgba(0, 0, 0, 0.35) 58%, transparent 58%); }   /* a grip line: the thumb is the knob in both positions */
     .sw.on i { background: var(--panel-ink); }
-    .sw.on i::after { transform: translateX(20px); background: var(--panel); }
+    .sw.on i::after { transform: translateX(20px); background-color: var(--panel); }
     .sw span { font-size: 11px; font-weight: 600; color: var(--panel-dim); }
     @media (prefers-reduced-motion: reduce) { .sw i, .sw i::after { transition: none; } }
     .sheet .sw, .edge-panel .sw, .side-pop .sw { display: flex; flex-direction: row-reverse; justify-content: space-between; align-items: center; width: 100%; min-height: 48px; padding: 0; border-top: 1px solid var(--hair, var(--panel-dim)); }
-    .sheet .sw span, .edge-panel .sw span, .side-pop .sw span { font-size: 15px; font-weight: 500; color: var(--panel-ink); }
+    .sheet .sw span, .edge-panel .sw span, .side-pop .sw span { font-size: 15px; font-weight: 500; color: var(--panel-ink); text-align: left; }
     .sw.on span { color: var(--panel-ink); }
     .sw-cycle { min-height: 44px; }
     .sw-cycle b { min-width: 30px; font-size: 11px; font-weight: 700; color: var(--panel-ink); }   /* a value is ink: red is record and destructive */
@@ -448,7 +451,7 @@
     .rc-profile { display: block; width: 100%; height: 92px; margin-top: 10px; }
     .rc-ground { fill: var(--rule); opacity: 0.3; } .rc-line { fill: none; stroke: var(--panel-ink); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
     .rc-base { stroke: var(--rule); stroke-width: 1; vector-effect: non-scaling-stroke; }
-    .rc-ticks path { stroke: var(--accent); stroke-width: 1; opacity: 0.75; vector-effect: non-scaling-stroke; }
+    .rc-ticks path { stroke: var(--panel-ink); stroke-width: 1; opacity: 0.55; vector-effect: non-scaling-stroke; }   /* corners in ink; red is the record key */
     .rc-profile text { font: 600 10px var(--font-ui); fill: var(--panel-dim); }
     .rc-dials { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin-top: 12px; text-align: center; }
     .rc-dial svg { width: 60px; height: 36px; display: block; margin: 0 auto; }
@@ -498,7 +501,8 @@
     .plan-more { margin-top: 16px; border-top: 1px solid var(--rule); }
     .plan-more > summary { list-style: none; cursor: pointer; display: flex; justify-content: space-between; align-items: center; min-height: 52px; font-size: 16px; font-weight: 700; }
     .plan-more > summary::-webkit-details-marker { display: none; }
-    .plan-more > summary::after { content: ""; width: 9px; height: 9px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg); margin-right: 6px; transition: transform 0.15s; }
+    #onboard .rec-key { width: 100%; }   /* the first key the driver meets is the one they will use (REVIEW2.md §2 Onboarding) */
+    .plan-more > summary::after { content: ""; flex: none; width: 9px; height: 9px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg); margin: 0 6px 0 12px; transition: transform 0.15s; }
     .plan-more[open] > summary::after { transform: rotate(45deg); }
     .find-bar::before { content: ""; position: absolute; left: 0; right: 0; top: -17px; height: 16px; background: linear-gradient(transparent, var(--panel)); pointer-events: none; }
     .find-bar { position: sticky; bottom: -20px; z-index: 2; margin: 16px -16px -20px; padding: 10px 16px calc(10px + var(--safe-bottom)); background: var(--panel); border-top: 1px solid var(--rule); }
@@ -521,7 +525,7 @@
     .end-acts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 18px; }
     .end-acts .ink-btn { min-height: 52px; }
     .end-links { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; }
-    .end-links > * { margin: 0; padding: 8px 4px; line-height: 1.2; }
+    .end-links > * { margin: 0; padding: 0 4px; line-height: 1.2; min-height: 44px; display: inline-flex; align-items: center; }   /* the link and the key on one line, the same box */
     .ob-strip { width: 100%; max-width: 420px; margin: 26px auto 0; border-top: 2px solid var(--panel-ink); border-bottom: 1px solid var(--rule); text-align: left; }
     .ob-strip .notes { position: static; min-height: 84px; padding-left: 0; padding-right: 0; }
     /* Night is a mode, not a token swap (REVIEW.md roadmap 11): bigger numbers, fewer things, the map quieter (themes.js) */
@@ -535,6 +539,7 @@
        row, and the trip readout hidden until its Trip key is tapped */
     html[data-mode="night"] .dial-speed .dial-digital:not(.small) { font-size: 82px; }   /* 46 px on an SE dial, clear of the unit */
     html[data-mode="night"] .dial-speed .dial-num.low { display: none; }   /* the end labels give way to the bigger numeral */
+    @media (max-width: 480px) { .dial-speed .dial-num.low { display: none; } }   /* and on a phone upright by day: at 120 px the 0 and the top touched the numeral */
     .trip-peek { display: none; }
     /* a small phone: the centre column is 60 px, so Limit sits over Sight rather than both spilling into the meter */
     @media (max-width: 359px) and (orientation: portrait) { .readouts { grid-template-columns: minmax(0, 1fr); justify-items: center; row-gap: 6px; } }
@@ -635,7 +640,9 @@
     .crew-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
     .crew-tiles .card { padding: 10px; min-height: 84px; align-content: start; }
     .crew-tiles .card.open { grid-column: 1 / -1; }
-    .crew-tile-head { width: 100%; display: grid; gap: 3px; text-align: left; min-height: 44px; align-content: start; }
+    .crew-tile-head { width: 100%; display: grid; gap: 3px; text-align: left; min-height: 44px; align-content: start; position: relative; padding-right: 24px; }
+    .crew-tile-head .chev { position: absolute; right: 8px; top: 14px; width: 9px; height: 9px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg); transition: transform 0.15s ease-out; }
+    .crew-tile-head[aria-expanded="true"] .chev { transform: rotate(225deg); top: 18px; }
     .crew-tile-head b { font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .crew-tile-head span { font-size: 12px; color: var(--panel-dim); }
     .crew-tile-head em { font-style: normal; font-size: 12px; color: var(--panel-dim); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
@@ -663,7 +670,7 @@
     .perm { display: grid; grid-template-columns: 96px 1fr; gap: 4px 12px; font-size: 15px; border-top: 1px solid var(--hair, var(--panel-dim)); padding-top: 12px; }
     .perm b { font-weight: 600; }
     .perm span { color: var(--panel-dim); }
-    .badge { display: inline-block; min-width: 18px; height: 18px; border-radius: 9px; background: var(--accent); color: var(--stage); font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; padding: 0 5px; position: absolute; top: 4px; left: calc(50% + 6px); }
+    .badge { display: inline-block; min-width: 18px; height: 18px; border-radius: 9px; background: var(--panel-ink); color: var(--stage); font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; padding: 0 5px; position: absolute; top: 4px; left: calc(50% + 6px); }
     details.more { margin-top: 8px; border-top: 1px solid var(--hair, var(--panel-dim)); }
     details.more summary { min-height: 44px; display: flex; align-items: center; font-size: 15px; font-weight: 600; cursor: pointer; list-style: none; }
     details.more summary::-webkit-details-marker { display: none; }
@@ -732,6 +739,7 @@
     .sheet p.note, .plan p.note { font-size: 13px; color: var(--panel-dim); line-height: 1.45; margin-top: 6px; }
     .row { display: flex; gap: 6px; flex-wrap: wrap; }
     .plan-fields { display: grid; gap: 6px; } .plan-fields .ink-btn { min-width: 64px; }
+    textarea { resize: none; }
     .field { flex: 1; min-width: 0; height: 44px; padding: 0 10px; font: inherit; font-size: 16px; background: transparent; color: var(--panel-ink); border: 1px solid var(--panel-dim); user-select: text; }
     .ink-btn { height: 44px; padding: 0 16px; border: 1.5px solid var(--panel-ink); font-size: 15px; font-weight: 600; font-family: var(--font-ui); }
     .ink-btn.solid { height: 48px; background: var(--panel-ink); color: var(--panel); border-color: var(--panel-ink); }
@@ -749,7 +757,8 @@
     .sources { font-size: 11px; color: var(--panel-dim); line-height: 1.5; }
     a { color: inherit; }   /* ink, underlined: never the browser's blue */
     /* Keyboard and switch-control users see where they are; touch taps show nothing extra. */
-    :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    :focus-visible { outline: 2px solid var(--panel-ink); outline-offset: 2px; }
+    html:not(.kbd) :focus-visible { outline: none; }   /* a key the page focused (a sheet's Cancel, Got it) is not an error: the ring is for the keyboard */
     .overlay:focus { outline: none; }
 
     /* The keyboard (web/keyboard.js): one clean ink border on the field that has it, no tab bar while typing, and the page
@@ -1068,7 +1077,7 @@
             <div class="row mt-8" style="flex-wrap:wrap">
               <button class="ink-btn" id="myAreaBtn">Save the map here for offline</button>
               <button class="linkbtn" id="myOfflineDelBtn">Delete offline data</button>
-              <button class="linkbtn" id="myDrivesDelBtn">Delete drives on this phone</button>
+              <button class="danger-btn" id="myDrivesDelBtn">Delete drives on this phone</button>
               <button class="danger-btn" id="myEraseBtn">Erase everything on this phone</button>
             </div>
             <p class="note">Your account (friends, crews, shared spots, routes and results) is deleted from the server in Garage → Account → Delete account.</p>
@@ -1250,7 +1259,7 @@
       <div class="ob-strip" aria-hidden="true"><div class="notes" id="obNotes"></div></div>
     </div>
     <div class="stack">
-      <button class="ink-btn solid" id="obNext">Start</button>
+      <button class="rec-key" id="obNext"><i></i>Start</button>
       <button class="linkbtn" id="obAlt">Watch a replay</button>
     </div>
   </div>
@@ -2660,7 +2669,7 @@
       for (let i = 0; i < t.lat.length; i++) { s = Math.min(s, t.lat[i]); n = Math.max(n, t.lat[i]); w = Math.min(w, t.lon[i]); e = Math.max(e, t.lon[i]); }
       const nodes = await alprNodesIn(s - 0.005, w - 0.005, n + 0.005, e + 0.005);
       if (nodes) { attachAlpr(t, nodes); return; }
-      if (track === t && replayOn) toast('Camera map is offline, so cameras may be missing from the map.');
+      if (track === t && replayOn) toast('Camera map offline. No pins doesn\'t mean no cameras.');
     }
     function attachAlpr(t, nodes) {
       t.alpr = [];
@@ -3071,11 +3080,11 @@
       b.textContent = saved ? 'Saved' : 'Save'; b.setAttribute('aria-pressed', String(saved));
     }
     // Pin the destination (pinned_places.js, IDEAS U-20): Home, Work or any name, first in Where to?; on this phone only.
-    $('routePinBtn').addEventListener('click', () => {
+    $('routePinBtn').addEventListener('click', async () => {
       const t = plannedRoute, to = t && t.request && t.request.to;
       if (!to || !Number.isFinite(to.lat)) { toast('Plan a route to a place first.'); return; }
       const has = (n) => ApexPinnedPlaces.list(localStorage).some((p) => p.name.toLowerCase() === n);
-      const name = prompt('Pin this place as (Home, Work or any name)', has('home') ? (has('work') ? '' : 'Work') : 'Home');
+      const name = await ApexConfirm.prompt('Pin this place as', { action: 'Pin', value: has('home') ? (has('work') ? '' : 'Work') : 'Home', placeholder: 'Home, Work or any name', maxLength: 40 });
       if (!name || !name.trim()) return;
       const label = String(t.name || '').replace(/^To /, '') || name;
       toast(ApexPinnedPlaces.pin(localStorage, name, { label, lat: to.lat, lon: to.lon }) ? `Pinned as ${name.trim()}. It's first in Where to?, on this phone only.` : 'Couldn\u2019t pin that.');
@@ -4273,8 +4282,8 @@
         return b;
       }));
     }
-    $('presetSaveBtn').addEventListener('click', () => {
-      const name = prompt('Name this setup (for example Sunday loop or Night run)', '');
+    $('presetSaveBtn').addEventListener('click', async () => {
+      const name = await ApexConfirm.prompt('Name this setup', { action: 'Save', placeholder: 'Sunday loop, Night run', maxLength: 40 });
       if (!name || !name.trim()) return;
       const r = ApexPlanPresets.save(localStorage, { name, fun: funLevel, avoid, prefs: roadPrefs });
       toast(r === 'saved' ? `${name.trim()} is a preset: it's at the top of the plan sheet.` : r === 'full' ? `You have ${ApexPlanPresets.MAX} presets. Tap one that is set to remove it.` : 'Couldn\u2019t save that preset.');
@@ -4373,7 +4382,7 @@
       const sec = el('div', { className: 'stack-8' }, el('h3', { textContent: 'Routes shared with you' }));
       apiCall('GET', '/api/routes/shared').then(jsonOf).then((list) => {
         if (onCount) onCount(Array.isArray(list) ? list.length : 0);
-        if (!Array.isArray(list) || !list.length) { sec.append(el('p', { className: 'note', textContent: 'Routes friends and crews share show up here.' })); return; }
+        if (!Array.isArray(list) || !list.length) { sec.append(el('p', { className: 'note', textContent: 'No routes shared with you yet. Share one from a route card.' })); return; }
         for (const r of list) sec.append(el('div', { className: 'row', style: 'align-items:center' },
           el('span', { style: 'flex:1', textContent: `${r.name} · from @${r.from_handle || '?'}` }),
           btn('Open', () => openSharedRoute(r.id), 'ink-btn')));
@@ -4588,7 +4597,7 @@
       }
       // Anyone signed in can take their data or close the account, member or not.
       const downloadMyData = async () => { const r = await apiCall('GET', '/api/me/export'); const blob = new Blob([JSON.stringify(await r.json(), null, 2)], { type: 'application/json' }); const a = el('a', { href: URL.createObjectURL(blob), download: 'vetta-my-data.json' }); a.click(); };
-      const deleteMyAccount = async () => { if (prompt('This erases your account, friends, shared results and spots from the server. Type DELETE to confirm.') === 'DELETE') { const r = await apiCall('DELETE', '/api/me', { confirm: 'DELETE' }); if (r.ok) ApexSync.setSession(null); redo(); } };
+      const deleteMyAccount = async () => { if (await ApexConfirm.prompt('This erases your account, friends, shared results and spots from the server. Type DELETE to confirm.', { action: 'Delete account', placeholder: 'DELETE', maxLength: 10, match: 'DELETE' }) === 'DELETE') { const r = await apiCall('DELETE', '/api/me', { confirm: 'DELETE' }); if (r.ok) ApexSync.setSession(null); redo(); } };
       if (!me.member) {
         const inp = el('input', { className: 'field', placeholder: 'Paste your invite', value: stash('apex.invite'), autocomplete: 'off', 'aria-label': 'Invite' });
         const join = async () => {
@@ -4640,6 +4649,7 @@
         p.append(el('div', { className: 'side-pop-head' }, el('h3', { textContent: title }), btn('Done', () => p.classList.remove('open'), 'linkbtn'))); return p; };
       const crewSettings = popSheet('Crew settings'), pops = [crewSettings];
       const navRow = (label, content) => { const pop = popSheet(label); pop.append(content); pops.push(pop);
+        const h = content.querySelector(':scope > h3'); if (h && h.textContent === label) h.remove();   // the pop's head names it once
         const count = el('small'), b = el('button', { className: 'nav-row', type: 'button' }, el('span', { textContent: label }), count, el('i', { 'aria-hidden': 'true' }));
         b.addEventListener('click', () => pop.classList.add('open')); b._count = count; return b; };
       if (crewPage && myCrews.length) {
@@ -4723,7 +4733,7 @@
           el('span', { textContent: g.share_scores ? (g.share_times ? `@${f.handle} sees your scores and times.` : `@${f.handle} sees your scores.`) : `@${f.handle} sees nothing of yours yet.` }),
           el('div', { className: 'row' },
             ...(window.ApexProfileView ? [btn('Profile', () => openProfile(f), 'linkbtn')] : []),
-            btn('Unfriend', async () => { if (await ApexConfirm.ask(`Unfriend @${f.handle}? This also stops all sharing.`, 'Unfriend')) { await apiCall('DELETE', `/api/friends/${f.id}`); redo(); } }, 'linkbtn'),
+            btn('Unfriend', async () => { if (await ApexConfirm.ask(`Unfriend @${f.handle}? This also stops all sharing.`, 'Unfriend')) { await apiCall('DELETE', `/api/friends/${f.id}`); redo(); } }, 'danger-btn'),
             ...(safety && f.handle ? [btn('Report', () => safety.report({ kind: 'user', target: f.handle, label: `@${f.handle}`, who: f.handle, done: redo }), 'linkbtn'),
                                       btn('Block', () => safety.block(f.handle, redo), 'linkbtn')] : [])));
         fsec.append(card);
@@ -4786,7 +4796,7 @@
         const count = typeof c.members === 'number' ? c.members : Array.isArray(c.members) ? c.members.length : 0;
         const kind = c.visibility === 'public' ? `Public${c.area_name ? ' · ' + c.area_name : ''}` : 'Private';
         const chev = el('span', { textContent: `${count} ${count === 1 ? 'member' : 'members'} · ${kind}` });
-        const head = el('button', { className: 'crew-tile-head' }, el('b', { textContent: c.name }), chev);
+        const head = el('button', { className: 'crew-tile-head' }, el('b', { textContent: c.name }), chev, el('i', { className: 'chev', 'aria-hidden': 'true' }));
         if (c.about) head.append(el('em', { textContent: c.about }));
         // owner: switch between private (invite link) and public (people nearby can find it; needs an area name)
         const ownerBox = el('div', { className: 'stack-8' });
@@ -4798,7 +4808,7 @@
           }, 'linkbtn'));
           if (c.visibility === 'public') ownerBox.append(btn('Make private', async () => { const r = await apiCall('PUT', `/api/crews/${c.id}`, { visibility: 'private', about: c.about || '' }); if (r.ok) redo(); else toast('Couldn\'t change that. Try again.'); }, 'linkbtn'));
           else {
-            const areaIn = el('input', { className: 'field', placeholder: 'Area people nearby will see, e.g. Robbinsville', maxLength: 60, autocomplete: 'off' });
+            const areaIn = el('input', { className: 'field', placeholder: 'Area people nearby will see, like Robbinsville', maxLength: 60, autocomplete: 'off' });
             ownerBox.append(el('div', { className: 'row' }, areaIn, btn('Make public', async () => {
               const near = crewNear(), name = areaIn.value.trim();
               if (name.length < 2) { toast('Name the area people nearby will see.'); return; }
@@ -4815,7 +4825,7 @@
           el('span', { textContent: g.share_scores ? (g.share_times ? `${c.name} sees your scores and times.` : `${c.name} sees your scores.`) : `${c.name} sees nothing of yours yet.` }),
           ownerBox,
           el('div', { className: 'row' }, btn('Invite to crew', async () => { const r = await apiCall('POST', `/api/crews/${c.id}/invite`); const j = await jsonOf(r); if (r.ok) copyText(`${shareOrigin()}/?crew=${j.token}`, 'Crew link copied.'); else toast(j && j.error === 'too_many_open_invites' ? 'You have 10 open crew links. Turn some off first.' : 'Only a crew\'s owner can invite.'); }),
-            btn('Leave', async () => { if (await ApexConfirm.ask(`Leave ${c.name}?`, 'Leave')) { if (openCrewId === c.id) openCrewId = null; await apiCall('DELETE', `/api/crews/${c.id}/membership`); redo(); } }, 'linkbtn')));
+            btn('Leave', async () => { if (await ApexConfirm.ask(`Leave ${c.name}?`, 'Leave')) { if (openCrewId === c.id) openCrewId = null; await apiCall('DELETE', `/api/crews/${c.id}/membership`); redo(); } }, 'danger-btn')));
         const loadMembers = async () => {
           mbox.innerHTML = '';
           let list = Array.isArray(c.member_list) ? c.member_list : Array.isArray(c.members) ? c.members : null;
@@ -4846,10 +4856,17 @@
       if (crewList.length) csec.append(tiles);
       // new crew: private (invite link) or public (findable nearby by an area you name)
       const cname = el('input', { className: 'field', placeholder: 'New crew name', autocomplete: 'off', maxLength: 40, 'aria-label': 'Crew name' });
-      const cvis = el('select', { className: 'field' }, new Option('Private: invite link only', 'private'), new Option('Public: people nearby can find it', 'public'));
-      const carea = el('input', { className: 'field', placeholder: 'Area people nearby will see, e.g. Robbinsville', maxLength: 60, autocomplete: 'off', hidden: true });
-      cvis.onchange = () => { carea.hidden = cvis.value !== 'public'; };
-      csec.append(cvis, carea);
+      // private (an invite link) or public (people nearby can find it, by an area you name): a slide switch under its own label
+      const cvis = el('div', { className: 'switch', role: 'radiogroup', value: 'private' });
+      cvis.setAttribute('aria-label', 'New crew');
+      const carea = el('input', { className: 'field', placeholder: 'Area people nearby will see, like Robbinsville', maxLength: 60, autocomplete: 'off', hidden: true });
+      for (const [v, label] of [['private', 'Private'], ['public', 'Public']]) {
+        const b = el('button', { type: 'button', role: 'radio', textContent: label });
+        b.addEventListener('click', () => { cvis.value = v; carea.hidden = v !== 'public'; cvis.querySelectorAll('button').forEach((x) => x.setAttribute('aria-checked', String(x === b))); });
+        b.setAttribute('aria-checked', String(v === 'private'));
+        cvis.append(b);
+      }
+      csec.append(el('p', { className: 'ctl-label', textContent: 'New crew' }, el('small', { textContent: 'private is by invite link; public, people nearby can find it' })), cvis, carea);
       csec.append(el('div', { className: 'row' }, cname, btn('Create', async () => {
         if (!cname.value.trim()) return;
         const pub = cvis.value === 'public', near = crewNear();
@@ -4863,7 +4880,7 @@
       const near = crewNear();
       const found = await apiCall('GET', `/api/crews/discover?lat=${near.lat.toFixed(2)}&lon=${near.lon.toFixed(2)}`).then(jsonOf).catch(() => null);
       const nearby = Array.isArray(found) ? found : [];
-      if (!nearby.length) nsec.append(el('p', { className: 'note', textContent: found ? 'No public crews near you yet. Make yours public so people nearby can find it.' : 'Couldn\'t look for crews nearby. Check signal.' }));
+      if (!nearby.length) nsec.append(el('p', { className: 'note', textContent: found ? 'No public crews near you yet.' : 'Couldn\'t look for crews nearby. Check signal.' }));
       else {
         const ntiles = el('div', { className: 'crew-tiles' });
         for (const c of nearby) {
@@ -5238,8 +5255,8 @@
           btn('Remove', () => { privacyZones = ApexPrivacyZones.remove(privacyZones, z.id); ApexPrivacyZones.save(localStorage, privacyZones); renderZones(); paintDriveStat(); }, 'linkbtn')));
       }
     }
-    function addZone(p) {
-      const name = prompt('Name this place (e.g. Home)', privacyZones.length ? '' : 'Home');
+    async function addZone(p) {
+      const name = await ApexConfirm.prompt('Name this place', { action: 'Add zone', value: privacyZones.length ? '' : 'Home', placeholder: 'Home, Work', maxLength: 40 });
       if (name === null) return;
       const next = ApexPrivacyZones.add(privacyZones, { lat: p.lat, lon: p.lon, r: zoneR, name });
       if (!next) { toast(`Up to ${ApexPrivacyZones.MAX_ZONES} zones.`); return; }
@@ -6328,6 +6345,9 @@
     // In a browser, frames come from the web sensors during a drive (or from tests) and go straight to live mode.
     // iOS ignores user-scalable=no: cancel Safari's page-zoom gesture. MapLibre's pinch uses touch events and keeps working.
     document.addEventListener('gesturestart', (e) => e.preventDefault(), { passive: false });
+    // the focus ring is for the keyboard: it shows once a key has been pressed to move focus, never after a tap or a sheet's own focus()
+    document.addEventListener('keydown', (e) => { if (e.key === 'Tab' || e.key.startsWith('Arrow')) document.documentElement.classList.add('kbd'); }, true);
+    document.addEventListener('pointerdown', () => document.documentElement.classList.remove('kbd'), true);
     // An invite, crew, friend or convoy link opened while the app is running: take it in place (never reload mid-drive) and
     // show the Crew sheet, where each one still waits for a tap.
     function openAppLink(p) {

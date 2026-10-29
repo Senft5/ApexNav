@@ -29,9 +29,13 @@
       const reason = el('select', { className: 'field' });
       reason.setAttribute('aria-label', 'Reason');
       for (const [v, t] of REASONS) reason.append(el('option', { value: v, textContent: t }));
-      const note = el('textarea', { className: 'field', rows: 2, maxLength: 280, placeholder: 'What happened (optional)' });
+      const note = el('textarea', { className: 'field', rows: 2, maxLength: 280, placeholder: 'What happened' });
       note.setAttribute('aria-label', 'What happened');
-      const alsoBlock = el('input', { type: 'checkbox', checked: false });   // blocking ends a friendship for good: never by default
+      // blocking ends a friendship for good: never by default; a slide switch, read through .checked
+      const alsoBlock = el('button', { type: 'button', className: 'sw' }, el('i'), el('span', { textContent: `Also block @${who}` }));
+      alsoBlock.setAttribute('role', 'switch'); alsoBlock.setAttribute('aria-checked', 'false');
+      Object.defineProperty(alsoBlock, 'checked', { get: () => alsoBlock.classList.contains('on'), set: (v) => { alsoBlock.classList.toggle('on', !!v); alsoBlock.setAttribute('aria-checked', String(!!v)); } });
+      alsoBlock.addEventListener('click', () => { alsoBlock.checked = !alsoBlock.checked; });
       const close = () => { scrim.remove(); sheet.remove(); window.removeEventListener('keydown', onKey, true); if (prev && prev.isConnected && prev.focus) prev.focus(); };
       // Captured first, so Escape closes only this sheet (not the Crew sheet under it); Tab stays inside it.
       const onKey = (e) => {
@@ -59,12 +63,13 @@
       };
       scrim.onclick = close;
       sheet.append(el('h3', { textContent: `Report this ${KIND_WORD[kind] || 'item'}` }), el('p', { className: 'note', textContent: label }), reason, note,
-        ...(who ? [el('label', {}, alsoBlock, document.createTextNode(`Also block @${who}`))] : []),
+        ...(who ? [alsoBlock] : []),
         el('p', { className: 'note', textContent: 'They won\'t know you reported them.' }),
         el('div', { className: 'row' }, btn('Send report', send, 'ink-btn solid'), btn('Cancel', close, 'linkbtn')));
       document.body.append(scrim, sheet);
+      if (root.ApexRowSelect) root.ApexRowSelect.enhance(reason);   // the app's row list; the select holds the value
       window.addEventListener('keydown', onKey, true);
-      reason.focus();
+      (reason._rowPick ? reason._rowPick.key : reason).focus();
     }
 
     /** Block by handle with a plain question first; `done` runs after. */
