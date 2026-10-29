@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-X5ofmGO6XsgPls9brbKQsDmkncRSJ4rl1KXFYJdOkec=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-laHjqVv65JNxrkI6nD4xXN68CpWbQFhK1I7yQtC2hYc=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -3370,8 +3370,7 @@
       const quickest = pool.filter(c => Number.isFinite(c.timeS)).reduce((x, y) => (y.timeS < x.timeS ? y : x), best);
       // The best and up to two really different others stay on the card (and faint on the map) to pick from.
       const t = await useOption({ id, name, request, level, quickest, list: FunRoute.distinctOptions(ranked, 3) }, 0);
-      const mi = ApexUnits.long(totalOf(t)), extra = best.extraS >= 60 ? ` · +${Math.round(best.extraS / 60)} min for ${fewerTownKm(best, quickest) < 1 ? 'fun' : best.fun && quickest.fun && best.fun.good > quickest.fun.good ? 'fun and fewer towns' : 'fewer towns'}` : '';
-      toast(`${name} · ${mi} · Fun ${best.fun ? best.fun.fun : '--'}${extra}`);
+      if (!t) return false;   // no toast: the route bar and card say it (REVIEW.md 1.2, Route bar: the bar is the toast)
       window.apexDebug && (window.apexDebug.lastFun = FunRoute.rank(pool, level).map(c => ({ kind: c.kind, fun: c.fun, timeS: c.timeS, value: c.value, adjust: c.adjust || 0, glare: c.glare, townKm: c.townKm })));
       return true;
     }
@@ -3555,12 +3554,12 @@
         const gotMin = Math.round(best.t.timeS / 60), near = Math.abs(best.t.timeS - targetS) <= 0.2 * targetS;
         best.t.name = `${gotMin} min loop`;
         await buildRoute(null, loopId, best.t.name, best.t);
-        toast(near ? `${best.good} good corners · home in about ${gotMin} min` : `${gotMin} min: the closest good loop to ${asked}`);
+        if (!near) toast(`${gotMin} min: the closest good loop to ${asked}`);   // the bar says the rest
       } else {
         const near = Math.abs(gotMi - miles) <= 0.2 * miles;
         best.t.name = `${Math.max(1, Math.round(ApexUnits.longN(best.km * 1000)))} ${ApexUnits.longU()} loop`;
         await buildRoute(null, loopId, best.t.name, best.t);
-        toast(near ? `${best.good} good corners on this loop` : `${ApexUnits.long(best.km * 1000)}: the closest good loop to ${asked}`);
+        if (!near) toast(`${ApexUnits.long(best.km * 1000)}: the closest good loop to ${asked}`);
       }
       window.apexDebug && (window.apexDebug.lastLoop = done.map(d => ({ kind: d.job.kind, fun: d.t.fun && d.t.fun.fun, score: d.score, km: d.km, good: d.good, retraced: d.retraced })));
     }

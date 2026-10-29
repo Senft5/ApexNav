@@ -6,6 +6,10 @@ it says so. Things only you can do are in docs/OWNER_TODO.md.
 
 ## 2026-10-29
 
+**No toast repeats the route bar (REVIEW.md 1.2, Route bar).** A planned route no longer toasts its name, length and fun
+score; the bar and the card say them. A loop toasts only when it couldn't match what you asked ("the closest good loop
+to 45 mi"). Undo: the two toasts are in git history.
+
 **The livery tiers' extras (REVIEW.md 5.1), dormant until Pro ships like the tiers themselves.** My calls:
 - *Club*: the owner pins one chat message; the crew keeps 3 event templates (the owner keeps one when planning a drive;
   anyone planning picks one to fill the form).

@@ -448,7 +448,7 @@ def test_app_fun_route_picks_and_falls_back():
     assert r["tollOnly"] == ["tolls"], "no toll-free way: the card says so"
     assert (r["towns"]["timeS"], r["towns"]["townKm"]) == (660, 0), "the bow round the town wins when towns are avoided"
     assert r["towns"]["why"].endswith("1.9 mi less in towns, +1 min"), r["towns"]["why"]
-    assert r["towns"]["toast"].endswith("+1 min for fun and fewer towns"), r["towns"]["toast"]
+    assert "min for" not in (r["towns"].get("toast") or ""), "no toast repeating the route bar (REVIEW.md 1.2)"
     assert r["townsOff"] == {"timeS": 600, "townKm": "unset"}, "not asked: the quickest straight road, no town lookup"
     assert r["townsUnknown"] == {"timeS": 600, "townKm": None}, "no place data: unknown (the card says it couldn't check), no cost"
     assert re.fullmatch(r"For Twisty Rd 8\.7 mi · \d+ more good corners, \+1 min", r["quick"]["why"]), r["quick"]["why"]
