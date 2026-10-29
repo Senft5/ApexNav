@@ -91,14 +91,16 @@ car's screen shows what it decides and sends back what the driver picks.
 - **Hazards:** every hazard the co-driver calls shows as a navigation alert for 8 s.
 - **Not in CarPlay:** scores, crews, friends, Log, settings (guideline: nothing unrelated to the drive).
 
-**Trying it** (Xcode on a Mac): simulator builds carry `com.apple.developer.carplay-maps` (`CarPlay/Simulator.entitlements`,
-`project.yml`), device builds don't until Apple grants it. Run the app in an iPhone simulator, then I/O → External
+**Trying it** (Xcode on a Mac): every build carries `com.apple.developer.carplay-maps` (`project.yml`; Apple assigned it to
+the account on 2026-10-29). Run the app in an iPhone simulator, then I/O → External
 Displays → CarPlay. Screenshots of it are what the entitlement form wants.
 
 ## 4. Still to build (after the entitlement arrives)
 
-1. **Entitlement and profile.** Enable CarPlay Navigation on the App ID (the API key can), add
-   `com.apple.developer.carplay-maps` to ApexNav.entitlements, and confirm cloud signing picks it up (TESTFLIGHT.md).
+1. **Entitlement and profile.** Granted 2026-10-29. `com.apple.developer.carplay-maps` is in ApexNav.entitlements for every
+   build (project.yml). The App Store Connect API has no CarPlay capability type (it accepts 28, none of them CarPlay),
+   so the App ID gets it either from cloud signing (`-allowProvisioningUpdates` on the TestFlight run) or, if that run
+   fails to sign, from the portal: Identifiers → com.senft.ApexNav → Capabilities → CarPlay Navigation (OWNER_TODO).
 2. **Scenes.** `UIApplicationSceneManifest` with the phone scene, `CPTemplateApplicationScene` and the Dashboard and
    instrument cluster scenes (guide p. 64); delegates keep the interface controller and window.
 3. **Engine without the phone screen.** A shared drive engine the CarPlay scene can start on its own: the existing web

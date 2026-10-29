@@ -24,10 +24,13 @@ targets:
       - package: ApexKit
       - target: ApexNavLive          # the drive's Live Activity (IDEAS U-11), embedded in the app
     # Sign in with Apple (IDEAS O-05, App Review 4.8). The App ID has the capability (enabled through the App Store Connect API).
+    # CarPlay navigation (docs/CARPLAY.md): Apple assigned com.apple.developer.carplay-maps to the account on 2026-10-29, so
+    # device builds carry it too; cloud signing (-allowProvisioningUpdates) puts it on the App ID and the profile.
     entitlements:
       path: ApexNav.entitlements
       properties:
         com.apple.developer.applesignin: [Default]
+        com.apple.developer.carplay-maps: true
     settings:
       base:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
@@ -36,9 +39,6 @@ targets:
         # The version people see. CI's TestFlight job sets CURRENT_PROJECT_VERSION (the build number) per run.
         MARKETING_VERSION: "1.0"
         CURRENT_PROJECT_VERSION: "1"
-        # CarPlay runs only with the navigation entitlement. Until Apple grants it to the account, only simulator builds carry
-        # it (CarPlay/Simulator.entitlements), so the CarPlay simulator works and device builds still sign.
-        CODE_SIGN_ENTITLEMENTS[sdk=iphonesimulator*]: CarPlay/Simulator.entitlements
     info:
       path: Info.plist
       properties:
