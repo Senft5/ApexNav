@@ -396,7 +396,7 @@ flow('privacy zones: add one at the map centre, kept on the phone only, then rem
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.goto(base + '/index.html');
   await page.waitForFunction(() => window.apex && typeof window.apex.live === 'function');
-  await page.click('.tab[data-view="setup"]');
+  await page.click('.tab[data-view="garage"]');
   await page.click('#zoneRadius [data-zone-r="200"]');
   page.once('dialog', (d) => d.accept('Home'));
   await page.click('#zoneMapBtn');
@@ -542,7 +542,7 @@ flow('your data: Settings counts what the phone holds and downloads drives as GP
   await page.waitForFunction(() => window.ApexRecording && window.ApexMyData);
   await page.evaluate(() => ApexRecording.store({ id: 'e2e_drive', name: 'Test road', date: '2026-10-20T15:00:00Z',
     lat: [35.6, 35.601, 35.602], lon: [-83.9, -83.901, -83.902], elev: null, dist: [0, 150, 300] }));
-  await page.click('.tab[data-view="setup"]');
+  await page.click('.tab[data-view="garage"]');
   await page.waitForFunction(() => /1 drive \(0.2 mi\)/.test(document.getElementById('myDataNote').textContent));
   const [dl] = await Promise.all([page.waitForEvent('download'), page.click('#myGpxBtn')]);
   const gpx = require('fs').readFileSync(await dl.path(), 'utf8');
@@ -551,7 +551,7 @@ flow('your data: Settings counts what the phone holds and downloads drives as GP
   await page.click('#myDrivesDelBtn');
   await page.waitForFunction(() => /0 drives/.test(document.getElementById('myDataNote').textContent));
   // offline data (IDEAS F-06): a saved route counted, then deleted; the drives are not touched by it
-  await page.evaluate(() => { localStorage.setItem('apex.savedRoutes', JSON.stringify([{ id: 'r1', coords: [[0, 0], [1, 1]] }])); document.querySelector('.tab[data-view="setup"]').click(); });
+  await page.evaluate(() => { localStorage.setItem('apex.savedRoutes', JSON.stringify([{ id: 'r1', coords: [[0, 0], [1, 1]] }])); document.querySelector('.tab[data-view="garage"]').click(); });
   await page.waitForFunction(() => /Offline data: 1 saved route /.test(document.getElementById('myOfflineNote').textContent));
   page.once('dialog', (d) => d.accept());
   await page.click('#myOfflineDelBtn');
@@ -848,7 +848,7 @@ flow('feedback: Settings sends what you typed with the diagnostics, never a plac
   });
   await page.goto(base + '/index.html');
   await page.waitForFunction(() => window.ApexFeedback && document.querySelector('#feedbackBox textarea'));
-  await page.click('.tab[data-view="setup"]');
+  await page.click('.tab[data-view="garage"]');
   await page.click('#feedbackBox button:has-text("An idea")');
   await page.fill('#feedbackBox textarea', 'A night theme please');
   await page.click('#feedbackBox button:has-text("Send")');
@@ -868,7 +868,7 @@ flow('landscape mount: the map takes the left, the instruments a column on the r
   check(bin.x >= stage.x + stage.w - 1 && bin.y < 120, 'the instruments are a column on the right: ' + JSON.stringify(bin));
   check(notes.w > 800, 'the notes run across the top');
   check(await page.evaluate(() => document.documentElement.scrollWidth <= 844), 'no sideways scroll');
-  await page.click('.tab[data-view="setup"]');
+  await page.click('.tab[data-view="garage"]');
   await page.waitForTimeout(400);
   const rail = await box('#binnacle');
   check(rail.w < 100, 'a sheet leaves a narrow tab rail: ' + JSON.stringify(rail));
@@ -902,7 +902,7 @@ flow('units: kilometres in Settings redraw the dial, the notes and the replay in
   await page.goto(base + '/index.html?drive=dry_ridge');
   await page.waitForFunction(() => window.apexDebug && window.apexDebug.track, null, { timeout: 15000 });
   check(await page.evaluate(() => ApexUnits.system()) === 'imperial', 'miles by default in en-US');
-  await page.click('.tab[data-view="setup"]');
+  await page.click('.tab[data-view="garage"]');
   await Promise.all([page.waitForNavigation(), page.click('[data-units="metric"]')]);
   await page.waitForFunction(() => window.apexDebug && window.apexDebug.track, null, { timeout: 15000 });
   check(await page.evaluate(() => localStorage.getItem('apex.units')) === 'metric', 'saved');
@@ -1096,7 +1096,7 @@ flow('desk: on a big screen Where to? is a column on the left and sheets a panel
   await page.waitForFunction(() => document.getElementById('planPanel').getBoundingClientRect().height > 600, null, { timeout: 3000 }).catch(() => {});
   const plan = await box('#planPanel');
   check(plan.w === 440 && plan.x < 40 && plan.h > 600, 'Where to? is a left column: ' + JSON.stringify(plan));
-  await page.click('.tab[data-view="setup"]');
+  await page.click('.tab[data-view="garage"]');
   await page.waitForTimeout(400);
   const sheet = await box('.sheet.open');
   check(sheet.w === 480 && sheet.x > 900, 'Settings is a right panel: ' + JSON.stringify(sheet));

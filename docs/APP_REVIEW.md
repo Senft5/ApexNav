@@ -21,7 +21,7 @@ Checked 2026-10-28 against main and App Store Connect (read through the API key 
 | guideline | how |
 |---|---|
 | 5.1.1 data portability in the app | Download my data, GPX exports and drive videos open the share sheet in the app (`shareFile` bridge, save_file.js); before this a download link did nothing in the web view |
-| 5.1.1(v) account deletion in the app | Account → Delete account (`DELETE /api/me`, erases the account and what others hold about it) |
+| 5.1.1(v) account deletion in the app | Garage → Account → Delete account (`DELETE /api/me`, erases the account and what others hold about it) |
 | 5.1.1 data security | the app's session token lives in the iOS Keychain (this device only, after first unlock); the shell makes the page's API calls (`ApexApiBridge`), so web content never holds it (IDEAS Z-10); every page runs under a Content-Security-Policy (Z-11) |
 | 3.1.1 in-app purchase | Nothing is sold in the app yet. The Octane accents (S-10) were removed from the app on 2026-10-29 (docs/design/REVIEW.md roadmap 8); Points can't be bought or spent. Pro themes and crew liveries, when they ship, are digital goods and go through StoreKit (REVIEW.md 4.5) |
 | 5.1.1 sign-in not required | first run is one screen with no sign-in (2026-10-29); sign-in is offered at the first social action (Crew, Share), never to drive, plan or record |

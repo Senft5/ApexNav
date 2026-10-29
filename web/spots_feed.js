@@ -43,7 +43,7 @@
           if (!s.mine && page.report) acts.append(btn('Report', () => page.report({ kind: 'highlight', target: s.id.replace(/^srv_/, ''), label: s.name, done: load }), 'linkbtn'));
           box.append(acts);
           return box;
-        }) : [el('p', { className: 'note', textContent: page.here() ? 'No shared spots near here yet. Add one in Settings → Spots.' : 'Waiting for your position.' })]));
+        }) : [el('p', { className: 'note', textContent: page.here() ? 'No shared spots near here yet. Add one in Garage → Spots.' : 'Waiting for your position.' })]));
       };
       const load = () => {
         const at = page.here();

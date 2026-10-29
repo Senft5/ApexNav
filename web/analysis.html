@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-whHGXZBw8MLzvg6RXW2em5lGOuxqz5Gv/HntESsR1Lk=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-QCHnniFESxKWBa7ONZ2aZZXI41dWhpVtKn41qw2jSyo=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta · Log</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -151,7 +151,7 @@
     tr.row-link { cursor: pointer; }
     .actions { display: flex; gap: 8px; flex-wrap: wrap; }
     /* Same tab bar as the cockpit: ANALYSIS is this page, the others return to the cockpit view. */
-    .tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
+    .tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
       background: var(--panel); border-top: 1px solid var(--rule); padding: 0 6px env(safe-area-inset-bottom, 0px); }
     .tabbar a { height: 52px; display: grid; grid-template-rows: 20px auto; justify-items: center; align-content: center; gap: 2px; color: var(--panel-dim);
       font-size: 11px; font-weight: 600; text-decoration: none; position: relative; }
@@ -201,8 +201,8 @@
 
     <!-- ============================ HISTORY ============================ -->
     <section id="tab-history" class="stack-12">
-      <div class="bar-top"><h1 class="stages-h">Log</h1>
-        <label class="btn">Import .csv<input type="file" id="importFile" accept=".csv,text/csv" aria-label="Import a recording" hidden /></label></div>
+      <div class="bar-top"><h1 class="stages-h">Log</h1></div>
+      <div class="switch log-seg" role="radiogroup" aria-label="Drives or stages"><button data-seg="history" role="radio" aria-checked="true">Drives</button><button data-seg="segments" role="radio" aria-checked="false">Stages</button></div>
       <div class="empty" id="historyEmpty" hidden>
         <b>No drives yet</b>
         <p class="note">Start a drive on the map. It lands here with a score for every corner.</p>
@@ -227,7 +227,8 @@
 
     <!-- ============================ SEGMENTS ============================ -->
     <section id="tab-segments" hidden class="stack-12">
-      <div class="bar-top"><h1 class="stages-h">Stages</h1><button class="btn solid" id="newStageBtn">New stage</button></div>
+      <div class="bar-top"><h1 class="stages-h">Log</h1><button class="btn solid" id="newStageBtn">New stage</button></div>
+      <div class="switch log-seg" role="radiogroup" aria-label="Drives or stages"><button data-seg="history" role="radio" aria-checked="false">Drives</button><button data-seg="segments" role="radio" aria-checked="true">Stages</button></div>
       <div class="seglist" id="segList"></div>
       <div class="grid2" id="segDetail" hidden>
       <div class="panel" id="segSyncPanel" hidden><h2>Board</h2><div class="row" id="segBoardFilter" role="group" aria-label="Board filter"></div><p class="note" id="segLegend"></p><div class="scroll mt-8"><table id="segBoard"></table></div><div class="row mt-8" id="segShareRow"></div><div id="segShared" class="stack-8 mt-8"></div><div class="note mt-8" id="segSyncNote"></div></div>
@@ -274,9 +275,8 @@
   <nav class="tabbar" aria-label="Views">
     <a href="index.html"><svg viewBox="0 0 24 24"><path d="M12 3l6 15-6-3-6 3z"/></svg><span>Map</span></a>
     <a href="analysis.html?tab=log" id="navLog"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg><span>Log</span></a>
-    <a href="analysis.html?tab=stages" id="navStages"><svg viewBox="0 0 24 24"><path d="M12 3v18M7 7h10M7 17h10"/></svg><span>Stages</span></a>
     <a href="index.html?view=crew"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.2"/><path d="M3 20c0-3.5 2.7-6 6-6s6 2.5 6 6M15.5 14.2c2.6 0 5 1.8 5 5"/></svg><span>Crew</span></a>
-    <a href="index.html?view=setup"><svg viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg><span>Settings</span></a>
+    <a href="index.html?view=garage"><svg viewBox="0 0 24 24"><path d="M3 10l9-6 9 6v10H3z"/><path d="M7 20v-7h10v7M7 16h10"/></svg><span>Garage</span></a>
   </nav>
 
   <script>
@@ -617,18 +617,6 @@
       $(id).addEventListener('click', (e) => { const r = e.target.closest('tr[data-drive]'); if (r) openDrive(r.dataset.drive); });
       $(id).addEventListener('keydown', (e) => { const r = e.target.closest('tr[data-drive]'); if (r && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openDrive(r.dataset.drive); } });
     }
-    $('importFile').addEventListener('change', async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      try {
-        const d = parseRecording(await file.text(), file.name);
-        await storeDrive(d);
-        await loadDrives();
-        renderAll();
-      } catch (err) { alert(/^missing column/.test(err.message) ? `Couldn't import ${file.name}. It isn't an Vetta drive log.` : `Couldn't import ${file.name}. The file may be damaged.`); }
-      e.target.value = '';
-    });
-
     // ---------------------------------------------------------------------
     // SEGMENTS (custom stretches, stored locally; ranked by Score)
     // ---------------------------------------------------------------------
@@ -1043,13 +1031,15 @@
     function showTab(t) {
       view = t;
       for (const v of ['drive', 'history', 'segments', 'compare']) $(`tab-${v}`).hidden = v !== t;
-      $('navLog').classList.toggle('on', t !== 'segments'); $('navStages').classList.toggle('on', t === 'segments');
-      for (const [id, on] of [['navLog', t !== 'segments'], ['navStages', t === 'segments']]) on ? $(id).setAttribute('aria-current', 'page') : $(id).removeAttribute('aria-current');
+      // Stages are part of the Log (REVIEW.md roadmap 9): one tab, a Drives / Stages switch
+      $('navLog').classList.add('on'); $('navLog').setAttribute('aria-current', 'page');
+      document.querySelectorAll('[data-seg]').forEach(b => { const on = b.dataset.seg === (t === 'segments' ? 'segments' : 'history'); b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); });
       if (t === 'segments') { if (!segs.length && drives.length) { $('newStage').open = true; $('newStage').dataset.auto = '1'; } renderSegStrip(); }
       if (t === 'history') renderHistory();
     }
     document.querySelectorAll('a.back').forEach(a => a.addEventListener('click', (e) => { e.preventDefault(); showTab(a.dataset.to); toTop(); }));
     const TAB_ALIAS = { log: 'history', stages: 'segments' };
+    document.querySelectorAll('[data-seg]').forEach(b => b.addEventListener('click', () => { showTab(b.dataset.seg); toTop(); }));
     // The page scrolls inside <body> (the iOS shell turns off the web view's own scrolling), so reset both.
     function toTop() { document.body.scrollTop = 0; window.scrollTo(0, 0); }
     // iOS ignores user-scalable=no: cancel Safari's page-zoom gesture (charts and maps use their own touch handling).

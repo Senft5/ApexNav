@@ -81,7 +81,7 @@
         el('a', { className: 'ink-btn solid big', href: `tel:${num}`, textContent: `Call ${num}` }));
       const href = c && smsHref(c.phone, helpText(pos), ios);
       if (href) node.append(el('a', { className: 'ink-btn big', href, textContent: `Text ${c.name || c.phone}` }));
-      else node.append(el('p', { className: 'note', textContent: 'Add an emergency contact in Settings → Crash check to text someone from here.' }));
+      else node.append(el('p', { className: 'note', textContent: 'Add an emergency contact in Garage → Crash check to text someone from here.' }));
       node.append(el('p', { className: 'note', textContent: 'Your phone opens the call or the message; nothing is sent until you (or someone with you) taps.' }));
       const ok = el('button', { className: 'ink-btn big', textContent: 'I\'m OK, close' });
       ok.addEventListener('click', close);

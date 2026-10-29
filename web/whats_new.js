@@ -11,7 +11,7 @@
       ['Siri', 'Say "Start a drive in Vetta", "Report a hazard in Vetta" or "End my drive in Vetta", hands on the wheel.'],
       ['Landscape and 3D', 'Mount the phone sideways for a wide map, and turn on 3D terrain in the map panel to preview a route over the hills.'],
       ['Stops of the day', 'Tap a viewpoint or café along your route to add it as a stop; move or remove stops on the route card.'],
-      ['Kilometres', 'Prefer km and metres? Settings → Units. Notes, directions and the Log follow.'],
+      ['Kilometres', 'Prefer km and metres? Garage → Units. Notes, directions and the Log follow.'],
     ],
   };
 
