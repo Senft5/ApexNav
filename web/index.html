@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-HK2FJsyjvdhoWak/uj+HkPGJKOd4cgK2zXiJiWM4yTg=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-Qg0LbcQik413GGPLuqbP/Zr/uo494PLFfcLGIcGApBY=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -46,6 +46,7 @@
   <script src="hazard_reports.js"></script>
   <script src="route_card.js"></script>
   <script src="plan_presets.js"></script>
+  <script src="place_plate.js"></script>
   <script src="week_digest.js"></script>
   <script src="drive_card.js"></script>
   <script src="outbox.js"></script>
@@ -453,6 +454,24 @@
     html[data-mode="night"] #app.live .ds-warn { display: none; }
     html[data-mode="night"] #app.live .ds-main { font-size: 17px; }
     html[data-mode="night"] .dial-num { font-size: 18px; } html[data-mode="night"] .ro b { font-size: 21px; }
+    /* the idle map (REVIEW.md 3.1, mockup 01): a place plate and one invitation on the deck */
+    .place-plate { position: absolute; z-index: 4; top: calc(12px + var(--safe-top)); left: 10px; padding: 7px 12px; background: var(--panel); color: var(--panel-ink);
+      border: 1.5px solid var(--panel-ink); font-size: 14px; font-weight: 600; box-shadow: 0 2px 0 var(--rule); }
+    .place-plate[hidden], #app:not(.idle) .place-plate, #app.plan-open .place-plate { display: none; }
+    .loop-suggest { display: none; width: 100%; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 12px; align-items: center; text-align: left;
+      padding: 10px 2px 4px; border-top: 1px solid var(--rule); margin-top: 8px; background: none; color: var(--panel-ink); }
+    #app.idle:not(.plan-open):not(.routed) .loop-suggest { display: grid; }
+    .loop-suggest svg { width: 40px; height: 40px; border: 1.5px solid var(--panel-ink); padding: 3px; fill: none; stroke: var(--panel-ink); stroke-width: 2.4; stroke-linecap: round; }
+    .loop-suggest svg circle { fill: var(--panel-ink); }
+    .loop-suggest b { display: block; font-size: 16px; } .loop-suggest small { display: block; font-size: 13px; color: var(--panel-dim); }
+    .loop-suggest em { font-style: normal; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+    #hzReportBtn.undo { background: var(--hz-bg); color: var(--hz-ink); border: 2px solid var(--hz-edge); }
+    .crew-gets { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 4px 0 8px; }
+    .crew-gets span { display: grid; justify-items: center; gap: 6px; font-size: 13px; font-weight: 600; text-align: center; }
+    .crew-gets svg { width: 34px; height: 34px; fill: none; stroke: var(--panel-ink); stroke-width: 1.8; stroke-linecap: round; border: 1.5px solid var(--panel-ink); padding: 4px; }
+    /* the replay's keys get the same bevel as every other key (REVIEW.md 1.2, Replay: one button language) */
+    .transport .key { box-shadow: inset 0 -3px 0 var(--rule); }
+    .transport .key.on { box-shadow: inset 0 -3px 0 var(--accent); }
     .rc-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 18px; margin-top: 10px; }
     label.linkbtn { display: inline-flex; align-items: center; cursor: pointer; }
     .linkbtn { font: inherit; font-size: 15px; font-weight: 500; color: var(--panel-ink); text-decoration: underline; min-height: 44px; padding: 0 4px; background: none; border: none; }
@@ -660,6 +679,7 @@
 
     <section class="stage">
       <div id="map"></div>
+      <div class="place-plate" id="placePlate" role="status" hidden></div>
       <div class="hz-plate" id="hzPlate" role="status" aria-live="assertive" hidden><svg viewBox="0 0 28 25" aria-hidden="true"><path class="hz-tri" d="M14 1 L27 24 H1 Z"/><path d="M14 9 V16 M14 19.5 V20.5" stroke-width="3" stroke-linecap="round"/></svg><b id="hzPlateTitle"></b><span id="hzPlateDetail"></span></div>
       <div class="plates">
         <div class="plate" id="modePlate" role="status">Replay</div>
@@ -962,6 +982,9 @@
         <div class="scrubber" id="scrubber" role="slider" tabindex="0" aria-label="Replay position" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><canvas id="scrubCanvas" aria-hidden="true"></canvas></div>
       </div>
       <div id="cluster"></div>
+      <!-- one invitation on the idle map (REVIEW.md 3.1, mockup 01): a loop from here, drawn as a tulip -->
+        <button class="loop-suggest" id="loopSuggest" aria-label="Plan a loop from here"><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M14 36 V22 Q14 10 26 8"/><path d="M22 3 L29 8 L23 13"/><circle cx="14" cy="36" r="2.4"/></svg>
+          <span><b id="loopSuggestTitle">Loop from here</b><small>On the twistiest roads nearby · map only until driven</small></span><em>Plan</em></button>
       <nav class="tabbar" id="tabbar" aria-label="Views">
         <button class="tab on" data-view="map" aria-label="Map"><svg viewBox="0 0 24 24"><path d="M12 3l6 15-6-3-6 3z"/></svg><span>Map</span></button>
         <button class="tab" data-view="log" aria-label="Log"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg><span>Log</span></button>
@@ -2676,6 +2699,7 @@
     function renderRouteCard(t = plannedRoute) {
       const card = $('routeCard');
       $('planPanel').classList.toggle('routed', !!t);
+      $('app').classList.toggle('routed', !!t);
       if (t) {
         const mi = Array.isArray(t.dist) && t.dist.length ? `${ApexUnits.long(t.dist[t.dist.length - 1], 1)}` : '--';
         $('routeBarName').textContent = t.name || 'Route';
@@ -4220,7 +4244,12 @@
       if (!me.signed_in) {
         body.append(el('img', { src: 'brand/logo.svg', alt: 'Vetta', width: 200, style: 'max-width:60%' }),
           el('h3', { textContent: 'Drive with friends' }),
-          el('p', { className: 'note', textContent: 'Vetta is invite-only. Sign in to add friends, share scores and join boards. Nothing is shared unless you switch it on.' }),
+          // what you get, in three glyphs (REVIEW.md 1.2, Crew signed out)
+          el('div', { className: 'crew-gets' },
+            el('span', { innerHTML: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="9" r="3"/><circle cx="16" cy="15" r="3"/><path d="M8 12v3M16 12V9"/></svg>Convoys' }),
+            el('span', { innerHTML: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20V10M12 20V4M19 20v-7"/></svg>The board' }),
+            el('span', { innerHTML: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="15"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>Crew drives' })),
+          el('p', { className: 'note', textContent: 'Vetta is invite-only. Nothing is shared unless you switch it on.' }),
           appleButton(),
           el('a', { className: 'ink-btn solid', href: '/api/auth/google/start', textContent: 'Sign in with Google', style: 'display:flex;align-items:center;justify-content:center;text-decoration:none' }),
           legalNote('By signing in you agree to the '));
@@ -4700,6 +4729,33 @@
       location.reload();
     });
     renderMyData();
+    // The place plate (place_plate.js): the town and the sky on the idle map. Asked with the position rounded to about a km,
+    // again after 20 minutes or 5 km; each part only when it came back. Hidden while driving (the hazard plate's place).
+    const placeAsk = { at: 0, lat: null, lon: null, data: {} };
+    async function refreshPlacePlate() {
+      const p = state.lastPosition;
+      $('placePlate').hidden = !$('placePlate').textContent || state.mode === 'live' || !$('app').classList.contains('idle');
+      if (!p || navigator.onLine === false) return;
+      const moved = placeAsk.lat == null ? Infinity : Math.hypot((p.lat - placeAsk.lat) * 111, (p.lon - placeAsk.lon) * 111 * Math.cos(p.lat * Math.PI / 180));
+      if (Date.now() - placeAsk.at < 20 * 60000 && moved < 5) return;
+      placeAsk.at = Date.now(); placeAsk.lat = p.lat; placeAsk.lon = p.lon;
+      const la = p.lat.toFixed(2), lo = p.lon.toFixed(2), d = {};
+      try { const r = await RouteLoading.json(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${la}&lon=${lo}&zoom=12&addressdetails=1`, {}, 6000); d.place = ApexPlacePlate.town(r); } catch (_) {}
+      try { const w = await RouteLoading.json(`https://api.open-meteo.com/v1/forecast?latitude=${la}&longitude=${lo}&current=temperature_2m,weather_code`, {}, 6000);
+        if (w && w.current) { d.tempC = w.current.temperature_2m; d.code = w.current.weather_code; } } catch (_) {}
+      placeAsk.data = d;
+      $('placePlate').textContent = ApexPlacePlate.text(d, ApexUnits.metric());
+      $('placePlate').hidden = !$('placePlate').textContent || state.mode === 'live' || !$('app').classList.contains('idle');
+    }
+    setTimeout(refreshPlacePlate, 4000); setInterval(refreshPlacePlate, 60000);
+    // The suggested loop on the deck: the length you last picked on the loop dial; tapping it builds that loop.
+    function paintLoopSuggest() {
+      const b = document.querySelector('#loopDetents button[aria-pressed="true"]');
+      $('loopSuggestTitle').textContent = `Loop from here · ${b ? b.textContent : '45 mi'}`;
+    }
+    $('loopSuggest').addEventListener('click', () => { if (!loopBusy) $('findLoopBtn').click(); });
+    document.querySelectorAll('#loopDetents button').forEach(b => b.addEventListener('click', paintLoopSuggest));
+    paintLoopSuggest();
     // Long help in the Garage folds under "How this works" (REVIEW.md 1.2, Settings): the control first, the essay on demand.
     document.querySelectorAll('#sheet [data-panel~="garage"] > p.note').forEach((p) => {
       if (p.id || p.textContent.trim().length < 140) return;                // short notes and live status lines stay as they are
@@ -5307,14 +5363,31 @@
       b.addEventListener('click', () => reportHazard(k));
       $('hzKinds').append(b);
     }
-    $('hzReportBtn').addEventListener('click', () => $('hzOverlay').classList.add('show'));
+    // One tap reports; for 3 s the Report key is Undo (REVIEW.md 1.2, Hazard report): nothing is sent until then.
+    let pendingHz = null;
+    function paintHzUndo() {
+      const b = $('hzReportBtn');
+      b.textContent = pendingHz ? `Undo ${ApexHazardReports.LABEL[pendingHz.body.kind] || 'report'}` : 'Report';
+      b.setAttribute('aria-label', pendingHz ? 'Undo the hazard report' : 'Report a hazard');
+      b.classList.toggle('undo', !!pendingHz);
+    }
+    $('hzReportBtn').addEventListener('click', () => {
+      if (pendingHz) { clearTimeout(pendingHz.timer); pendingHz = null; paintHzUndo(); toast('Not sent.'); return; }
+      $('hzOverlay').classList.add('show');
+    });
     $('hzCancel').addEventListener('click', () => $('hzOverlay').classList.remove('show'));
     async function reportHazard(kind) {
       $('hzOverlay').classList.remove('show');
       const p = state.lastPosition, heading = state.lastMotion && state.lastMotion.heading;
       if (!p || !state.lastPositionAt || performance.now() - state.lastPositionAt > 10000) { toast('No GPS fix yet. Try again in a moment.'); return; }
-      let r = null;
       const body = { kind, lat: p.lat, lon: p.lon, heading: Number.isFinite(heading) ? Math.round((heading % 360 + 360) % 360) : null };
+      if (pendingHz) { clearTimeout(pendingHz.timer); const was = pendingHz.body; pendingHz = null; sendHazard(was); }   // the one before goes now
+      pendingHz = { body, timer: setTimeout(() => { const b = pendingHz && pendingHz.body; pendingHz = null; paintHzUndo(); if (b) sendHazard(b); }, 3000) };
+      paintHzUndo();
+    }
+    async function sendHazard(body) {
+      const kind = body.kind;
+      let r = null;
       try { r = await ApexSync.apiFetch('/api/hazards', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }); } catch (_) {}
       if (!r || r.status >= 500) { outbox.add('/api/hazards', body, true); health.bump('hazard_queued'); toast(`No signal. ${ApexHazardReports.LABEL[kind]} saved; it's sent when you have one.`); return; }
       if (r.status === 401 || r.status === 403) { toast('Sign in (Crew) to report hazards for others.'); return; }
