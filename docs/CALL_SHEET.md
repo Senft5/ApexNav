@@ -6,6 +6,19 @@ it says so. Things only you can do are in docs/OWNER_TODO.md.
 
 ## 2026-10-29
 
+**Roadmap 2 item 17: replay controls (U-45).** A replay is full-screen like a drive: no tab bar, and the
+"Replay · Demo · Dry Ridge Rd ×" plate is the way out. The elevation strip is the scrubber, full width above the
+controls, with its position mark; under it, Play is one slide switch and the speed is a 1× 2× 4× 8× detent. My calls:
+- *The switch label stays "Play"* rather than flipping between Play and Pause: a switch names its on state, and a
+  constant label keeps the speed stops a full thumb wide on an iPhone SE.
+- *With a dashcam video the Video key moves to the scrubber's row* (end of the strip) so the four stops stay 49 px wide
+  on the smallest phone; without one the strip runs the full width.
+- *Tapedeck's bar meters keep their own height.* Squeezed into the dial's square they spilled upward over the speed
+  stops (and on main already overprinted Sight and the trip on an SE, and ran off the bottom on its side, REVIEW2.md
+  row 6: the landscape rule named a selector that never matched). On a small phone upright and on its side the meters
+  now take their own row under the speed and the readouts.
+Undo: restore the `#transport` markup, its CSS and the `rateBtn` handler in web/index.html from before this PR.
+
 **Roadmap 2 item 16: the Limit sign (U-40).** The Limit readout is the white US sign in Roadbook, Tapedeck and Billet
 alike (theme contract 4.3.5): 44 x 52, a black edge with the sign's inset rule, SPEED LIMIT in small caps over the
 number in Barlow Condensed. No theme restyles it. My calls:

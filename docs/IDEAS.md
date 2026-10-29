@@ -270,7 +270,7 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 | U-42 | Works stickers carry the supporter's initial in the stripe colour, not a count | L | S | done (Roadmap 2 item 15) | REVIEW2.md §2 Crew Works livery |
 | U-43 | Shared ETA page never prints NaN or Invalid Date: "This link has ended", or "--" | M | S | done (#240) | REVIEW2.md §2 (honesty rule) |
 | U-44 | The slide switch component: 44 x 24 track, 20 px thumb with travel and a 2 px drop, used in Layers, Garage and Friends in place of the 36 x 20 toggle | M | S | done (Roadmap 2 item 10) | REVIEW.md 2.1, REVIEW2.md §2 Layers |
-| U-45 | Replay controls as one slide switch (Pause / Play) and a speed detent; the elevation thumbnail as a full-width scrubber; the tab bar hidden during replay as during a drive | M | S | todo | REVIEW2.md §2 Replay Roadbook |
+| U-45 | Replay controls as one slide switch (Pause / Play) and a speed detent; the elevation thumbnail as a full-width scrubber; the tab bar hidden during replay as during a drive | M | S | done (Roadmap 2 item 17) | REVIEW2.md §2 Replay Roadbook |
 | U-46 | Chat and names render emoji as text (strip or replace); a test over the crew chat and build replies | L | S | todo | REVIEW.md "Not doing", brief |
 
 ## 7. Onboarding and growth (O)

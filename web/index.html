@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-BFDqTz9ev3+FPi91O6/B3U1ZIetHLYIvwVUC1OzNsrE=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-w4/1YBz1IriFfTM87BCSUM3grIP44Cj9n73SWUVRHAk=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -317,7 +317,15 @@
 
     /* ---------------- binnacle ---------------- */
     .binnacle { background: var(--panel); color: var(--panel-ink); border-top: 1px solid var(--rule); padding: 6px 10px calc(8px + var(--safe-bottom)); display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
-    .transport { display: grid; grid-template-columns: auto auto minmax(0, 1fr); gap: 6px; align-items: center; }
+    .transport { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "scrub scrub scrub" "play rate rate"; gap: 8px 12px; align-items: center; }
+    /* with a dashcam video the Video key sits at the scrubber's end, so the speed stops keep a full thumb's width on a small phone */
+    .transport:has(> #videoBtn:not([hidden])) { grid-template-areas: "scrub scrub video" "play rate rate"; }
+    .transport > .scrubber { grid-area: scrub; } .transport > #playBtn { grid-area: play; } .transport > .tp-rate { grid-area: rate; } .transport > #videoBtn { grid-area: video; }
+    .transport .sw.tp-play { display: flex; flex-direction: row; gap: 8px; align-items: center; min-height: 44px; padding: 0; }
+    .transport .sw.tp-play span { font-size: 15px; font-weight: 600; color: var(--panel-ink); }
+    .transport .detents.tp-rate { flex-wrap: nowrap; gap: 4px; } .transport .detents.tp-rate > button { min-width: 0; min-height: 44px; padding: 0 2px; font-size: 16px; }
+    /* replay is full-screen like a drive: no tab bar; the Replay plate is the way out (REVIEW2.md U-45) */
+    #app.replaying .tabbar { display: none; }
     .drivebar { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--rule); }
     .dbstat { font-size: 13px; line-height: 1.35; color: var(--panel-ink); min-width: 0; flex: 1; }
     #driveEnd { flex: none; background: var(--panel-ink); color: var(--panel); border-color: var(--panel-ink); font-size: 15px; padding: 0 16px; }
@@ -340,6 +348,14 @@
     .dial.dial-g { display: flex; flex-direction: column; align-items: stretch; }
     .dial.dial-g > :not(.g-score) { flex: 1 1 0; min-height: 0; width: 100%; }
     .dial.dial-g > .g-score { flex: none; height: 44px; }
+    .dial.dial-g > .vfd-meters { flex: 1 0 auto; }
+    html[data-theme="tapedeck"] .dial.dial-g { height: auto; }   /* and the box holds them and the Score */
+    /* a small phone upright: the bar meters get their own row under the speed and the readouts, as on its side (6) */
+    @media (max-width: 359px) {
+      html[data-theme="tapedeck"] .cluster-dials { grid-template-columns: var(--dial) minmax(0, 1fr); }
+      html[data-theme="tapedeck"] .cluster-dials > .dial-g { grid-column: 1 / -1; width: 100%; height: auto; aspect-ratio: auto; }
+      html[data-theme="tapedeck"] .dial-g > .vfd-meters { grid-template-columns: 1fr 1fr; column-gap: 16px; }
+    }   /* Tapedeck's bar meters keep their own height; squeezed, they overprinted the replay keys */
     .dial-g.bezelled .bezel-ring { height: calc(100% - 44px); }   /* Billet's ring rounds the meter, not the Score */
     .dial-num { font-family: var(--font-num); font-size: 15px; font-weight: 600; fill: var(--face-ink); }
     .dial-label { font-size: 14px; font-weight: 700; letter-spacing: 2px; fill: var(--face-dim); }
@@ -828,7 +844,8 @@
       #endCard .end-card > .end-line, #endCard .end-card > .end-acts, #endCard .end-card > .end-links { grid-column: 2; }
       #endCard .end-card > .end-line { grid-row: 1 / span 2; }
       html[data-theme="tapedeck"] .cluster-dials { grid-template-columns: var(--dial) minmax(0, 1fr); }        /* 6: the meters get a row */
-      html[data-theme="tapedeck"] .cluster-dials > .vfd-meters { grid-column: 1 / -1; grid-template-columns: 1fr 1fr; height: auto; }
+      html[data-theme="tapedeck"] .cluster-dials > .dial-g { grid-column: 1 / -1; width: 100%; height: auto; aspect-ratio: auto; }
+      html[data-theme="tapedeck"] .dial-g > .vfd-meters { grid-template-columns: 1fr 1fr; column-gap: 16px; }
       #app.idle:has(.edge.open) .loop-suggest { display: none; }                                                 /* 8: the panel is the task */
       .plan.open { height: calc(100% - var(--safe-bottom)); }                                                     /* 14 */
       /* 14: two columns, so the basic level fits without scrolling: places and the loop left, Roads, More and Find right */
@@ -1174,8 +1191,9 @@
         <button class="key" id="driveEnd" aria-label="End drive">End</button>
       </div>
       <div class="transport" id="transport">
-        <button class="key" id="playBtn">Play</button>
-        <button class="key" id="rateBtn">1X</button>
+        <!-- one slide switch and a speed detent (REVIEW2.md U-45); the scrubber runs full width above them -->
+        <button class="sw tp-play" id="playBtn" role="switch" aria-checked="false"><i></i><span>Play</span></button>
+        <div class="detents tp-rate" id="rateDetents" role="radiogroup" aria-label="Replay speed"><button data-rate="1" role="radio" aria-checked="true">1×</button><button data-rate="2" role="radio" aria-checked="false">2×</button><button data-rate="4" role="radio" aria-checked="false">4×</button><button data-rate="8" role="radio" aria-checked="false">8×</button></div>
         <button class="key" id="videoBtn" hidden aria-label="Record a video of the replay">Video</button>
         <div class="scrubber" id="scrubber" role="slider" tabindex="0" aria-label="Replay position" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><canvas id="scrubCanvas" aria-hidden="true"></canvas></div>
       </div>
@@ -2449,8 +2467,7 @@
     function setPlaying(on) {
       state.playing = on && !!track && state.mode !== 'live';
       if (!state.playing && video) { video.stop(); video = null; }      // the replay ended or paused: the video ends with it
-      $('playBtn').textContent = state.playing ? 'Pause' : 'Play';
-      $('playBtn').classList.toggle('on', state.playing);
+      $('playBtn').classList.toggle('on', state.playing); $('playBtn').setAttribute('aria-checked', String(state.playing));
       if (state.playing) {
         if (state.cursorM >= totalM() - 1) state.cursorM = 0;
         if (!state.follow) resumeFollow();
@@ -5307,11 +5324,10 @@
     document.querySelectorAll('[data-cam]').forEach(b => b.addEventListener('click', () => { state.camFeel = b.dataset.cam; renderCamList(); savePrefs(); }));
     renderCamList();
     $('playBtn').addEventListener('click', () => { setPlaying(!state.playing); });   // the name is on the plate; the pack's voice is for the road
-    $('rateBtn').addEventListener('click', () => {
-      const rates = [1, 2, 4, 8];
-      state.rate = rates[(rates.indexOf(state.rate) + 1) % rates.length];
-      $('rateBtn').textContent = `${state.rate}X`;
-    });
+    document.querySelectorAll('#rateDetents [data-rate]').forEach((b) => b.addEventListener('click', () => {
+      state.rate = Number(b.dataset.rate);
+      document.querySelectorAll('#rateDetents [data-rate]').forEach((x) => x.setAttribute('aria-checked', String(x === b)));
+    }));
     const scrubber = $('scrubber');
     let scrubbing = false;
     function scrubTo(x) {
