@@ -114,5 +114,35 @@ describe("crew drives", () => {
     await ok(api(a, "PUT", `/api/crews/${pub}`, { visibility: "private" }));
     expect(await near(b)).toEqual([]);                                                                 // the crew went private
   });
-});
 
+  it("roles and regroup points (roadmap 21): the planner leads, a going member sweeps, a role opens when its holder drops out", async () => {
+    const [a, b, c, out] = [await makeUser("alice"), await makeUser("bob"), await makeUser("cara"), await makeUser("outsider")];
+    const crew = await crewOf(a, b, c);
+    const regroup = [{ name: "Overlook", lat: 35.3311119, lon: -84.12 }, { name: "Gas, Robbinsville", lat: 35.32, lon: -83.8 }];
+    const { id } = await json(api(b, "POST", `/api/crews/${crew}/events`, { ...DRIVE, regroup }));
+    let [e] = await json(api(a, "GET", `/api/crews/${crew}/events`)) as Msg[];
+    expect([e.lead, e.sweep]).toEqual(["bob", null]);
+    expect(e.regroup).toEqual([{ name: "Overlook", lat: 35.33111, lon: -84.12 }, { name: "Gas, Robbinsville", lat: 35.32, lon: -83.8 }]);
+    await ok(api(c, "POST", `/api/events/${id}/role`, { role: "sweep", take: true }));
+    expect((await api(a, "POST", `/api/events/${id}/role`, { role: "sweep", take: true })).status).toBe(409);   // taken
+    expect((await api(b, "POST", `/api/events/${id}/role`, { role: "sweep", take: true })).status).toBe(409);   // bob leads already
+    [e] = await json(api(a, "GET", `/api/crews/${crew}/events`)) as Msg[];
+    expect([e.lead, e.sweep, e.going.sort()]).toEqual(["bob", "cara", ["bob", "cara"]]);                       // taking a role is going
+    await ok(api(c, "POST", `/api/events/${id}/rsvp`, { status: "no" }));                                     // cara drops out
+    [e] = await json(api(a, "GET", `/api/crews/${crew}/events`)) as Msg[];
+    expect(e.sweep).toBeNull();
+    expect((await api(c, "POST", `/api/events/${id}/role`, { role: "lead", take: false })).status).toBe(404);   // not hers to clear
+    await ok(api(a, "POST", `/api/events/${id}/role`, { role: "lead", take: false }));                        // the crew's owner may
+    await ok(api(a, "POST", `/api/events/${id}/role`, { role: "lead", take: true }));
+    expect((await json(api(b, "GET", `/api/crews/${crew}/events`)) as Msg[])[0].lead).toBe("alice");
+    expect((await api(out, "POST", `/api/events/${id}/role`, { role: "lead", take: true })).status).toBe(404);
+    // named at planning: members only, not the same person twice, at most 5 regroup points with names
+    const plan = (x: Msg) => api(a, "POST", `/api/crews/${crew}/events`, { ...DRIVE, ...x });
+    expect((await plan({ lead: "cara", sweep: "bob" })).status).toBe(201);
+    expect((await plan({ sweep: "outsider" })).status).toBe(400);
+    expect((await plan({ lead: "bob", sweep: "bob" })).status).toBe(400);
+    expect((await plan({ regroup: Array.from({ length: 6 }, (_, i) => ({ name: `R${i}`, lat: 35, lon: -84 })) })).status).toBe(400);
+    expect((await plan({ regroup: [{ name: " ", lat: 35, lon: -84 }] })).status).toBe(400);
+    expect((await plan({ regroup: [{ name: "Top", lat: 95, lon: -84 }] })).status).toBe(400);
+  });
+});

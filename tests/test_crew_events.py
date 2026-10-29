@@ -56,3 +56,29 @@ def test_calendar_file(out):
 
 def test_inputs_to_zoned_time(out):
     assert out["iso"] == ["2026-11-01T14:00:00.000Z", None, None]           # 9 AM EST (clocks went back Nov 1)
+
+
+# Roadmap 21: roles and the cockpit's morning reminder.
+def _ce(js: str):
+    import json as _j, shutil as _s, subprocess as _sp
+    from pathlib import Path as _P
+    src = f"const C = require({_j.dumps(str(_P(__file__).resolve().parents[1] / 'web' / 'crew_events.js'))}); console.log(JSON.stringify({js}));"
+    return _j.loads(_sp.run([_s.which("node"), "-e", src], capture_output=True, text=True, check=True, env={"TZ": "America/New_York"}).stdout)
+
+
+def test_roles_line():
+    assert _ce("C.rolesLine({ lead: 'bob', sweep: null })") == "Lead @bob · Sweep open"
+    assert _ce("C.rolesLine({})") == "Lead open · Sweep open"
+
+
+def test_today_drive_is_the_morning_of_a_drive_you_are_going_to():
+    evs = ("[{ id: 'a', starts_at: '2026-11-02T11:30:00Z', my_rsvp: 'going' },"     # 6:30 AM Nov 2, New York
+           " { id: 'b', starts_at: '2026-11-02T18:00:00Z', my_rsvp: 'going' },"     # 1 PM same day
+           " { id: 'c', starts_at: '2026-11-02T10:00:00Z', my_rsvp: 'maybe' },"     # not going
+           " { id: 'd', starts_at: '2026-11-03T11:30:00Z', my_rsvp: 'going' }]")    # tomorrow
+    at = lambda iso: _ce(f"(C.todayDrive({evs}, new Date('{iso}')) || {{}}).id || null")
+    assert at("2026-11-02T08:30:00Z") is None        # 3:30 AM: too early
+    assert at("2026-11-02T09:30:00Z") == "a"         # 4:30 AM: the dawn run
+    assert at("2026-11-02T12:45:00Z") == "b"         # 7:45 AM: the dawn run started over an hour ago
+    assert at("2026-11-02T19:30:00Z") is None        # 2:30 PM: both are over
+    assert _ce("C.todayDrive(null)") is None

@@ -20,6 +20,8 @@ import {
 } from "./social";
 import { deleteAccount, exportMyData } from "./account";
 import { carCreate, carDelete, carUpdate, myCars, peoplesCars } from "./garage";
+import { chatDelete, chatList, chatPost, crewPage, crewPageUpdate } from "./crew_page";
+import { decalsPlace } from "./livery";
 import { photoDelete, photoList, photoServe, photoUpload, photoUse } from "./photos";
 import { block, blockList, fileReport, isModerator, moderationQueue, moderationResolve, report, unblock } from "./safety";
 import { contribute, setContribute } from "./contribute";
@@ -28,7 +30,7 @@ import { redeem, shop } from "./redeem";
 import { flagsFor } from "./flags";
 import { coverage, exportRoads, roadBins } from "./roads";
 import { crewStandings } from "./standings";
-import { eventCancel, eventCreate, eventRsvp, eventsList, eventsNear } from "./events";
+import { eventCancel, eventCreate, eventRole, eventRsvp, eventsList, eventsNear } from "./events";
 import { healthReport, healthSummary } from "./health";
 import { feedbackCreate, feedbackDone, feedbackList } from "./feedback";
 import { friendProfile } from "./profile";
@@ -139,7 +141,15 @@ on("GET", "/api/eta/:token", async (_req, env, m) => json(await etaView(env, m.g
 on("GET", "/api/events/near", async (req, env) => json(await eventsNear(env, await requireMember(req, env), new URL(req.url))));
 on("GET", "/api/events", async (req, env) => json(await eventsList(env, await requireMember(req, env), null)));
 on("POST", "/api/events/:id/rsvp", async (req, env, m) => { await eventRsvp(env, await requireMember(req, env), m.groups!.id, req); return noContent(); });
+on("POST", "/api/events/:id/role", async (req, env, m) => { await eventRole(env, await requireMember(req, env), m.groups!.id, req); return noContent(); });
 on("DELETE", "/api/events/:id", async (req, env, m) => { await eventCancel(env, await requireMember(req, env), m.groups!.id); return noContent(); });
+// the crew page (src/crew_page.ts, REVIEW.md roadmap 20)
+on("GET", "/api/crews/:id/page", async (req, env, m) => json(await crewPage(env, await requireMember(req, env), m.groups!.id)));
+on("PUT", "/api/crews/:id/page", async (req, env, m) => { await crewPageUpdate(env, await requireMember(req, env), m.groups!.id, req); return noContent(); });
+on("PUT", "/api/crews/:id/decals", async (req, env, m) => { await decalsPlace(env, await requireMember(req, env), m.groups!.id, req); return noContent(); });
+on("GET", "/api/crews/:id/chat", async (req, env, m) => json(await chatList(env, await requireMember(req, env), m.groups!.id, new URL(req.url))));
+on("POST", "/api/crews/:id/chat", async (req, env, m) => json(await chatPost(env, await requireMember(req, env), m.groups!.id, req), 201));
+on("DELETE", "/api/crews/:id/chat/:msg", async (req, env, m) => { await chatDelete(env, await requireMember(req, env), m.groups!.id, m.groups!.msg); return noContent(); });
 on("GET", "/api/crews/:id/members", async (req, env, m) => json(await crewMembers(env, await requireMember(req, env), m.groups!.id)));
 on("POST", "/api/crews/join", async (req, env) => json(await crewJoin(env, await requireMember(req, env), req)));
 on("POST", "/api/crews/invite/preview", async (req, env) => json(await crewInvitePreview(env, await requireMember(req, env), req)));

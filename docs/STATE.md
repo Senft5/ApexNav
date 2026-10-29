@@ -11,8 +11,15 @@
   EXIF gone on the phone and stripped again on the Worker; KV `PHOTOS` until R2 is on (OWNER_TODO). Migration 0030
   (photos, crew page columns, crew chat, build threads) applied to both D1.
 - Active bugs: none new.
-- Exact next task: roadmap 20, the crew page v1 (cover, stock crest, motto, stripe, next drive, Vetta Score board,
-  chat; the Crew tab opens your crew).
+- [x] Roadmap 20: the crew page (web/crew_page.js, backend/src/crew_page.ts): cover, stock crest, motto, stripe, next
+  drive with Going, the Vetta Score board this month, crew chat (30 days). Migration 0031 applied to both D1.
+- [x] Roadmap 21: crew drives get lead and sweep roles (take or give up), up to five regroup points, roles on the crew
+  page's card, and the morning-of reminder on the idle map (crew_events.js todayDrive). Migration 0032 applied to both D1.
+- [x] Roadmap 22 (core): Decals from verified Pro (backend/src/livery.ts, migration 0033 applied to both D1), tiers, the
+  livery box, Club (second colour, pinned route, crest photo) and Works (third colour, patterns) in the editor. Dormant
+  until StoreKit writes pro_entitlements. Postponed: chat pins, templates, badges, house stage, call sign, Factory.
+- Exact next task: roadmap 23, build threads (car header, stage bar, posts with photos and parts, replies vs suggestions
+  with "Tried it", follow; tables from migration 0030).
 
 ## Session 2026-10-29 (day): design phase 2
 

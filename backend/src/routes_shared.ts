@@ -26,7 +26,7 @@ const CAN_SEE = `(r.owner = ?1
   OR EXISTS (SELECT 1 FROM shared_route_audience a JOIN crew_members m ON m.crew_id = a.audience_id AND m.user_id = ?1
              WHERE a.route_id = r.id AND a.audience_type = 'crew'))
   AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker = ?1 AND b.blocked = r.owner) OR (b.blocker = r.owner AND b.blocked = ?1))
-  AND r.created_at > datetime('now', '-${KEEP_DAYS} days')`;
+  AND (r.created_at > datetime('now', '-${KEEP_DAYS} days') OR EXISTS (SELECT 1 FROM crews pc WHERE pc.pinned_route_id = r.id))`;
 
 export async function shareRoute(env: Env, v: Viewer, req: Request) {
   const b = await body<{ name?: unknown; geom?: unknown; friends?: unknown; crews?: unknown }>(req);

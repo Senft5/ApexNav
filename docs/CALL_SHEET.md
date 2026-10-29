@@ -6,6 +6,43 @@ it says so. Things only you can do are in docs/OWNER_TODO.md.
 
 ## 2026-10-29
 
+**Decals and livery tiers (REVIEW.md 5.1, roadmap 22), built but dormant.** My calls:
+- *The server counts Pro only from `pro_entitlements`*, which nothing writes yet: StoreKit's App Store Server Notifications
+  will (with the founders' grant and earned Pro). So every crew is Plain today and the livery box says where Decals come
+  from. Migration 0033 is applied to both D1 databases.
+- *A Pro member's Decals go to every crew they're in* (1, then 2, then 3 from the third month of continuous Pro), unless
+  they keep them off one ("Take them off"). The review's "placed on a crew" became automatic with an opt-out, so nobody
+  has to manage them.
+- *Built now*: Club (5) unlocks a second stripe colour, a pinned route (kept past the usual 30-day route expiry while
+  pinned) and a crest photo; Works (12) a third colour and five stripe patterns. Gates are on the Worker. A crew that
+  drops a tier falls back to the look it still has, and gets the rest back when it climbs again.
+- *Postponed, not dropped* (they need parts that don't exist yet): Club's chat pins and event templates; Works' member
+  badges, house stage, convoy call sign and templates; all of Factory (animated crest, crew voice line, crew page in the
+  share card, custom hazard categories). They come after build threads and friends on the map.
+
+**Crew drives get roles, regroup points and a morning reminder (REVIEW.md roadmap 21).** My calls:
+- *Two roles, lead and sweep.* The planner leads unless they name someone; the sweep is named at planning or taken later
+  by anyone in the crew ("I'll sweep"), which also marks them going. Saying you're not going frees your role. The planner
+  or the crew's owner can clear a role. Migration 0032 is applied to both D1 databases.
+- *Up to five named regroup points*, set at the map's centre in the plan form; each one is a Directions link on the card.
+- *The morning reminder replaces the loop invitation on the idle map* (one invitation at a time) from 4 AM on the day of a
+  drive you said you're going to, until an hour after it starts. It shows the time, the meeting point, how many are going
+  and the roles; Go routes to the meeting point. It's never shown while driving.
+- *The plan form stays in Crew drives* rather than a new sheet built from the plan sheet: it already takes the route you
+  planned on the map, and the crew page's "Plan a drive" opens it for that crew.
+- *Tapping Going or Share on the crew page redraws only that part*, so a half-typed chat message isn't lost.
+
+**The crew page (REVIEW.md roadmap 20).** The Crew tab opens your crew (a row of names to switch when you're in several). My calls:
+- *Plain livery only*: the owner sets a motto, one of six drawn stock crests (Apex, Peak, Tulip, Wheel, Wing, Crown) and one
+  of eight stripe colours, and adds a cover photo. Crest uploads and the higher tiers wait for Decals (roadmap 22). Migration
+  0031 (the stock crest column) is applied to both D1 databases.
+- *The board is the Vetta Score only*, best this month as each member published it to the crew; members who don't share
+  show `--`. A member's car is named only in a private crew, where crew-mates already see shown cars.
+- *Crew chat is kept 30 days*, plain text, 500 characters, 30 messages an hour a person. The author or the crew's owner
+  deletes; three reports hide a message, a moderator's remove deletes it.
+- *The old crew list stays below the page* (invite links, public/private, members, leave, create) until those move into
+  the page's own settings.
+
 **Photos (REVIEW.md roadmap 19, 5.2): a profile photo and a car's cover and gallery.** My calls:
 - *Photos are kept in Workers KV, not R2,* because R2 isn't turned on for the account (only you can: OWNER_TODO). I
   made two KV namespaces (PHOTOS, prod and preview) and bound them. Undo: once R2 is on, move the bytes and change the

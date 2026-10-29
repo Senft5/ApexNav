@@ -6,6 +6,7 @@
 import type { Viewer } from "./auth";
 import { Env, HttpError } from "./util";
 import { removedSql, reportedSql } from "./reports_sql";
+import { atLeast, tierOf } from "./livery";
 
 export const MAX_BYTES = 700_000, MAX_SIDE = 2400, MAX_PER_OWNER = 300, MAX_PER_REF = 12;
 export const KINDS = ["profile", "car", "crew", "crest", "post"] as const;
@@ -54,7 +55,10 @@ async function canAttach(env: Env, v: Viewer, kind: Kind, ref: string | null): P
   if (kind === "profile") return ref === null;
   if (!ref) return false;
   if (kind === "car") return !!(await env.DB.prepare("SELECT 1 FROM cars WHERE id = ? AND owner = ?").bind(ref, v.id).first());
-  if (kind === "crew" || kind === "crest") return !!(await env.DB.prepare("SELECT 1 FROM crews WHERE id = ? AND owner = ?").bind(ref, v.id).first());
+  if (kind === "crew" || kind === "crest") {
+    if (!(await env.DB.prepare("SELECT 1 FROM crews WHERE id = ? AND owner = ?").bind(ref, v.id).first())) return false;
+    return kind === "crew" || atLeast(await tierOf(env, ref), "club");     // a crest of your own is the Club livery (REVIEW.md 5.1)
+  }
   if (kind === "post") return !!(await env.DB.prepare("SELECT 1 FROM build_posts p JOIN builds b ON b.id = p.build_id WHERE p.id = ? AND b.owner = ?").bind(ref, v.id).first());
   return false;
 }

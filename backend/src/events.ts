@@ -8,7 +8,8 @@ import { cleanText } from "./convoy";
 import { isCrewMember } from "./social";
 import { reportedSql } from "./reports_sql";
 
-export const MAX_UPCOMING = 10, MAX_AHEAD_DAYS = 30, SHOW_AFTER_START_H = 6, KEEP_AFTER_START_DAYS = 7;
+export const MAX_UPCOMING = 10, MAX_AHEAD_DAYS = 30, SHOW_AFTER_START_H = 6, KEEP_AFTER_START_DAYS = 7, MAX_REGROUP = 5;
+export const ROLES = ["lead", "sweep"] as const;
 const ID_RE = /^[A-Za-z0-9_-]{16}$/;
 const STATUSES = ["going", "maybe", "no"] as const;
 
@@ -21,11 +22,34 @@ function startsAt(v: unknown, now = Date.now()): string {
   return new Date(t).toISOString().slice(0, 19).replace("T", " ");
 }
 
+/** Regroup points (roadmap 21): at most MAX_REGROUP, each a short name and a place. */
+function regroupPoints(v: unknown): { name: string; lat: number; lon: number }[] {
+  if (v === undefined || v === null) return [];
+  if (!Array.isArray(v) || v.length > MAX_REGROUP) throw new HttpError(400, "bad_regroup");
+  return v.map((p) => {
+    if (!p || typeof p !== "object") throw new HttpError(400, "bad_regroup");
+    const o = p as { name?: unknown; lat?: unknown; lon?: unknown };
+    const name = cleanText(o.name, 40)?.trim();
+    if (!name) throw new HttpError(400, "bad_regroup");
+    return { name, lat: Math.round(num(o.lat, "regroup", -85, 85) * 1e5) / 1e5, lon: Math.round(num(o.lon, "regroup", -180, 180) * 1e5) / 1e5 };
+  });
+}
+/** A member of the crew by handle, for a role; null when none was asked. */
+async function roleHolder(env: Env, crewId: string, handle: unknown): Promise<string | null> {
+  if (handle === undefined || handle === null || handle === "") return null;
+  if (typeof handle !== "string" || handle.length > 20) throw new HttpError(400, "bad_role");
+  const u = await env.DB.prepare("SELECT u.id FROM users u JOIN crew_members m ON m.user_id = u.id AND m.crew_id = ? WHERE u.handle = ?")
+    .bind(crewId, handle.toLowerCase()).first<{ id: string }>();
+  if (!u) throw new HttpError(400, "bad_role");
+  return u.id;
+}
+
 const VISIBLE = (e: string) => `${e}.cancelled = 0 AND NOT ${reportedSql("event", `${e}.id`)}`;
 
 export async function eventCreate(env: Env, v: Viewer, crewId: string, req: Request) {
   if (!(await isCrewMember(env, crewId, v.id))) throw new HttpError(404, "no_crew");
-  const b = await body<{ title?: unknown; starts_at?: unknown; meet?: { name?: unknown; lat?: unknown; lon?: unknown }; route_id?: unknown; notes?: unknown; public?: unknown }>(req);
+  const b = await body<{ title?: unknown; starts_at?: unknown; meet?: { name?: unknown; lat?: unknown; lon?: unknown }; route_id?: unknown; notes?: unknown; public?: unknown;
+    lead?: unknown; sweep?: unknown; regroup?: unknown }>(req);
   const title = cleanText(b.title, 60)?.trim();
   if (!title) throw new HttpError(400, "bad_title");
   const when = startsAt(b.starts_at);
@@ -51,27 +75,35 @@ export async function eventCreate(env: Env, v: Viewer, crewId: string, req: Requ
     const c = await env.DB.prepare("SELECT visibility FROM crews WHERE id = ?").bind(crewId).first<{ visibility: string }>();
     if (!c || c.visibility !== "public") throw new HttpError(400, "not_public_crew");
   }
+  const regroup = regroupPoints(b.regroup);
+  // the planner leads unless they name someone; nobody sweeps until someone is named or volunteers
+  const lead = b.lead === undefined ? v.id : await roleHolder(env, crewId, b.lead), sweep = await roleHolder(env, crewId, b.sweep);
+  if (lead && lead === sweep) throw new HttpError(400, "bad_role");
   const upcoming = await env.DB.prepare("SELECT COUNT(*) AS n FROM crew_events WHERE crew_id = ? AND cancelled = 0 AND starts_at > datetime('now')")
     .bind(crewId).first<{ n: number }>();
   if ((upcoming?.n ?? 0) >= MAX_UPCOMING) throw new HttpError(429, "too_many_events");
   const id = randomToken(12);
   await env.DB.batch([
-    env.DB.prepare(`INSERT INTO crew_events (id, crew_id, created_by, title, starts_at, meet_name, meet_lat, meet_lon, route_id, notes, public)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(id, crewId, v.id, title, when, meetName, Math.round(lat * 1e5) / 1e5, Math.round(lon * 1e5) / 1e5, routeId, notes, listed ? 1 : 0),
+    env.DB.prepare(`INSERT INTO crew_events (id, crew_id, created_by, title, starts_at, meet_name, meet_lat, meet_lon, route_id, notes, public, lead_id, sweep_id, regroup)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(id, crewId, v.id, title, when, meetName, Math.round(lat * 1e5) / 1e5, Math.round(lon * 1e5) / 1e5, routeId, notes, listed ? 1 : 0,
+      lead, sweep, JSON.stringify(regroup)),
     env.DB.prepare("INSERT INTO crew_event_rsvps (event_id, user_id, status) VALUES (?, ?, 'going')").bind(id, v.id),
   ]);
   return { id };
 }
 
 interface EventRow { id: string; crew_id: string; crew_name: string; title: string; starts_at: string; meet_name: string | null; meet_lat: number; meet_lon: number;
-  route_id: string | null; notes: string | null; public: number; by_handle: string | null; mine: number; can_cancel: number; my_rsvp: string | null; going: string; maybe: number }
+  route_id: string | null; notes: string | null; public: number; by_handle: string | null; mine: number; can_cancel: number; my_rsvp: string | null; going: string; maybe: number;
+  lead: string | null; sweep: string | null; regroup: string }
 
 /** Upcoming drives (from SHOW_AFTER_START_H ago) in one crew, or in all your crews; each with who's going (handles). */
 export async function eventsList(env: Env, v: Viewer, crewId: string | null) {
   if (crewId && !(await isCrewMember(env, crewId, v.id))) throw new HttpError(404, "no_crew");
   const rows = (await env.DB.prepare(
     `SELECT e.id, e.crew_id, c.name AS crew_name, e.title, e.starts_at, e.meet_name, e.meet_lat, e.meet_lon, e.route_id, e.notes, e.public,
-            u.handle AS by_handle, (e.created_by = ?1) AS mine, (e.created_by = ?1 OR c.owner = ?1) AS can_cancel,
+            u.handle AS by_handle, (e.created_by = ?1) AS mine, e.regroup,
+            (SELECT lu.handle FROM users lu JOIN crew_members lm ON lm.user_id = lu.id AND lm.crew_id = e.crew_id WHERE lu.id = e.lead_id) AS lead,
+            (SELECT su.handle FROM users su JOIN crew_members sm ON sm.user_id = su.id AND sm.crew_id = e.crew_id WHERE su.id = e.sweep_id) AS sweep, (e.created_by = ?1 OR c.owner = ?1) AS can_cancel,
             (SELECT status FROM crew_event_rsvps r WHERE r.event_id = e.id AND r.user_id = ?1) AS my_rsvp,
             (SELECT json_group_array(COALESCE(gu.handle, '?')) FROM crew_event_rsvps g JOIN users gu ON gu.id = g.user_id
                JOIN crew_members gm ON gm.crew_id = e.crew_id AND gm.user_id = g.user_id
@@ -82,7 +114,8 @@ export async function eventsList(env: Env, v: Viewer, crewId: string | null) {
        LEFT JOIN users u ON u.id = e.created_by
       WHERE ${VISIBLE("e")} AND e.starts_at > datetime('now', '-${SHOW_AFTER_START_H} hours') ${crewId ? "AND e.crew_id = ?2" : ""}
       ORDER BY e.starts_at LIMIT 50`).bind(...(crewId ? [v.id, crewId] : [v.id])).all<EventRow>()).results;
-  return rows.map((r) => ({ ...r, public: !!r.public, mine: !!r.mine, can_cancel: !!r.can_cancel, starts_at: r.starts_at.replace(" ", "T") + "Z", going: JSON.parse(r.going) as string[] }));
+  return rows.map((r) => ({ ...r, public: !!r.public, mine: !!r.mine, can_cancel: !!r.can_cancel, starts_at: r.starts_at.replace(" ", "T") + "Z", going: JSON.parse(r.going) as string[],
+    regroup: JSON.parse(r.regroup || "[]") as { name: string; lat: number; lon: number }[] }));
 }
 
 export const NEAR_KM = 80;
@@ -125,8 +158,34 @@ export async function eventRsvp(env: Env, v: Viewer, id: string, req: Request) {
   const { status } = await body<{ status?: unknown }>(req);
   const s = STATUSES.find((x) => x === status);
   if (!s) throw new HttpError(400, "bad_status");
-  await env.DB.prepare(`INSERT INTO crew_event_rsvps (event_id, user_id, status) VALUES (?, ?, ?)
-    ON CONFLICT (event_id, user_id) DO UPDATE SET status = excluded.status, updated_at = datetime('now')`).bind(id, v.id, s).run();
+  await env.DB.batch([
+    env.DB.prepare(`INSERT INTO crew_event_rsvps (event_id, user_id, status) VALUES (?, ?, ?)
+      ON CONFLICT (event_id, user_id) DO UPDATE SET status = excluded.status, updated_at = datetime('now')`).bind(id, v.id, s),
+    // not going any more: a role you held opens up for someone else
+    ...(s === "going" ? [] : [env.DB.prepare(`UPDATE crew_events SET lead_id = CASE WHEN lead_id = ?2 THEN NULL ELSE lead_id END,
+      sweep_id = CASE WHEN sweep_id = ?2 THEN NULL ELSE sweep_id END WHERE id = ?1`).bind(id, v.id)]),
+  ]);
+}
+
+/** POST /api/events/:id/role { role: lead | sweep, take }: take an open role (you're going, then), or give yours up; the planner
+ *  or the crew's owner may also clear anyone's. */
+export async function eventRole(env: Env, v: Viewer, id: string, req: Request) {
+  const e = await visibleEvent(env, v, id);
+  const b = await body<{ role?: unknown; take?: unknown }>(req);
+  const role = ROLES.find((r) => r === b.role);
+  if (!role || typeof b.take !== "boolean") throw new HttpError(400, "bad_role");
+  const col = role === "lead" ? "lead_id" : "sweep_id", other = role === "lead" ? "sweep_id" : "lead_id";
+  if (b.take) {
+    const r = await env.DB.prepare(`UPDATE crew_events SET ${col} = ?2 WHERE id = ?1 AND (${col} IS NULL OR ${col} NOT IN (SELECT user_id FROM crew_members WHERE crew_id = ?3))
+        AND (${other} IS NULL OR ${other} != ?2)`).bind(id, v.id, e.crew_id).run();
+    if (!r.meta.changes) throw new HttpError(409, "role_taken");
+    await env.DB.prepare(`INSERT INTO crew_event_rsvps (event_id, user_id, status) VALUES (?, ?, 'going')
+      ON CONFLICT (event_id, user_id) DO UPDATE SET status = 'going', updated_at = datetime('now')`).bind(id, v.id).run();
+    return;
+  }
+  const boss = e.created_by === v.id || e.owner === v.id;
+  const r = await env.DB.prepare(`UPDATE crew_events SET ${col} = NULL WHERE id = ?1 AND ${col} IS NOT NULL ${boss ? "" : `AND ${col} = ?2`}`).bind(...(boss ? [id] : [id, v.id])).run();
+  if (!r.meta.changes) throw new HttpError(404, "not_yours");
 }
 
 /** The planner or the crew's owner. Kept (cancelled) until the sweep, so the members' lists just drop it. */
