@@ -64,6 +64,8 @@
     .bv-say { position: fixed; left: 0; right: 0; bottom: 0; z-index: 3; display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: center;
       padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); background: var(--panel); border-top: 2px solid var(--panel-ink); }
     .bv-say .to { grid-column: 1 / -1; font-size: 13px; color: var(--panel-dim); }
+    .bv-chat { margin: 0 16px 16px; border-top: 2px solid var(--panel-ink); padding-top: 10px; }
+    .bv-chat summary { cursor: pointer; padding: 6px 0; }
     .bv-form { display: grid; gap: 8px; padding: 0 16px 16px; }
     .bv-list button { display: grid; grid-template-columns: 56px 1fr auto; gap: 10px; align-items: center; width: 100%; text-align: left; padding: 8px 0; border: 0; border-top: 1px solid var(--rule); background: none; color: inherit; }
     .bv-list .thumb { width: 56px; height: 40px; background: var(--panel-dim); overflow: hidden; } .bv-list .thumb img { width: 100%; height: 100%; object-fit: cover; }
@@ -152,11 +154,38 @@
         }, 'ink-btn solid');
         paintSay();
         const say = b.posts.length && !b.mine ? el('div', { className: 'bv-say' }, to, input, sugg, send) : (b.posts.length ? el('div', { className: 'bv-say' }, to, input, el('span'), send) : '');
-        ov.replaceChildren(top, ...(cover ? [cover] : []), head, bar, posts, say);
+        ov.replaceChildren(top, ...(cover ? [cover] : []), head, bar, posts, chatSection(b), say);
       };
       d.body.append(ov);
       draw();
       return close;
+    }
+
+    // The thread's chat (REVIEW.md 5.3): the back and forth that doesn't belong in the log, kept 30 days; folded away.
+    function chatSection(b) {
+      const list = el('div'), box = el('details', { className: 'bv-chat' }, el('summary', {}, el('b', { textContent: 'Chat' }), el('span', { className: 'note', textContent: ' \u00b7 kept 30 days' })), list);
+      list.setAttribute('aria-live', 'polite');
+      const fill = async () => {
+        const r = await call('GET', `/api/builds/${encodeURIComponent(b.id)}/chat`);
+        const msgs = r && r.ok ? await r.json() : null;
+        if (!msgs) { list.replaceChildren(el('p', { className: 'note', textContent: 'Couldn\u2019t load the chat. Check signal.' })); return; }
+        list.replaceChildren(...(msgs.length ? msgs.map((m) => {
+          const acts = [];
+          if (m.mine || b.mine) acts.push(btn('Delete', async () => { const x = await call('DELETE', `/api/builds/${encodeURIComponent(b.id)}/chat/${encodeURIComponent(m.id)}`); if (x && x.ok) fill(); }, 'linkbtn'));
+          if (!m.mine && page.report) acts.push(btn('Report', () => page.report({ kind: 'build_chat', target: m.id, label: `a message from @${m.handle}`, who: m.handle, done: fill }), 'linkbtn'));
+          return el('div', { className: 'bv-reply' }, el('div', { className: 'row' }, el('b', { textContent: `@${m.handle || '?'}` }), el('span', { className: 'note', textContent: day(m.created_at) }), ...acts), el('p', { textContent: m.body }));
+        }) : [el('p', { className: 'note', textContent: 'Nothing said yet.' })]), sayRow);
+      };
+      const input = el('input', { className: 'field', maxLength: 500, placeholder: 'Say something', autocomplete: 'off' });
+      input.setAttribute('aria-label', 'Chat message');
+      const send = btn('Send', async () => {
+        const t = input.value.trim(); if (!t) return;
+        const x = await call('POST', `/api/builds/${encodeURIComponent(b.id)}/chat`, { body: t });
+        if (x && x.ok) { input.value = ''; fill(); } else toast(x && x.status === 429 ? 'That\u2019s a lot of messages. Wait a while.' : 'Couldn\u2019t send. Check signal.');
+      }, 'ink-btn');
+      const sayRow = el('div', { className: 'row', style: 'margin-top:8px' }, input, send);
+      box.addEventListener('toggle', () => { if (box.open) fill(); });
+      return box;
     }
 
     function postEl(b, p, redo, replyHere) {

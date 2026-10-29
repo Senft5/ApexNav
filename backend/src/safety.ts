@@ -16,7 +16,7 @@ const UNSAFE_RE = /(?!\u200d)[\p{Cc}\p{Cf}\p{Cs}\p{Co}\p{Cn}\u2028\u2029]/u;
 const HIDES: Record<ReportKind, string | null> = {
   user: null, car: "1",
   crew: "(SELECT visibility FROM crews WHERE id = r.target_id) = 'public'",
-  highlight: "1", event: "1", photo: "1", chat: "1", post: "1", reply: "1",
+  highlight: "1", event: "1", photo: "1", chat: "1", post: "1", reply: "1", build_chat: "1",
 };
 
 const first = <T>(env: Env, sql: string, ...args: unknown[]) => env.DB.prepare(sql).bind(...args).first<T>();
@@ -96,6 +96,12 @@ async function resolveTarget(env: Env, v: Viewer, kind: ReportKind, target: unkn
     const p = await first<{ owner: string }>(env, "SELECT owner FROM photos WHERE id = ?1 AND owner != ?2", id, v.id);
     if (!p) throw new HttpError(404, "no_photo");
     return { id, person: p.owner };
+  }
+  if (kind === "build_chat") {   // a build thread's chat: whoever can see the car
+    const m = await first<{ person: string }>(env, `SELECT c.author AS person FROM build_chat c JOIN builds b ON b.id = c.build_id JOIN cars car ON car.id = b.car_id
+        WHERE c.id = ?2 AND c.author != ?1 AND ${CAR_SEEN("car")}`, v.id, id);
+    if (!m) throw new HttpError(404, "no_message");
+    return { id, person: m.person };
   }
   if (kind === "post" || kind === "reply") {   // a build thread's step or reply: whoever can see the car (builds.ts); never your own
     const m = await first<{ person: string }>(env, kind === "post"
@@ -181,6 +187,8 @@ export async function moderationQueue(env: Env, v: Viewer) {
     (r) => `build post "${String(r.title).slice(0, 80)}" · @${r.handle ?? "?"}`);
   await each("reply", (q) => `SELECT r.id, r.body, u.handle FROM build_replies r JOIN users u ON u.id = r.author WHERE r.id IN (${q})`,
     (r) => `build reply "${String(r.body).slice(0, 120)}" · @${r.handle ?? "?"}`);
+  await each("build_chat", (q) => `SELECT c.id, c.body, u.handle FROM build_chat c JOIN users u ON u.id = c.author WHERE c.id IN (${q})`,
+    (r) => `build chat "${String(r.body).slice(0, 120)}" · @${r.handle ?? "?"}`);
   await each("event", (q) => `SELECT e.id, e.title, c.name AS crew, u.handle FROM crew_events e JOIN crews c ON c.id = e.crew_id LEFT JOIN users u ON u.id = e.created_by WHERE e.id IN (${q})`,
     (r) => `${r.title} · ${r.crew} · @${r.handle ?? "?"}`);
   return rows.map((r) => {
@@ -229,6 +237,7 @@ export async function moderationResolve(env: Env, v: Viewer, req: Request): Prom
     chat: [env.DB.prepare("DELETE FROM crew_chat WHERE id = ?").bind(id)],
     post: [env.DB.prepare("DELETE FROM build_posts WHERE id = ?").bind(id)],
     reply: [env.DB.prepare("DELETE FROM build_replies WHERE id = ?").bind(id)],
+    build_chat: [env.DB.prepare("DELETE FROM build_chat WHERE id = ?").bind(id)],
     photo: [],                                                        // stays down: removed reports hide it for good (photos.ts)
   }[kind];
   await env.DB.batch([mark, ...act]);

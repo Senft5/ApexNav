@@ -8,7 +8,8 @@ import { Env, HttpError, body } from "./util";
 import { cleanText } from "./convoy";
 import { reportedSql } from "./reports_sql";
 
-export const MAX_STAGES = 8, MAX_PARTS = 12, MAX_POSTS = 200, REPLY_MAX = 1000, REPLIES_PER_HOUR = 30;
+export const MAX_STAGES = 8, MAX_PARTS = 12, MAX_POSTS = 200, REPLY_MAX = 1000, REPLIES_PER_HOUR = 30, CHAT_MAX = 500, CHAT_KEEP_DAYS = 30;
+export const BUILD_CHAT_SWEEP = `DELETE FROM build_chat WHERE created_at <= datetime('now', '-${CHAT_KEEP_DAYS} days')`;
 
 /** SQL: may viewer ?1 see car `c`? The same circle as peoplesCars. */
 export const CAR_SEEN = (c: string) => `(${c}.owner = ?1 OR (${c}.shared = 1 AND NOT ${reportedSql("car", `${c}.id`)}
@@ -194,4 +195,33 @@ export async function replyDelete(env: Env, v: Viewer, replyId: string): Promise
   const r = await env.DB.prepare(`DELETE FROM build_replies WHERE id = ?1 AND (author = ?2
       OR post_id IN (SELECT p.id FROM build_posts p JOIN builds b ON b.id = p.build_id WHERE b.owner = ?2))`).bind(replyId, v.id).run();
   if (!r.meta.changes) throw new HttpError(404, "no_reply");
+}
+
+/** GET /api/builds/:id/chat: the thread's chat (REVIEW.md 5.3), the newest 50, oldest first; blocked and reported hidden. */
+export async function buildChatList(env: Env, v: Viewer, id: string) {
+  await seenBuild(env, v, id);
+  const rows = (await env.DB.prepare(`SELECT c.id, c.body, c.created_at, u.handle, u.photo_id, (c.author = ?1) AS mine FROM build_chat c JOIN users u ON u.id = c.author
+      WHERE c.build_id = ?2 AND (c.author = ?1 OR (${NOT_BLOCKED("c.author")} AND NOT ${reportedSql("build_chat", "c.id")}))
+      ORDER BY c.created_at DESC, c.rowid DESC LIMIT 50`).bind(v.id, id).all<{ mine: number }>()).results;
+  return rows.reverse().map((r) => ({ ...r, mine: !!r.mine }));
+}
+
+/** POST /api/builds/:id/chat { body }: whoever sees the build; replies and chat share the hourly cap. */
+export async function buildChatPost(env: Env, v: Viewer, id: string, req: Request): Promise<{ id: string }> {
+  await seenBuild(env, v, id);
+  const t = text((await body<{ body?: unknown }>(req)).body, "body", CHAT_MAX, true);
+  const cid = crypto.randomUUID();
+  const r = await env.DB.prepare(`INSERT INTO build_chat (id, build_id, author, body) SELECT ?1, ?2, ?3, ?4
+      WHERE (SELECT COUNT(*) FROM build_chat WHERE author = ?3 AND created_at > datetime('now', '-1 hour'))
+          + (SELECT COUNT(*) FROM build_replies WHERE author = ?3 AND created_at > datetime('now', '-1 hour')) < ${REPLIES_PER_HOUR}`)
+    .bind(cid, id, v.id, t).run();
+  if (!r.meta.changes) throw new HttpError(429, "slow_down");
+  return { id: cid };
+}
+
+/** DELETE /api/builds/:id/chat/:msg: its author or the build's owner. */
+export async function buildChatDelete(env: Env, v: Viewer, id: string, msg: string): Promise<void> {
+  const r = await env.DB.prepare(`DELETE FROM build_chat WHERE id = ?1 AND build_id = ?2
+      AND (author = ?3 OR EXISTS (SELECT 1 FROM builds b WHERE b.id = ?2 AND b.owner = ?3))`).bind(msg, id, v.id).run();
+  if (!r.meta.changes) throw new HttpError(404, "no_message");
 }

@@ -39,8 +39,8 @@ it says so. Things only you can do are in docs/OWNER_TODO.md.
 - *Following lists new steps* ("Builds you follow" in the Garage, "2 new") instead of a notification: the app has no push
   service yet. Notifications come when it does. Migration 0034 is applied to both D1 databases.
 - *A step holds up to eight photos*, added after it's posted. Deleting a step deletes its photos and replies.
-- *The per-thread chat (REVIEW.md 5.3) isn't built*: it isn't in roadmap item 23's list, and replies cover the back and
-  forth for now. It's postponed, not dropped.
+- *The per-thread chat (REVIEW.md 5.3)* is folded under the steps ("Chat · kept 30 days") so the log stays the thread;
+  it shares the replies' 30-an-hour cap. Migration 0036 is applied to both D1 databases.
 
 **Decals and livery tiers (REVIEW.md 5.1, roadmap 22), built but dormant.** My calls:
 - *The server counts Pro only from `pro_entitlements`*, which nothing writes yet: StoreKit's App Store Server Notifications

@@ -23,7 +23,7 @@ import { carCreate, carDelete, carUpdate, myCars, peoplesCars } from "./garage";
 import { chatDelete, chatList, chatPost, crewPage, crewPageUpdate } from "./crew_page";
 import { decalsPlace } from "./livery";
 import { presencePublish, presenceSettingsGet, presenceSettingsPut, presenceView } from "./presence";
-import { buildCreate, buildDelete, buildFind, buildFollow, buildGet, buildUpdate, buildsFollowing, postCreate, postDelete, replyCreate, replyDelete, replyTried } from "./builds";
+import { buildChatDelete, buildChatList, buildChatPost, buildCreate, buildDelete, buildFind, buildFollow, buildGet, buildUpdate, buildsFollowing, postCreate, postDelete, replyCreate, replyDelete, replyTried } from "./builds";
 import { photoDelete, photoList, photoServe, photoUpload, photoUse } from "./photos";
 import { block, blockList, fileReport, isModerator, moderationQueue, moderationResolve, report, unblock } from "./safety";
 import { contribute, setContribute } from "./contribute";
@@ -182,6 +182,9 @@ on("DELETE", "/api/builds/replies/:reply", async (req, env, m) => { await replyD
 on("GET", "/api/builds/:id", async (req, env, m) => json(await buildGet(env, await requireMember(req, env), m.groups!.id)));
 on("PUT", "/api/builds/:id", async (req, env, m) => { await buildUpdate(env, await requireMember(req, env), m.groups!.id, req); return noContent(); });
 on("DELETE", "/api/builds/:id", async (req, env, m) => { await buildDelete(env, await requireMember(req, env), m.groups!.id); return noContent(); });
+on("GET", "/api/builds/:id/chat", async (req, env, m) => json(await buildChatList(env, await requireMember(req, env), m.groups!.id)));
+on("POST", "/api/builds/:id/chat", async (req, env, m) => json(await buildChatPost(env, await requireMember(req, env), m.groups!.id, req), 201));
+on("DELETE", "/api/builds/:id/chat/:msg", async (req, env, m) => { await buildChatDelete(env, await requireMember(req, env), m.groups!.id, m.groups!.msg); return noContent(); });
 on("POST", "/api/builds/:id/posts", async (req, env, m) => json(await postCreate(env, await requireMember(req, env), m.groups!.id, req), 201));
 on("PUT", "/api/builds/:id/follow", async (req, env, m) => { await buildFollow(env, await requireMember(req, env), m.groups!.id, true); return noContent(); });
 on("DELETE", "/api/builds/:id/follow", async (req, env, m) => { await buildFollow(env, await requireMember(req, env), m.groups!.id, false); return noContent(); });

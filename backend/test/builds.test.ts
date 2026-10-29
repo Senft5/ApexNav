@@ -95,4 +95,22 @@ describe("build threads", () => {
     await ok(api(a, "DELETE", `/api/builds/${id}`));
     expect((await env.DB.prepare("SELECT COUNT(*) AS n FROM build_posts").first<{ n: number }>())!.n).toBe(0);
   });
+
+  it("chat on a thread: whoever sees the build, 30 days, author or owner deletes, reports hide, sweep", async () => {
+    const [a, b, c, d, out] = [await makeUser("nate"), await makeUser("sam"), await makeUser("jules"), await makeUser("dee"), await makeUser("outsider")];
+    for (const u of [b, c, d]) await befriend(a, u);
+    const { id } = await json(api(a, "POST", "/api/builds", { car_id: await car(a), stages: [] }));
+    const m1 = await json(api(b, "POST", `/api/builds/${id}/chat`, { body: "Which pads?" }));
+    await ok(api(a, "POST", `/api/builds/${id}/chat`, { body: "Hawk DTC-30 up front." }));
+    expect((await json(api(c, "GET", `/api/builds/${id}/chat`))).map((m: any) => [m.handle, m.body])).toEqual([["sam", "Which pads?"], ["nate", "Hawk DTC-30 up front."]]);
+    expect((await api(out, "GET", `/api/builds/${id}/chat`)).status).toBe(404);
+    expect((await api(out, "POST", `/api/builds/${id}/chat`, { body: "hi" })).status).toBe(404);
+    expect((await api(c, "DELETE", `/api/builds/${id}/chat/${m1.id}`)).status).toBe(404);
+    for (const u of [a, c, d]) await ok(api(u, "POST", "/api/reports", { kind: "build_chat", target: m1.id, reason: "spam" }));
+    expect((await json(api(c, "GET", `/api/builds/${id}/chat`))).map((m: any) => m.handle)).toEqual(["nate"]);
+    await ok(api(a, "DELETE", `/api/builds/${id}/chat/${m1.id}`));                       // the owner
+    await env.DB.prepare("UPDATE build_chat SET created_at = datetime('now', '-31 days')").run();
+    const { sweepExpired } = await import("../src/sweep");
+    expect((await sweepExpired(env as any)).build_chat).toBe(1);
+  });
 });

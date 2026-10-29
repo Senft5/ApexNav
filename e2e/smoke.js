@@ -531,6 +531,13 @@ flow('build threads: start one from a car, add a step, a friend suggests and it 
   await page.waitForSelector('.bv-reply.sugg');
   const r = sent.find((x) => x.p === '/api/builds/posts/po1/replies').b;
   check(r.suggestion === true && r.body === 'One click softer on the rear rebound', 'the suggestion is sent');
+  // the thread's chat, folded away until opened
+  await page.click('.bv-chat summary');
+  await page.waitForSelector('.bv-chat input[aria-label="Chat message"]');
+  await page.fill('.bv-chat input[aria-label="Chat message"]', 'Which pads?');
+  await page.click('.bv-chat button:has-text("Send")');
+  await page.waitForTimeout(300);
+  check(sent.some((x) => x.p === '/api/builds/b1/chat' && x.b.body === 'Which pads?'), 'a chat message is sent');
 });
 
 flow('friends on the map: off by default; the first time on explains both choices; Show me to sends no zones for Nobody; pucks say how old (Worker stubbed, REVIEW.md roadmap 24)', async (page, base) => {

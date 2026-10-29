@@ -24,9 +24,10 @@
   and grid fuzz on the server, only while driving, home zones on both sides and hatched on your map. Migration 0035.
 - All 24 roadmap items are built. Also done: the packs' closing lines with the score and "best on this road"
   (web/end_line.js, number clips in each bank), the Prefer stamps (web/prefer.js).
+- [x] Build-thread chat (30 days, migration 0036).
 - Postponed (CALL_SHEET): Club chat pins and event templates, Works badges / house stage / call sign / templates, all of
-  Factory, build-thread chat, push notifications for follows.
-- Exact next task: build-thread chat (30 days), then the Club and Works extras; then StoreKit (needs the owner's Paid
+  Factory, push notifications for follows.
+- Exact next task: the Club and Works extras; then StoreKit (needs the owner's Paid
   Applications Agreement) so Pro, Decals and the Pro themes can go on sale.
 
 ## Session 2026-10-29 (day): design phase 2

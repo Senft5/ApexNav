@@ -52,5 +52,6 @@ SELECT
   (SELECT COUNT(*) FROM decal_optouts) AS decal_optouts,
   (SELECT COUNT(*) FROM presence_settings) AS presence_settings,
   (SELECT COUNT(*) FROM presence_samples) AS presence_samples,
+  (SELECT COUNT(*) FROM build_chat) AS build_chat,
   (SELECT COUNT(*) FROM d1_migrations) AS d1_migrations
 ;
