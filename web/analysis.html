@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-A54FG/lpt0vnBbPVV5czgA2EuxqBTdAZFCv86e7ko/c=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-PiuuFSvcHU0EkyvepJ542AW0Eiy+4BRYNrMYVnGUkdQ=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta · Log</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -36,6 +36,7 @@
   <script src="flyover_video.js"></script>
   <script src="save_file.js"></script>
   <script src="dashcam.js"></script>
+  <script src="row_select.js"></script>
   <script src="recce.js"></script>
   <script src="confirm.js"></script>
   <style>
@@ -57,6 +58,13 @@
     .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; font-size: 12px; }
     select, input, button.btn, a.btn { font: inherit; font-size: 15px; height: 44px; padding: 0 10px; background: transparent; color: var(--panel-ink); border: 1px solid var(--panel-dim); }
     button.btn { cursor: pointer; font-weight: 600; font-size: 15px; }
+    label.btn { display: inline-flex; align-items: center; height: 44px; padding: 0 14px; border: 1.5px solid var(--panel-ink); font-weight: 600; font-size: 15px; cursor: pointer; }
+    .dc-section { border-top: 1px solid var(--rule); padding-top: 12px; display: grid; gap: 10px; justify-items: start; }
+    .dc-section .balance { width: 100%; }
+    /* the two drives as rows, one above the other, Swap beside them */
+    .compare-pick { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "a swap" "b swap"; column-gap: 12px; row-gap: 8px; align-items: center; }
+    .compare-pick label { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; gap: 2px; font-size: 13px; font-weight: 700; color: var(--panel-dim); }
+    .compare-pick label:first-child { grid-area: a; } .compare-pick label:last-child { grid-area: b; } .compare-pick #swapBtn { grid-area: swap; }
     /* Selects drawn like the app's other controls on every platform: square, ink border, a drawn chevron (iOS otherwise adds its own rounded bubble) */
     select { -webkit-appearance: none; appearance: none; border-radius: 0; padding-right: 30px; text-overflow: ellipsis;
       background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%);
@@ -307,10 +315,10 @@
     <!-- ============================ COMPARE ============================ -->
     <section id="tab-compare" hidden class="stack-12">
       <div><a href="#" class="back" data-to="drive">‹ Drive</a></div>
-      <div class="row">
-        <b>This drive</b><select id="selA" aria-label="Drive A"></select>
-        <button class="btn" id="swapBtn">Swap</button>
-        <b style="color:var(--accent)">vs</b><select id="selB" aria-label="Compare with"></select>
+      <div class="compare-pick">
+        <label>This drive<select id="selA" aria-label="Drive A"></select></label>
+        <button class="btn" id="swapBtn" aria-label="Swap the two drives">Swap</button>
+        <label>Compare with<select id="selB" aria-label="Compare with"></select></label>
       </div>
       <section class="cards" id="cards"></section>
       <section class="grid2">
@@ -337,6 +345,7 @@
     'use strict';
     const Core = window.ApexCore, Inst = window.ApexInstruments, MPH = window.ApexUnits ? ApexUnits.speed(1) : Core.MPS_TO_MPH;   // mph or km/h per m/s (U-22)
     const $ = (id) => document.getElementById(id);
+    for (const id of ['segDrive', 'selA', 'selB']) ApexRowSelect.enhance($(id));   // the app's row list, not the browser's select (REVIEW2.md U-18)
     let prefs = { theme: 'roadbook', toggles: { night: false } };
     try { prefs = Object.assign(prefs, JSON.parse(localStorage.getItem('apex.prefs') || 'null') || {}); if (prefs.themeV !== 2) prefs.theme = 'roadbook'; } catch (_) {}
     const params = new URLSearchParams(location.search);
@@ -833,7 +842,7 @@
           const sel2 = document.createElement('select'); fr.forEach(f => sel2.add(new Option('@' + f.handle, f.id)));
           const go = document.createElement('button'); go.className = 'btn'; go.textContent = 'Share stage';
           go.onclick = async () => { go.textContent = (await ApexSync.shareSegment(seg.id, 'friend', sel2.value)) ? 'Shared' : 'Failed. Try again'; };
-          row.append(sel2, go);
+          sel2.setAttribute('aria-label', 'Share with'); row.append(sel2, go); ApexRowSelect.enhance(sel2);
         }
       }
     }

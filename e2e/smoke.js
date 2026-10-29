@@ -1468,7 +1468,7 @@ flow('dashcam overlay: a video from the drive gets its speed, g and calls drawn 
       events: [{ type: 'corner', code: 'L4', call: 'Left 4', index: 100, dist_m: 500, start_m: 480, end_m: 520, radius_m: 80, apex_mph: 30, dir: 'L', severity: 4 }] });
   });
   await page.goto(base + '/analysis.html?drive=dc1');
-  await page.waitForSelector('#dvDashcam input[type=file]');
+  await page.waitForSelector('#dvDashcam input[type=file]', { state: 'attached' });   // behind the Pick a video key
   // a 2 s video made right here, put in the file box as if picked
   await page.evaluate(async () => {
     const c = Object.assign(document.createElement('canvas'), { width: 320, height: 180 }), g = c.getContext('2d');
