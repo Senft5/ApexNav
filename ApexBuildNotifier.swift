@@ -3,6 +3,7 @@
 // a local notification for each build whose count of new steps grew since the last one it announced. Permission is
 // asked when you follow a build (the page sends "notifyBuilds"), never at launch. Nothing about you leaves the phone that
 // the page wouldn't send anyway; the notification names the car and the owner's handle only.
+import ApexKit
 import BackgroundTasks
 import Foundation
 import UserNotifications
@@ -36,15 +37,6 @@ enum ApexBuildNotifier {
         }
     }
 
-    /// The notification's words for a build: "Nate's NB Miata" or "2004 Mazda Miata", and "@nate posted 2 new steps."
-    static func words(for build: [String: Any], newSteps: Int) -> (title: String, body: String) {
-        let nick = (build["nickname"] as? String).flatMap { $0.isEmpty ? nil : $0 }
-        let year = (build["year"] as? Int).map(String.init)
-        let name = nick ?? [year, build["make"] as? String, build["model"] as? String].compactMap { $0 }.joined(separator: " ")
-        let handle = (build["handle"] as? String).map { "@\($0)" } ?? "Its owner"
-        return (name.isEmpty ? "A build you follow" : name, "\(handle) posted \(newSteps) new step\(newSteps == 1 ? "" : "s").")
-    }
-
     static func check() async {
         guard let token = ApexKeychain.session(), let url = URL(string: base + "/api/builds/following") else { return }
         let settings = await UNUserNotificationCenter.current().notificationSettings()
@@ -56,23 +48,16 @@ enum ApexBuildNotifier {
         guard let (data, response) = try? await URLSession.shared.data(for: request),
               (response as? HTTPURLResponse)?.statusCode == 200,
               let list = (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]] else { return }
-        var announced = UserDefaults.standard.dictionary(forKey: announcedKey) as? [String: Int] ?? [:]
-        var still: [String: Int] = [:]
-        for build in list {
-            guard let id = build["id"] as? String else { continue }
-            let newSteps = build["new_posts"] as? Int ?? 0
-            if newSteps > (announced[id] ?? 0) {
-                let w = words(for: build, newSteps: newSteps)
-                let content = UNMutableNotificationContent()
-                content.title = w.title
-                content.body = w.body
-                content.sound = .default
-                content.threadIdentifier = "build-\(id)"
-                try? await UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "build-\(id)-\(newSteps)", content: content, trigger: nil))
-            }
-            still[id] = newSteps                                         // opening the build in the app resets it to 0
+        let announced = UserDefaults.standard.dictionary(forKey: announcedKey) as? [String: Int] ?? [:]
+        let due = BuildAlerts.due(list, announced: announced)                // which builds, and the words (ApexKit, tested)
+        for alert in due.alerts {
+            let content = UNMutableNotificationContent()
+            content.title = alert.title
+            content.body = alert.body
+            content.sound = .default
+            content.threadIdentifier = "build-\(alert.id)"
+            try? await UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "build-\(alert.id)-\(alert.newSteps)", content: content, trigger: nil))
         }
-        announced = still
-        UserDefaults.standard.set(announced, forKey: announcedKey)
+        UserDefaults.standard.set(due.announced, forKey: announcedKey)
     }
 }

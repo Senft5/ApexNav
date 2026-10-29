@@ -25,5 +25,8 @@ def test_permission_only_when_following_and_only_counts_it_has_not_announced():
     js = read("web", "builds.js")
     assert "if (!b.following && native) { try { native.postMessage({ cmd: 'notifyBuilds' }); }" in js
     src = read("ApexBuildNotifier.swift")
-    assert "if newSteps > (announced[id] ?? 0)" in src and "authorizationStatus == .authorized" in src
+    assert "BuildAlerts.due(list, announced: announced)" in src and "authorizationStatus == .authorized" in src
+    kit = read("ApexKit", "Sources", "ApexKit", "BuildAlerts.swift")
+    assert "if newSteps > (announced[id] ?? 0)" in kit                                    # the rule, unit-tested in Swift:
+    assert "testAnnouncesEachNewStepOnce" in read("ApexKit", "Tests", "ApexKitTests", "BuildAlertsTests.swift")
     assert "requestAuthorization" not in read("ApexNavApp.swift").split("notifyBuilds")[0]   # never at launch

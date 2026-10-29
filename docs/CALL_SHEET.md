@@ -6,6 +6,13 @@ it says so. Things only you can do are in docs/OWNER_TODO.md.
 
 ## 2026-10-29
 
+**Followed-build notifications are decided in ApexKit, and a flaky profile test is fixed.** My calls:
+- *Which builds get a notification, and its words, moved to `ApexKit/Sources/ApexKit/BuildAlerts.swift`* with unit tests
+  (`BuildAlertsTests.swift`) that CI runs on Linux and macOS for every PR; `ApexBuildNotifier.swift` keeps only the iOS
+  calls (background refresh, permission, posting). Undo: move `due`/`words` back into the notifier.
+- *`profile.test.ts` no longer fails at random*: it checked the profile JSON never contained "600" (the hidden time),
+  but random car ids sometimes do. It now checks for the value `:600`. Undo: revert the one line.
+
 **The binnacle shows the live Vetta Score (REVIEW.md 1.2 Driving, 4.3), and a last pass over the 1.2 screen list.** My calls:
 - *The Score sits under the meter in every theme* (speed left, Limit centre, Score right): the drive so far, scored the way
   the end card scores it, every 30 s while recording; "--" until there are enough clean corners, and on a replay. The
