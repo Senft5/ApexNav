@@ -48,6 +48,14 @@
     return out;
   }
 
-  const api = { digest, lines, PARTS };
+  /** One drive's thing to work on (the drive-ended card): the weakest Score part, or null without parts. */
+  function tip(components) {
+    if (!components) return null;
+    let low = null;
+    for (const k of Object.keys(PARTS)) if (finite(components[k]) && (!low || components[k] < low.v)) low = { k, v: components[k] };
+    return low ? { part: low.k, label: PARTS[low.k].label, tip: PARTS[low.k].tip } : null;
+  }
+
+  const api = { digest, lines, tip, PARTS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexWeekDigest = api;
 })(typeof window !== 'undefined' ? window : globalThis);

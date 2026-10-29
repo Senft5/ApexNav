@@ -17,6 +17,6 @@ def test_pages_exist_and_link_each_other():
 def test_linked_from_settings_and_every_sign_in():
     html = read("web", "index.html")
     site = re.search(r"const LEGAL_SITE = '([^']+)'", html).group(1)
-    assert html.count(f'{site}/privacy.html') >= 2                          # Settings and onboarding
+    assert html.count(f'{site}/privacy.html') >= 1                          # Settings (sign-in left onboarding, REVIEW.md 8)
     buttons = html.count(">Sign in with Google</a>") + html.count("textContent: 'Sign in with Google'")
-    assert buttons == html.count("you agree to the ") == 2                  # every sign-in button carries the note
+    assert buttons == html.count("you agree to the ") == 1                  # every sign-in button carries the note

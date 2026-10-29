@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-b3pUDwRloyEIaNufneZaV30L9iCvAIuRFx0uNnmOoYs=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-dZ0DOfM75RYKFiygtl9BuqTKaEE7KhuCrYd7HBMfCOo=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -44,6 +44,10 @@
   <script src="note_timing.js"></script>
   <script src="plain_notes.js"></script>
   <script src="hazard_reports.js"></script>
+  <script src="route_card.js"></script>
+  <script src="plan_presets.js"></script>
+  <script src="week_digest.js"></script>
+  <script src="drive_card.js"></script>
   <script src="outbox.js"></script>
   <script src="stage_delta.js"></script>
   <script src="lanes.js"></script>
@@ -90,7 +94,18 @@
   <script src="garage_ui.js"></script>
   <script src="safety_ui.js"></script>
   <style>
-    :root { --safe-top: env(safe-area-inset-top, 0px); --safe-bottom: env(safe-area-inset-bottom, 0px); --dial: clamp(88px, 12dvh, 150px); }
+    :root { --safe-top: env(safe-area-inset-top, 0px); --safe-bottom: env(safe-area-inset-bottom, 0px); --dial: clamp(88px, 12dvh, 150px);
+      /* The hazard plate (docs/design/REVIEW.md 4.3): the same in every theme, day and night; no theme may set these. */
+      --hz-bg: #111111; --hz-edge: #FF7A1A; --hz-ink: #FFFFFF; }
+    .hz-plate { position: absolute; z-index: 5; top: 14px; left: 10px; max-width: calc(100% - 76px); display: grid; grid-template-columns: 28px minmax(0, 1fr);
+      gap: 2px 10px; align-items: center; padding: 8px 14px 8px 10px; background: var(--hz-bg); color: var(--hz-ink); border: 2px solid var(--hz-edge);
+      box-shadow: 0 2px 0 rgba(0,0,0,0.25); pointer-events: none; }
+    .hz-plate[hidden] { display: none; }
+    .hz-plate svg { grid-row: span 2; width: 28px; height: 25px; }
+    .hz-plate b { font: 800 20px/1.05 var(--font-num, var(--font-ui)); letter-spacing: 0.01em; }
+    .hz-plate span { font-size: 12px; font-weight: 600; color: var(--hz-edge); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .hz-tri { fill: var(--hz-edge); }
+    .hz-tri + path { stroke: var(--hz-bg); }
     * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
     html, body { width: 100%; height: 100%; overflow: hidden; background: var(--panel); color: var(--panel-ink);
       font-family: var(--font-ui); font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -116,6 +131,8 @@
     /* The lead note reads at arm's length (U-07): bigger distance, tulip and call than the note after it. The call may take
        two lines rather than lose its end to an ellipsis. */
     .rb-box.now { grid-template-columns: auto 56px minmax(0, 1fr); }
+    .rb-box.now.hz { background: var(--hz-bg); color: var(--hz-ink); outline: 2px solid var(--hz-edge); outline-offset: -2px; }
+    .rb-box.now.hz .rb-call b { color: var(--hz-edge); }
     @media (max-width: 520px) {
       .rb-box:not(.now) { grid-template-columns: auto 30px minmax(0, 1fr); gap: 4px; padding: 2px 6px; }
       .rb-box:not(.now) .rb-tulip { width: 30px; height: 30px; }
@@ -137,7 +154,13 @@
     .rb-call span:first-child { font-size: 16px; font-weight: 800; line-height: 1.1; }
     .rb-box.now .rb-call span.long:first-child { font-size: 17px; }
     .rb-box.now .rb-call span.xlong:first-child { font-size: 14px; }
-    .rb-box:not(.now) .rb-call span.long:first-child, .rb-box:not(.now) .rb-call span.xlong:first-child { font-size: 11px; white-space: normal; line-height: 1.1; }
+    .rb-box:not(.now) .rb-call span.long:first-child, .rb-box:not(.now) .rb-call span.xlong:first-child { font-size: 13px; line-height: 1.1; }
+    /* the call lockup (REVIEW.md roadmap 3): modifiers one size down in pencil, the ones that change what you do in the accent */
+    .rb-call span.rb-mods { font-size: 12px; font-weight: 700; color: var(--panel-dim); margin-top: 2px; }
+    .rb-call span.rb-mods i { font-style: normal; }
+    .rb-call span.rb-mods i.warn { color: var(--accent); }
+    .rb-box.now .rb-call span.rb-mods { font-size: 14px; line-height: 1.15; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+    .rb-box.now.hz .rb-call span.rb-mods, .rb-box.now.hz .rb-call span.rb-mods i.warn { color: var(--hz-edge); }
     .ds-main > span { white-space: nowrap; }
 
     /* ---------------- stage map ---------------- */
@@ -218,9 +241,7 @@
     .toast.show { display: block; }
     .pin { font-size: 11px; font-weight: 800; letter-spacing: 0.1em; padding: 2px 5px; border: 1.5px solid; background: var(--panel); white-space: nowrap; cursor: pointer; font-family: var(--font-ui); }
     .pin.alpr { color: var(--signal); border-color: var(--signal); }
-    .pin.bump { color: var(--amber); border-color: var(--amber); }
-    .pin.crest, .pin.dip { color: var(--panel-ink); border-color: var(--panel-dim); }
-    .puck { width: 26px; height: 26px; }
+        .puck { width: 26px; height: 26px; }
     .reshape-pin { cursor: grabbing; }
     .stop-row { align-items: center; gap: 6px; } .stop-row span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .poi-pin { cursor: pointer; }
@@ -245,8 +266,12 @@
     .dbstat { font-size: 13px; line-height: 1.35; color: var(--panel-ink); min-width: 0; flex: 1; }
     #driveEnd { flex: none; background: var(--panel-ink); color: var(--panel); border-color: var(--panel-ink); font-size: 15px; padding: 0 16px; }
     .dbstat b { color: var(--accent); }
-    .ds-main { font-size: 20px; font-weight: 600; line-height: 1.2; font-variant-numeric: tabular-nums; }
-    .ds-warn { margin-top: 2px; font-size: 13px; }
+    .ds-main { font-size: 15px; font-weight: 600; line-height: 1.25; font-variant-numeric: tabular-nums; }
+    .ds-main b { font-size: 17px; }
+    /* one status line under the record line (REVIEW.md 1.1 #4): the rest is cut, never wrapped over the binnacle */
+    .ds-warn { margin-top: 2px; font-size: 13px; color: var(--panel-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    /* driving is full-screen (REVIEW.md roadmap 1): no tab bar, so no way to leave the drive by accident; End is the way out */
+    #app.live .tabbar { display: none; }
     .key { height: 44px; min-width: 44px; padding: 0 12px; font-size: 15px; font-weight: 600; border: 1px solid var(--rule); color: var(--panel-ink); background: transparent; }
     .key.on { color: var(--accent); border-color: var(--accent); }
     .scrubber { position: relative; height: 28px; border: 1px solid var(--rule); cursor: ew-resize; touch-action: none; }
@@ -326,6 +351,92 @@
     /* ---------------- start drive + first-run + permission sheets ---------------- */
     .btn-start { height: 44px; padding: 0 16px; background: var(--accent); color: var(--stage); font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 8px; flex: none; }
     .btn-start i { width: 10px; height: 10px; border-radius: 50%; background: currentColor; }
+    .btn-start { box-shadow: inset 0 -3px 0 rgba(0,0,0,0.28); }
+    /* ---------------- the route card as instruments (REVIEW.md roadmap 5) ---------------- */
+    #routeCard h3 { font-size: 26px; line-height: 1.1; }
+    .rc-via { margin: 4px 0 0; }
+    .rc-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 12px; border-top: 2px solid var(--panel-ink); border-bottom: 1px solid var(--rule); }
+    .rc-stats > div { padding: 8px 8px 8px 0; min-width: 0; }
+    .rc-stats > div + div { border-left: 1px solid var(--rule); padding-left: 8px; }
+    .rc-stats b { display: block; font: 800 34px/1 var(--font-num); font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .rc-stats b small { font: 600 13px var(--font-ui); color: var(--panel-dim); margin-left: 2px; }
+    .rc-stats span { display: block; margin-top: 4px; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--panel-dim); line-height: 1.2; }
+    .rc-profile { display: block; width: 100%; height: 92px; margin-top: 10px; }
+    .rc-ground { fill: var(--rule); opacity: 0.3; } .rc-line { fill: none; stroke: var(--panel-ink); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+    .rc-base { stroke: var(--rule); stroke-width: 1; vector-effect: non-scaling-stroke; }
+    .rc-ticks path { stroke: var(--accent); stroke-width: 1; opacity: 0.75; vector-effect: non-scaling-stroke; }
+    .rc-profile text { font: 600 10px var(--font-ui); fill: var(--panel-dim); }
+    .rc-dials { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin-top: 12px; text-align: center; }
+    .rc-dial svg { width: 60px; height: 36px; display: block; margin: 0 auto; }
+    .rc-dial .rc-track { fill: none; stroke: var(--rule); stroke-width: 3; }
+    .rc-dial.unknown .rc-track { stroke-dasharray: 2 3; }
+    .rc-dial .rc-arc { fill: none; stroke: var(--accent); stroke-width: 3.5; }
+    .rc-dial .rc-needle { stroke: var(--panel-ink); stroke-width: 2.4; stroke-linecap: round; } .rc-dial circle { fill: var(--panel-ink); }
+    .rc-dial b { display: block; font: 800 26px/1 var(--font-num); font-variant-numeric: tabular-nums; }
+    .rc-dial span { display: block; margin-top: 3px; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--panel-dim); }
+    .rc-facts { display: grid; gap: 6px; margin-top: 10px; }
+    .rc-facts .fact { margin: 0; display: flex; gap: 10px; align-items: flex-start; font-size: 15px; font-weight: 600; color: var(--panel-ink); line-height: 1.3; }
+    .rc-facts .fact[hidden] { display: none; }
+    .rc-facts .fact::before { content: ""; flex: none; width: 18px; height: 18px; margin-top: 1px; background: currentColor;
+      -webkit-mask: var(--glyph) center / contain no-repeat; mask: var(--glyph) center / contain no-repeat; }
+    .f-along { --glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linejoin='round'%3E%3Cpath d='M2 20 L9 8 L13 14 L16 10 L22 20 Z'/%3E%3C/svg%3E"); }
+    .f-climb { --glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'%3E%3Cpath d='M2 19 Q8 18 11 11 T22 5'/%3E%3Cpath d='M2 22 H22'/%3E%3C/svg%3E"); }
+    .f-ahead { --glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round'%3E%3Cpath d='M8 22 V14 Q8 7 16 5'/%3E%3Cpath d='M12 2 L17 5 L13 9'/%3E%3Ccircle cx='8' cy='22' r='1.5' fill='black'/%3E%3C/svg%3E"); }
+    .f-sky { --glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='12' cy='12' r='4'/%3E%3Cpath d='M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2'/%3E%3C/svg%3E"); }
+    .f-closed { --glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'%3E%3Crect x='2' y='8' width='20' height='6'/%3E%3Cpath d='M6 8 L10 14 M12 8 L16 14 M18 8 L22 14 M5 14 V21 M19 14 V21'/%3E%3C/svg%3E"); }
+    .rc-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 8px; margin-top: 12px; }
+    .rc-tiles[hidden] { display: none; }
+    .rc-tile { text-align: left; padding: 10px; border: 1.5px solid var(--panel-ink); background: transparent; color: var(--panel-ink); min-height: 64px; }
+    .rc-tile b { display: block; font-size: 16px; font-weight: 800; line-height: 1.15; }
+    .rc-tile span { display: block; margin-top: 2px; font-size: 13px; color: var(--panel-dim); }
+    .rc-tile.on { background: var(--panel-ink); color: var(--panel); } .rc-tile.on span { color: var(--panel); opacity: 0.8; }
+    .rc-go { display: grid; grid-template-columns: 1.4fr 1fr; gap: 10px; margin-top: 14px; }
+    .rc-go .ink-btn { min-height: 52px; font-size: 17px; }
+    /* ---------------- the plan sheet: basic level and More (REVIEW.md roadmap 6) ---------------- */
+    .loop-gauge { display: grid; grid-template-columns: 104px minmax(0, 1fr); gap: 12px; align-items: center; }
+    .loop-dial { position: relative; width: 104px; height: 104px; border-radius: 50%; border: 2.5px solid var(--panel-ink); display: flex; align-items: baseline;
+      justify-content: center; padding-top: 34px; background: var(--panel); box-shadow: inset 0 0 0 6px var(--panel), inset 0 0 0 7.5px var(--rule), 0 3px 0 var(--rule); }
+    .loop-dial i { position: absolute; left: 50%; top: 50%; width: 4px; height: 50px; margin: -50px 0 0 -2px; transform-origin: 50% 100%; transition: transform 0.2s ease-out; }
+    .loop-dial i::before { content: ""; position: absolute; left: 0; top: 4px; width: 4px; height: 16px; background: var(--accent); }
+    .loop-dial b { font: 800 36px/1 var(--font-num); font-variant-numeric: tabular-nums; }
+    .loop-dial small { font-size: 13px; font-weight: 600; color: var(--panel-dim); margin-left: 3px; }
+    .loop-side .note { margin: 6px 0 0; }
+    .plan-loop .detents > button { min-width: 0; font-size: 15px; padding: 0 2px; }
+    .plan-more { margin-top: 16px; border-top: 1px solid var(--rule); }
+    .plan-more > summary { list-style: none; cursor: pointer; display: flex; justify-content: space-between; align-items: center; min-height: 52px; font-size: 16px; font-weight: 700; }
+    .plan-more > summary::-webkit-details-marker { display: none; }
+    .plan-more > summary::after { content: ""; width: 9px; height: 9px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg); margin-right: 6px; transition: transform 0.15s; }
+    .plan-more[open] > summary::after { transform: rotate(45deg); }
+    .balance { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; min-height: 48px; font-size: 15px; font-weight: 600; }
+    .balance input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 30px; background:
+      linear-gradient(var(--panel-ink), var(--panel-ink)) center / 100% 2px no-repeat,
+      linear-gradient(var(--panel-ink), var(--panel-ink)) 25% center / 2px 12px no-repeat, linear-gradient(var(--panel-ink), var(--panel-ink)) 50% center / 2px 12px no-repeat,
+      linear-gradient(var(--panel-ink), var(--panel-ink)) 75% center / 2px 12px no-repeat; }
+    .balance input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 26px; height: 26px; border-radius: 50%; border: 2.5px solid var(--panel-ink); background: var(--panel); }
+    .balance input[type=range]::-moz-range-thumb { width: 22px; height: 22px; border-radius: 50%; border: 2.5px solid var(--panel-ink); background: var(--panel); }
+    .find-bar { position: sticky; bottom: 0; z-index: 2; margin: 16px -16px 0; padding: 10px 16px calc(10px + var(--safe-bottom)); background: var(--panel); border-top: 1px solid var(--rule); }
+    .plan.routed .find-bar, .plan:not(.open) .find-bar { display: none; }
+    .find-key { width: 100%; min-height: 52px; background: var(--panel-ink); color: var(--panel); font-size: 17px; font-weight: 700; box-shadow: inset 0 -3px 0 rgba(0,0,0,0.35); }
+    .find-key.busy { background: var(--panel-dim); }
+    .plan-presets { margin: 10px 0 2px; }
+    .place-all { display: block; margin: 6px 0 0; }
+    /* ---------------- the drive-ended card (REVIEW.md roadmap 7) ---------------- */
+    .end-card { text-align: left; }
+    .end-kicker { margin: 0; font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); }
+    .end-card h2 { margin: 4px 0 0; font-size: 28px; line-height: 1.1; }
+    .end-meta { margin: 4px 0 0; color: var(--panel-dim); font-size: 15px; }
+    .end-score { display: grid; grid-template-columns: auto 1fr; align-items: baseline; column-gap: 6px; margin: 18px 0 0; padding: 12px 0; border-top: 2px solid var(--panel-ink); border-bottom: 1px solid var(--rule); }
+    .end-score b { font: 800 84px/0.9 var(--font-num); font-variant-numeric: tabular-nums; }
+    .end-score small { font-size: 18px; font-weight: 600; color: var(--panel-dim); }
+    .end-score span { grid-column: 1 / -1; margin-top: 6px; font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--panel-dim); }
+    .end-line { margin: 12px 0 0; font-size: 16px; line-height: 1.35; }
+    .end-acts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 18px; }
+    .end-acts .ink-btn { min-height: 52px; }
+    .end-links { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; }
+    .end-links > * { margin: 0; padding: 8px 4px; line-height: 1.2; }
+    .ob-strip { width: 100%; max-width: 420px; margin: 26px auto 0; border-top: 2px solid var(--panel-ink); border-bottom: 1px solid var(--rule); text-align: left; }
+    .ob-strip .notes { position: static; min-height: 84px; }
+    .rc-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 18px; margin-top: 10px; }
     label.linkbtn { display: inline-flex; align-items: center; cursor: pointer; }
     .linkbtn { font: inherit; font-size: 15px; font-weight: 500; color: var(--panel-ink); text-decoration: underline; min-height: 44px; padding: 0 4px; background: none; border: none; }
     .danger-btn { font: inherit; font-size: 15px; font-weight: 600; color: var(--accent); text-decoration: none; min-height: 44px; padding: 0 4px; background: none; border: none; text-align: left; justify-self: start; }
@@ -372,6 +483,7 @@
     .sheet.open { transform: none; }
     .sheet.dragging { transition: none; }
     [hidden] { display: none !important; }
+    .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
     /* Menu views (Route / Drives / Setup) get the whole screen above the tab bar: the gauge cluster belongs to the map view only. */
     #app.sheet-open .binnacle > :not(.tabbar) { display: none !important; }
     #app.sheet-open .notes { visibility: hidden; height: 0; min-height: 0; padding: 0; border: 0; overflow: hidden; }
@@ -471,7 +583,12 @@
     .stage-bar.ahead { border-left-color: #2e9e5b; } .stage-bar.behind { border-left-color: #d0453a; }
     .hz-ask span { flex: 1; font-weight: 700; }
     .hz-ask .key { min-height: 56px; }
-    .hz-pin { font: 800 11px var(--font-ui, sans-serif); letter-spacing: 0.06em; padding: 2px 5px; border: 1.5px solid var(--signal, #c33); color: var(--signal, #c33); background: var(--panel, #fff); white-space: nowrap; }
+    .hz-pin, .pin.bump, .pin.crest, .pin.dip { font: 800 11px var(--font-ui, sans-serif); letter-spacing: 0.06em; padding: 2px 6px 2px 5px; border: 2px solid var(--hz-edge); color: var(--hz-ink); background: var(--hz-bg); white-space: nowrap; }
+    .hz-pin::before, .pin.bump::before, .pin.crest::before, .pin.dip::before { content: ""; display: inline-block; width: 0; height: 0; margin-right: 4px; vertical-align: -1px;
+      border-left: 5px solid transparent; border-right: 5px solid transparent; border-bottom: 9px solid var(--hz-edge); }
+    /* the report sheet's buttons are the plate others will see (REVIEW.md 1.2, Hazard report) */
+    .hz-grid .hz-btn { background: var(--hz-bg); color: var(--hz-ink); border: 2px solid var(--hz-edge); text-align: left; padding: 0 14px; display: flex; align-items: center; gap: 10px; }
+    .hz-grid .hz-btn::before { content: ""; flex: none; width: 0; height: 0; border-left: 9px solid transparent; border-right: 9px solid transparent; border-bottom: 16px solid var(--hz-edge); }
     /* Along the route (IDEAS R-24): viewpoints named, cafés and fuel small; map data, quieter than hazards. */
     .poi-pin { font: 700 10px var(--font-ui, sans-serif); letter-spacing: 0.04em; padding: 1px 4px; border: 1px solid var(--panel-ink, #222); color: var(--panel-ink, #222); background: var(--panel, #fff); white-space: nowrap; max-width: 140px; overflow: hidden; text-overflow: ellipsis; opacity: 0.9; }
     .poi-pin.poi-view { border-color: #2e7d5b; color: #2e7d5b; }
@@ -512,6 +629,7 @@
     #boot.gone { opacity: 0; pointer-events: none; }
     @media (prefers-reduced-motion: reduce) { #boot { transition: none; } }
 </style>
+  <link rel="stylesheet" href="controls.css" />
 </head>
 <body>
   <div id="boot" aria-hidden="true"><img src="brand/mark.svg" alt="" /></div>
@@ -520,11 +638,13 @@
 
     <section class="stage">
       <div id="map"></div>
+      <div class="hz-plate" id="hzPlate" role="status" aria-live="assertive" hidden><svg viewBox="0 0 28 25" aria-hidden="true"><path class="hz-tri" d="M14 1 L27 24 H1 Z"/><path d="M14 9 V16 M14 19.5 V20.5" stroke-width="3" stroke-linecap="round"/></svg><b id="hzPlateTitle"></b><span id="hzPlateDetail"></span></div>
       <div class="plates">
         <div class="plate" id="modePlate" role="status">Replay</div>
         <button class="plate" id="recenterBtn">Recenter</button>
       </div>
       <div class="toast" id="toast" role="status" aria-live="polite"></div>
+      <div class="sr-only" id="announcer" role="status" aria-live="polite"></div>
 
       <section class="plan" id="planPanel" aria-label="Plan">
         <div class="plan-bar" id="planBar">
@@ -537,44 +657,71 @@
         </div>
         <div class="plan-body" id="planBody">
             <section class="plan-search-section">
-              <div class="from-row">
-                <input class="field" id="fromInput" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="go" placeholder="From: current location" aria-label="From" autocomplete="off" />
-                <button class="icon-btn" id="swapBtn" aria-label="Swap From and To"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4v16M4 8l4-4 4 4M16 20V4M12 16l4 4 4-4"/></svg></button>
-              </div>
               <p class="plan-status" id="planStatus" role="status" aria-live="polite"></p>
               <div class="place-list" id="placeList" hidden></div>
+              <div class="stamps plan-presets" id="presetRow" role="group" aria-label="Your presets" hidden></div>
               <div class="plan-links">
                 <button class="linkbtn" id="tapRouteBtn">Tap the map</button>
-                <label class="linkbtn" id="gpxImportBtn">Open GPX<input type="file" id="gpxFile" accept=".gpx,application/gpx+xml,application/xml,text/xml" hidden /></label>
               </div>
-              <div class="plan-links fun-row" role="group" aria-label="Loop from here"><span class="loop-row"><span>Loop</span><button class="chip" data-loop-mi="15">15 mi</button><button class="chip" data-loop-mi="30">30 mi</button><button class="chip" data-loop-mi="45">45 mi</button><button class="chip" data-loop-min="60">1 h</button><button class="chip" data-loop-min="120">2 h</button></span>
+              <!-- the basic level (REVIEW.md roadmap 6, mockup 02-plan-basic.html): a loop dial, the Roads switch, More -->
+              <div class="ctl plan-loop" role="group" aria-label="Loop from here"><div class="ctl-label">Or loop from here <small>back where you started</small></div>
+                <div class="loop-gauge">
+                  <div class="loop-dial" aria-hidden="true"><i id="loopDialMark"></i><b id="loopDialVal">45</b><small id="loopDialUnit">mi</small></div>
+                  <div class="loop-side">
+                    <div class="detents" id="loopDetents"><button data-loop-mi="15" aria-pressed="false">15 mi</button><button data-loop-mi="30" aria-pressed="false">30 mi</button><button data-loop-mi="45" aria-pressed="true">45 mi</button><button data-loop-min="60" aria-pressed="false">1 h</button><button data-loop-min="120" aria-pressed="false">2 h</button></div>
+                    <p class="note" id="loopNote">Turn the dial, then Find a loop. It starts and ends where you are.</p>
+                  </div>
+                </div>
               </div>
-              <div class="plan-links fun-row" role="group" aria-label="Explore: the best roads near you"><span>Explore</span><button class="chip" data-explore-min="15">15 min</button><button class="chip" data-explore-min="30">30 min</button></div>
-              <div class="place-list" id="exploreList" hidden></div>
-              <div class="plan-links fun-row" role="radiogroup" aria-label="Route style"><span>Roads</span><button class="chip" data-fun="quick" role="radio" aria-checked="false">Quick</button><button class="chip" data-fun="fun" role="radio" aria-checked="false">Fun</button><button class="chip" data-fun="max" role="radio" aria-checked="false">Max fun</button></div>
-              <div class="plan-links fun-row" role="group" aria-label="Avoid"><span>Avoid</span><button class="chip" data-avoid="highways" aria-pressed="false">Highways</button><button class="chip" data-avoid="tolls" aria-pressed="false">Tolls</button><button class="chip" data-avoid="ferries" aria-pressed="false">Ferries</button><button class="chip" data-avoid="unpaved" aria-pressed="false">Unpaved</button><button class="chip" data-avoid="towns" aria-pressed="false">Towns</button><button class="chip" data-avoid="cameras" aria-pressed="false">Cameras</button></div>
-              <div class="plan-links fun-row" role="group" aria-label="Corners you like"><span>Hairpins</span><button class="chip" data-pref="tight" data-v="-1" aria-pressed="false">Fewer</button><button class="chip" data-pref="tight" data-v="1" aria-pressed="false">More</button><span>Sweepers</span><button class="chip" data-pref="fast" data-v="-1" aria-pressed="false">Fewer</button><button class="chip" data-pref="fast" data-v="1" aria-pressed="false">More</button></div>
+              <div class="ctl"><div class="ctl-label">Roads <small>how much of the long way</small></div>
+                <div class="switch" role="radiogroup" aria-label="Route style"><button data-fun="quick" role="radio" aria-checked="false">Quick</button><button data-fun="fun" role="radio" aria-checked="false">Fun</button><button data-fun="max" role="radio" aria-checked="false">Max fun</button></div>
+                <p class="note" id="funNote"></p></div>
+              <details class="plan-more" id="planMore">
+                <summary>More: avoid, corner mix, explore, start point</summary>
+                <div class="ctl"><div class="ctl-label">Start from</div>
+                  <div class="from-row">
+                <input class="field" id="fromInput" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="go" placeholder="From: current location" aria-label="From" autocomplete="off" />
+                <button class="icon-btn" id="swapBtn" aria-label="Swap From and To"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4v16M4 8l4-4 4 4M16 20V4M12 16l4 4 4-4"/></svg></button>
+              </div></div>
+                <div class="ctl"><div class="ctl-label">Avoid <small>stamped means avoided</small></div>
+                  <div class="stamps" role="group" aria-label="Avoid"><button data-avoid="highways" aria-pressed="false">Highways</button><button data-avoid="tolls" aria-pressed="false">Tolls</button><button data-avoid="ferries" aria-pressed="false">Ferries</button><button data-avoid="unpaved" aria-pressed="false">Unpaved</button><button data-avoid="towns" aria-pressed="false">Towns</button><button data-avoid="cameras" aria-pressed="false">Cameras</button></div></div>
+                <div class="ctl" role="group" aria-label="Corner mix"><div class="ctl-label">Corner mix</div>
+                  <label class="balance"><span>Fewer hairpins</span><input type="range" min="-1" max="1" step="1" value="0" data-pref-range="tight" aria-label="Hairpins: fewer, any or more" /><span>More</span></label>
+                  <label class="balance"><span>Fewer sweepers</span><input type="range" min="-1" max="1" step="1" value="0" data-pref-range="fast" aria-label="Fast sweepers: fewer, any or more" /><span>More</span></label></div>
+                <div class="ctl" role="group" aria-label="Explore: the best roads near you"><div class="ctl-label">Explore <small>the best roads within</small></div>
+                  <div class="detents"><button data-explore-min="15">15 min</button><button data-explore-min="30">30 min</button></div></div>
+                <div class="place-list" id="exploreList" hidden></div>
+                <div class="ctl"><div class="ctl-label">Presets <small>this setup, one tap next time</small></div>
+                  <div class="row"><button class="ink-btn" id="presetSaveBtn">Save as a preset</button><label class="linkbtn" id="gpxImportBtn">Open GPX<input type="file" id="gpxFile" accept=".gpx,application/gpx+xml,application/xml,text/xml" hidden /></label></div></div>
+              </details>
+              <div class="find-bar"><button class="find-key" id="findLoopBtn">Find a loop</button></div>
             </section>
             <section id="routeCard" hidden>
               <h3 id="routeCardName"></h3>
-              <p class="route-meta" id="routeCardMeta"></p>
-              <p class="route-meta" id="routeCardAlong" hidden></p>
-              <p class="route-meta" id="routeCardClimb" hidden></p>
-              <p class="route-meta" id="routeCardCharacter" hidden></p>
-              <p class="route-meta" id="routeCardWeather" hidden></p>
-              <p class="route-meta" id="routeCardClosures" hidden></p>
+              <p class="note rc-via" id="routeCardWhy" hidden></p>
+              <div class="rc-stats" id="routeCardStats"></div>
+              <div id="routeCardProfile"></div>
+              <p class="route-meta" id="routeCardMeta" hidden></p>
+              <div class="rc-facts">
+                <p class="fact f-along" id="routeCardAlong" hidden></p>
+                <p class="fact f-climb" id="routeCardClimb" hidden></p>
+                <p class="fact f-ahead" id="routeCardCharacter" hidden></p>
+                <p class="fact f-sky" id="routeCardWeather" hidden></p>
+                <p class="fact f-closed" id="routeCardClosures" hidden></p>
+              </div>
               <div class="stack-8" id="routeStops" hidden></div>
-              <div class="bars mt-8" id="routeCardBars"></div>
-              <p class="note" id="routeCardWhy" hidden></p>
+              <div class="rc-dials" id="routeCardBars"></div>
               <p class="note" id="routeCardSub"></p>
-              <div class="plan-links fun-row" id="routeCardOptions" role="radiogroup" aria-label="Route options" hidden></div>
-              <div class="plan-links fun-row" id="routeCardFun" role="radiogroup" aria-label="Route style"><span>Roads</span><button class="chip" data-fun="quick" role="radio" aria-checked="false">Quick</button><button class="chip" data-fun="fun" role="radio" aria-checked="false">Fun</button><button class="chip" data-fun="max" role="radio" aria-checked="false">Max fun</button></div>
-              <div class="row mt-8">
-                <button class="ink-btn solid" id="routeDriveBtn">Drive it</button>
+              <div class="rc-tiles" id="routeCardOptions" role="radiogroup" aria-label="Route options" hidden></div>
+              <div class="switch mt-8" id="routeCardFun" role="radiogroup" aria-label="Route style"><button data-fun="quick" role="radio" aria-checked="false">Quick</button><button data-fun="fun" role="radio" aria-checked="false">Fun</button><button data-fun="max" role="radio" aria-checked="false">Max fun</button></div>
+              <div class="rc-go">
+                <button class="rec-key" id="routeDriveBtn"><i></i>Drive it</button>
                 <button class="ink-btn" id="routePreviewBtn">Preview</button>
-                <button class="ink-btn" id="routeSaveBtn" aria-pressed="false">Save</button>
-                <button class="ink-btn" id="routeShareBtn">Share</button>
-                <button class="ink-btn" id="etaShareBtn" aria-pressed="false" hidden>Share ETA</button>
+              </div>
+              <div class="rc-links">
+                <button class="linkbtn" id="routeSaveBtn" aria-pressed="false">Save</button>
+                <button class="linkbtn" id="routeShareBtn">Share</button>
+                <button class="linkbtn" id="etaShareBtn" aria-pressed="false" hidden>Share ETA</button>
                 <button class="linkbtn" id="routeGpxBtn">GPX</button>
                 <button class="linkbtn" id="routePinBtn">Pin place</button>
                 <label class="linkbtn" id="homeByRow" hidden>Home by <input type="time" id="homeByInput" aria-label="Home by" /></label>
@@ -616,10 +763,10 @@
           <section data-panel="setup">
             <h3>Privacy zones</h3>
             <p class="note" style="margin:0 0 8px">Places like home and work. Inside one, nothing is recorded or shared, and convoys don't see you. Kept on this phone only.</p>
-            <div class="row" id="zoneRadius" role="group" aria-label="Zone size">
-              <button class="ink-btn" data-zone-r="200">200 m</button>
-              <button class="ink-btn" data-zone-r="500">500 m</button>
-              <button class="ink-btn" data-zone-r="1000">1 km</button>
+            <div class="detents" id="zoneRadius" role="group" aria-label="Zone size">
+              <button data-zone-r="200">200 m</button>
+              <button data-zone-r="500">500 m</button>
+              <button data-zone-r="1000">1 km</button>
             </div>
             <div class="row mt-8"><button class="ink-btn" id="zoneHereBtn">Add where I am</button><button class="ink-btn" id="zoneMapBtn">Add at map centre</button></div>
             <div id="zoneList" class="stack-8 mt-8"></div>
@@ -637,15 +784,9 @@
           </section>
           <section data-panel="setup">
             <h3>Units</h3>
-            <div class="row" role="radiogroup" aria-label="Units" id="unitsRow"><button class="chip" data-units="imperial" role="radio">Miles and feet</button><button class="chip" data-units="metric" role="radio">Kilometres and metres</button></div>
+            <div class="switch" role="radiogroup" aria-label="Units" id="unitsRow"><button data-units="imperial" role="radio">Miles and feet</button><button data-units="metric" role="radio">Kilometres and metres</button></div>
             <p class="note" style="margin:8px 0 4px">Driving side: bends toward your own side of the road get more caution, since you see less round them.</p>
-            <div class="row" role="radiogroup" aria-label="Driving side" id="sideRow"><button class="chip" data-side="auto" role="radio">From the map</button><button class="chip" data-side="right" role="radio">Right</button><button class="chip" data-side="left" role="radio">Left</button></div>
-          </section>
-          <section data-panel="setup">
-            <h3>Look</h3>
-            <p class="note" style="margin:0 0 8px">Colours for the route line and the cockpit, unlocked with the Octane you earn sharing road data. Warnings keep their colour.</p>
-            <div class="row" style="flex-wrap:wrap" id="lookRow"></div>
-            <p class="note" id="lookNote" style="margin:6px 0 0"></p>
+            <div class="switch" role="radiogroup" aria-label="Driving side" id="sideRow"><button data-side="auto" role="radio">From the map</button><button data-side="right" role="radio">Right</button><button data-side="left" role="radio">Left</button></div>
           </section>
           <section data-panel="setup">
             <h3>Feedback</h3>
@@ -674,11 +815,11 @@
         <section data-panel="setup">
             <h3>Spots</h3>
             <p class="note" style="margin:0 0 8px">Loops lean toward spots you rate 3★ or more. Your spots stay on this phone until you share one.</p>
-            <div class="row" id="detourList" role="group" aria-label="Detour">
-              <button class="ink-btn" data-detour="0">Off</button>
-              <button class="ink-btn" data-detour="0.5">Little</button>
-              <button class="ink-btn" data-detour="1">Some</button>
-              <button class="ink-btn" data-detour="2">More</button>
+            <div class="detents" id="detourList" role="group" aria-label="Detour">
+              <button data-detour="0">Off</button>
+              <button data-detour="0.5">Little</button>
+              <button data-detour="1">Some</button>
+              <button data-detour="2">More</button>
             </div>
             <button class="linkbtn" id="hlOpenBtn">Add a spot here</button>
             <div id="hlList" class="stack-8 mt-8"></div>
@@ -693,9 +834,9 @@
             </div>
             <div class="row mt-8"><select class="field" id="voiceSelect"></select></div>
             <div class="row mt-8"><button class="ink-btn" id="voiceTestBtn">▶ Sample</button></div>
-            <div class="row mt-8" id="noteWordsList" role="group" aria-label="Note words">
-              <button class="ink-btn" data-words="plain">Plain words</button>
-              <button class="ink-btn" data-words="rally">Rally notes</button>
+            <div class="switch mt-8" id="noteWordsList" role="group" aria-label="Note words">
+              <button data-words="plain">Plain words</button>
+              <button data-words="rally">Rally notes</button>
             </div>
             <p class="note" id="noteWordsNote"></p>
             <button class="sw mt-8" id="liveVoiceBtn" role="switch" aria-checked="false"><i></i><span>Speak road names</span></button>
@@ -703,10 +844,10 @@
           </section>
           <section data-panel="setup">
             <h3>Map motion</h3>
-            <div class="row" id="camList">
-              <button class="ink-btn" data-cam="steady">Steady</button>
-              <button class="ink-btn" data-cam="dynamic">Lean</button>
-              <button class="ink-btn" data-cam="whip">Whip</button>
+            <div class="switch" id="camList">
+              <button data-cam="steady">Steady</button>
+              <button data-cam="dynamic">Lean</button>
+              <button data-cam="whip">Whip</button>
             </div>
             <p class="note">How far the map leans into corners ahead.</p>
           </section>
@@ -722,6 +863,18 @@
           <p class="note">Drivers coming this way get a warning.</p>
           <div class="hz-grid" id="hzKinds"></div>
           <button class="linkbtn" id="hzCancel">Cancel</button>
+        </div>
+      </div>
+      <!-- the drive-ended card (REVIEW.md roadmap 7): the drive's name, its Vetta Score big, one thing to work on -->
+      <div class="overlay dim" id="endCard" role="dialog" aria-modal="true" aria-labelledby="endName">
+        <div class="card-sheet end-card">
+          <p class="end-kicker">Drive saved</p>
+          <h2 id="endName">--</h2>
+          <p class="end-meta" id="endMeta"></p>
+          <div class="end-score"><b id="endScore">--</b><small>/1000</small><span>Vetta Score</span></div>
+          <p class="end-line" id="endLine"></p>
+          <div class="end-acts"><button class="ink-btn solid" id="endShare">Share card</button><button class="ink-btn" id="endStage">Mark a stage</button></div>
+          <div class="end-links"><a class="linkbtn" id="endLog" href="analysis.html">Open in the Log</a><button class="linkbtn" id="endDone">Done</button></div>
         </div>
       </div>
       <div class="stage-bar" id="stageBar" role="status" aria-live="polite" hidden><span id="stageName"></span><b id="stageDelta">--</b><small id="stageCount"></small></div>
@@ -743,7 +896,7 @@
         <div class="card-sheet">
           <h2>Add a spot</h2>
           <label class="spot-dialog-field">Name<input class="field" id="hlName" maxlength="60" autocomplete="off" /></label>
-          <div class="spot-dialog-field">Category<div class="spot-chips" id="hlCategories" role="group" aria-label="Category">
+          <div class="spot-dialog-field">Category<div class="spot-chips stamps" id="hlCategories" role="group" aria-label="Category">
             <button type="button" data-category="overlook">Overlook</button><button type="button" data-category="photo">Photo</button><button type="button" data-category="bridge">Bridge</button><button type="button" data-category="water">Water</button><button type="button" data-category="cafe">Cafe</button><button type="button" data-category="trailhead">Trailhead</button><button type="button" data-category="landmark">Landmark</button><button type="button" data-category="other">Other</button>
           </div></div>
           <div class="spot-dialog-field">Rating<div class="spot-stars" id="hlRating" role="group" aria-label="Rating">
@@ -760,7 +913,7 @@
       <div class="drivebar" id="driveBar" hidden>
         <div class="dbstat" id="driveStat"><div class="ds-main" id="dsMain">Finding GPS…</div><div class="ds-warn" id="dsWarn" role="status" aria-live="polite" hidden></div></div>
         <button class="key" id="hzReportBtn" aria-label="Report a hazard">Report</button>
-        <button class="key" id="driveEnd">End drive</button>
+        <button class="key" id="driveEnd" aria-label="End drive">End</button>
       </div>
       <div class="transport" id="transport">
         <button class="key" id="playBtn">Play</button>
@@ -798,18 +951,9 @@
         </g>
       </svg>
       <h1>Your co-driver for the long way home.</h1>
-      <p>Calls every corner and scores how cleanly you drove it.</p>
-    </div>
-    <div class="grow" data-step="2" hidden>
-      <h2>Pick your co-driver</h2>
-      <div class="stack-8" id="obVoices"></div>
-    </div>
-    <div class="grow" data-step="3" hidden>
-      <h2>Driving with friends?</h2>
-      <p>Sign in to join a crew and see its stages and boards. You can do this later in Crew.</p>
-      <button class="apple-btn" data-apple-signin hidden>&#xF8FF; Sign in with Apple</button>
-      <a class="ink-btn solid" href="/api/auth/google/start" style="display:flex;align-items:center;justify-content:center;text-decoration:none">Sign in with Google</a>
-      <p class="note">By signing in you agree to the <a href="https://apexnav.senftns.workers.dev/terms.html" target="_blank" rel="noopener">Terms</a> and <a href="https://apexnav.senftns.workers.dev/privacy.html" target="_blank" rel="noopener">Privacy</a> policy.</p>
+      <p>Calls every corner before you reach it.</p>
+      <!-- the product in one look (REVIEW.md 1.2, Onboarding 1): the road book calling a real road's corners, silent -->
+      <div class="ob-strip" aria-hidden="true"><div class="notes" id="obNotes"></div></div>
     </div>
     <div class="stack">
       <button class="ink-btn solid" id="obNext">Get started</button>
@@ -1071,7 +1215,7 @@
     const map = new maplibregl.Map({ container: 'map', style: MAP_STYLE,
       center: startPos ? [startPos.lon, startPos.lat] : [-84.70, 39.24], zoom: 14.6, pitch: 45, maxPitch: 60, attributionControl: { compact: true }, fadeDuration: 0,
       transformRequest: window.ApexOfflineTiles ? ApexOfflineTiles.transform : undefined });
-    window.apexDebug = { map, get track() { return track; }, state, drives, buildRoute: (...a) => buildRoute(...a), renderRouteCard: (...a) => renderRouteCard(...a), openRoadPage: (...a) => openRoadPage(...a) };
+    window.apexDebug = { map, get track() { return track; }, state, drives, buildRoute: (...a) => buildRoute(...a), renderRouteCard: (...a) => renderRouteCard(...a), openRoadPage: (...a) => openRoadPage(...a), showEndCard: (...a) => showEndCard(...a) };
     let mapReady = false;
     // The map's box changes with the layout (idle hides the gauges, a drive shows them); keep the canvas the size of its box.
     if (window.ResizeObserver) new ResizeObserver(() => map.resize()).observe(document.getElementById('map'));
@@ -1908,7 +2052,7 @@
       const notes = shown.map(e => {
         const d = distLabel(Math.max(0, noteM(e) - state.cursorM));   // 0 once you're in the corner
         return { key: `${e.type}:${e.index}:${e.dist_m}`, type: e.type, code: e.code, call: state.noteWords === 'plain' && !e.recce ? ApexPlainNotes.plainCall(e) : e.call, sub: subFor(e) + linkLabel(e), dist: d.n, unit: d.u, distM: Math.max(0, noteM(e) - state.cursorM),
-                 dir: e.dir, severity: e.severity, turnRad: e.turn_rad, mods: e.mods || [] };
+                 dir: e.dir, severity: e.severity, turnRad: e.turn_rad, mods: e.mods || [], recce: !!e.recce };
       });
       // The route's junctions in the same strip, in road order with the notes (IDEAS V-04).
       (steps || []).forEach((st, i) => {
@@ -2509,6 +2653,10 @@
       const min = Number.isFinite(t.timeS) ? `${Math.round(t.timeS / 60)} min` : null;
       const extra = Number.isFinite(t.extraS) && t.extraS >= 60 ? ` (+${Math.round(t.extraS / 60)} for fun)` : '';
       $('routeCardMeta').textContent = [mi, min && min + extra, corners, roadTypeOf(t)].filter(v => v && v !== '--').join(' · ');
+      // the card as instruments (REVIEW.md roadmap 5): three stamped numbers and the profile with a tick per corner
+      $('routeCardStats').innerHTML = ApexRouteCard.stats(t, (m) => ApexUnits.long(m, 1)).map((x) =>
+        `<div><b>${x.value}${x.unit ? `<small>${x.unit}</small>` : ''}</b><span>${x.label}</span></div>`).join('');
+      $('routeCardProfile').innerHTML = ApexRouteCard.profile(t, 340, 92, heightLabel) || '';
       const avgSector = (k) => {
         if (!Array.isArray(t.sectors) || !t.sectors.length) return null;
         const vals = t.sectors.map(s => s && s[k]).filter(Number.isFinite);
@@ -2520,12 +2668,14 @@
         : [['Fun', t.fun ? t.fun.fun : null], ['Twist', t.fun ? t.fun.twist : null], ['Flow', t.fun ? t.fun.flow : null],
            // Surface only once members have measured enough of it; map geometry can't know pavement.
            ...(window.ApexContributor && ApexContributor.surfaceScore(t.measured) != null ? [['Surface', ApexContributor.surfaceScore(t.measured)]] : [])];
-      $('routeCardBars').style.gridTemplateColumns = `repeat(${bars.length}, minmax(0, 1fr))`;
-      $('routeCardBars').innerHTML = bars.map(([label, v]) =>
-        `<div class="bar"><span>${label} <b>${v != null ? v : '--'}</b></span><i><u style="width:${v != null ? v : 0}%"></u></i></div>`
-      ).join('');
+      // small half-dials, "--" when unknown; Fun is the options' tile, so the card shows what makes it up. Surface only once
+      // members have measured it; cameras once the camera check has run.
+      const dials = bars.filter(([label]) => label !== 'Fun');
+      if (!dials.some(([label]) => label === 'Surface')) dials.push(['Surface', null]);
+      $('routeCardBars').innerHTML = dials.map(([label, v]) => ApexRouteCard.dial(label, v)).join('')
+        + ApexRouteCard.count('Cameras', Array.isArray(t.alpr) ? t.alpr.length : null);
       // Plate cameras along it, only once the camera check has run (unknown stays off the card).
-      const cams = !Array.isArray(t.alpr) ? '' : t.alpr.length ? `${t.alpr.length} plate camera${t.alpr.length === 1 ? '' : 's'} · ` : 'No known plate cameras · ';
+      const cams = '';                                              // on the Cameras dial
       const mCov = t.measured && Number.isFinite(t.measured.coverage) && t.measured.coverage > 0
         ? Math.round(t.measured.coverage * 100)
         : (Array.isArray(t.roughG) && t.roughG.length && t.roughG.some(Number.isFinite))
@@ -2546,19 +2696,18 @@
       box.hidden = !optionsOffered(t);
       // Built once per pick (not on every card refresh), so keyboard focus survives camera and measured updates.
       if (o && o.current === t && box._t !== t) {
-        const label = document.createElement('span'); label.textContent = 'Options';
-        const refocus = box.contains(document.activeElement);
-        box.replaceChildren(label, ...o.list.map((c, i) => {
+        const refocus = box.contains(document.activeElement), tl = ApexRouteCard.tiles(o.list, o.picked);
+        box.replaceChildren(...o.list.map((c, i) => {
           const b = document.createElement('button');
-          b.className = 'chip' + (i === o.picked ? ' on' : '');
-          b.textContent = `Fun ${c.fun ? c.fun.fun : '--'} · ${Number.isFinite(c.timeS) ? Math.round(c.timeS / 60) : '--'} min`;
+          b.className = 'rc-tile' + (i === o.picked ? ' on' : '');
+          b.innerHTML = `<b></b><span></span>`; b.firstChild.textContent = tl[i].title; b.lastChild.textContent = tl[i].sub;
           b.setAttribute('role', 'radio');
           b.setAttribute('aria-checked', String(i === o.picked));
           b.addEventListener('click', () => pickOption(i));
           return b;
         }));
         box._t = t;
-        if (refocus) box.children[o.picked + 1].focus();
+        if (refocus) box.children[o.picked].focus();
       }
       paintAlternates();
     }
@@ -2645,7 +2794,8 @@
       paintStops(t);
       attachWeather(t);
       attachClosures(t);
-      if (!prebuilt) toast(`${name} · ${ApexUnits.long(totalM(), 1)} · ${t.events.filter(e => e.type === 'corner').length} corners`);
+      // the route bar shows this; screen readers hear it (REVIEW.md: the bar is the toast)
+      if (!prebuilt) announce(`${name} · ${ApexUnits.long(totalM(), 1)} · ${t.events.filter(e => e.type === 'corner').length} corners`);
     }
     // A route just found: pin its destination and show it, so you can check you are routing to the right place. FOLLOW
     // (or Start drive) goes back to your position. A loop has no destination: show the whole loop instead.
@@ -3101,7 +3251,12 @@
       funLevel = level;
       try { localStorage.setItem(FUN_LEVEL, level); } catch (_) { /* storage off: this session only */ }
       document.querySelectorAll('[data-fun]').forEach(b => { const on = b.dataset.fun === level; b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); });
+      $('funNote').textContent = FUN_NOTES[level] || '';
+      paintPresets();
     }
+    // What each Roads position does, from fun_route.js LEVELS (the extra time each one may spend).
+    const FUN_NOTES = { quick: 'Quick: the quickest way, or a better road that adds no more than about a tenth.',
+      fun: 'Fun: twistier roads that add up to about a third to the trip.', max: 'Max fun: the twistiest roads around, up to nearly twice the time.' };
     function setAvoid(next) {
       avoid = { ...avoid, ...next };
       try { localStorage.setItem(AVOID, JSON.stringify(avoid)); } catch (_) { /* storage off: this session only */ }
@@ -3527,7 +3682,7 @@
       const reply = await askNative({ cmd: 'placeResolve', index: p.apple.index }, 8000);
       return reply && Number.isFinite(reply.lat) && Number.isFinite(reply.lon) ? { lat: reply.lat, lon: reply.lon } : null;
     }
-    let suggestTimer = null, suggestSeq = 0, shownRows = { q: '', rows: [] };
+    let suggestTimer = null, suggestSeq = 0, shownRows = { q: '', rows: [] }, allPlaces = false;
     $('destInput').addEventListener('input', () => { clearTimeout(suggestTimer); suggestTimer = setTimeout(renderPlaces, 300); });
     async function renderPlaces() {
       const q = $('destInput').value.trim(), seq = ++suggestSeq, box = $('placeList');
@@ -3547,6 +3702,9 @@
                 ...recentPlaces().map(p => ({ ...p, kind: 'Recent' })),
                 ...loadHighlights().filter(h => Number.isFinite(h.lat) && Number.isFinite(h.lon)).map(h => ({ label: h.name || 'Spot', lat: h.lat, lon: h.lon, kind: 'Spot' }))].slice(0, 10 + ApexPinnedPlaces.MAX);
       }
+      // with nothing typed, three places and a row for the rest (REVIEW.md: search and three recents, the default first)
+      const more = !q && !allPlaces && rows.length > 3 ? rows.length - 3 : 0;
+      if (more) rows = rows.slice(0, 3);
       shownRows = { q, rows: empty ? [] : rows };
       if (empty) { const n = document.createElement('p'); n.className = 'note'; n.textContent = empty; box.replaceChildren(n); box.hidden = false; return; }
       box.replaceChildren(...rows.map(p => {
@@ -3561,6 +3719,11 @@
         const row = document.createElement('div'); row.className = 'row pinned-row'; row.append(b, un);
         return row;
       }));
+      if (more) {
+        const all = document.createElement('button'); all.className = 'linkbtn place-all'; all.textContent = `All places (${more} more)`;
+        all.addEventListener('click', () => { allPlaces = true; renderPlaces(); });
+        box.append(all);
+      }
       box.hidden = !rows.length;
     }
     async function routeToPlace(p) {
@@ -3687,8 +3850,26 @@
     });
     // Loop lengths in the chosen units (U-22): 25/50/75 km in metric, kept as miles inside.
     if (ApexUnits.metric()) document.querySelectorAll('[data-loop-mi]').forEach((b, i, all) => { const km = [25, 50, 75][i]; b.dataset.loopMi = String(km / 1.609344); b.textContent = `${km} km`; });
-    document.querySelectorAll('[data-loop-mi]').forEach(b => b.addEventListener('click', () => loop(parseFloat(b.dataset.loopMi), b)));
-    document.querySelectorAll('[data-loop-min]').forEach(b => b.addEventListener('click', () => loop({ minutes: parseInt(b.dataset.loopMin, 10) }, b)));
+    // The loop dial (REVIEW.md roadmap 6): a detent picks the length, the dial shows it, Find a loop builds it.
+    const LOOP_PICK = 'apex.loopPick';
+    function pickLoop(b) {
+      if (!b) return;
+      document.querySelectorAll('#loopDetents button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+      const [val, ...unit] = b.textContent.trim().split(' ');
+      $('loopDialVal').textContent = val; $('loopDialUnit').textContent = unit.join(' ');
+      const all = [...document.querySelectorAll('#loopDetents button')], i = all.indexOf(b);
+      $('loopDialMark').style.transform = `rotate(${-120 + 240 * i / Math.max(1, all.length - 1)}deg)`;
+      try { localStorage.setItem(LOOP_PICK, String(i)); } catch (_) {}
+    }
+    document.querySelectorAll('#loopDetents button').forEach(b => b.addEventListener('click', () => pickLoop(b)));
+    { let i = 2; try { const v = parseInt(localStorage.getItem(LOOP_PICK), 10); if (v >= 0 && v < 5) i = v; } catch (_) {}
+      pickLoop(document.querySelectorAll('#loopDetents button')[i]); }
+    $('findLoopBtn').addEventListener('click', () => {
+      const b = document.querySelector('#loopDetents button[aria-pressed="true"]');
+      if (!b) return;
+      if (b.dataset.loopMin) loop({ minutes: parseInt(b.dataset.loopMin, 10) }, $('findLoopBtn'));
+      else loop(parseFloat(b.dataset.loopMi), $('findLoopBtn'));
+    });
     document.querySelectorAll('[data-explore-min]').forEach(b => b.addEventListener('click', () => exploreNear(parseInt(b.dataset.exploreMin, 10), b)));
     document.querySelectorAll('[data-fun]').forEach(b => b.addEventListener('click', () => {
       if (b.dataset.fun === funLevel || $('planPanel').classList.contains('busy')) return;
@@ -3706,16 +3887,49 @@
     function setRoadPrefs(next) {
       roadPrefs = { ...roadPrefs, ...next };
       try { localStorage.setItem(ROAD_PREFS, JSON.stringify(roadPrefs)); } catch (_) { /* storage off: this session only */ }
-      document.querySelectorAll('[data-pref]').forEach(b => { const on = roadPrefs[b.dataset.pref] === Number(b.dataset.v); b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
+      document.querySelectorAll('[data-pref-range]').forEach(r => { r.value = String(roadPrefs[r.dataset.prefRange] || 0); });
+      paintPresets();
     }
-    document.querySelectorAll('[data-pref]').forEach(b => b.addEventListener('click', async () => {
-      if ($('planPanel').classList.contains('busy') || loopBusy) return;
-      const k = b.dataset.pref, v = Number(b.dataset.v), was = roadPrefs[k], now = was === v ? 0 : v;
+    // corner mix as balance sliders with three detents: fewer, any, more (REVIEW.md mockup 03-plan-more.html)
+    document.querySelectorAll('[data-pref-range]').forEach(r => r.addEventListener('change', async () => {
+      const k = r.dataset.prefRange, was = roadPrefs[k] || 0, now = Math.max(-1, Math.min(1, Math.round(Number(r.value))));
+      if ($('planPanel').classList.contains('busy') || loopBusy) { r.value = String(was); return; }
+      if (now === was) return;
       setRoadPrefs({ [k]: now });
       const what = `${now === 0 ? 'Any' : now > 0 ? 'More' : 'Fewer'} ${k === 'tight' ? 'hairpins' : 'fast sweepers'}`;
       if (!(await replanForLevel(what))) setRoadPrefs({ [k]: was });
     }));
     setRoadPrefs({});
+    // Presets (plan_presets.js): this setup under a name, a stamp at the top of the sheet; tapping one sets it all at once.
+    function paintPresets() {
+      const row = $('presetRow');
+      if (!row || typeof roadPrefs === 'undefined') return;
+      const list = ApexPlanPresets.list(localStorage), on = ApexPlanPresets.matching(localStorage, { fun: funLevel, avoid, prefs: roadPrefs });
+      row.hidden = !list.length;
+      row.replaceChildren(...list.map(p => {
+        const b = document.createElement('button'); b.textContent = p.name;
+        b.setAttribute('aria-pressed', String(!!on && on.name === p.name));
+        b.addEventListener('click', async () => {
+          if ($('planPanel').classList.contains('busy') || loopBusy) return;
+          if (on && on.name === p.name) {                                   // already set: the one thing left to do is remove it
+            toast(`${p.name} is set.`, { label: 'Remove preset', ms: 6000, onClick: () => { ApexPlanPresets.remove(localStorage, p.name); paintPresets(); } });
+            return;
+          }
+          const was = { fun: funLevel, avoid: { ...avoid }, prefs: { ...roadPrefs } };
+          setFunLevel(p.fun); setAvoid(Object.fromEntries(Object.keys(FunRoute.AVOID_LABELS).map(k => [k, !!p.avoid[k]]))); setRoadPrefs(p.prefs);
+          if (!(await replanForLevel(p.name))) { setFunLevel(was.fun); setAvoid(was.avoid); setRoadPrefs(was.prefs); }
+        });
+        return b;
+      }));
+    }
+    $('presetSaveBtn').addEventListener('click', () => {
+      const name = prompt('Name this setup (for example Sunday loop or Night run)', '');
+      if (!name || !name.trim()) return;
+      const r = ApexPlanPresets.save(localStorage, { name, fun: funLevel, avoid, prefs: roadPrefs });
+      toast(r === 'saved' ? `${name.trim()} is a preset: it's at the top of the plan sheet.` : r === 'full' ? `You have ${ApexPlanPresets.MAX} presets. Tap one that is set to remove it.` : 'Couldn\u2019t save that preset.');
+      paintPresets();
+    });
+    paintPresets();
     $('routeDriveBtn').addEventListener('click', () => {
       if (!plannedRoute) return;
       booting = false;
@@ -3901,29 +4115,9 @@
       document.querySelectorAll('[data-side]').forEach(b => b.addEventListener('click', () => { ApexDrivingSide.setChoice(b.dataset.side); paintSide(); toast('Used from the next route you plan.'); }));
       paintSide();
     }
-    // Look (themes.js accents, IDEAS S-10): cosmetic only, bought with earned Octane through /api/shop and /api/redeem.
-    async function renderLook() {
-      const row = $('lookRow'), note = $('lookNote');
-      if (!row || !Themes.ACCENTS) return;
-      let shop = null;
-      try { const r = await apiCall('GET', '/api/shop'); shop = r.ok ? await r.json() : null; } catch (_) { shop = null; }
-      if (!shop || !Array.isArray(shop.items) || !Array.isArray(shop.owned)) shop = null;   // signed out, or an answer of the wrong shape
-      const owned = new Set(shop ? shop.owned : []), current = Themes.accent();
-      const chip = (label, on, fn) => { const b = document.createElement('button'); b.className = 'chip' + (on ? ' on' : ''); b.textContent = label; b.setAttribute('aria-pressed', String(on)); b.addEventListener('click', fn); return b; };
-      const use = (a) => { Themes.setAccent(a); applyTheme(); renderLook(); };
-      row.replaceChildren(chip('Road book', !current, () => use(null)), ...Object.entries(Themes.ACCENTS).map(([k, a]) => {
-        const item = shop && shop.items.find(i => i.id === `accent_${k}`), have = owned.has(`accent_${k}`);
-        if (have) return chip(a.label, current === k, () => use(k));
-        return chip(`${a.label} · ${item ? item.octane : '--'} Octane`, false, async () => {
-          if (!shop) { toast('Sign in (Crew) to unlock colours with Octane.'); return; }
-          let r; try { r = await apiCall('POST', '/api/redeem', { item: `accent_${k}` }); } catch (_) { toast('No signal. Try again.'); return; }
-          if (r.ok) { toast(`${a.label} unlocked.`); use(k); } else toast(r.status === 402 ? 'Not enough Octane yet: share road data to earn more.' : 'Couldn\'t unlock that. Try again.');
-        });
-      }));
-      note.textContent = shop ? `${shop.balance} Octane to spend` : 'Sign in to unlock colours with Octane.';
-      if (current && shop && !owned.has(`accent_${current}`)) use(null);   // an accent you don't own (a shared phone): back to the road book
-    }
-    renderLook();
+    // Colour swaps are gone (REVIEW.md roadmap 8): theming is whole themes (Look and voice), not accents. An accent picked
+    // before stays off from now on.
+    if (Themes.accent && Themes.accent()) { Themes.setAccent(null); applyTheme(); }
     // feature flags (flags.js, IDEAS Y-06): fetched once a start, used from then on
     if (window.ApexFlags && window.ApexSync) ApexFlags.load((p) => ApexSync.apiFetch(p)).catch(() => {});
     // Send feedback (web/feedback.js, IDEAS L-05): Settings → Feedback; the owner reads it in Crew.
@@ -4669,6 +4863,7 @@
       const on = state.mode === 'live';
       $('driveBar').hidden = !on; $('transport').hidden = on;
       $('app').classList.toggle('live', on);
+      if (!on) $('hzPlate').hidden = true;
       if (on) { $('app').classList.remove('sheet-open'); openPlan(false); }
     }
     // In the iOS app the switch lives under the app, not Safari.
@@ -4931,10 +5126,14 @@
         $('routeCardCharacter').hidden = !line;
       } catch (_) { /* unknown: nothing said */ }
     }
+    // Said to screen readers only, for what the screen already shows (the route bar after a route is found).
+    function announce(text) { const a = $('announcer'); a.textContent = ''; setTimeout(() => { a.textContent = text; }, 50); }
+    function heightLabel(m) { return ApexUnits.metric() ? `${Math.round(m)} m` : `${Math.round(m * 3.28084).toLocaleString('en-US')} ft`; }
     function paintClimb(t) {
       const up = ApexStages.climbM(t.elev), lo = Math.min(...t.elev), hi = Math.max(...t.elev);
+      if (plannedRoute === t) $('routeCardProfile').innerHTML = ApexRouteCard.profile(t, 340, 92, heightLabel) || '';
       if (up == null) return;
-      const h = (m) => (ApexUnits.metric() ? `${Math.round(m)} m` : `${Math.round(m * 3.28084).toLocaleString('en-US')} ft`);
+      const h = heightLabel;
       $('routeCardClimb').textContent = `Climbs ${h(up)} in all · highest ${h(hi)}`;
       $('routeCardClimb').hidden = false;
     }
@@ -5009,9 +5208,20 @@
       const me = { lat: frame.lat, lon: frame.lon, heading: Number.isFinite(frame.course_deg) ? frame.course_deg : null };
       const v = Number.isFinite(frame.speed_mps) ? frame.speed_mps : 0;
       const next = ApexHazardReports.nextAhead(reported.list, me, Math.max(150, Math.min(600, v * 8)), reported.said);
+      paintHazardPlate(ApexHazardReports.nextAhead(reported.list, me, HZ_PLATE_M, null));
       if (next) { reported.said.add(next.id); say(next.text, false, null, null, { kind: 'hazard', key: `rep:${next.id}`, repeatMs: 10 * 60000, alert: true }); }
       const passed = reported.watch.update(reported.list, me, reported.mine);
       if (passed && !reported.asking) askStill(passed);
+    }
+    // The hazard plate (REVIEW.md 4.3): the nearest reported hazard ahead within a mile, fixed top-left of the map in every
+    // theme, until it is passed. Its words are hazard_reports.js plate(): what, how far, how old, how many confirmed.
+    const HZ_PLATE_M = 1609;
+    function paintHazardPlate(h) {
+      const p = h && state.mode === 'live' ? ApexHazardReports.plate(h, (m) => ApexUnits.long(m, 1), Date.now()) : null;
+      $('hzPlate').hidden = !p;
+      if (!p) return;
+      if ($('hzPlateTitle').textContent !== p.title) $('hzPlateTitle').textContent = p.title;
+      if ($('hzPlateDetail').textContent !== p.detail) $('hzPlateDetail').textContent = p.detail;
     }
     function askStill(h) {
       reported.asking = h;
@@ -5032,7 +5242,7 @@
     $('hzStill').addEventListener('click', () => answerStill(true));
     $('hzGone').addEventListener('click', () => answerStill(false));
     for (const k of ApexHazardReports.KINDS) {
-      const b = document.createElement('button'); b.className = 'ink-btn'; b.textContent = ApexHazardReports.LABEL[k];
+      const b = document.createElement('button'); b.className = 'ink-btn hz-btn'; b.textContent = ApexHazardReports.LABEL[k];
       b.addEventListener('click', () => reportHazard(k));
       $('hzKinds').append(b);
     }
@@ -5249,6 +5459,37 @@
         }
       }
     }
+    // The drive-ended card (REVIEW.md roadmap 7): the moment after the Skyway gets the screen, not a toast. The drive is
+    // already saved; the card shows its name, distance and time, the Vetta Score big (-- without clean corners) and one
+    // thing to work on (the weakest Score part, week_digest.js tip), with Share card and Mark a stage.
+    let endDrive = null;
+    function showEndCard(d, startedAt) {
+      endDrive = d;
+      let ds = null;
+      try { ds = Core.driverScore(d.speed_mps, d.lon_g, d.lat_g, ApexRecording.scorableCorners(d, d.corners)); } catch (_) { ds = null; }
+      d.ds = ds && Number.isFinite(ds.score) ? ds : { ...(ds || {}), score: null };
+      const miles = Array.isArray(d.dist) && d.dist.length ? ApexUnits.long(d.dist[d.dist.length - 1], 1) : null;
+      const mins = Number.isFinite(startedAt) ? Math.round((Date.now() - startedAt) / 60000) : null;
+      $('endName').textContent = d.name || 'Your drive';
+      $('endMeta').textContent = [miles, mins != null ? (mins >= 60 ? `${Math.floor(mins / 60)} h ${mins % 60} min` : `${mins} min`) : null,
+        Array.isArray(d.corners) ? `${d.corners.length} corners` : null].filter(Boolean).join(' · ');
+      $('endScore').textContent = d.ds.score == null ? '--' : String(d.ds.score);
+      const t = d.ds.score != null && window.ApexWeekDigest ? ApexWeekDigest.tip(d.ds.components) : null;
+      $('endLine').textContent = d.ds.score == null ? 'Not enough clean corners for a score this time.'
+        : t ? `Next time, ${t.label.toLowerCase()}: ${t.tip}.` : '';
+      $('endLog').href = `analysis.html?tab=drive&drive=${encodeURIComponent(d.id)}`;
+      $('endCard').classList.add('show');
+    }
+    $('endDone').addEventListener('click', () => $('endCard').classList.remove('show'));
+    $('endStage').addEventListener('click', () => { if (endDrive) location.href = `analysis.html?tab=segments&drive=${encodeURIComponent(endDrive.id)}`; });
+    $('endShare').addEventListener('click', async () => {
+      if (!endDrive || !window.ApexDriveCard) return;
+      const css = getComputedStyle(document.documentElement), v = (k) => css.getPropertyValue(k).trim();
+      const cv = ApexDriveCard.drawCard(document.createElement('canvas'), ApexDriveCard.cardModel(endDrive),
+        { panel: v('--panel'), panelInk: v('--panel-ink'), panelDim: v('--panel-dim'), accent: v('--accent'), fontNum: v('--font-num'), fontUi: v('--font-ui') });
+      const out = await ApexDriveCard.shareCard(cv, `${(endDrive.name || 'drive').replace(/[^A-Za-z0-9 _-]+/g, '').trim() || 'drive'}.png`);
+      if (out === 'saved') toast('Card saved.');
+    });
     async function leaveDrive(save) {
       driveActive = false;
       stageWatch = null; $('stageBar').hidden = true;
@@ -5275,7 +5516,7 @@
           if (battery) d.battery = battery;                          // what the drive cost the battery (IDEAS P-01)
           await ApexRecording.store(d);
           await refreshSavedDrives();
-          toast(`Drive saved · ${ApexUnits.long((rec.km) * 1000, 1)}`, { label: 'View', href: `analysis.html?tab=drive&drive=${encodeURIComponent(d.id)}` });
+          showEndCard(d, rec.startedAt);
           if (live) {
             live.finish().then(async (shared) => {
               if (shared && shared.chunks > 0) {
@@ -5359,29 +5600,29 @@
     // =======================================================================
     // 10c. FIRST RUN: three screens, shown once. No permissions here (they are asked at the first Start drive).
     // =======================================================================
+    // First run is one screen (REVIEW.md roadmap 8): the mark, a line, the road book calling corners on a loop, Get started.
+    // The voice comes with the theme and sign-in waits for the first social action, so neither is asked here.
+    const OB_NOTES = [
+      { type: 'corner', dir: 'L', severity: '4', mods: ['tightens'], call: 'Left 4 tightens', code: 'L4', dist: '300', unit: 'ft' },
+      { type: 'corner', dir: 'R', severity: '3', mods: [], call: 'Right 3', code: 'R3', dist: '150', unit: 'ft' },
+      { type: 'crest', dir: null, severity: null, mods: [], call: 'Crest', code: 'CREST', dist: '200', unit: 'ft' },
+      { type: 'corner', dir: 'L', severity: 'HP', mods: [], call: 'Left hairpin', code: 'LHP', dist: '400', unit: 'ft' },
+      { type: 'corner', dir: 'R', severity: '5', mods: ['long'], call: 'Right 5 long', code: 'R5', dist: '250', unit: 'ft' },
+    ];
     function runOnboarding() {
-      const ob = $('onboard'); let step = 1;
-      const steps = [...ob.querySelectorAll('[data-step]')];
-      const paint = () => {
-        steps.forEach(n => { n.hidden = Number(n.dataset.step) !== step; });
-        $('obNext').textContent = step === 1 ? 'Get started' : step === 2 ? 'Next' : 'Not now';
-        $('obNext').classList.toggle('solid', step < 3);   // on the sign-in step, Sign in is the one solid button
-        $('obAlt').textContent = 'Watch a replay';
-        $('obAlt').hidden = step === 2;
-        if (step === 2) {
-          const list = $('obVoices'); list.innerHTML = '';
-          for (const v of bankVoices.concat([{ id: 'device', name: 'Phone voice' }]).filter(v => v.id !== 'jarvis')) {
-            const b = document.createElement('button'); b.className = 'ink-btn' + (v.id === state.voiceId ? ' on' : ''); b.textContent = `▶  ${v.name}`; b.setAttribute('aria-pressed', String(v.id === state.voiceId));
-            b.addEventListener('click', () => { state.voiceId = v.id; state.voiceStyle = 'codriver'; savePrefs(); renderVoiceList(); if (window.ApexVoice) ApexVoice.unlock(); say('Left 4 tightens, one-fifty.', true, null, 'sys:test'); paint(); });
-            list.append(b);
-          }
-        }
+      const ob = $('onboard');
+      let k = 0;
+      const tick = () => {
+        if (!ob.classList.contains('show')) return;
+        Inst.renderNotes($('obNotes'), look.theme, [0, 1, 2].map(j => ({ ...OB_NOTES[(k + j) % OB_NOTES.length], key: k + j })));
+        k++;
+        setTimeout(tick, matchMedia('(prefers-reduced-motion: reduce)').matches ? 4000 : 1800);
       };
       const finish = () => { flag('apex.onboarded', '1'); ob.classList.remove('show'); };
-      $('obNext').onclick = () => { if (step < 3) { step++; paint(); } else finish(); };
+      $('obNext').onclick = finish;
       $('obAlt').onclick = () => { finish(); watchDryRidge(); };
       // Focus the dialog, not its button: VoiceOver reads the welcome, and no focus ring sits on Get started before a touch
-      ob.classList.add('show'); paint(); ob.tabIndex = -1; ob.focus();
+      ob.classList.add('show'); tick(); ob.tabIndex = -1; ob.focus();
     }
     setTimeout(() => health.flush(IN_APP_SHELL ? 'ios' : 'web').catch(() => {}), 5000);
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') health.flush(IN_APP_SHELL ? 'ios' : 'web').catch(() => {}); });

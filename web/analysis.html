@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-SdBaUps8dEA8biSvKlai64iF19gRSVd+kORKS+N/QzM=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-whHGXZBw8MLzvg6RXW2em5lGOuxqz5Gv/HntESsR1Lk=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta · Log</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -166,6 +166,7 @@
     #boot.gone { opacity: 0; pointer-events: none; }
     @media (prefers-reduced-motion: reduce) { #boot { transition: none; } }
 </style>
+  <link rel="stylesheet" href="controls.css" />
 </head>
 <body>
   <div id="boot" aria-hidden="true"><img src="brand/mark.svg" alt="" /></div>
@@ -182,7 +183,7 @@
         <button class="btn" id="dvCard">Share card</button>
       </div>
       <div class="panel" id="dvTagsPanel"><h2>Tags and note</h2>
-        <div class="actions" id="dvTags" role="group" aria-label="Tags for this drive"></div>
+        <div class="stamps" id="dvTags" role="group" aria-label="Tags for this drive"></div>
         <div class="actions mt-8"><input id="dvTagNew" maxlength="24" placeholder="Add a tag: the car, who came" aria-label="Add a tag" /><button class="btn" id="dvTagAdd">Add</button></div>
         <textarea class="mt-8" id="dvNoteText" maxlength="280" placeholder="A note for yourself (stays on this phone)" aria-label="Note"></textarea>
         <p class="note" id="dvTagsNote">Tags and notes stay on this phone. Filter the Log by them.</p></div>
@@ -220,7 +221,7 @@
       <div class="panel" id="trendPanel" hidden><h2>Score over time</h2><div id="trend"></div></div>
       <div class="panel" id="recordsPanel" hidden><h2>Your records</h2><div class="scroll"><table id="recordsTable"></table></div><p class="note" id="recordsNote"></p></div>
       <div class="panel" id="steadyPanel" hidden><h2>Braking consistency by month</h2><div id="steadyChart"></div><p class="note" id="steadyNote"></p></div>
-      <div class="actions" id="historyFilter" role="group" aria-label="Show drives tagged" hidden></div>
+      <div class="stamps" id="historyFilter" role="group" aria-label="Show drives tagged" hidden></div>
       <div class="panel" id="historyPanel"><div class="scroll"><table id="historyTable"></table></div></div>
     </section>
 
@@ -1102,7 +1103,12 @@
       const q = params.get('tab'), t = TAB_ALIAS[q] || q;
       showTab(['drive', 'history', 'segments', 'compare'].includes(t) ? t : 'history');
     }
-    loadDrives().then(() => { drivesLoaded = true; renderAll(); const want = params.get('drive'); if (want && drives.some(x => x.id === want)) openDrive(want); })
+    loadDrives().then(() => { drivesLoaded = true; renderAll(); const want = params.get('drive');
+      if (want && drives.some(x => x.id === want)) {
+        // Mark a stage from the drive-ended card: this drive picked in the new-stage marker, the marker open
+        if (params.get('tab') === 'segments' && $('segDrive')) { $('segDrive').value = want; $('segDrive').dispatchEvent(new Event('change')); $('newStage').open = true; }
+        else openDrive(want);
+      } })
       .finally(() => requestAnimationFrame(() => ApexBoot.done()));   // drawn with its drives: lift the cover
   })();
   </script>

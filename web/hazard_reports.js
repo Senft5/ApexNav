@@ -70,6 +70,24 @@
       .sort((a, b) => local(mid, a).m - local(mid, b).m).slice(0, max).map((h) => ({ lat: h.lat, lon: h.lon }));
   }
 
-  const api = { nextAhead, createPassWatch, closuresFor, LABEL, KINDS: Object.keys(LABEL) };
+  /**
+   * What the hazard plate says (docs/design/REVIEW.md 4.3): { title, detail }. `dist(m)` formats a distance in the driver's
+   * units; `nowMs` is the clock. The detail says how far and how old, and how many drivers confirmed it; never who reported
+   * it (reports are anonymous). A part that is unknown is left out, never guessed.
+   */
+  function plate(h, dist, nowMs) {
+    if (!h) return null;
+    const parts = [];
+    if (finite(h.m) && dist) parts.push(`in ${dist(h.m)}`);
+    const at = typeof h.created_at === 'string' ? Date.parse(h.created_at.replace(' ', 'T') + (/[zZ]|[+-]\d\d:?\d\d$/.test(h.created_at) ? '' : 'Z')) : NaN;
+    if (Number.isFinite(at) && finite(nowMs) && nowMs >= at) {
+      const min = Math.round((nowMs - at) / 60000);
+      parts.push(min < 1 ? 'reported just now' : min < 60 ? `reported ${min} min ago` : min < 48 * 60 ? `reported ${Math.round(min / 60)} h ago` : `reported ${Math.round(min / 1440)} days ago`);
+    }
+    if (finite(h.confirms) && h.confirms > 0) parts.push(`${h.confirms} confirmed`);
+    return { title: LABEL[h.kind] || 'Hazard', detail: parts.join(' · ') };
+  }
+
+  const api = { nextAhead, createPassWatch, closuresFor, plate, LABEL, KINDS: Object.keys(LABEL) };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexHazardReports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

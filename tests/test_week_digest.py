@@ -42,3 +42,12 @@ def test_the_week(out):
 def test_unknown_stays_unknown(out):
     assert out["empty"] is None
     assert out["one"]["focus"] is None and out["one"]["best"]["score"] == 500     # one drive: no tip yet
+
+
+def test_one_drive_tip():
+    out = subprocess.run([NODE, "-e", "const W = require(process.argv[1] + '/web/week_digest.js');"
+                          "console.log(JSON.stringify([W.tip({ braking: 0.9, smoothness: 0.4, consistency: 0.7, pace: 0.1 }), W.tip(null), W.tip({ pace: 1 })]))",
+                          ROOT], capture_output=True, text=True, check=True).stdout
+    first, none, pace_only = json.loads(out)
+    assert first["part"] == "smoothness" and first["label"] == "Smooth"     # pace is never the thing to work on
+    assert none is None and pace_only is None
