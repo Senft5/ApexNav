@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-w4/1YBz1IriFfTM87BCSUM3grIP44Cj9n73SWUVRHAk=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-cjBfX9suGDs2zZBCBU8Acs2K8LzGbDwn+LxYr/KU/Pk=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -588,10 +588,12 @@
     .vfd-bars b { flex: 1; background: var(--hair); }
     .vfd-bars b.on { background: var(--panel-ink); box-shadow: 0 0 4px color-mix(in srgb, var(--panel-ink) 70%, transparent); }
     .vfd-bars b.on.amber { background: var(--amber); }
-    .kit-row { grid-column: 1 / -1; display: grid; grid-template-columns: 70px minmax(0, 1fr); gap: 14px; align-items: center; padding-top: 6px; border-top: 1px solid var(--rule); }
-    .kit { width: 70px; height: 60px; display: block; }
+    .kit-row { grid-column: 1 / -1; display: grid; grid-template-columns: 80px minmax(0, 1fr); gap: 14px; align-items: center; padding-top: 6px; border-top: 1px solid var(--rule); }
+    .kit { width: 80px; height: 70px; display: block; }   /* 16 x 14 dots at 5 px (REVIEW2.md U-38) */
     .kit circle { fill: var(--hair); } .kit circle.on { fill: var(--panel-ink); } .kit circle.eye { fill: var(--amber); }
-    .kit-says b { display: block; font: 700 15px var(--font-ui); letter-spacing: 0.06em; color: var(--panel-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .kit circle.body { fill: color-mix(in srgb, var(--panel-ink) 45%, transparent); }   /* the lighter body: outline and muzzle read */
+    .kit-says b { display: block; font: 700 15px var(--font-ui); letter-spacing: 0.06em; color: var(--panel-ink); line-height: 1.2;
+      display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }   /* the call wraps to two lines, never cut short */
     .tp-tapedeck { background: #0A0C0B; } .tp-tapedeck .tp-call b, .tp-tapedeck .tp-speed b { text-shadow: 0 0 6px rgba(125, 245, 222, 0.6); }
     /* ---------------- Billet (Pro, REVIEW.md 4.1): brushed metal, knurled bezels, red glow; glow is additive ---------------- */
     html[data-theme="billet"] .binnacle, html[data-theme="billet"] .notes {
@@ -2157,7 +2159,7 @@
     function say(text, force, chain = null, sysToken = null, opts = {}) {
       // a road hazard (not a turn or a crest, which share the urgent speech lane) also alerts on the car's screen
       if (text && opts.alert && driveActive) carPost({ kind: 'hazard', title: text });
-      if (text) state.kitLine = String(text).replace(/\.$/, '').toUpperCase().slice(0, 40);   // what Kit says (Tapedeck)
+      if (text) state.kitLine = String(text).replace(/\.$/, '').toUpperCase().slice(0, 64);   // what Kit says (Tapedeck)
       if (!text || (!state.toggles.voice && !force)) return;
       if (force) { speech.queue.clear(); stopSpeaking(); opts = { duck: true, ...opts }; }   // a line you asked for is heard
       // a fixed line ("Rerouting", "Bump ahead") is in every voice pack (web/voice_lines.js): the pack says it, not the phone

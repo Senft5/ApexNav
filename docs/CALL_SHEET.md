@@ -6,6 +6,15 @@ it says so. Things only you can do are in docs/OWNER_TODO.md.
 
 ## 2026-10-29
 
+**Roadmap 2 item 18: Kit drawn properly (U-38).** Tapedeck's fox is 80 px on a 16 x 14 dot grid, with ears, a lighter
+body, a lit muzzle, a dark nose and amber eyes, so he reads as a face rather than a blob. Two idle frames (an ear flick,
+a quarter second every five) and four lean frames wired to the corner: he leans with lateral g past 0.15 g, further
+past 0.45 g. "KIT SAYS" wraps to two lines and the line keeps up to 64 characters instead of being cut at 40. My calls:
+- *The ear flick stops under Reduce Motion*; the leans still follow the car, because they carry information.
+- *The lean is a shear about the chin* with a two-dot margin at the ears, so no frame clips at the grid edge (a test
+  counts the dots).
+Undo: restore the `KIT` frames and `kitRow` in web/instruments.js and the `.kit` rules in web/index.html.
+
 **Roadmap 2 item 17: replay controls (U-45).** A replay is full-screen like a drive: no tab bar, and the
 "Replay · Demo · Dry Ridge Rd ×" plate is the way out. The elevation strip is the scrubber, full width above the
 controls, with its position mark; under it, Play is one slide switch and the speed is a 1× 2× 4× 8× detent. My calls:
