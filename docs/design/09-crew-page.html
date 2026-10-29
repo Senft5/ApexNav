@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Crew page</title>
+<meta name="description" content="A crew page with livery customisation">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:#3A3A3A;font-family:-apple-system, 'SF Pro Text', 'Helvetica Neue', Inter, Arial, sans-serif;color:#1C1A17;-webkit-font-smoothing:antialiased;display:flex;align-items:flex-start;justify-content:center;padding:24px 0}
+.phone{position:relative;width:390px;height:844px;background:#EDE4D3;overflow:hidden;color:#1C1A17;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.status{position:absolute;top:0;left:0;right:0;height:47px;display:flex;justify-content:space-between;align-items:flex-end;padding:0 28px 8px;font-size:15px;font-weight:600;z-index:30;pointer-events:none}
+.status .cell{display:flex;gap:5px;align-items:center}
+.cond{font-family:'SF Pro Display', 'Avenir Next Condensed', 'Arial Narrow', 'Helvetica Neue', Arial, sans-serif;font-weight:800;font-variant-numeric:tabular-nums}
+.mono{font-family:ui-monospace, 'SF Mono', Menlo, 'DejaVu Sans Mono', monospace}
+.tabs{position:absolute;left:0;right:0;bottom:0;height:82px;background:#EDE4D3;border-top:2px solid #1C1A17;display:flex;padding:8px 6px 0;z-index:20}
+.tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:11px;font-weight:600;color:#6A6255;position:relative}
+.tab svg{width:26px;height:26px;stroke:currentColor;fill:none;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round}
+.tab.on{color:#C8102E}
+.tab.on::before{content:"";position:absolute;top:-10px;left:22px;right:22px;height:3px;background:#C8102E}
+.home{position:absolute;bottom:8px;left:125px;width:140px;height:5px;border-radius:3px;background:#1C1A17;opacity:.8;z-index:31}
+.rule{border-top:1px solid #CFC4AE}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:48px;padding:0 18px;font-size:15px;font-weight:600;border:1.5px solid #1C1A17;color:#1C1A17;background:transparent;font-family:-apple-system, 'SF Pro Text', 'Helvetica Neue', Inter, Arial, sans-serif}
+.btn.primary{background:#1C1A17;color:#EDE4D3;border-color:#1C1A17}
+.btn.record{background:#C8102E;color:#FFFFFF;border-color:#C8102E;height:52px;font-size:16px;font-weight:700;box-shadow:inset 0 -3px 0 rgba(0,0,0,.28)}
+.btn.record .dot{width:12px;height:12px;border-radius:50%;background:#FFFFFF}
+.btn.text{border:none;text-decoration:underline;text-underline-offset:3px;padding:0 6px}
+.label{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#6A6255}
+.pencil{color:#6A6255}
+.red{color:#C8102E}
+
+.hazard{position:absolute;left:12px;display:flex;align-items:center;gap:10px;background:#111111;border:2px solid #FF7A1A;
+  color:#FFFFFF;padding:8px 12px 8px 10px;font-family:'SF Pro Display', 'Avenir Next Condensed', 'Arial Narrow', 'Helvetica Neue', Arial, sans-serif;font-weight:800;font-size:20px;letter-spacing:.02em;line-height:1;
+  box-shadow:0 2px 0 rgba(0,0,0,.35)}
+.hazard .glyph{width:26px;height:26px;flex:none}
+.hazard small{display:block;font-family:-apple-system, 'SF Pro Text', 'Helvetica Neue', Inter, Arial, sans-serif;font-weight:600;font-size:12px;letter-spacing:0;color:#FFB27A;margin-top:3px}
+
+
+.scroll{position:absolute;top:0;left:0;right:0;bottom:82px;overflow:hidden}
+.bar{height:92px;display:flex;align-items:flex-end;justify-content:space-between;padding:0 16px 10px;border-bottom:2px solid #1C1A17}
+.bar h1{font-family:'SF Pro Display', 'Avenir Next Condensed', 'Arial Narrow', 'Helvetica Neue', Arial, sans-serif;font-weight:800;font-size:26px;line-height:1}
+.bar .back{font-size:15px;font-weight:600}
+.bar .act{font-size:14px;font-weight:600;text-decoration:underline;text-underline-offset:3px}
+section{padding:14px 16px 0}
+h2{font-family:'SF Pro Display', 'Avenir Next Condensed', 'Arial Narrow', 'Helvetica Neue', Arial, sans-serif;font-weight:800;font-size:20px;display:flex;align-items:baseline;justify-content:space-between;margin-bottom:8px}
+h2 a{font-family:-apple-system, 'SF Pro Text', 'Helvetica Neue', Inter, Arial, sans-serif;font-size:13px;font-weight:600;text-decoration:underline;text-underline-offset:3px;color:#1C1A17}
+.hr{border-top:1px solid #CFC4AE;margin-top:14px}
+.photo{background:#CFC4AE;position:relative;overflow:hidden}
+.photo svg{display:block;width:100%;height:100%}
+.cap{position:absolute;right:8px;bottom:16px;font-size:10px;font-weight:600;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.6)}
+.avatar{width:40px;height:40px;border-radius:50%;background:#CFC4AE;border:1.5px solid #1C1A17;flex:none;display:flex;align-items:center;justify-content:center;font-family:'SF Pro Display', 'Avenir Next Condensed', 'Arial Narrow', 'Helvetica Neue', Arial, sans-serif;font-weight:800;font-size:16px}
+.small{font-size:13px;color:#6A6255}
+
+.hero{height:150px;position:relative}
+.hero .photo{position:absolute;inset:0}
+.hero .stripe{position:absolute;left:0;right:0;bottom:0;height:10px;background:repeating-linear-gradient(90deg,#1C1A17 0 60px,#C8102E 60px 80px,#EDE4D3 80px 92px)}
+.crest{position:absolute;left:16px;bottom:-26px;width:72px;height:72px;background:#EDE4D3;border:2px solid #1C1A17;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 0 rgba(0,0,0,.2)}
+.ident{padding:34px 16px 0;display:flex;align-items:flex-start;justify-content:space-between}
+.ident h1{font-family:'SF Pro Display', 'Avenir Next Condensed', 'Arial Narrow', 'Helvetica Neue', Arial, sans-serif;font-weight:800;font-size:28px;line-height:1}
+.ident .motto{font-size:13px;color:#6A6255;margin-top:4px;font-style:italic}
+.ident .meta{font-size:13px;margin-top:6px;font-weight:600}
+.livery{margin:12px 16px 0;border:1.5px solid #1C1A17;padding:10px 12px;display:grid;grid-template-columns:1fr auto;gap:8px 12px;align-items:center;background:#F3ECDD}
+.livery .track{grid-column:1/-1}
+.livery .tier{font-family:'SF Pro Display', 'Avenir Next Condensed', 'Arial Narrow', 'Helvetica Neue', Arial, sans-serif;font-weight:800;font-size:20px;line-height:1}
+.livery .tier small{display:block;font-family:-apple-system, 'SF Pro Text', 'Helvetica Neue', Inter, Arial, sans-serif;font-size:12px;font-weight:500;color:#6A6255;margin-top:3px}
+.livery .track{flex:1;height:8px;border:1.5px solid #1C1A17;position:relative;background:#EDE4D3}
+.livery .track i{position:absolute;left:0;top:0;bottom:0;width:70%;background:#1C1A17}
+.livery .track em{position:absolute;top:-4px;width:1.5px;height:14px;background:#1C1A17}
+.decals{display:flex;gap:4px}
+.decal{width:22px;height:22px;border:1.5px solid #1C1A17;transform:rotate(-6deg);background:#EDE4D3;display:flex;align-items:center;justify-content:center}
+.decal.red{background:#C8102E;border-color:#C8102E}
+.event{border:1.5px solid #1C1A17;display:flex}
+.event .date{width:64px;border-right:1.5px solid #1C1A17;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px 0;background:#1C1A17;color:#EDE4D3}
+.event .date b{font-family:'SF Pro Display', 'Avenir Next Condensed', 'Arial Narrow', 'Helvetica Neue', Arial, sans-serif;font-size:28px;font-weight:800;line-height:1}
+.event .date span{font-size:11px;font-weight:600;letter-spacing:.08em}
+.event .body{flex:1;padding:8px 12px}
+.event .body b{display:block;font-size:16px}
+.event .body div{font-size:13px;color:#6A6255;margin-top:2px}
+.event .going{display:flex;align-items:center;gap:8px;margin-top:8px}
+.event .going .avatar{width:26px;height:26px;font-size:11px;margin-right:-12px}
+.event .going .btn{margin-left:auto;height:34px;padding:0 12px;font-size:13px}
+.board{width:100%;border-collapse:collapse;font-size:14px}
+.board td{padding:6px 0;border-top:1px solid #CFC4AE}
+.board td:first-child{width:26px;font-family:'SF Pro Display', 'Avenir Next Condensed', 'Arial Narrow', 'Helvetica Neue', Arial, sans-serif;font-weight:800;font-size:16px;color:#6A6255}
+.board td:last-child{text-align:right;font-family:'SF Pro Display', 'Avenir Next Condensed', 'Arial Narrow', 'Helvetica Neue', Arial, sans-serif;font-weight:800;font-size:20px}
+.board .car{font-size:12px;color:#6A6255}
+.builds{display:flex;gap:10px;overflow:hidden}
+.build{width:150px;flex:none;border:1.5px solid #1C1A17}
+.build .photo{height:84px}
+.build .t{padding:6px 8px 8px}
+.build b{display:block;font-size:13px}
+.build span{font-size:11px;color:#6A6255}
+.chatline{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-top:1px solid #CFC4AE;font-size:14px}
+.chatline .avatar{width:28px;height:28px;font-size:11px}
+.chatline b{font-weight:700}
+.chatline span{color:#6A6255;font-size:12px;margin-left:6px}
+
+</style></head>
+<body><div class="phone"><div class="status" style="color:inherit"><div class="cell">9:41</div><div class="cell">
+<svg width="18" height="12" viewBox="0 0 18 12"><rect x="0" y="8" width="3" height="4" fill="currentColor"/><rect x="5" y="5.5" width="3" height="6.5" fill="currentColor"/><rect x="10" y="3" width="3" height="9" fill="currentColor"/><rect x="15" y="0" width="3" height="12" fill="currentColor"/></svg>
+<svg width="27" height="13" viewBox="0 0 27 13"><rect x=".5" y=".5" width="22" height="12" rx="3" fill="none" stroke="currentColor" opacity=".5"/><rect x="2" y="2" width="16" height="9" rx="1.5" fill="currentColor"/><path d="M24 4.5v4a2 2 0 0 0 0-4Z" fill="currentColor" opacity=".5"/></svg></div></div>
+<div class="scroll">
+  <div class="hero"><div class="photo"><svg viewBox="0 0 390 150" preserveAspectRatio="xMidYMid slice"><rect width="390" height="150" fill="#B9AE95"/>
+<path d="M0 82.5 C 78.0 52.5, 136.5 90.0, 214.50000000000003 60.0 S 331.5 45.0, 390 75.0 V150 H0Z" fill="#6E6757"/>
+<path d="M0 105.0 C 97.5 90.0, 156.0 120.0, 253.5 93.0 S 351.0 90.0, 390 108.0 V150 H0Z" fill="#5E584C"/>
+<path d="M59.0 150 C 117.0 127.5, 195.0 142.5, 234.0 117.0 S 312.0 105.0, 370.5 99.0" fill="none" stroke="#EDE4D3" stroke-width="10.500000000000002" stroke-linecap="round"/>
+<path d="M59.0 150 C 117.0 127.5, 195.0 142.5, 234.0 117.0 S 312.0 105.0, 370.5 99.0" fill="none" stroke="#C9A24A" stroke-width="1" stroke-dasharray="6 6"/></svg><span class="cap">Cherohala Skyway, Oct 12 · by @sam</span></div><div class="stripe"></div>
+    <div class="crest"><svg width="48" height="48" viewBox="0 0 48 48"><path d="M24 4 42 12v12c0 10-8 17-18 20C14 41 6 34 6 24V12Z" fill="none" stroke="#1C1A17" stroke-width="2.5"/><path d="M14 30 C 18 20, 26 26, 34 16" fill="none" stroke="#1C1A17" stroke-width="2.5" stroke-linecap="round"/><circle cx="26" cy="23" r="2.6" fill="#C8102E"/></svg></div>
+    <span style="position:absolute;right:16px;top:54px;background:#EDE4D3;padding:4px 8px;font-size:13px;font-weight:600;border:1.5px solid #1C1A17">Edit livery</span>
+  </div>
+  <div class="ident"><div><h1>Ridge Runners</h1><div class="motto">Slow in, smooth out. Dawn runs, no heroes.</div><div class="meta">6 members · Public · Tellico Plains, TN</div></div><button class="btn" style="height:38px;padding:0 12px;font-size:13px">Invite</button></div>
+  <div class="livery">
+    <div class="tier">Works livery<small>14 Decals from 5 supporters · Factory at 20</small></div>
+    <div class="track"><i></i><em style="left:25%"></em><em style="left:50%"></em><em style="left:75%"></em></div>
+    <div class="decals"><span class="decal red"></span><span class="decal"></span><span class="decal red"></span></div>
+  </div>
+
+  <section>
+    <h2>Next drive <a>All drives</a></h2>
+    <div class="event"><div class="date"><b>2</b><span>NOV</span></div><div class="body"><b>Dawn run: Skyway and back</b><div>6:30 AM · Meet at Tellico Plains Hardee's · 84 mi · Fun</div>
+      <div class="going"><span class="avatar">S</span><span class="avatar">J</span><span class="avatar">N</span><span class="avatar" style="font-size:10px">+1</span><span class="small" style="margin-left:18px">4 going</span><button class="btn primary">Going</button></div></div></div>
+  </section>
+
+  <section>
+    <h2>Vetta Score board <a>This month</a></h2>
+    <table class="board">
+      <tr><td>1</td><td>@sam <span class="car">NB Miata</span></td><td>811</td></tr>
+      <tr><td>2</td><td>@jules <span class="car">GR86</span></td><td>764</td></tr>
+      <tr><td>3</td><td>@nate <span class="car">NB Miata</span></td><td>702</td></tr>
+      <tr><td>4</td><td>@dee <span class="car">E46 330i</span></td><td>--</td></tr>
+    </table>
+    <div class="small" style="margin-top:4px">Best Score this month, only from people who share Scores with the crew.</div>
+  </section>
+
+  <section>
+    <h2>Builds <a>All 4</a></h2>
+    <div class="builds">
+      <div class="build"><div class="photo"><svg viewBox="0 0 150 84" preserveAspectRatio="xMidYMid slice"><rect width="150" height="84" fill="#C9C0A8"/>
+<path d="M0 46.2 C 30.0 29.4, 52.5 50.4, 82.5 33.6 S 127.5 25.2, 150 42.0 V84 H0Z" fill="#7A6F5C"/>
+<path d="M0 58.8 C 37.5 50.4, 60.0 67.2, 97.5 52.08 S 135.0 50.4, 150 60.48 V84 H0Z" fill="#5E584C"/>
+<path d="M20.0 84 C 45.0 71.39999999999999, 75.0 79.8, 90.0 65.52 S 120.0 58.8, 142.5 55.440000000000005" fill="none" stroke="#EDE4D3" stroke-width="5.880000000000001" stroke-linecap="round"/>
+<path d="M20.0 84 C 45.0 71.39999999999999, 75.0 79.8, 90.0 65.52 S 120.0 58.8, 142.5 55.440000000000005" fill="none" stroke="#C9A24A" stroke-width="1" stroke-dasharray="6 6"/></svg></div><div class="t"><b>Nate's NB: coilovers in</b><span>Stage 4 · 2 d ago · 6 replies</span></div></div>
+      <div class="build"><div class="photo"><svg viewBox="0 0 150 84" preserveAspectRatio="xMidYMid slice"><rect width="150" height="84" fill="#CFC6AE"/>
+<path d="M0 46.2 C 30.0 29.4, 52.5 50.4, 82.5 33.6 S 127.5 25.2, 150 42.0 V84 H0Z" fill="#6E6757"/>
+<path d="M0 58.8 C 37.5 50.4, 60.0 67.2, 97.5 52.08 S 135.0 50.4, 150 60.48 V84 H0Z" fill="#5E584C"/>
+<path d="M45.0 84 C 45.0 71.39999999999999, 75.0 79.8, 90.0 65.52 S 120.0 58.8, 142.5 55.440000000000005" fill="none" stroke="#EDE4D3" stroke-width="5.880000000000001" stroke-linecap="round"/>
+<path d="M45.0 84 C 45.0 71.39999999999999, 75.0 79.8, 90.0 65.52 S 120.0 58.8, 142.5 55.440000000000005" fill="none" stroke="#C9A24A" stroke-width="1" stroke-dasharray="6 6"/></svg></div><div class="t"><b>Jules' GR86: brake ducts</b><span>Stage 2 · 1 w ago · 11 replies</span></div></div>
+      <div class="build"><div class="photo"><svg viewBox="0 0 150 84" preserveAspectRatio="xMidYMid slice"><rect width="150" height="84" fill="#D8CDB4"/>
+<path d="M0 46.2 C 30.0 29.4, 52.5 50.4, 82.5 33.6 S 127.5 25.2, 150 42.0 V84 H0Z" fill="#8A8373"/>
+<path d="M0 58.8 C 37.5 50.4, 60.0 67.2, 97.5 52.08 S 135.0 50.4, 150 60.48 V84 H0Z" fill="#5E584C"/>
+<path d="M27.0 84 C 45.0 71.39999999999999, 75.0 79.8, 90.0 65.52 S 120.0 58.8, 142.5 55.440000000000005" fill="none" stroke="#EDE4D3" stroke-width="5.880000000000001" stroke-linecap="round"/>
+<path d="M27.0 84 C 45.0 71.39999999999999, 75.0 79.8, 90.0 65.52 S 120.0 58.8, 142.5 55.440000000000005" fill="none" stroke="#C9A24A" stroke-width="1" stroke-dasharray="6 6"/></svg></div><div class="t"><b>Dee's 330i: the start</b><span>Stage 1 · 3 w ago</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Chat <a>Open</a></h2>
+    <div class="chatline"><span class="avatar">S</span><div><b>@sam</b><span>8:12 PM</span><div>Skyway was clean all the way up today. One gravel patch past the overlook, reported it.</div></div></div>
+    <div class="chatline"><span class="avatar">J</span><div><b>@jules</b><span>8:40 PM</span><div>Bringing the thermos Sunday. Who has the regroup point?</div></div></div>
+  </section>
+</div>
+<nav class="tabs"><a class="tab"><svg viewBox="0 0 26 26"><path d="M13 3.5 4.5 22l8.5-4 8.5 4Z"/></svg><span>Map</span></a><a class="tab"><svg viewBox="0 0 26 26"><path d="M4 7h18M4 13h18M4 19h11"/></svg><span>Log</span></a><a class="tab on"><svg viewBox="0 0 26 26"><circle cx="9.5" cy="9" r="3.5"/><circle cx="17.5" cy="10.5" r="3"/><path d="M3.5 21c0-4 2.7-6.5 6-6.5s6 2.5 6 6.5M15.5 20.5c.4-3 2.3-5 5-5 1.2 0 2.5.5 3 1.5"/></svg><span>Crew</span></a><a class="tab"><svg viewBox="0 0 26 26"><path d="M3.5 11.5 13 4.5l9.5 7V22h-19Z"/><path d="M7.5 22v-7h11v7M7.5 18h11"/></svg><span>Garage</span></a></nav><div class="home"></div></div></body></html>

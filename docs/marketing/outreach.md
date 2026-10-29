@@ -51,7 +51,7 @@ launches {date}. Two things might interest your readers:
 
 - Drivers' phones measure the road itself (banking, crests, rough surface) in 5-metre sections, shared only once two
   people have driven a road, never with anyone's position or speed.
-- It scores technique, not speed: there are no speed or time leaderboards in the app.
+- There are no speed or time leaderboards in the app.
 
 It's free with no ads and no subscription. A press kit and screenshots are at {site}/press.html, and I can send a
 promo code or TestFlight access today. Embargo until {date} {time} ET if you'd like one.

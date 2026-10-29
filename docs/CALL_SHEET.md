@@ -6,6 +6,20 @@ it says so. Things only you can do are in docs/OWNER_TODO.md.
 
 ## 2026-10-29
 
+**The score is the Vetta Score, and the app doesn't explain how it's worked out** (your call; done). "Driver Score" is now
+"Vetta Score" everywhere you see it (Log, drive card, week and year summaries, profiles, About, privacy, the store listing
+and marketing drafts). Gone: the "How Score works" note on the Log, the formula line under your records, and every
+"technique, never speed" claim about the score. My call on top: the drive page still shows the four parts (Pace, Smooth,
+Brakes, Rhythm) as bars, because they tell you what to work on without giving the recipe. Undo the bars: say so; undo
+the name: one string per file in the PR.
+
+**About's "Technique, never speed" promise is now "No races"** ("no speed or time leaderboards anywhere"), which is still
+true now that the score is no longer described as speed-free.
+
+**The design review lives in docs/design/** (review, 12 mockups with pictures, the brief, the screenshots it was based on
+and the code that draws the mockups), with a README so GitHub shows the mockups. The names in it (Tapedeck, Billet,
+Decals, the voice names) are the designer's; say if any should change before they reach the app.
+
 **Lane guidance (IDEAS R-29) is in; junction pictures are not.** Lanes show from a mile before a junction and are spoken
 only when they are one block on the left, right or middle ("use the right 2 lanes"); split lanes are left to the drawing so
 the voice never says something confusing. Junction pictures need a paid map source, so they wait. Undo: drop

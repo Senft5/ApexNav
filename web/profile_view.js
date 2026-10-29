@@ -1,5 +1,5 @@
 // A friend's profile (IDEAS S-15, GET /api/friends/:id/profile): what they already show you, as text. Cars they show friends,
-// crews you share, the stages they publish to you with their best Driver Score and days this month. Never times.
+// crews you share, the stages they publish to you with their best Vetta Score and days this month. Never times.
 // lines() is pure (tests/test_profile_view.py); show() draws it in the Friends pop-up.
 (function (root) {
   'use strict';
@@ -9,7 +9,7 @@
   function lines(p) {
     const sections = [];
     const t = p.totals || {};
-    sections.push({ head: 'This month', rows: [t.stages ? `${t.stages} stage${t.stages === 1 ? '' : 's'} shared with you · ${t.days_month} day${t.days_month === 1 ? '' : 's'} on them this month${t.best != null ? ` · best Driver Score ${t.best}` : ''}`
+    sections.push({ head: 'This month', rows: [t.stages ? `${t.stages} stage${t.stages === 1 ? '' : 's'} shared with you · ${t.days_month} day${t.days_month === 1 ? '' : 's'} on them this month${t.best != null ? ` · best Vetta Score ${t.best}` : ''}`
       : 'No scores shared with you yet.'] });
     if ((p.stages || []).length) sections.push({ head: 'Favourite roads', rows: p.stages.map((s) => `${s.stage} · best ${s.best}${s.days_month ? ` · ${s.days_month} day${s.days_month === 1 ? '' : 's'} this month` : ''}`) });
     if ((p.cars || []).length) sections.push({ head: 'Garage', rows: p.cars.map((c) => car(c) + (c.is_primary ? ' · daily' : '')) });

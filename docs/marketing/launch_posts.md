@@ -49,7 +49,7 @@ say in the first line that you made it; ask a real question; no link in the titl
 
 I'm the developer, so take this with salt. Vetta sits on your dash and reads the road ahead out loud like a
 rally co-driver ("left 3, crest, right 4 tightens"), timed to your speed. It'll build a loop of the length you ask
-for from the twistiest roads nearby, and it scores drives on smoothness, never speed.
+for from the twistiest roads nearby, and it gives every drive a score.
 
 The part I think is new: with a switch on, your phone measures how the road actually feels (banking, crests,
 bumps) and shares just those road numbers, so the roads that are twisty and also smooth float to the top.
