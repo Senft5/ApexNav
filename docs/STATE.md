@@ -1,5 +1,14 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-10-29 (day): design phase 1
+
+- [x] REVIEW.md roadmap 1-8: driving full-screen (no tab bar, one status line, End); the hazard plate (fixed tokens
+  `--hz-*`, top-left of the map for the nearest reported hazard ahead, pins, report sheet, the strip); the call lockup;
+  shaped controls (web/controls.css: switch, detents, stamps, the record key); the route card as instruments
+  (web/route_card.js); the plan sheet's basic level and More with presets (web/plan_presets.js); the drive-ended card;
+  Look/Octane and onboarding steps 2-3 removed.
+- Exact next task: REVIEW.md phase 2, item 9 (four tabs: Map, Log, Crew, Garage; Stages into Log; Settings under Garage).
+
 ## Session 2026-10-29 (morning): design review, Vetta Score
 
 - [x] Design review by a design agent (Fable) from 54 screenshots: docs/design/ (REVIEW.md, 12 HTML mockups with PNG

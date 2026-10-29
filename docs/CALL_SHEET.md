@@ -6,6 +6,23 @@ it says so. Things only you can do are in docs/OWNER_TODO.md.
 
 ## 2026-10-29
 
+**Design phase 1 is built (docs/design/REVIEW.md roadmap 1-8).** My calls inside it:
+- *The hazard plate never names who reported a hazard.* The mockup says "reported by @sam"; reports are anonymous today
+  and naming people would be a privacy change, so the plate says what, how far, how old and how many confirmed. Undo:
+  hazard_reports.js `plate()` (the server would also have to send handles).
+- *Bump, crest and dip are hazards; plate cameras are not.* They get the black-and-orange plate on the map and in the
+  notes strip; cameras keep the quiet style. Undo: `HAZARD_TYPES` in web/instruments.js and the `.pin` CSS.
+- *The loop button says "Find a loop", not "Find roads".* It builds a loop; "Find roads" sounded like Explore. Undo: one
+  label in web/index.html.
+- *No "Prefer" stamps (measured roads, new to me, crew favourites) yet.* The router can't do them, and a control that
+  does nothing breaks "the shape says what it does". They come when routing supports them.
+- *Explore moved into More.* Loop and Explore did the same job on the basic level (the review's point); Loop stays up front.
+- *The drive-ended card has no "best on this road" line yet,* only the one thing to work on: comparing with older drives
+  on the same road needs the Log's matching, which the cockpit doesn't load. Next round.
+- *First run keeps "Get started" and the quiet "Watch a replay" link.* The review said one button; the replay is a link,
+  not a button, and it is the quickest way to see the product.
+- *Octane points stay on the server and on the crew board; only the Look shop is gone.* Nothing in the app sells them now.
+
 **The score is the Vetta Score, and the app doesn't explain how it's worked out** (your call; done). "Driver Score" is now
 "Vetta Score" everywhere you see it (Log, drive card, week and year summaries, profiles, About, privacy, the store listing
 and marketing drafts). Gone: the "How Score works" note on the Log, the formula line under your records, and every
