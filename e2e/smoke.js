@@ -1076,7 +1076,8 @@ flow('flyby: a friend on the same stage that day shows on the drive, as text; ch
   // this month's challenges (IDEAS S-11): a drive dated now makes the panel, a new road counted (f1 counts too in October 2026)
   await page.evaluate(async () => { const f = (await ApexRecording.all()).find((d) => d.id === 'f1'); await ApexRecording.store({ ...f, id: 'f2', name: 'Fresh road', date: new Date().toISOString() }); });
   await page.goto(base + '/analysis.html');
-  await page.waitForSelector('#challengePanel:not([hidden])');
+  await page.waitForFunction(() => !document.getElementById('challengePanel').hidden);   // inside the Log's summary row (closed until tapped)
+  check(/challenge/.test(await page.textContent('#yearTitle')), 'the summary row counts the challenges: ' + await page.textContent('#yearTitle'));
   check(/Drive 5 roads you haven't driven before · [12] of 5/.test(await page.textContent('#challengeList')), 'a new road this month');
   check(/^Your week: \d+(\.\d)? mi in 1 drive · 1 new road/.test(await page.textContent('#weekSum')), 'your week: ' + await page.textContent('#weekSum'));
 });

@@ -6,6 +6,16 @@ it says so. Things only you can do are in docs/OWNER_TODO.md.
 
 ## 2026-10-29
 
+**Roadmap 2 item 14: the Log is the drive list (U-32, U-33).** My calls:
+- *One summary row under the hero*: "2026 · 35 mi · 4 drives · 1 of 3 challenges"; open it for the year's lines,
+  Share and this month's challenges. The year line and the challenge line were two rows.
+- *Your week heads the drive list* when the week has drives; the rest of the Log stays quiet lines below it.
+- *Empty states are one line with the action*: "No drives yet. Start one on the map, or watch a replay." and "No
+  stages yet. Mark a stretch you drive often from a drive's page: your drives." No boxes.
+- *A stage is marked from a drive*: the drive page gets Mark a stage (as the drive-ended card has); the Stages tab
+  lost its "New stage" key and only shows the marker when you arrive from a drive.
+Undo: the Log markup and `summaryParts` in analysis.html.
+
 **Roadmap 2 item 13: in a crew, its page is the Crew tab; the old list is its settings (U-30).** My calls:
 - *The header is the crew*: its switcher (or its name), and a gear key that opens Crew settings: your crews with their
   members, shares, invite links, public or private and Leave; create another; crews near you. The "Crew" title is gone.

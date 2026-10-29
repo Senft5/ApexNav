@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-PiuuFSvcHU0EkyvepJ542AW0Eiy+4BRYNrMYVnGUkdQ=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-jaW6gfdHsqvOsByXtcqys3L5ydWScRrD1lN5roktR6c=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta · Log</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -136,6 +136,8 @@
     .seg.on { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
     .stages-h { font-size: 22px; font-weight: 700; font-family: var(--font-num); overflow-wrap: anywhere; }
     .empty { border: 1px solid var(--rule); padding: 16px; display: grid; gap: 8px; } .empty b { font-size: 17px; } .empty .note { font-size: 14px; }
+    /* an empty state is one line and its action, never a box of explanation (REVIEW2.md U-33) */
+    .empty-line { margin: 4px 0; font-size: 16px; line-height: 1.45; } .empty-line a { display: inline-block; color: var(--panel-ink); font-weight: 600; }   /* a link never breaks across lines */
     a.btn { display: inline-flex; align-items: center; text-decoration: none; font-weight: 600; }
     .seg b { font-size: 15px; } .seg span { font-size: 12px; color: var(--panel-dim); }
     :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -239,6 +241,7 @@
         <button class="linkbtn" id="dvCompare">Compare</button>
         <button class="linkbtn" id="dvShare">Share</button>
         <button class="linkbtn" id="dvCard">Share card</button>
+        <button class="linkbtn" id="dvStage">Mark a stage</button>
       </div>
       <div id="dvRoot"></div>
       <div class="dv-tagrow" id="dvTagsPanel">
@@ -262,21 +265,19 @@
     <section id="tab-history" class="stack-12">
       <div class="bar-top"><h1 class="stages-h">Log</h1></div>
       <div class="switch log-seg" role="radiogroup" aria-label="Drives or stages"><button data-seg="history" role="radio" aria-checked="true">Drives</button><button data-seg="segments" role="radio" aria-checked="false">Stages</button></div>
-      <div class="empty" id="historyEmpty" hidden>
-        <b>No drives yet</b>
-        <p class="note">Start a drive on the map. It lands here with a score for every corner.</p>
-        <div class="actions"><a class="btn solid" href="index.html">Go to the map</a><a class="btn" href="index.html?drive=dry_ridge&amp;play=1">Watch a replay</a></div>
-      </div>
+      <p class="empty-line" id="historyEmpty" hidden>No drives yet. <a href="index.html">Start one on the map</a>, or <a href="index.html?drive=dry_ridge&amp;play=1">watch a replay</a>.</p>
       <!-- the Log (REVIEW.md roadmap 13): one hero number, a quiet year line, challenges in one line, then the drives -->
       <div class="log-hero" id="historyCards"></div>
+      <!-- one quiet summary row (REVIEW2.md U-32): the year and this month's challenges in one line, the detail when opened -->
       <details class="quiet" id="yearPanel" hidden><summary id="yearTitle">--</summary><div id="yearLines" class="stack-8"></div>
-        <div class="row mt-8"><button class="btn" id="yearShare">Share</button></div></details>
-      <details class="quiet" id="challengePanel" hidden><summary id="challengeSum">This month's challenges</summary><div id="challengeList" class="stack-8"></div>
-        <p class="note">Exploring and technique, never speed. From the drives on this phone.</p></details>
+        <div class="row mt-8" id="yearShareRow"><button class="btn" id="yearShare">Share</button></div>
+        <div id="challengePanel" class="stack-8 mt-8" hidden><b id="challengeSum">This month's challenges</b><div id="challengeList" class="stack-8"></div>
+          <p class="note">Exploring and technique, never speed. From the drives on this phone.</p></div></details>
       <div class="stamps" id="historyFilter" role="group" aria-label="Show drives tagged" hidden></div>
+      <!-- the drive list is the Log; your week heads it when the week has drives -->
+      <details class="quiet" id="weekPanel" hidden><summary id="weekSum">Your week</summary><div id="weekLines" class="stack-8"></div></details>
       <div class="panel index-panel" id="historyPanel"><table id="historyTable" class="road-index"></table></div>
       <!-- the rest of the Log is quiet lines too (REVIEW.md 1.2 Log): one line each, the detail one tap down -->
-      <details class="quiet" id="weekPanel" hidden><summary id="weekSum">Your week</summary><div id="weekLines" class="stack-8"></div></details>
       <details class="quiet" id="roadsPanel" hidden><summary>Your roads</summary><div id="roadsList" class="stack-8"></div></details>
       <details class="quiet" id="kudosPanel" hidden><summary id="kudosSum">Kudos for you</summary><div id="kudosList" class="stack-8"></div></details>
       <div class="panel" id="friendsPanel" hidden><h2>Friends lately</h2><div id="friendsList" class="stack-8"></div>
@@ -288,7 +289,7 @@
 
     <!-- ============================ SEGMENTS ============================ -->
     <section id="tab-segments" hidden class="stack-12">
-      <div class="bar-top"><h1 class="stages-h">Log</h1><button class="btn solid" id="newStageBtn">New stage</button></div>
+      <div class="bar-top"><h1 class="stages-h">Log</h1></div>
       <div class="switch log-seg" role="radiogroup" aria-label="Drives or stages"><button data-seg="history" role="radio" aria-checked="false">Drives</button><button data-seg="segments" role="radio" aria-checked="true">Stages</button></div>
       <div class="seglist" id="segList"></div>
       <div class="grid2" id="segDetail" hidden>
@@ -500,6 +501,7 @@
       const now = new Date(), month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
       const list = drives.map((d) => ({ ...d, dateKnown: monthOf(d) !== null }));
       $('challengePanel').hidden = !list.some((d) => d.dateKnown && d.date.startsWith(month + '-'));
+      if ($('challengePanel').hidden) { summaryParts.ch = ''; paintSummary(); }
       // the km you were first to map this month comes from the server (signed in): drawn once it answers
       if (challengeServer === undefined && window.ApexSync && ApexSync.points) {
         challengeServer = null;
@@ -517,14 +519,21 @@
       // one line until opened (REVIEW.md roadmap 13)
       const all = ApexChallenges.progress(list, month, challengeServer || null, kmText), done = all.filter((c) => c.complete).length;
       $('challengeSum').textContent = `This month: ${done} of ${all.length} challenge${all.length === 1 ? '' : 's'} done`;
+      summaryParts.ch = $('challengePanel').hidden ? '' : `${done} of ${all.length} challenge${all.length === 1 ? '' : 's'}`; paintSummary();
+    }
+    // the Log's one summary row: "2026 · 35 mi · 4 drives · 1 of 3 challenges" (REVIEW2.md U-32)
+    const summaryParts = { year: '', ch: '' };
+    function paintSummary() {
+      const t = [summaryParts.year, summaryParts.ch].filter(Boolean).join(' · ');
+      $('yearPanel').hidden = !t; $('yearTitle').textContent = t || '--';
     }
     function renderYear() {
       const year = new Date().getFullYear();
       const s = window.ApexYearReview ? ApexYearReview.summary(drives.map((d) => ({ ...d, dateKnown: monthOf(d) !== null })), year) : null;
-      $('yearPanel').hidden = !s;
-      if (!s) return;
+      $('yearLines').hidden = $('yearShareRow').hidden = !s;
+      if (!s) { summaryParts.year = ''; paintSummary(); return; }
       const ls = ApexYearReview.lines(s);
-      $('yearTitle').textContent = `${year} so far: ${ls[0] || ''}`;   // one quiet line; the rest when opened
+      summaryParts.year = `${year} · ${ApexUnits.long(s.miles * 1609.344, 0)} · ${s.drives} drive${s.drives === 1 ? '' : 's'}`; paintSummary();   // the rest when opened
       $('yearLines').replaceChildren(...ls.map((t) => Object.assign(document.createElement('p'), { textContent: t })));
       yearText = [`My ${year} on the road with Vetta`, ...ls].join('\n');
     }
@@ -871,7 +880,6 @@
       }
     }
 
-    $('newStageBtn').onclick = () => { const d = $('newStage'); d.open = true; d.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
     function passesFor(seg) {
       return drives.map(d => ({ d, p: Core.segmentPass(seg, d) })).filter(x => x.p);
     }
@@ -881,9 +889,9 @@
       renderSegStrip();
       const list = $('segList');
       // Nothing to mark a stage on until there is a drive: say so instead of showing an empty picker.
-      $('newStageBtn').hidden = $('newStage').hidden = $('shareOlder').hidden = !drives.length;
-      if (view === 'segments' && !segs.length && drives.length && !$('newStage').dataset.auto) { $('newStage').open = true; $('newStage').dataset.auto = '1'; }   // first visit: open the marker once
-      list.innerHTML = segs.length ? '' : `<div class="empty"><b>No stages yet</b><p class="note">${drives.length ? 'Mark a stretch you drive often, below. Every run on it gets a score.' : 'A drive first; then Mark a stage at its end.'}</p></div>`;
+      // a stage is marked from a drive (its page's Mark a stage opens the marker here), not started from an empty tab
+      $('newStage').hidden = !$('newStage').dataset.fromDrive; $('shareOlder').hidden = !drives.length;   // first visit: open the marker once
+      list.innerHTML = segs.length ? '' : `<p class="empty-line">No stages yet. ${drives.length ? 'Mark a stretch you drive often from a drive\u2019s page: <a href="analysis.html?tab=log">your drives</a>.' : 'A drive first; then Mark a stage at its end.'}</p>`;
       for (const s of segs) {
         const passes = passesFor(s), best = passes.reduce((m, x) => (x.p.score != null && (m == null || x.p.score > m) ? x.p.score : m), null);
         const b = document.createElement('button');
@@ -1116,7 +1124,7 @@
       // Stages are part of the Log (REVIEW.md roadmap 9): one tab, a Drives / Stages switch
       $('navLog').classList.add('on'); $('navLog').setAttribute('aria-current', 'page');
       document.querySelectorAll('[data-seg]').forEach(b => { const on = b.dataset.seg === (t === 'segments' ? 'segments' : 'history'); b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); });
-      if (t === 'segments') { if (!segs.length && drives.length) { $('newStage').open = true; $('newStage').dataset.auto = '1'; } renderSegStrip(); }
+      if (t === 'segments') renderSegStrip();
       if (t === 'history') renderHistory();
     }
     document.querySelectorAll('a.back').forEach(a => a.addEventListener('click', (e) => { e.preventDefault(); showTab(a.dataset.to); toTop(); }));
@@ -1164,6 +1172,7 @@
       }
       return pick || drives.find(x => x !== d) || null;
     }
+    $('dvStage').addEventListener('click', () => { const id = $('dvPick').value; if (id) location.href = `analysis.html?tab=segments&drive=${encodeURIComponent(id)}`; });
     $('dvCompare').addEventListener('click', () => {
       const id = $('dvPick').value, d = drives.find(x => x.id === id);
       if (!d) return;
@@ -1179,7 +1188,7 @@
     loadDrives().then(() => { drivesLoaded = true; renderAll(); const want = params.get('drive');
       if (want && drives.some(x => x.id === want)) {
         // Mark a stage from the drive-ended card: this drive picked in the new-stage marker, the marker open
-        if (params.get('tab') === 'segments' && $('segDrive')) { $('segDrive').value = want; $('segDrive').dispatchEvent(new Event('change')); $('newStage').open = true; }
+        if (params.get('tab') === 'segments' && $('segDrive')) { $('newStage').dataset.fromDrive = '1'; $('newStage').hidden = false; $('segDrive').value = want; $('segDrive').dispatchEvent(new Event('change')); $('newStage').open = true; }
         else openDrive(want);
       } })
       .finally(() => requestAnimationFrame(() => ApexBoot.done()));   // drawn with its drives: lift the cover
