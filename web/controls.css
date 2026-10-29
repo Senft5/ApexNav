@@ -53,7 +53,7 @@
 /* The confirm sheet (web/confirm.js): a destructive action is red text behind this sheet; Cancel is a plain key. */
 .confirm-sheet { position: fixed; inset: 0; z-index: 60; background: rgba(0, 0, 0, 0.45); display: flex; align-items: flex-end; justify-content: center; }
 .confirm-sheet .cs-box { width: 100%; max-width: 480px; background: var(--panel); color: var(--panel-ink); border-top: 2px solid var(--panel-ink);
-  padding: 18px 16px calc(14px + env(safe-area-inset-bottom, 0px)); }
+  padding: 18px calc(16px + env(safe-area-inset-right, 0px)) calc(14px + env(safe-area-inset-bottom, 0px)) calc(16px + env(safe-area-inset-left, 0px)); }
 .confirm-sheet p { margin: 0 0 14px; font-size: 16px; line-height: 1.4; }
 .confirm-sheet .cs-acts { display: flex; gap: 12px; }
 .confirm-sheet button { flex: 1 1 0; min-height: 52px; font: inherit; font-size: 17px; font-weight: 700; background: transparent; }

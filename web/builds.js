@@ -33,8 +33,8 @@
   }
 
   const STYLE = `
-    .build-view { padding: 0 0 calc(84px + env(safe-area-inset-bottom)); }
-    .bv-top { position: sticky; top: 0; z-index: 2; display: flex; justify-content: space-between; align-items: center; padding: calc(10px + env(safe-area-inset-top)) 16px 10px; background: var(--panel); border-bottom: 2px solid var(--panel-ink); }
+    .build-view { padding: 0 env(safe-area-inset-right) calc(84px + env(safe-area-inset-bottom)) env(safe-area-inset-left); }
+    .bv-top { position: sticky; top: 0; z-index: 2; display: flex; justify-content: space-between; align-items: center; padding: calc(10px + env(safe-area-inset-top)) 16px 10px; margin: 0 calc(-1 * env(safe-area-inset-right)) 0 calc(-1 * env(safe-area-inset-left)); padding-left: calc(16px + env(safe-area-inset-left)); padding-right: calc(16px + env(safe-area-inset-right)); background: var(--panel); border-bottom: 2px solid var(--panel-ink); }
     .bv-head { display: grid; grid-template-columns: 96px 1fr; gap: 14px; padding: 14px 16px; align-items: center; }
     .bv-head h2 { margin: 0; font-size: 26px; line-height: 1.1; overflow-wrap: anywhere; }
     .bv-head .spec { color: var(--panel-dim); margin: 4px 0 0; overflow-wrap: anywhere; }
@@ -62,7 +62,7 @@
     .bv-reply .row { gap: 10px; align-items: baseline; flex-wrap: wrap; }
     .bv-reply .tried { margin: 4px 0 0; font-weight: 600; }
     .bv-say { position: fixed; left: 0; right: 0; bottom: 0; z-index: 3; display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: center;
-      padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); background: var(--panel); border-top: 2px solid var(--panel-ink); }
+      padding: 10px calc(16px + env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left)); background: var(--panel); border-top: 2px solid var(--panel-ink); }
     .bv-say .to { grid-column: 1 / -1; font-size: 13px; color: var(--panel-dim); }
     .bv-chat { margin: 0 16px 16px; border-top: 2px solid var(--panel-ink); padding-top: 10px; }
     .bv-chat summary { cursor: pointer; padding: 6px 0; }

@@ -34,6 +34,8 @@
 - [x] A fresh REVIEW.md 1.2 pass, now two e2e flows ("REVIEW.md 1.2 screen by screen"): Recenter a map key, the confirm
   sheet (web/confirm.js) for every destructive action, the rest of the Log as quiet lines, drive detail fits a phone,
   the signed-out Crew pitch. The friend-profile test's random failure (a car id holding "600") is fixed.
+- [x] Safe areas: an e2e flow emulates the iPhone 15 Pro's Dynamic Island, home indicator and corners, upright and on
+  its side; landscape now pads every sheet, overlay, plate and the tab rail, and the suggested loop floats over the map.
 - Every REVIEW.md suggestion is built. Pro, Decals and the Pro themes wait on StoreKit (the owner's Paid Applications
   Agreement); photos wait on R2 to move out of KV.
 - Exact next task: StoreKit (needs the owner's Paid

@@ -8,7 +8,7 @@
   const CSS = `
     .report-sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 45; background: var(--panel); color: var(--panel-ink);
       border-top: 1px solid var(--rule); box-shadow: 0 -12px 32px rgba(0, 0, 0, 0.3); display: grid; gap: 10px;
-      padding: 16px 16px calc(20px + var(--safe-bottom, 0px)); max-width: 560px; margin: 0 auto; }
+      padding: 16px calc(16px + var(--safe-right, 0px)) calc(20px + var(--safe-bottom, 0px)) calc(16px + var(--safe-left, 0px)); max-width: 560px; margin: 0 auto; }
     .report-sheet h3 { margin: 0; }
     .report-sheet label { display: flex; gap: 8px; align-items: center; }
     .report-scrim { position: fixed; inset: 0; z-index: 44; background: rgba(0, 0, 0, 0.45); }

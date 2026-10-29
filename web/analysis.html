@@ -47,7 +47,7 @@
     /* The phone's text size (format.js applyTypeScale) on the text blocks; charts and the stage strip measure their
        own width and stay unzoomed, so they still fit and track the finger. */
     #tab-history > :not(#trendPanel):not(#steadyPanel), #tab-segments > .bar-top, #segList, #segDetail table, #tab-segments .more > summary, #contribPanel { zoom: var(--type-scale, 1); }
-    main { max-width: 1180px; margin: 0 auto; padding: calc(14px + env(safe-area-inset-top, 0px)) 16px calc(80px + env(safe-area-inset-bottom, 0px)); display: grid; gap: 18px; }
+    main { max-width: 1180px; margin: 0 auto; padding: calc(14px + env(safe-area-inset-top, 0px)) calc(16px + env(safe-area-inset-right, 0px)) calc(80px + env(safe-area-inset-bottom, 0px)) calc(16px + env(safe-area-inset-left, 0px)); display: grid; gap: 18px; }
     /* grid columns never grow past the screen for one wide child (a trace, the Score bars): the child scrolls or shrinks */
     main, .stack-8, .stack-12 { grid-template-columns: minmax(0, 1fr); }
     h2 { font-size: 18px; font-weight: 700; font-family: var(--font-num); margin-bottom: 8px; }
@@ -190,7 +190,7 @@
     .actions { display: flex; gap: 8px; flex-wrap: wrap; }
     /* Same tab bar as the cockpit: ANALYSIS is this page, the others return to the cockpit view. */
     .tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
-      background: var(--panel); border-top: 1px solid var(--rule); padding: 0 6px env(safe-area-inset-bottom, 0px); }
+      background: var(--panel); border-top: 1px solid var(--rule); padding: 0 calc(6px + env(safe-area-inset-right, 0px)) env(safe-area-inset-bottom, 0px) calc(6px + env(safe-area-inset-left, 0px)); }
     .tabbar a { height: 52px; display: grid; grid-template-rows: 20px auto; justify-items: center; align-content: center; gap: 2px; color: var(--panel-dim);
       font-size: 11px; font-weight: 600; text-decoration: none; position: relative; }
     .tabbar svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }

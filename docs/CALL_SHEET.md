@@ -6,6 +6,20 @@ it says so. Things only you can do are in docs/OWNER_TODO.md.
 
 ## 2026-10-29
 
+**Nothing you read or tap sits under the Dynamic Island, the home indicator or the rounded corners, upright or on
+its side.** The app draws edge to edge (`contentInsetAdjustmentBehavior = .never`), so the page owns the safe areas. A new
+e2e flow ("safe areas") emulates an iPhone 15 Pro's insets in both orientations and fails on any control or text in
+them; upright was already clean, on its side was not. My calls:
+- *The map and the panels' backgrounds still run edge to edge*; only content is inset (`--safe-left`, `--safe-right`
+  join `--safe-top` and `--safe-bottom`). Scrolling content may pass under the home indicator, as on iOS.
+- *On its side the tab rail widens by the inset*; sheets, the plan deck, the plates, overlays, the build thread, the
+  report and crash sheets and the Log pad by it.
+- *On its side the suggested loop floats over the map above the deck*: it was crushed into the tab rail.
+- *Bottom sheets sit on an auto margin, not flex-end*, so a sheet taller than a landscape screen scrolls to its top
+  (the hazard report's title was cut off).
+Undo: the `env(safe-area-inset-*)` paddings in index.html, analysis.html, controls.css, builds.js, incident.js and
+safety_ui.js.
+
 **A fresh pass over REVIEW.md 1.2, screen by screen, now an e2e check; five gaps fixed.** Two flows in `e2e/smoke.js`
 ("REVIEW.md 1.2 screen by screen") walk every row on the running app and assert what the review asked for. My calls:
 - *Recenter is the second map key under Layers*, a crosshair (the mockup), with the seconds until it recenters on its
