@@ -350,7 +350,7 @@
             paint();
           }, 'ink-btn solid'), btn('Not now', () => { store.set('sessionStorage', INVITE_KEY, ''); preview.invite = null; paint(); }, 'linkbtn')));
         } else {
-          const name = labelled(el('input', { className: 'field', placeholder: 'Convoy name (optional)', maxLength: 40, autocomplete: 'off' }), 'Convoy name');
+          const name = labelled(el('input', { className: 'field', placeholder: 'Convoy name', maxLength: 40, autocomplete: 'off' }), 'Convoy name');
           kids.push(el('div', { className: 'row' }, name, btn('Start a convoy', async () => {
             const r = await client.start(name.value.trim());
             if (!r.ok) { toast(r.status === 429 ? 'You already lead two convoys. End one first.' : 'Couldn\'t start a convoy. Check signal and try again.'); return; }

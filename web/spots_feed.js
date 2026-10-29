@@ -28,6 +28,7 @@
           b.setAttribute('aria-pressed', String(cat === k));
           return b;
         }));
+        chips.hidden = !spots.length;   // nothing to filter yet
         const rows = feed(spots, page.here(), cat);
         list.replaceChildren(...(rows.length ? rows.map((s) => {
           const box = el('div', { className: 'stack-8 spot-card', style: 'border:1px solid var(--rule);padding:10px' });
