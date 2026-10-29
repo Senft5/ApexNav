@@ -223,6 +223,7 @@
       return el('div', { className: 'bv-post' }, el('span', { className: 'bv-n', textContent: String(p.n) }), body);
     }
 
+    const plain = (s) => (root.ApexFormat && root.ApexFormat.noEmoji ? root.ApexFormat.noEmoji(s) : s);   // replies render emoji as text: none (REVIEW.md "Not doing")
     function replyEl(b, r, redo) {
       const box = el('div', { className: 'bv-reply' + (r.suggestion ? ' sugg' : '') });
       const acts = [];
@@ -238,7 +239,7 @@
       }, 'linkbtn'));
       // what was said, then what you can do about it
       box.append(el('div', { className: 'row' }, el('b', { textContent: `@${r.handle || '?'}` }), el('span', { className: 'note', textContent: [r.suggestion ? 'Suggestion' : '', day(r.created_at)].filter(Boolean).join(' · ') })),
-        el('p', { textContent: r.body }), ...(acts.length ? [el('div', { className: 'row' }, ...acts)] : []));
+        el('p', { textContent: plain(r.body) }), ...(acts.length ? [el('div', { className: 'row' }, ...acts)] : []));
       if (r.tried) box.append(el('p', { className: 'tried', textContent: `Tried it: ${r.tried}` }));
       return box;
     }

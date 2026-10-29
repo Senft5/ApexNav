@@ -324,6 +324,7 @@
       return el('div', { className: 'stack-8' }, el('div', { className: 'cp-sec' }, el('h3', { textContent: 'House stage' }), el('span', { className: 'note', textContent: h.name })), list);
     }
 
+    const plain = (s) => (root.ApexFormat && root.ApexFormat.noEmoji ? root.ApexFormat.noEmoji(s) : s);   // chat renders emoji as text: none (REVIEW.md "Not doing")
     function chat(c, redraw) {
       const list = el('div'); list.setAttribute('aria-live', 'polite');
       const club = atLeast(c.livery && c.livery.tier, 'club'), pinnedId = c.pinned_chat ? c.pinned_chat.id : null;
@@ -332,7 +333,7 @@
         if (r && r.ok) redraw(); else toast('Couldn\u2019t change the pin. Try again.');
       };
       const pinned = c.pinned_chat ? el('div', { className: 'cp-pin' }, el('span', { className: 'cp-badge', textContent: 'Pinned' }),
-        el('b', { textContent: `@${c.pinned_chat.handle || '?'}` }), el('p', { textContent: c.pinned_chat.body }), ...(c.is_owner ? [btn('Unpin', pin(null), 'linkbtn')] : [])) : '';
+        el('b', { textContent: `@${c.pinned_chat.handle || '?'}` }), el('p', { textContent: plain(c.pinned_chat.body) }), ...(c.is_owner ? [btn('Unpin', pin(null), 'linkbtn')] : [])) : '';
       const sec = el('div', { className: 'stack-8' }, el('div', { className: 'cp-sec' }, el('h3', { textContent: 'Chat' }), el('span', { className: 'note', textContent: 'Kept 30 days' })), pinned, list);
       const fill = async () => {
         const r = await apiCall('GET', `/api/crews/${encodeURIComponent(c.id)}/chat`).catch(() => null);
@@ -350,7 +351,7 @@
           if (c.is_owner && club && m.id !== pinnedId) acts.push(btn('Pin', pin(m.id), 'linkbtn'));   // Club livery
           return el('div', { className: 'cp-msg' }, P() ? P().avatar(m.photo_id, m.handle, 40) : el('span'),
             el('div', { style: 'min-width:0' }, el('div', { className: 'row' }, el('b', { textContent: `@${m.handle || '?'}` }), el('span', { className: 'note', textContent: ago(m.created_at) }), ...acts),
-              el('p', { textContent: m.body })));
+              el('p', { textContent: plain(m.body) })));
         }));
       };
       const input = el('textarea', { className: 'field', maxLength: 500, rows: 2, placeholder: `Say something to ${c.name}` });
