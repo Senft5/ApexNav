@@ -942,11 +942,15 @@ flow('crew drives: an upcoming drive shows in Crew with who is going; Going answ
   await page.waitForFunction(() => window.apex && typeof window.apex.live === 'function');
   await page.evaluate(() => document.querySelector('.tab[data-view="crew"]').click());
   await page.waitForSelector('text=Crew drives');
+  // in a crew, Crew drives and Spots near you are rows on its page that open their lists (REVIEW2.md U-30)
+  const openRow = (name) => page.evaluate((n) => { document.querySelectorAll('.side-pop.open').forEach((x) => x.classList.remove('open'));
+    const r = [...document.querySelectorAll('.nav-row')].find((b) => b.textContent.includes(n)); if (r) r.click(); }, name).then(() => page.waitForTimeout(350));
+  await openRow('Crew drives');
   await page.waitForSelector('.drive-card');
   const card = await page.textContent('.drive-card');
   check(card.includes('Cherohala <i>Saturday</i>') && /Tomorrow|Today/.test(card) && card.includes('Going: @bob, @cara · 1 maybe'), 'the drive, as text: ' + card);
   await page.waitForSelector('.meet-card');
-  check(/Sunday coffee/.test(await page.textContent('.meet-card')) && /7 going/.test(await page.textContent('.meet-card')) && /Meets near you/.test(await page.textContent('#sheet')), 'a public meet nearby');
+  check(/Sunday coffee/.test(await page.textContent('.meet-card')) && /7 going/.test(await page.textContent('.meet-card')) && /Meets near you/.test(await page.evaluate(() => document.querySelector('.meet-card').closest('.side-pop, #sheet').textContent)), 'a public meet nearby');   // in a crew: the Crew drives row's sheet
   await page.click('.drive-card:not(.meet-card) button:has-text("Going")');
   await page.waitForFunction(() => document.querySelector('.drive-card:not(.meet-card) button[aria-pressed="true"]')?.textContent === 'Going');
   check(posted.some(([p, b]) => p === '/api/events/EVT1AAAAAAAAAAAA/rsvp' && b.status === 'going'), 'the answer was sent');
@@ -957,25 +961,27 @@ flow('crew drives: an upcoming drive shows in Crew with who is going; Going answ
   await page.waitForTimeout(300);
   check(posted.some(([p, b]) => p === '/api/events/EVT1AAAAAAAAAAAA/role' && b.role === 'sweep' && b.take === true), 'I\'ll sweep was sent');
   // spots near you (IDEAS S-12): best rated first, as text, filterable; a rating is sent
+  await openRow('Spots near you');
   await page.waitForSelector('.spot-card');
   const spots = await page.$$eval('.spot-card', (els) => els.map((e) => e.textContent));
   check(spots.length === 2 && spots[0].includes('Look Rock <b>view</b>') && /4\.5★ \(6\) · Overlook · [\d.]+ km · 9 visited/.test(spots[0]) && spots[0].includes('Best at sunset'), 'the spots: ' + spots.join(' | '));
   check(!/Report/.test(spots[1]) && !/5★/.test(spots[1]), 'no rating or report on your own spot');
-  await page.click('button:has-text("Café")');
+  await page.click('.side-pop.open button:has-text("Café")');
   check((await page.$$('.spot-card')).length === 1, 'the café filter');
-  await page.click('button:has-text("All")');
-  await page.click('button[aria-label="Rate Look Rock <b>view</b> 5 stars"]');
+  await page.click('.side-pop.open button:text-is("All")');
+  await page.click('.side-pop.open button[aria-label="Rate Look Rock <b>view</b> 5 stars"]');
   await page.waitForFunction(() => /Rated/.test(document.getElementById('toast').textContent));
   check(posted.some(([p, b]) => p === '/api/highlights/HL1/rating' && b.stars === 5), 'the rating was sent');
   // plan one: map centre as the meeting point
-  await page.click('button:has-text("Plan a drive")');
-  await page.fill('input[aria-label="Drive name"]', 'Dragon run');
-  await page.click('button:has-text("Map centre")');
-  await page.waitForSelector('select[aria-label="Sweep"] option[value="bob"]', { state: 'attached' });
-  await page.selectOption('select[aria-label="Sweep"]', 'bob');
-  await page.fill('input[aria-label="Regroup point name"]', 'Gas at Robbinsville');
-  await page.click('button:has-text("Add at the map centre")');
-  await page.click('button:has-text("Plan it")');
+  await openRow('Crew drives');
+  await page.click('.side-pop.open button:has-text("Plan a drive")');
+  await page.fill('.side-pop.open input[aria-label="Drive name"]', 'Dragon run');
+  await page.click('.side-pop.open button:has-text("Map centre")');
+  await page.waitForSelector('.side-pop.open select[aria-label="Sweep"] option[value="bob"]', { state: 'attached' });
+  await page.selectOption('.side-pop.open select[aria-label="Sweep"]', 'bob');
+  await page.fill('.side-pop.open input[aria-label="Regroup point name"]', 'Gas at Robbinsville');
+  await page.click('.side-pop.open button:has-text("Add at the map centre")');
+  await page.click('.side-pop.open button:has-text("Plan it")');
   await page.waitForFunction(() => /Drive planned/.test(document.getElementById('toast').textContent));
   const plan = posted.find(([p]) => p === '/api/crews/CREW1/events');
   check(plan && plan[1].title === 'Dragon run' && /Z$/.test(plan[1].starts_at) && Number.isFinite(plan[1].meet.lat) && plan[1].route_id === null && plan[1].public === false, 'the plan was sent: ' + JSON.stringify(plan));

@@ -255,7 +255,7 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 | U-27 | One landscape chrome: the Log gets the right-hand tab rail the other tabs have; the active mark on the rail's edge; the rail outside the binnacle's scroller so it never scrolls away | M | S | done | REVIEW2.md §1 rows 2, 7 |
 | U-28 | Tapedeck's landscape binnacle: bar meters under the readouts, never over them | H | S | done (#240) | REVIEW2.md §1 row 6 (bug) |
 | U-29 | Billet's trip drum tenths digit renders as a blank red block | M | S | done (#240) | REVIEW2.md §2 Replay Billet (bug) |
-| U-30 | The old crew list under the crew page becomes a Crew settings sheet behind a gear key (members, invite links, public/private, leave, create); Routes shared and Spots become rows on the page | H | M | todo | REVIEW2.md §2 Crew page lower, REVIEW.md 3.3 |
+| U-30 | The old crew list under the crew page becomes a Crew settings sheet behind a gear key (members, invite links, public/private, leave, create); Routes shared and Spots become rows on the page | H | M | done (Roadmap 2 item 13) | REVIEW2.md §2 Crew page lower, REVIEW.md 3.3 |
 | U-31 | Plan sheet: one loop control (the dial with five drawn detents and the value in its face), no chips, no helper sentences | M | S | done (Roadmap 2 item 11) | REVIEW2.md §2 Plan sheet, mockup 02 |
 | U-32 | Log index: hero, one quiet summary row, then the drive list with a corner-density sparkline per row; Your week as the list's first row | M | M | todo | REVIEW.md roadmap 13, REVIEW2.md §2 Log |
 | U-33 | Empty states as one line and one action, never a bordered box (Stages, Crews near you, Spots near you, Routes shared) | M | S | todo | REVIEW.md 1.1 (7), REVIEW2.md §2 |

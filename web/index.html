@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-fQUfCHNjKwjmO0OGlaKntgzdwaJITcvqIY9ONUm63Gg=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-GCOOS/k9a6dAPJbW0k8Gbi+TOF8UuvD9nR+71hrKlhw=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -674,6 +674,20 @@
     .sheet header::after { content: ""; position: absolute; left: 0; right: 0; bottom: -17px; height: 16px; background: linear-gradient(var(--panel), transparent); pointer-events: none; z-index: 2; }
     .sheet header { position: relative; display: flex; justify-content: space-between; align-items: center; padding: calc(14px + var(--safe-top)) 16px 14px; border-bottom: 1px solid var(--rule); }
     .sheet header h2 { font-size: 22px; font-weight: 700; font-family: var(--font-num); }
+    /* In a crew, the crew is the header: its switcher (or name) and the gear for its settings, no "Crew" title (REVIEW2.md U-30) */
+    .sheet-head-slot { display: none; }
+    .sheet.crew-has-page[data-view="crew"] #sheetTitle { display: none; }
+    .sheet.crew-has-page[data-view="crew"] .sheet-head-slot { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex: 1; min-width: 0; }
+    .sheet-head-slot .cp-switch { margin: 0; flex-wrap: nowrap; overflow-x: auto; min-width: 0; }
+    .sheet-head-slot > b { font: 700 22px var(--font-num); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .gear-key { flex: none; width: 44px; height: 44px; display: grid; place-items: center; border: 1.5px solid var(--panel-ink); background: transparent; color: var(--panel-ink); box-shadow: 0 3px 0 var(--rule); }
+    .gear-key svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; }
+    /* a list one tap away: a row with its count and a chevron (Routes shared, Spots near you, Crew drives) */
+    .nav-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-height: 52px; padding: 0 2px; border: 0;
+      border-bottom: 1px solid var(--hair, var(--panel-dim)); background: transparent; color: var(--panel-ink); font: inherit; font-size: 16px; font-weight: 600; text-align: left; }
+    .nav-row small { font-size: 14px; font-weight: 500; color: var(--panel-dim); margin-left: auto; }
+    .nav-row i { flex: none; width: 9px; height: 9px; margin-right: 6px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg); }
+    .nav-rows { display: grid; border-top: 1px solid var(--hair, var(--panel-dim)); }
     .sheet .body { overflow-y: auto; padding: 14px 16px 24px; display: grid; gap: 20px; }
     .sheet .body { zoom: var(--type-scale, 1); }   /* the phone's text size (format.js applyTypeScale) */
     .sheet h3, .plan h3 { font-size: 18px; font-weight: 700; font-family: var(--font-num); border-top: 1px solid var(--hair, var(--panel-dim)); padding-top: 12px; margin-bottom: 8px; }
@@ -959,7 +973,7 @@
       </div>
       <div class="scrim" id="scrim"></div>
       <aside class="sheet" id="sheet" aria-label="Menu" data-view="garage">
-        <header><h2 id="sheetTitle">Settings</h2></header>
+        <header><h2 id="sheetTitle">Settings</h2><div class="sheet-head-slot" id="sheetHead"></div></header>
         <div class="body">
           <section data-panel="crew" id="accountSection">
             <div id="accountBody" class="stack-12"></div>
@@ -4319,9 +4333,10 @@
           toast(j && j.shared ? `Shared. They'll find it in Crew.` : 'Nobody to share it with.'); box.replaceChildren();
         }, 'ink-btn solid'), btn('Cancel', () => box.replaceChildren(), 'linkbtn')));
     });
-    function sharedRoutesSection() {
+    function sharedRoutesSection(onCount) {
       const sec = el('div', { className: 'stack-8' }, el('h3', { textContent: 'Routes shared with you' }));
       apiCall('GET', '/api/routes/shared').then(jsonOf).then((list) => {
+        if (onCount) onCount(Array.isArray(list) ? list.length : 0);
         if (!Array.isArray(list) || !list.length) { sec.append(el('p', { className: 'note', textContent: 'Routes friends and crews share show up here.' })); return; }
         for (const r of list) sec.append(el('div', { className: 'row', style: 'align-items:center' },
           el('span', { style: 'flex:1', textContent: `${r.name} · from @${r.from_handle || '?'}` }),
@@ -4583,21 +4598,47 @@
       gbody.append(you);
       // your crew first (REVIEW.md 1.2 "Crew member"): its page, or a row of names to switch when you're in several
       const myCrews = Array.isArray(crews) ? crews : [];
+      // In a crew, its page is the tab; the old list (crews, invite links, privacy, create, crews near you) is the settings
+      // sheet behind the gear, and the lists you browse are rows (REVIEW2.md U-30). Not in one yet, the list is the tab.
+      const inCrew = !!(crewPage && myCrews.length);
+      const popSheet = (title) => { const p = el('aside', { className: 'side-pop' }); p.setAttribute('aria-label', title);
+        p.append(el('div', { className: 'side-pop-head' }, el('h3', { textContent: title }), btn('Done', () => p.classList.remove('open'), 'linkbtn'))); return p; };
+      const crewSettings = popSheet('Crew settings'), pops = [crewSettings];
+      const navRow = (label, content) => { const pop = popSheet(label); pop.append(content); pops.push(pop);
+        const count = el('small'), b = el('button', { className: 'nav-row', type: 'button' }, el('span', { textContent: label }), count, el('i', { 'aria-hidden': 'true' }));
+        b.addEventListener('click', () => pop.classList.add('open')); b._count = count; return b; };
       if (crewPage && myCrews.length) {
         let cur = null; try { cur = localStorage.getItem('apex.crewPage'); } catch (_) {}
         if (!myCrews.some((c) => c.id === cur)) cur = myCrews[0].id;
         const holder = el('div', { className: 'stack-8' });
+        const gear = el('button', { className: 'gear-key', type: 'button', 'aria-label': 'Crew settings', innerHTML: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="6.5"/><circle cx="12" cy="12" r="8" stroke-width="3.2" stroke-dasharray="3.1 3.18"/></svg>' });
+        gear.addEventListener('click', () => crewSettings.classList.add('open'));
         const openCrew = (id) => { try { localStorage.setItem('apex.crewPage', id); } catch (_) {}
-          holder.replaceChildren(...(myCrews.length > 1 ? [crewPage.switcher(myCrews, id, openCrew)] : []), crewPage.view(id)); };
+          const cur = myCrews.find((c) => c.id === id);
+          $('sheetHead').replaceChildren(myCrews.length > 1 ? crewPage.switcher(myCrews, id, openCrew) : el('b', { textContent: cur ? cur.name : '' }), gear);
+          holder.replaceChildren(crewPage.view(id)); };
         openCrew(cur);
         body.append(holder);
       }
+      $('sheet').classList.toggle('crew-has-page', inCrew);
+      $('sheetHead').hidden = !inCrew; if (!inCrew) $('sheetHead').replaceChildren();
       body.append(invite);
       if (convoy) body.append(convoy.section());
-      body.append(sharedRoutesSection());
-      if (spotsFeed) body.append(spotsFeed.section());
+      const shared = sharedRoutesSection((n) => { if (sharedRow) sharedRow._count.textContent = n ? String(n) : ''; });
+      const drives = crewEvents ? (crewDrivesEl = crewEvents.section(Array.isArray(crews) ? crews.map((c) => ({ id: c.id, name: c.name, visibility: c.visibility, role: c.role })) : [])) : null;
+      let sharedRow = null;
+      if (inCrew) {
+        sharedRow = navRow('Routes shared with you', shared);
+        const rows = el('div', { className: 'nav-rows' }, sharedRow);
+        if (spotsFeed) rows.append(navRow('Spots near you', spotsFeed.section()));
+        if (drives) rows.append(navRow('Crew drives', drives));
+        body.append(rows);
+      } else {
+        body.append(shared);
+        if (spotsFeed) body.append(spotsFeed.section());
+        if (drives) body.append(drives);
+      }
       if (crewStandings) body.append(crewStandings.section());
-      if (crewEvents) body.append(crewDrivesEl = crewEvents.section(Array.isArray(crews) ? crews.map((c) => ({ id: c.id, name: c.name, visibility: c.visibility, role: c.role })) : []));
       if (garage) gbody.append(garage.section());
       if (builds) gbody.append(builds.followingSection());
 
@@ -4779,7 +4820,8 @@
         const pub = cvis.value === 'public', near = crewNear();
         if (pub && carea.value.trim().length < 2) { toast('Name the area people nearby will see.'); return; }
         const r = await apiCall('POST', '/api/crews', pub ? { name: cname.value.trim(), visibility: 'public', area: { name: carea.value.trim(), lat: near.lat, lon: near.lon } } : { name: cname.value.trim() }); if (r.ok) redo(); else toast('Couldn\'t create the crew.'); })));
-      body.append(csec);
+      (inCrew ? crewSettings : body).append(csec);
+      if (inCrew && stash('apex.crew')) crewSettings.classList.add('open');   // a crew invite to answer: open where it is
 
       // public crews near you: tiles with Join (only name, area and size are shown; members stay private)
       const nsec = section('Crews near you');
@@ -4801,9 +4843,9 @@
         }
         nsec.append(ntiles);
       }
-      body.append(nsec);
+      (inCrew ? crewSettings : body).append(nsec);
       document.querySelectorAll('.side-pop').forEach(n => n.remove());       // one pop-up; on the page, not inside the sliding sheet
-      document.body.append(fpop);
+      document.body.append(fpop, ...pops);
 
       // points board
       if (pts && pts.board && pts.board.length) {

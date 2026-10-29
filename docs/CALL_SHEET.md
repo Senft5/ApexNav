@@ -6,6 +6,15 @@ it says so. Things only you can do are in docs/OWNER_TODO.md.
 
 ## 2026-10-29
 
+**Roadmap 2 item 13: in a crew, its page is the Crew tab; the old list is its settings (U-30).** My calls:
+- *The header is the crew*: its switcher (or its name), and a gear key that opens Crew settings: your crews with their
+  members, shares, invite links, public or private and Leave; create another; crews near you. The "Crew" title is gone.
+- *Routes shared with you, Spots near you and Crew drives are rows on the page* that open their lists; the routes row
+  shows how many. Plan a drive stays the crew page's "No drive planned" card and the Crew drives list.
+- *Not in a crew yet, nothing moves*: the list is the tab, since it is how you join or make one.
+- *A crew invite you opened a link for opens the settings sheet*, where the Join card is.
+Undo: `inCrew` in renderAccount (index.html).
+
 **Roadmap 2 item 12: the browser's own controls are gone from the drive page, Stages and Compare (U-18).** My calls:
 - *A list choice is a row and a sheet of rows* (`web/row_select.js`): the chosen option with a chevron; tap it for a
   sheet, the chosen row marked in red. The `<select>` stays underneath, hidden, so nothing that reads it changed. Used
