@@ -6,6 +6,17 @@ it says so. Things only you can do are in docs/OWNER_TODO.md.
 
 ## 2026-10-29
 
+**Roadmap 2 item 20: stills of every mockup surface (U-37).** `node tools/app_tour.js route-card friends-map
+plan-drive crew-board tapedeck-drive` saves OUT/stills/*.png: a routed mountain road with 186 corners, the profile
+with its corner ticks, named legs and two alternatives; two friends (one late and fuzzed, one live on a road) and a
+home zone; the Plan a drive form open; the crew board, next drive and chat; and Tapedeck on a live drive, not only a
+replay. My calls:
+- *The data is stubbed in the tour, never in the app*: the router, the place search and the Worker answer from the
+  script, so nothing synthesized can reach a real driver (CLAUDE.md rule 3).
+- *The stills show what is still wrong rather than staged around it*: the Plan a drive form still has the browser's
+  selects, date and time pickers and checkboxes; a friend's label near the right edge slides under the Layers key; on
+  the live Tapedeck drive the bar reads "Finding GPS..." with a good fix. They are in docs/STATE.md as the next work.
+Undo: delete the five scenes and `still()` from tools/app_tour.js.
 **Roadmap 2 item 19: night is a mode on the binnacle (U-36).** After dark (Auto, or Night in Settings) the binnacle
 changes shape, not only colour: the speed numeral is 46 px on an SE dial and larger on bigger phones, and the 0 and top
 labels at the foot of the dial give way to it; Limit and Sight keep their one row; the trip odometer steps aside for

@@ -1,5 +1,30 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-10-29 (evening): Roadmap 2 complete
+
+- [x] docs/design/REVIEW2.md Roadmap 2, items 1-20, each its own PR (the last four: #248 replay controls, #249 Kit,
+  #250 night as a mode, and this one). Every IDEAS row it names (U-23 to U-46) is done except U-18 and U-33 (partial, below).
+  - Replay: one Play slide switch, a 1x 2x 4x 8x speed detent, the elevation strip as a full-width scrubber, no tab bar
+    (the Replay plate is the exit). Tapedeck's bar meters keep their height and get their own row on small phones and
+    on its side (they overprinted the controls, and Sight on an SE).
+  - Kit at 80 px on a 16 x 14 grid with two idle frames and four lean frames; KIT SAYS wraps to two lines.
+  - Night as a mode: a 46 px speed numeral, Limit and Sight in a row (Limit over Sight on an SE, day and night), the
+    trip behind a Trip key for ten seconds.
+  - tools/app_tour.js saves review stills (OUT/stills) of the five surfaces REVIEW2 could not judge: a routed mountain
+    road with corners and alternatives, two friends and a home zone, Plan a drive open, the crew board and chat,
+    Tapedeck on a live drive. All data is stubbed in the script, never in the app.
+- Active bugs, found by those stills (not yet fixed):
+  - The Plan a drive form (web/crew_events.js) still uses the browser's selects (crew, lead, sweep), date and time
+    pickers and checkboxes; U-18 covered the drive page, Stages and Compare only.
+  - A friend's label near the right edge of the map slides under the Layers key and is cut by the screen edge.
+  - On a live Tapedeck drive started from window.apex.live frames, the status line stays on "Finding GPS..." with a good
+    fix, and a dark band shows between the map and the binnacle (check whether a real iOS drive does the same).
+  - U-33 (partial): the Log and Stages empty states are one line and an action; Crews near you and Spots near you
+    still explain in a line. U-18 (partial): the rest of the browser controls named in its row.
+- Exact next task: replace the Plan a drive form's browser controls with the shaped ones (stamps for the crew, row
+  pickers from web/row_select.js for lead and sweep, a drum or detents for the date and time), then the friend-label
+  edge collision, then the "Finding GPS..." line on a live drive; then run the stills and ask Fable for review 3.
+
 ## Session 2026-10-29 (afternoon): design phase 3, photos
 
 - [x] REVIEW.md 3.1: Start with no route follows the road you're on and calls its corners (web/horizon.js, free drive).
