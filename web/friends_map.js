@@ -42,7 +42,7 @@
     .fm-tag { background: var(--panel); color: var(--panel-ink); border: 1.5px solid var(--panel-ink); padding: 2px 6px; line-height: 1.15; white-space: nowrap; }
     .fm-tag b { display: block; font-size: 14px; } .fm-tag small { display: block; font-size: 13px; color: var(--panel-dim); }
     .fm-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--rule); flex-wrap: wrap; }
-    .fm-row > span { font-weight: 600; }
+    .fm-row > span { font-weight: 600; } .fm-row > span.note { font-weight: 400; }   /* a value in pencil, the label in ink */
     .fm-row .switch { flex: 0 1 auto; }
     .fm-row .switch > button { flex: 0 0 auto; padding: 0 14px; white-space: nowrap; }
     .fm-row .sw { width: auto; min-width: 0; padding: 6px 0; }
@@ -173,7 +173,8 @@
               onlyDriving = !onlyDriving; try { root.localStorage.setItem(ONLY_DRIVING_KEY, onlyDriving ? '1' : '0'); } catch (_) {} paint();
             })),
           ] : []),
-          el('div', { className: 'fm-row' }, el('span', { textContent: 'Home zones' }), el('span', { className: 'note', textContent: z ? `${z} zone${z === 1 ? '' : 's'} · always hidden` : 'None yet: add one in Garage, Privacy' })),
+          el('div', { className: 'fm-row' }, el('span', { textContent: 'Home zones' }), z ? el('span', { className: 'note', textContent: `${z} zone${z === 1 ? '' : 's'} · always hidden` })
+            : el('span', { className: 'note' }, 'None yet: add one in ', page.openGarage ? btn('Garage, Privacy', () => page.openGarage(), 'linkbtn') : 'Garage, Privacy')),
           el('p', { className: 'note', textContent: explainer({ ...settings, onlyDriving }) }));
       };
       paint();

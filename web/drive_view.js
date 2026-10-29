@@ -267,7 +267,8 @@
       + (jsegs ? `<div class="dv-legend" id="dvLegJerk" hidden><span>calm</span><i style="background:linear-gradient(90deg,${jerkColor(0)},${jerkColor(0.6)})"></i><span>abrupt</span></div>` : '');
     let showSmooth = null;
     if (jsegs) {                                                     // Speed / Smoothness switch for the map
-      const sw = el('div', 'dv-zoom dv-mapmode'), svg = mapBox.querySelector('svg'), speedLabel = svg && svg.getAttribute('aria-label'), bs = el('button', 'dv-z on', 'Speed'), bj = el('button', 'dv-z', 'Smoothness');
+      // a mode, so the slide switch (controls.css .switch, REVIEW2.md drive detail), not two boxes
+      const sw = el('div', 'switch dv-mapmode'), svg = mapBox.querySelector('svg'), speedLabel = svg && svg.getAttribute('aria-label'), bs = el('button', 'on', 'Speed'), bj = el('button', '', 'Smoothness');
       const show = (jerk) => {
         bs.classList.toggle('on', !jerk); bj.classList.toggle('on', jerk); bs.setAttribute('aria-pressed', String(!jerk)); bj.setAttribute('aria-pressed', String(jerk));
         const q = (id) => mapBox.querySelector(id);
