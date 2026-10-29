@@ -20,6 +20,7 @@ import {
 } from "./social";
 import { deleteAccount, exportMyData } from "./account";
 import { carCreate, carDelete, carUpdate, myCars, peoplesCars } from "./garage";
+import { photoDelete, photoList, photoServe, photoUpload, photoUse } from "./photos";
 import { block, blockList, fileReport, isModerator, moderationQueue, moderationResolve, report, unblock } from "./safety";
 import { contribute, setContribute } from "./contribute";
 import { pointsFor } from "./points";
@@ -88,7 +89,8 @@ on("GET", "/api/me", async (req, env) => {
   // incoming friend requests: lets the app show a badge on the Crew tab without a second call
   const waiting = v.member ? await env.DB.prepare(
     "SELECT COUNT(*) AS n FROM friendships WHERE status = 'pending' AND requested_by != ?1 AND (user_a = ?1 OR user_b = ?1)").bind(v.id).first<{ n: number }>() : null;
-  return json({ signed_in: true, id: v.id, handle: v.handle, name: v.displayName, member: v.member, requests: waiting?.n ?? 0,
+  const photo = v.member ? await env.DB.prepare("SELECT photo_id FROM users WHERE id = ?").bind(v.id).first<{ photo_id: string | null }>() : null;
+  return json({ signed_in: true, id: v.id, handle: v.handle, name: v.displayName, member: v.member, requests: waiting?.n ?? 0, photo_id: photo?.photo_id ?? null,
                ...(v.member && isModerator(env, v) ? { moderator: true } : {}) });
 });
 on("POST", "/api/invites/redeem", async (req, env) => { await redeemInvite(env, await requireUser(req, env), req); return noContent(); });
@@ -157,6 +159,12 @@ on("GET", "/api/garage/people", async (req, env) => json(await peoplesCars(env, 
 on("POST", "/api/garage", async (req, env) => json(await carCreate(env, await requireMember(req, env), req), 201));
 on("PUT", "/api/garage/:id", async (req, env, m) => { await carUpdate(env, await requireMember(req, env), m.groups!.id, req); return noContent(); });
 on("DELETE", "/api/garage/:id", async (req, env, m) => { await carDelete(env, await requireMember(req, env), m.groups!.id); return noContent(); });
+// photos (src/photos.ts, REVIEW.md 5.2): JPEG in, metadata out; members only
+on("POST", "/api/photos", async (req, env) => json(await photoUpload(env, await requireMember(req, env), req), 201));
+on("GET", "/api/photos", async (req, env) => json(await photoList(env, await requireMember(req, env), new URL(req.url))));
+on("GET", "/api/photos/:id", async (req, env, m) => photoServe(env, await requireMember(req, env), m.groups!.id));
+on("PUT", "/api/photos/:id/use", async (req, env, m) => { await photoUse(env, await requireMember(req, env), m.groups!.id); return noContent(); });
+on("DELETE", "/api/photos/:id", async (req, env, m) => { await photoDelete(env, await requireMember(req, env), m.groups!.id); return noContent(); });
 
 on("POST", "/api/segments", async (req, env) => json(await segmentCreate(env, await requireMember(req, env), req), 201));
 on("GET", "/api/segments", async (req, env) => json(await segmentList(env, await requireMember(req, env))));

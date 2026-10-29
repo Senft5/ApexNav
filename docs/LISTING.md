@@ -79,6 +79,7 @@ positions, routing and search requests) is not "collected" by Apple's definition
 | Email address | Yes (sign-in) | Yes | No | App functionality |
 | User ID | Yes (account id, handle) | Yes | No | App functionality |
 | Other user content | Yes (crew names, spots, shared routes, scores you publish) | Yes | No | App functionality |
+| Photos or videos | Yes: photos you add to your profile, your cars, a crew or a build thread (redrawn on the phone, every metadata segment removed on the server; no location) | Yes | No | App functionality |
 | Crash data | Yes (error counts with a scrubbed message, no identifiers) | No | No | App functionality |
 | Other diagnostic data | Yes (daily totals: routes found/failed, uploads failed, mount set time; switch in Settings) | No | No | App functionality, analytics |
 | Customer support | Yes (Settings → Feedback: what you write, with optional diagnostics: app version, device type, screen, language, error count) | Only when you ask for a reply (your handle) | No | App functionality |

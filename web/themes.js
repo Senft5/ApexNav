@@ -12,7 +12,10 @@
 
   const THEMES = {
     roadbook: {
-      id: 'roadbook', label: 'Road book', tag: 'A', blurb: 'Paper and red ink.',
+      id: 'roadbook', label: 'Roadbook', tag: 'A', blurb: 'Paper and red ink.', pro: false,
+      about: 'Paper, ink and one red pen. Reads in direct sun; night turns the page over after sunset.',
+      // the theme's co-driver (REVIEW.md 4.4): who reads the notes comes with the look
+      voice: { id: 'marguerite', name: 'Marguerite', who: 'Calm, exact, a step ahead.', sample: 'Left four, tightens. Long. Care.' },
       fonts: FONT, cluster: 'dials', notes: 'roadbook', gauge: 'printed',
       renderers: { dial: 'printed', meter: 'gball', strip: 'roadbook' },   // the theme contract's three renderers (theme_contract.js)
       day: {
@@ -31,9 +34,62 @@
         day: { bg: '#F2EBDD', water: '#CFD8D3', waterLine: '#7F9A9A', land: '#EFE7D8', wood: '#E3DCC5', road: '#FFFFFF', roadMinor: '#FFFFFF', casing: '#1C1A17', label: '#1C1A17', halo: '#F2EBDD', boundary: '#8C8373', contour: '#8B6B4A', shadow: '#A08F6E', highlight: '#FFFFFF', accentShade: '#B59E78' },
         night: { bg: '#1B1712', water: '#10161A', waterLine: '#26343A', land: '#1D1914', wood: '#1F1C15', road: '#36312A', roadMinor: '#2B2721', casing: '#A99F8C', label: '#A89E8C', halo: '#1B1712', boundary: '#332F28', contour: '#3A3126', shadow: '#080706', highlight: '#28231C', accentShade: '#14120E' }
       }
+    },
+    // Tapedeck (Pro, REVIEW.md 4.1): a late-90s head unit. Near-black glass, blue-green VFD glow, amber for what changes
+    // what you do, seven-segment speed, bar meters that are instruments (live surface; brake and turn), and Kit, a
+    // dot-matrix fox who leans into the corner being called. The panel is always dark: day and night are the same glass.
+    tapedeck: {
+      id: 'tapedeck', label: 'Tapedeck', tag: 'B', blurb: 'A late-90s head unit.', pro: true,
+      about: 'A late-90s head unit: blue-green VFD, seven-segment speed, spectrum bars that show the road surface, and Kit, who leans into every corner.',
+      voice: { id: 'kit', name: 'Kit', who: 'Quick, dry, a little cheeky, never silly.', sample: 'Left four, tightens. Easy in, late out.' },
+      fonts: { ui: '"SF Mono", "Menlo", "Roboto Mono", "Consolas", monospace', num: '"SF Mono", "Menlo", "Roboto Mono", "Consolas", monospace' },
+      cluster: 'dials', notes: 'roadbook', gauge: 'vfd', mascot: 'kit',
+      renderers: { dial: 'sevenseg', meter: 'bars', strip: 'vfd' },
+      day: {
+        stage: '#0B0E0D', ink: '#7DF5DE', dim: '#5FB3A5', route: '#FFB347', routeCasing: '#0B0E0D',
+        panel: '#0A0C0B', panelInk: '#7DF5DE', panelDim: '#5FB3A5', rule: '#2A5A52', accent: '#FFB347',
+        signal: '#FF8A4D', amber: '#FFB347', calm: '#7DF5DE',
+        face: '#0A0C0B', faceInk: '#7DF5DE', faceDim: '#5FB3A5', hair: '#16302B', gain: '#7DF5DE'
+      },
+      night: {
+        stage: '#080A09', ink: '#6FE3CD', dim: '#55A396', route: '#F5A63C', routeCasing: '#080A09',
+        panel: '#070908', panelInk: '#6FE3CD', panelDim: '#55A396', rule: '#24504A', accent: '#F5A63C',
+        signal: '#FF8A4D', amber: '#F5A63C', calm: '#6FE3CD',
+        face: '#070908', faceInk: '#6FE3CD', faceDim: '#55A396', hair: '#132925', gain: '#6FE3CD'
+      },
+      map: {
+        day: { bg: '#0B0E0D', water: '#0E1A1C', waterLine: '#1F4A48', land: '#0C100F', wood: '#0D1211', road: '#0F1615', roadMinor: '#0D1312', casing: '#3FA595', label: '#5FB3A5', halo: '#0B0E0D', boundary: '#1D3B36', contour: '#16302B', shadow: '#050606', highlight: '#13201E', accentShade: '#0A0D0C' },
+        night: { bg: '#080A09', water: '#0B1517', waterLine: '#1A3E3C', land: '#090C0B', wood: '#0A0F0E', road: '#0D1312', roadMinor: '#0B100F', casing: '#2E8577', label: '#4C9387', halo: '#080A09', boundary: '#18322E', contour: '#122824', shadow: '#040505', highlight: '#101A18', accentShade: '#080B0A' }
+      }
+    },
+    // Billet (Pro, REVIEW.md 4.1): machined aluminium. A brushed graphite panel, knurled bezels, black gauge faces, red
+    // glow on the needles and the speed, a white Limit sign exactly as on the road. The energy is the glow against the
+    // metal; the layout is still three things. Its needle overshoots a touch and settles, like a real one.
+    billet: {
+      id: 'billet', label: 'Billet', tag: 'C', blurb: 'Machined metal, red glow.', pro: true,
+      about: 'Machined aluminium, knurled bezels and black gauge faces with red glow. Quiet, precise, all business.',
+      voice: { id: 'hale', name: 'Hale', who: 'Low, even, zero drama. A test driver reading a card.', sample: 'Left four. Tightens. Long.' },
+      fonts: FONT, cluster: 'dials', notes: 'roadbook', gauge: 'printed', finish: 'metal',
+      renderers: { dial: 'bezel', meter: 'bezelg', strip: 'roadbook' },
+      day: {
+        stage: '#1C1D1F', ink: '#ECE6DA', dim: '#A39E93', route: '#FF4A3D', routeCasing: '#1C1D1F',
+        panel: '#1C1D1F', panelInk: '#ECE6DA', panelDim: '#A39E93', rule: '#55575C', accent: '#FF5A4C',
+        signal: '#FF5A4C', amber: '#E8A33A', calm: '#ECE6DA',
+        face: '#0D0D0E', faceInk: '#ECE6DA', faceDim: '#9A958B', hair: '#2C2D30', gain: '#8FD18F'
+      },
+      night: {
+        stage: '#151618', ink: '#E2DCD0', dim: '#9A958B', route: '#FF4A3D', routeCasing: '#151618',
+        panel: '#151618', panelInk: '#E2DCD0', panelDim: '#9A958B', rule: '#4A4C51', accent: '#FF5A4C',
+        signal: '#FF5A4C', amber: '#E0A040', calm: '#E2DCD0',
+        face: '#0A0A0B', faceInk: '#E2DCD0', faceDim: '#96918A', hair: '#26272A', gain: '#8FD18F'
+      },
+      map: {
+        day: { bg: '#1E1F21', water: '#16191C', waterLine: '#3A4048', land: '#202123', wood: '#222326', road: '#2B2C2F', roadMinor: '#262729', casing: '#CFC9BD', label: '#B8B2A6', halo: '#1E1F21', boundary: '#3A3B3F', contour: '#303135', shadow: '#0B0B0C', highlight: '#2E2F33', accentShade: '#151617' },
+        night: { bg: '#161719', water: '#121417', waterLine: '#30353C', land: '#18191B', wood: '#1A1B1D', road: '#232426', roadMinor: '#1F2022', casing: '#A9A398', label: '#9C968B', halo: '#161719', boundary: '#323336', contour: '#28292C', shadow: '#080809', highlight: '#252629', accentShade: '#111213' }
+      }
     }
   };
-  function get() { return THEMES.roadbook; }
+  function get(id) { return typeof id === 'string' && Object.prototype.hasOwnProperty.call(THEMES, id) ? THEMES[id] : THEMES.roadbook; }   // unknown or retired: the road book
 
   // Accents (IDEAS S-10): cosmetic colours for the route line and the cockpit's accent, unlocked with earned Octane
   // (Settings → Look). Warnings keep their own colour (signal) whatever the accent: nothing here changes what a hazard looks like.

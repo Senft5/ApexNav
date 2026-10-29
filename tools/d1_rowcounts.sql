@@ -42,5 +42,11 @@ SELECT
   (SELECT COUNT(*) FROM road_ways) AS road_ways,
   (SELECT COUNT(*) FROM member_months) AS member_months,
   (SELECT COUNT(*) FROM redemptions) AS redemptions,
+  (SELECT COUNT(*) FROM photos) AS photos,
+  (SELECT COUNT(*) FROM crew_chat) AS crew_chat,
+  (SELECT COUNT(*) FROM builds) AS builds,
+  (SELECT COUNT(*) FROM build_posts) AS build_posts,
+  (SELECT COUNT(*) FROM build_replies) AS build_replies,
+  (SELECT COUNT(*) FROM build_follows) AS build_follows,
   (SELECT COUNT(*) FROM d1_migrations) AS d1_migrations
 ;

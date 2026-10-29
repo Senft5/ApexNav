@@ -29,13 +29,26 @@
     const headers = { 'x-apexnav': '1', ...(init.headers || {}) };
     const b = bridge();
     if (b) {
-      if (init.body != null && typeof init.body !== 'string') throw new TypeError('apiFetch: string bodies only in the app');
+      // text as text; a photo's bytes (Uint8Array or Blob) as base64, which the shell turns back into bytes (photos.ts)
+      let bin = null;
+      if (init.body != null && typeof init.body !== 'string') {
+        const bytes = init.body instanceof Uint8Array ? init.body : init.body instanceof ArrayBuffer ? new Uint8Array(init.body)
+          : (root.Blob && init.body instanceof Blob) ? new Uint8Array(await init.body.arrayBuffer()) : null;
+        if (!bytes) throw new TypeError('apiFetch: text, bytes or a Blob only in the app');
+        let s = ''; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+        bin = root.btoa(s);
+      }
       if (pending) await pending;
       let r;
-      try { r = await b.postMessage({ cmd: 'fetch', path, method: init.method || 'GET', headers, body: init.body == null ? null : init.body }); }
+      try { r = await b.postMessage({ cmd: 'fetch', path, method: init.method || 'GET', headers, body: bin == null && init.body != null ? init.body : null, ...(bin != null ? { bodyBase64: bin } : {}) }); }
       catch (e) { throw new TypeError('Load failed'); }                       // offline, like fetch
       const status = r && r.status >= 200 && r.status <= 599 ? r.status : 502;
       const empty = [204, 205, 304].includes(status);
+      if (r && typeof r.bodyBase64 === 'string') {                         // an image came back as base64
+        const raw = root.atob(r.bodyBase64), out = new Uint8Array(raw.length);
+        for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+        return new Response(out, { status, headers: { 'content-type': r.type || 'application/octet-stream' } });
+      }
       return new Response(empty ? null : (r && r.body) || '', { status, headers: r && r.type ? { 'content-type': r.type } : {} });
     }
     const t = token();

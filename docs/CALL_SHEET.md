@@ -6,6 +6,32 @@ it says so. Things only you can do are in docs/OWNER_TODO.md.
 
 ## 2026-10-29
 
+**Photos (REVIEW.md roadmap 19, 5.2): a profile photo and a car's cover and gallery.** My calls:
+- *Photos are kept in Workers KV, not R2,* because R2 isn't turned on for the account (only you can: OWNER_TODO). I
+  made two KV namespaces (PHOTOS, prod and preview) and bound them. Undo: once R2 is on, move the bytes and change the
+  binding in wrangler.jsonc; the D1 rows don't change.
+- *Migration 0030 is applied to both D1 databases* (photos, the crew page's columns, crew chat, build threads), ahead of
+  the screens that use them, so the next items don't need another migration.
+- *Photos are re-encoded on the phone* (at most 1600 px, under 650 KB) and *the server strips every metadata segment
+  again*: a photo never carries where it was taken. JPEG only.
+- *Members only, both ways; one report hides a photo for 24 hours* while it's looked at, three keep it down (the same
+  rule as everything else). The owner always sees their own.
+- *Caps*: 12 photos a car (or crew, or post), 300 a person.
+- *No photo appears on the map, the drive screen or the Log.* Faces and covers live in the Garage and Crew.
+
+**Design phase 3 is built (REVIEW.md roadmap 15-18) and Start with no route calls the road you're on (3.1).** My calls:
+- *Free drive follows the road you're on* from the map's own road lines, and calls corners as far as it can see; it never
+  draws a route, never reroutes and never times anything. Leaving the road or losing GPS stops the calls.
+- *Look and voice lives in the Garage.* Roadbook is free; Tapedeck and Billet are Pro. The `pro` flag stays off, so no one
+  can buy them: a Pro theme can be tried for 10 minutes on the demo replay, and the card says Pro isn't on sale yet.
+- *Each theme brings its voice; the voice list is gone* (the brief: "we will do away with custom voices"). Roadbook is
+  Marguerite, Tapedeck is Kit, Billet is Hale (three British Kokoro voices, docs/VOICE.md). The
+  device voice is the fallback when a pack isn't downloaded. The old voices (George, Daniel, Emma, Michael, Me, Jarvis)
+  are deleted. Undo: they're in git history; tools/voicebank.py renders any Kokoro voice.
+- *Key sounds are on by default, with a switch* ("Key sounds" under the words). The hazard two-tone is the same in every
+  theme, so it always means the same thing.
+- *Billet's needle is a spring*: it overshoots about 8% and settles, like a real gauge.
+
 **Design phase 2 is built (REVIEW.md roadmap 9-14).** My calls inside it:
 - *Notes and Voice are in the Garage and also under the Layers key.* The review moves them to the Garage, but the
   Garage can't be reached while driving (no tab bar), and muting the voice mid-drive has to stay one tap away.

@@ -1,5 +1,6 @@
 // Leaving, and taking your data with you (docs/BACKEND.md section 11). Merged road data is anonymous and stays; everything
 // tied to a person goes. Tables without a foreign key to the audience (grants, board entries, segment shares) are cleaned by hand.
+import { photosEraseOwner } from "./photos";
 import { Env, HttpError, body, cookie } from "./util";
 import { SESSION_COOKIE, type Viewer } from "./auth";
 import { convoysLeaveAll } from "./convoy";
@@ -28,6 +29,7 @@ export async function exportMyData(env: Env, v: Viewer) {
     published_results: await q(`SELECT s.name AS segment, e.audience_type, COALESCE(u.handle, c.name) AS audience, e.driver_score, e.time_s, e.smoothness, e.driven_on FROM board_entries e
                        JOIN segments s ON s.id = e.segment_id LEFT JOIN users u ON e.audience_type = 'friend' AND u.id = e.audience_id
                        LEFT JOIN crews c ON e.audience_type = 'crew' AND c.id = e.audience_id WHERE e.user_id = ?`),
+    photos: await q("SELECT id, kind, ref_id, bytes, w, h, created_at FROM photos WHERE owner = ?"),
     cars: await q("SELECT year, make, model, trim, nickname, color, power_hp, weight_kg, drivetrain, transmission, tyres, mods, shared, is_primary, created_at FROM cars WHERE owner = ?"),
     highlights: await q("SELECT id, name, category, note, lat, lon, status, created_at FROM highlights WHERE author_id = ?"),
     reports_you_made: await q("SELECT kind, note, status, created_at FROM reports WHERE reporter = ?"),
@@ -43,6 +45,7 @@ export async function deleteAccount(env: Env, v: Viewer, req: Request): Promise<
   const { confirm } = await body<{ confirm?: string }>(req);
   if (confirm !== "DELETE") throw new HttpError(400, "confirmation_required");
   await convoysLeaveAll(env, v.id);                                  // live convoys first: leave them, or end the ones they lead
+  await photosEraseOwner(env, v.id);                                 // the JPEGs in KV, then their rows (REVIEW.md 5.2)
   const owned = (await all<{ id: string }>(env, "SELECT id FROM crews WHERE owner = ?", v.id)).map((c) => c.id);
   const stmts: D1PreparedStatement[] = [];
   const run = (sql: string, ...a: unknown[]) => stmts.push(env.DB.prepare(sql).bind(...a));

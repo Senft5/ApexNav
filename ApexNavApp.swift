@@ -1164,12 +1164,9 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
     private static let robotVoiceNames = ["Zarvox", "Trinoids", "Fred", "Ralph", "Cellos"]
 
     /// Co-driver: the highest-quality English voice installed (Premium > Enhanced > default),
-    /// British first. Jarvis: a novelty robot voice when the device has one.
+    /// British first; never a novelty robot voice.
     private static func voice(for style: String) -> AVSpeechSynthesisVoice? {
         let all = AVSpeechSynthesisVoice.speechVoices()
-        if style == "jarvis", let robot = all.first(where: { robotVoiceNames.contains($0.name) }) {
-            return robot
-        }
         func rank(_ v: AVSpeechSynthesisVoice) -> Int {
             let quality: Int
             switch v.quality {
@@ -1288,16 +1285,9 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         }
         beginVoice(duck: duck)
         let utterance = AVSpeechUtterance(string: phrase)
-        let voice = Self.voice(for: style)
-        utterance.voice = voice
-        if style == "jarvis" {
-            let isRobot = voice.map { Self.robotVoiceNames.contains($0.name) } ?? false
-            utterance.rate = isRobot ? 0.48 : 0.44
-            utterance.pitchMultiplier = isRobot ? 1.0 : 0.55
-        } else {
-            utterance.rate = 0.54
-            utterance.pitchMultiplier = 1.0
-        }
+        utterance.voice = Self.voice(for: style)
+        utterance.rate = 0.54
+        utterance.pitchMultiplier = 1.0
         synth.speak(utterance)
     }
 }
@@ -1462,12 +1452,18 @@ final class ApexApiBridge: NSObject, WKScriptMessageHandlerWithReply {
             req.setValue(Self.userAgent, forHTTPHeaderField: "user-agent")
             if let token = ApexKeychain.session() { req.setValue("Bearer \(token)", forHTTPHeaderField: "authorization") }
             if let body = dict["body"] as? String { req.httpBody = Data(body.utf8) }
+            // a photo (backend/src/photos.ts) crosses the bridge as base64, both ways; text stays text
+            if let b64 = dict["bodyBase64"] as? String, let data = Data(base64Encoded: b64) { req.httpBody = data }
             Task {
                 do {
                     let (data, resp) = try await URLSession.shared.data(for: req)
                     let http = resp as? HTTPURLResponse
-                    replyHandler(["status": http?.statusCode ?? 0, "type": http?.value(forHTTPHeaderField: "content-type") ?? "",
-                                  "body": String(data: data, encoding: .utf8) ?? ""], nil)
+                    let type = http?.value(forHTTPHeaderField: "content-type") ?? ""
+                    if type.hasPrefix("image/") {
+                        replyHandler(["status": http?.statusCode ?? 0, "type": type, "bodyBase64": data.base64EncodedString()], nil)
+                    } else {
+                        replyHandler(["status": http?.statusCode ?? 0, "type": type, "body": String(data: data, encoding: .utf8) ?? ""], nil)
+                    }
                 } catch {
                     replyHandler(nil, "offline")
                 }

@@ -32,7 +32,6 @@
   }
 
   // ---- notes -> tokens ------------------------------------------------------
-  const NUM = (n) => String(n).split('').map(d => `num:${d}`);
   function codriverTokens(e) {
     if (e.type === 'corner') {
       const t = [];
@@ -46,32 +45,16 @@
     }
     return [`hazard:${e.type}`];
   }
-  function jarvisTokens(e) {
-    if (e.type !== 'corner') return ['w:hazard', `w:${e.type}`];
-    const t = ['w:corner', e.dir === 'L' ? 'w:left' : 'w:right'];
-    const shape = e.severity === 'HP' ? 'hairpin' : e.shape;
-    if (shape) t.push('w:classification', `w:${shape}`);
-    else {
-      t.push('w:severity', `num:${e.severity}`);
-      if (e.grade === '-') t.push('w:minus');
-      if (e.grade === '+') t.push('w:plus');
-    }
-    if ((e.mods || []).length) { t.push('w:modifiers'); for (const m of e.mods) t.push(`mod:${m}`); }
-    if (e.caution) t.push('w:warning', `caution:${e.caution}`);
-    return t;
-  }
   // chain: [note, next, ...] where each but the last links with "into"/"and"; last may carry a distance.
   function tokensFor(chain, style) {
-    const note = style === 'jarvis' ? jarvisTokens : codriverTokens;
     const out = [];
     chain.forEach((e, i) => {
-      if (i > 0) out.push(style === 'jarvis' ? `w:seq_${chain[i - 1].link}` : `link:${chain[i - 1].link}`);
-      out.push(...note(e));
+      if (i > 0) out.push(`link:${chain[i - 1].link}`);
+      out.push(...codriverTokens(e));
     });
     const last = chain[chain.length - 1];
     if (last.link && last.link !== 'into' && last.link !== 'and') {
-      if (style === 'jarvis') out.push('w:distance', ...NUM(last.link), 'w:meters');
-      else out.push(`dist:${last.link}`);
+      out.push(`dist:${last.link}`);
     }
     return out;
   }
@@ -93,37 +76,8 @@
   }
 
   // ---- playback ---------------------------------------------------------------
-  function robotChain(c) {
-    // Ring modulator (metallic), short comb (tin can), hard clip (crunch).
-    const input = c.createGain();
-    const ring = c.createGain(); ring.gain.value = 0;
-    const osc = c.createOscillator(); osc.type = 'sine'; osc.frequency.value = 58;
-    const depth = c.createGain(); depth.gain.value = 0.9;
-    osc.connect(depth); depth.connect(ring.gain); osc.start();
-    const delay = c.createDelay(); delay.delayTime.value = 0.009;
-    const fb = c.createGain(); fb.gain.value = 0.55;
-    const shaper = c.createWaveShaper();
-    const curve = new Float32Array(1024);
-    for (let i = 0; i < 1024; i++) { const x = i / 512 - 1; curve[i] = Math.max(-0.6, Math.min(0.6, x * 1.8)); }
-    shaper.curve = curve;
-    const out = c.createGain(); out.gain.value = 1.4;
-    input.connect(ring); ring.connect(delay); delay.connect(fb); fb.connect(delay);
-    ring.connect(shaper); delay.connect(shaper); shaper.connect(out); out.connect(c.destination);
-    return { input, stop: () => { try { osc.stop(); } catch (_) {} } };
-  }
 
-  function chirp(c, t0) {
-    [[880, 0], [1320, 0.07], [990, 0.14]].forEach(([f, dt]) => {
-      const o = c.createOscillator(), g = c.createGain();
-      o.type = 'square'; o.frequency.value = f;
-      g.gain.setValueAtTime(0.0001, t0 + dt); g.gain.exponentialRampToValueAtTime(0.05, t0 + dt + 0.01);
-      g.gain.exponentialRampToValueAtTime(0.0001, t0 + dt + 0.06);
-      o.connect(g); g.connect(c.destination); o.start(t0 + dt); o.stop(t0 + dt + 0.07);
-    });
-    return 0.24;
-  }
-
-  const GAP = (token) => (token.startsWith('link:') || token.startsWith('w:seq') ? 0.03 : token.startsWith('dist:') ? 0.11 : 0.06);
+  const GAP = (token) => (token.startsWith('link:') ? 0.03 : token.startsWith('dist:') ? 0.11 : 0.06);
 
   // Plays tokens; resolves true when finished, false if the bank can't voice them (caller falls back).
   async function play(tokens) {
@@ -133,21 +87,17 @@
     const bufs = await Promise.all(tokens.map(buffer));
     if (bufs.some(b => !b)) return false;
     const c = audio();
-    const jarvis = bank.style === 'jarvis';
-    const fx = jarvis ? robotChain(c) : null;
     let t = c.currentTime + 0.03;
-    if (jarvis) t += chirp(c, t);
     bufs.forEach((b, i) => {
       if (i > 0) t += GAP(tokens[i]);
       const src = c.createBufferSource();
       src.buffer = b;
-      src.connect(fx ? fx.input : c.destination);
+      src.connect(c.destination);
       src.start(t);
       t += b.duration;
     });
     const ms = (t - c.currentTime) * 1000 + 60;
     await new Promise(r => setTimeout(r, ms));
-    if (fx) setTimeout(fx.stop, 400);
     return true;
   }
 
@@ -241,16 +191,12 @@
   }
   async function playBuffer(buf) {
     const c = audio();
-    const jarvis = bank && bank.style === 'jarvis';
-    const fx = jarvis ? robotChain(c) : null;
     let t = c.currentTime + 0.03;
-    if (jarvis) t += chirp(c, t);
     const src = c.createBufferSource();
     src.buffer = buf;
-    src.connect(fx ? fx.input : c.destination);
+    src.connect(c.destination);
     src.start(t);
     await new Promise(r => setTimeout(r, (t + buf.duration - c.currentTime) * 1000 + 60));
-    if (fx) setTimeout(fx.stop, 400);
   }
   // Render (or reuse) a phrase in the active bank's voice; one render at a time.
   let renderChain = Promise.resolve();

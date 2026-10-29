@@ -504,6 +504,47 @@ flow('garage: a VIN fills the car in, the owner keeps the colour (NHTSA stubbed,
   check(await page.evaluate(() => Array.isArray(window.__garage.cars)), 'the planner hears about your cars');
 });
 
+flow('garage photos: a big photo with a GPS tag goes up small and clean, and becomes the cover (Worker stubbed, REVIEW.md 5.2)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.ApexGarageUI && window.ApexPhotos && window.ApexSync);
+  await page.evaluate(() => {
+    const el = (tag, props = {}, ...kids) => { const n = Object.assign(document.createElement(tag), props); n.append(...kids); return n; };
+    const btn = (text, onclick, className = 'ink-btn') => el('button', { textContent: text, onclick, className });
+    const ok = (body) => ({ ok: true, status: 200, json: async () => body, blob: async () => new Blob([]) });
+    window.__ph = { sent: null, toasts: [], rendered: 0 };
+    ApexSync.apiFetch = async (path, opts = {}) => {
+      if (opts.method === 'POST') { window.__ph.sent = { path, type: opts.headers['content-type'], body: opts.body }; return ok({ id: 'p1', w: 1600, h: 1067 }); }
+      return ok([]);
+    };
+    const car = { id: 'c1', make: 'Mazda', model: 'MX-5', year: 2022, is_primary: 1, cover_photo_id: null };
+    const g = ApexGarageUI.mount({ el, btn, toast: (t) => window.__ph.toasts.push(t), jsonOf: (r) => r.json(), onPhotos: () => { window.__ph.rendered++; },
+      apiCall: async (m, p) => ok(p === '/api/garage' ? [car] : []) });
+    const host = el('div', { id: 'e2ePhotos' }); document.body.prepend(host); host.append(g.section());
+  });
+  await page.waitForSelector('#e2ePhotos label.photo-pick');
+  check(/Add a cover photo/.test(await page.textContent('#e2ePhotos label.photo-pick')), 'a car without photos asks for a cover');
+  // a 3000 x 2000 JPEG with an EXIF segment naming a place, put on the picker
+  await page.evaluate(async () => {
+    const c = Object.assign(document.createElement('canvas'), { width: 3000, height: 2000 }), x = c.getContext('2d');
+    x.fillStyle = '#c33'; x.fillRect(0, 0, 3000, 2000);
+    const raw = new Uint8Array(await (await new Promise((r) => c.toBlob(r, 'image/jpeg', 0.8))).arrayBuffer());
+    const tag = [...'Exif\0\0GPS 35.61 -83.92 home'].map((ch) => ch.charCodeAt(0)), seg = [0xff, 0xe1, 0, tag.length + 2, ...tag];
+    const file = new File([raw.subarray(0, 2), new Uint8Array(seg), raw.subarray(2)], 'IMG_0001.jpg', { type: 'image/jpeg' });
+    const input = document.querySelector('#e2ePhotos label.photo-pick input'), dt = new DataTransfer(); dt.items.add(file);
+    input.files = dt.files; input.dispatchEvent(new Event('change'));
+  });
+  await page.waitForFunction(() => window.__ph.sent && window.__ph.rendered > 0, null, { timeout: 15000 });
+  const sent = await page.evaluate(async () => {
+    const s = window.__ph.sent, buf = new Uint8Array(await s.body.arrayBuffer()), bmp = await createImageBitmap(s.body);
+    return { path: s.path, type: s.type, size: buf.length, w: bmp.width, h: bmp.height, gps: new TextDecoder('latin1').decode(buf).includes('GPS'), soi: buf[0] === 0xff && buf[1] === 0xd8 };
+  });
+  check(sent.path === '/api/photos?kind=car&ref=c1&cover=1' && sent.type === 'image/jpeg' && sent.soi, 'sends a JPEG as the car\'s cover: ' + sent.path);
+  check(sent.w === 1600 && sent.h === 1067 && sent.size <= 650000, `redrawn to 1600 px and under the cap: ${sent.w}x${sent.h} ${sent.size} B`);
+  check(!sent.gps, 'the GPS tag never leaves the phone');
+  check(await page.evaluate(() => window.__ph.toasts.some((t) => /location data stayed/.test(t))), 'says the location stayed behind');
+});
+
 flow('reported hazards: a call ahead, "still there?" after passing, and a one-tap report (Worker stubbed, IDEAS Q-15/Q-16)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
     window.__said = []; const S = window.speechSynthesis;   // what the co-driver says, whatever voice is set
@@ -1065,6 +1106,26 @@ flow('theme contract on the page: the hazard plate, the speed, the call and the 
     check(r.call >= 21, `${m}: the call ${r.call} px`);
     check(!r.small.length && r.bankPx >= 13, `${m}: nothing on the binnacle under 13 px: ` + JSON.stringify(r.small) + ' bank ' + r.bankPx);
     check(r.limit, `${m}: the Limit sign is there`);
+  }
+  // the Pro themes, tried on the demo replay from the picker: the same floors and the same hazard plate
+  for (const id of ['tapedeck', 'billet']) {
+    await page.evaluate((t) => window.apexDebug.tryTheme(t), id);
+    await page.waitForFunction((t) => document.documentElement.dataset.theme === t, id);
+    await page.waitForFunction(() => window.apexDebug.track && window.apexDebug.track.events.length);
+    await page.evaluate(() => { const st = window.apexDebug.state, t = window.apexDebug.track; st.cursorM = t.dist[t.dist.length - 1] * 0.45; });
+    await page.waitForTimeout(2500);
+    const r = await page.evaluate(() => {
+      const p = document.getElementById('hzPlate'); p.hidden = false;
+      const cs = getComputedStyle(p), speed = document.querySelector('.dial-digital, .vfd-seg');
+      const call = document.querySelector('.rb-box.now .rb-call span');
+      const small = [...document.querySelectorAll('#cluster *')].filter((n) => !(n instanceof SVGElement) && n.childNodes.length && [...n.childNodes].some((c) => c.nodeType === 3 && c.textContent.trim()))
+        .map((n) => [n.className, parseFloat(getComputedStyle(n).fontSize)]).filter(([, px]) => px < 13);
+      const seg = document.querySelector('.vfd-seg'), segH = seg ? seg.getBoundingClientRect().height * 100 / 200 : null;   // the digits are 100 of the 200 units
+      return { bg: cs.backgroundColor, edge: cs.borderTopColor, speed: segH != null ? segH : speed.getBoundingClientRect().height,
+               call: call ? parseFloat(getComputedStyle(call).fontSize) : 0, small };
+    });
+    check(r.bg === 'rgb(17, 17, 17)' && r.edge === 'rgb(255, 122, 26)', `${id}: the same hazard plate ` + JSON.stringify(r));
+    check(r.speed >= 40 && r.call >= 21 && !r.small.length, `${id}: speed ${r.speed}, call ${r.call}, small ` + JSON.stringify(r.small));
   }
 });
 

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-Qg0LbcQik413GGPLuqbP/Zr/uo494PLFfcLGIcGApBY=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-iryaNt2AGSnFSGTu7b4bpb/KK3aeRioYQA8t73ROF8I=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -47,6 +47,9 @@
   <script src="route_card.js"></script>
   <script src="plan_presets.js"></script>
   <script src="place_plate.js"></script>
+  <script src="horizon.js"></script>
+  <script src="pro.js"></script>
+  <script src="theme_sounds.js"></script>
   <script src="week_digest.js"></script>
   <script src="drive_card.js"></script>
   <script src="outbox.js"></script>
@@ -93,6 +96,7 @@
   <script src="convoy.js"></script>
   <script src="convoy_ui.js"></script>
   <script src="car_lookup.js"></script>
+  <script src="photos.js"></script>
   <script src="garage_ui.js"></script>
   <script src="safety_ui.js"></script>
   <style>
@@ -264,6 +268,14 @@
     .spot-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
     .overlay.dim.spot-photo { flex-direction: column; justify-content: center; align-items: center; gap: 12px; padding: 16px; z-index: 60; }
     .spot-photo img { max-width: 100%; max-height: 80vh; object-fit: contain; }
+    .overlay.dim.photo-view { flex-direction: column; justify-content: center; align-items: center; gap: 12px; padding: 16px; z-index: 60; }
+    .photo-view .photo-full { max-width: 100%; max-height: 78vh; object-fit: contain; }
+    /* a face (REVIEW.md 5.2): the photo in a bezelled circle, or the initial when there is none */
+    .avatar { position: relative; flex: none; width: var(--av, 40px); height: var(--av, 40px); border-radius: 50%; overflow: hidden; display: inline-grid; place-items: center;
+      background: var(--panel-dim); color: var(--panel); box-shadow: inset 0 0 0 2px var(--panel-ink), inset 0 0 0 4px var(--panel); }
+    .avatar b { font-family: var(--font-num); font-size: calc(var(--av, 40px) * 0.45); line-height: 1; }
+    .avatar img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+    label.photo-pick { display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
 
     /* ---------------- binnacle ---------------- */
     .binnacle { background: var(--panel); color: var(--panel-ink); border-top: 1px solid var(--rule); padding: 6px 10px calc(8px + var(--safe-bottom)); display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
@@ -472,6 +484,62 @@
     /* the replay's keys get the same bevel as every other key (REVIEW.md 1.2, Replay: one button language) */
     .transport .key { box-shadow: inset 0 -3px 0 var(--rule); }
     .transport .key.on { box-shadow: inset 0 -3px 0 var(--accent); }
+    /* ---------------- Look and voice (REVIEW.md 4.5, mockup 11) ---------------- */
+    .theme-cards { display: grid; gap: 12px; margin-top: 8px; }
+    .theme-card { border: 1.5px solid var(--panel-ink); padding: 0 0 12px; }
+    .theme-card.in-use { border-width: 2.5px; }
+    .theme-preview { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 14px 14px; margin-bottom: 10px;
+      background: var(--panel); color: var(--panel-ink); border-bottom: 1.5px solid var(--panel-ink); }
+    .tp-tulip svg { width: 44px; height: 44px; display: block; }
+    .tp-call b { display: block; font: 800 22px/1 var(--font-ui); } .tp-call i { display: block; font: 800 18px/1.1 var(--font-ui); font-style: normal; color: var(--accent); }
+    .tp-speed { text-align: right; } .tp-speed b { font: 800 40px/0.9 var(--font-num); } .tp-speed small { display: block; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; color: var(--panel-dim); }
+    .tc-head, .tc-voice, .theme-card > .note { padding: 0 14px; }
+    .tc-head { display: flex; align-items: center; gap: 10px; } .tc-head b { font-size: 20px; flex: 1; }
+    .tc-pro { font-size: 11px; font-weight: 800; letter-spacing: 0.12em; padding: 2px 6px; border: 1.5px solid var(--panel-ink); }
+    .tc-inuse { font-size: 13px; font-weight: 700; color: var(--panel-dim); }
+    .tc-voice { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; font-size: 14px; }
+    .tc-voice p { margin: 0; }
+    /* ---------------- Tapedeck (Pro, REVIEW.md 4.1): the VFD skin over the same layout; glow is additive, the tokens pass
+       the contract without it (theme_contract.js) ---------------- */
+    html[data-theme="tapedeck"] body { letter-spacing: 0.02em; }
+    html[data-theme="tapedeck"] .notes, html[data-theme="tapedeck"] .binnacle { text-transform: uppercase; }
+    html[data-theme="tapedeck"] .rb-call span, html[data-theme="tapedeck"] .rb-dist b, html[data-theme="tapedeck"] .ds-main,
+    html[data-theme="tapedeck"] .ro b, html[data-theme="tapedeck"] .odo-digits { text-shadow: 0 0 6px color-mix(in srgb, currentColor 60%, transparent); }
+    html[data-theme="tapedeck"] .rb-call span.rb-mods i.warn { color: var(--amber); }
+    html[data-theme="tapedeck"] .binnacle { background: linear-gradient(transparent 50%, rgba(125, 245, 222, 0.025) 50%) 0 0 / 100% 3px, var(--panel); }
+    html[data-theme="tapedeck"] .key, html[data-theme="tapedeck"] .ink-btn { border-color: var(--rule); box-shadow: inset 0 -3px 0 #000; }
+    html[data-theme="tapedeck"] #driveEnd { background: transparent; color: var(--accent); border: 1.5px solid var(--accent); }
+    html[data-theme="tapedeck"] .odo.boxed .dg { border-color: var(--rule); }
+    html[data-theme="tapedeck"] .odo-meta, html[data-theme="tapedeck"] .dna-arch, html[data-theme="tapedeck"] .ro span { letter-spacing: 0; white-space: nowrap; }
+    .vfd-seg .seg { fill: var(--face-ink); opacity: 0.07; } .vfd-seg .seg.lit { opacity: 1; filter: drop-shadow(0 0 3px var(--face-ink)); }
+    .vfd-seg .vfd-shadow { fill: transparent; }
+    .vfd-label { fill: var(--face-dim); font-family: var(--font-ui); }
+    .vfd-meters { display: grid; gap: 8px; align-content: center; height: 100%; }
+    .vfd-cap { display: block; font: 600 13px var(--font-ui); letter-spacing: 0.12em; color: var(--panel-dim); }
+    .vfd-bars { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 2px; height: 40px; }
+    .vfd-bars i { display: flex; flex-direction: column-reverse; gap: 1px; }
+    .vfd-bars b { flex: 1; background: var(--hair); }
+    .vfd-bars b.on { background: var(--panel-ink); box-shadow: 0 0 4px color-mix(in srgb, var(--panel-ink) 70%, transparent); }
+    .vfd-bars b.on.amber { background: var(--amber); }
+    .kit-row { grid-column: 1 / -1; display: grid; grid-template-columns: 70px minmax(0, 1fr); gap: 14px; align-items: center; padding-top: 6px; border-top: 1px solid var(--rule); }
+    .kit { width: 70px; height: 60px; display: block; }
+    .kit circle { fill: var(--hair); } .kit circle.on { fill: var(--panel-ink); } .kit circle.eye { fill: var(--amber); }
+    .kit-says b { display: block; font: 700 15px var(--font-ui); letter-spacing: 0.06em; color: var(--panel-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tp-tapedeck { background: #0A0C0B; } .tp-tapedeck .tp-call b, .tp-tapedeck .tp-speed b { text-shadow: 0 0 6px rgba(125, 245, 222, 0.6); }
+    /* ---------------- Billet (Pro, REVIEW.md 4.1): brushed metal, knurled bezels, red glow; glow is additive ---------------- */
+    html[data-theme="billet"] .binnacle, html[data-theme="billet"] .notes {
+      background: repeating-linear-gradient(90deg, rgba(255,255,255,0.025) 0 1px, transparent 1px 3px), linear-gradient(180deg, #2A2B2E, var(--panel) 60%); }
+    html[data-theme="billet"] .rb-dist b, html[data-theme="billet"] .ro-sight b, html[data-theme="billet"] .odo-digits { color: var(--accent); text-shadow: 0 0 8px rgba(255, 74, 61, 0.55); }
+    html[data-theme="billet"] .dial-digital { fill: var(--accent); filter: drop-shadow(0 0 4px rgba(255, 74, 61, 0.7)); }
+    html[data-theme="billet"] .key, html[data-theme="billet"] .ink-btn { border-color: var(--rule); background: linear-gradient(#2E2F33, #1C1D1F); box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 2px 0 #000; }
+    html[data-theme="billet"] .odo.boxed .dg { background: #0D0D0E; border-color: var(--rule); }
+    html[data-theme="billet"] .ro-limit:not(.unknown) { background: #FFFFFF; color: #111111; border-color: #111111; }   /* the white sign, exactly as on the road */
+    html[data-theme="billet"] .ro-limit:not(.unknown) span { color: #111111; }
+    .bezelled { position: relative; }
+    .bezel-ring { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+    .bezel-ring .knurl { fill: none; stroke: #6B6E74; stroke-width: 5; stroke-dasharray: 1.2 1.6; }
+    .bezel-ring .screw { fill: #3A3C40; stroke: #8A8D93; stroke-width: 0.8; }
+    .tp-billet { background: linear-gradient(180deg, #2A2B2E, #1C1D1F); } .tp-billet .tp-speed b { color: #FF5A4C; text-shadow: 0 0 8px rgba(255, 74, 61, 0.6); }
     .rc-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 18px; margin-top: 10px; }
     label.linkbtn { display: inline-flex; align-items: center; cursor: pointer; }
     .linkbtn { font: inherit; font-size: 15px; font-weight: 500; color: var(--panel-ink); text-decoration: underline; min-height: 44px; padding: 0 4px; background: none; border: none; }
@@ -875,25 +943,27 @@
             <div id="hlList" class="stack-8 mt-8"></div>
             <div id="hlNearby" class="stack-8 mt-8"></div>
           </section>
+          <!-- Look and voice (REVIEW.md 4.5, mockup 11-theme-picker.html): each theme with a live preview, its co-driver and
+               a Hear key. Pro themes carry a PRO tag (never a padlock) and can be tried in full on the demo replay. -->
+          <section data-panel="garage" id="lookSection">
+            <h3>Look and voice</h3>
+            <p class="note">A theme changes the type, colours, gauges, map, motion and the co-driver's voice. The calls, the hazards and where things sit never change.</p>
+            <div class="theme-cards" id="themeCards"></div>
+          </section>
           <section data-panel="garage">
             <h3>Co-driver</h3>
             <div class="switches">
               <button class="sw sw-cycle" data-cycle="notesMode" aria-label="Notes"><b></b><span>Notes</span></button>
               <button class="sw" data-toggle="voice"><i></i><span>Voice</span></button>
               <button class="sw" data-toggle="haptics"><i></i><span>Haptics</span></button>
+              <button class="sw" data-toggle="keys"><i></i><span>Key sounds</span></button>
               <button class="sw sw-cycle" data-cycle="nightMode" aria-label="Night"><b></b><span>Night</span></button>
             </div>
             <p class="note">Notes: Full calls every corner; Quiet only hazards and cameras; Auto calls corners once you are cornering with some purpose, quiet otherwise. Night: Auto turns the page over after sunset.</p>
           </section>
           <section data-panel="garage">
-            <h3>Voice</h3>
-            <p class="note" style="margin:0 0 8px">Who reads your notes. Works offline.</p>
-            <div class="row" id="voiceList">
-              <span id="voiceCards" style="display:contents"></span>
-              <button class="ink-btn" data-voice="device">Phone voice</button>
-            </div>
-            <div class="row mt-8"><select class="field" id="voiceSelect"></select></div>
-            <div class="row mt-8"><button class="ink-btn" id="voiceTestBtn">▶ Sample</button></div>
+            <h3>The words</h3>
+            <p class="note" style="margin:0 0 8px">Your co-driver comes with your theme (Look and voice above). Works offline.</p>
             <div class="switch mt-8" id="noteWordsList" role="group" aria-label="Note words">
               <button data-words="plain">Plain words</button>
               <button data-words="rally">Rally notes</button>
@@ -1155,10 +1225,10 @@
     const state = {
       mode: 'replay', playing: false, rate: 1, cursorM: 0, cursorIdx: 0, follow: true, bearing: 0,
       live: null, liveAt: 0, lastPosition: null, spiritedAt: -Infinity, spoken: new Set(), tapToRoute: false,
-      theme: 'roadbook', camFeel: 'dynamic', voiceId: 'george', liveVoice: false, voiceStyle: 'codriver', voiceName: '', hlOn: false, hlStrength: 1,
+      theme: 'roadbook', camFeel: 'dynamic', voiceId: 'marguerite', liveVoice: false, voiceStyle: 'codriver', voiceName: '', hlOn: false, hlStrength: 1,
       notesMode: 'auto', nightMode: 'auto',   // Notes: auto | full | quiet. Night: auto (sunset/sunrise) | on | off
       noteWords: 'plain',                     // rally ("Left 4 minus") | plain ("Medium left"), IDEAS V-02; a saved setting wins
-      toggles: { stage: false, voice: true, lpr: true, dna: false, night: false, twisty: false, haptics: true, crash: true, health: true, terrain: false, coverage: false }   // stage and night are derived from the two modes; analysis.html reads toggles.night
+      toggles: { stage: false, voice: true, lpr: true, dna: false, night: false, twisty: false, haptics: true, crash: true, health: true, terrain: false, coverage: false, keys: true }   // stage and night are derived from the two modes; analysis.html reads toggles.night
     };
     const NOTES_MODES = ['auto', 'full', 'quiet'], NIGHT_MODES = ['auto', 'on', 'off'];
     const MODE_LABEL = { auto: 'Auto', full: 'Full', quiet: 'Quiet', on: 'On', off: 'Off' };
@@ -1203,8 +1273,9 @@
     if (params.has('theme')) state.theme = params.get('theme');
     if (params.has('cam')) state.camFeel = params.get('cam');
     if (params.has('voice')) state.voiceId = params.get('voice');
-    state.voiceStyle = state.voiceId === 'jarvis' ? 'jarvis' : 'codriver';
+    state.voiceStyle = 'codriver';
 
+    let bankVoices = [];                                             // the voice banks on the phone (web/voices/index.json)
     let look = Themes.apply(state.theme, state.toggles.night);
     ApexFormat.applyTypeScale(document);
     document.addEventListener('visibilitychange', () => { if (!document.hidden) ApexFormat.applyTypeScale(document); });   // text size changed in Settings
@@ -1222,10 +1293,11 @@
     function applyTheme() {
       syncDerivedToggles();
       look = Themes.apply(state.theme, state.toggles.night);
+      if (typeof themeVoice === 'function') themeVoice();               // the co-driver comes with the theme
       cluster = Inst.mountCluster($('cluster'), look.theme);
       paintSwitches();
       restyleBasemap();
-      if (track) loadTrackOnMap();
+      if (track && track.kind !== 'horizon') loadTrackOnMap();   // the road ahead is never drawn
       savePrefs();
       render(false);
     }
@@ -1277,7 +1349,7 @@
     const map = new maplibregl.Map({ container: 'map', style: MAP_STYLE,
       center: startPos ? [startPos.lon, startPos.lat] : [-84.70, 39.24], zoom: 14.6, pitch: 45, maxPitch: 60, attributionControl: { compact: true }, fadeDuration: 0,
       transformRequest: window.ApexOfflineTiles ? ApexOfflineTiles.transform : undefined });
-    window.apexDebug = { map, get track() { return track; }, state, drives, buildRoute: (...a) => buildRoute(...a), renderRouteCard: (...a) => renderRouteCard(...a), openRoadPage: (...a) => openRoadPage(...a), showEndCard: (...a) => showEndCard(...a) };
+    window.apexDebug = { map, get track() { return track; }, state, drives, buildRoute: (...a) => buildRoute(...a), renderRouteCard: (...a) => renderRouteCard(...a), openRoadPage: (...a) => openRoadPage(...a), showEndCard: (...a) => showEndCard(...a), get driveActive() { return driveActive; }, tryTheme: (id) => tryTheme(id) };
     let mapReady = false;
     // The map's box changes with the layout (idle hides the gauges, a drive shows them); keep the canvas the size of its box.
     if (window.ResizeObserver) new ResizeObserver(() => map.resize()).observe(document.getElementById('map'));
@@ -1883,8 +1955,7 @@
     const noteworthyInCruise = (e) => e.type === 'alpr' || (e.type === 'bump' && e.severity_g >= 0.45);
 
     // -------------------------------------------------------------------------
-    // Voice: "codriver" (most natural voice installed, read like a real co-driver) or
-    // "jarvis" (cartoonishly robotic: robot voice where installed, chirps, machine-speak).
+    // Voice: the most natural voice installed, read like a real co-driver.
     // -------------------------------------------------------------------------
     let privacyZones = (() => { try { return ApexPrivacyZones.load(localStorage); } catch (_) { return []; } })();   // privacy_zones.js
     const inPrivacyZone = (lat, lon) => !!ApexPrivacyZones.zoneAt(privacyZones, lat, lon);
@@ -1910,52 +1981,13 @@
     // rhythm: for the open-model voices only (device TTS would read the dots aloud). A co-driver runs a
     // chunk together and breathes before the caution and before the distance (tools/voicebank.py tts_text).
     function spokenText(text, rhythm = false) {
-      if (state.voiceStyle !== 'jarvis') {
-        const spoken = text.replace(/, (\d{2,3})$/, (_, d) => `${rhythm ? ' ...' : ','} ${codriverDistance(parseInt(d, 10))}`);
-        return rhythm ? spoken.replace(/, (care|caution|double caution|triple caution)\b/g, ' ..... $1') : spoken;
-      }
-      // Jarvis: deadpan machine readout, digits one by one, each chained note on its own.
-      const digits = (n) => String(n).split('').map(c => NUM_WORDS[+c] || c).join(' ');
-      let tail = '';
-      text = text.replace(/, (\d{2,3})$/, (_, d) => { tail = ` Distance: ${digits(d)} meters.`; return ''; });
-      const piece = (p) => {
-        let out = p.trim()
-          .replace(/^(Left|Right) (\d)( minus| plus)?/i, (_, dir, n, g) => `Corner: ${dir.toLowerCase()}. Severity: ${NUM_WORDS[+n]}${g ? ', ' + g.trim() : ''}.`)
-          .replace(/^(Left|Right) hairpin/i, (_, dir) => `Corner: ${dir.toLowerCase()}. Classification: hairpin.`)
-          .replace(/^(Square|Acute) (left|right)/i, (_, k, dir) => `Corner: ${dir}. Classification: ${k.toLowerCase()}.`)
-          .replace(/(double caution|triple caution|caution|care)/, (m) => ` Warning: ${m}.`);
-        if (/^(Bump|Crest|Dip|Camera)/.test(out)) out = `Hazard detected. ${out}.`;
-        const MOD = '(?:long|short|tightens|opens|banked|off-camber|over crest)';
-        return out.replace(new RegExp(`\\. (${MOD}(?: ${MOD})*)`), (_, m) => `. Modifiers: ${m.match(new RegExp(MOD, 'g')).join(', ')}.`)
-          .replace(/[.,]?,\s*Warning/g, '. Warning').replace(/\.\s*\./g, '.').replace(/\s+/g, ' ').trim();
-      };
-      const parts = text.split(/ (into|and) (?=Left|Right|Square|Acute|Bump|Crest|Dip|Camera)/);
-      let out = piece(parts[0]);
-      for (let i = 1; i < parts.length; i += 2) out += ` Sequence ${parts[i] === 'into' ? 'immediate' : 'linked'}. ${piece(parts[i + 1])}`;
-      return out + tail;
-    }
-    let audioCtx = null;
-    function chirp() {
-      try {
-        audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
-        const t0 = audioCtx.currentTime;
-        [[880, 0], [1320, 0.07], [990, 0.14]].forEach(([f, dt]) => {
-          const o = audioCtx.createOscillator(), g = audioCtx.createGain();
-          o.type = 'square'; o.frequency.value = f;
-          g.gain.setValueAtTime(0.0001, t0 + dt); g.gain.exponentialRampToValueAtTime(0.06, t0 + dt + 0.01);
-          g.gain.exponentialRampToValueAtTime(0.0001, t0 + dt + 0.06);
-          o.connect(g); g.connect(audioCtx.destination); o.start(t0 + dt); o.stop(t0 + dt + 0.07);
-        });
-      } catch (_) {}
+      const spoken = text.replace(/, (\d{2,3})$/, (_, d) => `${rhythm ? ' ...' : ','} ${codriverDistance(parseInt(d, 10))}`);
+      return rhythm ? spoken.replace(/, (care|caution|double caution|triple caution)\b/g, ' ..... $1') : spoken;
     }
     // Rank installed voices: neural/premium first, British English (the co-driver accent), then any English.
     function pickVoice(style) {
       const voices = ('speechSynthesis' in window) ? speechSynthesis.getVoices() : [];
       if (state.voiceName) { const v = voices.find(x => x.name === state.voiceName); if (v) return v; }
-      if (style === 'jarvis') {
-        const robot = voices.find(v => /Zarvox|Trinoids|Fred|Ralph|Cellos|robot/i.test(v.name));
-        if (robot) return robot;
-      }
       const score = (v) => (/natural|neural|premium|enhanced|online/i.test(v.name) ? 10 : 0) + (/^en-GB/i.test(v.lang) ? 4 : 0) +
         (/^en/i.test(v.lang) ? 2 : 0) + (/Google UK English Male|Daniel|Arthur|Ryan|Thomas|Oliver/i.test(v.name) ? 3 : 0) - (v.localService === false && !/natural|online/i.test(v.name) ? 0 : 0);
       return voices.filter(v => /^en/i.test(v.lang)).sort((a, b) => score(b) - score(a))[0] || null;
@@ -1966,6 +1998,7 @@
     function say(text, force, chain = null, sysToken = null, opts = {}) {
       // a road hazard (not a turn or a crest, which share the urgent speech lane) also alerts on the car's screen
       if (text && opts.alert && driveActive) carPost({ kind: 'hazard', title: text });
+      if (text) state.kitLine = String(text).replace(/\.$/, '').toUpperCase().slice(0, 40);   // what Kit says (Tapedeck)
       if (!text || (!state.toggles.voice && !force)) return;
       if (force) { speech.queue.clear(); stopSpeaking(); opts = { duck: true, ...opts }; }   // a line you asked for is heard
       speech.queue.push({ text, chain, sysToken, ...opts }, performance.now());
@@ -2013,6 +2046,11 @@
       if (!item) { speech.current = null; speech.via = null; return; }
       if (item.kind === 'hazard' || item.chain || item.haptic) haptic(item.kind === 'hazard' ? 'hazard' : 'note');
       speech.busy = true; speech.current = item; speech.via = 'model';
+      // the theme's pre-call sound before a call, and the one hazard two-tone (the same in every theme) before a hazard
+      const cue = item.kind === 'hazard' ? 'hazard' : item.chain ? 'pre' : null;
+      if (cue && window.ApexThemeSounds && window.ApexVoice) {
+        try { const len = ApexThemeSounds.play(ApexVoice.unlock(), ApexThemeSounds.recipe(state.theme, cue)); await new Promise(r => setTimeout(r, len * 1000 + 40)); } catch (_) {}
+      }
       const duck = ApexSpeechQueue.ducks(item, isSpirited());
       let played = false;
       try {
@@ -2037,7 +2075,6 @@
     }
     function deviceSpeak(spoken, duck = true) {
       const style = state.voiceStyle;
-      if (style === 'jarvis') chirp();
       const native = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex;
       if (native) {
         // One line at a time, so a hazard can still go ahead of the lines behind it; a hazard cutting in interrupts at a word.
@@ -2054,9 +2091,7 @@
       const u = new SpeechSynthesisUtterance(spoken);
       const v = pickVoice(state.voiceStyle);
       if (v) { u.voice = v; u.lang = v.lang; }
-      const robotVoice = v && /Zarvox|Trinoids|Fred|Ralph|Cellos|robot/i.test(v.name);
-      if (state.voiceStyle === 'jarvis') { u.rate = robotVoice ? 1.0 : 0.92; u.pitch = robotVoice ? 1.0 : 0.15; }
-      else { u.rate = 1.12; u.pitch = 1.0; }
+      u.rate = 1.12; u.pitch = 1.0;
       u.onend = u.onerror = () => { speech.busy = false; pumpSpeech(); };
       speechSynthesis.speak(u);
     }
@@ -2127,6 +2162,7 @@
       notes.sort((a, b) => a.distM - b.distM).splice(3);
       notes.quietText = offRoute ? (!track ? 'No route planned' : offRouteText()) : track ? `${track.name} · ${spirited ? 'Full notes' : 'Quiet · bumps and cameras only'}` : 'Plan a route for notes';
       Inst.renderNotes($('notes'), look.theme, notes);
+      state.crestAhead = !!(notes[0] && notes[0].type === 'crest' && notes[0].distM < 150);   // Kit sits up for it
       lastNotes = notes;
       if (live) pushActivity(notes);
       if (live) carGuide();
@@ -2208,10 +2244,12 @@
         bearing = L.course_deg != null ? L.course_deg : state.bearing;
         if (track) {
           // Off route the rejoin can be anywhere on the route, so search all of it (hint -1).
-          const hit = Core.nearestIndex(lat, lon, track.lat, track.lon, rerouter.off ? -1 : state.cursorIdx, 600);
-          if (L !== routeWatch.frame) { routeWatch.frame = L; feedRerouter(L, hit); trafficTick(L, hit); }
-          if (hit.distM < 40 && !rerouter.off) { idx = hit.index; state.cursorM = track.dist[idx]; }
+          const free = track.kind === 'horizon';                         // the road ahead is not a route: no rerouting, ETA or traffic
+          const hit = Core.nearestIndex(lat, lon, track.lat, track.lon, rerouter.off && !free ? -1 : state.cursorIdx, 600);
+          if (L !== routeWatch.frame && !free) { routeWatch.frame = L; feedRerouter(L, hit); trafficTick(L, hit); }
+          if (hit.distM < 40 && (free || !rerouter.off)) { idx = hit.index; state.cursorM = track.dist[idx]; }
         }
+        if (onFreeRoad()) maybeHorizon(L, idx);
       } else if (track && replayOn) {
         const s = sample(track, state.cursorM);
         idx = s.i; lat = s.lat; lon = s.lon; bearing = s.bearing;
@@ -2239,8 +2277,10 @@
         sightOpen: sight != null && sight >= Core.SIGHT_MAX_M - 1 && (pace == null || pace >= sightMps - 0.5),
         limitMph: limit != null ? ApexUnits.speed(limit) : null,
         latG, lonG, camberDeg: camber,
-        tripMi: ApexUnits.longN(live && idx < 0 ? (drive.rec ? drive.rec.km * 1000 : 0) : state.cursorM), totalMi: track && !(live && idx < 0) ? ApexUnits.longN(totalM()) : null,
-        sector: sectorAt(idx), routeOnly: track && track.kind === 'route'
+        tripMi: ApexUnits.longN(live && (idx < 0 || track.kind === 'horizon') ? (drive.rec ? drive.rec.km * 1000 : 0) : state.cursorM), totalMi: track && track.kind !== 'horizon' && !(live && idx < 0) ? ApexUnits.longN(totalM()) : null,
+        sector: sectorAt(idx), routeOnly: track && track.kind === 'route',
+        // for Tapedeck's meters and Kit (instruments.js): the live roughness, the last line said, a crest close ahead, a blink
+        rough, kitLine: state.kitLine, crestAhead: !!state.crestAhead, blink: performance.now() < (state.blinkUntil || 0)
       });
       updateRibbon(vMps, idx, snap);
       updatePins();
@@ -2316,7 +2356,7 @@
       ApexVoice.load(state.voiceId).then(() => {
         const style = ApexVoice.bank.style, texts = [spokenTextFor(`${t.name}.`, style)];
         // Every call of the route that the bank cannot play as a single clip, in driving order.
-        if (ApexVoice.bank.engine === 'kokoro' && style !== 'jarvis') {
+        if (ApexVoice.bank.engine === 'kokoro') {
           const ev = t.events.slice().sort((a, b) => a.dist_m - b.dist_m);
           for (const e of ev) {
             if (e.type === 'alpr') continue;
@@ -2331,6 +2371,49 @@
         ApexVoice.prefetch(texts);
       }).catch(() => {});
     }
+    }
+    // Free driving (REVIEW.md 3.1): Start with no route still calls the corners of the road you're on. The road ahead comes
+    // from the map's own road lines (horizon.js: followed through plain junctions only, never a guessed turn) and becomes a
+    // track of its own kind, 'horizon', that the notes and the co-driver read like a route's. It is not drawn, rerouted or
+    // timed; it is rebuilt near its end, after a junction, or once you leave it; corners already called aren't called again.
+    const FREE_CLASSES = new Set(['motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'minor', 'service', 'track', 'raceway', 'busway']);
+    const free = { busy: false, at: 0, offSince: 0 };
+    function onFreeRoad() { return driveActive && state.mode === 'live' && !(track && track.kind === 'route'); }
+    function maybeHorizon(L, idx) {
+      const now = performance.now(), t = track && track.kind === 'horizon' ? track : null;
+      const off = !!t && idx < 0;
+      free.offSince = off ? (free.offSince || now) : 0;
+      if (free.busy || now - free.at < 2000) return;
+      if (t && !(off && now - free.offSince > 3000) && !(totalM() - state.cursorM < 600)) return;
+      if (!Number.isFinite(L.course_deg) || !(L.speed_mps > 3) || !mapReady) return;   // a heading needs motion
+      free.at = now; free.busy = true;
+      buildHorizon(L).catch(() => {}).finally(() => { free.busy = false; });
+    }
+    async function buildHorizon(L) {
+      let feats = [];
+      try { feats = map.querySourceFeatures('openmaptiles', { sourceLayer: 'transportation' }); } catch (_) { return; }
+      const dLat = 0.03, dLon = dLat / Math.max(0.2, Math.cos(L.lat * Math.PI / 180)), lines = [];   // about 3 km round you
+      for (const f of feats) {
+        const cls = f.properties && f.properties.class, g = f.geometry;
+        if (!FREE_CLASSES.has(cls) || !g) continue;
+        const parts = g.type === 'LineString' ? [g.coordinates] : g.type === 'MultiLineString' ? g.coordinates : [];
+        for (const p of parts) if (p.some(([lo, la]) => Math.abs(la - L.lat) < dLat && Math.abs(lo - L.lon) < dLon)) lines.push({ coords: p, cls });
+      }
+      const h = window.ApexHorizon ? ApexHorizon.ahead(lines, { lat: L.lat, lon: L.lon, heading: L.course_deg }, 2500) : null;
+      if (!h || !onFreeRoad()) return;
+      const t = await trackFromPolyline(h.coords, 'horizon', 'The road ahead');
+      if (!onFreeRoad()) return;
+      t.kind = 'horizon'; t.subtitle = 'The road ahead, from the map'; t.horizonEnd = h.end;
+      useHorizon(t);
+    }
+    function useHorizon(t) {
+      const old = track && track.kind === 'horizon' ? track : null, cos = Math.cos(t.lat[0] * Math.PI / 180);
+      const said = old ? old.events.filter(e => state.spoken.has(`${old.id}:${e.type}:${e.index}`)) : [];
+      track = t; state.cursorM = 0; state.spoken.clear();
+      for (const e of t.events) if (said.some(k => k.type === e.type && Math.hypot((k.lat - e.lat) * 110540, (k.lon - e.lon) * 111320 * cos) < 25)) state.spoken.add(`${t.id}:${e.type}:${e.index}`);
+      if (mapReady) map.getSource('apex-route-src').setData({ type: 'FeatureCollection', features: [] });   // not a route: not drawn
+      rebuildPins();
+      render(false);
     }
     function activate(t, startM = 0, { quiet = false } = {}) {
       if (!booting && !quiet) { replayOn = true; }
@@ -4201,7 +4284,7 @@
     try { spotsFeed = window.ApexSpotsFeed ? ApexSpotsFeed.mount({ el, btn, toast, sync: window.ApexSync, report: safety && safety.report,
       here: () => state.lastPosition || (() => { const c = map.getCenter(); return { lat: c.lat, lon: c.lng }; })(), goTo: (p) => { closeSheet(); routeToPlace(p); } }) : null; } catch (e) { console.error('spots', e); }
     let garage = null;
-    try { garage = window.ApexGarageUI ? ApexGarageUI.mount({ el, btn, toast, apiCall, jsonOf, report: safety && safety.report, onCars: setRoutingCars }) : null; } catch (e) { console.error('garage', e); }
+    try { garage = window.ApexGarageUI ? ApexGarageUI.mount({ el, btn, toast, apiCall, jsonOf, report: safety && safety.report, onCars: setRoutingCars, onPhotos: () => renderAccount() }) : null; } catch (e) { console.error('garage', e); }
     const switchRow = (label, on, change) => { const b = el('button', { className: 'ink-btn' + (on ? ' on' : ''), textContent: `${label}: ${on ? 'On' : 'Off'}`, onclick: change }); b.setAttribute('aria-pressed', String(!!on)); return b; };
     let openCrewId = null;
     const crewNear = () => { if (state.lastPosition) return state.lastPosition; const c = map.getCenter(); return { lat: c.lat, lon: c.lng }; };
@@ -4286,8 +4369,13 @@
 
       // you (in the Garage: REVIEW.md 3.2, your own identity lives with your cars)
       const you = section('You');
-      you.append(el('div', { className: 'row', style: 'align-items:baseline;gap:12px' }, el('b', { textContent: `@${me.handle}`, style: 'font-size:22px;font-family:var(--font-num)' }),
+      // your profile photo (REVIEW.md 5.2): a round face beside your handle, or your initial until you add one
+      const face = window.ApexPhotos ? ApexPhotos.avatar(me.photo_id, me.handle, 72) : null;
+      you.append(el('div', { className: 'row', style: 'align-items:center;gap:12px' }, ...(face ? [face] : []), el('b', { textContent: `@${me.handle}`, style: 'font-size:22px;font-family:var(--font-num)' }),
         el('span', { className: 'note', textContent: pts && Number.isFinite(pts.total) ? `${Math.round(pts.total).toLocaleString()} points` : '' })));
+      if (face && me.member) you.append(el('div', { className: 'row' }, ApexPhotos.picker(me.photo_id ? 'Change photo' : 'Add a photo', 'profile', null, redo, { toast }),
+        ...(me.photo_id ? [btn('Remove photo', async () => { if (await ApexPhotos.remove(me.photo_id)) redo(); else toast('Couldn\u2019t remove it. Try again.'); }, 'linkbtn')] : [])),
+        el('p', { className: 'note', textContent: 'Photos lose their location data before they leave your phone.' }));
       // pioneer badges (IDEAS S-09): roads you were first or second to map with Road data on; only you see them
       const pio = pts && pts.pioneer;
       if (pio && (pio.firsts || pio.seconds)) you.append(el('p', { className: 'note pioneer', textContent: [pio.firsts ? `Pioneer of ${pio.firsts} road${pio.firsts === 1 ? '' : 's'}` : '', pio.seconds ? `second to map ${pio.seconds}` : ''].filter(Boolean).join(' · ') }));
@@ -4756,6 +4844,56 @@
     $('loopSuggest').addEventListener('click', () => { if (!loopBusy) $('findLoopBtn').click(); });
     document.querySelectorAll('#loopDetents button').forEach(b => b.addEventListener('click', paintLoopSuggest));
     paintLoopSuggest();
+    // ---- Look and voice: the theme picker (REVIEW.md 4.5) ---------------------------------------------------------------
+    // A card per theme: a live preview of its strip and speed in its own tokens, its name, two lines, its co-driver with one
+    // sample line and a Hear key. Roadbook is free; a Pro theme can be tried on the demo replay for 10 minutes, then the
+    // look comes back and one line says what it is (pro.js: Pro isn't on sale yet, and says so).
+    const proFlags = () => (window.ApexFlags ? { pro: ApexFlags.on('pro', false), proOnSale: ApexFlags.on('proOnSale', false) } : {});   // both off unless the server turns them on
+    const themeAllowed = (id) => { const t = Themes.THEMES[id]; return !!t && (!t.pro || ApexPro.allowed(`theme_${id}`, localStorage, proFlags())); };
+    let themeTrial = null;                                            // { id, was, timer } while a Pro theme is being tried
+    function useTheme(id) { state.theme = id; savePrefs(); applyTheme(); renderThemePicker(); }
+    function endThemeTrial(say) {
+      if (!themeTrial) return;
+      clearTimeout(themeTrial.timer);
+      const { id, was } = themeTrial; themeTrial = null;
+      useTheme(was);
+      if (say) toast(ApexPro.line(`theme_${id}`, proFlags()) || '', { ms: 8000 });
+    }
+    function tryTheme(id) {
+      if (themeTrial) endThemeTrial(false);
+      themeTrial = { id, was: themeAllowed(state.theme) ? state.theme : 'roadbook', timer: setTimeout(() => endThemeTrial(true), 10 * 60000) };
+      useTheme(id); closeSheet();
+      if (typeof watchDryRidge === 'function') watchDryRidge();
+      toast(`Trying ${Themes.THEMES[id].label} for 10 minutes on the demo replay.`, { label: 'Stop', ms: 6000, onClick: () => endThemeTrial(false) });
+    }
+    function themePreview(t) {
+      const c = t.day, box = document.createElement('div');
+      box.className = `theme-preview tp-${t.id}`;
+      for (const [k, v] of Object.entries(c)) box.style.setProperty(`--${k.replace(/[A-Z]/g, m => '-' + m.toLowerCase())}`, v);
+      box.style.setProperty('--font-ui', t.fonts.ui); box.style.setProperty('--font-num', t.fonts.num);
+      box.innerHTML = `<span class="tp-tulip">${Inst.tulipSVG({ type: 'corner', dir: 'L', severity: '4', mods: ['tightens'], turnRad: 1.2 }, c.panelInk, c.accent)}</span>`
+        + '<span class="tp-call"><b>LEFT 4</b><i>TIGHTENS</i></span><span class="tp-speed"><b>42</b><small>MPH</small></span>';
+      return box;
+    }
+    function renderThemePicker() {
+      const box = $('themeCards'); if (!box) return;
+      box.replaceChildren(...Object.values(Themes.THEMES).map((t) => {
+        const card = el('div', { className: 'theme-card' + (state.theme === t.id ? ' in-use' : '') });
+        const ok = themeAllowed(t.id), inUse = state.theme === t.id && !themeTrial;
+        const act = inUse ? el('span', { className: 'tc-inuse', textContent: 'In use' })
+          : ok ? btn('Use', () => useTheme(t.id), 'ink-btn') : btn('Try it', () => tryTheme(t.id), 'ink-btn');
+        const hear = btn('Hear', () => hearPack(t.voice && t.voice.id, t.voice ? t.voice.sample : 'Left four, tightens.'), 'ink-btn tc-hear');
+        hear.setAttribute('aria-label', `Hear ${t.voice ? t.voice.name : t.label}`);
+        card.append(themePreview(t),
+          el('div', { className: 'tc-head' }, el('b', { textContent: t.label }), ...(t.pro ? [el('span', { className: 'tc-pro', textContent: 'PRO' })] : []), act),
+          el('p', { className: 'note', textContent: t.about || t.blurb || '' }),
+          el('div', { className: 'tc-voice' }, el('p', {}, el('b', { textContent: `Voice: ${t.voice ? t.voice.name : '--'}. ` }), document.createTextNode(t.voice ? `${t.voice.who} "${t.voice.sample}"` : '')), hear));
+        return card;
+      }));
+    }
+    // a Pro theme without Pro (a shared phone, Pro lapsed) goes back to the road book, never silently kept
+    if (!themeAllowed(state.theme)) { state.theme = 'roadbook'; savePrefs(); applyTheme(); }
+    renderThemePicker();
     // Long help in the Garage folds under "How this works" (REVIEW.md 1.2, Settings): the control first, the essay on demand.
     document.querySelectorAll('#sheet [data-panel~="garage"] > p.note').forEach((p) => {
       if (p.id || p.textContent.trim().length < 140) return;                // short notes and live status lines stay as they are
@@ -4829,35 +4967,27 @@
       closeHighlightDialog(); renderHighlights(); toast(`Spot saved · ${name}`);
     });
 
-    // Voice picker: open-model banks (web/voices/index.json) + the device's own voice.
-    let bankVoices = [];
-    function renderVoiceList() {
-      const cards = $('voiceCards');
-      cards.innerHTML = '';
-      for (const v of bankVoices) {
-        const btn = document.createElement('button');
-        btn.className = 'ink-btn';
-        btn.dataset.voice = v.id;
-        btn.textContent = v.name;
-        btn.title = v.license;
-        cards.appendChild(btn);
-      }
-      document.querySelectorAll('[data-voice]').forEach(b => {
-        b.classList.toggle('on', b.dataset.voice === state.voiceId);
-        b.onclick = () => {
-          state.voiceId = b.dataset.voice; state.voiceStyle = state.voiceId === 'jarvis' ? 'jarvis' : 'codriver';
-          renderVoiceList(); savePrefs();
-          if (window.ApexVoice) ApexVoice.unlock();
-          say('Co-driver ready.', true, null, state.voiceId === 'jarvis' ? 'w:test' : 'sys:test');
-        };
-      });
-      const sel = $('voiceSelect');
-      const voices = ('speechSynthesis' in window) ? speechSynthesis.getVoices().filter(v => /^en/i.test(v.lang)) : [];
-      sel.innerHTML = '';
-      sel.add(new Option(`Automatic (${(pickVoice(state.voiceStyle) || { name: 'device default' }).name})`, ''));
-      voices.forEach(v => sel.add(new Option(`${v.name} · ${v.lang}`, v.name)));
-      sel.value = state.voiceName || '';
-      sel.style.display = state.voiceId === 'device' && voices.length ? '' : 'none';
+    // Voices come with themes (REVIEW.md 4.4, roadmap 18): Roadbook's Marguerite, Tapedeck's Kit, Billet's Hale. The voice
+    // list and custom voices are gone; the theme's pack is used whenever its bank is on the phone, the phone's own voice
+    // only when it isn't (or for words no bank has). (bankVoices is declared with the state, before the first applyTheme.)
+    function themeVoice() {
+      const want = look && look.theme && look.theme.voice ? look.theme.voice.id : null;
+      if (want && bankVoices.some(v => v.id === want)) { state.voiceId = want; state.voiceStyle = 'codriver'; }
+      else if (!bankVoices.some(v => v.id === state.voiceId)) { state.voiceId = 'device'; state.voiceStyle = 'codriver'; }
+    }
+    function renderVoiceList() { themeVoice(); }
+    // Key sounds (REVIEW.md 4.2): the theme's own click on its keys; off in Garage > Co-driver
+    document.addEventListener('pointerdown', (e) => {
+      const k = e.target.closest && e.target.closest('.key, .ink-btn, .rec-key, .btn-start, .map-key, .find-key, .switch > button, .detents > button, .stamps > button');
+      if (!k || state.toggles.keys === false || !window.ApexThemeSounds || !window.ApexVoice) return;
+      try { ApexThemeSounds.play(ApexVoice.unlock(), ApexThemeSounds.recipe(state.theme, 'key')); } catch (_) {}
+    }, { passive: true });
+    // Hear on a theme card: that pack's own sample line, then back to the voice in use
+    async function hearPack(id, fallback) {
+      if (!window.ApexVoice || !bankVoices.some(v => v.id === id)) { say(fallback, true); return; }
+      ApexVoice.unlock();
+      try { await ApexVoice.load(id); if (!(await ApexVoice.play(['sys:sample']))) say(fallback, true); } catch (_) { say(fallback, true); }
+      try { if (state.voiceId !== 'device') await ApexVoice.load(state.voiceId); } catch (_) {}
     }
     function renderLive() {
       const st = window.ApexVoice ? ApexVoice.liveState() : 'idle';
@@ -4885,14 +5015,6 @@
     });
     setInterval(renderLive, 1500);
     renderLive();
-    $('voiceSelect').addEventListener('change', (e) => { state.voiceName = e.target.value; savePrefs(); renderVoiceList(); });
-    $('voiceTestBtn').addEventListener('click', () => {
-      if (window.ApexVoice) ApexVoice.unlock();
-      const demo = [{ type: 'corner', dir: 'L', severity: 4, grade: '-', shape: null, mods: ['long', 'tightens'], caution: 1, link: 'into' },
-                    { type: 'corner', dir: 'R', severity: 2, grade: '', shape: null, mods: [], caution: 0, link: '150' }];
-      say('Left 4 minus long tightens, care into Right 2, 150', true, demo);
-    });
-    if ('speechSynthesis' in window) speechSynthesis.onvoiceschanged = renderVoiceList;
     if (window.ApexVoice) ApexVoice.voices().then(v => { bankVoices = v; renderVoiceList(); });
     renderVoiceList();
     // Browsers only allow audio after a user gesture: unlock WebAudio on the first touch.
@@ -4960,9 +5082,9 @@
       state[k] = order[(order.indexOf(state[k]) + 1) % order.length];
       if (k === 'nightMode') { applyTheme(); return; }
       syncDerivedToggles(); paintSwitches();
-      const jar = state.voiceId === 'jarvis', full = state.notesMode === 'full';
+      const full = state.notesMode === 'full';
       // The voice bank has clips for "Full notes." and "Quiet. Hazards only."; Auto has none, so it is shown, not spoken.
-      if (state.notesMode !== 'auto') say(full ? 'Full notes.' : 'Quiet. Hazards only.', true, null, full ? (jar ? 'w:stage' : 'sys:stage') : (jar ? 'w:cruise' : 'sys:cruise'));
+      if (state.notesMode !== 'auto') say(full ? 'Full notes.' : 'Quiet. Hazards only.', true, null, full ? 'sys:stage' : 'sys:cruise');
       savePrefs();
       render(true);
     }));
@@ -5335,6 +5457,7 @@
     const HZ_PLATE_M = 1609;
     function paintHazardPlate(h) {
       const p = h && state.mode === 'live' ? ApexHazardReports.plate(h, (m) => ApexUnits.long(m, 1), Date.now()) : null;
+      if (p && $('hzPlate').hidden) state.blinkUntil = performance.now() + 1200;   // Kit blinks at a hazard (Tapedeck)
       $('hzPlate').hidden = !p;
       if (!p) return;
       if ($('hzPlateTitle').textContent !== p.title) $('hzPlateTitle').textContent = p.title;
@@ -5637,6 +5760,7 @@
       if (sensors) sensors.stop();
       state.live = null;
       refreshAutoNight();
+      if (track && track.kind === 'horizon') { track = null; if (plannedRoute) activate(plannedRoute, 0, { quiet: true }); }   // the road ahead ends with the drive
       replayOn = false; setMode(track && track.kind === 'route' ? 'sim' : 'replay'); paintModeSwitch(); render(true);
       if (save && rec && rec.km >= 0.3 && rec.samples >= 60) {
         try {
@@ -5910,6 +6034,7 @@
         return;
       }
       if (state.mode === 'live' && !drive.sensors && performance.now() - state.liveAt > 5000) {
+        if (track && track.kind === 'horizon') track = null;
         state.live = null; setMode(track && track.kind === 'route' ? 'sim' : 'replay'); paintModeSwitch(); toast('GPS lost. Back to the replay.');
         refreshAutoNight();
       }
