@@ -6,6 +6,17 @@ it says so. Things only you can do are in docs/OWNER_TODO.md.
 
 ## 2026-10-29
 
+**Roadmap 2 item 15: placeholders and small words (U-34, U-41, U-42).** My calls:
+- *An unknown score is "--" in the numeral font, in pencil*, on the Log hero and rows, the drive page, stages, Compare
+  and the drive-ended card; it was drawn as two black bars that read as a redaction.
+- *"1,240 points" is gone from the Garage*: no unit said what it counted (the last trace of Octane).
+- *Works stickers carry the supporter's initial*, tilted, in the crew's colours; the count stays in the line above.
+  Nothing to count yet: "Plain livery · Decals come from crew-mates with Vetta Pro" as one pencil line, no box, no
+  empty gauge. "Take them off" sits left, in pencil. The crew's meta line is 13 px so it fits.
+- *The route card's links in two weights*: Save and Share in ink, Share ETA, GPX and Pin place in pencil.
+- *One back glyph*: a friend's profile goes back with "‹ Friends" ("‹" everywhere, named for where it goes).
+Undo: `.unk` and `UNK` (analysis.html, drive_view.js, index.html), `liveryBox` in crew_page.js.
+
 **Roadmap 2 item 14: the Log is the drive list (U-32, U-33).** My calls:
 - *One summary row under the hero*: "2026 · 35 mi · 4 drives · 1 of 3 challenges"; open it for the year's lines,
   Share and this month's challenges. The year line and the challenge line were two rows.

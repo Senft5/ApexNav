@@ -20,7 +20,7 @@
   /** Draws the profile into `box` (replacing what's there); `back` returns to the list. */
   function show(box, p, { el, btn, back }) {
     const v = lines(p);
-    box.replaceChildren(el('div', { className: 'side-pop-head' }, el('h3', { textContent: v.title }), btn('Back', back, 'linkbtn')),
+    box.replaceChildren(el('div', { className: 'side-pop-head' }, el('h3', { textContent: v.title }), btn('‹ Friends', back, 'linkbtn')),
       ...(v.sub ? [el('p', { className: 'note', textContent: v.sub })] : []),
       ...v.sections.map((s) => el('div', { className: 'stack-8' }, el('b', { textContent: s.head }), ...s.rows.map((r) => el('p', { className: 'note', textContent: r })))),
       el('p', { className: 'note', textContent: 'Only what they share with you. Times are never shown here.' }));

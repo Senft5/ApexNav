@@ -480,7 +480,7 @@ flow('crew page: the tab opens your crew; going, chat and the livery reach the W
   const liv = find('/api/crews/k1/page');
   check(liv && liv.m === 'PUT' && JSON.parse(liv.b).crest === 'peak' && JSON.parse(liv.b).stripe === '#1f5fa8', 'the livery saves the crest and stripe: ' + (liv && liv.b));
   check(!('stripe2' in JSON.parse(liv.b)) && !('pattern' in JSON.parse(liv.b)), 'a Plain crew sends nothing past the Plain livery');
-  check(/Plain livery/.test(await page.textContent('.cp-livery')) && /Decals come from crew-mates with Vetta Pro/.test(await page.textContent('.cp-livery')), 'the livery box says Plain and where Decals come from');
+  check(/Plain livery/.test(await page.textContent('.cp-livery-line')) && /Decals come from crew-mates with Vetta Pro/.test(await page.textContent('.cp-livery-line')), 'the livery box says Plain and where Decals come from');
 });
 
 flow('build threads: start one from a car, add a step, a friend suggests and it shows on a red rule (Worker stubbed, REVIEW.md roadmap 23)', async (page, base) => {
@@ -1137,7 +1137,7 @@ flow('friend profile: Friends → Profile shows what the friend shares, as text,
   await page.waitForSelector('.profile-view');
   const t = await page.textContent('.profile-view');
   check(t.includes('@bob') && t.includes('Bob <b>S</b> · friends since 2026-09-01') && t.includes('Esses · best 812 · 3 days this month') && t.includes('Ridge Runners'), 'the profile, as text: ' + t);
-  await page.click('.profile-view button:has-text("Back")');
+  await page.click('.profile-view button:has-text("Friends")');   // one back glyph and where it goes (REVIEW2.md)
   await page.waitForSelector('.side-pop.open button:has-text("Profile")');
 });
 

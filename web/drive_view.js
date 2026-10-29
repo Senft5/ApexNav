@@ -192,7 +192,7 @@
     const showRead = () => { read.hidden = false; };
     const ds = d.ds || (Core && Core.driverScore ? Core.driverScore(d.speed_mps, d.lon_g, d.lat_g, d.corners) : null);
     const comp = ds && ds.components;
-    const scoreVal = ds && finite(ds.score) ? ds.score : '--';
+    const scoreVal = ds && finite(ds.score) ? ds.score : '<i class="unk">--</i>';   // unknown in pencil (REVIEW2.md U-34)
     const bar = (k, label) => {
       const v = comp && finite(comp[k]) ? Math.round(comp[k] * 100) : null;
       return `<div class="bar">${label} ${v != null ? v : '--'}<i><u style="width:${v != null ? v : 0}%"></u></i></div>`;
