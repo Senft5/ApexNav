@@ -6,6 +6,14 @@ it says so. Things only you can do are in docs/OWNER_TODO.md.
 
 ## 2026-10-29
 
+**Roadmap 2 item 19: night is a mode on the binnacle (U-36).** After dark (Auto, or Night in Settings) the binnacle
+changes shape, not only colour: the speed numeral is 46 px on an SE dial and larger on bigger phones, and the 0 and top
+labels at the foot of the dial give way to it; Limit and Sight keep their one row; the trip odometer steps aside for
+a quiet Trip key that shows it for ten seconds. My calls:
+- *A visible Trip key, not an invisible tap zone*, so the hidden readout is findable and VoiceOver can reach it.
+- *On an iPhone SE upright, Limit sits over Sight, day and night.* The centre column there is 60 px and the two
+  side by side spilled into the meter (it did on main too). Everywhere wider they share a row.
+Undo: remove the `data-mode="night"` binnacle rules and the `.trip-peek` key (web/index.html, web/instruments.js).
 **Roadmap 2 item 18: Kit drawn properly (U-38).** Tapedeck's fox is 80 px on a 16 x 14 dot grid, with ears, a lighter
 body, a lit muzzle, a dark nose and amber eyes, so he reads as a face rather than a blob. Two idle frames (an ear flick,
 a quarter second every five) and four lean frames wired to the corner: he leans with lateral g past 0.15 g, further

@@ -187,7 +187,7 @@
       svg('line', { x1, y1, x2, y2, stroke: 'var(--face-ink)', 'stroke-width': major ? 2.4 : mid ? 1.3 : 0.8 }, s);
       if (major) {
         const [tx, ty] = polar(63, a);
-        svg('text', { x: tx, y: ty + 5, 'text-anchor': 'middle', class: 'dial-num' }, s).textContent = v;
+        svg('text', { x: tx, y: ty + 5, 'text-anchor': 'middle', class: ty > 130 ? 'dial-num low' : 'dial-num' }, s).textContent = v;   // low: beside the numeral
       }
     }
     svg('text', { x: 100, y: 122, 'text-anchor': 'middle', class: 'dial-label' }, s).textContent = U() ? U().speedU().toUpperCase() : 'MPH';
@@ -471,6 +471,9 @@
     const center = html('div', 'cluster-center', el);
     const gg = html('div', 'dial dial-g', el);
     const u = [pick(theme, 'dial', 'printed')(sp), readouts(center), odometer(center, printed), pick(theme, 'meter', 'gball')(gg)];
+    // Night (REVIEW2.md U-36): the trip readout steps aside for a quiet Trip key; a tap shows it for ten seconds
+    const peek = html('button', 'trip-peek', center, 'Trip'); peek.type = 'button'; let peekT = 0;
+    peek.addEventListener('click', () => { el.classList.add('show-trip'); clearTimeout(peekT); peekT = setTimeout(() => el.classList.remove('show-trip'), 10000); });
     // the live Vetta Score under the meter, in every theme (REVIEW.md 4.3: speed left, Limit centre, Score right); "--" until known
     const sc = html('div', 'g-score', gg), scV = html('b', '', sc, '--');
     html('span', '', sc, 'SCORE');
