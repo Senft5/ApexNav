@@ -530,6 +530,16 @@
     html[data-mode="night"] #app.live .ds-warn { display: none; }
     html[data-mode="night"] #app.live .ds-main { font-size: 17px; }
     html[data-mode="night"] .dial-num { font-size: 18px; } html[data-mode="night"] .ro b { font-size: 21px; }
+    /* Night is a mode, not a token swap (REVIEW2.md U-36): the speed numeral at 46 px or more, Limit and Sight on their one
+       row, and the trip readout hidden until its Trip key is tapped */
+    html[data-mode="night"] .dial-speed .dial-digital:not(.small) { font-size: 82px; }   /* 46 px on an SE dial, clear of the unit */
+    html[data-mode="night"] .dial-speed .dial-num.low { display: none; }   /* the end labels give way to the bigger numeral */
+    .trip-peek { display: none; }
+    /* a small phone: the centre column is 60 px, so Limit sits over Sight rather than both spilling into the meter */
+    @media (max-width: 359px) and (orientation: portrait) { .readouts { grid-template-columns: minmax(0, 1fr); justify-items: center; row-gap: 6px; } }
+    html[data-mode="night"] #cluster:not(.show-trip) .odo { display: none; }
+    html[data-mode="night"] #cluster:not(.show-trip) .trip-peek { display: block; justify-self: center; min-height: 44px; min-width: 64px; padding: 0 12px;
+      border: 0; background: none; color: var(--panel-dim); font: 600 13px var(--font-ui); letter-spacing: 0.08em; text-transform: uppercase; }
     /* the idle map (REVIEW.md 3.1, mockup 01): a place plate and one invitation on the deck */
     .place-plate { position: absolute; z-index: 4; top: calc(12px + var(--safe-top)); left: 10px; padding: 7px 12px; background: var(--panel); color: var(--panel-ink);
       border: 1.5px solid var(--panel-ink); font-size: 14px; font-weight: 600; box-shadow: 0 2px 0 var(--rule); }

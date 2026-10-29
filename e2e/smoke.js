@@ -1320,6 +1320,15 @@ flow('theme contract on the page: the hazard plate, the speed, the call and the 
     check(r.call >= 21, `${m}: the call ${r.call} px`);
     check(!r.small.length && r.bankPx >= 13, `${m}: nothing on the binnacle under 13 px: ` + JSON.stringify(r.small) + ' bank ' + r.bankPx);
     check(r.limit && r.limit.w === 44 && r.limit.h === 52 && (r.limit.unknown || r.limit.bg === 'rgb(255, 255, 255)'), `${m}: the Limit sign is the white sign: ` + JSON.stringify(r.limit));
+    // night is a mode (REVIEW2.md U-36): a 46 px numeral, Limit and Sight on one row, the trip behind its Trip key
+    const nm = await page.evaluate(() => { const d = document.querySelector('.dial-speed .dial-digital'), vis = (q) => { const e = document.querySelector(q); return !!e && e.getClientRects().length > 0; };
+      const l = document.querySelector('.ro-limit').getBoundingClientRect(), g = document.querySelector('.ro-sight').getBoundingClientRect();
+      return { px: Math.round(parseFloat(getComputedStyle(d).fontSize) * d.getScreenCTM().a), oneRow: Math.abs(l.top - g.top) < 12, odo: vis('#cluster .odo'), key: vis('#cluster .trip-peek') }; });
+    if (night) {
+      check(nm.px >= 46 && nm.oneRow && !nm.odo && nm.key, 'night: a 46 px numeral, Limit and Sight in a row, the trip behind its key: ' + JSON.stringify(nm));
+      await page.click('#cluster .trip-peek');
+      check(await page.evaluate(() => document.querySelector('#cluster .odo').getClientRects().length > 0), 'night: the Trip key shows the trip');
+    } else check(nm.odo && !nm.key, 'day: the trip shows and there is no Trip key: ' + JSON.stringify(nm));
   }
   // the Pro themes, tried on the demo replay from the picker: the same floors and the same hazard plate
   for (const id of ['tapedeck', 'billet']) {
