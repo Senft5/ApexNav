@@ -1,5 +1,7 @@
 # Needs the owner (Nate)
 
+**Calls Claude made for you (read first): docs/CALL_SHEET.md.**
+
 Things only you can do, newest decisions first within each group. Claude keeps this list current: add a row when
 something blocks on you, delete it once it's done. Everything else is in docs/IDEAS.md and done without asking.
 

@@ -25,4 +25,5 @@ Regardless of how the phone is mounted in the cabin, all aligned chassis telemet
 3. Never ship placeholder or synthesized road data as if it were measured. Unknown stays unknown (`null`, `--`).
 4. For iOS / CarPlay changes, verify `project.yml` and `.github/workflows/build.yml` remain valid for cloud `xcodegen` compilation.
 5. For anything touching the iOS shell, sign-in, social features, data collection or the store listing, check `/docs/APP_REVIEW.md` (App Store Review Guidelines) and update it in the same PR.
-6. Before concluding an agent session, update `/docs/STATE.md` with completed milestones, active bugs, and the exact next task.
+6. Make the judgment calls yourself instead of asking, and log each one at the top of `/docs/CALL_SHEET.md` (what, why, how to undo). Money, legal and account actions stay with the owner (`/docs/OWNER_TODO.md`).
+7. Before concluding an agent session, update `/docs/STATE.md` with completed milestones, active bugs, and the exact next task.

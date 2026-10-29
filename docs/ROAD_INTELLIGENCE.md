@@ -47,6 +47,24 @@ Per 5 m sample `i` along the path:
 | Sight | `v_s`: reaction + braking distance fits in visible road: `v t_r + v^2/(2 a_b) = S` → `v_s = a_b (-t_r + sqrt(t_r^2 + 2 S / a_b))` | §2.1 |
 | Grip derate | `mu_lat` x (1 − roughness derate), wet/gravel later | crowd SURF, surface tag |
 
+### Where the numbers come from (2026-10-29)
+
+The equations are standard: the corner limit is the point-mass curve equation highway design uses (side friction plus
+superelevation balance `v^2 / (g R)`; AASHTO, *A Policy on Geometric Design of Highways and Streets*), and the sight limit is
+AASHTO's stopping sight distance solved for speed. The values are ours, chosen for an alert enthusiast on a dry road, and
+deliberately not the general-public design values:
+
+| input | Vetta | published reference | why ours |
+|---|---|---|---|
+| eye / object height | 1.08 m / 0.60 m | AASHTO stopping-sight geometry, the same | — |
+| perception-reaction | 1.5 s | AASHTO design 2.5 s (covers nearly all drivers); Green (2000, *Transportation Human Factors* 2(3)) about 0.7 s expected, 1.25 s unexpected, 1.5 s surprise | a driver following pace notes expects the road; 1.5 s is still the "surprise" end |
+| braking | 0.5 g | AASHTO design 0.35 g (11.2 ft/s², comfortable on a wet road); a car on dry pavement can do 0.8 g or more | firm, not emergency, and well inside the dry limit |
+| lateral grip | 0.60 g, rough pavement up to 30% less, gentler cars less (D-19) | road tyres on dry pavement about 0.8-1.0 g; curve advisory signs assume far less | a margin below the tyre, above a comfortable commute |
+
+The Sight cell shows the lower of the two limits; **Open** when the sight line reaches its 400 m cap and no corner asks for
+less (that cap alone would read 125 mph). Not yet calibrated against members' measured drives; the crowd's real cornering
+(D-19 car grip, Q-04 driven curvature) is how it gets checked.
+
 Then two passes:
 
 - **Backward (braking) pass**: `v_i <= sqrt(v_{i+1}^2 + 2 a_b ds)`. This is the
