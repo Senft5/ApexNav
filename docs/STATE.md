@@ -1,5 +1,19 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-10-29 (afternoon): design phase 3, photos
+
+- [x] REVIEW.md 3.1: Start with no route follows the road you're on and calls its corners (web/horizon.js, free drive).
+- [x] REVIEW.md roadmap 15-18: Look and voice in the Garage (theme picker, Hear keys, a 10-minute try on the demo
+  replay; web/pro.js, the `pro` flag off); Tapedeck (VFD, seven-segment speed, bar meters, Kit's lean frames); Billet
+  (bezel dial, spring needle, metal); theme sounds (web/theme_sounds.js); voice packs Marguerite, Kit and Hale replace the
+  voice list; George, Daniel, Emma, Michael, My Voice and Jarvis are retired (banks deleted, Jarvis code removed).
+- [x] Roadmap 19: photos (backend/src/photos.ts, web/photos.js): profile photo in the Garage, a car's cover and gallery;
+  EXIF gone on the phone and stripped again on the Worker; KV `PHOTOS` until R2 is on (OWNER_TODO). Migration 0030
+  (photos, crew page columns, crew chat, build threads) applied to both D1.
+- Active bugs: none new.
+- Exact next task: roadmap 20, the crew page v1 (cover, stock crest, motto, stripe, next drive, Vetta Score board,
+  chat; the Crew tab opens your crew).
+
 ## Session 2026-10-29 (day): design phase 2
 
 - [x] REVIEW.md roadmap 9-14: four tabs (Map, Log, Crew, Garage; Stages a Log segment; Settings, you, cars and account in

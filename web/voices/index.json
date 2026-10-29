@@ -1,38 +1,20 @@
 {
  "voices": [
   {
-   "id": "daniel",
-   "name": "Daniel",
+   "id": "hale",
+   "name": "Hale",
    "style": "codriver",
    "license": "Kokoro-82M, Apache-2.0 (hexgrad/Kokoro-82M)"
   },
   {
-   "id": "emma",
-   "name": "Emma",
+   "id": "kit",
+   "name": "Kit",
    "style": "codriver",
    "license": "Kokoro-82M, Apache-2.0 (hexgrad/Kokoro-82M)"
   },
   {
-   "id": "george",
-   "name": "George",
-   "style": "codriver",
-   "license": "Kokoro-82M, Apache-2.0 (hexgrad/Kokoro-82M)"
-  },
-  {
-   "id": "jarvis",
-   "name": "Jarvis",
-   "style": "jarvis",
-   "license": "Kokoro-82M, Apache-2.0 (hexgrad/Kokoro-82M)"
-  },
-  {
-   "id": "me",
-   "name": "My Voice",
-   "style": "codriver",
-   "license": "Kokoro-82M (Apache-2.0) converted to the owner's consented voice with kNN-VC (MIT)"
-  },
-  {
-   "id": "michael",
-   "name": "Michael",
+   "id": "marguerite",
+   "name": "Marguerite",
    "style": "codriver",
    "license": "Kokoro-82M, Apache-2.0 (hexgrad/Kokoro-82M)"
   }

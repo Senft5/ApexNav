@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-6XpI1RrcZGbCyY0Lz+yy7tj19GdUfW9p1V7Rn1p9J2E=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-iryaNt2AGSnFSGTu7b4bpb/KK3aeRioYQA8t73ROF8I=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -1225,7 +1225,7 @@
     const state = {
       mode: 'replay', playing: false, rate: 1, cursorM: 0, cursorIdx: 0, follow: true, bearing: 0,
       live: null, liveAt: 0, lastPosition: null, spiritedAt: -Infinity, spoken: new Set(), tapToRoute: false,
-      theme: 'roadbook', camFeel: 'dynamic', voiceId: 'george', liveVoice: false, voiceStyle: 'codriver', voiceName: '', hlOn: false, hlStrength: 1,
+      theme: 'roadbook', camFeel: 'dynamic', voiceId: 'marguerite', liveVoice: false, voiceStyle: 'codriver', voiceName: '', hlOn: false, hlStrength: 1,
       notesMode: 'auto', nightMode: 'auto',   // Notes: auto | full | quiet. Night: auto (sunset/sunrise) | on | off
       noteWords: 'plain',                     // rally ("Left 4 minus") | plain ("Medium left"), IDEAS V-02; a saved setting wins
       toggles: { stage: false, voice: true, lpr: true, dna: false, night: false, twisty: false, haptics: true, crash: true, health: true, terrain: false, coverage: false, keys: true }   // stage and night are derived from the two modes; analysis.html reads toggles.night
@@ -1273,7 +1273,7 @@
     if (params.has('theme')) state.theme = params.get('theme');
     if (params.has('cam')) state.camFeel = params.get('cam');
     if (params.has('voice')) state.voiceId = params.get('voice');
-    state.voiceStyle = state.voiceId === 'jarvis' ? 'jarvis' : 'codriver';
+    state.voiceStyle = 'codriver';
 
     let bankVoices = [];                                             // the voice banks on the phone (web/voices/index.json)
     let look = Themes.apply(state.theme, state.toggles.night);
@@ -1955,8 +1955,7 @@
     const noteworthyInCruise = (e) => e.type === 'alpr' || (e.type === 'bump' && e.severity_g >= 0.45);
 
     // -------------------------------------------------------------------------
-    // Voice: "codriver" (most natural voice installed, read like a real co-driver) or
-    // "jarvis" (cartoonishly robotic: robot voice where installed, chirps, machine-speak).
+    // Voice: the most natural voice installed, read like a real co-driver.
     // -------------------------------------------------------------------------
     let privacyZones = (() => { try { return ApexPrivacyZones.load(localStorage); } catch (_) { return []; } })();   // privacy_zones.js
     const inPrivacyZone = (lat, lon) => !!ApexPrivacyZones.zoneAt(privacyZones, lat, lon);
@@ -1982,52 +1981,13 @@
     // rhythm: for the open-model voices only (device TTS would read the dots aloud). A co-driver runs a
     // chunk together and breathes before the caution and before the distance (tools/voicebank.py tts_text).
     function spokenText(text, rhythm = false) {
-      if (state.voiceStyle !== 'jarvis') {
-        const spoken = text.replace(/, (\d{2,3})$/, (_, d) => `${rhythm ? ' ...' : ','} ${codriverDistance(parseInt(d, 10))}`);
-        return rhythm ? spoken.replace(/, (care|caution|double caution|triple caution)\b/g, ' ..... $1') : spoken;
-      }
-      // Jarvis: deadpan machine readout, digits one by one, each chained note on its own.
-      const digits = (n) => String(n).split('').map(c => NUM_WORDS[+c] || c).join(' ');
-      let tail = '';
-      text = text.replace(/, (\d{2,3})$/, (_, d) => { tail = ` Distance: ${digits(d)} meters.`; return ''; });
-      const piece = (p) => {
-        let out = p.trim()
-          .replace(/^(Left|Right) (\d)( minus| plus)?/i, (_, dir, n, g) => `Corner: ${dir.toLowerCase()}. Severity: ${NUM_WORDS[+n]}${g ? ', ' + g.trim() : ''}.`)
-          .replace(/^(Left|Right) hairpin/i, (_, dir) => `Corner: ${dir.toLowerCase()}. Classification: hairpin.`)
-          .replace(/^(Square|Acute) (left|right)/i, (_, k, dir) => `Corner: ${dir}. Classification: ${k.toLowerCase()}.`)
-          .replace(/(double caution|triple caution|caution|care)/, (m) => ` Warning: ${m}.`);
-        if (/^(Bump|Crest|Dip|Camera)/.test(out)) out = `Hazard detected. ${out}.`;
-        const MOD = '(?:long|short|tightens|opens|banked|off-camber|over crest)';
-        return out.replace(new RegExp(`\\. (${MOD}(?: ${MOD})*)`), (_, m) => `. Modifiers: ${m.match(new RegExp(MOD, 'g')).join(', ')}.`)
-          .replace(/[.,]?,\s*Warning/g, '. Warning').replace(/\.\s*\./g, '.').replace(/\s+/g, ' ').trim();
-      };
-      const parts = text.split(/ (into|and) (?=Left|Right|Square|Acute|Bump|Crest|Dip|Camera)/);
-      let out = piece(parts[0]);
-      for (let i = 1; i < parts.length; i += 2) out += ` Sequence ${parts[i] === 'into' ? 'immediate' : 'linked'}. ${piece(parts[i + 1])}`;
-      return out + tail;
-    }
-    let audioCtx = null;
-    function chirp() {
-      try {
-        audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
-        const t0 = audioCtx.currentTime;
-        [[880, 0], [1320, 0.07], [990, 0.14]].forEach(([f, dt]) => {
-          const o = audioCtx.createOscillator(), g = audioCtx.createGain();
-          o.type = 'square'; o.frequency.value = f;
-          g.gain.setValueAtTime(0.0001, t0 + dt); g.gain.exponentialRampToValueAtTime(0.06, t0 + dt + 0.01);
-          g.gain.exponentialRampToValueAtTime(0.0001, t0 + dt + 0.06);
-          o.connect(g); g.connect(audioCtx.destination); o.start(t0 + dt); o.stop(t0 + dt + 0.07);
-        });
-      } catch (_) {}
+      const spoken = text.replace(/, (\d{2,3})$/, (_, d) => `${rhythm ? ' ...' : ','} ${codriverDistance(parseInt(d, 10))}`);
+      return rhythm ? spoken.replace(/, (care|caution|double caution|triple caution)\b/g, ' ..... $1') : spoken;
     }
     // Rank installed voices: neural/premium first, British English (the co-driver accent), then any English.
     function pickVoice(style) {
       const voices = ('speechSynthesis' in window) ? speechSynthesis.getVoices() : [];
       if (state.voiceName) { const v = voices.find(x => x.name === state.voiceName); if (v) return v; }
-      if (style === 'jarvis') {
-        const robot = voices.find(v => /Zarvox|Trinoids|Fred|Ralph|Cellos|robot/i.test(v.name));
-        if (robot) return robot;
-      }
       const score = (v) => (/natural|neural|premium|enhanced|online/i.test(v.name) ? 10 : 0) + (/^en-GB/i.test(v.lang) ? 4 : 0) +
         (/^en/i.test(v.lang) ? 2 : 0) + (/Google UK English Male|Daniel|Arthur|Ryan|Thomas|Oliver/i.test(v.name) ? 3 : 0) - (v.localService === false && !/natural|online/i.test(v.name) ? 0 : 0);
       return voices.filter(v => /^en/i.test(v.lang)).sort((a, b) => score(b) - score(a))[0] || null;
@@ -2115,7 +2075,6 @@
     }
     function deviceSpeak(spoken, duck = true) {
       const style = state.voiceStyle;
-      if (style === 'jarvis') chirp();
       const native = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex;
       if (native) {
         // One line at a time, so a hazard can still go ahead of the lines behind it; a hazard cutting in interrupts at a word.
@@ -2132,9 +2091,7 @@
       const u = new SpeechSynthesisUtterance(spoken);
       const v = pickVoice(state.voiceStyle);
       if (v) { u.voice = v; u.lang = v.lang; }
-      const robotVoice = v && /Zarvox|Trinoids|Fred|Ralph|Cellos|robot/i.test(v.name);
-      if (state.voiceStyle === 'jarvis') { u.rate = robotVoice ? 1.0 : 0.92; u.pitch = robotVoice ? 1.0 : 0.15; }
-      else { u.rate = 1.12; u.pitch = 1.0; }
+      u.rate = 1.12; u.pitch = 1.0;
       u.onend = u.onerror = () => { speech.busy = false; pumpSpeech(); };
       speechSynthesis.speak(u);
     }
@@ -2399,7 +2356,7 @@
       ApexVoice.load(state.voiceId).then(() => {
         const style = ApexVoice.bank.style, texts = [spokenTextFor(`${t.name}.`, style)];
         // Every call of the route that the bank cannot play as a single clip, in driving order.
-        if (ApexVoice.bank.engine === 'kokoro' && style !== 'jarvis') {
+        if (ApexVoice.bank.engine === 'kokoro') {
           const ev = t.events.slice().sort((a, b) => a.dist_m - b.dist_m);
           for (const e of ev) {
             if (e.type === 'alpr') continue;
@@ -4413,7 +4370,7 @@
       // you (in the Garage: REVIEW.md 3.2, your own identity lives with your cars)
       const you = section('You');
       // your profile photo (REVIEW.md 5.2): a round face beside your handle, or your initial until you add one
-      const face = window.ApexPhotos ? ApexPhotos.avatar(me.photo_id, me.handle, 56) : null;
+      const face = window.ApexPhotos ? ApexPhotos.avatar(me.photo_id, me.handle, 72) : null;
       you.append(el('div', { className: 'row', style: 'align-items:center;gap:12px' }, ...(face ? [face] : []), el('b', { textContent: `@${me.handle}`, style: 'font-size:22px;font-family:var(--font-num)' }),
         el('span', { className: 'note', textContent: pts && Number.isFinite(pts.total) ? `${Math.round(pts.total).toLocaleString()} points` : '' })));
       if (face && me.member) you.append(el('div', { className: 'row' }, ApexPhotos.picker(me.photo_id ? 'Change photo' : 'Add a photo', 'profile', null, redo, { toast }),
@@ -5125,9 +5082,9 @@
       state[k] = order[(order.indexOf(state[k]) + 1) % order.length];
       if (k === 'nightMode') { applyTheme(); return; }
       syncDerivedToggles(); paintSwitches();
-      const jar = state.voiceId === 'jarvis', full = state.notesMode === 'full';
+      const full = state.notesMode === 'full';
       // The voice bank has clips for "Full notes." and "Quiet. Hazards only."; Auto has none, so it is shown, not spoken.
-      if (state.notesMode !== 'auto') say(full ? 'Full notes.' : 'Quiet. Hazards only.', true, null, full ? (jar ? 'w:stage' : 'sys:stage') : (jar ? 'w:cruise' : 'sys:cruise'));
+      if (state.notesMode !== 'auto') say(full ? 'Full notes.' : 'Quiet. Hazards only.', true, null, full ? 'sys:stage' : 'sys:cruise');
       savePrefs();
       render(true);
     }));

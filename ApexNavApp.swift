@@ -1164,12 +1164,9 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
     private static let robotVoiceNames = ["Zarvox", "Trinoids", "Fred", "Ralph", "Cellos"]
 
     /// Co-driver: the highest-quality English voice installed (Premium > Enhanced > default),
-    /// British first. Jarvis: a novelty robot voice when the device has one.
+    /// British first; never a novelty robot voice.
     private static func voice(for style: String) -> AVSpeechSynthesisVoice? {
         let all = AVSpeechSynthesisVoice.speechVoices()
-        if style == "jarvis", let robot = all.first(where: { robotVoiceNames.contains($0.name) }) {
-            return robot
-        }
         func rank(_ v: AVSpeechSynthesisVoice) -> Int {
             let quality: Int
             switch v.quality {
@@ -1288,16 +1285,9 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         }
         beginVoice(duck: duck)
         let utterance = AVSpeechUtterance(string: phrase)
-        let voice = Self.voice(for: style)
-        utterance.voice = voice
-        if style == "jarvis" {
-            let isRobot = voice.map { Self.robotVoiceNames.contains($0.name) } ?? false
-            utterance.rate = isRobot ? 0.48 : 0.44
-            utterance.pitchMultiplier = isRobot ? 1.0 : 0.55
-        } else {
-            utterance.rate = 0.54
-            utterance.pitchMultiplier = 1.0
-        }
+        utterance.voice = Self.voice(for: style)
+        utterance.rate = 0.54
+        utterance.pitchMultiplier = 1.0
         synth.speak(utterance)
     }
 }
