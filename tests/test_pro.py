@@ -23,6 +23,9 @@ out.verified = [P.has(store, { pro: true }), P.has(store, { pro: false }), P.all
 mem[P.ENT_KEY] = JSON.stringify({ verified: true, expiresMs: Date.now() - 1 });
 out.expired = P.has(store, { pro: true });
 out.lines = [P.line('theme_tapedeck', {}), P.line('theme_tapedeck', { pro: true, proOnSale: true }), P.line('nothing', {})];
+mem[P.ENT_KEY] = 'null';
+out.early = [P.allowed('theme_tapedeck', store, {}), P.allowed('theme_billet', store, { pro: true }), P.allowed('livery_club', store, { pro: true }),
+  P.allowed('theme_tapedeck', store, { pro: true, proOnSale: true }), P.themesOpen({}), P.themesOpen({ pro: true, proOnSale: true })];
 console.log(JSON.stringify(out));
 """
 
@@ -42,7 +45,7 @@ def test_pro_is_cosmetic_only(out):
 
 
 def test_nobody_has_it_until_the_shell_verifies_it(out):
-    assert out["nobody"] == [False, False, False, True]
+    assert out["nobody"] == [False, False, True, True]   # a theme is open in early access (below)
     assert out["unverified"] is False and out["expired"] is False
     assert out["verified"] == [True, False, True]
 
@@ -50,3 +53,8 @@ def test_nobody_has_it_until_the_shell_verifies_it(out):
 def test_the_line_is_honest_that_pro_is_not_on_sale(out):
     assert "isn't on sale yet" in out["lines"][0] and "stays free" in out["lines"][0]
     assert out["lines"][1] == "Tapedeck comes with Vetta Pro." and out["lines"][2] is None
+
+
+def test_themes_are_open_until_pro_goes_on_sale(out):
+    # early access (owner 2026-10-29): every theme for everyone; liveries stay Pro; on sale, themes are Pro again
+    assert out["early"] == [True, True, False, False, True, False]

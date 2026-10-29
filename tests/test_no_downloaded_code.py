@@ -49,5 +49,5 @@ def test_landing_page_links_and_shots_exist():
     page = read("web", "about.html")
     for href in re.findall(r'(?:href|src)="([^"#?:]+)', page):
         assert os.path.exists(os.path.join(WEB, href)), href                     # every local link and image is there
-    for claim in ("Never how fast", "No subscription", "not a racing app"):
+    for claim in ("Never how fast", "Free to drive", "not a racing app"):
         assert claim in page
