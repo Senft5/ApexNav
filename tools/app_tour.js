@@ -180,6 +180,147 @@ scene('member', async ({ page, base, cap, fresh, ctx }) => {
   await tab(page, cap, 'setup', 'Settings (a member)');
 });
 
+// ---- Stills for the design review (REVIEW2.md U-37): every surface the mockups drew, stubbed with what a real account
+// would show, so the next review judges them rather than an empty state. Each scene saves OUT/stills/NAME.png.
+// Run just these: node tools/app_tour.js route-card friends-map plan-drive crew-board tapedeck-drive
+function polyline6(points) {
+  let out = '', pLat = 0, pLon = 0;
+  const enc = (v) => { v = v < 0 ? ~(v << 1) : v << 1; let s = ''; while (v >= 0x20) { s += String.fromCharCode((0x20 | (v & 0x1f)) + 63); v >>= 5; } return s + String.fromCharCode(v + 63); };
+  for (const [lat, lon] of points) { const a = Math.round(lat * 1e6), b = Math.round(lon * 1e6); out += enc(a - pLat) + enc(b - pLon); pLat = a; pLon = b; }
+  return out;
+}
+// A mountain road between two places: tight bends (radius about 70 m) on a slower sweep, so the route card has corners,
+// a profile with corner ticks and named legs. `alt` bends it differently for the alternatives.
+function mountainTrip(locs, alt) {
+  const a = locs[0], b = locs[locs.length - 1], n = 4000, pts = [];
+  for (let i = 0; i <= n; i++) {
+    const t = i / n, env = Math.sin(t * Math.PI);
+    const wig = (Math.sin(t * Math.PI * (220 + alt * 40)) * 0.0007 + Math.sin(t * Math.PI * (9 + alt * 3)) * (0.004 + alt * 0.002)) * env;
+    pts.push([a.lat + (b.lat - a.lat) * t + wig, a.lon + (b.lon - a.lon) * t - wig]);
+  }
+  const km = 31 + alt * 4, names = [['Cherohala Skyway', 'Santeetlah Road'], ['Tellico River Road', 'Joyce Kilmer Road'], ['Mud Gap Road', 'Snowbird Road']][alt];
+  return { legs: [{ shape: polyline6(pts), maneuvers: [
+    { type: 1, begin_shape_index: 0, length: km * 0.6, street_names: [names[0]], instruction: `Drive east on ${names[0]}.` },
+    { type: 10, begin_shape_index: Math.round(n * 0.6), length: km * 0.4, street_names: [names[1]], instruction: `Turn right onto ${names[1]}.` },
+    { type: 4, begin_shape_index: n, length: 0, instruction: 'You have arrived.' }] }],
+    summary: { length: km, time: 2700 + alt * 300, has_highway: false, has_toll: false, has_ferry: false } };
+}
+
+scene('route-card', async ({ page, base, cap, fresh, ctx, still }) => {
+  await fresh();
+  await ctx.route('https://valhalla1.openstreetmap.de/**', (r) => {
+    const req = JSON.parse(r.request().postData() || '{}');
+    if (!req.locations) return r.abort();
+    const alts = Math.min(2, req.alternates || 0);
+    r.fulfill({ contentType: 'application/json', body: JSON.stringify({ trip: mountainTrip(req.locations, 0), alternates: Array.from({ length: alts }, (_, i) => ({ trip: mountainTrip(req.locations, i + 1) })) }) });
+  });
+  await page.goto(`${base}/index.html`);
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map);
+  await cap('Route card: a mountain route with corners, its profile and two alternatives');
+  await page.click('#destInput'); await page.fill('#destInput', 'Robbinsville');
+  await page.waitForSelector('#placeList .place', { timeout: 15000 });
+  await page.click('#placeList .place');
+  await page.waitForFunction(() => { const t = window.apexDebug.track; return t && t.kind === 'route' && t.steps && t.steps.length; }, null, { timeout: 60000 });
+  await page.waitForTimeout(4000);
+  await page.click('#routeBar').catch(() => {}); await page.waitForTimeout(4000);
+  await still('route-card');
+  await page.mouse.move(195, 600); await page.mouse.wheel(0, 700); await page.waitForTimeout(1500);
+  await still('route-card-2');
+  await ctx.unroute('https://valhalla1.openstreetmap.de/**');
+});
+
+scene('friends-map', async ({ page, base, cap, fresh, still }) => {
+  const ago = (min) => new Date(Date.now() - min * 60000).toISOString();
+  await fresh((p) => {
+    if (p === '/api/me') return { signed_in: true, member: true, handle: 'nate', name: 'Nate' };
+    if (p === '/api/presence/settings') return { audience: 'friends', delay_s: 600, fuzz: true };
+    if (p === '/api/presence') return [{ handle: 'sam', photo_id: null, delay_s: 600, fuzz: true, lat: 35.3690, lon: -84.2790, road: null, at: ago(11) },
+      { handle: 'jules', photo_id: null, delay_s: 0, fuzz: false, lat: 35.3560, lon: -84.2960, road: 'Cherohala Skyway', at: ago(0.5) }];
+  });
+  await page.evaluate(() => { localStorage.setItem('apex.privacyZones', JSON.stringify([{ id: 'z1', name: 'Home', lat: 35.3640, lon: -84.2880, r: 300 }]));
+    const prefs = JSON.parse(localStorage.getItem('apex.prefs') || '{}'); prefs.toggles = { ...(prefs.toggles || {}), friends: true }; localStorage.setItem('apex.prefs', JSON.stringify(prefs)); });
+  await page.goto(`${base}/index.html`);
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map);
+  await cap('Friends on the map: two friends and a home zone');
+  await page.waitForTimeout(3000);
+  await page.evaluate(() => { window.apexDebug.state.follow = false; window.apexDebug.map.jumpTo({ center: [-84.2840, 35.3630], zoom: 13, pitch: 0 }); });   // both friends and home in view
+  await page.waitForSelector('.fm-puck', { timeout: 15000 }).catch(() => {});
+  await page.waitForTimeout(3500);
+  console.log('  friends on the map:', await page.$$eval('.fm-puck', (p) => p.length), 'toggle', await page.evaluate(() => window.apexDebug.state.toggles.friends));
+  await still('friends-map');
+});
+
+const CREW_API = () => {
+  const soon = new Date(Date.now() + 4 * 86400e3); soon.setUTCHours(10, 30, 0, 0);   // 6:30 in Tellico Plains
+  const at = (h) => new Date(Date.now() - h * 3600e3).toISOString().slice(0, 19).replace('T', ' ');
+  return (p) => {
+    if (p === '/api/me') return { signed_in: true, member: true, handle: 'nate', name: 'Nate' };
+    if (p === '/api/crews') return [{ id: 'k1', name: 'Ridge Runners', role: 'owner', visibility: 'public', area_name: 'Tellico Plains, TN', members: 6 }];
+    if (p === '/api/crews/k1/members') return [{ handle: 'nate', mine: true }, { handle: 'sam', mine: false }, { handle: 'jules', mine: false }, { handle: 'dee', mine: false }];
+    if (p === '/api/crews/k1/page') return { id: 'k1', name: 'Ridge Runners', motto: 'Slow in, smooth out. Dawn runs, no heroes.', visibility: 'public', area_name: 'Tellico Plains, TN',
+      members: 6, is_owner: true, crest: 'apex', crest_photo_id: null, stripe: '#c8102e', cover_photo_id: null, sharing_scores: true,
+      livery: { tier: 'plain', decals: 0, next: { tier: 'club', at: 5 }, supporters: [], mine: { pro: false, decals: 0, on: true } },
+      routes: [{ id: 'r1', name: 'Cherohala Skyway and back' }], stages: [{ id: 's1', name: 'Skyway climb' }],
+      board: [{ handle: 'sam', score: 811, car: 'Mazda MX-5', mine: false }, { handle: 'jules', score: 764, car: 'Toyota GR86', mine: false },
+        { handle: 'nate', score: 702, car: 'Mazda MX-5', mine: true }, { handle: 'dee', score: null, car: 'BMW 330i', mine: false }],
+      next: { id: 'e1', title: 'Dawn run: Skyway and back', starts_at: soon.toISOString(), meet_name: "Tellico Plains Hardee's", going: ['sam', 'jules', 'dee'], my_rsvp: null } };
+    if (p === '/api/crews/k1/chat') return [{ id: 'm1', handle: 'sam', body: 'Fog was gone by 7 last time. Same plan?', created_at: at(3), mine: false, photo_id: null },
+      { id: 'm2', handle: 'jules', body: 'In. Bringing the radio.', created_at: at(1), mine: false, photo_id: null },
+      { id: 'm3', handle: 'nate', body: 'Same plan. Full tanks, meet 6:15.', created_at: at(0.3), mine: true, photo_id: null }];
+    if (p === '/api/events') return [{ id: 'e1', crew_id: 'k1', crew_name: 'Ridge Runners', title: 'Dawn run: Skyway and back', starts_at: soon.toISOString(), meet_name: "Tellico Plains Hardee's",
+      meet_lat: 35.36, meet_lon: -84.29, notes: null, by_handle: 'sam', mine: false, can_cancel: false, my_rsvp: null, going: ['sam', 'jules', 'dee'], maybe: 1, lead: 'sam', sweep: 'jules', regroup: [] }];
+    return undefined;
+  };
+};
+
+scene('crew-board', async ({ page, base, cap, fresh, still }) => {
+  await fresh(CREW_API());
+  await page.goto(`${base}/index.html?view=crew`);
+  await page.waitForSelector('.crew-page .cp-title h2', { timeout: 15000 });
+  await cap('Crew: the board and the chat');
+  await page.waitForTimeout(2000);
+  await still('crew-board');
+  const chat = await page.$('.cp-msg');
+  if (chat) { await chat.scrollIntoViewIfNeeded(); await page.waitForTimeout(800); }
+  await still('crew-chat');
+});
+
+scene('plan-drive', async ({ page, base, cap, fresh, still }) => {
+  await fresh(CREW_API());
+  await page.goto(`${base}/index.html?view=crew`);
+  await page.waitForSelector('.crew-page .cp-title h2', { timeout: 15000 });
+  await cap('Crew: Plan a drive, the form open');
+  await page.evaluate(() => { const r = [...document.querySelectorAll('.nav-row')].find((b) => b.textContent.includes('Crew drives')); if (r) r.click(); });
+  await page.waitForTimeout(600);
+  await page.click('.side-pop.open button:has-text("Plan a drive")');
+  await page.fill('.side-pop.open input[aria-label="Drive name"]', 'Dragon run').catch(() => {});
+  await page.waitForTimeout(1200);
+  await still('plan-drive');
+});
+
+scene('tapedeck-drive', async ({ page, base, cap, fresh, still }) => {
+  await fresh();
+  await page.goto(`${base}/index.html?drive=dry_ridge`);
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.track && window.apex && typeof window.apex.live === 'function');
+  await cap('Tapedeck: a live drive, not a replay');
+  await page.evaluate(() => window.apexDebug.tryTheme('tapedeck'));   // the trial starts from the demo replay; then leave it and drive
+  await page.waitForTimeout(1500);
+  await page.click('#modePlate').catch(() => {});
+  // drive the demo road live, frames as the iOS shell pushes them (window.apex.live): a fix every 0.1 s at 22 m/s
+  const pts = await page.evaluate(() => { const t = window.apexDebug.track, out = [];
+    for (let i = Math.floor(t.dist.length * 0.3); i < t.dist.length * 0.36; i++) out.push([t.lat[i], t.lon[i]]); return out; });
+  let at = 1e6;
+  for (let i = 1; i < pts.length; i++) {
+    const [la, lo] = pts[i], [pa, po] = pts[i - 1], course = (Math.atan2((lo - po) * Math.cos(la * Math.PI / 180), la - pa) * 180 / Math.PI + 360) % 360;
+    at += 100;
+    await page.evaluate((f) => window.apex.live(f), { lat: la, lon: lo, t: at, accuracy_m: 4, speed_mps: 22, course_deg: course, has_fix: true, lat_g: 0.3 * Math.sin(i / 9), lon_g: 0, calibration: 'locked', recording: true });
+    await page.waitForTimeout(100);
+    if (i === Math.floor(pts.length / 2)) await still('tapedeck-drive');
+  }
+  console.log('  mode:', await page.evaluate(() => window.apexDebug.state.mode), 'theme:', await page.evaluate(() => document.documentElement.dataset.theme));
+  await still('tapedeck-drive-2');
+});
+
 (async () => {
   fs.mkdirSync(OUT, { recursive: true });
   const base = `http://127.0.0.1:${server.address().port}`;
@@ -200,11 +341,18 @@ scene('member', async ({ page, base, cap, fresh, ctx }) => {
   page.on('pageerror', (e) => log.push({ t: (Date.now() - clock) / 1000, kind: 'page error', text: String(e.message || e).slice(0, 200) }));
   page.on('console', (m) => { if (m.type() === 'error' && !/status of 401/.test(m.text())) log.push({ t: (Date.now() - clock) / 1000, kind: 'console error', text: m.text().slice(0, 200) }); });
   const cap = async (text) => { caps.push({ t: (Date.now() - clock) / 1000, text }); console.log('·', text); };
+  // a still of the screen as it is, for the design review (OUT/stills/NAME.png)
+  const still = async (name) => { fs.mkdirSync(path.join(OUT, 'stills'), { recursive: true }); await page.screenshot({ path: path.join(OUT, 'stills', `${name}.png`) }); };
   const fresh = async (member) => {
     await page.goto(`${base}/index.html?blank=1`).catch(() => {});
     await page.evaluate((id) => { localStorage.clear(); localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.newsSeen', id); localStorage.setItem('apex.prefs', JSON.stringify({ notesMode: 'full' })); }, NEWS_ID).catch(() => {});
     await ctx.unroute(`${base}/api/**`);
-    if (member) await ctx.route(`${base}/api/**`, (r) => {
+    if (typeof member === 'function') await ctx.route(`${base}/api/**`, (r) => {
+      const u = new URL(r.request().url()), m = r.request().method(), b = member(u.pathname, m);
+      if (b === undefined) return m === 'GET' ? r.fulfill({ status: 200, contentType: 'application/json', body: '[]' }) : r.fulfill({ status: 204 });
+      return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(b) });
+    });
+    else if (member) await ctx.route(`${base}/api/**`, (r) => {
       const u = new URL(r.request().url()), json = (b) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(b) });
       if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'nate', name: 'Nate', requests: 1 });
       if (u.pathname === '/api/crews') return json([{ id: 'C1', name: 'Ridge Runners', role: 'owner', members: 6, visibility: 'public' }]);
@@ -220,7 +368,7 @@ scene('member', async ({ page, base, cap, fresh, ctx }) => {
   const want = process.argv.slice(2).length ? process.argv.slice(2) : Object.keys(scenes);
   try {
     for (const name of want) {
-      try { await scenes[name]({ page, base, cap, fresh, ctx }); }
+      try { await scenes[name]({ page, base, cap, fresh, ctx, still }); }
       catch (e) { log.push({ t: (Date.now() - clock) / 1000, kind: 'tour error', text: `${name}: ${String(e.message || e).split('\n')[0]}` }); console.log('!', name, String(e.message || e).split('\n').slice(0, process.env.TOUR_DEBUG ? 12 : 1).join('\n')); }
     }
   } finally {
