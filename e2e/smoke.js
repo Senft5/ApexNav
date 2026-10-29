@@ -1039,6 +1039,34 @@ flow('no colour swaps or Octane: an accent picked before is cleared, Settings se
   check(!(await page.$('#lookRow')), 'no colour-swap Look section');
 });
 
+flow('theme contract on the page: the hazard plate, the speed, the call and the binnacle floors, day and night (REVIEW.md 4.3)', async (page, base) => {
+  for (const night of [false, true]) {
+    await page.addInitScript((n) => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.prefs', JSON.stringify({ notesMode: 'full', nightMode: n ? 'on' : 'off' })); } catch (_) {} }, night);
+    await page.goto(base + '/index.html?drive=dry_ridge&play=1');
+    await page.waitForFunction(() => window.apexDebug && window.apexDebug.track && window.apexDebug.track.events.length);
+    await page.evaluate(() => { const st = window.apexDebug.state, t = window.apexDebug.track; st.cursorM = t.dist[t.dist.length - 1] * 0.45; });
+    await page.waitForTimeout(2500);
+    const r = await page.evaluate(() => {
+      const p = document.getElementById('hzPlate'); p.hidden = false; document.getElementById('hzPlateTitle').textContent = 'Gravel';
+      const cs = getComputedStyle(p), pr = p.getBoundingClientRect(), st = document.querySelector('.stage').getBoundingClientRect();
+      const speed = document.querySelector('.dial-digital').getBoundingClientRect().height;
+      const call = document.querySelector('.rb-box.now .rb-call span');
+      const small = [...document.querySelectorAll('#cluster *')].filter((n) => !(n instanceof SVGElement) && n.childNodes.length && [...n.childNodes].some((c) => c.nodeType === 3 && c.textContent.trim()))
+        .map((n) => [n.className, parseFloat(getComputedStyle(n).fontSize)]).filter(([, px]) => px < 13);
+      const bank = document.querySelector('.dial-digital.small'), bankPx = bank ? bank.getBoundingClientRect().height : 99;
+      return { bg: cs.backgroundColor, edge: cs.borderTopColor, ink: cs.color, top: Math.round(pr.top - st.top), left: Math.round(pr.left - st.left),
+               speed, call: call ? parseFloat(getComputedStyle(call).fontSize) : 0, small, bankPx, limit: !!document.querySelector('.ro-limit') };
+    });
+    const m = night ? 'night' : 'day';
+    check(r.bg === 'rgb(17, 17, 17)' && r.edge === 'rgb(255, 122, 26)' && r.ink === 'rgb(255, 255, 255)', `${m}: the hazard plate's colours ` + JSON.stringify(r));
+    check(r.top === 14 && r.left === 10, `${m}: the plate sits top-left, 14 px under the strip: ${r.top},${r.left}`);
+    check(r.speed >= 40, `${m}: speed numeral ${r.speed} px`);
+    check(r.call >= 21, `${m}: the call ${r.call} px`);
+    check(!r.small.length && r.bankPx >= 13, `${m}: nothing on the binnacle under 13 px: ` + JSON.stringify(r.small) + ' bank ' + r.bankPx);
+    check(r.limit, `${m}: the Limit sign is there`);
+  }
+});
+
 flow('flyover video: Video records the replay with the note on it and hands over a file (IDEAS D-10)', async (page, base) => {
   await page.route('https://tiles.openfreemap.org/**', (route) => (route.request().url().includes('/styles/')
     ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 8, sources: {}, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#eee' } }] }) })

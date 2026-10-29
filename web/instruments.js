@@ -114,6 +114,8 @@
   // Pace-note strip renderers
   // -------------------------------------------------------------------------
   function renderNotes(el, theme, notes) {
+    const custom = theme && theme.renderers && RENDER.strip[theme.renderers.strip];   // a Pro theme's strip (the contract's third)
+    if (custom) return custom(el, theme, notes, { lockup, tulipSVG, hazard: (n) => HAZARD_TYPES.has(n.type) });
     el.innerHTML = '';
     el.className = `notes notes-${theme.notes}`;
     const ink = css('--panel-ink'), accent = css('--accent'), signal = css('--signal');
@@ -188,7 +190,7 @@
         svg('text', { x: tx, y: ty + 5, 'text-anchor': 'middle', class: 'dial-num' }, s).textContent = v;
       }
     }
-    svg('text', { x: 100, y: 132, 'text-anchor': 'middle', class: 'dial-label' }, s).textContent = U() ? U().speedU().toUpperCase() : 'MPH';
+    svg('text', { x: 100, y: 122, 'text-anchor': 'middle', class: 'dial-label' }, s).textContent = U() ? U().speedU().toUpperCase() : 'MPH';
     const limit = svg('g', {}, s);
     svg('rect', { x: 94, y: 4, width: 12, height: 14, fill: 'var(--face)', stroke: 'var(--face-ink)', 'stroke-width': 1.6 }, limit);
     const sight = svg('path', { d: 'M100 18 L95 8 L105 8 Z', fill: 'none', stroke: 'var(--amber)', 'stroke-width': 2 }, s);
@@ -196,7 +198,7 @@
     const needle = svg('g', {}, s);
     const np = svg('path', { d: printed ? 'M98.6 112 L100 24 L101.4 112 Z' : 'M97.5 108 L100 22 L102.5 108 Z', fill: printed ? 'var(--signal)' : 'var(--face-ink)' }, needle);
     svg('circle', { cx: 100, cy: 100, r: printed ? 5 : 7, fill: 'var(--face)', stroke: 'var(--face-ink)', 'stroke-width': 1.6 }, s);
-    const digital = svg('text', { x: 100, y: 174, 'text-anchor': 'middle', class: 'dial-digital' }, s);
+    const digital = svg('text', { x: 100, y: 182, 'text-anchor': 'middle', class: 'dial-digital' }, s);
     return (d) => {
       const live = d.speedMph != null;
       needle.setAttribute('transform', `rotate(${ang(live ? d.speedMph : 0) + 90} 100 100)`);
@@ -323,6 +325,12 @@
     };
   }
 
+  // The theme contract's three renderers (theme_contract.js): a theme names its dial, meter and strip; Pro themes register
+  // theirs here (register(slot, id, fn)). Everything around them, and the hazard plate, stays the page's.
+  const RENDER = { dial: { printed: (el) => speedDial(el, true) }, meter: { gball: (el) => gDial(el, true) }, strip: { roadbook: null } };
+  function register(slot, id, fn) { if (RENDER[slot]) RENDER[slot][id] = fn; }
+  const pick = (theme, slot, fallback) => (theme.renderers && RENDER[slot][theme.renderers[slot]]) || RENDER[slot][fallback];
+
   function mountDials(el, theme) {
     const printed = theme.gauge === 'printed';
     el.innerHTML = '';
@@ -330,12 +338,13 @@
     const sp = html('div', 'dial dial-speed', el);
     const center = html('div', 'cluster-center', el);
     const gg = html('div', 'dial dial-g', el);
-    const u = [speedDial(sp, printed), readouts(center), odometer(center, printed), gDial(gg, printed)];
+    const u = [pick(theme, 'dial', 'printed')(sp), readouts(center), odometer(center, printed), pick(theme, 'meter', 'gball')(gg)];
     // Keep the road type below Trip; a route without sector data has no known type.
-    const roadType = html('div', 'dna-arch', center, '--');
+    const roadType = html('div', 'dna-arch', center, 'Road: --');
     u.push(d => {
       const type = d.sector && d.sector.archetype;
-      roadType.textContent = type === 'Flowing sweepers' ? 'Sweepers' : type === 'Fast open' ? 'Fast & open' : (type || '--');
+      // labelled (REVIEW.md 1.2, Replay): "Road: Fast & open", "Road: --" when the sector is unknown
+      roadType.textContent = `Road: ${type === 'Flowing sweepers' ? 'Sweepers' : type === 'Fast open' ? 'Fast & open' : (type || '--')}`;
     });
     return { update: (d) => u.forEach(f => f(d)) };
   }
@@ -344,6 +353,6 @@
     return mountDials(el, theme);
   }
 
-  const api = { mountCluster, renderNotes, tulipSVG, lockup, SPEED_MAX };
+  const api = { mountCluster, renderNotes, tulipSVG, lockup, register, SPEED_MAX };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexInstruments = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -14,17 +14,18 @@
     roadbook: {
       id: 'roadbook', label: 'Road book', tag: 'A', blurb: 'Paper and red ink.',
       fonts: FONT, cluster: 'dials', notes: 'roadbook', gauge: 'printed',
+      renderers: { dial: 'printed', meter: 'gball', strip: 'roadbook' },   // the theme contract's three renderers (theme_contract.js)
       day: {
         stage: '#F2EBDD', ink: '#1C1A17', dim: '#6A6255', route: '#C8102E', routeCasing: '#F2EBDD',
         panel: '#EDE4D3', panelInk: '#1C1A17', panelDim: '#6A6255', rule: '#1C1A17', accent: '#C8102E',
         signal: '#C8102E', amber: '#8A5810', calm: '#1C1A17',
-        face: '#F6F0E4', faceInk: '#1C1A17', faceDim: '#9A9080', hair: '#CFC4AE', gain: '#2E6B3F'
+        face: '#F6F0E4', faceInk: '#1C1A17', faceDim: '#736A5A', hair: '#CFC4AE', gain: '#2E6B3F'
       },
       night: {
         stage: '#1A1814', ink: '#EDE4D3', dim: '#9A9080', route: '#E65252', routeCasing: '#1A1814',
         panel: '#151310', panelInk: '#EDE4D3', panelDim: '#8C8373', rule: '#EDE4D3', accent: '#E65252',
         signal: '#E65252', amber: '#D9A24A', calm: '#EDE4D3',
-        face: '#1A1814', faceInk: '#EDE4D3', faceDim: '#6A6255', hair: '#2E2A23', gain: '#6FBF7F'
+        face: '#1A1814', faceInk: '#EDE4D3', faceDim: '#968C7B', hair: '#2E2A23', gain: '#6FBF7F'
       },
       map: {
         day: { bg: '#F2EBDD', water: '#CFD8D3', waterLine: '#7F9A9A', land: '#EFE7D8', wood: '#E3DCC5', road: '#FFFFFF', roadMinor: '#FFFFFF', casing: '#1C1A17', label: '#1C1A17', halo: '#F2EBDD', boundary: '#8C8373', contour: '#8B6B4A', shadow: '#A08F6E', highlight: '#FFFFFF', accentShade: '#B59E78' },

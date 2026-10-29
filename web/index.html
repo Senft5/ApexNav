@@ -84,6 +84,7 @@
   <script src="keyboard.js"></script>
   <script src="boot.js"></script>
   <script src="themes.js"></script>
+  <script src="theme_contract.js"></script>
   <script src="units.js"></script>
   <script src="instruments.js"></script>
   <script src="g2p.js"></script>
@@ -94,7 +95,7 @@
   <script src="garage_ui.js"></script>
   <script src="safety_ui.js"></script>
   <style>
-    :root { --safe-top: env(safe-area-inset-top, 0px); --safe-bottom: env(safe-area-inset-bottom, 0px); --dial: clamp(88px, 12dvh, 150px);
+    :root { --safe-top: env(safe-area-inset-top, 0px); --safe-bottom: env(safe-area-inset-bottom, 0px); --dial: clamp(112px, 14dvh, 150px);
       /* The hazard plate (docs/design/REVIEW.md 4.3): the same in every theme, day and night; no theme may set these. */
       --hz-bg: #111111; --hz-edge: #FF7A1A; --hz-ink: #FFFFFF; }
     .hz-plate { position: absolute; z-index: 5; top: 14px; left: 10px; max-width: calc(100% - 76px); display: grid; grid-template-columns: 28px minmax(0, 1fr);
@@ -152,8 +153,8 @@
     .rb-call b { display: block; font-size: 20px; font-weight: 800; color: var(--accent); line-height: 1; }
     .rb-call span { display: block; font-size: 11px; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: 0.04em; }
     .rb-call span:first-child { font-size: 16px; font-weight: 800; line-height: 1.1; }
-    .rb-box.now .rb-call span.long:first-child { font-size: 17px; }
-    .rb-box.now .rb-call span.xlong:first-child { font-size: 14px; }
+    /* never under the contract's 21 px (theme_contract.js): a long call takes another line instead of a smaller size */
+    .rb-box.now .rb-call span.xlong:first-child { -webkit-line-clamp: 3; }
     .rb-box:not(.now) .rb-call span.long:first-child, .rb-box:not(.now) .rb-call span.xlong:first-child { font-size: 13px; line-height: 1.1; }
     /* the call lockup (REVIEW.md roadmap 3): modifiers one size down in pencil, the ones that change what you do in the accent */
     .rb-call span.rb-mods { font-size: 12px; font-weight: 700; color: var(--panel-dim); margin-top: 2px; }
@@ -285,11 +286,12 @@
     .dial { width: var(--dial); height: var(--dial); }
     .dial-svg { width: 100%; height: 100%; display: block; }
     .dial-num { font-family: var(--font-num); font-size: 15px; font-weight: 600; fill: var(--face-ink); }
-    .dial-label { font-size: 11px; font-weight: 700; letter-spacing: 2px; fill: var(--face-dim); }
+    .dial-label { font-size: 14px; font-weight: 700; letter-spacing: 2px; fill: var(--face-dim); }
     .dial-tiny { font-size: 11px; fill: var(--face-dim); }
-    /* Speed is the one number read at a glance: the dial draws at about half size, so 44 here is ~22 px on a phone. */
-    .dial-digital { font-family: var(--font-num); font-size: 44px; font-weight: 700; fill: var(--face-ink); }
-    .dial-digital.small { font-size: 15px; fill: var(--accent); }
+    /* Speed is the one number read at a glance: the dial draws at a bit over half size, so 70 here is at least 40 px on a
+       phone (the theme contract's floor, theme_contract.js); the bank readout at least 13 px. */
+    .dial-digital { font-family: var(--font-num); font-size: 70px; font-weight: 700; fill: var(--face-ink); }
+    .dial-digital.small { font-size: 24px; fill: var(--accent); }
     .gauge-printed .dial-num { font-size: 17px; font-weight: 700; }
     .cluster-center { min-width: 0; display: grid; gap: 4px; justify-items: center; align-content: center; }
     .readouts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; width: min(100%, 250px); }
@@ -299,7 +301,7 @@
     .ro-eye { display: block; flex: none; color: var(--accent); }
     .ro-sight b { color: var(--accent); }
     .ro-sight.short { border-color: var(--signal); } .ro-sight.short b { color: var(--signal); }
-    .ro span { font-size: 11px; font-weight: 600; color: var(--panel-dim); }
+    .ro span { font-size: 13px; font-weight: 600; color: var(--panel-dim); }
     .ro-limit { background: var(--panel-ink); color: var(--panel); border-color: var(--panel-ink); }
     .ro-limit span { color: var(--panel); opacity: 0.7; }
     .ro-limit.unknown { background: none; color: var(--panel-dim); border-color: var(--rule); }
@@ -308,7 +310,7 @@
     .odo-digits { display: flex; gap: 1px; font-family: var(--font-num); font-size: 22px; font-weight: 700; line-height: 1; }
     .odo.boxed .dg { border: 1.5px solid var(--panel-ink); padding: 1px 3px; min-width: 18px; text-align: center; }
     .odo.boxed .dg:last-child { background: var(--panel-ink); color: var(--panel); }
-    .odo-meta { display: flex; gap: 8px; font-size: 11px; font-weight: 600; color: var(--panel-dim); }
+    .odo-meta { display: flex; gap: 8px; font-size: 13px; font-weight: 600; color: var(--panel-dim); }
     .dna { width: min(100%, 250px); display: grid; gap: 4px; }
     .dna-arch { text-align: center; font-size: 13px; font-weight: 600; color: var(--panel-ink); min-height: 13px; }
     .dna-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
