@@ -516,6 +516,20 @@
     .kit circle { fill: var(--hair); } .kit circle.on { fill: var(--panel-ink); } .kit circle.eye { fill: var(--amber); }
     .kit-says b { display: block; font: 700 15px var(--font-ui); letter-spacing: 0.06em; color: var(--panel-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .tp-tapedeck { background: #0A0C0B; } .tp-tapedeck .tp-call b, .tp-tapedeck .tp-speed b { text-shadow: 0 0 6px rgba(125, 245, 222, 0.6); }
+    /* ---------------- Billet (Pro, REVIEW.md 4.1): brushed metal, knurled bezels, red glow; glow is additive ---------------- */
+    html[data-theme="billet"] .binnacle, html[data-theme="billet"] .notes {
+      background: repeating-linear-gradient(90deg, rgba(255,255,255,0.025) 0 1px, transparent 1px 3px), linear-gradient(180deg, #2A2B2E, var(--panel) 60%); }
+    html[data-theme="billet"] .rb-dist b, html[data-theme="billet"] .ro-sight b, html[data-theme="billet"] .odo-digits { color: var(--accent); text-shadow: 0 0 8px rgba(255, 74, 61, 0.55); }
+    html[data-theme="billet"] .dial-digital { fill: var(--accent); filter: drop-shadow(0 0 4px rgba(255, 74, 61, 0.7)); }
+    html[data-theme="billet"] .key, html[data-theme="billet"] .ink-btn { border-color: var(--rule); background: linear-gradient(#2E2F33, #1C1D1F); box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 2px 0 #000; }
+    html[data-theme="billet"] .odo.boxed .dg { background: #0D0D0E; border-color: var(--rule); }
+    html[data-theme="billet"] .ro-limit:not(.unknown) { background: #FFFFFF; color: #111111; border-color: #111111; }   /* the white sign, exactly as on the road */
+    html[data-theme="billet"] .ro-limit:not(.unknown) span { color: #111111; }
+    .bezelled { position: relative; }
+    .bezel-ring { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+    .bezel-ring .knurl { fill: none; stroke: #6B6E74; stroke-width: 5; stroke-dasharray: 1.2 1.6; }
+    .bezel-ring .screw { fill: #3A3C40; stroke: #8A8D93; stroke-width: 0.8; }
+    .tp-billet { background: linear-gradient(180deg, #2A2B2E, #1C1D1F); } .tp-billet .tp-speed b { color: #FF5A4C; text-shadow: 0 0 8px rgba(255, 74, 61, 0.6); }
     .rc-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 18px; margin-top: 10px; }
     label.linkbtn { display: inline-flex; align-items: center; cursor: pointer; }
     .linkbtn { font: inherit; font-size: 15px; font-weight: 500; color: var(--panel-ink); text-decoration: underline; min-height: 44px; padding: 0 4px; background: none; border: none; }

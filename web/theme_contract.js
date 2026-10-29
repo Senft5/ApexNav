@@ -11,7 +11,7 @@
   // contrast floors: every text token against its surface 4.5:1, the call (panel ink) and the hazard 7:1
   const TEXT_PAIRS = [['panelInk', 'panel', 7], ['panelDim', 'panel', 4.5], ['ink', 'stage', 4.5], ['faceInk', 'face', 7], ['faceDim', 'face', 4.5],
     ['accent', 'panel', 4.5]];
-  const RENDERERS = { dial: ['printed', 'sevenseg'], meter: ['gball', 'bars'], strip: ['roadbook', 'vfd'] };   // grows as Pro themes add theirs
+  const RENDERERS = { dial: ['printed', 'sevenseg', 'bezel'], meter: ['gball', 'bars', 'bezelg'], strip: ['roadbook', 'vfd'] };   // grows as Pro themes add theirs
   const REQUIRED = ['stage', 'ink', 'dim', 'route', 'panel', 'panelInk', 'panelDim', 'rule', 'accent', 'signal', 'face', 'faceInk', 'faceDim'];
   const FORBIDDEN = ['hzBg', 'hzEdge', 'hzInk'];                                     // a theme can't set the plate
 

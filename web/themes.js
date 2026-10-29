@@ -61,6 +61,32 @@
         day: { bg: '#0B0E0D', water: '#0E1A1C', waterLine: '#1F4A48', land: '#0C100F', wood: '#0D1211', road: '#0F1615', roadMinor: '#0D1312', casing: '#3FA595', label: '#5FB3A5', halo: '#0B0E0D', boundary: '#1D3B36', contour: '#16302B', shadow: '#050606', highlight: '#13201E', accentShade: '#0A0D0C' },
         night: { bg: '#080A09', water: '#0B1517', waterLine: '#1A3E3C', land: '#090C0B', wood: '#0A0F0E', road: '#0D1312', roadMinor: '#0B100F', casing: '#2E8577', label: '#4C9387', halo: '#080A09', boundary: '#18322E', contour: '#122824', shadow: '#040505', highlight: '#101A18', accentShade: '#080B0A' }
       }
+    },
+    // Billet (Pro, REVIEW.md 4.1): machined aluminium. A brushed graphite panel, knurled bezels, black gauge faces, red
+    // glow on the needles and the speed, a white Limit sign exactly as on the road. The energy is the glow against the
+    // metal; the layout is still three things. Its needle overshoots a touch and settles, like a real one.
+    billet: {
+      id: 'billet', label: 'Billet', tag: 'C', blurb: 'Machined metal, red glow.', pro: true,
+      about: 'Machined aluminium, knurled bezels and black gauge faces with red glow. Quiet, precise, all business.',
+      voice: { id: 'hale', name: 'Hale', who: 'Low, even, zero drama. A test driver reading a card.', sample: 'Left four. Tightens. Long.' },
+      fonts: FONT, cluster: 'dials', notes: 'roadbook', gauge: 'printed', finish: 'metal',
+      renderers: { dial: 'bezel', meter: 'bezelg', strip: 'roadbook' },
+      day: {
+        stage: '#1C1D1F', ink: '#ECE6DA', dim: '#A39E93', route: '#FF4A3D', routeCasing: '#1C1D1F',
+        panel: '#1C1D1F', panelInk: '#ECE6DA', panelDim: '#A39E93', rule: '#55575C', accent: '#FF5A4C',
+        signal: '#FF5A4C', amber: '#E8A33A', calm: '#ECE6DA',
+        face: '#0D0D0E', faceInk: '#ECE6DA', faceDim: '#9A958B', hair: '#2C2D30', gain: '#8FD18F'
+      },
+      night: {
+        stage: '#151618', ink: '#E2DCD0', dim: '#9A958B', route: '#FF4A3D', routeCasing: '#151618',
+        panel: '#151618', panelInk: '#E2DCD0', panelDim: '#9A958B', rule: '#4A4C51', accent: '#FF5A4C',
+        signal: '#FF5A4C', amber: '#E0A040', calm: '#E2DCD0',
+        face: '#0A0A0B', faceInk: '#E2DCD0', faceDim: '#96918A', hair: '#26272A', gain: '#8FD18F'
+      },
+      map: {
+        day: { bg: '#1E1F21', water: '#16191C', waterLine: '#3A4048', land: '#202123', wood: '#222326', road: '#2B2C2F', roadMinor: '#262729', casing: '#CFC9BD', label: '#B8B2A6', halo: '#1E1F21', boundary: '#3A3B3F', contour: '#303135', shadow: '#0B0B0C', highlight: '#2E2F33', accentShade: '#151617' },
+        night: { bg: '#161719', water: '#121417', waterLine: '#30353C', land: '#18191B', wood: '#1A1B1D', road: '#232426', roadMinor: '#1F2022', casing: '#A9A398', label: '#9C968B', halo: '#161719', boundary: '#323336', contour: '#28292C', shadow: '#080809', highlight: '#252629', accentShade: '#111213' }
+      }
     }
   };
   function get(id) { return typeof id === 'string' && Object.prototype.hasOwnProperty.call(THEMES, id) ? THEMES[id] : THEMES.roadbook; }   // unknown or retired: the road book

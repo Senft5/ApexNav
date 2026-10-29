@@ -201,7 +201,7 @@
     const digital = svg('text', { x: 100, y: 182, 'text-anchor': 'middle', class: 'dial-digital' }, s);
     return (d) => {
       const live = d.speedMph != null;
-      needle.setAttribute('transform', `rotate(${ang(live ? d.speedMph : 0) + 90} 100 100)`);
+      needle.setAttribute('transform', `rotate(${ang(live ? (d.needleMph != null ? d.needleMph : d.speedMph) : 0) + 90} 100 100)`);
       needle.style.opacity = live ? 1 : 0.25;
       np.setAttribute('fill', live && d.paceMph != null && d.speedMph > d.paceMph + 1 ? 'var(--signal)' : (printed ? 'var(--signal)' : 'var(--face-ink)'));
       digital.textContent = live ? Math.round(d.speedMph) : '--';
@@ -417,9 +417,35 @@
     };
   }
 
+  // ---- Billet (Pro, REVIEW.md 4.1): the printed dial and g-ball in a knurled bezel; the needle on a spring --------------
+  function bezel(parent, inner) {
+    parent.classList.add('bezelled');
+    const ring = svg('svg', { viewBox: '0 0 200 200', class: 'bezel-ring', 'aria-hidden': 'true' }, parent);
+    svg('circle', { cx: 100, cy: 100, r: 98, class: 'knurl' }, ring);
+    for (const a of [45, 135, 225, 315]) { const [x, y] = polar(93, a); svg('circle', { cx: x, cy: y, r: 2.6, class: 'screw' }, ring); }
+    return inner;
+  }
+  // a needle with mass: it overshoots a little on a change and settles (critically under-damped spring, ~0.4 s)
+  function springNeedle() {
+    let x = null, v = 0, t0 = 0;
+    return (target, now) => {
+      if (target == null || !isFinite(target)) { x = null; return null; }
+      if (x == null) { x = target; t0 = now; return x; }
+      const dt = Math.min(0.1, Math.max(0, (now - t0) / 1000)); t0 = now;
+      const k = 120, c = 13;                                        // stiffness, damping: ~6 % overshoot
+      v += (k * (target - x) - c * v) * dt; x += v * dt;
+      return x;
+    };
+  }
+  function bezelDial(parent) {
+    const up = bezel(parent, speedDial(parent, true)), spring = springNeedle();
+    return (d) => up({ ...d, needleMph: spring(d.speedMph, typeof performance !== 'undefined' ? performance.now() : Date.now()) });
+  }
+  const bezelG = (parent) => bezel(parent, gDial(parent, true));
+
   // The theme contract's three renderers (theme_contract.js): a theme names its dial, meter and strip; Pro themes register
   // theirs here (register(slot, id, fn)). Everything around them, and the hazard plate, stays the page's.
-  const RENDER = { dial: { printed: (el) => speedDial(el, true), sevenseg: sevenSeg }, meter: { gball: (el) => gDial(el, true), bars: barMeters },
+  const RENDER = { dial: { printed: (el) => speedDial(el, true), sevenseg: sevenSeg, bezel: bezelDial }, meter: { gball: (el) => gDial(el, true), bars: barMeters, bezelg: bezelG },
     strip: { roadbook: null, vfd: null } };                          // the VFD strip is the road book's, in the VFD skin
   function register(slot, id, fn) { if (RENDER[slot]) RENDER[slot][id] = fn; }
   const pick = (theme, slot, fallback) => (theme.renderers && RENDER[slot][theme.renderers[slot]]) || RENDER[slot][fallback];
@@ -447,6 +473,6 @@
     return mountDials(el, theme);
   }
 
-  const api = { mountCluster, renderNotes, tulipSVG, lockup, register, kitPose, KIT, SPEED_MAX };
+  const api = { mountCluster, renderNotes, tulipSVG, lockup, register, kitPose, KIT, springNeedle, SPEED_MAX };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexInstruments = api;
 })(typeof window !== 'undefined' ? window : globalThis);
