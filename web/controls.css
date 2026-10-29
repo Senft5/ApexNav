@@ -90,3 +90,24 @@
 .row-pick-sheet .rp-list button[aria-selected="true"]::before { content: ""; position: absolute; left: 0; top: 14px; bottom: 14px; width: 3px; background: var(--accent); }
 .row-pick-sheet .rp-cancel { margin-top: 8px; min-height: 48px; border: 1.5px solid var(--panel-ink); background: transparent; color: var(--panel-ink); font: inherit; font-size: 16px; font-weight: 700; }
 @media (orientation: landscape) and (max-height: 540px) { .row-pick-sheet { align-items: center; } .row-pick-sheet .rp-box { max-height: 90dvh; border: 1.5px solid var(--panel-ink); } }
+
+/* A yes or no in a form: the slide switch drawn on the checkbox itself, so the form keeps its input (REVIEW2.md U-18) */
+.sw-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; min-height: 48px; font-size: 16px; color: var(--panel-ink); }
+.sw-row[hidden] { display: none; }
+input[type="checkbox"].tick-sw { -webkit-appearance: none; appearance: none; flex: none; position: relative; width: 44px; height: 24px; margin: 0;
+  border: 1.5px solid var(--panel-ink); border-radius: 0; background: var(--panel); cursor: pointer; }
+input[type="checkbox"].tick-sw::after { content: ""; position: absolute; top: 0.5px; left: 0.5px; width: 20px; height: 20px; background: var(--panel-dim);
+  transition: transform 0.15s ease-out; }
+input[type="checkbox"].tick-sw:checked { background: var(--panel-ink); }
+input[type="checkbox"].tick-sw:checked::after { transform: translateX(20px); background: var(--panel); }
+input[type="checkbox"].tick-sw:disabled { border-color: var(--panel-dim); cursor: default; }
+input[type="checkbox"].tick-sw:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { input[type="checkbox"].tick-sw::after { transition: none; } }
+
+/* A stepped value: minus, the value, plus (the day and time of a crew drive) */
+.stepper { display: grid; grid-template-columns: 48px minmax(0, 1fr) 48px; align-items: stretch; min-height: 48px; border: 1.5px solid var(--panel-ink); }
+.stepper > button { min-width: 0; padding: 0; border: 0; background: transparent; color: var(--panel-ink); font-family: inherit; font-size: 22px; font-weight: 700; line-height: 1; touch-action: manipulation; user-select: none; -webkit-user-select: none; }
+.stepper > button:active { background: var(--panel-ink); color: var(--panel); }
+.stepper > output { display: flex; align-items: center; justify-content: center; min-width: 0; padding: 0 6px; border-left: 1px solid var(--rule); border-right: 1px solid var(--rule);
+  font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.plan-when { display: grid; gap: 8px; }   /* day over time, each the full width so the value reads whole */

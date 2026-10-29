@@ -6,6 +6,19 @@ it says so. Things only you can do are in docs/OWNER_TODO.md.
 
 ## 2026-10-29
 
+**The three defects the review stills found.** My calls:
+- *Plan a drive uses only the app's controls.* Crew, template, lead and sweep are row pickers (web/row_select.js, now
+  loaded on the map page too); the day and time are steppers (minus, value, plus; the day from today to 29 days out as
+  the Worker allows, the time in 15-minute steps, holding a key keeps stepping); the yes-or-no lines are slide
+  switches drawn on the checkbox itself, so the form's logic didn't change. Lead and sweep are stacked rows now.
+- *A friend's label near the right edge goes on the face's left*, clear of the Layers key and the screen, and flips
+  back as the map moves. The face stays on the friend's spot.
+- *"Finding GPS..." on the live Tapedeck still was the tour's doing, not the app's.* The scene pushed shell frames
+  without starting a drive, which no phone does (on iOS frames without a drive go to the idle map). A drive started
+  by the shell's link reads "Rec 1.06 mi" with the same frames; the scene now starts one that way. The dark band under
+  the map was a screenshot taken mid-resize; canvas and container measure the same. No app change for either.
+Undo: revert web/crew_events.js, web/friends_map.js and the `.tick-sw`, `.stepper`, `.sw-row` rules in web/controls.css.
+
 **Roadmap 2 item 20: stills of every mockup surface (U-37).** `node tools/app_tour.js route-card friends-map
 plan-drive crew-board tapedeck-drive` saves OUT/stills/*.png: a routed mountain road with 186 corners, the profile
 with its corner ticks, named legs and two alternatives; two friends (one late and fuzzed, one live on a road) and a

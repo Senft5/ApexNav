@@ -13,67 +13,12 @@
   - tools/app_tour.js saves review stills (OUT/stills) of the five surfaces REVIEW2 could not judge: a routed mountain
     road with corners and alternatives, two friends and a home zone, Plan a drive open, the crew board and chat,
     Tapedeck on a live drive. All data is stubbed in the script, never in the app.
-- Active bugs, found by those stills (not yet fixed):
-  - The Plan a drive form (web/crew_events.js) still uses the browser's selects (crew, lead, sweep), date and time
-    pickers and checkboxes; U-18 covered the drive page, Stages and Compare only.
-  - A friend's label near the right edge of the map slides under the Layers key and is cut by the screen edge.
-  - On a live Tapedeck drive started from window.apex.live frames, the status line stays on "Finding GPS..." with a good
-    fix, and a dark band shows between the map and the binnacle (check whether a real iOS drive does the same).
-  - U-33 (partial): the Log and Stages empty states are one line and an action; Crews near you and Spots near you
-    still explain in a line. U-18 (partial): the rest of the browser controls named in its row.
-- Exact next task: replace the Plan a drive form's browser controls with the shaped ones (stamps for the crew, row
-  pickers from web/row_select.js for lead and sweep, a drum or detents for the date and time), then the friend-label
-  edge collision, then the "Finding GPS..." line on a live drive; then run the stills and ask Fable for review 3.
-
-## Session 2026-10-29 (afternoon): design phase 3, photos
-
-- [x] REVIEW.md 3.1: Start with no route follows the road you're on and calls its corners (web/horizon.js, free drive).
-- [x] REVIEW.md roadmap 15-18: Look and voice in the Garage (theme picker, Hear keys, a 10-minute try on the demo
-  replay; web/pro.js, the `pro` flag off); Tapedeck (VFD, seven-segment speed, bar meters, Kit's lean frames); Billet
-  (bezel dial, spring needle, metal); theme sounds (web/theme_sounds.js); voice packs Marguerite, Kit and Hale replace the
-  voice list; George, Daniel, Emma, Michael, My Voice and Jarvis are retired (banks deleted, Jarvis code removed).
-- [x] Roadmap 19: photos (backend/src/photos.ts, web/photos.js): profile photo in the Garage, a car's cover and gallery;
-  EXIF gone on the phone and stripped again on the Worker; KV `PHOTOS` until R2 is on (OWNER_TODO). Migration 0030
-  (photos, crew page columns, crew chat, build threads) applied to both D1.
-- Active bugs: none new.
-- [x] Roadmap 20: the crew page (web/crew_page.js, backend/src/crew_page.ts): cover, stock crest, motto, stripe, next
-  drive with Going, the Vetta Score board this month, crew chat (30 days). Migration 0031 applied to both D1.
-- [x] Roadmap 21: crew drives get lead and sweep roles (take or give up), up to five regroup points, roles on the crew
-  page's card, and the morning-of reminder on the idle map (crew_events.js todayDrive). Migration 0032 applied to both D1.
-- [x] Roadmap 22 (core): Decals from verified Pro (backend/src/livery.ts, migration 0033 applied to both D1), tiers, the
-  livery box, Club (second colour, pinned route, crest photo) and Works (third colour, patterns) in the editor. Dormant
-  until StoreKit writes pro_entitlements. Postponed: chat pins, templates, badges, house stage, call sign, Factory.
-- [x] Roadmap 23: build threads (backend/src/builds.ts, web/builds.js): car header, stage bar, numbered steps with photos,
-  parts and a Log drive's Vetta Score, replies and suggestions with Tried it, follow with new-step counts. Migration 0034.
-- [x] Roadmap 24: friends on the map (backend/src/presence.ts, web/friends_map.js): the Friends layer, Show me to, delay
-  and grid fuzz on the server, only while driving, home zones on both sides and hatched on your map. Migration 0035.
-- All 24 roadmap items are built. Also done: the packs' closing lines with the score and "best on this road"
-  (web/end_line.js, number clips in each bank), the Prefer stamps (web/prefer.js).
-- [x] Build-thread chat (30 days, migration 0036).
-- [x] REVIEW.md 1.2 pass: the live Vetta Score under the meter in every theme (contract-tested), Start on onboarding,
-  import hints point to Garage.
-- [x] Livery extras: Club (chat pin, 3 templates), Works (badges, house stage, call sign, 10 templates), Factory (drawn
-  crest, share card, crew hazard categories). Migrations 0037-0038 applied to both D1.
-- [x] The crew's regroup line in each pack's voice (rendered on the website, played in the app; migration 0039) and every
-  convoy regroup spoken; notifications for followed builds from a background refresh (ApexBuildNotifier.swift; the rule is ApexKit BuildAlerts, unit-tested).
-- [x] A fresh REVIEW.md 1.2 pass, now two e2e flows ("REVIEW.md 1.2 screen by screen"): Recenter a map key, the confirm
-  sheet (web/confirm.js) for every destructive action, the rest of the Log as quiet lines, drive detail fits a phone,
-  the signed-out Crew pitch. The friend-profile test's random failure (a car id holding "600") is fixed.
-- [x] Safe areas: an e2e flow emulates the iPhone 15 Pro's Dynamic Island, home indicator and corners, upright and on
-  its side; landscape now pads every sheet, overlay, plate and the tab rail, and the suggested loop floats over the map.
-- [x] Second Fable review (docs/design/REVIEW2.md, screenshots in docs/design/screens-v2, IDEAS U-23 to U-46): its 22
-  safe-area rows are fixed and the e2e "safe areas" flow checks 14 screens on four devices (15 Pro upright and on its
-  side, mini on its side, SE); a full 156-shot re-capture on 15 Pro and mini on their sides, the mini and the SE is
-  clean. The Live Activity follows the HIG's Dynamic Island layouts (short call, hazard keyline and glyph, ETA).
-- [x] Voices: every clip transcribed with Whisper; Marguerite is now Kokoro af_bella (the British voices added a syllable);
-  every bank re-rendered where misheard (`--rebuild-checked`, best of six takes), levelled to -20 dB RMS; directions,
-  route, traffic, reported-hazard, coaching and track lines are in each pack (web/voice_lines.js) so a drive keeps one
-  voice; iOS playback waits for the audio context and ends on the last clip. Kit's tens (40-80) were heard as teens at
-  his speed; the slower take fixes them.
-- Every REVIEW.md suggestion is built. Pro, Decals and the Pro themes wait on StoreKit (the owner's Paid Applications
-  Agreement); photos wait on R2 to move out of KV.
-- Exact next task: docs/design/REVIEW2.md Roadmap 2 from item 10 (the IDEAS rows still marked todo), and StoreKit when
-  the owner's Paid Applications Agreement is in, so Pro, Decals and the Pro themes can go on sale.
+- [x] The three defects the stills found: Plan a drive now uses row pickers, day and time steppers and slide switches;
+  a friend's label near the right edge flips to the face's left; "Finding GPS..." was the tour scene (it now starts a
+  drive as the shell does and reads "Rec").
+- Active bugs: none known. U-33 (partial): Crews near you and Spots near you still explain in a line. U-18 (partial):
+  the rest of the browser controls named in its row.
+- Exact next task: act on Fable's third review (docs/design/REVIEW3.md), a codebase-wide pass with edit access.
 
 ## Session 2026-10-29 (day): design phase 2
 
