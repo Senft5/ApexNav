@@ -4,7 +4,7 @@
 // opened). It plans routes, places the maneuvers, calls notes and hazards and speaks; CarPlay shows what it decides and
 // sends back what the driver picks. Page -> car: `{cmd:'car', kind:...}` messages (route, clear, start, guide, sight, end, hazard, ask,
 // places, corners, hazards, look), handled by ApexCar.receive. Car -> page: `onNative({type:'carplay', action})` with go,
-// pick, start, end, loop, report, still, voice, places, hello.
+// pick, start, end, loop, report, still, voice, places, hello, disconnect.
 //
 // What Apple leaves to the app, we draw: the base view is our own map in the phone's theme (web/carmap.html, the same
 // OpenFreeMap style and palettes as the phone) with the route, every corner's rating at its apex and the hazard plates; the
@@ -286,6 +286,9 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
                                   didDisconnect interfaceController: CPInterfaceController, from window: CPWindow) {
         MainActor.assumeIsolated {
             if ApexCar.shared.scene === self { ApexCar.shared.scene = nil }
+            // Round 3 (the owner's drive to work, 2026-10-30): the car switched off with the drive never ended. The page ends
+            // and saves it once the car has not driven on (web/drive_keep.js EndWatch); a drop that reconnects says hello again.
+            ApexCar.shared.send("disconnect", ["t": (Date().timeIntervalSince1970 * 1000).rounded()])
             session = nil; trip = nil; maneuver = nil; maneuverKey = ""
             self.interfaceController = nil
             carWindow = nil

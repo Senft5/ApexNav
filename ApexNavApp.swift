@@ -436,6 +436,11 @@ final class ApexScriptBridge: NSObject, WKScriptMessageHandler {
             ApexCar.shared.receive(dict)
             return
         }
+        // The drive journal (Round 3, web/drive_keep.js): the fixes the page has not yet kept.
+        if cmd == "journal", let dict = body as? [String: Any] {
+            shell?.handleJournal(dict)
+            return
+        }
         // The drive's Live Activity (IDEAS U-11): the page starts, updates and ends it.
         if cmd == "activity", let dict = body as? [String: Any] {
             shell?.handleActivity(dict)
@@ -585,6 +590,13 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         NotificationCenter.default.addObserver(forName: UIApplication.willTerminateNotification, object: nil, queue: .main) { _ in
             ApexSensorShell.endAllActivities(wait: true)
         }
+        // Round 3 (web/drive_keep.js): the page keeps the drive now, before iOS can suspend or end it; the journal has the rest
+        for name in [UIApplication.didEnterBackgroundNotification, UIApplication.willTerminateNotification] {
+            NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] note in
+                let state = note.name == UIApplication.willTerminateNotification ? "terminate" : "background"
+                MainActor.assumeIsolated { self?.sendToPage(["type": "lifecycle", "state": state]) }
+            }
+        }
     }
 
     // MARK: Web bridge
@@ -676,10 +688,12 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
 
     func webDidStartLoading() {
         webReady = false
+        liveInFlight = 0; liveStalled = false; backlogInFlight = false   // a new page asks for its journal itself (web recoverKept)
     }
 
     func webDidFinishLoading() {
         webReady = true
+        liveInFlight = 0; liveStalled = false; backlogInFlight = false
         // what the driver picks on the car's screen goes to the page (CarPlay/ApexCarPlay.swift)
         ApexCar.shared.toPage = { [weak self] obj in self?.sendToPage(obj) }
         pushLiveFrame()
@@ -1078,9 +1092,25 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         let vertPeak = pipeline.takeVertPeak()   // this frame's spike window; the web Recorder places it on the road
         let impact = frameImpactMps2; frameImpactMps2 = 0
         if hasFix { ApexCar.shared.position(lat: latDeg, lon: lonDeg, course: courseDeg ?? -1) }   // the car's maps (CarPlay), even before the page is ready
-        guard webReady, webView != nil else { return }
         let live = imuLive   // false while the thermal guard has motion paused: g, camber, crest and roughness are unknown
         func imu(_ v: Double) -> Double? { live ? v : nil }
+        // Round 3 (web/drive_keep.js): every fix is numbered, and in a drive journaled on disk until the page has kept it,
+        // whether or not the page is loaded, awake or answering
+        let at = (Date().timeIntervalSince1970 * 1000).rounded()
+        if hasFix { frameSeq += 1 }
+        let seq: Int? = hasFix ? frameSeq : nil
+        if let seq {
+            journal?.add(JournalFrame(seq: seq, at: at, lat: latDeg, lon: lonDeg, accuracyM: accuracyM, speedMps: speedMps,
+                                      courseDeg: courseDeg, elevationM: fusion.elevationM, latG: imu(pipeline.latAccMps2 / Self.gStd),
+                                      lonG: imu(pipeline.lonAccMps2 / Self.gStd), camberDeg: imu(pipeline.camberRad * 180.0 / Double.pi),
+                                      crestVerticalG: imu(pipeline.crestAccMps2 / Self.gStd), roughnessRms: imu(pipeline.roughRMSMps2 / Self.gStd),
+                                      vertPeakG: imu(vertPeak / Self.gStd), calibration: live ? pipeline.mount.state.rawValue : "paused"))
+        }
+        guard webReady, let wv = webView else { return }
+        // A page that has not answered the last few seconds of frames is suspended (a WKWebView in the background, the phone
+        // locked): its frames wait in the journal, not in a queue of scripts, and go to it as one backlog when it answers
+        if liveInFlight >= Self.stallFrames { liveStalled = true; return }
+        if liveStalled { flushBacklog(wv); return }
         let json = "{"
             + "\"lat\":\(Self.num(hasFix ? latDeg : nil, 7)),"
             + "\"lon\":\(Self.num(hasFix ? lonDeg : nil, 7)),"
@@ -1103,9 +1133,74 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
             + "\"battery\":\(Self.num(UIDevice.current.batteryLevel >= 0 ? Double(UIDevice.current.batteryLevel) : nil, 2)),"
             + "\"charging\":\(UIDevice.current.batteryState == .charging || UIDevice.current.batteryState == .full ? "true" : "false"),"
             + "\"has_fix\":\(hasFix ? "true" : "false"),"
-            + "\"segments\":\(recordedSegments)"
+            + "\"segments\":\(recordedSegments),"
+            + "\"at\":\(Self.num(at, 0)),"
+            + "\"seq\":\(seq.map { String($0) } ?? "null")"
             + "}"
-        evaluate("window.apex && window.apex.live && window.apex.live(\(json)); void 0;")
+        liveInFlight += 1
+        wv.evaluateJavaScript("(window.apex && window.apex.live) ? (window.apex.live(\(json)), true) : false") { [weak self] result, _ in
+            guard let self else { return }
+            self.liveInFlight = max(0, self.liveInFlight - 1)
+            if (result as? Bool) == true, let seq { self.liveConfirmedSeq = max(self.liveConfirmedSeq, seq) }
+        }
+    }
+
+    // MARK: The drive journal (Round 3, the owner's drive to work, 2026-10-30; ApexKit DriveJournal, web/drive_keep.js)
+    // The page keeps its recording in IndexedDB every few seconds; the fixes since its last checkpoint are here, on disk.
+    private static let stallFrames = 30                 // 3 s of frames unanswered: the page is not running
+    private var frameSeq = 0
+    private var journal: DriveJournal?
+    private var liveInFlight = 0
+    private var liveConfirmedSeq = 0
+    private var liveStalled = false
+    private var backlogInFlight = false
+    private static var journalDirectory: URL? {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?.appendingPathComponent("DriveJournal", isDirectory: true)
+    }
+
+    /// The frames a suspended page missed, oldest first, in pieces; live frames start again once it has them all.
+    private func flushBacklog(_ wv: WKWebView) {
+        guard !backlogInFlight else { return }
+        let missed = journal?.after(liveConfirmedSeq) ?? []
+        guard !missed.isEmpty else { liveStalled = false; return }
+        let chunk = Array(missed.prefix(600))
+        backlogInFlight = true
+        wv.evaluateJavaScript("(window.apex && window.apex.backlog) ? window.apex.backlog(\(DriveJournal.json(chunk))) === true : false") { [weak self] result, error in
+            guard let self else { return }
+            self.backlogInFlight = false
+            if (result as? Bool) == true, let last = chunk.last { self.liveConfirmedSeq = max(self.liveConfirmedSeq, last.seq) }
+            else if error == nil { self.liveStalled = false }   // a page without a backlog: live frames again, the journal keeps the rest
+        }
+    }
+
+    /// The page's side of the journal: start (a drive began), durable (kept up to seq), end (saved or dropped), list.
+    func handleJournal(_ dict: [String: Any]) {
+        let id = (dict["id"] as? String) ?? ""
+        switch dict["op"] as? String {
+        case "start":
+            if journal?.id == id { return }                       // the page came back to the drive it was on
+            journal = DriveJournal(id: id, directory: Self.journalDirectory)
+        case "durable":
+            if let seq = (dict["seq"] as? NSNumber)?.intValue, journal?.id == id { journal?.durable(through: seq) }
+        case "end":
+            if journal?.id == id { journal?.remove(); journal = nil; return }
+            if DriveJournal.validID(id), let dir = Self.journalDirectory {   // one left from an earlier launch, now recovered
+                try? FileManager.default.removeItem(at: dir.appendingPathComponent("\(id).jsonl"))
+            }
+        case "list":
+            var list: [[String: Any]] = []
+            func entry(_ j: DriveJournal, active: Bool) -> [String: Any] {
+                let frames = (try? JSONSerialization.jsonObject(with: Data(DriveJournal.json(j.frames).utf8))) as? [Any] ?? []
+                return ["id": j.id, "active": active, "frames": frames]
+            }
+            if let journal { list.append(entry(journal, active: true)) }
+            if let dir = Self.journalDirectory {
+                for j in DriveJournal.all(in: dir) where j.id != journal?.id { list.append(entry(j, active: false)) }
+            }
+            sendToPage(["type": "journals", "list": list, "car": ApexCar.shared.scene != nil])
+        default:
+            break
+        }
     }
 
     private static func num(_ value: Double?, _ digits: Int) -> String {
