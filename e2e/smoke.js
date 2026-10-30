@@ -241,7 +241,7 @@ flow('avoid cameras: with the chip on, the cameras near the trip go to the route
   await page.route('https://photon.komoot.io/**', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ features: [
     { geometry: { coordinates: [-83.9700, 35.7565] }, properties: { name: 'Maryville', state: 'Tennessee' } }] }) }));
   await page.route('https://overpass-api.de/**', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ elements: [
-    { type: 'node', id: 1, lat: 35.85, lon: -83.94 }, { type: 'node', id: 2, lat: 37.5, lon: -83.9 }] }) }));
+    { type: 'node', id: 1, lat: 35.85, lon: -83.94, tags: { 'surveillance:type': 'ALPR' } }, { type: 'node', id: 2, lat: 37.5, lon: -83.9, tags: { 'surveillance:type': 'ALPR' } }] }) }));
   await page.route('https://valhalla1.openstreetmap.de/route', (route) => {
     const req = JSON.parse(route.request().postData() || '{}');
     asked.push(req);

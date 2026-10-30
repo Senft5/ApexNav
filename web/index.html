@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-Yi1r2I0cFTDv7eYxzPvE+5+aIHt9Aw1dtu6hE2eEHRM=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-vakgvhSnivqzJD/Lx7Jw+tgDEI6q0cJnGJ8ghrPKpT0=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -60,6 +60,7 @@
   <script src="voice_lines.js"></script>
   <script src="directions.js"></script>
   <script src="carplay.js"></script>
+  <script src="cameras.js"></script>
   <script src="whats_new.js"></script>
   <script src="saved_routes.js"></script>
   <script src="row_select.js"></script>
@@ -1166,7 +1167,7 @@
             </ul>
           </section>
           <section class="sources" data-panel="garage">
-            <details class="more"><summary>Sources and licences</summary><p class="note">Map &copy; OpenStreetMap contributors via OpenFreeMap. Terrain: AWS Terrarium DEM. Routing, map matching and posted limits: Valhalla (FOSSGIS). Geocoding: Nominatim. Search suggestions: Photon (Komoot). Plate-reading cameras: OpenStreetMap (<code>surveillance:type=ALPR</code>, DeFlock) via Overpass. Voices: Kokoro-82M (Apache-2.0).</p></details>
+            <details class="more"><summary>Sources and licences</summary><p class="note">Map &copy; OpenStreetMap contributors via OpenFreeMap. Terrain: AWS Terrarium DEM. Routing, map matching and posted limits: Valhalla (FOSSGIS). Geocoding: Nominatim. Search suggestions: Photon (Komoot). Plate-reading and speed cameras: OpenStreetMap (<code>surveillance:type=ALPR</code>, DeFlock; <code>highway=speed_camera</code>) via Overpass. Voices: Kokoro-82M (Apache-2.0).</p></details>
             <p class="note mt-8"><a href="https://apexnav.senftns.workers.dev/privacy.html" target="_blank" rel="noopener">Privacy</a> · <a href="https://apexnav.senftns.workers.dev/terms.html" target="_blank" rel="noopener">Terms of use</a> · <a href="licenses.html">Licences</a></p>
           </section>
         </div>
@@ -2655,7 +2656,6 @@
     // =======================================================================
     // 8. ALPR — real cameras from OpenStreetMap (DeFlock) via Overpass
     // =======================================================================
-    const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter', 'https://overpass.private.coffee/api/interpreter'];
     // What other members have measured along this route (banking, roughness). Members only; silent when signed out or offline.
     async function showMeasured(t) {
       const note = $('measuredNote'); note.hidden = true;
@@ -2680,28 +2680,20 @@
           (t.crowdCorrected >= 30 ? ` · corners from members' drives on ${ApexUnits.long(t.crowdCorrected, 1)}` : '');
     }
     const repavedMonth = (ym) => { const d = new Date(ym + '-15T12:00:00Z'); return Number.isFinite(d.getTime()) ? d.toLocaleDateString([], { month: 'short', year: 'numeric' }) : ym; };
-    // Plate-reading cameras in a box [s, w, n, e] from the camera map (OSM / DeFlock via Overpass), kept a week; null offline.
+    // Enforcement cameras in a box [s, w, n, e] (web/cameras.js: plate readers and speed cameras from OSM, by tile, kept a
+    // week, the servers raced); null offline.
+    try { for (let i = localStorage.length - 1; i >= 0; i--) { const k = localStorage.key(i); if (k && k.startsWith('apex.alpr.')) localStorage.removeItem(k); } } catch (_) {}   // the old per-box cache
     async function alprNodesIn(s, w, n, e) {
-      const bbox = [s, w, n, e].map(v => v.toFixed(4)).join(',');
-      const cacheKey = `apex.alpr.${bbox}`;
-      try { const c = JSON.parse(localStorage.getItem(cacheKey) || 'null'); if (c && Date.now() - c.at < 7 * 864e5) return c.nodes; } catch (_) {}
-      const q = `[out:json][timeout:25];(node["surveillance:type"="ALPR"](${bbox});node["man_made"="surveillance"]["surveillance:type"="ALPR"](${bbox}););out body;`;
-      for (const url of OVERPASS) {
-        try {
-          const res = await fetch(url, { method: 'POST', body: 'data=' + encodeURIComponent(q), headers: { 'Content-Type': 'application/x-www-form-urlencoded' } });
-          if (!res.ok) continue;
-          const nodes = ((await res.json()).elements || []).filter(x => x.type === 'node').map(x => ({ lat: x.lat, lon: x.lon, id: x.id }));
-          try { localStorage.setItem(cacheKey, JSON.stringify({ at: Date.now(), nodes })); } catch (_) {}
-          return nodes;
-        } catch (_) { /* next mirror */ }
-      }
-      return null;
+      const cams = await ApexCameras.load(ApexCameras.tilesInBox(s, w, n, e));
+      return cams && cams.filter((c) => c.lat >= s && c.lat <= n && c.lon >= w && c.lon <= e);
     }
     async function fetchAlpr(t) {
       if (t.alpr) return;
-      let s = Infinity, w = Infinity, n = -Infinity, e = -Infinity;
-      for (let i = 0; i < t.lat.length; i++) { s = Math.min(s, t.lat[i]); n = Math.max(n, t.lat[i]); w = Math.min(w, t.lon[i]); e = Math.max(e, t.lon[i]); }
-      const nodes = await alprNodesIn(s - 0.005, w - 0.005, n + 0.005, e + 0.005);
+      // only the tiles the route passes through, not its whole bounding box (a long diagonal route was a huge query)
+      const pts = [];
+      for (let i = 0; i < t.lat.length; i += 20) pts.push([t.lat[i], t.lon[i]]);
+      pts.push([t.lat[t.lat.length - 1], t.lon[t.lon.length - 1]]);
+      const nodes = await ApexCameras.load(ApexCameras.tilesNear(pts));
       if (nodes) { attachAlpr(t, nodes); return; }
       if (track === t && replayOn) toast('Camera map offline. No pins doesn\'t mean no cameras.');
     }
@@ -2711,13 +2703,18 @@
       for (const node of nodes) {
         const hit = Core.nearestIndex(node.lat, node.lon, t.lat, t.lon, -1);
         if (hit.distM > Core.ALPR_RADIUS_M) continue;
-        t.alpr.push({ type: 'alpr', code: 'LPR', call: 'Camera', index: hit.index, dist_m: t.dist[hit.index], lat: node.lat, lon: node.lon });
-        if (t.sectors) { const sid = Math.floor(t.dist[hit.index] / t.sectorM); counts.set(sid, (counts.get(sid) || 0) + 1); }
+        const speed = node.kind === 'speed';                           // a speed camera rides with the plate readers (same switch, same pin)
+        t.alpr.push({ type: 'alpr', kind: speed ? 'speed' : 'alpr', code: speed ? 'SPD' : 'LPR', call: speed ? 'Speed camera' : 'Camera', index: hit.index, dist_m: t.dist[hit.index], lat: node.lat, lon: node.lon });
+        if (t.sectors && !speed) { const sid = Math.floor(t.dist[hit.index] / t.sectorM); counts.set(sid, (counts.get(sid) || 0) + 1); }
       }
       // Same rule as core/road_dna.score_sectors: -45 per camera within ALPR_RADIUS_M.
       if (t.sectors) for (const sec of t.sectors) sec.clear = Math.max(0, 100 - 45 * (counts.get(sec.id) || 0));
       if (t === plannedRoute) renderRouteCard(t);
-      if (track === t) { loadTrackOnMap(); render(false); toast(`${t.alpr.length} plate-reading camera${t.alpr.length === 1 ? '' : 's'} on this route`); }
+      if (track === t) {
+        loadTrackOnMap(); render(false);
+        const lpr = t.alpr.filter((c) => c.kind !== 'speed').length, spd = t.alpr.length - lpr;
+        toast([`${lpr} plate-reading camera${lpr === 1 ? '' : 's'}`, spd ? `${spd} speed camera${spd === 1 ? '' : 's'}` : null].filter(Boolean).join(' and ') + ' on this route');
+      }
     }
 
     // =======================================================================
@@ -5724,13 +5721,7 @@
       let s = Infinity, w = Infinity, n = -Infinity, e = -Infinity;
       for (let i = 0; i < t.lat.length; i++) { s = Math.min(s, t.lat[i]); n = Math.max(n, t.lat[i]); w = Math.min(w, t.lon[i]); e = Math.max(e, t.lon[i]); }
       if (n - s > 1 || e - w > 1) return;
-      let json = null;
-      for (const url of OVERPASS) {
-        try {
-          const r = await fetch(url, { method: 'POST', body: 'data=' + encodeURIComponent(ApexConditional.query(s - 0.005, w - 0.005, n + 0.005, e + 0.005)), headers: { 'Content-Type': 'application/x-www-form-urlencoded' } });
-          if (r.ok) { json = await r.json(); break; }
-        } catch (_) { /* next mirror */ }
-      }
+      const json = await ApexCameras.fetchFirst(fetch, 'data=' + encodeURIComponent(ApexConditional.query(s - 0.005, w - 0.005, n + 0.005, e + 0.005)));   // every server raced
       if (!json || plannedRoute !== t) return;
       const total = t.dist[t.dist.length - 1], now = Date.now();
       const secAt = (m) => (Number.isFinite(t.timeS) ? t.timeS - ApexEta.routerLeft(m, total, t.timeS, t.timeMarks) : m / (50 / 3.6));

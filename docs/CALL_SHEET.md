@@ -6,6 +6,20 @@ it says so. Things only you can do are in docs/OWNER_TODO.md.
 
 ## 2026-10-29
 
+**Cameras load fast, and speed cameras join the plate readers.** The owner: "pull in police data from other sources and
+figure out why the lpr data takes so long to load".
+- *Why it was slow:* one Overpass query for the route's whole bounding box (a long diagonal route asked for a huge
+  area), the three public servers tried one after another with no time limit (a busy one held everything for 25 s or
+  more), a cache keyed to that exact box (no other route could use it), and "Avoid cameras" made every route wait on it
+  before routing. Now (web/cameras.js): fixed 0.25° tiles, only those the route passes through, one query raced against
+  all three servers (12 s limit each, the first answer wins), every tile kept a week, so a second route nearby is instant.
+  Road closures (conditional tags) race the servers the same way.
+- *Other sources:* speed cameras from OpenStreetMap (`highway=speed_camera`) now come with the plate readers, under the
+  same Cameras switch, called "Speed camera" (they don't lower a road's Clear score, which is about plate readers).
+  Live police only ever comes from drivers: members' Police reports already show and are spoken. Waze is out (no public
+  feed, its terms forbid taking its reports); paid camera data is a licence, so it is in docs/OWNER_TODO.md.
+  Undo: `fetchAlpr`/`alprNodesIn` back to the per-box query (git), or drop `highway=speed_camera` from `query()`.
+
 **From the owner's phone photos: the convoy bar, Tapedeck in a drive, the plan sheet, a pin on the arrow.**
 - *Convoy bar:* one line (name and status) off the right-hand keys; the leader's calls only in a drive, in one row that
   scrolls, instead of a two-row block over the map and the Layers key before any drive. Its socket host is now named in
