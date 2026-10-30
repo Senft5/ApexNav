@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-HE4W1X27R4kb8FVkdIv3I946l1C5Fz8AEABrJakdYIc=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-if3TXvYohNAiRXkJaDiabE4wVJRK3/ZKclg+GOVc+OY=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <!-- REVIEW4 U-80 (check): before the stylesheets and the hundred scripts below (seconds on a cold start), the page's very
@@ -203,7 +203,14 @@
 
     /* ---------------- stage map ---------------- */
     .stage { position: relative; min-height: 0; background: var(--stage); overflow: hidden; }
-    #map { position: absolute; inset: 0; }
+    /* F-02 (REVIEW_FEEL.md): the map is a fixed stage under everything, never a grid cell. The strip, the binnacle, the
+       sheets and the tab bar lie over it and the camera is told what they cover (stageView), so a tab, a sheet, a wrapped
+       status line or a replay never resizes the WebGL canvas. Only a drive's start and end move its edges (--map-*), in
+       the same step as its pixel ratio (F-05), so that is one resize, not one per change. */
+    #map { position: fixed; top: var(--map-t, 0px); right: var(--map-r, 0px); bottom: var(--map-b, 0px); left: var(--map-l, 0px); z-index: 0; }
+    #app > .notes, #app > .binnacle { position: relative; z-index: 1; }
+    /* the attribution stays in the part of the map you can see, not under the binnacle */
+    #map .maplibregl-ctrl-bottom-right { bottom: var(--vis-b, 0px); right: var(--vis-r, 0px); }
     /* U-68: the canvas stays hidden on the theme's map paper until the basemap is restyled, so no frame of the stock
        (daylight, POI) style is ever drawn; it fades in on the first idle after the restyle. */
     #map .maplibregl-canvas { transition: opacity 0.25s ease-out; }
@@ -1665,13 +1672,37 @@
     try { if (window.ApexOfflineTiles) ApexOfflineTiles.install(maplibregl); } catch (_) {}
     const map = new maplibregl.Map({ container: 'map', style: MAP_STYLE,
       center: startPos ? [startPos.lon, startPos.lat] : [-84.70, 39.24], zoom: 14.6, pitch: 45, maxPitch: 60, attributionControl: { compact: true }, fadeDuration: 0,
+      trackResize: false,   // F-02: the page's own observer resizes it (below), once, not again after setPixelRatio already did
       transformRequest: window.ApexOfflineTiles ? ApexOfflineTiles.transform : undefined });
     { const v = document.getElementById('aboutVersion'), m = /ApexNav\/([^ ]+ \([^)]*\))/.exec(navigator.userAgent);   // the iOS shell names its version in the user agent
       if (v) v.textContent = m ? m[1] : (window.APEX_EMBED ? '--' : 'Website'); }
     window.apexDebug = { map, get track() { return track; }, state, drives, buildRoute: (...a) => buildRoute(...a), renderRouteCard: (...a) => renderRouteCard(...a), openRoadPage: (...a) => openRoadPage(...a), showEndCard: (...a) => showEndCard(...a), get driveActive() { return driveActive; }, tryTheme: (id) => tryTheme(id), tulipPNG: (svg) => tulipPNG(svg) };
     let mapReady = false;
-    // The map's box changes with the layout (idle hides the gauges, a drive shows them); keep the canvas the size of its box.
-    if (window.ResizeObserver) new ResizeObserver(() => map.resize()).observe(document.getElementById('map'));
+    // F-02: the map's box is fixed (the window, or a drive's edges); it changes on a rotation or at a drive's start and end.
+    // A resize the map already made (setPixelRatio resizes) is not made twice.
+    const mapBox = { w: map.getContainer().clientWidth, h: map.getContainer().clientHeight };
+    map.on('resize', () => { const c = map.getContainer(); mapBox.w = c.clientWidth; mapBox.h = c.clientHeight; });
+    if (window.ResizeObserver) new ResizeObserver(() => { const c = map.getContainer(); if (c.clientWidth !== mapBox.w || c.clientHeight !== mapBox.h) map.resize(); }).observe(document.getElementById('map'));
+    // F-02: what the chrome leaves of the map (the stage's cell), as insets from the map's edges. The camera's padding and
+    // the fits use it; it is read when the stage's cell changes, never per frame, and changing it never touches the canvas.
+    // While a sheet is open (People, Garage, Where to?) the camera keeps the view it had: the chrome a sheet moves is not a
+    // reason to move a map it covers, and moving it would draw frames under the sheet's slide. A fit reads viewInsets() fresh.
+    const stageView = { t: 0, r: 0, b: 0, l: 0 };
+    function viewInsets() {
+      const s = document.querySelector('#app > .stage').getBoundingClientRect(), m = map.getContainer().getBoundingClientRect();
+      return { t: Math.max(0, Math.round(s.top - m.top)), b: Math.max(0, Math.round(m.bottom - s.bottom)),
+        l: Math.max(0, Math.round(s.left - m.left)), r: Math.max(0, Math.round(m.right - s.right)) };
+    }
+    function measureStage() {
+      const app = document.getElementById('app');
+      if (app && (app.classList.contains('sheet-open') || app.classList.contains('plan-open'))) return;
+      Object.assign(stageView, viewInsets());
+      const st = map.getContainer().style;
+      st.setProperty('--vis-b', `${stageView.b}px`); st.setProperty('--vis-r', `${stageView.r}px`);
+    }
+    if (window.ResizeObserver) new ResizeObserver(measureStage).observe(document.querySelector('#app > .stage'));
+    map.on('resize', measureStage);
+    measureStage();
     // U-83: on its side the status line sits beside the notes strip; the strip's height (one line or three) is its height too
     if (window.ResizeObserver) new ResizeObserver(([e]) => document.getElementById('app').style.setProperty('--notes-h', `${Math.round(e.target.offsetHeight)}px`)).observe(document.getElementById('notes'));
     // iOS can drop the map's WebGL context under memory pressure (e.g. after building a long route): the page keeps running but
@@ -1979,11 +2010,58 @@
     // without shake, the map to 2x pixels, and hides hillshade and contours. Everything else (notes, recording) is unchanged.
     const power = new ApexPower.PowerSaver();
     const HEAVY_LAYERS = ['apex-hillshade', 'apex-contours', 'apex-contour-labels'];
+    // F-05 (REVIEW_FEEL.md, the owner's call 2026-10-30): a drive draws less. Its cost is the map's drawing, not script, so
+    // in a drive the canvas is capped at 2x pixels (the car already is: no sharper a glance at road speed), and at speed
+    // the contour lines and their labels go (hillshade stays: the relief still reads) with the labels no one reads at a
+    // glance (one-way arrows, water, paths, minor streets, airports). They come back once the car has stopped for a moment.
+    // The street you turn onto is in the strip and the voice, never only on the map.
+    const AT_SPEED_HIDE = ['apex-contours', 'apex-contour-labels', 'road_one_way_arrow', 'road_one_way_arrow_opposite', 'waterway_line_label',
+      'water_name_point_label', 'water_name_line_label', 'highway-name-path', 'highway-name-minor', 'airport'];
+    const AT_SPEED_MPS = 8, STOPPED_MPS = 1, STOPPED_S = 3;
+    const drawDetail = { atSpeed: false, stoppedAt: 0, base: {}, pxCap: null, edges: false };   // pxCap: the ratio last set (null: MapLibre's own)
+    // one step per live frame: above 8 m/s the drive is at speed; below 1 m/s for 3 s it has stopped (between the two it
+    // stays as it was, so a slow corner or a rolling stop never flickers the map)
+    function paceDetail(vMps) {
+      if (state.mode !== 'live') return;
+      let at = drawDetail.atSpeed;
+      if (vMps > AT_SPEED_MPS) { at = true; drawDetail.stoppedAt = 0; }
+      else if (vMps != null && vMps < STOPPED_MPS) { const now = performance.now(); if (!drawDetail.stoppedAt) drawDetail.stoppedAt = now; else if (now - drawDetail.stoppedAt >= STOPPED_S * 1000) at = false; }
+      else drawDetail.stoppedAt = 0;
+      if (at !== drawDetail.atSpeed) { drawDetail.atSpeed = at; applyPower(); }
+    }
+    // F-02 + F-05: a drive's map ends where its chrome starts (the strip, the binnacle), less a margin the chrome may grow or
+    // shrink into without leaving a gap: what is under the chrome is not drawn. Set at a drive's start and end (and on a
+    // rotation) only, with the pixel ratio, so the two make one resize; a status line or a strip that changes in the drive
+    // does not move them.
+    const MAP_EDGE_MARGIN = 28;
+    function setDriveEdges(live) {
+      const st = map.getContainer().style;
+      for (const k of ['t', 'r', 'b', 'l']) st.removeProperty(`--map-${k}`);
+      if (live) {
+        const s = document.querySelector('#app > .stage').getBoundingClientRect(), W = window.innerWidth, H = window.innerHeight;
+        const edge = (px) => (px > MAP_EDGE_MARGIN ? `${Math.round(px - MAP_EDGE_MARGIN)}px` : null);
+        const e = { t: edge(s.top), r: edge(W - s.right), b: edge(H - s.bottom), l: edge(s.left) };
+        for (const k of Object.keys(e)) if (e[k]) st.setProperty(`--map-${k}`, e[k]);
+      } else { drawDetail.atSpeed = false; drawDetail.stoppedAt = 0; }
+      applyPower();
+      measureStage();
+    }
+    window.addEventListener('resize', () => { if (state.mode === 'live') setDriveEdges(true); });
     function applyPower() {
       if (!mapReady) return;
-      const dpr = window.devicePixelRatio || 1;   // null hands the ratio back to MapLibre (follows zoom and screen changes)
-      if (power.low || map.getPixelRatio() !== dpr) try { map.setPixelRatio(power.low ? Math.min(dpr, 2) : null); } catch (_) {}
-      for (const id of HEAVY_LAYERS) if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', power.low ? 'none' : 'visible');
+      const dpr = window.devicePixelRatio || 1, live = state.mode === 'live', c = map.getContainer();
+      // null hands the ratio back to MapLibre (follows zoom and screen changes); a drive or a hot phone caps it at 2
+      const cap = power.low || live ? Math.min(dpr, 2) : null;
+      if (cap !== drawDetail.pxCap || (cap == null && map.getPixelRatio() !== dpr)) { drawDetail.pxCap = cap; try { map.setPixelRatio(cap); } catch (_) {} }
+      else if (c.clientWidth !== mapBox.w || c.clientHeight !== mapBox.h) map.resize();   // new edges at the same ratio: one resize
+      const hide = new Set(power.low ? HEAVY_LAYERS : []);
+      if (live && drawDetail.atSpeed) AT_SPEED_HIDE.forEach((id) => hide.add(id));
+      for (const id of new Set([...HEAVY_LAYERS, ...AT_SPEED_HIDE])) {
+        if (!map.getLayer(id)) continue;
+        if (!(id in drawDetail.base)) drawDetail.base[id] = map.getLayoutProperty(id, 'visibility') || 'visible';   // the style's own (some start hidden)
+        const want = hide.has(id) ? 'none' : drawDetail.base[id];
+        if ((map.getLayoutProperty(id, 'visibility') || 'visible') !== want) map.setLayoutProperty(id, 'visibility', want);
+      }
       applyTerrain();
     }
     // 3D terrain (IDEAS U-14): the hillshade's own DEM raised into relief, a little exaggerated so a ridge reads on a phone.
@@ -2064,8 +2142,8 @@
     let camSent = null, puckSent = null, camMapH = 0;
     map.on('resize', () => { camMapH = map.getContainer().clientHeight || 0; });
     const camSame = (a, b) => !!a && !!b && Math.abs(a.lon - b.lon) < 1e-7 && Math.abs(a.lat - b.lat) < 1e-7 && Math.abs(a.bearing - b.bearing) < 0.01
-      && Math.abs(a.zoom - b.zoom) < 5e-4 && Math.abs(a.pitch - b.pitch) < 0.01 && a.top === b.top;
-    const camNow = () => { const c = map.getCenter(); return { lon: c.lng, lat: c.lat, bearing: map.getBearing(), zoom: map.getZoom(), pitch: map.getPitch(), top: map.getPadding().top }; };
+      && Math.abs(a.zoom - b.zoom) < 5e-4 && Math.abs(a.pitch - b.pitch) < 0.01 && a.top === b.top && a.bottom === b.bottom && a.left === b.left && a.right === b.right;
+    const camNow = () => { const c = map.getCenter(), p = map.getPadding(); return { lon: c.lng, lat: c.lat, bearing: map.getBearing(), zoom: map.getZoom(), pitch: map.getPitch(), top: p.top, bottom: p.bottom, left: p.left, right: p.right }; };
     function cameraFrame(ts) {
       requestAnimationFrame(cameraFrame);
       if (!power.frameDue(ts)) return;
@@ -2102,11 +2180,16 @@
       const fy = state.mode === 'live' ? 0.55 + 0.13 * clamp01((vehicle.vMps - 11.2) / 6.7) : 0.5;
       cam.fy = Number.isFinite(cam.fy) ? cam.fy + (fy - cam.fy) * Math.min(1, dt * 1.2) : fy;
       const mapH = camMapH || (camMapH = map.getContainer().clientHeight || 0);
+      // F-02: the fraction is of the part of the map the chrome leaves (the strip above, the binnacle below lie over the
+      // map); the chrome's edges are eased like fy, so a status line taking a second row glides the view, never jumps it
+      for (const k of ['t', 'b', 'l', 'r']) cam['v' + k] = Number.isFinite(cam['v' + k]) ? cam['v' + k] + (stageView[k] - cam['v' + k]) * Math.min(1, dt * 3) : stageView[k];
+      const visH = Math.max(1, mapH - cam.vt - cam.vb);
       const next = { lon: sLon, lat: sLat, bearing: ((cam.bearing + amp * 0.5 * texture(tt, 7)) % 360 + 360) % 360,
-        zoom: cam.zoom, pitch: Math.max(0, Math.min(60, cam.pitch + amp * 0.9 * texture(tt, 13))), top: Math.max(0, Math.round((2 * cam.fy - 1) * mapH)) };
+        zoom: cam.zoom, pitch: Math.max(0, Math.min(60, cam.pitch + amp * 0.9 * texture(tt, 13))), top: Math.max(0, Math.round(cam.vt + (2 * cam.fy - 1) * visH)),
+        bottom: Math.round(cam.vb), left: Math.round(cam.vl), right: Math.round(cam.vr) };
       // skipped only while the map still sits where this loop last put it (a gesture, a fit or a resize moves it: sent again)
       if (camSent && camSame(next, camSent.to) && camSame(camNow(), camSent.at)) return;
-      map.jumpTo({ center: [next.lon, next.lat], bearing: next.bearing, zoom: next.zoom, pitch: next.pitch, padding: { top: next.top, bottom: 0, left: 0, right: 0 } });
+      map.jumpTo({ center: [next.lon, next.lat], bearing: next.bearing, zoom: next.zoom, pitch: next.pitch, padding: { top: next.top, bottom: next.bottom, left: next.left, right: next.right } });
       camSent = { to: next, at: camNow() };
     }
     requestAnimationFrame(cameraFrame);
@@ -2838,7 +2921,9 @@
       updateRibbon(vMps, idx, snap);
       updatePins();
       const now = performance.now();
-      if (snap || now - lastNotesAt > 150) { lastNotesAt = now; updateNotes(vMps, live); drawScrubber(); }
+      if (live) paceDetail(vMps);                                     // F-05: less to draw at speed
+      // F-14: a fast replay rewrites the strip at 4 Hz (it reads the same, and each rewrite is a layout)
+      if (snap || now - lastNotesAt > (!live && state.rate > 2 ? 250 : 150)) { lastNotesAt = now; updateNotes(vMps, live); drawScrubber(); }
     }
     const simSpeed = (i) => Math.max(6, Math.min(track.envMps[i] * 0.92, track.limitMps && track.limitMps[i] ? track.limitMps[i] : 27));
 
@@ -3557,16 +3642,16 @@
       pauseFollow();
       // the map left above the sheet: above the open card (U-70) when that leaves a strip to see the route in, else above
       // the bar (on its side, or the desk's column, the card covers the map: the fit is for when it goes down)
-      const panel = $('planPanel'), mapH = map.getContainer().clientHeight || window.innerHeight;
+      const sv = viewInsets(), panel = $('planPanel'), mapH = (map.getContainer().clientHeight - sv.t - sv.b) || window.innerHeight;   // F-02: the map you can see, not its full-bleed box
       const desk = matchMedia('(min-width: 1100px) and (min-height: 600px)').matches;
       const overCard = panel.classList.contains('open') && !desk && mapH - panel.offsetHeight >= 120;
-      const bottom = overCard ? panel.offsetHeight + 16 : ($('planBar').offsetHeight || 60) + 24;
+      const bottom = sv.b + (overCard ? panel.offsetHeight + 16 : ($('planBar').offsetHeight || 60) + 24);
       if (String(t.id || '').startsWith('loop_')) {
         let w = 180, e = -180, so = 90, n = -90;
         for (let i = 0; i < t.lat.length; i += 10) { w = Math.min(w, t.lon[i]); e = Math.max(e, t.lon[i]); so = Math.min(so, t.lat[i]); n = Math.max(n, t.lat[i]); }
-        map.fitBounds([[w, so], [e, n]], { padding: { top: 60, left: 40, right: 60, bottom }, pitch: 0, bearing: 0, duration: 1200 });
+        map.fitBounds([[w, so], [e, n]], { padding: { top: sv.t + 60, left: sv.l + 40, right: sv.r + 60, bottom }, pitch: 0, bearing: 0, duration: 1200 });
       } else {
-        map.flyTo({ center: [to.lng, to.lat], zoom: 15.5, pitch: 0, bearing: 0, duration: 1400, padding: { top: 0, left: 0, right: 0, bottom } });
+        map.flyTo({ center: [to.lng, to.lat], zoom: 15.5, pitch: 0, bearing: 0, duration: 1400, padding: { top: sv.t, left: sv.l, right: sv.r, bottom } });
       }
     }
     // Plan fields: empty = the phone's position (locate()), "lat, lon" = that point, anything else =
@@ -4235,7 +4320,8 @@
         pauseFollow();
         // Fit the roads into the map left above the plan sheet.
         const top = $('planPanel').getBoundingClientRect().top, bottom = Math.max(24, Math.min(window.innerHeight - 160, window.innerHeight - top + 16));
-        map.fitBounds([[w, so], [ea, n]], { padding: { top: 40, left: 30, right: 30, bottom }, pitch: 0, bearing: 0, duration: 1000 });
+        const sv = viewInsets();
+        map.fitBounds([[w, so], [ea, n]], { padding: { top: sv.t + 40, left: sv.l + 30, right: sv.r + 30, bottom }, pitch: 0, bearing: 0, duration: 1000 });
       }
     }
     // Road page (road_page.js, IDEAS Q-13): the reference lap over the road's shape, the DEM's climb, members' measurements.
@@ -6026,6 +6112,7 @@
       $('app').classList.toggle('live', on);
       if (!on) $('hzPlate').hidden = true;
       if (on) { $('app').classList.remove('sheet-open'); openPlan(false); }
+      if (on !== drawDetail.edges) { drawDetail.edges = on; setDriveEdges(on); }   // F-02/F-05: once per start and end
     }
     // In the iOS app the switch lives under the app, not Safari.
     const LOC_DENIED_TEXT = `Location is off. Settings → ${window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex ? 'Vetta' : 'Safari'} → Location → Allow`;
@@ -6929,7 +7016,8 @@
       // map stayed the follow camera's last frame. The fit owns the whole map: stop any glide and clear it first.
       map.stop();
       map.jumpTo({ padding: { top: 0, bottom: 0, left: 0, right: 0 } });
-      map.fitBounds([[w, so], [e, n]], { padding: { top, left: 32, right: 32, bottom }, pitch: 0, bearing: 0, duration: 900, maxZoom: 16 });
+      const sv = viewInsets();
+      map.fitBounds([[w, so], [e, n]], { padding: { top, left: sv.l + 32, right: sv.r + 32, bottom }, pitch: 0, bearing: 0, duration: 900, maxZoom: 16 });
     }
     let endTrailOn = false;
     function hideEndTrail() {
