@@ -980,6 +980,7 @@
       .plan { padding-left: var(--safe-left); transform: translateY(calc(100% - var(--plan-bar, 62px) - var(--safe-bottom))); }
       .plan.open { padding-bottom: var(--safe-bottom); }
       .plates, .place-plate, .hz-plate { left: calc(10px + var(--safe-left)); }
+      .plates { max-width: calc(100% - 90px - var(--safe-left) - var(--safe-right)); }   /* moved right by the notch: keep clear of the edge tabs */
       .binnacle { padding-bottom: calc(8px + var(--safe-bottom)); }
       /* the suggested loop can't live in the tab rail: it floats over the map, just above the deck */
       #app.idle .loop-suggest { position: fixed; z-index: 6; left: calc(10px + var(--safe-left)); bottom: calc(var(--plan-bar, 62px) + var(--safe-bottom) + 10px);
