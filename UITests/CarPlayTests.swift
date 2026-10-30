@@ -62,6 +62,11 @@ final class CarPlayTests: XCTestCase {
             if start.exists { start.tap(); break }
             if next.exists { next.tap() } else { break }
         }
+        // the location sheet follows the welcome's Start (U-65): answer it, or the replayed drive never moves
+        let sheet = XCUIApplication(bundleIdentifier: "com.apple.springboard").alerts.firstMatch
+        if sheet.waitForExistence(timeout: 6) {
+            for label in ["Allow While Using App", "Allow Once", "Allow"] where sheet.buttons[label].exists { sheet.buttons[label].tap(); break }
+        }
         for _ in 0..<60 where XCUIScreen.screens.count < 2 { pause(1) }
         XCTAssertGreaterThan(XCUIScreen.screens.count, 1, "no CarPlay display")
         photo("01-home")

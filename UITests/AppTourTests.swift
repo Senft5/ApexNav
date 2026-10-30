@@ -37,6 +37,11 @@ final class AppTourTests: XCTestCase {
             if start.exists { pause(2); start.tap(); break }
             if next.exists { pause(2.5); next.tap() } else { break }
         }
+        // the location sheet follows the welcome's Start (U-65)
+        let sheet = XCUIApplication(bundleIdentifier: "com.apple.springboard").alerts.firstMatch
+        if sheet.waitForExistence(timeout: 6) {
+            for label in ["Allow While Using App", "Allow Once", "Allow"] where sheet.buttons[label].exists { sheet.buttons[label].tap(); break }
+        }
         pause(3)
         return (app, web)
     }
