@@ -96,7 +96,7 @@
       const all = (await R.all().catch(() => [])).map((x) => { try { return R.repair(C, x); } catch (_) { return null; } }).filter(Boolean);
       return all.map((x) => {
         let s = null;
-        try { const ds = C.driverScore(x.speed_mps, x.lon_g, x.lat_g, R.scorableCorners(x, R.cornersOf(x))); s = Number.isFinite(ds.score) ? Math.round(ds.score) : null; } catch (_) {}
+        try { const v = R.scoreOf(C, x).ds.score; s = v == null ? null : Math.round(v); } catch (_) {}
         return { name: x.name || 'Drive', date: x.date, score: s };
       }).filter((x) => x.score != null).sort((a, b) => String(b.date).localeCompare(String(a.date))).slice(0, 20);
     }

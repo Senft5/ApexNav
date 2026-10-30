@@ -274,29 +274,36 @@
    * has held 2 s; red ("faster than you can see") only once you have been faster than it for 3 s; no plate under 5 mph
    * (8 km/h), where it means nothing; OPEN when it clears the posted limit by 15 mph (25 km/h). Unknown hides at once
    * and starts over: a held number is never shown for road it wasn't measured on.
+   * U-60 (the second recording): with no posted limit there was nothing to clear, so the plate went 120, OPEN, 105 in nine
+   * seconds on a suburban road. With no limit: OPEN above 80 mph (130 km/h), and once OPEN it stays until the sight line
+   * is two steps under that; a shown value holds at least 6 s before it rises (the rise still needs its 2 s of agreement);
+   * a fall of two steps or more shows at once (it is the one a driver needs), a one-step fall waits its 2 s like any other.
    * step({ sight, open, speed, limit, unit }, nowMs), numbers in display units, returns { msg, value, open }: msg is a
    * sightMessage for the plate (phone and car), value/open the held number for the binnacle's Sight cell.
    */
-  const SIGHT_HOLD_MS = 2000, SIGHT_RED_MS = 3000;
+  const SIGHT_HOLD_MS = 2000, SIGHT_RED_MS = 3000, SIGHT_KEEP_MS = 6000;
   function sightFilter() {
     // shown and the readings as numbers, OPEN as Infinity. A change is adopted only when every reading for 2 s has been at
     // least a step away on the same side, and then by the least of them (the change all of that 2 s agrees on): a value
     // that jumps up and down around the shown one never moves it.
-    let shown = null, pend = null, redSince = null;
-    const reset = () => { shown = null; pend = null; redSince = null; };
+    let shown = null, shownAt = null, pend = null, redSince = null;
+    const reset = () => { shown = null; shownAt = null; pend = null; redSince = null; };
+    const show = (v, now) => { shown = v; shownAt = now; pend = null; };
     function step(r, now) {
       r = r || {};
       const km = /^km/i.test(String(r.unit || '')), q = km ? 10 : 5, slow = km ? 8 : 5, margin = km ? 25 : 15;
       if (!finite(now) || (!r.open && !(finite(r.sight) && r.sight >= 0))) { reset(); return { msg: sightMessage(null), value: null, open: false }; }
-      const open = !!r.open || (finite(r.limit) && r.limit > 0 && r.sight > r.limit + margin);
+      const limited = finite(r.limit) && r.limit > 0, ceiling = (km ? 130 : 80) - (shown === Infinity ? 2 * q : 0);
+      const open = !!r.open || (limited ? r.sight > r.limit + margin : r.sight > ceiling);
       const want = open ? Infinity : Math.floor(r.sight / q) * q;
       const dir = shown === null ? 0 : Math.sign(want - shown);
-      if (shown === null) { shown = want; pend = null; }
+      if (shown === null) show(want, now);
       else if (!dir) pend = null;
+      else if (!limited && dir < 0 && shown - want >= 2 * q) show(want, now);
       else if (!pend || pend.dir !== dir) pend = { dir, since: now, near: want };
       else {
         pend.near = dir > 0 ? Math.min(pend.near, want) : Math.max(pend.near, want);
-        if (now - pend.since >= SIGHT_HOLD_MS) { shown = pend.near; pend = null; }
+        if (now - pend.since >= SIGHT_HOLD_MS && (limited || dir < 0 || now - shownAt >= SIGHT_KEEP_MS)) show(pend.near, now);
       }
       const isOpen = shown === Infinity, value = isOpen ? null : shown;
       // faster than the raw sight line and than the number on the plate: never red under the figure the driver reads

@@ -272,6 +272,15 @@ def test_the_car_shows_distance_left_without_a_made_up_time():
     assert "timeRemaining: g.remainS ?? -1" in swift and "timeRemaining: o.timeS ?? -1" in swift
 
 
+def test_a_free_drive_has_no_arrival():
+    """U-95 (REVIEW4_CHECK.md): the free drive's trip strip read "7:04 arrival · 0 min · -- mi"; now both are CarPlay's "--"."""
+    swift = open(os.path.join(ROOT, "CarPlay", "ApexCarPlay.swift"), encoding="utf-8").read()
+    changed = swift[swift.index("@MainActor func guideChanged()"):swift.index("@MainActor func driveEnded()")]
+    rec = changed[changed.index("} else if let t = trip, g.recording {"):]
+    assert "Measurement(value: -1, unit: unit), timeRemaining: -1), for: t)" in rec
+    assert "max(0, g.timeS ?? 0)" not in rec      # the record card's own estimates stay none (distM is nil)
+
+
 def test_every_drive_reaches_the_car_and_ends_idle():
     """U-59, U-79, U-62: the page tells the car a drive started, route or none; the idle car can start one; End goes idle."""
     swift = open(os.path.join(ROOT, "CarPlay", "ApexCarPlay.swift"), encoding="utf-8").read()

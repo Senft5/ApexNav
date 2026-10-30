@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-K6NkroD5Pxz1A+qKL+pGi656/cu0uW7P4DHPsJLcXTo=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-93eu654hde5ZeRGc/B5q3zpktgkIZNuqSuUx4p8R5c0=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -190,7 +190,8 @@
     .rb-box.now .rb-call span.rb-mods { font-size: 14px; line-height: 1.15; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
     .rb-box.now.hz .rb-call span.rb-mods, .rb-box.now.hz .rb-call span.rb-mods i.warn { color: var(--hz-edge); }
     html[data-theme="tapedeck"] .rb-box.now .rb-call span.rb-mods { -webkit-line-clamp: 3; }   /* the dot font is wide: "OVER CREST · CARE" takes a third line on an SE rather than an ellipsis */
-    .ds-main > span { white-space: nowrap; }
+    /* U-99: a part moves to the next line whole; only a part wider than the line on its own breaks inside */
+    .ds-main > span { display: inline-block; max-width: 100%; white-space: normal; }
 
     /* ---------------- stage map ---------------- */
     .stage { position: relative; min-height: 0; background: var(--stage); overflow: hidden; }
@@ -354,7 +355,8 @@
     .dbstat { font-size: 13px; line-height: 1.35; color: var(--panel-ink); min-width: 0; flex: 1; }
     #driveEnd { flex: none; background: var(--panel-ink); color: var(--panel); border-color: var(--panel-ink); font-size: 15px; padding: 0 16px; }
     .dbstat b { color: var(--accent); }
-    .ds-main { font-size: 15px; font-weight: 600; line-height: 1.25; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    /* U-99: wraps between its parts (each part a nowrap span), never an ellipsis, in every theme and width */
+    .ds-main { font-size: 15px; font-weight: 600; line-height: 1.25; font-variant-numeric: tabular-nums; white-space: normal; overflow-wrap: normal; }
     .ds-main b { font-size: 17px; }
     /* one status line under the record line (REVIEW.md 1.1 #4): the rest is cut, never wrapped over the binnacle */
     .ds-warn { margin-top: 2px; font-size: 13px; color: var(--panel-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -5812,7 +5814,7 @@
       else if (r && r.samples > 0) main.push(`<b>● Rec</b> ${ApexUnits.long((r.km) * 1000, 2)}`);
       else main.push(s.gps === 'on' ? 'Starting…' : 'Finding GPS…');
       if (s.mountSetUntil > performance.now()) main.push('Mount set');   // the calibration lock (U-74)
-      if (etaText) main.push(etaText);
+      if (etaText) main.push(...etaText.split(' · '));                  // U-99: "25 min left" and "7:12" are parts of their own
       if (NATIVE_SHELL) { const a = ambientStats(); if (a) main.push(a.error ? 'Sharing · retrying' : a.paused ? 'Sharing paused' : `Sharing ${ApexUnits.long((a.km) * 1000, 1)}`); }
       else if (drive.share === 'on') main.push(drive.shareErr ? 'Sharing · retrying' : `Sharing ${ApexUnits.long((drive.shareKm) * 1000, 1)}`);
       else if (drive.share === 'stopped') main.push('Sharing paused');
@@ -5829,8 +5831,10 @@
       else if (s.calibration === 'paused') warn.push('Phone is hot · bumps and banking paused');
       // a browser's own mount calibration (live_pipeline.js, IDEAS A-02): banking only once checked against GPS; silent until then
       if (!NATIVE_SHELL && s.webMount === 'verified') main.push('Banking measured');
-      // each part stays whole: a narrow screen breaks the line between parts, never inside "77 min left · 8:24 PM"
-      const m = main.map(x => `<span>${x}</span>`).join(' · '), w = warn.join(' · ');
+      // each part stays whole: a narrow screen breaks the line between parts, never inside "77 min left", and never cuts one
+      // (U-99: the line was one nowrap run, so "25 min left · 7:12" ended "25…"). The dot rides with the part before it, so a
+      // wrapped line never starts with one.
+      const m = main.map((x, i) => `<span>${x}${i < main.length - 1 ? ' ·' : ''}</span>`).join(' '), w = warn.join(' · ');
       if ($('dsMain').innerHTML !== m) $('dsMain').innerHTML = m;
       if ($('dsWarn').textContent !== w) $('dsWarn').textContent = w;
       $('dsWarn').hidden = !w;
@@ -5852,8 +5856,10 @@
       setTimeout(() => {
         try {
           const d = ApexRecording.parse(Core, r.toCsv(), 'live.csv', { source: 'web-gps' });
-          const s = Core.driverScore(d.speed_mps, d.lon_g, d.lat_g, ApexRecording.scorableCorners(d, d.corners)).score;
-          liveScore.value = Number.isFinite(s) ? Math.round(s) : null;
+          const car = routingCar();
+          if (car) d.car = { mu: Core.carGrip(car) };                 // U-91: the car's grip, as the saved drive will be scored
+          const s = ApexRecording.scoreOf(Core, d).ds.score;
+          liveScore.value = s == null ? null : Math.round(s);
         } catch (_) { liveScore.value = null; } finally { liveScore.busy = false; }
       }, 0);
     }
@@ -6391,19 +6397,36 @@
       if (action === 'update' && !liveAct.on) return;
       try { native.postMessage({ cmd: 'activity', action, ...fields }); } catch (_) {}
     }
-    // U-61: the Live Activity with no note ahead: a true short word for the island ('QUIET' on the route, 'OFF' off it,
-    // 'REC' in a free drive) and a line that still says something: the next corner's distance when the route has one,
+    // U-61: the Live Activity with no note ahead: a true short word for the island ('QUIET' on the route, the status
+    // line's own words off it (U-103), 'REC' in a free drive) and a line that still says something: the next corner's distance when the route has one,
     // else how far you've driven. `distance` stays the note's own (empty here), so the island shows the record dot.
     function quietActivity() {
       const driven = drive.rec ? ApexUnits.long(drive.rec.km * 1000, 1) : null;
       const onRoute = track && track.kind === 'route';
-      if (onRoute && state.cursorIdx < 0 && state.mode === 'live') return { short: 'OFF', note: [offRouteText(), driven && `${driven} driven`].filter(Boolean).join(' · ') };
+      if (onRoute && state.cursorIdx < 0 && state.mode === 'live') return { short: islandWords(offRouteText()), note: [offRouteText(), driven && `${driven} driven`].filter(Boolean).join(' · ') };
       if (onRoute) {
         const next = allEvents().filter(e => e.type === 'corner' && noteM(e) > state.cursorM).reduce((m, e) => Math.min(m, noteM(e)), Infinity);
         const d = Number.isFinite(next) ? distLabel(next - state.cursorM) : null;
         return { short: 'QUIET', note: d ? `Quiet · next corner ${d.n} ${d.u.toLowerCase()}` : ['Quiet', driven && `${driven} driven`].filter(Boolean).join(' · ') };
       }
       return { short: 'REC', note: driven ? `Recording · ${driven}` : 'Recording' };
+    }
+    // U-103: the island's compact word is one the driver reads elsewhere, never one made up for it ("RSQ", and "OFF", which
+    // also read as recording off). A corner: its code as the car map's plates print it ("R2", "LHP"; a square or acute
+    // corner by its number, as a road book rates it); a junction or hazard: its own word ("Sharp right", "Crest"), the
+    // first part of it ("Roundabout" of "Roundabout · exit 2"); off the route: the status line's own words ("Wrong way").
+    function islandWords(text) {
+      const t = String(text || '').split(' · ')[0].replace(/…$/, '').trim();
+      return t.length <= 12 ? t : t.split(' ')[0];
+    }
+    function islandShort(n) {
+      if (!n) return '';
+      if (n.type === 'corner' && (n.dir === 'L' || n.dir === 'R')) {
+        const hp = n.severity === 'HP' || n.shape === 'hairpin', sev = Math.round(+n.severity);
+        if (hp) return `${n.dir}HP`;
+        if (sev >= 1 && sev <= 6) return `${n.dir}${sev}`;
+      }
+      return islandWords(n.code || n.call);
     }
     function pushActivity(notes) {
       if (!liveAct.on) return;
@@ -6412,7 +6435,7 @@
         // the island's compact view: a few characters, never a sentence; a hazard turns its keyline orange (LiveActivity/ApexLiveWidget.swift).
         // U-61: a short word of its own when nothing is ahead (the widget once cut "No notes ahead" to "NO NOT"); codes are
         // already short, the widget scales rather than cut one
-        short: n ? String(n.code || '').slice(0, 8) : q.short, hazard: !!(n && n.type !== 'corner' && n.type !== 'turn'), etaShort: (etaText || '').split('·')[0].trim() };
+        short: n ? islandShort(n) : q.short, hazard: !!(n && n.type !== 'corner' && n.type !== 'turn'), etaShort: (etaText || '').split('·')[0].trim() };
       const key = JSON.stringify(fields), now = performance.now();
       // unchanged notes are resent once a minute: the shell marks each update stale two minutes on (a stop at a light stays live)
       if ((key === liveAct.last && now - liveAct.at < 60000) || (now - liveAct.at < 3000 && liveAct.last && JSON.parse(liveAct.last).note === fields.note)) return;
@@ -6556,11 +6579,13 @@
     let endDrive = null;
     function showEndCard(d, startedAt) {
       endDrive = d;
-      let ds = null;
-      try { ds = Core.driverScore(d.speed_mps, d.lon_g, d.lat_g, ApexRecording.scorableCorners(d, d.corners)); } catch (_) { ds = null; }
-      d.ds = ds && Number.isFinite(ds.score) ? ds : { ...(ds || {}), score: null };
+      // U-91: scored exactly as the Log scores it (a parsed record has no d.corners, so the card said "--" to a 788); and the
+      // drive's time is the recording's own, as the Log counts it, not the wall clock since Start
+      const scored0 = ApexRecording.scoreOf(Core, d);
+      d.corners = scored0.corners; d.ds = scored0.ds;
       const miles = Array.isArray(d.dist) && d.dist.length ? ApexUnits.long(d.dist[d.dist.length - 1], 1) : null;
-      const mins = Number.isFinite(startedAt) ? Math.round((Date.now() - startedAt) / 60000) : null;
+      let mins = null;
+      try { const T = Core.elapsedS(d.speed_mps), s = T[T.length - 1]; mins = Number.isFinite(s) ? Math.round(s / 60) : null; } catch (_) { mins = null; }
       $('endName').textContent = d.name || 'Your drive';
       $('endMeta').textContent = [miles, mins != null ? (mins >= 60 ? `${Math.floor(mins / 60)} h ${mins % 60} min` : `${mins} min`) : null,
         Array.isArray(d.corners) ? `${d.corners.length} corners` : null].filter(Boolean).join(' · ');
@@ -6575,8 +6600,7 @@
         if (d.ds.score != null && window.ApexEndLine) {
           try {
             const others = (await ApexRecording.all()).filter((o) => o.id !== d.id && o.name === d.name).map((o) => {
-              const x = ApexRecording.repair(Core, o);
-              try { const s = Core.driverScore(x.speed_mps, x.lon_g, x.lat_g, ApexRecording.scorableCorners(x, ApexRecording.cornersOf(x))).score; return { id: o.id, name: o.name, score: Number.isFinite(s) ? Math.round(s) : null }; }
+              try { const s = ApexRecording.scoreOf(Core, o).ds.score; return { id: o.id, name: o.name, score: s == null ? null : Math.round(s) }; }
               catch (_) { return null; }
             }).filter(Boolean);
             best = ApexEndLine.bestOnRoad({ id: d.id, name: d.name, score: d.ds.score }, others);
