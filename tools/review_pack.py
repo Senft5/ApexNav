@@ -6,6 +6,10 @@ flows/flow-<name>/ holds what one job made: phone.mp4 (and car.mp4 for drives), 
 app-log.txt, and shots/ (the test's photos exported from the result bundle, with manifest.json naming each). The pack has
 one folder per flow with its steps renamed in order (phone/NN-step.png, car/NN-step.png), a contact sheet of each, the
 videos, a clean transcript, and INDEX.md that walks the flows for the reviewer.
+
+REVIEW4 §6: a phone photo taken on its side (a step named "landscape") is turned upright, and phone-start.txt /
+car-start.txt (the wall-clock second each video started, written by the workflow) put the video second beside every
+transcript line, so a line said maps to a frame.
 """
 from __future__ import annotations
 
@@ -63,14 +67,51 @@ def sheet(files: list[tuple[str, str]], out: str, width: int = 260, cols: int = 
     board.save(out, optimize=True)
 
 
-def transcript(path: str) -> list[str]:
-    """The lines said, with their time: "12:01:33  Left 3 tightens"."""
+def upright(path: str, step: str) -> None:
+    """A phone photo taken on its side is saved in the phone's portrait pixels with the picture turned a quarter: turn it
+    back so the contact sheet reads (REVIEW4 §6.6). The flows turn the phone to landscapeLeft (the top of the picture is
+    the right edge of the pixels), so a quarter turn anticlockwise."""
+    if "landscape" not in step:
+        return
+    im = Image.open(path)
+    if im.height > im.width:
+        im.rotate(90, expand=True).save(path)
+
+
+def clock(t: str) -> int | None:
+    """"HH:MM:SS" as seconds of the day, or None."""
+    m = re.fullmatch(r"(\d\d):(\d\d):(\d\d)", t.strip())
+    return int(m.group(1)) * 3600 + int(m.group(2)) * 60 + int(m.group(3)) if m else None
+
+
+def video_start(flow_dir: str, video: str) -> str | None:
+    """The wall-clock second the workflow saw this video start ("phone" or "car"), or None."""
+    path = os.path.join(flow_dir, f"{video}-start.txt")
+    if not os.path.exists(path):
+        return None
+    t = open(path, encoding="utf-8").read().strip()
+    return t if clock(t) is not None else None
+
+
+def at(said: str, start: str | None) -> str:
+    """The video position of a line said at `said` ("HH:MM:SS"), as "@ MM:SS", or "" without a start."""
+    a, b = clock(said), clock(start) if start else None
+    if a is None or b is None:
+        return ""
+    d = (a - b) % 86400                                           # a recording that runs past midnight
+    return f"@ {d // 60:02d}:{d % 60:02d}"
+
+
+def transcript(path: str, start: str | None = None) -> list[str]:
+    """The lines said, with their time and, when the video's start is known, the second of phone.mp4 they fall on:
+    "12:01:33  @ 02:31  Left 3 tightens"."""
     lines = []
     if os.path.exists(path):
         for raw in open(path, encoding="utf-8", errors="replace"):
             m = re.search(r"(\d\d:\d\d:\d\d)\.\d+.*APEX-SAID (.*)$", raw.rstrip())
             if m:
-                lines.append(f"{m.group(1)}  {m.group(2)}")
+                pos = at(m.group(1), start)
+                lines.append(f"{m.group(1)}  {pos + '  ' if pos else ''}{m.group(2)}")
     return lines
 
 
@@ -79,7 +120,9 @@ def main(src: str, dst: str) -> int:
     index = ["# Vetta review recording", "",
              "Each flow below was run on an iPhone 16 Pro simulator (and its CarPlay window for the drives) by "
              "UITests/ReviewFlows. Drives replay a real recorded drive (Dry Ridge Rd, Cincinnati) through the app's own "
-             "sensor handlers. Videos have no sound: the transcript lists every line the co-driver said, with its time.", ""]
+             "sensor handlers. Videos have no sound: the transcript lists every line the co-driver said, with its time and, after "
+             "@, the minute and second of the flow's phone.mp4 it falls on (from the video's start time, beside each video "
+             "below; the car's video starts within a second or two of the phone's).", ""]
     for d in sorted(os.listdir(src)) if os.path.isdir(src) else []:
         flow_dir = os.path.join(src, d)
         if not os.path.isdir(flow_dir) or not d.startswith("flow-"):
@@ -98,6 +141,8 @@ def main(src: str, dst: str) -> int:
             os.makedirs(os.path.join(out, screen), exist_ok=True)
             target = os.path.join(out, screen, f"{num}-{step}.png")
             shutil.copyfile(src_file, target)
+            if screen == "phone":
+                upright(target, step)
             steps[screen].append((target, f"{num} {step}"))
         for screen in steps:
             steps[screen].sort()
@@ -106,13 +151,15 @@ def main(src: str, dst: str) -> int:
         for f in ("phone.mp4", "car.mp4", "app-log.txt"):
             if os.path.exists(os.path.join(flow_dir, f)):
                 shutil.copyfile(os.path.join(flow_dir, f), os.path.join(out, f))
-        said = transcript(os.path.join(flow_dir, "transcript.txt"))
+        starts = {v: video_start(flow_dir, v) for v in ("phone", "car")}
+        said = transcript(os.path.join(flow_dir, "transcript.txt"), starts["phone"])
         with open(os.path.join(out, "transcript.txt"), "w", encoding="utf-8") as fh:
             fh.write("\n".join(said) + ("\n" if said else ""))
         index += [f"## {flow}", "",
                   f"- Steps: {len(steps['phone'])} phone photos" + (f", {len(steps['car'])} car photos" if steps["car"] else ""),
                   f"- Contact sheets: `{flow}/sheet-phone.png`" + (f", `{flow}/sheet-car.png`" if steps["car"] else ""),
-                  "- Video: " + ", ".join(f"`{flow}/{v}`" for v in ("phone.mp4", "car.mp4") if os.path.exists(os.path.join(out, v))),
+                  "- Video: " + ", ".join(f"`{flow}/{v}.mp4`" + (f" (started {starts[v]})" if starts[v] else "")
+                                          for v in ("phone", "car") if os.path.exists(os.path.join(out, f"{v}.mp4"))),
                   f"- Spoken lines: {len(said)} (`{flow}/transcript.txt`)", ""]
         index += ["  " + " · ".join(label.split(" ", 1)[1] for _, label in steps["phone"]), ""] if steps["phone"] else []
         if said:

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-0NsTKUjc/Cf87OqffrF+ItLkp8Yupu63PfnpSnntXLk=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-Ua4GDDh8c4BR+8jVuSQ6SNlG2xfKhzy4vaxzfIgSuYs=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -602,6 +602,8 @@
     .theme-cards { display: grid; gap: 12px; margin-top: 8px; }
     .theme-card { border: 1.5px solid var(--panel-ink); padding: 0 0 12px; }
     .theme-card.in-use { border-width: 2.5px; }
+    .theme-preview.tc-pick { cursor: pointer; -webkit-tap-highlight-color: transparent; }   /* U-69: touch the preview to use it */
+    .theme-preview.tc-pick:active { filter: brightness(0.92); }
     .theme-preview { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 14px 14px; margin-bottom: 10px;
       background: var(--panel); color: var(--panel-ink); border-bottom: 1.5px solid var(--panel-ink); }
     .tp-tulip svg { width: 44px; height: 44px; display: block; }
@@ -5333,11 +5335,19 @@
       box.replaceChildren(...Object.values(Themes.THEMES).map((t) => {
         const card = el('div', { className: 'theme-card' + (state.theme === t.id ? ' in-use' : '') });
         const ok = themeAllowed(t.id), inUse = state.theme === t.id && !themeTrial;
+        const pick = () => (ok ? useTheme(t.id) : tryTheme(t.id));
+        // U-69: the key keeps its one word; its name says which card, so a screen reader (and the review recording) can
+        // tell three "Use" keys apart
         const act = inUse ? el('span', { className: 'tc-inuse', textContent: 'In use' })
-          : ok ? btn('Use', () => useTheme(t.id), 'ink-btn') : btn('Try it', () => tryTheme(t.id), 'ink-btn');
+          : ok ? btn('Use', pick, 'ink-btn') : btn('Try it', pick, 'ink-btn');
+        if (!inUse) act.setAttribute('aria-label', `${ok ? 'Use' : 'Try'} ${t.label}`);
         const hear = btn('Hear', () => hearPack(t.voice && t.voice.id, t.voice ? t.voice.sample : 'Left four, tightens.'), 'ink-btn tc-hear');
         hear.setAttribute('aria-label', `Hear ${t.voice ? t.voice.name : t.label}`);
-        card.append(themePreview(t),
+        // U-69: the card's preview is the theme drawn at 300 px, and touching it switches, as the Use key does. A pointer
+        // shortcut only: the Use key stays the one control a screen reader or keyboard meets.
+        const preview = themePreview(t);
+        if (!inUse) { preview.classList.add('tc-pick'); preview.setAttribute('aria-hidden', 'true'); preview.addEventListener('click', pick); }
+        card.append(preview,
           el('div', { className: 'tc-head' }, el('b', { textContent: t.label }), ...(t.pro ? [el('span', { className: 'tc-pro', textContent: 'PRO' })] : []), act),
           el('p', { className: 'note', textContent: t.about || t.blurb || '' }),
           el('div', { className: 'tc-voice' }, el('p', {}, el('b', { textContent: `Voice: ${t.voice ? t.voice.name : '--'}. ` }), document.createTextNode(t.voice ? `${t.voice.who} "${t.voice.sample}"` : '')), hear));

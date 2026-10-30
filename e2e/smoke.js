@@ -1832,6 +1832,16 @@ flow('REVIEW.md 1.2 screen by screen: the Log, drive detail, Stages, Crew signed
   check(!alerted && cs.yes === 'Erase everything' && cs.color === 'rgb(200, 16, 46)' && cs.focus === 'cs-no', 'the confirm sheet: ' + JSON.stringify(cs));
   await page.keyboard.press('Escape');
   check(!(await page.$('.confirm-sheet')) && (await page.evaluate(() => ApexRecording.all())).length === 1, 'Cancel (Escape) keeps everything');
+  // REVIEW4 U-69: touching a theme card's preview switches the theme, as its Use key does; each Use key names its card
+  const uses = await page.$$eval('#themeCards button.ink-btn:not(.tc-hear)', (b) => b.map((x) => x.textContent + '/' + x.getAttribute('aria-label')));
+  check(JSON.stringify(uses) === '["Use/Use Tapedeck","Use/Use Billet"]', 'theme cards: one word, named keys: ' + JSON.stringify(uses));
+  await page.evaluate(() => document.querySelectorAll('#themeCards .theme-card')[1].querySelector('.theme-preview').scrollIntoView());
+  await page.click('#themeCards .theme-card:nth-child(2) .theme-preview');
+  await page.waitForFunction(() => document.documentElement.dataset.theme === 'tapedeck');
+  const used = await page.evaluate(() => ({ inUse: document.querySelector('#themeCards .theme-card.in-use .tc-head b').textContent, back: !!document.querySelector('#themeCards [aria-label="Use Roadbook"]') }));
+  check(used.inUse === 'Tapedeck' && used.back, 'the Tapedeck preview, touched, is in use: ' + JSON.stringify(used));
+  await page.click('#themeCards [aria-label="Use Roadbook"]');
+  await page.waitForFunction(() => document.documentElement.dataset.theme === 'roadbook');
 });
 
 // Safe areas (iPhone 15 Pro): nothing you read or tap sits under the Dynamic Island, the home indicator or the rounded
