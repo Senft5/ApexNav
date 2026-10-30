@@ -463,7 +463,9 @@
     }
     ZOOMS.forEach(([label, m]) => { const b = el('button', 'dv-z', label); b.dataset.m = m; b.onclick = () => { showRead(); setZoom(m); }; b.setAttribute('aria-label', label === 'All' ? 'Zoom: whole drive' : `Zoom: ${label.toLowerCase()} window`); zoom.append(b); });
     const pan = (dir) => { showRead(); if (zoomM) setZoom(zoomM, Math.round((state.v0 + state.v1) / 2 + dir * (state.v1 - state.v0) * 0.6)); };
-    const prev = el('button', 'dv-z', '\u25c0'), next = el('button', 'dv-z', '\u25b6'); prev.setAttribute('aria-label', 'Earlier'); next.setAttribute('aria-label', 'Later');
+    // U-76: drawn chevrons in the ink, not U+25C0/U+25B6, which iOS paints as blue emoji
+    const chev = (d) => `<svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true" style="display:block;margin:auto"><path d="${d}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"/></svg>`;
+    const prev = el('button', 'dv-z', chev('M8 2 L4 6 L8 10')), next = el('button', 'dv-z', chev('M4 2 L8 6 L4 10')); prev.setAttribute('aria-label', 'Earlier'); next.setAttribute('aria-label', 'Later');
     prev.onclick = () => pan(-1); next.onclick = () => pan(1); zoom.append(prev, next);
     zoom.firstChild.classList.add('on');
     draw();

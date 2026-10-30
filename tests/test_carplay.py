@@ -38,6 +38,26 @@ console.log(JSON.stringify({
   sight: [C.sightMessage(52.4, false, 40, 'mph'), C.sightMessage(30, false, 45.5, 'km/h'), C.sightMessage(30, true, 99, 'mph'), C.sightMessage(null, false, 40, 'mph'), C.sightMessage(NaN, false, 1, 'mph')],
   loopNoSteps: C.guideMessage({ id: 'loop_30min', dist: [0, 2000], events: [{ type: 'corner', dir: 'R', severity: 3, start_m: 300, dist_m: 320, call: 'Right 3' }] }, 0, 600, D.phrase),
   places: C.placesMessage([{ label: 'Home', lat: 35.1, lon: -83.2 }, { label: 'Bad', lat: null, lon: 1 }, null]),
+  arrive: C.guideMessage(t, 3100, null, D.phrase),
+  // U-63: a GPX track on the motorway, its next corner 13 km on; the road named by the map under the car, or not at all
+  ...(() => { const g = { id: 'gpx', dist: [0, 20000], events: [{ type: 'corner', dir: 'R', severity: 2, start_m: 13000, dist_m: 13040, call: 'Tight right' }] };
+    let reads = 0;
+    return {
+      far: C.guideMessage(g, 0, null, D.phrase, { road: () => { reads++; return 'I-275 West'; } }),
+      farLater: C.guideMessage(g, 5000, null, D.phrase, { road: 'I-275 West' }),
+      farNoName: C.guideMessage(g, 0, null, D.phrase, { road: () => null }),
+      near: C.guideMessage(g, 11500, null, D.phrase, { road: () => { reads++; return 'I-275 West'; } }),
+      roadReads: reads,
+      // standing still at the start: a corner 5 m ahead is the one the car is at; one already begun is behind the card
+      still: C.guideMessage({ id: 's', dist: [0, 3000], events: [{ type: 'corner', dir: 'R', severity: 1, start_m: -3, dist_m: 20 },
+        { type: 'corner', dir: 'R', severity: 1, start_m: 5, dist_m: 30, call: 'Very tight right' }, { type: 'corner', dir: 'L', severity: 3, start_m: 400, dist_m: 430, call: 'Left 3' }] }, 0, null, D.phrase, { speedMps: 0.4 }),
+      moving: C.guideMessage({ id: 's', dist: [0, 3000], events: [{ type: 'corner', dir: 'R', severity: 1, start_m: -3, dist_m: 20 },
+        { type: 'corner', dir: 'R', severity: 1, start_m: 5, dist_m: 30, call: 'Very tight right' }] }, 0, null, D.phrase, { speedMps: 9 }),
+    }; })(),
+  rec0: C.recordingMessage(0, (m) => `${(m / 1609.344).toFixed(1)} mi`), rec1: C.recordingMessage(6800, (m) => `${(m / 1609.344).toFixed(1)} mi`),
+  recNull: C.recordingMessage(null, null),
+  recordSvg: C.recordSVG('#7DF5DE', '#FFB347'), recordBad: C.recordSVG('red;x', 'url(x)'),
+  hairpin: C.cornerTulipSVG('R', 'HP', '#EDE4D3'), hairpinL: C.cornerTulipSVG('L', 'HP', '#EDE4D3'), follow: C.tulipSVG(8, '#EDE4D3'),
 }));
 """
 
@@ -55,8 +75,9 @@ def test_route_line_is_small_and_keeps_both_ends(out):
 def test_route_choices(out):
     one = out["one"]
     assert one["kind"] == "route" and one["name"] == "To Robbinsville" and one["picked"] == 0
-    # one route: the card's title is its name and the car prints time and length, so the summary is the Fun score
-    assert one["options"] == [{"summary": "Fun 99", "detail": "3.1 mi", "timeS": 4620, "distM": 5000}]
+    # one route: the card's title is its name and the car prints time and length, so the summary is the Fun score; the
+    # card shows only the detail above its estimates, so that says what the route is too (U-89: "35.4 mi" twice, a blank middle)
+    assert one["options"] == [{"summary": "Fun 99", "detail": "Fun 99", "timeS": 4620, "distM": 5000}]
     two = out["two"]
     assert [o["summary"] for o in two["options"]] == ["Fun 99 · 77 min", "Fun 40 · 65 min"] and two["picked"] == 1
     assert two["options"][0]["distM"] is None, "an option not built yet has no known length"
@@ -66,9 +87,55 @@ def test_route_choices(out):
 def test_next_maneuver(out):
     assert out["g0"] == {"kind": "guide", "key": "route_dest:1200", "instruction": "Turn left onto Deals Gap Road", "street": "Deals Gap Road",
                          "type": 15, "distM": 1100, "remainM": 4900, "remainS": 3600}
-    assert out["g1"]["instruction"] == "Arriving at your destination", "a step that isn't said (continue) is skipped"
-    assert out["g1"]["remainS"] is None, "unknown time stays unknown"
+    # 3.7 km to the next said step: a continue step on the road the route is on (the step before names it)
+    assert out["g1"] == {"kind": "guide", "key": "route_dest:f4990:Deals Gap Road", "instruction": "Follow Deals Gap Road", "street": "Deals Gap Road",
+                         "type": 8, "follow": True, "distM": 3690, "remainM": 3700, "remainS": None}, "unknown time stays unknown"
+    assert out["arrive"]["instruction"] == "Arriving at your destination", "a step that isn't said (continue) is skipped"
     assert out["g2"] is None or out["g2"]["distM"] == 0
+
+
+def test_a_far_corner_is_a_continue_step_until_near(out):
+    """U-63: "13.1 mi · Tight right" sat on the car's card for seven minutes of motorway (REVIEW4.md, guided-drive car/04)."""
+    far = out["far"]
+    assert far["instruction"] == "Follow I-275 West" and far["street"] == "I-275 West" and far["type"] == 8 and far["follow"] is True
+    assert far["distM"] == 13000 and "corner" not in far, "the distance is to the corner the step leads to"
+    assert out["farLater"]["key"] == far["key"], "the same stretch keeps one key: the card is built once, its distance counts down"
+    assert out["farNoName"]["instruction"] == "Follow the route" and out["farNoName"]["street"] == "", "no road name is invented"
+    near = out["near"]
+    assert near["corner"] == {"dir": "R", "sev": 2} and near["instruction"] == "Tight right" and near["distM"] == 1500
+    assert out["roadReads"] == 1, "the map is read for a name only when a continue step needs one"
+
+
+def test_no_corner_under_a_standing_car(out):
+    """U-63: the start of a drive showed "0 ft · Very tight right, opens up" for the corner under the car."""
+    assert out["still"]["key"] == "s:c400" and out["still"]["corner"] == {"dir": "L", "sev": 3}
+    assert out["moving"]["key"] == "s:c5", "moving, the corner just ahead is the next maneuver; one already begun never is"
+
+
+def test_a_free_drive_has_a_record_card(out):
+    """U-59: a drive with no route on the car: recording, and the distance driven in its words, never as a distance to a turn."""
+    assert out["rec0"] == {"kind": "guide", "key": "rec:", "instruction": "Recording · the road ahead", "street": "Recording", "type": 8, "recording": True}
+    assert out["rec1"]["instruction"] == "Recording · 4.2 mi driven" and out["rec1"]["key"] == "rec:4.2 mi" and out["rec1"]["street"] == "4.2 mi driven"
+    assert "distM" not in out["rec1"] and "distM" not in out["rec0"]
+    assert out["recNull"]["instruction"] == "Recording · the road ahead", "unknown distance: nothing said about it"
+    assert 'stroke="#7DF5DE"' in out["recordSvg"] and 'fill="#FFB347"' in out["recordSvg"]
+    assert "red;x" not in out["recordBad"] and "url(" not in out["recordBad"]
+
+
+def test_the_hairpin_reads_as_a_hairpin(out):
+    """U-78: a stem, a wide turn and a return leg leaving at 45 degrees, a thinner line so the legs stay apart at 60 px."""
+    import re
+    for svg, s in ((out["hairpin"], 1), (out["hairpinL"], -1)):
+        assert 'stroke-width="7"' in svg and " A20 20 " in svg
+        m = re.search(r'd="M([\d.]+) 92 V40 A20 20 0 0 [01] ([\d.]+) 40 V([\d.]+) L([\d.]+) ([\d.]+)"', svg)
+        assert m, svg
+        x0, x1, by, ex, ey = (float(v) for v in m.groups())
+        assert (x1 - x0) * s == 40, "a wide turn: the return leg a full 40 units from the stem"
+        assert abs(abs(ex - x1) - (ey - by)) < 0.01 and (ex - x1) * s > 0 and ey > by, "the exit leaves at 45 degrees, outwards and down"
+        assert all(4 <= v <= 96 for v in (x0, x1, by, ex, ey)), "inside the tulip's box with the stroke"
+        head = [float(v) for v in re.findall(r"[\d.]+", re.findall(r'<path d="([^"]+)"', svg)[1])]
+        assert head[2:4] == [ex, ey], "the arrowhead on the return leg's end"
+    assert 'stroke-width="9"' in out["follow"] and "<circle" not in out["follow"], "follow the road: a straight line, no junction dot"
 
 
 def test_places(out):
@@ -95,6 +162,7 @@ console.log(JSON.stringify({
   withCorners: C.routeMessage({ lat: [35, 35.01], lon: [-84, -84], dist: [0, 1100], timeS: 120, events: t.events }, null, 0, (m) => `${m} m`).options[0],
   loop: C.routeMessage({ name: '32 min loop', lat: [35, 35.01], lon: [-84, -84], dist: [0, 15630], timeS: 1920, events: t.events }, null, 0, (m) => `${m} m`).options[0],
   metricLook: C.lookMessage({ id: 'roadbook' }, true, 'metric').units,
+  bare: C.routeMessage({ lat: [35, 35.01], lon: [-84, -84], dist: [0, 1100] }, null, 0, (m) => `${m} m`).options[0],
 }));
 """
 
@@ -130,8 +198,10 @@ def test_turn_symbols_are_tulips_in_the_cards_ink_and_never_take_markup(maps):
 
 
 def test_a_route_choice_says_its_distance_and_corners(maps):
-    # no Fun score: the corners are the summary (every corner counts, placeable on the map or not), the length the detail
-    assert maps["withCorners"]["summary"] == "4 corners" and maps["withCorners"]["detail"] == "1100 m"
+    # no Fun score: the corners are the summary (every corner counts, placeable on the map or not). One route's card shows
+    # the detail and its estimates line the length, so the detail is the corners too (U-89); the length only when nothing else is known
+    assert maps["withCorners"]["summary"] == "4 corners" and maps["withCorners"]["detail"] == "4 corners"
+    assert maps["bare"]["detail"] == "1100 m" and maps["bare"]["summary"] == "Route"
     # the owner's car showed "32 min loop" twice: nothing in the summary repeats the name or the time the car prints
     assert "min" not in maps["loop"]["summary"] and "loop" not in maps["loop"]["summary"]
     assert maps["metricLook"] == "metric"
@@ -200,3 +270,19 @@ def test_the_car_shows_distance_left_without_a_made_up_time():
     swift = open(os.path.join(ROOT, "CarPlay", "ApexCarPlay.swift"), encoding="utf-8").read()
     assert "if let t = trip, let rm = g.remainM {" in swift
     assert "timeRemaining: g.remainS ?? -1" in swift and "timeRemaining: o.timeS ?? -1" in swift
+
+
+def test_every_drive_reaches_the_car_and_ends_idle():
+    """U-59, U-79, U-62: the page tells the car a drive started, route or none; the idle car can start one; End goes idle."""
+    swift = open(os.path.join(ROOT, "CarPlay", "ApexCarPlay.swift"), encoding="utf-8").read()
+    html = open(os.path.join(ROOT, "web", "index.html"), encoding="utf-8").read()
+    assert "carPost({ kind: 'start', title:" in html, "enterDrive posts start"
+    assert 'case "start":' in swift and "guide = Self.recordingGuide" in swift
+    assert 'CPBarButton(title: "Drive") { _ in ApexCar.shared.send("start", ["free": true]) }' in swift, "the recording test taps the label Drive"
+    # after End: no trip preview of the finished route; the page clears it, the shell forgets the trip
+    ended = swift[swift.index("@MainActor func driveEnded()"):]
+    ended = ended[:ended.index("\n    }\n")]
+    assert "routeChanged()" not in ended and "trip = nil" in ended and "hideTripPreviews()" in ended
+    assert "if (track && track.kind === 'route') { car.ended = track; carRoute(null); }" in html
+    # a record card carries no distance to a maneuver
+    assert "recording || d != nil" in swift and "g.distM.map {" in swift

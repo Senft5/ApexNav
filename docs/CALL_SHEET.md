@@ -4,6 +4,48 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-10-30 (overnight): Review 4
+
+**Review 4: Fable watched the real app, and all 32 findings were built overnight** (docs/design/REVIEW4.md, U-58 to U-89;
+the prompts the owner approved are docs/design/REVIEW4_PROMPT.md). Five builders worked in parallel and Claude merged them
+into one PR. Every finding is built; where a builder did it differently from Fable's suggestion, it's below. My calls:
+- *The co-driver wakes on the road, not on the driver* (U-58): in Auto, notes come on for a corner ahead that is
+  severity 3 or tighter, a hairpin, or one that needs braking, within max(2 × its lead, 800 m), as well as on the old
+  g test. The first corner of a drive is called before the car moves, and going quiet and coming back are each said
+  once (at most every 2 min). There's no "Notes on." clip in the voice packs, so coming back says the pack's "Full
+  notes." (optional for the owner: record a "Notes on." line). A corner call now comes 1.5 s earlier at road speed
+  (`THINK_S` in note_timing.js; the reaction learner counts from after it). Undo: `THINK_S = 0`; `wakes` in
+  note_timing.js.
+- *The quiet line names the road* (U-67): "Quiet · Circle Freeway · next corner 1.6 mi", using the map's road name
+  (the name the saved drive gets) rather than its ref ("I-275"). An unknown road is left out of the line.
+- *The sight plate holds still* (U-60): 5 mph steps rounded down (never more than you can stop within); it changes
+  only when every reading for 2 s agrees, and goes red only after 3 s too fast. A plain "≥5 for 2 s" rule still
+  flapped on the recording's numbers. **The Sight cell's red stays** (your theme contract); Fable's pushback on it is
+  below for you.
+- *GPX and loop routes get a time* (U-64): a forecast from the route's own speed envelope (0.92 × envelope, capped by
+  the posted limit or 60 mph), shown as "1 h 05". It's the same kind of number a router's ETA is, not measured road
+  data, and it's never called "with traffic". Share ETA now shows on those routes too. Undo: `timeFromEnvelope` in
+  index.html.
+- *The Live Activity*: "● QUIET" on a route, "● REC" in a free drive, "250 FT R2" with a note; no "--" or cut words.
+- *The car is in every drive* (U-59, U-79, U-62, U-63): a free drive runs a CarPlay navigation session with a record
+  card ("Recording · 4.2 mi driven") and End; the idle map has a Drive button, which also puts away a finished route
+  the car isn't showing; after End the car goes idle. A corner over 2 km away becomes "Follow <road>" with the
+  distance. If App Review objects to a session with no route, the fallback is End alone on the bar (docs/CARPLAY.md).
+- *Every corner tulip redrawn* (U-78): the "pennant" in the recording was the R1 tulip, not the hairpin.
+- *The welcome runs in the app* (U-65): it was switched off in the app since the first import, probably because the
+  shell asked for location at launch on top of it. Location is now asked after the welcome's Start. The launch
+  screen shows the Vetta lockup on Roadbook night's ink (U-80); a day theme still cuts from dark to light paper.
+- *The route card opens when a route resolves* (U-70) with Drive it fixed at its foot; the recenter key never counts at
+  you after an app move and shows only its glyph (U-71); a drive on a route is named after the route (U-75); a
+  no-score end card's solid key is Open in the Log, with Share as a link.
+- *The recording itself* (REVIEW4 §6): the guided and theme drives start a mile before Dry Ridge Rd's corners
+  (`APEX_REPLAY_FROM`, 19.8 km), with photos every 3 s through them; themes are switched with Use and checked; the
+  review account is signed in at launch, before the page loads. A run is now about 35–40 minutes. Undo: `TWISTIES`
+  in UITests/ReviewFlows.swift.
+- *Fable's pushback, for the owner to decide* (REVIEW4 §7): (1) the binnacle's Sight value red all the time vs the plate
+  red only when too fast: Fable would make the cell ink so red means one thing. (2) Fable agrees corners are
+  maneuvers only with the continue step (now built). Not changed without you.
+
 ## 2026-10-30
 
 **The review account** (the owner: "yes make me the review account"). `@vetta_review`, a member with Share road feel off,

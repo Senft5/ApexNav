@@ -31,7 +31,11 @@
     const one = (fun, timeS, distM, n) => ({
       summary: (several ? [fun != null ? `Fun ${fun}` : null, finite(timeS) ? `${Math.round(timeS / 60)} min` : null]
         : [fun != null ? `Fun ${fun}` : cornersText(n)]).filter(Boolean).join(' · ') || 'Route',
-      detail: [finite(distM) && fmtDist ? fmtDist(distM) : null, several || fun != null ? cornersText(n) : null].filter(Boolean).join(' · '),
+      // U-89: one route's card prints its length on the estimates line and only the detail above it (the summary shows in
+      // the Options list alone), so the detail is what the route is: its Fun score and corners, the length only when
+      // neither is known. The review recording's card read "35.4 mi" twice, its middle blank.
+      detail: several ? [finite(distM) && fmtDist ? fmtDist(distM) : null, cornersText(n)].filter(Boolean).join(' · ')
+        : [fun != null ? `Fun ${fun}` : null, cornersText(n)].filter(Boolean).join(' · ') || (finite(distM) && fmtDist ? fmtDist(distM) : ''),
       timeS: finite(timeS) ? timeS : null, distM: finite(distM) ? distM : null,
     });
     const list = Array.isArray(options) && options.length > 1
@@ -58,11 +62,31 @@
   const cornerType = (dir, v) => (dir === 'L' ? (v === 'HP' ? 13 : v <= 2 ? 14 : v <= 4 ? 15 : 16) : (v === 'HP' ? 12 : v <= 2 ? 11 : v <= 4 ? 10 : 9));
   const cornerWords = (e, v) => `${e.dir === 'L' ? 'Left' : 'Right'} ${v === 'HP' ? 'hairpin' : v}`;
 
+  // U-63: a corner or turn more than CONTINUE_M ahead is not yet the card's maneuver. Until it is near, the card says which
+  // road to follow, as Apple Maps does on a motorway ("Continue on I-275 West for 13 mi"): a 13-mile "Tight right" sat on
+  // the card for seven minutes in the review recording (docs/design/REVIEW4.md). Standing still (under STILL_MPS), a
+  // corner within STILL_M is the one the car is already at, not news: the start of a drive showed "0 ft · Very tight
+  // right" under the car, a corner the phone never called.
+  const CONTINUE_M = 2000, STILL_MPS = 2, STILL_M = 15;
+  // The road the route is on at `m`: the street of the last step at or behind it (a Valhalla step names the road it goes
+  // onto), so a planned route names its own roads; '' when it has none (a loop or a GPX track).
+  function roadAt(t, m) {
+    let road = '';
+    for (const s of (Array.isArray(t.steps) ? t.steps : [])) {
+      if (!s || !finite(s.m) || s.m > m + 5) break;
+      if (typeof s.street === 'string' && s.street.trim()) road = s.street.trim();
+    }
+    return road;
+  }
+
   /**
    * The next maneuver ahead of `cursorM`: { kind:'guide', key, instruction, street, type, distM, remainM, remainS }, or null
    * with none ahead. `phrase` is ApexDirections.phrase; `leftS` the live time left (eta.js), null when unknown. A corner
    * ahead of the next turn comes first, with `corner: { dir, sev }` (sev 1-6 or 'HP') for its tulip. `opts.corners` is
    * one of CORNER_MODES; `opts.call(e)` words a corner as the phone does (the plain-words setting), else its own call.
+   * A maneuver more than CONTINUE_M away gives a continue step instead ("Follow I-275", type 8, `follow: true`, distM to
+   * that maneuver), the road named from the route's steps, else from `opts.road` (a name, or a function that reads the
+   * road under the car from the map). `opts.speedMps` is the car's speed, for the standing-still rule.
    */
   function guideMessage(t, cursorM, leftS, phrase, opts = {}) {
     // a route without turn-by-turn steps (a loop, a GPX track) still has its corners: the CarPlay run on 2026-10-30
@@ -73,16 +97,30 @@
     const turns = (Array.isArray(t.steps) ? t.steps : []).filter((s) => s && finite(s.m) && phrase(s));
     const st = turns.find((s) => s.m > cursorM - 5);
     const mode = CORNER_MODES.includes(opts.corners) ? opts.corners : 'all';
+    const still = finite(opts.speedMps) && opts.speedMps < STILL_MPS;
     let co = null, coM = Infinity;
     if (mode !== 'off') {
       for (const e of (Array.isArray(t.events) ? t.events : [])) {
         if (!e || e.type !== 'corner' || (e.dir !== 'L' && e.dir !== 'R') || sevOf(e) == null) continue;
         const m = cornerAt(e);
-        if (!finite(m) || m <= cursorM - 5 || m >= coM || (st && m >= st.m)) continue;
+        // U-63: a corner already begun is behind the card, and one at the wheels of a standing car is never its first maneuver
+        if (!finite(m) || m < cursorM || (still && m < cursorM + STILL_M) || m >= coM || (st && m >= st.m)) continue;
         if (mode === 'tight' && !tightCorner(e)) continue;
         if (turns.some((s) => Math.abs(s.m - m) < 40)) continue;
         co = e; coM = m;
       }
+    }
+    const nextM = co ? coM : st ? st.m : null;
+    if (nextM == null) return null;
+    if (nextM - cursorM > CONTINUE_M) {
+      let road = roadAt(t, cursorM);
+      if (!road && opts.road != null) {
+        try { road = String((typeof opts.road === 'function' ? opts.road() : opts.road) || '').trim(); } catch (_) { road = ''; }
+      }
+      road = road.slice(0, 60);
+      // the key holds still for the whole stretch (the same road, the same maneuver at its end), so the card is built once
+      return { kind: 'guide', key: `${t.id || ''}:f${Math.round(nextM)}:${road}`, instruction: road ? `Follow ${road}` : 'Follow the route',
+               street: road, type: 8, follow: true, distM: Math.max(0, Math.round(nextM - cursorM)), ...remain };
     }
     if (co) {
       const v = sevOf(co), said = typeof opts.call === 'function' ? opts.call(co) : co.call;
@@ -90,9 +128,19 @@
                street: `${co.dir}${v}`,                                  // the short variant (CPManeuver instructionVariants) where the call doesn't fit
                type: cornerType(co.dir, v), corner: { dir: co.dir, sev: v }, distM: Math.max(0, Math.round(coM - cursorM)), ...remain };
     }
-    if (!st) return null;
     return { kind: 'guide', key: `${t.id || ''}:${Math.round(st.m)}`, instruction: phrase(st), street: st.street || '', type: st.type,
              distM: Math.max(0, Math.round(st.m - cursorM)), ...remain };
+  }
+
+  /**
+   * U-59: a drive with no route, on the car's card. It says the drive is recording and, once there is any, how far it has
+   * driven, in the words: never as a distance to a maneuver, because there is none. { kind:'guide', key, instruction,
+   * street, type: 8, recording: true } and no distM. `drivenM` is the distance recorded; `fmtDist` the phone's ("4.2 mi").
+   */
+  function recordingMessage(drivenM, fmtDist) {
+    const d = finite(drivenM) && drivenM >= 160 && typeof fmtDist === 'function' ? String(fmtDist(drivenM)) : '';
+    return { kind: 'guide', key: `rec:${d}`, instruction: d ? `Recording · ${d} driven` : 'Recording · the road ahead',
+             street: d ? `${d} driven` : 'Recording', type: 8, recording: true };
   }
 
   /** Recent places for the car's Places list: [{ name, at: [lat, lon] }], newest first. */
@@ -147,6 +195,9 @@
     const A = { 9: 40, 10: 90, 11: 135, 12: 180, 13: -180, 14: -135, 15: -90, 16: -40, 17: 0, 18: 30, 19: -30, 20: 30, 21: -30,
                 22: 0, 23: 25, 24: -25, 25: 0, 37: 30, 38: -30 };
     let path;
+    if (type === 8) {                                                    // U-63 follow the road: one straight line, no junction dot
+      return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="120" height="120"><g fill="none" stroke="${c}" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"><path d="M50 92 V14"/><path d="M38 27 L50 14 L62 27"/></g></svg>`;
+    }
     if ([4, 5, 6].includes(type)) {                                      // arrive: a flag on the stem
       path = '<path d="M50 92 V22"/><path d="M50 24 H76 L68 33 L76 42 H50" fill="' + c + '"/>';
     } else if (type === 26 || type === 27) {                             // roundabout: a ring and the exit
@@ -174,19 +225,34 @@
   const CORNER_BEND = { 1: 140, 2: 115, 3: 90, 4: 65, 5: 45, 6: 25 };
   function cornerTulipSVG(dir, sev, ink) {
     const c = /^#[0-9A-Fa-f]{3,8}$/.test(ink || '') ? ink : '#EDE4D3', s = dir === 'L' ? -1 : 1;
-    let path;
+    let path, width = 9;
     if (sev === 'HP') {
-      path = `<path d="M50 92 V44 A16 16 0 0 ${s > 0 ? 1 : 0} ${50 + 32 * s} 44 V70"/><path d="M${50 + 32 * s - 11} 59 L${50 + 32 * s} 71 L${50 + 32 * s + 11} 59"/>`;
+      // U-78: the road book's hairpin, not a pennant (a stem, a tight arc and a down arrow read as a flag at card size): a
+      // long stem, a wide turn (radius 20) and a return leg that runs back down beside it and leaves at 45 degrees, the
+      // arrowhead on that leg. A thinner line (7) keeps the two legs apart at 60 px.
+      const x0 = 50 - 20 * s, x1 = 50 + 20 * s, ex = x1 + 14 * s, ey = 68, k = Math.SQRT1_2;
+      const hx = k * s, hy = k, px = -hy, py = hx, f = (v) => +v.toFixed(1);
+      path = `<path d="M${x0} 92 V40 A20 20 0 0 ${s > 0 ? 1 : 0} ${x1} 40 V${ey - 14} L${ex} ${ey}"/>`
+        + `<path d="M${f(ex - hx * 11 + px * 8)} ${f(ey - hy * 11 + py * 8)} L${ex} ${ey} L${f(ex - hx * 11 - px * 8)} ${f(ey - hy * 11 - py * 8)}"/>`;
+      width = 7;
     } else {
-      const deg = CORNER_BEND[sev] || 45, a = s * deg * Math.PI / 180;
-      const top = deg > 100 ? 40 : 50, r = 36;
-      const ex = 50 + Math.sin(a) * r, ey = top - Math.cos(a) * r;
-      const hx = Math.sin(a), hy = -Math.cos(a), px = -hy, py = hx;
-      // a smooth bend: the control point sits up the stem, so the line arcs instead of kinking at a junction
-      path = `<path d="M50 92 V${top + 14} C50 ${top - 6} ${(ex - hx * 20).toFixed(1)} ${(ey - hy * 20).toFixed(1)} ${ex.toFixed(1)} ${ey.toFixed(1)}"/>`
-        + `<path d="M${(ex - hx * 12 + px * 9).toFixed(1)} ${(ey - hy * 12 + py * 9).toFixed(1)} L${ex.toFixed(1)} ${ey.toFixed(1)} L${(ex - hx * 12 - px * 9).toFixed(1)} ${(ey - hy * 12 - py * 9).toFixed(1)}"/>`;
+      // U-78: the bend is a true arc of the road (a radius per rating, the stem set off to the outside so a tight one has room
+      // to come round) and a short straight exit carrying the arrowhead. The old curve put the head right on top of a short
+      // hook, and a 1 ("Very tight right, opens up", the review recording's car/02) read as a pennant on a pole.
+      const deg = CORNER_BEND[sev] || 45, a = deg * Math.PI / 180, f = (v) => +v.toFixed(1);
+      const R = deg > 100 ? 20 : deg > 60 ? 26 : 34, x0 = 50 - s * (deg > 100 ? 20 : deg > 60 ? 14 : 6), top = deg > 100 ? 44 : 52;
+      const cx = x0 + s * R, bx = cx - s * R * Math.cos(a), by = top - R * Math.sin(a);   // where the arc ends
+      const hx = s * Math.sin(a), hy = -Math.cos(a), px = -hy, py = hx, ex = bx + hx * 14, ey = by + hy * 14;
+      path = `<path d="M${x0} 92 V${top} A${R} ${R} 0 0 ${s > 0 ? 1 : 0} ${f(bx)} ${f(by)} L${f(ex)} ${f(ey)}"/>`
+        + `<path d="M${f(ex - hx * 12 + px * 9)} ${f(ey - hy * 12 + py * 9)} L${f(ex)} ${f(ey)} L${f(ex - hx * 12 - px * 9)} ${f(ey - hy * 12 - py * 9)}"/>`;
     }
-    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="120" height="120"><g fill="none" stroke="${c}" stroke-width="9" stroke-linecap="round" stroke-linejoin="round">${path}</g></svg>`;
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="120" height="120"><g fill="none" stroke="${c}" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round">${path}</g></svg>`;
+  }
+
+  /** U-59: the free drive's symbol, the record dot: a ring in the card's ink around a dot in the theme's accent. */
+  function recordSVG(ink, accent) {
+    const c = /^#[0-9A-Fa-f]{3,8}$/.test(ink || '') ? ink : '#EDE4D3', a = /^#[0-9A-Fa-f]{3,8}$/.test(accent || '') ? accent : '#E65252';
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="120" height="120"><g fill="none" stroke="${c}" stroke-width="7"><circle cx="50" cy="50" r="34"/></g><circle cx="50" cy="50" r="18" fill="${a}"/></svg>`;
   }
 
   /**
@@ -201,6 +267,51 @@
     return { kind: 'sight', text: String(Math.round(sight)), unit: String(unit || '').toUpperCase(), short: finite(speed) && speed > sight + 1 };
   }
 
-  const api = { sightMessage, line, routeMessage, guideMessage, placesMessage, cornersMessage, hazardsMessage, lookMessage, tulipSVG, cornerTulipSVG, CORNER_MODES, MAX_POINTS };
+  /**
+   * U-60: the sight-line speed as a display holds it. The raw value moves every sample (the recording read 67, 55, 97,
+   * 88, 124 ten seconds apart at a steady 70), and a red that flickers teaches the driver to ignore the one red on the
+   * map. So: steps of 5 mph (10 km/h), rounded down (it is a speed you can stop within); a new step or OPEN only once it
+   * has held 2 s; red ("faster than you can see") only once you have been faster than it for 3 s; no plate under 5 mph
+   * (8 km/h), where it means nothing; OPEN when it clears the posted limit by 15 mph (25 km/h). Unknown hides at once
+   * and starts over: a held number is never shown for road it wasn't measured on.
+   * step({ sight, open, speed, limit, unit }, nowMs), numbers in display units, returns { msg, value, open }: msg is a
+   * sightMessage for the plate (phone and car), value/open the held number for the binnacle's Sight cell.
+   */
+  const SIGHT_HOLD_MS = 2000, SIGHT_RED_MS = 3000;
+  function sightFilter() {
+    // shown and the readings as numbers, OPEN as Infinity. A change is adopted only when every reading for 2 s has been at
+    // least a step away on the same side, and then by the least of them (the change all of that 2 s agrees on): a value
+    // that jumps up and down around the shown one never moves it.
+    let shown = null, pend = null, redSince = null;
+    const reset = () => { shown = null; pend = null; redSince = null; };
+    function step(r, now) {
+      r = r || {};
+      const km = /^km/i.test(String(r.unit || '')), q = km ? 10 : 5, slow = km ? 8 : 5, margin = km ? 25 : 15;
+      if (!finite(now) || (!r.open && !(finite(r.sight) && r.sight >= 0))) { reset(); return { msg: sightMessage(null), value: null, open: false }; }
+      const open = !!r.open || (finite(r.limit) && r.limit > 0 && r.sight > r.limit + margin);
+      const want = open ? Infinity : Math.floor(r.sight / q) * q;
+      const dir = shown === null ? 0 : Math.sign(want - shown);
+      if (shown === null) { shown = want; pend = null; }
+      else if (!dir) pend = null;
+      else if (!pend || pend.dir !== dir) pend = { dir, since: now, near: want };
+      else {
+        pend.near = dir > 0 ? Math.min(pend.near, want) : Math.max(pend.near, want);
+        if (now - pend.since >= SIGHT_HOLD_MS) { shown = pend.near; pend = null; }
+      }
+      const isOpen = shown === Infinity, value = isOpen ? null : shown;
+      // faster than the raw sight line and than the number on the plate: never red under the figure the driver reads
+      const fast = !isOpen && finite(r.speed) && finite(r.sight) && r.speed > r.sight + 1 && r.speed > shown + 1;
+      redSince = fast ? (redSince === null ? now : redSince) : null;
+      if (finite(r.speed) && r.speed < slow) return { msg: sightMessage(null), value, open: isOpen };
+      const msg = sightMessage(value, isOpen, null, r.unit);
+      msg.short = redSince !== null && now - redSince >= SIGHT_RED_MS;
+      return { msg, value, open: isOpen };
+    }
+    return { step, reset };
+  }
+
+  const api = { sightMessage, line, routeMessage, guideMessage, recordingMessage, placesMessage, cornersMessage, hazardsMessage, lookMessage, tulipSVG, cornerTulipSVG,
+                recordSVG, CORNER_MODES, CONTINUE_M, MAX_POINTS };
+  api.sightFilter = sightFilter;                                       // U-60 (its own line: the list above is shared)
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexCarPlay = api;
 })(typeof window !== 'undefined' ? window : globalThis);

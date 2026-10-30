@@ -400,6 +400,11 @@ final class ApexScriptBridge: NSObject, WKScriptMessageHandler {
             ApexBuildNotifier.requestPermission()
             return
         }
+        // Location (U-65): asked when the page says, after the welcome, not at launch. Once answered this shows nothing.
+        if cmd == "requestLocation" {
+            shell?.requestLocation()
+            return
+        }
         // CarPlay (CarPlay/ApexCarPlay.swift): the route, the next maneuver and hazards for the car's screen.
         if cmd == "car", let dict = body as? [String: Any] {
             ApexCar.shared.receive(dict)
@@ -526,11 +531,13 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         locManager.pausesLocationUpdatesAutomatically = false
         locManager.allowsBackgroundLocationUpdates = true   // UIBackgroundModes: location is declared in project.yml
         locManager.showsBackgroundLocationIndicator = true
-        locManager.requestWhenInUseAuthorization()
+        // U-65: never asked at launch. The page asks (requestLocation) after the welcome's Start, so the system sheet follows a
+        // reason; a driver past the welcome asks at once, and a first drive (phone or car) asks if it never was.
         configureVoiceSession()
         synth.delegate = self
         #if DEBUG
         replay = ApexReplay.start(shell: self)                // review recordings: a real drive instead of the sensors
+        Self.reviewSignIn()                                   // U-66: before the page loads, so its first /api/me is the member's
         #endif
         if !replaying {
             locManager.startUpdatingLocation()
@@ -659,16 +666,39 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
 
     #if DEBUG
     /// Review recordings only (.github/workflows/app-review.yml, debug builds): APEX_REVIEW_SESSION signs in as the
-    /// review account (its Keychain session, then the page's own "signed in" message); APEX_REVIEW_ROUTE=1 hands the page
-    /// the replayed road as a GPX (the real import path), so a guided drive follows the road the replay drives. Once.
-    private static var reviewDone = false
+    /// review account; APEX_REVIEW_ROUTE=1 hands the page the replayed road as a GPX (the real import path), so a guided
+    /// drive follows the road the replay drives.
+    /// U-66: the session used to be stored and announced in one script at the first didFinish, and the page stayed signed
+    /// out for the whole flow. Now the Keychain holds it from launch (reviewSignIn, before the web view exists), so the
+    /// page's own first /api/me is the member's, as for a member who signed in yesterday; and the page's "signed in"
+    /// message is repeated until window.apex answers it (announceReviewSession), not fired once into a page that may not
+    /// be listening yet.
+    private static var reviewDone = false, reviewSessionAnnounced = false
+    private static func reviewSignIn() {
+        let review = (ProcessInfo.processInfo.environment["APEX_REVIEW_SESSION"] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !review.isEmpty else { return }
+        // A simulator whose Keychain refuses a test-launched app (errSecMissingEntitlement) still signs in: the bridge
+        // reads the token from memory instead (ApexKeychain.reviewToken, debug builds only).
+        if !ApexKeychain.setSession(review) { NSLog("APEX-REVIEW the Keychain refused the review session; kept in memory") }
+        ApexKeychain.reviewToken = review
+    }
+    private func announceReviewSession(tries: Int = 40) {
+        guard !Self.reviewSessionAnnounced, ApexKeychain.session() != nil, tries > 0 else { return }
+        guard webReady, let wv = webView else {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in self?.announceReviewSession(tries: tries - 1) }
+            return
+        }
+        wv.evaluateJavaScript("(window.apex && window.apex.onNative) ? (window.apex.onNative({type:'session',signedIn:true}), true) : false") { [weak self] result, _ in
+            guard let self else { return }
+            if (result as? Bool) == true { Self.reviewSessionAnnounced = true; NSLog("APEX-REVIEW signed in as the review account"); return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in self?.announceReviewSession(tries: tries - 1) }
+        }
+    }
     private func reviewSetup() {
+        announceReviewSession()                              // on every load until the page has taken it
         guard !Self.reviewDone else { return }
         Self.reviewDone = true
         let env = ProcessInfo.processInfo.environment
-        if let reviewToken = env["APEX_REVIEW_SESSION"], !reviewToken.isEmpty, ApexKeychain.setSession(reviewToken) {
-            evaluate("window.apex && window.apex.onNative && window.apex.onNative({type:'session',signedIn:true}); void 0;")
-        }
         if env["APEX_REVIEW_ROUTE"] == "1", let gpx = replay?.gpx() {
             DispatchQueue.main.asyncAfter(deadline: .now() + 4) { [weak self] in self?.deliverGpx(["type": "gpx", "name": "Dry Ridge Rd.gpx", "text": gpx]) }
         }
@@ -1073,6 +1103,12 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         Task { @MainActor in
             self.ingest(fix: fix)
         }
+    }
+
+    /// The system's location sheet, only while it has never been answered (U-65: the page asks after the welcome's Start).
+    func requestLocation() {
+        guard locManager.authorizationStatus == .notDetermined else { return }
+        locManager.requestWhenInUseAuthorization()
     }
 
     nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
@@ -1580,7 +1616,16 @@ enum ApexKeychain {
                                                kSecAttrService as String: "com.senft.ApexNav.session",
                                                kSecAttrAccount as String: "session"]
 
+    #if DEBUG
+    /// Review recordings only (ApexSensorShell.reviewSignIn): the review account's session, for a simulator whose Keychain
+    /// will not hold it. Any sign-in or sign-out (setSession) forgets it.
+    nonisolated(unsafe) static var reviewToken: String?
+    #endif
+
     static func session() -> String? {
+        #if DEBUG
+        if let t = reviewToken { return t }
+        #endif
         var q = query
         q[kSecReturnData as String] = true
         q[kSecMatchLimit as String] = kSecMatchLimitOne
@@ -1591,6 +1636,9 @@ enum ApexKeychain {
 
     @discardableResult
     static func setSession(_ token: String?) -> Bool {
+        #if DEBUG
+        reviewToken = nil
+        #endif
         SecItemDelete(query as CFDictionary)
         guard let token else { return true }
         guard token.range(of: "^[A-Za-z0-9_-]{20,200}$", options: .regularExpression) != nil else { return false }
@@ -1667,11 +1715,15 @@ final class ApexApiBridge: NSObject, WKScriptMessageHandlerWithReply {
 /// must find the mount, the banking and the roughness again, as in a car. Parked at the start until a drive starts (the
 /// page's Live Activity start), then at the recorded speeds; parked again when it ends. A review account keeps Share
 /// road feel off, so none of this is ever sent as measured road data (CLAUDE.md rule 3).
+/// APEX_REPLAY_FROM=<km> (REVIEW4 §6.1) parks it that far along the drive instead of at its start: the drive spends its
+/// first 21 km on Colerain Avenue and I-275, and a seven-minute flow never reached the corners. 19.8 is a mile before the
+/// first of them (the exit ramp at 21.4 km; Dry Ridge Rd's corners run to 34.1 km). The GPX (gpx()) starts there too.
 @MainActor final class ApexReplay {
     private struct Row { let lat, lon, ele, grade, mps, lonG, latG, camberDeg, crestG, rough: Double }
     private weak var shell: ApexSensorShell?
     private let rows: [Row]
     private let mount: [[Double]]
+    private let fromRow: Int                                   // APEX_REPLAY_FROM, as a row of the drive
     private var distM = 0.0, lastFix = 0.0, timer: Timer?
     var driving = false
 
@@ -1691,17 +1743,23 @@ final class ApexApiBridge: NSObject, WKScriptMessageHandlerWithReply {
                                       mps: num(r, iSpeed) / 2.23694, lonG: num(r, col("lon_g")), latG: num(r, col("lat_g")),
                                       camberDeg: num(r, col("camber_deg")), crestG: num(r, col("crest_vertical_g")), rough: num(r, col("roughness_rms"))) }
         guard rows.count > 2 else { return nil }
-        let r = ApexReplay(shell: shell, rows: rows, mount: mount)
+        let fromKm = Double(ProcessInfo.processInfo.environment["APEX_REPLAY_FROM"] ?? "") ?? 0
+        let fromRow = min(rows.count - 3, max(0, Int((fromKm.isFinite ? fromKm : 0) * 1000 / 5)))
+        let r = ApexReplay(shell: shell, rows: rows, mount: mount, fromRow: fromRow)
         r.timer = Timer.scheduledTimer(withTimeInterval: 0.01, repeats: true) { [weak r] _ in MainActor.assumeIsolated { r?.tick() } }
         return r
     }
 
-    private init(shell: ApexSensorShell, rows: [Row], mount: [[Double]]) { self.shell = shell; self.rows = rows; self.mount = mount }
+    private init(shell: ApexSensorShell, rows: [Row], mount: [[Double]], fromRow: Int) {
+        self.shell = shell; self.rows = rows; self.mount = mount; self.fromRow = fromRow
+        distM = Double(fromRow) * 5
+    }
 
-    /// The replayed road as a GPX track (a point every 20 m), for a guided drive along it.
+    /// The replayed road as a GPX track (a point every 20 m), for a guided drive along it: from where the replay starts
+    /// (APEX_REPLAY_FROM) to the end, so the route begins under the car, as a route planned from here would.
     func gpx() -> String {
         var pts = ""
-        for (k, r) in rows.enumerated() where k % 4 == 0 || k == rows.count - 1 {
+        for (k, r) in rows.enumerated() where k >= fromRow && ((k - fromRow) % 4 == 0 || k == rows.count - 1) {
             pts += String(format: "<trkpt lat=\"%.6f\" lon=\"%.6f\"><ele>%.1f</ele></trkpt>", r.lat, r.lon, r.ele)
         }
         return "<?xml version=\"1.0\"?><gpx version=\"1.1\" creator=\"Vetta review\"><trk><name>Dry Ridge Rd</name><trkseg>\(pts)</trkseg></trk></gpx>"

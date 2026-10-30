@@ -487,10 +487,13 @@
     const roadType = html('div', 'dna-arch', center, 'Road: --');
     u.push(d => {
       const type = d.sector && d.sector.archetype;
-      // labelled (REVIEW.md 1.2, Replay): "Road: Fast & open", "Road: --" when the sector is unknown
-      roadType.textContent = `Road: ${type === 'Flowing sweepers' ? 'Sweepers' : type === 'Fast open' ? 'Fast & open' : (type || '--')}`;
-      // with no route under the car there is no road type to know: the row steps aside instead of a lone "Road: --"
-      roadType.hidden = !(d.routeOnly || d.sector);
+      // REVIEW4 U-67: in a drive, the road under the car by the map's name ("Road: I-275"), the same name the strip's quiet
+      // line uses; otherwise the road's type, labelled (REVIEW.md 1.2, Replay): "Road: Fast & open", "Road: --" when unknown
+      const name = typeof d.roadName === 'string' && d.roadName.trim() ? d.roadName.trim() : null;
+      const text = `Road: ${name || (type === 'Flowing sweepers' ? 'Sweepers' : type === 'Fast open' ? 'Fast & open' : (type || '--'))}`;
+      if (roadType.textContent !== text) roadType.textContent = text;
+      // with no route and no named road under the car there is nothing to know: the row steps aside instead of a lone "Road: --"
+      roadType.hidden = !(d.routeOnly || d.sector || name);
     });
     return { update: (d) => u.forEach(f => f(d)) };
   }

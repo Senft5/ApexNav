@@ -11,7 +11,7 @@ on:
 jobs:
   flow:
     runs-on: macos-15
-    timeout-minutes: 45
+    timeout-minutes: 60            # guided-drive drives Dry Ridge Rd's corners end to end (about 20 minutes of it)
     strategy:
       fail-fast: false
       matrix:
@@ -37,7 +37,8 @@ jobs:
           echo "udid=$UDID" >> "$GITHUB_OUTPUT"
           xcrun simctl boot "$UDID" || true
           xcrun simctl bootstatus "$UDID" -b
-          xcrun simctl privacy "$UDID" grant location-always com.senft.ApexNav || true
+          # the first run asks for location as on a new phone (REVIEW4 §6.9); every other flow starts allowed
+          if [ "${{ matrix.name }}" != "first-run" ]; then xcrun simctl privacy "$UDID" grant location-always com.senft.ApexNav || true; fi
           xcrun simctl privacy "$UDID" grant motion com.senft.ApexNav || true
           xcrun simctl privacy "$UDID" grant notifications com.senft.ApexNav || true
           xcrun simctl location "$UDID" set 39.259141,-84.602626   # where the replayed drive starts
@@ -62,12 +63,18 @@ jobs:
           REVIEW_SESSION: ${{ secrets.REVIEW_SESSION }}
         run: |
           mkdir -p out/${{ matrix.name }}
-          xcrun simctl io "$UDID" recordVideo --codec=h264 --force out/${{ matrix.name }}/phone.mp4 &
+          # The wall-clock second each video starts (REVIEW4 §6.10): the app hides the status bar in a drive, so the pack maps
+          # transcript times to video seconds with it. Taken when simctl says the recording has started; `log show` (the
+          # transcript) prints the runner's local time, which is what `date` gives here.
+          started() { for _ in $(seq 1 40); do grep -q "Recording started" "$1" 2>/dev/null && break; sleep 0.25; done; date +%H:%M:%S; }
+          xcrun simctl io "$UDID" recordVideo --codec=h264 --force out/${{ matrix.name }}/phone.mp4 > out/${{ matrix.name }}/phone-rec.log 2>&1 &
           REC=$!
+          started out/${{ matrix.name }}/phone-rec.log > out/${{ matrix.name }}/phone-start.txt
           CAR=""
           if [ "${{ matrix.carplay }}" = "true" ]; then
-            xcrun simctl io "$UDID" recordVideo --display=external --codec=h264 --force out/${{ matrix.name }}/car.mp4 &
+            xcrun simctl io "$UDID" recordVideo --display=external --codec=h264 --force out/${{ matrix.name }}/car.mp4 > out/${{ matrix.name }}/car-rec.log 2>&1 &
             CAR=$!
+            started out/${{ matrix.name }}/car-rec.log > out/${{ matrix.name }}/car-start.txt
           fi
           START=$(date -u +"%Y-%m-%d %H:%M:%S")
           TEST_RUNNER_APEX_REVIEW=1 TEST_RUNNER_APEX_REVIEW_SESSION="$REVIEW_SESSION" xcodebuild test-without-building \

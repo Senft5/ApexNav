@@ -62,9 +62,13 @@ targets:
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         # Only standard HTTPS/TLS: skips the export-compliance question on every TestFlight build.
         ITSAppUsesNonExemptEncryption: false
-        # the launch screen is the night panel colour, not white, so opening the app doesn't flash (review 2026-10-28)
+        # the launch screen is the night panel colour, not white, so opening the app doesn't flash (review 2026-10-28), with
+        # the Vetta lockup (mark + wordmark, 184 x 50 pt, Assets.xcassets/LaunchLogo) centred on the screen: the page's
+        # opening cover (web/boot.js) draws the same lockup at the same size and place, so launch to app is one frame (U-80)
         UILaunchScreen:
           UIColorName: LaunchBackground
+          UIImageName: LaunchLogo
+          UIImageRespectsSafeAreaInsets: false
         # The car's screen is its own scene (CarPlay/ApexCarPlay.swift); the phone keeps SwiftUI's window scene.
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: true
