@@ -6,6 +6,10 @@ it says so. Things only you can do are in docs/OWNER_TODO.md.
 
 ## 2026-10-29
 
+**A drive clears the screen.** The owner: a drive started from the car while the phone showed the Crew sheet left the
+sheet in the middle of the drive screen. Starting a drive now closes any sheet, its pop-ups and the Log frame, however
+it was started (the car, Siri, a link or the button). Undo: the two lines at the top of `enterDrive`.
+
 **The car map fills the screen at its own scale, and the app opens with no route.**
 - *Edge to edge, at the car's scale.* The owner: "the map doesn't continue under the tiles and the tiles are giant". The
   web view kept the page inside the safe area, so the map stopped at the map buttons; and "device-width" in a web view

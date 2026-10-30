@@ -447,7 +447,10 @@ flow('the car connects: CarPlay offers Start drive, and an apexnav://open?go=dri
   // other toasts, and no new offer comes while driving.
   await page.evaluate(() => window.apex.onNative({ type: 'car', via: 'carplay' }));
   await page.waitForSelector('#toast a');
+  await page.evaluate(() => { document.querySelector('.tab[data-view="garage"]').click(); });   // the phone on another screen
+  await page.waitForSelector('#sheet.open');
   await page.evaluate(() => document.getElementById('permGo').click());
+  await page.waitForFunction(() => !document.querySelector('#sheet.open'), null, { timeout: 3000 });   // the drive takes the whole screen
   await page.waitForFunction(() => !document.querySelector('#toast a') && !(document.getElementById('toast')._holdUntil > performance.now()), null, { timeout: 3000 });   // well inside the offer's 10 s
   await page.evaluate(() => window.apex.onNative({ type: 'car', via: 'carplay' }));
   check(!(await page.isVisible('#toast a')), 'no offer while a drive is running');
