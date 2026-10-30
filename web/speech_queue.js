@@ -2,7 +2,8 @@
 // - Hazards (bumps, cameras, convoy calls, remembered bumps) always go ahead of ordinary lines (corner notes, route and
 //   traffic phrases) and are never trimmed to make room; ordinary lines keep at most MAX_ORDINARY waiting, newest kept.
 // - Never stale: a line tied to a place on the route (`atM`) is dropped once the car is past it; every line has a
-//   shelf life (`maxAgeMs`) after which it is dropped unsaid rather than read late.
+//   shelf life (`maxAgeMs`) after which it is dropped unsaid rather than read late. A corner call also carries `dueByM`,
+//   the last route metre it can still be started at with time to say it and act (REVIEW4 U-96): never read in the corner.
 // - Never duplicated: a line with a `key` already waiting, or said within `repeatMs`, is not queued again.
 // `preempts(playing, next)` tells the page when a waiting hazard should cut off an ordinary line already playing;
 // `ducks(line, spirited)` whether the app lowers the music for it (IDEAS V-08).
@@ -16,13 +17,15 @@
     const said = new Map();   // key -> when it was handed out, for the repeat window
 
     const fresh = (it, now, cursorM) => now - it.at <= it.maxAgeMs
-      && !(typeof it.atM === 'number' && typeof cursorM === 'number' && it.atM < cursorM + PASSED_M);
+      && !(typeof it.atM === 'number' && typeof cursorM === 'number' && it.atM < cursorM + PASSED_M)
+      && !(typeof it.dueByM === 'number' && typeof cursorM === 'number' && cursorM > it.dueByM);
 
     // Returns false when the line was refused (a duplicate, or nothing to say).
     function push(line, now) {
       if (!line || !line.text) return false;
       const it = { kind: line.kind === 'hazard' ? 'hazard' : 'ordinary', text: line.text, chain: line.chain || null,
                    sysToken: line.sysToken || null, tokens: Array.isArray(line.tokens) ? line.tokens : null, duck: line.duck === true, key: line.key || null, atM: typeof line.atM === 'number' ? line.atM : null,
+                   dueByM: typeof line.dueByM === 'number' ? line.dueByM : null,
                    at: now, repeatMs: line.repeatMs ?? REPEAT_MS,
                    maxAgeMs: line.maxAgeMs ?? (line.kind === 'hazard' ? HAZARD_AGE_MS : ORDINARY_AGE_MS) };
       if (it.key && (items.some((q) => q.key === it.key) || now - (said.get(it.key) ?? -Infinity) < it.repeatMs)) return false;

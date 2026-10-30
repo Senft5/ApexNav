@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-claf6GQKOcoR9BwnuRj3PQgzlcNUohAfRDbeEPDH9es=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-lbmIK86vd5r61DhQw/P2E9dexZnIwXGtc8MKIpxR2DI=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -2572,6 +2572,12 @@
         // U-58: the first note of a drive is read before the car moves, even the corner under it
         if (state.spoken.has(key) || (d < 10 && !(first && stopped))) continue;
         if (e.type === 'corner' && ApexDirections.atJunction(track.steps, noteM(e))) { state.spoken.add(key); continue; }   // the direction calls it
+        // U-96: a corner already too close to say with a beat to act (the first call after a wake, a mode switch or an
+        // off-route spell, a lead eaten by a slow line) is the driver's now: skipped, never read in the corner. Decided
+        // before the chain is built, so the next corner keeps its own call.
+        const own = state.noteWords === 'plain' && !e.recce ? ApexPlainNotes.plainCall(e) : e.call;
+        const lastM = e.type === 'corner' ? ApexNoteTiming.lastCallM({ vMps, text: own }) : 0;
+        if (e.type === 'corner' && !(first && stopped) && d < lastM) { state.spoken.add(key); continue; }
         const call = chainedCall(e, ev, spirited || first);
         const apexMps = apexMpsOf(e);
         const startCall = first && stopped && d <= ApexNoteTiming.wakeWindowM({ vMps, apexMps, text: call.text, reactionS: reactS });
@@ -2579,7 +2585,9 @@
         state.spoken.add(key);
         if (!first && (e.type === 'corner' ? !spirited : !(spirited || noteworthyInCruise(e)))) continue;
         // (a first note read at the start may be under the car already: it is not stale for that)
-        say(call.text, false, call.chain, null, { kind: e.type === 'corner' ? 'ordinary' : 'hazard', key, atM: noteM(e), duck: true, ...(startCall ? { atM: null } : {}) });
+        // dueByM: a call that waits in the queue (behind "Full notes.", a direction) is dropped once it would be late (U-96)
+        say(call.text, false, call.chain, null, { kind: e.type === 'corner' ? 'ordinary' : 'hazard', key, atM: noteM(e), duck: true,
+          ...(e.type === 'corner' && !startCall ? { dueByM: noteM(e) - lastM } : {}), ...(startCall ? { atM: null } : {}) });
         if (live) reaction.called(performance.now(), call.text, ApexNoteTiming.needsBrake(vMps, apexMps));
       }
       // Directions at junctions (IDEAS V-04), in any notes mode: the call at the turn goes ahead of corner notes.
