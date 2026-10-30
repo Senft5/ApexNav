@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-K6NkroD5Pxz1A+qKL+pGi656/cu0uW7P4DHPsJLcXTo=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-claf6GQKOcoR9BwnuRj3PQgzlcNUohAfRDbeEPDH9es=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -1508,7 +1508,8 @@
     const rerouter = new ApexReroute.RerouteMonitor();
     // Traffic on the route ahead (iOS app only, Apple via the shell): web/traffic.js decides, checkTraffic() (ROUTING) asks.
     const trafficMon = new ApexTraffic.TrafficMonitor();
-    const routeWatch = { note: null, frame: null, bestM: 0 };
+    const routeWatch = { note: null, frame: null, bestM: 0, offAt: null, saidAt: null };   // offAt/saidAt: the off-route episode, "Back on route" (U-90)
+    const BACK_ON_QUIET_MS = 60000;
     const etaPace = ApexEta.createPace();   // live ETA pace on the current route (paintEta)
     let etaText = '', etaLeftS = null;
     const car = { route: '', guideAt: 0, guideKey: '', sightKey: '', look: '', hazards: '', symbols: new Map(), ended: null, road: '', roadAt: -1e9 };   // what the car's screen was last sent (carRoute, carGuide below)   // strip text while off route; last frame fed; furthest progress
@@ -2475,7 +2476,8 @@
     // under you and how far to the corner that brings the notes back ("Quiet · I-275 · next corner 13 mi"). Off a planned
     // route, the rerouter's words; a drive without one (the road ahead, or nothing yet) never says them (U-72).
     function quietLine(spirited, offRoute, driving, next) {
-      if (offRoute && track && track.kind === 'route') return offRouteText();
+      // U-90: wrong way on a road is still that road (the strip said "Wrong way" with no road for seven minutes)
+      if (offRoute && track && track.kind === 'route') return [offRouteText(), rerouter.reason === 'wrong_way' ? roadNow.name : null].filter(Boolean).join(' · ');
       if (!driving) return track ? `${track.name} · ${spirited ? 'Full notes' : 'Quiet · bumps and cameras only'}` : 'Plan a route for notes';
       if (!track && !driveActive) return 'No route planned';
       if (spirited) return `${track && !offRoute && track.kind !== 'horizon' ? track.name : 'The road ahead'} · Full notes`;
@@ -2629,22 +2631,18 @@
     // =======================================================================
     function sectorAt(i) { return track && track.sectors ? track.sectors.find(s => i >= s.start_index && i <= s.end_index) || null : null; }
     let lastNotesAt = 0;
-    // Where on the route the car is. With no recent match (hint -1) the whole route is searched, and a loop passes the
-    // same place at its start and its end: of the stretches within 40 m, take the one nearest the progress so far, then
-    // the nearest point on it. So the start of a loop is never read as its end (the owner's car, 2026-10-29: "150 m"
-    // left and an arrival in the past, a minute into a 32 min loop).
-    function matchOnRoute(lat, lon, hint) {
-      const hit = Core.nearestIndex(lat, lon, track.lat, track.lon, hint, 600);
-      if (hint >= 0 || !(hit.distM < 40)) return hit;
-      const c = Math.cos(lat * Math.PI / 180), n = track.lat.length;
-      let anchor = -1, gap = Infinity;
-      for (let i = 0; i < n; i++) {
-        const dx = (track.lon[i] - lon) * 111320 * c, dy = (track.lat[i] - lat) * 110540;
-        if (dx * dx + dy * dy >= 1600) continue;
-        const g = Math.abs(track.dist[i] - state.cursorM);
-        if (g < gap) { gap = g; anchor = i; }
-      }
-      return anchor < 0 ? hit : Core.nearestIndex(lat, lon, track.lat, track.lon, anchor, 60);
+    // Where on the route the car is (web/reroute.js matchRoute). A loop passes the same place at its start and its end, and
+    // an out-and-back, a GPX that doubles back or a lap driven twice uses the same road twice: of the stretches within 40 m,
+    // the one going the car's way, then the one nearest the progress so far, so the start of a loop is never read as its end
+    // (the owner's car, 2026-10-29) and the return leg never as the way out (U-90: "Back on route" 140 times in 36 s, then
+    // "Wrong way" for seven minutes on the route). The anchor is the cursor, which holds still while off route. One match
+    // per fix: render runs every frame with the same fix.
+    const routeMatch = { L: null, track: null, hit: null };
+    function matchOnRoute(L) {
+      if (routeMatch.L === L && routeMatch.track === track) return routeMatch.hit;
+      const hit = ApexReroute.matchRoute(track, L.lat, L.lon, { anchorM: state.cursorM, headingDeg: L.course_deg, speedMps: L.speed_mps });
+      Object.assign(routeMatch, { L, track, hit });
+      return hit;
     }
     function render(snap) {
       let lat, lon, bearing, vMps, latG, lonG, camber, idx = -1;
@@ -2654,9 +2652,10 @@
         lat = L.lat; lon = L.lon; vMps = L.speed_mps; latG = L.lat_g; lonG = L.lon_g; camber = L.camber_deg;
         bearing = L.course_deg != null ? L.course_deg : state.bearing;
         if (track) {
-          // Off route the rejoin can be anywhere on the route, so search all of it (hint -1).
+          // The whole route is searched every fix: off route the rejoin can be anywhere on it, and on it the right pass of a
+          // road used twice can be anywhere too (U-90).
           const free = track.kind === 'horizon';                         // the road ahead is not a route: no rerouting, ETA or traffic
-          const hit = matchOnRoute(lat, lon, rerouter.off && !free ? -1 : state.cursorIdx);
+          const hit = matchOnRoute(L);
           if (L !== routeWatch.frame && !free) { routeWatch.frame = L; feedRerouter(L, hit); trafficTick(L, hit); }
           if (hit.distM < 40 && (free || !rerouter.off)) { idx = hit.index; state.cursorM = track.dist[idx]; }
         }
@@ -2843,7 +2842,7 @@
       state.cursorM = Math.max(0, Math.min(totalM(), startM));
       refreshAutoNight();
       state.spoken.clear();
-      rerouter.routeChanged(); trafficMon.routeChanged(Date.now()); etaPace.reset(); routeWatch.note = null; routeWatch.frame = null; routeWatch.bestM = 0;
+      rerouter.routeChanged(); trafficMon.routeChanged(Date.now()); etaPace.reset(); routeWatch.note = null; routeWatch.frame = null; routeWatch.bestM = 0; routeWatch.offAt = null;
       if (state.mode !== 'live') setMode(t.kind === 'drive' ? 'replay' : 'sim');
       loadTrackOnMap();
       fetchAlpr(t);
@@ -3502,7 +3501,16 @@
                                   speedMps: L.speed_mps, progressM: near ? track.dist[hit.index] : null });
       if (!r.off && near) routeWatch.bestM = Math.max(routeWatch.bestM, track.dist[hit.index]);
       paintEta(!r.off && near ? track.dist[hit.index] : null);
-      if (r.backOn) { routeWatch.note = null; say('Back on route'); }
+      // U-90: "Back on route" once per episode, and only after one long enough to have been heard as off route (10 s);
+      // never twice inside BACK_ON_QUIET_MS whatever the matcher does, so the line can never storm again.
+      const now = Date.now();
+      if (r.off && routeWatch.offAt == null) routeWatch.offAt = now;
+      if (r.backOn) {
+        routeWatch.note = null;
+        const long = routeWatch.offAt != null && now - routeWatch.offAt > 10000, quiet = routeWatch.saidAt == null || now - routeWatch.saidAt > BACK_ON_QUIET_MS;
+        if (long && quiet) { routeWatch.saidAt = now; say('Back on route'); }
+        routeWatch.offAt = null;
+      }
       if (r.request) reroute(track);
     }
     // Farther than 40 m but not yet confirmed by the monitor (its 5 s hold): notes are blank, but don't call it off route yet.

@@ -165,6 +165,46 @@ flow('the co-driver reads the road: the first note is called before the car move
   check(!said.includes('Full notes.'), 'the drive began awake, so it never said the notes came on: ' + JSON.stringify(said));
 });
 
+flow('a route that doubles back on its own road: no "Wrong way", no "Back on route", the cursor follows it past the turnaround (REVIEW4 U-90)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
+    window.__said = []; window.APEX_REVIEW = true;
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.ApexRouteImport && window.apex && window.apex.live);
+  // the review drive's shape: 1.5 km east, a V turnaround, 1.2 km back west along the same road (6 m over), then a left
+  // turn away south. Handed to the page as a GPX, as the recording does.
+  const KY = 110540, KX = 111320 * Math.cos(35.5 * Math.PI / 180), pts = [];
+  for (let x = 0; x <= 1500; x += 5) pts.push([0, x]);
+  pts.push([-3, 1520], [-6, 1500]);
+  for (let x = 1495; x >= 300; x -= 5) pts.push([-6, x]);
+  for (let a = 5; a <= 90; a += 5) { const r = a * Math.PI / 180; pts.push([-31 + 25 * Math.cos(r), 300 - 25 * Math.sin(r)]); }
+  for (let y = 35; y <= 600; y += 5) pts.push([-y, 275]);
+  const gpx = pts.map(([n, e]) => `<trkpt lat="${(35.5 + n / KY).toFixed(7)}" lon="${(-83.9 + e / KX).toFixed(7)}"/>`).join('');
+  await page.setInputFiles('#gpxFile', { name: 'outback.gpx', mimeType: 'application/gpx+xml', buffer: Buffer.from(`<gpx><trk><name>Out and back</name><trkseg>${gpx}</trkseg></trk></gpx>`) });
+  await page.waitForFunction(() => window.apexDebug.track && window.apexDebug.track.name === 'Out and back', null, { timeout: 10000 });
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start' }));
+  await page.waitForFunction(() => window.apexDebug.driveActive);
+  // drive it at 15 m/s with GPS noise (a fixed +-4 m wobble), the course from the road, every fix 15 m on
+  const n = await page.evaluate(() => apexDebug.track.lat.length);
+  const strips = new Set(), cursor = [];
+  for (let i = 0, k = 0; i < n - 1; i += 3, k++) {
+    const c = await page.evaluate(([i, k]) => { const t = apexDebug.track, a = Math.max(0, i - 2), b = Math.min(t.lat.length - 1, i + 2);
+      const crs = (Math.atan2((t.lon[b] - t.lon[a]) * Math.cos(t.lat[i] * Math.PI / 180), t.lat[b] - t.lat[a]) * 180 / Math.PI + 360) % 360;
+      const wob = [3, -4, 1, -2, 4, -3, 2, 0][k % 8] / 110540;
+      window.apex.live({ lat: t.lat[i] + wob, lon: t.lon[i] - wob, accuracy_m: 6, speed_mps: 15, course_deg: crs, has_fix: true, lat_g: 0, lon_g: 0, calibration: 'locked', thermal: 0 });
+      return apexDebug.state.cursorM; }, [i, k]);
+    await page.waitForTimeout(40);
+    cursor.push(c);
+    strips.add(await page.textContent('#notes'));
+  }
+  const said = await page.evaluate(() => window.__said.slice());
+  check(!said.some((s) => /Back on route|Wrong way|Rerouting/.test(s)), 'nothing said about the route: ' + JSON.stringify(said));
+  check(![...strips].some((s) => /Wrong way|Off route/.test(s)), 'the strip never reads off route: ' + [...strips].filter((s) => /Wrong way|Off route/.test(s)).join(' | '));
+  const total = await page.evaluate(() => apexDebug.track.dist[apexDebug.track.dist.length - 1]);
+  let fell = 0; for (let j = 1; j < cursor.length; j++) fell = Math.max(fell, cursor[j - 1] - cursor[j]);
+  check(fell < 30 && cursor[cursor.length - 1] > total - 40, `the cursor follows the route past the turnaround (fell ${Math.round(fell)} m, ended ${Math.round(cursor[cursor.length - 1])} of ${Math.round(total)})`);
+});
+
 flow('Where to?: with the search and routing services unreachable, a search fails politely', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.goto(base + '/index.html');
