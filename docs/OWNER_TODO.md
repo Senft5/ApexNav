@@ -10,6 +10,7 @@ something blocks on you, delete it once it's done. Everything else is in docs/ID
 | what | why | how long |
 |---|---|---|
 | **Turn on R2** in the Cloudflare dashboard (R2 → Purchase/Enable; the free tier is 10 GB with no egress fees, a card is needed on file) and tell Claude | Photos (profiles, cars, crews, build threads) live in Workers KV for now, which costs more per GB and caps a photo at 25 MB (ours are under 0.7 MB, so it works). Claude moves them to R2 once it's on | 5 min |
+| **Google's sign-in screen says "to continue to senftns.workers.dev"**: in Google Cloud → APIs & Services → OAuth consent screen, set the app name to **Vetta** (and the logo); with the domain (row below), Claude moves the sign-in to it | REVIEW4 U-66: it's the moment a new member decides whether to trust the app | 10 min |
 
 ## Money and marketing (new, 2026-10-28)
 
