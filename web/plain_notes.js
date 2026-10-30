@@ -22,22 +22,27 @@
     return parts.join(', ');
   }
 
-  /** The link to the next note: "then" straight after, else "in N metres". */
-  function plainLink(link) {
+  /**
+   * The link to the next note: "then" straight after, else "then N" in the driver's units (REVIEW4 U-93): `units` is
+   * ApexUnits (its spokenShort: "then 400 feet", "then a quarter mile"); without it, metres.
+   */
+  function plainLink(link, units) {
     if (!link) return '';
     if (link === 'into' || link === 'and') return 'then';
     const m = Number(link);
-    return Number.isFinite(m) ? `then ${m} metres` : '';
+    if (!Number.isFinite(m)) return '';
+    const said = units && typeof units.spokenShort === 'function' ? units.spokenShort(m) : `${m} metres`;
+    return said ? `then ${said}` : '';
   }
 
-  /** A chain as the page reads it: each note in plain words, joined by plain links. */
-  function plainChain(chain) {
+  /** A chain as the page reads it: each note in plain words, joined by plain links (in `units`, see plainLink). */
+  function plainChain(chain, units) {
     let text = '';
     chain.forEach((n, i) => {
-      text += (i ? ` ${plainLink(chain[i - 1].link)} ` : '') + plainCall(n);
+      text += (i ? ` ${plainLink(chain[i - 1].link, units)} ` : '') + plainCall(n);
     });
     const last = chain[chain.length - 1];
-    if (last && last.link && last.link !== 'into' && last.link !== 'and') text += `, ${plainLink(last.link)}`;
+    if (last && last.link && last.link !== 'into' && last.link !== 'and') text += `, ${plainLink(last.link, units)}`;
     return text.replace(/\s+/g, ' ').trim();
   }
 

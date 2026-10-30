@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-lbmIK86vd5r61DhQw/P2E9dexZnIwXGtc8MKIpxR2DI=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-3QNVHYBz9BVYQOttLoT+B2uquLnL1nfv/pW6cjvR8KE=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -2412,7 +2412,9 @@
       if (e.type === 'alpr') return 'Camera';
       return ApexRecording.seenLabel(e);
     }
-    const linkLabel = (e) => (!e.link ? '' : (e.link === 'into' || e.link === 'and') ? ` · ${e.link.toUpperCase()}` : ` · ${e.link} m to next`);
+    // U-93: the gap to the next note in the driver's units ("400 ft to next" on a miles drive), never metres to a driver in miles
+    const linkLabel = (e) => { if (!e.link) return ''; if (e.link === 'into' || e.link === 'and') return ` · ${e.link.toUpperCase()}`;
+      const d = ApexUnits.short(Number(e.link)); return Number.isFinite(Number(e.link)) ? ` · ${d.n} ${d.u.toLowerCase()} to next` : ''; };
 
     // Co-driver reading: the note, then "into"/"and" + the next note when it follows at once,
     // otherwise the distance to it ("Left 4 minus long, 150"). Chained notes are not called twice.
@@ -2434,7 +2436,7 @@
       // clips and plain words are built from the map's corner, not your text).
       if (chain.some((n) => n.recce)) return { text, chain: null };
       // Plain words: spoken whole (the voice bank's clips are rally words), from the same notes.
-      if (state.noteWords === 'plain') return { text: ApexPlainNotes.plainChain(voiced), chain: null };
+      if (state.noteWords === 'plain') return { text: ApexPlainNotes.plainChain(voiced, ApexUnits), chain: null };   // in the driver's units (U-93)
       return { text, chain: voiced };
     }
 
