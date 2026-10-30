@@ -177,39 +177,56 @@
     placePlates();                                                  // plates are DOM markers: they need the map, not its style
   }
 
-  // The car glides (the owner's first CarPlay drive, 2026-10-30: "incredibly stuttery and unusable"). The shell sends a
-  // 1 Hz GPS fix, and the map used to jump to each one and sit still in between. Now the arrow, its sight plate and the
-  // camera move every frame from where they are drawn to the newest fix, over the time the last fix took to come, so the
-  // road scrolls at the car's own speed, about one fix behind it (the fix itself, never a guess past it). A big jump (the
-  // first fix, a replay seek, out of a tunnel) is drawn at once. The loop stops when the car does.
-  const SNAP_M = 400, GLIDE_MIN_MS = 250, GLIDE_MAX_MS = 1500;
-  const glide = { from: null, to: null, t0: 0, dur: 1, at: 0, iv: 0, shown: null };
+  // The car glides (the owner's first CarPlay drive, 2026-10-30: "incredibly stuttery and unusable"): the arrow, its sight
+  // plate and the camera move every frame. F-01 (REVIEW_FEEL.md): they used to ease to the newest 1 Hz fix, "never ahead of
+  // real data", so the arrow sat where the car was a second ago (11 m behind at the median, 25 m at the 95th percentile at
+  // 20 to 25 m/s) and entered every corner after the car did. Now they are dead reckoned between fixes (web/car_glide.js):
+  // from the last fix at its speed, along the route line when the car is on it, never more than 1.5 s or 50 m past the fix,
+  // and eased into each new one. Position only: no road value is ever predicted. The loop stops when the car does.
+  const glider = root.ApexCarGlide.create();
+  const glide = { shown: null };
   let raf = 0;
+  const nowS = () => performance.now() / 1000;
+  // The camera's heading follows the arrow's through a short lag (CAM_TAU_S): the arrow turns with the road at once, the
+  // map under it swings smoothly, as a navigation app's does (dead reckoned along a twisty route, the road's own heading
+  // turns faster than a glance can follow).
+  const CAM_TAU_S = 0.4;
   const turn = (a, b) => ((b - a + 540) % 360) - 180;                // degrees, the short way round
-  function poseAt(now) {
-    const { from, to } = glide, k = Math.max(0, Math.min(1, (now - glide.t0) / glide.dur));
-    const course = from.course == null || to.course == null ? to.course : (from.course + turn(from.course, to.course) * k + 360) % 360;
-    return { lat: from.lat + (to.lat - from.lat) * k, lon: from.lon + (to.lon - from.lon) * k, course, k };
+  let camB = null, camT = 0;
+  function camBearing(p, t) {
+    if (!finite(p.course)) return camB == null ? 0 : camB;
+    if (camB != null && finite(t) && t <= camT) return camB;          // a camera ease (camera()) is on its way there
+    if (camB == null || !finite(t) || t - camT > 1) camB = p.course;
+    else camB = (camB + turn(camB, p.course) * (1 - Math.exp(-(t - camT) / CAM_TAU_S)) + 360) % 360;
+    camT = t;
+    return camB;
   }
   // heading up while guiding, the car low on the screen; north up and centred otherwise
-  function followView(p) {
+  function followView(p, t) {
     const guiding = state.mode === 'guide', h = geom ? geom.H : map.getContainer().clientHeight;
-    return { center: [p.lon, p.lat], bearing: guiding && finite(p.course) ? p.course : 0, pitch: guiding ? 45 : 0,
+    return { center: [p.lon, p.lat], bearing: guiding && finite(p.course) ? (finite(t) ? camBearing(p, t) : p.course) : 0, pitch: guiding ? 45 : 0,
       zoom: guiding ? Math.max(map.getZoom(), 15) : map.getZoom(), padding: { top: guiding ? h * 0.35 : 0, bottom: 0, left: state.inset, right: 0 } };
   }
-  function show(p) {
+  function show(p, t) {
     glide.shown = p;
     puck.setLngLat([p.lon, p.lat]); puck.setRotation(p.course || 0);
     sightTag.setLngLat([p.lon, p.lat]);
     // a mode change, Recentre or a zoom button eases the camera on its own; the glide takes it back when that ends
-    if (ready && state.follow && state.mode !== 'preview' && !map.isEasing()) map.jumpTo(followView(p));
+    if (ready && state.follow && state.mode !== 'preview' && !map.isEasing()) map.jumpTo(followView(p, finite(t) ? t : nowS()));
     platesSoon();
   }
-  function frame() {
+  function frame(ts) {
     raf = 0;
-    const p = poseAt(performance.now());
-    show(p);
-    if (p.k < 1) raf = requestAnimationFrame(frame);
+    if (!puck) return;
+    const t = finite(ts) ? ts / 1000 : nowS();                       // the frame's own time, the one it is drawn for
+    show(glider.pose(t), t);
+    if (glider.moving(t)) raf = requestAnimationFrame(frame);
+  }
+  // after a new fix or route: draw now if the car stands, else keep the frame loop running
+  function kick() {
+    if (!puck || !glider.fix) return;
+    const t = nowS();
+    if (glider.moving(t)) { if (!raf) raf = requestAnimationFrame(frame); } else show(glider.pose(t), t);
   }
 
   // The camera for a change of mode, route or card: the whole route for a trip preview, else following the car (where
@@ -223,8 +240,11 @@
       map.fitBounds(b, { padding: pad, pitch: 0, bearing: 0, duration: animate ? 600 : 0, maxZoom: 15 });
       return;
     }
-    if (!state.follow || !glide.to) return;
-    map.easeTo({ ...followView(poseAt(performance.now())), duration: animate ? 450 : 0, essential: true });
+    if (!state.follow || !glider.fix) return;
+    // to where the car will be drawn when the ease ends, so the glide takes over without a step
+    const t = nowS() + (animate ? 0.45 : 0), view = followView(glider.pose(t));
+    if (state.mode === 'guide') { camB = view.bearing; camT = t; }      // the frames carry on from the heading it eases to
+    map.easeTo({ ...view, duration: animate ? 450 : 0, essential: true });
   }
 
   const car = {
@@ -233,27 +253,19 @@
       if (ready && theme === state.theme && night === state.night) return;    // the shell says it again on every trait change
       state.theme = theme; state.night = night; paint();
     },
-    route(coords) { state.route = Array.isArray(coords) ? coords.filter((p) => Array.isArray(p) && finite(p[0]) && finite(p[1])) : []; setData(); camera(); },
+    route(coords) { state.route = Array.isArray(coords) ? coords.filter((p) => Array.isArray(p) && finite(p[0]) && finite(p[1])) : []; glider.setRoute(state.route, nowS()); kick(); setData(); camera(); },
     corners(list) { state.corners = (Array.isArray(list) ? list : []).filter((c) => c && Array.isArray(c.at)).slice(0, 600); setData(); },
     hazards(list) { state.hazards = (Array.isArray(list) ? list : []).filter((h) => h && Array.isArray(h.at)).slice(0, 40); setData(); },
-    position(lat, lon, course) {
+    // speed in m/s and how old the fix is (ms) when the shell knows them (ApexCar.position); without them the glide
+    // takes the speed from the distance between fixes
+    position(lat, lon, course, speed, ageMs) {
       if (!finite(lat) || !finite(lon)) return;
       const c = finite(course) && course >= 0 ? course : null, was = state.pos;
       if (was && was.lat === lat && was.lon === lon && was.course === c) return;   // the same fix again: nothing moved
       state.pos = { lat, lon, course: c };
-      const now = performance.now(), from = glide.to ? poseAt(now) : null, to = { lat, lon, course: c == null ? (from && from.course) : c };
-      if (!from || distM([from.lat, from.lon], [lat, lon]) > SNAP_M) {
-        glide.from = glide.to = to; glide.t0 = now; glide.dur = 1;
-        if (raf) { cancelAnimationFrame(raf); raf = 0; }
-        if (puck) show(to);
-      } else {
-        // over a little more than the fixes' usual spacing, so a fix that comes late finds the car still moving, not parked
-        const iv = Math.min(GLIDE_MAX_MS, now - glide.at);
-        glide.iv = glide.iv ? glide.iv * 0.7 + iv * 0.3 : iv;
-        glide.from = from; glide.to = to; glide.t0 = now; glide.dur = Math.min(GLIDE_MAX_MS, Math.max(GLIDE_MIN_MS, glide.iv * 1.15));
-        if (!raf) raf = requestAnimationFrame(frame);
-      }
-      glide.at = now;
+      const now = nowS(), age = finite(ageMs) ? Math.max(0, Math.min(1500, ageMs)) / 1000 : 0;
+      glider.push(lat, lon, c, finite(speed) && speed >= 0 ? speed : null, now - age, now);
+      kick();
       if (sightTag && sightTag.getElement().hidden && state.sight && state.sight.text) drawSight();
       if (!state.placedAt || distM(state.placedAt, [lat, lon]) > 800) { state.placedAt = [lat, lon]; placePlates(); }   // plates follow the car, a few times a mile
     },
@@ -280,19 +292,26 @@
       state.inset = next; camera(false); platesSoon();
     },
     get state() { return state; },
+    get shown() { return glide.shown; },                              // where the arrow is drawn (e2e/smoke.js)
     get map() { return map; },
   };
   root.car = car;
 
   function start() {
+    // F-17 (REVIEW_FEEL.md): the phone's tile store (web/offline_tiles.js: the same origin, so the same IndexedDB): a saved
+    // area serves the car too, and the style, its data description and label fonts are kept as they arrive, so the car map
+    // opens from them the next time instead of fetching them again
+    const offline = root.ApexOfflineTiles;
+    try { if (offline) offline.install(root.maplibregl); } catch (_) {}
     // at most 2 device pixels to a CSS pixel: a 3x car screen drew 2.25 times the pixels for no sharper a glance
     map = new root.maplibregl.Map({ container: 'map', style: MAP_STYLE, center: [-84.29, 35.36], zoom: 14, attributionControl: false, interactive: false, fadeDuration: 0,
-      pixelRatio: Math.min(2, root.devicePixelRatio || 1) });
+      pixelRatio: Math.min(2, root.devicePixelRatio || 1), transformRequest: offline ? offline.transform : undefined });
     const el = document.createElement('div'); el.className = 'car-puck';
     puck = new root.maplibregl.Marker({ element: el, rotationAlignment: 'map', pitchAlignment: 'map' }).setLngLat([-84.29, 35.36]).addTo(map);
     drawPuck();
     const tag = document.createElement('div'); tag.className = 'car-sight'; tag.hidden = true;
     sightTag = new root.maplibregl.Marker({ element: tag, anchor: 'top', offset: [0, 21] }).setLngLat([-84.29, 35.36]).addTo(map);
+    kick();                                                           // a fix that came before the map
     map.on('load', () => { addLayers(); ready = true; paint(); setData(); camera(false); });
     map.on('moveend', platesSoon);
     map.on('resize', () => { geom = null; platesSoon(); });

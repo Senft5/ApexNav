@@ -922,12 +922,16 @@ flow('the car map glides between fixes and no message holds a frame, on a slow C
       setInterval(() => timed(() => car.sight({ text: String(40 + 5 * Math.floor(Math.random() * 3)), unit: 'MPH', short: false })), 2000),
       setInterval(() => timed(() => { car.inset(288); car.mode('guide'); }), 1000),
     ];
-    // each frame: how far the ground moved under a point on the screen, and in what time
-    const steps = []; let last = null;
+    // each frame: how far the ground moved under a point on the screen, and in what time; and (F-01) how far the drawn
+    // arrow is from the true car, which drives the route at 20 m/s, read once the frame's own callbacks have run
+    const steps = [], lagM = []; let last = null;
+    const truth = (ts) => { const m = (ts - t0) / 1000 * 20, k = Math.min(route.length - 2, Math.floor(m / 10)), f = Math.min(1, m / 10 - k);
+      return [route[k][0] + (route[k + 1][0] - route[k][0]) * f, route[k][1] + (route[k + 1][1] - route[k][1]) * f]; };
     await new Promise((done) => {
       const tick = (ts) => {
         if (last) { const p = map.project(last.ll); steps.push({ px: Math.hypot(p.x - 560, p.y - 300), dt: ts - last.ts }); }
         last = { ll: map.unproject([560, 300]), ts };
+        if (ts - t0 > 3000) { const want = truth(ts); setTimeout(() => { const s = car.shown; if (s) lagM.push(Math.hypot((s.lon - want[1]) * 111320 * Math.cos(want[0] * Math.PI / 180), (s.lat - want[0]) * 110540)); }, 0); }
         if (ts - t0 < 30000) requestAnimationFrame(tick); else done();
       };
       requestAnimationFrame(tick);
@@ -935,7 +939,9 @@ flow('the car map glides between fixes and no message holds a frame, on a slow C
     timers.forEach(clearInterval);
     const run = steps.slice(Math.floor(steps.length * 0.1)), rate = run.map((s) => s.px / Math.max(1, s.dt)).sort((a, b) => a - b);
     const plates = [...document.querySelectorAll('.car-plate')].map((e) => e.getBoundingClientRect());
-    return { frames: run.length, moving: run.filter((s) => s.px > 0.05).length / run.length, rateMed: rate[rate.length >> 1], rateP95: rate[Math.floor(rate.length * 0.95)], rateMax: rate[rate.length - 1],
+    lagM.sort((a, b) => a - b);
+    const q = (f) => (lagM.length ? +lagM[Math.floor((lagM.length - 1) * f)].toFixed(1) : null);
+    return { lagP50: q(0.5), lagP95: q(0.95), frames: run.length, moving: run.filter((s) => s.px > 0.05).length / run.length, rateMed: rate[rate.length >> 1], rateP95: rate[Math.floor(rate.length * 0.95)], rateMax: rate[rate.length - 1],
       msgP95: +msgMs.sort((a, b) => a - b)[Math.floor(msgMs.length * 0.95)].toFixed(1), msgMax: +msgMs[msgMs.length - 1].toFixed(1), loaf: window.__loaf.slice(), plates: plates.length,
       offScreen: plates.filter((b) => b.right < 0 || b.left > innerWidth || b.bottom < 0 || b.top > innerHeight).length };
   });
@@ -950,6 +956,8 @@ flow('the car map glides between fixes and no message holds a frame, on a slow C
   check(r.msgP95 < 8, 'messages to the car map under 8 ms at a quarter speed: ' + say);
   check(r.loaf.filter((d) => d >= 33).length <= r.frames / 100, "the car map's own code never holds a frame: " + say);
   check(r.offScreen === 0, 'only the plates on the screen are on the map: ' + say);
+  // F-01 (REVIEW_FEEL.md): the arrow is where the car is, not where it was a fix ago (it trailed by 11 m at the median)
+  check(r.lagP50 != null && r.lagP50 < 5 && r.lagP95 < 10, 'the arrow is dead reckoned to the car between fixes: ' + say);
 }, { viewport: { width: 800, height: 480 }, deviceScaleFactor: 1 });
 
 flow('a route being driven comes back after the app is closed; a planned one, or a finished drive, does not (the owner, 2026-10-30)', async (page, base) => {

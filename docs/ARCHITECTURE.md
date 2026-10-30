@@ -138,6 +138,16 @@ Maps a normalized **Driver Engagement Score** (0.0 to 1.0, derived from combined
 ## 6. iOS & CarPlay Deployment Pipeline
 - **Cloud Unsigned `.ipa` Builder**: `.github/workflows/build.yml` uses `xcodegen` (`project.yml`) on `macos-15` runners to compile `ApexNav.ipa` for USB sideloading (Sideloadly / iloader) on pull requests that change native code; main archives for TestFlight (docs/TESTFLIGHT.md).
 - **CarPlay Head-Unit Path**: Uses `WidgetKit` / `LiveActivity` for un-gated CarPlay Dashboard telemetry cards on free sideloaded builds, and `CPMapTemplate` (`com.apple.developer.carplay-maps`) for full head-unit vector map projection.
+- **The car's map (2026-10-30, REVIEW_FEEL.md F-07, F-01)**: the CarPlay base view, the Dashboard and the instrument cluster draw
+  with MapLibre Native for iOS (Metal; Swift package `MapLibre`, pinned in `project.yml`) in `CarPlay/ApexCarMap.swift`: one map
+  engine in the app's process, not a WKWebView per screen. The cockpit page stays the brain and sends the same messages as
+  before (`ApexCarMapViewController`); `web/carmap.html` is the fallback, and Android Auto's and the website's car map. The
+  arrow is dead reckoned between 1 Hz fixes (position only, never road data): `web/car_glide.js` and ApexKit `CarGlide`, one
+  algorithm held to one fixture (`ApexKit/Tests/Fixtures/car_glide.json`, `tools/make_glide_fixture.js`).
+- **The shell's threads (F-13)**: CoreMotion's 100 Hz samples go to the motion lane's own serial `OperationQueue`
+  (`MotionLane` in `ApexNavApp.swift`: the IMU pipeline behind one lock), not the main queue; the 10 Hz live frame is gathered
+  on the main thread, encoded (`LiveFrame`, `JSONEncoder`) on a serial background queue, and only `evaluateJavaScript`
+  returns to the main thread.
 
 ## 7. App-open road learning and live convoy hazards (design draft, 2026-10-26)
 

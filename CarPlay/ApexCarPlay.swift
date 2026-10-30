@@ -6,8 +6,8 @@
 // places, corners, hazards, look), handled by ApexCar.receive. Car -> page: `onNative({type:'carplay', action})` with go,
 // pick, start, end, loop, report, still, voice, places, hello, disconnect.
 //
-// What Apple leaves to the app, we draw: the base view is our own map in the phone's theme (web/carmap.html, the same
-// OpenFreeMap style and palettes as the phone) with the route, every corner's rating at its apex and the hazard plates; the
+// What Apple leaves to the app, we draw: the base view is our own map in the phone's theme (MapLibre Native, ApexCarMap.swift,
+// with web/carmap.html as its fallback; the same OpenFreeMap style and palettes as the phone) with the route, every corner's rating at its apex and the hazard plates; the
 // maneuver symbols are the road book's tulips; the guidance card takes the theme's dark. Everything you touch is Apple's
 // templates. Nothing in the car shows scores, social features or settings, and nothing asks the driver to use the phone
 // (CarPlay Developer Guide, "Guidelines for all CarPlay apps").
@@ -55,7 +55,14 @@ final class ApexCar {
     private(set) var hazardsJSON = "[]"
     /// The sight-line speed under the car's arrow (web/carplay.js sightMessage), null when unknown or not driving.
     private(set) var sightJSON = "null"
-    private(set) var position: (lat: Double, lon: Double, course: Double)?
+    /// The same, parsed for the native car map (ApexCarMap.swift, F-07).
+    private(set) var cornerPlates: [ApexCarPlateData] = []
+    private(set) var hazardPlates: [ApexCarPlateData] = []
+    private(set) var sight: ApexCarSight?
+    /// The theme's map palettes from the page (web/themes.js, in the look message), nil until it says.
+    private(set) var palette: (day: ApexCarPalette, night: ApexCarPalette)?
+    /// The last fix: course -1 when unknown, speed in m/s (-1 unknown), when it was taken (F-01: the maps dead reckon from it).
+    private(set) var position: (lat: Double, lon: Double, course: Double, speed: Double, at: Date)?
     private var positionSentAt = Date.distantPast
 
     func send(_ action: String, _ fields: [String: Any] = [:]) {
@@ -80,7 +87,7 @@ final class ApexCar {
               let s = String(data: d, encoding: .utf8) else { return "[]" }
         return s
     }
-    static func color(_ v: Any?) -> UIColor? {
+    nonisolated static func color(_ v: Any?) -> UIColor? {   // pure: the native car map's palette parses with it too
         guard var hex = v as? String, hex.hasPrefix("#") else { return nil }
         hex.removeFirst()
         guard hex.count == 6, let n = UInt32(hex, radix: 16) else { return nil }
@@ -110,15 +117,27 @@ final class ApexCar {
             scene?.routeChanged()
         case "corners":
             cornersJSON = Self.json((dict["list"] as? [Any]) ?? [])
+            cornerPlates = ((dict["list"] as? [[String: Any]]) ?? []).prefix(600).compactMap { c in
+                guard let at = Self.coord(c["at"]), let text = c["text"] as? String else { return nil }
+                return ApexCarPlateData(lat: at.latitude, lon: at.longitude, text: String(text.prefix(8)), tight: (c["tight"] as? Bool) ?? false, hazard: false)
+            }
             eachMap { $0.showCorners() }
         case "hazards":
             hazardsJSON = Self.json((dict["list"] as? [Any]) ?? [])
+            hazardPlates = ((dict["list"] as? [[String: Any]]) ?? []).prefix(40).compactMap { h in
+                guard let at = Self.coord(h["at"]) else { return nil }
+                return ApexCarPlateData(lat: at.latitude, lon: at.longitude, text: String(((h["title"] as? String) ?? "Hazard").prefix(24)).uppercased(),
+                                        tight: false, hazard: true)
+            }
             eachMap { $0.showHazards() }
         case "sight":
             if let text = dict["text"] as? String {
-                sightJSON = Self.json(["text": String(text.prefix(6)), "unit": String(((dict["unit"] as? String) ?? "").prefix(5)), "short": (dict["short"] as? Bool) ?? false] as [String: Any])
+                let unit = String(((dict["unit"] as? String) ?? "").prefix(5)), short = (dict["short"] as? Bool) ?? false
+                sightJSON = Self.json(["text": String(text.prefix(6)), "unit": unit, "short": short] as [String: Any])
+                sight = ApexCarSight(text: String(text.prefix(6)), unit: unit, short: short)
             } else {
                 sightJSON = "null"
+                sight = nil
             }
             eachMap { $0.showSight() }
         case "look":
@@ -130,6 +149,8 @@ final class ApexCar {
             l.voice = (dict["voice"] as? Bool) ?? true
             l.metric = (dict["units"] as? String) == "metric"
             look = l
+            let pal = dict["palette"] as? [String: Any]
+            if let day = ApexCarPalette(pal?["day"] as? [String: Any]), let night = ApexCarPalette(pal?["night"] as? [String: Any]) { palette = (day, night) }
             eachMap { $0.showLook() }
             scene?.lookChanged()
         case "guide":
@@ -157,6 +178,7 @@ final class ApexCar {
             driving = false
             guide = nil
             sightJSON = "null"
+            sight = nil
             eachMap { $0.showSight() }
             eachMap { $0.setMode() }
             scene?.driveEnded()
@@ -180,12 +202,13 @@ final class ApexCar {
     /// The live frame comes ten times a second and the fix once: the maps used to get the same fix three times over, each
     /// one a script call and a camera move, and a new fix up to 0.4 s late. Now each fix goes once, on the next live frame,
     /// so it reaches the maps a steady second apart and they glide between them (web/carmap.js; the owner's first CarPlay
-    /// drive, 2026-10-30: "incredibly stuttery").
-    func position(lat: Double, lon: Double, course: Double) {
+    /// drive, 2026-10-30: "incredibly stuttery"). F-01: with the fix go its speed and when it was taken, so the maps can
+    /// dead reckon the arrow from it to where the car is now, instead of drawing it where the car was a second ago.
+    func position(lat: Double, lon: Double, course: Double, speed: Double, at: Date) {
         guard abs(lat) <= 90, abs(lon) <= 180, Date().timeIntervalSince(positionSentAt) > 0.2 else { return }
         if let p = position, p.lat == lat, p.lon == lon, p.course == course { return }
         positionSentAt = Date()
-        position = (lat, lon, course)
+        position = (lat, lon, course, speed, at)
         eachMap { $0.showPosition() }
     }
 
@@ -639,13 +662,20 @@ final class ApexCarClusterSceneDelegate: UIResponder, CPTemplateApplicationInstr
     func instrumentClusterController(_ instrumentClusterController: CPInstrumentClusterController, didChangeSpeedLimitSetting speedLimitSetting: CPInstrumentClusterSetting) {}
 }
 
-// MARK: - The base view: our map (web/carmap.html), in the phone's theme and the car screen's day or night
+// MARK: - The base view: our map, in the phone's theme and the car screen's day or night
 
+/// One per car screen (main, Dashboard, cluster). F-07 (REVIEW_FEEL.md): the map is MapLibre Native (ApexCarMap.swift), one
+/// engine in the app's process for every screen; web/carmap.html in a WKWebView is the fallback if it fails to start (and
+/// remains Android Auto's and the website's car map). Either way it speaks the same messages.
 final class ApexCarMapViewController: UIViewController, WKNavigationDelegate {
     enum Role { case main, dashboard, cluster }
     let role: Role
+    private var native: ApexNativeCarMap?
     private var web: WKWebView?
     private var loaded = false
+    /// Once the native map has failed to start in this run, every car screen uses the web map.
+    @MainActor private static var nativeFailed = false
+    private var sentLook = ""
 
     init(role: Role) {
         self.role = role
@@ -656,7 +686,37 @@ final class ApexCarMapViewController: UIViewController, WKNavigationDelegate {
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = UIColor(red: 0x1A / 255, green: 0x18 / 255, blue: 0x14 / 255, alpha: 1)
-        guard let index = ApexWebBundle.indexURL else { return }
+        MainActor.assumeIsolated {
+            if Self.nativeFailed { startWeb() } else { startNative() }
+            ApexCar.shared.register(self)
+        }
+    }
+
+    @MainActor private func startNative() {
+        let m = ApexNativeCarMap(frame: view.bounds, nightNow: traitCollection.userInterfaceStyle == .dark)
+        m.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        m.onFail = { [weak self] in
+            MainActor.assumeIsolated {
+                NSLog("Vetta car map: the native map did not start; using the web map")
+                Self.nativeFailed = true
+                self?.fallBackToWeb()
+            }
+        }
+        view.addSubview(m)
+        native = m
+        showLook(); showRoute(); showCorners(); showHazards(); setMode(); showPosition(); showSight()
+    }
+
+    @MainActor private func fallBackToWeb() {
+        native?.stop()
+        native?.removeFromSuperview()
+        native = nil
+        sentMode = ""
+        startWeb()
+    }
+
+    @MainActor private func startWeb() {
+        guard web == nil, let index = ApexWebBundle.indexURL else { return }
         let config = WKWebViewConfiguration()
         config.setURLSchemeHandler(ApexBundleSchemeHandler(root: index.deletingLastPathComponent()), forURLScheme: ApexWebBundle.scheme)
         // The car's screen is on while the phone is locked in a pocket: WebKit must not slow this page's frames and timers
@@ -675,7 +735,6 @@ final class ApexCarMapViewController: UIViewController, WKNavigationDelegate {
         view.addSubview(w)
         web = w
         w.load(URLRequest(url: URL(string: "\(ApexWebBundle.scheme)://app/carmap.html")!))
-        MainActor.assumeIsolated { ApexCar.shared.register(self) }
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
@@ -714,33 +773,60 @@ final class ApexCarMapViewController: UIViewController, WKNavigationDelegate {
 
     @MainActor func showLook() {
         let night = traitCollection.userInterfaceStyle == .dark
-        js("car.look('\(ApexCar.shared.look.theme)', \(night))")
+        if let native {
+            // the shell says the look again on every trait change; the 122-layer style pass runs only when it changed
+            let pal = ApexCar.shared.palette ?? ApexCarPalette.roadbook, key = "\(ApexCar.shared.look.theme)|\(night)|\(ApexCar.shared.palette != nil)"
+            guard key != sentLook else { return }
+            sentLook = key
+            native.setPalette(night ? pal.night : pal.day)
+        } else {
+            js("car.look('\(ApexCar.shared.look.theme)', \(night))")
+        }
     }
-    @MainActor func showRoute() { js("car.route(\(ApexCar.shared.routeJSON))") }
-    @MainActor func showCorners() { js("car.corners(\(ApexCar.shared.cornersJSON))") }
-    @MainActor func showHazards() { js("car.hazards(\(ApexCar.shared.hazardsJSON))") }
-    @MainActor func showSight() { js("car.sight(\(ApexCar.shared.sightJSON))") }
+    @MainActor func showRoute() {
+        if let native { native.setRoute(ApexCar.shared.route?.coords ?? []) } else { js("car.route(\(ApexCar.shared.routeJSON))") }
+    }
+    @MainActor func showCorners() {
+        if let native { native.setCorners(ApexCar.shared.cornerPlates) } else { js("car.corners(\(ApexCar.shared.cornersJSON))") }
+    }
+    @MainActor func showHazards() {
+        if let native { native.setHazards(ApexCar.shared.hazardPlates) } else { js("car.hazards(\(ApexCar.shared.hazardsJSON))") }
+    }
+    @MainActor func showSight() {
+        if let native { native.setSight(ApexCar.shared.sight) } else { js("car.sight(\(ApexCar.shared.sightJSON))") }
+    }
+    /// F-01: the fix with its speed and age, so the arrow is dead reckoned to where the car is now.
     @MainActor func showPosition() {
         guard let p = ApexCar.shared.position else { return }
-        js("car.position(\(p.lat), \(p.lon), \(p.course))")
+        if let native {
+            native.position(lat: p.lat, lon: p.lon, course: p.course >= 0 ? p.course : nil, speed: p.speed >= 0 ? p.speed : nil, at: p.at)
+        } else {
+            let speed = p.speed >= 0 ? String(format: "%.2f", p.speed) : "null"
+            let ageMs = Int((max(0, Date().timeIntervalSince(p.at)) * 1000).rounded())
+            js("car.position(\(p.lat), \(p.lon), \(p.course), \(speed), \(ageMs))")
+        }
     }
     /// Following the car while driving, the whole route in a trip preview (main screen only), the car otherwise. Every
-    /// layout pass asks; only a change is sent (the page ignores a repeat too, web/carmap.js `mode`).
+    /// layout pass asks; only a change is sent (both maps ignore a repeat too).
     private var sentMode = ""
     @MainActor func setMode() {
         let car = ApexCar.shared
         let mode = car.driving ? "guide" : (role == .main && car.route != nil ? "preview" : "idle")
         let inset = role == .main && (car.driving || car.route != nil) ? Int(view.bounds.width * 0.36) : 0
         let code = "car.inset(\(inset)), car.mode('\(mode)')"
+        if let native {
+            native.setMode(mode, inset: CGFloat(inset))
+            return
+        }
         guard loaded, code != sentMode else { return }
         sentMode = code
         js(code)
     }
-    @MainActor func zoom(_ dir: Int) { js("car.zoom(\(dir))") }
-    @MainActor func recentre() { js("car.recentre()") }
+    @MainActor func zoom(_ dir: Int) { if let native { native.zoom(dir) } else { js("car.zoom(\(dir))") } }
+    @MainActor func recentre() { if let native { native.recentre() } else { js("car.recentre()") } }
     @MainActor func pan(_ d: CPMapTemplate.PanDirection) {
         let dx = d.contains(.left) ? -1 : d.contains(.right) ? 1 : 0
         let dy = d.contains(.up) ? -1 : d.contains(.down) ? 1 : 0
-        js("car.pan(\(dx), \(dy))")
+        if let native { native.pan(dx: dx, dy: dy) } else { js("car.pan(\(dx), \(dy))") }
     }
 }
