@@ -62,7 +62,15 @@ final class ReviewFlows: XCTestCase {
         if tapFirst { app.tap() }
         web = app.webViews.firstMatch
         XCTAssertTrue(web.waitForExistence(timeout: 60))
-        if tapFirst { pause(5) }
+        if tapFirst {
+            pause(5)
+            // the welcome runs in the app since U-65: every flow but first-run goes past it (its one key is "Start")
+            let welcome = web.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "Welcome to Vetta")).firstMatch
+            if welcome.waitForExistence(timeout: 8) {
+                let go = welcome.buttons["Start"]
+                if go.exists { go.tap(); pause(2); app.tap() }     // app.tap() lets the permission monitor answer any sheet
+            }
+        }
     }
 
     /// The first element with any of these labels (buttons, links, text), or nil.
