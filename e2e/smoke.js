@@ -2083,6 +2083,16 @@ flow('friend profile: a friend on People → Profile shows what the friend share
   check(await page.evaluate(() => !document.querySelector('.side-pop.open') && !!document.querySelector('#accountBody .friend-head[aria-expanded="true"]')), 'Back returns to the friends list, the row still open');
 });
 
+flow('Billet: a primary key is light metal with dark ink, not dark on dark (REVIEW_PEOPLE.md P-01)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.route(base + '/api/**', (route) => route.fulfill({ status: 200, contentType: 'application/json',
+    body: JSON.stringify(route.request().url().includes('/api/me') ? { signed_in: false } : []) }));
+  await page.goto(base + '/index.html?view=people&theme=billet');
+  await page.waitForSelector('#accountBody a.ink-btn.solid');
+  const s = await page.evaluate(() => { const c = getComputedStyle(document.querySelector('#accountBody a.ink-btn.solid')); return { bg: c.backgroundImage, ink: c.color }; });
+  check(/rgb\(242, 242, 244\)/.test(s.bg) && s.ink === 'rgb(13, 13, 14)', 'Sign in with Google under Billet: ' + JSON.stringify(s));
+});
+
 flow('People: Friends first, each with where they are; one Invite key with requests; Crews on the other side; links open their side (the owner, 2026-10-30)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   const now = Date.now(), iso = (ms) => new Date(ms).toISOString();

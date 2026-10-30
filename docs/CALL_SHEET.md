@@ -4,6 +4,13 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-10-30: Billet's primary keys were unreadable (REVIEW_PEOPLE.md P-01, fixed straight away)
+
+- Under Billet every solid key (Sign in with Google, Invite, Accept, Join crew, Start a convoy, Plan it, and every
+  "on" key app-wide) was dark ink on dark metal: the Billet metal rule out-ranked `.ink-btn.solid`. Solid and on keys
+  are now light machined metal with dark ink. A plain bug, so built before the rest of the review. Undo: the P-01 line
+  in web/index.html. The other 34 People findings wait for you (some are overhauls).
+
 ## 2026-10-30: from your drive to work (CarPlay)
 
 - *A drive is never lost again.* It was only saved on End; CarPlay's disconnect told the page nothing; a page iOS closed
