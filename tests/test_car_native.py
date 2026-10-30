@@ -66,7 +66,7 @@ def test_the_swift_restyle_is_basemap_js():
                 "P.shadow", "P.highlight", "P.accentShade", "P.route"):
         assert key in swift, key
     assert "hillshadeExaggeration = NSExpression(forConstantValue: 0.36)" in swift and "hillshade-exaggeration', 0.36" in js
-    assert "textHaloWidth = NSExpression(forConstantValue: 1.4)" in swift and "'text-halo-width', 1.4" in js
+    assert "textHaloWidth = NSExpression(forConstantValue: 1.4)" in swift and "'text-halo-width', [1.4]" in js
     # the same sources as web/carmap.js: OpenFreeMap's style, the terrarium DEM to z13 as hillshade, no contours
     carmap = read("web", "carmap.js")
     for s in ("https://tiles.openfreemap.org/styles/liberty", "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"):

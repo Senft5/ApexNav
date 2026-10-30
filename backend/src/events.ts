@@ -265,7 +265,7 @@ export async function eventRecord(env: Env, v: Viewer, id: string) {
   const seen = (who: string) => `(${who} = ?2 OR NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker = ?2 AND b.blocked = ${who}) OR (b.blocker = ${who} AND b.blocked = ?2)))`;
   const handles = async (sql: string) => (await env.DB.prepare(sql).bind(id, v.id, e.crew_id).all<{ handle: string | null }>()).results.map((r) => r.handle || "?");
   const came = await handles(`SELECT u.handle FROM crew_event_attendance a JOIN users u ON u.id = a.user_id
-      JOIN crew_members m ON m.crew_id = ?3 AND m.user_id = a.user_id WHERE a.event_id = ?1 AND ${seen("a.user_id")} ORDER BY a.created_at`);
+      JOIN crew_members m ON m.crew_id = ?3 AND m.user_id = a.user_id WHERE a.event_id = ?1 AND ${seen("a.user_id")} ORDER BY a.created_at, u.handle`);
   const going = await handles(`SELECT u.handle FROM crew_event_rsvps r JOIN users u ON u.id = r.user_id
       JOIN crew_members m ON m.crew_id = ?3 AND m.user_id = r.user_id WHERE r.event_id = ?1 AND r.status = 'going' AND ${seen("r.user_id")} ORDER BY r.updated_at`);
   const iCame = !!(await env.DB.prepare("SELECT 1 AS ok FROM crew_event_attendance WHERE event_id = ? AND user_id = ?").bind(id, v.id).first());
