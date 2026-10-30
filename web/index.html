@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-0NsTKUjc/Cf87OqffrF+ItLkp8Yupu63PfnpSnntXLk=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-1jEj67cmKrnt7NtOIbvUY3zJwt/Lr8D3nWCGmBCb7Uo=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -1604,6 +1604,7 @@
     const sightTag = new maplibregl.Marker({ element: sightEl, anchor: 'top', offset: [0, 15] }).setLngLat([-84.70, 39.24]).addTo(map);
     const SIGHT_EYE = '<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6S2 12 2 12z" fill="none" stroke="currentColor" stroke-width="2.6"/><circle cx="12" cy="12" r="2.8" fill="currentColor"/></svg>';
     let sightKey = '';
+    const sightHold = ApexCarPlay.sightFilter();                         // U-60: render() steps it once a frame
     function paintSight(m, live) {
       const key = JSON.stringify(m);
       if (key !== sightKey) {
@@ -1879,7 +1880,7 @@
       return [lat + m * Math.cos(b) / 110540, lon + m * Math.sin(b) / (111320 * Math.cos(lat * Math.PI / 180))];
     }
     function aheadPoint(m) {
-      if (vehicle.onTrack) { const s = sample(track, state.cursorM + m); return [s.lat, s.lon]; }
+      if (vehicle.onTrack && track) { const s = sample(track, state.cursorM + m); return [s.lat, s.lon]; }   // track: the plan cleared after a drive on it
       return offsetPoint(vehicle.lat, vehicle.lon, vehicle.bearing, m);
     }
     function camTargets() {
@@ -2487,7 +2488,7 @@
         idx = s.i; lat = s.lat; lon = s.lon; bearing = s.bearing;
         vMps = state.mode === 'sim' ? simSpeed(idx) : s.speedMps;
         latG = s.latG; lonG = s.lonG; camber = s.camberDeg;
-      } else { cluster.update({ speedMph: null }); paintSight(ApexCarPlay.sightMessage(null), false); return; }
+      } else { cluster.update({ speedMph: null }); sightHold.reset(); paintSight(ApexCarPlay.sightMessage(null), false); return; }
       state.cursorIdx = idx;
       if (latG != null && (Math.abs(latG) > 0.30 || Math.abs(lonG) > 0.35)) state.spiritedAt = performance.now();
 
@@ -2502,13 +2503,17 @@
       const pace = at(track && track.envMps), sightMps = sight != null ? Core.sightSpeedMps(sight) : null;
       // nothing limits you here: the sight line runs to its 400 m cap and no corner asks for less (the Sight cell says Open)
       const sightOpen = sight != null && sight >= Core.SIGHT_MAX_M - 1 && (pace == null || pace >= sightMps - 0.5);
-      paintSight(ApexCarPlay.sightMessage(sightMps != null ? ApexUnits.speed(sightMps) : null, sightOpen, vMps != null ? ApexUnits.speed(vMps) : null, ApexUnits.speedU()), !!live);
+      // U-60: held, stepped and slow to go red (web/carplay.js sightFilter); a seek starts it over. The plate, the car's
+      // plate and the Sight cell read the same held value.
+      if (snap) sightHold.reset();
+      const held = sightHold.step({ sight: sightMps != null ? ApexUnits.speed(sightMps) : null, open: sightOpen, speed: vMps != null ? ApexUnits.speed(vMps) : null,
+        limit: limit != null ? ApexUnits.speed(limit) : null, unit: ApexUnits.speedU() }, performance.now());
+      paintSight(held.msg, !!live);
       cluster.update({
         // in the chosen units (mph or km/h, U-22); the names are the cluster's
         speedMph: vMps != null ? ApexUnits.speed(vMps) : null,
         paceMph: pace != null ? ApexUnits.speed(pace) : null,
-        sightMph: sightMps != null ? ApexUnits.speed(sightMps) : null,
-        sightOpen,
+        sightMph: held.value, sightOpen: held.open,
         limitMph: limit != null ? ApexUnits.speed(limit) : null,
         latG, lonG, camberDeg: camber,
         tripMi: ApexUnits.longN(live && (idx < 0 || track.kind === 'horizon') ? (drive.rec ? drive.rec.km * 1000 : 0) : state.cursorM), totalMi: track && track.kind !== 'horizon' && !(live && idx < 0) ? ApexUnits.longN(totalM()) : null,
@@ -2938,6 +2943,7 @@
           const v = e && typeof e.speed_limit === 'number' ? e.speed_limit / 3.6 : null;
           for (let i = idx[k]; i < (idx[k + 1] ?? t.lat.length); i++) t.limitMps[i] = v;
         });
+        if (timeFromEnvelope(t) && plannedRoute === t) renderRouteCard(t);   // U-64: the limits cap the envelope's time
         if (track === t) render(false);
       } catch (_) { /* unknown stays unknown */ }
     }
@@ -3011,6 +3017,8 @@
       const extraMin = w ? w.extraMin : Math.round(extraS / 60);
       return `For ${[roads, gain, towns].filter(Boolean).join(' · ')}${extraMin >= 1 ? `, +${extraMin} min` : ''}`;
     }
+    // A route's drive time: "42 min", "1 h 05" from the hour; null when unknown.
+    const routeTimeText = (s) => (!Number.isFinite(s) ? null : s < 3570 ? `${Math.max(1, Math.round(s / 60))} min` : `${Math.floor(Math.round(s / 60) / 60)} h ${String(Math.round(s / 60) % 60).padStart(2, '0')}`);
     function renderRouteCard(t = plannedRoute) {
       const card = $('routeCard');
       $('planPanel').classList.toggle('routed', !!t);
@@ -3018,7 +3026,8 @@
       if (t) {
         const mi = Array.isArray(t.dist) && t.dist.length ? `${ApexUnits.long(t.dist[t.dist.length - 1], 1)}` : '--';
         $('routeBarName').textContent = t.name || 'Route';
-        $('routeBarMeta').textContent = [mi, Array.isArray(t.events) ? `${t.events.filter(e => e.type === 'corner').length} corners` : ''].filter(Boolean).join(' · ');
+        // U-64: the time too, the router's or the route's own envelope (timeFromEnvelope): "35.4 mi · 1 h 05 · 32 corners"
+        $('routeBarMeta').textContent = [mi, routeTimeText(t.timeS), Array.isArray(t.events) ? `${t.events.filter(e => e.type === 'corner').length} corners` : ''].filter(Boolean).join(' · ');
       }
       carRoute(t);
       if (!t) { card.hidden = true; paintAlternates(); return; }
@@ -3028,7 +3037,7 @@
       const hasDist = Array.isArray(t.dist) && t.dist.length > 0 && Number.isFinite(t.dist[t.dist.length - 1]);
       const mi = hasDist ? `${ApexUnits.long(t.dist[t.dist.length - 1], 1)}` : '--';
       const corners = Array.isArray(t.events) ? `${t.events.filter(e => e.type === 'corner').length} corners` : '--';
-      const min = Number.isFinite(t.timeS) ? `${Math.round(t.timeS / 60)} min` : null;
+      const min = routeTimeText(t.timeS);
       const extra = Number.isFinite(t.extraS) && t.extraS >= 60 ? ` (+${Math.round(t.extraS / 60)} for fun)` : '';
       $('routeCardMeta').textContent = [mi, min && min + extra, corners, roadTypeOf(t)].filter(v => v && v !== '--').join(' · ');
       // the card as instruments (REVIEW.md roadmap 5): three stamped numbers and the profile with a tick per corner
@@ -3157,6 +3166,15 @@
       else toast('The phone is out of room for saved routes. Remove one first.');
       paintSaveBtn();
     });
+    // U-64: no router time (a GPX track, a loop or a fallback router without one): the route's own envelope, capped by the
+    // posted limits once attachLimits has them (eta.js envelopeTime). A forecast like the router's; timeFrom says whose.
+    function timeFromEnvelope(t) {
+      if (!t || t.kind !== 'route' || (Number.isFinite(t.timeS) && t.timeFrom !== 'envelope')) return false;
+      const e = ApexEta.envelopeTime(t.dist, t.envMps, t.limitMps);
+      if (!e) return false;
+      Object.assign(t, { timeS: e.timeS, timeMarks: e.marks, timeFrom: 'envelope' });
+      return true;
+    }
     async function buildRoute(points, id, name, prebuilt = null, request = null) {
       let t = prebuilt;
       if (!t) {
@@ -3166,6 +3184,7 @@
         t = await trackFromPolyline(r.coords, id, name);
         Object.assign(t, { request, fun: funOf(t, r.turns), timeS: r.timeS, timeMarks: timeMarksOf(t, r), steps: stepsOf(t, r), unavoided: FunRoute.unavoided(avoid, r) });
       }
+      timeFromEnvelope(t);
       if (explore) showExplore(null);                               // a route is up: the explore list has done its job
       if (t.request) for (const v of t.request.via) v.distM = t.dist[Core.nearestIndex(v.lat, v.lon, t.lat, t.lon, -1).index];
       const i = drives.findIndex(d => d.id === id);
@@ -6154,12 +6173,28 @@
       if (action === 'update' && !liveAct.on) return;
       try { native.postMessage({ cmd: 'activity', action, ...fields }); } catch (_) {}
     }
+    // U-61: the Live Activity with no note ahead: a true short word for the island ('QUIET' on the route, 'OFF' off it,
+    // 'REC' in a free drive) and a line that still says something: the next corner's distance when the route has one,
+    // else how far you've driven. `distance` stays the note's own (empty here), so the island shows the record dot.
+    function quietActivity() {
+      const driven = drive.rec ? ApexUnits.long(drive.rec.km * 1000, 1) : null;
+      const onRoute = track && track.kind === 'route';
+      if (onRoute && state.cursorIdx < 0 && state.mode === 'live') return { short: 'OFF', note: [offRouteText(), driven && `${driven} driven`].filter(Boolean).join(' · ') };
+      if (onRoute) {
+        const next = allEvents().filter(e => e.type === 'corner' && noteM(e) > state.cursorM).reduce((m, e) => Math.min(m, noteM(e)), Infinity);
+        const d = Number.isFinite(next) ? distLabel(next - state.cursorM) : null;
+        return { short: 'QUIET', note: d ? `Quiet · next corner ${d.n} ${d.u.toLowerCase()}` : ['Quiet', driven && `${driven} driven`].filter(Boolean).join(' · ') };
+      }
+      return { short: 'REC', note: driven ? `Recording · ${driven}` : 'Recording' };
+    }
     function pushActivity(notes) {
       if (!liveAct.on) return;
-      const n = notes && notes[0];
-      const fields = { note: n ? (n.type === 'turn' ? `${n.code}${n.call ? ' · ' + n.call : ''}` : n.call) : (track ? 'No notes ahead' : 'Recording'), distance: n ? `${n.dist} ${n.unit}`.trim() : '', eta: etaText || '',
-        // the island's compact view: a few characters, never a sentence; a hazard turns its keyline orange (LiveActivity/ApexLiveWidget.swift)
-        short: n ? String(n.code || '').slice(0, 6) : '', hazard: !!(n && n.type !== 'corner' && n.type !== 'turn'), etaShort: (etaText || '').split('·')[0].trim() };
+      const n = notes && notes[0], q = n ? null : quietActivity();
+      const fields = { note: n ? (n.type === 'turn' ? `${n.code}${n.call ? ' · ' + n.call : ''}` : n.call) : q.note, distance: n ? `${n.dist} ${n.unit}`.trim() : '', eta: etaText || '',
+        // the island's compact view: a few characters, never a sentence; a hazard turns its keyline orange (LiveActivity/ApexLiveWidget.swift).
+        // U-61: a short word of its own when nothing is ahead (the widget once cut "No notes ahead" to "NO NOT"); codes are
+        // already short, the widget scales rather than cut one
+        short: n ? String(n.code || '').slice(0, 8) : q.short, hazard: !!(n && n.type !== 'corner' && n.type !== 'turn'), etaShort: (etaText || '').split('·')[0].trim() };
       const key = JSON.stringify(fields), now = performance.now();
       // unchanged notes are resent once a minute: the shell marks each update stale two minutes on (a stop at a light stays live)
       if ((key === liveAct.last && now - liveAct.at < 60000) || (now - liveAct.at < 3000 && liveAct.last && JSON.parse(liveAct.last).note === fields.note)) return;

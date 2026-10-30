@@ -72,6 +72,33 @@
     return d.getTime();
   }
 
-  const api = { routerLeft, createPace, estimate, homeByOffer, homeByAt, PACE_MIN, PACE_MAX, LATE_GRACE_MS };
+  // U-64: a route the router never timed (a GPX track, a loop or restore without one) gets a time from its own speed
+  // envelope, so the route bar, the card, the car's trip strip and the live ETA all have one. It is a forecast like the
+  // router's, never road data and never "with traffic": each 5 m sample at the envelope's speed (the same 0.92 of it the
+  // replay drives at), capped by the posted limit where known and NO_LIMIT_MPS where not (the replay's 27 m/s, about
+  // 60 mph), never under FLOOR_MPS. The live pace then scales it like any router time. `marks` every MARK_M metres place
+  // the slow miles where they are (routerLeft). Returns { timeS, marks } or null when the track can't be timed.
+  const ENVELOPE_SHARE = 0.92, NO_LIMIT_MPS = 27, FLOOR_MPS = 4, MARK_M = 250;
+  function envelopeTime(dist, envMps, limitMps) {
+    if (!Array.isArray(dist) || dist.length < 2 || !Array.isArray(envMps) || envMps.length !== dist.length) return null;
+    const total = dist[dist.length - 1];
+    if (!finite(total) || !(total > 0)) return null;
+    const vAt = (i) => {
+      const env = finite(envMps[i]) && envMps[i] >= 0 ? envMps[i] * ENVELOPE_SHARE : NO_LIMIT_MPS;
+      const cap = Array.isArray(limitMps) && finite(limitMps[i]) && limitMps[i] > 0 ? limitMps[i] : NO_LIMIT_MPS;
+      return Math.max(FLOOR_MPS, Math.min(env, cap));
+    };
+    const marks = [];
+    let s = 0, next = MARK_M;
+    for (let i = 1; i < dist.length; i++) {
+      const ds = dist[i] - dist[i - 1];
+      if (!finite(ds) || ds < 0) return null;
+      s += ds * 2 / (vAt(i - 1) + vAt(i));
+      if (dist[i] >= next && dist[i] < total) { marks.push([dist[i], s]); next = dist[i] + MARK_M; }
+    }
+    return { timeS: s, marks };
+  }
+
+  const api = { routerLeft, createPace, estimate, homeByOffer, homeByAt, envelopeTime, PACE_MIN, PACE_MAX, LATE_GRACE_MS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexEta = api;
 })(typeof window !== 'undefined' ? window : globalThis);

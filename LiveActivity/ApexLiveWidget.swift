@@ -11,6 +11,12 @@ struct ApexLiveBundle: WidgetBundle {
     }
 }
 
+/// The record dot (U-61): where there is no distance to show, the drive's own state, never two dashes.
+private struct RecordDot: View {
+    var size: CGFloat = 8
+    var body: some View { Circle().fill(Color.red).frame(width: size, height: size).accessibilityLabel("Recording") }
+}
+
 /// The drive on the lock screen and in the Dynamic Island: the next note and how far it is, and time left on a route.
 /// Large type, nothing to tap: it is read at a glance (the cockpit is the app itself).
 struct ApexDriveLiveActivity: Widget {
@@ -23,7 +29,8 @@ struct ApexDriveLiveActivity: Widget {
                 }
                 Spacer(minLength: 8)
                 VStack(alignment: .trailing, spacing: 2) {
-                    Text(context.state.distance).font(.title2).bold().monospacedDigit()
+                    if context.state.distance.isEmpty { RecordDot(size: 12) }
+                    else { Text(context.state.distance).font(.title2).bold().monospacedDigit().lineLimit(1).minimumScaleFactor(0.7) }
                     if !context.state.eta.isEmpty { Text(context.state.eta).font(.caption).foregroundStyle(.secondary) }
                 }
             }
@@ -38,13 +45,21 @@ struct ApexDriveLiveActivity: Widget {
             // orange (the hazard plate's colour in every theme); otherwise the keyline is white, never the record red.
             let hazard = context.state.hazard ?? false
             let orange = Color(red: 1, green: 0.478, blue: 0.102)
-            let short = (context.state.short?.isEmpty == false ? context.state.short! : String(context.state.note.prefix(6))).uppercased()
+            // U-61: the page sends a short word for every state ("R2", "QUIET", "REC"); an older page's note gives its first
+            // word, scaled to fit rather than cut ("No notes ahead" once read "NO NOT")
+            let fallback = context.state.note.split(separator: " ").first.map(String.init) ?? ""
+            let short = (context.state.short?.isEmpty == false ? context.state.short! : fallback).uppercased()
             return DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    Text(context.state.distance.isEmpty ? "--" : context.state.distance)
-                        .font(.title3).bold().monospacedDigit().lineLimit(1)
-                        .padding(.leading, 10)
-                        .dynamicIsland(verticalPlacement: .belowIfTooWide)
+                    Group {
+                        if context.state.distance.isEmpty {
+                            HStack(spacing: 5) { RecordDot(); Text(short).font(.title3).bold().lineLimit(1).minimumScaleFactor(0.6) }
+                        } else {
+                            Text(context.state.distance).font(.title3).bold().monospacedDigit().lineLimit(1).minimumScaleFactor(0.7)
+                        }
+                    }
+                    .padding(.leading, 10)
+                    .dynamicIsland(verticalPlacement: .belowIfTooWide)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
                     Text(context.state.etaShort ?? "")
@@ -64,12 +79,16 @@ struct ApexDriveLiveActivity: Widget {
                     .padding(.horizontal, 10)
                 }
             } compactLeading: {
-                Text(context.state.distance.isEmpty ? "--" : context.state.distance.replacingOccurrences(of: " ft", with: ""))
-                    .font(.caption2).bold().monospacedDigit().lineLimit(1)
+                // U-61: the record dot when there is no note distance (it read two dashes for a whole quiet drive)
+                if context.state.distance.isEmpty { RecordDot() }
+                else {
+                    Text(context.state.distance.replacingOccurrences(of: " ft", with: ""))
+                        .font(.caption2).bold().monospacedDigit().lineLimit(1).minimumScaleFactor(0.7)
+                }
             } compactTrailing: {
                 HStack(spacing: 3) {
                     if hazard { Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(orange) }
-                    Text(short).font(.caption2).bold().lineLimit(1)
+                    Text(short).font(.caption2).bold().lineLimit(1).minimumScaleFactor(0.6)   // scaled, never cut to a fragment
                 }
             } minimal: {
                 Image(systemName: hazard ? "exclamationmark.triangle.fill" : "arrow.turn.up.right")

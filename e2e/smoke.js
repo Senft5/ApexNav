@@ -366,6 +366,42 @@ flow('routes from elsewhere: a GPX track is followed as drawn; a pasted Google M
   check(JSON.stringify(locs) === JSON.stringify([[35.9606, -83.9207], [35.8, -83.95], [35.7565, -83.97]]), 'the link\'s stops, in order: ' + JSON.stringify(locs));
 }, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
 
+flow('a GPX route has a time from its own envelope (U-64); the Live Activity reads QUIET and the next corner on it, REC in a free drive, never "--" (U-61)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
+    window.__act = []; window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'activity') window.__act.push(m); } } } }; });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.ApexRouteImport && window.apex);
+  // 4 km straight north, then a winding 1.5 km: no note in the first 3 km, a corner further on
+  const pts = [];
+  for (let i = 0; i <= 200; i++) pts.push([35.5 + i * 2e-4, -83.9]);
+  for (let i = 1; i <= 150; i++) pts.push([35.54 + i * 1e-4, -83.9 + Math.sin(i / 6) * 6e-4]);
+  const gpx = pts.map(([la, lo]) => `<trkpt lat="${la.toFixed(6)}" lon="${lo.toFixed(6)}"/>`).join('');
+  await page.setInputFiles('#gpxFile', { name: 'ridge.gpx', mimeType: 'application/gpx+xml', buffer: Buffer.from(`<gpx><trk><name>Ridge run</name><trkseg>${gpx}</trkseg></trk></gpx>`) });
+  await page.waitForFunction(() => window.apexDebug.track && window.apexDebug.track.name === 'Ridge run', null, { timeout: 10000 });
+  const t = await page.evaluate(() => ({ s: apexDebug.track.timeS, from: apexDebug.track.timeFrom, bar: document.getElementById('routeBarMeta').textContent, card: document.getElementById('routeCardMeta').textContent }));
+  check(t.from === 'envelope' && t.s > 60 && t.s < 3600, 'the envelope\'s time: ' + JSON.stringify(t));
+  check(/ · \d+ min · \d+ corners/.test(t.bar) && /\d+ min/.test(t.card) && !/traffic/i.test(t.bar + t.card), 'the bar and the card show it: ' + JSON.stringify(t));
+  // on the route, nothing within 3 km: a short word and the next corner, the island's distance left to the record dot
+  await page.evaluate(() => window.apex.live({ lat: 35.5, lon: -83.9, accuracy_m: 5, speed_mps: 0, course_deg: 0, has_fix: true }));
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start' }));
+  await page.waitForFunction(() => window.apexDebug.driveActive);
+  await page.evaluate(async () => { for (let i = 0; i < 12; i++) { window.apex.live({ lat: 35.5 + i * 1e-5, lon: -83.9, accuracy_m: 5, speed_mps: 12, course_deg: 0, has_fix: true, calibration: 'locked' }); await new Promise(r => setTimeout(r, 120)); } });
+  await page.waitForFunction(() => window.__act.some((m) => m.action === 'update'), null, { timeout: 5000 });
+  const q = await page.evaluate(() => window.__act.filter((m) => m.action === 'update').pop());
+  check(q.short === 'QUIET' && q.distance === '' && /^Quiet · next corner \d+(\.\d)? (mi|km)$/.test(q.note), 'quiet on the route: ' + JSON.stringify(q));
+  check(/min/.test(q.etaShort), 'the envelope\'s time reaches the island: ' + JSON.stringify(q));
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'end' }));
+  await page.waitForFunction(() => !window.apexDebug.driveActive);
+  // a free drive: REC, and how far you have driven
+  await page.click('#planClear');
+  await page.evaluate(() => { window.__act = []; window.apex.onNative({ type: 'carplay', action: 'start' }); });
+  await page.waitForFunction(() => window.apexDebug.driveActive);
+  await page.evaluate(async () => { for (let i = 0; i < 12; i++) { window.apex.live({ lat: 35.6 + i * 1e-4, lon: -84.1, accuracy_m: 5, speed_mps: 12, course_deg: 0, has_fix: true, calibration: 'locked' }); await new Promise(r => setTimeout(r, 120)); } });
+  await page.waitForFunction(() => window.__act.some((m) => m.action === 'update'), null, { timeout: 5000 });
+  const r = await page.evaluate(() => window.__act.filter((m) => m.action === 'update').pop());
+  check(r.short === 'REC' && r.distance === '' && /^Recording( · \d+\.\d (mi|km))?$/.test(r.note), 'a free drive: ' + JSON.stringify(r));
+}, { geolocation: { latitude: 35.5, longitude: -83.9 }, permissions: ['geolocation'] });
+
 flow('CarPlay feed: a planned route sends its line, every corner and the theme; the car can mute and ask again (CarPlay/ApexCarPlay.swift)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
     window.__car = []; window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'car') window.__car.push(m); } } } }; });
@@ -415,6 +451,10 @@ flow('the sight-line speed rides under the position arrow, on the phone and on t
   const cell = await page.textContent('#cluster');
   check(/^(\d+(MPH|KM\/H)|OPEN)$/.test(tag.trim()), 'the tag reads a speed or OPEN: ' + tag);
   check(/OPEN/.test(tag) ? /Open/.test(cell) : cell.includes(tag.replace(/\D/g, '')), 'the same value as the Sight cell: ' + tag);
+  // U-60: it holds still: a new value needs 2 s, so 1.5 s of glances see at most one change, in steps of 5
+  const glances = await page.evaluate(async () => { const out = []; for (let i = 0; i < 16; i++) { const t = document.querySelector('.sight-tag'); out.push(t.hidden ? '' : t.textContent); await new Promise(r => setTimeout(r, 100)); } return out; });
+  check(glances.filter((g, i) => i && g !== glances[i - 1]).length <= 1, 'the plate holds still: ' + glances.join(' '));
+  check(glances.every((g) => !g || g === 'OPEN' || /^\d*[05](MPH|KM\/H)$/.test(g)), 'in steps of 5: ' + glances.join(' '));
   // the car's map: the same tag under its arrow, hidden when unknown, red when short
   await page.goto(base + '/carmap.html');
   await page.waitForFunction(() => window.car && document.querySelector('.car-sight'));

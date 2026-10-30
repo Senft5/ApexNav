@@ -173,7 +173,7 @@ let activated = null;
 let fallbackCalls = 0;
 global.fetch = async () => new Promise(() => {});
 const build = new Function('valhallaRoutes', 'osrmRoutes', 'trackFromPolyline', 'Core', 'drives', 'activate', 'renderRouteCard', 'state', 'openPlan', 'attachLimits', 'totalM', 'toast', 'persistPlanned', 'markDestination', 'lockOnDestination', 'booting', 'funOf',
-  'FunRoute', 'avoid', 'let plannedRoute = null, explore = null; const timeMarksOf = () => []; const stepsOf = () => []; const paintSaveBtn = () => {}; const attachScenic = () => {}; const attachProfile = () => {}; const attachCharacter = () => {}; const paintStops = () => {}; const attachWeather = () => {}; const attachClosures = () => {}; const paintEtaShareBtn = () => {}; const paintHomeBy = () => {}; const announce = () => {}; return (' + source + ')')(
+  'FunRoute', 'avoid', 'let plannedRoute = null, explore = null; const timeMarksOf = () => []; const stepsOf = () => []; const paintSaveBtn = () => {}; const attachScenic = () => {}; const attachProfile = () => {}; const attachCharacter = () => {}; const paintStops = () => {}; const attachWeather = () => {}; const attachClosures = () => {}; const paintEtaShareBtn = () => {}; const paintHomeBy = () => {}; const announce = () => {}; const timeFromEnvelope = () => false; return (' + source + ')')(
   () => loading.json('https://isolated.test', {}, 5),
   async () => { fallbackCalls++; return [{ coords: [[-84, 39], [-83.99, 39]], turns: [], timeS: 60 }]; },
   async (coords, id, name) => {
