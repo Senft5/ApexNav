@@ -147,7 +147,10 @@
       // a long call ("Square left off-camber") steps down a size so it reads whole instead of ending in "..."
       const lk = n.type === 'corner' && !n.recce ? lockup(n.call, n.mods) : { head: String(n.call || ''), tail: [] };   // your own recce call stays as you wrote it
       const len = lk.head.length;
-      html('span', len > 18 ? 'xlong' : len > 11 ? 'long' : '', c, lk.head);
+      // U-92: a head of three words ("Very sharp left", "Very tight right") takes three lines at the lead's size: the
+      // two-line clamp cut the direction off ("VERY SHARP…" for a mile). The word that says which way is never the one lost.
+      const tall = lk.head.trim().split(/\s+/).length >= 3;
+      html('span', (len > 18 ? 'xlong' : len > 11 ? 'long' : '') + (tall ? ' tall' : ''), c, lk.head);
       if (lk.tail.length) {
         const m = html('span', 'rb-mods', c);
         m.append(' ');                                                     // read as one call, not "plustightens"

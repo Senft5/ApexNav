@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-3QNVHYBz9BVYQOttLoT+B2uquLnL1nfv/pW6cjvR8KE=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-vlzQGNrEX3dknYiJc4P4rbpeT852sknIFezDIqjv9Eg=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -181,13 +181,13 @@
     .rb-call span { display: block; font-size: 11px; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: 0.04em; }
     .rb-call span:first-child { font-size: 16px; font-weight: 800; line-height: 1.1; }
     /* never under the contract's 21 px (theme_contract.js): a long call takes another line instead of a smaller size */
-    .rb-box.now .rb-call span.xlong:first-child { -webkit-line-clamp: 3; }
+    .rb-box.now .rb-call span.xlong:first-child, .rb-box.now .rb-call span.tall:first-child { -webkit-line-clamp: 3; }   /* U-92: three words, three lines, never "VERY SHARP…" */
     .rb-box:not(.now) .rb-call span.long:first-child, .rb-box:not(.now) .rb-call span.xlong:first-child { font-size: 13px; line-height: 1.1; }
     /* the call lockup (REVIEW.md roadmap 3): modifiers one size down in pencil, the ones that change what you do in the accent */
     .rb-call span.rb-mods { font-size: 12px; font-weight: 700; color: var(--panel-dim); margin-top: 2px; }
     .rb-call span.rb-mods i { font-style: normal; }
     .rb-call span.rb-mods i.warn { color: var(--accent); }
-    .rb-box.now .rb-call span.rb-mods { font-size: 14px; line-height: 1.15; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+    .rb-box.now .rb-call span.rb-mods { font-size: 14px; line-height: 1.15; white-space: normal; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }   /* U-92: "almost back on itself · long" whole under the call */
     .rb-box.now.hz .rb-call span.rb-mods, .rb-box.now.hz .rb-call span.rb-mods i.warn { color: var(--hz-edge); }
     html[data-theme="tapedeck"] .rb-box.now .rb-call span.rb-mods { -webkit-line-clamp: 3; }   /* the dot font is wide: "OVER CREST · CARE" takes a third line on an SE rather than an ellipsis */
     .ds-main > span { white-space: nowrap; }
@@ -6807,7 +6807,8 @@
       { type: 'corner', dir: 'L', severity: '4', mods: ['tightens'], call: 'Left 4 tightens', code: 'L4', dist: '300', unit: 'ft' },
       { type: 'corner', dir: 'R', severity: '3', mods: [], call: 'Right 3', code: 'R3', dist: '150', unit: 'ft' },
       { type: 'crest', dir: null, severity: null, mods: [], call: 'Crest', code: 'CREST', dist: '200', unit: 'ft' },
-      { type: 'corner', dir: 'L', severity: 'HP', mods: [], call: 'Left hairpin', code: 'LHP', dist: '400', unit: 'ft' },
+      // U-105: calls that read whole in the welcome's narrow lead box ("LEFT HAIRP…" was the one cut word on the page)
+      { type: 'corner', dir: 'L', severity: '2', mods: [], call: 'Left 2', code: 'L2', dist: '400', unit: 'ft' },
       { type: 'corner', dir: 'R', severity: '5', mods: ['long'], call: 'Right 5 long', code: 'R5', dist: '250', unit: 'ft' },
     ];
     function runOnboarding() {

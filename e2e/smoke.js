@@ -76,6 +76,35 @@ flow('first run: onboarding, Watch a replay loads the bundled drive and Play mov
   check(tp.tabbar === 'none', 'the tab bar should hide during a replay');
 });
 
+flow('the strip never cuts where the meaning is: a three-word call keeps its direction, the welcome loop reads whole (REVIEW4 U-92, U-105)', async (page, base) => {
+  await page.goto(base + '/index.html');
+  await page.waitForSelector('#onboard.show', { timeout: 10000 });
+  // the welcome's demo strip: every lead call of the loop whole (it cut "LEFT HAIRP…")
+  const seen = new Map();
+  for (let k = 0; k < 6; k++) {
+    const r = await page.evaluate(() => { const s = document.querySelector('#obNotes .rb-box.now .rb-call span');
+      return s ? { text: s.textContent, cut: s.scrollHeight > s.clientHeight + 1 || s.scrollWidth > s.clientWidth + 1 } : null; });
+    if (r) seen.set(r.text, r.cut);
+    await page.waitForTimeout(1850);
+  }
+  check(seen.size >= 4 && [...seen.values()].every((c) => !c), 'the welcome loop reads whole: ' + JSON.stringify([...seen]));
+  // the plain words a sharp corner gets, at the lead's size, in every theme on the narrowest phone: nothing cut
+  await page.setViewportSize({ width: 375, height: 667 });
+  for (const theme of ['roadbook', 'tapedeck', 'billet']) {
+    const r = await page.evaluate((theme) => {
+      const look = ApexThemes.apply(theme, false), el = document.getElementById('notes'), out = [];
+      for (const [call, mods] of [['Very sharp left, almost back on itself, long', ['long']], ['Very tight right, slow down', []], ['Sharp left, like a junction', []]]) {
+        ApexInstruments.renderNotes(el, look.theme, [{ key: call, type: 'corner', dir: call.includes('left') ? 'L' : 'R', severity: 1, mods, call, code: 'L1', dist: '400', unit: 'FT', distM: 120 }]);
+        const cut = (x) => !!x && (x.scrollHeight > x.clientHeight + 1 || x.scrollWidth > x.clientWidth + 1);
+        const head = el.querySelector('.rb-box.now .rb-call span'), tail = el.querySelector('.rb-box.now .rb-mods');
+        out.push({ head: head.textContent, cut: cut(head) || cut(tail), px: parseFloat(getComputedStyle(head).fontSize) });
+      }
+      return out;
+    }, theme);
+    check(r.every((x) => !x.cut && x.px >= 21), `${theme}: the lead call whole at 21 px or more: ` + JSON.stringify(r));
+  }
+});
+
 flow('returning driver: live frames switch to the cockpit, big targets and no keyboard while moving', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.goto(base + '/index.html');
