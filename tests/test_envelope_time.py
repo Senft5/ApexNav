@@ -8,6 +8,7 @@ import shutil
 import subprocess
 
 import pytest
+from tests.page_source import cockpit_source
 
 NODE = shutil.which("node")
 pytestmark = pytest.mark.skipif(NODE is None, reason="node not installed")
@@ -127,7 +128,7 @@ def test_untimeable_tracks_stay_unknown(out):
 
 
 def test_the_page_times_untimed_routes_and_says_nothing_of_traffic():
-    html = open(os.path.join(ROOT, "web", "index.html"), encoding="utf-8").read()
+    html = cockpit_source()
     build = re.search(r"async function buildRoute\(.*?\n    }", html, re.S).group(0)
     assert "timeFromEnvelope(t);" in build                                # every route the page builds, GPX and loops too
     assert "ApexEta.envelopeTime(t.dist, t.envMps, t.limitMps)" in html

@@ -5,6 +5,7 @@ import shutil
 import subprocess
 
 import pytest
+from tests.page_source import cockpit_source
 
 NODE = shutil.which("node")
 pytestmark = pytest.mark.skipif(NODE is None, reason="node not installed")
@@ -58,7 +59,7 @@ def test_needs_brake(out):
 
 
 def test_page_uses_the_timing():
-    html = open(os.path.join(ROOT, "web", "index.html"), encoding="utf-8").read()
-    assert '<script src="note_timing.js"></script>' in html
+    html = cockpit_source()
+    assert '<script src="note_timing.js"' in html
     assert "ApexNoteTiming.leadM({ vMps, apexMps, text: call.text, reactionS: reactS })" in html
     assert "Math.min(250, vMps * 5)" not in html                     # the fixed 5 s is gone

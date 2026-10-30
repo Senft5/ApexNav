@@ -6,6 +6,7 @@ import shutil
 import subprocess
 
 import pytest
+from tests.page_source import cockpit_source
 
 NODE = shutil.which("node")
 pytestmark = pytest.mark.skipif(NODE is None, reason="node not installed")
@@ -73,7 +74,7 @@ def test_concurrent_flushes_send_once(out):
 
 
 def test_wired():
-    html = open(os.path.join(ROOT, "web", "index.html"), encoding="utf-8").read()
-    assert '<script src="outbox.js"></script>' in html
+    html = cockpit_source()
+    assert '<script src="outbox.js"' in html
     assert "outbox.add('/api/hazards', body, true)" in html and "outbox.add(path, { still })" in html
     assert "window.addEventListener('online', flushOutbox)" in html

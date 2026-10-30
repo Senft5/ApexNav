@@ -9,6 +9,7 @@ import shutil
 import subprocess
 
 import pytest
+from tests.page_source import cockpit_source
 
 NODE = shutil.which("node")
 pytestmark = pytest.mark.skipif(NODE is None, reason="node not installed")
@@ -58,7 +59,7 @@ def test_score_is_for_the_car(out):
 
 
 def test_every_page_scores_through_score_of():
-    html = open(os.path.join(ROOT, "web", "index.html"), encoding="utf-8").read()
+    html = cockpit_source()
     log = open(os.path.join(ROOT, "web", "analysis.html"), encoding="utf-8").read()
     end = html[html.index("    function showEndCard("):html.index("    function showEndTrail(")]
     assert "ApexRecording.scoreOf(Core, d)" in end and "Core.driverScore(" not in end

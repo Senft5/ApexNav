@@ -409,7 +409,7 @@ Colour roles (both themes use the existing `themes.js` keys; values below are Ro
 Instruments keeps its current Stage values plus `--gain`.
 
 ### Type
-Two families, both SIL Open Font License 1.1, both already loaded from Google Fonts:
+Two families, both SIL Open Font License 1.1, bundled with the app in `web/fonts/` (REVIEW_FEEL F-12; no request to Google Fonts):
 - **Barlow Condensed** (600/700/800): pace-note calls, numbers that matter (speed, Score,
   distance to call, gaps), section titles. Tabular figures (`font-variant-numeric: tabular-nums`).
 - **Inter Tight** (400/500/600): everything else: labels, body, buttons, tabs, tables.

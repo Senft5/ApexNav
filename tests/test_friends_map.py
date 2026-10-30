@@ -7,6 +7,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from tests.page_source import cockpit_source
 
 ROOT = Path(__file__).resolve().parents[1]
 NODE = shutil.which("node")
@@ -68,12 +69,12 @@ def test_friend_state_speaks_days_and_says_nothing_of_a_friend_who_shares_nothin
     assert s("{ at: '2026-10-26T12:00:00Z', delay_s: 600 }") == "Seen Mon"
     assert s("{ at: '2026-10-19T12:00:00Z', delay_s: 600 }") == "Seen Oct 19"
     assert run(f"F.friendState(null, {NOW})") == {"live": False, "text": ""}
-    html = (ROOT / "web" / "index.html").read_text()
+    html = cockpit_source()
     assert "Not sharing where they are" not in html + (ROOT / "web" / "friends_map.js").read_text()
 
 
 def test_layer_is_off_by_default_and_nothing_is_shared_by_default():
-    html = (ROOT / "web" / "index.html").read_text()
+    html = cockpit_source()
     assert re.search(r"toggles: \{[^}]*friends: false", html)
     src = (ROOT / "backend" / "src" / "presence.ts").read_text()
     assert 'audience: "nobody"' in src                      # no row means Nobody

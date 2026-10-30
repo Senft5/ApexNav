@@ -6,6 +6,7 @@ import shutil
 import subprocess
 
 import pytest
+from tests.page_source import cockpit_source
 
 NODE = shutil.which("node")
 pytestmark = pytest.mark.skipif(NODE is None, reason="node not installed")
@@ -56,7 +57,7 @@ def test_care_once_per_run_of_corners(out):
 
 
 def test_the_page_skips_a_late_corner_before_building_the_chain():
-    html = open(os.path.join(ROOT, "web", "index.html"), encoding="utf-8").read()
+    html = cockpit_source()
     loop = html[html.index("const lastM = e.type === 'corner'"):]
     skip = loop.index("d < lastM) { state.spoken.add(key); continue; }")
     assert skip < loop.index("let call = chainedCall(e, ev, spirited || first);"), "decided before the chain marks the next corner"

@@ -5,6 +5,7 @@ import shutil
 import subprocess
 
 import pytest
+from tests.page_source import cockpit_source
 
 NODE = shutil.which("node")
 pytestmark = pytest.mark.skipif(NODE is None, reason="node not installed")
@@ -101,8 +102,8 @@ def test_preemption(out):
 
 def test_page_routes_hazards_through_the_queue():
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    html = open(os.path.join(root, "web", "index.html"), encoding="utf-8").read()
-    assert '<script src="speech_queue.js"></script>' in html
+    html = cockpit_source()
+    assert '<script src="speech_queue.js"' in html
     assert "kind: e.type === 'corner' ? 'ordinary' : 'hazard'" in html     # route bumps and cameras are hazards
     assert "kind: 'hazard', key: `mem:${hz.id}`" in html                  # remembered bumps too
     assert "speech.queue.length" not in html                               # the old array queue is gone
@@ -116,7 +117,7 @@ def test_ducking_by_priority(out):
 
 def test_page_and_shell_pass_the_duck():
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    page = open(os.path.join(root, "web", "index.html"), encoding="utf-8").read()
+    page = cockpit_source()
     assert "ApexSpeechQueue.ducks(item, isSpirited())" in page and "cmd: 'speak', text: spoken, force: interrupt, style, duck" in page
     shell = open(os.path.join(root, "ApexNavApp.swift"), encoding="utf-8").read()
     assert 'dict["duck"] as? Bool' in shell and "[.mixWithOthers]" in shell

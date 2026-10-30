@@ -5,6 +5,7 @@ import shutil
 import subprocess
 
 import pytest
+from tests.page_source import cockpit_source
 
 NODE = shutil.which("node")
 pytestmark = pytest.mark.skipif(NODE is None, reason="node not installed")
@@ -74,8 +75,8 @@ def test_recorder_places_nothing_across_a_pause(out):
 
 
 def test_page_gates_recording_sharing_and_convoy():
-    html = open(os.path.join(ROOT, "web", "index.html"), encoding="utf-8").read()
-    assert '<script src="privacy_zones.js"></script>' in html
+    html = cockpit_source()
+    assert '<script src="privacy_zones.js"' in html
     assert "drive.rec.add(" not in html.replace("{ drive.rec.add(fr); keepFrame(fr); return true; }", "")   # every drive frame goes through recordFrame (and the keep)
     assert "feedAmbient(inPrivacyZone(frame.lat, frame.lon) ? { has_fix: false } : frame)" in html
     assert "if (inPrivacyZone(p.lat, p.lon)) return null;" in html                          # convoy getFix
