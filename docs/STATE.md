@@ -1,5 +1,21 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-10-30 (overnight): Fable review 4, both stages, built
+
+- [x] The owner tuned and approved the Fable prompts (docs/design/REVIEW4_PROMPT.md: the critic's role, the standard).
+- [x] Stage 1 (docs/design/REVIEW4.md, U-58 to U-89): all 32 built in #261 (co-driver wakes on the road, the car in
+  every drive, steady sight plate, route times, Live Activity words, the welcome in the app, planning and end card,
+  the recording). #262 and #263 fixed the recording itself (the location sheet the welcome brings up, >99 steps, flows
+  start past the welcome).
+- [x] Stage 2 (docs/design/REVIEW4_CHECK.md): 26/32 fixed, 4 partly, 1 not, 1 can't tell; 16 new (U-90 to U-105), all
+  built in the stage 2 PR (route that doubles back, one score, fitted forecast, island words, status-line messages,
+  end-card map, recording never writes real data). CALL_SHEET "Review 4, stage 2" has every call.
+- [x] The recording's test hazard was deleted from production (BACKUPS.md).
+- Active bugs: none known. Unverified on a device: the free-drive car strip with a negative distance (U-95), the
+  launch handoff (U-80), real-WebKit fonts for the strip clamps (U-92).
+- Exact next task: a third recording (app-review.yml, on demand) to confirm stage 2 on video, especially U-90 on the
+  Dry Ridge loop-back and U-86 at the billet standstill; then REVIEW3.md Roadmap 3 items 1, 2, 4-9.
+
 ## Session 2026-10-30: Tapedeck readout, the review recording, CarPlay by XCUITest
 
 - [x] #259 Tapedeck's digital readout compacted on the phone (it took most of the screen in a drive).
