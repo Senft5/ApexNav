@@ -2128,7 +2128,7 @@ flow('People: Friends first, each with where they are; one Invite key with reque
   await page.click('#accountBody .nav-row:has-text("Requests")');
   await page.waitForSelector('.side-pop.open[aria-label="Invite"]');
   const inv = await page.textContent('.side-pop.open[aria-label="Invite"]');
-  check(/Send an invite link/.test(inv) && /Share my handle · @me/.test(inv) && /Requests · 1/.test(inv) && /@dan/.test(inv) && await page.isVisible('.side-pop.open input[aria-label="Friend handle"]'),
+  check(/Send an invite link/.test(inv) && /Share a link to me/.test(inv) && !/invite-only/i.test(inv) && /Requests · 1/.test(inv) && /@dan/.test(inv) && await page.isVisible('.side-pop.open input[aria-label="Friend handle"]'),
     'one sheet: an invite link, my handle, add by handle and the requests: ' + inv);
   await page.click('.side-pop.open button:has-text("Done")');
   // Crews: the crew things, none of the friend things
@@ -2143,6 +2143,93 @@ flow('People: Friends first, each with where they are; one Invite key with reque
   await page.goto(base + '/index.html?crew=TOKEN123');
   await page.waitForSelector('#crewsBody >> text=Join Ridge Runners?');
   check((await side()).crews === 'true' && /run by @sam/.test(await page.textContent('#crewsBody')), '?crew= opens Crews with the invite named');
+});
+flow('one link in: no "invite-only" anywhere; a crew link joins a newcomer with a handle in one card; a friend link asks first; any member invites; the owner picks who can (Worker stubbed, REVIEW_PEOPLE.md P-02, P-07, P-20, P-22, P-32)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  const sent = [];
+  let me = { signed_in: false }, crews = [], crewPage = null;
+  await page.route(base + '/api/**', (route) => {
+    const u = new URL(route.request().url()), m = route.request().method(), p = u.pathname;
+    const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (m !== 'GET') sent.push({ m, p, b: route.request().postData() });
+    if (p === '/api/me') return json(me);
+    if (p === '/api/me/handle') { me = { ...me, handle: JSON.parse(route.request().postData()).handle }; return route.fulfill({ status: 204 }); }
+    if (p === '/api/crews/invite/preview') return json({ id: 'k9', name: 'Blue Ridge Breakfast Club', visibility: 'private', members: 6, owner: 'sam', from: 'tilly', member: false });
+    if (p === '/api/crews/join') return json({ id: 'k9', friend: 'tilly' });
+    if (p === '/api/invites/preview') return json({ from: 'sam' });
+    if (p === '/api/invites/redeem') return route.fulfill({ status: 204 });
+    if (p === '/api/crews') return json(crews);
+    if (p === '/api/crews/k1/page') return json(crewPage);
+    if (p === '/api/crews/k1/invite') return json({ token: 'CREWLINK1234' }, 201);
+    if (p === '/api/crews/k1/invites' && m === 'PUT') return json({ by: JSON.parse(route.request().postData()).by });
+    if (p === '/api/points') return json({ total: 0 });
+    return json([]);
+  });
+  const words = async () => page.evaluate(() => document.getElementById('accountBody').textContent + ' ' + document.getElementById('crewsBody').textContent);
+  // signed out, with a crew link: both sides say what signing in gets you, and never that the club is closed
+  await page.goto(base + '/index.html?crew=CREWTOKEN123');
+  await page.waitForSelector('#crewsBody >> text=You have a crew link');
+  const out = await words();
+  check(!/invite-only|own invite|join vetta|with an invite/i.test(out), 'signed out: no "invite-only" and no "join Vetta first": ' + out.slice(0, 300));
+  check(/Who’s out driving/.test(out) && /Crew drives/.test(out) && !/The board/.test(out), 'signed out, Friends promises who is out driving, not the board (P-32)');
+  // signed in for the first time, no handle yet: the crew link is a card on Crews with the crew named, a handle field and Join
+  me = { signed_in: true, id: 'U9', member: true, handle: null, requests: 0 };
+  await page.goto(base + '/index.html?view=people');
+  await page.click('[data-people="crews"]');
+  await page.waitForSelector('#crewsBody >> text=Join Blue Ridge Breakfast Club?');
+  const card = await page.textContent('#crewsBody .card');
+  check(/@tilly sent you the link, and you’ll be friends/.test(card) && !/first/i.test(card), 'the newcomer sees the crew and who sent it, nothing to do first: ' + card);
+  await page.fill('#crewsBody .card input[aria-label="Handle"]', 'newbie');
+  crews = [];
+  await page.click('#crewsBody .card button:has-text("Join crew")');
+  for (let i = 0; i < 50 && !sent.some((x) => x.p === '/api/crews/join'); i++) await page.waitForTimeout(100);
+  const order = sent.map((x) => x.p).filter((x) => x === '/api/me/handle' || x === '/api/crews/join');
+  check(JSON.stringify(order) === '["/api/me/handle","/api/crews/join"]', 'the handle is saved, then the crew joined, in one tap: ' + JSON.stringify(order));
+  check(JSON.parse(sent.find((x) => x.p === '/api/crews/join').b).token === 'CREWTOKEN123', 'joined with the link\'s token');
+  await page.waitForFunction(() => /friends with @tilly/.test(document.getElementById('toast').textContent));
+  // a member opening a friend link: a card at the top of Friends naming the sender; Accept redeems it
+  me = { signed_in: true, id: 'U9', member: true, handle: 'newbie', requests: 0 };
+  await page.goto(base + '/index.html?invite=FRIENDTOKEN12');
+  await page.waitForSelector('#accountBody >> text=sent you a link to be friends');
+  check(/@sam/.test(await page.textContent('#accountBody .card')), 'the friend link names its sender');
+  await page.click('#accountBody .card button:has-text("Accept")');
+  for (let i = 0; i < 50 && !sent.some((x) => x.p === '/api/invites/redeem'); i++) await page.waitForTimeout(100);
+  check(JSON.parse(sent.find((x) => x.p === '/api/invites/redeem').b).token === 'FRIENDTOKEN12', 'Accept redeems the friend link');
+  // a member (not the owner) of a crew: the page has Invite, and it makes a link
+  crews = [{ id: 'k1', name: 'Ridge Runners', role: 'member', visibility: 'private', members: 3, invites: 'anyone' }];
+  crewPage = { id: 'k1', name: 'Ridge Runners', motto: null, visibility: 'private', area_name: null, members: 3, is_owner: false, invites: 'anyone', can_invite: true,
+    crest: null, crest_photo_id: null, stripe: null, cover_photo_id: null, livery: 'plain', sharing_scores: false, board: [], next: null };
+  await page.goto(base + '/index.html?view=crew');
+  await page.waitForSelector('.crew-page .cp-title h2');
+  check(await page.isVisible('.cp-title button:has-text("Invite")'), 'a member\'s crew page has Invite (P-07)');
+  await page.evaluate(() => { try { Object.defineProperty(navigator, 'share', { value: undefined, configurable: true }); navigator.clipboard.writeText = async () => {}; } catch (_) {} });
+  await page.click('.cp-title button:has-text("Invite")');
+  for (let i = 0; i < 50 && !sent.some((x) => x.p === '/api/crews/k1/invite'); i++) await page.waitForTimeout(100);
+  check(sent.some((x) => x.p === '/api/crews/k1/invite'), 'Invite asks the Worker for a crew link');
+  // the owner keeps invites to themselves: the page's Invite goes for a member; the gear has the switch, and it reaches the Worker
+  crewPage = { ...crewPage, invites: 'owner', can_invite: false };
+  await page.goto(base + '/index.html?view=crew');
+  await page.waitForSelector('.crew-page .cp-title h2');
+  check(!(await page.isVisible('.cp-title button:has-text("Invite")')), 'Who can invite: Owner, and a member has no Invite key');
+  crews = [{ ...crews[0], role: 'owner', invites: 'anyone' }];
+  crewPage = { ...crewPage, is_owner: true, invites: 'anyone', can_invite: true };
+  await page.goto(base + '/index.html?view=crew');
+  await page.waitForSelector('.crew-page .cp-title h2');
+  await page.click('#crewsBody .gear-key');
+  await page.click('.side-pop.open .crew-tile-head');
+  await page.waitForSelector('.side-pop.open [role="radiogroup"][aria-label="Who can invite to Ridge Runners"]');
+  check(!(await page.isVisible('.side-pop.open button:has-text("Invite to crew")')), 'the gear has no second Invite key');
+  await page.click('.side-pop.open [role="radiogroup"][aria-label="Who can invite to Ridge Runners"] button:has-text("Owner")');
+  for (let i = 0; i < 50 && !sent.some((x) => x.p === '/api/crews/k1/invites' && x.m === 'PUT'); i++) await page.waitForTimeout(100);
+  const put = sent.find((x) => x.p === '/api/crews/k1/invites' && x.m === 'PUT');
+  check(put && JSON.parse(put.b).by === 'owner', 'Who can invite · Owner reaches the Worker: ' + (put && put.b));
+  check(await page.getAttribute('.side-pop.open [role="radiogroup"] button:has-text("Owner")', 'aria-checked') === 'true', 'and the switch shows Owner');
+  // the one signed-in person who isn't a member (an account the owner removed): one line, no paste field, the account in the Garage
+  me = { signed_in: true, id: 'U9', member: false, handle: 'newbie', requests: 0 };
+  await page.goto(base + '/index.html?view=people');
+  await page.waitForSelector('#accountBody >> text=Friends and crews are closed to this account');
+  check(!(await page.$('#accountBody input')) && !/invite/i.test(await words()), 'no paste field, no invite talk (P-22): ' + (await words()).slice(0, 200));
+  check(await page.evaluate(() => /Delete account/.test(document.getElementById('garageMeBody') ? document.getElementById('garageMeBody').textContent : '')), 'the account keys are in the Garage');
 });
 
 flow('units: kilometres in Settings redraw the dial, the notes and the replay in metric (IDEAS U-22)', async (page, base) => {
@@ -2720,7 +2807,7 @@ flow('REVIEW.md 1.2 screen by screen: the Log, drive detail, Stages, People sign
   await page.waitForSelector('#accountBody .crew-gets');
   const gets = (pane) => page.$$eval(`${pane} .crew-gets span`, (s) => s.map((x) => x.textContent + ':' + !!x.querySelector('svg')));
   const fg = await gets('#accountBody');
-  check(JSON.stringify(fg) === '["Friends on the map:true","The board:true","Shared routes:true"]', 'People signed out, Friends: ' + fg);
+  check(JSON.stringify(fg) === '["Who’s out driving:true","Crew drives:true","Shared routes:true"]', 'People signed out, Friends: ' + fg);
   check(await page.isVisible('#accountBody >> text=Sign in with Google') && !(await page.isVisible('#crewsBody')), 'Friends first, with sign-in');
   await page.click('[data-people="crews"]');
   const cg = await gets('#crewsBody');

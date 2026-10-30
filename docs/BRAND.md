@@ -81,7 +81,7 @@ signed-out and invite screens of Account, night mode of the current build. Crews
 out loud, scores how cleanly you drove it, and keeps a shared road book with your friends.**
 
 - **For:** enthusiasts in their own road cars on public back roads, driving with a small group
-  of friends (invite-only, US, under 20 people today). They know what a hairpin and a crest are;
+  of friends (US, under 20 people today; anyone who signs in is in since 2026-10-30). They know what a hairpin and a crest are;
   they do not know what LPR, DNA or an envelope is.
 - **The feeling:** a rally co-driver and a road book. Calm, exact, a step ahead. Paper, ink, one
   red pen. The app is quiet until the road gets interesting.
@@ -95,7 +95,7 @@ out loud, scores how cleanly you drove it, and keeps a shared road book with you
 ## 2. Voice and tone
 
 ### Rules
-1. **Talk like the co-driver.** Short, present tense, the instruction first. "Paste your invite."
+1. **Talk like the co-driver.** Short, present tense, the instruction first. "Pick a handle."
    not "You are signed in. Ask a member for an invite to see friends."
 2. **One line of help, maximum, under a control.** If it needs more, the control is wrong. Longer
    explanations go in a collapsed "How Score works" row, not in the flow.
@@ -119,8 +119,8 @@ out loud, scores how cleanly you drove it, and keeps a shared road book with you
 | 5 | pace-note sub | Measured 0.44 g · single pass, unverified | Driven once |
 | 6 | quiet strip | Dry Ridge Rd · cruise: hazards and LPR only | Quiet · bumps and cameras only |
 | 7 | toast after drive | Saved 35.6 mi. Open ANALYSIS to see it. | Drive saved · 35.6 mi  [View] |
-| 8 | Account | You are signed in. Ask a member for an invite to see friends. | Vetta is invite-only. Paste your invite. |
-| 9 | Friend request toast | If that member exists, they have your request. | Request sent. @handle sees it if they're a member. |
+| 8 | Account | You are signed in. Ask a member for an invite to see friends. | Pick a handle. Friends find you by it. (No invite since 2026-10-30, REVIEW_PEOPLE P-02: never say "invite-only".) |
+| 9 | Friend request toast | If that member exists, they have your request. | Request sent. @handle sees it if that's their handle. |
 | 10 | Segments note | Segments are your custom stretches. Every drive that covers one, in the same direction, is ranked on it by Driver Score. Sign in (Account on the main page) to back them up and compare with friends. | Mark a stretch you drive often. Every run gets a score. |
 | 11 | History note | Driver Score (0-1000) rates technique, never time or speed: pace = … (80 words) | Score rates how you drive the corners, not how fast. 1000 is a closed-course number. (rest moves into "How Score works") |
 | 12 | Compare card | +914.50 s · whole shared road · includes stops and traffic, so not a driving verdict | (deleted) |
@@ -189,7 +189,7 @@ Vague errors: *something went wrong, unavailable, oops, invalid* (say what is wr
 | **Plan** | Search a place, tap the map, Loop 15/30/45 mi, your Spots and Detour. Result = route card with Preview and Drive it. |
 | **Log** | Your drives, newest first, each with Score. Tap = drive detail (summary, map, lanes, corners, "This road over time", Compare with…, Replay on map, Share road feel). |
 | **Stages** | Your stages, each with your best Score and Board rank; New stage (pick a drive, drag a stretch). Stage detail = runs + Board. Friends' shared stages to adopt. |
-| **Crew** | You (`@handle`, points), Invite, Friends with Share switches, Crews, Points board, Share road feel switch, Account (export, delete, sign out). Signed out: what it is for + Sign in with Google + Paste invite. |
+| **Crew** | You (`@handle`, points), Invite, Friends with Share switches, Crews, Points board, Share road feel switch, Account (export, delete, sign out). Signed out: what it is for + Sign in with Apple or Google (no invite since 2026-10-30). |
 
 Drive vs Replay: **Drive** starts only from the red Start drive button on Map. **Replay** starts
 from a drive in Log ("Replay on map"). **Preview** starts from a route card in Plan. The
@@ -203,12 +203,12 @@ Compare is a sheet inside a drive, not a tab.
 1 ─────────────────────────   2 ─────────────────────────   3 ─────────────────────────
                                Pick your co-driver            Driving with friends?
    [logo.svg, 220 px]
-                               ( George  ) ▶                  Vetta is invite-only.
-   Your co-driver for the      ( Emma    ) ▶                  Sign in to see their
+                               ( George  ) ▶                  Sign in to see your
+   Your co-driver for the      ( Emma    ) ▶                  friends, crews,
    long way home.              ( Daniel  ) ▶                  stages and boards.
                                ( Michael ) ▶
    Calls every corner and      ( Phone voice )                [ Sign in with Google ]
-   scores how cleanly you                                     [ Paste invite ]
+   scores how cleanly you                                     [ Sign in with Apple ]
    drove it.                   ▶ plays "Left 4 tightens,
                                  one-fifty"                   Not now
    [ Get started ]
@@ -479,7 +479,7 @@ by swiping right; the Kokoro voices; the analysis lanes and corner list (only re
 7. **`web/index.html`: Start drive.** Delete `.modesw` from `.plates`; add a full-width red 52 px "Start drive" button above the tab bar when idle, with "Plan a route · Watch a replay" text links under it; show `#transport` only in Replay/Preview; mode plate reads `Replay · Dry Ridge Rd ×` / `Preview` / `Drive ● Rec`.
 8. **`web/index.html`: permission sheet.** On the first Start drive tap (flag `apex.permsExplained`), show the §4 sheet; "Allow and start" calls the existing `sensors.js` start path; denied states use the §4 wording.
 9. **`web/index.html` + `web/analysis.html`: 5 tabs.** `.tabbar` → `repeat(5, …)`; tabs Map, Plan, Log, Stages, Crew. Plan = today's route panel; Log = `analysis.html?tab=log`; Stages = `analysis.html?tab=stages`; Crew = new `data-view="crew"` panel. Gear plate on the map opens the Settings sheet (today's setup panel minus account). Delete the DRIVES panel and the CLOSE key (swipe/scrim/tab still close).
-10. **`web/index.html`: Crew view.** Move `renderAccount()` output into `data-panel="crew"`, always visible (signed-out state shows Sign in with Google + Paste invite instead of hiding the section). Order per §4 wireframe; friend rows open a detail with two switches (Scores, Times) instead of three buttons; Delete account becomes red text.
+10. **`web/index.html`: Crew view.** Move `renderAccount()` output into `data-panel="crew"`, always visible (signed-out state shows Sign in with Google instead of hiding the section; the invite paste went with the gate, 2026-10-30). Order per §4 wireframe; friend rows open a detail with two switches (Scores, Times) instead of three buttons; Delete account becomes red text.
 11. **`web/analysis.html`: Log.** Remove `<header>` (h1, subtitle, `.tabs`, "← Cockpit"). Default view = drives list (today's history table, Score right-aligned 26 px); trend chart only when ≥ 3 scored drives; tap a row → today's DRIVE view for that drive with a "‹ Log" back link. Import .csv becomes a secondary button at the top right.
 12. **`web/drive_view.js`: drive summary hierarchy.** Score 44 px with `/1000` and the four part bars directly under it; one line "35.6 mi · 46:00 · 30 corners"; delete Top speed, Peak lateral, Peak braking and Climb tiles from the summary (they remain in the lane readout); hide the scrub readout until the first pointer/keyboard scrub.
 13. **`web/analysis.html`: Compare as a sheet.** Remove the COMPARE tab; add "Compare with…" in drive detail, preselecting the best other drive on the same road (`Core.compareDrives` already finds it); delete the whole-road delta card; label "Gap over 4 corners: +0.11 s" with `--gain`/`--accent` colours.

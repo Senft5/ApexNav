@@ -1,6 +1,6 @@
 import { env, exports } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
-import { ORIGIN, api, freshDb, makeUser, ok, type TestUser } from "./helpers";
+import { ORIGIN, api, freshDb, makeBanned, makeUser, ok, type TestUser } from "./helpers";
 import { stripJpeg } from "../src/photos";
 
 beforeEach(freshDb);
@@ -34,7 +34,7 @@ describe("photos", () => {
   });
 
   it("a profile photo: uploaded clean, set on you, served to members, gone with the account", async () => {
-    const a = await makeUser("alice"), b = await makeUser("bob"), out = await makeUser("outsider", false);
+    const a = await makeUser("alice"), b = await makeUser("bob"), out = await makeBanned("outsider");
     const { id } = (await (await ok(upload(a, "kind=profile", jpeg()))).json()) as { id: string };
     expect(((await (await ok(api(a, "GET", "/api/me"))).json()) as { photo_id: string }).photo_id).toBe(id);
     const got = await ok(api(b, "GET", `/api/photos/${id}`));

@@ -11,9 +11,12 @@ export const removedSql = (kind: ReportKind, idExpr: string) =>
 
 /** True when removed, or when open reports came from HIDE_AFTER_REPORTS current members who were invited by different people and
  *  not by one another (a member's spare accounts trace back to that member, so a chain A → B → C counts once).
+ *  Since Vetta opened (P-02) anyone can sign in with a fresh account and no inviter, so a reporter with no inviter counts only
+ *  once their membership is a week old: three new accounts can't hide a crew in a minute. Their reports still reach the owner.
  *  Aliases are unique (rr, mm, ro) so `idExpr` may name a column of an outer `r`. */
 export const reportedSql = (kind: ReportKind, idExpr: string) =>
   `(${removedSql(kind, idExpr)} OR (SELECT COUNT(DISTINCT COALESCE(mm.invited_by, rr.reporter)) FROM reports rr JOIN members mm ON mm.user_id = rr.reporter
      WHERE rr.kind = '${kindOk(kind)}' AND rr.target_id = ${idExpr} AND rr.status = 'open'
+       AND (mm.invited_by IS NOT NULL OR mm.joined_at <= datetime('now', '-7 days'))
        AND NOT EXISTS (SELECT 1 FROM reports ro WHERE ro.kind = rr.kind AND ro.target_id = rr.target_id AND ro.status = 'open' AND ro.reporter = mm.invited_by)
      ) >= ${HIDE_AFTER_REPORTS})`;

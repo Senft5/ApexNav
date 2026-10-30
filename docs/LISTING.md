@@ -45,7 +45,7 @@ Drives are kept on your phone. Nothing is shared until you share it. Privacy zon
 SAFETY
 Typing is locked while you move. A crash check asks if you are OK after a hard impact and helps you call or text for help; it is a backup to your phone's own crash detection, not a replacement. Always drive within the law and the conditions, and keep your eyes on the road.
 
-Vetta accounts are by invitation for now. Driving, pace notes, loops and the Log all work without an account.
+Anyone can make an account (Sign in with Apple or Google) to add friends and join crews. Driving, pace notes, loops and the Log all work without one.
 
 ## URLs
 
