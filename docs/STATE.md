@@ -1,5 +1,23 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-10-30: Tapedeck readout, the review recording, CarPlay by XCUITest
+
+- [x] #259 Tapedeck's digital readout compacted on the phone (it took most of the screen in a drive).
+- [x] #260 CarPlay screenshots by XCUITest (UITests/CarPlayTests: the car's home screen and templates found by label,
+  XCUIScreen.screens[1] photographed); clicks from the Mac never reached the car. Debug builds replay the real drive
+  (`ApexReplay`, dry_ridge) through the shell's sensor handlers; the review recording (app-review.yml, ON DEMAND ONLY,
+  docs/REVIEW_RECORDING.md) runs eight flows on the phone and car with video, photos and a transcript of every line said,
+  packed by tools/review_pack.py. Car run 6 showed guidance on the replayed road; fixed on the way: a loop or GPX route
+  had no car guidance (guideMessage needed steps), and the trip strip sat at "0 min · -- mi" (now the miles left, time
+  "--" when no router time).
+- [x] The review account `@vetta_review` (member, Share road feel off, no Google login, one 365-day session); its token
+  goes in the `REVIEW_SESSION` secret, which the owner adds (OWNER_TODO).
+- **The Fable review waits for the owner**: record the pack, then draft the Fable prompt WITH the owner; never run Fable
+  on it until the owner says go.
+- Active bugs: none known. Unverified: the trip strip's "--" time on a real car (from Apple's header).
+- Exact next task: once #260 is on main, dispatch app-review.yml, check the review-pack covers every flow and fix what
+  the recording shows broken, then draft the Fable prompt for the owner. Then REVIEW3.md Roadmap 3 items 1, 2, 4-9.
+
 ## Session 2026-10-29 (late): CarPlay, then the owner's first-drive fixes
 
 - [x] #254 the promise ("no personal data sold") and every theme open until the App Store release; #255 the CarPlay
