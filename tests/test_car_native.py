@@ -8,7 +8,6 @@ import shutil
 import subprocess
 
 import pytest
-import yaml
 
 NODE = shutil.which("node")
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -76,13 +75,14 @@ def test_the_swift_restyle_is_basemap_js():
 
 
 def test_mapLibre_native_is_a_pinned_package():
-    yml = yaml.safe_load(read("project.yml"))
-    pkg = yml["packages"]["MapLibre"]
-    assert pkg["url"] == "https://github.com/maplibre/maplibre-gl-native-distribution"
-    assert re.fullmatch(r"\d+\.\d+\.\d+", str(pkg["exactVersion"])), "an exact release, never a branch"
-    app = yml["targets"]["ApexNav"]
-    assert {"package": "MapLibre", "product": "MapLibre"} in app["dependencies"]
-    assert {"path": "CarPlay/ApexCarMap.swift"} in [{"path": s["path"]} for s in app["sources"]]
+    # plain text (CI's test job has no PyYAML): the package block, the target's dependency and the source line
+    yml = read("project.yml")
+    pkg = re.search(r"\n  MapLibre:\n((?:    .*\n)+)", yml)
+    assert pkg, "MapLibre under packages"
+    assert "url: https://github.com/maplibre/maplibre-gl-native-distribution" in pkg.group(1)
+    assert re.search(r"exactVersion: \"?\d+\.\d+\.\d+\"?\n", pkg.group(1)), "an exact release, never a branch"
+    assert re.search(r"- package: MapLibre\n\s+product: MapLibre", yml)
+    assert re.search(r"- path: CarPlay/ApexCarMap\.swift", yml)
 
 
 def test_one_message_set_two_maps_and_the_web_one_as_fallback():
