@@ -2,7 +2,8 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { api, freshDb, makeUser, ok, type TestUser } from "./helpers";
-import { LIFE_MIN, MAX_PER_DAY } from "../src/hazards";
+import { LIFE_MIN, MAX_PER_DAY, REVIEW_USER_ID } from "../src/hazards";
+import { sha256hex } from "../src/util";
 
 beforeEach(freshDb);
 type Msg = Record<string, any>;
@@ -79,5 +80,26 @@ describe("hand-reported hazards", () => {
     await ok(api(a, "DELETE", "/api/me", { confirm: "DELETE" }));
     expect((await near(b))[0].kind).toBe("pothole");
     expect((await env.DB.prepare("SELECT reported_by FROM hazard_reports").first<{ reported_by: string | null }>())!.reported_by).toBeNull();
+  });
+
+  it("the review recording's account (U-94): its reports and votes are answered as taken and change nothing", async () => {
+    const a = await makeUser("alice"), b = await makeUser("bob");
+    const review: TestUser = { id: REVIEW_USER_ID, handle: "vetta_review", token: "tok-review" };   // the real account's id
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO users (id, google_sub, email, handle, display_name) VALUES (?, 'review:vetta-recording', 'review@example.test', 'vetta_review', 'Vetta Review')").bind(REVIEW_USER_ID),
+      env.DB.prepare("INSERT INTO sessions (id_hash, user_id, expires_at) VALUES (?, ?, datetime('now', '+1 day'))").bind(await sha256hex(review.token), REVIEW_USER_ID),
+      env.DB.prepare("INSERT INTO members (user_id) VALUES (?)").bind(REVIEW_USER_ID),
+    ]);
+    const r = await json(report(review, { kind: "gravel", ...P, heading: 92 }));   // 201, as for anyone
+    expect(r.confirmed).toBe(false);
+    expect(r.id).toMatch(/^review_/);
+    expect(await near(b)).toEqual([]);                                              // nobody hears about it
+    const real = await json(report(a, { kind: "pothole", ...P }));
+    expect(await json(report(review, { kind: "pothole", ...P }))).toMatchObject({ confirmed: false });   // never confirms a real one
+    await ok(vote(review, real.id, true)); await ok(vote(review, real.id, false));
+    expect((await near(b))[0]).toMatchObject({ id: real.id, confirms: 1, clears: 0 });
+    expect((await env.DB.prepare("SELECT COUNT(*) AS n FROM hazard_votes").first<{ n: number }>())!.n).toBe(0);
+    expect((await env.DB.prepare("SELECT COUNT(*) AS n FROM hazard_reports WHERE reported_by = ?").bind(REVIEW_USER_ID).first<{ n: number }>())!.n).toBe(0);
+    expect((await report(review, { kind: "aliens", ...P })).status).toBe(400);    // still the same checks
   });
 });

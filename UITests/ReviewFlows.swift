@@ -13,10 +13,14 @@ final class ReviewFlows: XCTestCase {
     private var app: XCUIApplication!
     private var web: XCUIElement!
     private var flow = "", step = 0
+    private var drivingSince = Date()                              // when the drive started (startDrive), for driveTo
 
     /// REVIEW4 §6.1: where the replay starts, in km along the bundled drive. The drive's first 21 km are Colerain Avenue and
     /// I-275; its corners run from the exit ramp at 21.4 km to 34.1 km on Dry Ridge Rd. TWISTIES is a mile before the first.
     private static let TWISTIES = 19.8
+    /// REVIEW4_CHECK §4.7 (U-86): a standstill in a corner. The drive's R3- at 25.32 km starts at 25.29; the replay stands
+    /// still at 25.31 (APEX_REPLAY_HOLD), inside it, for long enough that the strip's passed-note rule (3 s at 0 ft) shows.
+    private static let STANDSTILL = (km: 25.31, s: 8.0)
 
     override func setUp() {
         continueAfterFailure = true
@@ -48,14 +52,16 @@ final class ReviewFlows: XCTestCase {
         }
     }
 
-    /// `from`: km along the replayed drive to start at (APEX_REPLAY_FROM); nil for its real start. `tapFirst`: a tap after
-    /// launch wakes the permission monitor; the first run photographs the opening before anything is touched (§6.9).
-    private func start(_ name: String, route: Bool = false, from: Double? = nil, tapFirst: Bool = true) {
+    /// `from`: km along the replayed drive to start at (APEX_REPLAY_FROM); nil for its real start. `hold`: a standstill of
+    /// `s` seconds at `km` (APEX_REPLAY_HOLD). `tapFirst`: a tap after launch wakes the permission monitor; the first run
+    /// photographs the opening before anything is touched (§6.9).
+    private func start(_ name: String, route: Bool = false, from: Double? = nil, hold: (km: Double, s: Double)? = nil, tapFirst: Bool = true) {
         flow = name; step = 0
         app = XCUIApplication()
         var e = ["APEX_REPLAY": "dry_ridge", "APEX_REVIEW": "1"]
         if route { e["APEX_REVIEW_ROUTE"] = "1" }
         if let from { e["APEX_REPLAY_FROM"] = String(format: "%.2f", from) }
+        if let hold { e["APEX_REPLAY_HOLD"] = String(format: "%.2f:%.0f", hold.km, hold.s) }
         if let s = env["APEX_REVIEW_SESSION"], !s.isEmpty { e["APEX_REVIEW_SESSION"] = s }
         if tapFirst { e["APEX_REVIEW_PAST_WELCOME"] = "1" }        // the welcome is first-run's to photograph
         app.launchEnvironment = e
@@ -153,11 +159,24 @@ final class ReviewFlows: XCTestCase {
             }
         }
     }
+    /// Drive on until `minutes` after the drive started: the replay runs on the wall clock from Start, so a step placed by
+    /// the drive's own time lands on the same stretch of road however long the photos before it took (REVIEW4_CHECK §4.6).
+    private func driveTo(_ minutes: Double, every: Double = 3, _ tag: String = "driving") {
+        let left = minutes * 60 - Date().timeIntervalSince(drivingSince)
+        if left > 0 { driveFor(left, every: every, tag) }
+    }
     private func startDrive() {
         tap("Drive it", "Start drive", "Start", wait: 20)
         if tap("Allow and start", wait: 5) { app.tap() }
+        drivingSince = Date()
         pause(4)
         shot("drive-started")
+    }
+    /// The replay closed (REVIEW4_CHECK §4.4, U-104): its own key when it has one, else the "Replay · <road> ×" chip; the
+    /// tab bar coming back shows it took, so the tab steps after it photograph the tabs, not the replay.
+    private func closeReplay() {
+        if !tap("Done", "Close the replay", wait: 3), let chip = findButton(startingWith: "Replay ·", wait: 4) { chip.tap(); pause(2) }
+        XCTAssertTrue(find(["Log"], wait: 8) != nil, "the replay did not close (no tab bar)")
     }
     private func endDrive() {
         tap("End drive", wait: 10)
@@ -192,8 +211,14 @@ final class ReviewFlows: XCTestCase {
         // REVIEW4 §6.9: the opening before anything is touched (the welcome, U-65), then its Start, then the location sheet
         // (the workflow grants nothing for this flow, so the system asks as it would on a new phone)
         start("first-run", tapFirst: false)
-        pause(1.5); shot("opening")
-        pause(3); shot("opening-later")                            // the welcome's strip cycles its calls
+        // REVIEW4_CHECK §4.3: "opening" is the welcome itself, shot once its Start is on screen (on a timer it caught the
+        // black and the launch lockup before the page drew), then the welcome again as its strip moves to its next calls
+        let welcome = web.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "Welcome to Vetta")).firstMatch
+        let go = web.buttons["Start"]
+        XCTAssertTrue(until(90) { welcome.exists && go.exists && go.isHittable }, "the welcome never came up")
+        pause(0.5); shot("opening")
+        pause(2.5); shot("welcome")
+        pause(2.5); shot("welcome-later")                          // the welcome's strip cycles its calls
         for k in 0..<5 {
             if tap("Get started", "Start", wait: 2) { break }
             if !tap("Next", wait: 2) { break }
@@ -218,7 +243,7 @@ final class ReviewFlows: XCTestCase {
         driveFor(120, every: 10)
         endDrive()
         driveInLog(scrolls: 4, replay: true)
-        tab("Map")
+        closeReplay()                                              // §4.4: the tab steps photographed the replay
         tab("Log"); shot("log"); scroll(3, "log")
         tab("Map")
         tab("Crew"); shot("crew"); scroll(3, "crew")
@@ -242,11 +267,23 @@ final class ReviewFlows: XCTestCase {
                 place.tap()
                 let bar = web.buttons["Route details"], go = web.buttons["Start drive"]
                 XCTAssertTrue(until(45) { (bar.exists && bar.isHittable) || (go.exists && go.isHittable) }, "the route to Winton Woods never resolved")
-                pause(3); shot("route")
-                if bar.exists && bar.isHittable { bar.tap(); pause(2) }
+                pause(3); shot("route")                            // U-70: the card opens by itself
+                // REVIEW4_CHECK §4.5: the bar is a toggle, so tapping it on the open card closed it, and a swipe on the map
+                // never reached the bar's drag. The card's own Drive it key being on screen says it is open.
+                let driveIt = web.buttons["Drive it"]
+                let cardOpen = { driveIt.exists && driveIt.isHittable }
+                if !cardOpen(), bar.exists && bar.isHittable { bar.tap(); pause(2) }
                 shot("route-card"); scroll(3, "route-card")
-                app.swipeUp(velocity: .fast); pause(1.5); shot("route-card-open")      // the card dragged all the way up
-                app.swipeDown(velocity: .fast); pause(1)
+                if cardOpen(), bar.exists && bar.isHittable { bar.tap(); pause(1.5) }
+                shot("route-bar")                                  // closed: the bar alone over the map
+                if bar.exists && bar.isHittable {                  // dragged open by its bar, as a thumb does
+                    bar.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.5))
+                        .press(forDuration: 0.15, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.15)))
+                }
+                let dragged = until(4, cardOpen)
+                XCTAssertTrue(dragged, "dragging the route bar up did not open the card")
+                if !dragged, bar.exists && bar.isHittable { bar.tap() }
+                pause(1.5); shot("route-card-open")
             }
             tap("Save", wait: 4); shot("saved")
             tap("Close route", "Clear route", "×", wait: 4)
@@ -272,12 +309,16 @@ final class ReviewFlows: XCTestCase {
         shot("route-from-gpx")
         startDrive()
         driveFor(60, every: 10, "interstate")                      // the last mile of I-275, then the exit
-        driveFor(240)                                              // the ramp, the junction and the first corners
+        driveTo(5)                                                 // the ramp, the junction and the first corners
+        // U-94: in review mode the report is the member's sheet, Undo and pin, and never reaches the server
         if tap("Report a hazard", "Report", wait: 4) {
             shot("report-sheet"); tap("Gravel", "Pothole", wait: 4)
             pause(1); shot("reported")                             // the car's pin and alert a second after (§6.8)
         }
-        driveFor(60)
+        // REVIEW4_CHECK §4.6: New Biddinger Road's turnaround (where the route doubles back, U-90) and back, then the home
+        // screen, the island and the phone on its side from 13.4 min: the R5- at 31.1 km and the run of corners after it,
+        // so they are photographed with a note up (the drive reaches 31.14 km at 13.7 min and 32.1 km at 14.4)
+        driveTo(13.4)
         // the Live Activity in the Dynamic Island, from the home screen, and expanded by a long press (§6.7)
         XCUIDevice.shared.press(.home); pause(4); shot("home-live-activity")
         springboard.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0)).withOffset(CGVector(dx: 0, dy: 30)).press(forDuration: 1.2)
@@ -286,7 +327,7 @@ final class ReviewFlows: XCTestCase {
         app.activate(); pause(4); shot("back-in-app")
         XCUIDevice.shared.orientation = .landscapeLeft; pause(4); driveFor(40, every: 5, "landscape")
         XCUIDevice.shared.orientation = .portrait; pause(3)
-        driveFor(660)                                              // Dry Ridge Rd's corners, to the last at 34.1 km
+        driveTo(18.5)                                              // Dry Ridge Rd's corners, to the last at 34.1 km (17.7 min)
         endDrive()
         driveInLog(scrolls: 4, replay: false)
     }
@@ -327,12 +368,14 @@ final class ReviewFlows: XCTestCase {
 
     func test07Billet() throws {
         try XCTSkipUnless(env["APEX_REVIEW"] == "1", "review recording only")
-        start("billet", route: true, from: Self.TWISTIES)
+        // REVIEW4_CHECK §4.7 (U-86): this drive stands still in the R3- at 25.3 km (5.1 min in) for 8 s; the photos every 3 s
+        // show the strip move on from the corner the car waits in (app-log.txt: "replay standing")
+        start("billet", route: true, from: Self.TWISTIES, hold: Self.STANDSTILL)
         theme("Billet", night: false)
         pause(15)
         startDrive()
         driveFor(60, every: 10, "interstate")
-        driveFor(300)
+        driveTo(6.2)
         endDrive()
         driveInLog(scrolls: 1, replay: true)
     }

@@ -80,14 +80,21 @@ jobs:
           TEST_RUNNER_APEX_REVIEW=1 TEST_RUNNER_APEX_REVIEW_SESSION="$REVIEW_SESSION" xcodebuild test-without-building \
             -project ApexNav.xcodeproj -scheme ApexNav -destination "id=$UDID" -derivedDataPath build \
             -only-testing:ApexNavUITests/ReviewFlows/${{ matrix.test }} -resultBundlePath out/${{ matrix.name }}/result.xcresult || true
-          kill -INT $REC || true
-          [ -n "$CAR" ] && kill -INT $CAR || true
-          sleep 4
-          # every line the co-driver said (web say() → the shell's log), and the app's own log, for the reviewer
+          # REVIEW4_CHECK §4.1: simctl writes a video's index (the moov atom) after SIGINT, and a 20-minute car video takes
+          # longer than the old 4 s to close: stop both, then wait for each to exit (up to 2 min) before anything is uploaded
+          for p in $REC $CAR; do kill -INT "$p" 2>/dev/null || true; done
+          for p in $REC $CAR; do
+            for _ in $(seq 1 240); do kill -0 "$p" 2>/dev/null || break; sleep 0.5; done
+            wait "$p" 2>/dev/null || true
+          done
+          # every line the co-driver said (web say() → the shell's log), and the app's own log, for the reviewer: §4.2, the
+          # app's own lines for the whole flow (the shell's APEX-REVIEW / APEX-SAID and the page's console, APEX-CONSOLE),
+          # not the last 4,000 lines of system noise
           xcrun simctl spawn "$UDID" log show --start "$START" --predicate 'eventMessage CONTAINS "APEX-SAID"' --style compact \
             > out/${{ matrix.name }}/transcript.txt || true
-          xcrun simctl spawn "$UDID" log show --start "$START" --predicate 'process == "ApexNav"' --style compact \
-            | tail -4000 > out/${{ matrix.name }}/app-log.txt || true
+          xcrun simctl spawn "$UDID" log show --start "$START" --style compact \
+            --predicate 'process == "ApexNav" AND (eventMessage BEGINSWITH "APEX-" OR subsystem BEGINSWITH "com.senft")' \
+            > out/${{ matrix.name }}/app-log.txt || true
           xcrun xcresulttool export attachments --path out/${{ matrix.name }}/result.xcresult --output-path out/${{ matrix.name }}/shots || true
           ls -la out/${{ matrix.name }} out/${{ matrix.name }}/shots | head -40
       - uses: actions/upload-artifact@v4

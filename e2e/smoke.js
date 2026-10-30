@@ -1186,6 +1186,35 @@ flow('reported hazards: a call ahead, "still there?" after passing, and a one-ta
   check(reports.length === 1 && reports[0].kind === 'pothole' && Math.abs(reports[0].lat - (35.6 + 330 / 110540)) < 1e-4 && reports[0].heading === 0, 'reported at your position and heading');
 });
 
+flow('review mode (U-94): the recording\'s hazard report is the sheet, Undo and a pin, and nothing reaches the server', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} window.APEX_REVIEW = true; });
+  const writes = [];
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url()), m = route.request().method();
+    if (m !== 'GET' && m !== 'HEAD') writes.push(`${m} ${u.pathname}`);
+    const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'vetta_review' });
+    return m === 'GET' ? json([]) : json({}, 404);
+  });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && typeof window.apex.live === 'function');
+  await page.evaluate(async () => {   // heading north at 15 m/s
+    for (let i = 0; i <= 40; i++) { window.apex.live({ lat: 35.6 + (i * 1.5) / 110540, lon: -83.9, accuracy_m: 5, speed_mps: 15, course_deg: 0, has_fix: true, calibration: 'locked' });
+      await new Promise(r => setTimeout(r, 20)); }
+  });
+  await page.click('#hzReportBtn');
+  check(await page.evaluate(() => document.getElementById('hzOverlay').classList.contains('show')), 'the sheet opens');
+  await page.click('#hzKinds button:has-text("Gravel")');
+  check(/Undo Gravel/.test(await page.textContent('#hzReportBtn')), 'the Report key is Undo for 3 s');
+  await page.waitForFunction(() => /Gravel reported/.test(document.getElementById('toast').textContent), null, { timeout: 6000 });
+  await page.waitForFunction(() => [...document.querySelectorAll('.hz-pin')].some((p) => p.textContent === 'GRAVEL'), null, { timeout: 4000 });
+  await page.evaluate(async () => { await ApexSync.apiFetch('/api/presence', { method: 'POST', body: '{}' }); await ApexSync.apiFetch('/api/feedback', { method: 'POST', body: '{}' }); });
+  await page.waitForTimeout(1500);   // loadReported(true) after the report: the server's list again, with the review's own pin kept
+  check([...await page.$$eval('.hz-pin', (ps) => ps.map((p) => p.textContent))].includes('GRAVEL'), 'the pin outlives a reload of the server\'s hazards');
+  check(writes.length === 0, 'nothing was written to the server: ' + writes.join(', '));
+  check(await page.evaluate(() => !localStorage.getItem('apex.outbox')), 'nothing waits in the outbox either');
+});
+
 flow('your data: Settings counts what the phone holds and downloads drives as GPX, offline data deleted (IDEAS Z-03/Z-04, F-06)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.goto(base + '/index.html');
