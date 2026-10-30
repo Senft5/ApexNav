@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-hQTDDm8+wwYa9JibBFEmLYLrDvbMTwPnUmvFHNC5GOs=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-66ovYKGSsPC5XLyM2HWQ9//2XKz9IMZR9xgHorUKwhc=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <!-- REVIEW4 U-80 (check): before the stylesheets and the hundred scripts below (seconds on a cold start), the page's very
@@ -15,7 +15,10 @@
   <link rel="apple-touch-icon" href="brand/icon-180.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter+Tight:wght@400;500;600&display=swap" />
+  <!-- Perf (2026-10-30): the web fonts' stylesheet comes from Google; as a plain stylesheet every script below waited for it,
+       so a weak signal held the whole page back (seconds in a car). Loaded as print (which blocks nothing) and switched on
+       by boot.js once it arrives; until then the text is in the fallback font, behind the opening cover. -->
+  <link rel="stylesheet" id="webFonts" media="print" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter+Tight:wght@400;500;600&display=swap" />
   <link rel="stylesheet" href="vendor/maplibre-gl.css" />
   <script src="errors.js"></script>   <!-- first, so it sees errors in everything after it -->
   <script src="vendor/maplibre-gl.js"></script>
@@ -1760,7 +1763,7 @@
       map.addLayer({ id: 'apex-route', type: 'line', source: 'apex-route-src', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-width': width(3, 7) } });
       map.addLayer({ id: 'apex-dna', type: 'line', source: 'apex-route-src', filter: ['has', 'dna'], layout: { 'line-cap': 'butt', 'line-join': 'round', visibility: 'none' },
         paint: { 'line-color': ['get', 'dna'], 'line-width': width(3, 7) } });
-      map.addSource('apex-ribbon-src', { type: 'geojson', data: emptyFC() });
+      map.addSource('apex-ribbon-src', { type: 'geojson', data: emptyFC() }); ribbonKey = null;
       map.addLayer({ id: 'apex-ribbon', type: 'line', source: 'apex-ribbon-src', layout: { 'line-cap': 'round', 'line-join': 'round' },
         paint: { 'line-color': ['get', 'c'], 'line-width': width(4, 9) } });
     }
@@ -1787,14 +1790,14 @@
     }
 
     // Braking ribbon: next 300 m coloured by current speed vs the envelope there.
-    let lastRibbonAt = 0;
+    let lastRibbonAt = 0, ribbonKey = null, ribbonTrack = null;
     function updateRibbon(vMps, fromIdx, force) {
       if (!mapReady) return;
       const now = performance.now();
       if (!force && now - lastRibbonAt < 90) return;
       lastRibbonAt = now;
       const src = map.getSource('apex-ribbon-src');
-      if (!track || !track.envMps || vMps == null || fromIdx < 0) { src.setData(emptyFC()); return; }
+      if (!track || !track.envMps || vMps == null || fromIdx < 0) { if (ribbonKey !== '' || force) src.setData(emptyFC()); ribbonKey = ''; return; }
       const C = look.colors, features = [];
       let run = null;
       const stop = Math.min(track.lat.length - 1, fromIdx + 60);
@@ -1806,6 +1809,11 @@
         if (!run || run.c !== c) { const prev = run ? run.coords[run.coords.length - 1] : null; if (run) run.coords.push(pt); run = { c, coords: prev ? [prev, pt] : [pt] }; features.push(run); }
         else run.coords.push(pt);
       }
+      // Perf: the same ribbon is not sent again (each setData re-tiles the source in the map's worker); it changes when the
+      // car reaches the next route point or a colour changes, a few times a second, not with every fix
+      const key = `${fromIdx}:${stop}:${features.map(r => `${r.c}${r.coords.length}`).join()}`;
+      if (key === ribbonKey && track === ribbonTrack && !force) return;
+      ribbonKey = key; ribbonTrack = track;
       src.setData({ type: 'FeatureCollection', features: features.filter(r => r.coords.length > 1).map(r => ({ type: 'Feature', properties: { c: r.c }, geometry: { type: 'LineString', coordinates: r.coords } })) });
     }
 
@@ -2025,6 +2033,15 @@
     // Smooth pseudo-noise (incommensurate sines) for road texture.
     const texture = (t, seed) => Math.sin(t * 43.1 + seed) * 0.5 + Math.sin(t * 71.7 + seed * 2.3) * 0.3 + Math.sin(t * 97.3 + seed * 4.1) * 0.2;
     let camLast = 0, lastBumpKey = '';
+    // Perf (the owner's drive, 2026-10-30: "laggy"): the springs only ever approach their targets, so the loop used to move the
+    // map by a hair every frame forever and the map redrew 60 times a second standing still. A move under what a pixel shows
+    // is not sent; the map then sleeps until something changes. The map's height is read on resize, not every frame (a read
+    // after the marker writes forced a layout each frame).
+    let camSent = null, puckSent = null, camMapH = 0;
+    map.on('resize', () => { camMapH = map.getContainer().clientHeight || 0; });
+    const camSame = (a, b) => !!a && !!b && Math.abs(a.lon - b.lon) < 1e-7 && Math.abs(a.lat - b.lat) < 1e-7 && Math.abs(a.bearing - b.bearing) < 0.01
+      && Math.abs(a.zoom - b.zoom) < 5e-4 && Math.abs(a.pitch - b.pitch) < 0.01 && a.top === b.top;
+    const camNow = () => { const c = map.getCenter(); return { lon: c.lng, lat: c.lat, bearing: map.getBearing(), zoom: map.getZoom(), pitch: map.getPitch(), top: map.getPadding().top }; };
     function cameraFrame(ts) {
       requestAnimationFrame(cameraFrame);
       if (!power.frameDue(ts)) return;
@@ -2034,8 +2051,11 @@
       [cam.pLat, cam.pvLat] = spring(cam.pLat, cam.pvLat, vehicle.lat, 14, 1, dt);
       [cam.pLon, cam.pvLon] = spring(cam.pLon, cam.pvLon, vehicle.lon, 14, 1, dt);
       [cam.pBear, cam.pvBear] = spring(cam.pBear, cam.pvBear, cam.pBear + angleDelta(cam.pBear, vehicle.bearing), 10, 1, dt);
-      puck.setLngLat([cam.pLon, cam.pLat]).setRotation(cam.pBear);
-      sightTag.setLngLat([cam.pLon, cam.pLat]);
+      if (!puckSent || Math.abs(cam.pLat - puckSent.lat) > 1e-8 || Math.abs(cam.pLon - puckSent.lon) > 1e-8 || Math.abs(cam.pBear - puckSent.bear) > 0.01) {
+        puckSent = { lat: cam.pLat, lon: cam.pLon, bear: cam.pBear };
+        puck.setLngLat([cam.pLon, cam.pLat]).setRotation(cam.pBear);
+        sightTag.setLngLat([cam.pLon, cam.pLat]);
+      }
       if (!state.follow) return;
       const f = CAM_FEEL[state.camFeel] || CAM_FEEL.dynamic, t = camTargets();
       [cam.lat, cam.vLat] = spring(cam.lat, cam.vLat, t.lat, f.wPos, f.zPos, dt);
@@ -2045,7 +2065,7 @@
       [cam.pitch, cam.vPitch] = spring(cam.pitch, cam.vPitch, t.pitch, 2.0, 0.8, dt);
 
       // Road texture: measured roughness (g RMS) sets a fine shake; a recorded bump within 15 m kicks it.
-      const bump = track && allEvents().find(e => e.type === 'bump' && Math.abs(e.dist_m - state.cursorM) < 15);
+      const bump = track && track.events.find(e => e.type === 'bump' && Math.abs(e.dist_m - state.cursorM) < 15);   // (no copy a frame: allEvents' cameras are never bumps)
       const key = bump ? `${bump.index}` : '';
       if (bump && key !== lastBumpKey) cam.kick = Math.min(1.5, bump.severity_g * 2.2);
       lastBumpKey = key;
@@ -2057,13 +2077,13 @@
       // at 55 % of the map's height under 25 mph, easing to 68 % by 40 mph, which puts the arrow near 70 %; idle, the middle
       const fy = state.mode === 'live' ? 0.55 + 0.13 * clamp01((vehicle.vMps - 11.2) / 6.7) : 0.5;
       cam.fy = Number.isFinite(cam.fy) ? cam.fy + (fy - cam.fy) * Math.min(1, dt * 1.2) : fy;
-      const mapH = map.getContainer().clientHeight || 0;
-      map.jumpTo({
-        center: [sLon, sLat],
-        bearing: ((cam.bearing + amp * 0.5 * texture(tt, 7)) % 360 + 360) % 360,
-        zoom: cam.zoom, pitch: Math.max(0, Math.min(60, cam.pitch + amp * 0.9 * texture(tt, 13))),
-        padding: { top: Math.max(0, Math.round((2 * cam.fy - 1) * mapH)), bottom: 0, left: 0, right: 0 }
-      });
+      const mapH = camMapH || (camMapH = map.getContainer().clientHeight || 0);
+      const next = { lon: sLon, lat: sLat, bearing: ((cam.bearing + amp * 0.5 * texture(tt, 7)) % 360 + 360) % 360,
+        zoom: cam.zoom, pitch: Math.max(0, Math.min(60, cam.pitch + amp * 0.9 * texture(tt, 13))), top: Math.max(0, Math.round((2 * cam.fy - 1) * mapH)) };
+      // skipped only while the map still sits where this loop last put it (a gesture, a fit or a resize moves it: sent again)
+      if (camSent && camSame(next, camSent.to) && camSame(camNow(), camSent.at)) return;
+      map.jumpTo({ center: [next.lon, next.lat], bearing: next.bearing, zoom: next.zoom, pitch: next.pitch, padding: { top: next.top, bottom: 0, left: 0, right: 0 } });
+      camSent = { to: next, at: camNow() };
     }
     requestAnimationFrame(cameraFrame);
 
@@ -2250,6 +2270,10 @@
     // 5. SCRUBBER (pace profile = braking envelope, elevation behind it)
     // =======================================================================
     const scrubCanvas = $('scrubCanvas'), sctx = scrubCanvas.getContext('2d');
+    // Perf: the canvas's box, kept by a ResizeObserver (read where layout is already done); reading it on each draw forced
+    // a layout of the page several times a second in a drive, after the gauges had just been written
+    let scrubRect = null;
+    if (window.ResizeObserver) new ResizeObserver(() => { scrubRect = scrubCanvas.getBoundingClientRect(); drawScrubber(); }).observe(scrubCanvas);
     // What VoiceOver reads on the scrubber: "2.4 of 35.6 mi". Set only when the words change.
     function paintScrubValue() {
       const T = totalM(), at = Math.max(0, Math.min(T, state.cursorM || 0));
@@ -2259,7 +2283,7 @@
       el.setAttribute('aria-valuenow', String(T > 0 ? Math.round(at / T * 100) : 0));
     }
     function drawScrubber() {
-      const r = scrubCanvas.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+      const r = scrubRect || scrubCanvas.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
       const w = Math.max(10, Math.round(r.width * dpr)), h = Math.max(10, Math.round(r.height * dpr));
       if (scrubCanvas.width !== w || scrubCanvas.height !== h) { scrubCanvas.width = w; scrubCanvas.height = h; }
       sctx.clearRect(0, 0, w, h);
@@ -3617,9 +3641,12 @@
         if (o) { track.homeByOfferedAt = now; toast(`Running ${o.lateMin} min late for home.`, { label: 'Head home', ms: 15000, onClick: headHome }); }
       }
       etaLeftS = est ? est.leftS : null;
-      const text = est ? `${est.leftS < 60 ? '<1' : Math.round(est.leftS / 60)} min left · ${new Date(est.arriveAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : '';
+      const text = est ? `${est.leftS < 60 ? '<1' : Math.round(est.leftS / 60)} min left · ${etaClock().format(new Date(est.arriveAt))}` : '';
       if (text !== etaText) { etaText = text; paintDriveStat(); }
     }
+    // Perf: one clock formatter (toLocaleTimeString built a new one with every fix); the same words as before
+    let etaClockFmt = null;
+    const etaClock = () => etaClockFmt || (etaClockFmt = new Intl.DateTimeFormat([], { hour: 'numeric', minute: '2-digit' }));
     // Share your ETA (IDEAS S-19; backend/src/eta_share.ts, web/eta.html): a link that shows only the handle and arrival
     // time, refreshed about once a minute while the route is driven, ended on arrival or with the button.
     const etaShare = { token: null, at: 0, left: null };
@@ -4365,7 +4392,7 @@
       renderRouteCard(null);
       if (track && track.kind === 'route' && state.mode !== 'live') {
         setPlaying(false); replayOn = false; track = null;
-        if (mapReady) { map.getSource('apex-route-src').setData(emptyFC()); map.getSource('apex-ribbon-src').setData(emptyFC()); }
+        if (mapReady) { map.getSource('apex-route-src').setData(emptyFC()); map.getSource('apex-ribbon-src').setData(emptyFC()); ribbonKey = ''; }
         rebuildPins(); paintIdle(); render(true);
       }
       resumeFollow();
@@ -5960,7 +5987,7 @@
       const m = main.map((x, i) => `<span>${x}${i < main.length - 1 ? ' ·' : ''}</span>`).join(' '), w = warn.join(' · ');
       if ($('dsMain').innerHTML !== m) $('dsMain').innerHTML = m;
       if ($('dsWarn').textContent !== w) $('dsWarn').textContent = w;
-      $('dsWarn').hidden = !w;
+      if ($('dsWarn').hidden !== !w) $('dsWarn').hidden = !w;
     }
     // Road data streams while you drive when you are a member with ROAD DATA on: settled stretches only (never the first or last km).
     // Camber and crest go up when the recorder kept them (calibrated mount).
@@ -6313,7 +6340,7 @@
     function paintHazardPlate(h) {
       const p = h && state.mode === 'live' ? ApexHazardReports.plate(h, (m) => ApexUnits.long(m, 1), Date.now()) : null;
       if (p && $('hzPlate').hidden) state.blinkUntil = performance.now() + 1200;   // Kit blinks at a hazard (Tapedeck)
-      $('hzPlate').hidden = !p;
+      if ($('hzPlate').hidden !== !p) $('hzPlate').hidden = !p;            // (written only on a change: this runs every fix)
       if (!p) return;
       if ($('hzPlateTitle').textContent !== p.title) $('hzPlateTitle').textContent = p.title;
       if ($('hzPlateDetail').textContent !== p.detail) $('hzPlateDetail').textContent = p.detail;
