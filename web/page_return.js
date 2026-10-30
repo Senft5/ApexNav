@@ -1,7 +1,7 @@
 // The Log in a frame over the map (the owner, 2026-10-29: "the crew page still does a full reload every time"). The Log
 // and Stages are their own page (analysis.html), but the map page never leaves: it opens them in a full-screen frame
 // (index.html openLog), so the map, a drive in progress and the car's screen keep running behind. Inside that frame,
-// a link to the map page (the Map, Crew and Garage tabs) asks the map page to close the frame and show that tab, and
+// a link to the map page (the Map, People and Garage tabs) asks the map page to close the frame and show that tab, and
 // a replay link asks it to load that drive. Opened on its own (a shared link, the website), the page's links work
 // as plain links.
 (function (root) {

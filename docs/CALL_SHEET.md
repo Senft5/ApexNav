@@ -4,6 +4,39 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-10-30: the Crew tab is People (your decision)
+
+**Your design, built as you chose it** ("the crew tab is still laid out like shit with two places to invite people and a
+mix of individual social features and group features in one area"). Four tabs still; the third is **People**. Its
+header is a two-stop switch, **Friends | Crews**, the app's own `.switch` (like Notes and Night).
+- *Friends* (where it opens): your friends first, one row each with their face, handle and where they are ("On the
+  road · Cherohala Skyway", "Seen 15 min ago", or "Not sharing where they are"), read from what each one already shares
+  with you on the map (`friendState` in web/friends_map.js; nothing is shown that they didn't share, and if the read fails
+  the line is left blank, never guessed). A tap opens what you share with them, Profile, Unfriend, Report, Block. Then
+  one key, **Invite or add a friend**: one sheet with Send an invite link (new to Vetta), Share my handle and Send
+  request (already on Vetta), and the requests (incoming and the ones you sent). Then rows: Requests (count), Routes
+  shared with you, Spots near you, Friends on the map (it says who sees you). The points board after them.
+- *Crews*: in a crew, its page with the crew switcher and the settings gear (your crews' sharing, invite links, Leave),
+  then rows for Crew drives, Crews near you and Start a crew, then Convoy and the crew standings. Not in one: Your crews,
+  Crews near you, Start a crew, Crew drives, Convoy. A crew invite sits at the top of Crews; crew invite links stay in a
+  crew (its page, its tile).
+- *Signed out*, not a member, no handle yet: the same switch on both sides. Each side says what it gets you, then Sign
+  in with Apple and Google; Crews says "Join with an invite" or "Pick a handle" with a key back to Friends.
+- *Links*: `?add=` opens Friends with the Invite sheet and the handle filled in; `?invite=` Friends; `?crew=` and a convoy
+  invite open Crews; `?view=crew` (old links, the review recording) is an alias for People on its Crews side,
+  `?view=people` and `?view=friends` work too. The Log's tab bar says People.
+
+My calls on the way:
+- *The switch is the sheet's header*, not a "People" title over a switch (the title stays for screen readers): it stays
+  put while you scroll, and the tab already says People. Undo: the `.sheet[data-view="people"]` rules in web/index.html.
+- *The tab icon is unchanged* (two people, like Apple's person.2): it already reads as People.
+- *Moderator tools* (errors, health, latency, feedback, the moderation queue) sit at the bottom of Friends.
+- *Fixed on the way*: the page's `el()` helper dropped `aria-label`/`aria-hidden` (Object.assign sets properties, and
+  those are attributes), so the crew gear and four inputs had no accessible name; it now sets them as attributes.
+  Undo: the `el` line in web/index.html.
+- "Sign in (Crew)" and "in Crew" in toasts now say People; "Road data in Crew" now says Share road feel in the Garage
+  (where that switch has been since REVIEW.md roadmap 9).
+
 ## 2026-10-30 (morning): Review 4, stage 2
 
 **Fable's check (docs/design/REVIEW4_CHECK.md): 26 of 32 fixed, and 16 new findings (U-90 to U-105), all built.** Four

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-lF6Vy26ehvPT6jy873UtjSbkZ4mDLHG6bWa+jhsTZlA=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-O++hGgc3SMW8bAJwqAxigSCfjAunbmfWKW0CsEpfzsE=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <!-- REVIEW4 U-80 (check): before the stylesheets and the hundred scripts below (seconds on a cold start), the page's very
@@ -741,8 +741,24 @@
       overflow-y: auto; display: grid; gap: 16px; align-content: start; transform: translateX(105%); transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1); }
     .side-pop.open { transform: none; }
     .side-pop-head { display: flex; justify-content: space-between; align-items: center; }
-    .side-pop-head h3 { border: 0; padding: 0; margin: 0; }
+    .side-pop .side-pop-head h3 { border: 0; padding: 0; margin: 0; }
     .crew-detail { border-top: 1px solid var(--hair, var(--panel-dim)); padding-top: 8px; margin-top: 4px; }
+    /* Friends first on People (the owner, 2026-10-30): one row each, the face, the handle and where they are; a tap opens what you share */
+    .friend-list { display: grid; border-top: 1px solid var(--hair, var(--panel-dim)); }
+    #accountBody > .friend-list:first-child { border-top: 0; margin-top: -8px; }   /* the header's rule is the list's top */
+    .friend { border-bottom: 1px solid var(--hair, var(--panel-dim)); }
+    .friend-head { width: 100%; min-height: 60px; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 8px 2px;
+      border: 0; background: transparent; color: var(--panel-ink); font: inherit; text-align: left; }
+    .friend-head b { display: block; font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .friend-head small { display: block; margin-top: 2px; font-size: 13px; color: var(--panel-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .friend-head small.live { color: var(--panel-ink); font-weight: 600; }
+    .friend-head small.live::before { content: ""; display: inline-block; width: 7px; height: 7px; margin: 0 6px 1px 0; border-radius: 50%; background: var(--accent); }
+    .friend-head .chev { width: 9px; height: 9px; margin-right: 8px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg); transition: transform 0.15s ease-out; }
+    .friend-head[aria-expanded="true"] .chev { transform: rotate(225deg); }
+    .friend .crew-detail { border-top: 0; padding-top: 0; margin: 0 0 12px; }   /* its first switch draws the rule */
+    .friend-sent { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; }
+    .friend-sent span { color: var(--panel-dim); }
+    .people-gets { display: grid; gap: 12px; justify-items: start; }
     .overlay { position: fixed; inset: 0; z-index: 40; background: var(--panel); color: var(--panel-ink); display: none; flex-direction: column; padding: calc(24px + var(--safe-top)) calc(24px + var(--safe-right)) calc(24px + var(--safe-bottom)) calc(24px + var(--safe-left)); overflow-y: auto; }
     .overlay.show { display: flex; }
     /* a sheet over the screen covers the map's chrome too: the tab rail and the Layers key (docs/design/REVIEW2.md 1.3, 1.18) */
@@ -787,7 +803,7 @@
     .scrim { position: absolute; inset: 0; z-index: 9; display: none; background: rgba(0,0,0,0.18); }
     .scrim.show { display: block; }
     .sheet [data-panel] { display: none; }
-    .sheet[data-view="crew"] [data-panel~="crew"],
+    .sheet[data-view="people"] [data-panel~="people"],
     .sheet[data-view="garage"] [data-panel~="garage"] { display: block; }
 
     /* ---------------- tab bar (switch views; tapping the open tab closes it) ---------------- */
@@ -805,12 +821,15 @@
     .sheet header::after { content: ""; position: absolute; left: 0; right: 0; bottom: -17px; height: 16px; background: linear-gradient(var(--panel), transparent); pointer-events: none; z-index: 2; }
     .sheet header { position: relative; display: flex; justify-content: space-between; align-items: center; padding: calc(14px + var(--safe-top)) 16px 14px; border-bottom: 1px solid var(--rule); }
     .sheet header h2 { font-size: 22px; font-weight: 700; font-family: var(--font-num); }
-    /* In a crew, the crew is the header: its switcher (or name) and the gear for its settings, no "Crew" title (REVIEW2.md U-30) */
+    /* People (the owner, 2026-10-30): the header is the Friends | Crews switch, the title stays for screen readers only. */
     .sheet-head-slot { display: none; }
-    .sheet.crew-has-page[data-view="crew"] #sheetTitle { display: none; }
-    .sheet.crew-has-page[data-view="crew"] .sheet-head-slot { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex: 1; min-width: 0; }
-    .sheet-head-slot .cp-switch { margin: 0; flex-wrap: nowrap; overflow-x: auto; min-width: 0; }
-    .sheet-head-slot > b { font: 700 22px var(--font-num); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .sheet[data-view="people"] #sheetTitle { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+    .sheet[data-view="people"] .sheet-head-slot { display: flex; flex: 1; min-width: 0; }
+    .people-switch { flex: 1; }
+    /* In a crew, the Crews side opens on it: its switcher (or name) and the gear for its settings (REVIEW2.md U-30) */
+    .crew-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-width: 0; }
+    .crew-head .cp-switch { margin: 0; flex-wrap: nowrap; overflow-x: auto; min-width: 0; }
+    .crew-head > b { font: 700 22px var(--font-num); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .gear-key { flex: none; width: 44px; height: 44px; display: grid; place-items: center; border: 1.5px solid var(--panel-ink); background: transparent; color: var(--panel-ink); box-shadow: 0 3px 0 var(--rule); }
     .gear-key svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; }
     /* a list one tap away: a row with its count and a chevron (Routes shared, Spots near you, Crew drives) */
@@ -821,10 +840,10 @@
     .nav-rows { display: grid; border-top: 1px solid var(--hair, var(--panel-dim)); }
     .sheet .body { overflow-y: auto; padding: 14px 16px 24px; display: grid; gap: 20px; }
     .sheet .body { zoom: var(--type-scale, 1); }   /* the phone's text size (format.js applyTypeScale) */
-    .sheet h3, .plan h3 { font-size: 18px; font-weight: 700; font-family: var(--font-num); border-top: 1px solid var(--hair, var(--panel-dim)); padding-top: 12px; margin-bottom: 8px; }
+    .sheet h3, .plan h3, .side-pop h3 { font-size: 18px; font-weight: 700; font-family: var(--font-num); border-top: 1px solid var(--hair, var(--panel-dim)); padding-top: 12px; margin-bottom: 8px; }
     .sheet p.note.err, .plan p.note.err { color: var(--accent); }
     /* The sheet header already draws a rule: the first heading under it doesn't draw a second. */
-    #accountBody > h3:first-child, #accountBody > :first-child > h3:first-child, #accountSection + [data-panel~="garage"] > h3:first-child { border-top: 0; padding-top: 0; }
+    #accountBody > h3:first-child, #accountBody > :first-child > h3:first-child, #crewsBody > h3:first-child, #crewsBody > :first-child > h3:first-child, #accountSection + [data-panel~="garage"] > h3:first-child { border-top: 0; padding-top: 0; }
     .sheet p.note, .plan p.note { font-size: 13px; color: var(--panel-dim); line-height: 1.45; margin-top: 6px; }
     .row { display: flex; gap: 6px; flex-wrap: wrap; }
     .plan-fields { display: grid; gap: 6px; } .plan-fields .ink-btn { min-width: 64px; }
@@ -1129,10 +1148,12 @@
       </div>
       <div class="scrim" id="scrim"></div>
       <aside class="sheet" id="sheet" aria-label="Menu" data-view="garage">
-        <header><h2 id="sheetTitle">Settings</h2><div class="sheet-head-slot" id="sheetHead"></div></header>
+        <header><h2 id="sheetTitle">Settings</h2><div class="sheet-head-slot" id="sheetHead"><div class="switch people-switch" role="radiogroup" aria-label="People"><button type="button" role="radio" data-people="friends" aria-checked="true">Friends</button><button type="button" role="radio" data-people="crews" aria-checked="false">Crews</button></div></div></header>
         <div class="body">
-          <section data-panel="crew" id="accountSection">
-            <div id="accountBody" class="stack-12"></div>
+          <!-- People (the owner, 2026-10-30): Friends, then Crews, one switch in the header between them -->
+          <section data-panel="people" id="accountSection">
+            <div id="accountBody" class="stack-12" data-people-pane="friends"></div>
+            <div id="crewsBody" class="stack-12" data-people-pane="crews" hidden></div>
           </section>
           <!-- the Garage (REVIEW.md 3.2): you and your cars first, then the co-driver, privacy, your data and the rest -->
           <section data-panel="garage" id="garageMe">
@@ -1344,7 +1365,7 @@
       <nav class="tabbar" id="tabbar" aria-label="Views">
         <button class="tab on" data-view="map" aria-label="Map"><svg viewBox="0 0 24 24"><path d="M12 3l6 15-6-3-6 3z"/></svg><span>Map</span></button>
         <button class="tab" data-view="log" aria-label="Log"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg><span>Log</span></button>
-        <button class="tab" data-view="crew" id="crewTab" aria-label="Crew"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.2"/><path d="M3 20c0-3.5 2.7-6 6-6s6 2.5 6 6M15.5 14.2c2.6 0 5 1.8 5 5"/></svg><span>Crew</span></button>
+        <button class="tab" data-view="people" id="crewTab" aria-label="People"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.2"/><path d="M3 20c0-3.5 2.7-6 6-6s6 2.5 6 6M15.5 14.2c2.6 0 5 1.8 5 5"/></svg><span>People</span></button>
         <button class="tab" data-view="garage" aria-label="Garage"><svg viewBox="0 0 24 24"><path d="M3 10l9-6 9 6v10H3z"/><path d="M7 20v-7h10v7M7 16h10"/></svg><span>Garage</span></button>
       </nav>
     </section>
@@ -1909,7 +1930,7 @@
       try {
         const r = await apiCall('GET', `/api/coverage?bbox=${box.join(',')}`);
         if (r.status === 401 || r.status === 403) {
-          if (!coverage.said) toast('Sign in (Crew) to see measured roads.');
+          if (!coverage.said) toast('Sign in (People) to see measured roads.');
           coverage.said = true;
         } else if (r.ok) {
           coverage.had.push(box);
@@ -3659,7 +3680,7 @@
       let r = null;
       try { r = await ApexSync.apiFetch('/api/eta', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ left_s: Math.round(t.timeS) }) }); } catch (_) {}
       if (!r) { toast('No signal. Try again in a moment.'); return; }
-      if (r.status === 401 || r.status === 403) { toast('Sign in (Crew) to share your ETA.'); return; }
+      if (r.status === 401 || r.status === 403) { toast('Sign in (People) to share your ETA.'); return; }
       if (!r.ok) { toast(r.status === 429 ? 'You\'re sharing three already. Stop one first.' : 'Couldn\'t share it. Try again.'); return; }
       etaShare.token = (await r.json()).token; etaShare.at = performance.now(); paintEtaShareBtn();
       copyText(`${shareOrigin()}/eta.html?t=${etaShare.token}`, 'Link copied. It shows when you\'ll arrive, never where you are.', 'My ETA');
@@ -4287,15 +4308,26 @@
     // Views: ROUTE / DRIVES / SETUP open the side panel; tapping the open tab again, the map
     // behind it, or swiping it right closes it. ANALYSIS is its own page.
     const LEGAL_SITE = 'https://apexnav.senftns.workers.dev';   // the published privacy and terms pages (web/privacy.html, web/terms.html)
-    const VIEW_TITLES = { crew: 'Crew', garage: 'Garage' };
-    let view = null, friendsOpen = false;                                  // friendsOpen: the Crew sheet's friends pop-up
+    const VIEW_TITLES = { people: 'People', garage: 'Garage' };
+    // People (the owner, 2026-10-30): one tab, two sides; 'crew' (old links, a convoy invite) opens its Crews side.
+    const PEOPLE_SIDES = { friends: 'friends', crew: 'crews', crews: 'crews' };
+    let view = null, inviteOpen = false, peopleSide = 'friends';           // inviteOpen: the Friends side's Invite sheet
+    function setPeopleSide(side) {
+      const next = side === 'crews' ? 'crews' : 'friends';
+      if (next !== peopleSide) { inviteOpen = false; document.querySelectorAll('.side-pop.open').forEach(n => n.classList.remove('open')); }   // a sheet belongs to its side
+      peopleSide = next;
+      $('accountBody').hidden = next !== 'friends'; $('crewsBody').hidden = next !== 'crews';
+      document.querySelectorAll('[data-people]').forEach((b) => { const on = b.dataset.people === next; b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); });
+      $('sheet').querySelector('.body').scrollTop = 0;
+    }
     function showView(v) {
       if (v === 'log') { openLog('analysis.html?tab=log'); return; }
       if (v === 'stages') { openLog('analysis.html?tab=stages'); return; }
       if (v === 'setup') v = 'garage';                                   // Settings live in the Garage now (REVIEW.md roadmap 9)
       if (v === 'route') { showView(null); openPlan(true); return; }
       if (v === 'map') v = null;
-      if (v !== 'crew') { friendsOpen = false; document.querySelectorAll('.side-pop.open').forEach(n => n.classList.remove('open')); }
+      if (PEOPLE_SIDES[v]) { setPeopleSide(PEOPLE_SIDES[v]); v = 'people'; }
+      if (v !== 'people') { inviteOpen = false; document.querySelectorAll('.side-pop.open').forEach(n => n.classList.remove('open')); }
       view = v;
       if (v) openPlan(false);
       const sheet = $('sheet');
@@ -4308,7 +4340,7 @@
     const openSheet = (v = view || 'route') => showView(v);
     // The Log and Stages (analysis.html) open in a full-screen frame over the map, never in its place (the owner,
     // 2026-10-29: no page reloads): the map, a drive in progress and the car's screen keep running behind it, and its
-    // Map, Crew and Garage tabs close the frame (web/page_return.js). The frame is kept and shown again as it was, unless
+    // Map, People and Garage tabs close the frame (web/page_return.js). The frame is kept and shown again as it was, unless
     // a drive, the theme or the units changed since, or a different page of the Log is asked for.
     const logFrame = { el: null, url: null, stale: false };
     function safeInsets() {
@@ -4339,7 +4371,7 @@
         refreshSavedDrives().catch(() => {});                          // a drive renamed or deleted in the Log (the frame is still open: not stale)
         if (logFrame.el) logFrame.el.hidden = true;
         document.documentElement.classList.remove('log-open');
-        showView(VIEW_TITLES[v] ? v : null);
+        showView(VIEW_TITLES[v] || PEOPLE_SIDES[v] ? v : null);
       },
       load(url) { location.href = url; },                              // a replay: the map page loads with that drive
       stale() { logFrame.stale = true; },
@@ -4543,6 +4575,7 @@
 
     const closeSheet = () => showView(null);
     document.querySelectorAll('#tabbar .tab').forEach(t => t.addEventListener('click', () => showView(view === t.dataset.view ? null : t.dataset.view)));
+    document.querySelectorAll('[data-people]').forEach((b) => b.addEventListener('click', () => setPeopleSide(b.dataset.people)));
     $('scrim').addEventListener('click', closeSheet);
     $('pinCancelBtn').addEventListener('click', closePin);
     $('pinOverlay').addEventListener('click', (e) => { if (e.target === $('pinOverlay')) closePin(); });
@@ -4826,7 +4859,7 @@
       let friends = [], crews = [];
       try { [friends, crews] = await Promise.all([apiCall('GET', '/api/friends').then(jsonOf), apiCall('GET', '/api/crews').then(jsonOf)]); } catch (_) {}
       const fr = (friends || []).filter(f => f.status === 'accepted' && f.handle), cr = crews || [];
-      if (!fr.length && !cr.length) { box.replaceChildren(el('p', { className: 'note', textContent: 'Sign in and add friends or a crew (Crew) to share routes.' })); return; }
+      if (!fr.length && !cr.length) { box.replaceChildren(el('p', { className: 'note', textContent: 'Sign in and add friends or a crew (People) to share routes.' })); return; }
       const picked = { friends: new Set(), crews: new Set() };
       const chip = (label, set, key) => { const b = el('button', { className: 'ink-btn', textContent: label }); b.setAttribute('aria-pressed', 'false');
         b.onclick = () => { if (set.has(key)) set.delete(key); else set.add(key); b.classList.toggle('on', set.has(key)); b.setAttribute('aria-pressed', String(set.has(key))); }; return b; };
@@ -4837,7 +4870,7 @@
           const r = await apiCall('POST', '/api/routes', { name: t.name || 'Route', geom: sharedGeom(t), friends: [...picked.friends], crews: [...picked.crews] });
           const j = await jsonOf(r);
           if (!r.ok) { toast(r.status === 429 ? 'That\'s a lot of shares today.' : 'Couldn\'t share it. Try again.'); return; }
-          toast(j && j.shared ? `Shared. They'll find it in Crew.` : 'Nobody to share it with.'); box.replaceChildren();
+          toast(j && j.shared ? `Shared. They'll find it in People.` : 'Nobody to share it with.'); box.replaceChildren();
         }, 'ink-btn solid'), btn('Cancel', () => box.replaceChildren(), 'linkbtn')));
     });
     function sharedRoutesSection(onCount) {
@@ -4886,7 +4919,10 @@
     if (ApexSync.inApp) document.querySelectorAll('[data-apple-signin]').forEach((b) => { b.hidden = false; });
     const appleButton = () => { const b = el('button', { className: 'apple-btn', textContent: '\uF8FF Sign in with Apple', hidden: !ApexSync.inApp }); b.setAttribute('data-apple-signin', ''); return b; };
     const jsonOf = async (r) => { try { return await r.json(); } catch (_) { return null; } };
-    const el = (tag, props = {}, ...kids) => { const n = Object.assign(document.createElement(tag), props); n.append(...kids); return n; };
+    // 'aria-label', 'aria-hidden' and the like are attributes, not properties: Object.assign alone dropped them (People's gear had no name)
+    const el = (tag, props = {}, ...kids) => { const n = document.createElement(tag);
+      for (const [k, v] of Object.entries(props)) { if (k.includes('-')) n.setAttribute(k, v); else n[k] = v; }
+      n.append(...kids); return n; };
     const btn = (label, onclick, cls = 'ink-btn') => el('button', { className: cls, textContent: label, onclick });
     const copyText = async (text, ok, title = 'Vetta') => {
       if (navigator.share) {
@@ -4949,7 +4985,8 @@
     }
     // The crew page (web/crew_page.js, REVIEW.md roadmap 20): the Crew tab opens your crew.
     let crewPage = null, crewDrivesEl = null;
-    const toDrives = () => { if (crewDrivesEl) crewDrivesEl.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
+    // in a crew, Crew drives is a row on the Crews side that opens its sheet; not in one, the section on the side itself
+    const toDrives = () => { const pop = crewDrivesEl && crewDrivesEl.closest('.side-pop'); if (pop) pop.classList.add('open'); else if (crewDrivesEl) crewDrivesEl.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
     try { crewPage = window.ApexCrewPage ? ApexCrewPage.mount({ el, btn, toast, apiCall, jsonOf, report: safety && safety.report,
       invite: async (c) => { const r = await apiCall('POST', `/api/crews/${c.id}/invite`); const j = await jsonOf(r); if (r.ok) copyText(`${shareOrigin()}/?crew=${j.token}`, 'Crew link copied.'); else toast(j && j.error === 'too_many_open_invites' ? 'You have 10 open crew links. Turn some off first.' : 'Couldn\'t make a link. Try again.'); },
       openRoute: (id) => openSharedRoute(id), builds: () => builds, shareImage: (cv, name) => (window.ApexDriveCard ? ApexDriveCard.shareCard(cv, name) : null), onAllDrives: toDrives, onPlan: (c) => { if (crewEvents) crewEvents.plan(c.id); toDrives(); } }) : null; } catch (e) { console.error('crew page', e); }
@@ -4979,7 +5016,7 @@
     if (Themes.accent && Themes.accent()) { Themes.setAccent(null); applyTheme(); }
     // feature flags (flags.js, IDEAS Y-06): fetched once a start, used from then on
     if (window.ApexFlags && window.ApexSync) ApexFlags.load((p) => ApexSync.apiFetch(p)).catch(() => {});
-    // Send feedback (web/feedback.js, IDEAS L-05): Settings → Feedback; the owner reads it in Crew.
+    // Send feedback (web/feedback.js, IDEAS L-05): Settings → Feedback; the owner reads it in People.
     let accountMe = null, feedbackUi = null;
     try {
       feedbackUi = window.ApexFeedback ? ApexFeedback.mount($('feedbackBox'), { el, btn, toast, apiFetch: (...a) => ApexSync.apiFetch(...a), app: ApexSync.inApp ? 'ios' : 'web',
@@ -5009,14 +5046,15 @@
     try { garage = window.ApexGarageUI ? ApexGarageUI.mount({ el, btn, toast, apiCall, jsonOf, report: safety && safety.report, onCars: setRoutingCars, onPhotos: () => renderAccount(), builds }) : null; } catch (e) { console.error('garage', e); }
     // an on/off setting is the slide switch (U-44), the label beside it, never a key that reads "Off"
     const switchRow = (label, on, change) => { const b = el('button', { className: 'sw' + (on ? ' on' : ''), onclick: change }, el('i'), el('span', { textContent: label })); b.setAttribute('role', 'switch'); b.setAttribute('aria-checked', String(!!on)); return b; };
-    let openCrewId = null;
+    let openCrewId = null, openFriendId = null;   // the crew tile and the friend row left open across a redraw
     const crewNear = () => { if (state.lastPosition) return state.lastPosition; const c = map.getCenter(); return { lat: c.lat, lon: c.lng }; };
     // Links people share open the website (in the app the page's own origin is apexnav://app, which no one else can open).
     const shareOrigin = () => (ApexSync.inApp ? ApexSync.apiBase : location.origin);
     const crewPreview = { token: null, data: null };   // what the crew link is for, fetched once per link
     let renderGen = 0;   // two renders at once (a link while one runs): only the newest one draws
     async function renderAccount() {
-      const body = $('accountBody'), gen = ++renderGen;
+      // People (the owner, 2026-10-30): the Friends side (accountBody) and the Crews side (crewsBody), one switch between them
+      const body = $('accountBody'), cbody = $('crewsBody'), gen = ++renderGen;
       let me = null;
       accountMe = null;
       try { const r = await apiCall('GET', '/api/me'); if (r.ok && (r.headers.get('content-type') || '').includes('json')) me = await r.json(); } catch (_) {}
@@ -5028,13 +5066,13 @@
       if (feedbackUi) feedbackUi.refresh();
       if (me && !me.signed_in) setRoutingCars(null);
       else if (me && me.member) apiCall('GET', '/api/garage').then(r => (r.ok ? r.json() : null)).then(list => { if (list) setRoutingCars(list); }).catch(() => {});
-      body.innerHTML = '';
+      body.innerHTML = ''; cbody.innerHTML = '';
       const gbody = $('garageMeBody'); gbody.innerHTML = '';
       const redo = () => renderAccount();
       const badge = $('crewTab').querySelector('.badge'); if (badge) badge.remove();
       const params2 = new URLSearchParams(location.search);
       if (!me) {
-        body.append(el('h3', { textContent: 'Can\'t reach Vetta' }), el('p', { className: 'note', textContent: 'Friends, crews and boards need a connection. Driving, notes and your Log work offline.' }), btn('Try again', redo, 'ink-btn'));
+        for (const b of [body, cbody]) b.append(el('h3', { textContent: 'Can\'t reach Vetta' }), el('p', { className: 'note', textContent: 'Friends, crews and boards need a connection. Driving, notes and your Log work offline.' }), btn('Try again', redo, 'ink-btn'));
         return;
       }
       const inviteFromLink = params2.get('invite'), crewFromLink = params2.get('crew'), addFromLink = params2.get('add');
@@ -5043,26 +5081,36 @@
       // Kept in the tab, gone from the address bar: a reload or a redraw must not act on the link again.
       if (inviteFromLink || crewFromLink || addFromLink) {
         if (stashed) try { for (const k of ['invite', 'crew', 'add']) params2.delete(k); history.replaceState(history.state, '', location.pathname + (params2.toString() ? '?' + params2 : '') + location.hash); } catch (_) {}
-        showView('crew');
+        showView(crewFromLink ? 'crews' : 'friends');   // each link opens the side it belongs to
       }
       // Terms and Privacy open in Safari from the app (http links leave the web view, #135) and in a new tab on the web.
       const legalLink = (path, text) => el('a', { href: `${LEGAL_SITE}/${path}`, target: '_blank', rel: 'noopener', textContent: text });
       const legalNote = (lead) => el('p', { className: 'note' }, lead, legalLink('terms.html', 'Terms'), ' and ', legalLink('privacy.html', 'Privacy'), ' policy.');
       const stash = (k) => { try { return sessionStorage.getItem(k) || ''; } catch (_) { return ''; } };
       const unstash = (k) => { try { sessionStorage.removeItem(k); } catch (_) {} };
+      // A step only the Friends side can take (joining, a handle): the Crews side says so and has the key across.
+      const acrossToFriends = (title, text, key) => [el('h3', { textContent: title }), el('p', { className: 'note', textContent: text }), btn(key, () => setPeopleSide('friends'), 'ink-btn solid')];
       if (!me.signed_in) {
+        // what each side gets you, in three glyphs (REVIEW.md 1.2, signed out), then the same sign-in on both sides
+        const gets = (...items) => el('div', { className: 'crew-gets' }, ...items.map(([path, label]) => el('span', { innerHTML: `<svg viewBox="0 0 24 24" aria-hidden="true">${path}</svg>${label}` })));
+        const signIn = () => [appleButton(),
+          el('a', { className: 'ink-btn solid', href: '/api/auth/google/start', textContent: 'Sign in with Google', style: 'display:flex;align-items:center;justify-content:center;text-decoration:none' }),
+          legalNote('By signing in you agree to the ')];
+        const waiting = stash('apex.invite') ? 'You have an invite. Sign in, then join with it.' : stash('apex.add') ? `Sign in to ask @${stash('apex.add')} to be your friend.` : '';
         body.append(el('img', { src: 'brand/logo.svg', alt: 'Vetta', width: 200, style: 'max-width:60%' }),
           el('h3', { textContent: 'Drive with friends' }),
-          // what you get, in three glyphs (REVIEW.md 1.2, Crew signed out)
-          el('div', { className: 'crew-gets' },
-            el('span', { innerHTML: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-6-6.2-6-11a6 6 0 0 1 12 0c0 4.8-6 11-6 11z"/><circle cx="12" cy="10" r="2.2"/></svg>Friends on the map' }),
-            el('span', { innerHTML: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20V10M12 20V4M19 20v-7"/></svg>The board' }),
-            el('span', { innerHTML: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="15"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>Crew drives' })),
-          el('p', { className: 'note', textContent: 'Vetta is invite-only. Nothing is shared unless you switch it on.' }),
-          appleButton(),
-          el('a', { className: 'ink-btn solid', href: '/api/auth/google/start', textContent: 'Sign in with Google', style: 'display:flex;align-items:center;justify-content:center;text-decoration:none' }),
-          legalNote('By signing in you agree to the '));
-        gbody.append(el('h3', { textContent: 'Your cars' }), el('p', { className: 'note', textContent: 'Sign in (Crew) to keep your cars, a profile and build threads here. Everything below works without it.' }));
+          gets(['<path d="M12 21s-6-6.2-6-11a6 6 0 0 1 12 0c0 4.8-6 11-6 11z"/><circle cx="12" cy="10" r="2.2"/>', 'Friends on the map'],
+            ['<path d="M5 20V10M12 20V4M19 20v-7"/>', 'The board'],
+            ['<path d="M6 20c0-5 12-3 12-9 0-3-3-4-6-6"/><circle cx="6" cy="20" r="1.4"/><circle cx="12" cy="5" r="1.4"/>', 'Shared routes']),
+          ...(waiting ? [el('p', { textContent: waiting })] : []),
+          el('p', { className: 'note', textContent: 'Vetta is invite-only. Nothing is shared unless you switch it on.' }), ...signIn());
+        cbody.append(el('h3', { textContent: 'Drive as a crew' }),
+          gets(['<path d="M12 3l7 3v5c0 5-3.5 8-7 10-3.5-2-7-5-7-10V6z"/>', 'Your crew’s page'],
+            ['<rect x="3" y="5" width="18" height="15"/><path d="M3 10h18M8 3v4M16 3v4"/>', 'Crew drives'],
+            ['<path d="M8 21l3-18M16 21l-3-18"/><circle cx="12" cy="16" r="1.6"/><circle cx="12" cy="9" r="1.6"/>', 'Convoys']),
+          ...(stash('apex.crew') ? [el('p', { textContent: 'You have a crew invite. Sign in to see which crew, then answer it.' })] : []),
+          el('p', { className: 'note', textContent: 'A crew is a group for a club or a weekend run: its own page, drives you plan together and a live convoy.' }), ...signIn());
+        gbody.append(el('h3', { textContent: 'Your cars' }), el('p', { className: 'note', textContent: 'Sign in (People) to keep your cars, a profile and build threads here. Everything below works without it.' }));
         return;
       }
       // Anyone signed in can take their data or close the account, member or not.
@@ -5078,17 +5126,20 @@
         body.append(el('h3', { textContent: 'Join with an invite' }), el('p', { className: 'note', textContent: 'Vetta is invite-only. Paste your invite.' }), el('div', { className: 'row' }, inp, btn('Join', join, 'ink-btn solid')),
           el('div', { className: 'row' }, btn('Sign out', async () => { await apiCall('POST', '/api/auth/logout'); ApexSync.setSession(null); redo(); }, 'linkbtn'),
             btn('Download my data', downloadMyData, 'linkbtn'), btn('Delete account', deleteMyAccount, 'danger-btn')));
+        cbody.append(...acrossToFriends('Crews', stash('apex.crew') ? 'You have a crew invite. Join Vetta with your own invite first, then answer it here.' : 'Crews open once you’re in. Vetta is invite-only: join with your invite first.', 'Join with an invite'));
         return;
       }
       if (!me.handle) {
         const inp = el('input', { className: 'field', placeholder: 'Pick a handle', autocomplete: 'off', autocapitalize: 'none', 'aria-label': 'Handle' });
         body.append(el('h3', { textContent: 'Pick a handle' }), el('p', { className: 'note', textContent: 'Friends find you by it. 3 to 20 letters, numbers or _.' }),
           el('div', { className: 'row' }, inp, btn('Save', async () => { const r = await apiCall('PUT', '/api/me/handle', { handle: inp.value }); if (r.ok) redo(); else toast(r.status === 409 ? 'That handle is taken.' : 'Use 3 to 20 letters, numbers or _.'); }, 'ink-btn solid')));
+        cbody.append(...acrossToFriends('Crews', 'Pick a handle first: it’s how your crew sees you.', 'Pick a handle'));
         return;
       }
       if (me.requests > 0) { const b = el('span', { className: 'badge', textContent: String(me.requests) }); b.setAttribute('aria-label', `${me.requests} friend requests`); $('crewTab').append(b); }
-      const [fr, gr, pts, ex, crews] = await Promise.all([apiCall('GET', '/api/friends').then(jsonOf), apiCall('GET', '/api/grants').then(jsonOf), apiCall('GET', '/api/points').then(jsonOf),
-        apiCall('GET', '/api/me/export').then(jsonOf), window.ApexSync && ApexSync.crews ? ApexSync.crews() : apiCall('GET', '/api/crews').then(jsonOf)]);
+      const [fr, gr, pts, ex, crews, live] = await Promise.all([apiCall('GET', '/api/friends').then(jsonOf), apiCall('GET', '/api/grants').then(jsonOf), apiCall('GET', '/api/points').then(jsonOf),
+        apiCall('GET', '/api/me/export').then(jsonOf), window.ApexSync && ApexSync.crews ? ApexSync.crews() : apiCall('GET', '/api/crews').then(jsonOf),
+        friendsMap ? friendsMap.sharing().catch(() => null) : null]);
       if (gen !== renderGen) return;
       const friends = Array.isArray(fr) ? fr : [], grants = new Map((Array.isArray(gr) ? gr : []).map(g => [g.audience_type + ':' + g.audience_id, g]));
       const putGrant = async (type, id, scores, times) => { await apiCall('PUT', '/api/grants', { audience_type: type, audience_id: id, share_scores: scores, share_times: times }); redo(); };
@@ -5099,105 +5150,55 @@
       const face = window.ApexPhotos ? ApexPhotos.avatar(me.photo_id, me.handle, 72) : null;
       you.append(el('div', { className: 'row', style: 'align-items:center;gap:12px' }, ...(face ? [face] : []), el('b', { textContent: `@${me.handle}`, style: 'font-size:22px;font-family:var(--font-num)' })));   // no "points": a number with no unit (REVIEW2.md U-41)
       if (face && me.member) you.append(el('div', { className: 'row' }, ApexPhotos.picker(me.photo_id ? 'Change photo' : 'Add a photo', 'profile', null, redo, { toast }),
-        ...(me.photo_id ? [btn('Remove photo', async () => { if (await ApexPhotos.remove(me.photo_id)) redo(); else toast('Couldn\u2019t remove it. Try again.'); }, 'linkbtn')] : [])),
+        ...(me.photo_id ? [btn('Remove photo', async () => { if (await ApexPhotos.remove(me.photo_id)) redo(); else toast('Couldn’t remove it. Try again.'); }, 'linkbtn')] : [])),
         el('p', { className: 'note', textContent: 'Photos lose their location data before they leave your phone.' }));
       // pioneer badges (IDEAS S-09): roads you were first or second to map with Road data on; only you see them
       const pio = pts && pts.pioneer;
       if (pio && (pio.firsts || pio.seconds)) you.append(el('p', { className: 'note pioneer', textContent: [pio.firsts ? `Pioneer of ${pio.firsts} road${pio.firsts === 1 ? '' : 's'}` : '', pio.seconds ? `second to map ${pio.seconds}` : ''].filter(Boolean).join(' · ') }));
-      const invOut = el('p', { className: 'note' });
-      const invite = section('Invite');
-      invite.append(el('div', { className: 'row' },
-        btn('Invite someone', async () => { const r = await apiCall('POST', '/api/invites'); const j = await jsonOf(r); if (r.ok) copyText(j.url, 'Invite link copied. They\'ll be your friend the moment they join, and you both get 5 points when they first share road data.'); else toast('Couldn\'t make an invite. Try again.'); }, 'ink-btn solid'),
-        btn('Share my handle', () => copyText(`${shareOrigin()}/?add=${me.handle}`, 'Link copied. Anyone who opens it can ask to be your friend.'))), invOut);
       gbody.append(you);
-      // your crew first (REVIEW.md 1.2 "Crew member"): its page, or a row of names to switch when you're in several
-      const myCrews = Array.isArray(crews) ? crews : [];
-      // In a crew, its page is the tab; the old list (crews, invite links, privacy, create, crews near you) is the settings
-      // sheet behind the gear, and the lists you browse are rows (REVIEW2.md U-30). Not in one yet, the list is the tab.
-      const inCrew = !!(crewPage && myCrews.length);
-      const popSheet = (title) => { const p = el('aside', { className: 'side-pop' }); p.setAttribute('aria-label', title);
+      // Lists one tap away open as side sheets over People (REVIEW2.md U-30): each a row with its count and a chevron.
+      const popSheet = (title) => { const p = el('aside', { className: 'side-pop people-pop' }); p.setAttribute('aria-label', title);
         p.append(el('div', { className: 'side-pop-head' }, el('h3', { textContent: title }), btn('Done', () => p.classList.remove('open'), 'linkbtn'))); return p; };
-      const crewSettings = popSheet('Crew settings'), pops = [crewSettings];
+      const pops = [];
+      const rowKey = (label, open) => { const count = el('small'), b = el('button', { className: 'nav-row', type: 'button' }, el('span', { textContent: label }), count, el('i', { 'aria-hidden': 'true' }));
+        b.addEventListener('click', open); b._count = count; return b; };
       const navRow = (label, content) => { const pop = popSheet(label); pop.append(content); pops.push(pop);
         const h = content.querySelector(':scope > h3'); if (h && h.textContent === label) h.remove();   // the pop's head names it once
-        const count = el('small'), b = el('button', { className: 'nav-row', type: 'button' }, el('span', { textContent: label }), count, el('i', { 'aria-hidden': 'true' }));
-        b.addEventListener('click', () => pop.classList.add('open')); b._count = count; return b; };
-      if (crewPage && myCrews.length) {
-        let cur = null; try { cur = localStorage.getItem('apex.crewPage'); } catch (_) {}
-        if (!myCrews.some((c) => c.id === cur)) cur = myCrews[0].id;
-        const holder = el('div', { className: 'stack-8' });
-        const gear = el('button', { className: 'gear-key', type: 'button', 'aria-label': 'Crew settings', innerHTML: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="6.5"/><circle cx="12" cy="12" r="8" stroke-width="3.2" stroke-dasharray="3.1 3.18"/></svg>' });
-        gear.addEventListener('click', () => crewSettings.classList.add('open'));
-        const openCrew = (id) => { try { localStorage.setItem('apex.crewPage', id); } catch (_) {}
-          const cur = myCrews.find((c) => c.id === id);
-          $('sheetHead').replaceChildren(myCrews.length > 1 ? crewPage.switcher(myCrews, id, openCrew) : el('b', { textContent: cur ? cur.name : '' }), gear);
-          holder.replaceChildren(crewPage.view(id)); };
-        openCrew(cur);
-        body.append(holder);
-      }
-      $('sheet').classList.toggle('crew-has-page', inCrew);
-      $('sheetHead').hidden = !inCrew; if (!inCrew) $('sheetHead').replaceChildren();
-      body.append(invite);
-      if (convoy) body.append(convoy.section());
-      const shared = sharedRoutesSection((n) => { if (sharedRow) sharedRow._count.textContent = n ? String(n) : ''; });
-      const drives = crewEvents ? (crewDrivesEl = crewEvents.section(Array.isArray(crews) ? crews.map((c) => ({ id: c.id, name: c.name, visibility: c.visibility, role: c.role })) : [])) : null;
-      let sharedRow = null;
-      if (inCrew) {
-        sharedRow = navRow('Routes shared with you', shared);
-        const rows = el('div', { className: 'nav-rows' }, sharedRow);
-        if (spotsFeed) rows.append(navRow('Spots near you', spotsFeed.section()));
-        if (drives) rows.append(navRow('Crew drives', drives));
-        body.append(rows);
-      } else {
-        body.append(shared);
-        if (spotsFeed) body.append(spotsFeed.section());
-        if (drives) body.append(drives);
-      }
-      if (crewStandings) body.append(crewStandings.section());
-      if (garage) gbody.append(garage.section());
-      if (builds) gbody.append(builds.followingSection());
+        const b = rowKey(label, () => pop.classList.add('open')); b._pop = pop; return b; };
 
-      // friends: a side pop-up (owner decision), opened from the button under You; new requests light it up
-      if (stash('apex.add')) friendsOpen = true;
-      const fpop = el('aside', { className: 'side-pop' + (friendsOpen ? ' open' : '') });
-      fpop.setAttribute('aria-label', 'Friends');
-      const closePop = () => { friendsOpen = false; unstash('apex.add'); fpop.classList.remove('open'); };
-      fpop.append(el('div', { className: 'side-pop-head' }, el('h3', { textContent: 'Friends' }), btn('Done', closePop, 'linkbtn')));
-      const nFriends = friends.filter(f => f.status === 'accepted').length, nReq = friends.filter(f => f.status === 'pending' && f.incoming).length;
-      invite.append(el('div', { className: 'row' }, btn(`Friends · ${nFriends}${nReq ? ` · ${nReq} new` : ''}`, () => { friendsOpen = true; fpop.classList.add('open'); }, nReq ? 'ink-btn solid' : 'ink-btn')));
-
-      // requests waiting on you
-      const incoming = friends.filter(f => f.status === 'pending' && f.incoming);
-      if (incoming.length) {
-        const sec = section(`Requests · ${incoming.length}`);
-        for (const f of incoming) sec.append(el('div', { className: 'row', style: 'align-items:center' }, el('b', { textContent: `@${f.handle || '?'}`, style: 'flex:1' }),
-          btn('Accept', async () => { await apiCall('POST', '/api/friends/accept', { user_id: f.id }); toast(`You and @${f.handle} are friends. Choose what to share below.`); redo(); }, 'ink-btn solid'),
-          btn('Decline', async () => { await apiCall('DELETE', `/api/friends/${f.id}`); redo(); })));
-        fpop.append(sec);
-      }
-
-      // A friend's profile (profile_view.js, IDEAS S-15): over the list in the pop-up; Back restores it.
-      const openProfile = async (f) => {
-        let p = null;
-        try { const r = await apiCall('GET', `/api/friends/${encodeURIComponent(f.id)}/profile`); p = r.ok ? await jsonOf(r) : null; } catch (_) {}
-        if (!p) { toast('Couldn\u2019t load the profile. Try again.'); return; }
-        const kept = [...fpop.childNodes], view = el('div', { className: 'stack-8 profile-view' });
-        ApexProfileView.show(view, p, { el, btn, back: () => fpop.replaceChildren(...kept) });
-        fpop.replaceChildren(view);
-      };
-      // friends
-      const fsec = section('Friends');
+      // ---- Friends: your friends first, one Invite key, then what friends share with you ----
       // Requests you sent live on this phone (the server doesn't list them, so a reply never tells which handles exist; IDEAS Z-12).
       const SENT_KEY = 'apex.sentRequests';
       const sentList = () => { try { return JSON.parse(localStorage.getItem(SENT_KEY) || '[]').filter(h => typeof h === 'string'); } catch (_) { return []; } };
       const setSent = (l) => { try { localStorage.setItem(SENT_KEY, JSON.stringify(l.slice(-30))); } catch (_) {} };
-      const accepted = friends.filter(f => f.status === 'accepted');
+      const accepted = friends.filter(f => f.status === 'accepted'), incoming = friends.filter(f => f.status === 'pending' && f.incoming);
       setSent(sentList().filter(h => !friends.some(f => f.handle === h)));   // accepted, or they asked you too: no longer "sent"
       const waiting = sentList();
-      if (!accepted.length && !waiting.length) fsec.append(el('p', { className: 'note', textContent: 'No friends yet. Invite someone, or add a member by handle.' }));
-      for (const f of accepted) {
-        const g = grants.get('friend:' + f.id) || { share_scores: 0, share_times: 0 }, card = el('div', { className: 'card' });
-        card.append(el('b', { textContent: `@${f.handle || '?'}` }),
+      // Where each friend is, from what they share with you (friends_map.js friendState): on the road, last seen, or not shared.
+      // The positions couldn't be read: no line, rather than "not sharing" said of everyone.
+      const where = new Map((Array.isArray(live) ? live : []).map((p) => [p.handle, p]));
+      const stateOf = (f) => (Array.isArray(live) && window.ApexFriendsMap ? ApexFriendsMap.friendState(where.get(f.handle)) : null);
+      const seenAt = (f) => { const p = where.get(f.handle), t = p ? Date.parse(p.at) : NaN; return Number.isFinite(t) ? t : -Infinity; };
+      const order = accepted.map((f) => ({ f, st: stateOf(f) })).sort((a, b) => (b.st && b.st.live) - (a.st && a.st.live) || (seenAt(b.f) - seenAt(a.f) || 0));
+
+      // A friend's profile (profile_view.js, IDEAS S-15): a sheet over the list; its back key returns to it.
+      const ppop = el('aside', { className: 'side-pop people-pop' }); ppop.setAttribute('aria-label', 'Friend'); pops.push(ppop);
+      const openProfile = async (f) => {
+        let p = null;
+        try { const r = await apiCall('GET', `/api/friends/${encodeURIComponent(f.id)}/profile`); p = r.ok ? await jsonOf(r) : null; } catch (_) {}
+        if (!p) { toast('Couldn’t load the profile. Try again.'); return; }
+        const view = el('div', { className: 'stack-8 profile-view' });
+        ApexProfileView.show(view, p, { el, btn, back: () => ppop.classList.remove('open') });
+        ppop.replaceChildren(view); ppop.classList.add('open');
+      };
+      const flist = el('div', { className: 'friend-list' });
+      for (const { f, st } of order) {
+        const g = grants.get('friend:' + f.id) || { share_scores: 0, share_times: 0 }, row = el('div', { className: 'friend' });
+        const av = window.ApexPhotos ? ApexPhotos.avatar((where.get(f.handle) || {}).photo_id || null, f.handle || '?', 40) : el('span');
+        const head = el('button', { className: 'friend-head', type: 'button' }, av,
+          el('span', { className: 'friend-who' }, el('b', { textContent: `@${f.handle || '?'}` }), el('small', { className: st && st.live ? 'live' : '', textContent: st ? st.text : (f.name || '') })),
+          el('i', { className: 'chev', 'aria-hidden': 'true' }));
+        const detail = el('div', { className: 'crew-detail stack-8' },
           el('div', { className: 'row' }, switchRow('Scores', g.share_scores, () => putGrant('friend', f.id, !g.share_scores, g.share_scores ? g.share_times : false)),
             switchRow('Times', g.share_times, () => putGrant('friend', f.id, true, !g.share_times))),
           el('span', { textContent: g.share_scores ? (g.share_times ? `@${f.handle} sees your scores and times.` : `@${f.handle} sees your scores.`) : `@${f.handle} sees nothing of yours yet.` }),
@@ -5206,24 +5207,70 @@
             btn('Unfriend', async () => { if (await ApexConfirm.ask(`Unfriend @${f.handle}? This also stops all sharing.`, 'Unfriend')) { await apiCall('DELETE', `/api/friends/${f.id}`); redo(); } }, 'danger-btn'),
             ...(safety && f.handle ? [btn('Report', () => safety.report({ kind: 'user', target: f.handle, label: `@${f.handle}`, who: f.handle, done: redo }), 'linkbtn'),
                                       btn('Block', () => safety.block(f.handle, redo), 'linkbtn')] : [])));
-        fsec.append(card);
+        const setOpen = (on) => { detail.hidden = !on; head.setAttribute('aria-expanded', String(on)); };
+        head.addEventListener('click', () => { const on = detail.hidden; openFriendId = on ? f.id : null; setOpen(on); });
+        setOpen(openFriendId === f.id);
+        row.append(head, detail);
+        flist.append(row);
       }
-      for (const h of waiting) fsec.append(el('div', { className: 'row', style: 'align-items:center' }, el('span', { style: 'flex:1', textContent: `@${h} · request sent` }),
-        btn('Cancel', async () => { await apiCall('POST', '/api/friends/request/cancel', { handle: h }); setSent(sentList().filter(x => x !== h)); redo(); }, 'linkbtn')));
-      const add = el('input', { className: 'field', placeholder: 'Add by handle', autocomplete: 'off', autocapitalize: 'none', 'aria-label': 'Friend handle', value: stash('apex.add') });
+      if (accepted.length) body.append(flist);
+      else body.append(el('p', { className: 'note', textContent: 'No friends yet. Invite someone to Vetta, or add a member by their handle.' }));
+
+      // One Invite key (the owner, 2026-10-30): someone new gets an invite link, a member your handle or a request; requests here too.
+      const ipop = popSheet('Invite'); pops.push(ipop);
+      ipop.querySelector('.side-pop-head button').addEventListener('click', () => { inviteOpen = false; unstash('apex.add'); });
+      const add = el('input', { className: 'field', placeholder: 'Their handle', autocomplete: 'off', autocapitalize: 'none', 'aria-label': 'Friend handle', value: stash('apex.add') });
       const sendRequest = async () => {
         const h = add.value.trim().replace(/^@/, '').toLowerCase(); if (!h) return;
         const r = await apiCall('POST', '/api/friends/request', { handle: h }); unstash('apex.add'); add.value = '';
         if (r.ok && !accepted.some(f => f.handle === h)) setSent([...sentList().filter(x => x !== h), h]);
         toast(r.ok ? `Request sent. @${h} sees it if they're a member.` : 'Couldn\'t send that. Try again.'); redo();
       };
-      fsec.append(el('div', { className: 'row' }, add, btn('Send request', sendRequest)));
-      fpop.append(fsec);
-      if (stash('apex.add') && add.value && !accepted.some(f => f.handle === add.value) ) { add.focus(); }
+      const reqSec = el('div', { className: 'stack-8' }, el('h3', { textContent: incoming.length ? `Requests · ${incoming.length}` : 'Requests' }));
+      for (const f of incoming) reqSec.append(el('div', { className: 'row', style: 'align-items:center' }, el('b', { textContent: `@${f.handle || '?'}`, style: 'flex:1' }),
+        btn('Accept', async () => { await apiCall('POST', '/api/friends/accept', { user_id: f.id }); toast(`You and @${f.handle} are friends. Choose what to share in their row.`); redo(); }, 'ink-btn solid'),
+        btn('Decline', async () => { await apiCall('DELETE', `/api/friends/${f.id}`); redo(); })));
+      for (const h of waiting) reqSec.append(el('div', { className: 'friend-sent' }, el('span', { textContent: `@${h} · request sent` }),
+        btn('Cancel', async () => { await apiCall('POST', '/api/friends/request/cancel', { handle: h }); setSent(sentList().filter(x => x !== h)); redo(); }, 'linkbtn')));
+      if (!incoming.length && !waiting.length) reqSec.append(el('p', { className: 'note', textContent: 'No requests waiting.' }));
+      ipop.append(
+        el('div', { className: 'stack-8' }, el('h3', { textContent: 'New to Vetta' }),
+          el('p', { className: 'note', textContent: 'Vetta is invite-only. They join with your link, and you’re friends the moment they do.' }),
+          btn('Send an invite link', async () => { const r = await apiCall('POST', '/api/invites'); const j = await jsonOf(r); if (r.ok) copyText(j.url, 'Invite link copied. They\'ll be your friend the moment they join, and you both get 5 points when they first share road data.'); else toast('Couldn\'t make an invite. Try again.'); }, 'ink-btn solid')),
+        el('div', { className: 'stack-8' }, el('h3', { textContent: 'Already on Vetta' }),
+          btn(`Share my handle · @${me.handle}`, () => copyText(`${shareOrigin()}/?add=${me.handle}`, 'Link copied. Anyone who opens it can ask to be your friend.')),
+          el('div', { className: 'row' }, add, btn('Send request', sendRequest))),
+        reqSec);
+      const openInvite = (toRequests) => { inviteOpen = true; ipop.classList.add('open'); if (toRequests) reqSec.scrollIntoView({ block: 'start' }); };
+      if (stash('apex.add') && peopleSide === 'friends') inviteOpen = true;   // a friend link opens its sheet, never over the Crews side
+      if (inviteOpen) ipop.classList.add('open');
+      body.append(el('div', { className: 'row' }, btn('Invite or add a friend', () => openInvite(false), 'ink-btn solid')));
 
-      // crews
-      const csec = section('Crews');
-      const crewList = Array.isArray(crews) ? crews : [];
+      const frows = el('div', { className: 'nav-rows' });
+      const reqRow = rowKey('Requests', () => openInvite(true));
+      reqRow._count.textContent = incoming.length ? `${incoming.length} new` : waiting.length ? `${waiting.length} sent` : '';
+      frows.append(reqRow);
+      let sharedRow = null;
+      sharedRow = navRow('Routes shared with you', sharedRoutesSection((n) => { if (sharedRow) sharedRow._count.textContent = n ? String(n) : ''; }));
+      frows.append(sharedRow);
+      if (spotsFeed) frows.append(navRow('Spots near you', spotsFeed.section()));
+      if (friendsMap) {
+        // Friends on the map and who sees you (friends_map.js): its own sheet, the row says who sees you now
+        const WHO = { nobody: 'Nobody sees you', crew: 'Your crews see you', friends: 'Friends see you' };
+        const paintWho = () => { whoRow._count.textContent = friendsMap.loaded ? WHO[friendsMap.settings.audience] || '' : ''; };
+        const whoRow = rowKey('Friends on the map', () => friendsMap.sheet(paintWho));
+        if (friendsMap.loaded) paintWho(); else friendsMap.loadSettings().then(paintWho).catch(() => {});
+        frows.append(whoRow);
+      }
+      body.append(frows);
+      if (stash('apex.add') && add.value && !accepted.some(f => f.handle === add.value)) add.focus();
+
+      // ---- Crews: your crew's page, its drives, the convoy, crews near you and a new one; crew invites live in a crew ----
+      const myCrews = Array.isArray(crews) ? crews : [], crewList = myCrews;
+      // In a crew, its page is the Crews side; the list of your crews (sharing, invite links, leave) is the settings
+      // sheet behind the gear, and the lists you browse are rows (REVIEW2.md U-30). Not in one yet, they are the side.
+      const inCrew = !!(crewPage && myCrews.length);
+      const crewSettings = popSheet('Crew settings'); pops.push(crewSettings);
       // A crew link asks first: joining shows your handle to its members, so it is never done for you by opening a link.
       if (stash('apex.crew')) {
         const tok = stash('apex.crew');
@@ -5247,7 +5294,7 @@
             actions.replaceChildren(btn('OK', redo, 'linkbtn'));
           }
         })();
-        csec.append(el('div', { className: 'card stack-8' }, what, why, actions));
+        cbody.append(el('div', { className: 'card stack-8' }, what, why, actions));
         actions.append(btn('Join crew', async (e) => {
             const b = e && e.currentTarget; if (b) { if (b.disabled) return; b.disabled = true; }
             let r = null;
@@ -5259,7 +5306,22 @@
             redo();
           }, 'ink-btn solid'), btn('Not now', () => { unstash('apex.crew'); redo(); }, 'linkbtn'));
       }
-      if (!crewList.length) csec.append(el('p', { className: 'note', textContent: 'A crew is a group for a club or a weekend run. You can be in several. Make one below, or join one near you.' }));
+      if (inCrew) {
+        let cur = null; try { cur = localStorage.getItem('apex.crewPage'); } catch (_) {}
+        if (!myCrews.some((c) => c.id === cur)) cur = myCrews[0].id;
+        const holder = el('div', { className: 'stack-8' }), chead = el('div', { className: 'crew-head' });
+        const gear = el('button', { className: 'gear-key', type: 'button', 'aria-label': 'Crew settings', innerHTML: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="6.5"/><circle cx="12" cy="12" r="8" stroke-width="3.2" stroke-dasharray="3.1 3.18"/></svg>' });
+        gear.addEventListener('click', () => crewSettings.classList.add('open'));
+        const openCrew = (id) => { try { localStorage.setItem('apex.crewPage', id); } catch (_) {}
+          const cur = myCrews.find((c) => c.id === id);
+          chead.replaceChildren(myCrews.length > 1 ? crewPage.switcher(myCrews, id, openCrew) : el('b', { textContent: cur ? cur.name : '' }), gear);
+          holder.replaceChildren(crewPage.view(id)); };
+        openCrew(cur);
+        cbody.append(chead, holder);
+      }
+      // your crews: a tile each, open for its members, what it sees of yours, its invite link (owners) and Leave
+      const csec = section('Your crews');
+      if (!crewList.length) csec.append(el('p', { className: 'note', textContent: 'A crew is a group for a club or a weekend run. You can be in several. Join one near you, or start one.' }));
       const tiles = el('div', { className: 'crew-tiles' });
       for (const c of crewList) {
         const g = grants.get('crew:' + c.id) || { share_scores: 0, share_times: 0 }, card = el('div', { className: 'card' });
@@ -5305,7 +5367,7 @@
           if (!mems.length) { mbox.append(el('p', { className: 'note', textContent: "Couldn't load members. Check signal." })); return; }
           for (const m of mems) {
             const label = typeof m === 'string' ? (m.startsWith('@') ? m : '@' + m) : (m.handle ? '@' + m.handle : (m.name || ''));
-            const sub = typeof m === 'object' && m ? [m.handle && m.name ? m.name : '', m.role === 'owner' ? 'Owner' : ''].filter(Boolean).join(' \u00b7 ') : '';
+            const sub = typeof m === 'object' && m ? [m.handle && m.name ? m.name : '', m.role === 'owner' ? 'Owner' : ''].filter(Boolean).join(' · ') : '';
             const other = typeof m === 'object' && m && m.handle && !m.mine && safety;
             mbox.append(el('div', { className: 'row', style: 'justify-content:space-between;align-items:center' }, el('b', { textContent: label }), sub ? el('span', { className: 'note', textContent: sub }) : '',
               ...(other ? [el('span', { className: 'row' }, btn('Report', () => safety.report({ kind: 'user', target: m.handle, label: `@${m.handle} in ${c.name}`, who: m.handle, done: redo }), 'linkbtn'),
@@ -5324,7 +5386,9 @@
         tiles.append(card);
       }
       if (crewList.length) csec.append(tiles);
+      (inCrew ? crewSettings : cbody).append(csec);
       // new crew: private (invite link) or public (findable nearby by an area you name)
+      const newSec = section('Start a crew');
       const cname = el('input', { className: 'field', placeholder: 'New crew name', autocomplete: 'off', maxLength: 40, 'aria-label': 'Crew name' });
       // private (an invite link) or public (people nearby can find it, by an area you name): a slide switch under its own label
       const cvis = el('div', { className: 'switch', role: 'radiogroup', value: 'private' });
@@ -5336,22 +5400,21 @@
         b.setAttribute('aria-checked', String(v === 'private'));
         cvis.append(b);
       }
-      csec.append(el('p', { className: 'ctl-label', textContent: 'New crew' }, el('small', { textContent: 'private is by invite link; public, people nearby can find it' })), cvis, carea);
-      csec.append(el('div', { className: 'row' }, cname, btn('Create', async () => {
+      newSec.append(el('p', { className: 'ctl-label', textContent: 'Who can join' }, el('small', { textContent: 'private is by invite link; public, people nearby can find it' })), cvis, carea);
+      newSec.append(el('div', { className: 'row' }, cname, btn('Create', async () => {
         if (!cname.value.trim()) return;
         const pub = cvis.value === 'public', near = crewNear();
         if (pub && carea.value.trim().length < 2) { toast('Name the area people nearby will see.'); return; }
         const r = await apiCall('POST', '/api/crews', pub ? { name: cname.value.trim(), visibility: 'public', area: { name: carea.value.trim(), lat: near.lat, lon: near.lon } } : { name: cname.value.trim() }); if (r.ok) redo(); else toast('Couldn\'t create the crew.'); })));
-      (inCrew ? crewSettings : body).append(csec);
-      if (inCrew && stash('apex.crew')) crewSettings.classList.add('open');   // a crew invite to answer: open where it is
 
       // public crews near you: tiles with Join (only name, area and size are shown; members stay private)
-      const nsec = section('Crews near you');
-      const near = crewNear();
-      const found = await apiCall('GET', `/api/crews/discover?lat=${near.lat.toFixed(2)}&lon=${near.lon.toFixed(2)}`).then(jsonOf).catch(() => null);
-      const nearby = Array.isArray(found) ? found : [];
-      if (!nearby.length) nsec.append(el('p', { className: 'note', textContent: found ? 'No public crews near you yet.' : 'Couldn\'t look for crews nearby. Check signal.' }));
-      else {
+      let nearbyRow = null;
+      const nsec = section('Crews near you'), near = crewNear();
+      apiCall('GET', `/api/crews/discover?lat=${near.lat.toFixed(2)}&lon=${near.lon.toFixed(2)}`).then(jsonOf).catch(() => null).then((found) => {
+        if (gen !== renderGen) return;
+        const nearby = Array.isArray(found) ? found : [];
+        if (nearbyRow) nearbyRow._count.textContent = nearby.length ? String(nearby.length) : '';
+        if (!nearby.length) { nsec.append(el('p', { className: 'note', textContent: found ? 'No public crews near you yet.' : 'Couldn\'t look for crews nearby. Check signal.' })); return; }
         const ntiles = el('div', { className: 'crew-tiles' });
         for (const c of nearby) {
           const t = el('div', { className: 'card' });
@@ -5364,12 +5427,27 @@
           ntiles.append(t);
         }
         nsec.append(ntiles);
+      });
+      // Crew drives (crew_events.js): planned drives across your crews, RSVPs and meets near you
+      const drives = crewEvents ? (crewDrivesEl = crewEvents.section(myCrews.map((c) => ({ id: c.id, name: c.name, visibility: c.visibility, role: c.role })))) : null;
+      if (inCrew) {
+        const rows = el('div', { className: 'nav-rows' });
+        if (drives) rows.append(navRow('Crew drives', drives));
+        rows.append(nearbyRow = navRow('Crews near you', nsec), navRow('Start a crew', newSec));
+        cbody.append(rows);
+        if (convoy) cbody.append(convoy.section());
+      } else {
+        cbody.append(nsec, newSec);
+        if (drives) cbody.append(drives);
+        if (convoy) cbody.append(convoy.section());
       }
-      (inCrew ? crewSettings : body).append(nsec);
-      document.querySelectorAll('.side-pop').forEach(n => n.remove());       // one pop-up; on the page, not inside the sliding sheet
-      document.body.append(fpop, ...pops);
+      if (crewStandings) cbody.append(crewStandings.section());
+      document.querySelectorAll('.side-pop.people-pop').forEach(n => n.remove());       // People's sheets: on the page, not inside the sliding sheet
+      document.body.append(...pops);
+      if (garage) gbody.append(garage.section());
+      if (builds) gbody.append(builds.followingSection());
 
-      // points board
+      // points board (members, friends side)
       if (pts && pts.board && pts.board.length) {
         const bsec = section('Points board');
         pts.board.slice(0, 10).forEach((r, k) => bsec.append(el('div', { className: 'row', style: 'justify-content:space-between' }, el('span', { textContent: `${k + 1}  @${r.handle}` }), el('b', { textContent: String(r.total) }))));
@@ -5875,7 +5953,7 @@
         if (state.toggles.terrain && power.low) toast('3D terrain waits until the phone stops saving battery.');
       }
       if (k === 'friends') {   // REVIEW.md 5.4: seeing friends; the first time, the sheet explains both choices
-        if (!accountMe || !accountMe.member) { state.toggles.friends = false; paintSwitches(); toast('Sign in (Crew) to see friends on the map.'); return; }
+        if (!accountMe || !accountMe.member) { state.toggles.friends = false; paintSwitches(); toast('Sign in (People) to see friends on the map.'); return; }
         if (friendsMap) friendsMap.setLayer(state.toggles.friends);
         let seen = false; try { seen = localStorage.getItem('apex.friendsExplained') === '1'; localStorage.setItem('apex.friendsExplained', '1'); } catch (_) {}
         if (state.toggles.friends && !seen && friendsMap) friendsMap.sheet();
@@ -6060,7 +6138,7 @@
       const note = $('ambientNote'); if (!note) return;
       const a = ambientStats(), mi = a ? `${ApexUnits.long((a.km) * 1000, 1)} shared since the app opened` : '';
       note.textContent = !NATIVE_SHELL ? 'Shared while you drive. In the iPhone app it also shares whenever the phone is mounted.'
-        : ambient.allowed === false ? 'Off. Sign in and turn on Road data in Crew to share.'
+        : ambient.allowed === false ? 'Off. Sign in and turn on Share road feel in the Garage to share.'
         : !ambient.mounted ? 'Waiting for the phone to be calibrated in its mount.'
         : a && a.paused ? 'Paused: the server refused. Trying again in a few minutes.'
         : a && a.error ? `Couldn't reach the server. Retrying. ${mi}`
@@ -6402,7 +6480,7 @@
       if (window.APEX_REVIEW) r = reviewHazard(body);
       else try { r = await ApexSync.apiFetch('/api/hazards', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }); } catch (_) {}
       if (!r || r.status >= 500) { outbox.add('/api/hazards', body, true); health.bump('hazard_queued'); toast(`No signal. ${word} saved; it's sent when you have one.`); return; }
-      if (r.status === 401 || r.status === 403) { toast('Sign in (Crew) to report hazards for others.'); return; }
+      if (r.status === 401 || r.status === 403) { toast('Sign in (People) to report hazards for others.'); return; }
       if (!r.ok) { toast(r.status === 429 ? 'That\'s a lot of reports today.' : 'Couldn\'t send that. Try again.'); return; }
       const j = await r.json(); reported.mine.add(j.id); reported.said.add(j.id);
       toast(j.confirmed ? `${word}: someone reported it already. You confirmed it.` : `${word} reported. Drivers behind you will hear about it.`);
@@ -7082,7 +7160,7 @@
     document.addEventListener('keydown', (e) => { if (e.key === 'Tab' || e.key.startsWith('Arrow')) document.documentElement.classList.add('kbd'); }, true);
     document.addEventListener('pointerdown', () => document.documentElement.classList.remove('kbd'), true);
     // An invite, crew, friend or convoy link opened while the app is running: take it in place (never reload mid-drive) and
-    // show the Crew sheet, where each one still waits for a tap.
+    // show it on its side of People, where each one still waits for a tap.
     function openAppLink(p) {
       const ok = (v) => typeof v === 'string' && /^[A-Za-z0-9._-]{1,200}$/.test(v);
       try {
@@ -7100,7 +7178,7 @@
         else if (p.go === 'skipstage') skipStage();
         return;
       }
-      showView('crew'); renderAccount();
+      showView(ok(p.crew) || ok(p.convoy) ? 'crews' : 'friends'); renderAccount();
     }
     // Siri (IDEAS V-07): "how far to the next stage" says it aloud; "skip this stage" drops the stage you're on or the next
     // one and reroutes to your next stop or the destination (only on a fun route with stages, during a drive).
@@ -7356,7 +7434,7 @@
         booting = false; paintIdle();
       }
       if (params.get('book') === '1' || params.get('view') === 'route' || params.get('view') === 'drives') openPlan(true);
-      if (VIEW_TITLES[params.get('view')] || params.get('view') === 'setup') openSheet(params.get('view'));
+      if (VIEW_TITLES[params.get('view')] || PEOPLE_SIDES[params.get('view')] || params.get('view') === 'setup') openSheet(params.get('view'));
       if (params.get('go') === 'drive') driveFromLink();   // the app opened from apexnav://open?go=drive (IDEAS C-05)
       recoverKept().catch((e) => console.error('recover drives', e));   // Round 3: a drive never ended goes to the Log
     }
