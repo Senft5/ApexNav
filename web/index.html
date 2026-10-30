@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-HE4W1X27R4kb8FVkdIv3I946l1C5Fz8AEABrJakdYIc=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-porG5E663yvTmkOsE+FgS8mzkcz0kEGfKWpISeoX7lg=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <!-- REVIEW4 U-80 (check): before the stylesheets and the hundred scripts below (seconds on a cold start), the page's very
@@ -236,6 +236,11 @@
     .plan-search input::-webkit-search-cancel-button { -webkit-appearance: none; }
     .plan-cancel { flex: none; padding: 0 4px; font-size: 15px; }
     .plan:not(.open) .plan-cancel, .plan.open .btn-start, .plan.open .plan-clear { display: none; }
+    /* P-11: the Start key's chevron, one key with it (the gap closed, a hairline between) */
+    .btn-start.start-more { width: 34px; padding: 0; justify-content: center; margin-left: -8px; box-shadow: inset 0 -3px 0 rgba(0,0,0,0.28), inset 1.5px 0 0 rgba(0,0,0,0.22); }
+    .btn-start.start-more svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    .start-sheet .card-sheet .rec-key { width: 100%; }
+    .plan.routed .start-more { display: none; }   /* a planned route has its own bar (clear, details): Convoy now is the idle map's */
     .plan.routed .plan-search, .plan:not(.routed) .route-bar, .plan:not(.routed) .plan-clear, .plan.routed .plan-search-section { display: none; }
     .route-bar { flex: 1; min-width: 0; height: 44px; display: grid; align-content: center; text-align: left; padding: 0 2px; }
     .route-bar b { font-size: 16px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1042,6 +1047,8 @@
             <input id="destInput" type="search" placeholder="Where to?" aria-label="Where to" aria-controls="planBody" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="go" /></label>
           <button class="route-bar" id="routeBar" aria-label="Route details"><b id="routeBarName">--</b><span id="routeBarMeta"></span><em class="rb-open" aria-hidden="true"><svg viewBox="0 0 12 12"><path d="M2 8 L6 4 L10 8"/></svg></em></button>
           <button class="btn-start" id="startDrive" aria-label="Start drive"><i></i>Start</button>
+          <!-- P-11: the Start key's other way to go, a convoy now (no crew); a tap on Start itself still drives at once -->
+          <button class="btn-start start-more" id="startMore" aria-label="More ways to start: Drive, or Convoy now" aria-haspopup="dialog"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 4.5 L6 8.5 L10 4.5"/></svg></button>
           <button class="plan-clear" id="planClear" aria-label="Clear route"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
           <button class="linkbtn plan-cancel" id="planCancel">Cancel</button>
         </div>
@@ -4978,6 +4985,7 @@
       // A close hazard cuts in; a far one goes next, after the pace note being spoken (never dropping the notes queued).
       speak: (text, urgent) => { if (!state.toggles.voice) toast(text); else if (urgent) say(text, true, null, null, { kind: 'hazard', alert: true }); else sayNext(text, `convoy:${text}`); },
       onRegroup: (rg, convoyName) => regroupSay(rg, convoyName),
+      drive: () => startDrive(),                                       // the convoy sheet's "Start the drive" (Convoy now, P-11)
     }) : null; } catch (e) { console.error('convoy', e); convoy = null; }   // the convoy never takes the page down
     // Garage (web/garage_ui.js): your cars, and the ones friends and crew-mates show.
     // Block and report (web/safety_ui.js) on every social surface below; the garage uses it for friends' cars.
@@ -4990,7 +4998,18 @@
       myHandle: () => (accountMe && accountMe.handle) || null,
       plannedRoute: () => (plannedRoute && plannedRoute.lat.length > 1 ? { name: plannedRoute.name, geom: sharedGeom(plannedRoute) } : null),
       goTo: (p) => { closeSheet(); routeToPlace(p); }, openRoute: (id) => openSharedRoute(id),
-      startConvoy: (name, handles) => (convoy && convoy.startFor ? convoy.startFor(name, handles) : Promise.resolve({ ok: false, status: 0 })),
+      // the run as one card (REVIEW_PEOPLE.md P-03, P-11): the convoy lives on it; "Meet at…" is Where to?'s own search (P-10)
+      convoy: () => convoy, avatar: (id, h, px) => (window.ApexPhotos ? ApexPhotos.avatar(id, h, px) : null),
+      searchPlaces: async (q) => {
+        let segs = [];
+        try { segs = JSON.parse(localStorage.getItem('apex.segments') || '[]'); } catch (_) {}
+        const mine = ApexPlaceSearch.localMatches(q, segs, loadHighlights()).map((m) => ({ label: m.label, sub: m.kind, lat: m.lat, lon: m.lon }));
+        let rows;
+        try { rows = (IN_APP_SHELL && await appleSuggest(q)) || await photonSuggest(q); } catch (_) { return mine.length ? mine : null; }
+        return [...mine, ...rows.filter((r) => !mine.some((m) => ApexPlaceSearch.norm(m.label) === ApexPlaceSearch.norm(r.label)))];
+      },
+      resolvePlace: (r) => (r && r.apple ? appleResolve(r) : Promise.resolve(null)),
+      openWhereTo: () => { toast('Plan the route, then plan the drive.'); showView('route'); },
     }) : null; } catch (e) { console.error('crew drives', e); }
     // A regroup call in a convoy (crew_voice.js): a Factory crew's own line in the theme pack's voice when the convoy is the
     // crew's and the clip exists; otherwise "Regroup at <note>" like any other line. The note is always on screen.
@@ -5018,7 +5037,10 @@
     const toDrives = () => { const pop = crewDrivesEl && crewDrivesEl.closest('.side-pop'); if (pop) pop.classList.add('open'); else if (crewDrivesEl) crewDrivesEl.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
     try { crewPage = window.ApexCrewPage ? ApexCrewPage.mount({ el, btn, toast, apiCall, jsonOf, report: safety && safety.report,
       invite: async (c) => { const r = await apiCall('POST', `/api/crews/${c.id}/invite`); const j = await jsonOf(r); if (r.ok) copyText(`${shareOrigin()}/?crew=${j.token}`, 'Crew link copied.'); else toast(j && j.error === 'too_many_open_invites' ? 'You have 10 open crew links. Turn some off first.' : 'Couldn\'t make a link. Try again.'); },
-      openRoute: (id) => openSharedRoute(id), builds: () => builds, shareImage: (cv, name) => (window.ApexDriveCard ? ApexDriveCard.shareCard(cv, name) : null), onAllDrives: toDrives, onPlan: (c) => { if (crewEvents) crewEvents.plan(c.id); toDrives(); } }) : null; } catch (e) { console.error('crew page', e); }
+      openRoute: (id) => openSharedRoute(id), builds: () => builds, shareImage: (cv, name) => (window.ApexDriveCard ? ApexDriveCard.shareCard(cv, name) : null), onAllDrives: toDrives, onPlan: (c) => { if (crewEvents) crewEvents.plan(c.id); toDrives(); },
+      // P-18: the crew page's drive is the Crew drives sheet's card; a change on one redraws the other
+      driveCard: (e, o) => (crewEvents ? crewEvents.card(e, { ...o, redo: () => { o.redo(); crewEvents.refresh(); } }) : null),
+      block: safety ? (handle) => safety.block(handle, () => renderAccount()) : null }) : null; } catch (e) { console.error('crew page', e); }
     // Units (web/units.js, IDEAS U-22): every number is formatted when it is drawn, so a change redraws in place (the owner,
     // 2026-10-29: no page reloads). The cluster's unit labels, the loop lengths, the route card and the open sheet are redrawn
     // now; anything else picks the units up the next time it draws. Never mid-drive: the cluster would change under the driver.
@@ -5300,6 +5322,41 @@
       // sheet behind the gear, and the lists you browse are rows (REVIEW2.md U-30). Not in one yet, they are the side.
       const inCrew = !!(crewPage && myCrews.length);
       const crewSettings = popSheet('Crew settings'); pops.push(crewSettings);
+      // P-31: the gear is the settings of the crew on the page: what it sees of yours, its links and who can find it (the
+      // owner), and Leave. Its members are on the page now (P-06), Report and Block one tap into each.
+      const crewSettingsFor = (c) => {
+        const g = grants.get('crew:' + c.id) || { share_scores: 0, share_times: 0 }, box = el('div', { className: 'stack-12 crew-settings' });
+        const count = typeof c.members === 'number' ? c.members : Array.isArray(c.members) ? c.members.length : 0;
+        const kind = c.visibility === 'public' ? `Public${c.area_name ? ' · ' + c.area_name : ''}` : 'Private';
+        // owner: switch between private (invite link) and public (people nearby can find it; needs an area name)
+        const ownerBox = el('div', { className: 'stack-8' });
+        if (c.role === 'owner') {
+          ownerBox.append(btn('Turn off invite links', async () => {
+            if (!(await ApexConfirm.ask(`Turn off every invite link to ${c.name}? People already in stay in.`, 'Turn off'))) return;
+            const r = await apiCall('DELETE', `/api/crews/${c.id}/invites`); const j = await jsonOf(r);
+            toast(r.ok ? (j.revoked ? `Old links to ${c.name} no longer work.` : `${c.name} had no open links.`) : 'Couldn\'t change that. Try again.');
+          }, 'linkbtn'));
+          if (c.visibility === 'public') ownerBox.append(btn('Make private', async () => { const r = await apiCall('PUT', `/api/crews/${c.id}`, { visibility: 'private', about: c.about || '' }); if (r.ok) redo(); else toast('Couldn\'t change that. Try again.'); }, 'linkbtn'));
+          else {
+            const areaIn = el('input', { className: 'field', placeholder: 'Area people nearby will see, like Robbinsville', maxLength: 60, autocomplete: 'off' });
+            ownerBox.append(el('div', { className: 'row' }, areaIn, btn('Make public', async () => {
+              const near = crewNear(), name = areaIn.value.trim();
+              if (name.length < 2) { toast('Name the area people nearby will see.'); return; }
+              const r = await apiCall('PUT', `/api/crews/${c.id}`, { visibility: 'public', about: c.about || '', area: { name, lat: near.lat, lon: near.lon } });
+              if (r.ok) { toast(`${c.name} is public. People near ${name} can find and join it.`); redo(); } else toast('Couldn\'t change that. Try again.');
+            })));
+          }
+        }
+        box.append(el('div', { className: 'stack-8' }, el('b', { textContent: c.name }), el('span', { className: 'note', textContent: `${count} ${count === 1 ? 'member' : 'members'} · ${kind}${c.role === 'owner' ? ' · you run it' : ''}` })),
+          el('div', { className: 'stack-8' }, el('p', { className: 'ctl-label', textContent: 'What it sees of yours' }),
+            el('div', { className: 'row' }, switchRow('Scores', g.share_scores, () => putGrant('crew', c.id, !g.share_scores, g.share_scores ? g.share_times : false)),
+              switchRow('Times', g.share_times, () => putGrant('crew', c.id, true, !g.share_times))),
+            el('span', { textContent: g.share_scores ? (g.share_times ? `${c.name} sees your scores and times.` : `${c.name} sees your scores.`) : `${c.name} sees nothing of yours yet.` })),
+          ownerBox,
+          el('div', { className: 'row' }, btn('Invite to crew', async () => { const r = await apiCall('POST', `/api/crews/${c.id}/invite`); const j = await jsonOf(r); if (r.ok) copyText(`${shareOrigin()}/?crew=${j.token}`, 'Crew link copied.'); else toast(j && j.error === 'too_many_open_invites' ? 'You have 10 open crew links. Turn some off first.' : 'Only a crew\'s owner can invite.'); }),
+            btn('Leave', async () => { if (await ApexConfirm.ask(`Leave ${c.name}?`, 'Leave')) { await apiCall('DELETE', `/api/crews/${c.id}/membership`); redo(); } }, 'danger-btn')));
+        return box;
+      };
       // A crew link asks first: joining shows your handle to its members, so it is never done for you by opening a link.
       if (stash('apex.crew')) {
         const tok = stash('apex.crew');
@@ -5344,78 +5401,15 @@
         const openCrew = (id) => { try { localStorage.setItem('apex.crewPage', id); } catch (_) {}
           const cur = myCrews.find((c) => c.id === id);
           chead.replaceChildren(myCrews.length > 1 ? crewPage.switcher(myCrews, id, openCrew) : el('b', { textContent: cur ? cur.name : '' }), gear);
-          holder.replaceChildren(crewPage.view(id)); };
+          holder.replaceChildren(crewPage.view(id));
+          if (cur) crewSettings.replaceChildren(crewSettings.firstElementChild, crewSettingsFor(cur)); };
         openCrew(cur);
         cbody.append(chead, holder);
       }
-      // your crews: a tile each, open for its members, what it sees of yours, its invite link (owners) and Leave
+      // not in a crew yet: what one is (in one, its settings are the gear's, above)
       const csec = section('Your crews');
       if (!crewList.length) csec.append(el('p', { className: 'note', textContent: 'A crew is a group for a club or a weekend run. You can be in several. Join one near you, or start one.' }));
-      const tiles = el('div', { className: 'crew-tiles' });
-      for (const c of crewList) {
-        const g = grants.get('crew:' + c.id) || { share_scores: 0, share_times: 0 }, card = el('div', { className: 'card' });
-        const count = typeof c.members === 'number' ? c.members : Array.isArray(c.members) ? c.members.length : 0;
-        const kind = c.visibility === 'public' ? `Public${c.area_name ? ' · ' + c.area_name : ''}` : 'Private';
-        const chev = el('span', { textContent: `${count} ${count === 1 ? 'member' : 'members'} · ${kind}` });
-        const head = el('button', { className: 'crew-tile-head' }, el('b', { textContent: c.name }), chev, el('i', { className: 'chev', 'aria-hidden': 'true' }));
-        if (c.about) head.append(el('em', { textContent: c.about }));
-        // owner: switch between private (invite link) and public (people nearby can find it; needs an area name)
-        const ownerBox = el('div', { className: 'stack-8' });
-        if (c.role === 'owner') {
-          ownerBox.append(btn('Turn off invite links', async () => {
-            if (!(await ApexConfirm.ask(`Turn off every invite link to ${c.name}? People already in stay in.`, 'Turn off'))) return;
-            const r = await apiCall('DELETE', `/api/crews/${c.id}/invites`); const j = await jsonOf(r);
-            toast(r.ok ? (j.revoked ? `Old links to ${c.name} no longer work.` : `${c.name} had no open links.`) : 'Couldn\'t change that. Try again.');
-          }, 'linkbtn'));
-          if (c.visibility === 'public') ownerBox.append(btn('Make private', async () => { const r = await apiCall('PUT', `/api/crews/${c.id}`, { visibility: 'private', about: c.about || '' }); if (r.ok) redo(); else toast('Couldn\'t change that. Try again.'); }, 'linkbtn'));
-          else {
-            const areaIn = el('input', { className: 'field', placeholder: 'Area people nearby will see, like Robbinsville', maxLength: 60, autocomplete: 'off' });
-            ownerBox.append(el('div', { className: 'row' }, areaIn, btn('Make public', async () => {
-              const near = crewNear(), name = areaIn.value.trim();
-              if (name.length < 2) { toast('Name the area people nearby will see.'); return; }
-              const r = await apiCall('PUT', `/api/crews/${c.id}`, { visibility: 'public', about: c.about || '', area: { name, lat: near.lat, lon: near.lon } });
-              if (r.ok) { toast(`${c.name} is public. People near ${name} can find and join it.`); redo(); } else toast('Couldn\'t change that. Try again.');
-            })));
-          }
-        }
-        const mbox = el('div', { className: 'stack-8' });
-        const detail = el('div', { className: 'crew-detail stack-8', hidden: openCrewId !== c.id },
-          mbox,
-          el('div', { className: 'row' }, switchRow('Scores', g.share_scores, () => putGrant('crew', c.id, !g.share_scores, g.share_scores ? g.share_times : false)),
-            switchRow('Times', g.share_times, () => putGrant('crew', c.id, true, !g.share_times))),
-          el('span', { textContent: g.share_scores ? (g.share_times ? `${c.name} sees your scores and times.` : `${c.name} sees your scores.`) : `${c.name} sees nothing of yours yet.` }),
-          ownerBox,
-          el('div', { className: 'row' }, btn('Invite to crew', async () => { const r = await apiCall('POST', `/api/crews/${c.id}/invite`); const j = await jsonOf(r); if (r.ok) copyText(`${shareOrigin()}/?crew=${j.token}`, 'Crew link copied.'); else toast(j && j.error === 'too_many_open_invites' ? 'You have 10 open crew links. Turn some off first.' : 'Only a crew\'s owner can invite.'); }),
-            btn('Leave', async () => { if (await ApexConfirm.ask(`Leave ${c.name}?`, 'Leave')) { if (openCrewId === c.id) openCrewId = null; await apiCall('DELETE', `/api/crews/${c.id}/membership`); redo(); } }, 'danger-btn')));
-        const loadMembers = async () => {
-          mbox.innerHTML = '';
-          let list = Array.isArray(c.member_list) ? c.member_list : Array.isArray(c.members) ? c.members : null;
-          if (!list) list = window.ApexSync && ApexSync.crewMembers ? await ApexSync.crewMembers(c.id) : await apiCall('GET', `/api/crews/${encodeURIComponent(c.id)}/members`).then(jsonOf);
-          const mems = Array.isArray(list) ? list : [];
-          // You are always on your own crew's list, so an empty one means the request failed.
-          if (!mems.length) { mbox.append(el('p', { className: 'note', textContent: "Couldn't load members. Check signal." })); return; }
-          for (const m of mems) {
-            const label = typeof m === 'string' ? (m.startsWith('@') ? m : '@' + m) : (m.handle ? '@' + m.handle : (m.name || ''));
-            const sub = typeof m === 'object' && m ? [m.handle && m.name ? m.name : '', m.role === 'owner' ? 'Owner' : ''].filter(Boolean).join(' · ') : '';
-            const other = typeof m === 'object' && m && m.handle && !m.mine && safety;
-            mbox.append(el('div', { className: 'row', style: 'justify-content:space-between;align-items:center' }, el('b', { textContent: label }), sub ? el('span', { className: 'note', textContent: sub }) : '',
-              ...(other ? [el('span', { className: 'row' }, btn('Report', () => safety.report({ kind: 'user', target: m.handle, label: `@${m.handle} in ${c.name}`, who: m.handle, done: redo }), 'linkbtn'),
-                                                          btn('Block', () => safety.block(m.handle, redo), 'linkbtn'))] : [])));
-          }
-        };
-        const setOpen = (on) => {
-          detail.hidden = !on;
-          card.classList.toggle('open', on);
-          head.setAttribute('aria-expanded', String(on));
-          if (on) loadMembers();
-        };
-        head.onclick = () => { const open = detail.hidden; openCrewId = open ? c.id : null; setOpen(open); };
-        setOpen(openCrewId === c.id);
-        card.append(head, detail);
-        tiles.append(card);
-      }
-      if (crewList.length) csec.append(tiles);
-      (inCrew ? crewSettings : cbody).append(csec);
+      if (!inCrew) cbody.append(csec);
       // new crew: private (invite link) or public (findable nearby by an area you name)
       const newSec = section('Start a crew');
       const cname = el('input', { className: 'field', placeholder: 'New crew name', autocomplete: 'off', maxLength: 40, 'aria-label': 'Crew name' });
@@ -5464,12 +5458,11 @@
         if (drives) rows.append(navRow('Crew drives', drives));
         rows.append(nearbyRow = navRow('Crews near you', nsec), navRow('Start a crew', newSec));
         cbody.append(rows);
-        if (convoy) cbody.append(convoy.section());
       } else {
         cbody.append(nsec, newSec);
         if (drives) cbody.append(drives);
-        if (convoy) cbody.append(convoy.section());
       }
+      // P-11: no Convoy section. A crew's convoy is its drive's card; an ad-hoc one is the map's Start key (Convoy now).
       if (crewStandings) cbody.append(crewStandings.section());
       document.querySelectorAll('.side-pop.people-pop').forEach(n => n.remove());       // People's sheets: on the page, not inside the sliding sheet
       document.body.append(...pops);
@@ -7091,6 +7084,26 @@
     $('permGo').addEventListener('click', () => { if (locDenied) return; flag('apex.permsExplained', '1'); $('permSheet').classList.remove('show'); enterDrive(); });
     $('permNo').addEventListener('click', () => $('permSheet').classList.remove('show'));
     $('startDrive').addEventListener('click', startDrive);
+    // P-11: Start's other way to go. A crew's convoy starts from its drive's card; this is the one for two friends met at a
+    // petrol station: a convoy now, no crew, its code on the screen for them to scan.
+    $('startMore').addEventListener('click', () => {
+      if (state.mode === 'live') return;
+      const back = el('div', { className: 'overlay dim show start-sheet' });
+      back.setAttribute('role', 'dialog'); back.setAttribute('aria-modal', 'true'); back.setAttribute('aria-label', 'Start');
+      const close = () => { back.remove(); document.removeEventListener('keydown', esc); };
+      const esc = (e) => { if (e.key === 'Escape') close(); };
+      const drive = el('button', { className: 'rec-key', disabled: locDenied }, el('i'), 'Drive');
+      drive.addEventListener('click', () => { close(); startDrive(); });
+      const name = (accountMe && accountMe.handle ? `@${accountMe.handle}'s convoy` : 'Convoy');
+      back.append(el('div', { className: 'card-sheet' }, el('h2', { textContent: 'Start' }), drive,
+        btn('Convoy now', () => { close(); if (convoy) convoy.now(name); else toast('The convoy isn\u2019t available here.'); }, 'ink-btn'),
+        el('p', { textContent: 'A convoy: drive together, live, for up to two hours. Friends join with the code on your screen; nothing is kept. A crew\u2019s run starts its convoy from the drive\u2019s card.' }),
+        btn('Cancel', close, 'linkbtn')));
+      back.addEventListener('click', (e) => { if (e.target === back) close(); });
+      document.addEventListener('keydown', esc);
+      document.body.append(back);
+      drive.focus();
+    });
     $('trialStop').addEventListener('click', () => endThemeTrial(false));
     // the plate's × and (U-104) the transport's Done close a replay or a preview alike
     const closeReplay = () => { if (state.mode === 'live' || !replayOn) return; replayOn = false; setPlaying(false); paintIdle(); };

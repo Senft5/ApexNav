@@ -32,7 +32,7 @@ import { redeem, shop } from "./redeem";
 import { flagsFor } from "./flags";
 import { coverage, exportRoads, roadBins } from "./roads";
 import { crewStandings } from "./standings";
-import { eventCancel, eventCreate, eventRole, eventRsvp, eventsList, eventsNear } from "./events";
+import { eventCame, eventCancel, eventCreate, eventRecord, eventRole, eventRsvp, eventUpdate, eventsList, eventsNear } from "./events";
 import { healthReport, healthSummary } from "./health";
 import { feedbackCreate, feedbackDone, feedbackList } from "./feedback";
 import { friendProfile } from "./profile";
@@ -145,6 +145,11 @@ on("GET", "/api/events", async (req, env) => json(await eventsList(env, await re
 on("POST", "/api/events/:id/rsvp", async (req, env, m) => { await eventRsvp(env, await requireMember(req, env), m.groups!.id, req); return noContent(); });
 on("POST", "/api/events/:id/role", async (req, env, m) => { await eventRole(env, await requireMember(req, env), m.groups!.id, req); return noContent(); });
 on("DELETE", "/api/events/:id", async (req, env, m) => { await eventCancel(env, await requireMember(req, env), m.groups!.id); return noContent(); });
+// the run as one card (REVIEW_PEOPLE.md P-03, P-10): set the rest on the card, who came, and the drive remembered
+on("PUT", "/api/events/:id", async (req, env, m) => { await eventUpdate(env, await requireMember(req, env), m.groups!.id, req); return noContent(); });
+on("POST", "/api/events/:id/came", async (req, env, m) => { await eventCame(env, await requireMember(req, env), m.groups!.id, true); return noContent(); });
+on("DELETE", "/api/events/:id/came", async (req, env, m) => { await eventCame(env, await requireMember(req, env), m.groups!.id, false); return noContent(); });
+on("GET", "/api/events/:id/record", async (req, env, m) => json(await eventRecord(env, await requireMember(req, env), m.groups!.id)));
 // the crew page (src/crew_page.ts, REVIEW.md roadmap 20)
 on("GET", "/api/crews/:id/page", async (req, env, m) => json(await crewPage(env, await requireMember(req, env), m.groups!.id)));
 on("PUT", "/api/crews/:id/page", async (req, env, m) => { await crewPageUpdate(env, await requireMember(req, env), m.groups!.id, req); return noContent(); });

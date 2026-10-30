@@ -167,8 +167,8 @@ export async function crewJoinPublic(env: Env, v: Viewer, crewId: string): Promi
 
 export async function crewMembers(env: Env, v: Viewer, crewId: string) {
   if (!(await isCrewMember(env, crewId, v.id))) throw new HttpError(404, "no_crew");
-  return all<{ handle: string | null; name: string | null; role: string; mine: number }>(env,
-    `SELECT u.handle, ${NAME_FOR("m.user_id", "?2")} AS name, m.role, (m.user_id = ?2) AS mine
+  return all<{ handle: string | null; name: string | null; role: string; mine: number; photo_id: string | null }>(env,
+    `SELECT u.handle, ${NAME_FOR("m.user_id", "?2")} AS name, m.role, (m.user_id = ?2) AS mine, u.photo_id
        FROM crew_members m JOIN users u ON u.id = m.user_id
       WHERE m.crew_id = ?1
         AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker = ?2 AND b.blocked = m.user_id) OR (b.blocker = m.user_id AND b.blocked = ?2))

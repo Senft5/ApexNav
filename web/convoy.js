@@ -111,6 +111,13 @@
     if (g.seconds != null && Math.abs(g.seconds) < 600) return `${Math.round(Math.abs(g.seconds))} s${s}`;
     return `${distText(Math.abs(g.meters))}${s}`;
   }
+  /** How long a convoy has left (REVIEW_PEOPLE.md P-28): "1 h 58 min left", "12 min left", "Ending"; '--' unknown. */
+  function leftText(expiresAtMs, now = Date.now()) {
+    if (!Number.isFinite(expiresAtMs)) return '--';
+    const min = Math.floor((expiresAtMs - now) / 60000);
+    if (min < 1) return 'Ending';
+    return min < 60 ? `${min} min left` : `${Math.floor(min / 60)} h${min % 60 ? ` ${min % 60} min` : ''} left`;
+  }
   function distText(m) {
     if (root.ApexUnits && root.ApexUnits.metric()) {          // metres and km (units.js, U-22)
       return m < 1000 ? `${Math.max(100, Math.round(m / 100) * 100)} m` : `${(m / 1000).toFixed(m < 10000 ? 1 : 0)} km`;
@@ -394,6 +401,6 @@
     clearRegroup() { return this.send({ type: 'regroup', at: null }); }
   }
 
-  const api = { ConvoyClient, KINDS, encodePolyline, decodePolyline, thin, routeIndex, project, hazardAhead, gap, gapText, distText, hazardPhrase, haversineM, bearingDeg };
+  const api = { ConvoyClient, KINDS, encodePolyline, decodePolyline, thin, routeIndex, project, hazardAhead, gap, gapText, distText, leftText, hazardPhrase, haversineM, bearingDeg };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexConvoy = api;
 })(typeof window !== 'undefined' ? window : globalThis);
