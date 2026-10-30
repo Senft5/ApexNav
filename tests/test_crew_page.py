@@ -86,3 +86,20 @@ def test_a_crew_category_reads_its_own_word_on_every_plate():
     src = f"const H = require({json.dumps(str(ROOT / 'web' / 'hazard_reports.js'))});"
     js = src + " console.log(JSON.stringify([H.plate({ kind: 'debris', label: 'Cattle grid' }, null, 0).title, H.plate({ kind: 'debris' }, null, 0).title]));"
     assert json.loads(subprocess.run([NODE, "-e", js], capture_output=True, text=True, check=True).stdout) == ["Cattle grid", "Debris"]
+
+
+@needs_node
+def test_members_strip_owner_then_out_now():
+    """P-06: the owner first, then whoever is on the road now, then the rest by handle; you are never 'out' to yourself."""
+    got = run("C.outNow([{ handle: 'zed' }, { handle: 'me', mine: true }, { handle: 'sam', role: 'owner' }, { handle: 'bob' }, { name: 'no handle' }], ['bob', 'me'])")
+    assert [m["handle"] for m in got["list"]] == ["sam", "bob", "me", "zed"]
+    assert got["out"] == 1 and [m["live"] for m in got["list"]] == [False, True, False, False]
+
+
+@needs_node
+def test_livery_is_one_line():
+    """P-03: the livery's line at the foot of the page; the meter lives in Edit livery."""
+    assert run("C.liveryShort({ tier: 'club', decals: 6 })") == "Club livery · 6 Decals"
+    assert run("C.liveryShort({ tier: 'plain', decals: 1 })") == "Plain livery · 1 Decal"
+    assert run("C.liveryShort(null)") == "Plain livery · Decals come from crew-mates with Vetta Pro"
+    assert run("C.liveryShort({ tier: 'factory', granted: true })") == "Factory livery · every option open (early access)"

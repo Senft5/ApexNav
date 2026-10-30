@@ -198,3 +198,97 @@ export async function eventCancel(env: Env, v: Viewer, id: string) {
   if (e.created_by !== v.id && e.owner !== v.id) throw new HttpError(403, "not_yours");
   await env.DB.prepare("UPDATE crew_events SET cancelled = 1 WHERE id = ?").bind(id).run();
 }
+
+/** PUT /api/events/:id { notes?, regroup?, public?, lead?, sweep? } (REVIEW_PEOPLE.md P-10): what the plan form no longer
+ *  asks up front, set on the planned drive's card afterwards by the planner or the crew's owner. A key left out is kept;
+ *  null clears notes or a role. */
+export async function eventUpdate(env: Env, v: Viewer, id: string, req: Request): Promise<void> {
+  const e = await visibleEvent(env, v, id);
+  if (e.created_by !== v.id && e.owner !== v.id) throw new HttpError(403, "not_yours");
+  const b = await body<{ notes?: unknown; regroup?: unknown; public?: unknown; lead?: unknown; sweep?: unknown }>(req);
+  const sets: string[] = [], args: unknown[] = [];
+  if (b.notes !== undefined) {
+    const notes = b.notes === null || b.notes === "" ? null : cleanText(b.notes, 280)?.trim() || null;
+    if (b.notes && !notes) throw new HttpError(400, "bad_notes");
+    sets.push("notes = ?"); args.push(notes);
+  }
+  if (b.regroup !== undefined) { sets.push("regroup = ?"); args.push(JSON.stringify(regroupPoints(b.regroup))); }
+  if (b.public !== undefined) {
+    if (typeof b.public !== "boolean") throw new HttpError(400, "bad_public");
+    if (b.public) {
+      const c = await env.DB.prepare("SELECT visibility FROM crews WHERE id = ?").bind(e.crew_id).first<{ visibility: string }>();
+      if (!c || c.visibility !== "public") throw new HttpError(400, "not_public_crew");
+    }
+    sets.push("public = ?"); args.push(b.public ? 1 : 0);
+  }
+  const cur = await env.DB.prepare("SELECT lead_id, sweep_id FROM crew_events WHERE id = ?").bind(id).first<{ lead_id: string | null; sweep_id: string | null }>();
+  let lead = cur?.lead_id ?? null, sweep = cur?.sweep_id ?? null;
+  if (b.lead !== undefined) { lead = await roleHolder(env, e.crew_id, b.lead); sets.push("lead_id = ?"); args.push(lead); }
+  if (b.sweep !== undefined) { sweep = await roleHolder(env, e.crew_id, b.sweep); sets.push("sweep_id = ?"); args.push(sweep); }
+  if (lead && lead === sweep) throw new HttpError(400, "bad_role");
+  if (!sets.length) return;
+  // someone named to a role is going, as taking it would make them
+  const named = [b.lead !== undefined ? lead : null, b.sweep !== undefined ? sweep : null].filter((x): x is string => !!x);
+  await env.DB.batch([
+    env.DB.prepare(`UPDATE crew_events SET ${sets.join(", ")} WHERE id = ?`).bind(...args, id),
+    ...named.map((uid) => env.DB.prepare(`INSERT INTO crew_event_rsvps (event_id, user_id, status) VALUES (?, ?, 'going')
+      ON CONFLICT (event_id, user_id) DO UPDATE SET status = 'going', updated_at = datetime('now')`).bind(id, uid)),
+  ]);
+}
+
+/** "I came" can be said from 12 hours before a drive starts (its convoy, the morning of) until the drive is swept. */
+export const CAME_BEFORE_H = 12;
+
+/** POST /api/events/:id/came (P-03): you came. The card sends it when you start or join the drive's convoy from it, or say
+ *  "I was there" afterwards; DELETE takes it back. Only the fact, never a position. */
+export async function eventCame(env: Env, v: Viewer, id: string, came: boolean): Promise<void> {
+  await visibleEvent(env, v, id);
+  if (!came) { await env.DB.prepare("DELETE FROM crew_event_attendance WHERE event_id = ? AND user_id = ?").bind(id, v.id).run(); return; }
+  const r = await env.DB.prepare(`INSERT INTO crew_event_attendance (event_id, user_id)
+      SELECT ?1, ?2 FROM crew_events WHERE id = ?1 AND starts_at <= datetime('now', '+${CAME_BEFORE_H} hours') AND starts_at > datetime('now', '-${KEEP_AFTER_START_DAYS} days')
+      ON CONFLICT (event_id, user_id) DO NOTHING`).bind(id, v.id).run();
+  if (r.meta.changes) return;
+  const had = await env.DB.prepare("SELECT 1 AS ok FROM crew_event_attendance WHERE event_id = ? AND user_id = ?").bind(id, v.id).first();
+  if (!had) throw new HttpError(400, "not_now");
+}
+
+/**
+ * GET /api/events/:id/record (P-03, roadmap 2): the run remembered. Who came (from the convoy and "I was there"), who had
+ * said going, and the best Vetta Score a crew-mate published to the crew from the drive's day, among those who came (or,
+ * when nobody marked it, those going). Only Scores shared with the crew; a block either way hides the person. Members only.
+ */
+export async function eventRecord(env: Env, v: Viewer, id: string) {
+  await visibleEvent(env, v, id);
+  const e = await env.DB.prepare("SELECT e.id, e.crew_id, c.name AS crew_name, e.title, e.starts_at, e.meet_name FROM crew_events e JOIN crews c ON c.id = e.crew_id WHERE e.id = ?")
+    .bind(id).first<{ id: string; crew_id: string; crew_name: string; title: string; starts_at: string; meet_name: string | null }>();
+  if (!e) throw new HttpError(404, "no_event");
+  const seen = (who: string) => `(${who} = ?2 OR NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker = ?2 AND b.blocked = ${who}) OR (b.blocker = ${who} AND b.blocked = ?2)))`;
+  const handles = async (sql: string) => (await env.DB.prepare(sql).bind(id, v.id, e.crew_id).all<{ handle: string | null }>()).results.map((r) => r.handle || "?");
+  const came = await handles(`SELECT u.handle FROM crew_event_attendance a JOIN users u ON u.id = a.user_id
+      JOIN crew_members m ON m.crew_id = ?3 AND m.user_id = a.user_id WHERE a.event_id = ?1 AND ${seen("a.user_id")} ORDER BY a.created_at`);
+  const going = await handles(`SELECT u.handle FROM crew_event_rsvps r JOIN users u ON u.id = r.user_id
+      JOIN crew_members m ON m.crew_id = ?3 AND m.user_id = r.user_id WHERE r.event_id = ?1 AND r.status = 'going' AND ${seen("r.user_id")} ORDER BY r.updated_at`);
+  const iCame = !!(await env.DB.prepare("SELECT 1 AS ok FROM crew_event_attendance WHERE event_id = ? AND user_id = ?").bind(id, v.id).first());
+  // the drive's day wherever it was driven: a board day is the driver's own date, so a window around the UTC start
+  const pool = came.length ? "EXISTS (SELECT 1 FROM crew_event_attendance a WHERE a.event_id = ?1 AND a.user_id = be.user_id)"
+    : "EXISTS (SELECT 1 FROM crew_event_rsvps r WHERE r.event_id = ?1 AND r.user_id = be.user_id AND r.status = 'going')";
+  const best = await env.DB.prepare(`SELECT u.handle, be.driver_score AS score, s.name AS stage FROM board_entries be JOIN users u ON u.id = be.user_id
+      JOIN segments s ON s.id = be.segment_id JOIN crew_members m ON m.crew_id = ?3 AND m.user_id = be.user_id
+     WHERE be.audience_type = 'crew' AND be.audience_id = ?3 AND ${pool}
+       AND be.driven_on BETWEEN date(?4, '-12 hours') AND date(?4, '+14 hours')
+       AND EXISTS (SELECT 1 FROM grants g WHERE g.user_id = be.user_id AND g.audience_type = 'crew' AND g.audience_id = ?3 AND g.share_scores = 1)
+       AND ${seen("be.user_id")}
+     ORDER BY be.driver_score DESC LIMIT 1`).bind(id, v.id, e.crew_id, e.starts_at).first<{ handle: string | null; score: number; stage: string | null }>();
+  return { id: e.id, crew_id: e.crew_id, crew_name: e.crew_name, title: e.title, starts_at: e.starts_at.replace(" ", "T") + "Z", meet_name: e.meet_name,
+    came, going, i_came: iCame, best: best ? { handle: best.handle || "?", score: best.score, stage: best.stage } : null };
+}
+
+/** The crew's last drive (P-03): the most recent one that started RECORD_AFTER_H or more ago and is still kept, for the crew
+ *  page's "what it was" (its record is GET /api/events/:id/record). null when there is none. */
+export const RECORD_AFTER_H = 4;
+export async function lastEvent(env: Env, crewId: string) {
+  const r = await env.DB.prepare(`SELECT e.id, e.title, e.starts_at, e.meet_name FROM crew_events e
+      WHERE e.crew_id = ?1 AND ${VISIBLE("e")} AND e.starts_at <= datetime('now', '-${RECORD_AFTER_H} hours') AND e.starts_at > datetime('now', '-${KEEP_AFTER_START_DAYS} days')
+      ORDER BY e.starts_at DESC LIMIT 1`).bind(crewId).first<{ id: string; title: string; starts_at: string; meet_name: string | null }>();
+  return r ? { ...r, starts_at: r.starts_at.replace(" ", "T") + "Z" } : null;
+}

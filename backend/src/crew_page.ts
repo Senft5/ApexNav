@@ -5,7 +5,7 @@ import type { Viewer } from "./auth";
 import { Env, HttpError, body, num } from "./util";
 import { cleanText } from "./convoy";
 import { isCrewMember } from "./social";
-import { eventsList } from "./events";
+import { RECORD_AFTER_H, eventsList, lastEvent } from "./events";
 import { reportedSql } from "./reports_sql";
 import { PATTERNS, atLeast, liveryOf, myDecals, templateCap, type Tier } from "./livery";
 
@@ -43,7 +43,9 @@ export async function crewPage(env: Env, v: Viewer, crewId: string) {
        FROM crew_members m JOIN users u ON u.id = m.user_id
       WHERE m.crew_id = ?2 AND (m.user_id = ?1 OR ${NOT_BLOCKED("m.user_id")})
       ORDER BY score IS NULL, score DESC, u.handle LIMIT 100`).bind(v.id, crewId, c.visibility).all<BoardRow>()).results;
-  const now = Date.now(), next = (await eventsList(env, v, crewId)).find((e) => Date.parse(e.starts_at) > now - 3600_000) ?? null;
+  // the next drive holds the page through the drive itself (its morning and its convoy, P-03); after that it is the last one
+  const now = Date.now(), next = (await eventsList(env, v, crewId)).find((e) => Date.parse(e.starts_at) > now - RECORD_AFTER_H * 3600_000) ?? null;
+  const last = await lastEvent(env, crewId);
   const livery = await liveryOf(env, crewId), mine = await myDecals(env, v.id, crewId);
   // what's unlocked shows only what the tier allows, so a crew that drops a tier falls back to the Plain look
   const club = atLeast(livery.tier, "club"), works = atLeast(livery.tier, "works");
@@ -66,7 +68,7 @@ export async function crewPage(env: Env, v: Viewer, crewId: string) {
     pinned_chat: pinnedChat, house, stages, call_sign: works ? c.call_sign : null,
     hazard_kinds: atLeast(livery.tier, "factory") ? (JSON.parse(c.hazard_kinds) as string[]) : [],
     regroup_line: atLeast(livery.tier, "factory") ? c.regroup_line : null,
-    voice_packs: atLeast(livery.tier, "factory") ? (await env.DB.prepare("SELECT pack FROM crew_voice WHERE crew_id = ?").bind(crewId).all<{ pack: string }>()).results.map((r) => r.pack) : [], templates_cap: templateCap(livery.tier), board: board.map((r) => ({ ...r, mine: !!r.mine, badge: works ? r.badge : null })), next, sharing_scores: !!grant?.share_scores,
+    voice_packs: atLeast(livery.tier, "factory") ? (await env.DB.prepare("SELECT pack FROM crew_voice WHERE crew_id = ?").bind(crewId).all<{ pack: string }>()).results.map((r) => r.pack) : [], templates_cap: templateCap(livery.tier), board: board.map((r) => ({ ...r, mine: !!r.mine, badge: works ? r.badge : null })), next, last, sharing_scores: !!grant?.share_scores,
   };
 }
 
