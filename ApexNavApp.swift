@@ -271,11 +271,20 @@ struct ApexCockpitWebView: UIViewRepresentable {
 
     func updateUIView(_ uiView: WKWebView, context: Context) {}
 
+    /// Review recordings only (debug builds, APEX_REVIEW=1): the page logs every line it says (web say()).
+    private static var reviewFlag: String {
+        #if DEBUG
+        return ProcessInfo.processInfo.environment["APEX_REVIEW"] == "1" ? " window.APEX_REVIEW = true;" : ""
+        #else
+        return ""
+        #endif
+    }
+
     @MainActor
     static func makeWebView(shell: ApexSensorShell, indexURL: URL, coordinator: PageDelegate) -> WKWebView {
         let contentController = WKUserContentController()
         let embedFlag = WKUserScript(
-            source: "window.APEX_EMBED = true; window.APEX_PLATFORM = 'ios';",
+            source: "window.APEX_EMBED = true; window.APEX_PLATFORM = 'ios';" + reviewFlag,
             injectionTime: .atDocumentStart,
             forMainFrameOnly: true
         )
@@ -366,6 +375,12 @@ final class ApexScriptBridge: NSObject, WKScriptMessageHandler {
             speechDuck = (dict["duck"] as? Bool) ?? true
         }
         guard let cmd = command else { return }
+        #if DEBUG
+        if cmd == "said", let line = speechText {                    // review recordings: the transcript (web say())
+            NSLog("APEX-SAID %@", line)
+            return
+        }
+        #endif
         if cmd == "speak", let phrase = speechText {
             shell?.speakCoDriver(phrase, interrupt: interruptSpeech, style: speechStyle, duck: speechDuck)
             return
@@ -487,6 +502,12 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
 
     // Recording
     private var isRecording = false
+    #if DEBUG
+    fileprivate var replay: ApexReplay?
+    var replaying: Bool { replay != nil }
+    #else
+    let replaying = false
+    #endif
     private var recordedSegments: Int = 0
     /// Largest acceleration magnitude (m/s^2, any mount, gravity removed) since the last live frame: the web's crash
     /// check (web/incident.js, IDEAS D-17) needs a hard impact, which no 5 m road value shows.
@@ -506,10 +527,15 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         locManager.allowsBackgroundLocationUpdates = true   // UIBackgroundModes: location is declared in project.yml
         locManager.showsBackgroundLocationIndicator = true
         locManager.requestWhenInUseAuthorization()
-        locManager.startUpdatingLocation()
         configureVoiceSession()
         synth.delegate = self
-        startMotionPipeline()
+        #if DEBUG
+        replay = ApexReplay.start(shell: self)                // review recordings: a real drive instead of the sensors
+        #endif
+        if !replaying {
+            locManager.startUpdatingLocation()
+            startMotionPipeline()
+        }
         NotificationCenter.default.addObserver(forName: ProcessInfo.thermalStateDidChangeNotification, object: nil, queue: .main) { [weak self] _ in
             guard let self else { return }
             MainActor.assumeIsolated { self.thermalChanged() }
@@ -626,7 +652,28 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         pushLiveFrame()
         offerDriveIfReady()
         if let g = pendingGpx { pendingGpx = nil; deliverGpx(g) }
+        #if DEBUG
+        reviewSetup()
+        #endif
     }
+
+    #if DEBUG
+    /// Review recordings only (.github/workflows/app-review.yml, debug builds): APEX_REVIEW_SESSION signs in as the
+    /// review account (its Keychain session, then the page's own "signed in" message); APEX_REVIEW_ROUTE=1 hands the page
+    /// the replayed road as a GPX (the real import path), so a guided drive follows the road the replay drives. Once.
+    private static var reviewDone = false
+    private func reviewSetup() {
+        guard !Self.reviewDone else { return }
+        Self.reviewDone = true
+        let env = ProcessInfo.processInfo.environment
+        if let reviewToken = env["APEX_REVIEW_SESSION"], !reviewToken.isEmpty, ApexKeychain.setSession(reviewToken) {
+            evaluate("window.apex && window.apex.onNative && window.apex.onNative({type:'session',signedIn:true}); void 0;")
+        }
+        if env["APEX_REVIEW_ROUTE"] == "1", let gpx = replay?.gpx() {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 4) { [weak self] in self?.deliverGpx(["type": "gpx", "name": "Dry Ridge Rd.gpx", "text": gpx]) }
+        }
+    }
+    #endif
 
     /// iOS can kill the web content process while the app is in the background without calling
     /// webViewWebContentProcessDidTerminate, which leaves a black screen on return. Back in the
@@ -763,6 +810,9 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         let state = ApexDriveAttributes.ContentState(note: (dict["note"] as? String) ?? "", distance: (dict["distance"] as? String) ?? "",
                                                      eta: (dict["eta"] as? String) ?? "", short: dict["short"] as? String,
                                                      hazard: dict["hazard"] as? Bool, etaShort: dict["etaShort"] as? String)
+        #if DEBUG
+        if let replay, let a = dict["action"] as? String { if a == "start" { replay.driving = true } else if a == "end" { replay.driving = false } }
+        #endif
         switch dict["action"] as? String {
         case "start":
             guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
@@ -1027,11 +1077,11 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
 
     nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         Task { @MainActor in
-            self.locManager.startUpdatingLocation()
+            if !self.replaying { self.locManager.startUpdatingLocation() }
         }
     }
 
-    private func ingest(fix: GPSFix) {
+    fileprivate func ingest(fix: GPSFix) {
         guard fix.horizontalAccuracyM >= 0 else { return }
         hasFix = true
         accuracyM = fix.horizontalAccuracyM
@@ -1128,7 +1178,7 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
 
     private var imuLive: Bool { thermal.imuLive(t: ProcessInfo.processInfo.systemUptime) }
 
-    private func ingestMotion(gravityG: Vec3, accelMps2 a: Vec3, gyroRadS w: Vec3, timestamp: Double) {
+    fileprivate func ingestMotion(gravityG: Vec3, accelMps2 a: Vec3, gyroRadS w: Vec3, timestamp: Double) {
         latestGravityG = gravityG
         frameImpactMps2 = max(frameImpactMps2, (a.x * a.x + a.y * a.y + a.z * a.z).squareRoot())
         // Calibration is automatic and continuous (ApexKit.MountCalibrator): gravity gives the vertical, GPS speed and
@@ -1607,3 +1657,84 @@ final class ApexApiBridge: NSObject, WKScriptMessageHandlerWithReply {
         }
     }
 }
+
+#if DEBUG
+/// Review recordings only (.github/workflows/app-review.yml; never in a release build): APEX_REPLAY=dry_ridge plays the
+/// bundled demo drive, a real one (iPhone 15 Pro, 24 Oct 2026, 57 km of 5 m segments), through the shell's own GPS and
+/// motion handlers, because the simulator has no motion sensors and simctl's GPS only runs straight lines. The phone's
+/// 100 Hz motion is rebuilt from what the drive measured: its forces and yaw turned back into the phone frame by its
+/// mount, gravity tilted by the measured camber and grade, vertical vibration at the measured roughness. The pipeline
+/// must find the mount, the banking and the roughness again, as in a car. Parked at the start until a drive starts (the
+/// page's Live Activity start), then at the recorded speeds; parked again when it ends. A review account keeps Share
+/// road feel off, so none of this is ever sent as measured road data (CLAUDE.md rule 3).
+@MainActor final class ApexReplay {
+    private struct Row { let lat, lon, ele, grade, mps, lonG, latG, camberDeg, crestG, rough: Double }
+    private weak var shell: ApexSensorShell?
+    private let rows: [Row]
+    private let mount: [[Double]]
+    private var distM = 0.0, lastFix = 0.0, timer: Timer?
+    var driving = false
+
+    static func start(shell: ApexSensorShell) -> ApexReplay? {
+        guard let name = ProcessInfo.processInfo.environment["APEX_REPLAY"], name.range(of: "^[a-z_]{1,40}$", options: .regularExpression) != nil,
+              let index = ApexWebBundle.indexURL,
+              let text = try? String(contentsOf: index.deletingLastPathComponent().appendingPathComponent("data/\(name).js"), encoding: .utf8),
+              let open = text.range(of: "push("), let close = text.range(of: ")", options: .backwards),
+              let data = String(text[open.upperBound..<close.lowerBound]).data(using: .utf8),
+              let drive = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let fields = drive["fields"] as? [String], let raw = drive["rows"] as? [[Any]],
+              let mount = drive["mount_R"] as? [[Double]], mount.count == 3 else { return nil }
+        func col(_ f: String) -> Int? { fields.firstIndex(of: f) }
+        guard let iLat = col("lat"), let iLon = col("lon"), let iSpeed = col("speed_mph") else { return nil }
+        let num = { (r: [Any], i: Int?) -> Double in (i.flatMap { $0 < r.count ? r[$0] as? Double : nil }) ?? 0 }
+        let rows = raw.map { r in Row(lat: num(r, iLat), lon: num(r, iLon), ele: num(r, col("elevation_m")), grade: num(r, col("grade_pct")),
+                                      mps: num(r, iSpeed) / 2.23694, lonG: num(r, col("lon_g")), latG: num(r, col("lat_g")),
+                                      camberDeg: num(r, col("camber_deg")), crestG: num(r, col("crest_vertical_g")), rough: num(r, col("roughness_rms"))) }
+        guard rows.count > 2 else { return nil }
+        let r = ApexReplay(shell: shell, rows: rows, mount: mount)
+        r.timer = Timer.scheduledTimer(withTimeInterval: 0.01, repeats: true) { [weak r] _ in MainActor.assumeIsolated { r?.tick() } }
+        return r
+    }
+
+    private init(shell: ApexSensorShell, rows: [Row], mount: [[Double]]) { self.shell = shell; self.rows = rows; self.mount = mount }
+
+    /// The replayed road as a GPX track (a point every 20 m), for a guided drive along it.
+    func gpx() -> String {
+        var pts = ""
+        for (k, r) in rows.enumerated() where k % 4 == 0 || k == rows.count - 1 {
+            pts += String(format: "<trkpt lat=\"%.6f\" lon=\"%.6f\"><ele>%.1f</ele></trkpt>", r.lat, r.lon, r.ele)
+        }
+        return "<?xml version=\"1.0\"?><gpx version=\"1.1\" creator=\"Vetta review\"><trk><name>Dry Ridge Rd</name><trkseg>\(pts)</trkseg></trk></gpx>"
+    }
+
+    private func rotate(_ v: [Double]) -> Vec3 {
+        Vec3(x: mount[0][0] * v[0] + mount[0][1] * v[1] + mount[0][2] * v[2],
+             y: mount[1][0] * v[0] + mount[1][1] * v[1] + mount[1][2] * v[2],
+             z: mount[2][0] * v[0] + mount[2][1] * v[1] + mount[2][2] * v[2])
+    }
+    private func gauss() -> Double { (-2 * log(Double.random(in: 1e-9..<1))).squareRoot() * cos(2 * .pi * Double.random(in: 0..<1)) }
+
+    private func tick() {
+        guard let shell else { timer?.invalidate(); return }
+        let t = ProcessInfo.processInfo.systemUptime, dt = 0.01, g = ApexKit.gStd
+        let i = min(rows.count - 2, Int(distM / 5)), f = min(1, max(0, distM / 5 - Double(i)))
+        let a = rows[i], b = rows[i + 1]
+        let mix = { (x: Double, y: Double) in x + (y - x) * f }
+        let mps = driving ? max(1, mix(a.mps, b.mps)) : 0
+        if driving { distM += mps * dt; if Int(distM / 5) >= rows.count - 2 { driving = false } }
+        // the vehicle frame (ISO 8855: x forward, y left, z up): measured forces, and gravity tilted by camber and grade
+        let roll = mix(a.camberDeg, b.camberDeg) * .pi / 180, pitch = atan(mix(a.grade, b.grade) / 100)
+        let moving = mps > 0.5
+        let force = [moving ? mix(a.lonG, b.lonG) * g : 0, moving ? mix(a.latG, b.latG) * g : 0,
+                     (moving ? mix(a.crestG, b.crestG) + mix(a.rough, b.rough) * gauss() : 0.002 * gauss()) * g]
+        let gravity = [-sin(pitch), sin(roll), -cos(roll) * cos(pitch)]
+        let yaw = moving ? mix(a.latG, b.latG) * g / max(mps, 1) : 0
+        shell.ingestMotion(gravityG: rotate(gravity), accelMps2: rotate(force), gyroRadS: rotate([0, 0, yaw]), timestamp: t)
+        guard t - lastFix >= 1 else { return }
+        lastFix = t
+        let course = (atan2((b.lon - a.lon) * cos(a.lat * .pi / 180), b.lat - a.lat) * 180 / .pi + 360).truncatingRemainder(dividingBy: 360)
+        shell.ingest(fix: GPSFix(lat: mix(a.lat, b.lat), lon: mix(a.lon, b.lon), altitudeM: mix(a.ele, b.ele), horizontalAccuracyM: 5,
+                                 verticalAccuracyM: 8, speedMps: mps, courseDeg: moving ? course : -1))
+    }
+}
+#endif

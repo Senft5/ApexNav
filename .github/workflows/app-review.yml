@@ -1,0 +1,109 @@
+name: App review recording
+
+# Every real-world flow of the iPhone app, recorded for a design review (docs/REVIEW_RECORDING.md). On demand only (the
+# owner, 2026-10-30): Actions → App review recording → Run workflow. One job per flow in parallel (UITests/ReviewFlows):
+# the phone's screen as video and, for the drives, the car's screen too (the Simulator's CarPlay window), a photo of each
+# step on both, and a transcript of every line the co-driver said. The drives play a real recorded drive through the
+# app's own sensor handlers (ApexReplay, debug builds only). The `review-pack` artifact gathers it all with an index.
+on:
+  workflow_dispatch:
+
+jobs:
+  flow:
+    runs-on: macos-15
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { test: test01FirstRun, name: first-run, carplay: false }
+          - { test: test02Tabs, name: tabs, carplay: false }
+          - { test: test03Planning, name: planning, carplay: false }
+          - { test: test04GuidedDrive, name: guided-drive, carplay: true }
+          - { test: test05FreeDrive, name: free-drive, carplay: true }
+          - { test: test06TapedeckNight, name: tapedeck-night, carplay: false }
+          - { test: test07Billet, name: billet, carplay: false }
+          - { test: test08SignedIn, name: signed-in, carplay: false }
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generate Xcode project
+        run: |
+          brew install xcodegen
+          xcodegen generate
+      - name: Boot an iPhone simulator
+        id: sim
+        run: |
+          UDID=$(xcrun simctl list devices available -j | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; print(next(x['udid'] for k,v in d.items() if 'iOS' in k for x in v if x['name'].startswith('iPhone 16 Pro') or x['name'].startswith('iPhone 15 Pro')))")
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+          xcrun simctl boot "$UDID" || true
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl privacy "$UDID" grant location-always com.senft.ApexNav || true
+          xcrun simctl privacy "$UDID" grant motion com.senft.ApexNav || true
+          xcrun simctl privacy "$UDID" grant notifications com.senft.ApexNav || true
+          xcrun simctl location "$UDID" set 39.259141,-84.602626   # where the replayed drive starts
+      - name: Build for testing
+        run: xcodebuild build-for-testing -project ApexNav.xcodeproj -scheme ApexNav -destination "id=${{ steps.sim.outputs.udid }}" -derivedDataPath build
+      - name: Open the CarPlay display
+        if: matrix.carplay
+        env:
+          UDID: ${{ steps.sim.outputs.udid }}
+        run: |
+          open -a Simulator --args -CurrentDeviceUDID "$UDID"
+          sleep 20
+          osascript -e 'tell application "Simulator" to activate'
+          sleep 2
+          for bar in "I/O" "Hardware"; do
+            osascript -e "tell application \"System Events\" to tell process \"Simulator\" to click menu item \"CarPlay\" of menu 1 of menu item \"External Displays\" of menu 1 of menu bar item \"$bar\" of menu bar 1" && break || true
+          done
+          sleep 10
+      - name: Run the flow and record it
+        env:
+          UDID: ${{ steps.sim.outputs.udid }}
+          REVIEW_SESSION: ${{ secrets.REVIEW_SESSION }}
+        run: |
+          mkdir -p out/${{ matrix.name }}
+          xcrun simctl io "$UDID" recordVideo --codec=h264 --force out/${{ matrix.name }}/phone.mp4 &
+          REC=$!
+          CAR=""
+          if [ "${{ matrix.carplay }}" = "true" ]; then
+            xcrun simctl io "$UDID" recordVideo --display=external --codec=h264 --force out/${{ matrix.name }}/car.mp4 &
+            CAR=$!
+          fi
+          START=$(date -u +"%Y-%m-%d %H:%M:%S")
+          TEST_RUNNER_APEX_REVIEW=1 TEST_RUNNER_APEX_REVIEW_SESSION="$REVIEW_SESSION" xcodebuild test-without-building \
+            -project ApexNav.xcodeproj -scheme ApexNav -destination "id=$UDID" -derivedDataPath build \
+            -only-testing:ApexNavUITests/ReviewFlows/${{ matrix.test }} -resultBundlePath out/${{ matrix.name }}/result.xcresult || true
+          kill -INT $REC || true
+          [ -n "$CAR" ] && kill -INT $CAR || true
+          sleep 4
+          # every line the co-driver said (web say() → the shell's log), and the app's own log, for the reviewer
+          xcrun simctl spawn "$UDID" log show --start "$START" --predicate 'eventMessage CONTAINS "APEX-SAID"' --style compact \
+            > out/${{ matrix.name }}/transcript.txt || true
+          xcrun simctl spawn "$UDID" log show --start "$START" --predicate 'process == "ApexNav"' --style compact \
+            | tail -4000 > out/${{ matrix.name }}/app-log.txt || true
+          xcrun xcresulttool export attachments --path out/${{ matrix.name }}/result.xcresult --output-path out/${{ matrix.name }}/shots || true
+          ls -la out/${{ matrix.name }} out/${{ matrix.name }}/shots | head -40
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: flow-${{ matrix.name }}
+          path: out/${{ matrix.name }}
+
+  pack:
+    needs: flow
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: flow-*
+          path: flows
+      - name: Assemble the review pack
+        run: |
+          pip install pillow
+          python3 tools/review_pack.py flows review-pack
+      - uses: actions/upload-artifact@v4
+        with:
+          name: review-pack
+          path: review-pack
