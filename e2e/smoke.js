@@ -154,6 +154,11 @@ flow('Where to?: a suggestion builds a route with a card and a Start button (sea
   await page.waitForFunction(() => { const t = window.apexDebug.track; return t && t.kind === 'route' && t.lat.length > 50; }, null, { timeout: 20000 });
   const name = await page.textContent('#routeBarName');
   check(/Maryville/.test(name), `route bar names the destination (got "${name}")`);
+  // U-70: the card rises with the route, Drive it on it; Cancel puts it down to the bar, where Start is
+  check(await page.isVisible('#routeDriveBtn') && await page.evaluate(() => document.getElementById('planPanel').classList.contains('open')), 'the route card is up with Drive it');
+  // U-73: the place's name has the row, its town under it in pencil, the distance as the stamp
+  check(await page.evaluate(() => { const r = document.querySelector('#placeList .place'); return !r || (r.querySelector('small') || {}).textContent === 'Tennessee'; }), 'the suggestion row: name, then town');
+  await page.click('#planCancel');
   check(await page.isVisible('#startDrive'), 'Start is offered');
   check(await page.evaluate(() => ApexAnalysis.stats.worker >= 1 && ApexAnalysis.stats.inline === 0), 'the route was analysed in the Web Worker (IDEAS P-05)');
   // the router's turn is on the track for spoken directions (IDEAS V-04): halfway along, onto Hollow Creek Road
@@ -174,6 +179,7 @@ flow('Where to?: a suggestion builds a route with a card and a Start button (sea
   await page.waitForFunction(() => (JSON.parse(localStorage.getItem('apex.pinnedPlaces') || '[]') || []).length === 1);
   const pinned = await page.evaluate(() => JSON.parse(localStorage.getItem('apex.pinnedPlaces')));
   check(pinned.length === 1 && pinned[0].name === 'Home' && pinned[0].label === 'Maryville' && Math.abs(pinned[0].lat - 35.7565) < 1e-6, 'pinned: ' + JSON.stringify(pinned));
+  if (await page.isVisible('#planCancel')) await page.click('#planCancel');   // the rebuilt route's card is up (U-70)
   await page.click('#planClear');
   await page.click('#destInput');
   await page.waitForSelector('#placeList .pinned-row');
@@ -357,6 +363,8 @@ flow('routes from elsewhere: a GPX track is followed as drawn; a pasted Google M
   await page.setInputFiles('#gpxFile', { name: 'dragon.gpx', mimeType: 'application/gpx+xml', buffer: Buffer.from(`<gpx><trk><name>Dragon run</name><trkseg>${pts}</trkseg></trk></gpx>`) });
   await page.waitForFunction(() => window.apexDebug.track && window.apexDebug.track.name === 'Dragon run', null, { timeout: 10000 });
   check(bodies.length === 0, 'a GPX track is followed as drawn, no router');
+  check(await page.evaluate(() => document.getElementById('planPanel').classList.contains('open')), 'the GPX route opens its card (U-70)');
+  await page.click('#planCancel');
   await page.click('#planClear');
   await page.click('#destInput');
   await page.fill('#destInput', 'https://www.google.com/maps/dir/35.9606,-83.9207/35.80,-83.95/35.7565,-83.97/@35.8,-83.9,11z');
@@ -721,6 +729,90 @@ flow('drive ended: your best on this road on the card, and the pack closes with 
   });
   check(out.score === '200' && /^Your best on this road\./.test(out.line), 'the card: ' + JSON.stringify(out));
   check(JSON.stringify(out.played) === JSON.stringify(['sys:end', 'end:score', 'n:h2', 'end:best']), 'Marguerite closes with the score from her clips: ' + JSON.stringify(out.played));
+});
+
+flow('first open in the app: the welcome runs, and Start is what asks the shell for location (REVIEW4 U-65, U-68, U-80)', async (page, base) => {
+  await page.addInitScript(() => { window.__native = []; window.APEX_EMBED = true; window.APEX_PLATFORM = 'ios';
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { window.__native.push(m && m.cmd ? m.cmd : m); } } } }; });
+  await page.goto(base + '/index.html');
+  await page.waitForSelector('#onboard.show', { timeout: 10000 });
+  // the cover is the launch screen's lockup at its size; the map's canvas waits, hidden, for the theme (no stock map frame)
+  const first = await page.evaluate(() => { const b = document.getElementById('boot'), svg = b && b.querySelector('svg');
+    return { lockup: svg ? [svg.getBoundingClientRect().width, svg.getBoundingClientRect().height] : null, unstyled: document.getElementById('map').classList.contains('unstyled'), asked: window.__native.includes('requestLocation') }; });
+  check(!first.lockup || (first.lockup[0] === 184 && first.lockup[1] === 50), 'the cover draws the 184 x 50 lockup: ' + JSON.stringify(first));
+  check(first.unstyled, 'the map stays hidden until it is restyled (no tiles here, so it never is)');
+  check(!first.asked, 'no location question under the welcome');
+  await page.click('#obNext');
+  await page.waitForFunction(() => window.__native.includes('requestLocation'), null, { timeout: 3000 });
+  check(!(await page.isVisible('#onboard.show')), 'Start closes the welcome');
+  // a driver past the welcome: asked at once (the system shows nothing once it was answered), no welcome again
+  await page.reload();
+  await page.waitForFunction(() => window.apexDebug && window.__native.includes('requestLocation'), null, { timeout: 10000 });
+  check(!(await page.isVisible('#onboard.show')), 'once only');
+  // a first drive started from the car while the welcome waits on the phone: the welcome goes, location is asked, the drive runs
+  await page.evaluate(() => localStorage.removeItem('apex.onboarded'));
+  await page.reload();
+  await page.waitForSelector('#onboard.show', { timeout: 10000 });
+  await page.evaluate(() => { window.__native.length = 0; window.apex.onNative({ type: 'carplay', action: 'start' }); });
+  await page.waitForFunction(() => window.apexDebug.driveActive && window.__native.includes('requestLocation'), null, { timeout: 5000 });
+  check(!(await page.isVisible('#onboard.show')), "the car's Start answers the welcome");
+});
+
+flow('drive ended: Open in the Log is the solid key with no score, Share card with one; a drive on a route keeps its name (REVIEW4 U-75)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
+    window.webkit = { messageHandlers: { apex: { postMessage: () => {} } } }; });
+  await page.route('**/api/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.ApexRouteImport && window.apex);
+  const pts = Array.from({ length: 300 }, (_, i) => `<trkpt lat="${(35.5 + i * 1e-4).toFixed(6)}" lon="-83.9"/>`).join('');
+  await page.setInputFiles('#gpxFile', { name: 'dragon.gpx', mimeType: 'application/gpx+xml', buffer: Buffer.from(`<gpx><trk><name>Dragon run</name><trkseg>${pts}</trkseg></trk></gpx>`) });
+  await page.waitForFunction(() => window.apexDebug.track && window.apexDebug.track.name === 'Dragon run', null, { timeout: 10000 });
+  const keys = () => page.evaluate(() => { const vis = (id) => { const e = document.getElementById(id); return !!(e && e.offsetParent); };
+    return { name: document.getElementById('endName').textContent, share: vis('endShare'), logKey: vis('endLogKey') && document.getElementById('endLogKey').classList.contains('solid'),
+      logLink: vis('endLog'), shareLink: vis('endShareLink'), href: document.getElementById('endLogKey').getAttribute('href') }; });
+  // drive along the route on the app's frames, then End
+  await page.evaluate(() => window.apex.onNative({ type: 'link', params: { go: 'drive' } }));
+  await page.waitForFunction(() => window.apexDebug.driveActive);
+  for (let burst = 0; burst < 4; burst++) {
+    await page.evaluate((b) => { for (let j = b * 70; j < (b + 1) * 70; j++) window.apex.live({ lat: 35.5 + j * 1e-4, lon: -83.9, accuracy_m: 4, speed_mps: 15, course_deg: 0, lat_g: 0, lon_g: 0, has_fix: true, calibration: 'locked' }); }, burst);
+    await page.waitForTimeout(300);
+  }
+  await page.click('#driveEnd');
+  await page.waitForSelector('#endCard.show', { timeout: 8000 });
+  const routed = await keys();
+  check(routed.name === 'Dragon run', 'named after the route driven: ' + routed.name);
+  check(!routed.share && routed.logKey && routed.shareLink && !routed.logLink && /tab=drive&drive=/.test(routed.href), 'no score: Open in the Log is the solid key, Share a link: ' + JSON.stringify(routed));
+  // with a score, Share card is the solid key again and the Log a link
+  await page.click('#endDone');
+  await page.evaluate(() => { ApexCore.driverScore = () => ({ score: 640, components: {} });
+    const lat = [], lon = []; for (let i = 0; i < 300; i++) { lat.push(35.36 + i * 5 / 110540); lon.push(-84.29); }
+    apexDebug.showEndCard({ id: 'x', name: 'Cherohala Skyway', date: new Date().toISOString(), lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: lat.map(() => 15), lon_g: lat.map(() => 0), lat_g: lat.map(() => 0), g_known: null, events: [], elev: null, hz: 1, source: 'web-gps', corners: [] }, Date.now() - 600e3); });
+  const scored = await keys();
+  check(scored.share && !scored.logKey && scored.logLink && !scored.shareLink, 'a score: Share card is the solid key: ' + JSON.stringify(scored));
+});
+
+flow('small things: Notes is a detent, Layers never cuts the place plate, the Log pager draws its arrows (REVIEW4 U-82, U-81, U-76)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug);
+  await page.click('#swTab');
+  await page.waitForTimeout(400);
+  const notes = await page.evaluate(() => [...document.querySelectorAll('#swPanel [data-notes]')].map((b) => b.textContent + ':' + b.getAttribute('aria-checked')).join());
+  check(notes === 'Quiet:false,Auto:true,Full:false', 'three stops, Auto lit: ' + notes);
+  await page.click('#swPanel [data-notes="full"]');
+  const after = await page.evaluate(() => ({ mode: apexDebug.state.notesMode, garage: document.querySelector('.sheet [data-notes="full"]').getAttribute('aria-checked') }));
+  check(after.mode === 'full' && after.garage === 'true', 'a stop is chosen, and the Garage shows it too: ' + JSON.stringify(after));
+  // the place plate (shown here by hand: it needs a place lookup) slides up out of the panel's way, whole or gone
+  const plate = await page.evaluate(() => { const p = document.querySelector('.place-plate'); if (!p) return null; p.hidden = false; p.textContent = 'Colerain Township · Dry · 63°';
+    return new Promise((r) => setTimeout(() => { const b = p.getBoundingClientRect(), cs = getComputedStyle(p); r({ bottom: b.bottom, opacity: cs.opacity }); }, 400)); });
+  check(!plate || (plate.bottom <= 0 || plate.opacity === '0'), 'the plate is out of the open panel\'s way: ' + JSON.stringify(plate));
+  await page.evaluate(async () => { const lat = [], lon = []; for (let i = 0; i < 200; i++) { lat.push(35.6 + i * 5 / 110540); lon.push(-83.9); }
+    await ApexRecording.store({ id: 'pg1', name: 'Pager', date: '2026-10-20T15:00:00Z', lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: lat.map(() => 15),
+      lon_g: lat.map(() => 0), lat_g: lat.map(() => 0), g_known: null, events: [], elev: null, hz: 1, source: 'web-gps' }); });
+  await page.goto(base + '/analysis.html?drive=pg1');
+  await page.waitForSelector('.dv-z', { timeout: 15000, state: 'attached' });
+  const pager = await page.evaluate(() => [...document.querySelectorAll('.dv-z')].filter((b) => /Earlier|Later/.test(b.getAttribute('aria-label') || '')).map((b) => ({ svg: !!b.querySelector('svg'), text: b.textContent })));
+  check(pager.length === 2 && pager.every((p) => p.svg && !/[◀▶]/.test(p.text)), 'the pager arrows are drawn, not emoji-prone characters: ' + JSON.stringify(pager));
 });
 
 flow('convoy: the leader shows a QR code of the link (Worker stubbed, IDEAS S-22)', async (page, base) => {
@@ -1236,13 +1328,21 @@ flow('landscape mount: the map takes the left, the instruments a column on the r
   const stage = await box('.stage'), bin = await box('#binnacle'), notes = await box('#notes');
   check(stage.w > 0.5 * 844 && stage.h > 250, 'the map is big: ' + JSON.stringify(stage));
   check(bin.x >= stage.x + stage.w - 1 && bin.y < 120, 'the instruments are a column on the right: ' + JSON.stringify(bin));
-  check(notes.w > 800, 'the notes run across the top');
+  // U-83: the notes run over the map column only; the instruments' column runs the full height beside them
+  check(Math.abs(notes.x - stage.x) < 2 && notes.w <= stage.w + 1 && notes.y < 5 && bin.y < 5, 'the notes over the map column, the instruments full height: ' + JSON.stringify({ notes, bin }));
   check(await page.evaluate(() => document.documentElement.scrollWidth <= 844), 'no sideways scroll');
   await page.click('#modePlate');                                   // a replay is full-screen: its plate is the way back to the tabs (U-45)
   await page.click('.tab[data-view="garage"]');
   await page.waitForTimeout(400);
   const rail = await box('#binnacle');
   check(rail.w < 100, 'a sheet leaves a narrow tab rail: ' + JSON.stringify(rail));
+  // U-83: in a drive Rec, Report and End sit beside the strip, over the instruments; the map has the rest of its column
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && window.apexDebug);
+  await page.evaluate(async () => { for (let i = 0; i < 30; i++) { window.apex.live({ lat: 35.96 + i * 1e-5, lon: -83.92, accuracy_m: 5, speed_mps: 12, course_deg: 0, has_fix: true, calibration: 'locked', lat_g: 0.1, lon_g: 0 }); await new Promise((r) => setTimeout(r, 40)); } });
+  await page.waitForTimeout(300);
+  const dn = await box('#notes'), db = await box('#driveBar'), ds = await box('.stage');
+  check(db.h > 0 && db.x >= ds.x + ds.w - 1 && db.y < dn.y + dn.h && dn.x + dn.w <= ds.x + ds.w + 1 && ds.y + ds.h >= 389, 'driving on its side: ' + JSON.stringify({ dn, db, ds }));
 }, { viewport: { width: 844, height: 390 } });
 
 flow('friend profile: Friends → Profile shows what the friend shares, as text, and Back returns (Worker stubbed, IDEAS S-15)', async (page, base) => {
@@ -1741,8 +1841,17 @@ flow('REVIEW.md 1.2 screen by screen: first run, the map, planning, the route, d
     recenter: document.getElementById('recenterBtn').className, start: document.getElementById('startDrive').className, loop: document.getElementById('loopSuggest').innerText }));
   check(JSON.stringify(idle.tabs) === '["Map","Log","Crew","Garage"]', 'four tabs: ' + idle.tabs);
   check(/map-key/.test(idle.layers) && /map-key/.test(idle.recenter) && /btn-start/.test(idle.start), 'Layers and Recenter are keys, Start the record key: ' + JSON.stringify(idle));
-  check(/^Loop from here · \d+ mi/.test(idle.loop) && /map only until driven/.test(idle.loop), 'one suggested loop: ' + idle.loop);
-  await page.evaluate(() => apexDebug.map.getCanvasContainer().dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })));
+  check(/^Loop from here · \d+ mi/.test(idle.loop) && /On the twistiest roads nearby\s*Plan$/.test(idle.loop), 'one suggested loop, one clause under it (U-87): ' + idle.loop);
+  // U-71: a tap on the map leaves follow as it was (no key); a drag shows the key with its glyph, the countdown a bar on its foot
+  const tapKey = await page.evaluate(() => { const c = apexDebug.map.getCanvasContainer();
+    c.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: 200, clientY: 300 })); window.dispatchEvent(new PointerEvent('pointerup', { clientX: 200, clientY: 300 }));
+    return getComputedStyle(document.getElementById('recenterBtn')).display; });
+  check(tapKey === 'none', 'a tap on the map shows no recenter key: ' + tapKey);
+  await page.evaluate(() => { const c = apexDebug.map.getCanvasContainer();
+    c.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: 200, clientY: 300 })); window.dispatchEvent(new PointerEvent('pointermove', { clientX: 240, clientY: 330 }));
+    window.dispatchEvent(new PointerEvent('pointerup', { clientX: 240, clientY: 330 })); });
+  const rc = await page.evaluate(() => { const b = document.getElementById('recenterBtn'); return { glyph: getComputedStyle(b.querySelector('svg')).display, text: b.innerText.trim(), counting: b.classList.contains('counting'), label: b.getAttribute('aria-label') }; });
+  check(rc.glyph !== 'none' && rc.text === '' && rc.counting && /on its own in 6 s/.test(rc.label), 'after a drag the key is the glyph, the seconds only in its label: ' + JSON.stringify(rc));
   const keys = await page.evaluate(() => { const a = document.getElementById('swTab').getBoundingClientRect(), b = document.getElementById('recenterBtn').getBoundingClientRect(); return { a: [a.left, a.right, a.width], b: [b.left, b.right, b.width], gap: b.top - a.bottom }; });
   check(JSON.stringify(keys.a) === JSON.stringify(keys.b) && keys.gap > 0 && keys.gap < 30, 'Recenter is the second key, under Layers: ' + JSON.stringify(keys));
   // Map menu: Layers are map things; the theme, units and the rest of Settings are not there (Notes and Voice stay, CALL_SHEET)
@@ -1766,6 +1875,14 @@ flow('REVIEW.md 1.2 screen by screen: first run, the map, planning, the route, d
   check(!card.toast.includes('Maryville'), 'the bar is the toast: ' + card.toast);
   check(card.stats === 3 && /TWIST/.test(card.dials) && /FLOW/.test(card.dials) && /-- SURFACE/.test(card.dials) && /-- CAMERAS/.test(card.dials), 'Route card: ' + JSON.stringify(card));
   check(card.keys[0] === 'Drive it:rec-key' && card.keys[1] === 'Preview:ink-btn' && card.keys.slice(2).every((k) => /:linkbtn$/.test(k)), 'Drive it and Preview, then text links: ' + card.keys);
+  // U-70: the resolved route opens its card with Drive it in view on it; down, the bar says Details
+  const up = await page.evaluate(() => { const p = document.getElementById('planPanel'), k = document.getElementById('routeDriveBtn').getBoundingClientRect(), r = p.getBoundingClientRect();
+    return { open: p.classList.contains('open'), drive: k.top >= r.top && k.bottom <= Math.min(r.bottom, innerHeight) + 1 && k.height > 0 }; });
+  check(up.open && up.drive, 'the route card rises with Drive it on it: ' + JSON.stringify(up));
+  await page.click('#routeBar');
+  await page.waitForTimeout(400);
+  const down = await page.evaluate(() => { const m = document.querySelector('#routeBar .rb-open'); return { open: document.getElementById('planPanel').classList.contains('open'), word: m && m.offsetParent ? m.textContent.trim() : '' }; });
+  check(!down.open && down.word === 'Details', 'the collapsed bar names its way up: ' + JSON.stringify(down));
   // Driving: no tab bar; Report and End; Limit, the Score under the g-ball
   await page.click('#planClear');
   await page.evaluate(async () => { for (let i = 0; i < 40; i++) { window.apex.live({ lat: 35.96 + i * 1e-5, lon: -83.92, accuracy_m: 5, speed_mps: 12, course_deg: 0, has_fix: true, calibration: 'locked', lat_g: 0.1, lon_g: 0 }); await new Promise((r) => setTimeout(r, 100)); } });

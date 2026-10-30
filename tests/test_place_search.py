@@ -19,6 +19,8 @@ console.log(JSON.stringify({
   dragon: S.localMatches('tail dragon', stages, spots), any: S.localMatches('DRAGON', stages, spots).map((p) => p.label),
   accent: S.localMatches('cafe creme', stages, spots).map((p) => p.label), short: S.localMatches('e', stages, spots),
   drivable: [f('highway', 'cycleway'), f('highway', 'secondary'), f('shop', 'clothes'), f('highway', 'path'), {}].map(S.drivable),
+  addr: ['1231 W Kemper Rd, Cincinnati, OH  45240, United States', 'Cincinnati, OH, United States', '10 Downing St, London, SW1A 2AA, United Kingdom',
+         'Winton Woods, Cincinnati, OH 45231', '', null, 'Search Nearby'].map(S.shortAddress),
 }));
 """
 
@@ -36,3 +38,8 @@ def test_local_names(out):
 
 def test_drivable(out):
     assert out["drivable"] == [False, True, True, False, True]
+
+
+def test_short_address(out):
+    """U-73: a suggestion's second line is the street and the town; no region, postcode or country."""
+    assert out["addr"] == ["1231 W Kemper Rd, Cincinnati", "Cincinnati", "10 Downing St, London", "Winton Woods, Cincinnati", "", "", "Search Nearby"]
