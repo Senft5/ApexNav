@@ -106,7 +106,33 @@
     };
   }
 
-  const api = { leadM, speakS, createReactionLearner, needsBrake, wakes, wakeWindowM, wakeCorner, nextWake, createWakeVoice,
+  // U-96: a call is worth starting only while the line can end with a beat to act before the corner's entry. Inside that
+  // the corner is already the driver's (the review drive: "Open left" with the strip at 0 ft, the first call after a wake
+  // and an off-route spell); it is skipped, never read in the corner.
+  const LATE_S = REACT_DEFAULT_S;   // the beat: a default reaction
+  /** Metres before a note's entry under which its call is too late to start at this speed. */
+  const lastCallM = ({ vMps, text = '' }) => (finite(vMps) ? Math.max(0, vMps) : 0) * (speakS(text) + LATE_S);
+
+  // REVIEW4 §4: "careful" after every tight corner stops meaning anything by the third; a rally co-driver says it once a
+  // stage. A run of corners is corners called each within CARE_RUN_M of the one before on one route (the notes going quiet
+  // ends it, reset()); the lightest caution is said once in it. at(m, routeId) for each corner call about to be said, then
+  // take() for each "care" in it: true the first time in the run.
+  const CARE_RUN_M = 1000;
+  function createCareRun(gapM = CARE_RUN_M) {
+    let lastM = null, id = null, cared = false;
+    const run = {
+      at(m, routeId) {
+        if (routeId !== id || lastM == null || !(m - lastM <= gapM) || m < lastM - 50) { cared = false; id = routeId; }
+        lastM = m;
+        return run;
+      },
+      take() { if (cared) return false; cared = true; return true; },
+      reset() { lastM = null; id = null; cared = false; },
+    };
+    return run;
+  }
+
+  const api = { leadM, speakS, lastCallM, LATE_S, createCareRun, CARE_RUN_M, createReactionLearner, needsBrake, wakes, wakeWindowM, wakeCorner, nextWake, createWakeVoice,
     DECEL_MPS2, MIN_M, MAX_M, REACT_DEFAULT_S, THINK_S, WAKE_MIN_M, TRANSITION_GAP_MS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexNoteTiming = api;
 })(typeof window !== 'undefined' ? window : globalThis);

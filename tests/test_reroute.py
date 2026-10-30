@@ -77,8 +77,8 @@ def test_parked_drift_is_not_off_route(r):
 def test_wrong_way_triggers(r):
     off_t, reason = r["wrongWay"]["offAt"]
     assert reason == "wrong_way"
-    # best progress 600 m at t = 40; 100 m lower is t = 47 (495 m) at 15 m/s
-    assert off_t == 47 and r["wrongWay"]["req"] == [47]
+    # best progress 600 m at t = 40; 100 m lower is t = 47 (495 m) at 15 m/s; held 5 s like a turn-off (U-90)
+    assert off_t == 52 and r["wrongWay"]["req"] == [52]
 
 
 def test_back_on_route(r):

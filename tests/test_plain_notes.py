@@ -18,6 +18,11 @@ console.log(JSON.stringify({
           c({ mods: ['tightens', 'off-camber'], caution: 2 }), c({ mods: ['over crest', 'long', 'opens'] }), { type: 'bump', call: 'Bump' }].map(P.plainCall),
   links: ['into', 'and', '150', null, 'odd'].map(P.plainLink),
   chain: P.plainChain([c({ link: 'into' }), c({ dir: 'R', severity: 'HP', shape: 'hairpin', link: '100' })]),
+  // U-93: in the driver's units
+  miles: (() => { globalThis.localStorage = { getItem: () => 'imperial', setItem() {} }; const U = require(process.argv[1] + '/web/units.js'); U._reset();
+    const r = { links: ['120', '60', '350', '450', '500'].map((l) => P.plainLink(l, U)), chain: P.plainChain([c({ dir: 'L', severity: 4, link: '120' })], U),
+      far: [300, 400, 800, 1609, 2500].map(U.spokenShort) };
+    U.set('metric'); r.metric = ['120', '60'].map((l) => P.plainLink(l, U)).concat([U.spokenShort(1500)]); return r; })(),
 }));
 """
 
@@ -38,8 +43,17 @@ def test_links_and_chain(out):
     assert out["chain"] == "Medium left then Hairpin right, then 100 metres"
 
 
+def test_links_follow_the_drivers_units(out):
+    m = out["miles"]
+    # feet in 50s under 1000 ft, then the quarter miles a driver hears (350 m is 1150 ft)
+    assert m["links"] == ["then 400 feet", "then 200 feet", "then a quarter mile", "then a quarter mile", "then a quarter mile"]
+    assert m["chain"] == "Open left, then 400 feet"
+    assert m["far"] == ["a quarter mile", "a quarter mile", "half a mile", "a mile", "1.6 miles"]
+    assert m["metric"] == ["then 120 metres", "then 60 metres", "1.5 kilometres"]
+
+
 def test_page_offers_both_and_keeps_rally_for_existing_users():
     html = open(os.path.join(ROOT, "web", "index.html"), encoding="utf-8").read()
     assert 'data-words="plain"' in html and 'data-words="rally"' in html
     assert "saved.noteWords === 'plain' || saved.noteWords === 'rally' ? saved.noteWords : 'rally'" in html
-    assert "if (state.noteWords === 'plain') return { text: ApexPlainNotes.plainChain(voiced), chain: null };" in html
+    assert "if (state.noteWords === 'plain') return { text: ApexPlainNotes.plainChain(voiced, ApexUnits), chain: null, keys };" in html

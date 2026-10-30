@@ -48,6 +48,24 @@
     return best && totalM > 0 && bestM >= share * totalM ? best : null;
   }
 
-  const api = { nearestRoadName, mainRoad };
+  // A road's name as a sign or a map's label shortens it, for a line that must fit (REVIEW4 U-100: Tapedeck's wide dot font
+  // put "Quiet · Northwest Expressway · next corner 0.7 mi" on three lines): the compass word first or last ("NW"), the kind
+  // of road last ("Expy", "Rd"). A ref ("I-275") or a name with neither is left as it is.
+  const COMPASS = { northwest: 'NW', northeast: 'NE', southwest: 'SW', southeast: 'SE', north: 'N', south: 'S', east: 'E', west: 'W' };
+  const KIND = { road: 'Rd', street: 'St', avenue: 'Ave', drive: 'Dr', highway: 'Hwy', expressway: 'Expy', freeway: 'Fwy',
+    parkway: 'Pkwy', boulevard: 'Blvd', lane: 'Ln', court: 'Ct', turnpike: 'Tpke', place: 'Pl', terrace: 'Ter', trail: 'Trl', circle: 'Cir', mountain: 'Mtn' };
+  function shortRoadName(name) {
+    if (typeof name !== 'string') return name;
+    const w = name.trim().split(/\s+/);
+    if (w.length < 2) return name.trim();
+    const last = w.length - 1, kind = KIND[w[last].toLowerCase()];
+    if (kind) w[last] = kind;
+    const first = COMPASS[w[0].toLowerCase()];
+    if (first && w.length > 2) w[0] = first;                     // "North Road" stays a name, "North Main Street" is "N Main St"
+    else if (!kind && COMPASS[w[last].toLowerCase()] && w.length > 2) w[last] = COMPASS[w[last].toLowerCase()];
+    return w.join(' ');
+  }
+
+  const api = { nearestRoadName, mainRoad, shortRoadName };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexRoadNames = api;
 })(typeof window !== 'undefined' ? window : globalThis);
