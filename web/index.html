@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-HE4W1X27R4kb8FVkdIv3I946l1C5Fz8AEABrJakdYIc=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-/PhZfAOJk73LdUo8TjUvAtFoHd053qRhjl6C6tMyfhg=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <!-- REVIEW4 U-80 (check): before the stylesheets and the hundred scripts below (seconds on a cold start), the page's very
@@ -466,7 +466,8 @@
     .sight-tag.short { background: var(--signal); color: var(--panel); border-color: var(--panel); }   /* faster than you can see */
     .sight-tag[hidden] { display: none; }
     #logFrame { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; z-index: 10000; background: var(--panel); }
-    #logFrame[hidden] { display: none; }
+    /* F-15: a hidden Log is kept laid out at the phone's width (drawn once, shown at once), invisible and untouchable */
+    #logFrame[hidden] { display: block; visibility: hidden; pointer-events: none; }
 
     .switches { display: flex; justify-content: space-between; align-items: flex-start; gap: 4px; flex-wrap: wrap; }
     .sw { display: grid; justify-items: center; gap: 4px; min-width: 44px; padding: 4px 2px; }
@@ -1030,7 +1031,7 @@
       <div class="plates">
         <div class="plate" id="modePlate" role="status">Replay</div>
         <!-- a Pro theme on trial: its status line, not a box over the hazard plate's place (REVIEW2.md U-39) -->
-        <div class="plate trial-plate" id="trialPlate" role="status" hidden><span id="trialText"></span> · <button class="linkbtn" id="trialStop">Stop</button></div>
+        <div class="plate trial-plate" id="trialPlate" role="status" hidden><span id="trialText"></span><span id="trialWatchSep"> · </span><button class="linkbtn" id="trialWatch">Watch a replay</button> · <button class="linkbtn" id="trialStop">Stop</button></div>
       </div>
       <button class="map-key recenter-key" id="recenterBtn" aria-label="Recenter"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/><circle cx="12" cy="12" r="1.5"/></svg><span class="rc-left"></span></button>
       <div class="toast" id="toast" role="status" aria-live="polite"></div>
@@ -1140,6 +1141,7 @@
         <button class="sw" data-toggle="coverage"><i></i><span>Measured roads</span></button>
         <button class="sw" data-toggle="terrain"><i></i><span>3D terrain</span></button>
         </div>
+        <p class="note" id="terrainNote" role="status" hidden>Building 3D terrain…</p>
         <p class="note" id="camOfflineNote" hidden>Camera map offline. No pins doesn't mean no cameras.</p>
         <button class="linkbtn" id="friendsSheetBtn">Who sees me</button>
         <h3 class="mt-8">Co-driver</h3>
@@ -1493,6 +1495,8 @@
     // Bundled recordings are demos (Watch a replay), never the person's own drives. They are 1.8 MB of script, so they load
     // only when asked for (Watch a replay, a ?drive= link), not on every start (IDEAS P-06).
     const drives = [];
+    // after the next frame, when the page has nothing else to do (or within 2 s): work nobody is waiting to see (REVIEW_FEEL)
+    const idle = (fn) => requestAnimationFrame(() => (window.requestIdleCallback ? requestIdleCallback(fn, { timeout: 2000 }) : setTimeout(fn, 200)));
     const DEMO_SCRIPTS = ['data/dry_ridge.js', 'data/pebble_ridge.js'];
     let demosLoading = null;
     function loadDemos() {
@@ -1506,29 +1510,29 @@
       }, () => { demosLoading = null; return false; });
       return demosLoading;
     }
-    let savedDriveIds = new Set();
     let refreshDriveVersion = 0;
-    async function refreshSavedDrives() {
-      if (window.ApexLogHost && !(logFrame.el && !logFrame.el.hidden)) ApexLogHost.stale();   // the Log shows them fresh next time
+    // Your saved drives, as the cockpit uses them: the bumps they confirmed (called on any road) and what the coach found the
+    // last time on each corner (spoken on the way in). F-04 / F-08 (REVIEW_FEEL): built in the analysis worker from the
+    // drives in IndexedDB (analysis_client.js memory), so no drive's rows are read on this page's thread; a saved drive is a
+    // track here only when it is replayed (`want`, a ?drive= link from the Log).
+    async function refreshSavedDrives(want = null) {
+      if (window.ApexLogHost) ApexLogHost.changed('drives');           // the Log, kept or not, shows them fresh (F-15)
       const version = ++refreshDriveVersion;
-      const saved = await ApexRecording.all();
-      if (version !== refreshDriveVersion) return;
-      const records = saved.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-      const ids = new Set(records.map(d => d.id));
-      const others = drives.filter(d => !savedDriveIds.has(d.id) && !ids.has(d.id));
-      const mine = ApexRecording.corroborate(records.map((d) => ApexRecording.repair(Core, d)));   // hazards seen again on other drives
-      drives.splice(0, drives.length, ...mine.map((d) => ApexRecording.toTrack(d)), ...others);
-      savedDriveIds = ids;
-      // What the coach found last time on each corner you have driven, spoken on the way in. Rebuilt only when the set of
-      // drives changes (it runs the coach over your newest drives), off the main path.
-      hazardMemory = ApexRoadMemory.hazards(mine);                    // bumps your drives confirmed, called on any road
-      const memoKey = records.map((d) => d.id).join(',');
-      if (memoKey !== roadMemoryKey) setTimeout(() => {
-        if (version !== refreshDriveVersion) return;
-        try { roadMemory = ApexRoadMemory.build(Core, mine, ApexRecording.cornersOf); roadMemoryKey = memoKey; } catch (_) { roadMemory = []; }
-      }, 0);
+      let m = null;
+      try { m = await ApexAnalysis.job('memory', want ? { track: want } : {}); } catch (e) { console.error('road memory', e); return null; }
+      if (m.track && !drives.some((d) => d.id === m.track.id && !d.saved)) {
+        const i = drives.findIndex((d) => d.id === m.track.id);
+        if (i >= 0) drives.splice(i, 1);
+        drives.unshift(Object.assign(m.track, { saved: true }));
+      }
+      if (version !== refreshDriveVersion) return m;
+      const ids = new Set(m.ids);
+      for (let i = drives.length - 1; i >= 0; i--) if (drives[i].saved && !ids.has(drives[i].id)) drives.splice(i, 1);   // deleted in the Log
+      hazardMemory = m.hazards || [];
+      roadMemory = m.roadMemory || [];
+      return m;
     }
-    let roadMemory = [], roadMemoryKey = null, hazardMemory = [];
+    let roadMemory = [], hazardMemory = [];
     const hazardSaid = new Map(), HZ_REPEAT_MS = 5 * 60000, HZ_SAME_SPOT_M = 40;   // confirmed bump id -> when it was last said
     let track = null;
 
@@ -1606,17 +1610,25 @@
       document.querySelectorAll('#nightSwitch [data-night]').forEach(b => b.setAttribute('aria-checked', String(b.dataset.night === state.nightMode)));
       document.querySelectorAll('[data-notes]').forEach(b => b.setAttribute('aria-checked', String(b.dataset.notes === state.notesMode)));   // U-82
     }
+    // F-09 (REVIEW_FEEL): the look changes in one frame (the page's colours, the dials, the map's palette, only the paint
+    // values that changed: basemap.js); what nobody sees in that frame (the route line's sector colours, the hidden Log)
+    // follows when the page is idle, for the newest theme only.
+    let themeAfter = 0;
     function applyTheme() {
-      if (window.ApexLogHost) ApexLogHost.stale();
       syncDerivedToggles();
       look = Themes.apply(state.theme, state.toggles.night);
       if (typeof themeVoice === 'function') themeVoice();               // the co-driver comes with the theme
       cluster = Inst.mountCluster($('cluster'), look.theme);
       paintSwitches();
       restyleBasemap();
-      if (track && track.kind !== 'horizon') loadTrackOnMap();   // the road ahead is never drawn
       savePrefs();
       render(false);
+      const n = ++themeAfter;
+      idle(() => {
+        if (n !== themeAfter) return;
+        if (track && track.kind !== 'horizon') loadTrackOnMap();   // the road ahead is never drawn
+        if (window.ApexLogHost) ApexLogHost.changed('theme');
+      });
     }
     function refreshAutoNight() {
       if (state.nightMode === 'auto' && isNight() !== state.toggles.night) applyTheme();
@@ -1988,10 +2000,24 @@
     }
     // 3D terrain (IDEAS U-14): the hillshade's own DEM raised into relief, a little exaggerated so a ridge reads on a phone.
     // Off by default and off while saving battery (it is the heaviest thing the map can draw). Preview flies over it.
-    function applyTerrain() {
+    // F-10 (REVIEW_FEEL): raising the mesh held the page for seconds (3 tasks, 3.5 s at 4x). From the switch (`later`), the
+    // switch reads on at once, the pitch eases first and the terrain is set once the map has stopped and the page is idle,
+    // with "Building 3D terrain" under the switch until the map has drawn it.
+    let terrainRun = 0;
+    function paintTerrainNote(on) { const n = $('terrainNote'); if (n && n.hidden === on) n.hidden = !on; }
+    function applyTerrain(later = false) {
       if (!mapReady || !map.getSource('apex-dem')) return;
-      const on = !!state.toggles.terrain && !power.low;
-      try { map.setTerrain(on ? { source: 'apex-dem', exaggeration: 1.4 } : null); } catch (_) {}
+      const on = !!state.toggles.terrain && !power.low, run = ++terrainRun;
+      const set = () => {
+        if (run !== terrainRun) return;
+        try { map.setTerrain(on ? { source: 'apex-dem', exaggeration: 1.4 } : null); } catch (_) {}
+        const built = () => { if (run === terrainRun) paintTerrainNote(false); };
+        if (on) { map.once('idle', built); setTimeout(built, 6000); } else paintTerrainNote(false);   // (no DEM tiles: the map never idles)
+      };
+      if (!later || !on) { set(); return; }
+      paintTerrainNote(true);
+      const go = () => idle(set);
+      if (map.isMoving()) map.once('moveend', go); else go();
     }
     let webBattery = null;   // a browser's own battery reading, for what a drive costs (battery_budget.js, IDEAS P-01)
     function feedPower(info) {
@@ -4369,9 +4395,10 @@
     const openSheet = (v = view || 'route') => showView(v);
     // The Log and Stages (analysis.html) open in a full-screen frame over the map, never in its place (the owner,
     // 2026-10-29: no page reloads): the map, a drive in progress and the car's screen keep running behind it, and its
-    // Map, People and Garage tabs close the frame (web/page_return.js). The frame is kept and shown again as it was, unless
-    // a drive, the theme or the units changed since, or a different page of the Log is asked for.
-    const logFrame = { el: null, url: null, stale: false };
+    // Map, People and Garage tabs close the frame (web/page_return.js). F-15 (REVIEW_FEEL): the frame is loaded once, hidden,
+    // when the map is idle after launch, and never again: a different page of the Log, a new or changed drive, the theme and
+    // the units are messages to it (analysis.html ApexLogFrame), so opening the Log is showing a page that is already there.
+    const logFrame = { el: null, url: null, pending: new Set() };
     function safeInsets() {
       let probe = $('saProbe');
       if (!probe) { probe = el('div', { id: 'saProbe' }); probe.style.cssText = 'position:fixed;visibility:hidden;pointer-events:none;padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)'; document.body.append(probe); }
@@ -4382,28 +4409,52 @@
       const ins = safeInsets();
       try { const st = logFrame.el.contentDocument.documentElement.style; for (const k of Object.keys(ins)) st.setProperty(`--sa-${k}`, ins[k]); } catch (_) {}
     }
-    function openLog(url) {
+    // the Log page's own interface once it has loaded (analysis.html), else null
+    const logApi = () => { try { return (logFrame.el && logFrame.el.contentWindow && logFrame.el.contentWindow.ApexLogFrame) || null; } catch (_) { return null; } };
+    function logFrameEl(url) {
       let f = logFrame.el;
-      if (!f) {
-        f = logFrame.el = el('iframe', { id: 'logFrame', title: 'Log' });
-        f.addEventListener('load', logInsets);
-        document.body.append(f);
-      }
-      if (logFrame.url !== url || logFrame.stale) { logFrame.url = url; logFrame.stale = false; f.src = url; }
-      else logInsets();
+      if (f) return f;
+      f = logFrame.el = el('iframe', { id: 'logFrame', title: 'Log' });
+      f.hidden = true;
+      f.addEventListener('load', () => { logInsets(); logFrame.pending.clear(); });   // a fresh page reads everything itself
+      logFrame.url = url; f.src = url;
+      document.body.append(f);
+      return f;
+    }
+    function openLog(url) {
+      const f = logFrameEl(url), api = logApi();
+      if (api) {
+        for (const what of logFrame.pending) api.changed(what);         // what changed while it was hidden, said once each
+        logFrame.pending.clear();
+        api.open(url);                                                  // the page asked for, in place (never a reload)
+        logFrame.url = url;
+        logInsets();
+      } else if (logFrame.url !== url) { logFrame.url = url; f.src = url; }   // still loading: load the page asked for instead
       f.hidden = false;
       document.documentElement.classList.add('log-open');
+      if (api) api.shown();
+    }
+    // F-15: the Log is loaded while nothing else is happening (the map idle, no drive), so its first open is a show
+    function prewarmLog() {
+      if (logFrame.el || state.mode === 'live' || driveActive || document.hidden) return;
+      logFrameEl('analysis.html?tab=log');
     }
     window.addEventListener('resize', () => { if (logFrame.el && !logFrame.el.hidden) logInsets(); });
     window.ApexLogHost = {
       close(v) {
-        refreshSavedDrives().catch(() => {});                          // a drive renamed or deleted in the Log (the frame is still open: not stale)
+        refreshSavedDrives().catch(() => {});                          // a drive renamed or deleted in the Log
         if (logFrame.el) logFrame.el.hidden = true;
         document.documentElement.classList.remove('log-open');
+        const api = logApi(); if (api) api.hidden();
         showView(VIEW_TITLES[v] || PEOPLE_SIDES[v] ? v : null);
       },
       load(url) { location.href = url; },                              // a replay: the map page loads with that drive
-      stale() { logFrame.stale = true; },
+      // 'drives' | 'theme' | 'units': told now when the Log is showing, else when it is next opened
+      changed(what) {
+        const api = logApi();
+        if (api && logFrame.el && !logFrame.el.hidden) api.changed(what); else if (logFrame.el) logFrame.pending.add(what);
+      },
+      stale() { ['drives', 'theme', 'units'].forEach((w) => ApexLogHost.changed(w)); },
       insets: () => safeInsets(),                                      // asked for by the frame as its first script runs
     };
     // links into the Log anywhere on the map page (the drive-ended card, a toast's Open) open the frame too
@@ -5027,7 +5078,7 @@
       document.querySelectorAll('[data-units]').forEach(b => b.addEventListener('click', () => {
         if (b.dataset.units === ApexUnits.system()) return;
         if (state.mode === 'live') { toast('Change units when the drive has ended.'); return; }
-        ApexUnits.set(b.dataset.units); paintUnits(); ApexLogHost.stale(); carLook();
+        ApexUnits.set(b.dataset.units); paintUnits(); ApexLogHost.changed('units'); carLook();
         cluster = Inst.mountCluster($('cluster'), look.theme);
         labelLoops();
         if (plannedRoute && !$('routeCard').hidden) { try { renderRouteCard(); } catch (_) {} }
@@ -5608,7 +5659,10 @@
     document.querySelectorAll('#hlRating button').forEach(b => b.addEventListener('click', () => selectHighlightRating(Number(b.dataset.rating))));
     // Your data (my_data.js, IDEAS Z-03 / Z-04): what this phone holds, drives as GPX, delete and erase.
     async function renderMyData() {
-      const list = await ApexRecording.all();
+      // the summaries (F-06): each drive's length and battery, never its rows (the Garage opened with every drive read)
+      let sums = await ApexRecording.summaries(null);
+      if (sums.missing) sums = (await ApexAnalysis.job('summaries')).list;   // drives saved before summaries: built in the worker
+      const list = sums.map((s) => ({ dist: [s.len_m || 0], battery: s.battery }));
       const s = ApexMyData.phoneSummary(list, localStorage);
       $('myDataNote').textContent = `On this phone: ${s.drives} drive${s.drives === 1 ? '' : 's'} (${ApexUnits.long(s.miles * 1609.344)}), ${s.spots} spot${s.spots === 1 ? '' : 's'}, ${s.zones} privacy zone${s.zones === 1 ? '' : 's'}, ${s.places} recent place${s.places === 1 ? '' : 's'}. `
         + (s.signedIn ? 'Signed in: friends, crews and what you shared are on the server.' : 'Not signed in: nothing of yours is on the server.')
@@ -5677,16 +5731,16 @@
       toast('Offline data deleted.'); renderMyData();
     });
     $('myDrivesDelBtn').addEventListener('click', async () => {
-      const list = await ApexRecording.all();
+      const list = await ApexRecording.ids();
       if (!list.length) { toast('No drives on this phone.'); return; }
       if (!(await ApexConfirm.ask(`Delete all ${list.length} drives from this phone? Download them first if you want to keep them.`, 'Delete drives'))) return;
-      for (const d of list) { try { await ApexRecording.remove(d.id); } catch (_) {} }
+      for (const id of list) { try { await ApexRecording.remove(id); } catch (_) {} }
+      refreshSavedDrives().catch(() => {});
       toast('Drives deleted from this phone.'); renderMyData();
     });
     $('myEraseBtn').addEventListener('click', async () => {
       if (!(await ApexConfirm.ask('Erase drives, spots, zones, settings and sign-in from this phone? Your account on the server stays until you delete it in Garage → Account.', 'Erase everything'))) return;
-      const list = await ApexRecording.all();
-      for (const d of list) { try { await ApexRecording.remove(d.id); } catch (_) {} }
+      for (const id of await ApexRecording.ids()) { try { await ApexRecording.remove(id); } catch (_) {} }
       ApexSync.setSession(null);                                   // the app's Keychain session too (IDEAS Z-10)
       for (const k of ApexMyData.keysToClear(localStorage)) { try { localStorage.removeItem(k); } catch (_) {} }
       try { sessionStorage.clear(); } catch (_) {}
@@ -5758,6 +5812,8 @@
       if (!themeTrial) return;
       const left = Math.max(0, themeTrial.ends - Date.now()), m = Math.floor(left / 60000), sec = Math.floor(left / 1000) % 60;
       $('trialText').textContent = `${Themes.THEMES[themeTrial.id].label} · ${m}:${String(sec).padStart(2, '0')} left`;
+      const watching = !!(replayOn && track && track.demo);
+      if ($('trialWatch').hidden !== watching) $('trialWatch').hidden = $('trialWatchSep').hidden = watching;
     }
     function endThemeTrial(say) {
       if (!themeTrial) return;
@@ -5771,7 +5827,8 @@
       themeTrial = { id, was: themeAllowed(state.theme) ? state.theme : 'roadbook', ends: Date.now() + 10 * 60000,
         timer: setTimeout(() => endThemeTrial(true), 10 * 60000), tick: setInterval(paintTrial, 1000) };
       useTheme(id); closeSheet();
-      if (typeof watchDryRidge === 'function') watchDryRidge();
+      // F-09 (REVIEW_FEEL): the theme is on in the next frame; the demo drive (1.8 MB of script and a replay) loads only when
+      // asked for, from the plate's Watch a replay, never as part of trying the look
       paintTrial();
     }
     function themePreview(t) {
@@ -5977,8 +6034,8 @@
       if (k === 'lpr') updatePins();
       if (k === 'haptics' && state.toggles.haptics) haptic('note');   // feel it once
       if (k === 'terrain') {
-        applyTerrain();
         if (state.toggles.terrain && mapReady && state.mode !== 'live' && map.getPitch() < 40) map.easeTo({ pitch: 60, duration: 800 });
+        applyTerrain(true);                                            // F-10: after the ease, when the page is idle
         if (state.toggles.terrain && power.low) toast('3D terrain waits until the phone stops saving battery.');
       }
       if (k === 'friends') {   // REVIEW.md 5.4: seeing friends; the first time, the sheet explains both choices
@@ -6257,7 +6314,7 @@
     async function preferGrids(want) {
       if (Date.now() - preferCache.at > 10 * 60000) { preferCache.driven = null; preferCache.crew = null; preferCache.at = Date.now(); }
       if (want.novel && !preferCache.driven && window.ApexRecording) {
-        try { preferCache.driven = ApexPrefer.grid((await ApexRecording.all()).map(d => ({ lat: d.lat, lon: d.lon }))); } catch (_) { preferCache.driven = new Set(); }
+        try { preferCache.driven = new Set((await ApexAnalysis.job('drivenGrid')).cells); } catch (_) { preferCache.driven = new Set(); }   // in the worker (F-08)
       }
       if (want.crew && !preferCache.crew) {
         try {
@@ -6709,12 +6766,9 @@
       let segs = [];
       try { segs = JSON.parse(localStorage.getItem('apex.segments') || '[]'); } catch (_) {}
       if (!Array.isArray(segs) || !segs.length || !window.ApexStageDelta) return;
-      const drives = (await ApexRecording.all()).map((d) => ApexRecording.repair(Core, d)).filter((d) => Array.isArray(d.events));
-      const refs = [];
-      for (const seg of segs) {
-        const best = ApexStageDelta.best(drives.map((d) => ApexStageDelta.reference(Core, seg, d, ApexRecording.scorableCorners(d, ApexRecording.cornersOf(d)))));
-        if (best) refs.push(best);
-      }
+      // the reference passes come from the analysis worker (REVIEW_FEEL F-04): no drive's rows are read here at Start
+      let refs = [];
+      try { refs = (await ApexAnalysis.job('stageRefs', { segs })).refs || []; } catch (_) { refs = []; }
       if (refs.length && driveActive) stageWatch = { tracker: ApexStageDelta.createTracker(Core, refs), at: 0 };
     }
     function feedStage() {
@@ -6837,51 +6891,73 @@
     // already saved; the card shows its name, distance and time, the Vetta Score big (-- without clean corners) and one
     // thing to work on (the weakest Score part, week_digest.js tip), with Share card and Mark a stage.
     let endDrive = null;
-    function showEndCard(d, startedAt, opts = {}) {
-      endDrive = d;
-      // U-91: scored exactly as the Log scores it (a parsed record has no d.corners, so the card said "--" to a 788); and the
-      // drive's time is the recording's own, as the Log counts it, not the wall clock since Start
-      const scored0 = ApexRecording.scoreOf(Core, d);
-      d.corners = scored0.corners; d.ds = scored0.ds;
-      const miles = Array.isArray(d.dist) && d.dist.length ? ApexUnits.long(d.dist[d.dist.length - 1], 1) : null;
-      let mins = null;
-      try { const T = Core.elapsedS(d.speed_mps), s = T[T.length - 1]; mins = Number.isFinite(s) ? Math.round(s / 60) : null; } catch (_) { mins = null; }
-      $('endName').textContent = d.name || 'Your drive';
-      $('endMeta').textContent = [miles, mins != null ? (mins >= 60 ? `${Math.floor(mins / 60)} h ${mins % 60} min` : `${mins} min`) : null,
-        Array.isArray(d.corners) ? `${d.corners.length} corners` : null].filter(Boolean).join(' · ');
-      $('endScore').textContent = d.ds.score == null ? '--' : String(d.ds.score);
-      $('endScore').classList.toggle('unk', d.ds.score == null);   // unknown in pencil, not two black bars (REVIEW2.md U-34)
-      const t = d.ds.score != null && window.ApexWeekDigest ? ApexWeekDigest.tip(d.ds.components) : null;
-      const tip = d.ds.score == null ? 'Not enough clean corners for a score this time.' : t ? `Next time, ${t.label.toLowerCase()}: ${t.tip}.` : '';
-      const ended = window.ApexDriveKeep ? ApexDriveKeep.endNote(d) : null;   // Round 3: a drive that ended itself says how
+    // F-04 (REVIEW_FEEL): the card comes first, in the frame after End, with what the recording already knows (its name,
+    // distance, time and trail); the score, the tip and the closing line follow when the worker has parsed, scored and saved
+    // the drive (endCardScored). c: { id, name, len_m, secs, corners (a count, or null while scoring), ds (null while
+    // scoring), ended, lat, lon }. A full record (showEndCard) goes through the same two steps at once.
+    function endCardOpen(c) {
+      endDrive = c;
+      const mins = Number.isFinite(c.secs) ? Math.round(c.secs / 60) : null;
+      $('endName').textContent = c.name || 'Your drive';
+      $('endMeta').textContent = [Number.isFinite(c.len_m) ? ApexUnits.long(c.len_m, 1) : null, mins != null ? (mins >= 60 ? `${Math.floor(mins / 60)} h ${mins % 60} min` : `${mins} min`) : null,
+        Number.isFinite(c.corners) ? `${c.corners} corners` : null].filter(Boolean).join(' · ');
+      const ended = window.ApexDriveKeep ? ApexDriveKeep.endNote(c) : null;   // Round 3: a drive that ended itself says how
+      $('endLine').textContent = ended ? ended + '.' : '';
+      // scoring: no number yet, never "--" (that means "no score"), and no key that needs the score
+      $('endScore').textContent = '…'; $('endScore').classList.add('unk'); $('endScore').setAttribute('aria-busy', 'true');
+      $('endLog').href = $('endLogKey').href = `analysis.html?tab=drive&drive=${encodeURIComponent(c.id)}`;
+      $('endShare').hidden = true; $('endShareLink').hidden = true; $('endLogKey').hidden = false; $('endLog').hidden = true;
+      $('endCard').classList.add('show');
+      showEndTrail(c);
+    }
+    // The score arrived (ds: { score, components }, corners: a count; others: your earlier drives with this name, scored)
+    function endCardScored(c, others, opts = {}) {
+      if (!endDrive || endDrive.id !== c.id) return;                   // another card since
+      endDrive = { ...endDrive, ...c };
+      const mins = Number.isFinite(c.secs) ? Math.round(c.secs / 60) : null;
+      $('endMeta').textContent = [Number.isFinite(c.len_m) ? ApexUnits.long(c.len_m, 1) : null, mins != null ? (mins >= 60 ? `${Math.floor(mins / 60)} h ${mins % 60} min` : `${mins} min`) : null,
+        Number.isFinite(c.corners) ? `${c.corners} corners` : null].filter(Boolean).join(' · ');
+      $('endScore').removeAttribute('aria-busy');
+      $('endScore').textContent = c.ds.score == null ? '--' : String(c.ds.score);
+      $('endScore').classList.toggle('unk', c.ds.score == null);   // unknown in pencil, not two black bars (REVIEW2.md U-34)
+      const t = c.ds.score != null && window.ApexWeekDigest ? ApexWeekDigest.tip(c.ds.components) : null;
+      const tip = c.ds.score == null ? 'Not enough clean corners for a score this time.' : t ? `Next time, ${t.label.toLowerCase()}: ${t.tip}.` : '';
+      const ended = window.ApexDriveKeep ? ApexDriveKeep.endNote(c) : null;
       const tipLine = [ended ? ended + '.' : '', tip].filter(Boolean).join(' ');
-      $('endLine').textContent = tipLine;
       // your best on this road (REVIEW.md 4.4): against your earlier drives named after the same road; then the pack's closing line
-      (async () => {
-        let best = false;
-        if (d.ds.score != null && window.ApexEndLine) {
-          try {
-            const others = (await ApexRecording.all()).filter((o) => o.id !== d.id && o.name === d.name).map((o) => {
-              try { const s = ApexRecording.scoreOf(Core, o).ds.score; return { id: o.id, name: o.name, score: s == null ? null : Math.round(s) }; }
-              catch (_) { return null; }
-            }).filter(Boolean);
-            best = ApexEndLine.bestOnRoad({ id: d.id, name: d.name, score: d.ds.score }, others);
-          } catch (_) { best = false; }
-        }
-        if (best) $('endLine').textContent = ['Your best on this road.', tipLine].filter(Boolean).join(' ');
-        if (window.ApexEndLine && !opts.quiet) {                     // Round 3: never aloud to a parked car or a pocket
-          const pack = ['marguerite', 'kit', 'hale'].includes(state.voiceId) ? state.voiceId : 'marguerite';
-          const line = ApexEndLine.endLine(pack, d.ds.score == null ? null : Math.round(d.ds.score), best);
-          say(line.text, false, null, null, state.voiceId === 'device' ? {} : { tokens: line.tokens });
-        }
-      })();
-      $('endLog').href = $('endLogKey').href = `analysis.html?tab=drive&drive=${encodeURIComponent(d.id)}`;
+      let best = false;
+      if (c.ds.score != null && window.ApexEndLine) { try { best = ApexEndLine.bestOnRoad({ id: c.id, name: c.name, score: c.ds.score }, others || []); } catch (_) { best = false; } }
+      $('endLine').textContent = best ? ['Your best on this road.', tipLine].filter(Boolean).join(' ') : tipLine;
+      if (window.ApexEndLine && !opts.quiet) {                       // Round 3: never aloud to a parked car or a pocket
+        const pack = ['marguerite', 'kit', 'hale'].includes(state.voiceId) ? state.voiceId : 'marguerite';
+        const line = ApexEndLine.endLine(pack, c.ds.score == null ? null : Math.round(c.ds.score), best);
+        say(line.text, false, null, null, state.voiceId === 'device' ? {} : { tokens: line.tokens });
+      }
       // U-75: Share card is the solid key only with a score to share; with none, Open in the Log is, and Share is a link
-      const scored = d.ds.score != null;
+      const scored = c.ds.score != null;
       $('endShare').hidden = !scored; $('endShareLink').hidden = scored;
       $('endLogKey').hidden = scored; $('endLog').hidden = !scored;
-      $('endCard').classList.add('show');
-      showEndTrail(d);
+      // the card's words changed its height: the drive is fitted again to the map the card now leaves
+      const sheet = $('endCard').querySelector('.card-sheet');
+      if (endTrailOn && sheet && Math.abs(sheet.getBoundingClientRect().top - endTrailTop) > 4) showEndTrail(endDrive);
+    }
+    // A whole record (the review recording, a debug call): U-91, scored exactly as the Log scores it, and the drive's time
+    // the recording's own, as the Log counts it, not the wall clock since Start.
+    function showEndCard(d, startedAt, opts = {}) {
+      const scored0 = ApexRecording.scoreOf(Core, d);
+      d.corners = scored0.corners; d.ds = scored0.ds;
+      let secs = null;
+      try { const T = Core.elapsedS(d.speed_mps), s = T[T.length - 1]; secs = Number.isFinite(s) ? s : null; } catch (_) { secs = null; }
+      const c = { id: d.id, name: d.name, ended: d.ended, len_m: Array.isArray(d.dist) && d.dist.length ? d.dist[d.dist.length - 1] : null, secs,
+                  lat: d.lat, lon: d.lon, corners: null, ds: null, record: d };
+      endCardOpen(c);
+      (async () => {
+        let others = [];
+        if (d.ds.score != null) try {
+          others = (await ApexRecording.summaries()).filter((o) => o.id !== d.id && o.name === d.name).map((o) => ({ id: o.id, name: o.name, score: o.ds && o.ds.score != null ? Math.round(o.ds.score) : null }));
+        } catch (_) { others = []; }
+        endCardScored({ ...c, corners: d.corners.length, ds: d.ds }, others, opts);
+      })();
     }
     // U-88: behind the card, the map is the drive: fitted to its trail above the card, the trail drawn at the route's width in
     // the accent. It goes when the card does, however it closes, and the map follows again.
@@ -6921,6 +6997,7 @@
       endTrailOn = true; pauseFollow();
       // the part of the map the card leaves: from under the island to the card's top edge (on its side the card is beside it)
       const sheet = $('endCard').querySelector('.card-sheet'), mr = map.getContainer().getBoundingClientRect();
+      endTrailTop = sheet ? sheet.getBoundingClientRect().top : 0;
       const wide = matchMedia('(orientation: landscape) and (max-height: 540px)').matches;
       const top = Math.max(32, (parseFloat(safeInsets().top) || 0) - mr.top + 24);
       const bottom = wide || !sheet ? 24 : Math.max(24, Math.min(mr.height - top - 100, mr.bottom - sheet.getBoundingClientRect().top + 24));
@@ -6931,7 +7008,7 @@
       map.jumpTo({ padding: { top: 0, bottom: 0, left: 0, right: 0 } });
       map.fitBounds([[w, so], [e, n]], { padding: { top, left: 32, right: 32, bottom }, pitch: 0, bearing: 0, duration: 900, maxZoom: 16 });
     }
-    let endTrailOn = false;
+    let endTrailOn = false, endTrailTop = 0;
     function hideEndTrail() {
       if (!endTrailOn) return;
       endTrailOn = false;
@@ -6944,8 +7021,12 @@
     $('endStage').addEventListener('click', () => { if (endDrive) openLog(`analysis.html?tab=segments&drive=${encodeURIComponent(endDrive.id)}`); });
     $('endShare').addEventListener('click', async () => {
       if (!endDrive || !window.ApexDriveCard) return;
+      // F-04: the picture's model came with the score from the worker (the drive's shape and corner mix); a whole record
+      // shown here is drawn from itself
+      const model = endDrive.card || (endDrive.record ? ApexDriveCard.cardModel(endDrive.record) : null);
+      if (!model) return;
       const css = getComputedStyle(document.documentElement), v = (k) => css.getPropertyValue(k).trim();
-      const cv = ApexDriveCard.drawCard(document.createElement('canvas'), ApexDriveCard.cardModel(endDrive),
+      const cv = ApexDriveCard.drawCard(document.createElement('canvas'), model,
         { panel: v('--panel'), panelInk: v('--panel-ink'), panelDim: v('--panel-dim'), accent: v('--accent'), fontNum: v('--font-num'), fontUi: v('--font-ui') });
       const out = await ApexDriveCard.shareCard(cv, `${(endDrive.name || 'drive').replace(/[^A-Za-z0-9 _-]+/g, '').trim() || 'drive'}.png`);
       if (out === 'saved') toast('Card saved.');
@@ -6977,28 +7058,40 @@
       if (track && track.kind === 'horizon') { track = null; if (plannedRoute) activate(plannedRoute, 0, { quiet: true }); }   // the road ahead ends with the drive
       replayOn = false; setMode(track && track.kind === 'route' ? 'sim' : 'replay'); paintModeSwitch(); render(true);
       if (save && rec && ApexDriveKeep.keepable(rec)) {
+        // said in the Log and on the card (drive_keep.js endNote); the car it was driven in (IDEAS D-19: its label and the
+        // grip its score allows, never higher than the street default); lap times from track mode (on a circuit only,
+        // IDEAS D-15); what the drive cost the battery (IDEAS P-01)
+        const car = routingCar(), extra = {};
+        if (ended) extra.ended = ended;
+        if (car) extra.car = { label: car.label, mu: Core.carGrip(car) };
+        if (laps.length) extra.laps = laps;
+        if (battery) extra.battery = battery;
+        // F-04: the card in the frame after End, from the recording as it stands; the drive is parsed, scored and saved in
+        // the analysis worker (analysis_client.js save), and the card gets its score when that lands
+        const job = driveJob(rec, (when) => driveName(road, when));
+        const card = endCardFacts(rec, job, extra);
+        endCardOpen(card);
         try {
-          const d = driveRecord(rec, (when) => driveName(road, when));
-          if (ended) d.ended = ended;                                // said in the Log and on the card (drive_keep.js endNote)
-          // the car it was driven in (IDEAS D-19): its label and the grip its score allows, never higher than the street default
-          const car = routingCar();
-          if (car) d.car = { label: car.label, mu: Core.carGrip(car) };
-          if (laps.length) d.laps = laps;                            // lap times from track mode (on a circuit only, IDEAS D-15)
-          if (battery) d.battery = battery;                          // what the drive cost the battery (IDEAS P-01)
-          await ApexRecording.store(d);
+          const { rows: _, ...recState } = rec.snapshot(rec.samples);
+          const res = await ApexAnalysis.job('save', { state: recState, rows: rec.rows, fileName: job.fileName, meta: job.meta, extra });
           keepDone(kept);
-          await refreshSavedDrives();
-          showEndCard(d, rec.startedAt, { quiet: !!ended });
+          const s = res.summary || {};
+          endCardScored({ ...card, id: res.driveId, len_m: s.len_m ?? card.len_m, secs: s.secs ?? card.secs, corners: Array.isArray(s.corners) ? s.corners.length : null,
+                          ds: s.ds || { score: null, components: null }, card: res.card || null }, res.others || [], { quiet: !!ended });
+          idle(() => refreshSavedDrives().catch(() => {}));            // the road memory learns this drive, off the card's moment
           if (live) {
             live.finish().then(async (shared) => {
               if (shared && shared.chunks > 0) {
-                d.contributed = true;
-                await ApexRecording.store(d);
+                await ApexAnalysis.job('patch', { id: res.driveId, fields: { contributed: true } });
                 if (shared.km > 0) toast(`Shared ${ApexUnits.long((shared.km) * 1000, 1)} of road feel.`);
               }
             }).catch(() => {});
           }
-        } catch (e) { toast(e && e.name === 'QuotaExceededError' ? 'Couldn\'t save this drive. The phone is out of storage.' : 'Couldn\'t save this drive.'); console.error('save drive', e); }
+        } catch (e) {
+          if (endDrive && endDrive.id === card.id) $('endCard').classList.remove('show');   // nothing was saved: no card for it
+          toast(e && /Quota/.test(e.name || e.message || e) ? 'Couldn\'t save this drive. The phone is out of storage.' : 'Couldn\'t save this drive.'); console.error('save drive', e);
+          if (live) live.finish().catch(() => {});
+        }
       } else if (save && rec && rec.samples > 0) {
         keepDone(kept);
         if (!ended) toast('Too short to save. Drives under 0.2 mi are dropped.');
@@ -7010,11 +7103,23 @@
     }
     // A recording as the Log keeps it, named for the moment it started (the same id however it was saved, so a drive saved
     // twice, by End and again by recovery after the app closed at the wrong moment, is one drive)
-    function driveRecord(rec, nameAt) {
+    function driveJob(rec, nameAt) {
       const when = new Date(rec.startedAt || Date.now()), pad = (n) => String(n).padStart(2, '0');
       const stamp = `${when.getFullYear()}${pad(when.getMonth() + 1)}${pad(when.getDate())}_${pad(when.getHours())}${pad(when.getMinutes())}${pad(when.getSeconds())}`;
-      return ApexRecording.parse(Core, rec.toCsv(), `web_${stamp}.csv`, { source: 'web-gps', date: `${when.getFullYear()}-${pad(when.getMonth() + 1)}-${pad(when.getDate())}T${pad(when.getHours())}:${pad(when.getMinutes())}`, name: nameAt(when) });
+      const fileName = `web_${stamp}.csv`;
+      return { fileName, id: 'rec_' + fileName.replace(/\W+/g, '_'),     // the id ApexRecording.parse gives it
+               meta: { source: 'web-gps', date: `${when.getFullYear()}-${pad(when.getMonth() + 1)}-${pad(when.getDate())}T${pad(when.getHours())}:${pad(when.getMinutes())}`, name: nameAt(when) } };
     }
+    // What the end card can say before the drive is parsed (F-04): its name, the distance and time its own rows give (as
+    // the Log will count them), and its trail. No corner count and no score until they are measured.
+    function endCardFacts(rec, job, extra) {
+      const rows = rec.rows, n = rows.length, lat = new Array(n), lon = new Array(n), v = new Array(n);
+      for (let i = 0; i < n; i++) { const r = rows[i]; lat[i] = r.lat; lon[i] = r.lon; v[i] = Number.isFinite(r.speed_mps) ? r.speed_mps : NaN; }
+      let secs = null;
+      try { const T = Core.elapsedS(v), s = T[T.length - 1]; secs = Number.isFinite(s) ? s : null; } catch (_) { secs = null; }
+      return { id: job.id, name: job.meta.name, ended: extra.ended, len_m: n ? rows[n - 1].distance_m : null, secs, lat, lon, corners: null, ds: null };
+    }
+
     // In-car mode (web/in_car.js, IDEAS C-07 / C-08): big targets and no keyboard while the car moves. A tap on a text field
     // explains and offers "I'm a passenger", which unlocks typing until the car next stops.
     const motion = new ApexInCar.MotionGate();
@@ -7092,6 +7197,7 @@
     $('permNo').addEventListener('click', () => $('permSheet').classList.remove('show'));
     $('startDrive').addEventListener('click', startDrive);
     $('trialStop').addEventListener('click', () => endThemeTrial(false));
+    $('trialWatch').addEventListener('click', () => { watchDryRidge().then(paintTrial); });
     // the plate's × and (U-104) the transport's Done close a replay or a preview alike
     const closeReplay = () => { if (state.mode === 'live' || !replayOn) return; replayOn = false; setPlaying(false); paintIdle(); };
     $('modePlate').addEventListener('click', closeReplay);
@@ -7331,11 +7437,13 @@
         if (ApexDriveKeep.keepable(rec)) {
           try {
             const meta = (k.head && k.head.meta) || {};
-            const d = driveRecord(rec, (when) => meta.routeName || meta.road || `Drive ${when.toLocaleDateString()} ${ApexFormat.clock12(when.getHours(), when.getMinutes())}`);
-            d.ended = j && j.active ? end.why : 'recovered';           // (one the shell is still on was over while the page slept)
-            if (meta.car && Number.isFinite(meta.car.mu)) d.car = meta.car;
-            await ApexRecording.store(d);
-            saved++; lastName = d.name;
+            const job = driveJob(rec, (when) => meta.routeName || meta.road || `Drive ${when.toLocaleDateString()} ${ApexFormat.clock12(when.getHours(), when.getMinutes())}`);
+            const extra = { ended: j && j.active ? end.why : 'recovered' };   // (one the shell is still on was over while the page slept)
+            if (meta.car && Number.isFinite(meta.car.mu)) extra.car = meta.car;
+            // parsed, scored and saved in the analysis worker, as End does it (F-04): the launch is not held by a drive
+            const { rows: _, ...recState } = rec.snapshot(rec.samples);
+            await ApexAnalysis.job('save', { state: recState, rows: rec.rows, fileName: job.fileName, meta: job.meta, extra });
+            saved++; lastName = job.meta.name;
           } catch (e) { console.error('recover drive', e); continue; }   // kept for the next launch
         }
         journalPost({ op: 'end', id });
@@ -7446,7 +7554,8 @@
     renderHighlights(); renderNearbyHighlights();
     renderAccount();
     async function bootDrives() {
-      await refreshSavedDrives();
+      // a replay of one of your drives waits for it; otherwise the road memory builds in the worker while the map starts
+      if (params.has('drive')) await refreshSavedDrives(params.get('drive')); else refreshSavedDrives();
       // Only a drive the URL asks for (Log → Replay, Watch a replay links); otherwise the map starts idle at your position.
       if (params.has('drive') && !drives.some(d => d.id === params.get('drive'))) await loadDemos();
       const first = params.has('drive') ? drives.find(d => d.id === params.get('drive')) : null;
@@ -7468,6 +7577,8 @@
       recoverKept().catch((e) => console.error('recover drives', e));   // Round 3: a drive never ended goes to the Log
     }
     bootDrives();
+    // F-15: the Log's frame loads while the map is idle after launch (not in a drive or a hidden page: then its first open loads it)
+    setTimeout(() => idle(prewarmLog), 5000);
     if (document.fonts) document.fonts.ready.then(() => render(true));
   })();
   </script>

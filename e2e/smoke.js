@@ -51,6 +51,8 @@ function stubTrip(locs) {
 }
 
 const flows = [];
+// F-04 (REVIEW_FEEL): the end card is up at once and gets its score when the analysis worker has parsed and saved the drive
+const scoredCard = (page, timeout = 20000) => page.waitForFunction(() => { const s = document.getElementById('endScore'); return s && !s.hasAttribute('aria-busy'); }, null, { timeout });
 const flow = (name, fn, ctxOpts = {}) => flows.push({ name, fn, ctxOpts });
 function check(cond, msg) { if (!cond) throw new Error(msg); }
 
@@ -1243,6 +1245,7 @@ flow('drive ended: Open in the Log is the solid key with no score, Share card wi
   }
   await page.click('#driveEnd');
   await page.waitForSelector('#endCard.show', { timeout: 8000 });
+  await scoredCard(page);                                               // F-04: the card first, the score when the worker has it
   const routed = await keys();
   check(routed.name === 'Dragon run', 'named after the route driven: ' + routed.name);
   check(!routed.share && routed.logKey && routed.shareLink && !routed.logLink && /tab=drive&drive=/.test(routed.href), 'no score: Open in the Log is the solid key, Share a link: ' + JSON.stringify(routed));
@@ -1251,6 +1254,7 @@ flow('drive ended: Open in the Log is the solid key with no score, Share card wi
   await page.evaluate(() => { ApexCore.driverScore = () => ({ score: 640, components: {} });
     const lat = [], lon = []; for (let i = 0; i < 300; i++) { lat.push(35.36 + i * 5 / 110540); lon.push(-84.29); }
     apexDebug.showEndCard({ id: 'x', name: 'Cherohala Skyway', date: new Date().toISOString(), lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: lat.map(() => 15), lon_g: lat.map(() => 0), lat_g: lat.map(() => 0), g_known: null, events: [], elev: null, hz: 1, source: 'web-gps', corners: [] }, Date.now() - 600e3); });
+  await scoredCard(page);
   const scored = await keys();
   check(scored.share && !scored.logKey && scored.logLink && !scored.shareLink, 'a score: Share card is the solid key: ' + JSON.stringify(scored));
 });
@@ -1268,6 +1272,7 @@ flow('drive ended: the card and the Log give the same score and time for the rec
     const d = ApexRecording.parse(ApexCore, csv, 'web_20261030_064500.csv', { source: 'web-gps', name: 'Dry Ridge Rd' });
     await ApexRecording.store(d);
     apexDebug.showEndCard(d, Date.now() - 3 * 3600e3);              // three hours of wall clock: the card must not use it
+    for (let i = 0; i < 100 && document.getElementById('endScore').hasAttribute('aria-busy'); i++) await new Promise((r) => setTimeout(r, 50));
     return { id: d.id, score: document.getElementById('endScore').textContent, meta: document.getElementById('endMeta').textContent,
       line: document.getElementById('endLine').textContent, share: !!document.getElementById('endShare').offsetParent };
   });
@@ -2206,6 +2211,167 @@ flow('the Log opens over the map and its tabs come back without loading the map 
   check(sw && sw.off.bg !== sw.on.bg && sw.off.border !== sw.on.border && sw.off.mark !== sw.on.mark, 'on and off differ in fill, border and mark: ' + JSON.stringify(sw));
 });
 
+// REVIEW_FEEL F-04, F-06, F-08, F-09, F-10, F-15: nothing heavy while the driver looks, and a Log that scales.
+// A drive record as the app stores it, n samples north along a gently winding road (corners and g, so it scores).
+const FEEL_RECORD = `(id, name, date, n = 1200, lon0 = -84.29) => { const lat = [], lon = []; for (let i = 0; i < n; i++) { lat.push(35.36 + i * 5 / 110540); lon.push(lon0 + Math.sin(i / 20) * 0.0005); }
+  return { id, name, date, lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: lat.map((_, i) => 14 + 3 * Math.cos(i / 10)), lon_g: lat.map((_, i) => -0.2 * Math.sin(i / 10)),
+    lat_g: lat.map((_, i) => 0.3 * Math.sin(i / 20)), g_known: null, events: [], elev: null, hz: 1, source: 'web-gps', date_known: true }; }`;
+
+flow('the Log after the update: every drive saved before summaries stays as it was, is listed, and gets its summary from its own rows (REVIEW_FEEL F-06)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/privacy.html');                                // same origin, a page that never opens the drives
+  // the database as the build on phones left it: version 2, drives and a drive in progress, no summaries
+  const before = await page.evaluate(async (src) => {
+    const rec = eval(src);
+    const db = await new Promise((ok, fail) => { const r = indexedDB.open('apexnav', 2);
+      r.onupgradeneeded = () => { r.result.createObjectStore('drives', { keyPath: 'id' }); r.result.createObjectStore('keep', { keyPath: 'key' }); };
+      r.onsuccess = () => ok(r.result); r.onerror = () => fail(r.error); });
+    const old = [rec('m1', 'Cherohala Skyway', '2026-09-01T09:00', 900), rec('m2', 'Dry Ridge Rd', '2026-09-08T09:00', 700, -84.6),
+      { ...rec('m3', 'imported_ride', '2026-09-10T08:00:00.000Z', 600, -83.1), source: 'imported', date_known: undefined, tags: ['wet'], note: 'kept' }];
+    old[1].events = [{ type: 'corner', start_m: 100, end_m: 160, index: 26, apex_mph: NaN, code: 'L3', call: 'left three', dir: 'L', severity: '3', turn_rad: 1 }];   // saved before the NaN repair
+    await new Promise((ok, fail) => { const t = db.transaction(['drives', 'keep'], 'readwrite'); for (const d of old) t.objectStore('drives').put(d);
+      t.objectStore('keep').put({ key: 'drive_x:h', id: 'drive_x', kind: 'head', chunks: 1, state: { n: 1 } }); t.objectStore('keep').put({ key: 'drive_x:c000000', id: 'drive_x', kind: 'chunk', n: 0, from: 0, rows: [{ lat: 1 }] });
+      t.oncomplete = ok; t.onerror = () => fail(t.error); });
+    const dump = async (store) => JSON.stringify(await new Promise((ok) => { const q = db.transaction(store).objectStore(store).getAll(); q.onsuccess = () => ok(q.result); }));
+    const out = { drives: await dump('drives'), keep: await dump('keep') };
+    db.close();
+    return out;
+  }, FEEL_RECORD);
+  await page.goto(base + '/analysis.html?tab=log');
+  await page.waitForFunction(() => document.querySelectorAll('tr[data-drive]').length === 3, null, { timeout: 20000 });
+  const after = await page.evaluate(async () => {
+    const db = await new Promise((ok) => { const r = indexedDB.open('apexnav'); r.onsuccess = () => ok(r.result); });
+    const dump = async (store) => JSON.stringify(await new Promise((ok) => { const q = db.transaction(store).objectStore(store).getAll(); q.onsuccess = () => ok(q.result); }));
+    const sums = JSON.parse(await dump('summaries')), drives = await dump('drives'), keep = await dump('keep');
+    const scored = await Promise.all(sums.map(async (s) => ({ id: s.id, sum: s.ds.score, rows: ApexRecording.scoreOf(ApexCore, await ApexRecording.get(s.id)).ds.score, n: s.n, rowsCopied: 'lat' in s || 'speed_mps' in s })));
+    const v = db.version; db.close();
+    return { v, drives, keep, scored, names: [...document.querySelectorAll('tr[data-drive] .ix-road b')].map((b) => b.textContent), stats: ApexAnalysis.stats };
+  });
+  check(after.v === 3, 'the database is at version 3: ' + after.v);
+  check(after.drives === before.drives, 'every drive is exactly as it was saved (lossless)');
+  check(after.keep === before.keep, 'the drive in progress is untouched');
+  check(after.scored.length === 3 && after.scored.every((x) => x.sum === x.rows && !x.rowsCopied), 'each summary is its drive\'s own score, no rows copied: ' + JSON.stringify(after.scored));
+  check(after.scored.find((x) => x.id === 'm1').n === 900, 'the sample count is the drive\'s');
+  check(after.stats.jobs.summaries === 1, 'the missing summaries were built in the worker: ' + JSON.stringify(after.stats));
+  check(after.names.length === 3, 'all three listed: ' + after.names);
+});
+
+flow('End: the card is up within 150 ms of the tap and the drive is parsed, scored and saved in the worker; the Log is not reloaded for it (REVIEW_FEEL F-04, F-15)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
+    window.webkit = { messageHandlers: { apex: { postMessage: () => {} } } }; });
+  await page.route('**/api/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apex && window.ApexAnalysis);
+  // the Log, opened once and closed: kept from here on
+  await page.click('.tab[data-view="log"]');
+  await page.waitForFunction(() => { const f = document.getElementById('logFrame'); return f && !f.hidden && f.contentWindow.ApexLogFrame && f.contentWindow.apexLogDebug && f.contentWindow.apexLogDebug.loaded(); }, null, { timeout: 15000 });
+  await page.evaluate(() => { document.getElementById('logFrame').contentWindow.__kept = true; window.ApexLogHost.close('map'); });
+  await page.evaluate(() => window.apex.onNative({ type: 'link', params: { go: 'drive' } }));
+  await page.waitForFunction(() => window.apexDebug.driveActive);
+  for (let burst = 0; burst < 6; burst++) {
+    await page.evaluate((b) => { for (let j = b * 100; j < (b + 1) * 100; j++) window.apex.live({ lat: 35.5 + j * 1e-4, lon: -83.9 + Math.sin(j / 15) * 3e-4, accuracy_m: 4, speed_mps: 15, course_deg: 0, lat_g: 0.3 * Math.sin(j / 15), lon_g: 0, has_fix: true, calibration: 'locked' }); }, burst);
+    await page.waitForTimeout(200);
+  }
+  const t = await page.evaluate(() => new Promise((done) => {
+    let parsed = 0; const parse = ApexRecording.parse; ApexRecording.parse = (...a) => { parsed++; return parse(...a); };   // on this page's thread
+    const card = document.getElementById('endCard'), t0 = performance.now();
+    new MutationObserver((_, o) => { if (card.classList.contains('show')) { o.disconnect(); done({ ms: performance.now() - t0, busy: document.getElementById('endScore').hasAttribute('aria-busy'), name: document.getElementById('endName').textContent, meta: document.getElementById('endMeta').textContent, parsed }); } })
+      .observe(card, { attributes: true, attributeFilter: ['class'] });
+    document.getElementById('driveEnd').click();
+  }));
+  check(t.ms < 150 && t.busy && !t.parsed, 'the card first, the score still coming, nothing parsed here: ' + JSON.stringify(t));
+  check(/mi|km/.test(t.meta) && /min/.test(t.meta), 'the card says the distance and time from the start: ' + JSON.stringify(t));
+  await scoredCard(page);
+  const done = await page.evaluate(async () => ({ stats: ApexAnalysis.stats, saved: (await ApexRecording.summaries(null)).length, score: document.getElementById('endScore').textContent,
+    meta: document.getElementById('endMeta').textContent }));
+  check(done.stats.jobs.save === 1 && !done.stats.inlineJobs.save, 'saved in the worker: ' + JSON.stringify(done.stats));
+  check(done.saved === 1 && /^(\d+|--)$/.test(done.score) && /corners/.test(done.meta), 'saved with its summary, the score and corners on the card: ' + JSON.stringify(done));
+  // the Log shows the new drive without loading again
+  await page.click('#endDone');
+  await page.click('.tab[data-view="log"]');
+  await page.waitForFunction(() => document.getElementById('logFrame').contentDocument.querySelectorAll('tr[data-drive]').length === 1, null, { timeout: 10000 });
+  check(await page.evaluate(() => document.getElementById('logFrame').contentWindow.__kept === true), 'the Log was told about the drive, not reloaded');
+});
+
+flow('Where to? opens at once: no drive is read and no road is searched while the sheet opens (REVIEW_FEEL F-08)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.ApexRecording && window.ApexStages);
+  await page.evaluate(async (src) => { const rec = eval(src); for (let i = 0; i < 3; i++) await ApexRecording.store(rec('w' + i, 'Road ' + i, '2026-10-0' + (i + 1) + 'T09:00', 3000)); }, FEEL_RECORD);
+  await page.reload();
+  await page.waitForFunction(() => window.apexDebug && window.ApexRecording && !document.getElementById('boot'));
+  await page.waitForTimeout(500);
+  const r = await page.evaluate(() => new Promise((done) => {
+    const calls = []; for (const k of ['all', 'get']) { const f = ApexRecording[k]; ApexRecording[k] = (...a) => { calls.push(k); return f(...a); }; }
+    const disc = ApexStages.discover; ApexStages.discover = (...a) => { calls.push('discover'); return disc(...a); };
+    window.__planCalls = calls;
+    const t0 = performance.now();
+    document.getElementById('destInput').focus();
+    requestAnimationFrame(() => setTimeout(() => done({ open: document.getElementById('planPanel').classList.contains('open'), ms: performance.now() - t0 }), 0));
+  }));
+  check(r.open && r.ms < 200, 'the sheet is open in the next frame: ' + JSON.stringify(r));
+  await page.waitForTimeout(1000);
+  const calls = await page.evaluate(() => window.__planCalls);
+  check(!calls.length, 'nothing read or searched for it: ' + JSON.stringify(calls));
+});
+
+flow('themes: trying one is on in the frame, without loading the demo drive; its replay only when asked for (REVIEW_FEEL F-09)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && !document.getElementById('boot'));
+  const r = await page.evaluate(async () => { const t0 = performance.now(); window.apexDebug.tryTheme('tapedeck'); const inside = performance.now() - t0;
+    await new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(ok)));
+    await new Promise((ok) => setTimeout(ok, 1500));
+    return { inside, theme: document.documentElement.dataset.theme, demo: [...document.scripts].some((s) => /data\/dry_ridge\.js/.test(s.src)), plate: !document.getElementById('trialPlate').hidden,
+      watch: !document.getElementById('trialWatch').hidden, track: !!window.apexDebug.track }; });
+  check(r.theme === 'tapedeck' && r.inside < 100, 'the theme in the frame: ' + JSON.stringify(r));
+  check(!r.demo && !r.track, 'no demo drive loaded, no replay started: ' + JSON.stringify(r));
+  check(r.plate && r.watch, 'the trial plate offers the replay: ' + JSON.stringify(r));
+  await page.click('#trialWatch');
+  await page.waitForFunction(() => window.apexDebug.track && window.apexDebug.track.demo, null, { timeout: 15000 });
+  await page.waitForFunction(() => document.getElementById('trialWatch').hidden, null, { timeout: 3000 });
+});
+
+flow('3D terrain: the switch reads on at once, the relief is raised when the map is idle, with a note while it builds (REVIEW_FEEL F-10)', async (page, base) => {
+  await page.route('https://tiles.openfreemap.org/**', (route) => (route.request().url().includes('/styles/')
+    ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 8, sources: {}, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#eee' } }] }) })
+    : route.abort()));
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apexDebug.map.getSource('apex-dem'), null, { timeout: 15000 });
+  const r = await page.evaluate(() => { const m = window.apexDebug.map, sw = document.querySelector('[data-toggle="terrain"]'); sw.click();
+    return { on: sw.getAttribute('aria-checked'), terrain: !!m.getTerrain(), note: !document.getElementById('terrainNote').hidden }; });
+  check(r.on === 'true' && !r.terrain && r.note, 'on at once, "Building 3D terrain", the mesh not built in the tap: ' + JSON.stringify(r));
+  await page.waitForFunction(() => { const m = window.apexDebug.map; return m.getTerrain() && m.getPitch() > 40; }, null, { timeout: 8000 });
+  await page.waitForFunction(() => document.getElementById('terrainNote').hidden, null, { timeout: 10000 });
+});
+
+flow('the Log with 25 drives: loaded ahead, it opens in under 400 ms and reads no drive\'s rows for the list (REVIEW_FEEL F-06, F-15)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.ApexRecording);
+  await page.evaluate(async (src) => { const rec = eval(src);
+    for (let i = 0; i < 25; i++) await ApexRecording.store(rec('L' + i, i % 2 ? 'Cherohala Skyway' : 'Dry Ridge Rd', `2026-09-${String(1 + i).padStart(2, '0')}T09:00`, 3000)); }, FEEL_RECORD);
+  // the frame's own reads of the drives, counted from its first script
+  await page.addInitScript(() => { if (window.top === window) return; window.__rowReads = 0;
+    Object.defineProperty(window, 'ApexRecording', { configurable: true, set(v) { for (const k of ['all', 'get']) { const f = v[k]; v[k] = (...a) => { window.__rowReads++; return f(...a); }; }
+      Object.defineProperty(window, 'ApexRecording', { value: v, writable: true, configurable: true }); }, get() { return undefined; } }); });
+  await page.reload();
+  await page.waitForFunction(() => window.apexDebug && !document.getElementById('boot'));
+  // loaded while the map is idle after launch, hidden
+  await page.waitForFunction(() => { const f = document.getElementById('logFrame'); return f && f.hidden && f.contentWindow.apexLogDebug && f.contentWindow.apexLogDebug.loaded() && f.contentDocument.querySelectorAll('tr[data-drive]').length === 25; }, null, { timeout: 20000 });
+  const r = await page.evaluate(() => new Promise((done) => { const t0 = performance.now(); document.querySelector('.tab[data-view="log"]').click();
+    requestAnimationFrame(() => setTimeout(() => { const f = document.getElementById('logFrame'); done({ ms: performance.now() - t0, shown: !f.hidden && getComputedStyle(f).visibility === 'visible', rows: f.contentDocument.querySelectorAll('tr[data-drive]').length, reads: f.contentWindow.__rowReads }); }, 0)); }));
+  check(r.shown && r.rows === 25 && r.ms < 400, 'the Log with 25 drives up at once: ' + JSON.stringify(r));
+  check(r.reads === 0, 'the list read no drive\'s rows: ' + JSON.stringify(r));
+  // one view at a time: a drive's page reads that drive only, and its coach comes from the worker
+  const log = page.frameLocator('#logFrame');
+  await log.locator('tr[data-drive="L24"]').click();
+  await log.locator('#tab-drive .dv-score').waitFor({ timeout: 15000 });
+  const dv = await page.evaluate(() => { const w = document.getElementById('logFrame').contentWindow; return { reads: w.__rowReads, jobs: w.ApexAnalysis.stats.jobs, inline: w.ApexAnalysis.stats.inlineJobs }; });
+  check(dv.reads === 1 && dv.jobs.drive >= 1 && !dv.inline.drive && !dv.inline.steadiness, 'the drive\'s own rows, its coach and the month trend in the worker: ' + JSON.stringify(dv));
+});
+
 flow('Siri links: report and end act only during a drive, and say so otherwise (IDEAS V-07)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.goto(base + '/index.html');
@@ -2709,7 +2875,7 @@ flow('REVIEW.md 1.2 screen by screen: the Log, drive detail, Stages, People sign
   check(JSON.stringify(log.panels) === '["historyPanel"]' && log.quiet.includes('Your week'), 'one bordered list, the rest quiet lines: ' + JSON.stringify(log));
   // Drive detail: the Score first, Replay the primary, tags as stamps; nothing wider than the phone
   await page.click('.road-index tbody tr');
-  await page.waitForSelector('#dvReplay');
+  await page.waitForSelector('#tab-drive .dv-score');                    // F-06: the page is named at once, drawn when its rows are read
   const dv = await page.evaluate(() => { const ids = [...document.querySelectorAll('#tab-drive [id^="dv"]')].filter((e) => e.offsetParent).map((e) => e.id);
     const score = document.querySelector('.dv-score'), tags = document.getElementById('dvTags');
     return { first: score && score.compareDocumentPosition(document.getElementById('dvTagsPanel')) & Node.DOCUMENT_POSITION_FOLLOWING, replay: document.getElementById('dvReplay').className,
