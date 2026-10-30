@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-HE4W1X27R4kb8FVkdIv3I946l1C5Fz8AEABrJakdYIc=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-RDmRzNVSIqdKY9EuD0x12ji/qy6nhTfVhuAwIk5/2pE=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <!-- REVIEW4 U-80 (check): before the stylesheets and the hundred scripts below (seconds on a cold start), the page's very
@@ -83,6 +83,7 @@
   <script src="spots_feed.js"></script>
   <script src="feedback.js"></script>
   <script src="profile_view.js"></script>
+  <script src="who_sees.js"></script>
   <script src="pinned_places.js"></script>
   <script src="trip_stops.js"></script>
   <script src="route_weather.js"></script>
@@ -762,6 +763,23 @@
     .friend-head[aria-expanded="true"] .chev { transform: rotate(225deg); }
     .friend .crew-detail { border-top: 0; padding-top: 0; margin: 0 0 12px; }   /* its first switch draws the rule */
     .friend-sent { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; }
+    /* REVIEW_PEOPLE P-05: a request in is a card on the list; P-23: you, at the top; P-04: what they see of you, quietly */
+    .request-card { border: 1.5px solid var(--panel-ink); gap: 10px; padding: 12px; }
+    .request-card p { margin: 0; font-size: 16px; } .request-card small { display: block; color: var(--panel-dim); font-size: 13px; margin-top: 2px; }
+    #accountBody > .you-row { border-bottom: 1px solid var(--hair, var(--panel-dim)); margin-top: -8px; }
+    #accountBody > .you-row + .friend-list { border-top: 0; }
+    .row.friend-keys { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } .friend-keys .ink-btn, .friend-keys .ink-btn.solid { height: 44px; padding: 0 8px; }
+    #accountBody > .you-row .chev { transform: rotate(-45deg); }   /* it opens a page, it does not unfold */
+    .nav-row.quiet { min-height: 44px; font-size: 14px; font-weight: 500; color: var(--panel-dim); border-top: 1px solid var(--hair, var(--panel-dim)); }
+    .nav-row.quiet[aria-expanded="true"] { border-bottom: 0; } .nav-row.quiet[aria-expanded="true"] i { transform: rotate(45deg); }
+    .friend-grants .linkbtn { justify-self: start; }
+    .people-lead { margin: 0; font-size: 17px; line-height: 1.4; }
+    .crew-tiles.one { grid-template-columns: minmax(0, 1fr); }
+    .crew-tiles.one .crew-tile-head b { white-space: normal; overflow-wrap: anywhere; }
+    .row.profile-keys { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } .profile-keys .ink-btn, .profile-keys .ink-btn.solid { height: 44px; padding: 0 8px; }
+    .profile-foot { gap: 16px; border-top: 1px solid var(--hair, var(--panel-dim)); padding-top: 8px; }
+    /* P-25: Tapedeck's mono is wide; the status lines and the drive card's lines a size down so each stays one line */
+    html[data-theme="tapedeck"] .friend-head small, html[data-theme="tapedeck"] .cp-drive-body .note { font-size: 12px; letter-spacing: 0; }
     .friend-sent span { color: var(--panel-dim); }
     .people-gets { display: grid; gap: 12px; justify-items: start; }
     .overlay { position: fixed; inset: 0; z-index: 40; background: var(--panel); color: var(--panel-ink); display: none; flex-direction: column; padding: calc(24px + var(--safe-top)) calc(24px + var(--safe-right)) calc(24px + var(--safe-bottom)) calc(24px + var(--safe-left)); overflow-y: auto; }
@@ -826,11 +844,17 @@
     .sheet header::after { content: ""; position: absolute; left: 0; right: 0; bottom: -17px; height: 16px; background: linear-gradient(var(--panel), transparent); pointer-events: none; z-index: 2; }
     .sheet header { position: relative; display: flex; justify-content: space-between; align-items: center; padding: calc(14px + var(--safe-top)) 16px 14px; border-bottom: 1px solid var(--rule); }
     .sheet header h2 { font-size: 22px; font-weight: 700; font-family: var(--font-num); }
-    /* People (the owner, 2026-10-30): the header is the Friends | Crews switch, the title stays for screen readers only. */
+    /* People (the owner, 2026-10-30): the header is Friends | Crews, the title stays for screen readers only. Two underlined
+       tabs, not the slide switch (REVIEW_PEOPLE pushback, accepted): a switch read as a setting, "Friends: on"; these are two places. */
     .sheet-head-slot { display: none; }
     .sheet[data-view="people"] #sheetTitle { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
     .sheet[data-view="people"] .sheet-head-slot { display: flex; flex: 1; min-width: 0; }
-    .people-switch { flex: 1; }
+    .people-tabs { flex: 1; display: flex; gap: 24px; align-self: stretch; margin-bottom: -14px; }
+    .people-tabs > button { position: relative; min-height: 44px; padding: 0 2px 12px; border: 0; background: transparent; color: var(--panel-dim);
+      font: 700 22px var(--font-num); letter-spacing: 0.01em; display: flex; align-items: flex-end; }
+    .people-tabs > button[aria-selected="true"] { color: var(--panel-ink); }
+    .people-tabs > button::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 3px; background: var(--panel-ink); transform: scaleX(0); transition: transform 0.18s ease-out; }
+    .people-tabs > button[aria-selected="true"]::after { transform: none; }
     /* In a crew, the Crews side opens on it: its switcher (or name) and the gear for its settings (REVIEW2.md U-30) */
     .crew-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-width: 0; }
     .crew-head .cp-switch { margin: 0; flex-wrap: nowrap; overflow-x: auto; min-width: 0; }
@@ -1084,6 +1108,11 @@
                 <div class="ctl"><div class="ctl-label">Presets <small>this setup, one tap next time</small></div>
                   <div class="row"><button class="ink-btn" id="presetSaveBtn">Save as a preset</button><label class="linkbtn" id="gpxImportBtn">Open GPX<input type="file" id="gpxFile" accept=".gpx,application/gpx+xml,application/xml,text/xml" hidden /></label></div></div>
               </details>
+              <!-- REVIEW_PEOPLE P-13: members' spots are a planning input, so they live here (they were a row on Friends) -->
+              <details class="plan-more" id="planSpots" hidden>
+                <summary>Spots near you: overlooks, cafés, bridges</summary>
+                <div id="planSpotsBody"></div>
+              </details>
               <div class="find-bar"><button class="find-key" id="findLoopBtn">Find a loop</button></div>
             </section>
             <section id="routeCard" hidden>
@@ -1153,12 +1182,12 @@
       </div>
       <div class="scrim" id="scrim"></div>
       <aside class="sheet" id="sheet" aria-label="Menu" data-view="garage">
-        <header><h2 id="sheetTitle">Settings</h2><div class="sheet-head-slot" id="sheetHead"><div class="switch people-switch" role="radiogroup" aria-label="People"><button type="button" role="radio" data-people="friends" aria-checked="true">Friends</button><button type="button" role="radio" data-people="crews" aria-checked="false">Crews</button></div></div></header>
+        <header><h2 id="sheetTitle">Settings</h2><div class="sheet-head-slot" id="sheetHead"><div class="people-tabs" role="tablist" aria-label="People"><button type="button" role="tab" id="peopleTabFriends" data-people="friends" aria-selected="true" aria-controls="accountBody">Friends</button><button type="button" role="tab" id="peopleTabCrews" data-people="crews" aria-selected="false" aria-controls="crewsBody" tabindex="-1">Crews</button></div></div></header>
         <div class="body">
-          <!-- People (the owner, 2026-10-30): Friends, then Crews, one switch in the header between them -->
+          <!-- People (the owner, 2026-10-30): Friends, then Crews, two tabs in the header between them (REVIEW_PEOPLE pushback) -->
           <section data-panel="people" id="accountSection">
-            <div id="accountBody" class="stack-12" data-people-pane="friends"></div>
-            <div id="crewsBody" class="stack-12" data-people-pane="crews" hidden></div>
+            <div id="accountBody" class="stack-12" data-people-pane="friends" role="tabpanel" aria-labelledby="peopleTabFriends"></div>
+            <div id="crewsBody" class="stack-12" data-people-pane="crews" role="tabpanel" aria-labelledby="peopleTabCrews" hidden></div>
           </section>
           <!-- the Garage (REVIEW.md 3.2): you and your cars first, then the co-driver, privacy, your data and the rest -->
           <section data-panel="garage" id="garageMe">
@@ -4346,7 +4375,7 @@
       if (next !== peopleSide) { inviteOpen = false; document.querySelectorAll('.side-pop.open').forEach(n => n.classList.remove('open')); }   // a sheet belongs to its side
       peopleSide = next;
       $('accountBody').hidden = next !== 'friends'; $('crewsBody').hidden = next !== 'crews';
-      document.querySelectorAll('[data-people]').forEach((b) => { const on = b.dataset.people === next; b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); });
+      document.querySelectorAll('[data-people]').forEach((b) => { const on = b.dataset.people === next; b.setAttribute('aria-selected', String(on)); b.tabIndex = on ? 0 : -1; });
       $('sheet').querySelector('.body').scrollTop = 0;
     }
     function showView(v) {
@@ -4605,6 +4634,12 @@
     const closeSheet = () => showView(null);
     document.querySelectorAll('#tabbar .tab').forEach(t => t.addEventListener('click', () => showView(view === t.dataset.view ? null : t.dataset.view)));
     document.querySelectorAll('[data-people]').forEach((b) => b.addEventListener('click', () => setPeopleSide(b.dataset.people)));
+    // the tabs' keys (ARIA tabs): left and right move between Friends and Crews, focus with them
+    document.querySelector('.people-tabs').addEventListener('keydown', (e) => {
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      e.preventDefault(); setPeopleSide(peopleSide === 'friends' ? 'crews' : 'friends');
+      document.querySelector(`[data-people="${peopleSide}"]`).focus();
+    });
     $('scrim').addEventListener('click', closeSheet);
     $('pinCancelBtn').addEventListener('click', closePin);
     $('pinOverlay').addEventListener('click', (e) => { if (e.target === $('pinOverlay')) closePin(); });
@@ -4881,6 +4916,14 @@
       if (out.length && (out[out.length - 1][0] !== +t.lon[n - 1].toFixed(5))) out.push([+t.lon[n - 1].toFixed(5), +t.lat[n - 1].toFixed(5)]);
       return out.slice(0, SHARE_MAX_PTS);
     }
+    // A friend's row (REVIEW_PEOPLE P-04 "Share a route") picks them here: the next share opens with them chosen.
+    let shareTo = null;
+    function shareRouteWith(handle) {
+      shareTo = handle;
+      showView(null); openPlan(true);
+      if (plannedRoute) { $('routeShareBtn').click(); setTimeout(() => $('routeSharePick').scrollIntoView({ block: 'nearest' }), 50); }
+      else { $('destInput').focus(); toast(`Plan a route, then Share on its card: @${handle} is picked.`); }
+    }
     $('routeShareBtn').addEventListener('click', async () => {
       const t = plannedRoute, box = $('routeSharePick');
       if (!t || !Array.isArray(t.lat) || t.lat.length < 2) return;
@@ -4890,7 +4933,9 @@
       const fr = (friends || []).filter(f => f.status === 'accepted' && f.handle), cr = crews || [];
       if (!fr.length && !cr.length) { box.replaceChildren(el('p', { className: 'note', textContent: 'Sign in and add friends or a crew (People) to share routes.' })); return; }
       const picked = { friends: new Set(), crews: new Set() };
-      const chip = (label, set, key) => { const b = el('button', { className: 'ink-btn', textContent: label }); b.setAttribute('aria-pressed', 'false');
+      if (shareTo && fr.some(f => f.handle === shareTo)) picked.friends.add(shareTo);
+      shareTo = null;
+      const chip = (label, set, key) => { const b = el('button', { className: 'ink-btn' + (set.has(key) ? ' on' : ''), textContent: label }); b.setAttribute('aria-pressed', String(set.has(key)));
         b.onclick = () => { if (set.has(key)) set.delete(key); else set.add(key); b.classList.toggle('on', set.has(key)); b.setAttribute('aria-pressed', String(set.has(key))); }; return b; };
       box.replaceChildren(el('p', { className: 'note', textContent: 'Share this route\'s shape (not a drive). The first 400 m stay private.' }),
         el('div', { className: 'row', style: 'flex-wrap:wrap' }, ...fr.map(f => chip('@' + f.handle, picked.friends, f.handle)), ...cr.map(c => chip(c.name, picked.crews, c.id))),
@@ -4902,13 +4947,15 @@
           toast(j && j.shared ? `Shared. They'll find it in People.` : 'Nobody to share it with.'); box.replaceChildren();
         }, 'ink-btn solid'), btn('Cancel', () => box.replaceChildren(), 'linkbtn')));
     });
-    function sharedRoutesSection(onCount) {
-      const sec = el('div', { className: 'stack-8' }, el('h3', { textContent: 'Routes shared with you' }));
-      apiCall('GET', '/api/routes/shared').then(jsonOf).then((list) => {
+    // From friends (REVIEW_PEOPLE P-13/P-14): what friends shared with you, newest first, with when; `list` is the render's read.
+    const sharedWhen = (at) => { const t = Date.parse(String(at || '').replace(' ', 'T') + 'Z'); return Number.isFinite(t) && window.ApexFriendsMap ? ApexFriendsMap.spokenAgo(t) : ''; };
+    function sharedRoutesSection(onCount, list = null) {
+      const sec = el('div', { className: 'stack-8' }, el('h3', { textContent: 'From friends' }));
+      (list || apiCall('GET', '/api/routes/shared').then(jsonOf)).then((list) => {
         if (onCount) onCount(Array.isArray(list) ? list.length : 0);
         if (!Array.isArray(list) || !list.length) { sec.append(el('p', { className: 'note', textContent: 'No routes shared with you yet. Share one from a route card.' })); return; }
         for (const r of list) sec.append(el('div', { className: 'row', style: 'align-items:center' },
-          el('span', { style: 'flex:1', textContent: `${r.name} · from @${r.from_handle || '?'}` }),
+          el('span', { style: 'flex:1', textContent: `${r.name} · from @${r.from_handle || '?'}${sharedWhen(r.created_at) ? ` · ${sharedWhen(r.created_at)}` : ''}` }),
           btn('Open', () => openSharedRoute(r.id), 'ink-btn')));
       }).catch(() => sec.append(el('p', { className: 'note', textContent: 'Couldn\'t load shared routes. Check signal.' })));
       return sec;
@@ -5055,12 +5102,18 @@
                       online: navigator.onLine }) }) : null;
     } catch (e) { console.error('feedback', e); }
     // Spots near you (web/spots_feed.js, IDEAS S-12): members' shared spots, rated, filtered by kind; Go there plans the way.
+    // In Where to? (REVIEW_PEOPLE P-13): a planning input, not a friend thing; drawn the first time it is opened, fresh each time.
     let spotsFeed = null;
     // Crews this month (crew_standings.js, IDEAS S-11/S-08): road data km and smoothness, crew totals only
     let crewStandings = null;
     try { crewStandings = window.ApexCrewStandings ? ApexCrewStandings.mount({ el, sync: window.ApexSync, fmtKm: (km) => ApexUnits.long(km * 1000, 0) }) : null; } catch (e) { console.error('crew standings', e); }
     try { spotsFeed = window.ApexSpotsFeed ? ApexSpotsFeed.mount({ el, btn, toast, sync: window.ApexSync, report: safety && safety.report,
-      here: () => state.lastPosition || (() => { const c = map.getCenter(); return { lat: c.lat, lon: c.lng }; })(), goTo: (p) => { closeSheet(); routeToPlace(p); } }) : null; } catch (e) { console.error('spots', e); }
+      here: () => state.lastPosition || (() => { const c = map.getCenter(); return { lat: c.lat, lon: c.lng }; })(), goTo: (p) => { closeSheet(); routeToPlace(p); },
+      fmtKm: (km) => ApexUnits.long(km * 1000, 1) }) : null; } catch (e) { console.error('spots', e); }
+    if (spotsFeed) {
+      const d = $('planSpots'); d.hidden = false;
+      d.addEventListener('toggle', () => { if (!d.open) return; const sec = spotsFeed.section(); const h = sec.querySelector(':scope > h3'); if (h) h.remove(); $('planSpotsBody').replaceChildren(sec); });
+    }
     let garage = null;
     // Build threads (web/builds.js, REVIEW.md 5.3): from a car card, the crew page and Builds you follow.
     let builds = null;
@@ -5071,7 +5124,15 @@
       position: () => state.lastPosition || null, driving: () => driveActive,
       roadName: (lat, lon) => { try { return window.ApexRoadNames ? ApexRoadNames.nearestRoadName(map.querySourceFeatures('openmaptiles', { sourceLayer: 'transportation_name' }), lat, lon) : null; } catch (_) { return null; } },
       setLayerToggle: (on) => { state.toggles.friends = on; paintSwitches(); friendsMap.setLayer(on); savePrefs(); }, openGarage: () => showView('garage') }) : null; } catch (e) { console.error('friends map', e); }
-    if (friendsMap) $('friendsSheetBtn').addEventListener('click', () => friendsMap.sheet());
+    // Who sees what (web/who_sees.js, REVIEW_PEOPLE P-09): every "what people see of you" control on one page, in the Garage
+    // under You; People's You row, a friend's "What @x sees of you" and Layers' Who sees me all open it (P-19: one room).
+    let whoSees = null, roadFeelOn = null;
+    try { whoSees = window.ApexWhoSees && friendsMap ? ApexWhoSees.mount({ el, btn, toast, apiCall, jsonOf, friendsMap, zones: () => privacyZones,
+      crews: () => (window.ApexSync && ApexSync.crews ? ApexSync.crews() : apiCall('GET', '/api/crews').then(jsonOf)),
+      roadFeel: { get: () => roadFeelOn, set: async (on) => { const r = await apiCall('PUT', '/api/me/contribute', { on }).catch(() => null); if (r && r.ok) roadFeelOn = !!on; return !!(r && r.ok); } },
+      openGarage: (what) => { showView('garage'); const t = what === 'privacy' ? $('zoneRadius') : $('garageMeBody'); if (t) setTimeout(() => t.scrollIntoView({ block: 'start' }), 60); },
+      onChange: () => { if (view === 'people' || view === 'garage') renderAccount(); } }) : null; } catch (e) { console.error('who sees', e); }
+    if (friendsMap) $('friendsSheetBtn').addEventListener('click', () => (whoSees && accountMe && accountMe.member ? whoSees.open() : friendsMap.sheet()));
     try { garage = window.ApexGarageUI ? ApexGarageUI.mount({ el, btn, toast, apiCall, jsonOf, report: safety && safety.report, onCars: setRoutingCars, onPhotos: () => renderAccount(), builds }) : null; } catch (e) { console.error('garage', e); }
     // an on/off setting is the slide switch (U-44), the label beside it, never a key that reads "Off"
     const switchRow = (label, on, change) => { const b = el('button', { className: 'sw' + (on ? ' on' : ''), onclick: change }, el('i'), el('span', { textContent: label })); b.setAttribute('role', 'switch'); b.setAttribute('aria-checked', String(!!on)); return b; };
@@ -5165,11 +5226,17 @@
         cbody.append(...acrossToFriends('Crews', 'Pick a handle first: it’s how your crew sees you.', 'Pick a handle'));
         return;
       }
-      if (me.requests > 0) { const b = el('span', { className: 'badge', textContent: String(me.requests) }); b.setAttribute('aria-label', `${me.requests} friend requests`); $('crewTab').append(b); }
-      const [fr, gr, pts, ex, crews, live] = await Promise.all([apiCall('GET', '/api/friends').then(jsonOf), apiCall('GET', '/api/grants').then(jsonOf), apiCall('GET', '/api/points').then(jsonOf),
+      const sharedP = apiCall('GET', '/api/routes/shared').then(jsonOf).catch(() => null);
+      const [fr, gr, pts, ex, crews, live, convoyAsks] = await Promise.all([apiCall('GET', '/api/friends').then(jsonOf), apiCall('GET', '/api/grants').then(jsonOf), apiCall('GET', '/api/points').then(jsonOf),
         apiCall('GET', '/api/me/export').then(jsonOf), window.ApexSync && ApexSync.crews ? ApexSync.crews() : apiCall('GET', '/api/crews').then(jsonOf),
-        friendsMap ? friendsMap.sharing().catch(() => null) : null]);
+        friendsMap ? friendsMap.sharing().catch(() => null) : null,
+        convoy && !convoy.active ? apiCall('GET', '/api/convoy/invites').then(jsonOf).catch(() => null) : null]);
       if (gen !== renderGen) return;
+      // P-34: the People badge counts everything waiting on you: friend requests, a crew link not yet answered, convoy invites
+      const asks = [[me.requests || 0, 'friend request'], [stash('apex.crew') ? 1 : 0, 'crew invite'], [Array.isArray(convoyAsks) ? convoyAsks.length : 0, 'convoy invite']].filter(([n]) => n > 0);
+      const waitingN = asks.reduce((a, [n]) => a + n, 0);
+      if (waitingN) { const b = el('span', { className: 'badge', textContent: String(waitingN) }); b.setAttribute('aria-label', asks.map(([n, w]) => `${n} ${w}${n === 1 ? '' : 's'}`).join(', ')); $('crewTab').append(b); }
+      roadFeelOn = ex && ex.member ? !!ex.member.contribute : null;
       const friends = Array.isArray(fr) ? fr : [], grants = new Map((Array.isArray(gr) ? gr : []).map(g => [g.audience_type + ':' + g.audience_id, g]));
       const putGrant = async (type, id, scores, times) => { await apiCall('PUT', '/api/grants', { audience_type: type, audience_id: id, share_scores: scores, share_times: times }); redo(); };
 
@@ -5181,9 +5248,8 @@
       if (face && me.member) you.append(el('div', { className: 'row' }, ApexPhotos.picker(me.photo_id ? 'Change photo' : 'Add a photo', 'profile', null, redo, { toast }),
         ...(me.photo_id ? [btn('Remove photo', async () => { if (await ApexPhotos.remove(me.photo_id)) redo(); else toast('Couldn’t remove it. Try again.'); }, 'linkbtn')] : [])),
         el('p', { className: 'note', textContent: 'Photos lose their location data before they leave your phone.' }));
-      // pioneer badges (IDEAS S-09): roads you were first or second to map with Road data on; only you see them
-      const pio = pts && pts.pioneer;
-      if (pio && (pio.firsts || pio.seconds)) you.append(el('p', { className: 'note pioneer', textContent: [pio.firsts ? `Pioneer of ${pio.firsts} road${pio.firsts === 1 ? '' : 's'}` : '', pio.seconds ? `second to map ${pio.seconds}` : ''].filter(Boolean).join(' · ') }));
+      // Who sees what (P-09): under You, every audience and what it gets
+      if (whoSees) you.append(el('div', { className: 'nav-rows' }, whoSees.row()));
       gbody.append(you);
       // Lists one tap away open as side sheets over People (REVIEW2.md U-30): each a row with its count and a chevron.
       const popSheet = (title) => { const p = el('aside', { className: 'side-pop people-pop' }); p.setAttribute('aria-label', title);
@@ -5195,7 +5261,7 @@
         const h = content.querySelector(':scope > h3'); if (h && h.textContent === label) h.remove();   // the pop's head names it once
         const b = rowKey(label, () => pop.classList.add('open')); b._pop = pop; return b; };
 
-      // ---- Friends: your friends first, one Invite key, then what friends share with you ----
+      // ---- Friends (REVIEW_PEOPLE step 5/6): a request waiting, you, your friends, one Invite key, then what friends shared ----
       // Requests you sent live on this phone (the server doesn't list them, so a reply never tells which handles exist; IDEAS Z-12).
       const SENT_KEY = 'apex.sentRequests';
       const sentList = () => { try { return JSON.parse(localStorage.getItem(SENT_KEY) || '[]').filter(h => typeof h === 'string'); } catch (_) { return []; } };
@@ -5203,21 +5269,68 @@
       const accepted = friends.filter(f => f.status === 'accepted'), incoming = friends.filter(f => f.status === 'pending' && f.incoming);
       setSent(sentList().filter(h => !friends.some(f => f.handle === h)));   // accepted, or they asked you too: no longer "sent"
       const waiting = sentList();
-      // Where each friend is, from what they share with you (friends_map.js friendState): on the road, last seen, or not shared.
+      // Where each friend is, from what they share with you (friends_map.js friendState): on the road or last seen; nothing shared, no line.
       // The positions couldn't be read: no line, rather than "not sharing" said of everyone.
       const where = new Map((Array.isArray(live) ? live : []).map((p) => [p.handle, p]));
       const stateOf = (f) => (Array.isArray(live) && window.ApexFriendsMap ? ApexFriendsMap.friendState(where.get(f.handle)) : null);
       const seenAt = (f) => { const p = where.get(f.handle), t = p ? Date.parse(p.at) : NaN; return Number.isFinite(t) ? t : -Infinity; };
       const order = accepted.map((f) => ({ f, st: stateOf(f) })).sort((a, b) => (b.st && b.st.live) - (a.st && a.st.live) || (seenAt(b.f) - seenAt(a.f) || 0));
+      const sharedList = await sharedP;
+      if (gen !== renderGen) return;
+      const shared = Array.isArray(sharedList) ? sharedList : [];
+
+      // P-05: a request in is a card at the top of the list until it is answered (the ask is in the list, not in a drawer)
+      for (const f of incoming) body.append(el('div', { className: 'card request-card' },
+        el('p', {}, el('b', { textContent: `@${f.handle || '?'}` }), document.createTextNode(' wants to be your friend'), ...(f.name ? [el('small', { textContent: f.name })] : [])),
+        el('div', { className: 'row' },
+          btn('Accept', async () => { await apiCall('POST', '/api/friends/accept', { user_id: f.id }); toast(`You and @${f.handle} are friends.`); redo(); }, 'ink-btn solid'),
+          btn('Not now', async () => { await apiCall('DELETE', `/api/friends/${f.id}`); toast(`Declined. @${f.handle} isn’t told.`); redo(); }, 'linkbtn'))));
+
+      // P-23: you, one tap from People: your face, your handle and who sees where you are; it opens Who sees what (P-09)
+      const WHO = { nobody: 'Nobody sees where you are', crew: 'Your crews see where you are', friends: 'Friends see where you are' };
+      const empty = !accepted.length && !(Array.isArray(crews) && crews.length);
+      if (!empty) {
+        const yline = el('small'), yface = window.ApexPhotos ? ApexPhotos.avatar(me.photo_id, me.handle, 40) : el('span');
+        const yrow = el('button', { className: 'friend-head you-row', type: 'button', 'aria-label': `You, @${me.handle}: who sees what` }, yface,
+          el('span', { className: 'friend-who' }, el('b', { textContent: `You · @${me.handle}` }), yline), el('i', { className: 'chev', 'aria-hidden': 'true' }));
+        yrow.addEventListener('click', () => (whoSees ? whoSees.open() : showView('garage')));
+        const paintYou = () => { yline.textContent = friendsMap && friendsMap.loaded ? WHO[friendsMap.settings.audience] || '' : ''; };
+        if (friendsMap && !friendsMap.loaded) friendsMap.loadSettings().then(paintYou).catch(() => {}); else paintYou();
+        body.append(yrow);
+      }
 
       // A friend's profile (profile_view.js, IDEAS S-15): a sheet over the list; its back key returns to it.
       const ppop = el('aside', { className: 'side-pop people-pop' }); ppop.setAttribute('aria-label', 'Friend'); pops.push(ppop);
+      // P-04: what you do with a friend, on their row and on their profile
+      const seeOnMap = (f) => {
+        const p = where.get(f.handle); if (!p || !friendsMap) return;
+        showView(null); ppop.classList.remove('open');
+        if (!state.toggles.friends) { state.toggles.friends = true; paintSwitches(); savePrefs(); }
+        friendsMap.setLayer(true);
+        if (mapReady) map.flyTo({ center: [p.lon, p.lat], zoom: Math.max(map.getZoom(), 11), duration: 900 });
+      };
+      const driveWith = async (f) => {
+        if (!convoy) return;
+        if (convoy.active) { toast(`You're in a convoy: invite @${f.handle} from its Invite friends.`); return; }
+        if (!(await ApexConfirm.ask(`Start a convoy now and invite @${f.handle}? You see each other on the map while you drive, for up to two hours. Nothing is kept.`, 'Start convoy'))) return;
+        const r = await convoy.startFor(`@${me.handle} and @${f.handle}`, [f.handle]);
+        toast(r.ok ? (r.invited ? `Convoy started. @${f.handle} has the invite in the app.` : `Convoy started, but @${f.handle} couldn't be invited. Share its link.`) : 'Couldn\'t start a convoy. Check signal.');
+        if (r.ok) closeSheet();
+      };
+      const keysFor = (f) => [
+        ...(where.get(f.handle) && friendsMap ? [['On the map', () => seeOnMap(f)]] : []),
+        ['Share a route', () => { ppop.classList.remove('open'); shareRouteWith(f.handle); }],
+        ...(convoy ? [['Invite to a drive', () => driveWith(f)]] : [])];
       const openProfile = async (f) => {
         let p = null;
         try { const r = await apiCall('GET', `/api/friends/${encodeURIComponent(f.id)}/profile`); p = r.ok ? await jsonOf(r) : null; } catch (_) {}
         if (!p) { toast('Couldn’t load the profile. Try again.'); return; }
         const view = el('div', { className: 'stack-8 profile-view' });
-        ApexProfileView.show(view, p, { el, btn, back: () => ppop.classList.remove('open') });
+        // P-04: Unfriend, Report and Block live at the profile's foot, not on the row
+        ApexProfileView.show(view, p, { el, btn, back: () => ppop.classList.remove('open'), keys: keysFor(f),
+          foot: [['Unfriend', async () => { if (await ApexConfirm.ask(`Unfriend @${f.handle}? This also stops all sharing.`, 'Unfriend')) { await apiCall('DELETE', `/api/friends/${f.id}`); ppop.classList.remove('open'); openFriendId = null; redo(); } }, 'danger-btn'],
+            ...(safety && f.handle ? [['Report', () => safety.report({ kind: 'user', target: f.handle, label: `@${f.handle}`, who: f.handle, done: redo })],
+                                     ['Block', () => safety.block(f.handle, () => { ppop.classList.remove('open'); redo(); })]] : [])] });
         ppop.replaceChildren(view); ppop.classList.add('open');
       };
       const flist = el('div', { className: 'friend-list' });
@@ -5225,17 +5338,26 @@
         const g = grants.get('friend:' + f.id) || { share_scores: 0, share_times: 0 }, row = el('div', { className: 'friend' });
         const av = window.ApexPhotos ? ApexPhotos.avatar((where.get(f.handle) || {}).photo_id || null, f.handle || '?', 40) : el('span');
         const head = el('button', { className: 'friend-head', type: 'button' }, av,
-          el('span', { className: 'friend-who' }, el('b', { textContent: `@${f.handle || '?'}` }), el('small', { className: st && st.live ? 'live' : '', textContent: st ? st.text : (f.name || '') })),
+          el('span', { className: 'friend-who' }, el('b', { textContent: `@${f.handle || '?'}` }), el('small', { className: st && st.live ? 'live' : '', textContent: st && st.text ? st.text : (f.name || '') })),
           el('i', { className: 'chev', 'aria-hidden': 'true' }));
-        const detail = el('div', { className: 'crew-detail stack-8' },
+        // P-04: the row is about the friend: what you can do with them, the last thing they shared, then (quietly) what they see of you
+        const keys = keysFor(f).map(([label, run], i) => btn(label, run, i ? 'ink-btn' : 'ink-btn solid'));
+        if (window.ApexProfileView) keys.push(btn('Profile', () => openProfile(f), 'ink-btn'));
+        const last = shared.find((r) => r.from_handle && r.from_handle === f.handle);
+        const sees = el('div', { className: 'stack-8 friend-grants', hidden: true },
           el('div', { className: 'row' }, switchRow('Scores', g.share_scores, () => putGrant('friend', f.id, !g.share_scores, g.share_scores ? g.share_times : false)),
             switchRow('Times', g.share_times, () => putGrant('friend', f.id, true, !g.share_times))),
-          el('span', { textContent: g.share_scores ? (g.share_times ? `@${f.handle} sees your scores and times.` : `@${f.handle} sees your scores.`) : `@${f.handle} sees nothing of yours yet.` }),
-          el('div', { className: 'row' },
-            ...(window.ApexProfileView ? [btn('Profile', () => openProfile(f), 'linkbtn')] : []),
-            btn('Unfriend', async () => { if (await ApexConfirm.ask(`Unfriend @${f.handle}? This also stops all sharing.`, 'Unfriend')) { await apiCall('DELETE', `/api/friends/${f.id}`); redo(); } }, 'danger-btn'),
-            ...(safety && f.handle ? [btn('Report', () => safety.report({ kind: 'user', target: f.handle, label: `@${f.handle}`, who: f.handle, done: redo }), 'linkbtn'),
-                                      btn('Block', () => safety.block(f.handle, redo), 'linkbtn')] : [])));
+          el('p', { className: 'note', style: 'margin:0', textContent: [g.share_scores ? (g.share_times ? 'Your scores and times.' : 'Your scores.') : 'None of your scores or times.',
+            friendsMap && friendsMap.loaded ? (friendsMap.settings.audience === 'friends' ? 'Where you are, as you chose on the map.' : 'Not where you are.') : ''].filter(Boolean).join(' ') }),
+          ...(whoSees ? [btn('Everyone, on one page: Who sees what', () => whoSees.open({ friend: f.id }), 'linkbtn')] : []));
+        const seesKey = el('button', { className: 'nav-row quiet', type: 'button' }, el('span', { textContent: `What @${f.handle} sees of you` }),
+          el('small', { textContent: g.share_scores ? (g.share_times ? 'Scores, times' : 'Scores') : '' }), el('i', { 'aria-hidden': 'true' }));
+        seesKey.setAttribute('aria-expanded', 'false');
+        seesKey.addEventListener('click', () => { const on = sees.hidden; sees.hidden = !on; seesKey.setAttribute('aria-expanded', String(on)); });
+        const detail = el('div', { className: 'crew-detail stack-8' }, el('div', { className: 'row friend-keys' }, ...keys),
+          ...(last ? [el('div', { className: 'row', style: 'align-items:center' }, el('p', { className: 'note', style: 'flex:1;margin:0', textContent: `Shared ${last.name}${sharedWhen(last.created_at) ? ` · ${sharedWhen(last.created_at)}` : ''}` }),
+            btn('Open', () => openSharedRoute(last.id), 'linkbtn'))] : []),
+          seesKey, sees);
         const setOpen = (on) => { detail.hidden = !on; head.setAttribute('aria-expanded', String(on)); };
         head.addEventListener('click', () => { const on = detail.hidden; openFriendId = on ? f.id : null; setOpen(on); });
         setOpen(openFriendId === f.id);
@@ -5243,7 +5365,8 @@
         flist.append(row);
       }
       if (accepted.length) body.append(flist);
-      else body.append(el('p', { className: 'note', textContent: 'No friends yet. Invite someone to Vetta, or add a member by their handle.' }));
+      // P-08: no friends yet is one sentence and the Invite key, not four empty drawers
+      else body.append(el('p', { className: 'people-lead', textContent: 'Bring a friend: they join with your link, and you’re friends the moment they do.' }));
 
       // One Invite key (the owner, 2026-10-30): someone new gets an invite link, a member your handle or a request; requests here too.
       const ipop = popSheet('Invite'); pops.push(ipop);
@@ -5255,13 +5378,10 @@
         if (r.ok && !accepted.some(f => f.handle === h)) setSent([...sentList().filter(x => x !== h), h]);
         toast(r.ok ? `Request sent. @${h} sees it if they're a member.` : 'Couldn\'t send that. Try again.'); redo();
       };
-      const reqSec = el('div', { className: 'stack-8' }, el('h3', { textContent: incoming.length ? `Requests · ${incoming.length}` : 'Requests' }));
-      for (const f of incoming) reqSec.append(el('div', { className: 'row', style: 'align-items:center' }, el('b', { textContent: `@${f.handle || '?'}`, style: 'flex:1' }),
-        btn('Accept', async () => { await apiCall('POST', '/api/friends/accept', { user_id: f.id }); toast(`You and @${f.handle} are friends. Choose what to share in their row.`); redo(); }, 'ink-btn solid'),
-        btn('Decline', async () => { await apiCall('DELETE', `/api/friends/${f.id}`); redo(); })));
+      // P-05: a request in is a card on the list, not a drawer here; the sheet keeps the requests you sent
+      const reqSec = el('div', { className: 'stack-8' }, ...(waiting.length ? [el('h3', { textContent: 'Requests you sent' })] : []));
       for (const h of waiting) reqSec.append(el('div', { className: 'friend-sent' }, el('span', { textContent: `@${h} · request sent` }),
         btn('Cancel', async () => { await apiCall('POST', '/api/friends/request/cancel', { handle: h }); setSent(sentList().filter(x => x !== h)); redo(); }, 'linkbtn')));
-      if (!incoming.length && !waiting.length) reqSec.append(el('p', { className: 'note', textContent: 'No requests waiting.' }));
       ipop.append(
         el('div', { className: 'stack-8' }, el('h3', { textContent: 'New to Vetta' }),
           el('p', { className: 'note', textContent: 'Vetta is invite-only. They join with your link, and you’re friends the moment they do.' }),
@@ -5270,28 +5390,18 @@
           btn(`Share my handle · @${me.handle}`, () => copyText(`${shareOrigin()}/?add=${me.handle}`, 'Link copied. Anyone who opens it can ask to be your friend.')),
           el('div', { className: 'row' }, add, btn('Send request', sendRequest))),
         reqSec);
-      const openInvite = (toRequests) => { inviteOpen = true; ipop.classList.add('open'); if (toRequests) reqSec.scrollIntoView({ block: 'start' }); };
+      const openInvite = () => { inviteOpen = true; ipop.classList.add('open'); };
       if (stash('apex.add') && peopleSide === 'friends') inviteOpen = true;   // a friend link opens its sheet, never over the Crews side
       if (inviteOpen) ipop.classList.add('open');
-      body.append(el('div', { className: 'row' }, btn('Invite or add a friend', () => openInvite(false), 'ink-btn solid')));
+      body.append(el('div', { className: 'row' }, btn('Invite or add a friend', () => openInvite(), 'ink-btn solid')));
 
-      const frows = el('div', { className: 'nav-rows' });
-      const reqRow = rowKey('Requests', () => openInvite(true));
-      reqRow._count.textContent = incoming.length ? `${incoming.length} new` : waiting.length ? `${waiting.length} sent` : '';
-      frows.append(reqRow);
-      let sharedRow = null;
-      sharedRow = navRow('Routes shared with you', sharedRoutesSection((n) => { if (sharedRow) sharedRow._count.textContent = n ? String(n) : ''; }));
-      frows.append(sharedRow);
-      if (spotsFeed) frows.append(navRow('Spots near you', spotsFeed.section()));
-      if (friendsMap) {
-        // Friends on the map and who sees you (friends_map.js): its own sheet, the row says who sees you now
-        const WHO = { nobody: 'Nobody sees you', crew: 'Your crews see you', friends: 'Friends see you' };
-        const paintWho = () => { whoRow._count.textContent = friendsMap.loaded ? WHO[friendsMap.settings.audience] || '' : ''; };
-        const whoRow = rowKey('Friends on the map', () => friendsMap.sheet(paintWho));
-        if (friendsMap.loaded) paintWho(); else friendsMap.loadSettings().then(paintWho).catch(() => {});
-        frows.append(whoRow);
+      // P-13, P-14, P-19: what friends shared with you is the one row left; spots went to Where to?, the points to the Garage,
+      // who sees you to the You row above
+      if (shared.length || accepted.length) {
+        let sharedRow = null;
+        sharedRow = navRow('From friends', sharedRoutesSection((n) => { if (sharedRow) sharedRow._count.textContent = n ? String(n) : ''; }, Promise.resolve(sharedList)));
+        body.append(el('div', { className: 'nav-rows' }, sharedRow));
       }
-      body.append(frows);
       if (stash('apex.add') && add.value && !accepted.some(f => f.handle === add.value)) add.focus();
 
       // ---- Crews: your crew's page, its drives, the convoy, crews near you and a new one; crew invites live in a crew ----
@@ -5415,7 +5525,7 @@
         tiles.append(card);
       }
       if (crewList.length) csec.append(tiles);
-      (inCrew ? crewSettings : cbody).append(csec);
+      if (inCrew) crewSettings.append(csec); else if (crewList.length) cbody.append(csec);   // P-08: no crews, no empty "Your crews"
       // new crew: private (invite link) or public (findable nearby by an area you name)
       const newSec = section('Start a crew');
       const cname = el('input', { className: 'field', placeholder: 'New crew name', autocomplete: 'off', maxLength: 40, 'aria-label': 'Crew name' });
@@ -5444,7 +5554,7 @@
         const nearby = Array.isArray(found) ? found : [];
         if (nearbyRow) nearbyRow._count.textContent = nearby.length ? String(nearby.length) : '';
         if (!nearby.length) { nsec.append(el('p', { className: 'note', textContent: found ? 'No public crews near you yet.' : 'Couldn\'t look for crews nearby. Check signal.' })); return; }
-        const ntiles = el('div', { className: 'crew-tiles' });
+        const ntiles = el('div', { className: 'crew-tiles one' });   // P-26: one a row, the name whole
         for (const c of nearby) {
           const t = el('div', { className: 'card' });
           t.append(el('div', { className: 'crew-tile-head' }, el('b', { textContent: c.name }),
@@ -5458,36 +5568,38 @@
         nsec.append(ntiles);
       });
       // Crew drives (crew_events.js): planned drives across your crews, RSVPs and meets near you
-      const drives = crewEvents ? (crewDrivesEl = crewEvents.section(myCrews.map((c) => ({ id: c.id, name: c.name, visibility: c.visibility, role: c.role })))) : null;
+      // P-08: only once there is a crew to plan for
+      const drives = crewEvents && myCrews.length ? (crewDrivesEl = crewEvents.section(myCrews.map((c) => ({ id: c.id, name: c.name, visibility: c.visibility, role: c.role })))) : (crewDrivesEl = null);
+      // Find or start a crew (REVIEW_PEOPLE 2): the crews near you and a new one, one sheet behind one row
+      const findSheet = () => el('div', { className: 'stack-12' }, nsec, newSec);
       if (inCrew) {
         const rows = el('div', { className: 'nav-rows' });
         if (drives) rows.append(navRow('Crew drives', drives));
-        rows.append(nearbyRow = navRow('Crews near you', nsec), navRow('Start a crew', newSec));
+        rows.append(nearbyRow = navRow('Find or start a crew', findSheet()));
         cbody.append(rows);
         if (convoy) cbody.append(convoy.section());
       } else {
-        cbody.append(nsec, newSec);
+        if (myCrews.length) cbody.append(nsec, newSec);
+        // P-08: no crew yet is one sentence and one row, not five empty drawers
+        else cbody.append(el('p', { className: 'people-lead', textContent: 'A crew is a group for a club or a weekend run: its own page, and drives you plan together.' }),
+          el('div', { className: 'nav-rows' }, nearbyRow = navRow('Find or start a crew', findSheet())));
         if (drives) cbody.append(drives);
         if (convoy) cbody.append(convoy.section());
       }
-      if (crewStandings) cbody.append(crewStandings.section());
+      if (crewStandings && myCrews.length) cbody.append(crewStandings.section());
       document.querySelectorAll('.side-pop.people-pop').forEach(n => n.remove());       // People's sheets: on the page, not inside the sliding sheet
       document.body.append(...pops);
       if (garage) gbody.append(garage.section());
       if (builds) gbody.append(builds.followingSection());
-
-      // points board (members, friends side)
-      if (pts && pts.board && pts.board.length) {
-        const bsec = section('Points board');
-        pts.board.slice(0, 10).forEach((r, k) => bsec.append(el('div', { className: 'row', style: 'justify-content:space-between' }, el('span', { textContent: `${k + 1}  @${r.handle}` }), el('b', { textContent: String(r.total) }))));
-        body.append(bsec);
-      }
 
       // road feel + account
       const contribOn = !!ex?.member?.contribute;
       const dsec = section('Road feel');
       dsec.append(switchRow('Share road feel', contribOn, async () => { await apiCall('PUT', '/api/me/contribute', { on: !contribOn }); redo(); }),
         el('p', { className: 'note', textContent: 'Banking, bumps and surface. Never where you went or how fast. First to map a road earns 3×.' }));
+      // P-14: your own contribution, not a board of friends: roads you were first or second to map (IDEAS S-09); only you see it
+      const pio = pts && pts.pioneer;
+      if (pio && (pio.firsts || pio.seconds)) dsec.append(el('p', { className: 'note pioneer', textContent: [pio.firsts ? `Roads you mapped first: ${pio.firsts}` : '', pio.seconds ? `second to map ${pio.seconds}` : ''].filter(Boolean).join(' · ') }));
       gbody.append(dsec);
       const asec = section('Account');
       asec.append(el('div', { className: 'row' },
@@ -5495,8 +5607,8 @@
         btn('Sign out', async () => { await apiCall('POST', '/api/auth/logout'); ApexSync.setSession(null); redo(); })),
         btn('Delete account', deleteMyAccount, 'danger-btn'));
       gbody.append(asec);                                                   // your account lives with you, in the Garage
-      if (safety) { gbody.append(safety.blockedSection()); if (me.moderator) body.append(safety.moderationSection()); }
-      if (me.moderator) body.append(errorsSection(), healthSection(), latencySection(), ...(window.ApexFeedback ? [ApexFeedback.ownerSection({ el, btn, apiCall, jsonOf })] : []));
+      if (safety) { gbody.append(safety.blockedSection()); if (me.moderator) gbody.append(safety.moderationSection()); }
+      if (me.moderator) gbody.append(errorsSection(), healthSection(), latencySection(), ...(window.ApexFeedback ? [ApexFeedback.ownerSection({ el, btn, apiCall, jsonOf })] : []));
     }
 
     // Highlights (local for now): [{id, name, lat, lon, rating}] in localStorage; the server list joins later (docs/BACKEND.md section 9).

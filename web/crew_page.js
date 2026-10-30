@@ -27,7 +27,8 @@
     if (!Number.isFinite(t.getTime())) return { day: '--', mon: '' };
     return { day: String(t.getDate()), mon: MONTHS[t.getMonth()] };
   }
-  /** A chat time: "now", "12 min", "3 h", then "Oct 12". `at` is D1's UTC 'YYYY-MM-DD HH:MM:SS'. */
+  /** A chat time: "now", "12 min", "3 h", "yesterday" up to 48 h, then "Oct 12" (P-35: no "Oct 29" beside "3 h" inside
+   *  a day and a half). `at` is D1's UTC 'YYYY-MM-DD HH:MM:SS'. */
   function ago(at, now = Date.now()) {
     const t = Date.parse(String(at || '').replace(' ', 'T') + 'Z');
     if (!Number.isFinite(t)) return '';
@@ -35,6 +36,7 @@
     if (s < 60) return 'now';
     if (s < 3600) return `${Math.floor(s / 60)} min`;
     if (s < 86400) return `${Math.floor(s / 3600)} h`;
+    if (s < 172800) return 'yesterday';
     const d = new Date(t);
     return `${MONTHS[d.getMonth()].charAt(0)}${MONTHS[d.getMonth()].slice(1).toLowerCase()} ${d.getDate()}`;
   }

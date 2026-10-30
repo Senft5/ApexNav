@@ -31,6 +31,8 @@ def test_chat_times():
     now = "Date.parse('2026-10-29T12:00:00Z')"
     assert run(f"[C.ago('2026-10-29 11:59:30', {now}), C.ago('2026-10-29 11:48:00', {now}), C.ago('2026-10-29 09:00:00', {now}),"
                f" C.ago('2026-10-12 09:00:00', {now}), C.ago('', {now})]") == ["now", "12 min", "3 h", "Oct 12", ""]
+    # REVIEW_PEOPLE P-35: relative up to 48 h, never a date beside "3 h"
+    assert run(f"[C.ago('2026-10-28 06:00:00', {now}), C.ago('2026-10-27 13:00:00', {now}), C.ago('2026-10-27 11:00:00', {now})]") == ["yesterday", "yesterday", "Oct 27"]
 
 
 @needs_node
