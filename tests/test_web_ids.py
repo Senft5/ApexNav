@@ -5,8 +5,8 @@ from pathlib import Path
 WEB = Path(__file__).resolve().parent.parent / "web"
 
 
-def _check(name):
-    src = (WEB / name).read_text()
+def _check(name, src=None):
+    src = src if src is not None else (WEB / name).read_text()
     ids = set(re.findall(r'id="([^"]+)"', src))
     used = set(re.findall(r"\$\('([A-Za-z0-9_-]+)'\)", src)) | set(re.findall(r"getElementById\('([^']+)'\)", src))
     # ids created at runtime by the script itself are written as `id: 'x'` or `.id = 'x'`
@@ -15,7 +15,9 @@ def _check(name):
 
 
 def test_index_ids():
-    _check("index.html")
+    # the page's script is web/cockpit.js now (REVIEW_FEEL F-03): check it against the markup it runs on
+    from tests.page_source import cockpit_source
+    _check("index.html", cockpit_source())
 
 
 def test_analysis_ids():

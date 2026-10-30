@@ -1,5 +1,6 @@
 """The drive's Live Activity (IDEAS U-11): the extension target, shared attributes, the shell's handler and the page's updates."""
 import os
+from tests.page_source import cockpit_source
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 read = lambda *p: open(os.path.join(ROOT, *p), encoding="utf-8").read()
@@ -18,7 +19,7 @@ def test_extension_target():
 
 
 def test_shell_and_page():
-    swift, html = read("ApexNavApp.swift"), read("web", "index.html")
+    swift, html = read("ApexNavApp.swift"), cockpit_source()
     assert 'if cmd == "activity"' in swift and "Activity.request(attributes: ApexDriveAttributes" in swift
     # never stuck after the drive (the owner, 2026-10-29): End ends all of ours, leftovers end at launch and quit, updates go stale
     assert "for a in all { await a.end(nil, dismissalPolicy: .immediate) }" in swift and "Activity<ApexDriveAttributes>.activities" in swift
@@ -42,7 +43,7 @@ def test_quick_drive_widget_and_control():
 
 def test_short_true_words_never_a_cut_one():
     """U-61 (docs/design/REVIEW4.md): with no note ahead the island read "--" and "NO NOT"."""
-    widget, html = read("LiveActivity", "ApexLiveWidget.swift"), read("web", "index.html")
+    widget, html = read("LiveActivity", "ApexLiveWidget.swift"), cockpit_source()
     assert '"--"' not in widget and "prefix(6)" not in widget                 # no dashes, no six letters of a sentence
     assert widget.count("RecordDot(") >= 3                                     # lock screen, expanded and compact leading
     trailing = widget[widget.index("compactTrailing:"):widget.index("minimal:")]

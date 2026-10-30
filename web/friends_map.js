@@ -24,15 +24,31 @@
     const when = m < 1 ? 'just now' : m < 60 ? `about ${m} min ago` : `about ${Math.round(m / 60)} h ago`;
     return `${when} · ${p.fuzz ? 'within a mile' : 'exact'}`;
   }
+  const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'], MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  /** When, said the way a person says it (P-15: "Seen 26 h ago" was a sum to do): minutes, hours inside a day, then
+   *  "yesterday", a weekday inside the week, then the date. Calendar days on this phone. */
+  function spokenAgo(t, now = Date.now()) {
+    const m = Math.max(0, Math.floor((now - t) / 60000));
+    if (!Number.isFinite(m)) return '--';
+    if (m < 1) return 'just now';
+    if (m < 60) return `${m} min ago`;
+    if (m < 1440) return `${Math.round(m / 60)} h ago`;
+    const day = (x) => { const d = new Date(x); return Math.round(new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime() / 86400000); };
+    const days = day(now) - day(t), d = new Date(t);
+    if (days <= 1) return 'yesterday';
+    if (days < 7) return DAYS[d.getDay()];
+    return `${MONTHS[d.getMonth()]} ${d.getDate()}`;
+  }
   /** A friend's line in the People list (the owner, 2026-10-30), from their newest position shared with you (`p`, one row
    *  of GET /api/presence) or none: "On the road" only for a Live position under two minutes old, else when they were last
-   *  seen, never a place. No position means they don't share one with you: that is said, not guessed. */
+   *  seen, never a place. No position shared with you is no line (P-15: "not sharing" read as a refusal,
+   *  said of friends nobody had asked); the list shows their name there instead. */
   function friendState(p, now = Date.now()) {
-    if (!p) return { live: false, text: 'Not sharing where they are' };
+    if (!p) return { live: false, text: '' };
     const m = minutesAgo(p.at, now);
     if (m === null) return { live: false, text: '--' };
     if (p.delay_s === 0 && m < 2) return { live: true, text: p.road && !p.fuzz ? `On the road · ${p.road}` : 'On the road' };
-    return { live: false, text: `Seen ${m < 1 ? 'just now' : m < 60 ? `${m} min ago` : `${Math.round(m / 60)} h ago`}` };
+    return { live: false, text: `Seen ${spokenAgo(Date.parse(p.at), now)}` };
   }
   /** May the phone send a position now? Sharing on, a fix, outside every home zone, and driving unless told otherwise. */
   function shouldSend({ audience, driving, onlyDriving, inZone, hasFix }) {
@@ -211,9 +227,9 @@
       return Array.isArray(list) ? list : null;
     }
 
-    return { start, setLayer, sheet, poll, loadSettings, sharing, get settings() { return settings; }, get loaded() { return loaded; } };
+    return { start, setLayer, sheet, poll, loadSettings, save: saveSettings, sharing, get onlyDriving() { return onlyDriving; }, get layerOn() { return layerOn; }, get settings() { return settings; }, get loaded() { return loaded; } };
   }
 
-  const api = { mount, tag, minutesAgo, shouldSend, explainer, friendState, DELAYS };
+  const api = { mount, tag, minutesAgo, shouldSend, explainer, friendState, spokenAgo, DELAYS, AUDIENCES };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexFriendsMap = api;
 })(typeof window !== 'undefined' ? window : globalThis);

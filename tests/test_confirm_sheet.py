@@ -15,7 +15,7 @@ def test_no_system_confirm_left():
 
 def test_loaded_where_it_is_used():
     for page in ("index.html", "analysis.html"):
-        assert '<script src="confirm.js"></script>' in (WEB / page).read_text(), page
+        assert '<script src="confirm.js"' in (WEB / page).read_text(), page
 
 
 def test_cancel_is_the_default_and_the_action_is_red():

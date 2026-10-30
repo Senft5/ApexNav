@@ -9,6 +9,7 @@ import subprocess
 import sys
 
 import pytest
+from tests.page_source import cockpit_source
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 NODE = shutil.which("node")
@@ -62,7 +63,7 @@ def test_every_spoken_maneuver_and_a_whole_route_have_tokens():
 def test_the_fixed_lines_the_page_says_are_in_the_table_word_for_word():
     import voicebank
     lines = {v.rstrip(".") for k, v in voicebank.voice_lines().items() if k.startswith("line:")}
-    html = open(os.path.join(ROOT, "web", "index.html"), encoding="utf-8").read()
+    html = cockpit_source()
     for said in ("Back on route", "Rerouting", "Staying on this route", "Track mode. Tap start finish when you cross the line"):
         assert f"say('{said}" in html and said in lines, said
     memory = open(os.path.join(ROOT, "web", "road_memory.js"), encoding="utf-8").read()

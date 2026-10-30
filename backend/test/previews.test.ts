@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { api, freshDb, makeUser, ok } from "./helpers";
+import { api, freshDb, makeBanned, makeUser, ok } from "./helpers";
 
 beforeEach(freshDb);
 const json = async <T = Record<string, any>>(r: Promise<Response>) => (await (await ok(r)).json()) as T;
@@ -11,11 +11,11 @@ describe("invite previews: what you'd join, before you join", () => {
     const { token } = await json<{ token: string }>(api(a, "POST", `/api/crews/${id}/invite`));
     await ok(api(c, "POST", "/api/crews/join", { token }));
     expect(await json(api(b, "POST", "/api/crews/invite/preview", { token })))
-      .toEqual({ id, name: "Secret Squirrels", visibility: "private", owner: "alice", members: 2, member: false });
+      .toEqual({ id, name: "Secret Squirrels", visibility: "private", owner: "alice", from: "alice", members: 2, member: false });
     expect((await json<any[]>(api(b, "GET", "/api/crews"))).length).toBe(0);              // looking is not joining
     expect((await json(api(c, "POST", "/api/crews/invite/preview", { token }))).member).toBe(true);
     expect((await api(b, "POST", "/api/crews/invite/preview", { token: "nope-nope-nope" })).status).toBe(400);
-    expect((await api(await makeUser("nomember", false), "POST", "/api/crews/invite/preview", { token })).status).toBe(403);
+    expect((await api(await makeBanned("banned"), "POST", "/api/crews/invite/preview", { token })).status).toBe(403);
   });
 
   it("a block with the owner, either way, or a reported crew makes the invite look unknown to preview and join", async () => {

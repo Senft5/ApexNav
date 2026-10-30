@@ -11,7 +11,7 @@ owner's rows are also in docs/OWNER_TODO.md. Apple's rules in detail: docs/APP_R
 | Screenshots, 6.9" iPhone | To make: the app tour (tools/app_tour.js, the app-tour workflow) gives real frames; a set of 5 from the simulator run | Claude, then owner uploads |
 | App Privacy answers | Traced in LISTING.md to what the app sends; road class (a public map attribute) added 2026-10-28, not personal data | owner pastes |
 | Age rating, category (Navigation), export compliance (`ITSAppUsesNonExemptEncryption: false`) | Set / in LISTING.md | owner confirms |
-| Review access past the invite-only sign-up (2.1) | Built (review code, only its hash in the repo); the notes and code go only into App Store Connect, never the public repo | owner pastes |
+| Review access (2.1) | No gate since 2026-10-30 (REVIEW_PEOPLE P-02): a reviewer signs in with Apple or Google and is a member. The old review code still answers yes for builds from before; the notes (drives need a car, the bundled replays show the cockpit) go only into App Store Connect, never the public repo | owner pastes |
 | Sign in with Apple next to Google (4.8) | Built | — |
 | Account deletion in the app (5.1.1(v)) | Built; revoking the Apple token needs the owner's Sign in with Apple key | owner: key |
 | No speeding prompts (1.4.1): never a speed above the limit as a target | Built: scores are smoothness, the binnacle's Sight cell is a braking range (the speed you could stop from within what you can see), shown red when you're above it, and the review notes say so; the demo replay keeps to the limit (docs/REVIEW.md #1–2) | — |

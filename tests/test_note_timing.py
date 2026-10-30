@@ -2,9 +2,10 @@
 lead distance, staleness and the quiet-window checks all measure to `noteM(e)` (start_m, or dist_m for point hazards)."""
 import os
 import re
+from tests.page_source import cockpit_source
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-HTML = open(os.path.join(ROOT, "web", "index.html"), encoding="utf-8").read()
+HTML = cockpit_source()
 NOTES = HTML[HTML.index("function updateNotes("):HTML.index("// 7. RENDER LOOP")]
 
 

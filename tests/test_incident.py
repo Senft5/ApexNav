@@ -6,6 +6,7 @@ import shutil
 import subprocess
 
 import pytest
+from tests.page_source import cockpit_source
 
 NODE = shutil.which("node")
 pytestmark = pytest.mark.skipif(NODE is None, reason="node not installed")
@@ -79,9 +80,9 @@ def test_help_text_and_links(out):
 
 
 def test_wired():
-    html = open(os.path.join(ROOT, "web", "index.html"), encoding="utf-8").read()
+    html = cockpit_source()
     swift = open(os.path.join(ROOT, "ApexNavApp.swift"), encoding="utf-8").read()
-    assert '<script src="incident.js"></script>' in html and 'data-toggle="crash"' in html and "crash: true," in html
+    assert '<script src="incident.js"' in html and 'data-toggle="crash"' in html and "crash: true," in html
     assert "feedCrash(frame);" in html                                                  # every live frame, web and native
-    assert '"\\"impact_g\\":' in swift                                             # the shell sends the 100 Hz impact peak
+    assert 'impactG = "impact_g"' in swift and "impactG: r(imu(impact / Self.gStd), 2)" in swift   # the shell sends the 100 Hz impact peak
     assert "impact_g: this._takeImpact()" in open(os.path.join(ROOT, "web", "sensors.js"), encoding="utf-8").read()

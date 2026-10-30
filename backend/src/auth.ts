@@ -1,4 +1,6 @@
 // Sign-in with Google (OpenID Connect authorization-code flow with PKCE, state and nonce), sessions, invites.
+// Vetta is open (the owner, 2026-10-30): everyone who signs in and is not banned is a member. An account invite is a
+// friend link now, nothing more; the `members` table and /api/me's `member` flag stay so old app builds keep working.
 // No library: the id_token is received directly from Google's token endpoint over TLS, so per the OIDC spec its
 // signature need not be re-verified; we still check iss, aud, exp, nonce and email_verified.
 import {
@@ -37,11 +39,27 @@ export async function viewer(req: Request, env: Env): Promise<Viewer | null> {
   const token = sessionToken(req);
   if (!token) return null;
   const row = await env.DB.prepare(
-    `SELECT u.id, u.email, u.handle, u.display_name AS displayName, (m.user_id IS NOT NULL) AS member
+    `SELECT u.id, u.email, u.handle, u.display_name AS displayName, (m.user_id IS NOT NULL) AS member,
+            EXISTS (SELECT 1 FROM bans b WHERE b.google_sub = u.google_sub) AS banned
        FROM sessions s JOIN users u ON u.id = s.user_id LEFT JOIN members m ON m.user_id = u.id
       WHERE s.id_hash = ? AND s.expires_at > datetime('now')`,
-  ).bind(await sha256hex(token)).first<{ id: string; email: string; handle: string | null; displayName: string | null; member: number }>();
-  return row ? { ...row, member: !!row.member } : null;
+  ).bind(await sha256hex(token)).first<{ id: string; email: string; handle: string | null; displayName: string | null; member: number; banned: number }>();
+  if (!row) return null;
+  const { banned, ...v } = row;
+  // P-02: someone signed in before Vetta opened (no invite, so no row) becomes a member on their next request.
+  const member = !!v.member || (!banned && await admit(env, v.id));
+  return { ...v, member };
+}
+
+/** True when the account is banned (the owner removed it): it keeps the account, to download or delete it, never membership.
+ *  Keyed on the sign-in identity, so deleting the account and signing in again doesn't lift it. ?1 is the user id. */
+const BANNED = "EXISTS (SELECT 1 FROM bans b JOIN users u ON u.google_sub = b.google_sub WHERE u.id = ?1)";
+
+/** Makes a signed-in person a member unless they are banned; the ban is checked in the same statement, so one made a moment
+ *  ago still holds. True when they are a member afterwards. */
+export async function admit(env: Env, userId: string): Promise<boolean> {
+  const r = await env.DB.prepare(`INSERT OR IGNORE INTO members (user_id) SELECT ?1 WHERE NOT ${BANNED}`).bind(userId).run();
+  return !!r.meta.changes || !!(await env.DB.prepare("SELECT 1 FROM members WHERE user_id = ?").bind(userId).first());
 }
 
 export async function requireUser(req: Request, env: Env): Promise<Viewer> {
@@ -50,7 +68,8 @@ export async function requireUser(req: Request, env: Env): Promise<Viewer> {
   return v;
 }
 
-/** Every route that touches shared data uses this: signed in AND let in by an invite (or the owner bootstrap). */
+/** Every route that touches shared data uses this: signed in and not banned (everyone else who signs in is a member).
+ *  The error code is the old one, which old app builds know. */
 export async function requireMember(req: Request, env: Env): Promise<Viewer> {
   const v = await requireUser(req, env);
   if (!v.member) throw new HttpError(403, "invite_required");
@@ -58,6 +77,7 @@ export async function requireMember(req: Request, env: Env): Promise<Viewer> {
 }
 
 export async function startSession(env: Env, userId: string): Promise<string> {
+  await admit(env, userId);                                         // every sign-in (web, the app, Apple) lets the person in
   const token = randomToken(32);
   // no cron job: expired sessions (this person's) are swept whenever they sign in again
   await env.DB.batch([
@@ -170,22 +190,17 @@ export async function appExchange(req: Request, env: Env): Promise<Response> {
     { status: 200, headers: { "content-type": "application/json", "cache-control": "no-store" } });
 }
 
-/** Creates or finds the user. The owner (OWNER_EMAIL secret) is let in automatically when nobody is a member yet. */
+/** Creates or finds the user. Membership comes with the session (startSession), for everyone who isn't banned. */
 export async function upsertGoogleUser(env: Env, sub: string, email: string, name: string | null): Promise<string> {
   const found = await env.DB.prepare("SELECT id FROM users WHERE google_sub = ?").bind(sub).first<{ id: string }>();
   const id = found?.id ?? crypto.randomUUID();
   if (!found) await env.DB.prepare("INSERT INTO users (id, google_sub, email, display_name) VALUES (?, ?, ?, ?)").bind(id, sub, email, name).run();
   // Google is the source of truth for both: a changed address or name reaches the export and OWNER_EMAIL (IDEAS Y-15).
   else await env.DB.prepare("UPDATE users SET email = ?, display_name = ? WHERE id = ?").bind(email, name, id).run();
-  if (env.OWNER_EMAIL && email.toLowerCase() === env.OWNER_EMAIL.toLowerCase()) {
-    await env.DB.prepare(
-      "INSERT INTO members (user_id) SELECT ? WHERE NOT EXISTS (SELECT 1 FROM members)",
-    ).bind(id).run();
-  }
   return id;
 }
 
-// ---- invites -----------------------------------------------------------------------------------
+// ---- invites: a friend link (P-02). One use, seven days; whoever opens it and signs in is friends with whoever sent it. ----
 export async function createInvite(env: Env, v: Viewer, req: Request): Promise<{ token: string; url: string }> {
   const open = await env.DB.prepare("SELECT COUNT(*) AS n FROM invites WHERE created_by = ? AND used_at IS NULL AND expires_at > datetime('now')")
     .bind(v.id).first<{ n: number }>();
@@ -196,34 +211,53 @@ export async function createInvite(env: Env, v: Viewer, req: Request): Promise<{
   return { token, url: `${origin(req, env)}/?invite=${token}` };
 }
 
-const REVIEW_INVITE_HASH = "3b614a849d85e285c92b440e079d8f36ec1fbb10a264064794785765cd07e4e3";
+/** POST /api/invites/preview { token }: whose friend link this is, before saying yes (P-02). Changes nothing; an unknown, used,
+ *  expired or own link, or one across a block, is 400 like a redeem would be (a block looks the same as a dead link). */
+export async function invitePreview(env: Env, v: Viewer, req: Request): Promise<{ from: string | null }> {
+  const { token } = await body<{ token?: string }>(req);
+  const row = await env.DB.prepare(
+    `SELECT u.handle FROM invites i JOIN users u ON u.id = i.created_by
+      WHERE i.token_hash = ?2 AND i.created_by != ?1 AND i.used_at IS NULL AND i.expires_at > datetime('now')
+        AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker = ?1 AND b.blocked = i.created_by) OR (b.blocker = i.created_by AND b.blocked = ?1))`,
+  ).bind(v.id, await sha256hex(str(token, "token", 10, 100))).first<{ handle: string | null }>();
+  if (!row) throw new HttpError(400, "invalid_invite");
+  return { from: row.handle };
+}
+
+const REVIEW_INVITE_HASH ="3b614a849d85e285c92b440e079d8f36ec1fbb10a264064794785765cd07e4e3";
 
 export async function redeemInvite(env: Env, v: Viewer, req: Request): Promise<void> {
   const { token } = await body<{ token?: string }>(req);
   const hash = await sha256hex(str(token, "token", 10, 100));
   // someone the owner removed can't come back in, on anyone's invite (docs/BACKEND.md section 6)
-  const BANNED = "EXISTS (SELECT 1 FROM bans b JOIN users u ON u.google_sub = b.google_sub WHERE u.id = ?1)";
   if (await env.DB.prepare(`SELECT 1 WHERE ${BANNED}`).bind(v.id).first()) throw new HttpError(403, "not_allowed");
-  // App Review (IDEAS O-12, guideline 2.1): one long-lived code, written only in App Store Connect's private review notes, lets
-  // a reviewer's fresh account in without anyone's invite. Only its sha256 is here; it makes no friendship and no inviter.
+  // App Review (IDEAS O-12, guideline 2.1): one long-lived code, written only in App Store Connect's private review notes. Signing in
+  // is enough now; builds from before Vetta opened still send it, so it still says yes. Only its sha256 is here; no friendship, no inviter.
   if (hash === (env.REVIEW_INVITE_HASH ?? REVIEW_INVITE_HASH)) {
-    await env.DB.prepare(`INSERT OR IGNORE INTO members (user_id, invited_by) SELECT ?1, NULL WHERE NOT ${BANNED}`).bind(v.id).run();
-    if (!(await env.DB.prepare("SELECT 1 FROM members WHERE user_id = ?").bind(v.id).first())) throw new HttpError(403, "not_allowed");
+    if (!(await admit(env, v.id))) throw new HttpError(403, "not_allowed");
     return;
   }
-  // one atomic step: only an unused, unexpired invite flips to used, and only then is the user made a member
+  // one atomic step: only an unused, unexpired invite flips to used
   const used = await env.DB.prepare(
     "UPDATE invites SET used_by = ?1, used_at = datetime('now') WHERE token_hash = ?2 AND created_by != ?1 AND used_at IS NULL AND expires_at > datetime('now') RETURNING created_by",
   ).bind(v.id, hash).first<{ created_by: string }>();
   if (!used) throw new HttpError(400, "invalid_invite");
-  // the ban is checked again in the same statement, so one made a moment ago still holds
-  const joined = await env.DB.prepare(`INSERT OR IGNORE INTO members (user_id, invited_by) SELECT ?1, ?2 WHERE NOT ${BANNED}`).bind(v.id, used.created_by).run();
-  if (!joined.meta.changes && !(await env.DB.prepare("SELECT 1 FROM members WHERE user_id = ?").bind(v.id).first())) throw new HttpError(403, "not_allowed");
-  // An invite is two people agreeing to meet: the inviter made the link for this person, the invitee accepted it. They start as friends
-  // (sharing is still off until each of them turns it on, per friend).
-  const [x, y] = pair(v.id, used.created_by);
+  if (!(await admit(env, v.id))) throw new HttpError(403, "not_allowed");
+  // The link that brought a newcomer is still their inviter (the referral, and the report counting in reports_sql.ts): only for a
+  // member who joined in the last day with no inviter yet, so an old member opening a friend link changes nothing but the friendship.
+  await env.DB.prepare("UPDATE members SET invited_by = ?2 WHERE user_id = ?1 AND invited_by IS NULL AND joined_at > datetime('now', '-1 day')")
+    .bind(v.id, used.created_by).run();
+  await befriendOnLink(env, v.id, used.created_by);
+}
+
+/** A link is two people agreeing to meet: the sender made it, the other opened it and signed in. They start as friends (sharing
+ *  is still off until each of them turns it on, per friend). Never across a block, either way. Friend links and crew links (P-02). */
+export async function befriendOnLink(env: Env, userId: string, senderId: string): Promise<void> {
+  if (userId === senderId) return;
+  const [x, y] = pair(userId, senderId);
   await env.DB.prepare(
-    `INSERT INTO friendships (user_a, user_b, status, requested_by) VALUES (?, ?, 'accepted', ?)
+    `INSERT INTO friendships (user_a, user_b, status, requested_by) SELECT ?1, ?2, 'accepted', ?3
+      WHERE NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker = ?1 AND b.blocked = ?2) OR (b.blocker = ?2 AND b.blocked = ?1))
      ON CONFLICT (user_a, user_b) DO UPDATE SET status = 'accepted'`,
-  ).bind(x, y, used.created_by).run();
+  ).bind(x, y, senderId).run();
 }

@@ -88,7 +88,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const core = require(process.argv[1] + '/web/apex_core.js');
 const loading = require(process.argv[1] + '/web/route_loading.js');
-const html = fs.readFileSync(process.argv[1] + '/web/index.html', 'utf8');
+const html = ['index.html', 'cockpit.js', 'lazy.js'].map((f) => { try { return fs.readFileSync(process.argv[1] + '/web/' + f, 'utf8'); } catch (_) { return ''; } }).join('\n');
 const source = html.match(/async function trackFromPolyline\(.*?\n    }/s)[0];
 let heartbeat = 0;
 const phases = {};
@@ -129,7 +129,7 @@ def test_destination_failure_releases_button_and_loop_can_retry():
     run_node(r"""
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
-const html = fs.readFileSync(process.argv[1] + '/web/index.html', 'utf8');
+const html = ['index.html', 'cockpit.js', 'lazy.js'].map((f) => { try { return fs.readFileSync(process.argv[1] + '/web/' + f, 'utf8'); } catch (_) { return ''; } }).join('\n');
 const destinationSource = html.match(/async function routeToQuery\(.*?\n    }/s)[0];
 const loopSource = html.match(/async function loop\(.*?\n    }/s)[0];
 let completed = 0;
@@ -165,7 +165,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const loading = require(process.argv[1] + '/web/route_loading.js');
 globalThis.ApexUnits = require(process.argv[1] + '/web/units.js');
-const html = fs.readFileSync(process.argv[1] + '/web/index.html', 'utf8');
+const html = ['index.html', 'cockpit.js', 'lazy.js'].map((f) => { try { return fs.readFileSync(process.argv[1] + '/web/' + f, 'utf8'); } catch (_) { return ''; } }).join('\n');
 const source = html.match(/async function buildRoute\(.*?\n    }/s)[0];
 const drives = [];
 let analyzed = false;

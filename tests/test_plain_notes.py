@@ -5,6 +5,7 @@ import shutil
 import subprocess
 
 import pytest
+from tests.page_source import cockpit_source
 
 NODE = shutil.which("node")
 pytestmark = pytest.mark.skipif(NODE is None, reason="node not installed")
@@ -53,7 +54,7 @@ def test_links_follow_the_drivers_units(out):
 
 
 def test_page_offers_both_and_keeps_rally_for_existing_users():
-    html = open(os.path.join(ROOT, "web", "index.html"), encoding="utf-8").read()
+    html = cockpit_source()
     assert 'data-words="plain"' in html and 'data-words="rally"' in html
     assert "saved.noteWords === 'plain' || saved.noteWords === 'rally' ? saved.noteWords : 'rally'" in html
     assert "if (state.noteWords === 'plain') return { text: ApexPlainNotes.plainChain(voiced, ApexUnits), chain: null, keys };" in html

@@ -146,3 +146,72 @@ describe("crew drives", () => {
     expect((await plan({ regroup: [{ name: "Top", lat: 95, lon: -84 }] })).status).toBe(400);
   });
 });
+
+// The run as one card (REVIEW_PEOPLE.md P-03, P-10, roadmap 2): set the rest on the card, who came, the record.
+describe("a drive's card and its record", () => {
+  it("the planner or the crew's owner sets notes, regroup points, a meet and roles afterwards; a member can't", async () => {
+    const [a, b, c] = [await makeUser("alice"), await makeUser("bob"), await makeUser("cara")];
+    const crew = await crewOf(a, b, c);
+    const { id } = await json(api(b, "POST", `/api/crews/${crew}/events`, { ...DRIVE, notes: undefined }));
+    expect((await api(c, "PUT", `/api/events/${id}`, { notes: "Mine now" })).status).toBe(403);
+    await ok(api(b, "PUT", `/api/events/${id}`, { notes: "Fuel first.", regroup: [{ name: "The overlook", lat: 35.33, lon: -84.12 }], sweep: "cara" }));
+    let [e] = await json(api(a, "GET", `/api/crews/${crew}/events`)) as Msg[];
+    expect([e.notes, e.regroup, e.lead, e.sweep]).toEqual(["Fuel first.", [{ name: "The overlook", lat: 35.33, lon: -84.12 }], "bob", "cara"]);
+    expect(e.going.sort()).toEqual(["bob", "cara"]);                                                          // named to sweep: going
+    await ok(api(a, "PUT", `/api/events/${id}`, { notes: null, sweep: null }));                               // the owner may too
+    [e] = await json(api(a, "GET", `/api/crews/${crew}/events`)) as Msg[];
+    expect([e.notes, e.sweep, e.lead]).toEqual([null, null, "bob"]);
+    expect((await api(b, "PUT", `/api/events/${id}`, { lead: "cara", sweep: "cara" })).status).toBe(400);
+    expect((await api(b, "PUT", `/api/events/${id}`, { public: true })).status).toBe(400);                  // a private crew lists no meet
+    expect((await api(b, "PUT", `/api/events/${id}`, { regroup: [{ name: "", lat: 0, lon: 0 }] })).status).toBe(400);
+  });
+
+  it("who came, who said going, and the best Score from the day among those who came; blocks hide; members only", async () => {
+    const [a, b, c, out] = [await makeUser("alice"), await makeUser("bob"), await makeUser("cara"), await makeUser("outsider")];
+    const crew = await crewOf(a, b, c);
+    const { id } = await json(api(a, "POST", `/api/crews/${crew}/events`, DRIVE));
+    await ok(api(b, "POST", `/api/events/${id}/rsvp`, { status: "going" }));
+    expect((await api(b, "POST", `/api/events/${id}/came`)).status).toBe(400);                                // two days out: not yet
+    // the drive was this morning (the sweep keeps it a week)
+    await env.DB.prepare("UPDATE crew_events SET starts_at = datetime('now', '-5 hours') WHERE id = ?").bind(id).run();
+    let r = await json(api(c, "GET", `/api/events/${id}/record`));
+    expect(r).toMatchObject({ id, title: "Cherohala Saturday", crew_name: "Ridge Runners", came: [], i_came: false, best: null });
+    expect(r.going.sort()).toEqual(["alice", "bob"]);
+    await ok(api(a, "POST", `/api/events/${id}/came`));
+    await ok(api(b, "POST", `/api/events/${id}/came`));
+    await ok(api(b, "POST", `/api/events/${id}/came`));                                                       // said twice: once
+    // Scores published to the crew that day: bob's 811, alice's 790, and cara's 900 (she didn't come)
+    await env.DB.prepare("INSERT INTO segments (id, owner, name, length_m, geom, start_lat, start_lon, end_lat, end_lon) VALUES ('s1', ?, 'Cherohala Skyway', 3000, '[[1,2]]', 1, 2, 3, 4)").bind(a.id).run();
+    for (const [u, score] of [[a, 790], [b, 811], [c, 900]] as const) {
+      await ok(api(u, "PUT", "/api/grants", { audience_type: "crew", audience_id: crew, share_scores: true, share_times: false }));
+      await env.DB.prepare("INSERT INTO board_entries (id, segment_id, user_id, audience_type, audience_id, driver_score, driven_on) VALUES (?, 's1', ?, 'crew', ?, ?, date('now', '-5 hours'))")
+        .bind(crypto.randomUUID(), u.id, crew, score).run();
+    }
+    r = await json(api(c, "GET", `/api/events/${id}/record`));
+    expect(r.came).toEqual(["alice", "bob"]);
+    expect(r.best).toEqual({ handle: "bob", score: 811, stage: "Cherohala Skyway" });
+    expect((await json(api(b, "GET", `/api/events/${id}/record`))).i_came).toBe(true);
+    await ok(api(c, "POST", "/api/blocks", { handle: "bob" }));
+    r = await json(api(c, "GET", `/api/events/${id}/record`));
+    expect([r.came, r.best && r.best.handle]).toEqual([["alice"], "alice"]);
+    await ok(api(a, "DELETE", `/api/events/${id}/came`));
+    expect((await json(api(a, "GET", `/api/events/${id}/record`))).came).toEqual(["bob"]);
+    expect((await api(out, "GET", `/api/events/${id}/record`)).status).toBe(404);
+    expect((await api(out, "POST", `/api/events/${id}/came`)).status).toBe(404);
+    // the crew page: no next drive now, the last one for its record
+    const page = await json(api(a, "GET", `/api/crews/${crew}/page`));
+    expect([page.next, page.last && page.last.id]).toEqual([null, id]);
+    // the export lists it; the account's deletion takes it
+    expect((await json(api(b, "GET", "/api/me/export"))).crew_drives_came_to).toHaveLength(1);
+    await ok(api(b, "DELETE", "/api/me", { confirm: "DELETE" }));
+    expect((await env.DB.prepare("SELECT COUNT(*) AS n FROM crew_event_attendance").first<{ n: number }>())!.n).toBe(0);
+  });
+
+  it("a drive that started within the hours of its convoy stays the crew page's next drive", async () => {
+    const a = await makeUser("alice"), crew = await crewOf(a);
+    const { id } = await json(api(a, "POST", `/api/crews/${crew}/events`, DRIVE));
+    await env.DB.prepare("UPDATE crew_events SET starts_at = datetime('now', '-3 hours') WHERE id = ?").bind(id).run();
+    const page = await json(api(a, "GET", `/api/crews/${crew}/page`));
+    expect([page.next && page.next.id, page.last]).toEqual([id, null]);
+  });
+});

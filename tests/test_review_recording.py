@@ -2,6 +2,7 @@
 demand, and the transcript line reaches the shell only in review mode."""
 import os
 import re
+from tests.page_source import cockpit_source
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 read = lambda *p: open(os.path.join(ROOT, *p), encoding="utf-8").read()
@@ -43,7 +44,7 @@ def test_flows_run_on_demand_only():
 
 
 def test_page_logs_lines_only_in_review_mode():
-    html = read("web", "index.html")
+    html = cockpit_source()
     assert "if (window.APEX_REVIEW) { try { window.webkit.messageHandlers.apex.postMessage({ cmd: 'said'" in html
 
 
@@ -63,15 +64,15 @@ def test_recording_reaches_the_corners_and_maps_lines_to_video():
     assert "phone-start.txt" in yml and "car-start.txt" in yml
     pack = read("tools", "review_pack.py")
     assert '-start.txt"' in pack and "def upright(" in pack
-    html = read("web", "index.html")
-    assert "act.setAttribute('aria-label', `${ok ? 'Use' : 'Try'} ${t.label}`)" in html, "each Use key names its card (U-69)"
+    html = cockpit_source()
+    assert "key.setAttribute('aria-label', `${allowed ? 'Use' : 'Try'} ${t.label}`)" in html, "each Use key names its card (U-69)"
 
 
 def test_review_recording_writes_nothing_to_the_server():
     """REVIEW4_CHECK U-94: the recording signs in as a real account on the production Worker. Its hazard report is the
     member's sheet, Undo and pin, kept on the phone; every other write is held back by the page, by the shell's one door to
     the Worker, and the backend answers the review account's hazard reports and votes without storing them."""
-    html = read("web", "index.html")
+    html = cockpit_source()
     send = html.split("async function sendHazard(body)")[1].split("\n    }\n")[0]
     assert "if (window.APEX_REVIEW) r = reviewHazard(body);" in send and "else try { r = await ApexSync.apiFetch('/api/hazards'" in send
     review = html.split("function reviewHazard(body)")[1].split("\n    }\n")[0]

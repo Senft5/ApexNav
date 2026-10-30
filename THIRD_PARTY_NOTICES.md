@@ -16,12 +16,13 @@ component is permissive (BSD-3, MIT, Apache-2.0, OFL); no GPL code ships; the ap
 | Chatterbox (Resemble AI) | experimental voice clone (not shipped) | MIT |
 | MapLibre GL JS 4.7.1 | map rendering | BSD-3-Clause |
 | maplibre-contour (Michael Barry), `web/vendor/maplibre-contour.min.js` | contour lines | BSD-3-Clause |
+| MapLibre Native for iOS 6.31.0 (Swift package, `project.yml`) | the car's map on CarPlay (`CarPlay/ApexCarMap.swift`) | BSD-2-Clause; its own bundled components are listed in its LICENSE.md |
 | QR Code Generator 2.0.4 (Kazuhiko Arase), `web/vendor/qrcode.js` | the convoy QR code | MIT |
 | Valhalla (via FOSSGIS public server) | routing, map matching, speed limits | MIT |
 | OpenStreetMap data, OpenFreeMap tiles | roads, base map | ODbL 1.0; attribution required: © OpenStreetMap contributors |
 | AWS Terrain Tiles (Terrarium) | elevation | see https://registry.opendata.aws/terrain-tiles/ |
 | Nominatim (OpenStreetMap) | address search | ODbL; usage policy applies |
-| Fonts (Barlow Condensed, IBM Plex, Inter Tight) | UI | SIL OFL 1.1 |
+| Fonts: Barlow Condensed (© 2017 The Barlow Project Authors), Inter Tight (© 2022 The Inter Project Authors), bundled as `web/fonts/*.woff2` (Google Fonts' latin and latin-ext files, unchanged; REVIEW_FEEL F-12), and IBM Plex | UI | SIL OFL 1.1; full text in `web/fonts/OFL.txt` |
 
 ## espeak-ng (GPL-3.0): removed from the shipped app
 Earlier builds loaded kokoro-js, whose web bundle inlines an espeak-ng WebAssembly build (GPL-3.0). Since 2026-10-25 the

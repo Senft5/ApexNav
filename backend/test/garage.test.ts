@@ -115,6 +115,8 @@ describe("garage", () => {
     const { env } = await import("cloudflare:workers");
     await env.DB.prepare("UPDATE users SET handle = NULL WHERE id = ?").bind(nameless.id).run();
     expect((await people(mate)).map((p) => p.handle)).toEqual(["alice"]);
+    await ok(api(mate, "DELETE", `/api/friends/${a.id}`));            // the crew link made them friends too (P-02); only the crew's view here
+    expect((await people(mate)).map((p) => p.handle)).toEqual(["alice"]);
     await ok(api(mate, "DELETE", `/api/crews/${crew}/membership`));
     expect(await people(mate)).toEqual([]);
   });

@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
-import { api, freshDb, makeUser, ok } from "./helpers";
+import { api, freshDb, makeBanned, makeUser, ok } from "./helpers";
 
 beforeEach(freshDb);
 
@@ -10,7 +10,7 @@ const list = async (u: Parameters<typeof api>[0], bbox = "39,-85,40,-84") => (aw
 
 describe("highlights", () => {
   it("are members-only", async () => {
-    const out = await makeUser("outsider", false);
+    const out = await makeBanned("outsider");
     expect((await api(null, "GET", "/api/highlights?bbox=39,-85,40,-84")).status).toBe(401);
     expect((await api(out, "GET", "/api/highlights?bbox=39,-85,40,-84")).status).toBe(403);
     expect((await api(out, "POST", "/api/highlights", spot())).status).toBe(403);

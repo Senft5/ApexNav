@@ -8,6 +8,7 @@ import shutil
 import subprocess
 
 import pytest
+from tests.page_source import cockpit_source
 
 NODE = shutil.which("node")
 pytestmark = pytest.mark.skipif(NODE is None, reason="node not installed")
@@ -76,7 +77,7 @@ def test_transitions_said_once_each_way_and_never_within_two_minutes(out):
 
 
 def test_the_page_wakes_on_the_road_and_speaks_the_pack_lines():
-    html = open(os.path.join(ROOT, "web", "index.html"), encoding="utf-8").read()
+    html = cockpit_source()
     notes = html[html.index("function updateNotes("):html.index("// 7. RENDER LOOP")]
     assert "ApexNoteTiming.wakeCorner(corners" in notes and "state.spiritedAt = now" in notes
     # the lines the voice packs hold (tools/voicebank.py PACK_LINES sys:stage / sys:cruise), said by their tokens

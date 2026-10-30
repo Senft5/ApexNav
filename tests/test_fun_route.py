@@ -313,7 +313,7 @@ def test_loops_are_valued_on_the_fun_scale(r):
 
 MATRIX = r"""
 const fs = require('node:fs');
-const html = fs.readFileSync(process.argv[1] + '/web/index.html', 'utf8');
+const html = ['index.html', 'cockpit.js', 'lazy.js'].map((f) => { try { return fs.readFileSync(process.argv[1] + '/web/' + f, 'utf8'); } catch (_) { return ''; } }).join('\n');
 const source = html.match(/async function valhallaMatrix\(.*?\n    }/s)[0];
 const calls = [];
 const RouteLoading = { json: async (url, opts) => { const b = JSON.parse(opts.body); calls.push(b.sources.length * b.targets.length);
@@ -356,7 +356,7 @@ const Core = require(root + '/web/apex_core.js');
 globalThis.ApexCore = Core;
 globalThis.ApexUnits = require(root + "/web/units.js");
 const FunRoute = require(root + '/web/fun_route.js');
-const html = fs.readFileSync(root + '/web/index.html', 'utf8');
+const html = ['index.html', 'cockpit.js', 'lazy.js'].map((f) => { try { return fs.readFileSync(root + '/web/' + f, 'utf8'); } catch (_) { return ''; } }).join('\n');
 const source = html.match(/async function funRoute\(.*?\n    }/s)[0];
 const useOptionSource = html.match(/async function useOption\(.*?\n    }/s)[0];
 const marksSource = html.match(/function timeMarksOf\(.*?\n    }/s)[0];

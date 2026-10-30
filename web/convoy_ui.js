@@ -1,5 +1,7 @@
-// Convoy on screen: the Crew sheet's Convoy section, the strip over the map, cars and hazards on the map, and the
-// co-driver's hazard calls. The page hands in what it owns (map, position, voice, toasts) through mount(); the link and
+// Convoy on screen: the strip over the map, the convoy sheet it opens, the panel a crew drive's card shows while its
+// convoy is live, cars and hazards on the map, and the co-driver's hazard calls. A convoy is a state of the run, not a
+// section of its own (docs/design/REVIEW_PEOPLE.md P-11): a crew's starts from its drive's card (crew_events.js), an
+// ad-hoc one from the map's Start key ("Convoy now"), and an invite waits on the drive's card and on the map's line. The page hands in what it owns (map, position, voice, toasts) through mount(); the link and
 // geometry live in convoy.js. Every name, handle and note is set as text, never as HTML.
 // Buttons are rebuilt only when what they do changes (role, members, status, undo); positions move text and markers
 // in place, so a tap is never lost to a repaint while driving.
@@ -16,14 +18,28 @@
                    bad_regroup: 'That regroup point was refused.', leader_only: 'Only the leader can do that.', frame_too_large: 'That was too big to send.' };
   const CSS = `
     .convoy-bar { position: absolute; left: 10px; right: 76px; top: calc(76px + var(--safe-top, 0px)); z-index: 5; display: none; gap: 6px; flex-direction: column;
-      background: var(--panel); color: var(--panel-ink); border: 1px solid var(--rule); padding: 6px 10px; font-size: 13px; max-width: 420px; }
+      background: var(--panel); color: var(--panel-ink); border: 1px solid var(--rule); padding: 0; font-size: 13px; max-width: 420px; }
+    /* P-21: on the idle map one slim line in the place plate's column, just under it, in the plate's own hand; a tap opens
+       the convoy. Its status ("Reconnecting") is a word in the line, never a box of its own. */
+    #app.idle .convoy-bar { top: calc(54px + var(--safe-top, 0px)); left: 10px; right: auto; max-width: calc(100% - 96px); padding: 0;
+      border: 1.5px solid var(--panel-ink); box-shadow: 0 2px 0 var(--rule); }
+    #app.plan-open .convoy-bar { display: none; }
+    .convoy-bar .cv-line { display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 10px; border: 0; background: none; color: inherit;
+      font: 600 14px var(--font-ui, sans-serif); text-align: left; width: 100%; min-width: 0; }
+    .convoy-bar .cv-line b { font-family: var(--font-num); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+    .convoy-bar .cv-line span { color: var(--panel-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; font-weight: 500; }
+    .convoy-bar .cv-line i { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--gain, #2a6); }
+    .convoy-bar .cv-line i.off { background: var(--panel-dim); }
+    .convoy-bar .cv-line i.ask { background: var(--accent); }
+    .convoy-sheet .card-sheet { max-height: 86vh; overflow-y: auto; }
+    .convoy-sheet .cv-sheet-head { display: flex; justify-content: space-between; align-items: center; }
+    .convoy-sheet .cv-sheet-head h2 { margin: 0; }
     /* the owner's photos, 2026-10-30: a two-row block of calls over the map and the Layers key, before a drive had started.
        Now one line (name and status) off the right-hand keys; the calls come only in a drive, in one row that scrolls. */
     .convoy-bar.show { display: flex; }
     #app.sheet-open .convoy-bar { display: none; }
-    .convoy-bar .cv-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-height: 28px; }
-    .convoy-bar .cv-head b { font-family: var(--font-num); }
-    .convoy-bar .cv-calls { display: flex; flex-wrap: nowrap; gap: 6px; overflow-x: auto; scrollbar-width: none; margin: 0 -10px; padding: 0 10px; }
+    .convoy-bar .cv-calls { display: flex; flex-wrap: nowrap; gap: 6px; overflow-x: auto; scrollbar-width: none; padding: 0 10px 6px; }
+    .convoy-bar .cv-regroup { padding: 0 10px 6px; }
     .convoy-bar .cv-calls::-webkit-scrollbar { display: none; }
     .convoy-bar .cv-calls button { flex: none; min-height: 44px; min-width: 44px; padding: 0 10px; font-size: 13px; font-weight: 700; }
     .convoy-bar .cv-undo { color: var(--signal, #c33); border-color: var(--signal, #c33); }
@@ -50,11 +66,14 @@
     (page.overlayParent || document.body).append(bar);
     const labelled = (node, text) => { node.setAttribute('aria-label', text); return node; };
 
-    let snap = null, undo = null, sectionHost = null, lastKey = null;
+    let snap = null, undo = null, lastKey = null;
+    const hosts = new Set();                                    // where the convoy draws: the sheet, a drive card's panel
+    const watchers = new Set();                                 // drive cards: told when the convoy or its invites change
+    const tellWatchers = () => { for (const fn of [...watchers]) { let keep = false; try { keep = fn() !== false; } catch (_) {} if (!keep) watchers.delete(fn); } };
     const spoken = new Map();                                   // eventId -> 'far' | 'near': each hazard is called at most twice
     const markers = { cars: new Map(), hazards: new Map(), regroup: null };
     let lastRegroup = null;
-    const live = { headline: null, regroup: null, gaps: new Map() };   // text nodes updated in place
+    const live = { headline: null, regroup: null, gaps: [], left: [] };   // text nodes updated in place
 
     const client = new C.ConvoyClient({
       apiFetch, wsUrl,
@@ -159,6 +178,7 @@
     function paintText() {
       if (!snap || !snap.id) return;
       if (live.headline) live.headline.textContent = headline();
+      for (const n of live.left) n.textContent = C.leftText(snap.ctx && snap.ctx.expiresAtMs);   // P-28: how long, not a clock time
       const mine = me();
       if (live.regroup) live.regroup.textContent = client.regroup && mine ? `Regroup${client.regroup.note ? ' at ' + client.regroup.note : ''} · ${C.distText(C.haversineM(mine, client.regroup))}` : '';
       for (const [k, span] of live.gaps) {
@@ -170,18 +190,32 @@
     // ---- structure: rebuilt only when it changes -----------------------------------------------------------------
     function structKey() {
       const s = snap;
-      if (!s || !s.id) return JSON.stringify([s && s.status, store.get('sessionStorage', INVITE_KEY) !== '']);
+      if (!s || !s.id) return JSON.stringify([s && s.status, store.get('sessionStorage', INVITE_KEY) !== '', asked.list.map((i) => i.id), driving()]);
       return JSON.stringify([s.id, s.status, s.unreachable, s.ctx && s.ctx.role, s.ctx && s.ctx.name, s.members.map((m) => [m.key, m.online, m.role, m.handle]),
                              !!client.route, !!client.regroup, undo && undo.id, !!getRoute(), driving()]);
     }
+    // P-21: one line, a tap opens the convoy. Idle with an invite waiting, the line is the invite; in a drive the leader's
+    // calls come under it in one scrolling row.
     function paintBar() {
-      const s = snap;
-      bar.classList.toggle('show', !!(s && s.id));
+      const s = snap, idle = !(s && s.id);
+      const inv = idle && !driving() ? asked.list[0] || null : null, link = idle && !driving() && !inv ? store.get('sessionStorage', INVITE_KEY) : '';
+      bar.classList.toggle('show', !idle || !!inv || !!link);
       live.headline = null; live.regroup = null;
-      if (!s || !s.id) { bar.replaceChildren(); return; }
+      const line = (dot, name, text) => {
+        const b = el('button', { type: 'button', className: 'cv-line' }, el('i', { className: dot }), el('b', { textContent: name }), text);
+        b.addEventListener('click', open);
+        return b;
+      };
+      if (idle) {
+        if (!inv && !link) { bar.replaceChildren(); return; }
+        const ln = line('ask', inv ? inv.name : 'Convoy link', el('span', { textContent: inv ? `${inv.from ? '@' + inv.from : 'A friend'} invited you` : 'Join it?' }));
+        labelled(ln, inv ? `${inv.from ? '@' + inv.from : 'A friend'} invited you to the convoy ${inv.name}. Open it` : 'A convoy link. Open it');
+        bar.replaceChildren(ln);
+        return;
+      }
       live.headline = el('span');
-      live.regroup = el('div');
-      const kids = [el('div', { className: 'cv-head' }, el('b', { textContent: s.ctx ? s.ctx.name : 'Convoy' }), live.headline), live.regroup];
+      const kids = [labelled(line(s.status === 'live' ? '' : 'off', s.ctx ? s.ctx.name : 'Convoy', live.headline), `Convoy ${s.ctx ? s.ctx.name : ''}. Open it`)];
+      if (client.regroup) { live.regroup = el('div', { className: 'cv-regroup' }); kids.push(live.regroup); }
       if (s.status === 'replaced') kids.push(el('div', { className: 'cv-calls' }, btn('Use the convoy here', () => client.takeOver())));
       else if (isLeader() && driving()) {                              // calls are for the road: only in a drive
         const calls = el('div', { className: 'cv-calls' });
@@ -226,7 +260,7 @@
           for (const i of list) asked.seen.add(i.id);
           const changed = JSON.stringify(list.map((i) => i.id)) !== JSON.stringify(asked.list.map((i) => i.id));
           asked.list = list;
-          if (fresh) toast(`${fresh.from ? '@' + fresh.from : 'A friend'} invited you to a convoy: ${fresh.name}.`, { label: 'See it', ms: 10000, onClick: () => page.showView && page.showView('crew') });
+          if (fresh) toast(`${fresh.from ? '@' + fresh.from : 'A friend'} invited you to a convoy: ${fresh.name}.`, { label: 'See it', ms: 10000, onClick: open });
           if (changed) { lastKey = null; paint(); }
         }
       } catch (_) { /* signed out or offline: try again next minute */ }
@@ -251,7 +285,7 @@
       } catch (_) { /* offline: the list says so below */ }
       const inConvoy = new Set((snap && snap.members || []).map((m) => m.handle));
       const picks = [...handles].filter((h) => !inConvoy.has(h)).sort();
-      if (!picks.length) { box.replaceChildren(el('p', { className: 'note', textContent: 'No friends or crew-mates to invite yet. Add friends in Crew, or share the link.' })); return; }
+      if (!picks.length) { box.replaceChildren(el('p', { className: 'note', textContent: 'No friends or crew-mates to invite yet. Add friends in People, or show the code.' })); return; }
       const chosen = new Set();
       const rows = picks.map((h) => {
         const b = el('button', { className: 'ink-btn', textContent: '@' + h });
@@ -268,7 +302,7 @@
       }, 'ink-btn solid'), btn('Cancel', () => box.replaceChildren(), 'linkbtn')));
     }
 
-    // ---- the Crew sheet's Convoy section ------------------------------------------------------------------------
+    // ---- the convoy sheet, and the panel on a crew drive's card -------------------------------------------------------
     const inviteUrl = (invite) => `${siteOrigin()}/?convoy=${encodeURIComponent(invite)}`;
     async function shareInvite(fresh = false) {
       const invite = await client.inviteLink(fresh);
@@ -307,45 +341,34 @@
       Object.assign(preview, { status: r.status, ok: r.ok && !!(r.body && r.body.name), body: r.body, at: Date.now() });
       lastKey = null; paint();
     }
-    function renderSection() {
-      const s = snap, box = sectionHost;
-      if (!box) return;
-      live.gaps.clear();
-      const kids = [el('h3', { textContent: 'Convoy' })];
-      const pending = store.get('sessionStorage', INVITE_KEY);
+    // One host's content. The sheet ('sheet') holds everything: an invite or a link to answer, Convoy now when there is
+    // none, and the live convoy. A drive card's panel ('card') only the live convoy: the card says the rest itself.
+    function renderHost(h) {
+      const s = snap, box = h.box, kids = [];
       if (!s || !s.id) {
-        // one line, the rest on demand (REVIEW.md 1.1 #7: show, don't explain)
-        kids.push(el('p', { className: 'note', textContent: 'Drive together, live, for up to two hours.' }),
-          el('details', { className: 'how' }, el('summary', { textContent: 'How this works' }),
-            el('p', { className: 'note', textContent: 'Everyone in the convoy sees where everyone is, the leader can call hazards and a regroup point, and the co-driver warns you before you get there. Nothing is kept: it ends when the leader leaves or after two hours.' })));
+        if (h.picker) h.picker.replaceChildren();                       // a convoy that ended takes its code and picker with it
+        if (h.kind !== 'sheet') { box.replaceChildren(); return; }
+        const pending = store.get('sessionStorage', INVITE_KEY);
         loadAsked();
         const at = (ms) => new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
         for (const inv of asked.list) {
           kids.push(el('p', { className: 'note', textContent: `${inv.from ? '@' + inv.from : 'A friend'} invited you: ${inv.name} · until ${at(inv.expiresAtMs)}. Joining shares your position with the convoy.` }),
             el('div', { className: 'row' }, btn('Join', async () => {
-              const r = await client.accept(inv.id);
-              asked.list = asked.list.filter((x) => x.id !== inv.id);
+              const r = await accept(inv);
               if (!r.ok) toast(r.status === 409 ? 'That convoy is full.' : r.status === 0 || r.status >= 500 ? 'No connection. Try again in a moment.' : 'That invite has run out. Ask for a new one.');
               else toast('You\'re in the convoy. Your position is shared with it until you leave.');
-              lastKey = null; paint();
-            }, 'ink-btn solid'), btn('Not now', async () => {
-              asked.list = asked.list.filter((x) => x.id !== inv.id); lastKey = null; paint();
-              apiFetch(`/api/convoy/invites/${encodeURIComponent(inv.id)}`, { method: 'DELETE' }).catch(() => {});
-            }, 'linkbtn')));
+            }, 'ink-btn solid'), btn('Not now', () => dismiss(inv), 'linkbtn')));
         }
         if (pending) {
           // Say which convoy before the yes: joining shares your position with everyone in it.
           const pv = preview.invite === pending ? preview : null;
           if (!pv || (pv.status !== null && Date.now() - pv.at > 60e3)) loadPreview(pending);   // invites run out and convoys fill
-          const time = (ms) => new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
           const lead = (l) => (l && l.handle ? '@' + l.handle : 'someone');
           kids.push(el('p', { className: 'note', textContent: !pv || !pv.status ? 'Checking the convoy link…'
-            : pv.ok ? `${pv.body.name} · led by ${lead(pv.body.leader)} · ${pv.body.members} of ${pv.body.max} in · ends ${time(pv.body.expiresAtMs)}`
+            : pv.ok ? `${pv.body.name} · led by ${lead(pv.body.leader)} · ${pv.body.members} of ${pv.body.max} in · ${C.leftText(pv.body.expiresAtMs)}`
             : pv.status === 409 ? 'That convoy is full.'
             : pv.status === 0 || pv.status === 429 || pv.status >= 500 ? 'Couldn\'t check the convoy link. You can still try to join.'
             : 'That convoy link has run out or isn\'t yours to use. Ask the leader for a new one.' }));
-        }
-        if (pending) {
           kids.push(el('div', { className: 'row' }, btn('Join the convoy', async () => {
             const r = await client.join(pending);
             if (r.ok || r.status === 400 || r.status === 403 || r.status === 404 || r.status === 409) store.set('sessionStorage', INVITE_KEY, '');
@@ -353,50 +376,62 @@
               : r.status === 0 || r.status >= 500 ? 'No connection. Try again in a moment.' : 'That convoy link didn\'t work. Ask the leader for a new one.');
             else toast('You\'re in the convoy. Your position is shared with it until you leave.');
             paint();
-          }, 'ink-btn solid'), btn('Not now', () => { store.set('sessionStorage', INVITE_KEY, ''); preview.invite = null; paint(); }, 'linkbtn')));
-        } else {
-          const name = labelled(el('input', { className: 'field', placeholder: 'Convoy name', maxLength: 40, autocomplete: 'off' }), 'Convoy name');
-          kids.push(el('div', { className: 'row' }, name, btn('Start a convoy', async () => {
-            const r = await client.start(name.value.trim());
-            if (!r.ok) { toast(r.status === 429 ? 'You already lead two convoys. End one first.' : 'Couldn\'t start a convoy. Check signal and try again.'); return; }
-            shareInvite();
-          }, 'ink-btn solid')));
+          }, 'ink-btn solid'), btn('Not now', () => { store.set('sessionStorage', INVITE_KEY, ''); preview.invite = null; lastKey = null; paint(); }, 'linkbtn')));
+        } else if (!asked.list.length) {
+          // Convoy now (P-11): drive together now, no crew needed; a crew's convoy starts from its drive's card
+          const name = labelled(el('input', { className: 'field', placeholder: 'Convoy name', maxLength: 40, autocomplete: 'off', value: h.name || '' }), 'Convoy name');
+          kids.push(el('p', { className: 'note', textContent: 'Drive together, live, for up to two hours. Friends join with the code or the link; a crew’s run starts its convoy from the drive’s card.' }),
+            el('details', { className: 'how' }, el('summary', { textContent: 'How this works' }),
+              el('p', { className: 'note', textContent: 'Everyone in the convoy sees where everyone is, the leader can call hazards and a regroup point, and the co-driver warns you before you get there. Nothing is kept: it ends when the leader leaves or after two hours.' })),
+            el('div', { className: 'row' }, name, btn('Start a convoy', () => now(name.value.trim()), 'ink-btn solid')));
         }
-      } else {
-        const c = s.ctx;
-        kids.push(el('p', { className: 'note', textContent: `${c.name} · you are ${c.role === 'leader' ? 'leading' : 'following'} · ends ${new Date(c.expiresAtMs).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` }));
-        const list = el('div', { className: 'cv-members' });
-        loadCars();
-        for (const m of s.members) {
-          const car = m.key !== c.you && m.handle ? cars.byHandle.get(m.handle) : null;
-          const gap = el('span', { className: 'note' });
-          live.gaps.set(m.key, gap);
-          const row = el('div', { className: 'cv-member' },
-            el('span', {}, el('span', { className: 'cv-on' + (m.online || m.key === c.you ? ' live' : '') }), document.createTextNode(label(m) + (m.role === 'leader' ? ' · leader' : '')),
-              ...(car ? [el('span', { className: 'cv-car', textContent: car })] : [])), gap);
-          if (c.role === 'leader' && m.key !== c.you) row.append(btn('Remove', async () => { if (await ApexConfirm.ask(`Remove ${label(m)} from the convoy? They can't come back into it.`, 'Remove')) { if (!(await client.removeMember(m.key))) toast('Couldn\'t remove them. Try again.'); } }, 'linkbtn'));
-          list.append(row);
-        }
-        kids.push(list);
-        const actions = el('div', { className: 'row' }), picker = el('div', { className: 'stack-8' });
-        if (c.role === 'leader') {
-          actions.append(btn('Invite friends', () => invitePeople(picker), 'ink-btn solid'), btn('Show QR', () => showQr(picker)), btn('Share link', () => shareInvite(false)),
-            btn('New link', async () => { if (await ApexConfirm.ask('Make a new link? The old one stops working for anyone who hasn\'t joined yet.', 'New link')) shareInvite(true); }, 'linkbtn'));
-          const r = getRoute();
-          const shareMsg = { sent: (n) => `${n} shared with the convoy.`, offline: () => 'Not connected to the convoy.', too_long: () => 'That route is too long to share.' };
-          if (r) actions.append(btn(client.route ? 'Update shared route' : 'Share my route', () => { const out = client.shareRoute(r.name, r.pts); toast(shareMsg[out](r.name)); }));
-          else if (client.route) actions.append(btn('Stop sharing route', () => { if (!client.clearRoute()) toast('Not connected to the convoy.'); }));
-        }
-        actions.append(btn(c.role === 'leader' ? 'End convoy' : 'Leave', async () => {
-          if (!(await ApexConfirm.ask(c.role === 'leader' ? 'End the convoy for everyone?' : 'Leave the convoy?', c.role === 'leader' ? 'End convoy' : 'Leave'))) return;
-          await client.leave(); toast(c.role === 'leader' ? 'Convoy ended.' : 'You left the convoy.');
-        }, c.role === 'leader' ? 'ink-btn' : 'linkbtn'));
-        kids.push(actions);
-        if (c.role === 'leader') kids.push(picker);
-        if (s.status === 'replaced') kids.push(el('div', { className: 'row' }, el('span', { className: 'note', textContent: 'This convoy is open on another screen.' }), btn('Use it here', () => client.takeOver())));
-        else if (s.status !== 'live') kids.push(el('p', { className: 'note', textContent: s.unreachable ? 'Can\'t reach the convoy. Still trying.' : s.status === 'reconnecting' ? 'No connection to the convoy. Retrying…' : 'Connecting…' }));
+        box.replaceChildren(...kids);
+        return;
       }
+      const c = s.ctx;
+      // P-28: how long it has left, kept fresh every second, not the clock time it ends
+      const left = el('span', { textContent: C.leftText(c.expiresAtMs) });
+      live.left.push(left);
+      kids.push(el('p', { className: 'note' }, document.createTextNode(`${h.kind === 'sheet' ? `${c.name} · ` : 'Convoy · '}you are ${c.role === 'leader' ? 'leading' : 'following'} · `), left));
+      const list = el('div', { className: 'cv-members' });
+      loadCars();
+      for (const m of s.members) {
+        const car = m.key !== c.you && m.handle ? cars.byHandle.get(m.handle) : null;
+        const gap = el('span', { className: 'note' });
+        live.gaps.push([m.key, gap]);
+        const row = el('div', { className: 'cv-member' },
+          el('span', {}, el('span', { className: 'cv-on' + (m.online || m.key === c.you ? ' live' : '') }), document.createTextNode(label(m) + (m.role === 'leader' ? ' · leader' : '')),
+            ...(car ? [el('span', { className: 'cv-car', textContent: car })] : [])), gap);
+        if (c.role === 'leader' && m.key !== c.you) row.append(btn('Remove', async () => { if (await ApexConfirm.ask(`Remove ${label(m)} from the convoy? They can't come back into it.`, 'Remove')) { if (!(await client.removeMember(m.key))) toast('Couldn\'t remove them. Try again.'); } }, 'linkbtn'));
+        list.append(row);
+      }
+      kids.push(list);
+      // the picker (invite friends, the QR code) is the host's own: a status change redraws around it, never wipes it
+      const actions = el('div', { className: 'row', style: 'flex-wrap:wrap' }), picker = h.picker || (h.picker = el('div', { className: 'stack-8' }));
+      if (c.role === 'leader') {
+        actions.append(btn('Invite friends', () => invitePeople(picker), 'ink-btn solid'), btn('Show QR', () => showQr(picker)), btn('Share link', () => shareInvite(false)),
+          btn('New link', async () => { if (await ApexConfirm.ask('Make a new link? The old one stops working for anyone who hasn\'t joined yet.', 'New link')) shareInvite(true); }, 'linkbtn'));
+        const r = getRoute();
+        const shareMsg = { sent: (n) => `${n} shared with the convoy.`, offline: () => 'Not connected to the convoy.', too_long: () => 'That route is too long to share.' };
+        if (r) actions.append(btn(client.route ? 'Update shared route' : 'Share my route', () => { const out = client.shareRoute(r.name, r.pts); toast(shareMsg[out](r.name)); }));
+        else if (client.route) actions.append(btn('Stop sharing route', () => { if (!client.clearRoute()) toast('Not connected to the convoy.'); }));
+      }
+      // from the map's sheet, the drive itself is one key away (a convoy started at the petrol station, then go)
+      if (h.kind === 'sheet' && !driving() && page.drive) actions.append(btn('Start the drive', () => { close(); page.drive(); }, 'ink-btn'));
+      actions.append(btn(c.role === 'leader' ? 'End convoy' : 'Leave', async () => {
+        if (!(await ApexConfirm.ask(c.role === 'leader' ? 'End the convoy for everyone?' : 'Leave the convoy?', c.role === 'leader' ? 'End convoy' : 'Leave'))) return;
+        await client.leave(); toast(c.role === 'leader' ? 'Convoy ended.' : 'You left the convoy.');
+      }, 'linkbtn'));
+      kids.push(actions);
+      if (c.role === 'leader') kids.push(picker);
+      if (s.status === 'replaced') kids.push(el('div', { className: 'row' }, el('span', { className: 'note', textContent: 'This convoy is open on another screen.' }), btn('Use it here', () => client.takeOver())));
+      else if (s.status !== 'live') kids.push(el('p', { className: 'note', textContent: s.unreachable ? 'Can\'t reach the convoy. Still trying.' : s.status === 'reconnecting' ? 'No connection to the convoy. Retrying…' : 'Connecting…' }));
       box.replaceChildren(...kids);
+      if (h.showQr && c.role === 'leader') { h.showQr = false; showQr(picker); }   // Convoy now: the code first, for the car park
+    }
+    function renderAll() {
+      live.gaps = []; live.left = [];
+      for (const h of [...hosts]) { if (h.kind !== 'sheet' && !h.box.isConnected && h.drawn) { hosts.delete(h); continue; } h.drawn = true; renderHost(h); }
     }
     // Daily cars come from the Garage's own list of people you know, so its rules hold here too: only a car its owner shows, only
     // to friends and private crew-mates, never across a block. Someone in the convoy you don't know simply has no car line.
@@ -421,26 +456,75 @@
     function paint(what = 'structure') {
       if (snap && lastStatus !== snap.status) {
         if (STATUS_TOAST[snap.status] && lastStatus !== 'off') toast(STATUS_TOAST[snap.status]);
+        // P-21: in a drive a lost link is a status-line message (the page's toast is the drive's message row), once
+        else if (snap.status === 'reconnecting' && lastStatus === 'live' && driving()) toast('Convoy: reconnecting…');
         lastStatus = snap.status;
       }
       if (snap && !snap.id) spoken.clear();
       const key = structKey();
-      if (what === 'structure' && key !== lastKey) { lastKey = key; renderSection(); paintBar(); }
+      if (what === 'structure' && key !== lastKey) { lastKey = key; renderAll(); paintBar(); tellWatchers(); }
       paintText(); paintMap();
     }
 
-    // a link `/?convoy=<invite>`: keep it (not in the address bar) until the person says yes in the Crew sheet
+    // The convoy sheet over the map: from the line, an invite's toast, a convoy link, and Convoy now.
+    let sheet = null;
+    function open() {
+      if (sheet && sheet.el.isConnected) return;
+      const host = { box: el('div', { className: 'stack-8' }), kind: 'sheet' };
+      const back = el('div', { className: 'overlay dim show convoy-sheet' });
+      back.setAttribute('role', 'dialog'); back.setAttribute('aria-modal', 'true'); back.setAttribute('aria-label', 'Convoy');
+      back.append(el('div', { className: 'card-sheet' }, el('div', { className: 'cv-sheet-head' }, el('h2', { textContent: 'Convoy' }), btn('Done', close, 'linkbtn')), host.box));
+      back.addEventListener('click', (e) => { if (e.target === back) close(); });
+      const key = (e) => { if (e.key === 'Escape' && !(root.ApexConfirm && root.ApexConfirm.open)) close(); };
+      document.addEventListener('keydown', key);
+      sheet = { el: back, host, key };
+      hosts.add(host);
+      live.gaps = []; live.left = [];
+      for (const h of hosts) renderHost(h);
+      document.body.append(back);
+      paintText();
+      loadAsked(true);
+      return host;
+    }
+    function close() {
+      if (!sheet) return;
+      sheet.el.remove(); hosts.delete(sheet.host); document.removeEventListener('keydown', sheet.key); sheet = null;
+    }
+    /** Convoy now (P-11): an ad-hoc convoy from the map, no crew; the sheet opens on its QR code for the car park. */
+    async function now(name) {
+      if (snap && snap.id) { open(); return { ok: false, status: 'busy' }; }
+      const r = await client.start(String(name || '').slice(0, 40));
+      if (!r.ok) {
+        toast(r.status === 401 || r.status === 403 ? 'Sign in on People to drive in a convoy.' : r.status === 429 ? 'You already lead two convoys. End one first.' : 'Couldn\'t start a convoy. Check signal and try again.');
+        return r;
+      }
+      const host = open() || (sheet && sheet.host);
+      if (host) { host.showQr = true; lastKey = null; paint(); }
+      return r;
+    }
+    async function accept(inv) {
+      const r = await client.accept(inv.id);
+      asked.list = asked.list.filter((x) => x.id !== inv.id);
+      lastKey = null; paint();
+      return r;
+    }
+    function dismiss(inv) {
+      asked.list = asked.list.filter((x) => x.id !== inv.id); lastKey = null; paint();
+      apiFetch(`/api/convoy/invites/${encodeURIComponent(inv.id)}`, { method: 'DELETE' }).catch(() => {});
+    }
+
+    // a link `/?convoy=<invite>`: keep it (not in the address bar) until the person says yes on the convoy sheet
     function takeInvite(fromLink) {
       store.set('sessionStorage', INVITE_KEY, fromLink);
-      if (sectionHost) { lastKey = null; paint(); }
-      if (page.showView) page.showView('crew');
+      lastKey = null; paint();
+      open();
     }
     try {
       const q = new URLSearchParams(location.search), fromLink = q.get('convoy');
       if (fromLink) {
         q.delete('convoy');
         history.replaceState(history.state, '', location.pathname + (q.toString() ? '?' + q : '') + location.hash);
-        takeInvite(fromLink);
+        setTimeout(() => takeInvite(fromLink), 0);   // after the page has drawn: the sheet goes over it
       }
     } catch (_) { /* no history API */ }
     let resumeTry = 0;
@@ -456,10 +540,17 @@
 
     return {
       client,
-      /** The Convoy section for the Crew sheet (re-rendered in place as the convoy changes). */
-      section() { sectionHost = el('div', { className: 'stack-8' }); renderSection(); paintText(); return sectionHost; },
       get active() { return !!(snap && snap.id); },
-      /** A convoy link the app handed to the running page: waits for a yes in the Crew sheet, like one opened from the web. */
+      /** The live convoy, for a drive's card: { name, role, status, members, expiresAtMs } or null. */
+      state() { return snap && snap.id && snap.ctx ? { name: snap.ctx.name, role: snap.ctx.role, status: snap.status, members: snap.members.length, expiresAtMs: snap.ctx.expiresAtMs } : null; },
+      /** In-app invites waiting ({ id, name, from, expiresAtMs }); a drive's card shows the one for its convoy. */
+      invites() { loadAsked(); return asked.list.slice(); },
+      accept, dismiss, open, close, now,
+      /** The live convoy's panel for a drive's card (members, the leader's keys, the time left), redrawn in place. */
+      panel() { const h = { box: el('div', { className: 'stack-8 cv-panel' }), kind: 'card' }; hosts.add(h); live.left = live.left || []; renderHost(h); paintText(); return h.box; },
+      /** `fn()` after the convoy or its invites change, until it returns false (a card gone from the screen). */
+      watch(fn) { watchers.add(fn); },
+      /** A convoy link the app handed to the running page: waits for a yes on the convoy sheet, like one opened from the web. */
       takeInvite,
       /** A crew drive's convoy (IDEAS S-06): starts one named for it and invites the people going, in the app (no link).
        *  Resolves { ok, invited } or { ok: false, status } ('busy' when you're already in a convoy). */

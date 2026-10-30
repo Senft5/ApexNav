@@ -4,34 +4,130 @@
   const MPH = 2.2369362921;
   const HAZARD_VERSION = 1;   // records profiled with bump/crest/dip detection (parse and repair set it)
   let dbp = null;
+  // v3 (REVIEW_FEEL F-06): 'summaries' holds a few hundred bytes per drive (its name, date, length, score, corners, box),
+  // so the Log lists a year of drives without reading 1.6 MB of rows each. Opening v3 only adds the store: 'drives' is
+  // never touched by the upgrade, so every drive already on a phone stays; summaries() builds the missing ones from the
+  // drives' own rows the first time it is asked (in the analysis worker, off the page's thread).
+  const DB_VERSION = 3, SUMMARY_VERSION = 1;
   function idb() {
     if (dbp) return dbp;
     dbp = new Promise((res, rej) => {
       // v2 (Round 3, drive_keep.js): 'keep' holds the drive in progress, a head and its row chunks, until it is saved
-      const r = indexedDB.open('apexnav', 2);
+      const r = indexedDB.open('apexnav', DB_VERSION);
       r.onupgradeneeded = () => {
         const names = r.result.objectStoreNames;
         if (!names.contains('drives')) r.result.createObjectStore('drives', { keyPath: 'id' });
         if (!names.contains('keep')) r.result.createObjectStore('keep', { keyPath: 'key' });
+        if (!names.contains('summaries')) r.result.createObjectStore('summaries', { keyPath: 'id' });
       };
       r.onsuccess = () => { r.result.onversionchange = () => { r.result.close(); dbp = null; }; res(r.result); };
       r.onerror = () => { dbp = null; rej(r.error); };
+      r.onblocked = () => {};                                         // an older page still holds v2: it closes on versionchange
     });
     return dbp;
   }
+  const req = (q) => new Promise((res, rej) => { q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); });
+  const done = (t) => new Promise((res, rej) => { t.oncomplete = res; t.onerror = () => rej(t.error); t.onabort = () => rej(t.error); });
   async function all() {
     try {
       const db = await idb();
       return await new Promise((res) => { const q = db.transaction('drives').objectStore('drives').getAll(); q.onsuccess = () => res(q.result || []); q.onerror = () => res([]); });
     } catch (_) { return []; }
   }
+  /** One drive's full record, or null. */
+  async function get(id) {
+    try { const db = await idb(); return (await req(db.transaction('drives').objectStore('drives').get(id))) || null; } catch (_) { return null; }
+  }
+  /** The ids of every saved drive (no rows read). */
+  async function ids() {
+    try { const db = await idb(); return (await req(db.transaction('drives').objectStore('drives').getAllKeys())) || []; } catch (_) { return []; }
+  }
+  const finiteN = (v) => typeof v === 'number' && Number.isFinite(v);
+  /**
+   * What the Log's list, the end card and the Garage need of a drive, from its own record: no row is copied, nothing is
+   * estimated (a score without clean corners stays null). Null without the core (the drive is summarised later).
+   */
+  function summarize(Core, d) {
+    if (!Core || !d || !d.id || !Array.isArray(d.lat)) return null;
+    let ds = { score: null, corners: 0, components: null }, corners = [];
+    try { const s = scoreOf(Core, d); ds = s.ds; corners = s.corners.map((c) => [c.start, c.end, c.apex]); } catch (_) {}
+    let s = Infinity, n = -Infinity, w = Infinity, e = -Infinity;
+    for (let i = 0; i < d.lat.length; i++) { const la = d.lat[i], lo = d.lon[i]; if (!finiteN(la) || !finiteN(lo)) continue; if (la < s) s = la; if (la > n) n = la; if (lo < w) w = lo; if (lo > e) e = lo; }
+    let secs = null;
+    try { const T = Core.elapsedS(d.speed_mps); secs = finiteN(T[T.length - 1]) ? T[T.length - 1] : null; } catch (_) { secs = null; }
+    const len = Array.isArray(d.dist) && d.dist.length ? d.dist[d.dist.length - 1] : null;
+    return {
+      id: d.id, sv: SUMMARY_VERSION, name: d.name, date: d.date, date_known: d.date_known, source: d.source,
+      len_m: finiteN(len) ? len : null, n: d.lat.length, secs, bbox: s <= n ? [s, n, w, e] : null,
+      ds: { score: ds.score, corners: ds.corners || 0, components: ds.components || null }, corners,
+      tags: d.tags, note: d.note, ended: d.ended, contributed: d.contributed, car: d.car ? { label: d.car.label } : undefined,
+      battery: d.battery, laps: Array.isArray(d.laps) ? d.laps.length : undefined,
+      feel: !!(d.rough && d.kappa),                                  // ApexContributor.eligible asks for both
+    };
+  }
   async function store(d) {
-    const db = await idb();
-    await new Promise((res, rej) => { const t = db.transaction('drives', 'readwrite'); t.objectStore('drives').put(d); t.oncomplete = res; t.onerror = () => rej(t.error); });
+    const db = await idb(), sum = summarize(root.ApexCore, d);
+    const t = db.transaction(['drives', 'summaries'], 'readwrite');
+    t.objectStore('drives').put(d);
+    if (sum) t.objectStore('summaries').put(sum); else t.objectStore('summaries').delete(d.id);   // rebuilt when next listed
+    await done(t);
+    return sum;
+  }
+  /** Changes a few fields of a stored drive (tags, a note, shared) in one transaction; its summary follows. */
+  const META = ['name', 'tags', 'note', 'contributed', 'ended'];
+  async function patch(id, fields) {
+    const db = await idb(), t = db.transaction(['drives', 'summaries'], 'readwrite');
+    const ds = t.objectStore('drives'), ss = t.objectStore('summaries');
+    let out = null;
+    ds.get(id).onsuccess = (e) => {
+      const d = e.target.result;
+      if (!d) return;
+      ds.put(Object.assign(d, fields));
+      ss.get(id).onsuccess = (f) => {
+        const old = f.target.result, cheap = old && old.sv === SUMMARY_VERSION && Object.keys(fields).every((k) => META.includes(k));
+        out = cheap ? Object.assign(old, ...META.filter((k) => k in fields).map((k) => ({ [k]: fields[k] }))) : summarize(root.ApexCore, d);
+        if (out) ss.put(out); else ss.delete(id);
+      };
+    };
+    await done(t);
+    return out;
+  }
+  /**
+   * Every saved drive's summary, newest last by date. Missing or outdated ones are built from the drive's rows, each in
+   * the transaction that reads it (so a drive saved meanwhile is never summarised from its older self), and summaries of
+   * drives that are gone are dropped. The drives store is only read. Core null: only what is there (list.missing says
+   * how many are not), never a drive's rows.
+   */
+  async function summaries(Core = root.ApexCore) {   // (null: read only)
+    let db;
+    try { db = await idb(); } catch (_) { return []; }
+    const t0 = db.transaction(['drives', 'summaries']);
+    const [keys, sums] = await Promise.all([req(t0.objectStore('drives').getAllKeys()), req(t0.objectStore('summaries').getAll())]);
+    const have = new Map((sums || []).filter((x) => x && x.sv === SUMMARY_VERSION).map((x) => [x.id, x]));
+    const live = new Set(keys), gone = (sums || []).filter((x) => x && !live.has(x.id)).map((x) => x.id);
+    for (const id of keys) {
+      if (have.has(id) || !Core) continue;
+      const t = db.transaction(['drives', 'summaries'], 'readwrite');
+      t.objectStore('drives').get(id).onsuccess = (e) => {
+        const x = summarize(Core, e.target.result);
+        if (x) { t.objectStore('summaries').put(x); have.set(id, x); }
+      };
+      try { await done(t); } catch (_) {}
+    }
+    if (gone.length) {
+      const t = db.transaction('summaries', 'readwrite');
+      for (const id of gone) t.objectStore('summaries').delete(id);
+      try { await done(t); } catch (_) {}
+    }
+    const out = keys.map((k) => have.get(k)).filter(Boolean).sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')));
+    out.missing = keys.length - out.length;                         // with no core: drives still to summarise (in the worker)
+    return out;
   }
   async function remove(id) {
     const db = await idb();
-    await new Promise((res, rej) => { const t = db.transaction('drives', 'readwrite'); t.objectStore('drives').delete(id); t.oncomplete = res; t.onerror = () => rej(t.error); });
+    const t = db.transaction(['drives', 'summaries'], 'readwrite');
+    t.objectStore('drives').delete(id); t.objectStore('summaries').delete(id);
+    await done(t);
   }
 
   // The drive in progress (drive_keep.js): a checkpoint is its head and one chunk of new rows, written in one transaction,
@@ -220,6 +316,6 @@
     return `${s.hits >= 2 ? 'Confirmed' : 'Seen'} on ${s.hits} of ${s.passes} drives`;
   }
 
-  const api = { all, store, remove, keepPut, keepAll, keepRemove, parse, repair, scorableCorners, toTrack, corroborate, seenLabel, cornersOf, scoreOf };
+  const api = { all, get, ids, store, patch, summaries, summarize, remove, keepPut, keepAll, keepRemove, parse, repair, scorableCorners, toTrack, corroborate, seenLabel, cornersOf, scoreOf, DB_VERSION, SUMMARY_VERSION };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexRecording = api;
 })(typeof window !== 'undefined' ? window : globalThis);

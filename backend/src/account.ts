@@ -21,6 +21,7 @@ export async function exportMyData(env: Env, v: Viewer) {
     hazard_reports: await q("SELECT kind, lat, lon, heading, created_at, expires_at, confirms, clears FROM hazard_reports WHERE reported_by = ?"),
     crew_drives_planned: await q("SELECT title, starts_at, meet_name, meet_lat, meet_lon, notes, cancelled, created_at FROM crew_events WHERE created_by = ?"),
     crew_drive_rsvps: await q("SELECT e.title, e.starts_at, r.status, r.updated_at FROM crew_event_rsvps r JOIN crew_events e ON e.id = r.event_id WHERE r.user_id = ?"),
+    crew_drives_came_to: await q("SELECT e.title, e.starts_at, a.created_at FROM crew_event_attendance a JOIN crew_events e ON e.id = a.event_id WHERE a.user_id = ?"),
     crews: await q("SELECT c.name, m.role, m.joined_at FROM crew_members m JOIN crews c ON c.id = m.crew_id WHERE m.user_id = ?"),
     segments: await q("SELECT id, name, length_m, geom, origin_id, created_at FROM segments WHERE owner = ?"),
     // audiences are named by what you see in the app (a friend's handle, a crew's name), never by someone else's internal id

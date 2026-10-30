@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Vetta · Privacy</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -14,7 +14,7 @@
   <p class="draft" id="draft">Draft for the owner's review. Not yet the published policy.</p>
   <h1>Privacy</h1>
   <p class="lede">Vetta is built so that how you drive stays yours. Most of what the app knows never leaves your phone. This page lists everything that does, where it goes, and how to remove it.</p>
-  <p class="meta">Last updated 29 October 2026</p>
+  <p class="meta">Last updated 30 October 2026</p>
 
   <h2>On your phone only</h2>
   <ul>
@@ -46,7 +46,7 @@
   <p>When you share your ETA, anyone with the link sees your handle and when you'll arrive, refreshed about once a minute while you drive. Never where you are, your route or where you're going. It ends when you arrive or stop it, or after 4 hours, and is deleted a day later.</p>
 
   <h2>Crew drives</h2>
-  <p>When you plan a drive for a crew, its name, time, meeting point and notes are seen by that crew's members, with who planned it and who's going (by handle). A public crew can list a drive as a meet: then members within about 80 km also see its name, time, meeting point and how many are going, never who. It is deleted a week after it starts, or with your account.</p>
+  <p>When you plan a drive for a crew, its name, time, meeting point and notes are seen by that crew's members, with who planned it and who's going (by handle). A public crew can list a drive as a meet: then members within about 80 km also see its name, time, meeting point and how many are going, never who. When you start or join a drive's convoy from its card, or say you were there afterwards, the crew's members see that you came (by handle, never where you were), and the drive shows the best Vetta Score a crew-mate who came had already shared with the crew that day. It is all deleted a week after the drive starts, or with your account.</p>
 
   <h2>Shared routes</h2>
   <p>When you share a planned route, its shape (without the first 400 m) and name go to the friends and crews you pick, for 30 days or until you delete it. Never a recorded drive.</p>
@@ -73,7 +73,6 @@
     <li><b>Road names and features</b>: Overpass (OpenStreetMap).</li>
     <li><b>Car lookup</b>: NHTSA's vehicle database (US Department of Transportation), only when you look a car up in the Garage. It receives the VIN or the make and year you typed.</li>
     <li><b>Weather</b>: Open-Meteo, for the forecast along a route you plan. It receives six points along the route.</li>
-    <li><b>Fonts</b>: Google Fonts.</li>
     <li><b>Our server</b> runs on Cloudflare, which processes requests to it.</li>
   </ul>
   <p>Vetta has no advertising, no tracking across apps or websites, and sells no data.</p>
