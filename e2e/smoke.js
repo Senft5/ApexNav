@@ -105,6 +105,66 @@ flow('a hot phone turns the battery saver on and back off', async (page, base) =
   await page.waitForFunction(() => /Full map detail/.test(document.getElementById('toast').textContent));
 });
 
+flow('the co-driver reads the road: the first note is called before the car moves, the quiet line names the road and the next corner (REVIEW4 U-58, U-67, U-74)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
+    // as in the app (the shell feeds GPS); APEX_REVIEW: every line said is posted, as the review recording logs it
+    window.__said = []; window.APEX_REVIEW = true;
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.ApexRouteImport && window.apex && window.apex.live);
+  // a tight right 30 m from the start, then 3 km straight east, then a tight left: a GPX route, followed as drawn
+  const KY = 110540, KX = 111320 * Math.cos(35.5 * Math.PI / 180), pts = [];
+  for (let y = 0; y <= 30; y += 5) pts.push([y, 0]);
+  for (let a = 5; a <= 90; a += 5) { const r = a * Math.PI / 180; pts.push([30 + 20 * Math.sin(r), 20 - 20 * Math.cos(r)]); }
+  for (let x = 25; x <= 3000; x += 5) pts.push([50, x]);
+  for (let a = 5; a <= 90; a += 5) { const r = a * Math.PI / 180; pts.push([50 + 20 * (1 - Math.cos(r)), 3000 + 20 * Math.sin(r)]); }
+  for (let y = 75; y <= 400; y += 5) pts.push([y, 3020]);
+  const gpx = pts.map(([n, e]) => `<trkpt lat="${(35.5 + n / KY).toFixed(7)}" lon="${(-83.9 + e / KX).toFixed(7)}"/>`).join('');
+  await page.setInputFiles('#gpxFile', { name: 'ridge.gpx', mimeType: 'application/gpx+xml', buffer: Buffer.from(`<gpx><trk><name>Ridge run</name><trkseg>${gpx}</trkseg></trk></gpx>`) });
+  await page.waitForFunction(() => window.apexDebug.track && window.apexDebug.track.name === 'Ridge run', null, { timeout: 10000 });
+  check(await page.evaluate(() => apexDebug.track.events.some((e) => e.type === 'corner' && (e.severity === 'HP' || e.severity <= 3))), 'the route has its tight corners');
+  // the map's own road names (ApexRoadNames): one named line along the route
+  await page.evaluate(() => { const m = apexDebug.map, t = apexDebug.track, q = m.querySourceFeatures.bind(m);
+    const line = { properties: { name: 'Test Ridge Road' }, geometry: { type: 'LineString', coordinates: t.lat.map((la, i) => [t.lon[i], la]) } };
+    m.querySourceFeatures = (src, o) => (o && o.sourceLayer === 'transportation_name' ? [line] : q(src, o)); });
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start' }));
+  await page.waitForFunction(() => window.apexDebug.driveActive);
+  const at = (i, v, cal) => page.evaluate(([i, v, cal]) => { const t = apexDebug.track;
+    window.apex.live({ lat: t.lat[i], lon: t.lon[i], accuracy_m: 5, speed_mps: v, course_deg: i < 12 ? 0 : 90, has_fix: true, lat_g: 0, lon_g: 0, calibration: cal, thermal: 0 }); }, [i, v, cal]);
+  // stopped at the start, still calibrating: the first line of the drive is the corner, before the car moves
+  for (let k = 0; k < 10; k++) { await at(0, 0, 'default'); await page.waitForTimeout(100); }
+  const first = await page.evaluate(() => window.__said.slice());
+  check(first.length >= 1 && /right/i.test(first[0]), 'the first line of the drive is its first corner: ' + JSON.stringify(first));
+  check(/right/i.test(await page.textContent('#notes')), 'the strip shows the first corner: ' + await page.textContent('#notes'));
+  // the mount locks as the car pulls away: the status line says so, no toast over the map (U-74)
+  await at(2, 3, 'locked');
+  check(/Mount set/.test(await page.textContent('#dsMain')), 'the status line says the mount is set: ' + await page.textContent('#dsMain'));
+  check(!/Mount set/.test(await page.textContent('#toast')), 'no mount toast over the map');
+  // drive up to the corner and wait at its entry (a ramp's queue): after ~3 s at 0 ft the strip moves on (U-86)
+  const entry = await page.evaluate(() => { const t = apexDebug.track, e = t.events.filter((x) => x.type === 'corner').sort((a, b) => a.dist_m - b.dist_m)[0];
+    const m = Number.isFinite(e.start_m) ? e.start_m : e.dist_m; return t.dist.findIndex((d) => d >= m + 1); });
+  for (let i = 3; i <= entry; i++) { await at(i, 4, 'locked'); await page.waitForTimeout(150); }
+  const leadBox = () => page.evaluate(() => { const b = document.querySelector('#notes .rb-box.now'); return b ? b.textContent : ''; });
+  const waiting = await leadBox();
+  check(/^0\s*FT/i.test(waiting.trim()), 'at the corner the lead reads 0 ft: ' + waiting);
+  for (let k = 0; k < 22; k++) { await at(entry, 0, 'locked'); await page.waitForTimeout(200); }
+  check(await leadBox() !== waiting, 'a passed note advances while the car waits: ' + await leadBox());
+  // out onto the straight at 30 m/s, the first corner behind and its 30 s hold over: quiet, said once, with the road and the
+  // next corner (2.6 km on) in the strip and the road on the binnacle
+  const n = await page.evaluate(() => apexDebug.track.lat.length);
+  for (let i = 4, k = 0; i < Math.min(n - 1, 90) && k < 40; i += 3, k++) { await at(i, 30, 'locked'); await page.waitForTimeout(60); }
+  await page.evaluate(() => { apexDebug.state.spiritedAt = -Infinity; });
+  for (let k = 0; k < 8; k++) { await at(90 + k, 30, 'locked'); await page.waitForTimeout(120); }
+  await page.waitForFunction(() => /Quiet · Test Ridge Road · next corner \d/.test(document.getElementById('notes').textContent), null, { timeout: 5000 })
+    .catch(async () => { throw new Error('the quiet line: ' + await page.textContent('#notes')); });
+  const strip = await page.textContent('#notes');
+  check(/Clear/.test(strip) && !/Ridge run/.test(strip), 'the quiet line names the road, not the route: ' + strip);
+  check(/Road: Test Ridge Road/.test(await page.textContent('#cluster')), 'the binnacle names the road: ' + await page.textContent('#cluster'));
+  const said = await page.evaluate(() => window.__said.slice());
+  check(said.filter((s) => s === 'Quiet from here. Bumps and cameras only.').length === 1, 'going quiet is said once: ' + JSON.stringify(said));
+  check(!said.includes('Full notes.'), 'the drive began awake, so it never said the notes came on: ' + JSON.stringify(said));
+});
+
 flow('Where to?: with the search and routing services unreachable, a search fails politely', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.goto(base + '/index.html');

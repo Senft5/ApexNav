@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-0NsTKUjc/Cf87OqffrF+ItLkp8Yupu63PfnpSnntXLk=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-RWbLj6H3r0lKn8d7c/IbXD6ZsI/kVWugY++Z9ypEo4M=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -139,8 +139,9 @@
     .about-vetta .promises { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 8px; font-size: 14px; color: var(--panel-dim); }
     .about-vetta .promises b { color: var(--panel-ink); }
     .note-quiet { display: flex; gap: 10px; align-items: baseline; padding: 10px 6px; }
-    .note-quiet b { font-size: 20px; font-weight: 700; }
-    .note-quiet span { font-size: 13px; color: var(--panel-dim); }
+    /* U-67: the quiet line is the news (the road, the next corner); "Clear" is the hazard plate's word at the line's size */
+    .note-quiet b { font-size: 15px; font-weight: 600; }
+    .note-quiet span { font-size: 15px; color: var(--panel-dim); min-width: 0; }
     .tulip { width: 100%; height: 100%; display: block; }
     .rb-dist small { font-size: 11px; color: var(--panel-dim); }
     .notes-roadbook { display: grid; grid-template-columns: 1.25fr 1fr 1fr; gap: 0; padding-left: 8px; padding-right: 8px; }
@@ -409,6 +410,7 @@
     .odo-meta { display: flex; gap: 8px; font-size: 13px; font-weight: 600; color: var(--panel-dim); }
     .dna { width: min(100%, 250px); display: grid; gap: 4px; }
     .dna-arch { text-align: center; font-size: 13px; font-weight: 600; color: var(--panel-ink); min-height: 13px; }
+    .cluster-center > .dna-arch { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }   /* a long road name (U-67) */
     .dna-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
     .dna-cell { display: grid; justify-items: center; gap: 2px; }
     .dna-cell b { font-family: var(--font-num); font-size: 13px; font-weight: 700; }
@@ -2160,7 +2162,8 @@
     // =======================================================================
     const allEvents = () => (track ? track.events.concat(track.alpr || []) : []);
     const distLabel = (m) => ApexUnits.short(m);          // feet and miles, or metres and km (Settings → Units, U-22)
-    // Auto: wake on hard driving. Full: always awake. Quiet: never wake, so only cameras and severe bumps are called.
+    // Auto: wake on the road ahead (a corner that is tight or needs braking, updateNotes, U-58) or on hard driving. Full:
+    // always awake. Quiet: never wake, so only cameras and severe bumps are called.
     const isSpirited = () => state.notesMode === 'full' || (state.notesMode === 'auto' && performance.now() - state.spiritedAt < 30000);
     const noteworthyInCruise = (e) => e.type === 'alpr' || (e.type === 'bump' && e.severity_g >= 0.45);
 
@@ -2352,19 +2355,76 @@
       if (learned != null) { try { localStorage.setItem(REACT_KEY, learned.toFixed(2)); } catch (_) {} }
     }
     const noteM = (e) => (Number.isFinite(e.start_m) && e.start_m <= e.dist_m ? e.start_m : e.dist_m);
+    const apexMpsOf = (e) => (e.type === 'corner' && Number.isFinite(e.apex_mph) ? e.apex_mph / 2.2369362921 : null);
     let lastNotes = [];
+    // U-58: Auto says when it goes quiet and when the notes come back (ApexNoteTiming.createWakeVoice: once each way, never
+    // within two minutes of the last, silent on a drive's first reading). The drive's first note is called whatever the
+    // mode's gate says: state.firstNoteDue from Start until a track is there to choose it, then state.firstNoteKey.
+    const wakeVoice = ApexNoteTiming.createWakeVoice();
+    // U-86: the strip. A lead note driven up to and then waited at, 0 ft under 2 m/s for PASSED_STOP_MS, is behind you
+    // (a ramp, a junction queue) and drops out; a new lead shows once it has held LEAD_HOLD_MS, so one GPS jump can't flick
+    // the strip to Clear and back. U-74: noteNearUntil, while the lead note is within its lead, plain toasts wait (heldToast).
+    const LEAD_HOLD_MS = 600, PASSED_STOP_MS = 3000;
+    const strip = { track: null, passed: new Set(), approached: null, stall: null, stallAt: 0, shown: null, pending: null, pendingAt: 0 };
+    let heldToast = null;
+    // U-67: the road under the car, from the map's own road names (ApexRoadNames, the source the saved drive is named by in
+    // leaveDrive), read at most every 2 s; null while the map has no named road there (the binnacle shows "--").
+    const roadNow = { at: -Infinity, name: null };
+    function roadUnder(lat, lon) {
+      const now = performance.now();
+      if (now - roadNow.at < 2000) return roadNow.name;
+      roadNow.at = now;
+      let feats = [];
+      try { feats = map.querySourceFeatures('openmaptiles', { sourceLayer: 'transportation_name' }); } catch (_) { /* style not loaded */ }
+      roadNow.name = window.ApexRoadNames && Number.isFinite(lat) && Number.isFinite(lon) ? ApexRoadNames.nearestRoadName(feats, lat, lon) : null;
+      return roadNow.name;
+    }
+    // The strip's line when no note is up. Planning: the route and the mode. In a drive or a replay, quiet (U-67): the road
+    // under you and how far to the corner that brings the notes back ("Quiet · I-275 · next corner 13 mi"). Off a planned
+    // route, the rerouter's words; a drive without one (the road ahead, or nothing yet) never says them (U-72).
+    function quietLine(spirited, offRoute, driving, next) {
+      if (offRoute && track && track.kind === 'route') return offRouteText();
+      if (!driving) return track ? `${track.name} · ${spirited ? 'Full notes' : 'Quiet · bumps and cameras only'}` : 'Plan a route for notes';
+      if (!track && !driveActive) return 'No route planned';
+      if (spirited) return `${track && !offRoute && track.kind !== 'horizon' ? track.name : 'The road ahead'} · Full notes`;
+      const road = roadNow.name || (track && track.kind === 'horizon' && !offRoute ? 'The road ahead' : null);
+      const ahead = next ? Math.max(0, next.m - state.cursorM) : null, d = ahead != null ? distLabel(ahead) : null;
+      const far = d && (d.u === 'MI' || d.u === 'KM') ? ApexUnits.long(ahead, 1, true) : d ? `${d.n} ${d.u.toLowerCase()}` : null;
+      return ['Quiet', road, far ? `next corner ${far}` : 'bumps and cameras only'].filter(Boolean).join(' · ');
+    }
     function updateNotes(vMps, live) {
       // Driving somewhere that is not on the loaded route: its calls (and its stale trip distance) must never be read out as if they were this road.
       const offRoute = live && state.cursorIdx < 0;
       const ev = offRoute ? [] : allEvents().filter(e => e.dist_m >= state.cursorM - 5 && (e.type !== 'alpr' || state.toggles.lpr)).sort((a, b) => noteM(a) - noteM(b));
-      const spirited = isSpirited();
       const steps = !offRoute && track && track.kind === 'route' ? track.steps : null;
-      const shown = ev.filter(e => spirited || noteworthyInCruise(e) || e.type !== 'corner').filter(e => noteM(e) - state.cursorM <= 3000)
+      const moving = !!(state.playing || live) && vMps != null, now = performance.now();
+      const reactS = reaction.reactionS;
+      // U-58: Auto reads the road ahead. A corner within two leads (at least 800 m) that is tight or needs braking keeps
+      // the notes awake, the same 30 s hold as the g test; a junction's corner is called as the direction, so it doesn't count.
+      const corners = moving ? ev.filter(e => e.type === 'corner' && !ApexDirections.atJunction(steps, noteM(e)))
+        .map(e => ({ m: noteM(e), severity: e.severity, apexMps: apexMpsOf(e), text: e.call, e })) : [];
+      if (state.notesMode === 'auto' && ApexNoteTiming.wakeCorner(corners, { cursorM: state.cursorM, vMps, reactionS: reactS })) state.spiritedAt = now;
+      const spirited = isSpirited();
+      if (moving && state.notesMode === 'auto') {
+        const t = wakeVoice.update(spirited, now);
+        if (t) say(t === 'on' ? 'Full notes.' : 'Quiet from here. Bumps and cameras only.', false, null, t === 'on' ? 'sys:stage' : 'sys:cruise', { key: `wake:${t}` });
+      } else wakeVoice.reset();
+      // U-58: a drive's first note is its first corner, when one is within the wake window as the drive begins (a drive that
+      // starts on a motorway starts quiet, and says so in the strip). Quiet mode is the driver's choice: no first note there.
+      if (state.firstNoteDue && live && driveActive && track && vMps != null) {
+        const c = corners[0];
+        state.firstNoteDue = false;
+        state.firstNoteKey = c && state.notesMode !== 'quiet' && c.m - state.cursorM <= ApexNoteTiming.wakeWindowM({ vMps, apexMps: c.apexMps, text: c.text, reactionS: reactS })
+          ? `${track.id}:corner:${c.e.index}` : null;
+      }
+      const firstKey = track && state.firstNoteKey && state.firstNoteKey.startsWith(`${track.id}:`) ? state.firstNoteKey : null;
+      const isFirst = (e) => !!firstKey && `${track.id}:${e.type}:${e.index}` === firstKey;
+      const shown = ev.filter(e => spirited || noteworthyInCruise(e) || e.type !== 'corner' || isFirst(e)).filter(e => noteM(e) - state.cursorM <= 3000)
         .filter(e => !(e.type === 'corner' && ApexDirections.atJunction(steps, noteM(e)))).slice(0, 3);   // a junction shows once, as the direction
       const notes = shown.map(e => {
         const d = distLabel(Math.max(0, noteM(e) - state.cursorM));   // 0 once you're in the corner
         return { key: `${e.type}:${e.index}:${e.dist_m}`, type: e.type, code: e.code, call: state.noteWords === 'plain' && !e.recce ? ApexPlainNotes.plainCall(e) : e.call, sub: subFor(e) + linkLabel(e), dist: d.n, unit: d.u, distM: Math.max(0, noteM(e) - state.cursorM),
-                 dir: e.dir, severity: e.severity, turnRad: e.turn_rad, mods: e.mods || [], recce: !!e.recce };
+                 dir: e.dir, severity: e.severity, turnRad: e.turn_rad, mods: e.mods || [], recce: !!e.recce, apexMps: apexMpsOf(e) };
       });
       // The route's junctions in the same strip, in road order with the notes (IDEAS V-04).
       (steps || []).forEach((st, i) => {
@@ -2374,31 +2434,58 @@
         notes.push({ key: `turn:${i}`, type: 'turn', code: n.code, call: n.call, sub: '', dist: d.n, unit: d.u, distM: Math.max(0, ahead), dir: n.dir, angle: n.angle, mods: [],
                      lanes: n.lanes && ahead <= 1600 ? ApexLanes.lanes(n.lanes) : null });   // the lanes from a mile out
       });
-      notes.sort((a, b) => a.distM - b.distM).splice(3);
-      notes.quietText = offRoute ? (!track ? 'No route planned' : offRouteText()) : track ? `${track.name} · ${spirited ? 'Full notes' : 'Quiet · bumps and cameras only'}` : 'Plan a route for notes';
-      Inst.renderNotes($('notes'), look.theme, notes);
-      state.crestAhead = !!(notes[0] && notes[0].type === 'crest' && notes[0].distM < 150);   // Kit sits up for it
-      lastNotes = notes;
+      notes.sort((a, b) => a.distM - b.distM);
+      if (strip.track !== track) { strip.track = track; strip.passed.clear(); strip.approached = null; strip.stall = null; strip.shown = null; strip.pending = null; }
+      for (let i = notes.length - 1; i >= 0; i--) if (strip.passed.has(notes[i].key)) notes.splice(i, 1);
+      notes.splice(3);
+      // U-86: a note the car drove up to and now waits at (0 ft, under 2 m/s, 3 s) is passed; the strip moves on. A corner
+      // under the car as the drive starts was never driven up to, so it stays until it is driven.
+      const head = notes[0];
+      if (moving && head && head.distM > 0) strip.approached = head.key;
+      if (moving && head && head.type !== 'turn' && head.distM === 0 && vMps < 2 && strip.approached === head.key) {   // a turn stays until taken
+        if (strip.stall !== head.key) { strip.stall = head.key; strip.stallAt = now; }
+        else if (now - strip.stallAt > PASSED_STOP_MS) { strip.passed.add(head.key); notes.shift(); strip.stall = null; }
+      } else strip.stall = null;
+      notes.quietText = quietLine(spirited, offRoute, !!(state.playing || live), moving && state.notesMode === 'auto' && !spirited ? ApexNoteTiming.nextWake(corners, { cursorM: state.cursorM, vMps }) : null);
+      // U-86: a new lead note shows once it has held LEAD_HOLD_MS; until then the strip keeps the one it shows.
+      let showN = notes;
+      const leadKey = notes[0] ? notes[0].key : null, shownKey = strip.shown && strip.shown[0] ? strip.shown[0].key : null;
+      if (moving && strip.shown && leadKey !== shownKey) {
+        if (strip.pending !== leadKey) { strip.pending = leadKey; strip.pendingAt = now; }
+        if (now - strip.pendingAt < LEAD_HOLD_MS) showN = strip.shown;
+      }
+      if (showN === notes) { strip.shown = notes; strip.pending = null; }
+      Inst.renderNotes($('notes'), look.theme, showN);
+      state.crestAhead = !!(showN[0] && showN[0].type === 'crest' && showN[0].distM < 150);   // Kit sits up for it
+      lastNotes = showN;
       if (live) pushActivity(notes);
       if (live) carGuide();
+      // U-74: nothing lands on the map while the lead note is within its lead distance; a waiting toast shows after it.
+      const up = showN[0];
+      if (moving && driveActive && up && up.distM <= ApexNoteTiming.leadM({ vMps, apexMps: up.apexMps, text: up.call, reactionS: reactS })) state.noteNearUntil = now + 1500;
+      if (heldToast && !(now < (state.noteNearUntil || 0))) { const h = heldToast; heldToast = null; if (now - h.at < 30000) toast(h.msg); }
 
-      if (!(state.playing || live) || vMps == null) return;
+      if (!moving) return;
       // How far ahead to read a note (note_timing.js, IDEAS V-01): time to say it, your reaction (learned), and braking from
       // your speed to the corner's. `lead` is the point-hazard version (no braking), also used by the quiet-window checks below.
-      const reactS = reaction.reactionS;
       const lead = ApexNoteTiming.leadM({ vMps, text: 'Bump ahead', reactionS: reactS });
+      const stopped = vMps < 2;
       for (const e of ev) {
         const d = noteM(e) - state.cursorM;
-        if (d > ApexNoteTiming.MAX_M) break;
-        const key = `${track.id}:${e.type}:${e.index}`;
-        if (state.spoken.has(key) || d < 10) continue;
+        const key = `${track.id}:${e.type}:${e.index}`, first = key === firstKey;
+        // the drive's first note may lie past the usual reach while the car waits at the start
+        if (d > ApexNoteTiming.MAX_M && !first) { if (firstKey && !state.spoken.has(firstKey) && d < 2 * ApexNoteTiming.MAX_M) continue; break; }
+        // U-58: the first note of a drive is read before the car moves, even the corner under it
+        if (state.spoken.has(key) || (d < 10 && !(first && stopped))) continue;
         if (e.type === 'corner' && ApexDirections.atJunction(track.steps, noteM(e))) { state.spoken.add(key); continue; }   // the direction calls it
-        const call = chainedCall(e, ev, spirited);
-        const apexMps = e.type === 'corner' && Number.isFinite(e.apex_mph) ? e.apex_mph / 2.2369362921 : null;
-        if (d > ApexNoteTiming.leadM({ vMps, apexMps, text: call.text, reactionS: reactS })) continue;
+        const call = chainedCall(e, ev, spirited || first);
+        const apexMps = apexMpsOf(e);
+        const startCall = first && stopped && d <= ApexNoteTiming.wakeWindowM({ vMps, apexMps, text: call.text, reactionS: reactS });
+        if (!startCall && d > ApexNoteTiming.leadM({ vMps, apexMps, text: call.text, reactionS: reactS })) continue;
         state.spoken.add(key);
-        if (e.type === 'corner' ? !spirited : !(spirited || noteworthyInCruise(e))) continue;
-        say(call.text, false, call.chain, null, { kind: e.type === 'corner' ? 'ordinary' : 'hazard', key, atM: noteM(e), duck: true });
+        if (!first && (e.type === 'corner' ? !spirited : !(spirited || noteworthyInCruise(e)))) continue;
+        // (a first note read at the start may be under the car already: it is not stale for that)
+        say(call.text, false, call.chain, null, { kind: e.type === 'corner' ? 'ordinary' : 'hazard', key, atM: noteM(e), duck: true, ...(startCall ? { atM: null } : {}) });
         if (live) reaction.called(performance.now(), call.text, ApexNoteTiming.needsBrake(vMps, apexMps));
       }
       // Directions at junctions (IDEAS V-04), in any notes mode: the call at the turn goes ahead of corner notes.
@@ -2513,6 +2600,7 @@
         latG, lonG, camberDeg: camber,
         tripMi: ApexUnits.longN(live && (idx < 0 || track.kind === 'horizon') ? (drive.rec ? drive.rec.km * 1000 : 0) : state.cursorM), totalMi: track && track.kind !== 'horizon' && !(live && idx < 0) ? ApexUnits.longN(totalM()) : null,
         sector: sectorAt(idx), routeOnly: track && track.kind === 'route',
+        roadName: live || state.playing ? roadUnder(lat, lon) : null,   // U-67: the road under the car, by the map's name
         // for Tapedeck's meters and Kit (instruments.js): the live roughness, the last line said, a crest close ahead, a blink
         rough, kitLine: state.kitLine, crestAhead: !!state.crestAhead, blink: performance.now() < (state.blinkUntil || 0),
         score: live ? liveScore.value : null   // the drive's Vetta Score so far (liveScoreTick), only while recording
@@ -3929,6 +4017,8 @@
     function toast(msg, action) {
       const t = $('toast');
       if (!action && t._holdUntil > performance.now()) return;   // a Cancel countdown owns the toast until it ends
+      // U-74: a plain message waits while a note is within its lead (updateNotes shows it after); one with an action is timed
+      if (!action && driveActive && performance.now() < (state.noteNearUntil || 0)) { heldToast = { msg, at: performance.now() }; return; }
       t._holdUntil = action && action.ms ? performance.now() + action.ms : 0;
       t.textContent = msg;
       if (action) {
@@ -5593,6 +5683,7 @@
       else if (zoned) main.push('<b>Privacy zone</b> · not recording');
       else if (r && r.samples > 0) main.push(`<b>● Rec</b> ${ApexUnits.long((r.km) * 1000, 2)}`);
       else main.push(s.gps === 'on' ? 'Starting…' : 'Finding GPS…');
+      if (s.mountSetUntil > performance.now()) main.push('Mount set');   // the calibration lock (U-74)
       if (etaText) main.push(etaText);
       if (NATIVE_SHELL) { const a = ambientStats(); if (a) main.push(a.error ? 'Sharing · retrying' : a.paused ? 'Sharing paused' : `Sharing ${ApexUnits.long((a.km) * 1000, 1)}`); }
       else if (drive.share === 'on') main.push(drive.shareErr ? 'Sharing · retrying' : `Sharing ${ApexUnits.long((drive.shareKm) * 1000, 1)}`);
@@ -6248,6 +6339,7 @@
       setPlaying(false);
       drive.rec = new ApexSensors.Recorder(); drive.status = { gps: 'waiting', motion: 'off', wake: 'off', message: '' }; drive.frames = 0; drive.battery = null;
       startStageWatch();
+      state.firstNoteDue = true; state.firstNoteKey = null;   // U-58: the drive's first note is called
       drive.live = null; drive.liveIdx = 0; drive.share = 'off'; drive.shareKm = 0; drive.shareErr = null; drive.roads = {}; drive.roadIdx = 0; drive.rest = null; breakSay = null; if (breakWorker) { breakWorker.terminate(); breakWorker = null; }
       if (NATIVE_SHELL) {   // the app's own GPS and IMU feed window.apex.live; no browser sensors to start
         drive.native = true;
@@ -6600,7 +6692,7 @@
           const cal = typeof frame.calibration === 'string' ? frame.calibration : null;
           // The mount guide's tick: say so when calibration locks after the driver saw "Calibrating"
           if (cal === 'locked' && (drive.status.calibration === 'default' || drive.status.calibration === 'awaitingPull')) {
-            toast('Mount set. Bumps and banking are recording.');
+            drive.status.mountSetUntil = performance.now() + 6000;   // U-74: said in the status line for 6 s, not over the map
             health.bump('calib_locked'); if (drive.startedAt) health.bump('calib_lock_s', (performance.now() - drive.startedAt) / 1000);
           }
           drive.status.calibration = cal;
