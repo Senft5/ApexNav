@@ -246,7 +246,9 @@ final class ReviewFlows: XCTestCase {
         closeReplay()                                              // §4.4: the tab steps photographed the replay
         tab("Log"); shot("log"); scroll(3, "log")
         tab("Map")
-        tab("Crew"); shot("crew"); scroll(3, "crew")
+        // People (the owner, 2026-10-30): Friends first, then the switch's other side, Crews
+        tab("People"); shot("friends"); scroll(3, "friends")
+        if tap("Crews", wait: 4) { shot("crews"); scroll(3, "crews"); tap("Friends", wait: 3) }
         tab("Garage"); shot("garage"); scroll(8, "garage")
         // Roadbook at night (§6.2): the Garage's Night detent, then the map
         tab("Garage")
@@ -380,21 +382,23 @@ final class ReviewFlows: XCTestCase {
         driveInLog(scrolls: 1, replay: true)
     }
 
-    /// Signed in as the review account (APEX_REVIEW_SESSION): the member's Crew page, Friends and the account in the Garage.
+    /// Signed in as the review account (APEX_REVIEW_SESSION): People (its Friends, then its Crews) and the account in the Garage.
     func test08SignedIn() throws {
         try XCTSkipUnless(env["APEX_REVIEW"] == "1", "review recording only")
         try XCTSkipIf((env["APEX_REVIEW_SESSION"] ?? "").isEmpty, "needs the review account (REVIEW_SESSION secret)")
         start("signed-in")
-        tab("Crew")
+        tab("People")
         // REVIEW4 §6.5 (U-66): the member's page, not the sign-in page, before anything is photographed; nothing here may
         // tap into "Sign in with Google" (the last recording's stray tap opened Google's sheet)
         let signedOut = { self.find(["Sign in with Google", "Sign in with Apple"], wait: 0.5) != nil }
         let member = until(30) { !signedOut() }
-        XCTAssertTrue(member, "Crew still shows the sign-in page: the review session did not sign in")
-        pause(3); shot("crew")
+        XCTAssertTrue(member, "People still shows the sign-in page: the review session did not sign in")
+        pause(3); shot("friends")
         guard member else { return }
-        scroll(5, "crew")
-        if let friends = findButton(startingWith: "Friends", wait: 4) { friends.tap(); pause(2); shot("friends"); tap("Done", wait: 3) }
+        scroll(3, "friends")
+        // the one Invite key: its sheet (invite link, my handle, requests), then Done
+        if tap("Invite or add a friend", wait: 4) { pause(2); shot("invite"); tap("Done", wait: 3) }
+        if tap("Crews", wait: 4) { pause(3); shot("crews"); scroll(5, "crews") }
         tab("Garage"); shot("account"); scroll(6, "account")
         tab("Map")
     }

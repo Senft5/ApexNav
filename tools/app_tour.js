@@ -149,7 +149,7 @@ scene('loops', async ({ page, base, cap, fresh }) => {
 async function tab(page, cap, name, label) {
   await cap(label);
   // the map page's tab bar is buttons; Log and Stages are their own page, whose tab bar is links
-  const LABEL = { map: 'Map', log: 'Log', stages: 'Stages', crew: 'Crew', setup: 'Settings' };
+  const LABEL = { map: 'Map', log: 'Log', stages: 'Stages', people: 'People', setup: 'Settings' };
   await page.click(`#tabbar .tab[data-view="${name}"], nav.tabbar a:has(span:text-is("${LABEL[name]}"))`); await page.waitForTimeout(2500);
   await page.mouse.move(195, 480);   // over the content, not the header, so the wheel scrolls it
   for (let i = 0; i < 8; i++) { await page.mouse.wheel(0, 500); await page.waitForTimeout(1300); }
@@ -166,7 +166,7 @@ scene('tabs', async ({ page, base, cap, fresh }) => {
   const d = await page.$('#sheet .drive-row, #sheet [data-drive], #planBody .drive, .drive-list a, [data-drive-id]');
   if (d) { await cap('Log: a drive'); await d.click(); await page.waitForTimeout(4000); for (let i = 0; i < 6; i++) { await page.mouse.wheel(0, 500); await page.waitForTimeout(1300); } }
   await tab(page, cap, 'stages', 'Stages');
-  await tab(page, cap, 'crew', 'Crew (signed out)');
+  await tab(page, cap, 'people', 'People (signed out)');
   await tab(page, cap, 'setup', 'Settings: every section');
   await tab(page, cap, 'map', 'Map');
 });
@@ -176,7 +176,7 @@ scene('member', async ({ page, base, cap, fresh, ctx }) => {
   await page.goto(`${base}/index.html`);
   await page.waitForFunction(() => window.apexDebug && window.apexDebug.map);
   await page.waitForTimeout(2500);
-  await tab(page, cap, 'crew', 'Crew (a member, example data)');
+  await tab(page, cap, 'people', 'People (a member, example data)');
   await tab(page, cap, 'setup', 'Settings (a member)');
 });
 

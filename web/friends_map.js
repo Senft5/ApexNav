@@ -24,6 +24,16 @@
     const when = m < 1 ? 'just now' : m < 60 ? `about ${m} min ago` : `about ${Math.round(m / 60)} h ago`;
     return `${when} · ${p.fuzz ? 'within a mile' : 'exact'}`;
   }
+  /** A friend's line in the People list (the owner, 2026-10-30), from their newest position shared with you (`p`, one row
+   *  of GET /api/presence) or none: "On the road" only for a Live position under two minutes old, else when they were last
+   *  seen, never a place. No position means they don't share one with you: that is said, not guessed. */
+  function friendState(p, now = Date.now()) {
+    if (!p) return { live: false, text: 'Not sharing where they are' };
+    const m = minutesAgo(p.at, now);
+    if (m === null) return { live: false, text: '--' };
+    if (p.delay_s === 0 && m < 2) return { live: true, text: p.road && !p.fuzz ? `On the road · ${p.road}` : 'On the road' };
+    return { live: false, text: `Seen ${m < 1 ? 'just now' : m < 60 ? `${m} min ago` : `${Math.round(m / 60)} h ago`}` };
+  }
   /** May the phone send a position now? Sharing on, a fix, outside every home zone, and driving unless told otherwise. */
   function shouldSend({ audience, driving, onlyDriving, inZone, hasFix }) {
     return audience !== 'nobody' && !!hasFix && !inZone && (driving || !onlyDriving);
@@ -148,10 +158,10 @@
     function start() { loadSettings(); clearInterval(sendTimer); sendTimer = setInterval(tick, 5000); }
 
     // ---- the sheet: both choices, one paragraph ----
-    function sheet() {
+    function sheet(onDone) {   // onDone: after it closes (the People row repaints its line)
       const ov = el('div', { className: 'overlay show' });
       ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true'); ov.setAttribute('aria-label', 'Friends on the map');
-      const close = () => ov.remove();
+      const close = () => { ov.remove(); if (typeof onDone === 'function') onDone(); };
       const body = el('div', { className: 'stack-8', style: 'max-width:560px' });
       const group = (label, opts, cur, pick) => {
         const g = el('div', { className: 'switch', role: 'radiogroup' });
@@ -190,13 +200,20 @@
       paint();
       ov.append(body);
       d.body.append(ov);
-      if (!loaded) loadSettings().then((ok) => { if (ok) paint(); else { close(); toast('Sign in (Crew) to see friends on the map.'); } });
+      if (!loaded) loadSettings().then((ok) => { if (ok) paint(); else { close(); toast('Sign in (People) to see friends on the map.'); } });
       return close;
     }
 
-    return { start, setLayer, sheet, poll, loadSettings, get settings() { return settings; } };
+    /** Everyone sharing a position with you now (GET /api/presence), for the People list; null when it can't be read. */
+    async function sharing() {
+      const r = await apiCall('GET', '/api/presence').catch(() => null);
+      const list = r && r.ok ? await r.json().catch(() => null) : null;
+      return Array.isArray(list) ? list : null;
+    }
+
+    return { start, setLayer, sheet, poll, loadSettings, sharing, get settings() { return settings; }, get loaded() { return loaded; } };
   }
 
-  const api = { mount, tag, minutesAgo, shouldSend, explainer, DELAYS };
+  const api = { mount, tag, minutesAgo, shouldSend, explainer, friendState, DELAYS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexFriendsMap = api;
 })(typeof window !== 'undefined' ? window : globalThis);
