@@ -213,6 +213,7 @@
   const accentOf = (voice) => (voice[0] === 'b' ? 'gb' : 'us');
   // Text -> phonemes -> audio. Throws if a word can't be phonemised (caller falls back to the device voice).
   async function synthesize(text, voice, speed) {
+    if (!root.ApexG2P && root.ApexLazy) await root.ApexLazy.load('g2p');   // REVIEW_FEEL F-03: not on the launch path
     const g2p = await root.ApexG2P.load(accentOf(voice));
     const { phonemes, unknown } = g2p.phonemize(text);
     if (!phonemes || unknown.length) throw new Error(`g2p: ${unknown.join(' ') || 'empty'}`);

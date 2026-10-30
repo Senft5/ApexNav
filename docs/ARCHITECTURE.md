@@ -133,7 +133,7 @@ The JS file is a line-for-line port used by the browser/iOS cockpit for live OSR
   over a stretch = mean of combined g / that slice's radius (capped at 1.5, shown capped at 100 %) over samples of at least
   0.15 g. The drive view draws it as the Grip circle; scrubbing into a corner shows its trace and grip use from 100 m
   before turn-in to the exit.
-- Web shell: `web/index.html` (cockpit), `web/analysis.html` (history / segments / compare), `web/themes.js` (theme registry), `web/instruments.js` (renderers).
+- Web shell: `web/index.html` (cockpit markup and styles; its script is `web/cockpit.js`, loaded `defer` with the launch modules, while `web/lazy.js` loads People, the Garage, crews, builds, the convoy, friends on the map and the phonemizer on first use or once the map is idle, REVIEW_FEEL F-03; fonts bundled in `web/fonts/`, F-12), `web/analysis.html` (history / segments / compare), `web/themes.js` (theme registry), `web/instruments.js` (renderers).
 
 ## 3c. Fun routing (`web/fun_route.js`)
 Destination routes are chosen for fun within a time budget (Quick / Fun / Max fun): the router's route and alternates plus 1–2 corridor stage detours timed with one Valhalla matrix call, scored on map geometry (junction turns removed) and ranked by fun and corners gained against extra minutes. Details, weights and what was checked: docs/ROUTING.md.

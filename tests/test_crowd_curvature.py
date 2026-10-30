@@ -14,7 +14,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RUNNER = r"""
 const fs = require('fs'), R = process.argv[1];
 const Core = require(R + '/web/apex_core.js');
-const html = fs.readFileSync(R + '/web/index.html', 'utf8');
+const html = ['index.html', 'cockpit.js', 'lazy.js'].map((f) => { try { return fs.readFileSync(R + '/web/' + f, 'utf8'); } catch (_) { return ''; } }).join('\n');
 const helper = html.match(/function cornerEventOf\(.*?\n    }/s)[0], apply = html.match(/function applyCrowdCurvature\(.*?\n    }/s)[0];
 const fn = new Function('Core', 'MPH', 'window', helper + '; return (' + apply + ')')(Core, Core.MPS_TO_MPH, {});
 const N = 400, mk = () => ({ kind: 'route', lat: Array.from({ length: N }, (_, i) => 35 + i * 5 / 110540), lon: Array(N).fill(-83),

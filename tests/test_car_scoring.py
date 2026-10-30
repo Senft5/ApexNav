@@ -6,6 +6,7 @@ import shutil
 import subprocess
 
 import pytest
+from tests.page_source import cockpit_source
 
 NODE = shutil.which("node")
 pytestmark = pytest.mark.skipif(NODE is None, reason="node not installed")
@@ -28,6 +29,6 @@ def test_corners_scored_for_the_car():
 
 
 def test_the_drive_keeps_its_car():
-    html = open(os.path.join(ROOT, "web", "index.html"), encoding="utf-8").read()
+    html = cockpit_source()
     # F-04: End hands the car to the worker's save job with the recording (analysis_client.js save assigns `extra`)
     assert "extra.car = { label: car.label, mu: Core.carGrip(car) }" in html

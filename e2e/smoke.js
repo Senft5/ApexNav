@@ -1072,8 +1072,8 @@ flow('convoy: an in-app invite toasts and Join gets you in, no link (Worker stub
   });
   await page.addInitScript(() => {   // every toast the page shows, so a later one can't hide the invite's
     window.__toasts = [];
-    document.addEventListener('DOMContentLoaded', () => new MutationObserver(() => window.__toasts.push(document.getElementById('toast').textContent))
-      .observe(document.getElementById('toast'), { childList: true, characterData: true, subtree: true }));
+    document.addEventListener('DOMContentLoaded', () => { const t = document.getElementById('toast'); if (t) new MutationObserver(() => window.__toasts.push(t.textContent))   // (not in the Log's frame)
+      .observe(t, { childList: true, characterData: true, subtree: true }); });
   });
   await page.goto(base + '/index.html');
   await page.waitForFunction(() => window.__toasts.some((t) => /@lead invited you to a convoy: Sunday run/.test(t)), null, { timeout: 10000 });

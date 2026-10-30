@@ -1,6 +1,7 @@
 """Privacy policy and terms (IDEAS O-11, docs/APP_REVIEW.md): published from web/, linked in Settings and wherever you sign in."""
 import os
 import re
+from tests.page_source import cockpit_source
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 read = lambda *p: open(os.path.join(ROOT, *p), encoding="utf-8").read()
@@ -15,7 +16,7 @@ def test_pages_exist_and_link_each_other():
 
 
 def test_linked_from_settings_and_every_sign_in():
-    html = read("web", "index.html")
+    html = cockpit_source()
     site = re.search(r"const LEGAL_SITE = '([^']+)'", html).group(1)
     assert html.count(f'{site}/privacy.html') >= 1                          # Settings (sign-in left onboarding, REVIEW.md 8)
     buttons = html.count(">Sign in with Google</a>") + html.count("textContent: 'Sign in with Google'")

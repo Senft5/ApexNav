@@ -6,6 +6,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from tests.page_source import cockpit_source
 
 ROOT = Path(__file__).resolve().parents[1]
 NODE = shutil.which("node")
@@ -45,5 +46,5 @@ def test_crew_audience_lights_crews_not_friends():
 
 
 def test_the_page_is_loaded():
-    html = (ROOT / "web" / "index.html").read_text()
-    assert '<script src="who_sees.js"></script>' in html and "ApexWhoSees.mount(" in html
+    html = cockpit_source()
+    assert "'who_sees.js'" in html and "ApexWhoSees.mount(" in html

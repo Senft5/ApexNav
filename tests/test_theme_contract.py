@@ -6,6 +6,7 @@ import shutil
 import subprocess
 
 import pytest
+from tests.page_source import cockpit_source
 
 NODE = shutil.which("node")
 pytestmark = pytest.mark.skipif(NODE is None, reason="node not installed")
@@ -44,7 +45,7 @@ def test_what_it_forbids_is_caught(out):
 
 
 def test_the_plate_and_floors_match_the_page(out):
-    html = open(os.path.join(ROOT, "web", "index.html"), encoding="utf-8").read()
+    html = cockpit_source()
     p = out["plate"]
     assert f"--hz-bg: {p['bg']}; --hz-edge: {p['edge']}; --hz-ink: {p['ink']};" in html
     assert out["floors"] == {"speedPx": 40, "callPx": 21, "binnaclePx": 13}

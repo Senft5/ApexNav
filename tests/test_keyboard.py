@@ -33,6 +33,6 @@ def test_which_fields_and_when():
 @pytest.mark.parametrize("page", ["index.html", "analysis.html"])
 def test_pages_load_it_and_hide_the_tab_bar(page):
     html = open(os.path.join(ROOT, "web", page), encoding="utf-8").read()
-    assert '<script src="keyboard.js"></script>' in html
+    assert '<script src="keyboard.js"' in html
     assert re.search(r"html\.kb-open \.tabbar \{ display: none", html)
     assert "var(--kb-h)" in html, "the page fits above the keyboard"

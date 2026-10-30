@@ -22,7 +22,7 @@ component is permissive (BSD-3, MIT, Apache-2.0, OFL); no GPL code ships; the ap
 | OpenStreetMap data, OpenFreeMap tiles | roads, base map | ODbL 1.0; attribution required: © OpenStreetMap contributors |
 | AWS Terrain Tiles (Terrarium) | elevation | see https://registry.opendata.aws/terrain-tiles/ |
 | Nominatim (OpenStreetMap) | address search | ODbL; usage policy applies |
-| Fonts (Barlow Condensed, IBM Plex, Inter Tight) | UI | SIL OFL 1.1 |
+| Fonts: Barlow Condensed (© 2017 The Barlow Project Authors), Inter Tight (© 2022 The Inter Project Authors), bundled as `web/fonts/*.woff2` (Google Fonts' latin and latin-ext files, unchanged; REVIEW_FEEL F-12), and IBM Plex | UI | SIL OFL 1.1; full text in `web/fonts/OFL.txt` |
 
 ## espeak-ng (GPL-3.0): removed from the shipped app
 Earlier builds loaded kokoro-js, whose web bundle inlines an espeak-ng WebAssembly build (GPL-3.0). Since 2026-10-25 the
