@@ -6,6 +6,12 @@ it says so. Things only you can do are in docs/OWNER_TODO.md.
 
 ## 2026-10-30
 
+**The review account** (the owner: "yes make me the review account"). `@vetta_review`, a member with Share road feel off,
+made directly in the database with no Google login behind it, so nobody can sign in as it except with its one session token
+(a year long). That token went to the owner in chat to paste as the `REVIEW_SESSION` secret; it is not in the repository. It
+is not friends with anyone or in any crew, so the signed-in recording shows an empty-but-real account rather than anyone's
+data. Undo: delete user `7b39562f-72d8-4f6e-80c8-382820afb133` on `apexnav-db` (everything of it cascades).
+
 **A review recording of every real-world flow, on demand** (docs/REVIEW_RECORDING.md). The owner asked for the whole app
 captured in use for a deeper Fable review, run on demand only. My calls:
 - *A real drive instead of fake sensors*: debug builds replay the bundled real drive (dry_ridge) through the shell's own

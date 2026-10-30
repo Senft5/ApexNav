@@ -49,8 +49,14 @@ replayed drive is never sent as measured road data: the review account keeps Sha
 
 ## The review account (signed-in flow)
 
-Not set up yet: it needs a repository secret only the owner can add (docs/OWNER_TODO.md). Until then the signed-in flow
-skips itself and the rest run.
+`@vetta_review` ("Vetta Review", created 2026-10-30 at the owner's request): a member with Share road feel off, and no
+Google login (its `google_sub` is `review:vetta-recording`, which no Google sign-in can match), so the only way in is its
+one session token, good for a year. The token is never in the repository: it is the `REVIEW_SESSION` repository secret,
+passed to the test as `APEX_REVIEW_SESSION`, and the shell stores it as the signed-in session (debug builds only). Until
+the secret is added (docs/OWNER_TODO.md) the signed-in flow skips itself and the rest run.
+
+To revoke it: `DELETE FROM sessions WHERE user_id = '7b39562f-72d8-4f6e-80c8-382820afb133'` on `apexnav-db`. A new token is
+a new session row (`id_hash` = sha256 hex of the token) and a new secret value.
 
 ## Not covered
 
