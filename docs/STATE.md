@@ -1,5 +1,15 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-10-30 (evening): REVIEW_PEOPLE.md and REVIEW_FEEL.md built (PR #267)
+
+- [x] All 35 People findings (P-01..P-35), open sign-up, two tabs; all 18 speed findings (F-01..F-18) incl. the native
+  CarPlay map (MapLibre Native) and dead reckoning; the CarPlay guidance card at the top (bar hides in guidance).
+- [x] Migrations 0041 (crew_event_attendance) and 0042 (crews.invites) applied to apexnav-db and apexnav-preview-db.
+- Unverified on a device: the native car map, dead reckoning, the guidance card position, every speed number (Chromium
+  4x rig only). CI compiles the Swift.
+- Exact next task: TestFlight from main; the second speed review (Fable, REVIEW_FEEL_2.md) on the new build; then a
+  real drive.
+
 ## Session 2026-10-30 (day): fixes from the owner's first real drive with CarPlay
 
 - [x] Drives started on CarPlay always saved (checkpoints, native drive journal, end on disconnect/park, recovery).
