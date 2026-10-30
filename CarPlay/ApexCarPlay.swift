@@ -417,8 +417,8 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
     }
 
     @MainActor private func estimates(_ o: ApexCar.Option) -> CPTravelEstimates? {
-        guard let s = o.timeS, let m = o.distM else { return nil }
-        return CPTravelEstimates(distanceRemaining: ApexCar.shared.distance(m), timeRemaining: s)
+        guard let m = o.distM else { return nil }
+        return CPTravelEstimates(distanceRemaining: ApexCar.shared.distance(m), timeRemaining: o.timeS ?? -1)
     }
 
     @MainActor fileprivate func previewSelected(_ choice: CPRouteChoice) {
@@ -465,8 +465,11 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
         } else if let m = maneuver {
             session.updateEstimates(est, for: m)
         }
-        if let t = trip, let rm = g.remainM, let rs = g.remainS {
-            mapTemplate?.updateEstimates(CPTravelEstimates(distanceRemaining: ApexCar.shared.distance(rm), timeRemaining: rs), for: t)
+        // the distance left whenever the route has one; a negative time is CarPlay's own "--" (CPTravelEstimates.h), so a
+        // route with no router time (a GPX track) shows its miles left and no made-up time (the 2026-10-30 car run sat on
+        // "0 min · -- mi" for the whole drive)
+        if let t = trip, let rm = g.remainM {
+            mapTemplate?.updateEstimates(CPTravelEstimates(distanceRemaining: ApexCar.shared.distance(rm), timeRemaining: g.remainS ?? -1), for: t)
         }
     }
 

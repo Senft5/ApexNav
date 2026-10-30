@@ -193,3 +193,10 @@ def test_a_loop_without_steps_still_guides_its_corners(out):
     """A loop or GPX track has no turn-by-turn steps; its corners are still the card (the CarPlay simulator run, 2026-10-30)."""
     g = out["loopNoSteps"]
     assert g and g["corner"] == {"dir": "R", "sev": 3} and g["distM"] == 300
+
+
+def test_the_car_shows_distance_left_without_a_made_up_time():
+    """A route with no router time (a GPX track) still updates the trip strip's distance; its time is CarPlay's "--"."""
+    swift = open(os.path.join(ROOT, "CarPlay", "ApexCarPlay.swift"), encoding="utf-8").read()
+    assert "if let t = trip, let rm = g.remainM {" in swift
+    assert "timeRemaining: g.remainS ?? -1" in swift and "timeRemaining: o.timeS ?? -1" in swift
