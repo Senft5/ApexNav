@@ -361,6 +361,19 @@
       html[data-theme="tapedeck"] .cluster-dials { grid-template-columns: var(--dial) minmax(0, 1fr); }
       html[data-theme="tapedeck"] .cluster-dials > .dial-g { grid-column: 1 / -1; width: 100%; height: auto; aspect-ratio: auto; }
       html[data-theme="tapedeck"] .dial-g > .vfd-meters { grid-template-columns: 1fr 1fr; column-gap: 16px; }
+      /* the owner, 2026-10-30: "the digital display part on the bottom took up most of the screen" (313 px against
+         Roadbook's 119). One row for the meters with the Score beside them, shorter bars, and Kit small beside his line:
+         about 200 px, the rest goes to the map. */
+      html[data-theme="tapedeck"] .cluster-dials > .dial-speed { grid-row: span 2; }   /* the meters sit under Limit and Sight, beside the speed */
+      html[data-theme="tapedeck"] .cluster-dials > .dial-g { grid-column: 2; }
+      html[data-theme="tapedeck"] .dial.dial-g { flex-direction: row; align-items: center; gap: 12px; }
+      html[data-theme="tapedeck"] .dial.dial-g > .vfd-meters { flex: 1 1 auto; height: auto; gap: 4px; }
+      html[data-theme="tapedeck"] .dial.dial-g > .g-score { flex: none; width: 64px; height: auto; margin: 0; }
+      html[data-theme="tapedeck"] .vfd-bars { height: 24px; }
+      html[data-theme="tapedeck"] .vfd-cap { letter-spacing: 0.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }   /* 13 px, the binnacle floor (REVIEW.md 4.3) */
+      html[data-theme="tapedeck"] .kit-row { grid-template-columns: 40px minmax(0, 1fr); gap: 10px; padding-top: 4px; }
+      html[data-theme="tapedeck"] .kit { width: 40px; height: 35px; }
+      html[data-theme="tapedeck"] .kit-says b { font-size: 14px; }   /* still two lines, never cut (REVIEW2.md U-38) */
     }   /* Tapedeck's bar meters keep their own height; squeezed, they overprinted the replay keys */
     .dial-g.bezelled .bezel-ring { height: calc(100% - 44px); }   /* Billet's ring rounds the meter, not the Score */
     .dial-num { font-family: var(--font-num); font-size: 15px; font-weight: 600; fill: var(--face-ink); }

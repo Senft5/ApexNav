@@ -6,6 +6,12 @@ it says so. Things only you can do are in docs/OWNER_TODO.md.
 
 ## 2026-10-29
 
+**Tapedeck's instruments a third of the height.** The owner: "the digital display part on the bottom took up most of
+the screen" (313 px of an iPhone 15 Pro against Roadbook's 119). Upright on a phone, the bar meters now sit under Limit
+and Sight beside the speed with the Score at their end, the bars are shorter, and Kit is a small fox (40 px on an upright phone, 80 elsewhere; REVIEW2.md U-38 had 80) beside his two-line call:
+167 px, and the map gets the rest (457 px, was 311). Undo: the Tapedeck rules at the end of the `max-width: 480px`
+block in web/index.html.
+
 **Cameras load fast, and speed cameras join the plate readers.** The owner: "pull in police data from other sources and
 figure out why the lpr data takes so long to load".
 - *Why it was slow:* one Overpass query for the route's whole bounding box (a long diagonal route asked for a huge
