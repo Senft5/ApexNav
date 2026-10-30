@@ -964,6 +964,46 @@ flow('drive ended: Open in the Log is the solid key with no score, Share card wi
   check(scored.share && !scored.logKey && scored.logLink && !scored.shareLink, 'a score: Share card is the solid key: ' + JSON.stringify(scored));
 });
 
+flow('drive ended: the map behind the card is the whole drive, fitted flat above it, every time; a stray fix does not widen it (REVIEW4 U-88)', async (page, base) => {
+  await page.route('https://tiles.openfreemap.org/**', (route) => (route.request().url().includes('/styles/')
+    ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 8, sources: {}, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#eee' } }] }) })
+    : route.abort()));
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
+    window.webkit = { messageHandlers: { apex: { postMessage: () => {} } } }; });
+  await page.route('**/api/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apexDebug.map.loaded() && window.apex, null, { timeout: 20000 });
+  // a free drive at road speed (the follow camera sits the arrow low, with the map's padding), with one stray fix 40 km
+  // away first (the replay's first fix before its start offset), then End
+  await page.evaluate(() => window.apex.onNative({ type: 'link', params: { go: 'drive' } }));
+  await page.waitForFunction(() => window.apexDebug.driveActive);
+  await page.evaluate(() => window.apex.live({ lat: 35.86, lon: -83.9, accuracy_m: 4, speed_mps: 18, course_deg: 0, lat_g: 0, lon_g: 0, has_fix: true, calibration: 'locked' }));
+  for (let burst = 0; burst < 4; burst++) {
+    await page.evaluate((b) => { for (let j = b * 70; j < (b + 1) * 70; j++) window.apex.live({ lat: 35.5 + j * 1e-4, lon: -83.9, accuracy_m: 4, speed_mps: 18, course_deg: 0, lat_g: 0, lon_g: 0, has_fix: true, calibration: 'locked' }); }, burst);
+    await page.waitForTimeout(300);
+  }
+  check(await page.evaluate(() => apexDebug.map.getPadding().top > 0), 'the follow camera pads the map in a drive');
+  await page.click('#driveEnd');
+  await page.waitForSelector('#endCard.show', { timeout: 8000 });
+  await page.waitForTimeout(1500);
+  const fit = () => page.evaluate(() => { const m = apexDebug.map, c = m.getContainer().getBoundingClientRect(), top = document.querySelector('#endCard .card-sheet').getBoundingClientRect().top - c.top;
+    const a = m.project([-83.9, 35.5]), b = m.project([-83.9, 35.5 + 279e-4]), p = m.getPadding();
+    return { a: a.y, b: b.y, top, pitch: m.getPitch(), bearing: m.getBearing(), pad: p.top, follow: apexDebug.state.follow, shown: m.getLayoutProperty('apex-endtrail', 'visibility'),
+      lines: (m.getSource('apex-endtrail-src')._data.features || []).length }; });
+  const f1 = await fit();
+  check(f1.shown === 'visible' && f1.lines === 1 && !f1.follow && f1.pitch < 1 && Math.abs(f1.bearing) < 1 && f1.pad === 0, 'the trail drawn as one line, the map flat and still: ' + JSON.stringify(f1));
+  check([f1.a, f1.b].every((y) => y > 0 && y < f1.top) && Math.abs(f1.a - f1.b) > f1.top * 0.5, 'the whole drive fills the map above the card, not the stray fix\'s 40 km: ' + JSON.stringify(f1));
+  // a second fix after the end (the shell keeps sending them) does not take the map back
+  await page.evaluate(() => window.apex.live({ lat: 35.53, lon: -83.9, accuracy_m: 4, speed_mps: 0, course_deg: 0, lat_g: 0, lon_g: 0, has_fix: true }));
+  await page.waitForTimeout(600);
+  const f2 = await fit();
+  check(Math.abs(f2.a - f1.a) < 2 && Math.abs(f2.b - f1.b) < 2, 'a fix after the end leaves the fit: ' + JSON.stringify(f2));
+  await page.click('#endDone');
+  await page.waitForTimeout(300);
+  const after = await page.evaluate(() => ({ follow: apexDebug.state.follow, shown: apexDebug.map.getLayoutProperty('apex-endtrail', 'visibility') }));
+  check(after.follow && after.shown === 'none', 'Done: the trail goes and the map follows again: ' + JSON.stringify(after));
+});
+
 flow('small things: Notes is a detent, Layers never cuts the place plate, the Log pager draws its arrows (REVIEW4 U-82, U-81, U-76)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.goto(base + '/index.html');

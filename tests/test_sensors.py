@@ -64,6 +64,16 @@ for (const cal of ['locked', 'default']) {
 { const rec = new S.Recorder(), fixAt = (t) => (t < 20 ? Math.floor(t / 10) : (t < 70 ? 2 : Math.floor(t / 10))) * 20;
   for (let t = 0; t <= 100; t++) rec.add({ t: t * 100, has_fix: true, ...at(fixAt(t), 0), speed_mps: 20, calibration: 'locked', vert_peak_g: t === 50 ? 0.9 : 0.05 });
   out.tunnel = rec.toCsv().trim().split('\n').slice(1).map((l) => l.split(',')[11]); }
+// REVIEW4 U-88: a stray fix 40 km away (before the drive, and once in the middle) fills in no road and adds no distance
+{ const rec = new S.Recorder(), fix = (t, m, far) => ({ t: t * 1000, has_fix: true, ...(far ? at(0, 40000) : at(m, 0)), speed_mps: 20 });
+  rec.add(fix(0, 0, true));
+  for (let t = 1; t <= 50; t++) rec.add(fix(t, t * 20, t === 25));
+  const rows = rec.toCsv().trim().split('\n').slice(1).map((l) => l.split(','));
+  out.stray = { n: rows.length, km: rec.km, maxLat: Math.max(...rows.map((r) => +r[2] - lat0)) }; }
+// a long tunnel (60 s at 30 m/s, 1.8 km) is still a drive, not a jump
+{ const rec = new S.Recorder();
+  rec.add({ t: 0, has_fix: true, ...at(0, 0), speed_mps: 30 }); rec.add({ t: 60000, has_fix: true, ...at(1800, 0), speed_mps: 30 });
+  out.longTunnel = rec.km; }
 console.log(JSON.stringify(out));
 """
 
@@ -126,3 +136,10 @@ def test_spikes_inside_a_gps_gap_are_dropped_not_guessed(r):
     tunnel = r["tunnel"]
     assert "0.900" not in tunnel
     assert all(p == "" for p in tunnel[8:28]) and tunnel[3] == "0.050" and tunnel[-2] == "0.050"
+
+
+def test_recorder_drops_a_stray_fix(r):
+    # U-88: the end card's 60-mile map was a stray fix the recorder had filled in as road; it is a gap, never road
+    assert r["stray"]["km"] == pytest.approx(0.94, abs=0.01)                              # 50 s at 20 m/s, less the hops to and from the stray
+    assert r["stray"]["maxLat"] < 0.01                                                     # no sample on the 40 km line
+    assert r["longTunnel"] == pytest.approx(1.8, abs=0.01)

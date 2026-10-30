@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-K6NkroD5Pxz1A+qKL+pGi656/cu0uW7P4DHPsJLcXTo=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-NOIaSAy7d5z90KHq3ejhvGUe+/75piP9swohT6F42/k=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -6599,17 +6599,29 @@
     }
     // U-88: behind the card, the map is the drive: fitted to its trail above the card, the trail drawn at the route's width in
     // the accent. It goes when the card does, however it closes, and the map follows again.
+    // U-88 (check): a fix more than END_JUMP_M from the one before starts a new run, and a run of a few fixes is a stray (the
+    // first fix before the start offset, a cell-tower jump), so it neither draws a line across the county nor widens the fit
+    const END_JUMP_M = 1000, END_STRAY_N = 5;
+    function endTrailRuns(lat, lon) {
+      const runs = [];
+      let run = null, prev = null;
+      for (let i = 0; i < lat.length; i++) {
+        const la = lat[i], lo = lon[i];
+        if (!Number.isFinite(la) || !Number.isFinite(lo)) continue;
+        const jump = prev && Math.hypot((la - prev[1]) * 110540, (lo - prev[0]) * 111320 * Math.cos(la * Math.PI / 180)) > END_JUMP_M;
+        if (!run || jump) { run = []; runs.push(run); }
+        run.push([lo, la]); prev = [lo, la];
+      }
+      const kept = runs.filter((r) => r.length >= END_STRAY_N);
+      return kept.length ? kept : runs.filter((r) => r.length >= 2).sort((a, b) => b.length - a.length).slice(0, 1);
+    }
     function showEndTrail(d) {
       if (!mapReady || !Array.isArray(d.lat) || !Array.isArray(d.lon) || d.lat.length < 2) return;
-      const coords = [];
+      const runs = endTrailRuns(d.lat, d.lon);
+      if (!runs.length) return;
       let w = 180, e = -180, so = 90, n = -90;
-      for (let i = 0; i < d.lat.length; i++) {
-        const la = d.lat[i], lo = d.lon[i];
-        if (!Number.isFinite(la) || !Number.isFinite(lo)) continue;
-        coords.push([lo, la]); w = Math.min(w, lo); e = Math.max(e, lo); so = Math.min(so, la); n = Math.max(n, la);
-      }
-      if (coords.length < 2) return;
-      const data = { type: 'FeatureCollection', features: [{ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: coords } }] };
+      for (const r of runs) for (const [lo, la] of r) { w = Math.min(w, lo); e = Math.max(e, lo); so = Math.min(so, la); n = Math.max(n, la); }
+      const data = { type: 'FeatureCollection', features: runs.map((coordinates) => ({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates } })) };
       if (map.getSource('apex-endtrail-src')) map.getSource('apex-endtrail-src').setData(data);
       else {
         map.addSource('apex-endtrail-src', { type: 'geojson', data });
@@ -6626,6 +6638,11 @@
       const wide = matchMedia('(orientation: landscape) and (max-height: 540px)').matches;
       const top = Math.max(32, (parseFloat(safeInsets().top) || 0) - mr.top + 24);
       const bottom = wide || !sheet ? 24 : Math.max(24, Math.min(mr.height - top - 100, mr.bottom - sheet.getBoundingClientRect().top + 24));
+      // U-88 (check): the follow camera leaves the map's own padding on (up to a third of its height, so the arrow sits low).
+      // MapLibre adds that to the fit's padding, which left no room on a phone above the card, so the fit gave up and the
+      // map stayed the follow camera's last frame. The fit owns the whole map: stop any glide and clear it first.
+      map.stop();
+      map.jumpTo({ padding: { top: 0, bottom: 0, left: 0, right: 0 } });
       map.fitBounds([[w, so], [e, n]], { padding: { top, left: 32, right: 32, bottom }, pitch: 0, bearing: 0, duration: 900, maxZoom: 16 });
     }
     let endTrailOn = false;

@@ -101,6 +101,7 @@
   }
 
   /** Collects frames into 5 m samples (CLAUDE.md spatial binning) and writes the ApexDrive CSV the analysis page imports. */
+  const JUMP_M = 1000, JUMP_MPS = 90;                                     // no car covers 1 km between fixes, or 90 m/s over a longer gap
   class Recorder {
     constructor() { this.rows = []; this.dist = 0; this.prev = null; this.nextAt = 0; this.startedAt = null; this.last = null; this.peaks = []; this.peaksLost = false; }
     add(fr) {
@@ -116,6 +117,10 @@
       if (this.prev) {
         const seg = metres(this.prev, fr), d0 = this.dist;
         if (seg < 0.5) { this.last = fr; return; }                          // stationary: no new road
+        // REVIEW4 U-88: a fix farther than any car could have gone since the last (a stray first fix, a cell-tower jump) is a
+        // gap, as a privacy zone is: the next stretch starts there and no road is filled in along the straight line between
+        const dt = finite(fr.t) && finite(this.prev.t) && fr.t > this.prev.t ? (fr.t - this.prev.t) / 1000 : 0;
+        if (seg > Math.max(JUMP_M, dt * JUMP_MPS)) { this.peaks = []; this.peaksLost = false; this.prev = fr; this.last = fr; return; }
         this.dist += seg;
         const gOk = typeof fr.calibration !== 'string' || locked;            // the app's IMU g likewise; browser frames carry GPS-derived g and no calibration
         while (this.nextAt <= this.dist) {                                   // interpolate each 5 m crossing
