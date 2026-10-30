@@ -136,6 +136,44 @@ flow('returning driver: live frames switch to the cockpit, big targets and no ke
   check(await page.evaluate(() => document.activeElement !== document.getElementById('e2eField')), 'the field gives up focus while moving');
 });
 
+flow('standing still, the map sleeps: the follow camera stops moving it once settled, and wakes for a new fix or a moved map (perf, 2026-10-30)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && typeof window.apex.live === 'function' && window.apexDebug && window.apexDebug.map);
+  await page.evaluate(() => { const m = window.apexDebug.map, j = m.jumpTo.bind(m); window.__jumps = 0; m.jumpTo = (o) => { window.__jumps++; return j(o); }; });
+  const still = { lat: 35.96, lon: -83.92, accuracy_m: 5, speed_mps: 0, course_deg: 0, has_fix: true, calibration: 'locked' };
+  const jumpsOver = (ms, feed) => page.evaluate(async ([ms, feed]) => {
+    window.__jumps = 0; const t0 = performance.now();
+    while (performance.now() - t0 < ms) { if (feed) window.apex.live(feed); await new Promise(r => setTimeout(r, 100)); }
+    return window.__jumps;
+  }, [ms, feed]);
+  await jumpsOver(4000, still);                                        // the springs settle on the fix
+  const asleep = await jumpsOver(1500, still);
+  check(asleep === 0, `a settled camera leaves the map alone (moved it ${asleep} times in 1.5 s)`);
+  const woke = await jumpsOver(600, { ...still, lat: 35.9605 });       // 55 m on: the camera follows again
+  check(woke > 3, `a new fix moves the camera (${woke})`);
+  await jumpsOver(4000, { ...still, lat: 35.9605 });
+  // something else moves the map while following (counted from that moment): the camera takes it back
+  const back = await page.evaluate(async () => {
+    window.__jumps = 0; window.apexDebug.map.setZoom(12);
+    await new Promise(r => setTimeout(r, 300));
+    return { moves: window.__jumps, zoom: window.apexDebug.map.getZoom() };
+  });
+  check(back.moves > 0 && back.zoom > 15, `the follow camera takes the map back (${JSON.stringify(back)})`);
+  // the strip: the same notes leave its page as it is; a new distance rewrites only the number
+  const same = await page.evaluate(() => {
+    const el = document.createElement('div'); document.body.append(el);
+    const theme = { notes: 'roadbook' }, n = (dist) => [{ key: 'c1', type: 'corner', code: 'L3', call: 'Left 3', sub: '', dist, unit: 'FT', distM: 100, dir: 'L', severity: 3, mods: [] }];
+    ApexInstruments.renderNotes(el, theme, n('400'));
+    const box = el.firstChild;
+    ApexInstruments.renderNotes(el, theme, n('400'));
+    const kept = el.firstChild === box;
+    ApexInstruments.renderNotes(el, theme, n('350'));
+    return { kept, keptOnDist: el.firstChild === box, dist: el.querySelector('.rb-dist b').textContent };
+  });
+  check(same.kept && same.keptOnDist && same.dist === '350', `the strip is rewritten in place (${JSON.stringify(same)})`);
+});
+
 flow('a hot phone turns the battery saver on and back off', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.goto(base + '/index.html');

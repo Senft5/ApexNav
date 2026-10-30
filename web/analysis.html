@@ -11,7 +11,10 @@
   <link rel="apple-touch-icon" href="brand/icon-180.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter+Tight:wght@400;500;600&display=swap" />
+  <!-- Perf (2026-10-30): the web fonts' stylesheet comes from Google; as a plain stylesheet every script below waited for it,
+       so a weak signal held the whole page back (seconds in a car). Loaded as print (which blocks nothing) and switched on
+       by boot.js once it arrives; until then the text is in the fallback font, behind the opening cover. -->
+  <link rel="stylesheet" id="webFonts" media="print" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter+Tight:wght@400;500;600&display=swap" />
   <script src="errors.js"></script>   <!-- first, so it sees errors in everything after it -->
   <script src="apex_core.js"></script>
   <script src="keyboard.js"></script>

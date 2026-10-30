@@ -38,7 +38,7 @@ const functionText = name => {
   return html.slice(start, html.indexOf('\n    }', start) + 6);
 };
 const mapReady = true, emptyFC = () => ({type:'FeatureCollection', features:[]});
-let ribbon = null, lastRibbonAt = 0;
+let ribbon = null, lastRibbonAt = 0, ribbonKey = null, ribbonTrack = null, scrubRect = null;   // updateRibbon's own state (it sends a changed ribbon only)
 const map = {getSource: () => ({setData: data => {ribbon = data;}})};
 const look = {colors:{signal:'red',amber:'orange',calm:'green'}};
 const scrubCanvas = {getBoundingClientRect: () => ({width:300,height:30})};

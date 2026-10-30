@@ -16,5 +16,12 @@
     root.setTimeout(() => el.remove(), 250);
   }
   root.ApexBoot = { done, MAX_MS };
+  // The web fonts' stylesheet (<link id="webFonts" media="print">) applies once it has loaded, so it never holds the scripts
+  // back on a slow network (index.html, analysis.html).
+  const fonts = root.document && root.document.getElementById('webFonts');
+  if (fonts) {
+    const on = () => { fonts.media = 'all'; };
+    if (fonts.sheet) on(); else fonts.addEventListener('load', on, { once: true });
+  }
   root.addEventListener('DOMContentLoaded', () => root.setTimeout(done, MAX_MS));
 })(window);
