@@ -65,10 +65,12 @@
    * one of CORNER_MODES; `opts.call(e)` words a corner as the phone does (the plain-words setting), else its own call.
    */
   function guideMessage(t, cursorM, leftS, phrase, opts = {}) {
-    if (!t || !Array.isArray(t.steps) || !finite(cursorM)) return null;
+    // a route without turn-by-turn steps (a loop, a GPX track) still has its corners: the CarPlay run on 2026-10-30
+    // showed a loop with no guidance at all, the card never came up
+    if (!t || !finite(cursorM)) return null;
     const total = Array.isArray(t.dist) && t.dist.length ? t.dist[t.dist.length - 1] : null;
     const remain = { remainM: finite(total) ? Math.max(0, Math.round(total - cursorM)) : null, remainS: finite(leftS) ? Math.round(leftS) : null };
-    const turns = t.steps.filter((s) => s && finite(s.m) && phrase(s));
+    const turns = (Array.isArray(t.steps) ? t.steps : []).filter((s) => s && finite(s.m) && phrase(s));
     const st = turns.find((s) => s.m > cursorM - 5);
     const mode = CORNER_MODES.includes(opts.corners) ? opts.corners : 'all';
     let co = null, coM = Infinity;

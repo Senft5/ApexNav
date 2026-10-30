@@ -4,6 +4,33 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-10-30
+
+**The review account** (the owner: "yes make me the review account"). `@vetta_review`, a member with Share road feel off,
+made directly in the database with no Google login behind it, so nobody can sign in as it except with its one session token
+(a year long). That token went to the owner in chat to paste as the `REVIEW_SESSION` secret; it is not in the repository. It
+is not friends with anyone or in any crew, so the signed-in recording shows an empty-but-real account rather than anyone's
+data. Undo: delete user `7b39562f-72d8-4f6e-80c8-382820afb133` on `apexnav-db` (everything of it cascades).
+
+**A review recording of every real-world flow, on demand** (docs/REVIEW_RECORDING.md). The owner asked for the whole app
+captured in use for a deeper Fable review, run on demand only. My calls:
+- *A real drive instead of fake sensors*: debug builds replay the bundled real drive (dry_ridge) through the shell's own
+  GPS and motion handlers, its 100 Hz motion rebuilt from what it measured. It is test-only (`#if DEBUG`, guarded by
+  tests/test_review_recording.py) and never reaches road data (the review account keeps sharing off).
+- *A transcript instead of sound*: the page logs every line said in review mode; capturing audio on GitHub's Macs needs a
+  virtual audio driver that is unproven there, so it's left out.
+- *Eight flows as parallel jobs*, phone and car video plus a labelled photo per step, gathered into one `review-pack`.
+- *Signed-in flows wait on the owner*: a review account's session must be a repository secret, which only the owner can add.
+  Undo all of it: delete app-review.yml, UITests/ReviewFlows.swift, tools/review_pack.py and the `#if DEBUG` blocks.
+
+**Loops get CarPlay guidance.** The first XCUITest run on the car's screen showed a loop's Drive start the drive on the
+phone while the car stayed on its idle map: guidance needed turn-by-turn steps, which a loop (or a GPX track) doesn't
+have, so its corners never reached the card. A route without steps now guides its corners (web/carplay.js).
+
+**CarPlay screenshots by XCUITest.** Clicking the Simulator's CarPlay window from the Mac never reached the car (four
+runs, only the home screen). UITests/CarPlayTests now opens Vetta through the CarPlay home screen's accessibility and
+photographs the car's display, as tadasant/zimmer#1412 does on GitHub's runners.
+
 ## 2026-10-29
 
 **Tapedeck's instruments a third of the height.** The owner: "the digital display part on the bottom took up most of
