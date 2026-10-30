@@ -30,7 +30,7 @@
       .sort((x, y) => (all ? (y.c.tight - x.c.tight) || 0 : x.d - y.d)).slice(0, all ? 160 : 40);
     for (const h of state.hazards.filter(near)) {
       const el = document.createElement('div'); el.className = 'car-plate car-hazard'; el.innerHTML = '<i></i>'; el.append(String(h.title || 'Hazard').toUpperCase());
-      plates.push({ el, m: new root.maplibregl.Marker({ element: el, anchor: 'bottom', offset: [0, -6] }).setLngLat([h.at[1], h.at[0]]).addTo(map), at: h.at, dy: 6 });
+      plates.push({ el, m: new root.maplibregl.Marker({ element: el, anchor: 'bottom', offset: [0, -6] }).setLngLat([h.at[1], h.at[0]]).addTo(map), at: h.at, dy: 6, hazard: true });
     }
     for (const { c } of corners) {
       const el = document.createElement('div'); el.className = 'car-plate car-corner' + (c.tight ? ' tight' : ''); el.textContent = c.text;
@@ -53,15 +53,36 @@
     }
     return out;
   }
+  // REVIEW4 U-77 / U-74 (check): nor under Apple's card. `inset` is the share of the left its guidance (or trip) card covers,
+  // so that column, CARD_GAP past it, is taken too, as is the credit strip; and a plate is shown whole or not at all, never
+  // cut by the screen's edge. A hazard (the one you just reported is at the car) tries beside the point before it gives up.
+  const CARD_GAP = 16, EDGE_PX = 6;
+  function reservedBoxes(H) {
+    const out = carBoxes();
+    if (state.inset > 0) out.push([-1e4, -1e4, state.inset + CARD_GAP, H + 1e4]);
+    const credit = document.getElementById('credit'), mr = map.getContainer().getBoundingClientRect();
+    if (credit && credit.offsetHeight) { const c = credit.getBoundingClientRect(); out.push([c.left - mr.left - 3, c.top - mr.top - 3, c.right - mr.left + 3, c.bottom - mr.top + 3]); }
+    return out;
+  }
   function declutter() {
     if (!map || !plates.length) return;
-    const shown = carBoxes();
+    const W = map.getContainer().clientWidth, H = map.getContainer().clientHeight, shown = reservedBoxes(H);
+    const fits = (box) => box[0] >= EDGE_PX && box[1] >= EDGE_PX && box[2] <= W - EDGE_PX && box[3] <= H - EDGE_PX
+      && !shown.some((b) => box[0] < b[2] && box[2] > b[0] && box[1] < b[3] && box[3] > b[1]);
+    // how far beside a point a plate must stand to clear the car there: the arrow, or the wider sight plate under it
+    const tag = sightTag && sightTag.getElement(), reach = Math.max(17, tag && !tag.hidden ? (tag.offsetWidth || 80) / 2 : 0) + CLEAR_PX + 6;
     for (const p of plates) {
       const pt = map.project([p.at[1], p.at[0]]), w = p.el.offsetWidth || 40, h = p.el.offsetHeight || 24;
-      const box = [pt.x - w / 2 - 3, pt.y - p.dy - h - 3, pt.x + w / 2 + 3, pt.y - p.dy + 3];
-      const hit = shown.some((b) => box[0] < b[2] && box[2] > b[0] && box[1] < b[3] && box[3] > b[1]);
-      p.el.style.visibility = hit ? 'hidden' : '';
-      if (!hit) shown.push(box);
+      // [x, y] of the plate's bottom centre from its point: above it, then (a hazard) right of it, left of it, under it
+      const side = reach + w / 2, spots = [[0, -p.dy]];
+      if (p.hazard) spots.push([side, h / 2], [-side, h / 2], [0, h + p.dy + 17 + CLEAR_PX]);
+      let at = null;
+      for (const [ox, oy] of spots) {
+        const box = [pt.x + ox - w / 2 - 3, pt.y + oy - h - 3, pt.x + ox + w / 2 + 3, pt.y + oy + 3];
+        if (fits(box)) { at = [ox, oy]; shown.push(box); break; }
+      }
+      p.el.style.visibility = at ? '' : 'hidden';
+      if (at && (!p.off || p.off[0] !== at[0] || p.off[1] !== at[1])) { p.off = at; p.m.setOffset(at); }
     }
   }
 
