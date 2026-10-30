@@ -5,6 +5,10 @@ screencap the whole app in use … for a more in depth Fable review including ev
 only:** Actions → *App review recording* → Run workflow. About 20–25 minutes; eight Mac jobs (GitHub bills Mac minutes at
 10× on a private repo, so one run is roughly 1,500 billed minutes).
 
+**The Fable review itself waits for the owner** (2026-10-30: "ensure not to run fable until i say because i want to fine
+tune the fable prompt with you"). Recording the pack is fine; handing it to Fable is not, until the owner and Claude have
+agreed the prompt and the owner says go.
+
 ## What it produces
 
 The `review-pack` artifact, one folder per flow:
