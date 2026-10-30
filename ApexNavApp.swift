@@ -55,6 +55,15 @@ struct ApexShellRootView: View {
         ZStack {
             Color(uiColor: .launchPanel).ignoresSafeArea()
             if ApexWebBundle.indexURL != nil {
+                // REVIEW4 U-80 (check): the launch screen's lockup, at its size and place, under the web view. The web view is
+                // clear until the page paints, and the page's cover draws the same lockup over it, so launch screen, shell and
+                // page read as one frame instead of seconds of bare ink while WebKit starts and the page's scripts load.
+                Image("LaunchLogo")
+                    .resizable()
+                    .frame(width: 184, height: 50)
+                    .accessibilityHidden(true)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .ignoresSafeArea()
                 ApexCockpitWebView()
                     .ignoresSafeArea()
             } else {
@@ -312,8 +321,10 @@ struct ApexCockpitWebView: UIViewRepresentable {
         // A phone-sized frame until a window sizes it: a page started by the car's screen lays out as it would on the phone.
         let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 390, height: 844), configuration: config)
         webView.isOpaque = false
-        webView.backgroundColor = .launchPanel        // the launch screen's colour until the page's cover paints
-        webView.scrollView.backgroundColor = .launchPanel
+        // U-80 (check): clear, not the panel colour, until the page paints: the shell's lockup under it (ApexShellRootView)
+        // shows through, so the launch screen holds until the page's own cover takes over at the same place
+        webView.backgroundColor = .clear
+        webView.scrollView.backgroundColor = .clear
         webView.scrollView.contentInsetAdjustmentBehavior = .never
         webView.scrollView.isScrollEnabled = false
         webView.scrollView.bounces = false
