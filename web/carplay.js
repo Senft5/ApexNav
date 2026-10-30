@@ -3,14 +3,37 @@
 (function (root) {
   'use strict';
   const finite = (v) => typeof v === 'number' && Number.isFinite(v);
-  const MAX_POINTS = 400;
+  const MAX_POINTS = 2000, LINE_TOL_M = 2.5;
 
-  /** The route line for the base map: at most MAX_POINTS [lat, lon], both ends kept. */
+  /**
+   * The route line for the base map: at most MAX_POINTS [lat, lon], both ends kept. F-01: the car's arrow is dead reckoned
+   * along this line (web/car_glide.js, CarGlide.swift), so it must follow the road: simplified to within LINE_TOL_M of every
+   * point of the route (Douglas-Peucker), not every nth point (400 of a 57 km road's points were one every 140 m, a chord
+   * across every hairpin). The tolerance doubles only if a very long route would need more points.
+   */
   function line(t) {
     if (!t || !Array.isArray(t.lat) || t.lat.length < 2) return [];
-    const n = t.lat.length, step = Math.max(1, Math.ceil(n / MAX_POINTS)), out = [];
-    for (let i = 0; i < n; i += step) out.push([+t.lat[i].toFixed(6), +t.lon[i].toFixed(6)]);
-    if ((n - 1) % step) out.push([+t.lat[n - 1].toFixed(6), +t.lon[n - 1].toFixed(6)]);
+    const n = t.lat.length, c = Math.cos(t.lat[0] * Math.PI / 180), x = new Float64Array(n), y = new Float64Array(n);
+    for (let i = 0; i < n; i++) { x[i] = (t.lon[i] - t.lon[0]) * 111320 * c; y[i] = (t.lat[i] - t.lat[0]) * 110540; }
+    let keep;
+    for (let tol = LINE_TOL_M; ; tol *= 2) {
+      keep = new Uint8Array(n); keep[0] = keep[n - 1] = 1;
+      const stack = [[0, n - 1]];
+      while (stack.length) {
+        const [a, b] = stack.pop(), dx = x[b] - x[a], dy = y[b] - y[a], L2 = dx * dx + dy * dy;
+        let far = -1, worst = tol;
+        for (let i = a + 1; i < b; i++) {   // from the segment, not its line: a road that bends back past an end is kept
+          const u = L2 > 0 ? Math.max(0, Math.min(1, ((x[i] - x[a]) * dx + (y[i] - y[a]) * dy) / L2)) : 0;
+          const d = Math.hypot(x[a] + u * dx - x[i], y[a] + u * dy - y[i]);
+          if (d > worst) { worst = d; far = i; }
+        }
+        if (far > 0) { keep[far] = 1; stack.push([a, far], [far, b]); }
+      }
+      let count = 0; for (let i = 0; i < n; i++) count += keep[i];
+      if (count <= MAX_POINTS) break;
+    }
+    const out = [];
+    for (let i = 0; i < n; i++) if (keep[i]) out.push([+t.lat[i].toFixed(6), +t.lon[i].toFixed(6)]);
     return out;
   }
 
@@ -186,9 +209,13 @@
    */
   function lookMessage(theme, voiceOn, units) {
     const t = theme || {}, n = t.night || {};
+    // F-07: the native car map (CarPlay/ApexCarMap.swift) paints the theme's map itself: its day and night palettes
+    // (web/themes.js `map`) with the route, plate and accent inks, the same colours web/carmap.js takes from themes.js
+    const pal = (m) => (t.map && t.map[m] && t[m] ? { ...t.map[m], route: t[m].route, plate: t[m].panel, plateInk: t[m].panelInk, accent: t[m].accent } : null);
+    const day = pal('day'), night = pal('night');
     // units: the car shows distances in the driver's (miles and feet, or km and metres), not the metres it is sent
     return { kind: 'look', theme: t.id || 'roadbook', card: n.panel || '#151310', cardInk: n.panelInk || '#EDE4D3', accent: n.accent || '#E65252', voice: !!voiceOn,
-             units: units === 'metric' ? 'metric' : 'imperial' };
+             units: units === 'metric' ? 'metric' : 'imperial', palette: day && night ? { day, night } : null };
   }
 
   /**

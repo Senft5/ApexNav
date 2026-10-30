@@ -16,6 +16,7 @@ component is permissive (BSD-3, MIT, Apache-2.0, OFL); no GPL code ships; the ap
 | Chatterbox (Resemble AI) | experimental voice clone (not shipped) | MIT |
 | MapLibre GL JS 4.7.1 | map rendering | BSD-3-Clause |
 | maplibre-contour (Michael Barry), `web/vendor/maplibre-contour.min.js` | contour lines | BSD-3-Clause |
+| MapLibre Native for iOS 6.31.0 (Swift package, `project.yml`) | the car's map on CarPlay (`CarPlay/ApexCarMap.swift`) | BSD-2-Clause; its own bundled components are listed in its LICENSE.md |
 | QR Code Generator 2.0.4 (Kazuhiko Arase), `web/vendor/qrcode.js` | the convoy QR code | MIT |
 | Valhalla (via FOSSGIS public server) | routing, map matching, speed limits | MIT |
 | OpenStreetMap data, OpenFreeMap tiles | roads, base map | ODbL 1.0; attribution required: © OpenStreetMap contributors |

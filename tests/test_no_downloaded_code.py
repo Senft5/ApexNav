@@ -35,7 +35,7 @@ def test_app_hides_the_switch():
 def test_licences_page_ships_every_vendored_notice():
     page = read("web", "licenses.html")
     assert "licenses.html" in read("web", "index.html")                       # linked from Settings
-    for needle in ("MapLibre GL JS", "maplibre-contour", "Kazuhiko Arase", "Kokoro-82M", "OpenStreetMap contributors",
+    for needle in ("MapLibre GL JS", "maplibre-contour", "MapLibre Native", "Kazuhiko Arase", "Kokoro-82M", "OpenStreetMap contributors",
                    "BSD 3-Clause License", "MIT License", "g2p/LICENSE-APACHE-2.0.txt"):
         assert needle in page, needle
     assert os.path.exists(os.path.join(WEB, "g2p", "LICENSE-APACHE-2.0.txt"))

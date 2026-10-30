@@ -187,8 +187,9 @@ def test_hazards_are_named_and_unplaceable_ones_dropped(maps):
 
 
 def test_the_look_carries_the_theme_and_its_dark_card(maps):
+    # a theme without its map palettes (here a bare one) sends none: the native car map keeps what it has (F-07)
     assert maps["look"] == {"kind": "look", "theme": "tapedeck", "card": "#0A0C0B", "cardInk": "#7DF5DE", "accent": "#FFB347", "voice": False,
-                            "units": "imperial"}
+                            "units": "imperial", "palette": None}
 
 
 def test_turn_symbols_are_tulips_in_the_cards_ink_and_never_take_markup(maps):
@@ -256,7 +257,7 @@ def test_car_map_is_fed_for_a_smooth_glide():
     assert "guard loaded, code != sentMode else { return }" in swift, "only a changed mode"
     assert "config.preferences.inactiveSchedulingPolicy = .none" in swift, "full rate with the phone locked"
     js = open(os.path.join(ROOT, "web", "carmap.js"), encoding="utf-8").read()
-    assert "requestAnimationFrame(frame)" in js and "map.jumpTo(followView(p))" in js, "the camera glides every frame"
+    assert "requestAnimationFrame(frame)" in js and "map.jumpTo(followView(p, " in js, "the camera glides every frame"
     assert "apex-contour" not in js and "maplibre-contour" not in open(os.path.join(ROOT, "web", "carmap.html"), encoding="utf-8").read()
 
 
