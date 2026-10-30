@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-vlzQGNrEX3dknYiJc4P4rbpeT852sknIFezDIqjv9Eg=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-HV0ieUx0AjvLE3y+tBWCSVCJmDNfrW2SdoDaBMQqxhA=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -141,7 +141,7 @@
     .note-quiet { display: flex; gap: 10px; align-items: baseline; padding: 10px 6px; }
     /* U-67: the quiet line is the news (the road, the next corner); "Clear" is the hazard plate's word at the line's size */
     .note-quiet b { font-size: 15px; font-weight: 600; }
-    .note-quiet span { font-size: 15px; color: var(--panel-dim); min-width: 0; }
+    .note-quiet span { font-size: 15px; color: var(--panel-dim); min-width: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }   /* U-100: two rows at most (the compact line first) */
     .tulip { width: 100%; height: 100%; display: block; }
     .rb-dist small { font-size: 11px; color: var(--panel-dim); }
     .notes-roadbook { display: grid; grid-template-columns: 1.25fr 1fr 1fr; gap: 0; padding-left: 8px; padding-right: 8px; }
@@ -654,6 +654,8 @@
     html[data-theme="tapedeck"] .rb-call span, html[data-theme="tapedeck"] .rb-dist b, html[data-theme="tapedeck"] .ds-main,
     html[data-theme="tapedeck"] .ro b, html[data-theme="tapedeck"] .odo-digits { text-shadow: 0 0 6px color-mix(in srgb, currentColor 60%, transparent); }
     html[data-theme="tapedeck"] .rb-call span.rb-mods i.warn { color: var(--amber); }
+    /* U-100: the dot font is wide; the quiet line steps to the binnacle's 13 px floor so its compact form fits two rows */
+    html[data-theme="tapedeck"] .note-quiet b, html[data-theme="tapedeck"] .note-quiet span { font-size: 13px; }
     html[data-theme="tapedeck"] .binnacle { background: linear-gradient(transparent 50%, rgba(125, 245, 222, 0.025) 50%) 0 0 / 100% 3px, var(--panel); }
     html[data-theme="tapedeck"] .key, html[data-theme="tapedeck"] .ink-btn { border-color: var(--rule); box-shadow: inset 0 -3px 0 #000; }
     html[data-theme="tapedeck"] #driveEnd { background: transparent; color: var(--accent); border: 1.5px solid var(--accent); }
@@ -2304,7 +2306,8 @@
     function say(text, force, chain = null, sysToken = null, opts = {}) {
       // a road hazard (not a turn or a crest, which share the urgent speech lane) also alerts on the car's screen
       if (text && opts.alert && driveActive) carPost({ kind: 'hazard', title: text });
-      if (text) state.kitLine = String(text).replace(/\.$/, '').toUpperCase().slice(0, 64);   // what Kit says (Tapedeck)
+      // what Kit says (Tapedeck), and the strip's notes it is about (opts.kitFor: a corner call's keys) so it can clear (U-100)
+      if (text) { state.kitLine = String(text).replace(/\.$/, '').toUpperCase().slice(0, 64); state.kitFor = opts.kitFor || null; }
       if (!text || (!state.toggles.voice && !force)) return;
       // review recordings (.github/workflows/app-review.yml, debug builds only): every line said goes to the system log,
       // a transcript to read beside the video, which has no sound
@@ -2434,10 +2437,11 @@
       const voiced = chain.map((n, i) => (i === chain.length - 1 && (n.link === 'into' || n.link === 'and')) ? { ...n, link: null } : n);
       // Your own recce call in the chain (recce.js, V-09): spoken whole as you wrote it, in either words mode (the bank's
       // clips and plain words are built from the map's corner, not your text).
-      if (chain.some((n) => n.recce)) return { text, chain: null };
+      const keys = chain.map((n) => `${n.type}:${n.index}:${n.dist_m}`);   // the strip's keys of the notes it calls (Kit, U-100)
+      if (chain.some((n) => n.recce)) return { text, chain: null, keys };
       // Plain words: spoken whole (the voice bank's clips are rally words), from the same notes.
-      if (state.noteWords === 'plain') return { text: ApexPlainNotes.plainChain(voiced, ApexUnits), chain: null };   // in the driver's units (U-93)
-      return { text, chain: voiced };
+      if (state.noteWords === 'plain') return { text: ApexPlainNotes.plainChain(voiced, ApexUnits), chain: null, keys };   // in the driver's units (U-93)
+      return { text, chain: voiced, keys };
     }
 
     // Where a note is due: a corner's entry (turn-in), not its apex, so the call and the countdown come before you turn
@@ -2477,16 +2481,19 @@
     // The strip's line when no note is up. Planning: the route and the mode. In a drive or a replay, quiet (U-67): the road
     // under you and how far to the corner that brings the notes back ("Quiet · I-275 · next corner 13 mi"). Off a planned
     // route, the rerouter's words; a drive without one (the road ahead, or nothing yet) never says them (U-72).
-    function quietLine(spirited, offRoute, driving, next) {
+    // compact: the same line for a strip it would not fit in two rows of (U-100): the road as its sign shortens it, "corner
+    // 0.7 mi" for "next corner 0.7 mi"; the instruments pick it only when the full line needs a third row.
+    function quietLine(spirited, offRoute, driving, next, compact = false) {
       // U-90: wrong way on a road is still that road (the strip said "Wrong way" with no road for seven minutes)
       if (offRoute && track && track.kind === 'route') return [offRouteText(), rerouter.reason === 'wrong_way' ? roadNow.name : null].filter(Boolean).join(' · ');
       if (!driving) return track ? `${track.name} · ${spirited ? 'Full notes' : 'Quiet · bumps and cameras only'}` : 'Plan a route for notes';
       if (!track && !driveActive) return 'No route planned';
       if (spirited) return `${track && !offRoute && track.kind !== 'horizon' ? track.name : 'The road ahead'} · Full notes`;
-      const road = roadNow.name || (track && track.kind === 'horizon' && !offRoute ? 'The road ahead' : null);
+      const named = roadNow.name && compact && window.ApexRoadNames ? ApexRoadNames.shortRoadName(roadNow.name) : roadNow.name;
+      const road = named || (track && track.kind === 'horizon' && !offRoute ? 'The road ahead' : null);
       const ahead = next ? Math.max(0, next.m - state.cursorM) : null, d = ahead != null ? distLabel(ahead) : null;
       const far = d && (d.u === 'MI' || d.u === 'KM') ? ApexUnits.long(ahead, 1, true) : d ? `${d.n} ${d.u.toLowerCase()}` : null;
-      return ['Quiet', road, far ? `next corner ${far}` : 'bumps and cameras only'].filter(Boolean).join(' · ');
+      return ['Quiet', road, far ? `${compact ? 'corner' : 'next corner'} ${far}` : compact ? 'bumps, cameras' : 'bumps and cameras only'].filter(Boolean).join(' · ');
     }
     function updateNotes(vMps, live) {
       // Driving somewhere that is not on the loaded route: its calls (and its stale trip distance) must never be read out as if they were this road.
@@ -2542,7 +2549,9 @@
         if (strip.stall !== head.key) { strip.stall = head.key; strip.stallAt = now; }
         else if (now - strip.stallAt > PASSED_STOP_MS) { strip.passed.add(head.key); notes.shift(); strip.stall = null; }
       } else strip.stall = null;
-      notes.quietText = quietLine(spirited, offRoute, !!(state.playing || live), moving && state.notesMode === 'auto' && !spirited ? ApexNoteTiming.nextWake(corners, { cursorM: state.cursorM, vMps }) : null);
+      const nextUp = moving && state.notesMode === 'auto' && !spirited ? ApexNoteTiming.nextWake(corners, { cursorM: state.cursorM, vMps }) : null;
+      notes.quietText = quietLine(spirited, offRoute, !!(state.playing || live), nextUp);
+      notes.quietShort = quietLine(spirited, offRoute, !!(state.playing || live), nextUp, true);   // U-100
       // U-86: a new lead note shows once it has held LEAD_HOLD_MS; until then the strip keeps the one it shows.
       let showN = notes;
       const leadKey = notes[0] ? notes[0].key : null, shownKey = strip.shown && strip.shown[0] ? strip.shown[0].key : null;
@@ -2551,6 +2560,13 @@
         if (now - strip.pendingAt < LEAD_HOLD_MS) showN = strip.shown;
       }
       if (showN === notes) { strip.shown = notes; strip.pending = null; }
+      // U-100: Kit's line is the last thing said; once the strip's lead moves to a note that line was not about, it is stale
+      // ("KIT SAYS: TIGHT RIGHT, CAREFUL" for 20 s under VERY SHARP…), so Kit falls quiet until he says the next one.
+      const headKey = showN[0] ? showN[0].key : null;
+      if (headKey !== state.kitHead) {
+        if (state.kitHead !== undefined && state.kitLine && !(state.kitFor && state.kitFor.includes(headKey))) { state.kitLine = null; state.kitFor = null; }
+        state.kitHead = headKey;
+      }
       Inst.renderNotes($('notes'), look.theme, showN);
       state.crestAhead = !!(showN[0] && showN[0].type === 'crest' && showN[0].distM < 150);   // Kit sits up for it
       lastNotes = showN;
@@ -2588,7 +2604,7 @@
         if (!first && (e.type === 'corner' ? !spirited : !(spirited || noteworthyInCruise(e)))) continue;
         // (a first note read at the start may be under the car already: it is not stale for that)
         // dueByM: a call that waits in the queue (behind "Full notes.", a direction) is dropped once it would be late (U-96)
-        say(call.text, false, call.chain, null, { kind: e.type === 'corner' ? 'ordinary' : 'hazard', key, atM: noteM(e), duck: true,
+        say(call.text, false, call.chain, null, { kind: e.type === 'corner' ? 'ordinary' : 'hazard', key, atM: noteM(e), duck: true, kitFor: call.keys,
           ...(e.type === 'corner' && !startCall ? { dueByM: noteM(e) - lastM } : {}), ...(startCall ? { atM: null } : {}) });
         if (live) reaction.called(performance.now(), call.text, ApexNoteTiming.needsBrake(vMps, apexMps));
       }

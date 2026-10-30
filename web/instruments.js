@@ -122,7 +122,12 @@
     if (!notes.length) {
       const q = html('div', 'note-quiet', el);
       html('b', '', q, 'Clear');
-      html('span', '', q, notes.quietText || '');
+      const line = html('span', '', q, notes.quietText || '');
+      // U-100: a line that needs a third row (Tapedeck's wide dot font, a long road name) takes its compact form instead
+      if (notes.quietShort && notes.quietShort !== notes.quietText && typeof getComputedStyle === 'function') {
+        const fs = parseFloat(getComputedStyle(line).fontSize) || 15;
+        if (line.scrollHeight > 2.6 * fs) line.textContent = notes.quietShort;
+      }
       return;
     }
     // When the lead note changes (the old one was passed), the page slides on for 160 ms. The strip is rebuilt every

@@ -102,6 +102,15 @@ flow('the strip never cuts where the meaning is: a three-word call keeps its dir
       return out;
     }, theme);
     check(r.every((x) => !x.cut && x.px >= 21), `${theme}: the lead call whole at 21 px or more: ` + JSON.stringify(r));
+    // U-100: the quiet line in two rows at most, its compact form when the full one needs a third (Tapedeck's wide font)
+    const q = await page.evaluate((theme) => {
+      const look = ApexThemes.apply(theme, false), el = document.getElementById('notes'), n = [];
+      n.quietText = 'Quiet · Northwest Expressway · next corner 0.7 mi'; n.quietShort = 'Quiet · Northwest Expy · corner 0.7 mi';
+      ApexInstruments.renderNotes(el, look.theme, n);
+      const sp = el.querySelector('.note-quiet span'), fs = parseFloat(getComputedStyle(sp).fontSize);
+      return { text: sp.textContent, rows: Math.round(sp.clientHeight / (fs * 1.2)), cut: sp.scrollHeight > sp.clientHeight + 1, fs };
+    }, theme);
+    check(!q.cut && q.rows <= 2 && q.fs >= 13, `${theme}: the quiet line in two rows, whole: ` + JSON.stringify(q));
   }
 });
 
@@ -178,6 +187,8 @@ flow('the co-driver reads the road: the first note is called before the car move
   check(/^0\s*FT/i.test(waiting.trim()), 'at the corner the lead reads 0 ft: ' + waiting);
   for (let k = 0; k < 22; k++) { await at(entry, 0, 'locked'); await page.waitForTimeout(200); }
   check(await leadBox() !== waiting, 'a passed note advances while the car waits: ' + await leadBox());
+  // U-100: Kit's line was about the corner the strip has moved on from: it clears rather than reading stale
+  check(await page.evaluate(() => apexDebug.state.kitLine) === null, 'Kit falls quiet once the strip moves on: ' + await page.evaluate(() => apexDebug.state.kitLine));
   // out onto the straight at 30 m/s, the first corner behind and its 30 s hold over: quiet, said once, with the road and the
   // next corner (2.6 km on) in the strip and the road on the binnacle
   const n = await page.evaluate(() => apexDebug.track.lat.length);

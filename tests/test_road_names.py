@@ -28,6 +28,7 @@ console.log(JSON.stringify({
   main: R.mainRoad({ 'Dry Ridge Road': 6000, 'Bank Street': 2000 }, 10000),
   tooLittle: R.mainRoad({ 'Dry Ridge Road': 3000, 'Bank Street': 2000 }, 10000),
   none: R.mainRoad({}, 0),
+  short: ['Northwest Expressway', 'Carolina Trace Road', 'North Main Street', 'Interstate 74 West', 'I-275', 'North Road', 'Dry Ridge Rd', null].map(R.shortRoadName),
 }));
 """
 
@@ -45,3 +46,5 @@ def test_road_names():
     assert r["main"] == "Dry Ridge Road"
     assert r["tooLittle"] is None                     # under a third of the drive: keep the date name
     assert r["none"] is None
+    # U-100: as signs shorten them, for a line that must fit; a ref or a two-word compass name stays
+    assert r["short"] == ["Northwest Expy", "Carolina Trace Rd", "N Main St", "Interstate 74 W", "I-275", "North Rd", "Dry Ridge Rd", None]

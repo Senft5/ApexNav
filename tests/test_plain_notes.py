@@ -56,4 +56,4 @@ def test_page_offers_both_and_keeps_rally_for_existing_users():
     html = open(os.path.join(ROOT, "web", "index.html"), encoding="utf-8").read()
     assert 'data-words="plain"' in html and 'data-words="rally"' in html
     assert "saved.noteWords === 'plain' || saved.noteWords === 'rally' ? saved.noteWords : 'rally'" in html
-    assert "if (state.noteWords === 'plain') return { text: ApexPlainNotes.plainChain(voiced, ApexUnits), chain: null };" in html
+    assert "if (state.noteWords === 'plain') return { text: ApexPlainNotes.plainChain(voiced, ApexUnits), chain: null, keys };" in html
