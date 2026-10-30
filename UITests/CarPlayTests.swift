@@ -48,6 +48,8 @@ final class CarPlayTests: XCTestCase {
         try XCTSkipUnless(ProcessInfo.processInfo.environment["APEX_CARPLAY"] == "1", "CarPlay screenshots only")
         // the phone app, past the first-run screen (as AppTourTests)
         let app = XCUIApplication()
+        // the real drive replayed (debug builds), and its road as the route: guidance moves along a real road
+        app.launchEnvironment = ["APEX_REPLAY": "dry_ridge", "APEX_REVIEW": "1", "APEX_REVIEW_ROUTE": "1"]
         app.launch()
         app.tap()
         let web = app.webViews.firstMatch
@@ -70,24 +72,18 @@ final class CarPlayTests: XCTestCase {
         pause(10)                                                   // map tiles
         photo("02-idle-map")
 
-        // a loop from here: the list, then the trip preview with its card
-        if tap("Loops") {
-            pause(2)
-            photo("03-loops-list")
-            if tap("30 minutes") {
-                if labelled(car, "Drive").waitForExistence(timeout: 150) {
-                    pause(6)
-                    photo("04-trip-preview")
-                    tap("Drive")
-                    // guidance while the workflow's GPS drive plays: the card, the corners, the map following
-                    for k in 0..<14 { pause(8); photo(String(format: "05-drive-%02d", k)) }
-                    tap("End", wait: 10)
-                    pause(4)
-                    photo("06-ended")
-                } else {
-                    photo("04-no-trip-preview")
-                }
-            }
+        // the Loops list (not chosen: the route is the replayed road), then that road's trip preview and a guided drive
+        if tap("Loops") { pause(2); photo("03-loops-list"); tap("Back", wait: 5) }
+        if labelled(car, "Drive").waitForExistence(timeout: 90) {
+            pause(6)
+            photo("04-trip-preview")
+            tap("Drive")
+            for k in 0..<16 { pause(8); photo(String(format: "05-drive-%02d", k)) }
+            tap("End", wait: 10)
+            pause(4)
+            photo("06-ended")
+        } else {
+            photo("04-no-trip-preview")
         }
         // the other two keys, from the idle map
         if tap("Places", wait: 10) { pause(2); photo("07-places"); car.navigationBars.buttons.firstMatch.tap() }

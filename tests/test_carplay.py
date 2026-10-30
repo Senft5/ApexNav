@@ -36,6 +36,7 @@ console.log(JSON.stringify({
       off: C.guideMessage(c, 100, null, D.phrase, { corners: 'off' }), plain: C.guideMessage(c, 100, null, D.phrase, { call: (e) => 'plain ' + e.dir }),
       tulips2: [1, 4, 6, 'HP'].map((v) => C.cornerTulipSVG('L', v, '#7DF5DE')).concat([C.cornerTulipSVG('R', 3, 'red;x')]) }; })(),
   sight: [C.sightMessage(52.4, false, 40, 'mph'), C.sightMessage(30, false, 45.5, 'km/h'), C.sightMessage(30, true, 99, 'mph'), C.sightMessage(null, false, 40, 'mph'), C.sightMessage(NaN, false, 1, 'mph')],
+  loopNoSteps: C.guideMessage({ id: 'loop_30min', dist: [0, 2000], events: [{ type: 'corner', dir: 'R', severity: 3, start_m: 300, dist_m: 320, call: 'Right 3' }] }, 0, 600, D.phrase),
   places: C.placesMessage([{ label: 'Home', lat: 35.1, lon: -83.2 }, { label: 'Bad', lat: null, lon: 1 }, null]),
 }));
 """
@@ -186,3 +187,9 @@ def test_opens_with_no_route():
     assert "if (track && track.kind === 'route') persistActive(track);" in html
     assert "forgetActive();                                                  // the drive is over" in html
     assert "localStorage.getItem(ACTIVE)" in html and "ACTIVE_KEEP_MS" in html
+
+
+def test_a_loop_without_steps_still_guides_its_corners(out):
+    """A loop or GPX track has no turn-by-turn steps; its corners are still the card (the CarPlay simulator run, 2026-10-30)."""
+    g = out["loopNoSteps"]
+    assert g and g["corner"] == {"dir": "R", "sev": 3} and g["distM"] == 300

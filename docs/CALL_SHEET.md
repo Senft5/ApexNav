@@ -17,6 +17,10 @@ captured in use for a deeper Fable review, run on demand only. My calls:
 - *Signed-in flows wait on the owner*: a review account's session must be a repository secret, which only the owner can add.
   Undo all of it: delete app-review.yml, UITests/ReviewFlows.swift, tools/review_pack.py and the `#if DEBUG` blocks.
 
+**Loops get CarPlay guidance.** The first XCUITest run on the car's screen showed a loop's Drive start the drive on the
+phone while the car stayed on its idle map: guidance needed turn-by-turn steps, which a loop (or a GPX track) doesn't
+have, so its corners never reached the card. A route without steps now guides its corners (web/carplay.js).
+
 **CarPlay screenshots by XCUITest.** Clicking the Simulator's CarPlay window from the Mac never reached the car (four
 runs, only the home screen). UITests/CarPlayTests now opens Vetta through the CarPlay home screen's accessibility and
 photographs the car's display, as tadasant/zimmer#1412 does on GitHub's runners.

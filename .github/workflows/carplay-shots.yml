@@ -72,9 +72,7 @@ jobs:
               if [ -n "$REGION" ]; then screencapture -x -R"$REGION" "shots/window/$(printf %03d $i).png"; else screencapture -x "shots/window/$(printf %03d $i).png"; fi
               i=$((i+1)); sleep 5; done ) &
           SHOTS=$!
-          # a GPS drive for the guidance photos (the test taps Drive about three minutes in)
-          ( sleep 150; xcrun simctl location "$UDID" start --speed=15 \
-              35.3626,-84.2866 35.3640,-84.2700 35.3580,-84.2400 35.3460,-84.2060 35.3420,-84.1700 35.3400,-84.1300 ) &
+          # the drive is the bundled real one, replayed by the debug build (ApexReplay), not a simctl GPS route
           TEST_RUNNER_APEX_CARPLAY=1 xcodebuild test-without-building -project ApexNav.xcodeproj -scheme ApexNav \
             -destination "id=$UDID" -derivedDataPath build -only-testing:ApexNavUITests/CarPlayTests/testCar \
             -resultBundlePath Car.xcresult || true
