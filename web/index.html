@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-wJudljtWb3+VyTroQfDk1JoXGKvIP9HSIC6r+cfBlKw=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-JyClQqJBQOBvwRE0DIAHX+E5Mg989bWnKDy2kAsVq10=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -1541,7 +1541,7 @@
       transformRequest: window.ApexOfflineTiles ? ApexOfflineTiles.transform : undefined });
     { const v = document.getElementById('aboutVersion'), m = /ApexNav\/([^ ]+ \([^)]*\))/.exec(navigator.userAgent);   // the iOS shell names its version in the user agent
       if (v) v.textContent = m ? m[1] : (window.APEX_EMBED ? '--' : 'Website'); }
-    window.apexDebug = { map, get track() { return track; }, state, drives, buildRoute: (...a) => buildRoute(...a), renderRouteCard: (...a) => renderRouteCard(...a), openRoadPage: (...a) => openRoadPage(...a), showEndCard: (...a) => showEndCard(...a), get driveActive() { return driveActive; }, tryTheme: (id) => tryTheme(id) };
+    window.apexDebug = { map, get track() { return track; }, state, drives, buildRoute: (...a) => buildRoute(...a), renderRouteCard: (...a) => renderRouteCard(...a), openRoadPage: (...a) => openRoadPage(...a), showEndCard: (...a) => showEndCard(...a), get driveActive() { return driveActive; }, tryTheme: (id) => tryTheme(id), tulipPNG: (svg) => tulipPNG(svg) };
     let mapReady = false;
     // The map's box changes with the layout (idle hides the gauges, a drive shows them); keep the canvas the size of its box.
     if (window.ResizeObserver) new ResizeObserver(() => map.resize()).observe(document.getElementById('map'));
@@ -2431,6 +2431,23 @@
     // =======================================================================
     function sectorAt(i) { return track && track.sectors ? track.sectors.find(s => i >= s.start_index && i <= s.end_index) || null : null; }
     let lastNotesAt = 0;
+    // Where on the route the car is. With no recent match (hint -1) the whole route is searched, and a loop passes the
+    // same place at its start and its end: of the stretches within 40 m, take the one nearest the progress so far, then
+    // the nearest point on it. So the start of a loop is never read as its end (the owner's car, 2026-10-29: "150 m"
+    // left and an arrival in the past, a minute into a 32 min loop).
+    function matchOnRoute(lat, lon, hint) {
+      const hit = Core.nearestIndex(lat, lon, track.lat, track.lon, hint, 600);
+      if (hint >= 0 || !(hit.distM < 40)) return hit;
+      const c = Math.cos(lat * Math.PI / 180), n = track.lat.length;
+      let anchor = -1, gap = Infinity;
+      for (let i = 0; i < n; i++) {
+        const dx = (track.lon[i] - lon) * 111320 * c, dy = (track.lat[i] - lat) * 110540;
+        if (dx * dx + dy * dy >= 1600) continue;
+        const g = Math.abs(track.dist[i] - state.cursorM);
+        if (g < gap) { gap = g; anchor = i; }
+      }
+      return anchor < 0 ? hit : Core.nearestIndex(lat, lon, track.lat, track.lon, anchor, 60);
+    }
     function render(snap) {
       let lat, lon, bearing, vMps, latG, lonG, camber, idx = -1;
       const live = state.mode === 'live' && state.live;
@@ -2441,7 +2458,7 @@
         if (track) {
           // Off route the rejoin can be anywhere on the route, so search all of it (hint -1).
           const free = track.kind === 'horizon';                         // the road ahead is not a route: no rerouting, ETA or traffic
-          const hit = Core.nearestIndex(lat, lon, track.lat, track.lon, rerouter.off && !free ? -1 : state.cursorIdx, 600);
+          const hit = matchOnRoute(lat, lon, rerouter.off && !free ? -1 : state.cursorIdx);
           if (L !== routeWatch.frame && !free) { routeWatch.frame = L; feedRerouter(L, hit); trafficTick(L, hit); }
           if (hit.distM < 40 && (free || !rerouter.off)) { idx = hit.index; state.cursorM = track.dist[idx]; }
         }
@@ -4560,7 +4577,7 @@
       document.querySelectorAll('[data-units]').forEach(b => b.addEventListener('click', () => {
         if (b.dataset.units === ApexUnits.system()) return;
         if (state.mode === 'live') { toast('Change units when the drive has ended.'); return; }
-        ApexUnits.set(b.dataset.units); paintUnits(); ApexLogHost.stale();
+        ApexUnits.set(b.dataset.units); paintUnits(); ApexLogHost.stale(); carLook();
         cluster = Inst.mountCluster($('cluster'), look.theme);
         labelLoops();
         if (plannedRoute && !$('routeCard').hidden) { try { renderRouteCard(); } catch (_) {} }
@@ -6045,7 +6062,7 @@
     // The theme and the voice switch for the car's screen: its map paints the theme, its guidance card takes the theme's dark.
     function carLook() {
       if (!look || !look.theme) return;
-      const msg = ApexCarPlay.lookMessage(look.theme, !!state.toggles.voice), key = JSON.stringify(msg);
+      const msg = ApexCarPlay.lookMessage(look.theme, !!state.toggles.voice, ApexUnits.system()), key = JSON.stringify(msg);
       if (key === car.look) return;
       car.look = key;
       carPost(msg);
@@ -6061,19 +6078,34 @@
     // Corners on the car's guidance card (web/carplay.js guideMessage): 'all' ratings, or 'tight' (1, 2, hairpins) if App
     // Review asks for turn-by-turn only (docs/APP_REVIEW.md, CarPlay row). One line to change; 'off' is turns alone.
     const CAR_CORNERS = 'all';
+    // The tulip as a PNG for the car's card, drawn straight onto a canvas from the SVG's own path data (Path2D): no image
+    // to load, so it is there in the first message, and nothing that could taint the canvas. (Loading the SVG as an image
+    // never finished in the app: the car showed Apple's arrow, the owner's photos, 2026-10-29.)
+    function tulipPNG(svg) {
+      const cv = document.createElement('canvas'); cv.width = cv.height = 120;
+      const x = cv.getContext('2d'); x.scale(1.2, 1.2);                   // the SVG's 100-unit viewBox at 120 px
+      x.strokeStyle = (svg.match(/stroke="([^"]+)"/) || [])[1] || '#EDE4D3';
+      x.lineWidth = 9; x.lineCap = 'round'; x.lineJoin = 'round';
+      for (const m of svg.matchAll(/<path d="([^"]+)"(?: fill="([^"]+)")?\/>/g)) {
+        const path = new Path2D(m[1]);
+        if (m[2]) { x.fillStyle = m[2]; x.fill(path); }
+        x.stroke(path);
+      }
+      for (const m of svg.matchAll(/<circle cx="([\d.]+)" cy="([\d.]+)" r="([\d.]+)"(?: fill="([^"]+)")?\/>/g)) {
+        x.beginPath(); x.arc(+m[1], +m[2], +m[3], 0, 2 * Math.PI);
+        if (m[4]) { x.fillStyle = m[4]; x.fill(); } else x.stroke();
+      }
+      return cv.toDataURL('image/png').split(',')[1];
+    }
     function carSymbol(type, corner) {
       const ink = (look && look.theme && look.theme.night && look.theme.night.panelInk) || '#EDE4D3';
       const key = corner ? `c${corner.dir}${corner.sev}|${ink}` : `${type}|${ink}`;
-      if (car.symbols.has(key)) return car.symbols.get(key);
-      car.symbols.set(key, null);
-      const img = new Image();
-      img.onload = () => {
-        const c = document.createElement('canvas'); c.width = c.height = 120;
-        c.getContext('2d').drawImage(img, 0, 0, 120, 120);
-        try { car.symbols.set(key, c.toDataURL('image/png').split(',')[1]); } catch (_) {}
-      };
-      img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(corner ? ApexCarPlay.cornerTulipSVG(corner.dir, corner.sev, ink) : ApexCarPlay.tulipSVG(type, ink));
-      return null;
+      if (!car.symbols.has(key)) {
+        let png = null;
+        try { png = tulipPNG(corner ? ApexCarPlay.cornerTulipSVG(corner.dir, corner.sev, ink) : ApexCarPlay.tulipSVG(type, ink)); } catch (_) {}
+        car.symbols.set(key, png);
+      }
+      return car.symbols.get(key);
     }
     function carGuide() {
       if (!driveActive || !track || track.kind !== 'route') return;

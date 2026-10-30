@@ -393,7 +393,10 @@ flow('CarPlay feed: a planned route sends its line, every corner and the theme; 
     look: window.__car.filter((m) => m.kind === 'look').pop() }));
   check(r.route.options[0].detail.includes('corner'), 'the route choice says its corners: ' + JSON.stringify(r.route.options[0]));
   check(r.corners.list.every((c) => Array.isArray(c.at) && /^[LR](HP|\d)$/.test(c.text)), 'every corner placed and rated: ' + JSON.stringify(r.corners.list.slice(0, 3)));
-  check(r.look.theme === 'roadbook' && r.look.voice === true && /^#/.test(r.look.card), 'the look: ' + JSON.stringify(r.look));
+  check(r.look.theme === 'roadbook' && r.look.voice === true && /^#/.test(r.look.card) && r.look.units === 'imperial', 'the look: ' + JSON.stringify(r.look));
+  // the tulip is drawn at once (Path2D), so it rides on the first guide message; the car showed Apple's arrow without it
+  const png = await page.evaluate(() => { const svg = ApexCarPlay.cornerTulipSVG('R', 1, '#EDE4D3'); return document.createElement('canvas') && apexDebug.tulipPNG ? apexDebug.tulipPNG(svg) : null; });
+  check(typeof png === 'string' && png.length > 400, 'a corner tulip as a PNG, synchronously: ' + (png ? png.length : png));
   // a car screen that connects later asks again and gets the route and the look again
   await page.evaluate(() => { window.__car = []; window.apex.onNative({ type: 'carplay', action: 'hello' }); });
   await page.waitForFunction(() => ['route', 'corners', 'look', 'places'].every((k) => window.__car.some((m) => m.kind === k)));
@@ -421,6 +424,12 @@ flow('the sight-line speed rides under the position arrow, on the phone and on t
   await page.evaluate(() => car.sight({ text: '43', unit: 'MPH', short: true }));
   const r = await read();
   check(!r.hidden && r.text === '43MPH' && r.short, 'the car tag: ' + JSON.stringify(r));
+  // plates never pile up: three corners on one spot show one plate, the tight one when there is no car to measure from
+  await page.evaluate(() => { car.mode('preview'); car.corners([{ at: [35.4, -84.1], text: 'R4', tight: false }, { at: [35.4, -84.1], text: 'L2', tight: true }, { at: [35.40001, -84.1], text: 'R3', tight: false }]); });
+  await page.waitForTimeout(300);
+  const vis = await page.evaluate(() => [...document.querySelectorAll('.car-corner')].filter((e) => e.style.visibility !== 'hidden').map((e) => e.textContent));
+  check(vis.length === 1, 'one plate where three overlap: ' + vis.join());
+  check(await page.evaluate(() => getComputedStyle(document.querySelector('.car-puck')).zIndex === '3'), 'the car above the plates');
 });
 
 flow('the car connects: CarPlay offers Start drive, and an apexnav://open?go=drive link starts one', async (page, base) => {

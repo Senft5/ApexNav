@@ -54,7 +54,8 @@ def test_route_line_is_small_and_keeps_both_ends(out):
 def test_route_choices(out):
     one = out["one"]
     assert one["kind"] == "route" and one["name"] == "To Robbinsville" and one["picked"] == 0
-    assert one["options"] == [{"summary": "Fun 99 · 77 min", "detail": "3.1 mi", "timeS": 4620, "distM": 5000}]
+    # one route: the card's title is its name and the car prints time and length, so the summary is the Fun score
+    assert one["options"] == [{"summary": "Fun 99", "detail": "3.1 mi", "timeS": 4620, "distM": 5000}]
     two = out["two"]
     assert [o["summary"] for o in two["options"]] == ["Fun 99 · 77 min", "Fun 40 · 65 min"] and two["picked"] == 1
     assert two["options"][0]["distM"] is None, "an option not built yet has no known length"
@@ -90,7 +91,9 @@ console.log(JSON.stringify({
   hazards: C.hazardsMessage([{ id: 7, kind: 'gravel', lat: 35.2, lon: -83.5 }, { id: 8, label: 'Cattle grid', lat: 35, lon: -83 }, { id: 9, kind: 'x' }], { gravel: 'Gravel' }),
   look: C.lookMessage({ id: 'tapedeck', night: { panel: '#0A0C0B', panelInk: '#7DF5DE', accent: '#FFB347' } }, false),
   tulips: [10, 15, 17, 12, 4, 26].map((k) => C.tulipSVG(k, '#7DF5DE')), bad: C.tulipSVG(10, 'red;x'),
-  withCorners: C.routeMessage({ lat: [35, 35.01], lon: [-84, -84], dist: [0, 1100], timeS: 120, events: t.events }, null, 0, (m) => `${m} m`).options[0].detail,
+  withCorners: C.routeMessage({ lat: [35, 35.01], lon: [-84, -84], dist: [0, 1100], timeS: 120, events: t.events }, null, 0, (m) => `${m} m`).options[0],
+  loop: C.routeMessage({ name: '32 min loop', lat: [35, 35.01], lon: [-84, -84], dist: [0, 15630], timeS: 1920, events: t.events }, null, 0, (m) => `${m} m`).options[0],
+  metricLook: C.lookMessage({ id: 'roadbook' }, true, 'metric').units,
 }));
 """
 
@@ -115,7 +118,8 @@ def test_hazards_are_named_and_unplaceable_ones_dropped(maps):
 
 
 def test_the_look_carries_the_theme_and_its_dark_card(maps):
-    assert maps["look"] == {"kind": "look", "theme": "tapedeck", "card": "#0A0C0B", "cardInk": "#7DF5DE", "accent": "#FFB347", "voice": False}
+    assert maps["look"] == {"kind": "look", "theme": "tapedeck", "card": "#0A0C0B", "cardInk": "#7DF5DE", "accent": "#FFB347", "voice": False,
+                            "units": "imperial"}
 
 
 def test_turn_symbols_are_tulips_in_the_cards_ink_and_never_take_markup(maps):
@@ -125,7 +129,11 @@ def test_turn_symbols_are_tulips_in_the_cards_ink_and_never_take_markup(maps):
 
 
 def test_a_route_choice_says_its_distance_and_corners(maps):
-    assert maps["withCorners"] == "1100 m · 4 corners"   # every corner counts, placeable on the map or not
+    # no Fun score: the corners are the summary (every corner counts, placeable on the map or not), the length the detail
+    assert maps["withCorners"]["summary"] == "4 corners" and maps["withCorners"]["detail"] == "1100 m"
+    # the owner's car showed "32 min loop" twice: nothing in the summary repeats the name or the time the car prints
+    assert "min" not in maps["loop"]["summary"] and "loop" not in maps["loop"]["summary"]
+    assert maps["metricLook"] == "metric"
 
 
 def test_corners_come_before_the_next_turn(out):

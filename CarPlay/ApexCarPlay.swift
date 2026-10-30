@@ -38,7 +38,7 @@ final class ApexCar {
     struct Option { let summary: String; let detail: String; let timeS: Double?; let distM: Double? }
     struct Route { let name: String; let coords: [CLLocationCoordinate2D]; let dest: CLLocationCoordinate2D; let options: [Option]; let picked: Int }
     struct Guide { let key: String; let instruction: String; let street: String; let type: Int; let distM: Double; let timeS: Double?; let remainM: Double?; let remainS: Double?; let symbol: UIImage? }
-    struct Look { var theme = "roadbook"; var card = UIColor(white: 0.08, alpha: 1); var cardInk = UIColor(white: 0.93, alpha: 1); var accent = UIColor.systemRed; var voice = true }
+    struct Look { var theme = "roadbook"; var card = UIColor(white: 0.08, alpha: 1); var cardInk = UIColor(white: 0.93, alpha: 1); var accent = UIColor.systemRed; var voice = true; var metric = false }
 
     private(set) var route: Route?
     private(set) var guide: Guide?
@@ -124,6 +124,7 @@ final class ApexCar {
             l.cardInk = Self.color(dict["cardInk"]) ?? l.cardInk
             l.accent = Self.color(dict["accent"]) ?? l.accent
             l.voice = (dict["voice"] as? Bool) ?? true
+            l.metric = (dict["units"] as? String) == "metric"
             look = l
             eachMap { $0.showLook() }
             scene?.lookChanged()
@@ -163,6 +164,18 @@ final class ApexCar {
         positionSentAt = Date()
         position = (lat, lon, course)
         eachMap { $0.showPosition() }
+    }
+
+    /// A distance the way the driver reads them (the car prints a Measurement in the unit it is given, so metres showed as
+    /// "15,630 meter" on the owner's car): feet in 50s under a tenth of a mile, then miles to a tenth; or metres in 10s
+    /// under a kilometre, then km to a tenth.
+    func distance(_ m: Double) -> Measurement<UnitLength> {
+        let m = max(0, m)
+        if look.metric {
+            return m < 1000 ? Measurement(value: (m / 10).rounded() * 10, unit: .meters) : Measurement(value: (m / 100).rounded() / 10, unit: .kilometers)
+        }
+        let mi = m / 1609.344
+        return mi < 0.1 ? Measurement(value: (m / 0.3048 / 50).rounded() * 50, unit: .feet) : Measurement(value: (mi * 10).rounded() / 10, unit: .miles)
     }
 
     /// SF Symbol for a Valhalla maneuver type (web/directions.js VERB), until the page's tulip for it arrives.
@@ -403,9 +416,9 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
         if r.picked < r.options.count, let est = estimates(r.options[r.picked]) { map.updateEstimates(est, for: t) }
     }
 
-    private func estimates(_ o: ApexCar.Option) -> CPTravelEstimates? {
+    @MainActor private func estimates(_ o: ApexCar.Option) -> CPTravelEstimates? {
         guard let s = o.timeS, let m = o.distM else { return nil }
-        return CPTravelEstimates(distanceRemaining: Measurement(value: m, unit: UnitLength.meters), timeRemaining: s)
+        return CPTravelEstimates(distanceRemaining: ApexCar.shared.distance(m), timeRemaining: s)
     }
 
     @MainActor fileprivate func previewSelected(_ choice: CPRouteChoice) {
@@ -435,7 +448,7 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
     @MainActor func guideChanged() {
         guard let g = ApexCar.shared.guide, let session else { return }
         // time to the turn only when the page knows it (the router's times); 0 shows distance alone
-        let est = CPTravelEstimates(distanceRemaining: Measurement(value: g.distM, unit: UnitLength.meters), timeRemaining: max(0, g.timeS ?? 0))
+        let est = CPTravelEstimates(distanceRemaining: ApexCar.shared.distance(g.distM), timeRemaining: max(0, g.timeS ?? 0))
         if g.key != maneuverKey || (g.symbol != nil && !maneuverHasTulip) {
             let m = CPManeuver()
             m.instructionVariants = [g.instruction, g.street].filter { !$0.isEmpty }
@@ -453,7 +466,7 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
             session.updateEstimates(est, for: m)
         }
         if let t = trip, let rm = g.remainM, let rs = g.remainS {
-            mapTemplate?.updateEstimates(CPTravelEstimates(distanceRemaining: Measurement(value: rm, unit: UnitLength.meters), timeRemaining: rs), for: t)
+            mapTemplate?.updateEstimates(CPTravelEstimates(distanceRemaining: ApexCar.shared.distance(rm), timeRemaining: rs), for: t)
         }
     }
 

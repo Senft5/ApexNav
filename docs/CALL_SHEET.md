@@ -6,6 +6,21 @@ it says so. Things only you can do are in docs/OWNER_TODO.md.
 
 ## 2026-10-29
 
+**Fixes from the owner's photos of build 498.1 in the car.**
+- *The tulips are drawn straight onto a canvas* (Path2D from the SVG's own path data) instead of loading the SVG as an
+  image first: the car showed Apple's stock arrow, so that load never finished in the app. Now the tulip rides on the
+  first guide message. Undo: `tulipPNG` in web/index.html.
+- *Distances in the driver's units on the car* ("70 m", "150 meter", "15,630 meter" for a driver in miles): the car prints
+  a Measurement in the unit it is given, so the shell now converts (feet in 50s under a tenth of a mile, then miles to a
+  tenth; metres in 10s, then km), from the units the page sends with the look. `ApexCar.distance`.
+- *A loop's start is never read as its end.* With no recent match the whole route is searched, and a loop passes the
+  same spot twice: the drive began "150 m" from the finish with an arrival in the past. Of the stretches within 40 m
+  the one nearest the progress so far wins (`matchOnRoute`).
+- *The trip card says each thing once*: one route's summary is its Fun score, else its corners (the title is the name and
+  the car prints the time and length itself); several routes keep Fun and time to tell them apart.
+- *Plates never pile up on the car's map*: a plate that would overlap one already shown hides (hazards first, then the
+  corners nearest the car, or the tight ones in a preview), and the car's arrow and sight speed sit above every plate.
+
 **The Log opens over the map, and the sight-line speed rides on the arrow.**
 - *The Log is a frame over the map, never in its place.* The owner: "the crew page still does a full reload every time".
   Yesterday's fix sent the Log's tabs back in history, but it relied on the page's referrer (likely empty on the app's

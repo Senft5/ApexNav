@@ -11,13 +11,13 @@
   <link rel="stylesheet" href="vendor/maplibre-gl.css" />
   <style>
     html, body, #map { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #1A1814; }
-    .car-puck { pointer-events: none; }
+    .car-puck { pointer-events: none; z-index: 3; }   /* the car and its sight speed above every plate */
     .car-plate { pointer-events: none; font: 700 17px/1 "Barlow Condensed", "Arial Narrow", sans-serif; letter-spacing: 0.02em; padding: 3px 7px 2px; white-space: nowrap; }
     .car-corner { background: var(--plate, #EDE4D3); color: var(--plate-ink, #1C1A17); border: 2px solid var(--plate-ink, #1C1A17); }
     .car-corner.tight { background: var(--plate-ink, #1C1A17); color: var(--plate, #EDE4D3); }
     .car-hazard { display: flex; align-items: center; gap: 6px; background: #111111; color: #FFFFFF; border: 2.5px solid #FF7A1A; font: 700 15px/1 -apple-system, system-ui, sans-serif; padding: 5px 9px; }
     .car-hazard i { width: 0; height: 0; border-left: 7px solid transparent; border-right: 7px solid transparent; border-bottom: 12px solid #FF7A1A; }
-    .car-sight { pointer-events: none; display: flex; align-items: center; gap: 4px; padding: 2px 7px 1px; background: var(--plate, #EDE4D3); color: var(--plate-ink, #1C1A17);
+    .car-sight { pointer-events: none; z-index: 3; display: flex; align-items: center; gap: 4px; padding: 2px 7px 1px; background: var(--plate, #EDE4D3); color: var(--plate-ink, #1C1A17);
       border: 2px solid var(--plate-ink, #1C1A17); font: 700 19px/1 "Barlow Condensed", "Arial Narrow", sans-serif; white-space: nowrap; }
     .car-sight small { font-size: 11px; letter-spacing: 0.04em; }
     .car-sight.short { background: #C8102E; color: #FFFFFF; border-color: #FFFFFF; }   /* faster than you can see: the signal red */

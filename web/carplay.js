@@ -23,9 +23,15 @@
     if (pts.length < 2) return null;
     const total = t.dist[t.dist.length - 1];
     const corners = Array.isArray(t.events) ? t.events.filter((e) => e && e.type === 'corner').length : null;
+    // One route: the card's title is its name and the car prints the time and length itself, so the summary is what
+    // neither says (the Fun score, else the corners). Several: each choice's summary tells it from the others (Fun and
+    // time). The owner's car showed "32 min loop" twice, 2026-10-29.
+    const several = Array.isArray(options) && options.length > 1;
+    const cornersText = (n) => (finite(n) ? `${n} corner${n === 1 ? '' : 's'}` : null);
     const one = (fun, timeS, distM, n) => ({
-      summary: [fun != null ? `Fun ${fun}` : null, finite(timeS) ? `${Math.round(timeS / 60)} min` : null].filter(Boolean).join(' · ') || 'Route',
-      detail: [finite(distM) && fmtDist ? fmtDist(distM) : null, finite(n) ? `${n} corner${n === 1 ? '' : 's'}` : null].filter(Boolean).join(' · '),
+      summary: (several ? [fun != null ? `Fun ${fun}` : null, finite(timeS) ? `${Math.round(timeS / 60)} min` : null]
+        : [fun != null ? `Fun ${fun}` : cornersText(n)]).filter(Boolean).join(' · ') || 'Route',
+      detail: [finite(distM) && fmtDist ? fmtDist(distM) : null, several || fun != null ? cornersText(n) : null].filter(Boolean).join(' · '),
       timeS: finite(timeS) ? timeS : null, distM: finite(distM) ? distM : null,
     });
     const list = Array.isArray(options) && options.length > 1
@@ -120,11 +126,13 @@
 
   /**
    * The theme for the car's screen: its id (the car's map paints it, web/carmap.js), the guidance card's colours (the
-   * theme's dark panel, so the card reads in both the car's light and dark modes) and whether the voice is on.
+   * theme's dark panel, so the card reads in both the car's light and dark modes), whether the voice is on and the units.
    */
-  function lookMessage(theme, voiceOn) {
+  function lookMessage(theme, voiceOn, units) {
     const t = theme || {}, n = t.night || {};
-    return { kind: 'look', theme: t.id || 'roadbook', card: n.panel || '#151310', cardInk: n.panelInk || '#EDE4D3', accent: n.accent || '#E65252', voice: !!voiceOn };
+    // units: the car shows distances in the driver's (miles and feet, or km and metres), not the metres it is sent
+    return { kind: 'look', theme: t.id || 'roadbook', card: n.panel || '#151310', cardInk: n.panelInk || '#EDE4D3', accent: n.accent || '#E65252', voice: !!voiceOn,
+             units: units === 'metric' ? 'metric' : 'imperial' };
   }
 
   /**

@@ -17,6 +17,9 @@
   location marker"): the Log and Stages open in a frame over the map (openLog, web/page_return.js), so the map page never
   reloads from the Log's tabs and a drive and the car keep running behind it; the sight-line speed rides under the
   position arrow on the phone and the car (sightMessage, paintSight, carmap drawSight). e2e flows for both.
+- [x] From the owner's photos of build 498.1 in the car: tulips drawn synchronously (they never reached the card),
+  distances in the driver's units, a loop's start no longer matched to its end, the trip card without repeats, plates
+  decluttered with the car above them.
 - Answered for the owner: the UI is a WKWebView; the IMU and GPS run with the phone locked once CarPlay starts the engine,
   but location and motion permission must have been granted once on the phone.
 - Active bugs: none known. Unverified on a device: the Log frame's native calls through the map page's bridge (Save/Share, signed-in
