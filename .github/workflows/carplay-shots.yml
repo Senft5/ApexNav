@@ -1,8 +1,8 @@
 name: CarPlay screenshots
 
 # The car's screen in the iPhone simulator (docs/CARPLAY.md): opens Simulator's I/O → External Displays → CarPlay by UI
-# scripting, then screenshots the CarPlay window every few seconds while AppTourTests.testTour plans a route on the phone
-# (the trip preview), starts the drive and simctl plays a GPS drive (guidance). Run by hand; the shots are the run's
+# scripting, then UITests/CarPlayTests opens Vetta on the car's screen and walks it (Loops, the trip preview, a guided
+# drive while simctl plays a GPS route, Places, Where to?), photographing the car's display at each step. Run by hand; the shots are the run's
 # `carplay` artifact. Every build carries the CarPlay entitlement (project.yml; Apple granted it 2026-10-29).
 on:
   workflow_dispatch:
@@ -55,41 +55,35 @@ jobs:
           osascript -e 'tell application "System Events" to tell process "Simulator" to set size of (first window whose name contains "CarPlay") to {1000, 640}' || true
           sleep 3
           osascript -e 'tell application "System Events" to tell process "Simulator" to get {name, position, size} of every window' | tee windows.txt || true
-          brew install cliclick
           mkdir -p shots && screencapture -x shots/000-desktop.png
-      - name: Drive the tour and screenshot the car's screen
+      - name: Drive the car's screen and photograph it
         env:
           UDID: ${{ steps.sim.outputs.udid }}
         run: |
-          # the CarPlay window's bounds, from the window list (fall back to the whole screen). Not "carplay/": on the Mac's
-          # case-insensitive disk that is the CarPlay/ source folder.
+          # UITests/CarPlayTests drives the CarPlay window through its own accessibility (the home screen is
+          # com.apple.CarPlayApp, the templates com.apple.CarPlayTemplateUIHost) and photographs XCUIScreen.screens[1].
+          # Clicking the window from the Mac (cliclick, System Events) never reached the car (runs 1-4).
+          # A screencapture of the window every 5 s too, as a second record. Not "carplay/": on the Mac's case-insensitive
+          # disk that is the CarPlay/ source folder.
           REGION=$(osascript -e 'tell application "System Events" to tell process "Simulator" to get {position, size} of (first window whose name contains "CarPlay")' 2>/dev/null | tr -d ' {}' || true)
           echo "CarPlay window: $REGION"
+          mkdir -p shots/window
           ( i=1; while true; do
-              if [ -n "$REGION" ]; then screencapture -x -R"$REGION" "shots/$(printf %03d $i).png"; else screencapture -x "shots/$(printf %03d $i).png"; fi
+              if [ -n "$REGION" ]; then screencapture -x -R"$REGION" "shots/window/$(printf %03d $i).png"; else screencapture -x "shots/window/$(printf %03d $i).png"; fi
               i=$((i+1)); sleep 5; done ) &
           SHOTS=$!
-          # once the phone app is running, open Vetta on the car's screen: its icon on the CarPlay home page (second row,
-          # first column), then its icon in the side bar as a fallback
-          # once the phone app is running Vetta's icon appears on the CarPlay home page (second row, first column; about two
-          # minutes in on run 2): click it every 15 s for 3 minutes. Once Vetta is open that spot is just map. Two ways of
-          # clicking, in case one isn't allowed on the runner.
-          ( sleep 60
-            if [ -n "$REGION" ]; then
-              IFS=, read X Y W H <<< "$REGION"
-              CX=$((X + W * 242 / 1000)); CY=$((Y + 28 + (H - 28) * 595 / 1000))
-              for k in $(seq 1 12); do
-                cliclick c:$CX,$CY || osascript -e "tell application \"System Events\" to click at {$CX, $CY}" || true
-                sleep 15
-              done
-            fi ) &
-          ( sleep 120; xcrun simctl location "$UDID" start --speed=15 \
+          # a GPS drive for the guidance photos (the test taps Drive about three minutes in)
+          ( sleep 150; xcrun simctl location "$UDID" start --speed=15 \
               35.3626,-84.2866 35.3640,-84.2700 35.3580,-84.2400 35.3460,-84.2060 35.3420,-84.1700 35.3400,-84.1300 ) &
-          TEST_RUNNER_APEX_TOUR=1 xcodebuild test-without-building -project ApexNav.xcodeproj -scheme ApexNav \
-            -destination "id=$UDID" -derivedDataPath build -only-testing:ApexNavUITests/AppTourTests/testTour \
-            -resultBundlePath Tour.xcresult || true
+          TEST_RUNNER_APEX_CARPLAY=1 xcodebuild test-without-building -project ApexNav.xcodeproj -scheme ApexNav \
+            -destination "id=$UDID" -derivedDataPath build -only-testing:ApexNavUITests/CarPlayTests/testCar \
+            -resultBundlePath Car.xcresult || true
           kill $SHOTS || true
-          ls shots | wc -l
+          # the test's own photos of the car's display (Xcode 16: export attachments; older: the legacy flag)
+          mkdir -p shots/car
+          xcrun xcresulttool export attachments --path Car.xcresult --output-path shots/car \
+            || xcrun xcresulttool export --legacy --type directory --path Car.xcresult --output-path shots/car || true
+          ls -R shots | head -80
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -97,3 +91,4 @@ jobs:
           path: |
             shots
             windows.txt
+            Car.xcresult
