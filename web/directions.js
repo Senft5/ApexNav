@@ -1,5 +1,5 @@
 // Spoken directions at junctions, in the same voice as the pace notes (IDEAS V-04). The router's maneuvers, placed along
-// the route, become two calls each: one early ("In 0.3 miles, turn left onto Deals Gap Road") and one at the turn ("Turn
+// the route, become a ladder of calls each: early ("In 0.3 miles, turn left onto Deals Gap Road"), near, and at the turn ("Turn
 // left onto Deals Gap Road", with ", then right" when the next one follows straight after). The call at the turn goes ahead
 // of corner notes; a corner note at a junction is left out, so a turn is never called twice (once as "left 3", once as a
 // direction). Pure (tests/test_directions.py); the page says what due() returns.
@@ -61,38 +61,72 @@
     return out;
   }
 
-  /** When to call: early from max(400 m, 30 s) out but not inside max(150 m, 10 s); at the turn inside max(40 m, 5 s). */
-  const earlyFar = (v) => Math.max(400, v * 30), earlyNear = (v) => Math.max(150, v * 10), nowAt = (v) => Math.max(40, v * 5);
+  // One maneuver at a time, in road order, as Apple Maps and Google Maps do (the owner's drive, 2026-10-30: "'take exit 19 in
+  // 0.1 miles', then 'sharp right in 1 mile', then 'take exit 19'. This is bad and confusing"). The old version called every
+  // turn inside its window, so a sharp right a mile past the exit had its "In 0.6 miles" said between the exit's two calls.
+  // Now only the next turn not yet taken is said; nothing past a junction is announced until the car is TAKEN_M beyond it,
+  // and a turn once taken is never reinstated by a fix that falls back over it (createProgress). A turn's prompts are a fixed
+  // ladder said once each: far (30 s out, 400 m to 1 mile), near (12 s, 150 to 400 m) and at the turn (5 s, at least 40 m);
+  // a rung reached too close to the turn's own call (inside 3 s of it) is left out.
+  const TAKEN_M = 30, BACK_M = 200;
+  const farAt = (v) => Math.min(M_PER_MI, Math.max(400, v * 30)), nearAt = (v) => Math.min(400, Math.max(150, v * 12)), nowAt = (v) => Math.max(40, v * 5);
+  const clearOfNow = (v) => nowAt(v) + v * 3;
+
+  /** The index of the next turn not yet taken at `cursorM` (a turn is taken TAKEN_M past it), or -1. Stateless. */
+  function pendingAt(steps, cursorM) {
+    if (!Array.isArray(steps) || !finite(cursorM)) return -1;
+    return steps.findIndex((s) => s && finite(s.m) && phrase(s) && cursorM <= s.m + TAKEN_M);
+  }
 
   /**
-   * The lines due at `cursorM` (metres along the route) at `vMps`: [{ key, text, now, atM }]. `steps` are [{ m, type,
-   * street, exits }] in route order; `said` holds keys already said (the page adds them). `id` keeps keys per route.
+   * The next turn as the drive takes them, shared by the voice and the car's card: at(steps, cursorM, routeId) -> its index,
+   * or -1. Latched: a turn once taken stays taken while the cursor jitters back over it (GPS at a motorway diverge). A new
+   * route, or the car BACK_M behind the last turn taken (a replay seek, the same loop again), starts it over.
    */
-  function due(steps, cursorM, vMps, said, id = '') {
+  function createProgress(takenM = TAKEN_M) {
+    let id = null, list = null, i = 0;
+    return {
+      at(steps, cursorM, routeId = '') {
+        if (!Array.isArray(steps) || !finite(cursorM)) return -1;
+        if (routeId !== id || steps !== list || (i > 0 && steps[i - 1] && cursorM < steps[i - 1].m - BACK_M)) { id = routeId; list = steps; i = 0; }
+        while (i < steps.length && (!steps[i] || !finite(steps[i].m) || !phrase(steps[i]) || cursorM > steps[i].m + takenM)) i++;
+        return i < steps.length ? i : -1;
+      },
+      reset() { id = null; list = null; i = 0; },
+    };
+  }
+
+  /**
+   * The line due at `cursorM` (metres along the route) at `vMps`, for the next turn only: [] or [{ key, text, now, atM }].
+   * `steps` are [{ m, type, street, exits }] in route order; `said` holds keys already said (the page adds them). `id` keeps
+   * keys per route. `at` is that turn's index from createProgress (else found here, unlatched).
+   */
+  function due(steps, cursorM, vMps, said, id = '', at = null) {
     const out = [], v = finite(vMps) ? Math.max(0, vMps) : 0;
     if (!Array.isArray(steps) || !finite(cursorM)) return out;
-    for (let i = 0; i < steps.length; i++) {
-      const s = steps[i], d = s.m - cursorM;
-      if (d < -5) continue;
-      if (d > earlyFar(v)) break;
-      const text = phrase(s);
-      if (!text) continue;
-      const kNow = `${id}:dir:${i}:now`, kEarly = `${id}:dir:${i}:early`;
-      if (d <= nowAt(v)) {
-        if (said.has(kNow)) continue;
-        const next = steps[i + 1], nextText = next && next.m - s.m <= THEN_M && !ARRIVE.has(next.type) ? phrase(next) : null;
-        out.push({ key: kNow, text: nextText ? `${text}, then ${lower(nextText)}` : text, now: true, atM: s.m,
-                   tokens: packTokens(null, s, nextText ? next : null, null) });
-        said.add(kEarly);
-        if (nextText) said.add(`${id}:dir:${i + 1}:early`);
-      } else if (d >= earlyNear(v) && !said.has(kEarly) && !ARRIVE.has(s.type)
-                 && !(i > 0 && s.m - steps[i - 1].m <= THEN_M && phrase(steps[i - 1]))) {   // said as the "then" of the one before
-        // the lanes go with the early call, while there is time to move over: ", use the left 2 lanes"
-        const lane = root.ApexLanes && s.lanes ? root.ApexLanes.hint(s.lanes) : null;
-        out.push({ key: kEarly, text: `In ${distWords(d)}, ${lower(text)}${lane ? `, use ${lane}` : ''}`, now: false, atM: s.m,
-                   tokens: packTokens(distWords(d), s, null, lane) });
-      }
+    const i = Number.isInteger(at) ? at : pendingAt(steps, cursorM), s = steps[i];
+    const text = s && finite(s.m) ? phrase(s) : null;
+    if (!text) return out;
+    const d = s.m - cursorM, key = (rung, j = i) => `${id}:dir:${j}:${rung}`;
+    if (d > farAt(v)) return out;
+    if (d <= nowAt(v)) {
+      if (said.has(key('now'))) return out;
+      const next = steps[i + 1], nextText = next && next.m - s.m <= THEN_M && !ARRIVE.has(next.type) ? phrase(next) : null;
+      out.push({ key: key('now'), text: nextText ? `${text}, then ${lower(nextText)}` : text, now: true, atM: s.m,
+                 tokens: packTokens(null, s, nextText ? next : null, null) });
+      said.add(key('early')); said.add(key('near'));                  // the ladder is over: no rung after its turn's call
+      if (nextText) { said.add(key('early', i + 1)); said.add(key('near', i + 1)); }
+      return out;
     }
+    if (ARRIVE.has(s.type) || d < clearOfNow(v)) return out;
+    if (i > 0 && steps[i - 1] && s.m - steps[i - 1].m <= THEN_M && phrase(steps[i - 1])) return out;   // said as the "then" of the one before
+    const rung = d <= nearAt(v) ? 'near' : 'early';
+    if (said.has(key(rung))) return out;
+    if (rung === 'near') said.add(key('early'));                        // first seen inside the near rung: the far one is past
+    // the lanes go with the early calls, while there is time to move over: ", use the left 2 lanes"
+    const lane = root.ApexLanes && s.lanes ? root.ApexLanes.hint(s.lanes) : null;
+    out.push({ key: key(rung), text: `In ${distWords(d)}, ${lower(text)}${lane ? `, use ${lane}` : ''}`, now: false, atM: s.m,
+               tokens: packTokens(distWords(d), s, null, lane) });
     return out;
   }
 
@@ -128,6 +162,6 @@
     return { code, call: ARRIVE.has(s.type) ? 'Destination' : s.street || s.toward || '', dir: x[1], angle: x[2], ...(s.lanes ? { lanes: s.lanes } : {}) };
   }
 
-  const api = { due, phrase, distWords, atJunction, placeSteps, stripNote, VERB };
+  const api = { due, phrase, distWords, atJunction, placeSteps, stripNote, pendingAt, createProgress, TAKEN_M, VERB };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexDirections = api;
 })(typeof window !== 'undefined' ? window : globalThis);

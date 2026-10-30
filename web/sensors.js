@@ -145,6 +145,29 @@
     pause() { this.prev = null; this.peaks = []; this.peaksLost = false; }
     get km() { return this.dist / 1000; }
     get samples() { return this.rows.length; }
+    /** Round 3 (a drive to work lost, 2026-10-30): the recording so far as plain data for storage (drive_keep.js). Rows from
+     *  `from` only, so a checkpoint writes what is new; the recorder's own place on the road comes with it, so frames that
+     *  arrive later carry on from there, the spikes still waiting to be placed with them. */
+    snapshot(from = 0) {
+      const p = this.prev, keep = (f) => (f ? { lat: f.lat, lon: f.lon, t: f.t, elevation_m: f.elevation_m, speed_mps: f.speed_mps } : null);
+      return { v: 1, from, n: this.rows.length, rows: this.rows.slice(from).map((r) => ({ ...r })), dist: this.dist, nextAt: this.nextAt,
+               startedAt: this.startedAt, prev: keep(p), last: keep(this.last), peaks: this.peaks.slice(), peaksLost: this.peaksLost };
+    }
+    /** A recorder rebuilt from a snapshot's state and its rows (assembled by drive_keep.js), ready for more frames. */
+    static restore(state, rows) {
+      const r = new Recorder();
+      r.rows = rows.map((x) => ({ ...x })); r.dist = state.dist; r.nextAt = state.nextAt; r.startedAt = state.startedAt;
+      r.prev = state.prev ? { ...state.prev } : null; r.last = state.last ? { ...state.last } : r.prev;
+      r.peaks = Array.isArray(state.peaks) ? state.peaks.slice() : []; r.peaksLost = !!state.peaksLost;
+      return r;
+    }
+    /** The drive as it stood after its first `n` samples (a drive ended by parking: the walk from the car is not road). */
+    truncate(n) {
+      if (!(n >= 0) || n >= this.rows.length) return;
+      this.rows.length = n;
+      this.dist = n ? this.rows[n - 1].distance_m : 0; this.nextAt = n ? this.rows[n - 1].distance_m + 5 : 0;
+      this.prev = null; this.peaks = []; this.peaksLost = false;
+    }
     /** CSV in the ApexDrive column layout; missing values are left blank, never zero. */
     toCsv() {
       const num = (v, d) => (finite(v) ? v.toFixed(d) : '');

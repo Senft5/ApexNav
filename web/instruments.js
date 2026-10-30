@@ -26,7 +26,22 @@
     return n;
   }
   const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  // Perf (2026-10-30): the strip's colours, read once per theme instead of on every rebuild. The root's custom properties
+  // come only from the stylesheet and the theme's inline style on <html> (themes.js apply), so that style is the key; each
+  // getComputedStyle here forced a style recalculation in the middle of a drive frame.
+  const cssMemo = { key: null, vals: null };
+  function themeVar(name) {
+    const r = document.documentElement, key = `${r.getAttribute('style')}|${r.className}`;
+    if (cssMemo.key !== key) { cssMemo.key = key; cssMemo.vals = Object.create(null); }
+    if (!(name in cssMemo.vals)) cssMemo.vals[name] = css(name);
+    return cssMemo.vals[name];
+  }
   const fmt = (v) => (v == null || !isFinite(v) ? '--' : String(Math.round(v)));
+  // Perf (2026-10-30): the cluster is updated with every fix; only what changed is written (each write, even of the same
+  // value, dirtied the style of the whole cluster for the next frame).
+  const setA = (n, k, v) => { v = String(v); if (n.getAttribute(k) !== v) n.setAttribute(k, v); };
+  const setT = (n, t) => { t = t == null ? '' : String(t); if (n.textContent !== t) n.textContent = t; };
+  const setS = (n, k, v) => { v = String(v); if (n.style[k] !== v) n.style[k] = v; };
 
   // -------------------------------------------------------------------------
   // Tulip diagrams (FIA roadbook convention: entry dot at the bottom, the road as
@@ -113,12 +128,34 @@
   // -------------------------------------------------------------------------
   // Pace-note strip renderers
   // -------------------------------------------------------------------------
+  // a new screen size can change which quiet line fits (U-100), so a resize builds the strip anew
+  let stripEpoch = 0;
+  if (typeof addEventListener === 'function') addEventListener('resize', () => { stripEpoch++; });
+  // and so can the web fonts arriving (the page renders again on document.fonts.ready)
+  if (typeof document !== 'undefined' && document.fonts && document.fonts.addEventListener) document.fonts.addEventListener('loadingdone', () => { stripEpoch++; });
   function renderNotes(el, theme, notes) {
     const custom = theme && theme.renderers && RENDER.strip[theme.renderers.strip];   // a Pro theme's strip (the contract's third)
     if (custom) return custom(el, theme, notes, { lockup, tulipSVG, hazard: (n) => HAZARD_TYPES.has(n.type) });
+    const ink = themeVar('--panel-ink'), accent = themeVar('--accent'), signal = themeVar('--signal');
+    // Perf (2026-10-30): the page calls this several times a second in a drive, mostly with the same notes. The same page is
+    // left as it is (a slide in progress runs on); a page whose only change is a distance has those numbers rewritten in
+    // place; anything else is built anew, as before.
+    const shape = JSON.stringify([theme.notes, stripEpoch, ink, accent, signal, notes.quietText, notes.quietShort,
+      notes.slice(0, 3).map((n) => [n.key, n.type, n.code, n.call, n.sub, n.dir, n.severity, n.turnRad, n.angle, n.mods, n.recce, n.lanes])]);
+    const dists = notes.slice(0, 3).map((n) => [n.dist == null ? '' : String(n.dist), n.unit == null ? '' : String(n.unit)]);
+    if (el._shape === shape && el._built === el.firstChild && el.firstChild) {
+      if (JSON.stringify(dists) !== el._dists) {
+        el._dists = JSON.stringify(dists);
+        el.querySelectorAll(':scope > .rb-box > .rb-dist').forEach((d, i) => {
+          const b = d.firstChild, u = d.lastChild;
+          if (b && b.textContent !== dists[i][0]) b.textContent = dists[i][0];
+          if (u && u.textContent !== dists[i][1]) u.textContent = dists[i][1];
+        });
+      }
+      return;
+    }
     el.innerHTML = '';
     el.className = `notes notes-${theme.notes}`;
-    const ink = css('--panel-ink'), accent = css('--accent'), signal = css('--signal');
     if (!notes.length) {
       const q = html('div', 'note-quiet', el);
       html('b', '', q, 'Clear');
@@ -128,6 +165,7 @@
         const fs = parseFloat(getComputedStyle(line).fontSize) || 15;
         if (line.scrollHeight > 2.6 * fs) line.textContent = notes.quietShort;
       }
+      el._shape = shape; el._dists = JSON.stringify(dists); el._built = el.firstChild;
       return;
     }
     // When the lead note changes (the old one was passed), the page slides on for 160 ms. The strip is rebuilt every
@@ -146,7 +184,7 @@
       html('b', '', d, n.dist);
       html('small', '', d, n.unit);
       const t = html('div', 'rb-tulip', box);
-      t.innerHTML = hz && i === 0 ? tulipSVG(n, css('--hz-ink') || '#fff', css('--hz-edge') || '#FF7A1A') : tulipSVG(n, ink, n.type === 'corner' ? accent : hz ? (css('--hz-edge') || signal) : signal);
+      t.innerHTML = hz && i === 0 ? tulipSVG(n, themeVar('--hz-ink') || '#fff', themeVar('--hz-edge') || '#FF7A1A') : tulipSVG(n, ink, n.type === 'corner' ? accent : hz ? (themeVar('--hz-edge') || signal) : signal);
       const c = html('div', 'rb-call', box);
       if (n.type !== 'corner' && n.code.toLowerCase() !== n.call.toLowerCase()) html('b', '', c, n.code);
       // a long call ("Square left off-camber") steps down a size so it reads whole instead of ending in "..."
@@ -172,6 +210,7 @@
         }
       }
     });
+    el._shape = shape; el._dists = JSON.stringify(dists); el._built = el.firstChild;
   }
 
   // -------------------------------------------------------------------------
@@ -209,14 +248,14 @@
     const digital = svg('text', { x: 100, y: 182, 'text-anchor': 'middle', class: 'dial-digital' }, s);
     return (d) => {
       const live = d.speedMph != null;
-      needle.setAttribute('transform', `rotate(${ang(live ? (d.needleMph != null ? d.needleMph : d.speedMph) : 0) + 90} 100 100)`);
-      needle.style.opacity = live ? 1 : 0.25;
-      np.setAttribute('fill', live && d.paceMph != null && d.speedMph > d.paceMph + 1 ? 'var(--signal)' : (printed ? 'var(--signal)' : 'var(--face-ink)'));
-      digital.textContent = live ? Math.round(d.speedMph) : '--';
+      setA(needle, 'transform', `rotate(${ang(live ? (d.needleMph != null ? d.needleMph : d.speedMph) : 0) + 90} 100 100)`);
+      setS(needle, 'opacity', live ? 1 : 0.25);
+      setA(np, 'fill', live && d.paceMph != null && d.speedMph > d.paceMph + 1 ? 'var(--signal)' : (printed ? 'var(--signal)' : 'var(--face-ink)'));
+      setT(digital, live ? Math.round(d.speedMph) : '--');
       const place = (node, mph) => {
-        if (mph == null || !isFinite(mph)) { node.style.display = 'none'; return; }
-        node.style.display = '';
-        node.setAttribute('transform', `rotate(${ang(mph) + 90} 100 100)`);
+        if (mph == null || !isFinite(mph)) { setS(node, 'display', 'none'); return; }
+        setS(node, 'display', '');
+        setA(node, 'transform', `rotate(${ang(mph) + 90} 100 100)`);
       };
       place(pace, d.paceMph); place(sight, d.sightMph); place(limit, d.limitMph);
     };
@@ -250,14 +289,14 @@
         pts.push(`${x.toFixed(1)},${y.toFixed(1)}`);
         if (pts.length > 24) pts.shift();
       } else pts.length = 0;
-      ball.setAttribute('cx', x); ball.setAttribute('cy', y);
-      ball.setAttribute('fill', !known ? 'var(--face-dim)' : (Math.hypot(d.latG, d.lonG) > 0.45 ? 'var(--signal)' : 'var(--accent)'));
-      trail.setAttribute('points', pts.join(' '));
+      setA(ball, 'cx', x); setA(ball, 'cy', y);
+      setA(ball, 'fill', !known ? 'var(--face-dim)' : (Math.hypot(d.latG, d.lonG) > 0.45 ? 'var(--signal)' : 'var(--accent)'));
+      setA(trail, 'points', pts.join(' '));
       if (d.camberDeg != null) {
-        bank.style.display = '';
-        bank.setAttribute('transform', `rotate(${-Math.max(-10, Math.min(10, d.camberDeg)) * 3} 100 100)`);
-        bankTxt.textContent = `BANK ${d.camberDeg >= 0 ? '+' : ''}${d.camberDeg.toFixed(1)}°`;
-      } else { bank.style.display = 'none'; bankTxt.textContent = ''; }
+        setS(bank, 'display', '');
+        setA(bank, 'transform', `rotate(${-Math.max(-10, Math.min(10, d.camberDeg)) * 3} 100 100)`);
+        setT(bankTxt, `BANK ${d.camberDeg >= 0 ? '+' : ''}${d.camberDeg.toFixed(1)}°`);
+      } else { setS(bank, 'display', 'none'); setT(bankTxt, ''); }
     };
   }
 
@@ -280,14 +319,14 @@
     svg('circle', { cx: 12, cy: 12, r: 3, fill: 'currentColor' }, eye);
     eye.style.display = 'none';
     return (d) => {
-      limit.v.textContent = fmt(d.limitMph);
+      setT(limit.v, fmt(d.limitMph));
       limit.c.classList.toggle('unknown', !Number.isFinite(d.limitMph));   // a sign only when there is a limit to show
       const both = [d.paceMph, d.sightMph].filter(v => Number.isFinite(v));
       const v = both.length ? Math.min(...both) : null;
       // "Open" when nothing limits you (the sight line at its cap, no corner asking for less): the number there would only
       // be the cap's own speed (125 mph), not something the road says
-      sight.v.textContent = d.sightOpen ? 'Open' : fmt(v);
-      eye.style.display = !d.sightOpen && both.length === 2 && d.sightMph < d.paceMph ? '' : 'none';
+      setT(sight.v, d.sightOpen ? 'Open' : fmt(v));
+      setS(eye, 'display', !d.sightOpen && both.length === 2 && d.sightMph < d.paceMph ? '' : 'none');
       sight.c.classList.toggle('short', !d.sightOpen && v != null && Number.isFinite(d.speedMph) && d.speedMph > v + 1);
     };
   }
@@ -305,7 +344,7 @@
         digits.innerHTML = '';
         for (const ch of s) html('span', ch === '.' ? 'dot' : 'dg', digits, ch);
       }
-      total.textContent = d.totalMi != null ? `of ${d.totalMi.toFixed(1)}` : '';
+      setT(total, d.totalMi != null ? `of ${d.totalMi.toFixed(1)}` : '');
     };
   }
 
@@ -357,8 +396,8 @@
         segs.a.parentNode.classList.toggle('blank', text[k] === ' ');   // an unused leading digit shows nothing, not a ghost 8
         for (const [n, p] of Object.entries(segs)) p.classList.toggle('lit', on.includes(n));
       });
-      digital.textContent = v; s.setAttribute('aria-label', `${v} ${U() ? U().speedU() : 'mph'}`);
-      sub.textContent = d.limitMph != null ? `LIMIT ${Math.round(d.limitMph)}` : '';
+      setT(digital, v); setA(s, 'aria-label', `${v} ${U() ? U().speedU() : 'mph'}`);
+      setT(sub, d.limitMph != null ? `LIMIT ${Math.round(d.limitMph)}` : '');
     };
   }
   // Bar meters that are instruments, not decoration: SURFACE (roughness, the last 10 readings) and BRAKE / TURN (how hard
@@ -377,7 +416,7 @@
     const paint = (cols, hist, amber) => cols.forEach((cells, c) => {
       const v = hist[hist.length - 10 + c];
       const n = v == null ? 0 : Math.max(1, Math.min(8, Math.round(v.h * 8)));
-      cells.forEach((cell, r) => { cell.className = r < n ? (amber && v && v.amber ? 'on amber' : 'on') : ''; });
+      cells.forEach((cell, r) => { const c = r < n ? (amber && v && v.amber ? 'on amber' : 'on') : ''; if (cell.className !== c) cell.className = c; });
     });
     return (d) => {
       const now = Date.now();

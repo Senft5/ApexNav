@@ -7,9 +7,14 @@
   function idb() {
     if (dbp) return dbp;
     dbp = new Promise((res, rej) => {
-      const r = indexedDB.open('apexnav', 1);
-      r.onupgradeneeded = () => r.result.createObjectStore('drives', { keyPath: 'id' });
-      r.onsuccess = () => res(r.result);
+      // v2 (Round 3, drive_keep.js): 'keep' holds the drive in progress, a head and its row chunks, until it is saved
+      const r = indexedDB.open('apexnav', 2);
+      r.onupgradeneeded = () => {
+        const names = r.result.objectStoreNames;
+        if (!names.contains('drives')) r.result.createObjectStore('drives', { keyPath: 'id' });
+        if (!names.contains('keep')) r.result.createObjectStore('keep', { keyPath: 'key' });
+      };
+      r.onsuccess = () => { r.result.onversionchange = () => { r.result.close(); dbp = null; }; res(r.result); };
       r.onerror = () => { dbp = null; rej(r.error); };
     });
     return dbp;
@@ -27,6 +32,39 @@
   async function remove(id) {
     const db = await idb();
     await new Promise((res, rej) => { const t = db.transaction('drives', 'readwrite'); t.objectStore('drives').delete(id); t.oncomplete = res; t.onerror = () => rej(t.error); });
+  }
+
+  // The drive in progress (drive_keep.js): a checkpoint is its head and one chunk of new rows, written in one transaction,
+  // so what is kept is always a head with every chunk it names.
+  async function keepPut(head, chunk) {
+    const db = await idb();
+    await new Promise((res, rej) => {
+      const t = db.transaction('keep', 'readwrite'), s = t.objectStore('keep');
+      s.put({ ...chunk, key: `${chunk.id}:c${String(chunk.n).padStart(6, '0')}`, kind: 'chunk' });
+      s.put({ ...head, key: `${head.id}:h`, kind: 'head' });
+      t.oncomplete = res; t.onerror = () => rej(t.error); t.onabort = () => rej(t.error);
+    });
+  }
+  /** Every drive in progress: [{ id, head (or null), chunks }]. */
+  async function keepAll() {
+    try {
+      const db = await idb();
+      const recs = await new Promise((res) => { const q = db.transaction('keep').objectStore('keep').getAll(); q.onsuccess = () => res(q.result || []); q.onerror = () => res([]); });
+      const by = new Map();
+      for (const r of recs) {
+        if (!by.has(r.id)) by.set(r.id, { id: r.id, head: null, chunks: [] });
+        if (r.kind === 'head') by.get(r.id).head = r; else by.get(r.id).chunks.push(r);
+      }
+      return [...by.values()];
+    } catch (_) { return []; }
+  }
+  async function keepRemove(id) {
+    const db = await idb();
+    await new Promise((res, rej) => {
+      const t = db.transaction('keep', 'readwrite');
+      t.objectStore('keep').delete(IDBKeyRange.bound(`${id}:`, `${id}:￿`));
+      t.oncomplete = res; t.onerror = () => rej(t.error);
+    });
   }
 
   /**
@@ -182,6 +220,6 @@
     return `${s.hits >= 2 ? 'Confirmed' : 'Seen'} on ${s.hits} of ${s.passes} drives`;
   }
 
-  const api = { all, store, remove, parse, repair, scorableCorners, toTrack, corroborate, seenLabel, cornersOf, scoreOf };
+  const api = { all, store, remove, keepPut, keepAll, keepRemove, parse, repair, scorableCorners, toTrack, corroborate, seenLabel, cornersOf, scoreOf };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexRecording = api;
 })(typeof window !== 'undefined' ? window : globalThis);

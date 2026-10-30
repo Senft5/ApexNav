@@ -4,6 +4,62 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-10-30: from your drive to work (CarPlay)
+
+- *A drive is never lost again.* It was only saved on End; CarPlay's disconnect told the page nothing; a page iOS closed
+  in the background lost the whole drive. Now it is checkpointed every 15 s or 250 m, the shell keeps its own journal of
+  every fix until the page has it, a drive ends itself 20 s after the car disconnects (if it hasn't driven on: a
+  wireless drop at speed doesn't split it) or after 10 min parked without CarPlay, and a drive never ended is recovered
+  into the Log at the next launch, marked "Recovered". The walk from the car is cut off (below 2.5 m/s). Undo:
+  `PARK_MS`, `CAR_GONE_MS` in web/drive_keep.js. **For you:** GPS still runs in the background after a drive (it did
+  before); that's a battery question.
+- *Turn-by-turn in road order* ("exit 19 in 0.1 mi", then "sharp right in 1 mile", then "exit 19"): one tracked turn
+  for the voice and the car's card; a turn counts as taken 30 m past it and never comes back; each turn has three
+  prompts (about 30 s, 12 s, 5 s out) said once each; no corner past a junction is read before the junction's last
+  call. Undo: `TAKEN_M` and the ladder in web/directions.js.
+- *The car map glides*: it moved once per fix and sat still between (91 to 98 % of frames had no motion); now it eases
+  every frame to the newest fix, about one fix behind, never ahead of real data. Repeated messages do nothing; plates
+  are placed at most 4 times a second; no contour lines in the car (hillshade kept); pixel ratio capped at 2; WebKit no
+  longer throttles the car map with the phone locked. Undo: carmap.js `glide`; the contour block (parent of 52c98a8).
+- *The phone stops redrawing when nothing moves*: the follow camera nudged the map by invisible amounts every frame,
+  redrawing it 60 times a second standing still; now a move under a pixel is skipped, and the strip, gauges and scrubber
+  are written only when they change. The font stylesheet no longer blocks start-up (a brief fallback font behind the
+  cover). Idle map p50 frame 383 ms -> 16.7 ms at 4x CPU; People opens in 0.15 s (was 2.4 s). **For you:** hillshade and
+  contours are now the main per-frame cost in a drive on the phone; turning them off in a drive would change the look.
+
+## 2026-10-30: the Crew tab is People (your decision)
+
+**Your design, built as you chose it** ("the crew tab is still laid out like shit with two places to invite people and a
+mix of individual social features and group features in one area"). Four tabs still; the third is **People**. Its
+header is a two-stop switch, **Friends | Crews**, the app's own `.switch` (like Notes and Night).
+- *Friends* (where it opens): your friends first, one row each with their face, handle and where they are ("On the
+  road · Cherohala Skyway", "Seen 15 min ago", or "Not sharing where they are"), read from what each one already shares
+  with you on the map (`friendState` in web/friends_map.js; nothing is shown that they didn't share, and if the read fails
+  the line is left blank, never guessed). A tap opens what you share with them, Profile, Unfriend, Report, Block. Then
+  one key, **Invite or add a friend**: one sheet with Send an invite link (new to Vetta), Share my handle and Send
+  request (already on Vetta), and the requests (incoming and the ones you sent). Then rows: Requests (count), Routes
+  shared with you, Spots near you, Friends on the map (it says who sees you). The points board after them.
+- *Crews*: in a crew, its page with the crew switcher and the settings gear (your crews' sharing, invite links, Leave),
+  then rows for Crew drives, Crews near you and Start a crew, then Convoy and the crew standings. Not in one: Your crews,
+  Crews near you, Start a crew, Crew drives, Convoy. A crew invite sits at the top of Crews; crew invite links stay in a
+  crew (its page, its tile).
+- *Signed out*, not a member, no handle yet: the same switch on both sides. Each side says what it gets you, then Sign
+  in with Apple and Google; Crews says "Join with an invite" or "Pick a handle" with a key back to Friends.
+- *Links*: `?add=` opens Friends with the Invite sheet and the handle filled in; `?invite=` Friends; `?crew=` and a convoy
+  invite open Crews; `?view=crew` (old links, the review recording) is an alias for People on its Crews side,
+  `?view=people` and `?view=friends` work too. The Log's tab bar says People.
+
+My calls on the way:
+- *The switch is the sheet's header*, not a "People" title over a switch (the title stays for screen readers): it stays
+  put while you scroll, and the tab already says People. Undo: the `.sheet[data-view="people"]` rules in web/index.html.
+- *The tab icon is unchanged* (two people, like Apple's person.2): it already reads as People.
+- *Moderator tools* (errors, health, latency, feedback, the moderation queue) sit at the bottom of Friends.
+- *Fixed on the way*: the page's `el()` helper dropped `aria-label`/`aria-hidden` (Object.assign sets properties, and
+  those are attributes), so the crew gear and four inputs had no accessible name; it now sets them as attributes.
+  Undo: the `el` line in web/index.html.
+- "Sign in (Crew)" and "in Crew" in toasts now say People; "Road data in Crew" now says Share road feel in the Garage
+  (where that switch has been since REVIEW.md roadmap 9).
+
 ## 2026-10-30 (morning): Review 4, stage 2
 
 **Fable's check (docs/design/REVIEW4_CHECK.md): 26 of 32 fixed, and 16 new findings (U-90 to U-105), all built.** Four

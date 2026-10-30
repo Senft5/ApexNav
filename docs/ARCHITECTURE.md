@@ -52,6 +52,14 @@ The JS file is a line-for-line port used by the browser/iOS cockpit for live OSR
   sent as `vert_peak_g`; the web Recorder places each frame's spike on the 5 m sample where the car was (its share of the way
   between the two GPS fixes around it), only with a locked mount and above 1 m/s, as the CSV column `vert_peak_g`;
   spikes inside a gap of over ~3 s or 100 m between fixes are dropped, not guessed. Blank means unmeasured, never 0.
+- A drive is kept as it goes (`web/drive_keep.js`, 2026-10-30): the page checkpoints the Recorder to IndexedDB (`apexnav` v2,
+  store `keep`: a head plus row chunks, `recording.js keepPut/keepAll/keepRemove`) every 15 s or 250 m; the shell numbers
+  every fix (`seq`, `at` in each live frame) and journals those since the last checkpoint on disk (`ApexKit.DriveJournal`,
+  Application Support/DriveJournal, page messages `{cmd:'journal', op: start|durable|end|list}`). A page that stops answering
+  (3 s of frames) gets the missed fixes as `window.apex.backlog([...])` when it wakes. `EndWatch` ends a drive 20 s after
+  CarPlay disconnects with the car stopped, or after 10 min below 2.5 m/s with no car screen, cut back to the last sample at
+  driving speed; at launch `recoverKept` saves any drive never ended (checkpoint + journal) with `ended: 'recovered'`, or
+  carries on one the shell is still recording (the page was reloaded mid-drive).
 - Hazards on phone drives: `profileRecording` runs `detectHazards` (JS port of `road_dna.detect_hazards`, parity-tested)
   with no roughness stand-in, so a bump needs a measured spike (> 0.35 g and 6x the surrounding roughness) and crests/dips a
   measured crest. `ApexRecording.corroborate` then counts, per hazard, your other drives over the same spot in the same

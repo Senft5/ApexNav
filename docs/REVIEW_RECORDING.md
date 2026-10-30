@@ -29,7 +29,7 @@ The `review-pack` artifact, one folder per flow:
    again as its strip moves on, its Start, the location permission sheet (this flow alone starts without location
    granted, as a new phone does), the idle map, Layers.
 2. **tabs**: a two-minute drive on the corners first, so the Log has something to show; then the drive's page and its
-   Replay, the replay closed (the flow checks the tab bar is back), the Log, Crew, Garage, scrolled; and Roadbook at night.
+   Replay, the replay closed (the flow checks the tab bar is back), the Log, People (Friends, then Crews), Garage, scrolled; and Roadbook at night.
 3. **planning**: Where to?, suggestions, the place row tapped (not the search field) and the route waited for, the route
    card (it opens by itself), scrolled, closed to its bar, then dragged open by the bar (the flow checks it opened), Save,
    the plan sheet's More, Find a loop.
@@ -44,7 +44,7 @@ The `review-pack` artifact, one folder per flow:
    the corners in that theme, and its Replay in the Log. Billet's drive stands still for 8 s in the R3- at 25.3 km
    (`APEX_REPLAY_HOLD=25.31:8`, about 5 min in; `app-log.txt` says when), so the strip's passed-note rule (U-86: a corner
    waited in for 3 s at 0 ft drops out and the strip moves on) is on camera.
-8. **signed-in**: the member's Crew page (the flow fails if Crew still shows the sign-in page), Friends and the account
+8. **signed-in**: People: Friends (the flow fails if People still shows the sign-in page), its Invite sheet, then Crews, and the account
    (needs the review account below; skipped without it).
 
 ## How it gets close to the real world
@@ -102,7 +102,7 @@ Log's sync; held); kudos; friends-on-the-map presence (`/api/presence`, sent eve
 and blocks (`/api/reports`, `/api/blocks`); crew chat, events, RSVPs and pages; feedback; photos; garage; ETA shares;
 convoy (its socket opens only after a POST that starts or joins one, which is held, and no flow starts one); app-health and error counts
 (anonymous, raw `fetch`; skipped). Drives are never synced to the server (they stay on the phone).
-Reads (the member's Crew page, Friends, hazards near the road) still go, so the pages look as a member's do.
+Reads (People: the member's friends and crew page, hazards near the road) still go, so the pages look as a member's do.
 
 ## The review account (signed-in flow)
 
