@@ -38,12 +38,26 @@
     const ft = m / FT;
     return ft >= 1000 ? { n: (m / MI).toFixed(1), u: 'MI' } : { n: String(Math.max(0, Math.round(ft / 50) * 50)), u: 'FT' };
   }
+  /**
+   * A short distance as a co-driver says it (REVIEW4 U-93: "then 120 metres" to a driver in miles): "400 feet" (in 50s
+   * under 1000 ft), "a quarter mile", "half a mile", "1.5 miles"; "120 metres" (in 10s), "1.2 kilometres".
+   */
+  function spokenShort(m) {
+    if (!Number.isFinite(m) || m < 0) return '';
+    if (metric()) return m >= 1000 ? `${(m / 1000).toFixed(1)} kilometres` : `${Math.max(10, Math.round(m / 10) * 10)} metres`;
+    const ft = m / FT, mi = m / MI;
+    if (ft < 975) return `${Math.max(50, Math.round(ft / 50) * 50)} feet`;
+    if (mi < 0.375) return 'a quarter mile';
+    if (mi < 0.625) return 'half a mile';
+    if (mi < 0.875) return 'three quarters of a mile';
+    return mi < 1.05 ? 'a mile' : `${mi.toFixed(1)} miles`;
+  }
   /** Speeds: m/s to mph or km/h (a number), and the unit. */
   const speed = (mps) => (mps == null || !Number.isFinite(mps) ? null : mps * (metric() ? 3.6 : 2.2369362921));
   const speedU = () => (metric() ? 'km/h' : 'mph');
   /** The speed dial's top: 140 mph or 220 km/h. */
   const speedMax = () => (metric() ? 220 : 140);
 
-  const api = { KEY, choose, system, set, metric, long, longN, longU, short, speed, speedU, speedMax, _reset: () => { current = null; } };
+  const api = { KEY, choose, system, set, metric, long, longN, longU, short, spokenShort, speed, speedU, speedMax, _reset: () => { current = null; } };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexUnits = api;
 })(typeof window !== 'undefined' ? window : globalThis);

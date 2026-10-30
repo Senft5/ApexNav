@@ -4,6 +4,38 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-10-30 (morning): Review 4, stage 2
+
+**Fable's check (docs/design/REVIEW4_CHECK.md): 26 of 32 fixed, and 16 new findings (U-90 to U-105), all built.** Four
+builders in parallel, merged into one PR. My calls, and theirs:
+- *A route that uses its own road twice* (U-90, the one P0: "Back on route" 140 times in 36 s, then "Wrong way" for
+  seven minutes): the match keeps route points within 40 m whose direction agrees with the heading, then takes the one
+  nearest the progress so far; "Wrong way" must hold 5 s and ends on 3 good fixes; "Back on route" is said once per
+  episode, at most once a minute. One consequence: a driver who U-turns early on an out-and-back is matched to the return
+  leg (skips ahead) rather than told "Wrong way". Undo: `matchRoute` in web/reroute.js.
+- *No call from inside a corner* (U-96): a corner closer than speed × (time to say it + 1.2 s) is skipped, not chained
+  into the next call. *Distances in your units* (U-93): "then 400 feet" in miles. **For you:** the rally-style chain
+  ("Left 3 into right 4, 120") still says bare metres, as rally notes do; feet would need new voice-pack recordings.
+- *"careful" once per run of corners* (REVIEW4_CHECK §4), stronger cautions always. Undo: `createCareRun`.
+- *One score* (U-91): the end card said "no score" because the recording it scored had no corners attached; the card,
+  the live score, the Log and the Garage now all score through `ApexRecording.scoreOf` (the real drive: 673 on both).
+- *The forecast, fitted to the one real drive* (U-97): it was 20 minutes optimistic; now 45.5 min against the real
+  46.0. Back roads with no posted limit are capped at about 31 mph (14 m/s). Undo: the constants in web/eta.js.
+- *The sight plate off posted limits* (U-60): OPEN above 80 mph and it stays OPEN until 10 mph under; a value holds 6 s
+  before rising; a two-step fall shows at once.
+- *A free drive on the car shows "--" for time and distance* (U-95). Unverified: Apple documents a negative time as
+  "--", not a negative distance; if a real car shows "-1 mi", change the distance to 0 in `guideChanged`.
+- *The island's words* (U-103): corner codes as the car map prints them ("R2", "RHP"), off route as "Wrong way".
+- *Drive messages in the status line, not toasts over the map* (U-74, U-102), while the drive bar is up; toasts with a
+  Cancel key stay toasts. *The end card's map is the whole drive* (U-88: MapLibre gave up fitting because the follow
+  camera's padding was still on). *A stray GPS fix over 1 km away is a gap*, not a straight line filled with made-up
+  road samples (it had drawn a 40 km road). Undo: `JUMP_M` in web/sensors.js.
+- *Home by is a stepper* (U-98), *the route bar's name never cut* (U-101, "Details" is now the chevron alone), *a Done key
+  on the replay* (U-104), *the launch lockup stays until the page paints* (U-80).
+- *The review recording writes nothing real* (U-94): its hazard report reached production (deleted, docs/BACKUPS.md).
+  In review mode the page, the shell (debug only) and the Worker (for the review account) hold every write. The car's
+  video is stopped cleanly, the app log is the app's own lines, and one flow stops at a corner for U-86.
+
 ## 2026-10-30 (overnight): Review 4
 
 **Review 4: Fable watched the real app, and all 32 findings were built overnight** (docs/design/REVIEW4.md, U-58 to U-89;

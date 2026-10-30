@@ -55,6 +55,15 @@ struct ApexShellRootView: View {
         ZStack {
             Color(uiColor: .launchPanel).ignoresSafeArea()
             if ApexWebBundle.indexURL != nil {
+                // REVIEW4 U-80 (check): the launch screen's lockup, at its size and place, under the web view. The web view is
+                // clear until the page paints, and the page's cover draws the same lockup over it, so launch screen, shell and
+                // page read as one frame instead of seconds of bare ink while WebKit starts and the page's scripts load.
+                Image("LaunchLogo")
+                    .resizable()
+                    .frame(width: 184, height: 50)
+                    .accessibilityHidden(true)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .ignoresSafeArea()
                 ApexCockpitWebView()
                     .ignoresSafeArea()
             } else {
@@ -271,14 +280,21 @@ struct ApexCockpitWebView: UIViewRepresentable {
 
     func updateUIView(_ uiView: WKWebView, context: Context) {}
 
-    /// Review recordings only (debug builds, APEX_REVIEW=1): the page logs every line it says (web say()).
+    /// Review recordings only (debug builds, APEX_REVIEW=1): the page logs every line it says (web say()), and its console
+    /// reaches the app's log, so the pack's app-log.txt is the app's own story of the flow (REVIEW4_CHECK §4.2).
     private static var reviewFlag: String {
         #if DEBUG
         let env = ProcessInfo.processInfo.environment
         guard env["APEX_REVIEW"] == "1" else { return "" }
         // every flow but first-run starts past the welcome (U-65 put it in the app; tapping it from XCUITest was unreliable)
         let past = env["APEX_REVIEW_PAST_WELCOME"] == "1" ? " try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}" : ""
-        return " window.APEX_REVIEW = true;" + past
+        let consoleJS = """
+         (() => { const h = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex; if (!h) return;
+           const text = (x) => { if (typeof x === 'string') return x; if (x instanceof Error) return x.stack || x.message; try { return JSON.stringify(x); } catch (_) { return String(x); } };
+           for (const k of ['log', 'info', 'warn', 'error']) { const f = console[k];
+             console[k] = function (...a) { try { h.postMessage({ cmd: 'console', text: (k + ' ' + a.map(text).join(' ')).slice(0, 2000) }); } catch (_) {} return f.apply(console, a); }; } })();
+        """
+        return " window.APEX_REVIEW = true;" + past + consoleJS
         #else
         return ""
         #endif
@@ -312,8 +328,10 @@ struct ApexCockpitWebView: UIViewRepresentable {
         // A phone-sized frame until a window sizes it: a page started by the car's screen lays out as it would on the phone.
         let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 390, height: 844), configuration: config)
         webView.isOpaque = false
-        webView.backgroundColor = .launchPanel        // the launch screen's colour until the page's cover paints
-        webView.scrollView.backgroundColor = .launchPanel
+        // U-80 (check): clear, not the panel colour, until the page paints: the shell's lockup under it (ApexShellRootView)
+        // shows through, so the launch screen holds until the page's own cover takes over at the same place
+        webView.backgroundColor = .clear
+        webView.scrollView.backgroundColor = .clear
         webView.scrollView.contentInsetAdjustmentBehavior = .never
         webView.scrollView.isScrollEnabled = false
         webView.scrollView.bounces = false
@@ -382,6 +400,10 @@ final class ApexScriptBridge: NSObject, WKScriptMessageHandler {
         #if DEBUG
         if cmd == "said", let line = speechText {                    // review recordings: the transcript (web say())
             NSLog("APEX-SAID %@", line)
+            return
+        }
+        if cmd == "console", let line = speechText {                 // review recordings: the page's console, for app-log.txt
+            NSLog("APEX-CONSOLE %@", line)
             return
         }
         #endif
@@ -1680,6 +1702,15 @@ final class ApexApiBridge: NSObject, WKScriptMessageHandlerWithReply {
                   let url = URL(string: Self.base + path) else { replyHandler(nil, "bad_path"); return }
             var req = URLRequest(url: url, timeoutInterval: 30)
             req.httpMethod = ((dict["method"] as? String) ?? "GET").uppercased()
+            #if DEBUG
+            // U-94: the review recording signs in as a real account on the production Worker; it reads, and never writes
+            // (web/sync.js holds writes back too; this is the one door every signed-in call goes through)
+            if ProcessInfo.processInfo.environment["APEX_REVIEW"] == "1", let method = req.httpMethod, method != "GET", method != "HEAD" {
+                NSLog("APEX-REVIEW held %@ %@", method, url.path)
+                replyHandler(["status": 204, "type": "", "body": ""], nil)
+                return
+            }
+            #endif
             for (k, v) in (dict["headers"] as? [String: String]) ?? [:] where ["content-type", "x-apexnav"].contains(k.lowercased()) {
                 req.setValue(v, forHTTPHeaderField: k)
             }
@@ -1728,8 +1759,17 @@ final class ApexApiBridge: NSObject, WKScriptMessageHandlerWithReply {
     private let rows: [Row]
     private let mount: [[Double]]
     private let fromRow: Int                                   // APEX_REPLAY_FROM, as a row of the drive
+    /// APEX_REPLAY_HOLD=<km>:<s> (REVIEW4_CHECK §4.7, U-86): the car stands still for <s> seconds once it reaches <km>, in a
+    /// corner, as at a junction queue, so the strip's passed-note rule is seen in a recording. Once per drive.
+    private let hold: (m: Double, s: Double)?
+    private var holdUntil: Double?, held = false
     private var distM = 0.0, lastFix = 0.0, timer: Timer?
-    var driving = false
+    var driving = false {
+        didSet {
+            guard driving != oldValue else { return }
+            NSLog("APEX-REVIEW replay %@ at %.2f km", driving ? "driving" : "parked", distM / 1000)
+        }
+    }
 
     static func start(shell: ApexSensorShell) -> ApexReplay? {
         guard let name = ProcessInfo.processInfo.environment["APEX_REPLAY"], name.range(of: "^[a-z_]{1,40}$", options: .regularExpression) != nil,
@@ -1749,13 +1789,17 @@ final class ApexApiBridge: NSObject, WKScriptMessageHandlerWithReply {
         guard rows.count > 2 else { return nil }
         let fromKm = Double(ProcessInfo.processInfo.environment["APEX_REPLAY_FROM"] ?? "") ?? 0
         let fromRow = min(rows.count - 3, max(0, Int((fromKm.isFinite ? fromKm : 0) * 1000 / 5)))
-        let r = ApexReplay(shell: shell, rows: rows, mount: mount, fromRow: fromRow)
+        let parts = (ProcessInfo.processInfo.environment["APEX_REPLAY_HOLD"] ?? "").split(separator: ":").compactMap { Double($0) }
+        let hold: (m: Double, s: Double)? = parts.count == 2 && parts[0].isFinite && parts[1] > 0 && parts[1] <= 120 ? (m: parts[0] * 1000, s: parts[1]) : nil
+        let r = ApexReplay(shell: shell, rows: rows, mount: mount, fromRow: fromRow, hold: hold)
         r.timer = Timer.scheduledTimer(withTimeInterval: 0.01, repeats: true) { [weak r] _ in MainActor.assumeIsolated { r?.tick() } }
+        NSLog("APEX-REVIEW replay %@ parked at %.2f km%@", name, Double(fromRow) * 5 / 1000,
+              hold.map { String(format: ", to stand %.0f s at %.2f km", $0.s, $0.m / 1000) } ?? "")
         return r
     }
 
-    private init(shell: ApexSensorShell, rows: [Row], mount: [[Double]], fromRow: Int) {
-        self.shell = shell; self.rows = rows; self.mount = mount; self.fromRow = fromRow
+    private init(shell: ApexSensorShell, rows: [Row], mount: [[Double]], fromRow: Int, hold: (m: Double, s: Double)?) {
+        self.shell = shell; self.rows = rows; self.mount = mount; self.fromRow = fromRow; self.hold = hold
         distM = Double(fromRow) * 5
     }
 
@@ -1782,7 +1826,12 @@ final class ApexApiBridge: NSObject, WKScriptMessageHandlerWithReply {
         let i = min(rows.count - 2, Int(distM / 5)), f = min(1, max(0, distM / 5 - Double(i)))
         let a = rows[i], b = rows[i + 1]
         let mix = { (x: Double, y: Double) in x + (y - x) * f }
-        let mps = driving ? max(1, mix(a.mps, b.mps)) : 0
+        if driving, !held, let hold, distM >= hold.m {
+            held = true; holdUntil = t + hold.s
+            NSLog("APEX-REVIEW replay standing %.0f s at %.2f km", hold.s, distM / 1000)
+        }
+        if let until = holdUntil, t >= until { holdUntil = nil; NSLog("APEX-REVIEW replay moving again at %.2f km", distM / 1000) }
+        let mps = driving && holdUntil == nil ? max(1, mix(a.mps, b.mps)) : 0
         if driving { distM += mps * dt; if Int(distM / 5) >= rows.count - 2 { driving = false } }
         // the vehicle frame (ISO 8855: x forward, y left, z up): measured forces, and gravity tilted by camber and grade
         let roll = mix(a.camberDeg, b.camberDeg) * .pi / 180, pitch = atan(mix(a.grade, b.grade) / 100)

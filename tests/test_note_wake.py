@@ -85,4 +85,4 @@ def test_the_page_wakes_on_the_road_and_speaks_the_pack_lines():
     assert '"sys:cruise": "Quiet from here. Bumps and cameras only."' in bank and '"sys:stage": "Full notes."' in bank
     assert "'Quiet from here. Bumps and cameras only.'" in notes and "'Full notes.'" in notes
     # the rerouter's words only on a planned route (U-72)
-    assert re.search(r"if \(offRoute && track && track\.kind === 'route'\) return offRouteText\(\);", html)
+    assert re.search(r"if \(offRoute && track && track\.kind === 'route'\) return \[?offRouteText\(\)", html)

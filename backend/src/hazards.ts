@@ -11,6 +11,12 @@ type Kind = (typeof KINDS)[number];
 /** How long a report lives after it was made or last confirmed, in minutes. */
 export const LIFE_MIN: Record<Kind, number> = { pothole: 7 * 1440, gravel: 1440, debris: 180, animal: 30, police: 60, closure: 720 };
 export const SAME_M = 50, MAX_PER_DAY = 30, NEAR_MAX_KM = 50, MAX_LISTED = 200;
+/** The review recording's account (@vetta_review, docs/REVIEW_RECORDING.md). U-94: its replayed drive reported gravel on a
+ *  real road and real drivers heard about it. Its reports and votes are answered as if taken and never stored, so the
+ *  recording looks like a member's drive and no other driver hears it. The page holds them back too (web/index.html
+ *  sendHazard, web/sync.js apiFetch); this is the side a page can't skip. */
+export const REVIEW_USER_ID = "7b39562f-72d8-4f6e-80c8-382820afb133";
+const isReview = (v: Viewer) => v.id === REVIEW_USER_ID;
 
 const M_LAT = 110540;
 const cosLat = (lat: number) => Math.cos(lat * Math.PI / 180);
@@ -31,6 +37,7 @@ export async function reportHazard(env: Env, v: Viewer, req: Request) {
   // Made with no signal and sent later (IDEAS F-05): it lives from when it was seen, and one already past its life is refused.
   const ageS = b.age_s === undefined || b.age_s === null ? 0 : Math.round(num(b.age_s, "age_s", 0, 86400));
   if (ageS >= LIFE_MIN[kind] * 60) throw new HttpError(410, "stale_report");
+  if (isReview(v)) return { id: `review_${randomToken(9)}`, confirmed: false };   // U-94: answered, kept nowhere
   const today = await env.DB.prepare("SELECT COUNT(*) AS n FROM hazard_reports WHERE reported_by = ? AND created_at > datetime('now', '-1 day')")
     .bind(v.id).first<{ n: number }>();
   if ((today?.n ?? 0) >= MAX_PER_DAY) throw new HttpError(429, "too_many_reports");
@@ -76,6 +83,7 @@ export async function hazardsNear(env: Env, url: URL, v?: Viewer) {
 
 /** Still there (true): pushes the expiry out by the kind's life. Gone (false): two or more "gone" outvoting the confirmations end it. */
 export async function vote(env: Env, v: Viewer, id: string, still: boolean) {
+  if (isReview(v)) return { ok: true };                     // U-94: the review account's answer counts for nothing
   const h = await env.DB.prepare("SELECT kind FROM hazard_reports WHERE id = ? AND expires_at > datetime('now')").bind(id).first<{ kind: Kind }>();
   if (!h) throw new HttpError(404, "no_hazard");
   const prev = await env.DB.prepare("SELECT still FROM hazard_votes WHERE hazard_id = ? AND user_id = ?").bind(id, v.id).first<{ still: number }>();

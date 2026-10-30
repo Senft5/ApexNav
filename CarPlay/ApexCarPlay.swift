@@ -500,6 +500,12 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
         // "0 min · -- mi" for the whole drive)
         if let t = trip, let rm = g.remainM {
             mapTemplate?.updateEstimates(CPTravelEstimates(distanceRemaining: ApexCar.shared.distance(rm), timeRemaining: g.remainS ?? -1), for: t)
+        } else if let t = trip, g.recording {
+            // U-95: a free drive has no destination, so nothing to arrive at: the trip strip read "7:04 arrival · 0 min · -- mi"
+            // (unset estimates are an arrival of now). Negative time and distance are CarPlay's "--" for unknown, so the strip
+            // says it does not know rather than that the drive is over; the distance driven is in the record card's words.
+            let unit: UnitLength = ApexCar.shared.look.metric ? .kilometers : .miles
+            mapTemplate?.updateEstimates(CPTravelEstimates(distanceRemaining: Measurement(value: -1, unit: unit), timeRemaining: -1), for: t)
         }
     }
 

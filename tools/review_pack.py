@@ -10,6 +10,10 @@ videos, a clean transcript, and INDEX.md that walks the flows for the reviewer.
 REVIEW4 §6: a phone photo taken on its side (a step named "landscape") is turned upright, and phone-start.txt /
 car-start.txt (the wall-clock second each video started, written by the workflow) put the video second beside every
 transcript line, so a line said maps to a frame.
+
+REVIEW4_CHECK §4: a video without its index (the moov atom: the recording was not closed) is flagged in INDEX.md rather
+than passed on as if it would open, and the app's own review events from app-log.txt (where the replay parked, drove and
+stood still, what the recording held back from the server) are listed with their video second.
 """
 from __future__ import annotations
 
@@ -17,9 +21,9 @@ import json
 import os
 import re
 import shutil
+import struct
 import sys
 
-from PIL import Image, ImageDraw
 
 NAME = re.compile(r"^(phone|car)-([a-z0-9-]+)-(\d\d+)-([^_]+?)(?:_\d+_[0-9A-Fa-f-]+)?(?:\.png)?$")
 
@@ -51,6 +55,7 @@ def sheet(files: list[tuple[str, str]], out: str, width: int = 260, cols: int = 
     """A contact sheet: each photo scaled to `width`, labelled with its step."""
     if not files:
         return
+    from PIL import Image, ImageDraw                                   # only to draw: CI's test job has no Pillow
     ims = []
     for path, label in files:
         im = Image.open(path).convert("RGB")
@@ -73,6 +78,7 @@ def upright(path: str, step: str) -> None:
     the right edge of the pixels), so a quarter turn anticlockwise."""
     if "landscape" not in step:
         return
+    from PIL import Image
     im = Image.open(path)
     if im.height > im.width:
         im.rotate(90, expand=True).save(path)
@@ -113,6 +119,47 @@ def transcript(path: str, start: str | None = None) -> list[str]:
                 pos = at(m.group(1), start)
                 lines.append(f"{m.group(1)}  {pos + '  ' if pos else ''}{m.group(2)}")
     return lines
+
+
+def events(path: str, start: str | None = None) -> list[str]:
+    """The shell's review events in app-log.txt ("APEX-REVIEW replay standing 8 s at 25.31 km"), as the transcript's
+    lines are: "12:01:33  @ 02:31  replay standing 8 s at 25.31 km"."""
+    lines = []
+    if os.path.exists(path):
+        for raw in open(path, encoding="utf-8", errors="replace"):
+            m = re.search(r"(\d\d:\d\d:\d\d)\.\d+.*APEX-REVIEW (.*)$", raw.rstrip())
+            if m:
+                pos = at(m.group(1), start)
+                lines.append(f"{m.group(1)}  {pos + '  ' if pos else ''}{m.group(2)}")
+    return lines
+
+
+def playable(path: str) -> bool:
+    """Whether an MP4 has its index (a top-level moov atom). simctl writes it last, when the recording is stopped and
+    allowed to finish; without it the file will not open (REVIEW4_CHECK §4.1, the second recording's car.mp4)."""
+    try:
+        with open(path, "rb") as fh:
+            while True:
+                head = fh.read(8)
+                if len(head) < 8:
+                    return False
+                size, kind = struct.unpack(">I4s", head)
+                if kind == b"moov":
+                    return True
+                if size == 1:                                        # a 64-bit size follows
+                    big = fh.read(8)
+                    if len(big) < 8:
+                        return False
+                    skip = struct.unpack(">Q", big)[0] - 16
+                elif size == 0:                                      # the last atom runs to the end of the file
+                    return False
+                else:
+                    skip = size - 8
+                if skip < 0:
+                    return False
+                fh.seek(skip, 1)
+    except OSError:
+        return False
 
 
 def main(src: str, dst: str) -> int:
@@ -156,12 +203,19 @@ def main(src: str, dst: str) -> int:
         said = transcript(os.path.join(flow_dir, "transcript.txt"), starts["phone"])
         with open(os.path.join(out, "transcript.txt"), "w", encoding="utf-8") as fh:
             fh.write("\n".join(said) + ("\n" if said else ""))
+        def video(v: str) -> str:
+            notes = [f"started {starts[v]}"] if starts[v] else []
+            if not playable(os.path.join(out, f"{v}.mp4")):
+                notes.append("NO INDEX (moov): the recording was not closed and will not open")
+            return f"`{flow}/{v}.mp4`" + (f" ({'; '.join(notes)})" if notes else "")
+        happened = events(os.path.join(flow_dir, "app-log.txt"), starts["phone"])
         index += [f"## {flow}", "",
                   f"- Steps: {len(steps['phone'])} phone photos" + (f", {len(steps['car'])} car photos" if steps["car"] else ""),
                   f"- Contact sheets: `{flow}/sheet-phone.png`" + (f", `{flow}/sheet-car.png`" if steps["car"] else ""),
-                  "- Video: " + ", ".join(f"`{flow}/{v}.mp4`" + (f" (started {starts[v]})" if starts[v] else "")
-                                          for v in ("phone", "car") if os.path.exists(os.path.join(out, f"{v}.mp4"))),
+                  "- Video: " + ", ".join(video(v) for v in ("phone", "car") if os.path.exists(os.path.join(out, f"{v}.mp4"))),
                   f"- Spoken lines: {len(said)} (`{flow}/transcript.txt`)", ""]
+        if happened:
+            index += ["  The app's review events (`app-log.txt`):", ""] + [f"  - {l}" for l in happened[:40]] + [""]
         index += ["  " + " · ".join(label.split(" ", 1)[1] for _, label in steps["phone"]), ""] if steps["phone"] else []
         if said:
             index += ["  First lines said:", ""] + [f"  - {l}" for l in said[:12]] + [""]

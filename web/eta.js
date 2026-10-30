@@ -74,18 +74,34 @@
 
   // U-64: a route the router never timed (a GPX track, a loop or restore without one) gets a time from its own speed
   // envelope, so the route bar, the card, the car's trip strip and the live ETA all have one. It is a forecast like the
-  // router's, never road data and never "with traffic": each 5 m sample at the envelope's speed (the same 0.92 of it the
-  // replay drives at), capped by the posted limit where known and NO_LIMIT_MPS where not (the replay's 27 m/s, about
-  // 60 mph), never under FLOOR_MPS. The live pace then scales it like any router time. `marks` every MARK_M metres place
-  // the slow miles where they are (routerLeft). Returns { timeS, marks } or null when the track can't be timed.
-  const ENVELOPE_SHARE = 0.92, NO_LIMIT_MPS = 27, FLOOR_MPS = 4, MARK_M = 250;
+  // router's, never road data and never "with traffic". The live pace then scales it like any router time. `marks` every
+  // MARK_M metres place the slow miles where they are (routerLeft). Returns { timeS, marks } or null when the track can't
+  // be timed.
+  // U-97: the first version (0.92 of the envelope, capped at the limit or 60 mph) said 25 min for 23 miles of Dry Ridge Rd
+  // and was about 20% short on the recorded drive (web/data/dry_ridge.js: 36.8 min forecast against the 46.0 min it took). The
+  // envelope is a limit, not a pace: the recording's bins sit at 0.6 to 0.8 of it through the bends, and on roads with no
+  // posted limit the speed levels off near 38 mph whatever the envelope says, with junctions and stops on top. Fitted to
+  // that drive (45.5 min; tests/test_envelope_time.py pins it within 3%): ENVELOPE_SHARE of the envelope, capped by
+  // - a posted limit of OPEN_LIMIT_MPS or more (a highway): the limit;
+  // - a lower posted limit (town): TOWN_SHARE of it at 35 mph rising to all of it at OPEN_LIMIT_MPS (lights, turns);
+  // - no posted limit on a route whose limits were looked up (limitMps an array, the entry null): UNPOSTED_MPS, a minor road;
+  // - limits never looked up (limitMps not an array: offline, or not yet back): UNKNOWN_MPS, between the two.
+  // Never under FLOOR_MPS.
+  const ENVELOPE_SHARE = 0.8, OPEN_LIMIT_MPS = 24, TOWN_LIMIT_MPS = 15.65, TOWN_SHARE = 0.65, UNPOSTED_MPS = 14, UNKNOWN_MPS = 22,
+    FLOOR_MPS = 4, MARK_M = 250;
+  function limitCap(limit) {
+    if (limit >= OPEN_LIMIT_MPS) return limit;
+    const k = Math.max(0, Math.min(1, (limit - TOWN_LIMIT_MPS) / (OPEN_LIMIT_MPS - TOWN_LIMIT_MPS)));
+    return limit * (TOWN_SHARE + (1 - TOWN_SHARE) * k);
+  }
   function envelopeTime(dist, envMps, limitMps) {
     if (!Array.isArray(dist) || dist.length < 2 || !Array.isArray(envMps) || envMps.length !== dist.length) return null;
     const total = dist[dist.length - 1];
     if (!finite(total) || !(total > 0)) return null;
+    const looked = Array.isArray(limitMps) && limitMps.length === dist.length;
     const vAt = (i) => {
-      const env = finite(envMps[i]) && envMps[i] >= 0 ? envMps[i] * ENVELOPE_SHARE : NO_LIMIT_MPS;
-      const cap = Array.isArray(limitMps) && finite(limitMps[i]) && limitMps[i] > 0 ? limitMps[i] : NO_LIMIT_MPS;
+      const cap = looked && finite(limitMps[i]) && limitMps[i] > 0 ? limitCap(limitMps[i]) : looked ? UNPOSTED_MPS : UNKNOWN_MPS;
+      const env = finite(envMps[i]) && envMps[i] >= 0 ? envMps[i] * ENVELOPE_SHARE : cap;
       return Math.max(FLOOR_MPS, Math.min(env, cap));
     };
     const marks = [];
@@ -100,5 +116,6 @@
   }
 
   const api = { routerLeft, createPace, estimate, homeByOffer, homeByAt, envelopeTime, PACE_MIN, PACE_MAX, LATE_GRACE_MS };
+  api.ENVELOPE = { ENVELOPE_SHARE, OPEN_LIMIT_MPS, TOWN_SHARE, UNPOSTED_MPS, UNKNOWN_MPS, FLOOR_MPS };   // U-97 (tests)
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexEta = api;
 })(typeof window !== 'undefined' ? window : globalThis);

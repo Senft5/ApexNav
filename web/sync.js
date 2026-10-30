@@ -31,8 +31,16 @@
   }
   // A session an older build left in page storage moves into the Keychain once, then leaves the page.
   try { const old = bridge() && localStorage.getItem(TOKEN_KEY); if (old) { setSession(old); } } catch (_) {}
+  // U-94: the review recording (debug builds set window.APEX_REVIEW; the Log's frame reads its map page's) signs in as a real
+  // account on the production Worker. It reads like any member, and writes nothing: no hazard, vote, road feel, score,
+  // kudos, presence, crew post or feedback of a replayed drive may reach another driver. A write answers 204 here.
+  const reviewing = () => { try { return !!(root.APEX_REVIEW || (root.parent && root.parent !== root && root.parent.APEX_REVIEW)); } catch (_) { return !!root.APEX_REVIEW; } };
   /** fetch() for /api/* from either shell. Rejects when offline, like fetch. */
   async function apiFetch(path, init = {}) {
+    if (reviewing() && !/^(GET|HEAD)$/i.test(init.method || 'GET')) {
+      try { root.console.info(`APEX-REVIEW held ${String(init.method).toUpperCase()} ${String(path).split('?')[0]}`); } catch (_) {}
+      return new Response(null, { status: 204 });
+    }
     const headers = { 'x-apexnav': '1', ...(init.headers || {}) };
     const b = bridge();
     if (b) {
