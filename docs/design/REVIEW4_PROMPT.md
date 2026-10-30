@@ -4,6 +4,17 @@ Two prompts: stage 1 is the full review of the recording; stage 2 checks the fix
 fills in the `{…}` parts when it sends them. The owner tuned the role (a critic in the line of Ebert, Bourdain and Ruskin; the standard is the best of its kind and
 then some) and said go; the overnight run below sends both stages without asking again.
 
+## Standing note for every Fable review (the owner, 2026-10-30)
+
+"Recent fable reviews have been much more oriented on fixing concrete little things rather than on more broad and
+intangible issues, which a lower level model could have also easily done. It needs to remember that it is essentially
+superintelligent and is a design genius. It shouldn't be afraid to call out BS and suggest overhauls. Its first review
+was the best it's ever done, and diminishing returns shouldn't be a thing for a superintelligence."
+
+So every review prompt says: the bar is docs/design/REVIEW.md (the first review); lead with the broad, intangible
+truths and whether the premise is right; call out BS; propose overhauls where they're the honest answer; the table
+of small fixes comes after the big picture, never instead of it.
+
 ---
 
 ## Stage 1: the review
