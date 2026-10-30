@@ -10,7 +10,6 @@ something blocks on you, delete it once it's done. Everything else is in docs/ID
 | what | why | how long |
 |---|---|---|
 | **Turn on R2** in the Cloudflare dashboard (R2 → Purchase/Enable; the free tier is 10 GB with no egress fees, a card is needed on file) and tell Claude | Photos (profiles, cars, crews, build threads) live in Workers KV for now, which costs more per GB and caps a photo at 25 MB (ours are under 0.7 MB, so it works). Claude moves them to R2 once it's on | 5 min |
-| **Add the review token as a GitHub secret**: repo → Settings → Secrets and variables → Actions → New repository secret, name `REVIEW_SESSION`, value: the token Claude gave you in chat on 2026-10-30 | The review recording's signed-in flow (Crew, Friends, the account) signs in as the review account `@vetta_review` with it; without it that one flow skips itself | 2 min |
 
 ## Money and marketing (new, 2026-10-28)
 
