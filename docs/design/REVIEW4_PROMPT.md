@@ -1,7 +1,8 @@
-# Fable review 4: the prompts (DRAFT, for the owner to tune)
+# Fable review 4: the prompts (approved by the owner, 2026-10-30 03:4xZ: "go")
 
 Two prompts: stage 1 is the full review of the recording; stage 2 checks the fixes against a fresh recording. Claude
-fills in the `{…}` parts when it sends them. Nothing here is sent until the owner says go (docs/REVIEW_RECORDING.md).
+fills in the `{…}` parts when it sends them. The owner tuned the role (a critic in the line of Ebert, Bourdain and Ruskin; the standard is the best of its kind and
+then some) and said go; the overnight run below sends both stages without asking again.
 
 ---
 

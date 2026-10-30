@@ -7,7 +7,7 @@ only:** Actions → *App review recording* → Run workflow. About 20–25 minut
 
 **The Fable review itself waits for the owner** (2026-10-30: "ensure not to run fable until i say because i want to fine
 tune the fable prompt with you"). Recording the pack is fine; handing it to Fable is not, until the owner and Claude have
-agreed the prompt and the owner says go.
+agreed the prompt and the owner says go. Review 4's prompts (docs/design/REVIEW4_PROMPT.md) were approved on 2026-10-30.
 
 ## What it produces
 
