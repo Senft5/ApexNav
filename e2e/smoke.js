@@ -174,6 +174,57 @@ flow('standing still, the map sleeps: the follow camera stops moving it once set
   check(same.kept && same.keptOnDist && same.dist === '350', `the strip is rewritten in place (${JSON.stringify(same)})`);
 });
 
+flow('the map is a fixed stage: tabs, sheets and the drive never resize it; a drive draws at 2x without contours at speed (REVIEW_FEEL F-02, F-05, F-14)', async (page, base) => {
+  // a style with one of the labels a drive hides at speed (the real one has more; see AT_SPEED_HIDE)
+  await page.route('https://tiles.openfreemap.org/**', (route) => (route.request().url().includes('/styles/')
+    ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 8, sources: { n: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } } },
+      layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#eee' } }, { id: 'highway-name-minor', type: 'symbol', source: 'n', layout: {} }] }) })
+    : route.abort()));
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apexDebug.map.getLayer('apex-contours'), null, { timeout: 15000 });
+  await page.evaluate(() => { window.__resizes = 0; window.apexDebug.map.on('resize', () => { window.__resizes++; }); });
+  const canvas = () => page.evaluate(() => { const c = window.apexDebug.map.getCanvas(); return `${c.width}x${c.height}`; });
+  const before = await canvas();
+  check(before === '1170x2532', `the idle map is full-bleed at the screen's 3x (${before})`);
+  // every tab and sheet, there and back
+  for (const v of ['people', 'garage', 'map', 'people', 'map']) { await page.click(`#tabbar .tab[data-view="${v}"]`); await page.waitForTimeout(250); }
+  await page.click('#destInput'); await page.waitForTimeout(400);
+  await page.click('#planCancel'); await page.waitForTimeout(400);
+  await page.click('#tabbar .tab[data-view="log"]'); await page.waitForFunction(() => document.documentElement.classList.contains('log-open'));
+  await page.evaluate(() => window.ApexLogHost.close('map')); await page.waitForTimeout(400);
+  const idle = await page.evaluate(() => window.__resizes);
+  check(idle === 0 && await canvas() === before, `no tab or sheet resizes the map (${idle} resizes, ${await canvas()})`);
+  // a drive at speed: one resize at its start (2x pixels, the map ending under its chrome), none after
+  const fix = (i, v) => ({ lat: 35.96 + i * 1.2e-5, lon: -83.92, accuracy_m: 5, speed_mps: v, course_deg: 0, has_fix: true, calibration: 'locked', recording: true, lat_g: 0.1, lon_g: 0 });
+  const feed = (from, n, v) => page.evaluate(async ([from, n, v, f]) => { const mk = new Function('i', 'v', `return (${f})(i, v)`);
+    for (let i = from; i < from + n; i++) { window.apex.live(mk(i, v)); await new Promise((r) => setTimeout(r, 100)); } }, [from, n, v, fix.toString()]);
+  await feed(0, 20, 14);
+  await page.waitForFunction(() => window.apexDebug.state.mode === 'live');
+  const start = await page.evaluate(() => { const m = window.apexDebug.map; return { dpr: m.getPixelRatio(), resizes: window.__resizes,
+    contours: m.getLayoutProperty('apex-contours', 'visibility'), labels: m.getLayer('apex-contour-labels') ? m.getLayoutProperty('apex-contour-labels', 'visibility') : 'none',   // (no glyphs in this style: no label layer)
+    minor: m.getLayoutProperty('highway-name-minor', 'visibility'), hillshade: m.getLayoutProperty('apex-hillshade', 'visibility') || 'visible',
+    px: m.getCanvas().width * m.getCanvas().height }; });
+    check(start.dpr === 2, `a drive draws at 2x pixels (${start.dpr})`);
+  check(start.resizes === 1, `the drive's start is one resize (its pixels and its edges together): ${start.resizes}`);
+  check(start.contours === 'none' && start.labels === 'none' && start.minor === 'none' && start.hillshade === 'visible',
+    `at speed the contours and minor labels go, the hillshade stays (${JSON.stringify(start)})`);
+  check(start.px <= 0.45 * 1170 * 2532, `the drive's canvas is under half the idle one's pixels (${start.px})`);
+  await page.evaluate(() => { window.__resizes = 0; });
+  await feed(20, 30, 20);                                              // the strip and the status line change; the map does not
+  await feed(50, 45, 0);                                               // stopped for over 3 s: the contours come back
+  const stopped = await page.evaluate(() => ({ resizes: window.__resizes, contours: window.apexDebug.map.getLayoutProperty('apex-contours', 'visibility'), dpr: window.apexDebug.map.getPixelRatio() }));
+  check(stopped.resizes === 0, `no resize in the drive (${stopped.resizes})`);
+  check(stopped.contours === 'visible' && stopped.dpr === 2, `stopped, the contours are back; still 2x in the drive (${JSON.stringify(stopped)})`);
+  // F-14: a replay at 8x, its strip and gauges changing every frame, never resizes the map either
+  await page.goto(base + '/index.html?drive=dry_ridge&play=1');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.state.playing && window.apexDebug.state.cursorM > 0, null, { timeout: 20000 });
+  await page.evaluate(() => { window.__resizes = 0; window.apexDebug.map.on('resize', () => { window.__resizes++; }); document.querySelector('#rateDetents [data-rate="8"]').click(); });
+  await page.waitForTimeout(3000);
+  const replay = await page.evaluate(() => ({ resizes: window.__resizes, playing: window.apexDebug.state.playing, dpr: window.apexDebug.map.getPixelRatio() }));
+  check(replay.playing && replay.resizes === 0, `no resize in a replay (${JSON.stringify(replay)})`);
+}, { deviceScaleFactor: 3 });
+
 flow('a hot phone turns the battery saver on and back off', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.goto(base + '/index.html');
