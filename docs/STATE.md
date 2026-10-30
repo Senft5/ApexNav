@@ -1,5 +1,15 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-10-30 (day): fixes from the owner's first real drive with CarPlay
+
+- [x] Drives started on CarPlay always saved (checkpoints, native drive journal, end on disconnect/park, recovery).
+- [x] Turn-by-turn in road order (one tracked turn, a prompt ladder said once, no corner before the junction's call).
+- [x] Car map glides between fixes; dedupe; no contours in the car; not throttled when locked.
+- [x] Phone performance (no idle redraws, change-only DOM writes, fonts non-blocking).
+- [x] Crew tab is People with Friends | Crews (the owner's choice).
+- Unverified on a device: all of the above needs the owner's next drive (a fresh TestFlight build); Swift compiles in CI.
+- Exact next task: a TestFlight build from main for the owner; then confirm on a real drive; then REVIEW3.md Roadmap 3.
+
 ## Session 2026-10-30 (overnight): Fable review 4, both stages, built
 
 - [x] The owner tuned and approved the Fable prompts (docs/design/REVIEW4_PROMPT.md: the critic's role, the standard).

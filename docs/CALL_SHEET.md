@@ -4,6 +4,29 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-10-30: from your drive to work (CarPlay)
+
+- *A drive is never lost again.* It was only saved on End; CarPlay's disconnect told the page nothing; a page iOS closed
+  in the background lost the whole drive. Now it is checkpointed every 15 s or 250 m, the shell keeps its own journal of
+  every fix until the page has it, a drive ends itself 20 s after the car disconnects (if it hasn't driven on: a
+  wireless drop at speed doesn't split it) or after 10 min parked without CarPlay, and a drive never ended is recovered
+  into the Log at the next launch, marked "Recovered". The walk from the car is cut off (below 2.5 m/s). Undo:
+  `PARK_MS`, `CAR_GONE_MS` in web/drive_keep.js. **For you:** GPS still runs in the background after a drive (it did
+  before); that's a battery question.
+- *Turn-by-turn in road order* ("exit 19 in 0.1 mi", then "sharp right in 1 mile", then "exit 19"): one tracked turn
+  for the voice and the car's card; a turn counts as taken 30 m past it and never comes back; each turn has three
+  prompts (about 30 s, 12 s, 5 s out) said once each; no corner past a junction is read before the junction's last
+  call. Undo: `TAKEN_M` and the ladder in web/directions.js.
+- *The car map glides*: it moved once per fix and sat still between (91 to 98 % of frames had no motion); now it eases
+  every frame to the newest fix, about one fix behind, never ahead of real data. Repeated messages do nothing; plates
+  are placed at most 4 times a second; no contour lines in the car (hillshade kept); pixel ratio capped at 2; WebKit no
+  longer throttles the car map with the phone locked. Undo: carmap.js `glide`; the contour block (parent of 52c98a8).
+- *The phone stops redrawing when nothing moves*: the follow camera nudged the map by invisible amounts every frame,
+  redrawing it 60 times a second standing still; now a move under a pixel is skipped, and the strip, gauges and scrubber
+  are written only when they change. The font stylesheet no longer blocks start-up (a brief fallback font behind the
+  cover). Idle map p50 frame 383 ms -> 16.7 ms at 4x CPU; People opens in 0.15 s (was 2.4 s). **For you:** hillshade and
+  contours are now the main per-frame cost in a drive on the phone; turning them off in a drive would change the look.
+
 ## 2026-10-30: the Crew tab is People (your decision)
 
 **Your design, built as you chose it** ("the crew tab is still laid out like shit with two places to invite people and a
