@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-WFNEooEM47pDFGo3OtwLopFK0xV6HxoyvXQPNol46kM=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-XPGiF14Aav2rY0uuVWH9NIrRBpQ4wn2dR9KcglmgK+4=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -3077,12 +3077,20 @@
     // The planned route lives for this session only (sessionStorage): a reload after a lost map (WebGL, above) plans it
     // again from its own geometry (no router call, works offline), but opening the app, on the phone or in the car, starts
     // with no route (the owner, 2026-10-30: "it should open with no route loaded"; it used to keep it for 12 hours).
-    const PLANNED = 'apex.plannedRoute';
+    // A route being driven is kept across a close (localStorage, ACTIVE) for ACTIVE_KEEP_MS, so a phone that killed the
+    // app mid-drive comes back to it; ending the drive forgets it (the owner: "active routes, not planned ones").
+    const PLANNED = 'apex.plannedRoute', ACTIVE = 'apex.activeRoute', ACTIVE_KEEP_MS = 12 * 3600_000;
     try { localStorage.removeItem(PLANNED); } catch (_) {}            // what older builds kept across launches
+    const packPlanned = (t) => JSON.stringify({ ...ApexSavedRoutes.pack(t), extraS: t.extraS ?? null, savedAt: Date.now() });
     function persistPlanned(t) {
-      try { sessionStorage.setItem(PLANNED, JSON.stringify({ ...ApexSavedRoutes.pack(t), extraS: t.extraS ?? null })); }
-      catch (_) { /* too big or storage off: a reload just won't bring it back */ }
+      try { sessionStorage.setItem(PLANNED, packPlanned(t)); } catch (_) { /* too big or storage off: a reload just won't bring it back */ }
+      let driving = false; try { driving = driveActive; } catch (_) {}   // (declared further down)
+      if (driving) persistActive(t);                                   // a reroute mid-drive replaces the kept one
     }
+    function persistActive(t) {
+      try { if (t && t.kind === 'route') localStorage.setItem(ACTIVE, packPlanned(t)); } catch (_) {}
+    }
+    function forgetActive() { try { localStorage.removeItem(ACTIVE); } catch (_) {} }
     // A packed route (planned or saved for offline) rebuilt on the phone: notes from its shape, the rest as it was kept.
     async function trackFromPacked(p) {
       const t = await trackFromPolyline(p.coords, p.id, p.name);
@@ -3093,8 +3101,15 @@
     }
     async function restorePlanned() {
       let saved = null;
+      let resumed = false;
       try { saved = JSON.parse(sessionStorage.getItem(PLANNED) || 'null'); } catch (_) { saved = null; }
+      if (!saved) {                                                    // a fresh launch: only a drive the app was closed in
+        try { saved = JSON.parse(localStorage.getItem(ACTIVE) || 'null'); } catch (_) { saved = null; }
+        if (saved && !(Number.isFinite(saved.savedAt) && Date.now() - saved.savedAt < ACTIVE_KEEP_MS)) { forgetActive(); saved = null; }
+        resumed = !!saved;
+      }
       if (!saved || !Array.isArray(saved.coords) || saved.coords.length < 2) return;
+      if (resumed) setTimeout(() => toast(`Back on ${saved.name || 'your route'}: the drive you were on when the app closed.`), 1200);
       await buildRoute(null, saved.id, saved.name, await trackFromPacked(saved));
     }
     // Saved for offline (IDEAS F-03): the route card's Save keeps it on the phone; Where to? lists it under Saved.
@@ -6210,6 +6225,7 @@
       // with the Crew or Garage sheet or the Log open left that page in the middle of the drive screen (the owner, 2026-10-30).
       if (logFrame.el && !logFrame.el.hidden) { logFrame.el.hidden = true; document.documentElement.classList.remove('log-open'); }
       showView(null);
+      if (track && track.kind === 'route') persistActive(track);       // kept if the app is closed mid-drive
       clearCarOffer();
       setPlaying(false);
       drive.rec = new ApexSensors.Recorder(); drive.status = { gps: 'waiting', motion: 'off', wake: 'off', message: '' }; drive.frames = 0; drive.battery = null;
@@ -6316,6 +6332,7 @@
       const battery = window.ApexBattery ? ApexBattery.summary(drive.battery) : null; drive.battery = null;
       resetCircuit();
       activity('end');
+      forgetActive();                                                  // the drive is over: a relaunch starts with no route
       carPost({ kind: 'end' }); car.guideKey = ''; car.sightKey = '';
       const rec = drive.rec, sensors = drive.sensors, live = drive.live, road = rec && window.ApexRoadNames ? ApexRoadNames.mainRoad(drive.roads, rec.km * 1000) : null;
       drive.sensors = null; drive.rec = null; drive.live = null; drive.share = 'off'; drive.native = false;

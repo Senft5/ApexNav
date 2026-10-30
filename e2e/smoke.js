@@ -432,6 +432,41 @@ flow('the sight-line speed rides under the position arrow, on the phone and on t
   check(await page.evaluate(() => getComputedStyle(document.querySelector('.car-puck')).zIndex === '3'), 'the car above the plates');
 });
 
+flow('a route being driven comes back after the app is closed; a planned one, or a finished drive, does not (the owner, 2026-10-30)', async (page, base) => {
+  const ctx = page.context();
+  await ctx.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
+    window.webkit = { messageHandlers: { apex: { postMessage() {} } } }; });   // as in the app: the shell feeds GPS
+  await ctx.route('https://photon.komoot.io/**', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ features: [
+    { geometry: { coordinates: [-83.9700, 35.7565] }, properties: { name: 'Maryville', state: 'Tennessee' } }] }) }));
+  await ctx.route('https://valhalla1.openstreetmap.de/**', (route) => {
+    const req = JSON.parse(route.request().postData() || '{}');
+    if (!req.locations) return route.abort();
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify(stubTrip(req.locations)) });
+  });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && typeof window.apex.onNative === 'function');
+  await page.evaluate(() => window.apex.live({ lat: 35.6, lon: -84.1, accuracy_m: 5, speed_mps: 0, course_deg: 0, has_fix: true }));
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'go', lat: 35.7565, lon: -83.97, name: 'Maryville' }));
+  await page.waitForFunction(() => { const t = window.apexDebug.track; return t && t.kind === 'route'; }, null, { timeout: 20000 });
+  const name = await page.evaluate(() => window.apexDebug.track.name);
+  const relaunch = async () => {                                    // a new tab: no session left, like opening the app again
+    const p = await ctx.newPage();
+    await p.goto(base + '/index.html');
+    await p.waitForFunction(() => window.apexDebug && window.apexDebug.map);
+    await p.waitForTimeout(2500);
+    const t = await p.evaluate(() => (window.apexDebug.track && window.apexDebug.track.kind === 'route' ? window.apexDebug.track.name : null));
+    await p.close();
+    return t;
+  };
+  check(await relaunch() === null, 'a planned route does not come back on a fresh open');
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start' }));   // started from the car
+  await page.waitForFunction(() => window.apexDebug.driveActive);
+  check(await relaunch() === name, 'the route being driven comes back');
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'end' }));
+  await page.waitForFunction(() => !window.apexDebug.driveActive);
+  check(await relaunch() === null, 'after the drive ends, a fresh open has no route');
+}, { geolocation: { latitude: 35.6, longitude: -84.1 }, permissions: ['geolocation'] });
+
 flow('the car connects: CarPlay offers Start drive, and an apexnav://open?go=drive link starts one', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.goto(base + '/index.html');

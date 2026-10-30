@@ -182,3 +182,7 @@ def test_opens_with_no_route():
     html = open(os.path.join(ROOT, "web", "index.html"), encoding="utf-8").read()
     assert "sessionStorage.setItem(PLANNED" in html and "localStorage.setItem(PLANNED" not in html
     assert "localStorage.getItem(PLANNED)" not in html
+    # ... but a route being driven survives a close, and ending the drive forgets it (the owner: "active routes")
+    assert "if (track && track.kind === 'route') persistActive(track);" in html
+    assert "forgetActive();                                                  // the drive is over" in html
+    assert "localStorage.getItem(ACTIVE)" in html and "ACTIVE_KEEP_MS" in html

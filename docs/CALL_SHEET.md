@@ -6,6 +6,18 @@ it says so. Things only you can do are in docs/OWNER_TODO.md.
 
 ## 2026-10-29
 
+**Full crew customization for the owner's account, and only a drive in progress survives a close.**
+- *Livery grants.* The owner: "my account should have full access to crew customization". Pro comes only from
+  `pro_entitlements` (nothing writes it before StoreKit), and one Pro member gives at most 3 Decals while the full livery
+  (Factory) needs 20, so a Pro row would not do it. New table `livery_grants` (migration 0040): a crew with a granted
+  member is Factory, every option open, and the granted user counts as Pro for their own Decals controls. Applied to
+  preview and production through the connector with its `d1_migrations` row (docs/BACKUPS.md), and one row written:
+  @natesenft. Undo: `DELETE FROM livery_grants WHERE user_id = '<id>'` (the table can stay).
+- *Active routes, not planned ones, survive a close.* The owner liked a route coming back after the app closed, but
+  only for a drive in progress. A route is kept (localStorage, 12 h) from the moment a drive on it starts, replaced on a
+  reroute, and forgotten when the drive ends; opening the app back on it says so in a toast. A planned route still lasts
+  the session only. Undo: `persistActive`/`forgetActive` in web/index.html.
+
 **A drive clears the screen.** The owner: a drive started from the car while the phone showed the Crew sheet left the
 sheet in the middle of the drive screen. Starting a drive now closes any sheet, its pop-ups and the Log frame, however
 it was started (the car, Siri, a link or the button). Undo: the two lines at the top of `enterDrive`.

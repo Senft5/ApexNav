@@ -2,7 +2,7 @@
 // they're in: one in their first month of continuous Pro, two in the second, three from the third on. A crew's Decals
 // set its livery tier; each tier unlocks more of the crew page's look. Decals never touch the board (the Vetta Score only).
 // Pro comes only from pro_entitlements, which nothing writes until StoreKit ships (docs/MONETIZATION.md), so every crew is
-// Plain today.
+// Plain today, except a crew with a member in livery_grants (hand-written, migration 0040), which is Factory.
 import type { Viewer } from "./auth";
 import { Env, HttpError, body } from "./util";
 import { isCrewMember } from "./social";
@@ -38,7 +38,10 @@ export async function liveryOf(env: Env, crewId: string, viewer?: string) {
        FROM crew_members m JOIN users u ON u.id = m.user_id WHERE m.crew_id = ?1`).bind(crewId, viewer ?? "").all<{ handle: string | null; decals: number; mine: number }>()).results;
   const supporters = rows.filter((r) => r.decals > 0).sort((a, b) => b.decals - a.decals).map((r) => ({ handle: r.handle, decals: r.decals }));
   const decals = supporters.reduce((n, r) => n + r.decals, 0);
-  return { decals, ...tierFor(decals), supporters };
+  // a member with a hand-written grant (livery_grants, migration 0040) opens the whole livery: Factory, nothing to reach
+  const granted = !!(await env.DB.prepare(
+    "SELECT 1 FROM crew_members m JOIN livery_grants g ON g.user_id = m.user_id WHERE m.crew_id = ? LIMIT 1").bind(crewId).first());
+  return { decals, ...(granted ? { tier: "factory" as Tier, next: null } : tierFor(decals)), supporters, granted };
 }
 export async function tierOf(env: Env, crewId: string): Promise<Tier> { return (await liveryOf(env, crewId)).tier; }
 
@@ -53,7 +56,8 @@ export async function decalsPlace(env: Env, v: Viewer, crewId: string, req: Requ
 /** Your own Pro, as the server knows it, and whether your Decals are on this crew. */
 export async function myDecals(env: Env, userId: string, crewId: string) {
   const r = await env.DB.prepare(`SELECT ${DECALS_SQL("?1", "?2")} AS decals,
-      EXISTS (SELECT 1 FROM pro_entitlements p WHERE p.user_id = ?1 AND (p.expires_at IS NULL OR p.expires_at > datetime('now'))) AS pro,
+      (EXISTS (SELECT 1 FROM pro_entitlements p WHERE p.user_id = ?1 AND (p.expires_at IS NULL OR p.expires_at > datetime('now')))
+        OR EXISTS (SELECT 1 FROM livery_grants g WHERE g.user_id = ?1)) AS pro,
       EXISTS (SELECT 1 FROM decal_optouts o WHERE o.user_id = ?1 AND o.crew_id = ?2) AS off`).bind(userId, crewId).first<{ decals: number; pro: number; off: number }>();
   return { pro: !!r?.pro, decals: r?.decals ?? 0, on: !r?.off };
 }

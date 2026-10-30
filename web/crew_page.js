@@ -220,6 +220,8 @@
     // The livery (REVIEW.md 5.1, mockup 09): the tier, the Decals and the next threshold, supporters as tilted stickers.
     function liveryBox(c, redo) {
       const l = c.livery || { tier: 'plain', decals: 0, next: { tier: 'club', at: 5 }, supporters: [] };
+      // the whole livery granted by hand (livery_grants): no Decals to count, every option open
+      if (l.granted) return el('p', { className: 'note cp-livery-line', textContent: 'Factory livery · every option open (early access)' });
       // nothing to count yet: one pencil line, no box and no empty gauge (REVIEW2.md crew page)
       if (!l.decals && !(l.mine && l.mine.pro)) return el('p', { className: 'note cp-livery-line', textContent: `${TIER_NAME[l.tier] || 'Plain'} livery · Decals come from crew-mates with Vetta Pro` });
       const box = el('div', { className: 'cp-livery' }, el('h3', { textContent: `${TIER_NAME[l.tier] || 'Plain'} livery` }),
