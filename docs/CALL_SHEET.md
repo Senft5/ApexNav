@@ -4,6 +4,13 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-10-30 (night): the simulator smoke test starts past the welcome
+
+- main's simulator test had failed since 05:51 (the welcome moved into the app, U-65, and its Start brings up the
+  location sheet; the test still looked for "Get started" and a Crew tab), and a failed simulator test holds back
+  TestFlight. The test now launches with the review flags past the welcome and answers the location sheet, and looks
+  for People. Undo: the launchEnvironment lines in UITests/CockpitSmokeTests.swift.
+
 ## 2026-10-30 (evening): the People review and the speed review, built (your go: open sign-up, two tabs, the speed pushback)
 
 Your calls, built: Vetta is open (anyone who signs in is a member; invite links only add a friend or join a crew); People

@@ -16,25 +16,22 @@ final class CockpitSmokeTests: XCTestCase {
 
     func testCockpitLoadsInsideTheApp() {
         let app = XCUIApplication()
+        // Since U-65 the first-run welcome runs in the app and its Start brings up the system location sheet, which
+        // the old "Get started" tap never met: start past the welcome as the review recordings do (debug builds).
+        app.launchEnvironment["APEX_REVIEW"] = "1"
+        app.launchEnvironment["APEX_REVIEW_PAST_WELCOME"] = "1"
         app.launch()
-        app.tap()   // lets the interruption monitor handle the permission alert
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        let sheet = springboard.alerts.firstMatch
+        if sheet.waitForExistence(timeout: 8) {
+            for label in ["Allow While Using App", "Allow Once", "Allow"] where sheet.buttons[label].exists { sheet.buttons[label].tap(); break }
+        }
 
         let web = app.webViews.firstMatch
         XCTAssertTrue(web.waitForExistence(timeout: 30), "WKWebView never appeared")
 
-        // First launch displays the onboarding dialog on a fresh install. Dismiss if present.
-        let watchReplay = web.buttons["Watch a replay"]
-        let getStarted = web.buttons["Get started"]
-        if watchReplay.waitForExistence(timeout: 5) {
-            watchReplay.tap()
-        } else if getStarted.waitForExistence(timeout: 2) {
-            getStarted.tap()
-        }
-
-        // The four tabs exist in every cockpit state but a drive (driving is full-screen). "Start drive" may not: the native shell feeds live frames as soon as
-        // the simulator has a location, and a live cockpit shows End drive instead. (MapLibre text is not exposed to accessibility.)
         XCTAssertTrue(web.buttons["Garage"].waitForExistence(timeout: 45), "cockpit JS did not boot")
-        for tab in ["Map", "Log", "Crew"] {
+        for tab in ["Map", "Log", "People"] {
             XCTAssertTrue(web.buttons[tab].waitForExistence(timeout: 5), "tab \(tab) missing")
         }
 
