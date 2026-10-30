@@ -1395,7 +1395,7 @@ flow('review mode (U-94): the recording\'s hazard report is the sheet, Undo and 
   check(await page.evaluate(() => document.getElementById('hzOverlay').classList.contains('show')), 'the sheet opens');
   await page.click('#hzKinds button:has-text("Gravel")');
   check(/Undo Gravel/.test(await page.textContent('#hzReportBtn')), 'the Report key is Undo for 3 s');
-  await page.waitForFunction(() => /Gravel reported/.test(document.getElementById('toast').textContent), null, { timeout: 6000 });
+  await saidOn(page, /Gravel reported/, { timeout: 6000 });                 // the toast, or the status line in a drive (U-74)
   await page.waitForFunction(() => [...document.querySelectorAll('.hz-pin')].some((p) => p.textContent === 'GRAVEL'), null, { timeout: 4000 });
   await page.evaluate(async () => { await ApexSync.apiFetch('/api/presence', { method: 'POST', body: '{}' }); await ApexSync.apiFetch('/api/feedback', { method: 'POST', body: '{}' }); });
   await page.waitForTimeout(1500);   // loadReported(true) after the report: the server's list again, with the review's own pin kept
