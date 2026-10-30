@@ -20,6 +20,8 @@
 - [x] From the owner's photos of build 498.1 in the car: tulips drawn synchronously (they never reached the card),
   distances in the driver's units, a loop's start no longer matched to its end, the trip card without repeats, plates
   decluttered with the car above them.
+- [x] The car map edge to edge at the car's own scale (it stopped at the map buttons, and was laid out at the phone's
+  width and scaled up); the app opens with no route (the planned route lasts the session only).
 - Answered for the owner: the UI is a WKWebView; the IMU and GPS run with the phone locked once CarPlay starts the engine,
   but location and motion permission must have been granted once on the phone.
 - Active bugs: none known. Unverified on a device: the Log frame's native calls through the map page's bridge (Save/Share, signed-in

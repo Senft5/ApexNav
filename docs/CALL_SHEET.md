@@ -6,6 +6,16 @@ it says so. Things only you can do are in docs/OWNER_TODO.md.
 
 ## 2026-10-29
 
+**The car map fills the screen at its own scale, and the app opens with no route.**
+- *Edge to edge, at the car's scale.* The owner: "the map doesn't continue under the tiles and the tiles are giant". The
+  web view kept the page inside the safe area, so the map stopped at the map buttons; and "device-width" in a web view
+  is the iPhone's width, so the page was laid out about 390 wide and scaled up some 2.3 times (giant, soft plates and
+  labels). The shell now sets no safe-area inset, `viewport-fit=cover`, and the car view's own width as the viewport
+  (`fitViewport`). I missed both in the first photos.
+- *No route on open.* The planned route was kept for 12 hours so a killed app came back to it; the owner doesn't want
+  that ("it should open with no route loaded"). It now lasts the session only (a reload after a lost map still keeps
+  it). Undo: `persistPlanned`/`restorePlanned` back to localStorage with `PLANNED_KEEP_MS`.
+
 **Fixes from the owner's photos of build 498.1 in the car.**
 - *The tulips are drawn straight onto a canvas* (Path2D from the SVG's own path data) instead of loading the SVG as an
   image first: the car showed Apple's stock arrow, so that load never finished in the app. Now the tulip rides on the

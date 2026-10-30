@@ -615,6 +615,9 @@ final class ApexCarMapViewController: UIViewController, WKNavigationDelegate {
         w.isOpaque = false
         w.backgroundColor = view.backgroundColor
         w.scrollView.isScrollEnabled = false
+        // The map runs under Apple's buttons and cards, edge to edge: no safe-area inset (the owner's photos, 2026-10-30:
+        // the map stopped short at the map buttons, an empty strip under them).
+        w.scrollView.contentInsetAdjustmentBehavior = .never
         w.isUserInteractionEnabled = false                  // the base view takes no touches: Apple's templates own every control
         w.navigationDelegate = self
         view.addSubview(w)
@@ -626,7 +629,7 @@ final class ApexCarMapViewController: UIViewController, WKNavigationDelegate {
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         loaded = true
         MainActor.assumeIsolated {
-            showLook(); showRoute(); showCorners(); showHazards(); setMode(); showPosition(); showSight()
+            fitViewport(); showLook(); showRoute(); showCorners(); showHazards(); setMode(); showPosition(); showSight()
         }
     }
 
@@ -637,7 +640,18 @@ final class ApexCarMapViewController: UIViewController, WKNavigationDelegate {
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-        MainActor.assumeIsolated { setMode() }               // Apple's cards cover a share of the left that depends on the width
+        MainActor.assumeIsolated { fitViewport(); setMode() }   // Apple's cards cover a share of the left that depends on the width
+    }
+
+    /// Lays the page out at the car screen's own width, one CSS pixel to a point. "device-width" in a web view is the
+    /// iPhone's width, so the car map was laid out about 390 wide and scaled up: giant, soft plates and labels (2026-10-30).
+    private var fittedWidth = 0
+    private func fitViewport() {
+        guard loaded, let web else { return }
+        let w = Int(web.bounds.width.rounded())
+        guard w > 0, w != fittedWidth else { return }
+        fittedWidth = w
+        web.evaluateJavaScript("(function () { var m = document.querySelector('meta[name=viewport]'); if (m) m.content = 'width=\(w), initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover'; if (window.car && window.car.map) window.car.map.resize(); })(); void 0;", completionHandler: nil)
     }
 
     private func js(_ code: String) {

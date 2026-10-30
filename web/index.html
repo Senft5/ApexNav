@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-JyClQqJBQOBvwRE0DIAHX+E5Mg989bWnKDy2kAsVq10=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-n4OXWUinQL9/vxJSI9LeQYzrm9QQG8CNI4uU5VWNVqA=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -3074,15 +3074,14 @@
       }
       paintAlternates();
     }
-    // Log and Stages are another page, so coming back to Map reloads this one: keep the planned route for the session and
-    // rebuild it here from its own geometry (no router call, works offline). Also what a reload after a lost map restores.
+    // The planned route lives for this session only (sessionStorage): a reload after a lost map (WebGL, above) plans it
+    // again from its own geometry (no router call, works offline), but opening the app, on the phone or in the car, starts
+    // with no route (the owner, 2026-10-30: "it should open with no route loaded"; it used to keep it for 12 hours).
     const PLANNED = 'apex.plannedRoute';
-    // The planned route survives a page change and an app restart for PLANNED_KEEP_MS (kept with its directions, router times
-    // and limits, web/saved_routes.js), so a phone that killed the app mid-trip comes back to the same route.
-    const PLANNED_KEEP_MS = 12 * 3600_000;
+    try { localStorage.removeItem(PLANNED); } catch (_) {}            // what older builds kept across launches
     function persistPlanned(t) {
-      try { localStorage.setItem(PLANNED, JSON.stringify({ ...ApexSavedRoutes.pack(t), extraS: t.extraS ?? null })); }
-      catch (_) { /* too big or storage off: the route just won't survive a restart */ }
+      try { sessionStorage.setItem(PLANNED, JSON.stringify({ ...ApexSavedRoutes.pack(t), extraS: t.extraS ?? null })); }
+      catch (_) { /* too big or storage off: a reload just won't bring it back */ }
     }
     // A packed route (planned or saved for offline) rebuilt on the phone: notes from its shape, the rest as it was kept.
     async function trackFromPacked(p) {
@@ -3094,9 +3093,8 @@
     }
     async function restorePlanned() {
       let saved = null;
-      try { saved = JSON.parse(localStorage.getItem(PLANNED) || sessionStorage.getItem(PLANNED) || 'null'); } catch (_) { saved = null; }
+      try { saved = JSON.parse(sessionStorage.getItem(PLANNED) || 'null'); } catch (_) { saved = null; }
       if (!saved || !Array.isArray(saved.coords) || saved.coords.length < 2) return;
-      if (Number.isFinite(saved.savedAt) && Date.now() - saved.savedAt > PLANNED_KEEP_MS) { try { localStorage.removeItem(PLANNED); } catch (_) {} return; }
       await buildRoute(null, saved.id, saved.name, await trackFromPacked(saved));
     }
     // Saved for offline (IDEAS F-03): the route card's Save keeps it on the phone; Where to? lists it under Saved.
@@ -6630,7 +6628,7 @@
         booting = false; paintIdle();
         if (params.get('play') === '1') setPlaying(true);
       } else {
-        // Back from Log / Stages (or after a reload): the planned route returns, quietly (booting: no preview), without
+        // After a reload in the same session (a lost map): the planned route returns, quietly (booting: no preview), without
         // waiting for the map, which draws it whenever it finishes loading.
         await restorePlanned().catch(() => {});
         booting = false; paintIdle();

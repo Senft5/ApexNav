@@ -167,3 +167,18 @@ def test_sight_tag(out):
     assert b == {"kind": "sight", "text": "30", "unit": "KM/H", "short": True}
     assert o == {"kind": "sight", "text": "OPEN", "unit": "", "short": False}
     assert n["text"] is None and nan["text"] is None, "unknown stays unknown"
+
+
+def test_car_map_fills_the_screen_at_its_own_scale():
+    """The owner's photos (2026-10-30): the map stopped at the map buttons, and plates and labels came out giant and soft."""
+    swift = open(os.path.join(ROOT, "CarPlay", "ApexCarPlay.swift"), encoding="utf-8").read()
+    html = open(os.path.join(ROOT, "web", "carmap.html"), encoding="utf-8").read()
+    assert "contentInsetAdjustmentBehavior = .never" in swift and "viewport-fit=cover" in html
+    assert "func fitViewport()" in swift and "'width=\\(w), initial-scale=1" in swift, "laid out at the car's width, not the phone's"
+
+
+def test_opens_with_no_route():
+    """Opening the app (or the car) starts with no route: the planned route lasts the session only (2026-10-30)."""
+    html = open(os.path.join(ROOT, "web", "index.html"), encoding="utf-8").read()
+    assert "sessionStorage.setItem(PLANNED" in html and "localStorage.setItem(PLANNED" not in html
+    assert "localStorage.getItem(PLANNED)" not in html
