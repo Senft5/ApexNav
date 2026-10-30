@@ -400,6 +400,11 @@ final class ApexScriptBridge: NSObject, WKScriptMessageHandler {
             ApexBuildNotifier.requestPermission()
             return
         }
+        // Location (U-65): asked when the page says, after the welcome, not at launch. Once answered this shows nothing.
+        if cmd == "requestLocation" {
+            shell?.requestLocation()
+            return
+        }
         // CarPlay (CarPlay/ApexCarPlay.swift): the route, the next maneuver and hazards for the car's screen.
         if cmd == "car", let dict = body as? [String: Any] {
             ApexCar.shared.receive(dict)
@@ -526,7 +531,8 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         locManager.pausesLocationUpdatesAutomatically = false
         locManager.allowsBackgroundLocationUpdates = true   // UIBackgroundModes: location is declared in project.yml
         locManager.showsBackgroundLocationIndicator = true
-        locManager.requestWhenInUseAuthorization()
+        // U-65: never asked at launch. The page asks (requestLocation) after the welcome's Start, so the system sheet follows a
+        // reason; a driver past the welcome asks at once, and a first drive (phone or car) asks if it never was.
         configureVoiceSession()
         synth.delegate = self
         #if DEBUG
@@ -1097,6 +1103,12 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         Task { @MainActor in
             self.ingest(fix: fix)
         }
+    }
+
+    /// The system's location sheet, only while it has never been answered (U-65: the page asks after the welcome's Start).
+    func requestLocation() {
+        guard locManager.authorizationStatus == .notDetermined else { return }
+        locManager.requestWhenInUseAuthorization()
     }
 
     nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {

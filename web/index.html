@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-JyXAaXXF5QZhL83/7IInZgXwQ2+IBurorKw9gO2CQVE=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-K6NkroD5Pxz1A+qKL+pGi656/cu0uW7P4DHPsJLcXTo=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -195,6 +195,10 @@
     /* ---------------- stage map ---------------- */
     .stage { position: relative; min-height: 0; background: var(--stage); overflow: hidden; }
     #map { position: absolute; inset: 0; }
+    /* U-68: the canvas stays hidden on the theme's map paper until the basemap is restyled, so no frame of the stock
+       (daylight, POI) style is ever drawn; it fades in on the first idle after the restyle. */
+    #map .maplibregl-canvas { transition: opacity 0.25s ease-out; }
+    #map.unstyled .maplibregl-canvas { opacity: 0; }
     .maplibregl-ctrl-top-left, .maplibregl-ctrl-top-right, .maplibregl-ctrl-bottom-left { display: none !important; }
     .maplibregl-ctrl-attrib { font-size: 10px; }
     .plates { position: absolute; left: 10px; bottom: 10px; z-index: 4; display: flex; flex-wrap: wrap; gap: 6px; max-width: calc(100% - 90px); }
@@ -227,6 +231,12 @@
     .route-bar { flex: 1; min-width: 0; height: 44px; display: grid; align-content: center; text-align: left; padding: 0 2px; }
     .route-bar b { font-size: 16px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .route-bar span { font-size: 12px; color: var(--panel-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    /* U-70: the collapsed bar says it opens: a word and a chevron, not an unlabelled grabber */
+    .route-bar { grid-template-columns: minmax(0, 1fr) auto; column-gap: 10px; }
+    .route-bar > b, .route-bar > span { grid-column: 1; }
+    .rb-open { grid-column: 2; grid-row: 1 / span 2; align-self: center; display: flex; align-items: center; gap: 4px; font-style: normal; font-size: 13px; font-weight: 700; color: var(--panel-ink); }
+    .rb-open svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: square; }
+    .plan.open .rb-open { display: none; }
     .plan-clear, .icon-btn { flex: none; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; color: var(--panel-dim); }
     .plan-clear svg, .icon-btn svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
     .plan-body { display: grid; align-content: start; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding: 2px 16px 20px; scroll-padding-bottom: 80px; gap: 16px; flex: 1; min-height: 0; }
@@ -252,9 +262,13 @@
     .chip.on { color: var(--panel); background: var(--panel-ink); border-color: var(--panel-ink); }
     .fun-row { justify-content: flex-start; gap: 6px; font-size: 13px; color: var(--panel-dim); }
     .place-list { display: grid; margin-top: 8px; }
-    .place { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: baseline; min-height: 44px; padding: 8px 2px; border-top: 1px solid var(--hair, var(--panel-dim)); text-align: left; }
-    .place b { font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .place span { font-size: 12px; color: var(--panel-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 45vw; }
+    /* U-73: the place's name gets the row's width, in full (two lines if it must); the address sits under it in pencil and
+       the stamp (a distance, Recent, Saved) stays small on the right */
+    .place { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; row-gap: 1px; align-items: baseline; min-height: 44px; padding: 8px 2px; border-top: 1px solid var(--hair, var(--panel-dim)); text-align: left; }
+    .place b { grid-column: 1; font-size: 15px; font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .place span { grid-column: 2; grid-row: 1; font-size: 12px; color: var(--panel-dim); white-space: nowrap; max-width: 34vw; overflow: hidden; text-overflow: ellipsis; }
+    .place span:empty { display: none; }
+    .place small { grid-column: 1 / -1; font-size: 13px; color: var(--panel-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .place-list .note { margin: 8px 2px 0; }
     /* Watching a recorded drive: the gauges and scrubber own the bottom; the plate's × ends the replay and brings Where to? back. */
     #app.live .plan, #app.sheet-open .plan, #app.replaying .plan { display: none; }
@@ -277,12 +291,16 @@
       padding: 8px 14px 4px; box-shadow: -8px 8px 24px rgba(0, 0, 0, 0.22); }
     .edge-panel h3 { font-size: 13px; font-weight: 600; color: var(--panel-dim); margin-bottom: 2px; }
     #app.sheet-open .edge { display: none; }
-    /* Recenter: the second map key, under Layers (REVIEW.md 1.2 Map idle); the seconds left replace the glyph */
+    /* Recenter: the second map key, under Layers (REVIEW.md 1.2 Map idle). U-71: the glyph is always its face; the time
+       left before it recenters on its own is a bar along its foot that drains, and the seconds are in its label only */
     #recenterBtn { display: none; position: absolute; right: 0; top: calc(38% + 62px); z-index: 4; background: var(--panel); color: var(--panel-ink); padding: 0; }
     #recenterBtn.show { display: flex; align-items: center; justify-content: center; }
     #recenterBtn svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
-    #recenterBtn .rc-left { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
-    #recenterBtn.counting svg { display: none; }
+    #recenterBtn { overflow: hidden; }
+    @media (prefers-reduced-motion: reduce) { #recenterBtn.counting .rc-left { transform: scaleX(1); } }
+    #recenterBtn .rc-left { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: var(--panel-ink); transform-origin: left center; transform: scaleX(0); }
+    #recenterBtn.counting .rc-left { animation: rc-drain var(--rc-s, 6s) linear forwards; }
+    @keyframes rc-drain { from { transform: scaleX(1); } to { transform: scaleX(0); } }
     #app.plan-open #recenterBtn, #app.sheet-open #recenterBtn { display: none; }
     .toast { position: absolute; left: 50%; top: 12px; transform: translateX(-50%); z-index: 6; max-width: calc(100% - 32px);
       background: var(--panel); color: var(--panel-ink); border: 1px solid var(--panel-ink); padding: 8px 12px; font-size: 12px; font-weight: 600; display: none; }   /* a message: ink, never the red pen */
@@ -449,6 +467,8 @@
     .sheet .sw span, .edge-panel .sw span, .side-pop .sw span { font-size: 15px; font-weight: 500; color: var(--panel-ink); text-align: left; }
     .sw.on span { color: var(--panel-ink); }
     .sw-cycle { min-height: 44px; }
+    .edge-panel .notes-ctl { margin: 0; padding: 8px 0 8px; border-top: 1px solid var(--hair, var(--panel-dim)); }
+    .edge-panel .notes-ctl .ctl-label { font-size: 15px; font-weight: 500; margin-bottom: 6px; }
     .sw-cycle b { min-width: 30px; font-size: 11px; font-weight: 700; color: var(--panel-ink); }   /* a value is ink: red is record and destructive */
     .sheet .sw-cycle b, .edge-panel .sw-cycle b { font-size: 15px; font-weight: 600; }
     .route-key { height: 34px; padding: 0 14px; }
@@ -509,6 +529,8 @@
     .rc-tile span { display: block; margin-top: 2px; font-size: 13px; color: var(--panel-dim); }
     .rc-tile.on { background: var(--panel-ink); color: var(--panel); } .rc-tile.on span { color: var(--panel); opacity: 0.8; }
     .rc-go { display: grid; grid-template-columns: 1.4fr 1fr; gap: 10px; margin-top: 14px; }
+    /* U-70: Drive it stays on the card while it scrolls (the find bar's sticky foot), so the card that rises has Start on it */
+    .plan.open .rc-go { position: sticky; bottom: -20px; z-index: 2; margin: 14px -16px -6px; padding: 10px 16px calc(10px + var(--safe-bottom)); background: var(--panel); border-top: 1px solid var(--rule); }
     .rc-go .ink-btn { min-height: 52px; font-size: 17px; }
     /* ---------------- the plan sheet: basic level and More (REVIEW.md roadmap 6) ---------------- */
     /* the loop dial: one control, the value in its face, five lengths as ticks on an arc around it (REVIEW2.md U-31) */
@@ -555,6 +577,10 @@
     .end-line { margin: 12px 0 0; font-size: 16px; line-height: 1.35; }
     .end-acts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 18px; }
     .end-acts .ink-btn { min-height: 52px; }
+    .end-acts a.ink-btn { display: flex; align-items: center; justify-content: center; text-decoration: none; }
+    .end-acts [hidden], .end-links [hidden] { display: none; }
+    /* U-88: the drive is the picture behind the card, so the map is dimmed one step, not blacked out */
+    #endCard.overlay.dim { background: rgba(0, 0, 0, 0.22); }
     .end-links { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; }
     .end-links > * { margin: 0; padding: 0 4px; line-height: 1.2; min-height: 44px; display: inline-flex; align-items: center; }   /* the link and the key on one line, the same box */
     .ob-strip { width: 100%; max-width: 420px; margin: 26px auto 0; border-top: 2px solid var(--panel-ink); border-bottom: 1px solid var(--rule); text-align: left; }
@@ -583,6 +609,10 @@
     .place-plate { position: absolute; z-index: 4; top: calc(12px + var(--safe-top)); left: 10px; padding: 7px 12px; background: var(--panel); color: var(--panel-ink);
       border: 1.5px solid var(--panel-ink); font-size: 14px; font-weight: 600; box-shadow: 0 2px 0 var(--rule); }
     .place-plate[hidden], #app:not(.idle) .place-plate, #app.plan-open .place-plate { display: none; }
+    /* U-81: Layers opens from the top down and is wider than the space beside the plate: the plate slides up out of its way
+       while it is open, so it is whole or gone, never cut */
+    .place-plate { transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.2s; }
+    #app:has(.edge.open) .place-plate { transform: translateY(calc(-100% - 16px - var(--safe-top))); opacity: 0; pointer-events: none; }
     .loop-suggest { display: none; width: 100%; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 12px; align-items: center; text-align: left;
       padding: 10px 2px 4px; border-top: 1px solid var(--rule); margin-top: 8px; background: none; color: var(--panel-ink); }
     #app.idle:not(.plan-open):not(.routed) .loop-suggest { display: grid; }
@@ -862,7 +892,11 @@
        right column shrinks to the tab rail. Notch-side safe areas pad the edges. */
     @media (orientation: landscape) and (max-height: 540px) {
       :root { --dial: clamp(76px, 24dvh, 96px); }
-      #app { grid-template-columns: minmax(0, 1fr) clamp(320px, 42vw, 420px); grid-template-rows: auto minmax(0, 1fr); grid-template-areas: "notes notes" "stage binnacle"; }
+      /* U-83: the notes strip spans the map column only; the instruments' column runs the full height, so the status line
+         (Rec, Report, End) sits beside the strip, over the instruments, not under an empty half of a full-width strip */
+      #app { grid-template-columns: minmax(0, 1fr) clamp(320px, 42vw, 420px); grid-template-rows: auto minmax(0, 1fr); grid-template-areas: "notes binnacle" "stage binnacle"; }
+      .binnacle > .drivebar { min-height: calc(var(--notes-h, 56px) - 6px); }   /* its rule level with the strip's (under the 6 px pad) */
+      #app > .binnacle { border-top: 0; }                                  /* the column starts at the top edge: no rule over it */
       .notes { grid-area: notes; min-height: 56px; padding-left: calc(16px + env(safe-area-inset-left, 0px)); padding-right: calc(16px + env(safe-area-inset-right, 0px)); }
       .stage { grid-area: stage; padding-left: env(safe-area-inset-left, 0px); }
       .binnacle { grid-area: binnacle; border-top: 0; border-left: 1px solid var(--rule); overflow-y: auto; align-content: start;
@@ -919,19 +953,30 @@
 
     /* The opening cover (web/boot.js): the theme's panel and the mark until the page has drawn. */
     #boot { position: fixed; inset: 0; z-index: 10000; display: grid; place-items: center; background: var(--panel, #151310); transition: opacity 0.2s ease-out; }
-    #boot img { width: 56px; height: 56px; opacity: 0.9; }
+    #boot { color: var(--panel-ink, #EDE4D3); }
+    #boot svg { display: block; width: 184px; height: 50px; }
     #boot.gone { opacity: 0; pointer-events: none; }
     @media (prefers-reduced-motion: reduce) { #boot { transition: none; } }
 </style>
   <link rel="stylesheet" href="controls.css" />
 </head>
 <body>
-  <div id="boot" aria-hidden="true"><img src="brand/mark.svg" alt="" /></div>
+  <!-- U-80: the launch screen's lockup (Assets.xcassets/LaunchLogo, 184 x 50 pt, centred) drawn again at the same size and
+       place, in the theme's ink and accent, so the cut from the launch screen to the page cannot be seen -->
+  <div id="boot" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 372 100" width="184" height="50">
+    <defs><clipPath id="bootCap"><rect x="0" y="26" width="372" height="48"/></clipPath></defs>
+    <circle cx="34" cy="84" r="8" fill="currentColor"/>
+    <path d="M34 84 V52 Q34 26 62 21.5" fill="none" stroke="currentColor" stroke-width="9"/>
+    <path d="M60 9 L88 18 L63 34 Z" fill="currentColor"/>
+    <circle cx="51" cy="43" r="6.5" style="fill:var(--accent,#C8102E)"/>
+    <g clip-path="url(#bootCap)" fill="none" stroke="currentColor" stroke-linejoin="miter" stroke-miterlimit="10" stroke-width="8.5">
+      <path d="M118 22 L135 78 L152 22"/><path d="M196 30 H170.25 V70 H196 M170.25 50 H190"/><path d="M208 30 H244 M226 30 V80"/><path d="M254 30 H290 M272 30 V80"/><path d="M300 78 L317 22 L334 78 M306 59 H328"/>
+    </g></svg></div>
   <div id="app">
     <div class="notes" id="notes"></div>
 
     <section class="stage">
-      <div id="map"></div>
+      <div id="map" class="unstyled"></div>
       <div class="place-plate" id="placePlate" role="status" hidden></div>
       <div class="hz-plate" id="hzPlate" role="status" aria-live="assertive" hidden><svg viewBox="0 0 28 25" aria-hidden="true"><path class="hz-tri" d="M14 1 L27 24 H1 Z"/><path d="M14 9 V16 M14 19.5 V20.5" stroke-width="3" stroke-linecap="round"/></svg><b id="hzPlateTitle"></b><span id="hzPlateDetail"></span></div>
       <div class="plates">
@@ -947,7 +992,7 @@
         <div class="plan-bar" id="planBar">
           <label class="plan-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5"/></svg>
             <input id="destInput" type="search" placeholder="Where to?" aria-label="Where to" aria-controls="planBody" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="go" /></label>
-          <button class="route-bar" id="routeBar" aria-label="Route details"><b id="routeBarName">--</b><span id="routeBarMeta"></span></button>
+          <button class="route-bar" id="routeBar" aria-label="Route details"><b id="routeBarName">--</b><span id="routeBarMeta"></span><em class="rb-open" aria-hidden="true">Details<svg viewBox="0 0 12 12"><path d="M2 8 L6 4 L10 8"/></svg></em></button>
           <button class="btn-start" id="startDrive" aria-label="Start drive"><i></i>Start</button>
           <button class="plan-clear" id="planClear" aria-label="Clear route"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
           <button class="linkbtn plan-cancel" id="planCancel">Cancel</button>
@@ -1045,8 +1090,10 @@
         </div>
         <button class="linkbtn" id="friendsSheetBtn">Who sees me</button>
         <h3 class="mt-8">Co-driver</h3>
+        <!-- U-82: Notes is a three-stop detent like Night, not a row that changes mode when touched -->
+        <div class="ctl notes-ctl"><p class="ctl-label">Notes</p>
+          <div class="switch" role="radiogroup" aria-label="Notes"><button data-notes="quiet" role="radio">Quiet</button><button data-notes="auto" role="radio">Auto</button><button data-notes="full" role="radio">Full</button></div></div>
         <div class="switches">
-        <button class="sw sw-cycle" data-cycle="notesMode" aria-label="Notes"><b></b><span>Notes</span></button>
         <button class="sw" data-toggle="voice"><i></i><span>Voice</span></button>
         </div>
       </div>
@@ -1141,8 +1188,9 @@
           </section>
           <section data-panel="garage">
             <h3>Co-driver</h3>
+            <div class="ctl notes-ctl"><p class="ctl-label">Notes</p>
+              <div class="switch" role="radiogroup" aria-label="Notes"><button data-notes="quiet" role="radio">Quiet</button><button data-notes="auto" role="radio">Auto</button><button data-notes="full" role="radio">Full</button></div></div>
             <div class="switches">
-              <button class="sw sw-cycle" data-cycle="notesMode" aria-label="Notes"><b></b><span>Notes</span></button>
               <button class="sw" data-toggle="voice"><i></i><span>Voice</span></button>
               <button class="sw" data-toggle="haptics"><i></i><span>Haptics</span></button>
               <button class="sw" data-toggle="keys"><i></i><span>Key sounds</span></button>
@@ -1205,8 +1253,10 @@
           <p class="end-meta" id="endMeta"></p>
           <div class="end-score"><b id="endScore">--</b><small>/1000</small><span>Vetta Score</span></div>
           <p class="end-line" id="endLine"></p>
-          <div class="end-acts"><button class="ink-btn solid" id="endShare">Share card</button><button class="ink-btn" id="endStage">Mark a stage</button></div>
-          <div class="end-links"><a class="linkbtn" id="endLog" href="analysis.html">Open in the Log</a><button class="linkbtn" id="endDone">Done</button></div>
+          <!-- U-75: the solid key is Share card only when there is a score to share; otherwise it is Open in the Log, and Share
+               waits as a link -->
+          <div class="end-acts"><button class="ink-btn solid" id="endShare">Share card</button><a class="ink-btn solid" id="endLogKey" href="analysis.html" hidden>Open in the Log</a><button class="ink-btn" id="endStage">Mark a stage</button></div>
+          <div class="end-links"><a class="linkbtn" id="endLog" href="analysis.html">Open in the Log</a><button class="linkbtn" id="endShareLink" hidden>Share card</button><button class="linkbtn" id="endDone">Done</button></div>
         </div>
       </div>
       <div class="stage-bar" id="stageBar" role="status" aria-live="polite" hidden><span id="stageName"></span><b id="stageDelta">--</b><small id="stageCount"></small></div>
@@ -1257,7 +1307,7 @@
       <div id="cluster"></div>
       <!-- one invitation on the idle map (REVIEW.md 3.1, mockup 01): a loop from here, drawn as a tulip -->
         <button class="loop-suggest" id="loopSuggest" aria-label="Plan a loop from here"><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M14 36 V22 Q14 10 26 8"/><path d="M22 3 L29 8 L23 13"/><circle cx="14" cy="36" r="2.4"/></svg>
-          <span><b id="loopSuggestTitle">Loop from here</b><small>On the twistiest roads nearby · map only until driven</small></span><em>Plan</em></button>
+          <span><b id="loopSuggestTitle">Loop from here</b><small>On the twistiest roads nearby</small></span><em>Plan</em></button>
       <!-- the morning of a crew drive you're going to, it takes the invitation's place (REVIEW.md roadmap 21) -->
         <button class="loop-suggest drive-today" id="driveToday" hidden><span class="dt-date" aria-hidden="true"><b id="driveTodayDay"></b><small id="driveTodayMon"></small></span>
           <span><b id="driveTodayTitle"></b><small id="driveTodayMeta"></small></span><em>Go</em></button>
@@ -1497,7 +1547,7 @@
       try { carLook(); } catch (_) {}                                     // the car's screen follows the theme and the voice switch
       document.querySelectorAll('[data-toggle]').forEach(b => { const on = !!state.toggles[b.dataset.toggle]; b.classList.toggle('on', on); b.setAttribute('role', 'switch'); b.setAttribute('aria-checked', String(on)); });
       document.querySelectorAll('#nightSwitch [data-night]').forEach(b => b.setAttribute('aria-checked', String(b.dataset.night === state.nightMode)));
-      document.querySelectorAll('[data-cycle]').forEach(b => { const v = state[b.dataset.cycle]; b.querySelector('b').textContent = MODE_LABEL[v]; b.setAttribute('aria-label', `${b.querySelector('span').textContent}: ${MODE_LABEL[v]}`); });
+      document.querySelectorAll('[data-notes]').forEach(b => b.setAttribute('aria-checked', String(b.dataset.notes === state.notesMode)));   // U-82
     }
     function applyTheme() {
       if (window.ApexLogHost) ApexLogHost.stale();
@@ -1565,6 +1615,8 @@
     let mapReady = false;
     // The map's box changes with the layout (idle hides the gauges, a drive shows them); keep the canvas the size of its box.
     if (window.ResizeObserver) new ResizeObserver(() => map.resize()).observe(document.getElementById('map'));
+    // U-83: on its side the status line sits beside the notes strip; the strip's height (one line or three) is its height too
+    if (window.ResizeObserver) new ResizeObserver(([e]) => document.getElementById('app').style.setProperty('--notes-h', `${Math.round(e.target.offsetHeight)}px`)).observe(document.getElementById('notes'));
     // iOS can drop the map's WebGL context under memory pressure (e.g. after building a long route): the page keeps running but
     // the map goes black. MapLibre recovers if WebKit restores the context; if it doesn't within 4 s, reload the page and plan the
     // same route again. Never during a drive: the recording lives in this page.
@@ -1630,6 +1682,7 @@
 
     function restyleBasemap() {
       drawPuck();
+      $('map').style.background = look.map.bg;                             // U-68: the paper the map fades in on
       if (!mapReady) return;
       const P = look.map, C = look.colors;
       ApexBasemap.restyle(map, P);                                         // web/basemap.js: shared with the car's screen
@@ -1727,6 +1780,7 @@
     }
 
     let pins = [];
+    const fuelPins = [];                                                    // U-85: the route's FUEL stamps, { m, el }
     function rebuildPins() {
       pins.forEach(p => p.marker.remove());
       pins = [];
@@ -1746,13 +1800,20 @@
         const d = p.e.dist_m - state.cursorM;
         p.el.style.display = d > -150 && d < 2500 && (p.e.type !== 'alpr' || state.toggles.lpr) ? 'block' : 'none';
       }
+      // U-85: in a drive only the next fuel stop ahead keeps its stamp (the preview shows them all)
+      if (!fuelPins.length) return;                                        // (filled only once a route exists)
+      const driving = state.mode === 'live', next = driving && track === plannedRoute ? fuelPins.find((f) => f.m > state.cursorM) : null;
+      for (const f of fuelPins) f.el.style.display = !driving || f === next ? '' : 'none';
     }
 
     map.on('load', () => {
       mapReady = true;
       addApexLayers();
       restyleBasemap();
-      map.once('idle', () => ApexBoot.done());   // the styled map has drawn: lift the cover
+      // U-68: the canvas shows only now it is ours; on the first idle (or soon after, if tiles are slow), then lift the cover
+      const reveal = () => document.getElementById('map').classList.remove('unstyled');
+      map.once('idle', () => { reveal(); ApexBoot.done(); });   // the styled map has drawn: lift the cover
+      setTimeout(reveal, 1200);
       applyPower();
       map.setLayoutProperty('apex-dna', 'visibility', state.toggles.dna ? 'visible' : 'none');
       updateTwisty();
@@ -1950,10 +2011,16 @@
       const amp = (power.low ? 0 : f.shake) * (clamp01((vehicle.rough || 0) / 0.25) * 0.6 + cam.kick) * clamp01(vehicle.vMps / 6);
       const tt = ts / 1000;
       const [sLat, sLon] = offsetPoint(cam.lat, cam.lon, cam.bearing + 90, amp * 1.2 * texture(tt, 1));
+      // U-84: in a drive the view sits low, so the road ahead gets the screen: the camera's point (a little ahead of the arrow)
+      // at 55 % of the map's height under 25 mph, easing to 68 % by 40 mph, which puts the arrow near 70 %; idle, the middle
+      const fy = state.mode === 'live' ? 0.55 + 0.13 * clamp01((vehicle.vMps - 11.2) / 6.7) : 0.5;
+      cam.fy = Number.isFinite(cam.fy) ? cam.fy + (fy - cam.fy) * Math.min(1, dt * 1.2) : fy;
+      const mapH = map.getContainer().clientHeight || 0;
       map.jumpTo({
         center: [sLon, sLat],
         bearing: ((cam.bearing + amp * 0.5 * texture(tt, 7)) % 360 + 360) % 360,
-        zoom: cam.zoom, pitch: Math.max(0, Math.min(60, cam.pitch + amp * 0.9 * texture(tt, 13)))
+        zoom: cam.zoom, pitch: Math.max(0, Math.min(60, cam.pitch + amp * 0.9 * texture(tt, 13))),
+        padding: { top: Math.max(0, Math.round((2 * cam.fy - 1) * mapH)), bottom: 0, left: 0, right: 0 }
       });
     }
     requestAnimationFrame(cameraFrame);
@@ -1973,11 +2040,12 @@
       resumeTick = setInterval(() => { left -= 1; if (left > 0) recenterLeft(left); }, 1000);
       resumeTimer = setTimeout(resumeFollow, FOLLOW_RESUME_S * 1000);
     }
-    // the key's face: the glyph, or the seconds until it recenters on its own
+    // U-71: the key's face is always the glyph; a countdown drains a bar along its foot (restarted for each new one), and
+    // the seconds go only to its label
     function recenterLeft(s) {
-      const b = $('recenterBtn');
+      const b = $('recenterBtn'), bar = b.querySelector('.rc-left');
+      if (s === FOLLOW_RESUME_S) { b.classList.remove('counting'); void bar.offsetWidth; b.style.setProperty('--rc-s', `${s}s`); }
       b.classList.toggle('counting', s > 0);
-      b.querySelector('.rc-left').textContent = s > 0 ? `${s}s` : '';
       b.setAttribute('aria-label', s > 0 ? `Recenter (on its own in ${s} s)` : 'Recenter');
     }
     function resumeFollow() {
@@ -1986,7 +2054,9 @@
       state.follow = true;
       $('recenterBtn').classList.remove('show');
     }
-    // Pause on first contact: the follow loop's jumpTo would otherwise cancel the gesture.
+    // Pause on first contact: the follow loop's jumpTo would otherwise cancel the gesture. U-71: but only a gesture that moves
+    // the map (a drag, a pinch, a second finger) shows the key and counts down; a tap leaves follow as it was, and the app's
+    // own camera moves (a route fit, a drive start) never count.
     const mapEl = map.getCanvasContainer();
     let droppedPin = null, pinMarker = null, pinLookup = 0, suppressMapClickUntil = 0;
     const activeMapPointers = new Set();
@@ -2101,12 +2171,31 @@
       addViaAt({ lat: ll.lat, lon: ll.lng }, r.atM);
     });
     window.addEventListener('pointercancel', endReshape);
-    let touching = 0;
-    mapEl.addEventListener('pointerdown', () => { touching++; pauseFollow(); }, { capture: true });
-    window.addEventListener('pointerup', () => { if (touching) { touching = 0; if (!state.follow) scheduleResume(); } });
-    window.addEventListener('pointercancel', () => { if (touching) { touching = 0; if (!state.follow) scheduleResume(); } });
+    let touching = 0, gesture = null;
+    mapEl.addEventListener('pointerdown', (e) => {
+      touching++;
+      if (!gesture) gesture = { x: e.clientX, y: e.clientY, following: state.follow, moved: false };
+      else gesture.moved = true;                                           // a second finger: a pinch or a turn
+      if (gesture.moved) pauseFollow();
+      else state.follow = false;                                           // hold the camera still under the finger; no key yet
+    }, { capture: true });
+    window.addEventListener('pointermove', (e) => {
+      if (!touching || !gesture || gesture.moved || Math.hypot(e.clientX - gesture.x, e.clientY - gesture.y) < 8) return;
+      gesture.moved = true; pauseFollow();
+    });
+    const endGesture = () => {
+      if (!touching) return;
+      touching = 0;
+      const g = gesture; gesture = null;
+      if (g && !g.moved) { if (g.following) state.follow = true; return; }   // a tap: everything as it was
+      if (!state.follow) scheduleResume();
+    };
+    window.addEventListener('pointerup', endGesture);
+    window.addEventListener('pointercancel', endGesture);
     let wheelIdle = null;
     mapEl.addEventListener('wheel', () => { pauseFollow(); clearTimeout(wheelIdle); wheelIdle = setTimeout(scheduleResume, 250); }, { capture: true, passive: true });
+    // a move the driver made with no finger down (a double-tap zoom, the keys) counts like a drag; the app's own moves carry no event
+    map.on('movestart', (e) => { if (e.originalEvent && !touching && e.originalEvent.type !== 'wheel') { pauseFollow(); scheduleResume(); } });
 
     function loadTrackOnMap() {
       if (!mapReady || !track) return;
@@ -3284,7 +3373,9 @@
       activate(t, 0, { quiet: state.mode !== 'live' });
       renderRouteCard(t);
       persistPlanned(t); paintSaveBtn(); paintEtaShareBtn(); paintHomeBy();
-      openPlan(false);
+      // U-70: a route or loop that comes back opens its card (the instruments, with Drive it on them), not a one-line bar;
+      // a route restored at launch, or one rebuilt during a drive, keeps the sheet down
+      openPlan(state.mode !== 'live' && !booting);
       markDestination(t);
       if (state.mode !== 'live' && !booting) lockOnDestination(t);
       attachLimits(t);
@@ -3315,7 +3406,12 @@
       const to = destMarker ? destMarker.getLngLat() : null;
       if (!to) return;
       pauseFollow();
-      const bottom = ($('planBar').offsetHeight || 60) + 24;
+      // the map left above the sheet: above the open card (U-70) when that leaves a strip to see the route in, else above
+      // the bar (on its side, or the desk's column, the card covers the map: the fit is for when it goes down)
+      const panel = $('planPanel'), mapH = map.getContainer().clientHeight || window.innerHeight;
+      const desk = matchMedia('(min-width: 1100px) and (min-height: 600px)').matches;
+      const overCard = panel.classList.contains('open') && !desk && mapH - panel.offsetHeight >= 120;
+      const bottom = overCard ? panel.offsetHeight + 16 : ($('planBar').offsetHeight || 60) + 24;
       if (String(t.id || '').startsWith('loop_')) {
         let w = 180, e = -180, so = 90, n = -90;
         for (let i = 0; i < t.lat.length; i += 10) { w = Math.min(w, t.lon[i]); e = Math.max(e, t.lon[i]); so = Math.min(so, t.lat[i]); n = Math.max(n, t.lat[i]); }
@@ -4218,7 +4314,7 @@
       }).filter((p, i, all) => Number.isFinite(p.lat) && Number.isFinite(p.lon)
         && all.findIndex(o => o.label === p.label && o.area === p.area) === i)   // one row per place (OSM can hold a node and an area)
         .sort((a, b) => a.km - b.km).slice(0, 5)
-        .map(p => ({ ...p, kind: [ApexUnits.long(p.km * 1000, 1, true), p.area].filter(Boolean).join(' · ') }));
+        .map(p => ({ ...p, sub: p.area, kind: ApexUnits.long(p.km * 1000, 1, true) }));   // U-73: the town under the name, the distance as the stamp
     }
     // In the app, Apple's place search (the shell's MKLocalSearchCompleter: knows house numbers, no key) answers instead;
     // coordinates are asked only for the row tapped. No answer in 4 s: Photon.
@@ -4236,7 +4332,8 @@
       const c0 = map.getCenter(), near = state.lastPosition || { lat: c0.lat, lon: c0.lng };
       const reply = await askNative({ cmd: 'placeComplete', q, lat: near.lat, lon: near.lon }, 4000);
       if (!reply || reply.failed || !Array.isArray(reply.items)) return null;
-      return reply.items.map((it, index) => ({ label: it.title, kind: it.subtitle || 'Place', apple: { id: reply.id, index } }));
+      // U-73: the name wins the row; the address goes under it as street and town (no region, postcode or country)
+      return reply.items.map((it, index) => ({ label: it.title, sub: ApexPlaceSearch.shortAddress(it.subtitle), kind: '', apple: { id: reply.id, index } }));
     }
     async function appleResolve(p) {
       const reply = await askNative({ cmd: 'placeResolve', index: p.apple.index }, 8000);
@@ -4270,8 +4367,10 @@
       box.replaceChildren(...rows.map(p => {
         const b = document.createElement('button'); b.className = 'place';
         const name = document.createElement('b'); name.textContent = p.label;
-        const kind = document.createElement('span'); kind.textContent = p.kind;
-        b.append(name, kind); b.addEventListener('click', () => (p.saved ? openSaved(p.saved) : routeToPlace(p)));
+        const kind = document.createElement('span'); kind.textContent = p.kind || '';
+        b.append(name, kind);
+        if (p.sub && p.sub !== p.label) { const sub = document.createElement('small'); sub.textContent = p.sub; b.append(sub); }   // U-73
+        b.addEventListener('click', () => (p.saved ? openSaved(p.saved) : routeToPlace(p)));
         if (!p.pinned) return b;
         // a pinned place (U-20): its own row with Unpin beside it
         const un = document.createElement('button'); un.className = 'linkbtn'; un.textContent = 'Unpin'; un.setAttribute('aria-label', `Unpin ${p.label}`);
@@ -5655,10 +5754,10 @@
       render(true);
     }));
     document.querySelectorAll('#nightSwitch [data-night]').forEach(b => b.addEventListener('click', () => { state.nightMode = b.dataset.night; applyTheme(); }));
-    document.querySelectorAll('[data-cycle]').forEach(b => b.addEventListener('click', () => {
-      const k = b.dataset.cycle, order = k === 'notesMode' ? NOTES_MODES : NIGHT_MODES;
-      state[k] = order[(order.indexOf(state[k]) + 1) % order.length];
-      if (k === 'nightMode') { applyTheme(); return; }
+    // U-82: the Notes detent (Layers and the Garage): a stop is chosen, never cycled into by a stray tap
+    document.querySelectorAll('[data-notes]').forEach(b => b.addEventListener('click', () => {
+      if (!NOTES_MODES.includes(b.dataset.notes) || b.dataset.notes === state.notesMode) return;
+      state.notesMode = b.dataset.notes;
       syncDerivedToggles(); paintSwitches();
       const full = state.notesMode === 'full';
       // The voice bank has clips for "Full notes." and "Quiet. Hazards only."; Auto has none, so it is shown, not spoken.
@@ -5999,6 +6098,7 @@
     }
     async function attachScenic(t) {
       for (const mk of scenicPins.splice(0)) mk.remove();
+      fuelPins.length = 0;
       $('routeCardAlong').hidden = true;
       if (!t || !Array.isArray(t.lat) || t.lat.length < 2 || !window.ApexScenic) return;
       const pts = [];
@@ -6020,7 +6120,10 @@
           toast(label, { label: 'Add as a stop', ms: 6000, onClick: () => { if (plannedRoute === t) addViaAt({ lat: p.lat, lon: p.lon, label }, p.m); } });
         });
         scenicPins.push(new maplibregl.Marker({ element: el }).setLngLat([p.lon, p.lat]).addTo(map));
+        if (p.kind === 'fuel' && Number.isFinite(p.m)) fuelPins.push({ m: p.m, el });
       }
+      fuelPins.sort((a, b) => a.m - b.m);
+      updatePins();
     }
     function paintReported() {
       const keep = new Set(reported.list.map(h => h.id));
@@ -6486,10 +6589,55 @@
           say(line.text, false, null, null, state.voiceId === 'device' ? {} : { tokens: line.tokens });
         }
       })();
-      $('endLog').href = `analysis.html?tab=drive&drive=${encodeURIComponent(d.id)}`;
+      $('endLog').href = $('endLogKey').href = `analysis.html?tab=drive&drive=${encodeURIComponent(d.id)}`;
+      // U-75: Share card is the solid key only with a score to share; with none, Open in the Log is, and Share is a link
+      const scored = d.ds.score != null;
+      $('endShare').hidden = !scored; $('endShareLink').hidden = scored;
+      $('endLogKey').hidden = scored; $('endLog').hidden = !scored;
       $('endCard').classList.add('show');
+      showEndTrail(d);
     }
+    // U-88: behind the card, the map is the drive: fitted to its trail above the card, the trail drawn at the route's width in
+    // the accent. It goes when the card does, however it closes, and the map follows again.
+    function showEndTrail(d) {
+      if (!mapReady || !Array.isArray(d.lat) || !Array.isArray(d.lon) || d.lat.length < 2) return;
+      const coords = [];
+      let w = 180, e = -180, so = 90, n = -90;
+      for (let i = 0; i < d.lat.length; i++) {
+        const la = d.lat[i], lo = d.lon[i];
+        if (!Number.isFinite(la) || !Number.isFinite(lo)) continue;
+        coords.push([lo, la]); w = Math.min(w, lo); e = Math.max(e, lo); so = Math.min(so, la); n = Math.max(n, la);
+      }
+      if (coords.length < 2) return;
+      const data = { type: 'FeatureCollection', features: [{ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: coords } }] };
+      if (map.getSource('apex-endtrail-src')) map.getSource('apex-endtrail-src').setData(data);
+      else {
+        map.addSource('apex-endtrail-src', { type: 'geojson', data });
+        const width = (a, b) => ['interpolate', ['linear'], ['zoom'], 10, a, 16, b];
+        map.addLayer({ id: 'apex-endtrail-casing', type: 'line', source: 'apex-endtrail-src', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-width': width(6, 13) } });
+        map.addLayer({ id: 'apex-endtrail', type: 'line', source: 'apex-endtrail-src', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-width': width(3, 7) } });
+      }
+      map.setPaintProperty('apex-endtrail-casing', 'line-color', look.colors.routeCasing);
+      map.setPaintProperty('apex-endtrail', 'line-color', look.colors.accent);
+      map.setLayoutProperty('apex-endtrail-casing', 'visibility', 'visible'); map.setLayoutProperty('apex-endtrail', 'visibility', 'visible');
+      endTrailOn = true; pauseFollow();
+      // the part of the map the card leaves: from under the island to the card's top edge (on its side the card is beside it)
+      const sheet = $('endCard').querySelector('.card-sheet'), mr = map.getContainer().getBoundingClientRect();
+      const wide = matchMedia('(orientation: landscape) and (max-height: 540px)').matches;
+      const top = Math.max(32, (parseFloat(safeInsets().top) || 0) - mr.top + 24);
+      const bottom = wide || !sheet ? 24 : Math.max(24, Math.min(mr.height - top - 100, mr.bottom - sheet.getBoundingClientRect().top + 24));
+      map.fitBounds([[w, so], [e, n]], { padding: { top, left: 32, right: 32, bottom }, pitch: 0, bearing: 0, duration: 900, maxZoom: 16 });
+    }
+    let endTrailOn = false;
+    function hideEndTrail() {
+      if (!endTrailOn) return;
+      endTrailOn = false;
+      map.setLayoutProperty('apex-endtrail-casing', 'visibility', 'none'); map.setLayoutProperty('apex-endtrail', 'visibility', 'none');
+      resumeFollow();
+    }
+    new MutationObserver(() => { if (!$('endCard').classList.contains('show')) hideEndTrail(); }).observe($('endCard'), { attributes: true, attributeFilter: ['class'] });
     $('endDone').addEventListener('click', () => $('endCard').classList.remove('show'));
+    $('endShareLink').addEventListener('click', () => $('endShare').click());
     $('endStage').addEventListener('click', () => { if (endDrive) openLog(`analysis.html?tab=segments&drive=${encodeURIComponent(endDrive.id)}`); });
     $('endShare').addEventListener('click', async () => {
       if (!endDrive || !window.ApexDriveCard) return;
@@ -6499,6 +6647,12 @@
       const out = await ApexDriveCard.shareCard(cv, `${(endDrive.name || 'drive').replace(/[^A-Za-z0-9 _-]+/g, '').trim() || 'drive'}.png`);
       if (out === 'saved') toast('Card saved.');
     });
+    // U-75: a drive on a planned route is named after the route the driver chose (they will look for it under that name); a
+    // free drive after the road that carried most of it (road_names.js), else the date and time
+    function driveName(road, when) {
+      const routeName = track && track.kind === 'route' && typeof track.name === 'string' ? track.name.trim() : '';
+      return routeName || road || `Drive ${when.toLocaleDateString()} ${ApexFormat.clock12(when.getHours(), when.getMinutes())}`;
+    }
     async function leaveDrive(save) {
       driveActive = false;
       stageWatch = null; $('stageBar').hidden = true;
@@ -6521,7 +6675,7 @@
         try {
           const when = new Date(rec.startedAt || Date.now()), pad = (n) => String(n).padStart(2, '0');
           const stamp = `${when.getFullYear()}${pad(when.getMonth() + 1)}${pad(when.getDate())}_${pad(when.getHours())}${pad(when.getMinutes())}${pad(when.getSeconds())}`;
-          const d = ApexRecording.parse(Core, rec.toCsv(), `web_${stamp}.csv`, { source: 'web-gps', date: `${when.getFullYear()}-${pad(when.getMonth() + 1)}-${pad(when.getDate())}T${pad(when.getHours())}:${pad(when.getMinutes())}`, name: road || `Drive ${when.toLocaleDateString()} ${ApexFormat.clock12(when.getHours(), when.getMinutes())}` });
+          const d = ApexRecording.parse(Core, rec.toCsv(), `web_${stamp}.csv`, { source: 'web-gps', date: `${when.getFullYear()}-${pad(when.getMonth() + 1)}-${pad(when.getDate())}T${pad(when.getHours())}:${pad(when.getMinutes())}`, name: driveName(road, when) });
           // the car it was driven in (IDEAS D-19): its label and the grip its score allows, never higher than the street default
           const car = routingCar();
           if (car) d.car = { label: car.label, mu: Core.carGrip(car) };
@@ -6595,6 +6749,7 @@
         // U-79: the idle map's Drive is a free drive. The car shows no route then, so one the phone still holds (the route just
         // driven, U-62) is put away rather than guided along unseen; the preview's own Drive (no `free`) drives the route.
         if (m.free === true && car.route === '' && track && track.kind === 'route') clearPlanned();
+        closeWelcome();                                              // U-65: a first drive from the car
         enterDrive();
       }
       else if (m.action === 'end' && driveActive) leaveDrive(true);
@@ -6610,6 +6765,7 @@
     carPost(ApexCarPlay.placesMessage(recentPlaces()));
     function startDrive() {
       if (state.mode === 'live' || locDenied) return;
+      askLocation();                                                   // never asked (a welcome skipped by a link): ask now
       if (flag('apex.permsExplained')) { enterDrive(); return; }
       paintPerms();
       // The app calibrates the mount (ApexKit); a browser has no mount calibration, so the tip is app-only
@@ -6624,7 +6780,8 @@
     $('driveEnd').addEventListener('click', () => leaveDrive(true));
 
     // =======================================================================
-    // 10c. FIRST RUN: three screens, shown once. No permissions here (they are asked at the first Start drive).
+    // 10c. FIRST RUN: one screen, shown once, on the web and in the app. In the app its Start is what asks for location
+    // (U-65); motion and the explainer wait for the first Start drive.
     // =======================================================================
     // First run is one screen (REVIEW.md roadmap 8): the mark, a line, the road book calling corners on a loop, Start.
     // The voice comes with the theme and sign-in waits for the first social action, so neither is asked here.
@@ -6644,7 +6801,8 @@
         k++;
         setTimeout(tick, matchMedia('(prefers-reduced-motion: reduce)').matches ? 4000 : 1800);
       };
-      const finish = () => { flag('apex.onboarded', '1'); ob.classList.remove('show'); };
+      // U-65: in the app the system's location sheet follows the welcome's Start, so it comes after a reason, not at launch
+      const finish = () => { flag('apex.onboarded', '1'); ob.classList.remove('show'); askLocation(); };
       $('obNext').onclick = finish;
       $('obAlt').onclick = () => { finish(); watchDryRidge(); };
       // Focus the dialog, not its button: VoiceOver reads the welcome, and no focus ring sits on Start before a touch
@@ -6652,9 +6810,25 @@
     }
     setTimeout(() => health.flush(IN_APP_SHELL ? 'ios' : 'web').catch(() => {}), 5000);
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') health.flush(IN_APP_SHELL ? 'ios' : 'web').catch(() => {}); });
+    // The shell asks for location only when the page says (ApexNavApp.swift requestLocation): after the welcome, at once for a
+    // driver past it, or at the first Start drive. Asked before and answered, the system shows nothing.
+    function askLocation() {
+      if (!NATIVE_SHELL) return;
+      try { window.webkit.messageHandlers.apex.postMessage({ cmd: 'requestLocation' }); } catch (_) {}
+    }
+    // A first drive started from the car while the welcome waits on the phone: the drive is the answer to it, and location
+    // is asked now (the phone shows the sheet).
+    function closeWelcome() {
+      if ($('onboard').classList.contains('show')) { flag('apex.onboarded', '1'); $('onboard').classList.remove('show'); }
+      askLocation();
+    }
     const wasOnboarded = !!flag('apex.onboarded');
-    if (!flag('apex.onboarded') && !window.APEX_EMBED && !['invite', 'crew', 'add', 'convoy', 'drive', 'play', 'at', 'theme', 'go'].some(k => params.has(k))) runOnboarding();
-    else if (!flag('apex.onboarded')) flag('apex.onboarded', '1');
+    // U-65: the welcome runs in the app too (it was web only from the first import, when the shell asked for location at
+    // launch and its sheet would have covered the welcome; the shell now waits for askLocation). A link that opened the app
+    // for something still goes straight to it.
+    if (!flag('apex.onboarded') && !['invite', 'crew', 'add', 'convoy', 'drive', 'play', 'at', 'theme', 'go'].some(k => params.has(k))) runOnboarding();
+    else if (!flag('apex.onboarded')) flag('apex.onboarded', '1');     // a link's first open: location waits for a Start drive
+    else askLocation();
     // What's new after an update (IDEAS O-10; web/whats_new.js): once, a moment after the page settles, never over a drive or a
     // link that opened the app for something; a first install only marks it seen.
     (() => {

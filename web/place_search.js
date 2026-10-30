@@ -25,6 +25,16 @@
     return !(p.osm_key === 'highway' && NOT_DRIVABLE.has(p.osm_value));
   };
 
-  const api = { localMatches, drivable, norm };
+  /** U-73: an address as a suggestion's second line: the street and the town, without the region, postcode or country
+   *  ("1231 W Kemper Rd, Cincinnati, OH  45240, United States" -> "1231 W Kemper Rd, Cincinnati"). Empty in, empty out. */
+  function shortAddress(s) {
+    const parts = String(s || '').split(',').map((x) => x.replace(/\s+/g, ' ').trim()).filter(Boolean);
+    if (parts.length >= 2 && !/\d/.test(parts[parts.length - 1])) parts.pop();                  // the country
+    const region = /^(?:[A-Z]{2,3}(?: \d{4,5}(?:-\d{4})?)?|\d{4,6}|[A-Z]{1,2}\d[A-Z\d]? ?\d[A-Z]{2})$/;   // OH 45240, a postcode
+    const kept = parts.filter((x, i) => i === 0 || !region.test(x));
+    return kept.slice(0, 2).join(', ');
+  }
+
+  const api = { localMatches, drivable, norm, shortAddress };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexPlaceSearch = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -31,7 +31,9 @@ final class AppTourTests: XCTestCase {
         XCTAssertTrue(web.waitForExistence(timeout: 45))
         pause(4)
         for _ in 0..<5 {
-            let next = web.buttons["Next"], start = web.buttons["Get started"]
+            // the welcome's one key is "Start" (it runs in the app since U-65); Next/Get started were the old three screens
+            let next = web.buttons["Next"], start = web.buttons["Get started"], welcome = web.buttons["Start"]
+            if welcome.exists { pause(2); welcome.tap(); break }
             if start.exists { pause(2); start.tap(); break }
             if next.exists { pause(2.5); next.tap() } else { break }
         }
