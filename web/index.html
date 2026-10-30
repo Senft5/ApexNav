@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-sQm3Zk7uvq22wf5hrhyRj5Kw6TJAyCLbJ97vCSLUcjQ=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-knoySoCx51wL55Bl4bQepz2aMpQ3o9Anbw/L4IGHMGg=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <!-- REVIEW4 U-80 (check): before the stylesheets and the hundred scripts below (seconds on a cold start), the page's very
@@ -5662,7 +5662,8 @@
               switchRow('Times', g.share_times, () => putGrant('crew', c.id, true, !g.share_times))),
             el('span', { textContent: g.share_scores ? (g.share_times ? `${c.name} sees your scores and times.` : `${c.name} sees your scores.`) : `${c.name} sees nothing of yours yet.` })),
           ownerBox,
-          el('div', { className: 'row' }, btn('Invite to crew', async () => { const r = await apiCall('POST', `/api/crews/${c.id}/invite`); const j = await jsonOf(r); if (r.ok) copyText(`${shareOrigin()}/?crew=${j.token}`, 'Crew link copied.'); else toast(j && j.error === 'too_many_open_invites' ? 'You have 10 open crew links. Turn some off first.' : 'Only a crew\'s owner can invite.'); }),
+          // P-07: the crew page's Invite is the one invite key; the gear keeps who can invite, and Leave
+          el('div', { className: 'row' },
             btn('Leave', async () => { if (await ApexConfirm.ask(`Leave ${c.name}?`, 'Leave')) { await apiCall('DELETE', `/api/crews/${c.id}/membership`); redo(); } }, 'danger-btn')));
         return box;
       };
@@ -5719,7 +5720,7 @@
       // not in a crew yet: what one is (in one, its settings are the gear's, above)
       const csec = section('Your crews');
       if (!crewList.length) csec.append(el('p', { className: 'note', textContent: 'A crew is a group for a club or a weekend run. You can be in several. Join one near you, or start one.' }));
-      if (!inCrew) cbody.append(csec);
+      if (!inCrew && crewList.length) cbody.append(csec);   // P-08: no crews, no empty "Your crews"
       // new crew: private (invite link) or public (findable nearby by an area you name)
       const newSec = section('Start a crew');
       const cname = el('input', { className: 'field', placeholder: 'New crew name', autocomplete: 'off', maxLength: 40, 'aria-label': 'Crew name' });

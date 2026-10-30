@@ -2201,9 +2201,9 @@ flow('flyby: a friend on the same stage that day shows on the drive, as text; ch
     await ApexRecording.store({ id: 'f1', name: 'Morning run', date: '2026-10-20T15:00:00Z', lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: lat.map(() => 15),
       lon_g: lat.map(() => 0), lat_g: lat.map(() => 0), g_known: null, events: [], elev: null, hz: 1, source: 'web-gps' });
     const a = 20, b = 180;
-    localStorage.setItem('apex.segments', JSON.stringify([{ id: 'seg_f', origin: 'CANON1', synced: true, name: 'Straight run', lat0: lat[a], lon0: lon[a], lat1: lat[b], lon1: lon[b], length_m: (b - a) * 5,
-      geom: JSON.stringify(Array.from({ length: 20 }, (_, k) => { const i = a + Math.round(k * (b - a) / 19); return [lat[i], lon[i]]; })) }]));
-  });
+    return JSON.stringify([{ id: 'seg_f', origin: 'CANON1', synced: true, name: 'Straight run', lat0: lat[a], lon0: lon[a], lat1: lat[b], lon1: lon[b], length_m: (b - a) * 5,
+      geom: JSON.stringify(Array.from({ length: 20 }, (_, k) => { const i = a + Math.round(k * (b - a) / 19); return [lat[i], lon[i]]; })) }]);
+  }).then((segs) => page.addInitScript((v) => localStorage.setItem('apex.segments', v), segs));   // before the page loads: the first visit's own write can't undo it
   await page.goto(base + '/analysis.html?drive=f1');
   await page.waitForSelector('#dvFlyby:not([hidden])');
   const t = await page.textContent('#dvFlybyList');
@@ -2495,7 +2495,6 @@ flow('one link in: no "invite-only" anywhere; a crew link joins a newcomer with 
   await page.goto(base + '/index.html?view=crew');
   await page.waitForSelector('.crew-page .cp-title h2');
   await page.click('#crewsBody .gear-key');
-  await page.click('.side-pop.open .crew-tile-head');
   await page.waitForSelector('.side-pop.open [role="radiogroup"][aria-label="Who can invite to Ridge Runners"]');
   check(!(await page.isVisible('.side-pop.open button:has-text("Invite to crew")')), 'the gear has no second Invite key');
   await page.click('.side-pop.open [role="radiogroup"][aria-label="Who can invite to Ridge Runners"] button:has-text("Owner")');
