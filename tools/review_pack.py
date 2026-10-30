@@ -24,7 +24,6 @@ import shutil
 import struct
 import sys
 
-from PIL import Image, ImageDraw
 
 NAME = re.compile(r"^(phone|car)-([a-z0-9-]+)-(\d\d+)-([^_]+?)(?:_\d+_[0-9A-Fa-f-]+)?(?:\.png)?$")
 
@@ -56,6 +55,7 @@ def sheet(files: list[tuple[str, str]], out: str, width: int = 260, cols: int = 
     """A contact sheet: each photo scaled to `width`, labelled with its step."""
     if not files:
         return
+    from PIL import Image, ImageDraw                                   # only to draw: CI's test job has no Pillow
     ims = []
     for path, label in files:
         im = Image.open(path).convert("RGB")
@@ -78,6 +78,7 @@ def upright(path: str, step: str) -> None:
     the right edge of the pixels), so a quarter turn anticlockwise."""
     if "landscape" not in step:
         return
+    from PIL import Image
     im = Image.open(path)
     if im.height > im.width:
         im.rotate(90, expand=True).save(path)
