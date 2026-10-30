@@ -38,3 +38,20 @@ def test_quick_drive_widget_and_control():
     assert '"go"' in read("ApexNavApp.swift")                                    # the app accepts go=drive
     yml = read(".github", "workflows", "build.yml")
     assert "'LiveActivity/**'" in yml                                             # a PR that changes the extension builds it
+
+
+def test_short_true_words_never_a_cut_one():
+    """U-61 (docs/design/REVIEW4.md): with no note ahead the island read "--" and "NO NOT"."""
+    widget, html = read("LiveActivity", "ApexLiveWidget.swift"), read("web", "index.html")
+    assert '"--"' not in widget and "prefix(6)" not in widget                 # no dashes, no six letters of a sentence
+    assert widget.count("RecordDot(") >= 3                                     # lock screen, expanded and compact leading
+    trailing = widget[widget.index("compactTrailing:"):widget.index("minimal:")]
+    assert ".minimumScaleFactor(" in trailing and ".lineLimit(1)" in trailing   # scaled to fit, never truncated
+    push = html[html.index("function quietActivity()"):html.index("// ---- live delta on your saved stages")]
+    assert "'QUIET'" in push and "'REC'" in push and "'No notes ahead'" not in push
+    assert "next corner" in push and "driven" in push
+    attrs = read("LiveActivity", "ApexDriveAttributes.swift")
+    for f in ("var note: String", "var distance: String", "var eta: String", "var short: String?", "var hazard: Bool?", "var etaShort: String?"):
+        assert f in attrs                                                      # the fields the shell fills (ApexNavApp.swift handleActivity)
+    for k in ('dict["note"]', 'dict["distance"]', 'dict["eta"]', 'dict["short"]', 'dict["hazard"]', 'dict["etaShort"]'):
+        assert k in read("ApexNavApp.swift")

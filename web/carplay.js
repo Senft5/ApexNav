@@ -201,6 +201,50 @@
     return { kind: 'sight', text: String(Math.round(sight)), unit: String(unit || '').toUpperCase(), short: finite(speed) && speed > sight + 1 };
   }
 
+  /**
+   * U-60: the sight-line speed as a display holds it. The raw value moves every sample (the recording read 67, 55, 97,
+   * 88, 124 ten seconds apart at a steady 70), and a red that flickers teaches the driver to ignore the one red on the
+   * map. So: steps of 5 mph (10 km/h), rounded down (it is a speed you can stop within); a new step or OPEN only once it
+   * has held 2 s; red ("faster than you can see") only once you have been faster than it for 3 s; no plate under 5 mph
+   * (8 km/h), where it means nothing; OPEN when it clears the posted limit by 15 mph (25 km/h). Unknown hides at once
+   * and starts over: a held number is never shown for road it wasn't measured on.
+   * step({ sight, open, speed, limit, unit }, nowMs), numbers in display units, returns { msg, value, open }: msg is a
+   * sightMessage for the plate (phone and car), value/open the held number for the binnacle's Sight cell.
+   */
+  const SIGHT_HOLD_MS = 2000, SIGHT_RED_MS = 3000;
+  function sightFilter() {
+    // shown and the readings as numbers, OPEN as Infinity. A change is adopted only when every reading for 2 s has been at
+    // least a step away on the same side, and then by the least of them (the change all of that 2 s agrees on): a value
+    // that jumps up and down around the shown one never moves it.
+    let shown = null, pend = null, redSince = null;
+    const reset = () => { shown = null; pend = null; redSince = null; };
+    function step(r, now) {
+      r = r || {};
+      const km = /^km/i.test(String(r.unit || '')), q = km ? 10 : 5, slow = km ? 8 : 5, margin = km ? 25 : 15;
+      if (!finite(now) || (!r.open && !(finite(r.sight) && r.sight >= 0))) { reset(); return { msg: sightMessage(null), value: null, open: false }; }
+      const open = !!r.open || (finite(r.limit) && r.limit > 0 && r.sight > r.limit + margin);
+      const want = open ? Infinity : Math.floor(r.sight / q) * q;
+      const dir = shown === null ? 0 : Math.sign(want - shown);
+      if (shown === null) { shown = want; pend = null; }
+      else if (!dir) pend = null;
+      else if (!pend || pend.dir !== dir) pend = { dir, since: now, near: want };
+      else {
+        pend.near = dir > 0 ? Math.min(pend.near, want) : Math.max(pend.near, want);
+        if (now - pend.since >= SIGHT_HOLD_MS) { shown = pend.near; pend = null; }
+      }
+      const isOpen = shown === Infinity, value = isOpen ? null : shown;
+      // faster than the raw sight line and than the number on the plate: never red under the figure the driver reads
+      const fast = !isOpen && finite(r.speed) && finite(r.sight) && r.speed > r.sight + 1 && r.speed > shown + 1;
+      redSince = fast ? (redSince === null ? now : redSince) : null;
+      if (finite(r.speed) && r.speed < slow) return { msg: sightMessage(null), value, open: isOpen };
+      const msg = sightMessage(value, isOpen, null, r.unit);
+      msg.short = redSince !== null && now - redSince >= SIGHT_RED_MS;
+      return { msg, value, open: isOpen };
+    }
+    return { step, reset };
+  }
+
   const api = { sightMessage, line, routeMessage, guideMessage, placesMessage, cornersMessage, hazardsMessage, lookMessage, tulipSVG, cornerTulipSVG, CORNER_MODES, MAX_POINTS };
+  api.sightFilter = sightFilter;                                       // U-60 (its own line: the list above is shared)
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexCarPlay = api;
 })(typeof window !== 'undefined' ? window : globalThis);
