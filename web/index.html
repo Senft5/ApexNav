@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-YTPSegfj7qdAwezsPX9w5yRu+uVsNN4lqnLd9mRvxaE=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-vakgvhSnivqzJD/Lx7Jw+tgDEI6q0cJnGJ8ghrPKpT0=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -60,6 +60,7 @@
   <script src="voice_lines.js"></script>
   <script src="directions.js"></script>
   <script src="carplay.js"></script>
+  <script src="cameras.js"></script>
   <script src="whats_new.js"></script>
   <script src="saved_routes.js"></script>
   <script src="row_select.js"></script>
@@ -96,7 +97,6 @@
   <script src="keyboard.js"></script>
   <script src="boot.js"></script>
   <script src="press.js"></script>
-  <script src="page_return.js"></script>
   <script src="themes.js"></script>
   <script src="theme_contract.js"></script>
   <script src="units.js"></script>
@@ -404,6 +404,16 @@
     .dna-cell span { font-size: 11px; color: var(--panel-dim); font-weight: 700; }
 
 
+    /* The Log over the map (openLog): a full-screen frame; the map page keeps running behind it */
+    /* the sight-line speed under the position arrow (paintSight) */
+    .sight-tag { pointer-events: none; display: flex; align-items: center; gap: 3px; padding: 2px 5px 1px; background: var(--panel); color: var(--panel-ink);
+      border: 1.5px solid var(--panel-ink); font: 700 15px/1 var(--font-num); white-space: nowrap; }
+    .sight-tag small { font-size: 9px; letter-spacing: 0.04em; }
+    .sight-tag.short { background: var(--signal); color: var(--panel); border-color: var(--panel); }   /* faster than you can see */
+    .sight-tag[hidden] { display: none; }
+    #logFrame { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; z-index: 10000; background: var(--panel); }
+    #logFrame[hidden] { display: none; }
+
     .switches { display: flex; justify-content: space-between; align-items: flex-start; gap: 4px; flex-wrap: wrap; }
     .sw { display: grid; justify-items: center; gap: 4px; min-width: 44px; padding: 4px 2px; }
     /* The slide switch (REVIEW.md 2.1, REVIEW2.md U-44; the owner, 2026-10-29: "hard to tell if they're on or off"): one
@@ -552,6 +562,8 @@
     html[data-mode="night"] #cluster:not(.show-trip) .odo { display: none; }
     html[data-mode="night"] #cluster:not(.show-trip) .trip-peek { display: block; justify-self: center; min-height: 44px; min-width: 64px; padding: 0 12px;
       border: 0; background: none; color: var(--panel-dim); font: 600 13px var(--font-ui); letter-spacing: 0.08em; text-transform: uppercase; }
+    /* in a drive the REC line already says how far: no lone "TRIP" key in the binnacle (the owner's photos, 2026-10-30) */
+    html[data-mode="night"] #app.live #cluster .trip-peek { display: none; }
     /* the idle map (REVIEW.md 3.1, mockup 01): a place plate and one invitation on the deck */
     .place-plate { position: absolute; z-index: 4; top: calc(12px + var(--safe-top)); left: 10px; padding: 7px 12px; background: var(--panel); color: var(--panel-ink);
       border: 1.5px solid var(--panel-ink); font-size: 14px; font-weight: 600; box-shadow: 0 2px 0 var(--rule); }
@@ -600,7 +612,7 @@
     html[data-theme="tapedeck"] #driveEnd { background: transparent; color: var(--accent); border: 1.5px solid var(--accent); }
     html[data-theme="tapedeck"] .odo.boxed .dg { border-color: var(--rule); }
     html[data-theme="tapedeck"] .odo-meta, html[data-theme="tapedeck"] .dna-arch, html[data-theme="tapedeck"] .ro span { letter-spacing: 0; white-space: nowrap; }
-    .vfd-seg .seg { fill: var(--face-ink); opacity: 0.07; } .vfd-seg .seg.lit { opacity: 1; filter: drop-shadow(0 0 3px var(--face-ink)); }
+    .vfd-seg .seg { fill: var(--face-ink); opacity: 0.05; } .vfd-seg .blank .seg { opacity: 0; }   /* no ghost 8s in front of a number: "7" read as "887" */ .vfd-seg .seg.lit { opacity: 1; filter: drop-shadow(0 0 3px var(--face-ink)); }
     .vfd-seg .vfd-shadow { fill: transparent; }
     .vfd-label { fill: var(--face-dim); font-family: var(--font-ui); }
     .vfd-meters { display: grid; gap: 8px; align-content: center; height: 100%; }
@@ -1155,7 +1167,7 @@
             </ul>
           </section>
           <section class="sources" data-panel="garage">
-            <details class="more"><summary>Sources and licences</summary><p class="note">Map &copy; OpenStreetMap contributors via OpenFreeMap. Terrain: AWS Terrarium DEM. Routing, map matching and posted limits: Valhalla (FOSSGIS). Geocoding: Nominatim. Search suggestions: Photon (Komoot). Plate-reading cameras: OpenStreetMap (<code>surveillance:type=ALPR</code>, DeFlock) via Overpass. Voices: Kokoro-82M (Apache-2.0).</p></details>
+            <details class="more"><summary>Sources and licences</summary><p class="note">Map &copy; OpenStreetMap contributors via OpenFreeMap. Terrain: AWS Terrarium DEM. Routing, map matching and posted limits: Valhalla (FOSSGIS). Geocoding: Nominatim. Search suggestions: Photon (Komoot). Plate-reading and speed cameras: OpenStreetMap (<code>surveillance:type=ALPR</code>, DeFlock; <code>highway=speed_camera</code>) via Overpass. Voices: Kokoro-82M (Apache-2.0).</p></details>
             <p class="note mt-8"><a href="https://apexnav.senftns.workers.dev/privacy.html" target="_blank" rel="noopener">Privacy</a> · <a href="https://apexnav.senftns.workers.dev/terms.html" target="_blank" rel="noopener">Terms of use</a> · <a href="licenses.html">Licences</a></p>
           </section>
         </div>
@@ -1374,6 +1386,7 @@
     let savedDriveIds = new Set();
     let refreshDriveVersion = 0;
     async function refreshSavedDrives() {
+      if (window.ApexLogHost && !(logFrame.el && !logFrame.el.hidden)) ApexLogHost.stale();   // the Log shows them fresh next time
       const version = ++refreshDriveVersion;
       const saved = await ApexRecording.all();
       if (version !== refreshDriveVersion) return;
@@ -1431,7 +1444,7 @@
     const routeWatch = { note: null, frame: null, bestM: 0 };
     const etaPace = ApexEta.createPace();   // live ETA pace on the current route (paintEta)
     let etaText = '', etaLeftS = null;
-    const car = { route: '', guideAt: 0, guideKey: '', look: '', hazards: '', symbols: new Map() };   // what the car's screen was last sent (carRoute, carGuide below)   // strip text while off route; last frame fed; furthest progress
+    const car = { route: '', guideAt: 0, guideKey: '', sightKey: '', look: '', hazards: '', symbols: new Map() };   // what the car's screen was last sent (carRoute, carGuide below)   // strip text while off route; last frame fed; furthest progress
     try {
       const saved = JSON.parse(localStorage.getItem('apex.prefs') || 'null');
       if (saved) {
@@ -1470,6 +1483,7 @@
       document.querySelectorAll('[data-cycle]').forEach(b => { const v = state[b.dataset.cycle]; b.querySelector('b').textContent = MODE_LABEL[v]; b.setAttribute('aria-label', `${b.querySelector('span').textContent}: ${MODE_LABEL[v]}`); });
     }
     function applyTheme() {
+      if (window.ApexLogHost) ApexLogHost.stale();
       syncDerivedToggles();
       look = Themes.apply(state.theme, state.toggles.night);
       if (typeof themeVoice === 'function') themeVoice();               // the co-driver comes with the theme
@@ -1530,7 +1544,7 @@
       transformRequest: window.ApexOfflineTiles ? ApexOfflineTiles.transform : undefined });
     { const v = document.getElementById('aboutVersion'), m = /ApexNav\/([^ ]+ \([^)]*\))/.exec(navigator.userAgent);   // the iOS shell names its version in the user agent
       if (v) v.textContent = m ? m[1] : (window.APEX_EMBED ? '--' : 'Website'); }
-    window.apexDebug = { map, get track() { return track; }, state, drives, buildRoute: (...a) => buildRoute(...a), renderRouteCard: (...a) => renderRouteCard(...a), openRoadPage: (...a) => openRoadPage(...a), showEndCard: (...a) => showEndCard(...a), get driveActive() { return driveActive; }, tryTheme: (id) => tryTheme(id) };
+    window.apexDebug = { map, get track() { return track; }, state, drives, buildRoute: (...a) => buildRoute(...a), renderRouteCard: (...a) => renderRouteCard(...a), openRoadPage: (...a) => openRoadPage(...a), showEndCard: (...a) => showEndCard(...a), get driveActive() { return driveActive; }, tryTheme: (id) => tryTheme(id), tulipPNG: (svg) => tulipPNG(svg) };
     let mapReady = false;
     // The map's box changes with the layout (idle hides the gauges, a drive shows them); keep the canvas the size of its box.
     if (window.ResizeObserver) new ResizeObserver(() => map.resize()).observe(document.getElementById('map'));
@@ -1570,6 +1584,27 @@
     puckEl.setAttribute('role', 'img');
     const puck = new maplibregl.Marker({ element: puckEl, rotationAlignment: 'map', pitchAlignment: 'map' }).setLngLat([-84.70, 39.24]).addTo(map);
     puckEl.setAttribute('aria-label', 'Your position');                  // after the Marker, which labels it "Map marker"
+    // The sight-line speed under the arrow (the owner, 2026-10-29; web/carplay.js sightMessage): upright while the arrow
+    // turns, red when you are faster than it, hidden when unknown. The car's map gets the same tag while you drive.
+    const sightEl = document.createElement('div');
+    sightEl.className = 'sight-tag'; sightEl.hidden = true; sightEl.setAttribute('role', 'img');
+    const sightTag = new maplibregl.Marker({ element: sightEl, anchor: 'top', offset: [0, 15] }).setLngLat([-84.70, 39.24]).addTo(map);
+    const SIGHT_EYE = '<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6S2 12 2 12z" fill="none" stroke="currentColor" stroke-width="2.6"/><circle cx="12" cy="12" r="2.8" fill="currentColor"/></svg>';
+    let sightKey = '';
+    function paintSight(m, live) {
+      const key = JSON.stringify(m);
+      if (key !== sightKey) {
+        sightKey = key;
+        sightEl.hidden = !m.text;
+        if (m.text) {
+          sightEl.classList.toggle('short', m.short);
+          sightEl.innerHTML = SIGHT_EYE;
+          sightEl.append(el('b', { textContent: m.text }), ...(m.unit ? [el('small', { textContent: m.unit })] : []));
+          sightEl.setAttribute('aria-label', m.text === 'OPEN' ? 'Sight line open' : `Sight-line speed ${m.text} ${m.unit.toLowerCase()}${m.short ? ', faster than you can see' : ''}`);
+        }
+      }
+      if (live && key !== car.sightKey) { car.sightKey = key; carPost(m); }
+    }
     function drawPuck() {
       const c = look.colors;
       puckEl.innerHTML = `<svg viewBox="0 0 26 26" width="26" height="26"><circle cx="13" cy="13" r="11" fill="${c.panel}" stroke="${c.panelInk}" stroke-width="2"/><path d="M13 5 L19 18 L13 14.8 L7 18 Z" fill="${c.accent}"/></svg>`;
@@ -1879,6 +1914,7 @@
       [cam.pLon, cam.pvLon] = spring(cam.pLon, cam.pvLon, vehicle.lon, 14, 1, dt);
       [cam.pBear, cam.pvBear] = spring(cam.pBear, cam.pvBear, cam.pBear + angleDelta(cam.pBear, vehicle.bearing), 10, 1, dt);
       puck.setLngLat([cam.pLon, cam.pLat]).setRotation(cam.pBear);
+      sightTag.setLngLat([cam.pLon, cam.pLat]);
       if (!state.follow) return;
       const f = CAM_FEEL[state.camFeel] || CAM_FEEL.dynamic, t = camTargets();
       [cam.lat, cam.vLat] = spring(cam.lat, cam.vLat, t.lat, f.wPos, f.zPos, dt);
@@ -2398,6 +2434,23 @@
     // =======================================================================
     function sectorAt(i) { return track && track.sectors ? track.sectors.find(s => i >= s.start_index && i <= s.end_index) || null : null; }
     let lastNotesAt = 0;
+    // Where on the route the car is. With no recent match (hint -1) the whole route is searched, and a loop passes the
+    // same place at its start and its end: of the stretches within 40 m, take the one nearest the progress so far, then
+    // the nearest point on it. So the start of a loop is never read as its end (the owner's car, 2026-10-29: "150 m"
+    // left and an arrival in the past, a minute into a 32 min loop).
+    function matchOnRoute(lat, lon, hint) {
+      const hit = Core.nearestIndex(lat, lon, track.lat, track.lon, hint, 600);
+      if (hint >= 0 || !(hit.distM < 40)) return hit;
+      const c = Math.cos(lat * Math.PI / 180), n = track.lat.length;
+      let anchor = -1, gap = Infinity;
+      for (let i = 0; i < n; i++) {
+        const dx = (track.lon[i] - lon) * 111320 * c, dy = (track.lat[i] - lat) * 110540;
+        if (dx * dx + dy * dy >= 1600) continue;
+        const g = Math.abs(track.dist[i] - state.cursorM);
+        if (g < gap) { gap = g; anchor = i; }
+      }
+      return anchor < 0 ? hit : Core.nearestIndex(lat, lon, track.lat, track.lon, anchor, 60);
+    }
     function render(snap) {
       let lat, lon, bearing, vMps, latG, lonG, camber, idx = -1;
       const live = state.mode === 'live' && state.live;
@@ -2408,7 +2461,7 @@
         if (track) {
           // Off route the rejoin can be anywhere on the route, so search all of it (hint -1).
           const free = track.kind === 'horizon';                         // the road ahead is not a route: no rerouting, ETA or traffic
-          const hit = Core.nearestIndex(lat, lon, track.lat, track.lon, rerouter.off && !free ? -1 : state.cursorIdx, 600);
+          const hit = matchOnRoute(lat, lon, rerouter.off && !free ? -1 : state.cursorIdx);
           if (L !== routeWatch.frame && !free) { routeWatch.frame = L; feedRerouter(L, hit); trafficTick(L, hit); }
           if (hit.distM < 40 && (free || !rerouter.off)) { idx = hit.index; state.cursorM = track.dist[idx]; }
         }
@@ -2418,7 +2471,7 @@
         idx = s.i; lat = s.lat; lon = s.lon; bearing = s.bearing;
         vMps = state.mode === 'sim' ? simSpeed(idx) : s.speedMps;
         latG = s.latG; lonG = s.lonG; camber = s.camberDeg;
-      } else { cluster.update({ speedMph: null }); return; }
+      } else { cluster.update({ speedMph: null }); paintSight(ApexCarPlay.sightMessage(null), false); return; }
       state.cursorIdx = idx;
       if (latG != null && (Math.abs(latG) > 0.30 || Math.abs(lonG) > 0.35)) state.spiritedAt = performance.now();
 
@@ -2431,13 +2484,15 @@
       const sight = at(track && track.sightM);
       const limit = at(track && track.limitMps);
       const pace = at(track && track.envMps), sightMps = sight != null ? Core.sightSpeedMps(sight) : null;
+      // nothing limits you here: the sight line runs to its 400 m cap and no corner asks for less (the Sight cell says Open)
+      const sightOpen = sight != null && sight >= Core.SIGHT_MAX_M - 1 && (pace == null || pace >= sightMps - 0.5);
+      paintSight(ApexCarPlay.sightMessage(sightMps != null ? ApexUnits.speed(sightMps) : null, sightOpen, vMps != null ? ApexUnits.speed(vMps) : null, ApexUnits.speedU()), !!live);
       cluster.update({
         // in the chosen units (mph or km/h, U-22); the names are the cluster's
         speedMph: vMps != null ? ApexUnits.speed(vMps) : null,
         paceMph: pace != null ? ApexUnits.speed(pace) : null,
         sightMph: sightMps != null ? ApexUnits.speed(sightMps) : null,
-        // nothing limits you here: the sight line runs to its 400 m cap and no corner asks for less (the Sight cell says Open)
-        sightOpen: sight != null && sight >= Core.SIGHT_MAX_M - 1 && (pace == null || pace >= sightMps - 0.5),
+        sightOpen,
         limitMph: limit != null ? ApexUnits.speed(limit) : null,
         latG, lonG, camberDeg: camber,
         tripMi: ApexUnits.longN(live && (idx < 0 || track.kind === 'horizon') ? (drive.rec ? drive.rec.km * 1000 : 0) : state.cursorM), totalMi: track && track.kind !== 'horizon' && !(live && idx < 0) ? ApexUnits.longN(totalM()) : null,
@@ -2601,7 +2656,6 @@
     // =======================================================================
     // 8. ALPR — real cameras from OpenStreetMap (DeFlock) via Overpass
     // =======================================================================
-    const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter', 'https://overpass.private.coffee/api/interpreter'];
     // What other members have measured along this route (banking, roughness). Members only; silent when signed out or offline.
     async function showMeasured(t) {
       const note = $('measuredNote'); note.hidden = true;
@@ -2626,28 +2680,20 @@
           (t.crowdCorrected >= 30 ? ` · corners from members' drives on ${ApexUnits.long(t.crowdCorrected, 1)}` : '');
     }
     const repavedMonth = (ym) => { const d = new Date(ym + '-15T12:00:00Z'); return Number.isFinite(d.getTime()) ? d.toLocaleDateString([], { month: 'short', year: 'numeric' }) : ym; };
-    // Plate-reading cameras in a box [s, w, n, e] from the camera map (OSM / DeFlock via Overpass), kept a week; null offline.
+    // Enforcement cameras in a box [s, w, n, e] (web/cameras.js: plate readers and speed cameras from OSM, by tile, kept a
+    // week, the servers raced); null offline.
+    try { for (let i = localStorage.length - 1; i >= 0; i--) { const k = localStorage.key(i); if (k && k.startsWith('apex.alpr.')) localStorage.removeItem(k); } } catch (_) {}   // the old per-box cache
     async function alprNodesIn(s, w, n, e) {
-      const bbox = [s, w, n, e].map(v => v.toFixed(4)).join(',');
-      const cacheKey = `apex.alpr.${bbox}`;
-      try { const c = JSON.parse(localStorage.getItem(cacheKey) || 'null'); if (c && Date.now() - c.at < 7 * 864e5) return c.nodes; } catch (_) {}
-      const q = `[out:json][timeout:25];(node["surveillance:type"="ALPR"](${bbox});node["man_made"="surveillance"]["surveillance:type"="ALPR"](${bbox}););out body;`;
-      for (const url of OVERPASS) {
-        try {
-          const res = await fetch(url, { method: 'POST', body: 'data=' + encodeURIComponent(q), headers: { 'Content-Type': 'application/x-www-form-urlencoded' } });
-          if (!res.ok) continue;
-          const nodes = ((await res.json()).elements || []).filter(x => x.type === 'node').map(x => ({ lat: x.lat, lon: x.lon, id: x.id }));
-          try { localStorage.setItem(cacheKey, JSON.stringify({ at: Date.now(), nodes })); } catch (_) {}
-          return nodes;
-        } catch (_) { /* next mirror */ }
-      }
-      return null;
+      const cams = await ApexCameras.load(ApexCameras.tilesInBox(s, w, n, e));
+      return cams && cams.filter((c) => c.lat >= s && c.lat <= n && c.lon >= w && c.lon <= e);
     }
     async function fetchAlpr(t) {
       if (t.alpr) return;
-      let s = Infinity, w = Infinity, n = -Infinity, e = -Infinity;
-      for (let i = 0; i < t.lat.length; i++) { s = Math.min(s, t.lat[i]); n = Math.max(n, t.lat[i]); w = Math.min(w, t.lon[i]); e = Math.max(e, t.lon[i]); }
-      const nodes = await alprNodesIn(s - 0.005, w - 0.005, n + 0.005, e + 0.005);
+      // only the tiles the route passes through, not its whole bounding box (a long diagonal route was a huge query)
+      const pts = [];
+      for (let i = 0; i < t.lat.length; i += 20) pts.push([t.lat[i], t.lon[i]]);
+      pts.push([t.lat[t.lat.length - 1], t.lon[t.lon.length - 1]]);
+      const nodes = await ApexCameras.load(ApexCameras.tilesNear(pts));
       if (nodes) { attachAlpr(t, nodes); return; }
       if (track === t && replayOn) toast('Camera map offline. No pins doesn\'t mean no cameras.');
     }
@@ -2657,13 +2703,18 @@
       for (const node of nodes) {
         const hit = Core.nearestIndex(node.lat, node.lon, t.lat, t.lon, -1);
         if (hit.distM > Core.ALPR_RADIUS_M) continue;
-        t.alpr.push({ type: 'alpr', code: 'LPR', call: 'Camera', index: hit.index, dist_m: t.dist[hit.index], lat: node.lat, lon: node.lon });
-        if (t.sectors) { const sid = Math.floor(t.dist[hit.index] / t.sectorM); counts.set(sid, (counts.get(sid) || 0) + 1); }
+        const speed = node.kind === 'speed';                           // a speed camera rides with the plate readers (same switch, same pin)
+        t.alpr.push({ type: 'alpr', kind: speed ? 'speed' : 'alpr', code: speed ? 'SPD' : 'LPR', call: speed ? 'Speed camera' : 'Camera', index: hit.index, dist_m: t.dist[hit.index], lat: node.lat, lon: node.lon });
+        if (t.sectors && !speed) { const sid = Math.floor(t.dist[hit.index] / t.sectorM); counts.set(sid, (counts.get(sid) || 0) + 1); }
       }
       // Same rule as core/road_dna.score_sectors: -45 per camera within ALPR_RADIUS_M.
       if (t.sectors) for (const sec of t.sectors) sec.clear = Math.max(0, 100 - 45 * (counts.get(sec.id) || 0));
       if (t === plannedRoute) renderRouteCard(t);
-      if (track === t) { loadTrackOnMap(); render(false); toast(`${t.alpr.length} plate-reading camera${t.alpr.length === 1 ? '' : 's'} on this route`); }
+      if (track === t) {
+        loadTrackOnMap(); render(false);
+        const lpr = t.alpr.filter((c) => c.kind !== 'speed').length, spd = t.alpr.length - lpr;
+        toast([`${lpr} plate-reading camera${lpr === 1 ? '' : 's'}`, spd ? `${spd} speed camera${spd === 1 ? '' : 's'}` : null].filter(Boolean).join(' and ') + ' on this route');
+      }
     }
 
     // =======================================================================
@@ -3022,16 +3073,23 @@
       }
       paintAlternates();
     }
-    // Log and Stages are another page, so coming back to Map reloads this one: keep the planned route for the session and
-    // rebuild it here from its own geometry (no router call, works offline). Also what a reload after a lost map restores.
-    const PLANNED = 'apex.plannedRoute';
-    // The planned route survives a page change and an app restart for PLANNED_KEEP_MS (kept with its directions, router times
-    // and limits, web/saved_routes.js), so a phone that killed the app mid-trip comes back to the same route.
-    const PLANNED_KEEP_MS = 12 * 3600_000;
+    // The planned route lives for this session only (sessionStorage): a reload after a lost map (WebGL, above) plans it
+    // again from its own geometry (no router call, works offline), but opening the app, on the phone or in the car, starts
+    // with no route (the owner, 2026-10-30: "it should open with no route loaded"; it used to keep it for 12 hours).
+    // A route being driven is kept across a close (localStorage, ACTIVE) for ACTIVE_KEEP_MS, so a phone that killed the
+    // app mid-drive comes back to it; ending the drive forgets it (the owner: "active routes, not planned ones").
+    const PLANNED = 'apex.plannedRoute', ACTIVE = 'apex.activeRoute', ACTIVE_KEEP_MS = 12 * 3600_000;
+    try { localStorage.removeItem(PLANNED); } catch (_) {}            // what older builds kept across launches
+    const packPlanned = (t) => JSON.stringify({ ...ApexSavedRoutes.pack(t), extraS: t.extraS ?? null, savedAt: Date.now() });
     function persistPlanned(t) {
-      try { localStorage.setItem(PLANNED, JSON.stringify({ ...ApexSavedRoutes.pack(t), extraS: t.extraS ?? null })); }
-      catch (_) { /* too big or storage off: the route just won't survive a restart */ }
+      try { sessionStorage.setItem(PLANNED, packPlanned(t)); } catch (_) { /* too big or storage off: a reload just won't bring it back */ }
+      let driving = false; try { driving = driveActive; } catch (_) {}   // (declared further down)
+      if (driving) persistActive(t);                                   // a reroute mid-drive replaces the kept one
     }
+    function persistActive(t) {
+      try { if (t && t.kind === 'route') localStorage.setItem(ACTIVE, packPlanned(t)); } catch (_) {}
+    }
+    function forgetActive() { try { localStorage.removeItem(ACTIVE); } catch (_) {} }
     // A packed route (planned or saved for offline) rebuilt on the phone: notes from its shape, the rest as it was kept.
     async function trackFromPacked(p) {
       const t = await trackFromPolyline(p.coords, p.id, p.name);
@@ -3042,9 +3100,15 @@
     }
     async function restorePlanned() {
       let saved = null;
-      try { saved = JSON.parse(localStorage.getItem(PLANNED) || sessionStorage.getItem(PLANNED) || 'null'); } catch (_) { saved = null; }
+      let resumed = false;
+      try { saved = JSON.parse(sessionStorage.getItem(PLANNED) || 'null'); } catch (_) { saved = null; }
+      if (!saved) {                                                    // a fresh launch: only a drive the app was closed in
+        try { saved = JSON.parse(localStorage.getItem(ACTIVE) || 'null'); } catch (_) { saved = null; }
+        if (saved && !(Number.isFinite(saved.savedAt) && Date.now() - saved.savedAt < ACTIVE_KEEP_MS)) { forgetActive(); saved = null; }
+        resumed = !!saved;
+      }
       if (!saved || !Array.isArray(saved.coords) || saved.coords.length < 2) return;
-      if (Number.isFinite(saved.savedAt) && Date.now() - saved.savedAt > PLANNED_KEEP_MS) { try { localStorage.removeItem(PLANNED); } catch (_) {} return; }
+      if (resumed) setTimeout(() => toast(`Back on ${saved.name || 'your route'}: the drive you were on when the app closed.`), 1200);
       await buildRoute(null, saved.id, saved.name, await trackFromPacked(saved));
     }
     // Saved for offline (IDEAS F-03): the route card's Save keeps it on the phone; Where to? lists it under Saved.
@@ -3115,6 +3179,9 @@
       if (destMarker) { destMarker.remove(); destMarker = null; }
       if (!t || !Array.isArray(t.lat) || !t.lat.length) return null;
       const to = t.request && t.request.to ? t.request.to : { lat: t.lat[t.lat.length - 1], lon: t.lon[t.lon.length - 1] };
+      // a loop ends where it starts: no pin, or it sits on the car's arrow for the whole drive (the owner's photo, 2026-10-30)
+      const n = t.lat.length - 1, c = Math.cos(t.lat[0] * Math.PI / 180);
+      if (Math.hypot((t.lon[n] - t.lon[0]) * 111320 * c, (t.lat[n] - t.lat[0]) * 110540) < 300) return null;
       const el = document.createElement('div'); el.className = 'dropped-pin'; el.setAttribute('aria-label', 'Destination');
       destMarker = new maplibregl.Marker({ element: el }).setLngLat([to.lon, to.lat]).addTo(map);
       return to;
@@ -3862,8 +3929,8 @@
     const VIEW_TITLES = { crew: 'Crew', garage: 'Garage' };
     let view = null, friendsOpen = false;                                  // friendsOpen: the Crew sheet's friends pop-up
     function showView(v) {
-      if (v === 'log') { location.href = 'analysis.html?tab=log'; return; }
-      if (v === 'stages') { location.href = 'analysis.html?tab=stages'; return; }
+      if (v === 'log') { openLog('analysis.html?tab=log'); return; }
+      if (v === 'stages') { openLog('analysis.html?tab=stages'); return; }
       if (v === 'setup') v = 'garage';                                   // Settings live in the Garage now (REVIEW.md roadmap 9)
       if (v === 'route') { showView(null); openPlan(true); return; }
       if (v === 'map') v = null;
@@ -3878,6 +3945,51 @@
       document.querySelectorAll('#tabbar .tab').forEach(t => t.classList.toggle('on', v ? t.dataset.view === v : t.dataset.view === 'map'));
     }
     const openSheet = (v = view || 'route') => showView(v);
+    // The Log and Stages (analysis.html) open in a full-screen frame over the map, never in its place (the owner,
+    // 2026-10-29: no page reloads): the map, a drive in progress and the car's screen keep running behind it, and its
+    // Map, Crew and Garage tabs close the frame (web/page_return.js). The frame is kept and shown again as it was, unless
+    // a drive, the theme or the units changed since, or a different page of the Log is asked for.
+    const logFrame = { el: null, url: null, stale: false };
+    function safeInsets() {
+      let probe = $('saProbe');
+      if (!probe) { probe = el('div', { id: 'saProbe' }); probe.style.cssText = 'position:fixed;visibility:hidden;pointer-events:none;padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)'; document.body.append(probe); }
+      const cs = getComputedStyle(probe);
+      return { top: cs.paddingTop, right: cs.paddingRight, bottom: cs.paddingBottom, left: cs.paddingLeft };
+    }
+    function logInsets() {
+      const ins = safeInsets();
+      try { const st = logFrame.el.contentDocument.documentElement.style; for (const k of Object.keys(ins)) st.setProperty(`--sa-${k}`, ins[k]); } catch (_) {}
+    }
+    function openLog(url) {
+      let f = logFrame.el;
+      if (!f) {
+        f = logFrame.el = el('iframe', { id: 'logFrame', title: 'Log' });
+        f.addEventListener('load', logInsets);
+        document.body.append(f);
+      }
+      if (logFrame.url !== url || logFrame.stale) { logFrame.url = url; logFrame.stale = false; f.src = url; }
+      else logInsets();
+      f.hidden = false;
+      document.documentElement.classList.add('log-open');
+    }
+    window.addEventListener('resize', () => { if (logFrame.el && !logFrame.el.hidden) logInsets(); });
+    window.ApexLogHost = {
+      close(v) {
+        refreshSavedDrives().catch(() => {});                          // a drive renamed or deleted in the Log (the frame is still open: not stale)
+        if (logFrame.el) logFrame.el.hidden = true;
+        document.documentElement.classList.remove('log-open');
+        showView(VIEW_TITLES[v] ? v : null);
+      },
+      load(url) { location.href = url; },                              // a replay: the map page loads with that drive
+      stale() { logFrame.stale = true; },
+      insets: () => safeInsets(),                                      // asked for by the frame as its first script runs
+    };
+    // links into the Log anywhere on the map page (the drive-ended card, a toast's Open) open the frame too
+    document.addEventListener('click', (e) => {
+      const a = e.target && e.target.closest ? e.target.closest('a[href^="analysis.html"]') : null;
+      if (!a || e.defaultPrevented) return;
+      e.preventDefault(); openLog(a.getAttribute('href'));
+    });
     // Plan: the bar is always there (not while driving); tap it, or drag it up, for From / To, places, loops and the route card.
     function openPlan(open) {
       const panel = $('planPanel');
@@ -4423,6 +4535,7 @@
     let convoy = null;
     try { convoy = window.ApexConvoyUI && window.ApexConvoy ? ApexConvoyUI.mount({
       map, maplibregl, el, btn, toast, copyText, showView, apiFetch: ApexSync.apiFetch, overlayParent: $('toast').parentElement,
+      driving: () => driveActive,
       siteOrigin: () => (ApexSync.inApp ? ApexSync.apiBase : location.origin),
       wsUrl: (id) => `${ApexSync.inApp ? ApexSync.apiBase.replace(/^http/, 'ws') : location.origin.replace(/^http/, 'ws')}/api/convoy/${encodeURIComponent(id)}/connect`,
       getFix: () => {
@@ -4484,7 +4597,7 @@
       document.querySelectorAll('[data-units]').forEach(b => b.addEventListener('click', () => {
         if (b.dataset.units === ApexUnits.system()) return;
         if (state.mode === 'live') { toast('Change units when the drive has ended.'); return; }
-        ApexUnits.set(b.dataset.units); paintUnits();
+        ApexUnits.set(b.dataset.units); paintUnits(); ApexLogHost.stale(); carLook();
         cluster = Inst.mountCluster($('cluster'), look.theme);
         labelLoops();
         if (plannedRoute && !$('routeCard').hidden) { try { renderRouteCard(); } catch (_) {} }
@@ -5608,13 +5721,7 @@
       let s = Infinity, w = Infinity, n = -Infinity, e = -Infinity;
       for (let i = 0; i < t.lat.length; i++) { s = Math.min(s, t.lat[i]); n = Math.max(n, t.lat[i]); w = Math.min(w, t.lon[i]); e = Math.max(e, t.lon[i]); }
       if (n - s > 1 || e - w > 1) return;
-      let json = null;
-      for (const url of OVERPASS) {
-        try {
-          const r = await fetch(url, { method: 'POST', body: 'data=' + encodeURIComponent(ApexConditional.query(s - 0.005, w - 0.005, n + 0.005, e + 0.005)), headers: { 'Content-Type': 'application/x-www-form-urlencoded' } });
-          if (r.ok) { json = await r.json(); break; }
-        } catch (_) { /* next mirror */ }
-      }
+      const json = await ApexCameras.fetchFirst(fetch, 'data=' + encodeURIComponent(ApexConditional.query(s - 0.005, w - 0.005, n + 0.005, e + 0.005)));   // every server raced
       if (!json || plannedRoute !== t) return;
       const total = t.dist[t.dist.length - 1], now = Date.now();
       const secAt = (m) => (Number.isFinite(t.timeS) ? t.timeS - ApexEta.routerLeft(m, total, t.timeS, t.timeMarks) : m / (50 / 3.6));
@@ -5969,7 +6076,7 @@
     // The theme and the voice switch for the car's screen: its map paints the theme, its guidance card takes the theme's dark.
     function carLook() {
       if (!look || !look.theme) return;
-      const msg = ApexCarPlay.lookMessage(look.theme, !!state.toggles.voice), key = JSON.stringify(msg);
+      const msg = ApexCarPlay.lookMessage(look.theme, !!state.toggles.voice, ApexUnits.system()), key = JSON.stringify(msg);
       if (key === car.look) return;
       car.look = key;
       carPost(msg);
@@ -5985,19 +6092,34 @@
     // Corners on the car's guidance card (web/carplay.js guideMessage): 'all' ratings, or 'tight' (1, 2, hairpins) if App
     // Review asks for turn-by-turn only (docs/APP_REVIEW.md, CarPlay row). One line to change; 'off' is turns alone.
     const CAR_CORNERS = 'all';
+    // The tulip as a PNG for the car's card, drawn straight onto a canvas from the SVG's own path data (Path2D): no image
+    // to load, so it is there in the first message, and nothing that could taint the canvas. (Loading the SVG as an image
+    // never finished in the app: the car showed Apple's arrow, the owner's photos, 2026-10-29.)
+    function tulipPNG(svg) {
+      const cv = document.createElement('canvas'); cv.width = cv.height = 120;
+      const x = cv.getContext('2d'); x.scale(1.2, 1.2);                   // the SVG's 100-unit viewBox at 120 px
+      x.strokeStyle = (svg.match(/stroke="([^"]+)"/) || [])[1] || '#EDE4D3';
+      x.lineWidth = 9; x.lineCap = 'round'; x.lineJoin = 'round';
+      for (const m of svg.matchAll(/<path d="([^"]+)"(?: fill="([^"]+)")?\/>/g)) {
+        const path = new Path2D(m[1]);
+        if (m[2]) { x.fillStyle = m[2]; x.fill(path); }
+        x.stroke(path);
+      }
+      for (const m of svg.matchAll(/<circle cx="([\d.]+)" cy="([\d.]+)" r="([\d.]+)"(?: fill="([^"]+)")?\/>/g)) {
+        x.beginPath(); x.arc(+m[1], +m[2], +m[3], 0, 2 * Math.PI);
+        if (m[4]) { x.fillStyle = m[4]; x.fill(); } else x.stroke();
+      }
+      return cv.toDataURL('image/png').split(',')[1];
+    }
     function carSymbol(type, corner) {
       const ink = (look && look.theme && look.theme.night && look.theme.night.panelInk) || '#EDE4D3';
       const key = corner ? `c${corner.dir}${corner.sev}|${ink}` : `${type}|${ink}`;
-      if (car.symbols.has(key)) return car.symbols.get(key);
-      car.symbols.set(key, null);
-      const img = new Image();
-      img.onload = () => {
-        const c = document.createElement('canvas'); c.width = c.height = 120;
-        c.getContext('2d').drawImage(img, 0, 0, 120, 120);
-        try { car.symbols.set(key, c.toDataURL('image/png').split(',')[1]); } catch (_) {}
-      };
-      img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(corner ? ApexCarPlay.cornerTulipSVG(corner.dir, corner.sev, ink) : ApexCarPlay.tulipSVG(type, ink));
-      return null;
+      if (!car.symbols.has(key)) {
+        let png = null;
+        try { png = tulipPNG(corner ? ApexCarPlay.cornerTulipSVG(corner.dir, corner.sev, ink) : ApexCarPlay.tulipSVG(type, ink)); } catch (_) {}
+        car.symbols.set(key, png);
+      }
+      return car.symbols.get(key);
     }
     function carGuide() {
       if (!driveActive || !track || track.kind !== 'route') return;
@@ -6100,6 +6222,12 @@
       if (state.mode === 'live' && drive.sensors) return;
       if (state.mode === 'live' || driveActive) return;                                   // native app is feeding frames already or start is pending
       driveActive = true; health.bump('drives'); drive.startedAt = performance.now();
+      // A drive takes the whole screen, whatever the phone was showing: a drive started from the car (or a link, or Siri)
+      // with the Crew or Garage sheet or the Log open left that page in the middle of the drive screen (the owner, 2026-10-30).
+      if (logFrame.el && !logFrame.el.hidden) { logFrame.el.hidden = true; document.documentElement.classList.remove('log-open'); }
+      showView(null);
+      openPlan(false);                                                 // the plan sheet too, and the keyboard with it
+      if (track && track.kind === 'route') persistActive(track);       // kept if the app is closed mid-drive
       clearCarOffer();
       setPlaying(false);
       drive.rec = new ApexSensors.Recorder(); drive.status = { gps: 'waiting', motion: 'off', wake: 'off', message: '' }; drive.frames = 0; drive.battery = null;
@@ -6190,7 +6318,7 @@
       $('endCard').classList.add('show');
     }
     $('endDone').addEventListener('click', () => $('endCard').classList.remove('show'));
-    $('endStage').addEventListener('click', () => { if (endDrive) location.href = `analysis.html?tab=segments&drive=${encodeURIComponent(endDrive.id)}`; });
+    $('endStage').addEventListener('click', () => { if (endDrive) openLog(`analysis.html?tab=segments&drive=${encodeURIComponent(endDrive.id)}`); });
     $('endShare').addEventListener('click', async () => {
       if (!endDrive || !window.ApexDriveCard) return;
       const css = getComputedStyle(document.documentElement), v = (k) => css.getPropertyValue(k).trim();
@@ -6206,7 +6334,8 @@
       const battery = window.ApexBattery ? ApexBattery.summary(drive.battery) : null; drive.battery = null;
       resetCircuit();
       activity('end');
-      carPost({ kind: 'end' }); car.guideKey = '';
+      forgetActive();                                                  // the drive is over: a relaunch starts with no route
+      carPost({ kind: 'end' }); car.guideKey = ''; car.sightKey = '';
       const rec = drive.rec, sensors = drive.sensors, live = drive.live, road = rec && window.ApexRoadNames ? ApexRoadNames.mainRoad(drive.roads, rec.km * 1000) : null;
       drive.sensors = null; drive.rec = null; drive.live = null; drive.share = 'off'; drive.native = false;
       if (sensors) sensors.stop();
@@ -6522,28 +6651,17 @@
         booting = false; paintIdle();
         if (params.get('play') === '1') setPlaying(true);
       } else {
-        // Back from Log / Stages (or after a reload): the planned route returns, quietly (booting: no preview), without
+        // After a reload in the same session (a lost map): the planned route returns, quietly (booting: no preview), without
         // waiting for the map, which draws it whenever it finishes loading.
         await restorePlanned().catch(() => {});
         booting = false; paintIdle();
       }
       if (params.get('book') === '1' || params.get('view') === 'route' || params.get('view') === 'drives') openPlan(true);
       if (VIEW_TITLES[params.get('view')] || params.get('view') === 'setup') openSheet(params.get('view'));
-      const back = window.ApexReturn && ApexReturn.take();             // a tab on the Log page, when WebKit had to load the map again
-      if (VIEW_TITLES[back]) openSheet(back);
       if (params.get('go') === 'drive') driveFromLink();   // the app opened from apexnav://open?go=drive (IDEAS C-05)
     }
     bootDrives();
     if (document.fonts) document.fonts.ready.then(() => render(true));
-    // Back from the Log page (web/page_return.js): the map comes back from WebKit's back-forward cache as it was left; open
-    // the tab that was tapped there (Crew, Garage) or show the bare map, and redraw at the current size.
-    window.addEventListener('pageshow', (e) => {
-      if (!e.persisted) return;
-      const back = window.ApexReturn && ApexReturn.take();
-      if (VIEW_TITLES[back]) openSheet(back); else if (back === 'map') showView(null);
-      try { map.resize(); } catch (_) {}
-      render(true);
-    });
   })();
   </script>
   <script>

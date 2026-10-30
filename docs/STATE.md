@@ -13,10 +13,26 @@
   without a reload; the Log's tabs go back to the map (web/page_return.js); Live Activities end with the drive, at
   launch and at quit, and go stale after two minutes. e2e: the units flow checks there is no reload; a new flow checks
   the Log's tabs go back and the switch's two states differ.
+- [x] Follow-up (the owner: "the crew page still does a full reload every time"; "sightline speed as part of the current
+  location marker"): the Log and Stages open in a frame over the map (openLog, web/page_return.js), so the map page never
+  reloads from the Log's tabs and a drive and the car keep running behind it; the sight-line speed rides under the
+  position arrow on the phone and the car (sightMessage, paintSight, carmap drawSight). e2e flows for both.
+- [x] From the owner's photos of build 498.1 in the car: tulips drawn synchronously (they never reached the card),
+  distances in the driver's units, a loop's start no longer matched to its end, the trip card without repeats, plates
+  decluttered with the car above them.
+- [x] The car map edge to edge at the car's own scale (it stopped at the map buttons, and was laid out at the phone's
+  width and scaled up); the app opens with no route (the planned route lasts the session only).
+- [x] The owner's account has the full crew livery (livery_grants, migration 0040, applied to both databases); only a
+  route being driven survives a close (a planned one lasts the session); a drive start clears any open sheet or the Log.
+- [x] From phone photos: convoy bar one line idle, calls only in a drive (one scrolling row), `wss://` in the CSP for the
+  convoy socket (unverified on the phone: "Reconnecting…"); Tapedeck without ghost 8s, the Trip key or a lone Road row in a
+  drive; no destination pin on a loop; the plan sheet closes on drive start.
+- [x] Cameras: web/cameras.js loads by tile (only the route's), races the three Overpass servers, keeps tiles a week;
+  speed cameras from OSM join the plate readers. Paid camera data is an owner decision (OWNER_TODO); Waze is out.
 - Answered for the owner: the UI is a WKWebView; the IMU and GPS run with the phone locked once CarPlay starts the engine,
   but location and motion permission must have been granted once on the phone.
-- Active bugs: none known. Unverified on a device: WebKit's back-forward cache in the app's WKWebView (if it drops the
-  map page, the Log's tabs load it as before), and how App Review reads corners as maneuvers.
+- Active bugs: none known. Unverified on a device: the Log frame's native calls through the map page's bridge (Save/Share, signed-in
+  calls from the Log), and how App Review reads corners as maneuvers.
 - Exact next task: run the carplay-shots workflow to see the real car screen, then REVIEW3.md Roadmap 3 from item 1
   (stash@{0} in the old session holds a half-built version; rebuild it on main) and items 2, 4-9.
 

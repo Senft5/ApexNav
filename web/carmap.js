@@ -1,7 +1,7 @@
 // The car's map (web/carmap.html in CarPlay's base view, CarPlay/ApexCarPlay.swift): the phone's theme on OpenFreeMap with
 // the route, every corner's rating at its apex (the road book on the map), reported hazards as the hazard plate and the
-// car's position. Apple's templates own every control, so this page takes no touches: the shell drives it through
-// window.car (look, route, corners, hazards, position, mode, zoom, pan, recentre, inset).
+// car's position with its sight-line speed. Apple's templates own every control, so this page takes no touches: the shell
+// drives it through window.car (look, route, corners, hazards, position, sight, mode, zoom, pan, recentre, inset).
 (function (root) {
   'use strict';
   const MAP_STYLE = 'https://tiles.openfreemap.org/styles/liberty';
@@ -10,8 +10,8 @@
   const finite = (v) => typeof v === 'number' && Number.isFinite(v);
   const line = (coords) => ({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: coords.map(([lat, lon]) => [lon, lat]) } });
 
-  const state = { theme: 'roadbook', night: false, route: [], corners: [], hazards: [], pos: null, mode: 'idle', follow: true, inset: 0 };
-  let map = null, ready = false, puck = null;
+  const state = { theme: 'roadbook', night: false, route: [], corners: [], hazards: [], pos: null, sight: null, mode: 'idle', follow: true, inset: 0 };
+  let map = null, ready = false, puck = null, sightTag = null;
 
   const look = () => { const t = root.ApexThemes.get(state.theme); return { P: t.map[state.night ? 'night' : 'day'], C: t[state.night ? 'night' : 'day'] }; };
 
@@ -22,16 +22,33 @@
   const distM = (a, b) => Math.hypot((a[1] - b[1]) * 111320 * Math.cos(a[0] * Math.PI / 180), (a[0] - b[0]) * 110540);
   function placePlates() {
     if (!map) return;
-    plates.splice(0).forEach((m) => m.remove());
+    plates.splice(0).forEach((p) => p.m.remove());
     const here = state.pos ? [state.pos.lat, state.pos.lon] : null, all = state.mode === 'preview' || !here;
     const near = (p) => all || distM(here, p.at) < NEAR_M;
-    for (const c of state.corners.filter(near).slice(0, all ? 160 : 40)) {
-      const el = document.createElement('div'); el.className = 'car-plate car-corner' + (c.tight ? ' tight' : ''); el.textContent = c.text;
-      plates.push(new root.maplibregl.Marker({ element: el, anchor: 'bottom', offset: [0, -8] }).setLngLat([c.at[1], c.at[0]]).addTo(map));
-    }
+    // which plate wins a crowded spot: hazards, then the corners nearest the car (or the tight ones, with no car)
+    const corners = state.corners.filter(near).map((c) => ({ c, d: here ? distM(here, c.at) : 0 }))
+      .sort((x, y) => (all ? (y.c.tight - x.c.tight) || 0 : x.d - y.d)).slice(0, all ? 160 : 40);
     for (const h of state.hazards.filter(near)) {
       const el = document.createElement('div'); el.className = 'car-plate car-hazard'; el.innerHTML = '<i></i>'; el.append(String(h.title || 'Hazard').toUpperCase());
-      plates.push(new root.maplibregl.Marker({ element: el, anchor: 'bottom', offset: [0, -6] }).setLngLat([h.at[1], h.at[0]]).addTo(map));
+      plates.push({ el, m: new root.maplibregl.Marker({ element: el, anchor: 'bottom', offset: [0, -6] }).setLngLat([h.at[1], h.at[0]]).addTo(map), at: h.at, dy: 6 });
+    }
+    for (const { c } of corners) {
+      const el = document.createElement('div'); el.className = 'car-plate car-corner' + (c.tight ? ' tight' : ''); el.textContent = c.text;
+      plates.push({ el, m: new root.maplibregl.Marker({ element: el, anchor: 'bottom', offset: [0, -8] }).setLngLat([c.at[1], c.at[0]]).addTo(map), at: c.at, dy: 8 });
+    }
+    declutter();
+  }
+  // Plates never pile up (the owner's car, 2026-10-29: L2, L3 and R4 on top of each other): in priority order, a plate
+  // that would overlap one already shown is hidden until the map moves or zooms enough to make room.
+  function declutter() {
+    if (!map || !plates.length) return;
+    const shown = [];
+    for (const p of plates) {
+      const pt = map.project([p.at[1], p.at[0]]), w = p.el.offsetWidth || 40, h = p.el.offsetHeight || 24;
+      const box = [pt.x - w / 2 - 3, pt.y - p.dy - h - 3, pt.x + w / 2 + 3, pt.y - p.dy + 3];
+      const hit = shown.some((b) => box[0] < b[2] && box[2] > b[0] && box[1] < b[3] && box[3] > b[1]);
+      p.el.style.visibility = hit ? 'hidden' : '';
+      if (!hit) shown.push(box);
     }
   }
 
@@ -50,6 +67,20 @@
   function drawPuck() {
     const { C } = look();
     puck.getElement().innerHTML = `<svg viewBox="0 0 34 34" width="34" height="34"><circle cx="17" cy="17" r="14" fill="${C.panel}" stroke="${C.panelInk}" stroke-width="2.5"/><path d="M17 7 L25 24 L17 19.8 L9 24 Z" fill="${C.accent}"/></svg>`;
+  }
+
+  // The sight-line speed under the arrow (web/carplay.js sightMessage): its own marker, so it stays upright while the
+  // arrow turns with the car; red when you are going faster than it; hidden when unknown.
+  const EYE = '<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6S2 12 2 12z" fill="none" stroke="currentColor" stroke-width="2.4"/><circle cx="12" cy="12" r="2.8" fill="currentColor"/></svg>';
+  function drawSight() {
+    if (!sightTag) return;
+    const el = sightTag.getElement(), s = state.sight;
+    if (!s || !s.text || !state.pos) { el.hidden = true; return; }
+    el.hidden = false;
+    el.classList.toggle('short', s.short);                            // classList: MapLibre's own marker classes stay
+    const b = document.createElement('b'); b.textContent = s.text;
+    const u = document.createElement('small'); u.textContent = s.unit || '';
+    el.innerHTML = EYE; el.append(b); if (s.unit) el.append(u);
   }
 
   function addLayers() {
@@ -71,9 +102,8 @@
   }
 
   function setData() {
-    if (!ready) return;
-    map.getSource('car-route-src').setData(state.route.length >= 2 ? { type: 'FeatureCollection', features: [line(state.route)] } : empty());
-    placePlates();
+    if (ready) map.getSource('car-route-src').setData(state.route.length >= 2 ? { type: 'FeatureCollection', features: [line(state.route)] } : empty());
+    placePlates();                                                  // plates are DOM markers: they need the map, not its style
   }
 
   // The camera: following the car (heading up while guiding, the car low on the screen), or the whole route for a trip
@@ -104,9 +134,11 @@
       if (!finite(lat) || !finite(lon)) return;
       state.pos = { lat, lon, course: finite(course) && course >= 0 ? course : null };
       if (puck) { puck.setLngLat([lon, lat]); puck.setRotation(state.pos.course || 0); }
+      if (sightTag) { sightTag.setLngLat([lon, lat]); if (sightTag.getElement().hidden && state.sight && state.sight.text) drawSight(); }
       if (!state.placedAt || distM(state.placedAt, [lat, lon]) > 800) { state.placedAt = [lat, lon]; placePlates(); }   // plates follow the car, a few times a mile
       if (state.mode !== 'preview') camera(false);
     },
+    sight(s) { state.sight = s && typeof s.text === 'string' ? { text: s.text.slice(0, 6), unit: String(s.unit || '').slice(0, 5), short: !!s.short } : null; drawSight(); },
     mode(m) { state.mode = m === 'guide' || m === 'preview' ? m : 'idle'; state.follow = true; placePlates(); camera(); },
     zoom(dir) { if (ready) map.easeTo({ zoom: map.getZoom() + (dir > 0 ? 1 : -1), duration: 300 }); },
     pan(dx, dy) { if (!ready) return; state.follow = false; map.panBy([dx * map.getContainer().clientWidth / 3, dy * map.getContainer().clientHeight / 3], { duration: 300 }); },
@@ -122,7 +154,10 @@
     const el = document.createElement('div'); el.className = 'car-puck';
     puck = new root.maplibregl.Marker({ element: el, rotationAlignment: 'map', pitchAlignment: 'map' }).setLngLat([-84.29, 35.36]).addTo(map);
     drawPuck();
+    const tag = document.createElement('div'); tag.className = 'car-sight'; tag.hidden = true;
+    sightTag = new root.maplibregl.Marker({ element: tag, anchor: 'top', offset: [0, 21] }).setLngLat([-84.29, 35.36]).addTo(map);
     map.on('load', () => { addLayers(); ready = true; paint(); setData(); camera(false); });
+    map.on('moveend', declutter);
     map.on('styleimagemissing', () => {});
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();

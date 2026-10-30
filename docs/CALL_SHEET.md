@@ -6,6 +6,88 @@ it says so. Things only you can do are in docs/OWNER_TODO.md.
 
 ## 2026-10-29
 
+**Cameras load fast, and speed cameras join the plate readers.** The owner: "pull in police data from other sources and
+figure out why the lpr data takes so long to load".
+- *Why it was slow:* one Overpass query for the route's whole bounding box (a long diagonal route asked for a huge
+  area), the three public servers tried one after another with no time limit (a busy one held everything for 25 s or
+  more), a cache keyed to that exact box (no other route could use it), and "Avoid cameras" made every route wait on it
+  before routing. Now (web/cameras.js): fixed 0.25° tiles, only those the route passes through, one query raced against
+  all three servers (12 s limit each, the first answer wins), every tile kept a week, so a second route nearby is instant.
+  Road closures (conditional tags) race the servers the same way.
+- *Other sources:* speed cameras from OpenStreetMap (`highway=speed_camera`) now come with the plate readers, under the
+  same Cameras switch, called "Speed camera" (they don't lower a road's Clear score, which is about plate readers).
+  Live police only ever comes from drivers: members' Police reports already show and are spoken. Waze is out (no public
+  feed, its terms forbid taking its reports); paid camera data is a licence, so it is in docs/OWNER_TODO.md.
+  Undo: `fetchAlpr`/`alprNodesIn` back to the per-box query (git), or drop `highway=speed_camera` from `query()`.
+
+**From the owner's phone photos: the convoy bar, Tapedeck in a drive, the plan sheet, a pin on the arrow.**
+- *Convoy bar:* one line (name and status) off the right-hand keys; the leader's calls only in a drive, in one row that
+  scrolls, instead of a two-row block over the map and the Layers key before any drive. Its socket host is now named in
+  the CSP as `wss://` too: WebKit may not let `https:` cover `wss:`, which would leave the app on "Reconnecting…" while
+  the browser tests pass. If it still reconnects on the phone after this, the next step is reading the Worker's convoy
+  logs (needs the full Cloudflare connector, docs/BACKUPS.md 6a).
+- *Tapedeck in a drive:* an unused leading digit shows nothing instead of a ghost 8 (a "7" read as "887"); the Night
+  Trip key steps aside in a drive (the REC line has the distance); "Road: --" only shows where a route or a recorded
+  drive has road types.
+- *A loop gets no destination pin:* its end is its start, so the pin sat beside the car's arrow all drive.
+- *The plan sheet closes when a drive starts*, with the keyboard.
+
+**Full crew customization for the owner's account, and only a drive in progress survives a close.**
+- *Livery grants.* The owner: "my account should have full access to crew customization". Pro comes only from
+  `pro_entitlements` (nothing writes it before StoreKit), and one Pro member gives at most 3 Decals while the full livery
+  (Factory) needs 20, so a Pro row would not do it. New table `livery_grants` (migration 0040): a crew with a granted
+  member is Factory, every option open, and the granted user counts as Pro for their own Decals controls. Applied to
+  preview and production through the connector with its `d1_migrations` row (docs/BACKUPS.md), and one row written:
+  @natesenft. Undo: `DELETE FROM livery_grants WHERE user_id = '<id>'` (the table can stay).
+- *Active routes, not planned ones, survive a close.* The owner liked a route coming back after the app closed, but
+  only for a drive in progress. A route is kept (localStorage, 12 h) from the moment a drive on it starts, replaced on a
+  reroute, and forgotten when the drive ends; opening the app back on it says so in a toast. A planned route still lasts
+  the session only. Undo: `persistActive`/`forgetActive` in web/index.html.
+
+**A drive clears the screen.** The owner: a drive started from the car while the phone showed the Crew sheet left the
+sheet in the middle of the drive screen. Starting a drive now closes any sheet, its pop-ups and the Log frame, however
+it was started (the car, Siri, a link or the button). Undo: the two lines at the top of `enterDrive`.
+
+**The car map fills the screen at its own scale, and the app opens with no route.**
+- *Edge to edge, at the car's scale.* The owner: "the map doesn't continue under the tiles and the tiles are giant". The
+  web view kept the page inside the safe area, so the map stopped at the map buttons; and "device-width" in a web view
+  is the iPhone's width, so the page was laid out about 390 wide and scaled up some 2.3 times (giant, soft plates and
+  labels). The shell now sets no safe-area inset, `viewport-fit=cover`, and the car view's own width as the viewport
+  (`fitViewport`). I missed both in the first photos.
+- *No route on open.* The planned route was kept for 12 hours so a killed app came back to it; the owner doesn't want
+  that ("it should open with no route loaded"). It now lasts the session only (a reload after a lost map still keeps
+  it). Undo: `persistPlanned`/`restorePlanned` back to localStorage with `PLANNED_KEEP_MS`.
+
+**Fixes from the owner's photos of build 498.1 in the car.**
+- *The tulips are drawn straight onto a canvas* (Path2D from the SVG's own path data) instead of loading the SVG as an
+  image first: the car showed Apple's stock arrow, so that load never finished in the app. Now the tulip rides on the
+  first guide message. Undo: `tulipPNG` in web/index.html.
+- *Distances in the driver's units on the car* ("70 m", "150 meter", "15,630 meter" for a driver in miles): the car prints
+  a Measurement in the unit it is given, so the shell now converts (feet in 50s under a tenth of a mile, then miles to a
+  tenth; metres in 10s, then km), from the units the page sends with the look. `ApexCar.distance`.
+- *A loop's start is never read as its end.* With no recent match the whole route is searched, and a loop passes the
+  same spot twice: the drive began "150 m" from the finish with an arrival in the past. Of the stretches within 40 m
+  the one nearest the progress so far wins (`matchOnRoute`).
+- *The trip card says each thing once*: one route's summary is its Fun score, else its corners (the title is the name and
+  the car prints the time and length itself); several routes keep Fun and time to tell them apart.
+- *Plates never pile up on the car's map*: a plate that would overlap one already shown hides (hazards first, then the
+  corners nearest the car, or the tight ones in a preview), and the car's arrow and sight speed sit above every plate.
+
+**The Log opens over the map, and the sight-line speed rides on the arrow.**
+- *The Log is a frame over the map, never in its place.* The owner: "the crew page still does a full reload every time".
+  Yesterday's fix sent the Log's tabs back in history, but it relied on the page's referrer (likely empty on the app's
+  apexnav:// pages) and on WebKit keeping the map cached, so the map still loaded from scratch. Now the map page opens
+  analysis.html in a full-screen iframe and never leaves: the Log's Map, Crew and Garage tabs just close the frame and
+  open that tab. Side benefit: a drive and the car's screen keep running while you read the Log. The frame is kept and
+  shown again as it was, and loaded fresh only after a new drive, a theme or units change, or for a different page of
+  the Log. Its notch and home-bar insets come from the map page (env() is zero inside a frame), and its native calls
+  (signed-in API, Save/Share) go through the map page's bridge, which the shell accepts as the main frame. A replay
+  link from the Log still loads the map with that drive. Undo: `openLog` in web/index.html back to `location.href`.
+- *Sight-line speed on the position arrow*, the owner's ask: a small plate under the arrow on the phone's map and the
+  car's, with the speed you can stop within what you can see (the cluster's Sight cell), OPEN when nothing limits you,
+  red when you are going faster than it, hidden when unknown. It is its own marker so it stays upright while the arrow
+  turns. The car gets it only during a drive. Undo: `paintSight` in web/index.html and `drawSight` in web/carmap.js.
+
 **Fixes after the first drive with CarPlay: switches, presses, reloads, Live Activities, corners on the car's card.**
 - *Every corner is guidance in the car.* The owner: "if you take a R5 when you're supposed to take a RHP you're gonna have
   a bad time". The car's guidance card shows whichever comes first, the next turn or the next corner, at every rating,

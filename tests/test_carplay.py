@@ -35,6 +35,7 @@ console.log(JSON.stringify({
       c3: C.guideMessage(c, 1300, null, D.phrase), tight: C.guideMessage(c, 100, null, D.phrase, { corners: 'tight' }),
       off: C.guideMessage(c, 100, null, D.phrase, { corners: 'off' }), plain: C.guideMessage(c, 100, null, D.phrase, { call: (e) => 'plain ' + e.dir }),
       tulips2: [1, 4, 6, 'HP'].map((v) => C.cornerTulipSVG('L', v, '#7DF5DE')).concat([C.cornerTulipSVG('R', 3, 'red;x')]) }; })(),
+  sight: [C.sightMessage(52.4, false, 40, 'mph'), C.sightMessage(30, false, 45.5, 'km/h'), C.sightMessage(30, true, 99, 'mph'), C.sightMessage(null, false, 40, 'mph'), C.sightMessage(NaN, false, 1, 'mph')],
   places: C.placesMessage([{ label: 'Home', lat: 35.1, lon: -83.2 }, { label: 'Bad', lat: null, lon: 1 }, null]),
 }));
 """
@@ -53,7 +54,8 @@ def test_route_line_is_small_and_keeps_both_ends(out):
 def test_route_choices(out):
     one = out["one"]
     assert one["kind"] == "route" and one["name"] == "To Robbinsville" and one["picked"] == 0
-    assert one["options"] == [{"summary": "Fun 99 · 77 min", "detail": "3.1 mi", "timeS": 4620, "distM": 5000}]
+    # one route: the card's title is its name and the car prints time and length, so the summary is the Fun score
+    assert one["options"] == [{"summary": "Fun 99", "detail": "3.1 mi", "timeS": 4620, "distM": 5000}]
     two = out["two"]
     assert [o["summary"] for o in two["options"]] == ["Fun 99 · 77 min", "Fun 40 · 65 min"] and two["picked"] == 1
     assert two["options"][0]["distM"] is None, "an option not built yet has no known length"
@@ -89,7 +91,9 @@ console.log(JSON.stringify({
   hazards: C.hazardsMessage([{ id: 7, kind: 'gravel', lat: 35.2, lon: -83.5 }, { id: 8, label: 'Cattle grid', lat: 35, lon: -83 }, { id: 9, kind: 'x' }], { gravel: 'Gravel' }),
   look: C.lookMessage({ id: 'tapedeck', night: { panel: '#0A0C0B', panelInk: '#7DF5DE', accent: '#FFB347' } }, false),
   tulips: [10, 15, 17, 12, 4, 26].map((k) => C.tulipSVG(k, '#7DF5DE')), bad: C.tulipSVG(10, 'red;x'),
-  withCorners: C.routeMessage({ lat: [35, 35.01], lon: [-84, -84], dist: [0, 1100], timeS: 120, events: t.events }, null, 0, (m) => `${m} m`).options[0].detail,
+  withCorners: C.routeMessage({ lat: [35, 35.01], lon: [-84, -84], dist: [0, 1100], timeS: 120, events: t.events }, null, 0, (m) => `${m} m`).options[0],
+  loop: C.routeMessage({ name: '32 min loop', lat: [35, 35.01], lon: [-84, -84], dist: [0, 15630], timeS: 1920, events: t.events }, null, 0, (m) => `${m} m`).options[0],
+  metricLook: C.lookMessage({ id: 'roadbook' }, true, 'metric').units,
 }));
 """
 
@@ -114,7 +118,8 @@ def test_hazards_are_named_and_unplaceable_ones_dropped(maps):
 
 
 def test_the_look_carries_the_theme_and_its_dark_card(maps):
-    assert maps["look"] == {"kind": "look", "theme": "tapedeck", "card": "#0A0C0B", "cardInk": "#7DF5DE", "accent": "#FFB347", "voice": False}
+    assert maps["look"] == {"kind": "look", "theme": "tapedeck", "card": "#0A0C0B", "cardInk": "#7DF5DE", "accent": "#FFB347", "voice": False,
+                            "units": "imperial"}
 
 
 def test_turn_symbols_are_tulips_in_the_cards_ink_and_never_take_markup(maps):
@@ -124,7 +129,11 @@ def test_turn_symbols_are_tulips_in_the_cards_ink_and_never_take_markup(maps):
 
 
 def test_a_route_choice_says_its_distance_and_corners(maps):
-    assert maps["withCorners"] == "1100 m · 4 corners"   # every corner counts, placeable on the map or not
+    # no Fun score: the corners are the summary (every corner counts, placeable on the map or not), the length the detail
+    assert maps["withCorners"]["summary"] == "4 corners" and maps["withCorners"]["detail"] == "1100 m"
+    # the owner's car showed "32 min loop" twice: nothing in the summary repeats the name or the time the car prints
+    assert "min" not in maps["loop"]["summary"] and "loop" not in maps["loop"]["summary"]
+    assert maps["metricLook"] == "metric"
 
 
 def test_corners_come_before_the_next_turn(out):
@@ -149,3 +158,31 @@ def test_corner_tulips(out):
     assert len(set(svgs[:4])) == 4, "each rating bends differently"
     assert all(s.startswith("<svg") and "#7DF5DE" in s and "<circle" not in s for s in svgs[:4]), "no junction dot: a corner is not a turn"
     assert "red;x" not in svgs[4] and "#EDE4D3" in svgs[4]
+
+
+def test_sight_tag(out):
+    """The sight-line speed on the arrow: the number in the chosen units, OPEN, red when faster, hidden when unknown."""
+    a, b, o, n, nan = out["sight"]
+    assert a == {"kind": "sight", "text": "52", "unit": "MPH", "short": False}
+    assert b == {"kind": "sight", "text": "30", "unit": "KM/H", "short": True}
+    assert o == {"kind": "sight", "text": "OPEN", "unit": "", "short": False}
+    assert n["text"] is None and nan["text"] is None, "unknown stays unknown"
+
+
+def test_car_map_fills_the_screen_at_its_own_scale():
+    """The owner's photos (2026-10-30): the map stopped at the map buttons, and plates and labels came out giant and soft."""
+    swift = open(os.path.join(ROOT, "CarPlay", "ApexCarPlay.swift"), encoding="utf-8").read()
+    html = open(os.path.join(ROOT, "web", "carmap.html"), encoding="utf-8").read()
+    assert "contentInsetAdjustmentBehavior = .never" in swift and "viewport-fit=cover" in html
+    assert "func fitViewport()" in swift and "'width=\\(w), initial-scale=1" in swift, "laid out at the car's width, not the phone's"
+
+
+def test_opens_with_no_route():
+    """Opening the app (or the car) starts with no route: the planned route lasts the session only (2026-10-30)."""
+    html = open(os.path.join(ROOT, "web", "index.html"), encoding="utf-8").read()
+    assert "sessionStorage.setItem(PLANNED" in html and "localStorage.setItem(PLANNED" not in html
+    assert "localStorage.getItem(PLANNED)" not in html
+    # ... but a route being driven survives a close, and ending the drive forgets it (the owner: "active routes")
+    assert "if (track && track.kind === 'route') persistActive(track);" in html
+    assert "forgetActive();                                                  // the drive is over" in html
+    assert "localStorage.getItem(ACTIVE)" in html and "ACTIVE_KEEP_MS" in html

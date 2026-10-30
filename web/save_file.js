@@ -7,7 +7,9 @@
   async function saveFile(data, name, type, opts = {}) {
     const blob = data instanceof Blob ? data : new Blob([data], { type });
     const share = opts.share != null ? opts.share : inApp();
-    const native = share && root.webkit && root.webkit.messageHandlers && root.webkit.messageHandlers.apex;
+    // the map page's handler when this is its Log frame (sync.js handlers): the shell listens to the main frame only
+    const wk = root.ApexSync && root.ApexSync.handlers ? root.ApexSync.handlers() : (root.webkit && root.webkit.messageHandlers);
+    const native = share && wk && wk.apex;
     if (native) {                                                  // no tap needed, unlike the web share sheet after a network wait
       const b64 = await new Promise((ok, fail) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(',')[1] || ''); r.onerror = fail; r.readAsDataURL(blob); });
       native.postMessage({ cmd: 'shareFile', name, type, data: b64 });

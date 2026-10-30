@@ -2,7 +2,7 @@
 //
 // The cockpit page stays the single brain (ApexEngine, ApexNavApp.swift: it runs whether or not the phone's window was ever
 // opened). It plans routes, places the maneuvers, calls notes and hazards and speaks; CarPlay shows what it decides and
-// sends back what the driver picks. Page -> car: `{cmd:'car', kind:...}` messages (route, clear, guide, end, hazard, ask,
+// sends back what the driver picks. Page -> car: `{cmd:'car', kind:...}` messages (route, clear, guide, sight, end, hazard, ask,
 // places, corners, hazards, look), handled by ApexCar.receive. Car -> page: `onNative({type:'carplay', action})` with go,
 // pick, start, end, loop, report, still, voice, places, hello.
 //
@@ -38,7 +38,7 @@ final class ApexCar {
     struct Option { let summary: String; let detail: String; let timeS: Double?; let distM: Double? }
     struct Route { let name: String; let coords: [CLLocationCoordinate2D]; let dest: CLLocationCoordinate2D; let options: [Option]; let picked: Int }
     struct Guide { let key: String; let instruction: String; let street: String; let type: Int; let distM: Double; let timeS: Double?; let remainM: Double?; let remainS: Double?; let symbol: UIImage? }
-    struct Look { var theme = "roadbook"; var card = UIColor(white: 0.08, alpha: 1); var cardInk = UIColor(white: 0.93, alpha: 1); var accent = UIColor.systemRed; var voice = true }
+    struct Look { var theme = "roadbook"; var card = UIColor(white: 0.08, alpha: 1); var cardInk = UIColor(white: 0.93, alpha: 1); var accent = UIColor.systemRed; var voice = true; var metric = false }
 
     private(set) var route: Route?
     private(set) var guide: Guide?
@@ -49,6 +49,8 @@ final class ApexCar {
     private(set) var routeJSON = "[]"
     private(set) var cornersJSON = "[]"
     private(set) var hazardsJSON = "[]"
+    /// The sight-line speed under the car's arrow (web/carplay.js sightMessage), null when unknown or not driving.
+    private(set) var sightJSON = "null"
     private(set) var position: (lat: Double, lon: Double, course: Double)?
     private var positionSentAt = Date.distantPast
 
@@ -108,6 +110,13 @@ final class ApexCar {
         case "hazards":
             hazardsJSON = Self.json((dict["list"] as? [Any]) ?? [])
             eachMap { $0.showHazards() }
+        case "sight":
+            if let text = dict["text"] as? String {
+                sightJSON = Self.json(["text": String(text.prefix(6)), "unit": String(((dict["unit"] as? String) ?? "").prefix(5)), "short": (dict["short"] as? Bool) ?? false] as [String: Any])
+            } else {
+                sightJSON = "null"
+            }
+            eachMap { $0.showSight() }
         case "look":
             var l = Look()
             if let t = dict["theme"] as? String, t.range(of: "^[a-z]{1,20}$", options: .regularExpression) != nil { l.theme = t }
@@ -115,6 +124,7 @@ final class ApexCar {
             l.cardInk = Self.color(dict["cardInk"]) ?? l.cardInk
             l.accent = Self.color(dict["accent"]) ?? l.accent
             l.voice = (dict["voice"] as? Bool) ?? true
+            l.metric = (dict["units"] as? String) == "metric"
             look = l
             eachMap { $0.showLook() }
             scene?.lookChanged()
@@ -128,6 +138,8 @@ final class ApexCar {
         case "end":
             driving = false
             guide = nil
+            sightJSON = "null"
+            eachMap { $0.showSight() }
             eachMap { $0.setMode() }
             scene?.driveEnded()
         case "hazard":
@@ -152,6 +164,18 @@ final class ApexCar {
         positionSentAt = Date()
         position = (lat, lon, course)
         eachMap { $0.showPosition() }
+    }
+
+    /// A distance the way the driver reads them (the car prints a Measurement in the unit it is given, so metres showed as
+    /// "15,630 meter" on the owner's car): feet in 50s under a tenth of a mile, then miles to a tenth; or metres in 10s
+    /// under a kilometre, then km to a tenth.
+    func distance(_ m: Double) -> Measurement<UnitLength> {
+        let m = max(0, m)
+        if look.metric {
+            return m < 1000 ? Measurement(value: (m / 10).rounded() * 10, unit: .meters) : Measurement(value: (m / 100).rounded() / 10, unit: .kilometers)
+        }
+        let mi = m / 1609.344
+        return mi < 0.1 ? Measurement(value: (m / 0.3048 / 50).rounded() * 50, unit: .feet) : Measurement(value: (mi * 10).rounded() / 10, unit: .miles)
     }
 
     /// SF Symbol for a Valhalla maneuver type (web/directions.js VERB), until the page's tulip for it arrives.
@@ -392,9 +416,9 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
         if r.picked < r.options.count, let est = estimates(r.options[r.picked]) { map.updateEstimates(est, for: t) }
     }
 
-    private func estimates(_ o: ApexCar.Option) -> CPTravelEstimates? {
+    @MainActor private func estimates(_ o: ApexCar.Option) -> CPTravelEstimates? {
         guard let s = o.timeS, let m = o.distM else { return nil }
-        return CPTravelEstimates(distanceRemaining: Measurement(value: m, unit: UnitLength.meters), timeRemaining: s)
+        return CPTravelEstimates(distanceRemaining: ApexCar.shared.distance(m), timeRemaining: s)
     }
 
     @MainActor fileprivate func previewSelected(_ choice: CPRouteChoice) {
@@ -424,7 +448,7 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
     @MainActor func guideChanged() {
         guard let g = ApexCar.shared.guide, let session else { return }
         // time to the turn only when the page knows it (the router's times); 0 shows distance alone
-        let est = CPTravelEstimates(distanceRemaining: Measurement(value: g.distM, unit: UnitLength.meters), timeRemaining: max(0, g.timeS ?? 0))
+        let est = CPTravelEstimates(distanceRemaining: ApexCar.shared.distance(g.distM), timeRemaining: max(0, g.timeS ?? 0))
         if g.key != maneuverKey || (g.symbol != nil && !maneuverHasTulip) {
             let m = CPManeuver()
             m.instructionVariants = [g.instruction, g.street].filter { !$0.isEmpty }
@@ -442,7 +466,7 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
             session.updateEstimates(est, for: m)
         }
         if let t = trip, let rm = g.remainM, let rs = g.remainS {
-            mapTemplate?.updateEstimates(CPTravelEstimates(distanceRemaining: Measurement(value: rm, unit: UnitLength.meters), timeRemaining: rs), for: t)
+            mapTemplate?.updateEstimates(CPTravelEstimates(distanceRemaining: ApexCar.shared.distance(rm), timeRemaining: rs), for: t)
         }
     }
 
@@ -591,6 +615,9 @@ final class ApexCarMapViewController: UIViewController, WKNavigationDelegate {
         w.isOpaque = false
         w.backgroundColor = view.backgroundColor
         w.scrollView.isScrollEnabled = false
+        // The map runs under Apple's buttons and cards, edge to edge: no safe-area inset (the owner's photos, 2026-10-30:
+        // the map stopped short at the map buttons, an empty strip under them).
+        w.scrollView.contentInsetAdjustmentBehavior = .never
         w.isUserInteractionEnabled = false                  // the base view takes no touches: Apple's templates own every control
         w.navigationDelegate = self
         view.addSubview(w)
@@ -602,7 +629,7 @@ final class ApexCarMapViewController: UIViewController, WKNavigationDelegate {
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         loaded = true
         MainActor.assumeIsolated {
-            showLook(); showRoute(); showCorners(); showHazards(); setMode(); showPosition()
+            fitViewport(); showLook(); showRoute(); showCorners(); showHazards(); setMode(); showPosition(); showSight()
         }
     }
 
@@ -613,7 +640,18 @@ final class ApexCarMapViewController: UIViewController, WKNavigationDelegate {
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-        MainActor.assumeIsolated { setMode() }               // Apple's cards cover a share of the left that depends on the width
+        MainActor.assumeIsolated { fitViewport(); setMode() }   // Apple's cards cover a share of the left that depends on the width
+    }
+
+    /// Lays the page out at the car screen's own width, one CSS pixel to a point. "device-width" in a web view is the
+    /// iPhone's width, so the car map was laid out about 390 wide and scaled up: giant, soft plates and labels (2026-10-30).
+    private var fittedWidth = 0
+    private func fitViewport() {
+        guard loaded, let web else { return }
+        let w = Int(web.bounds.width.rounded())
+        guard w > 0, w != fittedWidth else { return }
+        fittedWidth = w
+        web.evaluateJavaScript("(function () { var m = document.querySelector('meta[name=viewport]'); if (m) m.content = 'width=\(w), initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover'; if (window.car && window.car.map) window.car.map.resize(); })(); void 0;", completionHandler: nil)
     }
 
     private func js(_ code: String) {
@@ -628,6 +666,7 @@ final class ApexCarMapViewController: UIViewController, WKNavigationDelegate {
     @MainActor func showRoute() { js("car.route(\(ApexCar.shared.routeJSON))") }
     @MainActor func showCorners() { js("car.corners(\(ApexCar.shared.cornersJSON))") }
     @MainActor func showHazards() { js("car.hazards(\(ApexCar.shared.hazardsJSON))") }
+    @MainActor func showSight() { js("car.sight(\(ApexCar.shared.sightJSON))") }
     @MainActor func showPosition() {
         guard let p = ApexCar.shared.position else { return }
         js("car.position(\(p.lat), \(p.lon), \(p.course))")

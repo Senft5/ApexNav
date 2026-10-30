@@ -241,7 +241,7 @@ flow('avoid cameras: with the chip on, the cameras near the trip go to the route
   await page.route('https://photon.komoot.io/**', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ features: [
     { geometry: { coordinates: [-83.9700, 35.7565] }, properties: { name: 'Maryville', state: 'Tennessee' } }] }) }));
   await page.route('https://overpass-api.de/**', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ elements: [
-    { type: 'node', id: 1, lat: 35.85, lon: -83.94 }, { type: 'node', id: 2, lat: 37.5, lon: -83.9 }] }) }));
+    { type: 'node', id: 1, lat: 35.85, lon: -83.94, tags: { 'surveillance:type': 'ALPR' } }, { type: 'node', id: 2, lat: 37.5, lon: -83.9, tags: { 'surveillance:type': 'ALPR' } }] }) }));
   await page.route('https://valhalla1.openstreetmap.de/route', (route) => {
     const req = JSON.parse(route.request().postData() || '{}');
     asked.push(req);
@@ -393,7 +393,10 @@ flow('CarPlay feed: a planned route sends its line, every corner and the theme; 
     look: window.__car.filter((m) => m.kind === 'look').pop() }));
   check(r.route.options[0].detail.includes('corner'), 'the route choice says its corners: ' + JSON.stringify(r.route.options[0]));
   check(r.corners.list.every((c) => Array.isArray(c.at) && /^[LR](HP|\d)$/.test(c.text)), 'every corner placed and rated: ' + JSON.stringify(r.corners.list.slice(0, 3)));
-  check(r.look.theme === 'roadbook' && r.look.voice === true && /^#/.test(r.look.card), 'the look: ' + JSON.stringify(r.look));
+  check(r.look.theme === 'roadbook' && r.look.voice === true && /^#/.test(r.look.card) && r.look.units === 'imperial', 'the look: ' + JSON.stringify(r.look));
+  // the tulip is drawn at once (Path2D), so it rides on the first guide message; the car showed Apple's arrow without it
+  const png = await page.evaluate(() => { const svg = ApexCarPlay.cornerTulipSVG('R', 1, '#EDE4D3'); return document.createElement('canvas') && apexDebug.tulipPNG ? apexDebug.tulipPNG(svg) : null; });
+  check(typeof png === 'string' && png.length > 400, 'a corner tulip as a PNG, synchronously: ' + (png ? png.length : png));
   // a car screen that connects later asks again and gets the route and the look again
   await page.evaluate(() => { window.__car = []; window.apex.onNative({ type: 'carplay', action: 'hello' }); });
   await page.waitForFunction(() => ['route', 'corners', 'look', 'places'].every((k) => window.__car.some((m) => m.kind === k)));
@@ -402,6 +405,67 @@ flow('CarPlay feed: a planned route sends its line, every corner and the theme; 
   await page.waitForFunction(() => window.__car.some((m) => m.kind === 'look' && m.voice === false));
   check(await page.evaluate(() => apexDebug.state.toggles.voice === false), 'the voice is off on the phone too');
 });
+
+flow('the sight-line speed rides under the position arrow, on the phone and on the car map (the owner, 2026-10-29)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html?drive=dry_ridge&play=1');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.track, null, { timeout: 15000 });
+  await page.waitForFunction(() => { const t = document.querySelector('.sight-tag'); return t && !t.hidden; }, null, { timeout: 10000 });
+  const tag = await page.textContent('.sight-tag');
+  const cell = await page.textContent('#cluster');
+  check(/^(\d+(MPH|KM\/H)|OPEN)$/.test(tag.trim()), 'the tag reads a speed or OPEN: ' + tag);
+  check(/OPEN/.test(tag) ? /Open/.test(cell) : cell.includes(tag.replace(/\D/g, '')), 'the same value as the Sight cell: ' + tag);
+  // the car's map: the same tag under its arrow, hidden when unknown, red when short
+  await page.goto(base + '/carmap.html');
+  await page.waitForFunction(() => window.car && document.querySelector('.car-sight'));
+  const read = () => page.evaluate(() => { const t = document.querySelector('.car-sight'); return { hidden: t.hidden, text: t.textContent, short: t.classList.contains('short') }; });
+  await page.evaluate(() => { car.position(35.4, -84.1, 90); car.sight({ text: null }); });
+  check((await read()).hidden, 'unknown: no tag');
+  await page.evaluate(() => car.sight({ text: '43', unit: 'MPH', short: true }));
+  const r = await read();
+  check(!r.hidden && r.text === '43MPH' && r.short, 'the car tag: ' + JSON.stringify(r));
+  // plates never pile up: three corners on one spot show one plate, the tight one when there is no car to measure from
+  await page.evaluate(() => { car.mode('preview'); car.corners([{ at: [35.4, -84.1], text: 'R4', tight: false }, { at: [35.4, -84.1], text: 'L2', tight: true }, { at: [35.40001, -84.1], text: 'R3', tight: false }]); });
+  await page.waitForTimeout(300);
+  const vis = await page.evaluate(() => [...document.querySelectorAll('.car-corner')].filter((e) => e.style.visibility !== 'hidden').map((e) => e.textContent));
+  check(vis.length === 1, 'one plate where three overlap: ' + vis.join());
+  check(await page.evaluate(() => getComputedStyle(document.querySelector('.car-puck')).zIndex === '3'), 'the car above the plates');
+});
+
+flow('a route being driven comes back after the app is closed; a planned one, or a finished drive, does not (the owner, 2026-10-30)', async (page, base) => {
+  const ctx = page.context();
+  await ctx.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
+    window.webkit = { messageHandlers: { apex: { postMessage() {} } } }; });   // as in the app: the shell feeds GPS
+  await ctx.route('https://photon.komoot.io/**', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ features: [
+    { geometry: { coordinates: [-83.9700, 35.7565] }, properties: { name: 'Maryville', state: 'Tennessee' } }] }) }));
+  await ctx.route('https://valhalla1.openstreetmap.de/**', (route) => {
+    const req = JSON.parse(route.request().postData() || '{}');
+    if (!req.locations) return route.abort();
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify(stubTrip(req.locations)) });
+  });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && typeof window.apex.onNative === 'function');
+  await page.evaluate(() => window.apex.live({ lat: 35.6, lon: -84.1, accuracy_m: 5, speed_mps: 0, course_deg: 0, has_fix: true }));
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'go', lat: 35.7565, lon: -83.97, name: 'Maryville' }));
+  await page.waitForFunction(() => { const t = window.apexDebug.track; return t && t.kind === 'route'; }, null, { timeout: 20000 });
+  const name = await page.evaluate(() => window.apexDebug.track.name);
+  const relaunch = async () => {                                    // a new tab: no session left, like opening the app again
+    const p = await ctx.newPage();
+    await p.goto(base + '/index.html');
+    await p.waitForFunction(() => window.apexDebug && window.apexDebug.map);
+    await p.waitForTimeout(2500);
+    const t = await p.evaluate(() => (window.apexDebug.track && window.apexDebug.track.kind === 'route' ? window.apexDebug.track.name : null));
+    await p.close();
+    return t;
+  };
+  check(await relaunch() === null, 'a planned route does not come back on a fresh open');
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start' }));   // started from the car
+  await page.waitForFunction(() => window.apexDebug.driveActive);
+  check(await relaunch() === name, 'the route being driven comes back');
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'end' }));
+  await page.waitForFunction(() => !window.apexDebug.driveActive);
+  check(await relaunch() === null, 'after the drive ends, a fresh open has no route');
+}, { geolocation: { latitude: 35.6, longitude: -84.1 }, permissions: ['geolocation'] });
 
 flow('the car connects: CarPlay offers Start drive, and an apexnav://open?go=drive link starts one', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
@@ -418,7 +482,10 @@ flow('the car connects: CarPlay offers Start drive, and an apexnav://open?go=dri
   // other toasts, and no new offer comes while driving.
   await page.evaluate(() => window.apex.onNative({ type: 'car', via: 'carplay' }));
   await page.waitForSelector('#toast a');
+  await page.evaluate(() => { document.querySelector('.tab[data-view="garage"]').click(); });   // the phone on another screen
+  await page.waitForSelector('#sheet.open');
   await page.evaluate(() => document.getElementById('permGo').click());
+  await page.waitForFunction(() => !document.querySelector('#sheet.open'), null, { timeout: 3000 });   // the drive takes the whole screen
   await page.waitForFunction(() => !document.querySelector('#toast a') && !(document.getElementById('toast')._holdUntil > performance.now()), null, { timeout: 3000 });   // well inside the offer's 10 s
   await page.evaluate(() => window.apex.onNative({ type: 'car', via: 'carplay' }));
   check(!(await page.isVisible('#toast a')), 'no offer while a drive is running');
@@ -1226,19 +1293,32 @@ flow('units: kilometres in Settings redraw the dial, the notes and the replay in
   check(/ km$/.test(await page.getAttribute('#scrubber', 'aria-valuetext')), 'the replay position in km');
 });
 
-flow('Log tabs go back to the map instead of loading it again; switches read on and off (the owner, 2026-10-29)', async (page, base) => {
+flow('the Log opens over the map and its tabs come back without loading the map again; switches read on and off (the owner, 2026-10-29)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.goto(base + '/index.html');
   await page.waitForFunction(() => window.apex && window.apexDebug);
   await page.waitForFunction(() => !document.getElementById('boot'), null, { timeout: 5000 });
-  const depth = await page.evaluate(() => history.length);
-  await Promise.all([page.waitForNavigation(), page.click('.tab[data-view="log"]')]);
-  check(/analysis\.html/.test(page.url()), 'the Log page');
-  await Promise.all([page.waitForNavigation(), page.click('nav.tabbar a:has-text("Garage")')]);
-  check(/\/index\.html$/.test(page.url()), 'went back to the map page itself, not index.html?view=garage: ' + page.url());
-  check(await page.evaluate(() => history.length) === depth + 1, 'history did not grow');
-  await page.waitForFunction(() => window.apexDebug && document.querySelector('#sheet.open[data-view="garage"]'), null, { timeout: 8000 });
-  check(await page.textContent('#sheetTitle') === 'Garage', 'the Garage tab opened on arrival');
+  await page.evaluate(() => { window.__samePage = true; });
+  await page.click('.tab[data-view="log"]');
+  await page.waitForSelector('#logFrame:not([hidden])');
+  const log = page.frameLocator('#logFrame');
+  await log.locator('nav.tabbar a:has-text("Garage")').waitFor();
+  check(/\/index\.html$/.test(page.url()), 'the map page stays: ' + page.url());
+  // the frame gets the map page's safe areas (env() is zero inside a frame)
+  check(await page.waitForFunction(() => /px$/.test(document.getElementById('logFrame').contentDocument.documentElement.style.getPropertyValue('--sa-bottom')), null, { timeout: 5000 }).then(() => true, () => false), 'insets handed to the Log');
+  await log.locator('nav.tabbar a:has-text("Garage")').click();
+  await page.waitForSelector('#logFrame', { state: 'hidden' });
+  await page.waitForFunction(() => document.querySelector('#sheet.open[data-view="garage"]'));
+  check(await page.evaluate(() => window.__samePage === true), 'the map page was never reloaded');
+  check(await page.textContent('#sheetTitle') === 'Garage', 'the Garage tab opened');
+  // back to the Log: the same frame, shown again as it was (not loaded again)
+  await page.evaluate(() => { document.getElementById('logFrame').contentWindow.__kept = true; });
+  await page.click('.tab[data-view="log"]');
+  await page.waitForSelector('#logFrame:not([hidden])');
+  check(await page.evaluate(() => document.getElementById('logFrame').contentWindow.__kept === true), 'the Log was kept, not loaded again');
+  await log.locator('nav.tabbar a:has-text("Crew")').click();
+  await page.waitForFunction(() => document.querySelector('#sheet.open[data-view="crew"]'));
+  check(await page.evaluate(() => window.__samePage === true), 'Crew from the Log: still no reload');
   // a switch: off is hollow with a dim border, on is filled with ink (two cues besides the thumb's position)
   const sw = await page.evaluate(() => {
     const b = document.querySelector('.sw[data-toggle]'); if (!b) return null;

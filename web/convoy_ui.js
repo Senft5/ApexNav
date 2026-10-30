@@ -15,14 +15,17 @@
   const ERRORS = { capacity: 'Too many live calls. Wait a moment.', bad_event: 'That call was refused.', bad_route: 'That route could not be shared.',
                    bad_regroup: 'That regroup point was refused.', leader_only: 'Only the leader can do that.', frame_too_large: 'That was too big to send.' };
   const CSS = `
-    .convoy-bar { position: absolute; left: 10px; right: 10px; top: calc(76px + var(--safe-top, 0px)); z-index: 5; display: none; gap: 6px; flex-direction: column;
-      background: var(--panel); color: var(--panel-ink); border: 1px solid var(--rule); padding: 8px 10px; font-size: 13px; max-width: 420px; }
+    .convoy-bar { position: absolute; left: 10px; right: 76px; top: calc(76px + var(--safe-top, 0px)); z-index: 5; display: none; gap: 6px; flex-direction: column;
+      background: var(--panel); color: var(--panel-ink); border: 1px solid var(--rule); padding: 6px 10px; font-size: 13px; max-width: 420px; }
+    /* the owner's photos, 2026-10-30: a two-row block of calls over the map and the Layers key, before a drive had started.
+       Now one line (name and status) off the right-hand keys; the calls come only in a drive, in one row that scrolls. */
     .convoy-bar.show { display: flex; }
     #app.sheet-open .convoy-bar { display: none; }
     .convoy-bar .cv-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-height: 28px; }
     .convoy-bar .cv-head b { font-family: var(--font-num); }
-    .convoy-bar .cv-calls { display: flex; flex-wrap: wrap; gap: 6px; }
-    .convoy-bar .cv-calls button { min-height: 44px; min-width: 44px; padding: 0 10px; font-size: 13px; font-weight: 700; }
+    .convoy-bar .cv-calls { display: flex; flex-wrap: nowrap; gap: 6px; overflow-x: auto; scrollbar-width: none; margin: 0 -10px; padding: 0 10px; }
+    .convoy-bar .cv-calls::-webkit-scrollbar { display: none; }
+    .convoy-bar .cv-calls button { flex: none; min-height: 44px; min-width: 44px; padding: 0 10px; font-size: 13px; font-weight: 700; }
     .convoy-bar .cv-undo { color: var(--signal, #c33); border-color: var(--signal, #c33); }
     .convoy-dot { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--panel, #fff);
       background: var(--accent, #2a6); color: var(--panel, #fff); font: 800 11px var(--font-ui, sans-serif); box-shadow: 0 1px 4px rgba(0,0,0,.4); }
@@ -62,6 +65,7 @@
     });
 
     const me = () => client.locate(getFix());
+    const driving = () => !!(page.driving && page.driving());
     const isLeader = () => !!(snap && snap.ctx && snap.ctx.role === 'leader');
     const label = (m) => (m && m.handle ? '@' + m.handle : 'Driver');
     const initial = (m) => ((m && m.handle) || '?').slice(0, 1).toUpperCase();
@@ -81,6 +85,7 @@
         else if (was === 'far' && ahead < NEAR_M) { spoken.set(ev.eventId, 'near'); speak(C.hazardPhrase(ev.type, ahead), true); }
       }
       paintMap(); paintText();
+      if (structKey() !== lastKey) paint();                             // a drive started or ended: the calls come or go
     }
     setInterval(tick, TICK_MS);
 
@@ -167,7 +172,7 @@
       const s = snap;
       if (!s || !s.id) return JSON.stringify([s && s.status, store.get('sessionStorage', INVITE_KEY) !== '']);
       return JSON.stringify([s.id, s.status, s.unreachable, s.ctx && s.ctx.role, s.ctx && s.ctx.name, s.members.map((m) => [m.key, m.online, m.role, m.handle]),
-                             !!client.route, !!client.regroup, undo && undo.id, !!getRoute()]);
+                             !!client.route, !!client.regroup, undo && undo.id, !!getRoute(), driving()]);
     }
     function paintBar() {
       const s = snap;
@@ -178,7 +183,7 @@
       live.regroup = el('div');
       const kids = [el('div', { className: 'cv-head' }, el('b', { textContent: s.ctx ? s.ctx.name : 'Convoy' }), live.headline), live.regroup];
       if (s.status === 'replaced') kids.push(el('div', { className: 'cv-calls' }, btn('Use the convoy here', () => client.takeOver())));
-      else if (isLeader()) {
+      else if (isLeader() && driving()) {                              // calls are for the road: only in a drive
         const calls = el('div', { className: 'cv-calls' });
         if (undo) calls.append(btn(`Undo ${C.KINDS[undo.type]}`, undoCall, 'ink-btn cv-undo'));
         else for (const k of LEADER_CALLS) calls.append(labelled(btn(C.KINDS[k], () => callOut(k)), `Call ${C.KINDS[k]} to the convoy`));

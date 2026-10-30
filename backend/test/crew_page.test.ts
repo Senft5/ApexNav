@@ -225,3 +225,19 @@ describe("crew page", () => {
     expect((await api(b, "GET", `/api/crews/${crew}/voice/kit`)).status).toBe(404);
   });
 });
+
+describe("livery grants (migration 0040)", () => {
+  beforeEach(freshDb);
+  it("a granted member opens the whole livery for their crew, with no Decals; taking the grant away goes back to Plain", async () => {
+    const a = await makeUser("alice"), b = await makeUser("bob");
+    const crew = await crewOf(a, b);
+    expect((await page(b, crew)).livery.tier).toBe("plain");
+    await env.DB.prepare("INSERT INTO livery_grants (user_id, note) VALUES (?, 'owner')").bind(a.id).run();
+    const p = await page(b, crew);
+    expect(p.livery).toMatchObject({ tier: "factory", next: null, granted: true, decals: 0 });
+    await ok(api(a, "PUT", `/api/crews/${crew}/page`, { hazard_kinds: ["Cattle grid"] }));   // a Factory setting
+    expect((await page(a, crew)).livery.mine).toMatchObject({ pro: true });
+    await env.DB.prepare("DELETE FROM livery_grants").run();
+    expect((await page(b, crew)).livery).toMatchObject({ tier: "plain", granted: false });
+  });
+});

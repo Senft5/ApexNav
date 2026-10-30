@@ -8,7 +8,14 @@
   const IN_APP = typeof location !== 'undefined' && location.protocol === 'apexnav:';
   const API_BASE = IN_APP ? 'https://apexnav.senftns.workers.dev' : '';
   const TOKEN_KEY = 'apex.session', SIGNED_KEY = 'apex.signedIn';   // the token (older builds only) / a plain "signed in" flag
-  const bridge = () => (IN_APP && root.webkit && root.webkit.messageHandlers && root.webkit.messageHandlers.apexApi) || null;
+  // The shell only listens to the map page itself (the main frame); the Log in its frame over the map (web/page_return.js)
+  // posts through the map page's handlers, which the shell takes as the map page's.
+  const handlers = () => {
+    let w = root;
+    try { if (root.parent && root.parent !== root && root.parent.ApexLogHost) w = root.parent; } catch (_) {}
+    return (w.webkit && w.webkit.messageHandlers) || null;
+  };
+  const bridge = () => (IN_APP && handlers() && handlers().apexApi) || null;
   const store = (k, v) => { try { if (v) localStorage.setItem(k, v); else localStorage.removeItem(k); } catch (_) {} };
   const token = () => { try { return IN_APP && !bridge() ? localStorage.getItem(TOKEN_KEY) : null; } catch (_) { return null; } };
   /** After a sign-in (`t` from an older shell, or true when the shell kept it) or a sign-out (null). */
@@ -59,12 +66,12 @@
   const signedIn = () => { try { return !!(localStorage.getItem(SIGNED_KEY) || localStorage.getItem(TOKEN_KEY)); } catch (_) { return false; } };
   /** Google sign-in: the web follows the Worker's redirect; the app asks the native shell (Google refuses embedded web views). */
   function signIn() {
-    const native = IN_APP && root.webkit && root.webkit.messageHandlers && root.webkit.messageHandlers.apex;
+    const native = IN_APP && handlers() && handlers().apex;
     if (native) native.postMessage({ cmd: 'signIn' }); else location.href = '/api/auth/google/start';
   }
   /** Sign in with Apple: the app only (Apple's native sheet; the web would need a Services ID). Answers like signIn. */
   function signInApple() {
-    const native = IN_APP && root.webkit && root.webkit.messageHandlers && root.webkit.messageHandlers.apex;
+    const native = IN_APP && handlers() && handlers().apex;
     if (native) native.postMessage({ cmd: 'signInApple' });
   }
   const call = async (method, path, body) => {
@@ -152,6 +159,6 @@
   }
   const contributionEnabled = async () => { const e = await call('GET', '/api/me/export'); return !!(e && e.member && e.member.contribute); };
 
-  const api = { inApp: IN_APP, apiBase: API_BASE, apiFetch, signIn, signInApple, setSession, signedIn, contribute, newSegmentId, contributionEnabled, publishScore, standings, points, board, activity, kudos, kudosReceived, highlightsNear, shareHighlight, rateHighlight, member, pushSegments, sharedWithMe, adopt, shareSegment, friends, crews, crewMembers, removeRemote, toServer, fromServer };
+  const api = { handlers, inApp: IN_APP, apiBase: API_BASE, apiFetch, signIn, signInApple, setSession, signedIn, contribute, newSegmentId, contributionEnabled, publishScore, standings, points, board, activity, kudos, kudosReceived, highlightsNear, shareHighlight, rateHighlight, member, pushSegments, sharedWithMe, adopt, shareSegment, friends, crews, crewMembers, removeRemote, toServer, fromServer };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexSync = api;
 })(typeof window !== 'undefined' ? window : globalThis);
