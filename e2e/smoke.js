@@ -964,6 +964,68 @@ flow('drive ended: Open in the Log is the solid key with no score, Share card wi
   check(scored.share && !scored.logKey && scored.logLink && !scored.shareLink, 'a score: Share card is the solid key: ' + JSON.stringify(scored));
 });
 
+flow('drive ended: the card and the Log give the same score and time for the recorded drive (REVIEW4_CHECK U-91)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.ApexRecording && window.ApexCore);
+  // the real drive (web/data/dry_ridge.js) as the CSV the phone writes, parsed and stored as End does it
+  const card = await page.evaluate(async () => {
+    await new Promise((ok, fail) => { const s = document.createElement('script'); s.src = 'data/dry_ridge.js'; s.onload = ok; s.onerror = fail; document.head.append(s); });
+    const src = window.APEX_DRIVES.find((x) => x.id === 'dry_ridge'), f = src.fields, c = (k) => f.indexOf(k);
+    const want = ['distance_m', 'lat', 'lon', 'elevation_m', 'speed_mph', 'lon_g', 'lat_g', 'camber_deg', 'roughness_rms', 'crest_vertical_g', 'vert_peak_g'];
+    const csv = [want.join(','), ...src.rows.map((r) => want.map((k) => (r[c(k)] == null ? '' : r[c(k)])).join(','))].join('\n');
+    const d = ApexRecording.parse(ApexCore, csv, 'web_20261030_064500.csv', { source: 'web-gps', name: 'Dry Ridge Rd' });
+    await ApexRecording.store(d);
+    apexDebug.showEndCard(d, Date.now() - 3 * 3600e3);              // three hours of wall clock: the card must not use it
+    return { id: d.id, score: document.getElementById('endScore').textContent, meta: document.getElementById('endMeta').textContent,
+      line: document.getElementById('endLine').textContent, share: !!document.getElementById('endShare').offsetParent };
+  });
+  check(/^\d+$/.test(card.score) && card.share && !/Not enough clean corners/.test(card.line), 'the card scores the drive and offers Share: ' + JSON.stringify(card));
+  await page.goto(`${base}/analysis.html?tab=drive&drive=${encodeURIComponent(card.id)}`);
+  await page.waitForSelector('.dv-score b', { timeout: 15000 });
+  const log = await page.evaluate(() => ({ score: document.querySelector('.dv-score b').textContent, meta: document.querySelector('.dv-meta').textContent }));
+  check(log.score === card.score, `the Log's ${log.score} is the card's ${card.score}`);
+  const [, mm, ss] = /(\d+):(\d\d)/.exec(log.meta) || [];
+  const cardMin = +((/(\d+) min/.exec(card.meta) || [])[1]);
+  check(mm && cardMin === Math.round(+mm + +ss / 60) && !/ h /.test(card.meta), `the card's time is the recording's: ${card.meta} against ${log.meta}`);
+});
+
+flow('the status line wraps between its parts, never "25 min left…", at every width and theme (REVIEW4_CHECK U-99)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
+    window.webkit = { messageHandlers: { apex: { postMessage: () => {} } } }; });
+  const pts = Array.from({ length: 600 }, (_, i) => `<trkpt lat="${(35.5 + i * 1e-4).toFixed(6)}" lon="-83.9"/>`).join('');
+  const fits = () => page.evaluate(() => {
+    const m = document.getElementById('dsMain'), box = m.getBoundingClientRect(), end = document.getElementById('driveEnd').getBoundingClientRect();
+    const parts = [...m.children].map((x) => x.getBoundingClientRect());
+    return { text: m.textContent, cut: getComputedStyle(m).textOverflow === 'ellipsis' && m.scrollWidth > m.clientWidth,
+      inside: parts.every((r) => r.left >= box.left - 0.5 && r.right <= box.right + 0.5 && r.right <= end.left), lines: new Set(parts.map((r) => Math.round(r.top))).size };
+  });
+  for (const theme of ['roadbook', 'tapedeck', 'billet']) {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(`${base}/index.html?theme=${theme}`);
+    await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.ApexRouteImport && window.apex);
+    await page.setInputFiles('#gpxFile', { name: 'long.gpx', mimeType: 'application/gpx+xml', buffer: Buffer.from(`<gpx><trk><name>Long run</name><trkseg>${pts}</trkseg></trk></gpx>`) });
+    await page.waitForFunction(() => window.apexDebug.track && window.apexDebug.track.name === 'Long run', null, { timeout: 10000 });
+    await page.evaluate(() => window.apex.onNative({ type: 'link', params: { go: 'drive' } }));
+    await page.waitForFunction(() => window.apexDebug.driveActive);
+    for (let burst = 0; burst < 3; burst++) {
+      await page.evaluate((b) => { for (let j = b * 70; j < (b + 1) * 70; j++) window.apex.live({ lat: 35.5 + j * 1e-5, lon: -83.9, accuracy_m: 4, speed_mps: 15, course_deg: 0, lat_g: 0, lon_g: 0, has_fix: true, calibration: 'locked' }); }, burst);
+      await page.waitForTimeout(300);
+    }
+    await page.waitForFunction(() => /min left/.test(document.getElementById('dsMain').textContent), null, { timeout: 8000 });
+    for (const width of [320, 375, 402]) {
+      await page.setViewportSize({ width, height: 800 });
+      for (const night of [false, true]) {
+        await page.evaluate((n) => { document.documentElement.dataset.mode = n ? 'night' : 'day'; }, night);
+        await page.waitForTimeout(60);
+        const r = await fits();
+        check(!r.cut && r.inside && /min left/.test(r.text), `${width} px ${theme}${night ? ' night' : ''}: ${JSON.stringify(r)}`);
+      }
+    }
+    await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'end' }));
+  }
+});
+
 flow('small things: Notes is a detent, Layers never cuts the place plate, the Log pager draws its arrows (REVIEW4 U-82, U-81, U-76)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.goto(base + '/index.html');

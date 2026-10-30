@@ -99,6 +99,18 @@
     return d.car && Number.isFinite(d.car.mu) && Core && Core.cornersForCar ? Core.cornersForCar(list, d.car.mu) : list;
   };
 
+  /**
+   * U-91: the drive's Vetta Score, the one way every page computes it (the end card, the live score, the Log, the Garage):
+   * the record repaired, its corners for its car, only those with measured g. Returns { ds, corners }; ds.score is null
+   * (shown "--") when there are not enough clean corners, never NaN.
+   */
+  function scoreOf(Core, d) {
+    const x = repair(Core, d), corners = cornersOf(x);
+    let ds = null;
+    try { ds = Core.driverScore(x.speed_mps, x.lon_g, x.lat_g, scorableCorners(x, corners)); } catch (_) { ds = null; }
+    return { ds: ds && Number.isFinite(ds.score) ? ds : { ...(ds || {}), score: null }, corners };
+  }
+
   const HAZARDS = new Set(['bump', 'crest', 'dip']);
   const PASS_M = 15;        // another drive went over the spot (its path within this of the hazard)
   const SAME_SPOT_M = 25;   // and found the same kind of hazard this close (GPS at 1 Hz, 5 m samples)
@@ -170,6 +182,6 @@
     return `${s.hits >= 2 ? 'Confirmed' : 'Seen'} on ${s.hits} of ${s.passes} drives`;
   }
 
-  const api = { all, store, remove, parse, repair, scorableCorners, toTrack, corroborate, seenLabel, cornersOf };
+  const api = { all, store, remove, parse, repair, scorableCorners, toTrack, corroborate, seenLabel, cornersOf, scoreOf };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexRecording = api;
 })(typeof window !== 'undefined' ? window : globalThis);
