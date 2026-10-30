@@ -4,6 +4,13 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-10-30: the CarPlay guidance card sits at the top (you saw it float mid-left)
+
+- In guidance the map's top bar (with End) now hides itself after a moment, as Apple Maps' does; the card had been
+  held below a bar that never hid. A tap on the map brings End back; the map buttons stay. Idle keeps the bar up.
+  Not checked on a car (the simulator can't show it reliably). Undo: `automaticallyHidesNavigationBar = false` in
+  `startGuidance`.
+
 ## 2026-10-30: Billet's primary keys were unreadable (REVIEW_PEOPLE.md P-01, fixed straight away)
 
 - Under Billet every solid key (Sign in with Google, Invite, Accept, Join crew, Start a convoy, Plan it, and every

@@ -339,6 +339,7 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
     /// While a trip preview is up its own Drive starts that route, and the bar's would be a second key saying the same thing.
     @MainActor private func idleBars() {
         guard let map = mapTemplate else { return }
+        map.automaticallyHidesNavigationBar = false   // idle: Where to?, Loops and Places stay up
         map.leadingNavigationBarButtons = [CPBarButton(title: "Where to?") { [weak self] _ in self?.openSearch() },
                                            CPBarButton(title: "Loops") { [weak self] _ in self?.openLoops() }]
         let places = CPBarButton(title: "Places") { [weak self] _ in self?.openPlaces() }
@@ -500,6 +501,10 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
         maneuverKey = ""
         map.leadingNavigationBarButtons = []
         map.trailingNavigationBarButtons = [CPBarButton(title: "End") { _ in ApexCar.shared.send("end") }]
+        // Owner, 2026-10-30: the guidance card floated mid-left. A bar that never hides holds the card below it;
+        // in guidance the bar hides after a moment (a tap on the map brings End back), so the card sits at the top.
+        map.automaticallyHidesNavigationBar = true
+        map.hidesButtonsWithNavigationBar = false
         mapButtons()
     }
 
