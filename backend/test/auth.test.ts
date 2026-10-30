@@ -1,6 +1,6 @@
 import { env, exports } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
-import { checkClaims, upsertGoogleUser } from "../src/auth";
+import { checkClaims, startSession, upsertGoogleUser } from "../src/auth";
 import { ORIGIN, api, freshDb, makeUser } from "./helpers";
 
 beforeEach(freshDb);
@@ -32,16 +32,19 @@ describe("Google sign-in", () => {
     }
   });
 
-  it("only the owner address is let in automatically, and only while there are no members", async () => {
+  it("anyone who signs in is let in (P-02): membership comes with the session, never for a banned account", async () => {
     const owner = await upsertGoogleUser(env, "g1", "Owner@Example.test", "Owner");
-    expect(await env.DB.prepare("SELECT 1 FROM members WHERE user_id = ?").bind(owner).first()).toBeTruthy();
     const stranger = await upsertGoogleUser(env, "g2", "stranger@example.test", null);
-    expect(await env.DB.prepare("SELECT 1 FROM members WHERE user_id = ?").bind(stranger).first()).toBeNull();
-    await env.DB.prepare("DELETE FROM members").run();
-    await env.DB.prepare("INSERT INTO members (user_id) VALUES (?)").bind(stranger).run();
-    const again = await upsertGoogleUser(env, "g1", "owner@example.test", "Owner");
-    expect(again).toBe(owner);                                                     // same person, same row
-    expect(await env.DB.prepare("SELECT 1 FROM members WHERE user_id = ?").bind(owner).first()).toBeNull();   // not re-added once members exist
+    expect(await upsertGoogleUser(env, "g1", "owner@example.test", "Owner")).toBe(owner);   // same person, same row
+    for (const id of [owner, stranger]) {
+      expect(await env.DB.prepare("SELECT 1 FROM members WHERE user_id = ?").bind(id).first()).toBeNull();   // finding the user lets nobody in
+      await startSession(env, id);
+      expect(await env.DB.prepare("SELECT 1 FROM members WHERE user_id = ?").bind(id).first()).toBeTruthy();
+    }
+    await env.DB.prepare("INSERT INTO bans (google_sub) VALUES ('g3')").run();
+    const banned = await upsertGoogleUser(env, "g3", "gone@example.test", null);
+    await startSession(env, banned);
+    expect(await env.DB.prepare("SELECT 1 FROM members WHERE user_id = ?").bind(banned).first()).toBeNull();
   });
 
   it("a returning account takes Google's current email and name", async () => {

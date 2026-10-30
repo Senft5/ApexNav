@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
-import { api, freshDb, makeUser } from "./helpers";
+import { api, freshDb, makeBanned, makeUser } from "./helpers";
 
 beforeEach(freshDb);
 
@@ -17,7 +17,7 @@ describe("GET /api/roads", () => {
   it("members only", async () => {
     await seed();
     expect((await api(null, "GET", "/api/roads?ways=9")).status).toBe(401);
-    expect((await api(await makeUser("outsider", false), "GET", "/api/roads?ways=9")).status).toBe(403);
+    expect((await api(await makeBanned("outsider"), "GET", "/api/roads?ways=9")).status).toBe(403);
   });
 
   it("returns merged numbers per way and direction, null where unmeasured, and no contributor information", async () => {

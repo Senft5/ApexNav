@@ -1,7 +1,7 @@
 // ApexNav API Worker. Static files are served by Cloudflare's asset layer; only /api/* reaches this code
 // (wrangler.jsonc: assets.run_worker_first). Phones never talk to the database directly.
 import {
-  APP_ORIGIN, appExchange, csrfCheck, createInvite, googleCallback, googleStart, logout, redeemInvite, requireMember, requireUser, sessionHash, viewer,
+  APP_ORIGIN, appExchange, csrfCheck, createInvite, googleCallback, googleStart, invitePreview, logout, redeemInvite, requireMember, requireUser, sessionHash, viewer,
 } from "./auth";
 import { convoyAccept, convoyConnect, convoyCreate, convoyDismiss, convoyInvitePeople, convoyInvites, convoyJoin, convoyPreview, convoyRoom, unwrap } from "./convoy_routes";
 import { Env, HttpError, body, json, str } from "./util";
@@ -15,7 +15,7 @@ import { routeDelete, routeGet, routesSharedWithMe, shareRoute } from "./routes_
 
 const BACKUP_CRON = "0 7 * * 1";   // wrangler.jsonc triggers; the other cron is the daily sweep
 import {
-  boardActivity, boardFor, crewCreate, crewDiscover, crewInvite, crewInvitePreview, crewInvitesRevoke, crewJoin, crewJoinPublic, crewLeave, crewList, crewMembers, crewUpdate, friendAccept, friendList, friendRequest, friendRequestCancel,
+  boardActivity, boardFor, crewCreate, crewDiscover, crewInvite, crewInvitePreview, crewInvitesBy, crewInvitesRevoke, crewJoin, crewJoinPublic, crewLeave, crewList, crewMembers, crewUpdate, friendAccept, friendList, friendRequest, friendRequestCancel,
   myGrants, publish, removePair, setGrant, setHandle,
 } from "./social";
 import { deleteAccount, exportMyData } from "./account";
@@ -98,6 +98,7 @@ on("GET", "/api/me", async (req, env) => {
                ...(v.member && isModerator(env, v) ? { moderator: true } : {}) });
 });
 on("POST", "/api/invites/redeem", async (req, env) => { await redeemInvite(env, await requireUser(req, env), req); return noContent(); });
+on("POST", "/api/invites/preview", async (req, env) => json(await invitePreview(env, await requireMember(req, env), req)));   // P-02: whose friend link
 on("POST", "/api/invites", async (req, env) => json(await createInvite(env, await requireMember(req, env), req), 201));
 // Signed in is enough to take your data or close your account, member or not (someone removed by the owner keeps both rights).
 on("GET", "/api/me/export", async (req, env) => json(await exportMyData(env, await requireUser(req, env))));
@@ -161,6 +162,7 @@ on("POST", "/api/crews/join", async (req, env) => json(await crewJoin(env, await
 on("POST", "/api/crews/invite/preview", async (req, env) => json(await crewInvitePreview(env, await requireMember(req, env), req)));
 on("POST", "/api/crews/:id/invite", async (req, env, m) => json(await crewInvite(env, await requireMember(req, env), m.groups!.id), 201));
 on("DELETE", "/api/crews/:id/invites", async (req, env, m) => json(await crewInvitesRevoke(env, await requireMember(req, env), m.groups!.id)));
+on("PUT", "/api/crews/:id/invites", async (req, env, m) => json(await crewInvitesBy(env, await requireMember(req, env), m.groups!.id, req)));   // P-07: who can invite
 on("GET", "/api/crews/voices", async (req, env) => json(await crewVoices(env, await requireMember(req, env))));
 on("PUT", "/api/crews/:id/voice/:pack", async (req, env, m) => { await crewVoicePut(env, await requireMember(req, env), m.groups!.id, m.groups!.pack, req); return noContent(); });
 on("GET", "/api/crews/:id/voice/:pack", async (req, env, m) => crewVoiceGet(env, await requireMember(req, env), m.groups!.id, m.groups!.pack));

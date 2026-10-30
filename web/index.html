@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-HE4W1X27R4kb8FVkdIv3I946l1C5Fz8AEABrJakdYIc=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-aGX0UriebEXIKnxzTHLfSFcYQuvPcWbPS578azhQohU=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <!-- REVIEW4 U-80 (check): before the stylesheets and the hundred scripts below (seconds on a cold start), the page's very
@@ -5012,12 +5012,19 @@
       }
       say(ApexCrewVoice.regroupText(rg), false, null, null, { tokens: [rg && rg.note ? 'line:regroup' : 'line:regroup_set'], named: true });
     }
+    // A crew link (P-02, P-07): any member makes one unless the owner keeps invites; whoever opens it and signs in joins the
+    // crew and is friends with the sender, so the one link is the whole way in.
+    const crewInviteLink = async (c) => {
+      const r = await apiCall('POST', `/api/crews/${c.id}/invite`); const j = await jsonOf(r);
+      if (r.ok) copyText(`${shareOrigin()}/?crew=${j.token}`, `Crew link copied. Whoever opens it joins ${c.name} and is your friend.`, `Join ${c.name} on Vetta`);
+      else toast(j && j.error === 'too_many_open_invites' ? 'You have 10 open crew links. Turn some off first.' : j && j.error === 'owner_invites_only' ? `Only the owner invites to ${c.name}.` : 'Couldn\'t make a link. Try again.');
+    };
     // The crew page (web/crew_page.js, REVIEW.md roadmap 20): the Crew tab opens your crew.
     let crewPage = null, crewDrivesEl = null;
     // in a crew, Crew drives is a row on the Crews side that opens its sheet; not in one, the section on the side itself
     const toDrives = () => { const pop = crewDrivesEl && crewDrivesEl.closest('.side-pop'); if (pop) pop.classList.add('open'); else if (crewDrivesEl) crewDrivesEl.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
     try { crewPage = window.ApexCrewPage ? ApexCrewPage.mount({ el, btn, toast, apiCall, jsonOf, report: safety && safety.report,
-      invite: async (c) => { const r = await apiCall('POST', `/api/crews/${c.id}/invite`); const j = await jsonOf(r); if (r.ok) copyText(`${shareOrigin()}/?crew=${j.token}`, 'Crew link copied.'); else toast(j && j.error === 'too_many_open_invites' ? 'You have 10 open crew links. Turn some off first.' : 'Couldn\'t make a link. Try again.'); },
+      invite: (c) => crewInviteLink(c),
       openRoute: (id) => openSharedRoute(id), builds: () => builds, shareImage: (cv, name) => (window.ApexDriveCard ? ApexDriveCard.shareCard(cv, name) : null), onAllDrives: toDrives, onPlan: (c) => { if (crewEvents) crewEvents.plan(c.id); toDrives(); } }) : null; } catch (e) { console.error('crew page', e); }
     // Units (web/units.js, IDEAS U-22): every number is formatted when it is drawn, so a change redraws in place (the owner,
     // 2026-10-29: no page reloads). The cluster's unit labels, the loop lengths, the route card and the open sheet are redrawn
@@ -5125,19 +5132,21 @@
         const signIn = () => [appleButton(),
           el('a', { className: 'ink-btn solid', href: '/api/auth/google/start', textContent: 'Sign in with Google', style: 'display:flex;align-items:center;justify-content:center;text-decoration:none' }),
           legalNote('By signing in you agree to the ')];
-        const waiting = stash('apex.invite') ? 'You have an invite. Sign in, then join with it.' : stash('apex.add') ? `Sign in to ask @${stash('apex.add')} to be your friend.` : '';
+        // P-02: anyone who signs in is in; a link waiting here says what signing in will do with it
+        const waiting = stash('apex.invite') ? 'You have a friend link. Sign in and you’re friends.' : stash('apex.add') ? `Sign in to ask @${stash('apex.add')} to be your friend.` : '';
         body.append(el('img', { src: 'brand/logo.svg', alt: 'Vetta', width: 200, style: 'max-width:60%' }),
           el('h3', { textContent: 'Drive with friends' }),
-          gets(['<path d="M12 21s-6-6.2-6-11a6 6 0 0 1 12 0c0 4.8-6 11-6 11z"/><circle cx="12" cy="10" r="2.2"/>', 'Friends on the map'],
-            ['<path d="M5 20V10M12 20V4M19 20v-7"/>', 'The board'],
+          // P-32: what a newcomer with no friends yet can look forward to, not the board they can't have
+          gets(['<path d="M12 21s-6-6.2-6-11a6 6 0 0 1 12 0c0 4.8-6 11-6 11z"/><circle cx="12" cy="10" r="2.2"/>', 'Who’s out driving'],
+            ['<rect x="3" y="5" width="18" height="15"/><path d="M3 10h18M8 3v4M16 3v4"/>', 'Crew drives'],
             ['<path d="M6 20c0-5 12-3 12-9 0-3-3-4-6-6"/><circle cx="6" cy="20" r="1.4"/><circle cx="12" cy="5" r="1.4"/>', 'Shared routes']),
           ...(waiting ? [el('p', { textContent: waiting })] : []),
-          el('p', { className: 'note', textContent: 'Vetta is invite-only. Nothing is shared unless you switch it on.' }), ...signIn());
+          el('p', { className: 'note', textContent: 'Nothing is shared unless you switch it on.' }), ...signIn());
         cbody.append(el('h3', { textContent: 'Drive as a crew' }),
           gets(['<path d="M12 3l7 3v5c0 5-3.5 8-7 10-3.5-2-7-5-7-10V6z"/>', 'Your crew’s page'],
             ['<rect x="3" y="5" width="18" height="15"/><path d="M3 10h18M8 3v4M16 3v4"/>', 'Crew drives'],
             ['<path d="M8 21l3-18M16 21l-3-18"/><circle cx="12" cy="16" r="1.6"/><circle cx="12" cy="9" r="1.6"/>', 'Convoys']),
-          ...(stash('apex.crew') ? [el('p', { textContent: 'You have a crew invite. Sign in to see which crew, then answer it.' })] : []),
+          ...(stash('apex.crew') ? [el('p', { textContent: 'You have a crew link. Sign in to see which crew, then join it.' })] : []),
           el('p', { className: 'note', textContent: 'A crew is a group for a club or a weekend run: its own page, drives you plan together and a live convoy.' }), ...signIn());
         gbody.append(el('h3', { textContent: 'Your cars' }), el('p', { className: 'note', textContent: 'Sign in (People) to keep your cars, a profile and build threads here. Everything below works without it.' }));
         return;
@@ -5145,24 +5154,45 @@
       // Anyone signed in can take their data or close the account, member or not.
       const downloadMyData = async () => { const r = await apiCall('GET', '/api/me/export'); const blob = new Blob([JSON.stringify(await r.json(), null, 2)], { type: 'application/json' }); const a = el('a', { href: URL.createObjectURL(blob), download: 'vetta-my-data.json' }); a.click(); };
       const deleteMyAccount = async () => { if (await ApexConfirm.prompt('This erases your account, friends, shared results and spots from the server. Type DELETE to confirm.', { action: 'Delete account', placeholder: 'DELETE', maxLength: 10, match: 'DELETE' }) === 'DELETE') { const r = await apiCall('DELETE', '/api/me', { confirm: 'DELETE' }); if (r.ok) ApexSync.setSession(null); redo(); } };
+      // Vetta is open (P-02, the owner 2026-10-30): everyone signed in is a member, so the only one who isn't is an account the owner
+      // removed. No paste field and no way in to offer; one line on each side, and the account's keys in the Garage, where they live (P-22).
       if (!me.member) {
-        const inp = el('input', { className: 'field', placeholder: 'Paste your invite', value: stash('apex.invite'), autocomplete: 'off', 'aria-label': 'Invite' });
-        const join = async () => {
-          const raw = inp.value.trim(), token = (raw.match(/invite=([A-Za-z0-9_-]+)/) || [null, raw])[1];
-          const r = await apiCall('POST', '/api/invites/redeem', { token });
-          if (r.ok) { unstash('apex.invite'); toast('You\'re in. You and the person who invited you are now friends.'); redo(); } else toast('That invite didn\'t work. Ask for a new one.');
-        };
-        body.append(el('h3', { textContent: 'Join with an invite' }), el('p', { className: 'note', textContent: 'Vetta is invite-only. Paste your invite.' }), el('div', { className: 'row' }, inp, btn('Join', join, 'ink-btn solid')),
-          el('div', { className: 'row' }, btn('Sign out', async () => { await apiCall('POST', '/api/auth/logout'); ApexSync.setSession(null); redo(); }, 'linkbtn'),
-            btn('Download my data', downloadMyData, 'linkbtn'), btn('Delete account', deleteMyAccount, 'danger-btn')));
-        cbody.append(...acrossToFriends('Crews', stash('apex.crew') ? 'You have a crew invite. Join Vetta with your own invite first, then answer it here.' : 'Crews open once you’re in. Vetta is invite-only: join with your invite first.', 'Join with an invite'));
+        for (const b of [body, cbody]) b.append(el('h3', { textContent: 'Friends and crews are closed to this account' }),
+          el('p', { className: 'note', textContent: 'Driving, notes and your Log work as always. Your account is still yours: download or delete it in the Garage.' }));
+        const asec = section('Account');
+        asec.append(el('div', { className: 'row' }, btn('Download my data', downloadMyData),
+          btn('Sign out', async () => { await apiCall('POST', '/api/auth/logout'); ApexSync.setSession(null); redo(); })), btn('Delete account', deleteMyAccount, 'danger-btn'));
+        gbody.append(asec);
         return;
       }
       if (!me.handle) {
-        const inp = el('input', { className: 'field', placeholder: 'Pick a handle', autocomplete: 'off', autocapitalize: 'none', 'aria-label': 'Handle' });
-        body.append(el('h3', { textContent: 'Pick a handle' }), el('p', { className: 'note', textContent: 'Friends find you by it. 3 to 20 letters, numbers or _.' }),
-          el('div', { className: 'row' }, inp, btn('Save', async () => { const r = await apiCall('PUT', '/api/me/handle', { handle: inp.value }); if (r.ok) redo(); else toast(r.status === 409 ? 'That handle is taken.' : 'Use 3 to 20 letters, numbers or _.'); }, 'ink-btn solid')));
-        cbody.append(...acrossToFriends('Crews', 'Pick a handle first: it’s how your crew sees you.', 'Pick a handle'));
+        const pickHandle = () => el('input', { className: 'field', placeholder: 'Pick a handle', autocomplete: 'off', autocapitalize: 'none', 'aria-label': 'Handle' });
+        const saveHandle = async (inp) => { const r = await apiCall('PUT', '/api/me/handle', { handle: inp.value }); if (!r.ok) toast(r.status === 409 ? 'That handle is taken.' : 'Use 3 to 20 letters, numbers or _.'); return r.ok; };
+        const inp = pickHandle();
+        body.append(el('h3', { textContent: 'Pick a handle' }), el('p', { className: 'note', textContent: stash('apex.invite') ? 'Friends find you by it. Then you’re friends with whoever sent your link.' : 'Friends find you by it. 3 to 20 letters, numbers or _.' }),
+          el('div', { className: 'row' }, inp, btn('Save', async () => { if (await saveHandle(inp)) redo(); }, 'ink-btn solid')));
+        // P-02: one link is the whole way in. Someone who opened a crew link and just signed in sees the crew and joins it here,
+        // the handle (how the crew sees them) picked in the same card; never "join Vetta first".
+        const tok = stash('apex.crew');
+        if (tok) {
+          const what = el('p', { textContent: 'You have a crew link.' }), hin = pickHandle();
+          const why = el('p', { className: 'note', textContent: 'Pick a handle: it’s how the crew sees you.' });
+          apiCall('POST', '/api/crews/invite/preview', { token: tok }).then((r) => (r.ok ? jsonOf(r) : null)).then((j) => {
+            if (gen !== renderGen || !j || !j.name) return;
+            what.replaceChildren(document.createTextNode('Join '), el('b', { textContent: j.name }), document.createTextNode('?'));
+            why.textContent = `${j.members} ${j.members === 1 ? 'member' : 'members'}${j.from ? ` · @${j.from} sent you the link, and you’ll be friends` : ''}. Pick a handle: it’s how the crew sees you.`;
+          }).catch(() => {});
+          cbody.append(el('div', { className: 'card stack-8' }, what, why, el('div', { className: 'row' }, hin, btn('Join crew', async (e) => {
+            const b = e && e.currentTarget; if (b) { if (b.disabled) return; b.disabled = true; }
+            try {
+              if (!(await saveHandle(hin))) return;
+              const r = await apiCall('POST', '/api/crews/join', { token: tok }), j = r.ok ? await jsonOf(r) : null;
+              if (r.ok || (r.status >= 400 && r.status < 500)) unstash('apex.crew');
+              toast(r.ok ? (j && j.friend ? `You're in the crew, and friends with @${j.friend}.` : 'You joined the crew.') : r.status < 500 ? 'That crew link didn\'t work. Ask for a new one.' : 'Couldn\'t join. Check signal and try again.');
+              redo();
+            } catch (_) { toast('Couldn\'t join. Check signal and try again.'); } finally { if (b) b.disabled = false; }
+          }, 'ink-btn solid')), btn('Not now', () => { unstash('apex.crew'); redo(); }, 'linkbtn')));
+        } else cbody.append(...acrossToFriends('Crews', 'Pick a handle first: it’s how your crew sees you.', 'Pick a handle'));
         return;
       }
       if (me.requests > 0) { const b = el('span', { className: 'badge', textContent: String(me.requests) }); b.setAttribute('aria-label', `${me.requests} friend requests`); $('crewTab').append(b); }
@@ -5220,6 +5250,23 @@
         ApexProfileView.show(view, p, { el, btn, back: () => ppop.classList.remove('open') });
         ppop.replaceChildren(view); ppop.classList.add('open');
       };
+      // P-02: a friend link (?invite=) is "add a friend" now, not a way in. It asks first, naming who sent it, at the top of the list.
+      const friendTok = stash('apex.invite');
+      if (friendTok) {
+        const what = el('p', { textContent: 'You have a friend link.' }), actions = el('div', { className: 'row' });
+        apiCall('POST', '/api/invites/preview', { token: friendTok }).then(async (r) => {
+          if (gen !== renderGen) return;
+          const j = r.ok ? await jsonOf(r) : null;
+          if (j && j.from) what.replaceChildren(el('b', { textContent: `@${j.from}` }), document.createTextNode(' sent you a link to be friends.'));
+          else if (r.status === 400) { unstash('apex.invite'); what.textContent = 'That friend link has been used or has run out. Ask for a new one.'; actions.replaceChildren(btn('OK', redo, 'linkbtn')); }
+        }).catch(() => {});
+        actions.append(btn('Accept', async () => {
+          const r = await apiCall('POST', '/api/invites/redeem', { token: friendTok }).catch(() => null);
+          if (r && (r.ok || r.status < 500)) unstash('apex.invite');
+          toast(r && r.ok ? 'You\'re friends. Choose what to share in their row.' : r ? 'That friend link didn\'t work. Ask for a new one.' : 'Couldn\'t reach Vetta. Try again.'); redo();
+        }, 'ink-btn solid'), btn('Not now', () => { unstash('apex.invite'); redo(); }, 'linkbtn'));
+        body.append(el('div', { className: 'card stack-8' }, what, actions));
+      }
       const flist = el('div', { className: 'friend-list' });
       for (const { f, st } of order) {
         const g = grants.get('friend:' + f.id) || { share_scores: 0, share_times: 0 }, row = el('div', { className: 'friend' });
@@ -5243,7 +5290,7 @@
         flist.append(row);
       }
       if (accepted.length) body.append(flist);
-      else body.append(el('p', { className: 'note', textContent: 'No friends yet. Invite someone to Vetta, or add a member by their handle.' }));
+      else body.append(el('p', { className: 'note', textContent: 'No friends yet. Send someone your link, or add them by their handle.' }));
 
       // One Invite key (the owner, 2026-10-30): someone new gets an invite link, a member your handle or a request; requests here too.
       const ipop = popSheet('Invite'); pops.push(ipop);
@@ -5253,7 +5300,7 @@
         const h = add.value.trim().replace(/^@/, '').toLowerCase(); if (!h) return;
         const r = await apiCall('POST', '/api/friends/request', { handle: h }); unstash('apex.add'); add.value = '';
         if (r.ok && !accepted.some(f => f.handle === h)) setSent([...sentList().filter(x => x !== h), h]);
-        toast(r.ok ? `Request sent. @${h} sees it if they're a member.` : 'Couldn\'t send that. Try again.'); redo();
+        toast(r.ok ? `Request sent. @${h} sees it if that's their handle.` : 'Couldn\'t send that. Try again.'); redo();
       };
       const reqSec = el('div', { className: 'stack-8' }, el('h3', { textContent: incoming.length ? `Requests · ${incoming.length}` : 'Requests' }));
       for (const f of incoming) reqSec.append(el('div', { className: 'row', style: 'align-items:center' }, el('b', { textContent: `@${f.handle || '?'}`, style: 'flex:1' }),
@@ -5264,10 +5311,10 @@
       if (!incoming.length && !waiting.length) reqSec.append(el('p', { className: 'note', textContent: 'No requests waiting.' }));
       ipop.append(
         el('div', { className: 'stack-8' }, el('h3', { textContent: 'New to Vetta' }),
-          el('p', { className: 'note', textContent: 'Vetta is invite-only. They join with your link, and you’re friends the moment they do.' }),
-          btn('Send an invite link', async () => { const r = await apiCall('POST', '/api/invites'); const j = await jsonOf(r); if (r.ok) copyText(j.url, 'Invite link copied. They\'ll be your friend the moment they join, and you both get 5 points when they first share road data.'); else toast('Couldn\'t make an invite. Try again.'); }, 'ink-btn solid')),
+          el('p', { className: 'note', textContent: 'They sign in with your link, and you’re friends the moment they do.' }),
+          btn('Send an invite link', async () => { const r = await apiCall('POST', '/api/invites'); const j = await jsonOf(r); if (r.ok) copyText(j.url, 'Invite link copied. They\'ll be your friend the moment they sign in, and you both get 5 points when they first share road data.'); else toast('Couldn\'t make an invite. Try again.'); }, 'ink-btn solid')),
         el('div', { className: 'stack-8' }, el('h3', { textContent: 'Already on Vetta' }),
-          btn(`Share my handle · @${me.handle}`, () => copyText(`${shareOrigin()}/?add=${me.handle}`, 'Link copied. Anyone who opens it can ask to be your friend.')),
+          btn('Share a link to me', () => copyText(`${shareOrigin()}/?add=${me.handle}`, 'Link copied. Anyone who opens it can ask to be your friend.')),
           el('div', { className: 'row' }, add, btn('Send request', sendRequest))),
         reqSec);
       const openInvite = (toRequests) => { inviteOpen = true; ipop.classList.add('open'); if (toRequests) reqSec.scrollIntoView({ block: 'start' }); };
@@ -5303,13 +5350,13 @@
       // A crew link asks first: joining shows your handle to its members, so it is never done for you by opening a link.
       if (stash('apex.crew')) {
         const tok = stash('apex.crew');
-        const what = el('p', { textContent: 'You have a crew invite.' });
+        const what = el('p', { textContent: 'You have a crew link.' });
         const why = el('p', { className: 'note', textContent: 'Its members will see your handle, and your car if you show it to crews.' });
         const actions = el('div', { className: 'row' });
         const show = (j) => {   // name the crew before the yes
           if (j.member) { unstash('apex.crew'); toast(`You're already in ${j.name}.`); redo(); return; }
           what.replaceChildren(document.createTextNode('Join '), el('b', { textContent: j.name }), document.createTextNode('?'));
-          why.textContent = `${j.visibility === 'public' ? 'Public' : 'Private'} crew · ${j.members} ${j.members === 1 ? 'member' : 'members'}${j.owner ? ' · run by @' + j.owner : ''}. Its members will see your handle, and your car if you show it to crews.`;
+          why.textContent = `${j.visibility === 'public' ? 'Public' : 'Private'} crew · ${j.members} ${j.members === 1 ? 'member' : 'members'}${j.owner ? ' · run by @' + j.owner : ''}. Its members will see your handle, and your car if you show it to crews.${j.from ? ` You and @${j.from}, who sent the link, will be friends.` : ''}`;
         };
         if (crewPreview.token === tok && crewPreview.data) show(crewPreview.data);
         else (async () => {
@@ -5319,7 +5366,7 @@
           if (j && j.name) { crewPreview.token = tok; crewPreview.data = j; show(j); }
           else if (r && r.status === 400) {
             unstash('apex.crew');
-            what.textContent = 'That crew invite has run out or doesn\'t work for you. Ask for a new one.'; why.remove();
+            what.textContent = 'That crew link has run out or doesn\'t work for you. Ask for a new one.'; why.remove();
             actions.replaceChildren(btn('OK', redo, 'linkbtn'));
           }
         })();
@@ -5331,7 +5378,8 @@
             if (b) b.disabled = false;
             if (!r) { toast('Couldn\'t join. Check signal and try again.'); return; }
             if (r.ok || (r.status >= 400 && r.status < 500)) unstash('apex.crew');
-            toast(r.ok ? 'You joined the crew.' : r.status < 500 ? 'That crew invite didn\'t work. Ask for a new one.' : 'Couldn\'t join. Check signal and try again.');
+            const j = r.ok ? await jsonOf(r).catch(() => null) : null;   // P-02: the link friends its sender too
+            toast(r.ok ? (j && j.friend ? `You're in the crew, and friends with @${j.friend}.` : 'You joined the crew.') : r.status < 500 ? 'That crew link didn\'t work. Ask for a new one.' : 'Couldn\'t join. Check signal and try again.');
             redo();
           }, 'ink-btn solid'), btn('Not now', () => { unstash('apex.crew'); redo(); }, 'linkbtn'));
       }
@@ -5362,6 +5410,21 @@
         // owner: switch between private (invite link) and public (people nearby can find it; needs an area name)
         const ownerBox = el('div', { className: 'stack-8' });
         if (c.role === 'owner') {
+          // P-07: any member can invite (a mate brings a mate) unless the owner keeps it to themselves; Owner voids the members' links
+          const by = el('div', { className: 'switch', role: 'radiogroup' });
+          by.setAttribute('aria-label', `Who can invite to ${c.name}`);
+          for (const [v, label] of [['anyone', 'Any member'], ['owner', 'Owner']]) {
+            const b = el('button', { type: 'button', role: 'radio', textContent: label });
+            b.setAttribute('aria-checked', String((c.invites || 'anyone') === v));
+            b.addEventListener('click', async () => {
+              if ((c.invites || 'anyone') === v) return;
+              const r = await apiCall('PUT', `/api/crews/${c.id}/invites`, { by: v });
+              if (r.ok) { c.invites = v; by.querySelectorAll('button').forEach((x) => x.setAttribute('aria-checked', String(x === b))); toast(v === 'owner' ? `Only you can invite to ${c.name} now. Links other members made no longer work.` : `Anyone in ${c.name} can invite now.`); }
+              else toast('Couldn\'t change that. Try again.');
+            });
+            by.append(b);
+          }
+          ownerBox.append(el('p', { className: 'ctl-label', textContent: 'Who can invite' }, el('small', { textContent: 'whoever opens a crew link joins and is friends with the sender' })), by);
           ownerBox.append(btn('Turn off invite links', async () => {
             if (!(await ApexConfirm.ask(`Turn off every invite link to ${c.name}? People already in stay in.`, 'Turn off'))) return;
             const r = await apiCall('DELETE', `/api/crews/${c.id}/invites`); const j = await jsonOf(r);
@@ -5385,7 +5448,8 @@
             switchRow('Times', g.share_times, () => putGrant('crew', c.id, true, !g.share_times))),
           el('span', { textContent: g.share_scores ? (g.share_times ? `${c.name} sees your scores and times.` : `${c.name} sees your scores.`) : `${c.name} sees nothing of yours yet.` }),
           ownerBox,
-          el('div', { className: 'row' }, btn('Invite to crew', async () => { const r = await apiCall('POST', `/api/crews/${c.id}/invite`); const j = await jsonOf(r); if (r.ok) copyText(`${shareOrigin()}/?crew=${j.token}`, 'Crew link copied.'); else toast(j && j.error === 'too_many_open_invites' ? 'You have 10 open crew links. Turn some off first.' : 'Only a crew\'s owner can invite.'); }),
+          // P-07: the crew page's Invite is the one key (any member); this one stays only where there is no crew page
+          el('div', { className: 'row' }, ...(inCrew ? [] : [btn('Invite to crew', () => crewInviteLink(c))]),
             btn('Leave', async () => { if (await ApexConfirm.ask(`Leave ${c.name}?`, 'Leave')) { if (openCrewId === c.id) openCrewId = null; await apiCall('DELETE', `/api/crews/${c.id}/membership`); redo(); } }, 'danger-btn')));
         const loadMembers = async () => {
           mbox.innerHTML = '';

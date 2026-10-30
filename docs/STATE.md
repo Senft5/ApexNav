@@ -679,7 +679,7 @@ docs/SOCIAL.md.
   (Michael converted to the owner's timbre with kNN-VC + 54 real recorded calls). Pause rhythm from the owner's real
   delivery (breath before the caution ~0.3-0.4 s and before the distance ~0.2-0.25 s; `tts_text`, `spokenText(text, rhythm)`).
 - [x] **Licence**: proprietary, all rights reserved (LICENSE, THIRD_PARTY_NOTICES.md). Not open source.
-- [x] **docs/BACKEND.md**: local-first backend design (Supabase + Google sign-in, invite-only), points 3x/2x/1x per way+direction,
+- [x] **docs/BACKEND.md**: local-first backend design (Supabase + Google sign-in; invite-only then, open to anyone who signs in since 2026-10-30), points 3x/2x/1x per way+direction,
   reviewed by Opus (privacy leaks fixed in the design).
 - [x] **Cloudflare**: Worker `apexnav` serves `web/` (wrangler.jsonc). Live at https://apexnav.senftns.workers.dev/
   (also GitHub Pages at senft5.github.io/ApexNav/web until the repo goes private).
@@ -696,7 +696,7 @@ docs/SOCIAL.md.
 
 ## Session 2026-10-25 (i): Cloudflare backend foundation
 ### Decisions (owner)
-- All-Cloudflare backend (Workers + D1), not Supabase. Google sign-in, invite-only, US only, under 20 users, all rights reserved.
+- All-Cloudflare backend (Workers + D1), not Supabase. Google sign-in, invite-only at the time (open since 2026-10-30), US only, under 20 users, all rights reserved.
 - In-app voice enrollment (a short guided recording inside the app), not a giant call sheet. Voice work is **on hold**.
 - Highlights (user scenic points, rated, optional routing bonus), points 3x/2x/1x per direction of each road.
 ### Completed

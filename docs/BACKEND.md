@@ -36,14 +36,14 @@ drive → phone profiles it (core/ApexKit, offline) → [opt-in + online] → bi
 ## 4. Points ("Octane")
 - **km of newly mapped road × multiplier, per road segment and direction** (one OSM way, one direction): **1st 3×, 2nd 2×, then 1×.**
 - Order is by **arrival**: the first person to upload a road+direction gets 3x, the second 2x, everyone after 1x. A person earns points on their **first drive** on a road only (later drives still improve the data). All chunks of one drive keep the multiplier its first chunk earned. Points land immediately; public: totals only, never who was first. An offline phone that uploads late simply ranks later.
-- Anti-cheat (no device attestation exists, so cheap checks): value ranges and contiguity checks, 600 km/day and 1,500 km/week caps, 300 uploads/hour, `driven_on` within 14 days of upload. The cross-account replay check was removed with the holding period (nothing to compare against); with an invite-only group of friends that risk is accepted. Privacy: the server keeps no coordinates, no times beyond the day, and `rank_slots`/`seen` hold only HMAC values keyed by a server secret.
+- Anti-cheat (no device attestation exists, so cheap checks): value ranges and contiguity checks, 600 km/day and 1,500 km/week caps, 300 uploads/hour, `driven_on` within 14 days of upload. The cross-account replay check was removed with the holding period (nothing to compare against); with a small group of friends that risk was accepted; open sign-up (2026-10-30) widens it, so look again before a public launch. Privacy: the server keeps no coordinates, no times beyond the day, and `rank_slots`/`seen` hold only HMAC values keyed by a server secret.
 
 ## 5. Data model (backend/migrations, D1 = SQLite)
 Applied to both `apexnav-db` and `apexnav-preview-db`: **0001_init.sql**, **0002_segment_sharing.sql**, **0003_camber_count.sql**, **0004_realtime_ingest.sql**.
 
 | Group | Tables |
 |---|---|
-| Identity | `users` (Google sub, handle), `members` (let in by invite), `invites` (token hash only), `sessions` (token hash only) |
+| Identity | `users` (Google sub, handle), `members` (everyone signed in and not banned, since 2026-10-30; kept for old app builds and the inviter link), `invites` (token hash only), `sessions` (token hash only) |
 | Social | `friendships` (canonical ordered pair), `blocks`, `crews`, `crew_members`, `crew_invites` |
 | Segments & boards | `segments` (+`origin_id`), `segment_shares`, `grants` (**opt-in, one row per friend or crew**), `board_entries` (+`canon_id`), `shared_routes` |
 | Crowd road data | `road_bins`, `hazard_obs`, `ingest_pending`, `rank_slots`, `seen`, `points_ledger` (private tables: no API route reads or writes them directly) |
@@ -52,7 +52,20 @@ Applied to both `apexnav-db` and `apexnav-preview-db`: **0001_init.sql**, **0002
 
 ## 6. Authorization model (what the tests prove)
 Implemented in `backend/src/{auth,social,segments}.ts`, one router in `index.ts`.
-- **Gate**: signed in (Google) AND a member (invite or owner bootstrap). Anonymous or un-invited sessions read nothing.
+- **Gate**: signed in (Google or Apple) and not banned. Since 2026-10-30 (the owner: "Vetta is not invite-only at all";
+  REVIEW_PEOPLE P-02) every sign-in makes the person a member (`startSession` → `admit`), and a session from before then is
+  admitted on its next request (`viewer`); the ban is checked in the same statement. `requireMember` still guards the shared-data
+  routes and still answers 403 `invite_required` for a banned account, the code old builds know; `/api/me` keeps `member`.
+  Anonymous sessions read nothing.
+- **Friend links** (`POST /api/invites`, `/api/invites/preview` `{token}` → `{from}`, `/api/invites/redeem`): an account invite is
+  "add a friend" now: one use, 7 days; redeeming makes the two friends (sharing off), never across a block, and for a member
+  who joined in the last day with no inviter yet records the sender as `invited_by` (the referral and report counting). The
+  App Review code still answers yes (old builds send it) and makes no friendship.
+- **Crew links (P-02, P-07, migration 0042)**: `POST /api/crews/:id/invite` by any member of the crew unless the owner set
+  `PUT /api/crews/:id/invites {by: "owner"}` (403 `owner_invites_only`; `{by: "anyone"}` is the default), which voids the other
+  members' live links. A link works only while its maker is still in the crew. `POST /api/crews/join {token}` joins anyone signed
+  in and, on a first join, friends them with the link's maker (not across a block); it answers `{id, friend}` (the sender's
+  handle when they are friends). The crew page and `GET /api/crews` carry `invites`; the page also `can_invite`.
 - **State-changing requests** must carry our own `Origin` and an `X-ApexNav: 1` header (CSRF), on top of `SameSite=Lax`, `HttpOnly`, `__Host-` cookies.
 - **Sharing is opt-in per friend and per crew**: a score reaches an audience only through `POST /api/board` and only if a grant for that
   audience exists. `GET /api/board/:canon` returns only entries published **to the viewer**, by someone who is still their friend / crew-mate, whose grant is
@@ -65,7 +78,7 @@ Implemented in `backend/src/{auth,social,segments}.ts`, one router in `index.ts`
 - **Crew drives (IDEAS S-06, migration 0013, `backend/src/events.ts`):** `POST /api/crews/:id/events {title, starts_at (ISO with zone, 10 min to 30 days out), meet {lat, lon, name?}, route_id?, notes?}` (members of that crew; at most 10 upcoming per crew; `route_id` must be a route the planner shared with that crew, S-05; the planner is going), `GET /api/crews/:id/events` and `GET /api/events` (all your crews; from 6 h after the start; who's going by handle, blocked people left out), `POST /api/events/:id/rsvp {status: going|maybe|no}`, `DELETE /api/events/:id` (planner or crew owner; cancels). Car meets (S-13, migration 0015): a public crew's drive created with `public: true` is listed by `GET /api/events/near?lat&lon` to any member within 80 km (crew, time, meeting point, how many going; no handles; whether you're in the crew), while the crew stays public, the drive isn't hidden by reports and neither side blocked the other. Reportable as kind `event` (hidden at the usual report threshold; the owner's remove cancels it). Exported; deleted with the account or crew; the sweep deletes drives a week after they start.
 - **Share your ETA (IDEAS S-19, migration 0016, `backend/src/eta_share.ts`; page `web/eta.html`):** `POST /api/eta {left_s}` (members; at most 3 live) returns a random token (only its sha256 is stored); `PUT /api/eta/:token {left_s}` refreshes the arrival time or `{ended: arrived|stopped}` ends it (the owner only); `GET /api/eta/:token` (anyone with the link, signed out) gives the handle, arrival time, last update and whether it ended. No position, route or destination exists in it. Links end after 4 hours; the sweep deletes them a day later.
 - **Hazard reports (IDEAS Q-15/Q-16, migration 0011):** `POST /api/hazards {kind, lat, lon, heading?, age_s?}` (members; 30 a day; `age_s` is how long ago a report made with no signal was seen, so it expires from then, and 410 once past its life (F-05); the same kind within 50 m of a live one confirms it instead), `GET /api/hazards?lat&lon&km` (members; live ones within `km` ≤ 50, nearest first, never the reporter), `POST /api/hazards/:id/vote {still}` (one vote per person; still pushes the expiry out by the kind's life: pothole 7 d, gravel 1 d, closure 12 h, debris 3 h, police 1 h, animal 30 min; two or more "gone" outvoting confirmations end it). Account deletion keeps a report but not who made it; the export lists your own. The daily sweep deletes reports a day after they expire (`backend/test/hazards.test.ts`).
-- **Invite previews** (`POST /api/crews/invite/preview` `{token}`, `POST /api/convoy/preview` `{invite}`): members only, the same checks as a join in the same order, and nothing changes. A crew preview gives name, visibility, member count and the owner's handle; a convoy preview gives name, the leader's handle (never a real name), size and end time, never the other members. A crew invite (preview and join) answers like an unknown token across a block with the owner, either way, and for a crew that was reported or removed, so nobody learns they were blocked; a full convoy answers 409 before the block check, like a join (`backend/test/previews.test.ts`). Links never join on their own: the page asks with these.
+- **Invite previews** (`POST /api/crews/invite/preview` `{token}`, `POST /api/convoy/preview` `{invite}`): members only, the same checks as a join in the same order, and nothing changes. A crew preview gives name, visibility, member count, the owner's handle and `from` (whoever made the link); a convoy preview gives name, the leader's handle (never a real name), size and end time, never the other members. A crew invite (preview and join) answers like an unknown token across a block with the owner, either way, and for a crew that was reported or removed, so nobody learns they were blocked; a full convoy answers 409 before the block check, like a join (`backend/test/previews.test.ts`). Links never join on their own: the page asks with these.
 - **Real names** (the Google display name) reach only the person and their accepted friends. Crew member lists, boards and a request you sent (before it is accepted) show the handle only: anyone can join a public crew, and anyone who knows a handle can send a request (`backend/test/names.test.ts`).
 - **Rate limits** (`backend/src/ratelimit.ts`, Cloudflare rate limiting bindings in wrangler.jsonc, free): every write 60/min per session (per IP signed out), sign-in start and app code exchange 20/min per IP (not the Google callback or logout); over the limit is `429 rate_limited` with `retry-after: 60` (road uploads already retry on 429). Reads are not limited. Per-feature caps (uploads/hour, km/day, crews, highlights/day) stay on top.
 - **Road data shown (owner decision 2026-10-28, `backend/src/roads.ts`, migration 0029):** `GET /api/roads` and `GET /api/coverage` show a road+direction from its first pass when the way is an open road (`road_ways.cls` motorway to tertiary, or unclassified with at least 1.5 km of map line); every other road, an unknown class included, only once two different people have driven it that way (`MIN_DRIVERS`, Z-08). Coverage sends `conf` per direction (1 one pass, 2 two to four, 3 five or more), never a count. The phone sends `cls` (its map match's road class) with each contribution; an unlisted value is stored as unknown. Owner-only `GET /api/ops/roads.geojson?bbox=` (≤2° a side, 404 for anyone else) exports an area as GeoJSON for a pilot (docs/ROAD_DATA.md) (`backend/test/roads.test.ts`, `coverage.test.ts`, `loop.test.ts`).
@@ -77,7 +90,8 @@ Implemented in `backend/src/{auth,social,segments}.ts`, one router in `index.ts`
 - **Block and report** (`safety.ts`, `reports_sql.ts`, migration 0009): block by id or handle (unknown handles answer like real ones), list and
   unblock your own blocks (never who blocked you; unblocking restores nothing). `POST /api/reports` covers people, crews, cars and highlights, only
   ones the reporter could see (else 404), one per person per target, 20 a day (checked before any lookup, so no handle oracle). Open reports from
-  three current members **invited by different people and not by one another** (one member's spare accounts count once) take a public crew off discovery and public join, a car out of
+  three current members **invited by different people and not by one another** (one member's spare accounts count once; since sign-up opened, a
+  member nobody invited counts only once their membership is a week old) take a public crew off discovery and public join, a car out of
   friends' garages, a highlight off the map, until the owner (OWNER_EMAIL) decides in `GET /api/moderation` (shows reporters and who invited them).
   Dismiss closes those reports for good (the same people can't re-trigger it). Remove keeps it down (`status='removed'`; the owner of a crew or car
   can't make it public/shown again); for a person it is a ban: membership, sessions, app sign-in codes and unused invites go, their crews turn
@@ -87,8 +101,8 @@ Implemented in `backend/src/{auth,social,segments}.ts`, one router in `index.ts`
 
 ## 7. Auth: Google sign-in, no library
 `/api/auth/google/start` → Google (authorization-code flow, PKCE S256, `state`, `nonce`) → `/api/auth/google/callback`: exchanges the code
-server-side, checks `iss`, `aud`, `exp`, `nonce`, `email_verified`, creates a 30-day session. The first sign-in with the `OWNER_EMAIL` secret becomes the
-first member; everyone else needs an invite. **Secrets** (set in the Cloudflare dashboard, never in the repo): `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`,
+server-side, checks `iss`, `aud`, `exp`, `nonce`, `email_verified`, creates a 30-day session and makes the person a member unless they are banned (open since 2026-10-30; before then the first
+`OWNER_EMAIL` sign-in was the first member and everyone else needed an invite). **Secrets** (set in the Cloudflare dashboard, never in the repo): `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`,
 `OWNER_EMAIL`, `PEPPER`. Without them the sign-in routes answer 503 and the rest of the app is unaffected.
 Google setup (owner, free): Google Cloud console → OAuth consent screen (External, publish "In production"; basic scopes only) → OAuth client (web) with redirect
 `https://<site>/api/auth/google/callback`. The native sideloaded app must use the system browser for sign-in (Google blocks embedded web views).
@@ -127,7 +141,7 @@ points 3×/2×/1× per direction of each road; time sharing opt-in per friend an
 
 ## 11. Design review (Opus) — findings and where they went
 - **P0** friend boards leaked across friends → published rows carry `audience_id`; read requires "published to me" + live grant (test).
-- **P0** un-invited / anonymous sessions → `members` gate on every shared-data route (test).
+- **P0** un-invited / anonymous sessions → `members` gate on every shared-data route (test). Since 2026-10-30 the gate is sign-in and no ban.
 - **P0** contribution data revealing where/when → pending table + two-slot ranking + hashed dedupe + weekly totals + client trimming (schema in 0001; job not built).
 - **P1** anti-cheat, definer/service-role pitfalls → n/a (no RLS, no service role; one Worker is the only writer), anti-cheat list in section 4.
 - **P2** magic-link email problems → no email at all; Google-only. Backups: nightly export to R2 (not built).

@@ -39,6 +39,7 @@ import m37 from "../migrations/0037_livery_extras.sql?raw";
 import m38 from "../migrations/0038_factory.sql?raw";
 import m39 from "../migrations/0039_crew_voice.sql?raw";
 import m40 from "../migrations/0040_livery_grants.sql?raw";
+import m42 from "../migrations/0042_crew_invites_by.sql?raw";
 import { sha256hex } from "../src/util";
 
 export const ORIGIN = "https://apexnav.test";
@@ -57,20 +58,29 @@ export async function freshDb(): Promise<void> {
     await env.DB.batch(tables.map((t) => env.DB.prepare(`DELETE FROM ${t.name}`)));
     return;
   }
-  await env.DB.batch([...splitSql(m1), ...splitSql(m2), ...splitSql(m3), ...splitSql(m4), ...splitSql(m5), ...splitSql(m6), ...splitSql(m7), ...splitSql(m8), ...splitSql(m9), ...splitSql(m10), ...splitSql(m11), ...splitSql(m12), ...splitSql(m13), ...splitSql(m14), ...splitSql(m15), ...splitSql(m16), ...splitSql(m17), ...splitSql(m18), ...splitSql(m19), ...splitSql(m20), ...splitSql(m21), ...splitSql(m22), ...splitSql(m23), ...splitSql(m24), ...splitSql(m25), ...splitSql(m26), ...splitSql(m27), ...splitSql(m28), ...splitSql(m29), ...splitSql(m30), ...splitSql(m31), ...splitSql(m32), ...splitSql(m33), ...splitSql(m34), ...splitSql(m35), ...splitSql(m36), ...splitSql(m37), ...splitSql(m38), ...splitSql(m39), ...splitSql(m40)].map((s) => env.DB.prepare(s)));
+  await env.DB.batch([...splitSql(m1), ...splitSql(m2), ...splitSql(m3), ...splitSql(m4), ...splitSql(m5), ...splitSql(m6), ...splitSql(m7), ...splitSql(m8), ...splitSql(m9), ...splitSql(m10), ...splitSql(m11), ...splitSql(m12), ...splitSql(m13), ...splitSql(m14), ...splitSql(m15), ...splitSql(m16), ...splitSql(m17), ...splitSql(m18), ...splitSql(m19), ...splitSql(m20), ...splitSql(m21), ...splitSql(m22), ...splitSql(m23), ...splitSql(m24), ...splitSql(m25), ...splitSql(m26), ...splitSql(m27), ...splitSql(m28), ...splitSql(m29), ...splitSql(m30), ...splitSql(m31), ...splitSql(m32), ...splitSql(m33), ...splitSql(m34), ...splitSql(m35), ...splitSql(m36), ...splitSql(m37), ...splitSql(m38), ...splitSql(m39), ...splitSql(m40), ...splitSql(m42)].map((s) => env.DB.prepare(s)));
 }
 
 export interface TestUser { id: string; handle: string; token: string }
 
+/** A signed-in person. `member` true: a member of a month's standing. False: signed in with no members row yet, as someone who
+ *  signed in before Vetta opened (P-02); their first request makes them a member. */
 export async function makeUser(handle: string, member = true): Promise<TestUser> {
   const id = crypto.randomUUID(), token = `tok-${handle}-${crypto.randomUUID()}`;
   const hash = await sha256hex(token);
   await env.DB.batch([
     env.DB.prepare("INSERT INTO users (id, google_sub, email, handle, display_name) VALUES (?, ?, ?, ?, ?)").bind(id, `sub-${handle}`, `${handle}@example.test`, handle, handle.toUpperCase()),
     env.DB.prepare("INSERT INTO sessions (id_hash, user_id, expires_at) VALUES (?, ?, datetime('now', '+1 day'))").bind(hash, id),
-    ...(member ? [env.DB.prepare("INSERT INTO members (user_id) VALUES (?)").bind(id)] : []),
+    ...(member ? [env.DB.prepare("INSERT INTO members (user_id, joined_at) VALUES (?, datetime('now', '-30 days'))").bind(id)] : []),
   ]);
   return { id, handle, token };
+}
+
+/** Signed in but banned: the one kind of signed-in person who is not a member since Vetta opened. */
+export async function makeBanned(handle: string): Promise<TestUser> {
+  const u = await makeUser(handle, false);
+  await env.DB.prepare("INSERT INTO bans (google_sub) VALUES (?)").bind(`sub-${handle}`).run();
+  return u;
 }
 
 export async function api(u: TestUser | null, method: string, path: string, body?: unknown, extra: Record<string, string> = {}): Promise<Response> {

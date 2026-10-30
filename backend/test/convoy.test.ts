@@ -1,7 +1,7 @@
 import { env, exports } from "cloudflare:workers";
 import { evictDurableObject, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
-import { ORIGIN, api, freshDb, makeUser, ok, type TestUser } from "./helpers";
+import { ORIGIN, api, freshDb, makeBanned, makeUser, ok, type TestUser } from "./helpers";
 import { LIMITS, parseEvent } from "../src/convoy";
 
 beforeEach(freshDb);
@@ -70,7 +70,7 @@ async function convoyOfThree() {
 
 describe("convoy: create, join, leave", () => {
   it("needs explicit consent, a member account and a valid invite", async () => {
-    const [a, b, outsider] = [await makeUser("alice"), await makeUser("bob"), await makeUser("nomem", false)];
+    const [a, b, outsider] = [await makeUser("alice"), await makeUser("bob"), await makeBanned("nomem")];
     expect((await api(a, "POST", "/api/convoy", { name: "x" })).status).toBe(400);
     expect((await api(outsider, "POST", "/api/convoy", { consent: true })).status).toBe(403);
     expect((await api(null, "POST", "/api/convoy", { consent: true })).status).toBe(401);

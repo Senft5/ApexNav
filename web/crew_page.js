@@ -212,7 +212,7 @@
       const left = el('div', { style: 'min-width:0' }, el('h2', { textContent: c.name }));
       if (c.motto) left.append(el('p', { className: 'cp-motto', textContent: c.motto }));
       left.append(el('p', { className: 'cp-meta', textContent: meta }));
-      const right = el('div', { className: 'stack-8', style: 'align-items:flex-end' }, ...(c.is_owner && page.invite ? [btn('Invite', () => page.invite(c), 'ink-btn')] : []),
+      const right = el('div', { className: 'stack-8', style: 'align-items:flex-end' }, ...((c.can_invite ?? c.is_owner) && page.invite ? [btn('Invite', () => page.invite(c), 'ink-btn')] : []),   // P-07: any member, unless the owner keeps invites
         ...(atLeast(c.livery && c.livery.tier, 'factory') && page.shareImage ? [btn('Share', () => shareCrew(c), 'linkbtn')] : []));
       return el('div', { className: 'cp-title' }, left, right);
     }

@@ -20,7 +20,7 @@ const NOT_BLOCKED = (who: string) =>
 interface CrewRow { id: string; name: string; owner: string; visibility: string; about: string | null; area_name: string | null; motto: string | null;
   crest: string | null; stripe: string | null; cover_photo_id: string | null; crest_photo_id: string | null; members: number;
   stripe2: string | null; stripe3: string | null; pattern: string | null; pinned_route_id: string | null; pinned_name: string | null;
-  pinned_chat_id: string | null; house_canon_id: string | null; call_sign: string | null; hazard_kinds: string; regroup_line: string | null }
+  pinned_chat_id: string | null; house_canon_id: string | null; call_sign: string | null; hazard_kinds: string; regroup_line: string | null; invites: string }
 interface BoardRow { handle: string | null; photo_id: string | null; score: number | null; mine: number; car: string | null; badge: string | null }
 
 /** GET /api/crews/:id/page */
@@ -28,7 +28,7 @@ export async function crewPage(env: Env, v: Viewer, crewId: string) {
   if (!(await isCrewMember(env, crewId, v.id))) throw new HttpError(404, "no_crew");
   const c = await env.DB.prepare(`SELECT c.id, c.name, c.owner, c.visibility, c.about, c.area_name, c.motto, c.crest, c.stripe, c.cover_photo_id, c.crest_photo_id,
       c.stripe2, c.stripe3, c.pattern, c.pinned_route_id, (SELECT r.name FROM shared_routes r WHERE r.id = c.pinned_route_id) AS pinned_name,
-      c.pinned_chat_id, c.house_canon_id, c.call_sign, c.hazard_kinds, c.regroup_line,
+      c.pinned_chat_id, c.house_canon_id, c.call_sign, c.hazard_kinds, c.regroup_line, c.invites,
       (SELECT COUNT(*) FROM crew_members x WHERE x.crew_id = c.id) AS members FROM crews c WHERE c.id = ?`).bind(crewId).first<CrewRow>();
   if (!c) throw new HttpError(404, "no_crew");
   // The board: every member you can see, with their best Score this month as published to this crew (grant on), else
@@ -60,6 +60,7 @@ export async function crewPage(env: Env, v: Viewer, crewId: string) {
   return {
     id: c.id, name: c.name, motto: c.motto, about: c.about, visibility: c.visibility, area_name: c.area_name, members: c.members,
     is_owner: c.owner === v.id, crest: c.crest, stripe: c.stripe, cover_photo_id: c.cover_photo_id,
+    invites: c.invites, can_invite: c.owner === v.id || c.invites === "anyone",          // P-07: who can invite, and whether you can
     livery: { ...livery, mine }, stripe2: club ? c.stripe2 : null, stripe3: works ? c.stripe3 : null, pattern: works ? c.pattern : null,
     crest_photo_id: club ? c.crest_photo_id : null, pinned: club && c.pinned_route_id && c.pinned_name ? { id: c.pinned_route_id, name: c.pinned_name } : null, routes,
     pinned_chat: pinnedChat, house, stages, call_sign: works ? c.call_sign : null,
