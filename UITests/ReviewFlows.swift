@@ -57,6 +57,7 @@ final class ReviewFlows: XCTestCase {
         if route { e["APEX_REVIEW_ROUTE"] = "1" }
         if let from { e["APEX_REPLAY_FROM"] = String(format: "%.2f", from) }
         if let s = env["APEX_REVIEW_SESSION"], !s.isEmpty { e["APEX_REVIEW_SESSION"] = s }
+        if tapFirst { e["APEX_REVIEW_PAST_WELCOME"] = "1" }        // the welcome is first-run's to photograph
         app.launchEnvironment = e
         app.launch()
         if tapFirst { app.tap() }

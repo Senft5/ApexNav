@@ -274,7 +274,11 @@ struct ApexCockpitWebView: UIViewRepresentable {
     /// Review recordings only (debug builds, APEX_REVIEW=1): the page logs every line it says (web say()).
     private static var reviewFlag: String {
         #if DEBUG
-        return ProcessInfo.processInfo.environment["APEX_REVIEW"] == "1" ? " window.APEX_REVIEW = true;" : ""
+        let env = ProcessInfo.processInfo.environment
+        guard env["APEX_REVIEW"] == "1" else { return "" }
+        // every flow but first-run starts past the welcome (U-65 put it in the app; tapping it from XCUITest was unreliable)
+        let past = env["APEX_REVIEW_PAST_WELCOME"] == "1" ? " try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}" : ""
+        return " window.APEX_REVIEW = true;" + past
         #else
         return ""
         #endif
