@@ -1305,7 +1305,7 @@ flow('the Log opens over the map and its tabs come back without loading the map 
   await log.locator('nav.tabbar a:has-text("Garage")').waitFor();
   check(/\/index\.html$/.test(page.url()), 'the map page stays: ' + page.url());
   // the frame gets the map page's safe areas (env() is zero inside a frame)
-  check(await page.evaluate(() => /px$/.test(document.getElementById('logFrame').contentDocument.documentElement.style.getPropertyValue('--sa-bottom'))), 'insets handed to the Log');
+  check(await page.waitForFunction(() => /px$/.test(document.getElementById('logFrame').contentDocument.documentElement.style.getPropertyValue('--sa-bottom')), null, { timeout: 5000 }).then(() => true, () => false), 'insets handed to the Log');
   await log.locator('nav.tabbar a:has-text("Garage")').click();
   await page.waitForSelector('#logFrame', { state: 'hidden' });
   await page.waitForFunction(() => document.querySelector('#sheet.open[data-view="garage"]'));

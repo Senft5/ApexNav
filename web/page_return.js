@@ -31,6 +31,8 @@
 
   if (host && doc) {
     doc.documentElement.classList.add('in-log-frame');
+    // the notch and home bar from the map page before anything draws (env() is zero inside a frame); it sets them again on load
+    try { const ins = host.ApexLogHost.insets(); for (const k of Object.keys(ins)) doc.documentElement.style.setProperty(`--sa-${k}`, ins[k]); } catch (_) {}
     doc.addEventListener('click', (e) => {
       const a = e.target && e.target.closest ? e.target.closest('a[href]') : null;
       if (!a || a.target === '_blank' || e.defaultPrevented) return;

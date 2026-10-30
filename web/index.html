@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-XMxR79uVr6MDtVDoaVmnM6MSlB/+iX96BrRP/p2blDs=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-Yi1r2I0cFTDv7eYxzPvE+5+aIHt9Aw1dtu6hE2eEHRM=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -3953,12 +3953,15 @@
     // Map, Crew and Garage tabs close the frame (web/page_return.js). The frame is kept and shown again as it was, unless
     // a drive, the theme or the units changed since, or a different page of the Log is asked for.
     const logFrame = { el: null, url: null, stale: false };
-    function logInsets() {
-      const f = logFrame.el;
+    function safeInsets() {
       let probe = $('saProbe');
       if (!probe) { probe = el('div', { id: 'saProbe' }); probe.style.cssText = 'position:fixed;visibility:hidden;pointer-events:none;padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)'; document.body.append(probe); }
       const cs = getComputedStyle(probe);
-      try { const st = f.contentDocument.documentElement.style; for (const k of ['top', 'right', 'bottom', 'left']) st.setProperty(`--sa-${k}`, cs[`padding${k[0].toUpperCase()}${k.slice(1)}`]); } catch (_) {}
+      return { top: cs.paddingTop, right: cs.paddingRight, bottom: cs.paddingBottom, left: cs.paddingLeft };
+    }
+    function logInsets() {
+      const ins = safeInsets();
+      try { const st = logFrame.el.contentDocument.documentElement.style; for (const k of Object.keys(ins)) st.setProperty(`--sa-${k}`, ins[k]); } catch (_) {}
     }
     function openLog(url) {
       let f = logFrame.el;
@@ -3982,6 +3985,7 @@
       },
       load(url) { location.href = url; },                              // a replay: the map page loads with that drive
       stale() { logFrame.stale = true; },
+      insets: () => safeInsets(),                                      // asked for by the frame as its first script runs
     };
     // links into the Log anywhere on the map page (the drive-ended card, a toast's Open) open the frame too
     document.addEventListener('click', (e) => {
