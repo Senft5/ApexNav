@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-4EArkvs2sqg6X9KrghpgB5MxOzyc92ej7fnATjleJdo=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-uyafDLtmk0mCQyFzeqY3acpSKAgVTTXfmRq3OpJDYEw=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta · Log</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -24,6 +24,7 @@
   <script src="sync.js"></script>
   <script src="format.js"></script>
   <script src="recording.js"></script>
+  <script src="drive_keep.js"></script>
   <script src="contributor.js"></script>
   <script src="drive_view.js"></script>
   <script src="drive_card.js"></script>
@@ -1029,7 +1030,9 @@
       renderVote(d);
       renderRecce(d);
       renderFlyby(d).catch(() => { $('dvFlyby').hidden = true; });
-      $('dvNote').textContent = `${dateLabel(d)} · ${d.source === 'web-gps' ? 'Recorded on this phone' : d.source === 'imported' ? 'Imported' : 'Example drive'}`;
+      // Round 3 (drive_keep.js): a drive that ended itself, or was recovered after the app closed, says so
+      const ended = window.ApexDriveKeep ? ApexDriveKeep.endNote(d) : null;
+      $('dvNote').textContent = [dateLabel(d), d.source === 'web-gps' ? 'Recorded on this phone' : d.source === 'imported' ? 'Imported' : 'Example drive', ended].filter(Boolean).join(' · ');
     }
     // Flyby (flyby.js, IDEAS S-20): friends who drove this drive's stages the same day. Members only; set as text.
     let activityRows = null;

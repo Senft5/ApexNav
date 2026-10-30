@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-hQTDDm8+wwYa9JibBFEmLYLrDvbMTwPnUmvFHNC5GOs=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-DzUb/ZxbLle1BChzH/phAgS5hV1FaxyDSqVnRtbxikU=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <!-- REVIEW4 U-80 (check): before the stylesheets and the hundred scripts below (seconds on a cold start), the page's very
@@ -42,6 +42,7 @@
   <script src="sync.js"></script>
   <script src="live_pipeline.js"></script>
   <script src="sensors.js"></script>
+  <script src="drive_keep.js"></script>
   <script src="privacy_zones.js"></script>
   <script src="reroute.js"></script>
   <script src="eta.js"></script>
@@ -6665,6 +6666,7 @@
       startStageWatch();
       state.firstNoteDue = true; state.firstNoteKey = null;   // U-58: the drive's first note is called
       drive.live = null; drive.liveIdx = 0; drive.share = 'off'; drive.shareKm = 0; drive.shareErr = null; drive.roads = {}; drive.roadIdx = 0; drive.rest = null; breakSay = null; if (breakWorker) { breakWorker.terminate(); breakWorker = null; }
+      keepStart();                                                     // Round 3: the drive is kept as it goes (drive_keep.js)
       if (NATIVE_SHELL) {   // the app's own GPS and IMU feed window.apex.live; no browser sensors to start
         drive.native = true;
         activity('start', { title: track ? track.name : 'Drive', note: 'Recording', distance: '', eta: '' });
@@ -6711,7 +6713,7 @@
     // already saved; the card shows its name, distance and time, the Vetta Score big (-- without clean corners) and one
     // thing to work on (the weakest Score part, week_digest.js tip), with Share card and Mark a stage.
     let endDrive = null;
-    function showEndCard(d, startedAt) {
+    function showEndCard(d, startedAt, opts = {}) {
       endDrive = d;
       // U-91: scored exactly as the Log scores it (a parsed record has no d.corners, so the card said "--" to a 788); and the
       // drive's time is the recording's own, as the Log counts it, not the wall clock since Start
@@ -6726,7 +6728,9 @@
       $('endScore').textContent = d.ds.score == null ? '--' : String(d.ds.score);
       $('endScore').classList.toggle('unk', d.ds.score == null);   // unknown in pencil, not two black bars (REVIEW2.md U-34)
       const t = d.ds.score != null && window.ApexWeekDigest ? ApexWeekDigest.tip(d.ds.components) : null;
-      const tipLine = d.ds.score == null ? 'Not enough clean corners for a score this time.' : t ? `Next time, ${t.label.toLowerCase()}: ${t.tip}.` : '';
+      const tip = d.ds.score == null ? 'Not enough clean corners for a score this time.' : t ? `Next time, ${t.label.toLowerCase()}: ${t.tip}.` : '';
+      const ended = window.ApexDriveKeep ? ApexDriveKeep.endNote(d) : null;   // Round 3: a drive that ended itself says how
+      const tipLine = [ended ? ended + '.' : '', tip].filter(Boolean).join(' ');
       $('endLine').textContent = tipLine;
       // your best on this road (REVIEW.md 4.4): against your earlier drives named after the same road; then the pack's closing line
       (async () => {
@@ -6741,7 +6745,7 @@
           } catch (_) { best = false; }
         }
         if (best) $('endLine').textContent = ['Your best on this road.', tipLine].filter(Boolean).join(' ');
-        if (window.ApexEndLine) {
+        if (window.ApexEndLine && !opts.quiet) {                     // Round 3: never aloud to a parked car or a pocket
           const pack = ['marguerite', 'kit', 'hale'].includes(state.voiceId) ? state.voiceId : 'marguerite';
           const line = ApexEndLine.endLine(pack, d.ds.score == null ? null : Math.round(d.ds.score), best);
           say(line.text, false, null, null, state.voiceId === 'device' ? {} : { tokens: line.tokens });
@@ -6828,8 +6832,10 @@
       const routeName = track && track.kind === 'route' && typeof track.name === 'string' ? track.name.trim() : '';
       return routeName || road || `Drive ${when.toLocaleDateString()} ${ApexFormat.clock12(when.getHours(), when.getMinutes())}`;
     }
-    async function leaveDrive(save) {
+    // ended: why a drive ended itself ('car', 'parked'; drive_keep.js EndWatch), or nothing for End
+    async function leaveDrive(save, ended) {
       driveActive = false;
+      const kept = keepStop();                                         // Round 3: no more checkpoints; dropped once saved
       stageWatch = null; $('stageBar').hidden = true;
       const laps = circuit.timer ? circuit.timer.state(Date.now()).laps : [];
       const battery = window.ApexBattery ? ApexBattery.summary(drive.battery) : null; drive.battery = null;
@@ -6846,19 +6852,19 @@
       refreshAutoNight();
       if (track && track.kind === 'horizon') { track = null; if (plannedRoute) activate(plannedRoute, 0, { quiet: true }); }   // the road ahead ends with the drive
       replayOn = false; setMode(track && track.kind === 'route' ? 'sim' : 'replay'); paintModeSwitch(); render(true);
-      if (save && rec && rec.km >= 0.3 && rec.samples >= 60) {
+      if (save && rec && ApexDriveKeep.keepable(rec)) {
         try {
-          const when = new Date(rec.startedAt || Date.now()), pad = (n) => String(n).padStart(2, '0');
-          const stamp = `${when.getFullYear()}${pad(when.getMonth() + 1)}${pad(when.getDate())}_${pad(when.getHours())}${pad(when.getMinutes())}${pad(when.getSeconds())}`;
-          const d = ApexRecording.parse(Core, rec.toCsv(), `web_${stamp}.csv`, { source: 'web-gps', date: `${when.getFullYear()}-${pad(when.getMonth() + 1)}-${pad(when.getDate())}T${pad(when.getHours())}:${pad(when.getMinutes())}`, name: driveName(road, when) });
+          const d = driveRecord(rec, (when) => driveName(road, when));
+          if (ended) d.ended = ended;                                // said in the Log and on the card (drive_keep.js endNote)
           // the car it was driven in (IDEAS D-19): its label and the grip its score allows, never higher than the street default
           const car = routingCar();
           if (car) d.car = { label: car.label, mu: Core.carGrip(car) };
           if (laps.length) d.laps = laps;                            // lap times from track mode (on a circuit only, IDEAS D-15)
           if (battery) d.battery = battery;                          // what the drive cost the battery (IDEAS P-01)
           await ApexRecording.store(d);
+          keepDone(kept);
           await refreshSavedDrives();
-          showEndCard(d, rec.startedAt);
+          showEndCard(d, rec.startedAt, { quiet: !!ended });
           if (live) {
             live.finish().then(async (shared) => {
               if (shared && shared.chunks > 0) {
@@ -6870,11 +6876,20 @@
           }
         } catch (e) { toast(e && e.name === 'QuotaExceededError' ? 'Couldn\'t save this drive. The phone is out of storage.' : 'Couldn\'t save this drive.'); console.error('save drive', e); }
       } else if (save && rec && rec.samples > 0) {
-        toast('Too short to save. Drives under 0.2 mi are dropped.');
+        keepDone(kept);
+        if (!ended) toast('Too short to save. Drives under 0.2 mi are dropped.');
         if (live) live.finish().catch(() => {});
-      } else if (live) {
-        live.finish().catch(() => {});
+      } else {
+        keepDone(kept);
+        if (live) live.finish().catch(() => {});
       }
+    }
+    // A recording as the Log keeps it, named for the moment it started (the same id however it was saved, so a drive saved
+    // twice, by End and again by recovery after the app closed at the wrong moment, is one drive)
+    function driveRecord(rec, nameAt) {
+      const when = new Date(rec.startedAt || Date.now()), pad = (n) => String(n).padStart(2, '0');
+      const stamp = `${when.getFullYear()}${pad(when.getMonth() + 1)}${pad(when.getDate())}_${pad(when.getHours())}${pad(when.getMinutes())}${pad(when.getSeconds())}`;
+      return ApexRecording.parse(Core, rec.toCsv(), `web_${stamp}.csv`, { source: 'web-gps', date: `${when.getFullYear()}-${pad(when.getMonth() + 1)}-${pad(when.getDate())}T${pad(when.getHours())}:${pad(when.getMinutes())}`, name: nameAt(when) });
     }
     // In-car mode (web/in_car.js, IDEAS C-07 / C-08): big targets and no keyboard while the car moves. A tap on a text field
     // explains and offers "I'm a passenger", which unlocks typing until the car next stops.
@@ -6925,15 +6940,17 @@
         // driven, U-62) is put away rather than guided along unseen; the preview's own Drive (no `free`) drives the route.
         if (m.free === true && car.route === '' && track && track.kind === 'route') clearPlanned();
         closeWelcome();                                              // U-65: a first drive from the car
+        keepCar(true);                                               // Round 3: the car's screen is there, so the car is on
         enterDrive();
       }
       else if (m.action === 'end' && driveActive) leaveDrive(true);
+      else if (m.action === 'disconnect') keepCar(false, m.t);      // Round 3: the car switched off; the drive ends once it stays put
       else if (m.action === 'places') carPost(ApexCarPlay.placesMessage(recentPlaces()));
       else if (m.action === 'loop' && [30, 60, 120].includes(m.minutes) && !driveActive) loop({ minutes: m.minutes });
       else if (m.action === 'report' && ApexHazardReports.KINDS.includes(m.kind)) reportHazard(m.kind);
       else if (m.action === 'still' && typeof m.still === 'boolean') answerStill(m.still);
       else if (m.action === 'voice') { state.toggles.voice = !state.toggles.voice; savePrefs(); paintSwitches(); if (!state.toggles.voice) stopSpeaking(); }
-      else if (m.action === 'hello') { car.route = ''; car.look = ''; car.hazards = ''; carRoute(track && track.kind === 'route' ? track : null); carLook(); carHazards();
+      else if (m.action === 'hello') { keepCar(true); car.route = ''; car.look = ''; car.hazards = ''; carRoute(track && track.kind === 'route' ? track : null); carLook(); carHazards();
         carPost(ApexCarPlay.placesMessage(recentPlaces()));                   // a car screen that just connected gets everything again
         if (driveActive) { carPost({ kind: 'start', title: track && track.kind === 'route' ? String(track.name || 'Route').slice(0, 80) : 'Drive' }); car.guideKey = ''; } }   // and the drive in progress (U-59)
     }
@@ -7090,17 +7107,134 @@
       toast(line); say(line, true);
       reroute(t);
     }
+    // Round 3 (the owner's drive to work, 2026-10-30: "the drive isn't in my log"; drive_keep.js): a drive is kept as it
+    // goes. Recorded frames write a checkpoint (the new rows) to IndexedDB every 15 s or 250 m, and in the app the shell
+    // journals every fix since the last one on disk (ApexKit DriveJournal: 'journal' messages, apex.backlog). The car's
+    // screen going, or a long stop with none, ends and saves the drive (EndWatch); one the page never ended is rebuilt at
+    // the next launch and saved to the Log, said so (recoverKept). A frame never measured is never made up.
+    const keep = { id: null, k: null, watch: null, seq: null, writing: Promise.resolve(), queued: false, ending: false, car: false, resume: null };
+    function journalPost(msg) {
+      const native = NATIVE_SHELL && window.webkit.messageHandlers.apex;
+      if (native) try { native.postMessage({ cmd: 'journal', ...msg }); } catch (_) {}
+    }
+    function keepStart() {
+      const r = keep.resume; keep.resume = null;
+      keep.id = r ? r.id : `drive_${Date.now().toString(36)}`; keep.seq = r ? r.seq : null; keep.ending = false; keep.queued = false;
+      keep.k = r ? r.k : ApexDriveKeep.fresh(Date.now());
+      if (r) drive.rec = r.rec;                                        // a page reloaded mid-drive carries on with its own recording
+      keep.watch = r && r.watch ? r.watch : new ApexDriveKeep.EndWatch(); keep.watch.carScreen(keep.car, Date.now());
+      journalPost({ op: 'start', id: keep.id });
+    }
+    /** The drive is over: no more checkpoints. Returns its id for keepDone once it is saved (or not worth saving). */
+    function keepStop() { const id = keep.id; keep.id = null; keep.watch = null; keep.queued = false; return id; }
+    function keepDone(id) {
+      if (!id) return;
+      journalPost({ op: 'end', id });
+      keep.writing = keep.writing.then(() => ApexRecording.keepRemove(id)).catch(() => {});   // after any checkpoint still being written
+    }
+    function keepCar(on, at) { keep.car = on; if (keep.watch) keep.watch.carScreen(on, Number.isFinite(at) ? at : Date.now()); }
+    function keepMeta() {
+      const c = routingCar();
+      return { routeName: track && track.kind === 'route' && typeof track.name === 'string' ? track.name.trim() : '',
+               road: window.ApexRoadNames && drive.rec ? ApexRoadNames.mainRoad(drive.roads, drive.rec.km * 1000) : null,
+               car: c ? { label: c.label, mu: Core.carGrip(c) } : null };
+    }
+    /** A checkpoint now (one at a time, in order; a second ask while one is written runs once after it). */
+    function keepSave() {
+      if (!keep.id || !drive.rec || !drive.rec.samples) return;
+      if (keep.queued) return;
+      keep.queued = true;
+      keep.writing = keep.writing.then(async () => {
+        keep.queued = false;
+        const id = keep.id, rec = drive.rec, seq = keep.seq;
+        if (!id || !rec || rec.samples <= keep.k.rows - 1) return;
+        const cp = ApexDriveKeep.checkpoint(id, rec, keep.k, { ...keepMeta(), watch: keep.watch ? keep.watch.state() : null }, seq, Date.now());
+        await ApexRecording.keepPut(cp.head, cp.chunk);
+        if (keep.id !== id) return;
+        keep.k = cp.next;
+        if (seq != null) journalPost({ op: 'durable', id, seq });     // the shell's journal lets go of what is kept
+      }).catch((e) => console.error('keep drive', e));
+    }
+    /** Each frame of the drive (recorded or in a privacy zone, where only its time and speed count): checkpoint, or end. */
+    function keepFrame(fr) {
+      if (!keep.id || !drive.rec || keep.ending) return;
+      if (Number.isFinite(fr.seq)) keep.seq = fr.seq;
+      const at = Number.isFinite(fr.at) ? fr.at : Number.isFinite(fr.t) ? fr.t : Date.now();
+      const end = keep.watch.feed(fr.has_fix ? fr : { speed_mps: null }, drive.rec.samples, at);
+      if (end) {
+        keep.ending = true;
+        Promise.resolve().then(() => {                                 // after this frame's own work
+          if (!driveActive || !drive.rec) return;
+          drive.rec.truncate(end.rows);                                // the drive as it stood when the car last drove
+          leaveDrive(true, end.why);
+        });
+        return;
+      }
+      if (ApexDriveKeep.due(keep.k, drive.rec, Date.now())) keepSave();
+    }
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') keepSave(); });
+    window.addEventListener('pagehide', () => keepSave());
+    // What the shell journaled (null on the web, or a shell that never answers)
+    let journalsWaiter = null;
+    function nativeJournals() {
+      if (!NATIVE_SHELL) return Promise.resolve(null);
+      return new Promise((resolve) => {
+        const timer = setTimeout(() => { journalsWaiter = null; resolve(null); }, 3000);
+        journalsWaiter = (msg) => { clearTimeout(timer); journalsWaiter = null; resolve(msg); };
+        journalPost({ op: 'list' });
+      });
+    }
+    async function recoverKept() {
+      const [kept, native] = await Promise.all([ApexRecording.keepAll(), nativeJournals()]);
+      const journals = native && Array.isArray(native.list) ? native.list : [];
+      if (native && typeof native.car === 'boolean') keepCar(native.car);
+      const ids = new Set([...kept.map((k) => k.id), ...journals.map((j) => j && j.id).filter((id) => typeof id === 'string')]);
+      let saved = 0, lastName = null;
+      for (const id of ids) {
+        const k = kept.find((x) => x.id === id) || { head: null, chunks: [] }, j = journals.find((x) => x && x.id === id);
+        const { rec, watch, end } = ApexDriveKeep.rebuild(k.head, k.chunks, j && Array.isArray(j.frames) ? j.frames : []);
+        if (j && j.active && !end) {
+          // the page was reloaded (the phone ended it in the background) in the middle of a drive the shell is still on
+          if (driveActive) continue;
+          const n = k.head ? k.head.chunks : 0, fs = Array.isArray(j.frames) ? j.frames : [];
+          keep.resume = { id, rec, watch, seq: fs.length ? fs[fs.length - 1].seq : (k.head ? k.head.seq : null),
+                          k: { at: Date.now(), rows: k.head ? Math.min(k.head.state.n, rec.samples) : 0, dist: k.head ? k.head.state.dist : 0, n } };
+          enterDrive();
+          keep.resume = null;                                          // taken by keepStart (or a drive was already starting)
+          toast('Still recording the drive you were on.');
+          continue;
+        }
+        if (ApexDriveKeep.keepable(rec)) {
+          try {
+            const meta = (k.head && k.head.meta) || {};
+            const d = driveRecord(rec, (when) => meta.routeName || meta.road || `Drive ${when.toLocaleDateString()} ${ApexFormat.clock12(when.getHours(), when.getMinutes())}`);
+            d.ended = j && j.active ? end.why : 'recovered';           // (one the shell is still on was over while the page slept)
+            if (meta.car && Number.isFinite(meta.car.mu)) d.car = meta.car;
+            await ApexRecording.store(d);
+            saved++; lastName = d.name;
+          } catch (e) { console.error('recover drive', e); continue; }   // kept for the next launch
+        }
+        journalPost({ op: 'end', id });
+        await ApexRecording.keepRemove(id).catch(() => {});
+      }
+      if (saved) {
+        await refreshSavedDrives();
+        toast(saved === 1 ? `${lastName || 'Your last drive'} was saved to the Log. The app closed before it was ended.` : `${saved} drives were saved to the Log. The app closed before they were ended.`, { ms: 8000 });
+      }
+    }
     // Privacy zones (privacy_zones.js, IDEAS Z-02): inside one the drive keeps no samples, road data stops, convoys get no
     // position. A drive that enters one stops sharing road data for the rest of that drive (the stretch before stays private too).
     function recordFrame(fr) {
-      if (!inPrivacyZone(fr.lat, fr.lon)) { drive.rec.add(fr); return true; }
+      if (!inPrivacyZone(fr.lat, fr.lon)) { drive.rec.add(fr); keepFrame(fr); return true; }
       drive.rec.pause();
+      keepFrame(fr);
       if (drive.live) { drive.live.finish().catch(() => {}); drive.live = null; drive.share = 'zone'; }
       return false;
     }
     window.apex = {
       live(frame) {
         if (frame) feedPower({ thermal: frame.thermal, lowPowerMode: frame.low_power_mode });
+        if (frame && !frame.has_fix && drive.native && drive.rec) keepFrame(frame);   // Round 3: a stop with no sky (a garage) still ends it
         if (!frame || !frame.has_fix || !Number.isFinite(frame.lat) || !Number.isFinite(frame.lon)) return;
         feedMotion(frame.speed_mps);
         state.lastPosition = { lat: frame.lat, lon: frame.lon }; state.lastPositionAt = performance.now();
@@ -7109,7 +7243,7 @@
         if (NATIVE_SHELL && !driveActive) { showIdleFix(frame); return; }
         feedReported(frame); feedReaction(frame); feedCrash(frame);
         state.live = frame; state.liveAt = performance.now();
-        if (drive.native && drive.rec) {
+        if (drive.native && drive.rec && !(Number.isFinite(frame.seq) && keep.seq != null && frame.seq <= keep.seq)) {   // (taken in a backlog)
           drive.frames++; recordFrame(frame); feedLive(); noteRoads(); noteRest(frame); feedStage(); feedTrack(frame);
           if (window.ApexBattery) drive.battery = ApexBattery.feed(drive.battery, frame.battery, frame.charging === true, Date.now());
           const gps = Number.isFinite(frame.accuracy_m) && frame.accuracy_m > ApexSensors.MAX_ACCURACY_M ? 'weak' : 'on';
@@ -7128,7 +7262,22 @@
         refreshAutoNight();
         render(entering);
       },
+      // Round 3: the fixes the shell journaled while this page was suspended (the phone locked, the app in the background),
+      // oldest first. Recorded only: the moment for their notes and the map has passed. True once taken.
+      backlog(frames) {
+        if (!Array.isArray(frames)) return false;
+        for (const f of frames) {
+          if (!drive.native || !drive.rec || keep.ending) break;
+          if (!f || !f.has_fix || !Number.isFinite(f.lat) || !Number.isFinite(f.lon)) continue;
+          if (Number.isFinite(f.seq) && keep.seq != null && f.seq <= keep.seq) continue;
+          drive.frames++; recordFrame(f);
+        }
+        if (drive.rec && !keep.ending) { noteRoads(); keepSave(); }
+        return true;
+      },
       onNative(msg) {
+        if (msg && msg.type === 'journals') { if (journalsWaiter) journalsWaiter(msg); return; }
+        if (msg && msg.type === 'lifecycle') { if (driveActive) keepSave(); return; }   // going to the background: kept now
         if (msg && (msg.type === 'placeSuggestions' || msg.type === 'placeResolved' || msg.type === 'trafficProbe')) { nativePlaceReply(msg); return; }
         if (msg && msg.type === 'recordingSaved') toast(`Saved ${msg.segments} road segments to ${msg.file}`);
         // App sign-in finished in the native shell: keep the session token and redraw whatever shows account state.
@@ -7192,6 +7341,7 @@
       if (params.get('book') === '1' || params.get('view') === 'route' || params.get('view') === 'drives') openPlan(true);
       if (VIEW_TITLES[params.get('view')] || params.get('view') === 'setup') openSheet(params.get('view'));
       if (params.get('go') === 'drive') driveFromLink();   // the app opened from apexnav://open?go=drive (IDEAS C-05)
+      recoverKept().catch((e) => console.error('recover drives', e));   // Round 3: a drive never ended goes to the Log
     }
     bootDrives();
     if (document.fonts) document.fonts.ready.then(() => render(true));

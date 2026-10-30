@@ -1170,6 +1170,72 @@ flow('drive ended: the map behind the card is the whole drive, fitted flat above
   check(after.follow && after.shown === 'none', 'Done: the trail goes and the map follows again: ' + JSON.stringify(after));
 });
 
+// Round 3 (the owner, 2026-10-30: "I drove to work today with the map running started on carplay and the drive isn't in my
+// log"): a drive started on the car and never ended with End. The car switching off saves it; a page that was closed in
+// the middle of one is rebuilt at the next launch from its checkpoint and the shell's journal (drive_keep.js).
+flow('a drive started on the car and never ended is in the Log: the car switching off saves it; a page closed mid-drive is recovered (Round 3)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
+    // the shell: what the page posts, and the journal it would keep on disk (sessionStorage here, which outlives the reload)
+    window.__native = [];
+    window.webkit = { messageHandlers: { apex: { postMessage: (m) => { window.__native.push(m);
+      if (m && m.cmd === 'journal' && m.op === 'list') setTimeout(() => window.apex.onNative({ type: 'journals', car: false, list: JSON.parse(sessionStorage.getItem('fakeJournal') || '[]') }), 50); } } } }; });
+  await page.route('**/api/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apex && window.ApexDriveKeep && window.ApexRecording);
+  const T0 = Date.now() - 3600e3;
+  // the app's frames as pushLiveFrame sends them: numbered, timed, north at 15 m/s (11 m a frame), or stopped where `from` is
+  const feed = (from, to, v, at0) => page.evaluate(([from, to, v, T0, at0]) => { for (let i = from; i < to; i++) window.apex.live({ lat: 35.5 + (v ? i : from) * 1e-4, lon: -83.9,
+    accuracy_m: 4, speed_mps: v, course_deg: 0, lat_g: 0, lon_g: 0, has_fix: true, calibration: 'locked', seq: i + 1, at: (at0 ?? T0) + i * 1000 }); }, [from, to, v, T0, at0]);
+  const until = async (fn, arg, msg, ms = 8000) => { const t = Date.now(); for (;;) { const v = await page.evaluate(fn, arg); if (v) return v; if (Date.now() - t > ms) throw new Error(msg); await page.waitForTimeout(100); } };
+
+  // 1. started on the car's screen, driven 3.5 km, the car switched off in the car park: no End
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start', free: true }));
+  await page.waitForFunction(() => window.apexDebug.driveActive);
+  for (let b = 0; b < 4; b++) { await feed(b * 80, (b + 1) * 80, 15); await page.waitForTimeout(150); }
+  await until(async () => (await ApexRecording.keepAll()).length === 1, null, 'the drive is checkpointed as it goes');
+  const posted = await page.evaluate(() => window.__native.filter((m) => m.cmd === 'journal').map((m) => m.op));
+  check(posted.indexOf('start') >= 0 && posted.indexOf('durable') > posted.indexOf('start'), 'the shell is told the drive began and what is kept: ' + posted);
+  await page.evaluate((t) => window.apex.onNative({ type: 'carplay', action: 'disconnect', t }), T0 + 320e3);
+  await feed(319, 330, 0);                                              // parked: stopped, 10 s after the car went: still on
+  check(await page.evaluate(() => window.apexDebug.driveActive), 'not ended while the car might come back');
+  await feed(330, 345, 0);
+  await until(() => !window.apexDebug.driveActive && document.getElementById('endCard').classList.contains('show'), null, 'ended itself 20 s after the car went');
+  const one = await until(async () => { const all = await ApexRecording.all(); return all.length === 1 && !(await ApexRecording.keepAll()).length ? all[0] : null; }, null, 'saved, and nothing left in progress');
+  check(one.ended === 'car' && one.dist[one.dist.length - 1] > 3400, 'the whole drive saved, said how it ended: ' + JSON.stringify({ ended: one.ended, m: one.dist[one.dist.length - 1] }));
+  check(/Ended when the car disconnected/.test(await page.textContent('#endLine')), 'the card says so');
+  check(await page.evaluate(() => window.__native.some((m) => m.cmd === 'journal' && m.op === 'end')), 'the shell drops its journal once saved');
+
+  // 2. another drive from the car; the phone closes the page in the background (it writes nothing more) after the last
+  // checkpoint and 10 more fixes, which only the shell's journal has. The next launch puts the whole drive in the Log.
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apex && window.ApexDriveKeep);
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start', free: true }));
+  await page.waitForFunction(() => window.apexDebug.driveActive);
+  for (let b = 0; b < 3; b++) { await feed(1000 + b * 70, 1000 + (b + 1) * 70, 15, T0 + 1e6); await page.waitForTimeout(150); }
+  await until(async () => { const k = await ApexRecording.keepAll(); return k.length === 1 && k[0].head && k[0].head.seq === 1210; }, null, 'checkpointed up to the last frame');
+  await feed(1210, 1220, 15, T0 + 1e6);
+  const id = await page.evaluate(() => { const start = window.__native.find((m) => m.cmd === 'journal' && m.op === 'start'), durable = window.__native.filter((m) => m.cmd === 'journal' && m.op === 'durable').pop();
+    // the shell's journal, as an app relaunch reads it back: every fix after the last durable one
+    const frames = []; for (let i = 1000; i < 1220; i++) if (i + 1 > durable.seq) frames.push({ lat: 35.5 + i * 1e-4, lon: -83.9, accuracy_m: 4, speed_mps: 15, course_deg: 0, has_fix: true, calibration: 'locked', seq: i + 1, at: 0 });
+    sessionStorage.setItem('fakeJournal', JSON.stringify([{ id: start.id, active: false, frames }]));
+    ApexRecording.keepPut = async () => {};                               // the page is gone: nothing more is written
+    return start.id; });
+  await page.reload();
+  await page.waitForFunction(() => window.apexDebug && window.ApexRecording);
+  const back = await until(async () => { const all = await ApexRecording.all(); return all.length === 2 && !(await ApexRecording.keepAll()).length ? all.find((d) => d.ended === 'recovered') : null; }, null, 'recovered into the Log at the next launch');
+  const m = back.dist[back.dist.length - 1];
+  check(m > 219 * 11.05 - 6 && m < 219 * 11.05 + 1, 'every fix, the ones only the journal had too: ' + m);
+  check(!(await page.evaluate(() => window.apexDebug.driveActive)), 'a recovered drive is saved, not carried on');
+  await saidOn(page, /saved to the Log\. The app closed before it was ended/);
+  check(await page.evaluate((id) => window.__native.some((m) => m.cmd === 'journal' && m.op === 'end' && m.id === id), id), 'the shell drops the recovered journal');
+  await page.evaluate(() => sessionStorage.removeItem('fakeJournal'));
+  // the Log: both drives, each saying how it ended
+  for (const [d, note] of [[one, 'Ended when the car disconnected'], [back, 'Recovered: the app closed before the drive was ended']]) {
+    await page.goto(`${base}/analysis.html?tab=drive&drive=${encodeURIComponent(d.id)}`);
+    await page.waitForFunction((n) => { const e = document.getElementById('dvNote'); return !!e && e.textContent.includes(n); }, note, { timeout: 15000 });
+  }
+});
+
 flow('surfaces: Home by is the app\'s stepper, the replay has a Done key, the first paint is the launch screen (REVIEW4 U-98, U-104, U-80)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.goto(base + '/index.html');
