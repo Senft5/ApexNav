@@ -1579,7 +1579,8 @@ flow('garage: a VIN fills the car in, the owner keeps the colour (NHTSA stubbed,
     window.__garage = { calls: [], cars: null };
     const g = ApexGarageUI.mount({ el, btn, toast: () => {}, apiCall: async (m, p, b) => { window.__garage.calls.push({ m, p, b }); return ok(m === 'POST' ? { id: 'c1' } : []); },
       jsonOf: (r) => r.json(), onCars: (list) => { window.__garage.cars = list; } });
-    const host = el('div', { id: 'e2eGarage' }); document.body.prepend(host); host.append(g.section());
+    const host = el('div', { id: 'e2eGarage' }); host.style.cssText = 'position:relative;z-index:50';   // over the map's fixed stage (F-02)
+    document.body.prepend(host); host.append(g.section());
   });
   await page.click('#e2eGarage button:has-text("Add a car")');
   await page.fill('#e2eGarage input[name="color"]', 'Soul Red');
