@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-K6NkroD5Pxz1A+qKL+pGi656/cu0uW7P4DHPsJLcXTo=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-DihwibnV4QxS7M3SOuKQk8xEY07EUouIGcRyMmztzcM=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -1540,7 +1540,7 @@
     let cluster = Inst.mountCluster($('cluster'), look.theme);
     // App health counts (IDEAS Y-03; web/health.js): yesterday's totals, anonymous, once a day; Settings → Your data switches it off.
     const health = window.ApexHealth ? ApexHealth.createHealth(localStorage,
-      async (b) => (await fetch(`${window.ApexSync ? ApexSync.apiBase : ''}/api/app-health`, { method: 'POST', credentials: 'omit', headers: { 'content-type': 'application/json', 'x-apexnav': '1' }, body: JSON.stringify(b) })).status,
+      async (b) => window.APEX_REVIEW ? 204 : (await fetch(`${window.ApexSync ? ApexSync.apiBase : ''}/api/app-health`, { method: 'POST', credentials: 'omit', headers: { 'content-type': 'application/json', 'x-apexnav': '1' }, body: JSON.stringify(b) })).status,
       () => !!state.toggles.health) : { bump() {}, flush: async () => 0 };
     function savePrefs() { try { localStorage.setItem('apex.prefs', JSON.stringify({ theme: state.theme, themeV: 2, camFeel: state.camFeel, voiceId: state.voiceId, liveVoice: state.liveVoice, liveVoiceV: 2, voiceName: state.voiceName, hlOn: state.hlOn, hlStrength: state.hlStrength, notesMode: state.notesMode, noteWords: state.noteWords, nightMode: state.nightMode, toggles: state.toggles })); } catch (_) {} }
     function paintSwitches() {
@@ -5933,14 +5933,15 @@
       if (ambient.allowed === false && ambient.sharer) ambient.sharer.stop();
     }
     // ---- hazards people reported (hazard_reports.js; backend/src/hazards.ts) -----------------------------------------
-    const reported = { list: [], at: -Infinity, busy: false, said: new Set(), mine: new Set(), pins: new Map(), watch: ApexHazardReports.createPassWatch(), asking: null };
+    // `local`: U-94, what the review recording reported, kept on this phone (reviewHazard); the server never hears of it.
+    const reported = { list: [], at: -Infinity, busy: false, said: new Set(), mine: new Set(), pins: new Map(), watch: ApexHazardReports.createPassWatch(), asking: null, local: [] };
     async function loadReported(force = false) {
       const p = state.lastPosition;
       if (!p || reported.busy || (!force && performance.now() - reported.at < 120e3) || !window.ApexSync) return;
       reported.busy = true;
       try {
         const r = await ApexSync.apiFetch(`/api/hazards?lat=${p.lat.toFixed(5)}&lon=${p.lon.toFixed(5)}&km=20`, { method: 'GET' });
-        if (r.ok) { reported.list = await r.json(); paintReported(); carHazards(); }
+        if (r.ok) { reported.list = (await r.json()).concat(reported.local); paintReported(); carHazards(); }
       } catch (_) { /* offline or signed out: keep what we had */ }
       finally { reported.at = performance.now(); reported.busy = false; }
     }
@@ -6160,7 +6161,7 @@
       return r.status;
     });
     let outboxAt = 0;
-    const flushOutbox = () => { outboxAt = performance.now(); if (navigator.onLine === false) return; outbox.flush().then((n) => { if (!n) return; health.bump('hazard_sent_late', n); toast(n === 1 ? 'Sent what you reported with no signal.' : `Sent ${n} things you reported with no signal.`); loadReported(true); }).catch(() => {}); };
+    const flushOutbox = () => { outboxAt = performance.now(); if (navigator.onLine === false || window.APEX_REVIEW) return; outbox.flush().then((n) => { if (!n) return; health.bump('hazard_sent_late', n); toast(n === 1 ? 'Sent what you reported with no signal.' : `Sent ${n} things you reported with no signal.`); loadReported(true); }).catch(() => {}); };
     window.addEventListener('online', flushOutbox);
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') flushOutbox(); });
     if (outbox.size()) setTimeout(flushOutbox, 3000);
@@ -6201,7 +6202,8 @@
       if (!h) return;
       const path = `/api/hazards/${encodeURIComponent(h.id)}/vote`;
       let r = null;
-      try { r = await ApexSync.apiFetch(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ still }) }); } catch (_) {}
+      if (window.APEX_REVIEW) r = new Response(null, { status: 204 });   // U-94: the review recording's answer stays here
+      else try { r = await ApexSync.apiFetch(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ still }) }); } catch (_) {}
       if (!r || r.status >= 500) { outbox.add(path, { still }); toast('No signal. Your answer goes when you have one.'); return; }
       toast(still ? 'Thanks. Others will hear about it.' : 'Thanks. It goes once others agree.');
     }
@@ -6244,10 +6246,19 @@
       pendingHz = { body, timer: setTimeout(() => { const b = pendingHz && pendingHz.body; pendingHz = null; paintHzUndo(); if (b) sendHazard(b); }, 3000) };
       paintHzUndo();
     }
+    // U-94: in the review recording (window.APEX_REVIEW) a report is the member's sheet, Undo and pin, answered here as the
+    // Worker would answer it; it never reaches the server or the outbox, so no real driver hears of a replayed drive's gravel.
+    function reviewHazard(body) {
+      const h = { id: `review_${Date.now()}`, kind: body.kind, label: body.label || null, lat: body.lat, lon: body.lon, heading: body.heading,
+                  confirms: 1, clears: 0, created_at: new Date().toISOString() };
+      reported.local.push(h); reported.list = reported.list.concat(h); paintReported(); carHazards();
+      return new Response(JSON.stringify({ id: h.id, confirmed: false }), { status: 201, headers: { 'content-type': 'application/json' } });
+    }
     async function sendHazard(body) {
       const kind = body.kind, word = body.label || ApexHazardReports.LABEL[kind];
       let r = null;
-      try { r = await ApexSync.apiFetch('/api/hazards', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }); } catch (_) {}
+      if (window.APEX_REVIEW) r = reviewHazard(body);
+      else try { r = await ApexSync.apiFetch('/api/hazards', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }); } catch (_) {}
       if (!r || r.status >= 500) { outbox.add('/api/hazards', body, true); health.bump('hazard_queued'); toast(`No signal. ${word} saved; it's sent when you have one.`); return; }
       if (r.status === 401 || r.status === 403) { toast('Sign in (Crew) to report hazards for others.'); return; }
       if (!r.ok) { toast(r.status === 429 ? 'That\'s a lot of reports today.' : 'Couldn\'t send that. Try again.'); return; }
