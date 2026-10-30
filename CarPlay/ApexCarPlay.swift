@@ -176,9 +176,14 @@ final class ApexCar {
         }
     }
 
-    /// The car's position from the shell's GPS (ApexNavApp.swift, every live frame), a few times a second to the car maps.
+    /// The car's position from the shell's GPS (ApexNavApp.swift, every live frame), to the car maps when it is a new fix.
+    /// The live frame comes ten times a second and the fix once: the maps used to get the same fix three times over, each
+    /// one a script call and a camera move, and a new fix up to 0.4 s late. Now each fix goes once, on the next live frame,
+    /// so it reaches the maps a steady second apart and they glide between them (web/carmap.js; the owner's first CarPlay
+    /// drive, 2026-10-30: "incredibly stuttery").
     func position(lat: Double, lon: Double, course: Double) {
-        guard abs(lat) <= 90, abs(lon) <= 180, Date().timeIntervalSince(positionSentAt) > 0.3 else { return }
+        guard abs(lat) <= 90, abs(lon) <= 180, Date().timeIntervalSince(positionSentAt) > 0.2 else { return }
+        if let p = position, p.lat == lat, p.lon == lon, p.course == course { return }
         positionSentAt = Date()
         position = (lat, lon, course)
         eachMap { $0.showPosition() }
@@ -651,6 +656,9 @@ final class ApexCarMapViewController: UIViewController, WKNavigationDelegate {
         guard let index = ApexWebBundle.indexURL else { return }
         let config = WKWebViewConfiguration()
         config.setURLSchemeHandler(ApexBundleSchemeHandler(root: index.deletingLastPathComponent()), forURLScheme: ApexWebBundle.scheme)
+        // The car's screen is on while the phone is locked in a pocket: WebKit must not slow this page's frames and timers
+        // down as it does a web view of an app the phone has put in the background (the owner's drive, 2026-10-30).
+        config.preferences.inactiveSchedulingPolicy = .none
         let w = WKWebView(frame: view.bounds, configuration: config)
         w.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         w.isOpaque = false
@@ -669,6 +677,7 @@ final class ApexCarMapViewController: UIViewController, WKNavigationDelegate {
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         loaded = true
+        sentMode = ""
         MainActor.assumeIsolated {
             fitViewport(); showLook(); showRoute(); showCorners(); showHazards(); setMode(); showPosition(); showSight()
         }
@@ -712,12 +721,17 @@ final class ApexCarMapViewController: UIViewController, WKNavigationDelegate {
         guard let p = ApexCar.shared.position else { return }
         js("car.position(\(p.lat), \(p.lon), \(p.course))")
     }
-    /// Following the car while driving, the whole route in a trip preview (main screen only), the car otherwise.
+    /// Following the car while driving, the whole route in a trip preview (main screen only), the car otherwise. Every
+    /// layout pass asks; only a change is sent (the page ignores a repeat too, web/carmap.js `mode`).
+    private var sentMode = ""
     @MainActor func setMode() {
         let car = ApexCar.shared
         let mode = car.driving ? "guide" : (role == .main && car.route != nil ? "preview" : "idle")
         let inset = role == .main && (car.driving || car.route != nil) ? Int(view.bounds.width * 0.36) : 0
-        js("car.inset(\(inset)), car.mode('\(mode)')")
+        let code = "car.inset(\(inset)), car.mode('\(mode)')"
+        guard loaded, code != sentMode else { return }
+        sentMode = code
+        js(code)
     }
     @MainActor func zoom(_ dir: Int) { js("car.zoom(\(dir))") }
     @MainActor func recentre() { js("car.recentre()") }
