@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-p970ifmKfHD20EiKAUGI7oNOc2tgYdhlgvqkfSJZAuM=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-JyXAaXXF5QZhL83/7IInZgXwQ2+IBurorKw9gO2CQVE=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -1461,7 +1461,7 @@
     const routeWatch = { note: null, frame: null, bestM: 0 };
     const etaPace = ApexEta.createPace();   // live ETA pace on the current route (paintEta)
     let etaText = '', etaLeftS = null;
-    const car = { route: '', guideAt: 0, guideKey: '', sightKey: '', look: '', hazards: '', symbols: new Map() };   // what the car's screen was last sent (carRoute, carGuide below)   // strip text while off route; last frame fed; furthest progress
+    const car = { route: '', guideAt: 0, guideKey: '', sightKey: '', look: '', hazards: '', symbols: new Map(), ended: null, road: '', roadAt: -1e9 };   // what the car's screen was last sent (carRoute, carGuide below)   // strip text while off route; last frame fed; furthest progress
     try {
       const saved = JSON.parse(localStorage.getItem('apex.prefs') || 'null');
       if (saved) {
@@ -6200,6 +6200,7 @@
       if (native && msg) try { native.postMessage({ cmd: 'car', ...msg }); } catch (_) {}
     }
     function carRoute(t) {
+      if (t && t === car.ended) t = null;                                 // U-62: a route just driven is not offered to the car again
       const o = routeOptions && t && routeOptions.current === t ? routeOptions : null;
       const key = t ? `${t.id}|${t.lat.length}|${o ? o.picked : -1}` : '';
       if (key === car.route) return;
@@ -6235,7 +6236,7 @@
       const cv = document.createElement('canvas'); cv.width = cv.height = 120;
       const x = cv.getContext('2d'); x.scale(1.2, 1.2);                   // the SVG's 100-unit viewBox at 120 px
       x.strokeStyle = (svg.match(/stroke="([^"]+)"/) || [])[1] || '#EDE4D3';
-      x.lineWidth = 9; x.lineCap = 'round'; x.lineJoin = 'round';
+      x.lineWidth = +(svg.match(/stroke-width="([\d.]+)"/) || [])[1] || 9; x.lineCap = 'round'; x.lineJoin = 'round';   // the hairpin's is thinner (U-78)
       for (const m of svg.matchAll(/<path d="([^"]+)"(?: fill="([^"]+)")?\/>/g)) {
         const path = new Path2D(m[1]);
         if (m[2]) { x.fillStyle = m[2]; x.fill(path); }
@@ -6247,23 +6248,36 @@
       }
       return cv.toDataURL('image/png').split(',')[1];
     }
-    function carSymbol(type, corner) {
-      const ink = (look && look.theme && look.theme.night && look.theme.night.panelInk) || '#EDE4D3';
-      const key = corner ? `c${corner.dir}${corner.sev}|${ink}` : `${type}|${ink}`;
+    function carSymbol(type, corner, recording) {
+      const night = (look && look.theme && look.theme.night) || {}, ink = night.panelInk || '#EDE4D3', accent = night.accent || '#E65252';
+      const key = recording ? `rec|${ink}|${accent}` : corner ? `c${corner.dir}${corner.sev}|${ink}` : `${type}|${ink}`;
       if (!car.symbols.has(key)) {
         let png = null;
-        try { png = tulipPNG(corner ? ApexCarPlay.cornerTulipSVG(corner.dir, corner.sev, ink) : ApexCarPlay.tulipSVG(type, ink)); } catch (_) {}
+        try { png = tulipPNG(recording ? ApexCarPlay.recordSVG(ink, accent) : corner ? ApexCarPlay.cornerTulipSVG(corner.dir, corner.sev, ink) : ApexCarPlay.tulipSVG(type, ink)); } catch (_) {}
         car.symbols.set(key, png);
       }
       return car.symbols.get(key);
     }
+    // U-63: the road under the car for the continue step on a route with no named steps (a GPX track, a loop), read from the
+    // map's own tiles (ApexRoadNames, as the saved drive's name is) at most every 5 s and only when a continue step asks.
+    function carRoad() {
+      const now = performance.now(), L = state.live;
+      if (now - car.roadAt < 5000 || !L || !window.ApexRoadNames) return car.road;
+      car.roadAt = now;
+      try { car.road = ApexRoadNames.nearestRoadName(map.querySourceFeatures('openmaptiles', { sourceLayer: 'transportation_name' }), L.lat, L.lon) || ''; } catch (_) { /* style not loaded */ }
+      return car.road;
+    }
     function carGuide() {
-      if (!driveActive || !track || track.kind !== 'route') return;
-      const now = performance.now(), g = ApexCarPlay.guideMessage(track, state.cursorM, etaLeftS, ApexDirections.phrase,
-        { corners: CAR_CORNERS, call: (e) => (state.noteWords === 'plain' && !e.recce && window.ApexPlainNotes ? ApexPlainNotes.plainCall(e) : e.call) });
+      if (!driveActive) return;
+      // U-59: a drive with no route (or on the road ahead) is still a drive on the car: the record card and the distance driven
+      const now = performance.now(), g = !track || track.kind !== 'route'
+        ? ApexCarPlay.recordingMessage(drive.rec ? drive.rec.km * 1000 : null, (m) => ApexUnits.long(m, 1))
+        : ApexCarPlay.guideMessage(track, state.cursorM, etaLeftS, ApexDirections.phrase,
+          { corners: CAR_CORNERS, call: (e) => (state.noteWords === 'plain' && !e.recce && window.ApexPlainNotes ? ApexPlainNotes.plainCall(e) : e.call),
+            speedMps: state.live ? state.live.speed_mps : null, road: carRoad });
       if (!g || (g.key === car.guideKey && now - car.guideAt < 1000)) return;
       car.guideKey = g.key; car.guideAt = now;
-      const sym = carSymbol(g.type, g.corner);
+      const sym = carSymbol(g.type, g.corner, g.recording);
       carPost(sym ? { ...g, symbol: sym } : g);
     }
     function activity(action, fields = {}) {
@@ -6381,6 +6395,11 @@
       openPlan(false);                                                 // the plan sheet too, and the keyboard with it
       if (track && track.kind === 'route') persistActive(track);       // kept if the app is closed mid-drive
       clearCarOffer();
+      // U-59: the car enters every drive, a route or none (it went into a drive only on a guide message, so a free drive never
+      // reached it: no End, no card). A route driven again goes back on the car's map first.
+      car.ended = null; car.guideKey = '';
+      if (track && track.kind === 'route') carRoute(track);
+      carPost({ kind: 'start', title: track && track.kind === 'route' ? String(track.name || 'Route').slice(0, 80) : 'Drive' });
       setPlaying(false);
       drive.rec = new ApexSensors.Recorder(); drive.status = { gps: 'waiting', motion: 'off', wake: 'off', message: '' }; drive.frames = 0; drive.battery = null;
       startStageWatch();
@@ -6489,6 +6508,8 @@
       activity('end');
       forgetActive();                                                  // the drive is over: a relaunch starts with no route
       carPost({ kind: 'end' }); car.guideKey = ''; car.sightKey = '';
+      // U-62: after End the car goes idle; the finished route was offered again as a trip preview ("Dry Ridge Rd · Drive")
+      if (track && track.kind === 'route') { car.ended = track; carRoute(null); }
       const rec = drive.rec, sensors = drive.sensors, live = drive.live, road = rec && window.ApexRoadNames ? ApexRoadNames.mainRoad(drive.roads, rec.km * 1000) : null;
       drive.sensors = null; drive.rec = null; drive.live = null; drive.share = 'off'; drive.native = false;
       if (sensors) sensors.stop();
@@ -6570,7 +6591,12 @@
     function carAction(m) {
       if (m.action === 'go' && Number.isFinite(m.lat) && Number.isFinite(m.lon) && !driveActive) routeToPlace({ label: String(m.name || 'Destination').slice(0, 80), lat: m.lat, lon: m.lon });
       else if (m.action === 'pick' && Number.isInteger(m.i)) pickOption(m.i);
-      else if (m.action === 'start' && state.mode !== 'live' && !locDenied) enterDrive();
+      else if (m.action === 'start' && state.mode !== 'live' && !locDenied) {
+        // U-79: the idle map's Drive is a free drive. The car shows no route then, so one the phone still holds (the route just
+        // driven, U-62) is put away rather than guided along unseen; the preview's own Drive (no `free`) drives the route.
+        if (m.free === true && car.route === '' && track && track.kind === 'route') clearPlanned();
+        enterDrive();
+      }
       else if (m.action === 'end' && driveActive) leaveDrive(true);
       else if (m.action === 'places') carPost(ApexCarPlay.placesMessage(recentPlaces()));
       else if (m.action === 'loop' && [30, 60, 120].includes(m.minutes) && !driveActive) loop({ minutes: m.minutes });
@@ -6578,7 +6604,8 @@
       else if (m.action === 'still' && typeof m.still === 'boolean') answerStill(m.still);
       else if (m.action === 'voice') { state.toggles.voice = !state.toggles.voice; savePrefs(); paintSwitches(); if (!state.toggles.voice) stopSpeaking(); }
       else if (m.action === 'hello') { car.route = ''; car.look = ''; car.hazards = ''; carRoute(track && track.kind === 'route' ? track : null); carLook(); carHazards();
-        carPost(ApexCarPlay.placesMessage(recentPlaces())); }                 // a car screen that just connected gets everything again
+        carPost(ApexCarPlay.placesMessage(recentPlaces()));                   // a car screen that just connected gets everything again
+        if (driveActive) { carPost({ kind: 'start', title: track && track.kind === 'route' ? String(track.name || 'Route').slice(0, 80) : 'Drive' }); car.guideKey = ''; } }   // and the drive in progress (U-59)
     }
     carPost(ApexCarPlay.placesMessage(recentPlaces()));
     function startDrive() {
