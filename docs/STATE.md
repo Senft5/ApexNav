@@ -24,6 +24,9 @@
   width and scaled up); the app opens with no route (the planned route lasts the session only).
 - [x] The owner's account has the full crew livery (livery_grants, migration 0040, applied to both databases); only a
   route being driven survives a close (a planned one lasts the session); a drive start clears any open sheet or the Log.
+- [x] From phone photos: convoy bar one line idle, calls only in a drive (one scrolling row), `wss://` in the CSP for the
+  convoy socket (unverified on the phone: "Reconnecting…"); Tapedeck without ghost 8s, the Trip key or a lone Road row in a
+  drive; no destination pin on a loop; the plan sheet closes on drive start.
 - Answered for the owner: the UI is a WKWebView; the IMU and GPS run with the phone locked once CarPlay starts the engine,
   but location and motion permission must have been granted once on the phone.
 - Active bugs: none known. Unverified on a device: the Log frame's native calls through the map page's bridge (Save/Share, signed-in

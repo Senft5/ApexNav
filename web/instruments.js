@@ -344,7 +344,11 @@
     return (d) => {
       const v = d.speedMph != null && isFinite(d.speedMph) ? String(Math.min(999, Math.round(d.speedMph))) : '--';
       const text = v.padStart(3, ' ');
-      digits.forEach((segs, k) => { const on = DIGIT[text[k]] || ''; for (const [n, p] of Object.entries(segs)) p.classList.toggle('lit', on.includes(n)); });
+      digits.forEach((segs, k) => {
+        const on = DIGIT[text[k]] || '';
+        segs.a.parentNode.classList.toggle('blank', text[k] === ' ');   // an unused leading digit shows nothing, not a ghost 8
+        for (const [n, p] of Object.entries(segs)) p.classList.toggle('lit', on.includes(n));
+      });
       digital.textContent = v; s.setAttribute('aria-label', `${v} ${U() ? U().speedU() : 'mph'}`);
       sub.textContent = d.limitMph != null ? `LIMIT ${Math.round(d.limitMph)}` : '';
     };
@@ -485,6 +489,8 @@
       const type = d.sector && d.sector.archetype;
       // labelled (REVIEW.md 1.2, Replay): "Road: Fast & open", "Road: --" when the sector is unknown
       roadType.textContent = `Road: ${type === 'Flowing sweepers' ? 'Sweepers' : type === 'Fast open' ? 'Fast & open' : (type || '--')}`;
+      // with no route under the car there is no road type to know: the row steps aside instead of a lone "Road: --"
+      roadType.hidden = !(d.routeOnly || d.sector);
     });
     return { update: (d) => u.forEach(f => f(d)) };
   }

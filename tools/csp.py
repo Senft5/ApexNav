@@ -17,6 +17,7 @@ import sys
 WEB = pathlib.Path(__file__).resolve().parent.parent / "web"
 CONNECT = [
     "https://apexnav.senftns.workers.dev",            # the Worker, from the iOS shell (on the web it's 'self')
+    "wss://apexnav.senftns.workers.dev",              # its convoy socket: WebKit may not let https: cover wss: ("Reconnecting…" in the app)
     "https://tiles.openfreemap.org",                  # map style, tiles, glyphs, sprites
     "https://s3.amazonaws.com",                       # Terrarium DEM
     "https://valhalla1.openstreetmap.de",             # routing, matrix, map matching

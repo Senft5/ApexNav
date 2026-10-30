@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-XPGiF14Aav2rY0uuVWH9NIrRBpQ4wn2dR9KcglmgK+4=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-XMxR79uVr6MDtVDoaVmnM6MSlB/+iX96BrRP/p2blDs=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -561,6 +561,8 @@
     html[data-mode="night"] #cluster:not(.show-trip) .odo { display: none; }
     html[data-mode="night"] #cluster:not(.show-trip) .trip-peek { display: block; justify-self: center; min-height: 44px; min-width: 64px; padding: 0 12px;
       border: 0; background: none; color: var(--panel-dim); font: 600 13px var(--font-ui); letter-spacing: 0.08em; text-transform: uppercase; }
+    /* in a drive the REC line already says how far: no lone "TRIP" key in the binnacle (the owner's photos, 2026-10-30) */
+    html[data-mode="night"] #app.live #cluster .trip-peek { display: none; }
     /* the idle map (REVIEW.md 3.1, mockup 01): a place plate and one invitation on the deck */
     .place-plate { position: absolute; z-index: 4; top: calc(12px + var(--safe-top)); left: 10px; padding: 7px 12px; background: var(--panel); color: var(--panel-ink);
       border: 1.5px solid var(--panel-ink); font-size: 14px; font-weight: 600; box-shadow: 0 2px 0 var(--rule); }
@@ -609,7 +611,7 @@
     html[data-theme="tapedeck"] #driveEnd { background: transparent; color: var(--accent); border: 1.5px solid var(--accent); }
     html[data-theme="tapedeck"] .odo.boxed .dg { border-color: var(--rule); }
     html[data-theme="tapedeck"] .odo-meta, html[data-theme="tapedeck"] .dna-arch, html[data-theme="tapedeck"] .ro span { letter-spacing: 0; white-space: nowrap; }
-    .vfd-seg .seg { fill: var(--face-ink); opacity: 0.07; } .vfd-seg .seg.lit { opacity: 1; filter: drop-shadow(0 0 3px var(--face-ink)); }
+    .vfd-seg .seg { fill: var(--face-ink); opacity: 0.05; } .vfd-seg .blank .seg { opacity: 0; }   /* no ghost 8s in front of a number: "7" read as "887" */ .vfd-seg .seg.lit { opacity: 1; filter: drop-shadow(0 0 3px var(--face-ink)); }
     .vfd-seg .vfd-shadow { fill: transparent; }
     .vfd-label { fill: var(--face-dim); font-family: var(--font-ui); }
     .vfd-meters { display: grid; gap: 8px; align-content: center; height: 100%; }
@@ -3180,6 +3182,9 @@
       if (destMarker) { destMarker.remove(); destMarker = null; }
       if (!t || !Array.isArray(t.lat) || !t.lat.length) return null;
       const to = t.request && t.request.to ? t.request.to : { lat: t.lat[t.lat.length - 1], lon: t.lon[t.lon.length - 1] };
+      // a loop ends where it starts: no pin, or it sits on the car's arrow for the whole drive (the owner's photo, 2026-10-30)
+      const n = t.lat.length - 1, c = Math.cos(t.lat[0] * Math.PI / 180);
+      if (Math.hypot((t.lon[n] - t.lon[0]) * 111320 * c, (t.lat[n] - t.lat[0]) * 110540) < 300) return null;
       const el = document.createElement('div'); el.className = 'dropped-pin'; el.setAttribute('aria-label', 'Destination');
       destMarker = new maplibregl.Marker({ element: el }).setLngLat([to.lon, to.lat]).addTo(map);
       return to;
@@ -4529,6 +4534,7 @@
     let convoy = null;
     try { convoy = window.ApexConvoyUI && window.ApexConvoy ? ApexConvoyUI.mount({
       map, maplibregl, el, btn, toast, copyText, showView, apiFetch: ApexSync.apiFetch, overlayParent: $('toast').parentElement,
+      driving: () => driveActive,
       siteOrigin: () => (ApexSync.inApp ? ApexSync.apiBase : location.origin),
       wsUrl: (id) => `${ApexSync.inApp ? ApexSync.apiBase.replace(/^http/, 'ws') : location.origin.replace(/^http/, 'ws')}/api/convoy/${encodeURIComponent(id)}/connect`,
       getFix: () => {
@@ -6225,6 +6231,7 @@
       // with the Crew or Garage sheet or the Log open left that page in the middle of the drive screen (the owner, 2026-10-30).
       if (logFrame.el && !logFrame.el.hidden) { logFrame.el.hidden = true; document.documentElement.classList.remove('log-open'); }
       showView(null);
+      openPlan(false);                                                 // the plan sheet too, and the keyboard with it
       if (track && track.kind === 'route') persistActive(track);       // kept if the app is closed mid-drive
       clearCarOffer();
       setPlaying(false);

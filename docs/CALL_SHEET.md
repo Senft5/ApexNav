@@ -6,6 +6,18 @@ it says so. Things only you can do are in docs/OWNER_TODO.md.
 
 ## 2026-10-29
 
+**From the owner's phone photos: the convoy bar, Tapedeck in a drive, the plan sheet, a pin on the arrow.**
+- *Convoy bar:* one line (name and status) off the right-hand keys; the leader's calls only in a drive, in one row that
+  scrolls, instead of a two-row block over the map and the Layers key before any drive. Its socket host is now named in
+  the CSP as `wss://` too: WebKit may not let `https:` cover `wss:`, which would leave the app on "Reconnecting…" while
+  the browser tests pass. If it still reconnects on the phone after this, the next step is reading the Worker's convoy
+  logs (needs the full Cloudflare connector, docs/BACKUPS.md 6a).
+- *Tapedeck in a drive:* an unused leading digit shows nothing instead of a ghost 8 (a "7" read as "887"); the Night
+  Trip key steps aside in a drive (the REC line has the distance); "Road: --" only shows where a route or a recorded
+  drive has road types.
+- *A loop gets no destination pin:* its end is its start, so the pin sat beside the car's arrow all drive.
+- *The plan sheet closes when a drive starts*, with the keyboard.
+
 **Full crew customization for the owner's account, and only a drive in progress survives a close.**
 - *Livery grants.* The owner: "my account should have full access to crew customization". Pro comes only from
   `pro_entitlements` (nothing writes it before StoreKit), and one Pro member gives at most 3 Decals while the full livery
