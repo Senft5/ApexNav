@@ -21,7 +21,14 @@ def _check(src: str, name: str) -> None:
         assert r.returncode == 0, f"{name}: {r.stderr.splitlines()[:5]}"
 
 
-@pytest.mark.parametrize("page", ["index.html", "analysis.html"])
+def test_the_cockpit_has_no_inline_script():
+    """REVIEW_FEEL F-03: index.html's script is web/cockpit.js (checked with the other files below), so WebKit caches it."""
+    html = (WEB / "index.html").read_text()
+    assert not re.findall(r"<script(?![^>]*\bsrc=)[^>]*>", html)
+    assert re.search(r'<script src="cockpit.js"( defer)?></script>', html)
+
+
+@pytest.mark.parametrize("page", ["analysis.html"])
 def test_inline_scripts_parse(page):
     html = (WEB / page).read_text()
     scripts = re.findall(r"<script>\n(.*?)</script>", html, re.S)

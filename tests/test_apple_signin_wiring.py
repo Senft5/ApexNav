@@ -1,12 +1,13 @@
 """Sign in with Apple (IDEAS O-05, App Review 4.8): the page, the shell, the entitlement and the Worker route stay wired."""
 import os
+from tests.page_source import cockpit_source
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 read = lambda *p: open(os.path.join(ROOT, *p), encoding="utf-8").read()
 
 
 def test_wired_end_to_end():
-    html, swift, yml = read("web", "index.html"), read("ApexNavApp.swift"), read("project.yml")
+    html, swift, yml = cockpit_source(), read("ApexNavApp.swift"), read("project.yml")
     assert html.count("data-apple-signin") >= 2 and "ApexSync.signInApple()" in html          # onboarding and Account
     assert html.index("Sign in with Apple") < html.index("Sign in with Google")                 # first, as prominent as Google
     assert "cmd: 'signInApple'" in read("web", "sync.js")

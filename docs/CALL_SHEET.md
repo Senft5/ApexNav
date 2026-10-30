@@ -4,6 +4,34 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-10-30 (evening): the People review and the speed review, built (your go: open sign-up, two tabs, the speed pushback)
+
+Your calls, built: Vetta is open (anyone who signs in is a member; invite links only add a friend or join a crew); People
+is two underlined tabs; dead reckoning on the car's arrow, contours off above 8 m/s, the map at 2x pixels in a drive.
+My calls (undo in brackets):
+- A crew link friends its sender on a first join, never across a block; reports from an uninvited account count to the
+  3-report auto-hide only after a week; Who can invite: Owner voids members' links (`befriendOnLink`, `reports_sql.ts`,
+  `crewInvitesBy`). **For you:** a crew link posted publicly makes strangers the sender's friends (they then see the
+  sender on the map if the sender shares with friends); limit it to private crews if you'd rather.
+- Who came to a drive is new stored data (a handle, 7 days, in Download my data); privacy page updated (migration 0041).
+  Both migrations (0041, 0042) are applied to production and preview, additive only.
+- Invite to a drive starts a convoy (planned drives take no guests yet); "Convoy now" sits on a chevron beside Start.
+- The crew page's Invite is the one invite key; the gear keeps who can invite and Leave.
+- MapLibre Native 6.31.0 for the car's map (7.0 is two days old); the web car map is the fallback if the native style
+  fails. Its bundled components need a licence check before release (**for you**).
+- The map is a fixed stage with camera padding; contours back after 3 s stopped; minor labels hidden at speed.
+- End shows its card at once and scores in the worker ("…" while pending); the Log reads summaries (IndexedDB v3,
+  lossless upgrade); the Log frame loads at idle; Try a theme no longer starts the demo.
+- The launch loads only the cockpit; People, Garage, crews and convoy load on first use or when the map goes idle;
+  fonts are bundled (no Google request; privacy page's Google Fonts line removed, **for you to glance at**).
+
+## 2026-10-30: the CarPlay guidance card sits at the top (you saw it float mid-left)
+
+- In guidance the map's top bar (with End) now hides itself after a moment, as Apple Maps' does; the card had been
+  held below a bar that never hid. A tap on the map brings End back; the map buttons stay. Idle keeps the bar up.
+  Not checked on a car (the simulator can't show it reliably). Undo: `automaticallyHidesNavigationBar = false` in
+  `startGuidance`.
+
 ## 2026-10-30: Billet's primary keys were unreadable (REVIEW_PEOPLE.md P-01, fixed straight away)
 
 - Under Billet every solid key (Sign in with Google, Invite, Accept, Join crew, Start a convoy, Plan it, and every

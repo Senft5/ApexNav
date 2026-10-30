@@ -32,13 +32,16 @@ assert.equal(track.sectors, null);
 assert.ok(track.camberDeg.every(v => v === null));
 assert.deepEqual(track.speedMps, record.speed_mps);
 // Run the actual page renderers with a legacy record, not a copy of their logic.
-const html = fs.readFileSync('web/index.html', 'utf8');
+const html = ['index.html', 'cockpit.js', 'lazy.js'].map((f) => { try { return fs.readFileSync('web/' + f, 'utf8'); } catch (_) { return ''; } }).join('\n');
 const functionText = name => {
   const start = html.indexOf(`    function ${name}(`);
   return html.slice(start, html.indexOf('\n    }', start) + 6);
 };
 const mapReady = true, emptyFC = () => ({type:'FeatureCollection', features:[]});
 let ribbon = null, lastRibbonAt = 0, ribbonKey = null, ribbonTrack = null, scrubRect = null;   // updateRibbon's own state (it sends a changed ribbon only)
+// F-18: its reused runs (cockpit.js, beside updateRibbon)
+const RIBBON_N = 61, ribbonRuns = () => ({ s: new Int32Array(RIBBON_N), e: new Int32Array(RIBBON_N), c: new Array(RIBBON_N).fill(null), n: 0 });
+let ribbonA = ribbonRuns(), ribbonB = ribbonRuns(), ribbonFrom = -1, ribbonStop = -1;
 const map = {getSource: () => ({setData: data => {ribbon = data;}})};
 const look = {colors:{signal:'red',amber:'orange',calm:'green'}};
 const scrubCanvas = {getBoundingClientRect: () => ({width:300,height:30})};
@@ -61,6 +64,16 @@ track.envMps[0] = 20; track.envMps[1] = 20;
 track.envMps[3] = 20; track.envMps[4] = 20;
 eval(functionText('updateRibbon') + '\nupdateRibbon(15, 0, true);');
 assert.equal(ribbon.features.length, 2); // missing bin breaks the ribbon
+// F-18: a colour change overlaps its neighbours by a segment, as before; the same ribbon asked for again sends nothing
+const env0 = track.envMps;
+track.envMps = Array(100).fill(20); track.envMps[5] = 10;
+eval(functionText('updateRibbon') + '\nupdateRibbon(15, 0, true);');
+assert.deepEqual(ribbon.features.map(f => f.geometry.coordinates.length), [6, 3, Math.min(track.lat.length - 1, 60) - 5 + 1]);
+ribbon = null; lastRibbonAt = -Infinity;
+eval(functionText('updateRibbon') + '\nupdateRibbon(15, 0, false);');
+assert.equal(ribbon, null);
+track.envMps = env0;
+eval(functionText('updateRibbon') + '\nupdateRibbon(15, 0, true);');
 eval(functionText('paintScrubValue') + functionText('drawScrubber') + '\ndrawScrubber();');
 assert.deepEqual(strokes.map(s => s[0]), ['moveTo','lineTo','moveTo','lineTo']);
 })();

@@ -1,7 +1,7 @@
 // The privacy rules from docs/BACKEND.md section 11, as API tests. If one of these fails, a person can see what they should not.
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
-import { api, befriend, freshDb, makeSegment, makeUser, ok } from "./helpers";
+import { api, befriend, freshDb, makeBanned, makeSegment, makeUser, ok } from "./helpers";
 
 beforeEach(freshDb);
 
@@ -9,8 +9,8 @@ type Row = { user_id: string; driver_score: number; time_s: number | null };
 const board = async (u: Parameters<typeof api>[0], canon: string) => (await (await ok(api(u, "GET", `/api/board/${canon}`))).json()) as Row[];
 
 describe("access gates", () => {
-  it("signed-out users get 401 and non-members get 403 on every shared-data route", async () => {
-    const outsider = await makeUser("outsider", false);
+  it("signed-out users get 401 and the banned (the only non-members since Vetta opened) get 403 on every shared-data route", async () => {
+    const outsider = await makeBanned("outsider");
     for (const [m, p] of [["GET", "/api/friends"], ["GET", "/api/segments"], ["GET", "/api/crews"], ["GET", "/api/crews/x/members"], ["GET", "/api/grants"], ["GET", "/api/board/x"]] as const) {
       expect((await api(null, m, p)).status).toBe(401);
       expect((await api(outsider, m, p)).status).toBe(403);
@@ -217,13 +217,51 @@ describe("shared segments line scores up on the same stretch", () => {
 });
 
 describe("invites", () => {
-  it("an invite works once, then not again; a signed-in non-member becomes a member", async () => {
+  it("an invite works once, then not again; membership never needed one (P-02)", async () => {
     const owner = await makeUser("owner"), newbie = await makeUser("newbie", false), other = await makeUser("other", false);
     const { token } = (await (await ok(api(owner, "POST", "/api/invites"))).json()) as { token: string };
     expect((await api(newbie, "POST", "/api/invites/redeem", { token })).status).toBe(204);
     expect((await api(other, "POST", "/api/invites/redeem", { token })).status).toBe(400);
     expect((await api(newbie, "GET", "/api/friends")).status).toBe(200);
-    expect((await api(other, "GET", "/api/friends")).status).toBe(403);
+    expect((await api(other, "GET", "/api/friends")).status).toBe(200);                       // signed in is enough
+    expect(await (await ok(api(other, "GET", "/api/friends"))).json()).toEqual([]);             // but the used link made no friend
+  });
+
+  it("everyone signed in is a member: at sign-in, and on the next request for an older session; never the banned", async () => {
+    const { startSession } = await import("../src/auth");
+    const id = crypto.randomUUID();
+    await env.DB.prepare("INSERT INTO users (id, google_sub, email) VALUES (?, 'sub-fresh', 'fresh@example.test')").bind(id).run();
+    const fresh = { id, handle: "", token: await startSession(env, id) };
+    expect(await env.DB.prepare("SELECT 1 FROM members WHERE user_id = ?").bind(id).first()).toBeTruthy();
+    expect(await (await ok(api(fresh, "GET", "/api/me"))).json()).toMatchObject({ signed_in: true, member: true });
+    const old = await makeUser("old", false);                                                    // signed in while Vetta was invite-only
+    expect(await (await ok(api(old, "GET", "/api/me"))).json()).toMatchObject({ member: true });
+    expect((await api(old, "GET", "/api/crews")).status).toBe(200);
+    const banned = await makeBanned("banned");
+    expect(await (await ok(api(banned, "GET", "/api/me"))).json()).toMatchObject({ signed_in: true, member: false });
+    expect((await api(banned, "GET", "/api/crews")).status).toBe(403);
+    await startSession(env, banned.id);                                                          // signing in again doesn't lift it
+    expect(await env.DB.prepare("SELECT 1 FROM members WHERE user_id = ?").bind(banned.id).first()).toBeNull();
+  });
+
+  it("a friend link's preview names the sender and changes nothing; dead, own and blocked links all look the same", async () => {
+    const owner = await makeUser("owner"), newbie = await makeUser("newbie", false), other = await makeUser("other");
+    const { token } = (await (await ok(api(owner, "POST", "/api/invites"))).json()) as { token: string };
+    expect(await (await ok(api(newbie, "POST", "/api/invites/preview", { token }))).json()).toEqual({ from: "owner" });
+    expect(await (await ok(api(newbie, "GET", "/api/friends"))).json()).toEqual([]);              // looking is not accepting
+    expect((await api(owner, "POST", "/api/invites/preview", { token })).status).toBe(400);       // your own link
+    await ok(api(other, "POST", "/api/blocks", { user_id: owner.id }));
+    expect((await api(other, "POST", "/api/invites/preview", { token })).status).toBe(400);
+    await ok(api(newbie, "POST", "/api/invites/redeem", { token }));
+    expect((await api(newbie, "POST", "/api/invites/preview", { token })).status).toBe(400);      // used
+  });
+
+  it("a friend link never makes friends across a block", async () => {
+    const owner = await makeUser("owner"), newbie = await makeUser("newbie");
+    const { token } = (await (await ok(api(owner, "POST", "/api/invites"))).json()) as { token: string };
+    await ok(api(newbie, "POST", "/api/blocks", { user_id: owner.id }));
+    expect((await api(newbie, "POST", "/api/invites/redeem", { token })).status).toBe(204);
+    expect((await env.DB.prepare("SELECT COUNT(*) AS n FROM friendships WHERE status = 'accepted'").first<{ n: number }>())!.n).toBe(0);
   });
 
   it("redeeming an invite makes you friends with whoever invited you, with sharing still off", async () => {

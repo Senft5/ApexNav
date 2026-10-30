@@ -85,4 +85,80 @@ describe("crew invite links (IDEAS Z-15)", () => {
     await ok(api(owner, "DELETE", `/api/crews/${b}/invites`));
     await ok(invite(owner, a));
   });
+
+  it("any member can invite until the owner sets Who can invite: Owner, which voids the members' links (P-07)", async () => {
+    const owner = await makeUser("owner"), sam = await makeUser("sam"), mate = await makeUser("mate"), late = await makeUser("late"), out = await makeUser("out");
+    const id = await make(owner, { name: "Ridge Runners" });
+    const page = async (u: typeof sam) => (await (await ok(api(u, "GET", `/api/crews/${id}/page`))).json()) as { invites: string; can_invite: boolean };
+    await ok(api(sam, "POST", "/api/crews/join", { token: ((await (await ok(invite(owner, id))).json()) as { token: string }).token }));
+    expect(await page(sam)).toMatchObject({ invites: "anyone", can_invite: true });
+    const { token } = (await (await ok(invite(sam, id))).json()) as { token: string };    // a member brings a mate
+    expect(await (await ok(api(mate, "POST", "/api/crews/join", { token }))).json()).toEqual({ id, friend: "sam" });
+    expect((await invite(out, id)).status).toBe(404);                                     // not in the crew: no crew
+    expect((await api(sam, "PUT", `/api/crews/${id}/invites`, { by: "owner" })).status).toBe(404);   // only the owner decides
+    expect((await api(owner, "PUT", `/api/crews/${id}/invites`, { by: "everyone" })).status).toBe(400);
+    expect(await (await ok(api(owner, "PUT", `/api/crews/${id}/invites`, { by: "owner" }))).json()).toEqual({ by: "owner" });
+    expect(await page(sam)).toMatchObject({ invites: "owner", can_invite: false });
+    expect(await page(owner)).toMatchObject({ invites: "owner", can_invite: true });
+    const r = await invite(sam, id);
+    expect(r.status).toBe(403);
+    expect(await r.json()).toEqual({ error: "owner_invites_only" });
+    expect((await api(late, "POST", "/api/crews/join", { token })).status).toBe(400);      // sam's old link is void
+    await ok(invite(owner, id));
+    expect(((await (await ok(api(sam, "GET", "/api/crews"))).json()) as { invites: string }[])[0]).toMatchObject({ invites: "owner" });
+    const members = (await (await ok(api(owner, "GET", `/api/crews/${id}/members`))).json()) as { handle: string }[];
+    expect(members.map((m) => m.handle).sort()).toEqual(["mate", "owner", "sam"]);      // the mate sam brought stays
+  });
+
+  it("a member's link dies when they leave the crew", async () => {
+    const owner = await makeUser("owner"), sam = await makeUser("sam"), late = await makeUser("late");
+    const id = await make(owner, { name: "Ridge Runners" });
+    await ok(api(sam, "POST", "/api/crews/join", { token: ((await (await ok(invite(owner, id))).json()) as { token: string }).token }));
+    const { token } = (await (await ok(invite(sam, id))).json()) as { token: string };
+    await ok(api(sam, "DELETE", `/api/crews/${id}/membership`));
+    expect((await api(late, "POST", "/api/crews/join", { token })).status).toBe(400);
+  });
+});
+
+describe("one link in (P-02)", () => {
+  const invite = async (who: Awaited<ReturnType<typeof makeUser>>, id: string) =>
+    ((await (await ok(api(who, "POST", `/api/crews/${id}/invite`))).json()) as { token: string }).token;
+  const friends = async (u: Awaited<ReturnType<typeof makeUser>>) =>
+    ((await (await ok(api(u, "GET", "/api/friends"))).json()) as { handle: string; status: string }[]).map((f) => `${f.handle}:${f.status}`);
+
+  it("a crew link takes someone who has never been in, signed in with no invite, into the crew and friends with the sender", async () => {
+    const owner = await makeUser("owner"), newbie = await makeUser("newbie", false);
+    const id = await make(owner, { name: "Blue Ridge Breakfast Club" });
+    const token = await invite(owner, id);
+    expect(await (await ok(api(newbie, "POST", "/api/crews/invite/preview", { token }))).json())
+      .toMatchObject({ id, name: "Blue Ridge Breakfast Club", from: "owner", member: false });
+    expect(await (await ok(api(newbie, "POST", "/api/crews/join", { token }))).json()).toEqual({ id, friend: "owner" });
+    expect(await friends(newbie)).toEqual(["owner:accepted"]);
+    expect(await friends(owner)).toEqual(["newbie:accepted"]);
+    expect(await (await ok(api(newbie, "GET", "/api/grants"))).json()).toEqual([]);     // friends, with nothing shared yet
+  });
+
+  it("joining again doesn't redo an unfriending; never friends across a block; your own link friends nobody", async () => {
+    const owner = await makeUser("owner"), a = await makeUser("alice"), b = await makeUser("bob");
+    const id = await make(owner, { name: "Night Shift" });
+    const token = await invite(owner, id);
+    await ok(api(a, "POST", "/api/crews/join", { token }));
+    await ok(api(a, "DELETE", `/api/friends/${owner.id}`));
+    expect(await (await ok(api(a, "POST", "/api/crews/join", { token }))).json()).toEqual({ id, friend: null });
+    expect(await friends(a)).toEqual([]);
+    await ok(api(b, "POST", "/api/blocks", { user_id: owner.id }));
+    expect((await api(b, "POST", "/api/crews/join", { token })).status).toBe(400);           // a block with the owner hides the crew, as before
+    const own = await invite(a, id);
+    const bobsMate = await makeUser("mate");
+    await ok(api(bobsMate, "POST", "/api/blocks", { user_id: a.id }));
+    expect(await (await ok(api(bobsMate, "POST", "/api/crews/join", { token: own }))).json()).toEqual({ id, friend: null });   // in, but not friends
+    expect(await (await ok(api(a, "POST", "/api/crews/join", { token: own }))).json()).toEqual({ id, friend: null });
+  });
+
+  it("a banned account can't join on a crew link", async () => {
+    const { makeBanned } = await import("./helpers");
+    const owner = await makeUser("owner"), banned = await makeBanned("gone");
+    const id = await make(owner, { name: "Night Shift" });
+    expect((await api(banned, "POST", "/api/crews/join", { token: await invite(owner, id) })).status).toBe(403);
+  });
 });

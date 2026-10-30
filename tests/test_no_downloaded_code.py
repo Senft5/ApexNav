@@ -2,6 +2,7 @@
 one remote module (the website's live voice engine, transformers.js) is never loaded inside the iOS app."""
 import os
 import re
+from tests.page_source import cockpit_source
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WEB = os.path.join(ROOT, "web")
@@ -28,14 +29,14 @@ def test_remote_imports_only_the_guarded_voice_engine():
 
 
 def test_app_hides_the_switch():
-    html = read("web", "index.html")
+    html = cockpit_source()
     assert "if (IN_APP_SHELL) { state.liveVoice = false; $('liveVoiceBtn').hidden = true;" in html
 
 
 def test_licences_page_ships_every_vendored_notice():
     page = read("web", "licenses.html")
-    assert "licenses.html" in read("web", "index.html")                       # linked from Settings
-    for needle in ("MapLibre GL JS", "maplibre-contour", "Kazuhiko Arase", "Kokoro-82M", "OpenStreetMap contributors",
+    assert "licenses.html" in cockpit_source()                       # linked from Settings
+    for needle in ("MapLibre GL JS", "maplibre-contour", "MapLibre Native", "Kazuhiko Arase", "Kokoro-82M", "OpenStreetMap contributors",
                    "BSD 3-Clause License", "MIT License", "g2p/LICENSE-APACHE-2.0.txt"):
         assert needle in page, needle
     assert os.path.exists(os.path.join(WEB, "g2p", "LICENSE-APACHE-2.0.txt"))

@@ -111,7 +111,58 @@
     });
   }
 
-  const api = { ask, prompt, get open() { return !!open; } };
+  // What to do with one thing, on the same sheet (REVIEW_PEOPLE.md P-17: a chat message's Delete, Report and Pin behind
+  // one key): resolves the chosen option's key, or null for Cancel, Escape or a tap outside. A `danger` option is red.
+  //   const what = await ApexConfirm.choose('@sam: "Fog by 7?"', [{ key: 'report', label: 'Report' }, { key: 'delete', label: 'Delete', danger: true }]);
+  function choose(text, options) {
+    if (open) open.done(null);
+    const doc = root.document;
+    return new Promise((resolve) => {
+      const back = doc.createElement('div');
+      back.className = 'confirm-sheet';
+      const box = doc.createElement('div');
+      box.className = 'cs-box cs-choose';
+      box.setAttribute('role', 'dialog');
+      box.setAttribute('aria-modal', 'true');
+      const p = doc.createElement('p');
+      p.id = 'csText';
+      p.textContent = text;
+      box.setAttribute('aria-labelledby', p.id);
+      const acts = doc.createElement('div');
+      acts.className = 'cs-list';
+      for (const o of options || []) {
+        const b = doc.createElement('button');
+        b.className = o.danger ? 'cs-yes' : 'cs-opt';
+        b.textContent = o.label;
+        b.addEventListener('click', () => done(o.key));
+        acts.append(b);
+      }
+      const no = doc.createElement('button');
+      no.className = 'cs-no';
+      no.textContent = 'Cancel';
+      no.addEventListener('click', () => done(null));
+      acts.append(no);
+      box.append(p, acts);
+      back.append(box);
+      const before = doc.activeElement;
+      const key = (e) => { if (e.key === 'Escape') { e.preventDefault(); done(null); } };
+      function done(v) {
+        if (!open || open.back !== back) return;
+        open = null;
+        doc.removeEventListener('keydown', key, true);
+        back.remove();
+        try { if (before && before.focus) before.focus(); } catch (_) {}
+        resolve(v);
+      }
+      back.addEventListener('click', (e) => { if (e.target === back) done(null); });
+      doc.addEventListener('keydown', key, true);
+      open = { back, done };
+      doc.body.append(back);
+      no.focus();
+    });
+  }
+
+  const api = { ask, prompt, choose, get open() { return !!open; } };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.ApexConfirm = api;
 })(typeof window !== 'undefined' ? window : globalThis);

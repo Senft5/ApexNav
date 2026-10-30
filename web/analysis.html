@@ -2,19 +2,20 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-NiGea15hk/VToQAMSqYLpD4Usk4OjeAqf/EMbfaqCLM=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-Zwhb0AZsyxZFolE3PU6E21oMT48mZ67nAuCNNRb9xew=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta · Log</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
   <link rel="manifest" href="manifest.webmanifest" />
   <meta name="theme-color" content="#1b1914" />
   <link rel="apple-touch-icon" href="brand/icon-180.png" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <!-- Perf (2026-10-30): the web fonts' stylesheet comes from Google; as a plain stylesheet every script below waited for it,
-       so a weak signal held the whole page back (seconds in a car). Loaded as print (which blocks nothing) and switched on
-       by boot.js once it arrives; until then the text is in the fallback font, behind the opening cover. -->
-  <link rel="stylesheet" id="webFonts" media="print" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter+Tight:wght@400;500;600&display=swap" />
+  <!-- The fonts ship with the app (REVIEW_FEEL F-12): no request to Google, nothing to wait for. The latin files the first
+       screen draws with are preloaded so `font-display: optional` always gets them. -->
+  <link rel="preload" href="fonts/inter-tight.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="fonts/barlow-condensed-600.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="fonts/barlow-condensed-700.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="fonts/barlow-condensed-800.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="stylesheet" href="fonts/fonts.css" />
   <script src="errors.js"></script>   <!-- first, so it sees errors in everything after it -->
   <script src="apex_core.js"></script>
   <script src="keyboard.js"></script>
@@ -27,6 +28,7 @@
   <script src="sync.js"></script>
   <script src="format.js"></script>
   <script src="recording.js"></script>
+  <script src="analysis_client.js"></script>   <!-- the Log's heavy work in the analysis worker (REVIEW_FEEL F-06) -->
   <script src="drive_keep.js"></script>
   <script src="contributor.js"></script>
   <script src="drive_view.js"></script>
@@ -353,7 +355,8 @@
   <script>
   (() => {
     'use strict';
-    const Core = window.ApexCore, Inst = window.ApexInstruments, MPH = window.ApexUnits ? ApexUnits.speed(1) : Core.MPS_TO_MPH;   // mph or km/h per m/s (U-22)
+    const Core = window.ApexCore, Inst = window.ApexInstruments;
+    let MPH = window.ApexUnits ? ApexUnits.speed(1) : Core.MPS_TO_MPH;   // mph or km/h per m/s (U-22); the map page can change it (F-15)
     const $ = (id) => document.getElementById(id);
     const UNK = '<i class="unk">--</i>';   // a score we don't know: "--" in the numeral font, in pencil, never two black bars (REVIEW2.md U-34)
     for (const id of ['segDrive', 'selA', 'selB']) ApexRowSelect.enhance($(id));   // the app's row list, not the browser's select (REVIEW2.md U-18)
@@ -362,10 +365,10 @@
     const params = new URLSearchParams(location.search);
     // night as the map page last showed it (auto night follows the sun there, which a saved toggle can lag)
     const lastLook = window.ApexThemes.last && window.ApexThemes.last();
-    const look = window.ApexThemes.apply(params.get('theme') || prefs.theme, params.has('night') ? params.get('night') === '1' : lastLook ? lastLook.night : !!(prefs.toggles && prefs.toggles.night));
+    let look = window.ApexThemes.apply(params.get('theme') || prefs.theme, params.has('night') ? params.get('night') === '1' : lastLook ? lastLook.night : !!(prefs.toggles && prefs.toggles.night));
     window.ApexFormat.applyTypeScale(document);
     document.addEventListener('visibilitychange', () => { if (!document.hidden) window.ApexFormat.applyTypeScale(document); });   // text size changed in Settings
-    const C = look.colors;
+    let C = look.colors;
 
     // ---------------------------------------------------------------------
     // Drive library: the person's recordings in IndexedDB
@@ -378,17 +381,35 @@
       return d;
     }
 
-    // Recordings live in IndexedDB, shared with the cockpit (web/recording.js).
-    const storedDrives = async () => (await ApexRecording.all()).map((d) => ApexRecording.repair(Core, d));
-    const storeDrive = (d) => ApexRecording.store(d);
-    const parseRecording = (text, fileName) => ApexRecording.parse(Core, text, fileName);
-
-    let drives = [], drivesLoaded = false;
+    // Recordings live in IndexedDB, shared with the cockpit (web/recording.js). F-06 (REVIEW_FEEL): the Log lists their
+    // summaries (a few hundred bytes a drive: name, date, length, score, corners, box), read and built in the analysis
+    // worker (analysis_client.js); a drive's rows are read only when its page, the stage marker or a compare draws them
+    // (full). With 25 drives of 57 km the list was 1.65 MB of rows a drive and every drive matched against every other.
+    // A list drive's `dist` is the one distance it knows, its length (year_review.js and week_digest.js read only the last).
+    const listDrive = (s) => ({ ...s, name: ApexFormat.driveName(s.name), km: (s.len_m || 0) / 1000, dist: [s.len_m || 0],
+      corners: (s.corners || []).map(([start, end, apex]) => ({ start, end, apex })) });
+    let drives = [], drivesLoaded = false, libKey = null;
+    /** Reads the summaries; true when the library changed since the last read. */
     async function loadDrives() {
-      // Only the person's own recordings. The bundled ones are the cockpit's "Watch a replay" demo, not their drives.
-      const stored = await storedDrives();
-      drives = stored.map((d) => finish({ ...d, name: ApexFormat.driveName(d.name) })).sort((a, b) => (a.date < b.date ? -1 : 1));
+      // the summaries are read here (a few KB); only drives without one yet (saved before v3) wait for the worker to build theirs
+      let list = await ApexRecording.summaries(null);
+      if (list.missing) list = (await ApexAnalysis.job('summaries')).list;
+      const key = JSON.stringify(list.map((s) => [s.id, s.n, s.date, s.name, s.ds && s.ds.score, s.tags, s.note, s.contributed]));
+      const changed = key !== libKey;
+      libKey = key;
+      if (changed) drives = list.map(listDrive).sort((a, b) => (a.date < b.date ? -1 : 1));
+      return changed;
     }
+    // A drive's whole record, finished as the list's are (repaired, named, scored), the last few kept
+    const fullCache = new Map();
+    function full(id) {
+      if (!fullCache.has(id)) {
+        fullCache.set(id, ApexRecording.get(id).then((raw) => (raw ? finish({ ...ApexRecording.repair(Core, raw), name: ApexFormat.driveName(raw.name) }) : null)));
+        while (fullCache.size > 3) fullCache.delete(fullCache.keys().next().value);
+      }
+      return fullCache.get(id);
+    }
+    const summaryOf = (id) => drives.find((x) => x.id === id) || null;
 
     // ---------------------------------------------------------------------
     // Shared helpers
@@ -476,15 +497,17 @@
       const panel = $('dvVote'), st = ApexRoadVotes.load(localStorage), q = ApexRoadVotes.question(drives, d, st);
       panel.hidden = !q;
       if (!q) return;
-      const pick = (winner) => {
+      const pick = async (winner) => {
         ApexRoadVotes.save(localStorage, winner ? ApexRoadVotes.vote(st, q, winner) : ApexRoadVotes.skip(st, q));
+        panel.hidden = true; renderRoads();
         // what each road is like, kept with the answer so your taste can be learned (taste.js, IDEAS R-33)
         if (winner && window.ApexTaste) try {
-          const other = drives.filter((o) => o.name === q.b && o.date <= d.date).sort((a, b) => String(b.date).localeCompare(String(a.date)))[0];
+          const o = drives.filter((x) => x.name === q.b && x.date <= d.date).sort((a, b) => String(b.date).localeCompare(String(a.date)))[0];
+          const other = o ? await full(o.id) : null;                   // its rows, only now
           const fa = ApexTaste.featuresOf(Core, d), fb = other ? ApexTaste.featuresOf(Core, other) : null;
           if (fa && fb) ApexTaste.save(localStorage, winner === q.a ? ApexTaste.record(ApexTaste.load(localStorage), fa, fb) : ApexTaste.record(ApexTaste.load(localStorage), fb, fa));
+          renderRoads();
         } catch (_) { /* a drive too short to read: the vote still counts for the ranking */ }
-        panel.hidden = true; renderRoads();
       };
       const b = (label, fn, cls = 'btn') => { const n = document.createElement('button'); n.className = cls; n.textContent = label; n.addEventListener('click', fn); return n; };
       $('dvVoteBtns').replaceChildren(b(q.a, () => pick(q.a)), b(q.b, () => pick(q.b)), b('Skip', () => pick(null), 'btn ghost'));
@@ -593,7 +616,7 @@
       // the drive list as a road-book index (REVIEW.md roadmap 13): the date stamped, the road, a tick per corner along it
       // (where the drive was busy), the distance and the score
       const spark = (d) => {
-        const n = Array.isArray(d.dist) ? d.dist.length : 0;
+        const n = d.n || 0;                                           // samples (the summary's count)
         if (n < 2 || !Array.isArray(d.corners) || !d.corners.length) return '';
         const ticks = d.corners.map(c => { const x = (100 * c.apex / (n - 1)).toFixed(1); return `<line x1="${x}" x2="${x}" y1="1" y2="9"/>`; }).join('');
         return `<svg class="spark" viewBox="0 0 100 10" preserveAspectRatio="none" aria-hidden="true"><line class="base" x1="0" x2="100" y1="9" y2="9"/>${ticks}</svg>`;
@@ -644,48 +667,24 @@
     const finiteNum = (v) => typeof v === 'number' && Number.isFinite(v);
     window.apexLogDebug = { loaded: () => drivesLoaded, records: (ds) => renderRecords(ds) };   // e2e/smoke.js seeds the panel (the library itself is untouched)
 
-    // Braking consistency by month (IDEAS D-07 trend): on corners you drove five or more times in a month, how widely your
-    // braking point spread inside that month (Core.spreadBy, a robust SD per corner), the median over the month's corners.
-    // Spread inside a month, so braking deliberately earlier from one month on is not counted as unsteady. Newest drive first,
-    // each road's latest drive is the reference its passes are mapped onto; one road per step so the page stays responsive.
-    // Drives whose date is unknown (an import without a stamp) are left out.
+    // Braking consistency by month (IDEAS D-07 trend): how widely your braking point spread inside each month on corners you
+    // drove five or more times that month (analysis_client.js steadiness: every drive's coach against the others, in the
+    // analysis worker since F-06; it read every drive's rows on this page, one road per step). Drives whose date is
+    // unknown (an import without a stamp) are left out.
     const STEADY_MIN_CORNERS = 3, STEADY_CLAIM_M = 5, STEADY_CLAIM_CORNERS = 5;
-    const steady = { key: null, months: [], run: 0 };
-    // A date is unknown when parse said so, or on an import stored before it could: those got the import time, the only dates
-    // written with toISOString (seconds and a Z); a stamp in the file name or a drive recorded here has neither.
-    const monthOf = (o) => (o.date_known === false || (o.date_known === undefined && o.source === 'imported' && /Z$/.test(o.date || ''))
-      || !/^\d{4}-\d{2}/.test(o.date || '') ? null : o.date.slice(0, 7));
+    const steady = { key: null, months: [], run: 0, pending: null, wait: [] };
+    const monthOf = ApexAnalysis.monthOf;
     function steadinessByMonth(done) {
       const key = drives.map(o => o.id).join(',');
       if (steady.key === key) { done(steady.months); return; }
-      // Every drive is a reference in turn, newest first; a corner already counted for a month (from a newer reference, within
-      // 20 m, the same way) is not counted again, so overlapping roads do not double it and no drive's other roads are skipped.
-      const run = ++steady.run, seen = [], sds = new Map();
-      const queue = drives.filter(d => d.corners.length).sort((p, q) => (q.date || '').localeCompare(p.date || ''));
-      const step = () => {
+      steady.wait = steady.pending === key ? steady.wait.concat([done]) : [done];
+      if (steady.pending === key) return;                                // already being worked out: told when it is
+      const run = ++steady.run;
+      steady.pending = key;
+      ApexAnalysis.job('steadiness', { minCorners: STEADY_MIN_CORNERS }).then((r) => {
         if (run !== steady.run) return;                                   // the library changed: a newer run took over
-        const d = queue.shift();
-        if (d) {
-          const co = coachFor(d), by = Core.spreadBy(co, [monthOf(d), ...co.near.map(monthOf)]);
-          for (const [k, xs] of Object.entries(by)) for (const [apex, sd] of xs) {
-            const lat = d.lat[apex], lon = d.lon[apex], c = Math.cos(lat * Math.PI / 180);
-            const a0 = Math.max(0, apex - 2), a1 = Math.min(d.lat.length - 1, apex + 2);
-            const hx = (d.lon[a1] - d.lon[a0]) * c, hy = d.lat[a1] - d.lat[a0], hn = Math.hypot(hx, hy) || 1;
-            // the same corner, the same way: apex within 20 m and heading within ~45 degrees (not the next bend of an S)
-            if (seen.some(s => s.k === k && Math.hypot((s.lon - lon) * 111320 * c, (s.lat - lat) * 110540) < 20 && (s.hx * hx + s.hy * hy) / hn > 0.7)) continue;
-            seen.push({ k, lat, lon, hx: hx / hn, hy: hy / hn });
-            sds.set(k, (sds.get(k) || []).concat([sd]));
-          }
-          setTimeout(step, 0);
-          return;
-        }
-        const med = (xs) => { const s = xs.slice().sort((p, q) => p - q), k = s.length >> 1; return s.length % 2 ? s[k] : (s[k - 1] + s[k]) / 2; };
-        steady.key = key;
-        steady.months = [...sds.entries()].filter(([, xs]) => xs.length >= STEADY_MIN_CORNERS).sort((p, q) => p[0].localeCompare(q[0]))
-          .map(([month, xs]) => ({ month, sd_m: med(xs), corners: xs.length }));
-        done(steady.months);
-      };
-      step();
+        steady.key = key; steady.pending = null; steady.months = r.months || []; steady.wait.forEach((f) => f(steady.months));
+      }).catch(() => { if (run === steady.run) steady.pending = null; });
     }
     const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const monthLabel = (m) => `${MONTHS[+m.slice(5, 7) - 1]} ${m.slice(0, 4)}`;
@@ -722,9 +721,13 @@
     let segs = loadSegs(), activeSeg = null, sel = null, boardFilter = 'friends';   // the list first; a tapped stage opens its board
     const crewMembersCache = new Map();
 
-    function renderSegStrip() {
-      const d = drives.find(x => x.id === $('segDrive').value);
-      if (!d) return;
+    // the marker draws the picked drive's own speed and height: its rows, read when it is picked (F-06)
+    let stripRun = 0;
+    async function renderSegStrip() {
+      const id = $('segDrive').value, run = ++stripRun;
+      if (!summaryOf(id)) return;
+      const d = await full(id);
+      if (!d || run !== stripRun || $('segDrive').value !== id) return;
       const W = 1000, H = 110, n = d.lat.length, step = Math.max(1, Math.floor(n / 600));
       const vmax = Math.max(...d.speed_mps) || 1;
       let sp = '', el = '';
@@ -741,7 +744,7 @@
     function drawSel() {
       const box = $('segSel');
       if (!sel) { box.hidden = true; $('segInfo').textContent = ''; return; }
-      const d = drives.find(x => x.id === $('segDrive').value), n = d.lat.length;
+      const d = summaryOf($('segDrive').value), n = d.n;
       const [a, b] = sel[0] < sel[1] ? sel : [sel[1], sel[0]];
       box.hidden = false;
       box.style.left = `${(a / (n - 1)) * 100}%`; box.style.width = `${((b - a) / (n - 1)) * 100}%`;
@@ -751,14 +754,14 @@
     (() => {
       const strip = $('segStrip');
       let dragging = false;
-      const idxAt = (x) => { const d = drives.find(v => v.id === $('segDrive').value); const r = strip.getBoundingClientRect(); return Math.round(Math.max(0, Math.min(1, (x - r.left) / r.width)) * (d.lat.length - 1)); };
+      const idxAt = (x) => { const d = summaryOf($('segDrive').value); const r = strip.getBoundingClientRect(); return Math.round(Math.max(0, Math.min(1, (x - r.left) / r.width)) * (d.n - 1)); };
       strip.addEventListener('pointerdown', (e) => { dragging = true; strip.setPointerCapture(e.pointerId); const i = idxAt(e.clientX); sel = [i, i]; drawSel(); });
       strip.addEventListener('pointermove', (e) => { if (dragging) { sel[1] = idxAt(e.clientX); drawSel(); } });
       strip.addEventListener('pointerup', () => { dragging = false; });
     })();
     $('segDrive').addEventListener('change', () => { sel = null; renderSegStrip(); });
-    $('segSave').addEventListener('click', () => {
-      const d = drives.find(x => x.id === $('segDrive').value);
+    $('segSave').addEventListener('click', async () => {
+      const d = summaryOf($('segDrive').value) ? await full($('segDrive').value) : null;
       if (!d || !sel) { $('segInfo').textContent = 'Drag across the profile first.'; return; }
       const [a, b] = sel[0] < sel[1] ? sel : [sel[1], sel[0]];
       if (b - a < 40) { $('segInfo').textContent = 'Make it at least 200 m long.'; return; }
@@ -766,7 +769,7 @@
                     lat0: d.lat[a], lon0: d.lon[a], lat1: d.lat[b], lon1: d.lon[b], length_m: (b - a) * 5, from: d.id,
                     geom: JSON.stringify(Array.from({ length: Math.min(60, b - a + 1) }, (_, k) => { const i = a + Math.round(k * (b - a) / (Math.min(60, b - a + 1) - 1)); return [+d.lat[i].toFixed(6), +d.lon[i].toFixed(6)]; })) };
       segs.push(seg); saveSegs(segs); activeSeg = seg.id; sel = null; $('segName').value = '';
-      renderSegments(); syncSegments();
+      renderSegments().then(syncSegments);
     });
 
     // Optional server sync (sync.js): segments upload when signed in; friends' shared segments can be adopted; the active one can be shared.
@@ -781,10 +784,11 @@
       for (const r of (await ApexSync.sharedWithMe()).filter(r => !have.has(r.origin || r.id))) {
         const b = document.createElement('button'); b.className = 'btn';
         b.textContent = `Add “${r.name}” from @${r.from_handle}`;
-        b.onclick = async () => { b.disabled = true; const a = await ApexSync.adopt(r); if (a) { segs.push(a); saveSegs(segs); renderSegments(); syncSegments(); } else b.disabled = false; };
+        b.onclick = async () => { b.disabled = true; const a = await ApexSync.adopt(r); if (a) { segs.push(a); saveSegs(segs); renderSegments().then(syncSegments); } else b.disabled = false; };
         box.appendChild(b);
       }
       // publish my best run on each synced segment (reaches only friends/crews I granted), then show the friends board for the active one
+      await stagePasses();
       for (const s of segs.filter(x => x.synced)) {
         const best = passesFor(s).filter(x => x.p.score != null && /^\d{4}-\d{2}-\d{2}/.test(x.d.date)).sort((p, q) => q.p.score - p.p.score)[0];
         if (best) await ApexSync.publishScore(s.id, best.p.score, best.p.time_s, best.d.date.slice(0, 10), best.p.components ? best.p.components.smoothness : null);
@@ -869,7 +873,8 @@
     async function renderContribute() {
       const panel = $('contribPanel'), list = $('contribList'); list.innerHTML = '';
       if (!window.ApexSync || !window.ApexContributor || !(await ApexSync.member())) { panel.hidden = true; return; }
-      const ready = drives.filter(d => d.source !== 'profiled' && ApexContributor.eligible(d) && !d.contributed);
+      // eligible: recent, with roughness and curvature (the summary's `feel`); the rows are read only for the one shared
+      const ready = drives.filter(d => d.source !== 'profiled' && d.feel && ApexContributor.eligible({ rough: true, kappa: true, date: d.date }) && !d.contributed);
       panel.hidden = false;
       const on = await ApexSync.contributionEnabled();
       $('contribNote').textContent = !on ? 'Off. Turn on Share road feel in the Garage to take part. First to map a road earns 3×, second 2×, then 1×.'
@@ -880,8 +885,8 @@
         b.onclick = async () => {
           b.disabled = true; b.textContent = 'Matching roads…';
           try {
-            const r = await ApexContributor.contributeDrive(d, ApexSync.contribute);
-            if (r.sent) { d.contributed = true; await storeDrive(d); }
+            const r = await ApexContributor.contributeDrive(await full(d.id), ApexSync.contribute);
+            if (r.sent) { d.contributed = true; await ApexAnalysis.job('patch', { id: d.id, fields: { contributed: true } }); }
             b.textContent = r.skipped ? r.skipped : r.sent ? `Shared ${r.sent} road${r.sent === 1 ? '' : 's'}` : r.built ? 'Nothing new to share' : 'No usable roads. They were too short, private or unmatched.';
           } catch (err) { b.disabled = false; b.textContent = 'Couldn\'t share. Tap to try again.'; b.title = err.message; }
         };
@@ -889,10 +894,22 @@
       }
     }
 
-    function passesFor(seg) {
-      return drives.map(d => ({ d, p: Core.segmentPass(seg, d) })).filter(x => x.p);
+    // Every drive's pass over each stage, from the analysis worker (F-06), kept until the drives or the stages change
+    const passMemo = { key: null, by: {}, run: null };
+    function stagePasses() {
+      const key = libKey + '|' + JSON.stringify(segs.map((x) => [x.id, x.lat0, x.lon0, x.lat1, x.lon1, x.length_m]));
+      if (passMemo.key !== key) {
+        passMemo.key = key;
+        passMemo.run = ApexAnalysis.job('passes', { segs: segs.map(({ id, lat0, lon0, lat1, lon1, length_m }) => ({ id, lat0, lon0, lat1, lon1, length_m })) })
+          .then((r) => { if (passMemo.key === key) passMemo.by = r.passes || {}; }).catch(() => {});
+      }
+      return passMemo.run;
     }
-    function renderSegments() {
+    function passesFor(seg) {
+      return (passMemo.by[seg.id] || []).map(({ id, p }) => ({ d: summaryOf(id), p })).filter((x) => x.d);
+    }
+    async function renderSegments() {
+      await stagePasses();
       $('segDrive').innerHTML = '';
       drives.forEach(d => $('segDrive').add(new Option(driveLabel(d), d.id)));
       renderSegStrip();
@@ -908,7 +925,7 @@
         b.innerHTML = `<b></b><span class="score" style="font-size:20px">${best ?? UNK}</span><span></span><span>best</span>`;
         b.querySelector('b').textContent = s.name;
         b.querySelectorAll('span')[1].textContent = `${ApexUnits.long(s.length_m, 2)} · ${passes.length} run${passes.length === 1 ? '' : 's'}`;
-        b.onclick = () => { activeSeg = activeSeg === s.id ? null : s.id; renderSegments(); syncSegments(); };
+        b.onclick = () => { activeSeg = activeSeg === s.id ? null : s.id; renderSegments().then(syncSegments); };
         list.appendChild(b);
       }
       const seg = segs.find(s => s.id === activeSeg);
@@ -941,10 +958,16 @@
     $('selA').onchange = $('selB').onchange = () => renderCompare();
     $('swapBtn').onclick = () => { const a = $('selA').value; $('selA').value = $('selB').value; $('selB').value = a; renderCompare(); };
 
-    function renderCompare() {
-      const A = drives.find(d => d.id === $('selA').value), B = drives.find(d => d.id === $('selB').value);
-      if (!A || !B || A === B) { $('cards').innerHTML = '<p class="note">Pick two different drives.</p>'; return; }
-      const r = Core.compareDrives(A, B);
+    // corner by corner in the analysis worker (F-06); drawn on drive A's own rows
+    let compareRun = 0;
+    async function renderCompare() {
+      const a = $('selA').value, b = $('selB').value, run = ++compareRun;
+      const B = summaryOf(b);
+      if (!summaryOf(a) || !B || a === b) { $('cards').innerHTML = '<p class="note">Pick two different drives.</p>'; return; }
+      const [A, res] = await Promise.all([full(a), ApexAnalysis.job('compare', { a, b })]);
+      if (run !== compareRun) return;                                    // another pair picked meanwhile
+      const r = res && res.r;
+      if (!A || !r) { $('cards').innerHTML = '<p class="note">Pick two different drives.</p>'; return; }
       const c = (v, label, extra, k = '') => `<div class="card"><b class="${k}">${v}</b><span>${label}</span>${extra ? `<em>${extra}</em>` : ''}</div>`;
       $('cards').innerHTML =
         c(ApexUnits.long(r.overlap_m), 'Shared road', `${A.name} ∩ ${B.name}`) +
@@ -997,26 +1020,36 @@
 
     // ---------------------------------------------------------------------
     // DRIVE tab: the newest drive by default, any drive from the picker.
-    let dvView = null;
-    function renderDrive() {
-      const pick = $('dvPick'), keep = pick.value; pick.innerHTML = '';
+    let dvView = null, dvRun = 0, dvInfo = null, wantDrive = null;
+    // F-06: the list's summary names the page at once; the drive's rows (one IndexedDB read) and what it is measured against
+    // (the reference, the corner coach, the road's history: analysis_client.js drive, in the worker) fill it as they land
+    async function renderDrive() {
+      const pick = $('dvPick'), keep = wantDrive || pick.value; pick.innerHTML = ''; wantDrive = null;
       const list = drives.slice().reverse();
       list.forEach(d => pick.add(new Option(driveLabel(d), d.id)));
       const actions = document.querySelector('#tab-drive .actions'); actions.hidden = !list.length;
       if (!list.length) { $('dvTitle').textContent = 'No drives yet'; $('dvNote').textContent = ''; $('dvRoot').innerHTML = '<p class="note">Start a drive on the map, or import a recording in Garage, Your data.</p>'; return; }
       pick.value = list.some(d => d.id === keep) ? keep : list[0].id;
-      const d = drives.find(x => x.id === pick.value);
-      if (dvView) dvView.destroy();
-      // reference = the best-scoring other drive that shares enough road with this one
-      let reference = null;
-      for (const o of drives.filter(x => x !== d && x.ds.score != null).sort((p, q) => q.ds.score - p.ds.score)) {
-        const r = Core.compareDrives(d, o);
-        if (r.overlap_m >= 0.3 * d.dist[d.dist.length - 1] && r.matched_corners >= 3) { reference = { name: o.name, score: o.ds.score, corners: r.corners }; break; }
+      const id = pick.value, s = summaryOf(id), run = ++dvRun;
+      if (dvCurrent && dvCurrent.id !== id) {                            // another drive: nothing of the last one stays on its page
+        $('tab-drive').insertBefore(dvActs, $('dvRoot'));
+        if (dvView) dvView.destroy();
+        dvView = null; dvCurrent = null; dvInfo = null;
+        $('dvRoot').replaceChildren(); $('dvDashcam').replaceChildren();
+        for (const k of ['dvRoad', 'dvVote', 'dvRecce', 'dvFlyby']) $(k).hidden = true;
       }
-      // corner coach: every other drive whose box overlaps this one is a candidate pass (Core.coach decides what is the same corner)
-      const coach = coachFor(d);
+      // The drive's name is the page title (you arrive from the Log list); the picker stays only as this view's state.
+      $('dvTitle').textContent = s.name;
+      // Round 3 (drive_keep.js): a drive that ended itself, or was recovered after the app closed, says so
+      const ended = window.ApexDriveKeep ? ApexDriveKeep.endNote(s) : null;
+      $('dvNote').textContent = [dateLabel(s), s.source === 'web-gps' ? 'Recorded on this phone' : s.source === 'imported' ? 'Imported' : 'Example drive', ended].filter(Boolean).join(' · ');
+      const [d, info] = await Promise.all([full(id), ApexAnalysis.job('drive', { id }).catch(() => null)]);
+      if (run !== dvRun || !d) return;                                   // another drive opened meanwhile
+      dvInfo = info || {};
+      if (dvView) dvView.destroy();
+      const reference = dvInfo.reference || null, coach = dvInfo.coach || null;
       $('tab-drive').insertBefore(dvActs, $('dvRoot'));                // out of the root before it is redrawn
-      dvView = ApexDriveView.mount($('dvRoot'), d, { Core, C, MPH, reference, coach });
+      dvView = ApexDriveView.mount($('dvRoot'), d, { Core, C, MPH, reference, coach }); dvCurrent = d;
       const dvHead = $('dvRoot').querySelector('.dv-head');
       if (dvHead) dvHead.after(dvActs);                                  // the score first, then Replay
       // a video from this drive with its numbers on it (dashcam.js, IDEAS D-11)
@@ -1025,17 +1058,12 @@
         $('dvDashcam').replaceChildren(ApexDashcam.mount({ el: mk, Core, d, fmtSpeed: (v) => `${Math.round(ApexUnits.speed(v))} ${ApexUnits.speedU()}`,
           save: (blob, name, type) => ApexSaveFile.saveFile(blob, name, type) }));
       } else $('dvDashcam').replaceChildren();
-      renderRoadHistory(d);
+      renderRoadHistory(d, dvInfo.road || []);
       loadRoadFeel(d, dvView);
-      // The drive's name is the page title (you arrive from the Log list); the picker stays only as this view's state.
-      $('dvTitle').textContent = d.name;
       renderTags(d);
       renderVote(d);
       renderRecce(d);
       renderFlyby(d).catch(() => { $('dvFlyby').hidden = true; });
-      // Round 3 (drive_keep.js): a drive that ended itself, or was recovered after the app closed, says so
-      const ended = window.ApexDriveKeep ? ApexDriveKeep.endNote(d) : null;
-      $('dvNote').textContent = [dateLabel(d), d.source === 'web-gps' ? 'Recorded on this phone' : d.source === 'imported' ? 'Imported' : 'Example drive', ended].filter(Boolean).join(' · ');
     }
     // Flyby (flyby.js, IDEAS S-20): friends who drove this drive's stages the same day. Members only; set as text.
     let activityRows = null;
@@ -1045,7 +1073,7 @@
       const canons = segs.filter((s) => s.synced && Core.segmentPass(s, d)).map((s) => s.origin || s.id);
       if (!canons.length) return;
       if (!activityRows) activityRows = await ApexSync.activity();
-      if ($('dvPick').value !== d.id) return;                          // another drive opened meanwhile
+      if (dvCurrent !== d) return;                                      // another drive opened meanwhile (the picker can lag the view)
       const groups = ApexFlyby.flyby(activityRows, d.date.slice(0, 10), canons);
       $('dvFlybyList').replaceChildren(...ApexFlyby.lines(groups).map((t) => { const p = document.createElement('p'); p.className = 'friend-act'; p.textContent = t; return p; }));
       panel.hidden = !groups.length;
@@ -1053,13 +1081,13 @@
     // Tags and note on a drive (drive_tags.js, IDEAS D-23): saved on its IndexedDB record, never sent anywhere.
     async function saveTags(d, tags, note) {
       d.tags = ApexDriveTags.normalize(tags); d.note = ApexDriveTags.note(note);
-      const raw = (await ApexRecording.all()).find((x) => x.id === d.id);
-      if (!raw) return false;
-      try { await ApexRecording.store({ ...raw, tags: d.tags, note: d.note }); return true; } catch (_) { return false; }
+      const s = summaryOf(d.id); if (s) { s.tags = d.tags; s.note = d.note; }            // the list's filter chips
+      // written in the worker: the record's one transaction, its summary with it (F-06)
+      try { return !!(await ApexAnalysis.job('patch', { id: d.id, fields: { tags: d.tags, note: d.note } })).summary; } catch (_) { return false; }
     }
     function renderTags(d) {
       const box = $('dvTags'), current = ApexDriveTags.normalize(d.tags);
-      box.replaceChildren(...ApexDriveTags.offered(drives.filter((x) => x !== d), current).map((t) => {
+      box.replaceChildren(...ApexDriveTags.offered(drives.filter((x) => x.id !== d.id), current).map((t) => {
         const on = current.some((c) => c.toLowerCase() === t.toLowerCase()), b = document.createElement('button');
         b.className = 'btn' + (on ? ' on' : ''); b.textContent = t; b.setAttribute('aria-pressed', String(on));
         b.addEventListener('click', async () => { await saveTags(d, ApexDriveTags.toggle(d.tags, t), d.note); renderTags(d); });
@@ -1067,7 +1095,8 @@
       }));
       $('dvNoteText').value = d.note || '';
     }
-    const currentDrive = () => drives.find((x) => x.id === $('dvPick').value);
+    let dvCurrent = null;                                              // the drive the page shows, whole
+    const currentDrive = () => (dvCurrent && dvCurrent.id === $('dvPick').value ? dvCurrent : null);
     async function addTag() {
       const d = currentDrive(), inp = $('dvTagNew');
       if (!d || !inp.value.trim()) return;
@@ -1080,36 +1109,22 @@
       const d = currentDrive(); if (!d) return;
       $('dvTagsNote').textContent = (await saveTags(d, d.tags, $('dvNoteText').value)) ? 'Note saved on this phone.' : 'Couldn\u2019t save the note.';
     });
-    // Corner coach for a drive, against every other drive whose box overlaps it (Core.coach decides what is the same corner).
-    // Boxes are cached on the drives and results per drive, so reopening a drive costs nothing until the library changes.
-    const coachMemo = new Map(), boxes = new WeakMap();
-    function coachFor(d) {
-      const box = (x) => { if (!boxes.has(x)) { let a = Infinity, b = -Infinity, c = Infinity, e = -Infinity; for (let i = 0; i < x.lat.length; i++) { a = Math.min(a, x.lat[i]); b = Math.max(b, x.lat[i]); c = Math.min(c, x.lon[i]); e = Math.max(e, x.lon[i]); } boxes.set(x, [a, b, c, e]); } return boxes.get(x); };
-      const lib = drives.map(o => o.id).join(','), key = `${d.id}|${lib}`;
-      if (coachMemo.lib !== lib) { coachMemo.clear(); coachMemo.lib = lib; }            // results against an older library are dead
-      if (coachMemo.has(key)) return coachMemo.get(key);
-      const bd = box(d), near = drives.filter(o => { if (o === d) return false; const b = box(o); return b[0] <= bd[1] && b[1] >= bd[0] && b[2] <= bd[3] && b[3] >= bd[2]; });
-      const r = { ...Core.coach(d, near), others: near.map(o => ({ name: o.name, date: dateLabel(o) })), near };
-      coachMemo.set(key, r);
-      return r;
-    }
-    // Every drive that shares at least 30% of this drive's road, oldest to newest: is the driving getting better on this road?
-    function renderRoadHistory(d) {
-      const panel = $('dvRoad'), len = d.dist[d.dist.length - 1];
-      const same = drives.filter(o => o === d || (o.ds.score != null && Core.compareDrives(d, o).overlap_m >= 0.3 * len)).sort((p, q) => (p.date < q.date ? -1 : 1));
+    // Every scored drive that shares at least 30% of this drive's road, oldest to newest (rows from the analysis worker's
+    // drive job): is the driving getting better on this road?
+    function renderRoadHistory(d, same) {
+      const panel = $('dvRoad');
       if (same.length < 2) { panel.hidden = true; return; }
       panel.hidden = false;
-      const W = 760, H = 150, L = 40, R = 14, T = 12, B = 24, sc = same.filter(x => x.ds.score != null);
+      const W = 760, H = 150, L = 40, R = 14, T = 12, B = 24, sc = same.filter(x => x.score != null);
       const X = (i) => L + (sc.length < 2 ? 0.5 : i / (sc.length - 1)) * (W - L - R), Y = (v) => T + (1 - v / 1000) * (H - T - B);
       const grid = [0, 500, 1000].map(v => `<line x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}" stroke="${C.rule}"/><text x="${L - 6}" y="${Y(v) + 3}" text-anchor="end" font-size="10" fill="${C.panelDim}">${v}</text>`).join('');
-      const line = sc.map((x, i) => `${i ? 'L' : 'M'}${X(i).toFixed(1)} ${Y(x.ds.score).toFixed(1)}`).join('');
-      const dots = sc.map((x, i) => `<circle cx="${X(i)}" cy="${Y(x.ds.score)}" r="${x === d ? 7 : 4.5}" fill="${x === d ? C.accent : C.panel}" stroke="${C.accent}" stroke-width="2"/><text x="${X(i)}" y="${H - 7}" text-anchor="middle" font-size="10" fill="${C.panelDim}">${x.date.slice(5, 10)}</text>`).join('');
+      const line = sc.map((x, i) => `${i ? 'L' : 'M'}${X(i).toFixed(1)} ${Y(x.score).toFixed(1)}`).join('');
+      const dots = sc.map((x, i) => `<circle cx="${X(i)}" cy="${Y(x.score)}" r="${x.self ? 7 : 4.5}" fill="${x.self ? C.accent : C.panel}" stroke="${C.accent}" stroke-width="2"/><text x="${X(i)}" y="${H - 7}" text-anchor="middle" font-size="10" fill="${C.panelDim}">${String(x.date || '').slice(5, 10)}</text>`).join('');
       $('dvRoadChart').innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Score on this road over time">${grid}<path d="${line}" fill="none" stroke="${C.accent}" stroke-width="2"/>${dots}</svg>`;
-      const first = sc[0], last = sc[sc.length - 1], gain = last.ds.score - first.ds.score;
-      $('dvRoadTable').innerHTML = '<tr><th class="l">Drive</th><th>Score</th><th>Corners</th><th class="l">vs this drive</th></tr>' + same.map(o => {
-        const r = o === d ? null : Core.compareDrives(d, o);
-        return `<tr class="${o === d ? 'best' : ''}"><td class="l"><b></b><span class="sub">${dateLabel(o)}</span></td><td><span class="score">${o.ds.score ?? UNK}</span></td><td>${o.ds.corners}</td><td class="l">${o === d ? 'this drive' : r.matched_corners ? `${fmtS(r.corner_delta_s)} on ${r.matched_corners} corners (positive = it was slower)` : '--'}</td></tr>`;
-      }).join('') + `<tr><td class="l" colspan="4"><span class="note">${sc.length > 1 ? `Score ${gain >= 0 ? 'up' : 'down'} ${Math.abs(gain)} points from the first to the latest drive on this road.` : ''}</span></td></tr>`;
+      const first = sc[0], last = sc[sc.length - 1], gain = last ? last.score - first.score : 0;
+      $('dvRoadTable').innerHTML = '<tr><th class="l">Drive</th><th>Score</th><th>Corners</th><th class="l">vs this drive</th></tr>' + same.map(o =>
+        `<tr class="${o.self ? 'best' : ''}"><td class="l"><b></b><span class="sub">${o.dateLabel}</span></td><td><span class="score">${o.score ?? UNK}</span></td><td>${o.corners}</td><td class="l">${o.self ? 'this drive' : o.matched ? `${fmtS(o.delta_s)} on ${o.matched} corners (positive = it was slower)` : '--'}</td></tr>`
+      ).join('') + `<tr><td class="l" colspan="4"><span class="note">${sc.length > 1 ? `Score ${gain >= 0 ? 'up' : 'down'} ${Math.abs(gain)} points from the first to the latest drive on this road.` : ''}</span></td></tr>`;
       $('dvRoadTable').querySelectorAll('tr td.l b').forEach((b, i) => { if (same[i]) b.textContent = same[i].name; });
     }
 
@@ -1124,19 +1139,32 @@
       if (s && dvView === view) view.setRoadFeel(s);
     }
     $('dvPick').addEventListener('change', renderDrive);
-    function renderAll() {
-      renderDrive(); renderHistory(); renderSegments(); renderCompareSelectors(); renderCompare(); syncSegments(); renderContribute(); renderFriends().catch(() => {}); }
+    // F-06: one view drawn at a time, the one asked for; the others when they are first shown after the drives (or the theme,
+    // or the units) changed. The network panels (stages backed up, road feel to share, friends) after the view is up.
+    const VIEWS = ['drive', 'history', 'segments', 'compare'], dirty = new Set(VIEWS);
+    let drawnWidth = 0;
+    function renderView(t) {
+      if (!drivesLoaded) return;
+      dirty.delete(t); drawnWidth = document.documentElement.clientWidth;
+      if (t === 'history') renderHistory();
+      else if (t === 'drive') renderDrive();
+      else if (t === 'segments') renderSegments();
+      else if (t === 'compare') { renderCompareSelectors(); renderCompare(); }
+    }
+    function renderAll() { VIEWS.forEach((v) => dirty.add(v)); renderView(view); }
+    const later = (fn) => (window.requestIdleCallback ? requestIdleCallback(fn, { timeout: 1500 }) : setTimeout(fn, 300));
+    function renderPanels() { later(() => { syncSegments(); renderContribute(); renderFriends().catch(() => {}); }); }
     $('newStage').addEventListener('toggle', () => { if ($('newStage').open) renderSegStrip(); });
     // One view at a time: drives list (default), drive detail, stages, compare. No inner tab row.
     let view = 'history';
     function showTab(t) {
       view = t;
-      for (const v of ['drive', 'history', 'segments', 'compare']) $(`tab-${v}`).hidden = v !== t;
+      for (const v of VIEWS) $(`tab-${v}`).hidden = v !== t;
       // Stages are part of the Log (REVIEW.md roadmap 9): one tab, a Drives / Stages switch
       $('navLog').classList.add('on'); $('navLog').setAttribute('aria-current', 'page');
       document.querySelectorAll('[data-seg]').forEach(b => { const on = b.dataset.seg === (t === 'segments' ? 'segments' : 'history'); b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); });
-      if (t === 'segments') renderSegStrip();
-      if (t === 'history') renderHistory();
+      if (dirty.has(t) || t === 'history') renderView(t);
+      else if (t === 'segments') renderSegStrip();
     }
     document.querySelectorAll('a.back').forEach(a => a.addEventListener('click', (e) => { e.preventDefault(); showTab(a.dataset.to); toTop(); }));
     const TAB_ALIAS = { log: 'history', stages: 'segments' };
@@ -1149,16 +1177,16 @@
     // the focus ring is for the keyboard: it shows once a key has been pressed to move focus, never after a tap or a sheet's own focus()
     document.addEventListener('keydown', (e) => { if (e.key === 'Tab' || e.key.startsWith('Arrow')) document.documentElement.classList.add('kbd'); }, true);
     document.addEventListener('pointerdown', () => document.documentElement.classList.remove('kbd'), true);
-    function openDrive(id) { $('dvPick').value = id; renderDrive(); showTab('drive'); toTop(); }
+    function openDrive(id) { wantDrive = id; dirty.add('drive'); showTab('drive'); toTop(); }
     $('dvReplay').addEventListener('click', () => {
       const id = $('dvPick').value;
       if (id) ApexReturn.open('index.html?drive=' + encodeURIComponent(id) + '&play=1');   // the map page, also from inside its Log frame
     });
     $('dvShare').addEventListener('click', async () => {
-      const id = $('dvPick').value, d = drives.find(x => x.id === id);
+      const id = $('dvPick').value, d = summaryOf(id);
       if (!d) return;
       const score = d.ds && d.ds.score != null ? 'Score ' + d.ds.score + '/1000' : '';
-      const mi = ApexUnits.long(d.dist[d.dist.length - 1]);
+      const mi = ApexUnits.long(d.len_m);
       const text = d.name + ' · ' + [score, mi].filter(Boolean).join(' · ');
       const url = location.origin + '/?drive=' + encodeURIComponent(d.id);
       if (navigator.share) {
@@ -1168,7 +1196,7 @@
     });
     // A picture of the drive to share (drive_card.js, IDEAS D-09): the road's outline, score and corner mix, no times or speeds.
     $('dvCard').addEventListener('click', async () => {
-      const d = drives.find(x => x.id === $('dvPick').value);
+      const d = currentDrive();
       if (!d) return;
       const css = getComputedStyle(document.documentElement);
       const cv = ApexDriveCard.drawCard(document.createElement('canvas'), ApexDriveCard.cardModel(d),
@@ -1177,35 +1205,66 @@
       const b = $('dvCard');
       if (out === 'saved') { b.textContent = 'Card saved'; setTimeout(() => { b.textContent = 'Share card'; }, 2000); }
     });
-    // Compare with…: this drive against the best other drive on the same road (Core.compareDrives decides what shares a road).
-    function bestOther(d) {
-      let pick = null;
-      for (const o of drives.filter(x => x !== d && x.ds.score != null).sort((p, q) => q.ds.score - p.ds.score)) {
-        const r = Core.compareDrives(d, o);
-        if (r.overlap_m >= 0.3 * d.dist[d.dist.length - 1] && r.matched_corners >= 3) { pick = o; break; }
-      }
-      return pick || drives.find(x => x !== d) || null;
-    }
+    // Compare with…: this drive against the best other drive on the same road (the drive job's reference), else any other
+    const bestOther = (d) => summaryOf(dvInfo && dvInfo.bestOther) || drives.find((x) => x.id !== d.id) || null;
     $('dvStage').addEventListener('click', () => { const id = $('dvPick').value; if (id) location.href = `analysis.html?tab=segments&drive=${encodeURIComponent(id)}`; });
     $('dvCompare').addEventListener('click', () => {
-      const id = $('dvPick').value, d = drives.find(x => x.id === id);
+      const id = $('dvPick').value, d = summaryOf(id);
       if (!d) return;
+      renderCompareSelectors(); dirty.delete('compare');
       $('selA').value = id;
       const o = bestOther(d);
       if (o) $('selB').value = o.id;
       renderCompare(); showTab('compare'); toTop();
     });
+    // The page a Log URL asks for: ?tab= (log, stages, drive, compare) and a drive (?drive=), here or from the map page
+    async function route(search) {
+      const p = new URLSearchParams(search), q = p.get('tab'), t = TAB_ALIAS[q] || q, want = p.get('drive');
+      const tab = VIEWS.includes(t) ? t : 'history';
+      if (!(want && drives.some((x) => x.id === want))) { showTab(tab); return; }
+      // Mark a stage from the drive-ended card: this drive picked in the new-stage marker, the marker open
+      if (tab === 'segments' && $('segDrive')) {
+        showTab('segments');
+        if (dirty.has('segments') || !$('segDrive').options.length) await renderSegments();
+        $('newStage').dataset.fromDrive = '1'; $('newStage').hidden = false; $('segDrive').value = want; $('segDrive').dispatchEvent(new Event('change')); $('newStage').open = true;
+      } else openDrive(want);
+    }
     {
       const q = params.get('tab'), t = TAB_ALIAS[q] || q;
-      showTab(['drive', 'history', 'segments', 'compare'].includes(t) ? t : 'history');
+      showTab(VIEWS.includes(t) && !params.get('drive') ? t : 'history');
     }
-    loadDrives().then(() => { drivesLoaded = true; renderAll(); const want = params.get('drive');
-      if (want && drives.some(x => x.id === want)) {
-        // Mark a stage from the drive-ended card: this drive picked in the new-stage marker, the marker open
-        if (params.get('tab') === 'segments' && $('segDrive')) { $('newStage').dataset.fromDrive = '1'; $('newStage').hidden = false; $('segDrive').value = want; $('segDrive').dispatchEvent(new Event('change')); $('newStage').open = true; }
-        else openDrive(want);
-      } })
+    loadDrives().then(async () => { drivesLoaded = true; await route(location.search); if (dirty.has(view)) renderView(view); renderPanels(); })
       .finally(() => requestAnimationFrame(() => ApexBoot.done()));   // drawn with its drives: lift the cover
+
+    // F-15 (REVIEW_FEEL): the map page keeps this page in its frame, loaded once (hidden, while the map is idle) and never
+    // again: it says which page of the Log to show and what changed (index.html openLog, ApexLogHost.changed).
+    window.ApexLogFrame = {
+      open(url) {
+        let u; try { u = new URL(url, location.href); } catch (_) { return; }
+        try { history.replaceState(null, '', u.pathname.replace(/^.*\//, '') + u.search); } catch (_) {}
+        if (drivesLoaded) route(u.search);
+        toTop();
+      },
+      // 'drives': read the summaries again (redrawn only if they changed); 'theme' / 'units': as the map page now has them
+      async changed(what) {
+        if (what === 'theme') {
+          try { prefs = Object.assign(prefs, JSON.parse(localStorage.getItem('apex.prefs') || 'null') || {}); } catch (_) {}
+          const last = window.ApexThemes.last && window.ApexThemes.last();
+          look = window.ApexThemes.apply(prefs.themeV === 2 ? prefs.theme : 'roadbook', last ? last.night : !!(prefs.toggles && prefs.toggles.night));
+          C = look.colors;
+          renderAll(); return;
+        }
+        if (what === 'units') {
+          try { const u = localStorage.getItem('apex.units'); if (u) ApexUnits.set(u); } catch (_) {}
+          MPH = ApexUnits.speed(1);
+          renderAll(); return;
+        }
+        if (what === 'drives' && drivesLoaded && (await loadDrives())) { fullCache.clear(); renderAll(); }
+      },
+      // a view drawn while the frame was hidden has the hidden frame's width: drawn again at the phone's
+      shown() { if (drivesLoaded && drawnWidth !== document.documentElement.clientWidth) renderView(view); },
+      hidden() {},
+    };
   })();
   </script>
   <script>

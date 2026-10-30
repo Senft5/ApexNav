@@ -7,13 +7,14 @@ import shutil
 import subprocess
 
 import pytest
+from tests.page_source import cockpit_source
 
 NODE = shutil.which("node")
 pytestmark = pytest.mark.skipif(NODE is None, reason="node not installed")
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 RUNNER = r"""
-const html = require('fs').readFileSync(process.argv[1] + '/web/index.html', 'utf8');
+const html = ['index.html', 'cockpit.js', 'lazy.js'].map((f) => { try { return require('fs').readFileSync(process.argv[1] + '/web/' + f, 'utf8'); } catch (_) { return ''; } }).join('\n');
 const fn = (name) => { const a = html.indexOf(`    function ${name}(`); return html.slice(a, html.indexOf('\n    }', a) + 6); };
 const { islandShort, islandWords } = new Function(fn('islandWords') + fn('islandShort') + 'return { islandShort, islandWords };')();
 console.log(JSON.stringify({
@@ -49,7 +50,7 @@ def test_junctions_and_hazards_keep_their_words(out):
 
 def test_off_route_says_the_status_lines_words(out):
     assert out["wrong"] == "Wrong way" and out["off"] == "Off route" and out["checking"] == "Checking"
-    html = open(os.path.join(ROOT, "web", "index.html"), encoding="utf-8").read()
+    html = cockpit_source()
     quiet = html[html.index("    function quietActivity("):html.index("    function islandWords(")]
     assert "short: 'OFF'" not in quiet and "islandWords(offRouteText())" in quiet
     assert "SQ`" not in html[html.index("    function islandShort("):html.index("    function pushActivity(")]

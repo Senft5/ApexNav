@@ -7,6 +7,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from tests.page_source import cockpit_source
 
 ROOT = Path(__file__).resolve().parents[1]
 NODE = shutil.which("node")
@@ -56,12 +57,24 @@ def test_friend_state_in_the_people_list_is_measured_never_guessed():
     assert s("{ at: '2026-10-29T11:55:00Z', delay_s: 0, fuzz: false }") == {"live": False, "text": "Seen 5 min ago"}   # live but not fresh
     assert s("{ at: '2026-10-29T11:49:00Z', delay_s: 600, fuzz: true }") == {"live": False, "text": "Seen 11 min ago"}   # delayed: never "on the road"
     assert s("{ at: '2026-10-29T10:50:00Z', delay_s: 3600, fuzz: true }") == {"live": False, "text": "Seen 1 h ago"}
-    assert s("null") == {"live": False, "text": "Not sharing where they are"}
     assert s("{ at: 'nope', delay_s: 0 }") == {"live": False, "text": "--"}
 
 
+@needs_node
+def test_friend_state_speaks_days_and_says_nothing_of_a_friend_who_shares_nothing():
+    """REVIEW_PEOPLE P-15: "Seen yesterday", a weekday, then a date, never "26 h ago"; no position, no line (their name shows)."""
+    s = lambda p: run(f"F.friendState({p}, {NOW})")["text"]
+    assert s("{ at: '2026-10-29T00:00:00Z', delay_s: 600 }") == "Seen 12 h ago"
+    assert s("{ at: '2026-10-28T10:00:00Z', delay_s: 600 }") == "Seen yesterday"   # 26 h
+    assert s("{ at: '2026-10-26T12:00:00Z', delay_s: 600 }") == "Seen Mon"
+    assert s("{ at: '2026-10-19T12:00:00Z', delay_s: 600 }") == "Seen Oct 19"
+    assert run(f"F.friendState(null, {NOW})") == {"live": False, "text": ""}
+    html = cockpit_source()
+    assert "Not sharing where they are" not in html + (ROOT / "web" / "friends_map.js").read_text()
+
+
 def test_layer_is_off_by_default_and_nothing_is_shared_by_default():
-    html = (ROOT / "web" / "index.html").read_text()
+    html = cockpit_source()
     assert re.search(r"toggles: \{[^}]*friends: false", html)
     src = (ROOT / "backend" / "src" / "presence.ts").read_text()
     assert 'audience: "nobody"' in src                      # no row means Nobody

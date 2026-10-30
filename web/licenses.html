@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Vetta · Licences</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -18,10 +18,11 @@
   <ul>
     <li><b>MapLibre GL JS 4.7.1</b>: map rendering. BSD 3-Clause. Copyright (c) MapLibre contributors; portions copyright (c) Mapbox, Inc.</li>
     <li><b>maplibre-contour</b>: contour lines on the map. BSD 3-Clause. Copyright (c) Michael Barry and contributors.</li>
+    <li><b>MapLibre Native for iOS 6.31.0</b>: the car's map on CarPlay. BSD 2-Clause (the first two conditions and the disclaimer of the BSD 3-Clause License below). Copyright (c) 2021 MapLibre contributors; copyright (c) 2018-2021 MapTiler.com; copyright (c) 2014-2020 Mapbox.</li>
     <li><b>QR Code Generator for JavaScript 2.0.4</b>: the convoy QR code. MIT. Copyright (c) 2009 Kazuhiko Arase. "QR Code" is a registered trademark of DENSO WAVE INCORPORATED.</li>
     <li><b>Kokoro-82M</b> (hexgrad) and its voice packs: the recorded co-driver voices. Apache License 2.0.</li>
     <li><b>misaki 0.9.4</b> (hexgrad) dictionaries and <b>graphemes_to_phonemes</b> (Peter Reid) models: words to sounds. Apache License 2.0.</li>
-    <li><b>Fonts</b>: Barlow Condensed, Inter Tight, IBM Plex. SIL Open Font License 1.1.</li>
+    <li><b>Fonts</b>: Barlow Condensed (copyright 2017 The Barlow Project Authors) and Inter Tight (copyright 2022 The Inter Project Authors), shipped in the app as <code>fonts/*.woff2</code>, and IBM Plex. SIL Open Font License 1.1; the full text ships beside the fonts: <a href="fonts/OFL.txt">fonts/OFL.txt</a>.</li>
   </ul>
 
   <h2>Data and services</h2>

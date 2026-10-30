@@ -7,6 +7,7 @@ import shutil
 import subprocess
 
 import pytest
+from tests.page_source import cockpit_source
 
 NODE = shutil.which("node")
 pytestmark = pytest.mark.skipif(NODE is None, reason="node not installed")
@@ -128,12 +129,12 @@ def test_the_log_says_how_a_drive_ended(out):
 
 
 def test_the_page_and_the_shell_wire_it():
-    html = open(os.path.join(ROOT, "web", "index.html"), encoding="utf-8").read()
-    assert '<script src="drive_keep.js"></script>' in html
+    html = cockpit_source()
+    assert '<script src="drive_keep.js"' in html
     assert "keepStart();" in html and "keepDone(kept);" in html and "recoverKept()" in html
     assert "m.action === 'disconnect'" in html and "backlog(frames)" in html
     swift = open(os.path.join(ROOT, "ApexNavApp.swift"), encoding="utf-8").read()
     assert 'cmd == "journal"' in swift and "journal?.add(JournalFrame(" in swift and "window.apex.backlog(" in swift
-    assert "didEnterBackgroundNotification" in swift and '"\\"seq\\":' in swift
+    assert "didEnterBackgroundNotification" in swift and "segments, at, seq" in swift and "at: at, seq: seq)" in swift   # every frame numbered (LiveFrame)
     car = open(os.path.join(ROOT, "CarPlay", "ApexCarPlay.swift"), encoding="utf-8").read()
     assert 'ApexCar.shared.send("disconnect"' in car

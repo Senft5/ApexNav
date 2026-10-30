@@ -495,6 +495,113 @@ struct GPSFix: Sendable {
     let verticalAccuracyM: Double
     let speedMps: Double
     let courseDeg: Double
+    var timestamp = Date()                 // when the fix was taken (CLLocation.timestamp): the car map dead reckons from it (F-01)
+}
+
+/// F-13 (REVIEW_FEEL.md): the 100 Hz IMU pipeline runs on its own queue, off the main thread that drives WebKit and UIKit.
+/// Everything a motion sample touches lives here behind one lock; the main thread takes what it needs ten times a second.
+final class MotionLane: @unchecked Sendable {
+    struct State {
+        var pipeline = IMUPipeline()
+        var gravityG = Vec3(x: 0.0, y: -0.95, z: -0.30)   // CoreMotion gravity, phone frame, in g (points DOWN)
+        /// Largest acceleration magnitude (m/s^2, any mount, gravity removed) since the last live frame: the web's crash
+        /// check (web/incident.js, IDEAS D-17) needs a hard impact, which no 5 m road value shows.
+        var impactMps2 = 0.0
+        var nodeVertPeakMps2: Double?                      // largest >8 Hz vertical spike since the last 5 m node, nil when unmeasured
+        var speedMps = 0.0                                 // the latest GPS speed, held between fixes
+        var thermal = ThermalGuard()                       // the shell's, copied on every change
+    }
+    private let lock = NSLock()
+    private var state = State()
+    let queue: OperationQueue = {
+        let q = OperationQueue()
+        q.name = "Vetta motion"
+        q.maxConcurrentOperationCount = 1                  // samples in order
+        q.qualityOfService = .userInitiated
+        return q
+    }()
+
+    func with<T>(_ f: (inout State) -> T) -> T {
+        lock.lock()
+        defer { lock.unlock() }
+        return f(&state)
+    }
+
+    /// One motion sample, on any thread. Returns the mount's rows when it has just locked (the shell saves them).
+    func ingest(gravityG: Vec3, accelMps2 a: Vec3, gyroRadS w: Vec3, timestamp: Double) -> [Double]? {
+        let t = ProcessInfo.processInfo.systemUptime
+        return with { s in
+            s.gravityG = gravityG
+            s.impactMps2 = max(s.impactMps2, (a.x * a.x + a.y * a.y + a.z * a.z).squareRoot())
+            // Calibration is automatic and continuous (ApexKit.MountCalibrator): gravity gives the vertical, GPS speed and
+            // turns give forward, a moved phone drops back to unknown. Silent; the frame's "calibration" field shows the state.
+            let wasLocked = s.pipeline.mount.state == .locked
+            let v = s.speedMps
+            s.pipeline.step(accel: a, gyro: w, timestamp: timestamp, speedMps: v, gravityG: gravityG)
+            // Pothole evidence only in a solved chassis frame and while rolling (a door slam at a stop is not road), and not
+            // while settling after a thermal pause.
+            if s.thermal.imuLive(t: t) && s.pipeline.mount.state == .locked && v >= 1.0 {
+                s.nodeVertPeakMps2 = max(s.nodeVertPeakMps2 ?? 0.0, abs(s.pipeline.hpVert))
+            }
+            return !wasLocked && s.pipeline.mount.state == .locked ? s.pipeline.mount.rows : nil
+        }
+    }
+
+    /// CoreMotion's handler for `queue`: built outside the main actor, so it runs where CoreMotion calls it.
+    static func handler(_ lane: MotionLane, saveMount: @escaping @Sendable ([Double]) -> Void) -> CMDeviceMotionHandler {
+        return { motion, _ in
+            guard let m = motion else { return }
+            let gravity = Vec3(x: m.gravity.x, y: m.gravity.y, z: m.gravity.z)
+            // CoreMotion userAcceleration is reported with the opposite sign of proper (specific-force)
+            // acceleration, so negate it and convert g -> m/s^2.
+            let accel = Vec3(x: -m.userAcceleration.x, y: -m.userAcceleration.y, z: -m.userAcceleration.z).scaled(ApexKit.gStd)
+            let gyro = Vec3(x: m.rotationRate.x, y: m.rotationRate.y, z: m.rotationRate.z)
+            if let rows = lane.ingest(gravityG: gravity, accelMps2: accel, gyroRadS: gyro, timestamp: m.timestamp) { saveMount(rows) }
+        }
+    }
+}
+
+/// F-13: one live frame as the page reads it (window.apex.live), encoded off the main thread. nil is JSON null, never 0.
+struct LiveFrame: Encodable, Sendable {
+    var lat, lon, accuracyM: Double?
+    var speedMps, courseDeg, elevationM, gradePct: Double?
+    var latG, lonG, camberDeg, crestVerticalG, roughnessRms, vertPeakG, impactG: Double?
+    var recording: Bool
+    var calibration: String
+    var thermal: Int
+    var lowPowerMode: Bool
+    var battery: Double?
+    var charging, hasFix: Bool
+    var segments: Int
+    var at: Double
+    var seq: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case lat, lon, accuracyM = "accuracy_m", speedMps = "speed_mps", courseDeg = "course_deg", elevationM = "elevation_m",
+             gradePct = "grade_pct", latG = "lat_g", lonG = "lon_g", camberDeg = "camber_deg", crestVerticalG = "crest_vertical_g",
+             roughnessRms = "roughness_rms", vertPeakG = "vert_peak_g", impactG = "impact_g", recording, calibration, thermal,
+             lowPowerMode = "low_power_mode", battery, charging, hasFix = "has_fix", segments, at, seq
+    }
+
+    /// Rounded to `digits` (the page needs no more, and the bridge carries less); nil when unknown or not finite.
+    static func r(_ v: Double?, _ digits: Int) -> Double? {
+        guard let v, v.isFinite else { return nil }
+        let p = pow(10.0, Double(digits))
+        return (v * p).rounded() / p
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        // every key, null when unknown: the page tells unknown from absent
+        try c.encode(lat, forKey: .lat); try c.encode(lon, forKey: .lon); try c.encode(accuracyM, forKey: .accuracyM)
+        try c.encode(speedMps, forKey: .speedMps); try c.encode(courseDeg, forKey: .courseDeg); try c.encode(elevationM, forKey: .elevationM)
+        try c.encode(gradePct, forKey: .gradePct); try c.encode(latG, forKey: .latG); try c.encode(lonG, forKey: .lonG)
+        try c.encode(camberDeg, forKey: .camberDeg); try c.encode(crestVerticalG, forKey: .crestVerticalG)
+        try c.encode(roughnessRms, forKey: .roughnessRms); try c.encode(vertPeakG, forKey: .vertPeakG); try c.encode(impactG, forKey: .impactG)
+        try c.encode(recording, forKey: .recording); try c.encode(calibration, forKey: .calibration); try c.encode(thermal, forKey: .thermal)
+        try c.encode(lowPowerMode, forKey: .lowPowerMode); try c.encode(battery, forKey: .battery); try c.encode(charging, forKey: .charging)
+        try c.encode(hasFix, forKey: .hasFix); try c.encode(segments, forKey: .segments); try c.encode(at, forKey: .at); try c.encode(seq, forKey: .seq)
+    }
 }
 
 // MARK: - Native Sensor Shell (CoreLocation + CoreMotion + CMAltimeter)
@@ -506,7 +613,7 @@ struct GPSFix: Sendable {
 @MainActor
 final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelegate, ASWebAuthenticationPresentationContextProviding {
     static let gStd = ApexKit.gStd
-    private static let mountDefaultsKey = "apex.mountRotationRows.v1"
+    nonisolated private static let mountDefaultsKey = "apex.mountRotationRows.v1"
 
     @Published var shareItem: CSVShareItem?
 
@@ -527,13 +634,13 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
     private var lonDeg: Double = 0.0
     private var speedMps: Double = 0.0
     private var courseDeg: Double?
+    private var fixSpeedMps: Double = -1    // the last fix's own speed, -1 when it had none (the car map then measures it)
+    private var fixAt = Date()              // when the last fix was taken
 
-    // Live math (ApexKit)
-    private var pipeline = IMUPipeline()
-    private var nodeVertPeakMps2: Double?   // largest >8 Hz vertical spike since the last 5 m node, nil when unmeasured
+    // Live math (ApexKit). F-13: the 100 Hz pipeline (mount, filters, spikes) runs on the motion lane's queue
+    private let motion = MotionLane()
     private var fusion = ElevationFusion(baroAvailable: CMAltimeter.isRelativeAltitudeAvailable())
     private var odometer = Odometer5m()
-    private var latestGravityG = Vec3(x: 0.0, y: -0.95, z: -0.30)   // CoreMotion gravity, phone frame, in g (points DOWN)
     private var thermal = ThermalGuard()   // IDEAS P-07: a critically hot phone pauses CoreMotion, IMU values go unknown
 
     // Recording
@@ -545,15 +652,12 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
     let replaying = false
     #endif
     private var recordedSegments: Int = 0
-    /// Largest acceleration magnitude (m/s^2, any mount, gravity removed) since the last live frame: the web's crash
-    /// check (web/incident.js, IDEAS D-17) needs a hard impact, which no 5 m road value shows.
-    private var frameImpactMps2: Double = 0
     private static let csvHeader = "segment_index,distance_m,lat,lon,elevation_m,speed_mph,lon_g,lat_g,camber_deg,crest_vertical_g,roughness_rms,engagement_score,grade_pct,vert_peak_g"
     private var csvLines: [String] = [ApexSensorShell.csvHeader]
 
     override init() {
         super.init()
-        pipeline.mount = MountCalibrator()   // unknown until gravity settles; a mount saved from an earlier drive is reused only if gravity agrees
+        motion.with { $0.pipeline.mount = MountCalibrator() }   // unknown until gravity settles; a mount saved from an earlier drive is reused only if gravity agrees
         restorePersistedMount()
         locManager.delegate = self
         locManager.desiredAccuracy = kCLLocationAccuracyBestForNavigation
@@ -1089,9 +1193,15 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
     /// lat_g / lon_g in G (= m/s^2 / 9.80665), camber in degrees, roughness_rms in G RMS (>8 Hz vertical),
     /// speed in m/s, course in degrees true, elevation in m, grade in %.
     private func pushLiveFrame() {
-        let vertPeak = pipeline.takeVertPeak()   // this frame's spike window; the web Recorder places it on the road
-        let impact = frameImpactMps2; frameImpactMps2 = 0
-        if hasFix { ApexCar.shared.position(lat: latDeg, lon: lonDeg, course: courseDeg ?? -1) }   // the car's maps (CarPlay), even before the page is ready
+        // F-13: what the motion lane has measured, taken in one short hold of its lock: this frame's spike window (the web
+        // Recorder places it on the road) and impact, and the pipeline's values
+        let (pipeline, vertPeak, impact) = motion.with { s -> (IMUPipeline, Double, Double) in
+            let peak = s.pipeline.takeVertPeak(), hit = s.impactMps2
+            s.impactMps2 = 0
+            return (s.pipeline, peak, hit)
+        }
+        // the car's maps (CarPlay), even before the page is ready; F-01: with the fix's speed and time, to dead reckon from
+        if hasFix { ApexCar.shared.position(lat: latDeg, lon: lonDeg, course: courseDeg ?? -1, speed: fixSpeedMps, at: fixAt) }
         let live = imuLive   // false while the thermal guard has motion paused: g, camber, crest and roughness are unknown
         func imu(_ v: Double) -> Double? { live ? v : nil }
         // Round 3 (web/drive_keep.js): every fix is numbered, and in a drive journaled on disk until the page has kept it,
@@ -1111,39 +1221,38 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         // locked): its frames wait in the journal, not in a queue of scripts, and go to it as one backlog when it answers
         if liveInFlight >= Self.stallFrames { liveStalled = true; return }
         if liveStalled { flushBacklog(wv); return }
-        let json = "{"
-            + "\"lat\":\(Self.num(hasFix ? latDeg : nil, 7)),"
-            + "\"lon\":\(Self.num(hasFix ? lonDeg : nil, 7)),"
-            + "\"accuracy_m\":\(Self.num(hasFix ? accuracyM : nil, 1)),"
-            + "\"speed_mps\":\(Self.num(speedMps, 2)),"
-            + "\"course_deg\":\(Self.num(courseDeg, 1)),"
-            + "\"elevation_m\":\(Self.num(fusion.elevationM, 2)),"
-            + "\"grade_pct\":\(Self.num(odometer.gradePct, 2)),"
-            + "\"lat_g\":\(Self.num(imu(pipeline.latAccMps2 / Self.gStd), 3)),"
-            + "\"lon_g\":\(Self.num(imu(pipeline.lonAccMps2 / Self.gStd), 3)),"
-            + "\"camber_deg\":\(Self.num(imu(pipeline.camberRad * 180.0 / Double.pi), 2)),"
-            + "\"crest_vertical_g\":\(Self.num(imu(pipeline.crestAccMps2 / Self.gStd), 3)),"
-            + "\"roughness_rms\":\(Self.num(imu(pipeline.roughRMSMps2 / Self.gStd), 4)),"
-            + "\"vert_peak_g\":\(Self.num(imu(vertPeak / Self.gStd), 3)),"
-            + "\"impact_g\":\(Self.num(imu(impact / Self.gStd), 2)),"
-            + "\"recording\":\(isRecording ? "true" : "false"),"
-            + "\"calibration\":\"\(live ? pipeline.mount.state.rawValue : "paused")\","
-            + "\"thermal\":\(thermal.level),"
-            + "\"low_power_mode\":\(ProcessInfo.processInfo.isLowPowerModeEnabled ? "true" : "false"),"
-            + "\"battery\":\(Self.num(UIDevice.current.batteryLevel >= 0 ? Double(UIDevice.current.batteryLevel) : nil, 2)),"
-            + "\"charging\":\(UIDevice.current.batteryState == .charging || UIDevice.current.batteryState == .full ? "true" : "false"),"
-            + "\"has_fix\":\(hasFix ? "true" : "false"),"
-            + "\"segments\":\(recordedSegments),"
-            + "\"at\":\(Self.num(at, 0)),"
-            + "\"seq\":\(seq.map { String($0) } ?? "null")"
-            + "}"
+        // F-13: the frame's values are gathered here (a few dozen numbers), encoded to JSON on the live queue, and only the
+        // script call comes back to the main thread
+        let r = LiveFrame.r
+        let frame = LiveFrame(
+            lat: r(hasFix ? latDeg : nil, 7), lon: r(hasFix ? lonDeg : nil, 7), accuracyM: r(hasFix ? accuracyM : nil, 1),
+            speedMps: r(speedMps, 2), courseDeg: r(courseDeg, 1), elevationM: r(fusion.elevationM, 2), gradePct: r(odometer.gradePct, 2),
+            latG: r(imu(pipeline.latAccMps2 / Self.gStd), 3), lonG: r(imu(pipeline.lonAccMps2 / Self.gStd), 3),
+            camberDeg: r(imu(pipeline.camberRad * 180.0 / Double.pi), 2), crestVerticalG: r(imu(pipeline.crestAccMps2 / Self.gStd), 3),
+            roughnessRms: r(imu(pipeline.roughRMSMps2 / Self.gStd), 4), vertPeakG: r(imu(vertPeak / Self.gStd), 3), impactG: r(imu(impact / Self.gStd), 2),
+            recording: isRecording, calibration: live ? pipeline.mount.state.rawValue : "paused", thermal: thermal.level,
+            lowPowerMode: ProcessInfo.processInfo.isLowPowerModeEnabled,
+            battery: r(UIDevice.current.batteryLevel >= 0 ? Double(UIDevice.current.batteryLevel) : nil, 2),
+            charging: UIDevice.current.batteryState == .charging || UIDevice.current.batteryState == .full,
+            hasFix: hasFix, segments: recordedSegments, at: at, seq: seq)
         liveInFlight += 1
-        wv.evaluateJavaScript("(window.apex && window.apex.live) ? (window.apex.live(\(json)), true) : false") { [weak self] result, _ in
-            guard let self else { return }
-            self.liveInFlight = max(0, self.liveInFlight - 1)
-            if (result as? Bool) == true, let seq { self.liveConfirmedSeq = max(self.liveConfirmedSeq, seq) }
+        Self.liveQueue.async { [weak self] in
+            let json = (try? JSONEncoder().encode(frame)).flatMap { String(data: $0, encoding: .utf8) }
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    guard let json, let wv = self.webView else { self.liveInFlight = max(0, self.liveInFlight - 1); return }
+                    wv.evaluateJavaScript("(window.apex && window.apex.live) ? (window.apex.live(\(json)), true) : false") { [weak self] result, _ in
+                        guard let self else { return }
+                        self.liveInFlight = max(0, self.liveInFlight - 1)
+                        if (result as? Bool) == true, let seq { self.liveConfirmedSeq = max(self.liveConfirmedSeq, seq) }
+                    }
+                }
+            }
         }
     }
+    /// F-13: where live frames are encoded (serial, so they reach the page in order).
+    private static let liveQueue = DispatchQueue(label: "Vetta live frame", qos: .userInitiated)
 
     // MARK: The drive journal (Round 3, the owner's drive to work, 2026-10-30; ApexKit DriveJournal, web/drive_keep.js)
     // The page keeps its recording in IndexedDB every few seconds; the fixes since its last checkpoint are here, on disk.
@@ -1219,7 +1328,8 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
             horizontalAccuracyM: loc.horizontalAccuracy,
             verticalAccuracyM: loc.verticalAccuracy,
             speedMps: loc.speed,
-            courseDeg: loc.course
+            courseDeg: loc.course,
+            timestamp: loc.timestamp
         )
         Task { @MainActor in
             self.ingest(fix: fix)
@@ -1246,17 +1356,26 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         lonDeg = fix.lon
         if fix.speedMps >= 0 { speedMps = fix.speedMps }
         if fix.courseDeg >= 0 { courseDeg = fix.courseDeg }
+        fixSpeedMps = fix.speedMps >= 0 ? fix.speedMps : -1
+        fixAt = fix.timestamp
         fusion.ingestGPS(altitudeM: fix.altitudeM, verticalAccuracyM: fix.verticalAccuracyM)
 
+        let v = speedMps
+        let rough = motion.with { s -> Double in s.speedMps = v; return s.pipeline.segmentRoughRMS }
         let nodes = odometer.feed(lat: fix.lat, lon: fix.lon, elevationM: fusion.elevationM, speedMps: fix.speedMps,
-                                  horizontalAccuracyM: fix.horizontalAccuracyM, roughRMSMps2: pipeline.segmentRoughRMS)
-        if !nodes.isEmpty { pipeline.resetSegmentRough() }
+                                  horizontalAccuracyM: fix.horizontalAccuracyM, roughRMSMps2: rough)
+        guard !nodes.isEmpty else { return }
+        // the node's spike and the pipeline's values, and a fresh roughness and spike window, in one hold of the lock
+        let (pipeline, peak) = motion.with { s -> (IMUPipeline, Double?) in
+            let p = s.pipeline, k = s.nodeVertPeakMps2
+            s.pipeline.resetSegmentRough(); s.nodeVertPeakMps2 = nil
+            return (p, k)
+        }
         // A 1 Hz fix can close several nodes; in this CSV they share the spike, like roughness (the web Recorder places it per frame).
-        for node in nodes { record(node, vertPeakMps2: nodeVertPeakMps2) }
-        if !nodes.isEmpty { nodeVertPeakMps2 = nil }
+        for node in nodes { record(node, vertPeakMps2: peak, pipeline: pipeline) }
     }
 
-    private func record(_ node: RoadNode, vertPeakMps2: Double?) {
+    private func record(_ node: RoadNode, vertPeakMps2: Double?, pipeline: IMUPipeline) {
         guard isRecording else { return }
         let idx = recordedSegments
         // Blank, never 0, for what is not measured: chassis-frame values need a solved mount (an unsolved one would put
@@ -1305,19 +1424,12 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
     private func startDeviceMotion() {
         guard motionManager.isDeviceMotionAvailable, !motionManager.isDeviceMotionActive else { return }
         motionManager.deviceMotionUpdateInterval = 1.0 / 100.0
-        motionManager.startDeviceMotionUpdates(to: .main) { [weak self] motion, _ in
-            guard let self, let m = motion else { return }
-            let gravity = Vec3(x: m.gravity.x, y: m.gravity.y, z: m.gravity.z)
-            // CoreMotion userAcceleration is reported with the opposite sign of proper (specific-force)
-            // acceleration, so negate it and convert g -> m/s^2.
-            let accel = Vec3(x: -m.userAcceleration.x, y: -m.userAcceleration.y, z: -m.userAcceleration.z)
-                .scaled(ApexKit.gStd)
-            let gyro = Vec3(x: m.rotationRate.x, y: m.rotationRate.y, z: m.rotationRate.z)
-            let timestamp = m.timestamp
-            MainActor.assumeIsolated {
-                self.ingestMotion(gravityG: gravity, accelMps2: accel, gyroRadS: gyro, timestamp: timestamp)
-            }
-        }
+        // F-13 (REVIEW_FEEL.md): 100 samples a second used to land on the main queue, the thread that drives
+        // evaluateJavaScript and UIKit; now they go to the motion lane's own queue, and only a newly solved mount comes back
+        let key = Self.mountDefaultsKey
+        motionManager.startDeviceMotionUpdates(to: motion.queue, withHandler: MotionLane.handler(motion) { rows in
+            UserDefaults.standard.set(rows, forKey: key)        // thread-safe; the mount is reused on the next drive
+        })
     }
 
     /// Thermal guard (ApexKit.ThermalGuard): critical stops the 100 Hz pipeline, fair or cooler restarts it. GPS, map,
@@ -1325,9 +1437,11 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
     private func thermalChanged() {
         let level = ProcessInfo.processInfo.thermalState.rawValue
         guard thermal.update(level: level, t: ProcessInfo.processInfo.systemUptime) else { return }
+        let copy = thermal
+        motion.with { $0.thermal = copy }
         if thermal.paused {
             motionManager.stopDeviceMotionUpdates()
-            nodeVertPeakMps2 = nil
+            motion.with { $0.nodeVertPeakMps2 = nil }
         } else {
             startDeviceMotion()
         }
@@ -1335,17 +1449,10 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
 
     private var imuLive: Bool { thermal.imuLive(t: ProcessInfo.processInfo.systemUptime) }
 
+    /// One motion sample from the replay (ApexReplay, on the main thread); CoreMotion's go straight to the motion lane.
     fileprivate func ingestMotion(gravityG: Vec3, accelMps2 a: Vec3, gyroRadS w: Vec3, timestamp: Double) {
-        latestGravityG = gravityG
-        frameImpactMps2 = max(frameImpactMps2, (a.x * a.x + a.y * a.y + a.z * a.z).squareRoot())
-        // Calibration is automatic and continuous (ApexKit.MountCalibrator): gravity gives the vertical, GPS speed and
-        // turns give forward, a moved phone drops back to unknown. Silent; the frame's "calibration" field shows the state.
-        let wasLocked = pipeline.mount.state == .locked
-        pipeline.step(accel: a, gyro: w, timestamp: timestamp, speedMps: speedMps, gravityG: gravityG)
-        if !wasLocked && pipeline.mount.state == .locked { persistMount() }
-        // Pothole evidence only in a solved chassis frame and while rolling (a door slam at a stop is not road).
-        if imuLive && pipeline.mount.state == .locked && speedMps >= 1.0 {   // not while settling after a thermal pause
-            nodeVertPeakMps2 = max(nodeVertPeakMps2 ?? 0.0, abs(pipeline.hpVert))
+        if let rows = motion.ingest(gravityG: gravityG, accelMps2: a, gyroRadS: w, timestamp: timestamp) {
+            UserDefaults.standard.set(rows, forKey: Self.mountDefaultsKey)
         }
     }
 
@@ -1354,19 +1461,15 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
     /// Manual vertical lock (the "calibrate" message): +Z_veh = -gravity now. Not needed in normal use, the
     /// calibration is automatic; forward follows from driving, inside ApexKit.
     func zeroMountCalibration() {
-        pipeline.mount.lockVertical(gravityG: latestGravityG)
+        motion.with { s in let g = s.gravityG; s.pipeline.mount.lockVertical(gravityG: g) }
         speak("Vertical locked. Accelerate straight to lock forward axis.")
-    }
-
-    private func persistMount() {
-        UserDefaults.standard.set(pipeline.mount.rows, forKey: Self.mountDefaultsKey)
     }
 
     private func restorePersistedMount() {
         guard let rows = UserDefaults.standard.array(forKey: Self.mountDefaultsKey) as? [Double],
               rows.count == 9,
               rows.allSatisfy({ $0.isFinite }) else { return }
-        pipeline.mount.restore(rows: rows)
+        motion.with { $0.pipeline.mount.restore(rows: rows) }
     }
 
     // MARK: Recording / export

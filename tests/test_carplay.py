@@ -6,6 +6,7 @@ import shutil
 import subprocess
 
 import pytest
+from tests.page_source import cockpit_source
 
 NODE = shutil.which("node")
 pytestmark = pytest.mark.skipif(NODE is None, reason="node not installed")
@@ -143,7 +144,7 @@ def test_places(out):
 
 
 def test_only_road_hazards_alert_the_car():
-    html = open(os.path.join(ROOT, "web", "index.html"), encoding="utf-8").read()
+    html = cockpit_source()
     assert "if (text && opts.alert && driveActive) carPost({ kind: 'hazard'" in html
     # the urgent speech lane also carries turn-now directions and crests: only member, reported and convoy hazards set alert
     assert html.count("alert: true") == 3
@@ -187,8 +188,9 @@ def test_hazards_are_named_and_unplaceable_ones_dropped(maps):
 
 
 def test_the_look_carries_the_theme_and_its_dark_card(maps):
+    # a theme without its map palettes (here a bare one) sends none: the native car map keeps what it has (F-07)
     assert maps["look"] == {"kind": "look", "theme": "tapedeck", "card": "#0A0C0B", "cardInk": "#7DF5DE", "accent": "#FFB347", "voice": False,
-                            "units": "imperial"}
+                            "units": "imperial", "palette": None}
 
 
 def test_turn_symbols_are_tulips_in_the_cards_ink_and_never_take_markup(maps):
@@ -256,13 +258,13 @@ def test_car_map_is_fed_for_a_smooth_glide():
     assert "guard loaded, code != sentMode else { return }" in swift, "only a changed mode"
     assert "config.preferences.inactiveSchedulingPolicy = .none" in swift, "full rate with the phone locked"
     js = open(os.path.join(ROOT, "web", "carmap.js"), encoding="utf-8").read()
-    assert "requestAnimationFrame(frame)" in js and "map.jumpTo(followView(p))" in js, "the camera glides every frame"
+    assert "requestAnimationFrame(frame)" in js and "map.jumpTo(followView(p, " in js, "the camera glides every frame"
     assert "apex-contour" not in js and "maplibre-contour" not in open(os.path.join(ROOT, "web", "carmap.html"), encoding="utf-8").read()
 
 
 def test_opens_with_no_route():
     """Opening the app (or the car) starts with no route: the planned route lasts the session only (2026-10-30)."""
-    html = open(os.path.join(ROOT, "web", "index.html"), encoding="utf-8").read()
+    html = cockpit_source()
     assert "sessionStorage.setItem(PLANNED" in html and "localStorage.setItem(PLANNED" not in html
     assert "localStorage.getItem(PLANNED)" not in html
     # ... but a route being driven survives a close, and ending the drive forgets it (the owner: "active routes")
@@ -296,7 +298,7 @@ def test_a_free_drive_has_no_arrival():
 def test_every_drive_reaches_the_car_and_ends_idle():
     """U-59, U-79, U-62: the page tells the car a drive started, route or none; the idle car can start one; End goes idle."""
     swift = open(os.path.join(ROOT, "CarPlay", "ApexCarPlay.swift"), encoding="utf-8").read()
-    html = open(os.path.join(ROOT, "web", "index.html"), encoding="utf-8").read()
+    html = cockpit_source()
     assert "carPost({ kind: 'start', title:" in html, "enterDrive posts start"
     assert 'case "start":' in swift and "guide = Self.recordingGuide" in swift
     assert 'CPBarButton(title: "Drive") { _ in ApexCar.shared.send("start", ["free": true]) }' in swift, "the recording test taps the label Drive"

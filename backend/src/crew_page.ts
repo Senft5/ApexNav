@@ -5,7 +5,7 @@ import type { Viewer } from "./auth";
 import { Env, HttpError, body, num } from "./util";
 import { cleanText } from "./convoy";
 import { isCrewMember } from "./social";
-import { eventsList } from "./events";
+import { RECORD_AFTER_H, eventsList, lastEvent } from "./events";
 import { reportedSql } from "./reports_sql";
 import { PATTERNS, atLeast, liveryOf, myDecals, templateCap, type Tier } from "./livery";
 
@@ -20,7 +20,7 @@ const NOT_BLOCKED = (who: string) =>
 interface CrewRow { id: string; name: string; owner: string; visibility: string; about: string | null; area_name: string | null; motto: string | null;
   crest: string | null; stripe: string | null; cover_photo_id: string | null; crest_photo_id: string | null; members: number;
   stripe2: string | null; stripe3: string | null; pattern: string | null; pinned_route_id: string | null; pinned_name: string | null;
-  pinned_chat_id: string | null; house_canon_id: string | null; call_sign: string | null; hazard_kinds: string; regroup_line: string | null }
+  pinned_chat_id: string | null; house_canon_id: string | null; call_sign: string | null; hazard_kinds: string; regroup_line: string | null; invites: string }
 interface BoardRow { handle: string | null; photo_id: string | null; score: number | null; mine: number; car: string | null; badge: string | null }
 
 /** GET /api/crews/:id/page */
@@ -28,7 +28,7 @@ export async function crewPage(env: Env, v: Viewer, crewId: string) {
   if (!(await isCrewMember(env, crewId, v.id))) throw new HttpError(404, "no_crew");
   const c = await env.DB.prepare(`SELECT c.id, c.name, c.owner, c.visibility, c.about, c.area_name, c.motto, c.crest, c.stripe, c.cover_photo_id, c.crest_photo_id,
       c.stripe2, c.stripe3, c.pattern, c.pinned_route_id, (SELECT r.name FROM shared_routes r WHERE r.id = c.pinned_route_id) AS pinned_name,
-      c.pinned_chat_id, c.house_canon_id, c.call_sign, c.hazard_kinds, c.regroup_line,
+      c.pinned_chat_id, c.house_canon_id, c.call_sign, c.hazard_kinds, c.regroup_line, c.invites,
       (SELECT COUNT(*) FROM crew_members x WHERE x.crew_id = c.id) AS members FROM crews c WHERE c.id = ?`).bind(crewId).first<CrewRow>();
   if (!c) throw new HttpError(404, "no_crew");
   // The board: every member you can see, with their best Score this month as published to this crew (grant on), else
@@ -43,7 +43,9 @@ export async function crewPage(env: Env, v: Viewer, crewId: string) {
        FROM crew_members m JOIN users u ON u.id = m.user_id
       WHERE m.crew_id = ?2 AND (m.user_id = ?1 OR ${NOT_BLOCKED("m.user_id")})
       ORDER BY score IS NULL, score DESC, u.handle LIMIT 100`).bind(v.id, crewId, c.visibility).all<BoardRow>()).results;
-  const now = Date.now(), next = (await eventsList(env, v, crewId)).find((e) => Date.parse(e.starts_at) > now - 3600_000) ?? null;
+  // the next drive holds the page through the drive itself (its morning and its convoy, P-03); after that it is the last one
+  const now = Date.now(), next = (await eventsList(env, v, crewId)).find((e) => Date.parse(e.starts_at) > now - RECORD_AFTER_H * 3600_000) ?? null;
+  const last = await lastEvent(env, crewId);
   const livery = await liveryOf(env, crewId), mine = await myDecals(env, v.id, crewId);
   // what's unlocked shows only what the tier allows, so a crew that drops a tier falls back to the Plain look
   const club = atLeast(livery.tier, "club"), works = atLeast(livery.tier, "works");
@@ -60,12 +62,13 @@ export async function crewPage(env: Env, v: Viewer, crewId: string) {
   return {
     id: c.id, name: c.name, motto: c.motto, about: c.about, visibility: c.visibility, area_name: c.area_name, members: c.members,
     is_owner: c.owner === v.id, crest: c.crest, stripe: c.stripe, cover_photo_id: c.cover_photo_id,
+    invites: c.invites, can_invite: c.owner === v.id || c.invites === "anyone",          // P-07: who can invite, and whether you can
     livery: { ...livery, mine }, stripe2: club ? c.stripe2 : null, stripe3: works ? c.stripe3 : null, pattern: works ? c.pattern : null,
     crest_photo_id: club ? c.crest_photo_id : null, pinned: club && c.pinned_route_id && c.pinned_name ? { id: c.pinned_route_id, name: c.pinned_name } : null, routes,
     pinned_chat: pinnedChat, house, stages, call_sign: works ? c.call_sign : null,
     hazard_kinds: atLeast(livery.tier, "factory") ? (JSON.parse(c.hazard_kinds) as string[]) : [],
     regroup_line: atLeast(livery.tier, "factory") ? c.regroup_line : null,
-    voice_packs: atLeast(livery.tier, "factory") ? (await env.DB.prepare("SELECT pack FROM crew_voice WHERE crew_id = ?").bind(crewId).all<{ pack: string }>()).results.map((r) => r.pack) : [], templates_cap: templateCap(livery.tier), board: board.map((r) => ({ ...r, mine: !!r.mine, badge: works ? r.badge : null })), next, sharing_scores: !!grant?.share_scores,
+    voice_packs: atLeast(livery.tier, "factory") ? (await env.DB.prepare("SELECT pack FROM crew_voice WHERE crew_id = ?").bind(crewId).all<{ pack: string }>()).results.map((r) => r.pack) : [], templates_cap: templateCap(livery.tier), board: board.map((r) => ({ ...r, mine: !!r.mine, badge: works ? r.badge : null })), next, last, sharing_scores: !!grant?.share_scores,
   };
 }
 

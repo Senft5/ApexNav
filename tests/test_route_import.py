@@ -6,6 +6,7 @@ import shutil
 import subprocess
 
 import pytest
+from tests.page_source import cockpit_source
 
 NODE = shutil.which("node")
 pytestmark = pytest.mark.skipif(NODE is None, reason="node not installed")
@@ -62,8 +63,8 @@ def test_gpx_export_reads_back(out):
 
 def test_wired_in_app_and_shell():
     read = lambda *p: open(os.path.join(ROOT, *p), encoding="utf-8").read()
-    html, yml, swift = read("web", "index.html"), read("project.yml"), read("ApexNavApp.swift")
-    assert '<script src="route_import.js"></script>' in html and 'id="gpxFile"' in html and 'id="routeGpxBtn"' in html
+    html, yml, swift = cockpit_source(), read("project.yml"), read("ApexNavApp.swift")
+    assert '<script src="route_import.js"' in html and 'id="gpxFile"' in html and 'id="routeGpxBtn"' in html
     assert "msg.type === 'gpx'" in html and "ApexRouteImport.parseMapsLink(toQ);" in html
     assert "LSItemContentTypes: [com.topografix.gpx]" in yml and yml.count("LSSupportsOpeningDocumentsInPlace:") == 1   # one key: a duplicate is ambiguous to YAML readers
     assert "if url.isFileURL { openFile(url); return }" in swift and "data.count <= 5_000_000" in swift

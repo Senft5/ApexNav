@@ -52,7 +52,7 @@ The JS file is a line-for-line port used by the browser/iOS cockpit for live OSR
   sent as `vert_peak_g`; the web Recorder places each frame's spike on the 5 m sample where the car was (its share of the way
   between the two GPS fixes around it), only with a locked mount and above 1 m/s, as the CSV column `vert_peak_g`;
   spikes inside a gap of over ~3 s or 100 m between fixes are dropped, not guessed. Blank means unmeasured, never 0.
-- A drive is kept as it goes (`web/drive_keep.js`, 2026-10-30): the page checkpoints the Recorder to IndexedDB (`apexnav` v2,
+- A drive is kept as it goes (`web/drive_keep.js`, 2026-10-30): the page checkpoints the Recorder to IndexedDB (`apexnav` v2+,
   store `keep`: a head plus row chunks, `recording.js keepPut/keepAll/keepRemove`) every 15 s or 250 m; the shell numbers
   every fix (`seq`, `at` in each live frame) and journals those since the last checkpoint on disk (`ApexKit.DriveJournal`,
   Application Support/DriveJournal, page messages `{cmd:'journal', op: start|durable|end|list}`). A page that stops answering
@@ -60,6 +60,15 @@ The JS file is a line-for-line port used by the browser/iOS cockpit for live OSR
   CarPlay disconnects with the car stopped, or after 10 min below 2.5 m/s with no car screen, cut back to the last sample at
   driving speed; at launch `recoverKept` saves any drive never ended (checkpoint + journal) with `ended: 'recovered'`, or
   carries on one the shell is still recording (the page was reloaded mid-drive).
+- Drives at rest (REVIEW_FEEL F-04/F-06, 2026-10-30): `apexnav` v3 adds the store `summaries` (`recording.js summarize`: name,
+  date, length, samples, time, box, the Vetta Score and its corners as [start, end, apex], tags, note; no rows), written in
+  the same transaction as its drive (`store`, `patch`, `remove`). The upgrade only adds the store; `summaries()` builds a
+  missing one from the drive's own rows, in the transaction that reads it. The heavy work runs in `analysis_worker.js`,
+  which imports `analysis_client.js` and reads IndexedDB itself: jobs `save` (End and recovery: the Recorder's rows parsed,
+  scored and stored, the card's facts back), `summaries`, `patch`, `drive` (reference, coach, road history), `compare`,
+  `passes`, `steadiness`, `memory` (the cockpit's bump and corner memory), `stageRefs`, `drivenGrid`; each runs inline when
+  there is no worker. The Log (`analysis.html`) lists summaries and reads one drive's rows only for the page that draws
+  it; it is loaded once in a hidden frame while the map is idle and told what changed (`ApexLogFrame.open/changed/shown`).
 - Hazards on phone drives: `profileRecording` runs `detectHazards` (JS port of `road_dna.detect_hazards`, parity-tested)
   with no roughness stand-in, so a bump needs a measured spike (> 0.35 g and 6x the surrounding roughness) and crests/dips a
   measured crest. `ApexRecording.corroborate` then counts, per hazard, your other drives over the same spot in the same
@@ -124,7 +133,7 @@ The JS file is a line-for-line port used by the browser/iOS cockpit for live OSR
   over a stretch = mean of combined g / that slice's radius (capped at 1.5, shown capped at 100 %) over samples of at least
   0.15 g. The drive view draws it as the Grip circle; scrubbing into a corner shows its trace and grip use from 100 m
   before turn-in to the exit.
-- Web shell: `web/index.html` (cockpit), `web/analysis.html` (history / segments / compare), `web/themes.js` (theme registry), `web/instruments.js` (renderers).
+- Web shell: `web/index.html` (cockpit markup and styles; its script is `web/cockpit.js`, loaded `defer` with the launch modules, while `web/lazy.js` loads People, the Garage, crews, builds, the convoy, friends on the map and the phonemizer on first use or once the map is idle, REVIEW_FEEL F-03; fonts bundled in `web/fonts/`, F-12), `web/analysis.html` (history / segments / compare), `web/themes.js` (theme registry), `web/instruments.js` (renderers).
 
 ## 3c. Fun routing (`web/fun_route.js`)
 Destination routes are chosen for fun within a time budget (Quick / Fun / Max fun): the router's route and alternates plus 1–2 corridor stage detours timed with one Valhalla matrix call, scored on map geometry (junction turns removed) and ranked by fun and corners gained against extra minutes. Details, weights and what was checked: docs/ROUTING.md.
@@ -138,6 +147,16 @@ Maps a normalized **Driver Engagement Score** (0.0 to 1.0, derived from combined
 ## 6. iOS & CarPlay Deployment Pipeline
 - **Cloud Unsigned `.ipa` Builder**: `.github/workflows/build.yml` uses `xcodegen` (`project.yml`) on `macos-15` runners to compile `ApexNav.ipa` for USB sideloading (Sideloadly / iloader) on pull requests that change native code; main archives for TestFlight (docs/TESTFLIGHT.md).
 - **CarPlay Head-Unit Path**: Uses `WidgetKit` / `LiveActivity` for un-gated CarPlay Dashboard telemetry cards on free sideloaded builds, and `CPMapTemplate` (`com.apple.developer.carplay-maps`) for full head-unit vector map projection.
+- **The car's map (2026-10-30, REVIEW_FEEL.md F-07, F-01)**: the CarPlay base view, the Dashboard and the instrument cluster draw
+  with MapLibre Native for iOS (Metal; Swift package `MapLibre`, pinned in `project.yml`) in `CarPlay/ApexCarMap.swift`: one map
+  engine in the app's process, not a WKWebView per screen. The cockpit page stays the brain and sends the same messages as
+  before (`ApexCarMapViewController`); `web/carmap.html` is the fallback, and Android Auto's and the website's car map. The
+  arrow is dead reckoned between 1 Hz fixes (position only, never road data): `web/car_glide.js` and ApexKit `CarGlide`, one
+  algorithm held to one fixture (`ApexKit/Tests/Fixtures/car_glide.json`, `tools/make_glide_fixture.js`).
+- **The shell's threads (F-13)**: CoreMotion's 100 Hz samples go to the motion lane's own serial `OperationQueue`
+  (`MotionLane` in `ApexNavApp.swift`: the IMU pipeline behind one lock), not the main queue; the 10 Hz live frame is gathered
+  on the main thread, encoded (`LiveFrame`, `JSONEncoder`) on a serial background queue, and only `evaluateJavaScript`
+  returns to the main thread.
 
 ## 7. App-open road learning and live convoy hazards (design draft, 2026-10-26)
 

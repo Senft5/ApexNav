@@ -1,7 +1,7 @@
 // Friends, blocks, crews, grants and boards. Every function takes the verified viewer; there is no endpoint that
 // takes a user id for "whose data to read". Privacy rules (docs/BACKEND.md section 11) are enforced here and tested.
 import { Env, HANDLE_RE, HttpError, body, num, pair, randomToken, sha256hex, sqlTime, str } from "./util";
-import type { Viewer } from "./auth";
+import { befriendOnLink, type Viewer } from "./auth";
 import { removedSql, reportedSql } from "./reports_sql";
 import { kudosFor } from "./kudos";
 
@@ -131,8 +131,8 @@ export async function crewUpdate(env: Env, v: Viewer, crewId: string, req: Reque
     name, set.visibility, set.about, set.area_name, set.area_lat, set.area_lon, crewId);
 }
 
-export const crewList = (env: Env, v: Viewer) => all<{ id: string; name: string; role: string; members: number; visibility: string; about: string | null; area_name: string | null }>(env,
-  `SELECT c.id, c.name, m.role, c.visibility, c.about, c.area_name, (SELECT COUNT(*) FROM crew_members x WHERE x.crew_id = c.id) AS members
+export const crewList = (env: Env, v: Viewer) => all<{ id: string; name: string; role: string; members: number; visibility: string; about: string | null; area_name: string | null; invites: string }>(env,
+  `SELECT c.id, c.name, m.role, c.visibility, c.about, c.area_name, c.invites, (SELECT COUNT(*) FROM crew_members x WHERE x.crew_id = c.id) AS members
      FROM crews c JOIN crew_members m ON m.crew_id = c.id WHERE m.user_id = ? ORDER BY c.name`, v.id);
 
 /** Public crews near a point (about 55 km), nearest first; not ones you are in, none whose owner you blocked or who blocked you. */
@@ -167,18 +167,21 @@ export async function crewJoinPublic(env: Env, v: Viewer, crewId: string): Promi
 
 export async function crewMembers(env: Env, v: Viewer, crewId: string) {
   if (!(await isCrewMember(env, crewId, v.id))) throw new HttpError(404, "no_crew");
-  return all<{ handle: string | null; name: string | null; role: string; mine: number }>(env,
-    `SELECT u.handle, ${NAME_FOR("m.user_id", "?2")} AS name, m.role, (m.user_id = ?2) AS mine
+  return all<{ handle: string | null; name: string | null; role: string; mine: number; photo_id: string | null }>(env,
+    `SELECT u.handle, ${NAME_FOR("m.user_id", "?2")} AS name, m.role, (m.user_id = ?2) AS mine, u.photo_id
        FROM crew_members m JOIN users u ON u.id = m.user_id
       WHERE m.crew_id = ?1
         AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker = ?2 AND b.blocked = m.user_id) OR (b.blocker = m.user_id AND b.blocked = ?2))
       ORDER BY m.role DESC, u.handle`, crewId, v.id);
 }
 
+/** P-07: any member makes a link to their crew, unless the owner set "Who can invite: Owner"; then a member is told so (403),
+ *  and a stranger still sees no crew (404). */
 export async function crewInvite(env: Env, v: Viewer, crewId: string): Promise<{ token: string }> {
-  const crew = await first<{ owner: string }>(env, "SELECT owner FROM crews WHERE id = ?", crewId);
-  if (!crew || crew.owner !== v.id) throw new HttpError(404, "no_crew");
-  // Same cap as account invites: at most 10 live links per owner across their crews (IDEAS Z-15).
+  const crew = await first<{ owner: string; invites: string }>(env, "SELECT owner, invites FROM crews WHERE id = ?", crewId);
+  if (!crew || !(await isCrewMember(env, crewId, v.id))) throw new HttpError(404, "no_crew");
+  if (crew.invites === "owner" && crew.owner !== v.id) throw new HttpError(403, "owner_invites_only");
+  // Same cap as account invites: at most 10 live links per person across their crews (IDEAS Z-15).
   const open = await first<{ n: number }>(env, "SELECT COUNT(*) AS n FROM crew_invites WHERE created_by = ? AND expires_at > datetime('now')", v.id);
   if ((open?.n ?? 0) >= CREW_INVITE_CAP) throw new HttpError(429, "too_many_open_invites");
   const token = randomToken(24);
@@ -197,36 +200,60 @@ export async function crewInvitesRevoke(env: Env, v: Viewer, crewId: string): Pr
   return { revoked: r.meta.changes ?? 0 };
 }
 
+/** PUT /api/crews/:id/invites { by: "anyone" | "owner" } (owner, P-07): who can make the crew's invite links. Switching to the
+ *  owner voids the links other members made; the people they already brought in stay. */
+export async function crewInvitesBy(env: Env, v: Viewer, crewId: string, req: Request): Promise<{ by: string }> {
+  const crew = await first<{ owner: string }>(env, "SELECT owner FROM crews WHERE id = ?", crewId);
+  if (!crew || crew.owner !== v.id) throw new HttpError(404, "no_crew");
+  const { by } = await body<{ by?: unknown }>(req);
+  if (by !== "anyone" && by !== "owner") throw new HttpError(400, "bad_by");
+  await env.DB.batch([
+    env.DB.prepare("UPDATE crews SET invites = ? WHERE id = ?").bind(by, crewId),
+    ...(by === "owner" ? [env.DB.prepare("DELETE FROM crew_invites WHERE crew_id = ? AND created_by != ?").bind(crewId, v.id)] : []),
+  ]);
+  return { by };
+}
+
 /** A crew invite works only while it's live, never across a block with the owner (either way) and never for a crew several people
- *  reported or the owner removed; all three look the same as an unknown token, so nobody learns they were blocked. ?1 token hash, ?2 viewer. */
+ *  reported or the owner removed; all three look the same as an unknown token, so nobody learns they were blocked. A member's link
+ *  dies with their membership, and with "Who can invite: Owner" (P-07). ?1 token hash, ?2 viewer. */
 const CREW_INVITE_OK = `i.token_hash = ?1 AND i.expires_at > datetime('now')
   AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker = ?2 AND b.blocked = c.owner) OR (b.blocker = c.owner AND b.blocked = ?2))
+  AND EXISTS (SELECT 1 FROM crew_members im WHERE im.crew_id = c.id AND im.user_id = i.created_by)
+  AND (c.invites = 'anyone' OR i.created_by = c.owner)
   AND NOT ${reportedSql("crew", "c.id")}`;
 
-export async function crewJoin(env: Env, v: Viewer, req: Request): Promise<{ id: string }> {
+/** POST /api/crews/join { token }: one link is the whole way in (P-02). Anyone signed in (a member, since Vetta opened) joins the
+ *  crew and, on first joining, is friends with whoever sent the link (not across a block). `friend` is that sender's handle. */
+export async function crewJoin(env: Env, v: Viewer, req: Request): Promise<{ id: string; friend: string | null }> {
   const { token } = await body<{ token?: string }>(req);
-  const inv = await first<{ crew_id: string }>(env,
-    `SELECT i.crew_id FROM crew_invites i JOIN crews c ON c.id = i.crew_id WHERE ${CREW_INVITE_OK}`, await sha256hex(str(token, "token", 10, 100)), v.id);
+  const inv = await first<{ crew_id: string; created_by: string; handle: string | null }>(env,
+    `SELECT i.crew_id, i.created_by, s.handle FROM crew_invites i JOIN crews c ON c.id = i.crew_id JOIN users s ON s.id = i.created_by
+      WHERE ${CREW_INVITE_OK}`, await sha256hex(str(token, "token", 10, 100)), v.id);
   if (!inv) throw new HttpError(400, "invalid_invite");
   const n = await first<{ n: number }>(env, "SELECT COUNT(*) AS n FROM crew_members WHERE user_id = ? AND crew_id != ?", v.id, inv.crew_id);
   if ((n?.n ?? 0) >= 10) throw new HttpError(429, "too_many_crews");                // same cap as creating or joining a public crew
-  await run(env, "INSERT OR IGNORE INTO crew_members (crew_id, user_id) VALUES (?, ?)", inv.crew_id, v.id);
-  return { id: inv.crew_id };
+  const joined = await run(env, "INSERT OR IGNORE INTO crew_members (crew_id, user_id) VALUES (?, ?)", inv.crew_id, v.id);
+  // only a first join: tapping an old link again doesn't undo an unfriending
+  if (joined.meta.changes) await befriendOnLink(env, v.id, inv.created_by);
+  const friend = inv.created_by !== v.id && await isAcceptedFriend(env, v.id, inv.created_by) ? inv.handle : null;
+  return { id: inv.crew_id, friend };
 }
 
 /** What a crew invite is for, before joining: its name, owner, size and whether you're in it already. Asks nothing of the
  *  crew's members and changes nothing; an unknown or expired invite is 400 like a join. */
 export async function crewInvitePreview(env: Env, v: Viewer, req: Request) {
   const { token } = await body<{ token?: string }>(req);
-  const row = await first<{ id: string; name: string; visibility: string; owner_handle: string | null; members: number; mine: number }>(env,
-    `SELECT c.id, c.name, c.visibility, o.handle AS owner_handle,
+  const row = await first<{ id: string; name: string; visibility: string; owner_handle: string | null; from_handle: string | null; members: number; mine: number }>(env,
+    `SELECT c.id, c.name, c.visibility, o.handle AS owner_handle, s.handle AS from_handle,
             (SELECT COUNT(*) FROM crew_members m WHERE m.crew_id = c.id) AS members,
             EXISTS (SELECT 1 FROM crew_members m WHERE m.crew_id = c.id AND m.user_id = ?2) AS mine
-       FROM crew_invites i JOIN crews c ON c.id = i.crew_id JOIN users o ON o.id = c.owner
+       FROM crew_invites i JOIN crews c ON c.id = i.crew_id JOIN users o ON o.id = c.owner JOIN users s ON s.id = i.created_by
       WHERE ${CREW_INVITE_OK}`,
     await sha256hex(str(token, "token", 10, 100)), v.id);
   if (!row) throw new HttpError(400, "invalid_invite");
-  return { id: row.id, name: row.name, visibility: row.visibility, owner: row.owner_handle, members: row.members, member: !!row.mine };
+  // `from`: who sent the link (the owner or, since P-07, any member); the one you'd be friends with
+  return { id: row.id, name: row.name, visibility: row.visibility, owner: row.owner_handle, from: row.from_handle, members: row.members, member: !!row.mine };
 }
 
 /** Leaving removes your grants and published entries for that crew. The owner leaving dissolves the crew. */
