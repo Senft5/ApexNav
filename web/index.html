@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-HV0ieUx0AjvLE3y+tBWCSVCJmDNfrW2SdoDaBMQqxhA=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-0TbVLdEsNhnxUu1SYs7mAPenc2brp26oQyMZthq/eUc=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -2421,28 +2421,36 @@
 
     // Co-driver reading: the note, then "into"/"and" + the next note when it follows at once,
     // otherwise the distance to it ("Left 4 minus long, 150"). Chained notes are not called twice.
-    function chainedCall(e, ev, spirited) {
-      let text = e.call, cur = e;
-      const chain = [e];
+    // run: the run of corners being read (careRun below), when the call is about to be said: its "care" is said once.
+    function chainedCall(e, ev, spirited, run = null) {
+      let cur = e;
+      const raw = [e];
       for (let hops = 0; hops < 2 && (cur.link === 'into' || cur.link === 'and'); hops++) {
         const next = ev[ev.indexOf(cur) + 1];
         if (!next || (next.type === 'corner' && !spirited)) break;
-        text += ` ${cur.link} ${next.call}`;
         state.spoken.add(`${track.id}:${next.type}:${next.index}`);
-        chain.push(next);
+        raw.push(next);
         cur = next;
       }
+      // REVIEW4 §4: "careful" after every tight corner stops meaning anything by the third; a co-driver says it once a stage.
+      // The lightest caution (rally "care", plain "careful") is said once per run of corners; the stronger ones ("caution",
+      // "slow down" and up) are about that corner and always said. The strip still marks every one.
+      const chain = !run ? raw : raw.map((n) => (n.type !== 'corner' || n.recce || n.caution !== 1 || run.take() ? n
+        : { ...n, caution: 0, call: String(n.call).replace(/, care$/i, '') }));
+      let text = chain.map((n, i) => (i ? ` ${chain[i - 1].link} ` : '') + n.call).join('');
       if (cur.link && cur.link !== 'into' && cur.link !== 'and') text += `, ${cur.link}`;
       // The last note's link is "into"/"and" only if the chain was cut short; don't voice a dangling link.
       const voiced = chain.map((n, i) => (i === chain.length - 1 && (n.link === 'into' || n.link === 'and')) ? { ...n, link: null } : n);
       // Your own recce call in the chain (recce.js, V-09): spoken whole as you wrote it, in either words mode (the bank's
       // clips and plain words are built from the map's corner, not your text).
-      const keys = chain.map((n) => `${n.type}:${n.index}:${n.dist_m}`);   // the strip's keys of the notes it calls (Kit, U-100)
+      const keys = raw.map((n) => `${n.type}:${n.index}:${n.dist_m}`);   // the strip's keys of the notes it calls (Kit, U-100)
       if (chain.some((n) => n.recce)) return { text, chain: null, keys };
       // Plain words: spoken whole (the voice bank's clips are rally words), from the same notes.
       if (state.noteWords === 'plain') return { text: ApexPlainNotes.plainChain(voiced, ApexUnits), chain: null, keys };   // in the driver's units (U-93)
       return { text, chain: voiced, keys };
     }
+    // The run of corners being read (note_timing.js createCareRun, REVIEW4 §4): its "care" is said once.
+    const careRun = ApexNoteTiming.createCareRun();
 
     // Where a note is due: a corner's entry (turn-in), not its apex, so the call and the countdown come before you turn
     // (owner 2026-10-28: "called out in reference to the apex rather than the entry"). Hazards are a point: entry = apex.
@@ -2511,6 +2519,7 @@
       if (moving && state.notesMode === 'auto') {
         const t = wakeVoice.update(spirited, now);
         if (t) say(t === 'on' ? 'Full notes.' : 'Quiet from here. Bumps and cameras only.', false, null, t === 'on' ? 'sys:stage' : 'sys:cruise', { key: `wake:${t}` });
+        if (t === 'off') careRun.reset();   // the run of corners is over: the next one's "care" is said (§4)
       } else wakeVoice.reset();
       // U-58: a drive's first note is its first corner, when one is within the wake window as the drive begins (a drive that
       // starts on a motorway starts quiet, and says so in the strip). Quiet mode is the driver's choice: no first note there.
@@ -2596,7 +2605,7 @@
         const own = state.noteWords === 'plain' && !e.recce ? ApexPlainNotes.plainCall(e) : e.call;
         const lastM = e.type === 'corner' ? ApexNoteTiming.lastCallM({ vMps, text: own }) : 0;
         if (e.type === 'corner' && !(first && stopped) && d < lastM) { state.spoken.add(key); continue; }
-        const call = chainedCall(e, ev, spirited || first);
+        let call = chainedCall(e, ev, spirited || first);
         const apexMps = apexMpsOf(e);
         const startCall = first && stopped && d <= ApexNoteTiming.wakeWindowM({ vMps, apexMps, text: call.text, reactionS: reactS });
         if (!startCall && d > ApexNoteTiming.leadM({ vMps, apexMps, text: call.text, reactionS: reactS })) continue;
@@ -2604,6 +2613,7 @@
         if (!first && (e.type === 'corner' ? !spirited : !(spirited || noteworthyInCruise(e)))) continue;
         // (a first note read at the start may be under the car already: it is not stale for that)
         // dueByM: a call that waits in the queue (behind "Full notes.", a direction) is dropped once it would be late (U-96)
+        if (e.type === 'corner' && !e.recce) call = chainedCall(e, ev, spirited || first, careRun.at(noteM(e), track.id));   // "care" once a run (§4)
         say(call.text, false, call.chain, null, { kind: e.type === 'corner' ? 'ordinary' : 'hazard', key, atM: noteM(e), duck: true, kitFor: call.keys,
           ...(e.type === 'corner' && !startCall ? { dueByM: noteM(e) - lastM } : {}), ...(startCall ? { atM: null } : {}) });
         if (live) reaction.called(performance.now(), call.text, ApexNoteTiming.needsBrake(vMps, apexMps));

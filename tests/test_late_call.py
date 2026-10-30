@@ -25,6 +25,11 @@ const a = q.take(10, 340);
 q.push({ text: 'again', atM: 400, dueByM: due }, 0);
 const b = q.take(10, 360);
 out.queue = [a && a.text, b && b.text];
+// REVIEW4 §4: "care" once per run of corners (each within 1 km of the last called), again after a gap, a new route or a reset
+const run = T.createCareRun(), takes = [];
+for (const [m, id] of [[100, 'r'], [400, 'r'], [900, 'r'], [2500, 'r'], [2800, 'r'], [2900, 'r2'], [3000, 'r2']]) takes.push(run.at(m, id).take());
+run.reset(); takes.push(run.at(3100, 'r2').take());
+out.care = takes;
 console.log(JSON.stringify(out));
 """
 
@@ -46,9 +51,13 @@ def test_a_waiting_call_is_dropped_once_late(out):
     assert out["queue"] == ["Open left, then 200 feet", None]
 
 
+def test_care_once_per_run_of_corners(out):
+    assert out["care"] == [True, False, False, True, False, True, False, True]
+
+
 def test_the_page_skips_a_late_corner_before_building_the_chain():
     html = open(os.path.join(ROOT, "web", "index.html"), encoding="utf-8").read()
     loop = html[html.index("const lastM = e.type === 'corner'"):]
     skip = loop.index("d < lastM) { state.spoken.add(key); continue; }")
-    assert skip < loop.index("const call = chainedCall(e, ev, spirited || first);"), "decided before the chain marks the next corner"
+    assert skip < loop.index("let call = chainedCall(e, ev, spirited || first);"), "decided before the chain marks the next corner"
     assert "dueByM: noteM(e) - lastM" in loop
