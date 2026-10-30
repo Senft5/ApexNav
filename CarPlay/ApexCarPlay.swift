@@ -2,7 +2,7 @@
 //
 // The cockpit page stays the single brain (ApexEngine, ApexNavApp.swift: it runs whether or not the phone's window was ever
 // opened). It plans routes, places the maneuvers, calls notes and hazards and speaks; CarPlay shows what it decides and
-// sends back what the driver picks. Page -> car: `{cmd:'car', kind:...}` messages (route, clear, guide, sight, end, hazard, ask,
+// sends back what the driver picks. Page -> car: `{cmd:'car', kind:...}` messages (route, clear, start, guide, sight, end, hazard, ask,
 // places, corners, hazards, look), handled by ApexCar.receive. Car -> page: `onNative({type:'carplay', action})` with go,
 // pick, start, end, loop, report, still, voice, places, hello.
 //
@@ -37,7 +37,11 @@ final class ApexCar {
 
     struct Option { let summary: String; let detail: String; let timeS: Double?; let distM: Double? }
     struct Route { let name: String; let coords: [CLLocationCoordinate2D]; let dest: CLLocationCoordinate2D; let options: [Option]; let picked: Int }
-    struct Guide { let key: String; let instruction: String; let street: String; let type: Int; let distM: Double; let timeS: Double?; let remainM: Double?; let remainS: Double?; let symbol: UIImage? }
+    /// The card's maneuver. `distM` is nil only for a free drive's record card (`recording`), which has no maneuver to count down to.
+    struct Guide { let key: String; let instruction: String; let street: String; let type: Int; let distM: Double?; let timeS: Double?; let remainM: Double?; let remainS: Double?; let symbol: UIImage?; var recording = false }
+    /// U-59: a free drive's card until the page's first guide message (web/carplay.js recordingMessage) says how far it has gone.
+    static let recordingGuide = Guide(key: "rec:", instruction: "Recording · the road ahead", street: "Recording", type: 8, distM: nil, timeS: nil,
+                                      remainM: nil, remainS: nil, symbol: nil, recording: true)
     struct Look { var theme = "roadbook"; var card = UIColor(white: 0.08, alpha: 1); var cardInk = UIColor(white: 0.93, alpha: 1); var accent = UIColor.systemRed; var voice = true; var metric = false }
 
     private(set) var route: Route?
@@ -129,12 +133,26 @@ final class ApexCar {
             eachMap { $0.showLook() }
             scene?.lookChanged()
         case "guide":
-            guard let key = dict["key"] as? String, let text = dict["instruction"] as? String, let d = Self.num(dict["distM"]) else { return }
+            // a maneuver always has a distance to it; only a free drive's record card (recording) goes without one
+            let recording = (dict["recording"] as? Bool) ?? false, d = Self.num(dict["distM"])
+            guard let key = dict["key"] as? String, let text = dict["instruction"] as? String, recording || d != nil else { return }
             let symbol = (dict["symbol"] as? String).flatMap { Data(base64Encoded: $0) }.flatMap { UIImage(data: $0, scale: 3) }
             guide = Guide(key: key, instruction: text, street: (dict["street"] as? String) ?? "", type: Int(Self.num(dict["type"]) ?? 0),
-                          distM: max(0, d), timeS: Self.num(dict["timeS"]), remainM: Self.num(dict["remainM"]), remainS: Self.num(dict["remainS"]), symbol: symbol)
+                          distM: d.map { max(0, $0) }, timeS: Self.num(dict["timeS"]), remainM: Self.num(dict["remainM"]), remainS: Self.num(dict["remainS"]),
+                          symbol: symbol, recording: recording)
             if !driving { driving = true; eachMap { $0.setMode() }; scene?.driveStarted() }
             scene?.guideChanged()
+        case "start":
+            // U-59: the page entered a drive, with a route or none (a free drive sends no maneuver until it has driven a little, and
+            // used to never reach the car at all): the navigation session, End and the drive's map buttons, and the record card
+            // when there is no route to guide along.
+            if !driving {
+                driving = true
+                if route == nil && guide == nil { guide = Self.recordingGuide }
+                eachMap { $0.setMode() }
+                scene?.driveStarted()
+                scene?.guideChanged()
+            }
         case "end":
             driving = false
             guide = nil
@@ -284,12 +302,16 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
 
     // MARK: Bars and buttons
 
-    /// Not driving: Where to? and Loops on the left, Places on the right; pan, zoom and the voice as map buttons.
+    /// Not driving: Where to? and Loops on the left, Places and Drive on the right; pan, zoom and the voice as map buttons.
+    /// U-79: Drive starts a free drive from the car (the page records "the road ahead"), so a driver with no destination never
+    /// has to pick up the phone. CPMapTemplate shows at most two buttons on each side (CPBarButtonProviding), so this is full.
+    /// While a trip preview is up its own Drive starts that route, and the bar's would be a second key saying the same thing.
     @MainActor private func idleBars() {
         guard let map = mapTemplate else { return }
         map.leadingNavigationBarButtons = [CPBarButton(title: "Where to?") { [weak self] _ in self?.openSearch() },
                                            CPBarButton(title: "Loops") { [weak self] _ in self?.openLoops() }]
-        map.trailingNavigationBarButtons = [CPBarButton(title: "Places") { [weak self] _ in self?.openPlaces() }]
+        let places = CPBarButton(title: "Places") { [weak self] _ in self?.openPlaces() }
+        map.trailingNavigationBarButtons = ApexCar.shared.route == nil ? [CPBarButton(title: "Drive") { _ in ApexCar.shared.send("start", ["free": true]) }, places] : [places]
         mapButtons()
     }
 
@@ -402,8 +424,10 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
         let car = ApexCar.shared
         guard let r = car.route, !car.driving else {
             if car.route == nil { map.hideTripPreviews(); trip = nil }
+            if !car.driving { idleBars() }                        // Drive comes back on the bar once no preview offers one (U-79)
             return
         }
+        idleBars()
         let choices = r.options.map { o -> CPRouteChoice in
             CPRouteChoice(summaryVariants: [o.summary], additionalInformationVariants: [o.detail].filter { !$0.isEmpty }, selectionSummaryVariants: [o.summary])
         }
@@ -436,6 +460,9 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
     @MainActor func driveStarted() {
         guard let map = mapTemplate else { return }
         map.hideTripPreviews()
+        // A free drive (U-59) is a trip from here with no choices and no destination of its own: CPMapTemplate guides only
+        // through a navigation session, and the session is what puts End on the bar, the drive in the Dashboard and the
+        // cluster, and stops ours when the car's own navigation starts. Its card is the record card, never a made-up turn.
         let t = trip ?? CPTrip(origin: MKMapItem.forCurrentLocation(), destination: MKMapItem.forCurrentLocation(), routeChoices: [])
         trip = t
         session = map.startNavigationSession(for: t)
@@ -447,13 +474,16 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
 
     @MainActor func guideChanged() {
         guard let g = ApexCar.shared.guide, let session else { return }
-        // time to the turn only when the page knows it (the router's times); 0 shows distance alone
-        let est = CPTravelEstimates(distanceRemaining: ApexCar.shared.distance(g.distM), timeRemaining: max(0, g.timeS ?? 0))
+        // time to the turn only when the page knows it (the router's times); 0 shows distance alone. The record card has no
+        // distance to count down (the distance driven is in its words), so it carries no estimates at all.
+        let est = g.distM.map { CPTravelEstimates(distanceRemaining: ApexCar.shared.distance($0), timeRemaining: max(0, g.timeS ?? 0)) }
         if g.key != maneuverKey || (g.symbol != nil && !maneuverHasTulip) {
             let m = CPManeuver()
             m.instructionVariants = [g.instruction, g.street].filter { !$0.isEmpty }
             if let tulip = g.symbol {
                 m.symbolImage = tulip.withRenderingMode(.alwaysOriginal)    // the road book's tulip, in the card's ink
+            } else if g.recording {
+                m.symbolImage = UIImage(systemName: "record.circle", withConfiguration: UIImage.SymbolConfiguration(pointSize: 40, weight: .semibold))?.withRenderingMode(.alwaysTemplate)
             } else {
                 m.symbolImage = ApexCar.symbol(g.type)
             }
@@ -462,7 +492,7 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
             maneuverKey = g.key
             maneuverHasTulip = g.symbol != nil
             session.upcomingManeuvers = [m]
-        } else if let m = maneuver {
+        } else if let m = maneuver, let est {
             session.updateEstimates(est, for: m)
         }
         // the distance left whenever the route has one; a negative time is CarPlay's own "--" (CPTravelEstimates.h), so a
@@ -473,11 +503,13 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
         }
     }
 
+    /// U-62: after End the car goes idle (Where to?, Loops, Places, Drive), never a trip preview of the route just finished: the
+    /// page clears the route too, and a route planned afterwards comes in as a new `route` message.
     @MainActor func driveEnded() {
         session?.finishTrip()
-        session = nil; maneuver = nil; maneuverKey = ""
+        session = nil; maneuver = nil; maneuverKey = ""; trip = nil
+        mapTemplate?.hideTripPreviews()
         idleBars()
-        routeChanged()
     }
 
     @MainActor func showHazard(title: String, detail: String) {

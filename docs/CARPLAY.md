@@ -64,9 +64,9 @@ From the guide's "Guidelines for all CarPlay apps" and "Additional guidelines fo
 | Check `promptStyle` before each prompt: none = silent, short = a tone, normal = speak | Done: native speech and the web voice clips both ask the shell first; the shell plays a short tone for `short` |
 | Base view draws only the map; all controls through templates | Built (`CarPlay/ApexCarPlay.swift`): MapKit route line and position; search, places, End and map buttons are templates |
 | Pan button when panning exists; touch gestures only for pan, zoom, pitch, rotate | Built: zoom in, zoom out, recentre and pan map buttons; panning through the template's panning interface |
-| Each template used for its purpose: maneuver images show maneuvers only | Design decision (reversed 2026-10-29, docs/CALL_SHEET.md): a corner you must slow for is a maneuver, so the next corner or turn, whichever is first, is the card's maneuver, with a corner tulip; `CAR_CORNERS = 'tight'` (web/index.html) keeps only 1, 2 and hairpins if review disagrees. Hazards use navigation alerts |
+| Each template used for its purpose: maneuver images show maneuvers only | Design decision (reversed 2026-10-29, docs/CALL_SHEET.md): a corner you must slow for is a maneuver, so the next corner or turn, whichever is first, is the card's maneuver, with a corner tulip; `CAR_CORNERS = 'tight'` (web/index.html) keeps only 1, 2 and hairpins if review disagrees. A maneuver over 2 km off shows as a continue step ("Follow I-275") until near (U-63). A free drive's card is a record card ("Recording · the road ahead", a record dot, no distance to a maneuver, U-59); if review objects, the fallback is no session in a free drive, End alone on the bar. Hazards use navigation alerts |
 | Stop guidance immediately when the car's own navigation starts (`mapTemplateDidCancelNavigation`) | Built: ends the drive |
-| All CarPlay flows possible without touching the iPhone, including with it locked | Partly: search, route choice, start, guidance and end all work from the car while the app is running on the phone (locked is fine: background location and audio keep it alive). Still to build: starting the route engine (the cockpit page) when CarPlay launches the app cold, in a window-less web view |
+| All CarPlay flows possible without touching the iPhone, including with it locked | Partly: search, route choice, start (a route, or a free drive from the idle map's Drive), guidance and end all work from the car while the app is running on the phone (locked is fine: background location and audio keep it alive). Still to build: starting the route engine (the cockpit page) when CarPlay launches the app cold, in a window-less web view |
 | Never tell the driver to pick up the iPhone | Built: the only CarPlay error says what happened ("Couldn't plan the route yet. Try again in a moment."); starting from the car skips the phone's explainer sheet |
 | No gaming or social networking in CarPlay; nothing unrelated to the drive (settings, account) | Crews, friends, kudos, scores, Log and Settings stay on the iPhone |
 | Map appropriate in each supported country | United States only at launch |
@@ -85,16 +85,31 @@ yellow tags we do).
 
 - **Our map in the base view:** the phone's theme (Roadbook, Tapedeck, Billet: the same OpenFreeMap style, palettes, hill
   shading and contours, web/basemap.js), day or night from the car's screen; the route, every corner's rating at its apex
-  (tight ones filled), the hazard plate for reported hazards, the position puck; following the car heading-up while
+  (tight ones filled; plates never overlap, never sit within 28 px of the arrow or its sight plate, and are placed again once
+  the camera settles on a mode change, U-77; the credit on its own strip of ground so no label runs under it, U-89), the hazard plate for reported hazards, the position puck; following the car heading-up while
   guiding, the whole route in a trip preview. It takes no touches: Apple's templates own every control.
-- **Root:** Where to? and Loops on the left, Places on the right; pan, zoom in, zoom out and the voice (mute) as map buttons.
+- **Root:** Where to? and Loops on the left, Drive and Places on the right (CPMapTemplate shows at most two a side); pan, zoom
+  in, zoom out and the voice (mute) as map buttons. **Drive** starts a free drive from the car with no destination (U-79); it
+  steps aside while a trip preview offers its own Drive.
 - **Where to?:** Apple's place search near you; **Loops:** 30 minutes, 1 hour or 2 hours, a twisty loop from where you are;
   **Places:** recent destinations from the phone.
-- **Trip preview:** up to three route choices ("Fun 99 · 77 min", "32.6 mi · 186 corners"); picking one switches the route on
-  the phone too; Drive starts the drive.
+- **Trip preview:** up to three route choices ("Fun 99 · 77 min", "32.6 mi · 186 corners"); one route's card says what the
+  route is above its estimates ("Fun 99 · 186 corners", U-89: the length is already on the estimates line); picking one
+  switches the route on the phone too; Drive starts the drive.
 - **Guidance:** the maneuver card in the theme's dark (`guidanceBackgroundColor`) with the road book's tulip as the symbol
-  (drawn by the page, web/carplay.js tulipSVG; corners, interleaved with turns, cornerTulipSVG), distance and time to it, trip estimates; End; the car's own navigation
-  starting ends ours. While driving the map buttons are Report, voice, zoom in and zoom out.
+  (drawn by the page, web/carplay.js tulipSVG; corners, interleaved with turns, cornerTulipSVG: each rating a true arc, the
+  hairpin the road book's glyph with its return leg leaving at 45 degrees, U-78), distance and time to it, trip estimates; End;
+  the car's own navigation starting ends ours. While driving the map buttons are Report, voice, zoom in and zoom out.
+  When the next corner or turn is more than 2 km off, the card is a continue step instead: "Follow I-275" (the road from the
+  route's steps, else the map's road name under the car), a straight arrow and the distance to that maneuver, switching to
+  it when near (U-63). A standing car is never shown the corner it is already at as its first maneuver.
+- **Every drive reaches the car (U-59):** the page sends `start` on entering any drive, so a free drive (no route) gets the
+  navigation session too: End, the drive's map buttons, and a record card ("Recording · the road ahead", then "Recording ·
+  4.2 mi driven", a record dot, no travel estimates: there is no maneuver to count down to). CPMapTemplate guides only through
+  a session, and the session is what puts the drive in the Dashboard and the cluster and stops it when the car's own
+  navigation starts; the trip is from here with no route choices. A car that connects mid-drive is sent `start` again.
+- **After End (U-62):** the car goes back to the idle map (Where to?, Loops, Drive, Places). The page clears the route it just
+  drove, so neither the card nor a car that connects later offers the finished route again.
 - **Hazards:** a called hazard is a navigation alert with the hazard plate; passing a reported one asks "Still there?" with
   Still there and Gone; Report opens a grid of the six kinds.
 - **Voice:** the theme's voice pack, played by the shell (`ApexClipPlayer`), so a locked phone still speaks in the pack's

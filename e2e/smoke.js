@@ -406,6 +406,66 @@ flow('CarPlay feed: a planned route sends its line, every corner and the theme; 
   check(await page.evaluate(() => apexDebug.state.toggles.voice === false), 'the voice is off on the phone too');
 });
 
+flow('CarPlay: the car is in every drive: a free drive from its Drive key, a continue step, End goes idle (U-59, U-62, U-63, U-79)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
+    window.__car = []; window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'car') window.__car.push(m); } } } }; });
+  await page.route('https://photon.komoot.io/**', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ features: [
+    { geometry: { coordinates: [-83.9700, 35.7565] }, properties: { name: 'Maryville', state: 'Tennessee' } }] }) }));
+  await page.route('https://valhalla1.openstreetmap.de/**', (route) => {
+    const req = JSON.parse(route.request().postData() || '{}');
+    if (!req.locations) return route.abort();
+    // a straight road for 10 km, then a right turn: the first card is a continue step, not a turn 6 miles away
+    const t = stubTrip(req.locations), a = req.locations[0], b = req.locations[req.locations.length - 1], pts = [];
+    for (let i = 0; i <= 400; i++) pts.push([a.lat + (b.lat - a.lat) * i / 400, a.lon + (b.lon - a.lon) * i / 400]);
+    t.trip.legs[0].shape = polyline6(pts);
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify(t) });
+  });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && typeof window.apex.onNative === 'function');
+  const fix = (speed = 0) => page.evaluate((v) => window.apex.live({ lat: 35.6, lon: -84.1, accuracy_m: 5, speed_mps: v, course_deg: 45, has_fix: true }), speed);
+  await fix();
+  // the idle car's Drive key sends start: a free drive, and the car is told it has begun, with the record card
+  await page.evaluate(() => { window.__car = []; window.apex.onNative({ type: 'carplay', action: 'start' }); });
+  await page.waitForFunction(() => window.apexDebug.driveActive);
+  check(await page.evaluate(() => window.__car.some((m) => m.kind === 'start' && m.title === 'Drive')), 'a free drive tells the car: ' + JSON.stringify(await page.evaluate(() => window.__car.map((m) => m.kind))));
+  await fix(); await page.waitForTimeout(250); await fix();
+  await page.waitForFunction(() => window.__car.some((m) => m.kind === 'guide' && m.recording), null, { timeout: 5000 });
+  const rec = await page.evaluate(() => window.__car.find((m) => m.kind === 'guide' && m.recording));
+  check(rec.instruction === 'Recording · the road ahead' && rec.distM === undefined && typeof rec.symbol === 'string' && rec.symbol.length > 200,
+    'the record card, no distance to a maneuver that is not there, the record dot drawn: ' + JSON.stringify({ ...rec, symbol: !!rec.symbol }));
+  await page.evaluate(() => { window.__car = []; window.apex.onNative({ type: 'carplay', action: 'end' }); });
+  await page.waitForFunction(() => !window.apexDebug.driveActive);
+  check(await page.evaluate(() => window.__car.some((m) => m.kind === 'end')), 'End from the car ends it');
+  // a route: planned from the car, driven, a continue step while its first turn is 6 miles off; after End the car goes idle
+  await fix();
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'go', lat: 35.7565, lon: -83.97, name: 'Maryville' }));
+  await page.waitForFunction(() => { const t = window.apexDebug.track; return t && t.kind === 'route' && window.__car.some((m) => m.kind === 'route'); }, null, { timeout: 20000 });
+  await page.evaluate(() => { window.__car = []; window.apex.onNative({ type: 'carplay', action: 'start' }); });
+  await page.waitForFunction(() => window.apexDebug.driveActive);
+  await fix(); await page.waitForTimeout(250); await fix(0.5);
+  await page.waitForFunction(() => window.__car.some((m) => m.kind === 'guide'), null, { timeout: 5000 });
+  const kinds = await page.evaluate(() => window.__car.map((m) => m.kind));
+  check(kinds.indexOf('start') >= 0 && kinds.indexOf('start') < kinds.indexOf('guide'), 'start before the first maneuver: ' + kinds.join());
+  const g = await page.evaluate(() => window.__car.find((m) => m.kind === 'guide'));
+  check(g.follow === true && g.type === 8 && /^Follow /.test(g.instruction) && g.distM > 2000 && !g.corner, 'a continue step to the far turn: ' + JSON.stringify({ ...g, symbol: !!g.symbol }));
+  await page.evaluate(() => { window.__car = []; window.apex.onNative({ type: 'carplay', action: 'end' }); });
+  await page.waitForFunction(() => !window.apexDebug.driveActive);
+  const after = await page.evaluate(() => window.__car.map((m) => m.kind));
+  check(after.indexOf('end') >= 0 && after.indexOf('clear') > after.indexOf('end') && !after.includes('route'), 'after End the car is idle, no preview of the finished route: ' + after.join());
+  await page.evaluate(() => { window.__car = []; window.apex.onNative({ type: 'carplay', action: 'hello' }); });
+  await page.waitForTimeout(200);
+  check(!(await page.evaluate(() => window.__car.some((m) => m.kind === 'route' || m.kind === 'start'))), 'a car that connects later is not offered the finished route either');
+  // the idle car's Drive now is a free drive, not the finished route guided along unseen
+  await page.evaluate(() => { window.__car = []; window.apex.onNative({ type: 'carplay', action: 'start', free: true }); });
+  await page.waitForFunction(() => window.apexDebug.driveActive);
+  await fix(); await page.waitForTimeout(250); await fix();
+  await page.waitForFunction(() => window.__car.some((m) => m.kind === 'guide'), null, { timeout: 5000 });
+  const free = await page.evaluate(() => ({ start: window.__car.find((m) => m.kind === 'start'), guide: window.__car.find((m) => m.kind === 'guide'), track: window.apexDebug.track ? window.apexDebug.track.kind : null }));
+  check(free.start.title === 'Drive' && free.guide.recording === true && free.track !== 'route', 'Drive from the idle car is a free drive: ' + JSON.stringify({ ...free, guide: free.guide.instruction }));
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'end' }));
+  await page.waitForFunction(() => !window.apexDebug.driveActive);
+});
+
 flow('the sight-line speed rides under the position arrow, on the phone and on the car map (the owner, 2026-10-29)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.goto(base + '/index.html?drive=dry_ridge&play=1');
@@ -425,11 +485,24 @@ flow('the sight-line speed rides under the position arrow, on the phone and on t
   const r = await read();
   check(!r.hidden && r.text === '43MPH' && r.short, 'the car tag: ' + JSON.stringify(r));
   // plates never pile up: three corners on one spot show one plate, the tight one when there is no car to measure from
-  await page.evaluate(() => { car.mode('preview'); car.corners([{ at: [35.4, -84.1], text: 'R4', tight: false }, { at: [35.4, -84.1], text: 'L2', tight: true }, { at: [35.40001, -84.1], text: 'R3', tight: false }]); });
+  await page.evaluate(() => { car.mode('preview'); car.corners([{ at: [35.41, -84.1], text: 'R4', tight: false }, { at: [35.41, -84.1], text: 'L2', tight: true }, { at: [35.41001, -84.1], text: 'R3', tight: false }]); });
   await page.waitForTimeout(300);
   const vis = await page.evaluate(() => [...document.querySelectorAll('.car-corner')].filter((e) => e.style.visibility !== 'hidden').map((e) => e.textContent));
   check(vis.length === 1, 'one plate where three overlap: ' + vis.join());
   check(await page.evaluate(() => getComputedStyle(document.querySelector('.car-puck')).zIndex === '3'), 'the car above the plates');
+  // U-77: as guidance begins no plate sits on the car's arrow or its sight plate; the one further up the road stays
+  await page.evaluate(() => { car.corners([{ at: [35.4, -84.1], text: 'R1', tight: true }, { at: [35.39985, -84.1], text: 'R2', tight: true }, { at: [35.41, -84.1], text: 'L3', tight: false }]); car.mode('guide'); });
+  await page.waitForTimeout(900);
+  const clear = await page.evaluate(() => {
+    const boxes = [document.querySelector('.car-puck'), document.querySelector('.car-sight')].map((e) => e.getBoundingClientRect());
+    return [...document.querySelectorAll('.car-corner')].filter((e) => e.style.visibility !== 'hidden').map((e) => {
+      const b = e.getBoundingClientRect();
+      return { text: e.textContent, onCar: boxes.some((c) => b.left < c.right && b.right > c.left && b.top < c.bottom && b.bottom > c.top) };
+    });
+  });
+  check(clear.every((p) => !p.onCar) && !clear.some((p) => p.text === 'R1' || p.text === 'R2') && clear.some((p) => p.text === 'L3'), 'plates clear of the arrow and sight: ' + JSON.stringify(clear));
+  // U-89: the credit on its own strip of ground, so no map label shows under it
+  check(await page.evaluate(() => { const s = getComputedStyle(document.getElementById('credit')); return s.backgroundColor !== 'rgba(0, 0, 0, 0)' && s.opacity === '1'; }), 'the credit sits on a solid strip');
 });
 
 flow('a route being driven comes back after the app is closed; a planned one, or a finished drive, does not (the owner, 2026-10-30)', async (page, base) => {

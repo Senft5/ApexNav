@@ -74,16 +74,25 @@ final class CarPlayTests: XCTestCase {
 
         // the Loops list (not chosen: the route is the replayed road), then that road's trip preview and a guided drive
         if tap("Loops") { pause(2); photo("03-loops-list"); tap("Back", wait: 5) }
-        if labelled(car, "Drive").waitForExistence(timeout: 90) {
+        // The idle map has a Drive key of its own (U-79), so the preview is found by its card's words ("186 corners", U-89)
+        // before its Drive is tapped; the bar's Drive steps aside while a preview is up.
+        let preview = car.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "corners")).firstMatch
+        if preview.waitForExistence(timeout: 90), labelled(car, "Drive").exists {
             pause(6)
             photo("04-trip-preview")
             tap("Drive")
             for k in 0..<16 { pause(8); photo(String(format: "05-drive-%02d", k)) }
             tap("End", wait: 10)
             pause(4)
-            photo("06-ended")
+            photo("06-ended")                                       // the idle map, no preview of the finished route (U-62)
         } else {
             photo("04-no-trip-preview")
+        }
+        // a free drive started and ended from the car (U-59, U-79): Drive on the idle map, the record card, End
+        if tap("Drive", wait: 10) {
+            pause(8); photo("06a-free-drive")
+            tap("End", wait: 10)
+            pause(4); photo("06b-free-drive-ended")
         }
         // the other two keys, from the idle map
         if tap("Places", wait: 10) { pause(2); photo("07-places"); car.navigationBars.buttons.firstMatch.tap() }

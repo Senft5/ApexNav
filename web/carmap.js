@@ -39,10 +39,23 @@
     declutter();
   }
   // Plates never pile up (the owner's car, 2026-10-29: L2, L3 and R4 on top of each other): in priority order, a plate
-  // that would overlap one already shown is hidden until the map moves or zooms enough to make room.
+  // that would overlap one already shown is hidden until the map moves or zooms enough to make room. U-77: nor do they sit
+  // on the car: the arrow and the sight plate under it are taken first, with CLEAR_PX around them (the review recording's
+  // car/02 had R1 on the arrow and an R2 half under it as guidance began).
+  const CLEAR_PX = 28;
+  function carBoxes() {
+    if (!state.pos) return [];
+    const pt = map.project([state.pos.lon, state.pos.lat]), out = [[pt.x - 17 - CLEAR_PX, pt.y - 17 - CLEAR_PX, pt.x + 17 + CLEAR_PX, pt.y + 17 + CLEAR_PX]];
+    const tag = sightTag && sightTag.getElement();
+    if (tag && !tag.hidden) {                                        // anchored by its top, 21 px under the car's centre
+      const w = tag.offsetWidth || 80, h = tag.offsetHeight || 24;
+      out.push([pt.x - w / 2 - CLEAR_PX, pt.y + 21 - CLEAR_PX, pt.x + w / 2 + CLEAR_PX, pt.y + 21 + h + CLEAR_PX]);
+    }
+    return out;
+  }
   function declutter() {
     if (!map || !plates.length) return;
-    const shown = [];
+    const shown = carBoxes();
     for (const p of plates) {
       const pt = map.project([p.at[1], p.at[0]]), w = p.el.offsetWidth || 40, h = p.el.offsetHeight || 24;
       const box = [pt.x - w / 2 - 3, pt.y - p.dy - h - 3, pt.x + w / 2 + 3, pt.y - p.dy + 3];
@@ -60,7 +73,11 @@
     map.setPaintProperty('car-route', 'line-color', C.route);
     const st = document.documentElement.style;
     st.setProperty('--plate', C.panel); st.setProperty('--plate-ink', C.panelInk);
-    document.getElementById('credit').style.color = P.label;
+    // U-89: the credit sits on a strip of the map's own ground, so no place name shows through under it ("Cincinnati" ran
+    // under the attribution in the review recording's car/01); its words dimmed, the strip solid
+    const credit = document.getElementById('credit');
+    credit.style.background = P.bg;
+    credit.style.color = /^#[0-9A-Fa-f]{6}$/.test(P.label) ? `${P.label}A6` : P.label;
     drawPuck();
   }
 
@@ -139,7 +156,13 @@
       if (state.mode !== 'preview') camera(false);
     },
     sight(s) { state.sight = s && typeof s.text === 'string' ? { text: s.text.slice(0, 6), unit: String(s.unit || '').slice(0, 5), short: !!s.short } : null; drawSight(); },
-    mode(m) { state.mode = m === 'guide' || m === 'preview' ? m : 'idle'; state.follow = true; placePlates(); camera(); },
+    // U-77: the plates are placed again once the new camera has settled (heading up and pitched, the car low on the screen),
+    // not only for the camera the mode left behind
+    mode(m) {
+      const was = state.mode;
+      state.mode = m === 'guide' || m === 'preview' ? m : 'idle'; state.follow = true; placePlates(); camera();
+      if (ready && was !== state.mode) map.once('moveend', placePlates);
+    },
     zoom(dir) { if (ready) map.easeTo({ zoom: map.getZoom() + (dir > 0 ? 1 : -1), duration: 300 }); },
     pan(dx, dy) { if (!ready) return; state.follow = false; map.panBy([dx * map.getContainer().clientWidth / 3, dy * map.getContainer().clientHeight / 3], { duration: 300 }); },
     recentre() { state.follow = true; if (state.mode === 'preview') state.mode = 'idle'; camera(); },
