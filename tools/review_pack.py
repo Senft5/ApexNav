@@ -21,7 +21,7 @@ import sys
 
 from PIL import Image, ImageDraw
 
-NAME = re.compile(r"^(phone|car)-([a-z0-9-]+)-(\d\d)-([^_]+?)(?:_\d+_[0-9A-Fa-f-]+)?(?:\.png)?$")
+NAME = re.compile(r"^(phone|car)-([a-z0-9-]+)-(\d\d+)-([^_]+?)(?:_\d+_[0-9A-Fa-f-]+)?(?:\.png)?$")
 
 
 def attachments(shots_dir: str) -> list[tuple[str, str]]:
@@ -138,6 +138,7 @@ def main(src: str, dst: str) -> int:
             if not m or not os.path.exists(src_file):
                 continue
             screen, _, num, step = m.groups()
+            num = num.zfill(3)                                         # 100+ steps still sort after 099
             os.makedirs(os.path.join(out, screen), exist_ok=True)
             target = os.path.join(out, screen, f"{num}-{step}.png")
             shutil.copyfile(src_file, target)

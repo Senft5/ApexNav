@@ -41,7 +41,7 @@ final class ReviewFlows: XCTestCase {
     /// A named step: the phone's screen, and the car's when there is one, kept with the run as "flow-NN-step".
     private func shot(_ name: String) {
         step += 1
-        let tag = String(format: "%@-%02d-%@", flow, step, name)
+        let tag = String(format: "%@-%03d-%@", flow, step, name)
         let p = XCTAttachment(screenshot: XCUIScreen.main.screenshot()); p.name = "phone-\(tag)"; p.lifetime = .keepAlways; add(p)
         if XCUIScreen.screens.count > 1 {
             let c = XCTAttachment(screenshot: XCUIScreen.screens[1].screenshot()); c.name = "car-\(tag)"; c.lifetime = .keepAlways; add(c)
@@ -68,8 +68,19 @@ final class ReviewFlows: XCTestCase {
             let welcome = web.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "Welcome to Vetta")).firstMatch
             if welcome.waitForExistence(timeout: 8) {
                 let go = welcome.buttons["Start"]
-                if go.exists { go.tap(); pause(2); app.tap() }     // app.tap() lets the permission monitor answer any sheet
+                if go.exists { go.tap(); pause(2) }
             }
+            allowLocation()
+        }
+    }
+
+    /// The system's location sheet, answered: it follows the welcome's Start (U-65), and `simctl privacy grant` before the
+    /// app is installed doesn't hold, so the second recording's drives sat behind it and never moved.
+    private func allowLocation(wait: Double = 6) {
+        let sheet = springboard.alerts.firstMatch
+        guard sheet.waitForExistence(timeout: wait) else { return }
+        for label in ["Allow While Using App", "Allow Once", "Allow"] where sheet.buttons[label].exists {
+            sheet.buttons[label].tap(); pause(1.5); return
         }
     }
 
