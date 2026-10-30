@@ -2501,6 +2501,7 @@ flow('one link in: no "invite-only" anywhere; a crew link joins a newcomer with 
   for (let i = 0; i < 50 && !sent.some((x) => x.p === '/api/crews/k1/invites' && x.m === 'PUT'); i++) await page.waitForTimeout(100);
   const put = sent.find((x) => x.p === '/api/crews/k1/invites' && x.m === 'PUT');
   check(put && JSON.parse(put.b).by === 'owner', 'Who can invite · Owner reaches the Worker: ' + (put && put.b));
+  await page.waitForSelector('.side-pop.open [role="radiogroup"] button[aria-checked="true"]:has-text("Owner")', { timeout: 5000 }).catch(() => {});   // the answer lands after the request
   check(await page.getAttribute('.side-pop.open [role="radiogroup"] button:has-text("Owner")', 'aria-checked') === 'true', 'and the switch shows Owner');
   // the one signed-in person who isn't a member (an account the owner removed): one line, no paste field, the account in the Garage
   me = { signed_in: true, id: 'U9', member: false, handle: 'newbie', requests: 0 };
