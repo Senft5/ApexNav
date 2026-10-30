@@ -25,7 +25,7 @@ describe("friends' activity", () => {
     await publish(b, adopted, 812);
     const list = await activity(a);
     expect(list).toEqual([{ handle: "bob", name: "BOB", canon_id: seg, stage: "Esses", driver_score: 812, driven_on: today, you: { rank: 2, of: 2, mine: 700 }, kudos: 0, my_kudos: false }]);
-    expect(JSON.stringify(list)).not.toMatch(/time_s|600/);
+    expect(JSON.stringify(list)).not.toMatch(/time_s|:600\b/);   // a value, not a random id that happens to hold "600"
     expect((await activity(b))[0]).toMatchObject({ handle: "alice", stage: "Esses", you: { rank: 1, of: 2, mine: 812 } });
   });
 
