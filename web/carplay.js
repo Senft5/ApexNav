@@ -68,6 +68,7 @@
   // corner within STILL_M is the one the car is already at, not news: the start of a drive showed "0 ft · Very tight
   // right" under the car, a corner the phone never called.
   const CONTINUE_M = 2000, STILL_MPS = 2, STILL_M = 15;
+  const TAKEN_M = 30;   // a turn is taken this far past it, as the voice has it (web/directions.js TAKEN_M)
   // The road the route is on at `m`: the street of the last step at or behind it (a Valhalla step names the road it goes
   // onto), so a planned route names its own roads; '' when it has none (a loop or a GPX track).
   function roadAt(t, m) {
@@ -86,7 +87,8 @@
    * one of CORNER_MODES; `opts.call(e)` words a corner as the phone does (the plain-words setting), else its own call.
    * A maneuver more than CONTINUE_M away gives a continue step instead ("Follow I-275", type 8, `follow: true`, distM to
    * that maneuver), the road named from the route's steps, else from `opts.road` (a name, or a function that reads the
-   * road under the car from the map). `opts.speedMps` is the car's speed, for the standing-still rule.
+   * road under the car from the map). `opts.speedMps` is the car's speed, for the standing-still rule. `opts.step` is the
+   * next turn as the page tracks it (null for none left); nothing past it, corner or turn, is the card's until it is taken.
    */
   function guideMessage(t, cursorM, leftS, phrase, opts = {}) {
     // a route without turn-by-turn steps (a loop, a GPX track) still has its corners: the CarPlay run on 2026-10-30
@@ -95,7 +97,11 @@
     const total = Array.isArray(t.dist) && t.dist.length ? t.dist[t.dist.length - 1] : null;
     const remain = { remainM: finite(total) ? Math.max(0, Math.round(total - cursorM)) : null, remainS: finite(leftS) ? Math.round(leftS) : null };
     const turns = (Array.isArray(t.steps) ? t.steps : []).filter((s) => s && finite(s.m) && phrase(s));
-    const st = turns.find((s) => s.m > cursorM - 5);
+    // the next turn: `opts.step` when the page tracks it (ApexDirections.createProgress, shared with the voice, so the card
+    // and the spoken calls are about the same turn and a turn once taken never comes back to the card), else the first not
+    // yet taken. The owner's car, 2026-10-30: the card went exit 19, sharp right, exit 19 again.
+    const st = Object.prototype.hasOwnProperty.call(opts, 'step') ? (opts.step && finite(opts.step.m) && phrase(opts.step) ? opts.step : null)
+      : turns.find((s) => s.m > cursorM - TAKEN_M);
     const mode = CORNER_MODES.includes(opts.corners) ? opts.corners : 'all';
     const still = finite(opts.speedMps) && opts.speedMps < STILL_MPS;
     let co = null, coM = Infinity;

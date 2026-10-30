@@ -47,13 +47,17 @@ def out():
     return json.loads(subprocess.run([NODE, "-e", RUNNER, ROOT], capture_output=True, text=True, check=True).stdout)
 
 
-def test_two_calls_per_turn_with_then(out):
+def test_a_ladder_per_turn_with_then(out):
+    # far (30 s), near (12 s) and at the turn, each once, one turn at a time (tests/test_turn_order.py, the owner's drive
+    # 2026-10-30); the turn straight after is the "then" of the one before and gets no ladder of its own
     texts = [t for _, t, _ in out["heard"]]
     assert texts == [
         "In 0.4 miles, turn left onto Deals Gap Road",
+        "In 800 feet, turn left onto Deals Gap Road",
         "Turn left onto Deals Gap Road, then turn right onto US 129",
         "Turn right onto US 129",
         "In 0.4 miles, at the roundabout, take the 2nd exit onto Foothills Pkwy",
+        "In 800 feet, at the roundabout, take the 2nd exit onto Foothills Pkwy",
         "At the roundabout, take the 2nd exit onto Foothills Pkwy",
         "Arriving at your destination",
     ]

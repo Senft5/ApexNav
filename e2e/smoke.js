@@ -654,6 +654,85 @@ flow('CarPlay: the car is in every drive: a free drive from its Drive key, a con
   await page.waitForFunction(() => !window.apexDebug.driveActive);
 });
 
+flow('turn by turn in road order: exit 19, then the sharp right a mile on, on the car and in the voice, a ladder said once each (the owner\'s drive, 2026-10-30)', async (page, base) => {
+  // the owner on CarPlay: "'take exit 19 in 0.1 miles', then 'sharp right in 1 mile', then 'take exit 19'. This is bad and
+  // confusing." A motorway north, exit 19 at 5 km, a right bend on the ramp, a sharp right onto Main St a mile past the exit.
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
+    window.__car = []; window.__said = []; window.APEX_REVIEW = true;
+    window.webkit = { messageHandlers: { apex: { postMessage(m) {
+      const at = window.apexDebug ? window.apexDebug.state.cursorM : null;
+      if (m && m.cmd === 'car') window.__car.push({ ...m, symbol: undefined, at });
+      if (m && m.cmd === 'said') window.__said.push({ text: m.text, at });
+    } } } }; });
+  const KY = 110540, KX = 111320 * Math.cos(35.5 * Math.PI / 180), P = [];   // [north m, east m]
+  for (let y = 0; y <= 5150; y += 10) P.push([y, 0]);
+  const EXIT = 500;                                                    // the shape index at 5000 m
+  for (let a = 6; a <= 90; a += 6) { const r = a * Math.PI / 180; P.push([5150 + 60 * Math.sin(r), 60 - 60 * Math.cos(r)]); }
+  for (let x = 70; x <= 1430; x += 10) P.push([5210, x]);
+  const SHARP = P.length - 1;                                          // 1.6 km (a mile) past the exit
+  for (let k = 1; k <= 100; k++) P.push([5210 - k * 10 * Math.SQRT1_2, 1430 - k * 10 * Math.SQRT1_2]);
+  const LL = P.map(([n, e]) => [35.5 + n / KY, -83.9 + e / KX]), end = LL[LL.length - 1];
+  await page.route('https://photon.komoot.io/**', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ features: [
+    { geometry: { coordinates: [end[1], end[0]] }, properties: { name: 'Downtown', state: 'Tennessee' } }] }) }));
+  await page.route('https://valhalla1.openstreetmap.de/**', (route) => {
+    const req = JSON.parse(route.request().postData() || '{}');
+    if (!req.locations) return route.abort();
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify({ trip: { legs: [{ shape: polyline6(LL), maneuvers: [
+      { type: 1, begin_shape_index: 0, length: 5, time: 160, street_names: ['I-75 North'] },
+      { type: 20, begin_shape_index: EXIT, length: 1.6, time: 80, street_names: ['Exit 19'], sign: { exit_number_elements: [{ text: '19' }], exit_toward_elements: [{ text: 'Downtown' }] } },
+      { type: 11, begin_shape_index: SHARP, length: 1, time: 60, street_names: ['Main St'] },
+      { type: 4, begin_shape_index: LL.length - 1, length: 0, time: 0 }] }],
+      summary: { length: 7.6, time: 300, has_highway: true, has_toll: false, has_ferry: false } } }) });
+  });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && typeof window.apex.onNative === 'function' && window.apexDebug);
+  await page.evaluate(([lat, lon]) => window.apex.live({ lat, lon, accuracy_m: 5, speed_mps: 0, course_deg: 0, has_fix: true }), LL[0]);
+  await page.evaluate(([lat, lon]) => window.apex.onNative({ type: 'carplay', action: 'go', lat, lon, name: 'Downtown' }), end);
+  await page.waitForFunction(() => { const t = window.apexDebug.track; return t && t.kind === 'route' && (t.steps || []).length >= 3; }, null, { timeout: 20000 });
+  const steps = await page.evaluate(() => apexDebug.track.steps.map((s) => ({ m: s.m, type: s.type })));
+  const exitM = steps.find((s) => s.type === 20).m;
+  await page.evaluate(() => { window.__car = []; window.__said = []; window.apex.onNative({ type: 'carplay', action: 'start' }); });
+  await page.waitForFunction(() => window.apexDebug.driveActive);
+  // drive it at 31 m/s (70 mph) from 2.5 km, a fix every 20 m; at the diverge GPS runs the car 40 m past the exit, then
+  // drops it back over it for two fixes (the turn must stay taken)
+  const n = await page.evaluate(() => apexDebug.track.lat.length);
+  const idxAt = (m) => page.evaluate((m) => apexDebug.track.dist.findIndex((d) => d >= m), m);
+  const send = (i) => page.evaluate((i) => { const t = apexDebug.track, a = Math.max(0, i - 2), b = Math.min(t.lat.length - 1, i + 2);
+    const crs = (Math.atan2((t.lon[b] - t.lon[a]) * Math.cos(t.lat[i] * Math.PI / 180), t.lat[b] - t.lat[a]) * 180 / Math.PI + 360) % 360;
+    window.apex.live({ lat: t.lat[i], lon: t.lon[i], accuracy_m: 5, speed_mps: 31, course_deg: crs, has_fix: true, lat_g: 0, lon_g: 0, calibration: 'locked', thermal: 0 }); }, i);
+  const back = await idxAt(exitM + 15);
+  let jittered = false;
+  for (let m = 2500; ; m += 20) {
+    const i = await idxAt(m);
+    if (i < 0 || i >= n - 3) break;
+    await send(i); await page.waitForTimeout(110);
+    if (!jittered && m >= exitM + 40) { jittered = true; for (let k = 0; k < 2; k++) { await send(back); await page.waitForTimeout(170); } }
+  }
+  const said = await page.evaluate(() => window.__said.slice());
+  const guides = await page.evaluate(() => window.__car.filter((m) => m.kind === 'guide'));
+  const lines = said.map((s) => s.text);
+  // the voice: the exit's ladder (far, near, at the turn) once each, all of it before anything about Main St, and nothing
+  // past the exit (Main St, the ramp's bend) said before the exit's own call at the turn
+  const exitLines = lines.filter((t) => /exit 19/.test(t)), mainLines = lines.filter((t) => /Main St/.test(t));
+  check(exitLines.length === 3 && /^In .*, take exit 19 toward Downtown$/.test(exitLines[0]) && /^In .*, take exit 19 toward Downtown$/.test(exitLines[1])
+    && exitLines[2] === 'Take exit 19 toward Downtown', 'the exit is a ladder said once each: ' + JSON.stringify(lines));
+  check(mainLines.length === 3 && mainLines[2] === 'Sharp right onto Main St', 'the sharp right is a ladder said once each: ' + JSON.stringify(lines));
+  const lastExit = lines.lastIndexOf('Take exit 19 toward Downtown'), firstMain = lines.findIndex((t) => /Main St/.test(t));
+  check(lastExit >= 0 && firstMain > lastExit, 'the exit, all of it, before the sharp right: ' + JSON.stringify(lines));
+  check(said.filter((s) => /Main St/.test(s.text)).every((s) => s.at > exitM), 'Main St only once the exit is taken: ' + JSON.stringify(said));
+  const firstExit = lines.findIndex((t) => /exit 19/.test(t));
+  check(!lines.slice(firstExit, lastExit).some((t) => /^(Right|Left|Tight|Medium|Open|Easy|Very|Hairpin|Sharp)/i.test(t)), 'no corner call among the exit\'s prompts: ' + JSON.stringify(lines));
+  check(new Set(lines.filter((t) => /exit 19|Main St|Arriving/.test(t))).size === lines.filter((t) => /exit 19|Main St|Arriving/.test(t)).length, 'no prompt repeated: ' + JSON.stringify(lines));
+  // the car: one maneuver at a time in road order, never back to one it has left (the owner's card: exit, sharp right, exit)
+  const runs = []; for (const g of guides) if (!runs.length || runs[runs.length - 1].instruction !== g.instruction) runs.push(g);
+  const names = runs.map((g) => g.instruction);
+  check(new Set(names).size === names.length, 'the card never goes back to a maneuver it left: ' + JSON.stringify(names));
+  const ei = names.indexOf('Take exit 19 toward Downtown'), mi = names.indexOf('Sharp right onto Main St');
+  check(ei >= 0 && mi > ei, 'the card has the exit, then the sharp right: ' + JSON.stringify(names));
+  check(guides.filter((g) => g.instruction === 'Sharp right onto Main St').every((g) => g.at > exitM), 'the sharp right is on the card only past the exit: '
+    + JSON.stringify(guides.map((g) => [g.instruction, Math.round(g.at)])));
+});
+
 flow('the sight-line speed rides under the position arrow, on the phone and on the car map (the owner, 2026-10-29)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.goto(base + '/index.html?drive=dry_ridge&play=1');

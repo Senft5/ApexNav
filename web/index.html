@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-hQTDDm8+wwYa9JibBFEmLYLrDvbMTwPnUmvFHNC5GOs=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-8Twch+CLbcStZMnZcnZFedmo5i1r60MSyKa0rAcM5TY=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' apexnav: data: https://fonts.gstatic.com; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <!-- REVIEW4 U-80 (check): before the stylesheets and the hundred scripts below (seconds on a cold start), the page's very
@@ -2466,7 +2466,7 @@
       const raw = [e];
       for (let hops = 0; hops < 2 && (cur.link === 'into' || cur.link === 'and'); hops++) {
         const next = ev[ev.indexOf(cur) + 1];
-        if (!next || (next.type === 'corner' && !spirited)) break;
+        if (!next || (next.type === 'corner' && !spirited) || noteM(next) > turnHold.m) break;   // never chained past a junction not yet called
         state.spoken.add(`${track.id}:${next.type}:${next.index}`);
         raw.push(next);
         cur = next;
@@ -2490,6 +2490,10 @@
     }
     // The run of corners being read (note_timing.js createCareRun, REVIEW4 §4): its "care" is said once.
     const careRun = ApexNoteTiming.createCareRun();
+    // The next turn not yet taken (web/directions.js createProgress), one for the voice and the car's card, so both are about
+    // the same turn and a taken one never comes back. turnHold.m: the first junction ahead whose call at the turn is not yet
+    // said; no note past it is read until it is (the owner's drive, 2026-10-30: a far corner's call landed among the exit's).
+    const turnProgress = ApexDirections.createProgress(), turnHold = { m: Infinity };
 
     // Where a note is due: a corner's entry (turn-in), not its apex, so the call and the countdown come before you turn
     // (owner 2026-10-28: "called out in reference to the apex rather than the entry"). Hazards are a point: entry = apex.
@@ -2547,6 +2551,11 @@
       const offRoute = live && state.cursorIdx < 0;
       const ev = offRoute ? [] : allEvents().filter(e => e.dist_m >= state.cursorM - 5 && (e.type !== 'alpr' || state.toggles.lpr)).sort((a, b) => noteM(a) - noteM(b));
       const steps = !offRoute && track && track.kind === 'route' ? track.steps : null;
+      const pend = steps ? turnProgress.at(steps, state.cursorM, track.id) : -1;
+      turnHold.m = Infinity;
+      for (let j = Math.max(0, pend); pend >= 0 && j < steps.length; j++) {
+        if (ApexDirections.phrase(steps[j]) && !state.spoken.has(`${track.id}:dir:${j}:now`)) { turnHold.m = steps[j].m; break; }
+      }
       const moving = !!(state.playing || live) && vMps != null, now = performance.now();
       const reactS = reaction.reactionS;
       // U-58: Auto reads the road ahead. A corner within two leads (at least 800 m) that is tight or needs braking keeps
@@ -2638,6 +2647,9 @@
         // U-58: the first note of a drive is read before the car moves, even the corner under it
         if (state.spoken.has(key) || (d < 10 && !(first && stopped))) continue;
         if (e.type === 'corner' && ApexDirections.atJunction(track.steps, noteM(e))) { state.spoken.add(key); continue; }   // the direction calls it
+        // past a junction whose call at the turn is not yet said: it waits (one maneuver at a time, the junction first), and
+        // is read after that call, queued behind it, or skipped by U-96 below if that leaves it too late
+        if (noteM(e) > turnHold.m) continue;
         // U-96: a corner already too close to say with a beat to act (the first call after a wake, a mode switch or an
         // off-route spell, a lead eaten by a slow line) is the driver's now: skipped, never read in the corner. Decided
         // before the chain is built, so the next corner keeps its own call.
@@ -2659,7 +2671,7 @@
       }
       // Directions at junctions (IDEAS V-04), in any notes mode: the call at the turn goes ahead of corner notes.
       if (track && track.kind === 'route' && !offRoute) {
-        for (const line of ApexDirections.due(track.steps, state.cursorM, vMps, state.spoken, track.id)) {
+        for (const line of ApexDirections.due(track.steps, state.cursorM, vMps, state.spoken, track.id, pend)) {   // the next turn only
           state.spoken.add(line.key); health.bump('directions_said');
           say(line.text, false, null, null, { kind: line.now ? 'hazard' : 'ordinary', key: line.key, atM: line.atM, duck: true, tokens: line.tokens || undefined, named: true });
         }
@@ -6510,6 +6522,11 @@
       try { car.road = ApexRoadNames.nearestRoadName(map.querySourceFeatures('openmaptiles', { sourceLayer: 'transportation_name' }), L.lat, L.lon) || ''; } catch (_) { /* style not loaded */ }
       return car.road;
     }
+    // the card's turn is the voice's (turnProgress): the same one, in road order, never one taken coming back
+    function carStep() {
+      const i = track && Array.isArray(track.steps) ? turnProgress.at(track.steps, state.cursorM, track.id) : -1;
+      return i >= 0 ? track.steps[i] : null;
+    }
     function carGuide() {
       if (!driveActive) return;
       // U-59: a drive with no route (or on the road ahead) is still a drive on the car: the record card and the distance driven
@@ -6517,7 +6534,7 @@
         ? ApexCarPlay.recordingMessage(drive.rec ? drive.rec.km * 1000 : null, (m) => ApexUnits.long(m, 1))
         : ApexCarPlay.guideMessage(track, state.cursorM, etaLeftS, ApexDirections.phrase,
           { corners: CAR_CORNERS, call: (e) => (state.noteWords === 'plain' && !e.recce && window.ApexPlainNotes ? ApexPlainNotes.plainCall(e) : e.call),
-            speedMps: state.live ? state.live.speed_mps : null, road: carRoad });
+            speedMps: state.live ? state.live.speed_mps : null, road: carRoad, step: carStep() });
       if (!g || (g.key === car.guideKey && now - car.guideAt < 1000)) return;
       car.guideKey = g.key; car.guideAt = now;
       const sym = carSymbol(g.type, g.corner, g.recording);

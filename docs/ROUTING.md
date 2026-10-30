@@ -259,11 +259,17 @@ over. Blank off route, on a recorded drive, or when the router gave no time. No 
 ## Spoken directions
 
 The router's maneuvers are kept with the route (`stepsOf`, placed in route order so a loop's second pass of a junction is
-not the first) and spoken in the co-driver's voice (web/directions.js, IDEAS V-04): "In 0.4 miles, turn left onto Deals
-Gap Road" from max(400 m, 30 s) out, then "Turn left onto Deals Gap Road" at max(40 m, 5 s), with ", then turn right onto
-US 129" when the next turn is within 150 m. Roundabouts name the exit; the end says "Arriving at your destination". Starts,
-"continue" and "stay straight" are never said. The call at the turn is a hazard-priority line (ahead of corner notes) and
-a corner note within 35 m of a junction is left out, so one bend is never called twice. Any notes mode; off route, nothing.
+not the first) and spoken in the co-driver's voice (web/directions.js, IDEAS V-04). One maneuver at a time, in road order,
+as Apple Maps and Google Maps do (the owner's drive, 2026-10-30: the exit, then the sharp right a mile on, then the exit
+again): only the next turn not yet taken is said, and it is taken 30 m past it, never reinstated by a fix that falls back
+over it (`createProgress`, shared with the car's card, web/carplay.js guideMessage `step`). Its prompts are a ladder said
+once each: "In 0.4 miles, turn left onto Deals Gap Road" at 30 s out (400 m to 1 mile), again at 12 s (150 to 400 m),
+then "Turn left onto Deals Gap Road" at max(40 m, 5 s), with ", then turn right onto US 129" when the next turn is within
+150 m; a rung inside 3 s of the call at the turn is left out. Roundabouts name the exit; the end says "Arriving at your
+destination". Starts, "continue" and "stay straight" are never said. The call at the turn is a hazard-priority line (ahead
+of corner notes); a corner note within 35 m of a junction is left out, so one bend is never called twice, and no note past
+a junction is read until that junction's call at the turn has been said (it then queues behind it, or is skipped as too
+late). Any notes mode; off route, nothing. tests/test_turn_order.py; e2e "turn by turn in road order".
 A route rebuilt from a shared shape has no maneuvers and so no directions.
 
 ## Fun score (map only)
