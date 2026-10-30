@@ -248,6 +248,18 @@ def test_car_map_fills_the_screen_at_its_own_scale():
     assert "func fitViewport()" in swift and "'width=\\(w), initial-scale=1" in swift, "laid out at the car's width, not the phone's"
 
 
+def test_car_map_is_fed_for_a_smooth_glide():
+    """The owner's first CarPlay drive (2026-10-30, "incredibly stuttery"): the shell sent every fix three times and the mode
+    on every layout pass, and WebKit may slow a backgrounded app's web view. The page's side is checked in e2e/smoke.js."""
+    swift = open(os.path.join(ROOT, "CarPlay", "ApexCarPlay.swift"), encoding="utf-8").read()
+    assert "if let p = position, p.lat == lat, p.lon == lon, p.course == course { return }" in swift, "each fix once"
+    assert "guard loaded, code != sentMode else { return }" in swift, "only a changed mode"
+    assert "config.preferences.inactiveSchedulingPolicy = .none" in swift, "full rate with the phone locked"
+    js = open(os.path.join(ROOT, "web", "carmap.js"), encoding="utf-8").read()
+    assert "requestAnimationFrame(frame)" in js and "map.jumpTo(followView(p))" in js, "the camera glides every frame"
+    assert "apex-contour" not in js and "maplibre-contour" not in open(os.path.join(ROOT, "web", "carmap.html"), encoding="utf-8").read()
+
+
 def test_opens_with_no_route():
     """Opening the app (or the car) starts with no route: the planned route lasts the session only (2026-10-30)."""
     html = open(os.path.join(ROOT, "web", "index.html"), encoding="utf-8").read()

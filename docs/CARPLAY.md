@@ -83,11 +83,16 @@ the one brain (routing, directions, notes, hazards, the voice); it runs in `Apex
 the phone's window was ever opened, so the car can open Vetta cold. Mockups: docs/design/carplay (blue tags Apple draws,
 yellow tags we do).
 
-- **Our map in the base view:** the phone's theme (Roadbook, Tapedeck, Billet: the same OpenFreeMap style, palettes, hill
-  shading and contours, web/basemap.js), day or night from the car's screen; the route, every corner's rating at its apex
+- **Our map in the base view:** the phone's theme (Roadbook, Tapedeck, Billet: the same OpenFreeMap style, palettes and hill
+  shading, web/basemap.js; no contour lines in the car since 2026-10-30, the heaviest thing it drew), day or night from the car's screen; the route, every corner's rating at its apex
   (tight ones filled; plates never overlap, never sit within 28 px of the arrow or its sight plate, and are placed again once
   the camera settles on a mode change, U-77; the credit on its own strip of ground so no label runs under it, U-89), the hazard plate for reported hazards, the position puck; following the car heading-up while
   guiding, the whole route in a trip preview. It takes no touches: Apple's templates own every control.
+- **Smooth in the car (2026-10-30, the owner's first drive: "incredibly stuttery"):** the shell sends each 1 Hz GPS fix once
+  (it repeated each one three times), only a changed mode, and keeps the car's web view running at full rate with the phone
+  locked; the page glides the arrow and the camera every frame from fix to fix (about one fix behind, never ahead of it),
+  takes plates it hides off the map, never forces a layout while moving, and draws at most 2 device pixels a point.
+  e2e/smoke.js drives it 30 s on a quarter-speed CPU and checks it.
 - **Root:** Where to? and Loops on the left, Drive and Places on the right (CPMapTemplate shows at most two a side); pan, zoom
   in, zoom out and the voice (mute) as map buttons. **Drive** starts a free drive from the car with no destination (U-79); it
   steps aside while a trip preview offers its own Drive.

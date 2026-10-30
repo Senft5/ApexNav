@@ -834,6 +834,73 @@ flow('the sight-line speed rides under the position arrow, on the phone and on t
   check(await page.evaluate(() => { const s = getComputedStyle(document.getElementById('credit')); return s.backgroundColor !== 'rgba(0, 0, 0, 0)' && s.opacity === '1'; }), 'the credit sits on a solid strip');
 });
 
+// The owner's first CarPlay drive (2026-10-30): the car map was "incredibly stuttery and unusable". It jumped to each 1 Hz
+// fix and sat still in between, and every message (the shell repeats a fix every 0.4 s, and says the mode on every layout
+// pass) cost a frame or more: the camera eased again, every plate was torn down and rebuilt and measured. A 30 s drive on
+// a car's screen (800 × 480) with the CPU at a quarter speed, fed as the shell feeds it: the map moves every frame at the
+// car's speed, and no message or frame of the car map's own code holds a frame.
+flow('the car map glides between fixes and no message holds a frame, on a slow CPU (the owner, 2026-10-30)', async (page, base) => {
+  await page.route('https://tiles.openfreemap.org/**', (route) => (route.request().url().includes('/styles/')
+    ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 8, sources: {}, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#eee' } }] }) })
+    : route.abort()));
+  // the car map's own scripts in every long frame (Long Animation Frames: each script over 5 ms, with its file)
+  await page.addInitScript(() => { window.__loaf = [];
+    try { new PerformanceObserver((l) => { for (const f of l.getEntries()) for (const s of f.scripts || []) if (/carmap\.js/.test(s.sourceURL)) window.__loaf.push(Math.round(s.duration)); }).observe({ type: 'long-animation-frame', buffered: true }); } catch (_) {} });
+  await page.goto(base + '/carmap.html');
+  await page.waitForFunction(() => window.car && car.map && car.map.loaded());
+  await page.evaluate(() => {   // a twisty road, a point every 10 m, a corner plate every 60 m, a hazard; guiding with Apple's card on the left
+    const route = []; let lat = 35.36, lon = -84.29, h = 30;
+    for (let i = 0; i < 1200; i++) { h += 9 * Math.sin(i / 9); const b = h * Math.PI / 180; lat += 10 * Math.cos(b) / 110540; lon += 10 * Math.sin(b) / (111320 * Math.cos(lat * Math.PI / 180)); route.push([lat, lon]); }
+    window.__route = route;
+    car.look('roadbook', false); car.route(route); car.position(route[0][0], route[0][1], 30);
+    car.corners(route.filter((_, i) => i % 6 === 3).map((at, k) => ({ at, text: (k % 2 ? 'L' : 'R') + (1 + k % 6), tight: k % 5 === 0 })));
+    car.hazards([{ at: route[120], title: 'Gravel' }]); car.inset(288); car.mode('guide'); car.sight({ text: '45', unit: 'MPH', short: false });
+  });
+  await page.waitForTimeout(1500);
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
+  const r = await page.evaluate(async () => {
+    const map = car.map, route = window.__route, t0 = performance.now(), msgMs = [];
+    window.__loaf.length = 0;
+    const timed = (f) => { const s = performance.now(); f(); msgMs.push(performance.now() - s); };
+    const brg = (a, b) => (Math.atan2((b[1] - a[1]) * Math.cos(a[0] * Math.PI / 180), b[0] - a[0]) * 180 / Math.PI + 360) % 360;
+    // 20 m/s: a new fix each second, sent every 0.1 s as ApexNavApp's live frame does; the sight on its own clock; the
+    // mode and inset again every second, as a layout pass sends them
+    const timers = [
+      setInterval(() => { const i = Math.min(route.length - 2, 2 * Math.floor((performance.now() - t0) / 1000)); timed(() => car.position(route[i][0], route[i][1], brg(route[i], route[i + 1]))); }, 100),
+      setInterval(() => timed(() => car.sight({ text: String(40 + 5 * Math.floor(Math.random() * 3)), unit: 'MPH', short: false })), 2000),
+      setInterval(() => timed(() => { car.inset(288); car.mode('guide'); }), 1000),
+    ];
+    // each frame: how far the ground moved under a point on the screen, and in what time
+    const steps = []; let last = null;
+    await new Promise((done) => {
+      const tick = (ts) => {
+        if (last) { const p = map.project(last.ll); steps.push({ px: Math.hypot(p.x - 560, p.y - 300), dt: ts - last.ts }); }
+        last = { ll: map.unproject([560, 300]), ts };
+        if (ts - t0 < 30000) requestAnimationFrame(tick); else done();
+      };
+      requestAnimationFrame(tick);
+    });
+    timers.forEach(clearInterval);
+    const run = steps.slice(Math.floor(steps.length * 0.1)), rate = run.map((s) => s.px / Math.max(1, s.dt)).sort((a, b) => a - b);
+    const plates = [...document.querySelectorAll('.car-plate')].map((e) => e.getBoundingClientRect());
+    return { frames: run.length, moving: run.filter((s) => s.px > 0.05).length / run.length, rateMed: rate[rate.length >> 1], rateP95: rate[Math.floor(rate.length * 0.95)], rateMax: rate[rate.length - 1],
+      msgP95: +msgMs.sort((a, b) => a - b)[Math.floor(msgMs.length * 0.95)].toFixed(1), msgMax: +msgMs[msgMs.length - 1].toFixed(1), loaf: window.__loaf.slice(), plates: plates.length,
+      offScreen: plates.filter((b) => b.right < 0 || b.left > innerWidth || b.bottom < 0 || b.top > innerHeight).length };
+  });
+  await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
+  const say = JSON.stringify({ ...r, rateMed: +r.rateMed.toFixed(4), rateP95: +r.rateP95.toFixed(4), rateMax: +r.rateMax.toFixed(4) });
+  // it glides: the map moves on nearly every frame, never in a lurch (a jump per fix is a long still, then one frame's leap)
+  check(r.frames > 60 && r.moving >= 0.85, 'the map moves every frame, not once a fix: ' + say);
+  check(r.rateP95 <= 3 * r.rateMed && r.rateMax <= 10 * r.rateMed, 'no frame leaps ahead of the glide: ' + say);
+  // a message (a repeated fix, the mode said again) costs next to nothing, and the car map's own frame work stays under half
+  // a frame (33 ms at a quarter speed). Wall-clock times on a shared CI machine catch the odd stall, so these hold for 95% of
+  // messages and 99% of frames; the old map's every repeated fix eased the camera again (~13 ms each, up to 70)
+  check(r.msgP95 < 8, 'messages to the car map under 8 ms at a quarter speed: ' + say);
+  check(r.loaf.filter((d) => d >= 33).length <= r.frames / 100, "the car map's own code never holds a frame: " + say);
+  check(r.offScreen === 0, 'only the plates on the screen are on the map: ' + say);
+}, { viewport: { width: 800, height: 480 }, deviceScaleFactor: 1 });
+
 flow('a route being driven comes back after the app is closed; a planned one, or a finished drive, does not (the owner, 2026-10-30)', async (page, base) => {
   const ctx = page.context();
   await ctx.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}

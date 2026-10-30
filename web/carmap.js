@@ -20,22 +20,35 @@
   // route never puts hundreds of plates on a small screen.
   const NEAR_M = 6000, plates = [];
   const distM = (a, b) => Math.hypot((a[1] - b[1]) * 111320 * Math.cos(a[0] * Math.PI / 180), (a[0] - b[0]) * 110540);
+  // The owner's first CarPlay drive (2026-10-30, "incredibly stuttery"): every few hundred metres all forty plates were torn
+  // down and built again. Now a plate that is still wanted keeps its marker (and its measured size); only the ones that
+  // came into range are made and only the ones left behind removed. And a plate declutter hides is taken off the map, not
+  // just made invisible: MapLibre moves every marker on the map every frame, and with the camera gliding, forty of them
+  // (most off the screen) were most of the page's work a frame.
+  function makePlate(w) {
+    const el = document.createElement('div');
+    if (w.hazard) { el.className = 'car-plate car-hazard'; el.innerHTML = '<i></i>'; el.append(w.text); }
+    else { el.className = 'car-plate car-corner' + (w.tight ? ' tight' : ''); el.textContent = w.text; }
+    return { key: w.key, el, at: w.at, dy: w.dy, hazard: w.hazard, on: false, m: new root.maplibregl.Marker({ element: el, anchor: 'bottom', offset: [0, -w.dy] }).setLngLat([w.at[1], w.at[0]]) };
+  }
+  function showPlate(p, on) {
+    if (p.on === on) return;
+    p.on = on;
+    if (on) p.m.addTo(map); else p.m.remove();
+  }
   function placePlates() {
     if (!map) return;
-    plates.splice(0).forEach((p) => p.m.remove());
     const here = state.pos ? [state.pos.lat, state.pos.lon] : null, all = state.mode === 'preview' || !here;
     const near = (p) => all || distM(here, p.at) < NEAR_M;
     // which plate wins a crowded spot: hazards, then the corners nearest the car (or the tight ones, with no car)
     const corners = state.corners.filter(near).map((c) => ({ c, d: here ? distM(here, c.at) : 0 }))
       .sort((x, y) => (all ? (y.c.tight - x.c.tight) || 0 : x.d - y.d)).slice(0, all ? 160 : 40);
-    for (const h of state.hazards.filter(near)) {
-      const el = document.createElement('div'); el.className = 'car-plate car-hazard'; el.innerHTML = '<i></i>'; el.append(String(h.title || 'Hazard').toUpperCase());
-      plates.push({ el, m: new root.maplibregl.Marker({ element: el, anchor: 'bottom', offset: [0, -6] }).setLngLat([h.at[1], h.at[0]]).addTo(map), at: h.at, dy: 6, hazard: true });
-    }
-    for (const { c } of corners) {
-      const el = document.createElement('div'); el.className = 'car-plate car-corner' + (c.tight ? ' tight' : ''); el.textContent = c.text;
-      plates.push({ el, m: new root.maplibregl.Marker({ element: el, anchor: 'bottom', offset: [0, -8] }).setLngLat([c.at[1], c.at[0]]).addTo(map), at: c.at, dy: 8 });
-    }
+    const wanted = state.hazards.filter(near).map((h) => { const text = String(h.title || 'Hazard').toUpperCase(); return { key: `h|${text}|${h.at}`, text, at: h.at, dy: 6, hazard: true }; })
+      .concat(corners.map(({ c }) => ({ key: `c|${c.text}|${c.tight ? 1 : 0}|${c.at}`, text: c.text, tight: !!c.tight, at: c.at, dy: 8, hazard: false })));
+    const old = new Map(plates.map((p) => [p.key, p]));
+    plates.length = 0;
+    for (const w of wanted) { const p = old.get(w.key); if (p) old.delete(w.key); plates.push(p || makePlate(w)); }
+    old.forEach((p) => showPlate(p, false));
     declutter();
   }
   // Plates never pile up (the owner's car, 2026-10-29: L2, L3 and R4 on top of each other): in priority order, a plate
@@ -43,12 +56,12 @@
   // on the car: the arrow and the sight plate under it are taken first, with CLEAR_PX around them (the review recording's
   // car/02 had R1 on the arrow and an R2 half under it as guidance began).
   const CLEAR_PX = 28;
-  function carBoxes() {
-    if (!state.pos) return [];
-    const pt = map.project([state.pos.lon, state.pos.lat]), out = [[pt.x - 17 - CLEAR_PX, pt.y - 17 - CLEAR_PX, pt.x + 17 + CLEAR_PX, pt.y + 17 + CLEAR_PX]];
-    const tag = sightTag && sightTag.getElement();
-    if (tag && !tag.hidden) {                                        // anchored by its top, 21 px under the car's centre
-      const w = tag.offsetWidth || 80, h = tag.offsetHeight || 24;
+  function carBoxes(sight) {
+    const car = glide.shown || state.pos;                            // where the arrow is drawn now (it glides, below)
+    if (!car) return [];
+    const pt = map.project([car.lon, car.lat]), out = [[pt.x - 17 - CLEAR_PX, pt.y - 17 - CLEAR_PX, pt.x + 17 + CLEAR_PX, pt.y + 17 + CLEAR_PX]];
+    if (sight) {                                                     // anchored by its top, 21 px under the car's centre
+      const [w, h] = sight;
       out.push([pt.x - w / 2 - CLEAR_PX, pt.y + 21 - CLEAR_PX, pt.x + w / 2 + CLEAR_PX, pt.y + 21 + h + CLEAR_PX]);
     }
     return out;
@@ -57,22 +70,37 @@
   // so that column, CARD_GAP past it, is taken too, as is the credit strip; and a plate is shown whole or not at all, never
   // cut by the screen's edge. A hazard (the one you just reported is at the car) tries beside the point before it gives up.
   const CARD_GAP = 16, EDGE_PX = 6;
-  function reservedBoxes(H) {
-    const out = carBoxes();
-    if (state.inset > 0) out.push([-1e4, -1e4, state.inset + CARD_GAP, H + 1e4]);
-    const credit = document.getElementById('credit'), mr = map.getContainer().getBoundingClientRect();
-    if (credit && credit.offsetHeight) { const c = credit.getBoundingClientRect(); out.push([c.left - mr.left - 3, c.top - mr.top - 3, c.right - mr.left + 3, c.bottom - mr.top + 3]); }
+  function reservedBoxes(g, sight) {
+    const out = carBoxes(sight);
+    if (state.inset > 0) out.push([-1e4, -1e4, state.inset + CARD_GAP, g.H + 1e4]);
+    if (g.credit) out.push(g.credit);
     return out;
   }
+  // Declutter runs while the map moves (a few times a second, platesSoon below), so it never forces a layout there: the
+  // screen, the credit strip, the sight plate and every plate are measured once, when they change, all before any write.
+  let geom = null, sightSize = null;
+  function measure() {
+    const c = map.getContainer(), fresh = plates.filter((p) => !p.w);
+    fresh.forEach((p) => showPlate(p, true));                          // measured on the map, in its own font
+    if (!geom) {
+      const credit = document.getElementById('credit'), mr = c.getBoundingClientRect(), b = credit && credit.offsetHeight ? credit.getBoundingClientRect() : null;
+      geom = { W: c.clientWidth, H: c.clientHeight, credit: b && [b.left - mr.left - 3, b.top - mr.top - 3, b.right - mr.left + 3, b.bottom - mr.top + 3] };
+    }
+    const tag = sightTag && sightTag.getElement();
+    if (!tag || tag.hidden) sightSize = null; else if (!sightSize) sightSize = [tag.offsetWidth || 80, tag.offsetHeight || 24];
+    for (const p of fresh) { p.w = p.el.offsetWidth || 40; p.h = p.el.offsetHeight || 24; }
+  }
   function declutter() {
+    declutterAt = performance.now();
     if (!map || !plates.length) return;
-    const W = map.getContainer().clientWidth, H = map.getContainer().clientHeight, shown = reservedBoxes(H);
+    measure();
+    const W = geom.W, H = geom.H, shown = reservedBoxes(geom, sightSize);
     const fits = (box) => box[0] >= EDGE_PX && box[1] >= EDGE_PX && box[2] <= W - EDGE_PX && box[3] <= H - EDGE_PX
       && !shown.some((b) => box[0] < b[2] && box[2] > b[0] && box[1] < b[3] && box[3] > b[1]);
     // how far beside a point a plate must stand to clear the car there: the arrow, or the wider sight plate under it
-    const tag = sightTag && sightTag.getElement(), reach = Math.max(17, tag && !tag.hidden ? (tag.offsetWidth || 80) / 2 : 0) + CLEAR_PX + 6;
+    const reach = Math.max(17, sightSize ? sightSize[0] / 2 : 0) + CLEAR_PX + 6;
     for (const p of plates) {
-      const pt = map.project([p.at[1], p.at[0]]), w = p.el.offsetWidth || 40, h = p.el.offsetHeight || 24;
+      const pt = map.project([p.at[1], p.at[0]]), w = p.w, h = p.h;
       // [x, y] of the plate's bottom centre from its point: above it, then (a hazard) right of it, left of it, under it
       const side = reach + w / 2, spots = [[0, -p.dy]];
       if (p.hazard) spots.push([side, h / 2], [-side, h / 2], [0, h + p.dy + 17 + CLEAR_PX]);
@@ -81,9 +109,17 @@
         const box = [pt.x + ox - w / 2 - 3, pt.y + oy - h - 3, pt.x + ox + w / 2 + 3, pt.y + oy + 3];
         if (fits(box)) { at = [ox, oy]; shown.push(box); break; }
       }
-      p.el.style.visibility = at ? '' : 'hidden';
       if (at && (!p.off || p.off[0] !== at[0] || p.off[1] !== at[1])) { p.off = at; p.m.setOffset(at); }
+      showPlate(p, !!at);
     }
+  }
+  // While the camera glides it moves every frame; the plates are placed again at most every DECLUTTER_MS of it (the markers
+  // themselves ride with the map in between), and once more when it settles.
+  const DECLUTTER_MS = 250;
+  let declutterAt = 0, declutterTimer = 0;
+  function platesSoon() {
+    if (declutterTimer) return;
+    declutterTimer = setTimeout(() => { declutterTimer = 0; declutter(); }, Math.max(0, declutterAt + DECLUTTER_MS - performance.now()));
   }
 
   function paint() {
@@ -99,6 +135,7 @@
     const credit = document.getElementById('credit');
     credit.style.background = P.bg;
     credit.style.color = /^#[0-9A-Fa-f]{6}$/.test(P.label) ? `${P.label}A6` : P.label;
+    geom = null;                                                      // the credit strip, measured again by the next declutter
     drawPuck();
   }
 
@@ -113,6 +150,7 @@
   function drawSight() {
     if (!sightTag) return;
     const el = sightTag.getElement(), s = state.sight;
+    sightSize = null;                                                 // measured again by the next declutter
     if (!s || !s.text || !state.pos) { el.hidden = true; return; }
     el.hidden = false;
     el.classList.toggle('short', s.short);                            // classList: MapLibre's own marker classes stay
@@ -123,16 +161,11 @@
 
   function addLayers() {
     const firstSymbol = (map.getStyle().layers.find((l) => l.type === 'symbol') || {}).id;
-    let dem = null;
-    try { dem = new root.mlcontour.DemSource({ url: DEM_URL, encoding: 'terrarium', maxzoom: 13, worker: true }); dem.setupMaplibre(root.maplibregl); } catch (_) { dem = null; }
-    map.addSource('apex-dem', { type: 'raster-dem', tiles: [dem ? dem.sharedDemProtocolUrl : DEM_URL], tileSize: 256, encoding: 'terrarium', maxzoom: 13 });
+    // The car draws the relief as the hillshade alone: the phone's contour lines (thousands of line features a tile,
+    // generated in workers as the car moves) were the heaviest thing on the car's screen, for a glance's worth of detail
+    // (the owner's first CarPlay drive, 2026-10-30: a frame cost 2-3 times one without them, measured at 800 × 480).
+    map.addSource('apex-dem', { type: 'raster-dem', tiles: [DEM_URL], tileSize: 256, encoding: 'terrarium', maxzoom: 13 });
     map.addLayer({ id: 'apex-hillshade', type: 'hillshade', source: 'apex-dem', paint: {} }, firstSymbol);
-    if (dem) {
-      map.addSource('apex-contour-src', { type: 'vector', maxzoom: 15, tiles: [dem.contourProtocolUrl({ multiplier: 3.28084,
-        thresholds: { 11: [200, 1000], 12: [100, 500], 13: [50, 250], 14: [20, 100], 15: [10, 50] }, elevationKey: 'ele', levelKey: 'level', contourLayer: 'contours' })] });
-      map.addLayer({ id: 'apex-contours', type: 'line', source: 'apex-contour-src', 'source-layer': 'contours',
-        paint: { 'line-width': ['match', ['get', 'level'], 1, 0.9, 0.45], 'line-opacity': ['match', ['get', 'level'], 1, 0.55, 0.32] } }, firstSymbol);
-    }
     const width = (a, b) => ['interpolate', ['linear'], ['zoom'], 10, a, 16, b];
     map.addSource('car-route-src', { type: 'geojson', data: empty() });
     map.addLayer({ id: 'car-route-casing', type: 'line', source: 'car-route-src', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-width': width(6, 14) } });
@@ -144,8 +177,43 @@
     placePlates();                                                  // plates are DOM markers: they need the map, not its style
   }
 
-  // The camera: following the car (heading up while guiding, the car low on the screen), or the whole route for a trip
-  // preview, or where the driver panned until Recentre. `inset` is the width Apple's card covers on the left.
+  // The car glides (the owner's first CarPlay drive, 2026-10-30: "incredibly stuttery and unusable"). The shell sends a
+  // 1 Hz GPS fix, and the map used to jump to each one and sit still in between. Now the arrow, its sight plate and the
+  // camera move every frame from where they are drawn to the newest fix, over the time the last fix took to come, so the
+  // road scrolls at the car's own speed, about one fix behind it (the fix itself, never a guess past it). A big jump (the
+  // first fix, a replay seek, out of a tunnel) is drawn at once. The loop stops when the car does.
+  const SNAP_M = 400, GLIDE_MIN_MS = 250, GLIDE_MAX_MS = 1500;
+  const glide = { from: null, to: null, t0: 0, dur: 1, at: 0, iv: 0, shown: null };
+  let raf = 0;
+  const turn = (a, b) => ((b - a + 540) % 360) - 180;                // degrees, the short way round
+  function poseAt(now) {
+    const { from, to } = glide, k = Math.max(0, Math.min(1, (now - glide.t0) / glide.dur));
+    const course = from.course == null || to.course == null ? to.course : (from.course + turn(from.course, to.course) * k + 360) % 360;
+    return { lat: from.lat + (to.lat - from.lat) * k, lon: from.lon + (to.lon - from.lon) * k, course, k };
+  }
+  // heading up while guiding, the car low on the screen; north up and centred otherwise
+  function followView(p) {
+    const guiding = state.mode === 'guide', h = geom ? geom.H : map.getContainer().clientHeight;
+    return { center: [p.lon, p.lat], bearing: guiding && finite(p.course) ? p.course : 0, pitch: guiding ? 45 : 0,
+      zoom: guiding ? Math.max(map.getZoom(), 15) : map.getZoom(), padding: { top: guiding ? h * 0.35 : 0, bottom: 0, left: state.inset, right: 0 } };
+  }
+  function show(p) {
+    glide.shown = p;
+    puck.setLngLat([p.lon, p.lat]); puck.setRotation(p.course || 0);
+    sightTag.setLngLat([p.lon, p.lat]);
+    // a mode change, Recentre or a zoom button eases the camera on its own; the glide takes it back when that ends
+    if (ready && state.follow && state.mode !== 'preview' && !map.isEasing()) map.jumpTo(followView(p));
+    platesSoon();
+  }
+  function frame() {
+    raf = 0;
+    const p = poseAt(performance.now());
+    show(p);
+    if (p.k < 1) raf = requestAnimationFrame(frame);
+  }
+
+  // The camera for a change of mode, route or card: the whole route for a trip preview, else following the car (where
+  // it is drawn now), or where the driver panned until Recentre. `inset` is the width Apple's card covers on the left.
   function camera(animate = true) {
     if (!ready) return;
     const pad = { top: 40, bottom: 40, left: 40 + state.inset, right: 80 };
@@ -155,53 +223,80 @@
       map.fitBounds(b, { padding: pad, pitch: 0, bearing: 0, duration: animate ? 600 : 0, maxZoom: 15 });
       return;
     }
-    if (!state.follow || !state.pos) return;
-    const guiding = state.mode === 'guide';
-    const h = map.getContainer().clientHeight;
-    map.easeTo({ center: [state.pos.lon, state.pos.lat], bearing: guiding && finite(state.pos.course) ? state.pos.course : 0, pitch: guiding ? 45 : 0,
-      zoom: guiding ? Math.max(map.getZoom(), 15) : map.getZoom(), padding: { top: guiding ? h * 0.35 : 0, bottom: 0, left: state.inset, right: 0 },
-      duration: animate ? 450 : 0, essential: true });
+    if (!state.follow || !glide.to) return;
+    map.easeTo({ ...followView(poseAt(performance.now())), duration: animate ? 450 : 0, essential: true });
   }
 
   const car = {
-    look(theme, night) { state.theme = theme || 'roadbook'; state.night = !!night; paint(); },
+    look(theme, night) {
+      theme = theme || 'roadbook'; night = !!night;
+      if (ready && theme === state.theme && night === state.night) return;    // the shell says it again on every trait change
+      state.theme = theme; state.night = night; paint();
+    },
     route(coords) { state.route = Array.isArray(coords) ? coords.filter((p) => Array.isArray(p) && finite(p[0]) && finite(p[1])) : []; setData(); camera(); },
     corners(list) { state.corners = (Array.isArray(list) ? list : []).filter((c) => c && Array.isArray(c.at)).slice(0, 600); setData(); },
     hazards(list) { state.hazards = (Array.isArray(list) ? list : []).filter((h) => h && Array.isArray(h.at)).slice(0, 40); setData(); },
     position(lat, lon, course) {
       if (!finite(lat) || !finite(lon)) return;
-      state.pos = { lat, lon, course: finite(course) && course >= 0 ? course : null };
-      if (puck) { puck.setLngLat([lon, lat]); puck.setRotation(state.pos.course || 0); }
-      if (sightTag) { sightTag.setLngLat([lon, lat]); if (sightTag.getElement().hidden && state.sight && state.sight.text) drawSight(); }
+      const c = finite(course) && course >= 0 ? course : null, was = state.pos;
+      if (was && was.lat === lat && was.lon === lon && was.course === c) return;   // the same fix again: nothing moved
+      state.pos = { lat, lon, course: c };
+      const now = performance.now(), from = glide.to ? poseAt(now) : null, to = { lat, lon, course: c == null ? (from && from.course) : c };
+      if (!from || distM([from.lat, from.lon], [lat, lon]) > SNAP_M) {
+        glide.from = glide.to = to; glide.t0 = now; glide.dur = 1;
+        if (raf) { cancelAnimationFrame(raf); raf = 0; }
+        if (puck) show(to);
+      } else {
+        // over a little more than the fixes' usual spacing, so a fix that comes late finds the car still moving, not parked
+        const iv = Math.min(GLIDE_MAX_MS, now - glide.at);
+        glide.iv = glide.iv ? glide.iv * 0.7 + iv * 0.3 : iv;
+        glide.from = from; glide.to = to; glide.t0 = now; glide.dur = Math.min(GLIDE_MAX_MS, Math.max(GLIDE_MIN_MS, glide.iv * 1.15));
+        if (!raf) raf = requestAnimationFrame(frame);
+      }
+      glide.at = now;
+      if (sightTag && sightTag.getElement().hidden && state.sight && state.sight.text) drawSight();
       if (!state.placedAt || distM(state.placedAt, [lat, lon]) > 800) { state.placedAt = [lat, lon]; placePlates(); }   // plates follow the car, a few times a mile
-      if (state.mode !== 'preview') camera(false);
     },
-    sight(s) { state.sight = s && typeof s.text === 'string' ? { text: s.text.slice(0, 6), unit: String(s.unit || '').slice(0, 5), short: !!s.short } : null; drawSight(); },
+    sight(s) {
+      const next = s && typeof s.text === 'string' ? { text: s.text.slice(0, 6), unit: String(s.unit || '').slice(0, 5), short: !!s.short } : null;
+      if (JSON.stringify(next) === JSON.stringify(state.sight)) return;
+      state.sight = next; drawSight();
+    },
     // U-77: the plates are placed again once the new camera has settled (heading up and pitched, the car low on the screen),
-    // not only for the camera the mode left behind
+    // not only for the camera the mode left behind. The shell says the mode on every layout pass; only a change does
+    // anything (a repeat used to tear down every plate, restart the camera's ease and undo a pan).
     mode(m) {
-      const was = state.mode;
-      state.mode = m === 'guide' || m === 'preview' ? m : 'idle'; state.follow = true; placePlates(); camera();
-      if (ready && was !== state.mode) map.once('moveend', placePlates);
+      const next = m === 'guide' || m === 'preview' ? m : 'idle';
+      if (next === state.mode) return;
+      state.mode = next; state.follow = true; placePlates(); camera();
+      if (ready) map.once('moveend', placePlates);
     },
     zoom(dir) { if (ready) map.easeTo({ zoom: map.getZoom() + (dir > 0 ? 1 : -1), duration: 300 }); },
     pan(dx, dy) { if (!ready) return; state.follow = false; map.panBy([dx * map.getContainer().clientWidth / 3, dy * map.getContainer().clientHeight / 3], { duration: 300 }); },
     recentre() { state.follow = true; if (state.mode === 'preview') state.mode = 'idle'; camera(); },
-    inset(px) { state.inset = finite(px) ? Math.max(0, px) : 0; camera(false); },
+    inset(px) {
+      const next = finite(px) ? Math.max(0, px) : 0;
+      if (next === state.inset) return;
+      state.inset = next; camera(false); platesSoon();
+    },
     get state() { return state; },
     get map() { return map; },
   };
   root.car = car;
 
   function start() {
-    map = new root.maplibregl.Map({ container: 'map', style: MAP_STYLE, center: [-84.29, 35.36], zoom: 14, attributionControl: false, interactive: false, fadeDuration: 0 });
+    // at most 2 device pixels to a CSS pixel: a 3x car screen drew 2.25 times the pixels for no sharper a glance
+    map = new root.maplibregl.Map({ container: 'map', style: MAP_STYLE, center: [-84.29, 35.36], zoom: 14, attributionControl: false, interactive: false, fadeDuration: 0,
+      pixelRatio: Math.min(2, root.devicePixelRatio || 1) });
     const el = document.createElement('div'); el.className = 'car-puck';
     puck = new root.maplibregl.Marker({ element: el, rotationAlignment: 'map', pitchAlignment: 'map' }).setLngLat([-84.29, 35.36]).addTo(map);
     drawPuck();
     const tag = document.createElement('div'); tag.className = 'car-sight'; tag.hidden = true;
     sightTag = new root.maplibregl.Marker({ element: tag, anchor: 'top', offset: [0, 21] }).setLngLat([-84.29, 35.36]).addTo(map);
     map.on('load', () => { addLayers(); ready = true; paint(); setData(); camera(false); });
-    map.on('moveend', declutter);
+    map.on('moveend', platesSoon);
+    map.on('resize', () => { geom = null; platesSoon(); });
+    if (document.fonts) document.fonts.ready.then(() => { plates.forEach((p) => { p.w = 0; }); sightSize = null; platesSoon(); });   // the plates' font, once it is in
     map.on('styleimagemissing', () => {});
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
