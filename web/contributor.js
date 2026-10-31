@@ -111,13 +111,13 @@
       const shape = []; for (let i = s; i < e; i++) shape.push({ lat: drive.lat[i], lon: drive.lon[i] });
       if (shape.length < 2) continue;
       const r = await fetchFn(`${VALHALLA}/trace_attributes`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({
-        shape, costing: 'auto', shape_match: 'map_snap', filters: { attributes: ['edge.way_id', 'edge.road_class', 'matched.edge_index', 'matched.type'], action: 'include' } }) });
+        shape, costing: 'auto', shape_match: 'map_snap', filters: { attributes: ['edge.way_id', 'edge.road_class', 'edge.names', 'matched.edge_index', 'matched.type'], action: 'include' } }) });
       if (!r.ok) throw new Error(`map matching failed (${r.status})`);
       const j = await r.json();
       (j.matched_points || []).forEach((m, k) => {
         if (s + k >= Math.min(n, s + CH) || m.type === 'unmatched' || m.edge_index == null) return;
         const ed = j.edges[m.edge_index];
-        if (ed && ed.way_id != null) out[s + k] = { way: ed.way_id, cls: ed.road_class || null };
+        if (ed && ed.way_id != null) out[s + k] = { way: ed.way_id, cls: ed.road_class || null, name: (Array.isArray(ed.names) && ed.names[0]) || null };   // name: road_runs.js
       });
     }
     return out;
