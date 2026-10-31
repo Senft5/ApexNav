@@ -6,11 +6,6 @@ options:
 packages:
   ApexKit:
     path: ApexKit
-  # The car's map (CarPlay/ApexCarMap.swift, REVIEW_FEEL.md F-07): MapLibre Native for iOS, Metal. 6.31.0 (2026-09-11);
-  # the distribution repo's Package.swift is a binary target of the release's dynamic xcframework, embedded by Xcode.
-  MapLibre:
-    url: https://github.com/maplibre/maplibre-gl-native-distribution
-    exactVersion: 6.31.0
 targets:
   ApexNav:
     type: application
@@ -20,7 +15,6 @@ targets:
       - path: ApexIntents.swift                         # Siri and Shortcuts (IDEAS V-07)
       - path: ApexBuildNotifier.swift                   # new steps on builds you follow (REVIEW.md 5.3)
       - path: CarPlay/ApexCarPlay.swift                 # the car's screen (docs/CARPLAY.md)
-      - path: CarPlay/ApexCarMap.swift                  # its map, MapLibre Native (F-07)
       - path: LiveActivity/ApexDriveAttributes.swift   # shared with the ApexNavLive extension
       - path: Assets.xcassets      # AppIcon: web/brand/icon-1024.png (single-size iOS icon)
       - path: web
@@ -28,8 +22,6 @@ targets:
         buildPhase: resources
     dependencies:
       - package: ApexKit
-      - package: MapLibre
-        product: MapLibre
       - target: ApexNavLive          # the drive's Live Activity (IDEAS U-11), embedded in the app
     # Sign in with Apple (IDEAS O-05, App Review 4.8). The App ID has the capability (enabled through the App Store Connect API).
     # CarPlay navigation (docs/CARPLAY.md): Apple assigned com.apple.developer.carplay-maps to the account on 2026-10-29, so

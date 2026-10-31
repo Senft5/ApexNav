@@ -4,6 +4,17 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-10-31: the shell and CarPlay back to the last build that opened (you: it crashes on open, phone and car)
+
+- The #267 build crashed on every open, on the phone and in CarPlay; the simulator never showed it (no motion
+  sensors there, no car). ApexNavApp.swift, CarPlay/ApexCarPlay.swift and project.yml are back to the 20:13 TestFlight
+  build's (a8dedc1), plus the guidance card fix; CarPlay/ApexCarMap.swift and the MapLibre package are out. Every web
+  change of #267 stays (People, the fixed stage, End/Log, the launch split, dead reckoning in the web car map).
+- Out until the crash is found: the native car map (F-07), motion and frame encoding off the main thread (F-13), the
+  shell's speed and fix time for the arrow (the web car map dead reckons from its own fixes). ApexKit's CarGlide stays.
+- Next: the crash report (TestFlight → the build → Crashes, or the phone's Analytics Data) names the line; then the
+  native work comes back one piece at a time on its own build. Undo: revert this commit.
+
 ## 2026-10-30 (night): the simulator smoke test starts past the welcome
 
 - main's simulator test had failed since 05:51 (the welcome moved into the app, U-65, and its Start brings up the

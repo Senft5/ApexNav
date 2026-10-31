@@ -135,6 +135,6 @@ def test_the_page_and_the_shell_wire_it():
     assert "m.action === 'disconnect'" in html and "backlog(frames)" in html
     swift = open(os.path.join(ROOT, "ApexNavApp.swift"), encoding="utf-8").read()
     assert 'cmd == "journal"' in swift and "journal?.add(JournalFrame(" in swift and "window.apex.backlog(" in swift
-    assert "didEnterBackgroundNotification" in swift and "segments, at, seq" in swift and "at: at, seq: seq)" in swift   # every frame numbered (LiveFrame)
+    assert "didEnterBackgroundNotification" in swift and '"\\"seq\\":' in swift
     car = open(os.path.join(ROOT, "CarPlay", "ApexCarPlay.swift"), encoding="utf-8").read()
     assert 'ApexCar.shared.send("disconnect"' in car

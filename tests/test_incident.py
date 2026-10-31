@@ -84,5 +84,5 @@ def test_wired():
     swift = open(os.path.join(ROOT, "ApexNavApp.swift"), encoding="utf-8").read()
     assert '<script src="incident.js"' in html and 'data-toggle="crash"' in html and "crash: true," in html
     assert "feedCrash(frame);" in html                                                  # every live frame, web and native
-    assert 'impactG = "impact_g"' in swift and "impactG: r(imu(impact / Self.gStd), 2)" in swift   # the shell sends the 100 Hz impact peak
+    assert '"\\"impact_g\\":' in swift                                             # the shell sends the 100 Hz impact peak
     assert "impact_g: this._takeImpact()" in open(os.path.join(ROOT, "web", "sensors.js"), encoding="utf-8").read()
