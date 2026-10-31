@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-ggzlsm8aqe+JNWGlp0Tu+izDTqbHN5oWbkwDzM6PLuI=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-989bsgI+qwAsdNE8anLo6sSaQ9pXCjdBGcyovUw1r54=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta · Log</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -592,8 +592,8 @@
     }
     $('yearShare').addEventListener('click', async () => {
       if (!yearText) return;
-      try { if (navigator.share) { await navigator.share({ text: yearText }); return; } } catch (e) { if (e && e.name === 'AbortError') return; }
-      try { await navigator.clipboard.writeText(yearText); $('yearShare').textContent = 'Copied'; setTimeout(() => { $('yearShare').textContent = 'Share'; }, 1500); } catch (_) {}
+      const how = await ApexSaveFile.shareLink({ title: 'My year on Vetta', text: yearText });   // the real share sheet (feedback 07)
+      if (how === 'copied') { $('yearShare').textContent = 'Copied'; setTimeout(() => { $('yearShare').textContent = 'Share'; }, 1500); }
     });
     function renderHistory() {
       const scored = drives.filter(d => d.ds.score != null);
@@ -1230,10 +1230,9 @@
       const mi = ApexUnits.long(d.len_m);
       const text = d.name + ' · ' + [score, mi].filter(Boolean).join(' · ');
       const url = location.origin + '/?drive=' + encodeURIComponent(d.id);
-      if (navigator.share) {
-        try { await navigator.share({ title: 'Vetta drive', text, url }); return; } catch (e) { if (e.name === 'AbortError') return; }
-      }
-      try { await navigator.clipboard.writeText(text + ' ' + url); const b = $('dvShare'); b.textContent = 'Link copied'; setTimeout(() => { b.textContent = 'Share'; }, 2000); } catch (_) { window.prompt('Copy drive link', text + ' ' + url); }
+      // the real share sheet (feedback 07; save_file.js shareLink), never a "Copy drive link" box
+      const how = await ApexSaveFile.shareLink({ title: 'Vetta drive', text, url });
+      if (how === 'copied' || how === 'failed') { const b = $('dvShare'); b.textContent = how === 'copied' ? 'Link copied' : 'Couldn\u2019t share'; setTimeout(() => { b.textContent = 'Share'; }, 2000); }
     });
     // A picture of the drive to share (drive_card.js, IDEAS D-09): the road's outline, score and corner mix, no times or speeds.
     $('dvCard').addEventListener('click', async () => {

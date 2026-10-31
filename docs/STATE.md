@@ -16,6 +16,13 @@
 - Migration 0043 (drive_scores) is NOT applied yet: apply it to apexnav-preview-db and apexnav-db before the Worker deploy
   (until then the new board says "Couldn't load the board" and drive Scores wait on the phone to be sent).
 - Exact next task: apply 0043; on a device, check a finished drive shows on the crew board's Week total.
+## Session 2026-10-31: TestFlight feedback 01-04, 07, 08 (screens and sharing)
+
+- [x] A route Preview owns the screen like a replay (no route card or tabs under it); Where to? stays below the Dynamic
+  Island with the keyboard up; written fields centred top to bottom and growing; menus are bottom sheets over a modal
+  scrim (tap outside closes); every invite/share opens the real share sheet (`shareText` bridge); no crew image card.
+- Unverified on a device: the `shareText` share sheet (CI compiles the Swift), the island gap on a real Dynamic Island.
+- Exact next task: TestFlight from main, then the owner's next round of notes.
 
 ## Session 2026-10-30 (evening): REVIEW_PEOPLE.md and REVIEW_FEEL.md built (PR #267)
 
