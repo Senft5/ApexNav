@@ -1,4 +1,5 @@
-# TestFlight crash reports (the ones shared from the phone after a crash), printed without personal details.
+# TestFlight feedback: crash reports and screenshot feedback shared from the phone, printed without personal details;
+# the screenshots go to an artifact kept one day.
 # On demand only.
 name: Crash logs
 on: workflow_dispatch
@@ -20,3 +21,10 @@ jobs:
           tools/write_asc_key.sh "$KEY"   # the PEM rebuilt as the TestFlight job does
           ASC_KEY_PATH="$KEY" python tools/crash_logs.py
           rm -f "$KEY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: feedback-screenshots
+          path: feedback/
+          retention-days: 1
+          if-no-files-found: ignore

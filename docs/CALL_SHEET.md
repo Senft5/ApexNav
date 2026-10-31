@@ -7,8 +7,8 @@ it says so. Things only you can do are in docs/OWNER_TODO.md.
 ## 2026-10-31: "it always thinks my phone is warm"
 
 - The battery saver came on at iOS's "serious" thermal state, where a phone charging on a dash with GPS and CarPlay sits
-  much of the time. Now: on at critical, or at serious held for 2 minutes; off at fair. Undo: THERMAL_ON = 2 and drop
-  the hold in web/power.js.
+  much of the time. You then: only at the highest level. Now on at critical only, off below it. Undo: THERMAL_ON = 2 in
+  web/power.js.
 
 ## 2026-10-31: the crash on open, found and fixed (nothing reverted)
 
