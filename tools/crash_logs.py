@@ -10,6 +10,15 @@ import json, os, re, sys, time, urllib.request
 import jwt   # PyJWT[crypto]
 
 API = "https://api.appstoreconnect.apple.com/v1"
+# The owner's TestFlight email, as the first 16 hex of its sha256 (the address itself is not in the repo). Screenshot
+# feedback is acted on only when it is the owner's; another tester's comment is counted, never printed or followed.
+OWNER = "90e41480b1bda2f5"
+
+
+def is_owner(attrs):
+    import hashlib
+    email = (attrs.get("email") or "").strip().lower()
+    return bool(email) and hashlib.sha256(email.encode()).hexdigest()[:16] == OWNER
 
 
 def token():
@@ -47,10 +56,14 @@ def screenshots(app_id, tok):
     subs = get(f"/apps/{app_id}/betaFeedbackScreenshotSubmissions?limit=10&sort=-createdDate", tok).get("data", [])
     print(f"{len(subs)} screenshot feedback(s)")
     os.makedirs("feedback", exist_ok=True)
+    others = 0
     for n, s in enumerate(subs, 1):
         a = s.get("attributes", {})
+        if not is_owner(a):
+            others += 1
+            continue
         print("=" * 80)
-        print(f"#{n} shared", a.get("createdDate"), "· iOS", a.get("osVersion"), "· app", a.get("appPlatform") or "")
+        print(f"#{n} shared", a.get("createdDate"), "· from: owner · iOS", a.get("osVersion"), "· app", a.get("appPlatform") or "")
         print("comment:", (a.get("comment") or "(none)").strip())
         for k, shot in enumerate(a.get("screenshots") or [], 1):
             try:
@@ -59,6 +72,8 @@ def screenshots(app_id, tok):
                 print(f"  screenshot feedback/{n:02d}-{k}.png ({shot.get('width')}x{shot.get('height')})")
             except Exception as e:
                 print("  screenshot not downloaded:", e)
+    if others:
+        print(f"{others} screenshot feedback(s) from other testers: not shown, not acted on")
 
 
 def main():
@@ -72,7 +87,8 @@ def main():
     for s in subs:
         a = s.get("attributes", {})
         print("=" * 80)
-        print("shared", a.get("createdDate"), "· build", a.get("appBuild") or a.get("buildNumber") or "?", "· iOS", a.get("osVersion"))
+        print("shared", a.get("createdDate"), "· from:", "owner" if is_owner(a) else "another tester", "· build",
+              a.get("appBuild") or a.get("buildNumber") or "?", "· iOS", a.get("osVersion"), "· device", a.get("deviceModel") or "?")
         try:
             log = get(f"/betaFeedbackCrashSubmissions/{s['id']}/crashLog", tok)
             print(crashed_part(log.get("data", {}).get("attributes", {}).get("logText", "")))
