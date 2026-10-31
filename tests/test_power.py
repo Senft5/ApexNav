@@ -22,7 +22,7 @@ out.unknown = run([{}, { thermal: null, lowPowerMode: null, batteryLevel: NaN },
 out.missingKeeps = run([{ thermal: 3 }, { lowPowerMode: false }, { batteryLevel: 0.9 }]);
 const p = new P.PowerSaver();
 out.changed = [p.update({ thermal: 2 }), p.update({ thermal: 3 }), p.update({ thermal: 0 })];
-const r = new P.PowerSaver(); r.update({ thermal: 2, lowPowerMode: true }); out.reasons = [r.reason];
+const r = new P.PowerSaver(); r.update({ thermal: 3, lowPowerMode: true }); out.reasons = [r.reason];
 r.update({ thermal: 0 }); out.reasons.push(r.reason); r.update({ lowPowerMode: false }); out.reasons.push(r.reason);
 // Frame gate at 60 Hz and 120 Hz for one second.
 function drawn(hz, low) {
@@ -30,6 +30,10 @@ function drawn(hz, low) {
   let n = 0; for (let i = 0; i < hz; i++) if (g.frameDue(i * 1000 / hz)) n++; return n;
 }
 out.fps = [drawn(60, false), drawn(60, true), drawn(120, true)];
+// serious (2) only counts once held for two minutes; fair ends it
+const h = new P.PowerSaver(), H = P.SERIOUS_HOLD_MS;
+out.serious = [h.update({ thermal: 2, t: 0 }), h.low, h.update({ thermal: 2, t: H - 1 }), h.low, h.update({ thermal: 2, t: H }), h.low,
+               h.update({ thermal: 1, t: H + 1 }), h.low, h.update({ thermal: 2, t: H + 2 }), h.low];
 console.log(JSON.stringify(out));
 """
 
@@ -41,8 +45,12 @@ def r():
 
 
 def test_hot_phone_saves_power_until_fair(r):
-    assert r["thermal"] == [0, 0, 1, 1, 1, 0, 0]
-    assert r["changed"] == [True, False, True]
+    assert r["thermal"] == [0, 0, 0, 1, 1, 0, 0], "critical turns it on; serious alone does not (a dash in the sun, charging)"
+    assert r["changed"] == [False, True, True]
+
+
+def test_serious_counts_only_when_held_two_minutes(r):
+    assert r["serious"] == [False, False, False, False, True, True, True, False, False, False]
 
 
 def test_low_power_mode_and_battery_with_hysteresis(r):

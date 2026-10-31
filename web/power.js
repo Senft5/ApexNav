@@ -2,18 +2,27 @@
 // drops the chase cam to 30 fps without road shake, the map to 2x pixels and hides hillshade and contours. Pure: the page
 // feeds what it knows (app frames carry `thermal` 0-3 and `low_power_mode`; a browser may offer navigator.getBattery), this
 // file says whether to save power and why. Unknown inputs keep their last value and never turn the saver on by themselves.
-//   - thermal: on at serious (2) or critical (3), off at fair (1) or nominal (0);
+//   - thermal: on at critical (3), or at serious (2) held for 2 minutes, off at fair (1) or nominal (0). A phone charging on
+//     a dash with GPS and CarPlay sits at serious much of the time (the owner, 2026-10-31: "it always thinks my phone is
+//     warm"); serious alone is not a reason to dim the map;
 //   - battery: on at <= 20 % while not charging, off at >= 25 % or once charging (no flapping around 20 %).
 (function (root) {
-  const THERMAL_ON = 2, BATTERY_ON = 0.20, BATTERY_OFF = 0.25, LOW_FPS = 30;
+  const THERMAL_ON = 3, THERMAL_SERIOUS = 2, SERIOUS_HOLD_MS = 120000, BATTERY_ON = 0.20, BATTERY_OFF = 0.25, LOW_FPS = 30;
   const finite = (v) => typeof v === 'number' && Number.isFinite(v);
 
   class PowerSaver {
-    constructor() { this.hot = false; this.lowPowerMode = false; this.battery = false; this.low = false; this.lastDraw = -Infinity; }
+    constructor() { this.seriousSince = null; this.hot = false; this.lowPowerMode = false; this.battery = false; this.low = false; this.lastDraw = -Infinity; }
     /** What the page knows now; any field may be missing. Returns true when `low` changed. */
-    update({ thermal, lowPowerMode, batteryLevel, charging } = {}) {
+    update({ thermal, lowPowerMode, batteryLevel, charging, t = Date.now() } = {}) {
       const was = this.low;
-      if (finite(thermal)) this.hot = thermal >= THERMAL_ON;
+      if (finite(thermal)) {
+        if (thermal >= THERMAL_ON) this.hot = true;
+        else if (thermal >= THERMAL_SERIOUS) {
+          if (this.seriousSince === null) this.seriousSince = t;
+          if (t - this.seriousSince >= SERIOUS_HOLD_MS) this.hot = true;   // held hot ends here; a hot phone stays hot until fair
+        } else { this.hot = false; this.seriousSince = null; }
+        if (thermal >= THERMAL_ON && this.seriousSince === null) this.seriousSince = t;
+      }
       if (typeof lowPowerMode === 'boolean') this.lowPowerMode = lowPowerMode;
       if (charging === true) this.battery = false;
       else if (finite(batteryLevel)) {
@@ -39,6 +48,6 @@
     }
   }
 
-  const api = { PowerSaver, THERMAL_ON, BATTERY_ON, BATTERY_OFF, LOW_FPS };
+  const api = { PowerSaver, THERMAL_ON, SERIOUS_HOLD_MS, BATTERY_ON, BATTERY_OFF, LOW_FPS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexPower = api;
 })(typeof window !== 'undefined' ? window : globalThis);
