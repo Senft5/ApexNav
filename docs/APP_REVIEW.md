@@ -40,6 +40,7 @@ Checked 2026-10-28 against main and App Store Connect (read through the API key 
 | 5.2 third-party content | OpenStreetMap/OpenFreeMap attribution on the map and in Settings → Sources and licences |
 | Export compliance | `ITSAppUsesNonExemptEncryption = NO` (HTTPS only) |
 | 1.4.1 safety claims | Crash check (D-17) is described in the app and policy as a backup to the phone's own crash detection, never a replacement; it never calls or texts by itself (the driver or someone with them taps `tel:`/`sms:` links), so it makes no claim it can't keep. Keep listing copy the same: no "we call for help" |
+| 1.4 physical harm, the crew Score board (2026-10-31) | the crew page's board adds up each member's drive Vetta Scores over a week, month, year or all time (the owner's TestFlight note 06). The Vetta Score is how cleanly corners were driven, never top speed or a time, and only drives a member chose to share with that crew count (grant per crew, deleted when switched off). Listing copy should call it a smoothness board, never a race |
 | 1.4 physical harm | no speed leaderboards or top-speed records anywhere (guardrails in IDEAS.md), typing locked while moving (C-08), performance timing parked (D-14). Lap times (track mode, D-15) only exist on a mapped raceway (OSM highway=raceway under the car); on any other road nothing is timed, and the listing should call it "track day lap timing", never timing on public roads. Keep listing copy about flow, smoothness and finding good roads, never racing or speed |
 
 ## Open before the first App Store submission

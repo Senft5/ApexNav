@@ -141,6 +141,11 @@
     .cp-board-row .who { min-width: 0; overflow-wrap: anywhere; } .cp-board-row .who small { color: var(--panel-dim); margin-left: 6px; }
     .cp-board-row .score { font-family: var(--font-num); font-size: 26px; font-variant-numeric: tabular-nums; letter-spacing: 0.04em; }
     .cp-board-row.mine .who b { text-decoration: underline; text-decoration-thickness: 2px; }
+    .cp-board .cp-board-row { grid-template-columns: 24px 36px minmax(0, 1fr) auto; align-items: center; gap: 10px; }
+    .cp-board .cp-board-row .who small { display: block; margin-left: 0; }
+    .cp-board .cp-board-row > :nth-child(2) { width: 36px; height: 36px; }
+    .cp-board[aria-busy="true"] { opacity: 0.5; }
+    .cp-periods { width: 100%; } .cp-periods button { flex: 1; min-width: 0; }
     /* P-06: the members as faces, the owner marked, the ones on the road lit */
     .cp-members { display: flex; gap: 12px; overflow-x: auto; scrollbar-width: none; padding: 2px 0 4px; }
     .cp-members::-webkit-scrollbar { display: none; }
@@ -192,6 +197,66 @@
     .cp-patterns button { width: 72px; height: 30px; border: 1.5px solid var(--rule); }
     .cp-patterns button[aria-pressed="true"] { outline: 3px solid var(--panel-ink); }
   `;
+
+  // The board's periods (the owner's TestFlight note 06); the pick is remembered on this phone.
+  const PERIODS = [['week', 'Week'], ['month', 'Month'], ['year', 'Year'], ['all', 'All time']];
+  const PERIOD_NOTE = {
+    week: 'Every drive’s Score added up since Monday, only from people who share Scores with the crew.',
+    month: 'Every drive’s Score added up this month, only from people who share Scores with the crew.',
+    year: 'Every drive’s Score added up this year, only from people who share Scores with the crew.',
+    all: 'Every drive’s Score added up, only from people who share Scores with the crew.',
+  };
+  function boardPeriod(set) {
+    try {
+      if (set) localStorage.setItem('apex.boardPeriod', set);
+      const v = localStorage.getItem('apex.boardPeriod');
+      return PERIODS.some(([k]) => k === v) ? v : 'month';
+    } catch (_) { return set || 'month'; }
+  }
+  /** The phone's day of a drive, 'YYYY-MM-DD', or null when its time is unknown. */
+  function dayOf(date) {
+    const t = new Date(date);
+    if (!Number.isFinite(t.getTime())) return null;
+    return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
+  }
+  /** The drives to send: a Log summary's Vetta Score (as the Log shows it) and its day; none without a Score or a known
+   *  date (unknown stays unknown), none already sent with that Score. */
+  function drivesToSend(summaries, sent) {
+    const out = [];
+    for (const x of Array.isArray(summaries) ? summaries : []) {
+      const s = x && x.ds && Number.isFinite(x.ds.score) ? Math.round(x.ds.score) : null, day = x && x.date_known !== false ? dayOf(x.date) : null;
+      if (!x || !x.id || s == null || s < 0 || s > 1000 || !day || sent[x.id] === s) continue;
+      out.push({ id: String(x.id).slice(0, 64), score: s, driven_on: day });
+    }
+    return out;
+  }
+  // Your drives' Scores go to the server (POST /api/drives/scores), which keeps them only for the crews you share Scores
+  // with and says which. What went where is remembered per crew ('*': sent at all), so a crew you start sharing with later
+  // gets them when its page opens (`crewId`); after a drive, the new one goes (cockpit.js refreshSavedDrives).
+  let publishing = null;
+  function publishDrives(apiCall, crewId = null) {
+    const R = root.ApexRecording;
+    if (!R || !R.summaries) return Promise.resolve(0);
+    if (publishing) return publishing.then(() => publishDrives(apiCall, crewId));
+    publishing = (async () => {
+      let sent = {};
+      try { sent = JSON.parse(localStorage.getItem('apex.driveScoresSent') || '{}') || {}; } catch (_) {}
+      const key = crewId || '*', mark = (k, d) => { (sent[k] = sent[k] && typeof sent[k] === 'object' ? sent[k] : {})[d.id] = d.score; };
+      const todo = drivesToSend(await R.summaries(null).catch(() => []), sent[key] || {});   // read only: never summarises on this thread (F-04)
+      let n = 0;
+      for (let i = 0; i < todo.length; i += 50) {
+        const part = todo.slice(i, i + 50);
+        const r = await apiCall('POST', '/api/drives/scores', { drives: part }).catch(() => null);
+        const j = r && r.ok ? await r.json().catch(() => null) : null;
+        if (!j) break;
+        for (const d of part) { mark('*', d); if (crewId) mark(crewId, d); for (const c of Array.isArray(j.crews) ? j.crews : []) mark(c, d); }
+        n += part.length;
+      }
+      try { localStorage.setItem('apex.driveScoresSent', JSON.stringify(sent)); } catch (_) {}
+      return n;
+    })().finally(() => { publishing = null; });
+    return publishing;
+  }
 
   function mount(page) {
     const { el, btn, toast, apiCall, jsonOf } = page;
@@ -306,7 +371,16 @@
 
     // This week (P-03, P-18): the run's card from crew_events.js, the same card as the Crew drives sheet; in the days after
     // a drive, the drive remembered (who came, the best Score) above the next one; no drive at all, a way to plan one.
+    // The owner's TestFlight note 05 (2026-10-31): no Crew drives row; this is the crew's Upcoming drives, every planned
+    // drive's card with a + in the corner to plan one (crew_events.js section), the last one remembered above for a few days.
     function thisWeek(c, redo) {
+      if (page.drives) {
+        const now = Date.now(), last = c.last ? { ...c.last, crew_id: c.id, crew_name: c.name } : null;
+        const CE = root.ApexCrewEvents, next = c.next || null, onDay = next && CE && CE.onTheDay(next, now);
+        const before = last && now - Date.parse(last.starts_at) < 3 * 86400e3 && !onDay && page.driveCard ? page.driveCard(last, { redo }) : null;
+        const sec = page.drives(c, { before });
+        if (sec) return sec;
+      }
       const all = page.onAllDrives ? btn('All drives', page.onAllDrives, 'linkbtn') : '';
       const now = Date.now(), next = c.next || null, last = c.last ? { ...c.last, crew_id: c.id, crew_name: c.name } : null;
       const soon = next && Date.parse(next.starts_at) - now < 7 * 86400e3;
@@ -363,22 +437,48 @@
       root.document.body.append(ov);
     }
 
+    // The Vetta Score board (the owner's TestFlight note 06, 2026-10-31: Octane is gone): each member's face and the total of
+    // their drive Scores over the week, month, year or all time, only drives they share with the crew (GET
+    // /api/crews/:id/board; your own drives go up first, publishDrives). Unknown stays "--".
     function board(c, redo) {
-      const sec = el('div', { className: 'stack-8' }, el('div', { className: 'cp-sec' }, el('h3', { textContent: 'Vetta Score board' }), el('span', { className: 'note', textContent: 'This month' })));
-      const list = el('div');
-      c.board.forEach((r, i) => {
-        const who = el('span', { className: 'who' }, el('b', { textContent: `@${r.handle || '?'}` }));
-        if (r.badge) who.append(el('span', { className: 'cp-badge', textContent: r.badge }));   // Works livery
-        if (r.car) who.append(el('small', { textContent: r.car }));
-        list.append(el('div', { className: 'cp-board-row' + (r.mine ? ' mine' : '') },
-          el('span', { className: 'rank', textContent: r.score == null ? '' : String(i + 1) }), who,
-          el('span', { className: 'score', textContent: r.score == null ? '--' : String(r.score) })));
-      });
-      sec.append(list, el('p', { className: 'note', textContent: 'Best Score this month, only from people who share Scores with the crew.' }));
+      const period = boardPeriod();
+      const pick = el('div', { className: 'switch cp-periods', role: 'radiogroup' });
+      pick.setAttribute('aria-label', 'Score board period');
+      const list = el('div', { className: 'cp-board' }), foot = el('p', { className: 'note', textContent: PERIOD_NOTE[period] });
+      const sec = el('div', { className: 'stack-8' }, el('div', { className: 'cp-sec' }, el('h3', { textContent: 'Vetta Score board' })), pick, list, foot);
+      const fill = async (p) => {
+        pick.querySelectorAll('button').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.period === p)));
+        foot.textContent = PERIOD_NOTE[p];
+        list.setAttribute('aria-busy', 'true');
+        if (c.sharing_scores) await publishDrives(apiCall, c.id);
+        const r = await apiCall('GET', `/api/crews/${encodeURIComponent(c.id)}/board?period=${p}`).catch(() => null);
+        const j = r && r.ok ? await r.json().catch(() => null) : null;
+        if (boardPeriod() !== p) return;   // another period was picked meanwhile
+        list.removeAttribute('aria-busy');
+        if (!j || !Array.isArray(j.rows)) { list.replaceChildren(el('p', { className: 'note', textContent: 'Couldn’t load the board. Check signal.' })); return; }
+        list.replaceChildren(...j.rows.map((x, i) => {
+          const who = el('span', { className: 'who' }, el('b', { textContent: `@${x.handle || '?'}` }));
+          if (x.badge) who.append(el('span', { className: 'cp-badge', textContent: x.badge }));   // Works livery
+          if (x.car) who.append(el('small', { textContent: x.car }));
+          if (x.total != null) who.append(el('small', { className: 'cp-drives', textContent: `${x.drives} drive${x.drives === 1 ? '' : 's'}` }));
+          const row = el('div', { className: 'cp-board-row' + (x.mine ? ' mine' : '') },
+            el('span', { className: 'rank', textContent: x.total == null ? '' : String(i + 1) }),
+            P() ? P().avatar(x.photo_id || null, x.handle, 36) : el('span'), who,
+            el('span', { className: 'score', textContent: x.total == null ? '--' : Number(x.total).toLocaleString() }));
+          return row;
+        }));
+      };
+      for (const [k, label] of PERIODS) {
+        const b = el('button', { type: 'button', textContent: label });
+        b.dataset.period = k; b.setAttribute('role', 'radio');
+        b.addEventListener('click', () => { if (boardPeriod() === k) return; boardPeriod(k); fill(k); });
+        pick.append(b);
+      }
+      fill(period);
       if (!c.sharing_scores) {
         sec.append(btn('Share my Scores with the crew', async () => {
           const r = await apiCall('PUT', '/api/grants', { audience_type: 'crew', audience_id: c.id, share_scores: true, share_times: false }).catch(() => null);
-          if (r && r.ok) { toast(`${c.name} sees your Scores from your next drive on.`); redo(); } else toast('Couldn’t change that. Try again.');
+          if (r && r.ok) { toast(`${c.name} sees your drive Scores now.`); redo(); } else toast('Couldn’t change that. Try again.');
         }, 'ink-btn'));
       }
       return sec;
@@ -610,6 +710,6 @@
     return { view, switcher };
   }
 
-  const api = { mount, dateBlock, ago, goingFaces, stripeOk, outNow, liveryShort, crestSvg, liveryLine, stripeCss, atLeast, CRESTS: Object.keys(CRESTS), STRIPES, PATTERNS };
+  const api = { mount, dateBlock, ago, goingFaces, stripeOk, outNow, liveryShort, crestSvg, liveryLine, stripeCss, atLeast, dayOf, drivesToSend, publishDrives, CRESTS: Object.keys(CRESTS), STRIPES, PATTERNS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexCrewPage = api;
 })(typeof window !== 'undefined' ? window : globalThis);

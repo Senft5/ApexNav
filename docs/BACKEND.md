@@ -66,6 +66,13 @@ Implemented in `backend/src/{auth,social,segments}.ts`, one router in `index.ts`
   members' live links. A link works only while its maker is still in the crew. `POST /api/crews/join {token}` joins anyone signed
   in and, on a first join, friends them with the link's maker (not across a block); it answers `{id, friend}` (the sender's
   handle when they are friends). The crew page and `GET /api/crews` carry `invites`; the page also `can_invite`.
+- **The crew Score board as totals (the owner's TestFlight note 06, migration 0043, src/drive_scores.ts)**: the app sends each
+  drive's Vetta Score and day, `POST /api/drives/scores {drives: [{id, score, driven_on}]}` (50 at most), which keeps a row per
+  drive for every crew the driver shares Scores with and is in, and answers `{published, crews}`. `GET
+  /api/crews/:id/board?period=week|month|year|all` (members only) answers `{period, rows}`: every member you can see with
+  `photo_id`, the `total` of those drive Scores (null when none) and how many `drives`. The grant switched off, leaving or
+  the crew ending deletes them; export has `drive_scores_shared`. The page's own `board` (best stage Score this month) stays
+  for old builds.
 - **State-changing requests** must carry our own `Origin` and an `X-ApexNav: 1` header (CSRF), on top of `SameSite=Lax`, `HttpOnly`, `__Host-` cookies.
 - **Sharing is opt-in per friend and per crew**: a score reaches an audience only through `POST /api/board` and only if a grant for that
   audience exists. `GET /api/board/:canon` returns only entries published **to the viewer**, by someone who is still their friend / crew-mate, whose grant is
