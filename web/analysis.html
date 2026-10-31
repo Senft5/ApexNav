@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-Zwhb0AZsyxZFolE3PU6E21oMT48mZ67nAuCNNRb9xew=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-ggzlsm8aqe+JNWGlp0Tu+izDTqbHN5oWbkwDzM6PLuI=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta · Log</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -31,6 +31,8 @@
   <script src="analysis_client.js"></script>   <!-- the Log's heavy work in the analysis worker (REVIEW_FEEL F-06) -->
   <script src="drive_keep.js"></script>
   <script src="contributor.js"></script>
+  <script src="road_runs.js"></script>
+  <script src="route_thumb.js"></script>
   <script src="drive_view.js"></script>
   <script src="drive_card.js"></script>
   <script src="year_review.js"></script>
@@ -106,8 +108,13 @@
     .gain { color: var(--gain); } .loss { color: var(--signal); }
     .tul { width: 34px; height: 34px; display: inline-block; vertical-align: middle; }
     .scroll { overflow-x: auto; }
-    .strip { position: relative; cursor: crosshair; touch-action: none; border: 1px solid var(--rule); }
-    .strip .sel { position: absolute; top: 0; bottom: 0; background: var(--accent); opacity: 0.22; pointer-events: none; }
+    .seg-map { border: 1px solid var(--rule); margin: 8px 0; padding: 4px; }
+    .seg-map svg, .vote-map svg { display: block; width: 100%; height: auto; max-height: 260px; }
+    .seg-end { display: grid; grid-template-columns: 4.5em 1fr; align-items: center; gap: 8px; font-size: 14px; color: var(--panel-dim); }
+    .seg-end input { width: 100%; height: 32px; border: 0; padding: 0; accent-color: var(--panel-ink); }
+    #dvVoteBtns .vote-pick { height: auto; flex: 1 1 140px; max-width: 260px; display: grid; gap: 6px; padding: 8px; text-align: left; font-weight: 600; }
+    .vote-map { aspect-ratio: 8 / 5; border: 1px solid var(--rule); }
+    #segRoads .btn[aria-pressed="true"] { background: var(--panel-ink); color: var(--panel); }
     /* Drive view */
     .dv-head { display: grid; gap: 8px; padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px solid var(--rule); }
     .dv-score { display: flex; align-items: baseline; gap: 4px; font-family: var(--font-num); font-variant-numeric: tabular-nums; }
@@ -265,7 +272,7 @@
       <div class="panel" id="dvRecce"><h2>Your notes</h2>
         <p class="note" id="dvRecceNote">Keep this drive's notes as yours, change any call, and the co-driver reads yours the next time you drive these corners this way. On this phone only.</p>
         <div class="actions" id="dvRecceActs"></div><div class="stack-8 mt-8" id="dvRecceList"></div></div>
-      <div class="panel" id="dvVote" hidden><h2>Which road was better?</h2><div class="actions" id="dvVoteBtns" role="group" aria-label="Which road was better"></div>
+      <div class="panel" id="dvVote" hidden><h2>Which route was better?</h2><div class="actions" id="dvVoteBtns" role="group" aria-label="Which route was better"></div>
         <p class="note">Your answers rank your roads (Log). They stay on this phone.</p></div>
       <div class="panel" id="dvFlyby" hidden><h2>Friends on these roads that day</h2><div id="dvFlybyList" class="stack-8"></div>
         <p class="note">From the scores friends chose to show you, on stages you both marked. The last 14 days.</p></div>
@@ -310,9 +317,12 @@
       <details class="more" id="newStage"><summary>New stage from a drive</summary>
         <div class="row" style="margin-bottom:8px">
           <select id="segDrive" aria-label="Drive to mark a stage on"></select>
-          <span class="note">Drag across the profile to mark a stretch, then name it.</span>
         </div>
-        <div class="strip" id="segStrip"><div class="sel" id="segSel" hidden></div><div id="segStripSvg"></div></div>
+        <p class="note">Pick a road you drove, start to finish, or slide Start and Finish. The stage is circled on the map.</p>
+        <div class="row" id="segRoads" role="group" aria-label="Roads on this drive"></div>
+        <div class="seg-map" id="segMap"></div>
+        <label class="seg-end"><span>Start</span><input type="range" id="segFrom" min="0" max="0" step="1" value="0" aria-label="Where the stage starts" /></label>
+        <label class="seg-end"><span>Finish</span><input type="range" id="segTo" min="0" max="0" step="1" value="0" aria-label="Where the stage finishes" /></label>
         <div class="row mt-8">
           <input id="segName" aria-label="Stage name" placeholder="Stage name, like Dry Ridge climb" style="flex:1;min-width:200px" />
           <button class="btn solid" id="segSave">Save stage</button>
@@ -492,7 +502,8 @@
         return row;
       }));
     }
-    // Which road was better? (road_votes.js, IDEAS S-17): one question per drive, this road against the last other one.
+    // Which route was better? (road_votes.js, IDEAS S-17): one question per drive, this route against the last other one, each
+    // with a small map of it so you remember which it was (the owner's note 10; route_thumb.js).
     function renderVote(d) {
       const panel = $('dvVote'), st = ApexRoadVotes.load(localStorage), q = ApexRoadVotes.question(drives, d, st);
       panel.hidden = !q;
@@ -510,7 +521,17 @@
         } catch (_) { /* a drive too short to read: the vote still counts for the ranking */ }
       };
       const b = (label, fn, cls = 'btn') => { const n = document.createElement('button'); n.className = cls; n.textContent = label; n.addEventListener('click', fn); return n; };
-      $('dvVoteBtns').replaceChildren(b(q.a, () => pick(q.a)), b(q.b, () => pick(q.b)), b('Skip', () => pick(null), 'btn ghost'));
+      const thumb = (r) => (r ? ApexRouteThumb.svg(r.lat, r.lon, { w: 320, h: 200, line: C.panelInk, hi: C.accent, width: 3, label: `Map of ${r.name}` }) : null) || '';
+      const route = (name, r) => {
+        const n = b('', () => pick(name), 'btn vote-pick'), m = document.createElement('span');
+        m.className = 'vote-map'; m.innerHTML = thumb(r);
+        n.append(m, Object.assign(document.createElement('span'), { textContent: name }));
+        return n;
+      };
+      const other = drives.filter((x) => x.name === q.b && x.date <= d.date).sort((x, y) => String(y.date).localeCompare(String(x.date)))[0];
+      const bBtn = route(q.b, null);
+      $('dvVoteBtns').replaceChildren(route(q.a, d), bBtn, b('Skip', () => pick(null), 'btn ghost'));
+      if (other) full(other.id).then((r) => { if (r && bBtn.isConnected) bBtn.querySelector('.vote-map').innerHTML = thumb(r); }).catch(() => {});
     }
     function renderRoads() {
       const list = ApexRoadVotes.ranking(ApexRoadVotes.load(localStorage)).slice(0, 10);
@@ -721,54 +742,74 @@
     let segs = loadSegs(), activeSeg = null, sel = null, boardFilter = 'friends';   // the list first; a tapped stage opens its board
     const crewMembersCache = new Map();
 
-    // the marker draws the picked drive's own speed and height: its rows, read when it is picked (F-06)
-    let stripRun = 0;
+    // The marker (the owner's note 09): the picked drive on a map with the stage drawn bold and circled, the roads it was
+    // on as keys (each whole, from where you joined it to where you left it: road_runs.js), and Start and Finish
+    // sliders for any other stretch. Its rows are read when it is picked (F-06).
+    let stripRun = 0, selLabel = '';
+    const roadRunsCache = new Map();                                    // drive id -> Promise<runs[] | null>
+    const ROADS_KEY = 'apex.driveRoads';
+    function driveRoads(d) {
+      if (!roadRunsCache.has(d.id)) roadRunsCache.set(d.id, (async () => {
+        let kept = {};
+        try { kept = JSON.parse(localStorage.getItem(ROADS_KEY) || '{}') || {}; } catch (_) {}
+        if (Array.isArray(kept[d.id])) return kept[d.id];               // matched once: the track isn't sent again
+        const names = await ApexRoadRuns.fetchNames(d, ApexContributor.matchDrive);
+        const list = ApexRoadRuns.runs(names).map((r) => ({ ...r, label: ApexRoadRuns.label(r, d.elev) }));
+        kept[d.id] = list;
+        const ids = Object.keys(kept); for (const k of ids.slice(0, Math.max(0, ids.length - 30))) delete kept[k];
+        try { localStorage.setItem(ROADS_KEY, JSON.stringify(kept)); } catch (_) {}
+        return list;
+      })().catch(() => { roadRunsCache.delete(d.id); return null; }));   // offline: asked again next time
+      return roadRunsCache.get(d.id);
+    }
+    const segNote = (text) => Object.assign(document.createElement('span'), { className: 'note', textContent: text });
     async function renderSegStrip() {
       const id = $('segDrive').value, run = ++stripRun;
       if (!summaryOf(id)) return;
       const d = await full(id);
       if (!d || run !== stripRun || $('segDrive').value !== id) return;
-      const W = 1000, H = 110, n = d.lat.length, step = Math.max(1, Math.floor(n / 600));
-      const vmax = Math.max(...d.speed_mps) || 1;
-      let sp = '', el = '';
-      const ex = d.elev, emin = ex ? Math.min(...ex) : 0, espan = ex ? Math.max(10, Math.max(...ex) - emin) : 1;
-      for (let i = 0; i < n; i += step) {
-        const x = (i / (n - 1)) * W;
-        sp += `${i ? 'L' : 'M'}${x.toFixed(1)} ${(H - 8 - (d.speed_mps[i] / vmax) * (H - 20)).toFixed(1)}`;
-        if (ex) el += `${i ? 'L' : 'M'}${x.toFixed(1)} ${(H - 4 - ((ex[i] - emin) / espan) * (H - 30)).toFixed(1)}`;
+      const n = d.lat.length;
+      for (const k of ['segFrom', 'segTo']) $(k).max = String(n - 1);
+      $('segFrom').value = '0'; $('segTo').value = String(n - 1);
+      drawSel();
+      $('segRoads').replaceChildren(segNote('Finding the roads on this drive…'));
+      const list = await driveRoads(d);
+      if (run !== stripRun || $('segDrive').value !== id) return;
+      if (!list || !list.length) {
+        $('segRoads').replaceChildren(segNote(list ? 'No whole road long enough to name on this drive. Slide Start and Finish instead.' : 'Couldn’t name the roads (offline?). Slide Start and Finish instead.'));
+        return;
       }
-      const ticks = d.corners.map(c => `<line x1="${(c.apex / (n - 1)) * W}" x2="${(c.apex / (n - 1)) * W}" y1="0" y2="8" stroke="${C.accent}" stroke-width="2"/>`).join('');
-      $('segStripSvg').innerHTML = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="height:110px">${ex ? `<path d="${el} L${W} ${H} L0 ${H} Z" fill="${C.rule}"/>` : ''}<path d="${sp}" fill="none" stroke="${C.panelInk}" stroke-width="1.2" opacity="0.8"/>${ticks}</svg>`;
+      $('segRoads').replaceChildren(...list.map((r) => {
+        const b = document.createElement('button'); b.className = 'btn'; b.dataset.a = r.a; b.dataset.b = r.b;
+        b.textContent = `${r.label} · ${ApexUnits.long(r.length_m, 1)}`;
+        b.setAttribute('aria-pressed', 'false');
+        b.addEventListener('click', () => { sel = [r.a, r.b]; selLabel = r.label; $('segFrom').value = String(r.a); $('segTo').value = String(r.b); drawSel(); });
+        return b;
+      }));
       drawSel();
     }
-    function drawSel() {
-      const box = $('segSel');
-      if (!sel) { box.hidden = true; $('segInfo').textContent = ''; return; }
-      const d = summaryOf($('segDrive').value), n = d.n;
-      const [a, b] = sel[0] < sel[1] ? sel : [sel[1], sel[0]];
-      box.hidden = false;
-      box.style.left = `${(a / (n - 1)) * 100}%`; box.style.width = `${((b - a) / (n - 1)) * 100}%`;
-      const corners = d.corners.filter(c => c.start >= a && c.end <= b).length;
-      $('segInfo').textContent = `${ApexUnits.long((b - a) * 5, 2)} · ${corners} corners`;
+    async function drawSel() {
+      const id = $('segDrive').value, d = summaryOf(id) ? await full(id) : null;
+      if (!d || $('segDrive').value !== id) return;
+      const [a, b] = sel ? (sel[0] < sel[1] ? sel : [sel[1], sel[0]]) : [0, -1];
+      $('segMap').innerHTML = ApexRouteThumb.svg(d.lat, d.lon, { w: 360, h: 220, line: C.panelDim, hi: C.accent, ring: C.panelInk, width: 3,
+        range: sel ? [a, b] : null, label: sel ? `This drive, the stage circled: ${ApexUnits.long((b - a) * 5, 2)}` : 'This drive' }) || '';
+      for (const k of $('segRoads').querySelectorAll('button[data-a]')) k.setAttribute('aria-pressed', String(!!sel && +k.dataset.a === a && +k.dataset.b === b));
+      if (!sel) { $('segInfo').textContent = ''; return; }
+      const corners = d.corners.filter(c => c.start >= a && c.end <= b).length, dz = ApexRoadRuns.climb(d.elev, a, b);
+      $('segInfo').textContent = `${ApexUnits.long((b - a) * 5, 2)} · ${corners} corners${dz != null && Math.abs(dz) >= 15 ? ` · ${dz > 0 ? 'up' : 'down'} ${Math.round(Math.abs(dz))} m` : ''}`;
     }
-    (() => {
-      const strip = $('segStrip');
-      let dragging = false;
-      const idxAt = (x) => { const d = summaryOf($('segDrive').value); const r = strip.getBoundingClientRect(); return Math.round(Math.max(0, Math.min(1, (x - r.left) / r.width)) * (d.n - 1)); };
-      strip.addEventListener('pointerdown', (e) => { dragging = true; strip.setPointerCapture(e.pointerId); const i = idxAt(e.clientX); sel = [i, i]; drawSel(); });
-      strip.addEventListener('pointermove', (e) => { if (dragging) { sel[1] = idxAt(e.clientX); drawSel(); } });
-      strip.addEventListener('pointerup', () => { dragging = false; });
-    })();
-    $('segDrive').addEventListener('change', () => { sel = null; renderSegStrip(); });
+    for (const k of ['segFrom', 'segTo']) $(k).addEventListener('input', () => { sel = [+$('segFrom').value, +$('segTo').value]; selLabel = ''; drawSel(); });
+    $('segDrive').addEventListener('change', () => { sel = null; selLabel = ''; renderSegStrip(); });
     $('segSave').addEventListener('click', async () => {
       const d = summaryOf($('segDrive').value) ? await full($('segDrive').value) : null;
-      if (!d || !sel) { $('segInfo').textContent = 'Drag across the profile first.'; return; }
+      if (!d || !sel) { $('segInfo').textContent = 'Pick a road, or slide Start and Finish, first.'; return; }
       const [a, b] = sel[0] < sel[1] ? sel : [sel[1], sel[0]];
       if (b - a < 40) { $('segInfo').textContent = 'Make it at least 200 m long.'; return; }
-      const seg = { id: ApexSync.newSegmentId(), name: $('segName').value.trim() || `${d.name} ${ApexUnits.longN(a * 5).toFixed(1)}-${ApexUnits.long(b * 5)}`,
+      const seg = { id: ApexSync.newSegmentId(), name: $('segName').value.trim() || selLabel || `${d.name} ${ApexUnits.longN(a * 5).toFixed(1)}-${ApexUnits.long(b * 5)}`,
                     lat0: d.lat[a], lon0: d.lon[a], lat1: d.lat[b], lon1: d.lon[b], length_m: (b - a) * 5, from: d.id,
                     geom: JSON.stringify(Array.from({ length: Math.min(60, b - a + 1) }, (_, k) => { const i = a + Math.round(k * (b - a) / (Math.min(60, b - a + 1) - 1)); return [+d.lat[i].toFixed(6), +d.lon[i].toFixed(6)]; })) };
-      segs.push(seg); saveSegs(segs); activeSeg = seg.id; sel = null; $('segName').value = '';
+      segs.push(seg); saveSegs(segs); activeSeg = seg.id; sel = null; selLabel = ''; $('segName').value = '';
       renderSegments().then(syncSegments);
     });
 
@@ -1053,7 +1094,7 @@
       const dvHead = $('dvRoot').querySelector('.dv-head');
       if (dvHead) dvHead.after(dvActs);                                  // the score first, then Replay
       // a video from this drive with its numbers on it (dashcam.js, IDEAS D-11)
-      if (window.ApexDashcam && window.MediaRecorder && Array.isArray(d.speed_mps) && d.speed_mps.length > 20) {
+      if (window.ApexDashcam && ApexDashcam.supported() && Array.isArray(d.speed_mps) && d.speed_mps.length > 20) {
         const mk = (tag, props = {}, ...kids) => { const n = Object.assign(document.createElement(tag), props); n.append(...kids); return n; };
         $('dvDashcam').replaceChildren(ApexDashcam.mount({ el: mk, Core, d, fmtSpeed: (v) => `${Math.round(ApexUnits.speed(v))} ${ApexUnits.speedU()}`,
           save: (blob, name, type) => ApexSaveFile.saveFile(blob, name, type) }));

@@ -1,5 +1,14 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-10-31: TestFlight notes 09, 10 and the video (one of three feedback builders)
+
+- [x] 09 a stage is marked on the drive's map (circled), from a whole road you drove (road keys from map matching) or
+  Start/Finish sliders; 10 "Which route was better?" with a map of each route; Make the video fixed for the iOS web view
+  (the dashcam video never loaded), both video keys hidden where recording can't work. CALL_SHEET 2026-10-31.
+- Unverified on a device: both videos in the app's WKWebView (MediaRecorder + canvas captureStream), the road keys on a
+  real drive (Valhalla's names).
+- Exact next task: TestFlight from main; the owner tries Make the video and a Bank Road stage.
+
 ## Session 2026-10-30 (evening): REVIEW_PEOPLE.md and REVIEW_FEEL.md built (PR #267)
 
 - [x] All 35 People findings (P-01..P-35), open sign-up, two tabs; all 18 speed findings (F-01..F-18) incl. the native

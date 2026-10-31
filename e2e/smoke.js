@@ -3057,6 +3057,37 @@ flow('spot photo: a camera photo with GPS in its EXIF is kept without it, shows 
   check(await page.evaluate(() => window.ApexSpotPhotos.count()) === 0, 'Erase everything clears spot photos');
 }, { geolocation: { latitude: 35.96, longitude: -83.92 }, permissions: ['geolocation'] });
 
+flow('a whole road as a stage: the drive\'s roads are keys, the picked one is circled on its map and saved under its name (the owner\'s note 09)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  let sent = 0;
+  // the map match names the samples it is sent: the second half "Bank Road" (the first and last km never sent)
+  await page.route('https://valhalla1.openstreetmap.de/**', async (route) => {
+    const shape = JSON.parse(route.request().postData()).shape; sent = shape.length;
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify({ edges: [{ way_id: 1, names: ['Cheviot Road'] }, { way_id: 2, names: ['Bank Road'] }],
+      matched_points: shape.map((_, k) => ({ type: 'matched', edge_index: k < shape.length / 2 ? 0 : 1 })) }) });
+  });
+  await page.goto(base + '/analysis.html');
+  await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && window.ApexRecording);
+  await page.evaluate(async () => {
+    const lat = [], lon = [];
+    for (let i = 0; i < 800; i++) { lat.push(39.1 + i * 5 / 110540); lon.push(-84.6 + Math.sin(i / 60) * 0.001); }
+    await ApexRecording.store({ id: 'br1', name: 'Bank Road', date: '2026-10-29T15:00:00Z', lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: lat.map(() => 15),
+      lon_g: lat.map(() => 0), lat_g: lat.map(() => 0), g_known: null, elev: lat.map((_, i) => 200 + i * 0.1), hz: 1, source: 'web-gps', events: [] });
+  });
+  await page.goto(base + '/analysis.html?tab=stages&drive=br1');
+  await page.waitForSelector('#segRoads button:has-text("Bank Road uphill")');
+  check(sent === 400, 'only the middle of the drive was sent: ' + sent);
+  check(!(await page.$('#segMap ellipse')), 'nothing circled before a pick');
+  await page.click('#segRoads button:has-text("Bank Road uphill")');
+  await page.waitForSelector('#segMap ellipse');
+  check(await page.getAttribute('#segRoads button:has-text("Bank Road uphill")', 'aria-pressed') === 'true', 'the picked road is pressed');
+  check(/corners · up 20 m/.test(await page.textContent('#segInfo')), 'its length and climb: ' + await page.textContent('#segInfo'));
+  await page.click('#segSave');
+  await page.waitForFunction(() => JSON.parse(localStorage.getItem('apex.segments') || '[]').some((s) => s.name === 'Bank Road uphill'));
+  const seg = await page.evaluate(() => JSON.parse(localStorage.getItem('apex.segments')).find((s) => s.name === 'Bank Road uphill'));
+  check(seg.length_m === 199 * 5, 'from where it joined Bank Road to where it left: ' + seg.length_m);
+});
+
 flow('dashcam overlay: a video from the drive gets its speed, g and calls drawn on and comes out as a new video (IDEAS D-11)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.goto(base + '/analysis.html');

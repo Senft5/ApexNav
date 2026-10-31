@@ -4,6 +4,26 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-10-31: TestFlight notes 09, 10 and "make video doesn't work"
+
+- 09, stages on the map: New stage from a drive no longer shows the speed/elevation strip. It shows the drive as a small
+  north-up map with the stage drawn bold and circled (web/route_thumb.js), the drive's roads as keys ("Bank Road uphill ·
+  0.6 mi"), and Start and Finish sliders for any other stretch. A road key covers it from where you joined it to where
+  you left it; a crossing or a short unnamed link (under 60 m) doesn't split it; "uphill"/"downhill" at 15 m or more of
+  height change; under 200 m isn't offered. Undo: the segRoads/segMap/segFrom block in web/analysis.html.
+- The roads come from map matching the drive on the public Valhalla server (contributor.js matchDrive now also asks for
+  edge names), first and last km never sent, as privacy.html already says; asked when the marker opens on a drive and
+  kept on the phone (apex.driveRoads, 30 drives) so a drive's track is sent once. Roads in the first or last km stay
+  unnamed (use the sliders). Undo: drop 'edge.names' and road_runs.js.
+- 10: "Which route was better?", each choice a key with a small map of that drive's route (start filled, finish open).
+  The ranking underneath still ranks by drive name, as before.
+- Make the video: on iOS the dashcam video sat display:none and was never played, so WebKit never loaded its data,
+  'loadeddata' never fired and Make the video stayed greyed. The video now stays in the page (1 px, see-through),
+  preloads, and a muted play/pause decodes the first frame. The flyover's recording canvas is now put in the page too
+  (WebKit streams a canvas as it renders it). Both keys are hidden where the browser has no MediaRecorder type or no
+  canvas captureStream, and a failed or empty recording says so instead of handing over nothing. Not verified on a
+  phone (Chromium only here). Undo: web/dashcam.js, web/flyover_video.js.
+
 ## 2026-10-31: "it always thinks my phone is warm"
 
 - The battery saver came on at iOS's "serious" thermal state, where a phone charging on a dash with GPS and CarPlay sits

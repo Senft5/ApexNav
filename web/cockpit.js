@@ -1579,7 +1579,7 @@
       }
     }
     // The replay as a video (flyover_video.js, IDEAS D-10): from the start, at the chosen speed, with the note and speed on it.
-    const canRecord = !!(window.ApexFlyoverVideo && ApexFlyoverVideo.mimeFor(window.MediaRecorder));
+    const canRecord = !!(window.ApexFlyoverVideo && ApexFlyoverVideo.canRecord());   // no recorder or canvas stream here: no key
     $('videoBtn').hidden = !canRecord;
     function startVideo() {
       if (!track || state.mode === 'live' || !mapReady) return;
