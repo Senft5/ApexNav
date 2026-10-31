@@ -101,6 +101,8 @@
   async function shareCard(canvas, fileName) {
     const blob = await new Promise((ok) => canvas.toBlob(ok, 'image/png'));
     if (!blob) return 'failed';
+    // the shell's share sheet in the app (save_file.js), where a download link does nothing (feedback 07)
+    if (root.ApexSaveFile && typeof location !== 'undefined' && location.protocol === 'apexnav:') return root.ApexSaveFile.saveFile(blob, fileName, 'image/png', { share: true });
     const file = typeof File === 'function' ? new File([blob], fileName, { type: 'image/png' }) : null;
     if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
       try { await navigator.share({ files: [file] }); return 'shared'; } catch (e) { if (e && e.name === 'AbortError') return 'cancelled'; }

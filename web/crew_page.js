@@ -161,7 +161,7 @@
     .cp-msg p { margin: 2px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
     .cp-msg .row { gap: 10px; align-items: baseline; }
     .cp-say { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: end; }
-    .cp-say textarea { min-height: 44px; resize: none; }
+    .cp-say textarea { resize: none; }
     .cp-crests { display: flex; flex-wrap: wrap; gap: 8px; }
     .cp-crests button { width: 64px; height: 64px; display: grid; place-items: center; background: var(--panel); color: var(--panel-ink); border: 1.5px solid var(--rule); }
     .cp-crests button[aria-pressed="true"] { border: 2.5px solid var(--panel-ink); box-shadow: 0 2px 0 var(--panel-dim); }
@@ -241,8 +241,7 @@
       const left = el('div', { style: 'min-width:0' }, el('h2', { textContent: c.name }));
       if (c.motto) left.append(el('p', { className: 'cp-motto', textContent: c.motto }));
       left.append(el('p', { className: 'cp-meta', textContent: meta }));
-      const right = el('div', { className: 'stack-8', style: 'align-items:flex-end' }, ...((c.can_invite ?? c.is_owner) && page.invite ? [btn('Invite', () => page.invite(c), 'ink-btn')] : []),   // P-07: any member, unless the owner keeps invites
-        ...(atLeast(c.livery && c.livery.tier, 'factory') && page.shareImage ? [btn('Share', () => shareCrew(c), 'linkbtn')] : []));
+      const right = el('div', { className: 'stack-8', style: 'align-items:flex-end' }, ...((c.can_invite ?? c.is_owner) && page.invite ? [btn('Invite', () => page.invite(c), 'ink-btn')] : []));   // P-07: any member, unless the owner keeps invites. No image-card Share (feedback 08): Invite shares the link
       return el('div', { className: 'cp-title' }, left, right);
     }
 
@@ -443,7 +442,7 @@
               el('p', { textContent: plain(m.body) })));
         }));
       };
-      const input = el('textarea', { className: 'field', maxLength: 500, rows: 2, placeholder: `Say something to ${c.name}` });
+      const input = el('textarea', { className: 'field', maxLength: 500, rows: 1, placeholder: `Say something to ${c.name}` });
       input.setAttribute('aria-label', `Message to ${c.name}`);
       const send = btn('Send', async () => {
         const text = input.value.trim();
@@ -451,7 +450,7 @@
         send.disabled = true;
         const r = await apiCall('POST', `/api/crews/${encodeURIComponent(c.id)}/chat`, { body: text }).catch(() => null);
         send.disabled = false;
-        if (r && r.ok) { input.value = ''; fill(); }
+        if (r && r.ok) { input.value = ''; input.style.height = ''; fill(); }
         else toast(r && r.status === 429 ? 'That’s a lot of messages. Wait a while.' : 'Couldn’t send. Check signal.');
       }, 'ink-btn solid');
       sec.append(el('div', { className: 'cp-say' }, input, send));
@@ -568,30 +567,6 @@
       d.body.append(ov);
       if (root.ApexRowSelect) for (const s of [routeSel, houseSel, badgeWho]) root.ApexRowSelect.enhance(s);   // the app's row lists, now that they are on the sheet
       motto.focus();
-    }
-
-    // Factory: the crew page as a share card (crest, name, motto, tier, members, the next drive). Text only, no photo.
-    async function shareCrew(c) {
-      const W = 1080, H = 1350, cv = root.document.createElement('canvas'); cv.width = W; cv.height = H;
-      const x = cv.getContext('2d'), css = getComputedStyle(root.document.documentElement), v = (k, f) => css.getPropertyValue(k).trim() || f;
-      const ink = v('--panel-ink', '#1c1a17'), paper = v('--panel', '#ece3d3'), dim = v('--panel-dim', '#6c6455'), stripe = stripeOk(c.stripe) ? c.stripe : v('--accent', '#c8102e');
-      x.fillStyle = paper; x.fillRect(0, 0, W, H);
-      x.fillStyle = ink; x.fillRect(0, 300, W, 30); x.fillStyle = stripe; for (let i = 0; i < W; i += 220) x.fillRect(i + 150, 300, 50, 30);
-      const svg = crestSvg(c.crest || 'apex', 240); svg.setAttribute('color', ink);
-      const img = new Image(); img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(new XMLSerializer().serializeToString(svg).replace(/var\(--cp-stripe, var\(--accent\)\)/g, stripe));
-      await new Promise((r) => { img.onload = r; img.onerror = r; });
-      x.fillStyle = paper; x.fillRect(80, 180, 280, 280); x.strokeStyle = ink; x.lineWidth = 6; x.strokeRect(80, 180, 280, 280);
-      try { x.drawImage(img, 100, 200, 240, 240); } catch (_) {}
-      const fNum = v('--font-num', 'sans-serif'), fUi = v('--font-ui', 'sans-serif');
-      const wrap = (t, y, size, font, color, maxW = W - 160, style = '') => { x.font = `${style} ${size}px ${font}`.trim(); x.fillStyle = color; let line = '', yy = y;
-        for (const w of String(t).split(' ')) { const test = line ? `${line} ${w}` : w; if (x.measureText(test).width > maxW && line) { x.fillText(line, 80, yy); line = w; yy += size * 1.2; } else line = test; }
-        if (line) x.fillText(line, 80, yy); return yy + size * 1.4; };
-      let y = wrap(c.name, 600, 96, fNum, ink, undefined, '700');
-      if (c.motto) y = wrap(c.motto, y, 44, fUi, dim, undefined, 'italic');
-      y = wrap(`${c.members} members \u00b7 ${(c.livery && c.livery.tier) ? c.livery.tier[0].toUpperCase() + c.livery.tier.slice(1) : 'Plain'} livery`, y + 10, 40, fUi, ink, undefined, '600');
-      if (c.next) y = wrap(`Next drive: ${c.next.title}`, y + 20, 40, fUi, ink);
-      wrap('Vetta', H - 90, 40, fNum, dim, undefined, '700');
-      page.shareImage(cv, `${String(c.name).replace(/[^A-Za-z0-9 _-]+/g, '').trim() || 'crew'}.png`);
     }
 
     /** Several crews: a row of their names to switch between; `pick(id)` opens one. */

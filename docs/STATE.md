@@ -1,5 +1,13 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-10-31: TestFlight feedback 01-04, 07, 08 (screens and sharing)
+
+- [x] A route Preview owns the screen like a replay (no route card or tabs under it); Where to? stays below the Dynamic
+  Island with the keyboard up; written fields centred top to bottom and growing; menus are bottom sheets over a modal
+  scrim (tap outside closes); every invite/share opens the real share sheet (`shareText` bridge); no crew image card.
+- Unverified on a device: the `shareText` share sheet (CI compiles the Swift), the island gap on a real Dynamic Island.
+- Exact next task: TestFlight from main, then the owner's next round of notes.
+
 ## Session 2026-10-30 (evening): REVIEW_PEOPLE.md and REVIEW_FEEL.md built (PR #267)
 
 - [x] All 35 People findings (P-01..P-35), open sign-up, two tabs; all 18 speed findings (F-01..F-18) incl. the native

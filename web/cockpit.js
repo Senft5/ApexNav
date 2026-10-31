@@ -599,6 +599,23 @@
     // only when that key is tapped.
     let attribAsked = 0;
     document.addEventListener('click', (e) => { if (e.target.closest && e.target.closest('.maplibregl-ctrl-attrib-button')) attribAsked = performance.now(); }, true);
+    // feedback 03: a written field (textarea.field) starts at its rows and grows with what's written, up to 40% of the screen
+    document.addEventListener('input', (e) => {
+      const t = e.target;
+      if (!t || t.tagName !== 'TEXTAREA' || !t.classList.contains('field')) return;
+      t.style.height = ''; if (t.scrollHeight > t.clientHeight) t.style.height = `${t.scrollHeight + 2}px`;
+    });
+    // feedback 04: a menu sheet (.side-pop) is modal. The scrim under it takes every tap outside it (nothing behind is
+    // tappable) and slides the sheet away: through its own Done or Close, so what that key does on closing still happens.
+    const popScrim = document.createElement('div'); popScrim.className = 'pop-scrim'; popScrim.setAttribute('aria-hidden', 'true');
+    document.body.append(popScrim);
+    popScrim.addEventListener('click', () => {
+      document.querySelectorAll('.side-pop.open').forEach((p) => {
+        const key = [...p.querySelectorAll('.side-pop-head button')].find((b) => /^(Done|Close|Cancel)$/.test(b.textContent.trim()));
+        if (key) key.click();
+        if (p.classList.contains('open')) p.classList.remove('open');
+      });
+    });
     const attribWatch = new MutationObserver((ms) => {
       for (const m of ms) {
         const a = m.target;
@@ -1600,7 +1617,9 @@
     function paintIdle() {
       const idle = !replayOn && state.mode !== 'live';
       $('app').classList.toggle('idle', idle);
-      $('app').classList.toggle('replaying', replayOn && state.mode === 'replay');
+      // feedback 01: one surface owns the screen. A replay or a route preview has the gauges and transport; the route card,
+      // Where to? and the tabs step aside until Done (or the plate's ×) brings them back, never all stacked at once.
+      $('app').classList.toggle('replaying', replayOn && state.mode !== 'live');
       $('modePlate').hidden = idle || state.mode === 'live';   // driving: the drive bar under the map says it
       $('modePlate').setAttribute('role', replayOn && state.mode !== 'live' ? 'button' : 'status');
     }
@@ -3711,11 +3730,13 @@
       for (const [k, v] of Object.entries(props)) { if (k.includes('-')) n.setAttribute(k, v); else n[k] = v; }
       n.append(...kids); return n; };
     const btn = (label, onclick, cls = 'ink-btn') => el('button', { className: cls, textContent: label, onclick });
+    // Every invite and share link (feedback 07): the real share sheet (save_file.js shareLink), the clipboard only on a web
+    // page without one; a toast when it was copied or couldn't be, never a "Copy this link" box.
     const copyText = async (text, ok, title = 'Vetta') => {
-      if (navigator.share) {
-        try { await navigator.share({ title, text, url: text.startsWith('http') ? text : undefined }); return; } catch (e) { if (e.name === 'AbortError') return; }
-      }
-      try { await navigator.clipboard.writeText(text); toast(ok); } catch (_) { window.prompt('Copy this link', text); }
+      const isUrl = /^https?:/.test(text);
+      const how = await ApexSaveFile.shareLink({ title, text: isUrl ? title : text, url: isUrl ? text : '' });
+      if (how === 'copied') toast(ok);
+      else if (how === 'failed') toast('Couldn\'t open the share sheet. Try again.');
     };
     const section = (title) => el('div', { className: 'stack-8' }, el('h3', { textContent: title }));
     // F-03 (REVIEW_FEEL): People, the Garage, crews, builds, the convoy and friends on the map are not on the launch path
@@ -3811,7 +3832,7 @@
     const toDrives = () => { const pop = crewDrivesEl && crewDrivesEl.closest('.side-pop'); if (pop) pop.classList.add('open'); else if (crewDrivesEl) crewDrivesEl.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
     onSocial(() => { try { crewPage = window.ApexCrewPage ? ApexCrewPage.mount({ el, btn, toast, apiCall, jsonOf, report: safety && safety.report,
       invite: (c) => crewInviteLink(c),
-      openRoute: (id) => openSharedRoute(id), builds: () => builds, shareImage: (cv, name) => (window.ApexDriveCard ? ApexDriveCard.shareCard(cv, name) : null), onAllDrives: toDrives, onPlan: (c) => { if (crewEvents) crewEvents.plan(c.id); toDrives(); },
+      openRoute: (id) => openSharedRoute(id), builds: () => builds, onAllDrives: toDrives, onPlan: (c) => { if (crewEvents) crewEvents.plan(c.id); toDrives(); },
       // P-18: the crew page's drive is the Crew drives sheet's card; a change on one redraws the other
       driveCard: (e, o) => (crewEvents ? crewEvents.card(e, { ...o, redo: () => { o.redo(); crewEvents.refresh(); } }) : null),
       block: safety ? (handle) => safety.block(handle, () => renderAccount()) : null }) : null; } catch (e) { console.error('crew page', e); } });

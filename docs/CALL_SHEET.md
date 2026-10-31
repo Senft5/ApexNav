@@ -4,6 +4,24 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-10-31: TestFlight feedback 01-04, 07, 08 (one surface, the island, centred fields, bottom sheets, the share sheet)
+
+- 01: a route Preview now hides the route card, Where to? and the tabs like a replay does (one class, `replaying`, for
+  both); Done or the plate's × brings the card back. Undo: `state.mode === 'replay'` in paintIdle (web/cockpit.js).
+- 02: with the keyboard up, Where to? stops 12 px below the Dynamic Island (safe area, at least 20 px) instead of running
+  the full height. Undo: `html.kb-open .plan.open { height: 100%; }` in web/index.html.
+- 03: read as "vertically centred, left-aligned": every written field (textarea.field) has the one-line field's padding so
+  its words sit in the middle, starts at its rows and grows as you write; crew chat starts one line tall. Undo: the
+  `textarea.field` rule in web/index.html and the input listener in cockpit.js.
+- 04: menus (every `.side-pop`: crew drives, crew settings, friends, a friend's profile, About this road) slide up from
+  the bottom over a dim scrim; nothing behind is tappable; a tap outside slides it away at once (through its own Done/Close,
+  so what that does still happens), not a shake first. Pop-up cards (`.overlay.dim`) slide up too; they already closed on
+  an outside tap. A desk (1100 px+) keeps them beside its panel. Undo: the feedback-04 rules in web/index.html.
+- 07: every invite and share link goes through `ApexSaveFile.shareLink`: the shell's real share sheet in the app (new
+  `shareText` bridge, UIActivityViewController), the web's share sheet, else the clipboard with a toast; the "Copy this
+  link" box is gone. In the app the drive card image goes to the shell's share sheet too. Undo: copyText in cockpit.js.
+- 08: the crew page's Share (an image card, Factory livery) is removed; Invite is how a crew is shared.
+
 ## 2026-10-31: "it always thinks my phone is warm"
 
 - The battery saver came on at iOS's "serious" thermal state, where a phone charging on a dash with GPS and CarPlay sits
