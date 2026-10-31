@@ -15,10 +15,15 @@ API = "https://api.appstoreconnect.apple.com/v1"
 OWNER = "90e41480b1bda2f5"
 
 
-def is_owner(attrs):
+def tester(attrs):
+    """The tester's fingerprint: the first 16 hex of the sha256 of their TestFlight email, or "" when there is none."""
     import hashlib
     email = (attrs.get("email") or "").strip().lower()
-    return bool(email) and hashlib.sha256(email.encode()).hexdigest()[:16] == OWNER
+    return hashlib.sha256(email.encode()).hexdigest()[:16] if email else ""
+
+
+def is_owner(attrs):
+    return tester(attrs) == OWNER
 
 
 def token():
@@ -61,6 +66,7 @@ def screenshots(app_id, tok):
         a = s.get("attributes", {})
         if not is_owner(a):
             others += 1
+            print(f"#{n} shared", a.get("createdDate"), "· from another tester", tester(a) or "(no email)", "· not shown")
             continue
         print("=" * 80)
         print(f"#{n} shared", a.get("createdDate"), "· from: owner · iOS", a.get("osVersion"), "· app", a.get("appPlatform") or "")
