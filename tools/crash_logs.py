@@ -1,7 +1,9 @@
-"""TestFlight crash reports, from App Store Connect (betaFeedbackCrashSubmissions), for CI (.github/workflows/crash-logs.yml).
+"""TestFlight feedback from App Store Connect, for CI (.github/workflows/crash-logs.yml): crash reports
+(betaFeedbackCrashSubmissions) and screenshot feedback (betaFeedbackScreenshotSubmissions).
 
-Prints each report's build, time, exception and the crashed thread's frames: never the tester's email, device name or
-comment, because the repository's Actions logs are public.
+Prints each crash's build, time, exception and crashed thread, and each screenshot's comment; never the tester's email
+or device name, because the repository's Actions logs are public. Screenshots are saved to feedback/ for a short-lived
+workflow artifact, not printed.
 """
 import json, os, re, sys, time, urllib.request
 
@@ -41,11 +43,30 @@ def crashed_part(text):
     return "\n".join(keep) or text[:4000]
 
 
+def screenshots(app_id, tok):
+    subs = get(f"/apps/{app_id}/betaFeedbackScreenshotSubmissions?limit=10&sort=-createdDate", tok).get("data", [])
+    print(f"{len(subs)} screenshot feedback(s)")
+    os.makedirs("feedback", exist_ok=True)
+    for n, s in enumerate(subs, 1):
+        a = s.get("attributes", {})
+        print("=" * 80)
+        print(f"#{n} shared", a.get("createdDate"), "· iOS", a.get("osVersion"), "· app", a.get("appPlatform") or "")
+        print("comment:", (a.get("comment") or "(none)").strip())
+        for k, shot in enumerate(a.get("screenshots") or [], 1):
+            try:
+                with urllib.request.urlopen(shot["url"], timeout=60) as r:
+                    open(f"feedback/{n:02d}-{k}.png", "wb").write(r.read())
+                print(f"  screenshot feedback/{n:02d}-{k}.png ({shot.get('width')}x{shot.get('height')})")
+            except Exception as e:
+                print("  screenshot not downloaded:", e)
+
+
 def main():
     tok = token()
     apps = get("/apps?filter[bundleId]=com.senft.ApexNav", tok)["data"]
     if not apps:
         sys.exit("no app with bundle id com.senft.ApexNav")
+    screenshots(apps[0]["id"], tok)
     subs = get(f"/apps/{apps[0]['id']}/betaFeedbackCrashSubmissions?limit=5&sort=-createdDate", tok).get("data", [])
     print(f"{len(subs)} crash report(s) shared from TestFlight")
     for s in subs:
