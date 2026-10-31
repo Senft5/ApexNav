@@ -8,6 +8,14 @@
 - Unverified on a device: both videos in the app's WKWebView (MediaRecorder + canvas captureStream), the road keys on a
   real drive (Valhalla's names).
 - Exact next task: TestFlight from main; the owner tries Make the video and a Bank Road stage.
+## Session 2026-10-31: TestFlight notes 05 and 06 (feedback builder)
+
+- [x] 05: the Crew drives row is gone; the crew page's "Upcoming drives" lists the crew's drives with a + to plan one.
+- [x] 06: the crew Score board shows faces and Week / Month / Year / All time, ranked by the total of drive Scores
+  (`GET /api/crews/:id/board`, `POST /api/drives/scores`, backend/src/drive_scores.ts). Old builds keep the page's `board`.
+- Migration 0043 (drive_scores) is NOT applied yet: apply it to apexnav-preview-db and apexnav-db before the Worker deploy
+  (until then the new board says "Couldn't load the board" and drive Scores wait on the phone to be sent).
+- Exact next task: apply 0043; on a device, check a finished drive shows on the crew board's Week total.
 
 ## Session 2026-10-30 (evening): REVIEW_PEOPLE.md and REVIEW_FEEL.md built (PR #267)
 

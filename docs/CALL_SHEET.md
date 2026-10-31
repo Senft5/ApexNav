@@ -23,6 +23,23 @@ it says so. Things only you can do are in docs/OWNER_TODO.md.
   (WebKit streams a canvas as it renders it). Both keys are hidden where the browser has no MediaRecorder type or no
   canvas captureStream, and a failed or empty recording says so instead of handing over nothing. Not verified on a
   phone (Chromium only here). Undo: web/dashcam.js, web/flyover_video.js.
+## 2026-10-31: TestFlight notes 05 and 06 (Crew drives row gone; the Score board as totals)
+
+- *No Crew drives row; the crew page's drive section is "Upcoming drives"*: every planned drive of that crew as its card,
+  a + in the head's corner opens the plan form in place (it gives way while the form is open), the last drive remembered
+  above for three days, Meets near you at its foot. Someone with crews but no crew page (the page failed to load) still
+  gets the old section. Undo: `drives` in the crewPage mount (web/cockpit.js) and the `!inCrew` on `drives`.
+- *The board ranks the total of drive Scores*, Week / Month (default) / Year / All time, the pick kept on the phone, each
+  row a face, the rank, @handle, car, "N drives" and the total; "--" for members who share none. Weeks start Monday, all
+  periods in UTC days (as the old board's month). Undo: `board()` in web/crew_page.js back to `c.board`.
+- *Drive Scores had to reach the server* (only stage bests did): migration 0043 `drive_scores`, one row per drive per crew
+  the driver shares Scores with, written when you publish (as board_entries), so switching a crew on later doesn't
+  expose drives sent before it was on, except: *past drives in your Log go up too* the first time the board opens (the
+  stage board already publishes past runs). The toast now says "sees your drive Scores now", not "from your next drive".
+  A drive goes up 5 s after any Log refresh when signed in, and before the board loads. Only the number and the day.
+- *A drive deleted from the Log keeps its Score on the board* (the server has no delete for one drive yet). Undo/extend:
+  a `DELETE /api/drives/scores/:id` called from the Log's delete.
+- *Old builds keep the page's `board`* (best stage Score this month) unchanged; only new builds call the new route.
 
 ## 2026-10-31: "it always thinks my phone is warm"
 

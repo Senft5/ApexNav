@@ -102,6 +102,8 @@
     // track here only when it is replayed (`want`, a ?drive= link from the Log).
     async function refreshSavedDrives(want = null) {
       if (window.ApexLogHost) ApexLogHost.changed('drives');           // the Log, kept or not, shows them fresh (F-15)
+      // a new drive's Vetta Score to the crews you share Scores with (crew_page.js publishDrives: the board's totals)
+      setTimeout(() => { try { if (accountMe && state.mode !== 'live' && window.ApexCrewPage && ApexCrewPage.publishDrives) ApexCrewPage.publishDrives(apiCall); } catch (_) {} }, 5000);
       const version = ++refreshDriveVersion;
       let m = null;
       try { m = await ApexAnalysis.job('memory', want ? { track: want } : {}); } catch (e) { console.error('road memory', e); return null; }
@@ -3812,6 +3814,8 @@
     onSocial(() => { try { crewPage = window.ApexCrewPage ? ApexCrewPage.mount({ el, btn, toast, apiCall, jsonOf, report: safety && safety.report,
       invite: (c) => crewInviteLink(c),
       openRoute: (id) => openSharedRoute(id), builds: () => builds, shareImage: (cv, name) => (window.ApexDriveCard ? ApexDriveCard.shareCard(cv, name) : null), onAllDrives: toDrives, onPlan: (c) => { if (crewEvents) crewEvents.plan(c.id); toDrives(); },
+      // the owner's TestFlight note 05: the crew page's Upcoming drives is the crew's drives list, a + plans one (no Crew drives row)
+      drives: (c, o) => (crewEvents ? crewEvents.section([{ id: c.id, name: c.name, visibility: c.visibility, role: c.is_owner ? 'owner' : 'member' }], { crewId: c.id, ...o }) : null),
       // P-18: the crew page's drive is the Crew drives sheet's card; a change on one redraws the other
       driveCard: (e, o) => (crewEvents ? crewEvents.card(e, { ...o, redo: () => { o.redo(); crewEvents.refresh(); } }) : null),
       block: safety ? (handle) => safety.block(handle, () => renderAccount()) : null }) : null; } catch (e) { console.error('crew page', e); } });
@@ -4349,12 +4353,12 @@
       });
       // Crew drives (crew_events.js): planned drives across your crews, RSVPs and meets near you
       // P-08: only once there is a crew to plan for
-      const drives = crewEvents && myCrews.length ? (crewDrivesEl = crewEvents.section(myCrews.map((c) => ({ id: c.id, name: c.name, visibility: c.visibility, role: c.role })))) : (crewDrivesEl = null);
+      // in a crew, the crew page's Upcoming drives carries them (the owner's TestFlight note 05): no Crew drives row
+      const drives = crewEvents && myCrews.length && !inCrew ? (crewDrivesEl = crewEvents.section(myCrews.map((c) => ({ id: c.id, name: c.name, visibility: c.visibility, role: c.role })))) : (crewDrivesEl = null);
       // Find or start a crew (REVIEW_PEOPLE 2): the crews near you and a new one, one sheet behind one row
       const findSheet = () => el('div', { className: 'stack-12' }, nsec, newSec);
       if (inCrew) {
         const rows = el('div', { className: 'nav-rows' });
-        if (drives) rows.append(navRow('Crew drives', drives));
         rows.append(nearbyRow = navRow('Find or start a crew', findSheet()));
         cbody.append(rows);
       } else {
