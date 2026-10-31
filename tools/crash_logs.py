@@ -12,7 +12,7 @@ import jwt   # PyJWT[crypto]
 API = "https://api.appstoreconnect.apple.com/v1"
 # The owner's TestFlight email, as the first 16 hex of its sha256 (the address itself is not in the repo). Screenshot
 # feedback is acted on only when it is the owner's; another tester's comment is counted, never printed or followed.
-OWNER = "90e41480b1bda2f5"
+OWNER = "e974529f133cce2f"   # from the owner's own notes (TestFlight records his Apple ID address)
 
 
 def tester(attrs):
