@@ -1,0 +1,22 @@
+# TestFlight crash reports (the ones shared from the phone after a crash), printed without personal details.
+# On demand only.
+name: Crash logs
+on: workflow_dispatch
+permissions:
+  contents: read
+jobs:
+  crashes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install "pyjwt[crypto]"
+      - name: Fetch
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          KEY="$RUNNER_TEMP/AuthKey.p8"
+          tools/write_asc_key.sh "$KEY"   # the PEM rebuilt as the TestFlight job does
+          ASC_KEY_PATH="$KEY" python tools/crash_logs.py
+          rm -f "$KEY"
