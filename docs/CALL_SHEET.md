@@ -4,6 +4,12 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-10-31: "it always thinks my phone is warm"
+
+- The battery saver came on at iOS's "serious" thermal state, where a phone charging on a dash with GPS and CarPlay sits
+  much of the time. Now: on at critical, or at serious held for 2 minutes; off at fair. Undo: THERMAL_ON = 2 and drop
+  the hold in web/power.js.
+
 ## 2026-10-31: the crash on open, found and fixed (nothing reverted)
 
 - TestFlight's crash report (tools/crash_logs.py, new on-demand workflow): CarPlay/ApexCarMap.swift set the hillshade's
