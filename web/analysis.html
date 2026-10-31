@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-989bsgI+qwAsdNE8anLo6sSaQ9pXCjdBGcyovUw1r54=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-/jFAmsZTRn0yGmt6ZxcoxP+WXf7gDGquX2hzRT6am7Y=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta · Log</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -531,7 +531,15 @@
       const other = drives.filter((x) => x.name === q.b && x.date <= d.date).sort((x, y) => String(y.date).localeCompare(String(x.date)))[0];
       const bBtn = route(q.b, null);
       $('dvVoteBtns').replaceChildren(route(q.a, d), bBtn, b('Skip', () => pick(null), 'btn ghost'));
-      if (other) full(other.id).then((r) => { if (r && bBtn.isConnected) bBtn.querySelector('.vote-map').innerHTML = thumb(r); }).catch(() => {});
+      // the other route's map needs that drive's rows: read them only once the question is in view, after the drive's own
+      // page has drawn (REVIEW_FEEL F-06: opening a drive reads that drive only)
+      if (other) setTimeout(() => {
+        if (!bBtn.isConnected) return;
+        const load = () => full(other.id).then((r) => { if (r && bBtn.isConnected) bBtn.querySelector('.vote-map').innerHTML = thumb(r); }).catch(() => {});
+        if (!window.IntersectionObserver) { load(); return; }
+        const io = new IntersectionObserver((es) => { if (es.some((e) => e.isIntersecting)) { io.disconnect(); load(); } });
+        io.observe(panel);
+      }, 1500);
     }
     function renderRoads() {
       const list = ApexRoadVotes.ranking(ApexRoadVotes.load(localStorage)).slice(0, 10);
