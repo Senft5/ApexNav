@@ -214,7 +214,11 @@ final class ApexNativeCarMap: UIView {
             }
         }
         if let h = s.layer(withIdentifier: "apex-hillshade") as? MLNHillshadeStyleLayer {
-            h.hillshadeShadowColor = k(P.shadow); h.hillshadeHighlightColor = k(P.highlight); h.hillshadeAccentColor = k(P.accentShade)
+            // MapLibre Native 6.x takes the shadow and highlight as arrays of colours (one per light direction, multidirectional
+            // hillshade): a bare UIColor here threw doesNotRecognizeSelector and crashed the app on every style load (2026-10-31)
+            h.hillshadeShadowColor = NSExpression(forConstantValue: [P.shadow])
+            h.hillshadeHighlightColor = NSExpression(forConstantValue: [P.highlight])
+            h.hillshadeAccentColor = k(P.accentShade)
             h.hillshadeExaggeration = NSExpression(forConstantValue: 0.36)
         }
         (s.layer(withIdentifier: "car-route-casing") as? MLNLineStyleLayer)?.lineColor = k(P.casing)
