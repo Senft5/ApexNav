@@ -4,6 +4,14 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-10-31: the crash on open, found and fixed (nothing reverted)
+
+- TestFlight's crash report (tools/crash_logs.py, new on-demand workflow): CarPlay/ApexCarMap.swift set the hillshade's
+  shadow colour as one UIColor; MapLibre Native 6.x takes an array (multidirectional hillshade), threw
+  doesNotRecognizeSelector the moment the car map's style loaded, and took the whole app down. Shadow and highlight are
+  now arrays; a test holds it. Nothing else was changed or reverted.
+- Next time: the carplay-shots workflow opens the car's screen in the simulator; it runs before a native car change merges.
+
 ## 2026-10-30 (night): the simulator smoke test starts past the welcome
 
 - main's simulator test had failed since 05:51 (the welcome moved into the app, U-65, and its Start brings up the

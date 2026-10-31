@@ -118,3 +118,12 @@ def test_the_motion_pipeline_and_the_live_frame_are_off_the_main_thread():
                 "crest_vertical_g", "roughness_rms", "vert_peak_g", "impact_g", "recording", "calibration", "thermal", "low_power_mode",
                 "battery", "charging", "has_fix", "segments", "at", "seq"):
         assert re.search(rf'(\b{key}\b(,|\s*$)|= "{key}")', swift[swift.index("enum CodingKeys"):swift.index("static func r(")], re.M), key
+
+
+def test_hillshade_colours_are_arrays_as_maplibre_native_6_wants():
+    # 2026-10-31: a bare UIColor for hillshadeShadowColor threw doesNotRecognizeSelector on every style load (the crash
+    # on open, phone and CarPlay); MapLibre Native 6.x takes the shadow and highlight as arrays of colours
+    swift = read("CarPlay", "ApexCarMap.swift")
+    assert "hillshadeShadowColor = NSExpression(forConstantValue: [P.shadow])" in swift
+    assert "hillshadeHighlightColor = NSExpression(forConstantValue: [P.highlight])" in swift
+    assert "hillshadeShadowColor = k(" not in swift and "hillshadeHighlightColor = k(" not in swift
