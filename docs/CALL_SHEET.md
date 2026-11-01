@@ -4,6 +4,53 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-01: Picks from the twostraws Swift skills list (and the iOS dev guide)
+
+- github.com/twostraws/swift-agent-skills is a list of links, not skills. Most of what it links to is already covered by
+  the packs below (concurrency, testing, App Intents, widgets, background work, App Store review, simulator,
+  accessibility, UI copy). Added only the three that bring something new, all MIT with LICENSE kept:
+  `ios-code-audit` (Chad Etzel, 34edb29: a read-only whole-codebase audit written to CODE_AUDIT.md),
+  `swift-security-expert` (Ivan Magda, bda2e0c: Keychain, tokens, certificate trust, CryptoKit) and `swiftui-pro`
+  (Paul Hudson, f2920b6: SwiftUI review, for the widgets, Live Activity and shell views).
+- Skipped: Writing for Interfaces (Intent's /articulate covers it), the SwiftData, Core Data, focus-engine and Figma skills
+  (Vetta doesn't use them), App Store Connect CLI (tools/crash_logs.py already does what we need), and second copies of
+  concurrency and testing skills.
+- github.com/keskinonur/claude-code-ios-dev-guide is a single README with no licence. Nothing to install; our CLAUDE.md
+  and docs already do what it describes. Its XcodeBuildMCP tip needs a Mac, so it only helps a local session.
+- Undo: delete those three folders.
+
+## 2026-11-01: 18 of the Swift iOS skills installed in the repo
+
+- You asked for github.com/dpearson2699/swift-ios-skills (upstream commit 8d90fd1). It has 86 skills. Each installed
+  skill's description loads into every session and costs usage, so only the 18 that match frameworks Vetta imports are
+  copied into `.claude/skills/`: carplay, mapkit, core-motion, activitykit, widgetkit, app-intents, swiftui-webkit,
+  swiftui-uikit-interop, background-processing, push-notifications, authentication, cryptokit, swift-concurrency,
+  swift-testing, app-store-review, ios-simulator, debugging-instruments, metrickit.
+- Licence: PolyForm Perimeter 1.0.0. Using the skills to build our own app is allowed, closed-source included. The
+  conditions: each skill folder keeps the LICENSE with its "Required Notice" copyright line, and the skills must not be
+  repackaged and offered to others as a competing product. Vetta isn't one.
+- Undo: delete those 18 folders. Add more: copy `skills/<name>` (with LICENSE) from a clone of the upstream repo.
+
+## 2026-11-01: Intent design-strategy skills installed in the repo
+
+- You asked for Intent (github.com/ghaida/intent). It's copied in the same way as Impeccable below: its 18 skills in
+  `.claude/skills/` (intent, strategize, investigate, journey, organize, wireframe, articulate, blueprint, evaluate,
+  fortify, include, measure, transpose, localize, philosopher, storytelling, specify, present; upstream commit 7111cb8,
+  CC0) and its 6 agents in `.claude/agents/` (noor, ember, wren, vigil, rune, sage). Start with `/intent`.
+- Its only hook prints a coloured banner when `/intent` runs, so it's left out.
+- Undo: delete those 18 skill folders and 6 agent files.
+
+## 2026-11-01: Impeccable design skill installed in the repo
+
+- You asked for the Impeccable plugin (github.com/pbakaus/impeccable). `/plugin` doesn't work in cloud sessions, and
+  the container is wiped after each one, so its Claude files are copied into the repo instead: the skill in
+  `.claude/skills/impeccable` (v4.8.0, upstream commit 4f95649, Apache-2.0, with its LICENSE and NOTICE) and its four
+  agents in `.claude/agents/impeccable-*.md`. Every session, cloud or local, now has `/impeccable critique|audit|polish…`.
+- Its auto-hook is NOT installed. That hook runs a downloaded binary after every edit and at the end of every turn. The
+  skill's launcher still downloads that binary (to `~/.impeccable/bin/`) the first time a command runs it.
+- Undo: delete `.claude/skills/impeccable` and `.claude/agents/impeccable-*.md`. Update: copy the same folders from a
+  newer clone of the upstream repo.
+
 ## 2026-10-31: TestFlight notes 09, 10 and "make video doesn't work"
 
 - 09, stages on the map: New stage from a drive no longer shows the speed/elevation strip. It shows the drive as a small
