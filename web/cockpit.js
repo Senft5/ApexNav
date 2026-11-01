@@ -157,7 +157,8 @@
     const trafficMon = new ApexTraffic.TrafficMonitor();
     const routeWatch = { note: null, frame: null, bestM: 0, offAt: null, saidAt: null };   // offAt/saidAt: the off-route episode, "Back on route" (U-90)
     const BACK_ON_QUIET_MS = 60000;
-    const etaPace = ApexEta.createPace();   // live ETA pace on the current route (paintEta)
+    const etaPace = ApexEta.createEta();   // live ETA on the current route: pace per section class, a slow arrival (paintEta, U-108)
+    const etaSections = new WeakMap();      // track -> its corner sections (ApexEta.cornerSections), worked out once
     let etaText = '', etaLeftS = null;
     const car = { route: '', guideAt: 0, guideKey: '', sightKey: '', look: '', hazards: '', symbols: new Map(), ended: null, road: '', roadAt: -1e9 };   // what the car's screen was last sent (carRoute, carGuide below)   // strip text while off route; last frame fed; furthest progress
     try {
@@ -2403,15 +2404,16 @@
     // Live time left and arrival on a planned route (eta.js): the router's time ahead at your pace on this route so far.
     // Blank off route, on a recorded drive, or when the router gave no time (OSRM fallback without one, an old restore).
     function paintEta(atM) {
-      const left = track && track.kind === 'route' && atM != null ? ApexEta.routerLeft(atM, totalM(), track.timeS, track.timeMarks) : null;
-      const now = Date.now(), est = ApexEta.estimate(left, etaPace.update(now, left), now);
+      const now = Date.now(), on = track && track.kind === 'route' && atM != null;
+      if (on && !etaSections.has(track)) etaSections.set(track, ApexEta.cornerSections(track.events));
+      const est = on ? etaPace.update({ t: now, atM, totalM: totalM(), timeS: track.timeS, marks: track.timeMarks, sections: etaSections.get(track) }) : null;
       if (est) pushEtaShare(est.leftS, atM);
       if (est && track && track.homeBy && driveActive) {
         const o = ApexEta.homeByOffer(est.arriveAt, track.homeBy, track.homeByOfferedAt ?? null, now);
         if (o) { track.homeByOfferedAt = now; toast(`Running ${o.lateMin} min late for home.`, { label: 'Head home', ms: 15000, onClick: headHome }); }
       }
       etaLeftS = est ? est.leftS : null;
-      const text = est ? `${est.leftS < 60 ? '<1' : Math.round(est.leftS / 60)} min left · ${etaClock().format(new Date(est.arriveAt))}` : '';
+      const text = est ? `${ApexEta.leftText(est.leftS, est.rough)} · ${etaClock().format(new Date(est.arriveAt))}` : '';
       if (text !== etaText) { etaText = text; paintDriveStat(); }
     }
     // Perf: one clock formatter (toLocaleTimeString built a new one with every fix); the same words as before
