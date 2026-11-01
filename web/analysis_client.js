@@ -249,7 +249,9 @@
       try { out.roadMemory = root.ApexRoadMemory ? root.ApexRoadMemory.build(Core, mine, Rec().cornersOf) : []; } catch (_) { out.roadMemory = []; }
       memo.key = key; memo.out = out;
       const t = want ? mine.find((d) => d.id === want) : null;
-      return { ...out, track: t ? Rec().toTrack(t) : null };
+      // its Vetta Score as the Log has it (the summary's), for the finished replay's plate (U-110); null when unscored
+      const sc = t ? ((sums.find((s) => s.id === t.id) || {}).ds || {}).score : null;
+      return { ...out, track: t ? { ...Rec().toTrack(t), score: Number.isFinite(sc) ? Math.round(sc) : null } : null };
     },
   };
 

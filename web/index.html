@@ -361,6 +361,8 @@
     .transport > .scrubber { grid-area: scrub; } .transport > #playBtn { grid-area: play; } .transport > .tp-rate { grid-area: rate; } .transport > #videoBtn { grid-area: video; }
     .transport .sw.tp-play { display: flex; flex-direction: row; gap: 8px; align-items: center; min-height: 44px; padding: 0; }
     .transport .sw.tp-play span { font-size: 15px; font-weight: 600; color: var(--panel-ink); }
+    /* U-110: a finished replay's Play is Again: a replay arrow in place of the switch's O */
+    .transport .sw.tp-play.again i::before { content: "\21BB"; right: 6px; width: auto; height: auto; margin-top: -10px; border: 0; border-radius: 0; font-size: 15px; line-height: 20px; font-weight: 700; color: var(--panel-ink); }
     .transport .detents.tp-rate { flex-wrap: nowrap; gap: 4px; } .transport .detents.tp-rate > button { min-width: 0; min-height: 44px; padding: 0 2px; font-size: 16px; }
     /* replay is full-screen like a drive: no tab bar; the Replay plate is the way out (REVIEW2.md U-45) */
     #app.replaying .tabbar { display: none; }

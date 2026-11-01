@@ -321,7 +321,8 @@
     return (d) => {
       setT(limit.v, fmt(d.limitMph));
       limit.c.classList.toggle('unknown', !Number.isFinite(d.limitMph));   // a sign only when there is a limit to show
-      const both = [d.paceMph, d.sightMph].filter(v => Number.isFinite(v));
+      // U-130: under 5 mph the sight plate hides (sightQuiet) and so does the value here: --, never a number at a standstill
+      const both = d.sightQuiet ? [] : [d.paceMph, d.sightMph].filter(v => Number.isFinite(v));
       const v = both.length ? Math.min(...both) : null;
       // "Open" when nothing limits you (the sight line at its cap, no corner asking for less): the number there would only
       // be the cap's own speed (125 mph), not something the road says

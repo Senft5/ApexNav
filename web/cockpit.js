@@ -160,6 +160,7 @@
     const etaPace = ApexEta.createEta();   // live ETA on the current route: pace per section class, a slow arrival (paintEta, U-108)
     const etaSections = new WeakMap();      // track -> its corner sections (ApexEta.cornerSections), worked out once
     let etaText = '', etaLeftS = null;
+    let replayEnded = false, replayWaiting = false;   // U-110 a finished replay, U-128 a replay waiting for its map (paintReplayEnd)
     const car = { route: '', guideAt: 0, guideKey: '', sightKey: '', look: '', hazards: '', symbols: new Map(), ended: null, road: '', roadAt: -1e9 };   // what the car's screen was last sent (carRoute, carGuide below)   // strip text while off route; last frame fed; furthest progress
     try {
       const saved = JSON.parse(localStorage.getItem('apex.prefs') || 'null');
@@ -1319,6 +1320,8 @@
     function quietLine(spirited, offRoute, driving, next, compact = false) {
       // U-90: wrong way on a road is still that road (the strip said "Wrong way" with no road for seven minutes)
       if (offRoute && track && track.kind === 'route') return [offRouteText(), rerouter.reason === 'wrong_way' ? roadNow.name : null].filter(Boolean).join(' · ');
+      if (replayEnded && !driveActive) return state.mode === 'sim' ? 'That\'s the route' : 'That\'s the drive';   // U-110
+      if (replayWaiting && !driveActive && track) return track.name || 'Replay';                                     // U-128
       if (!driving) return track ? `${track.name} · ${spirited ? 'Full notes' : 'Quiet · bumps and cameras only'}` : 'Plan a route for notes';
       if (!track && !driveActive) return 'No route planned';
       if (spirited) return `${track && !offRoute && track.kind !== 'horizon' ? track.name : 'The road ahead'} · Full notes`;
@@ -1535,6 +1538,8 @@
         idx = s.i; lat = s.lat; lon = s.lon; bearing = s.bearing;
         vMps = state.mode === 'sim' ? simSpeed(idx) : s.speedMps;
         latG = s.latG; lonG = s.lonG; camber = s.camberDeg;
+        if (replayEnded && state.cursorM < totalM() - 1) paintReplayEnd(false);   // a seek back: it plays on from there
+        if (replayEnded) { vMps = 0; latG = 0; lonG = 0; }           // U-110: the drive is over, the dial at rest (Sight hides under 5 mph)
       } else { cluster.update({ speedMph: null }); sightHold.reset(); paintSight(ApexCarPlay.sightMessage(null), false); return; }
       state.cursorIdx = idx;
       if (latG != null && (Math.abs(latG) > 0.30 || Math.abs(lonG) > 0.35)) state.spiritedAt = performance.now();
@@ -1562,9 +1567,9 @@
       // in the chosen units (mph or km/h, U-22); the names are the cluster's
       d.speedMph = vMps != null ? ApexUnits.speed(vMps) : null;
       d.paceMph = pace != null ? ApexUnits.speed(pace) : null;
-      // U-130: the Sight cell follows the plate: under 5 mph the plate hides (the filter's message is empty) and the cell reads --
-      const plateOn = !!held.msg.text;
-      d.sightMph = plateOn ? held.value : null; d.sightOpen = plateOn && held.open;
+      // U-130: the Sight cell follows the plate: under 5 mph (8 km/h, as sightFilter) the plate hides and the cell reads --
+      const crawl = si.speed != null && si.speed < (/^km/i.test(si.unit) ? 8 : 5);
+      d.sightMph = crawl ? null : held.value; d.sightOpen = !crawl && held.open; d.sightQuiet = crawl;
       d.limitMph = limit != null ? ApexUnits.speed(limit) : null;
       d.latG = latG; d.lonG = lonG; d.camberDeg = camber;
       d.tripMi = ApexUnits.longN(live && (idx < 0 || track.kind === 'horizon') ? (drive.rec ? drive.rec.km * 1000 : 0) : state.cursorM); d.totalMi = track && track.kind !== 'horizon' && !(live && idx < 0) ? ApexUnits.longN(totalM()) : null;
@@ -1584,6 +1589,39 @@
     const simSpeed = (i) => Math.max(6, Math.min(track.envMps[i] * 0.92, track.limitMps && track.limitMps[i] ? track.limitMps[i] : 27));
 
     let lastTs = 0, raf = null, video = null;   // video: a replay being recorded (startVideo below)
+    // U-110: a finished replay says it ended. The plate reads "Replay finished · 788" (the drive's Score as the Log has it),
+    // the strip "That's the drive", the dial 0 and Sight -- (render), and Play becomes Again. Play, a seek back or another
+    // drive clears it. Done is the solid key already.
+    // (replayEnded, replayWaiting: declared with the state at the top, read by render and the strip)
+    function paintReplayEnd(on) {
+      if (replayEnded === on) return;
+      replayEnded = on;
+      const b = $('playBtn'), label = b.querySelector('span');
+      b.classList.toggle('again', on);
+      if (label) label.textContent = on ? 'Again' : 'Play';
+      if (on) b.setAttribute('aria-label', 'Play it again from the start'); else b.removeAttribute('aria-label');
+      if (state.mode === 'replay' || state.mode === 'sim') {
+        const name = state.mode === 'sim' ? 'Preview' : 'Replay', score = state.mode === 'replay' && track && Number.isFinite(track.score) ? ` · ${track.score}` : '';
+        $('modePlate').textContent = on ? `${name} finished${score} ×`
+          : state.mode === 'sim' ? 'Preview ×' : `Replay${track && track.demo ? ' · Demo' : ''}${track && track.name ? ' · ' + track.name : ''} ×`;
+      }
+    }
+    // U-128: a replay opens on the drive, never a void. The trail is drawn and the clock starts once the map has its tiles at
+    // the drive's start, where the follow camera already is (or after REPLAY_WAIT_MS whatever the network does); meanwhile the
+    // strip names the drive rather than a quiet line with no road, and the road under the car is looked up afresh.
+    const REPLAY_WAIT_MS = 4000;
+    async function replayWhenReady(t) {
+      replayWaiting = true; render(true);
+      const until = performance.now() + REPLAY_WAIT_MS;
+      while (!mapReady && performance.now() < until) await new Promise((ok) => setTimeout(ok, 100));
+      if (mapReady && track === t) {
+        loadTrackOnMap();
+        await new Promise((ok) => { let over = false; const done = () => { if (!over) { over = true; ok(); } };
+          map.once('idle', done); map.triggerRepaint(); setTimeout(done, Math.max(0, until - performance.now())); });
+      }
+      replayWaiting = false; roadNow.at = -Infinity;
+      if (track === t && replayOn && state.mode !== 'live') setPlaying(true); else render(true);
+    }
     function tick(ts) {
       raf = null;
       if (!state.playing || !track || state.mode === 'live') return;
@@ -1592,7 +1630,7 @@
       const s = sample(track, state.cursorM);
       const v = state.mode === 'sim' ? simSpeed(s.i) : Math.max(2, s.speedMps);
       state.cursorM += v * state.rate * dt;
-      if (state.cursorM >= totalM()) { state.cursorM = totalM(); setPlaying(false); }
+      if (state.cursorM >= totalM()) { state.cursorM = totalM(); setPlaying(false); paintReplayEnd(true); render(true); return; }
       render(false);
       raf = requestAnimationFrame(tick);
     }
@@ -1601,6 +1639,7 @@
       if (!state.playing && video) { video.stop(); video = null; }      // the replay ended or paused: the video ends with it
       $('playBtn').classList.toggle('on', state.playing); $('playBtn').setAttribute('aria-checked', String(state.playing));
       if (state.playing) {
+        paintReplayEnd(false);
         if (state.cursorM >= totalM() - 1) state.cursorM = 0;
         if (!state.follow) resumeFollow();
         lastTs = 0; if (!raf) raf = requestAnimationFrame(tick);
@@ -1717,6 +1756,7 @@
       // your own notes from a recce drive (recce.js, IDEAS V-09) read on the same corners, same direction
       try { if (window.ApexRecce && Array.isArray(t.events)) ApexRecce.apply(ApexRecce.load(localStorage), t); } catch (_) {}
       track = t;
+      paintReplayEnd(false);                                           // U-110: a new replay is not finished
       state.cursorM = Math.max(0, Math.min(totalM(), startM));
       refreshAutoNight();
       state.spoken.clear();
@@ -6483,7 +6523,7 @@
         if (!replayOn) activate(first, at * first.dist[first.dist.length - 1]);
         replayOn = replayOn || ['drive', 'play', 'at'].some(k => params.has(k));
         booting = false; paintIdle();
-        if (params.get('play') === '1') setPlaying(true);
+        if (params.get('play') === '1') replayWhenReady(first);       // U-128: once the map has the drive's start
       } else {
         // After a reload in the same session (a lost map): the planned route returns, quietly (booting: no preview), without
         // waiting for the map, which draws it whenever it finishes loading.

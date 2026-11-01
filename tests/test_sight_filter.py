@@ -129,8 +129,10 @@ def test_the_sight_cell_hides_with_the_plate():
     src = cockpit_source()
     i = src.index("const held = sightHold.step(si, performance.now());")
     block = src[i:i + 1500]
-    assert "const plateOn = !!held.msg.text;" in block
-    assert "d.sightMph = plateOn ? held.value : null; d.sightOpen = plateOn && held.open;" in block
+    assert "const crawl = si.speed != null && si.speed < (/^km/i.test(si.unit) ? 8 : 5);" in block
+    assert "d.sightMph = crawl ? null : held.value; d.sightOpen = !crawl && held.open; d.sightQuiet = crawl;" in block
+    inst = open(__import__("os").path.join(__import__("os").path.dirname(__file__), "..", "web", "instruments.js"), encoding="utf-8").read()
+    assert "const both = d.sightQuiet ? [] :" in inst, "the cell's value (sight or pace, the lower) goes with the plate"
 
 
 def test_open_past_the_limit_by_a_margin(out):
