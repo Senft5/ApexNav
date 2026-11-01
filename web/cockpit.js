@@ -1624,6 +1624,7 @@
       $('app').classList.toggle('replaying', replayOn && state.mode !== 'live');
       $('modePlate').hidden = idle || state.mode === 'live';   // driving: the drive bar under the map says it
       $('modePlate').setAttribute('role', replayOn && state.mode !== 'live' ? 'button' : 'status');
+      paintPlacePlate();
     }
     function setMode(mode) {
       state.mode = mode;
@@ -4618,9 +4619,15 @@
     // The place plate (place_plate.js): the town and the sky on the idle map. Asked with the position rounded to about a km,
     // again after 20 minutes or 5 km; each part only when it came back. Hidden while driving (the hazard plate's place).
     const placeAsk = { at: 0, lat: null, lon: null, data: {} };
+    // REVIEW5 U-127: one rule for when it shows, in every theme: on the idle map, not under a drive's end card (Billet drew
+    // it over the card), and back as soon as Done brings the idle map back (it waited up to a minute for the next refresh)
+    function paintPlacePlate() {
+      const pp = $('placePlate'), card = $('endCard');
+      if (pp) pp.hidden = !pp.textContent || state.mode === 'live' || !$('app').classList.contains('idle') || !!(card && card.classList.contains('show'));
+    }
     async function refreshPlacePlate() {
       const p = state.lastPosition;
-      $('placePlate').hidden = !$('placePlate').textContent || state.mode === 'live' || !$('app').classList.contains('idle');
+      paintPlacePlate();
       if (!p || navigator.onLine === false) return;
       const moved = placeAsk.lat == null ? Infinity : Math.hypot((p.lat - placeAsk.lat) * 111, (p.lon - placeAsk.lon) * 111 * Math.cos(p.lat * Math.PI / 180));
       if (Date.now() - placeAsk.at < 20 * 60000 && moved < 5) return;
@@ -4631,7 +4638,7 @@
         if (w && w.current) { d.tempC = w.current.temperature_2m; d.code = w.current.weather_code; } } catch (_) {}
       placeAsk.data = d;
       $('placePlate').textContent = ApexPlacePlate.text(d, ApexUnits.metric());
-      $('placePlate').hidden = !$('placePlate').textContent || state.mode === 'live' || !$('app').classList.contains('idle');
+      paintPlacePlate();
     }
     setTimeout(refreshPlacePlate, 4000); setInterval(refreshPlacePlate, 60000);
     // The suggested loop on the deck: the length you last picked on the loop dial; tapping it builds that loop.
@@ -5606,7 +5613,8 @@
       if (onRoute) {
         const next = allEvents().filter(e => e.type === 'corner' && noteM(e) > state.cursorM).reduce((m, e) => Math.min(m, noteM(e)), Infinity);
         const d = Number.isFinite(next) ? distLabel(next - state.cursorM) : null;
-        return { short: 'QUIET', note: d ? `Quiet · next corner ${d.n} ${d.u.toLowerCase()}` : ['Quiet', driven && `${driven} driven`].filter(Boolean).join(' · ') };
+        // U-131: the island's compact trailing slot gets the next corner's distance ("1.0 MI"); QUIET is for the expanded view
+        return { short: 'QUIET', trail: d ? `${d.n} ${d.u}`.toUpperCase() : '', note: d ? `Quiet · next corner ${d.n} ${d.u.toLowerCase()}` : ['Quiet', driven && `${driven} driven`].filter(Boolean).join(' · ') };
       }
       return { short: 'REC', note: driven ? `Recording · ${driven}` : 'Recording' };
     }
@@ -5634,7 +5642,7 @@
         // the island's compact view: a few characters, never a sentence; a hazard turns its keyline orange (LiveActivity/ApexLiveWidget.swift).
         // U-61: a short word of its own when nothing is ahead (the widget once cut "No notes ahead" to "NO NOT"); codes are
         // already short, the widget scales rather than cut one
-        short: n ? islandShort(n) : q.short, hazard: !!(n && n.type !== 'corner' && n.type !== 'turn'), etaShort: (etaText || '').split('·')[0].trim() };
+        short: n ? islandShort(n) : q.short, trail: n ? '' : (q.trail || ''), hazard: !!(n && n.type !== 'corner' && n.type !== 'turn'), etaShort: (etaText || '').split('·')[0].trim() };
       const key = JSON.stringify(fields), now = performance.now();
       // unchanged notes are resent once a minute: the shell marks each update stale two minutes on (a stop at a light stays live)
       if ((key === liveAct.last && now - liveAct.at < 60000) || (now - liveAct.at < 3000 && liveAct.last && JSON.parse(liveAct.last).note === fields.note)) return;
@@ -5899,7 +5907,7 @@
       map.setLayoutProperty('apex-endtrail-casing', 'visibility', 'none'); map.setLayoutProperty('apex-endtrail', 'visibility', 'none');
       resumeFollow();
     }
-    new MutationObserver(() => { if (!$('endCard').classList.contains('show')) hideEndTrail(); }).observe($('endCard'), { attributes: true, attributeFilter: ['class'] });
+    new MutationObserver(() => { if (!$('endCard').classList.contains('show')) hideEndTrail(); paintPlacePlate(); }).observe($('endCard'), { attributes: true, attributeFilter: ['class'] });
     $('endDone').addEventListener('click', () => $('endCard').classList.remove('show'));
     $('endShareLink').addEventListener('click', () => $('endShare').click());
     $('endStage').addEventListener('click', () => { if (endDrive) openLog(`analysis.html?tab=segments&drive=${encodeURIComponent(endDrive.id)}`); });

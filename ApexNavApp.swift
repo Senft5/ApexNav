@@ -991,7 +991,8 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
     func handleActivity(_ dict: [String: Any]) {
         let state = ApexDriveAttributes.ContentState(note: (dict["note"] as? String) ?? "", distance: (dict["distance"] as? String) ?? "",
                                                      eta: (dict["eta"] as? String) ?? "", short: dict["short"] as? String,
-                                                     hazard: dict["hazard"] as? Bool, etaShort: dict["etaShort"] as? String)
+                                                     hazard: dict["hazard"] as? Bool, etaShort: dict["etaShort"] as? String,
+                                                     trail: dict["trail"] as? String)
         #if DEBUG
         if let replay, let a = dict["action"] as? String { if a == "start" { replay.driving = true } else if a == "end" { replay.driving = false } }
         #endif

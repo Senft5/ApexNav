@@ -86,9 +86,15 @@ struct ApexDriveLiveActivity: Widget {
                         .font(.caption2).bold().monospacedDigit().lineLimit(1).minimumScaleFactor(0.7)
                 }
             } compactTrailing: {
+                // U-131: quiet on a route, the next corner's distance ("1.0 MI") rather than a word ("QUIE" was clipped). A word
+                // here is scaled into a bounded width: with no width to scale against, the system clipped it instead.
+                let trail = context.state.distance.isEmpty ? (context.state.trail ?? "") : ""
                 HStack(spacing: 3) {
                     if hazard { Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(orange) }
-                    Text(short).font(.caption2).bold().lineLimit(1).minimumScaleFactor(0.6)   // scaled, never cut to a fragment
+                    Text(trail.isEmpty ? short : trail)
+                        .font(.caption2).bold().monospacedDigit().lineLimit(1)
+                        .minimumScaleFactor(0.5).allowsTightening(true)
+                        .frame(maxWidth: 44)   // scaled, never cut to a fragment
                 }
             } minimal: {
                 Image(systemName: hazard ? "exclamationmark.triangle.fill" : "arrow.turn.up.right")

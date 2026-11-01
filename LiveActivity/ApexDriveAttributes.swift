@@ -16,6 +16,9 @@ struct ApexDriveAttributes: ActivityAttributes {
         var hazard: Bool? = nil
         /// Time left only ("48 min"), for the expanded view's trailing slot.
         var etaShort: String? = nil
+        /// With no note ahead, the island's compact trailing value: the next corner's distance ("1.0 MI"), U-131; nil or
+        /// empty when there is none (the compact view then shows the short word, scaled to fit).
+        var trail: String? = nil
     }
     /// The drive or route name.
     var title: String

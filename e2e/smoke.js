@@ -93,6 +93,20 @@ flow('the strip never cuts where the meaning is: a three-word call keeps its dir
     await page.waitForTimeout(1850);
   }
   check(seen.size >= 4 && [...seen.values()].every((c) => !c), 'the welcome loop reads whole: ' + JSON.stringify([...seen]));
+  // REVIEW5 U-107: the welcome's next cells print codes, whole ("CR…" was the crest), and a call's head sits on one line
+  // ("RIGHT / 3" wrapped where "LEFT 2" fit); U-133: the strip keeps one height through the loop
+  const ob = { codes: new Set(), wrapped: [], heights: new Set() };
+  for (let k = 0; k < 6; k++) {
+    const r = await page.evaluate(() => { const el = document.getElementById('obNotes'), h = el.querySelector('.rb-box.now .rb-call span'), fs = h && parseFloat(getComputedStyle(h).fontSize);
+      return { codes: [...el.querySelectorAll('.rb-code')].filter((c) => c.getClientRects().length).map((c) => ({ t: c.textContent, cut: c.scrollWidth > c.clientWidth + 1 || c.getBoundingClientRect().right > el.getBoundingClientRect().right + 1 })),
+        head: h && h.textContent, lines: h ? Math.round(h.getBoundingClientRect().height / (fs * 1.05)) : 0, words: !!el.querySelector('.rb-box:not(.now) .rb-call'), h: Math.round(el.getBoundingClientRect().height) }; });
+    r.codes.forEach((c) => ob.codes.add(c.t + (c.cut ? ' CUT' : '')));
+    if (r.lines > 1 || r.words) ob.wrapped.push(r);
+    ob.heights.add(r.h);
+    await page.waitForTimeout(1850);
+  }
+  check(ob.codes.size >= 3 && [...ob.codes].every((t) => /^[A-Z0-9+-]{1,6}$/.test(t)), 'the welcome\'s next cells are whole codes: ' + JSON.stringify([...ob.codes]));
+  check(!ob.wrapped.length && ob.heights.size === 1, 'the welcome\'s heads on one line, no words in a next cell, one height: ' + JSON.stringify({ w: ob.wrapped, h: [...ob.heights] }));
   // the plain words a sharp corner gets, at the lead's size, in every theme on the narrowest phone: nothing cut
   await page.setViewportSize({ width: 375, height: 667 });
   for (const theme of ['roadbook', 'tapedeck', 'billet']) {
@@ -633,6 +647,7 @@ flow('a GPX route has a time from its own envelope (U-64); the Live Activity rea
   const q = await page.evaluate(() => window.__act.filter((m) => m.action === 'update').pop());
   check(q.short === 'QUIET' && q.distance === '' && /^Quiet · next corner \d+(\.\d)? (mi|km)$/.test(q.note), 'quiet on the route: ' + JSON.stringify(q));
   check(/min/.test(q.etaShort), 'the envelope\'s time reaches the island: ' + JSON.stringify(q));
+  check(/^\d+(\.\d)? (MI|KM)$/.test(q.trail), 'U-131: the compact island shows the next corner\'s distance, not a clipped QUIET: ' + JSON.stringify(q));
   await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'end' }));
   await page.waitForFunction(() => !window.apexDebug.driveActive);
   // a free drive: REC, and how far you have driven
@@ -1470,8 +1485,15 @@ flow('drive ended: the map behind the card is the whole drive, fitted flat above
   await page.waitForTimeout(600);
   const f2 = await fit();
   check(Math.abs(f2.a - f1.a) < 2 && Math.abs(f2.b - f1.b) < 2, 'a fix after the end leaves the fit: ' + JSON.stringify(f2));
+  // REVIEW5 U-127: the place plate (its text set by hand: it needs a lookup) waits under the end card, and Done brings it back
+  const plateShown = () => page.evaluate(() => { const p = document.getElementById('placePlate'); return !p.hidden && p.getClientRects().length > 0; });
+  await page.evaluate(() => { const p = document.getElementById('placePlate'), c = document.getElementById('endCard');
+    p.textContent = 'Colerain Township · Dry · 63°'; p.hidden = false; c.classList.remove('show'); c.classList.add('show'); });   // as a late lookup would leave it
+  await page.waitForTimeout(100);
+  check(!(await plateShown()), 'no place plate over the end card');
   await page.click('#endDone');
   await page.waitForTimeout(300);
+  check(await plateShown(), 'Done: the idle map has its place plate at once');
   const after = await page.evaluate(() => ({ follow: apexDebug.state.follow, shown: apexDebug.map.getLayoutProperty('apex-endtrail', 'visibility') }));
   check(after.follow && after.shown === 'none', 'Done: the trail goes and the map follows again: ' + JSON.stringify(after));
 });
@@ -2942,6 +2964,58 @@ flow('theme contract on the page: the hazard plate, the speed, the call and the 
       const kit = await page.evaluate(() => { const k = document.querySelector('#cluster .kit'), b = document.querySelector('#cluster .kit-says b');
         return { w: Math.round(k.getBoundingClientRect().width), phone: innerWidth <= 480, dots: k.querySelectorAll('circle').length, clamp: getComputedStyle(b).webkitLineClamp, ellipsis: getComputedStyle(b).textOverflow }; });
       check(kit.w === (kit.phone ? 40 : 80) && kit.dots === 16 * 14 && kit.clamp === '2' && kit.ellipsis !== 'ellipsis', 'tapedeck: Kit at his size and a two-line call: ' + JSON.stringify(kit));
+    }
+  }
+});
+
+flow('theme contract on its side: the strip has words, one height, codes in the next cell; nothing on the binnacle overlaps and the Road line is whole, day and night, every theme (REVIEW5 U-106, U-107, U-124, U-129, U-133)', async (page, base) => {
+  // the boxes the binnacle must never print over one another (the Road line ran across the Score, REVIEW5 U-106)
+  const BOXES = () => {
+    const q = (sel, label) => [...document.querySelectorAll(sel)].filter((e) => e.getClientRects().length && !e.closest('[hidden]')).map((e) => { const r = e.getBoundingClientRect(); return { label, x: r.left, y: r.top, r: r.right, b: r.bottom }; });
+    return [...q('#cluster .dial-speed', 'speed'), ...q('#cluster .ro-limit', 'limit'), ...q('#cluster .ro-sight', 'sight'), ...q('#cluster .odo', 'trip'),
+      ...q('#cluster .dna-arch', 'road'), ...q('#cluster .dial-g > :not(.g-score):not(.bezel-ring)', 'meter'), ...q('#cluster .g-score', 'score'), ...q('#cluster .kit-row', 'kit'),
+      ...q('#driveBar', 'status'), ...q('#cluster .trip-peek', 'trip key')];
+  };
+  const overlaps = (bs) => { const out = []; for (let i = 0; i < bs.length; i++) for (let j = i + 1; j < bs.length; j++) { const A = bs[i], B = bs[j];
+    const w = Math.min(A.r, B.r) - Math.max(A.x, B.x), h = Math.min(A.b, B.b) - Math.max(A.y, B.y); if (w > 1 && h > 1) out.push(`${A.label} over ${B.label}`); } return out; };
+  const LONG = 'Road: Northwest Expressway';
+  for (const night of [false, true]) {
+    for (const theme of ['roadbook', 'tapedeck', 'billet']) {
+      await page.setViewportSize({ width: 852, height: 393 });
+      await page.addInitScript((n) => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.prefs', JSON.stringify({ notesMode: 'full', nightMode: n ? 'on' : 'off' })); } catch (_) {} }, night);
+      const m = `${theme} ${night ? 'night' : 'day'}`;
+      // the strip, on its side, on the demo replay: a corner, then the quiet stretch
+      await page.goto(base + `/index.html?drive=dry_ridge&play=1&theme=${theme}`);
+      await page.waitForFunction(() => window.apexDebug && window.apexDebug.track && window.apexDebug.track.events.length);
+      const strip = async (frac) => {
+        await page.evaluate((f) => { const st = window.apexDebug.state, t = window.apexDebug.track; st.cursorM = t.dist[t.dist.length - 1] * f; }, frac);
+        await page.waitForTimeout(1200);
+        return page.evaluate(() => { const el = document.getElementById('notes'), head = el.querySelector('.rb-box.now .rb-call span'), mods = el.querySelector('.rb-box.now .rb-mods');
+          const cut = (x) => !!x && (x.scrollHeight > x.clientHeight + 1 || x.scrollWidth > x.clientWidth + 1);
+          return { h: Math.round(el.getBoundingClientRect().height), head: head && head.textContent, headW: head ? Math.round(head.getBoundingClientRect().width) : 0,
+            px: head ? parseFloat(getComputedStyle(head).fontSize) : 0, cut: cut(head) || cut(mods), quiet: !!el.querySelector('.note-quiet'),
+            codes: [...el.querySelectorAll('.rb-code')].filter((c) => c.getClientRects().length).map((c) => [c.textContent, cut(c)]), words: el.querySelectorAll('.rb-box:not(.now) .rb-call').length }; });
+      };
+      const a = await strip(0.45), b = await strip(0.2);
+      check(a.head && a.headW >= 80 && a.px >= 21 && !a.cut, `${m}: the head says its call in words at 21 px, whole: ` + JSON.stringify(a));
+      check(!a.words && a.codes.length >= 1 && a.codes.every(([t, c]) => /^[A-Z0-9+-]+( [A-Z0-9]+)?$/.test(t) && t.length <= 7 && !c), `${m}: the next cell is a code, whole: ` + JSON.stringify(a.codes));
+      check(a.h === b.h, `${m}: the strip keeps one height (U-133): ` + JSON.stringify([a.h, b.h, a.head, b.head]));
+      // the binnacle in a drive, on its side, with a long road name: no box over another, the name whole
+      await page.goto(base + `/index.html?theme=${theme}`);
+      await page.waitForFunction(() => window.apex && window.apexDebug);
+      await page.evaluate(async () => { for (let i = 0; i < 30; i++) { window.apex.live({ lat: 35.96 + i * 1e-5, lon: -83.92, accuracy_m: 5, speed_mps: 31, course_deg: 0, has_fix: true, calibration: 'locked', lat_g: 0.1, lon_g: 0 }); await new Promise((r) => setTimeout(r, 40)); } });
+      for (const [w, h] of [[852, 393], [393, 852]]) {
+        await page.setViewportSize({ width: w, height: h });
+        await page.waitForTimeout(300);
+        const r = await page.evaluate((LONG) => { const d = document.querySelector('#cluster .dna-arch'); d.hidden = false; d.textContent = LONG;
+          return { road: { whole: d.scrollWidth <= d.clientWidth + 1 && getComputedStyle(d).textOverflow !== 'ellipsis', text: d.textContent },
+            limits: [...document.querySelectorAll('#cluster *')].filter((e) => e.childNodes.length === 1 && e.firstChild.nodeType === 3 && /^LIMIT \d/i.test(e.textContent)).length }; }, LONG);
+        const bs = await page.evaluate(BOXES), o = overlaps(bs);
+        check(!o.length, `${m} ${w}x${h}: nothing on the binnacle overprints: ` + o.join(', '));
+        check(r.road.whole, `${m} ${w}x${h}: the Road line whole: ` + JSON.stringify(r.road));
+        check(r.limits === 0, `${m}: the limit is printed once, on the sign (U-129)`);
+        check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${m} ${w}x${h}: no sideways scroll`);
+      }
     }
   }
 });
