@@ -4,6 +4,20 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-01: Vetta on the CarPlay Dashboard (the split overview screen)
+
+- The owner asked for the Apple Maps-style overview: map on the left, guidance top right, music bottom right. That is the
+  CarPlay Dashboard. Vetta already declared it (`CPSupportsDashboardNavigationScene`) and drew its map there, and CarPlay
+  builds the guidance card from Vetta's navigation session.
+- Added:
+  - the Dashboard card gets the short instruction first (`dashboardInstructionVariants`);
+  - two shortcut buttons shown when not navigating, "Where to?" and "Loops". Apple asks Dashboard navigation apps for
+    these. Each opens the main car screen on that list (`apexnav://car/where` and `/loops`, handled only by the CarPlay
+    scene).
+- The Dashboard shows the navigation app used most recently, so after a drive in Apple Maps it shows Apple Maps until a
+  Vetta drive starts.
+- Undo: remove `shortcutButtons` and the `openURLContexts` handler in `CarPlay/ApexCarPlay.swift`.
+
 ## 2026-11-01: Review 5, all 32 findings (U-106..U-137) built ("build all")
 
 Five builders worked in parallel and Claude merged them. These are the calls, each with how to undo it.

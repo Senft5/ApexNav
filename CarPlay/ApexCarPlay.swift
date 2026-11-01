@@ -374,6 +374,21 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
 
     // MARK: Where to?, Loops, Places, Report
 
+    // The Dashboard's shortcut buttons (ApexCarDashboardSceneDelegate) open this scene with apexnav://car/where or /loops.
+    func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
+        guard let url = URLContexts.first?.url else { return }
+        MainActor.assumeIsolated { openCarLink(url) }
+    }
+
+    @MainActor func openCarLink(_ url: URL) {
+        guard let route = ApexCarDashboardSceneDelegate.route(url) else { return }
+        interfaceController?.popToRootTemplate(animated: false, completion: nil)
+        switch route {
+        case .whereTo: openSearch()
+        case .loops: openLoops()
+        }
+    }
+
     @MainActor private func openSearch() {
         let t = CPSearchTemplate()
         t.delegate = searchDelegate
@@ -527,6 +542,9 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
                 variants.append(v)
             }
             m.instructionVariants = variants
+            // the Dashboard's guidance card (the owner, 2026-11-01: the overview screen with the map, the guidance top right
+            // and the music below) is a third of the screen: the short form alone where there is one
+            m.dashboardInstructionVariants = g.short.isEmpty ? variants : Array(g.short.prefix(1)) + variants
             if let tulip = g.symbol {
                 m.symbolImage = tulip.withRenderingMode(.alwaysOriginal)    // the road book's tulip, in the card's ink
             } else if g.recording {
@@ -626,6 +644,19 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
 final class ApexCarDashboardSceneDelegate: UIResponder, CPTemplateApplicationDashboardSceneDelegate {
     private var mapController: ApexCarMapViewController?
 
+    enum Route { case whereTo, loops }
+    static let whereToURL = URL(string: "apexnav://car/where")!
+    static let loopsURL = URL(string: "apexnav://car/loops")!
+    /// Only the two Dashboard links; anything else is not ours (the phone's apexnav://open links never reach the car).
+    static func route(_ url: URL) -> Route? {
+        guard url.scheme == "apexnav", url.host() == "car" else { return nil }
+        switch url.path() {
+        case "/where": return .whereTo
+        case "/loops": return .loops
+        default: return nil
+        }
+    }
+
     func templateApplicationDashboardScene(_ templateApplicationDashboardScene: CPTemplateApplicationDashboardScene,
                                            didConnect dashboardController: CPDashboardController, to window: UIWindow) {
         MainActor.assumeIsolated {
@@ -633,6 +664,21 @@ final class ApexCarDashboardSceneDelegate: UIResponder, CPTemplateApplicationDas
             let m = ApexCarMapViewController(role: .dashboard)
             mapController = m
             window.rootViewController = m
+            // The owner, 2026-11-01: Vetta on the Dashboard (map left, guidance top right, music bottom right) like Apple Maps.
+            // In a drive CarPlay draws the guidance card from the navigation session; out of one the card holds these
+            // shortcut buttons (Apple: a Dashboard navigation app offers them when it isn't navigating). Each opens the
+            // main CarPlay screen on that template.
+            let scene = templateApplicationDashboardScene
+            func button(_ title: String, _ subtitle: String, _ symbol: String, _ url: URL) -> CPDashboardButton {
+                let img = UIImage(systemName: symbol, withConfiguration: UIImage.SymbolConfiguration(pointSize: 24, weight: .semibold)) ?? UIImage()
+                return CPDashboardButton(titleVariants: [title], subtitleVariants: [subtitle], image: img) { [weak scene] _ in
+                    scene?.open(url, options: nil, completionHandler: nil)
+                }
+            }
+            dashboardController.shortcutButtons = [
+                button("Where to?", "A road worth driving", "magnifyingglass", Self.whereToURL),
+                button("Loops", "Twisty, back where you start", "arrow.triangle.turn.up.right.circle", Self.loopsURL),
+            ]
         }
     }
 
