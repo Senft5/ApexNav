@@ -5676,6 +5676,7 @@
         ? ApexCarPlay.recordingMessage(drive.rec ? drive.rec.km * 1000 : null, (m) => ApexUnits.long(m, 1))
         : ApexCarPlay.guideMessage(track, state.cursorM, etaLeftS, ApexDirections.phrase,
           { corners: CAR_CORNERS, call: (e) => (state.noteWords === 'plain' && !e.recce && window.ApexPlainNotes ? ApexPlainNotes.plainCall(e) : e.call),
+            plain: state.noteWords === 'plain' && !!window.ApexPlainNotes,   // U-112: the card's short words in the call's words
             speedMps: state.live ? state.live.speed_mps : null, road: carRoad, step: carStep() });
       if (!g || (g.key === car.guideKey && now - car.guideAt < 1000)) return;
       car.guideKey = g.key; car.guideAt = now;

@@ -1979,7 +1979,7 @@ final class ApexApiBridge: NSObject, WKScriptMessageHandlerWithReply {
     /// corner, as at a junction queue, so the strip's passed-note rule is seen in a recording. Once per drive.
     private let hold: (m: Double, s: Double)?
     private var holdUntil: Double?, held = false
-    private var distM = 0.0, lastFix = 0.0, timer: Timer?
+    private var distM = 0.0, lastFix = 0.0, lastTick: Double?, timer: Timer?
     var driving = false {
         didSet {
             guard driving != oldValue else { return }
@@ -2038,7 +2038,11 @@ final class ApexApiBridge: NSObject, WKScriptMessageHandlerWithReply {
 
     private func tick() {
         guard let shell else { timer?.invalidate(); return }
-        let t = ProcessInfo.processInfo.systemUptime, dt = 0.01, g = ApexKit.gStd
+        // REVIEW5 §7.1: the drive moves by the time that really passed, not by a fixed 10 ms a tick. The recording's photos
+        // (phone and car every 3 s) held the main thread, ticks were dropped and the guided drive ran at a third of real speed
+        // (0.83 mi in 129 s) and never reached End. A stall longer than 2 s (a debugger, a suspended app) is not driven through.
+        let t = ProcessInfo.processInfo.systemUptime, g = ApexKit.gStd
+        let dt = min(2, max(0, t - (lastTick ?? t - 0.01))); lastTick = t
         let i = min(rows.count - 2, Int(distM / 5)), f = min(1, max(0, distM / 5 - Double(i)))
         let a = rows[i], b = rows[i + 1]
         let mix = { (x: Double, y: Double) in x + (y - x) * f }

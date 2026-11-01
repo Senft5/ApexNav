@@ -582,7 +582,8 @@ final class ApexCarPuckView: UIView {
 }
 
 /// The sight-line speed under the arrow (web/carmap.js drawSight): an eye, the number and its unit; signal red when the car
-/// is going faster than it; hidden when unknown.
+/// is going faster than it; hidden when unknown. U-119: OPEN is the eye alone, half the plate's height and dimmed (at full
+/// size it was the loudest thing on the car's screen, REVIEW5 free-drive car/007).
 final class ApexCarSightView: UIView {
     private let label = ApexCarPlateLabel()
     var palette: (plate: UIColor, ink: UIColor) = (.white, .black)
@@ -600,15 +601,21 @@ final class ApexCarSightView: UIView {
         guard let s else { return }
         let red = UIColor(red: 0xC8 / 255, green: 0x10 / 255, blue: 0x2E / 255, alpha: 1)
         let ink = s.short ? UIColor.white : palette.ink
+        let open = s.text == "OPEN" && !s.short
         label.backgroundColor = s.short ? red : palette.plate
         label.layer.borderColor = ink.cgColor
+        label.layer.borderWidth = open ? 1.5 : 2
+        label.inset = open ? UIEdgeInsets(top: 2, left: 4, bottom: 2, right: 4) : UIEdgeInsets(top: 2, left: 7, bottom: 1, right: 7)
+        alpha = open ? 0.8 : 1
         let t = NSMutableAttributedString()
-        if let eye = UIImage(systemName: "eye", withConfiguration: UIImage.SymbolConfiguration(pointSize: 13, weight: .bold))?.withTintColor(ink, renderingMode: .alwaysOriginal) {
+        if let eye = UIImage(systemName: "eye", withConfiguration: UIImage.SymbolConfiguration(pointSize: open ? 9 : 13, weight: .bold))?.withTintColor(ink, renderingMode: .alwaysOriginal) {
             t.append(NSAttributedString(attachment: NSTextAttachment(image: eye)))
-            t.append(NSAttributedString(string: " "))
+            if !open { t.append(NSAttributedString(string: " ")) }
         }
-        t.append(NSAttributedString(string: s.text, attributes: [.foregroundColor: ink, .font: UIFont.systemFont(ofSize: 19, weight: .bold, width: .condensed)]))
-        if !s.unit.isEmpty { t.append(NSAttributedString(string: s.unit, attributes: [.foregroundColor: ink, .font: UIFont.systemFont(ofSize: 11, weight: .bold, width: .condensed), .kern: 0.4])) }
+        if !open {
+            t.append(NSAttributedString(string: s.text, attributes: [.foregroundColor: ink, .font: UIFont.systemFont(ofSize: 19, weight: .bold, width: .condensed)]))
+            if !s.unit.isEmpty { t.append(NSAttributedString(string: s.unit, attributes: [.foregroundColor: ink, .font: UIFont.systemFont(ofSize: 11, weight: .bold, width: .condensed), .kern: 0.4])) }
+        }
         label.attributedText = t
         label.sizeToFit()
         bounds = CGRect(origin: .zero, size: label.bounds.size)
