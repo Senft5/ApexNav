@@ -25,7 +25,7 @@
       if (!line || !line.text) return false;
       const it = { kind: line.kind === 'hazard' ? 'hazard' : 'ordinary', text: line.text, chain: line.chain || null,
                    sysToken: line.sysToken || null, tokens: Array.isArray(line.tokens) ? line.tokens : null, duck: line.duck === true, key: line.key || null, atM: typeof line.atM === 'number' ? line.atM : null,
-                   dueByM: typeof line.dueByM === 'number' ? line.dueByM : null,
+                   dueByM: typeof line.dueByM === 'number' ? line.dueByM : null, aside: line.aside || null,   // aside: the pack's line after a call (U-113)
                    at: now, repeatMs: line.repeatMs ?? REPEAT_MS,
                    maxAgeMs: line.maxAgeMs ?? (line.kind === 'hazard' ? HAZARD_AGE_MS : ORDINARY_AGE_MS) };
       if (it.key && (items.some((q) => q.key === it.key) || now - (said.get(it.key) ?? -Infinity) < it.repeatMs)) return false;

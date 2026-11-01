@@ -426,8 +426,10 @@
   },
   "sys:sample": {
    "file": "sys_sample.m4a",
-   "dur": 2.685,
-   "text": "Left four, tightens. Easy in, late out."
+   "dur": 2.686,
+   "text": "Left four, tightens. Easy in, late out.",
+   "heard": 0.86,
+   "voice": "bm_fable"
   },
   "head:R1++mod:off-camber+caution:1+link:and+hazard:bump+dist:120": {
    "file": "p_f7f4de3c30ef.m4a",
@@ -4648,6 +4650,97 @@
    "file": "line_best.m4a",
    "dur": 0.737,
    "text": "Best.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "sys:end2": {
+   "file": "sys_end2.m4a",
+   "dur": 0.922,
+   "text": "Tape's out.",
+   "heard": 0.4,
+   "voice": "bm_fable"
+  },
+  "sys:end3": {
+   "file": "sys_end3.m4a",
+   "dur": 1.648,
+   "text": "That's the B-side done.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "sys:end4": {
+   "file": "sys_end4.m4a",
+   "dur": 1.926,
+   "text": "Rewind it some other day.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "sys:sample_plain": {
+   "file": "sys_sample_plain.m4a",
+   "dur": 2.768,
+   "text": "Open left, tightens. Easy in, late out.",
+   "heard": 0.86,
+   "voice": "bm_fable"
+  },
+  "aside:hairpin": {
+   "file": "aside_hairpin.m4a",
+   "dur": 2.045,
+   "text": "All the way round. Patience.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "aside:acute": {
+   "file": "aside_acute.m4a",
+   "dur": 2.172,
+   "text": "Proper tight one. Wait for it.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "aside:square": {
+   "file": "aside_square.m4a",
+   "dur": 1.967,
+   "text": "Square one. Tidy does it.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "aside:tightens": {
+   "file": "aside_tightens.m4a",
+   "dur": 1.597,
+   "text": "Easy in, late out.",
+   "heard": 0.75,
+   "voice": "bm_fable"
+  },
+  "aside:off-camber": {
+   "file": "aside_off_camber.m4a",
+   "dur": 2.126,
+   "text": "Leans the wrong way. Smooth.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "aside:over crest": {
+   "file": "aside_over_crest.m4a",
+   "dur": 1.865,
+   "text": "Light hands over the top.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "aside:opens": {
+   "file": "aside_opens.m4a",
+   "dur": 1.751,
+   "text": "Lets you out gently.",
+   "heard": 0.67,
+   "voice": "bm_fable"
+  },
+  "aside:long": {
+   "file": "aside_long.m4a",
+   "dur": 1.769,
+   "text": "Long one. Settle in.",
+   "heard": 1.0,
+   "voice": "bm_fable"
+  },
+  "aside:crest": {
+   "file": "aside_crest.m4a",
+   "dur": 1.81,
+   "text": "Crest. Light hands.",
    "heard": 1.0,
    "voice": "bm_fable"
   }

@@ -38,7 +38,10 @@ final class ApexCar {
     struct Option { let summary: String; let detail: String; let timeS: Double?; let distM: Double? }
     struct Route { let name: String; let coords: [CLLocationCoordinate2D]; let dest: CLLocationCoordinate2D; let options: [Option]; let picked: Int }
     /// The card's maneuver. `distM` is nil only for a free drive's record card (`recording`), which has no maneuver to count down to.
-    struct Guide { let key: String; let instruction: String; let street: String; let type: Int; let distM: Double?; let timeS: Double?; let remainM: Double?; let remainS: Double?; let symbol: UIImage?; var recording = false }
+    /// `short` (U-112): the same instruction in fewer words, longest first, for a glance; `drivenM` (U-120): a record card's
+    /// distance driven, for the trip strip.
+    struct Guide { let key: String; let instruction: String; let street: String; let type: Int; let distM: Double?; let timeS: Double?; let remainM: Double?; let remainS: Double?; let symbol: UIImage?; var recording = false
+                   var short: [String] = []; var drivenM: Double? = nil }
     /// U-59: a free drive's card until the page's first guide message (web/carplay.js recordingMessage) says how far it has gone.
     static let recordingGuide = Guide(key: "rec:", instruction: "Recording · the road ahead", street: "Recording", type: 8, distM: nil, timeS: nil,
                                       remainM: nil, remainS: nil, symbol: nil, recording: true)
@@ -160,7 +163,9 @@ final class ApexCar {
             let symbol = (dict["symbol"] as? String).flatMap { Data(base64Encoded: $0) }.flatMap { UIImage(data: $0, scale: 3) }
             guide = Guide(key: key, instruction: text, street: (dict["street"] as? String) ?? "", type: Int(Self.num(dict["type"]) ?? 0),
                           distM: d.map { max(0, $0) }, timeS: Self.num(dict["timeS"]), remainM: Self.num(dict["remainM"]), remainS: Self.num(dict["remainS"]),
-                          symbol: symbol, recording: recording)
+                          symbol: symbol, recording: recording,
+                          short: ((dict["short"] as? [Any]) ?? []).prefix(3).compactMap { $0 as? String }.map { String($0.prefix(80)) },
+                          drivenM: Self.num(dict["drivenM"]).map { max(0, $0) })
             if !driving { driving = true; eachMap { $0.setMode() }; scene?.driveStarted() }
             scene?.guideChanged()
         case "start":
@@ -515,7 +520,13 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
         let est = g.distM.map { CPTravelEstimates(distanceRemaining: ApexCar.shared.distance($0), timeRemaining: max(0, g.timeS ?? 0)) }
         if g.key != maneuverKey || (g.symbol != nil && !maneuverHasTulip) {
             let m = CPManeuver()
-            m.instructionVariants = [g.instruction, g.street].filter { !$0.isEmpty }
+            // U-112: the short form first, so the card reads at a glance ("Very sharp left, careful", not the whole call on
+            // four lines for half a mile, REVIEW5 guided-drive car/035); the whole call, any shorter form and the street follow
+            var variants: [String] = []
+            for v in Array(g.short.prefix(1)) + [g.instruction] + Array(g.short.dropFirst()) + [g.street] where !v.isEmpty && !variants.contains(v) {
+                variants.append(v)
+            }
+            m.instructionVariants = variants
             if let tulip = g.symbol {
                 m.symbolImage = tulip.withRenderingMode(.alwaysOriginal)    // the road book's tulip, in the card's ink
             } else if g.recording {
@@ -538,10 +549,12 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
             mapTemplate?.updateEstimates(CPTravelEstimates(distanceRemaining: ApexCar.shared.distance(rm), timeRemaining: g.remainS ?? -1), for: t)
         } else if let t = trip, g.recording {
             // U-95: a free drive has no destination, so nothing to arrive at: the trip strip read "7:04 arrival · 0 min · -- mi"
-            // (unset estimates are an arrival of now). Negative time and distance are CarPlay's "--" for unknown, so the strip
-            // says it does not know rather than that the drive is over; the distance driven is in the record card's words.
+            // (unset estimates are an arrival of now, so CarPlay will not leave the strip empty). A negative time is CarPlay's
+            // "--". U-120: three dashes for a whole drive is honest and dead, so once the drive has a distance (the one the
+            // record card's words say) the strip carries it; the time stays "--", never an arrival made up from the time driven.
             let unit: UnitLength = ApexCar.shared.look.metric ? .kilometers : .miles
-            mapTemplate?.updateEstimates(CPTravelEstimates(distanceRemaining: Measurement(value: -1, unit: unit), timeRemaining: -1), for: t)
+            let driven = g.drivenM.map { ApexCar.shared.distance($0) } ?? Measurement(value: -1, unit: unit)
+            mapTemplate?.updateEstimates(CPTravelEstimates(distanceRemaining: driven, timeRemaining: -1), for: t)
         }
     }
 
@@ -817,7 +830,7 @@ final class ApexCarMapViewController: UIViewController, WKNavigationDelegate {
     @MainActor func setMode() {
         let car = ApexCar.shared
         let mode = car.driving ? "guide" : (role == .main && car.route != nil ? "preview" : "idle")
-        let inset = role == .main && (car.driving || car.route != nil) ? Int(view.bounds.width * 0.36) : 0
+        let inset = role == .main && (car.driving || car.route != nil) ? Int(cardWidth().rounded(.up)) : 0
         let code = "car.inset(\(inset)), car.mode('\(mode)')"
         if let native {
             native.setMode(mode, inset: CGFloat(inset))
@@ -826,6 +839,14 @@ final class ApexCarMapViewController: UIViewController, WKNavigationDelegate {
         guard loaded, code != sentMode else { return }
         sentMode = code
         js(code)
+    }
+    /// U-136: how much of the left Apple's guidance (or trip) card covers. The review recording measured it at 300 of the 710
+    /// points of the car's window on the 800 × 480 simulator (42 %); the 36 % it was set to left an R3 plate against the card's
+    /// edge (REVIEW5 guided-drive car/020). CarPlay's own safe area wins when it reports more.
+    static let cardShare: CGFloat = 0.43
+    private func cardWidth() -> CGFloat {
+        let w = view.bounds.width
+        return max(w * Self.cardShare, min(view.safeAreaInsets.left, w * 0.6))
     }
     @MainActor func zoom(_ dir: Int) { if let native { native.zoom(dir) } else { js("car.zoom(\(dir))") } }
     @MainActor func recentre() { if let native { native.recentre() } else { js("car.recentre()") } }

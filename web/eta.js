@@ -1,13 +1,17 @@
 // Live time left and arrival (WORKER_QUEUE eta-1). Pure: the page feeds one update() per GPS fix on the route.
 // - The router's own time for the part ahead (`routerLeft`): from its maneuver times placed along the track when the
 //   router gave them (`marks`, cumulative seconds at track metres), else its total time spread evenly over the distance.
-// - Scaled by your pace so far on this route: real seconds over router seconds for the part already driven, only once
-//   there is enough of it (2 min and 1 router-minute), bounded to 0.6–1.8 and smoothed, so a red light or one fast
-//   straight doesn't swing it. A new route (reroute) starts the pace over.
+// - Scaled by your pace so far on this route, learned per section class (U-108): "corner" sections (runs of called
+//   corners, `cornerSections`) and the open road between them, so a fast interstate join does not reprice the twisties.
+//   A class's pace counts only once there is enough of it (2 min and 1 router-minute), is bounded to 0.85-1.25 and
+//   follows its evidence slowly (TAU_S). A new route (reroute) starts the pace over.
+// - The arrival moves at most one minute per minute driven (RATE), so it never walks back eight minutes in three miles;
+//   and while under five miles of evidence the time left is said roughly ("about 30 min left", `leftText`).
 // No traffic data goes into this: never call it "with traffic". Unknown stays unknown (null).
 (function (root) {
   'use strict';
-  const MIN_ELAPSED_MS = 120000, MIN_ROUTER_S = 60, PACE_MIN = 0.6, PACE_MAX = 1.8, SMOOTH = 0.1;
+  const MIN_ELAPSED_MS = 120000, MIN_ROUTER_S = 60, PACE_MIN = 0.85, PACE_MAX = 1.25, TAU_S = 180, RATE = 1,
+    ROUGH_EVIDENCE_M = 8046.72, ROUGH_MIN_LEFT_S = 600, ROUND_S = 300, SECTION_GAP_M = 500, SECTION_PAD_M = 100;
   const finite = (v) => typeof v === 'number' && Number.isFinite(v);
 
   /** Router seconds left from `m` metres along a route of `totalM` that the router timed at `timeS`; null when unknown. */
@@ -28,31 +32,80 @@
     return 0;
   }
 
-  /** Pace on the current route: real time over router time since the first fix on it. */
-  function createPace() {
-    let start = null, factor = 1;
+  /**
+   * Corner sections of a route, [[startM, endM], ...] in order: runs of two or more called corners (events with
+   * type 'corner' and start_m/end_m) no more than SECTION_GAP_M apart, padded by SECTION_PAD_M. A lone corner on an open
+   * road (a ramp) stays open road.
+   */
+  function cornerSections(events) {
+    const cs = (Array.isArray(events) ? events : []).filter(e => e && e.type === 'corner' && finite(e.start_m) && finite(e.end_m))
+      .map(e => [Math.min(e.start_m, e.end_m), Math.max(e.start_m, e.end_m)]).sort((x, y) => x[0] - y[0]);
+    const out = [];
+    let run = null;
+    for (const [a, b] of cs) {
+      if (run && a - run.b <= SECTION_GAP_M) { run.b = Math.max(run.b, b); run.n++; continue; }
+      if (run && run.n >= 2) out.push([run.a - SECTION_PAD_M, run.b + SECTION_PAD_M]);
+      run = { a, b, n: 1 };
+    }
+    if (run && run.n >= 2) out.push([run.a - SECTION_PAD_M, run.b + SECTION_PAD_M]);
+    return out;
+  }
+  const inSection = (m, sections) => (sections || []).some(([a, b]) => m >= a && m <= b);
+
+  /**
+   * The live forecast on the current route (U-108). update({ t, atM, totalM, timeS, marks, sections }) once per fix on
+   * the route: t in ms, atM metres along it. Returns { leftS, arriveAt, rough } or null when the router's time is unknown.
+   */
+  function createEta() {
+    let last = null, startM = null, shown = null;
+    const cls = () => ({ realS: 0, routerS: 0, factor: 1 });
+    let pace = { open: cls(), corner: cls() };
     return {
-      reset() { start = null; factor = 1; },
-      /** One fix on the route: t in ms, leftS = router seconds left from here. Returns the pace factor (1 until known). */
-      update(t, leftS) {
-        if (!finite(t) || !finite(leftS)) return factor;
-        if (!start) { start = { t, leftS }; return factor; }
-        const elapsedMs = t - start.t, routerS = start.leftS - leftS;
-        if (elapsedMs >= MIN_ELAPSED_MS && routerS >= MIN_ROUTER_S) {
-          const raw = Math.max(PACE_MIN, Math.min(PACE_MAX, elapsedMs / 1000 / routerS));
-          factor += (raw - factor) * SMOOTH;
+      reset() { last = null; startM = null; shown = null; pace = { open: cls(), corner: cls() }; },
+      update(o) {
+        const { t, atM, totalM, timeS, marks } = o || {}, sections = (o && o.sections) || [];
+        const left = routerLeft(atM, totalM, timeS, marks);
+        if (left == null || !finite(t)) return null;
+        const at = Math.max(0, Math.min(totalM, atM)), secAt = (m) => timeS - routerLeft(m, totalM, timeS, marks);
+        if (startM == null) startM = at;
+        // learn: the real and router seconds since the last fix go to the class of the road the car was on
+        if (last && t > last.t && at >= last.at) {
+          const realS = (t - last.t) / 1000, routerS = secAt(at) - secAt(last.at);
+          const c = pace[inSection((at + last.at) / 2, sections) ? 'corner' : 'open'];
+          c.realS += realS; c.routerS += routerS;
+          if (c.realS * 1000 >= MIN_ELAPSED_MS && c.routerS >= MIN_ROUTER_S) {
+            const raw = Math.max(PACE_MIN, Math.min(PACE_MAX, c.realS / c.routerS));
+            c.factor += (raw - c.factor) * Math.min(1, realS / TAU_S);
+          }
         }
-        return factor;
+        if (!last || t > last.t) last = { t, at };
+        // the router's time ahead, split by class, each at its own pace
+        let cornerLeft = 0;
+        for (const [a, b] of sections) {
+          const lo = Math.max(a, at), hi = Math.min(b, totalM);
+          if (hi > lo) cornerLeft += secAt(hi) - secAt(lo);
+        }
+        cornerLeft = Math.max(0, Math.min(left, cornerLeft));
+        const raw = t + ((left - cornerLeft) * pace.open.factor + cornerLeft * pace.corner.factor) * 1000;
+        if (shown == null || left <= 0) shown = { arriveAt: raw, t };
+        else if (t > shown.t) {
+          const step = (t - shown.t) * RATE;   // at most a minute per minute driven, either way
+          shown = { arriveAt: shown.arriveAt + Math.max(-step, Math.min(step, raw - shown.arriveAt)), t };
+        }
+        if (shown.arriveAt < t) shown.arriveAt = t;
+        const leftS = (shown.arriveAt - t) / 1000;
+        return { leftS, arriveAt: shown.arriveAt, rough: at - startM < ROUGH_EVIDENCE_M && leftS > ROUGH_MIN_LEFT_S };
       },
-      get factor() { return factor; },
+      get factors() { return { open: pace.open.factor, corner: pace.corner.factor }; },
     };
   }
 
-  /** Seconds left at this pace, and the arrival time (ms) from `now`; null when the router's time is unknown. */
-  function estimate(leftS, pace, now) {
-    if (!finite(leftS) || !finite(pace) || !finite(now)) return null;
-    const s = Math.max(0, leftS * pace);
-    return { leftS: s, arriveAt: now + s * 1000 };
+  /** The status line's time left: "12 min left", "<1 min left", or to 5 min while rough ("about 30 min left"). */
+  function leftText(leftS, rough) {
+    if (!finite(leftS)) return '';
+    if (leftS < 60) return '<1 min left';
+    if (rough && leftS > ROUGH_MIN_LEFT_S) return `about ${Math.max(1, Math.round(leftS / ROUND_S)) * ROUND_S / 60} min left`;
+    return `${Math.round(leftS / 60)} min left`;
   }
 
   // "Home by" on a loop (IDEAS R-37): offer the way home when the live arrival is more than LATE_GRACE_MS past the time the
@@ -115,7 +168,7 @@
     return { timeS: s, marks };
   }
 
-  const api = { routerLeft, createPace, estimate, homeByOffer, homeByAt, envelopeTime, PACE_MIN, PACE_MAX, LATE_GRACE_MS };
+  const api = { routerLeft, cornerSections, createEta, leftText, homeByOffer, homeByAt, envelopeTime, PACE_MIN, PACE_MAX, LATE_GRACE_MS };
   api.ENVELOPE = { ENVELOPE_SHARE, OPEN_LIMIT_MPS, TOWN_SHARE, UNPOSTED_MPS, UNKNOWN_MPS, FLOOR_MPS };   // U-97 (tests)
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexEta = api;
 })(typeof window !== 'undefined' ? window : globalThis);

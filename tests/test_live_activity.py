@@ -52,7 +52,7 @@ def test_short_true_words_never_a_cut_one():
     assert "'QUIET'" in push and "'REC'" in push and "'No notes ahead'" not in push
     assert "next corner" in push and "driven" in push
     attrs = read("LiveActivity", "ApexDriveAttributes.swift")
-    for f in ("var note: String", "var distance: String", "var eta: String", "var short: String?", "var hazard: Bool?", "var etaShort: String?"):
+    for f in ("var note: String", "var distance: String", "var eta: String", "var short: String?", "var hazard: Bool?", "var etaShort: String?", "var trail: String?"):
         assert f in attrs                                                      # the fields the shell fills (ApexNavApp.swift handleActivity)
-    for k in ('dict["note"]', 'dict["distance"]', 'dict["eta"]', 'dict["short"]', 'dict["hazard"]', 'dict["etaShort"]'):
+    for k in ('dict["note"]', 'dict["distance"]', 'dict["eta"]', 'dict["short"]', 'dict["hazard"]', 'dict["etaShort"]', 'dict["trail"]'):
         assert k in read("ApexNavApp.swift")

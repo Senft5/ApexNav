@@ -35,17 +35,40 @@
     return said ? `then ${said}` : '';
   }
 
-  /** A chain as the page reads it: each note in plain words, joined by plain links (in `units`, see plainLink). */
-  function plainChain(chain, units) {
-    let text = '';
+  /** The corner's name alone ("Easy right", "Hairpin left"), for the call that names the one after it (U-109). */
+  function plainHead(e) {
+    if (!e) return '';
+    if (e.type !== 'corner') return e.call ? String(e.call) : '';
+    return plainCall({ ...e, mods: [], caution: 0 });
+  }
+  const lower = (s) => (s ? s.charAt(0).toLowerCase() + s.slice(1) : s);
+  const upper = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
+
+  /**
+   * A chain as the page reads it: each note in plain words, joined by "then". REVIEW5 U-109: a chain whose last note links
+   * to the next by a distance names that next note, in `units` (ApexUnits.spokenShort; metres without): "Easy left, then
+   * easy right in 400 feet". With no next note given the link is dropped ("Easy left"), never "then 400 feet" with nothing
+   * after it. opts.next: the note after the chain. opts.card: Hale's delivery (REVIEW.md 4.4, "Left four. Tightens.
+   * Long."), every part its own sentence; the words are the same in every pack.
+   */
+  function plainChain(chain, units, opts = {}) {
+    const parts = [];
     chain.forEach((n, i) => {
-      text += (i ? ` ${plainLink(chain[i - 1].link, units)} ` : '') + plainCall(n);
+      const call = plainCall(n).split(', ');
+      if (i) call[0] = `then ${lower(call[0])}`;
+      parts.push(...call);
     });
-    const last = chain[chain.length - 1];
-    if (last && last.link && last.link !== 'into' && last.link !== 'and') text += `, ${plainLink(last.link, units)}`;
+    const last = chain[chain.length - 1], next = opts.next;
+    if (last && last.link && last.link !== 'into' && last.link !== 'and' && next) {
+      const m = Number(last.link);
+      const said = !Number.isFinite(m) ? '' : units && typeof units.spokenShort === 'function' ? units.spokenShort(m) : `${m} metres`;
+      const head = lower(plainHead(next));
+      if (said && head) parts.push(`then ${head} in ${said}`);
+    }
+    const text = opts.card ? parts.map(upper).join('. ') : parts.join(', ');
     return text.replace(/\s+/g, ' ').trim();
   }
 
-  const api = { plainCall, plainLink, plainChain, SEVERITY };
+  const api = { plainCall, plainHead, plainLink, plainChain, SEVERITY };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexPlainNotes = api;
 })(typeof window !== 'undefined' ? window : globalThis);

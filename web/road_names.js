@@ -66,6 +66,17 @@
     return w.join(' ');
   }
 
-  const api = { nearestRoadName, mainRoad, shortRoadName };
+  // U-137: the binnacle's road name through a junction. The tiles' nearest name drops out for a beat where roads meet ("Road:
+  // --" in a junction the strip was calling), so the last name is held for HOLD_MS after the matcher has none, and for as
+  // long as the car is inside a junction the app knows about (`inJunction`). A new name always wins at once.
+  // hold: { name, at } (the last name seen and when), or null; returns the name to show and the hold to keep.
+  const HOLD_MS = 5000;
+  function holdRoadName(hold, name, now, inJunction = false) {
+    if (typeof name === 'string' && name.trim()) return { name, hold: { name, at: now } };
+    if (hold && hold.name && (inJunction || now - hold.at <= HOLD_MS)) return { name: hold.name, hold: inJunction ? { name: hold.name, at: now } : hold };
+    return { name: null, hold: null };
+  }
+
+  const api = { nearestRoadName, mainRoad, shortRoadName, holdRoadName, HOLD_MS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexRoadNames = api;
 })(typeof window !== 'undefined' ? window : globalThis);

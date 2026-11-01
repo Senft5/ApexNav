@@ -80,10 +80,11 @@ def test_the_page_wakes_on_the_road_and_speaks_the_pack_lines():
     html = cockpit_source()
     notes = html[html.index("function updateNotes("):html.index("// 7. RENDER LOOP")]
     assert "ApexNoteTiming.wakeCorner(corners" in notes and "state.spiritedAt = now" in notes
-    # the lines the voice packs hold (tools/voicebank.py PACK_LINES sys:stage / sys:cruise), said by their tokens
+    # the lines the voice packs hold (web/voice_lines.js PACKS, which tools/voicebank.py renders: sys:stage / sys:cruise),
+    # said by their tokens and in the pack's own words (U-113), Marguerite's as the phone's fallback
     assert "'sys:stage'" in notes and "'sys:cruise'" in notes
-    bank = open(os.path.join(ROOT, "tools", "voicebank.py"), encoding="utf-8").read()
+    bank = open(os.path.join(ROOT, "web", "voice_lines.js"), encoding="utf-8").read()
     assert '"sys:cruise": "Quiet from here. Bumps and cameras only."' in bank and '"sys:stage": "Full notes."' in bank
-    assert "'Quiet from here. Bumps and cameras only.'" in notes and "'Full notes.'" in notes
+    assert "packSays('sys:cruise', 'Quiet from here. Bumps and cameras only.')" in notes and "packSays('sys:stage', 'Full notes.')" in notes
     # the rerouter's words only on a planned route (U-72)
     assert re.search(r"if \(offRoute && track && track\.kind === 'route'\) return \[?offRouteText\(\)", html)

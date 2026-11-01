@@ -7,6 +7,7 @@
 //                                                          dir, severity, turnRad, mods }]
 //   tulipSVG(note, ink, accent)                 roadbook tulip diagram (string)
 //   lockup(call, mods)                          the call split for the strip: { head, tail: [{ text, warn }] } (pure)
+//   stripCode(note)                             the short code the strip's next cells print ("R3", "KEEP L") (pure)
 (function (root) {
   'use strict';
   const NS = 'http://www.w3.org/2000/svg';
@@ -66,6 +67,24 @@
     if (rest) tail.push({ text: rest, warn: false });                      // anything the list didn't name, kept as said
     for (const c of caution) if (c.trim()) tail.push({ text: c.trim().toLowerCase(), warn: true });
     return { head: text.slice(0, cut).trim(), tail };
+  }
+  // REVIEW5 U-107: the strip's grammar. Words belong to the head; every other cell prints the note's code under its
+  // distance ("R3", "LHP", "CREST", "KEEP L"), short enough that it is never a cut word ("EASY …", "MEDIU…", "CR…").
+  const TURN_CODES = [
+    [/^roundabout · exit (\S+)/i, (m) => `RBT ${m[1]}`], [/^roundabout/i, () => 'RBT'],
+    [/^(exit|ramp|keep|bear|merge|sharp) (left|right)$/i, (m) => `${m[1]} ${m[2][0]}`], [/^exit (\S{1,4})$/i, (m) => `EXIT ${m[1]}`],
+    [/^(left|right)$/i, (m) => `TURN ${m[1][0]}`], [/^u-turn/i, () => 'U-TURN'], [/^(ramp|merge|exit)/i, (m) => m[1]],
+  ];
+  function stripCode(n) {
+    const code = String((n && n.code) || '').trim();
+    if (n && n.type === 'turn') {
+      if (n.dir === 'A') return 'ARRIVE';
+      for (const [re, f] of TURN_CODES) { const m = code.match(re); if (m) return f(m).toUpperCase(); }
+      return n.dir === 'L' || n.dir === 'R' ? `TURN ${n.dir}` : 'TURN';
+    }
+    if (code && code.length <= 6 && !/\s/.test(code)) return code.toUpperCase();
+    // a long code or none: its first word, whole (a hazard without a code by its kind: "BUMP")
+    return (code || (n && n.type && n.type !== 'corner' ? n.type : String((n && n.call) || ''))).split(/[\s,·]+/)[0].toUpperCase().slice(0, 7) || '--';
   }
   const HAZARD_TYPES = new Set(['bump', 'crest', 'dip']);   // measured hazards: the hazard plate's colours when they are the call
   const TULIP_R = { HP: 8, 1: 10, 2: 14, 3: 19, 4: 25, 5: 32, 6: 40 };
@@ -185,6 +204,10 @@
       html('small', '', d, n.unit);
       const t = html('div', 'rb-tulip', box);
       t.innerHTML = hz && i === 0 ? tulipSVG(n, themeVar('--hz-ink') || '#fff', themeVar('--hz-edge') || '#FF7A1A') : tulipSVG(n, ink, n.type === 'corner' ? accent : hz ? (themeVar('--hz-edge') || signal) : signal);
+      if (i > 0) {                                                          // U-107: the next cells say the code, never words
+        html('b', 'rb-code', box, stripCode(n));
+        return;
+      }
       const c = html('div', 'rb-call', box);
       if (n.type !== 'corner' && n.code.toLowerCase() !== n.call.toLowerCase()) html('b', '', c, n.code);
       // a long call ("Square left off-camber") steps down a size so it reads whole instead of ending in "..."
@@ -195,7 +218,7 @@
       const tall = lk.head.trim().split(/\s+/).length >= 3;
       html('span', (len > 18 ? 'xlong' : len > 11 ? 'long' : '') + (tall ? ' tall' : ''), c, lk.head);
       if (lk.tail.length) {
-        const m = html('span', 'rb-mods', c);
+        const m = html('span', 'rb-mods', box);                           // U-133: its own row, the box's full width
         m.append(' ');                                                     // read as one call, not "plustightens"
         lk.tail.forEach((t, k) => { if (k) m.append(' · '); html('i', t.warn ? 'warn' : '', m, t.text); });
       }
@@ -321,7 +344,8 @@
     return (d) => {
       setT(limit.v, fmt(d.limitMph));
       limit.c.classList.toggle('unknown', !Number.isFinite(d.limitMph));   // a sign only when there is a limit to show
-      const both = [d.paceMph, d.sightMph].filter(v => Number.isFinite(v));
+      // U-130: under 5 mph the sight plate hides (sightQuiet) and so does the value here: --, never a number at a standstill
+      const both = d.sightQuiet ? [] : [d.paceMph, d.sightMph].filter(v => Number.isFinite(v));
       const v = both.length ? Math.min(...both) : null;
       // "Open" when nothing limits you (the sight line at its cap, no corner asking for less): the number there would only
       // be the cap's own speed (125 mph), not something the road says
@@ -385,7 +409,7 @@
       return segs;
     });
     svg('text', { x: 18, y: 160, class: 'dial-label vfd-label' }, s).textContent = U() ? U().speedU().toUpperCase() : 'MPH';
-    const sub = svg('text', { x: 186, y: 160, 'text-anchor': 'end', class: 'dial-label vfd-label' }, s);
+    // REVIEW5 U-129: no "LIMIT 70" caption here; the Limit sign beside the speed is the limit, printed once
     const digital = svg('text', { x: 100, y: 150, 'text-anchor': 'middle', class: 'dial-digital vfd-shadow' }, s);   // read by the contract and screen readers
     s.setAttribute('role', 'img');
     return (d) => {
@@ -397,7 +421,6 @@
         for (const [n, p] of Object.entries(segs)) p.classList.toggle('lit', on.includes(n));
       });
       setT(digital, v); setA(s, 'aria-label', `${v} ${U() ? U().speedU() : 'mph'}`);
-      setT(sub, d.limitMph != null ? `LIMIT ${Math.round(d.limitMph)}` : '');
     };
   }
   // Bar meters that are instruments, not decoration: SURFACE (roughness, the last 10 readings) and BRAKE / TURN (how hard
@@ -467,7 +490,7 @@
     const s = svg('svg', { viewBox: `0 0 ${KIT_W * 10} ${KIT_H * 10}`, class: 'kit', 'aria-hidden': 'true' }, row);
     const dots = [];
     for (let y = 0; y < KIT_H; y++) for (let x = 0; x < KIT_W; x++) dots.push(svg('circle', { cx: 5 + x * 10, cy: 5 + y * 10, r: 3.8 }, s));
-    const says = html('div', 'kit-says', row); html('span', 'vfd-cap', says, 'KIT SAYS'); const line = html('b', '', says, '--');
+    const says = html('div', 'kit-says', row); html('span', 'vfd-cap', says, 'KIT SAYS'); const line = html('b', '', says, ''); says.classList.add('quiet');
     const still = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
     let pose = null;
     return (d) => {
@@ -477,7 +500,8 @@
         const rows = KIT[p];
         dots.forEach((c, i) => { c.setAttribute('class', KIT_CLASS[rows[Math.floor(i / KIT_W)][i % KIT_W]] || ''); });
       }
-      if (d.kitLine !== undefined && line.textContent !== (d.kitLine || '--')) line.textContent = d.kitLine || '--';
+      // U-113: Kit's aside, from the pre-call until the strip moves on; with none the box is empty, label and all (never "--")
+      if (d.kitLine !== undefined && line.textContent !== (d.kitLine || '')) { line.textContent = d.kitLine || ''; says.classList.toggle('quiet', !d.kitLine); }
     };
   }
 
@@ -549,6 +573,6 @@
     return mountDials(el, theme);
   }
 
-  const api = { mountCluster, renderNotes, tulipSVG, lockup, register, kitPose, KIT, springNeedle, SPEED_MAX };
+  const api = { mountCluster, renderNotes, tulipSVG, lockup, stripCode, register, kitPose, KIT, springNeedle, SPEED_MAX };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexInstruments = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -562,8 +562,8 @@
   },
   "sys:sample": {
    "file": "sys_sample.m4a",
-   "dur": 2.094,
-   "text": "Left four, tightens. Long. Care.",
+   "dur": 2.698,
+   "text": "Left four, tightens. Watch the exit, it closes.",
    "heard": 1.0,
    "voice": "af_bella"
   },
@@ -5891,6 +5891,97 @@
    "file": "line_best.m4a",
    "dur": 0.419,
    "text": "Best.",
+   "heard": 1.0,
+   "voice": "af_bella"
+  },
+  "sys:end2": {
+   "file": "sys_end2.m4a",
+   "dur": 0.996,
+   "text": "And that's the stage.",
+   "heard": 1.0,
+   "voice": "af_bella"
+  },
+  "sys:end3": {
+   "file": "sys_end3.m4a",
+   "dur": 1.636,
+   "text": "Notes closed. Have a good one.",
+   "heard": 1.0,
+   "voice": "af_bella"
+  },
+  "sys:end4": {
+   "file": "sys_end4.m4a",
+   "dur": 2.033,
+   "text": "That's the last corner. Lovely road.",
+   "heard": 1.0,
+   "voice": "af_bella"
+  },
+  "sys:sample_plain": {
+   "file": "sys_sample_plain.m4a",
+   "dur": 2.779,
+   "text": "Open left, tightens. Watch the exit, it closes.",
+   "heard": 1.0,
+   "voice": "af_bella"
+  },
+  "aside:hairpin": {
+   "file": "aside_hairpin.m4a",
+   "dur": 1.275,
+   "text": "Brake before it, not in it.",
+   "heard": 0.83,
+   "voice": "af_bella"
+  },
+  "aside:acute": {
+   "file": "aside_acute.m4a",
+   "dur": 1.216,
+   "text": "Brake well before this one.",
+   "heard": 0.8,
+   "voice": "af_bella"
+  },
+  "aside:square": {
+   "file": "aside_square.m4a",
+   "dur": 1.047,
+   "text": "Brake in a straight line.",
+   "heard": 0.8,
+   "voice": "af_bella"
+  },
+  "aside:tightens": {
+   "file": "aside_tightens.m4a",
+   "dur": 1.293,
+   "text": "Watch the exit, it closes.",
+   "heard": 1.0,
+   "voice": "af_bella"
+  },
+  "aside:off-camber": {
+   "file": "aside_off_camber.m4a",
+   "dur": 1.676,
+   "text": "The road falls away. Gently.",
+   "heard": 1.0,
+   "voice": "af_bella"
+  },
+  "aside:over crest": {
+   "file": "aside_over_crest.m4a",
+   "dur": 1.359,
+   "text": "Over the top, keep it straight.",
+   "heard": 1.0,
+   "voice": "af_bella"
+  },
+  "aside:opens": {
+   "file": "aside_opens.m4a",
+   "dur": 1.118,
+   "text": "It opens on the exit.",
+   "heard": 1.0,
+   "voice": "af_bella"
+  },
+  "aside:long": {
+   "file": "aside_long.m4a",
+   "dur": 0.907,
+   "text": "It goes on a while.",
+   "heard": 1.0,
+   "voice": "af_bella"
+  },
+  "aside:crest": {
+   "file": "aside_crest.m4a",
+   "dur": 1.159,
+   "text": "Keep it straight over the top.",
    "heard": 1.0,
    "voice": "af_bella"
   }

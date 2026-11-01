@@ -127,3 +127,33 @@ def test_hillshade_colours_are_arrays_as_maplibre_native_6_wants():
     assert "hillshadeShadowColor = NSExpression(forConstantValue: [P.shadow])" in swift
     assert "hillshadeHighlightColor = NSExpression(forConstantValue: [P.highlight])" in swift
     assert "hillshadeShadowColor = k(" not in swift and "hillshadeHighlightColor = k(" not in swift
+
+
+def test_the_open_sight_plate_is_quiet():
+    """U-119 (REVIEW5 free-drive car/007): the OPEN plate at road-sign size was the loudest thing on the car's screen, saying
+    nothing restricts the view. Both car maps draw OPEN as the eye alone, small and dimmed; a number keeps the full plate,
+    and red (faster than you can see) is never quieted."""
+    js, html, swift = read("web", "carmap.js"), read("web", "carmap.html"), read("CarPlay", "ApexCarMap.swift")
+    draw = js[js.index("function drawSight()"):js.index("function addLayers()")]
+    assert "const open = s.text === 'OPEN' && !s.short;" in draw and "if (open) { el.innerHTML = EYE; return; }" in draw
+    assert draw.index("if (open)") < draw.index("b.textContent = s.text"), "no word on the open plate"
+    assert ".car-sight.open { padding: 2px 4px; border-width: 1.5px; opacity: 0.8; }" in html
+    assert ".car-sight.open svg { width: 12px; height: 12px; }" in html, "half the plate's height"
+    view = swift[swift.index("final class ApexCarSightView"):]
+    assert 'let open = s.text == "OPEN" && !s.short' in view and "alpha = open ? 0.8 : 1" in view
+    assert "pointSize: open ? 9 : 13" in view and "if !open {" in view
+
+
+def test_plates_stay_clear_of_the_card():
+    """U-136 (REVIEW5 guided-drive car/020): an R3 plate against the guidance card's edge. The card covers 300 of the window's
+    710 points on the review simulator; the reserved column was 36 % (256). Both maps keep plates CARD_GAP (>= 12) past it."""
+    shell = read("CarPlay", "ApexCarPlay.swift")
+    assert "static let cardShare: CGFloat = 0.43" in shell and "view.bounds.width * 0.36" not in shell
+    assert "return max(w * Self.cardShare, min(view.safeAreaInsets.left, w * 0.6))" in shell
+    assert "Int(cardWidth().rounded(.up))" in shell
+    assert 0.43 * 710 >= 300, "the measured card fits inside the share"
+    native, js = read("CarPlay", "ApexCarMap.swift"), read("web", "carmap.js")
+    gap_s = float(re.search(r"cardGap: CGFloat = (\d+)", native).group(1))
+    gap_j = float(re.search(r"const CARD_GAP = (\d+)", js).group(1))
+    assert gap_s >= 12 and gap_j >= 12
+    assert "width: 1e4 + inset + Self.cardGap" in native and "state.inset + CARD_GAP" in js

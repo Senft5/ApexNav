@@ -228,7 +228,8 @@
    */
   const cornersOf = (d) => {
     const list = d.events.filter((e) => e.type === 'corner').map((e) => ({ start: Math.round(e.start_m / 5), end: Math.round(e.end_m / 5), apex: e.index,
-      apex_mps: e.apex_mph / MPH, code: e.code, call: e.call, dir: e.dir, severity: e.severity, turn_rad: e.turn_rad, mods: e.mods || [] }));
+      apex_mps: e.apex_mph / MPH, code: e.code, call: e.call, dir: e.dir, severity: e.severity, turn_rad: e.turn_rad, mods: e.mods || [],
+      shape: e.shape, caution: e.caution }));   // shape and caution: the plain words for it (U-123, plain_notes.js)
     const Core = root.ApexCore;
     return d.car && Number.isFinite(d.car.mu) && Core && Core.cornersForCar ? Core.cornersForCar(list, d.car.mu) : list;
   };

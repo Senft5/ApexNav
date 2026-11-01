@@ -73,6 +73,7 @@
   <script src="saved_routes.js" defer></script>
   <script src="row_select.js" defer></script>
   <script src="confirm.js" defer></script>
+  <script src="garage_settings.js" defer></script>
   <script src="health.js" defer></script>
   <script src="scenic.js" defer></script>
   <script src="eta_share.js" defer></script>
@@ -137,15 +138,21 @@
     .note-quiet span { font-size: 15px; color: var(--panel-dim); min-width: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }   /* U-100: two rows at most (the compact line first) */
     .tulip { width: 100%; height: 100%; display: block; }
     .rb-dist small { font-size: 11px; color: var(--panel-dim); }
-    .notes-roadbook { display: grid; grid-template-columns: 1.25fr 1fr 1fr; gap: 0; padding-left: 8px; padding-right: 8px; }
-    .notes-roadbook > .note-quiet { padding-left: 8px; }   /* 16 pt from the edge like the deck (docs/design/REVIEW2.md 1.17) */
+    /* REVIEW5 U-107: the strip's grammar. The head says the call in words and takes the room; the next cells say only the
+       note's code under its distance, so they are as wide as they need and never end in "…" */
+    .notes-roadbook { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 0; padding-left: 8px; padding-right: 8px; }
+    .notes-roadbook > .note-quiet { padding-left: 8px; grid-column: 1 / -1; }   /* 16 pt from the edge like the deck (docs/design/REVIEW2.md 1.17) */
     .rb-box { display: grid; grid-template-columns: auto 46px minmax(0, 1fr); gap: 6px; align-items: center; padding: 2px 8px; border-left: 1.5px solid var(--rule); min-width: 0; }
     .rb-box:first-child { border-left: none; }
     .rb-box.advance { animation: rb-advance 160ms ease-out both; }
     @keyframes rb-advance { from { transform: translateX(14%); opacity: 0.35; } to { transform: none; opacity: 1; } }
     /* The next note steps back in colour, not opacity, so its small text keeps 4.5:1 contrast (only the tulip fades) */
-    .rb-box:not(.now) { color: var(--panel-dim); } .rb-box:not(.now) .rb-tulip { opacity: 0.62; } .rb-box:not(.now) .rb-call b { color: var(--panel-dim); }
-    @media (max-width: 520px) { .notes-roadbook { grid-template-columns: 2fr 1fr; } .rb-box:nth-child(3) { display: none; } }   /* the lead call keeps "OVER CREST" whole; the next note is the one that shortens */
+    .rb-box:not(.now) { color: var(--panel-dim); } .rb-box:not(.now) .rb-tulip { opacity: 0.62; }
+    @media (max-width: 520px) { .notes-roadbook { grid-template-columns: minmax(0, 1fr) auto; } .rb-box:nth-child(3) { display: none; } }   /* one next cell on a phone upright */
+    .rb-box:not(.now) { grid-template-columns: auto 46px; grid-template-rows: auto auto; column-gap: 8px; row-gap: 3px; align-content: center; }
+    .rb-box:not(.now) > .rb-tulip { grid-column: 2; grid-row: 1 / span 2; align-self: center; }
+    .rb-box:not(.now) > .rb-dist, .rb-box:not(.now) > .rb-code { grid-column: 1; }
+    .rb-code { display: block; font-family: var(--font-num); font-size: 16px; font-weight: 800; line-height: 1; letter-spacing: 0.02em; white-space: nowrap; text-align: right; color: var(--panel-dim); }
     /* The lead note reads at arm's length (U-07): bigger distance, tulip and call than the note after it. The call may take
        two lines rather than lose its end to an ellipsis. */
     .rb-box.now { grid-template-columns: auto 56px minmax(0, 1fr); }
@@ -155,10 +162,10 @@
     .rb-box.now.hz, .rb-box.now.hz .rb-call { min-width: min-content; }
     .rb-box.now.hz .rb-call span:first-child { overflow-wrap: normal; }
     @media (max-width: 520px) {
-      .rb-box:not(.now) { grid-template-columns: auto 30px minmax(0, 1fr); gap: 4px; padding: 2px 6px; }
+      .rb-box:not(.now) { grid-template-columns: auto 30px; column-gap: 6px; padding: 2px 6px; }
       .rb-box:not(.now) .rb-tulip { width: 30px; height: 30px; }
       .rb-box:not(.now) .rb-dist b { font-size: 18px; }
-      .rb-box:not(.now) .rb-call span:first-child { font-size: 14px; }
+      .rb-code { font-size: 15px; }
     }
     .rb-box.now .rb-dist b { font-size: 32px; }
     .rb-box.now .rb-tulip { width: 56px; height: 56px; }
@@ -173,16 +180,21 @@
     .rb-call b { display: block; font-size: 20px; font-weight: 800; color: var(--accent); line-height: 1; }
     .rb-call span { display: block; font-size: 11px; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: 0.04em; }
     .rb-call span:first-child { font-size: 16px; font-weight: 800; line-height: 1.1; }
+    .rb-box.now .rb-call b + span { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.15; }   /* a junction's road: two lines, not "EXPRESSWAY…" */
     /* never under the contract's 21 px (theme_contract.js): a long call takes another line instead of a smaller size */
     .rb-box.now .rb-call span.xlong:first-child, .rb-box.now .rb-call span.tall:first-child { -webkit-line-clamp: 3; }   /* U-92: three words, three lines, never "VERY SHARP…" */
-    .rb-box:not(.now) .rb-call span.long:first-child, .rb-box:not(.now) .rb-call span.xlong:first-child { font-size: 13px; line-height: 1.1; }
     /* the call lockup (REVIEW.md roadmap 3): modifiers one size down in pencil, the ones that change what you do in the accent */
-    .rb-call span.rb-mods { font-size: 12px; font-weight: 700; color: var(--panel-dim); margin-top: 2px; }
-    .rb-call span.rb-mods i { font-style: normal; }
-    .rb-call span.rb-mods i.warn { color: var(--accent); }
-    .rb-box.now .rb-call span.rb-mods { font-size: 14px; line-height: 1.15; white-space: normal; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }   /* U-92: "almost back on itself · long" whole under the call */
-    .rb-box.now.hz .rb-call span.rb-mods, .rb-box.now.hz .rb-call span.rb-mods i.warn { color: var(--hz-edge); }
-    html[data-theme="tapedeck"] .rb-box.now .rb-call span.rb-mods { -webkit-line-clamp: 3; }   /* the dot font is wide: "OVER CREST · CARE" takes a third line on an SE rather than an ellipsis */
+    /* U-133: the modifiers are a row of their own across the whole lead box (under the distance, the tulip and the call),
+       so "almost back on itself · long · careful" takes two lines at most and the strip can keep one height */
+    .rb-mods { grid-column: 1 / -1; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: normal;
+      font-size: 14px; font-weight: 700; line-height: 1.15; text-transform: uppercase; letter-spacing: 0.04em; color: var(--panel-dim); margin-top: -2px; }
+    .rb-mods i { font-style: normal; }
+    .rb-mods i.warn { color: var(--accent); }
+    .rb-box.now.hz .rb-mods, .rb-box.now.hz .rb-mods i.warn { color: var(--hz-edge); }
+    /* U-133: one strip height whatever the call (the tallest case: a three-line head over two lines of modifiers), so the
+       map's top edge, the arrow and the sight plate never step between calls; the quiet line sits in the same band */
+    .notes.notes-roadbook { height: calc(var(--safe-top) + 12px + var(--strip-body, 104px)); align-content: center; overflow: hidden; }
+    html[data-theme="tapedeck"] { --strip-body: 112px; }   /* the dot font's three lines are taller */
     /* U-99: a part moves to the next line whole; only a part wider than the line on its own breaks inside */
     .ds-main > span { display: inline-block; max-width: 100%; white-space: normal; }
 
@@ -361,6 +373,8 @@
     .transport > .scrubber { grid-area: scrub; } .transport > #playBtn { grid-area: play; } .transport > .tp-rate { grid-area: rate; } .transport > #videoBtn { grid-area: video; }
     .transport .sw.tp-play { display: flex; flex-direction: row; gap: 8px; align-items: center; min-height: 44px; padding: 0; }
     .transport .sw.tp-play span { font-size: 15px; font-weight: 600; color: var(--panel-ink); }
+    /* U-110: a finished replay's Play is Again: a replay arrow in place of the switch's O */
+    .transport .sw.tp-play.again i::before { content: "\21BB"; right: 6px; width: auto; height: auto; margin-top: -10px; border: 0; border-radius: 0; font-size: 15px; line-height: 20px; font-weight: 700; color: var(--panel-ink); }
     .transport .detents.tp-rate { flex-wrap: nowrap; gap: 4px; } .transport .detents.tp-rate > button { min-width: 0; min-height: 44px; padding: 0 2px; font-size: 16px; }
     /* replay is full-screen like a drive: no tab bar; the Replay plate is the way out (REVIEW2.md U-45) */
     #app.replaying .tabbar { display: none; }
@@ -447,7 +461,9 @@
     .odo-meta { display: flex; gap: 8px; font-size: 13px; font-weight: 600; color: var(--panel-dim); }
     .dna { width: min(100%, 250px); display: grid; gap: 4px; }
     .dna-arch { text-align: center; font-size: 13px; font-weight: 600; color: var(--panel-ink); min-height: 13px; }
-    .cluster-center > .dna-arch { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }   /* a long road name (U-67) */
+    /* a long road name (U-67) is never cut and never runs under the dial (REVIEW5 U-124, Billet hid its first letter): the
+       line is held to the centre column and takes a second line instead */
+    .cluster-center > .dna-arch { justify-self: stretch; min-width: 0; max-width: 100%; white-space: normal; overflow-wrap: break-word; line-height: 1.15; }
     .dna-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
     .dna-cell { display: grid; justify-items: center; gap: 2px; }
     .dna-cell b { font-family: var(--font-num); font-size: 13px; font-weight: 700; }
@@ -538,6 +554,9 @@
     .rc-facts .fact::before { content: ""; flex: none; width: 18px; height: 18px; margin-top: 1px; background: currentColor;
       -webkit-mask: var(--glyph) center / contain no-repeat; mask: var(--glyph) center / contain no-repeat; }
     .f-along { --glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linejoin='round'%3E%3Cpath d='M2 20 L9 8 L13 14 L16 10 L22 20 Z'/%3E%3C/svg%3E"); }
+    /* U-134: a café is a cup (a steaming mug), fuel alone a pump; viewpoints keep the hills */
+    .f-along[data-glyph="cafe"] { --glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 10 H17 V15 A5 5 0 0 1 12 20 H9 A5 5 0 0 1 4 15 Z'/%3E%3Cpath d='M17 11 H19 A2.5 2.5 0 0 1 19 16 H17'/%3E%3Cpath d='M8 3 V6 M12 2 V6'/%3E%3Cpath d='M3 22 H18'/%3E%3C/svg%3E"); }
+    .f-along[data-glyph="fuel"] { --glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linejoin='round'%3E%3Crect x='4' y='3' width='10' height='18'/%3E%3Cpath d='M4 10 H14 M14 8 L18 11 V18 A1.5 1.5 0 0 0 21 18 V9 L18 6'/%3E%3C/svg%3E"); }
     .f-climb { --glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'%3E%3Cpath d='M2 19 Q8 18 11 11 T22 5'/%3E%3Cpath d='M2 22 H22'/%3E%3C/svg%3E"); }
     .f-ahead { --glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round'%3E%3Cpath d='M8 22 V14 Q8 7 16 5'/%3E%3Cpath d='M12 2 L17 5 L13 9'/%3E%3Ccircle cx='8' cy='22' r='1.5' fill='black'/%3E%3C/svg%3E"); }
     .f-sky { --glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='12' cy='12' r='4'/%3E%3Cpath d='M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2'/%3E%3C/svg%3E"); }
@@ -605,10 +624,12 @@
     .end-links > * { margin: 0; padding: 0 4px; line-height: 1.2; min-height: 44px; display: inline-flex; align-items: center; }   /* the link and the key on one line, the same box */
     .ob-strip { width: 100%; max-width: 420px; margin: 26px auto 0; border-top: 2px solid var(--panel-ink); border-bottom: 1px solid var(--rule); text-align: left; }
     .ob-strip .notes { position: static; min-height: 84px; padding-left: 0; padding-right: 0; }
+    .ob-strip .notes.notes-roadbook { height: 92px; padding-top: 6px; }   /* U-133: the welcome's loop holds still too */
     /* Night is a mode, not a token swap (REVIEW.md roadmap 11): bigger numbers, fewer things, the map quieter (themes.js) */
     html[data-mode="night"] .rb-box.now .rb-dist b { font-size: 38px; }
-    html[data-mode="night"] .rb-box.now .rb-call span:first-child { font-size: 24px; }
-    html[data-mode="night"] .rb-box:not(.now) .rb-call span.rb-mods, html[data-mode="night"] #lapBar small, html[data-mode="night"] .rb-lanes .lane:not(.use):not(.ok) { display: none; }
+    html[data-mode="night"] .rb-box.now .rb-call span:first-child { font-size: 24px; line-height: 1.1; }
+    html[data-mode="night"] { --strip-body: 112px; } html[data-mode="night"][data-theme="tapedeck"] { --strip-body: 124px; }   /* U-133: night's bigger head, three lines of it, in the same fixed band */
+    html[data-mode="night"] #lapBar small, html[data-mode="night"] .rb-lanes .lane:not(.use):not(.ok) { display: none; }
     html[data-mode="night"] #app.live .ds-warn { display: none; }
     html[data-mode="night"] #app.live .ds-main { font-size: 17px; }
     html[data-mode="night"] .dial-num { font-size: 18px; } html[data-mode="night"] .ro b { font-size: 21px; }
@@ -671,9 +692,9 @@
        the contract without it (theme_contract.js) ---------------- */
     html[data-theme="tapedeck"] body { letter-spacing: 0.02em; }
     html[data-theme="tapedeck"] .notes, html[data-theme="tapedeck"] .binnacle { text-transform: uppercase; }
-    html[data-theme="tapedeck"] .rb-call span, html[data-theme="tapedeck"] .rb-dist b, html[data-theme="tapedeck"] .ds-main,
+    html[data-theme="tapedeck"] .rb-call span, html[data-theme="tapedeck"] .rb-dist b, html[data-theme="tapedeck"] .rb-code, html[data-theme="tapedeck"] .ds-main,
     html[data-theme="tapedeck"] .ro b, html[data-theme="tapedeck"] .odo-digits { text-shadow: 0 0 6px color-mix(in srgb, currentColor 60%, transparent); }
-    html[data-theme="tapedeck"] .rb-call span.rb-mods i.warn { color: var(--amber); }
+    html[data-theme="tapedeck"] .rb-mods i.warn { color: var(--amber); }
     /* U-100: the dot font is wide; the quiet line steps to the binnacle's 13 px floor so its compact form fits two rows */
     html[data-theme="tapedeck"] .note-quiet b, html[data-theme="tapedeck"] .note-quiet span { font-size: 13px; }
     html[data-theme="tapedeck"] .binnacle { background: linear-gradient(transparent 50%, rgba(125, 245, 222, 0.025) 50%) 0 0 / 100% 3px, var(--panel); }
@@ -681,6 +702,7 @@
     html[data-theme="tapedeck"] #driveEnd { background: transparent; color: var(--accent); border: 1.5px solid var(--accent); }
     html[data-theme="tapedeck"] .odo.boxed .dg { border-color: var(--rule); }
     html[data-theme="tapedeck"] .odo-meta, html[data-theme="tapedeck"] .dna-arch, html[data-theme="tapedeck"] .ro span { letter-spacing: 0; white-space: nowrap; }
+    html[data-theme="tapedeck"] .cluster-center > .dna-arch { white-space: normal; }   /* U-124: the road's name wraps, whole */
     .vfd-seg .seg { fill: var(--face-ink); opacity: 0.05; } .vfd-seg .blank .seg { opacity: 0; }   /* no ghost 8s in front of a number: "7" read as "887" */ .vfd-seg .seg.lit { opacity: 1; filter: drop-shadow(0 0 3px var(--face-ink)); }
     .vfd-seg .vfd-shadow { fill: transparent; }
     .vfd-label { fill: var(--face-dim); font-family: var(--font-ui); }
@@ -697,6 +719,7 @@
     .kit circle.body { fill: color-mix(in srgb, var(--panel-ink) 45%, transparent); }   /* the lighter body: outline and muzzle read */
     .kit-says b { display: block; font: 700 15px var(--font-ui); letter-spacing: 0.06em; color: var(--panel-ink); line-height: 1.2;
       display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }   /* the call wraps to two lines, never cut short */
+    .kit-says.quiet { visibility: hidden; }   /* no aside: no labelled empty box (REVIEW5 U-113) */
     .tp-tapedeck { background: #0A0C0B; } .tp-tapedeck .tp-call b, .tp-tapedeck .tp-speed b { text-shadow: 0 0 6px rgba(125, 245, 222, 0.6); }
     /* ---------------- Billet (Pro, REVIEW.md 4.1): brushed metal, knurled bezels, red glow; glow is additive ---------------- */
     html[data-theme="billet"] .binnacle, html[data-theme="billet"] .notes {
@@ -755,6 +778,20 @@
     body:has(.side-pop.open) .pop-scrim { opacity: 1; pointer-events: auto; }
     .side-pop-head { display: flex; justify-content: space-between; align-items: center; }
     .side-pop .side-pop-head h3 { border: 0; padding: 0; margin: 0; }
+    /* The Garage's settings (REVIEW5 §2, web/garage_settings.js): one gear in the header, a sheet of rows, each row a sheet over
+       it. Tall enough that a setting's sheet covers the list under it; hidden when shut, so nothing off screen takes focus. */
+    .sheet:not([data-view="garage"]) .garage-gear { display: none; }
+    .garage-gear { margin-left: auto; }
+    .garage-pop { min-height: min(82%, 680px); transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1), visibility 0s linear 0.2s; visibility: hidden; }
+    .garage-pop.open { visibility: visible; transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1), visibility 0s; }
+    .garage-pop:focus { outline: none; }
+    .garage-pop > section { display: grid; gap: 8px; zoom: var(--type-scale, 1); }
+    .garage-pop p.note { font-size: 13px; color: var(--panel-dim); line-height: 1.45; margin-top: 6px; }
+    .garage-pop p.note.err { color: var(--accent); }
+    .garage-pop .nav-row small { font-size: 13px; }
+    /* U-132: no browser scrollbar in a native-looking sheet (iOS draws its own indicator while scrolling) */
+    .sheet .body, .side-pop { scrollbar-width: none; }
+    .sheet .body::-webkit-scrollbar, .side-pop::-webkit-scrollbar { display: none; }
     .crew-detail { border-top: 1px solid var(--hair, var(--panel-dim)); padding-top: 8px; margin-top: 4px; }
     /* Friends first on People (the owner, 2026-10-30): one row each, the face, the handle and where they are; a tap opens what you share */
     .friend-list { display: grid; border-top: 1px solid var(--hair, var(--panel-dim)); }
@@ -781,6 +818,15 @@
     .nav-row.quiet[aria-expanded="true"] { border-bottom: 0; } .nav-row.quiet[aria-expanded="true"] i { transform: rotate(45deg); }
     .friend-grants .linkbtn { justify-self: start; }
     .people-lead { margin: 0; font-size: 17px; line-height: 1.4; }
+    /* U-121: what arrives on People, dimmed and captioned as an example (web/people_samples.js); never a control */
+    .people-sample { margin: 8px 0 0; display: grid; gap: 6px; }
+    .people-sample figcaption { font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--panel-dim); }
+    .people-sample-body { opacity: 0.55; pointer-events: none; border: 1px dashed var(--panel-dim); padding: 2px 10px; }
+    .people-sample .friend-head { border: 0; }
+    .people-sample .sample-crew { border: 0; padding: 8px 0; gap: 4px; }
+    .people-sample .sample-crew span { font-size: 13px; color: var(--panel-dim); }
+    .sample-crew-head { display: flex; align-items: center; gap: 10px; } .sample-crew-head b { font-size: 16px; }
+    .sample-crest svg { width: 28px; height: 28px; fill: none; stroke: var(--panel-ink); stroke-width: 1.8; display: block; }
     .crew-tiles.one { grid-template-columns: minmax(0, 1fr); }
     .crew-tiles.one .crew-tile-head b { white-space: normal; overflow-wrap: anywhere; }
     .row.profile-keys { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } .profile-keys .ink-btn, .profile-keys .ink-btn.solid { height: 44px; padding: 0 8px; }
@@ -995,7 +1041,20 @@
         grid-template-columns: minmax(0, 1fr); grid-template-areas: none; padding-right: calc(10px + env(safe-area-inset-right, 0px)); }
       #binnacle > *, #cluster { grid-area: auto; }
       .switches { display: flex; flex-wrap: wrap; justify-content: flex-start; }
-      .cluster-dials { grid-template-columns: var(--dial) minmax(0, 1fr) var(--dial); justify-content: stretch; }
+      /* REVIEW5 U-106: the instruments' column in two rows, so nothing overprints (the Road line ran over the Score): the
+         speed beside Limit, Sight, the trip and the Road line; then the meter with the Score beside it, across the column */
+      .cluster-dials { grid-template-columns: var(--dial) minmax(0, 1fr); justify-content: stretch; column-gap: 12px; row-gap: 8px; }
+      .cluster-dials > * { min-width: 0; }
+      .cluster-dials > .dial-g { grid-column: 1 / -1; width: 100%; height: var(--dial); flex-direction: row; align-items: center; gap: 12px; }
+      .dial.dial-g > :not(.g-score) { flex: none; width: var(--dial); height: var(--dial); }
+      .dial.dial-g > .g-score { height: auto; margin: 0; }
+      .dial-g.bezelled .bezel-ring { width: var(--dial); height: var(--dial); }
+      html[data-theme="tapedeck"] .dial.dial-g { height: auto; }
+      html[data-theme="tapedeck"] .dial.dial-g > .vfd-meters { flex: 1 1 auto; width: auto; height: auto; }
+      html[data-theme="tapedeck"] .dial.dial-g > .g-score { flex: none; width: 64px; }
+      /* the strip over the map column: the head in words on one line, one next cell (its code), one height */
+      .notes-roadbook { grid-template-columns: minmax(0, 1fr) auto; } .rb-box:nth-child(3) { display: none; }
+      html, html[data-mode="night"] { --strip-body: 94px; } html[data-theme="tapedeck"], html[data-mode="night"][data-theme="tapedeck"] { --strip-body: 100px; }
       .tabbar { margin: 2px -10px 0; }
       /* the Dynamic Island and the rounded corners sit on the short sides: the map runs under them, nothing you read or tap does */
       #app.sheet-open, #app.idle { grid-template-columns: minmax(0, 1fr) calc(76px + var(--safe-right)); }
@@ -1217,11 +1276,16 @@
           <section data-panel="garage" id="garageMe">
             <div id="garageMeBody" class="stack-12"></div>
           </section>
-          <section data-panel="garage">
-            <h3>Road data</h3>
+          <!-- REVIEW5 §2, U-49: the settings below sit behind the Garage's one gear (web/garage_settings.js moves each
+               data-setting section into its own sheet); the page keeps you, your cars, Look and voice and the co-driver -->
+          <section data-panel="garage" data-setting="roadfeel" data-title="Road feel">
+            <div id="garageRoadFeelBody" class="stack-8"></div>
             <p class="note" id="ambientNote" role="status" aria-live="polite">--</p>
           </section>
-          <section data-panel="garage">
+          <section data-panel="garage" data-setting="account" data-title="Account" data-empty-hides>
+            <div id="garageAccountBody" class="stack-12" data-fill></div>
+          </section>
+          <section data-panel="garage" data-setting="zones" data-title="Privacy zones">
             <h3>Privacy zones</h3>
             <p class="note" style="margin:0 0 8px">Places like home and work. Inside one, nothing is recorded or shared, and convoys don't see you. Kept on this phone only.</p>
             <div class="detents" id="zoneRadius" role="group" aria-label="Zone size">
@@ -1232,29 +1296,31 @@
             <div class="row mt-8"><button class="ink-btn" id="zoneHereBtn">Add where I am</button><button class="ink-btn" id="zoneMapBtn">Add at map centre</button></div>
             <div id="zoneList" class="stack-8 mt-8"></div>
           </section>
-          <section data-panel="garage">
+          <section data-panel="garage" data-setting="crash" data-title="Crash check">
             <h3>Crash check</h3>
             <p class="note" style="margin:0 0 8px">After a hard impact and a stop, Vetta asks if you're OK. If you don't answer within a minute it shows buttons to call emergency services or text this person your location. Your phone never calls or texts by itself. This is a backup to your phone's own crash detection, not a replacement for it. The contact stays on this phone.</p>
             <div class="row" style="flex-wrap:wrap">
               <button class="sw" data-toggle="crash"><i></i><span>Crash check</span></button>
             </div>
+            <!-- U-117: what it does in the state it is in, in the open: with no contact it still asks and offers the call -->
+            <p class="note" id="crashState" role="status" aria-live="polite"></p>
             <div class="row mt-8" style="flex-wrap:wrap">
               <input class="field" id="crashName" autocomplete="off" maxlength="40" placeholder="Contact name" aria-label="Emergency contact name">
               <input class="field" id="crashPhone" type="tel" autocomplete="off" maxlength="24" placeholder="Phone number" aria-label="Emergency contact phone number">
             </div>
           </section>
-          <section data-panel="garage">
+          <section data-panel="garage" data-setting="units" data-title="Units">
             <h3>Units</h3>
             <div class="switch" role="radiogroup" aria-label="Units" id="unitsRow"><button data-units="imperial" role="radio">Miles and feet</button><button data-units="metric" role="radio">Kilometres and metres</button></div>
             <p class="note" style="margin:8px 0 4px">Driving side: bends toward your own side of the road get more caution, since you see less round them.</p>
             <div class="switch" role="radiogroup" aria-label="Driving side" id="sideRow"><button data-side="auto" role="radio">From the map</button><button data-side="right" role="radio">Right</button><button data-side="left" role="radio">Left</button></div>
           </section>
-          <section data-panel="garage">
+          <section data-panel="garage" data-setting="feedback" data-title="Feedback">
             <h3>Feedback</h3>
             <p class="note" style="margin:0 0 8px">Something wrong, or an idea? It goes straight to the person who makes Vetta.</p>
             <div class="stack-8" id="feedbackBox"></div>
           </section>
-          <section data-panel="garage">
+          <section data-panel="garage" data-setting="data" data-title="Your data">
             <h3>Your data</h3>
             <p class="note" id="myDataNote" role="status">--</p>
             <p class="note" id="myOfflineNote">--</p>
@@ -1270,11 +1336,11 @@
               <button class="danger-btn" id="myDrivesDelBtn">Delete drives on this phone</button>
               <button class="danger-btn" id="myEraseBtn">Erase everything on this phone</button>
             </div>
-            <p class="note">Your account (friends, crews, shared spots, routes and results) is deleted from the server in Garage → Account → Delete account.</p>
-            <button class="sw mt-8" data-toggle="health"><i></i><span>Share app health</span></button>
+            <p class="note">Your account (friends, crews, shared spots, routes and results) is deleted from the server in Settings → Account → Delete account.</p>
+            <button class="sw mt-8" data-toggle="health"><i></i><span>Share app health (anonymous counts)</span></button>
             <p class="note">Once a day, totals like "3 routes found, 1 failed" go to Vetta with no account, phone or place in them, so problems get fixed. Off: nothing is counted or sent.</p>
           </section>
-        <section data-panel="garage">
+        <section data-panel="garage" data-setting="spots" data-title="Spots">
             <h3>Spots</h3>
             <p class="note" style="margin:0 0 8px">Loops lean toward spots you rate 3★ or more. Your spots stay on this phone until you share one.</p>
             <div class="detents" id="detourList" role="group" aria-label="Detour">
@@ -1320,7 +1386,7 @@
             <button class="sw mt-8" id="liveVoiceBtn" role="switch" aria-checked="false"><i></i><span>Speak road names</span></button>
             <p class="note" id="liveNote" role="status" aria-live="polite"></p>
           </section>
-          <section data-panel="garage">
+          <section data-panel="garage" data-setting="motion" data-title="Map motion">
             <h3>Map motion</h3>
             <div class="switch" id="camList">
               <button data-cam="steady">Steady</button>
@@ -1329,7 +1395,7 @@
             </div>
             <p class="note">How far the map leans into corners ahead.</p>
           </section>
-          <section class="about-vetta" data-panel="garage">
+          <section class="about-vetta" data-panel="garage" data-setting="about" data-title="About Vetta">
             <h3>About Vetta</h3>
             <div class="row"><span>Version</span><b id="aboutVersion">--</b></div>
             <ul class="promises">
@@ -1339,7 +1405,7 @@
               <li><b>Free to drive.</b> No ads, no personal data sold, and nothing you made ever behind a paywall.</li>
             </ul>
           </section>
-          <section class="sources" data-panel="garage">
+          <section class="sources" data-panel="garage" data-setting="about">
             <details class="more"><summary>Sources and licences</summary><p class="note">Map &copy; OpenStreetMap contributors via OpenFreeMap. Terrain: AWS Terrarium DEM. Routing, map matching and posted limits: Valhalla (FOSSGIS). Geocoding: Nominatim. Search suggestions: Photon (Komoot). Plate-reading and speed cameras: OpenStreetMap (<code>surveillance:type=ALPR</code>, DeFlock; <code>highway=speed_camera</code>) via Overpass. Voices: Kokoro-82M (Apache-2.0).</p></details>
             <p class="note mt-8"><a href="https://apexnav.senftns.workers.dev/privacy.html" target="_blank" rel="noopener">Privacy</a> · <a href="https://apexnav.senftns.workers.dev/terms.html" target="_blank" rel="noopener">Terms of use</a> · <a href="licenses.html">Licences</a></p>
           </section>

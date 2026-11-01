@@ -133,7 +133,7 @@ def test_recording_notes_of_the_second_recording():
     flows = read("UITests", "ReviewFlows.swift")
     body = lambda t: flows.split(f"func {t}()")[1].split("    func test")[0]
     first = body("test01FirstRun")
-    assert first.index('"the welcome never came up"') < first.index('shot("opening")') < first.index('shot("welcome")')
+    assert first.index('"the welcome never came up"') < first.index('shot("opening")') < first.index('shot("welcome-\\(k)")')
     tabs = body("test02Tabs")
     assert tabs.index("closeReplay()") < tabs.index('tab("Log")')
     plan = body("test03Planning")
@@ -158,3 +158,47 @@ def test_pack_flags_a_video_without_its_index_and_lists_review_events(tmp_path):
     log.write_text("2026-10-30 06:58:10.120 Df ApexNav[9:9] APEX-REVIEW replay standing 8 s at 25.31 km\n"
                    "2026-10-30 06:58:11.000 Df ApexNav[9:9] APEX-CONSOLE warn something\n", encoding="utf-8")
     assert pack.events(str(log), "06:52:00") == ["06:58:10  @ 06:10  replay standing 8 s at 25.31 km"]
+
+
+def test_recording_notes_of_the_fifth_recording():
+    """REVIEW5 §7 (1)-(9): the replay at real speed and the drive reaching End, the tab bar checked before the tabs, no
+    identical scroll frames, the welcome strip's full cycle, landscape on a call and on the quiet line, contrast from the page,
+    the largest text size, the island on the quiet line and the lock screen."""
+    swift = read("ApexNavApp.swift")
+    inside = debug_blocks(swift)
+    tick = inside[inside.index("private func tick()"):]
+    assert "let dt = min(2, max(0, t - (lastTick ?? t - 0.01))); lastTick = t" in tick and "dt = 0.01," not in tick, "§7.1: on the clock"
+    flows = read("UITests", "ReviewFlows.swift")
+    body = lambda t: flows.split(f"func {t}()")[1].split("    func test")[0]
+    guided = body("test04GuidedDrive")
+    assert 'XCTAssertTrue(endDrive(), "the guided drive never reached End (no end card)")' in guided
+    assert "return find([\"Open in the Log\"], wait: 6) != nil" in flows
+    # §7.2: the tab bar on screen (bottom quarter, no replay over it) before a tab is tapped, and after the replay closes
+    tab = flows[flows.index("private func tab(_ name: String)"):flows.index("private func scroll(")]
+    assert tab.index("tabBarShown()") < tab.index("tap(name, wait: 6)") and "XCTAssertTrue(until(6, tabBarShown)" in tab
+    assert "XCTAssertTrue(until(8, tabBarShown)" in flows[flows.index("private func closeReplay()"):]
+    assert 'onScreen($0, below: 0.75)' in flows and "all.element(boundBy: i)" in flows, "every match looked at, not the first"
+    # §7.3: a swipe that changes nothing ends the scrolling
+    scroll = flows[flows.index("private func scroll("):flows.index("// MARK: The car")]
+    assert "if now == before { break }" in scroll and scroll.index("break") < scroll.index('shot("\\(tag)')
+    # §7.4: one full cycle of the welcome's five calls on its beat; the beat is the page's
+    first = body("test01FirstRun")
+    assert "for k in 1...6" in first and 'shot("welcome-\\(k)")' in first and "WELCOME_BEAT = 1.8" in flows
+    cockpit = read("web", "cockpit.js")
+    assert "matches ? 4000 : 1800);" in cockpit and cockpit.count("{ type: ", cockpit.index("const OB_NOTES"), cockpit.index("function runOnboarding")) == 5
+    # §7.5, §7.8, §7.9: landscape on a call and on the quiet line, the island on the quiet line, the lock screen
+    assert guided.index('landscape(16, "landscape-corner")') < guided.index('landscape(10, "landscape-quiet")') < guided.index('homeScreen("home-quiet-line")') < guided.index("driveTo(5)")
+    assert 'shot("report-sheet-landscape")' in guided and 'lockScreen("lock-screen-live-activity")' in guided
+    assert 'NSSelectorFromString("pressLockButton")' in flows and "guard XCUIDevice.shared.responds(to: lock)" in flows, "skipped where unsupported"
+    # §7.6: contrast from the page, in the pack job, never losing the pack
+    yml = read(".github", "workflows", "app-review.yml")
+    pack = yml[yml.index("  pack:"):]
+    assert "node tools/contrast_dump.js review-pack/contrast.md" in pack and "continue-on-error: true" in pack
+    dump = read("tools", "contrast_dump.js")
+    assert "getComputedStyle" in dump and "notesMode = 'quiet'" in dump and "for (const night of [false, true])" in dump
+    # §7.7: the largest accessibility size, as its own flow in the workflow
+    dyn = body("test09DynamicType")
+    assert '"-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"' in dyn
+    assert "test: test09DynamicType, name: dynamic-type" in yml
+    for tag in ('tab("Garage")', 'tab("People")', 'tab("Log")', 'shot("route-card")', '"cockpit"'):
+        assert tag in dyn, tag

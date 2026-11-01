@@ -25,16 +25,20 @@
     kit: ['#', 'end:best', 'sys:end'],
     hale: ['sys:end', 'end:score', '#', 'end:best'],
   };
-  const WORDS = {
-    marguerite: { 'sys:end': "That's the drive.", 'end:score': 'Score', 'end:best': 'your best on this road.' },
-    kit: { 'sys:end': "That's a wrap.", 'end:score': '', 'end:best': 'Best yet on this road.' },
-    hale: { 'sys:end': 'Complete.', 'end:score': 'Score,', 'end:best': 'Best on this road.' },
-  };
-  /** The closing line for a pack: { tokens, text }. No score: just the pack's close. */
-  function endLine(pack, score, best) {
+  // The words are the packs' own (web/voice_lines.js PACKS), the ones their clips hold. Kit has no "Score" word.
+  const VL = typeof module !== 'undefined' && module.exports ? require('./voice_lines.js') : root.ApexVoiceLines;
+  const WORDS = {};
+  for (const p of Object.keys(ORDER)) WORDS[p] = { 'end:score': '', ...((VL && VL.PACKS[p] && VL.PACKS[p].lines) || {}) };
+  /**
+   * The closing line for a pack: { tokens, text }. No score: just the pack's close. `signOff` is the pack's closing clip
+   * for this drive (sys:end, sys:end2...; see pickSignOff); anything else is sys:end.
+   */
+  function endLine(pack, score, best, signOff = 'sys:end') {
     const p = ORDER[pack] ? pack : 'marguerite', s = scoreTokens(score);
+    const end = /^sys:end\d*$/.test(signOff) && WORDS[p][signOff] ? signOff : 'sys:end';
     const tokens = [], text = [];
-    for (const k of ORDER[p]) {
+    for (const k0 of ORDER[p]) {
+      const k = k0 === 'sys:end' ? end : k0;
       if (k === '#') { if (s) { tokens.push(...s.tokens); text.push(s.words + '.'); } continue; }
       if ((k === 'end:score' && !s) || (k === 'end:best' && !(s && best)) || !WORDS[p][k]) continue;
       tokens.push(k); text.push(WORDS[p][k]);
@@ -43,6 +47,19 @@
     const t = text.reduce((out, piece) => (out && /^[a-z]/.test(piece) ? `${out.replace(/\.$/, ',')} ${piece}` : out ? `${out} ${piece}` : piece), '');
     return { tokens, text: t.charAt(0).toUpperCase() + t.slice(1) };
   }
+  /**
+   * Which sign-off a drive gets (REVIEW5 U-113: each pack has four): the same one every time for the same drive (its id), so
+   * a replay or a second look at the end card says what the drive said. `has(token)`: the loaded bank holds the clip; a
+   * bank rendered before the extra sign-offs keeps its first one.
+   */
+  function pickSignOff(pack, driveId, has = () => true) {
+    const p = ORDER[pack] ? pack : 'marguerite';
+    const all = Object.keys(WORDS[p]).filter((k) => /^sys:end\d*$/.test(k) && has(k));
+    if (!all.length) return 'sys:end';
+    let h = 0;
+    for (const ch of String(driveId == null ? '' : driveId)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+    return all[h % all.length];
+  }
   /** Is this the best score among your drives on the same road (named the same, at least one earlier with a score)? */
   function bestOnRoad(drive, others) {
     if (!drive || !Number.isFinite(drive.score) || !drive.name) return false;
@@ -50,6 +67,6 @@
     return same.length > 0 && same.every((o) => drive.score > o.score);
   }
 
-  const api = { scoreTokens, endLine, bestOnRoad, under100, WORDS };
+  const api = { scoreTokens, endLine, pickSignOff, bestOnRoad, under100, WORDS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexEndLine = api;
 })(typeof window !== 'undefined' ? window : globalThis);

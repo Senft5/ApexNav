@@ -49,3 +49,14 @@ def test_the_plate_and_floors_match_the_page(out):
     p = out["plate"]
     assert f"--hz-bg: {p['bg']}; --hz-edge: {p['edge']}; --hz-ink: {p['ink']};" in html
     assert out["floors"] == {"speedPx": 40, "callPx": 21, "binnaclePx": 13}
+
+
+def test_the_contract_is_checked_on_its_side_too():
+    """REVIEW5 U-106: the page's contract flow ran upright only; on its side the strip lost its words and the Road line
+    overprinted the Score. e2e/smoke.js checks every theme, day and night, at 852 x 393 (and upright) for both."""
+    smoke = open(os.path.join(ROOT, "e2e", "smoke.js"), encoding="utf-8").read()
+    i = smoke.index("flow('theme contract on its side:")
+    body = smoke[i:smoke.index("\nflow(", i + 10)]
+    for want in ("['roadbook', 'tapedeck', 'billet']", "[false, true]", "width: 852, height: 393", "nothing on the binnacle overprints",
+                 "the Road line whole", "the strip keeps one height", "the next cell is a code", "the head says its call in words at 21 px"):
+        assert want in body, want

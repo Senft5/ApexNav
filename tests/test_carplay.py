@@ -58,6 +58,20 @@ console.log(JSON.stringify({
   rec0: C.recordingMessage(0, (m) => `${(m / 1609.344).toFixed(1)} mi`), rec1: C.recordingMessage(6800, (m) => `${(m / 1609.344).toFixed(1)} mi`),
   recNull: C.recordingMessage(null, null),
   recordSvg: C.recordSVG('#7DF5DE', '#FFB347'), recordBad: C.recordSVG('red;x', 'url(x)'),
+  // U-112: a glance's words. The review's corner: plain words, acute, long, careful; the same corner in rally words; a
+  // turn onto a long road name; a short call that needs none; a hairpin in plain words with its caution
+  ...(() => { const P = require(process.argv[1] + '/web/plain_notes.js');
+    const ev = (o) => ({ id: 'g', dist: [0, 5000], events: [{ type: 'corner', dir: 'L', start_m: 300, dist_m: 320, ...o }] });
+    const plainOpts = { call: (e) => P.plainCall(e), plain: true };
+    return {
+      glancePlain: C.guideMessage(ev({ severity: 1, shape: 'acute', mods: ['long'], caution: 1, call: 'Left 1 acute long, care' }), 0, null, D.phrase, plainOpts),
+      glanceRally: C.guideMessage(ev({ severity: 2, mods: ['long', 'tightens'], caution: 2, call: 'Left 2 long tightens into right 4, caution' }), 0, null, D.phrase),
+      glanceHP: C.guideMessage(ev({ severity: 'HP', mods: ['long', 'over crest'], caution: 1, call: 'Left hairpin long over crest, care' }), 0, null, D.phrase, plainOpts),
+      glanceRecce: C.guideMessage(ev({ severity: 1, shape: 'acute', mods: ['long'], caution: 1, recce: true, call: 'Left 1 acute long over crest, care' }), 0, null, D.phrase, plainOpts),
+      glanceFits: C.guideMessage(ev({ severity: 3, call: 'Left 3' }), 0, null, D.phrase, plainOpts),
+      glanceTurn: C.guideMessage({ id: 'tt', dist: [0, 5000], steps: [{ m: 900, type: 10, street: 'Ronald Reagan Cross County Highway' }] }, 0, null, D.phrase),
+      glanceMax: C.GLANCE_MAX,
+    }; })(),
   hairpin: C.cornerTulipSVG('R', 'HP', '#EDE4D3'), hairpinL: C.cornerTulipSVG('L', 'HP', '#EDE4D3'), follow: C.tulipSVG(8, '#EDE4D3'),
 }));
 """
@@ -86,7 +100,7 @@ def test_route_choices(out):
 
 
 def test_next_maneuver(out):
-    assert out["g0"] == {"kind": "guide", "key": "route_dest:1200", "instruction": "Turn left onto Deals Gap Road", "street": "Deals Gap Road",
+    assert out["g0"] == {"kind": "guide", "key": "route_dest:1200", "instruction": "Turn left onto Deals Gap Road", "short": ["Turn left"], "street": "Deals Gap Road",
                          "type": 15, "distM": 1100, "remainM": 4900, "remainS": 3600}
     # 3.7 km to the next said step: a continue step on the road the route is on (the step before names it)
     assert out["g1"] == {"kind": "guide", "key": "route_dest:f4990:Deals Gap Road", "instruction": "Follow Deals Gap Road", "street": "Deals Gap Road",
@@ -119,8 +133,41 @@ def test_a_free_drive_has_a_record_card(out):
     assert out["rec1"]["instruction"] == "Recording · 4.2 mi driven" and out["rec1"]["key"] == "rec:4.2 mi" and out["rec1"]["street"] == "4.2 mi driven"
     assert "distM" not in out["rec1"] and "distM" not in out["rec0"]
     assert out["recNull"]["instruction"] == "Recording · the road ahead", "unknown distance: nothing said about it"
+    # U-120: the distance the words say goes to the trip strip too; none before there is one
+    assert out["rec1"]["drivenM"] == 6800 and "drivenM" not in out["rec0"] and "drivenM" not in out["recNull"]
     assert 'stroke="#7DF5DE"' in out["recordSvg"] and 'fill="#FFB347"' in out["recordSvg"]
     assert "red;x" not in out["recordBad"] and "url(" not in out["recordBad"]
+
+
+def test_the_card_reads_at_a_glance(out):
+    """U-112 (REVIEW5 guided-drive car/035): "Very sharp left, almost back on itself, long, careful" on four lines at card
+    size for half a mile. A long instruction carries `short`, the same instruction in fewer words, longest first."""
+    g = out["glancePlain"]
+    assert g["instruction"] == "Very sharp left, almost back on itself, long, careful"
+    assert g["short"] == ["Very sharp left, careful", "Very sharp left"], "its kind and its caution, the modifiers dropped"
+    assert out["glanceHP"]["short"] == ["Hairpin left, careful", "Hairpin left"]
+    assert out["glanceRally"]["short"] == ["Left 2, caution", "Left 2"], "rally words stay rally words"
+    assert out["glanceRecce"]["short"] == ["Left 1, care", "Left 1"], "a recce's own notes are not the plain words"
+    assert "short" not in out["glanceFits"], "a call that already fits a glance needs no other"
+    assert out["glanceTurn"]["instruction"] == "Turn right onto Ronald Reagan Cross County Highway"
+    assert out["glanceTurn"]["short"] == ["Turn right"] and out["glanceTurn"]["street"] == "Ronald Reagan Cross County Highway"
+    for key in ("glancePlain", "glanceRally", "glanceHP", "glanceRecce", "glanceTurn"):
+        sh = out[key]["short"]
+        assert sh[0] and len(sh[0]) <= 26, (key, sh)
+        assert all(len(a) > len(b) for a, b in zip([out[key]["instruction"]] + sh, sh)), "each shorter than the one before"
+    assert out["glanceMax"] == 24
+
+
+def test_the_card_puts_the_short_words_first():
+    """U-112: the shell takes `short` and puts its first form ahead of the whole call in instructionVariants."""
+    swift = open(os.path.join(ROOT, "CarPlay", "ApexCarPlay.swift"), encoding="utf-8").read()
+    assert 'short: ((dict["short"] as? [Any]) ?? []).prefix(3).compactMap { $0 as? String }' in swift
+    assert "var short: [String] = []" in swift
+    changed = swift[swift.index("@MainActor func guideChanged()"):swift.index("@MainActor func driveEnded()")]
+    assert "for v in Array(g.short.prefix(1)) + [g.instruction] + Array(g.short.dropFirst()) + [g.street] where !v.isEmpty && !variants.contains(v)" in changed
+    assert "m.instructionVariants = variants" in changed and "[g.instruction, g.street]" not in changed
+    html = cockpit_source()
+    assert "plain: state.noteWords === 'plain' && !!window.ApexPlainNotes" in html, "the page says which words the call is in"
 
 
 def test_the_hairpin_reads_as_a_hairpin(out):
@@ -287,12 +334,16 @@ def test_the_car_shows_distance_left_without_a_made_up_time():
 
 
 def test_a_free_drive_has_no_arrival():
-    """U-95 (REVIEW4_CHECK.md): the free drive's trip strip read "7:04 arrival · 0 min · -- mi"; now both are CarPlay's "--"."""
+    """U-95 (REVIEW4_CHECK.md): the free drive's trip strip read "7:04 arrival · 0 min · -- mi"; its time is CarPlay's "--".
+    U-120 (REVIEW5 free-drive car/002 to 019): "-- arrival · -- min · -- mi" for five minutes; the strip carries the distance
+    driven once there is one, and never a time."""
     swift = open(os.path.join(ROOT, "CarPlay", "ApexCarPlay.swift"), encoding="utf-8").read()
     changed = swift[swift.index("@MainActor func guideChanged()"):swift.index("@MainActor func driveEnded()")]
     rec = changed[changed.index("} else if let t = trip, g.recording {"):]
-    assert "Measurement(value: -1, unit: unit), timeRemaining: -1), for: t)" in rec
+    assert "let driven = g.drivenM.map { ApexCar.shared.distance($0) } ?? Measurement(value: -1, unit: unit)" in rec
+    assert "CPTravelEstimates(distanceRemaining: driven, timeRemaining: -1), for: t)" in rec
     assert "max(0, g.timeS ?? 0)" not in rec      # the record card's own estimates stay none (distM is nil)
+    assert 'drivenM: Self.num(dict["drivenM"]).map { max(0, $0) }' in swift
 
 
 def test_every_drive_reaches_the_car_and_ends_idle():

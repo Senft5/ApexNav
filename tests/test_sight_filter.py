@@ -119,8 +119,20 @@ def test_never_red_under_the_figure_shown(out):
 
 def test_no_plate_when_crawling(out):
     a, b, c = out["slow"]
-    assert a["text"] is None and b["text"] is None and a["value"] == 40     # the cell still has the held value
+    assert a["text"] is None and b["text"] is None and a["value"] == 40     # the filter keeps it for when the car moves
     assert c["text"] == "40"
+
+
+def test_the_sight_cell_hides_with_the_plate():
+    """U-130: the cell follows the plate's filtered value and reads -- under 5 mph, where the plate hides."""
+    from tests.page_source import cockpit_source
+    src = cockpit_source()
+    i = src.index("const held = sightHold.step(si, performance.now());")
+    block = src[i:i + 1500]
+    assert "const crawl = si.speed != null && si.speed < (/^km/i.test(si.unit) ? 8 : 5);" in block
+    assert "d.sightMph = crawl ? null : held.value; d.sightOpen = !crawl && held.open; d.sightQuiet = crawl;" in block
+    inst = open(__import__("os").path.join(__import__("os").path.dirname(__file__), "..", "web", "instruments.js"), encoding="utf-8").read()
+    assert "const both = d.sightQuiet ? [] :" in inst, "the cell's value (sight or pace, the lower) goes with the plate"
 
 
 def test_open_past_the_limit_by_a_margin(out):

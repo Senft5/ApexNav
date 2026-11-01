@@ -52,7 +52,7 @@
       b.addEventListener('click', () => { b.checked = !b.checked; });
       return [b, b];
     };
-    const [attach, attachRow] = tick('Attach diagnostics: app version, device type, screen size, language, error count. Never your position or drives.', true);
+    const [attach, attachRow] = tick('Attach diagnostics (app version, device, language, error count; never your position)', true);
     const [reply, replyRow] = tick('I’d like a reply (shares your handle with the owner)', false);
     const send = btn('Send', async () => {
       const body = payload({ kind, message: text.value, app: page.app, attach: attach.checked, reply: reply.checked && page.signedIn(), env: page.env() });

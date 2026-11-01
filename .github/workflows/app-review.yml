@@ -24,6 +24,7 @@ jobs:
           - { test: test06TapedeckNight, name: tapedeck-night, carplay: false }
           - { test: test07Billet, name: billet, carplay: false }
           - { test: test08SignedIn, name: signed-in, carplay: false }
+          - { test: test09DynamicType, name: dynamic-type, carplay: false }
     steps:
       - uses: actions/checkout@v4
       - name: Generate Xcode project
@@ -117,7 +118,19 @@ jobs:
         run: |
           pip install pillow
           python3 tools/review_pack.py flows review-pack
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Contrast notes from the page (REVIEW5 §7.6)
+        continue-on-error: true
+        # every text colour on the drive screen per theme, day and night, read with getComputedStyle (not from the PNGs), into
+        # review-pack/contrast.md and a short section of INDEX.md; a failure here is noted and never loses the pack
+        run: |
+          npm install --no-save --no-package-lock --no-audit --no-fund playwright@1.63.0
+          npx playwright install --with-deps --only-shell chromium
+          node tools/contrast_dump.js review-pack/contrast.md || printf '\n## Contrast (from the page)\n\nNot measured: tools/contrast_dump.js failed (see the pack job log).\n' >> review-pack/INDEX.md
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: review-pack
           path: review-pack
