@@ -4,6 +4,18 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-01: 18 of the Swift iOS skills installed in the repo
+
+- You asked for github.com/dpearson2699/swift-ios-skills (upstream commit 8d90fd1). It has 86 skills. Each installed
+  skill's description loads into every session and costs usage, so only the 18 that match frameworks Vetta imports are
+  copied into `.claude/skills/`: carplay, mapkit, core-motion, activitykit, widgetkit, app-intents, swiftui-webkit,
+  swiftui-uikit-interop, background-processing, push-notifications, authentication, cryptokit, swift-concurrency,
+  swift-testing, app-store-review, ios-simulator, debugging-instruments, metrickit.
+- Licence: PolyForm Perimeter 1.0.0. Using the skills to build our own app is allowed, closed-source included. The
+  conditions: each skill folder keeps the LICENSE with its "Required Notice" copyright line, and the skills must not be
+  repackaged and offered to others as a competing product. Vetta isn't one.
+- Undo: delete those 18 folders. Add more: copy `skills/<name>` (with LICENSE) from a clone of the upstream repo.
+
 ## 2026-11-01: Intent design-strategy skills installed in the repo
 
 - You asked for Intent (github.com/ghaida/intent). It's copied in the same way as Impeccable below: its 18 skills in
