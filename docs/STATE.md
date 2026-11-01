@@ -1,5 +1,29 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-10-31: TestFlight notes 09, 10 and the video (one of three feedback builders)
+
+- [x] 09 a stage is marked on the drive's map (circled), from a whole road you drove (road keys from map matching) or
+  Start/Finish sliders; 10 "Which route was better?" with a map of each route; Make the video fixed for the iOS web view
+  (the dashcam video never loaded), both video keys hidden where recording can't work. CALL_SHEET 2026-10-31.
+- Unverified on a device: both videos in the app's WKWebView (MediaRecorder + canvas captureStream), the road keys on a
+  real drive (Valhalla's names).
+- Exact next task: TestFlight from main; the owner tries Make the video and a Bank Road stage.
+## Session 2026-10-31: TestFlight notes 05 and 06 (feedback builder)
+
+- [x] 05: the Crew drives row is gone; the crew page's "Upcoming drives" lists the crew's drives with a + to plan one.
+- [x] 06: the crew Score board shows faces and Week / Month / Year / All time, ranked by the total of drive Scores
+  (`GET /api/crews/:id/board`, `POST /api/drives/scores`, backend/src/drive_scores.ts). Old builds keep the page's `board`.
+- Migration 0043 (drive_scores) is NOT applied yet: apply it to apexnav-preview-db and apexnav-db before the Worker deploy
+  (until then the new board says "Couldn't load the board" and drive Scores wait on the phone to be sent).
+- Exact next task: apply 0043; on a device, check a finished drive shows on the crew board's Week total.
+## Session 2026-10-31: TestFlight feedback 01-04, 07, 08 (screens and sharing)
+
+- [x] A route Preview owns the screen like a replay (no route card or tabs under it); Where to? stays below the Dynamic
+  Island with the keyboard up; written fields centred top to bottom and growing; menus are bottom sheets over a modal
+  scrim (tap outside closes); every invite/share opens the real share sheet (`shareText` bridge); no crew image card.
+- Unverified on a device: the `shareText` share sheet (CI compiles the Swift), the island gap on a real Dynamic Island.
+- Exact next task: TestFlight from main, then the owner's next round of notes.
+
 ## Session 2026-10-30 (evening): REVIEW_PEOPLE.md and REVIEW_FEEL.md built (PR #267)
 
 - [x] All 35 People findings (P-01..P-35), open sign-up, two tabs; all 18 speed findings (F-01..F-18) incl. the native

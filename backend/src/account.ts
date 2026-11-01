@@ -30,6 +30,7 @@ export async function exportMyData(env: Env, v: Viewer) {
     published_results: await q(`SELECT s.name AS segment, e.audience_type, COALESCE(u.handle, c.name) AS audience, e.driver_score, e.time_s, e.smoothness, e.driven_on FROM board_entries e
                        JOIN segments s ON s.id = e.segment_id LEFT JOIN users u ON e.audience_type = 'friend' AND u.id = e.audience_id
                        LEFT JOIN crews c ON e.audience_type = 'crew' AND c.id = e.audience_id WHERE e.user_id = ?`),
+    drive_scores_shared: await q("SELECT c.name AS crew, d.score, d.driven_on, d.created_at FROM drive_scores d JOIN crews c ON c.id = d.crew_id WHERE d.user_id = ?"),
     photos: await q("SELECT id, kind, ref_id, bytes, w, h, created_at FROM photos WHERE owner = ?"),
     pro: await q("SELECT source, since, expires_at FROM pro_entitlements WHERE user_id = ?"),
     decals_kept_off: await q("SELECT c.name FROM decal_optouts o JOIN crews c ON c.id = o.crew_id WHERE o.user_id = ?"),
@@ -67,6 +68,7 @@ export async function deleteAccount(env: Env, v: Viewer, req: Request): Promise<
   for (const id of owned) {
     run("DELETE FROM grants WHERE audience_type = 'crew' AND audience_id = ?", id);
     run("DELETE FROM board_entries WHERE audience_type = 'crew' AND audience_id = ?", id);
+    run("DELETE FROM drive_scores WHERE crew_id = ?", id);
     run("DELETE FROM segment_shares WHERE audience_type = 'crew' AND audience_id = ?", id);
     run("DELETE FROM crews WHERE id = ?", id);
   }

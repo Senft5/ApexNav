@@ -98,6 +98,8 @@
 
   // The card is the crew page's drive card (mockup 09: the black date block, three lines, faces, one key), now everywhere.
   const STYLE = `
+    .plan-plus { align-self: center; margin: -10px -10px -10px 0; color: var(--panel-ink); }
+    .plan-plus svg { width: 26px; height: 26px; stroke-width: 2.2; }
     .cp-drive { display: grid; grid-template-columns: 76px minmax(0, 1fr); border: 1.5px solid var(--panel-ink); background: var(--panel); color: var(--panel-ink); }
     .cp-date { background: var(--panel-ink); color: var(--panel); display: grid; place-content: center; text-align: center; font-family: var(--font-num); align-self: stretch; }
     .cp-date b { font-size: 34px; line-height: 1; } .cp-date span { font-size: 13px; letter-spacing: 0.08em; }
@@ -540,7 +542,7 @@
       const acts = el('div', { className: 'row', style: 'flex-wrap:wrap' },
         btn('Join the crew', async () => {
           const r = await apiCall('POST', `/api/crews/${encodeURIComponent(e.crew_id)}/join`);
-          if (r.ok) { toast(`You're in ${e.crew_name}. Answer in Crew drives.`); redo(); }
+          if (r.ok) { toast(`You're in ${e.crew_name}. Answer on its card on the crew page.`); redo(); }
           else toast(r.status === 429 ? 'You\'re in 10 crews already. Leave one first.' : 'Couldn\'t join. Try again.');
         }, 'ink-btn solid'),
         btn('Directions to meet', () => page.goTo({ label: e.meet_name || e.title, lat: e.meet_lat, lon: e.meet_lon }), 'linkbtn'),
@@ -551,10 +553,12 @@
     }
 
     /** The "Crew drives" section: the same cards as the crew page (P-18), the plan form, meets nearby. `crews` are the ones
-     *  you're in ({id, name, visibility, role}). */
-    function section(crews) {
+     *  you're in ({id, name, visibility, role}). `o.crewId` (the crew page's Upcoming drives, the owner's TestFlight note
+     *  05, 2026-10-31: no Crew drives row any more): only that crew's drives, a + in the head's corner plans one for it,
+     *  and `o.before` (the last drive remembered) sits above the list. */
+    function section(crews, o = {}) {
       known = crews;
-      const sec = el('div', { className: 'stack-8' }, el('h3', { textContent: 'Crew drives' }));
+      const one = o.crewId ? crews.filter((c) => c.id === o.crewId) : crews;
       const list = el('div', { className: 'stack-8' }), formHost = el('div'), meets = el('div', { className: 'stack-8' });
       const loadMeets = () => {
         const at = (page.here && page.here()) || (page.mapCentre && page.mapCentre());
@@ -566,18 +570,27 @@
       };
       const redo = () => {
         loadMeets();
-        apiCall('GET', '/api/events').then(jsonOf).then((rows) => {
-          if (!Array.isArray(rows)) throw new Error('offline');
+        apiCall('GET', '/api/events').then(jsonOf).then((all) => {
+          if (!Array.isArray(all)) throw new Error('offline');
+          const rows = o.crewId ? all.filter((e) => e.crew_id === o.crewId) : all;
           const open = new Set([...list.querySelectorAll('.drive-card')].filter((c) => c.querySelector('.cp-more[open]')).map((c) => c.dataset.id));
-          list.replaceChildren(...(rows.length ? rows.map((e) => { const c = card(e, { redo, crew: crews.length > 1, open: open.has(e.id) }); c.dataset.id = e.id; return c; })
-            : [el('p', { className: 'note', textContent: crews.length ? 'No drives planned. Plan one for your crew.' : 'Join or start a crew to plan drives together.' })]));
+          const empty = o.crewId ? `${o.before ? 'Nothing planned next' : 'No drives planned'}. Tap + to plan one.`
+            : crews.length ? 'No drives planned. Plan one for your crew.' : 'Join or start a crew to plan drives together.';
+          list.replaceChildren(...(rows.length ? rows.map((e) => { const c = card(e, { redo, crew: one.length > 1, open: open.has(e.id) }); c.dataset.id = e.id; return c; })
+            : [el('p', { className: 'note', textContent: empty })]));
         }).catch(() => list.replaceChildren(el('p', { className: 'note', textContent: 'Couldn\'t load crew drives. Check signal.' })));
       };
       // the key gives way to the form while it is open: one way to plan a drive on the screen at a time
-      const planKey = crews.length ? btn('Plan a drive', () => openPlan(), 'ink-btn') : null;
-      const openPlan = (pick) => { formHost.replaceChildren(planForm(crews, () => { formHost.replaceChildren(); if (planKey) planKey.hidden = false; redo(); }, pick)); if (planKey) planKey.hidden = true; };
-      if (planKey) sec.append(planKey);
-      sec.append(formHost, list, meets);
+      let planKey = null;
+      if (one.length && o.crewId) {
+        planKey = el('button', { type: 'button', className: 'icon-btn plan-plus', innerHTML: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>' });
+        planKey.setAttribute('aria-label', 'Plan a drive');
+        planKey.addEventListener('click', () => openPlan(o.crewId));
+      } else if (one.length) planKey = btn('Plan a drive', () => openPlan(), 'ink-btn');
+      const openPlan = (pick) => { formHost.replaceChildren(planForm(one, () => { formHost.replaceChildren(); if (planKey) planKey.hidden = false; redo(); }, pick)); if (planKey) planKey.hidden = true; };
+      const sec = o.crewId
+        ? el('div', { className: 'stack-8 cp-week' }, el('div', { className: 'cp-sec' }, el('h3', { textContent: 'Upcoming drives' }), planKey || ''), formHost, ...(o.before ? [o.before] : []), list, meets)
+        : el('div', { className: 'stack-8' }, el('h3', { textContent: 'Crew drives' }), ...(planKey ? [planKey] : []), formHost, list, meets);
       lastPlan = openPlan; lastRedo = redo;
       redo();
       return sec;

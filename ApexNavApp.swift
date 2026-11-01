@@ -80,7 +80,7 @@ struct ApexShellRootView: View {
         .statusBarHidden(true)
         .persistentSystemOverlays(.hidden)
         .sheet(item: $shell.shareItem) { item in
-            ActivityShareSheet(items: [item.url])
+            ActivityShareSheet(items: item.items)
         }
         .onAppear { UIApplication.shared.isIdleTimerDisabled = true }
         .onChange(of: scenePhase) { _, phase in
@@ -152,13 +152,16 @@ final class ApexBundleSchemeHandler: NSObject, WKURLSchemeHandler {
     func webView(_ webView: WKWebView, stop task: WKURLSchemeTask) {}
 }
 
+// What the share sheet carries: a file the app wrote, or an invite's words and link (`shareText`, feedback 07).
 struct CSVShareItem: Identifiable {
     let id = UUID()
-    let url: URL
+    let items: [Any]
+    init(url: URL) { items = [url] }
+    init(items: [Any]) { self.items = items }
 }
 
 struct ActivityShareSheet: UIViewControllerRepresentable {
-    let items: [URL]
+    let items: [Any]
 
     func makeUIViewController(context: Context) -> UIActivityViewController {
         UIActivityViewController(activityItems: items, applicationActivities: nil)
@@ -451,6 +454,11 @@ final class ApexScriptBridge: NSObject, WKScriptMessageHandler {
         // a web view. The name is cleaned to letters, digits, dot, dash and underscore; the file goes in the app's temp folder.
         if cmd == "shareFile", let dict = body as? [String: Any], let b64 = dict["data"] as? String, let data = Data(base64Encoded: b64) {
             shell?.shareFile(name: (dict["name"] as? String) ?? "ApexNav", data: data)
+            return
+        }
+        // An invite or a share link (feedback 07): the real share sheet (Messages, AirDrop, Copy), never a "Copy this link" box.
+        if cmd == "shareText", let dict = body as? [String: Any] {
+            shell?.shareText(text: (dict["text"] as? String) ?? "", url: dict["url"] as? String)
             return
         }
         if cmd == "haptic" {
@@ -1495,6 +1503,15 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         } catch {
             evaluate("window.apex && window.apex.onNative && window.apex.onNative({type:'shareFailed'}); void 0;")
         }
+    }
+
+    func shareText(text: String, url: String?) {
+        var items: [Any] = []
+        let words = String(text.prefix(1000))
+        if !words.isEmpty { items.append(words) }
+        if let u = url, let link = URL(string: u), link.scheme == "https" || link.scheme == "http" { items.append(link) }
+        guard !items.isEmpty else { return }
+        shareItem = CSVShareItem(items: items)
     }
 
     func stopRecordingAndExport() {

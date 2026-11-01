@@ -32,6 +32,7 @@ import { redeem, shop } from "./redeem";
 import { flagsFor } from "./flags";
 import { coverage, exportRoads, roadBins } from "./roads";
 import { crewStandings } from "./standings";
+import { crewBoard, publishDriveScores } from "./drive_scores";
 import { eventCame, eventCancel, eventCreate, eventRecord, eventRole, eventRsvp, eventUpdate, eventsList, eventsNear } from "./events";
 import { healthReport, healthSummary } from "./health";
 import { feedbackCreate, feedbackDone, feedbackList } from "./feedback";
@@ -153,6 +154,9 @@ on("DELETE", "/api/events/:id/came", async (req, env, m) => { await eventCame(en
 on("GET", "/api/events/:id/record", async (req, env, m) => json(await eventRecord(env, await requireMember(req, env), m.groups!.id)));
 // the crew page (src/crew_page.ts, REVIEW.md roadmap 20)
 on("GET", "/api/crews/:id/page", async (req, env, m) => json(await crewPage(env, await requireMember(req, env), m.groups!.id)));
+// the board as a total of drive Scores over a period (drive_scores.ts, the owner's TestFlight note 06)
+on("GET", "/api/crews/:id/board", async (req, env, m) => json(await crewBoard(env, await requireMember(req, env), m.groups!.id, new URL(req.url))));
+on("POST", "/api/drives/scores", async (req, env) => json(await publishDriveScores(env, await requireMember(req, env), req)));
 on("PUT", "/api/crews/:id/page", async (req, env, m) => { await crewPageUpdate(env, await requireMember(req, env), m.groups!.id, req); return noContent(); });
 on("PUT", "/api/crews/:id/badges", async (req, env, m) => { await crewBadge(env, await requireMember(req, env), m.groups!.id, req); return noContent(); });
 on("GET", "/api/crews/:id/templates", async (req, env, m) => json(await templatesList(env, await requireMember(req, env), m.groups!.id)));

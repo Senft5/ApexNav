@@ -40,6 +40,15 @@
     g.textAlign = 'right'; g.font = `800 ${Math.round(fs * 0.6)}px system-ui, sans-serif`; g.fillText('APEX NAV', w - pad, h - fs * 0.6); g.textAlign = 'left';
   }
 
+  /**
+   * Whether this browser can make the video at all: a recorder with a type it can write and a canvas it can stream. The
+   * iOS web view has had no MediaRecorder or no canvas captureStream in some versions; there the panel isn't shown.
+   */
+  function supported(R = root) {
+    const C = R.HTMLCanvasElement;
+    return !!(R.ApexFlyoverVideo && R.ApexFlyoverVideo.mimeFor(R.MediaRecorder) && C && C.prototype && typeof C.prototype.captureStream === 'function');
+  }
+
   /** page: el, Core, drive d, fmtSpeed, save(blob, name, type) → Promise. Returns the panel element. */
   function mount(page) {
     const { el, Core, d } = page, T = Core.elapsedS(d.speed_mps), total = T[T.length - 1] || 0;
@@ -47,7 +56,11 @@
     const box = el('section', { className: 'dc-section' }, el('h2', { textContent: 'Dashcam overlay' }));
     const input = el('input', { type: 'file', accept: 'video/*', hidden: true }); input.setAttribute('aria-label', 'A video from this drive');
     const pick = el('label', { className: 'btn' }, 'Pick a video', input);
-    const video = el('video', { muted: true, playsInline: true }); video.style.display = 'none';
+    // iOS (the owner's "make video doesn't work"): a video with display:none, or one not yet played, never loads its data,
+    // so 'loadeddata' never came and Make the video stayed off. It stays in the page, 1 px and see-through, preloading.
+    const video = el('video', { muted: true, playsInline: true, preload: 'auto' });
+    video.setAttribute('playsinline', ''); video.setAttribute('muted', '');
+    video.style.cssText = 'position:absolute;width:1px;height:1px;opacity:0;pointer-events:none';
     const canvas = el('canvas'), g = canvas.getContext('2d');
     canvas.style.cssText = 'width:100%;max-width:640px;display:none;background:#000';
     const offset = el('input', { type: 'range', min: '-600', max: String(Math.max(600, Math.ceil(total))), step: '1', value: '0' }); offset.setAttribute('aria-label', 'When the video starts in the drive (s)');
@@ -66,7 +79,12 @@
       if (!f) return;
       pick.firstChild.textContent = 'Pick another video';
       video.src = URL.createObjectURL(f);
-      video.addEventListener('loadeddata', () => { canvas.style.display = 'block'; exportBtn.disabled = false; video.currentTime = Math.min(5, video.duration / 2); }, { once: true });
+      video.addEventListener('loadedmetadata', () => {
+        canvas.style.display = 'block'; exportBtn.disabled = false;
+        // a muted play and pause makes iOS decode a frame; then the preview seeks to it
+        Promise.resolve(video.play()).catch(() => {}).then(() => { video.pause(); video.currentTime = Math.min(5, (video.duration || 0) / 2 || 0); });
+      }, { once: true });
+      video.load();
     });
     video.addEventListener('seeked', paint); video.addEventListener('timeupdate', paint);
     offset.addEventListener('input', () => { offsetNote.textContent = `Video starts ${offset.value} s into the drive`; paint(); });
@@ -74,21 +92,32 @@
       const MR = root.MediaRecorder, mime = root.ApexFlyoverVideo && root.ApexFlyoverVideo.mimeFor(MR);
       if (!mime || !canvas.captureStream) { note.textContent = 'This browser can’t make videos.'; return; }
       exportBtn.disabled = true; note.textContent = 'Making the video: it plays through once.';
-      const rec = new MR(canvas.captureStream(30), { mimeType: mime, videoBitsPerSecond: 8e6 }), chunks = [];
-      rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
-      const done = new Promise((ok) => { rec.onstop = ok; });
-      let raf = 0; const loop = () => { paint(); raf = root.requestAnimationFrame(loop); };
-      video.currentTime = 0; await video.play(); rec.start(1000); loop();
-      await new Promise((ok) => video.addEventListener('ended', ok, { once: true }));
-      root.cancelAnimationFrame(raf); rec.stop(); await done;
-      const blob = new Blob(chunks, { type: mime.split(';')[0] });
-      await page.save(blob, root.ApexFlyoverVideo.fileName(`${d.name || 'drive'}-dashcam`, mime), mime.split(';')[0]);
-      note.textContent = 'Done. The sound isn’t kept.'; exportBtn.disabled = false;
+      let raf = 0;
+      try {
+        paint();                                                       // a frame on the canvas before the stream starts
+        const rec = new MR(canvas.captureStream(30), { mimeType: mime, videoBitsPerSecond: 8e6 }), chunks = [];
+        rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+        const done = new Promise((ok) => { rec.onstop = ok; });
+        const loop = () => { paint(); raf = root.requestAnimationFrame(loop); };
+        video.currentTime = 0;
+        const ended = new Promise((ok) => video.addEventListener('ended', ok, { once: true }));
+        await video.play(); rec.start(1000); loop();
+        await ended;
+        root.cancelAnimationFrame(raf); raf = 0; rec.stop(); await done;
+        const blob = new Blob(chunks, { type: mime.split(';')[0] });
+        if (!blob.size) throw new Error('empty');
+        await page.save(blob, root.ApexFlyoverVideo.fileName(`${d.name || 'drive'}-dashcam`, mime), mime.split(';')[0]);
+        note.textContent = 'Done. The sound isn’t kept.';
+      } catch (_) {
+        if (raf) root.cancelAnimationFrame(raf);
+        note.textContent = 'Couldn’t make the video on this phone.';
+      }
+      exportBtn.disabled = false;
     });
     box.append(note, pick, video, canvas, balance, offsetNote, exportBtn);
     return box;
   }
 
-  const api = { indexAt, overlayAt, drawOverlay, mount };
+  const api = { indexAt, overlayAt, drawOverlay, mount, supported };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexDashcam = api;
 })(typeof window !== 'undefined' ? window : globalThis);

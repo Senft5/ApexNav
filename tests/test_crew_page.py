@@ -103,3 +103,16 @@ def test_livery_is_one_line():
     assert run("C.liveryShort({ tier: 'plain', decals: 1 })") == "Plain livery · 1 Decal"
     assert run("C.liveryShort(null)") == "Plain livery · Decals come from crew-mates with Vetta Pro"
     assert run("C.liveryShort({ tier: 'factory', granted: true })") == "Factory livery · every option open (early access)"
+
+
+@needs_node
+def test_drive_scores_to_send_are_the_logs_scores_on_the_phones_day():
+    # the owner's TestFlight note 06: a drive's Score and its local day; none without a Score or a known date; none twice
+    sums = ("[{id: 'a', date: '2026-11-02T02:30:00Z', ds: {score: 702.4}}, {id: 'b', date: '2026-11-02T12:00:00Z', ds: {score: null}},"
+            " {id: 'c', date: '2026-11-02T12:00:00Z', date_known: false, ds: {score: 650}}, {id: 'd', date: '2026-11-03T12:00:00Z', ds: {score: 600}},"
+            " {id: 'e', date: '2026-11-03T12:00:00Z', ds: {score: 610}}]")
+    assert run(f"C.drivesToSend({sums}, {{d: 600, e: 500}})") == [
+        {"id": "a", "score": 702, "driven_on": "2026-11-01"},   # 9:30 PM the night before in Tennessee
+        {"id": "e", "score": 610, "driven_on": "2026-11-03"},   # its Score changed since it was sent
+    ]
+    assert run("C.dayOf('nope')") is None

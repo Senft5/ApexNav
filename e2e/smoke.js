@@ -1096,7 +1096,7 @@ flow('convoy: an in-app invite toasts and Join gets you in, no link (Worker stub
 
 flow('crew page: an old ?view=crew link opens People on Crews, at your crew; going, chat and the livery reach the Worker (Worker stubbed, REVIEW.md roadmap 20)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
-  const sent = [], soon = new Date(Date.now() + 3 * 86400e3).toISOString();
+  const sent = [], boardAsks = [], soon = new Date(Date.now() + 3 * 86400e3).toISOString();
   const crewPage = { id: 'k1', name: 'Ridge Runners', motto: 'Slow in, smooth out.', visibility: 'private', area_name: null, members: 3, is_owner: true,
     crest: null, crest_photo_id: null, stripe: null, cover_photo_id: null, livery: 'plain', sharing_scores: true,
     board: [{ handle: 'sam', score: 811, car: 'Mazda MX-5', mine: false }, { handle: 'me', score: null, car: null, mine: true }],
@@ -1108,6 +1108,11 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
     if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
     if (u.pathname === '/api/crews') return json([{ id: 'k1', name: 'Ridge Runners', role: 'owner', visibility: 'private', members: 3 }]);
     if (u.pathname === '/api/crews/k1/page') return json(crewPage);
+    if (u.pathname === '/api/events') return json([{ ...crewPage.next, crew_id: 'k1', crew_name: 'Ridge Runners' }]);
+    // the owner's note 06: the board is each member's face and the total of their drive Scores over the picked period
+    if (u.pathname === '/api/crews/k1/board') { boardAsks.push(u.searchParams.get('period')); return json({ period: u.searchParams.get('period'), rows: u.searchParams.get('period') === 'all'
+      ? [{ handle: 'sam', photo_id: null, total: 12840, drives: 17, car: 'Mazda MX-5', mine: false }, { handle: 'me', photo_id: null, total: 702, drives: 1, mine: true }]
+      : [{ handle: 'sam', photo_id: null, total: 1622, drives: 2, car: 'Mazda MX-5', mine: false }, { handle: 'me', photo_id: null, total: null, drives: 0, mine: true }] }); }
     if (u.pathname === '/api/crews/k1/chat') return json([{ id: 'm1', handle: 'sam', body: '<b>Fog</b> by 7?', created_at: '2026-10-29 10:00:00', mine: false, photo_id: null }]);
     if (u.pathname === '/api/crews/k1/members') return json([{ handle: 'me', role: 'owner', mine: true }, { handle: 'sam', role: 'member', mine: false }, { handle: 'cara', role: 'member', mine: false }]);
     if (u.pathname === '/api/presence') return json([{ handle: 'cara', photo_id: null, delay_s: 0, fuzz: false, road: 'Cherohala Skyway', lat: 35.3, lon: -84.1, at: new Date(Date.now() - 30e3).toISOString() }]);
@@ -1119,8 +1124,21 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
   check(await page.evaluate(() => document.querySelector('[data-people="crews"]').getAttribute('aria-selected') === 'true' && !document.getElementById('crewsBody').hidden
     && document.getElementById('accountBody').hidden && document.getElementById('sheetTitle').textContent === 'People'), 'on the People tab, its Crews side');
   check(await page.evaluate(() => !!document.querySelector('#crewsBody .crew-head .gear-key') && !document.querySelector('#crewsBody .friend-list')), 'the crew head and its gear are on the Crews side, no friends list there');
-  const rows = await page.$$eval('.cp-board-row', (r) => r.map((x) => [x.querySelector('.who b').textContent, x.querySelector('.score').textContent]));
-  check(JSON.stringify(rows) === JSON.stringify([['@sam', '811'], ['@me', '--']]), 'the board: a Score, then -- for no Score: ' + JSON.stringify(rows));
+  await page.waitForSelector('.cp-board .cp-board-row');
+  const boardRows = () => page.$$eval('.cp-board .cp-board-row', (r) => r.map((x) => [x.querySelector('.who b').textContent, x.querySelector('.score').textContent, !!x.querySelector('.avatar')]));
+  const rows = await boardRows();
+  check(JSON.stringify(rows) === JSON.stringify([['@sam', (1622).toLocaleString(), true], ['@me', '--', true]]) && boardAsks[0] === 'month', 'the board: a face and this month\'s total, then -- for none: ' + JSON.stringify(rows));
+  check(JSON.stringify(await page.$$eval('.cp-periods button', (b) => b.map((x) => x.textContent + ':' + x.getAttribute('aria-checked')))) === '["Week:false","Month:true","Year:false","All time:false"]', 'Week / Month / Year / All time, Month picked');
+  await page.click('.cp-periods button:text-is("All time")');
+  await page.waitForFunction(() => /12/.test((document.querySelector('.cp-board .score') || {}).textContent || ''));
+  check(JSON.stringify((await boardRows()).map((r) => r[1])) === JSON.stringify([(12840).toLocaleString(), (702).toLocaleString()]) && boardAsks.includes('all'), 'All time asks for all time');
+  // the owner's note 05: no Crew drives row; the crew's Upcoming drives has a + in its corner that plans one
+  check(!/Crew drives/.test(await page.$$eval('#crewsBody .nav-rows', (n) => n.map((x) => x.textContent).join('|'))), 'no Crew drives row on Crews');
+  check(/Upcoming drives/.test(await page.textContent('.cp-week .cp-sec h3')) && await page.isVisible('.cp-week .cp-sec .plan-plus'), 'Upcoming drives with a + in its corner');
+  await page.click('.cp-week .plan-plus');
+  await page.waitForSelector('.cp-week .plan-drive');
+  check(await page.isHidden('.cp-week .plan-plus'), 'the + opens the plan form there, and gives way to it');
+  await page.click('.cp-week .plan-drive button:text-is("Cancel")');
   check(await page.$eval('.cp-msg p', (p) => p.textContent === '<b>Fog</b> by 7?' && !p.querySelector('b')), 'chat is set as text');
   // P-03: the run first, then the members, then the chat, the board after; the livery one line at the foot; no Convoy heading
   await page.waitForSelector('.cp-member');
@@ -1962,6 +1980,7 @@ flow('crew drives: an upcoming drive shows on People, Crews, as the crew page’
       lead: 'bob', sweep: null, regroup: [{ name: 'The overlook', lat: 35.33, lon: -84.12 }] },
       { id: 'EVT2AAAAAAAAAAAA', crew_id: 'CREW1', crew_name: 'Ridge Runners', title: 'My run', starts_at: starts, meet_name: 'Kroger lot', meet_lat: 35.76, meet_lon: -83.96, route_id: null,
         notes: null, by_handle: 'me', mine: true, can_cancel: true, my_rsvp: 'going', going: ['me'], maybe: 0, lead: 'me', sweep: null, regroup: [] }]);
+    if (u.pathname === '/api/crews/CREW1/page') return json({ id: 'CREW1', name: 'Ridge Runners', visibility: 'private', members: 3, is_owner: false, livery: 'plain', board: [], sharing_scores: false, next: null, last: null });
     if (u.pathname === '/api/crews/CREW1/members') return json([{ handle: 'me', mine: true }, { handle: 'bob', mine: false }]);
     if (u.pathname === '/api/highlights' && m === 'GET') return json([{ id: 'HL1', name: 'Look Rock <b>view</b>', lat: 35.64, lon: -83.94, score: 4.5, ratings: 6, mine: false,
       category: 'overlook', note: 'Best at sunset', visits: 9, my_stars: null }, { id: 'HL2', name: 'Bean Stop', lat: 35.75, lon: -83.97, score: 3.9, ratings: 2, mine: true, category: 'cafe' }]);
@@ -1973,30 +1992,28 @@ flow('crew drives: an upcoming drive shows on People, Crews, as the crew page’
   await page.goto(base + '/index.html');
   await page.waitForFunction(() => window.apex && typeof window.apex.live === 'function');
   await page.evaluate(() => document.querySelector('.tab[data-view="people"]').click());
-  // in a crew, Crew drives is a row on the Crews side; it opens its list (REVIEW2.md U-30)
-  const openRow = async (side, name) => {
+  // the owner's note 05 (2026-10-31): no Crew drives row; the crew page's Upcoming drives lists the crew's drives, a + plans one
+  const W = '.crew-page .cp-week';
+  const openDrives = async () => {
     for (const done of await page.$$('.side-pop.open .side-pop-head button')) await done.click();   // Done on the sheet that's open
-    await page.click(`[data-people="${side}"]`);
-    const pane = side === 'crews' ? '#crewsBody' : '#accountBody';
-    await page.click(`${pane} .nav-row:has-text("${name}")`);
-    await page.waitForTimeout(350);
+    await page.click('[data-people="crews"]');
+    await page.waitForSelector(`${W} .drive-card`);
   };
   // the Photon search behind "Meet at…" (P-10)
   await page.route('https://photon.komoot.io/**', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ features: [
     { geometry: { coordinates: [-84.2912, 35.3601] }, properties: { name: 'Tellico Plains Shell', city: 'Tellico Plains', state: 'Tennessee' } }] }) }));
-  await openRow('crews', 'Crew drives');
-  await page.waitForSelector('.drive-card');
-  const card = await page.textContent('.drive-card');
+  await openDrives();
+  const card = await page.textContent(`${W} .drive-card`);
   check(card.includes('Cherohala <i>Saturday</i>') && /Tomorrow|Today/.test(card) && card.includes('2 going · 1 maybe'), 'the drive, as text: ' + card);
   // P-18: the sheet's drive is the crew page's card: the date block once, three lines, faces and one key; the rest under More
-  check(await page.evaluate(() => { const c = document.querySelector('.side-pop.open .drive-card:not(.meet-card)');
+  check(await page.evaluate(() => { const c = document.querySelector('.crew-page .cp-week .drive-card:not(.meet-card)');
     return c.classList.contains('cp-drive') && !!c.querySelector('.cp-date b') && !!c.querySelector('details.cp-more:not([open])') && !c.querySelector('.switch'); }), 'the card, its detail folded under More');
-  check(!/\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d/.test(await page.$eval('.side-pop.open .drive-card:not(.meet-card) .cp-drive-body', (b) => b.textContent)), 'the date said once, in the block (P-27): ' + card);
+  check(!/\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d/.test(await page.$eval(`${W} .drive-card:not(.meet-card) .cp-drive-body`, (b) => b.textContent)), 'the date said once, in the block (P-27): ' + card);
   await page.click('.drive-card:not(.meet-card) summary:has-text("More")');
   await page.waitForSelector('.drive-card:not(.meet-card) .cp-more-body');
   check((await page.textContent('.drive-card:not(.meet-card)')).includes('Going: @bob, @cara · 1 maybe'), 'More names who is going');
   await page.waitForSelector('.meet-card');
-  check(/Sunday coffee/.test(await page.textContent('.meet-card')) && /7 going/.test(await page.textContent('.meet-card')) && /Meets near you/.test(await page.evaluate(() => document.querySelector('.meet-card').closest('.side-pop, #sheet').textContent)), 'a public meet nearby');   // in a crew: the Crew drives row's sheet
+  check(/Sunday coffee/.test(await page.textContent('.meet-card')) && /7 going/.test(await page.textContent('.meet-card')) && /Meets near you/.test(await page.evaluate(() => document.querySelector('.meet-card').closest('.side-pop, #sheet').textContent)), 'a public meet nearby');   // in a crew: under the crew's Upcoming drives
   await page.click('.drive-card:not(.meet-card) .switch button:text-is("Going")');
   await page.waitForFunction(() => document.querySelector('.drive-card:not(.meet-card) .switch button[aria-checked="true"]')?.textContent === 'Going');   // the answer is a slide switch
   check(posted.some(([p, b]) => p === '/api/events/EVT1AAAAAAAAAAAA/rsvp' && b.status === 'going'), 'the answer was sent');
@@ -2007,7 +2024,7 @@ flow('crew drives: an upcoming drive shows on People, Crews, as the crew page’
   await page.waitForTimeout(300);
   check(posted.some(([p, b]) => p === '/api/events/EVT1AAAAAAAAAAAA/role' && b.role === 'sweep' && b.take === true), 'I\'ll sweep was sent');
   // the planner's own drive: notes and a regroup point set on its card, after planning (P-10); no meet switch on a private crew (P-30)
-  const myCard = '.side-pop.open .drive-card:not(.meet-card):has-text("My run")';
+  const myCard = `${W} .drive-card:not(.meet-card):has-text("My run")`;
   await page.click(`${myCard} summary:has-text("More")`);
   await page.waitForSelector(`${myCard} .cp-set`);
   check(!/List it for everyone/.test(await page.textContent(`${myCard} .cp-set`)), 'a private crew is not offered a public meet');
@@ -2042,21 +2059,22 @@ flow('crew drives: an upcoming drive shows on People, Crews, as the crew page’
   check(posted.some(([p, b]) => p === '/api/highlights/HL1/rating' && b.stars === 5), 'the rating was sent');
   await page.evaluate(() => document.querySelector('.tab[data-view="people"]').click());
   // plan one, on one screen (P-10): a name, the day, the time, Meet at… by search; no roles, regroup or notes up front
-  await openRow('crews', 'Crew drives');
-  await page.click('.side-pop.open button:has-text("Plan a drive")');
-  await page.fill('.side-pop.open input[aria-label="Drive name"]', 'Dragon run');
-  check(!(await page.$$('.side-pop.open .plan-drive select[aria-label="Sweep"], .side-pop.open .plan-drive input[aria-label="Regroup point name"], .side-pop.open .plan-drive input[aria-label="Notes"]')).length,
+  await openDrives();
+  check(!/Crew drives/.test(await page.$$eval('#crewsBody .nav-row', (n) => n.map((x) => x.textContent).join('|'))), 'no Crew drives row');
+  await page.click(`${W} .plan-plus`);
+  await page.fill(`${W} input[aria-label="Drive name"]`, 'Dragon run');
+  check(!(await page.$$(`${W} .plan-drive select[aria-label="Sweep"], ${W} .plan-drive input[aria-label="Regroup point name"], ${W} .plan-drive input[aria-label="Notes"]`)).length,
     'roles, regroup points and notes are not on the form');
-  check(!(await page.$$('.side-pop.open .plan-drive .sw[disabled], .side-pop.open .plan-drive button.sw:has-text("Plan a route first")')).length && await page.isVisible('.side-pop.open .plan-drive button:has-text("Add a route")'),
+  check(!(await page.$$(`${W} .plan-drive .sw[disabled], ${W} .plan-drive button.sw:has-text("Plan a route first")`)).length && await page.isVisible(`${W} .plan-drive button:has-text("Add a route")`),
     'no route planned: an Add a route link, not a switch that can\'t be switched (P-29)');
-  check(!(await page.$$('.side-pop.open select:not(.row-pick-native), .side-pop.open input[type=checkbox], .side-pop.open input[type=date], .side-pop.open input[type=time]')).length, 'the form shows none of the browser\'s own controls');
-  check(/Tmrw|Today/.test(await page.textContent('.side-pop.open .detents.scroll [aria-checked="true"]')), 'tomorrow is the day by default');
-  await page.fill('.side-pop.open input[aria-label="Meet at"]', 'Tellico');
-  await page.click('.side-pop.open .meet-hits button:has-text("Tellico Plains Shell")');
-  check(/Meeting point: Tellico Plains Shell/.test(await page.textContent('.side-pop.open .plan-drive')), 'the meeting point by search');
-  const formH = await page.$eval('.side-pop.open .plan-drive', (f) => f.getBoundingClientRect().height);
+  check(!(await page.$$(`${W} select:not(.row-pick-native), ${W} input[type=checkbox], ${W} input[type=date], ${W} input[type=time]`)).length, 'the form shows none of the browser\'s own controls');
+  check(/Tmrw|Today/.test(await page.textContent(`${W} .detents.scroll [aria-checked="true"]`)), 'tomorrow is the day by default');
+  await page.fill(`${W} input[aria-label="Meet at"]`, 'Tellico');
+  await page.click(`${W} .meet-hits button:has-text("Tellico Plains Shell")`);
+  check(/Meeting point: Tellico Plains Shell/.test(await page.textContent(`${W} .plan-drive`)), 'the meeting point by search');
+  const formH = await page.$eval(`${W} .plan-drive`, (f) => f.getBoundingClientRect().height);
   check(formH < 852, `the form fits one phone screen (${Math.round(formH)} px)`);
-  await page.click('.side-pop.open button:has-text("Plan it")');
+  await page.click(`${W} button:has-text("Plan it")`);
   await page.waitForFunction(() => /Drive planned/.test(document.getElementById('toast').textContent));
   const plan = posted.find(([p]) => p === '/api/crews/CREW1/events');
   check(plan && plan[1].title === 'Dragon run' && /Z$/.test(plan[1].starts_at) && plan[1].meet.name === 'Tellico Plains Shell' && Math.abs(plan[1].meet.lat - 35.3601) < 1e-6 && plan[1].route_id === null && plan[1].public === false, 'the plan was sent: ' + JSON.stringify(plan));
@@ -2117,7 +2135,7 @@ flow('the run as one card: the morning of, a crew-mate\'s convoy to join or your
   await crewSide();
   await page.waitForSelector('.cp-week .drive-card.is-remembered .cp-best');
   const rec = await page.textContent('.cp-week');
-  check(/Last drive/.test(rec) && /DRIVEN/.test(rec) && /2 came: @sam, @cara/.test(rec) && /811/.test(rec) && /Best Vetta Score · @sam on Cherohala Skyway/.test(rec) && /Plan the next one/.test(rec), 'remembered: ' + rec);
+  check(/Upcoming drives/.test(rec) && /DRIVEN/.test(rec) && /2 came: @sam, @cara/.test(rec) && /811/.test(rec) && /Best Vetta Score · @sam on Cherohala Skyway/.test(rec) && /Nothing planned next/.test(rec) && await page.isVisible('.cp-week .plan-plus'), 'remembered, above the + to plan the next one: ' + rec);
   await page.click('.cp-week button:has-text("I was there")');
   await page.waitForTimeout(300);
   check(sent.some(([m, p]) => m === 'POST' && p === '/api/events/e0AAAAAAAAAAAAAA/came'), 'I was there is sent');
@@ -3056,6 +3074,37 @@ flow('spot photo: a camera photo with GPS in its EXIF is kept without it, shows 
   await page.waitForFunction(() => window.ApexSpotPhotos);
   check(await page.evaluate(() => window.ApexSpotPhotos.count()) === 0, 'Erase everything clears spot photos');
 }, { geolocation: { latitude: 35.96, longitude: -83.92 }, permissions: ['geolocation'] });
+
+flow('a whole road as a stage: the drive\'s roads are keys, the picked one is circled on its map and saved under its name (the owner\'s note 09)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  let sent = 0;
+  // the map match names the samples it is sent: the second half "Bank Road" (the first and last km never sent)
+  await page.route('https://valhalla1.openstreetmap.de/**', async (route) => {
+    const shape = JSON.parse(route.request().postData()).shape; sent = shape.length;
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify({ edges: [{ way_id: 1, names: ['Cheviot Road'] }, { way_id: 2, names: ['Bank Road'] }],
+      matched_points: shape.map((_, k) => ({ type: 'matched', edge_index: k < shape.length / 2 ? 0 : 1 })) }) });
+  });
+  await page.goto(base + '/analysis.html');
+  await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && window.ApexRecording);
+  await page.evaluate(async () => {
+    const lat = [], lon = [];
+    for (let i = 0; i < 800; i++) { lat.push(39.1 + i * 5 / 110540); lon.push(-84.6 + Math.sin(i / 60) * 0.001); }
+    await ApexRecording.store({ id: 'br1', name: 'Bank Road', date: '2026-10-29T15:00:00Z', lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: lat.map(() => 15),
+      lon_g: lat.map(() => 0), lat_g: lat.map(() => 0), g_known: null, elev: lat.map((_, i) => 200 + i * 0.1), hz: 1, source: 'web-gps', events: [] });
+  });
+  await page.goto(base + '/analysis.html?tab=stages&drive=br1');
+  await page.waitForSelector('#segRoads button:has-text("Bank Road uphill")');
+  check(sent === 400, 'only the middle of the drive was sent: ' + sent);
+  check(!(await page.$('#segMap ellipse')), 'nothing circled before a pick');
+  await page.click('#segRoads button:has-text("Bank Road uphill")');
+  await page.waitForSelector('#segMap ellipse');
+  check(await page.getAttribute('#segRoads button:has-text("Bank Road uphill")', 'aria-pressed') === 'true', 'the picked road is pressed');
+  check(/corners · up 20 m/.test(await page.textContent('#segInfo')), 'its length and climb: ' + await page.textContent('#segInfo'));
+  await page.click('#segSave');
+  await page.waitForFunction(() => JSON.parse(localStorage.getItem('apex.segments') || '[]').some((s) => s.name === 'Bank Road uphill'));
+  const seg = await page.evaluate(() => JSON.parse(localStorage.getItem('apex.segments')).find((s) => s.name === 'Bank Road uphill'));
+  check(seg.length_m === 199 * 5, 'from where it joined Bank Road to where it left: ' + seg.length_m);
+});
 
 flow('dashcam overlay: a video from the drive gets its speed, g and calls drawn on and comes out as a new video (IDEAS D-11)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });

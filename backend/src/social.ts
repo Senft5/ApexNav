@@ -264,6 +264,7 @@ export async function crewLeave(env: Env, v: Viewer, crewId: string): Promise<vo
   await env.DB.batch([
     env.DB.prepare(dissolve ? "DELETE FROM grants WHERE audience_type = 'crew' AND audience_id = ?1" : "DELETE FROM grants WHERE audience_type = 'crew' AND audience_id = ?1 AND user_id = ?2").bind(...(dissolve ? [crewId] : [crewId, v.id])),
     env.DB.prepare(dissolve ? "DELETE FROM board_entries WHERE audience_type = 'crew' AND audience_id = ?1" : "DELETE FROM board_entries WHERE audience_type = 'crew' AND audience_id = ?1 AND user_id = ?2").bind(...(dissolve ? [crewId] : [crewId, v.id])),
+    env.DB.prepare(dissolve ? "DELETE FROM drive_scores WHERE crew_id = ?1" : "DELETE FROM drive_scores WHERE crew_id = ?1 AND user_id = ?2").bind(...(dissolve ? [crewId] : [crewId, v.id])),
     env.DB.prepare(dissolve ? "DELETE FROM segment_shares WHERE audience_type = 'crew' AND audience_id = ?1" : "DELETE FROM segment_shares WHERE audience_type = 'crew' AND audience_id = ?1 AND segment_id IN (SELECT id FROM segments WHERE owner = ?2)").bind(...(dissolve ? [crewId] : [crewId, v.id])),
     env.DB.prepare(dissolve ? "DELETE FROM crews WHERE id = ?1" : "DELETE FROM crew_members WHERE crew_id = ?1 AND user_id = ?2").bind(...(dissolve ? [crewId] : [crewId, v.id])),
   ]);
@@ -281,6 +282,7 @@ export async function setGrant(env: Env, v: Viewer, req: Request): Promise<void>
     await env.DB.batch([
       env.DB.prepare("DELETE FROM grants WHERE user_id = ? AND audience_type = ? AND audience_id = ?").bind(v.id, type, id),
       env.DB.prepare("DELETE FROM board_entries WHERE user_id = ? AND audience_type = ? AND audience_id = ?").bind(v.id, type, id),
+      ...(type === "crew" ? [env.DB.prepare("DELETE FROM drive_scores WHERE user_id = ? AND crew_id = ?").bind(v.id, id)] : []),
     ]);
     return;
   }

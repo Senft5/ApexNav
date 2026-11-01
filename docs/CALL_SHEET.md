@@ -4,6 +4,60 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-10-31: TestFlight notes 09, 10 and "make video doesn't work"
+
+- 09, stages on the map: New stage from a drive no longer shows the speed/elevation strip. It shows the drive as a small
+  north-up map with the stage drawn bold and circled (web/route_thumb.js), the drive's roads as keys ("Bank Road uphill ·
+  0.6 mi"), and Start and Finish sliders for any other stretch. A road key covers it from where you joined it to where
+  you left it; a crossing or a short unnamed link (under 60 m) doesn't split it; "uphill"/"downhill" at 15 m or more of
+  height change; under 200 m isn't offered. Undo: the segRoads/segMap/segFrom block in web/analysis.html.
+- The roads come from map matching the drive on the public Valhalla server (contributor.js matchDrive now also asks for
+  edge names), first and last km never sent, as privacy.html already says; asked when the marker opens on a drive and
+  kept on the phone (apex.driveRoads, 30 drives) so a drive's track is sent once. Roads in the first or last km stay
+  unnamed (use the sliders). Undo: drop 'edge.names' and road_runs.js.
+- 10: "Which route was better?", each choice a key with a small map of that drive's route (start filled, finish open).
+  The ranking underneath still ranks by drive name, as before.
+- Make the video: on iOS the dashcam video sat display:none and was never played, so WebKit never loaded its data,
+  'loadeddata' never fired and Make the video stayed greyed. The video now stays in the page (1 px, see-through),
+  preloads, and a muted play/pause decodes the first frame. The flyover's recording canvas is now put in the page too
+  (WebKit streams a canvas as it renders it). Both keys are hidden where the browser has no MediaRecorder type or no
+  canvas captureStream, and a failed or empty recording says so instead of handing over nothing. Not verified on a
+  phone (Chromium only here). Undo: web/dashcam.js, web/flyover_video.js.
+## 2026-10-31: TestFlight notes 05 and 06 (Crew drives row gone; the Score board as totals)
+
+- *No Crew drives row; the crew page's drive section is "Upcoming drives"*: every planned drive of that crew as its card,
+  a + in the head's corner opens the plan form in place (it gives way while the form is open), the last drive remembered
+  above for three days, Meets near you at its foot. Someone with crews but no crew page (the page failed to load) still
+  gets the old section. Undo: `drives` in the crewPage mount (web/cockpit.js) and the `!inCrew` on `drives`.
+- *The board ranks the total of drive Scores*, Week / Month (default) / Year / All time, the pick kept on the phone, each
+  row a face, the rank, @handle, car, "N drives" and the total; "--" for members who share none. Weeks start Monday, all
+  periods in UTC days (as the old board's month). Undo: `board()` in web/crew_page.js back to `c.board`.
+- *Drive Scores had to reach the server* (only stage bests did): migration 0043 `drive_scores`, one row per drive per crew
+  the driver shares Scores with, written when you publish (as board_entries), so switching a crew on later doesn't
+  expose drives sent before it was on, except: *past drives in your Log go up too* the first time the board opens (the
+  stage board already publishes past runs). The toast now says "sees your drive Scores now", not "from your next drive".
+  A drive goes up 5 s after any Log refresh when signed in, and before the board loads. Only the number and the day.
+- *A drive deleted from the Log keeps its Score on the board* (the server has no delete for one drive yet). Undo/extend:
+  a `DELETE /api/drives/scores/:id` called from the Log's delete.
+- *Old builds keep the page's `board`* (best stage Score this month) unchanged; only new builds call the new route.
+## 2026-10-31: TestFlight feedback 01-04, 07, 08 (one surface, the island, centred fields, bottom sheets, the share sheet)
+
+- 01: a route Preview now hides the route card, Where to? and the tabs like a replay does (one class, `replaying`, for
+  both); Done or the plate's × brings the card back. Undo: `state.mode === 'replay'` in paintIdle (web/cockpit.js).
+- 02: with the keyboard up, Where to? stops 12 px below the Dynamic Island (safe area, at least 20 px) instead of running
+  the full height. Undo: `html.kb-open .plan.open { height: 100%; }` in web/index.html.
+- 03: read as "vertically centred, left-aligned": every written field (textarea.field) has the one-line field's padding so
+  its words sit in the middle, starts at its rows and grows as you write; crew chat starts one line tall. Undo: the
+  `textarea.field` rule in web/index.html and the input listener in cockpit.js.
+- 04: menus (every `.side-pop`: crew drives, crew settings, friends, a friend's profile, About this road) slide up from
+  the bottom over a dim scrim; nothing behind is tappable; a tap outside slides it away at once (through its own Done/Close,
+  so what that does still happens), not a shake first. Pop-up cards (`.overlay.dim`) slide up too; they already closed on
+  an outside tap. A desk (1100 px+) keeps them beside its panel. Undo: the feedback-04 rules in web/index.html.
+- 07: every invite and share link goes through `ApexSaveFile.shareLink`: the shell's real share sheet in the app (new
+  `shareText` bridge, UIActivityViewController), the web's share sheet, else the clipboard with a toast; the "Copy this
+  link" box is gone. In the app the drive card image goes to the shell's share sheet too. Undo: copyText in cockpit.js.
+- 08: the crew page's Share (an image card, Factory livery) is removed; Invite is how a crew is shared.
+
 ## 2026-10-31: "it always thinks my phone is warm"
 
 - The battery saver came on at iOS's "serious" thermal state, where a phone charging on a dash with GPS and CarPlay sits

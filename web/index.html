@@ -281,7 +281,8 @@
     .place span:empty { display: none; }
     .place small { grid-column: 1 / -1; font-size: 13px; color: var(--panel-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .place-list .note { margin: 8px 2px 0; }
-    /* Watching a recorded drive: the gauges and scrubber own the bottom; the plate's × ends the replay and brings Where to? back. */
+    /* Watching a recorded drive or previewing a route (feedback 01): the gauges and scrubber own the bottom; Done or the plate's ×
+       ends it and brings the route card / Where to? back. */
     #app.live .plan, #app.sheet-open .plan, #app.replaying .plan { display: none; }
     #app:not(.live) .plates { bottom: 72px; }
     #app.plan-open .plates, #app.plan-open .edge { display: none; }
@@ -743,6 +744,15 @@
       border-left: 1px solid var(--rule); box-shadow: -12px 0 32px rgba(0, 0, 0, 0.3); padding: calc(14px + var(--safe-top)) calc(16px + var(--safe-right)) calc(24px + var(--safe-bottom)) 16px;
       overflow-y: auto; display: grid; gap: 16px; align-content: start; transform: translateX(105%); transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1); }   /* F-16 */
     .side-pop.open { transform: none; }
+    /* feedback 04: these menus slide up from the bottom as a sheet (not in from the side), over a scrim that takes every tap
+       outside them; a tap on it slides the sheet away (cockpit.js popScrim). A desk keeps them beside its panel (below). */
+    .side-pop { top: auto; left: 0; width: auto; min-height: min(50%, 420px); max-height: calc(100% - var(--safe-top) - 24px);
+      border-left: 0; border-top: 1px solid var(--rule); box-shadow: 0 -12px 32px rgba(0, 0, 0, 0.3);
+      padding: 22px calc(16px + var(--safe-right)) calc(24px + var(--safe-bottom)) calc(16px + var(--safe-left)); transform: translateY(105%); overscroll-behavior: contain; }
+    .side-pop::before { content: ""; position: absolute; top: 8px; left: 50%; width: 36px; height: 3px; margin-left: -18px; background: var(--panel-dim); opacity: 0.5; }
+    .side-pop.open { transform: none; }
+    .pop-scrim { position: fixed; inset: 0; z-index: 29; background: rgba(0, 0, 0, 0.45); opacity: 0; pointer-events: none; transition: opacity 0.2s ease-out; }
+    body:has(.side-pop.open) .pop-scrim { opacity: 1; pointer-events: auto; }
     .side-pop-head { display: flex; justify-content: space-between; align-items: center; }
     .side-pop .side-pop-head h3 { border: 0; padding: 0; margin: 0; }
     .crew-detail { border-top: 1px solid var(--hair, var(--panel-dim)); padding-top: 8px; margin-top: 4px; }
@@ -786,6 +796,11 @@
     /* pinned to the bottom with an auto margin, not flex-end: a sheet taller than a landscape screen still scrolls to its top */
     .overlay.dim { background: rgba(0,0,0,0.5); justify-content: flex-start; padding: 0; }
     .overlay.dim > :first-child { margin-top: auto; }
+    /* feedback 04: a menu over the screen slides up from the bottom; the dim behind it takes the taps and closes it (not
+       the end card: the drive's map is fitted to where the card stands) */
+    .overlay.dim.show:not(#endCard) > :first-child { animation: sheet-up 0.2s cubic-bezier(0.2, 0.8, 0.2, 1); }
+    @keyframes sheet-up { from { transform: translateY(100%); } to { transform: none; } }
+    @media (prefers-reduced-motion: reduce) { .overlay.dim.show:not(#endCard) > :first-child { animation: none; } .side-pop, .pop-scrim { transition: none; } }
     .overlay .card-sheet { background: var(--panel); color: var(--panel-ink); border-top: 2px solid var(--rule); padding: 24px calc(24px + var(--safe-right)) calc(24px + var(--safe-bottom)) calc(24px + var(--safe-left)); display: grid; gap: 12px; }
     .overlay h1 { font-family: var(--font-num); font-size: 36px; line-height: 1.05; font-weight: 800; }
     .overlay h2 { font-family: var(--font-num); font-size: 28px; font-weight: 700; }
@@ -875,6 +890,9 @@
     .plan-fields { display: grid; gap: 6px; } .plan-fields .ink-btn { min-width: 64px; }
     textarea { resize: none; }
     .field { flex: 1; min-width: 0; height: 44px; padding: 0 10px; font: inherit; font-size: 16px; background: transparent; color: var(--panel-ink); border: 1px solid var(--panel-dim); user-select: text; }
+    /* feedback 03: a written field's words sit left and centred top to bottom like a one-line field's, not glued to its top
+       edge; one line tall to start (rows), it grows with what's written (cockpit.js) */
+    textarea.field { height: auto; min-height: 44px; max-height: 40vh; padding: 10px; line-height: 22px; text-align: left; }
     .ink-btn { height: 44px; padding: 0 16px; border: 1.5px solid var(--panel-ink); font-size: 15px; font-weight: 600; font-family: var(--font-ui); }
     .ink-btn.solid { height: 48px; background: var(--panel-ink); color: var(--panel); border-color: var(--panel-ink); }
     .ink-btn.on { background: var(--panel-ink); border-color: var(--panel-ink); color: var(--panel); }
@@ -902,7 +920,9 @@
       outline: none; border-color: var(--panel-ink); box-shadow: inset 0 0 0 1px var(--panel-ink); }
     html.kb-open .tabbar { display: none !important; }
     html.kb-open #app { height: var(--kb-h); }
-    html.kb-open .plan.open { height: 100%; }
+    /* feedback 02: with the keyboard up the sheet takes the height above it but stops below the Dynamic Island (and a gap),
+       so focusing Where to? never snaps the field under the island */
+    html.kb-open .plan.open { height: calc(100% - max(var(--safe-top), 20px) - 12px); }
     /* the bar already names the route while the sheet is open */
     .plan.open #routeCardName { display: none; }
     .plan-search:focus-within { border-color: var(--panel-ink); }
@@ -949,7 +969,10 @@
        right and the map stays in view beside them, for planning with a mouse: drag the route, add stops, GPX in and out. */
     @media (min-width: 1100px) and (min-height: 600px) {
       .sheet { left: auto; width: 480px; border-left: 1px solid var(--rule); box-shadow: -12px 0 32px rgba(0, 0, 0, 0.25); }
-      .side-pop { right: 480px; }
+      .side-pop { right: 480px; left: auto; top: 0; width: min(360px, 88vw); min-height: 0; max-height: none; border-top: 0; border-left: 1px solid var(--rule);
+        box-shadow: -12px 0 32px rgba(0, 0, 0, 0.3); padding: calc(14px + var(--safe-top)) 16px 24px; transform: translateX(105%); }
+      .side-pop::before { display: none; }
+      .side-pop.open { transform: none; }
       /* Where to? is a column on the left, the map beside it: closed it is just the search bar, open it runs the full height. */
       .plan { left: 16px; right: auto; top: 16px; bottom: auto; width: 440px; height: var(--plan-bar, 62px); transform: none; border: 1px solid var(--rule);
         transition: height 0.2s cubic-bezier(0.2, 0.8, 0.2, 1); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22); overflow: hidden; }

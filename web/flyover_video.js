@@ -5,6 +5,11 @@
 (function (root) {
   'use strict';
   const TYPES = ['video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
+  /** Whether this browser can record a canvas at all: a recorder type and canvas captureStream (no Video key otherwise). */
+  function canRecord(R = root) {
+    const C = R.HTMLCanvasElement;
+    return !!(mimeFor(R.MediaRecorder) && C && C.prototype && typeof C.prototype.captureStream === 'function');
+  }
   /** The first type the recorder can make, or null when it can make none (an old phone: no Video button). */
   function mimeFor(MR) {
     if (!MR || typeof MR.isTypeSupported !== 'function') return null;
@@ -26,11 +31,15 @@
    */
   function start(opts) {
     const MR = root.MediaRecorder, mime = mimeFor(MR), src = opts.map && opts.map.getCanvas && opts.map.getCanvas();
-    if (!mime || !src || typeof src.captureStream !== 'function' && !root.HTMLCanvasElement) return null;
+    if (!mime || !src) return null;
     const { w, h } = sizeFor(src.width, src.height), out = root.document.createElement('canvas');
     out.width = w; out.height = h;
     const g = out.getContext('2d');
     if (!g || typeof out.captureStream !== 'function') return null;
+    // in the page, unseen: WebKit only hands a canvas's frames to its stream as it renders it (the iOS app's web view)
+    out.setAttribute('aria-hidden', 'true');
+    out.style.cssText = 'position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:none;z-index:-1';
+    root.document.body.append(out);
     const draw = () => {
       try { g.drawImage(src, 0, 0, w, h); } catch (_) { return; }
       const o = (opts.overlay && opts.overlay()) || {}, pad = Math.round(w * 0.025), fs = Math.round(h * 0.05);
@@ -41,14 +50,18 @@
       g.textAlign = 'right'; g.font = `800 ${Math.round(fs * 0.6)}px system-ui, sans-serif`; g.fillText('APEX NAV', w - pad, h - fs * 0.6); g.textAlign = 'left';
     };
     opts.map.on('render', draw);
-    const stream = out.captureStream(opts.fps || 30), rec = new MR(stream, { mimeType: mime, videoBitsPerSecond: 6e6 }), chunks = [];
-    rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
-    rec.onstop = () => { opts.map.off('render', draw); stream.getTracks().forEach((t) => t.stop()); opts.onStop && opts.onStop(new Blob(chunks, { type: mime.split(';')[0] }), mime); };
-    rec.start(1000);
+    let stream, rec;
+    const chunks = [];
+    try {
+      stream = out.captureStream(opts.fps || 30); rec = new MR(stream, { mimeType: mime, videoBitsPerSecond: 6e6 });
+      rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+      rec.onstop = () => { opts.map.off('render', draw); out.remove(); stream.getTracks().forEach((t) => t.stop()); opts.onStop && opts.onStop(new Blob(chunks, { type: mime.split(';')[0] }), mime); };
+      rec.start(1000);
+    } catch (_) { opts.map.off('render', draw); out.remove(); if (stream) stream.getTracks().forEach((t) => t.stop()); return null; }
     opts.map.triggerRepaint && opts.map.triggerRepaint();
     return { stop() { if (rec.state !== 'inactive') rec.stop(); }, mime };
   }
 
-  const api = { mimeFor, extFor, fileName, sizeFor, start, TYPES };
+  const api = { mimeFor, canRecord, extFor, fileName, sizeFor, start, TYPES };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexFlyoverVideo = api;
 })(typeof window !== 'undefined' ? window : globalThis);

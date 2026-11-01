@@ -25,6 +25,20 @@
     root.document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 10000);
     return 'saved';
   }
-  const api = { saveFile };
+  // An invite or a share link (feedback 07): the real share sheet, everywhere. In the app the shell's (`shareText`,
+  // UIActivityViewController: Messages, AirDrop, Copy), since a web view's own share may be missing; the web's share sheet
+  // where there is one; otherwise the clipboard. Never a "Copy this link" box. Resolves 'shared' | 'copied' | 'cancelled' | 'failed'.
+  async function shareLink({ title = 'Vetta', text = '', url = '' } = {}) {
+    const wk = root.ApexSync && root.ApexSync.handlers ? root.ApexSync.handlers() : (root.webkit && root.webkit.messageHandlers);
+    const native = inApp() && wk && wk.apex;
+    const words = text && text !== url ? text : title;
+    if (native) { native.postMessage({ cmd: 'shareText', text: words, url }); return 'shared'; }
+    const nav = root.navigator;
+    if (nav && nav.share) {
+      try { await nav.share(url ? { title, text: words, url } : { title, text: words }); return 'shared'; } catch (e) { if (e && e.name === 'AbortError') return 'cancelled'; }
+    }
+    try { await nav.clipboard.writeText(url ? (words && words !== title ? words + ' ' + url : url) : words); return 'copied'; } catch (_) { return 'failed'; }
+  }
+  const api = { saveFile, shareLink };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexSaveFile = api;
 })(typeof window !== 'undefined' ? window : globalThis);
