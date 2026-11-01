@@ -25,6 +25,25 @@
 
   const esc = (t) => String(t).replace(/[&<>"']/g, (ch) => `&#${ch.charCodeAt(0)};`);
 
+  // U-123: one corner vocabulary from the strip to the Log. The Log names a corner the way the drive screen's strip and voice
+  // do: in plain words (plain_notes.js plainCall) when the driver's `noteWords` setting is plain, rally codes when it is
+  // rally. The setting is read as the cockpit reads it (apex.prefs): plain for a new driver, rally for a save from before
+  // the setting existed.
+  function noteWordsPref(storage) {
+    try {
+      const saved = JSON.parse((storage || root.localStorage).getItem('apex.prefs') || 'null');
+      if (!saved) return 'plain';
+      return saved.noteWords === 'plain' || saved.noteWords === 'rally' ? saved.noteWords : 'rally';
+    } catch (_) { return 'plain'; }
+  }
+  /** A drive corner's name in `words` ('plain' | 'rally'): plain words need plain_notes.js, else the recorded call. */
+  function cornerCall(c, words) {
+    if (!c) return '';
+    const P = root.ApexPlainNotes;
+    if (words === 'plain' && P && c.dir && c.severity != null) return P.plainCall({ ...c, type: 'corner' });
+    return c.call || c.code || '';
+  }
+
   /** One line of coaching for a Core.coach corner, or null. Units converted here only (metres, mph). */
   function tipText(x, MPH) {
     const t = x && x.tip;
@@ -180,7 +199,8 @@
   }
 
   function mount(root_, d, o) {
-    const { Core, C, MPH } = o, ref = o.reference || null;        // ref: { name, score, corners[] } from Core.compareDrives(this, best other drive)
+    const { Core, C, MPH } = o, ref = o.reference || null;
+    const words = o.noteWords || noteWordsPref(), callOf = (c) => cornerCall(c, words);   // U-123        // ref: { name, score, corners[] } from Core.compareDrives(this, best other drive)
     const co = o.coach || null;                                      // Core.coach(this, other drives) + others: [{ name, date }]
     const lost = (k) => { const r = ref && ref.corners[k]; return r && r.delta_s != null && !r.stopped ? -r.delta_s : null; };   // seconds this pass was slower than the reference
     const fmtD = (s) => (s == null ? '--' : `${s > 0.005 ? '+' : s < -0.005 ? '\u2212' : ''}${Math.abs(s).toFixed(2)} s`);
@@ -375,7 +395,7 @@
       read.innerHTML = cell('Distance', DIST(d.dist[i])) + cell('Time', fmtT(T[i])) + cell('Speed', `${Math.round(d.speed_mps[i] * MPH)} ${SPD()}`)
         + cell('Lateral', d.lat_g && finite(d.lat_g[i]) ? `${d.lat_g[i] >= 0 ? 'L ' : 'R '}${Math.abs(d.lat_g[i]).toFixed(2)} g` : '--')
         + cell('Brake / throttle', d.lon_g && finite(d.lon_g[i]) ? `${d.lon_g[i] < 0 ? 'brake ' : 'accel '}${Math.abs(d.lon_g[i]).toFixed(2)} g` : '--')
-        + cell(c ? `Corner ${k + 1}` : 'Corner', c ? `${c.call || c.code}` : '--') + (ref ? cell('vs other drive', c ? fmtD(lost(k)) : '--') : '')
+        + cell(c ? `Corner ${k + 1}` : 'Corner', c ? esc(callOf(c)) : '--') + (ref ? cell('vs other drive', c ? fmtD(lost(k)) : '--') : '')
         + (feel ? cell(`Banking${trustLabel(feel, i, 'cam')}`, finite(feel.cam[i]) ? `${feel.cam[i].toFixed(1)}\u00b0` : '--')
           + cell(`Roughness${trustLabel(feel, i, 'rough')}`, finite(feel.rough[i]) ? `${feel.rough[i].toFixed(2)} g` : '--') + cell('Runs', feel.n[i] != null ? feel.n[i] : '--') : '');
       list.querySelectorAll('.dv-corner').forEach((r, q) => r.classList.toggle('on', q === k));
@@ -404,7 +424,7 @@
       const loose = reps.filter(varies).slice(-2).reverse();
       [...steady, ...loose].forEach((r) => {
         const c = d.corners[r.k], li = el('li'), b = el('button'), v = varies(r);
-        b.innerHTML = `<b>${r.k + 1}</b><span>${esc(c.call || c.code || '')}</span><em class="${v ? 'loss' : 'gain'}">${m(r.brake_sd_m)}</em>`
+        b.innerHTML = `<b>${r.k + 1}</b><span>${esc(callOf(c))}</span><em class="${v ? 'loss' : 'gain'}">${m(r.brake_sd_m)}</em>`
           + `<span class="note">braking point typically within ${m(r.brake_sd_m)} over ${r.brake_passes} of ${r.passes} passes`
           + `${r.min_sd_m != null ? `, slowest point within ${m(r.min_sd_m)} over ${r.min_passes} passes` : ''}`
           + `${v ? '. If it was not traffic or the weather, pick an early, comfortable braking marker you can always make' : ''}</span>`;
@@ -422,7 +442,7 @@
       const ul = el('ol', 'dv-time dv-abrupt');
       ab.moments.forEach((m, k) => {
         const near = d.corners.findIndex((c) => m.index >= c.start - 4 && m.index <= c.end + 4), li = el('li'), b = el('button');
-        b.innerHTML = `<b>${String.fromCharCode(65 + k)}</b><span>${near >= 0 ? `Corner ${near + 1} \u00b7 ${esc(d.corners[near].call || d.corners[near].code || '')}` : 'Between corners'}</span><em class="loss">${m.jerk_gps.toFixed(2)} g/s</em>`
+        b.innerHTML = `<b>${String.fromCharCode(65 + k)}</b><span>${near >= 0 ? `Corner ${near + 1} \u00b7 ${esc(callOf(d.corners[near]))}` : 'Between corners'}</span><em class="loss">${m.jerk_gps.toFixed(2)} g/s</em>`
           + `<span class="note">${DIST(d.dist[m.index])} \u00b7 ${abruptAdvice(d.lat_g, d.lon_g, m.index)}</span>`;
         b.onclick = () => { if (showSmooth) showSmooth(); if (zoomM) setZoom(zoomM, m.index); move(m.index); lanes.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); };
         li.append(b); ul.append(li);
@@ -433,7 +453,7 @@
       const ul = el('ol', 'dv-time');
       for (const k of co.top) {
         const x = co.corners[k], c = d.corners[k], from = x.best ? co.others[x.best_from] : null, li = el('li'), b = el('button');
-        b.innerHTML = `<b>${k + 1}</b><span>${esc(c.call || c.code || '')}</span><em class="loss">${fmtD(x.gain_s)}</em>`
+        b.innerHTML = `<b>${k + 1}</b><span>${esc(callOf(c))}</span><em class="loss">${fmtD(x.gain_s)}</em>`
           + `<span class="note">${esc(tipText(x, MPH) || 'Same technique, quicker all the way through')}${from ? ` \u00b7 best pass ${esc(from.date)}` : ''}</span>`;
         b.onclick = () => { if (zoomM) setZoom(zoomM, c.apex); move(c.apex); lanes.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); };
         li.append(b); ul.append(li);
@@ -442,8 +462,8 @@
     }
     const grid2 = el('div', 'dv-corners');
     d.corners.forEach((c, k) => {
-      const r = el('button', 'dv-corner'); r.setAttribute('aria-label', `Corner ${k + 1}: ${c.call || c.code}, apex ${Math.round(c.apex_mps * MPH)} ${SPD_WORDS()}`);
-      r.innerHTML = `<b>${k + 1}</b><span class="dv-call">${esc(c.call || c.code || '')}</span><span class="dv-v">${Math.round(c.apex_mps * MPH)} ${SPD()}</span><span class="dv-d">${DIST(d.dist[c.apex])}${ref ? ` \u00b7 <em class="${lost(k) == null ? '' : lost(k) > 0.05 ? 'loss' : lost(k) < -0.05 ? 'gain' : ''}">${fmtD(lost(k))}</em>` : ''}</span>`
+      const r = el('button', 'dv-corner'); r.setAttribute('aria-label', `Corner ${k + 1}: ${callOf(c)}, apex ${Math.round(c.apex_mps * MPH)} ${SPD_WORDS()}`);
+      r.innerHTML = `<b>${k + 1}</b><span class="dv-call">${esc(callOf(c))}</span><span class="dv-v">${Math.round(c.apex_mps * MPH)} ${SPD()}</span><span class="dv-d">${DIST(d.dist[c.apex])}${ref ? ` \u00b7 <em class="${lost(k) == null ? '' : lost(k) > 0.05 ? 'loss' : lost(k) < -0.05 ? 'gain' : ''}">${fmtD(lost(k))}</em>` : ''}</span>`
         + (co && tipText(co.corners[k], MPH) ? `<span class="dv-tip">${esc(tipText(co.corners[k], MPH))}</span>` : '');
       r.onclick = () => { if (zoomM) setZoom(zoomM, c.apex); move(c.apex); lanes.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); };
       grid2.append(r);
@@ -475,6 +495,6 @@
     return { move, setRoadFeel, destroy() { ro.disconnect(); }, summary: S };
   }
 
-  const api = { mount, summarize, tipText, plainCoach, abruptAdvice, fatigueText, consistencyRows };
+  const api = { mount, summarize, tipText, plainCoach, abruptAdvice, fatigueText, consistencyRows, noteWordsPref, cornerCall };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexDriveView = api;
 })(typeof window !== 'undefined' ? window : globalThis);

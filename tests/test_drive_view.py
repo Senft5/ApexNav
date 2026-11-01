@@ -1,5 +1,6 @@
 """Drive view (web/drive_view.js): summary numbers are computed from the data, never invented."""
 import json
+import os
 import shutil
 import subprocess
 
@@ -283,3 +284,32 @@ console.log(JSON.stringify({
     assert [x["k"] for x in r["rows"]] == [2, 4, 0]                  # steadiest first; unknown braking spread left out
     assert r["rows"][0]["min_sd_m"] is None and r["rows"][2]["passes"] == 4 and r["rows"][2]["brake_passes"] == 4
     assert r["few"] == [] and r["none"] == []                        # too little to rank
+
+
+def test_the_log_names_corners_in_the_strips_words():
+    """U-123: plain words when the noteWords setting is plain (a new driver's default), rally codes when it is rally."""
+    runner = r"""
+const R = process.argv[1];
+globalThis.ApexPlainNotes = require(R + '/web/plain_notes.js');
+const V = require(R + '/web/drive_view.js');
+const store = (v) => ({ getItem: () => v });
+const c = { code: 'L5-', call: 'Left 5 minus', dir: 'L', severity: 5, mods: [] };
+console.log(JSON.stringify({
+  fresh: V.noteWordsPref(store(null)), plain: V.noteWordsPref(store('{"noteWords":"plain"}')),
+  rally: V.noteWordsPref(store('{"noteWords":"rally"}')), old: V.noteWordsPref(store('{"theme":"x"}')),
+  plainCall: V.cornerCall(c, 'plain'), rallyCall: V.cornerCall(c, 'rally'),
+  hairpin: V.cornerCall({ ...c, shape: 'hairpin', severity: 1 }, 'plain'),
+  bare: V.cornerCall({ code: 'R3' }, 'plain'),
+}));
+"""
+    root = str(__import__("pathlib").Path(__file__).resolve().parents[1])
+    p = subprocess.run([NODE, "-e", runner, root], capture_output=True, text=True, timeout=60)
+    assert p.returncode == 0, p.stderr
+    r = json.loads(p.stdout)
+    assert [r["fresh"], r["plain"], r["rally"], r["old"]] == ["plain", "plain", "rally", "rally"]   # as the cockpit reads it
+    assert r["plainCall"] == "Easy left" and r["rallyCall"] == "Left 5 minus"
+    assert r["hairpin"] == "Hairpin left"
+    assert r["bare"] == "R3", "without a direction and severity the recorded call stays"
+    src = open(os.path.join(root, "web", "drive_view.js"), encoding="utf-8").read()
+    assert "c.call || c.code" not in src.replace("return c.call || c.code || '';", ""), "every corner name goes through cornerCall"
+    assert '<script src="plain_notes.js">' in open(os.path.join(root, "web", "analysis.html"), encoding="utf-8").read()
