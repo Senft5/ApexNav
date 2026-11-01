@@ -21,6 +21,8 @@
       border: 2px solid var(--plate-ink, #1C1A17); font: 700 19px/1 "Barlow Condensed", "Arial Narrow", sans-serif; white-space: nowrap; }
     .car-sight small { font-size: 11px; letter-spacing: 0.04em; }
     .car-sight.short { background: #C8102E; color: #FFFFFF; border-color: #FFFFFF; }   /* faster than you can see: the signal red */
+    .car-sight.open { padding: 2px 4px; border-width: 1.5px; opacity: 0.8; }   /* U-119: OPEN is the eye alone, half the plate's height */
+    .car-sight.open svg { width: 12px; height: 12px; }
     .car-sight[hidden] { display: none; }
     #credit { position: absolute; right: 0; bottom: 0; padding: 3px 6px 4px 7px; background: #1A1814; color: #A89E8CA6; font: 500 10px/1 -apple-system, system-ui, sans-serif; pointer-events: none; z-index: 4; }   /* on its own strip of ground (U-89): no label under it */
     .maplibregl-ctrl-attrib, .maplibregl-ctrl-logo { display: none !important; }   /* no tappable controls in the base view: the credit is plain text */

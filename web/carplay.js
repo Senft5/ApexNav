@@ -85,6 +85,34 @@
   const cornerType = (dir, v) => (dir === 'L' ? (v === 'HP' ? 13 : v <= 2 ? 14 : v <= 4 ? 15 : 16) : (v === 'HP' ? 12 : v <= 2 ? 11 : v <= 4 ? 10 : 9));
   const cornerWords = (e, v) => `${e.dir === 'L' ? 'Left' : 'Right'} ${v === 'HP' ? 'hairpin' : v}`;
 
+  // U-112: the card's words at a glance. The card wrapped the phone's whole plain-words call ("Very sharp left, almost back
+  // on itself, long, careful") onto four lines for half a mile (REVIEW5 guided-drive car/035). An instruction longer than
+  // GLANCE_MAX gets `short`: the same instruction in fewer words, longest first, which the shell puts first in the card's
+  // instructionVariants (CarPlay/ApexCarPlay.swift guideChanged). A corner keeps its kind and its caution and drops its
+  // modifiers ("Very sharp left, careful", then "Very sharp left"); a turn drops the road it goes onto ("Turn left"), which
+  // the card's street variant and the map still say.
+  const GLANCE_MAX = 24;
+  const PLAIN_SEV = { 1: 'Very tight', 2: 'Tight', 3: 'Medium', 4: 'Open', 5: 'Easy', 6: 'Slight' };   // web/plain_notes.js
+  const PLAIN_CARE = ['', 'careful', 'slow down', 'slow right down', 'very slow'];
+  const RALLY_CARE = ['', 'care', 'caution', 'double caution', 'triple caution'];                      // web/apex_core.js
+  function cornerShort(e, v, plain) {
+    const side = e.dir === 'L' ? 'left' : 'right', k = Math.round(+e.caution) || 0;
+    const core = !plain ? cornerWords(e, v) : v === 'HP' ? `Hairpin ${side}` : e.shape === 'acute' ? `Very sharp ${side}`
+      : e.shape === 'square' ? `Sharp ${side}` : `${PLAIN_SEV[v] || 'Bend'} ${side}`;
+    const care = (plain ? PLAIN_CARE : RALLY_CARE)[k];
+    return [care ? `${core}, ${care}` : core, core];
+  }
+  // the shorter forms of `long`, longest first, each shorter than the one before; none when `long` already fits a glance
+  function shortForms(long, forms) {
+    const out = [];
+    if (long.length <= GLANCE_MAX) return out;
+    for (const f of forms) {
+      const s = String(f || '').trim();
+      if (s && s.length < (out.length ? out[out.length - 1] : long).length) out.push(s);
+    }
+    return out;
+  }
+
   // U-63: a corner or turn more than CONTINUE_M ahead is not yet the card's maneuver. Until it is near, the card says which
   // road to follow, as Apple Maps does on a motorway ("Continue on I-275 West for 13 mi"): a 13-mile "Tight right" sat on
   // the card for seven minutes in the review recording (docs/design/REVIEW4.md). Standing still (under STILL_MPS), a
@@ -152,12 +180,17 @@
                street: road, type: 8, follow: true, distM: Math.max(0, Math.round(nextM - cursorM)), ...remain };
     }
     if (co) {
-      const v = sevOf(co), said = typeof opts.call === 'function' ? opts.call(co) : co.call;
-      return { kind: 'guide', key: `${t.id || ''}:c${Math.round(coM)}`, instruction: String(said || cornerWords(co, v)),
-               street: `${co.dir}${v}`,                                  // the short variant (CPManeuver instructionVariants) where the call doesn't fit
+      const v = sevOf(co), said = typeof opts.call === 'function' ? opts.call(co) : co.call, instruction = String(said || cornerWords(co, v));
+      // the glance in the words the call is in: plain words when the phone says them (not a recce's own notes), else rally's
+      const plain = (typeof opts.plain === 'function' ? !!opts.plain(co) : !!opts.plain) && !co.recce;
+      const short = shortForms(instruction, cornerShort(co, v, plain));
+      return { kind: 'guide', key: `${t.id || ''}:c${Math.round(coM)}`, instruction,
+               ...(short.length ? { short } : {}),
+               street: `${co.dir}${v}`,                                  // the shortest variant (CPManeuver instructionVariants), the map plate's code
                type: cornerType(co.dir, v), corner: { dir: co.dir, sev: v }, distM: Math.max(0, Math.round(coM - cursorM)), ...remain };
     }
-    return { kind: 'guide', key: `${t.id || ''}:${Math.round(st.m)}`, instruction: phrase(st), street: st.street || '', type: st.type,
+    const instruction = phrase(st), short = shortForms(instruction, [phrase({ ...st, street: '', toward: '' })]);
+    return { kind: 'guide', key: `${t.id || ''}:${Math.round(st.m)}`, instruction, ...(short.length ? { short } : {}), street: st.street || '', type: st.type,
              distM: Math.max(0, Math.round(st.m - cursorM)), ...remain };
   }
 
@@ -168,8 +201,10 @@
    */
   function recordingMessage(drivenM, fmtDist) {
     const d = finite(drivenM) && drivenM >= 160 && typeof fmtDist === 'function' ? String(fmtDist(drivenM)) : '';
+    // U-120: `drivenM` (the distance the card's words say) goes to the trip strip, which CarPlay always shows in a session:
+    // the strip carries the drive's own distance rather than three dashes, and never an arrival (there is nothing to arrive at)
     return { kind: 'guide', key: `rec:${d}`, instruction: d ? `Recording · ${d} driven` : 'Recording · the road ahead',
-             street: d ? `${d} driven` : 'Recording', type: 8, recording: true };
+             street: d ? `${d} driven` : 'Recording', type: 8, recording: true, ...(d ? { drivenM: Math.round(drivenM) } : {}) };
   }
 
   /** Recent places for the car's Places list: [{ name, at: [lat, lon] }], newest first. */
@@ -353,5 +388,6 @@
   const api = { sightMessage, line, routeMessage, guideMessage, recordingMessage, placesMessage, cornersMessage, hazardsMessage, lookMessage, tulipSVG, cornerTulipSVG,
                 recordSVG, CORNER_MODES, CONTINUE_M, MAX_POINTS };
   api.sightFilter = sightFilter;                                       // U-60 (its own line: the list above is shared)
+  api.GLANCE_MAX = GLANCE_MAX;                                         // U-112
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexCarPlay = api;
 })(typeof window !== 'undefined' ? window : globalThis);

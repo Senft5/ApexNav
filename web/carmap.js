@@ -145,7 +145,9 @@
   }
 
   // The sight-line speed under the arrow (web/carplay.js sightMessage): its own marker, so it stays upright while the
-  // arrow turns with the car; red when you are going faster than it; hidden when unknown.
+  // arrow turns with the car; red when you are going faster than it; hidden when unknown. U-119: OPEN (nothing limits the
+  // view) is the eye alone, small and dimmed: at road-sign size it was the loudest thing on the car's screen for saying
+  // nothing restricts you (REVIEW5 free-drive car/007). The full plate is kept for a number.
   const EYE = '<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6S2 12 2 12z" fill="none" stroke="currentColor" stroke-width="2.4"/><circle cx="12" cy="12" r="2.8" fill="currentColor"/></svg>';
   function drawSight() {
     if (!sightTag) return;
@@ -154,6 +156,9 @@
     if (!s || !s.text || !state.pos) { el.hidden = true; return; }
     el.hidden = false;
     el.classList.toggle('short', s.short);                            // classList: MapLibre's own marker classes stay
+    const open = s.text === 'OPEN' && !s.short;
+    el.classList.toggle('open', open);
+    if (open) { el.innerHTML = EYE; return; }
     const b = document.createElement('b'); b.textContent = s.text;
     const u = document.createElement('small'); u.textContent = s.unit || '';
     el.innerHTML = EYE; el.append(b); if (s.unit) el.append(u);
