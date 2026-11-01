@@ -4,6 +4,17 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-01: Impeccable design skill installed in the repo
+
+- You asked for the Impeccable plugin (github.com/pbakaus/impeccable). `/plugin` doesn't work in cloud sessions, and
+  the container is wiped after each one, so its Claude files are copied into the repo instead: the skill in
+  `.claude/skills/impeccable` (v4.8.0, upstream commit 4f95649, Apache-2.0, with its LICENSE and NOTICE) and its four
+  agents in `.claude/agents/impeccable-*.md`. Every session, cloud or local, now has `/impeccable critique|audit|polish…`.
+- Its auto-hook is NOT installed. That hook runs a downloaded binary after every edit and at the end of every turn. The
+  skill's launcher still downloads that binary (to `~/.impeccable/bin/`) the first time a command runs it.
+- Undo: delete `.claude/skills/impeccable` and `.claude/agents/impeccable-*.md`. Update: copy the same folders from a
+  newer clone of the upstream repo.
+
 ## 2026-10-31: TestFlight notes 09, 10 and "make video doesn't work"
 
 - 09, stages on the map: New stage from a drive no longer shows the speed/elevation strip. It shows the drive as a small
