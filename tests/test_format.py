@@ -13,7 +13,9 @@ SCRIPT = r"""
 const F = require('./web/format.js');
 console.log(JSON.stringify({
   clock: [[0, 5], [9, 0], [12, 0], [17, 3], [23, 59], [null, 1]].map(([h, m]) => F.clock12(h, m)),
-  dateTime: ['2026-10-26T17:03', '2026-10-26T00:15:09', '2026-10-26', '', 'nonsense'].map(F.dateTime),
+  dateTime: ['2026-11-01T08:02', '2026-10-31T00:15:09', '2026-10-26T17:03', '2025-12-24T09:00', '2026-10-26', '', 'nonsense', null]
+    .map((s) => F.dateTime(s, new Date(2026, 10, 1, 9, 30), 'en-GB')),
+  dateTimeMapped: ['2026-10-26'].map(F.dateTime).length,
   scale: [17, 19, 23, 53, 14, 0, NaN, undefined].map(F.typeScale),
   names: ['Drive 10/26/2026 17:03', 'Drive 10/26/2026 09:41', 'Dry Ridge', 'Drive 10/26/2026 5:03 PM', 'web_20261027_080000', 'web_20261027_1703', 'my web_20261027_080000'].map(F.driveName),
   plain: ['Same plan \u{1F697}\u{1F4A8} meet 6:15', 'Fog \u{2601}\u{FE0F} gone by 7', '\u{1F44D}\u{1F3FD}', 'no emoji here', null, 'Sticker \u00A9 2026, Bilstein\u00AE B6, GR86\u2122'].map(F.noEmoji),
@@ -27,7 +29,9 @@ def test_twelve_hour_formatting():
     assert p.returncode == 0, p.stderr
     r = json.loads(p.stdout)
     assert r["clock"] == ["12:05 AM", "9:00 AM", "12:00 PM", "5:03 PM", "11:59 PM", "--"]
-    assert r["dateTime"] == ["2026-10-26 5:03 PM", "2026-10-26 12:15 AM", "2026-10-26", "--", "--"]
+    # U-126: the Log's dates said, not set like a database field
+    assert r["dateTime"] == ["Today, 8:02 AM", "Yesterday, 12:15 AM", "26 Oct, 5:03 PM", "24 Dec 2025, 9:00 AM", "26 Oct", "--", "--", "--"]
+    assert r["dateTimeMapped"] == 1
     assert r["names"] == ["Drive 10/26/2026 5:03 PM", "Drive 10/26/2026 9:41 AM", "Dry Ridge", "Drive 10/26/2026 5:03 PM", "Drive 10/27/2026 8:00 AM", "web_20261027_1703", "my web_20261027_080000"]
 
 

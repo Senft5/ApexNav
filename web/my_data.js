@@ -35,6 +35,17 @@
     };
   }
 
+  /**
+   * U-126: what the phone holds as one sentence that counts only what exists ("On this phone: 3 drives (12.4 mi), 2 spots."),
+   * one line when there is nothing. `long(m)` formats a distance.
+   */
+  function phoneText(s, long = (m) => `${(m / 1609.344).toFixed(1)} mi`) {
+    const n = (k, word) => (k > 0 ? `${k} ${word}${k === 1 ? '' : 's'}` : '');
+    const parts = [s.drives > 0 ? `${n(s.drives, 'drive')} (${long(s.miles * 1609.344)})` : '', n(s.spots, 'spot'), n(s.zones, 'privacy zone'), n(s.places, 'recent place')].filter(Boolean);
+    if (!parts.length) return s.signedIn ? 'Nothing on this phone yet. Friends, crews and what you shared are on the server.' : 'Nothing on this phone yet, and nothing of yours on the server.';
+    return `On this phone: ${parts.join(', ')}. ` + (s.signedIn ? 'Signed in: friends, crews and what you shared are on the server.' : 'Not signed in: nothing of yours is on the server.');
+  }
+
   /** The keys this app keeps in localStorage (cleared by "Erase everything on this phone"). */
   const keysToClear = (storage) => { const ks = []; for (let i = 0; i < storage.length; i++) { const k = storage.key(i); if (k && k.startsWith('apex.')) ks.push(k); } return ks; };
 
@@ -56,7 +67,10 @@
   const mb = (b) => (b < 0.05 * 1048576 ? '<0.1' : (b / 1048576).toFixed(1)) + ' MB';
   /** One line for Settings. */
   function offlineText(o) {
-    const parts = [`${o.routes} saved route${o.routes === 1 ? '' : 's'} (${mb(o.routeBytes)})`];
+    // U-126: no scoreboard of zeros: nothing saved for offline is one short line
+    if (!(o.routes > 0) && !(o.areas > 0) && !(o.voiceBytes > 0)) return 'Nothing saved for offline. Map tiles you have seen are kept by the phone\u2019s own web cache, which clears itself.';
+    const parts = [];
+    if (o.routes > 0) parts.push(`${o.routes} saved route${o.routes === 1 ? '' : 's'} (${mb(o.routeBytes)})`);
     if (o.areas > 0) parts.push(`${o.areas} map area${o.areas === 1 ? '' : 's'} (${mb(o.areaBytes)})`);
     if (o.voiceBytes != null && o.voiceBytes > 0) parts.push(`downloaded voices ${mb(o.voiceBytes)}`);
     let s = `Offline data: ${parts.join(', ')}.`;
@@ -64,6 +78,6 @@
     return s + (o.areas > 0 ? '' : ' Other map tiles are kept by the phone\u2019s own web cache, which clears itself.');
   }
 
-  const api = { toGpx, phoneSummary, keysToClear, offlineSummary, offlineText };
+  const api = { toGpx, phoneSummary, phoneText, keysToClear, offlineSummary, offlineText };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexMyData = api;
 })(typeof window !== 'undefined' ? window : globalThis);

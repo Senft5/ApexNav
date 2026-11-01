@@ -19,7 +19,8 @@ const drives = [{ name: 'Dragon <& co>', date: '2026-10-20T15:00:00Z', lat: [35.
                 { name: 'Empty', lat: [], lon: [], dist: [] }];
 const routes = JSON.stringify([{ id: 'a' }, { id: 'b' }]);
 const off = M.offlineSummary({ getItem: (k) => (k === 'apex.savedRoutes' ? routes : null) }, 3 * 1048576, 12 * 1048576, 2 * 1073741824), none = M.offlineSummary({ getItem: () => null }, null, NaN);
-console.log(JSON.stringify({ gpx: M.toGpx(drives), sum: M.phoneSummary(drives, store), keys: M.keysToClear(store).sort(), off, offText: M.offlineText(off), none, noneText: M.offlineText(none) }));
+console.log(JSON.stringify({ gpx: M.toGpx(drives), sum: M.phoneSummary(drives, store), keys: M.keysToClear(store).sort(), off, offText: M.offlineText(off), none, noneText: M.offlineText(none),
+  text: M.phoneText(M.phoneSummary(drives, store)), empty: [M.phoneText({ drives: 0, miles: 0, spots: 0, zones: 0, places: 0, signedIn: false }), M.phoneText({ drives: 0, miles: 0, spots: 0, zones: 0, places: 0, signedIn: true })] }));
 """
 
 
@@ -49,4 +50,11 @@ def test_offline_data(out):
     assert out["offText"].startswith("Offline data: 2 saved routes (<0.1 MB), downloaded voices 3.0 MB.")
     assert "uses 12.0 MB" in out["offText"] and "of 2 GB allowed" in out["offText"]
     assert out["none"] == {"routes": 0, "routeBytes": 0, "areas": 0, "areaBytes": 0, "voiceBytes": None, "usage": None, "quota": None}   # unknown stays unknown
-    assert out["noneText"].startswith("Offline data: 0 saved routes (<0.1 MB). Other map tiles")
+    assert out["noneText"].startswith("Nothing saved for offline.")                      # U-126: no line of zeros
+
+
+def test_phone_text_counts_only_what_exists(out):
+    # U-126: no scoreboard of zeros; one line when the phone holds nothing
+    assert out["text"] == "On this phone: 2 drives (2.0 mi), 2 spots, 1 privacy zone. Signed in: friends, crews and what you shared are on the server."
+    assert out["empty"] == ["Nothing on this phone yet, and nothing of yours on the server.",
+                            "Nothing on this phone yet. Friends, crews and what you shared are on the server."]
