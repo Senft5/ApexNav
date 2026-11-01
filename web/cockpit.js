@@ -3206,7 +3206,9 @@
       const closing = !open && panel.classList.contains('open');
       panel.classList.toggle('open', open);
       $('app').classList.toggle('plan-open', open);
-      if (closing && panel.classList.contains('routed')) fitPlannedRoute();   // U-122: the chosen route stays on screen
+      // U-122: the chosen route stays on screen; not when the card went down for a sheet or a drive (the camera keeps still
+      // under a sheet, F-02), which is settled by the next frame
+      if (closing && panel.classList.contains('routed')) requestAnimationFrame(() => { let driving = false; try { driving = driveActive; } catch (_) {} if (!panel.classList.contains('open') && !$('app').classList.contains('sheet-open') && !driving) fitPlannedRoute(); });
       $('destInput').setAttribute('aria-expanded', String(open));
       if (open) { refreshSavedDrives(); if (!panel.classList.contains('routed')) renderPlaces(); $('planBody').scrollTop = 0; closeEdge(); }
       else { $('destInput').blur(); $('fromInput').blur(); }                 // closing puts the keyboard away
