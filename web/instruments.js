@@ -467,7 +467,7 @@
     const s = svg('svg', { viewBox: `0 0 ${KIT_W * 10} ${KIT_H * 10}`, class: 'kit', 'aria-hidden': 'true' }, row);
     const dots = [];
     for (let y = 0; y < KIT_H; y++) for (let x = 0; x < KIT_W; x++) dots.push(svg('circle', { cx: 5 + x * 10, cy: 5 + y * 10, r: 3.8 }, s));
-    const says = html('div', 'kit-says', row); html('span', 'vfd-cap', says, 'KIT SAYS'); const line = html('b', '', says, '--');
+    const says = html('div', 'kit-says', row); html('span', 'vfd-cap', says, 'KIT SAYS'); const line = html('b', '', says, ''); says.classList.add('quiet');
     const still = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
     let pose = null;
     return (d) => {
@@ -477,7 +477,8 @@
         const rows = KIT[p];
         dots.forEach((c, i) => { c.setAttribute('class', KIT_CLASS[rows[Math.floor(i / KIT_W)][i % KIT_W]] || ''); });
       }
-      if (d.kitLine !== undefined && line.textContent !== (d.kitLine || '--')) line.textContent = d.kitLine || '--';
+      // U-113: Kit's aside, from the pre-call until the strip moves on; with none the box is empty, label and all (never "--")
+      if (d.kitLine !== undefined && line.textContent !== (d.kitLine || '')) { line.textContent = d.kitLine || ''; says.classList.toggle('quiet', !d.kitLine); }
     };
   }
 

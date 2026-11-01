@@ -424,8 +424,10 @@
   },
   "sys:sample": {
    "file": "sys_sample.m4a",
-   "dur": 1.922,
-   "text": "Left four. Tightens. Long."
+   "dur": 2.435,
+   "text": "Left four. Tightens. Late apex.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
   },
   "head:R1++mod:off-camber+caution:1+link:and+hazard:bump+dist:120": {
    "file": "p_f7f4de3c30ef.m4a",
@@ -4489,6 +4491,97 @@
    "file": "line_best.m4a",
    "dur": 0.558,
    "text": "Best.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "sys:end2": {
+   "file": "sys_end2.m4a",
+   "dur": 1.019,
+   "text": "Run complete.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "sys:end3": {
+   "file": "sys_end3.m4a",
+   "dur": 0.981,
+   "text": "End of card.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "sys:end4": {
+   "file": "sys_end4.m4a",
+   "dur": 1.422,
+   "text": "Logged. Stand down.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "sys:sample_plain": {
+   "file": "sys_sample_plain.m4a",
+   "dur": 2.704,
+   "text": "Open left. Tightens. Late apex.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "aside:hairpin": {
+   "file": "aside_hairpin.m4a",
+   "dur": 1.587,
+   "text": "Brake straight. Then turn.",
+   "heard": 0.75,
+   "voice": "bm_lewis"
+  },
+  "aside:acute": {
+   "file": "aside_acute.m4a",
+   "dur": 0.802,
+   "text": "Brake straight.",
+   "heard": 0.5,
+   "voice": "bm_lewis"
+  },
+  "aside:square": {
+   "file": "aside_square.m4a",
+   "dur": 1.319,
+   "text": "Square. Late apex.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "aside:tightens": {
+   "file": "aside_tightens.m4a",
+   "dur": 0.965,
+   "text": "Late apex.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "aside:off-camber": {
+   "file": "aside_off_camber.m4a",
+   "dur": 1.178,
+   "text": "Negative camber.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "aside:over crest": {
+   "file": "aside_over_crest.m4a",
+   "dur": 1.076,
+   "text": "Car goes light.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "aside:opens": {
+   "file": "aside_opens.m4a",
+   "dur": 1.052,
+   "text": "Exit opens.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "aside:long": {
+   "file": "aside_long.m4a",
+   "dur": 0.91,
+   "text": "Hold the line.",
+   "heard": 1.0,
+   "voice": "bm_lewis"
+  },
+  "aside:crest": {
+   "file": "aside_crest.m4a",
+   "dur": 1.076,
+   "text": "Car goes light.",
    "heard": 1.0,
    "voice": "bm_lewis"
   }
