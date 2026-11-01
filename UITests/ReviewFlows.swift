@@ -21,6 +21,12 @@ final class ReviewFlows: XCTestCase {
     /// REVIEW4_CHECK §4.7 (U-86): a standstill in a corner. The drive's R3- at 25.32 km starts at 25.29; the replay stands
     /// still at 25.31 (APEX_REPLAY_HOLD), inside it, for long enough that the strip's passed-note rule (3 s at 0 ft) shows.
     private static let STANDSTILL = (km: 25.31, s: 8.0)
+    /// The welcome strip's beat (web/cockpit.js runOnboarding: a call every 1.8 s, five calls in OB_NOTES).
+    private static let WELCOME_BEAT = 1.8
+    /// REVIEW5 §7.5, §7.8: where the guided drive (from TWISTIES) says its lines, in minutes after Start, from the billet
+    /// flow's transcript of the same road at real speed: "Tight right, careful" at 0.7, "Very sharp left, almost back on
+    /// itself" at 1.7 (a corner call), "Quiet from here" at 2.6 and the next note at 3.8 (the quiet line between).
+    private static let CORNER_CALL = 1.6, QUIET_LINE = 2.75
 
     override func setUp() {
         continueAfterFailure = true
@@ -55,9 +61,11 @@ final class ReviewFlows: XCTestCase {
     /// `from`: km along the replayed drive to start at (APEX_REPLAY_FROM); nil for its real start. `hold`: a standstill of
     /// `s` seconds at `km` (APEX_REPLAY_HOLD). `tapFirst`: a tap after launch wakes the permission monitor; the first run
     /// photographs the opening before anything is touched (§6.9).
-    private func start(_ name: String, route: Bool = false, from: Double? = nil, hold: (km: Double, s: Double)? = nil, tapFirst: Bool = true) {
+    private func start(_ name: String, route: Bool = false, from: Double? = nil, hold: (km: Double, s: Double)? = nil, tapFirst: Bool = true,
+                       args: [String] = []) {
         flow = name; step = 0
         app = XCUIApplication()
+        app.launchArguments += args
         var e = ["APEX_REPLAY": "dry_ridge", "APEX_REVIEW": "1"]
         if route { e["APEX_REVIEW_ROUTE"] = "1" }
         if let from { e["APEX_REPLAY_FROM"] = String(format: "%.2f", from) }
@@ -91,17 +99,35 @@ final class ReviewFlows: XCTestCase {
         }
     }
 
-    /// The first element with any of these labels (buttons, links, text), or nil.
+    /// The first element with any of these labels (buttons, links, text) that is on the screen, or nil.
     private func find(_ labels: [String], wait: Double = 8) -> XCUIElement? {
         let deadline = Date().addingTimeInterval(wait)
         repeat {
-            for l in labels {
-                let e = web.descendants(matching: .any).matching(NSPredicate(format: "label == %@", l)).firstMatch
-                if e.exists && e.isHittable { return e }
-            }
+            for l in labels { if let e = onScreen(l) { return e } }
             pause(0.5)
         } while Date() < deadline
         return nil
+    }
+    /// REVIEW5 §7.2: the page keeps keys it isn't showing (a closed sheet's Done) in its accessibility tree, and the first
+    /// match for "Done" was one of those, so the replay's own Done was never tapped. Every match is looked at (at most 12),
+    /// and the first one hittable with its centre on the screen is taken.
+    private func onScreen(_ label: String, below share: CGFloat = 0) -> XCUIElement? {
+        let all = web.descendants(matching: .any).matching(NSPredicate(format: "label == %@", label))
+        let screen = app.windows.firstMatch.frame
+        for i in 0..<min(all.count, 12) {
+            let e = all.element(boundBy: i)
+            guard e.exists, e.isHittable else { continue }
+            let f = e.frame, mid = CGPoint(x: f.midX, y: f.midY)
+            if !f.isEmpty, screen.isEmpty || (screen.contains(mid) && mid.y >= screen.minY + screen.height * share) { return e }
+        }
+        return nil
+    }
+    /// The tab bar is up: its four tabs on the screen, in its bottom quarter, and no replay over them (its "Replay ·" chip and
+    /// its Play key gone). The tabs flow's Log, People and Garage photos were all of the replay (REVIEW5 §7.2).
+    private func tabBarShown() -> Bool {
+        guard ["Map", "Log", "People", "Garage"].allSatisfy({ onScreen($0, below: 0.75) != nil }) else { return false }
+        let chip = web.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", "Replay ·")).firstMatch
+        return !(chip.exists && chip.isHittable) && onScreen("Play") == nil
     }
     /// The first button whose label starts with `prefix` (a row whose label carries more than its name), or nil.
     private func findButton(startingWith prefix: String, wait: Double = 8) -> XCUIElement? {
@@ -112,10 +138,25 @@ final class ReviewFlows: XCTestCase {
         guard let e = find(labels, wait: wait) else { return false }
         e.tap(); pause(1.5); return true
     }
-    private func tab(_ name: String) { _ = tap(name, wait: 6); pause(2) }
+    /// A tab, once the tab bar is up (REVIEW5 §7.2): a replay or a sheet over it is closed by its Done first, and the flow says
+    /// so if the bar still isn't there (the tap is tried anyway, so a flow never hangs on it).
+    private func tab(_ name: String) {
+        if !tabBarShown() { _ = tap("Done", "Close the replay", wait: 2) }
+        XCTAssertTrue(until(6, tabBarShown), "the tab bar is not on screen for \(name)")
+        _ = tap(name, wait: 6); pause(2)
+    }
+    /// Up to `times` photos a swipe apart. REVIEW5 §7.3: a page that fits gave identical frames (planning 005 to 007,
+    /// signed-in 002 to 011), so a swipe that changes nothing on the screen ends the scrolling, unphotographed.
     private func scroll(_ times: Int, _ tag: String) {
-        for k in 0..<times { app.swipeUp(velocity: .slow); pause(1); shot("\(tag)-\(k + 1)") }
-        for _ in 0..<times { app.swipeDown(velocity: .fast) }
+        var before = XCUIScreen.main.screenshot().pngRepresentation, moved = 0
+        for k in 0..<times {
+            app.swipeUp(velocity: .slow); pause(1)
+            let now = XCUIScreen.main.screenshot().pngRepresentation
+            if now == before { break }
+            before = now; moved += 1
+            shot("\(tag)-\(k + 1)")
+        }
+        for _ in 0..<moved { app.swipeDown(velocity: .fast) }
     }
 
     // MARK: The car
@@ -176,12 +217,37 @@ final class ReviewFlows: XCTestCase {
     /// tab bar coming back shows it took, so the tab steps after it photograph the tabs, not the replay.
     private func closeReplay() {
         if !tap("Done", "Close the replay", wait: 3), let chip = findButton(startingWith: "Replay ·", wait: 4) { chip.tap(); pause(2) }
-        XCTAssertTrue(find(["Log"], wait: 8) != nil, "the replay did not close (no tab bar)")
+        XCTAssertTrue(until(8, tabBarShown), "the replay did not close (no tab bar)")
     }
-    private func endDrive() {
+    /// End, and whether the drive ended: its end card's "Open in the Log" key came up.
+    @discardableResult private func endDrive() -> Bool {
         tap("End drive", wait: 10)
         pause(5)
         shot("drive-ended")
+        return find(["Open in the Log"], wait: 6) != nil
+    }
+    /// The phone on its side for `seconds`, a photo every `every` seconds, then upright again (REVIEW5 §7.5).
+    private func landscape(_ seconds: Double, every: Double = 4, _ tag: String) {
+        XCUIDevice.shared.orientation = .landscapeLeft; pause(3)
+        driveFor(seconds, every: every, tag)
+        XCUIDevice.shared.orientation = .portrait; pause(3)
+    }
+    /// The home screen with the drive behind it: the Dynamic Island's Live Activity (REVIEW5 §7.8), then back in the app.
+    private func homeScreen(_ tag: String) {
+        XCUIDevice.shared.press(.home); pause(4); shot(tag)
+        app.activate(); pause(3)
+    }
+    /// REVIEW5 §7.9: the lock screen's Live Activity. XCUIDevice has no lock button in its public buttons and simctl has no
+    /// lock command; XCUIDevice answers the private pressLockButton in the simulator, so it is asked first and the step is
+    /// skipped (said in the log) when it doesn't. The home button wakes the locked screen, where the Live Activity sits.
+    private func lockScreen(_ tag: String) {
+        let lock = NSSelectorFromString("pressLockButton")
+        guard XCUIDevice.shared.responds(to: lock) else { NSLog("APEX-REVIEW-TEST no lock button: lock screen step skipped"); return }
+        _ = XCUIDevice.shared.perform(lock); pause(3)
+        XCUIDevice.shared.press(.home); pause(3)               // wakes the screen: the lock screen with the Live Activity
+        shot(tag)
+        XCUIDevice.shared.press(.home); pause(2)               // the simulator has no passcode: home again unlocks
+        app.activate(); pause(3)
     }
     /// A theme from its card in the Garage: the card's "Use" key (U-69: named "Use <theme>" for exactly this), then wait
     /// until the theme took, which the Use key coming back on Roadbook's card shows (REVIEW4 §6.2).
@@ -217,8 +283,15 @@ final class ReviewFlows: XCTestCase {
         let go = web.buttons["Start"]
         XCTAssertTrue(until(90) { welcome.exists && go.exists && go.isHittable }, "the welcome never came up")
         pause(0.5); shot("opening")
-        pause(2.5); shot("welcome")
-        pause(2.5); shot("welcome-later")                          // the welcome's strip cycles its calls
+        // REVIEW5 §7.4: the welcome's strip is the first thing a new driver sees; it moves on every 1.8 s through five demo
+        // calls (web/cockpit.js OB_NOTES, runOnboarding), so one full cycle and the first call again, photographed on the
+        // strip's own beat (from the opening, not from the last photo, so the time a photo takes doesn't drift the beat)
+        let beat = Date()
+        for k in 1...6 {
+            let at = beat.addingTimeInterval(Self.WELCOME_BEAT * Double(k))
+            if at > Date() { pause(at.timeIntervalSinceNow) }
+            shot("welcome-\(k)")
+        }
         for k in 0..<5 {
             if tap("Get started", "Start", wait: 2) { break }
             if !tap("Next", wait: 2) { break }
@@ -311,11 +384,24 @@ final class ReviewFlows: XCTestCase {
         shot("route-from-gpx")
         startDrive()
         driveFor(60, every: 10, "interstate")                      // the last mile of I-275, then the exit
+        // REVIEW5 §7.5: landscape on a corner call and on the quiet line (six frames at one moment last time); §7.8: the
+        // home screen's island during the quiet line as well as during a note
+        driveTo(Self.CORNER_CALL)
+        landscape(16, "landscape-corner")
+        driveTo(Self.QUIET_LINE)
+        landscape(10, "landscape-quiet")
+        homeScreen("home-quiet-line")
         driveTo(5)                                                 // the ramp, the junction and the first corners
-        // U-94: in review mode the report is the member's sheet, Undo and pin, and never reaches the server
+        // U-94: in review mode the report is the member's sheet, Undo and pin, and never reaches the server. REVIEW5 §7.5:
+        // the sheet once on its side too, then upright for the report itself
+        XCUIDevice.shared.orientation = .landscapeLeft; pause(3)
         if tap("Report a hazard", "Report", wait: 4) {
+            shot("report-sheet-landscape")
+            XCUIDevice.shared.orientation = .portrait; pause(3)
             shot("report-sheet"); tap("Gravel", "Pothole", wait: 4)
             pause(1); shot("reported")                             // the car's pin and alert a second after (§6.8)
+        } else {
+            XCUIDevice.shared.orientation = .portrait; pause(3)
         }
         // REVIEW4_CHECK §4.6: New Biddinger Road's turnaround (where the route doubles back, U-90) and back, then the home
         // screen, the island and the phone on its side from 13.4 min: the R5- at 31.1 km and the run of corners after it,
@@ -327,10 +413,12 @@ final class ReviewFlows: XCTestCase {
         pause(2); shot("island-expanded")
         XCUIDevice.shared.press(.home); pause(4); shot("home-live-activity-later")
         app.activate(); pause(4); shot("back-in-app")
-        XCUIDevice.shared.orientation = .landscapeLeft; pause(4); driveFor(40, every: 5, "landscape")
-        XCUIDevice.shared.orientation = .portrait; pause(3)
+        lockScreen("lock-screen-live-activity")                   // REVIEW5 §7.9
+        landscape(30, every: 5, "landscape")
         driveTo(18.5)                                              // Dry Ridge Rd's corners, to the last at 34.1 km (17.7 min)
-        endDrive()
+        // REVIEW5 §7.1: the last recording's replay ran at a third of real speed and never reached End; the replay now runs
+        // on the clock (ApexReplay), and the flow fails if the drive didn't end
+        XCTAssertTrue(endDrive(), "the guided drive never reached End (no end card)")
         driveInLog(scrolls: 4, replay: false)
     }
 
@@ -401,5 +489,32 @@ final class ReviewFlows: XCTestCase {
         if tap("Crews", wait: 4) { pause(3); shot("crews"); scroll(5, "crews") }
         tab("Garage"); shot("account"); scroll(6, "account")
         tab("Map")
+    }
+
+    /// REVIEW5 §7.7: the largest accessibility text size. The cockpit's sizes are the theme contract's and must not change;
+    /// the Garage, People, the route card and the Log's prose should grow. Launched with UIKit's own content-size argument,
+    /// which is what the app (and WebKit's -apple-system text styles) read.
+    func test09DynamicType() throws {
+        try XCTSkipUnless(env["APEX_REVIEW"] == "1", "review recording only")
+        start("dynamic-type", from: Self.TWISTIES, args: ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
+        shot("map")
+        startDrive()
+        driveFor(20, every: 10, "cockpit")                         // the cockpit: unchanged
+        endDrive()
+        driveInLog(scrolls: 2, replay: false)                      // the Log's page of that drive: its prose
+        tab("Log"); shot("log")
+        tab("Garage"); shot("garage"); scroll(3, "garage")
+        tab("People"); shot("people"); scroll(2, "people")
+        tab("Map")
+        let search = web.searchFields.firstMatch
+        if search.waitForExistence(timeout: 10) {
+            search.tap(); pause(2)
+            search.typeText("Winton Woods"); pause(6)
+            if let place = findButton(startingWith: "Winton Woods", wait: 8) {
+                place.tap()
+                let driveIt = web.buttons["Drive it"]
+                if until(45, { driveIt.exists && driveIt.isHittable }) { pause(2); shot("route-card"); scroll(2, "route-card") }
+            }
+        }
     }
 }

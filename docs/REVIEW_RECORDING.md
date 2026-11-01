@@ -3,8 +3,8 @@
 Every real-world flow of the iPhone app, recorded on GitHub's Macs for a design review (the owner, 2026-10-30: "fully
 screencap the whole app in use … for a more in depth Fable review including every real world user flow"). **On demand
 only:** Actions → *App review recording* → Run workflow. About 35–40 minutes (guided-drive is the longest: it drives
-Dry Ridge Rd's corners end to end); eight Mac jobs in parallel (GitHub bills Mac minutes at 10× on a private repo, so one
-run is roughly 2,000 billed minutes).
+Dry Ridge Rd's corners end to end); nine Mac jobs in parallel (GitHub bills Mac minutes at 10× on a private repo, so one
+run is roughly 2,200 billed minutes).
 
 **The Fable review itself waits for the owner** (2026-10-30: "ensure not to run fable until i say because i want to fine
 tune the fable prompt with you"). Recording the pack is fine; handing it to Fable is not, until the owner and Claude have
@@ -21,22 +21,28 @@ The `review-pack` artifact, one folder per flow:
 | `phone.mp4`, `car.mp4` | the whole flow as video (no sound) |
 | `transcript.txt` | every line the co-driver said, with its time and the second of `phone.mp4` it falls on (`03:47:09  @ 02:31  Tight right`) |
 | `app-log.txt` | the app's own lines for the whole flow: the shell's `APEX-REVIEW` events (the replay parked, driving, standing still; a write held back), `APEX-SAID`, and the page's console (`APEX-CONSOLE`, review mode only); no system noise |
-| `INDEX.md` (top level) | the flows, their steps, each video's start time (wall clock, the transcript's clock), a warning on any video without its index (moov), the first lines said and the app's review events with their video second |
+| `INDEX.md` (top level) | the flows, their steps, each video's start time (wall clock, the transcript's clock), a warning on any video without its index (moov), the first lines said and the app's review events with their video second, and the lowest contrast ratios |
+| `contrast.md` (top level) | REVIEW5 §7.6: every text colour on the drive screen per theme, day and night, with a note up and on the quiet line, read from the page with `getComputedStyle` (`tools/contrast_dump.js`, Chromium in the pack job, not the PNGs), with its surface and WCAG ratio; the quiet line, SCORE, Sight and MPH named, rows under 4.5:1 marked |
 
 ## The flows (UITests/ReviewFlows.swift)
 
-1. **first-run**: the opening photographed once the welcome is on screen (its Start key, not a timer), then the welcome
-   again as its strip moves on, its Start, the location permission sheet (this flow alone starts without location
+1. **first-run**: the opening photographed once the welcome is on screen (its Start key, not a timer), then the welcome's
+   strip for one full cycle on its own 1.8 s beat (`welcome-1` to `welcome-6`: each of the five demo calls and the first
+   again, REVIEW5 §7.4), its Start, the location permission sheet (this flow alone starts without location
    granted, as a new phone does), the idle map, Layers.
 2. **tabs**: a two-minute drive on the corners first, so the Log has something to show; then the drive's page and its
-   Replay, the replay closed (the flow checks the tab bar is back), the Log, People (Friends, then Crews), Garage, scrolled; and Roadbook at night.
+   Replay, the replay closed by its Done (the flow checks the tab bar is on screen, its four tabs in the bottom quarter and
+   no replay chip or Play key, before every tab step: REVIEW5 §7.2), the Log, People (Friends, then Crews), Garage,
+   scrolled; and Roadbook at night.
 3. **planning**: Where to?, suggestions, the place row tapped (not the search field) and the route waited for, the route
    card (it opens by itself), scrolled, closed to its bar, then dragged open by the bar (the flow checks it opened), Save,
    the plan sheet's More, Find a loop.
-4. **guided-drive**: from a mile before the corners, the replayed road as a GPX route, on the phone and in CarPlay; a
-   hazard report at 5 min (the car a second after; it stays on the phone, see below); the Live Activity from the home
-   screen, and expanded by a long press on the island, then the phone on its side, from 13.4 min into the drive, where the
-   R5- at 31.1 km and the run of corners after it put a note up; Dry Ridge Rd's corners to the last; the end card and the
+4. **guided-drive**: from a mile before the corners, the replayed road as a GPX route, on the phone and in CarPlay; the
+   phone on its side on a corner call (1.6 min) and on the quiet line (2.75 min), and the home screen's island on the quiet
+   line (REVIEW5 §7.5, §7.8); a hazard report at 5 min, its sheet once on its side (the car a second after; it stays on the
+   phone, see below); the Live Activity from the home screen, and expanded by a long press on the island, then on the lock
+   screen (§7.9), then the phone on its side, from 13.4 min into the drive, where the R5- at 31.1 km and the run of corners
+   after it put a note up; Dry Ridge Rd's corners to the last; the end card (the flow fails without it, §7.1) and the
    drive in the Log. Its steps are placed by the drive's own clock (`driveTo`), so they land on the same road every run.
 5. **free-drive**: a drive with no route (the road ahead) from the drive's real start, so the interstate join is seen;
    started with the car's **Drive** bar button and ended with its **End** when the car has them (otherwise from the phone).
@@ -46,6 +52,12 @@ The `review-pack` artifact, one folder per flow:
    waited in for 3 s at 0 ft drops out and the strip moves on) is on camera.
 8. **signed-in**: People: Friends (the flow fails if People still shows the sign-in page), its Invite sheet, then Crews, and the account
    (needs the review account below; skipped without it).
+9. **dynamic-type** (REVIEW5 §7.7): launched at the largest accessibility text size
+   (`-UIPreferredContentSizeCategoryName UICTContentSizeCategoryAccessibilityXXXL`): a short drive (the cockpit should be
+   unchanged), the drive's page in the Log, the Log, the Garage, People and a route card (the prose should grow).
+
+Every flow's scroll steps stop at the first swipe that changes nothing on the screen, so a page that fits is photographed
+once, not as identical frames (REVIEW5 §7.3).
 
 ## How it gets close to the real world
 
@@ -72,6 +84,9 @@ The `review-pack` artifact, one folder per flow:
 
 - **A standstill.** `APEX_REPLAY_HOLD=<km>:<s>` stops the replay for `s` seconds (at most 120) when it reaches `km`, once
   per drive, as a car waits in a queue; one flow (billet) uses it.
+- **Real speed.** The replay moves the car by the time that really passed between its ticks, not 10 ms a tick: the photos
+  held the main thread, ticks were dropped and the fifth recording's guided drive ran at a third of real speed and never
+  reached End (REVIEW5 §7.1). A stall over 2 s is not driven through.
 - **Videos that open.** simctl writes a video's index (the moov atom) after it is stopped; the workflow sends SIGINT and
   then waits for each recording to exit (up to two minutes) before uploading. The second recording's 20-minute car.mp4
   was cut off after 4 s and would not open; the pack now says so in INDEX.md if it ever happens again.
@@ -120,6 +135,7 @@ a new session row (`id_hash` = sha256 hex of the token) and a new secret value.
 
 ## Not covered
 
-The lock screen itself (XCUITest can't press the lock button; the Live Activity is checked from the home screen's
-Dynamic Island), the motion of a real phone in a real car (the replay is a real drive, but rebuilt motion), sound, a
+The lock screen is tried but unproven: XCUITest has no public lock button and simctl no lock command, so the flow uses
+XCUIDevice's private `pressLockButton` when the simulator answers it and skips the step (`APEX-REVIEW-TEST` in the test
+log) when it doesn't; the Dynamic Island from the home screen is the fallback. Not covered: the motion of a real phone in a real car (the replay is a real drive, but rebuilt motion), sound, a
 second person in a convoy (planned with the review account), and anything that needs a real car.
