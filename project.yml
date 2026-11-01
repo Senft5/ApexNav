@@ -80,6 +80,10 @@ targets:
         # The car's screen is its own scene (CarPlay/ApexCarPlay.swift); the phone keeps SwiftUI's window scene.
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: true
+          # Apple: these two belong inside the scene manifest. At the Info.plist's top level (where they sat until
+          # 2026-11-01) CarPlay never offered Vetta on the Dashboard or the cluster (the owner: "it's not working for me").
+          CPSupportsDashboardNavigationScene: true
+          CPSupportsInstrumentClusterNavigationScene: true
           UISceneConfigurations:
             CPTemplateApplicationSceneSessionRoleApplication:
               - UISceneClassName: CPTemplateApplicationScene
@@ -94,8 +98,6 @@ targets:
               - UISceneClassName: CPTemplateApplicationInstrumentClusterScene
                 UISceneConfigurationName: CarPlay-Cluster
                 UISceneDelegateClassName: $(PRODUCT_MODULE_NAME).ApexCarClusterSceneDelegate
-        CPSupportsDashboardNavigationScene: true
-        CPSupportsInstrumentClusterNavigationScene: true
         # Portrait, or landscape for landscape mounts (IDEAS U-16: the cockpit has a landscape layout)
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
         NSLocationWhenInUseUsageDescription: "Required for live turn-by-turn navigation and road-feel mapping."
