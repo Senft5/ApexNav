@@ -1295,14 +1295,20 @@
     let heldToast = null;
     // U-67: the road under the car, from the map's own road names (ApexRoadNames, the source the saved drive is named by in
     // leaveDrive), read at most every 2 s; null while the map has no named road there (the binnacle shows "--").
-    const roadNow = { at: -Infinity, name: null };
+    const roadNow = { at: -Infinity, name: null, hold: null };   // hold: the last name seen, held through a junction (U-137)
     function roadUnder(lat, lon) {
       const now = performance.now();
       if (now - roadNow.at < 2000) return roadNow.name;
       roadNow.at = now;
       let feats = [];
       try { feats = map.querySourceFeatures('openmaptiles', { sourceLayer: 'transportation_name' }); } catch (_) { /* style not loaded */ }
-      roadNow.name = window.ApexRoadNames && Number.isFinite(lat) && Number.isFinite(lon) ? ApexRoadNames.nearestRoadName(feats, lat, lon) : null;
+      const seen = window.ApexRoadNames && Number.isFinite(lat) && Number.isFinite(lon) ? ApexRoadNames.nearestRoadName(feats, lat, lon) : null;
+      // U-137: held 5 s when the tiles give none, and through a junction the app knows it is in (a router turn, or a corner
+      // the strip calls "like a junction"), so the binnacle never says "Road: --" mid-junction
+      const cm = state.cursorM, inJunction = !!track && Number.isFinite(cm) && ((track.kind === 'route' && window.ApexDirections && ApexDirections.atJunction(track.steps, cm))
+        || (Array.isArray(track.events) && track.events.some((e) => e.type === 'corner' && e.shape === 'square' && cm >= e.start_m - 20 && cm <= e.end_m + 20)));
+      const h = window.ApexRoadNames ? ApexRoadNames.holdRoadName(roadNow.hold, seen, now, inJunction) : { name: seen, hold: null };
+      roadNow.name = h.name; roadNow.hold = h.hold;
       return roadNow.name;
     }
     // The strip's line when no note is up. Planning: the route and the mode. In a drive or a replay, quiet (U-67): the road
@@ -1556,7 +1562,9 @@
       // in the chosen units (mph or km/h, U-22); the names are the cluster's
       d.speedMph = vMps != null ? ApexUnits.speed(vMps) : null;
       d.paceMph = pace != null ? ApexUnits.speed(pace) : null;
-      d.sightMph = held.value; d.sightOpen = held.open;
+      // U-130: the Sight cell follows the plate: under 5 mph the plate hides (the filter's message is empty) and the cell reads --
+      const plateOn = !!held.msg.text;
+      d.sightMph = plateOn ? held.value : null; d.sightOpen = plateOn && held.open;
       d.limitMph = limit != null ? ApexUnits.speed(limit) : null;
       d.latG = latG; d.lonG = lonG; d.camberDeg = camber;
       d.tripMi = ApexUnits.longN(live && (idx < 0 || track.kind === 'horizon') ? (drive.rec ? drive.rec.km * 1000 : 0) : state.cursorM); d.totalMi = track && track.kind !== 'horizon' && !(live && idx < 0) ? ApexUnits.longN(totalM()) : null;
