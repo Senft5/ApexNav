@@ -846,6 +846,8 @@
       $('recenterBtn').classList.add('show');
       recenterLeft(0);
     }
+    // the app's own camera move (a route fit): follow pauses with no recenter key; a drag of the map brings it (U-122)
+    function holdFollow() { state.follow = false; clearTimeout(resumeTimer); clearInterval(resumeTick); recenterLeft(0); }
     function scheduleResume() {
       clearTimeout(resumeTimer); clearInterval(resumeTick);
       let left = FOLLOW_RESUME_S;
@@ -2080,6 +2082,13 @@
       });
     }
     window.addEventListener('resize', () => { if ($('planPanel').classList.contains('routed')) fitRouteBarName(); });
+    // U-114: the bar's width changes after the name is set (the card goes down and the Start key takes its place; the
+    // theme's font arrives late), so the name is fitted again whenever the bar's own width changes, and once fonts are in.
+    {
+      let barW = 0;
+      if (window.ResizeObserver) new ResizeObserver(() => { const w = $('routeBar').clientWidth; if (w && w !== barW) { barW = w; if ($('planPanel').classList.contains('routed')) fitRouteBarName(); } }).observe($('routeBar'));
+      if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { if ($('planPanel').classList.contains('routed')) fitRouteBarName(); }).catch(() => {});
+    }
     function renderRouteCard(t = plannedRoute) {
       const card = $('routeCard');
       $('planPanel').classList.toggle('routed', !!t);
@@ -2112,9 +2121,11 @@
         return vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) : null;
       };
       // A driven road has measured sectors; a planned one has its map-only fun score (docs/ROUTING.md).
+      // U-115: Twist and Flow from the track's own corners when nothing better is known (a GPX, a loop), as for a searched route
+      const geo = ApexRouteCard.shape(t, (x) => FunRoute.score(x, [], roadPrefs));
       const bars = Array.isArray(t.sectors) && t.sectors.length
-        ? [['Twist', avgSector('tech')], ['Flow', avgSector('flow')], ['Surface', avgSector('surf')]]
-        : [['Fun', t.fun ? t.fun.fun : null], ['Twist', t.fun ? t.fun.twist : null], ['Flow', t.fun ? t.fun.flow : null],
+        ? [['Twist', avgSector('tech') ?? geo.twist], ['Flow', avgSector('flow') ?? geo.flow], ['Surface', avgSector('surf')]]
+        : [['Twist', geo.twist], ['Flow', geo.flow],
            // Surface only once members have measured enough of it; map geometry can't know pavement.
            ...(window.ApexContributor && ApexContributor.surfaceScore(t.measured) != null ? [['Surface', ApexContributor.surfaceScore(t.measured)]] : [])];
       // small half-dials, "--" when unknown; Fun is the options' tile, so the card shows what makes it up. Surface only once
@@ -2288,7 +2299,7 @@
     function lockOnDestination(t) {
       const to = destMarker ? destMarker.getLngLat() : null;
       if (!to) return;
-      pauseFollow();
+      holdFollow();
       // the map left above the sheet: above the open card (U-70) when that leaves a strip to see the route in, else above
       // the bar (on its side, or the desk's column, the card covers the map: the fit is for when it goes down)
       const sv = viewInsets(), panel = $('planPanel'), mapH = (map.getContainer().clientHeight - sv.t - sv.b) || window.innerHeight;   // F-02: the map you can see, not its full-bleed box
@@ -2302,6 +2313,21 @@
       } else {
         map.flyTo({ center: [to.lng, to.lat], zoom: 15.5, pitch: 0, bearing: 0, duration: 1400, padding: { top: sv.t, left: sv.l, right: sv.r, bottom } });
       }
+    }
+    // U-122: the card goes down and the chosen route stays on screen: the route and the car fitted together above the bar.
+    // The app's own move: follow pauses without the recenter key, which a drag of the map brings up (U-71).
+    function fitPlannedRoute(t = plannedRoute) {
+      if (!t || !Array.isArray(t.lat) || t.lat.length < 2 || state.mode === 'live') return;
+      let w = 180, e = -180, so = 90, n = -90;
+      const add = (la, lo) => { if (!Number.isFinite(la) || !Number.isFinite(lo)) return; w = Math.min(w, lo); e = Math.max(e, lo); so = Math.min(so, la); n = Math.max(n, la); };
+      const step = Math.max(1, Math.floor(t.lat.length / 400));
+      for (let i = 0; i < t.lat.length; i += step) add(t.lat[i], t.lon[i]);
+      add(t.lat[t.lat.length - 1], t.lon[t.lon.length - 1]);
+      if (vehicle) add(vehicle.lat, vehicle.lon);
+      if (!(e >= w && n >= so)) return;
+      holdFollow();
+      const sv = viewInsets(), bottom = sv.b + ($('planBar').offsetHeight || 60) + 24;
+      map.fitBounds([[w, so], [e, n]], { padding: { top: sv.t + 60, left: sv.l + 40, right: sv.r + 60, bottom }, pitch: 0, bearing: 0, duration: 900, maxZoom: 16 });
     }
     // Plan fields: empty = the phone's position (locate()), "lat, lon" = that point, anything else =
     // the first Nominatim match. Errors carry the toast text.
@@ -3177,8 +3203,10 @@
     function openPlan(open) {
       const panel = $('planPanel');
       panel.style.setProperty('--plan-bar', `${$('planBar').offsetHeight + 2}px`); document.documentElement.style.setProperty('--plan-bar', `${$('planBar').offsetHeight + 2}px`);   // the floating loop (landscape) sits above it
+      const closing = !open && panel.classList.contains('open');
       panel.classList.toggle('open', open);
       $('app').classList.toggle('plan-open', open);
+      if (closing && panel.classList.contains('routed')) fitPlannedRoute();   // U-122: the chosen route stays on screen
       $('destInput').setAttribute('aria-expanded', String(open));
       if (open) { refreshSavedDrives(); if (!panel.classList.contains('routed')) renderPlaces(); $('planBody').scrollTop = 0; closeEdge(); }
       else { $('destInput').blur(); $('fromInput').blur(); }                 // closing puts the keyboard away
@@ -5271,7 +5299,7 @@
         const breaks = (Array.isArray(t.steps) ? t.steps : []).map(s => Math.round((s.m || 0) / 5));
         t.character = ApexRoadPage.character(Core, t, breaks);
         const line = ApexRoadPage.characterLine(t.character, (m) => ApexUnits.long(m, 1));
-        $('routeCardCharacter').textContent = line ? `Ahead: ${line}` : '';
+        $('routeCardCharacter').textContent = line ? ApexRouteCard.factText(`Ahead: ${line}`) : '';   // U-134: no unit alone on a line
         $('routeCardCharacter').hidden = !line;
       } catch (_) { /* unknown: nothing said */ }
     }
@@ -5283,7 +5311,7 @@
       if (plannedRoute === t) $('routeCardProfile').innerHTML = ApexRouteCard.profile(t, 340, 92, heightLabel) || '';
       if (up == null) return;
       const h = heightLabel;
-      $('routeCardClimb').textContent = `Climbs ${h(up)} in all · highest ${h(hi)}`;
+      $('routeCardClimb').textContent = ApexRouteCard.factText(`Climbs ${h(up)} in all · highest ${h(hi)}`);
       $('routeCardClimb').hidden = false;
     }
     async function attachScenic(t) {
@@ -5298,7 +5326,8 @@
       if (plannedRoute !== t) return;                                                          // another route came up meanwhile
       t.scenic = list;
       const line = ApexScenic.summary(list, t.dist[t.dist.length - 1]);
-      $('routeCardAlong').textContent = line; $('routeCardAlong').hidden = !line;
+      $('routeCardAlong').textContent = ApexRouteCard.factText(line); $('routeCardAlong').hidden = !line;
+      $('routeCardAlong').dataset.glyph = ApexRouteCard.alongGlyph(line);                     // U-134: a café is a cup
       for (const p of list) {
         const el = document.createElement('div'); el.className = `poi-pin poi-${p.kind}`;
         el.textContent = p.kind === 'view' && p.name ? p.name : SCENIC_LABEL[p.kind];

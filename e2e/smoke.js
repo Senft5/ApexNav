@@ -3243,6 +3243,17 @@ flow('REVIEW.md 1.2 screen by screen: first run, the map, planning, the route, d
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
     return { whole: n.scrollWidth <= n.clientWidth + 1 && n.scrollHeight <= n.clientHeight + 1, size: getComputedStyle(n).fontSize, w: innerWidth, lines: Math.round(n.clientHeight / parseFloat(getComputedStyle(n).lineHeight || '16')) }; });
   check(long.whole && parseFloat(long.size) >= 14, 'a long name is whole, smaller or on two lines, never cut: ' + JSON.stringify(long));
+  // U-114: a long name set while the card is up is fitted again when the card goes down; U-122: and the chosen route stays
+  // on screen with the car: the camera is fitted to the route (with no tiles here the map never draws, so the fit asked is
+  // what is checked), the app's own fit pausing follow with no recenter key
+  await page.click('#routeBar'); await page.waitForTimeout(400);
+  await page.evaluate(() => { apexDebug.renderRouteCard(apexDebug.track); window.__fits = []; const m = apexDebug.map, f = m.fitBounds.bind(m); m.fitBounds = (b, o) => { window.__fits.push(b); return f(b, o); }; });
+  await page.click('#routeBar'); await page.waitForTimeout(600);
+  const fitted = await page.evaluate(() => { const n = document.getElementById('routeBarName'), t = apexDebug.track, b = window.__fits[window.__fits.length - 1];
+    const inside = (i) => b && t.lon[i] >= b[0][0] - 1e-9 && t.lon[i] <= b[1][0] + 1e-9 && t.lat[i] >= b[0][1] - 1e-9 && t.lat[i] <= b[1][1] + 1e-9;
+    return { whole: n.scrollWidth <= n.clientWidth + 1 && n.scrollHeight <= n.clientHeight + 1, follow: apexDebug.state.follow, fits: window.__fits.length,
+      inView: [0, Math.floor(t.lat.length / 2), t.lat.length - 1].every(inside) }; });
+  check(fitted.whole && fitted.inView && fitted.follow === false, 'collapsed: the name whole and the route fitted on screen: ' + JSON.stringify(fitted));
   // Driving: no tab bar; Report and End; Limit, the Score under the g-ball
   await page.click('#planClear');
   await page.evaluate(async () => { for (let i = 0; i < 40; i++) { window.apex.live({ lat: 35.96 + i * 1e-5, lon: -83.92, accuracy_m: 5, speed_mps: 12, course_deg: 0, has_fix: true, calibration: 'locked', lat_g: 0.1, lon_g: 0 }); await new Promise((r) => setTimeout(r, 100)); } });

@@ -13,6 +13,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 RUNNER = r"""
 const R = require(process.argv[1] + '/web/route_card.js');
+const F = require(process.argv[1] + '/web/fun_route.js');
 const mi = (m) => `${(m / 1609.344).toFixed(1)} mi`;
 const dist = [], elev = [];
 for (let i = 0; i <= 200; i++) { dist.push(i * 50); elev.push(300 + 200 * Math.sin(i / 200 * Math.PI)); }
@@ -25,6 +26,13 @@ const out = {
   profile: R.profile(t, 340, 92, (m) => `${Math.round(m)} m`),
   noProfile: [R.profile({ dist: [0], elev: [1] }), R.profile({ dist: [0, 10], elev: [null, null] }), R.profile(null)],
   dial: R.dial('Twist', 97), dialUnknown: R.dial('Surface', null), count: R.count('Cameras', 0), countUnknown: R.count('Cameras', undefined),
+  // U-115: a GPX or a loop has no router fun score: Twist and Flow come from its own corners
+  gpxShape: (() => { const ev = []; for (let k = 0; k < 12; k++) ev.push({ type: 'corner', dist_m: 600 + k * 120, start_m: 560 + k * 120, end_m: 640 + k * 120, severity: 3 });
+    return R.shape({ dist, events: ev }, (x) => F.score(x, [])); })(),
+  searchedShape: R.shape({ dist, events: [], fun: { fun: 60, twist: 56, flow: 23 } }, () => ({ twist: 1, flow: 1 })),
+  noShape: [R.shape({ dist: [0, 10] }, (x) => F.score(x, [])), R.shape(null)],
+  fact: R.factText('Ahead: Esses at 2.4 mi · Technical at 3.4 and 8.5 mi'),
+  glyphs: ['1 café', '2 viewpoints · 1 café', 'No fuel for the first 40 mi', ''].map(R.alongGlyph),
   tiles: R.tiles([{ fun: { fun: 98 }, timeS: 10080 }, { fun: { fun: 80 }, timeS: 9360 }, { fun: { fun: 100 }, timeS: 12660 }, { fun: null, timeS: null }], 0),
 };
 console.log(JSON.stringify(out));
@@ -59,3 +67,17 @@ def test_dials_show_unknown_honestly(out):
 def test_option_tiles_are_relative_to_the_pick(out):
     assert out["tiles"] == [{"title": "Fun 98 · 2:48", "sub": "this one"}, {"title": "Fun 80 · 2:36", "sub": "12 min quicker"},
                             {"title": "Fun 100 · 3:31", "sub": "+43 min"}, {"title": "Fun -- · --", "sub": "--"}]
+
+
+def test_twist_and_flow_come_from_the_geometry_of_any_track(out):
+    g = out["gpxShape"]
+    assert isinstance(g["twist"], (int, float)) and g["twist"] > 0 and isinstance(g["flow"], (int, float)) and g["flow"] > 0
+    assert out["searchedShape"] == {"twist": 56, "flow": 23}                              # the searched route's own score first
+    assert out["noShape"] == [{"twist": None, "flow": None}, {"twist": None, "flow": None}]
+
+
+def test_facts_never_orphan_a_unit_and_a_cafe_is_a_cup(out):
+    assert out["fact"] == "Ahead: Esses at 2.4 mi · Technical at 3.4 and 8.5 mi"      # U-134
+    assert out["glyphs"] == ["cafe", "view", "fuel", "view"]
+    html = open(os.path.join(ROOT, "web", "index.html")).read()
+    assert '.f-along[data-glyph="cafe"]' in html and '.f-along[data-glyph="fuel"]' in html
