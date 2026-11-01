@@ -4,6 +4,54 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-01: Review 5, all 32 findings (U-106..U-137) built ("build all")
+
+Five builders worked in parallel and Claude merged them. These are the calls, each with how to undo it.
+
+- **Strip (A).**
+  - Fixed strip height instead of the height animation, so the map's top edge stays still. The band is about 104–116 px
+    even on the quiet line. Undo: the `.notes.notes-roadbook` height rule.
+  - In landscape the third cell is dropped so the head fits in words. Undo: the landscape `.rb-box:nth-child(3)` rule.
+  - A junction's road name wraps to two lines instead of ending in "…". Undo: `.rb-call b + span`.
+  - Night strip is 112/124 px with line height 1.1. Undo: the two night rules.
+  - The next cells print codes from `stripCode()`: R3, LHP, KEEP R, RBT 2.
+- **Forecast (B, U-108).**
+  - Pace is learned separately for corner sections (2+ corners within 500 m, padded 100 m) and open road. Undo:
+    `sections: []`.
+  - The factor stays within 0.85–1.25, and the arrival moves at most 1 min per minute driven. Undo: `RATE` in `eta.js`.
+  - "About N min" is shown until 5 mi driven.
+- **Coaching, end card, replay (B).**
+  - U-111: one coaching sentence, from the Log's own writer. Undo: revert 2cdfdd4.
+  - U-118: Share card is solid from the first frame and does nothing until the score lands.
+  - U-128: the replay opens in follow view at the start and waits up to 4 s for tiles. Undo: `REPLAY_WAIT_MS = 0`.
+- **Voices (C, U-113).** The owner chose to build the packs, not remove them.
+  - Each voice has 9 asides and 4 sign-offs (`web/voice_lines.js` PACKS), and 42 new Kokoro clips were rendered. A test
+    bans direction, "careful", "slow", distance and speed words from asides.
+  - Asides play after the call, at most once per 45 s, never after a slow-down warning or in a chained run.
+  - With plain words, the call is in the phone's voice and the aside in the pack voice; that was already so. Undo:
+    strip `aside` in `packAside`.
+  - Kit's asides avoid "slow". `themes.js` `voice.sample` is gone: the cards quote real lines.
+- **CarPlay (D).**
+  - Short instruction variants use the call's own words ("Very sharp left", not "Hairpin"). Undo: `cornerShort`.
+  - U-120 is only partly fixed: CarPlay won't leave the trip strip empty, so it shows the distance driven, with time
+    "--". Undo: `Measurement(value: -1…)`.
+  - The guidance card's reserved share is 0.43 of the screen (was 0.36). Undo: `cardShare`.
+- **Recording (D, REVIEW5 §7).**
+  - The replay is driven by real elapsed time, not fewer photos. Undo: `dt = 0.01`.
+  - Dynamic Type is its own ninth flow. Undo: `test09` and its matrix row.
+  - Contrast is measured in Chromium. It found Roadbook day "MPH" at 4.22:1, under 4.5:1: left for the next review.
+  - None of it has run on a Mac yet.
+- **Garage and People (E).**
+  - Crash check stays on with no contact: it still asks if you're OK and offers the emergency call. An always-visible
+    line says what it does in each state. Undo: `crash: false` in the toggles.
+  - "Earns 3×" is removed (nothing names what is tripled).
+  - The Garage page shows you and your cars, Look and voice, Co-driver and The words. Ten settings rows sit behind one
+    gear and open bottom sheets (`web/garage_settings.js`); every id is unchanged.
+  - Every Log date now reads "Today, 8:02 AM" (`ApexFormat.dateTime`). Undo: revert `format.js`.
+  - People's empty sides show a dimmed sample row captioned "Example", read as not real.
+- **Not built:** REVIEW5's pushback to hide the live Score while driving. It reverses an owner decision, so it stays
+  with the owner.
+
 ## 2026-11-01: Picks from the twostraws Swift skills list (and the iOS dev guide)
 
 - github.com/twostraws/swift-agent-skills is a list of links, not skills. Most of what it links to is already covered by

@@ -1,5 +1,27 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-01: design skills installed; Fable review 5; all 32 findings built
+
+- [x] Skills in `.claude/skills` (Impeccable, Intent, 18 Swift iOS skills, ios-code-audit, swift-security-expert,
+  swiftui-pro), #278. Recording 5 (app-review run 41286687159, all 8 flows) and docs/design/REVIEW5.md, #279.
+- [x] All 32 findings U-106..U-137 built by five parallel builders and merged:
+  - strip grammar, including landscape (the P0);
+  - a bounded forecast;
+  - one coaching sentence;
+  - per-voice words, with 42 new Kokoro clips;
+  - CarPlay short instructions;
+  - the replay's end;
+  - the Garage behind one gear;
+  - People example rows;
+  - the REVIEW5 §7 recording fixes.
+  CALL_SHEET 2026-11-01 lists every call.
+- Unverified on a device or Mac: all Swift (CI compiles it), the recording changes (the next app-review run proves them),
+  the new clips on a phone, the landscape strip on a real phone.
+- Known gap: with plain words on (the default), calls are spoken by the phone's voice and only asides are in the pack
+  voice; rendering plain-words calls per pack is the follow-up if the owner wants it.
+- Exact next task: recording 6 (app-review.yml on main) to check review 5 on video, then Fable stage 2
+  (REVIEW5_CHECK.md) if the owner asks.
+
 ## Session 2026-10-31: TestFlight notes 09, 10 and the video (one of three feedback builders)
 
 - [x] 09 a stage is marked on the drive's map (circled), from a whole road you drove (road keys from map matching) or
