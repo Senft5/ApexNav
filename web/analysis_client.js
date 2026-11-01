@@ -91,6 +91,15 @@
     const near = await fullAll(nearS);
     return { co: { ...Core.coach(d, near), others: near.map((o) => ({ name: o.name, date: label(o) })), near: near.map(lite) }, near };
   }
+  // U-111: the one coaching sentence a drive gets, the Log's (drive_view.js plainCoach over this drive's score and the coach's
+  // corners against your other drives, as the drive job gives the Log), so the end card says the same words. null when the
+  // drive is not stored, drive_view.js is not loaded here, or there is no score to coach from.
+  async function coachLineOf(Core, id, sums) {
+    const me = sums.find((s) => s.id === id), d = me ? await full(id, me) : null;
+    if (!d || !root.ApexDriveView) return null;
+    const { co } = await coachOf(Core, d, sums);
+    return root.ApexDriveView.plainCoach(d.ds, co) || null;
+  }
 
   const jobs = {
     /** Every drive's summary (missing ones built from the drive's rows first). */
@@ -106,9 +115,22 @@
       const summary = (await Rec().store(d)) || Rec().summarize(Core, d);
       let card = null;                                                 // Share card's picture of it (drive_card.js), drawn on a tap
       try { const s = Rec().scoreOf(Core, d); card = root.ApexDriveCard ? root.ApexDriveCard.cardModel({ ...d, corners: s.corners, ds: s.ds }) : null; } catch (_) { card = null; }
-      const others = (await Rec().summaries(Core)).filter((o) => o.id !== d.id && o.name === d.name)
+      const sums = await Rec().summaries(Core);
+      const others = sums.filter((o) => o.id !== d.id && o.name === d.name)
         .map((o) => ({ id: o.id, name: o.name, score: o.ds && o.ds.score != null ? Math.round(o.ds.score) : null }));
-      return { driveId: d.id, summary, others, card };   // (never `id`: the message's own)
+      let coach = null;                                                // U-111: the Log's sentence, written once, here
+      try { coach = await coachLineOf(Core, d.id, sums); } catch (_) { coach = null; }
+      release();
+      return { driveId: d.id, summary, others, card, coach };   // (never `id`: the message's own)
+    },
+
+    /** U-111: a stored drive's coaching sentence, the Log's (coachLineOf); { coach: null } when there is none. */
+    async coachLine({ id }) {
+      const Core = CoreOf(), sums = await Rec().summaries(Core);
+      let coach = null;
+      try { coach = await coachLineOf(Core, id, sums); } catch (_) { coach = null; }
+      release();
+      return { coach };
     },
 
     /** A few fields of a stored drive (tags, a note, shared), its summary kept in step. */

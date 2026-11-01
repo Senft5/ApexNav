@@ -1359,6 +1359,8 @@ flow('drive ended: Open in the Log is the solid key with no score, Share card wi
   }
   await page.click('#driveEnd');
   await page.waitForSelector('#endCard.show', { timeout: 8000 });
+  const first = await keys();                                           // U-118: while scoring, the scored layout already
+  check(first.share && first.logLink && !first.logKey && !first.shareLink, 'scoring: Share card solid, the Log a link: ' + JSON.stringify(first));
   await scoredCard(page);                                               // F-04: the card first, the score when the worker has it
   const routed = await keys();
   check(routed.name === 'Dragon run', 'named after the route driven: ' + routed.name);
@@ -1368,9 +1370,11 @@ flow('drive ended: Open in the Log is the solid key with no score, Share card wi
   await page.evaluate(() => { ApexCore.driverScore = () => ({ score: 640, components: {} });
     const lat = [], lon = []; for (let i = 0; i < 300; i++) { lat.push(35.36 + i * 5 / 110540); lon.push(-84.29); }
     apexDebug.showEndCard({ id: 'x', name: 'Cherohala Skyway', date: new Date().toISOString(), lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: lat.map(() => 15), lon_g: lat.map(() => 0), lat_g: lat.map(() => 0), g_known: null, events: [], elev: null, hz: 1, source: 'web-gps', corners: [] }, Date.now() - 600e3); });
+  const pending = await keys();
   await scoredCard(page);
   const scored = await keys();
   check(scored.share && !scored.logKey && scored.logLink && !scored.shareLink, 'a score: Share card is the solid key: ' + JSON.stringify(scored));
+  check(JSON.stringify(pending) === JSON.stringify(scored), 'U-118: the keys do not swap when the score lands: ' + JSON.stringify({ pending, scored }));
 });
 
 flow('drive ended: the card and the Log give the same score and time for the recorded drive (REVIEW4_CHECK U-91)', async (page, base) => {
@@ -1393,8 +1397,11 @@ flow('drive ended: the card and the Log give the same score and time for the rec
   check(/^\d+$/.test(card.score) && card.share && !/Not enough clean corners/.test(card.line), 'the card scores the drive and offers Share: ' + JSON.stringify(card));
   await page.goto(`${base}/analysis.html?tab=drive&drive=${encodeURIComponent(card.id)}`);
   await page.waitForSelector('.dv-score b', { timeout: 15000 });
-  const log = await page.evaluate(() => ({ score: document.querySelector('.dv-score b').textContent, meta: document.querySelector('.dv-meta').textContent }));
+  const log = await page.evaluate(() => ({ score: document.querySelector('.dv-score b').textContent, meta: document.querySelector('.dv-meta').textContent,
+    plain: (document.querySelector('.dv-plain') || {}).textContent || '' }));
   check(log.score === card.score, `the Log's ${log.score} is the card's ${card.score}`);
+  // U-111: one coaching sentence, the Log's, on the card; never "Next time, X:" and never two colons
+  check(log.plain && card.line.endsWith(log.plain) && !/Next time/.test(card.line) && (card.line.match(/:/g) || []).length <= 1, `the card's sentence is the Log's: ${card.line} against ${log.plain}`);
   const [, mm, ss] = /(\d+):(\d\d)/.exec(log.meta) || [];
   const cardMin = +((/(\d+) min/.exec(card.meta) || [])[1]);
   check(mm && cardMin === Math.round(+mm + +ss / 60) && !/ h /.test(card.meta), `the card's time is the recording's: ${card.meta} against ${log.meta}`);

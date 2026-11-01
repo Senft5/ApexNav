@@ -5774,7 +5774,7 @@
     }
     // The drive-ended card (REVIEW.md roadmap 7): the moment after the Skyway gets the screen, not a toast. The drive is
     // already saved; the card shows its name, distance and time, the Vetta Score big (-- without clean corners) and one
-    // thing to work on (the weakest Score part, week_digest.js tip), with Share card and Mark a stage.
+    // thing to work on (U-111: the Log's own coaching sentence), with Share card and Mark a stage.
     let endDrive = null;
     // F-04 (REVIEW_FEEL): the card comes first, in the frame after End, with what the recording already knows (its name,
     // distance, time and trail); the score, the tip and the closing line follow when the worker has parsed, scored and saved
@@ -5791,7 +5791,9 @@
       // scoring: no number yet, never "--" (that means "no score"), and no key that needs the score
       $('endScore').textContent = '…'; $('endScore').classList.add('unk'); $('endScore').setAttribute('aria-busy', 'true');
       $('endLog').href = $('endLogKey').href = `analysis.html?tab=drive&drive=${encodeURIComponent(c.id)}`;
-      $('endShare').hidden = true; $('endShareLink').hidden = true; $('endLogKey').hidden = false; $('endLog').hidden = true;
+      // U-118: the keys are the scored layout from the first frame (Share card solid, Open in the Log the link), so nothing
+      // swaps under a reaching finger when the score lands; Share waits for it. Only a drive with no score changes them.
+      $('endShare').hidden = false; $('endShare').setAttribute('aria-disabled', 'true'); $('endShareLink').hidden = true; $('endLogKey').hidden = true; $('endLog').hidden = false;
       $('endCard').classList.add('show');
       showEndTrail(c);
     }
@@ -5805,8 +5807,8 @@
       $('endScore').removeAttribute('aria-busy');
       $('endScore').textContent = c.ds.score == null ? '--' : String(c.ds.score);
       $('endScore').classList.toggle('unk', c.ds.score == null);   // unknown in pencil, not two black bars (REVIEW2.md U-34)
-      const t = c.ds.score != null && window.ApexWeekDigest ? ApexWeekDigest.tip(c.ds.components) : null;
-      const tip = c.ds.score == null ? 'Not enough clean corners for a score this time.' : t ? `Next time, ${t.label.toLowerCase()}: ${t.tip}.` : '';
+      // U-111: one coaching sentence, the Log's (analysis_client.js coachLineOf, written in the job that scored the drive)
+      const tip = c.ds.score == null ? 'Not enough clean corners for a score this time.' : typeof c.coach === 'string' ? c.coach : '';
       const ended = window.ApexDriveKeep ? ApexDriveKeep.endNote(c) : null;
       const tipLine = [ended ? ended + '.' : '', tip].filter(Boolean).join(' ');
       // your best on this road (REVIEW.md 4.4): against your earlier drives named after the same road; then the pack's closing line
@@ -5820,6 +5822,7 @@
       }
       // U-75: Share card is the solid key only with a score to share; with none, Open in the Log is, and Share is a link
       const scored = c.ds.score != null;
+      $('endShare').removeAttribute('aria-disabled');
       $('endShare').hidden = !scored; $('endShareLink').hidden = scored;
       $('endLogKey').hidden = scored; $('endLog').hidden = !scored;
       // the card's words changed its height: the drive is fitted again to the map the card now leaves
@@ -5841,7 +5844,9 @@
         if (d.ds.score != null) try {
           others = (await ApexRecording.summaries()).filter((o) => o.id !== d.id && o.name === d.name).map((o) => ({ id: o.id, name: o.name, score: o.ds && o.ds.score != null ? Math.round(o.ds.score) : null }));
         } catch (_) { others = []; }
-        endCardScored({ ...c, corners: d.corners.length, ds: d.ds }, others, opts);
+        let coach = null;                                              // U-111: the Log's sentence, when the drive is stored
+        if (d.ds.score != null && window.ApexAnalysis) try { coach = (await ApexAnalysis.job('coachLine', { id: d.id })).coach || null; } catch (_) { coach = null; }
+        endCardScored({ ...c, corners: d.corners.length, ds: d.ds, coach }, others, opts);
       })();
     }
     // U-88: behind the card, the map is the drive: fitted to its trail above the card, the trail drawn at the route's width in
@@ -5906,7 +5911,7 @@
     $('endShareLink').addEventListener('click', () => $('endShare').click());
     $('endStage').addEventListener('click', () => { if (endDrive) openLog(`analysis.html?tab=segments&drive=${encodeURIComponent(endDrive.id)}`); });
     $('endShare').addEventListener('click', async () => {
-      if (!endDrive || !window.ApexDriveCard) return;
+      if (!endDrive || !window.ApexDriveCard || $('endShare').getAttribute('aria-disabled') === 'true') return;   // U-118: still scoring
       // F-04: the picture's model came with the score from the worker (the drive's shape and corner mix); a whole record
       // shown here is drawn from itself
       const model = endDrive.card || (endDrive.record ? ApexDriveCard.cardModel(endDrive.record) : null);
@@ -5963,7 +5968,7 @@
           keepDone(kept);
           const s = res.summary || {};
           endCardScored({ ...card, id: res.driveId, len_m: s.len_m ?? card.len_m, secs: s.secs ?? card.secs, corners: Array.isArray(s.corners) ? s.corners.length : null,
-                          ds: s.ds || { score: null, components: null }, card: res.card || null }, res.others || [], { quiet: !!ended });
+                          ds: s.ds || { score: null, components: null }, card: res.card || null, coach: res.coach || null }, res.others || [], { quiet: !!ended });
           idle(() => refreshSavedDrives().catch(() => {}));            // the road memory learns this drive, off the card's moment
           if (live) {
             live.finish().then(async (shared) => {
