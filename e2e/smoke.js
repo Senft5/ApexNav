@@ -1363,7 +1363,7 @@ flow('first open in the app: the welcome runs, and Start is what asks the shell 
   check(!(await page.isVisible('#onboard.show')), "the car's Start answers the welcome");
 });
 
-flow('drive ended: Open in the Log is the solid key with no score, Share card with one; a drive on a route keeps its name (REVIEW4 U-75)', async (page, base) => {
+flow('drive ended: Open in the Log is the solid key with no score, Share card with one, fixed from the first frame; a drive on a route keeps its name (REVIEW4 U-75, REVIEW5 U-118)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
     window.webkit = { messageHandlers: { apex: { postMessage: () => {} } } }; });
   await page.route('**/api/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
@@ -1382,9 +1382,10 @@ flow('drive ended: Open in the Log is the solid key with no score, Share card wi
     await page.evaluate((b) => { for (let j = b * 70; j < (b + 1) * 70; j++) window.apex.live({ lat: 35.5 + j * 1e-4, lon: -83.9, accuracy_m: 4, speed_mps: 15, course_deg: 0, lat_g: 0, lon_g: 0, has_fix: true, calibration: 'locked' }); }, burst);
     await page.waitForTimeout(300);
   }
-  await page.click('#driveEnd');
+  // U-118: in the frame after End, while scoring, the scored layout already (read in the same task, before the worker answers)
+  const first = await page.evaluate(() => { document.getElementById('driveEnd').click(); const vis = (id) => { const e = document.getElementById(id); return !!(e && e.offsetParent); };
+    return { share: vis('endShare'), logKey: vis('endLogKey'), logLink: vis('endLog'), shareLink: vis('endShareLink') }; });
   await page.waitForSelector('#endCard.show', { timeout: 8000 });
-  const first = await keys();                                           // U-118: while scoring, the scored layout already
   check(first.share && first.logLink && !first.logKey && !first.shareLink, 'scoring: Share card solid, the Log a link: ' + JSON.stringify(first));
   await scoredCard(page);                                               // F-04: the card first, the score when the worker has it
   const routed = await keys();
@@ -2912,6 +2913,7 @@ flow('theme contract on the page: the hazard plate, the speed, the call and the 
     await page.addInitScript((n) => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.prefs', JSON.stringify({ notesMode: 'full', nightMode: n ? 'on' : 'off' })); } catch (_) {} }, night);
     await page.goto(base + '/index.html?drive=dry_ridge&play=1');
     await page.waitForFunction(() => window.apexDebug && window.apexDebug.track && window.apexDebug.track.events.length);
+    await page.waitForFunction(() => window.apexDebug.state.playing, null, { timeout: 10000 });   // U-128: once the map is ready
     await page.evaluate(() => { const st = window.apexDebug.state, t = window.apexDebug.track; st.cursorM = t.dist[t.dist.length - 1] * 0.45; });
     await page.waitForTimeout(2500);
     const r = await page.evaluate(() => {
