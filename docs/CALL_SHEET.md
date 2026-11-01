@@ -4,6 +4,21 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-01: Picks from the twostraws Swift skills list (and the iOS dev guide)
+
+- github.com/twostraws/swift-agent-skills is a list of links, not skills. Most of what it links to is already covered by
+  the packs below (concurrency, testing, App Intents, widgets, background work, App Store review, simulator,
+  accessibility, UI copy). Added only the three that bring something new, all MIT with LICENSE kept:
+  `ios-code-audit` (Chad Etzel, 34edb29: a read-only whole-codebase audit written to CODE_AUDIT.md),
+  `swift-security-expert` (Ivan Magda, bda2e0c: Keychain, tokens, certificate trust, CryptoKit) and `swiftui-pro`
+  (Paul Hudson, f2920b6: SwiftUI review, for the widgets, Live Activity and shell views).
+- Skipped: Writing for Interfaces (Intent's /articulate covers it), the SwiftData, Core Data, focus-engine and Figma skills
+  (Vetta doesn't use them), App Store Connect CLI (tools/crash_logs.py already does what we need), and second copies of
+  concurrency and testing skills.
+- github.com/keskinonur/claude-code-ios-dev-guide is a single README with no licence. Nothing to install; our CLAUDE.md
+  and docs already do what it describes. Its XcodeBuildMCP tip needs a Mac, so it only helps a local session.
+- Undo: delete those three folders.
+
 ## 2026-11-01: 18 of the Swift iOS skills installed in the repo
 
 - You asked for github.com/dpearson2699/swift-ios-skills (upstream commit 8d90fd1). It has 86 skills. Each installed
