@@ -4,6 +4,15 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-01: Intent design-strategy skills installed in the repo
+
+- You asked for Intent (github.com/ghaida/intent). It's copied in the same way as Impeccable below: its 18 skills in
+  `.claude/skills/` (intent, strategize, investigate, journey, organize, wireframe, articulate, blueprint, evaluate,
+  fortify, include, measure, transpose, localize, philosopher, storytelling, specify, present; upstream commit 7111cb8,
+  CC0) and its 6 agents in `.claude/agents/` (noor, ember, wren, vigil, rune, sage). Start with `/intent`.
+- Its only hook prints a coloured banner when `/intent` runs, so it's left out.
+- Undo: delete those 18 skill folders and 6 agent files.
+
 ## 2026-11-01: Impeccable design skill installed in the repo
 
 - You asked for the Impeccable plugin (github.com/pbakaus/impeccable). `/plugin` doesn't work in cloud sessions, and
