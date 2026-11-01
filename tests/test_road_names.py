@@ -48,3 +48,22 @@ def test_road_names():
     assert r["none"] is None
     # U-100: as signs shorten them, for a line that must fit; a ref or a two-word compass name stays
     assert r["short"] == ["Northwest Expy", "Carolina Trace Rd", "N Main St", "Interstate 74 W", "I-275", "North Rd", "Dry Ridge Rd", None]
+
+
+def test_the_road_name_is_held_through_a_junction():
+    """U-137: no "Road: --" for a beat in a junction: the last name holds 5 s, and as long as the car is in a known junction."""
+    js = r"""
+const R = require('./web/road_names.js');
+const steps = [];
+let h = null;
+const at = (name, t, j) => { const r = R.holdRoadName(h, name, t, j); h = r.hold; steps.push(r.name); };
+at('Dry Ridge Road', 0); at(null, 2000); at(null, 5000); at(null, 5001);       // held 5 s, then unknown
+at('Bank Street', 6000); at(null, 7000, true); at(null, 20000, true); at(null, 24000); at(null, 26000);   // a long junction
+at('Mill Road', 27000); at('Dry Ridge Road', 27500);                           // a new name always wins
+console.log(JSON.stringify(steps));
+"""
+    root = Path(__file__).resolve().parents[1]
+    p = subprocess.run([NODE, "-e", js], cwd=root, capture_output=True, text=True, encoding="utf-8", timeout=30)
+    assert p.returncode == 0, p.stderr
+    assert json.loads(p.stdout) == ["Dry Ridge Road", "Dry Ridge Road", "Dry Ridge Road", None,
+                                    "Bank Street", "Bank Street", "Bank Street", "Bank Street", None, "Mill Road", "Dry Ridge Road"]

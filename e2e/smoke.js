@@ -241,6 +241,31 @@ flow('the map is a fixed stage: tabs, sheets and the drive never resize it; a dr
   check(replay.playing && replay.resizes === 0, `no resize in a replay (${JSON.stringify(replay)})`);
 }, { deviceScaleFactor: 3 });
 
+flow('a replay opens on its trail and says when it has finished (REVIEW5 U-110, U-128)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html?drive=dry_ridge&play=1');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.track, null, { timeout: 20000 });
+  // U-128: by the time the clock starts the trail is on the map; while it waits the strip names the drive, never a roadless quiet line
+  await page.waitForFunction(() => window.apexDebug.state.playing, null, { timeout: 20000 });
+  const first = await page.evaluate(() => { const src = window.apexDebug.map.getSource('apex-route-src'), data = src ? src._data : null;
+    return { loaded: !!src, trail: !!(data && data.features && data.features.length) }; });
+  // (this server blocks the map's tiles and style, so the map may never load here: then the clock starts after the wait)
+  check(!first.loaded || first.trail, 'the trail is drawn before the first tick: ' + JSON.stringify(first));
+  // U-110: run it to its end
+  await page.evaluate(() => { const st = window.apexDebug.state, t = window.apexDebug.track; st.cursorM = t.dist[t.dist.length - 1] - 20; });
+  await page.waitForFunction(() => !window.apexDebug.state.playing, null, { timeout: 10000 });
+  await page.waitForTimeout(400);
+  const end = await page.evaluate(() => ({ plate: document.getElementById('modePlate').textContent, strip: document.getElementById('notes').textContent,
+    play: document.querySelector('#playBtn span').textContent, again: document.getElementById('playBtn').classList.contains('again'),
+    speed: (document.querySelector('.dial-digital') || {}).textContent, sight: (document.querySelector('.ro-sight b') || {}).textContent }));
+  check(/^Replay finished/.test(end.plate) && /That.s the drive/.test(end.strip) && end.play === 'Again' && end.again, 'the replay says it finished: ' + JSON.stringify(end));
+  check(end.speed === '0' && (end.sight == null || end.sight === '--'), 'the dial at rest and Sight -- (U-130): ' + JSON.stringify(end));
+  // Again plays it from the start, and the finished state goes
+  await page.click('#playBtn');
+  await page.waitForFunction(() => window.apexDebug.state.playing && !document.getElementById('playBtn').classList.contains('again'), null, { timeout: 5000 });
+  check(!/finished/.test(await page.textContent('#modePlate')), 'Again clears the finished plate');
+});
+
 flow('a hot phone turns the battery saver on and back off', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.goto(base + '/index.html');
@@ -1353,7 +1378,7 @@ flow('first open in the app: the welcome runs, and Start is what asks the shell 
   check(!(await page.isVisible('#onboard.show')), "the car's Start answers the welcome");
 });
 
-flow('drive ended: Open in the Log is the solid key with no score, Share card with one; a drive on a route keeps its name (REVIEW4 U-75)', async (page, base) => {
+flow('drive ended: Open in the Log is the solid key with no score, Share card with one, fixed from the first frame; a drive on a route keeps its name (REVIEW4 U-75, REVIEW5 U-118)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
     window.webkit = { messageHandlers: { apex: { postMessage: () => {} } } }; });
   await page.route('**/api/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
@@ -1372,8 +1397,11 @@ flow('drive ended: Open in the Log is the solid key with no score, Share card wi
     await page.evaluate((b) => { for (let j = b * 70; j < (b + 1) * 70; j++) window.apex.live({ lat: 35.5 + j * 1e-4, lon: -83.9, accuracy_m: 4, speed_mps: 15, course_deg: 0, lat_g: 0, lon_g: 0, has_fix: true, calibration: 'locked' }); }, burst);
     await page.waitForTimeout(300);
   }
-  await page.click('#driveEnd');
+  // U-118: in the frame after End, while scoring, the scored layout already (read in the same task, before the worker answers)
+  const first = await page.evaluate(() => { document.getElementById('driveEnd').click(); const vis = (id) => { const e = document.getElementById(id); return !!(e && e.offsetParent); };
+    return { share: vis('endShare'), logKey: vis('endLogKey'), logLink: vis('endLog'), shareLink: vis('endShareLink') }; });
   await page.waitForSelector('#endCard.show', { timeout: 8000 });
+  check(first.share && first.logLink && !first.logKey && !first.shareLink, 'scoring: Share card solid, the Log a link: ' + JSON.stringify(first));
   await scoredCard(page);                                               // F-04: the card first, the score when the worker has it
   const routed = await keys();
   check(routed.name === 'Dragon run', 'named after the route driven: ' + routed.name);
@@ -1383,9 +1411,11 @@ flow('drive ended: Open in the Log is the solid key with no score, Share card wi
   await page.evaluate(() => { ApexCore.driverScore = () => ({ score: 640, components: {} });
     const lat = [], lon = []; for (let i = 0; i < 300; i++) { lat.push(35.36 + i * 5 / 110540); lon.push(-84.29); }
     apexDebug.showEndCard({ id: 'x', name: 'Cherohala Skyway', date: new Date().toISOString(), lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: lat.map(() => 15), lon_g: lat.map(() => 0), lat_g: lat.map(() => 0), g_known: null, events: [], elev: null, hz: 1, source: 'web-gps', corners: [] }, Date.now() - 600e3); });
+  const pending = await keys();
   await scoredCard(page);
   const scored = await keys();
   check(scored.share && !scored.logKey && scored.logLink && !scored.shareLink, 'a score: Share card is the solid key: ' + JSON.stringify(scored));
+  check(JSON.stringify(pending) === JSON.stringify(scored), 'U-118: the keys do not swap when the score lands: ' + JSON.stringify({ pending, scored }));
 });
 
 flow('drive ended: the card and the Log give the same score and time for the recorded drive (REVIEW4_CHECK U-91)', async (page, base) => {
@@ -1408,8 +1438,11 @@ flow('drive ended: the card and the Log give the same score and time for the rec
   check(/^\d+$/.test(card.score) && card.share && !/Not enough clean corners/.test(card.line), 'the card scores the drive and offers Share: ' + JSON.stringify(card));
   await page.goto(`${base}/analysis.html?tab=drive&drive=${encodeURIComponent(card.id)}`);
   await page.waitForSelector('.dv-score b', { timeout: 15000 });
-  const log = await page.evaluate(() => ({ score: document.querySelector('.dv-score b').textContent, meta: document.querySelector('.dv-meta').textContent }));
+  const log = await page.evaluate(() => ({ score: document.querySelector('.dv-score b').textContent, meta: document.querySelector('.dv-meta').textContent,
+    plain: (document.querySelector('.dv-plain') || {}).textContent || '' }));
   check(log.score === card.score, `the Log's ${log.score} is the card's ${card.score}`);
+  // U-111: one coaching sentence, the Log's, on the card; never "Next time, X:" and never two colons
+  check(log.plain && card.line.endsWith(log.plain) && !/Next time/.test(card.line) && (card.line.match(/:/g) || []).length <= 1, `the card's sentence is the Log's: ${card.line} against ${log.plain}`);
   const [, mm, ss] = /(\d+):(\d\d)/.exec(log.meta) || [];
   const cardMin = +((/(\d+) min/.exec(card.meta) || [])[1]);
   check(mm && cardMin === Math.round(+mm + +ss / 60) && !/ h /.test(card.meta), `the card's time is the recording's: ${card.meta} against ${log.meta}`);
@@ -2902,6 +2935,7 @@ flow('theme contract on the page: the hazard plate, the speed, the call and the 
     await page.addInitScript((n) => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.prefs', JSON.stringify({ notesMode: 'full', nightMode: n ? 'on' : 'off' })); } catch (_) {} }, night);
     await page.goto(base + '/index.html?drive=dry_ridge&play=1');
     await page.waitForFunction(() => window.apexDebug && window.apexDebug.track && window.apexDebug.track.events.length);
+    await page.waitForFunction(() => window.apexDebug.state.playing, null, { timeout: 10000 });   // U-128: once the map is ready
     await page.evaluate(() => { const st = window.apexDebug.state, t = window.apexDebug.track; st.cursorM = t.dist[t.dist.length - 1] * 0.45; });
     await page.waitForTimeout(2500);
     const r = await page.evaluate(() => {

@@ -157,8 +157,10 @@
     const trafficMon = new ApexTraffic.TrafficMonitor();
     const routeWatch = { note: null, frame: null, bestM: 0, offAt: null, saidAt: null };   // offAt/saidAt: the off-route episode, "Back on route" (U-90)
     const BACK_ON_QUIET_MS = 60000;
-    const etaPace = ApexEta.createPace();   // live ETA pace on the current route (paintEta)
+    const etaPace = ApexEta.createEta();   // live ETA on the current route: pace per section class, a slow arrival (paintEta, U-108)
+    const etaSections = new WeakMap();      // track -> its corner sections (ApexEta.cornerSections), worked out once
     let etaText = '', etaLeftS = null;
+    let replayEnded = false, replayWaiting = false;   // U-110 a finished replay, U-128 a replay waiting for its map (paintReplayEnd)
     const car = { route: '', guideAt: 0, guideKey: '', sightKey: '', look: '', hazards: '', symbols: new Map(), ended: null, road: '', roadAt: -1e9 };   // what the car's screen was last sent (carRoute, carGuide below)   // strip text while off route; last frame fed; furthest progress
     try {
       const saved = JSON.parse(localStorage.getItem('apex.prefs') || 'null');
@@ -1294,14 +1296,20 @@
     let heldToast = null;
     // U-67: the road under the car, from the map's own road names (ApexRoadNames, the source the saved drive is named by in
     // leaveDrive), read at most every 2 s; null while the map has no named road there (the binnacle shows "--").
-    const roadNow = { at: -Infinity, name: null };
+    const roadNow = { at: -Infinity, name: null, hold: null };   // hold: the last name seen, held through a junction (U-137)
     function roadUnder(lat, lon) {
       const now = performance.now();
       if (now - roadNow.at < 2000) return roadNow.name;
       roadNow.at = now;
       let feats = [];
       try { feats = map.querySourceFeatures('openmaptiles', { sourceLayer: 'transportation_name' }); } catch (_) { /* style not loaded */ }
-      roadNow.name = window.ApexRoadNames && Number.isFinite(lat) && Number.isFinite(lon) ? ApexRoadNames.nearestRoadName(feats, lat, lon) : null;
+      const seen = window.ApexRoadNames && Number.isFinite(lat) && Number.isFinite(lon) ? ApexRoadNames.nearestRoadName(feats, lat, lon) : null;
+      // U-137: held 5 s when the tiles give none, and through a junction the app knows it is in (a router turn, or a corner
+      // the strip calls "like a junction"), so the binnacle never says "Road: --" mid-junction
+      const cm = state.cursorM, inJunction = !!track && Number.isFinite(cm) && ((track.kind === 'route' && window.ApexDirections && ApexDirections.atJunction(track.steps, cm))
+        || (Array.isArray(track.events) && track.events.some((e) => e.type === 'corner' && e.shape === 'square' && cm >= e.start_m - 20 && cm <= e.end_m + 20)));
+      const h = window.ApexRoadNames ? ApexRoadNames.holdRoadName(roadNow.hold, seen, now, inJunction) : { name: seen, hold: null };
+      roadNow.name = h.name; roadNow.hold = h.hold;
       return roadNow.name;
     }
     // The strip's line when no note is up. Planning: the route and the mode. In a drive or a replay, quiet (U-67): the road
@@ -1312,6 +1320,8 @@
     function quietLine(spirited, offRoute, driving, next, compact = false) {
       // U-90: wrong way on a road is still that road (the strip said "Wrong way" with no road for seven minutes)
       if (offRoute && track && track.kind === 'route') return [offRouteText(), rerouter.reason === 'wrong_way' ? roadNow.name : null].filter(Boolean).join(' · ');
+      if (replayEnded && !driveActive) return state.mode === 'sim' ? 'That\'s the route' : 'That\'s the drive';   // U-110
+      if (replayWaiting && !driveActive && track) return track.name || 'Replay';                                     // U-128
       if (!driving) return track ? `${track.name} · ${spirited ? 'Full notes' : 'Quiet · bumps and cameras only'}` : 'Plan a route for notes';
       if (!track && !driveActive) return 'No route planned';
       if (spirited) return `${track && !offRoute && track.kind !== 'horizon' ? track.name : 'The road ahead'} · Full notes`;
@@ -1528,6 +1538,8 @@
         idx = s.i; lat = s.lat; lon = s.lon; bearing = s.bearing;
         vMps = state.mode === 'sim' ? simSpeed(idx) : s.speedMps;
         latG = s.latG; lonG = s.lonG; camber = s.camberDeg;
+        if (replayEnded && state.cursorM < totalM() - 1) paintReplayEnd(false);   // a seek back: it plays on from there
+        if (replayEnded) { vMps = 0; latG = 0; lonG = 0; }           // U-110: the drive is over, the dial at rest (Sight hides under 5 mph)
       } else { cluster.update({ speedMph: null }); sightHold.reset(); paintSight(ApexCarPlay.sightMessage(null), false); return; }
       state.cursorIdx = idx;
       if (latG != null && (Math.abs(latG) > 0.30 || Math.abs(lonG) > 0.35)) state.spiritedAt = performance.now();
@@ -1555,7 +1567,9 @@
       // in the chosen units (mph or km/h, U-22); the names are the cluster's
       d.speedMph = vMps != null ? ApexUnits.speed(vMps) : null;
       d.paceMph = pace != null ? ApexUnits.speed(pace) : null;
-      d.sightMph = held.value; d.sightOpen = held.open;
+      // U-130: the Sight cell follows the plate: under 5 mph (8 km/h, as sightFilter) the plate hides and the cell reads --
+      const crawl = si.speed != null && si.speed < (/^km/i.test(si.unit) ? 8 : 5);
+      d.sightMph = crawl ? null : held.value; d.sightOpen = !crawl && held.open; d.sightQuiet = crawl;
       d.limitMph = limit != null ? ApexUnits.speed(limit) : null;
       d.latG = latG; d.lonG = lonG; d.camberDeg = camber;
       d.tripMi = ApexUnits.longN(live && (idx < 0 || track.kind === 'horizon') ? (drive.rec ? drive.rec.km * 1000 : 0) : state.cursorM); d.totalMi = track && track.kind !== 'horizon' && !(live && idx < 0) ? ApexUnits.longN(totalM()) : null;
@@ -1575,6 +1589,39 @@
     const simSpeed = (i) => Math.max(6, Math.min(track.envMps[i] * 0.92, track.limitMps && track.limitMps[i] ? track.limitMps[i] : 27));
 
     let lastTs = 0, raf = null, video = null;   // video: a replay being recorded (startVideo below)
+    // U-110: a finished replay says it ended. The plate reads "Replay finished · 788" (the drive's Score as the Log has it),
+    // the strip "That's the drive", the dial 0 and Sight -- (render), and Play becomes Again. Play, a seek back or another
+    // drive clears it. Done is the solid key already.
+    // (replayEnded, replayWaiting: declared with the state at the top, read by render and the strip)
+    function paintReplayEnd(on) {
+      if (replayEnded === on) return;
+      replayEnded = on;
+      const b = $('playBtn'), label = b.querySelector('span');
+      b.classList.toggle('again', on);
+      if (label) label.textContent = on ? 'Again' : 'Play';
+      if (on) b.setAttribute('aria-label', 'Play it again from the start'); else b.removeAttribute('aria-label');
+      if (state.mode === 'replay' || state.mode === 'sim') {
+        const name = state.mode === 'sim' ? 'Preview' : 'Replay', score = state.mode === 'replay' && track && Number.isFinite(track.score) ? ` · ${track.score}` : '';
+        $('modePlate').textContent = on ? `${name} finished${score} ×`
+          : state.mode === 'sim' ? 'Preview ×' : `Replay${track && track.demo ? ' · Demo' : ''}${track && track.name ? ' · ' + track.name : ''} ×`;
+      }
+    }
+    // U-128: a replay opens on the drive, never a void. The trail is drawn and the clock starts once the map has its tiles at
+    // the drive's start, where the follow camera already is (or after REPLAY_WAIT_MS whatever the network does); meanwhile the
+    // strip names the drive rather than a quiet line with no road, and the road under the car is looked up afresh.
+    const REPLAY_WAIT_MS = 4000;
+    async function replayWhenReady(t) {
+      replayWaiting = true; render(true);
+      const until = performance.now() + REPLAY_WAIT_MS;
+      while (!mapReady && performance.now() < until) await new Promise((ok) => setTimeout(ok, 100));
+      if (mapReady && track === t) {
+        loadTrackOnMap();
+        await new Promise((ok) => { let over = false; const done = () => { if (!over) { over = true; ok(); } };
+          map.once('idle', done); map.triggerRepaint(); setTimeout(done, Math.max(0, until - performance.now())); });
+      }
+      replayWaiting = false; roadNow.at = -Infinity;
+      if (track === t && replayOn && state.mode !== 'live') setPlaying(true); else render(true);
+    }
     function tick(ts) {
       raf = null;
       if (!state.playing || !track || state.mode === 'live') return;
@@ -1583,7 +1630,7 @@
       const s = sample(track, state.cursorM);
       const v = state.mode === 'sim' ? simSpeed(s.i) : Math.max(2, s.speedMps);
       state.cursorM += v * state.rate * dt;
-      if (state.cursorM >= totalM()) { state.cursorM = totalM(); setPlaying(false); }
+      if (state.cursorM >= totalM()) { state.cursorM = totalM(); setPlaying(false); paintReplayEnd(true); render(true); return; }
       render(false);
       raf = requestAnimationFrame(tick);
     }
@@ -1592,6 +1639,7 @@
       if (!state.playing && video) { video.stop(); video = null; }      // the replay ended or paused: the video ends with it
       $('playBtn').classList.toggle('on', state.playing); $('playBtn').setAttribute('aria-checked', String(state.playing));
       if (state.playing) {
+        paintReplayEnd(false);
         if (state.cursorM >= totalM() - 1) state.cursorM = 0;
         if (!state.follow) resumeFollow();
         lastTs = 0; if (!raf) raf = requestAnimationFrame(tick);
@@ -1709,6 +1757,7 @@
       // your own notes from a recce drive (recce.js, IDEAS V-09) read on the same corners, same direction
       try { if (window.ApexRecce && Array.isArray(t.events)) ApexRecce.apply(ApexRecce.load(localStorage), t); } catch (_) {}
       track = t;
+      paintReplayEnd(false);                                           // U-110: a new replay is not finished
       state.cursorM = Math.max(0, Math.min(totalM(), startM));
       refreshAutoNight();
       state.spoken.clear();
@@ -2404,15 +2453,16 @@
     // Live time left and arrival on a planned route (eta.js): the router's time ahead at your pace on this route so far.
     // Blank off route, on a recorded drive, or when the router gave no time (OSRM fallback without one, an old restore).
     function paintEta(atM) {
-      const left = track && track.kind === 'route' && atM != null ? ApexEta.routerLeft(atM, totalM(), track.timeS, track.timeMarks) : null;
-      const now = Date.now(), est = ApexEta.estimate(left, etaPace.update(now, left), now);
+      const now = Date.now(), on = track && track.kind === 'route' && atM != null;
+      if (on && !etaSections.has(track)) etaSections.set(track, ApexEta.cornerSections(track.events));
+      const est = on ? etaPace.update({ t: now, atM, totalM: totalM(), timeS: track.timeS, marks: track.timeMarks, sections: etaSections.get(track) }) : null;
       if (est) pushEtaShare(est.leftS, atM);
       if (est && track && track.homeBy && driveActive) {
         const o = ApexEta.homeByOffer(est.arriveAt, track.homeBy, track.homeByOfferedAt ?? null, now);
         if (o) { track.homeByOfferedAt = now; toast(`Running ${o.lateMin} min late for home.`, { label: 'Head home', ms: 15000, onClick: headHome }); }
       }
       etaLeftS = est ? est.leftS : null;
-      const text = est ? `${est.leftS < 60 ? '<1' : Math.round(est.leftS / 60)} min left · ${etaClock().format(new Date(est.arriveAt))}` : '';
+      const text = est ? `${ApexEta.leftText(est.leftS, est.rough)} · ${etaClock().format(new Date(est.arriveAt))}` : '';
       if (text !== etaText) { etaText = text; paintDriveStat(); }
     }
     // Perf: one clock formatter (toLocaleTimeString built a new one with every fix); the same words as before
@@ -5780,7 +5830,7 @@
     }
     // The drive-ended card (REVIEW.md roadmap 7): the moment after the Skyway gets the screen, not a toast. The drive is
     // already saved; the card shows its name, distance and time, the Vetta Score big (-- without clean corners) and one
-    // thing to work on (the weakest Score part, week_digest.js tip), with Share card and Mark a stage.
+    // thing to work on (U-111: the Log's own coaching sentence), with Share card and Mark a stage.
     let endDrive = null;
     // F-04 (REVIEW_FEEL): the card comes first, in the frame after End, with what the recording already knows (its name,
     // distance, time and trail); the score, the tip and the closing line follow when the worker has parsed, scored and saved
@@ -5797,7 +5847,9 @@
       // scoring: no number yet, never "--" (that means "no score"), and no key that needs the score
       $('endScore').textContent = '…'; $('endScore').classList.add('unk'); $('endScore').setAttribute('aria-busy', 'true');
       $('endLog').href = $('endLogKey').href = `analysis.html?tab=drive&drive=${encodeURIComponent(c.id)}`;
-      $('endShare').hidden = true; $('endShareLink').hidden = true; $('endLogKey').hidden = false; $('endLog').hidden = true;
+      // U-118: the keys are the scored layout from the first frame (Share card solid, Open in the Log the link), so nothing
+      // swaps under a reaching finger when the score lands; Share waits for it. Only a drive with no score changes them.
+      $('endShare').hidden = false; $('endShare').setAttribute('aria-disabled', 'true'); $('endShareLink').hidden = true; $('endLogKey').hidden = true; $('endLog').hidden = false;
       $('endCard').classList.add('show');
       showEndTrail(c);
     }
@@ -5811,8 +5863,8 @@
       $('endScore').removeAttribute('aria-busy');
       $('endScore').textContent = c.ds.score == null ? '--' : String(c.ds.score);
       $('endScore').classList.toggle('unk', c.ds.score == null);   // unknown in pencil, not two black bars (REVIEW2.md U-34)
-      const t = c.ds.score != null && window.ApexWeekDigest ? ApexWeekDigest.tip(c.ds.components) : null;
-      const tip = c.ds.score == null ? 'Not enough clean corners for a score this time.' : t ? `Next time, ${t.label.toLowerCase()}: ${t.tip}.` : '';
+      // U-111: one coaching sentence, the Log's (analysis_client.js coachLineOf, written in the job that scored the drive)
+      const tip = c.ds.score == null ? 'Not enough clean corners for a score this time.' : typeof c.coach === 'string' ? c.coach : '';
       const ended = window.ApexDriveKeep ? ApexDriveKeep.endNote(c) : null;
       const tipLine = [ended ? ended + '.' : '', tip].filter(Boolean).join(' ');
       // your best on this road (REVIEW.md 4.4): against your earlier drives named after the same road; then the pack's closing line
@@ -5826,6 +5878,7 @@
       }
       // U-75: Share card is the solid key only with a score to share; with none, Open in the Log is, and Share is a link
       const scored = c.ds.score != null;
+      $('endShare').removeAttribute('aria-disabled');
       $('endShare').hidden = !scored; $('endShareLink').hidden = scored;
       $('endLogKey').hidden = scored; $('endLog').hidden = !scored;
       // the card's words changed its height: the drive is fitted again to the map the card now leaves
@@ -5847,7 +5900,9 @@
         if (d.ds.score != null) try {
           others = (await ApexRecording.summaries()).filter((o) => o.id !== d.id && o.name === d.name).map((o) => ({ id: o.id, name: o.name, score: o.ds && o.ds.score != null ? Math.round(o.ds.score) : null }));
         } catch (_) { others = []; }
-        endCardScored({ ...c, corners: d.corners.length, ds: d.ds }, others, opts);
+        let coach = null;                                              // U-111: the Log's sentence, when the drive is stored
+        if (d.ds.score != null && window.ApexAnalysis) try { coach = (await ApexAnalysis.job('coachLine', { id: d.id })).coach || null; } catch (_) { coach = null; }
+        endCardScored({ ...c, corners: d.corners.length, ds: d.ds, coach }, others, opts);
       })();
     }
     // U-88: behind the card, the map is the drive: fitted to its trail above the card, the trail drawn at the route's width in
@@ -5912,7 +5967,7 @@
     $('endShareLink').addEventListener('click', () => $('endShare').click());
     $('endStage').addEventListener('click', () => { if (endDrive) openLog(`analysis.html?tab=segments&drive=${encodeURIComponent(endDrive.id)}`); });
     $('endShare').addEventListener('click', async () => {
-      if (!endDrive || !window.ApexDriveCard) return;
+      if (!endDrive || !window.ApexDriveCard || $('endShare').getAttribute('aria-disabled') === 'true') return;   // U-118: still scoring
       // F-04: the picture's model came with the score from the worker (the drive's shape and corner mix); a whole record
       // shown here is drawn from itself
       const model = endDrive.card || (endDrive.record ? ApexDriveCard.cardModel(endDrive.record) : null);
@@ -5969,7 +6024,7 @@
           keepDone(kept);
           const s = res.summary || {};
           endCardScored({ ...card, id: res.driveId, len_m: s.len_m ?? card.len_m, secs: s.secs ?? card.secs, corners: Array.isArray(s.corners) ? s.corners.length : null,
-                          ds: s.ds || { score: null, components: null }, card: res.card || null }, res.others || [], { quiet: !!ended });
+                          ds: s.ds || { score: null, components: null }, card: res.card || null, coach: res.coach || null }, res.others || [], { quiet: !!ended });
           idle(() => refreshSavedDrives().catch(() => {}));            // the road memory learns this drive, off the card's moment
           if (live) {
             live.finish().then(async (shared) => {
@@ -6476,7 +6531,7 @@
         if (!replayOn) activate(first, at * first.dist[first.dist.length - 1]);
         replayOn = replayOn || ['drive', 'play', 'at'].some(k => params.has(k));
         booting = false; paintIdle();
-        if (params.get('play') === '1') setPlaying(true);
+        if (params.get('play') === '1') replayWhenReady(first);       // U-128: once the map has the drive's start
       } else {
         // After a reload in the same session (a lost map): the planned route returns, quietly (booting: no preview), without
         // waiting for the map, which draws it whenever it finishes loading.

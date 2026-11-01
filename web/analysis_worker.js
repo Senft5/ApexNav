@@ -4,7 +4,7 @@
 // stages, steadiness, the cockpit's road memory): { id, job, args } → { id, ...result }. They read and write IndexedDB
 // here, so a drive's rows never cross to the page.
 /* global importScripts, ApexCore, ApexAnalysis */
-importScripts('apex_core.js', 'format.js', 'sensors.js', 'recording.js', 'road_memory.js', 'drive_card.js', 'stage_delta.js', 'prefer.js', 'analysis_client.js');
+importScripts('apex_core.js', 'format.js', 'sensors.js', 'recording.js', 'road_memory.js', 'drive_card.js', 'stage_delta.js', 'prefer.js', 'drive_view.js', 'analysis_client.js');
 self.onmessage = async (e) => {
   const { id, job, args, lat, lon, offsets, side } = e.data || {};
   try {
