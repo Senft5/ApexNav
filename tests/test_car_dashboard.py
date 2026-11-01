@@ -8,8 +8,20 @@ SRC = open(os.path.join(ROOT, "CarPlay", "ApexCarPlay.swift"), encoding="utf-8")
 PROJECT = open(os.path.join(ROOT, "project.yml"), encoding="utf-8").read()
 
 
-def test_dashboard_scene_is_declared():
-    assert "CPSupportsDashboardNavigationScene: true" in PROJECT
+def test_dashboard_scene_is_declared_inside_the_scene_manifest():
+    # Apple reads CPSupportsDashboardNavigationScene (and the cluster's key) inside UIApplicationSceneManifest; at the
+    # Info.plist's top level the car never offered Vetta on the Dashboard (the owner, 2026-11-01)
+    lines = PROJECT.splitlines()
+    m = next(i for i, l in enumerate(lines) if l.strip() == "UIApplicationSceneManifest:")
+    indent = len(lines[m]) - len(lines[m].lstrip())
+    block = []
+    for l in lines[m + 1:]:
+        if l.strip() and not l.strip().startswith("#") and len(l) - len(l.lstrip()) <= indent:
+            break
+        block.append(l.strip())
+    assert "CPSupportsDashboardNavigationScene: true" in block
+    assert "CPSupportsInstrumentClusterNavigationScene: true" in block
+    assert PROJECT.count("CPSupportsDashboardNavigationScene") == 1
     assert "ApexCarDashboardSceneDelegate" in PROJECT
 
 

@@ -14,6 +14,10 @@ it says so. Things only you can do are in docs/OWNER_TODO.md.
   - two shortcut buttons shown when not navigating, "Where to?" and "Loops". Apple asks Dashboard navigation apps for
     these. Each opens the main car screen on that list (`apexnav://car/where` and `/loops`, handled only by the CarPlay
     scene).
+- The real reason it didn't work (the owner: "it's not working for me"): `CPSupportsDashboardNavigationScene` and
+  `CPSupportsInstrumentClusterNavigationScene` sat at the Info.plist's top level in project.yml. Apple reads them inside
+  `UIApplicationSceneManifest`, so CarPlay never offered Vetta on the Dashboard or a car's cluster. They are moved, and a
+  test pins where they go.
 - The Dashboard shows the navigation app used most recently, so after a drive in Apple Maps it shows Apple Maps until a
   Vetta drive starts.
 - Undo: remove `shortcutButtons` and the `openURLContexts` handler in `CarPlay/ApexCarPlay.swift`.
