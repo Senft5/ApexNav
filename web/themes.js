@@ -14,8 +14,9 @@
     roadbook: {
       id: 'roadbook', label: 'Roadbook', tag: 'A', blurb: 'Paper and red ink.', pro: false,
       about: 'Paper, ink and one red pen. Reads in direct sun; night turns the page over after sunset.',
-      // the theme's co-driver (REVIEW.md 4.4): who reads the notes comes with the look
-      voice: { id: 'marguerite', name: 'Marguerite', who: 'Calm, exact, a step ahead.', sample: 'Left four, tightens. Long. Care.' },
+      // the theme's co-driver (REVIEW.md 4.4): who reads the notes comes with the look. What the voice says, and the line its
+      // card quotes, are the pack's (web/voice_lines.js PACKS, U-113), so a card never quotes a line the voice doesn't say.
+      voice: { id: 'marguerite', name: 'Marguerite', who: 'Calm, exact, a step ahead.' },
       fonts: FONT, cluster: 'dials', notes: 'roadbook', gauge: 'printed',
       renderers: { dial: 'printed', meter: 'gball', strip: 'roadbook' },   // the theme contract's three renderers (theme_contract.js)
       day: {
@@ -41,7 +42,7 @@
     tapedeck: {
       id: 'tapedeck', label: 'Tapedeck', tag: 'B', blurb: 'A late-90s head unit.', pro: true,
       about: 'A late-90s head unit: blue-green VFD, seven-segment speed, spectrum bars that show the road surface, and Kit, who leans into every corner.',
-      voice: { id: 'kit', name: 'Kit', who: 'Quick, dry, a little cheeky, never silly.', sample: 'Left four, tightens. Easy in, late out.' },
+      voice: { id: 'kit', name: 'Kit', who: 'Quick, dry, a little cheeky, never silly.' },
       fonts: { ui: '"SF Mono", "Menlo", "Roboto Mono", "Consolas", monospace', num: '"SF Mono", "Menlo", "Roboto Mono", "Consolas", monospace' },
       cluster: 'dials', notes: 'roadbook', gauge: 'vfd', mascot: 'kit',
       renderers: { dial: 'sevenseg', meter: 'bars', strip: 'vfd' },
@@ -68,7 +69,7 @@
     billet: {
       id: 'billet', label: 'Billet', tag: 'C', blurb: 'Machined metal, red glow.', pro: true,
       about: 'Machined aluminium, knurled bezels and black gauge faces with red glow. Quiet, precise, all business.',
-      voice: { id: 'hale', name: 'Hale', who: 'Low, even, zero drama. A test driver reading a card.', sample: 'Left four. Tightens. Long.' },
+      voice: { id: 'hale', name: 'Hale', who: 'Low, even, zero drama. A test driver reading a card.' },
       fonts: FONT, cluster: 'dials', notes: 'roadbook', gauge: 'printed', finish: 'metal',
       renderers: { dial: 'bezel', meter: 'bezelg', strip: 'roadbook' },
       day: {

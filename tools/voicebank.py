@@ -46,17 +46,16 @@ def codriver_distance(d: int) -> str:
     return f"{NUM[h]} {TENS.get(r, 'twenty' if r == 20 else str(r))}"
 
 
-# The theme voice packs (docs/design/REVIEW.md 4.4): one co-driver per theme. The calls are the same in every pack; the
-# character is in the lines around them. No speed numbers, no praise for pace, "score" the only score word.
-PACK_LINES = {
-    "marguerite": {"sys:test": "Notes ready. Have a good one.", "sys:stage": "Full notes.", "sys:cruise": "Quiet from here. Bumps and cameras only.",
-                   "sys:end": "That's the drive.", "sys:sample": "Left four, tightens. Long. Care.",
-                   "end:score": "Score", "end:best": "your best on this road."},
-    "kit": {"sys:test": "Tape's in. Let's keep it tidy.", "sys:stage": "Full notes. Here we go.", "sys:cruise": "Quiet now. Hazards only.",
-            "sys:end": "That's a wrap.", "sys:sample": "Left four, tightens. Easy in, late out.", "end:best": "Best yet on this road."},
-    "hale": {"sys:test": "Route loaded.", "sys:stage": "Full notes.", "sys:cruise": "Hazards only.",
-             "sys:end": "Complete.", "sys:sample": "Left four. Tightens. Long.", "end:score": "Score,", "end:best": "Best on this road."},
-}
+def _js_json(name: str, start: str, end: str):
+    """The JSON between two markers in a web/ file (one source for the page and the renderer)."""
+    src = open(os.path.join(ROOT, "web", name), encoding="utf-8").read()
+    return json.loads(src.split(start, 1)[1].split(end, 1)[0])
+
+
+# The theme voice packs (docs/design/REVIEW.md 4.4, REVIEW5 U-113): one co-driver per theme. The calls are the same in
+# every pack; the character is in the lines around them (system lines, asides, sign-offs), kept in web/voice_lines.js
+# PACKS so the page says, and the transcript logs, exactly what the clips hold. No speed numbers, no praise for pace.
+PACK_LINES = {k: v["lines"] for k, v in _js_json("voice_lines.js", "/* VOICE_PACKS_JSON */", "/* END_VOICE_PACKS_JSON */").items()}
 
 
 def codriver_vocabulary(pack: str = None) -> dict[str, str]:
@@ -91,9 +90,7 @@ def codriver_vocabulary(pack: str = None) -> dict[str, str]:
 def voice_lines() -> dict[str, str]:
     """The directions, route, traffic, hazard-report, coaching and track lines (web/voice_lines.js, the JSON between its
     markers): in every pack so a drive is said in one voice, never half by the phone's own."""
-    src = open(os.path.join(ROOT, "web", "voice_lines.js"), encoding="utf-8").read()
-    body = src.split("/* VOICE_LINES_JSON */", 1)[1].split("/* END_VOICE_LINES_JSON */", 1)[0]
-    return json.loads(body)
+    return _js_json("voice_lines.js", "/* VOICE_LINES_JSON */", "/* END_VOICE_LINES_JSON */")
 
 
 def score_vocabulary() -> dict[str, str]:
@@ -411,6 +408,9 @@ class Listener:
 # Clips a voice says wrong at its own setting, by Whisper base and small: Kit's fast "sixty" and "eighty" are "sixteen" and
 # "eighteen". The bare clip uses this pronunciation (lang) and speed; a phrase holding the token also gets a take at it.
 TOKEN_OVERRIDES = {"kit": {"dist:40": ("b", 0.9), "dist:50": ("b", 0.9), "dist:60": ("b", 0.9), "dist:80": ("a", 0.9)}}
+# What the model is given for a line it runs together at its own setting: Kit's "Easy in, late out" comes out "Easy end,
+# light out" with the comma; a full stop gives it the beat. The manifest keeps the line as written.
+TTS_SPELLING = {"kit": {"aside:tightens": "Easy in. Late out."}}
 
 
 def rebuild_checked(voice_id: str, only: list[str] | None = None, threshold: float = 0.8) -> None:
@@ -433,11 +433,11 @@ def rebuild_checked(voice_id: str, only: list[str] | None = None, threshold: flo
         if not all(t in vocab for t in toks):
             continue
         done = manifest["tokens"].get(key)
-        if done and "heard" in done and done.get("voice") == cfg["kokoro_voice"] and done["heard"] >= threshold:
+        want = phrase_text(toks, vocab) if len(toks) > 1 else vocab[key]
+        if done and "heard" in done and done.get("voice") == cfg["kokoro_voice"] and done["heard"] >= threshold and done.get("text") == want:
             continue                                           # resumable: already rendered and heard right in this voice
         multi = len(toks) > 1
-        want = phrase_text(toks, vocab) if multi else vocab[key]
-        base = tts_text(toks, vocab) if multi else vocab[key]
+        base = tts_text(toks, vocab) if multi else TTS_SPELLING.get(voice_id, {}).get(key, vocab[key])
         stem = base.rstrip(".,!?")
         # then the same a little slower: at Kit's 1.12 "forty" comes out as "fourteen" (heard so by Whisper base and small)
         over = TOKEN_OVERRIDES.get(voice_id, {})

@@ -1119,16 +1119,22 @@
     // say(): pace notes (chain) and fixed phrases (sysToken) play from the open-model voice bank;
     // anything the bank can't voice (drive names...) falls back to the device voice.
     // opts: kind 'hazard' (goes first, may cut off an ordinary line), key (never twice in a row), atM (route metres: dropped once passed).
+    // review recordings (.github/workflows/app-review.yml, debug builds only): every line said goes to the system log, a
+    // transcript to read beside the video, which has no sound
+    function saidLog(text) { if (window.APEX_REVIEW) { try { window.webkit.messageHandlers.apex.postMessage({ cmd: 'said', text: String(text) }); } catch (_) {} } }
+    // a pack line's words (voice_lines.js PACKS), the ones its clip holds, so the transcript and the phone's voice say what
+    // the pack says (U-113); the fallback for the phone's own voice
+    const packSays = (token, fallback) => (window.ApexVoiceLines && ApexVoiceLines.packLine(state.voiceId, token)) || fallback;
     function say(text, force, chain = null, sysToken = null, opts = {}) {
       // a road hazard (not a turn or a crest, which share the urgent speech lane) also alerts on the car's screen
       if (text && opts.alert && driveActive) carPost({ kind: 'hazard', title: text });
-      // what Kit says (Tapedeck), and the strip's notes it is about (opts.kitFor: a corner call's keys) so it can clear (U-100)
-      if (text) { state.kitLine = String(text).replace(/\.$/, '').toUpperCase().slice(0, 64); state.kitFor = opts.kitFor || null; }
+      if (text) state.lastSaid = String(text);
+      // Kit's box (Tapedeck, U-113): Kit's own aside from the pre-call of the call it follows, never the call again (the strip
+      // has it); a call with no aside leaves the box empty. kitFor: the strip's notes it is about, so it clears (U-100).
+      if (text && 'aside' in opts) { state.kitLine = opts.aside ? opts.aside.text.replace(/\.$/, '').toUpperCase().slice(0, 64) : null; state.kitFor = opts.aside ? opts.kitFor || null : null; }
       if (!text || (!state.toggles.voice && !force)) return;
-      // review recordings (.github/workflows/app-review.yml, debug builds only): every line said goes to the system log,
-      // a transcript to read beside the video, which has no sound
-      if (window.APEX_REVIEW) { try { window.webkit.messageHandlers.apex.postMessage({ cmd: 'said', text: String(text) }); } catch (_) {} }
-      if (force) { speech.queue.clear(); stopSpeaking(); opts = { duck: true, ...opts }; }   // a line you asked for is heard
+      saidLog(text);
+      if (force) { speech.queue.clear(); speech.followUp = null; stopSpeaking(); opts = { duck: true, ...opts }; }   // a line you asked for is heard
       // a fixed line ("Rerouting", "Bump ahead") is in every voice pack (web/voice_lines.js): the pack says it, not the phone
       if (!chain && !sysToken && !opts.tokens && window.ApexVoiceLines) { const t = ApexVoiceLines.forText(text); if (t) opts = { ...opts, tokens: t }; }
       speech.queue.push({ text, chain, sysToken, ...opts }, performance.now());
@@ -1172,8 +1178,16 @@
     }
     async function pumpSpeech() {
       if (speech.busy) return;
+      // U-113: the aside of the call just said, if nothing else waits (it never pushes a line out) and it can still end
+      // before the corner (dueByM); dropped otherwise
+      const follow = speech.followUp; speech.followUp = null;
+      if (follow && !speech.queue.size && state.toggles.voice) {
+        speech.queue.push({ text: follow.text, tokens: [follow.token], kind: 'ordinary', dueByM: follow.dueByM, maxAgeMs: 3000, duck: true, key: 'aside', repeatMs: 0 }, performance.now());
+      }
       const item = speech.queue.take(performance.now(), queueCursor());
       if (!item) { speech.current = null; speech.via = null; return; }
+      speech.followUp = item.aside || null;
+      if (item.key === 'aside') { state.lastSaid = item.text; saidLog(item.text); }
       if (item.kind === 'hazard' || item.chain || item.haptic) haptic(item.kind === 'hazard' ? 'hazard' : 'note');
       speech.busy = true; speech.current = item; speech.via = 'model';
       // the theme's pre-call sound before a call, and the one hazard two-tone (the same in every theme) before a hazard
@@ -1188,7 +1202,7 @@
           await ApexVoice.load(state.voiceId);
           const tokens = item.tokens || (item.chain ? ApexVoice.tokensFor(item.chain, ApexVoice.bank.style) : item.sysToken ? [item.sysToken] : null);
           const promptStyle = await voiceBracket(true, duck);
-          if (promptStyle !== 'normal') { voiceBracket(false); speech.busy = false; pumpSpeech(); return; }   // silent or a tone: skip the words
+          if (promptStyle !== 'normal') { voiceBracket(false); speech.busy = false; speech.followUp = null; pumpSpeech(); return; }   // silent or a tone: skip the words
           try {
             // A call the bank can only voice by joining clips plays as one whole render when the
             // route-load prefetch has it; the join is the audible seam we are avoiding.
@@ -1262,11 +1276,25 @@
       const keys = raw.map((n) => `${n.type}:${n.index}:${n.dist_m}`);   // the strip's keys of the notes it calls (Kit, U-100)
       if (chain.some((n) => n.recce)) return { text, chain: null, keys };
       // Plain words: spoken whole (the voice bank's clips are rally words), from the same notes.
-      if (state.noteWords === 'plain') return { text: ApexPlainNotes.plainChain(voiced, ApexUnits), chain: null, keys };   // in the driver's units (U-93)
-      return { text, chain: voiced, keys };
+      // U-109: a distance link names the corner it leads to ("then easy right in 400 feet"); none past a junction not yet called
+      const after = cur.link && cur.link !== 'into' && cur.link !== 'and' ? ev[ev.indexOf(cur) + 1] : null;
+      const next = after && !(noteM(after) > turnHold.m) ? after : null;
+      const card = !!(window.ApexVoiceLines && ApexVoiceLines.PACKS[state.voiceId] && ApexVoiceLines.PACKS[state.voiceId].card);   // Hale reads a card (U-113)
+      if (state.noteWords === 'plain') return { text: ApexPlainNotes.plainChain(voiced, ApexUnits, { next, card }), chain: null, keys, voiced };   // in the driver's units (U-93)
+      return { text, chain: voiced, keys, voiced };
     }
     // The run of corners being read (note_timing.js createCareRun, REVIEW4 §4): its "care" is said once.
     const careRun = ApexNoteTiming.createCareRun();
+    // REVIEW5 U-113: the pack's aside for a call (voice_lines.js createAsides: rare, never after a warning or in a run), only
+    // from a clip the loaded bank holds (a bank rendered before the asides says none); dueByM: the last metre it can start
+    // at and still end before the corner with the beat a call gets.
+    const asides = window.ApexVoiceLines ? ApexVoiceLines.createAsides() : null;
+    function packAside(voiced, atM, vMps) {
+      const bank = window.ApexVoice && ApexVoice.bank;
+      if (!asides || !voiced || !bank || bank.id !== state.voiceId) return null;
+      const a = asides.pick(state.voiceId, voiced, performance.now(), (t) => !!bank.tokens[t]);
+      return a ? { ...a, dueByM: atM - ApexNoteTiming.lastCallM({ vMps, text: a.text }) } : null;
+    }
     // The next turn not yet taken (web/directions.js createProgress), one for the voice and the car's card, so both are about
     // the same turn and a taken one never comes back. turnHold.m: the first junction ahead whose call at the turn is not yet
     // said; no note past it is read until it is (the owner's drive, 2026-10-30: a far corner's call landed among the exit's).
@@ -1351,7 +1379,7 @@
       const spirited = isSpirited();
       if (moving && state.notesMode === 'auto') {
         const t = wakeVoice.update(spirited, now);
-        if (t) say(t === 'on' ? 'Full notes.' : 'Quiet from here. Bumps and cameras only.', false, null, t === 'on' ? 'sys:stage' : 'sys:cruise', { key: `wake:${t}` });
+        if (t) say(t === 'on' ? packSays('sys:stage', 'Full notes.') : packSays('sys:cruise', 'Quiet from here. Bumps and cameras only.'), false, null, t === 'on' ? 'sys:stage' : 'sys:cruise', { key: `wake:${t}` });
         if (t === 'off') careRun.reset();   // the run of corners is over: the next one's "care" is said (§4)
       } else wakeVoice.reset();
       // U-58: a drive's first note is its first corner, when one is within the wake window as the drive begins (a drive that
@@ -1450,7 +1478,10 @@
         // (a first note read at the start may be under the car already: it is not stale for that)
         // dueByM: a call that waits in the queue (behind "Full notes.", a direction) is dropped once it would be late (U-96)
         if (e.type === 'corner' && !e.recce) call = chainedCall(e, ev, spirited || first, careRun.at(noteM(e), track.id));   // "care" once a run (§4)
-        say(call.text, false, call.chain, null, { kind: e.type === 'corner' ? 'ordinary' : 'hazard', key, atM: noteM(e), duck: true, kitFor: call.keys,
+        // U-113: the pack's aside after the call, now and then ("Easy in, late out."): its own clip, said only if it can end
+        // before the corner as a call would; Kit's box shows it from the pre-call
+        const aside = packAside(call.voiced, noteM(e), vMps);
+        say(call.text, false, call.chain, null, { kind: e.type === 'corner' ? 'ordinary' : 'hazard', key, atM: noteM(e), duck: true, kitFor: call.keys, aside,
           ...(e.type === 'corner' && !startCall ? { dueByM: noteM(e) - lastM } : {}), ...(startCall ? { atM: null } : {}) });
         if (live) reaction.called(performance.now(), call.text, ApexNoteTiming.needsBrake(vMps, apexMps));
       }
@@ -4773,7 +4804,10 @@
           const card = el('div', { className: 'theme-card' });
           const ok = () => themeAllowed(t.id);
           const pick = () => (ok() ? useTheme(t.id) : tryTheme(t.id));
-          const hear = btn('Hear', () => hearPack(t.voice && t.voice.id, t.voice ? t.voice.sample : 'Left four, tightens.'), 'ink-btn tc-hear');
+          // U-113: the card quotes a line its voice really says in the driver's words mode (voice_lines.js sample: a call and
+          // the aside the pack says after it), and Hear plays that line's own clip
+          const line = () => (t.voice && window.ApexVoiceLines && ApexVoiceLines.sample(t.voice.id, state.noteWords)) || null;
+          const hear = btn('Hear', () => { const l = line(); hearPack(t.voice && t.voice.id, l ? l.text : 'Left four, tightens.', l ? l.token : 'sys:sample'); }, 'ink-btn tc-hear');
           hear.setAttribute('aria-label', `Hear ${t.voice ? t.voice.name : t.label}`);
           // U-69: the card's preview is the theme drawn at 300 px, and touching it switches, as the Use key does. A pointer
           // shortcut only: the Use key stays the one control a screen reader or keyboard meets.
@@ -4783,16 +4817,19 @@
           // U-69: the key keeps its one word; its name says which card, so a screen reader (and the review recording) can
           // tell three "Use" keys apart
           const inUseTag = el('span', { className: 'tc-inuse', textContent: 'In use' }), key = btn('Use', pick, 'ink-btn');
+          const quote = document.createTextNode('');
           card.append(preview,
             el('div', { className: 'tc-head' }, el('b', { textContent: t.label }), ...(t.pro ? [el('span', { className: 'tc-pro', textContent: 'PRO' })] : []), key),
             el('p', { className: 'note', textContent: t.about || t.blurb || '' }),
-            el('div', { className: 'tc-voice' }, el('p', {}, el('b', { textContent: `Voice: ${t.voice ? t.voice.name : '--'}. ` }), document.createTextNode(t.voice ? `${t.voice.who} "${t.voice.sample}"` : '')), hear));
-          themeCards.set(t.id, { t, card, preview, key, inUseTag, ok });
+            el('div', { className: 'tc-voice' }, el('p', {}, el('b', { textContent: `Voice: ${t.voice ? t.voice.name : '--'}. ` }), quote), hear));
+          themeCards.set(t.id, { t, card, preview, key, inUseTag, ok, quote, line });
           return card;
         }));
       }
-      for (const { t, card, preview, key, inUseTag, ok } of themeCards.values()) {
-        const allowed = ok(), inUse = state.theme === t.id && !themeTrial;
+      for (const { t, card, preview, key, inUseTag, ok, quote, line } of themeCards.values()) {
+        const allowed = ok(), inUse = state.theme === t.id && !themeTrial, l = line();
+        const q = t.voice ? `${t.voice.who}${l ? ` "${l.text}"` : ''}` : '';
+        if (quote.data !== q) quote.data = q;
         card.classList.toggle('in-use', state.theme === t.id);
         preview.classList.toggle('tc-pick', !inUse);
         key.textContent = allowed ? 'Use' : 'Try it';
@@ -4852,7 +4889,7 @@
       $('noteWordsNote').textContent = state.noteWords === 'plain' ? 'For example "Medium left, tightens, slow down".' : 'Rally pace notes, 1 tightest to 6: "Left 3 tightens, caution".';
     }
     document.querySelectorAll('#noteWordsList [data-words]').forEach(b => b.addEventListener('click', () => {
-      state.noteWords = b.dataset.words; savePrefs(); renderNoteWords(); render(true);
+      state.noteWords = b.dataset.words; savePrefs(); renderNoteWords(); renderThemePicker(); render(true);
       say(state.noteWords === 'plain' ? 'Medium left, tightens, then hairpin right.' : 'Left 3 tightens into right hairpin.', true);
     }));
     renderNoteWords();
@@ -4893,10 +4930,10 @@
       try { ApexThemeSounds.play(ApexVoice.unlock(), ApexThemeSounds.recipe(state.theme, 'key')); } catch (_) {}
     }, { passive: true });
     // Hear on a theme card: that pack's own sample line, then back to the voice in use
-    async function hearPack(id, fallback) {
+    async function hearPack(id, fallback, token = 'sys:sample') {
       if (!window.ApexVoice || !bankVoices.some(v => v.id === id)) { say(fallback, true); return; }
       ApexVoice.unlock();
-      try { await ApexVoice.load(id); if (!(await ApexVoice.play(['sys:sample']))) say(fallback, true); } catch (_) { say(fallback, true); }
+      try { await ApexVoice.load(id); if (!(await ApexVoice.play([token]))) say(fallback, true); } catch (_) { say(fallback, true); }
       try { if (state.voiceId !== 'device') await ApexVoice.load(state.voiceId); } catch (_) {}
     }
     function renderLive() {
@@ -5002,7 +5039,7 @@
       syncDerivedToggles(); paintSwitches();
       const full = state.notesMode === 'full';
       // The voice bank has clips for "Full notes." and "Quiet. Hazards only."; Auto has none, so it is shown, not spoken.
-      if (state.notesMode !== 'auto') say(full ? 'Full notes.' : 'Quiet. Hazards only.', true, null, full ? 'sys:stage' : 'sys:cruise');
+      if (state.notesMode !== 'auto') say(full ? packSays('sys:stage', 'Full notes.') : packSays('sys:cruise', 'Quiet. Hazards only.'), true, null, full ? 'sys:stage' : 'sys:cruise');
       savePrefs();
       render(true);
     }));
@@ -5873,7 +5910,9 @@
       $('endLine').textContent = best ? ['Your best on this road.', tipLine].filter(Boolean).join(' ') : tipLine;
       if (window.ApexEndLine && !opts.quiet) {                       // Round 3: never aloud to a parked car or a pocket
         const pack = ['marguerite', 'kit', 'hale'].includes(state.voiceId) ? state.voiceId : 'marguerite';
-        const line = ApexEndLine.endLine(pack, c.ds.score == null ? null : Math.round(c.ds.score), best);
+        // one of the pack's sign-offs, the same for this drive every time, from a clip the loaded bank holds (U-113)
+        const bank = window.ApexVoice && ApexVoice.bank, has = (k) => !!(bank && bank.id === pack && bank.tokens[k]);
+        const line = ApexEndLine.endLine(pack, c.ds.score == null ? null : Math.round(c.ds.score), best, ApexEndLine.pickSignOff(pack, c.id, has));
         say(line.text, false, null, null, state.voiceId === 'device' ? {} : { tokens: line.tokens });
       }
       // U-75: Share card is the solid key only with a score to share; with none, Open in the Log is, and Share is a link

@@ -85,6 +85,97 @@
   /** A number 0-99 as the score clips say it (n:0..n:99), or null. */
   const num = (n) => (Number.isInteger(n) && n >= 0 && n < 100 ? `n:${n}` : null);
 
-  const api = { TEXT, maneuver, distToken, laneToken, forText, num };
+  // ---- the three co-drivers (REVIEW.md 4.4, REVIEW5 U-113) ---------------------------------------------------------------
+  // The call is the same in every pack: direction, severity, "careful", the distances, word for word. The character is in
+  // the words around it: the pack's own system lines, an aside after some calls (said from its own clip, after the call and
+  // only when nothing else is waiting), its sign-offs, and Hale's delivery (card: each part its own sentence). Every line
+  // here is rendered into that pack's bank by tools/voicebank.py, which reads the JSON between the markers. Rules for
+  // every pack: no speed numbers, no praise for pace, nothing that tells a driver to go faster.
+  const PACKS = /* VOICE_PACKS_JSON */ {
+    "marguerite": {
+      "card": false,
+      "lines": {
+        "sys:test": "Notes ready. Have a good one.", "sys:stage": "Full notes.", "sys:cruise": "Quiet from here. Bumps and cameras only.",
+        "sys:end": "That's the drive.", "sys:end2": "And that's the stage.", "sys:end3": "Notes closed. Have a good one.", "sys:end4": "That's the last corner. Lovely road.",
+        "end:score": "Score", "end:best": "your best on this road.",
+        "sys:sample": "Left four, tightens. Watch the exit, it closes.", "sys:sample_plain": "Open left, tightens. Watch the exit, it closes.",
+        "aside:hairpin": "Brake before it, not in it.", "aside:acute": "Brake well before this one.", "aside:square": "Brake in a straight line.",
+        "aside:tightens": "Watch the exit, it closes.", "aside:off-camber": "The road falls away. Gently.", "aside:over crest": "Over the top, keep it straight.",
+        "aside:opens": "It opens on the exit.", "aside:long": "It goes on a while.", "aside:crest": "Keep it straight over the top."
+      }
+    },
+    "kit": {
+      "card": false,
+      "lines": {
+        "sys:test": "Tape's in. Let's keep it tidy.", "sys:stage": "Full notes. Here we go.", "sys:cruise": "Quiet now. Hazards only.",
+        "sys:end": "That's a wrap.", "sys:end2": "Tape's out.", "sys:end3": "That's the B-side done.", "sys:end4": "Rewind it some other day.",
+        "end:best": "Best yet on this road.",
+        "sys:sample": "Left four, tightens. Easy in, late out.", "sys:sample_plain": "Open left, tightens. Easy in, late out.",
+        "aside:hairpin": "All the way round. Patience.", "aside:acute": "Proper tight one. Wait for it.", "aside:square": "Square one. Tidy does it.",
+        "aside:tightens": "Easy in, late out.", "aside:off-camber": "Leans the wrong way. Smooth.", "aside:over crest": "Light hands over the top.",
+        "aside:opens": "Lets you out gently.", "aside:long": "Long one. Settle in.", "aside:crest": "Crest. Light hands."
+      }
+    },
+    "hale": {
+      "card": true,
+      "lines": {
+        "sys:test": "Route loaded.", "sys:stage": "Full notes.", "sys:cruise": "Hazards only.",
+        "sys:end": "Complete.", "sys:end2": "Run complete.", "sys:end3": "End of card.", "sys:end4": "Logged. Stand down.",
+        "end:score": "Score,", "end:best": "Best on this road.",
+        "sys:sample": "Left four. Tightens. Late apex.", "sys:sample_plain": "Open left. Tightens. Late apex.",
+        "aside:hairpin": "Brake straight. Then turn.", "aside:acute": "Brake straight.", "aside:square": "Square. Late apex.",
+        "aside:tightens": "Late apex.", "aside:off-camber": "Negative camber.", "aside:over crest": "Car goes light.",
+        "aside:opens": "Exit opens.", "aside:long": "Hold the line.", "aside:crest": "Car goes light."
+      }
+    }
+  } /* END_VOICE_PACKS_JSON */;
+  const packOf = (id) => (Object.prototype.hasOwnProperty.call(PACKS, id) ? PACKS[id] : null);
+  /** A pack's line by token ("sys:cruise"), or null: the words the transcript and the phone's own voice say for that clip. */
+  function packLine(id, token) { const p = packOf(id); return (p && p.lines[token]) || null; }
+
+  // Which aside a call earns, most telling first. A call with a real warning in it ("slow down" and up) gets none: the
+  // warning is the last thing heard. A run of chained corners gets none: the next call is coming.
+  const ASIDE_SHAPES = { hairpin: 'aside:hairpin', acute: 'aside:acute', square: 'aside:square' };
+  const ASIDE_MODS = ['tightens', 'off-camber', 'over crest', 'opens', 'long'];
+  function asideToken(chain) {
+    if (!Array.isArray(chain) || chain.length !== 1) return null;
+    const e = chain[0];
+    if (!e) return null;
+    if (e.type === 'crest') return 'aside:crest';
+    if (e.type !== 'corner' || e.recce || (e.caution || 0) >= 2) return null;
+    if (e.severity === 'HP') return 'aside:hairpin';
+    if (ASIDE_SHAPES[e.shape]) return ASIDE_SHAPES[e.shape];
+    const m = ASIDE_MODS.find((k) => (e.mods || []).includes(k));
+    return m ? `aside:${m}` : null;
+  }
+  /**
+   * Asides are rare, or they stop being character and become noise: at most one every GAP_MS, and the same one not again
+   * within SAME_MS. pick(pack, chain, now) -> { token, text } or null; `has(token)` (the loaded bank) leaves out a clip
+   * the bank doesn't have yet, so a bank rendered before the asides says none rather than the phone's voice saying them.
+   */
+  const ASIDE_GAP_MS = 45000, ASIDE_SAME_MS = 180000;
+  function createAsides({ gapMs = ASIDE_GAP_MS, sameMs = ASIDE_SAME_MS } = {}) {
+    let lastAt = -Infinity;
+    const said = new Map();
+    return {
+      pick(pack, chain, now, has = () => true) {
+        const token = asideToken(chain), text = token && packLine(pack, token);
+        if (!text || !has(token) || now - lastAt < gapMs || now - (said.get(token) ?? -Infinity) < sameMs) return null;
+        lastAt = now; said.set(token, now);
+        return { token, text };
+      },
+      reset() { lastAt = -Infinity; said.clear(); },
+    };
+  }
+  /** The theme card's quote and the clip its Hear key plays: a line the pack really says in the driver's words mode. */
+  function sample(id, words) {
+    const token = words === 'plain' ? 'sys:sample_plain' : 'sys:sample';
+    const text = packLine(id, token);
+    return text ? { token, text } : null;
+  }
+  /** The pack's sign-offs, in order: sys:end, sys:end2... (web/end_line.js picks one per drive). */
+  function signOffs(id) { const p = packOf(id); return p ? Object.keys(p.lines).filter((k) => /^sys:end\d*$/.test(k)) : []; }
+
+  const api = { TEXT, PACKS, maneuver, distToken, laneToken, forText, num, packLine, asideToken, createAsides, sample, signOffs, ASIDE_GAP_MS, ASIDE_SAME_MS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexVoiceLines = api;
 })(typeof window !== 'undefined' ? window : globalThis);
