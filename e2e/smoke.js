@@ -55,6 +55,13 @@ const flows = [];
 const scoredCard = (page, timeout = 20000) => page.waitForFunction(() => { const s = document.getElementById('endScore'); return s && !s.hasAttribute('aria-busy'); }, null, { timeout });
 const flow = (name, fn, ctxOpts = {}) => flows.push({ name, fn, ctxOpts });
 function check(cond, msg) { if (!cond) throw new Error(msg); }
+// REVIEW5 §2: a setting lives behind the Garage's one gear; open its sheet as a driver does (the Garage open): the gear, then its row
+async function openSetting(page, key) {
+  await page.click('#garageGear');
+  await page.click(`#garageSettings .nav-row[data-setting="${key}"]`);
+  await page.waitForSelector(`.garage-pop.open[data-setting="${key}"]`);
+  await page.waitForTimeout(250);                                    // the sheet's slide
+}
 
 // A driving frame like the iOS shell pushes every 0.1 s (ApexNavApp.swift pushLiveFrame).
 // a message the app gave: in a drive it is the status line's (REVIEW4 U-74 / U-102, its whole text in dsNote's label), else a toast
@@ -1079,6 +1086,7 @@ flow('privacy zones: add one at the map centre, kept on the phone only, then rem
   await page.goto(base + '/index.html');
   await page.waitForFunction(() => window.apex && typeof window.apex.live === 'function');
   await page.click('.tab[data-view="garage"]');
+  await openSetting(page, 'zones');
   await page.click('#zoneRadius [data-zone-r="200"]');
   await page.click('#zoneMapBtn');
   await page.fill('.confirm-sheet .cs-field', 'Home'); await page.click('.confirm-sheet .cs-ok');
@@ -1842,19 +1850,21 @@ flow('your data: Settings counts what the phone holds and downloads drives as GP
   await page.evaluate(() => ApexRecording.store({ id: 'e2e_drive', name: 'Test road', date: '2026-10-20T15:00:00Z',
     lat: [35.6, 35.601, 35.602], lon: [-83.9, -83.901, -83.902], elev: null, dist: [0, 150, 300] }));
   await page.click('.tab[data-view="garage"]');
+  await openSetting(page, 'data');
   await page.waitForFunction(() => /1 drive \(0.2 mi\)/.test(document.getElementById('myDataNote').textContent));
   const [dl] = await Promise.all([page.waitForEvent('download'), page.click('#myGpxBtn')]);
   const gpx = require('fs').readFileSync(await dl.path(), 'utf8');
   check(/<trk><name>Test road<\/name>/.test(gpx) && (gpx.match(/<trkpt /g) || []).length === 3, 'the GPX holds the drive');
   await page.click('#myDrivesDelBtn');
   await page.click('.confirm-sheet .cs-yes:has-text("Delete drives")');             // the confirm sheet, not a system alert (REVIEW.md 1.2)
-  await page.waitForFunction(() => /0 drives/.test(document.getElementById('myDataNote').textContent));
+  await page.waitForFunction(() => /^Nothing on this phone yet/.test(document.getElementById('myDataNote').textContent));   // U-126: no line of zeros
   // offline data (IDEAS F-06): a saved route counted, then deleted; the drives are not touched by it
   await page.evaluate(() => { localStorage.setItem('apex.savedRoutes', JSON.stringify([{ id: 'r1', coords: [[0, 0], [1, 1]] }])); document.querySelector('.tab[data-view="garage"]').click(); });
+  await openSetting(page, 'data');
   await page.waitForFunction(() => /Offline data: 1 saved route /.test(document.getElementById('myOfflineNote').textContent));
   await page.click('#myOfflineDelBtn');
   await page.click('.confirm-sheet .cs-yes');
-  await page.waitForFunction(() => /Offline data: 0 saved routes/.test(document.getElementById('myOfflineNote').textContent));
+  await page.waitForFunction(() => /^Nothing saved for offline/.test(document.getElementById('myOfflineNote').textContent));
   check((await page.evaluate(() => localStorage.getItem('apex.savedRoutes'))) === null, 'saved routes gone');
 });
 
@@ -1874,7 +1884,7 @@ flow('shared routes: one a friend shared shows on People, Friends, under From fr
   await page.waitForFunction(() => window.apex && typeof window.apex.live === 'function');
   await page.evaluate(() => document.querySelector('.tab[data-view="people"]').click());   // Friends is the side it opens on
   await page.waitForSelector('#accountBody .nav-row:has-text("From friends")');
-  await page.waitForFunction(() => [...document.querySelectorAll('#accountBody .nav-row')].some((r) => /From friends/.test(r.textContent) && r.querySelector('small').textContent === '1'));   // the row counts it
+  await page.waitForFunction(() => [...document.querySelectorAll('#accountBody .nav-row')].some((r) => /From friends/.test(r.textContent) && r.querySelector('small').textContent === '1 route'));   // the row says what it counts (U-125)
   await page.click('#accountBody .nav-row:has-text("From friends")');
   await page.waitForSelector('.side-pop.open >> text=Cherohala loop · from @alice');
   await page.click('.side-pop.open button:has-text("Open")');
@@ -2301,6 +2311,7 @@ flow('feedback: Settings sends what you typed with the diagnostics, never a plac
   await page.goto(base + '/index.html');
   await page.waitForFunction(() => window.ApexFeedback && document.querySelector('#feedbackBox textarea'));
   await page.click('.tab[data-view="garage"]');
+  await openSetting(page, 'feedback');
   await page.click('#feedbackBox button:has-text("An idea")');
   await page.fill('#feedbackBox textarea', 'A night theme please');
   await page.click('#feedbackBox button:has-text("Send")');
@@ -2454,7 +2465,7 @@ flow('People: two tabs; a request is a card on top, then you, then friends with 
   // the Garage: Who sees what under You; the pioneer count with Road feel; no points board anywhere
   await page.evaluate(() => document.querySelector('.tab[data-view="garage"]').click());
   await page.waitForSelector('#garageMeBody .nav-row:has-text("Who sees what")');
-  check(/Roads you mapped first: 3/.test(await page.textContent('#garageMeBody')), 'roads you mapped first, in the Garage');
+  check(/Roads you mapped first: 3/.test(await page.textContent('#garageRoadFeelBody')), 'roads you mapped first, in the Garage (Settings → Road feel)');
   // Crews: the crew things, none of the friend things; with no crew, one row
   await page.evaluate(() => document.querySelector('.tab[data-view="people"]').click());
   await page.click('[data-people="crews"]');
@@ -2485,7 +2496,7 @@ flow('People, a new account: Friends is one sentence and the Invite key; Crews i
   await page.goto(base + '/index.html?view=people');
   await page.waitForSelector('#accountBody .people-lead');
   const kids = await page.$$eval('#accountBody > *', (k) => k.map((x) => x.className + ':' + x.textContent.trim()));
-  check(kids.length === 2 && /people-lead/.test(kids[0]) && /Invite or add a friend/.test(kids[1]), 'one sentence and the Invite key: ' + JSON.stringify(kids));
+  check(kids.length === 3 && /people-lead/.test(kids[0]) && /Invite or add a friend/.test(kids[1]) && /^people-sample:Example: /.test(kids[2]), 'one sentence, the Invite key and an example (U-121): ' + JSON.stringify(kids));
   await page.click('[data-people="crews"]');
   await page.waitForSelector('#crewsBody .nav-row:has-text("Find or start a crew")');
   const rows = await page.$$eval('#crewsBody .nav-row > span', (s) => s.map((x) => x.textContent));
@@ -2581,7 +2592,7 @@ flow('one link in: no "invite-only" anywhere; a crew link joins a newcomer with 
   await page.goto(base + '/index.html?view=people');
   await page.waitForSelector('#accountBody >> text=Friends and crews are closed to this account');
   check(!(await page.$('#accountBody input')) && !/invite/i.test(await words()), 'no paste field, no invite talk (P-22): ' + (await words()).slice(0, 200));
-  check(await page.evaluate(() => /Delete account/.test(document.getElementById('garageMeBody') ? document.getElementById('garageMeBody').textContent : '')), 'the account keys are in the Garage');
+  check(await page.evaluate(() => /Delete account/.test(document.getElementById('garageAccountBody') ? document.getElementById('garageAccountBody').textContent : '')), 'the account keys are in the Garage (Settings → Account)');
 });
 
 flow('units: kilometres in Settings redraw the dial, the notes and the replay in metric (IDEAS U-22)', async (page, base) => {
@@ -2592,6 +2603,7 @@ flow('units: kilometres in Settings redraw the dial, the notes and the replay in
   await page.click('#modePlate');                                   // out of the full-screen replay to the tabs (U-45)
   await page.click('.tab[data-view="garage"]');
   await page.evaluate(() => { window.__samePage = true; });
+  await openSetting(page, 'units');
   await page.click('[data-units="metric"]');                       // redrawn in place, no reload (the owner, 2026-10-29)
   await page.waitForTimeout(400);
   check(await page.evaluate(() => window.__samePage === true), 'the page was not reloaded');
@@ -3351,6 +3363,17 @@ flow('REVIEW.md 1.2 screen by screen: first run, the map, planning, the route, d
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
     return { whole: n.scrollWidth <= n.clientWidth + 1 && n.scrollHeight <= n.clientHeight + 1, size: getComputedStyle(n).fontSize, w: innerWidth, lines: Math.round(n.clientHeight / parseFloat(getComputedStyle(n).lineHeight || '16')) }; });
   check(long.whole && parseFloat(long.size) >= 14, 'a long name is whole, smaller or on two lines, never cut: ' + JSON.stringify(long));
+  // U-114: a long name set while the card is up is fitted again when the card goes down; U-122: and the chosen route stays
+  // on screen with the car: the camera is fitted to the route (with no tiles here the map never draws, so the fit asked is
+  // what is checked), the app's own fit pausing follow with no recenter key
+  await page.click('#routeBar'); await page.waitForTimeout(400);
+  await page.evaluate(() => { apexDebug.renderRouteCard(apexDebug.track); window.__fits = []; const m = apexDebug.map, f = m.fitBounds.bind(m); m.fitBounds = (b, o) => { window.__fits.push(b); return f(b, o); }; });
+  await page.click('#routeBar'); await page.waitForTimeout(600);
+  const fitted = await page.evaluate(() => { const n = document.getElementById('routeBarName'), t = apexDebug.track, b = window.__fits[window.__fits.length - 1];
+    const inside = (i) => b && t.lon[i] >= b[0][0] - 1e-9 && t.lon[i] <= b[1][0] + 1e-9 && t.lat[i] >= b[0][1] - 1e-9 && t.lat[i] <= b[1][1] + 1e-9;
+    return { whole: n.scrollWidth <= n.clientWidth + 1 && n.scrollHeight <= n.clientHeight + 1, follow: apexDebug.state.follow, fits: window.__fits.length,
+      inView: [0, Math.floor(t.lat.length / 2), t.lat.length - 1].every(inside) }; });
+  check(fitted.whole && fitted.inView && fitted.follow === false, 'collapsed: the name whole and the route fitted on screen: ' + JSON.stringify(fitted));
   // Driving: no tab bar; Report and End; Limit, the Score under the g-ball
   await page.click('#planClear');
   await page.evaluate(async () => { for (let i = 0; i < 40; i++) { window.apex.live({ lat: 35.96 + i * 1e-5, lon: -83.92, accuracy_m: 5, speed_mps: 12, course_deg: 0, has_fix: true, calibration: 'locked', lat_g: 0.1, lon_g: 0 }); await new Promise((r) => setTimeout(r, 100)); } });
@@ -3411,9 +3434,10 @@ flow('REVIEW.md 1.2 screen by screen: the Log, drive detail, Stages, People sign
   check(JSON.stringify(cg) === '["Your crew’s page:true","Crew drives:true","Convoys:true"]' && await page.isVisible('#crewsBody >> text=Sign in with Google'), 'People signed out, Crews: ' + cg);
   // Settings are the Garage: the theme picker, help folded under "How this works", no Octane, Erase is red text behind a confirm sheet
   await page.goto(base + '/index.html?view=garage');
-  await page.waitForSelector('#myEraseBtn');
+  await page.waitForSelector('#garageGear', { state: 'visible' });
+  await openSetting(page, 'data');
   const g = await page.evaluate(() => { const s = document.getElementById('sheet'), e = getComputedStyle(document.getElementById('myEraseBtn'));
-    return { title: s.querySelector('h2').textContent, themes: document.querySelectorAll('#themeCards > *').length, how: s.querySelectorAll('details.how').length, octane: /Octane/.test(s.innerText), erase: e.color + '/' + e.textDecorationLine + '/' + e.borderTopStyle }; });
+    return { title: s.querySelector('h2').textContent, themes: document.querySelectorAll('#themeCards > *').length, how: document.querySelectorAll('[data-panel~="garage"] details.how').length, octane: /Octane/.test(document.body.innerText), erase: e.color + '/' + e.textDecorationLine + '/' + e.borderTopStyle }; });
   check(g.title === 'Garage' && g.themes === 3 && g.how >= 2 && !g.octane && g.erase === 'rgb(200, 16, 46)/none/none', 'Garage: ' + JSON.stringify(g));
   let alerted = false; page.on('dialog', (d) => { alerted = true; d.dismiss(); });
   await page.evaluate(() => document.getElementById('myEraseBtn').click());
@@ -3422,6 +3446,7 @@ flow('REVIEW.md 1.2 screen by screen: the Log, drive detail, Stages, People sign
   check(!alerted && cs.yes === 'Erase everything' && cs.color === 'rgb(200, 16, 46)' && cs.focus === 'cs-no', 'the confirm sheet: ' + JSON.stringify(cs));
   await page.keyboard.press('Escape');
   check(!(await page.$('.confirm-sheet')) && (await page.evaluate(() => ApexRecording.all())).length === 1, 'Cancel (Escape) keeps everything');
+  await page.mouse.click(200, 30); await page.waitForTimeout(300);   // a tap outside slides the settings sheets away
   // REVIEW4 U-69: touching a theme card's preview switches the theme, as its Use key does; each Use key names its card
   const uses = await page.$$eval('#themeCards button.ink-btn:not(.tc-hear)', (b) => b.map((x) => x.textContent + '/' + x.getAttribute('aria-label')));
   check(JSON.stringify(uses) === '["Use/Use Tapedeck","Use/Use Billet"]', 'theme cards: one word, named keys: ' + JSON.stringify(uses));
@@ -3432,6 +3457,56 @@ flow('REVIEW.md 1.2 screen by screen: the Log, drive detail, Stages, People sign
   check(used.inUse === 'Tapedeck' && used.back, 'the Tapedeck preview, touched, is in use: ' + JSON.stringify(used));
   await page.click('#themeCards [aria-label="Use Roadbook"]');
   await page.waitForFunction(() => document.documentElement.dataset.theme === 'roadbook');
+});
+
+flow('REVIEW5 §2: the Garage leads with you, your cars, Look and voice and the co-driver; every setting is a row behind one gear; People shows what arrives (U-116, U-117, U-121, U-132, U-135)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url()), json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (u.pathname === '/api/me/export') return json({ member: { contribute: 0 } });
+    if (u.pathname === '/api/points') return json({ pioneer: { firsts: 0, seconds: 0 } });
+    if (route.request().method() === 'GET') return json([]);
+    return json({}, 404);
+  });
+  await page.goto(base + '/index.html?view=garage');
+  await page.waitForSelector('#garageGear', { state: 'visible' });
+  await page.waitForSelector('#garageRoadFeelBody .sw', { state: 'attached' });   // drawn into its (shut) sheet
+  const pg = await page.evaluate(() => ({ me: !!document.getElementById('garageMeBody').offsetParent, look: !!document.getElementById('lookSection').offsetParent,
+    erase: getComputedStyle(document.getElementById('myEraseBtn').closest('.garage-pop')).visibility, inSheet: !!document.querySelector('#sheet #zoneRadius'),
+    bar: getComputedStyle(document.querySelector('#sheet .body')).scrollbarWidth, gearLabel: document.getElementById('garageGear').getAttribute('aria-label') }));
+  check(pg.me && pg.look && pg.erase === 'hidden' && !pg.inSheet && pg.bar === 'none' && pg.gearLabel === 'Settings', 'the Garage page: ' + JSON.stringify(pg));
+  await page.click('#garageGear');
+  await page.waitForSelector('#garageSettings.open');
+  const rows = await page.$$eval('#garageSettings .nav-row', (r) => r.filter((x) => !x.hidden).map((x) => x.querySelector('span').textContent));
+  check(JSON.stringify(rows) === '["Road feel","Privacy zones","Crash check","Units","Map motion","Spots","Your data","Account","Feedback","About Vetta"]', 'the rows behind the gear: ' + rows);
+  // U-116: a member with the switch off is told to turn it on above, never to sign in
+  await page.click('#garageSettings .nav-row[data-setting="roadfeel"]');
+  await page.waitForSelector('.garage-pop.open[data-setting="roadfeel"]');
+  const rf = await page.evaluate(() => { const p = document.querySelector('.garage-pop.open[data-setting="roadfeel"]'); return { note: document.getElementById('ambientNote').textContent, sw: !!p.querySelector('.sw'), heads: p.querySelectorAll('h3').length }; });
+  check(rf.note === 'Off. Turn on Share road feel above.' && rf.sw && rf.heads === 1, 'Road feel: ' + JSON.stringify(rf));
+  await page.click('.garage-pop.open[data-setting="roadfeel"] .side-pop-head button');
+  // U-117: Crash check says what it does with no contact, and with one
+  await page.click('#garageSettings .nav-row[data-setting="crash"]');
+  await page.waitForSelector('.garage-pop.open[data-setting="crash"]');
+  check(/^On, with no contact: .* offers to call (911|112)\. Add a contact/.test(await page.textContent('#crashState')), 'crash, no contact: ' + await page.textContent('#crashState'));
+  await page.fill('#crashName', 'Sam'); await page.fill('#crashPhone', '+1 555 010 2030');
+  check(/text Sam where you are\.$/.test(await page.textContent('#crashState')), 'crash, with Sam: ' + await page.textContent('#crashState'));
+  await page.click('.garage-pop.open[data-setting="crash"] .side-pop-head button');
+  // U-135: the default-on switch says anonymous on the row
+  await page.click('#garageSettings .nav-row[data-setting="data"]');
+  check(await page.isVisible('.garage-pop.open [data-toggle="health"] >> text=Share app health (anonymous counts)'), 'Share app health says anonymous on the row');
+  // a tap outside closes every sheet
+  await page.mouse.click(200, 30); await page.waitForTimeout(300);
+  check(!(await page.$('.side-pop.open')), 'the scrim closes the sheets');
+  // U-121: People's empty sides show what arrives there, captioned as an example, under the key
+  await page.click('.tab[data-view="people"]');
+  await page.waitForSelector('#accountBody .people-sample');
+  const fs = await page.evaluate(() => { const f = document.querySelector('#accountBody .people-sample'); return { cap: f.querySelector('figcaption').textContent, label: f.getAttribute('aria-label'), afterKey: !!f.previousElementSibling.querySelector('button'), taps: f.querySelectorAll('button, a').length }; });
+  check(fs.cap === 'Example: what a friend looks like here' && /Not a real person/.test(fs.label) && fs.afterKey && fs.taps === 0, 'Friends sample: ' + JSON.stringify(fs));
+  await page.click('[data-people="crews"]');
+  await page.waitForSelector('#crewsBody .people-sample');
+  check((await page.textContent('#crewsBody .people-sample figcaption')) === 'Example: what a crew looks like here', 'Crews sample');
 });
 
 // Safe areas (iPhone 15 Pro): nothing you read or tap sits under the Dynamic Island, the home indicator or the rounded

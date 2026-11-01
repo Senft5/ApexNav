@@ -53,6 +53,8 @@
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { background: var(--panel); color: var(--panel-ink); font-family: var(--font-ui); font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+    /* U-132: the Log is a sheet too: no browser scrollbar (iOS draws its own indicator while scrolling) */
+    html, body { scrollbar-width: none; } ::-webkit-scrollbar { display: none; }
     input, textarea, select { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; font-size: max(16px, 1em); }
     /* The page scrolls inside body: the iOS shell disables the web view's own scroll view (the map page must not rubber-band). */
     html { height: 100%; overflow: hidden; } body { height: 100%; overflow-y: auto; overscroll-behavior-y: none; -webkit-overflow-scrolling: touch; }

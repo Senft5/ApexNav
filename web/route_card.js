@@ -74,6 +74,33 @@
       + `</svg><b>${known ? Math.round(v) : '--'}</b><span>${esc(label)}</span></div>`;
   }
 
+  /**
+   * U-115: Twist and Flow are the route's geometry, so any track with corners has them: a searched route's own fun score
+   * (`t.fun`), else `score(t)` (FunRoute.score) over the track's corners, as for a GPX or a loop. { twist, flow }, each null
+   * when the track has no corners to read (unknown stays "--").
+   */
+  function shape(t, score) {
+    let f = t && t.fun && (finite(t.fun.twist) || finite(t.fun.flow)) ? t.fun : null;
+    if (!f && t && Array.isArray(t.events) && Array.isArray(t.dist) && typeof score === 'function') { try { f = score(t); } catch (_) { f = null; } }
+    return { twist: f && finite(f.twist) ? f.twist : null, flow: f && finite(f.flow) ? f.flow : null };
+  }
+
+  /**
+   * U-134: a fact line set so no unit is left alone on a line: a number and its unit are held together ("8.5 mi"), and a
+   * "·" keeps to the phrase before it, so the line breaks after a "·", never inside a distance.
+   */
+  function factText(s) {
+    return String(s == null ? '' : s)
+      .replace(/(\d) (mi|km|ft|m|min|h)\b/g, '$1 $2')
+      .replace(/ · /g, ' · ');
+  }
+
+  /** U-134: the Along fact's glyph follows what it leads with: a viewpoint the hills, a café a cup, fuel alone a pump. */
+  function alongGlyph(line) {
+    const s = String(line || '').toLowerCase();
+    return /viewpoint/.test(s) ? 'view' : /café/.test(s) ? 'cafe' : /fuel/.test(s) ? 'fuel' : 'view';
+  }
+
   /** The cameras readout: a count once the check has run, "--" before (it is not a 0-100 scale, so no arc). */
   function count(label, n) {
     return `<div class="rc-dial count${finite(n) ? '' : ' unknown'}"><svg viewBox="0 0 60 36" aria-hidden="true"><path class="rc-track" d="M4 32 A26 26 0 0 1 56 32"/></svg>`
@@ -97,6 +124,6 @@
     });
   }
 
-  const api = { duration, stats, profile, dial, count, tiles };
+  const api = { duration, stats, profile, dial, count, tiles, shape, factText, alongGlyph };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexRouteCard = api;
 })(typeof window !== 'undefined' ? window : globalThis);

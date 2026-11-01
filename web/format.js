@@ -5,12 +5,30 @@
     if (!Number.isInteger(h) || !Number.isInteger(m)) return '--';
     return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`;
   }
-  /** Local ISO "2026-10-26T17:03" -> "2026-10-26 5:03 PM"; a date alone stays a date; nothing -> "--". */
-  function dateTime(iso) {
-    if (!iso) return '--';
-    const m = /^(\d{4}-\d{2}-\d{2})(?:[T ](\d{2}):(\d{2}))?/.exec(iso);
+  /**
+   * A date said, not set like a database field (REVIEW5 U-126): "Today, 8:02 AM", "Yesterday, 6:40 PM", then the day in
+   * the phone's own format ("Nov 1, 8:02 AM" / "1 Nov, 8:02 AM"), with the year only when it is not this one. A local ISO
+   * ("2026-10-26T17:03") is that wall time; one with a zone ("…Z") is shown in the phone's. A date alone stays a day;
+   * nothing -> "--". `now` and `locale` are for tests.
+   */
+  function dateTime(iso, now, locale) {
+    if (!iso || typeof iso !== 'string') return '--';
+    const m = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2}))?/.exec(iso);
     if (!m) return '--';
-    return m[2] === undefined ? m[1] : `${m[1]} ${clock12(Number(m[2]), Number(m[3]))}`;
+    const zoned = m[4] !== undefined && /(?:Z|[+-]\d{2}:?\d{2})$/.test(iso);
+    const d = zoned ? new Date(iso) : new Date(+m[1], +m[2] - 1, +m[3], m[4] === undefined ? 0 : +m[4], m[5] === undefined ? 0 : +m[5]);
+    if (Number.isNaN(d.getTime())) return '--';
+    const at = now instanceof Date ? now : new Date();
+    const day0 = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+    const ago = Math.round((day0(at) - day0(d)) / 864e5);
+    let day;
+    if (ago === 0) day = 'Today';
+    else if (ago === 1) day = 'Yesterday';
+    else {
+      const opts = { day: 'numeric', month: 'short', ...(d.getFullYear() !== at.getFullYear() ? { year: 'numeric' } : {}) };
+      try { day = d.toLocaleDateString(typeof locale === 'string' ? locale : undefined, opts); } catch (_) { day = `${m[1]}-${m[2]}-${m[3]}`; }
+    }
+    return m[4] === undefined ? day : `${day}, ${clock12(d.getHours(), d.getMinutes())}`;
   }
   /** Drive names saved with a 24-hour time ("Drive 10/26/2026 17:03") read in 12-hour; a recorder file name
    *  ("web_20261027_080000", how an exported drive comes back on import) reads like an app drive; any other name is unchanged. */

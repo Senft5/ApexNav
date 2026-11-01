@@ -848,6 +848,8 @@
       $('recenterBtn').classList.add('show');
       recenterLeft(0);
     }
+    // the app's own camera move (a route fit): follow pauses with no recenter key; a drag of the map brings it (U-122)
+    function holdFollow() { state.follow = false; clearTimeout(resumeTimer); clearInterval(resumeTick); recenterLeft(0); }
     function scheduleResume() {
       clearTimeout(resumeTimer); clearInterval(resumeTick);
       let left = FOLLOW_RESUME_S;
@@ -2161,6 +2163,13 @@
       });
     }
     window.addEventListener('resize', () => { if ($('planPanel').classList.contains('routed')) fitRouteBarName(); });
+    // U-114: the bar's width changes after the name is set (the card goes down and the Start key takes its place; the
+    // theme's font arrives late), so the name is fitted again whenever the bar's own width changes, and once fonts are in.
+    {
+      let barW = 0;
+      if (window.ResizeObserver) new ResizeObserver(() => { const w = $('routeBar').clientWidth; if (w && w !== barW) { barW = w; if ($('planPanel').classList.contains('routed')) fitRouteBarName(); } }).observe($('routeBar'));
+      if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { if ($('planPanel').classList.contains('routed')) fitRouteBarName(); }).catch(() => {});
+    }
     function renderRouteCard(t = plannedRoute) {
       const card = $('routeCard');
       $('planPanel').classList.toggle('routed', !!t);
@@ -2193,9 +2202,11 @@
         return vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) : null;
       };
       // A driven road has measured sectors; a planned one has its map-only fun score (docs/ROUTING.md).
+      // U-115: Twist and Flow from the track's own corners when nothing better is known (a GPX, a loop), as for a searched route
+      const geo = ApexRouteCard.shape(t, (x) => FunRoute.score(x, [], roadPrefs));
       const bars = Array.isArray(t.sectors) && t.sectors.length
-        ? [['Twist', avgSector('tech')], ['Flow', avgSector('flow')], ['Surface', avgSector('surf')]]
-        : [['Fun', t.fun ? t.fun.fun : null], ['Twist', t.fun ? t.fun.twist : null], ['Flow', t.fun ? t.fun.flow : null],
+        ? [['Twist', avgSector('tech') ?? geo.twist], ['Flow', avgSector('flow') ?? geo.flow], ['Surface', avgSector('surf')]]
+        : [['Twist', geo.twist], ['Flow', geo.flow],
            // Surface only once members have measured enough of it; map geometry can't know pavement.
            ...(window.ApexContributor && ApexContributor.surfaceScore(t.measured) != null ? [['Surface', ApexContributor.surfaceScore(t.measured)]] : [])];
       // small half-dials, "--" when unknown; Fun is the options' tile, so the card shows what makes it up. Surface only once
@@ -2369,7 +2380,7 @@
     function lockOnDestination(t) {
       const to = destMarker ? destMarker.getLngLat() : null;
       if (!to) return;
-      pauseFollow();
+      holdFollow();
       // the map left above the sheet: above the open card (U-70) when that leaves a strip to see the route in, else above
       // the bar (on its side, or the desk's column, the card covers the map: the fit is for when it goes down)
       const sv = viewInsets(), panel = $('planPanel'), mapH = (map.getContainer().clientHeight - sv.t - sv.b) || window.innerHeight;   // F-02: the map you can see, not its full-bleed box
@@ -2383,6 +2394,21 @@
       } else {
         map.flyTo({ center: [to.lng, to.lat], zoom: 15.5, pitch: 0, bearing: 0, duration: 1400, padding: { top: sv.t, left: sv.l, right: sv.r, bottom } });
       }
+    }
+    // U-122: the card goes down and the chosen route stays on screen: the route and the car fitted together above the bar.
+    // The app's own move: follow pauses without the recenter key, which a drag of the map brings up (U-71).
+    function fitPlannedRoute(t = plannedRoute) {
+      if (!t || !Array.isArray(t.lat) || t.lat.length < 2 || state.mode === 'live') return;
+      let w = 180, e = -180, so = 90, n = -90;
+      const add = (la, lo) => { if (!Number.isFinite(la) || !Number.isFinite(lo)) return; w = Math.min(w, lo); e = Math.max(e, lo); so = Math.min(so, la); n = Math.max(n, la); };
+      const step = Math.max(1, Math.floor(t.lat.length / 400));
+      for (let i = 0; i < t.lat.length; i += step) add(t.lat[i], t.lon[i]);
+      add(t.lat[t.lat.length - 1], t.lon[t.lon.length - 1]);
+      if (vehicle) add(vehicle.lat, vehicle.lon);
+      if (!(e >= w && n >= so)) return;
+      holdFollow();
+      const sv = viewInsets(), bottom = sv.b + ($('planBar').offsetHeight || 60) + 24;
+      map.fitBounds([[w, so], [e, n]], { padding: { top: sv.t + 60, left: sv.l + 40, right: sv.r + 60, bottom }, pitch: 0, bearing: 0, duration: 900, maxZoom: 16 });
     }
     // Plan fields: empty = the phone's position (locate()), "lat, lon" = that point, anything else =
     // the first Nominatim match. Errors carry the toast text.
@@ -3259,8 +3285,12 @@
     function openPlan(open) {
       const panel = $('planPanel');
       panel.style.setProperty('--plan-bar', `${$('planBar').offsetHeight + 2}px`); document.documentElement.style.setProperty('--plan-bar', `${$('planBar').offsetHeight + 2}px`);   // the floating loop (landscape) sits above it
+      const closing = !open && panel.classList.contains('open');
       panel.classList.toggle('open', open);
       $('app').classList.toggle('plan-open', open);
+      // U-122: the chosen route stays on screen; not when the card went down for a sheet or a drive (the camera keeps still
+      // under a sheet, F-02), which is settled by the next frame
+      if (closing && panel.classList.contains('routed')) requestAnimationFrame(() => { let driving = false; try { driving = driveActive; } catch (_) {} if (!panel.classList.contains('open') && !$('app').classList.contains('sheet-open') && !driving) fitPlannedRoute(); });
       $('destInput').setAttribute('aria-expanded', String(open));
       if (open) { refreshSavedDrives(); if (!panel.classList.contains('routed')) renderPlaces(); $('planBody').scrollTop = 0; closeEdge(); }
       else { $('destInput').blur(); $('fromInput').blur(); }                 // closing puts the keyboard away
@@ -3986,7 +4016,7 @@
     onSocial(() => { try { whoSees = window.ApexWhoSees && friendsMap ? ApexWhoSees.mount({ el, btn, toast, apiCall, jsonOf, friendsMap, zones: () => privacyZones,
       crews: () => (window.ApexSync && ApexSync.crews ? ApexSync.crews() : apiCall('GET', '/api/crews').then(jsonOf)),
       roadFeel: { get: () => roadFeelOn, set: async (on) => { const r = await apiCall('PUT', '/api/me/contribute', { on }).catch(() => null); if (r && r.ok) roadFeelOn = !!on; return !!(r && r.ok); } },
-      openGarage: (what) => { showView('garage'); const t = what === 'privacy' ? $('zoneRadius') : $('garageMeBody'); if (t) setTimeout(() => t.scrollIntoView({ block: 'start' }), 60); },
+      openGarage: (what) => { showView('garage'); const t = what === 'privacy' ? $('zoneRadius') : $('garageMeBody'); if (t && window.ApexGarageSettings && ApexGarageSettings.ui && ApexGarageSettings.ui.reveal(t)) return; if (t) setTimeout(() => t.scrollIntoView({ block: 'start' }), 60); },
       onChange: () => { if (view === 'people' || view === 'garage') renderAccount(); } }) : null; } catch (e) { console.error('who sees', e); } });
     onSocial(() => { if (friendsMap) $('friendsSheetBtn').addEventListener('click', () => (whoSees && accountMe && accountMe.member ? whoSees.open() : friendsMap.sheet())); });
     onSocial(() => { try { garage = window.ApexGarageUI ? ApexGarageUI.mount({ el, btn, toast, apiCall, jsonOf, report: safety && safety.report, onCars: setRoutingCars, onPhotos: () => renderAccount(), builds }) : null; } catch (e) { console.error('garage', e); } });
@@ -4016,6 +4046,9 @@
       else if (me && me.member) apiCall('GET', '/api/garage').then(r => (r.ok ? r.json() : null)).then(list => { if (list) setRoutingCars(list); }).catch(() => {});
       body.innerHTML = ''; cbody.innerHTML = '';
       const gbody = $('garageMeBody'); gbody.innerHTML = '';
+      // REVIEW5 §2: road feel and the account live behind the Garage's gear (web/garage_settings.js), drawn here as before
+      const rfBody = $('garageRoadFeelBody') || gbody, accBody = $('garageAccountBody') || gbody;
+      if (rfBody !== gbody) rfBody.innerHTML = ''; if (accBody !== gbody) accBody.innerHTML = '';
       const redo = () => renderAccount();
       const badge = $('crewTab').querySelector('.badge'); if (badge) badge.remove();
       const params2 = new URLSearchParams(location.search);
@@ -4060,7 +4093,8 @@
             ['<path d="M8 21l3-18M16 21l-3-18"/><circle cx="12" cy="16" r="1.6"/><circle cx="12" cy="9" r="1.6"/>', 'Convoys']),
           ...(stash('apex.crew') ? [el('p', { textContent: 'You have a crew link. Sign in to see which crew, then join it.' })] : []),
           el('p', { className: 'note', textContent: 'A crew is a group for a club or a weekend run: its own page, drives you plan together and a live convoy.' }), ...signIn());
-        gbody.append(el('h3', { textContent: 'Your cars' }), el('p', { className: 'note', textContent: 'Sign in (People) to keep your cars, a profile and build threads here. Everything below works without it.' }));
+        gbody.append(el('h3', { textContent: 'Your cars' }), el('p', { className: 'note', textContent: 'Sign in (People) to keep your cars, a profile and build threads here. Everything else in the Garage works without it.' }));
+        ambientFromAccount(false, false);                                     // U-116
         return;
       }
       // Anyone signed in can take their data or close the account, member or not.
@@ -4071,10 +4105,10 @@
       if (!me.member) {
         for (const b of [body, cbody]) b.append(el('h3', { textContent: 'Friends and crews are closed to this account' }),
           el('p', { className: 'note', textContent: 'Driving, notes and your Log work as always. Your account is still yours: download or delete it in the Garage.' }));
-        const asec = section('Account');
+        const asec = el('div', { className: 'stack-8' });                        // the sheet's head says Account
         asec.append(el('div', { className: 'row' }, btn('Download my data', downloadMyData),
           btn('Sign out', async () => { await apiCall('POST', '/api/auth/logout'); ApexSync.setSession(null); redo(); })), btn('Delete account', deleteMyAccount, 'danger-btn'));
-        gbody.append(asec);
+        accBody.append(asec);
         return;
       }
       if (!me.handle) {
@@ -4292,12 +4326,13 @@
       if (stash('apex.add') && peopleSide === 'friends') inviteOpen = true;   // a friend link opens its sheet, never over the Crews side
       if (inviteOpen) ipop.classList.add('open');
       body.append(el('div', { className: 'row' }, btn('Invite or add a friend', () => openInvite(), 'ink-btn solid')));
+      if (!accepted.length && window.ApexPeopleSamples) body.append(ApexPeopleSamples.friend(el));   // U-121: what arrives here, as an example
 
       // P-13, P-14, P-19: what friends shared with you is the one row left; spots went to Where to?, the points to the Garage,
       // who sees you to the You row above
       if (shared.length || accepted.length) {
         let sharedRow = null;
-        sharedRow = navRow('From friends', sharedRoutesSection((n) => { if (sharedRow) sharedRow._count.textContent = n ? String(n) : ''; }, Promise.resolve(sharedList)));
+        sharedRow = navRow('From friends', sharedRoutesSection((n) => { if (sharedRow) sharedRow._count.textContent = n ? `${n} route${n === 1 ? '' : 's'}` : ''; }, Promise.resolve(sharedList)));   // U-125: the count says what it counts
         body.append(el('div', { className: 'nav-rows' }, sharedRow));
       }
       if (stash('apex.add') && add.value && !accepted.some(f => f.handle === add.value)) add.focus();
@@ -4439,7 +4474,7 @@
       apiCall('GET', `/api/crews/discover?lat=${near.lat.toFixed(2)}&lon=${near.lon.toFixed(2)}`).then(jsonOf).catch(() => null).then((found) => {
         if (gen !== renderGen) return;
         const nearby = Array.isArray(found) ? found : [];
-        if (nearbyRow) nearbyRow._count.textContent = nearby.length ? String(nearby.length) : '';
+        if (nearbyRow) nearbyRow._count.textContent = nearby.length ? `${nearby.length} crew${nearby.length === 1 ? '' : 's'} near you` : '';   // U-125
         if (!nearby.length) { nsec.append(el('p', { className: 'note', textContent: found ? 'No public crews near you yet.' : 'Couldn\'t look for crews nearby. Check signal.' })); return; }
         const ntiles = el('div', { className: 'crew-tiles one' });   // P-26: one a row, the name whole
         for (const c of nearby) {
@@ -4469,6 +4504,7 @@
         // P-08: no crew yet is one sentence and one row, not five empty drawers
         else cbody.append(el('p', { className: 'people-lead', textContent: 'A crew is a group for a club or a weekend run: its own page, and drives you plan together.' }),
           el('div', { className: 'nav-rows' }, nearbyRow = navRow('Find or start a crew', findSheet())));
+        if (!myCrews.length && window.ApexPeopleSamples) cbody.append(ApexPeopleSamples.crew(el));   // U-121: what a crew looks like, as an example
         if (drives) cbody.append(drives);
       }
       // P-11: no Convoy section. A crew's convoy is its drive's card; an ad-hoc one is the map's Start key (Convoy now).
@@ -4480,21 +4516,23 @@
 
       // road feel + account
       const contribOn = !!ex?.member?.contribute;
-      const dsec = section('Road feel');
+      ambientFromAccount(true, contribOn);                                    // U-116
+      const dsec = rfBody === gbody ? section('Road feel') : el('div', { className: 'stack-8' });   // the sheet's head says Road feel
       dsec.append(switchRow('Share road feel', contribOn, async () => { await apiCall('PUT', '/api/me/contribute', { on: !contribOn }); redo(); }),
-        el('p', { className: 'note', textContent: 'Banking, bumps and surface. Never where you went or how fast. First to map a road earns 3×.' }));
+        // U-126: no multiplier of nothing: what the app shows for mapping a road first is the count below, for you only
+        el('p', { className: 'note', textContent: 'Banking, bumps and surface. Never where you went or how fast. Roads you map first are counted here, for you only.' }));
       // P-14: your own contribution, not a board of friends: roads you were first or second to map (IDEAS S-09); only you see it
       const pio = pts && pts.pioneer;
       if (pio && (pio.firsts || pio.seconds)) dsec.append(el('p', { className: 'note pioneer', textContent: [pio.firsts ? `Roads you mapped first: ${pio.firsts}` : '', pio.seconds ? `second to map ${pio.seconds}` : ''].filter(Boolean).join(' · ') }));
-      gbody.append(dsec);
-      const asec = section('Account');
+      rfBody.append(dsec);
+      const asec = accBody === gbody ? section('Account') : el('div', { className: 'stack-8' });
       asec.append(el('div', { className: 'row' },
         btn('Download my data', downloadMyData),
         btn('Sign out', async () => { await apiCall('POST', '/api/auth/logout'); ApexSync.setSession(null); redo(); })),
         btn('Delete account', deleteMyAccount, 'danger-btn'));
-      gbody.append(asec);                                                   // your account lives with you, in the Garage
-      if (safety) { gbody.append(safety.blockedSection()); if (me.moderator) gbody.append(safety.moderationSection()); }
-      if (me.moderator) gbody.append(errorsSection(), healthSection(), latencySection(), ...(window.ApexFeedback ? [ApexFeedback.ownerSection({ el, btn, apiCall, jsonOf })] : []));
+      accBody.append(asec);                                                 // your account: Garage → Settings → Account
+      if (safety) { accBody.append(safety.blockedSection()); if (me.moderator) accBody.append(safety.moderationSection()); }
+      if (me.moderator) accBody.append(errorsSection(), healthSection(), latencySection(), ...(window.ApexFeedback ? [ApexFeedback.ownerSection({ el, btn, apiCall, jsonOf })] : []));
     }
 
     // Highlights (local for now): [{id, name, lat, lon, rating}] in localStorage; the server list joins later (docs/BACKEND.md section 9).
@@ -4611,8 +4649,7 @@
       if (sums.missing) sums = (await ApexAnalysis.job('summaries')).list;   // drives saved before summaries: built in the worker
       const list = sums.map((s) => ({ dist: [s.len_m || 0], battery: s.battery }));
       const s = ApexMyData.phoneSummary(list, localStorage);
-      $('myDataNote').textContent = `On this phone: ${s.drives} drive${s.drives === 1 ? '' : 's'} (${ApexUnits.long(s.miles * 1609.344)}), ${s.spots} spot${s.spots === 1 ? '' : 's'}, ${s.zones} privacy zone${s.zones === 1 ? '' : 's'}, ${s.places} recent place${s.places === 1 ? '' : 's'}. `
-        + (s.signedIn ? 'Signed in: friends, crews and what you shared are on the server.' : 'Not signed in: nothing of yours is on the server.')
+      $('myDataNote').textContent = ApexMyData.phoneText(s, (m) => ApexUnits.long(m))   // U-126: counts only what exists
         + (() => { const b = window.ApexBattery ? ApexBattery.overall(list) : null; return b ? ` Driving uses about ${b.perHour}% battery an hour on this phone (${b.drives} drive${b.drives === 1 ? '' : 's'}).` : ''; })();
       renderOffline();
     }
@@ -4686,7 +4723,7 @@
       toast('Drives deleted from this phone.'); renderMyData();
     });
     $('myEraseBtn').addEventListener('click', async () => {
-      if (!(await ApexConfirm.ask('Erase drives, spots, zones, settings and sign-in from this phone? Your account on the server stays until you delete it in Garage → Account.', 'Erase everything'))) return;
+      if (!(await ApexConfirm.ask('Erase drives, spots, zones, settings and sign-in from this phone? Your account on the server stays until you delete it in Garage → Settings → Account.', 'Erase everything'))) return;
       for (const id of await ApexRecording.ids()) { try { await ApexRecording.remove(id); } catch (_) {} }
       ApexSync.setSession(null);                                   // the app's Keychain session too (IDEAS Z-10)
       for (const k of ApexMyData.keysToClear(localStorage)) { try { localStorage.removeItem(k); } catch (_) {} }
@@ -4842,7 +4879,7 @@
     if (!themeAllowed(state.theme)) { state.theme = 'roadbook'; savePrefs(); applyTheme(); }
     renderThemePicker();
     // Long help in the Garage folds under "How this works" (REVIEW.md 1.2, Settings): the control first, the essay on demand.
-    document.querySelectorAll('#sheet [data-panel~="garage"] > p.note').forEach((p) => {
+    document.querySelectorAll('[data-panel~="garage"] > p.note').forEach((p) => {   // on the page and in the gear's sheets
       if (p.id || p.textContent.trim().length < 140) return;                // short notes and live status lines stay as they are
       const d = el('details', { className: 'how' }, el('summary', { textContent: 'How this works' }));
       p.replaceWith(d); d.append(p);
@@ -5195,22 +5232,28 @@
     }
     // Road data whenever the app is open and the phone is mounted (calibration locked), not only during a drive
     // (owner 2026-10-26). Trips, privacy trims and gaps: ApexContributor.createAmbient. Members with ROAD DATA on only.
-    const ambient = { sharer: null, allowed: null, checkedAt: -Infinity, checking: false, mounted: false };
+    const ambient = { sharer: null, allowed: null, member: null, checkedAt: -Infinity, checking: false, mounted: false };
     function ambientStats() { return ambient.sharer ? ambient.sharer.stats() : null; }
     function paintAmbient() {
       const note = $('ambientNote'); if (!note) return;
       const a = ambientStats(), mi = a ? `${ApexUnits.long((a.km) * 1000, 1)} shared since the app opened` : '';
-      note.textContent = !NATIVE_SHELL ? 'Shared while you drive. In the iPhone app it also shares whenever the phone is mounted.'
-        : ambient.allowed === false ? 'Off. Sign in and turn on Share road feel in the Garage to share.'
+      // U-116: the line for the state you are in: signed out, a member with the switch off (it sits above this line), or on
+      note.textContent = ambient.allowed === false ? (ambient.member ? 'Off. Turn on Share road feel above.' : 'Off. Sign in to share road feel.')
+        : !NATIVE_SHELL ? 'Sharing banking, bumps and surface while you drive. In the iPhone app it also shares whenever the phone is mounted.'
         : !ambient.mounted ? 'Waiting for the phone to be calibrated in its mount.'
         : a && a.paused ? 'Paused: the server refused. Trying again in a few minutes.'
         : a && a.error ? `Couldn't reach the server. Retrying. ${mi}`
         : `Sharing while the phone is mounted. ${mi || 'Starts once you move.'} The first and last km of every trip stay on this phone.`;
     }
+    // what the Garage just read of the account (renderAccount): who you are and the Share road feel switch, said at once
+    function ambientFromAccount(member, on) {
+      ambient.member = member; ambient.allowed = !!(member && on); ambient.checkedAt = performance.now(); paintAmbient();
+      if (!ambient.allowed && ambient.sharer) ambient.sharer.stop();
+    }
     async function checkAmbientAllowed() {
       if (ambient.checking || performance.now() - ambient.checkedAt < 600000) return;
       ambient.checking = true;
-      try { ambient.allowed = !!(window.ApexSync && await ApexSync.member() && await ApexSync.contributionEnabled()); }
+      try { const m = window.ApexSync ? await ApexSync.member() : null; ambient.member = !!m; ambient.allowed = !!(m && await ApexSync.contributionEnabled()); }
       catch (_) { ambient.allowed = null; }
       finally { ambient.checking = false; ambient.checkedAt = performance.now(); paintAmbient(); }
       if (ambient.allowed === false && ambient.sharer) ambient.sharer.stop();
@@ -5365,7 +5408,7 @@
         const breaks = (Array.isArray(t.steps) ? t.steps : []).map(s => Math.round((s.m || 0) / 5));
         t.character = ApexRoadPage.character(Core, t, breaks);
         const line = ApexRoadPage.characterLine(t.character, (m) => ApexUnits.long(m, 1));
-        $('routeCardCharacter').textContent = line ? `Ahead: ${line}` : '';
+        $('routeCardCharacter').textContent = line ? ApexRouteCard.factText(`Ahead: ${line}`) : '';   // U-134: no unit alone on a line
         $('routeCardCharacter').hidden = !line;
       } catch (_) { /* unknown: nothing said */ }
     }
@@ -5377,7 +5420,7 @@
       if (plannedRoute === t) $('routeCardProfile').innerHTML = ApexRouteCard.profile(t, 340, 92, heightLabel) || '';
       if (up == null) return;
       const h = heightLabel;
-      $('routeCardClimb').textContent = `Climbs ${h(up)} in all · highest ${h(hi)}`;
+      $('routeCardClimb').textContent = ApexRouteCard.factText(`Climbs ${h(up)} in all · highest ${h(hi)}`);
       $('routeCardClimb').hidden = false;
     }
     async function attachScenic(t) {
@@ -5392,7 +5435,8 @@
       if (plannedRoute !== t) return;                                                          // another route came up meanwhile
       t.scenic = list;
       const line = ApexScenic.summary(list, t.dist[t.dist.length - 1]);
-      $('routeCardAlong').textContent = line; $('routeCardAlong').hidden = !line;
+      $('routeCardAlong').textContent = ApexRouteCard.factText(line); $('routeCardAlong').hidden = !line;
+      $('routeCardAlong').dataset.glyph = ApexRouteCard.alongGlyph(line);                     // U-134: a café is a cup
       for (const p of list) {
         const el = document.createElement('div'); el.className = `poi-pin poi-${p.kind}`;
         el.textContent = p.kind === 'view' && p.name ? p.name : SCENIC_LABEL[p.kind];
@@ -5430,6 +5474,19 @@
         try { if (phone) localStorage.setItem(CRASH_KEY, JSON.stringify({ name, phone })); else localStorage.removeItem(CRASH_KEY); } catch (_) {}
       };
       $('crashName').addEventListener('change', save); $('crashPhone').addEventListener('change', save);
+      // U-117: the switch says what it does in the state it is in. With no contact it still asks and offers the emergency
+      // call (it never calls by itself); a contact adds the text with your location.
+      const paint = () => {
+        const n = $('crashState'); if (!n) return;
+        const num = window.ApexIncident ? ApexIncident.emergencyNumber(navigator.language) : '911';
+        const who = $('crashName').value.trim(), has = !!$('crashPhone').value.trim();
+        n.textContent = !state.toggles.crash ? 'Off. Nothing is checked after an impact.'
+          : has ? `On. After a hard impact and a stop it asks if you're OK, then offers to call ${num} or text ${who || 'your contact'} where you are.`
+          : `On, with no contact: after a hard impact and a stop it asks if you're OK, then offers to call ${num}. Add a contact to text them where you are too.`;
+      };
+      $('crashName').addEventListener('input', paint); $('crashPhone').addEventListener('input', paint);
+      document.querySelectorAll('[data-toggle="crash"]').forEach((k) => k.addEventListener('click', paint));
+      paint();
     })();
     const crashSheet = window.ApexIncident ? ApexIncident.mount({ el, say: (t) => say(t, true), haptic, contact: crashContact, position: () => state.lastPosition || null }) : null;
     const crashDetector = window.ApexIncident ? ApexIncident.createDetector() : null;
