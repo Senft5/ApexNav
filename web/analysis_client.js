@@ -154,7 +154,7 @@
       }
       const road = [d, ...near.filter((o) => o.ds.score != null && compare(o).overlap_m >= 0.3 * len)].sort((p, q) => (p.date < q.date ? -1 : 1))
         .map((o) => { const r = o === d ? null : compare(o);
-          return { id: o.id, name: o.name, date: o.date, dateLabel: label(o), score: o.ds.score, corners: o.ds.corners, self: o === d,
+          return { id: o.id, name: o.name, date: o.date, dateLabel: label(o), score: o.ds.score, corners: Array.isArray(o.corners) ? o.corners.length : null, self: o === d,   // RA-3: every corner, as the Log row counts
                    matched: r ? r.matched_corners : 0, delta_s: r ? r.corner_delta_s : null }; });
       release();
       return { reference, coach: co, road, bestOther: reference ? reference.id : (sums.find((s) => s.id !== id) || {}).id || null };

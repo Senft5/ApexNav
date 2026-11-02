@@ -108,19 +108,22 @@
   }
 
   /**
-   * Route options as tiles: { title: "Fun 98 · 2:48", sub } with sub relative to the picked one ("this one",
-   * "12 min quicker", "+43 min").
+   * Route options as tiles (panel round 2, SO-1): the time big, and what differs from the picked one under it ("this one",
+   * "7 min quicker · 6 fewer good corners"). No "Fun 45": Fun is the route style (Quick / Fun / Max fun), never a number,
+   * and that score appeared on no dial (web/vocabulary.js). Good corners are the fun score's (fun_route.js `good`, the
+   * deck's "11 good corners"); a difference is said only when both are known.
    */
   function tiles(list, picked) {
     const p = list && list[picked];
+    const good = (c) => (c && c.fun && finite(c.fun.good) ? c.fun.good : null);
     return (list || []).map((c, i) => {
-      const t = duration(c && c.timeS), title = `Fun ${c && c.fun && finite(c.fun.fun) ? c.fun.fun : '--'} · ${t ? (t.unit === 'h' ? t.value : `${t.value} min`) : '--'}`;
-      let sub = 'this one';
-      if (i !== picked) {
-        const dm = p && finite(p.timeS) && finite(c && c.timeS) ? Math.round((c.timeS - p.timeS) / 60) : null;
-        sub = dm == null ? '--' : dm < 0 ? `${-dm} min quicker` : dm > 0 ? `+${dm} min` : 'same time';
-      }
-      return { title, sub };
+      const t = duration(c && c.timeS), title = t ? (t.unit === 'h' ? t.value : `${t.value} min`) : '--';
+      if (i === picked) return { title, sub: 'this one' };
+      const dm = p && finite(p.timeS) && finite(c && c.timeS) ? Math.round((c.timeS - p.timeS) / 60) : null;
+      const time = dm == null ? null : dm < 0 ? `${-dm} min quicker` : dm > 0 ? `+${dm} min` : 'same time';
+      const gc = good(c), gp = good(p), dg = gc != null && gp != null ? gc - gp : null;
+      const corners = !dg ? null : `${Math.abs(dg)} ${dg > 0 ? 'more' : 'fewer'} good corner${Math.abs(dg) === 1 ? '' : 's'}`;
+      return { title, sub: [time, corners].filter(Boolean).join(' · ') || '--' };
     });
   }
 

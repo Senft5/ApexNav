@@ -117,7 +117,7 @@ def test_the_page_uses_the_drivers_words_everywhere():
     assert "showN.words = state.noteWords;" in html                       # the live strip's next cells
     assert "page.words = state.noteWords;" in html and "obNote(OB_NOTES[" in html   # the welcome (P-2)
     assert "state.noteWords === 'plain' && window.ApexPlainNotes ? { ...n, call: ApexPlainNotes.plainCall(n) } : n" in html
-    assert '"Slow down, medium left, tightens"' in html                  # the Garage's example in the grammar
+    assert "ApexVocabulary.wordsExample(state.noteWords" in html       # the Garage's example, generated (SO-1, test_vocabulary.py)
 
 
 def test_asides_split_into_advice_and_colour(out):

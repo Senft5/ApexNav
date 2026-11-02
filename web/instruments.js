@@ -360,6 +360,20 @@
     };
   }
 
+  /**
+   * The binnacle's Sight cell from the cluster's frame (panel round 2, SO-1): the same held sight-line speed as the plate
+   * under the arrow, never the corner's pace under the same word (recording 7: the plate said 50 and the cell 48, the
+   * pace; the pace keeps its own mark on the speed dial). U-130: under 5 mph the plate hides (sightQuiet) and the cell
+   * reads --, never a number at a standstill; "Open" when nothing limits you. Red only when the plate is red
+   * (d.sightShort, its 3 s rule), else, without that flag, when the speed is over it. { text, eye, short }.
+   */
+  function sightCell(d) {
+    const v = !d || d.sightQuiet || !Number.isFinite(d.sightMph) ? null : d.sightMph;
+    if (d && d.sightOpen && !d.sightQuiet) return { text: 'Open', eye: false, short: false };
+    const short = v != null && (typeof d.sightShort === 'boolean' ? d.sightShort : Number.isFinite(d.speedMph) && d.speedMph > v + 1);
+    return { text: fmt(v), eye: v != null, short };
+  }
+
   function readouts(parent) {
     const box = html('div', 'readouts', parent);
     const cell = (label, cls) => {
@@ -381,14 +395,10 @@
     return (d) => {
       setT(limit.v, fmt(d.limitMph));
       limit.c.classList.toggle('unknown', !Number.isFinite(d.limitMph));   // a sign only when there is a limit to show
-      // U-130: under 5 mph the sight plate hides (sightQuiet) and so does the value here: --, never a number at a standstill
-      const both = d.sightQuiet ? [] : [d.paceMph, d.sightMph].filter(v => Number.isFinite(v));
-      const v = both.length ? Math.min(...both) : null;
-      // "Open" when nothing limits you (the sight line at its cap, no corner asking for less): the number there would only
-      // be the cap's own speed (125 mph), not something the road says
-      setT(sight.v, d.sightOpen ? 'Open' : fmt(v));
-      setS(eye, 'display', !d.sightOpen && both.length === 2 && d.sightMph < d.paceMph ? '' : 'none');
-      sight.c.classList.toggle('short', !d.sightOpen && v != null && Number.isFinite(d.speedMph) && d.speedMph > v + 1);
+      const s = sightCell(d);
+      setT(sight.v, s.text);
+      setS(eye, 'display', s.eye ? '' : 'none');
+      sight.c.classList.toggle('short', s.short);
     };
   }
 
@@ -610,6 +620,6 @@
     return mountDials(el, theme);
   }
 
-  const api = { mountCluster, renderNotes, tulipSVG, lockup, stripCode, register, kitPose, KIT, springNeedle, SPEED_MAX };
+  const api = { mountCluster, renderNotes, tulipSVG, lockup, stripCode, register, kitPose, KIT, springNeedle, SPEED_MAX, sightCell };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexInstruments = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -33,7 +33,7 @@ const out = {
   noShape: [R.shape({ dist: [0, 10] }, (x) => F.score(x, [])), R.shape(null)],
   fact: R.factText('Ahead: Esses at 2.4 mi · Technical at 3.4 and 8.5 mi'),
   glyphs: ['1 café', '2 viewpoints · 1 café', 'No fuel for the first 40 mi', ''].map(R.alongGlyph),
-  tiles: R.tiles([{ fun: { fun: 98 }, timeS: 10080 }, { fun: { fun: 80 }, timeS: 9360 }, { fun: { fun: 100 }, timeS: 12660 }, { fun: null, timeS: null }], 0),
+  tiles: R.tiles([{ fun: { fun: 98, good: 30 }, timeS: 10080 }, { fun: { fun: 80, good: 24 }, timeS: 9360 }, { fun: { fun: 100, good: 31 }, timeS: 12660 }, { fun: null, timeS: null }, { fun: { fun: 70, good: 30 }, timeS: 10080 }], 0),
 };
 console.log(JSON.stringify(out));
 """
@@ -65,8 +65,11 @@ def test_dials_show_unknown_honestly(out):
 
 
 def test_option_tiles_are_relative_to_the_pick(out):
-    assert out["tiles"] == [{"title": "Fun 98 · 2:48", "sub": "this one"}, {"title": "Fun 80 · 2:36", "sub": "12 min quicker"},
-                            {"title": "Fun 100 · 3:31", "sub": "+43 min"}, {"title": "Fun -- · --", "sub": "--"}]
+    # SO-1 (panel round 2): no "Fun 98" score on a tile (Fun is the route style); the time, and what differs from the pick
+    assert out["tiles"] == [{"title": "2:48", "sub": "this one"}, {"title": "2:36", "sub": "12 min quicker · 6 fewer good corners"},
+                            {"title": "3:31", "sub": "+43 min · 1 more good corner"}, {"title": "--", "sub": "--"},
+                            {"title": "2:48", "sub": "same time"}]
+    assert not any("Fun" in t["title"] + t["sub"] for t in out["tiles"])
 
 
 def test_twist_and_flow_come_from_the_geometry_of_any_track(out):

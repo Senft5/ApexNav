@@ -38,8 +38,9 @@
   }
 
   /**
-   * A planned route for the trip preview: its line, where it ends and up to three choices ("Fun 99 · 77 min").
-   * `options` is the card's list ({ fun, timeS, route: { coords } }); a route without options is one choice.
+   * A planned route for the trip preview: its line, where it ends and up to three choices ("11 good corners · 77 min").
+   * `options` is the card's list ({ fun, timeS, route: { coords } }); a route without options is one choice. Panel round 2
+   * SO-1: no "Fun 99" (Fun is the route style, never a number; web/vocabulary.js): the fun score's good corners instead.
    */
   function routeMessage(t, options, picked, fmtDist) {
     const pts = line(t);
@@ -47,23 +48,24 @@
     const total = t.dist[t.dist.length - 1];
     const corners = Array.isArray(t.events) ? t.events.filter((e) => e && e.type === 'corner').length : null;
     // One route: the card's title is its name and the car prints the time and length itself, so the summary is what
-    // neither says (the Fun score, else the corners). Several: each choice's summary tells it from the others (Fun and
-    // time). The owner's car showed "32 min loop" twice, 2026-10-29.
+    // neither says (its good corners, else the corners). Several: each choice's summary tells it from the others (good
+    // corners and time). The owner's car showed "32 min loop" twice, 2026-10-29.
     const several = Array.isArray(options) && options.length > 1;
     const cornersText = (n) => (finite(n) ? `${n} corner${n === 1 ? '' : 's'}` : null);
-    const one = (fun, timeS, distM, n) => ({
-      summary: (several ? [fun != null ? `Fun ${fun}` : null, finite(timeS) ? `${Math.round(timeS / 60)} min` : null]
-        : [fun != null ? `Fun ${fun}` : cornersText(n)]).filter(Boolean).join(' · ') || 'Route',
+    const goodText = (n) => (finite(n) ? `${n} good corner${n === 1 ? '' : 's'}` : null);
+    const one = (good, timeS, distM, n) => ({
+      summary: (several ? [goodText(good), finite(timeS) ? `${Math.round(timeS / 60)} min` : null]
+        : [goodText(good) || cornersText(n)]).filter(Boolean).join(' · ') || 'Route',
       // U-89: one route's card prints its length on the estimates line and only the detail above it (the summary shows in
-      // the Options list alone), so the detail is what the route is: its Fun score and corners, the length only when
+      // the Options list alone), so the detail is what the route is: its good corners and corners, the length only when
       // neither is known. The review recording's card read "35.4 mi" twice, its middle blank.
       detail: several ? [finite(distM) && fmtDist ? fmtDist(distM) : null, cornersText(n)].filter(Boolean).join(' · ')
-        : [fun != null ? `Fun ${fun}` : null, cornersText(n)].filter(Boolean).join(' · ') || (finite(distM) && fmtDist ? fmtDist(distM) : ''),
+        : [goodText(good), cornersText(n)].filter(Boolean).join(' · ') || (finite(distM) && fmtDist ? fmtDist(distM) : ''),
       timeS: finite(timeS) ? timeS : null, distM: finite(distM) ? distM : null,
     });
     const list = Array.isArray(options) && options.length > 1
-      ? options.slice(0, 3).map((c, i) => one(c.fun ? c.fun.fun : null, c.timeS, finite(c.distM) ? c.distM : null, i === picked ? corners : null))
-      : [one(t.fun ? t.fun.fun : null, t.timeS, total, corners)];
+      ? options.slice(0, 3).map((c, i) => one(c.fun ? c.fun.good : null, c.timeS, finite(c.distM) ? c.distM : null, i === picked ? corners : null))
+      : [one(t.fun ? t.fun.good : null, t.timeS, total, corners)];
     if (Array.isArray(options) && options.length > 1 && list[picked]) {   // the picked one is built: its length and corners are known
       const p = list[picked], again = one(null, null, total, corners);
       p.distM = total; p.detail = again.detail;

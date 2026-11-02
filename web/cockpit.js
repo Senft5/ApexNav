@@ -200,6 +200,9 @@
       document.querySelectorAll('[data-toggle]').forEach(b => { const on = !!state.toggles[b.dataset.toggle]; b.classList.toggle('on', on); b.setAttribute('role', 'switch'); b.setAttribute('aria-checked', String(on)); });
       document.querySelectorAll('#nightSwitch [data-night]').forEach(b => b.setAttribute('aria-checked', String(b.dataset.night === state.nightMode)));
       document.querySelectorAll('[data-notes]').forEach(b => b.setAttribute('aria-checked', String(b.dataset.notes === state.notesMode)));   // U-82
+      // SO-1: the Garage says what the one Notes and Voice switches (in Layers) are set to, in their own words
+      const now = document.getElementById('coNotesNow');
+      if (now) now.textContent = `Notes: ${({ quiet: 'Quiet', auto: 'Auto', full: 'Full' })[state.notesMode] || '--'} · Voice ${state.toggles.voice ? 'on' : 'off'}`;
     }
     // F-09 (REVIEW_FEEL): the look changes in one frame (the page's colours, the dials, the map's palette, only the paint
     // values that changed: basemap.js); what nobody sees in that frame (the route line's sector colours, the hidden Log)
@@ -1611,6 +1614,7 @@
       // U-130: the Sight cell follows the plate: under 5 mph (8 km/h, as sightFilter) the plate hides and the cell reads --
       const crawl = si.speed != null && si.speed < (/^km/i.test(si.unit) ? 8 : 5);
       d.sightMph = crawl ? null : held.value; d.sightOpen = !crawl && held.open; d.sightQuiet = crawl;
+      d.sightShort = !crawl && !!(held.msg && held.msg.short);       // SO-1: the cell is red when the plate is, not sooner
       d.limitMph = limit != null ? ApexUnits.speed(limit) : null;
       d.latG = latG; d.lonG = lonG; d.camberDeg = camber;
       d.tripMi = ApexUnits.longN(live && (idx < 0 || track.kind === 'horizon') ? (drive.rec ? drive.rec.km * 1000 : 0) : state.cursorM); d.totalMi = track && track.kind !== 'horizon' && !(live && idx < 0) ? ApexUnits.longN(totalM()) : null;
@@ -4788,7 +4792,7 @@
     // roads, each a tap from being driven again. Unknown stays unknown: nothing found, nothing said.
     const YR = window.ApexYourRoads;
     const deckState = { all: [], dates: [], sugg: null, crew: null, untried: null, untriedAt: -Infinity, untriedLat: null, untriedLon: null };
-    const deckLong = (m) => ApexUnits.long(m, m >= 16000 ? 0 : 1);
+    const deckLong = (m) => ApexFormat.distance(m);                  // RA-3: one distance format everywhere
     async function refreshYourRoads() {
       if (!YR || !window.ApexAnalysis) return;
       let list = [];
@@ -5032,9 +5036,20 @@
       box.className = `theme-preview tp-${t.id}`;
       for (const [k, v] of Object.entries(c)) box.style.setProperty(`--${k.replace(/[A-Z]/g, m => '-' + m.toLowerCase())}`, v);
       box.style.setProperty('--font-ui', t.fonts.ui); box.style.setProperty('--font-num', t.fonts.num);
-      box.innerHTML = `<span class="tp-tulip">${Inst.tulipSVG({ type: 'corner', dir: 'L', severity: '4', mods: ['tightens'], turnRad: 1.2 }, c.panelInk, c.accent)}</span>`
-        + '<span class="tp-call"><b>LEFT 4</b><i>TIGHTENS</i></span><span class="tp-speed"><b>42</b><small>MPH</small></span>';
+      fillPreview(box, t);
       return box;
+    }
+    // HE-3 (panel round 2): the card draws a real strip head in the driver's words (vocabulary.js sampleStrip: plainCall or
+    // the rally call through the strip's own lockup), with its distance, never a hard-coded "LEFT 4 · TIGHTENS" over 42 MPH
+    const vocabDeps = () => ({ plain: window.ApexPlainNotes, units: ApexUnits, paceNoteText: Core.paceNoteText, lockup: Inst.lockup, voiceLines: window.ApexVoiceLines });
+    function fillPreview(box, t) {
+      const c = t.day, st = window.ApexVocabulary && ApexVocabulary.sampleStrip(state.noteWords, vocabDeps());
+      box._words = state.noteWords;
+      if (!st) { box.innerHTML = ''; return; }
+      box.innerHTML = `<span class="tp-tulip">${Inst.tulipSVG(st.note, c.panelInk, c.accent)}</span><span class="tp-call"><b></b><i></i></span><span class="tp-speed"><b></b><small></small></span>`;
+      box.querySelector('.tp-call b').textContent = st.head.toUpperCase();
+      box.querySelector('.tp-call i').textContent = st.tail.map((x) => x.text.toUpperCase()).join(' \u00b7 ');
+      box.querySelector('.tp-speed b').textContent = st.dist.n; box.querySelector('.tp-speed small').textContent = st.dist.u;
     }
     // F-11 (REVIEW_FEEL): the cards are built once; a theme change or a trial only updates which one is in use and what its
     // key says (it used to rebuild every card, previews and all, on each change)
@@ -5047,10 +5062,11 @@
           const card = el('div', { className: 'theme-card' });
           const ok = () => themeAllowed(t.id);
           const pick = () => (ok() ? useTheme(t.id) : tryTheme(t.id));
-          // U-113: the card quotes a line its voice really says in the driver's words mode (voice_lines.js sample: a call and
-          // the aside the pack says after it), and Hear plays that line's own clip
-          const line = () => (t.voice && window.ApexVoiceLines && ApexVoiceLines.sample(t.voice.id, state.noteWords)) || null;
-          const hear = btn('Hear', () => { const l = line(); hearPack(t.voice && t.voice.id, l ? l.text : 'Left four, tightens.', l ? l.token : 'sys:sample'); }, 'ink-btn tc-hear');
+          // HE-3 (panel round 2): the card quotes what this voice really says in the driver's words: the sample call from the
+          // call grammar (vocabulary.js sampleQuote) and one of the pack's own sign-offs; Hear says the call as a drive does
+          // and then plays the sign-off's clip
+          const line = () => (t.voice && window.ApexVocabulary && ApexVocabulary.sampleQuote(t.voice.id, state.noteWords, vocabDeps())) || null;
+          const hear = btn('Hear', () => { const l = line(); if (l) hearSample(t.voice.id, l); else hearPack(t.voice && t.voice.id, 'Notes ready.', 'sys:test'); }, 'ink-btn tc-hear');
           hear.setAttribute('aria-label', `Hear ${t.voice ? t.voice.name : t.label}`);
           // U-69: the card's preview is the theme drawn at 300 px, and touching it switches, as the Use key does. A pointer
           // shortcut only: the Use key stays the one control a screen reader or keyboard meets.
@@ -5071,6 +5087,7 @@
       }
       for (const { t, card, preview, key, inUseTag, ok, quote, line } of themeCards.values()) {
         const allowed = ok(), inUse = state.theme === t.id && !themeTrial, l = line();
+        if (preview._words !== state.noteWords) fillPreview(preview, t);   // the words changed: the strip head follows
         const q = t.voice ? `${t.voice.who}${l ? ` "${l.text}"` : ''}` : '';
         if (quote.data !== q) quote.data = q;
         card.classList.toggle('in-use', state.theme === t.id);
@@ -5129,12 +5146,13 @@
     // Note words (plain_notes.js, IDEAS V-02)
     function renderNoteWords() {
       document.querySelectorAll('#noteWordsList [data-words]').forEach(b => { const on = b.dataset.words === state.noteWords; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
-      $('noteWordsNote').textContent = state.noteWords === 'plain' ? 'For example "Slow down, medium left, tightens".' : 'Rally pace notes, 1 tightest to 6: "Left 3 tightens, caution".';
+      // SO-1: the example is the call grammar's own output (vocabulary.js wordsExample), never a typed sentence
+      $('noteWordsNote').textContent = window.ApexVocabulary ? ApexVocabulary.wordsExample(state.noteWords, vocabDeps()) : '';
     }
     document.querySelectorAll('#noteWordsList [data-words]').forEach(b => b.addEventListener('click', () => {
       state.noteWords = b.dataset.words; savePrefs(); renderNoteWords(); renderThemePicker(); render(true);
       if (track && track.kind === 'route' && car.route) carRoute(track);   // M-3: the car's plates in the new words
-      say(state.noteWords === 'plain' ? 'Medium left, tightens, then hairpin right.' : 'Left 3 tightens into right hairpin.', true);
+      say((window.ApexVocabulary && ApexVocabulary.sampleCall(state.noteWords, vocabDeps())) || '', true);   // the example, said
     }));
     renderNoteWords();
     $('hlOpenBtn').addEventListener('click', async () => {
@@ -5174,6 +5192,24 @@
       try { ApexThemeSounds.play(ApexVoice.unlock(), ApexThemeSounds.recipe(state.theme, 'key')); } catch (_) {}
     }, { passive: true });
     // Hear on a theme card: that pack's own sample line, then back to the voice in use
+    // HE-3: a theme card's sample as a drive says it: the call (plain words in the phone's voice, rally notes from the pack's
+    // clips when the bank has them), then the pack's sign-off clip once the call has been said
+    async function hearSample(id, l) {
+      const chain = state.noteWords === 'plain' ? null : [ApexVocabulary.SAMPLE[0]];
+      if (!window.ApexVoice || !bankVoices.some(v => v.id === id)) { say(l.text, true); return; }
+      ApexVoice.unlock();
+      try {
+        await ApexVoice.load(id);
+        let ok = false;
+        if (chain) ok = await ApexVoice.play([...ApexVoice.tokensFor(chain), l.token]);
+        if (!ok) {
+          say(l.call, true);
+          for (let i = 0; i < 100 && (speech.busy || speech.queue.items.length); i++) await new Promise((r) => setTimeout(r, 100));
+          if (!(await ApexVoice.play([l.token]))) say(l.signOff, true);
+        }
+      } catch (_) { say(l.text, true); }
+      try { if (state.voiceId !== 'device') await ApexVoice.load(state.voiceId); } catch (_) {}
+    }
     async function hearPack(id, fallback, token = 'sys:sample') {
       if (!window.ApexVoice || !bankVoices.some(v => v.id === id)) { say(fallback, true); return; }
       ApexVoice.unlock();
@@ -5277,7 +5313,9 @@
       render(true);
     }));
     document.querySelectorAll('#nightSwitch [data-night]').forEach(b => b.addEventListener('click', () => { state.nightMode = b.dataset.night; applyTheme(); }));
-    // U-82: the Notes detent (Layers and the Garage): a stop is chosen, never cycled into by a stray tap
+    // SO-1 (panel round 2): Notes and Voice have one home, Layers (a drive reaches it); the Garage's link opens it
+    $('coNotesLink').addEventListener('click', () => { showView(null); if (!$('swEdge').classList.contains('open')) $('swTab').click(); });
+    // U-82: the Notes detent (Layers): a stop is chosen, never cycled into by a stray tap
     document.querySelectorAll('[data-notes]').forEach(b => b.addEventListener('click', () => {
       if (!NOTES_MODES.includes(b.dataset.notes) || b.dataset.notes === state.notesMode) return;
       state.notesMode = b.dataset.notes;
@@ -6145,10 +6183,8 @@
     // scoring), ended, lat, lon }. A full record (showEndCard) goes through the same two steps at once.
     function endCardOpen(c) {
       endDrive = c;
-      const mins = Number.isFinite(c.secs) ? Math.round(c.secs / 60) : null;
       $('endName').textContent = c.name || 'Your drive';
-      $('endMeta').textContent = [Number.isFinite(c.len_m) ? ApexUnits.long(c.len_m, 1) : null, mins != null ? (mins >= 60 ? `${Math.floor(mins / 60)} h ${mins % 60} min` : `${mins} min`) : null,
-        Number.isFinite(c.corners) ? `${c.corners} corners` : null].filter(Boolean).join(' · ');
+      $('endMeta').textContent = ApexFormat.factsLine(c);              // RA-3: the Log's numbers, from the one helper
       const ended = window.ApexDriveKeep ? ApexDriveKeep.endNote(c) : null;   // Round 3: a drive that ended itself says how
       $('endLine').textContent = ended ? ended + '.' : '';
       // scoring: no number yet, never "--" (that means "no score"), and no key that needs the score
@@ -6168,14 +6204,12 @@
     function endCardScored(c, others, opts = {}) {
       if (!endDrive || endDrive.id !== c.id) return;                   // another card since
       endDrive = { ...endDrive, ...c };
-      const mins = Number.isFinite(c.secs) ? Math.round(c.secs / 60) : null;
-      $('endMeta').textContent = [Number.isFinite(c.len_m) ? ApexUnits.long(c.len_m, 1) : null, mins != null ? (mins >= 60 ? `${Math.floor(mins / 60)} h ${mins % 60} min` : `${mins} min`) : null,
-        Number.isFinite(c.corners) ? `${c.corners} corners` : null].filter(Boolean).join(' · ');
+      $('endMeta').textContent = ApexFormat.factsLine(c);
       $('endScore').removeAttribute('aria-busy');
       // D-6 / R-5 (panel round 1): a drive with no score still reads as a drive. The score's slot says what it was, "3.1 mi ·
       // no corners to score", instead of "-- /1000" over a sentence about a failed exam; nothing is invented (no number).
       const none = c.ds.score == null;
-      $('endScore').textContent = none ? [Number.isFinite(c.len_m) ? ApexUnits.long(c.len_m, 1) : null, noScoreWords(c.corners)].filter(Boolean).join(' · ') : String(c.ds.score);
+      $('endScore').textContent = none ? [Number.isFinite(c.len_m) ? ApexFormat.distance(c.len_m) : null, noScoreWords(c.corners)].filter(Boolean).join(' · ') : String(c.ds.score);
       $('endScore').classList.remove('unk');                         // the words are the answer; "--" never shows as a score here
       $('endScore').parentElement.classList.toggle('no-score', none);
       // U-111: one coaching sentence, the Log's (analysis_client.js coachLineOf, written in the job that scored the drive)

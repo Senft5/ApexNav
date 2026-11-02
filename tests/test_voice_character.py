@@ -136,7 +136,8 @@ def test_the_page_says_the_pack_lines_and_fills_kits_box():
     # the pack's own system lines and sign-offs; the card's quote and Hear from the pack
     assert "packSays('sys:cruise', 'Quiet from here. Bumps and cameras only.')" in html
     assert "ApexEndLine.pickSignOff(pack, c.id, has)" in html
-    assert "ApexVoiceLines.sample(t.voice.id, state.noteWords)" in html and "t.voice.sample" not in html
+    # HE-3 (panel round 2): the card's quote is the call grammar's sample and a sign-off of the pack's (test_vocabulary.py)
+    assert "ApexVocabulary.sampleQuote(t.voice.id, state.noteWords, vocabDeps())" in html and "t.voice.sample" not in html
     themes = open(os.path.join(ROOT, "web", "themes.js"), encoding="utf-8").read()
     assert "sample:" not in themes
     inst = open(os.path.join(ROOT, "web", "instruments.js"), encoding="utf-8").read()
