@@ -547,6 +547,48 @@ flow('avoid cameras: with the chip on, the cameras near the trip go to the route
   check(await page.evaluate(() => document.querySelector('[data-avoid="cameras"]').getAttribute('aria-pressed')) === 'true', 'the chip shows it');
 }, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
 
+flow('your roads (panel D-1, R-1, D-2): a road you drove is on the deck and its page, Drive it again routes it, twisty roads on, the reminder only in the app', async (page, base) => {
+  const asked = [];
+  await page.route('https://valhalla1.openstreetmap.de/route', (route) => {
+    const req = JSON.parse(route.request().postData() || '{}');
+    asked.push(req.locations);
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify(stubTrip(req.locations)) });
+  });
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map);
+  const fresh = await page.evaluate(() => ({ twisty: apexDebug.state.toggles.twisty, nudge: apexDebug.state.toggles.nudge, roads: document.querySelectorAll('#yourRoads .your-road').length }));
+  check(fresh.twisty === true && fresh.nudge === false && fresh.roads === 0, 'first run: twisty roads on, the reminder off, no roads of yours yet: ' + JSON.stringify(fresh));
+  await page.evaluate(async () => { const lat = [], lon = []; for (let i = 0; i < 400; i++) { lat.push(35.36 + i * 5 / 110540); lon.push(-84.29 + Math.sin(i / 20) * 0.0005); }
+    await ApexRecording.store({ id: 'yr1', name: 'Cherohala Skyway', date: new Date(Date.now() - 86400e3).toISOString(), lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: lat.map(() => 15),
+      lon_g: lat.map(() => 0), lat_g: lat.map((_, i) => Math.sin(i / 20) * 3), g_known: null, events: [], elev: null, hz: 1, source: 'web-gps', corners: [] }); });
+  await page.goto(base + '/index.html');
+  await page.waitForSelector('#yourRoads .your-road', { timeout: 15000 });
+  const deck = await page.evaluate(() => ({ first: document.getElementById('loopSuggest').innerText, rows: [...document.querySelectorAll('#yourRoads .your-road')].map((b) => b.innerText.replace(/\s+/g, ' ')) }));
+  check(/^Loop from here/.test(deck.first) && deck.rows.length === 1 && /^Cherohala Skyway 1\.2 mi · 1 run Drive$/.test(deck.rows[0]),
+    'the deck: the loop (no score, so no reason to name a road), then the road you drove: ' + JSON.stringify(deck));
+  await page.click('#yourRoads .your-road');
+  await page.waitForFunction(() => /Cherohala Skyway/.test(document.getElementById('routeCardName').textContent), null, { timeout: 20000 });
+  const locs = asked[asked.length - 1];
+  check(locs.length >= 4 && Math.abs(locs[0].lat - 35.9606) < 1e-3 && Math.abs(locs[1].lat - 35.36) < 1e-3 && Math.abs(locs[locs.length - 1].lat - (35.36 + 399 * 5 / 110540)) < 1e-3,
+    'Drive it again: from here to the drive\'s start, then along it to its end: ' + JSON.stringify(locs));
+  // the reminder is the app's: on the website the switch says so and stays off
+  await page.goto(base + '/index.html?view=garage');
+  await page.waitForSelector('#garageGear', { state: 'visible' });
+  await openSetting(page, 'nudge');
+  await page.click('.garage-pop.open [data-toggle="nudge"]');
+  const nudge = await page.evaluate(() => ({ on: apexDebug.state.toggles.nudge, note: document.getElementById('nudgeState').textContent }));
+  check(nudge.on === false && /Vetta app on iPhone/.test(nudge.note), 'the reminder needs the app, and stays off: ' + JSON.stringify(nudge));
+  // the drive's page: Drive it again next to Replay, and it plans the drive on the map
+  await page.goto(base + '/analysis.html?tab=drive&drive=yr1');
+  await page.waitForSelector('#dvAgain:not([hidden])', { timeout: 15000 });
+  const n = asked.length;
+  await page.click('#dvAgain');
+  for (let t = 0; t < 100 && asked.length === n; t++) await page.waitForTimeout(200);   // the map page loads with ?again= and routes it
+  check(asked.length > n, 'the drive\'s page planned it again');
+  await page.waitForFunction(() => window.apexDebug && apexDebug.track && apexDebug.track.id === 'again' && /Cherohala Skyway/.test(document.getElementById('routeCardName').textContent), null, { timeout: 20000 });
+}, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
+
 flow('saved for offline: Save on the route card, then with no signal it opens from Where to? with its directions (IDEAS F-03)', async (page, base) => {
   let online = true;
   await page.route('https://photon.komoot.io/**', (route) => (online ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ features: [
@@ -3479,7 +3521,7 @@ flow('REVIEW5 §2: the Garage leads with you, your cars, Look and voice and the 
   await page.click('#garageGear');
   await page.waitForSelector('#garageSettings.open');
   const rows = await page.$$eval('#garageSettings .nav-row', (r) => r.filter((x) => !x.hidden).map((x) => x.querySelector('span').textContent));
-  check(JSON.stringify(rows) === '["Road feel","Privacy zones","Crash check","Units","Map motion","Spots","Your data","Account","Feedback","About Vetta"]', 'the rows behind the gear: ' + rows);
+  check(JSON.stringify(rows) === '["Road feel","Privacy zones","Crash check","Reminder","Units","Map motion","Spots","Your data","Account","Feedback","About Vetta"]', 'the rows behind the gear: ' + rows);
   // U-116: a member with the switch off is told to turn it on above, never to sign in
   await page.click('#garageSettings .nav-row[data-setting="roadfeel"]');
   await page.waitForSelector('.garage-pop.open[data-setting="roadfeel"]');

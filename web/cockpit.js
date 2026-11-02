@@ -102,6 +102,7 @@
     // track here only when it is replayed (`want`, a ?drive= link from the Log).
     async function refreshSavedDrives(want = null) {
       if (window.ApexLogHost) ApexLogHost.changed('drives');           // the Log, kept or not, shows them fresh (F-15)
+      refreshYourRoads().catch(() => {});                              // panel D-1: the deck's roads follow the Log
       // a new drive's Vetta Score to the crews you share Scores with (crew_page.js publishDrives: the board's totals)
       setTimeout(() => { try { if (accountMe && state.mode !== 'live' && window.ApexCrewPage && ApexCrewPage.publishDrives) ApexCrewPage.publishDrives(apiCall); } catch (_) {} }, 5000);
       const version = ++refreshDriveVersion;
@@ -132,7 +133,7 @@
       theme: 'roadbook', camFeel: 'dynamic', voiceId: 'marguerite', liveVoice: false, voiceStyle: 'codriver', voiceName: '', hlOn: false, hlStrength: 1,
       notesMode: 'auto', nightMode: 'auto',   // Notes: auto | full | quiet. Night: auto (sunset/sunrise) | on | off
       noteWords: 'plain',                     // rally ("Left 4 minus") | plain ("Medium left"), IDEAS V-02; a saved setting wins
-      toggles: { stage: false, voice: true, lpr: true, dna: false, night: false, twisty: false, haptics: true, crash: true, health: true, terrain: false, coverage: false, keys: true, friends: false }   // stage and night are derived from the two modes; analysis.html reads toggles.night
+      toggles: { stage: false, voice: true, lpr: true, dna: false, night: false, twisty: true, haptics: true, crash: true, health: true, terrain: false, coverage: false, keys: true, friends: false, nudge: false }   // twisty on by default (panel D-2), the weekly reminder off until asked for (R-1); stage and night are derived from the two modes; analysis.html reads toggles.night
     };
     const NOTES_MODES = ['auto', 'full', 'quiet'], NIGHT_MODES = ['auto', 'on', 'off'];
     const MODE_LABEL = { auto: 'Auto', full: 'Full', quiet: 'Quiet', on: 'On', off: 'Off' };
@@ -166,6 +167,7 @@
       const saved = JSON.parse(localStorage.getItem('apex.prefs') || 'null');
       if (saved) {
         Object.assign(state.toggles, saved.toggles || {});
+        if (saved.twistyV !== 2) state.toggles.twisty = true;   // panel D-2: every save before it had the old default (off) written in
         state.toggles.dna = false;   // the Road scores switch is gone (BRAND §7 item 5); a stored "on" must not leave the layer stuck on
         // Old saves only have toggles.stage / toggles.night: stage true = Full, false = Auto; night true = On, false = Off (a saved false was a choice, not unset).
         state.noteWords = saved.noteWords === 'plain' || saved.noteWords === 'rally' ? saved.noteWords : 'rally';   // people from before V-02 keep rally
@@ -192,7 +194,7 @@
     const health = window.ApexHealth ? ApexHealth.createHealth(localStorage,
       async (b) => window.APEX_REVIEW ? 204 : (await fetch(`${window.ApexSync ? ApexSync.apiBase : ''}/api/app-health`, { method: 'POST', credentials: 'omit', headers: { 'content-type': 'application/json', 'x-apexnav': '1' }, body: JSON.stringify(b) })).status,
       () => !!state.toggles.health) : { bump() {}, flush: async () => 0 };
-    function savePrefs() { try { localStorage.setItem('apex.prefs', JSON.stringify({ theme: state.theme, themeV: 2, camFeel: state.camFeel, voiceId: state.voiceId, liveVoice: state.liveVoice, liveVoiceV: 2, voiceName: state.voiceName, hlOn: state.hlOn, hlStrength: state.hlStrength, notesMode: state.notesMode, noteWords: state.noteWords, nightMode: state.nightMode, toggles: state.toggles })); } catch (_) {} }
+    function savePrefs() { try { localStorage.setItem('apex.prefs', JSON.stringify({ theme: state.theme, themeV: 2, camFeel: state.camFeel, voiceId: state.voiceId, liveVoice: state.liveVoice, liveVoiceV: 2, voiceName: state.voiceName, hlOn: state.hlOn, hlStrength: state.hlStrength, notesMode: state.notesMode, noteWords: state.noteWords, nightMode: state.nightMode, toggles: state.toggles, twistyV: 2 })); } catch (_) {} }
     function paintSwitches() {
       try { carLook(); } catch (_) {}                                     // the car's screen follows the theme and the voice switch
       document.querySelectorAll('[data-toggle]').forEach(b => { const on = !!state.toggles[b.dataset.toggle]; b.classList.toggle('on', on); b.setAttribute('role', 'switch'); b.setAttribute('aria-checked', String(on)); });
@@ -555,7 +557,7 @@
     const twisty = { cache: new Map(), searched: [], busy: false, timer: 0 };
     async function updateTwisty() {
       if (!mapReady || !map.getLayer('apex-twisty')) return;
-      const on = !!state.toggles.twisty && !!window.ApexTwisty;
+      const on = !!state.toggles.twisty && !!window.ApexTwisty && state.mode !== 'live';   // D-2: the idle map's; a drive never searches tiles for it
       map.setLayoutProperty('apex-twisty', 'visibility', on ? 'visible' : 'none');
       if (!on || twisty.busy) return;
       const c = map.getCenter(), b = map.getBounds();
@@ -1717,6 +1719,7 @@
       $('modePlate').textContent = { replay: `Replay${track && track.demo ? ' · Demo' : ''}${track && track.name ? ' · ' + track.name : ''} ×`, sim: 'Preview ×', live: 'Drive ● Rec' }[mode];
       $('modePlate').classList.toggle('live', mode === 'live');
       paintIdle();
+      updateTwisty();
     }
     // Names are known now: pre-render them in the co-driver's own voice (only when the owner turned Speak-road-names / LIVE on).
     function prefetchNames(t) {
@@ -3266,7 +3269,11 @@
         const api = logApi(); if (api) api.hidden();
         showView(VIEW_TITLES[v] || PEOPLE_SIDES[v] ? v : null);
       },
-      load(url) { location.href = url; },                              // a replay: the map page loads with that drive
+      load(url) {                                                      // a replay: the map page loads with that drive
+        const again = (() => { try { return new URL(url, location.href).searchParams.get('again'); } catch (_) { return null; } })();
+        if (again) { ApexLogHost.close('map'); driveAgain(again); return; }   // panel D-1: Drive it again plans in place
+        location.href = url;
+      },
       // 'drives' | 'theme' | 'units': told now when the Log is showing, else when it is next opened
       changed(what) {
         const api = logApi();
@@ -4759,12 +4766,194 @@
       paintPlacePlate();
     }
     setTimeout(refreshPlacePlate, 4000); setInterval(refreshPlacePlate, 60000);
-    // The suggested loop on the deck: the length you last picked on the loop dial; tapping it builds that loop.
+    // ---- Your roads and a Sunday suggestion (panel round 1, D-1 and R-1; your_roads.js) ----------------------------------
+    // The deck's first row names one real suggestion and its reason (a crew drive you're going to this week, the best road
+    // near you that you haven't driven, your best-scored road), else the loop as before; under it up to three of your own
+    // roads, each a tap from being driven again. Unknown stays unknown: nothing found, nothing said.
+    const YR = window.ApexYourRoads;
+    const deckState = { all: [], dates: [], sugg: null, crew: null, untried: null, untriedAt: -Infinity, untriedLat: null, untriedLon: null };
+    const deckLong = (m) => ApexUnits.long(m, m >= 16000 ? 0 : 1);
+    async function refreshYourRoads() {
+      if (!YR || !window.ApexAnalysis) return;
+      let list = [];
+      try { list = (await ApexAnalysis.job('summaries')).list || []; } catch (_) { list = []; }
+      deckState.all = YR.roads(list, 50);
+      deckState.dates = list.filter((x) => x && x.source === 'web-gps' && x.date_known !== false).map((x) => x.date);
+      paintDeck();
+    }
+    function crewSoon(rows) {
+      const now = Date.now(), soon = (Array.isArray(rows) ? rows : []).filter((e) => {
+        const t = Date.parse(e && e.starts_at);
+        return e && e.my_rsvp === 'going' && Number.isFinite(t) && t > now - 3600000 && t - now <= 7 * 86400000;
+      }).sort((a, b) => Date.parse(a.starts_at) - Date.parse(b.starts_at))[0];
+      const was = deckState.crew ? deckState.crew.key : '', key = soon ? `${soon.id}|${soon.starts_at}` : '';
+      deckState.crew = soon ? { key, title: soon.title, crew: soon.crew_name || null, at: Date.parse(soon.starts_at), lat: soon.meet_lat, lon: soon.meet_lon,
+        label: soon.meet_name || soon.title, when: window.ApexCrewEvents ? ApexCrewEvents.timeText(soon.starts_at) : null } : null;
+      if (was !== key) paintDeck();
+    }
+    const ROAD_GLYPH = '<svg viewBox="0 0 40 40" aria-hidden="true"><path d="M12 37 C12 26 28 26 28 18 C28 10 16 10 16 3"/><circle cx="12" cy="37" r="2.4"/></svg>';
+    function deckRow(title, why, key, label, onTap) {
+      const b = document.createElement('button'), span = document.createElement('span'), t = document.createElement('b'), w = document.createElement('small'), k = document.createElement('em');
+      b.type = 'button'; b.className = 'loop-suggest your-road'; b.innerHTML = ROAD_GLYPH;
+      t.textContent = title; w.textContent = why; k.textContent = key; span.append(t, w); b.append(span, k);
+      b.setAttribute('aria-label', label); b.addEventListener('click', onTap);
+      return b;
+    }
+    function paintDeck() {
+      if (!YR) return;
+      untriedNow();
+      const sugg = YR.suggest({ crew: deckState.crew, untried: deckState.untried, mine: deckState.all, long: deckLong });
+      deckState.sugg = sugg;
+      paintLoopSuggest();
+      const rows = YR.deck(sugg, deckState.all.slice(0, 3), 3).slice(1).map((row) => {
+        if (row.kind === 'loop') {
+          const b = document.querySelector('#loopDetents button[aria-pressed="true"]'), title = `Loop from here · ${b ? b.textContent : '45 mi'}`;
+          return deckRow(title, 'On the twistiest roads nearby', 'Plan', `${title}, on the twistiest roads nearby. Plan it.`, () => { if (!loopBusy) $('findLoopBtn').click(); });
+        }
+        const r = row.r, why = YR.roadLine(r, deckLong);
+        return deckRow(r.name, why, 'Drive', `${r.name}: ${why}. Drive it again.`, () => driveAgain(r.id, r.name));
+      });
+      $('yourRoads').replaceChildren(...rows);
+      scheduleNudge();
+    }
+    // The suggested loop on the deck: the length you last picked on the loop dial; tapping it builds that loop. With a
+    // suggestion (above) this row is the suggestion, its reason under it.
     function paintLoopSuggest() {
+      const s = deckState.sugg;
+      if (s) {
+        $('loopSuggestTitle').textContent = s.title; $('loopSuggestWhy').textContent = s.reason; $('loopSuggestKey').textContent = s.kind === 'crew' ? 'Go' : 'Drive';
+        $('loopSuggest').setAttribute('aria-label', `${s.title}. ${s.reason}. ${s.kind === 'crew' ? 'Directions to the meeting point.' : 'Route it.'}`);
+        return;
+      }
       const b = document.querySelector('#loopDetents button[aria-pressed="true"]');
       $('loopSuggestTitle').textContent = `Loop from here · ${b ? b.textContent : '45 mi'}`;
+      $('loopSuggestWhy').textContent = 'On the twistiest roads nearby'; $('loopSuggestKey').textContent = 'Plan';
+      $('loopSuggest').setAttribute('aria-label', 'Plan a loop from here');
     }
-    $('loopSuggest').addEventListener('click', () => { if (!loopBusy) $('findLoopBtn').click(); });
+    $('loopSuggest').addEventListener('click', () => {
+      const s = deckState.sugg;
+      if (s && s.kind === 'crew') { if (Number.isFinite(s.lat) && Number.isFinite(s.lon)) routeToPlace({ label: (deckState.crew && deckState.crew.label) || s.name, lat: s.lat, lon: s.lon }); return; }
+      if (s && s.kind === 'best') { driveAgain(s.id, s.name); return; }
+      if (s && s.kind === 'untried' && deckState.untried) { driveSuggested(deckState.untried); return; }
+      if (!loopBusy) $('findLoopBtn').click();
+    });
+    // The best road near you that you haven't driven: Explore's stage finder (R-10) over its 30-minute reach, run once in the
+    // background while the map is idle (again after 30 min, or 5 km on), named roads only. It reads the map's own tiles and
+    // nothing else: no router is asked until you tap it, so the distance it gives is a straight line, said as "from here".
+    async function findUntried() {
+      const p = state.lastPosition;
+      if (!YR || !p || !window.ApexStages || navigator.onLine === false || state.mode === 'live' || driveActive || loopBusy || power.low || document.hidden) return;
+      const moved = deckState.untriedLat == null ? Infinity : Math.hypot((p.lat - deckState.untriedLat) * 111, (p.lon - deckState.untriedLon) * 111 * Math.cos(p.lat * Math.PI / 180));
+      if (performance.now() - deckState.untriedAt < 30 * 60000 && moved < 5) return;
+      deckState.untriedAt = performance.now(); deckState.untriedLat = p.lat; deckState.untriedLon = p.lon;
+      const c = { lat: p.lat, lon: p.lon }, maxKm = Math.min(14, 30 / 60 * EXPLORE_KMH);
+      const mine = new Set(deckState.all.map((r) => r.name.trim().toLowerCase()));
+      const ends = (s) => [FunRoute.kmBetween(c, { lat: s.lat[0], lon: s.lon[0] }), FunRoute.kmBetween(c, { lat: s.lat[s.lat.length - 1], lon: s.lon[s.lon.length - 1] })];
+      const inReach = (s) => Math.min(...ends(s)) <= maxKm;
+      let found = null;
+      try {
+        const stages = await ApexStages.discover(c, maxKm, null, { names: inReach });
+        const s = stages.find((x) => x.name && x.good > 0 && inReach(x) && !mine.has(roadLabel(x.name).trim().toLowerCase()));   // best first
+        if (s && state.mode !== 'live') {
+          const [a, b] = ends(s), fwd = a <= b;
+          found = { name: roadLabel(s.name), good: s.good, awayM: Math.min(a, b) * 1000, pick: { s, fwd }, here: c };
+        }
+      } catch (_) { found = null; }                                   // no tiles (offline): no suggestion, nothing said
+      deckState.untried = found;
+      paintDeck();
+    }
+    // the sky in one word now, the place plate's (place_plate.js), on the suggestion that names a road you haven't driven
+    function untriedNow() { if (deckState.untried) deckState.untried.sky = placeAsk.data ? ApexPlacePlate.sky(placeAsk.data.code) : null; }
+    setTimeout(() => { findUntried(); }, 15000); setInterval(() => { findUntried(); }, 5 * 60000);
+    // One road, routed: from here to its near end, then through it (driveStage's way, without the Explore list).
+    async function driveSuggested(u) {
+      const p = u && u.pick;
+      if (!p || loopBusy || optionBusy || state.mode === 'live' || $('planPanel').classList.contains('busy')) return;
+      loopBusy = true;
+      const ui = planBusy();
+      try {
+        ui.step('Routing…');
+        const from = (await locate()) || u.here;
+        const pts = ApexStages.waypoints(from, { legs: [{ s: p.s, fwd: p.fwd }] }).slice(0, -1);
+        const [r] = await valhallaRoutes(pts);
+        if (state.mode === 'live') return;
+        const end = pts[pts.length - 1], t = await trackFromPolyline(r.coords, 'suggested', u.name);
+        if (state.mode === 'live') return;
+        Object.assign(t, { fun: funOf(t, r.turns), timeS: r.timeS, timeMarks: timeMarksOf(t, r), steps: stepsOf(t, r), unavoided: FunRoute.unavoided(avoid, r),
+                           request: { from: null, to: { lat: end.lat, lon: end.lon }, via: pts.slice(1, -1).map(q => ({ lat: q.lat, lon: q.lon, shaping: true })) } });
+        await buildRoute(null, 'suggested', u.name, t);
+      } catch (_) { toast('Couldn\'t route to that road. Check signal and try again.'); }
+      finally { loopBusy = false; ui.done(); }
+    }
+    // Drive it again (D-1): from here to where the drive started, then along it to where it ended, through points on its own
+    // track (shaping points, so the router keeps to the road it took). From the deck, the drive's page and the end card.
+    async function driveAgain(id, name) {
+      if (!id || !YR || loopBusy || optionBusy || state.mode === 'live' || $('planPanel').classList.contains('busy')) return;
+      loopBusy = true;
+      const ui = planBusy();
+      try {
+        ui.step('Routing…');
+        let d = null;
+        try { d = (await ApexAnalysis.job('memory', { track: id })).track; } catch (_) { d = null; }
+        if (!d || !Array.isArray(d.lat) || d.lat.length < 2) { toast('That drive isn’t on this phone any more.'); return; }
+        const label = name || d.name || 'Your road', from = await locate();
+        if (!from) { toast(NO_FIX); return; }
+        const pts = YR.againPoints(from, d.lat, d.lon);
+        const [r] = await valhallaRoutes(pts);
+        if (state.mode === 'live') return;
+        const end = pts[pts.length - 1], t = await trackFromPolyline(r.coords, 'again', label);
+        if (state.mode === 'live') return;
+        Object.assign(t, { fun: funOf(t, r.turns), timeS: r.timeS, timeMarks: timeMarksOf(t, r), steps: stepsOf(t, r), unavoided: FunRoute.unavoided(avoid, r),
+                           request: { from: null, to: { lat: end.lat, lon: end.lon }, via: pts.slice(1, -1).map(q => ({ lat: q.lat, lon: q.lon, shaping: !!q.shaping })) } });
+        await buildRoute(null, 'again', label, t);
+      } catch (_) { toast('Couldn\'t route that drive. Check signal and try again.'); }
+      finally { loopBusy = false; ui.done(); }
+    }
+    // The reminder (R-1): one local notification, off until you turn it on (Garage > Reminder), at most once a week, the
+    // evening before your usual day (or a crew drive you're going to), naming the deck's suggestion. Scheduled by the shell
+    // (ApexNavApp.swift ApexNudge); the page only says when and what. Nothing about it leaves the phone.
+    const NUDGE_KEY = 'apex.nudge';
+    const nudgeShell = () => (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex) || null;
+    function nudgeLoad() { try { return JSON.parse(localStorage.getItem(NUDGE_KEY) || '{}') || {}; } catch (_) { return {}; } }
+    function nudgeSave(st) { try { localStorage.setItem(NUDGE_KEY, JSON.stringify(st)); } catch (_) {} }
+    function scheduleNudge() {
+      const native = nudgeShell();
+      if (!YR || !native) { paintNudgeState(null); return; }
+      const st = nudgeLoad(), now = Date.now();
+      if (Number.isFinite(st.pending) && st.pending <= now) { st.last = st.pending; st.pending = null; st.key = ''; }   // it went
+      let at = null, text = null;
+      if (state.toggles.nudge) {
+        const sugg = deckState.sugg, day = YR.usualDay(deckState.dates);
+        at = YR.nudgeAt({ now, day, crewAt: sugg && sugg.kind === 'crew' ? sugg.at : null, lastAt: st.last });
+        text = at ? YR.nudgeText(sugg, day) : null;
+      }
+      const key = at ? `${at}|${text.title}|${text.body}` : '';
+      if (key !== (st.key || '')) {
+        try { native.postMessage(at ? { cmd: 'nudge', op: 'set', at, title: text.title, body: text.body } : { cmd: 'nudge', op: 'off' }); } catch (_) {}
+        st.pending = at; st.key = key;
+      }
+      nudgeSave(st);
+      paintNudgeState(at ? { at, text } : null);
+    }
+    function paintNudgeState(next) {
+      const n = $('nudgeState'); if (!n) return;
+      if (!nudgeShell()) { n.textContent = 'Reminders come from the Vetta app on iPhone.'; return; }
+      if (!state.toggles.nudge) { n.textContent = 'Off.'; return; }
+      if (!next) { n.textContent = 'On. The first one waits until Vetta knows your usual day: two drives on the same day of the week.'; return; }
+      const d = new Date(next.at);
+      n.textContent = `Next: ${d.toLocaleDateString([], { weekday: 'long' })} ${ApexFormat.clock12(d.getHours(), d.getMinutes())}, "${next.text.title}".`;
+    }
+    function nudgeSwitched() {
+      const native = nudgeShell();
+      if (state.toggles.nudge && !native) { state.toggles.nudge = false; paintSwitches(); toast('Reminders need the Vetta app on iPhone.'); }
+      else if (state.toggles.nudge) { try { native.postMessage({ cmd: 'nudge', op: 'allow' }); } catch (_) {} }   // iOS asks once, now
+      scheduleNudge();
+    }
+    function nudgeAnswered(granted) {
+      if (granted) { scheduleNudge(); return; }
+      state.toggles.nudge = false; paintSwitches(); savePrefs(); scheduleNudge();
+      toast('Notifications are off for Vetta. Turn them on in the iPhone’s Settings, then here.');
+    }
     // The morning of a crew drive you said you're going to (REVIEW.md roadmap 21, crew_events.js todayDrive): from 4 AM until an
     // hour after it starts, the idle map offers directions to the meeting point instead of the loop. Members only, every 10 min.
     let driveTodayEvent = null;
@@ -4773,7 +4962,8 @@
       if (accountMe && accountMe.member && window.ApexCrewEvents && navigator.onLine !== false) {
         const rows = await apiCall('GET', '/api/events').then(jsonOf).catch(() => null);
         e = ApexCrewEvents.todayDrive(rows);
-      }
+        crewSoon(rows);                                                // panel R-1: a drive this week is the deck's suggestion
+      } else crewSoon(null);
       driveTodayEvent = e;
       $('driveToday').hidden = !e;
       $('app').classList.toggle('drive-today-on', !!e);
@@ -4786,7 +4976,7 @@
     }
     $('driveToday').addEventListener('click', () => { const e = driveTodayEvent; if (e) routeToPlace({ label: e.meet_name || e.title, lat: e.meet_lat, lon: e.meet_lon }); });
     setTimeout(refreshDriveToday, 5000); setInterval(refreshDriveToday, 10 * 60000);
-    document.querySelectorAll('#loopDetents button').forEach(b => b.addEventListener('click', paintLoopSuggest));
+    document.querySelectorAll('#loopDetents button').forEach(b => b.addEventListener('click', paintDeck));
     paintLoopSuggest();
     // ---- Look and voice: the theme picker (REVIEW.md 4.5) ---------------------------------------------------------------
     // A card per theme: a live preview of its strip and speed in its own tokens, its name, two lines, its co-driver with one
@@ -5061,6 +5251,7 @@
         updateCoverage();
         if (state.toggles.coverage) toast(mapReady && map.getZoom() < ApexCoverage.MIN_ZOOM ? 'Zoom in to see measured roads.' : 'Green: measured roads, bolder the surer. A road without a line is waiting for a pioneer: the first drivers to map it earn extra points.');
       }
+      if (k === 'nudge') nudgeSwitched();                              // panel R-1: asks for notifications only now
       if (k === 'twisty') {
         updateTwisty();
         if (state.toggles.twisty) toast(mapReady && map.getZoom() < ApexTwisty.MIN_ZOOM ? 'Zoom in to see twisty roads.' : 'Twisty roads come from the map\'s shape, not from drives.');
@@ -5945,6 +6136,7 @@
       // U-118: the keys are the scored layout from the first frame (Share card solid, Open in the Log the link), so nothing
       // swaps under a reaching finger when the score lands; Share waits for it. Only a drive with no score changes them.
       $('endShare').hidden = false; $('endShare').setAttribute('aria-disabled', 'true'); $('endShareLink').hidden = true; $('endLogKey').hidden = true; $('endLog').hidden = false;
+      $('endAgain').hidden = true;                                     // panel D-1: once the drive is stored (endCardScored)
       $('endCard').classList.add('show');
       showEndTrail(c);
     }
@@ -5978,6 +6170,7 @@
       $('endShare').removeAttribute('aria-disabled');
       $('endShare').hidden = !scored; $('endShareLink').hidden = scored;
       $('endLogKey').hidden = scored; $('endLog').hidden = !scored;
+      $('endAgain').hidden = !(Number.isFinite(endDrive.len_m) && endDrive.len_m >= ApexYourRoads.MIN_LEN_M);   // panel D-1: a road, not an errand
       // the card's words changed its height: the drive is fitted again to the map the card now leaves
       const sheet = $('endCard').querySelector('.card-sheet');
       if (endTrailOn && sheet && Math.abs(sheet.getBoundingClientRect().top - endTrailTop) > 4) showEndTrail(endDrive);
@@ -6061,6 +6254,7 @@
     }
     new MutationObserver(() => { if (!$('endCard').classList.contains('show')) hideEndTrail(); paintPlacePlate(); }).observe($('endCard'), { attributes: true, attributeFilter: ['class'] });
     $('endDone').addEventListener('click', () => $('endCard').classList.remove('show'));
+    $('endAgain').addEventListener('click', () => { const d = endDrive; if (!d) return; $('endCard').classList.remove('show'); driveAgain(d.id, d.name); });
     $('endShareLink').addEventListener('click', () => $('endShare').click());
     $('endStage').addEventListener('click', () => { if (endDrive) openLog(`analysis.html?tab=segments&drive=${encodeURIComponent(endDrive.id)}`); });
     $('endShare').addEventListener('click', async () => {
@@ -6575,6 +6769,7 @@
         if (msg && msg.type === 'journals') { if (journalsWaiter) journalsWaiter(msg); return; }
         if (msg && msg.type === 'lifecycle') { if (driveActive) keepSave(); return; }   // going to the background: kept now
         if (msg && (msg.type === 'placeSuggestions' || msg.type === 'placeResolved' || msg.type === 'trafficProbe')) { nativePlaceReply(msg); return; }
+        if (msg && msg.type === 'nudge') { nudgeAnswered(!!msg.granted); return; }
         if (msg && msg.type === 'recordingSaved') toast(`Saved ${msg.segments} road segments to ${msg.file}`);
         // App sign-in finished in the native shell: keep the session token and redraw whatever shows account state.
         // the shell keeps the token in the Keychain and says signedIn (IDEAS Z-10); an older shell hands the token over
@@ -6637,7 +6832,8 @@
       }
       if (params.get('book') === '1' || params.get('view') === 'route' || params.get('view') === 'drives') openPlan(true);
       if (VIEW_TITLES[params.get('view')] || PEOPLE_SIDES[params.get('view')] || params.get('view') === 'setup') openSheet(params.get('view'));
-      if (params.get('go') === 'drive') driveFromLink();   // the app opened from apexnav://open?go=drive (IDEAS C-05)
+      if (params.get('go') === 'drive') driveFromLink();
+      if (params.get('again')) driveAgain(params.get('again'));      // panel D-1: Drive it again from a Log page opened on its own   // the app opened from apexnav://open?go=drive (IDEAS C-05)
       recoverKept().catch((e) => console.error('recover drives', e));   // Round 3: a drive never ended goes to the Log
     }
     bootDrives();
