@@ -174,8 +174,8 @@ def test_every_long_call_has_a_glance_that_fits(out):
         assert len(g["instruction"]) > m, (key, "the case should need a glance")
         assert g.get("short"), (key, g)
         assert all(0 < len(v) <= m for v in g["short"]), (key, g["short"])
-    # the caution's words don't fit with the kind ("Very sharp left, slow right down"), so the kind alone, never mid-word
-    assert out["glanceSlow"]["short"] == ["Very sharp left"]
+    # the caution's words don't fit with the kind (the slow-down warning with the kind), so the kind alone, never mid-word
+    assert out["glanceSlow"]["short"] == ["Hairpin left"]   # panel M-1: the call grammar names it a hairpin
     # a follow step on a long road: the call's own words, cut at a word
     assert out["glanceFollow"]["instruction"] == "Follow Ronald Reagan Cross County Highway"
     assert out["glanceFollow"]["short"] == ["Follow Ronald Reagan"]
