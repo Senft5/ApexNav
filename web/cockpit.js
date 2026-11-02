@@ -1087,6 +1087,11 @@
     // -------------------------------------------------------------------------
     let privacyZones = (() => { try { return ApexPrivacyZones.load(localStorage); } catch (_) { return []; } })();   // privacy_zones.js
     const inPrivacyZone = (lat, lon) => !!ApexPrivacyZones.zoneAt(privacyZones, lat, lon);
+    // VI-1: a "near me" lookup (hazards, meets, crews) never goes from a privacy zone, nor before a drive's private edge:
+    // the first km at least, or the private edge the road data skips when that is longer (contributor.js privateEdge, up to
+    // 1.5 km), so the first lookup isn't a fixed distance from home. feedReported counts the drive's distance.
+    const lookupEdge = { on: false, m: 0, edgeM: 1000, last: null };
+    const nearLookupOk = (p) => !!p && ApexPrivacyZones.mayLookUp(privacyZones, p.lat, p.lon, lookupEdge.on ? lookupEdge.m : Infinity, lookupEdge.edgeM);
     // queue: what to say next, hazards first, stale and duplicate lines dropped (speech_queue.js, IDEAS V-03). current: the line playing.
     // talkingUntil: the native voice's estimated end (it reports no finish).
     const speech = { busy: false, queue: ApexSpeechQueue.createSpeechQueue(), current: null, talkingUntil: 0, nativeTimer: 0, via: null };
@@ -1988,7 +1993,7 @@
       if (closureCache.key !== key || performance.now() - closureCache.at > 300000) {
         let list = [];
         try {
-          const r = await ApexSync.apiFetch(`/api/hazards?lat=${mid.lat.toFixed(4)}&lon=${mid.lon.toFixed(4)}&km=50`, { method: 'GET' });
+          const r = await ApexSync.apiFetch(`/api/hazards?${ApexPrivacyZones.cellQuery(mid.lat, mid.lon, 50)}`, { method: 'GET' });   // VI-1: by cell
           if (r.ok) list = await r.json();
         } catch (_) { /* offline or signed out: no closures known */ }
         Object.assign(closureCache, { key, at: performance.now(), list: Array.isArray(list) ? list : [] });
@@ -2742,7 +2747,7 @@
         const get = async (path) => { const r = await ApexSync.apiFetch(path, { method: 'GET' }); return r.ok ? r.json() : null; };
         const [cov, hz] = await Promise.all([
           Promise.all(boxes.map((b) => RouteLoading.optional(get(`/api/coverage?bbox=${b.join(',')}`), 5000).catch(() => null))),
-          RouteLoading.optional(get(`/api/hazards?lat=${c.lat.toFixed(4)}&lon=${c.lon.toFixed(4)}&km=${Math.min(50, Math.ceil(radiusKm))}`), 5000).catch(() => null),
+          RouteLoading.optional(get(`/api/hazards?${ApexPrivacyZones.cellQuery(c.lat, c.lon, Math.min(50, Math.ceil(radiusKm)))}`), 5000).catch(() => null),
         ]);
         const ways = new Map();
         for (const j of cov) for (const w of (j && Array.isArray(j.ways) ? j.ways : [])) if (w && Number.isFinite(w.way)) ways.set(w.way, w);
@@ -3919,7 +3924,7 @@
     // Crew drives (web/crew_events.js, IDEAS S-06): planned drives across your crews, RSVPs, and the day's convoy.
     let crewEvents = null;
     onSocial(() => { try { crewEvents = window.ApexCrewEvents ? ApexCrewEvents.mount({ el, btn, toast, apiCall, jsonOf, report: safety && safety.report,
-      here: () => state.lastPosition || null, mapCentre: () => { const c = map.getCenter(); return { lat: c.lat, lon: c.lng }; },
+      here: () => state.lastPosition || null, mapCentre: () => { const c = map.getCenter(); return { lat: c.lat, lon: c.lng }; }, mayLookUp: nearLookupOk,
       myHandle: () => (accountMe && accountMe.handle) || null,
       plannedRoute: () => (plannedRoute && plannedRoute.lat.length > 1 ? { name: plannedRoute.name, geom: sharedGeom(plannedRoute) } : null),
       goTo: (p) => { closeSheet(); routeToPlace(p); }, openRoute: (id) => openSharedRoute(id),
@@ -4494,8 +4499,11 @@
       // public crews near you: tiles with Join (only name, area and size are shown; members stay private)
       let nearbyRow = null;
       const nsec = section('Crews near you'), near = crewNear();
-      apiCall('GET', `/api/crews/discover?lat=${near.lat.toFixed(2)}&lon=${near.lon.toFixed(2)}`).then(jsonOf).catch(() => null).then((found) => {
+      // VI-1: asked by the 0.1-degree cell, and not at all from a privacy zone (said so, never "none near you")
+      const discover = nearLookupOk(near) ? apiCall('GET', `/api/crews/discover?${ApexPrivacyZones.cellQuery(near.lat, near.lon)}`).then(jsonOf).catch(() => null) : Promise.resolve('private');
+      discover.then((found) => {
         if (gen !== renderGen) return;
+        if (found === 'private') { nsec.append(el('p', { className: 'note', textContent: 'You\'re in a privacy zone, so crews nearby aren\'t looked up from here.' })); return; }
         const nearby = Array.isArray(found) ? found : [];
         if (nearbyRow) nearbyRow._count.textContent = nearby.length ? `${nearby.length} crew${nearby.length === 1 ? '' : 's'} near you` : '';   // U-125
         if (!nearby.length) { nsec.append(el('p', { className: 'note', textContent: found ? 'No public crews near you yet.' : 'Couldn\'t look for crews nearby. Check signal.' })); return; }
@@ -5468,14 +5476,21 @@
     }
     // ---- hazards people reported (hazard_reports.js; backend/src/hazards.ts) -----------------------------------------
     // `local`: U-94, what the review recording reported, kept on this phone (reviewHazard); the server never hears of it.
-    const reported = { list: [], at: -Infinity, busy: false, said: new Set(), mine: new Set(), pins: new Map(), watch: ApexHazardReports.createPassWatch(), asking: null, local: [] };
+    // VI-1: asked by the 0.1-degree cell (privacy_zones.js cell), kept per cell for 2 min, filtered and sorted here; never
+    // from a privacy zone or before the drive's private edge (nearLookupOk).
+    const reported = { list: [], at: -Infinity, cellKey: '', busy: false, said: new Set(), mine: new Set(), pins: new Map(), watch: ApexHazardReports.createPassWatch(), asking: null, local: [],
+                       cells: ApexPrivacyZones.cellCache(120e3) };
     async function loadReported(force = false) {
-      const p = state.lastPosition;
-      if (!p || reported.busy || (!force && performance.now() - reported.at < 120e3) || !window.ApexSync) return;
+      const p = state.lastPosition, c = p && ApexPrivacyZones.cell(p.lat, p.lon);
+      if (!c || reported.busy || !window.ApexSync || !nearLookupOk(p)) return;
+      const keep = (rows) => { reported.list = ApexPrivacyZones.nearFirst(rows, p.lat, p.lon, 20).concat(reported.local); paintReported(); carHazards(); };
+      const kept = force ? undefined : reported.cells.get(c.key);
+      if (kept) { if (c.key !== reported.cellKey) { reported.cellKey = c.key; keep(kept); } return; }   // a cell asked for under 2 min ago
+      if (!force && c.key === reported.cellKey && performance.now() - reported.at < 120e3) return;
       reported.busy = true;
       try {
-        const r = await ApexSync.apiFetch(`/api/hazards?lat=${p.lat.toFixed(5)}&lon=${p.lon.toFixed(5)}&km=20`, { method: 'GET' });
-        if (r.ok) { reported.list = (await r.json()).concat(reported.local); paintReported(); carHazards(); }
+        const r = await ApexSync.apiFetch(`/api/hazards?${ApexPrivacyZones.cellQuery(p.lat, p.lon, 20)}`, { method: 'GET' });
+        if (r.ok) { const rows = await r.json(); reported.cells.set(c.key, rows); reported.cellKey = c.key; keep(rows); }
       } catch (_) { /* offline or signed out: keep what we had */ }
       finally { reported.at = performance.now(); reported.busy = false; }
     }
@@ -5715,7 +5730,10 @@
     if (outbox.size()) setTimeout(flushOutbox, 3000);
     function feedReported(frame) {
       if (outbox.size() && performance.now() - outboxAt > 60000) flushOutbox();   // a fix and a minute since the last try
-      if (!driveActive && state.mode !== 'live') return;
+      if (!driveActive && state.mode !== 'live') { lookupEdge.on = false; return; }
+      if (!lookupEdge.on) Object.assign(lookupEdge, { on: true, m: 0, last: null, edgeM: Math.max(1000, window.ApexContributor ? ApexContributor.privateEdge() * 5 : 0) });
+      if (lookupEdge.last) lookupEdge.m += ApexPrivacyZones.metres(lookupEdge.last.lat, lookupEdge.last.lon, frame.lat, frame.lon);
+      lookupEdge.last = { lat: frame.lat, lon: frame.lon };
       loadReported();
       const me = { lat: frame.lat, lon: frame.lon, heading: Number.isFinite(frame.course_deg) ? frame.course_deg : null };
       const v = Number.isFinite(frame.speed_mps) ? frame.speed_mps : 0;
