@@ -41,4 +41,11 @@ def test_main_car_scene_handles_only_the_two_dashboard_links():
 
 
 def test_dashboard_card_gets_the_short_instruction():
-    assert "m.dashboardInstructionVariants" in SRC
+    """T-1/I-4: the Dashboard's card takes the longest variant that fits too, so it gets the same glance forms as the main
+    card (each at most glanceMax), never the whole call."""
+    changed = SRC[SRC.index("@MainActor func guideChanged()"):SRC.index("@MainActor func driveEnded()")]
+    assert "m.dashboardInstructionVariants = variants" in changed
+    assert "dashboardInstructionVariants = g.short.isEmpty ? variants" not in changed
+    assert "+ variants" not in changed, "nothing longer is appended after the glance forms"
+    built = changed[:changed.index("m.instructionVariants = variants")]
+    assert "v.count <= ApexCar.glanceMax" in built

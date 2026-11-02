@@ -44,7 +44,22 @@ final class ApexCar {
                    var short: [String] = []; var drivenM: Double? = nil }
     /// U-59: a free drive's card until the page's first guide message (web/carplay.js recordingMessage) says how far it has gone.
     static let recordingGuide = Guide(key: "rec:", instruction: "Recording · the road ahead", street: "Recording", type: 8, distM: nil, timeS: nil,
-                                      remainM: nil, remainS: nil, symbol: nil, recording: true)
+                                      remainM: nil, remainS: nil, symbol: nil, recording: true, short: ["Recording"])
+    /// T-1/I-4: the most characters the guidance card is sent (web/carplay.js GLANCE_MAX). CarPlay shows the longest
+    /// variant that fits its card, so any longer form sent would win on a big screen.
+    static let glanceMax = 24
+    /// A call cut to a glance, as web/carplay.js `clip` does: at its last clause that fits, else its last word; the call's
+    /// own words, nothing added. For a call that came without `short` (an older page, the record card).
+    static func glance(_ text: String) -> String {
+        let s = text.trimmingCharacters(in: .whitespaces)
+        guard s.count > glanceMax else { return s }
+        let cut = String(s.prefix(glanceMax + 1))
+        var end = cut.lastIndex(of: ",")
+        if let e = end, cut.distance(from: cut.startIndex, to: e) < 6 { end = nil }
+        if end == nil { end = cut.lastIndex(of: " ") }
+        let head = end.map { String(cut[..<$0]) } ?? String(s.prefix(glanceMax))
+        return head.trimmingCharacters(in: CharacterSet(charactersIn: " ,·.-"))
+    }
     struct Look { var theme = "roadbook"; var card = UIColor(white: 0.08, alpha: 1); var cardInk = UIColor(white: 0.93, alpha: 1); var accent = UIColor.systemRed; var voice = true; var metric = false }
 
     private(set) var route: Route?
@@ -535,16 +550,21 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
         let est = g.distM.map { CPTravelEstimates(distanceRemaining: ApexCar.shared.distance($0), timeRemaining: max(0, g.timeS ?? 0)) }
         if g.key != maneuverKey || (g.symbol != nil && !maneuverHasTulip) {
             let m = CPManeuver()
-            // U-112: the short form first, so the card reads at a glance ("Very sharp left, careful", not the whole call on
-            // four lines for half a mile, REVIEW5 guided-drive car/035); the whole call, any shorter form and the street follow
+            // T-1/I-4 (panel round 1, guided-drive car/005-011): U-112 put the short form first, and the card still printed
+            // "Very sharp left, almost back on itself, long, careful" on four lines for half a mile, because CarPlay shows
+            // the longest variant that FITS, not the first. So the card gets glance forms only: the short forms (longest
+            // first), else the call cut to a glance, and the street when it fits. The whole call stays the phone's and the
+            // voice's.
             var variants: [String] = []
-            for v in Array(g.short.prefix(1)) + [g.instruction] + Array(g.short.dropFirst()) + [g.street] where !v.isEmpty && !variants.contains(v) {
+            for v in (g.short.isEmpty ? [g.instruction] : g.short).map(ApexCar.glance) + [g.street]
+                where !v.isEmpty && v.count <= ApexCar.glanceMax && !variants.contains(v) {
                 variants.append(v)
             }
+            if variants.isEmpty { variants = [ApexCar.glance(g.street)].filter { !$0.isEmpty } }
             m.instructionVariants = variants
-            // the Dashboard's guidance card (the owner, 2026-11-01: the overview screen with the map, the guidance top right
-            // and the music below) is a third of the screen: the short form alone where there is one
-            m.dashboardInstructionVariants = g.short.isEmpty ? variants : Array(g.short.prefix(1)) + variants
+            // the Dashboard's guidance card (a third of the screen) gets the same glance forms: it too takes the longest
+            // that fits, so on a narrow card it falls to the shorter form ("Very sharp left") by itself
+            m.dashboardInstructionVariants = variants
             if let tulip = g.symbol {
                 m.symbolImage = tulip.withRenderingMode(.alwaysOriginal)    // the road book's tulip, in the card's ink
             } else if g.recording {
