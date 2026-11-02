@@ -143,9 +143,10 @@ def test_the_card_reads_at_a_glance(out):
     """U-112 (REVIEW5 guided-drive car/035): "Very sharp left, almost back on itself, long, careful" on four lines at card
     size for half a mile. A long instruction carries `short`, the same instruction in fewer words, longest first."""
     g = out["glancePlain"]
-    assert g["instruction"] == "Very sharp left, almost back on itself, long, careful"
-    assert g["short"] == ["Very sharp left, careful", "Very sharp left"], "its kind and its caution, the modifiers dropped"
-    assert out["glanceHP"]["short"] == ["Hairpin left, careful", "Hairpin left"]
+    # M-1 (panel round 1): the call's grammar, the warning first and an acute corner a hairpin
+    assert g["instruction"] == "Careful, hairpin left, long"
+    assert g["short"] == ["Careful, hairpin left", "Hairpin left"], "its kind and its caution, the modifiers dropped"
+    assert out["glanceHP"]["short"] == ["Careful, hairpin left", "Hairpin left"]
     assert out["glanceRally"]["short"] == ["Left 2, caution", "Left 2"], "rally words stay rally words"
     assert out["glanceRecce"]["short"] == ["Left 1, care", "Left 1"], "a recce's own notes are not the plain words"
     assert "short" not in out["glanceFits"], "a call that already fits a glance needs no other"
@@ -204,6 +205,9 @@ const t = { events: [{ type: 'corner', dir: 'L', severity: 4, lat: 35.1, lon: -8
 const at = (m) => ({ lat: 35 + m / 1e5, lon: -84 });
 console.log(JSON.stringify({
   corners: C.cornersMessage(t, at), none: C.cornersMessage(null, at),
+  // M-3 (panel round 1): the plates in the driver's notation, as the strip's next cells print it
+  plainPlates: C.cornersMessage({ events: [...t.events, { type: 'corner', dir: 'L', severity: 2, shape: 'square', dist_m: 1000 }, { type: 'corner', dir: 'R', severity: 1, shape: 'acute', dist_m: 1100 }] }, at, 'plain').list.map((c) => c.text),
+  rallyPlates: C.cornersMessage({ events: [{ type: 'corner', dir: 'L', severity: 4, grade: '-', dist_m: 10 }, { type: 'corner', dir: 'L', severity: 2, shape: 'square', dist_m: 1000 }, { type: 'corner', dir: 'R', severity: 1, shape: 'acute', dist_m: 1100 }] }, at, 'rally').list.map((c) => c.text),
   hazards: C.hazardsMessage([{ id: 7, kind: 'gravel', lat: 35.2, lon: -83.5 }, { id: 8, label: 'Cattle grid', lat: 35, lon: -83 }, { id: 9, kind: 'x' }], { gravel: 'Gravel' }),
   look: C.lookMessage({ id: 'tapedeck', night: { panel: '#0A0C0B', panelInk: '#7DF5DE', accent: '#FFB347' } }, false),
   tulips: [10, 15, 17, 12, 4, 26].map((k) => C.tulipSVG(k, '#7DF5DE')), bad: C.tulipSVG(10, 'red;x'),
@@ -228,6 +232,15 @@ def test_the_cars_map_gets_every_rated_corner_at_its_apex(maps):
         {"at": [35.009, -84], "text": "R2", "tight": True},
     ]
     assert maps["none"]["list"] == []
+
+
+def test_the_cars_plates_say_what_the_head_says(maps):
+    """Panel round 1 M-3: "R4" on the car's map under a card that said "Open left". Plain words on: plain plates."""
+    assert maps["plainPlates"] == ["OPEN L", "HAIRPIN R", "TIGHT R", "SQUARE L", "HAIRPIN R"]
+    assert maps["rallyPlates"] == ["L4-", "SQ L", "RHP"], "real rally notation, never LSQ or RAC"
+    html = cockpit_source()
+    assert "ApexCarPlay.cornersMessage(t, (m) => sample(t, m), state.noteWords)" in html
+    assert "|${state.noteWords}` : '';" in html, "a change of words sends the plates again"
 
 
 def test_hazards_are_named_and_unplaceable_ones_dropped(maps):

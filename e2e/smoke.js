@@ -108,18 +108,19 @@ flow('the strip never cuts where the meaning is: a three-word call keeps its dir
       return { codes: [...el.querySelectorAll('.rb-code')].filter((c) => c.getClientRects().length).map((c) => ({ t: c.textContent, cut: c.scrollWidth > c.clientWidth + 1 || c.getBoundingClientRect().right > el.getBoundingClientRect().right + 1 })),
         head: h && h.textContent, lines: h ? Math.round(h.getBoundingClientRect().height / (fs * 1.05)) : 0, words: !!el.querySelector('.rb-box:not(.now) .rb-call'), h: Math.round(el.getBoundingClientRect().height) }; });
     r.codes.forEach((c) => ob.codes.add(c.t + (c.cut ? ' CUT' : '')));
-    if (r.lines > 1 || r.words) ob.wrapped.push(r);
+    if (r.lines > 2 || r.words) ob.wrapped.push(r);   // plain words (panel M-1): "MEDIUM / RIGHT", two whole words, never a cut one
     ob.heights.add(r.h);
     await page.waitForTimeout(1850);
   }
-  check(ob.codes.size >= 3 && [...ob.codes].every((t) => /^[A-Z0-9+-]{1,6}$/.test(t)), 'the welcome\'s next cells are whole codes: ' + JSON.stringify([...ob.codes]));
-  check(!ob.wrapped.length && ob.heights.size === 1, 'the welcome\'s heads on one line, no words in a next cell, one height: ' + JSON.stringify({ w: ob.wrapped, h: [...ob.heights] }));
+  // P-2 / M-3 (panel round 1): a new driver gets plain words, so the next cells are plain words too ("OPEN L", "CREST"), never "L4"
+  check(ob.codes.size >= 3 && [...ob.codes].every((t) => /^(?:[A-Z]{3,7} [LR]|CREST)$/.test(t)), 'the welcome\'s next cells are whole plain-word codes: ' + JSON.stringify([...ob.codes]));
+  check(!ob.wrapped.length && ob.heights.size === 1, 'the welcome\'s heads in two lines at most, no words in a next cell, one height: ' + JSON.stringify({ w: ob.wrapped, h: [...ob.heights] }));
   // the plain words a sharp corner gets, at the lead's size, in every theme on the narrowest phone: nothing cut
   await page.setViewportSize({ width: 375, height: 667 });
   for (const theme of ['roadbook', 'tapedeck', 'billet']) {
     const r = await page.evaluate((theme) => {
       const look = ApexThemes.apply(theme, false), el = document.getElementById('notes'), out = [];
-      for (const [call, mods] of [['Very sharp left, almost back on itself, long', ['long']], ['Very tight right, slow down', []], ['Sharp left, like a junction', []]]) {
+      for (const [call, mods] of [['Slow right down, hairpin left, long', ['long']], ['Careful, medium right, tightens, slopes away', ['tightens', 'off-camber']], ['Square left', []]]) {
         ApexInstruments.renderNotes(el, look.theme, [{ key: call, type: 'corner', dir: call.includes('left') ? 'L' : 'R', severity: 1, mods, call, code: 'L1', dist: '400', unit: 'FT', distM: 120 }]);
         const cut = (x) => !!x && (x.scrollHeight > x.clientHeight + 1 || x.scrollWidth > x.clientWidth + 1);
         const head = el.querySelector('.rb-box.now .rb-call span'), tail = el.querySelector('.rb-box.now .rb-mods');
@@ -718,7 +719,7 @@ flow('CarPlay feed: a planned route sends its line, every corner and the theme; 
   const r = await page.evaluate(() => ({ route: window.__car.find((m) => m.kind === 'route'), corners: window.__car.filter((m) => m.kind === 'corners').pop(),
     look: window.__car.filter((m) => m.kind === 'look').pop() }));
   check(r.route.options[0].detail.includes('corner'), 'the route choice says its corners: ' + JSON.stringify(r.route.options[0]));
-  check(r.corners.list.every((c) => Array.isArray(c.at) && /^[LR](HP|\d)$/.test(c.text)), 'every corner placed and rated: ' + JSON.stringify(r.corners.list.slice(0, 3)));
+  check(r.corners.list.every((c) => Array.isArray(c.at) && /^(HAIRPIN|SQUARE|TIGHT|MEDIUM|OPEN|EASY|SLIGHT) [LR]$/.test(c.text)), 'every corner placed and rated, in the plain words a new driver gets (panel M-3): ' + JSON.stringify(r.corners.list.slice(0, 3)));
   check(r.look.theme === 'roadbook' && r.look.voice === true && /^#/.test(r.look.card) && r.look.units === 'imperial', 'the look: ' + JSON.stringify(r.look));
   // the tulip is drawn at once (Path2D), so it rides on the first guide message; the car showed Apple's arrow without it
   const png = await page.evaluate(() => { const svg = ApexCarPlay.cornerTulipSVG('R', 1, '#EDE4D3'); return document.createElement('canvas') && apexDebug.tulipPNG ? apexDebug.tulipPNG(svg) : null; });

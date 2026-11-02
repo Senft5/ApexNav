@@ -300,6 +300,9 @@ console.log(JSON.stringify({
   plainCall: V.cornerCall(c, 'plain'), rallyCall: V.cornerCall(c, 'rally'),
   hairpin: V.cornerCall({ ...c, shape: 'hairpin', severity: 1 }, 'plain'),
   bare: V.cornerCall({ code: 'R3' }, 'plain'),
+  // M-3 (panel round 1): a comparison's corner carries only its code; it is named in the driver's words, never "LSQ"
+  square: V.cornerCall({ code: 'LSQ', call: 'Square left' }, 'plain'), acute: V.cornerCall({ code: 'RAC' }, 'plain'),
+  rallyCode: V.cornerCall({ code: 'RAC' }, 'rally'), odd: V.cornerCall({ code: 'X9', call: 'Odd' }, 'plain'),
 }));
 """
     root = str(__import__("pathlib").Path(__file__).resolve().parents[1])
@@ -309,7 +312,8 @@ console.log(JSON.stringify({
     assert [r["fresh"], r["plain"], r["rally"], r["old"]] == ["plain", "plain", "rally", "rally"]   # as the cockpit reads it
     assert r["plainCall"] == "Easy left" and r["rallyCall"] == "Left 5 minus"
     assert r["hairpin"] == "Hairpin left"
-    assert r["bare"] == "R3", "without a direction and severity the recorded call stays"
+    assert r["bare"] == "Medium right" and r["square"] == "Square left" and r["acute"] == "Hairpin right"
+    assert r["rallyCode"] == "RHP" and r["odd"] == "Odd", "a code it can't read: the recorded call stays"
     src = open(os.path.join(root, "web", "drive_view.js"), encoding="utf-8").read()
     assert "c.call || c.code" not in src.replace("return c.call || c.code || '';", ""), "every corner name goes through cornerCall"
     assert '<script src="plain_notes.js">' in open(os.path.join(root, "web", "analysis.html"), encoding="utf-8").read()

@@ -55,7 +55,7 @@ def test_next_cells_print_codes_never_words(codes):
 def test_the_renderer_and_the_strip_css():
     js, html = read("web", "instruments.js"), cockpit_source()
     render = js[js.index("  function renderNotes("):js.index("  // Dial cluster")]
-    assert "html('b', 'rb-code', box, stripCode(n))" in render and "if (i > 0)" in render   # the next cells: the code only
+    assert "html('b', 'rb-code', box, stripCode(n, notes.words))" in render and "if (i > 0)" in render   # the next cells: the code only
     assert "html('span', 'rb-mods', box)" in render                                         # the modifiers: a row of their own
     # U-107: the head takes the room the codes leave; U-133: one height for every call (and on the welcome)
     assert ".notes-roadbook { display: grid; grid-template-columns: minmax(0, 1fr) auto auto;" in html

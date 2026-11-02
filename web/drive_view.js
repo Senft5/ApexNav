@@ -40,7 +40,12 @@
   function cornerCall(c, words) {
     if (!c) return '';
     const P = root.ApexPlainNotes;
-    if (words === 'plain' && P && c.dir && c.severity != null) return P.plainCall({ ...c, type: 'corner' });
+    // M-3 (panel round 1): a corner that carries only its code (a comparison's corner: "LSQ") is named from the code
+    if (words === 'plain' && P && ((c.dir && c.severity != null) || P.kindOf({ ...c, type: 'corner' }))) {
+      const said = P.plainCall({ ...c, type: 'corner' });
+      if (said) return said;
+    }
+    if (words !== 'plain' && P && !c.call) return P.noteCode({ ...c, type: 'corner' }, 'rally') || c.code || '';
     return c.call || c.code || '';
   }
 

@@ -1288,14 +1288,19 @@
     // The run of corners being read (note_timing.js createCareRun, REVIEW4 §4): its "care" is said once.
     const careRun = ApexNoteTiming.createCareRun();
     // REVIEW5 U-113: the pack's aside for a call (voice_lines.js createAsides: rare, never after a warning or in a run), only
-    // from a clip the loaded bank holds (a bank rendered before the asides says none); dueByM: the last metre it can start
-    // at and still end before the corner with the beat a call gets.
+    // from a clip the loaded bank holds (a bank rendered before the asides says none). Panel round 1 M-2: dueByM is the last
+    // metre it can start at and still end before the braking starts (note_timing.js asideDueByM: advice a beat before the
+    // braking point, colour before the call's own lead, neither under 4 s out); one that can't start by then once the call
+    // (and its pre-call cue) is said is not picked at all, so it is dropped, never deferred, and Kit's box stays empty.
     const asides = window.ApexVoiceLines ? ApexVoiceLines.createAsides() : null;
-    function packAside(voiced, atM, vMps) {
+    function packAside(voiced, atM, vMps, apexMps = null, callText = '', reactionS = undefined) {
       const bank = window.ApexVoice && ApexVoice.bank;
       if (!asides || !voiced || !bank || bank.id !== state.voiceId) return null;
-      const a = asides.pick(state.voiceId, voiced, performance.now(), (t) => !!bank.tokens[t]);
-      return a ? { ...a, dueByM: atM - ApexNoteTiming.lastCallM({ vMps, text: a.text }) } : null;
+      const v = Math.max(0, vMps || 0), callEndM = (Number.isFinite(state.cursorM) ? state.cursorM : atM) + v * (ApexNoteTiming.speakS(callText) + 0.3);
+      let due = null;
+      const fits = ({ text, kind }) => { due = ApexNoteTiming.asideDueByM({ atM, vMps: v, apexMps, text, kind, reactionS }); return due != null && callEndM <= due; };
+      const a = asides.pick(state.voiceId, voiced, performance.now(), (t) => !!bank.tokens[t], fits);
+      return a ? { ...a, dueByM: due } : null;
     }
     // The next turn not yet taken (web/directions.js createProgress), one for the voice and the car's card, so both are about
     // the same turn and a taken one never comes back. turnHold.m: the first junction ahead whose call at the turn is not yet
@@ -1439,6 +1444,7 @@
         if (state.kitHead !== undefined && state.kitLine && !(state.kitFor && state.kitFor.includes(headKey))) { state.kitLine = null; state.kitFor = null; }
         state.kitHead = headKey;
       }
+      showN.words = state.noteWords;                                    // M-3: the next cells in the head's notation
       Inst.renderNotes($('notes'), look.theme, showN);
       state.crestAhead = !!(showN[0] && showN[0].type === 'crest' && showN[0].distM < 150);   // Kit sits up for it
       lastNotes = showN;
@@ -1482,7 +1488,7 @@
         if (e.type === 'corner' && !e.recce) call = chainedCall(e, ev, spirited || first, careRun.at(noteM(e), track.id));   // "care" once a run (§4)
         // U-113: the pack's aside after the call, now and then ("Easy in, late out."): its own clip, said only if it can end
         // before the corner as a call would; Kit's box shows it from the pre-call
-        const aside = packAside(call.voiced, noteM(e), vMps);
+        const aside = packAside(call.voiced, noteM(e), vMps, apexMps, call.text, reactS);   // M-2: before the braking, or not at all
         say(call.text, false, call.chain, null, { kind: e.type === 'corner' ? 'ordinary' : 'hazard', key, atM: noteM(e), duck: true, kitFor: call.keys, aside,
           ...(e.type === 'corner' && !startCall ? { dueByM: noteM(e) - lastM } : {}), ...(startCall ? { atM: null } : {}) });
         if (live) reaction.called(performance.now(), call.text, ApexNoteTiming.needsBrake(vMps, apexMps));
@@ -4923,10 +4929,11 @@
     // Note words (plain_notes.js, IDEAS V-02)
     function renderNoteWords() {
       document.querySelectorAll('#noteWordsList [data-words]').forEach(b => { const on = b.dataset.words === state.noteWords; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
-      $('noteWordsNote').textContent = state.noteWords === 'plain' ? 'For example "Medium left, tightens, slow down".' : 'Rally pace notes, 1 tightest to 6: "Left 3 tightens, caution".';
+      $('noteWordsNote').textContent = state.noteWords === 'plain' ? 'For example "Slow down, medium left, tightens".' : 'Rally pace notes, 1 tightest to 6: "Left 3 tightens, caution".';
     }
     document.querySelectorAll('#noteWordsList [data-words]').forEach(b => b.addEventListener('click', () => {
       state.noteWords = b.dataset.words; savePrefs(); renderNoteWords(); renderThemePicker(); render(true);
+      if (track && track.kind === 'route' && car.route) carRoute(track);   // M-3: the car's plates in the new words
       say(state.noteWords === 'plain' ? 'Medium left, tightens, then hairpin right.' : 'Left 3 tightens into right hairpin.', true);
     }));
     renderNoteWords();
@@ -5656,13 +5663,13 @@
     function carRoute(t) {
       if (t && t === car.ended) t = null;                                 // U-62: a route just driven is not offered to the car again
       const o = routeOptions && t && routeOptions.current === t ? routeOptions : null;
-      const key = t ? `${t.id}|${t.lat.length}|${o ? o.picked : -1}` : '';
+      const key = t ? `${t.id}|${t.lat.length}|${o ? o.picked : -1}|${state.noteWords}` : '';   // M-3: the plates in the driver's words
       if (key === car.route) return;
       car.route = key;
       if (!t) { carPost({ kind: 'clear' }); carPost({ kind: 'corners', list: [] }); return; }
       carPost(ApexCarPlay.routeMessage(t, o ? o.list.map(c => ({ fun: c.fun, timeS: c.timeS, distM: c.t && c.t.dist ? c.t.dist[c.t.dist.length - 1] : null })) : null,
         o ? o.picked : 0, (m) => ApexUnits.long(m, 1)));
-      carPost(ApexCarPlay.cornersMessage(t, (m) => sample(t, m)));        // the road book on the car's map (web/carmap.js)
+      carPost(ApexCarPlay.cornersMessage(t, (m) => sample(t, m), state.noteWords));        // the road book on the car's map (web/carmap.js)
     }
     // The theme and the voice switch for the car's screen: its map paints the theme, its guidance card takes the theme's dark.
     function carLook() {
@@ -5771,8 +5778,12 @@
       const t = String(text || '').split(' · ')[0].replace(/…$/, '').trim();
       return t.length <= 12 ? t : t.split(' ')[0];
     }
-    function islandShort(n) {
+    // M-3 (panel round 1): a corner in the driver's notation, as the strip's next cells and the car's plates print it
+    // ("TIGHT R" with plain words, "L4-", "LHP", "SQ L" with rally words; plain_notes.js noteCode)
+    function islandShort(n, words) {
       if (!n) return '';
+      const own = n.type === 'corner' && typeof ApexPlainNotes !== 'undefined' ? ApexPlainNotes.noteCode(n, words) : null;
+      if (own) return own;
       if (n.type === 'corner' && (n.dir === 'L' || n.dir === 'R')) {
         const hp = n.severity === 'HP' || n.shape === 'hairpin', sev = Math.round(+n.severity);
         if (hp) return `${n.dir}HP`;
@@ -5787,7 +5798,7 @@
         // the island's compact view: a few characters, never a sentence; a hazard turns its keyline orange (LiveActivity/ApexLiveWidget.swift).
         // U-61: a short word of its own when nothing is ahead (the widget once cut "No notes ahead" to "NO NOT"); codes are
         // already short, the widget scales rather than cut one
-        short: n ? islandShort(n) : q.short, trail: n ? '' : (q.trail || ''), hazard: !!(n && n.type !== 'corner' && n.type !== 'turn'), etaShort: (etaText || '').split('·')[0].trim() };
+        short: n ? islandShort(n, state.noteWords) : q.short, trail: n ? '' : (q.trail || ''), hazard: !!(n && n.type !== 'corner' && n.type !== 'turn'), etaShort: (etaText || '').split('·')[0].trim() };
       const key = JSON.stringify(fields), now = performance.now();
       // unchanged notes are resent once a minute: the shell marks each update stale two minutes on (a stop at a light stays live)
       if ((key === liveAct.last && now - liveAct.at < 60000) || (now - liveAct.at < 3000 && liveAct.last && JSON.parse(liveAct.last).note === fields.note)) return;
@@ -6274,6 +6285,8 @@
     // =======================================================================
     // First run is one screen (REVIEW.md roadmap 8): the mark, a line, the road book calling corners on a loop, Start.
     // The voice comes with the theme and sign-in waits for the first social action, so neither is asked here.
+    // P-2 / M-3 (panel round 1): in the driver's words, the head and the next cells alike (a new driver gets plain words, so
+    // the welcome says "Tight right, long" beside "EASY L", never "Right 5" beside "L4")
     const OB_NOTES = [
       { type: 'corner', dir: 'L', severity: '4', mods: ['tightens'], call: 'Left 4 tightens', code: 'L4', dist: '300', unit: 'ft' },
       { type: 'corner', dir: 'R', severity: '3', mods: [], call: 'Right 3', code: 'R3', dist: '150', unit: 'ft' },
@@ -6282,12 +6295,15 @@
       { type: 'corner', dir: 'L', severity: '2', mods: [], call: 'Left 2', code: 'L2', dist: '400', unit: 'ft' },
       { type: 'corner', dir: 'R', severity: '5', mods: ['long'], call: 'Right 5 long', code: 'R5', dist: '250', unit: 'ft' },
     ];
+    const obNote = (n) => (state.noteWords === 'plain' && window.ApexPlainNotes ? { ...n, call: ApexPlainNotes.plainCall(n) } : n);
     function runOnboarding() {
       const ob = $('onboard');
       let k = 0;
       const tick = () => {
         if (!ob.classList.contains('show')) return;
-        Inst.renderNotes($('obNotes'), look.theme, [0, 1, 2].map(j => ({ ...OB_NOTES[(k + j) % OB_NOTES.length], key: k + j })));
+        const page = [0, 1, 2].map(j => ({ ...obNote(OB_NOTES[(k + j) % OB_NOTES.length]), key: k + j }));
+        page.words = state.noteWords;
+        Inst.renderNotes($('obNotes'), look.theme, page);
         k++;
         setTimeout(tick, matchMedia('(prefers-reduced-motion: reduce)').matches ? 4000 : 1800);
       };

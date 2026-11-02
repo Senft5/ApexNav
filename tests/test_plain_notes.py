@@ -40,9 +40,12 @@ def out():
 
 
 def test_calls(out):
-    assert out["calls"] == ["Medium left", "Very tight right", "Slight left", "Hairpin left", "Sharp left, like a junction",
-                            "Very sharp right, almost back on itself", "Medium left, tightens, slopes away, slow down",
-                            "Medium left, over a crest, long, opens up", "Bump"]
+    # M-1 (panel round 1): the warning first, one short word per thing, every word of the scale its own sound
+    assert out["calls"] == ["Medium left", "Tight right", "Slight left", "Hairpin left", "Square left",
+                            "Hairpin right", "Slow down, medium left, tightens, slopes away",
+                            "Medium left, over a crest, long, opens", "Bump"]
+    for call in out["calls"]:
+        assert not any(w in call.lower() for w in ("very", "sharp", "like a", "almost", "back on itself")), call
 
 
 def test_links_and_chain(out):
@@ -52,11 +55,12 @@ def test_links_and_chain(out):
 
 
 def test_the_chain_names_the_corner_it_links_to(out):
-    assert out["named"] == "Easy left, then easy right in 100 metres"          # its name only: its own call comes in its turn
+    # its name and its warning, no modifiers: its own call comes in its turn (M-1: "then careful, square left in 200 feet")
+    assert out["named"] == "Easy left, then careful, easy right in 100 metres"
     assert out["toHazard"] == "Easy left, then bump in 100 metres"
-    assert out["heads"] == ["Medium left", "Sharp right, like a junction", "Crest", ""]
+    assert out["heads"] == ["Medium left", "Square right", "Crest", ""]
     # Hale's delivery (U-113): each part its own sentence, the same words
-    assert out["card"] == "Medium left. Tightens. Careful. Then tight right in 100 metres"
+    assert out["card"] == "Careful. Medium left. Tightens. Then tight right in 100 metres"
 
 
 def test_links_follow_the_drivers_units(out):

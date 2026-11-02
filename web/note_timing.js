@@ -113,6 +113,20 @@
   /** Metres before a note's entry under which its call is too late to start at this speed. */
   const lastCallM = ({ vMps, text = '' }) => (finite(vMps) ? Math.max(0, vMps) : 0) * (speakS(text) + LATE_S);
 
+  // Panel round 1 M-2 (docs/design/panel/round-1/margo.md): an aside never lands inside the braking zone. "Brake well
+  // before this one." came 100 ft from a hairpin at 22 mph, when the driver was already braking. The last metre before a
+  // note's entry an aside may START at: advice ends a beat before the braking point; colour must be done before the point
+  // the call itself would be read (leadM: braking, reaction and thinking time); and neither starts under ASIDE_MIN_S from
+  // the corner at this speed. Past it the aside is dropped, never deferred.
+  const ASIDE_MIN_S = 4;
+  function asideDueByM({ atM, vMps, apexMps = null, text = '', kind = 'colour', reactionS = REACT_DEFAULT_S }) {
+    if (!finite(atM)) return null;
+    const v = finite(vMps) ? Math.max(0, vMps) : 0;
+    const brake = finite(apexMps) && apexMps < v ? (v * v - apexMps * apexMps) / (2 * DECEL_MPS2) : 0;
+    const back = kind === 'advice' ? v * (speakS(text) + LATE_S) + brake : leadM({ vMps: v, apexMps, text, reactionS });
+    return atM - Math.max(back, v * ASIDE_MIN_S);
+  }
+
   // REVIEW4 §4: "careful" after every tight corner stops meaning anything by the third; a rally co-driver says it once a
   // stage. A run of corners is corners called each within CARE_RUN_M of the one before on one route (the notes going quiet
   // ends it, reset()); the lightest caution is said once in it. at(m, routeId) for each corner call about to be said, then
@@ -132,7 +146,7 @@
     return run;
   }
 
-  const api = { leadM, speakS, lastCallM, LATE_S, createCareRun, CARE_RUN_M, createReactionLearner, needsBrake, wakes, wakeWindowM, wakeCorner, nextWake, createWakeVoice,
+  const api = { leadM, speakS, lastCallM, LATE_S, asideDueByM, ASIDE_MIN_S, createCareRun, CARE_RUN_M, createReactionLearner, needsBrake, wakes, wakeWindowM, wakeCorner, nextWake, createWakeVoice,
     DECEL_MPS2, MIN_M, MAX_M, REACT_DEFAULT_S, THINK_S, WAKE_MIN_M, TRANSITION_GAP_MS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexNoteTiming = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -128,7 +128,7 @@ def test_the_card_quotes_a_line_the_voice_says():
 def test_the_page_says_the_pack_lines_and_fills_kits_box():
     html = cockpit_source()
     # the call carries its aside; Kit's box is the aside, never the call
-    assert "const aside = packAside(call.voiced, noteM(e), vMps);" in html and "kitFor: call.keys, aside," in html
+    assert "const aside = packAside(call.voiced, noteM(e), vMps, apexMps, call.text, reactS);" in html and "kitFor: call.keys, aside," in html
     assert "if (text && 'aside' in opts) { state.kitLine = opts.aside ? opts.aside.text" in html
     assert "state.kitLine = String(text)" not in html
     # the aside follows its call only when nothing else waits, and never after it would be late
