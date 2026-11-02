@@ -4,6 +4,51 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-02: Panel round 1 built (the winners of docs/design/panel/round-1/VOTE.md)
+
+The owner asked for iterative improvements from a panel of reviewer characters who vote (docs/design/PANEL.md). Six
+reviewers made 35 proposals and voted. Four builders built ranks 1–6 and the cheap M-2 and P-1. The calls:
+
+- **Your roads and the Sunday suggestion (D-1, R-1, D-2).**
+  - Your roads are grouped by drive name, not map-matched road runs, so drives aren't sent to the map-matching server.
+    Undo: `roads()` in `web/your_roads.js`.
+  - "Not driven yet" reads only the map's tiles and gives straight-line distance, so the position isn't sent to a router.
+  - Drive it again routes to the start, then through up to 7 points along the drive's track (turn-by-turn and an ETA). It
+    is hidden for drives under 1 km. The deck has at most 3 rows.
+  - The Reminder is off by default. Permission is asked when the switch is turned on. It sends at most one a week, the
+    evening before your usual day. No streak words (a test checks). Tapping it opens the app, not the suggestion yet.
+    APP_REVIEW 4.5.4.
+  - Twisty roads is on by default, turned on once for old saves. Dani's ghost loop isn't built.
+- **The car card's glance form (T-1, I-4).**
+  - Only forms of 24 characters or fewer are sent, cut at a clause or a word, in the call's own words.
+  - The Dashboard gets the same list. Undo: `dashboardInstructionVariants = [variants.last]`.
+- **End can't be a mis-tap (I-3).**
+  - End becomes Undo for 5 s, the drive stays live, and if nobody taps Undo it saves as it stood at End.
+  - The car's End shows an Undo alert; a second End ends at once. Siri's end and the parked auto-end end at once.
+  - Tapping elsewhere does not end it early, and Report did not move (the gap is now 16 pt). Undo: the
+    `askEnd`/`paintEndUndo` block in `cockpit.js`.
+- **The call grammar and one notation (M-1, M-2, M-3, P-2).**
+  - Plain words put the warning first and use one word per thing: "Careful, hairpin left, long". Acute is "hairpin",
+    severity 1 is "tight", and the similes are gone.
+  - A chained next corner keeps its own caution ("then careful, square left"). Undo: `plainNamed`.
+  - Asides are tagged advice or colour (`ADVICE`). Advice ends a beat before braking. An aside is dropped, never
+    deferred, and never follows a call with a link.
+  - `noteCode` gives the next cells, car plates, island and Log one notation. Rally codes are now SQ L and LHP, and the
+    island shows the grade, which reverses U-103's "R2". Undo: `noteCode`'s rally branch.
+  - On a 320 pt phone the head stays whole and the next cell shrinks, then hides (`fitHead`).
+- **The app comes back whole, and the rig (D-3, R-4c, R-5, T-6, P-1, D-6 part).**
+  - The stuck replay was the rig's lookup ("Done: close the replay"), not the app. The rig now stops a flow that doesn't
+    get its tab bar back.
+  - The missing Where to? deck was a real bug: it measured its bar while hidden.
+  - The end card closes when a tab opens. Billet didn't take because the route load closed the Garage.
+  - The guided drive's landscape Report lookup timed out; it is now found upright.
+  - A drive with no score shows "4.1 mi · no corners to score" (Dani's card, not Ray's toast).
+  - A crew link's first open shows the welcome with a generic line, because the crew-name preview needs sign-in.
+- **Not built:**
+  - P-3 (Dani's veto).
+  - I-1 (disputed, checked next round).
+  - R-4's seeded social world and the 1-point proposals (next round).
+
 ## 2026-11-01: Vetta on the CarPlay Dashboard (the split overview screen)
 
 - The owner asked for the Apple Maps-style overview: map on the left, guidance top right, music bottom right. That is the

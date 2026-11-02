@@ -1,5 +1,21 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-02: the panel (docs/design/PANEL.md), round 1 built
+
+- [x] Six reviewer characters (Dani, Margo, Theo, Priya, Ray, Ines) reviewed recording 6 and voted
+  (docs/design/panel/round-1/). The winners are built:
+  - your roads, Drive it again, the Sunday suggestion and an opt-in weekly reminder;
+  - the car card's glance form;
+  - End with Undo;
+  - the call grammar and one notation;
+  - the app coming back whole after a replay or drive;
+  - crew links showing the welcome first;
+  - the recording rig's fixes.
+  CALL_SHEET 2026-11-02 lists the calls.
+- Unverified: Swift (CI compiles it), the reminder on a device, the rig changes (the next recording proves them).
+- Exact next task: panel round 2. Record on main, then the same six review it and vote. Carry over: P-3 as a tap-to-learn
+  instead, I-1 checked side by side, and R-4's seeded social world.
+
 ## Session 2026-11-01: design skills installed; Fable review 5; all 32 findings built
 
 - [x] Skills in `.claude/skills` (Impeccable, Intent, 18 Swift iOS skills, ios-code-audit, swift-security-expert,
