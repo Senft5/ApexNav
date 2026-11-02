@@ -60,7 +60,7 @@ jobs:
   # cockpit with big targets and the typing lock, the battery saver, search offline, the Log page. No network needed.
   e2e:
     runs-on: ubuntu-latest
-    timeout-minutes: 15   # the safe-area flow walks 14 screens on four phone shapes
+    timeout-minutes: 25   # the safe-area flow walks 14 screens on four phone shapes; the whole suite is ~14.5 min since panel round 1 (96 flows)
     defaults:
       run:
         working-directory: e2e

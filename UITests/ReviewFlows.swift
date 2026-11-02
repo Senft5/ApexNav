@@ -14,6 +14,12 @@ final class ReviewFlows: XCTestCase {
     private var web: XCUIElement!
     private var flow = "", step = 0
     private var drivingSince = Date()                              // when the drive started (startDrive), for driveTo
+    private var portrait = CGRect.zero                              // the app's window upright, read once a flow (onScreen)
+
+    /// Panel round 1 (D-3, R-4c, T-6): a step that didn't land stops its flow, red, instead of photographing the screen it
+    /// was stuck on for the rest of the run (recording 6's tabs flow: seventeen photos of the replay).
+    struct FlowStopped: Error, CustomStringConvertible { let description: String }
+    private func stop(_ why: String) -> FlowStopped { XCTFail(why); return FlowStopped(description: why) }
 
     /// REVIEW4 §6.1: where the replay starts, in km along the bundled drive. The drive's first 21 km are Colerain Avenue and
     /// I-275; its corners run from the exit ramp at 21.4 km to 34.1 km on Dry Ridge Rd. TWISTIES is a mile before the first.
@@ -63,7 +69,7 @@ final class ReviewFlows: XCTestCase {
     /// photographs the opening before anything is touched (§6.9).
     private func start(_ name: String, route: Bool = false, from: Double? = nil, hold: (km: Double, s: Double)? = nil, tapFirst: Bool = true,
                        args: [String] = []) {
-        flow = name; step = 0
+        flow = name; step = 0; portrait = .zero
         app = XCUIApplication()
         app.launchArguments += args
         var e = ["APEX_REPLAY": "dry_ridge", "APEX_REVIEW": "1"]
@@ -111,9 +117,17 @@ final class ReviewFlows: XCTestCase {
     /// REVIEW5 §7.2: the page keeps keys it isn't showing (a closed sheet's Done) in its accessibility tree, and the first
     /// match for "Done" was one of those, so the replay's own Done was never tapped. Every match is looked at (at most 12),
     /// and the first one hittable with its centre on the screen is taken.
+    /// Recording 6 (guided-drive): on its side in the middle of a drive the page's accessibility tree took over 30 s a query,
+    /// and XCUITest ended the flow ("Failed to get matching snapshot: Timed out") 13 minutes before End. The window is read
+    /// once a flow, upright (turned for landscape, never queried again), and the first match is tried before the rest.
+    private func screenFrame() -> CGRect {
+        if portrait.isEmpty { portrait = app.windows.firstMatch.frame }
+        let f = portrait
+        return XCUIDevice.shared.orientation.isLandscape ? CGRect(x: 0, y: 0, width: max(f.width, f.height), height: min(f.width, f.height)) : f
+    }
     private func onScreen(_ label: String, below share: CGFloat = 0) -> XCUIElement? {
         let all = web.descendants(matching: .any).matching(NSPredicate(format: "label == %@", label))
-        let screen = app.windows.firstMatch.frame
+        let screen = screenFrame()
         for i in 0..<min(all.count, 12) {
             let e = all.element(boundBy: i)
             guard e.exists, e.isHittable else { continue }
@@ -126,8 +140,9 @@ final class ReviewFlows: XCTestCase {
     /// its Play key gone). The tabs flow's Log, People and Garage photos were all of the replay (REVIEW5 §7.2).
     private func tabBarShown() -> Bool {
         guard ["Map", "Log", "People", "Garage"].allSatisfy({ onScreen($0, below: 0.75) != nil }) else { return false }
-        let chip = web.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", "Replay ·")).firstMatch
-        return !(chip.exists && chip.isHittable) && onScreen("Play") == nil
+        // the plate reads "Replay · <road> ×" while it plays and "Replay finished · <score> ×" after (U-110): either is the replay
+        let chip = web.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@ AND label ENDSWITH %@", "Replay", "×")).firstMatch
+        return !chip.exists && onScreen("Play") == nil
     }
     /// The first button whose label starts with `prefix` (a row whose label carries more than its name), or nil.
     private func findButton(startingWith prefix: String, wait: Double = 8) -> XCUIElement? {
@@ -138,12 +153,13 @@ final class ReviewFlows: XCTestCase {
         guard let e = find(labels, wait: wait) else { return false }
         e.tap(); pause(1.5); return true
     }
-    /// A tab, once the tab bar is up (REVIEW5 §7.2): a replay or a sheet over it is closed by its Done first, and the flow says
-    /// so if the bar still isn't there (the tap is tried anyway, so a flow never hangs on it).
-    private func tab(_ name: String) {
-        if !tabBarShown() { _ = tap("Done", "Close the replay", wait: 2) }
-        XCTAssertTrue(until(6, tabBarShown), "the tab bar is not on screen for \(name)")
-        _ = tap(name, wait: 6); pause(2)
+    /// A tab, once the tab bar is up (REVIEW5 §7.2): a replay over it is closed by its Done first. Panel round 1 (D-3, T-6):
+    /// no tab bar stops the flow; what a tab must show is checked by the step that needs it (theme() reads the Garage's cards).
+    private func tab(_ name: String) throws {
+        if !tabBarShown() { _ = replayDone() }
+        guard until(6, tabBarShown) else { throw stop("the tab bar is not on screen for \(name)") }
+        guard tap(name, wait: 6) else { throw stop("the \(name) tab was not on screen") }
+        pause(2)
     }
     /// Up to `times` photos a swipe apart. REVIEW5 §7.3: a page that fits gave identical frames (planning 005 to 007,
     /// signed-in 002 to 011), so a swipe that changes nothing on the screen ends the scrolling, unphotographed.
@@ -213,15 +229,29 @@ final class ReviewFlows: XCTestCase {
         pause(4)
         shot("drive-started")
     }
-    /// The replay closed (REVIEW4_CHECK §4.4, U-104): its own key when it has one, else the "Replay · <road> ×" chip; the
-    /// tab bar coming back shows it took, so the tab steps after it photograph the tabs, not the replay.
-    private func closeReplay() {
-        if !tap("Done", "Close the replay", wait: 3), let chip = findButton(startingWith: "Replay ·", wait: 4) { chip.tap(); pause(2) }
-        XCTAssertTrue(until(8, tabBarShown), "the replay did not close (no tab bar)")
+    /// The replay's own Done key. Recording 6 (D-3): its accessible name is "Done: close the replay" (web/index.html
+    /// #replayDone), so the old exact matches on "Done" and "Close the replay" never found it, and the Replay chip they fell
+    /// back on was not hittable: every tab step after it photographed the replay. It is found by its whole name, in one query.
+    private func replayDone() -> Bool {
+        let done = web.buttons.matching(NSPredicate(format: "label == %@", "Done: close the replay")).firstMatch
+        if until(3, { done.exists && done.isHittable }) { done.tap(); pause(2); return true }
+        let chip = web.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@ AND label ENDSWITH %@", "Replay", "×")).firstMatch
+        if chip.exists { chip.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap(); pause(2); return true }
+        return false
     }
-    /// End, and whether the drive ended: its end card's "Open in the Log" key came up.
+    /// The replay closed (REVIEW4_CHECK §4.4, U-104; panel round 1 D-3): its Done, then the tab bar back within 8 s, or the
+    /// flow stops there, red, rather than photograph the replay under every tab's name.
+    private func closeReplay() throws {
+        XCTAssertTrue(replayDone(), "the replay's Done key was not on screen")
+        guard until(8, tabBarShown) else { throw stop("the replay did not close (no tab bar after Done)") }
+        shot("replay-closed")
+    }
+    /// End, and whether the drive ended: its end card's "Open in the Log" key came up. I-3: for 5 s after End the status row
+    /// says so and End is Undo, the drive still live (photographed), then the card.
     @discardableResult private func endDrive() -> Bool {
-        tap("End drive", wait: 10)
+        let end = web.buttons.matching(NSPredicate(format: "label == %@", "End drive")).firstMatch   // one query (recording 6)
+        if until(10, { end.exists && end.isHittable }) { end.tap(); pause(1.5) }
+        shot("drive-ending")                                   // I-3: the 5 s Undo window, the drive still live
         pause(5)
         shot("drive-ended")
         return find(["Open in the Log"], wait: 6) != nil
@@ -251,17 +281,30 @@ final class ReviewFlows: XCTestCase {
     }
     /// A theme from its card in the Garage: the card's "Use" key (U-69: named "Use <theme>" for exactly this), then wait
     /// until the theme took, which the Use key coming back on Roadbook's card shows (REVIEW4 §6.2).
-    private func theme(_ name: String, night: Bool) {
-        tab("Garage")
-        let use = "Use \(name)"
-        for _ in 0..<8 where find([use], wait: 1) == nil { app.swipeUp(velocity: .slow); pause(0.8) }
-        if let key = find([use], wait: 4) { key.tap() } else { find(["Try \(name)"], wait: 2)?.tap() }
-        let back = web.buttons["Use Roadbook"], gone = web.buttons[use]
-        XCTAssertTrue(until(10) { back.exists && !gone.exists }, "\(name) did not take (Roadbook's card has no Use key)")
+    /// Panel round 1 (T-6): recording 6's Billet flow was Roadbook in all 108 photos. The review route (APEX_REVIEW_ROUTE)
+    /// resolved while the Garage was open, its card opened itself (U-70) and closed the Garage between finding "Use Billet"
+    /// and tapping it, so the tap fell on the map and the flow drove on in Roadbook. Now a flow with a route waits for it
+    /// first, the key is tapped up to twice, the step's photo is the Garage with the theme's card "In use", and a theme
+    /// that didn't take stops the flow.
+    private func theme(_ name: String, night: Bool, route: Bool = false) throws {
+        if route {
+            let bar = web.buttons["Route details"]                // the route bar is in the page only once routed
+            XCTAssertTrue(until(60) { bar.exists }, "the review route never resolved")
+            pause(3)                                               // its card has opened itself (U-70) by now
+        }
+        let use = "Use \(name)", back = web.buttons["Use Roadbook"], gone = web.buttons[use]
+        let took = { back.exists && !gone.exists }
+        for _ in 0..<2 where !took() {
+            try tab("Garage")
+            for _ in 0..<8 where find([use], wait: 1) == nil { app.swipeUp(velocity: .slow); pause(0.8) }
+            if let key = find([use], wait: 4) { key.tap() } else { find(["Try \(name)"], wait: 2)?.tap() }
+            _ = until(10, took)
+        }
+        guard took() else { throw stop("\(name) did not take (Roadbook's card has no Use key)") }
         pause(1.5)
         shot("theme-\(name.lowercased())")
         if night { tap("Night", wait: 4); shot("night") }
-        tab("Map")
+        try tab("Map")
     }
     /// The drive just ended, in the Log: its page and its Replay in the current theme.
     private func driveInLog(scrolls: Int, replay: Bool) {
@@ -316,17 +359,16 @@ final class ReviewFlows: XCTestCase {
         driveFor(120, every: 10)
         endDrive()
         driveInLog(scrolls: 4, replay: true)
-        closeReplay()                                              // §4.4: the tab steps photographed the replay
-        tab("Log"); shot("log"); scroll(3, "log")
-        tab("Map")
+        try closeReplay()                                            // §4.4: the tab steps photographed the replay
+        try tab("Log"); shot("log"); scroll(3, "log")
+        try tab("Map")
         // People (the owner, 2026-10-30): Friends first, then the switch's other side, Crews
-        tab("People"); shot("friends"); scroll(3, "friends")
+        try tab("People"); shot("friends"); scroll(3, "friends")
         if tap("Crews", wait: 4) { shot("crews"); scroll(3, "crews"); tap("Friends", wait: 3) }
-        tab("Garage"); shot("garage"); scroll(8, "garage")
-        // Roadbook at night (§6.2): the Garage's Night detent, then the map
-        tab("Garage")
+        try tab("Garage"); shot("garage"); scroll(8, "garage")
+        // Roadbook at night (§6.2): the Garage's Night detent (the Garage is still open: its tab again would close it), then the map
         for _ in 0..<8 where find(["Night"], wait: 1) == nil { app.swipeUp(velocity: .slow); pause(0.8) }
-        if tap("Night", wait: 4) { tab("Map"); pause(3); shot("roadbook-night") }
+        if tap("Night", wait: 4) { try tab("Map"); pause(3); shot("roadbook-night") }
     }
 
     func test03Planning() throws {
@@ -393,15 +435,19 @@ final class ReviewFlows: XCTestCase {
         homeScreen("home-quiet-line")
         driveTo(5)                                                 // the ramp, the junction and the first corners
         // U-94: in review mode the report is the member's sheet, Undo and pin, and never reaches the server. REVIEW5 §7.5:
-        // the sheet once on its side too, then upright for the report itself
-        XCUIDevice.shared.orientation = .landscapeLeft; pause(3)
-        if tap("Report a hazard", "Report", wait: 4) {
+        // the sheet once on its side too, then upright for the report itself. Recording 6: looking for the Report key with the
+        // phone on its side mid-drive timed out XCUITest's snapshot and ended the flow at step 24, so the key is found upright,
+        // by its own name in one query, and the phone turns once the sheet is up.
+        let report = web.buttons.matching(NSPredicate(format: "label == %@", "Report a hazard")).firstMatch
+        if until(6, { report.exists && report.isHittable }) {
+            report.tap(); pause(1.5)
+            XCUIDevice.shared.orientation = .landscapeLeft; pause(3)
             shot("report-sheet-landscape")
             XCUIDevice.shared.orientation = .portrait; pause(3)
-            shot("report-sheet"); tap("Gravel", "Pothole", wait: 4)
+            shot("report-sheet")
+            let kind = web.buttons.matching(NSPredicate(format: "label IN %@", ["Gravel", "Pothole"])).firstMatch
+            if until(4, { kind.exists && kind.isHittable }) { kind.tap() }
             pause(1); shot("reported")                             // the car's pin and alert a second after (§6.8)
-        } else {
-            XCUIDevice.shared.orientation = .portrait; pause(3)
         }
         // REVIEW4_CHECK §4.6: New Biddinger Road's turnaround (where the route doubles back, U-90) and back, then the home
         // screen, the island and the phone on its side from 13.4 min: the R5- at 31.1 km and the run of corners after it,
@@ -437,17 +483,20 @@ final class ReviewFlows: XCTestCase {
         driveFor(180, every: 10)
         let carEnd = inCar("End")
         if XCUIScreen.screens.count > 1, carEnd.waitForExistence(timeout: 3) {
-            carEnd.tap(); pause(5); shot("drive-ended-from-car")
+            carEnd.tap(); pause(1.5); shot("drive-ending-from-car"); pause(6); shot("drive-ended-from-car")
         } else {
             endDrive()
         }
         tap("Done", wait: 4); pause(3); shot("after")
+        // R-5 (panel round 1): the map comes back whole after a car-started drive: Where to? and Start, not a 2 px deck
+        let whereTo = web.searchFields.firstMatch, go = web.buttons["Start drive"]
+        XCTAssertTrue(until(8) { whereTo.exists && whereTo.isHittable && go.exists && go.isHittable }, "after the drive the deck (Where to? and Start) is not back")
     }
 
     func test06TapedeckNight() throws {
         try XCTSkipUnless(env["APEX_REVIEW"] == "1", "review recording only")
         start("tapedeck-night", route: true, from: Self.TWISTIES)
-        theme("Tapedeck", night: true)
+        try theme("Tapedeck", night: true, route: true)
         pause(15)
         startDrive()
         driveFor(60, every: 10, "interstate")
@@ -461,7 +510,7 @@ final class ReviewFlows: XCTestCase {
         // REVIEW4_CHECK §4.7 (U-86): this drive stands still in the R3- at 25.3 km (5.1 min in) for 8 s; the photos every 3 s
         // show the strip move on from the corner the car waits in (app-log.txt: "replay standing")
         start("billet", route: true, from: Self.TWISTIES, hold: Self.STANDSTILL)
-        theme("Billet", night: false)
+        try theme("Billet", night: false, route: true)
         pause(15)
         startDrive()
         driveFor(60, every: 10, "interstate")
@@ -475,7 +524,7 @@ final class ReviewFlows: XCTestCase {
         try XCTSkipUnless(env["APEX_REVIEW"] == "1", "review recording only")
         try XCTSkipIf((env["APEX_REVIEW_SESSION"] ?? "").isEmpty, "needs the review account (REVIEW_SESSION secret)")
         start("signed-in")
-        tab("People")
+        try tab("People")
         // REVIEW4 §6.5 (U-66): the member's page, not the sign-in page, before anything is photographed; nothing here may
         // tap into "Sign in with Google" (the last recording's stray tap opened Google's sheet)
         let signedOut = { self.find(["Sign in with Google", "Sign in with Apple"], wait: 0.5) != nil }
@@ -487,8 +536,8 @@ final class ReviewFlows: XCTestCase {
         // the one Invite key: its sheet (invite link, my handle, requests), then Done
         if tap("Invite or add a friend", wait: 4) { pause(2); shot("invite"); tap("Done", wait: 3) }
         if tap("Crews", wait: 4) { pause(3); shot("crews"); scroll(5, "crews") }
-        tab("Garage"); shot("account"); scroll(6, "account")
-        tab("Map")
+        try tab("Garage"); shot("account"); scroll(6, "account")
+        try tab("Map")
     }
 
     /// REVIEW5 §7.7: the largest accessibility text size. The cockpit's sizes are the theme contract's and must not change;
@@ -502,10 +551,13 @@ final class ReviewFlows: XCTestCase {
         driveFor(20, every: 10, "cockpit")                         // the cockpit: unchanged
         endDrive()
         driveInLog(scrolls: 2, replay: false)                      // the Log's page of that drive: its prose
-        tab("Log"); shot("log")
-        tab("Garage"); shot("garage"); scroll(3, "garage")
-        tab("People"); shot("people"); scroll(2, "people")
-        tab("Map")
+        try tab("Log"); shot("log")
+        try tab("Garage"); shot("garage")
+        // R-5 / I-6 (panel round 1): recording 6 drew the drive's end card over the Garage; a tab closes it
+        XCTAssertNil(find(["Open in the Log"], wait: 1), "the drive's end card is over the Garage")
+        scroll(3, "garage")
+        try tab("People"); shot("people"); scroll(2, "people")
+        try tab("Map")
         let search = web.searchFields.firstMatch
         if search.waitForExistence(timeout: 10) {
             search.tap(); pause(2)

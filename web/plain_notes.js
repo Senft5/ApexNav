@@ -1,25 +1,80 @@
 // Pace notes in plain words (IDEAS V-02): the same corners, said the way someone without rally training understands them.
-// "Left 4 minus tightens, caution" becomes "Medium left, tightens, slow down". Built from the note's fields (direction,
-// severity, shape, mods, caution), never by rewriting the rally text. Pure (tests/test_plain_notes.py).
+// Built from the note's fields (direction, severity, shape, mods, caution), never by rewriting the rally text. Pure
+// (tests/test_plain_notes.py).
+//
+// Panel round 1, M-1 (docs/design/panel/round-1/margo.md): a call grammar. A pace note is an instruction in the order the
+// driver needs it: the warning first, then the corner, then what it does, then the link. One short word per thing, and
+// every word of the scale a different sound: hairpin / square / tight / medium / open / easy / slight ("tight", "sharp"
+// and "very sharp" were three near-sounds at 60 mph with the window down). No similes ("like a junction", "almost back on
+// itself"): "Careful, hairpin left, long", "Square left", "Open left, then careful, square left in 200 feet".
+// M-3 / P-2: noteCode() is the one short notation for everything that is not the head (the strip's next cells, the car
+// map's plates, the island): plain words when the driver chose them ("TIGHT R", "HAIRPIN L"), real rally notation when
+// not ("L4-", "LHP", "SQ L"), never the internal "LAC" / "LSQ" / "RSQ".
 (function (root) {
   'use strict';
-  // McRae 1 (tightest) to 6 (nearly straight)
-  const SEVERITY = { 1: 'Very tight', 2: 'Tight', 3: 'Medium', 4: 'Open', 5: 'Easy', 6: 'Slight' };
-  const MODS = { tightens: 'tightens', opens: 'opens up', long: 'long', 'off-camber': 'slopes away', 'over crest': 'over a crest' };
+  // McRae 1 (tightest) to 6 (nearly straight). 1 and 2 are both "tight": the grade stays in the tulip and the rally code.
+  const SEVERITY = { 1: 'Tight', 2: 'Tight', 3: 'Medium', 4: 'Open', 5: 'Easy', 6: 'Slight' };
+  const MODS = { tightens: 'tightens', opens: 'opens', long: 'long', 'off-camber': 'slopes away', 'over crest': 'over a crest' };
   const CAUTION = ['', 'careful', 'slow down', 'slow right down', 'very slow'];
+  const lower = (s) => (s ? s.charAt(0).toLowerCase() + s.slice(1) : s);
+  const upper = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 
-  /** One corner (or hazard) in plain words. Hazards keep their own call ("Bump", "Camera"). */
+  /**
+   * A corner's kind: { dir: 'L'|'R', kind: 'hairpin'|'square'|1..6|null, grade }, from its fields, or from its rally code
+   * ("LSQ", "RAC", "L4-") when a note carries only that (a saved drive's corner list, the strip's own notes). Acute folds
+   * into hairpin: a driver treats them the same and no notation has a word for it. null for anything not a corner.
+   */
+  const CODE_RE = /^([LR])(HP|SQ|AC|([1-6])([+-]?))$/i;
+  function kindOf(e) {
+    if (!e || (e.type && e.type !== 'corner')) return null;
+    const m = CODE_RE.exec(String(e.code || '').trim());
+    const dir = e.dir === 'L' || e.dir === 'R' ? e.dir : m ? m[1].toUpperCase() : null;
+    if (!dir) return null;
+    const shape = e.shape || (m && /^SQ$/i.test(m[2]) ? 'square' : m && /^AC$/i.test(m[2]) ? 'acute' : null);
+    if (e.severity === 'HP' || shape === 'hairpin' || shape === 'acute' || (m && /^HP$/i.test(m[2]))) return { dir, kind: 'hairpin', grade: '' };
+    if (shape === 'square') return { dir, kind: 'square', grade: '' };
+    const sev = e.severity != null && Number.isFinite(+e.severity) && +e.severity >= 1 && +e.severity <= 6 ? Math.round(+e.severity) : m && m[3] ? +m[3] : null;
+    const grade = e.grade === '+' || e.grade === '-' ? e.grade : m && m[4] ? m[4] : '';
+    return { dir, kind: sev, grade };
+  }
+  const wordOf = (k) => (k.kind === 'hairpin' ? 'Hairpin' : k.kind === 'square' ? 'Square' : SEVERITY[k.kind] || 'Bend');
+
+  /** The corner's name alone ("Easy right", "Hairpin left"), for the call that names the one after it (U-109). */
+  function plainHead(e) {
+    if (!e) return '';
+    const k = kindOf(e);
+    if (!k) return e.type && e.type !== 'corner' && e.call ? String(e.call) : '';
+    return `${wordOf(k)} ${k.dir === 'L' ? 'left' : 'right'}`;
+  }
+
+  /** One corner (or hazard) in plain words, warning first: "Careful, hairpin left, long". Hazards keep their own call. */
   function plainCall(e) {
-    if (!e || e.type !== 'corner') return e ? e.call : '';
-    const side = e.dir === 'L' ? 'left' : 'right';
-    let core;
-    if (e.severity === 'HP' || e.shape === 'hairpin') core = `Hairpin ${side}`;
-    else if (e.shape === 'acute') core = `Very sharp ${side}, almost back on itself`;
-    else if (e.shape === 'square') core = `Sharp ${side}, like a junction`;
-    else core = `${SEVERITY[e.severity] || 'Bend'} ${side}`;
-    const parts = [core, ...(e.mods || []).map((m) => MODS[m] || m)];
-    if (e.caution && CAUTION[e.caution]) parts.push(CAUTION[e.caution]);
-    return parts.join(', ');
+    if (!e || (e.type && e.type !== 'corner')) return e ? e.call : '';
+    const head = plainHead(e);
+    if (!head) return e.call || '';
+    const care = CAUTION[e.caution] || '';
+    const parts = [care ? upper(care) : '', care ? lower(head) : head, ...(e.mods || []).map((m) => MODS[m] || m)];
+    return parts.filter(Boolean).join(', ');
+  }
+
+  /** The next corner as a chain names it: its caution and its name ("careful, square left"), no modifiers. */
+  function plainNamed(e) {
+    if (!kindOf(e)) return lower(plainHead(e));
+    const care = CAUTION[e.caution] || '';
+    return (care ? `${care}, ` : '') + lower(plainHead(e));
+  }
+
+  /**
+   * The short notation for a note in `words` ('plain' | 'rally'): plain "TIGHT R", "HAIRPIN L", "SQUARE L"; rally "L4-",
+   * "LHP", "SQ L". null for anything not a corner (its own code stands: "CREST", "KEEP R").
+   */
+  function noteCode(e, words) {
+    const k = kindOf(e);
+    if (!k) return null;
+    if (words === 'plain') return `${wordOf(k).toUpperCase()} ${k.dir}`;
+    if (k.kind === 'hairpin') return `${k.dir}HP`;
+    if (k.kind === 'square') return `SQ ${k.dir}`;
+    return k.kind ? `${k.dir}${k.kind}${k.grade}` : null;
   }
 
   /**
@@ -35,21 +90,13 @@
     return said ? `then ${said}` : '';
   }
 
-  /** The corner's name alone ("Easy right", "Hairpin left"), for the call that names the one after it (U-109). */
-  function plainHead(e) {
-    if (!e) return '';
-    if (e.type !== 'corner') return e.call ? String(e.call) : '';
-    return plainCall({ ...e, mods: [], caution: 0 });
-  }
-  const lower = (s) => (s ? s.charAt(0).toLowerCase() + s.slice(1) : s);
-  const upper = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
-
   /**
-   * A chain as the page reads it: each note in plain words, joined by "then". REVIEW5 U-109: a chain whose last note links
-   * to the next by a distance names that next note, in `units` (ApexUnits.spokenShort; metres without): "Easy left, then
-   * easy right in 400 feet". With no next note given the link is dropped ("Easy left"), never "then 400 feet" with nothing
-   * after it. opts.next: the note after the chain. opts.card: Hale's delivery (REVIEW.md 4.4, "Left four. Tightens.
-   * Long."), every part its own sentence; the words are the same in every pack.
+   * A chain as the page reads it: each note in plain words, joined by "then", each caution in front of the corner it
+   * belongs to ("Open left, then careful, square left"). REVIEW5 U-109: a chain whose last note links to the next by a
+   * distance names that next note, in `units` (ApexUnits.spokenShort; metres without): "Easy left, then easy right in 400
+   * feet". With no next note given the link is dropped ("Easy left"), never "then 400 feet" with nothing after it.
+   * opts.next: the note after the chain. opts.card: Hale's delivery (REVIEW.md 4.4), every part its own sentence
+   * ("Careful. Tight right. Long."); the words are the same in every pack.
    */
   function plainChain(chain, units, opts = {}) {
     const parts = [];
@@ -62,13 +109,13 @@
     if (last && last.link && last.link !== 'into' && last.link !== 'and' && next) {
       const m = Number(last.link);
       const said = !Number.isFinite(m) ? '' : units && typeof units.spokenShort === 'function' ? units.spokenShort(m) : `${m} metres`;
-      const head = lower(plainHead(next));
-      if (said && head) parts.push(`then ${head} in ${said}`);
+      const named = plainNamed(next);
+      if (said && named) parts.push(`then ${named} in ${said}`);
     }
     const text = opts.card ? parts.map(upper).join('. ') : parts.join(', ');
     return text.replace(/\s+/g, ' ').trim();
   }
 
-  const api = { plainCall, plainHead, plainLink, plainChain, SEVERITY };
+  const api = { plainCall, plainHead, plainNamed, plainLink, plainChain, noteCode, kindOf, SEVERITY, CAUTION };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexPlainNotes = api;
 })(typeof window !== 'undefined' ? window : globalThis);

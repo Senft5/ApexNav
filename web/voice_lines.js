@@ -137,10 +137,13 @@
   // warning is the last thing heard. A run of chained corners gets none: the next call is coming.
   const ASIDE_SHAPES = { hairpin: 'aside:hairpin', acute: 'aside:acute', square: 'aside:square' };
   const ASIDE_MODS = ['tightens', 'off-camber', 'over crest', 'opens', 'long'];
+  // Panel round 1 M-2: a call that names a next corner, or says the distance to one, is the last word: no aside after it
+  // ("It goes on a while." landed after "…then square left in a quarter mile", about the wrong corner).
   function asideToken(chain) {
     if (!Array.isArray(chain) || chain.length !== 1) return null;
     const e = chain[0];
     if (!e) return null;
+    if (e.link && e.link !== 'into' && e.link !== 'and') return null;
     if (e.type === 'crest') return 'aside:crest';
     if (e.type !== 'corner' || e.recce || (e.caution || 0) >= 2) return null;
     if (e.severity === 'HP') return 'aside:hairpin';
@@ -154,15 +157,29 @@
    * the bank doesn't have yet, so a bank rendered before the asides says none rather than the phone's voice saying them.
    */
   const ASIDE_GAP_MS = 45000, ASIDE_SAME_MS = 180000;
+  // Panel round 1 M-2: two kinds of aside. Advice tells the driver what to do with the corner ("Brake before it, not in it",
+  // "Late apex"); it rides with the call, straight after it, or is not said. Colour is character ("Long one. Settle in.");
+  // it may come only while the driver has nothing to do yet. Both must end before the braking starts (note_timing.js
+  // asideDueByM). Which lines are advice is decided per pack, by what the line asks of the driver.
+  const ADVICE = {
+    marguerite: ['aside:hairpin', 'aside:acute', 'aside:square', 'aside:tightens', 'aside:off-camber', 'aside:over crest', 'aside:crest'],
+    kit: ['aside:tightens', 'aside:over crest', 'aside:crest'],
+    hale: ['aside:hairpin', 'aside:acute', 'aside:square', 'aside:tightens', 'aside:long'],
+  };
+  /** 'advice' or 'colour' for a pack's aside token. */
+  const asideKind = (pack, token) => ((ADVICE[pack] || []).includes(token) ? 'advice' : 'colour');
   function createAsides({ gapMs = ASIDE_GAP_MS, sameMs = ASIDE_SAME_MS } = {}) {
     let lastAt = -Infinity;
     const said = new Map();
     return {
-      pick(pack, chain, now, has = () => true) {
+      // fits({ token, text, kind }): whether it can still be said in time (M-2); one that can't is dropped and not counted
+      pick(pack, chain, now, has = () => true, fits = () => true) {
         const token = asideToken(chain), text = token && packLine(pack, token);
         if (!text || !has(token) || now - lastAt < gapMs || now - (said.get(token) ?? -Infinity) < sameMs) return null;
+        const kind = asideKind(pack, token);
+        if (!fits({ token, text, kind })) return null;
         lastAt = now; said.set(token, now);
-        return { token, text };
+        return { token, text, kind };
       },
       reset() { lastAt = -Infinity; said.clear(); },
     };
@@ -176,6 +193,6 @@
   /** The pack's sign-offs, in order: sys:end, sys:end2... (web/end_line.js picks one per drive). */
   function signOffs(id) { const p = packOf(id); return p ? Object.keys(p.lines).filter((k) => /^sys:end\d*$/.test(k)) : []; }
 
-  const api = { TEXT, PACKS, maneuver, distToken, laneToken, forText, num, packLine, asideToken, createAsides, sample, signOffs, ASIDE_GAP_MS, ASIDE_SAME_MS };
+  const api = { TEXT, PACKS, ADVICE, maneuver, distToken, laneToken, forText, num, packLine, asideToken, asideKind, createAsides, sample, signOffs, ASIDE_GAP_MS, ASIDE_SAME_MS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexVoiceLines = api;
 })(typeof window !== 'undefined' ? window : globalThis);

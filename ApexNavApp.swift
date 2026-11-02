@@ -8,6 +8,7 @@ import AuthenticationServices
 import MapKit
 import CryptoKit
 import ActivityKit
+import UserNotifications
 import ApexKit
 
 // =====================================================================================
@@ -429,6 +430,12 @@ final class ApexScriptBridge: NSObject, WKScriptMessageHandler {
             ApexBuildNotifier.requestPermission()
             return
         }
+        // The weekly reminder (panel round 1, R-1): off until the driver turns it on in Garage > Reminder; only then is the
+        // notification permission asked. The page says when and what (web/your_roads.js); one pending request at most.
+        if cmd == "nudge", let dict = body as? [String: Any] {
+            ApexNudge.handle(dict, shell: shell)
+            return
+        }
         // Location (U-65): asked when the page says, after the welcome, not at launch. Once answered this shows nothing.
         if cmd == "requestLocation" {
             shell?.requestLocation()
@@ -491,6 +498,44 @@ final class ApexScriptBridge: NSObject, WKScriptMessageHandler {
             }
         }
         shell?.handleCommand(cmd)
+    }
+}
+
+/// The weekly reminder (panel round 1, R-1; web/your_roads.js, cockpit.js scheduleNudge): one local notification, opt-in,
+/// at most once a week, the evening before the driver's usual day, naming the map's suggestion. `allow` asks for permission
+/// (only when the driver turns the switch on) and answers the page; `set` replaces the one pending request; `off` removes it.
+/// No streaks, no counts of days away: the page writes the words, and this only carries them (docs/APP_REVIEW.md).
+enum ApexNudge {
+    static let id = "vetta-nudge"
+
+    @MainActor
+    static func handle(_ dict: [String: Any], shell: ApexSensorShell?) {
+        switch dict["op"] as? String {
+        case "allow":
+            Task { @MainActor [weak shell] in
+                let granted = (try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound])) ?? false
+                shell?.sendToPage(["type": "nudge", "granted": granted])
+            }
+        case "set":
+            let atMs = (dict["at"] as? NSNumber)?.doubleValue ?? 0
+            let title = String(((dict["title"] as? String) ?? "").prefix(80))
+            let words = String(((dict["body"] as? String) ?? "").prefix(200))
+            let wait = atMs / 1000 - Date().timeIntervalSince1970
+            UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [id])
+            guard wait > 60, wait < 30 * 86400, !title.isEmpty else { return }
+            Task {
+                let center = UNUserNotificationCenter.current()
+                guard await center.notificationSettings().authorizationStatus == .authorized else { return }
+                let content = UNMutableNotificationContent()
+                content.title = title
+                content.body = words
+                content.sound = .default
+                let trigger = UNTimeIntervalNotificationTrigger(timeInterval: wait, repeats: false)
+                try? await center.add(UNNotificationRequest(identifier: id, content: content, trigger: trigger))
+            }
+        default:
+            UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [id])
+        }
     }
 }
 

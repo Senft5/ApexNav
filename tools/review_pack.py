@@ -162,6 +162,27 @@ def playable(path: str) -> bool:
         return False
 
 
+FAILURE = re.compile(r"error: -\[\w+\.ReviewFlows (test\w+)\] : (.+)$")
+
+
+def result(flow_dir: str) -> list[str]:
+    """Panel round 1 (D-3, T-6): what the flow's own test said, from test.log (xcodebuild's output, written by the workflow):
+    ["passed"], ["FAILED", why, ...], or [] when there is no log. The run itself stays green so the pack is always made."""
+    path = os.path.join(flow_dir, "test.log")
+    if not os.path.exists(path):
+        return []
+    with open(path, encoding="utf-8", errors="replace") as fh:
+        text = fh.read()
+    why = []
+    for line in text.splitlines():
+        m = FAILURE.search(line)
+        if m and m.group(2).strip() not in why:
+            why.append(m.group(2).strip())
+    if why or re.search(r"Test Case '-\[\w+\.ReviewFlows test\w+\]' failed", text):
+        return ["FAILED"] + why
+    return ["passed"] if re.search(r"Test Case '-\[\w+\.ReviewFlows test\w+\]' passed", text) else []
+
+
 def main(src: str, dst: str) -> int:
     os.makedirs(dst, exist_ok=True)
     index = ["# Vetta review recording", "",
@@ -209,8 +230,11 @@ def main(src: str, dst: str) -> int:
                 notes.append("NO INDEX (moov): the recording was not closed and will not open")
             return f"`{flow}/{v}.mp4`" + (f" ({'; '.join(notes)})" if notes else "")
         happened = events(os.path.join(flow_dir, "app-log.txt"), starts["phone"])
-        index += [f"## {flow}", "",
-                  f"- Steps: {len(steps['phone'])} phone photos" + (f", {len(steps['car'])} car photos" if steps["car"] else ""),
+        said_by_test = result(flow_dir)
+        index += [f"## {flow}", ""]
+        if said_by_test:
+            index += [f"- Result: **{said_by_test[0]}**"] + [f"  - {w}" for w in said_by_test[1:]]
+        index += [f"- Steps: {len(steps['phone'])} phone photos" + (f", {len(steps['car'])} car photos" if steps["car"] else ""),
                   f"- Contact sheets: `{flow}/sheet-phone.png`" + (f", `{flow}/sheet-car.png`" if steps["car"] else ""),
                   "- Video: " + ", ".join(video(v) for v in ("phone", "car") if os.path.exists(os.path.join(out, f"{v}.mp4"))),
                   f"- Spoken lines: {len(said)} (`{flow}/transcript.txt`)", ""]

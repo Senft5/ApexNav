@@ -9,7 +9,7 @@
 (function (root) {
   'use strict';
   // The rows, in the order a driver looks for them: what you share and keep, how the app reads, then the account and help.
-  const ORDER = ['roadfeel', 'zones', 'crash', 'units', 'motion', 'spots', 'data', 'account', 'feedback', 'about'];
+  const ORDER = ['roadfeel', 'zones', 'crash', 'nudge', 'units', 'motion', 'spots', 'data', 'account', 'feedback', 'about'];
   const GEAR = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v2.6M12 18.9v2.6M21.5 12h-2.6M5.1 12H2.5M18.7 5.3l-1.8 1.8M7.1 16.9l-1.8 1.8M18.7 18.7l-1.8-1.8M7.1 7.1L5.3 5.3"/><circle cx="12" cy="12" r="6.6"/></svg>';
 
   function mount(opts = {}) {

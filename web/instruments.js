@@ -3,11 +3,11 @@
 //
 //   mountCluster(el, theme) -> { update(d) }   d = { speedMph, paceMph, sightMph, limitMph,
 //                                                   latG, lonG, camberDeg, tripMi, totalMi, sector }
-//   renderNotes(el, theme, notes)               notes = [{ type, code, call, sub, dist, unit,
+//   renderNotes(el, theme, notes)               notes = [{ type, code, call, sub, dist, unit,   notes.words: 'plain' | 'rally'
 //                                                          dir, severity, turnRad, mods }]
 //   tulipSVG(note, ink, accent)                 roadbook tulip diagram (string)
 //   lockup(call, mods)                          the call split for the strip: { head, tail: [{ text, warn }] } (pure)
-//   stripCode(note)                             the short code the strip's next cells print ("R3", "KEEP L") (pure)
+//   stripCode(note, words)                      the short code the strip's next cells print ("R3", "TIGHT R", "KEEP L") (pure)
 (function (root) {
   'use strict';
   const NS = 'http://www.w3.org/2000/svg';
@@ -52,7 +52,13 @@
   // size down ("tightens · long · care") so a long call never wraps to four lines. The modifiers that change what you do
   // (tightens, off-camber, over crest) are marked to be drawn in the accent. Plain-words calls carry no modifiers: whole.
   const WARN_MODS = new Set(['tightens', 'off-camber', 'over crest']);
+  // Panel round 1, M-1: a plain-words call says its warning first ("Careful, hairpin left, long"); the head stays the
+  // corner and the caution leads the row under it, in the warning colour.
+  const CALM_WORDS = new Set(['long', 'opens']);
+  const LEAD_CAUTION = /^(careful|slow down|slow right down|very slow), (.+)$/i;
   function lockup(call, mods) {
+    const lead = LEAD_CAUTION.exec(String(call || ''));
+    if (lead) { const r = lockup(lead[2], mods); return { head: r.head.charAt(0).toUpperCase() + r.head.slice(1), tail: [{ text: lead[1].toLowerCase(), warn: true }, ...r.tail] }; }
     const text = String(call || ''), low = text.toLowerCase();
     let cut = text.indexOf(', ');
     for (const m of mods || []) { const i = low.indexOf(' ' + String(m).toLowerCase()); if (i > 0 && (cut < 0 || i < cut)) cut = i; }
@@ -65,7 +71,8 @@
       if (rest.startsWith(w)) { tail.push({ text: w, warn: WARN_MODS.has(w) }); rest = rest.slice(w.length).trim(); }
     }
     if (rest) tail.push({ text: rest, warn: false });                      // anything the list didn't name, kept as said
-    for (const c of caution) if (c.trim()) tail.push({ text: c.trim().toLowerCase(), warn: true });
+    // after a comma: a caution or a modifier in plain words; only the ones that change nothing you do (long, opens) are calm
+    for (const c of caution) if (c.trim()) tail.push({ text: c.trim().toLowerCase(), warn: !CALM_WORDS.has(c.trim().toLowerCase()) });
     return { head: text.slice(0, cut).trim(), tail };
   }
   // REVIEW5 U-107: the strip's grammar. Words belong to the head; every other cell prints the note's code under its
@@ -75,7 +82,13 @@
     [/^(exit|ramp|keep|bear|merge|sharp) (left|right)$/i, (m) => `${m[1]} ${m[2][0]}`], [/^exit (\S{1,4})$/i, (m) => `EXIT ${m[1]}`],
     [/^(left|right)$/i, (m) => `TURN ${m[1][0]}`], [/^u-turn/i, () => 'U-TURN'], [/^(ramp|merge|exit)/i, (m) => m[1]],
   ];
-  function stripCode(n) {
+  // Panel round 1, M-3 / P-2: a corner's code is the driver's notation (plain_notes.js noteCode): "TIGHT R", "HAIRPIN L"
+  // with plain words on, real rally codes ("L4-", "LHP", "SQ L") with rally words, never "LAC" / "LSQ" / "RSQ". `words`
+  // is the strip's notes.words; your own recce note keeps its code.
+  const plainNotes = () => root.ApexPlainNotes || (typeof module !== 'undefined' && typeof require === 'function' ? require('./plain_notes.js') : null);
+  function stripCode(n, words = 'rally') {
+    const P = n && n.type === 'corner' && !n.recce ? plainNotes() : null, own = P ? P.noteCode(n, words) : null;
+    if (own) return own;
     const code = String((n && n.code) || '').trim();
     if (n && n.type === 'turn') {
       if (n.dir === 'A') return 'ARRIVE';
@@ -159,7 +172,7 @@
     // Perf (2026-10-30): the page calls this several times a second in a drive, mostly with the same notes. The same page is
     // left as it is (a slide in progress runs on); a page whose only change is a distance has those numbers rewritten in
     // place; anything else is built anew, as before.
-    const shape = JSON.stringify([theme.notes, stripEpoch, ink, accent, signal, notes.quietText, notes.quietShort,
+    const shape = JSON.stringify([theme.notes, stripEpoch, ink, accent, signal, notes.quietText, notes.quietShort, notes.words,
       notes.slice(0, 3).map((n) => [n.key, n.type, n.code, n.call, n.sub, n.dir, n.severity, n.turnRad, n.angle, n.mods, n.recce, n.lanes])]);
     const dists = notes.slice(0, 3).map((n) => [n.dist == null ? '' : String(n.dist), n.unit == null ? '' : String(n.unit)]);
     if (el._shape === shape && el._built === el.firstChild && el.firstChild) {
@@ -205,7 +218,7 @@
       const t = html('div', 'rb-tulip', box);
       t.innerHTML = hz && i === 0 ? tulipSVG(n, themeVar('--hz-ink') || '#fff', themeVar('--hz-edge') || '#FF7A1A') : tulipSVG(n, ink, n.type === 'corner' ? accent : hz ? (themeVar('--hz-edge') || signal) : signal);
       if (i > 0) {                                                          // U-107: the next cells say the code, never words
-        html('b', 'rb-code', box, stripCode(n));
+        html('b', 'rb-code', box, stripCode(n, notes.words));
         return;
       }
       const c = html('div', 'rb-call', box);
@@ -233,7 +246,31 @@
         }
       }
     });
+    fitHead(el);
     el._shape = shape; el._dists = JSON.stringify(dists); el._built = el.firstChild;
+  }
+  // Panel round 1 M-3: a plain-words code ("MEDIUM R") is wider than "R3", and on the narrowest phones the head could then
+  // break mid-word ("SQUA / RE"). The head's words stay whole: the next cell's code steps down a size, and if that is not
+  // enough the next cell gives way, because the head is the call. Measured once per rebuild, never on a distance update.
+  function headBroken(h) {
+    const t = h && h.firstChild;
+    if (!t || t.nodeType !== 3 || typeof document.createRange !== 'function') return false;
+    if (h.scrollWidth > h.clientWidth + 1) return true;                  // a word that will not break runs out of its box
+    let i = 0;
+    for (const w of t.textContent.split(' ')) {
+      const r = document.createRange();
+      r.setStart(t, i); r.setEnd(t, i + w.length);
+      if (w && r.getClientRects().length > 1) return true;
+      i += w.length + 1;
+    }
+    return false;
+  }
+  function fitHead(el) {
+    const h = el.querySelector(':scope > .rb-box.now .rb-call span');
+    if (!headBroken(h)) return;
+    const next = el.querySelectorAll(':scope > .rb-box:not(.now)');
+    next.forEach((b) => { const c = b.querySelector('.rb-code'); if (c) c.style.fontSize = '12px'; });
+    if (headBroken(h)) next.forEach((b) => { b.style.display = 'none'; });
   }
 
   // -------------------------------------------------------------------------
