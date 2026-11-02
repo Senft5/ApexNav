@@ -80,7 +80,10 @@ jobs:
           START=$(date -u +"%Y-%m-%d %H:%M:%S")
           TEST_RUNNER_APEX_REVIEW=1 TEST_RUNNER_APEX_REVIEW_SESSION="$REVIEW_SESSION" xcodebuild test-without-building \
             -project ApexNav.xcodeproj -scheme ApexNav -destination "id=$UDID" -derivedDataPath build \
-            -only-testing:ApexNavUITests/ReviewFlows/${{ matrix.test }} -resultBundlePath out/${{ matrix.name }}/result.xcresult || true
+            -only-testing:ApexNavUITests/ReviewFlows/${{ matrix.test }} -resultBundlePath out/${{ matrix.name }}/result.xcresult 2>&1 \
+            | tee out/${{ matrix.name }}/test.log || true
+          # panel round 1 (D-3, T-6): the run stays green so the pack is always made, and the pack says which flows failed and
+          # why (tools/review_pack.py reads test.log), so a stuck step is a red line in INDEX.md, not seventeen quiet photos
           # REVIEW4_CHECK §4.1: simctl writes a video's index (the moov atom) after SIGINT, and a 20-minute car video takes
           # longer than the old 4 s to close: stop both, then wait for each to exit (up to 2 min) before anything is uploaded
           for p in $REC $CAR; do kill -INT "$p" 2>/dev/null || true; done
