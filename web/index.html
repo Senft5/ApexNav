@@ -57,6 +57,7 @@
   <script src="route_card.js" defer></script>
   <script src="plan_presets.js" defer></script>
   <script src="place_plate.js" defer></script>
+  <script src="your_roads.js" defer></script>
   <script src="horizon.js" defer></script>
   <script src="pro.js" defer></script>
   <script src="theme_sounds.js" defer></script>
@@ -670,6 +671,9 @@
     .drive-today .dt-date { width: 40px; height: 40px; background: var(--panel-ink); color: var(--panel); display: grid; place-content: center; text-align: center; font-family: var(--font-num); line-height: 1; }
     .drive-today .dt-date b { font-size: 18px; } .drive-today .dt-date small { font-size: 10px; letter-spacing: 0.06em; color: var(--panel); }
     .loop-suggest em { font-style: normal; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+    /* panel round 1 D-1: your roads under the suggestion, roadbooked like it; on a short landscape screen only the suggestion floats */
+    .your-road b, .your-road small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    @media (max-height: 540px) and (orientation: landscape) { #app.idle .loop-suggest.your-road { display: none !important; } }
     #hzReportBtn.undo { background: var(--hz-bg); color: var(--hz-ink); border: 2px solid var(--hz-edge); }
     .crew-gets { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 4px 0 8px; }
     .crew-gets span { display: grid; justify-items: center; gap: 6px; font-size: 13px; font-weight: 600; text-align: center; }
@@ -1315,6 +1319,15 @@
               <input class="field" id="crashPhone" type="tel" autocomplete="off" maxlength="24" placeholder="Phone number" aria-label="Emergency contact phone number">
             </div>
           </section>
+          <!-- panel round 1 R-1: one reminder, off until you turn it on, at most once a week; no streaks, no nag -->
+          <section data-panel="garage" data-setting="nudge" data-title="Reminder">
+            <h3>Reminder</h3>
+            <p class="note" style="margin:0 0 8px">One notification at most once a week, the evening before the day you usually drive (or before a crew drive you said you're going to), naming the road the map suggests. Off until you turn it on.</p>
+            <div class="row" style="flex-wrap:wrap">
+              <button class="sw" data-toggle="nudge"><i></i><span>Remind me the evening before</span></button>
+            </div>
+            <p class="note" id="nudgeState" role="status" aria-live="polite"></p>
+          </section>
           <section data-panel="garage" data-setting="units" data-title="Units">
             <h3>Units</h3>
             <div class="switch" role="radiogroup" aria-label="Units" id="unitsRow"><button data-units="imperial" role="radio">Miles and feet</button><button data-units="metric" role="radio">Kilometres and metres</button></div>
@@ -1435,7 +1448,7 @@
           <p class="end-line" id="endLine"></p>
           <!-- U-75: the solid key is Share card only when there is a score to share; otherwise it is Open in the Log, and Share
                waits as a link -->
-          <div class="end-acts"><button class="ink-btn solid" id="endShare">Share card</button><a class="ink-btn solid" id="endLogKey" href="analysis.html" hidden>Open in the Log</a><button class="ink-btn" id="endStage">Mark a stage</button></div>
+          <div class="end-acts"><button class="ink-btn solid" id="endShare">Share card</button><a class="ink-btn solid" id="endLogKey" href="analysis.html" hidden>Open in the Log</a><button class="ink-btn" id="endStage">Mark a stage</button><button class="ink-btn" id="endAgain" hidden>Drive it again</button></div>
           <div class="end-links"><a class="linkbtn" id="endLog" href="analysis.html">Open in the Log</a><button class="linkbtn" id="endShareLink" hidden>Share card</button><button class="linkbtn" id="endDone">Done</button></div>
         </div>
       </div>
@@ -1488,7 +1501,9 @@
       <div id="cluster"></div>
       <!-- one invitation on the idle map (REVIEW.md 3.1, mockup 01): a loop from here, drawn as a tulip -->
         <button class="loop-suggest" id="loopSuggest" aria-label="Plan a loop from here"><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M14 36 V22 Q14 10 26 8"/><path d="M22 3 L29 8 L23 13"/><circle cx="14" cy="36" r="2.4"/></svg>
-          <span><b id="loopSuggestTitle">Loop from here</b><small>On the twistiest roads nearby</small></span><em>Plan</em></button>
+          <span><b id="loopSuggestTitle">Loop from here</b><small id="loopSuggestWhy">On the twistiest roads nearby</small></span><em id="loopSuggestKey">Plan</em></button>
+      <!-- panel round 1 D-1: your own roads, a tap from driving them again (cockpit.js paintDeck, your_roads.js) -->
+        <div class="your-roads" id="yourRoads"></div>
       <!-- the morning of a crew drive you're going to, it takes the invitation's place (REVIEW.md roadmap 21) -->
         <button class="loop-suggest drive-today" id="driveToday" hidden><span class="dt-date" aria-hidden="true"><b id="driveTodayDay"></b><small id="driveTodayMon"></small></span>
           <span><b id="driveTodayTitle"></b><small id="driveTodayMeta"></small></span><em>Go</em></button>

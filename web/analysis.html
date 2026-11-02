@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-/jFAmsZTRn0yGmt6ZxcoxP+WXf7gDGquX2hzRT6am7Y=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-hjuf74jRM0M57kdbwuemZBI11U1n/FrM2NbGNnKoOH0=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta · Log</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -259,6 +259,7 @@
            the tags one row of stamps; the actions are moved under the score once it is drawn -->
       <div class="dv-acts" id="dvActs" role="group" aria-label="This drive">
         <button class="btn solid dv-replay" id="dvReplay">Replay</button>
+        <button class="linkbtn" id="dvAgain">Drive it again</button>
         <button class="linkbtn" id="dvCompare">Compare</button>
         <button class="linkbtn" id="dvShare">Share</button>
         <button class="linkbtn" id="dvCard">Share card</button>
@@ -1092,6 +1093,7 @@
       }
       // The drive's name is the page title (you arrive from the Log list); the picker stays only as this view's state.
       $('dvTitle').textContent = s.name;
+      $('dvAgain').hidden = !(Number.isFinite(s.len_m) && s.len_m >= 1000);   // panel D-1: a road to drive again, not an errand
       // Round 3 (drive_keep.js): a drive that ended itself, or was recovered after the app closed, says so
       const ended = window.ApexDriveKeep ? ApexDriveKeep.endNote(s) : null;
       $('dvNote').textContent = [dateLabel(s), s.source === 'web-gps' ? 'Recorded on this phone' : s.source === 'imported' ? 'Imported' : 'Example drive', ended].filter(Boolean).join(' · ');
@@ -1233,6 +1235,11 @@
     $('dvReplay').addEventListener('click', () => {
       const id = $('dvPick').value;
       if (id) ApexReturn.open('index.html?drive=' + encodeURIComponent(id) + '&play=1');   // the map page, also from inside its Log frame
+    });
+    // panel D-1: Drive it again plans this drive's route on the map (cockpit.js driveAgain), from here to its start and along it
+    $('dvAgain').addEventListener('click', () => {
+      const id = $('dvPick').value;
+      if (id) ApexReturn.open('index.html?again=' + encodeURIComponent(id));
     });
     $('dvShare').addEventListener('click', async () => {
       const id = $('dvPick').value, d = summaryOf(id);
