@@ -619,6 +619,8 @@
     .end-score b { font: 800 84px/0.9 var(--font-num); font-variant-numeric: tabular-nums; }
     .end-score b.unk { font-weight: 600; color: var(--panel-dim); letter-spacing: 0.06em; }
     .end-score small { font-size: 18px; font-weight: 600; color: var(--panel-dim); }
+    .end-score.no-score b { grid-column: 1 / -1; font: 700 22px/1.25 var(--font-ui); letter-spacing: 0; color: var(--panel-ink); }   /* D-6: the drive, in words */
+    .end-score.no-score small, .end-score.no-score span { display: none; }
     .end-score span { grid-column: 1 / -1; margin-top: 6px; font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--panel-dim); }
     .end-line { margin: 12px 0 0; font-size: 16px; line-height: 1.35; }
     .end-acts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 18px; }
@@ -629,6 +631,7 @@
     #endCard.overlay.dim { background: rgba(0, 0, 0, 0.22); }
     .end-links { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; }
     .end-links > * { margin: 0; padding: 0 4px; line-height: 1.2; min-height: 44px; display: inline-flex; align-items: center; }   /* the link and the key on one line, the same box */
+    .ob-link { margin-top: 10px; font-weight: 600; } .ob-link[hidden] { display: none; }   /* P-1: the link that brought you waits */
     .ob-strip { width: 100%; max-width: 420px; margin: 26px auto 0; border-top: 2px solid var(--panel-ink); border-bottom: 1px solid var(--rule); text-align: left; }
     .ob-strip .notes { position: static; min-height: 84px; padding-left: 0; padding-right: 0; }
     .ob-strip .notes.notes-roadbook { height: 92px; padding-top: 6px; }   /* U-133: the welcome's loop holds still too */
@@ -1536,6 +1539,7 @@
       </svg>
       <h1>Your co-driver for the long way home.</h1>
       <p>Calls every corner before you reach it.</p>
+      <p class="ob-link" id="obLink" hidden></p>
       <!-- the product in one look (REVIEW.md 1.2, Onboarding 1): the road book calling a real road's corners, silent -->
       <div class="ob-strip" aria-hidden="true"><div class="notes" id="obNotes"></div></div>
     </div>

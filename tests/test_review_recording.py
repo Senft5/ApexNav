@@ -175,8 +175,8 @@ def test_recording_notes_of_the_fifth_recording():
     assert "return find([\"Open in the Log\"], wait: 6) != nil" in flows
     # §7.2: the tab bar on screen (bottom quarter, no replay over it) before a tab is tapped, and after the replay closes
     tab = flows[flows.index("private func tab(_ name: String)"):flows.index("private func scroll(")]
-    assert tab.index("tabBarShown()") < tab.index("tap(name, wait: 6)") and "XCTAssertTrue(until(6, tabBarShown)" in tab
-    assert "XCTAssertTrue(until(8, tabBarShown)" in flows[flows.index("private func closeReplay()"):]
+    assert tab.index("tabBarShown()") < tab.index("tap(name, wait: 6)") and "guard until(6, tabBarShown) else { throw stop(" in tab
+    assert "guard until(8, tabBarShown) else { throw stop(" in flows[flows.index("private func closeReplay()"):]
     assert 'onScreen($0, below: 0.75)' in flows and "all.element(boundBy: i)" in flows, "every match looked at, not the first"
     # §7.3: a swipe that changes nothing ends the scrolling
     scroll = flows[flows.index("private func scroll("):flows.index("// MARK: The car")]
@@ -202,3 +202,60 @@ def test_recording_notes_of_the_fifth_recording():
     assert "test: test09DynamicType, name: dynamic-type" in yml
     for tag in ('tab("Garage")', 'tab("People")', 'tab("Log")', 'shot("route-card")', '"cockpit"'):
         assert tag in dyn, tag
+
+
+def test_recording_notes_of_panel_round_1():
+    """Panel round 1, rank 5 (D-3, R-4c, R-5, T-6, I-6) and the guided drive reaching End: the replay's Done found by its
+    real name and a missing tab bar stopping the flow; the theme waiting for the review route and stopping the flow when it
+    didn't take; the guided drive never querying the page on its side; the deck and the end card checked after a drive;
+    the pack saying which flows failed."""
+    flows = read("UITests", "ReviewFlows.swift")
+    body = lambda t: flows.split(f"func {t}()")[1].split("    func test")[0]
+    html = read("web", "index.html")
+    # D-3 / R-4c: recording 6 looked for "Done" and "Close the replay"; the key is named "Done: close the replay"
+    assert 'id="replayDone" aria-label="Done: close the replay"' in html
+    done = flows[flows.index("private func replayDone()"):flows.index("private func closeReplay()")]
+    assert '"Done: close the replay"' in done and 'tap("Done", "Close the replay"' not in flows
+    close = flows[flows.index("private func closeReplay() throws"):flows.index("@discardableResult private func endDrive()")]
+    assert close.index("replayDone()") < close.index("guard until(8, tabBarShown) else { throw stop(")
+    tabs = body("test02Tabs")
+    assert tabs.index("try closeReplay()") < tabs.index('try tab("Log")')
+    assert tabs.count('try tab("Garage")') == 1, "the Garage tab twice in a row closes the Garage"
+    assert "XCTFail(why)" in flows and "struct FlowStopped: Error" in flows
+    # T-6: the themed flows wait for their route, and a theme that didn't take stops the flow
+    theme = flows[flows.index("private func theme("):flows.index("/// The drive just ended, in the Log")]
+    assert 'web.buttons["Route details"]' in theme and theme.index("if route {") < theme.index('try tab("Garage")')
+    assert 'guard took() else { throw stop("\\(name) did not take' in theme
+    assert 'try theme("Billet", night: false, route: true)' in body("test07Billet")
+    assert 'try theme("Tapedeck", night: true, route: true)' in body("test06TapedeckNight")
+    # the guided drive: the Report key upright in one query, the phone turned only once the sheet is up (recording 6 ended
+    # at step 24 on a snapshot timeout); the window read once a flow, not on every lookup
+    guided = body("test04GuidedDrive")
+    assert guided.index('"Report a hazard"') < guided.index(".landscapeLeft") < guided.index('shot("report-sheet-landscape")')
+    assert 'tap("Report a hazard"' not in guided
+    on = flows[flows.index("private func onScreen("):flows.index("private func tabBarShown()")]
+    assert "screenFrame()" in on and "app.windows.firstMatch.frame" not in on
+    assert 'XCTAssertTrue(endDrive(), "the guided drive never reached End (no end card)")' in guided
+    # R-5 / I-6 in the pack: the deck after the car-started drive, no end card over the Garage
+    assert 'web.buttons["Start drive"]' in body("test05FreeDrive") and "the deck (Where to? and Start) is not back" in body("test05FreeDrive")
+    assert '"the drive\'s end card is over the Garage"' in body("test09DynamicType")
+    # failures reach the pack
+    yml = read(".github", "workflows", "app-review.yml")
+    assert "| tee out/${{ matrix.name }}/test.log || true" in yml
+
+
+def test_pack_says_which_flows_failed(tmp_path):
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("review_pack", os.path.join(ROOT, "tools", "review_pack.py"))
+    pack = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(pack)
+    bad, good, none = tmp_path / "bad", tmp_path / "good", tmp_path / "none"
+    for d in (bad, good, none):
+        d.mkdir()
+    (bad / "test.log").write_text(
+        "Test Case '-[ApexNavUITests.ReviewFlows test02Tabs]' started.\n"
+        "/x/UITests/ReviewFlows.swift:243: error: -[ApexNavUITests.ReviewFlows test02Tabs] : failed - the replay did not close (no tab bar after Done)\n"
+        "Test Case '-[ApexNavUITests.ReviewFlows test02Tabs]' failed (300.1 seconds).\n", encoding="utf-8")
+    (good / "test.log").write_text("Test Case '-[ApexNavUITests.ReviewFlows test01FirstRun]' passed (90.0 seconds).\n", encoding="utf-8")
+    assert pack.result(str(bad)) == ["FAILED", "failed - the replay did not close (no tab bar after Done)"]
+    assert pack.result(str(good)) == ["passed"] and pack.result(str(none)) == []

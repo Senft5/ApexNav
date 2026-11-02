@@ -3196,6 +3196,7 @@
       $('sheet').querySelector('.body').scrollTop = 0;
     }
     function showView(v) {
+      if (v) $('endCard').classList.remove('show');                    // R-5 / I-6: a tab never opens under the drive's card
       if (v === 'log') { openLog('analysis.html?tab=log'); return; }
       if (v === 'stages') { openLog('analysis.html?tab=stages'); return; }
       if (v === 'setup') v = 'garage';                                   // Settings live in the Garage now (REVIEW.md roadmap 9)
@@ -3243,6 +3244,7 @@
       return f;
     }
     function openLog(url) {
+      $('endCard').classList.remove('show');                           // R-5 / I-6: the Log takes the screen, not under the card
       const f = logFrameEl(url), api = logApi();
       if (api) {
         for (const what of logFrame.pending) api.changed(what);         // what changed while it was hidden, said once each
@@ -3289,9 +3291,17 @@
       e.preventDefault(); openLog(a.getAttribute('href'));
     });
     // Plan: the bar is always there (not while driving); tap it, or drag it up, for From / To, places, loops and the route card.
+    // R-5 (panel round 1): the bar's height, measured only while it is laid out. A drive hides the deck (#app.live) and then
+    // closes it, which measured 0 and parked the deck 2 px tall behind the tab bar for good: Where to? and Start were gone
+    // after a car-started drive (free-drive/phone/021).
+    function measurePlanBar() {
+      const h = $('planBar').offsetHeight;
+      if (!h) return;
+      $('planPanel').style.setProperty('--plan-bar', `${h + 2}px`); document.documentElement.style.setProperty('--plan-bar', `${h + 2}px`);   // the floating loop (landscape) sits above it
+    }
     function openPlan(open) {
       const panel = $('planPanel');
-      panel.style.setProperty('--plan-bar', `${$('planBar').offsetHeight + 2}px`); document.documentElement.style.setProperty('--plan-bar', `${$('planBar').offsetHeight + 2}px`);   // the floating loop (landscape) sits above it
+      measurePlanBar();
       const closing = !open && panel.classList.contains('open');
       panel.classList.toggle('open', open);
       $('app').classList.toggle('plan-open', open);
@@ -5285,7 +5295,7 @@
       const on = state.mode === 'live';
       $('driveBar').hidden = !on; $('transport').hidden = on;
       $('app').classList.toggle('live', on);
-      if (!on) $('hzPlate').hidden = true;
+      if (!on) { $('hzPlate').hidden = true; measurePlanBar(); }
       if (on) { $('app').classList.remove('sheet-open'); openPlan(false); }
       if (on !== drawDetail.edges) { drawDetail.edges = on; setDriveEdges(on); }   // F-02/F-05: once per start and end
     }
@@ -6132,6 +6142,7 @@
       $('endLine').textContent = ended ? ended + '.' : '';
       // scoring: no number yet, never "--" (that means "no score"), and no key that needs the score
       $('endScore').textContent = '…'; $('endScore').classList.add('unk'); $('endScore').setAttribute('aria-busy', 'true');
+      $('endScore').parentElement.classList.remove('no-score');
       $('endLog').href = $('endLogKey').href = `analysis.html?tab=drive&drive=${encodeURIComponent(c.id)}`;
       // U-118: the keys are the scored layout from the first frame (Share card solid, Open in the Log the link), so nothing
       // swaps under a reaching finger when the score lands; Share waits for it. Only a drive with no score changes them.
@@ -6140,6 +6151,8 @@
       $('endCard').classList.add('show');
       showEndTrail(c);
     }
+    // what a drive with no score was, in the score's slot: no corners at all, or too few clean ones to score
+    const noScoreWords = (corners) => (Number.isFinite(corners) && corners > 0 ? 'too few clean corners to score' : 'no corners to score');
     // The score arrived (ds: { score, components }, corners: a count; others: your earlier drives with this name, scored)
     function endCardScored(c, others, opts = {}) {
       if (!endDrive || endDrive.id !== c.id) return;                   // another card since
@@ -6148,10 +6161,14 @@
       $('endMeta').textContent = [Number.isFinite(c.len_m) ? ApexUnits.long(c.len_m, 1) : null, mins != null ? (mins >= 60 ? `${Math.floor(mins / 60)} h ${mins % 60} min` : `${mins} min`) : null,
         Number.isFinite(c.corners) ? `${c.corners} corners` : null].filter(Boolean).join(' · ');
       $('endScore').removeAttribute('aria-busy');
-      $('endScore').textContent = c.ds.score == null ? '--' : String(c.ds.score);
-      $('endScore').classList.toggle('unk', c.ds.score == null);   // unknown in pencil, not two black bars (REVIEW2.md U-34)
+      // D-6 / R-5 (panel round 1): a drive with no score still reads as a drive. The score's slot says what it was, "3.1 mi ·
+      // no corners to score", instead of "-- /1000" over a sentence about a failed exam; nothing is invented (no number).
+      const none = c.ds.score == null;
+      $('endScore').textContent = none ? [Number.isFinite(c.len_m) ? ApexUnits.long(c.len_m, 1) : null, noScoreWords(c.corners)].filter(Boolean).join(' · ') : String(c.ds.score);
+      $('endScore').classList.remove('unk');                         // the words are the answer; "--" never shows as a score here
+      $('endScore').parentElement.classList.toggle('no-score', none);
       // U-111: one coaching sentence, the Log's (analysis_client.js coachLineOf, written in the job that scored the drive)
-      const tip = c.ds.score == null ? 'Not enough clean corners for a score this time.' : typeof c.coach === 'string' ? c.coach : '';
+      const tip = none ? '' : typeof c.coach === 'string' ? c.coach : '';
       const ended = window.ApexDriveKeep ? ApexDriveKeep.endNote(c) : null;
       const tipLine = [ended ? ended + '.' : '', tip].filter(Boolean).join(' ');
       // your best on this road (REVIEW.md 4.4): against your earlier drives named after the same road; then the pack's closing line
@@ -6459,7 +6476,16 @@
     $('trialStop').addEventListener('click', () => endThemeTrial(false));
     $('trialWatch').addEventListener('click', () => { watchDryRidge().then(paintTrial); });
     // the plate's × and (U-104) the transport's Done close a replay or a preview alike
-    const closeReplay = () => { if (state.mode === 'live' || !replayOn) return; replayOn = false; setPlaying(false); paintIdle(); };
+    // D-3 (panel round 1): Done gives the app back whatever mode the page was in. Only a drive in progress keeps the plate (it
+    // reads "Drive ● Rec" then); a page left in 'live' with no drive behind it (frames that stopped) goes back to the replay
+    // mode, and the idle deck, the tabs and the plan bar come back with it.
+    const closeReplay = () => {
+      if (driveActive) return;
+      if (!replayOn && state.mode !== 'live') return;
+      replayOn = false; setPlaying(false);
+      if (state.mode === 'live') { state.live = null; setMode(track && track.kind === 'route' ? 'sim' : 'replay'); paintModeSwitch(); }
+      paintIdle(); measurePlanBar();
+    };
     $('modePlate').addEventListener('click', closeReplay);
     $('replayDone').addEventListener('click', closeReplay);
     // I-3 (panel round 1): End can't be a mis-tap. It sat 6 pt from Report and ended the drive at once. Now End says so in
@@ -6549,7 +6575,11 @@
     // U-65: the welcome runs in the app too (it was web only from the first import, when the shell asked for location at
     // launch and its sheet would have covered the welcome; the shell now waits for askLocation). A link that opened the app
     // for something still goes straight to it.
-    if (!flag('apex.onboarded') && !['invite', 'crew', 'add', 'convoy', 'drive', 'play', 'at', 'theme', 'go'].some(k => params.has(k))) runOnboarding();
+    // P-1 (panel round 1): a crew, friend or invite link is a newcomer's way in, so it opens the welcome first (one more line
+    // says the link waits), and the link's own side of People is under it when Start closes it (renderAccount opens it).
+    const linkIn = ['crew', 'invite', 'add'].find(k => params.has(k));
+    if (!flag('apex.onboarded') && linkIn) { $('obLink').textContent = linkIn === 'crew' ? 'A crew link is waiting. It opens after Start.' : 'A friend’s link is waiting. It opens after Start.'; $('obLink').hidden = false; }
+    if (!flag('apex.onboarded') && !['convoy', 'drive', 'play', 'at', 'theme', 'go'].some(k => params.has(k))) runOnboarding();
     else if (!flag('apex.onboarded')) flag('apex.onboarded', '1');     // a link's first open: location waits for a Start drive
     else askLocation();
     // What's new after an update (IDEAS O-10; web/whats_new.js): once, a moment after the page settles, never over a drive or a
