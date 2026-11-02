@@ -106,6 +106,46 @@
     };
   }
 
+  // Panel round 2 MA-1: quiet means quiet. Waking and sleeping use different numbers, so the mode can't flap at its own
+  // edge (the guided drive: "Quiet from here" with OPEN LEFT at 600 ft on the strip, and "Open left" six seconds later).
+  // The notes stay awake while a waking corner lies within twice its wake window (never under SLEEP_MIN_M) or within a
+  // minute's driving beyond its wake point, or while any corner is within its own call lead. Wake stays at wakeWindowM.
+  const SLEEP_MIN_M = 1600, QUIET_MIN_S = 60, QUIET_SAID_M = 800;
+  /** The corner that keeps Auto awake now, or null when it may go quiet. */
+  function keepsAwake(corners, { cursorM, vMps, reactionS = REACT_DEFAULT_S }) {
+    const v = finite(vMps) ? Math.max(0, vMps) : 0;
+    for (const c of corners || []) {
+      const d = c.m - cursorM;
+      if (d < -5) continue;
+      const w = wakeWindowM({ vMps: v, apexMps: c.apexMps, text: c.text, reactionS });
+      if (wakes(c, v) && d <= Math.max(SLEEP_MIN_M, 2 * w, w + v * QUIET_MIN_S)) return c;
+      if (d <= leadM({ vMps: v, apexMps: c.apexMps, text: c.text, reactionS })) return c;
+    }
+    return null;
+  }
+  /** Metres the quiet lasts: to where the next waking corner wakes the notes. null when no corner ahead wakes them. */
+  function quietM(corners, { cursorM, vMps, reactionS = REACT_DEFAULT_S }) {
+    const c = nextWake(corners, { cursorM, vMps });
+    return c ? Math.max(0, c.m - cursorM - wakeWindowM({ vMps, apexMps: c.apexMps, text: c.text, reactionS })) : null;
+  }
+  /**
+   * How long the quiet lasts, as the voice says it ("two miles", "half a mile", "three kilometres"), rounded down so it
+   * never promises more quiet than there is; null under QUIET_SAID_M (too short to announce) or when unknown. `units`:
+   * ApexUnits (miles unless it says metric).
+   */
+  const NUM = { 1: 'one', 2: 'two', 3: 'three', 4: 'four', 5: 'five', 6: 'six', 7: 'seven', 8: 'eight', 9: 'nine', 10: 'ten' };
+  const count = (h, unit) => { const n = Math.floor(h), half = h - n >= 0.5;
+    return n === 1 && !half ? `a ${unit}` : `${NUM[n] || n}${half ? ' and a half' : ''} ${unit}s`; };
+  function quietSpan(m, units) {
+    if (!finite(m) || m < QUIET_SAID_M) return null;
+    if (units && typeof units.metric === 'function' && units.metric()) {
+      const km = Math.floor(m / 500) / 2;
+      return km < 1 ? 'eight hundred metres' : count(km, 'kilometre');
+    }
+    const mi = m / 1609.344;
+    return mi < 0.75 ? 'half a mile' : mi < 1 ? 'three quarters of a mile' : count(Math.floor(mi * 2) / 2, 'mile');
+  }
+
   // U-96: a call is worth starting only while the line can end with a beat to act before the corner's entry. Inside that
   // the corner is already the driver's (the review drive: "Open left" with the strip at 0 ft, the first call after a wake
   // and an off-route spell); it is skipped, never read in the corner.
@@ -114,18 +154,46 @@
   const lastCallM = ({ vMps, text = '' }) => (finite(vMps) ? Math.max(0, vMps) : 0) * (speakS(text) + LATE_S);
 
   // Panel round 1 M-2 (docs/design/panel/round-1/margo.md): an aside never lands inside the braking zone. "Brake well
-  // before this one." came 100 ft from a hairpin at 22 mph, when the driver was already braking. The last metre before a
-  // note's entry an aside may START at: advice ends a beat before the braking point; colour must be done before the point
-  // the call itself would be read (leadM: braking, reaction and thinking time); and neither starts under ASIDE_MIN_S from
-  // the corner at this speed. Past it the aside is dropped, never deferred.
+  // before this one." came 100 ft from a hairpin at 22 mph, when the driver was already braking.
+  // Panel round 2 MA-3 (docs/design/panel/round-2/ma.md): round 1's gate asked a line chosen after the call to end before
+  // the call began, so no aside ever played. Now the aside is planned with the call, and the call starts early enough to
+  // carry it: advice rides INSIDE the call ("Careful, hairpin left, long. Brake before it, not in it.", one utterance);
+  // colour is its own clip straight after the call. Either way the whole line ends at least asideMarginM before the
+  // corner's entry: before the braking point with a thinking beat and a reaction to spare, and never under ASIDE_MIN_S out.
+  // An aside that can't end by then is dropped, never deferred, and the call is said on its own lead as always.
   const ASIDE_MIN_S = 4;
-  function asideDueByM({ atM, vMps, apexMps = null, text = '', kind = 'colour', reactionS = REACT_DEFAULT_S }) {
-    if (!finite(atM)) return null;
+  const CUE_S = 0.3;          // the pre-call sound and the gap before a following clip
+  const ASIDE_SLACK_S = 1;    // the call may start up to a second's driving after the planned point (frames, a busy queue)
+  /** The advice said as the call's last clause: "Careful, hairpin left, long. Brake before it, not in it." */
+  const withAdvice = (callText, advice) => `${String(callText || '').replace(/[.\s]+$/, '')}. ${String(advice || '').trim()}`;
+  const brakeM = (v, apexMps) => (finite(apexMps) && apexMps < v ? (v * v - apexMps * apexMps) / (2 * DECEL_MPS2) : 0);
+  /** Metres before the entry that a call with an aside must be done by: max(ASIDE_MIN_S, think + react + braking). */
+  function asideMarginM({ vMps, apexMps = null, reactionS = REACT_DEFAULT_S }) {
     const v = finite(vMps) ? Math.max(0, vMps) : 0;
-    const brake = finite(apexMps) && apexMps < v ? (v * v - apexMps * apexMps) / (2 * DECEL_MPS2) : 0;
-    const back = kind === 'advice' ? v * (speakS(text) + LATE_S) + brake : leadM({ vMps: v, apexMps, text, reactionS });
-    return atM - Math.max(back, v * ASIDE_MIN_S);
+    return Math.max(v * ASIDE_MIN_S, v * (THINK_S + reactionS) + brakeM(v, apexMps));
   }
+  /** Seconds the call and its aside take: one line for advice, call + cue + clip for colour. */
+  const asideSpeechS = ({ callText = '', text = '', kind = 'colour' }) =>
+    (kind === 'advice' ? speakS(withAdvice(callText, text)) : speakS(callText) + CUE_S + speakS(text));
+  /**
+   * A call with its aside, `dM` metres before the corner's entry (route metre `atM`): { leadM, fits, dueByM }. leadM: where
+   * to start the call so call and aside end asideMarginM before the entry (a second of slack in it); fits: said from here,
+   * it still ends by then; dueByM: the last route metre the aside's line may start at (advice: the whole call; colour:
+   * the clip after it), for the speech queue to drop it once late.
+   */
+  function asideWindow({ dM, atM = null, vMps, apexMps = null, callText = '', text = '', kind = 'colour', reactionS = REACT_DEFAULT_S }) {
+    const v = finite(vMps) ? Math.max(0, vMps) : 0;
+    const margin = asideMarginM({ vMps: v, apexMps, reactionS }), speech = asideSpeechS({ callText, text, kind });
+    const leadM = v * (speech + ASIDE_SLACK_S) + margin;
+    const fits = v > 0 && finite(dM) && dM - v * speech >= margin;
+    const own = kind === 'advice' ? speakS(withAdvice(callText, text)) : speakS(text);
+    return { leadM, fits, dueByM: finite(atM) ? atM - margin - v * own : null };
+  }
+
+  // MA-2: a chain names the next corner only while the link is short enough to carry: 150 m, or 6 s at this speed. Past
+  // that the next corner gets its own call at its own lead ("then ... in a quarter mile" at 28 mph was 32 s ahead).
+  const NAME_NEXT_M = 150, NAME_NEXT_S = 6;
+  const chainReachM = (vMps) => Math.max(NAME_NEXT_M, (finite(vMps) ? Math.max(0, vMps) : 0) * NAME_NEXT_S);
 
   // REVIEW4 §4: "careful" after every tight corner stops meaning anything by the third; a rally co-driver says it once a
   // stage. A run of corners is corners called each within CARE_RUN_M of the one before on one route (the notes going quiet
@@ -141,12 +209,20 @@
         return run;
       },
       take() { if (cared) return false; cared = true; return true; },
+      // A note as the run says it: its "care" (caution 1) spent the first time in the run, left off after. Panel round 2
+      // MA-2: a chain that names the next corner with its "careful" spends it for that corner too, so the corner's own
+      // call comes without it ("Square left"): one word, one corner.
+      spend(n) {
+        if (!n || n.type !== 'corner' || n.recce || n.caution !== 1 || run.take()) return n;
+        return { ...n, caution: 0, call: String(n.call).replace(/, care$/i, '') };
+      },
       reset() { lastM = null; id = null; cared = false; },
     };
     return run;
   }
 
-  const api = { leadM, speakS, lastCallM, LATE_S, asideDueByM, ASIDE_MIN_S, createCareRun, CARE_RUN_M, createReactionLearner, needsBrake, wakes, wakeWindowM, wakeCorner, nextWake, createWakeVoice,
+  const api = { leadM, speakS, lastCallM, LATE_S, asideWindow, asideMarginM, withAdvice, ASIDE_MIN_S, chainReachM, NAME_NEXT_M, NAME_NEXT_S,
+    keepsAwake, quietM, quietSpan, SLEEP_MIN_M, QUIET_MIN_S, QUIET_SAID_M, createCareRun, CARE_RUN_M, createReactionLearner, needsBrake, wakes, wakeWindowM, wakeCorner, nextWake, createWakeVoice,
     DECEL_MPS2, MIN_M, MAX_M, REACT_DEFAULT_S, THINK_S, WAKE_MIN_M, TRANSITION_GAP_MS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexNoteTiming = api;
 })(typeof window !== 'undefined' ? window : globalThis);

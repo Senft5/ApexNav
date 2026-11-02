@@ -1089,7 +1089,7 @@
     const inPrivacyZone = (lat, lon) => !!ApexPrivacyZones.zoneAt(privacyZones, lat, lon);
     // queue: what to say next, hazards first, stale and duplicate lines dropped (speech_queue.js, IDEAS V-03). current: the line playing.
     // talkingUntil: the native voice's estimated end (it reports no finish).
-    const speech = { busy: false, queue: ApexSpeechQueue.createSpeechQueue(), current: null, talkingUntil: 0, nativeTimer: 0, via: null };
+    const speech = { busy: false, queue: ApexSpeechQueue.createSpeechQueue(), current: null, talkingUntil: 0, nativeTimer: 0, via: null, chime: null };
     const MEMO_S = 5;   // a remembered coaching tip takes up to this long to say
     let breakSay = null;  // a break suggestion waiting for a quiet moment (noteRest sets it, the notes loop says it)
     const NUM_WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
@@ -1126,9 +1126,6 @@
     // review recordings (.github/workflows/app-review.yml, debug builds only): every line said goes to the system log, a
     // transcript to read beside the video, which has no sound
     function saidLog(text) { if (window.APEX_REVIEW) { try { window.webkit.messageHandlers.apex.postMessage({ cmd: 'said', text: String(text) }); } catch (_) {} } }
-    // a pack line's words (voice_lines.js PACKS), the ones its clip holds, so the transcript and the phone's voice say what
-    // the pack says (U-113); the fallback for the phone's own voice
-    const packSays = (token, fallback) => (window.ApexVoiceLines && ApexVoiceLines.packLine(state.voiceId, token)) || fallback;
     function say(text, force, chain = null, sysToken = null, opts = {}) {
       // a road hazard (not a turn or a crest, which share the urgent speech lane) also alerts on the car's screen
       if (text && opts.alert && driveActive) carPost({ kind: 'hazard', title: text });
@@ -1147,6 +1144,13 @@
     }
     // A hazard said ahead of whatever ordinary lines are waiting (convoy hazard calls far ahead).
     function sayNext(text, key) { say(text, false, null, null, { kind: 'hazard', key }); }
+    // Panel round 2 LA-4: a change of notes mode is a chime ('wake' rising, 'sleep' falling, theme_sounds.js MODE), never
+    // the mode's name. It waits for the voice to be free and plays before the next line, or alone if none waits.
+    function chime(kind) {
+      if (!state.toggles.voice) return;
+      speech.chime = kind;
+      if (!speech.busy) pumpSpeech();
+    }
     const queueCursor = () => (track && state.cursorIdx >= 0 ? state.cursorM : null);
     // A hazard waiting while an ordinary line plays: cut the line off. A model-voice clip is short and finishes; the hazard is next.
     function preemptForHazard() {
@@ -1188,14 +1192,25 @@
       if (follow && !speech.queue.size && state.toggles.voice) {
         speech.queue.push({ text: follow.text, tokens: [follow.token], kind: 'ordinary', dueByM: follow.dueByM, maxAgeMs: 3000, duck: true, key: 'aside', repeatMs: 0 }, performance.now());
       }
-      const item = speech.queue.take(performance.now(), queueCursor());
-      if (!item) { speech.current = null; speech.via = null; return; }
-      speech.followUp = item.aside || null;
+      let item = speech.queue.take(performance.now(), queueCursor());
+      const chimed = speech.chime; speech.chime = null;   // LA-4: a mode chime waiting for the voice to be free
+      if (!item) {
+        speech.current = null; speech.via = null;
+        if (chimed) saidLog(`[chime: ${chimed}]`);   // review recordings: the earcon in the transcript, where the line used to be
+        if (chimed && window.ApexThemeSounds && window.ApexVoice) { try { ApexThemeSounds.play(ApexVoice.unlock(), ApexThemeSounds.recipe(state.theme, chimed)); } catch (_) {} }
+        return;
+      }
+      // MA-3: advice rides in its call; a call that waited in the queue past the advice's last start says the call alone
+      const advice = item.aside && item.aside.kind === 'advice' ? item.aside : null;
+      if (advice && typeof advice.dueByM === 'number' && queueCursor() != null && queueCursor() > advice.dueByM) item = { ...item, text: advice.bare || item.text, aside: null };
+      speech.followUp = item.aside && item.aside.kind !== 'advice' ? item.aside : null;   // colour: its own clip, after the call
       if (item.key === 'aside') { state.lastSaid = item.text; saidLog(item.text); }
       if (item.kind === 'hazard' || item.chain || item.haptic) haptic(item.kind === 'hazard' ? 'hazard' : 'note');
       speech.busy = true; speech.current = item; speech.via = 'model';
-      // the theme's pre-call sound before a call, and the one hazard two-tone (the same in every theme) before a hazard
-      const cue = item.kind === 'hazard' ? 'hazard' : item.chain ? 'pre' : null;
+      // the theme's pre-call sound before a call, and the one hazard two-tone (the same in every theme) before a hazard;
+      // LA-4: the rising chime before the first call after the notes wake, the falling one before the quiet line
+      const cue = item.kind === 'hazard' ? 'hazard' : item.cue || chimed || (item.chain ? 'pre' : null);
+      if (cue === 'wake' || cue === 'sleep') saidLog(`[chime: ${cue}]`);
       if (cue && window.ApexThemeSounds && window.ApexVoice) {
         try { const len = ApexThemeSounds.play(ApexVoice.unlock(), ApexThemeSounds.recipe(state.theme, cue)); await new Promise(r => setTimeout(r, len * 1000 + 40)); } catch (_) {}
       }
@@ -1204,7 +1219,9 @@
       try {
         if (state.voiceId !== 'device' && window.ApexVoice) {
           await ApexVoice.load(state.voiceId);
-          const tokens = item.tokens || (item.chain ? ApexVoice.tokensFor(item.chain, ApexVoice.bank.style) : item.sysToken ? [item.sysToken] : null);
+          const own = item.tokens || (item.chain ? ApexVoice.tokensFor(item.chain, ApexVoice.bank.style) : item.sysToken ? [item.sysToken] : null);
+          // MA-3: the advice's clip in the same breath as the call's (rally words; plain words are spoken whole)
+          const tokens = own && item.chain && item.aside && item.aside.kind === 'advice' ? [...own, item.aside.token] : own;
           const promptStyle = await voiceBracket(true, duck);
           if (promptStyle !== 'normal') { voiceBracket(false); speech.busy = false; speech.followUp = null; pumpSpeech(); return; }   // silent or a tone: skip the words
           try {
@@ -1256,7 +1273,10 @@
     // Co-driver reading: the note, then "into"/"and" + the next note when it follows at once,
     // otherwise the distance to it ("Left 4 minus long, 150"). Chained notes are not called twice.
     // run: the run of corners being read (careRun below), when the call is about to be said: its "care" is said once.
-    function chainedCall(e, ev, spirited, run = null) {
+    // opt.vMps: the car's speed. Panel round 2 MA-2: the distance to the next note is said (and in plain words the next
+    // corner named) only within note_timing.js chainReachM (150 m, or 6 s at speed); past it the call ends at its corner.
+    // opt.advice: MA-3, the pack's advice, said as the call's last sentence; `bare` is the call without it.
+    function chainedCall(e, ev, spirited, run = null, opt = {}) {
       let cur = e;
       const raw = [e];
       for (let hops = 0; hops < 2 && (cur.link === 'into' || cur.link === 'and'); hops++) {
@@ -1269,40 +1289,52 @@
       // REVIEW4 §4: "careful" after every tight corner stops meaning anything by the third; a co-driver says it once a stage.
       // The lightest caution (rally "care", plain "careful") is said once per run of corners; the stronger ones ("caution",
       // "slow down" and up) are about that corner and always said. The strip still marks every one.
-      const chain = !run ? raw : raw.map((n) => (n.type !== 'corner' || n.recce || n.caution !== 1 || run.take() ? n
-        : { ...n, caution: 0, call: String(n.call).replace(/, care$/i, '') }));
+      const care = (n) => (run ? run.spend(n) : n);   // note_timing.js createCareRun
+      const chain = raw.map(care);
+      const reach = ApexNoteTiming.chainReachM(opt.vMps);
+      const linked = !!cur.link && cur.link !== 'into' && cur.link !== 'and', carried = linked && Number(cur.link) <= reach;   // MA-2
       let text = chain.map((n, i) => (i ? ` ${chain[i - 1].link} ` : '') + n.call).join('');
-      if (cur.link && cur.link !== 'into' && cur.link !== 'and') text += `, ${cur.link}`;
-      // The last note's link is "into"/"and" only if the chain was cut short; don't voice a dangling link.
-      const voiced = chain.map((n, i) => (i === chain.length - 1 && (n.link === 'into' || n.link === 'and')) ? { ...n, link: null } : n);
+      // The last note's link is "into"/"and" only if the chain was cut short; don't voice a dangling link, nor one past reach.
+      const voiced = chain.map((n, i) => (i === chain.length - 1 && (n.link === 'into' || n.link === 'and' || (linked && !carried))) ? { ...n, link: null } : n);
       // Your own recce call in the chain (recce.js, V-09): spoken whole as you wrote it, in either words mode (the bank's
       // clips and plain words are built from the map's corner, not your text).
       const keys = raw.map((n) => `${n.type}:${n.index}:${n.dist_m}`);   // the strip's keys of the notes it calls (Kit, U-100)
-      if (chain.some((n) => n.recce)) return { text, chain: null, keys };
+      if (chain.some((n) => n.recce)) return { text: linked ? `${text}, ${cur.link}` : text, chain: null, keys };
+      if (carried) text += `, ${cur.link}`;
       // Plain words: spoken whole (the voice bank's clips are rally words), from the same notes.
-      // U-109: a distance link names the corner it leads to ("then easy right in 400 feet"); none past a junction not yet called
-      const after = cur.link && cur.link !== 'into' && cur.link !== 'and' ? ev[ev.indexOf(cur) + 1] : null;
-      const next = after && !(noteM(after) > turnHold.m) ? after : null;
+      // U-109: a distance link names the corner it leads to ("then easy right in 400 feet"); none past a junction not yet
+      // called. MA-2: when the named corner carries "careful", that is the run's one (its own call then comes without it).
+      const after = carried ? ev[ev.indexOf(cur) + 1] : null;
+      const next = after && !(noteM(after) > turnHold.m) && state.noteWords === 'plain' ? care(after) : null;   // rally names no next corner
       const card = !!(window.ApexVoiceLines && ApexVoiceLines.PACKS[state.voiceId] && ApexVoiceLines.PACKS[state.voiceId].card);   // Hale reads a card (U-113)
-      if (state.noteWords === 'plain') return { text: ApexPlainNotes.plainChain(voiced, ApexUnits, { next, card }), chain: null, keys, voiced };   // in the driver's units (U-93)
-      return { text, chain: voiced, keys, voiced };
+      if (state.noteWords === 'plain') {   // in the driver's units (U-93)
+        const bare = ApexPlainNotes.plainChain(voiced, ApexUnits, { next, card, reachM: reach });
+        return { text: opt.advice ? ApexPlainNotes.plainChain(voiced, ApexUnits, { next, card, reachM: reach, advice: opt.advice }) : bare, bare, chain: null, keys, voiced };
+      }
+      return { text: opt.advice ? ApexNoteTiming.withAdvice(text, opt.advice) : text, bare: text, chain: voiced, keys, voiced };
     }
     // The run of corners being read (note_timing.js createCareRun, REVIEW4 §4): its "care" is said once.
     const careRun = ApexNoteTiming.createCareRun();
     // REVIEW5 U-113: the pack's aside for a call (voice_lines.js createAsides: rare, never after a warning or in a run), only
-    // from a clip the loaded bank holds (a bank rendered before the asides says none). Panel round 1 M-2: dueByM is the last
-    // metre it can start at and still end before the braking starts (note_timing.js asideDueByM: advice a beat before the
-    // braking point, colour before the call's own lead, neither under 4 s out); one that can't start by then once the call
-    // (and its pre-call cue) is said is not picked at all, so it is dropped, never deferred, and Kit's box stays empty.
+    // from a clip the loaded bank holds (a bank rendered before the asides says none). Panel round 2 MA-3: planned WITH the
+    // call (note_timing.js asideWindow), which then starts early enough to carry it: advice inside the call, colour as its
+    // own clip straight after; both end before the braking point and at least 4 s from the corner, and colour before the
+    // next note's call is due. One that can't is not picked (dropped, never deferred) and the call keeps its own lead.
+    // `call` is chainedCall's (its text, voiced chain and keys), dM the metres from the car to the corner's entry.
     const asides = window.ApexVoiceLines ? ApexVoiceLines.createAsides() : null;
-    function packAside(voiced, atM, vMps, apexMps = null, callText = '', reactionS = undefined) {
+    function packAside(call, e, ev, dM, vMps, apexMps = null, reactionS = undefined) {
       const bank = window.ApexVoice && ApexVoice.bank;
-      if (!asides || !voiced || !bank || bank.id !== state.voiceId) return null;
-      const v = Math.max(0, vMps || 0), callEndM = (Number.isFinite(state.cursorM) ? state.cursorM : atM) + v * (ApexNoteTiming.speakS(callText) + 0.3);
-      let due = null;
-      const fits = ({ text, kind }) => { due = ApexNoteTiming.asideDueByM({ atM, vMps: v, apexMps, text, kind, reactionS }); return due != null && callEndM <= due; };
-      const a = asides.pick(state.voiceId, voiced, performance.now(), (t) => !!bank.tokens[t], fits);
-      return a ? { ...a, dueByM: due } : null;
+      if (!asides || !call.voiced || !bank || bank.id !== state.voiceId) return null;
+      const atM = noteM(e), after = ev[ev.indexOf(e) + call.keys.length];
+      const nextCallM = after ? noteM(after) - ApexNoteTiming.leadM({ vMps, apexMps: apexMpsOf(after), text: after.call, reactionS }) : Infinity;
+      let win = null;
+      const fits = ({ text, kind }) => {
+        win = ApexNoteTiming.asideWindow({ dM, atM, vMps, apexMps, callText: call.text, text, kind, reactionS });
+        const endsM = atM - ApexNoteTiming.asideMarginM({ vMps, apexMps, reactionS });
+        return win.fits && dM <= win.leadM && (kind === 'advice' || endsM <= nextCallM);
+      };
+      const a = asides.pick(state.voiceId, call.voiced, performance.now(), (t) => !!bank.tokens[t], fits);
+      return a ? { ...a, dueByM: win.dueByM } : null;
     }
     // The next turn not yet taken (web/directions.js createProgress), one for the voice and the car's card, so both are about
     // the same turn and a taken one never comes back. turnHold.m: the first junction ahead whose call at the turn is not yet
@@ -1328,7 +1360,7 @@
     // U-86: the strip. A lead note driven up to and then waited at, 0 ft under 2 m/s for PASSED_STOP_MS, is behind you
     // (a ramp, a junction queue) and drops out; a new lead shows once it has held LEAD_HOLD_MS, so one GPS jump can't flick
     // the strip to Clear and back. U-74: noteNearUntil, while the lead note is within its lead, plain toasts wait (heldToast).
-    const LEAD_HOLD_MS = 600, PASSED_STOP_MS = 3000;
+    const LEAD_HOLD_MS = 600, PASSED_STOP_MS = 3000, OPENER_WAIT_MS = 4000;   // OPENER_WAIT_MS: DA-3, how long the opener waits for the road's name
     const strip = { track: null, passed: new Set(), approached: null, stall: null, stallAt: 0, shown: null, pending: null, pendingAt: 0 };
     let heldToast = null;
     // U-67: the road under the car, from the map's own road names (ApexRoadNames, the source the saved drive is named by in
@@ -1384,12 +1416,24 @@
       // the notes awake, the same 30 s hold as the g test; a junction's corner is called as the direction, so it doesn't count.
       const corners = moving ? ev.filter(e => e.type === 'corner' && !ApexDirections.atJunction(steps, noteM(e)))
         .map(e => ({ m: noteM(e), severity: e.severity, apexMps: apexMpsOf(e), text: e.call, e })) : [];
-      if (state.notesMode === 'auto' && ApexNoteTiming.wakeCorner(corners, { cursorM: state.cursorM, vMps, reactionS: reactS })) state.spiritedAt = now;
+      // Panel round 2 MA-1: awake, Auto stays awake while a waking corner is within its wider sleep window or any corner is
+      // within its call lead (note_timing.js keepsAwake): it never goes quiet with a corner on the page.
+      const wakeAt = { cursorM: state.cursorM, vMps, reactionS: reactS };
+      if (state.notesMode === 'auto' && (ApexNoteTiming.wakeCorner(corners, wakeAt) || (isSpirited() && ApexNoteTiming.keepsAwake(corners, wakeAt)))) state.spiritedAt = now;
       const spirited = isSpirited();
+      const quietSaid = () => ApexNoteTiming.quietSpan(ApexNoteTiming.quietM(corners, wakeAt), ApexUnits);   // "two miles", or null
       if (moving && state.notesMode === 'auto') {
+        // LA-4: the change is a chime, not the mode's name. Waking: the rising chime goes on the first call (MA-1: the wake
+        // line IS the first call; none before it goes quiet again, nothing). Quiet: the falling chime, then how far the quiet lasts in
+        // the pack's words ("Quiet for two miles."), the one thing a chime can't say; under half a mile or unknown, the chime.
         const t = wakeVoice.update(spirited, now);
-        if (t) say(t === 'on' ? packSays('sys:stage', 'Full notes.') : packSays('sys:cruise', 'Quiet from here. Bumps and cameras only.'), false, null, t === 'on' ? 'sys:stage' : 'sys:cruise', { key: `wake:${t}` });
-        if (t === 'off') careRun.reset();   // the run of corners is over: the next one's "care" is said (§4)
+        if (t === 'on') state.wakeCue = true;
+        if (t === 'off') {
+          careRun.reset();   // the run of corners is over: the next one's "care" is said (§4)
+          state.wakeCue = false;
+          const line = window.ApexVoiceLines ? ApexVoiceLines.quietLine(state.voiceId, quietSaid()) : null;
+          if (line) say(line, false, null, null, { key: 'wake:off', cue: 'sleep', duck: true }); else chime('sleep');
+        }
       } else wakeVoice.reset();
       // U-58: a drive's first note is its first corner, when one is within the wake window as the drive begins (a drive that
       // starts on a motorway starts quiet, and says so in the strip). Quiet mode is the driver's choice: no first note there.
@@ -1458,6 +1502,20 @@
       if (heldToast && !(now < (state.noteNearUntil || 0))) { const h = heldToast; heldToast = null; if (now - h.at < 30000) toast(h.msg); }
 
       if (!moving) return;
+      // Panel round 2 DA-3: a drive's first words name the road under the car, then the notes' state in the pack's words
+      // ("Dry Ridge Road. Full notes.", "Dry Ridge Road. Quiet for two miles."). Said once the map names the road, within
+      // OPENER_WAIT_MS of Start, and always ahead of the first call (force); with no road known nothing is said (the
+      // strip and the chime carry the mode, and the first call is the first line).
+      const openNotes = (force) => {
+        if (!state.openerDue || !live || !driveActive) return;
+        const road = roadNow.name;
+        if (!road && !force && now - (state.openerAt || 0) < OPENER_WAIT_MS) return;
+        state.openerDue = false;
+        const span = !spirited && state.notesMode === 'auto' ? quietSaid() : null;
+        const line = road && window.ApexVoiceLines ? ApexVoiceLines.openerLine(state.voiceId, { road, awake: spirited, span }) : null;
+        if (line) say(line, false, null, null, { key: 'opener', duck: true });
+      };
+      openNotes(false);
       // How far ahead to read a note (note_timing.js, IDEAS V-01): time to say it, your reaction (learned), and braking from
       // your speed to the corner's. `lead` is the point-hazard version (no braking), also used by the quiet-window checks below.
       const lead = ApexNoteTiming.leadM({ vMps, text: 'Bump ahead', reactionS: reactS });
@@ -1479,19 +1537,28 @@
         const own = state.noteWords === 'plain' && !e.recce ? ApexPlainNotes.plainCall(e) : e.call;
         const lastM = e.type === 'corner' ? ApexNoteTiming.lastCallM({ vMps, text: own }) : 0;
         if (e.type === 'corner' && !(first && stopped) && d < lastM) { state.spoken.add(key); continue; }
-        let call = chainedCall(e, ev, spirited || first);
+        let call = chainedCall(e, ev, spirited || first, null, { vMps });
         const apexMps = apexMpsOf(e);
         const startCall = first && stopped && d <= ApexNoteTiming.wakeWindowM({ vMps, apexMps, text: call.text, reactionS: reactS });
-        if (!startCall && d > ApexNoteTiming.leadM({ vMps, apexMps, text: call.text, reactionS: reactS })) continue;
+        const voiced = first || (e.type === 'corner' ? spirited : spirited || noteworthyInCruise(e));
+        // U-113 / MA-3: the pack's aside, now and then, planned with its call: when one fits, the call starts at the aside's
+        // lead (earlier than its own) so both end before the braking; advice is said in the call, colour straight after it.
+        // Kit's box shows it from the pre-call.
+        const aside = voiced && !startCall ? packAside(call, e, ev, d, vMps, apexMps, reactS) : null;
+        if (!startCall && !aside && d > ApexNoteTiming.leadM({ vMps, apexMps, text: call.text, reactionS: reactS })) continue;
         state.spoken.add(key);
-        if (!first && (e.type === 'corner' ? !spirited : !(spirited || noteworthyInCruise(e)))) continue;
+        if (!voiced) continue;
         // (a first note read at the start may be under the car already: it is not stale for that)
-        // dueByM: a call that waits in the queue (behind "Full notes.", a direction) is dropped once it would be late (U-96)
-        if (e.type === 'corner' && !e.recce) call = chainedCall(e, ev, spirited || first, careRun.at(noteM(e), track.id));   // "care" once a run (§4)
-        // U-113: the pack's aside after the call, now and then ("Easy in, late out."): its own clip, said only if it can end
-        // before the corner as a call would; Kit's box shows it from the pre-call
-        const aside = packAside(call.voiced, noteM(e), vMps, apexMps, call.text, reactS);   // M-2: before the braking, or not at all
-        say(call.text, false, call.chain, null, { kind: e.type === 'corner' ? 'ordinary' : 'hazard', key, atM: noteM(e), duck: true, kitFor: call.keys, aside,
+        // dueByM: a call that waits in the queue (behind a quiet line, a direction) is dropped once it would be late (U-96)
+        const advice = aside && aside.kind === 'advice' ? aside.text : null;
+        if (e.type === 'corner' && !e.recce) call = chainedCall(e, ev, spirited || first, careRun.at(noteM(e), track.id), { vMps, advice });   // "care" once a run (§4)
+        else if (advice) call = chainedCall(e, ev, spirited || first, null, { vMps, advice });
+        openNotes(true);   // DA-3: the drive's opener goes first
+        // LA-4 / MA-1: the first corner call after the notes wake carries the rising chime
+        const cue = e.type === 'corner' && state.wakeCue ? 'wake' : undefined;   // until the notes go quiet again
+        if (cue) state.wakeCue = false;
+        say(call.text, false, call.chain, null, { kind: e.type === 'corner' ? 'ordinary' : 'hazard', key, atM: noteM(e), duck: true, kitFor: call.keys,
+          aside: aside ? { ...aside, bare: call.bare } : null, cue,
           ...(e.type === 'corner' && !startCall ? { dueByM: noteM(e) - lastM } : {}), ...(startCall ? { atM: null } : {}) });
         if (live) reaction.called(performance.now(), call.text, ApexNoteTiming.needsBrake(vMps, apexMps));
       }
@@ -5283,8 +5350,9 @@
       state.notesMode = b.dataset.notes;
       syncDerivedToggles(); paintSwitches();
       const full = state.notesMode === 'full';
-      // The voice bank has clips for "Full notes." and "Quiet. Hazards only."; Auto has none, so it is shown, not spoken.
-      if (state.notesMode !== 'auto') say(full ? packSays('sys:stage', 'Full notes.') : packSays('sys:cruise', 'Quiet. Hazards only.'), true, null, full ? 'sys:stage' : 'sys:cruise');
+      // Panel round 2 LA-4: the switch is shown, and heard as the mode chime (rising for Full, falling for Quiet), never a
+      // spoken mode name. Auto has none: it is the notes deciding, which the strip shows.
+      if (state.notesMode !== 'auto') chime(full ? 'wake' : 'sleep');
       savePrefs();
       render(true);
     }));
@@ -6091,6 +6159,7 @@
       drive.rec = new ApexSensors.Recorder(); drive.status = { gps: 'waiting', motion: 'off', wake: 'off', message: '' }; drive.frames = 0; drive.battery = null;
       startStageWatch();
       state.firstNoteDue = true; state.firstNoteKey = null;   // U-58: the drive's first note is called
+      state.openerDue = true; state.openerAt = performance.now(); state.wakeCue = false;   // DA-3: the first words name the road
       drive.live = null; drive.liveIdx = 0; drive.share = 'off'; drive.shareKm = 0; drive.shareErr = null; drive.roads = {}; drive.roadIdx = 0; drive.rest = null; breakSay = null; if (breakWorker) { breakWorker.terminate(); breakWorker = null; }
       keepStart();                                                     // Round 3: the drive is kept as it goes (drive_keep.js)
       if (NATIVE_SHELL) {   // the app's own GPS and IMU feed window.apex.live; no browser sensors to start

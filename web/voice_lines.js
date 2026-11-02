@@ -133,6 +133,22 @@
   /** A pack's line by token ("sys:cruise"), or null: the words the transcript and the phone's own voice say for that clip. */
   function packLine(id, token) { const p = packOf(id); return (p && p.lines[token]) || null; }
 
+  // Panel round 2 MA-1 / LA-4: going quiet is a falling chime and how far the quiet lasts, in the pack's own words (the
+  // chime says "quiet"; only the distance needs words). `span` is note_timing.js quietSpan ("two miles"); null says nothing.
+  const QUIET = { marguerite: (d) => `Quiet for ${d}.`, kit: (d) => `Nothing for ${d}.`, hale: (d) => `Clear, ${d}.` };
+  function quietLine(id, span) { return span ? (Object.prototype.hasOwnProperty.call(QUIET, id) ? QUIET[id] : QUIET.marguerite)(span) : null; }
+  /**
+   * DA-3: the drive's first words name the road, then the notes' state in the pack's words: "Dry Ridge Road. Full notes.",
+   * "Dry Ridge Road. Quiet for two miles.". null when the road is unknown (unknown stays unknown: the chime and the strip
+   * carry the mode, and the first call is the first line).
+   */
+  function openerLine(id, { road, awake, span = null }) {
+    const name = String(road || '').trim();
+    if (!name) return null;
+    const mode = awake ? packLine(id, 'sys:stage') || 'Full notes.' : quietLine(id, span) || packLine(id, 'sys:cruise') || 'Quiet from here. Bumps and cameras only.';
+    return `${name.replace(/[.\s]+$/, '')}. ${mode}`;
+  }
+
   // Which aside a call earns, most telling first. A call with a real warning in it ("slow down" and up) gets none: the
   // warning is the last thing heard. A run of chained corners gets none: the next call is coming.
   const ASIDE_SHAPES = { hairpin: 'aside:hairpin', acute: 'aside:acute', square: 'aside:square' };
@@ -158,9 +174,10 @@
    */
   const ASIDE_GAP_MS = 45000, ASIDE_SAME_MS = 180000;
   // Panel round 1 M-2: two kinds of aside. Advice tells the driver what to do with the corner ("Brake before it, not in it",
-  // "Late apex"); it rides with the call, straight after it, or is not said. Colour is character ("Long one. Settle in.");
-  // it may come only while the driver has nothing to do yet. Both must end before the braking starts (note_timing.js
-  // asideDueByM). Which lines are advice is decided per pack, by what the line asks of the driver.
+  // "Late apex"); round 2 MA-3: it rides INSIDE the call, as its last sentence, or is not said. Colour is character ("Long
+  // one. Settle in."), its own clip straight after the call. The call starts early enough that both end before the braking
+  // starts and never under 4 s out (note_timing.js asideWindow). Which lines are advice is decided per pack, by what the
+  // line asks of the driver.
   const ADVICE = {
     marguerite: ['aside:hairpin', 'aside:acute', 'aside:square', 'aside:tightens', 'aside:off-camber', 'aside:over crest', 'aside:crest'],
     kit: ['aside:tightens', 'aside:over crest', 'aside:crest'],
@@ -193,6 +210,6 @@
   /** The pack's sign-offs, in order: sys:end, sys:end2... (web/end_line.js picks one per drive). */
   function signOffs(id) { const p = packOf(id); return p ? Object.keys(p.lines).filter((k) => /^sys:end\d*$/.test(k)) : []; }
 
-  const api = { TEXT, PACKS, ADVICE, maneuver, distToken, laneToken, forText, num, packLine, asideToken, asideKind, createAsides, sample, signOffs, ASIDE_GAP_MS, ASIDE_SAME_MS };
+  const api = { TEXT, PACKS, ADVICE, maneuver, distToken, laneToken, forText, num, packLine, quietLine, openerLine, asideToken, asideKind, createAsides, sample, signOffs, ASIDE_GAP_MS, ASIDE_SAME_MS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexVoiceLines = api;
 })(typeof window !== 'undefined' ? window : globalThis);

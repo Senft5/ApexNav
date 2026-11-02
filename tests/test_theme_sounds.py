@@ -35,6 +35,26 @@ def test_the_hazard_sound_is_the_same_everywhere(out):
     assert all(h == out["hazard"][0] for h in out["hazard"]) and len(out["hazard"][0]) == 2
 
 
+MODE = r"""
+const S = require(process.argv[1] + '/web/theme_sounds.js'), Q = require(process.argv[1] + '/web/speech_queue.js');
+const ids = ['roadbook', 'tapedeck', 'billet'];
+const q = Q.createSpeechQueue(); q.push({ text: 'Quiet for two miles.', cue: 'sleep' }, 0);
+console.log(JSON.stringify({ wake: ids.map((i) => S.recipe(i, 'wake')), sleep: ids.map((i) => S.recipe(i, 'sleep')),
+  hazard: S.recipe('roadbook', 'hazard'), len: S.length(S.recipe('billet', 'wake')), cue: q.take(1, null).cue }));
+"""
+
+
+def test_mode_changes_are_a_chime_the_same_in_every_theme():
+    """Panel round 2 LA-4: rising when the notes wake, falling when they go quiet; short, and not the hazard's sound."""
+    r = json.loads(subprocess.run([NODE, "-e", MODE, ROOT], capture_output=True, text=True, check=True).stdout)
+    assert all(w == r["wake"][0] for w in r["wake"]) and all(s == r["sleep"][0] for s in r["sleep"])
+    up, down = r["wake"][0], r["sleep"][0]
+    assert len(up) == 2 and up[0]["f"] < up[1]["f"] and down[0]["f"] > down[1]["f"]
+    assert up != r["hazard"] and all(v["type"] == "sine" for v in up + down)
+    assert r["len"] < 0.5
+    assert r["cue"] == "sleep"                                        # the queue carries the chime to the line it leads
+
+
 def test_every_theme_has_sounds():
     themes = open(os.path.join(ROOT, "web", "themes.js"), encoding="utf-8").read()
     sounds = open(os.path.join(ROOT, "web", "theme_sounds.js"), encoding="utf-8").read()

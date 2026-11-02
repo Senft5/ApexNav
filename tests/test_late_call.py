@@ -60,5 +60,5 @@ def test_the_page_skips_a_late_corner_before_building_the_chain():
     html = cockpit_source()
     loop = html[html.index("const lastM = e.type === 'corner'"):]
     skip = loop.index("d < lastM) { state.spoken.add(key); continue; }")
-    assert skip < loop.index("let call = chainedCall(e, ev, spirited || first);"), "decided before the chain marks the next corner"
+    assert skip < loop.index("let call = chainedCall(e, ev, spirited || first, null, { vMps });"), "decided before the chain marks the next corner"
     assert "dueByM: noteM(e) - lastM" in loop
