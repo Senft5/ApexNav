@@ -71,6 +71,11 @@ console.log(JSON.stringify({
       glanceFits: C.guideMessage(ev({ severity: 3, call: 'Left 3' }), 0, null, D.phrase, plainOpts),
       glanceTurn: C.guideMessage({ id: 'tt', dist: [0, 5000], steps: [{ m: 900, type: 10, street: 'Ronald Reagan Cross County Highway' }] }, 0, null, D.phrase),
       glanceMax: C.GLANCE_MAX,
+      // T-1: a caution whose glance is still too long, a follow step on a long road, a turn whose short form is still long
+      glanceSlow: C.guideMessage(ev({ severity: 1, shape: 'acute', mods: ['long'], caution: 3, call: 'Left 1 acute long, double caution' }), 0, null, D.phrase, plainOpts),
+      glanceFollow: C.guideMessage({ id: 'gf', dist: [0, 9000], steps: [{ m: 50, type: 8, street: 'Ronald Reagan Cross County Highway' }, { m: 8000, type: 10, street: 'Elm St' }] }, 100, null, D.phrase),
+      glanceCall: C.guideMessage(ev({ severity: 3, call: 'Left 3 into right 4 over crest don\'t cut' }), 0, null, D.phrase),
+      clips: ['Very sharp left, almost back on itself, long, careful', 'Recording · the road ahead', 'Left 3', 'Supercalifragilisticexpialidociously'].map(C.glanceClip),
     }; })(),
   hairpin: C.cornerTulipSVG('R', 'HP', '#EDE4D3'), hairpinL: C.cornerTulipSVG('L', 'HP', '#EDE4D3'), follow: C.tulipSVG(8, '#EDE4D3'),
 }));
@@ -129,7 +134,8 @@ def test_no_corner_under_a_standing_car(out):
 
 def test_a_free_drive_has_a_record_card(out):
     """U-59: a drive with no route on the car: recording, and the distance driven in its words, never as a distance to a turn."""
-    assert out["rec0"] == {"kind": "guide", "key": "rec:", "instruction": "Recording · the road ahead", "street": "Recording", "type": 8, "recording": True}
+    assert out["rec0"] == {"kind": "guide", "key": "rec:", "instruction": "Recording · the road ahead", "short": ["Recording"],
+                           "street": "Recording", "type": 8, "recording": True}
     assert out["rec1"]["instruction"] == "Recording · 4.2 mi driven" and out["rec1"]["key"] == "rec:4.2 mi" and out["rec1"]["street"] == "4.2 mi driven"
     assert "distM" not in out["rec1"] and "distM" not in out["rec0"]
     assert out["recNull"]["instruction"] == "Recording · the road ahead", "unknown distance: nothing said about it"
@@ -153,19 +159,56 @@ def test_the_card_reads_at_a_glance(out):
     assert out["glanceTurn"]["short"] == ["Turn right"] and out["glanceTurn"]["street"] == "Ronald Reagan Cross County Highway"
     for key in ("glancePlain", "glanceRally", "glanceHP", "glanceRecce", "glanceTurn"):
         sh = out[key]["short"]
-        assert sh[0] and len(sh[0]) <= 26, (key, sh)
+        assert sh[0] and all(len(v) <= out["glanceMax"] for v in sh), (key, sh)
         assert all(len(a) > len(b) for a, b in zip([out[key]["instruction"]] + sh, sh)), "each shorter than the one before"
     assert out["glanceMax"] == 24
 
 
-def test_the_card_puts_the_short_words_first():
-    """U-112: the shell takes `short` and puts its first form ahead of the whole call in instructionVariants."""
+def test_every_long_call_has_a_glance_that_fits(out):
+    """T-1/I-4 (panel round 1, guided-drive car/005-011): CarPlay shows the longest variant that fits, so every form the
+    card is sent must fit a glance, and a call too long for one always gets at least one form."""
+    m = out["glanceMax"]
+    for key in ("glancePlain", "glanceRally", "glanceHP", "glanceRecce", "glanceTurn", "glanceSlow", "glanceFollow", "glanceCall", "rec0", "rec1"):
+        g = out[key]
+        assert len(g["instruction"]) > m, (key, "the case should need a glance")
+        assert g.get("short"), (key, g)
+        assert all(0 < len(v) <= m for v in g["short"]), (key, g["short"])
+    # the caution's words don't fit with the kind ("Very sharp left, slow right down"), so the kind alone, never mid-word
+    assert out["glanceSlow"]["short"] == ["Very sharp left"]
+    # a follow step on a long road: the call's own words, cut at a word
+    assert out["glanceFollow"]["instruction"] == "Follow Ronald Reagan Cross County Highway"
+    assert out["glanceFollow"]["short"] == ["Follow Ronald Reagan"]
+    # a corner whose own call is long (rally words, no plain form) keeps its kind and side
+    assert out["glanceCall"]["short"][0].startswith("Left 3")
+    assert out["rec0"]["short"] == ["Recording"] and out["rec1"]["short"] == ["Rec · 4.2 mi driven", "Recording"]
+    assert out["clips"] == ["Very sharp left", "Recording · the road", "Left 3", "Supercalifragilisticexpi"]
+
+
+def _guide_changed():
     swift = open(os.path.join(ROOT, "CarPlay", "ApexCarPlay.swift"), encoding="utf-8").read()
+    return swift, swift[swift.index("@MainActor func guideChanged()"):swift.index("@MainActor func driveEnded()")]
+
+
+def test_the_card_is_sent_only_glance_forms():
+    """T-1/I-4: the shell sends the card the short forms (else the call cut to a glance) and the street when it fits;
+    never the whole call. U-112's short-first ordering did nothing because CarPlay picks the longest that fits."""
+    swift, changed = _guide_changed()
     assert 'short: ((dict["short"] as? [Any]) ?? []).prefix(3).compactMap { $0 as? String }' in swift
     assert "var short: [String] = []" in swift
-    changed = swift[swift.index("@MainActor func guideChanged()"):swift.index("@MainActor func driveEnded()")]
-    assert "for v in Array(g.short.prefix(1)) + [g.instruction] + Array(g.short.dropFirst()) + [g.street] where !v.isEmpty && !variants.contains(v)" in changed
-    assert "m.instructionVariants = variants" in changed and "[g.instruction, g.street]" not in changed
+    assert "static let glanceMax = 24" in swift
+    assert "for v in (g.short.isEmpty ? [g.instruction] : g.short).map(ApexCar.glance) + [g.street]" in changed
+    assert "where !v.isEmpty && v.count <= ApexCar.glanceMax && !variants.contains(v)" in changed
+    assert "m.instructionVariants = variants" in changed
+    # the whole call is never a variant on its own
+    assert "[g.instruction] + " not in changed and "[g.instruction, g.street]" not in changed
+    # the free drive's first card, before the page says anything, has its glance too
+    assert 'recording: true, short: ["Recording"])' in swift
+    # the shell's clip is web/carplay.js's: last clause that fits, else last word, trimmed
+    glance = swift[swift.index("static func glance(_ text: String) -> String {"):]
+    glance = glance[:glance.index("\n    }\n")]
+    for part in ("guard s.count > glanceMax else { return s }", "String(s.prefix(glanceMax + 1))", 'cut.lastIndex(of: ",")',
+                 "< 6 { end = nil }", 'cut.lastIndex(of: " ")', 'CharacterSet(charactersIn: " ,·.-")'):
+        assert part in glance, part
     html = cockpit_source()
     assert "plain: state.noteWords === 'plain' && !!window.ApexPlainNotes" in html, "the page says which words the call is in"
 

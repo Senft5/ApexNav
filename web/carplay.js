@@ -87,8 +87,8 @@
 
   // U-112: the card's words at a glance. The card wrapped the phone's whole plain-words call ("Very sharp left, almost back
   // on itself, long, careful") onto four lines for half a mile (REVIEW5 guided-drive car/035). An instruction longer than
-  // GLANCE_MAX gets `short`: the same instruction in fewer words, longest first, which the shell puts first in the card's
-  // instructionVariants (CarPlay/ApexCarPlay.swift guideChanged). A corner keeps its kind and its caution and drops its
+  // GLANCE_MAX gets `short`: the same instruction in fewer words, longest first, which the shell sends the card in place of
+  // the whole call (CarPlay/ApexCarPlay.swift guideChanged, T-1). A corner keeps its kind and its caution and drops its
   // modifiers ("Very sharp left, careful", then "Very sharp left"); a turn drops the road it goes onto ("Turn left"), which
   // the card's street variant and the map still say.
   const GLANCE_MAX = 24;
@@ -102,14 +102,30 @@
     const care = (plain ? PLAIN_CARE : RALLY_CARE)[k];
     return [care ? `${core}, ${care}` : core, core];
   }
-  // the shorter forms of `long`, longest first, each shorter than the one before; none when `long` already fits a glance
+  // T-1/I-4 (panel round 1, guided-drive car/005-011): putting the short form first did nothing, because CarPlay shows the
+  // LONGEST variant that fits its card, and a four-line card fits the whole call. So the card is sent glance forms only:
+  // every form here is at most GLANCE_MAX, and a call too long for a glance always gets at least one. The whole call stays
+  // the phone's and the voice's.
+  // `clip`: a call cut to a glance at its last clause that fits ("Very sharp left, almost back on itself" -> "Very sharp
+  // left"), else at its last word, never mid-word; the words are the call's own, nothing added
+  function clip(s) {
+    s = String(s || '').trim();
+    if (s.length <= GLANCE_MAX) return s;
+    const cut = s.slice(0, GLANCE_MAX + 1);
+    let i = cut.lastIndexOf(',');
+    if (i < 6) i = cut.lastIndexOf(' ');
+    return (i > 0 ? cut.slice(0, i) : s.slice(0, GLANCE_MAX)).replace(/[\s,·.-]+$/, '');
+  }
+  // the glance forms of `long`, longest first, each at most GLANCE_MAX and shorter than the one before; none when `long`
+  // already fits a glance; when no form given fits, the call clipped
   function shortForms(long, forms) {
     const out = [];
     if (long.length <= GLANCE_MAX) return out;
     for (const f of forms) {
       const s = String(f || '').trim();
-      if (s && s.length < (out.length ? out[out.length - 1] : long).length) out.push(s);
+      if (s && s.length <= GLANCE_MAX && s.length < (out.length ? out[out.length - 1] : long).length) out.push(s);
     }
+    if (!out.length) { const c = clip(long); if (c) out.push(c); }
     return out;
   }
 
@@ -176,7 +192,8 @@
       }
       road = road.slice(0, 60);
       // the key holds still for the whole stretch (the same road, the same maneuver at its end), so the card is built once
-      return { kind: 'guide', key: `${t.id || ''}:f${Math.round(nextM)}:${road}`, instruction: road ? `Follow ${road}` : 'Follow the route',
+      const instruction = road ? `Follow ${road}` : 'Follow the route', short = shortForms(instruction, []);
+      return { kind: 'guide', key: `${t.id || ''}:f${Math.round(nextM)}:${road}`, instruction, ...(short.length ? { short } : {}),
                street: road, type: 8, follow: true, distM: Math.max(0, Math.round(nextM - cursorM)), ...remain };
     }
     if (co) {
@@ -203,7 +220,10 @@
     const d = finite(drivenM) && drivenM >= 160 && typeof fmtDist === 'function' ? String(fmtDist(drivenM)) : '';
     // U-120: `drivenM` (the distance the card's words say) goes to the trip strip, which CarPlay always shows in a session:
     // the strip carries the drive's own distance rather than three dashes, and never an arrival (there is nothing to arrive at)
-    return { kind: 'guide', key: `rec:${d}`, instruction: d ? `Recording · ${d} driven` : 'Recording · the road ahead',
+    // T-1: the card's glance ("Recording · the road ahead" is 26 characters)
+    const instruction = d ? `Recording · ${d} driven` : 'Recording · the road ahead';
+    const short = shortForms(instruction, d ? [`Rec · ${d} driven`, 'Recording'] : ['Recording']);
+    return { kind: 'guide', key: `rec:${d}`, instruction, ...(short.length ? { short } : {}),
              street: d ? `${d} driven` : 'Recording', type: 8, recording: true, ...(d ? { drivenM: Math.round(drivenM) } : {}) };
   }
 
@@ -389,5 +409,6 @@
                 recordSVG, CORNER_MODES, CONTINUE_M, MAX_POINTS };
   api.sightFilter = sightFilter;                                       // U-60 (its own line: the list above is shared)
   api.GLANCE_MAX = GLANCE_MAX;                                         // U-112
+  api.glanceClip = clip;                                               // T-1
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexCarPlay = api;
 })(typeof window !== 'undefined' ? window : globalThis);

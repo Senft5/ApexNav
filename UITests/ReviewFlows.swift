@@ -219,10 +219,12 @@ final class ReviewFlows: XCTestCase {
         if !tap("Done", "Close the replay", wait: 3), let chip = findButton(startingWith: "Replay ·", wait: 4) { chip.tap(); pause(2) }
         XCTAssertTrue(until(8, tabBarShown), "the replay did not close (no tab bar)")
     }
-    /// End, and whether the drive ended: its end card's "Open in the Log" key came up.
+    /// End, and whether the drive ended: its end card's "Open in the Log" key came up. I-3: for 5 s after End the status row
+    /// says so and End is Undo, the drive still live (photographed), then the card.
     @discardableResult private func endDrive() -> Bool {
         tap("End drive", wait: 10)
-        pause(5)
+        shot("drive-ending")
+        pause(6)
         shot("drive-ended")
         return find(["Open in the Log"], wait: 6) != nil
     }
@@ -437,7 +439,7 @@ final class ReviewFlows: XCTestCase {
         driveFor(180, every: 10)
         let carEnd = inCar("End")
         if XCUIScreen.screens.count > 1, carEnd.waitForExistence(timeout: 3) {
-            carEnd.tap(); pause(5); shot("drive-ended-from-car")
+            carEnd.tap(); pause(1.5); shot("drive-ending-from-car"); pause(6); shot("drive-ended-from-car")
         } else {
             endDrive()
         }

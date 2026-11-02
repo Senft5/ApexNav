@@ -129,7 +129,7 @@ final class AppTourTests: XCTestCase {
             pause(3)
             if web.buttons["Allow and start"].exists { web.buttons["Allow and start"].tap(); app.tap() }
             pause(90)   // simctl drives the route meanwhile: directions, notes, the Live Activity
-            if web.buttons["End drive"].exists { web.buttons["End drive"].tap(); pause(6) }
+            if web.buttons["End drive"].exists { web.buttons["End drive"].tap(); pause(8) }   // I-3: End is undoable for 5 s
         }
         shot(app, "end of tour")
     }

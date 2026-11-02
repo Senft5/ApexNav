@@ -6083,6 +6083,7 @@
     }
     // ended: why a drive ended itself ('car', 'parked'; drive_keep.js EndWatch), or nothing for End
     async function leaveDrive(save, ended) {
+      if (pendingEnd) { clearTimeout(pendingEnd.timer); pendingEnd = null; paintEndUndo(); }   // I-3: any other way out ends it now
       driveActive = false;
       const kept = keepStop();                                         // Round 3: no more checkpoints; dropped once saved
       stageWatch = null; $('stageBar').hidden = true;
@@ -6216,7 +6217,8 @@
         keepCar(true);                                               // Round 3: the car's screen is there, so the car is on
         enterDrive();
       }
-      else if (m.action === 'end' && driveActive) leaveDrive(true);
+      else if (m.action === 'end' && driveActive) { if (pendingEnd) commitEnd(); else askEnd(); }   // I-3: the car's End has the Undo window too; End again ends now
+      else if (m.action === 'undo') undoEnd();
       else if (m.action === 'disconnect') keepCar(false, m.t);      // Round 3: the car switched off; the drive ends once it stays put
       else if (m.action === 'places') carPost(ApexCarPlay.placesMessage(recentPlaces()));
       else if (m.action === 'loop' && [30, 60, 120].includes(m.minutes) && !driveActive) loop({ minutes: m.minutes });
@@ -6266,7 +6268,44 @@
     const closeReplay = () => { if (state.mode === 'live' || !replayOn) return; replayOn = false; setPlaying(false); paintIdle(); };
     $('modePlate').addEventListener('click', closeReplay);
     $('replayDone').addEventListener('click', closeReplay);
-    $('driveEnd').addEventListener('click', () => leaveDrive(true));
+    // I-3 (panel round 1): End can't be a mis-tap. It sat 6 pt from Report and ended the drive at once. Now End says so in
+    // the status row and its own key turns Undo for END_UNDO_MS, with a fill running down; the sensors, the notes and the
+    // car keep going meanwhile, so Undo resumes as if End was never tapped. No dialog while moving (NHTSA counts those).
+    // When the time runs out the drive is saved as it stood at End (the rows after it dropped, as a parked end does).
+    const END_UNDO_MS = 5000;
+    let pendingEnd = null;                                            // { timer, rows }: End tapped, not yet done
+    function paintEndUndo() {
+      const b = $('driveEnd'), on = !!pendingEnd;
+      b.textContent = on ? 'Undo' : 'End';
+      b.setAttribute('aria-label', on ? 'Undo End: keep driving' : 'End drive');
+      b.classList.toggle('undo', on);
+      b.style.setProperty('--end-undo-ms', `${END_UNDO_MS}ms`);
+    }
+    function commitEnd() {
+      const p = pendingEnd;
+      if (!p) return;
+      clearTimeout(p.timer); pendingEnd = null; paintEndUndo();
+      if (!driveActive) return;
+      if (drive.rec && Number.isFinite(p.rows)) drive.rec.truncate(p.rows);
+      leaveDrive(true);
+    }
+    function askEnd() {
+      if (pendingEnd) { undoEnd(); return; }                          // the same key again is Undo: a second bump undoes
+      if (!driveActive) { leaveDrive(true); return; }
+      haptic('note');                                                  // a mis-tap is felt
+      pendingEnd = { rows: drive.rec ? drive.rec.samples : null, timer: setTimeout(commitEnd, END_UNDO_MS) };
+      paintEndUndo();
+      driveNote(`Drive ended. Saving it in ${Math.round(END_UNDO_MS / 1000)} seconds.`);
+      carPost({ kind: 'ending', seconds: END_UNDO_MS / 1000 });
+    }
+    function undoEnd() {
+      if (!pendingEnd) return;
+      clearTimeout(pendingEnd.timer); pendingEnd = null; paintEndUndo();
+      driveNote('Still recording.');
+      carPost({ kind: 'resumed' });
+    }
+    $('driveEnd').addEventListener('click', askEnd);
+    if (window.apexDebug) window.apexDebug.endNow = commitEnd;       // the smoke test: the window run out, without the wait
 
     // =======================================================================
     // 10c. FIRST RUN: one screen, shown once, on the web and in the app. In the app its Start is what asks for location
