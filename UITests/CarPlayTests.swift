@@ -90,7 +90,7 @@ final class CarPlayTests: XCTestCase {
             tap("Drive")
             for k in 0..<16 { pause(8); photo(String(format: "05-drive-%02d", k)) }
             tap("End", wait: 10)
-            pause(4)
+            pause(7)                                                // I-3: the drive ends once the 5 s Undo window runs out
             photo("06-ended")                                       // the idle map, no preview of the finished route (U-62)
         } else {
             photo("04-no-trip-preview")
@@ -99,7 +99,7 @@ final class CarPlayTests: XCTestCase {
         if tap("Drive", wait: 10) {
             pause(8); photo("06a-free-drive")
             tap("End", wait: 10)
-            pause(4); photo("06b-free-drive-ended")
+            pause(7)                                                // I-3: the drive ends once the 5 s Undo window runs out; photo("06b-free-drive-ended")
         }
         // the other two keys, from the idle map
         if tap("Places", wait: 10) { pause(2); photo("07-places"); car.navigationBars.buttons.firstMatch.tap() }

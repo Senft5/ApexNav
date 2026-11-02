@@ -680,7 +680,7 @@ flow('a GPX route has a time from its own envelope (U-64); the Live Activity rea
   check(q.short === 'QUIET' && q.distance === '' && /^Quiet · next corner \d+(\.\d)? (mi|km)$/.test(q.note), 'quiet on the route: ' + JSON.stringify(q));
   check(/min/.test(q.etaShort), 'the envelope\'s time reaches the island: ' + JSON.stringify(q));
   check(/^\d+(\.\d)? (MI|KM)$/.test(q.trail), 'U-131: the compact island shows the next corner\'s distance, not a clipped QUIET: ' + JSON.stringify(q));
-  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'end' }));
+  await page.evaluate(() => { for (let i = 0; i < 2; i++) window.apex.onNative({ type: 'carplay', action: 'end' }); });
   await page.waitForFunction(() => !window.apexDebug.driveActive);
   // a free drive: REC, and how far you have driven
   await page.click('#planClear');
@@ -757,11 +757,18 @@ flow('CarPlay: the car is in every drive: a free drive from its Drive key, a con
   await fix(); await page.waitForTimeout(250); await fix();
   await page.waitForFunction(() => window.__car.some((m) => m.kind === 'guide' && m.recording), null, { timeout: 5000 });
   const rec = await page.evaluate(() => window.__car.find((m) => m.kind === 'guide' && m.recording));
-  check(rec.instruction === 'Recording · the road ahead' && rec.distM === undefined && typeof rec.symbol === 'string' && rec.symbol.length > 200,
+  check(rec.instruction === 'Recording · the road ahead' && JSON.stringify(rec.short) === '["Recording"]' && rec.distM === undefined && typeof rec.symbol === 'string' && rec.symbol.length > 200,
     'the record card, no distance to a maneuver that is not there, the record dot drawn: ' + JSON.stringify({ ...rec, symbol: !!rec.symbol }));
+  // I-3: the car's End has the phone's Undo window: the drive goes on, the car is told (its alert's one action is Undo)
   await page.evaluate(() => { window.__car = []; window.apex.onNative({ type: 'carplay', action: 'end' }); });
+  const ending = await page.evaluate(() => ({ active: window.apexDebug.driveActive, kinds: window.__car.map((m) => m.kind), key: document.getElementById('driveEnd').textContent }));
+  check(ending.active && ending.kinds.includes('ending') && !ending.kinds.includes('end') && ending.key === 'Undo', 'End from the car: the Undo window, the drive still on: ' + JSON.stringify(ending));
+  await page.evaluate(() => { window.__car = []; window.apex.onNative({ type: 'carplay', action: 'undo' }); });
+  const undone = await page.evaluate(() => ({ active: window.apexDebug.driveActive, kinds: window.__car.map((m) => m.kind), key: document.getElementById('driveEnd').textContent }));
+  check(undone.active && undone.kinds.includes('resumed') && undone.key === 'End', 'Undo from the car: the drive goes on: ' + JSON.stringify(undone));
+  await page.evaluate(() => { window.__car = []; for (let i = 0; i < 2; i++) window.apex.onNative({ type: 'carplay', action: 'end' }); });
   await page.waitForFunction(() => !window.apexDebug.driveActive);
-  check(await page.evaluate(() => window.__car.some((m) => m.kind === 'end')), 'End from the car ends it');
+  check(await page.evaluate(() => window.__car.some((m) => m.kind === 'end')), 'End from the car, End again: it ends now');
   // a route: planned from the car, driven, a continue step while its first turn is 6 miles off; after End the car goes idle
   await fix();
   await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'go', lat: 35.7565, lon: -83.97, name: 'Maryville' }));
@@ -774,7 +781,7 @@ flow('CarPlay: the car is in every drive: a free drive from its Drive key, a con
   check(kinds.indexOf('start') >= 0 && kinds.indexOf('start') < kinds.indexOf('guide'), 'start before the first maneuver: ' + kinds.join());
   const g = await page.evaluate(() => window.__car.find((m) => m.kind === 'guide'));
   check(g.follow === true && g.type === 8 && /^Follow /.test(g.instruction) && g.distM > 2000 && !g.corner, 'a continue step to the far turn: ' + JSON.stringify({ ...g, symbol: !!g.symbol }));
-  await page.evaluate(() => { window.__car = []; window.apex.onNative({ type: 'carplay', action: 'end' }); });
+  await page.evaluate(() => { window.__car = []; for (let i = 0; i < 2; i++) window.apex.onNative({ type: 'carplay', action: 'end' }); });
   await page.waitForFunction(() => !window.apexDebug.driveActive);
   const after = await page.evaluate(() => window.__car.map((m) => m.kind));
   check(after.indexOf('end') >= 0 && after.indexOf('clear') > after.indexOf('end') && !after.includes('route'), 'after End the car is idle, no preview of the finished route: ' + after.join());
@@ -788,7 +795,7 @@ flow('CarPlay: the car is in every drive: a free drive from its Drive key, a con
   await page.waitForFunction(() => window.__car.some((m) => m.kind === 'guide'), null, { timeout: 5000 });
   const free = await page.evaluate(() => ({ start: window.__car.find((m) => m.kind === 'start'), guide: window.__car.find((m) => m.kind === 'guide'), track: window.apexDebug.track ? window.apexDebug.track.kind : null }));
   check(free.start.title === 'Drive' && free.guide.recording === true && free.track !== 'route', 'Drive from the idle car is a free drive: ' + JSON.stringify({ ...free, guide: free.guide.instruction }));
-  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'end' }));
+  await page.evaluate(() => { for (let i = 0; i < 2; i++) window.apex.onNative({ type: 'carplay', action: 'end' }); });
   await page.waitForFunction(() => !window.apexDebug.driveActive);
 });
 
@@ -1039,7 +1046,7 @@ flow('a route being driven comes back after the app is closed; a planned one, or
   await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start' }));   // started from the car
   await page.waitForFunction(() => window.apexDebug.driveActive);
   check(await relaunch() === name, 'the route being driven comes back');
-  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'end' }));
+  await page.evaluate(() => { for (let i = 0; i < 2; i++) window.apex.onNative({ type: 'carplay', action: 'end' }); });
   await page.waitForFunction(() => !window.apexDebug.driveActive);
   check(await relaunch() === null, 'after the drive ends, a fresh open has no route');
 }, { geolocation: { latitude: 35.6, longitude: -84.1 }, permissions: ['geolocation'] });
@@ -1405,8 +1412,20 @@ flow('drive ended: Open in the Log is the solid key with no score, Share card wi
     await page.evaluate((b) => { for (let j = b * 70; j < (b + 1) * 70; j++) window.apex.live({ lat: 35.5 + j * 1e-4, lon: -83.9, accuracy_m: 4, speed_mps: 15, course_deg: 0, lat_g: 0, lon_g: 0, has_fix: true, calibration: 'locked' }); }, burst);
     await page.waitForTimeout(300);
   }
+  // I-3: End can't be a mis-tap. For 5 s the status row says so and End is Undo, the drive still recording; Undo resumes it
+  await page.click('#driveEnd');
+  const win = await page.evaluate(() => { const b = document.getElementById('driveEnd'), n = document.getElementById('dsNote');
+    return { active: window.apexDebug.driveActive, key: b.textContent, label: b.getAttribute('aria-label'), undo: b.classList.contains('undo'), note: n.hidden ? '' : n.getAttribute('aria-label') || n.textContent,
+      card: document.getElementById('endCard').classList.contains('show'), bar: !document.getElementById('driveBar').hidden }; });
+  check(win.active && win.key === 'Undo' && win.undo && /Undo End/.test(win.label) && /^Drive ended/.test(win.note) && !win.card && win.bar,
+    'after End: Undo in the status row, the drive still live, no card yet: ' + JSON.stringify(win));
+  await page.click('#driveEnd');
+  await page.waitForTimeout(5600);                                     // past the window: Undo held, nothing ended
+  const kept = await page.evaluate(() => ({ active: window.apexDebug.driveActive, key: document.getElementById('driveEnd').textContent, card: document.getElementById('endCard').classList.contains('show') }));
+  check(kept.active && kept.key === 'End' && !kept.card, 'Undo: the drive goes on as if End was never tapped: ' + JSON.stringify(kept));
+  await page.evaluate(() => { for (let j = 280; j < 300; j++) window.apex.live({ lat: 35.5 + j * 1e-4, lon: -83.9, accuracy_m: 4, speed_mps: 15, course_deg: 0, lat_g: 0, lon_g: 0, has_fix: true, calibration: 'locked' }); });
   // U-118: in the frame after End, while scoring, the scored layout already (read in the same task, before the worker answers)
-  const first = await page.evaluate(() => { document.getElementById('driveEnd').click(); const vis = (id) => { const e = document.getElementById(id); return !!(e && e.offsetParent); };
+  const first = await page.evaluate(() => { document.getElementById('driveEnd').click(); window.apexDebug.endNow(); const vis = (id) => { const e = document.getElementById(id); return !!(e && e.offsetParent); };
     return { share: vis('endShare'), logKey: vis('endLogKey'), logLink: vis('endLog'), shareLink: vis('endShareLink') }; });
   await page.waitForSelector('#endCard.show', { timeout: 8000 });
   check(first.share && first.logLink && !first.logKey && !first.shareLink, 'scoring: Share card solid, the Log a link: ' + JSON.stringify(first));
@@ -1488,7 +1507,7 @@ flow('the status line wraps between its parts, never "25 min left…", at every 
         check(!r.cut && r.inside && /min left/.test(r.text), `${width} px ${theme}${night ? ' night' : ''}: ${JSON.stringify(r)}`);
       }
     }
-    await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'end' }));
+    await page.evaluate(() => { for (let i = 0; i < 2; i++) window.apex.onNative({ type: 'carplay', action: 'end' }); });
   }
 });
 
@@ -1512,7 +1531,8 @@ flow('drive ended: the map behind the card is the whole drive, fitted flat above
   }
   check(await page.evaluate(() => apexDebug.map.getPadding().top > 0), 'the follow camera pads the map in a drive');
   await page.click('#driveEnd');
-  await page.waitForSelector('#endCard.show', { timeout: 8000 });
+  check(await page.evaluate(() => window.apexDebug.driveActive), 'I-3: End is not done at once');
+  await page.waitForSelector('#endCard.show', { timeout: 8000 });     // not undone: the 5 s window runs out and the drive is saved
   await page.waitForTimeout(1500);
   const fit = () => page.evaluate(() => { const m = apexDebug.map, c = m.getContainer().getBoundingClientRect(), top = document.querySelector('#endCard .card-sheet').getBoundingClientRect().top - c.top;
     const a = m.project([-83.9, 35.5]), b = m.project([-83.9, 35.5 + 279e-4]), p = m.getPadding();
@@ -2723,7 +2743,7 @@ flow('End: the card is up within 150 ms of the tap and the drive is parsed, scor
     const card = document.getElementById('endCard'), t0 = performance.now();
     new MutationObserver((_, o) => { if (card.classList.contains('show')) { o.disconnect(); done({ ms: performance.now() - t0, busy: document.getElementById('endScore').hasAttribute('aria-busy'), name: document.getElementById('endName').textContent, meta: document.getElementById('endMeta').textContent, parsed }); } })
       .observe(card, { attributes: true, attributeFilter: ['class'] });
-    document.getElementById('driveEnd').click();
+    document.getElementById('driveEnd').click(); window.apexDebug.endNow();   // I-3: End, and the Undo window run out
   }));
   check(t.ms < 150 && t.busy && !t.parsed, 'the card first, the score still coming, nothing parsed here: ' + JSON.stringify(t));
   check(/mi|km/.test(t.meta) && /min/.test(t.meta), 'the card says the distance and time from the start: ' + JSON.stringify(t));

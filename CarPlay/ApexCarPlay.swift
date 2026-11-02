@@ -202,6 +202,11 @@ final class ApexCar {
             eachMap { $0.showSight() }
             eachMap { $0.setMode() }
             scene?.driveEnded()
+        case "ending":
+            // I-3: End was tapped (here or on the phone); the drive goes on for the page's Undo window, then `end` comes
+            scene?.showEnding(seconds: Self.num(dict["seconds"]) ?? 5)
+        case "resumed":
+            scene?.endingUndone()
         case "hazard":
             guard let title = dict["title"] as? String else { return }
             scene?.showHazard(title: title, detail: (dict["detail"] as? String) ?? "")
@@ -603,6 +608,26 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
         session = nil; maneuver = nil; maneuverKey = ""; trip = nil
         mapTemplate?.hideTripPreviews()
         idleBars()
+    }
+
+    /// I-3: End can't be a mis-tap. The page keeps the drive going for a few seconds after End; the car says so with one
+    /// action, Undo, for that long (a navigation alert, the template's own: no dialog of ours while moving). Not tapped,
+    /// the page's `end` follows and the car goes idle as before.
+    private var endingAlert: CPNavigationAlert?
+    @MainActor func showEnding(seconds: Double) {
+        guard let map = mapTemplate, ApexCar.shared.driving else { return }
+        let alert = CPNavigationAlert(titleVariants: ["Drive ended"], subtitleVariants: ["Saving it"], image: nil,
+                                      primaryAction: CPAlertAction(title: "Undo", style: .default) { _ in ApexCar.shared.send("undo") },
+                                      secondaryAction: nil, duration: max(1, min(10, seconds)))
+        endingAlert = alert
+        map.present(navigationAlert: alert, animated: true)
+    }
+
+    /// Undone on the phone: the car's Undo goes away with it.
+    @MainActor func endingUndone() {
+        defer { endingAlert = nil }
+        guard let map = mapTemplate, let alert = endingAlert, map.currentNavigationAlert === alert else { return }
+        map.dismissNavigationAlert(animated: true) { _ in }
     }
 
     @MainActor func showHazard(title: String, detail: String) {
