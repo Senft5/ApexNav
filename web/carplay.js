@@ -92,15 +92,16 @@
   // modifiers ("Very sharp left, careful", then "Very sharp left"); a turn drops the road it goes onto ("Turn left"), which
   // the card's street variant and the map still say.
   const GLANCE_MAX = 24;
-  const PLAIN_SEV = { 1: 'Very tight', 2: 'Tight', 3: 'Medium', 4: 'Open', 5: 'Easy', 6: 'Slight' };   // web/plain_notes.js
-  const PLAIN_CARE = ['', 'careful', 'slow down', 'slow right down', 'very slow'];
+  // Panel round 1 M-1: plain words in the call's grammar (web/plain_notes.js), the warning first ("Careful, hairpin left")
+  const PLAIN_SEV = { 1: 'Tight', 2: 'Tight', 3: 'Medium', 4: 'Open', 5: 'Easy', 6: 'Slight' };        // web/plain_notes.js
+  const PLAIN_CARE = ['', 'Careful', 'Slow down', 'Slow right down', 'Very slow'];
   const RALLY_CARE = ['', 'care', 'caution', 'double caution', 'triple caution'];                      // web/apex_core.js
   function cornerShort(e, v, plain) {
     const side = e.dir === 'L' ? 'left' : 'right', k = Math.round(+e.caution) || 0;
-    const core = !plain ? cornerWords(e, v) : v === 'HP' ? `Hairpin ${side}` : e.shape === 'acute' ? `Very sharp ${side}`
-      : e.shape === 'square' ? `Sharp ${side}` : `${PLAIN_SEV[v] || 'Bend'} ${side}`;
+    const core = !plain ? cornerWords(e, v) : v === 'HP' || e.shape === 'acute' ? `Hairpin ${side}`
+      : e.shape === 'square' ? `Square ${side}` : `${PLAIN_SEV[v] || 'Bend'} ${side}`;
     const care = (plain ? PLAIN_CARE : RALLY_CARE)[k];
-    return [care ? `${core}, ${care}` : core, core];
+    return [care ? (plain ? `${care}, ${core.toLowerCase()}` : `${core}, ${care}`) : core, core];
   }
   // T-1/I-4 (panel round 1, guided-drive car/005-011): putting the short form first did nothing, because CarPlay shows the
   // LONGEST variant that fits its card, and a four-line card fits the whole call. So the card is sent glance forms only:
@@ -237,15 +238,19 @@
   /**
    * The road book on the car's map (web/carmap.js): every corner's rating at its apex, { kind:'corners', list:[{ at, text,
    * tight }] }. `at(m)` places an event that carries no position of its own (a planned route's corners have dist_m only).
+   * Panel round 1 M-3: `words` ('plain' | 'rally') is the driver's notation, the strip's next cells' (plain_notes.js
+   * noteCode): "TIGHT R" with plain words on, "L4-", "LHP", "SQ L" with rally words.
    */
-  function cornersMessage(t, at) {
+  const plainNotes = () => root.ApexPlainNotes || (typeof module !== 'undefined' && typeof require === 'function' ? require('./plain_notes.js') : null);
+  function cornersMessage(t, at, words = 'rally') {
+    const P = plainNotes();
     const list = [];
     for (const e of (t && Array.isArray(t.events) ? t.events : [])) {
       if (!e || e.type !== 'corner' || (e.dir !== 'L' && e.dir !== 'R')) continue;
       const p = finite(e.lat) && finite(e.lon) ? { lat: e.lat, lon: e.lon } : (at && finite(e.dist_m) ? at(e.dist_m) : null);
       if (!p || !finite(p.lat) || !finite(p.lon)) continue;
       const hp = e.severity === 'HP' || e.shape === 'hairpin';
-      list.push({ at: [+p.lat.toFixed(6), +p.lon.toFixed(6)], text: `${e.dir}${hp ? 'HP' : e.severity}`, tight: hp || (finite(e.severity) && e.severity <= 2) });
+      list.push({ at: [+p.lat.toFixed(6), +p.lon.toFixed(6)], text: (P && P.noteCode(e, words)) || `${e.dir}${hp ? 'HP' : e.severity}`, tight: hp || (finite(e.severity) && e.severity <= 2) });
       if (list.length >= 600) break;
     }
     return { kind: 'corners', list };
