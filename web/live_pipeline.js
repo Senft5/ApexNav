@@ -6,6 +6,8 @@
 (function (root) {
   'use strict';
   const G = 9.80665, D2R = Math.PI / 180;
+  // camber is seen only under cornering load; after the last sample over the gate it is held, then unknown (core/live_pipeline.py)
+  const CAMBER_GATE_MPS2 = 1.5, CAMBER_HOLD_S = 1.0;
   const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
   const scale = (a, s) => [a[0] * s, a[1] * s, a[2] * s];
   const add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
@@ -105,7 +107,8 @@
     constructor() {
       this.mount = new MountCalibrator(); this.lastT = null;
       this.lonAcc = 0; this.latAcc = 0; this.yawRate = 0; this.crestAcc = 0; this.hpVert = 0; this.vertPeak = 0; this.lastAz = 0;
-      this.roughMeanSq = 0; this.segRoughSumSq = 0; this.segRoughCount = 0; this.camber = 0; this.engagement = 0;
+      this.roughMeanSq = 0; this.segRoughSumSq = 0; this.segRoughCount = 0; this.engagement = 0;
+      this.camber = null; this.camberAt = null;   // turn-relative bank, rad; null = not observed in the last CAMBER_HOLD_S
     }
     /** One sample: t in seconds; gravity in g pointing down, or null; v the latest GPS speed (held between fixes). */
     step(accel, gyro, t, v, gravity = null) {
@@ -122,11 +125,13 @@
       this.vertPeak = Math.max(this.vertPeak, Math.abs(this.hpVert));
       const sq = this.hpVert * this.hpVert;
       this.roughMeanSq += alpha(dt, 0.5) * (sq - this.roughMeanSq); this.segRoughSumSq += sq; this.segRoughCount += 1;
+      // camber: observed only while cornering, held CAMBER_HOLD_S after the last observation, then unknown (never 0)
       const aKin = v * this.yawRate;
-      if (Math.abs(aKin) > 1.5) {
-        const sinPhi = Math.max(-0.5, Math.min(0.5, (Math.abs(aKin) - Math.abs(this.latAcc)) / G));
-        this.camber += alpha(dt, 0.3) * (Math.asin(sinPhi) - this.camber);
-      } else this.camber -= alpha(dt, 0.6) * this.camber;
+      if (Math.abs(aKin) > CAMBER_GATE_MPS2) {
+        const sinPhi = Math.max(-0.5, Math.min(0.5, (Math.abs(aKin) - Math.abs(this.latAcc)) / G)), phi = Math.asin(sinPhi);
+        this.camber = this.camber == null ? phi : this.camber + alpha(dt, 0.3) * (phi - this.camber);
+        this.camberAt = t;
+      } else if (this.camberAt != null && !(t - this.camberAt >= 0 && t - this.camberAt <= CAMBER_HOLD_S)) { this.camber = null; this.camberAt = null; }
       const combined = Math.hypot(this.latAcc, this.lonAcc) / G, rough = Math.sqrt(Math.max(0, this.roughMeanSq)) / G;
       this.engagement = Math.min(1, (combined / 0.75) * 0.75 + (rough / 0.45) * 0.25);
     }
@@ -167,6 +172,6 @@
     get verified() { const n = this.pairs.length; return n >= 10 && this.pairs.filter(Boolean).length / n >= 0.8; }
   }
 
-  const api = { G, MountCalibrator, IMUPipeline, CrossCheck, fromDeviceMotion, CONSTANTS: C };
+  const api = { G, CAMBER_HOLD_S, MountCalibrator, IMUPipeline, CrossCheck, fromDeviceMotion, CONSTANTS: C };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexLivePipeline = api;
 })(typeof window !== 'undefined' ? window : globalThis);

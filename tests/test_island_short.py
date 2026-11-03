@@ -59,5 +59,5 @@ def test_off_route_says_the_status_lines_words(out):
     assert out["wrong"] == "Wrong way" and out["off"] == "Off route" and out["checking"] == "Checking"
     html = cockpit_source()
     quiet = html[html.index("    function quietActivity("):html.index("    function islandWords(")]
-    assert "short: 'OFF'" not in quiet and "islandWords(offRouteText())" in quiet
+    assert "short: 'OFF'" not in quiet and "? offRouteText() : null" in quiet and "short: islandWords(offWords)" in quiet
     assert "SQ`" not in html[html.index("    function islandShort("):html.index("    function pushActivity(")]

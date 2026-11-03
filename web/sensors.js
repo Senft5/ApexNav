@@ -14,6 +14,9 @@
 // FrameBuilder is pure and unit-tested; start()/stop() are the thin browser shell and must be called from a user gesture (iOS requires it).
 (function (root) {
   const G = 9.80665, D2R = Math.PI / 180;
+  // camber_v: frames whose camber comes from the fixed live pipeline (unknown off a corner, never a decayed 0) carry it
+  // (ApexKit IMUPipeline.camberVersion, live_pipeline.js). Camber in frames without it is a placeholder and is not recorded.
+  const CAMBER_V = 2;
   const finite = (v) => typeof v === 'number' && Number.isFinite(v);
   const wrapPi = (a) => { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI) a += 2 * Math.PI; return a; };
   const metres = (a, b) => { const c = Math.cos(a.lat * D2R); return Math.hypot((b.lon - a.lon) * 111320 * c, (b.lat - a.lat) * 110540); };
@@ -47,7 +50,7 @@
       const peak = p.takeVertPeak();
       if (!this.check.verified) return {};
       const G_ = this.L.G, r = (v, d) => Math.round(v * 10 ** d) / 10 ** d;
-      return { calibration: 'locked', camber_deg: r(p.camber / D2R, 2), crest_vertical_g: r(p.crestAcc / G_, 3), vert_peak_g: r(peak / G_, 3),
+      return { calibration: 'locked', camber_deg: p.camber == null ? null : r(p.camber / D2R, 2), camber_v: CAMBER_V, crest_vertical_g: r(p.crestAcc / G_, 3), vert_peak_g: r(peak / G_, 3),
                roughness_rms: r(Math.sqrt(Math.max(0, p.roughMeanSq)) / G_, 4) };
     }
     /** A GPS fix: { t (ms), lat, lon, accuracy (m), speed (m/s|null), heading (deg|null), altitude (m|null) }. Returns a live frame. */
@@ -128,7 +131,7 @@
           this.rows.push({ distance_m: this.nextAt, lat: this.prev.lat + (fr.lat - this.prev.lat) * f, lon: this.prev.lon + (fr.lon - this.prev.lon) * f,
             elevation_m: mix(this.prev.elevation_m, fr.elevation_m), speed_mps: mix(this.prev.speed_mps, fr.speed_mps),
             lon_g: gOk && finite(fr.lon_g) ? fr.lon_g : null, lat_g: gOk && finite(fr.lat_g) ? fr.lat_g : null, roughness_rms: finite(fr.roughness_rms) ? fr.roughness_rms : null,
-            camber_deg: locked && finite(fr.camber_deg) ? fr.camber_deg : null, crest_vertical_g: locked && finite(fr.crest_vertical_g) ? fr.crest_vertical_g : null,
+            ...(locked && fr.camber_v === CAMBER_V && finite(fr.camber_deg) ? { camber_deg: fr.camber_deg, camber_v: CAMBER_V } : { camber_deg: null }), crest_vertical_g: locked && finite(fr.crest_vertical_g) ? fr.crest_vertical_g : null,
             vert_peak_g: null });
           this.nextAt += 5;
         }
@@ -171,9 +174,10 @@
     /** CSV in the ApexDrive column layout; missing values are left blank, never zero. */
     toCsv() {
       const num = (v, d) => (finite(v) ? v.toFixed(d) : '');
-      const head = 'segment_index,distance_m,lat,lon,elevation_m,speed_mph,lon_g,lat_g,camber_deg,roughness_rms,crest_vertical_g,vert_peak_g,source';
+      const head = 'segment_index,distance_m,lat,lon,elevation_m,speed_mph,lon_g,lat_g,camber_deg,roughness_rms,crest_vertical_g,vert_peak_g,source,camber_v';
+      // camber_v per row: blank where the row's camber (if any) is not from the fixed pipeline (a drive kept by an older build)
       return [head, ...this.rows.map((r, i) => [i, num(r.distance_m, 1), num(r.lat, 7), num(r.lon, 7), num(r.elevation_m, 1), num(finite(r.speed_mps) ? r.speed_mps * 2.2369362921 : null, 2),
-        num(r.lon_g, 4), num(r.lat_g, 4), num(r.camber_deg, 2), num(r.roughness_rms, 4), num(r.crest_vertical_g, 3), num(r.vert_peak_g, 3), 'web-gps'].join(','))].join('\n') + '\n';
+        num(r.lon_g, 4), num(r.lat_g, 4), num(r.camber_deg, 2), num(r.roughness_rms, 4), num(r.crest_vertical_g, 3), num(r.vert_peak_g, 3), 'web-gps', r.camber_v === CAMBER_V ? CAMBER_V : ''].join(','))].join('\n') + '\n';
     }
   }
 

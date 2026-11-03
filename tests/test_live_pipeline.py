@@ -67,10 +67,37 @@ def test_fixture_drive_calibrates_by_itself_and_relearns_after_a_remount():
 
 def test_live_camber_reads_the_bank():
     d = mk.build()
-    o = np.array(d["outputs_every_10"])
+    o = np.array(d["outputs_every_10"], dtype=float)                                  # unknown camber (None) -> nan
     turn = (o[:, 0] >= 1800) & (o[:, 0] < 2550)
     camber_deg = np.degrees(o[turn, d["output_fields"].index("camber")])
+    assert np.isfinite(camber_deg).all(), "measured all through the corner"
     assert abs(camber_deg.mean() - 4.0) < 0.3
+
+
+def test_live_camber_is_unknown_on_a_straight_never_zero():
+    d = mk.build()
+    k = d["output_fields"].index("camber")
+    rows = {r[0]: r[k] for r in d["outputs_every_10"]}
+    straight = [i for i in rows if 500 <= i < 1500 or 2800 <= i < 3100]             # pulling away and braking; after the turn
+    assert len(straight) == 130 and all(rows[i] is None for i in straight)
+    # committed as JSON null, which Swift reads as nil
+    committed = json.load(open(FIXTURE, encoding="utf-8"))
+    assert all(r[k] is None for r in committed["outputs_every_10"] if 2800 <= r[0] < 3100)
+
+
+def test_camber_is_held_briefly_after_a_corner_then_unknown():
+    pipe = lp.IMUPipeline()
+    R = np.eye(3)
+    pipe.mount.restore([1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0])
+    assert pipe.camber is None                                                        # nothing observed yet
+    t, v, _ = _drive(pipe, R, [(3.0, 0.0, 0.0)], v=20.0)                              # a straight: never observed
+    assert pipe.camber is None and pipe.mount.state == "locked"
+    t, v, _ = _drive(pipe, R, [(3.0, 0.0, 0.2)], t=t, v=v)                            # a flat corner at 4 m/s^2
+    assert pipe.camber is not None and abs(math.degrees(pipe.camber)) < 0.5
+    t, v, _ = _drive(pipe, R, [(0.5, 0.0, 0.0)], t=t, v=v)
+    assert pipe.camber is not None                                                    # inside the hold
+    _drive(pipe, R, [(lp.CAMBER_HOLD_S + 0.5, 0.0, 0.0)], t=t, v=v)
+    assert pipe.camber is None and pipe.outputs()[6] is None                          # unknown, not decayed to 0
 
 
 def test_braking_alone_locks_forward_the_right_way_round():

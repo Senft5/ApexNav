@@ -4,6 +4,30 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-03: Road data fixed, your tester's three notes, two private car themes (#285)
+
+- **Road data was invisible.** The app's upload dropped each road's line and class, so the server knew no road's type and
+  showed none of the 187 roads measured. It sends them now; I filled the 187 roads' lines and classes in from
+  OpenStreetMap (public map data, not anyone's drive). Undo: `DELETE FROM road_ways` (then nothing shows until two drivers).
+- **Banking zeros were placeholders.** The phone faded camber to 0 on every straight and uploaded it as measured (13,044
+  of 14,768 bins). Now camber is unknown unless measured in a corner within the last 1.0 s, rows and uploads carry a
+  marker (`camber_v`/`cam_v` 2), and the server stores camber only from uploads with it, so the TestFlight build on
+  phones can't add zeros. In production I cleared every stored camber value (the fading made even the non-zero ones
+  suspect); roughness, crest and curvature stay. Backup: table `road_bins_backup_20261103` (15,441 rows, 18:44 UTC) and
+  D1 Time Travel. Undo: copy camber_mean, camber_m2, camber_n back from the backup table.
+- **Road feel** speaks from 40 m of measured corner (banking) and 200 m of roughness. Undo: MIN_BANK_ROWS in road_feel.js.
+- **A deliberate detour** reroutes once, forward (the request carries the car's heading), says "Rerouting" once per
+  detour, and keeps the plan if you rejoin it. Undo: revert the heading in reroute().
+- **Music under the voice:** "While Vetta speaks: Lower music / Pause music" in Layers beside Voice (app only). No voice
+  boost: past full volume needs its own gain stage, which can clip, and can't be built safely without compiling. Pause
+  pauses for every line, and hands the music back 0.8 s after the last.
+- **No glitch on a reroute:** the new route replaces the old in one redraw, the camera doesn't snap, one status
+  ("Rerouting…"), the arrival stays up.
+- **Two private themes, Tiburon (silver 2005 GT V6) and FR-S (Ultramarine 2013):** their looks live on the server and
+  are sent only to accounts in `theme_grants` (yours and @fish5spd's; migration 0044 applied to both databases). The
+  Tiburon's pre-2007 dash light colour couldn't be confirmed, so it claims the silver and the centre pod only. Voices
+  reuse Hale (Tiburon) and Kit (FR-S). Undo a grant: `DELETE FROM theme_grants WHERE user_id = ? AND theme = ?`.
+
 ## 2026-11-03: Feedback runs hourly; your co-developer's notes count as yours
 
 - **Hourly, not daily** (you asked for every 1 or 1.5 hours; a schedule can't say 1.5, so hourly, at :52). A run with

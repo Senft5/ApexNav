@@ -7,10 +7,16 @@ import { isoWeek } from "./points";
 
 export const LIMITS = { maxBins: 2000, minBins: 20, maxAgeDays: 14, kmPerDay: 600, kmPerWeek: 1500, uploadsPerHour: 300, minCoverage: 0.6 };
 const BIN_KM = 0.005;
+/**
+ * Camber from the fixed live pipeline (ApexKit IMUPipeline.camberVersion). Earlier builds decayed camber to a placeholder 0
+ * on every straight (and a fading tail after each corner), so camber from an upload without `cam_v: CAM_V` is stored as
+ * unknown (null). Its roughness, crest and curvature are unaffected.
+ */
+export const CAM_V = 2;
 
 /** crest: the bin's peak unweighting in g (0 = none, 1 = weightless over the top), null when the phone did not measure it. */
 export interface Bin { i: number; cam: number | null; rough: number; crest: number | null; k: number | null }
-export interface Contribution { wayId: number; dir: 0 | 1; drivenOn: string; driveId: string; bins: Bin[]; km: number; shape: [number, number][] | null; cls: RoadClass | null }
+export interface Contribution { wayId: number; dir: 0 | 1; drivenOn: string; driveId: string; bins: Bin[]; km: number; shape: [number, number][] | null; cls: RoadClass | null; lenM: number | null }
 
 /** Valhalla's road classes (the phone's map match, `edge.road_class`); anything else is stored as unknown (null). */
 export const ROAD_CLASSES = ["motorway", "trunk", "primary", "secondary", "tertiary", "unclassified", "residential", "service_other", "track"] as const;
@@ -33,7 +39,7 @@ export function validateContribution(raw: Record<string, unknown>, nowMs = Date.
   if (dayMs < nowMs - (LIMITS.maxAgeDays + 1) * 86400_000) throw bad("too_old");
   if (!Array.isArray(bins) || bins.length < LIMITS.minBins || bins.length > LIMITS.maxBins) throw bad("bad_bin_count");
 
-  const seen = new Set<number>(), out: Bin[] = [];
+  const seen = new Set<number>(), out: Bin[] = [], camTrusted = raw.cam_v === CAM_V;
   for (const b of bins as Record<string, unknown>[]) {
     if (!b || typeof b !== "object") throw bad("bad_bin");
     const i = b.i;
@@ -45,11 +51,15 @@ export function validateContribution(raw: Record<string, unknown>, nowMs = Date.
     const crest = b.crest === null || b.crest === undefined ? null : b.crest;        // a phone with no crest sensor says so
     if (crest !== null && !isNum(crest, 0, 3)) throw bad("bad_crest");
     if (b.k !== null && !isNum(b.k, -0.2, 0.2)) throw bad("bad_curvature");          // null = curvature unknown; radius under 5 m is not a road
-    out.push({ i, cam, rough: b.rough, crest, k: b.k });
+    out.push({ i, cam: camTrusted ? cam : null, rough: b.rough, crest, k: b.k });   // an old build's camber: validated, then unknown
   }
   const lo = Math.min(...seen), hi = Math.max(...seen);
   if (out.length / (hi - lo + 1) < LIMITS.minCoverage) throw bad("not_contiguous");   // real drives cover a run of the road, not scattered bins
-  return { wayId, dir, drivenOn: day, driveId, bins: out, km: out.length * BIN_KM, shape: validateShape(raw.shape, hi), cls: roadClass(raw.cls) };
+  const shape = validateShape(raw.shape, hi);
+  // the way's length for the open-road rule (roads.ts): its line's, or at least as far along it as the bins reach (the
+  // phone counts 5 m bins along the full OSM line; the line it sends is simplified, so a little shorter)
+  const lenM = shape ? Math.round(Math.max(shapeLength(shape), (hi + 1) * 5)) : null;
+  return { wayId, dir, drivenOn: day, driveId, bins: out, km: out.length * BIN_KM, shape, cls: roadClass(raw.cls), lenM };
 }
 
 const MAX_SHAPE = 64;
@@ -221,7 +231,7 @@ export async function contribute(env: Env, v: Viewer, req: Request): Promise<{ a
     const lats = c.shape.map((p) => p[0]), lons = c.shape.map((p) => p[1]);
     stmts.push(env.DB.prepare(`INSERT INTO road_ways (way_id, s, w, n, e, shape, cls, len_m) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                                ON CONFLICT (way_id) DO UPDATE SET cls = COALESCE(road_ways.cls, excluded.cls), len_m = COALESCE(road_ways.len_m, excluded.len_m)`)
-      .bind(c.wayId, Math.min(...lats), Math.min(...lons), Math.max(...lats), Math.max(...lons), JSON.stringify(c.shape), c.cls, Math.round(shapeLength(c.shape))));
+      .bind(c.wayId, Math.min(...lats), Math.min(...lons), Math.max(...lats), Math.max(...lons), JSON.stringify(c.shape), c.cls, c.lenM));
   }
   // this month's km and pioneer km (IDEAS S-11): every accepted chunk counts; pioneer km only while this drive holds the first slot
   stmts.push(env.DB.prepare(`INSERT INTO member_months (user_id, month, km, pioneer_km) VALUES (?1, ?2, ?3, ?4)

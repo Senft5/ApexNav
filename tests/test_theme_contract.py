@@ -57,6 +57,6 @@ def test_the_contract_is_checked_on_its_side_too():
     smoke = open(os.path.join(ROOT, "e2e", "smoke.js"), encoding="utf-8").read()
     i = smoke.index("flow('theme contract on its side:")
     body = smoke[i:smoke.index("\nflow(", i + 10)]
-    for want in ("['roadbook', 'tapedeck', 'billet']", "[false, true]", "width: 852, height: 393", "nothing on the binnacle overprints",
+    for want in ("[...['roadbook', 'tapedeck', 'billet'], ...PRIVATE_IDS]", "the theme is on", "[false, true]", "width: 852, height: 393", "nothing on the binnacle overprints",
                  "the Road line whole", "the strip keeps one height", "the next cell is a code", "the head says its call in words at 21 px"):
         assert want in body, want

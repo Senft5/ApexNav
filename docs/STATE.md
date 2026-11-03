@@ -1,5 +1,17 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-03 (later): road data, tester feedback, private themes (#285)
+
+- [x] Road data reaches the map (line and class uploaded; 187 roads backfilled from OSM), no placeholder camber (all
+  three twins, `cam_v` 2, server ignores camber from older builds; production camber cleared, backup table kept).
+- [x] Tester feedback: detour reroutes once and forward, Lower/Pause music while Vetta speaks, seamless reroute.
+- [x] Private themes Tiburon and FR-S (theme_grants, 0044, applied; granted to natesenft and fish5spd).
+- [x] Feedback runs hourly; @fish5spd's notes are followed (#284).
+- Unverified: all Swift (CI compiles it), the music pause on a device, the themes on CarPlay.
+- Open: R2 for photos (owner turns it on; R2 needs enabling in the dashboard), the Sign in with Apple key, the public
+  TestFlight link (Claude submits once the key is in and the contact email is chosen).
+- Exact next task: recording 8, then panel round 3 (carry-overs below).
+
 ## Session 2026-11-03: panel round 2 built (20 reviewers across four models)
 
 - [x] Twenty reviewers (docs/design/PANEL.md round 2) reviewed recording 7, and the vote is in

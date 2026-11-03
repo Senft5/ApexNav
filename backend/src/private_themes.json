@@ -1,0 +1,46 @@
+{
+  "tiburon": {
+    "id": "tiburon", "label": "Tiburon", "tag": "D", "blurb": "Silver V6 coupe, three gauges in the pod.",
+    "about": "A silver 2005 GT V6: brushed silver by day, black faces lit at night, and three small gauges in a pod over the radio, as the car has. Here they read Turn, Brake and Bank.",
+    "voice": { "id": "hale", "name": "Hale", "who": "Low, even, zero drama. A test driver reading a card." },
+    "gauge": "printed", "renderers": { "dial": "bezel", "meter": "pod", "strip": "roadbook" },
+    "day": {
+      "stage": "#D5D8DB", "ink": "#121417", "dim": "#4A4F56", "route": "#121417", "routeCasing": "#D5D8DB",
+      "panel": "#CBCED2", "panelInk": "#0F1114", "panelDim": "#474C53", "rule": "#2A2E33", "accent": "#A3101C",
+      "signal": "#A3101C", "amber": "#7A4E00", "calm": "#0F1114",
+      "face": "#E4E6E9", "faceInk": "#0D0F12", "faceDim": "#50555C", "hair": "#B9BDC2", "gain": "#2C6B3E"
+    },
+    "night": {
+      "stage": "#121417", "ink": "#DDE1E6", "dim": "#8E949C", "route": "#DDE1E6", "routeCasing": "#121417",
+      "panel": "#101215", "panelInk": "#E2E6EB", "panelDim": "#8C939B", "rule": "#3A3F46", "accent": "#FF5247",
+      "signal": "#FF5247", "amber": "#E3A13E", "calm": "#E2E6EB",
+      "face": "#08090B", "faceInk": "#E8ECF0", "faceDim": "#8F959D", "hair": "#24282D", "gain": "#86CF8E"
+    },
+    "map": {
+      "day": { "bg": "#D9DCDF", "water": "#B9C6CF", "waterLine": "#7D8E99", "land": "#D4D7DA", "wood": "#C8CDC8", "road": "#F4F5F6", "roadMinor": "#EEEFF0", "casing": "#2A2E33", "label": "#1E2125", "halo": "#D9DCDF", "boundary": "#8A9097", "contour": "#8A8F94", "shadow": "#8E959C", "highlight": "#F7F8F9", "accentShade": "#AEB3B8" },
+      "night": { "bg": "#14161A", "water": "#0E1216", "waterLine": "#26303A", "land": "#16181C", "wood": "#181B1E", "road": "#2C3036", "roadMinor": "#24282D", "casing": "#9EA5AD", "label": "#9AA1A9", "halo": "#14161A", "boundary": "#2E3238", "contour": "#2A2E33", "shadow": "#07080A", "highlight": "#22262B", "accentShade": "#101215" }
+    }
+  },
+  "frs": {
+    "id": "frs", "label": "FR-S", "tag": "E", "blurb": "Ultramarine, black cloth, white light.",
+    "about": "A blue 2013 FR-S: the black cabin, white-lit numerals, an Ultramarine ring round the speed dial, a light quick needle, and the route in the same blue.",
+    "voice": { "id": "kit", "name": "Kit", "who": "Quick, dry, a little cheeky, never silly." },
+    "gauge": "printed", "renderers": { "dial": "tach", "meter": "gball", "strip": "roadbook" },
+    "day": {
+      "stage": "#0E1014", "ink": "#F1F3F6", "dim": "#A3AAB5", "route": "#5C88FF", "routeCasing": "#0E1014",
+      "panel": "#0C0E12", "panelInk": "#F4F6F9", "panelDim": "#A0A7B2", "rule": "#2E3440", "accent": "#6E96FF",
+      "signal": "#FF4A3D", "amber": "#FFB040", "calm": "#F4F6F9",
+      "face": "#07080A", "faceInk": "#F6F8FA", "faceDim": "#9BA2AD", "hair": "#1E222A", "gain": "#8FD6A0"
+    },
+    "night": {
+      "stage": "#0A0B0E", "ink": "#E6E9EE", "dim": "#969DA8", "route": "#4F7DF5", "routeCasing": "#0A0B0E",
+      "panel": "#08090C", "panelInk": "#E9ECF1", "panelDim": "#959CA7", "rule": "#283040", "accent": "#6A90F8",
+      "signal": "#F5473B", "amber": "#F0A63C", "calm": "#E9ECF1",
+      "face": "#050608", "faceInk": "#ECEFF3", "faceDim": "#929AA5", "hair": "#191C23", "gain": "#86CC97"
+    },
+    "map": {
+      "day": { "bg": "#101318", "water": "#0B1830", "waterLine": "#1F3A70", "land": "#11141A", "wood": "#12161B", "road": "#1C2129", "roadMinor": "#181C23", "casing": "#8FA3C8", "label": "#A6B0C0", "halo": "#101318", "boundary": "#262C38", "contour": "#1C222C", "shadow": "#050608", "highlight": "#1A1F27", "accentShade": "#0B0D11" },
+      "night": { "bg": "#0B0D11", "water": "#081226", "waterLine": "#1A315E", "land": "#0C0F13", "wood": "#0D1015", "road": "#171B22", "roadMinor": "#13161C", "casing": "#7488AE", "label": "#8E99AB", "halo": "#0B0D11", "boundary": "#1F2430", "contour": "#171C25", "shadow": "#040506", "highlight": "#151920", "accentShade": "#08090C" }
+    }
+  }
+}

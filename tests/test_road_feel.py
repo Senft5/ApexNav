@@ -32,9 +32,12 @@ const s = F.summary({ dist, camber, rough });
 const smooth = F.summary({ dist, camber, rough: rough.map(() => 0.02) });
 const off = F.summary({ dist, camber: camber.map((v, i) => (i >= 300 && i < 304 ? -6 : v)), rough });
 const flat = F.summary({ dist, camber: camber.map(() => 0.3), rough: null });
+// camber is unknown on straights (2026-11-03): two corners measured (12 rows), roughness everywhere
+const corners = F.summary({ dist, camber: dist.map((_, i) => (i >= 800 && i < 806 ? 4.2 : i >= 900 && i < 906 ? 2 : null)), rough });
+const fewRough = F.summary({ dist, camber, rough: rough.map((v, i) => (i < 30 ? 0.3 : null)) });
 console.log(JSON.stringify({
-  s, line: F.endLine(s, mi), smooth: F.endLine(smooth, mi), off: F.endLine(off, mi), flat: F.endLine(flat, mi),
-  none: [F.summary(null), F.summary({ dist, camber: dist.map(() => null), rough }), F.summary({ dist, camber: dist.map((_, i) => (i < 39 ? 2 : null)), rough }),
+  s, line: F.endLine(s, mi), corners: F.endLine(corners, mi), fewRough: F.endLine(fewRough, mi), smooth: F.endLine(smooth, mi), off: F.endLine(off, mi), flat: F.endLine(flat, mi),
+  none: [F.summary(null), F.summary({ dist, camber: dist.map(() => null), rough }), F.summary({ dist, camber: dist.map((_, i) => (i < 7 ? 2 : null)), rough }),
          F.summary({ dist, camber: null, rough })],
   noneLine: F.endLine(null, mi),
   cols: F.columns([{ distance_m: 5, camber_deg: 1.5, roughness_rms: 0.1 }, { distance_m: 10, camber_deg: null, roughness_rms: NaN }]),
@@ -59,8 +62,14 @@ def test_a_calibrated_drive_says_what_the_phone_felt(out):
     assert out["flat"] == "Road feel: flat, no banking over 1°."
 
 
+def test_corners_alone_are_enough(out):
+    """Camber is measured only in corners: 40 m of them speak for the banking, and roughness speaks from its own 200 m."""
+    assert out["corners"] == "Road feel: banked 4\u00b0 at 2.5 mi \u00b7 roughest at 3.7 mi."
+    assert out["fewRough"] == "Road feel: banked 4\u00b0 at 2.5 mi.", "30 rows of roughness are not 200 m: not spoken about"
+
+
 def test_an_uncalibrated_drive_says_nothing(out):
-    """No camber rows (the mount never locked), fewer than 40 of them, or no column at all: no line, never a guessed one."""
+    """No camber rows (the mount never locked), fewer than 8 of them, or no column at all: no line, never a guessed one."""
     assert out["none"] == [None, None, None, None] and out["noneLine"] == ""
     assert out["cols"] == {"dist": [5, 10], "camber": [1.5, None], "rough": [0.1, None]}
 

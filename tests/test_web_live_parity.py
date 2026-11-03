@@ -19,12 +19,16 @@ const fx = JSON.parse(require('fs').readFileSync(process.argv[2], 'utf8'));
 const want = new Map(fx.outputs_every_10.map((r) => [r[0], r.slice(1)]));
 const mounts = new Map(fx.mount_every_10.map((r) => [r[0], r]));
 const pipe = new L.IMUPipeline();
-let worst = 0, worstMount = 0, states = [], compared = 0;
+let worst = 0, worstMount = 0, states = [], compared = 0, nullMismatch = [], nulls = 0;
+fx.outputs_every_10.forEach((r) => { if (r.includes(null)) nulls++; });
 for (let i = 0; i < fx.t.length; i++) {
   pipe.step(fx.accel[i], fx.gyro[i], fx.t[i], fx.speed[i], fx.gravity[i]);
   if (want.has(i)) {
     const got = pipe.outputs().slice(0, 8), exp = want.get(i);
-    got.forEach((g, k) => { worst = Math.max(worst, Math.abs(g - exp[k]) / Math.max(1, Math.abs(exp[k]))); });
+    got.forEach((g, k) => {
+      if (exp[k] === null || g === null) { if (exp[k] !== g) nullMismatch.push([i, k, g, exp[k]]); return; }   // unknown camber: both null
+      worst = Math.max(worst, Math.abs(g - exp[k]) / Math.max(1, Math.abs(exp[k])));
+    });
     compared++;
   }
   if (mounts.has(i)) {
@@ -41,7 +45,7 @@ const notGravity = L.fromDeviceMotion({ acceleration: { x: 0, y: 0, z: 0 }, acce
 const cc = new L.CrossCheck(); for (let k = 0; k < 12; k++) cc.add(0.3, 0.25); cc.add(0.3, 0.05);
 const bad = new L.CrossCheck(); for (let k = 0; k < 12; k++) bad.add(-0.3, 0.25);
 const few = new L.CrossCheck(); for (let k = 0; k < 9; k++) few.add(0.3, 0.25);
-console.log(JSON.stringify({ worst, worstMount, states, compared, n: want.size, flat, noGyro, notGravity, cc: cc.verified, bad: bad.verified, few: few.verified }));
+console.log(JSON.stringify({ worst, worstMount, states, compared, nullMismatch, nulls, n: want.size, flat, noGyro, notGravity, cc: cc.verified, bad: bad.verified, few: few.verified }));
 """
 
 
@@ -54,6 +58,7 @@ def test_pipeline_matches_reference():
     r = run()
     assert r["compared"] == r["n"] > 0
     assert r["worst"] < 1e-9
+    assert r["nulls"] > 0 and r["nullMismatch"] == [], "camber is unknown (null) exactly where the reference says so"
     assert r["states"] == []
     assert r["worstMount"] < 1e-9
 

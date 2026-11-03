@@ -121,3 +121,35 @@ def test_page_and_shell_pass_the_duck():
     assert "ApexSpeechQueue.ducks(item, isSpirited())" in page and "cmd: 'speak', text: spoken, force: interrupt, style, duck" in page
     shell = open(os.path.join(root, "ApexNavApp.swift"), encoding="utf-8").read()
     assert 'dict["duck"] as? Bool' in shell and "[.mixWithOthers]" in shell
+
+
+def test_while_vetta_speaks_lower_or_pause_music():
+    """TestFlight: "my music played a little too loud over it, is there a setting to make the voice louder?" The voice is
+    at full volume already, so the music gives: Lower music (ducked, the default) or Pause music (the session takes the
+    audio, then hands it back so the music plays on). One home (Layers, in the app), kept, and sent to the shell."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    page = cockpit_source()
+    assert "native.postMessage({ cmd: 'voiceMusic', mode: state.musicMode })" in page
+    assert "$('musicCtl').hidden = !sendMusicMode();" in page                     # in the app only, sent at launch
+    assert "musicMode: state.musicMode" in page and "MUSIC_MODES = ['lower', 'pause']" in page   # kept with the prefs
+    html = open(os.path.join(root, "web", "index.html"), encoding="utf-8").read()
+    layers = html[html.index('id="swPanel"'):html.index('<aside class="sheet"')]
+    assert 'data-music="lower"' in layers and 'data-music="pause"' in layers   # beside Voice, in Layers
+    shell = open(os.path.join(root, "ApexNavApp.swift"), encoding="utf-8").read()
+    assert 'if cmd == "voiceMusic", let dict = body as? [String: Any]' in shell
+    assert 'shell?.setVoiceMusic((dict["mode"] as? String) ?? "lower")' in shell
+    assert "func setVoiceMusic(_ mode: String)" in shell and 'UserDefaults.standard.set(pauseMusic ? "pause" : "lower", forKey: Self.musicDefaultsKey)' in shell
+    assert 'pauseMusic = UserDefaults.standard.string(forKey: Self.musicDefaultsKey) == "pause"' in shell
+    # pause: no mixing option at all, so other audio is interrupted; lower: the ducking it always had
+    cfg = shell[shell.index("    private func configureVoiceSession("):shell.index("    private func beginVoice(")]
+    assert "pauseMusic ? [] : (duck ? [.duckOthers, .interruptSpokenAudioAndMixWithOthers] : [.mixWithOthers])" in cfg
+    assert "setCategory(.playback, mode: .voicePrompt, options: options)" in cfg
+    # the music is handed back after the line, and told it may resume; lines close together keep it paused
+    end = shell[shell.index("    fileprivate func endVoiceIfIdle("):shell.index("    private func speak(")]
+    assert "setActive(false, options: .notifyOthersOnDeactivation)" in end
+    assert "guard pauseMusic else { releaseVoice(); return }" in end and "self.voiceEndGen == gen" in end
+    begin = shell[shell.index("    private func beginVoice("):shell.index("    // CarPlay Developer Guide, Voice prompts")]
+    assert "voiceEndGen += 1" in begin and "setActive(true)" in begin
+    # CarPlay plays no voice of its own: the car's audio is this one session
+    car = open(os.path.join(root, "CarPlay", "ApexCarPlay.swift"), encoding="utf-8").read()
+    assert "AVAudioSession" not in car and "AVSpeechSynthesizer" not in car

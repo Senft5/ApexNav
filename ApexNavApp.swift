@@ -419,6 +419,11 @@ final class ApexScriptBridge: NSObject, WKScriptMessageHandler {
             shell?.webVoiceBegin(duck: speechDuck)
             return
         }
+        // While Vetta speaks (the map's Layers): "lower" ducks the music for each line, "pause" pauses it (cockpit.js sendMusicMode).
+        if cmd == "voiceMusic", let dict = body as? [String: Any] {
+            shell?.setVoiceMusic((dict["mode"] as? String) ?? "lower")
+            return
+        }
         // A pace note or direction from the voice bank (web/voice.js nativePlay): the shell plays the clip files itself.
         if cmd == "clips", let dict = body as? [String: Any], let id = (dict["id"] as? NSNumber)?.intValue, let files = dict["files"] as? [String] {
             let gaps = ((dict["gaps"] as? [Any]) ?? []).map { ($0 as? NSNumber)?.doubleValue ?? 0 }
@@ -620,6 +625,7 @@ struct LiveFrame: Encodable, Sendable {
     var lat, lon, accuracyM: Double?
     var speedMps, courseDeg, elevationM, gradePct: Double?
     var latG, lonG, camberDeg, crestVerticalG, roughnessRms, vertPeakG, impactG: Double?
+    var camberV: Int = IMUPipeline.camberVersion   // camber from the fixed pipeline (unknown when unobserved, never a decayed 0)
     var recording: Bool
     var calibration: String
     var thermal: Int
@@ -633,7 +639,7 @@ struct LiveFrame: Encodable, Sendable {
     enum CodingKeys: String, CodingKey {
         case lat, lon, accuracyM = "accuracy_m", speedMps = "speed_mps", courseDeg = "course_deg", elevationM = "elevation_m",
              gradePct = "grade_pct", latG = "lat_g", lonG = "lon_g", camberDeg = "camber_deg", crestVerticalG = "crest_vertical_g",
-             roughnessRms = "roughness_rms", vertPeakG = "vert_peak_g", impactG = "impact_g", recording, calibration, thermal,
+             roughnessRms = "roughness_rms", vertPeakG = "vert_peak_g", impactG = "impact_g", camberV = "camber_v", recording, calibration, thermal,
              lowPowerMode = "low_power_mode", battery, charging, hasFix = "has_fix", segments, at, seq
     }
 
@@ -652,6 +658,7 @@ struct LiveFrame: Encodable, Sendable {
         try c.encode(gradePct, forKey: .gradePct); try c.encode(latG, forKey: .latG); try c.encode(lonG, forKey: .lonG)
         try c.encode(camberDeg, forKey: .camberDeg); try c.encode(crestVerticalG, forKey: .crestVerticalG)
         try c.encode(roughnessRms, forKey: .roughnessRms); try c.encode(vertPeakG, forKey: .vertPeakG); try c.encode(impactG, forKey: .impactG)
+        try c.encode(camberV, forKey: .camberV)
         try c.encode(recording, forKey: .recording); try c.encode(calibration, forKey: .calibration); try c.encode(thermal, forKey: .thermal)
         try c.encode(lowPowerMode, forKey: .lowPowerMode); try c.encode(battery, forKey: .battery); try c.encode(charging, forKey: .charging)
         try c.encode(hasFix, forKey: .hasFix); try c.encode(segments, forKey: .segments); try c.encode(at, forKey: .at); try c.encode(seq, forKey: .seq)
@@ -668,6 +675,7 @@ struct LiveFrame: Encodable, Sendable {
 final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelegate, ASWebAuthenticationPresentationContextProviding {
     static let gStd = ApexKit.gStd
     nonisolated private static let mountDefaultsKey = "apex.mountRotationRows.v1"
+    nonisolated private static let musicDefaultsKey = "apex.voiceMusic.v1"
 
     @Published var shareItem: CSVShareItem?
 
@@ -712,13 +720,14 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
     let replaying = false
     #endif
     private var recordedSegments: Int = 0
-    private static let csvHeader = "segment_index,distance_m,lat,lon,elevation_m,speed_mph,lon_g,lat_g,camber_deg,crest_vertical_g,roughness_rms,engagement_score,grade_pct,vert_peak_g"
+    private static let csvHeader = "segment_index,distance_m,lat,lon,elevation_m,speed_mph,lon_g,lat_g,camber_deg,crest_vertical_g,roughness_rms,engagement_score,grade_pct,vert_peak_g,camber_v"
     private var csvLines: [String] = [ApexSensorShell.csvHeader]
 
     override init() {
         super.init()
         motion.with { $0.pipeline.mount = MountCalibrator() }   // unknown until gravity settles; a mount saved from an earlier drive is reused only if gravity agrees
         restorePersistedMount()
+        pauseMusic = UserDefaults.standard.string(forKey: Self.musicDefaultsKey) == "pause"   // before the session is set up
         locManager.delegate = self
         locManager.activityType = .automotiveNavigation
         locManager.pausesLocationUpdatesAutomatically = false
@@ -1278,9 +1287,10 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         if let seq {
             journal?.add(JournalFrame(seq: seq, at: at, lat: latDeg, lon: lonDeg, accuracyM: accuracyM, speedMps: speedMps,
                                       courseDeg: courseDeg, elevationM: fusion.elevationM, latG: imu(pipeline.latAccMps2 / Self.gStd),
-                                      lonG: imu(pipeline.lonAccMps2 / Self.gStd), camberDeg: imu(pipeline.camberRad * 180.0 / Double.pi),
+                                      lonG: imu(pipeline.lonAccMps2 / Self.gStd), camberDeg: pipeline.camberRad.flatMap { imu($0 * 180.0 / Double.pi) },
                                       crestVerticalG: imu(pipeline.crestAccMps2 / Self.gStd), roughnessRms: imu(pipeline.roughRMSMps2 / Self.gStd),
-                                      vertPeakG: imu(vertPeak / Self.gStd), calibration: live ? pipeline.mount.state.rawValue : idleCalibration))
+                                      vertPeakG: imu(vertPeak / Self.gStd), calibration: live ? pipeline.mount.state.rawValue : idleCalibration,
+                                      camberV: IMUPipeline.camberVersion))
         }
         guard webReady, let wv = webView else { return }
         // A page that has not answered the last few seconds of frames is suspended (a WKWebView in the background, the phone
@@ -1294,7 +1304,7 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
             lat: r(hasFix ? latDeg : nil, 7), lon: r(hasFix ? lonDeg : nil, 7), accuracyM: r(hasFix ? accuracyM : nil, 1),
             speedMps: r(speedMps, 2), courseDeg: r(courseDeg, 1), elevationM: r(fusion.elevationM, 2), gradePct: r(odometer.gradePct, 2),
             latG: r(imu(pipeline.latAccMps2 / Self.gStd), 3), lonG: r(imu(pipeline.lonAccMps2 / Self.gStd), 3),
-            camberDeg: r(imu(pipeline.camberRad * 180.0 / Double.pi), 2), crestVerticalG: r(imu(pipeline.crestAccMps2 / Self.gStd), 3),
+            camberDeg: r(pipeline.camberRad.flatMap { imu($0 * 180.0 / Double.pi) }, 2), crestVerticalG: r(imu(pipeline.crestAccMps2 / Self.gStd), 3),
             roughnessRms: r(imu(pipeline.roughRMSMps2 / Self.gStd), 4), vertPeakG: r(imu(vertPeak / Self.gStd), 3), impactG: r(imu(impact / Self.gStd), 2),
             recording: isRecording, calibration: live ? pipeline.mount.state.rawValue : idleCalibration, thermal: thermal.level,
             lowPowerMode: ProcessInfo.processInfo.isLowPowerModeEnabled,
@@ -1463,12 +1473,13 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
             cell(speedMps * 2.2369362921, 2),
             cell(locked ? pipeline.lonAccMps2 / Self.gStd : nil, 4),
             cell(locked ? pipeline.latAccMps2 / Self.gStd : nil, 4),
-            cell(locked ? pipeline.camberRad * 180.0 / Double.pi : nil, 2),
+            cell(locked ? pipeline.camberRad.map { $0 * 180.0 / Double.pi } : nil, 2),
             cell(locked ? pipeline.crestAccMps2 / Self.gStd : nil, 4),
             cell(vertical ? node.roughRMSMps2 / Self.gStd : nil, 4),
             cell(locked ? pipeline.engagement : nil, 3),
             cell(node.elevationM == nil ? nil : node.gradePct, 2),
             cell(vertPeakMps2.map { $0 / Self.gStd }, 3),
+            String(IMUPipeline.camberVersion),   // camber from the fixed pipeline (blank = unknown); older CSVs lack the column
         ]
         csvLines.append(cells.joined(separator: ","))
         recordedSegments += 1
@@ -1731,14 +1742,31 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
     // voice clips (WebAudio) share this session and bracket themselves with voiceBegin / voiceEnd.
     private var webVoiceActive = false
 
+    // While Vetta speaks (TestFlight: "my music played a little too loud over it"; the map's Layers, cockpit.js sendMusicMode).
+    // Lower music (the default): ducked, as below. Pause music: the session takes the audio without mixing, so the music app
+    // pauses for the line, and ending it with .notifyOthersOnDeactivation tells that app it may play on. CarPlay audio uses
+    // this same session. The voice itself is already at full volume (AVAudioPlayer and AVSpeechUtterance stop at 1.0), so
+    // the music is what gives; a louder voice than full would need its own gain stage, which can clip.
+    private var pauseMusic = false
+    // In pause mode the session is given back a moment after the last line, so lines close together don't stutter the music.
+    private static let pauseReleaseS = 0.8
+    private var voiceEndGen = 0
+
+    func setVoiceMusic(_ mode: String) {
+        pauseMusic = mode == "pause"
+        UserDefaults.standard.set(pauseMusic ? "pause" : "lower", forKey: Self.musicDefaultsKey)
+    }
+
     // IDEAS V-08: a low-priority line in cruise (a route or traffic phrase) plays over the music at its own level instead of
     // ducking it; pace notes, hazards, directions and anything spirited duck. The page decides (ApexSpeechQueue.ducks).
+    // Pause music overrides it: the driver asked for the music to stop for every line.
     private func configureVoiceSession(duck: Bool = true) {
-        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .voicePrompt,
-                                                         options: duck ? [.duckOthers, .interruptSpokenAudioAndMixWithOthers] : [.mixWithOthers])
+        let options: AVAudioSession.CategoryOptions = pauseMusic ? [] : (duck ? [.duckOthers, .interruptSpokenAudioAndMixWithOthers] : [.mixWithOthers])
+        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .voicePrompt, options: options)
     }
 
     private func beginVoice(duck: Bool = true) {
+        voiceEndGen += 1                                       // a release waiting from the line before is cancelled
         configureVoiceSession(duck: duck)                      // WebKit may have changed the category for its own media
         try? AVAudioSession.sharedInstance().setActive(true)
     }
@@ -1782,6 +1810,17 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
 
     fileprivate func endVoiceIfIdle() {
         guard !synth.isSpeaking, !webVoiceActive else { return }
+        voiceEndGen += 1
+        guard pauseMusic else { releaseVoice(); return }
+        let gen = voiceEndGen
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.pauseReleaseS) { [weak self] in
+            guard let self, self.voiceEndGen == gen, !self.synth.isSpeaking, !self.webVoiceActive else { return }
+            self.releaseVoice()
+        }
+    }
+
+    /// Gives the audio back: ducked music comes back up, paused music is told it may play on.
+    private func releaseVoice() {
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 

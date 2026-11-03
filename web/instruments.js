@@ -411,6 +411,9 @@
       now: (d) => bankText(d.camberDeg) },
     meters: { title: 'Surface and Brake / Turn', what: 'Surface: how rough the road is under you. Brake / Turn: how hard you braked or turned, the last few seconds.',
       how: 'From the phone\'s motion sensors. Dark bars are readings not taken yet.', now: () => '' },
+    pod: { title: 'Turn, Brake and Bank', what: 'Three small gauges in a row. Turn: how hard you are turning. Brake: how hard you are braking. Bank: how much the road leans in the corner.',
+      how: 'From the phone\'s motion sensors. A needle lies dim at rest until it is measured; Bank reads -- until the phone is calibrated in its mount.',
+      now: (d) => bankText(d.camberDeg) },
     score: { title: 'Vetta Score', what: 'How cleanly you drove the corners: your pace against what each one allows, smoothness, braking and rhythm. Out of 1000.',
       how: 'Worked out from this drive every 30 seconds while you record. -- until there are enough clean corners.',
       now: (d) => (Number.isFinite(d.score) ? String(Math.round(d.score)) : '--') },
@@ -638,9 +641,53 @@
   }
   const bezelG = (parent) => bezel(parent, gDial(parent, true));
 
+  // ---- The private themes' two (themes.js grant(), migration 0044) ------------------------------------------------------
+  // tach (FR-S): the printed speed dial with the car's lit ring round its scale (.tach-ring, the paint's blue in its CSS),
+  // the numerals and needle in the face's white, and a light, quick needle on the spring. Readings stay ink.
+  function tachDial(parent) {
+    const up = speedDial(parent, true), s = parent.querySelector('svg.dial-svg'), spring = springNeedle();
+    if (s) {
+      s.classList.add('tach');
+      const ring = svg('circle', { cx: 100, cy: 100, r: 93.5, fill: 'none', class: 'tach-ring', 'aria-hidden': 'true' }, s);
+      s.insertBefore(ring, s.children[1] || null);                   // over the face, under the scale and the needle
+    }
+    return (d) => up({ ...d, needleMph: spring(d.speedMph, typeof performance !== 'undefined' ? performance.now() : Date.now()) });
+  }
+  // pod (Tiburon): three small gauges in a row, as in the pod over the GT's radio (there: torque, fuel use, volts). Here
+  // they are the meter's readings: TURN (lateral g, centre zero), BRAKE (braking g) and BANK (the road's lean, centre
+  // zero), with Bank's value under them as the g-ball has it. A needle not measured lies at rest, dim; Bank reads "--".
+  function podMeter(parent) {
+    const s = svg('svg', { viewBox: '0 0 200 200', class: 'dial-svg pod' }, parent);
+    const R = 30, Y = 56;
+    const gauge = (cx, cap, from, sweep) => {
+      svg('circle', { cx, cy: Y, r: R + 3, fill: 'var(--face)', stroke: 'var(--face-ink)', 'stroke-width': 2, class: 'pod-bezel' }, s);
+      for (let k = 0; k <= 4; k++) {
+        const a = (from + sweep * k / 4) * Math.PI / 180, r2 = k % 2 ? R - 4 : R - 7;
+        svg('line', { x1: cx + R * Math.cos(a), y1: Y + R * Math.sin(a), x2: cx + r2 * Math.cos(a), y2: Y + r2 * Math.sin(a), stroke: 'var(--face-ink)', 'stroke-width': k % 2 ? 1 : 1.8 }, s);
+      }
+      const needle = svg('line', { x1: cx, y1: Y, x2: cx, y2: Y - R + 5, stroke: 'var(--face-ink)', 'stroke-width': 2.4, 'stroke-linecap': 'round' }, s);
+      svg('circle', { cx, cy: Y, r: 3.2, fill: 'var(--face-ink)' }, s);
+      svg('text', { x: cx, y: Y + R + 22, 'text-anchor': 'middle', class: 'dial-label pod-cap' }, s).textContent = cap;
+      return (deg, known) => { setA(needle, 'transform', `rotate(${deg} ${cx} ${Y})`); setS(needle, 'opacity', known ? 1 : 0.25); };
+    };
+    // angles: 0 is straight up; a centre-zero gauge swings 120° either way, Brake sweeps 240° from the left
+    const turn = gauge(36, 'TURN', 150, 240), brake = gauge(100, 'BRAKE', 150, 240), bank = gauge(164, 'BANK', 150, 240);
+    const bankTxt = svg('text', { x: 100, y: 168, 'text-anchor': 'middle', class: 'dial-digital small' }, s);
+    const clip = (v) => Math.max(-1, Math.min(1, v));
+    return (d) => {
+      const g = d.latG != null && d.lonG != null;
+      turn(g ? clip(-d.latG / 0.8) * 120 : 0, g);                     // a left turn (+) swings it left
+      brake(g ? -120 + Math.max(0, Math.min(1, -d.lonG / 0.8)) * 240 : -120, g);   // braking is -X (ISO 8855)
+      const banked = Number.isFinite(d.camberDeg);
+      bank(banked ? clip(d.camberDeg / 10) * 120 : 0, banked);
+      setT(bankTxt, bankText(d.camberDeg));
+      bankTxt.classList.toggle('unk', !banked);
+    };
+  }
+
   // The theme contract's three renderers (theme_contract.js): a theme names its dial, meter and strip; Pro themes register
   // theirs here (register(slot, id, fn)). Everything around them, and the hazard plate, stays the page's.
-  const RENDER = { dial: { printed: (el) => speedDial(el, true), sevenseg: sevenSeg, bezel: bezelDial }, meter: { gball: (el) => gDial(el, true), bars: barMeters, bezelg: bezelG },
+  const RENDER = { dial: { printed: (el) => speedDial(el, true), sevenseg: sevenSeg, bezel: bezelDial, tach: tachDial }, meter: { gball: (el) => gDial(el, true), bars: barMeters, bezelg: bezelG, pod: podMeter },
     strip: { roadbook: null, vfd: null } };                          // the VFD strip is the road book's, in the VFD skin
   function register(slot, id, fn) { if (RENDER[slot]) RENDER[slot][id] = fn; }
   const pick = (theme, slot, fallback) => (theme.renderers && RENDER[slot][theme.renderers[slot]]) || RENDER[slot][fallback];
@@ -654,7 +701,8 @@
     const gg = html('div', 'dial dial-g', el);
     const u = [pick(theme, 'dial', 'printed')(sp), readouts(center), odometer(center, printed), pick(theme, 'meter', 'gball')(gg)];
     // PR-1: what a tap on each part explains (cockpit.js openExplain)
-    sp.dataset.explain = 'speed'; gg.dataset.explain = theme.renderers && theme.renderers.meter === 'bars' ? 'meters' : 'gball';
+    const meterKind = theme.renderers && theme.renderers.meter;
+    sp.dataset.explain = 'speed'; gg.dataset.explain = meterKind === 'bars' ? 'meters' : meterKind === 'pod' ? 'pod' : 'gball';
     const odoEl = center.querySelector('.odo'); if (odoEl) odoEl.dataset.explain = 'trip';
     // Night (REVIEW2.md U-36): the trip readout steps aside for a quiet Trip key; a tap shows it for ten seconds
     const peek = html('button', 'trip-peek', center, 'Trip'); peek.type = 'button'; let peekT = 0;

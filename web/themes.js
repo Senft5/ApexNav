@@ -93,6 +93,43 @@
   };
   function get(id) { return typeof id === 'string' && Object.prototype.hasOwnProperty.call(THEMES, id) ? THEMES[id] : THEMES.roadbook; }   // unknown or retired: the road book
 
+  // Private themes (migration 0044 theme_grants): a theme granted to an account by hand is not in this file. The server
+  // sends its definition in GET /api/me only to an account it is granted to (backend/src/private_themes.json); grant()
+  // takes that list, keeps only well-formed entries that pass the theme contract, and puts them in THEMES marked
+  // `granted`. The list is kept on the phone so the look survives an offline start; signed out, or a grant gone, and the
+  // next /api/me empties it (cockpit.js applyThemeGrants), and the page falls back to the road book.
+  const BUILT_IN = new Set(Object.keys(THEMES));
+  const GRANT_KEY = 'apex.themeGrants';
+  const HEX = /^#[0-9a-f]{6}$/i;
+  const TOKENS = ['stage', 'ink', 'dim', 'route', 'routeCasing', 'panel', 'panelInk', 'panelDim', 'rule', 'accent', 'signal', 'amber', 'calm', 'face', 'faceInk', 'faceDim', 'hair', 'gain'];
+  const MAP_KEYS = ['bg', 'water', 'waterLine', 'land', 'wood', 'road', 'roadMinor', 'casing', 'label', 'halo', 'boundary', 'contour', 'shadow', 'highlight', 'accentShade'];
+  const str = (v, n) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, n) : null);
+  const colours = (o, keys) => { if (!o || typeof o !== 'object') return null; const out = {}; for (const k of keys) { if (!HEX.test(o[k] || '')) return null; out[k] = o[k]; } return out; };
+  /** A server's theme definition as a theme of this file's shape, or null: only known keys, colours as #rrggbb. Pure. */
+  function fromGrant(d) {
+    if (!d || typeof d !== 'object' || !/^[a-z]{1,20}$/.test(d.id || '') || BUILT_IN.has(d.id)) return null;
+    const day = colours(d.day, TOKENS), night = colours(d.night, TOKENS), mday = colours(d.map && d.map.day, MAP_KEYS), mnight = colours(d.map && d.map.night, MAP_KEYS);
+    const r = d.renderers || {}, v = d.voice || {}, label = str(d.label, 24);
+    if (!day || !night || !mday || !mnight || !label) return null;
+    return { id: d.id, label, tag: str(d.tag, 2) || '', blurb: str(d.blurb, 80) || '', about: str(d.about, 280) || '', pro: false, granted: true,
+      voice: str(v.id, 20) ? { id: str(v.id, 20), name: str(v.name, 24) || '', who: str(v.who, 120) || '' } : null,
+      fonts: FONT, cluster: 'dials', notes: 'roadbook', gauge: d.gauge === 'vfd' ? 'vfd' : 'printed',
+      renderers: { dial: str(r.dial, 20), meter: str(r.meter, 20), strip: str(r.strip, 20) }, day, night, map: { day: mday, night: mnight } };
+  }
+  /** The granted themes, from /api/me: replaces the last list. contract: web/theme_contract.js, when loaded (a theme that
+   *  breaks it is never shown). True when the set of granted themes changed. */
+  function grant(defs, contract) {
+    const list = (Array.isArray(defs) ? defs : []).map(fromGrant).filter((t) => t && (!contract || contract.check(t).length === 0));
+    const before = Object.keys(THEMES).filter((k) => THEMES[k].granted).sort().join();
+    for (const k of Object.keys(THEMES)) if (THEMES[k].granted) delete THEMES[k];
+    for (const t of list) THEMES[t.id] = t;
+    try { if (list.length) root.localStorage.setItem(GRANT_KEY, JSON.stringify(defs.filter((d) => list.some((t) => t.id === (d && d.id))))); else root.localStorage.removeItem(GRANT_KEY); } catch (_) {}
+    return list.map((t) => t.id).sort().join() !== before;
+  }
+  /** The ids granted now. */
+  const granted = () => Object.keys(THEMES).filter((k) => THEMES[k].granted);
+  try { const g = JSON.parse(root.localStorage.getItem(GRANT_KEY) || 'null'); if (Array.isArray(g)) for (const t of g.map(fromGrant)) if (t) THEMES[t.id] = t; } catch (_) {}
+
   // Accents (IDEAS S-10): cosmetic colours for the route line and the cockpit's accent, unlocked with earned Octane
   // (Settings → Look). Warnings keep their own colour (signal) whatever the accent: nothing here changes what a hazard looks like.
   const ACCENTS = {
@@ -122,5 +159,5 @@
   function last() { try { const l = JSON.parse(root.localStorage.getItem(LAST_KEY)); return Array.isArray(l) ? { id: l[0], night: !!l[1] } : null; } catch (_) { return null; } }
   { const l = last(); if (l) apply(l.id, l.night); }
 
-  root.ApexThemes = { THEMES, ACCENTS, get, apply, accent, setAccent, last };
+  root.ApexThemes = { THEMES, ACCENTS, get, apply, accent, setAccent, last, grant, granted, fromGrant, GRANT_KEY };
 })(window);

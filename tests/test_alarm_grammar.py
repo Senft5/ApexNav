@@ -79,7 +79,7 @@ def test_explain_only_parked_or_in_a_replay(out):
 
 def test_every_instrument_says_what_it_is_and_how_it_is_measured(out):
     js = read("web", "instruments.js")
-    keys = set(re.findall(r"dataset\.explain = '(\w+)'", js)) | {"meters", "gball"}   # the meter's two, by the theme's renderer
+    keys = set(re.findall(r"dataset\.explain = '(\w+)'", js)) | {"meters", "gball", "pod"}   # the meter's three, by the theme's renderer
     assert {"speed", "limit", "sight", "score", "trip", "road", "clear"} <= keys
     assert keys <= set(out["explain"]), keys - set(out["explain"])
     for k, e in out["explain"].items():

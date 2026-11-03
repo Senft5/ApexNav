@@ -20,3 +20,6 @@ from any tester are fixed when they are an app bug.
 | 2026-10-31T00:51:55Z | crash (owner) | same as 00:40 | #271 |
 | 2026-10-31T00:51:58Z | crash (owner) | same as 00:40 | #271 |
 | 2026-10-31T01:51:29Z | owner note | "this is so bad": a route Preview stacked over everything | daily run 2026-10-31 (A) |
+| 2026-11-03 (in chat) | owner, relaying a tester | a deliberate detour: rerouted back, "Rerouting" again and again | #285 (heading on the reroute, said once per detour) |
+| 2026-11-03 (in chat) | owner, relaying a tester | music too loud over the voice; a setting? | #285 (While Vetta speaks: Lower / Pause music) |
+| 2026-11-03 (in chat) | owner, relaying a tester | "it tweaks when finding a new route" | #285 (seamless route swap, one status, no camera snap) |
