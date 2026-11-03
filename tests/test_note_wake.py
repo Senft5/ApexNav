@@ -98,7 +98,7 @@ def test_the_page_wakes_on_the_road_and_speaks_the_pack_lines():
     assert notes.index("openNotes(true);") < notes.index("say(call.text, false, call.chain")
     assert "state.openerDue = true; state.openerAt = performance.now();" in html
     # the rerouter's words only on a planned route (U-72)
-    assert re.search(r"if \(offRoute && track && track\.kind === 'route'\) return \[?offRouteText\(\)", html)
+    assert re.search(r"const offWords = offRoute && track && track\.kind === 'route' \? offRouteText\(\) : null;", html)
 
 
 QUIET = r"""

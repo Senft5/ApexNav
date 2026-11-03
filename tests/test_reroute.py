@@ -44,6 +44,20 @@ out.backoff = drive(new RerouteMonitor(), seq(400, (t) => ({ t, distToRouteM: t 
 out.cooldown = drive(new RerouteMonitor(), seq(60, (t) => ({ t, distToRouteM: t < 5 ? 5 : 200, progressM: 0 })), (m) => m.routeChanged());
 // 9. no GPS for 10 s while far does not count as 5 s off route
 out.tunnel = drive(new RerouteMonitor(), seq(20, (t) => (t % 3 === 0 ? { t, distToRouteM: 90, progressM: 0 } : { t, distToRouteM: null })));
+// 10. "Rerouting" once per detour (TestFlight: a deliberate detour): the driver turns off, the first new route needs a
+// second go (the car is off it too), a retry fails once; one announcement. After a minute on the new route, a second
+// detour is announced again.
+{
+  const m = new RerouteMonitor(), said = [];
+  const ask = (t) => { if (m.announce()) said.push(t); };
+  let routes = 0;
+  drive(m, seq(200, (t) => ({ t, distToRouteM: t < 5 ? 5 : t < 60 ? 200 : t < 140 ? 5 : 200, progressM: t < 60 ? 0 : 15 * t })), (mm, t) => {
+    ask(t);
+    if (routes === 1) { mm.requestFailed(t * 1000); routes++; return; }   // the second request fails
+    routes++; mm.routeChanged();
+  });
+  out.announce = { said, routes };
+}
 console.log(JSON.stringify(out));
 """
 
@@ -101,3 +115,11 @@ def test_cooldown_between_requests(r):
 
 def test_missing_fix_breaks_the_run(r):
     assert r["tunnel"]["req"] == []
+
+
+def test_rerouting_said_once_per_detour(r):
+    # requests at 10 (new route, still off it), 30 (fails), 50 (retry after 20 s), all one detour: said once at 10.
+    # On route from t = 60; a minute later (120) the detour is over, so the turn-off at 140 is announced (request at 145).
+    a = r["announce"]
+    assert a["said"] == [10, 145], a
+    assert a["routes"] >= 4

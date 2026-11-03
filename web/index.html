@@ -1354,6 +1354,11 @@
         <div class="switches">
         <button class="sw" data-toggle="voice"><i></i><span>Voice</span></button>
         </div>
+        <!-- TestFlight ("my music played a little too loud over it"): what the music does while Vetta speaks, in the app only
+             (a browser can't pause another app's music). The voice is already at full volume; the music is the lever. -->
+        <div class="ctl notes-ctl" id="musicCtl" hidden><p class="ctl-label">While Vetta speaks</p>
+          <div class="switch" role="radiogroup" aria-label="While Vetta speaks"><button data-music="lower" role="radio">Lower music</button><button data-music="pause" role="radio">Pause music</button></div>
+          <p class="note" id="musicNote">Pause stops your music for each line, then it plays on. On CarPlay too.</p></div>
       </div>
       </div>
       <div class="scrim" id="scrim"></div>
