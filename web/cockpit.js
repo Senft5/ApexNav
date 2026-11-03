@@ -5204,7 +5204,7 @@
         if (chain) ok = await ApexVoice.play([...ApexVoice.tokensFor(chain), l.token]);
         if (!ok) {
           say(l.call, true);
-          for (let i = 0; i < 100 && (speech.busy || speech.queue.items.length); i++) await new Promise((r) => setTimeout(r, 100));
+          for (let i = 0; i < 100 && (speech.busy || speech.queue.size); i++) await new Promise((r) => setTimeout(r, 100));
           if (!(await ApexVoice.play([l.token]))) say(l.signOff, true);
         }
       } catch (_) { say(l.text, true); }
