@@ -23,3 +23,7 @@ from any tester are fixed when they are an app bug.
 | 2026-11-03 (in chat) | owner, relaying a tester | a deliberate detour: rerouted back, "Rerouting" again and again | #285 (heading on the reroute, said once per detour) |
 | 2026-11-03 (in chat) | owner, relaying a tester | music too loud over the voice; a setting? | #285 (While Vetta speaks: Lower / Pause music) |
 | 2026-11-03 (in chat) | owner, relaying a tester | "it tweaks when finding a new route" | #285 (seamless route swap, one status, no camera snap) |
+| 2026-10-31T00:18:12Z | owner note | need to see map under path (the drive page's route picture) | #286 (the app's map under the path) |
+| 2026-10-31T00:18:33Z | owner note | explain what grip circle actually means? | #286 (a line and a tap-to-open explanation) |
+| 2026-10-31T00:19:26Z | owner note | how do I slide to align when video doesn't preview? (dashcam overlay) | #286 (live preview with the overlay, step by call) |
+| 2026-11-03T17:10:38Z | co-developer note | "Shits in my way when I lead" (convoy card over the road ahead) | #286 (one line behind the car; calls from Report or a tap) |

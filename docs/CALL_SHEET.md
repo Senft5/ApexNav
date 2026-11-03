@@ -4,6 +4,19 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-03: Four TestFlight notes (#286)
+
+- **Three of your notes from 31 Oct were never seen**: the run read only the last 10 notes. It reads 20 now; these are built.
+- **Map under the drive's path** (the Log): the app's own map, loaded when the picture scrolls into view, not touchable;
+  no signal and no saved area keeps the blank panel. Undo: drop web/drive_basemap.js from analysis.html.
+- **The grip circle explained**: "Your grip on this drive" now reads "The outline on this drive" (it is what you used,
+  not the tyres' limit), with a tap-to-open explanation. Undo: the text in drive_view.js ggView.
+- **Dashcam preview**: the video shows with the overlay, step from call to call while sliding. Untested on a phone.
+- **Convoy while leading (@fish5spd)**: the convoy is one line in the map's bottom-left (behind the car); the leader's
+  calls open from Report or a tap on the line. It sat mid-map because the safe area was counted twice. Undo: the
+  `#app.live .convoy-bar` rules in convoy_ui.js.
+- The flyover video's watermark says VETTA (it still said APEX NAV).
+
 ## 2026-11-03: Road data fixed, your tester's three notes, two private car themes (#285)
 
 - **Road data was invisible.** The app's upload dropped each road's line and class, so the server knew no road's type and
