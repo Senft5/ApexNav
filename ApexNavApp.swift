@@ -419,6 +419,11 @@ final class ApexScriptBridge: NSObject, WKScriptMessageHandler {
             shell?.webVoiceBegin(duck: speechDuck)
             return
         }
+        // While Vetta speaks (the map's Layers): "lower" ducks the music for each line, "pause" pauses it (cockpit.js sendMusicMode).
+        if cmd == "voiceMusic", let dict = body as? [String: Any] {
+            shell?.setVoiceMusic((dict["mode"] as? String) ?? "lower")
+            return
+        }
         // A pace note or direction from the voice bank (web/voice.js nativePlay): the shell plays the clip files itself.
         if cmd == "clips", let dict = body as? [String: Any], let id = (dict["id"] as? NSNumber)?.intValue, let files = dict["files"] as? [String] {
             let gaps = ((dict["gaps"] as? [Any]) ?? []).map { ($0 as? NSNumber)?.doubleValue ?? 0 }
@@ -670,6 +675,7 @@ struct LiveFrame: Encodable, Sendable {
 final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelegate, ASWebAuthenticationPresentationContextProviding {
     static let gStd = ApexKit.gStd
     nonisolated private static let mountDefaultsKey = "apex.mountRotationRows.v1"
+    nonisolated private static let musicDefaultsKey = "apex.voiceMusic.v1"
 
     @Published var shareItem: CSVShareItem?
 
@@ -721,6 +727,7 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         super.init()
         motion.with { $0.pipeline.mount = MountCalibrator() }   // unknown until gravity settles; a mount saved from an earlier drive is reused only if gravity agrees
         restorePersistedMount()
+        pauseMusic = UserDefaults.standard.string(forKey: Self.musicDefaultsKey) == "pause"   // before the session is set up
         locManager.delegate = self
         locManager.activityType = .automotiveNavigation
         locManager.pausesLocationUpdatesAutomatically = false
@@ -1735,14 +1742,31 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
     // voice clips (WebAudio) share this session and bracket themselves with voiceBegin / voiceEnd.
     private var webVoiceActive = false
 
+    // While Vetta speaks (TestFlight: "my music played a little too loud over it"; the map's Layers, cockpit.js sendMusicMode).
+    // Lower music (the default): ducked, as below. Pause music: the session takes the audio without mixing, so the music app
+    // pauses for the line, and ending it with .notifyOthersOnDeactivation tells that app it may play on. CarPlay audio uses
+    // this same session. The voice itself is already at full volume (AVAudioPlayer and AVSpeechUtterance stop at 1.0), so
+    // the music is what gives; a louder voice than full would need its own gain stage, which can clip.
+    private var pauseMusic = false
+    // In pause mode the session is given back a moment after the last line, so lines close together don't stutter the music.
+    private static let pauseReleaseS = 0.8
+    private var voiceEndGen = 0
+
+    func setVoiceMusic(_ mode: String) {
+        pauseMusic = mode == "pause"
+        UserDefaults.standard.set(pauseMusic ? "pause" : "lower", forKey: Self.musicDefaultsKey)
+    }
+
     // IDEAS V-08: a low-priority line in cruise (a route or traffic phrase) plays over the music at its own level instead of
     // ducking it; pace notes, hazards, directions and anything spirited duck. The page decides (ApexSpeechQueue.ducks).
+    // Pause music overrides it: the driver asked for the music to stop for every line.
     private func configureVoiceSession(duck: Bool = true) {
-        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .voicePrompt,
-                                                         options: duck ? [.duckOthers, .interruptSpokenAudioAndMixWithOthers] : [.mixWithOthers])
+        let options: AVAudioSession.CategoryOptions = pauseMusic ? [] : (duck ? [.duckOthers, .interruptSpokenAudioAndMixWithOthers] : [.mixWithOthers])
+        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .voicePrompt, options: options)
     }
 
     private func beginVoice(duck: Bool = true) {
+        voiceEndGen += 1                                       // a release waiting from the line before is cancelled
         configureVoiceSession(duck: duck)                      // WebKit may have changed the category for its own media
         try? AVAudioSession.sharedInstance().setActive(true)
     }
@@ -1786,6 +1810,17 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
 
     fileprivate func endVoiceIfIdle() {
         guard !synth.isSpeaking, !webVoiceActive else { return }
+        voiceEndGen += 1
+        guard pauseMusic else { releaseVoice(); return }
+        let gen = voiceEndGen
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.pauseReleaseS) { [weak self] in
+            guard let self, self.voiceEndGen == gen, !self.synth.isSpeaking, !self.webVoiceActive else { return }
+            self.releaseVoice()
+        }
+    }
+
+    /// Gives the audio back: ducked music comes back up, paused music is told it may play on.
+    private func releaseVoice() {
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 

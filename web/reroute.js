@@ -5,12 +5,16 @@
 //   - also off route when progress along the route stays 100 m below its best for 5 s (driving it backwards);
 //   - back on route under 25 m (and, for wrong way, once progress is back within 100 m of its best on 3 fixes in a row);
 //   - one reroute request per off-route episode, at least 20 s after the previous request; a failed
-//     request is retried after 20 / 40 / 80 s, capped at 2 min, until a new route arrives.
+//     request is retried after 20 / 40 / 80 s, capped at 2 min, until a new route arrives;
+//   - "Rerouting" is said once per detour, as Apple Maps and Google Maps do (TestFlight: "it does not like when you don't
+//     take the intended route"): announce() answers yes once, then no until the car has driven on a route for SETTLE_MS,
+//     so a retry, a second turn-off on the way, or a new route that needed another go stay silent.
 // A missing fix (no GPS) breaks the 5 s run: losing signal in a tunnel is not a turn-off.
 (function (root) {
   const OFF_MIN_M = 40, OFF_ACCURACY_X = 2, OFF_HOLD_MS = 5000, MOVING_MPS = 2;
   const BACK_ON_M = 25, WRONG_WAY_M = 100, BACK_ON_FIXES = 3;
   const COOLDOWN_MS = 20000, BACKOFF_MS = [20000, 40000, 80000], BACKOFF_CAP_MS = 120000;
+  const SETTLE_MS = 60000;
   const finite = (v) => typeof v === 'number' && Number.isFinite(v);
 
   class RerouteMonitor {
@@ -18,7 +22,16 @@
       this.lastRequestT = null;   // survives new routes: the cooldown is between requests
       this.failures = 0;          // survives episodes until a reroute succeeds, so offline stays backed off
       this.retryAt = null;
+      this.said = false;          // "Rerouting" said in this detour; survives new routes (a reroute is one)
+      this.onSince = null;        // since when the car has been on a route without a break
       this.routeChanged();
+    }
+
+    /** Whether to say "Rerouting" now: once per detour. A detour ends after SETTLE_MS on a route. */
+    announce() {
+      if (this.said) return false;
+      this.said = true;
+      return true;
     }
 
     /** A new route is on screen (a reroute arrived, or the driver planned one): start fresh. */
@@ -42,6 +55,9 @@
       const res = (request = false, backOn = false) => ({ off: this.off, reason: this.reason, request, backOn });
       if (!f || !finite(f.t) || !finite(f.distToRouteM)) { this.farSince = null; this.wrongSince = null; return res(); }
       const moving = finite(f.speedMps) && f.speedMps > MOVING_MPS;
+      if (this.off || f.distToRouteM >= BACK_ON_M) this.onSince = null;
+      else if (this.onSince == null) this.onSince = f.t;
+      if (this.said && this.onSince != null && f.t - this.onSince >= SETTLE_MS) this.said = false;
       const progress = finite(f.progressM) ? f.progressM : null;
 
       if (this.off) {
@@ -132,6 +148,6 @@
     return { index: best[0], distM: best[1] };
   }
 
-  const api = { RerouteMonitor, matchRoute, MATCH_M, BACK_ON_FIXES, OFF_MIN_M, OFF_HOLD_MS, BACK_ON_M, WRONG_WAY_M, COOLDOWN_MS, BACKOFF_MS, BACKOFF_CAP_MS };
+  const api = { RerouteMonitor, matchRoute, SETTLE_MS, MATCH_M, BACK_ON_FIXES, OFF_MIN_M, OFF_HOLD_MS, BACK_ON_M, WRONG_WAY_M, COOLDOWN_MS, BACKOFF_MS, BACKOFF_CAP_MS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexReroute = api;
 })(typeof window !== 'undefined' ? window : globalThis);

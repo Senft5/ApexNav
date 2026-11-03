@@ -131,11 +131,11 @@
       mode: 'replay', playing: false, rate: 1, cursorM: 0, cursorIdx: 0, follow: true, bearing: 0,
       live: null, liveAt: 0, lastPosition: null, spiritedAt: -Infinity, spoken: new Set(), tapToRoute: false,
       theme: 'roadbook', camFeel: 'dynamic', voiceId: 'marguerite', liveVoice: false, voiceStyle: 'codriver', voiceName: '', hlOn: false, hlStrength: 1,
-      notesMode: 'auto', nightMode: 'auto',   // Notes: auto | full | quiet. Night: auto (sunset/sunrise) | on | off
+      notesMode: 'auto', nightMode: 'auto', musicMode: 'lower',   // Notes: auto | full | quiet. Night: auto (sunset/sunrise) | on | off
       noteWords: 'plain',                     // rally ("Left 4 minus") | plain ("Medium left"), IDEAS V-02; a saved setting wins
       toggles: { stage: false, voice: true, lpr: true, dna: false, night: false, twisty: true, haptics: true, crash: true, health: true, terrain: false, coverage: false, keys: true, friends: false, nudge: false }   // twisty on by default (panel D-2), the weekly reminder off until asked for (R-1); stage and night are derived from the two modes; analysis.html reads toggles.night
     };
-    const NOTES_MODES = ['auto', 'full', 'quiet'], NIGHT_MODES = ['auto', 'on', 'off'];
+    const NOTES_MODES = ['auto', 'full', 'quiet'], NIGHT_MODES = ['auto', 'on', 'off'], MUSIC_MODES = ['lower', 'pause'];
     const MODE_LABEL = { auto: 'Auto', full: 'Full', quiet: 'Quiet', on: 'On', off: 'Off' };
     const darkQuery = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
     function nightPosition() {
@@ -162,7 +162,7 @@
     const etaSections = new WeakMap();      // track -> its corner sections (ApexEta.cornerSections), worked out once
     let etaText = '', etaLeftS = null;
     let replayEnded = false, replayWaiting = false;   // U-110 a finished replay, U-128 a replay waiting for its map (paintReplayEnd)
-    const car = { route: '', guideAt: 0, guideKey: '', sightKey: '', look: '', hazards: '', symbols: new Map(), ended: null, road: '', roadAt: -1e9 };   // what the car's screen was last sent (carRoute, carGuide below)   // strip text while off route; last frame fed; furthest progress
+    const car = { serial: 0, route: '', guideAt: 0, guideKey: '', sightKey: '', look: '', hazards: '', symbols: new Map(), ended: null, road: '', roadAt: -1e9 };   // what the car's screen was last sent (carRoute, carGuide below)   // strip text while off route; last frame fed; furthest progress
     try {
       const saved = JSON.parse(localStorage.getItem('apex.prefs') || 'null');
       if (saved) {
@@ -171,6 +171,7 @@
         state.toggles.dna = false;   // the Road scores switch is gone (BRAND §7 item 5); a stored "on" must not leave the layer stuck on
         // Old saves only have toggles.stage / toggles.night: stage true = Full, false = Auto; night true = On, false = Off (a saved false was a choice, not unset).
         state.noteWords = saved.noteWords === 'plain' || saved.noteWords === 'rally' ? saved.noteWords : 'rally';   // people from before V-02 keep rally
+        state.musicMode = MUSIC_MODES.includes(saved.musicMode) ? saved.musicMode : 'lower';
         state.notesMode = NOTES_MODES.includes(saved.notesMode) ? saved.notesMode : (saved.toggles && saved.toggles.stage ? 'full' : 'auto');
         state.nightMode = NIGHT_MODES.includes(saved.nightMode) ? saved.nightMode : (saved.toggles && saved.toggles.night ? 'on' : saved.toggles && 'night' in saved.toggles ? 'off' : 'auto');
       }
@@ -194,12 +195,13 @@
     const health = window.ApexHealth ? ApexHealth.createHealth(localStorage,
       async (b) => window.APEX_REVIEW ? 204 : (await fetch(`${window.ApexSync ? ApexSync.apiBase : ''}/api/app-health`, { method: 'POST', credentials: 'omit', headers: { 'content-type': 'application/json', 'x-apexnav': '1' }, body: JSON.stringify(b) })).status,
       () => !!state.toggles.health) : { bump() {}, flush: async () => 0 };
-    function savePrefs() { try { localStorage.setItem('apex.prefs', JSON.stringify({ theme: state.theme, themeV: 2, camFeel: state.camFeel, voiceId: state.voiceId, liveVoice: state.liveVoice, liveVoiceV: 2, voiceName: state.voiceName, hlOn: state.hlOn, hlStrength: state.hlStrength, notesMode: state.notesMode, noteWords: state.noteWords, nightMode: state.nightMode, toggles: state.toggles, twistyV: 2 })); } catch (_) {} }
+    function savePrefs() { try { localStorage.setItem('apex.prefs', JSON.stringify({ theme: state.theme, themeV: 2, camFeel: state.camFeel, voiceId: state.voiceId, liveVoice: state.liveVoice, liveVoiceV: 2, voiceName: state.voiceName, hlOn: state.hlOn, hlStrength: state.hlStrength, notesMode: state.notesMode, noteWords: state.noteWords, musicMode: state.musicMode, nightMode: state.nightMode, toggles: state.toggles, twistyV: 2 })); } catch (_) {} }
     function paintSwitches() {
       try { carLook(); } catch (_) {}                                     // the car's screen follows the theme and the voice switch
       document.querySelectorAll('[data-toggle]').forEach(b => { const on = !!state.toggles[b.dataset.toggle]; b.classList.toggle('on', on); b.setAttribute('role', 'switch'); b.setAttribute('aria-checked', String(on)); });
       document.querySelectorAll('#nightSwitch [data-night]').forEach(b => b.setAttribute('aria-checked', String(b.dataset.night === state.nightMode)));
       document.querySelectorAll('[data-notes]').forEach(b => b.setAttribute('aria-checked', String(b.dataset.notes === state.notesMode)));   // U-82
+      document.querySelectorAll('[data-music]').forEach(b => b.setAttribute('aria-checked', String(b.dataset.music === state.musicMode)));
       // SO-1: the Garage says what the one Notes and Voice switches (in Layers) are set to, in their own words
       const now = document.getElementById('coNotesNow');
       if (now) now.textContent = `Notes: ${({ quiet: 'Quiet', auto: 'Auto', full: 'Full' })[state.notesMode] || '--'} · Voice ${state.toggles.voice ? 'on' : 'off'}`;
@@ -275,7 +277,7 @@
       transformRequest: window.ApexOfflineTiles ? ApexOfflineTiles.transform : undefined });
     { const v = document.getElementById('aboutVersion'), m = /ApexNav\/([^ ]+ \([^)]*\))/.exec(navigator.userAgent);   // the iOS shell names its version in the user agent
       if (v) v.textContent = m ? m[1] : (window.APEX_EMBED ? '--' : 'Website'); }
-    window.apexDebug = { map, get track() { return track; }, state, drives, buildRoute: (...a) => buildRoute(...a), renderRouteCard: (...a) => renderRouteCard(...a), openRoadPage: (...a) => openRoadPage(...a), showEndCard: (...a) => showEndCard(...a), get driveActive() { return driveActive; }, tryTheme: (id) => tryTheme(id), tulipPNG: (svg) => tulipPNG(svg) };
+    window.apexDebug = { map, get track() { return track; }, state, drives, buildRoute: (...a) => buildRoute(...a), renderRouteCard: (...a) => renderRouteCard(...a), openRoadPage: (...a) => openRoadPage(...a), showEndCard: (...a) => showEndCard(...a), get driveActive() { return driveActive; }, get camResets() { return camResets; }, tryTheme: (id) => tryTheme(id), tulipPNG: (svg) => tulipPNG(svg) };
     let mapReady = false;
     // F-02: the map's box is fixed (the window, or a drive's edges); it changes on a rotation or at a drive's start and end.
     // A resize the map already made (setPixelRatio resizes) is not made twice.
@@ -770,8 +772,10 @@
         pitch: 42 + 12 * clamp01(v / 35) + f.punch * 5 * brake
       };
     }
+    let camResets = 0;                                                   // e2e: a reroute while driving resets nothing
     function resetCamera(fromMap = false) {
       if (!vehicle) return;
+      camResets++;
       const t = camTargets();
       const c = fromMap ? map.getCenter() : null;
       Object.assign(cam, {
@@ -1415,7 +1419,8 @@
     // 0.7 mi" for "next corner 0.7 mi"; the instruments pick it only when the full line needs a third row.
     function quietLine(spirited, offRoute, driving, next, compact = false) {
       // U-90: wrong way on a road is still that road (the strip said "Wrong way" with no road for seven minutes)
-      if (offRoute && track && track.kind === 'route') return [offRouteText(), rerouter.reason === 'wrong_way' ? roadNow.name : null].filter(Boolean).join(' · ');
+      const offWords = offRoute && track && track.kind === 'route' ? offRouteText() : null;
+      if (offWords) return [offWords, /^Wrong way/.test(offWords) ? roadNow.name : null].filter(Boolean).join(' · ');
       if (replayEnded && !driveActive) return state.mode === 'sim' ? 'That\'s the route' : 'That\'s the drive';   // U-110
       if (replayWaiting && !driveActive && track) return track.name || 'Replay';                                     // U-128
       if (!driving) return track ? `${track.name} · ${spirited ? 'Full notes' : 'Quiet · bumps and cameras only'}` : 'Plan a route for notes';
@@ -1932,7 +1937,9 @@
       rebuildPins();
       render(false);
     }
-    function activate(t, startM = 0, { quiet = false } = {}) {
+    // seamless (a new route while driving: a reroute, a traffic detour, the way home): the new line replaces the old in one
+    // frame, and the follow camera carries on from where it is, never snapped or re-fitted mid-drive.
+    function activate(t, startM = 0, { quiet = false, seamless = false } = {}) {
       if (!booting && !quiet) { replayOn = true; }
       // your own notes from a recce drive (recce.js, IDEAS V-09) read on the same corners, same direction
       try { if (window.ApexRecce && Array.isArray(t.events)) ApexRecce.apply(ApexRecce.load(localStorage), t); } catch (_) {}
@@ -1947,6 +1954,7 @@
       fetchAlpr(t);
       showMeasured(t);
       prefetchNames(t);
+      if (seamless) { render(false); return; }
       resumeFollow();
       render(true);
     }
@@ -2114,6 +2122,10 @@
     // [{ coords, turns: [[lon, lat]], names, timeS }]: the route, then up to `alternates` other ways (two-point requests
     // only). extra: more request options, e.g. { exclude_polygons }.
     // Router calls counted for app health (Y-03): found, failed, and the fallback router used.
+    // The car's heading for the router (Valhalla heading / OSRM bearings), in whole degrees; null standing still or without
+    // a course, when the router picks the way as it would anyway. 45 degrees either side: a car on a bend still matches.
+    const HEADING_TOLERANCE_DEG = 45;
+    const headingOf = (L) => (L && Number.isFinite(L.course_deg) && L.speed_mps > 3 ? Math.round(((L.course_deg % 360) + 360) % 360) % 360 : null);
     async function valhallaRoutes(...a) { try { const r = await valhallaRoutesOnce(...a); health.bump('route_ok'); return r; } catch (e) { health.bump('route_fail'); throw e; } }
     async function osrmRoutes(...a) { const r = await osrmRoutesOnce(...a); health.bump('route_fallback'); return r; }
     // Reported road closures (IDEAS Q-17; hazard_reports.js closuresFor): fetched around the trip for members, kept 5 min, and
@@ -2170,7 +2182,9 @@
         locations: points.map((p, i) => {
           const end = i === 0 || i === points.length - 1;
           if (!end && p.shaping) return { lat: p.lat, lon: p.lon, type: 'through', radius: 25 };   // stay on the stage
-          return { lat: p.lat, lon: p.lon, type: end ? 'break' : 'through', ...(throughRoadsOnly && !end ? { radius: 2500, search_filter: filter } : {}) };
+          // a route from a moving car leaves the way the car is going (headingOf), never with a U-turn behind it
+          return { lat: p.lat, lon: p.lon, type: end ? 'break' : 'through', ...(throughRoadsOnly && !end ? { radius: 2500, search_filter: filter } : {}),
+                   ...(i === 0 && Number.isFinite(p.heading) ? { heading: p.heading, heading_tolerance: HEADING_TOLERANCE_DEG } : {}) };
         }),
         ...FunRoute.costing(avoid, routingCar()), ...(alternates && points.length === 2 ? { alternates } : {}), ...(excl.length ? { exclude_locations: excl } : {}),
         turn_lanes: true, ...extra }) });   // turn_lanes: lane data on each maneuver (IDEAS R-29)
@@ -2195,7 +2209,9 @@
     }
     async function osrmRoutesOnce(points) {
       const coords = points.map(p => `${p.lon.toFixed(6)},${p.lat.toFixed(6)}`).join(';');
-      const json = await RouteLoading.json(`https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`);
+      // the fallback router gets the car's heading too (OSRM bearings: value,range for the first point, blank for the rest)
+      const bearings = points[0] && Number.isFinite(points[0].heading) ? `&bearings=${points.map((p, i) => (i === 0 ? `${p.heading},${HEADING_TOLERANCE_DEG}` : '')).join(';')}` : '';
+      const json = await RouteLoading.json(`https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson${bearings}`);
       if (!json.routes || !json.routes[0]) throw new Error(json.message || 'no route');
       return [{ coords: json.routes[0].geometry.coordinates, turns: [], timeS: Number.isFinite(json.routes[0].duration) ? json.routes[0].duration : null }];
     }
@@ -2492,7 +2508,7 @@
       if (i >= 0) drives.splice(i, 1);
       drives.unshift(t);
       plannedRoute = t;
-      activate(t, 0, { quiet: state.mode !== 'live' });
+      activate(t, 0, { quiet: state.mode !== 'live', seamless: state.mode === 'live' });
       renderRouteCard(t);
       persistPlanned(t); paintSaveBtn(); paintEtaShareBtn(); paintHomeBy();
       // U-70: a route or loop that comes back opens its card (the instruments, with Drive it on them), not a one-line bar;
@@ -2640,7 +2656,10 @@
       const r = rerouter.update({ t: Date.now(), distToRouteM: hit.distM, accuracyM: Number.isFinite(L.accuracy_m) ? L.accuracy_m : null,
                                   speedMps: L.speed_mps, progressM: near ? track.dist[hit.index] : null });
       if (!r.off && near) routeWatch.bestM = Math.max(routeWatch.bestM, track.dist[hit.index]);
-      paintEta(!r.off && near ? track.dist[hit.index] : null);
+      // the arrival stays up while a new route is on its way (as in Apple Maps) and the new route's replaces it; it goes
+      // blank only off route with no new route coming (no signal, nothing to rebuild). Not yet confirmed off: unchanged.
+      if (!r.off && near) paintEta(track.dist[hit.index]);
+      else if (r.off && offRouteText() !== 'Rerouting…') paintEta(null);
       // U-90: "Back on route" once per episode, and only after one long enough to have been heard as off route (10 s);
       // never twice inside BACK_ON_QUIET_MS whatever the matcher does, so the line can never storm again.
       const now = Date.now();
@@ -2653,9 +2672,18 @@
       }
       if (r.request) reroute(track);
     }
-    // Farther than 40 m but not yet confirmed by the monitor (its 5 s hold): notes are blank, but don't call it off route yet.
-    const offRouteText = () => rerouter.reason === 'wrong_way' ? (routeWatch.note && routeWatch.note.endsWith('no signal to reroute') ? 'Wrong way · no signal to reroute' : 'Wrong way')
-                                                       : routeWatch.note || (!rerouter.off ? 'Checking route…' : 'Off route');
+    // The route's word in the status line while off it: one word per detour (TestFlight: "it tweaks when finding a new route";
+    // it flipped "Checking route…", "Off route", "Rerouting…"). Farther than 40 m but not yet confirmed by the monitor (its
+    // 5 s hold): no word, the road's own quiet line (null). Confirmed with a plan to rebuild: "Rerouting…" from then until the
+    // new route is up, through the cooldown and a retry. No signal, or nothing to rebuild (a recorded drive, a GPX track):
+    // what is true ("Off route", "Wrong way").
+    const offRouteText = () => {
+      if (!rerouter.off) return null;
+      const wrong = rerouter.reason === 'wrong_way', note = routeWatch.note || '';
+      if (note.endsWith('no signal to reroute')) return wrong ? 'Wrong way · no signal to reroute' : note;
+      if (track && track.request && state.live) return 'Rerouting…';
+      return wrong ? 'Wrong way' : 'Off route';
+    };
     // Live time left and arrival on a planned route (eta.js): the router's time ahead at your pace on this route so far.
     // Blank off route, on a recorded drive, or when the router gave no time (OSRM fallback without one, an old restore).
     function paintEta(atM) {
@@ -2741,22 +2769,27 @@
         toast('Heading home the quickest way.');
       } catch (_) { toast('Couldn\'t plan the way home. Check signal.'); }
     }
+    // TestFlight ("it does not like when you don't take the intended route"): a deliberate detour is one quiet reroute, as in
+    // Apple Maps and Google Maps. The new route starts where the car is, going the way it is already heading (no U-turn
+    // back to the old road); "Rerouting" is said once per detour (RerouteMonitor.announce); the old route stays drawn until
+    // the new one replaces it in one frame (activate's seamless swap), and a car that rejoined the plan meanwhile keeps it.
     async function reroute(t) {
       const req = t.request, L = state.live;
       if (!req || !L) { routeWatch.note = 'Off route'; return; }   // a recorded drive has no plan to rebuild
       const failed = () => { routeWatch.note = 'Off route · no signal to reroute'; rerouter.requestFailed(Date.now()); };
       if (navigator.onLine === false) { failed(); return; }
       routeWatch.note = 'Rerouting…';
-      say('Rerouting');
+      if (rerouter.announce()) say('Rerouting');
       // From here through the via points still ahead (a loop's next unpassed waypoint, then the rest) to the destination.
       // Stage points stay shaping points, so a reroute still drives the fun roads ahead.
       const ahead = req.via.filter(v => v.distM == null || v.distM > routeWatch.bestM).map(v => ({ lat: v.lat, lon: v.lon, ...(v.shaping ? { shaping: true } : {}), ...(v.planned ? { planned: true } : {}), ...(v.label ? { label: v.label } : {}) }));
-      const points = [{ lat: L.lat, lon: L.lon }, ...ahead, req.to];
+      const points = [{ lat: L.lat, lon: L.lon, heading: headingOf(L) }, ...ahead, req.to];
       let r;
       try { [r] = await valhallaRoutes(points); } catch (_) { try { [r] = await osrmRoutes(points); } catch (_) { failed(); return; } }
       if (track !== t || state.mode !== 'live') return;           // the driver loaded something else meanwhile
+      if (!rerouter.off) return;                                  // back on the planned route meanwhile: it stays
       const nt = await trackFromPolyline(r.coords, t.id, t.name);
-      if (track !== t || state.mode !== 'live') return;
+      if (track !== t || state.mode !== 'live' || !rerouter.off) return;
       Object.assign(nt, { request: { from: null, to: req.to, via: ahead }, fun: funOf(nt, r.turns), timeS: r.timeS, timeMarks: timeMarksOf(nt, r), steps: stepsOf(nt, r) });
       if (t.stageSpans) nt.stageSpans = FunRoute.stageSpans(nt, t.stageSpans.filter(s => s.endM > routeWatch.bestM));
       await buildRoute(null, t.id, t.name, nt);                     // activate() resets the monitor for the new route
@@ -2847,7 +2880,7 @@
       if (Lnow && Core.nearestIndex(Lnow.lat, Lnow.lon, nt.lat, nt.lon, -1).distM > 40) {
         const order = (v) => Core.nearestIndex(v.lat, v.lon, nt.lat, nt.lon, -1).index;
         const pts = [...ahead, ...along].map(v => ({ v, i: order(v) })).sort((a, b) => a.i - b.i).map(x => x.v);
-        try { [route] = await valhallaRoutes([{ lat: Lnow.lat, lon: Lnow.lon }, ...pts, req.to]); } catch (_) { return; }
+        try { [route] = await valhallaRoutes([{ lat: Lnow.lat, lon: Lnow.lon, heading: headingOf(Lnow) }, ...pts, req.to]); } catch (_) { return; }
         if (track !== t || state.mode !== 'live') return;
         nt = await trackFromPolyline(route.coords, t.id, t.name);
         if (track !== t || state.mode !== 'live') return;
@@ -5597,6 +5630,21 @@
       savePrefs();
       render(true);
     }));
+    // While Vetta speaks (TestFlight: "my music played a little too loud over it"): Lower music ducks it, as before; Pause
+    // music stops it for the line and lets it play on after (the shell's audio session, which CarPlay audio shares). The
+    // voice is already at full volume, so the music is what can give. In the app only: a browser can't touch other apps'
+    // audio. The shell keeps the choice too, so the first line after a launch already obeys it.
+    function sendMusicMode() {
+      const native = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex;
+      if (native) { try { native.postMessage({ cmd: 'voiceMusic', mode: state.musicMode }); } catch (_) {} }
+      return !!native;
+    }
+    $('musicCtl').hidden = !sendMusicMode();
+    document.querySelectorAll('[data-music]').forEach(b => b.addEventListener('click', () => {
+      if (!MUSIC_MODES.includes(b.dataset.music) || b.dataset.music === state.musicMode) return;
+      state.musicMode = b.dataset.music;
+      savePrefs(); paintSwitches(); sendMusicMode();
+    }));
     // Without a position, Auto follows the system setting. Recheck solar time each minute.
     if (darkQuery) darkQuery.addEventListener('change', refreshAutoNight);
     setInterval(refreshAutoNight, 60000);
@@ -6183,7 +6231,8 @@
     function carRoute(t) {
       if (t && t === car.ended) t = null;                                 // U-62: a route just driven is not offered to the car again
       const o = routeOptions && t && routeOptions.current === t ? routeOptions : null;
-      const key = t ? `${t.id}|${t.lat.length}|${o ? o.picked : -1}|${state.noteWords}` : '';   // M-3: the plates in the driver's words
+      if (t && !t.carSerial) t.carSerial = ++car.serial;              // a reroute keeps the id (and may keep the length): still a new route
+      const key = t ? `${t.id}|${t.carSerial}|${t.lat.length}|${o ? o.picked : -1}|${state.noteWords}` : '';   // M-3: the plates in the driver's words
       if (key === car.route) return;
       car.route = key;
       if (!t) { carPost({ kind: 'clear' }); carPost({ kind: 'corners', list: [] }); return; }
@@ -6281,7 +6330,8 @@
     function quietActivity() {
       const driven = drive.rec ? ApexUnits.long(drive.rec.km * 1000, 1) : null;
       const onRoute = track && track.kind === 'route';
-      if (onRoute && state.cursorIdx < 0 && state.mode === 'live') return { short: islandWords(offRouteText()), note: [offRouteText(), driven && `${driven} driven`].filter(Boolean).join(' · ') };
+      const offWords = onRoute && state.cursorIdx < 0 && state.mode === 'live' ? offRouteText() : null;
+      if (offWords) return { short: islandWords(offWords), note: [offWords, driven && `${driven} driven`].filter(Boolean).join(' · ') };
       if (onRoute) {
         const next = allEvents().filter(e => e.type === 'corner' && noteM(e) > state.cursorM).reduce((m, e) => Math.min(m, noteM(e)), Infinity);
         const d = Number.isFinite(next) ? distLabel(next - state.cursorM) : null;

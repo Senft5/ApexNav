@@ -390,6 +390,138 @@ flow('a route that doubles back on its own road: no "Wrong way", no "Back on rou
   check(fell < 30 && cursor[cursor.length - 1] > total - 40, `the cursor follows the route past the turnaround (fell ${Math.round(fell)} m, ended ${Math.round(cursor[cursor.length - 1])} of ${Math.round(total)})`);
 });
 
+flow('a deliberate detour: one quiet "Rerouting", the new route goes the way the car is heading, and the swap is seamless (TestFlight: "it tweaks when finding a new route")', async (page, base) => {
+  await page.route('https://tiles.openfreemap.org/**', (route) => (route.request().url().includes('/styles/')
+    ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 8, sources: {}, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#eee' } }] }) })
+    : route.abort()));
+  // The router: the plan goes north; a reroute from a moving car leaves along the heading it was given (400 m), then to the
+  // destination. Without a heading it would head straight for the destination: back across the car's path (the U-turn).
+  const asked = [];
+  const KY = 110540, KX = 111320 * Math.cos(35.96 * Math.PI / 180);
+  await page.route('https://valhalla1.openstreetmap.de/route', async (route) => {
+    const req = JSON.parse(route.request().postData() || '{}'), locs = req.locations;
+    asked.push(req);
+    const a = locs[0], b = locs[locs.length - 1];
+    if (asked.length === 1) { route.fulfill({ contentType: 'application/json', body: JSON.stringify(stubTrip(locs)) }); return; }
+    const pts = [], h = Number.isFinite(a.heading) ? a.heading * Math.PI / 180 : null;
+    let lat = a.lat, lon = a.lon;
+    if (h != null) for (let d = 0; d <= 400; d += 5) pts.push([lat = a.lat + d * Math.cos(h) / KY, lon = a.lon + d * Math.sin(h) / KX]);
+    for (let i = 1; i <= 300; i++) pts.push([lat + (b.lat - lat) * i / 300, lon + (b.lon - lon) * i / 300]);
+    await new Promise((r) => setTimeout(r, 1500));                    // a slow signal: the old route must stay up meanwhile
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify({ trip: { legs: [{ shape: polyline6(pts), maneuvers: [
+      { type: 1, begin_shape_index: 0, length: 3, street_names: ['Detour Lane'] }, { type: 4, begin_shape_index: pts.length - 1, length: 0 }] }],
+      summary: { length: 12, time: 900, has_highway: false, has_toll: false, has_ferry: false } } }) });
+  });
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
+    window.__said = []; window.APEX_REVIEW = true;
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apexDebug.map.loaded() && window.apex && window.apex.live, null, { timeout: 20000 });
+  await page.evaluate(() => apexDebug.buildRoute([{ lat: 35.96, lon: -83.92 }, { lat: 36.06, lon: -83.92 }], 'route_dest', 'To the ridge', null,
+    { from: null, to: { lat: 36.06, lon: -83.92 }, via: [] }));
+  await page.waitForFunction(() => apexDebug.track && apexDebug.track.kind === 'route' && apexDebug.track.request, null, { timeout: 20000 });
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start' }));
+  await page.waitForFunction(() => window.apexDebug.driveActive);
+  // what the driver sees, counted: route-line redraws (and clears), camera fits, the camera's step from frame to frame
+  await page.evaluate(() => {
+    const m = apexDebug.map, src = m.getSource('apex-route-src'), set = src.setData.bind(src);
+    window.__lines = []; window.__fits = 0; window.__steps = []; window.__plan = apexDebug.track;
+    src.setData = (d) => { window.__lines.push(d && d.features ? d.features.length : -1); return set(d); };
+    for (const k of ['fitBounds', 'flyTo', 'easeTo']) { const f = m[k].bind(m); m[k] = (...a) => { window.__fits++; return f(...a); }; }
+    let last = null;
+    // the camera's step from one frame to the next, in metres, over frames under 40 ms apart (a stalled frame on a slow
+    // machine is not the app's jump): the springs move it about a metre a frame; a snap leaps several
+    m.on('move', () => { const c = m.getCenter(), t = performance.now();
+      if (last && t - last.t < 40) window.__steps.push(Math.hypot((c.lat - last.lat) * 110540, (c.lng - last.lng) * 111320 * Math.cos(c.lat * Math.PI / 180)));
+      last = { lat: c.lat, lng: c.lng, t }; });
+  });
+  const fix = (lat, lon, crs) => page.evaluate(([lat, lon, crs]) => {
+    window.apex.live({ lat, lon, accuracy_m: 5, speed_mps: 15, course_deg: crs, has_fix: true, lat_g: 0, lon_g: 0, calibration: 'locked', thermal: 0 });
+    const n = document.getElementById('notes'), ds = document.getElementById('dsMain');
+    return { strip: n ? n.textContent : '', eta: ds ? ds.textContent : '' };
+  }, [lat, lon, crs]);
+  const seen = [];
+  // 1. along the plan, north, for 3 s (4 fixes a second at 15 m/s, in real time: the monitor's 5 s hold is on the clock)
+  const route0 = await page.evaluate(() => ({ lat: apexDebug.track.lat.slice(0, 200), lon: apexDebug.track.lon.slice(0, 200), dist: apexDebug.track.dist.slice(0, 200) }));
+  let i = 0, lat = route0.lat[0], lon = route0.lon[0];
+  for (let k = 0; k < 12; k++) {
+    while (i < route0.dist.length - 1 && route0.dist[i] < k * 3.75) i++;
+    lat = route0.lat[i]; lon = route0.lon[i];
+    const a = Math.max(0, i - 2), b = Math.min(route0.lat.length - 1, i + 2);
+    const crs = (Math.atan2((route0.lon[b] - route0.lon[a]) * Math.cos(lat * Math.PI / 180), route0.lat[b] - route0.lat[a]) * 180 / Math.PI + 360) % 360;
+    seen.push(await fix(lat, lon, crs));
+    await page.waitForTimeout(250);
+  }
+  const etaBefore = seen[seen.length - 1].eta;
+  check(/left/.test(etaBefore), 'the plan has an arrival: ' + etaBefore);
+  const linesBefore = await page.evaluate(() => { window.__steps = []; window.__resets = apexDebug.camResets; return window.__lines.length; });   // the camera is following by now
+  // 2. the driver turns east on purpose and keeps going, until the new route is up (and 2 s more)
+  let swapped = -1;
+  for (let k = 0; k < 80; k++) {
+    lon += 3.75 / KX;
+    seen.push(await fix(lat, lon, 90));
+    if (swapped < 0 && asked.length > 1 && await page.evaluate(() => apexDebug.track !== window.__plan)) swapped = k;
+    if (swapped >= 0 && k > swapped + 8) break;
+    await page.waitForTimeout(250);
+  }
+  check(swapped >= 0, 'a new route arrived: ' + asked.length + ' router calls');
+  // 3. on along the new route (it leaves east, the way the car was going) for 3 s
+  const nt = await page.evaluate(() => ({ lat: apexDebug.track.lat.slice(), lon: apexDebug.track.lon.slice() }));
+  let j = 0, best = Infinity;
+  nt.lat.forEach((la, q) => { const d = Math.hypot((la - lat) * KY, (nt.lon[q] - lon) * KX); if (d < best) { best = d; j = q; } });
+  check(best < 25, `the new route starts where the car is, going its way (${Math.round(best)} m from it)`);
+  for (let k = 0; k < 12 && j < nt.lat.length - 1; k++) { j++; seen.push(await fix(nt.lat[j], nt.lon[j], 90)); await page.waitForTimeout(250); }
+  const out = await page.evaluate(() => ({ said: window.__said.slice(), lines: window.__lines.slice(), fits: window.__fits, steps: window.__steps.slice(), resets: apexDebug.camResets - window.__resets }));
+  // the router was asked from the car, heading east, with a tolerance
+  const re = asked[1].locations[0];
+  check(asked.length === 2 && Math.abs(re.heading - 90) <= 1 && re.heading_tolerance > 0 && re.heading_tolerance <= 90,
+    'one reroute, from the car with its heading: ' + JSON.stringify(asked.map((a) => a.locations[0])));
+  // the voice: "Rerouting" once, no nagging, no U-turn, no "Back on route"
+  check(out.said.filter((s) => /Rerouting/.test(s)).length === 1, '"Rerouting" said once: ' + JSON.stringify(out.said));
+  check(!out.said.some((s) => /U-turn|Wrong way|Off route|Back on route/.test(s)), 'no nagging: ' + JSON.stringify(out.said));
+  // the status line: the one off-route word, in one run; never "Checking route…", "Off route" or "Wrong way"
+  const strips = seen.map((s) => s.strip);
+  check(!strips.some((s) => /Checking route|Off route|Wrong way/.test(s)), 'no flip-flop words: ' + [...new Set(strips)].join(' | '));
+  const runs = strips.map((s) => /Rerouting/.test(s)).reduce((n, on, q, a) => n + (on && !a[q - 1] ? 1 : 0), 0);
+  check(runs === 1, `"Rerouting…" on the status line once, in one run (${runs}): ` + [...new Set(strips)].join(' | '));
+  // the map: the old line until the new one, swapped in one redraw, never cleared; no camera fit while driving, no jump
+  const during = out.lines.slice(linesBefore);
+  check(during.length === 1 && during[0] > 0 && !out.lines.includes(0), 'the route line replaced once, never cleared: ' + JSON.stringify(out.lines));
+  check(out.fits === 0, `no camera fit while driving (${out.fits})`);
+  const jump = Math.max(...out.steps);
+  if (process.env.DEBUG_DETOUR) console.log('detour camera steps', out.steps.slice().sort((a, b) => b - a).slice(0, 6).map((x) => x.toFixed(2)).join(' '), out.steps.length);
+  check(out.resets === 0, `the follow camera is never reset or snapped by the new route (${out.resets})`);
+  check(out.steps.length > 100 && jump < 15, `the follow camera never leaps (largest step ${jump.toFixed(1)} m in ${out.steps.length} frames)`);
+  // the arrival stays up through the reroute, then the new route's
+  const etas = seen.slice(12).map((s) => /left/.test(s.eta));
+  check(etas.every(Boolean), 'the arrival never blanks during the reroute: ' + JSON.stringify(seen.slice(12).map((s) => s.eta)));
+}, { geolocation: { latitude: 35.96, longitude: -83.92 }, permissions: ['geolocation'] });
+
+flow('while Vetta speaks: Lower music or Pause music, beside Voice in Layers, kept and sent to the shell (TestFlight: "my music played a little too loud over it")', async (page, base) => {
+  // a plain browser can't touch other apps' audio: no such switch there
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map);
+  check(await page.evaluate(() => document.getElementById('musicCtl').hidden), 'no music switch in a browser');
+  await page.addInitScript(() => { window.__posted = [];
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { window.__posted.push(m); } } } }; });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map);
+  const music = () => page.evaluate(() => window.__posted.filter((m) => m && m.cmd === 'voiceMusic').map((m) => m.mode));
+  check(JSON.stringify(await music()) === '["lower"]', 'the shell hears the default at launch: ' + JSON.stringify(await music()));
+  await page.click('#swTab');
+  await page.waitForSelector('#musicCtl:not([hidden]) [data-music="pause"]', { state: 'visible' });
+  check((await page.textContent('#musicCtl .ctl-label')) === 'While Vetta speaks', 'its label');
+  await page.click('#musicCtl [data-music="pause"]');
+  const after = await page.evaluate(() => ({ checked: [...document.querySelectorAll('[data-music]')].map((b) => `${b.dataset.music}:${b.getAttribute('aria-checked')}`).join(),
+    kept: JSON.parse(localStorage.getItem('apex.prefs')).musicMode }));
+  check(after.checked === 'lower:false,pause:true' && after.kept === 'pause', 'Pause music is chosen and kept: ' + JSON.stringify(after));
+  check(JSON.stringify(await music()) === '["lower","pause"]', 'and sent: ' + JSON.stringify(await music()));
+  await page.reload();
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map);
+  check(JSON.stringify(await music()) === '["pause"]', 'a launch sends the kept choice: ' + JSON.stringify(await music()));
+});
+
 flow('Where to?: with the search and routing services unreachable, a search fails politely', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.goto(base + '/index.html');
