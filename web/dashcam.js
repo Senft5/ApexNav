@@ -37,7 +37,7 @@
       g.strokeStyle = 'rgba(255,255,255,0.8)'; g.lineWidth = 2; g.beginPath(); g.arc(cx, cy, r, 0, 2 * Math.PI); g.stroke();
       g.fillStyle = '#ffcc33'; g.beginPath(); g.arc(cx - Math.max(-1, Math.min(1, o.latG)) * r, cy - Math.max(-1, Math.min(1, o.lonG)) * r, fs * 0.22, 0, 2 * Math.PI); g.fill();
     }
-    g.textAlign = 'right'; g.font = `800 ${Math.round(fs * 0.6)}px system-ui, sans-serif`; g.fillText('APEX NAV', w - pad, h - fs * 0.6); g.textAlign = 'left';
+    g.textAlign = 'right'; g.font = `800 ${Math.round(fs * 0.6)}px system-ui, sans-serif`; g.fillText('VETTA', w - pad, h - fs * 0.6); g.textAlign = 'left';
   }
 
   /**
@@ -49,49 +49,189 @@
     return !!(R.ApexFlyoverVideo && R.ApexFlyoverVideo.mimeFor(R.MediaRecorder) && C && C.prototype && typeof C.prototype.captureStream === 'function');
   }
 
+
+  // ---- lining it up (TestFlight 13: "how do i slide to align when video doesn't preview?") ------------------------------
+  /** The drive's corner calls in road order: [{ i, call, dist_m }], i the 5 m sample the corner is at. */
+  function cornerCalls(d) {
+    const n = (d.speed_mps || []).length;
+    return (d.events || []).filter((e) => e.type === 'corner' && finite(e.dist_m) && e.call)
+      .sort((a, b) => a.dist_m - b.dist_m)
+      .map((e) => ({ i: Math.max(0, Math.min(n - 1, Math.round(e.dist_m / 5))), call: e.call, dist_m: e.dist_m }));
+  }
+  /** The video time at which drive time tDrive shows, with the video starting offsetS seconds into the drive. */
+  const videoTimeFor = (tDrive, offsetS) => tDrive - offsetS;
+  /** The call after (dir 1) or before (dir -1) drive time tDrive: its index in calls, or -1. */
+  function stepCall(calls, T, tDrive, dir) {
+    if (dir > 0) { for (let k = 0; k < calls.length; k++) if (T[calls[k].i] > tDrive + 0.05) return k; return -1; }
+    for (let k = calls.length - 1; k >= 0; k--) if (T[calls[k].i] < tDrive - 0.05) return k;
+    return -1;
+  }
+  const secs = (v) => (Math.abs(v - Math.round(v)) < 0.05 ? String(Math.round(Math.abs(v))) : Math.abs(v).toFixed(1));
+  /** The offset in words: "Video starts 163 s into the drive", or "… 12 s before the drive". */
+  const offsetText = (v) => (v < 0 ? `Video starts ${secs(v)} s before the drive` : `Video starts ${secs(v)} s into the drive`);
+  const clock = (t) => { const s = Math.max(0, t); return `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, '0')}`; };
+  /** Whether a drawn frame has anything in it (RGBA bytes): WebKit leaves a frame it could not decode transparent. */
+  function frameDrawn(rgba) {
+    for (let k = 3; k < rgba.length; k += 4) if (rgba[k] > 0) return true;
+    return false;
+  }
+
   /** page: el, Core, drive d, fmtSpeed, save(blob, name, type) → Promise. Returns the panel element. */
   function mount(page) {
-    const { el, Core, d } = page, T = Core.elapsedS(d.speed_mps), total = T[T.length - 1] || 0;
+    const { el, Core, d } = page, T = Core.elapsedS(d.speed_mps), total = T[T.length - 1] || 0, calls = cornerCalls(d);
     // a rule-separated section, not a box; the picker is an ink key, the offset the balance slider (REVIEW2.md U-18)
     const box = el('section', { className: 'dc-section' }, el('h2', { textContent: 'Dashcam overlay' }));
     const input = el('input', { type: 'file', accept: 'video/*', hidden: true }); input.setAttribute('aria-label', 'A video from this drive');
     const pick = el('label', { className: 'btn' }, 'Pick a video', input);
-    // iOS (the owner's "make video doesn't work"): a video with display:none, or one not yet played, never loads its data,
-    // so 'loadeddata' never came and Make the video stayed off. It stays in the page, 1 px and see-through, preloading.
+    // The preview is the video itself, shown (WebKit loads and decodes a video it shows; one display:none or 1 px may never
+    // load), with the overlay drawn over it by the same drawOverlay the made video uses, at the same proportions.
     const video = el('video', { muted: true, playsInline: true, preload: 'auto' });
-    video.setAttribute('playsinline', ''); video.setAttribute('muted', '');
-    video.style.cssText = 'position:absolute;width:1px;height:1px;opacity:0;pointer-events:none';
+    video.setAttribute('playsinline', ''); video.setAttribute('muted', ''); video.setAttribute('aria-label', 'Preview of the video');
+    video.style.cssText = 'display:block;width:100%;height:auto';
+    const ov = el('canvas', { className: 'dc-ov' }), og = ov.getContext('2d');
+    ov.setAttribute('aria-hidden', 'true');
+    const stage = el('div', { className: 'dc-stage', hidden: true }, video, ov);
+    // the made video's own canvas: in the page (WebKit streams a canvas as it renders it), shown only while it is made
     const canvas = el('canvas'), g = canvas.getContext('2d');
     canvas.style.cssText = 'width:100%;max-width:640px;display:none;background:#000';
-    const offset = el('input', { type: 'range', min: '-600', max: String(Math.max(600, Math.ceil(total))), step: '1', value: '0' }); offset.setAttribute('aria-label', 'When the video starts in the drive (s)');
+    const step = '0.5';
+    const offset = el('input', { type: 'range', min: '-600', max: String(Math.max(600, Math.ceil(total))), step, value: '0' }); offset.setAttribute('aria-label', 'When the video starts in the drive (s)');
     const balance = el('label', { className: 'balance' }, el('span', { textContent: 'Earlier' }), offset, el('span', { textContent: 'Later' }));
-    const offsetNote = el('p', { className: 'note', textContent: 'Video starts 0 s into the drive' });
+    const offsetNote = el('p', { className: 'note', textContent: offsetText(0) });
+    const nudge = (label, dv, aria) => { const b = el('button', { className: 'btn', textContent: label, type: 'button' }); b.setAttribute('aria-label', aria); b.addEventListener('click', () => setOffset(Number(offset.value) + dv)); return b; };
+    const fine = el('div', { className: 'dc-row' }, nudge('− 0.5 s', -0.5, 'Video starts half a second earlier in the drive'), nudge('+ 0.5 s', 0.5, 'Video starts half a second later in the drive'));
+    // where the preview is: a free scrub through the video, or the previous / next corner call, which then stays put while
+    // the offset slides, so the frame moves until the car is at that corner
+    const scrub = el('input', { type: 'range', min: '0', max: '1', step: '0.1', value: '0' }); scrub.setAttribute('aria-label', 'Preview point in the video (s)');
+    const scrubRow = el('label', { className: 'balance' }, el('span', { textContent: 'Start' }), scrub, el('span', { textContent: 'End' }));
+    const prevB = el('button', { className: 'btn', textContent: '‹ Previous call', type: 'button' }), nextB = el('button', { className: 'btn', textContent: 'Next call ›', type: 'button' });
+    const callRow = el('div', { className: 'dc-row' }, prevB, nextB);
+    const where = el('p', { className: 'note dc-where' }); where.setAttribute('aria-live', 'polite');
+    const tools = el('div', { className: 'dc-tools', hidden: true }, scrubRow, callRow, where);
     const exportBtn = el('button', { className: 'btn', textContent: 'Make the video', disabled: true });
-    const note = el('p', { className: 'note', textContent: 'Pick a video you filmed on this drive, slide until the corner calls line up, then make the video. It stays on this phone.' });
-    const paint = () => {
-      if (!video.videoWidth) return;
-      canvas.width = Math.min(1280, video.videoWidth); canvas.height = Math.round(canvas.width * video.videoHeight / video.videoWidth);
-      g.drawImage(video, 0, 0, canvas.width, canvas.height);
-      drawOverlay(g, canvas.width, canvas.height, overlayAt(d, T, video.currentTime, Number(offset.value), page.fmtSpeed), d.name || '');
-    };
+    const note = el('p', { className: 'note', textContent: 'Pick a video you filmed on this drive. Step to a corner call and slide until the car is at that corner in the picture, then make the video. It stays on this phone.' });
+    const status = el('p', { className: 'note dc-status', hidden: true }); status.setAttribute('role', 'status');
+    const say = (t) => { status.textContent = t || ''; status.hidden = !t; };
+
+    let anchor = -1, opened = false, frameOk = null, busy = false, pending = null, openTimer = 0, dur = 0;
+    const off = () => Number(offset.value);
+    const duration = () => (finite(video.duration) && video.duration > 0 ? video.duration : dur);
+    function drawPreview() {                                          // the overlay over the shown video, at its shown size
+      const w = stage.clientWidth || 0, h = stage.clientHeight || 0, k = Math.min(2, root.devicePixelRatio || 1);
+      if (!w || !h) return;
+      if (ov.width !== Math.round(w * k) || ov.height !== Math.round(h * k)) { ov.width = Math.round(w * k); ov.height = Math.round(h * k); }
+      og.clearRect(0, 0, ov.width, ov.height);
+      drawOverlay(og, ov.width, ov.height, overlayAt(d, T, video.currentTime, off(), page.fmtSpeed), d.name || '');
+    }
+    // can this phone copy the video's frame? (the made video needs it). A frame not decoded yet draws nothing too, so it
+    // is asked a few times over two seconds before the panel says it can't
+    let tries = 0, retry = 0;
+    function probe() {
+      if (frameOk) return;
+      let ok = false;
+      if (video.readyState >= 2 && video.videoWidth) {
+        try {
+          const p = el('canvas'); p.width = 8; p.height = 8;
+          const pg = p.getContext('2d'); pg.drawImage(video, 0, 0, 8, 8);
+          ok = frameDrawn(pg.getImageData(0, 0, 8, 8).data);
+        } catch (_) { ok = false; }
+      }
+      if (ok) { frameOk = true; clearTimeout(retry); exportBtn.disabled = false; say(''); return; }
+      exportBtn.disabled = true;
+      if (++tries < 8) { clearTimeout(retry); retry = setTimeout(probe, 250); return; }
+      frameOk = false;
+      say('This phone shows the video but won’t let the app copy its frames, so it can’t make the video here. You can still line it up.');
+    }
+    function describe() {
+      const vt = video.currentTime, at = `Preview at ${clock(vt)} in the video`;
+      if (anchor < 0) { where.textContent = `${at}.`; return; }
+      const c = calls[anchor], cvt = videoTimeFor(T[c.i], off()), D = duration();
+      where.textContent = cvt < 0 || (D && cvt > D)
+        ? `Corner call ${anchor + 1} of ${calls.length}, ${c.call}, is ${cvt < 0 ? 'before the video starts' : 'after the video ends'} at this setting: slide ${cvt < 0 ? 'Earlier' : 'Later'}.`
+        : `${at}: corner call ${anchor + 1} of ${calls.length}, ${c.call}. Slide until the car is at this corner.`;
+    }
+    function seek(vt) {
+      const D = duration();
+      const t = Math.max(0, D ? Math.min(D - 0.05, vt) : vt);
+      if (busy) { pending = t; return; }
+      if (Math.abs(video.currentTime - t) < 0.02) { refresh(); return; }
+      busy = true; video.currentTime = t;
+    }
+    function refresh() { drawPreview(); probe(); describe(); scrub.value = String(video.currentTime); }
+    function follow() {                                                // an anchored call stays put as the offset moves
+      if (anchor < 0) { refresh(); return; }
+      seek(videoTimeFor(T[calls[anchor].i], off()));
+      describe();
+    }
+    function setOffset(v) {
+      const lo = Number(offset.min), hi = Number(offset.max);
+      offset.value = String(Math.max(lo, Math.min(hi, Math.round(v * 2) / 2)));
+      offsetNote.textContent = offsetText(off());
+      follow();
+    }
+    function toCall(dir) {
+      if (!calls.length) { where.textContent = 'This drive has no corner calls to line up with: use the slider under the picture.'; return; }
+      const k = anchor >= 0 ? anchor + dir : stepCall(calls, T, video.currentTime + off(), dir);
+      if (k < 0 || k >= calls.length) { where.textContent = dir > 0 ? 'That was the last corner call.' : 'That was the first corner call.'; return; }
+      anchor = k; follow();
+    }
+    function ready() {                                                 // the video opened: show it and pick where to look first
+      if (opened) return;
+      opened = true; clearTimeout(openTimer); openTimer = 0;
+      stage.hidden = false; tools.hidden = false; say('');
+      dur = duration();
+      scrub.max = String(Math.max(0.1, dur || 0));
+      anchor = calls.findIndex((c) => { const v = videoTimeFor(T[c.i], off()); return v >= 0 && (!dur || v <= dur); });
+      if (anchor >= 0) follow(); else seek(Math.min(5, dur / 2 || 0));
+    }
     input.addEventListener('change', () => {
       const f = input.files && input.files[0];
       if (!f) return;
       pick.firstChild.textContent = 'Pick another video';
+      opened = false; frameOk = null; tries = 0; clearTimeout(retry); anchor = -1; busy = false; pending = null; dur = 0;
+      stage.hidden = true; tools.hidden = true; exportBtn.disabled = true;
+      say('Opening the video…');
       video.src = URL.createObjectURL(f);
-      video.addEventListener('loadedmetadata', () => {
-        canvas.style.display = 'block'; exportBtn.disabled = false;
-        // a muted play and pause makes iOS decode a frame; then the preview seeks to it
-        Promise.resolve(video.play()).catch(() => {}).then(() => { video.pause(); video.currentTime = Math.min(5, (video.duration || 0) / 2 || 0); });
-      }, { once: true });
       video.load();
+      // a muted play and pause makes iOS fetch and decode it (preload alone may not); then the preview seeks
+      Promise.resolve(video.play()).catch(() => {}).then(() => { video.pause(); });
+      clearTimeout(openTimer);
+      openTimer = setTimeout(() => { if (!opened) say('No preview: this phone hasn’t opened the video in the app. Try picking it again, or a video from the Camera app.'); }, 10000);
     });
-    video.addEventListener('seeked', paint); video.addEventListener('timeupdate', paint);
-    offset.addEventListener('input', () => { offsetNote.textContent = `Video starts ${offset.value} s into the drive`; paint(); });
+    video.addEventListener('loadedmetadata', () => {
+      if (finite(video.duration)) { ready(); return; }
+      // a recorded WebM can say its length is unknown until a seek far past its end finds it
+      const found = () => { if (finite(video.duration)) { video.removeEventListener('durationchange', found); video.currentTime = 0; ready(); } };
+      video.addEventListener('durationchange', found);
+      video.currentTime = 1e7;
+      setTimeout(() => { video.removeEventListener('durationchange', found); if (!opened) { video.currentTime = 0; ready(); } }, 3000);
+    });
+    video.addEventListener('error', () => {
+      clearTimeout(openTimer); stage.hidden = true; tools.hidden = true; exportBtn.disabled = true;
+      say('This phone couldn’t open that video, so there’s nothing to preview. A video from the Camera app (MP4 or MOV) works best.');
+    });
+    video.addEventListener('seeked', () => {
+      busy = false;
+      if (pending != null) { const t = pending; pending = null; seek(t); return; }
+      if (opened) refresh();
+    });
+    video.addEventListener('timeupdate', () => { if (opened && !video.paused) drawPreview(); });
+    offset.addEventListener('input', () => setOffset(off()));
+    scrub.addEventListener('input', () => { anchor = -1; seek(Number(scrub.value)); });
+    prevB.addEventListener('click', () => toCall(-1)); nextB.addEventListener('click', () => toCall(1));
+    if (root.ResizeObserver) new root.ResizeObserver(() => { if (opened) drawPreview(); }).observe(stage);
+
+    const paint = () => {                                              // a frame of the made video
+      if (!video.videoWidth) return;
+      canvas.width = Math.min(1280, video.videoWidth); canvas.height = Math.round(canvas.width * video.videoHeight / video.videoWidth);
+      g.drawImage(video, 0, 0, canvas.width, canvas.height);
+      drawOverlay(g, canvas.width, canvas.height, overlayAt(d, T, video.currentTime, off(), page.fmtSpeed), d.name || '');
+    };
     exportBtn.addEventListener('click', async () => {
       const MR = root.MediaRecorder, mime = root.ApexFlyoverVideo && root.ApexFlyoverVideo.mimeFor(MR);
       if (!mime || !canvas.captureStream) { note.textContent = 'This browser can’t make videos.'; return; }
       exportBtn.disabled = true; note.textContent = 'Making the video: it plays through once.';
+      stage.hidden = true; tools.hidden = true; canvas.style.display = 'block';
       let raf = 0;
       try {
         paint();                                                       // a frame on the canvas before the stream starts
@@ -112,12 +252,14 @@
         if (raf) root.cancelAnimationFrame(raf);
         note.textContent = 'Couldn’t make the video on this phone.';
       }
-      exportBtn.disabled = false;
+      canvas.style.display = 'none'; stage.hidden = false; tools.hidden = false;
+      exportBtn.disabled = frameOk === false;
+      follow();
     });
-    box.append(note, pick, video, canvas, balance, offsetNote, exportBtn);
+    box.append(note, pick, status, stage, tools, canvas, balance, fine, offsetNote, exportBtn);
     return box;
   }
 
-  const api = { indexAt, overlayAt, drawOverlay, mount, supported };
+  const api = { indexAt, overlayAt, drawOverlay, mount, supported, cornerCalls, videoTimeFor, stepCall, offsetText, frameDrawn };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexDashcam = api;
 })(typeof window !== 'undefined' ? window : globalThis);

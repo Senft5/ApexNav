@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-mrbHgfZqyRYEXQaDiAnDy+VrlPH+xBwxQ/TPht6ZPcg=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-aDsztmavQKAwsp2EFkUNgdLGbPOWjDvEd1mDZHgac0Q=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta · Log</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -37,6 +37,8 @@
   <script src="your_roads.js"></script>
   <script src="plain_notes.js"></script>   <!-- U-123: the Log names corners in the strip's words -->
   <script src="road_feel.js"></script>   <!-- panel round 2, HE-1: the drive page's own road-feel lane -->
+  <script src="vocabulary.js"></script>   <!-- the grip circle's one line (one term, one meaning) -->
+  <script src="drive_basemap.js"></script>   <!-- the real map under the route picture; MapLibre itself loads when it scrolls into view -->
   <script src="drive_view.js"></script>
   <script src="drive_card.js"></script>
   <script src="year_review.js"></script>
@@ -86,6 +88,10 @@
     label.btn { display: inline-flex; align-items: center; height: 44px; padding: 0 14px; border: 1.5px solid var(--panel-ink); font-weight: 600; font-size: 15px; cursor: pointer; }
     .dc-section { border-top: 1px solid var(--rule); padding-top: 12px; display: grid; gap: 10px; justify-items: start; }
     .dc-section .balance { width: 100%; }
+    /* the dashcam preview (TestFlight 13): the video shown, the overlay drawn over it as the made video will have it */
+    .dc-stage { position: relative; width: 100%; max-width: 640px; background: #000; } .dc-stage[hidden], .dc-tools[hidden] { display: none; }
+    .dc-ov { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+    .dc-tools { width: 100%; display: grid; gap: 8px; } .dc-row { display: flex; gap: 8px; flex-wrap: wrap; }
     /* the two drives as rows, one above the other, Swap beside them */
     .compare-pick { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "a swap" "b swap"; column-gap: 12px; row-gap: 8px; align-items: center; }
     .compare-pick label { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; gap: 2px; font-size: 13px; font-weight: 700; color: var(--panel-dim); }
@@ -156,6 +162,12 @@
     .dv-gg { margin-top: 12px; } .dv-gg h3 { font-size: 13px; margin: 0 0 6px; }
     .dv-gg-pic { position: relative; width: 100%; max-width: 320px; aspect-ratio: 1; } .dv-gg-pic svg { display: block; width: 100%; height: 100%; }
     .dv-gg-hot { position: absolute; inset: 0; pointer-events: none; }
+    .dv-gg-lede { margin: 0 0 8px; max-width: 60ch; } .dv-gg-more { max-width: 60ch; margin-top: 8px; } .dv-gg-more p { margin: 0 0 8px; }
+    /* the real map under the route picture (drive_basemap.js): the SVG on top, the map fades in only once its tiles drew */
+    .dv-plan { position: relative; } .dv-plan > svg { position: relative; z-index: 1; display: block; width: 100%; height: auto; }
+    .dv-plan > .dv-basemap { position: absolute; inset: 0; z-index: 0; opacity: 0; transition: opacity 0.3s ease-out; pointer-events: none; overflow: hidden; }
+    .dv-plan > .dv-basemap.shown { opacity: 0.85; }   /* .dv-plan > : over maplibre-gl.css's .maplibregl-map { position: relative } */
+    .dv-credit { position: absolute; right: 0; bottom: 0; z-index: 2; padding: 2px 5px; font-size: 9px; line-height: 1.2; color: var(--panel-dim); background: var(--panel); pointer-events: none; }
     .dv-time { margin: 0 0 12px; padding: 0; list-style: none; display: grid; gap: 6px; }
     .dv-time button { width: 100%; text-align: left; background: transparent; color: inherit; font: inherit; cursor: pointer; display: grid; grid-template-columns: auto 1fr auto; gap: 2px 10px; align-items: baseline; padding: 8px 10px; border: 1px solid var(--rule); }
     .dv-time b { font-family: var(--font-num); color: var(--signal); } .dv-time em { font-style: normal; font-family: var(--font-num); }
@@ -1115,7 +1127,7 @@
       if (dvView) dvView.destroy();
       const reference = dvInfo.reference || null, coach = dvInfo.coach || null;
       $('tab-drive').insertBefore(dvActs, $('dvRoot'));                // out of the root before it is redrawn
-      dvView = ApexDriveView.mount($('dvRoot'), d, { Core, C, MPH, reference, coach }); dvCurrent = d;
+      dvView = ApexDriveView.mount($('dvRoot'), d, { Core, C, MPH, reference, coach, mapPalette: () => look.map }); dvCurrent = d;
       const dvHead = $('dvRoot').querySelector('.dv-head');
       if (dvHead) dvHead.after(dvActs);                                  // the score first, then Replay
       // a video from this drive with its numbers on it (dashcam.js, IDEAS D-11)

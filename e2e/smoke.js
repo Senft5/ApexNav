@@ -2297,6 +2297,106 @@ flow('convoy: the leader shows a QR code of the link (Worker stubbed, IDEAS S-22
   check(dark > 0.2 && dark < 0.6, `a QR code is drawn (${(dark * 100).toFixed(0)} % dark)`);
 });
 
+// @fish5spd, 2026-11-03 ("Shits in my way when I lead"): leading a convoy on a drive, a card over the road just ahead of the
+// arrow held the convoy's line and a row of calls cut off under the Layers key. Now the convoy is one line behind the car,
+// clear of the right-hand keys and the safe areas, upright and on its side; the calls come from the Report key or the line.
+flow('convoy: leading a drive, the convoy is one line behind the car and the calls come when asked (Worker stubbed, @fish5spd 2026-11-03)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  const id = 'CCCCCCCCCCCCCCCCCCCCCC', until = Date.now() + 120 * 60000;
+  const ctx = { sessionId: id, name: '@fish5spd and @natesenft', role: 'leader', you: 'k1', leaderKey: 'k1', expiresAtMs: until, seq: 0, leaderEpoch: 1,
+                members: [{ key: 'k1', handle: 'fish5spd', role: 'leader', online: true }, { key: 'k2', handle: 'natesenft', role: 'member', online: true }] };
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url()), m = route.request().method();
+    const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'fish5spd' });
+    if (u.pathname === '/api/convoy' && m === 'POST') return json({ invite: `${id}.${'s'.repeat(32)}`, context: ctx }, 201);
+    if (u.pathname === `/api/convoy/${id}/ticket`) return json({ ticket: 't'.repeat(32), expiresAtMs: Date.now() + 60000 }, 201);
+    if (u.pathname === `/api/convoy/${id}`) return json(ctx);
+    if (m === 'GET') return json([]);
+    return json({}, 404);
+  });
+  await page.context().grantPermissions(['geolocation']);   // the browser's own GPS, for Start the drive
+  await page.context().setGeolocation({ latitude: 35.36, longitude: -84.29 });
+  const cdp = await page.context().newCDPSession(page);
+  await page.setViewportSize({ width: SAFE.portrait.w, height: SAFE.portrait.h });
+  await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets: SAFE.portrait.i });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && typeof window.apex.live === 'function');
+  // (a script's tap: Playwright's click scrolls the clipped stage to bring the plan bar's key "into view", which a finger can't)
+  await page.evaluate(() => document.getElementById('startMore').click());
+  await page.click('.start-sheet button:has-text("Convoy now")');
+  await page.waitForSelector('.convoy-sheet canvas.cv-qr');
+  await page.click('.convoy-sheet button:has-text("Start the drive")');
+  check(await page.evaluate(() => { const s = document.querySelector('.stage'); return !s.scrollLeft && !s.scrollTop; }), 'the map stage is where it was');
+  await page.evaluate(async () => { for (let i = 0; i < 40; i++) { window.apex.live({ lat: 35.36 + i * 1e-5, lon: -84.29, accuracy_m: 5, speed_mps: 12, course_deg: 0, has_fix: true, calibration: 'locked', lat_g: 0.1, lon_g: 0 }); await new Promise((r) => setTimeout(r, 40)); } });
+  await page.waitForFunction(() => document.getElementById('app').classList.contains('live') && document.querySelector('.convoy-bar.show'));
+  await page.waitForTimeout(1200);   // a tick: the bar redraws for the drive
+  const geo = () => page.evaluate(() => {
+    const R = (n) => { if (!n) return null; const r = n.getBoundingClientRect(); return r.width && r.height ? { l: r.left, r: r.right, t: r.top, b: r.bottom } : null; };
+    const bar = document.querySelector('.convoy-bar.show'), puck = document.querySelector('.puck'), stage = document.querySelector('.stage');
+    const keys = ['.edge-tab', '#recenterBtn', '.maplibregl-ctrl-attrib', '#hzPlate', '#toast'].map((q) => [q, R(document.querySelector(q))]).filter(([, r]) => r);
+    const inside = (a, b) => a.l >= b.l - 0.5 && a.r <= b.r + 0.5 && a.t >= b.t - 0.5 && a.b <= b.b + 0.5;
+    const meet = (a, b) => Math.min(a.r, b.r) - Math.max(a.l, b.l) > 1 && Math.min(a.b, b.b) - Math.max(a.t, b.t) > 1;
+    const b = R(bar), p = R(puck), s = R(stage);
+    // the road ahead: from the top of the map down to the arrow, across the arrow and 120 px either side of it
+    const ahead = p && { l: Math.max(s.l, (p.l + p.r) / 2 - 120), r: Math.min(s.r, (p.l + p.r) / 2 + 120), t: s.t, b: p.t };
+    return { bar: b, puck: p, stage: s, rows: bar.querySelectorAll('.cv-calls, .cv-call-grid').length, kids: bar.children.length,
+      text: bar.innerText, coversAhead: !!(ahead && meet(b, ahead)), behind: !!(p && b.t >= (p.t + p.b) / 2), inStage: inside(b, s),
+      keysInBar: [...bar.querySelectorAll('button')].every((k) => inside(R(k), b)),
+      hits: keys.filter(([, r]) => meet(b, r)).map(([q]) => q), oneLine: b.b - b.t <= 64 };
+  });
+  let g = await geo();
+  check(g.puck && g.rows === 0 && g.kids === 1 && /@fish5spd and @natesenft/.test(g.text) && /of 2 live|Reconnecting|Connecting/.test(g.text), 'in a drive the convoy is one line, no calls row: ' + JSON.stringify(g));
+  check(!g.coversAhead && g.behind && g.inStage && g.keysInBar && !g.hits.length && g.oneLine, 'the line is off the road ahead, behind the car, whole and clear of the keys: ' + JSON.stringify(g));
+  let bad = await unsafe(page, SAFE.portrait);
+  check(!bad.length, 'upright, clear of the island, the corners and every key: ' + bad.join(' | '));
+  // the leader's calls: the Report key's sheet, on top of the public report; a call closes it and the line holds Undo for 3 s
+  const reportSheet = async () => {
+    await page.click('#hzReportBtn');
+    await page.waitForSelector('#hzOverlay.show .cv-report');
+    await page.waitForTimeout(400);   // the sheet's slide up
+    return page.evaluate(() => { const card = document.querySelector('#hzOverlay .card-sheet'), c = card.getBoundingClientRect();
+      const ks = [...card.querySelectorAll('.cv-report button, #hzKinds button')];
+      return { keys: [...card.querySelectorAll('.cv-report button')].map((k) => k.textContent),
+        clipped: ks.filter((k) => { const r = k.getBoundingClientRect(); return r.left < c.left - 0.5 || r.right > c.right + 0.5 || k.scrollWidth > k.clientWidth + 1; }).map((k) => k.textContent),
+        first: card.firstElementChild.classList.contains('cv-report'), publicKinds: document.querySelectorAll('#hzKinds button').length }; });
+  };
+  const sheet = await reportSheet();
+  check(JSON.stringify(sheet.keys) === '["Bump","Gravel","Debris","Animal","Police","Stopped car","Regroup here"]', 'the convoy calls in the Report sheet: ' + JSON.stringify(sheet));
+  check(!sheet.clipped.length && sheet.first && sheet.publicKinds >= 6, 'every call whole, convoy first, the public report still under it: ' + JSON.stringify(sheet));
+  bad = await unsafe(page, SAFE.portrait);
+  check(!bad.length, 'the Report sheet with the calls is clear: ' + bad.join(' | '));
+  await page.click('#hzOverlay .cv-report button:has-text("Bump")');
+  check(!(await page.isVisible('#hzOverlay.show')), 'a call closes the sheet');
+  await saidOn(page, /Bump (called to|will go out)/, { timeout: 4000 });
+  g = await geo();
+  check(/Undo Bump/.test(g.text) && g.oneLine && !g.coversAhead && g.keysInBar && !g.hits.length, 'Undo on the line, still one line behind the car: ' + JSON.stringify(g));
+  await page.click('.convoy-bar .cv-undo');
+  await saidOn(page, /Call cancelled|Cancelling/, { timeout: 4000 });
+  // a tap on the line: the convoy sheet, the calls first
+  await page.click('.convoy-bar .cv-line');
+  await page.waitForSelector('.convoy-sheet .cv-callbox');
+  check(await page.evaluate(() => { const k = [...document.querySelectorAll('.convoy-sheet .cv-callbox button')]; return k.length === 7 && document.querySelector('.convoy-sheet .stack-8').firstElementChild.classList.contains('cv-callbox'); }), 'the line opens the convoy with the calls on top');
+  await page.click('.convoy-sheet .cv-callbox button:has-text("Gravel")');
+  check(!(await page.$('.convoy-sheet')), 'a call from the convoy sheet closes it too');
+  await page.waitForTimeout(3300);   // the Undo window passes: the line is the line again
+  g = await geo();
+  check(g.kids === 1 && !/Undo/.test(g.text), 'after 3 s the Undo goes: ' + g.text);
+  // on its side (the landscape mount): behind the car, clear of the notch, the home indicator and the keys
+  await page.setViewportSize({ width: SAFE.landscape.w, height: SAFE.landscape.h });
+  await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets: SAFE.landscape.i });
+  await page.evaluate(async () => { for (let i = 40; i < 60; i++) { window.apex.live({ lat: 35.36 + i * 1e-5, lon: -84.29, accuracy_m: 5, speed_mps: 12, course_deg: 0, has_fix: true, calibration: 'locked', lat_g: 0.1, lon_g: 0 }); await new Promise((r) => setTimeout(r, 40)); } });
+  await page.waitForTimeout(700);
+  g = await geo();
+  check(!g.coversAhead && g.behind && g.inStage && g.keysInBar && !g.hits.length && g.oneLine && g.bar.l >= SAFE.landscape.i.left, 'on its side, the same: ' + JSON.stringify(g));
+  bad = await unsafe(page, SAFE.landscape);
+  check(!bad.length, 'on its side, clear of the notch, the corners and every key: ' + bad.join(' | '));
+  const side = await reportSheet();
+  check(side.keys.length === 7 && !side.clipped.length && side.publicKinds >= 6, 'on its side, every call whole beside the public report: ' + JSON.stringify(side));
+  bad = await unsafe(page, SAFE.landscape);
+  check(!bad.length, 'on its side, the Report sheet with the calls is clear: ' + bad.join(' | '));
+}, { hasTouch: true });
+
 flow('garage: a VIN fills the car in, the owner keeps the colour (NHTSA stubbed, IDEAS S-21)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.route('https://vpic.nhtsa.dot.gov/**', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ Results: [
@@ -3931,10 +4031,110 @@ flow('dashcam overlay: a video from the drive gets its speed, g and calls drawn 
     window.__saved = null; ApexSaveFile.saveFile = async (blob, name, type) => { window.__saved = { size: blob.size, name, type }; return 'saved'; };
   });
   await page.waitForFunction(() => { const b = [...document.querySelectorAll('#dvDashcam button')].find((x) => /Make the video/.test(x.textContent)); return b && !b.disabled; }, null, { timeout: 8000 });
+  // TestFlight 13 ("how do i slide to align when video doesn't preview?"): the video is shown with the overlay drawn on it
+  const btn = (re) => page.evaluate((s) => [...document.querySelectorAll('#dvDashcam button')].find((x) => new RegExp(s).test(x.textContent)).click(), re);
+  const pv = () => page.evaluate(() => {
+    const st = document.querySelector('#dvDashcam .dc-stage'), ov = st.querySelector('canvas'), g = ov.getContext('2d'), v = st.querySelector('video');
+    const strip = ov.width && ov.height ? g.getImageData(0, Math.round(ov.height * 0.95), ov.width, 1).data : [];
+    let ink = 0; for (let k = 3; k < strip.length; k += 4) if (strip[k] > 0) ink++;
+    return { shown: !st.hidden && st.getBoundingClientRect().height > 50, ink, vt: v.currentTime, where: document.querySelector('#dvDashcam .dc-where').textContent,
+      off: document.querySelector('#dvDashcam input[aria-label^="When the video starts"]').value };
+  });
+  let p = await pv();
+  check(p.shown && p.ink > 0, 'a preview with the overlay strip drawn over the video: ' + JSON.stringify(p));
+  // the corner call (500 m at 15 m/s: 33.3 s into the drive) is past this 2 s video: the preview says which way to slide
+  await btn('Next call');
+  p = await pv();
+  check(/Left 4/.test(p.where) && /after the video ends/.test(p.where) && /slide Later/.test(p.where), 'the call outside the video, said: ' + p.where);
+  // slide the video's start to 32.5 s into the drive: the call is 0.8 s into the video, and the preview goes there
+  await page.evaluate(() => { const r = document.querySelector('#dvDashcam input[aria-label^="When the video starts"]'); r.value = '32.5'; r.dispatchEvent(new Event('input')); });
+  await page.waitForFunction(() => Math.abs(document.querySelector('#dvDashcam video').currentTime - 0.83) < 0.1, null, { timeout: 5000 });
+  await page.waitForFunction(() => /Slide until the car is at this corner/.test(document.querySelector('#dvDashcam .dc-where').textContent));
+  p = await pv();
+  check(/corner call 1 of 1, Left 4/.test(p.where) && p.ink > 0, 'the call lands on its frame: ' + JSON.stringify(p));
+  check(/Video starts 32\.5 s into the drive/.test(await page.textContent('#dvDashcam')), 'the offset in words');
+  await btn('\\+ 0\\.5 s');
+  check((await pv()).off === '33', 'a half-second nudge');
   await page.evaluate(() => [...document.querySelectorAll('#dvDashcam button')].find((x) => /Make the video/.test(x.textContent)).click());
   await page.waitForFunction(() => window.__saved, null, { timeout: 20000 });
   const saved = await page.evaluate(() => window.__saved);
   check(saved.size > 500 && /^Dashcam_road-dashcam-.*\.(webm|mp4)$/.test(saved.name), 'a new video: ' + JSON.stringify(saved));
+  // a file this phone can't open: said plainly, no blank preview, no Make the video
+  await page.evaluate(() => {
+    const dt = new DataTransfer(); dt.items.add(new File([new Uint8Array(4096).fill(7)], 'broken.mp4', { type: 'video/mp4' }));
+    const input = document.querySelector('#dvDashcam input[type=file]'); input.files = dt.files; input.dispatchEvent(new Event('change'));
+  });
+  await page.waitForFunction(() => /couldn’t open that video/.test(document.querySelector('#dvDashcam .dc-status').textContent), null, { timeout: 8000 });
+  check(await page.evaluate(() => document.querySelector('#dvDashcam .dc-stage').hidden
+    && [...document.querySelectorAll('#dvDashcam button')].find((x) => /Make the video/.test(x.textContent)).disabled), 'nothing to preview or make from it');
+});
+
+// A drive for the drive page's own flows: north 1.5 km with a corner call (dashcam) and some g (the grip circle)
+async function storeDashDrive(page, id = 'dc1', name = 'Dashcam road') {
+  await page.evaluate(async ([id, name]) => {
+    const lat = [], lon = [];
+    for (let i = 0; i < 300; i++) { lat.push(35.6 + i * 5 / 110540); lon.push(-83.9 + Math.sin(i / 40) * 0.002); }
+    await ApexRecording.store({ id, name, date: '2026-10-20T15:00:00Z', lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: lat.map(() => 15),
+      lon_g: lat.map(() => -0.1), lat_g: lat.map((_, i) => Math.sin(i / 10) * 0.3), g_known: null, elev: null, hz: 1, source: 'web-gps',
+      events: [{ type: 'corner', code: 'L4', call: 'Left 4', index: 100, dist_m: 500, start_m: 480, end_m: 520, radius_m: 80, apex_mph: 30, dir: 'L', severity: 4 }] });
+  }, [id, name]);
+}
+
+flow('the drive page\'s map: with no map to be had the picture keeps its blank panel; MapLibre loads only for it (TestFlight 15)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/analysis.html');
+  await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && window.ApexRecording);
+  await storeDashDrive(page, 'bm1', 'Map road');
+  check(!(await page.evaluate(() => !!window.maplibregl || performance.getEntriesByType('resource').some((e) => /maplibre-gl\.js/.test(e.name)))),
+    'the Log list never loads MapLibre');
+  await page.goto(base + '/analysis.html?drive=bm1');
+  await page.waitForSelector('.dv-plan svg');
+  await page.evaluate(() => document.querySelector('.dv-plan').scrollIntoView());
+  // tiles are blocked here: MapLibre loads for the picture, its style fails, and the map is taken away again
+  await page.waitForFunction(() => !!window.maplibregl, null, { timeout: 15000 });
+  await page.waitForFunction(() => !document.querySelector('.dv-basemap'), null, { timeout: 15000 });
+  const s = await page.evaluate(() => ({ on: document.querySelector('.dv-plan').classList.contains('on-map'), credit: document.querySelector('.dv-credit').hidden,
+    path: document.querySelectorAll('#dvSpeed line').length, casing: !!document.querySelector('#dvCase') }));
+  check(!s.on && s.credit && s.path > 10 && s.casing, 'the blank panel, the path drawn, no credit for a map not shown: ' + JSON.stringify(s));
+});
+
+flow('the drive page\'s map: when the map can draw it sits under the path, fitted, still and in the theme (stubbed MapLibre, TestFlight 15)', async (page, base) => {
+  await page.addInitScript(() => {
+    try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
+    // a stand-in MapLibre: records how it was made and draws one tile
+    window.__maps = [];
+    window.maplibregl = { Map: class {
+      constructor(o) {
+        this.o = o; this.h = {}; const c = o.container;
+        c.classList.add('maplibregl-map');                               // as MapLibre does: its stylesheet's position: relative must not win
+        c.getBoundingClientRect();
+        window.__maps.push({ style: o.style, center: o.center, zoom: o.zoom, interactive: o.interactive, w: c.clientWidth, h: c.clientHeight, cls: c.className });
+        setTimeout(() => { this.fire('styledata'); this.fire('data', { dataType: 'source', tile: {} }); this.fire('idle'); }, 50);
+      }
+      on(k, f) { (this.h[k] = this.h[k] || []).push(f); } fire(k, e) { (this.h[k] || []).forEach((f) => f(e)); }
+      isStyleLoaded() { return true; } resize() {} jumpTo(v) { window.__jump = v; } remove() { window.__removed = (window.__removed || 0) + 1; }
+    } };
+    window.ApexBasemap = { restyle(map, P) { window.__palette = P; } };
+  });
+  await page.goto(base + '/analysis.html');
+  await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && window.ApexRecording);
+  await storeDashDrive(page, 'bm2', 'Map road');
+  await page.goto(base + '/analysis.html?drive=bm2');
+  await page.waitForSelector('.dv-plan svg');
+  await page.evaluate(() => document.querySelector('.dv-plan').scrollIntoView());
+  await page.waitForSelector('.dv-basemap.shown', { timeout: 8000 });
+  const s = await page.evaluate(() => {
+    const plan = document.querySelector('.dv-plan'), svg = plan.querySelector('svg'), layer = plan.querySelector('.dv-basemap');
+    const sv = svg.getBoundingClientRect(), lr = layer.getBoundingClientRect();
+    return { m: window.__maps, n: window.__maps.length, on: plan.classList.contains('on-map'), credit: !plan.querySelector('.dv-credit').hidden,
+      under: getComputedStyle(layer).zIndex < getComputedStyle(svg).zIndex, first: plan.firstElementChild === layer,
+      same: Math.abs(sv.width - lr.width) < 1 && Math.abs(sv.height - lr.height) < 1, palette: window.__palette, bg: layer.style.background };
+  });
+  const m = s.m[0];
+  check(s.n === 1 && /tiles\.openfreemap\.org\/styles\//.test(m.style) && m.interactive === false, 'one still map of the app\'s own style: ' + JSON.stringify(s.m));
+  check(Math.abs(m.center[1] - (35.6 + 150 * 5 / 110540)) < 0.002 && Math.abs(m.center[0] + 83.9) < 0.003 && m.zoom > 12 && m.zoom < 17, 'fitted on the drive: ' + JSON.stringify(m));
+  check(s.on && s.credit && s.under && s.first && s.same, 'under the path, the picture\'s exact size, credited: ' + JSON.stringify(s));
+  check(s.palette && s.palette.bg && s.bg, 'painted in the theme\'s map palette');
 });
 
 flow('the Log page opens', async (page, base) => {
