@@ -1,5 +1,32 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-03: panel round 2 built (20 reviewers across four models)
+
+- [x] Twenty reviewers (docs/design/PANEL.md round 2) reviewed recording 7, and the vote is in
+  docs/design/panel/round-2/VOTE.md. Built:
+  - one red that means act now;
+  - one vocabulary and one set of numbers;
+  - road feel shown, never a false +0.0°;
+  - the end card's road portrait and share card;
+  - roads drawn before driving;
+  - share the road, not the drive;
+  - the position beacon removed;
+  - quiet means quiet, chimes, the asides playing;
+  - explain behind a tap;
+  - Dynamic Type on the drive pages;
+  - VoiceOver;
+  - idle sensors off;
+  - the rig's four flows fixed.
+  CALL_SHEET 2026-11-03 has the calls.
+- Unverified: all Swift (CI), VoiceOver and Dynamic Type on a device, the sensor stack's battery effect.
+- Exact next task: recording 8, then panel round 3. Carry over:
+  - the crew drive with people (RA-1);
+  - a usability lab (SO-3, NA-1);
+  - the lock screen as the road book (TH-1);
+  - a trip pack (DE-2);
+  - IN-2 large cockpit;
+  - SO-2 two Start keys.
+
 ## Session 2026-11-02: the panel (docs/design/PANEL.md), round 1 built
 
 - [x] Six reviewer characters (Dani, Margo, Theo, Priya, Ray, Ines) reviewed recording 6 and voted

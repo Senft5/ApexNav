@@ -4,6 +4,52 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-03: Panel round 2 built (docs/design/panel/round-2/VOTE.md; 20 reviewers, 200 points)
+
+Five builders plus a rig fix. The calls, each with how to undo it:
+
+- **The recording rig.** Recording 7's four stopped flows were all the rig, not the app: the welcome's label, a planning
+  drag that hit the home screen, a car query too broad, and Billet's key hidden under the tab bar. Undo: revert 15c6edf.
+- **A, one red.**
+  - The route is drawn in ink in Roadbook and Billet; Tapedeck's warning becomes red (#FF4D63 / #F2475E), not orange.
+  - Warning words use the warning colour in every theme. The OPEN Sight plate draws nothing on the phone or the car.
+  - Undo: `themes.js` and the Swift palette.
+- **A, road feel and explain.**
+  - The end card's road-feel line and the Log lane show only after 200 m of calibrated bank readings.
+  - Explain sheets work only under 3 mph or in a replay.
+  - Not built: the cluster's compass and speed-limit settings.
+- **Sight, where A and C met.** Sight is the held sight line only, as the map tag shows it; the corner's pace keeps its
+  own mark on the dial. This is C's vocabulary rule, so 40 mph against Sight 50 is no alarm. VoiceOver reads it the same
+  way.
+- **B, voice and sensors.**
+  - With the road known, the opener is "<Road>. Full notes."; with it unknown, nothing is said.
+  - A short quiet plays the chime alone.
+  - A chain names the next corner only within 150 m or 6 s.
+  - Idle sensors: 100 m GPS, no IMU or barometer, no background location. The full stack runs at Start, in the car or
+    above 8 m/s, and stops after 5 min stopped. Undo: make `updateSensorStack` always return full.
+- **C, vocabulary.**
+  - `web/vocabulary.js` with a test. "Fun" is only the route style.
+  - Notes and Voice live in Layers (the Garage shows a summary).
+  - The two red Start keys are a listed known break (SO-2 next round).
+  - One distance and corner format (`format.js`): every corner, one decimal under 10.
+- **D, the road.**
+  - The end card fit is a jump, not a flight, with an SVG road portrait until the map draws.
+  - The share card leaves off the first and last 800 m, has no time (a time with the distance would give the average
+    speed), and keeps Pace (a 0–100 part, not a speed).
+  - Road links carry the road in the URL (after `#` on the web, so no server sees it). There is no road page server.
+  - The Log's Share is now "Send the road". Every planned route is fitted whole.
+- **E, privacy and access.**
+  - Hazard, meet, crew and spot lookups send only the 0.1° cell. None go from a privacy zone or within
+    max(1 km, privateEdge) of a drive's start. The server snaps to the cell.
+  - Worker invocation logs are off and query strings redacted.
+  - Text-size caps are 2× on scrolling pages and 1.6× on the end card and plan controls.
+  - Not built: IN-2's large cockpit.
+- **Not built (vetoed):**
+  - JA-2, silencing the spoken Score;
+  - PE-1, the 30-car convoy;
+  - JA-3, a public drive link;
+  - TO-4, an early Live Activity prompt.
+
 ## 2026-11-02: Panel round 1 built (the winners of docs/design/panel/round-1/VOTE.md)
 
 The owner asked for iterative improvements from a panel of reviewer characters who vote (docs/design/PANEL.md). Six
