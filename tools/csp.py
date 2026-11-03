@@ -23,6 +23,7 @@ CONNECT = [
     "https://valhalla1.openstreetmap.de",             # routing, matrix, map matching
     "https://router.project-osrm.org",                # fallback router
     "https://overpass-api.de", "https://overpass.private.coffee", "https://overpass.kumi.systems",   # OSM lookups
+    "https://maps.mail.ru",                           # VK Maps' public Overpass (route context; answered when the others were full)
     "https://nominatim.openstreetmap.org", "https://photon.komoot.io",                               # search
     "https://api.open-meteo.com",                     # forecast along the route
     "https://vpic.nhtsa.dot.gov",                     # VIN lookup

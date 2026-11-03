@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://maps.mail.ru https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <!-- REVIEW4 U-80 (check): before the stylesheets and the hundred scripts below (seconds on a cold start), the page's very
@@ -74,6 +74,10 @@
   <script src="directions.js" defer></script>
   <script src="carplay.js" defer></script>
   <script src="cameras.js" defer></script>
+  <script src="route_ctx/osm_common.js" defer></script>
+  <script src="route_ctx/osm_tiles.js" defer></script>
+  <script src="route_ctx/osm_overpass.js" defer></script>
+  <script src="route_ctx/road_name_age.js" defer></script>
   <script src="whats_new.js" defer></script>
   <script src="saved_routes.js" defer></script>
   <script src="row_select.js" defer></script>
@@ -1552,7 +1556,7 @@
             </ul>
           </section>
           <section class="sources" data-panel="garage" data-setting="about">
-            <details class="more"><summary>Sources and licences</summary><p class="note">Map &copy; OpenStreetMap contributors via OpenFreeMap. Terrain: AWS Terrarium DEM. Routing, map matching and posted limits: Valhalla (FOSSGIS). Geocoding: Nominatim. Search suggestions: Photon (Komoot). Plate-reading and speed cameras: OpenStreetMap (<code>surveillance:type=ALPR</code>, DeFlock; <code>highway=speed_camera</code>) via Overpass. Voices: Kokoro-82M (Apache-2.0).</p></details>
+            <details class="more"><summary>Sources and licences</summary><p class="note">Map &copy; OpenStreetMap contributors via OpenFreeMap. Terrain: AWS Terrarium DEM. Routing, map matching and posted limits: Valhalla (FOSSGIS). Geocoding: Nominatim. Search suggestions: Photon (Komoot). Plate-reading and speed cameras: OpenStreetMap (<code>surveillance:type=ALPR</code>, DeFlock; <code>highway=speed_camera</code>) via Overpass. Route ranking: land use, buildings, businesses, signals, stops, limits, lanes, signs, guard rails, cycle routes, byways and fuel from OpenStreetMap (ODbL) via OpenFreeMap tiles and Overpass, including the VK Maps Overpass server. Voices: Kokoro-82M (Apache-2.0).</p></details>
             <p class="note mt-8"><a href="https://apexnav.senftns.workers.dev/privacy.html" target="_blank" rel="noopener">Privacy</a> · <a href="https://apexnav.senftns.workers.dev/terms.html" target="_blank" rel="noopener">Terms of use</a> · <a href="licenses.html">Licences</a></p>
           </section>
         </div>
