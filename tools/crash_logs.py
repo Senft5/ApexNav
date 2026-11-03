@@ -13,6 +13,8 @@ API = "https://api.appstoreconnect.apple.com/v1"
 # The owner's TestFlight email, as the first 16 hex of its sha256 (the address itself is not in the repo). Screenshot
 # feedback is acted on only when it is the owner's; another tester's comment is counted, never printed or followed.
 OWNER = "e974529f133cce2f"   # from the owner's own notes (TestFlight records his Apple ID address)
+# The owner's co-developer (@fish5spd, 2026-11-03: "anything he says goes as well"), by the TestFlight address he was invited with
+CODEV = "6af4f2d604522a57"
 
 
 def tester(attrs):
@@ -20,6 +22,12 @@ def tester(attrs):
     import hashlib
     email = (attrs.get("email") or "").strip().lower()
     return hashlib.sha256(email.encode()).hexdigest()[:16] if email else ""
+
+
+def who(attrs):
+    """"owner", "co-developer", or None for any other tester: only the first two are followed."""
+    t = tester(attrs)
+    return "owner" if t == OWNER else "co-developer" if t == CODEV else None
 
 
 def is_owner(attrs):
@@ -58,18 +66,18 @@ def crashed_part(text):
 
 
 def screenshots(app_id, tok):
-    subs = get(f"/apps/{app_id}/betaFeedbackScreenshotSubmissions?limit=10&sort=-createdDate", tok).get("data", [])
+    subs = get(f"/apps/{app_id}/betaFeedbackScreenshotSubmissions?limit=20&sort=-createdDate", tok).get("data", [])
     print(f"{len(subs)} screenshot feedback(s)")
     os.makedirs("feedback", exist_ok=True)
     others = 0
     for n, s in enumerate(subs, 1):
         a = s.get("attributes", {})
-        if not is_owner(a):
+        if not who(a):
             others += 1
             print(f"#{n} shared", a.get("createdDate"), "· from another tester", tester(a) or "(no email)", "· not shown")
             continue
         print("=" * 80)
-        print(f"#{n} shared", a.get("createdDate"), "· from: owner · iOS", a.get("osVersion"), "· app", a.get("appPlatform") or "")
+        print(f"#{n} shared", a.get("createdDate"), f"· from: {who(a)} · iOS", a.get("osVersion"), "· app", a.get("appPlatform") or "")
         print("comment:", (a.get("comment") or "(none)").strip())
         for k, shot in enumerate(a.get("screenshots") or [], 1):
             try:
@@ -93,7 +101,7 @@ def main():
     for s in subs:
         a = s.get("attributes", {})
         print("=" * 80)
-        print("shared", a.get("createdDate"), "· from:", "owner" if is_owner(a) else "another tester", "· build",
+        print("shared", a.get("createdDate"), "· from:", who(a) or "another tester", "· build",
               a.get("appBuild") or a.get("buildNumber") or "?", "· iOS", a.get("osVersion"), "· device", a.get("deviceModel") or "?")
         try:
             log = get(f"/betaFeedbackCrashSubmissions/{s['id']}/crashLog", tok)
