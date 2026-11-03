@@ -181,7 +181,11 @@
     const stamp = (fileName.match(/(\d{8})_(\d{6})/) || []);
     const date = meta.date || (stamp.length ? `${stamp[1].slice(0, 4)}-${stamp[1].slice(4, 6)}-${stamp[1].slice(6, 8)}T${stamp[2].slice(0, 2)}:${stamp[2].slice(2, 4)}` : new Date().toISOString());
     const nul = (a) => (a ? a.map((v) => (Number.isFinite(v) ? v : null)) : null);
+    // cam_v 2: every camber in the file is from the fixed live pipeline (its camber_v column says so row by row). Files
+    // without it (older builds) hold placeholder zeros on straights: kept for this phone, never shared (contributor.js).
+    const camV = cols.camber_v && cols.camber_deg && cols.camber_deg.every((v, i) => !Number.isFinite(v) || cols.camber_v[i] === 2) ? 2 : null;
     return {
+      cam_v: camV,
       id: meta.id || ('rec_' + fileName.replace(/\W+/g, '_')), name: meta.name || fileName.replace(/\.csv$/i, ''), date, date_known: !!(meta.date || stamp.length), source: meta.source || 'imported',
       lat: cols.lat, lon: cols.lon, dist: cols.distance_m || cols.lat.map((_, i) => i * 5), speed_mps: cols.speed_mph.map((v) => v / MPH),
       lon_g: prepared.lon_g, lat_g: prepared.lat_g, g_known: gKnown.every(Boolean) ? null : gKnown, elev: cols.elevation_m && cols.elevation_m.some(Number.isFinite) ? cols.elevation_m : null, events: prof.events,

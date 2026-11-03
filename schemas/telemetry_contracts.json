@@ -85,8 +85,12 @@
           "type": "number"
         },
         "camber_deg": {
-          "type": "number",
-          "description": "Turn-relative banking: + = banked into the corner, - = off-camber. 0 where not cornering (unobservable)."
+          "type": ["number", "null"],
+          "description": "Turn-relative banking: + = banked into the corner, - = off-camber. null where not cornering (unobservable; the live pipeline holds a corner's value 1 s, then null), never 0."
+        },
+        "camber_v": {
+          "type": ["integer", "null"],
+          "description": "2 when camber_deg comes from the fixed live pipeline (ApexKit IMUPipeline.camberVersion). Rows, frames and uploads without it come from builds that decayed camber to a placeholder 0, and their camber is not shared."
         },
         "crest_vertical_g": {
           "type": "number"

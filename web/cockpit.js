@@ -5674,7 +5674,7 @@
     // Camber and crest go up when the recorder kept them (calibrated mount).
     function feedLive() {
       const L = drive.live, r = drive.rec; if (!L || !r) return;
-      while (drive.liveIdx < r.rows.length) { const x = r.rows[drive.liveIdx++]; L.push({ lat: x.lat, lon: x.lon, roughness_rms: x.roughness_rms, camber_deg: x.camber_deg, crest: x.crest_vertical_g }); }
+      while (drive.liveIdx < r.rows.length) { const x = r.rows[drive.liveIdx++]; L.push({ lat: x.lat, lon: x.lon, roughness_rms: x.roughness_rms, camber_deg: x.camber_deg, camber_v: x.camber_v, crest: x.crest_vertical_g }); }
     }
     // The live Vetta Score (REVIEW.md 1.2, Driving; 4.3): the drive so far scored the way the end card scores it, every 30 s
     // while recording; null (shown "--") until there are enough clean corners.

@@ -160,11 +160,15 @@
    * Uploads one road contribution. true = accepted, false = rejected (bad data: never resend), 'stop' = signed out or not enabled,
    * 'retry' = offline, rate limited or a server error (resend the same payload later; the server merges a repeated chunk once).
    */
+  /** One road chunk (contributor.js buildContributions). shape and cls are the way's public map line and road class: without
+   *  them the server can't apply the open-road rule (roads.ts) and no once-driven road is ever shown. cam_v says the camber
+   *  is from the fixed live pipeline; the server ignores camber without it. */
   async function contribute(c) {
     let r;
     try {
       r = await apiFetch('/api/contribute', { method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ way_id: c.way_id, dir: c.dir, driven_on: c.driven_on, drive_id: c.drive_id, bins: c.bins }) });
+        body: JSON.stringify({ way_id: c.way_id, dir: c.dir, driven_on: c.driven_on, drive_id: c.drive_id, bins: c.bins,
+                               shape: c.shape ?? null, cls: c.cls ?? null, cam_v: c.cam_v ?? null }) });
     } catch (_) { return 'retry'; }
     return r.status === 202 ? true : r.status === 401 || r.status === 403 ? 'stop' : r.status === 429 || r.status >= 500 ? 'retry' : false;
   }
