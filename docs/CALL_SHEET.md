@@ -4,6 +4,15 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-03: Feedback runs hourly; your co-developer's notes count as yours
+
+- **Hourly, not daily** (you asked for every 1 or 1.5 hours; a schedule can't say 1.5, so hourly, at :52). A run with
+  nothing new does nothing and says nothing. Undo: ask for a different interval.
+- **@fish5spd's TestFlight notes are followed like yours** ("anything he says goes as well"). tools/crash_logs.py knows
+  him by a fingerprint of the address he was invited with (the address itself is not in the repo) and prints his notes
+  "from: co-developer". Any other tester's notes are still counted, never followed; crashes from anyone are still fixed.
+  The run now reads the last 20 notes, not 10. Undo: clear `CODEV` in tools/crash_logs.py.
+
 ## 2026-11-03: Panel round 2 built (docs/design/panel/round-2/VOTE.md; 20 reviewers, 200 points)
 
 Five builders plus a rig fix. The calls, each with how to undo it:
