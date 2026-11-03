@@ -343,25 +343,29 @@
     sightEl.className = 'sight-tag'; sightEl.hidden = true; sightEl.setAttribute('role', 'img');
     const sightTag = new maplibregl.Marker({ element: sightEl, anchor: 'top', offset: [0, 15] }).setLngLat([-84.70, 39.24]).addTo(map);
     const SIGHT_EYE = '<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6S2 12 2 12z" fill="none" stroke="currentColor" stroke-width="2.6"/><circle cx="12" cy="12" r="2.8" fill="currentColor"/></svg>';
+    const SIGHT_EYE_BARRED = SIGHT_EYE.replace('</svg>', '<path d="M4 21 L20 3" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/></svg>');
     let sightKey = '';
     const sightHold = ApexCarPlay.sightFilter();                         // U-60: render() steps it once a frame
     function paintSight(m, live) {
       const key = JSON.stringify(m);
       if (key !== sightKey) {
         sightKey = key;
-        sightEl.hidden = !m.text;
-        if (m.text) {
-          sightEl.classList.toggle('short', m.short);
-          sightEl.innerHTML = SIGHT_EYE;
-          sightEl.append(el('b', { textContent: m.text }), ...(m.unit ? [el('small', { textContent: m.unit })] : []));
-          sightEl.setAttribute('aria-label', m.text === 'OPEN' ? 'Sight line open' : `Sight-line speed ${m.text} ${m.unit.toLowerCase()}${m.short ? ', faster than you can see' : ''}`);
+        // panel round 2 (TH-2, IN-3): the tag names itself, "SIGHT 45" by the eye, with no unit, on a pill, so it never reads
+        // as a limit sign; over it, "SLOW 45" with the eye barred on the signal colour; Open draws nothing (the cell says Open)
+        const tag = ApexCarPlay.sightTag(m);
+        sightEl.hidden = !tag;
+        if (tag) {
+          sightEl.classList.toggle('short', tag.short);
+          sightEl.innerHTML = tag.short ? SIGHT_EYE_BARRED : SIGHT_EYE;
+          sightEl.append(el('small', { textContent: tag.label }), el('b', { textContent: tag.text }));
+          sightEl.setAttribute('aria-label', `Sight-line speed ${tag.text} ${String(m.unit || '').toLowerCase()}${tag.short ? ', faster than you can see' : ''}`);
         }
       }
       if (live && key !== car.sightKey) { car.sightKey = key; carPost(m); }
     }
     function drawPuck() {
       const c = look.colors;
-      puckEl.innerHTML = `<svg viewBox="0 0 26 26" width="26" height="26"><circle cx="13" cy="13" r="11" fill="${c.panel}" stroke="${c.panelInk}" stroke-width="2"/><path d="M13 5 L19 18 L13 14.8 L7 18 Z" fill="${c.accent}"/></svg>`;
+      puckEl.innerHTML = `<svg viewBox="0 0 26 26" width="26" height="26"><circle cx="13" cy="13" r="11" fill="${c.panel}" stroke="${c.panelInk}" stroke-width="2"/><path d="M13 5 L19 18 L13 14.8 L7 18 Z" fill="${c.panelInk}"/></svg>`;   // panel round 2: a position, in ink
     }
 
     function restyleBasemap() {
@@ -1563,7 +1567,10 @@
       const live = state.mode === 'live' && state.live;
       if (live) {
         const L = state.live;
-        lat = L.lat; lon = L.lon; vMps = L.speed_mps; latG = L.lat_g; lonG = L.lon_g; camber = L.camber_deg;
+        lat = L.lat; lon = L.lon; vMps = L.speed_mps; latG = L.lat_g; lonG = L.lon_g;
+        // HE-1 / LA-3: banking only from a calibrated mount (the recorder's own rule, sensors.js); before that the pipeline's
+        // number is no measurement, and Bank reads --, never +0.0°
+        camber = L.calibration === 'locked' && Number.isFinite(L.camber_deg) ? L.camber_deg : null;
         bearing = L.course_deg != null ? L.course_deg : state.bearing;
         if (track) {
           // The whole route is searched every fix: off route the rejoin can be anywhere on it, and on it the right pass of a
@@ -1586,7 +1593,8 @@
       if (latG != null && (Math.abs(latG) > 0.30 || Math.abs(lonG) > 0.35)) state.spiritedAt = performance.now();
 
       state.bearing = bearing;
-      const rough = live ? state.live.roughness_rms : (idx >= 0 && track.roughG ? track.roughG[idx] : 0);
+      // a replay without a measured roughness here is unknown (the Surface bars stay dark), never a smooth 0
+      const rough = live ? state.live.roughness_rms : (idx >= 0 && track.roughG && Number.isFinite(track.roughG[idx]) ? track.roughG[idx] : null);
       const simLat = state.mode === 'sim' && idx >= 0 && vMps ? vMps * vMps * (track.kappa ? track.kappa[idx] : 0) / Core.G_STD : null;
       setVehicle({ lat, lon, bearing, vMps: vMps || 0, onTrack: !!track && idx >= 0, latG: latG != null ? latG : simLat, lonG: lonG || 0, rough }, snap);
 
@@ -1620,6 +1628,8 @@
       d.rough = rough; d.kitLine = state.kitLine; d.crestAhead = !!state.crestAhead; d.blink = performance.now() < (state.blinkUntil || 0);
       d.score = live ? liveScore.value : null;   // the drive's Vetta Score so far (liveScoreTick), only while recording
       cluster.update(d);
+      sightAlarm(d, !!live);
+      if (live && explainOpen() && !explainGate()) closeExplain();   // PR-1: the car moved off: nothing left to read
       updateRibbon(vMps, idx, snap);
       updatePins();
       const now = performance.now();
@@ -1627,6 +1637,42 @@
       // F-14: a fast replay rewrites the strip at 4 Hz (it reads the same, and each rewrite is a layout)
       if (snap || now - lastNotesAt > (!live && state.rate > 2 ? 250 : 150)) { lastNotesAt = now; updateNotes(vMps, live); drawScrubber(); }
     }
+    // Panel round 2 (GR-1, IN-3): the one alarm says so in words and in the hand. Going faster than Sight in a drive, the
+    // status row's message line says "Slow to 45 for what you can see." for 3 s, in the signal colour with its mark, and the
+    // hazard haptic fires once; again only if Sight drops a step while you are over it, or after 10 s back under it.
+    function sightAlarm(d, live) {
+      const S = sightAlarm.s || (sightAlarm.s = { short: false, value: null, endedAt: -Infinity }), short = live && Inst.sightShort(d), now = performance.now();
+      if (!short) { if (S.short) S.endedAt = now; S.short = false; S.value = null; return; }
+      const v = Inst.sightValue(d), fresh = !S.short && now - S.endedAt > 10000, drop = S.short && S.value != null && v < S.value - 1;
+      if (fresh || drop) { if (fresh) haptic('hazard'); driveNote(Inst.slowLine(v), { alarm: true, ms: 3000 }); }
+      S.short = true; S.value = v;
+    }
+    // Panel round 2 (PR-1, SO-4): a tap on an instrument says what it means and how it is measured, in a short sheet, only
+    // parked or in a replay (ApexInstruments.explainAllowed). While you drive the tap does nothing, and a sheet left open
+    // closes as the car moves off. No screen before Start: the sheet is there only when someone asks.
+    const explainGate = () => Inst.explainAllowed({ live: state.mode === 'live' && !!state.live, speedMps: state.live ? state.live.speed_mps : null });
+    const explainOpen = () => $('explainCard').classList.contains('show');
+    function openExplain(key) {
+      const e = Inst.EXPLAIN[key];
+      if (!e || !explainGate()) return false;
+      let now = '';
+      try { now = e.now(renderIn.cluster || {}, ApexUnits.speedU()); } catch (_) { now = ''; }
+      $('explainTitle').textContent = e.title;
+      $('explainNow').textContent = now ? `Now: ${now}` : ''; $('explainNow').hidden = !now;
+      $('explainWhat').textContent = e.what; $('explainHow').textContent = e.how;
+      $('explainCard').classList.add('show');
+      return true;
+    }
+    function closeExplain() { $('explainCard').classList.remove('show'); }
+    for (const id of ['cluster', 'notes']) {
+      $(id).addEventListener('click', (ev) => {
+        const t = ev.target && ev.target.closest ? ev.target.closest('[data-explain]') : null;
+        if (!t || ev.target.closest('button, a')) return;                // the Trip key and links keep their own taps
+        openExplain(t.dataset.explain);
+      });
+    }
+    $('explainDone').addEventListener('click', closeExplain);
+    $('explainCard').addEventListener('click', (e) => { if (e.target === $('explainCard')) closeExplain(); });
     const simSpeed = (i) => Math.max(6, Math.min(track.envMps[i] * 0.92, track.limitMps && track.limitMps[i] ? track.limitMps[i] : 27));
 
     let lastTs = 0, raf = null, video = null;   // video: a replay being recorded (startVideo below)
@@ -3178,13 +3224,15 @@
     // The drive's message row: the whole message if it fits beside Report and End, else its first sentence ("Gravel
     // reported."), never a word cut in half; VoiceOver is read all of it. It goes after DRIVE_NOTE_MS.
     const DRIVE_NOTE_MS = 6000;
-    function driveNote(msg) {
+    // opts.alarm: the Sight warning's sentence (sightAlarm), in the signal colour with its mark; opts.ms: how long it stays
+    function driveNote(msg, opts = {}) {
       const n = $('dsNote');
       clearTimeout(n._h);
+      n.classList.toggle('alarm', !!opts.alarm);
       n.hidden = false; n.textContent = msg; n.setAttribute('aria-label', msg);
       const first = (msg.match(/^.+?[.!?](?=\s|$)/) || [msg])[0];
       if (n.scrollWidth > n.clientWidth + 1 && first !== msg && first.split(' ').length >= 2) { n.textContent = first; announce(msg); }
-      n._h = setTimeout(() => { n.hidden = true; n.textContent = ''; n.removeAttribute('aria-label'); }, DRIVE_NOTE_MS);
+      n._h = setTimeout(() => { n.hidden = true; n.textContent = ''; n.removeAttribute('aria-label'); n.classList.remove('alarm'); }, opts.ms || DRIVE_NOTE_MS);
     }
     // Views: ROUTE / DRIVES / SETUP open the side panel; tapping the open tab again, the map
     // behind it, or swiping it right closes it. ANALYSIS is its own page.
@@ -3590,6 +3638,7 @@
     document.addEventListener('keydown', (e) => {
       if (e.key !== 'Escape') return;
       if ($('hlOverlay').classList.contains('show')) closeHighlightDialog();
+      else if (explainOpen()) closeExplain();
       else if ($('pinOverlay').classList.contains('show')) closePin();
       else if (view) closeSheet();
     });
@@ -6151,6 +6200,10 @@
         Number.isFinite(c.corners) ? `${c.corners} corners` : null].filter(Boolean).join(' · ');
       const ended = window.ApexDriveKeep ? ApexDriveKeep.endNote(c) : null;   // Round 3: a drive that ended itself says how
       $('endLine').textContent = ended ? ended + '.' : '';
+      // panel round 2 (HE-1): one measured road-feel line from this drive's own rows (road_feel.js); none for a drive whose
+      // mount never calibrated, so nothing unmeasured is ever said
+      const feel = window.ApexRoadFeel && c.feel ? ApexRoadFeel.endLine(c.feel, (m) => ApexUnits.long(m, 1)) : '';
+      $('endFeel').textContent = feel; $('endFeel').hidden = !feel;
       // scoring: no number yet, never "--" (that means "no score"), and no key that needs the score
       $('endScore').textContent = '…'; $('endScore').classList.add('unk'); $('endScore').setAttribute('aria-busy', 'true');
       $('endScore').parentElement.classList.remove('no-score');
@@ -6211,7 +6264,8 @@
       let secs = null;
       try { const T = Core.elapsedS(d.speed_mps), s = T[T.length - 1]; secs = Number.isFinite(s) ? s : null; } catch (_) { secs = null; }
       const c = { id: d.id, name: d.name, ended: d.ended, len_m: Array.isArray(d.dist) && d.dist.length ? d.dist[d.dist.length - 1] : null, secs,
-                  lat: d.lat, lon: d.lon, corners: null, ds: null, record: d };
+                  lat: d.lat, lon: d.lon, corners: null, ds: null, record: d,
+                  feel: window.ApexRoadFeel ? ApexRoadFeel.summary({ dist: d.dist, camber: d.camber, rough: d.rough }) : null };
       endCardOpen(c);
       (async () => {
         let others = [];
@@ -6337,6 +6391,7 @@
         // the analysis worker (analysis_client.js save), and the card gets its score when that lands
         const job = driveJob(rec, (when) => driveName(road, when));
         const card = endCardFacts(rec, job, extra);
+        card.feel = window.ApexRoadFeel ? ApexRoadFeel.summary(ApexRoadFeel.columns(rec.rows)) : null;   // HE-1
         endCardOpen(card);
         try {
           const { rows: _, ...recState } = rec.snapshot(rec.samples);

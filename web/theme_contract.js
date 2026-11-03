@@ -9,8 +9,16 @@
   // legibility floors, CSS px on a 390 px wide phone
   const FLOORS = { speedPx: 40, callPx: 21, binnaclePx: 13 };
   // contrast floors: every text token against its surface 4.5:1, the call (panel ink) and the hazard 7:1
+  // (faceDim on panel: the dial's labels are read over the binnacle's paper too; Roadbook day's MPH was 4.22:1 there, IN-3)
   const TEXT_PAIRS = [['panelInk', 'panel', 7], ['panelDim', 'panel', 4.5], ['ink', 'stage', 4.5], ['faceInk', 'face', 7], ['faceDim', 'face', 4.5],
-    ['accent', 'panel', 4.5]];
+    ['faceDim', 'panel', 4.5], ['accent', 'panel', 4.5]];
+  // Panel round 2 (IN-3, PR-2): one colour means act now. The signal is a warning's colour: at least 3:1 on the panel (a
+  // non-text floor, WCAG 1.4.11), and nothing that is only a reading may wear it, so the route and the calm ribbon must stand
+  // clearly apart from it (RGB distance). A warning state also changes shape and says a word (instruments.js sightShort,
+  // index.html .ro-sight.short); colour alone is never the message.
+  const SIGNAL_FLOOR = 3;
+  const APART = 90;
+  const ALARM = { token: 'signal', channels: ['colour', 'shape', 'word'] };
   const RENDERERS = { dial: ['printed', 'sevenseg', 'bezel'], meter: ['gball', 'bars', 'bezelg'], strip: ['roadbook', 'vfd'] };   // grows as Pro themes add theirs
   const REQUIRED = ['stage', 'ink', 'dim', 'route', 'panel', 'panelInk', 'panelDim', 'rule', 'accent', 'signal', 'face', 'faceInk', 'faceDim'];
   const FORBIDDEN = ['hzBg', 'hzEdge', 'hzInk'];                                     // a theme can't set the plate
@@ -34,6 +42,12 @@
     return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
   }
 
+  /** Distance between two #rrggbb colours in RGB, or null: how far apart a reading's colour stands from the warning's. */
+  function apart(a, b) {
+    const x = rgb(a), y = rgb(b);
+    return x && y ? Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2]) : null;
+  }
+
   /** Every way a theme breaks the contract, as short strings; [] when it holds. */
   function check(theme) {
     const out = [];
@@ -51,12 +65,18 @@
         const c = contrast(t[fg], t[bg]);
         if (c != null && c < min) out.push(`${mode}: ${fg} on ${bg} is ${c.toFixed(2)}:1, under ${min}:1`);
       }
+      const sig = contrast(t.signal, t.panel);
+      if (sig != null && sig < SIGNAL_FLOOR) out.push(`${mode}: signal on panel is ${sig.toFixed(2)}:1, under ${SIGNAL_FLOOR}:1`);
+      for (const k of ['route', 'calm']) {
+        const d = apart(t[k], t.signal);
+        if (d != null && d < APART) out.push(`${mode}: ${k} is the warning's colour (${Math.round(d)} from signal, under ${APART})`);
+      }
     }
     const hz = contrast(HAZARD.ink, HAZARD.bg);
     if (hz < 7) out.push('hazard plate contrast');                                 // a guard on the constants themselves
     return out;
   }
 
-  const api = { HAZARD, FLOORS, TEXT_PAIRS, RENDERERS, contrast, check };
+  const api = { HAZARD, FLOORS, TEXT_PAIRS, RENDERERS, SIGNAL_FLOOR, APART, ALARM, contrast, apart, check };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexThemeContract = api;
 })(typeof window !== 'undefined' ? window : globalThis);

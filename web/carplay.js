@@ -361,6 +361,18 @@
   }
 
   /**
+   * Panel round 2 (TH-2, IN-3): what the sight plate under the arrow draws, on the phone and on the car (web/carmap.js and
+   * CarPlay/ApexCarMap.swift draw the same). null draws nothing: unknown, or OPEN (nothing ahead limits you; the binnacle's
+   * Sight cell says Open). Else { label, text, short }: "SIGHT" by the number and no unit, so it never reads as a limit sign;
+   * faster than it, "SLOW" and short (the signal colour and the eye barred: two channels, never hue alone).
+   */
+  function sightTag(m) {
+    if (!m || typeof m.text !== 'string' || !m.text) return null;
+    if (m.text === 'OPEN' && !m.short) return null;
+    return { label: m.short ? 'SLOW' : 'SIGHT', text: m.text, short: !!m.short };
+  }
+
+  /**
    * U-60: the sight-line speed as a display holds it. The raw value moves every sample (the recording read 67, 55, 97,
    * 88, 124 ten seconds apart at a steady 70), and a red that flickers teaches the driver to ignore the one red on the
    * map. So: steps of 5 mph (10 km/h), rounded down (it is a speed you can stop within); a new step or OPEN only once it
@@ -413,6 +425,7 @@
   const api = { sightMessage, line, routeMessage, guideMessage, recordingMessage, placesMessage, cornersMessage, hazardsMessage, lookMessage, tulipSVG, cornerTulipSVG,
                 recordSVG, CORNER_MODES, CONTINUE_M, MAX_POINTS };
   api.sightFilter = sightFilter;                                       // U-60 (its own line: the list above is shared)
+  api.sightTag = sightTag;                                             // panel round 2, TH-2
   api.GLANCE_MAX = GLANCE_MAX;                                         // U-112
   api.glanceClip = clip;                                               // T-1
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexCarPlay = api;

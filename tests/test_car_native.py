@@ -129,19 +129,32 @@ def test_hillshade_colours_are_arrays_as_maplibre_native_6_wants():
     assert "hillshadeShadowColor = k(" not in swift and "hillshadeHighlightColor = k(" not in swift
 
 
-def test_the_open_sight_plate_is_quiet():
-    """U-119 (REVIEW5 free-drive car/007): the OPEN plate at road-sign size was the loudest thing on the car's screen, saying
-    nothing restricts the view. Both car maps draw OPEN as the eye alone, small and dimmed; a number keeps the full plate,
-    and red (faster than you can see) is never quieted."""
+def test_the_sight_plate_is_not_a_limit_sign():
+    """U-119 quietened OPEN to the eye alone; panel round 2 (TH-2, IN-3) goes further. The plate under the car was a white box
+    with "20 MPH" where Apple Maps draws the limit. Both car maps now draw the eye, SIGHT and the number with no unit on the
+    dark plate with rounded ends; faster than it, the signal red with the eye barred and SLOW (two channels); OPEN nothing."""
     js, html, swift = read("web", "carmap.js"), read("web", "carmap.html"), read("CarPlay", "ApexCarMap.swift")
-    draw = js[js.index("function drawSight()"):js.index("function addLayers()")]
-    assert "const open = s.text === 'OPEN' && !s.short;" in draw and "if (open) { el.innerHTML = EYE; return; }" in draw
-    assert draw.index("if (open)") < draw.index("b.textContent = s.text"), "no word on the open plate"
-    assert ".car-sight.open { padding: 2px 4px; border-width: 1.5px; opacity: 0.8; }" in html
-    assert ".car-sight.open svg { width: 12px; height: 12px; }" in html, "half the plate's height"
+    draw = js[js.index("function sightPlate("):js.index("function addLayers()")]
+    assert "(s.text === 'OPEN' && !s.short)) return null;" in draw and "label: s.short ? 'SLOW' : 'SIGHT'" in draw
+    assert "if (!t || !state.pos) { el.hidden = true; return; }" in draw, "OPEN and unknown draw nothing"
+    assert "t.short ? EYE_BARRED : EYE" in draw and "unit" not in draw, "no unit, the eye barred when short"
+    css = html[html.index(".car-sight {"):html.index(".car-sight[hidden]")]
+    assert "background: #111111" in css and "border-radius: 999px" in css and "#FFFFFF" not in css.split(".car-sight.short")[0], "a dark pill, never white"
+    assert ".car-sight.open" not in html
     view = swift[swift.index("final class ApexCarSightView"):]
-    assert 'let open = s.text == "OPEN" && !s.short' in view and "alpha = open ? 0.8 : 1" in view
-    assert "pointSize: open ? 9 : 13" in view and "if !open {" in view
+    assert 'systemName: s.short ? "eye.slash" : "eye"' in view and 's.short ? "SLOW " : "SIGHT "' in view
+    assert "UIColor(white: 0.067, alpha: 1)" in view and "label.layer.cornerRadius = bounds.height / 2" in view
+    assert "s.unit" not in view and "palette.plate" not in view.split("func set(")[1], "no unit, and never the theme's paper plate"
+    assert 'var drawn: Bool { !(text == "OPEN" && !short) }' in swift and "s.flatMap { $0.drawn ? $0 : nil }" in swift
+
+
+def test_the_cluster_never_draws_the_sight_plate():
+    """TH-2: the cluster sits in front of the driver beside the car's own speedometer; the plate is never drawn there."""
+    shell = read("CarPlay", "ApexCarPlay.swift")
+    show = shell[shell.index("@MainActor func showSight()"):]
+    show = show[:show.index("\n    }\n")]
+    assert "let sight = role == .cluster ? nil : ApexCar.shared.sight" in show and "native.setSight(sight)" in show
+    assert 'role == .cluster ? "null" : ApexCar.shared.sightJSON' in show
 
 
 def test_plates_stay_clear_of_the_card():

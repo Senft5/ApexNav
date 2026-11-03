@@ -928,12 +928,13 @@ flow('the sight-line speed rides under the position arrow, on the phone and on t
   await page.waitForFunction(() => { const t = document.querySelector('.sight-tag'); return t && !t.hidden; }, null, { timeout: 10000 });
   const tag = await page.textContent('.sight-tag');
   const cell = await page.textContent('#cluster');
-  check(/^(\d+(MPH|KM\/H)|OPEN)$/.test(tag.trim()), 'the tag reads a speed or OPEN: ' + tag);
-  check(/OPEN/.test(tag) ? /Open/.test(cell) : cell.includes(tag.replace(/\D/g, '')), 'the same value as the Sight cell: ' + tag);
+  // panel round 2 (TH-2, IN-3): the tag names itself, SIGHT and the number, no unit (never a limit sign); OPEN draws nothing
+  check(/^(SIGHT|SLOW)\d+$/.test(tag.trim()), 'the tag reads SIGHT and a speed: ' + tag);
+  check(cell.includes(tag.replace(/\D/g, '')), 'the same value as the Sight cell: ' + tag);
   // U-60: it holds still: a new value needs 2 s, so 1.5 s of glances see at most one change, in steps of 5
   const glances = await page.evaluate(async () => { const out = []; for (let i = 0; i < 16; i++) { const t = document.querySelector('.sight-tag'); out.push(t.hidden ? '' : t.textContent); await new Promise(r => setTimeout(r, 100)); } return out; });
   check(glances.filter((g, i) => i && g !== glances[i - 1]).length <= 1, 'the plate holds still: ' + glances.join(' '));
-  check(glances.every((g) => !g || g === 'OPEN' || /^\d*[05](MPH|KM\/H)$/.test(g)), 'in steps of 5: ' + glances.join(' '));
+  check(glances.every((g) => !g || /^(SIGHT|SLOW)\d*[05]$/.test(g)), 'in steps of 5: ' + glances.join(' '));
   // the car's map: the same tag under its arrow, hidden when unknown, red when short. A bare style, so the map loads and its
   // camera follows the car (a plate off the screen is hidden, U-77)
   await page.route('https://tiles.openfreemap.org/**', (route) => (route.request().url().includes('/styles/')
@@ -946,7 +947,13 @@ flow('the sight-line speed rides under the position arrow, on the phone and on t
   check((await read()).hidden, 'unknown: no tag');
   await page.evaluate(() => car.sight({ text: '43', unit: 'MPH', short: true }));
   const r = await read();
-  check(!r.hidden && r.text === '43MPH' && r.short, 'the car tag: ' + JSON.stringify(r));
+  check(!r.hidden && r.text === 'SLOW43' && r.short, 'the car tag, over it: ' + JSON.stringify(r));
+  await page.evaluate(() => car.sight({ text: '45', unit: 'MPH', short: false }));
+  const r2 = await read(), bg = await page.evaluate(() => getComputedStyle(document.querySelector('.car-sight')).backgroundColor);
+  check(!r2.hidden && r2.text === 'SIGHT45' && !r2.short && bg === 'rgb(17, 17, 17)', 'the car tag names itself on the dark plate: ' + JSON.stringify(r2) + bg);
+  await page.evaluate(() => car.sight({ text: 'OPEN', unit: '', short: false }));
+  check((await read()).hidden, 'OPEN: no plate on the car (TH-2)');
+  await page.evaluate(() => car.sight({ text: '43', unit: 'MPH', short: true }));
   // plates never pile up: three corners on one spot show one plate, the tight one when there is no car to measure from
   await page.evaluate(() => { car.mode('preview'); car.corners([{ at: [35.41, -84.1], text: 'R4', tight: false }, { at: [35.41, -84.1], text: 'L2', tight: true }, { at: [35.41001, -84.1], text: 'R3', tight: false }]); });
   await page.waitForTimeout(300);
@@ -982,6 +989,57 @@ flow('the sight-line speed rides under the position arrow, on the phone and on t
   check(card.some((p) => p.text === 'GRAVEL') && card.some((p) => p.text === 'R6'), 'the reported hazard shows beside the car, and a corner in the clear: ' + JSON.stringify(card));
   // U-89: the credit on its own strip of ground, so no map label shows under it
   check(await page.evaluate(() => { const s = getComputedStyle(document.getElementById('credit')); return s.backgroundColor !== 'rgba(0, 0, 0, 0)' && s.opacity === '1'; }), 'the credit sits on a solid strip');
+});
+
+// Panel round 2, build A (IN-3, PR-2, GR-1, HE-1, PR-1): one red that means act now. In the demo replay the Sight cell is
+// ink, Bank says "--" with no measurement, and a sight line forced short (20 m) makes the cell the alarm on two channels:
+// the signal colour plus the hatched edge, the barred eye and SLOW; in greyscale it still differs from the reading. A tap on
+// an instrument in a replay opens what it means; Done closes it.
+flow('one red that means act now: Sight is ink until you are over it, then colour and shape and a word; Bank -- unmeasured; a tap explains in a replay', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.prefs', JSON.stringify({ notesMode: 'full', nightMode: 'off' })); } catch (_) {} });
+  await page.goto(base + '/index.html?drive=dry_ridge&play=1');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.track && window.apexDebug.state.playing, null, { timeout: 15000 });
+  await page.evaluate(() => { const st = window.apexDebug.state, t = window.apexDebug.track; st.cursorM = t.dist[t.dist.length - 1] * 0.45; });
+  await page.waitForTimeout(1500);
+  const cellOf = () => page.evaluate(() => {
+    const c = document.querySelector('.ro-sight'), b = c.querySelector('b'), cs = getComputedStyle(c), bar = c.querySelector('.ro-eye-bar');
+    const grey = (rgb) => { const m = rgb.match(/\d+/g).map(Number); return Math.round(0.299 * m[0] + 0.587 * m[1] + 0.114 * m[2]); };
+    return { short: c.classList.contains('short'), label: c.querySelector('span').textContent, color: getComputedStyle(b).color, image: cs.borderImageSource,
+      width: cs.borderTopWidth, bar: !!bar && getComputedStyle(bar).display !== 'none', grey: grey(getComputedStyle(b).color),
+      ink: getComputedStyle(document.documentElement).getPropertyValue('--panel-ink').trim(), signal: getComputedStyle(document.documentElement).getPropertyValue('--signal').trim() };
+  });
+  const hex = (rgb) => '#' + rgb.match(/\d+/g).slice(0, 3).map((v) => Number(v).toString(16).padStart(2, '0')).join('').toUpperCase();
+  // the sight line opened right up (nothing ahead limits you) and the speed under the corner's pace: a reading, not an alarm
+  await page.evaluate(() => { const t = window.apexDebug.track; t.sightM = t.sightM.map(() => 400); t.envMps = t.envMps.map(() => 60); });
+  await page.waitForFunction(() => !document.querySelector('.ro-sight.short'), null, { timeout: 8000 });
+  const calm = await cellOf();
+  check(!calm.short && calm.label === 'Sight' && hex(calm.color) === calm.ink.toUpperCase() && calm.image === 'none' && !calm.bar, 'Sight is a reading, in ink: ' + JSON.stringify(calm));
+  // the g-ball and Bank are readings too; with the drive's camber taken away Bank says --, never +0.0°
+  await page.evaluate(() => { window.apexDebug.track.camberDeg = null; });
+  await page.waitForFunction(() => (document.querySelector('.dial-digital.small') || {}).textContent === 'BANK --', null, { timeout: 5000 });
+  const ball = await page.evaluate(() => [...document.querySelectorAll('.dial-g circle')].pop().getAttribute('fill'));
+  check(!/signal|accent/.test(ball), 'the ball is ink: ' + ball);
+  // a sight line forced to 20 m: faster than Sight, the alarm
+  await page.evaluate(() => { const t = window.apexDebug.track; t.sightM = t.sightM.map(() => 20); });
+  await page.waitForFunction(() => document.querySelector('.ro-sight.short'), null, { timeout: 8000 });
+  const loud = await cellOf();
+  check(loud.label === 'SLOW' && hex(loud.color) === loud.signal.toUpperCase() && loud.image !== 'none' && loud.bar && loud.width === '2px',
+    'over Sight: the signal colour, the hatched edge, the barred eye and SLOW: ' + JSON.stringify(loud));
+  check(loud.grey !== calm.grey || loud.label !== calm.label, 'in greyscale the alarm still differs from the reading');
+  await page.waitForFunction(() => { const t = document.querySelector('.sight-tag'); return t && !t.hidden && t.classList.contains('short'); }, null, { timeout: 8000 });
+  check(/^SLOW\d+$/.test((await page.textContent('.sight-tag')).trim()), 'the plate says SLOW: ' + await page.textContent('.sight-tag'));
+  // PR-1: in a replay a tap on Sight, then the Score, says what it is; Done closes it
+  await page.click('#cluster .ro-sight');
+  await page.waitForSelector('#explainCard.show', { timeout: 3000 });
+  const sheet = await page.evaluate(() => ({ title: document.getElementById('explainTitle').textContent, what: document.getElementById('explainWhat').textContent,
+    how: document.getElementById('explainHow').textContent, now: document.getElementById('explainNow').textContent }));
+  check(sheet.title === 'Sight' && /never a target/.test(sheet.what) && /SLOW/.test(sheet.how) && /^Now: \d+ (mph|km\/h)$/.test(sheet.now), 'the Sight sheet: ' + JSON.stringify(sheet));
+  await page.click('#explainDone');
+  check(!(await page.evaluate(() => document.getElementById('explainCard').classList.contains('show'))), 'Done closes it');
+  await page.click('#cluster .g-score');
+  await page.waitForSelector('#explainCard.show', { timeout: 3000 });
+  check(await page.textContent('#explainTitle') === 'Vetta Score', 'the Score explains itself');
+  await page.click('#explainDone');
 });
 
 // The owner's first CarPlay drive (2026-10-30): the car map was "incredibly stuttery and unusable". It jumped to each 1 Hz

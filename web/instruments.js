@@ -190,7 +190,7 @@
     el.className = `notes notes-${theme.notes}`;
     if (!notes.length) {
       const q = html('div', 'note-quiet', el);
-      html('b', '', q, 'Clear');
+      html('b', '', q, 'Clear').dataset.explain = 'clear';
       const line = html('span', '', q, notes.quietText || '');
       // U-100: a line that needs a third row (Tapedeck's wide dot font, a long road name) takes its compact form instead
       if (notes.quietShort && notes.quietShort !== notes.quietText && typeof getComputedStyle === 'function') {
@@ -301,16 +301,17 @@
     const limit = svg('g', {}, s);
     svg('rect', { x: 94, y: 4, width: 12, height: 14, fill: 'var(--face)', stroke: 'var(--face-ink)', 'stroke-width': 1.6 }, limit);
     const sight = svg('path', { d: 'M100 18 L95 8 L105 8 Z', fill: 'none', stroke: 'var(--amber)', 'stroke-width': 2 }, s);
-    const pace = svg('path', { d: 'M100 20 L94 8 L106 8 Z', fill: 'var(--accent)' }, s);
+    // panel round 2 (PR-2): readings are ink; the needle takes the signal only when you are over the corner's pace
+    const pace = svg('path', { d: 'M100 20 L94 8 L106 8 Z', fill: 'var(--face-ink)' }, s);
     const needle = svg('g', {}, s);
-    const np = svg('path', { d: printed ? 'M98.6 112 L100 24 L101.4 112 Z' : 'M97.5 108 L100 22 L102.5 108 Z', fill: printed ? 'var(--signal)' : 'var(--face-ink)' }, needle);
+    const np = svg('path', { d: printed ? 'M98.6 112 L100 24 L101.4 112 Z' : 'M97.5 108 L100 22 L102.5 108 Z', fill: 'var(--face-ink)' }, needle);
     svg('circle', { cx: 100, cy: 100, r: printed ? 5 : 7, fill: 'var(--face)', stroke: 'var(--face-ink)', 'stroke-width': 1.6 }, s);
     const digital = svg('text', { x: 100, y: 182, 'text-anchor': 'middle', class: 'dial-digital' }, s);
     return (d) => {
       const live = d.speedMph != null;
       setA(needle, 'transform', `rotate(${ang(live ? (d.needleMph != null ? d.needleMph : d.speedMph) : 0) + 90} 100 100)`);
       setS(needle, 'opacity', live ? 1 : 0.25);
-      setA(np, 'fill', live && d.paceMph != null && d.speedMph > d.paceMph + 1 ? 'var(--signal)' : (printed ? 'var(--signal)' : 'var(--face-ink)'));
+      setA(np, 'fill', live && d.paceMph != null && d.speedMph > d.paceMph + 1 ? 'var(--signal)' : 'var(--face-ink)');
       setT(digital, live ? Math.round(d.speedMph) : '--');
       const place = (node, mph) => {
         if (mph == null || !isFinite(mph)) { setS(node, 'display', 'none'); return; }
@@ -334,10 +335,11 @@
       const a = 90 - d * 3, [x1, y1] = polar(92, a), [x2, y2] = polar(d % 5 === 0 ? 84 : 88, a);
       svg('line', { x1, y1, x2, y2, stroke: d === 0 ? 'var(--face-ink)' : 'var(--face-dim)', 'stroke-width': d === 0 ? 1.8 : 1 }, s);
     }
-    const bank = svg('path', { d: 'M100 182 L96 172 L104 172 Z', fill: 'var(--accent)' }, s);
+    // panel round 2 (PR-2): the ball, its trail and Bank are readings, in the face's ink; none of them is ever the alarm red
+    const bank = svg('path', { d: 'M100 182 L96 172 L104 172 Z', fill: 'var(--face-ink)' }, s);
     const bankTxt = svg('text', { x: 100, y: 158, 'text-anchor': 'middle', class: 'dial-digital small' }, s);
-    const trail = svg('polyline', { points: '', fill: 'none', stroke: 'var(--accent)', 'stroke-opacity': 0.4, 'stroke-width': 2 }, s);
-    const ball = svg('circle', { cx: 100, cy: 100, r: 7, fill: 'var(--accent)' }, s);
+    const trail = svg('polyline', { points: '', fill: 'none', stroke: 'var(--face-ink)', 'stroke-opacity': 0.4, 'stroke-width': 2 }, s);
+    const ball = svg('circle', { cx: 100, cy: 100, r: 7, fill: 'var(--face-ink)' }, s);
     const pts = [];
     return (d) => {
       const known = d.latG != null && d.lonG != null;
@@ -350,14 +352,72 @@
         if (pts.length > 24) pts.shift();
       } else pts.length = 0;
       setA(ball, 'cx', x); setA(ball, 'cy', y);
-      setA(ball, 'fill', !known ? 'var(--face-dim)' : (Math.hypot(d.latG, d.lonG) > 0.45 ? 'var(--signal)' : 'var(--accent)'));
+      setA(ball, 'fill', known ? 'var(--face-ink)' : 'var(--face-dim)');
       setA(trail, 'points', pts.join(' '));
-      if (d.camberDeg != null) {
-        setS(bank, 'display', '');
-        setA(bank, 'transform', `rotate(${-Math.max(-10, Math.min(10, d.camberDeg)) * 3} 100 100)`);
-        setT(bankTxt, `BANK ${d.camberDeg >= 0 ? '+' : ''}${d.camberDeg.toFixed(1)}°`);
-      } else { setS(bank, 'display', 'none'); setT(bankTxt, ''); }
+      // HE-1 / LA-3: Bank is "--" until it is measured (a calibrated mount, or a recorded drive's own column), never a
+      // +0.0° that reads as measured; the same slot and size either way
+      const banked = Number.isFinite(d.camberDeg);
+      setS(bank, 'display', banked ? '' : 'none');
+      if (banked) setA(bank, 'transform', `rotate(${-Math.max(-10, Math.min(10, d.camberDeg)) * 3} 100 100)`);
+      setT(bankTxt, bankText(d.camberDeg));
+      bankTxt.classList.toggle('unk', !banked);
     };
+  }
+
+  // ---- Panel round 2: one red that means act now (IN-3, PR-2, TH-2, GR-1) -----------------------------------------------
+  // The drive screen's alarm grammar: the signal colour means "act now" and nothing else. Readings (speed, Sight under your
+  // speed, Bank, the g-ball, Score, the trip) are ink. A warning is never hue alone: it also changes shape and says a word.
+  /** The Sight value the cell shows (the lower of the corner's pace and the sight line), or null. Pure. */
+  function sightValue(d) {
+    const both = !d || d.sightQuiet ? [] : [d.paceMph, d.sightMph].filter((v) => Number.isFinite(v));
+    return both.length ? Math.min(...both) : null;
+  }
+  /** True when you are faster than Sight: the one alarm on the binnacle. Pure. */
+  function sightShort(d) {
+    const v = sightValue(d);
+    return !!d && !d.sightOpen && v != null && Number.isFinite(d.speedMph) && d.speedMph > v + 1;
+  }
+  /** GR-1: the warning's plain sentence, said in words when it fires: "Slow to 45 for what you can see." Pure. */
+  function slowLine(v) { return Number.isFinite(v) ? `Slow to ${Math.round(v)} for what you can see.` : ''; }
+  /** HE-1 / LA-3: the Bank readout; "BANK --" until measured, never a false +0.0°. Pure. */
+  function bankText(deg) {
+    if (!Number.isFinite(deg)) return 'BANK --';
+    const r = Math.round(deg * 10) / 10;
+    return `BANK ${r > 0 ? '+' : r < 0 ? '-' : ''}${Math.abs(r).toFixed(1)}°`;
+  }
+
+  // ---- Panel round 2: explain behind a tap (PR-1, SO-4) -----------------------------------------------------------------
+  // What each instrument means and how it is measured, one short sheet each. Shown only parked or in a replay
+  // (explainAllowed): while you drive, a tap on an instrument does nothing. now(d, unit): the reading as the cell shows it.
+  const nf = (v, unit) => (Number.isFinite(v) ? `${Math.round(v)} ${unit}` : '--');
+  const EXPLAIN = {
+    speed: { title: 'Speed', what: 'How fast you are going. The filled mark on the dial is the pace the next corner allows; the open one is Sight.',
+      how: 'From GPS, smoothed. -- with no fix.', now: (d, u) => nf(d.speedMph, u) },
+    limit: { title: 'Speed limit', what: 'The posted limit for the road you are on, drawn as the sign.',
+      how: 'From OpenStreetMap. -- where the map does not know it; Vetta never guesses one.', now: (d, u) => nf(d.limitMph, u) },
+    sight: { title: 'Sight', what: 'The fastest you could still stop from within the road you can see ahead, and no faster than the next corner allows. A braking range, never a target.',
+      how: 'Worked out from the shape of the road ahead: its bends, its crests and what stands at its edge. When you are faster than it, it turns red and says SLOW. Open: nothing ahead limits you.',
+      now: (d, u) => (d.sightOpen ? 'Open' : nf(sightValue(d), u)) },
+    gball: { title: 'Grip ball and Bank', what: 'The ball shows the force you feel: it rolls forward under braking and outward in a turn. Bank is how much the road leans in the corner: + leans into the turn and helps, - is off-camber.',
+      how: 'From the phone\'s motion sensors. Bank reads -- until the phone is calibrated in its mount; nothing is shown that was not measured.',
+      now: (d) => bankText(d.camberDeg) },
+    meters: { title: 'Surface and Brake / Turn', what: 'Surface: how rough the road is under you. Brake / Turn: how hard you braked or turned, the last few seconds.',
+      how: 'From the phone\'s motion sensors. Dark bars are readings not taken yet.', now: () => '' },
+    score: { title: 'Vetta Score', what: 'How cleanly you drove the corners: your pace against what each one allows, smoothness, braking and rhythm. Out of 1000.',
+      how: 'Worked out from this drive every 30 seconds while you record. -- until there are enough clean corners.',
+      now: (d) => (Number.isFinite(d.score) ? String(Math.round(d.score)) : '--') },
+    trip: { title: 'Trip', what: 'How far you have come on this drive, and the route\'s whole length beside it.', how: 'From GPS, along the road.',
+      now: (d) => (Number.isFinite(d.tripMi) ? d.tripMi.toFixed(1) : '--') },
+    road: { title: 'Road', what: 'The road under you, by the map\'s name; on a route with no name for it, its kind of road.', how: 'From the map.',
+      now: (d) => (typeof d.roadName === 'string' && d.roadName.trim() ? d.roadName.trim() : '--') },
+    clear: { title: 'Clear', what: 'No corner or hazard to call yet. The line beside it says what comes next.', how: 'From the route\'s corners and the hazards reported on it.', now: () => '' },
+  };
+  /** PR-1 / SO-4: an instrument explains itself only parked (under 3 mph) or in a replay; never while you drive. Pure.
+   *  s: { live, speedMps }. A live drive with no speed known is treated as moving. */
+  const EXPLAIN_MAX_MPS = 3 / 2.23694;
+  function explainAllowed(s) {
+    if (!s || !s.live) return true;                                   // a replay, a preview, the idle map
+    return Number.isFinite(s.speedMps) && s.speedMps < EXPLAIN_MAX_MPS;
   }
 
   function readouts(parent) {
@@ -377,18 +437,25 @@
     const eye = svg('svg', { viewBox: '0 0 24 24', width: 12, height: 12, class: 'ro-eye', 'aria-hidden': 'true' }, sight.value);
     svg('path', { d: 'M2 12 Q12 2 22 12 Q12 22 2 12 Z', fill: 'none', stroke: 'currentColor', 'stroke-width': 2 }, eye);
     svg('circle', { cx: 12, cy: 12, r: 3, fill: 'currentColor' }, eye);
+    svg('path', { d: 'M4 21 L20 3', stroke: 'currentColor', 'stroke-width': 2.6, 'stroke-linecap': 'round', class: 'ro-eye-bar' }, eye);   // the bar: over it
     eye.style.display = 'none';
+    const sightLabel = sight.c.lastChild;
+    limit.c.dataset.explain = 'limit'; sight.c.dataset.explain = 'sight';   // PR-1: what a tap explains
     return (d) => {
       setT(limit.v, fmt(d.limitMph));
       limit.c.classList.toggle('unknown', !Number.isFinite(d.limitMph));   // a sign only when there is a limit to show
       // U-130: under 5 mph the sight plate hides (sightQuiet) and so does the value here: --, never a number at a standstill
       const both = d.sightQuiet ? [] : [d.paceMph, d.sightMph].filter(v => Number.isFinite(v));
-      const v = both.length ? Math.min(...both) : null;
+      const v = sightValue(d);
       // "Open" when nothing limits you (the sight line at its cap, no corner asking for less): the number there would only
       // be the cap's own speed (125 mph), not something the road says
       setT(sight.v, d.sightOpen ? 'Open' : fmt(v));
-      setS(eye, 'display', !d.sightOpen && both.length === 2 && d.sightMph < d.paceMph ? '' : 'none');
-      sight.c.classList.toggle('short', !d.sightOpen && v != null && Number.isFinite(d.speedMph) && d.speedMph > v + 1);
+      // panel round 2 (IN-3, PR-2, GR-1): Sight is a reading in ink; over it, it is the one alarm, on two channels: the signal
+      // colour, and a shape and a word (the hatched edge, the barred eye, SLOW in place of "Sight")
+      const short = sightShort(d);
+      setS(eye, 'display', short || (!d.sightOpen && both.length === 2 && d.sightMph < d.paceMph) ? '' : 'none');
+      sight.c.classList.toggle('short', short);
+      setT(sightLabel, short ? 'SLOW' : 'Sight');
     };
   }
 
@@ -583,16 +650,21 @@
     const center = html('div', 'cluster-center', el);
     const gg = html('div', 'dial dial-g', el);
     const u = [pick(theme, 'dial', 'printed')(sp), readouts(center), odometer(center, printed), pick(theme, 'meter', 'gball')(gg)];
+    // PR-1: what a tap on each part explains (cockpit.js openExplain)
+    sp.dataset.explain = 'speed'; gg.dataset.explain = theme.renderers && theme.renderers.meter === 'bars' ? 'meters' : 'gball';
+    const odoEl = center.querySelector('.odo'); if (odoEl) odoEl.dataset.explain = 'trip';
     // Night (REVIEW2.md U-36): the trip readout steps aside for a quiet Trip key; a tap shows it for ten seconds
     const peek = html('button', 'trip-peek', center, 'Trip'); peek.type = 'button'; let peekT = 0;
     peek.addEventListener('click', () => { el.classList.add('show-trip'); clearTimeout(peekT); peekT = setTimeout(() => el.classList.remove('show-trip'), 10000); });
     // the live Vetta Score under the meter, in every theme (REVIEW.md 4.3: speed left, Limit centre, Score right); "--" until known
     const sc = html('div', 'g-score', gg), scV = html('b', '', sc, '--');
+    sc.dataset.explain = 'score';
     html('span', '', sc, 'SCORE');
     u.push(d => { const t = Number.isFinite(d.score) ? String(Math.round(d.score)) : '--'; if (scV.textContent !== t) scV.textContent = t; });
     if (theme.mascot === 'kit') u.push(kitRow(el));                  // Tapedeck's fox, a row of its own under the gauges
     // Keep the road type below Trip; a route without sector data has no known type.
     const roadType = html('div', 'dna-arch', center, 'Road: --');
+    roadType.dataset.explain = 'road';
     u.push(d => {
       const type = d.sector && d.sector.archetype;
       // REVIEW4 U-67: in a drive, the road under the car by the map's name ("Road: I-275"), the same name the strip's quiet
@@ -610,6 +682,7 @@
     return mountDials(el, theme);
   }
 
-  const api = { mountCluster, renderNotes, tulipSVG, lockup, stripCode, register, kitPose, KIT, springNeedle, SPEED_MAX };
+  const api = { mountCluster, renderNotes, tulipSVG, lockup, stripCode, register, kitPose, KIT, springNeedle, SPEED_MAX,
+    sightValue, sightShort, slowLine, bankText, EXPLAIN, explainAllowed };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexInstruments = api;
 })(typeof window !== 'undefined' ? window : globalThis);
