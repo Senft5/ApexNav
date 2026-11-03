@@ -364,19 +364,27 @@
     };
   }
 
+  /**
+   * The binnacle's Sight cell from the cluster's frame (panel round 2, SO-1): the same held sight-line speed as the plate
+   * under the arrow, never the corner's pace under the same word (recording 7: the plate said 50 and the cell 48, the
+   * pace; the pace keeps its own mark on the speed dial). U-130: under 5 mph the plate hides (sightQuiet) and the cell
+   * reads --, never a number at a standstill; "Open" when nothing limits you. Red only when the plate is red
+   * (d.sightShort, its 3 s rule), else, without that flag, when the speed is over it. { text, eye, short }.
+   */
+  function sightCell(d) {
+    const v = !d || d.sightQuiet || !Number.isFinite(d.sightMph) ? null : d.sightMph;
+    if (d && d.sightOpen && !d.sightQuiet) return { text: 'Open', eye: false, short: false };
+    const short = v != null && (typeof d.sightShort === 'boolean' ? d.sightShort : Number.isFinite(d.speedMph) && d.speedMph > v + 1);
+    return { text: fmt(v), eye: v != null, short };
+  }
+
   // ---- Panel round 2: one red that means act now (IN-3, PR-2, TH-2, GR-1) -----------------------------------------------
   // The drive screen's alarm grammar: the signal colour means "act now" and nothing else. Readings (speed, Sight under your
   // speed, Bank, the g-ball, Score, the trip) are ink. A warning is never hue alone: it also changes shape and says a word.
-  /** The Sight value the cell shows (the lower of the corner's pace and the sight line), or null. Pure. */
-  function sightValue(d) {
-    const both = !d || d.sightQuiet ? [] : [d.paceMph, d.sightMph].filter((v) => Number.isFinite(v));
-    return both.length ? Math.min(...both) : null;
-  }
+  /** The Sight value the cell shows: the held sight line only (SO-1: the pace has its own mark on the dial), or null. */
+  function sightValue(d) { const c = sightCell(d); return c.text === 'Open' || c.text === '--' ? null : (Number.isFinite(d.sightMph) ? d.sightMph : null); }
   /** True when you are faster than Sight: the one alarm on the binnacle. Pure. */
-  function sightShort(d) {
-    const v = sightValue(d);
-    return !!d && !d.sightOpen && v != null && Number.isFinite(d.speedMph) && d.speedMph > v + 1;
-  }
+  function sightShort(d) { return sightCell(d).short; }
   /** GR-1: the warning's plain sentence, said in words when it fires: "Slow to 45 for what you can see." Pure. */
   function slowLine(v) { return Number.isFinite(v) ? `Slow to ${Math.round(v)} for what you can see.` : ''; }
   /** HE-1 / LA-3: the Bank readout; "BANK --" until measured, never a false +0.0°. Pure. */
@@ -444,18 +452,13 @@
     return (d) => {
       setT(limit.v, fmt(d.limitMph));
       limit.c.classList.toggle('unknown', !Number.isFinite(d.limitMph));   // a sign only when there is a limit to show
-      // U-130: under 5 mph the sight plate hides (sightQuiet) and so does the value here: --, never a number at a standstill
-      const both = d.sightQuiet ? [] : [d.paceMph, d.sightMph].filter(v => Number.isFinite(v));
-      const v = sightValue(d);
-      // "Open" when nothing limits you (the sight line at its cap, no corner asking for less): the number there would only
-      // be the cap's own speed (125 mph), not something the road says
-      setT(sight.v, d.sightOpen ? 'Open' : fmt(v));
+      const s = sightCell(d);
+      setT(sight.v, s.text);
       // panel round 2 (IN-3, PR-2, GR-1): Sight is a reading in ink; over it, it is the one alarm, on two channels: the signal
       // colour, and a shape and a word (the hatched edge, the barred eye, SLOW in place of "Sight")
-      const short = sightShort(d);
-      setS(eye, 'display', short || (!d.sightOpen && both.length === 2 && d.sightMph < d.paceMph) ? '' : 'none');
-      sight.c.classList.toggle('short', short);
-      setT(sightLabel, short ? 'SLOW' : 'Sight');
+      setS(eye, 'display', s.eye ? '' : 'none');
+      sight.c.classList.toggle('short', s.short);
+      setT(sightLabel, s.short ? 'SLOW' : 'Sight');
     };
   }
 
@@ -683,6 +686,6 @@
   }
 
   const api = { mountCluster, renderNotes, tulipSVG, lockup, stripCode, register, kitPose, KIT, springNeedle, SPEED_MAX,
-    sightValue, sightShort, slowLine, bankText, EXPLAIN, explainAllowed };
+    sightCell, sightValue, sightShort, slowLine, bankText, EXPLAIN, explainAllowed };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexInstruments = api;
 })(typeof window !== 'undefined' ? window : globalThis);

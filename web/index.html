@@ -67,6 +67,7 @@
   <script src="stage_delta.js" defer></script>
   <script src="lanes.js" defer></script>
   <script src="voice_lines.js" defer></script>
+  <script src="vocabulary.js" defer></script>
   <script src="directions.js" defer></script>
   <script src="carplay.js" defer></script>
   <script src="cameras.js" defer></script>
@@ -1410,10 +1411,9 @@
           </section>
           <section data-panel="garage">
             <h3>Co-driver</h3>
-            <div class="ctl notes-ctl"><p class="ctl-label">Notes</p>
-              <div class="switch" role="radiogroup" aria-label="Notes"><button data-notes="quiet" role="radio">Quiet</button><button data-notes="auto" role="radio">Auto</button><button data-notes="full" role="radio">Full</button></div></div>
+            <!-- SO-1 (panel round 2): one setting, one home. Notes and Voice live in the map's Layers, where a drive reaches them -->
+            <p class="note" id="coNotesHere"><span id="coNotesNow">Notes: Auto</span>. Notes and Voice are on the map, under Layers. <button class="linkbtn" id="coNotesLink">Open Layers</button></p>
             <div class="switches">
-              <button class="sw" data-toggle="voice"><i></i><span>Voice</span></button>
               <button class="sw" data-toggle="haptics"><i></i><span>Haptics</span></button>
               <button class="sw" data-toggle="keys"><i></i><span>Key sounds</span></button>
             </div>

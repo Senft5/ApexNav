@@ -67,6 +67,47 @@
     return String(s == null ? '' : s).replace(/[\p{Extended_Pictographic}\u{FE0F}\u{200D}\u{1F3FB}-\u{1F3FF}\u{E0020}-\u{E007F}]/gu, (c) => (c.codePointAt(0) < 0x2190 ? c : ''))
       .replace(/ {2,}/g, ' ').trim();
   }
-  const api = { clock12, dateTime, driveName, typeScale, applyTypeScale, noEmoji };
+  // ---- a drive's facts: one set of numbers everywhere (panel round 2, RA-3) -------------------------------------------
+  // The end card, the drive page, the Log row, Your week, the year line, the share card and the deck all read a drive's
+  // distance, time and corners through these, so one drive never shows two numbers (recording 7: the end card said
+  // 3 corners and the Log row 2; the year said 1 mi over a week of 1.3 mi). web/vocabulary.js defines the words.
+  const MI = 1609.344;
+  const finite = (v) => typeof v === 'number' && Number.isFinite(v);
+  /** A distance: one decimal under 10 ("1.3 mi"), whole from 10 ("71 mi"), in the chosen units; "--" when unknown. */
+  function distance(m) {
+    if (!finite(m)) return '--';
+    const U = root.ApexUnits;
+    if (U) return U.long(m, 1, true);
+    const v = m / MI;
+    return `${v >= 10 ? Math.round(v) : v.toFixed(1)} mi`;
+  }
+  /** A drive's time in minutes ("2 min", "1 h 5 min"); null when unknown. */
+  function minutes(secs) {
+    if (!finite(secs) || secs < 0) return null;
+    const m = Math.round(secs / 60);
+    return m >= 60 ? `${Math.floor(m / 60)} h ${m % 60} min` : `${m} min`;
+  }
+  /** "3 corners", "1 corner", "0 corners"; null when unknown. */
+  const cornerCount = (n) => (finite(n) && n >= 0 ? `${n} corner${n === 1 ? '' : 's'}` : null);
+  /**
+   * A drive's facts from whichever shape the app holds it in: a Log drive (dist[] or km, corners[]), a summary (len_m,
+   * secs, corners[]), the end card's (len_m, secs, corners as a count). Corners are every corner the drive found for its
+   * car (recording.js cornersOf), never only the clean ones the Score counted (ds.corners). Unknown stays null.
+   */
+  function driveFacts(d) {
+    if (!d) return { len_m: null, secs: null, corners: null };
+    const len = finite(d.len_m) ? d.len_m : Array.isArray(d.dist) && d.dist.length && finite(d.dist[d.dist.length - 1]) ? d.dist[d.dist.length - 1]
+      : finite(d.km) ? d.km * 1000 : null;
+    const secs = finite(d.secs) ? d.secs : finite(d.duration_s) ? d.duration_s : null;
+    const corners = Array.isArray(d.corners) ? d.corners.length : finite(d.corners) ? d.corners : null;
+    return { len_m: len, secs, corners };
+  }
+  /** "1.3 mi · 2 min · 3 corners": the parts asked for ('distance', 'time', 'corners'), each only when known. */
+  function factsLine(d, parts = ['distance', 'time', 'corners']) {
+    const f = driveFacts(d);
+    const out = { distance: finite(f.len_m) ? distance(f.len_m) : null, time: minutes(f.secs), corners: cornerCount(f.corners) };
+    return parts.map((p) => out[p]).filter(Boolean).join(' · ');
+  }
+  const api = { clock12, dateTime, driveName, typeScale, applyTypeScale, noEmoji, distance, minutes, cornerCount, driveFacts, factsLine };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexFormat = api;
 })(typeof window !== 'undefined' ? window : globalThis);

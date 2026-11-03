@@ -1574,9 +1574,14 @@ flow('drive ended: the card and the Log give the same score and time for the rec
   check(log.score === card.score, `the Log's ${log.score} is the card's ${card.score}`);
   // U-111: one coaching sentence, the Log's, on the card; never "Next time, X:" and never two colons
   check(log.plain && card.line.endsWith(log.plain) && !/Next time/.test(card.line) && (card.line.match(/:/g) || []).length <= 1, `the card's sentence is the Log's: ${card.line} against ${log.plain}`);
-  const [, mm, ss] = /(\d+):(\d\d)/.exec(log.meta) || [];
-  const cardMin = +((/(\d+) min/.exec(card.meta) || [])[1]);
-  check(mm && cardMin === Math.round(+mm + +ss / 60) && !/ h /.test(card.meta), `the card's time is the recording's: ${card.meta} against ${log.meta}`);
+  // RA-3 (panel round 2): one set of numbers: the card's line and the drive page's are the same words (distance, time,
+  // every corner), and the Log's row says the same distance and corners (recording 7: 3 corners on the card, 2 on the row)
+  check(/ min/.test(card.meta) && !/ h /.test(card.meta) && /corner/.test(card.meta) && log.meta === card.meta, `the card's line is the drive page's: ${card.meta} against ${log.meta}`);
+  await page.goto(`${base}/analysis.html`);
+  await page.waitForSelector(`tr[data-drive="${card.id}"] .sub`, { timeout: 15000 });
+  const row = await page.evaluate((id) => document.querySelector(`tr[data-drive="${id}"] .sub`).textContent, card.id);
+  const [dist, , corners] = card.meta.split(' · ');
+  check(row.startsWith(`${dist} · ${corners}`), `the Log row says the card's distance and corners: ${row} against ${card.meta}`);
 });
 
 flow('the status line wraps between its parts, never "25 min left…", at every width and theme (REVIEW4_CHECK U-99)', async (page, base) => {
@@ -1848,6 +1853,21 @@ flow('a crew link opens the welcome first, then the crew (panel round 1 P-1)', a
   check(!(await page.isVisible('#obLink')), 'no link line without a link');
 });
 
+flow('the theme cards and the words example say the real words, in the driver\'s mode (panel round 2 HE-3, SO-1)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && document.querySelector('#themeCards .theme-card'));
+  const read = () => page.evaluate(() => ({ head: document.querySelector('#themeCards .tp-call b').textContent, tail: document.querySelector('#themeCards .tp-call i').textContent,
+    quote: document.querySelector('#themeCards .tc-voice p').textContent, example: document.getElementById('noteWordsNote').textContent,
+    call: ApexVocabulary.sampleCall(apexDebug.state.noteWords, { plain: ApexPlainNotes, units: ApexUnits, paceNoteText: ApexCore.paceNoteText }) }));
+  const plain = await read();
+  check(plain.head === 'MEDIUM RIGHT' && plain.tail === 'CAREFUL · LONG' && plain.quote.includes(`"${plain.call}.`) && plain.example === `For example "${plain.call}".`
+    && !/TIGHTENS|Late apex|Slow down/.test(plain.head + plain.quote + plain.example), 'plain words, generated: ' + JSON.stringify(plain));
+  await page.evaluate(() => document.querySelector('#noteWordsList [data-words="rally"]').click());
+  const rally = await read();
+  check(rally.head === 'RIGHT 3' && rally.quote.includes(`"${rally.call}.`) && rally.example.includes(rally.call), 'rally notes, generated: ' + JSON.stringify(rally));
+});
+
 flow('small things: Notes is a detent, Layers never cuts the place plate, the Log pager draws its arrows (REVIEW4 U-82, U-81, U-76)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.goto(base + '/index.html');
@@ -1857,8 +1877,10 @@ flow('small things: Notes is a detent, Layers never cuts the place plate, the Lo
   const notes = await page.evaluate(() => [...document.querySelectorAll('#swPanel [data-notes]')].map((b) => b.textContent + ':' + b.getAttribute('aria-checked')).join());
   check(notes === 'Quiet:false,Auto:true,Full:false', 'three stops, Auto lit: ' + notes);
   await page.click('#swPanel [data-notes="full"]');
-  const after = await page.evaluate(() => ({ mode: apexDebug.state.notesMode, garage: document.querySelector('.sheet [data-notes="full"]').getAttribute('aria-checked') }));
-  check(after.mode === 'full' && after.garage === 'true', 'a stop is chosen, and the Garage shows it too: ' + JSON.stringify(after));
+  const after = await page.evaluate(() => ({ mode: apexDebug.state.notesMode, switches: document.querySelectorAll('[data-notes="full"]').length,
+    garage: document.getElementById('coNotesNow').textContent }));
+  // SO-1 (panel round 2): one setting, one home: the Notes switch is in Layers only, and the Garage says what it is set to
+  check(after.mode === 'full' && after.switches === 1 && /^Notes: Full/.test(after.garage), 'a stop is chosen, one switch, and the Garage says it: ' + JSON.stringify(after));
   // the place plate (shown here by hand: it needs a place lookup) slides up out of the panel's way, whole or gone
   const plate = await page.evaluate(() => { const p = document.querySelector('.place-plate'); if (!p) return null; p.hidden = false; p.textContent = 'Colerain Township · Dry · 63°';
     return new Promise((r) => setTimeout(() => { const b = p.getBoundingClientRect(), cs = getComputedStyle(p); r({ bottom: b.bottom, opacity: cs.opacity }); }, 400)); });

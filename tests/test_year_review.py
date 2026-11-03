@@ -31,7 +31,7 @@ def out():
 
 def test_year_summary(out):
     s = out["s"]
-    assert s["drives"] == 4 and s["miles"] == 71 and s["corners"] == 149 and s["months"] == 3
+    assert s["drives"] == 4 and s["miles"] == 70.6 and s["corners"] == 149 and s["months"] == 3
     assert s["topRoads"] == [{"name": "Tail of the Dragon", "times": 2}]
     assert s["best"] == {"name": "Tail of the Dragon", "score": 744, "date": "2026-06-12"}
     assert s["longest"] == {"name": "Cherohala Skyway", "miles": 43.4}

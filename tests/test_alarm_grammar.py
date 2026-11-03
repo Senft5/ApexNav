@@ -59,9 +59,10 @@ def out():
 
 
 def test_the_one_alarm_is_faster_than_sight(out):
-    # over Sight by more than 1; not when Open, not at a crawl, not with no speed; the lower of pace and sight is the value
-    assert out["short"] == [True, False, False, False, False, True, False]
-    assert out["value"] == [30, None, None]
+    # over Sight by more than 1; not when Open, not at a crawl, not with no speed. Sight is the sight line only (panel
+    # round 2 SO-1, web/vocabulary.js): the corner's pace has its own mark on the dial, so 40 against Sight 50 is no alarm
+    assert out["short"] == [True, False, False, False, False, False, False]
+    assert out["value"] == [50, None, None]
     # GR-1: the plain sentence it says when it fires; nothing to say with no value
     assert out["slow"] == ["Slow to 45 for what you can see.", "Slow to 45 for what you can see.", ""]
 
@@ -133,7 +134,7 @@ def test_readings_are_ink_on_the_binnacle():
 def test_the_warning_is_two_channels_and_a_sentence():
     js, html = read("web", "instruments.js"), cockpit_source()
     ro = js[js.index("  function readouts("):js.index("  function odometer(")]
-    assert "sight.c.classList.toggle('short', short);" in ro and "setT(sightLabel, short ? 'SLOW' : 'Sight');" in ro
+    assert "sight.c.classList.toggle('short', s.short);" in ro and "setT(sightLabel, s.short ? 'SLOW' : 'Sight');" in ro
     assert "class: 'ro-eye-bar'" in ro, "the bar through the eye"
     css = html[html.index("html .readouts .ro.ro-sight.short {"):]
     css = css[:css.index("}")]

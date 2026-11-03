@@ -231,7 +231,8 @@
     const dur = finite(S.duration_s) ? fmtT(S.duration_s) : '--';
     head.innerHTML = `<div class="dv-score"><b class="score big">${scoreVal}</b> <small>/1000</small></div>`
       + `<div class="bars">${bar('pace', 'Pace')}${bar('smoothness', 'Smooth')}${bar('braking', 'Brakes')}${bar('consistency', 'Rhythm')}</div>`
-      + `<div class="dv-meta">${mi} \u00b7 ${dur} \u00b7 ${d.corners.length} corners</div>`
+      // RA-3 (panel round 2): the end card's line, from the one helper (format.js factsLine): same distance, time and corners
+      + `<div class="dv-meta">${root.ApexFormat ? root.ApexFormat.factsLine({ len_m: finite(S.km) ? S.km * 1000 : null, secs: S.duration_s, corners: d.corners }) : `${mi} \u00b7 ${dur} \u00b7 ${d.corners.length} corners`}</div>`
       // lap times from track mode (a circuit only, IDEAS D-15): best marked, sectors when the first lap set their lines
       + (Array.isArray(d.laps) && d.laps.length ? `<div class="dv-meta">Laps: ${d.laps.map((l) => {
           const best = Math.min(...d.laps.map((x) => x.timeS)), t = `${Math.floor(l.timeS / 60)}:${(l.timeS % 60).toFixed(2).padStart(5, '0')}`;

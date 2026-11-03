@@ -36,13 +36,15 @@
       }
       if (low) focus = { part: low.k, label: PARTS[low.k].label, tip: PARTS[low.k].tip, pct: Math.round(low.m * 100) };
     }
-    return { drives: week.length, miles: Math.round(miles * 10) / 10, newRoads,
+    return { drives: week.length, miles: Math.round(miles * 10) / 10, m: miles * MI, newRoads,
              best: best ? { name: best.name, score: best.ds.score } : null, focus };
   }
 
   function lines(w) {
-    const U = root.ApexUnits;                                  // km or miles (units.js, U-22)
-    const out = [`${U ? U.long(w.miles * MI) : `${w.miles} mi`} in ${w.drives} drive${w.drives === 1 ? '' : 's'}${w.newRoads ? ` · ${w.newRoads} new road${w.newRoads === 1 ? '' : 's'}` : ''}`];
+    const F = root.ApexFormat, U = root.ApexUnits;             // km or miles (units.js, U-22)
+    // RA-3: the one distance format (format.js distance), so the week and the year read alike
+    const m = Number.isFinite(w.m) ? w.m : w.miles * MI;
+    const out = [`${F ? F.distance(m) : U ? U.long(m, 1, true) : `${w.miles >= 10 ? Math.round(w.miles) : w.miles.toFixed(1)} mi`} in ${w.drives} drive${w.drives === 1 ? '' : 's'}${w.newRoads ? ` · ${w.newRoads} new road${w.newRoads === 1 ? '' : 's'}` : ''}`];
     if (w.best) out.push(`Best Vetta Score: ${w.best.score} on ${w.best.name}`);
     if (w.focus) out.push(`One thing to work on: ${w.focus.label} (${w.focus.pct}%). Try to ${w.focus.tip}.`);
     return out;

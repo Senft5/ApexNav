@@ -25,7 +25,7 @@
     const out = [
       row('roads', `Drive ${GOALS.roads} roads you haven't driven before`, roads),
       row('smooth', `${GOALS.smooth} drives with Smooth at ${Math.round(SMOOTH * 100)}% or more`, smooth),
-      row('corners', `${GOALS.corners} scored corners`, corners),
+      row('corners', `${GOALS.corners} clean corners`, corners),   // the Score's word for them (web/vocabulary.js)
     ];
     if (server && finite(server.pioneer_km)) {
       const r = row('pioneer', `Be first to map ${fmtKm(GOALS.pioneer)} of road`, Math.round(server.pioneer_km * 10) / 10);

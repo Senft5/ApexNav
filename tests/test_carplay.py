@@ -14,10 +14,10 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 RUNNER = r"""
 const C = require(process.argv[1] + '/web/carplay.js'), D = require(process.argv[1] + '/web/directions.js');
-const n = 1001, t = { id: 'route_dest', name: 'To Robbinsville', lat: [], lon: [], dist: [], timeS: 4620, fun: { fun: 99 },
+const n = 1001, t = { id: 'route_dest', name: 'To Robbinsville', lat: [], lon: [], dist: [], timeS: 4620, fun: { fun: 99, good: 11 },
   steps: [{ m: 1200, type: 15, street: 'Deals Gap Road' }, { m: 3000, type: 8 }, { m: 4990, type: 4 }] };
 for (let i = 0; i < n; i++) { t.lat.push(35.3 + i * 5 / 110540); t.lon.push(-83.8); t.dist.push(i * 5); }
-const opts = [{ fun: { fun: 99 }, timeS: 4620, distM: null }, { fun: { fun: 40 }, timeS: 3900, distM: 70000 }];
+const opts = [{ fun: { fun: 99, good: 11 }, timeS: 4620, distM: null }, { fun: { fun: 40, good: 1 }, timeS: 3900, distM: 70000 }];
 console.log(JSON.stringify({
   line: C.line(t).length, ends: [C.line(t)[0], C.line(t).slice(-1)[0]],
   one: C.routeMessage(t, null, 0, (m) => `${(m / 1609.344).toFixed(1)} mi`),
@@ -95,11 +95,13 @@ def test_route_line_is_small_and_keeps_both_ends(out):
 def test_route_choices(out):
     one = out["one"]
     assert one["kind"] == "route" and one["name"] == "To Robbinsville" and one["picked"] == 0
-    # one route: the card's title is its name and the car prints time and length, so the summary is the Fun score; the
-    # card shows only the detail above its estimates, so that says what the route is too (U-89: "35.4 mi" twice, a blank middle)
-    assert one["options"] == [{"summary": "Fun 99", "detail": "Fun 99", "timeS": 4620, "distM": 5000}]
+    # one route: the card's title is its name and the car prints time and length, so the summary is its good corners (SO-1:
+    # never a "Fun 99" score); the card shows only the detail above its estimates, so that says what the route is too
+    # (U-89: "35.4 mi" twice, a blank middle)
+    assert one["options"][0]["summary"] == "11 good corners" and one["options"][0]["detail"].startswith("11 good corners")
+    assert one["options"][0]["timeS"] == 4620 and one["options"][0]["distM"] == 5000
     two = out["two"]
-    assert [o["summary"] for o in two["options"]] == ["Fun 99 · 77 min", "Fun 40 · 65 min"] and two["picked"] == 1
+    assert [o["summary"] for o in two["options"]] == ["11 good corners · 77 min", "1 good corner · 65 min"] and two["picked"] == 1
     assert two["options"][0]["distM"] is None, "an option not built yet has no known length"
     assert out["none"] is None
 

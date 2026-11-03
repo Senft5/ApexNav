@@ -21,7 +21,10 @@
     const longest = mine.reduce((b, d) => (!b || miles(d) > miles(b) ? d : b), null);
     return {
       year, drives: mine.length,
-      miles: Math.round(mine.reduce((s, d) => s + miles(d), 0)),
+      // RA-3: the total to a tenth, and in metres for the one distance format (format.js distance): rounded to a whole mile
+      // here, 1.3 mi read "1 mi" one line above a week of 1.3 mi
+      miles: Math.round(mine.reduce((s, d) => s + miles(d), 0) * 10) / 10,
+      m: mine.reduce((s, d) => s + miles(d), 0) * MI,
       corners: mine.reduce((s, d) => s + (Array.isArray(d.corners) ? d.corners.length : 0), 0),
       months: [...new Set(mine.map((d) => d.date.slice(5, 7)))].length,
       topRoads: [...roads.entries()].filter(([, n]) => n >= 2).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 3)
@@ -33,10 +36,12 @@
 
   /** The year as a few lines of text, for the panel and for sharing. */
   function lines(s) {
-    const U = root.ApexUnits, dist = (mi, d = 0) => (U ? U.long(mi * MI, d) : `${mi.toLocaleString('en-US')} mi`);
-    const out = [`${U ? dist(s.miles) : `${s.miles.toLocaleString('en-US')} mi`} in ${s.drives} drive${s.drives === 1 ? '' : 's'} · ${s.corners.toLocaleString('en-US')} corners · ${s.months} month${s.months === 1 ? '' : 's'} on the road`];
+    // RA-3: every distance through the one format (format.js distance: a tenth under 10, whole from 10), as Your week
+    const F = root.ApexFormat, U = root.ApexUnits;
+    const dist = (mi) => (F ? F.distance(mi * MI) : U ? U.long(mi * MI, 1, true) : `${mi >= 10 ? Math.round(mi).toLocaleString('en-US') : mi.toFixed(1)} mi`);
+    const out = [`${dist(Number.isFinite(s.m) ? s.m / MI : s.miles)} in ${s.drives} drive${s.drives === 1 ? '' : 's'} · ${s.corners.toLocaleString('en-US')} corners · ${s.months} month${s.months === 1 ? '' : 's'} on the road`];
     if (s.best) out.push(`Best Vetta Score: ${s.best.score} on ${s.best.name}`);
-    if (s.longest) out.push(`Longest drive: ${s.longest.name}, ${U ? dist(s.longest.miles, 1) : `${s.longest.miles} mi`}`);
+    if (s.longest) out.push(`Longest drive: ${s.longest.name}, ${dist(s.longest.miles)}`);
     if (s.topRoads.length) out.push(`Roads you came back to: ${s.topRoads.map((r) => `${r.name} (${r.times}×)`).join(', ')}`);
     return out;
   }

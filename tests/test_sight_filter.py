@@ -132,7 +132,8 @@ def test_the_sight_cell_hides_with_the_plate():
     assert "const crawl = si.speed != null && si.speed < (/^km/i.test(si.unit) ? 8 : 5);" in block
     assert "d.sightMph = crawl ? null : held.value; d.sightOpen = !crawl && held.open; d.sightQuiet = crawl;" in block
     inst = open(__import__("os").path.join(__import__("os").path.dirname(__file__), "..", "web", "instruments.js"), encoding="utf-8").read()
-    assert "const both = d.sightQuiet ? [] :" in inst, "the cell's value (sight or pace, the lower) goes with the plate"
+    # SO-1 (panel round 2): the cell is the plate's own held value, and hides with it (test_vocabulary.py runs it frame by frame)
+    assert "const v = !d || d.sightQuiet || !Number.isFinite(d.sightMph) ? null : d.sightMph;" in inst, "the cell's value goes with the plate"
 
 
 def test_open_past_the_limit_by_a_margin(out):
