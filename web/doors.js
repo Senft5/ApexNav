@@ -44,7 +44,7 @@
   }
 
   function mount(doc) {
-    let last = null, queued = false;
+    let last = null;
     const shut = (list) => { for (const n of list) { n.inert = true; n.setAttribute(MARK, ''); } };
     const open = () => { for (const n of doc.querySelectorAll(`[${MARK}]`)) { n.inert = false; n.removeAttribute(MARK); } };
     function tabs() {
@@ -62,7 +62,6 @@
     const openers = [];   // [{ door, from }]: who opened each door still open, to give focus back when it shuts
     const focus = (n) => { try { n.focus({ preventScroll: true }); } catch (_) {} };
     function refresh() {
-      queued = false;
       tabs(); mapHidden();
       const now = openDoor(doc);
       if ((now && now.el) === (last && last.el)) return;
@@ -89,13 +88,14 @@
       } else if (back && back.isConnected && !back.closest('[inert]')) focus(back);
       last = now;
     }
-    const later = () => { if (!queued) { queued = true; (root.requestAnimationFrame || setTimeout)(refresh); } };
-    // only what can open or close a door: the strip rebuilds itself every frame, and that must cost nothing here
+    // only what can open or close a door: the strip rebuilds itself every frame, and that must cost nothing here.
+    // The observer's callback is a microtask, so a door that opens is reachable before the next tap or keystroke; waiting
+    // for a frame left a sheet opened over another one inert for that frame (its first keystrokes went nowhere).
     const door = (n) => n.nodeType === 1 && n.matches('.overlay, .side-pop');
     const watch = new MutationObserver((ms) => {
       for (const m of ms) {
         const t = m.target;
-        if (m.type === 'childList' ? [...m.addedNodes].some(door) || [...m.removedNodes].some(door) : t.matches && t.matches('.overlay, .sheet, .side-pop, .tab, #app')) { later(); return; }
+        if (m.type === 'childList' ? [...m.addedNodes].some(door) || [...m.removedNodes].some(door) : t.matches && t.matches('.overlay, .sheet, .side-pop, .tab, #app')) { refresh(); return; }
       }
     });
     watch.observe(doc.body, { attributes: true, attributeFilter: ['class'], subtree: true, childList: true });

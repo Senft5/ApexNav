@@ -8,6 +8,10 @@ it says so. Things only you can do are in docs/OWNER_TODO.md.
 
 Five builders plus a rig fix. The calls, each with how to undo it:
 
+- **Shut doors open at once (CI caught it).** web/doors.js waited for the next frame after a sheet opened before
+  unshutting it. A sheet opened over the Settings list (Crash check) kept its fields inert for that frame, and on CI's
+  slower runner the first typing went nowhere. It now updates in the observer itself, before the next tap or keystroke.
+  e2e clicks and checks in one task, which fails on the old code. Undo: revert that commit (the race comes back).
 - **The recording rig.** Recording 7's four stopped flows were all the rig, not the app: the welcome's label, a planning
   drag that hit the home screen, a car query too broad, and Billet's key hidden under the tab bar. Undo: revert 15c6edf.
 - **A, one red.**

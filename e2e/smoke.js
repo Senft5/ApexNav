@@ -3965,7 +3965,14 @@ flow('REVIEW5 §2: the Garage leads with you, your cars, Look and voice and the 
   check(rf.note === 'Off. Turn on Share road feel above.' && rf.sw && rf.heads === 1, 'Road feel: ' + JSON.stringify(rf));
   await page.click('.garage-pop.open[data-setting="roadfeel"] .side-pop-head button');
   // U-117: Crash check says what it does with no contact, and with one
-  await page.click('#garageSettings .nav-row[data-setting="crash"]');
+  // a sheet opened over the Settings list is reachable at once, not a frame later: clicked and read in one task, before any
+  // frame (doors.js; on a slow runner its first keystrokes went nowhere)
+  check(await page.evaluate(async () => {
+    document.querySelector('#garageSettings .nav-row[data-setting="crash"]').click();
+    await Promise.resolve();
+    const p = document.querySelector('.garage-pop.open[data-setting="crash"]');
+    return !!p && ['crashName', 'crashPhone'].every((id) => p.contains(document.getElementById(id)) && !document.getElementById(id).closest('[inert]'));
+  }), 'the crash sheet\'s fields are reachable as it opens');
   await page.waitForSelector('.garage-pop.open[data-setting="crash"]');
   check(/^On, with no contact: .* offers to call (911|112)\. Add a contact/.test(await page.textContent('#crashState')), 'crash, no contact: ' + await page.textContent('#crashState'));
   await page.fill('#crashName', 'Sam'); await page.fill('#crashPhone', '+1 555 010 2030');
