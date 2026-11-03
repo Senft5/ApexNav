@@ -2174,6 +2174,8 @@ flow('your data: Settings counts what the phone holds and downloads drives as GP
   await page.waitForFunction(() => /^Nothing on this phone yet/.test(document.getElementById('myDataNote').textContent));   // U-126: no line of zeros
   // offline data (IDEAS F-06): a saved route counted, then deleted; the drives are not touched by it
   await page.evaluate(() => { localStorage.setItem('apex.savedRoutes', JSON.stringify([{ id: 'r1', coords: [[0, 0], [1, 1]] }])); document.querySelector('.tab[data-view="garage"]').click(); });
+  // the Garage tab again closes the Menu; since AM-1 a closed Menu can't be reached, so it is opened once more
+  if (!(await page.evaluate(() => document.getElementById('sheet').classList.contains('open')))) await page.click('.tab[data-view="garage"]');
   await openSetting(page, 'data');
   await page.waitForFunction(() => /Offline data: 1 saved route /.test(document.getElementById('myOfflineNote').textContent));
   await page.click('#myOfflineDelBtn');
@@ -2353,7 +2355,7 @@ flow('crew drives: an upcoming drive shows on People, Crews, as the crew page’
     if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
     if (u.pathname === '/api/crews' && m === 'GET') return json([{ id: 'CREW1', name: 'Ridge Runners', role: 'member', members: 3, visibility: 'private' }]);
     if (u.pathname === '/api/events/near') return json([{ id: 'MEET1AAAAAAAAAAA', crew_id: 'CREW9', crew_name: 'Coffee & Cars', title: 'Sunday coffee', starts_at: starts,
-      meet_name: 'Kroger lot', meet_lat: 35.76, meet_lon: -83.96, notes: null, going: 7, member: false, km: 12 }]);
+      meet_name: 'Kroger lot', meet_lat: 39.3, meet_lon: -84.6, notes: null, going: 7, member: false, km: 12 }]);   // VI-1: near the map's centre, as the phone measures it
     if (u.pathname === '/api/events') return json([{ id: 'EVT1AAAAAAAAAAAA', crew_id: 'CREW1', crew_name: 'Ridge Runners', title: 'Cherohala <i>Saturday</i>', starts_at: starts,
       meet_name: 'Tellico Shell', meet_lat: 35.36, meet_lon: -84.29, route_id: null, notes: null, by_handle: 'bob', mine: false, can_cancel: false, my_rsvp: mine, going: ['bob', 'cara'], maybe: 1,
       lead: 'bob', sweep: null, regroup: [{ name: 'The overlook', lat: 35.33, lon: -84.12 }] },
@@ -3642,7 +3644,9 @@ flow('REVIEW.md 1.2 screen by screen: first run, the map, planning, the route, d
   const keys = await page.evaluate(() => { const a = document.getElementById('swTab').getBoundingClientRect(), b = document.getElementById('recenterBtn').getBoundingClientRect(); return { a: [a.left, a.right, a.width], b: [b.left, b.right, b.width], gap: b.top - a.bottom }; });
   check(JSON.stringify(keys.a) === JSON.stringify(keys.b) && keys.gap > 0 && keys.gap < 30, 'Recenter is the second key, under Layers: ' + JSON.stringify(keys));
   // Map menu: Layers are map things; the theme, units and the rest of Settings are not there (Notes and Voice stay, CALL_SHEET)
-  const layers = await page.evaluate(() => document.getElementById('swPanel').innerText);
+  // (the panel is opened to read it: since AM-1 a closed panel is hidden, and hidden words have no innerText)
+  const layers = await page.evaluate(async () => { const tab = document.getElementById('swTab'), was = tab.getAttribute('aria-expanded') === 'true';
+    if (!was) tab.click(); await new Promise((r) => setTimeout(r, 50)); const t = document.getElementById('swPanel').innerText; if (!was) tab.click(); return t; });
   check(/Friends/.test(layers) && /Cameras/.test(layers) && /Twisty roads/.test(layers) && /3D terrain/.test(layers) && !/Night|Theme|Units|Look/.test(layers), 'Layers: ' + layers);
   // Plan sheet: the loop dial (five detents), one Route style switch, and one "More" row, closed
   await page.click('#destInput');
@@ -3761,6 +3765,8 @@ flow('REVIEW.md 1.2 screen by screen: the Log, drive detail, Stages, People sign
   await page.keyboard.press('Escape');
   check(!(await page.$('.confirm-sheet')) && (await page.evaluate(() => ApexRecording.all())).length === 1, 'Cancel (Escape) keeps everything');
   await page.mouse.click(200, 30); await page.waitForTimeout(300);   // a tap outside slides the settings sheets away
+  // that tap closes the Menu too; since AM-1 a closed Menu can't be reached (the test used to click into it off screen)
+  if (!(await page.evaluate(() => document.getElementById('sheet').classList.contains('open')))) { await page.click('.tab[data-view="garage"]'); await page.waitForTimeout(300); }
   // REVIEW4 U-69: touching a theme card's preview switches the theme, as its Use key does; each Use key names its card
   const uses = await page.$$eval('#themeCards button.ink-btn:not(.tc-hear)', (b) => b.map((x) => x.textContent + '/' + x.getAttribute('aria-label')));
   check(JSON.stringify(uses) === '["Use/Use Tapedeck","Use/Use Billet"]', 'theme cards: one word, named keys: ' + JSON.stringify(uses));
