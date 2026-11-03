@@ -465,6 +465,7 @@ final class ApexNativeCarMap: UIView {
     private func paintPlatesAndCredit() {
         plates.forEach(paint)
         puck.paint(panel: palette.plate, ink: palette.plateInk, accent: palette.plateInk)   // panel round 2: a position, in ink
+        puck.edge(palette.casing)                                         // a car's outline: the map's road casing, 3:1 on the map
         sightTag.palette = (palette.plate, palette.plateInk)
         drawSight()
         credit.backgroundColor = palette.bg
@@ -625,6 +626,8 @@ final class ApexCarPuckView: UIView {
         glass.isHidden = true; roof.isHidden = true
         isUserInteractionEnabled = false
     }
+    /// A car's own theme: its outline in the map's casing colour (theme_contract.js holds it to 3:1 on the map).
+    func edge(_ c: UIColor) { if car != nil { disc.strokeColor = c.cgColor } }
     /// A car's own theme draws that car in place of the disc and arrow; nil puts the ink arrow back.
     func shape(_ s: ApexCarPuckShape?) {
         car = s

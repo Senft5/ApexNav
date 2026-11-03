@@ -20,7 +20,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 IDS = ("tiburon", "frs")
 PALETTE_KEYS = {"bg", "water", "waterLine", "land", "wood", "road", "roadMinor", "casing", "label", "halo", "boundary", "shadow",
                 "highlight", "accentShade", "route", "plate", "plateInk", "accent"}
-MEASURED = {"speed", "latG", "brakeG", "bank"}
+MEASURED = {"speed", "latG", "brakeG", "bank", "grip"}
 
 
 def read(*p):
@@ -73,9 +73,13 @@ out.same = T.grant(defs, K);
 out.refused = [T.fromGrant({ ...tb, id: 'billet' }), T.fromGrant({ ...tb, day: { ...tb.day, ink: 'red' } }), T.fromGrant({ ...tb, id: 'Bad-Id' })];
 T.grant([{ ...tb, night: { ...tb.night, route: tb.night.signal } }], K);
 out.redRoute = Object.keys(T.THEMES);
-// the contract on a car's own: a needle in the warning's red, a car cluster without its speed numeral or its Bank
+// the contract on a car's own: a red needle is the car's to have (the owner, 2026-11-03); a needle lost on its face, an
+// LCD's ink lost on the LCD, a car cluster without its speed numeral or its Bank are not
 const t0 = T.fromGrant(tb);
 out.redNeedle = K.check({ ...t0, car: { ...t0.car, needle: { day: t0.day.signal, night: t0.night.signal } } });
+out.faintNeedle = K.check({ ...t0, car: { ...t0.car, needle: { day: t0.day.face, night: t0.night.face } } });
+out.faintLcd = K.check({ ...t0, car: { ...t0.car, lcdInk: { day: t0.car.lcd.day, night: t0.car.lcd.night } } });
+out.alarm = K.ALARM;
 out.noDigital = K.check({ ...t0, car: { ...t0.car, dial: { parts: t0.car.dial.parts.filter((p) => p.k !== 'digital') } } });
 out.noBank = K.check({ ...t0, car: { ...t0.car, meter: { parts: t0.car.meter.parts.filter((p) => p.k !== 'bank') } } });
 out.noCar = K.check({ ...t0, car: null });
@@ -98,7 +102,10 @@ def test_both_keep_the_contract_day_and_night(out):
 
 
 def test_the_contract_holds_a_car_to_it(out):
-    assert any("needle is the warning's colour" in m for m in out["redNeedle"])
+    assert out["redNeedle"] == [], "a car's red needles are allowed: the warning keeps its shape, word and plate"
+    assert any("needle on the face" in m for m in out["faintNeedle"])
+    assert any("LCD's ink" in m for m in out["faintLcd"])
+    assert out["alarm"]["channels"] == ["colour", "shape", "word"]
     assert any("without the speed numeral" in m for m in out["noDigital"])
     assert any("without the Bank readout" in m for m in out["noBank"])
     assert any("car without the car's dial" in m for m in out["noCar"])
@@ -131,22 +138,28 @@ def test_the_car_is_kept_whole_and_cleaned(out):
 
 
 def test_each_cluster_is_that_car(out):
-    """The Tiburon: the 160 MPH speedometer (km/h 0 to 260 inside) and the three-gauge pod; the FR-S: the 9,000 r/min
-    tachometer, red from 7,500, the speed in digits, the REV lamp and the right dial's two gauges (CAR_THEMES.md)."""
+    """The Tiburon (the co-developer's photos): black dials, the 160 MPH speedometer (km/h 0 to 260 inside), the
+    tachometer's face (0 to 8, red from 6.5) reading grip, the twin small gauges reading Turn and Brake, Bank in the LCD;
+    the FR-S: the 9,000 r/min tachometer, red from 7,500, the speed in digits, the REV lamp, the right dial's two gauges."""
     P = private()
     tib, frs = P["tiburon"]["car"], P["frs"]["car"]
     speedo = next(p for p in tib["dial"]["parts"] if p["k"] == "scale" and p["reads"] == "speed")
     assert speedo["mph"]["max"] == 160 and speedo["kmh"]["max"] == 260 and (speedo["a0"], speedo["a1"]) == (-135, 135)
     inner = next(p for p in tib["dial"]["parts"] if p["k"] == "scale" and p["reads"] == "speedAlt")
     assert inner["kmh"]["max"] == 260 and inner["mph"]["max"] == 160 and "needle" not in inner
-    pod = [p for p in tib["meter"]["parts"] if p["k"] == "scale"]
-    assert [p["reads"] for p in pod] == ["latG", "brakeG", "bank"] and any(p["k"] == "pod" for p in tib["meter"]["parts"])
+    meter = [p for p in tib["meter"]["parts"] if p["k"] == "scale"]
+    assert [p["reads"] for p in meter] == ["latG", "brakeG", "grip"] and not any(p["k"] == "pod" for p in tib["meter"]["parts"])
+    grip = meter[2]
+    assert (grip["min"], grip["max"], grip["labelDiv"], grip["red"]) == (0, 0.8, 0.1, [0.65, 0.8])
+    assert any(p["k"] == "text" and p["t"] == "x0.1 g" for p in tib["meter"]["parts"]), "the face says what it reads"
+    assert any(p["k"] == "box" and p.get("lcd") for p in tib["meter"]["parts"]) and any(p["k"] == "bank" and p.get("lcd") for p in tib["meter"]["parts"])
+    assert P["tiburon"]["day"]["face"] == "#0B0C0D" and P["tiburon"]["night"]["faceInk"] == "#FF6A4C", "black faces, red at night"
     tach = next(p for p in frs["dial"]["parts"] if p["k"] == "scale")
     assert tach["reads"] == "rpm" and (tach["min"], tach["max"]) == (0, 9) and tach["red"] == [7.5, 9]
     assert {p["k"] for p in frs["dial"]["parts"]} >= {"digital", "lamp", "mid"} and frs["dial"]["explain"] == "tach"
     assert [p["reads"] for p in frs["meter"]["parts"] if p["k"] == "scale"] == ["latG", "brakeG"]
-    assert tib["paint"]["name"] == "Sterling Metallic" and frs["paint"]["name"] == "Ultramarine Pearl"
-    assert tib["finish"] == "metalgrain" and frs["finish"] == "carbon"
+    assert tib["paint"]["name"] == "Silver" and frs["paint"]["name"] == "Ultramarine Pearl"
+    assert tib["finish"] == "cloth" and frs["finish"] == "carbon"
     for car in (tib, frs):
         assert any(p["k"] == "digital" for p in car["dial"]["parts"]) and any(p["k"] == "bank" for p in car["meter"]["parts"])
 

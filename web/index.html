@@ -809,11 +809,14 @@
     .car-gauge .car-disc { fill: var(--car-disc, var(--face)); }
     .car-gauge .car-box { fill: var(--car-disc, var(--face)); stroke: var(--car-ring, var(--face-dim)); stroke-width: 1; }
     .car-gauge .car-pod { fill: var(--car-disc, var(--panel)); stroke: var(--car-ring, var(--face-ink)); stroke-width: 3; }
-    .car-gauge .car-hub { fill: var(--car-ring, var(--face-ink)); stroke: var(--face); stroke-width: 1; }
+    .car-gauge .car-hub { fill: var(--car-hub, var(--car-ring, var(--face-ink))); stroke: var(--face); stroke-width: 1; }
     .car-gauge .car-lamp { fill: var(--car-lamp, var(--face)); stroke: var(--face-dim); stroke-width: 1; }
     .car-gauge .car-lamp.on { fill: var(--signal); stroke: var(--signal); }
+    .car-gauge .car-lcd { fill: var(--car-lcd, var(--face)); stroke: var(--car-ring, var(--face-dim)); stroke-width: 1.5; }
+    .car-gauge .car-on-lcd { fill: var(--car-lcd-ink, var(--face-ink)); } .car-gauge .car-on-lcd.unk { fill: var(--car-lcd-ink, var(--face-dim)); opacity: 0.7; }
     .car-gauge .car-num, .car-gauge .car-mid, html[data-finish] .odo-digits, html[data-finish] .rb-dist b { font-family: var(--font-dial, var(--font-num)); }
     .car-gauge .car-mid { font-size: 17px; }
+    .car-dial .dial-num.low { display: none; }   /* the speed digits sit where the car prints its end numerals: they give way */
     .car-gauge .car-cap, .car-gauge .car-end { fill: var(--face-dim); }
     html[data-mode="night"][data-finish] .car-gauge .dial-digital:not(.unk) { filter: drop-shadow(0 0 2px var(--face-ink)); }   /* lit, not blurred */
     html[data-finish="metalgrain"][data-mode="day"] .binnacle, html[data-finish="metalgrain"][data-mode="day"] .notes {   /* metal-grain trim, brushed */

@@ -414,6 +414,8 @@
     pod: { title: 'Turn, Brake and Bank', what: 'The car\'s small gauges, reading what Vetta measures. Turn: how hard you are turning. Brake: how hard you are braking. Bank: how much the road leans in the corner.',
       how: 'From the phone\'s motion sensors. A needle lies dim at rest until it is measured; Bank reads -- until the phone is calibrated in its mount.',
       now: (d) => bankText(d.camberDeg) },
+    grip: { title: 'Grip, Turn, Brake and Bank', what: 'The big dial reads grip: turning and braking together, in tenths of g (8 is 0.8 g). The two small gauges: Turn and Brake. Bank: how much the road leans.',
+      how: 'From the phone\'s motion sensors. A needle lies dim at rest until it is measured; Bank reads -- until the phone is calibrated.', now: (d) => bankText(d.camberDeg) },
     tach: { title: 'Speed', what: 'How fast you are going, in the window. The big dial is the car\'s rev counter: Vetta can\'t read the engine, so its needle rests, dimmed. PACE is what the next corner allows; the lamp lights over it.',
       how: 'From GPS, smoothed. -- with no fix.', now: (d, u) => nf(d.speedMph, u) },
     score: { title: 'Vetta Score', what: 'How cleanly you drove the corners: your pace against what each one allows, smoothness, braking and rhythm. Out of 1000.',
@@ -649,7 +651,7 @@
   // 200 x 200 box every dial here uses. This code knows no car. What a scale reads is one of CAR_READS: the four Vetta
   // measures move a needle; anything else (engine speed, fuel, coolant, torque, volts) is drawn as the car has it and its
   // needle lies at rest, dimmed, because Vetta cannot read the engine (CLAUDE.md: unknown stays unknown).
-  const CAR_READS = ['speed', 'speedAlt', 'latG', 'brakeG', 'bank', 'rpm', 'fuel', 'temp', 'torque', 'volts', 'mpg'];
+  const CAR_READS = ['speed', 'speedAlt', 'latG', 'brakeG', 'bank', 'grip', 'rpm', 'fuel', 'temp', 'torque', 'volts', 'mpg'];
   const KMH = 1.609344;
   const metricNow = () => !!(U() && U().metric && U().metric());
   /** A scale's reading from the cluster's frame, in the scale's units, or null when Vetta doesn't measure it. Pure. */
@@ -660,6 +662,7 @@
       case 'latG': return g ? d.latG : null;                         // + is a left turn (ISO 8855)
       case 'brakeG': return g ? Math.max(0, -d.lonG) : null;          // braking is -X
       case 'bank': return d && Number.isFinite(d.camberDeg) ? d.camberDeg : null;
+      case 'grip': return g ? Math.hypot(d.latG, d.lonG) : null;    // turning and braking together, g
       default: return null;                                          // speedAlt has no needle; the engine's are never read
     }
   }
@@ -704,7 +707,7 @@
       svg('text', { x: tx.toFixed(1), y: (ty + 5).toFixed(1), 'text-anchor': 'middle', class: 'dial-label car-end' }, g).textContent = e.t;
     }
     if (!p.needle) return null;
-    const nd = p.needle, live = CAR_READS.slice(0, 5).includes(p.reads) && p.reads !== 'speedAlt';
+    const nd = p.needle, live = CAR_READS.slice(0, 6).includes(p.reads) && p.reads !== 'speedAlt';
     const ng = svg('g', { class: 'car-needle' }, s);
     const w = nd.w || 3, len = nd.len || p.r - 6, tail = nd.tail || 0;
     const shape = nd.style === 'taper' ? `M${p.cx - w / 2} ${p.cy + tail} L${p.cx - 0.6} ${p.cy - len} L${p.cx + 0.6} ${p.cy - len} L${p.cx + w / 2} ${p.cy + tail} Z`
@@ -731,7 +734,8 @@
   function carGauge(parent, spec, slot) {
     const metric = metricNow();
     const vh = spec && Number.isFinite(spec.vb) && spec.vb >= 80 && spec.vb <= 200 ? spec.vb : 200;   // a meter may be wider than tall (a pod)
-    const s = svg('svg', { viewBox: `0 0 200 ${vh}`, class: `dial-svg car-gauge car-${slot}` }, parent);
+    const vw = spec && Number.isFinite(spec.vw) && spec.vw >= 80 && spec.vw <= 400 ? spec.vw : 200;   // or two dials wide
+    const s = svg('svg', { viewBox: `0 0 ${vw} ${vh}`, class: `dial-svg car-gauge car-${slot}` }, parent);
     const ups = [];
     for (const p of (spec && spec.parts) || []) {
       switch (p.k) {
@@ -743,7 +747,7 @@
         }
         case 'pod': svg('rect', { x: p.x, y: p.y, width: p.w, height: p.h, rx: p.rx || 0, class: 'car-pod' }, s); break;
         case 'disc': svg('circle', { cx: p.cx, cy: p.cy, r: p.r, class: 'car-disc' }, s); break;
-        case 'box': svg('rect', { x: p.x, y: p.y, width: p.w, height: p.h, rx: p.rx || 4, class: 'car-box' }, s); break;
+        case 'box': svg('rect', { x: p.x, y: p.y, width: p.w, height: p.h, rx: p.rx || 4, class: p.lcd ? 'car-box car-lcd' : 'car-box' }, s); break;
         case 'text': {
           const t = svg('text', { x: p.x, y: p.y, 'text-anchor': p.anchor || 'middle', class: p.cls === 'tiny' ? 'dial-tiny' : 'dial-label car-cap' }, s);
           t.textContent = p.t === '{unit}' ? (U() ? U().speedU().toUpperCase() : 'MPH') : p.t === '{alt}' ? (metric ? 'MPH' : 'km/h') : p.t;
@@ -775,7 +779,7 @@
           break;
         }
         case 'bank': {
-          const t = svg('text', { x: p.x, y: p.y, 'text-anchor': 'middle', class: 'dial-digital small' }, s);
+          const t = svg('text', { x: p.x, y: p.y, 'text-anchor': 'middle', class: p.lcd ? 'dial-digital small car-on-lcd' : 'dial-digital small' }, s);
           let a = null, b = null;
           if (p.lines) { a = svg('tspan', { x: p.x }, t); b = svg('tspan', { x: p.x, dy: p.lines }, t); }
           ups.push((d) => {
@@ -824,6 +828,7 @@
     sp.dataset.explain = 'speed';
     if (theme.renderers && theme.renderers.dial === 'car' && car.dial && car.dial.explain === 'tach') sp.dataset.explain = 'tach';
     gg.dataset.explain = meterKind === 'bars' ? 'meters' : meterKind === 'car' ? 'pod' : 'gball';
+    if (meterKind === 'car' && car.meter && car.meter.explain === 'grip') gg.dataset.explain = 'grip';
     const odoEl = center.querySelector('.odo'); if (odoEl) odoEl.dataset.explain = 'trip';
     // Night (REVIEW2.md U-36): the trip readout steps aside for a quiet Trip key; a tap shows it for ten seconds
     const peek = html('button', 'trip-peek', center, 'Trip'); peek.type = 'button'; let peekT = 0;

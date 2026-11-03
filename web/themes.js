@@ -126,10 +126,11 @@
     rounded: '"Arial Rounded MT Bold", "Varela Round", "Barlow Condensed", sans-serif',
     din: '"DIN Alternate", "DIN 2014", "Bahnschrift", "Barlow Condensed", sans-serif',
     condensed: '"Barlow Condensed", "Arial Narrow", sans-serif',
+    sans: '"Helvetica Neue", Arial, "Inter Tight", sans-serif',
   };
   const FINISHES = ['metalgrain', 'carbon', 'cloth'];
   const PART_KINDS = ['face', 'ring', 'pod', 'disc', 'box', 'text', 'scale', 'marks', 'digital', 'bank', 'lamp', 'mid'];
-  const READS = ['speed', 'speedAlt', 'latG', 'brakeG', 'bank', 'rpm', 'fuel', 'temp', 'torque', 'volts', 'mpg'];   // instruments.js CAR_READS
+  const READS = ['speed', 'speedAlt', 'latG', 'brakeG', 'bank', 'grip', 'rpm', 'fuel', 'temp', 'torque', 'volts', 'mpg'];   // instruments.js CAR_READS
   const PART_NUM = ['cx', 'cy', 'r', 'w', 'h', 'x', 'y', 'rx', 'a0', 'a1', 'min', 'max', 'major', 'minor', 'label', 'labelR', 'labelSize', 'labelDiv',
     'majorLen', 'minorLen', 'majorW', 'minorW', 'arc', 'redW', 'pegs', 'peg0', 'rest', 'lines', 'fit', 'labelMin', 'labelMax'];
   const n = (v, lo = -1000, hi = 1000) => (typeof v === 'number' && Number.isFinite(v) && v >= lo && v <= hi ? v : null);
@@ -140,7 +141,7 @@
     if (!p || typeof p !== 'object' || !PART_KINDS.includes(p.k)) return null;
     const out = { k: p.k, ...nums(p, PART_NUM) };
     if (p.reads !== undefined) { if (!READS.includes(p.reads)) return null; out.reads = p.reads; }
-    for (const b of ['deep', 'small', 'invert']) if (p[b] === true) out[b] = true;
+    for (const b of ['deep', 'small', 'invert', 'lcd']) if (p[b] === true) out[b] = true;
     if (typeof p.t === 'string' && WORD.test(p.t)) out.t = p.t; else if (out.k === 'text') return null;   // a word, or no part
     if (p.cls === 'tiny') out.cls = 'tiny';
     if (['start', 'middle', 'end'].includes(p.anchor)) out.anchor = p.anchor;
@@ -154,7 +155,7 @@
     }
     return out;
   }
-  const gaugeFrom = (g) => { const parts = g && Array.isArray(g.parts) ? g.parts.slice(0, 48).map(partFrom).filter(Boolean) : []; return parts.length ? { parts, ...(g.explain === 'tach' ? { explain: 'tach' } : {}), ...(n(g.vb, 80, 200) != null ? { vb: g.vb } : {}) } : null; };
+  const gaugeFrom = (g) => { const parts = g && Array.isArray(g.parts) ? g.parts.slice(0, 48).map(partFrom).filter(Boolean) : []; return parts.length ? { parts, ...(['tach', 'grip'].includes(g.explain) ? { explain: g.explain } : {}), ...(n(g.vb, 80, 200) != null ? { vb: g.vb } : {}), ...(n(g.vw, 80, 400) != null ? { vw: g.vw } : {}) } : null; };
   const poly = (a) => (Array.isArray(a) && a.length >= 3 && a.length <= 120 && a.every((q) => Array.isArray(q) && q.length === 2 && n(q[0], 0, 200) != null && n(q[1], 0, 200) != null) ? a.map((q) => [q[0], q[1]]) : null);
   const VOICE_TYPES = ['sine', 'square', 'triangle', 'sawtooth', 'noise'];
   const voices = (a) => (Array.isArray(a) ? a.slice(0, 4).map((v) => (v && VOICE_TYPES.includes(v.type) && n(v.f, 20, 12000) != null && n(v.at, 0, 1) != null && n(v.dur, 0.003, 0.5) != null && n(v.gain, 0.0005, 0.2) != null
@@ -166,7 +167,7 @@
     const out = {
       model: str(c.model, 60) || '', paint: c.paint && HEX.test(c.paint.hex || '') ? { name: str(c.paint.name, 40) || '', hex: c.paint.hex } : null,
       finish: FINISHES.includes(c.finish) ? c.finish : null, numerals: NUMERALS[c.numerals] ? c.numerals : null,
-      needle: pair(c.needle), ring: pair(c.ring), disc: pair(c.disc), lamp: pair(c.lamp),
+      needle: pair(c.needle), ring: pair(c.ring), disc: pair(c.disc), lamp: pair(c.lamp), lcd: pair(c.lcd), lcdInk: pair(c.lcdInk), hub: pair(c.hub),
       dial: gaugeFrom(c.dial), meter: gaugeFrom(c.meter),
       silhouette: body && w && h ? { w, h, body, glass: poly(s.glass), roof: poly(s.roof), lamps: Array.isArray(s.lamps) ? s.lamps.slice(0, 6).map(poly).filter(Boolean) : [] } : null,
       sounds: c.sounds && typeof c.sounds === 'object' ? { key: voices(c.sounds.key), pre: voices(c.sounds.pre) } : null,
@@ -226,7 +227,7 @@
     // a car's own look (theme.car): its needles, chrome, inner dial, lamp and paint as tokens, its finish on the binnacle
     const car = t.car, m = night ? 'night' : 'day';
     for (const [k, v] of [['--car-needle', car && car.needle && car.needle[m]], ['--car-ring', car && car.ring && car.ring[m]], ['--car-disc', car && car.disc && car.disc[m]],
-      ['--car-lamp', car && car.lamp && car.lamp[m]], ['--car-paint', car && car.paint && car.paint.hex], ['--font-dial', t.fonts.dial]]) { if (v) r.style.setProperty(k, v); else if (r.style.removeProperty) r.style.removeProperty(k); }
+      ['--car-lamp', car && car.lamp && car.lamp[m]], ['--car-lcd', car && car.lcd && car.lcd[m]], ['--car-hub', car && car.hub && car.hub[m]], ['--car-lcd-ink', car && car.lcdInk && car.lcdInk[m]], ['--car-paint', car && car.paint && car.paint.hex], ['--font-dial', t.fonts.dial]]) { if (v) r.style.setProperty(k, v); else if (r.style.removeProperty) r.style.removeProperty(k); }
     if (car && car.finish) r.dataset.finish = car.finish; else delete r.dataset.finish;
     r.dataset.theme = t.id;
     r.dataset.mode = night ? 'night' : 'day';

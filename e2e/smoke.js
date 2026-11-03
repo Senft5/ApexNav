@@ -3856,14 +3856,14 @@ flow('private themes: a granted account sees the Tiburon and the FR-S, uses each
   const nightClash = await page.evaluate(GAUGE_CLASH('#themeCards'));
   check(!nightClash.length, 'the cards\' gauges print clear at night: ' + nightClash.join(' | '));
   await page.evaluate(() => document.querySelector('#nightSwitch [data-night="auto"]').click());
-  for (const [id, label, part] of [['tiburon', 'Tiburon', '#cluster .dial-g svg.car-meter .car-pod'], ['frs', 'FR-S', '#cluster .dial-speed svg.car-dial .car-red']]) {
+  for (const [id, label, part] of [['tiburon', 'Tiburon', '#cluster .dial-g svg.car-meter .car-lcd'], ['frs', 'FR-S', '#cluster .dial-speed svg.car-dial .car-red']]) {
     await page.evaluate((l) => document.querySelector(`#themeCards [aria-label="Use ${l}"]`).click(), label);
     await page.waitForFunction((t) => document.documentElement.dataset.theme === t, id);
     check(await page.$(part), `${id}: its own instruments (${part})`);
     check(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--route').trim().toLowerCase()) === PRIVATE[id].day.route.toLowerCase(), `${id}: its own route colour`);
     // the arrow on the map is the car from above, in its paint, outlined in ink
     const puck = await page.evaluate(() => { const p = document.querySelector('.puck.car-puck polygon'); return p && { fill: p.getAttribute('fill'), stroke: p.getAttribute('stroke') }; });
-    check(puck && puck.fill === PRIVATE[id].car.paint.hex && puck.stroke.toLowerCase() === PRIVATE[id].day.panelInk.toLowerCase(), `${id}: the arrow is the car: ` + JSON.stringify(puck));
+    check(puck && puck.fill === PRIVATE[id].car.paint.hex && puck.stroke.toLowerCase() === PRIVATE[id].map.day.casing.toLowerCase(), `${id}: the arrow is the car: ` + JSON.stringify(puck));
     check(await page.evaluate(() => document.documentElement.dataset.finish) === PRIVATE[id].car.finish, `${id}: its trim on the binnacle`);
   }
   check(JSON.parse(await page.evaluate(() => localStorage.getItem('apex.prefs'))).theme === 'frs', 'the choice is kept');

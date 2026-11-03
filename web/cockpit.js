@@ -373,7 +373,7 @@
       if (live && key !== car.sightKey) { car.sightKey = key; carPost(m); }
     }
     function drawPuck() {
-      const c = look.colors, carSvg = Themes.carSVG(look.theme, c.panelInk, 34, 34);
+      const c = look.colors, carSvg = Themes.carSVG(look.theme, look.map.casing, 34, 34);   // outlined as the map draws its roads
       // a car's own theme: the arrow is that car from above, in its paint, outlined in the panel's ink (theme_contract.js holds
       // the outline to 3:1 on the map); every other theme keeps the ink arrow (panel round 2: a position, in ink)
       puckEl.classList.toggle('car-puck', !!carSvg);
@@ -5367,7 +5367,7 @@
         box.classList.add('tp-car');
         for (const [k, v] of Object.entries(cm)) box.style.setProperty(`--${k.replace(/[A-Z]/g, (x) => '-' + x.toLowerCase())}`, v);
         for (const [k, v] of [['--car-needle', t.car.needle && t.car.needle[m]], ['--car-ring', t.car.ring && t.car.ring[m]], ['--car-disc', t.car.disc && t.car.disc[m]],
-          ['--car-lamp', t.car.lamp && t.car.lamp[m]], ['--font-dial', t.fonts.dial]]) if (v) box.style.setProperty(k, v);
+          ['--car-lamp', t.car.lamp && t.car.lamp[m]], ['--car-lcd', t.car.lcd && t.car.lcd[m]], ['--car-hub', t.car.hub && t.car.hub[m]], ['--car-lcd-ink', t.car.lcdInk && t.car.lcdInk[m]], ['--font-dial', t.fonts.dial]]) if (v) box.style.setProperty(k, v);
         box.dataset.mode = m;
         if (t.car.finish) box.dataset.finish = t.car.finish;
         box.replaceChildren();

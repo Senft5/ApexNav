@@ -71,17 +71,18 @@
         const d = apart(t[k], t.signal);
         if (d != null && d < APART) out.push(`${mode}: ${k} is the warning's colour (${Math.round(d)} from signal, under ${APART})`);
       }
-      // a car's own cluster (theme.car, the private themes): its needles are readings, so they stand apart from the warning's
-      // red as the route does, and read on the face; its arrow on the map is outlined in the panel's ink, 3:1 on the map
+      // a car's own cluster (theme.car, the private themes). The owner (2026-11-03): "red doesn't need to be warnings only if
+      // it's stuff like needles or accent." A car's needles, red zone, night light and accents may be red where the real car's
+      // are; the warning stays unmistakable by what only it has (ALARM: its shape, its word, the plate) and by its floors
+      // (signal 3:1 on the panel; the route and the calm ribbon, which run the length of the screen, stay apart from it).
+      // A needle still reads on its face (3:1); an LCD's ink on the LCD 4.5:1; the arrow's outline (the map's casing) 3:1 on the map.
       const car = theme.car;
       if (car) {
-        const nd = car.needle && car.needle[mode];
-        if (nd) {
-          const d = apart(nd, t.signal), c = contrast(nd, t.face);
-          if (d != null && d < APART) out.push(`${mode}: the needle is the warning's colour (${Math.round(d)} from signal, under ${APART})`);
-          if (c != null && c < SIGNAL_FLOOR) out.push(`${mode}: the needle on the face is ${c.toFixed(2)}:1, under ${SIGNAL_FLOOR}:1`);
-        }
-        const bg = theme.map && theme.map[mode] && theme.map[mode].bg, edge = contrast(t.panelInk, bg);
+        const nd = car.needle && car.needle[mode], c = nd ? contrast(nd, t.face) : null;
+        if (c != null && c < SIGNAL_FLOOR) out.push(`${mode}: the needle on the face is ${c.toFixed(2)}:1, under ${SIGNAL_FLOOR}:1`);
+        const lcd = car.lcd && car.lcd[mode], li = car.lcdInk && car.lcdInk[mode], lc = lcd && li ? contrast(li, lcd) : null;
+        if (lc != null && lc < 4.5) out.push(`${mode}: the LCD's ink is ${lc.toFixed(2)}:1, under 4.5:1`);
+        const mp = theme.map && theme.map[mode], edge = mp ? contrast(mp.casing, mp.bg) : null;
         if (car.silhouette && edge != null && edge < SIGNAL_FLOOR) out.push(`${mode}: the car's outline on the map is ${edge.toFixed(2)}:1, under ${SIGNAL_FLOOR}:1`);
       }
     }
@@ -97,6 +98,8 @@
       const parts = (theme.car && theme.car.meter && theme.car.meter.parts) || [];
       if (!parts.some((p) => p && p.k === 'bank')) out.push('renderer meter: car without the Bank readout');
     }
+    // the warning's own cues, whatever a theme paints red: never colour alone (the shape and the word are not a theme's)
+    if (!['shape', 'word'].every((c) => ALARM.channels.includes(c))) out.push('the warning lost its shape or its word');
     const hz = contrast(HAZARD.ink, HAZARD.bg);
     if (hz < 7) out.push('hazard plate contrast');                                 // a guard on the constants themselves
     return out;
