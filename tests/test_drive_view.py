@@ -98,9 +98,13 @@ const feelRead = rootFeel.children[1].children[1].children[2].innerHTML;
 
 // Grip circle: shown with measured g, absent without it; scrubbing into a corner names its grip use.
 const ggCol = rootScored.children[1].children[1].children[3];
-const ggCaption = ggCol ? ggCol.children[2].textContent : null;
+const ggCap = ggCol ? ggCol.children.find((c) => c.className === 'note') : null;
+const ggCaption = ggCap ? ggCap.textContent : null;
+const ggLede = ggCol ? (ggCol.children.find((c) => c.className === 'note dv-gg-lede') || {}).textContent : null;
+const ggMore = ggCol ? (ggCol.children.find((c) => c.className === 'quiet dv-gg-more') || {}).innerHTML : null;
+const ggOrder = ggCol ? ggCol.children.map((c) => c.tag) : null;
 lanesEl.dispatch('keydown', { key: 'Home' }); for (let q = 0; q < 4; q++) lanesEl.dispatch('keydown', { key: 'ArrowRight', preventDefault() {} });
-const ggCorner = ggCol ? ggCol.children[2].textContent : null;
+const ggCorner = ggCap ? ggCap.textContent : null;
 const rootNoG = mkEl('div');
 V.mount(rootNoG, { ...scoredDrive, g_known: d.lat.map(() => 0) }, { Core, C, MPH: Core.MPS_TO_MPH });
 const ggNone = rootNoG.children[1].children[1].children.length;
@@ -109,7 +113,7 @@ V.mount(rootGap, { ...scoredDrive, elev: scoredDrive.elev.map((v, i) => (i < 50 
 const gapLanes = rootGap.children[1].children[1].children[1].innerHTML;
 
 console.log(JSON.stringify({ full, bare, headHtml, unscoredHeadHtml, hiddenBeforeScrub, hiddenAfterKeyScrub, hiddenBeforeZoom, hiddenAfterZoom,
-  coachHead, timeHtml, cardHtml, aloneHead, aloneList, aloneCard, coastNear, ggCaption, ggCorner, ggNone, feelRead, gapLanes }));
+  coachHead, timeHtml, cardHtml, aloneHead, aloneList, aloneCard, coastNear, ggCaption, ggCorner, ggNone, ggLede, ggMore, ggOrder, feelRead, gapLanes }));
 """
 
 
@@ -169,9 +173,23 @@ def test_coast_tip_wording_follows_the_tip_not_the_best_pass(r):
 
 
 def test_grip_circle_from_measured_g_only(r):
-    assert r["ggCaption"].startswith("Your grip on this drive: braking")
+    assert r["ggCaption"].startswith("The outline on this drive: braking")
     assert r["ggCorner"].startswith("Corner 1, from 100 m before turn-in to the exit:") and "%" in r["ggCorner"]
     assert r["ggNone"] == 3, "no measured g: no grip circle"
+
+
+def test_grip_circle_explains_itself(r):
+    """TestFlight 14 ("explain what grip circle actually means?"): one line from the vocabulary, then the rest behind a tap."""
+    vocab = json.loads(subprocess.run([NODE, "-e", "console.log(JSON.stringify(require(process.argv[1]).TERMS.gripCircle))",
+                                       str(__import__("pathlib").Path(__file__).resolve().parents[1] / "web" / "vocabulary.js")],
+                                      capture_output=True, text=True, check=True).stdout)
+    assert r["ggLede"] == vocab["meaning"], "the one line is the vocabulary's meaning, not a second wording"
+    assert r["ggOrder"] == ["h3", "p", "div", "p", "details"], r["ggOrder"]
+    m = r["ggMore"]
+    assert m.startswith("<summary>What the grip circle shows</summary>")
+    for part in ("The dots.", "every 5 m", "The outline.", "16 directions", "5 in 100", "The rings.", "0.5 g",
+                 "bigger shape", "rounder one", "not a target"):
+        assert part in m, part
 
 
 def test_road_feel_says_how_far_to_trust_it():
