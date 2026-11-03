@@ -105,6 +105,7 @@
   <script src="theme_contract.js" defer></script>
   <script src="units.js" defer></script>
   <script src="instruments.js" defer></script>
+  <script src="road_feel.js" defer></script>   <!-- panel round 2, HE-1: the end card's measured road-feel line -->
   <script src="voice.js" defer></script>
   <style>
     :root { --safe-top: env(safe-area-inset-top, 0px); --safe-bottom: env(safe-area-inset-bottom, 0px); --safe-left: env(safe-area-inset-left, 0px); --safe-right: env(safe-area-inset-right, 0px); --dial: clamp(112px, 14dvh, 150px);
@@ -190,7 +191,7 @@
     .rb-mods { grid-column: 1 / -1; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: normal;
       font-size: 14px; font-weight: 700; line-height: 1.15; text-transform: uppercase; letter-spacing: 0.04em; color: var(--panel-dim); margin-top: -2px; }
     .rb-mods i { font-style: normal; }
-    .rb-mods i.warn { color: var(--accent); }
+    .rb-mods i.warn { color: var(--signal); }   /* panel round 2: a warning word is the act-now colour in every theme and accent */
     .rb-box.now.hz .rb-mods, .rb-box.now.hz .rb-mods i.warn { color: var(--hz-edge); }
     /* U-133: one strip height whatever the call (the tallest case: a three-line head over two lines of modifiers), so the
        map's top edge, the arrow and the sight plate never step between calls; the quiet line sits in the same band */
@@ -386,9 +387,9 @@
        #app outranks the themes' own #driveEnd */
     #driveEnd { margin-left: 8px; }
     #app #driveEnd.undo { position: relative; overflow: hidden; background: var(--panel); color: var(--panel-ink); border: 2px solid var(--panel-ink); }
-    #app #driveEnd.undo::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: var(--accent); transform-origin: left; animation: end-undo var(--end-undo-ms, 5s) linear forwards; }
+    #app #driveEnd.undo::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: var(--panel-ink); transform-origin: left; animation: end-undo var(--end-undo-ms, 5s) linear forwards; }
     @keyframes end-undo { to { transform: scaleX(0); } }
-    .dbstat b { color: var(--accent); }
+    .dbstat b { color: var(--panel-ink); }   /* panel round 2 (PR-2): the Rec dot is a state, not an alarm: ink, never the signal red */
     /* U-99: wraps between its parts (each part a nowrap span), never an ellipsis, in every theme and width */
     .ds-main { font-size: 15px; font-weight: 600; line-height: 1.25; font-variant-numeric: tabular-nums; white-space: normal; overflow-wrap: normal; }
     .ds-main b { font-size: 17px; }
@@ -441,16 +442,29 @@
     /* Speed is the one number read at a glance: the dial draws at a bit over half size, so 70 here is at least 40 px on a
        phone (the theme contract's floor, theme_contract.js); the bank readout at least 13 px. */
     .dial-digital { font-family: var(--font-num); font-size: 70px; font-weight: 700; fill: var(--face-ink); }
-    .dial-digital.small { font-size: 36px; fill: var(--accent); }   /* the g-ball shares its column with the Score: 36 keeps BANK over 13 px */
+    .dial-digital.small { font-size: 36px; fill: var(--face-ink); }   /* the g-ball shares its column with the Score: 36 keeps BANK over 13 px */
+    .dial-digital.small.unk { fill: var(--face-dim); }   /* HE-1 / LA-3: "BANK --" until measured, in pencil */
     .gauge-printed .dial-num { font-size: 17px; font-weight: 700; }
     .cluster-center { min-width: 0; display: grid; gap: 4px; justify-items: center; align-content: center; }
     .readouts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; width: min(100%, 250px); }
     .ro { display: grid; justify-items: center; gap: 1px; padding: 3px 0; border: 1px solid var(--rule); }
     .ro-value { display: flex; align-items: center; justify-content: center; gap: 4px; }
     .ro b { font-family: var(--font-num); font-size: 17px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
-    .ro-eye { display: block; flex: none; color: var(--accent); }
-    .ro-sight b { color: var(--accent); }
-    .ro-sight.short { border-color: var(--signal); } .ro-sight.short b { color: var(--signal); }
+    /* Panel round 2 (IN-3, PR-2, GR-1): one red that means act now. Sight is a reading in ink; over it, the cell is the alarm
+       on two channels, never hue alone: the signal colour, a 2 px hatched edge, a bar through the eye and SLOW for "Sight".
+       Seen in greyscale the short cell still differs from the open one (the hatch, the bar, the word). */
+    .ro-eye { display: block; flex: none; color: var(--panel-ink); }
+    .ro-eye .ro-eye-bar { display: none; }
+    .ro-sight b { color: var(--panel-ink); }
+    html .readouts .ro.ro-sight.short { border: 2px solid var(--signal); padding: 2px 0;
+      border-image: repeating-linear-gradient(45deg, var(--signal) 0 3px, transparent 3px 6px) 2; }
+    .ro-sight.short b, .ro-sight.short .ro-eye { color: var(--signal); }
+    .ro-sight.short .ro-eye .ro-eye-bar { display: inline; }
+    .ro-sight.short span { color: var(--signal); font-weight: 800; letter-spacing: 0.08em; }
+    /* the plain sentence when it fires (GR-1, cockpit.js sightAlarm): the status row's message line, in the signal colour with
+       its warning mark */
+    .ds-note.alarm { color: var(--signal); }
+    .ds-note.alarm::before { content: "\25B2\00A0"; }
     .ro span { font-size: 13px; font-weight: 600; color: var(--panel-dim); }
     /* The Limit sign (theme contract 4.3.5, REVIEW2.md U-40): the white US sign in every theme, the one real-world object on
        the screen. 44 x 52, a black edge with the sign's inset rule, SPEED LIMIT in small caps over the number. No theme
@@ -481,10 +495,13 @@
 
     /* The Log over the map (openLog): a full-screen frame; the map page keeps running behind it */
     /* the sight-line speed under the position arrow (paintSight) */
-    .sight-tag { pointer-events: none; display: flex; align-items: center; gap: 3px; padding: 2px 5px 1px; background: var(--panel); color: var(--panel-ink);
-      border: 1.5px solid var(--panel-ink); font: 700 15px/1 var(--font-num); white-space: nowrap; }
-    .sight-tag small { font-size: 9px; letter-spacing: 0.04em; }
-    .sight-tag.short { background: var(--signal); color: var(--panel); border-color: var(--panel); }   /* faster than you can see */
+    /* Panel round 2 (TH-2, IN-3): the tag names itself (eye, SIGHT, the number; no unit) on a rounded pill, so it never reads as
+       a limit sign's white rectangle with MPH. Over it: the signal colour, the eye barred and SLOW for SIGHT (two channels).
+       Open draws nothing on the map (the Sight cell says Open). */
+    .sight-tag { pointer-events: none; display: flex; align-items: center; gap: 4px; padding: 2px 8px 1px 6px; background: var(--panel); color: var(--panel-ink);
+      border: 1px solid var(--panel-dim); border-radius: 999px; font: 700 15px/1 var(--font-num); white-space: nowrap; }
+    .sight-tag small { font: 700 9px/1 var(--font-ui); letter-spacing: 0.08em; }
+    .sight-tag.short { background: var(--signal); color: #FFFFFF; border: 1.5px solid #FFFFFF; }   /* faster than you can see */
     .sight-tag[hidden] { display: none; }
     #logFrame { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; z-index: 10000; background: var(--panel); }
     /* F-15: a hidden Log is kept laid out at the phone's width (drawn once, shown at once), invisible and untouchable */
@@ -612,6 +629,13 @@
     .place-all { display: block; margin: 6px 0 0; }
     /* ---------------- the drive-ended card (REVIEW.md roadmap 7) ---------------- */
     .end-card { text-align: left; }
+    .end-feel { margin: 0; font-size: 15px; font-weight: 600; line-height: 1.35; color: var(--panel-ink); }   /* HE-1: measured, in ink */
+    .explain-card h2 { margin: 0; }
+    .explain-now { margin: 0; font: 700 20px/1.1 var(--font-num); font-variant-numeric: tabular-nums; }
+    .explain-what { margin: 0; font-size: 16px; line-height: 1.4; }
+    .explain-card .note { margin: 0; font-size: 15px; line-height: 1.4; color: var(--panel-dim); }
+    /* an instrument says what it is when tapped, parked or in a replay (PR-1); the cursor says so on a desktop */
+    #cluster [data-explain], #notes [data-explain] { cursor: help; }
     .end-kicker { margin: 0; font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); }
     .end-card h2 { margin: 4px 0 0; font-size: 28px; line-height: 1.1; }
     .end-meta { margin: 4px 0 0; color: var(--panel-dim); font-size: 15px; }
@@ -707,7 +731,6 @@
     html[data-theme="tapedeck"] .notes, html[data-theme="tapedeck"] .binnacle { text-transform: uppercase; }
     html[data-theme="tapedeck"] .rb-call span, html[data-theme="tapedeck"] .rb-dist b, html[data-theme="tapedeck"] .rb-code, html[data-theme="tapedeck"] .ds-main,
     html[data-theme="tapedeck"] .ro b, html[data-theme="tapedeck"] .odo-digits { text-shadow: 0 0 6px color-mix(in srgb, currentColor 60%, transparent); }
-    html[data-theme="tapedeck"] .rb-mods i.warn { color: var(--amber); }
     /* U-100: the dot font is wide; the quiet line steps to the binnacle's 13 px floor so its compact form fits two rows */
     html[data-theme="tapedeck"] .note-quiet b, html[data-theme="tapedeck"] .note-quiet span { font-size: 13px; }
     html[data-theme="tapedeck"] .binnacle { background: linear-gradient(transparent 50%, rgba(125, 245, 222, 0.025) 50%) 0 0 / 100% 3px, var(--panel); }
@@ -737,13 +760,16 @@
     /* ---------------- Billet (Pro, REVIEW.md 4.1): brushed metal, knurled bezels, red glow; glow is additive ---------------- */
     html[data-theme="billet"] .binnacle, html[data-theme="billet"] .notes {
       background: repeating-linear-gradient(90deg, rgba(255,255,255,0.025) 0 1px, transparent 1px 3px), linear-gradient(180deg, #2A2B2E, var(--panel) 60%); }
-    html[data-theme="billet"] .rb-dist b, html[data-theme="billet"] .ro-sight b, html[data-theme="billet"] .odo-digits { color: var(--accent); text-shadow: 0 0 8px rgba(255, 74, 61, 0.55); }
-    html[data-theme="billet"] .dial-digital { fill: var(--accent); filter: drop-shadow(0 0 4px rgba(255, 74, 61, 0.7)); }
+    /* panel round 2 (PR-2): the numerals glow in the panel's ink, backlit; red is the warning's alone */
+    html[data-theme="billet"] .rb-dist b, html[data-theme="billet"] .ro-sight b, html[data-theme="billet"] .odo-digits { color: var(--panel-ink); text-shadow: 0 0 8px rgba(236, 230, 218, 0.45); }
+    html[data-theme="billet"] .ro-sight.short b { color: var(--signal); text-shadow: 0 0 8px rgba(255, 74, 61, 0.55); }
+    html[data-theme="billet"] .dial-digital { fill: var(--face-ink); filter: drop-shadow(0 0 4px rgba(236, 230, 218, 0.5)); }
+    html[data-theme="billet"] .dial-digital.small.unk { fill: var(--face-dim); }
     html[data-theme="billet"] .key, html[data-theme="billet"] .ink-btn { border-color: var(--rule); background: linear-gradient(#2E2F33, #1C1D1F); box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 2px 0 #000; }
     /* P-01 (REVIEW_PEOPLE.md): the metal above out-ranked .solid and .on, so every primary key was dark text on dark metal */
     html[data-theme="billet"] .ink-btn.solid, html[data-theme="billet"] .ink-btn.on { background: linear-gradient(#F2F2F4, #C9CACE); color: #0D0D0E; border-color: #F2F2F4; }
     html[data-theme="billet"] .odo.boxed .dg { background: #0D0D0E; border-color: var(--rule); }
-    html[data-theme="billet"] .odo.boxed .dg:last-child { background: var(--accent); color: #0D0D0E; text-shadow: none; }   /* the tenths wheel, inverted (it was dark on dark, REVIEW2.md U-29) */
+    html[data-theme="billet"] .odo.boxed .dg:last-child { background: var(--panel-ink); color: #0D0D0E; text-shadow: none; }   /* the tenths wheel, inverted (it was dark on dark, REVIEW2.md U-29) */
     .bezelled { position: relative; }
     .bezel-ring { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
     .bezel-ring .knurl { fill: none; stroke: #6B6E74; stroke-width: 5; stroke-dasharray: 1.2 1.6; }
@@ -1448,6 +1474,7 @@
           <h2 id="endName">--</h2>
           <p class="end-meta" id="endMeta"></p>
           <div class="end-score"><b id="endScore">--</b><small>/1000</small><span>Vetta Score</span></div>
+          <p class="end-feel" id="endFeel" hidden></p>   <!-- panel round 2, HE-1: what this phone felt, only when measured -->
           <p class="end-line" id="endLine"></p>
           <!-- U-75: the solid key is Share card only when there is a score to share; otherwise it is Open in the Log, and Share
                waits as a link -->
@@ -1458,6 +1485,17 @@
       <div class="stage-bar" id="stageBar" role="status" aria-live="polite" hidden><span id="stageName"></span><b id="stageDelta">--</b><small id="stageCount"></small></div>
       <div class="stage-bar" id="lapBar" role="status" aria-live="polite" hidden><span id="lapName">Track</span><b id="lapTime">--</b><small id="lapInfo"></small><button class="key" id="lapSetBtn" hidden>Start/finish here</button></div>
       <div class="hz-ask" id="hzAsk" role="alertdialog" aria-live="assertive" hidden><span id="hzAskText"></span><button class="key" id="hzStill">Still there</button><button class="key" id="hzGone">Gone</button></div>
+      <!-- panel round 2 (PR-1, SO-4): what an instrument means and how it is measured, behind a tap on it, parked or in a
+           replay only (cockpit.js openExplain); never a screen before Start -->
+      <div class="overlay dim" id="explainCard" role="dialog" aria-modal="true" aria-labelledby="explainTitle">
+        <div class="card-sheet explain-card">
+          <h2 id="explainTitle">--</h2>
+          <p class="explain-now" id="explainNow" hidden></p>
+          <p class="explain-what" id="explainWhat"></p>
+          <p class="note" id="explainHow"></p>
+          <button class="ink-btn solid" id="explainDone">Done</button>
+        </div>
+      </div>
       <div class="overlay dim" id="pinOverlay" role="dialog" aria-modal="true" aria-label="Dropped pin">
         <div class="card-sheet">
           <h2 id="pinPlace">--</h2>
