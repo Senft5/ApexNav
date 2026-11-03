@@ -472,7 +472,7 @@
   }
 
   const provider = { id: 'osm_overpass', version: 1, channels: CHANNELS, needs: { network: true }, budgetMs: 15000, fetch: fetchCtx };
-  const api = { provider, CHANNELS, SERVERS, TILE, COV, speedKph, paved, hgvLevel, accessLevel, hazardOf, bywayLevel, simplify, query, parse,
+  const api = { provider, CHANNELS, SERVERS, KEEP, TILE, COV, speedKph, paved, hgvLevel, accessLevel, hazardOf, bywayLevel, simplify, query, parse,
     aggregate, planPieces, piecesCells, tileKey, covKey, readTile, storeElements, _reset: () => { downUntil = 0; } };
   root.ApexOsmOverpass = api;
   if (Ctx && Ctx.register) Ctx.register(provider);

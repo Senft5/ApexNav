@@ -6,7 +6,8 @@
 //     the route's box plus 300 m (rounded to 1e-5 deg for lines and rings).
 //   node tools/route_ctx_fixtures.js overpass <name> <response.json>
 //     Adds the Overpass answer to that file as `overpass` (the reply to osm_overpass.js query() for the route), with
-//     ways and nodes more than 900 m from the route dropped.
+//     ways and nodes more than 900 m from the route dropped, ways cut to their vertices within 100 m, and only the tags
+//     the provider reads.
 // Data © OpenStreetMap contributors, ODbL 1.0.
 'use strict';
 const fs = require('fs');
@@ -98,14 +99,17 @@ function overpass(name, respFile) {
     if (e.center && !near(e.center.lat, e.center.lon)) continue;
     if (e.geometry && !e.geometry.some((p) => near(p.lat, p.lon))) continue;
     if (e.geometry && e.type === 'way') {
-      // a side street's far end can't reach the route: keep its vertices within 200 m (and their node ids, in step)
-      const keepIdx = e.geometry.map((p, i) => i).filter((i) => [i - 1, i, i + 1].some((k) => e.geometry[k] && near(e.geometry[k].lat, e.geometry[k].lon, 200)));
+      // a side street's far end can't reach the route: keep its vertices within 100 m (and their node ids, in step)
+      const keepIdx = e.geometry.map((p, i) => i).filter((i) => [i - 1, i, i + 1].some((k) => e.geometry[k] && near(e.geometry[k].lat, e.geometry[k].lon, 100)));
       const ge = keepIdx.map((i) => e.geometry[i]);
       keep.push({ ...e, geometry: ge, ...(e.nodes ? { nodes: keepIdx.map((i) => e.nodes[i]) } : {}), bounds: undefined });
       continue;
     }
     keep.push(e);
   }
+  // only the tags the provider reads (osm_overpass.js KEEP): names in other languages, TIGER and source tags dropped
+  const KEEP = require(ROOT + '/web/route_ctx/osm_overpass.js').KEEP;
+  for (const e of keep) if (e.tags) e.tags = Object.fromEntries(Object.entries(e.tags).filter(([k]) => KEEP.has(k)));
   fx.overpass = { osm3s: j.osm3s, elements: keep };
   fs.writeFileSync(file, JSON.stringify(fx));
   console.log(file, fs.statSync(file).size, 'bytes,', keep.length, 'of', j.elements.length, 'elements');
