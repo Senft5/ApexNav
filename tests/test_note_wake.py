@@ -80,11 +80,90 @@ def test_the_page_wakes_on_the_road_and_speaks_the_pack_lines():
     html = cockpit_source()
     notes = html[html.index("function updateNotes("):html.index("// 7. RENDER LOOP")]
     assert "ApexNoteTiming.wakeCorner(corners" in notes and "state.spiritedAt = now" in notes
-    # the lines the voice packs hold (web/voice_lines.js PACKS, which tools/voicebank.py renders: sys:stage / sys:cruise),
-    # said by their tokens and in the pack's own words (U-113), Marguerite's as the phone's fallback
-    assert "'sys:stage'" in notes and "'sys:cruise'" in notes
+    # panel round 2 MA-1: awake, it stays awake on the wider sleep rule
+    assert "(isSpirited() && ApexNoteTiming.keepsAwake(corners, wakeAt))" in notes
+    # LA-4: the mode is a chime, never its name: the rising one rides on the first call after a wake, the falling one leads
+    # the quiet line, which says how far the quiet lasts in the pack's words (or the chime alone when that is unknown/short)
+    assert "if (t === 'on') state.wakeCue = true;" in notes
+    assert "ApexVoiceLines.quietLine(state.voiceId, quietSaid())" in notes and "cue: 'sleep'" in notes and "else chime('sleep');" in notes
+    assert "cue = e.type === 'corner' && state.wakeCue ? 'wake' : undefined" in notes
+    assert "packSays(" not in html and "'Full notes.'" not in notes and "'Quiet from here. Bumps and cameras only.'" not in notes
+    # the Notes switch chimes too
+    assert "if (state.notesMode !== 'auto') chime(full ? 'wake' : 'sleep');" in html
+    # the pack lines stay in the banks: the opener (DA-3) says them after the road's name
     bank = open(os.path.join(ROOT, "web", "voice_lines.js"), encoding="utf-8").read()
     assert '"sys:cruise": "Quiet from here. Bumps and cameras only."' in bank and '"sys:stage": "Full notes."' in bank
-    assert "packSays('sys:cruise', 'Quiet from here. Bumps and cameras only.')" in notes and "packSays('sys:stage', 'Full notes.')" in notes
+    # DA-3: the opener is said once per drive, ahead of the first call, only with the road known
+    assert "ApexVoiceLines.openerLine(state.voiceId, { road, awake: spirited, span })" in notes
+    assert notes.index("openNotes(true);") < notes.index("say(call.text, false, call.chain")
+    assert "state.openerDue = true; state.openerAt = performance.now();" in html
     # the rerouter's words only on a planned route (U-72)
     assert re.search(r"if \(offRoute && track && track\.kind === 'route'\) return \[?offRouteText\(\)", html)
+
+
+QUIET = r"""
+const R = process.argv[1], T = require(R + '/web/note_timing.js'), L = require(R + '/web/voice_lines.js');
+const out = {};
+const c = (m, severity, apexMps = null, text = 'Tight right') => ({ m, severity, apexMps, text });
+// the guided drive at 07:12: OPEN LEFT at 600 ft (183 m) on the strip, at 47 mph (21 m/s), a square left half a mile on
+const atEdge = [c(183, 4, 18, 'Open left'), c(805, 2, 8, 'Careful, square left')];
+out.edge = T.keepsAwake(atEdge, { cursorM: 0, vMps: 21 }).m;
+// a waking corner 1.2 km on (past its 800 m wake window, inside the 1600 m sleep window) keeps it awake
+out.wide = T.keepsAwake([c(1200, 2, 10)], { cursorM: 0, vMps: 20 }).m;
+// at 30 m/s a minute's quiet beyond the wake point reaches 800 + 1800 m: a corner 2.4 km on still keeps it awake
+out.minute = !!T.keepsAwake([c(2400, 2, 10)], { cursorM: 0, vMps: 30 });
+out.sleeps = T.keepsAwake([c(3500, 2, 10), c(900, 6, 30, 'Slight left')], { cursorM: 0, vMps: 20 });
+out.quietM = T.quietM([c(4019, 2, 10)], { cursorM: 0, vMps: 20 });
+out.noneAhead = T.quietM([c(400, 6, 30)], { cursorM: 0, vMps: 20 });
+const mi = { metric: () => false }, km = { metric: () => true };
+out.spans = [700, 810, 1300, 3300, 5000].map((m) => T.quietSpan(m, mi)).concat([T.quietSpan(2600, km), T.quietSpan(null, mi)]);
+out.lines = ['marguerite', 'kit', 'hale', 'device'].map((id) => L.quietLine(id, 'two miles')).concat([L.quietLine('kit', null)]);
+out.openers = [L.openerLine('marguerite', { road: 'Dry Ridge Road', awake: true }), L.openerLine('kit', { road: 'Dry Ridge Road', awake: true }),
+  L.openerLine('marguerite', { road: 'Dry Ridge Road', awake: false, span: 'two miles' }), L.openerLine('hale', { road: 'I-275', awake: false }),
+  L.openerLine('marguerite', { road: null, awake: true }), L.openerLine('marguerite', { road: '  ', awake: true })];
+console.log(JSON.stringify(out));
+"""
+
+
+@pytest.fixture(scope="module")
+def quiet():
+    return json.loads(subprocess.run([NODE, "-e", QUIET, ROOT], capture_output=True, text=True, check=True).stdout)
+
+
+def test_never_quiet_with_a_corner_on_the_page(quiet):
+    """Panel round 2 MA-1: sleep has its own, wider window, and a corner within its lead keeps the notes up."""
+    assert quiet["edge"] == 183                       # the open left on the strip keeps it awake
+    assert quiet["wide"] == 1200 and quiet["minute"] is True
+    assert quiet["sleeps"] is None                    # a slight left that doesn't wake, far from its lead: quiet may come
+
+
+def test_the_quiet_line_says_how_far(quiet):
+    assert quiet["quietM"] == 4019 - 800 and quiet["noneAhead"] is None
+    # rounded down: never more quiet than there is; under half a mile, nothing to announce
+    assert quiet["spans"] == [None, "half a mile", "three quarters of a mile", "two miles", "three miles", "two and a half kilometres", None]
+    assert quiet["lines"] == ["Quiet for two miles.", "Nothing for two miles.", "Clear, two miles.", "Quiet for two miles.", None]
+
+
+def test_the_first_words_name_the_road(quiet):
+    """DA-3: "Dry Ridge Road. Full notes."; with the road unknown, no opener (unknown stays unknown)."""
+    assert quiet["openers"] == ["Dry Ridge Road. Full notes.", "Dry Ridge Road. Full notes. Here we go.",
+                                "Dry Ridge Road. Quiet for two miles.", "I-275. Hazards only.", None, None]
+
+
+def test_the_guided_drive_never_wakes_within_a_minute_of_going_quiet():
+    """MA-1 Done: in the guided drive no corner call within 45 s after a quiet line, and every quiet line carries a
+    distance (the one at the end of the road, with no corner left to wake for, is the chime alone)."""
+    from tests.guided_drive import replay
+    for pack in ("marguerite", "kit", "hale"):
+        log = replay("auto", pack)
+        quiets = [x for x in log if x["kind"] == "quiet"]
+        calls = [x for x in log if x["kind"] == "call"]
+        assert len(quiets) >= 2, (pack, quiets)
+        for q in quiets:
+            after = [c for c in calls if c["t"] > q["t"]]
+            if after:
+                assert after[0]["t"] - q["t"] >= 60, (pack, q, after[0])
+                assert q["text"] and re.search(r"(mile|kilometre)", q["text"]), q
+            else:
+                assert q["text"] is None, q          # the road's end: chime only
+        assert not any("Full notes" in (c["text"] or "") for c in calls)

@@ -563,6 +563,7 @@ final class MotionLane: @unchecked Sendable {
         var nodeVertPeakMps2: Double?                      // largest >8 Hz vertical spike since the last 5 m node, nil when unmeasured
         var speedMps = 0.0                                 // the latest GPS speed, held between fixes
         var thermal = ThermalGuard()                       // the shell's, copied on every change
+        var stack: SensorStack?                            // NA-2: the shell's, copied on every reading; nil in a review replay
     }
     private let lock = NSLock()
     private var state = State()
@@ -593,7 +594,7 @@ final class MotionLane: @unchecked Sendable {
             s.pipeline.step(accel: a, gyro: w, timestamp: timestamp, speedMps: v, gravityG: gravityG)
             // Pothole evidence only in a solved chassis frame and while rolling (a door slam at a stop is not road), and not
             // while settling after a thermal pause.
-            if s.thermal.imuLive(t: t) && s.pipeline.mount.state == .locked && v >= 1.0 {
+            if s.thermal.imuLive(t: t) && (s.stack?.imuLive(t: t) ?? true) && s.pipeline.mount.state == .locked && v >= 1.0 {
                 s.nodeVertPeakMps2 = max(s.nodeVertPeakMps2 ?? 0.0, abs(s.pipeline.hpVert))
             }
             return !wasLocked && s.pipeline.mount.state == .locked ? s.pipeline.mount.rows : nil
@@ -695,6 +696,12 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
     private var fusion = ElevationFusion(baroAvailable: CMAltimeter.isRelativeAltitudeAvailable())
     private var odometer = Odometer5m()
     private var thermal = ThermalGuard()   // IDEAS P-07: a critically hot phone pauses CoreMotion, IMU values go unknown
+    // Panel round 2 NA-2: the drive sensors (100 Hz IMU, barometer, best-for-navigation GPS) only while driving (ApexKit
+    // SensorStack). pageDriving: the page's drive is on (its Live Activity start to its end). baroOn: the altimeter runs.
+    private var stack = SensorStack()
+    private var pageDriving = false
+    private var baroOn = false
+    private var stackTick = 0
 
     // Recording
     private var isRecording = false
@@ -713,12 +720,9 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         motion.with { $0.pipeline.mount = MountCalibrator() }   // unknown until gravity settles; a mount saved from an earlier drive is reused only if gravity agrees
         restorePersistedMount()
         locManager.delegate = self
-        locManager.desiredAccuracy = kCLLocationAccuracyBestForNavigation
-        locManager.distanceFilter = kCLDistanceFilterNone
         locManager.activityType = .automotiveNavigation
         locManager.pausesLocationUpdatesAutomatically = false
-        locManager.allowsBackgroundLocationUpdates = true   // UIBackgroundModes: location is declared in project.yml
-        locManager.showsBackgroundLocationIndicator = true
+        applySensorStack()   // NA-2: idle until a drive (coarse GPS for the map, no IMU, no barometer)
         // U-65: never asked at launch. The page asks (requestLocation) after the welcome's Start, so the system sheet follows a
         // reason; a driver past the welcome asks at once, and a first drive (phone or car) asks if it never was.
         configureVoiceSession()
@@ -729,7 +733,7 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         #endif
         if !replaying {
             locManager.startUpdatingLocation()
-            startMotionPipeline()
+            updateSensorStack()   // NA-2: the 100 Hz IMU and the barometer start with a drive, not with the app
         }
         NotificationCenter.default.addObserver(forName: ProcessInfo.thermalStateDidChangeNotification, object: nil, queue: .main) { [weak self] _ in
             guard let self else { return }
@@ -947,6 +951,12 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         let timer = Timer(timeInterval: 0.1, repeats: true) { [weak self] _ in
             guard let self else { return }
             MainActor.assumeIsolated {
+                // NA-2: once a second the stack is checked (a parked phone gets few fixes), and an idle map gets one frame
+                // a second instead of ten (a review replay drives its own frames)
+                self.stackTick += 1
+                let second = self.stackTick % 10 == 0
+                if second { self.updateSensorStack() }
+                if !self.stack.full && !self.replaying && !second { return }
                 self.pushLiveFrame()
             }
         }
@@ -1038,6 +1048,8 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
                                                      eta: (dict["eta"] as? String) ?? "", short: dict["short"] as? String,
                                                      hazard: dict["hazard"] as? Bool, etaShort: dict["etaShort"] as? String,
                                                      trail: dict["trail"] as? String)
+        // NA-2: the page's drive (Start to End, whether or not Live Activities are allowed) runs the drive sensors
+        if let a = dict["action"] as? String, a == "start" || a == "end" { pageDriving = a == "start"; updateSensorStack() }
         #if DEBUG
         if let replay, let a = dict["action"] as? String { if a == "start" { replay.driving = true } else if a == "end" { replay.driving = false } }
         #endif
@@ -1268,7 +1280,7 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
                                       courseDeg: courseDeg, elevationM: fusion.elevationM, latG: imu(pipeline.latAccMps2 / Self.gStd),
                                       lonG: imu(pipeline.lonAccMps2 / Self.gStd), camberDeg: imu(pipeline.camberRad * 180.0 / Double.pi),
                                       crestVerticalG: imu(pipeline.crestAccMps2 / Self.gStd), roughnessRms: imu(pipeline.roughRMSMps2 / Self.gStd),
-                                      vertPeakG: imu(vertPeak / Self.gStd), calibration: live ? pipeline.mount.state.rawValue : "paused"))
+                                      vertPeakG: imu(vertPeak / Self.gStd), calibration: live ? pipeline.mount.state.rawValue : idleCalibration))
         }
         guard webReady, let wv = webView else { return }
         // A page that has not answered the last few seconds of frames is suspended (a WKWebView in the background, the phone
@@ -1284,7 +1296,7 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
             latG: r(imu(pipeline.latAccMps2 / Self.gStd), 3), lonG: r(imu(pipeline.lonAccMps2 / Self.gStd), 3),
             camberDeg: r(imu(pipeline.camberRad * 180.0 / Double.pi), 2), crestVerticalG: r(imu(pipeline.crestAccMps2 / Self.gStd), 3),
             roughnessRms: r(imu(pipeline.roughRMSMps2 / Self.gStd), 4), vertPeakG: r(imu(vertPeak / Self.gStd), 3), impactG: r(imu(impact / Self.gStd), 2),
-            recording: isRecording, calibration: live ? pipeline.mount.state.rawValue : "paused", thermal: thermal.level,
+            recording: isRecording, calibration: live ? pipeline.mount.state.rawValue : idleCalibration, thermal: thermal.level,
             lowPowerMode: ProcessInfo.processInfo.isLowPowerModeEnabled,
             battery: r(UIDevice.current.batteryLevel >= 0 ? Double(UIDevice.current.batteryLevel) : nil, 2),
             charging: UIDevice.current.batteryState == .charging || UIDevice.current.batteryState == .full,
@@ -1338,6 +1350,7 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
 
     /// The page's side of the journal: start (a drive began), durable (kept up to seq), end (saved or dropped), list.
     func handleJournal(_ dict: [String: Any]) {
+        defer { updateSensorStack() }   // NA-2: a drive kept in the journal is a drive
         let id = (dict["id"] as? String) ?? ""
         switch dict["op"] as? String {
         case "start":
@@ -1410,6 +1423,7 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         lonDeg = fix.lon
         if fix.speedMps >= 0 { speedMps = fix.speedMps }
         if fix.courseDeg >= 0 { courseDeg = fix.courseDeg }
+        updateSensorStack()   // NA-2: road speed promotes the stack, five minutes stopped demotes it
         fixSpeedMps = fix.speedMps >= 0 ? fix.speedMps : -1
         fixAt = fix.timestamp
         fusion.ingestGPS(altitudeM: fix.altitudeM, verticalAccuracyM: fix.verticalAccuracyM)
@@ -1460,10 +1474,49 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         recordedSegments += 1
     }
 
+    // MARK: The drive sensor stack (panel round 2 NA-2)
+
+    /// The page, the recorder, the car and each fix tell the stack what is going on; a change starts or stops the sensors.
+    private func updateSensorStack() {
+        guard !replaying else { return }
+        let changed = stack.update(driving: pageDriving || isRecording || journal != nil, inCar: inCar, speedMps: hasFix ? speedMps : nil,
+                                   t: ProcessInfo.processInfo.systemUptime)
+        let copy = stack
+        motion.with { $0.stack = copy }
+        if changed { applySensorStack() }
+    }
+
+    /// The sensors for the stack's state. Full: best-for-navigation GPS with every fix, the 100 Hz IMU and the barometer,
+    /// location in the background; the blue indicator only while a drive is recorded. Idle: coarse GPS for the map's dot,
+    /// no IMU, no barometer, nothing in the background. The thermal guard still pauses the IMU when the phone is critical.
+    private func applySensorStack() {
+        let driving = stack.full && (pageDriving || isRecording || journal != nil)
+        if stack.full {
+            locManager.desiredAccuracy = kCLLocationAccuracyBestForNavigation
+            locManager.distanceFilter = kCLDistanceFilterNone
+        } else {
+            locManager.desiredAccuracy = kCLLocationAccuracyHundredMeters
+            locManager.distanceFilter = 25
+        }
+        locManager.allowsBackgroundLocationUpdates = stack.full   // UIBackgroundModes: location is declared in project.yml
+        locManager.showsBackgroundLocationIndicator = driving
+        guard !replaying else { return }
+        if stack.full { startMotionPipeline() } else { stopMotionPipeline() }
+    }
+
+    private func stopMotionPipeline() {
+        if baroOn { altimeter.stopRelativeAltitudeUpdates(); baroOn = false }
+        if motionManager.isDeviceMotionActive { motionManager.stopDeviceMotionUpdates() }
+        motion.with { $0.nodeVertPeakMps2 = nil }
+    }
+
     // MARK: CoreMotion (100 Hz) + CMAltimeter
 
     private func startMotionPipeline() {
-        if CMAltimeter.isRelativeAltitudeAvailable() {
+        if CMAltimeter.isRelativeAltitudeAvailable(), !baroOn {
+            baroOn = true
+            // the altimeter's relative altitude starts again from zero: anchor it to GPS afresh, never to the old offset
+            fusion = ElevationFusion(baroAvailable: true)
             altimeter.startRelativeAltitudeUpdates(to: .main) { [weak self] data, _ in
                 guard let self, let d = data else { return }
                 let rel = d.relativeAltitude.doubleValue
@@ -1472,7 +1525,7 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
                 }
             }
         }
-        startDeviceMotion()
+        if !thermal.paused { startDeviceMotion() }   // a critically hot phone keeps the IMU paused (the thermal guard)
     }
 
     private func startDeviceMotion() {
@@ -1496,12 +1549,18 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         if thermal.paused {
             motionManager.stopDeviceMotionUpdates()
             motion.with { $0.nodeVertPeakMps2 = nil }
-        } else {
+        } else if stack.full {   // NA-2: an idle map has no IMU to restart
             startDeviceMotion()
         }
     }
 
-    private var imuLive: Bool { thermal.imuLive(t: ProcessInfo.processInfo.systemUptime) }
+    // NA-2: and only while the drive stack runs and has settled (a review replay feeds its own motion, so it is not governed)
+    private var imuLive: Bool {
+        let t = ProcessInfo.processInfo.systemUptime
+        return thermal.imuLive(t: t) && (replaying || stack.imuLive(t: t))
+    }
+    /// What a frame says for the mount while the IMU is not live: "paused" for a hot phone (the page warns), "idle" otherwise.
+    private var idleCalibration: String { thermal.imuLive(t: ProcessInfo.processInfo.systemUptime) ? "idle" : "paused" }
 
     /// One motion sample from the replay (ApexReplay, on the main thread); CoreMotion's go straight to the motion lane.
     fileprivate func ingestMotion(gravityG: Vec3, accelMps2 a: Vec3, gyroRadS w: Vec3, timestamp: Double) {
@@ -1533,6 +1592,7 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         csvLines = [Self.csvHeader]
         recordedSegments = 0
         isRecording = true
+        updateSensorStack()
         speak("Mapping 5 meter road feel.")
     }
 
@@ -1563,6 +1623,7 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
     func stopRecordingAndExport() {
         guard isRecording else { return }
         isRecording = false
+        updateSensorStack()
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "yyyyMMdd_HHmmss"
@@ -1648,6 +1709,7 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         let now = AVAudioSession.sharedInstance().currentRoute.outputs.contains { $0.portType == .carAudio }
         guard now != inCar else { return }
         inCar = now
+        updateSensorStack()   // NA-2: in the car, the drive sensors run
         carOfferPending = now
         offerDriveIfReady()
     }

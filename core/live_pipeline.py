@@ -396,3 +396,43 @@ class Odometer:
         self.since_node_m = leg - (s - SEGMENT_M)
         self.prev_lat, self.prev_lon, self.prev_elev = lat, lon, elev
         return nodes
+
+
+# Panel round 2 NA-2: the drive sensor stack (100 Hz IMU, barometer, best-for-navigation GPS) runs only while driving; an
+# idle map gets coarse location and nothing else. Promoted at a drive's Start, in the car, or at road speed; demoted after
+# DEMOTE_AFTER_S stopped with none of those. IMU values stay unknown SETTLE_S after a promotion. ApexKit.SensorStack.
+@dataclass
+class SensorStack:
+    AT_SPEED_MPS = 8.0
+    STOPPED_MPS = 2.0
+    DEMOTE_AFTER_S = 300.0
+    SETTLE_S = 3.0
+    full: bool = False
+    stopped_since: float | None = None
+    promoted_at: float | None = None
+
+    def update(self, driving: bool, in_car: bool, speed_mps, t: float) -> bool:
+        """The phone's state at t (s). True when `full` changed (the shell starts or stops the drive sensors)."""
+        v = speed_mps if speed_mps is not None else 0.0
+        if driving or in_car or v >= self.AT_SPEED_MPS:
+            self.stopped_since = None
+            if self.full:
+                return False
+            self.full, self.promoted_at = True, t
+            return True
+        if not self.full:
+            return False
+        if v >= self.STOPPED_MPS:
+            self.stopped_since = None
+            return False
+        if self.stopped_since is None:
+            self.stopped_since = t
+        if t - self.stopped_since < self.DEMOTE_AFTER_S:
+            return False
+        self.full, self.promoted_at, self.stopped_since = False, None, None
+        return True
+
+    def imu_live(self, t: float) -> bool:
+        if not self.full:
+            return False
+        return self.promoted_at is None or t - self.promoted_at >= self.SETTLE_S
