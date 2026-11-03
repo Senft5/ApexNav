@@ -60,7 +60,7 @@ final class ApexCar {
         let head = end.map { String(cut[..<$0]) } ?? String(s.prefix(glanceMax))
         return head.trimmingCharacters(in: CharacterSet(charactersIn: " ,·.-"))
     }
-    struct Look { var theme = "roadbook"; var card = UIColor(white: 0.08, alpha: 1); var cardInk = UIColor(white: 0.93, alpha: 1); var accent = UIColor.systemRed; var voice = true; var metric = false }
+    struct Look { var theme = "roadbook"; var card = UIColor(white: 0.08, alpha: 1); var cardInk = UIColor(white: 0.93, alpha: 1); var accent = UIColor.systemRed; var voice = true; var metric = false; var puck: ApexCarPuckShape? = nil }
 
     private(set) var route: Route?
     private(set) var guide: Guide?
@@ -166,6 +166,7 @@ final class ApexCar {
             l.accent = Self.color(dict["accent"]) ?? l.accent
             l.voice = (dict["voice"] as? Bool) ?? true
             l.metric = (dict["units"] as? String) == "metric"
+            l.puck = ApexCarPuckShape(dict["puck"] as? [String: Any])   // a car's own theme: that car from above (web/carplay.js carPuck)
             look = l
             let pal = dict["palette"] as? [String: Any]
             if let day = ApexCarPalette(pal?["day"] as? [String: Any]), let night = ApexCarPalette(pal?["night"] as? [String: Any]) { palette = (day, night) }
@@ -887,6 +888,7 @@ final class ApexCarMapViewController: UIViewController, WKNavigationDelegate {
             let pal = ApexCar.shared.palette ?? ApexCarPalette.roadbook, key = "\(ApexCar.shared.look.theme)|\(night)|\(ApexCar.shared.palette != nil)"
             guard key != sentLook else { return }
             sentLook = key
+            native.setPuck(ApexCar.shared.look.puck)
             native.setPalette(night ? pal.night : pal.day)
         } else {
             js("car.look('\(ApexCar.shared.look.theme)', \(night))")

@@ -132,7 +132,19 @@
     const mixText = `${m.mix.tight} tight · ${m.mix.medium} medium · ${m.mix.fast} fast corners`;
     g.fillStyle = dim; g.font = font(500, 34); g.fillText(mixText, 90, H - 170);
     g.fillStyle = accent; g.font = font(800, 40, C.fontNum); g.textAlign = 'right'; g.fillText('VETTA', W - 90, H - 172); g.textAlign = 'left';
+    if (opts.car) drawCar(g, opts.car, ink, W - 90, H - 212);
     return canvas;
+  }
+  /** A car's own theme (themes.js carFrom): the car from above, lying nose right, in its paint, outlined in ink, its right
+   *  end at (x, y). No logo or badge: the outline and the paint. */
+  function drawCar(g, car, ink, x, y) {
+    const s = car.silhouette;
+    if (!s || !Array.isArray(s.body) || !/^#[0-9A-Fa-f]{6}$/.test(car.paint || '')) return;
+    const len = 190, k = len / s.h, wd = s.w * k;
+    const pt = ([px, py]) => [x - py * k, y - wd / 2 + px * k];       // nose (py = 0) at the right, lying across
+    const poly = (a, fill) => { if (!a || a.length < 3) return; g.beginPath(); a.forEach((p, i) => { const [qx, qy] = pt(p); if (i) g.lineTo(qx, qy); else g.moveTo(qx, qy); }); g.closePath(); g.fillStyle = fill; g.fill(); return true; };
+    if (poly(s.body, car.paint)) { g.strokeStyle = ink; g.lineWidth = 3; g.lineJoin = 'round'; g.stroke(); }
+    poly(s.glass, '#1A1D22'); poly(s.roof, car.paint);
   }
 
   /** The share sheet with the image when the browser can share files; otherwise the image is saved. 'shared' | 'saved' | 'cancelled'. */

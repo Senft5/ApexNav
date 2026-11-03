@@ -237,6 +237,12 @@ final class ApexNativeCarMap: UIView {
         paintPlatesAndCredit()
     }
 
+    /// A car's own theme: the arrow is that car from above (web/carplay.js carPuck); nil, the ink arrow.
+    func setPuck(_ s: ApexCarPuckShape?) {
+        puck.shape(s)
+        paintPlatesAndCredit()
+    }
+
     func setRoute(_ coords: [CLLocationCoordinate2D]) {
         route = coords
         glide.setRoute(coords.map { (lat: $0.latitude, lon: $0.longitude) }, now: CACurrentMediaTime())
@@ -459,6 +465,7 @@ final class ApexNativeCarMap: UIView {
     private func paintPlatesAndCredit() {
         plates.forEach(paint)
         puck.paint(panel: palette.plate, ink: palette.plateInk, accent: palette.plateInk)   // panel round 2: a position, in ink
+        puck.edge(palette.casing)                                         // a car's outline: the map's road casing, 3:1 on the map
         sightTag.palette = (palette.plate, palette.plateInk)
         drawSight()
         credit.backgroundColor = palette.bg
@@ -567,9 +574,47 @@ final class ApexCarPlateLabel: UILabel {
     override var intrinsicContentSize: CGSize { sizeThatFits(CGSize(width: CGFloat.greatestFiniteMagnitude, height: .greatestFiniteMagnitude)) }
 }
 
+/// A car's own theme (web/carplay.js carPuck): the car from above, nose up, in the arrow's 34-point box, in its paint.
+/// Malformed points are dropped, never guessed; fewer than three body points and there is no car (the ink arrow stays).
+struct ApexCarPuckShape {
+    var paint: UIColor
+    var glass: UIColor
+    var body: [CGPoint]
+    var glassShape: [CGPoint]
+    var roof: [CGPoint]
+
+    init?(_ d: [String: Any]?) {
+        guard let d, let paint = ApexCar.color(d["paint"]) else { return nil }
+        func points(_ v: Any?) -> [CGPoint] {
+            ((v as? [Any]) ?? []).prefix(120).compactMap { p -> CGPoint? in
+                guard let a = p as? [Any], a.count == 2, let x = (a[0] as? NSNumber)?.doubleValue, let y = (a[1] as? NSNumber)?.doubleValue,
+                      x.isFinite, y.isFinite, x >= 0, x <= 34, y >= 0, y <= 34 else { return nil }
+                return CGPoint(x: x, y: y)
+            }
+        }
+        let body = points(d["body"])
+        guard body.count >= 3 else { return nil }
+        self.paint = paint
+        self.glass = ApexCar.color(d["glass"]) ?? UIColor(white: 0.1, alpha: 1)
+        self.body = body
+        self.glassShape = points(d["glass_shape"])
+        self.roof = points(d["roof"])
+    }
+
+    static func path(_ pts: [CGPoint]) -> CGPath? {
+        guard pts.count >= 3 else { return nil }
+        let p = UIBezierPath()
+        p.move(to: pts[0])
+        for q in pts.dropFirst() { p.addLine(to: q) }
+        p.close()
+        return p.cgPath
+    }
+}
+
 /// The car's arrow (web/carmap.js drawPuck): a disc in the plate's colours, the arrow in the accent.
 final class ApexCarPuckView: UIView {
-    private let disc = CAShapeLayer(), arrow = CAShapeLayer()
+    private let disc = CAShapeLayer(), arrow = CAShapeLayer(), glass = CAShapeLayer(), roof = CAShapeLayer()
+    private var car: ApexCarPuckShape?
     override init(frame: CGRect) {
         super.init(frame: CGRect(x: 0, y: 0, width: 34, height: 34))
         disc.path = UIBezierPath(ovalIn: CGRect(x: 3, y: 3, width: 28, height: 28)).cgPath
@@ -577,12 +622,28 @@ final class ApexCarPuckView: UIView {
         let a = UIBezierPath()
         a.move(to: CGPoint(x: 17, y: 7)); a.addLine(to: CGPoint(x: 25, y: 24)); a.addLine(to: CGPoint(x: 17, y: 19.8)); a.addLine(to: CGPoint(x: 9, y: 24)); a.close()
         arrow.path = a.cgPath
-        layer.addSublayer(disc); layer.addSublayer(arrow)
+        layer.addSublayer(disc); layer.addSublayer(arrow); layer.addSublayer(glass); layer.addSublayer(roof)
+        glass.isHidden = true; roof.isHidden = true
         isUserInteractionEnabled = false
+    }
+    /// A car's own theme: its outline in the map's casing colour (theme_contract.js holds it to 3:1 on the map).
+    func edge(_ c: UIColor) { if car != nil { disc.strokeColor = c.cgColor } }
+    /// A car's own theme draws that car in place of the disc and arrow; nil puts the ink arrow back.
+    func shape(_ s: ApexCarPuckShape?) {
+        car = s
+        if let s {
+            disc.path = ApexCarPuckShape.path(s.body); disc.lineWidth = 1.6; disc.lineJoin = .round
+            glass.path = ApexCarPuckShape.path(s.glassShape); roof.path = ApexCarPuckShape.path(s.roof)
+            arrow.isHidden = true; glass.isHidden = false; roof.isHidden = false
+        } else {
+            disc.path = UIBezierPath(ovalIn: CGRect(x: 3, y: 3, width: 28, height: 28)).cgPath; disc.lineWidth = 2.5
+            arrow.isHidden = false; glass.isHidden = true; roof.isHidden = true
+        }
     }
     required init?(coder: NSCoder) { fatalError("not from a storyboard") }
     func paint(panel: UIColor, ink: UIColor, accent: UIColor) {
-        disc.fillColor = panel.cgColor; disc.strokeColor = ink.cgColor; arrow.fillColor = accent.cgColor
+        disc.fillColor = (car?.paint ?? panel).cgColor; disc.strokeColor = ink.cgColor; arrow.fillColor = accent.cgColor
+        glass.fillColor = car?.glass.cgColor; roof.fillColor = car?.paint.cgColor
     }
 }
 

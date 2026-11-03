@@ -4,6 +4,26 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-03: The car themes are the cars (you: "much more car specific… any voice pack")
+
+- **Each cluster is drawn as that car's**, from its own data on the server (only your and @fish5spd's accounts get it).
+  Tiburon from your photos: black faces, chrome rings, red-orange needles, speedometer left (0-160 MPH, km/h inside),
+  the right dial the tach's face (0-8, red from 6.5), the twin small gauges and the LCD, red light at night, silver
+  paint. FR-S: the centre 0-9 tach (red from 7,500) with the speed in digits, PACE window, the REV lamp, the right dial
+  Turn and Brake, Bank on the left, carbon trim, Ultramarine Pearl. Sources and what couldn't be confirmed:
+  docs/design/CAR_THEMES.md.
+- **Honest readings**: Vetta can't read the engine, so the Tiburon's tach-faced dial reads grip ("x0.1 g", 8 = 0.8 g)
+  and says so; the FR-S tach needle rests dimmed; the small gauges carry Turn and Brake, the LCD Bank. Undo: the
+  dial's `reads` in backend/src/private_themes.json.
+- **Red** is allowed for needles, redline zones and night light where the car has them (you: "red doesn't need to be
+  warnings only"); the warning keeps its shape, hatching and word, which the theme contract now checks. The FR-S needle
+  stays white (its stock colour couldn't be confirmed).
+- **Your car on the map** is a top-down outline in its paint, on the phone and the car map (road-edge outline for
+  contrast); the Garage card is the parked cluster with the car, the share card shows the car by VETTA.
+- **Any voice with any theme**: "Co-driver's voice" in the Garage (Suggested, Marguerite, Kit, Hale); the pick wins over
+  the theme and survives theme changes. Undo: the voiceChoice setting.
+- Not drawn: the Tiburon's warning lamps (a lamp that never lights would mislead), its turn arrows, seat fabric.
+
 ## 2026-11-03: End's Undo is 1.7 s (you: "undo timer should be 1/3 as long")
 
 - The Undo after End now lasts 1.7 s (was 5 s), on the phone and the car's screen. Report's and the convoy calls' 3 s

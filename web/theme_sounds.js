@@ -3,8 +3,7 @@
 //   Roadbook  key: a soft paper click     pre-call: a wood-block tick
 //   Tapedeck  key: a tape-deck clunk      pre-call: a VFD bip
 //   Billet    key: a machined click       pre-call: a low tone
-//   Tiburon   key: a rocker switch        pre-call: a warm two-note chime   (private, themes.js grant())
-//   FR-S      key: a light tick           pre-call: a double beep           (private)
+//   a private theme's own (themes.js grant()): its key and pre-call voices come with its look from the server (theme.sounds)
 // recipe() is pure (tests/test_theme_sounds.py); play() needs an AudioContext.
 (function (root) {
   'use strict';
@@ -16,12 +15,6 @@
                 pre: [{ type: 'square', f: 2000, at: 0, dur: 0.05, gain: 0.04 }] },
     billet: { key: [{ type: 'noise', f: 6000, at: 0, dur: 0.008, gain: 0.07, q: 4 }, { type: 'triangle', f: 3100, at: 0, dur: 0.012, gain: 0.03 }],
               pre: [{ type: 'sine', f: 220, at: 0, dur: 0.12, gain: 0.14 }] },
-    // the private themes (themes.js grant()): the Tiburon's chunky 2000s rocker switch and a warm two-note chime; the FR-S's
-    // light tick and the short, high beep of its rev indicator
-    tiburon: { key: [{ type: 'noise', f: 1800, at: 0, dur: 0.03, gain: 0.08, q: 1.5 }, { type: 'sine', f: 160, at: 0, dur: 0.04, gain: 0.08 }],
-               pre: [{ type: 'triangle', f: 660, at: 0, dur: 0.07, gain: 0.1 }, { type: 'triangle', f: 990, at: 0.08, dur: 0.07, gain: 0.08 }] },
-    frs: { key: [{ type: 'noise', f: 5200, at: 0, dur: 0.01, gain: 0.06, q: 3 }],
-           pre: [{ type: 'sine', f: 2400, at: 0, dur: 0.04, gain: 0.06 }, { type: 'sine', f: 2400, at: 0.07, dur: 0.04, gain: 0.06 }] },
   };
   // the same in every theme: what a hazard sounds like is not a theme's to change
   const HAZARD = [{ type: 'square', f: 660, at: 0, dur: 0.09, gain: 0.07 }, { type: 'square', f: 880, at: 0.11, dur: 0.09, gain: 0.07 }];
@@ -33,10 +26,12 @@
     sleep: [{ type: 'sine', f: 1175, at: 0, dur: 0.11, gain: 0.08 }, { type: 'sine', f: 784, at: 0.13, dur: 0.18, gain: 0.08 }],
   };
 
-  /** The voices for a sound: kind 'key' | 'pre' | 'hazard' | 'wake' | 'sleep'. An unknown theme uses the road book's. */
-  function recipe(themeId, kind) {
+  /** The voices for a sound: kind 'key' | 'pre' | 'hazard' | 'wake' | 'sleep'. An unknown theme uses the road book's.
+   *  own: a private theme's sounds ({ key, pre }, cleaned by themes.js carFrom); the hazard and the mode chimes are never a theme's. */
+  function recipe(themeId, kind, own) {
     if (kind === 'hazard') return HAZARD;
     if (kind === 'wake' || kind === 'sleep') return MODE[kind];
+    if (own && Array.isArray(own[kind]) && own[kind].length) return own[kind];
     const r = Object.prototype.hasOwnProperty.call(RECIPES, themeId) ? RECIPES[themeId] : RECIPES.roadbook;
     return r[kind] || [];
   }
