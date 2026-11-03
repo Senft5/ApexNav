@@ -1,4 +1,4 @@
-// Convoy on screen: the strip over the map, the convoy sheet it opens, the panel a crew drive's card shows while its
+// Convoy on screen: the one line on the map, the convoy sheet it opens, the panel a crew drive's card shows while its
 // convoy is live, cars and hazards on the map, and the co-driver's hazard calls. A convoy is a state of the run, not a
 // section of its own (docs/design/REVIEW_PEOPLE.md P-11): a crew's starts from its drive's card (crew_events.js), an
 // ad-hoc one from the map's Start key ("Convoy now"), and an invite waits on the drive's card and on the map's line. The page hands in what it owns (map, position, voice, toasts) through mount(); the link and
@@ -35,14 +35,32 @@
     .convoy-sheet .cv-sheet-head { display: flex; justify-content: space-between; align-items: center; }
     .convoy-sheet .cv-sheet-head h2 { margin: 0; }
     /* the owner's photos, 2026-10-30: a two-row block of calls over the map and the Layers key, before a drive had started.
-       Now one line (name and status) off the right-hand keys; the calls come only in a drive, in one row that scrolls. */
+       Now one line (name and status) off the right-hand keys; the calls come only in a drive (below). */
     .convoy-bar.show { display: flex; }
     #app.sheet-open .convoy-bar { display: none; }
-    .convoy-bar .cv-calls { display: flex; flex-wrap: nowrap; gap: 6px; overflow-x: auto; scrollbar-width: none; padding: 0 10px 6px; }
-    .convoy-bar .cv-regroup { padding: 0 10px 6px; }
-    .convoy-bar .cv-calls::-webkit-scrollbar { display: none; }
-    .convoy-bar .cv-calls button { flex: none; min-height: 44px; min-width: 44px; padding: 0 10px; font-size: 13px; font-weight: 700; }
+    /* @fish5spd, 2026-11-03 ("in my way when I lead"): in a drive the bar sat over the road just ahead of the arrow (the
+       stage's top plus the safe area again, under the notes strip) with the leader's calls in a row cut off at the Layers
+       key. Now the convoy is one line in the map's bottom-left corner, behind the car and clear of the right-hand keys; the
+       calls come when the leader asks (the Report key's sheet, or a tap on the line) and go with the sheet. */
+    .convoy-bar .cv-line .cv-rg { color: var(--panel-ink); }
+    .convoy-bar .cv-key { flex: none; min-height: 36px; padding: 0 10px; font: 700 13px var(--font-ui, sans-serif); white-space: nowrap; }
     .convoy-bar .cv-undo { color: var(--signal, #c33); border-color: var(--signal, #c33); }
+    #app.live .convoy-bar { top: auto; bottom: 10px; left: 10px; right: auto; max-width: min(360px, calc(100% - 90px)); flex-direction: row; align-items: center; gap: 0;
+      border: 1.5px solid var(--panel-ink); box-shadow: 0 2px 0 var(--rule); }
+    #app.live .convoy-bar .cv-line { flex: 1 1 auto; }
+    #app.live .stage:has(> .convoy-bar.show) > .plates { bottom: 82px; }   /* a Pro trial's line, if any, goes over the convoy's */
+    @media (orientation: landscape) and (max-height: 540px) {
+      #app.live .convoy-bar { left: calc(10px + var(--safe-left)); bottom: calc(10px + var(--safe-bottom)); max-width: min(360px, calc(100% - 90px - var(--safe-left) - var(--safe-right))); }
+      /* the Report sheet on its side: the convoy's calls beside the public report, so both fit without a scroll */
+      #hzOverlay .card-sheet:has(> .cv-report) { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 24px; align-items: start; }
+      #hzOverlay .card-sheet:has(> .cv-report) > .cv-report { grid-column: 1; grid-row: 1 / span 9; }
+      #hzOverlay .card-sheet:has(> .cv-report) > :not(.cv-report) { grid-column: 2; }
+      #hzOverlay .card-sheet:has(> .cv-report) .hz-grid { gap: 8px; }
+      #hzOverlay .card-sheet:has(> .cv-report) .hz-grid button { font-size: 17px; padding: 0 8px; }
+      #hzOverlay .card-sheet:has(> .cv-report) .hz-grid .hz-btn::before { display: none; }   /* the half-width keys keep their words whole */
+    }
+    .cv-callbox h3 { margin: 0; }
+    .cv-callbox .note { margin: 2px 0 0; }
     .convoy-dot { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--panel, #fff);
       background: var(--accent, #2a6); color: var(--panel, #fff); font: 800 11px var(--font-ui, sans-serif); box-shadow: 0 1px 4px rgba(0,0,0,.4); }
     .convoy-dot.leader { background: var(--panel-ink, #111); }
@@ -194,8 +212,8 @@
       return JSON.stringify([s.id, s.status, s.unreachable, s.ctx && s.ctx.role, s.ctx && s.ctx.name, s.members.map((m) => [m.key, m.online, m.role, m.handle]),
                              !!client.route, !!client.regroup, undo && undo.id, !!getRoute(), driving()]);
     }
-    // P-21: one line, a tap opens the convoy. Idle with an invite waiting, the line is the invite; in a drive the leader's
-    // calls come under it in one scrolling row.
+    // P-21: one line, a tap opens the convoy. Idle with an invite waiting, the line is the invite; in a drive it sits behind
+    // the car, and the leader's calls open from it or from the Report key, never as a row over the map.
     function paintBar() {
       const s = snap, idle = !(s && s.id);
       const inv = idle && !driving() ? asked.list[0] || null : null, link = idle && !driving() && !inv ? store.get('sessionStorage', INVITE_KEY) : '';
@@ -213,22 +231,45 @@
         bar.replaceChildren(ln);
         return;
       }
+      // one line: who and how many live (and the regroup point); the leader's calls are behind it, never under it
       live.headline = el('span');
-      const kids = [labelled(line(s.status === 'live' ? '' : 'off', s.ctx ? s.ctx.name : 'Convoy', live.headline), `Convoy ${s.ctx ? s.ctx.name : ''}. Open it`)];
-      if (client.regroup) { live.regroup = el('div', { className: 'cv-regroup' }); kids.push(live.regroup); }
-      if (s.status === 'replaced') kids.push(el('div', { className: 'cv-calls' }, btn('Use the convoy here', () => client.takeOver())));
-      else if (isLeader() && driving()) {                              // calls are for the road: only in a drive
-        const calls = el('div', { className: 'cv-calls' });
-        if (undo) calls.append(btn(`Undo ${C.KINDS[undo.type]}`, undoCall, 'ink-btn cv-undo'));
-        else for (const k of LEADER_CALLS) calls.append(labelled(btn(C.KINDS[k], () => callOut(k)), `Call ${C.KINDS[k]} to the convoy`));
-        calls.append(btn(client.regroup ? 'Clear regroup' : 'Regroup here', () => {
-          if (client.regroup) { if (!client.clearRegroup()) toast('Not connected to the convoy.'); }
-          else if (!getFix()) toast('No GPS fix yet.');
-          else if (!client.callRegroup(getFix())) toast('Not connected to the convoy.');
-        }));
-        kids.push(calls);
-      }
+      if (client.regroup) live.regroup = el('span', { className: 'cv-rg' });
+      const name = s.ctx ? s.ctx.name : 'Convoy', calling = callsOn();
+      const ln = line(s.status === 'live' ? '' : 'off', name, live.headline);
+      if (live.regroup) ln.append(live.regroup);
+      const kids = [labelled(ln, `Convoy ${name}. ${calling ? 'Open it for your calls' : 'Open it'}`)];
+      if (s.status === 'replaced') kids.push(btn('Use it here', () => client.takeOver(), 'ink-btn cv-key'));
+      else if (calling && undo) kids.push(btn(`Undo ${C.KINDS[undo.type]}`, undoCall, 'ink-btn cv-key cv-undo'));   // 3 s, then gone
       bar.replaceChildren(...kids);
+    }
+    // The leader's calls are for the road: only in a drive, and only when asked for (the Report key's sheet, the line).
+    const callsOn = () => !!(snap && snap.id && snap.status !== 'replaced' && isLeader() && driving());
+    function regroupKey(done) {
+      return btn(client.regroup ? 'Clear regroup' : 'Regroup here', () => {
+        done();
+        if (client.regroup) { if (!client.clearRegroup()) toast('Not connected to the convoy.'); }
+        else if (!getFix()) toast('No GPS fix yet.');
+        else if (!client.callRegroup(getFix())) toast('Not connected to the convoy.');
+      }, 'ink-btn');
+    }
+    // The calls as a sheet's block, in rows that wrap (never a row cut off at the screen's edge); a call closes the sheet.
+    function callsBox(done) {
+      const grid = el('div', { className: 'hz-grid cv-call-grid' });
+      for (const k of LEADER_CALLS) grid.append(labelled(btn(C.KINDS[k], () => { done(); callOut(k); }, 'ink-btn hz-btn'), `Call ${C.KINDS[k]} to the convoy`));
+      grid.append(regroupKey(done));
+      return el('div', { className: 'cv-callbox' }, el('h3', { textContent: 'Call to the convoy' }),
+        el('p', { className: 'note', textContent: 'Only your convoy hears these.' }), grid);
+    }
+    // The Report key's sheet (the page's): the convoy's calls on top while you lead a drive, the public report under them.
+    function paintReport() {
+      const sheetEl = page.reportSheet, card = sheetEl && sheetEl.querySelector('.card-sheet');
+      if (!card) return;
+      const was = card.querySelector('.cv-report'), key = callsOn() ? String(!!client.regroup) : '';
+      if (was && was.dataset.key === key) return;                       // rebuilt only when its keys change: no tap lost
+      if (!key) { if (was) was.remove(); return; }
+      const box = callsBox(() => sheetEl.classList.remove('show'));
+      box.classList.add('cv-report'); box.dataset.key = key;
+      if (was) was.replaceWith(box); else card.prepend(box);
     }
     function callOut(type) {
       const id = client.callHazard(type, getFix());
@@ -389,6 +430,7 @@
         return;
       }
       const c = s.ctx;
+      if (h.kind === 'sheet' && callsOn()) kids.push(callsBox(close));   // a tap on the line in a drive: the calls first
       // P-28: how long it has left, kept fresh every second, not the clock time it ends
       const left = el('span', { textContent: C.leftText(c.expiresAtMs) });
       live.left.push(left);
@@ -462,7 +504,7 @@
       }
       if (snap && !snap.id) spoken.clear();
       const key = structKey();
-      if (what === 'structure' && key !== lastKey) { lastKey = key; renderAll(); paintBar(); tellWatchers(); }
+      if (what === 'structure' && key !== lastKey) { lastKey = key; renderAll(); paintBar(); paintReport(); tellWatchers(); }
       paintText(); paintMap();
     }
 

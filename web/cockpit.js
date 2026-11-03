@@ -4074,6 +4074,7 @@
     let convoy = null;
     onSocial(() => { try { convoy = window.ApexConvoyUI && window.ApexConvoy ? ApexConvoyUI.mount({
       map, maplibregl, el, btn, toast, copyText, showView, apiFetch: ApexSync.apiFetch, overlayParent: $('toast').parentElement,
+      reportSheet: $('hzOverlay'),                                     // the Report key's sheet: the leader's convoy calls go on top
       driving: () => driveActive,
       siteOrigin: () => (ApexSync.inApp ? ApexSync.apiBase : location.origin),
       wsUrl: (id) => `${ApexSync.inApp ? ApexSync.apiBase.replace(/^http/, 'ws') : location.origin.replace(/^http/, 'ws')}/api/convoy/${encodeURIComponent(id)}/connect`,

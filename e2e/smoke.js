@@ -2297,6 +2297,106 @@ flow('convoy: the leader shows a QR code of the link (Worker stubbed, IDEAS S-22
   check(dark > 0.2 && dark < 0.6, `a QR code is drawn (${(dark * 100).toFixed(0)} % dark)`);
 });
 
+// @fish5spd, 2026-11-03 ("Shits in my way when I lead"): leading a convoy on a drive, a card over the road just ahead of the
+// arrow held the convoy's line and a row of calls cut off under the Layers key. Now the convoy is one line behind the car,
+// clear of the right-hand keys and the safe areas, upright and on its side; the calls come from the Report key or the line.
+flow('convoy: leading a drive, the convoy is one line behind the car and the calls come when asked (Worker stubbed, @fish5spd 2026-11-03)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  const id = 'CCCCCCCCCCCCCCCCCCCCCC', until = Date.now() + 120 * 60000;
+  const ctx = { sessionId: id, name: '@fish5spd and @natesenft', role: 'leader', you: 'k1', leaderKey: 'k1', expiresAtMs: until, seq: 0, leaderEpoch: 1,
+                members: [{ key: 'k1', handle: 'fish5spd', role: 'leader', online: true }, { key: 'k2', handle: 'natesenft', role: 'member', online: true }] };
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url()), m = route.request().method();
+    const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'fish5spd' });
+    if (u.pathname === '/api/convoy' && m === 'POST') return json({ invite: `${id}.${'s'.repeat(32)}`, context: ctx }, 201);
+    if (u.pathname === `/api/convoy/${id}/ticket`) return json({ ticket: 't'.repeat(32), expiresAtMs: Date.now() + 60000 }, 201);
+    if (u.pathname === `/api/convoy/${id}`) return json(ctx);
+    if (m === 'GET') return json([]);
+    return json({}, 404);
+  });
+  await page.context().grantPermissions(['geolocation']);   // the browser's own GPS, for Start the drive
+  await page.context().setGeolocation({ latitude: 35.36, longitude: -84.29 });
+  const cdp = await page.context().newCDPSession(page);
+  await page.setViewportSize({ width: SAFE.portrait.w, height: SAFE.portrait.h });
+  await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets: SAFE.portrait.i });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && typeof window.apex.live === 'function');
+  // (a script's tap: Playwright's click scrolls the clipped stage to bring the plan bar's key "into view", which a finger can't)
+  await page.evaluate(() => document.getElementById('startMore').click());
+  await page.click('.start-sheet button:has-text("Convoy now")');
+  await page.waitForSelector('.convoy-sheet canvas.cv-qr');
+  await page.click('.convoy-sheet button:has-text("Start the drive")');
+  check(await page.evaluate(() => { const s = document.querySelector('.stage'); return !s.scrollLeft && !s.scrollTop; }), 'the map stage is where it was');
+  await page.evaluate(async () => { for (let i = 0; i < 40; i++) { window.apex.live({ lat: 35.36 + i * 1e-5, lon: -84.29, accuracy_m: 5, speed_mps: 12, course_deg: 0, has_fix: true, calibration: 'locked', lat_g: 0.1, lon_g: 0 }); await new Promise((r) => setTimeout(r, 40)); } });
+  await page.waitForFunction(() => document.getElementById('app').classList.contains('live') && document.querySelector('.convoy-bar.show'));
+  await page.waitForTimeout(1200);   // a tick: the bar redraws for the drive
+  const geo = () => page.evaluate(() => {
+    const R = (n) => { if (!n) return null; const r = n.getBoundingClientRect(); return r.width && r.height ? { l: r.left, r: r.right, t: r.top, b: r.bottom } : null; };
+    const bar = document.querySelector('.convoy-bar.show'), puck = document.querySelector('.puck'), stage = document.querySelector('.stage');
+    const keys = ['.edge-tab', '#recenterBtn', '.maplibregl-ctrl-attrib', '#hzPlate', '#toast'].map((q) => [q, R(document.querySelector(q))]).filter(([, r]) => r);
+    const inside = (a, b) => a.l >= b.l - 0.5 && a.r <= b.r + 0.5 && a.t >= b.t - 0.5 && a.b <= b.b + 0.5;
+    const meet = (a, b) => Math.min(a.r, b.r) - Math.max(a.l, b.l) > 1 && Math.min(a.b, b.b) - Math.max(a.t, b.t) > 1;
+    const b = R(bar), p = R(puck), s = R(stage);
+    // the road ahead: from the top of the map down to the arrow, across the arrow and 120 px either side of it
+    const ahead = p && { l: Math.max(s.l, (p.l + p.r) / 2 - 120), r: Math.min(s.r, (p.l + p.r) / 2 + 120), t: s.t, b: p.t };
+    return { bar: b, puck: p, stage: s, rows: bar.querySelectorAll('.cv-calls, .cv-call-grid').length, kids: bar.children.length,
+      text: bar.innerText, coversAhead: !!(ahead && meet(b, ahead)), behind: !!(p && b.t >= (p.t + p.b) / 2), inStage: inside(b, s),
+      keysInBar: [...bar.querySelectorAll('button')].every((k) => inside(R(k), b)),
+      hits: keys.filter(([, r]) => meet(b, r)).map(([q]) => q), oneLine: b.b - b.t <= 64 };
+  });
+  let g = await geo();
+  check(g.puck && g.rows === 0 && g.kids === 1 && /@fish5spd and @natesenft/.test(g.text) && /of 2 live|Reconnecting|Connecting/.test(g.text), 'in a drive the convoy is one line, no calls row: ' + JSON.stringify(g));
+  check(!g.coversAhead && g.behind && g.inStage && g.keysInBar && !g.hits.length && g.oneLine, 'the line is off the road ahead, behind the car, whole and clear of the keys: ' + JSON.stringify(g));
+  let bad = await unsafe(page, SAFE.portrait);
+  check(!bad.length, 'upright, clear of the island, the corners and every key: ' + bad.join(' | '));
+  // the leader's calls: the Report key's sheet, on top of the public report; a call closes it and the line holds Undo for 3 s
+  const reportSheet = async () => {
+    await page.click('#hzReportBtn');
+    await page.waitForSelector('#hzOverlay.show .cv-report');
+    await page.waitForTimeout(400);   // the sheet's slide up
+    return page.evaluate(() => { const card = document.querySelector('#hzOverlay .card-sheet'), c = card.getBoundingClientRect();
+      const ks = [...card.querySelectorAll('.cv-report button, #hzKinds button')];
+      return { keys: [...card.querySelectorAll('.cv-report button')].map((k) => k.textContent),
+        clipped: ks.filter((k) => { const r = k.getBoundingClientRect(); return r.left < c.left - 0.5 || r.right > c.right + 0.5 || k.scrollWidth > k.clientWidth + 1; }).map((k) => k.textContent),
+        first: card.firstElementChild.classList.contains('cv-report'), publicKinds: document.querySelectorAll('#hzKinds button').length }; });
+  };
+  const sheet = await reportSheet();
+  check(JSON.stringify(sheet.keys) === '["Bump","Gravel","Debris","Animal","Police","Stopped car","Regroup here"]', 'the convoy calls in the Report sheet: ' + JSON.stringify(sheet));
+  check(!sheet.clipped.length && sheet.first && sheet.publicKinds >= 6, 'every call whole, convoy first, the public report still under it: ' + JSON.stringify(sheet));
+  bad = await unsafe(page, SAFE.portrait);
+  check(!bad.length, 'the Report sheet with the calls is clear: ' + bad.join(' | '));
+  await page.click('#hzOverlay .cv-report button:has-text("Bump")');
+  check(!(await page.isVisible('#hzOverlay.show')), 'a call closes the sheet');
+  await saidOn(page, /Bump (called to|will go out)/, { timeout: 4000 });
+  g = await geo();
+  check(/Undo Bump/.test(g.text) && g.oneLine && !g.coversAhead && g.keysInBar && !g.hits.length, 'Undo on the line, still one line behind the car: ' + JSON.stringify(g));
+  await page.click('.convoy-bar .cv-undo');
+  await saidOn(page, /Call cancelled|Cancelling/, { timeout: 4000 });
+  // a tap on the line: the convoy sheet, the calls first
+  await page.click('.convoy-bar .cv-line');
+  await page.waitForSelector('.convoy-sheet .cv-callbox');
+  check(await page.evaluate(() => { const k = [...document.querySelectorAll('.convoy-sheet .cv-callbox button')]; return k.length === 7 && document.querySelector('.convoy-sheet .stack-8').firstElementChild.classList.contains('cv-callbox'); }), 'the line opens the convoy with the calls on top');
+  await page.click('.convoy-sheet .cv-callbox button:has-text("Gravel")');
+  check(!(await page.$('.convoy-sheet')), 'a call from the convoy sheet closes it too');
+  await page.waitForTimeout(3300);   // the Undo window passes: the line is the line again
+  g = await geo();
+  check(g.kids === 1 && !/Undo/.test(g.text), 'after 3 s the Undo goes: ' + g.text);
+  // on its side (the landscape mount): behind the car, clear of the notch, the home indicator and the keys
+  await page.setViewportSize({ width: SAFE.landscape.w, height: SAFE.landscape.h });
+  await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets: SAFE.landscape.i });
+  await page.evaluate(async () => { for (let i = 40; i < 60; i++) { window.apex.live({ lat: 35.36 + i * 1e-5, lon: -84.29, accuracy_m: 5, speed_mps: 12, course_deg: 0, has_fix: true, calibration: 'locked', lat_g: 0.1, lon_g: 0 }); await new Promise((r) => setTimeout(r, 40)); } });
+  await page.waitForTimeout(700);
+  g = await geo();
+  check(!g.coversAhead && g.behind && g.inStage && g.keysInBar && !g.hits.length && g.oneLine && g.bar.l >= SAFE.landscape.i.left, 'on its side, the same: ' + JSON.stringify(g));
+  bad = await unsafe(page, SAFE.landscape);
+  check(!bad.length, 'on its side, clear of the notch, the corners and every key: ' + bad.join(' | '));
+  const side = await reportSheet();
+  check(side.keys.length === 7 && !side.clipped.length && side.publicKinds >= 6, 'on its side, every call whole beside the public report: ' + JSON.stringify(side));
+  bad = await unsafe(page, SAFE.landscape);
+  check(!bad.length, 'on its side, the Report sheet with the calls is clear: ' + bad.join(' | '));
+}, { hasTouch: true });
+
 flow('garage: a VIN fills the car in, the owner keeps the colour (NHTSA stubbed, IDEAS S-21)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.route('https://vpic.nhtsa.dot.gov/**', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ Results: [
