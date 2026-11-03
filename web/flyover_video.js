@@ -47,7 +47,7 @@
       g.fillStyle = '#fff'; g.textBaseline = 'middle';
       g.font = `700 ${fs}px system-ui, sans-serif`; g.fillText(o.note || '', pad, h - fs * 1.6);
       g.font = `500 ${Math.round(fs * 0.6)}px system-ui, sans-serif`; g.fillText([o.title, o.speed].filter(Boolean).join(' · '), pad, h - fs * 0.6);
-      g.textAlign = 'right'; g.font = `800 ${Math.round(fs * 0.6)}px system-ui, sans-serif`; g.fillText('APEX NAV', w - pad, h - fs * 0.6); g.textAlign = 'left';
+      g.textAlign = 'right'; g.font = `800 ${Math.round(fs * 0.6)}px system-ui, sans-serif`; g.fillText('VETTA', w - pad, h - fs * 0.6); g.textAlign = 'left';
     };
     opts.map.on('render', draw);
     let stream, rec;
