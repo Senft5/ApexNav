@@ -8,6 +8,9 @@ const path = require('path');
 const { chromium } = require('playwright');
 
 const WEB = path.resolve(__dirname, '..', 'web');
+// The private themes' looks (migration 0044): the server sends them in /api/me only to a granted account; the stubs below do the same
+const PRIVATE = JSON.parse(fs.readFileSync(path.resolve(__dirname, '..', 'backend', 'src', 'private_themes.json'), 'utf8'));
+const PRIVATE_IDS = Object.keys(PRIVATE);
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png',
   '.svg': 'image/svg+xml', '.wasm': 'application/wasm', '.onnx': 'application/octet-stream', '.webmanifest': 'application/manifest+json' };
 
@@ -3499,14 +3502,18 @@ flow('theme contract on its side: the strip has words, one height, codes in the 
   const overlaps = (bs) => { const out = []; for (let i = 0; i < bs.length; i++) for (let j = i + 1; j < bs.length; j++) { const A = bs[i], B = bs[j];
     const w = Math.min(A.r, B.r) - Math.max(A.x, B.x), h = Math.min(A.b, B.b) - Math.max(A.y, B.y); if (w > 1 && h > 1) out.push(`${A.label} over ${B.label}`); } return out; };
   const LONG = 'Road: Northwest Expressway';
+  // the private themes too, on an account granted them (the phone has the grant from an earlier /api/me, and this one says it again)
+  await page.route('**/api/me', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ signed_in: true, member: true, handle: 'granted', themes: Object.values(PRIVATE) }) }));
+  await page.addInitScript((defs) => { try { localStorage.setItem('apex.themeGrants', JSON.stringify(defs)); } catch (_) {} }, Object.values(PRIVATE));
   for (const night of [false, true]) {
-    for (const theme of ['roadbook', 'tapedeck', 'billet']) {
+    for (const theme of [...['roadbook', 'tapedeck', 'billet'], ...PRIVATE_IDS]) {
       await page.setViewportSize({ width: 852, height: 393 });
       await page.addInitScript((n) => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.prefs', JSON.stringify({ notesMode: 'full', nightMode: n ? 'on' : 'off' })); } catch (_) {} }, night);
       const m = `${theme} ${night ? 'night' : 'day'}`;
       // the strip, on its side, on the demo replay: a corner, then the quiet stretch
       await page.goto(base + `/index.html?drive=dry_ridge&play=1&theme=${theme}`);
       await page.waitForFunction(() => window.apexDebug && window.apexDebug.track && window.apexDebug.track.events.length);
+      check(await page.evaluate(() => document.documentElement.dataset.theme) === theme, `${m}: the theme is on`);
       const strip = async (frac) => {
         await page.evaluate((f) => { const st = window.apexDebug.state, t = window.apexDebug.track; st.cursorM = t.dist[t.dist.length - 1] * f; }, frac);
         await page.waitForTimeout(1200);
@@ -3537,6 +3544,72 @@ flow('theme contract on its side: the strip has words, one height, codes in the 
         check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${m} ${w}x${h}: no sideways scroll`);
       }
     }
+  }
+});
+
+flow('private themes: a granted account sees the Tiburon and the FR-S, uses each, and both keep the contract day and night; a grant gone, another account or signed out never sees them (migration 0044)', async (page, base) => {
+  let me = { signed_in: true, member: true, handle: 'granted', themes: Object.values(PRIVATE) };
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url());
+    if (u.pathname === '/api/me') return route.fulfill({ contentType: 'application/json', body: JSON.stringify(me) });
+    return route.fulfill({ status: 404, contentType: 'application/json', body: '{"error":"not_found"}' });
+  });
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  const cards = () => page.evaluate(() => [...document.querySelectorAll('#themeCards .theme-card')].map((c) => c.querySelector('.tc-head').textContent));
+  // granted: the picker shows both, marked private, and Use puts each on, its own instruments drawn
+  await page.goto(base + '/index.html?view=garage');
+  await page.waitForFunction(() => document.querySelectorAll('#themeCards .theme-card').length === 5, null, { timeout: 15000 });
+  const c = await cards();
+  check(c.some((t) => /^TiburonPRIVATE/.test(t)) && c.some((t) => /^FR-SPRIVATE/.test(t)), 'the granted account sees both, private: ' + JSON.stringify(c));
+  for (const [id, label, part] of [['tiburon', 'Tiburon', '#cluster .dial-g svg.pod'], ['frs', 'FR-S', '#cluster .dial-speed .tach-ring']]) {
+    await page.evaluate((l) => document.querySelector(`#themeCards [aria-label="Use ${l}"]`).click(), label);
+    await page.waitForFunction((t) => document.documentElement.dataset.theme === t, id);
+    check(await page.$(part), `${id}: its own instruments (${part})`);
+    check(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--route').trim().toLowerCase()) === PRIVATE[id].day.route.toLowerCase(), `${id}: its own route colour`);
+  }
+  check(JSON.parse(await page.evaluate(() => localStorage.getItem('apex.prefs'))).theme === 'frs', 'the choice is kept');
+  // the contract on the page, day and night, on the replay: the same hazard plate, floors, Limit sign and Score as every theme
+  for (const id of PRIVATE_IDS) for (const night of [false, true]) {
+    await page.addInitScript((n) => { try { localStorage.setItem('apex.prefs', JSON.stringify({ notesMode: 'full', nightMode: n ? 'on' : 'off' })); } catch (_) {} }, night);
+    await page.goto(base + `/index.html?drive=dry_ridge&play=1&theme=${id}`);
+    await page.waitForFunction(() => window.apexDebug && window.apexDebug.track && window.apexDebug.track.events.length);
+    await page.waitForFunction(() => window.apexDebug.state.playing, null, { timeout: 10000 });
+    const m = `${id} ${night ? 'night' : 'day'}`;
+    check(await page.evaluate(() => document.documentElement.dataset.theme + '/' + document.documentElement.dataset.mode) === `${id}/${night ? 'night' : 'day'}`, `${m}: on`);
+    await page.evaluate(() => { const st = window.apexDebug.state, t = window.apexDebug.track; st.cursorM = t.dist[t.dist.length - 1] * 0.45; });
+    await page.waitForTimeout(2500);
+    const r = await page.evaluate(() => {
+      const p = document.getElementById('hzPlate'); p.hidden = false; document.getElementById('hzPlateTitle').textContent = 'Gravel';
+      const cs = getComputedStyle(p), call = document.querySelector('.rb-box.now .rb-call span');
+      const small = [...document.querySelectorAll('#cluster *')].filter((n) => !(n instanceof SVGElement) && !n.closest('.ro-limit') && n.childNodes.length && [...n.childNodes].some((c) => c.nodeType === 3 && c.textContent.trim()))
+        .map((n) => [n.className, parseFloat(getComputedStyle(n).fontSize)]).filter(([, px]) => px < 13);
+      const bank = document.querySelector('#cluster .dial-g .dial-digital.small'), l = document.querySelector('.ro-limit'), lb = l && l.getBoundingClientRect();
+      const g = document.querySelector('#cluster .g-score'), gb = g.getBoundingClientRect(), mb = document.querySelector('#cluster .dial-g').getBoundingClientRect();
+      return { bg: cs.backgroundColor, edge: cs.borderTopColor, ink: cs.color, speed: document.querySelector('#cluster .dial-digital').getBoundingClientRect().height,
+        call: call ? parseFloat(getComputedStyle(call).fontSize) : 0, small, bankPx: bank ? bank.getBoundingClientRect().height : 0, bank: bank && bank.textContent,
+        limit: l && { w: Math.round(lb.width), h: Math.round(lb.height), bg: getComputedStyle(l).backgroundColor, unknown: l.classList.contains('unknown') },
+        score: { text: g.textContent, inside: gb.bottom <= mb.bottom + 1 && gb.top >= mb.top - 1 } };
+    });
+    check(r.bg === 'rgb(17, 17, 17)' && r.edge === 'rgb(255, 122, 26)' && r.ink === 'rgb(255, 255, 255)', `${m}: the same hazard plate ` + JSON.stringify(r));
+    check(r.speed >= 40 && r.call >= 21 && !r.small.length && r.bankPx >= 13, `${m}: speed ${r.speed}, call ${r.call}, bank ${r.bankPx}, small ` + JSON.stringify(r.small));
+    check(/^BANK /.test(r.bank || ''), `${m}: Bank is read out, -- until measured: ` + r.bank);
+    check(r.limit && r.limit.w === 44 && r.limit.h === 52 && (r.limit.unknown || r.limit.bg === 'rgb(255, 255, 255)'), `${m}: the same Limit sign: ` + JSON.stringify(r.limit));
+    check(/^--SCORE$/.test(r.score.text) && r.score.inside, `${m}: the Score under the meter, -- on a replay: ` + JSON.stringify(r.score));
+  }
+  // the grant taken away: the next /api/me drops both, and the look in use falls back to the road book
+  await page.addInitScript(() => { try { localStorage.setItem('apex.prefs', JSON.stringify({ theme: 'tiburon', themeV: 2 })); } catch (_) {} });
+  me = { signed_in: true, member: true, handle: 'granted', themes: [] };
+  await page.goto(base + '/index.html?view=garage');
+  await page.waitForFunction(() => document.documentElement.dataset.theme === 'roadbook' && document.querySelectorAll('#themeCards .theme-card').length === 3, null, { timeout: 15000 });
+  check(await page.evaluate(() => localStorage.getItem('apex.themeGrants')) === null && !/Tiburon|FR-S/.test(JSON.stringify(await cards())), 'a grant gone: the phone forgets both');
+  // another account, and signed out: never in the picker, and asking for one by link gets the road book
+  for (const who of [{ signed_in: true, member: true, handle: 'other', themes: [] }, { signed_in: false }]) {
+    me = who;
+    await page.goto(base + '/index.html?view=garage&theme=frs');
+    await page.waitForFunction(() => document.querySelectorAll('#themeCards .theme-card').length === 3);
+    await page.waitForTimeout(800);                                   // /api/me has answered
+    const seen = await cards();
+    check(!/Tiburon|FR-S/.test(JSON.stringify(seen)) && await page.evaluate(() => document.documentElement.dataset.theme) === 'roadbook', `${who.signed_in ? 'another account' : 'signed out'}: no private theme ` + JSON.stringify(seen));
   }
 });
 

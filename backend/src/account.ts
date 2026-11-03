@@ -33,6 +33,7 @@ export async function exportMyData(env: Env, v: Viewer) {
     drive_scores_shared: await q("SELECT c.name AS crew, d.score, d.driven_on, d.created_at FROM drive_scores d JOIN crews c ON c.id = d.crew_id WHERE d.user_id = ?"),
     photos: await q("SELECT id, kind, ref_id, bytes, w, h, created_at FROM photos WHERE owner = ?"),
     pro: await q("SELECT source, since, expires_at FROM pro_entitlements WHERE user_id = ?"),
+    themes_granted: await q("SELECT theme, created_at FROM theme_grants WHERE user_id = ?"),
     decals_kept_off: await q("SELECT c.name FROM decal_optouts o JOIN crews c ON c.id = o.crew_id WHERE o.user_id = ?"),
     builds: await q("SELECT b.id, c.make, c.model, b.stages, b.created_at FROM builds b JOIN cars c ON c.id = b.car_id WHERE b.owner = ?"),
     build_posts: await q("SELECT p.n, p.title, p.body, p.parts, p.score, p.created_at FROM build_posts p JOIN builds b ON b.id = p.build_id WHERE b.owner = ?"),

@@ -19,7 +19,7 @@
   const SIGNAL_FLOOR = 3;
   const APART = 90;
   const ALARM = { token: 'signal', channels: ['colour', 'shape', 'word'] };
-  const RENDERERS = { dial: ['printed', 'sevenseg', 'bezel'], meter: ['gball', 'bars', 'bezelg'], strip: ['roadbook', 'vfd'] };   // grows as Pro themes add theirs
+  const RENDERERS = { dial: ['printed', 'sevenseg', 'bezel', 'tach'], meter: ['gball', 'bars', 'bezelg', 'pod'], strip: ['roadbook', 'vfd'] };   // grows as themes add theirs (tach, pod: the private themes)
   const REQUIRED = ['stage', 'ink', 'dim', 'route', 'panel', 'panelInk', 'panelDim', 'rule', 'accent', 'signal', 'face', 'faceInk', 'faceDim'];
   const FORBIDDEN = ['hzBg', 'hzEdge', 'hzInk'];                                     // a theme can't set the plate
 

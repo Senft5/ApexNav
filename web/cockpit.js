@@ -4203,6 +4203,7 @@
       accountMe = null;
       try { const r = await apiCall('GET', '/api/me'); if (r.ok && (r.headers.get('content-type') || '').includes('json')) me = await r.json(); } catch (_) {}
       if (gen !== renderGen) return;
+      try { applyThemeGrants(me); } catch (e) { console.error('theme grants', e); }   // the account's private themes, or none
       // F-03: People and the Garage are never drawn without their modules while they are open; once loaded, needSocial draws them
       if (!socialIn && !socialFailed && (view === 'people' || view === 'garage')) { needSocial(); return; }
       accountMe = me && me.signed_in ? me : null;
@@ -5348,7 +5349,7 @@
           const inUseTag = el('span', { className: 'tc-inuse', textContent: 'In use' }), key = btn('Use', pick, 'ink-btn');
           const quote = document.createTextNode('');
           card.append(preview,
-            el('div', { className: 'tc-head' }, el('b', { textContent: t.label }), ...(t.pro ? [el('span', { className: 'tc-pro', textContent: 'PRO' })] : []), key),
+            el('div', { className: 'tc-head' }, el('b', { textContent: t.label }), ...(t.pro ? [el('span', { className: 'tc-pro', textContent: 'PRO' })] : t.granted ? [el('span', { className: 'tc-pro', textContent: 'PRIVATE' })] : []), key),
             el('p', { className: 'note', textContent: t.about || t.blurb || '' }),
             el('div', { className: 'tc-voice' }, el('p', {}, el('b', { textContent: `Voice: ${t.voice ? t.voice.name : '--'}. ` }), quote), hear));
           themeCards.set(t.id, { t, card, preview, key, inUseTag, ok, quote, line });
@@ -5371,6 +5372,16 @@
     // a Pro theme without Pro (a shared phone, Pro lapsed) goes back to the road book, never silently kept
     if (!themeAllowed(state.theme)) { state.theme = 'roadbook'; savePrefs(); applyTheme(); }
     renderThemePicker();
+    // Private themes (migration 0044): /api/me lists the ones granted to this account, with their looks (themes.js grant()).
+    // Signed out, another account, or a grant taken away: they leave the picker, and a look in use falls back to the road book.
+    function applyThemeGrants(me) {
+      if (!me || typeof me.signed_in !== 'boolean') return;           // offline or an error page: keep what the phone knew
+      if (!Themes.grant(me.signed_in && Array.isArray(me.themes) ? me.themes : [], window.ApexThemeContract)) return;
+      if (themeTrial && !Themes.THEMES[themeTrial.was]) themeTrial.was = 'roadbook';
+      themeCards.clear();
+      if (!Themes.THEMES[state.theme]) { state.theme = 'roadbook'; savePrefs(); applyTheme(); }
+      renderThemePicker();
+    }
     // Long help in the Garage folds under "How this works" (REVIEW.md 1.2, Settings): the control first, the essay on demand.
     document.querySelectorAll('[data-panel~="garage"] > p.note').forEach((p) => {   // on the page and in the gear's sheets
       if (p.id || p.textContent.trim().length < 140) return;                // short notes and live status lines stay as they are
