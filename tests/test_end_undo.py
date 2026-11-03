@@ -21,7 +21,7 @@ def test_end_waits_for_the_undo_window():
     assert "$('driveEnd').addEventListener('click', askEnd);" in PAGE
     assert "$('driveEnd').addEventListener('click', () => leaveDrive(true));" not in PAGE, "End no longer ends at once"
     m = re.search(r"const END_UNDO_MS = (\d+);", PAGE)
-    assert m and 3000 <= int(m.group(1)) <= 6000, "a few seconds, about Report's 3 s Undo"
+    assert m and 1500 <= int(m.group(1)) <= 2000, "the owner, 2026-11-03: a third of the 5 s it was (long enough to tap Undo)"
     ask = _fn(PAGE, "askEnd")
     assert "setTimeout(commitEnd, END_UNDO_MS)" in ask
     assert "leaveDrive(" not in ask.replace("if (!driveActive) { leaveDrive(true); return; }", ""), "only a drive not yet live ends at once"
