@@ -4,6 +4,11 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-03: End's Undo is 1.7 s (you: "undo timer should be 1/3 as long")
+
+- The Undo after End now lasts 1.7 s (was 5 s), on the phone and the car's screen. Report's and the convoy calls' 3 s
+  Undo are unchanged: you said "the undo timer", and End's is the one with the running fill. Undo: END_UNDO_MS.
+
 ## 2026-11-03: Four TestFlight notes (#286)
 
 - **Three of your notes from 31 Oct were never seen**: the run read only the last 10 notes. It reads 20 now; these are built.

@@ -6915,7 +6915,7 @@
     // the status row and its own key turns Undo for END_UNDO_MS, with a fill running down; the sensors, the notes and the
     // car keep going meanwhile, so Undo resumes as if End was never tapped. No dialog while moving (NHTSA counts those).
     // When the time runs out the drive is saved as it stood at End (the rows after it dropped, as a parked end does).
-    const END_UNDO_MS = 5000;
+    const END_UNDO_MS = 1700;   // the owner, 2026-11-03: a third of the 5 s it was
     let pendingEnd = null;                                            // { timer, rows }: End tapped, not yet done
     function paintEndUndo() {
       const b = $('driveEnd'), on = !!pendingEnd;
