@@ -4,6 +4,13 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-03: A theme from a newer server falls back instead of vanishing
+
+- The car themes disappeared on 572.1: the server deployed the new `car` renderer at once, and the older app's contract
+  rejected a renderer it didn't know, so it dropped both granted themes. Build 574 draws them. From now on a renderer
+  the app doesn't know is drawn as the printed dial, g-ball and road book, so a granted theme never vanishes because the
+  server is ahead of the phone. Undo: renderersFor in web/themes.js.
+
 ## 2026-11-03: The car themes are the cars (you: "much more car specific… any voice pack")
 
 - **Each cluster is drawn as that car's**, from its own data on the server (only your and @fish5spd's accounts get it).

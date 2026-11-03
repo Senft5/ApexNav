@@ -105,6 +105,20 @@
   const MAP_KEYS = ['bg', 'water', 'waterLine', 'land', 'wood', 'road', 'roadMinor', 'casing', 'label', 'halo', 'boundary', 'contour', 'shadow', 'highlight', 'accentShade'];
   const str = (v, n) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, n) : null);
   const colours = (o, keys) => { if (!o || typeof o !== 'object') return null; const out = {}; for (const k of keys) { if (!HEX.test(o[k] || '')) return null; out[k] = o[k]; } return out; };
+  // The renderers this build can draw (theme_contract.js RENDERERS lists the same; tests/test_themes.py keeps them equal).
+  // A server can be newer than the app on the phone (it deploys at once; a TestFlight build follows): a renderer this build
+  // doesn't know, or the car's cluster without its data, falls back to the printed dial, the g-ball and the road book, so a
+  // granted theme is drawn plainly instead of vanishing (2026-11-03: the car themes disappeared on 572.1 for exactly this).
+  const KNOWN_RENDERERS = { dial: ['printed', 'sevenseg', 'bezel', 'car'], meter: ['gball', 'bars', 'bezelg', 'car'], strip: ['roadbook', 'vfd'] };
+  const FALLBACK_RENDERER = { dial: 'printed', meter: 'gball', strip: 'roadbook' };
+  function renderersFor(r, car) {
+    const out = {};
+    for (const slot of Object.keys(FALLBACK_RENDERER)) {
+      const want = str(r && r[slot], 20);
+      out[slot] = want && KNOWN_RENDERERS[slot].includes(want) && (want !== 'car' || car) ? want : FALLBACK_RENDERER[slot];
+    }
+    return out;
+  }
   /** A server's theme definition as a theme of this file's shape, or null: only known keys, colours as #rrggbb. Pure. */
   function fromGrant(d) {
     if (!d || typeof d !== 'object' || !/^[a-z]{1,20}$/.test(d.id || '') || BUILT_IN.has(d.id)) return null;
@@ -115,7 +129,7 @@
     return { id: d.id, label, tag: str(d.tag, 2) || '', blurb: str(d.blurb, 80) || '', about: str(d.about, 400) || '', pro: false, granted: true,
       voice: str(v.id, 20) ? { id: str(v.id, 20), name: str(v.name, 24) || '', who: str(v.who, 120) || '' } : null,
       fonts: car && NUMERALS[car.numerals] ? { ...FONT, dial: NUMERALS[car.numerals] } : FONT, cluster: 'dials', notes: 'roadbook', gauge: d.gauge === 'vfd' ? 'vfd' : 'printed',
-      renderers: { dial: str(r.dial, 20), meter: str(r.meter, 20), strip: str(r.strip, 20) }, day, night, map: { day: mday, night: mnight },
+      renderers: renderersFor(r, car), day, night, map: { day: mday, night: mnight },
       ...(car ? { car, sounds: car.sounds } : {}) };
   }
 
@@ -241,5 +255,5 @@
   function last() { try { const l = JSON.parse(root.localStorage.getItem(LAST_KEY)); return Array.isArray(l) ? { id: l[0], night: !!l[1] } : null; } catch (_) { return null; } }
   { const l = last(); if (l) apply(l.id, l.night); }
 
-  root.ApexThemes = { THEMES, ACCENTS, get, apply, accent, setAccent, last, grant, granted, fromGrant, carFrom, carSVG, GRANT_KEY };
+  root.ApexThemes = { THEMES, ACCENTS, get, apply, accent, setAccent, last, grant, granted, fromGrant, carFrom, carSVG, GRANT_KEY, KNOWN_RENDERERS, renderersFor };
 })(window);

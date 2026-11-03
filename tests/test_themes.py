@@ -106,3 +106,29 @@ console.log(JSON.stringify({ route: day.route, accent: day.accent, signal: day.s
     assert out["route"] == "#1F4FA8" and out["accent"] == "#1F4FA8" and out["route"] != out["baseRoute"]
     assert out["signal"] == out["baseSignal"], "warnings keep their colour"
     assert out["after"] is None, "an unknown accent is no accent"
+
+
+@pytest.mark.skipif(NODE is None, reason="node not installed")
+def test_a_newer_server_theme_falls_back_instead_of_vanishing():
+    """2026-11-03: the server deployed a new renderer ('car') before the TestFlight build that draws it, and the older app
+    dropped both granted themes. A renderer this build doesn't know (or a car renderer without its car data) now draws
+    as the printed dial, the g-ball and the road book; the theme stays granted and passes the contract."""
+    import json as _j, os as _o, subprocess as _s
+    root = _o.path.dirname(_o.path.dirname(_o.path.abspath(__file__)))
+    runner = r"""
+const vm = require('node:vm'), fs = require('node:fs'), R = process.argv[1];
+const w = { localStorage: { getItem: () => null, setItem() {}, removeItem() {} } }; w.window = w; vm.createContext(w);
+vm.runInContext(fs.readFileSync(R + '/web/themes.js', 'utf8'), w);
+const C = require(R + '/web/theme_contract.js'), T = w.ApexThemes;
+const base = JSON.parse(JSON.stringify(Object.values(T.THEMES).find((t) => t.id === 'roadbook')));
+const def = { id: 'future', label: 'Future', day: base.day, night: base.night, map: base.map,
+  renderers: { dial: 'hologram', meter: 'car', strip: 'roadbook' } };   // unknown dial; 'car' meter without car data
+const t = T.fromGrant(def);
+const changed = T.grant([def], C);
+console.log(JSON.stringify({ renderers: t && t.renderers, granted: T.granted(), problems: C.check(t),
+  same: JSON.stringify(T.KNOWN_RENDERERS) === JSON.stringify(C.RENDERERS) }));
+"""
+    out = _j.loads(_s.run([NODE, "-e", runner, root], capture_output=True, text=True, check=True).stdout)
+    assert out["renderers"] == {"dial": "printed", "meter": "gball", "strip": "roadbook"}
+    assert out["granted"] == ["future"] and out["problems"] == []
+    assert out["same"], "themes.js KNOWN_RENDERERS must match theme_contract.js RENDERERS"
