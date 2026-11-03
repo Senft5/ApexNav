@@ -548,8 +548,63 @@ flow('avoid cameras: with the chip on, the cameras near the trip go to the route
   check(await page.evaluate(() => document.querySelector('[data-avoid="cameras"]').getAttribute('aria-pressed')) === 'true', 'the chip shows it');
 }, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
 
+flow('the chosen route stays whole on screen: above the card when it opens, above the bar when it goes down (panel round 2 DA-2)', async (page, base) => {
+  await page.route('https://tiles.openfreemap.org/**', (route) => (route.request().url().includes('/styles/')
+    ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 8, sources: {}, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#eee' } }] }) })
+    : route.abort()));
+  await page.route('https://valhalla1.openstreetmap.de/route', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify(stubTrip(JSON.parse(route.request().postData() || '{}').locations)) }));
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  await page.setViewportSize({ width: 402, height: 874 });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apexDebug.map.loaded() && window.apex, null, { timeout: 20000 });
+  await page.waitForFunction(() => !!apexDebug.state.lastPosition, null, { timeout: 10000 });
+  await page.evaluate(() => apexDebug.buildRoute([{ lat: 35.9606, lon: -83.9207 }, { lat: 36.06, lon: -83.80 }], 'to_x', 'To Winton Woods Middle School'));
+  await page.waitForFunction(() => document.getElementById('planPanel').classList.contains('open') && apexDebug.track && apexDebug.track.kind === 'route', null, { timeout: 20000 });
+  // the camera (not just the fit asked): both ends and the middle, and the car, inside the map above `edge`
+  const framed = (edgeOf) => page.evaluate((edgeOf) => { const m = apexDebug.map, t = apexDebug.track, c = m.getContainer().getBoundingClientRect(), p = document.getElementById('planPanel');
+    const edge = (edgeOf === 'card' ? p.getBoundingClientRect().top : document.getElementById('planBar').getBoundingClientRect().top) - c.top;
+    const pts = [0, Math.floor(t.lat.length / 2), t.lat.length - 1].map((i) => m.project([t.lon[i], t.lat[i]]));
+    return { ok: pts.every((q) => q.x >= 0 && q.x <= c.width && q.y >= 0 && q.y <= edge + 1), pts: pts.map((q) => [Math.round(q.x), Math.round(q.y)]), edge: Math.round(edge),
+      open: p.classList.contains('open'), roomy: c.height - p.offsetHeight >= 120, follow: apexDebug.state.follow }; }, edgeOf);
+  await page.waitForTimeout(1200);
+  const up = await framed('card');
+  check(!up.roomy || up.ok, 'open: the route whole above the card (when the card leaves room to see it): ' + JSON.stringify(up));
+  await page.click('#routeBar');
+  await page.waitForTimeout(1200);
+  const down = await framed('bar');
+  check(!down.open && down.ok && down.follow === false, 'down: the route whole above the bar, the car with it (planning/phone/006): ' + JSON.stringify(down));
+  await page.click('#routeBar');
+  await page.waitForTimeout(1200);
+  const again = await framed('card');
+  check(again.open && (!again.roomy || again.ok), 'up again: refitted above the card: ' + JSON.stringify(again));
+}, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
+
+flow('a road someone sent (#road=) opens as a route card: its name, through its points, nothing of the drive (panel round 2 DA-4)', async (page, base) => {
+  const asked = [];
+  await page.route('https://valhalla1.openstreetmap.de/route', (route) => {
+    const req = JSON.parse(route.request().postData() || '{}');
+    asked.push(req.locations);
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify(stubTrip(req.locations)) });
+  });
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  const L = require('../web/road_link.js'), lat = [], lon = [], dist = [];
+  for (let i = 0; i < 1200; i++) { lat.push(35.36 + i * 5 / 110540); lon.push(-84.29 + Math.sin(i / 40) * 0.002); dist.push(i * 5); }
+  const pts = L.roadPoints(lat, lon, dist), token = L.encode(pts, 'Cherohala Skyway');
+  await page.goto(base + '/index.html#road=' + token);
+  await page.waitForFunction(() => /Cherohala Skyway/.test(document.getElementById('routeCardName').textContent), null, { timeout: 20000 });
+  const locs = asked[asked.length - 1];
+  check(locs.length === pts.length + 1 && Math.abs(locs[0].lat - 35.9606) < 1e-3 && Math.abs(locs[1].lat - pts[0].lat) < 1e-5 && Math.abs(locs[locs.length - 1].lat - pts[pts.length - 1].lat) < 1e-5,
+    'from here, then through the road: ' + JSON.stringify(locs));
+  check(await page.evaluate(() => !/road=/.test(location.href)), 'the link leaves the address once read (a reload plans nothing)');
+  await page.goto(base + '/index.html#road=r1.@@');
+  await page.waitForFunction(() => /incomplete/.test(document.getElementById('toast').textContent), null, { timeout: 8000 });
+}, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
+
 flow('your roads (panel D-1, R-1, D-2): a road you drove is on the deck and its page, Drive it again routes it, twisty roads on, the reminder only in the app', async (page, base) => {
   const asked = [];
+  await page.route('https://tiles.openfreemap.org/**', (route) => (route.request().url().includes('/styles/')   // a map that loads (DA-1 draws on it)
+    ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 8, sources: {}, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#eee' } }] }) })
+    : route.abort()));
   await page.route('https://valhalla1.openstreetmap.de/route', (route) => {
     const req = JSON.parse(route.request().postData() || '{}');
     asked.push(req.locations);
@@ -568,7 +623,20 @@ flow('your roads (panel D-1, R-1, D-2): a road you drove is on the deck and its 
   const deck = await page.evaluate(() => ({ first: document.getElementById('loopSuggest').innerText, rows: [...document.querySelectorAll('#yourRoads .your-road')].map((b) => b.innerText.replace(/\s+/g, ' ')) }));
   check(/^Loop from here/.test(deck.first) && deck.rows.length === 1 && /^Cherohala Skyway 1\.2 mi · 1 run Drive$/.test(deck.rows[0]),
     'the deck: the loop (no score, so no reason to name a road), then the road you drove: ' + JSON.stringify(deck));
-  await page.click('#yourRoads .your-road');
+  // DA-1 / KE-2 (panel round 2): the row's glyph is the road's own shape; its body draws the road on the map, fitted with you
+  // in view, and a second tap clears it; the key routes it
+  await page.waitForSelector('#yourRoads .your-road .ls-glyph svg.road-shape', { timeout: 10000 });
+  await page.click('#yourRoads .your-road .ls-show');
+  await page.waitForFunction(() => apexDebug.map.getSource('apex-deckroad-src') && apexDebug.map.getLayoutProperty('apex-deckroad', 'visibility') === 'visible', null, { timeout: 8000 });
+  await page.waitForTimeout(1000);
+  const shown = await page.evaluate(() => { const m = apexDebug.map, top = document.getElementById('planPanel').getBoundingClientRect().top - m.getContainer().getBoundingClientRect().top;
+    const ends = [[-84.29, 35.36], [-84.29 + Math.sin(399 / 20) * 0.0005, 35.36 + 399 * 5 / 110540]].map((c) => m.project(c));
+    return { pressed: document.querySelector('#yourRoads .ls-show').getAttribute('aria-pressed'), inView: ends.every((p) => p.x >= 0 && p.x <= innerWidth && p.y >= 0 && p.y <= top), dash: !!m.getPaintProperty('apex-deckroad', 'line-dasharray'),
+      ends: ends.map((p) => [Math.round(p.x), Math.round(p.y)]), top, route: !!apexDebug.track && apexDebug.track.kind === 'route' }; });
+  check(shown.pressed === 'true' && shown.inView && shown.dash && !shown.route, 'the row draws its road, dashed, whole above the deck, and routes nothing: ' + JSON.stringify(shown));
+  await page.click('#yourRoads .your-road .ls-show');
+  check(await page.evaluate(() => apexDebug.map.getLayoutProperty('apex-deckroad', 'visibility') === 'none' && document.querySelector('#yourRoads .ls-show').getAttribute('aria-pressed') === 'false'), 'a second tap clears it');
+  await page.click('#yourRoads .your-road .ls-go');
   await page.waitForFunction(() => /Cherohala Skyway/.test(document.getElementById('routeCardName').textContent), null, { timeout: 20000 });
   const locs = asked[asked.length - 1];
   check(locs.length >= 4 && Math.abs(locs[0].lat - 35.9606) < 1e-3 && Math.abs(locs[1].lat - 35.36) < 1e-3 && Math.abs(locs[locs.length - 1].lat - (35.36 + 399 * 5 / 110540)) < 1e-3,
@@ -1581,6 +1649,12 @@ flow('drive ended: the map behind the card is the whole drive, fitted flat above
     const a = m.project([-83.9, 35.5]), b = m.project([-83.9, 35.5 + 279e-4]), p = m.getPadding();
     return { a: a.y, b: b.y, top, pitch: m.getPitch(), bearing: m.getBearing(), pad: p.top, follow: apexDebug.state.follow, shown: m.getLayoutProperty('apex-endtrail', 'visibility'),
       lines: (m.getSource('apex-endtrail-src')._data.features || []).length }; });
+  // KE-1 (panel round 2): the road's portrait is up with the card, whatever the map has drawn, where the fit puts the trail
+  const portrait = await page.evaluate(() => { const e = document.getElementById('endPortrait'), p = e.querySelector('.rp-road path:last-child'), top = document.querySelector('#endCard .card-sheet').getBoundingClientRect().top;
+    const r = p ? p.getBoundingClientRect() : null, m = apexDebug.map, a = m.project([-83.9, 35.5]), c = m.getContainer().getBoundingClientRect();
+    return { shown: !e.hidden, paths: e.querySelectorAll('.rp-road path').length, inside: !!r && r.top >= 0 && r.bottom <= top + 1 && r.height > top * 0.4,
+      onTrail: !!r && Math.abs(r.bottom - (a.y + c.top)) < 12 }; });
+  check(portrait.shown && portrait.paths === 2 && portrait.inside && portrait.onTrail, 'the road\'s portrait is drawn above the card, on the map\'s trail: ' + JSON.stringify(portrait));
   const f1 = await fit();
   check(f1.shown === 'visible' && f1.lines === 1 && !f1.follow && f1.pitch < 1 && Math.abs(f1.bearing) < 1 && f1.pad === 0, 'the trail drawn as one line, the map flat and still: ' + JSON.stringify(f1));
   check([f1.a, f1.b].every((y) => y > 0 && y < f1.top) && Math.abs(f1.a - f1.b) > f1.top * 0.5, 'the whole drive fills the map above the card, not the stray fix\'s 40 km: ' + JSON.stringify(f1));
@@ -1600,6 +1674,7 @@ flow('drive ended: the map behind the card is the whole drive, fitted flat above
   check(await plateShown(), 'Done: the idle map has its place plate at once');
   const after = await page.evaluate(() => ({ follow: apexDebug.state.follow, shown: apexDebug.map.getLayoutProperty('apex-endtrail', 'visibility') }));
   check(after.follow && after.shown === 'none', 'Done: the trail goes and the map follows again: ' + JSON.stringify(after));
+  check(await page.evaluate(() => document.getElementById('endPortrait').hidden), 'and the portrait with it');
 });
 
 // Round 3 (the owner, 2026-10-30: "I drove to work today with the map running started on carplay and the drive isn't in my

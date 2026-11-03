@@ -307,9 +307,22 @@ final class ReviewFlows: XCTestCase {
         try tab("Map")
     }
     /// The drive just ended, in the Log: its page and its Replay in the current theme.
-    private func driveInLog(scrolls: Int, replay: Bool) {
+    /// Panel round 2 (HE-4, DA-4): a share key's system sheet, photographed, then closed (its Close, else a swipe down) so the
+    /// flow carries on from the page it was on. A key that isn't there is skipped, never fails the flow.
+    private func shareSheet(_ label: String, _ tag: String) {
+        guard tap(label, wait: 4) else { return }
+        let sheet = app.otherElements["ActivityListView"]                  // UIActivityViewController's own list
+        guard sheet.waitForExistence(timeout: 6) else { return }        // a key still waiting (Share card waits for the score)
+        pause(1); shot(tag)
+        let close = app.buttons["Close"]
+        if close.exists && close.isHittable { close.tap() } else { sheet.swipeDown() }
+        pause(1.5)
+    }
+    private func driveInLog(scrolls: Int, replay: Bool, sendRoad: Bool = false) {
         guard tap("Open in the Log", wait: 6) else { return }
-        pause(5); shot("in-the-log"); scroll(scrolls, "in-the-log")
+        pause(5); shot("in-the-log")
+        if sendRoad { shareSheet("Send the road", "send-the-road") }   // DA-4: the road's link, from the drive's page
+        scroll(scrolls, "in-the-log")
         if replay, tap("Replay", wait: 4) { pause(6); shot("replay"); pause(10); shot("replay-later") }
     }
 
@@ -358,7 +371,8 @@ final class ReviewFlows: XCTestCase {
         startDrive()
         driveFor(120, every: 10)
         endDrive()
-        driveInLog(scrolls: 4, replay: true)
+        shareSheet("Share card", "share-card")                       // HE-4: the card people post, in the pack at last
+        driveInLog(scrolls: 4, replay: true, sendRoad: true)
         try closeReplay()                                            // §4.4: the tab steps photographed the replay
         try tab("Log"); shot("log"); scroll(3, "log")
         try tab("Map")

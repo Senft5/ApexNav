@@ -63,6 +63,9 @@
   <script src="theme_sounds.js" defer></script>
   <script src="week_digest.js" defer></script>
   <script src="drive_card.js" defer></script>
+  <script src="road_portrait.js" defer></script>
+  <script src="road_link.js" defer></script>
+  <script src="route_thumb.js" defer></script>
   <script src="outbox.js" defer></script>
   <script src="stage_delta.js" defer></script>
   <script src="lanes.js" defer></script>
@@ -629,6 +632,16 @@
     .end-acts [hidden], .end-links [hidden] { display: none; }
     /* U-88: the drive is the picture behind the card, so the map is dimmed one step, not blacked out */
     #endCard.overlay.dim { background: rgba(0, 0, 0, 0.22); }
+    /* KE-1 (panel round 2): the road's portrait over the map, where the map's fit puts the trail, at once; it steps back
+       when the map has drawn the trail (cockpit.js showEndTrail). The climbs under it stay. */
+    .end-portrait { position: fixed; pointer-events: none; z-index: 0; }
+    .end-portrait[hidden] { display: none; }
+    .end-portrait .rp-road { position: absolute; inset: 0; transition: opacity 0.5s ease-out; }
+    .end-portrait.drawn .rp-road { opacity: 0; }
+    .end-portrait .rp-band { position: absolute; }
+    .end-portrait .rp-band svg { display: block; width: 100%; height: 100%; }
+    #endCard > .card-sheet { position: relative; z-index: 1; }
+    @media (prefers-reduced-motion: reduce) { .end-portrait .rp-road { transition: none; } }
     .end-links { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; }
     .end-links > * { margin: 0; padding: 0 4px; line-height: 1.2; min-height: 44px; display: inline-flex; align-items: center; }   /* the link and the key on one line, the same box */
     .ob-link { margin-top: 10px; font-weight: 600; } .ob-link[hidden] { display: none; }   /* P-1: the link that brought you waits */
@@ -674,6 +687,16 @@
     .drive-today .dt-date { width: 40px; height: 40px; background: var(--panel-ink); color: var(--panel); display: grid; place-content: center; text-align: center; font-family: var(--font-num); line-height: 1; }
     .drive-today .dt-date b { font-size: 18px; } .drive-today .dt-date small { font-size: 10px; letter-spacing: 0.06em; color: var(--panel); }
     .loop-suggest em { font-style: normal; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+    /* DA-1 / KE-2: a row in two keys, the road (its body) and its key */
+    .loop-suggest.split { grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+    .loop-suggest .ls-show, .loop-suggest .ls-go { background: none; border: 0; padding: 0; margin: 0; color: inherit; font: inherit; text-align: left; min-height: 44px; }
+    .loop-suggest .ls-show { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 12px; align-items: center; min-width: 0; }
+    .loop-suggest .ls-show > span:last-child { min-width: 0; }
+    .loop-suggest .ls-go { min-width: 44px; padding: 0 2px; }
+    .loop-suggest .ls-glyph { display: block; width: 40px; height: 40px; }
+    .loop-suggest .ls-glyph svg.road-shape { padding: 4px; stroke: none; }
+    .loop-suggest .ls-show[aria-pressed="true"] .ls-glyph svg { border-color: var(--accent); }
+    .loop-suggest .ls-show[aria-pressed="true"] b { color: var(--accent); }
     /* panel round 1 D-1: your roads under the suggestion, roadbooked like it; on a short landscape screen only the suggestion floats */
     .your-road b, .your-road small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     @media (max-height: 540px) and (orientation: landscape) { #app.idle .loop-suggest.your-road { display: none !important; } }
@@ -1454,6 +1477,7 @@
           <div class="end-acts"><button class="ink-btn solid" id="endShare">Share card</button><a class="ink-btn solid" id="endLogKey" href="analysis.html" hidden>Open in the Log</a><button class="ink-btn" id="endStage">Mark a stage</button><button class="ink-btn" id="endAgain" hidden>Drive it again</button></div>
           <div class="end-links"><a class="linkbtn" id="endLog" href="analysis.html">Open in the Log</a><button class="linkbtn" id="endShareLink" hidden>Share card</button><button class="linkbtn" id="endDone">Done</button></div>
         </div>
+        <div class="end-portrait" id="endPortrait" aria-hidden="true" hidden></div>
       </div>
       <div class="stage-bar" id="stageBar" role="status" aria-live="polite" hidden><span id="stageName"></span><b id="stageDelta">--</b><small id="stageCount"></small></div>
       <div class="stage-bar" id="lapBar" role="status" aria-live="polite" hidden><span id="lapName">Track</span><b id="lapTime">--</b><small id="lapInfo"></small><button class="key" id="lapSetBtn" hidden>Start/finish here</button></div>
@@ -1503,8 +1527,10 @@
       </div>
       <div id="cluster"></div>
       <!-- one invitation on the idle map (REVIEW.md 3.1, mockup 01): a loop from here, drawn as a tulip -->
-        <button class="loop-suggest" id="loopSuggest" aria-label="Plan a loop from here"><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M14 36 V22 Q14 10 26 8"/><path d="M22 3 L29 8 L23 13"/><circle cx="14" cy="36" r="2.4"/></svg>
-          <span><b id="loopSuggestTitle">Loop from here</b><small id="loopSuggestWhy">On the twistiest roads nearby</small></span><em id="loopSuggestKey">Plan</em></button>
+        <!-- DA-1 / KE-2 (panel round 2): the row's body draws its road on the map (its glyph is the road's own shape); the key
+             routes it. A row with no road to draw (the loop, a crew's meeting point) does what its key does. -->
+        <div class="loop-suggest split" id="loopSuggest"><button class="ls-show" id="loopSuggestShow" aria-label="Plan a loop from here"><span class="ls-glyph" id="loopSuggestGlyph"><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M14 36 V22 Q14 10 26 8"/><path d="M22 3 L29 8 L23 13"/><circle cx="14" cy="36" r="2.4"/></svg></span>
+          <span><b id="loopSuggestTitle">Loop from here</b><small id="loopSuggestWhy">On the twistiest roads nearby</small></span></button><button class="ls-go" id="loopSuggestGo" aria-label="Plan a loop from here"><em id="loopSuggestKey">Plan</em></button></div>
       <!-- panel round 1 D-1: your own roads, a tap from driving them again (cockpit.js paintDeck, your_roads.js) -->
         <div class="your-roads" id="yourRoads"></div>
       <!-- the morning of a crew drive you're going to, it takes the invitation's place (REVIEW.md roadmap 21) -->
