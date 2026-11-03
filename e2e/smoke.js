@@ -311,10 +311,11 @@ flow('the co-driver reads the road: the first note is called before the car move
   await page.waitForFunction(() => window.apexDebug.driveActive);
   const at = (i, v, cal) => page.evaluate(([i, v, cal]) => { const t = apexDebug.track;
     window.apex.live({ lat: t.lat[i], lon: t.lon[i], accuracy_m: 5, speed_mps: v, course_deg: i < 12 ? 0 : 90, has_fix: true, lat_g: 0, lon_g: 0, calibration: cal, thermal: 0 }); }, [i, v, cal]);
-  // stopped at the start, still calibrating: the first line of the drive is the corner, before the car moves
+  // stopped at the start, still calibrating: the drive opens with the road's name (panel round 2 DA-3), then the first
+  // corner, before the car moves
   for (let k = 0; k < 10; k++) { await at(0, 0, 'default'); await page.waitForTimeout(100); }
-  const first = await page.evaluate(() => window.__said.slice());
-  check(first.length >= 1 && /right/i.test(first[0]), 'the first line of the drive is its first corner: ' + JSON.stringify(first));
+  const first = await page.evaluate(() => window.__said.filter((s) => !/^\[chime/.test(s)));
+  check(first.length >= 2 && first[0] === 'Test Ridge Road. Full notes.' && /right/i.test(first[1]), 'the drive opens with the road, then its first corner: ' + JSON.stringify(first));
   check(/right/i.test(await page.textContent('#notes')), 'the strip shows the first corner: ' + await page.textContent('#notes'));
   // the mount locks as the car pulls away: the status line says so, no toast over the map (U-74)
   await at(2, 3, 'locked');
@@ -343,7 +344,9 @@ flow('the co-driver reads the road: the first note is called before the car move
   check(/Clear/.test(strip) && !/Ridge run/.test(strip), 'the quiet line names the road, not the route: ' + strip);
   check(/Road: Test Ridge Road/.test(await page.textContent('#cluster')), 'the binnacle names the road: ' + await page.textContent('#cluster'));
   const said = await page.evaluate(() => window.__said.slice());
-  check(said.filter((s) => s === 'Quiet from here. Bumps and cameras only.').length === 1, 'going quiet is said once: ' + JSON.stringify(said));
+  // panel round 2 LA-4 / MA-1: going quiet is the falling chime once, with how far the quiet lasts when that is known
+  check(said.filter((s) => s === '[chime: sleep]').length === 1 && !said.includes('Quiet from here. Bumps and cameras only.')
+    && said.filter((s) => /^Quiet for /.test(s)).length <= 1, 'going quiet is a chime, once: ' + JSON.stringify(said));
   check(!said.includes('Full notes.'), 'the drive began awake, so it never said the notes came on: ' + JSON.stringify(said));
 });
 
@@ -548,8 +551,63 @@ flow('avoid cameras: with the chip on, the cameras near the trip go to the route
   check(await page.evaluate(() => document.querySelector('[data-avoid="cameras"]').getAttribute('aria-pressed')) === 'true', 'the chip shows it');
 }, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
 
+flow('the chosen route stays whole on screen: above the card when it opens, above the bar when it goes down (panel round 2 DA-2)', async (page, base) => {
+  await page.route('https://tiles.openfreemap.org/**', (route) => (route.request().url().includes('/styles/')
+    ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 8, sources: {}, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#eee' } }] }) })
+    : route.abort()));
+  await page.route('https://valhalla1.openstreetmap.de/route', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify(stubTrip(JSON.parse(route.request().postData() || '{}').locations)) }));
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  await page.setViewportSize({ width: 402, height: 874 });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apexDebug.map.loaded() && window.apex, null, { timeout: 20000 });
+  await page.waitForFunction(() => !!apexDebug.state.lastPosition, null, { timeout: 10000 });
+  await page.evaluate(() => apexDebug.buildRoute([{ lat: 35.9606, lon: -83.9207 }, { lat: 36.06, lon: -83.80 }], 'to_x', 'To Winton Woods Middle School'));
+  await page.waitForFunction(() => document.getElementById('planPanel').classList.contains('open') && apexDebug.track && apexDebug.track.kind === 'route', null, { timeout: 20000 });
+  // the camera (not just the fit asked): both ends and the middle, and the car, inside the map above `edge`
+  const framed = (edgeOf) => page.evaluate((edgeOf) => { const m = apexDebug.map, t = apexDebug.track, c = m.getContainer().getBoundingClientRect(), p = document.getElementById('planPanel');
+    const edge = (edgeOf === 'card' ? p.getBoundingClientRect().top : document.getElementById('planBar').getBoundingClientRect().top) - c.top;
+    const pts = [0, Math.floor(t.lat.length / 2), t.lat.length - 1].map((i) => m.project([t.lon[i], t.lat[i]]));
+    return { ok: pts.every((q) => q.x >= 0 && q.x <= c.width && q.y >= 0 && q.y <= edge + 1), pts: pts.map((q) => [Math.round(q.x), Math.round(q.y)]), edge: Math.round(edge),
+      open: p.classList.contains('open'), roomy: c.height - p.offsetHeight >= 120, follow: apexDebug.state.follow }; }, edgeOf);
+  await page.waitForTimeout(1200);
+  const up = await framed('card');
+  check(!up.roomy || up.ok, 'open: the route whole above the card (when the card leaves room to see it): ' + JSON.stringify(up));
+  await page.click('#routeBar');
+  await page.waitForTimeout(1200);
+  const down = await framed('bar');
+  check(!down.open && down.ok && down.follow === false, 'down: the route whole above the bar, the car with it (planning/phone/006): ' + JSON.stringify(down));
+  await page.click('#routeBar');
+  await page.waitForTimeout(1200);
+  const again = await framed('card');
+  check(again.open && (!again.roomy || again.ok), 'up again: refitted above the card: ' + JSON.stringify(again));
+}, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
+
+flow('a road someone sent (#road=) opens as a route card: its name, through its points, nothing of the drive (panel round 2 DA-4)', async (page, base) => {
+  const asked = [];
+  await page.route('https://valhalla1.openstreetmap.de/route', (route) => {
+    const req = JSON.parse(route.request().postData() || '{}');
+    asked.push(req.locations);
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify(stubTrip(req.locations)) });
+  });
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  const L = require('../web/road_link.js'), lat = [], lon = [], dist = [];
+  for (let i = 0; i < 1200; i++) { lat.push(35.36 + i * 5 / 110540); lon.push(-84.29 + Math.sin(i / 40) * 0.002); dist.push(i * 5); }
+  const pts = L.roadPoints(lat, lon, dist), token = L.encode(pts, 'Cherohala Skyway');
+  await page.goto(base + '/index.html#road=' + token);
+  await page.waitForFunction(() => /Cherohala Skyway/.test(document.getElementById('routeCardName').textContent), null, { timeout: 20000 });
+  const locs = asked[asked.length - 1];
+  check(locs.length === pts.length + 1 && Math.abs(locs[0].lat - 35.9606) < 1e-3 && Math.abs(locs[1].lat - pts[0].lat) < 1e-5 && Math.abs(locs[locs.length - 1].lat - pts[pts.length - 1].lat) < 1e-5,
+    'from here, then through the road: ' + JSON.stringify(locs));
+  check(await page.evaluate(() => !/road=/.test(location.href)), 'the link leaves the address once read (a reload plans nothing)');
+  await page.goto(base + '/index.html#road=r1.@@');
+  await page.waitForFunction(() => /incomplete/.test(document.getElementById('toast').textContent), null, { timeout: 8000 });
+}, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
+
 flow('your roads (panel D-1, R-1, D-2): a road you drove is on the deck and its page, Drive it again routes it, twisty roads on, the reminder only in the app', async (page, base) => {
   const asked = [];
+  await page.route('https://tiles.openfreemap.org/**', (route) => (route.request().url().includes('/styles/')   // a map that loads (DA-1 draws on it)
+    ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 8, sources: {}, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#eee' } }] }) })
+    : route.abort()));
   await page.route('https://valhalla1.openstreetmap.de/route', (route) => {
     const req = JSON.parse(route.request().postData() || '{}');
     asked.push(req.locations);
@@ -568,7 +626,20 @@ flow('your roads (panel D-1, R-1, D-2): a road you drove is on the deck and its 
   const deck = await page.evaluate(() => ({ first: document.getElementById('loopSuggest').innerText, rows: [...document.querySelectorAll('#yourRoads .your-road')].map((b) => b.innerText.replace(/\s+/g, ' ')) }));
   check(/^Loop from here/.test(deck.first) && deck.rows.length === 1 && /^Cherohala Skyway 1\.2 mi · 1 run Drive$/.test(deck.rows[0]),
     'the deck: the loop (no score, so no reason to name a road), then the road you drove: ' + JSON.stringify(deck));
-  await page.click('#yourRoads .your-road');
+  // DA-1 / KE-2 (panel round 2): the row's glyph is the road's own shape; its body draws the road on the map, fitted with you
+  // in view, and a second tap clears it; the key routes it
+  await page.waitForSelector('#yourRoads .your-road .ls-glyph svg.road-shape', { timeout: 10000 });
+  await page.click('#yourRoads .your-road .ls-show');
+  await page.waitForFunction(() => apexDebug.map.getSource('apex-deckroad-src') && apexDebug.map.getLayoutProperty('apex-deckroad', 'visibility') === 'visible', null, { timeout: 8000 });
+  await page.waitForTimeout(1000);
+  const shown = await page.evaluate(() => { const m = apexDebug.map, top = document.getElementById('planPanel').getBoundingClientRect().top - m.getContainer().getBoundingClientRect().top;
+    const ends = [[-84.29, 35.36], [-84.29 + Math.sin(399 / 20) * 0.0005, 35.36 + 399 * 5 / 110540]].map((c) => m.project(c));
+    return { pressed: document.querySelector('#yourRoads .ls-show').getAttribute('aria-pressed'), inView: ends.every((p) => p.x >= 0 && p.x <= innerWidth && p.y >= 0 && p.y <= top), dash: !!m.getPaintProperty('apex-deckroad', 'line-dasharray'),
+      ends: ends.map((p) => [Math.round(p.x), Math.round(p.y)]), top, route: !!apexDebug.track && apexDebug.track.kind === 'route' }; });
+  check(shown.pressed === 'true' && shown.inView && shown.dash && !shown.route, 'the row draws its road, dashed, whole above the deck, and routes nothing: ' + JSON.stringify(shown));
+  await page.click('#yourRoads .your-road .ls-show');
+  check(await page.evaluate(() => apexDebug.map.getLayoutProperty('apex-deckroad', 'visibility') === 'none' && document.querySelector('#yourRoads .ls-show').getAttribute('aria-pressed') === 'false'), 'a second tap clears it');
+  await page.click('#yourRoads .your-road .ls-go');
   await page.waitForFunction(() => /Cherohala Skyway/.test(document.getElementById('routeCardName').textContent), null, { timeout: 20000 });
   const locs = asked[asked.length - 1];
   check(locs.length >= 4 && Math.abs(locs[0].lat - 35.9606) < 1e-3 && Math.abs(locs[1].lat - 35.36) < 1e-3 && Math.abs(locs[locs.length - 1].lat - (35.36 + 399 * 5 / 110540)) < 1e-3,
@@ -649,6 +720,170 @@ flow('a reported road closure: routing asks the router to go around it (Worker a
   await page.waitForFunction(() => { const t = window.apexDebug.track; return t && t.kind === 'route'; }, null, { timeout: 20000 });
   check(bodies.length && bodies.every((b) => JSON.stringify(b.exclude_locations) === JSON.stringify([{ lat: 35.86, lon: -83.95 }])), 'every route request goes around the closure, and only the closure: ' + JSON.stringify(bodies.map((b) => b.exclude_locations)));
 }, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
+
+// IN-1 / GR-2 (panel round 2): the pages that carry the drive follow the phone's text size, and hold a floor.
+// What a page measures for a text size, set by hand: Chromium has no -apple-system-body (format.js applyTypeScale).
+const TYPE_AT = (scale) => `(() => { const r = document.documentElement, t = ApexFormat.typeScales(${17 * scale});
+  r.style.setProperty('--type-scale', String(t.scale)); r.style.setProperty('--type-scale-fit', String(t.fit));
+  if (t.size) r.setAttribute('data-type-size', t.size); else r.removeAttribute('data-type-size');
+  const st = document.querySelector('.stage'); if (st) st.scrollLeft = 0;   // headless Chromium scrolls the stage sideways on a click into Where to? (so does the base build)
+  return t; })()`;
+// Every visible element with words of its own under `sel`: cut off at the screen's sides, or inside its own box
+const CUT = (sel) => `(() => { const W = innerWidth, out = [];
+  for (const e of document.querySelectorAll('${sel} *')) {
+    if (![...e.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim())) continue;
+    const r = e.getBoundingClientRect(), cs = getComputedStyle(e);
+    if (!r.width || !r.height || cs.visibility === 'hidden' || e.closest('[hidden]')) continue;
+    if (e.closest('.garage-pop:not(.open)')) continue;   // a closed Garage panel, parked off the screen
+    const clips = /hidden|clip/.test(cs.overflowX) || cs.textOverflow === 'ellipsis';
+    if (r.left < -1 || r.right > W + 1 || (clips && e.scrollWidth > e.clientWidth + 1)) out.push((e.id || e.className || e.tagName) + ':' + e.textContent.trim().slice(0, 24) + ' ' + [r.left, r.right, e.scrollWidth, e.clientWidth].map(Math.round).join('/'));
+  }
+  return out; })()`;
+// prose under 17 px, or a key under 44 px either way
+const FLOOR = (sel, prose) => `(() => { const out = [];
+  for (const e of document.querySelectorAll('${sel} :is(${prose})')) {
+    const r = e.getBoundingClientRect(); if (!r.width || e.closest('[hidden]')) continue;
+    if (parseFloat(getComputedStyle(e).fontSize) < 17) out.push('text ' + (e.id || e.className) + ' ' + getComputedStyle(e).fontSize);
+  }
+  for (const e of document.querySelectorAll('${sel} button, ${sel} a.ink-btn, ${sel} a.linkbtn')) {
+    const r = e.getBoundingClientRect(); if (!r.width || e.closest('[hidden]') || getComputedStyle(e).visibility === 'hidden') continue;
+    if (r.height < 43.5 || r.width < 43.5) out.push('key ' + (e.id || e.textContent.trim().slice(0, 20)) + ' ' + Math.round(r.width) + 'x' + Math.round(r.height));
+  }
+  return out; })()`;
+
+flow('Dynamic Type (IN-1, GR-2): the route card, plan sheet, end card and the drive\'s page grow with the text size, cut nothing, and hold a 17 px and 44 pt floor', async (page, base) => {
+  await page.route('https://photon.komoot.io/**', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ features: [
+    { geometry: { coordinates: [-83.9700, 35.7565] }, properties: { name: 'Maryville', state: 'Tennessee' } }] }) }));
+  await page.route('https://valhalla1.openstreetmap.de/route', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify(stubTrip(JSON.parse(route.request().postData()).locations)) }));
+  await page.route(base + '/api/**', (route) => route.fulfill({ contentType: 'application/json', body: '[]' }));
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map);
+  // the plan sheet: its floor at the normal size, nothing cut at 2x
+  await page.click('#destInput');
+  await page.evaluate(() => { document.getElementById('planMore').open = true; });
+  const planFloor = await page.evaluate(FLOOR('#planBody .plan-search-section', '.ctl-label small, p.note, .linkbtn, .plan-more > summary'));
+  check(!planFloor.length, 'the plan sheet\'s floor: ' + JSON.stringify(planFloor));
+  await page.evaluate(TYPE_AT(2));
+  const planCut = await page.evaluate(CUT('#planBody'));
+  check(!planCut.length, 'the plan sheet at 2x cuts nothing: ' + JSON.stringify(planCut));
+  await page.evaluate(TYPE_AT(1));
+  // the route card
+  await page.fill('#destInput', 'Maryville');
+  await page.waitForSelector('#placeList .place', { timeout: 10000 });
+  await page.click('#placeList .place');
+  await page.waitForFunction(() => !document.getElementById('routeCard').hidden && document.querySelector('#routeCardStats > div span'), null, { timeout: 20000 });
+  const size = () => page.evaluate(() => { const f = document.querySelector('#routeCardStats > div span'), s = document.getElementById('routeCardStats');
+    return {
+      factH: f.getBoundingClientRect().height, cols: getComputedStyle(s).gridTemplateColumns.split(' ').length }; });
+  const one = await size();
+  const cardFloor = await page.evaluate(FLOOR('#routeCard', '.fact, .route-meta, p.note, .linkbtn, .rc-tile span'));
+  check(!cardFloor.length, 'the route card\'s floor: ' + JSON.stringify(cardFloor));
+  await page.evaluate(TYPE_AT(2));
+  const two = await size();
+  check(two.factH >= 1.5 * one.factH && two.cols === 2 && one.cols === 3, `the route card at 2x: its words at least 1.5x as big, the stats two a row: ${JSON.stringify({ one, two })}`);
+  const cardCut = await page.evaluate(CUT('#routeCard'));
+  check(!cardCut.length, 'the route card at 2x cuts nothing: ' + JSON.stringify(cardCut));
+  check(await page.evaluate(() => { const b = document.getElementById('routeDriveBtn').getBoundingClientRect(); return b.height >= 44 && b.bottom <= innerHeight + 1; }), 'Drive it is whole and on screen at 2x');
+  // the cockpit keeps its size (IN-2's rule: it does not scale)
+  check(await page.evaluate(() => getComputedStyle(document.getElementById('notes')).zoom === '1'), 'the road book strip is not zoomed');
+  // the end card: 1.6x at most, scrolls to its last key
+  await page.evaluate(TYPE_AT(1));
+  await page.evaluate(() => { const lat = [], lon = []; for (let i = 0; i < 300; i++) { lat.push(35.36 + i * 5 / 110540); lon.push(-84.29); }
+    apexDebug.showEndCard({ id: 'dt1', name: 'Cherohala Skyway', date: new Date().toISOString(), lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: lat.map(() => 15),
+      lon_g: lat.map(() => 0), lat_g: lat.map(() => 0), g_known: null, events: [], elev: null, hz: 1, source: 'web-gps', corners: [] }, Date.now() - 1800e3); });
+  await page.waitForSelector('#endCard.show', { timeout: 8000 });
+  const endFloor = await page.evaluate(FLOOR('#endCard', '.end-meta, .end-line, .linkbtn'));
+  check(!endFloor.length, 'the end card\'s floor: ' + JSON.stringify(endFloor));
+  const meta1 = await page.evaluate(() => document.getElementById('endMeta').getBoundingClientRect().height);
+  await page.evaluate(TYPE_AT(2));
+  const end = await page.evaluate(() => ({ zoom: getComputedStyle(document.querySelector('#endCard .end-card')).zoom, meta: document.getElementById('endMeta').getBoundingClientRect().height }));
+  check(end.zoom === '1.6' && end.meta >= 1.5 * meta1, 'the end card at the largest size is 1.6x: ' + JSON.stringify({ end, meta1 }));
+  const endCut = await page.evaluate(CUT('#endCard'));
+  check(!endCut.length, 'the end card at 1.6x cuts nothing: ' + JSON.stringify(endCut));
+  await page.evaluate(() => { const o = document.getElementById('endCard'); o.scrollTop = o.scrollHeight; });
+  check(await page.evaluate(() => { const b = document.getElementById('endDone').getBoundingClientRect(); return b.top >= 0 && b.bottom <= innerHeight + 1; }), 'Done is reachable by scrolling the card');
+  // the drive's page in the Log
+  await page.evaluate(async () => { const lat = [], lon = []; for (let i = 0; i < 300; i++) { lat.push(35.36 + i * 5 / 110540); lon.push(-84.29); }
+    await ApexRecording.store({ id: 'dt2', name: 'Cherohala Skyway', date: new Date().toISOString(), lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: lat.map(() => 15),
+      lon_g: lat.map(() => 0), lat_g: lat.map(() => 0), g_known: null, events: [], elev: null, hz: 1, source: 'web-gps', corners: [] }); });
+  await page.goto(base + '/analysis.html?tab=drive&drive=dt2');
+  await page.waitForSelector('.dv-head', { timeout: 15000 });
+  const logFloor = await page.evaluate(FLOOR('#tab-drive', '.note, .dv-meta, .linkbtn'));
+  check(!logFloor.length, 'the drive page\'s floor: ' + JSON.stringify(logFloor));
+  const t1 = await page.evaluate(() => document.getElementById('dvTitle').getBoundingClientRect().height);
+  await page.evaluate(TYPE_AT(2));
+  const t2 = await page.evaluate(() => document.getElementById('dvTitle').getBoundingClientRect().height);
+  check(t2 >= 1.5 * t1, `the drive's page grows: title ${t1} -> ${t2}`);
+  const logCut = await page.evaluate(CUT('#tab-drive'));
+  check(!logCut.length, 'the drive page at 2x cuts nothing: ' + JSON.stringify(logCut));
+  // GR-2: the Garage at the largest size fits too (its sections no longer set a width wider than the screen)
+  await page.goto(base + '/index.html?view=garage');
+  await page.waitForSelector('#garageGear', { state: 'visible' });
+  await page.evaluate(TYPE_AT(2));
+  await page.waitForTimeout(800);                                            // the sheet slides in
+  const garageCut = await page.evaluate(CUT('#sheet .body'));
+  check(!garageCut.length, 'the Garage at 2x cuts nothing: ' + JSON.stringify(garageCut));
+}, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
+
+flow('VoiceOver (AM-1/2/3): shut doors are out of reach, dialogs take focus and give it back, the strip and every instrument are said', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDoors && window.apexDebug && window.apexDebug.map);
+  const reach = () => page.evaluate(() => {
+    const out = (sel) => { const n = document.querySelector(sel); return !!n && !n.closest('[inert]') && getComputedStyle(n).visibility !== 'hidden'; };
+    return { sheet: out('#sheet .body'), notes: out('#notes'), plan: out('#destInput'), map: out('#map'), tabs: out('#tabbar'), announcer: out('#announcer'),
+      current: [...document.querySelectorAll('#tabbar .tab')].filter((t) => t.getAttribute('aria-current') === 'page').map((t) => t.dataset.view),
+      focus: document.activeElement && (document.activeElement.id || document.activeElement.className) };
+  });
+  // AM-1: the closed Menu is out of the swipe order; the tab bar says where you are
+  let r = await reach();
+  check(!r.sheet && r.plan && r.tabs && JSON.stringify(r.current) === '["map"]', 'the closed Menu is unreachable, the map is current: ' + JSON.stringify(r));
+  await page.click('#tabbar .tab[data-view="garage"]');
+  await page.waitForTimeout(300);
+  r = await reach();
+  check(r.sheet && !r.notes && !r.plan && !r.map && r.tabs && r.announcer && JSON.stringify(r.current) === '["garage"]',
+    'the open Garage is all that is reachable, with the tab bar and the announcer: ' + JSON.stringify(r));
+  check(await page.evaluate(() => document.getElementById('sheet').contains(document.activeElement)), 'focus moves into the Garage');
+  await page.click('#tabbar .tab[data-view="map"]');
+  await page.waitForTimeout(400);
+  r = await reach();
+  check(!r.sheet && r.plan && r.map && !(await page.evaluate(() => document.querySelectorAll('[inert]').length)), 'closed again: nothing left inert, the Menu hidden: ' + JSON.stringify(r));
+  // a dialog: focus into it, nothing behind it, and focus back to its opener
+  await page.focus('#swTab');
+  await page.evaluate(() => { const lat = [], lon = []; for (let i = 0; i < 200; i++) { lat.push(35.36 + i * 5 / 110540); lon.push(-84.29); }
+    apexDebug.showEndCard({ id: 'am1', name: 'Cherohala Skyway', date: new Date().toISOString(), lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: lat.map(() => 15),
+      lon_g: lat.map(() => 0), lat_g: lat.map(() => 0), g_known: null, events: [], elev: null, hz: 1, source: 'web-gps', corners: [] }, Date.now() - 1800e3); });
+  await page.waitForSelector('#endCard.show');
+  await page.waitForTimeout(200);
+  const dlg = await page.evaluate(() => ({ inCard: document.getElementById('endCard').contains(document.activeElement), focus: document.activeElement.id,
+    tabs: !!document.getElementById('tabbar').closest('[inert]'), notes: !!document.getElementById('notes').closest('[inert]'), card: !!document.getElementById('endCard').closest('[inert]') }));
+  check(dlg.inCard && dlg.tabs && dlg.notes && !dlg.card, 'the end card takes focus and shuts everything behind it: ' + JSON.stringify(dlg));
+  await page.click('#endDone');
+  await page.waitForTimeout(200);
+  const after = await page.evaluate(() => ({ focus: document.activeElement.id, inert: document.querySelectorAll('[inert]').length }));
+  check(after.focus === 'swTab' && after.inert === 0, 'Done gives focus back to what opened it: ' + JSON.stringify(after));
+  // AM-2 and AM-3 in a drive: the strip and the instruments, said
+  await page.evaluate(async () => {
+    const f = (i) => ({ lat: 35.96 + i * 1e-5, lon: -83.92, accuracy_m: 5, speed_mps: 12, course_deg: 0, has_fix: true, calibration: 'locked' });
+    for (let i = 0; i < 30; i++) { window.apex.live(f(i)); await new Promise(r => setTimeout(r, 60)); }
+  });
+  await page.waitForTimeout(1100);   // the names change at most once a second
+  const said = await page.evaluate(() => {
+    const n = document.getElementById('notes'), s = document.getElementById('notesSaid'), a = (sel) => { const e = document.querySelector(sel); return e && e.getAttribute('aria-label'); };
+    const sight = document.querySelector('#cluster .ro-sight');
+    return { role: n.getAttribute('role'), label: n.getAttribute('aria-label'), live: n.getAttribute('aria-live') || (s && s.getAttribute('aria-live')),
+      said: s && s.textContent, last: n.lastElementChild === s, boxes: [...n.children].filter((c) => c !== s).every((c) => c.getAttribute('aria-hidden') === 'true'),
+      speed: a('#cluster .dial-speed'), limit: a('#cluster .ro-limit'), sight: a('#cluster .ro-sight'), score: a('#cluster .g-score'), grip: a('#cluster .dial-g > svg'),
+      means: sight && sight.getAttribute('aria-describedby') && (document.getElementById(sight.getAttribute('aria-describedby')) || {}).textContent,
+      map: document.getElementById('map').getAttribute('aria-hidden'), live2: document.getElementById('app').classList.contains('live') };
+  });
+  check(said.role === 'group' && said.label === 'Road book' && !said.live && said.said && said.last && said.boxes, 'the road book is one named group, said on demand, its boxes hidden: ' + JSON.stringify(said));
+  check(/^27 miles per hour, Speed$/.test(said.speed) && /^(\d+ miles per hour|unknown), Speed limit$/.test(said.limit) && /, Sight/.test(said.sight) && /^(\d+|unknown), Vetta Score$/.test(said.score) && /, Grip$/.test(said.grip),
+    'every instrument named value first: ' + JSON.stringify(said));
+  check(/stop from within what you can see/.test(said.means || ''), 'Sight says what it means');
+  check(!said.live2 || said.map === 'true', 'the map is hidden from VoiceOver while driving: ' + JSON.stringify(said));
+});
 
 flow('share your ETA: the route card makes a link; its page says who and when, never where (Worker stubbed, IDEAS S-19)', async (page, base) => {
   await page.route('https://photon.komoot.io/**', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ features: [
@@ -928,12 +1163,13 @@ flow('the sight-line speed rides under the position arrow, on the phone and on t
   await page.waitForFunction(() => { const t = document.querySelector('.sight-tag'); return t && !t.hidden; }, null, { timeout: 10000 });
   const tag = await page.textContent('.sight-tag');
   const cell = await page.textContent('#cluster');
-  check(/^(\d+(MPH|KM\/H)|OPEN)$/.test(tag.trim()), 'the tag reads a speed or OPEN: ' + tag);
-  check(/OPEN/.test(tag) ? /Open/.test(cell) : cell.includes(tag.replace(/\D/g, '')), 'the same value as the Sight cell: ' + tag);
+  // panel round 2 (TH-2, IN-3): the tag names itself, SIGHT and the number, no unit (never a limit sign); OPEN draws nothing
+  check(/^(SIGHT|SLOW)\d+$/.test(tag.trim()), 'the tag reads SIGHT and a speed: ' + tag);
+  check(cell.includes(tag.replace(/\D/g, '')), 'the same value as the Sight cell: ' + tag);
   // U-60: it holds still: a new value needs 2 s, so 1.5 s of glances see at most one change, in steps of 5
   const glances = await page.evaluate(async () => { const out = []; for (let i = 0; i < 16; i++) { const t = document.querySelector('.sight-tag'); out.push(t.hidden ? '' : t.textContent); await new Promise(r => setTimeout(r, 100)); } return out; });
   check(glances.filter((g, i) => i && g !== glances[i - 1]).length <= 1, 'the plate holds still: ' + glances.join(' '));
-  check(glances.every((g) => !g || g === 'OPEN' || /^\d*[05](MPH|KM\/H)$/.test(g)), 'in steps of 5: ' + glances.join(' '));
+  check(glances.every((g) => !g || /^(SIGHT|SLOW)\d*[05]$/.test(g)), 'in steps of 5: ' + glances.join(' '));
   // the car's map: the same tag under its arrow, hidden when unknown, red when short. A bare style, so the map loads and its
   // camera follows the car (a plate off the screen is hidden, U-77)
   await page.route('https://tiles.openfreemap.org/**', (route) => (route.request().url().includes('/styles/')
@@ -946,7 +1182,13 @@ flow('the sight-line speed rides under the position arrow, on the phone and on t
   check((await read()).hidden, 'unknown: no tag');
   await page.evaluate(() => car.sight({ text: '43', unit: 'MPH', short: true }));
   const r = await read();
-  check(!r.hidden && r.text === '43MPH' && r.short, 'the car tag: ' + JSON.stringify(r));
+  check(!r.hidden && r.text === 'SLOW43' && r.short, 'the car tag, over it: ' + JSON.stringify(r));
+  await page.evaluate(() => car.sight({ text: '45', unit: 'MPH', short: false }));
+  const r2 = await read(), bg = await page.evaluate(() => getComputedStyle(document.querySelector('.car-sight')).backgroundColor);
+  check(!r2.hidden && r2.text === 'SIGHT45' && !r2.short && bg === 'rgb(17, 17, 17)', 'the car tag names itself on the dark plate: ' + JSON.stringify(r2) + bg);
+  await page.evaluate(() => car.sight({ text: 'OPEN', unit: '', short: false }));
+  check((await read()).hidden, 'OPEN: no plate on the car (TH-2)');
+  await page.evaluate(() => car.sight({ text: '43', unit: 'MPH', short: true }));
   // plates never pile up: three corners on one spot show one plate, the tight one when there is no car to measure from
   await page.evaluate(() => { car.mode('preview'); car.corners([{ at: [35.41, -84.1], text: 'R4', tight: false }, { at: [35.41, -84.1], text: 'L2', tight: true }, { at: [35.41001, -84.1], text: 'R3', tight: false }]); });
   await page.waitForTimeout(300);
@@ -982,6 +1224,57 @@ flow('the sight-line speed rides under the position arrow, on the phone and on t
   check(card.some((p) => p.text === 'GRAVEL') && card.some((p) => p.text === 'R6'), 'the reported hazard shows beside the car, and a corner in the clear: ' + JSON.stringify(card));
   // U-89: the credit on its own strip of ground, so no map label shows under it
   check(await page.evaluate(() => { const s = getComputedStyle(document.getElementById('credit')); return s.backgroundColor !== 'rgba(0, 0, 0, 0)' && s.opacity === '1'; }), 'the credit sits on a solid strip');
+});
+
+// Panel round 2, build A (IN-3, PR-2, GR-1, HE-1, PR-1): one red that means act now. In the demo replay the Sight cell is
+// ink, Bank says "--" with no measurement, and a sight line forced short (20 m) makes the cell the alarm on two channels:
+// the signal colour plus the hatched edge, the barred eye and SLOW; in greyscale it still differs from the reading. A tap on
+// an instrument in a replay opens what it means; Done closes it.
+flow('one red that means act now: Sight is ink until you are over it, then colour and shape and a word; Bank -- unmeasured; a tap explains in a replay', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.prefs', JSON.stringify({ notesMode: 'full', nightMode: 'off' })); } catch (_) {} });
+  await page.goto(base + '/index.html?drive=dry_ridge&play=1');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.track && window.apexDebug.state.playing, null, { timeout: 15000 });
+  await page.evaluate(() => { const st = window.apexDebug.state, t = window.apexDebug.track; st.cursorM = t.dist[t.dist.length - 1] * 0.45; });
+  await page.waitForTimeout(1500);
+  const cellOf = () => page.evaluate(() => {
+    const c = document.querySelector('.ro-sight'), b = c.querySelector('b'), cs = getComputedStyle(c), bar = c.querySelector('.ro-eye-bar');
+    const grey = (rgb) => { const m = rgb.match(/\d+/g).map(Number); return Math.round(0.299 * m[0] + 0.587 * m[1] + 0.114 * m[2]); };
+    return { short: c.classList.contains('short'), label: c.querySelector('span').textContent, color: getComputedStyle(b).color, image: cs.borderImageSource,
+      width: cs.borderTopWidth, bar: !!bar && getComputedStyle(bar).display !== 'none', grey: grey(getComputedStyle(b).color),
+      ink: getComputedStyle(document.documentElement).getPropertyValue('--panel-ink').trim(), signal: getComputedStyle(document.documentElement).getPropertyValue('--signal').trim() };
+  });
+  const hex = (rgb) => '#' + rgb.match(/\d+/g).slice(0, 3).map((v) => Number(v).toString(16).padStart(2, '0')).join('').toUpperCase();
+  // the sight line opened right up (nothing ahead limits you) and the speed under the corner's pace: a reading, not an alarm
+  await page.evaluate(() => { const t = window.apexDebug.track; t.sightM = t.sightM.map(() => 400); t.envMps = t.envMps.map(() => 60); });
+  await page.waitForFunction(() => !document.querySelector('.ro-sight.short'), null, { timeout: 8000 });
+  const calm = await cellOf();
+  check(!calm.short && calm.label === 'Sight' && hex(calm.color) === calm.ink.toUpperCase() && calm.image === 'none' && !calm.bar, 'Sight is a reading, in ink: ' + JSON.stringify(calm));
+  // the g-ball and Bank are readings too; with the drive's camber taken away Bank says --, never +0.0°
+  await page.evaluate(() => { window.apexDebug.track.camberDeg = null; });
+  await page.waitForFunction(() => (document.querySelector('.dial-digital.small') || {}).textContent === 'BANK --', null, { timeout: 5000 });
+  const ball = await page.evaluate(() => [...document.querySelectorAll('.dial-g circle')].pop().getAttribute('fill'));
+  check(!/signal|accent/.test(ball), 'the ball is ink: ' + ball);
+  // a sight line forced to 20 m: faster than Sight, the alarm
+  await page.evaluate(() => { const t = window.apexDebug.track; t.sightM = t.sightM.map(() => 20); });
+  await page.waitForFunction(() => document.querySelector('.ro-sight.short'), null, { timeout: 8000 });
+  const loud = await cellOf();
+  check(loud.label === 'SLOW' && hex(loud.color) === loud.signal.toUpperCase() && loud.image !== 'none' && loud.bar && loud.width === '2px',
+    'over Sight: the signal colour, the hatched edge, the barred eye and SLOW: ' + JSON.stringify(loud));
+  check(loud.grey !== calm.grey || loud.label !== calm.label, 'in greyscale the alarm still differs from the reading');
+  await page.waitForFunction(() => { const t = document.querySelector('.sight-tag'); return t && !t.hidden && t.classList.contains('short'); }, null, { timeout: 8000 });
+  check(/^SLOW\d+$/.test((await page.textContent('.sight-tag')).trim()), 'the plate says SLOW: ' + await page.textContent('.sight-tag'));
+  // PR-1: in a replay a tap on Sight, then the Score, says what it is; Done closes it
+  await page.click('#cluster .ro-sight');
+  await page.waitForSelector('#explainCard.show', { timeout: 3000 });
+  const sheet = await page.evaluate(() => ({ title: document.getElementById('explainTitle').textContent, what: document.getElementById('explainWhat').textContent,
+    how: document.getElementById('explainHow').textContent, now: document.getElementById('explainNow').textContent }));
+  check(sheet.title === 'Sight' && /never a target/.test(sheet.what) && /SLOW/.test(sheet.how) && /^Now: \d+ (mph|km\/h)$/.test(sheet.now), 'the Sight sheet: ' + JSON.stringify(sheet));
+  await page.click('#explainDone');
+  check(!(await page.evaluate(() => document.getElementById('explainCard').classList.contains('show'))), 'Done closes it');
+  await page.click('#cluster .g-score');
+  await page.waitForSelector('#explainCard.show', { timeout: 3000 });
+  check(await page.textContent('#explainTitle') === 'Vetta Score', 'the Score explains itself');
+  await page.click('#explainDone');
 });
 
 // The owner's first CarPlay drive (2026-10-30): the car map was "incredibly stuttery and unusable". It jumped to each 1 Hz
@@ -1513,9 +1806,14 @@ flow('drive ended: the card and the Log give the same score and time for the rec
   check(log.score === card.score, `the Log's ${log.score} is the card's ${card.score}`);
   // U-111: one coaching sentence, the Log's, on the card; never "Next time, X:" and never two colons
   check(log.plain && card.line.endsWith(log.plain) && !/Next time/.test(card.line) && (card.line.match(/:/g) || []).length <= 1, `the card's sentence is the Log's: ${card.line} against ${log.plain}`);
-  const [, mm, ss] = /(\d+):(\d\d)/.exec(log.meta) || [];
-  const cardMin = +((/(\d+) min/.exec(card.meta) || [])[1]);
-  check(mm && cardMin === Math.round(+mm + +ss / 60) && !/ h /.test(card.meta), `the card's time is the recording's: ${card.meta} against ${log.meta}`);
+  // RA-3 (panel round 2): one set of numbers: the card's line and the drive page's are the same words (distance, time,
+  // every corner), and the Log's row says the same distance and corners (recording 7: 3 corners on the card, 2 on the row)
+  check(/ min/.test(card.meta) && !/ h /.test(card.meta) && /corner/.test(card.meta) && log.meta === card.meta, `the card's line is the drive page's: ${card.meta} against ${log.meta}`);
+  await page.goto(`${base}/analysis.html`);
+  await page.waitForSelector(`tr[data-drive="${card.id}"] .sub`, { timeout: 15000 });
+  const row = await page.evaluate((id) => document.querySelector(`tr[data-drive="${id}"] .sub`).textContent, card.id);
+  const [dist, , corners] = card.meta.split(' · ');
+  check(row.startsWith(`${dist} · ${corners}`), `the Log row says the card's distance and corners: ${row} against ${card.meta}`);
 });
 
 flow('the status line wraps between its parts, never "25 min left…", at every width and theme (REVIEW4_CHECK U-99)', async (page, base) => {
@@ -1581,6 +1879,12 @@ flow('drive ended: the map behind the card is the whole drive, fitted flat above
     const a = m.project([-83.9, 35.5]), b = m.project([-83.9, 35.5 + 279e-4]), p = m.getPadding();
     return { a: a.y, b: b.y, top, pitch: m.getPitch(), bearing: m.getBearing(), pad: p.top, follow: apexDebug.state.follow, shown: m.getLayoutProperty('apex-endtrail', 'visibility'),
       lines: (m.getSource('apex-endtrail-src')._data.features || []).length }; });
+  // KE-1 (panel round 2): the road's portrait is up with the card, whatever the map has drawn, where the fit puts the trail
+  const portrait = await page.evaluate(() => { const e = document.getElementById('endPortrait'), p = e.querySelector('.rp-road path:last-child'), top = document.querySelector('#endCard .card-sheet').getBoundingClientRect().top;
+    const r = p ? p.getBoundingClientRect() : null, m = apexDebug.map, a = m.project([-83.9, 35.5]), c = m.getContainer().getBoundingClientRect();
+    return { shown: !e.hidden, paths: e.querySelectorAll('.rp-road path').length, inside: !!r && r.top >= 0 && r.bottom <= top + 1 && r.height > top * 0.4,
+      onTrail: !!r && Math.abs(r.bottom - (a.y + c.top)) < 12 }; });
+  check(portrait.shown && portrait.paths === 2 && portrait.inside && portrait.onTrail, 'the road\'s portrait is drawn above the card, on the map\'s trail: ' + JSON.stringify(portrait));
   const f1 = await fit();
   check(f1.shown === 'visible' && f1.lines === 1 && !f1.follow && f1.pitch < 1 && Math.abs(f1.bearing) < 1 && f1.pad === 0, 'the trail drawn as one line, the map flat and still: ' + JSON.stringify(f1));
   check([f1.a, f1.b].every((y) => y > 0 && y < f1.top) && Math.abs(f1.a - f1.b) > f1.top * 0.5, 'the whole drive fills the map above the card, not the stray fix\'s 40 km: ' + JSON.stringify(f1));
@@ -1600,6 +1904,7 @@ flow('drive ended: the map behind the card is the whole drive, fitted flat above
   check(await plateShown(), 'Done: the idle map has its place plate at once');
   const after = await page.evaluate(() => ({ follow: apexDebug.state.follow, shown: apexDebug.map.getLayoutProperty('apex-endtrail', 'visibility') }));
   check(after.follow && after.shown === 'none', 'Done: the trail goes and the map follows again: ' + JSON.stringify(after));
+  check(await page.evaluate(() => document.getElementById('endPortrait').hidden), 'and the portrait with it');
 });
 
 // Round 3 (the owner, 2026-10-30: "I drove to work today with the map running started on carplay and the drive isn't in my
@@ -1787,6 +2092,21 @@ flow('a crew link opens the welcome first, then the crew (panel round 1 P-1)', a
   check(!(await page.isVisible('#obLink')), 'no link line without a link');
 });
 
+flow('the theme cards and the words example say the real words, in the driver\'s mode (panel round 2 HE-3, SO-1)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && document.querySelector('#themeCards .theme-card'));
+  const read = () => page.evaluate(() => ({ head: document.querySelector('#themeCards .tp-call b').textContent, tail: document.querySelector('#themeCards .tp-call i').textContent,
+    quote: document.querySelector('#themeCards .tc-voice p').textContent, example: document.getElementById('noteWordsNote').textContent,
+    call: ApexVocabulary.sampleCall(apexDebug.state.noteWords, { plain: ApexPlainNotes, units: ApexUnits, paceNoteText: ApexCore.paceNoteText }) }));
+  const plain = await read();
+  check(plain.head === 'MEDIUM RIGHT' && plain.tail === 'CAREFUL · LONG' && plain.quote.includes(`"${plain.call}.`) && plain.example === `For example "${plain.call}".`
+    && !/TIGHTENS|Late apex|Slow down/.test(plain.head + plain.quote + plain.example), 'plain words, generated: ' + JSON.stringify(plain));
+  await page.evaluate(() => document.querySelector('#noteWordsList [data-words="rally"]').click());
+  const rally = await read();
+  check(rally.head === 'RIGHT 3' && rally.quote.includes(`"${rally.call}.`) && rally.example.includes(rally.call), 'rally notes, generated: ' + JSON.stringify(rally));
+});
+
 flow('small things: Notes is a detent, Layers never cuts the place plate, the Log pager draws its arrows (REVIEW4 U-82, U-81, U-76)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.goto(base + '/index.html');
@@ -1796,8 +2116,10 @@ flow('small things: Notes is a detent, Layers never cuts the place plate, the Lo
   const notes = await page.evaluate(() => [...document.querySelectorAll('#swPanel [data-notes]')].map((b) => b.textContent + ':' + b.getAttribute('aria-checked')).join());
   check(notes === 'Quiet:false,Auto:true,Full:false', 'three stops, Auto lit: ' + notes);
   await page.click('#swPanel [data-notes="full"]');
-  const after = await page.evaluate(() => ({ mode: apexDebug.state.notesMode, garage: document.querySelector('.sheet [data-notes="full"]').getAttribute('aria-checked') }));
-  check(after.mode === 'full' && after.garage === 'true', 'a stop is chosen, and the Garage shows it too: ' + JSON.stringify(after));
+  const after = await page.evaluate(() => ({ mode: apexDebug.state.notesMode, switches: document.querySelectorAll('[data-notes="full"]').length,
+    garage: document.getElementById('coNotesNow').textContent }));
+  // SO-1 (panel round 2): one setting, one home: the Notes switch is in Layers only, and the Garage says what it is set to
+  check(after.mode === 'full' && after.switches === 1 && /^Notes: Full/.test(after.garage), 'a stop is chosen, one switch, and the Garage says it: ' + JSON.stringify(after));
   // the place plate (shown here by hand: it needs a place lookup) slides up out of the panel's way, whole or gone
   const plate = await page.evaluate(() => { const p = document.querySelector('.place-plate'); if (!p) return null; p.hidden = false; p.textContent = 'Colerain Township · Dry · 63°';
     return new Promise((r) => setTimeout(() => { const b = p.getBoundingClientRect(), cs = getComputedStyle(p); r({ bottom: b.bottom, opacity: cs.opacity }); }, 400)); });
@@ -1921,11 +2243,11 @@ flow('reported hazards: a call ahead, "still there?" after passing, and a one-ta
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
     window.__said = []; const S = window.speechSynthesis;   // what the co-driver says, whatever voice is set
     if (S) S.speak = (u) => { window.__said.push(u.text); setTimeout(() => u.onend && u.onend(), 30); }; });
-  const N = (m) => m / 110540, votes = [], reports = [];
+  const N = (m) => m / 110540, votes = [], reports = [], asked = [];
   await page.route('**/api/**', (route) => {
     const u = new URL(route.request().url()), m = route.request().method();
     const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
-    if (u.pathname === '/api/hazards' && m === 'GET') return json([{ id: 'h1', kind: 'gravel', lat: 35.6 + N(200), lon: -83.9, heading: 0, confirms: 2, clears: 0, m: 200 }]);
+    if (u.pathname === '/api/hazards' && m === 'GET') { asked.push(u.search); return json([{ id: 'h1', kind: 'gravel', lat: 35.6 + N(200), lon: -83.9, heading: 0, confirms: 2, clears: 0, m: 5000 }]); }
     if (u.pathname === '/api/hazards' && m === 'POST') { reports.push(JSON.parse(route.request().postData())); return json({ id: 'mine1', confirmed: false }, 201); }
     if (u.pathname === '/api/hazards/h1/vote') { votes.push(JSON.parse(route.request().postData())); return json({ ok: true }); }
     if (m === 'GET') return json([]);
@@ -1933,6 +2255,14 @@ flow('reported hazards: a call ahead, "still there?" after passing, and a one-ta
   });
   await page.goto(base + '/index.html');
   await page.waitForFunction(() => window.apex && typeof window.apex.live === 'function');
+  // VI-1: the drive starts 1.6 km south, past the private edge (1 to 1.5 km), quickly: nothing is asked before it
+  const run = (from, to) => page.evaluate(async ([a, b]) => {
+    for (let i = a; i < b; i++) { window.apex.live({ lat: 35.6 + (i * 10 - 1600) / 110540, lon: -83.9, accuracy_m: 5, speed_mps: 15, course_deg: 0, has_fix: true, calibration: 'locked' });
+      await new Promise(r => setTimeout(r, 5)); }
+  }, [from, to]);
+  await run(0, 98); await page.waitForTimeout(300);
+  check(asked.length === 0, 'nothing asked in the drive\'s first km: ' + JSON.stringify(asked));
+  await run(98, 160);
   await page.evaluate(async () => {   // heading north at 15 m/s, 1.5 m per 100 ms, from 0 m to 330 m
     for (let i = 0; i <= 220; i++) { window.apex.live({ lat: 35.6 + (i * 1.5) / 110540, lon: -83.9, accuracy_m: 5, speed_mps: 15, course_deg: 0, has_fix: true, calibration: 'locked' });
       const k = window.apexDebug.state.lastSaid;   // a line the voice pack says (web/voice_lines.js) never reaches speechSynthesis
@@ -1944,6 +2274,8 @@ flow('reported hazards: a call ahead, "still there?" after passing, and a one-ta
   await page.click('#hzGone');
   for (let i = 0; i < 40 && !votes.length; i++) await page.waitForTimeout(50);   // the vote is a request: let it land
   check(votes.length === 1 && votes[0].still === false, 'the vote is sent');
+  // VI-1: asked by the 0.1-degree cell, never the position (the phone measures the 200 m itself)
+  check(asked.length >= 1 && asked.every((q) => /^\?lat=35\.6&lon=-83\.9&km=20$/.test(q)), 'the hazards are asked for by cell: ' + JSON.stringify(asked));
   check(await page.evaluate(() => window.__said.some((t) => /gravel reported ahead/i.test(t)) || /Gravel reported ahead/.test(document.body.textContent)), 'the hazard was called ahead');
   await page.click('#hzReportBtn');
   await page.click('#hzKinds button:has-text("Pothole")');
@@ -2000,6 +2332,8 @@ flow('your data: Settings counts what the phone holds and downloads drives as GP
   await page.waitForFunction(() => /^Nothing on this phone yet/.test(document.getElementById('myDataNote').textContent));   // U-126: no line of zeros
   // offline data (IDEAS F-06): a saved route counted, then deleted; the drives are not touched by it
   await page.evaluate(() => { localStorage.setItem('apex.savedRoutes', JSON.stringify([{ id: 'r1', coords: [[0, 0], [1, 1]] }])); document.querySelector('.tab[data-view="garage"]').click(); });
+  // the Garage tab again closes the Menu; since AM-1 a closed Menu can't be reached, so it is opened once more
+  if (!(await page.evaluate(() => document.getElementById('sheet').classList.contains('open')))) await page.click('.tab[data-view="garage"]');
   await openSetting(page, 'data');
   await page.waitForFunction(() => /Offline data: 1 saved route /.test(document.getElementById('myOfflineNote').textContent));
   await page.click('#myOfflineDelBtn');
@@ -2179,7 +2513,7 @@ flow('crew drives: an upcoming drive shows on People, Crews, as the crew page’
     if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
     if (u.pathname === '/api/crews' && m === 'GET') return json([{ id: 'CREW1', name: 'Ridge Runners', role: 'member', members: 3, visibility: 'private' }]);
     if (u.pathname === '/api/events/near') return json([{ id: 'MEET1AAAAAAAAAAA', crew_id: 'CREW9', crew_name: 'Coffee & Cars', title: 'Sunday coffee', starts_at: starts,
-      meet_name: 'Kroger lot', meet_lat: 35.76, meet_lon: -83.96, notes: null, going: 7, member: false, km: 12 }]);
+      meet_name: 'Kroger lot', meet_lat: 39.3, meet_lon: -84.6, notes: null, going: 7, member: false, km: 12 }]);   // VI-1: near the map's centre, as the phone measures it
     if (u.pathname === '/api/events') return json([{ id: 'EVT1AAAAAAAAAAAA', crew_id: 'CREW1', crew_name: 'Ridge Runners', title: 'Cherohala <i>Saturday</i>', starts_at: starts,
       meet_name: 'Tellico Shell', meet_lat: 35.36, meet_lon: -84.29, route_id: null, notes: null, by_handle: 'bob', mine: false, can_cancel: false, my_rsvp: mine, going: ['bob', 'cara'], maybe: 1,
       lead: 'bob', sweep: null, regroup: [{ name: 'The overlook', lat: 35.33, lon: -84.12 }] },
@@ -3468,7 +3802,9 @@ flow('REVIEW.md 1.2 screen by screen: first run, the map, planning, the route, d
   const keys = await page.evaluate(() => { const a = document.getElementById('swTab').getBoundingClientRect(), b = document.getElementById('recenterBtn').getBoundingClientRect(); return { a: [a.left, a.right, a.width], b: [b.left, b.right, b.width], gap: b.top - a.bottom }; });
   check(JSON.stringify(keys.a) === JSON.stringify(keys.b) && keys.gap > 0 && keys.gap < 30, 'Recenter is the second key, under Layers: ' + JSON.stringify(keys));
   // Map menu: Layers are map things; the theme, units and the rest of Settings are not there (Notes and Voice stay, CALL_SHEET)
-  const layers = await page.evaluate(() => document.getElementById('swPanel').innerText);
+  // (the panel is opened to read it: since AM-1 a closed panel is hidden, and hidden words have no innerText)
+  const layers = await page.evaluate(async () => { const tab = document.getElementById('swTab'), was = tab.getAttribute('aria-expanded') === 'true';
+    if (!was) tab.click(); await new Promise((r) => setTimeout(r, 50)); const t = document.getElementById('swPanel').innerText; if (!was) tab.click(); return t; });
   check(/Friends/.test(layers) && /Cameras/.test(layers) && /Twisty roads/.test(layers) && /3D terrain/.test(layers) && !/Night|Theme|Units|Look/.test(layers), 'Layers: ' + layers);
   // Plan sheet: the loop dial (five detents), one Route style switch, and one "More" row, closed
   await page.click('#destInput');
@@ -3587,6 +3923,8 @@ flow('REVIEW.md 1.2 screen by screen: the Log, drive detail, Stages, People sign
   await page.keyboard.press('Escape');
   check(!(await page.$('.confirm-sheet')) && (await page.evaluate(() => ApexRecording.all())).length === 1, 'Cancel (Escape) keeps everything');
   await page.mouse.click(200, 30); await page.waitForTimeout(300);   // a tap outside slides the settings sheets away
+  // that tap closes the Menu too; since AM-1 a closed Menu can't be reached (the test used to click into it off screen)
+  if (!(await page.evaluate(() => document.getElementById('sheet').classList.contains('open')))) { await page.click('.tab[data-view="garage"]'); await page.waitForTimeout(300); }
   // REVIEW4 U-69: touching a theme card's preview switches the theme, as its Use key does; each Use key names its card
   const uses = await page.$$eval('#themeCards button.ink-btn:not(.tc-hear)', (b) => b.map((x) => x.textContent + '/' + x.getAttribute('aria-label')));
   check(JSON.stringify(uses) === '["Use/Use Tapedeck","Use/Use Billet"]', 'theme cards: one word, named keys: ' + JSON.stringify(uses));
@@ -3627,7 +3965,14 @@ flow('REVIEW5 §2: the Garage leads with you, your cars, Look and voice and the 
   check(rf.note === 'Off. Turn on Share road feel above.' && rf.sw && rf.heads === 1, 'Road feel: ' + JSON.stringify(rf));
   await page.click('.garage-pop.open[data-setting="roadfeel"] .side-pop-head button');
   // U-117: Crash check says what it does with no contact, and with one
-  await page.click('#garageSettings .nav-row[data-setting="crash"]');
+  // a sheet opened over the Settings list is reachable at once, not a frame later: clicked and read in one task, before any
+  // frame (doors.js; on a slow runner its first keystrokes went nowhere)
+  check(await page.evaluate(async () => {
+    document.querySelector('#garageSettings .nav-row[data-setting="crash"]').click();
+    await Promise.resolve();
+    const p = document.querySelector('.garage-pop.open[data-setting="crash"]');
+    return !!p && ['crashName', 'crashPhone'].every((id) => p.contains(document.getElementById(id)) && !document.getElementById(id).closest('[inert]'));
+  }), 'the crash sheet\'s fields are reachable as it opens');
   await page.waitForSelector('.garage-pop.open[data-setting="crash"]');
   check(/^On, with no contact: .* offers to call (911|112)\. Add a contact/.test(await page.textContent('#crashState')), 'crash, no contact: ' + await page.textContent('#crashState'));
   await page.fill('#crashName', 'Sam'); await page.fill('#crashPhone', '+1 555 010 2030');

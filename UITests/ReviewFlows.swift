@@ -86,13 +86,18 @@ final class ReviewFlows: XCTestCase {
         if tapFirst {
             pause(5)
             // the welcome runs in the app since U-65: every flow but first-run goes past it (its one key is "Start")
-            let welcome = web.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "Welcome to Vetta")).firstMatch
-            if welcome.waitForExistence(timeout: 8) {
-                let go = welcome.buttons["Start"]
-                if go.exists { go.tap(); pause(2) }
-            }
+            if until(8, welcomeUp) { welcomeStart.tap(); pause(2) }
             allowLocation()
         }
+    }
+
+    /// Recording 7 (first-run): the welcome is found by its two keys, "Start" and "Watch a replay" (web/index.html #obNext,
+    /// #obAlt), which are buttons in the accessibility tree. The old lookup by the dialog's own label ("Welcome to Vetta", its
+    /// aria-label) found nothing there, so the flow stopped at "the welcome never came up" with the welcome on every photo.
+    private var welcomeStart: XCUIElement { web.buttons["Start"] }
+    private func welcomeUp() -> Bool {
+        let go = welcomeStart
+        return web.buttons["Watch a replay"].exists && go.exists && go.isHittable
     }
 
     /// The system's location sheet, answered: it follows the welcome's Start (U-65), and `simctl privacy grant` before the
@@ -106,10 +111,10 @@ final class ReviewFlows: XCTestCase {
     }
 
     /// The first element with any of these labels (buttons, links, text) that is on the screen, or nil.
-    private func find(_ labels: [String], wait: Double = 8) -> XCUIElement? {
+    private func find(_ labels: [String], wait: Double = 8, above limit: CGFloat = 1) -> XCUIElement? {
         let deadline = Date().addingTimeInterval(wait)
         repeat {
-            for l in labels { if let e = onScreen(l) { return e } }
+            for l in labels { if let e = onScreen(l, above: limit) { return e } }
             pause(0.5)
         } while Date() < deadline
         return nil
@@ -125,14 +130,16 @@ final class ReviewFlows: XCTestCase {
         let f = portrait
         return XCUIDevice.shared.orientation.isLandscape ? CGRect(x: 0, y: 0, width: max(f.width, f.height), height: min(f.width, f.height)) : f
     }
-    private func onScreen(_ label: String, below share: CGFloat = 0) -> XCUIElement? {
+    /// `above`: the share of the screen's height the element's centre must be within, so a key under the tab bar (hittable to
+    /// the accessibility tree, but a tap there lands on a tab) is not taken as on the screen.
+    private func onScreen(_ label: String, below share: CGFloat = 0, above limit: CGFloat = 1) -> XCUIElement? {
         let all = web.descendants(matching: .any).matching(NSPredicate(format: "label == %@", label))
         let screen = screenFrame()
         for i in 0..<min(all.count, 12) {
             let e = all.element(boundBy: i)
             guard e.exists, e.isHittable else { continue }
             let f = e.frame, mid = CGPoint(x: f.midX, y: f.midY)
-            if !f.isEmpty, screen.isEmpty || (screen.contains(mid) && mid.y >= screen.minY + screen.height * share) { return e }
+            if !f.isEmpty, screen.isEmpty || (screen.contains(mid) && mid.y >= screen.minY + screen.height * share && mid.y <= screen.minY + screen.height * limit) { return e }
         }
         return nil
     }
@@ -178,7 +185,9 @@ final class ReviewFlows: XCTestCase {
     // MARK: The car
 
     private func inCar(_ label: String) -> XCUIElement {
-        car.descendants(matching: .any).matching(NSPredicate(format: "label == %@", label)).firstMatch
+        // recording 7 (free-drive): a `.any` descendants query over the whole car screen timed out mid-drive ("Failed to get
+        // matching snapshots"). Its keys are bar buttons (CPBarButton Drive and End): one query, over buttons only.
+        car.buttons.matching(NSPredicate(format: "label == %@", label)).firstMatch
     }
     /// Vetta on the car's screen, when the CarPlay window is open.
     private func openInCar() {
@@ -296,8 +305,11 @@ final class ReviewFlows: XCTestCase {
         let took = { back.exists && !gone.exists }
         for _ in 0..<2 where !took() {
             try tab("Garage")
-            for _ in 0..<8 where find([use], wait: 1) == nil { app.swipeUp(velocity: .slow); pause(0.8) }
-            if let key = find([use], wait: 4) { key.tap() } else { find(["Try \(name)"], wait: 2)?.tap() }
+            // recording 7 (billet): the last card's key was "on the screen" under the tab bar, the tap landed on the Garage tab,
+            // and the cards never scrolled up to it; a key counts only above the tab bar (the top 85% of the screen)
+            let clear: CGFloat = 0.85
+            for _ in 0..<8 where find([use, "Try \(name)"], wait: 1, above: clear) == nil { app.swipeUp(velocity: .slow); pause(0.8) }
+            find([use, "Try \(name)"], wait: 4, above: clear)?.tap()
             _ = until(10, took)
         }
         guard took() else { throw stop("\(name) did not take (Roadbook's card has no Use key)") }
@@ -307,9 +319,22 @@ final class ReviewFlows: XCTestCase {
         try tab("Map")
     }
     /// The drive just ended, in the Log: its page and its Replay in the current theme.
-    private func driveInLog(scrolls: Int, replay: Bool) {
+    /// Panel round 2 (HE-4, DA-4): a share key's system sheet, photographed, then closed (its Close, else a swipe down) so the
+    /// flow carries on from the page it was on. A key that isn't there is skipped, never fails the flow.
+    private func shareSheet(_ label: String, _ tag: String) {
+        guard tap(label, wait: 4) else { return }
+        let sheet = app.otherElements["ActivityListView"]                  // UIActivityViewController's own list
+        guard sheet.waitForExistence(timeout: 6) else { return }        // a key still waiting (Share card waits for the score)
+        pause(1); shot(tag)
+        let close = app.buttons["Close"]
+        if close.exists && close.isHittable { close.tap() } else { sheet.swipeDown() }
+        pause(1.5)
+    }
+    private func driveInLog(scrolls: Int, replay: Bool, sendRoad: Bool = false) {
         guard tap("Open in the Log", wait: 6) else { return }
-        pause(5); shot("in-the-log"); scroll(scrolls, "in-the-log")
+        pause(5); shot("in-the-log")
+        if sendRoad { shareSheet("Send the road", "send-the-road") }   // DA-4: the road's link, from the drive's page
+        scroll(scrolls, "in-the-log")
         if replay, tap("Replay", wait: 4) { pause(6); shot("replay"); pause(10); shot("replay-later") }
     }
 
@@ -322,9 +347,7 @@ final class ReviewFlows: XCTestCase {
         start("first-run", tapFirst: false)
         // REVIEW4_CHECK §4.3: "opening" is the welcome itself, shot once its Start is on screen (on a timer it caught the
         // black and the launch lockup before the page drew), then the welcome again as its strip moves to its next calls
-        let welcome = web.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "Welcome to Vetta")).firstMatch
-        let go = web.buttons["Start"]
-        XCTAssertTrue(until(90) { welcome.exists && go.exists && go.isHittable }, "the welcome never came up")
+        XCTAssertTrue(until(90, welcomeUp), "the welcome never came up")
         pause(0.5); shot("opening")
         // REVIEW5 §7.4: the welcome's strip is the first thing a new driver sees; it moves on every 1.8 s through five demo
         // calls (web/cockpit.js OB_NOTES, runOnboarding), so one full cycle and the first call again, photographed on the
@@ -358,7 +381,8 @@ final class ReviewFlows: XCTestCase {
         startDrive()
         driveFor(120, every: 10)
         endDrive()
-        driveInLog(scrolls: 4, replay: true)
+        shareSheet("Share card", "share-card")                       // HE-4: the card people post, in the pack at last
+        driveInLog(scrolls: 4, replay: true, sendRoad: true)
         try closeReplay()                                            // §4.4: the tab steps photographed the replay
         try tab("Log"); shot("log"); scroll(3, "log")
         try tab("Map")
@@ -394,9 +418,17 @@ final class ReviewFlows: XCTestCase {
                 if cardOpen(), bar.exists && bar.isHittable { bar.tap(); pause(1.5) }
                 shot("route-bar")                                  // closed: the bar alone over the map
                 if bar.exists && bar.isHittable {                  // dragged open by its bar, as a thumb does
-                    bar.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.5))
-                        .press(forDuration: 0.15, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.15)))
+                    // recording 7: the drag, from a coordinate relative to the bar, ended on the home screen. It now starts at the
+                    // bar's centre in the window's own coordinates (never within 90 pt of the bottom edge, where an upward swipe
+                    // goes home) and ends a third of the way down, slowly so the page sees its pointermove events
+                    let win = app.windows.firstMatch, wf = win.frame, bf = bar.frame
+                    let top = win.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0))
+                    let from = top.withOffset(CGVector(dx: bf.minX + bf.width * 0.3, dy: min(bf.midY, wf.height - 90)))
+                    let to = top.withOffset(CGVector(dx: bf.minX + bf.width * 0.3, dy: wf.height * 0.3))
+                    from.press(forDuration: 0.15, thenDragTo: to, withVelocity: .slow, thenHoldForDuration: 0.2)
                 }
+                // an app that left the screen (a crash) is said so, not blamed on the card
+                XCTAssertEqual(app.state, .runningForeground, "the app left the screen when the route bar was dragged")
                 let dragged = until(4, cardOpen)
                 XCTAssertTrue(dragged, "dragging the route bar up did not open the card")
                 if !dragged, bar.exists && bar.isHittable { bar.tap() }

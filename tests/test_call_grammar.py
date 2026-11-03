@@ -49,11 +49,15 @@ console.log(JSON.stringify({
   kinds: Object.fromEntries(Object.keys(L.PACKS).map((id) => [id, Object.keys(L.PACKS[id].lines).filter((k) => k.startsWith('aside:')).map((k) => [k, L.asideKind(id, k)])])),
   linked: [L.asideToken([c({ severity: 'HP', link: '150' })]), L.asideToken([c({ severity: 'HP', link: null })]), L.asideToken([c({ severity: 'HP', link: 'into' })])],
   // Margo's hairpin: "Brake well before this one." at 100 ft and 22 mph, the car down from 33
-  late: (() => { const atM = 1000, due = T.asideDueByM({ atM, vMps: mph(22), apexMps: mph(15), text: 'Brake well before this one.', kind: 'advice' });
-    return { due, cursor: atM - ft(100) }; })(),
-  early: T.asideDueByM({ atM: 1000, vMps: mph(34), apexMps: mph(15), text: 'Brake well before this one.', kind: 'advice' }),
-  colour: T.asideDueByM({ atM: 1000, vMps: mph(34), apexMps: mph(15), text: 'It goes on a while.', kind: 'colour' }),
-  floor: T.asideDueByM({ atM: 1000, vMps: 20, apexMps: 20, text: 'Late apex.', kind: 'advice' }),
+  late: T.asideWindow({ dM: ft(100), atM: 1000, vMps: mph(22), apexMps: mph(15), callText: 'Hairpin right, long', text: 'Brake well before this one.', kind: 'advice' }),
+  // round 2 MA-3: the same advice at 34 mph, planned with the call: the call starts at the aside's lead and both end in time
+  early: (() => { const a = { atM: 1000, vMps: mph(34), apexMps: mph(15), callText: 'Hairpin right, long', text: 'Brake well before this one.', kind: 'advice' };
+    const w = T.asideWindow({ dM: 0, ...a }); return { lead: w.leadM, own: T.leadM({ vMps: a.vMps, apexMps: a.apexMps, text: a.callText }),
+      atLead: T.asideWindow({ dM: w.leadM, ...a }).fits, secondLate: T.asideWindow({ dM: w.leadM - a.vMps * 1.01, ...a }).fits,
+      margin: T.asideMarginM(a), brake: (a.vMps ** 2 - a.apexMps ** 2) / (2 * T.DECEL_MPS2), v: a.vMps }; })(),
+  colour: T.asideWindow({ dM: 300, atM: 1000, vMps: mph(34), apexMps: mph(15), callText: 'Open left, long', text: 'It goes on a while.', kind: 'colour' }),
+  floor: T.asideMarginM({ vMps: 20, apexMps: 20 }),
+  said: T.withAdvice('Careful, hairpin left, long', 'Brake before it, not in it.'),
   fits: (() => { const a = L.createAsides(); const no = a.pick('marguerite', [c({ severity: 'HP' })], 0, () => true, () => false);
     const yes = a.pick('marguerite', [c({ severity: 'HP' })], 1, () => true, (x) => x.kind === 'advice'); return { no, yes }; })(),
 }));
@@ -117,7 +121,7 @@ def test_the_page_uses_the_drivers_words_everywhere():
     assert "showN.words = state.noteWords;" in html                       # the live strip's next cells
     assert "page.words = state.noteWords;" in html and "obNote(OB_NOTES[" in html   # the welcome (P-2)
     assert "state.noteWords === 'plain' && window.ApexPlainNotes ? { ...n, call: ApexPlainNotes.plainCall(n) } : n" in html
-    assert '"Slow down, medium left, tightens"' in html                  # the Garage's example in the grammar
+    assert "ApexVocabulary.wordsExample(state.noteWords" in html       # the Garage's example, generated (SO-1, test_vocabulary.py)
 
 
 def test_asides_split_into_advice_and_colour(out):
@@ -132,11 +136,16 @@ def test_no_aside_after_a_call_that_names_the_next_corner(out):
 
 
 def test_no_aside_in_the_braking_zone(out):
-    """M-2: "Brake well before this one." came at 100 ft and 22 mph; it now can't start there."""
-    assert out["late"]["cursor"] > out["late"]["due"], out["late"]
-    # advice may start where it can end a beat before the braking; colour must end before the call's own lead
-    assert out["colour"] < out["early"] < 1000
-    assert out["floor"] <= 1000 - 4 * 20 + 1e-6                           # never under 4 s from the corner
+    """M-2: "Brake well before this one." came at 100 ft and 22 mph; it now can't start there. Round 2 MA-3: planned with the
+    call, it fits at its own lead (earlier than the call's), and ends before the braking with a think and a reaction spare."""
+    assert out["late"]["fits"] is False, out["late"]
+    e = out["early"]
+    assert e["atLead"] is True and e["lead"] > e["own"], e                 # the call starts earlier to carry it
+    assert e["secondLate"] is False, e                                     # over a second's driving late: dropped
+    assert e["margin"] >= e["brake"] + e["v"] * (1.5 + 1.2) - 1e-6        # ends before the braking point, a beat to spare
+    assert out["colour"]["fits"] is True and out["colour"]["dueByM"] < 1000
+    assert out["floor"] == pytest.approx(4 * 20)                           # never under 4 s from the corner
+    assert out["said"] == "Careful, hairpin left, long. Brake before it, not in it."   # advice is the call's last sentence
 
 
 def test_an_aside_that_wont_fit_is_dropped_not_counted(out):
@@ -146,9 +155,14 @@ def test_an_aside_that_wont_fit_is_dropped_not_counted(out):
 
 def test_the_page_times_the_aside_from_the_call():
     html = cockpit_source()
-    assert "ApexNoteTiming.asideDueByM({ atM, vMps: v, apexMps, text, kind, reactionS })" in html
-    assert "asides.pick(state.voiceId, voiced, performance.now(), (t) => !!bank.tokens[t], fits)" in html
-    assert "ApexNoteTiming.lastCallM({ vMps, text: a.text })" not in html  # the old rule: as late as a call
+    # round 2 MA-3: planned with the call, which waits for the aside's lead only when one fits
+    assert "ApexNoteTiming.asideWindow({ dM, atM, vMps, apexMps, callText: call.text, text, kind, reactionS })" in html
+    assert "asides.pick(state.voiceId, call.voiced, performance.now(), (t) => !!bank.tokens[t], fits)" in html
+    assert "if (!startCall && !aside && d > ApexNoteTiming.leadM(" in html
+    assert "asideDueByM" not in html and "ApexNoteTiming.lastCallM({ vMps, text: a.text })" not in html  # the old rules
+    # advice is in the call (its clip in the same breath); colour alone follows it
+    assert "[...own, item.aside.token]" in html
+    assert "speech.followUp = item.aside && item.aside.kind !== 'advice' ? item.aside : null;" in html
 
 
 def test_a_wider_plain_code_never_breaks_the_heads_words():

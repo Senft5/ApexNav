@@ -132,8 +132,11 @@
   const removeRemote = (id) => call('DELETE', `/api/segments/${encodeURIComponent(id)}`);
 
   /** Shared highlights in a box around a point (about 0.25 degrees each way); [] when offline. Scores are shrunk toward 3 stars by the server. */
+  // VI-1: the box is drawn round the point's 0.1-degree cell, half a cell wider, so its edges are whole tenths and never
+  // say where in the cell you are.
   async function highlightsNear(c, deg = 0.25) {
-    const r = await call('GET', `/api/highlights?bbox=${[c.lat - deg, c.lon - deg, c.lat + deg, c.lon + deg].map((v) => v.toFixed(5)).join(',')}`);
+    const cl = { lat: Math.round(c.lat * 10) / 10, lon: Math.round(c.lon * 10) / 10 }, d = deg + 0.05;
+    const r = await call('GET', `/api/highlights?bbox=${[cl.lat - d, cl.lon - d, cl.lat + d, cl.lon + d].map((v) => v.toFixed(1)).join(',')}`);
     return list(r).map((h) => ({ id: 'srv_' + h.id, name: h.name, lat: h.lat, lon: h.lon, rating: h.score, ratings: h.ratings, server: true, mine: !!h.mine,
       category: h.category || 'other', note: h.note || null, visits: h.visits || 0, myStars: h.my_stars ?? null }));
   }

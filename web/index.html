@@ -63,10 +63,14 @@
   <script src="theme_sounds.js" defer></script>
   <script src="week_digest.js" defer></script>
   <script src="drive_card.js" defer></script>
+  <script src="road_portrait.js" defer></script>
+  <script src="road_link.js" defer></script>
+  <script src="route_thumb.js" defer></script>
   <script src="outbox.js" defer></script>
   <script src="stage_delta.js" defer></script>
   <script src="lanes.js" defer></script>
   <script src="voice_lines.js" defer></script>
+  <script src="vocabulary.js" defer></script>
   <script src="directions.js" defer></script>
   <script src="carplay.js" defer></script>
   <script src="cameras.js" defer></script>
@@ -101,10 +105,13 @@
   <script src="keyboard.js" defer></script>
   <script src="boot.js" defer></script>
   <script src="press.js" defer></script>
+  <script src="doors.js" defer></script>
   <script src="themes.js"></script>
   <script src="theme_contract.js" defer></script>
   <script src="units.js" defer></script>
+  <script src="say.js" defer></script>
   <script src="instruments.js" defer></script>
+  <script src="road_feel.js" defer></script>   <!-- panel round 2, HE-1: the end card's measured road-feel line -->
   <script src="voice.js" defer></script>
   <style>
     :root { --safe-top: env(safe-area-inset-top, 0px); --safe-bottom: env(safe-area-inset-bottom, 0px); --safe-left: env(safe-area-inset-left, 0px); --safe-right: env(safe-area-inset-right, 0px); --dial: clamp(112px, 14dvh, 150px);
@@ -190,7 +197,7 @@
     .rb-mods { grid-column: 1 / -1; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: normal;
       font-size: 14px; font-weight: 700; line-height: 1.15; text-transform: uppercase; letter-spacing: 0.04em; color: var(--panel-dim); margin-top: -2px; }
     .rb-mods i { font-style: normal; }
-    .rb-mods i.warn { color: var(--accent); }
+    .rb-mods i.warn { color: var(--signal); }   /* panel round 2: a warning word is the act-now colour in every theme and accent */
     .rb-box.now.hz .rb-mods, .rb-box.now.hz .rb-mods i.warn { color: var(--hz-edge); }
     /* U-133: one strip height whatever the call (the tallest case: a three-line head over two lines of modifiers), so the
        map's top edge, the arrow and the sight plate never step between calls; the quiet line sits in the same band */
@@ -386,9 +393,9 @@
        #app outranks the themes' own #driveEnd */
     #driveEnd { margin-left: 8px; }
     #app #driveEnd.undo { position: relative; overflow: hidden; background: var(--panel); color: var(--panel-ink); border: 2px solid var(--panel-ink); }
-    #app #driveEnd.undo::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: var(--accent); transform-origin: left; animation: end-undo var(--end-undo-ms, 5s) linear forwards; }
+    #app #driveEnd.undo::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: var(--panel-ink); transform-origin: left; animation: end-undo var(--end-undo-ms, 5s) linear forwards; }
     @keyframes end-undo { to { transform: scaleX(0); } }
-    .dbstat b { color: var(--accent); }
+    .dbstat b { color: var(--panel-ink); }   /* panel round 2 (PR-2): the Rec dot is a state, not an alarm: ink, never the signal red */
     /* U-99: wraps between its parts (each part a nowrap span), never an ellipsis, in every theme and width */
     .ds-main { font-size: 15px; font-weight: 600; line-height: 1.25; font-variant-numeric: tabular-nums; white-space: normal; overflow-wrap: normal; }
     .ds-main b { font-size: 17px; }
@@ -441,16 +448,29 @@
     /* Speed is the one number read at a glance: the dial draws at a bit over half size, so 70 here is at least 40 px on a
        phone (the theme contract's floor, theme_contract.js); the bank readout at least 13 px. */
     .dial-digital { font-family: var(--font-num); font-size: 70px; font-weight: 700; fill: var(--face-ink); }
-    .dial-digital.small { font-size: 36px; fill: var(--accent); }   /* the g-ball shares its column with the Score: 36 keeps BANK over 13 px */
+    .dial-digital.small { font-size: 36px; fill: var(--face-ink); }   /* the g-ball shares its column with the Score: 36 keeps BANK over 13 px */
+    .dial-digital.small.unk { fill: var(--face-dim); }   /* HE-1 / LA-3: "BANK --" until measured, in pencil */
     .gauge-printed .dial-num { font-size: 17px; font-weight: 700; }
     .cluster-center { min-width: 0; display: grid; gap: 4px; justify-items: center; align-content: center; }
     .readouts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; width: min(100%, 250px); }
     .ro { display: grid; justify-items: center; gap: 1px; padding: 3px 0; border: 1px solid var(--rule); }
     .ro-value { display: flex; align-items: center; justify-content: center; gap: 4px; }
     .ro b { font-family: var(--font-num); font-size: 17px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
-    .ro-eye { display: block; flex: none; color: var(--accent); }
-    .ro-sight b { color: var(--accent); }
-    .ro-sight.short { border-color: var(--signal); } .ro-sight.short b { color: var(--signal); }
+    /* Panel round 2 (IN-3, PR-2, GR-1): one red that means act now. Sight is a reading in ink; over it, the cell is the alarm
+       on two channels, never hue alone: the signal colour, a 2 px hatched edge, a bar through the eye and SLOW for "Sight".
+       Seen in greyscale the short cell still differs from the open one (the hatch, the bar, the word). */
+    .ro-eye { display: block; flex: none; color: var(--panel-ink); }
+    .ro-eye .ro-eye-bar { display: none; }
+    .ro-sight b { color: var(--panel-ink); }
+    html .readouts .ro.ro-sight.short { border: 2px solid var(--signal); padding: 2px 0;
+      border-image: repeating-linear-gradient(45deg, var(--signal) 0 3px, transparent 3px 6px) 2; }
+    .ro-sight.short b, .ro-sight.short .ro-eye { color: var(--signal); }
+    .ro-sight.short .ro-eye .ro-eye-bar { display: inline; }
+    .ro-sight.short span { color: var(--signal); font-weight: 800; letter-spacing: 0.08em; }
+    /* the plain sentence when it fires (GR-1, cockpit.js sightAlarm): the status row's message line, in the signal colour with
+       its warning mark */
+    .ds-note.alarm { color: var(--signal); }
+    .ds-note.alarm::before { content: "\25B2\00A0"; }
     .ro span { font-size: 13px; font-weight: 600; color: var(--panel-dim); }
     /* The Limit sign (theme contract 4.3.5, REVIEW2.md U-40): the white US sign in every theme, the one real-world object on
        the screen. 44 x 52, a black edge with the sign's inset rule, SPEED LIMIT in small caps over the number. No theme
@@ -481,10 +501,13 @@
 
     /* The Log over the map (openLog): a full-screen frame; the map page keeps running behind it */
     /* the sight-line speed under the position arrow (paintSight) */
-    .sight-tag { pointer-events: none; display: flex; align-items: center; gap: 3px; padding: 2px 5px 1px; background: var(--panel); color: var(--panel-ink);
-      border: 1.5px solid var(--panel-ink); font: 700 15px/1 var(--font-num); white-space: nowrap; }
-    .sight-tag small { font-size: 9px; letter-spacing: 0.04em; }
-    .sight-tag.short { background: var(--signal); color: var(--panel); border-color: var(--panel); }   /* faster than you can see */
+    /* Panel round 2 (TH-2, IN-3): the tag names itself (eye, SIGHT, the number; no unit) on a rounded pill, so it never reads as
+       a limit sign's white rectangle with MPH. Over it: the signal colour, the eye barred and SLOW for SIGHT (two channels).
+       Open draws nothing on the map (the Sight cell says Open). */
+    .sight-tag { pointer-events: none; display: flex; align-items: center; gap: 4px; padding: 2px 8px 1px 6px; background: var(--panel); color: var(--panel-ink);
+      border: 1px solid var(--panel-dim); border-radius: 999px; font: 700 15px/1 var(--font-num); white-space: nowrap; }
+    .sight-tag small { font: 700 9px/1 var(--font-ui); letter-spacing: 0.08em; }
+    .sight-tag.short { background: var(--signal); color: #FFFFFF; border: 1.5px solid #FFFFFF; }   /* faster than you can see */
     .sight-tag[hidden] { display: none; }
     #logFrame { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; z-index: 10000; background: var(--panel); }
     /* F-15: a hidden Log is kept laid out at the phone's width (drawn once, shown at once), invisible and untouchable */
@@ -612,6 +635,13 @@
     .place-all { display: block; margin: 6px 0 0; }
     /* ---------------- the drive-ended card (REVIEW.md roadmap 7) ---------------- */
     .end-card { text-align: left; }
+    .end-feel { margin: 0; font-size: 15px; font-weight: 600; line-height: 1.35; color: var(--panel-ink); }   /* HE-1: measured, in ink */
+    .explain-card h2 { margin: 0; }
+    .explain-now { margin: 0; font: 700 20px/1.1 var(--font-num); font-variant-numeric: tabular-nums; }
+    .explain-what { margin: 0; font-size: 16px; line-height: 1.4; }
+    .explain-card .note { margin: 0; font-size: 15px; line-height: 1.4; color: var(--panel-dim); }
+    /* an instrument says what it is when tapped, parked or in a replay (PR-1); the cursor says so on a desktop */
+    #cluster [data-explain], #notes [data-explain] { cursor: help; }
     .end-kicker { margin: 0; font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); }
     .end-card h2 { margin: 4px 0 0; font-size: 28px; line-height: 1.1; }
     .end-meta { margin: 4px 0 0; color: var(--panel-dim); font-size: 15px; }
@@ -629,6 +659,16 @@
     .end-acts [hidden], .end-links [hidden] { display: none; }
     /* U-88: the drive is the picture behind the card, so the map is dimmed one step, not blacked out */
     #endCard.overlay.dim { background: rgba(0, 0, 0, 0.22); }
+    /* KE-1 (panel round 2): the road's portrait over the map, where the map's fit puts the trail, at once; it steps back
+       when the map has drawn the trail (cockpit.js showEndTrail). The climbs under it stay. */
+    .end-portrait { position: fixed; pointer-events: none; z-index: 0; }
+    .end-portrait[hidden] { display: none; }
+    .end-portrait .rp-road { position: absolute; inset: 0; transition: opacity 0.5s ease-out; }
+    .end-portrait.drawn .rp-road { opacity: 0; }
+    .end-portrait .rp-band { position: absolute; }
+    .end-portrait .rp-band svg { display: block; width: 100%; height: 100%; }
+    #endCard > .card-sheet { position: relative; z-index: 1; }
+    @media (prefers-reduced-motion: reduce) { .end-portrait .rp-road { transition: none; } }
     .end-links { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; }
     .end-links > * { margin: 0; padding: 0 4px; line-height: 1.2; min-height: 44px; display: inline-flex; align-items: center; }   /* the link and the key on one line, the same box */
     .ob-link { margin-top: 10px; font-weight: 600; } .ob-link[hidden] { display: none; }   /* P-1: the link that brought you waits */
@@ -674,6 +714,16 @@
     .drive-today .dt-date { width: 40px; height: 40px; background: var(--panel-ink); color: var(--panel); display: grid; place-content: center; text-align: center; font-family: var(--font-num); line-height: 1; }
     .drive-today .dt-date b { font-size: 18px; } .drive-today .dt-date small { font-size: 10px; letter-spacing: 0.06em; color: var(--panel); }
     .loop-suggest em { font-style: normal; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+    /* DA-1 / KE-2: a row in two keys, the road (its body) and its key */
+    .loop-suggest.split { grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+    .loop-suggest .ls-show, .loop-suggest .ls-go { background: none; border: 0; padding: 0; margin: 0; color: inherit; font: inherit; text-align: left; min-height: 44px; }
+    .loop-suggest .ls-show { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 12px; align-items: center; min-width: 0; }
+    .loop-suggest .ls-show > span:last-child { min-width: 0; }
+    .loop-suggest .ls-go { min-width: 44px; padding: 0 2px; }
+    .loop-suggest .ls-glyph { display: block; width: 40px; height: 40px; }
+    .loop-suggest .ls-glyph svg.road-shape { padding: 4px; stroke: none; }
+    .loop-suggest .ls-show[aria-pressed="true"] .ls-glyph svg { border-color: var(--accent); }
+    .loop-suggest .ls-show[aria-pressed="true"] b { color: var(--accent); }
     /* panel round 1 D-1: your roads under the suggestion, roadbooked like it; on a short landscape screen only the suggestion floats */
     .your-road b, .your-road small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     @media (max-height: 540px) and (orientation: landscape) { #app.idle .loop-suggest.your-road { display: none !important; } }
@@ -707,7 +757,6 @@
     html[data-theme="tapedeck"] .notes, html[data-theme="tapedeck"] .binnacle { text-transform: uppercase; }
     html[data-theme="tapedeck"] .rb-call span, html[data-theme="tapedeck"] .rb-dist b, html[data-theme="tapedeck"] .rb-code, html[data-theme="tapedeck"] .ds-main,
     html[data-theme="tapedeck"] .ro b, html[data-theme="tapedeck"] .odo-digits { text-shadow: 0 0 6px color-mix(in srgb, currentColor 60%, transparent); }
-    html[data-theme="tapedeck"] .rb-mods i.warn { color: var(--amber); }
     /* U-100: the dot font is wide; the quiet line steps to the binnacle's 13 px floor so its compact form fits two rows */
     html[data-theme="tapedeck"] .note-quiet b, html[data-theme="tapedeck"] .note-quiet span { font-size: 13px; }
     html[data-theme="tapedeck"] .binnacle { background: linear-gradient(transparent 50%, rgba(125, 245, 222, 0.025) 50%) 0 0 / 100% 3px, var(--panel); }
@@ -737,13 +786,16 @@
     /* ---------------- Billet (Pro, REVIEW.md 4.1): brushed metal, knurled bezels, red glow; glow is additive ---------------- */
     html[data-theme="billet"] .binnacle, html[data-theme="billet"] .notes {
       background: repeating-linear-gradient(90deg, rgba(255,255,255,0.025) 0 1px, transparent 1px 3px), linear-gradient(180deg, #2A2B2E, var(--panel) 60%); }
-    html[data-theme="billet"] .rb-dist b, html[data-theme="billet"] .ro-sight b, html[data-theme="billet"] .odo-digits { color: var(--accent); text-shadow: 0 0 8px rgba(255, 74, 61, 0.55); }
-    html[data-theme="billet"] .dial-digital { fill: var(--accent); filter: drop-shadow(0 0 4px rgba(255, 74, 61, 0.7)); }
+    /* panel round 2 (PR-2): the numerals glow in the panel's ink, backlit; red is the warning's alone */
+    html[data-theme="billet"] .rb-dist b, html[data-theme="billet"] .ro-sight b, html[data-theme="billet"] .odo-digits { color: var(--panel-ink); text-shadow: 0 0 8px rgba(236, 230, 218, 0.45); }
+    html[data-theme="billet"] .ro-sight.short b { color: var(--signal); text-shadow: 0 0 8px rgba(255, 74, 61, 0.55); }
+    html[data-theme="billet"] .dial-digital { fill: var(--face-ink); filter: drop-shadow(0 0 4px rgba(236, 230, 218, 0.5)); }
+    html[data-theme="billet"] .dial-digital.small.unk { fill: var(--face-dim); }
     html[data-theme="billet"] .key, html[data-theme="billet"] .ink-btn { border-color: var(--rule); background: linear-gradient(#2E2F33, #1C1D1F); box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 2px 0 #000; }
     /* P-01 (REVIEW_PEOPLE.md): the metal above out-ranked .solid and .on, so every primary key was dark text on dark metal */
     html[data-theme="billet"] .ink-btn.solid, html[data-theme="billet"] .ink-btn.on { background: linear-gradient(#F2F2F4, #C9CACE); color: #0D0D0E; border-color: #F2F2F4; }
     html[data-theme="billet"] .odo.boxed .dg { background: #0D0D0E; border-color: var(--rule); }
-    html[data-theme="billet"] .odo.boxed .dg:last-child { background: var(--accent); color: #0D0D0E; text-shadow: none; }   /* the tenths wheel, inverted (it was dark on dark, REVIEW2.md U-29) */
+    html[data-theme="billet"] .odo.boxed .dg:last-child { background: var(--panel-ink); color: #0D0D0E; text-shadow: none; }   /* the tenths wheel, inverted (it was dark on dark, REVIEW2.md U-29) */
     .bezelled { position: relative; }
     .bezel-ring { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
     .bezel-ring .knurl { fill: none; stroke: #6B6E74; stroke-width: 5; stroke-dasharray: 1.2 1.6; }
@@ -880,6 +932,11 @@
     /* ---------------- route book ---------------- */
     .sheet { position: absolute; z-index: 10; top: 0; bottom: 0; right: 0; left: 0; width: 100%; background: var(--panel); color: var(--panel-ink);
       transform: translateX(105%); transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1); display: flex; flex-direction: column; }   /* F-16: one ease for every sheet */
+    /* AM-1 (panel round 2): a closed sheet, side sheet or Layers panel leaves the swipe order too, once its slide is done
+       (the Garage pops' trick); doors.js makes what is behind an open one inert */
+    .sheet, .side-pop { visibility: hidden; transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1), visibility 0s linear 0.2s; }
+    .sheet.open, .side-pop.open { visibility: visible; transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1), visibility 0s; }
+    .edge:not(.open) .edge-panel { visibility: hidden; transition: visibility 0s linear 0.12s; }
     .sheet.open { transform: none; }
     .sheet.dragging { transition: none; }
     [hidden] { display: none !important; }
@@ -940,6 +997,29 @@
     .nav-rows { display: grid; border-top: 1px solid var(--hair, var(--panel-dim)); }
     .sheet .body { overflow-y: auto; padding: 14px 16px 24px; display: grid; gap: 20px; }
     .sheet .body { zoom: var(--type-scale, 1); }   /* the phone's text size (format.js applyTypeScale) */
+    /* IN-1 (panel round 2): the pages that carry the drive scale too. The plan sheet and the route card (each section of
+       #planBody, so the scroller itself keeps its size) go to 2x; the end card to 1.6x (--type-scale-fit), its overlay
+       scrolling upright as it does on its side. From 1.4x the route card's stats and dials go two a row. */
+    #planBody > section:not(.plan-search-section) { zoom: var(--type-scale, 1); }
+    /* the plan sheet is controls set to fit a row: its words and keys go to 1.6x (the loop dial is an instrument and keeps its size) */
+    .plan-search-section > :not(.plan-loop):not(.find-bar), .plan-loop > .ctl-label { zoom: var(--type-scale-fit, 1); }
+    html[data-type-size] .ctl-label { flex-wrap: wrap; row-gap: 2px; }
+    #planBody, .sheet .body, .garage-pop > section, .theme-cards { grid-template-columns: minmax(0, 1fr); }   /* one wide child wraps; a sheet never grows past the screen */
+    #endCard .end-card { zoom: var(--type-scale-fit, 1); }
+    #endCard.overlay { overflow-y: auto; overscroll-behavior: contain; }
+    html[data-type-size="large"] .rc-stats, html[data-type-size="large"] .rc-dials { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 10px; }
+    html[data-type-size="large"] .rc-stats > div:nth-child(odd) { border-left: 0; padding-left: 0; }
+    html[data-type-size="large"] .end-acts { grid-template-columns: minmax(0, 1fr); }
+    html[data-type-size] .end-links { flex-wrap: wrap; }
+    /* rows that cut their end off with an ellipsis wrap instead once the text is larger */
+    html[data-type-size] .tc-head { flex-wrap: wrap; }
+    html[data-type-size] .switch > button { white-space: normal; text-overflow: clip; line-height: 1.15; padding: 4px; }
+    html[data-type-size] :is(.place small, .place span, .friend-head b, .friend-head small, .crew-tile-head b, .your-road b, .your-road small, .stop-row span) { white-space: normal; overflow: visible; text-overflow: clip; max-width: none; }
+    /* GR-2: a floor on the same pages. Prose and captions at least 17 px (the numerals' small-caps labels keep their size
+       and grow with the scale); every key at least 44 pt each way. */
+    #planBody :is(.rc-facts .fact, .route-meta, p.note, .plan-status, .ctl-label small, .rc-tile span, .linkbtn, .place b, .place small, .place span, .plan-more > summary),
+    .home-by .hb-label, #endCard :is(.end-meta, .end-line, .linkbtn, p:not(.end-kicker)) { font-size: 17px; }
+    #planBody :is(.stamps > button, .switch > button, .detents > button, .linkbtn, .ink-btn, .chip), #endCard :is(.linkbtn, .ink-btn) { min-height: 44px; min-width: 44px; }
     .sheet h3, .plan h3, .side-pop h3 { font-size: 18px; font-weight: 700; font-family: var(--font-num); border-top: 1px solid var(--hair, var(--panel-dim)); padding-top: 12px; margin-bottom: 8px; }
     .sheet p.note.err, .plan p.note.err { color: var(--accent); }
     /* The sheet header already draws a rule: the first heading under it doesn't draw a second. */
@@ -1138,12 +1218,12 @@
       <path d="M118 22 L135 78 L152 22"/><path d="M196 30 H170.25 V70 H196 M170.25 50 H190"/><path d="M208 30 H244 M226 30 V80"/><path d="M254 30 H290 M272 30 V80"/><path d="M300 78 L317 22 L334 78 M306 59 H328"/>
     </g></svg></div>
   <div id="app">
-    <div class="notes" id="notes"></div>
+    <div class="notes" id="notes" role="group" aria-label="Road book"></div>
 
     <section class="stage">
       <div id="map" class="unstyled"></div>
       <div class="place-plate" id="placePlate" role="status" hidden></div>
-      <div class="hz-plate" id="hzPlate" role="status" aria-live="assertive" hidden><svg viewBox="0 0 28 25" aria-hidden="true"><path class="hz-tri" d="M14 1 L27 24 H1 Z"/><path d="M14 9 V16 M14 19.5 V20.5" stroke-width="3" stroke-linecap="round"/></svg><b id="hzPlateTitle"></b><span id="hzPlateDetail"></span></div>
+      <div class="hz-plate" id="hzPlate" role="status" aria-live="assertive" hidden><svg viewBox="0 0 28 25" aria-hidden="true"><path class="hz-tri" d="M14 1 L27 24 H1 Z"/><path d="M14 9 V16 M14 19.5 V20.5" stroke-width="3" stroke-linecap="round"/></svg><b id="hzPlateTitle"></b><span id="hzPlateDetail" aria-live="off"></span></div>
       <div class="plates">
         <div class="plate" id="modePlate" role="status">Replay</div>
         <!-- a Pro theme on trial: its status line, not a box over the hazard plate's place (REVIEW2.md U-39) -->
@@ -1384,10 +1464,9 @@
           </section>
           <section data-panel="garage">
             <h3>Co-driver</h3>
-            <div class="ctl notes-ctl"><p class="ctl-label">Notes</p>
-              <div class="switch" role="radiogroup" aria-label="Notes"><button data-notes="quiet" role="radio">Quiet</button><button data-notes="auto" role="radio">Auto</button><button data-notes="full" role="radio">Full</button></div></div>
+            <!-- SO-1 (panel round 2): one setting, one home. Notes and Voice live in the map's Layers, where a drive reaches them -->
+            <p class="note" id="coNotesHere"><span id="coNotesNow">Notes: Auto</span>. Notes and Voice are on the map, under Layers. <button class="linkbtn" id="coNotesLink">Open Layers</button></p>
             <div class="switches">
-              <button class="sw" data-toggle="voice"><i></i><span>Voice</span></button>
               <button class="sw" data-toggle="haptics"><i></i><span>Haptics</span></button>
               <button class="sw" data-toggle="keys"><i></i><span>Key sounds</span></button>
             </div>
@@ -1448,16 +1527,29 @@
           <h2 id="endName">--</h2>
           <p class="end-meta" id="endMeta"></p>
           <div class="end-score"><b id="endScore">--</b><small>/1000</small><span>Vetta Score</span></div>
+          <p class="end-feel" id="endFeel" hidden></p>   <!-- panel round 2, HE-1: what this phone felt, only when measured -->
           <p class="end-line" id="endLine"></p>
           <!-- U-75: the solid key is Share card only when there is a score to share; otherwise it is Open in the Log, and Share
                waits as a link -->
           <div class="end-acts"><button class="ink-btn solid" id="endShare">Share card</button><a class="ink-btn solid" id="endLogKey" href="analysis.html" hidden>Open in the Log</a><button class="ink-btn" id="endStage">Mark a stage</button><button class="ink-btn" id="endAgain" hidden>Drive it again</button></div>
           <div class="end-links"><a class="linkbtn" id="endLog" href="analysis.html">Open in the Log</a><button class="linkbtn" id="endShareLink" hidden>Share card</button><button class="linkbtn" id="endDone">Done</button></div>
         </div>
+        <div class="end-portrait" id="endPortrait" aria-hidden="true" hidden></div>
       </div>
       <div class="stage-bar" id="stageBar" role="status" aria-live="polite" hidden><span id="stageName"></span><b id="stageDelta">--</b><small id="stageCount"></small></div>
       <div class="stage-bar" id="lapBar" role="status" aria-live="polite" hidden><span id="lapName">Track</span><b id="lapTime">--</b><small id="lapInfo"></small><button class="key" id="lapSetBtn" hidden>Start/finish here</button></div>
       <div class="hz-ask" id="hzAsk" role="alertdialog" aria-live="assertive" hidden><span id="hzAskText"></span><button class="key" id="hzStill">Still there</button><button class="key" id="hzGone">Gone</button></div>
+      <!-- panel round 2 (PR-1, SO-4): what an instrument means and how it is measured, behind a tap on it, parked or in a
+           replay only (cockpit.js openExplain); never a screen before Start -->
+      <div class="overlay dim" id="explainCard" role="dialog" aria-modal="true" aria-labelledby="explainTitle">
+        <div class="card-sheet explain-card">
+          <h2 id="explainTitle">--</h2>
+          <p class="explain-now" id="explainNow" hidden></p>
+          <p class="explain-what" id="explainWhat"></p>
+          <p class="note" id="explainHow"></p>
+          <button class="ink-btn solid" id="explainDone">Done</button>
+        </div>
+      </div>
       <div class="overlay dim" id="pinOverlay" role="dialog" aria-modal="true" aria-label="Dropped pin">
         <div class="card-sheet">
           <h2 id="pinPlace">--</h2>
@@ -1503,8 +1595,10 @@
       </div>
       <div id="cluster"></div>
       <!-- one invitation on the idle map (REVIEW.md 3.1, mockup 01): a loop from here, drawn as a tulip -->
-        <button class="loop-suggest" id="loopSuggest" aria-label="Plan a loop from here"><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M14 36 V22 Q14 10 26 8"/><path d="M22 3 L29 8 L23 13"/><circle cx="14" cy="36" r="2.4"/></svg>
-          <span><b id="loopSuggestTitle">Loop from here</b><small id="loopSuggestWhy">On the twistiest roads nearby</small></span><em id="loopSuggestKey">Plan</em></button>
+        <!-- DA-1 / KE-2 (panel round 2): the row's body draws its road on the map (its glyph is the road's own shape); the key
+             routes it. A row with no road to draw (the loop, a crew's meeting point) does what its key does. -->
+        <div class="loop-suggest split" id="loopSuggest"><button class="ls-show" id="loopSuggestShow" aria-label="Plan a loop from here"><span class="ls-glyph" id="loopSuggestGlyph"><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M14 36 V22 Q14 10 26 8"/><path d="M22 3 L29 8 L23 13"/><circle cx="14" cy="36" r="2.4"/></svg></span>
+          <span><b id="loopSuggestTitle">Loop from here</b><small id="loopSuggestWhy">On the twistiest roads nearby</small></span></button><button class="ls-go" id="loopSuggestGo" aria-label="Plan a loop from here"><em id="loopSuggestKey">Plan</em></button></div>
       <!-- panel round 1 D-1: your own roads, a tap from driving them again (cockpit.js paintDeck, your_roads.js) -->
         <div class="your-roads" id="yourRoads"></div>
       <!-- the morning of a crew drive you're going to, it takes the invitation's place (REVIEW.md roadmap 21) -->

@@ -3,7 +3,7 @@
 // planned it or the crew's owner cancels it. On the day the app offers the planner a convoy with the people going.
 // Members of that crew only; a drive hidden by reports or removed by the owner (moderation) shows to no one.
 import type { Viewer } from "./auth";
-import { Env, HttpError, body, num, randomToken } from "./util";
+import { CELL_COVER_KM, Env, HttpError, body, nearCell, num, randomToken } from "./util";
 import { cleanText } from "./convoy";
 import { isCrewMember } from "./social";
 import { reportedSql } from "./reports_sql";
@@ -129,9 +129,9 @@ export const NEAR_KM = 80;
  * that goes private, a block either way with the planner, or enough reports takes it off.
  */
 export async function eventsNear(env: Env, v: Viewer, url: URL) {
-  const q = (k: string) => { const s = url.searchParams.get(k); return s === null || s.trim() === "" ? NaN : Number(s); };
-  const lat = num(q("lat"), "lat", -85, 85), lon = num(q("lon"), "lon", -180, 180);
-  const dLat = NEAR_KM / 111.2, dLon = NEAR_KM / (111.32 * Math.max(0.2, Math.cos(lat * Math.PI / 180)));
+  const { lat, lon } = nearCell(url);                                     // VI-1: the 0.1-degree cell, never the point
+  const reach = NEAR_KM + CELL_COVER_KM;
+  const dLat = reach / 111.2, dLon = reach / (111.32 * Math.max(0.2, Math.cos(lat * Math.PI / 180)));
   const rows = (await env.DB.prepare(
     `SELECT e.id, e.crew_id, c.name AS crew_name, e.title, e.starts_at, e.meet_name, e.meet_lat, e.meet_lon, e.notes,
             (SELECT COUNT(*) FROM crew_event_rsvps g JOIN crew_members gm ON gm.crew_id = e.crew_id AND gm.user_id = g.user_id
@@ -145,7 +145,7 @@ export async function eventsNear(env: Env, v: Viewer, url: URL) {
     .all<{ id: string; crew_id: string; crew_name: string; title: string; starts_at: string; meet_name: string | null; meet_lat: number; meet_lon: number; notes: string | null; going: number; member: number }>()).results;
   const km = (r: { meet_lat: number; meet_lon: number }) => Math.hypot((r.meet_lat - lat) * 111.2, (r.meet_lon - lon) * 111.32 * Math.cos(lat * Math.PI / 180));
   return rows.map((r) => ({ ...r, member: !!r.member, starts_at: r.starts_at.replace(" ", "T") + "Z", km: Math.round(km(r)) }))
-    .filter((r) => r.km <= NEAR_KM).slice(0, 20);
+    .filter((r) => r.km <= reach).slice(0, 20);
 }
 
 async function visibleEvent(env: Env, v: Viewer, id: string) {

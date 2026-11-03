@@ -901,8 +901,11 @@ final class ApexCarMapViewController: UIViewController, WKNavigationDelegate {
     @MainActor func showHazards() {
         if let native { native.setHazards(ApexCar.shared.hazardPlates) } else { js("car.hazards(\(ApexCar.shared.hazardsJSON))") }
     }
+    /// Panel round 2 (TH-2): the sight plate is never drawn in the instrument cluster, in front of the driver beside the
+    /// car's own speedometer and limit; the main screen and the Dashboard keep it.
     @MainActor func showSight() {
-        if let native { native.setSight(ApexCar.shared.sight) } else { js("car.sight(\(ApexCar.shared.sightJSON))") }
+        let sight = role == .cluster ? nil : ApexCar.shared.sight
+        if let native { native.setSight(sight) } else { js("car.sight(\(role == .cluster ? "null" : ApexCar.shared.sightJSON))") }
     }
     /// F-01: the fix with its speed and age, so the arrow is dead reckoned to where the car is now.
     @MainActor func showPosition() {

@@ -97,7 +97,12 @@
    * feet". With no next note given the link is dropped ("Easy left"), never "then 400 feet" with nothing after it.
    * opts.next: the note after the chain. opts.card: Hale's delivery (REVIEW.md 4.4), every part its own sentence
    * ("Careful. Tight right. Long."); the words are the same in every pack.
+   * Panel round 2 MA-2: the next note is named only while the link is within opts.reachM (note_timing.js chainReachM:
+   * 150 m, or 6 s at speed; 150 m when not given). Past it the chain ends at its corner and the next gets its own call.
+   * MA-3: opts.advice, the pack's advice for the corner, rides in the call as its last sentence ("Careful, hairpin left,
+   * long. Brake before it, not in it.").
    */
+  const NAME_NEXT_M = 150;
   function plainChain(chain, units, opts = {}) {
     const parts = [];
     chain.forEach((n, i) => {
@@ -106,14 +111,15 @@
       parts.push(...call);
     });
     const last = chain[chain.length - 1], next = opts.next;
-    if (last && last.link && last.link !== 'into' && last.link !== 'and' && next) {
+    const reach = Number.isFinite(opts.reachM) ? opts.reachM : NAME_NEXT_M;
+    if (last && last.link && last.link !== 'into' && last.link !== 'and' && next && Number(last.link) <= reach) {
       const m = Number(last.link);
       const said = !Number.isFinite(m) ? '' : units && typeof units.spokenShort === 'function' ? units.spokenShort(m) : `${m} metres`;
       const named = plainNamed(next);
       if (said && named) parts.push(`then ${named} in ${said}`);
     }
-    const text = opts.card ? parts.map(upper).join('. ') : parts.join(', ');
-    return text.replace(/\s+/g, ' ').trim();
+    const text = (opts.card ? parts.map(upper).join('. ') : parts.join(', ')).replace(/\s+/g, ' ').trim();
+    return opts.advice ? `${text.replace(/[.\s]+$/, '')}. ${String(opts.advice).trim()}` : text;
   }
 
   const api = { plainCall, plainHead, plainNamed, plainLink, plainChain, noteCode, kindOf, SEVERITY, CAUTION };

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-hjuf74jRM0M57kdbwuemZBI11U1n/FrM2NbGNnKoOH0=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-mrbHgfZqyRYEXQaDiAnDy+VrlPH+xBwxQ/TPht6ZPcg=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta · Log</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -33,7 +33,10 @@
   <script src="contributor.js"></script>
   <script src="road_runs.js"></script>
   <script src="route_thumb.js"></script>
+  <script src="road_link.js"></script>
+  <script src="your_roads.js"></script>
   <script src="plain_notes.js"></script>   <!-- U-123: the Log names corners in the strip's words -->
+  <script src="road_feel.js"></script>   <!-- panel round 2, HE-1: the drive page's own road-feel lane -->
   <script src="drive_view.js"></script>
   <script src="drive_card.js"></script>
   <script src="year_review.js"></script>
@@ -61,6 +64,15 @@
     /* The phone's text size (format.js applyTypeScale) on the text blocks; charts and the stage strip measure their
        own width and stay unzoomed, so they still fit and track the finger. */
     #tab-history > :not(#trendPanel):not(#steadyPanel), #tab-segments > .bar-top, #segList, #segDetail table, #tab-segments .more > summary, #contribPanel { zoom: var(--type-scale, 1); }
+    /* IN-1 (panel round 2): the drive's page too: its title, the score and coaching line, the keys, the corner list, tags
+       and the panels' words; the map, lanes and charts (.dv-grid) and the dashcam keep their measured size. */
+    #tab-drive > div:first-child, #tab-drive > div:has(#dvTitle), #dvRoot > .dv-head, #dvActs, #dvRoot > .dv-list, #dvTagsPanel, #dvRecce, #dvVote, #dvFlyby, #dvRoad > h2 { zoom: var(--type-scale, 1); }
+    /* GR-2: a floor on the drive's page: prose and captions at least 17 px, every key at least 44 px each way */
+    #tab-drive :is(.note, .dv-meta, .dv-plain, .linkbtn, a.back, .dv-call, .dv-tip) { font-size: 17px; }
+    #tab-drive :is(.linkbtn, .stamps > button, .switch > button, button.btn, .dv-z) { min-height: 44px; min-width: 44px; }
+    #tab-drive #dvTagNew { height: 44px; }
+    html[data-type-size] .dv-head .bars { grid-template-columns: repeat(2, minmax(0, 1fr)); min-width: 0; }
+    html[data-type-size] .dv-corners { grid-template-columns: minmax(0, 1fr); }
     main { max-width: 1180px; margin: 0 auto; padding: calc(14px + var(--sa-top, env(safe-area-inset-top, 0px))) calc(16px + var(--sa-right, env(safe-area-inset-right, 0px))) calc(80px + var(--sa-bottom, env(safe-area-inset-bottom, 0px))) calc(16px + var(--sa-left, env(safe-area-inset-left, 0px))); display: grid; gap: 18px; }
     /* grid columns never grow past the screen for one wide child (a trace, the Score bars): the child scrolls or shrinks */
     main, .stack-8, .stack-12 { grid-template-columns: minmax(0, 1fr); }
@@ -261,7 +273,7 @@
         <button class="btn solid dv-replay" id="dvReplay">Replay</button>
         <button class="linkbtn" id="dvAgain">Drive it again</button>
         <button class="linkbtn" id="dvCompare">Compare</button>
-        <button class="linkbtn" id="dvShare">Share</button>
+        <button class="linkbtn" id="dvShare">Send the road</button>
         <button class="linkbtn" id="dvCard">Share card</button>
         <button class="linkbtn" id="dvStage">Mark a stage</button>
       </div>
@@ -598,7 +610,7 @@
       $('yearLines').hidden = $('yearShareRow').hidden = !s;
       if (!s) { summaryParts.year = ''; paintSummary(); return; }
       const ls = ApexYearReview.lines(s);
-      summaryParts.year = `${year} · ${ApexUnits.long(s.miles * 1609.344, 0)} · ${s.drives} drive${s.drives === 1 ? '' : 's'}`; paintSummary();   // the rest when opened
+      summaryParts.year = `${year} · ${ApexFormat.distance(s.m)} · ${s.drives} drive${s.drives === 1 ? '' : 's'}`; paintSummary();   // the rest when opened
       $('yearLines').replaceChildren(...ls.map((t) => Object.assign(document.createElement('p'), { textContent: t })));
       yearText = [`My ${year} on the road with Vetta`, ...ls].join('\n');
     }
@@ -658,7 +670,7 @@
         return m ? `<span class="stamp-d"><b>${m.getDate()}</b>${m.toLocaleDateString('en-US', { month: 'short' }).toUpperCase()}</span>` : '<span class="stamp-d"><b>--</b></span>'; };
       const rows = shown.slice().reverse().map(d => `<tr class="row-link" data-drive="${d.id}" tabindex="0" role="link" aria-label="Open ${escH(d.name)}">
         <td class="ix-date">${stamp(d)}</td>
-        <td class="l ix-road"><b>${escH(d.name)}</b>${spark(d)}<span class="sub">${ApexUnits.long(d.km * 1000)} · ${d.ds.corners} corners${ApexDriveTags.normalize(d.tags).length ? ` · <span class="tagline">${escH(ApexDriveTags.normalize(d.tags).join(', '))}</span>` : ''}</span></td>
+        <td class="l ix-road"><b>${escH(d.name)}</b>${spark(d)}<span class="sub">${ApexFormat.factsLine(d, ['distance', 'corners'])}${ApexDriveTags.normalize(d.tags).length ? ` · <span class="tagline">${escH(ApexDriveTags.normalize(d.tags).join(', '))}</span>` : ''}</span></td>
         <td class="ix-score"><span class="score">${d.ds.score ?? UNK}</span></td></tr>`).join('');
       $('historyTable').innerHTML = !drives.length ? '<tr><td class="l" colspan="3"><span class="note">No drives yet.</span></td></tr>' : !shown.length ? '<tr><td class="l" colspan="3"><span class="note">No drives with those tags.</span></td></tr>' : rows;
       setTimeout(renderRecords, 0);
@@ -1177,7 +1189,7 @@
       $('dvRoadChart').innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Score on this road over time">${grid}<path d="${line}" fill="none" stroke="${C.accent}" stroke-width="2"/>${dots}</svg>`;
       const first = sc[0], last = sc[sc.length - 1], gain = last ? last.score - first.score : 0;
       $('dvRoadTable').innerHTML = '<tr><th class="l">Drive</th><th>Score</th><th>Corners</th><th class="l">vs this drive</th></tr>' + same.map(o =>
-        `<tr class="${o.self ? 'best' : ''}"><td class="l"><b></b><span class="sub">${o.dateLabel}</span></td><td><span class="score">${o.score ?? UNK}</span></td><td>${o.corners}</td><td class="l">${o.self ? 'this drive' : o.matched ? `${fmtS(o.delta_s)} on ${o.matched} corners (positive = it was slower)` : '--'}</td></tr>`
+        `<tr class="${o.self ? 'best' : ''}"><td class="l"><b></b><span class="sub">${o.dateLabel}</span></td><td><span class="score">${o.score ?? UNK}</span></td><td>${o.corners ?? UNK}</td><td class="l">${o.self ? 'this drive' : o.matched ? `${fmtS(o.delta_s)} on ${o.matched} corners (positive = it was slower)` : '--'}</td></tr>`
       ).join('') + `<tr><td class="l" colspan="4"><span class="note">${sc.length > 1 ? `Score ${gain >= 0 ? 'up' : 'down'} ${Math.abs(gain)} points from the first to the latest drive on this road.` : ''}</span></td></tr>`;
       $('dvRoadTable').querySelectorAll('tr td.l b').forEach((b, i) => { if (same[i]) b.textContent = same[i].name; });
     }
@@ -1241,16 +1253,23 @@
       const id = $('dvPick').value;
       if (id) ApexReturn.open('index.html?again=' + encodeURIComponent(id));
     });
+    // DA-4 / RA-4 (panel round 2): send the road, not the drive (VI vetoed a public drive link). The link carries the road's
+    // line and its name when a road named it (road_link.js), never the score, the time, the date, the drive's ends or who drove
+    // it. It opens the road as a route card in Vetta, or on the website. The old link was this drive's id, which opened
+    // nothing on anyone else's phone.
     $('dvShare').addEventListener('click', async () => {
-      const id = $('dvPick').value, d = summaryOf(id);
-      if (!d) return;
-      const score = d.ds && d.ds.score != null ? 'Score ' + d.ds.score + '/1000' : '';
-      const mi = ApexUnits.long(d.len_m);
-      const text = d.name + ' · ' + [score, mi].filter(Boolean).join(' · ');
-      const url = location.origin + '/?drive=' + encodeURIComponent(d.id);
-      // the real share sheet (feedback 07; save_file.js shareLink), never a "Copy drive link" box
-      const how = await ApexSaveFile.shareLink({ title: 'Vetta drive', text, url });
-      if (how === 'copied' || how === 'failed') { const b = $('dvShare'); b.textContent = how === 'copied' ? 'Link copied' : 'Couldn\u2019t share'; setTimeout(() => { b.textContent = 'Share'; }, 2000); }
+      const d = currentDrive(), b = $('dvShare');
+      if (!d || !window.ApexRoadLink) return;
+      const say = (t) => { b.textContent = t; setTimeout(() => { b.textContent = 'Send the road'; }, 2500); };
+      const pts = ApexRoadLink.roadPoints(d.lat, d.lon, d.dist);
+      if (!pts) { say('Too short to send'); return; }                 // what is left once its ends stay on the phone
+      const name = window.ApexYourRoads && ApexYourRoads.isRoadName(d.name) ? d.name : '';
+      const token = ApexRoadLink.encode(pts, name);
+      if (!token) { say('Couldn’t send'); return; }
+      const url = ApexRoadLink.url(ApexSync.inApp ? ApexSync.apiBase : location.origin, token);
+      const text = name ? name + ' · a road to drive' : 'A road to drive';
+      const how = await ApexSaveFile.shareLink({ title: name || 'A road on Vetta', text, url });
+      if (how === 'copied' || how === 'failed') say(how === 'copied' ? 'Link copied' : 'Couldn’t share');
     });
     // A picture of the drive to share (drive_card.js, IDEAS D-09): the road's outline, score and corner mix, no times or speeds.
     $('dvCard').addEventListener('click', async () => {

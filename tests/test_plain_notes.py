@@ -77,6 +77,47 @@ def test_page_offers_both_and_keeps_rally_for_existing_users():
     html = cockpit_source()
     assert 'data-words="plain"' in html and 'data-words="rally"' in html
     assert "saved.noteWords === 'plain' || saved.noteWords === 'rally' ? saved.noteWords : 'rally'" in html
-    assert "if (state.noteWords === 'plain') return { text: ApexPlainNotes.plainChain(voiced, ApexUnits, { next, card }), chain: null, keys, voiced };" in html
-    # U-109: the next note is the one after the chain, and never one past a junction not yet called
-    assert "const next = after && !(noteM(after) > turnHold.m) ? after : null;" in html
+    assert "const bare = ApexPlainNotes.plainChain(voiced, ApexUnits, { next, card, reachM: reach });" in html
+    # U-109: the next note is the one after the chain, and never one past a junction not yet called; panel round 2 MA-2:
+    # only within reach, and its "careful" spent by the run it is named in
+    assert "const after = carried ? ev[ev.indexOf(cur) + 1] : null;" in html
+    assert "const next = after && !(noteM(after) > turnHold.m) && state.noteWords === 'plain' ? care(after) : null;" in html
+    assert "const reach = ApexNoteTiming.chainReachM(opt.vMps);" in html and "if (carried) text += `, ${cur.link}`;" in html
+
+
+MA2 = r"""
+const R = process.argv[1], P = require(R + '/web/plain_notes.js'), T = require(R + '/web/note_timing.js');
+globalThis.localStorage = { getItem: () => 'imperial', setItem() {} };
+const U = require(R + '/web/units.js'); U._reset();
+const c = (o) => ({ type: 'corner', dir: 'L', severity: 3, mods: [], caution: 0, ...o });
+const sq = c({ shape: 'square', severity: 2, caution: 1, call: 'Left square, care' });
+const out = {};
+// the guided drive at 28 mph (12.5 m/s): "Tight left, then careful, square left in a quarter mile" (400 m)
+out.reach = [T.chainReachM(12.5), T.chainReachM(30), T.chainReachM(null)];
+out.far = P.plainChain([c({ severity: 2, link: '400' })], U, { next: sq, reachM: T.chainReachM(12.5) });
+out.farDefault = P.plainChain([c({ severity: 2, link: '400' })], U, { next: sq });
+out.near = P.plainChain([c({ severity: 2, link: '120' })], U, { next: sq, reachM: T.chainReachM(12.5) });
+// at 30 m/s six seconds is 180 m: a 170 m link is still named
+out.fast = P.plainChain([c({ severity: 2, link: '170' })], U, { next: sq, reachM: T.chainReachM(30) });
+// "careful" once per corner: the chain names the square with it, so the square's own call comes without it
+const run = T.createCareRun();
+run.at(1000, 'r');
+out.chained = P.plainChain([run.spend(c({ severity: 2, link: '120' }))], U, { next: run.spend(sq), reachM: 150 });
+run.at(1120, 'r');
+out.own = P.plainCall(run.spend(sq));
+// a new run (the notes went quiet): the square's caution is said again
+run.reset(); run.at(5000, 'r'); out.newRun = P.plainCall(run.spend(sq));
+console.log(JSON.stringify(out));
+"""
+
+
+def test_a_chain_names_the_next_corner_only_within_reach_and_says_careful_once():
+    """Panel round 2 MA-2: no "then … in a quarter mile"; a corner's "careful" is said once, not once per mention."""
+    r = json.loads(subprocess.run([NODE, "-e", MA2, ROOT], capture_output=True, text=True, check=True).stdout)
+    assert r["reach"] == [150, 180, 150]
+    assert r["far"] == "Tight left" and r["farDefault"] == "Tight left"        # 400 m names nothing
+    assert r["near"] == "Tight left, then careful, square left in 400 feet"
+    assert r["fast"] == "Tight left, then careful, square left in 550 feet"
+    assert r["chained"] == "Tight left, then careful, square left in 400 feet"
+    assert r["own"] == "Square left"                                              # its own call: no second "careful"
+    assert r["newRun"] == "Careful, square left"

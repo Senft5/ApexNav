@@ -141,27 +141,30 @@
 
   function drawPuck() {
     const { C } = look();
-    puck.getElement().innerHTML = `<svg viewBox="0 0 34 34" width="34" height="34"><circle cx="17" cy="17" r="14" fill="${C.panel}" stroke="${C.panelInk}" stroke-width="2.5"/><path d="M17 7 L25 24 L17 19.8 L9 24 Z" fill="${C.accent}"/></svg>`;
+    puck.getElement().innerHTML = `<svg viewBox="0 0 34 34" width="34" height="34"><circle cx="17" cy="17" r="14" fill="${C.panel}" stroke="${C.panelInk}" stroke-width="2.5"/><path d="M17 7 L25 24 L17 19.8 L9 24 Z" fill="${C.panelInk}"/></svg>`;   // panel round 2: a position, in ink
   }
 
   // The sight-line speed under the arrow (web/carplay.js sightMessage): its own marker, so it stays upright while the
-  // arrow turns with the car; red when you are going faster than it; hidden when unknown. U-119: OPEN (nothing limits the
-  // view) is the eye alone, small and dimmed: at road-sign size it was the loudest thing on the car's screen for saying
-  // nothing restricts you (REVIEW5 free-drive car/007). The full plate is kept for a number.
+  // arrow turns with the car; hidden when unknown. Panel round 2 (TH-2, IN-3; web/carplay.js sightTag, the same rule):
+  // the plate names itself, the eye, "SIGHT" and the number, with no unit, on the dark plate with rounded ends, so in a
+  // glance it is never a limit sign (it was a white box with "20 MPH" where Apple Maps draws the limit). Faster than it:
+  // the signal red, the eye barred and "SLOW" (two channels). OPEN draws nothing (U-119 had kept the eye alone).
   const EYE = '<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6S2 12 2 12z" fill="none" stroke="currentColor" stroke-width="2.4"/><circle cx="12" cy="12" r="2.8" fill="currentColor"/></svg>';
+  const EYE_BARRED = EYE.replace('</svg>', '<path d="M4 21 L20 3" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>');
+  function sightPlate(s) {
+    if (!s || typeof s.text !== 'string' || !s.text || (s.text === 'OPEN' && !s.short)) return null;
+    return { label: s.short ? 'SLOW' : 'SIGHT', text: s.text, short: !!s.short };
+  }
   function drawSight() {
     if (!sightTag) return;
-    const el = sightTag.getElement(), s = state.sight;
+    const el = sightTag.getElement(), t = sightPlate(state.sight);
     sightSize = null;                                                 // measured again by the next declutter
-    if (!s || !s.text || !state.pos) { el.hidden = true; return; }
+    if (!t || !state.pos) { el.hidden = true; return; }
     el.hidden = false;
-    el.classList.toggle('short', s.short);                            // classList: MapLibre's own marker classes stay
-    const open = s.text === 'OPEN' && !s.short;
-    el.classList.toggle('open', open);
-    if (open) { el.innerHTML = EYE; return; }
-    const b = document.createElement('b'); b.textContent = s.text;
-    const u = document.createElement('small'); u.textContent = s.unit || '';
-    el.innerHTML = EYE; el.append(b); if (s.unit) el.append(u);
+    el.classList.toggle('short', t.short);                            // classList: MapLibre's own marker classes stay
+    const label = document.createElement('small'); label.textContent = t.label;
+    const b = document.createElement('b'); b.textContent = t.text;
+    el.innerHTML = t.short ? EYE_BARRED : EYE; el.append(label, b);
   }
 
   function addLayers() {

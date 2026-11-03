@@ -17,10 +17,18 @@
   };
   // the same in every theme: what a hazard sounds like is not a theme's to change
   const HAZARD = [{ type: 'square', f: 660, at: 0, dur: 0.09, gain: 0.07 }, { type: 'square', f: 880, at: 0.11, dur: 0.09, gain: 0.07 }];
+  // Panel round 2 LA-4: the notes' mode changes are a chime, not a sentence. Rising: the notes are back (it plays before the
+  // first call); falling: the notes go quiet. Soft sines a fifth apart, unlike the hazard's square two-tone, and the same
+  // in every theme, because what they mean is not a theme's to change.
+  const MODE = {
+    wake: [{ type: 'sine', f: 784, at: 0, dur: 0.11, gain: 0.09 }, { type: 'sine', f: 1175, at: 0.13, dur: 0.16, gain: 0.09 }],
+    sleep: [{ type: 'sine', f: 1175, at: 0, dur: 0.11, gain: 0.08 }, { type: 'sine', f: 784, at: 0.13, dur: 0.18, gain: 0.08 }],
+  };
 
-  /** The voices for a sound: kind 'key' | 'pre' | 'hazard'. An unknown theme uses the road book's. */
+  /** The voices for a sound: kind 'key' | 'pre' | 'hazard' | 'wake' | 'sleep'. An unknown theme uses the road book's. */
   function recipe(themeId, kind) {
     if (kind === 'hazard') return HAZARD;
+    if (kind === 'wake' || kind === 'sleep') return MODE[kind];
     const r = Object.prototype.hasOwnProperty.call(RECIPES, themeId) ? RECIPES[themeId] : RECIPES.roadbook;
     return r[kind] || [];
   }
@@ -51,6 +59,6 @@
     return length(voices);
   }
 
-  const api = { RECIPES, HAZARD, recipe, length, play };
+  const api = { RECIPES, HAZARD, MODE, recipe, length, play };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexThemeSounds = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -58,3 +58,35 @@ decisions in CALL_SHEET stand, though a reviewer may push back once.
 - Judges against NHTSA glance rules (2 s glances, 12 s total), CarPlay's rules, low vision, colour-blindness,
   VoiceOver, Dynamic Type, motor limits and night glare.
 - Ranks anything unsafe above everything else, and says so.
+
+## Round 2: twenty reviewers, four models (the owner, 2026-11-02)
+
+"More reviewers this time, but make them a mix of Opus, Fable, Haiku and Sonnet. I want 20 reviewers, all with different
+backgrounds."
+
+The six above stay on the panel. Fourteen join them, and each model plays five reviewers. Each reviewer makes at most
+four proposals. Voting uses one ballot, a line per proposal (`round-2/BALLOT.md`); a voter opens a review in full when
+they want the detail. Each voter still has 10 points, at most 4 on their own proposals and at most 5 on any one.
+
+| ID | Reviewer | Background | Model |
+|---|---|---|---|
+| DA | Dani Okafor | the regular (above) | Sonnet |
+| MA | Margo Lindqvist | the co-driver (above) | Fable |
+| TH | Theo Marchetti | the platform designer (above) | Fable |
+| PR | Priya Raman | the newcomer (above) | Haiku |
+| RA | Ray Castellanos | the product skeptic (above) | Opus |
+| IN | Ines Duarte | safety and access (above) | Fable |
+| KE | Kenji Watanabe | 44, touge driver and car photographer from Gunma, now in Colorado; NA Miata; mountain passes at dawn. Judges beauty, the road as a place, and whether Vetta makes him want to go | Opus |
+| LA | Lauren Pierce | 36, sport-touring motorcyclist (Ducati Multistrada), helmet comms, gloves on. Judges whether a rider could use it: voice, glance, gloves, wind noise | Sonnet |
+| MR | Marcus Bell | 31, software sales, Tesla Model 3 Performance, drives the twisties on regen. Judges EV fit: range, charging stops, battery on long loops | Sonnet |
+| GR | Grace Okonkwo | 67, retired teacher; Sunday drives with her husband in a Buick; bigger text; little patience for jargon or tiny buttons | Haiku |
+| TO | Tomás Herrera | 27, drives for delivery apps in Phoenix; uses Waze all day. Judges: would a working driver keep it, and is it fast enough to plan | Haiku |
+| SO | Sofia Brandt | 39, UX researcher who ran usability labs for two map apps. Judges task success, onboarding, mental models; wants evidence | Opus |
+| JA | Jamal Wright | 19, licensed eight months, '09 Civic Si, lives on TikTok and Instagram; his parents worry. Judges what he'd share, what's cool, what's cringe, what looks unsafe to a parent | Haiku |
+| HE | Helen Cho | 48, automotive journalist (road tests, long-form features). Judges: would she write about it, what's the headline, what's the story, what's missing to make it remarkable | Fable |
+| VI | Victor Lindgren | 42, privacy and security researcher; has audited location apps. Judges what leaves the phone, defaults, consent, data retention, and the claims in the privacy page | Opus |
+| AM | Amara Diallo | 33, blind since birth, an accessibility advocate who navigates for her partner from the passenger seat with VoiceOver. Judges everything a screen reader meets | Sonnet |
+| PE | Pete Kowalski | 58, runs his Porsche Club region's tours: 20 cars, a lead and a sweep, CB radios. Judges crews, convoys, events and planning a group run | Opus |
+| NA | Nadia Petrova | 30, iOS performance engineer. Judges launch time, battery, heat, memory, web-view jank, and offline/poor-signal behaviour | Sonnet |
+| DE | Dee Martinez | 45, lives in rural Appalachia, drives a Tacoma on mountain roads with no signal, deer and coal trucks. Judges offline use and roads the map doesn't know | Haiku |
+| AR | Arjun Mehta | 37, brand and type designer (car marques, a watch company). Judges the themes as art direction: type, colour, mark, consistency, what's dated | Fable |

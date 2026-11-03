@@ -102,4 +102,17 @@ describe("hand-reported hazards", () => {
     expect((await env.DB.prepare("SELECT COUNT(*) AS n FROM hazard_reports WHERE reported_by = ?").bind(REVIEW_USER_ID).first<{ n: number }>())!.n).toBe(0);
     expect((await report(review, { kind: "aliens", ...P })).status).toBe(400);    // still the same checks
   });
+
+  it("VI-1: a lookup uses only the 0.1-degree cell, and still finds everything within km of anywhere in it", async () => {
+    const a = await makeUser("alice"), b = await makeUser("bob");
+    const at = { lat: 35.64, lon: -83.86 };                                     // in cell 35.6, -83.9, near its corner
+    const r = await json(report(a, { kind: "gravel", ...at }));
+    // asked from the far side of the cell, 5 km: the cell is covered, so it is found, measured from the cell's centre
+    const list = await near(b, 35.56, -83.94, 5);
+    expect(list.map((h: Msg) => h.id)).toEqual([r.id]);
+    const centre = Math.round(Math.hypot((at.lat - 35.6) * 110540, (at.lon + 83.9) * 111320 * Math.cos(35.6 * Math.PI / 180)));
+    expect(list[0].m).toBe(centre);                                             // the server only ever used the cell
+    expect(await near(b, 35.6123, -83.8777, 5)).toEqual(list);                  // two points in one cell: one answer
+    expect(await near(b, 35.8, -83.9, 1)).toEqual([]);                          // two cells up, 1 km: out of reach
+  });
 });

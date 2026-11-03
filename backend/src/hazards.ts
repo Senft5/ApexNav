@@ -3,7 +3,7 @@
 // SAME_M of a live one confirms that one instead of adding another. Each kind lives for its own time from the last
 // confirmation; enough "gone" votes end it early. The daily sweep (sweep.ts) deletes reports a day after they expire.
 import type { Viewer } from "./auth";
-import { Env, HttpError, body, num, randomToken } from "./util";
+import { CELL_COVER_KM, Env, HttpError, body, nearCell, num, randomToken } from "./util";
 import { atLeast, tierOf } from "./livery";
 
 export const KINDS = ["pothole", "gravel", "debris", "animal", "police", "closure"] as const;
@@ -62,10 +62,11 @@ export async function crewHazardKinds(env: Env, v: Viewer): Promise<string[]> {
   return [...out].slice(0, 8);
 }
 
-/** Live reports within `km` of a point, nearest first. Never who reported them. */
+/** Live reports within `km` of anywhere in a point's 0.1-degree cell (VI-1, util.ts nearCell), nearest the cell's centre
+ *  first; the phone measures from where it really is. Never who reported them. */
 export async function hazardsNear(env: Env, url: URL, v?: Viewer) {
-  const lat = num(Number(url.searchParams.get("lat")), "lat", -85, 85), lon = num(Number(url.searchParams.get("lon")), "lon", -180, 180);
-  const km = num(Number(url.searchParams.get("km") ?? 20), "km", 0.1, NEAR_MAX_KM);
+  const { lat, lon } = nearCell(url);
+  const km = num(Number(url.searchParams.get("km") ?? 20), "km", 0.1, NEAR_MAX_KM) + CELL_COVER_KM;
   const dLat = (km * 1000) / M_LAT, dLon = (km * 1000) / (111320 * cosLat(lat));
   const rows = (await env.DB.prepare(
     `SELECT id, kind, label, lat, lon, heading, confirms, clears, created_at, expires_at FROM hazard_reports

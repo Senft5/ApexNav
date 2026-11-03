@@ -231,7 +231,8 @@
     const dur = finite(S.duration_s) ? fmtT(S.duration_s) : '--';
     head.innerHTML = `<div class="dv-score"><b class="score big">${scoreVal}</b> <small>/1000</small></div>`
       + `<div class="bars">${bar('pace', 'Pace')}${bar('smoothness', 'Smooth')}${bar('braking', 'Brakes')}${bar('consistency', 'Rhythm')}</div>`
-      + `<div class="dv-meta">${mi} \u00b7 ${dur} \u00b7 ${d.corners.length} corners</div>`
+      // RA-3 (panel round 2): the end card's line, from the one helper (format.js factsLine): same distance, time and corners
+      + `<div class="dv-meta">${root.ApexFormat ? root.ApexFormat.factsLine({ len_m: finite(S.km) ? S.km * 1000 : null, secs: S.duration_s, corners: d.corners }) : `${mi} \u00b7 ${dur} \u00b7 ${d.corners.length} corners`}</div>`
       // lap times from track mode (a circuit only, IDEAS D-15): best marked, sectors when the first lap set their lines
       + (Array.isArray(d.laps) && d.laps.length ? `<div class="dv-meta">Laps: ${d.laps.map((l) => {
           const best = Math.min(...d.laps.map((x) => x.timeS)), t = `${Math.floor(l.timeS / 60)}:${(l.timeS % 60).toFixed(2).padStart(5, '0')}`;
@@ -321,6 +322,10 @@
     }
     const hasElev = !!d.elev;
     let feel = null;                                                       // member-measured road feel along this drive (setRoadFeel)
+    // panel round 2 (HE-1): this phone's own road feel on this drive, from its own rows, only when the mount calibrated
+    // (road_feel.js summary: 200 m of measured camber at least); gaps are unknown and drawn as nothing, never as zero
+    const RF = root.ApexRoadFeel || (typeof module !== 'undefined' && typeof require === 'function' ? require('./road_feel.js') : null);
+    const own = RF && Array.isArray(d.camber) && RF.summary({ dist: d.dist, camber: d.camber, rough: d.rough }) ? { cam: d.camber, rough: Array.isArray(d.rough) ? d.rough : [] } : null;
     function draw() {
       W = Math.max(280, lanes.clientWidth || 600);
       const LM = 8, RM = 8, LH = 18;                                        // label row above each lane
@@ -346,6 +351,19 @@
         }
         svg += p ? `<path d="${p}" fill="none" stroke="${L.id === 'speed' ? C.panelInk : C.accent}" stroke-width="1.6" stroke-linejoin="round"/>` : `<text x="${LM}" y="${top + h / 2}" font-size="11" fill="${C.panelDim}">not recorded</text>`;
         yTop = top + h + 10;
+      }
+      if (own) {                                                           // HE-1: what this phone felt, labelled so it is never the crowd's
+        const top = yTop + LH, h = 56, cs = Math.max(1, Math.floor((v1 - v0) / (W * 1.2))), bw = Math.max(1, (W - LM - RM) / ((v1 - v0) / cs));
+        svg += `<text x="${LM}" y="${yTop + 12}" font-size="11" fill="${C.panelDim}">Your road feel</text><text x="${W - RM}" y="${yTop + 12}" text-anchor="end" font-size="10" fill="${C.panelDim}">this phone \u00b7 1 run \u00b7 banking \u00b18\u00b0 \u00b7 roughness</text>`;
+        svg += `<line x1="${LM}" x2="${W - RM}" y1="${top + h / 2}" y2="${top + h / 2}" stroke="${C.rule}" stroke-dasharray="3 4"/><line x1="${LM}" x2="${W - RM}" y1="${top + h}" y2="${top + h}" stroke="${C.rule}"/>`;
+        let bars = '', rp = '', rs = false;
+        for (let i = v0; i <= v1; i += cs) {
+          const cm = own.cam[i], rf = own.rough[i];
+          if (finite(cm)) { const hh = Math.min(1, Math.abs(cm) / 8) * (h / 2); bars += `<rect x="${X(i).toFixed(1)}" y="${(cm >= 0 ? top + h / 2 - hh : top + h / 2).toFixed(1)}" width="${bw.toFixed(1)}" height="${hh.toFixed(1)}" fill="${C.panelInk}" opacity="0.6"/>`; }
+          if (finite(rf)) { rp += `${rs ? 'L' : 'M'}${X(i).toFixed(1)} ${(top + h - Math.min(1, rf / 0.4) * h).toFixed(1)}`; rs = true; } else rs = false;
+        }
+        svg += bars + (rp ? `<path d="${rp}" fill="none" stroke="${C.panelDim}" stroke-width="1.4"/>` : '');
+        geo.lanes.push({ top, h }); yTop = top + h + 10;
       }
       if (feel) {                                                          // what members measured on these roads; gaps are unknown, not zero
         const top = yTop + LH, h = 56, covered = feel.cam.filter((v) => v != null).length;

@@ -1,6 +1,6 @@
 // Friends, blocks, crews, grants and boards. Every function takes the verified viewer; there is no endpoint that
 // takes a user id for "whose data to read". Privacy rules (docs/BACKEND.md section 11) are enforced here and tested.
-import { Env, HANDLE_RE, HttpError, body, num, pair, randomToken, sha256hex, sqlTime, str } from "./util";
+import { CELL_DEG, Env, HANDLE_RE, HttpError, body, nearCell, num, pair, randomToken, sha256hex, sqlTime, str } from "./util";
 import { befriendOnLink, type Viewer } from "./auth";
 import { removedSql, reportedSql } from "./reports_sql";
 import { kudosFor } from "./kudos";
@@ -137,10 +137,10 @@ export const crewList = (env: Env, v: Viewer) => all<{ id: string; name: string;
 
 /** Public crews near a point (about 55 km), nearest first; not ones you are in, none whose owner you blocked or who blocked you. */
 export async function crewDiscover(env: Env, v: Viewer, url: URL) {
-  // a missing parameter must not become Number(null) = 0 and quietly search the Gulf of Guinea
-  const q = (k: string) => { const s = url.searchParams.get(k); return s === null || s.trim() === "" ? NaN : Number(s); };
-  const lat = num(q("lat"), "lat", -85, 85), lon = num(q("lon"), "lon", -180, 180);
-  const dLat = 0.5, dLon = 0.5 / Math.max(0.2, Math.cos(lat * Math.PI / 180));
+  // a missing parameter must not become Number(null) = 0 and quietly search the Gulf of Guinea (nearCell refuses it);
+  // VI-1: only the 0.1-degree cell is used, and the box grows by half a cell so the whole cell is covered
+  const { lat, lon } = nearCell(url);
+  const dLat = 0.5 + CELL_DEG / 2, dLon = (0.5 + CELL_DEG / 2) / Math.max(0.2, Math.cos(lat * Math.PI / 180));
   const rows = await all<{ id: string; name: string; about: string | null; area_name: string; area_lat: number; area_lon: number; members: number }>(env,
     `SELECT c.id, c.name, c.about, c.area_name, c.area_lat, c.area_lon, (SELECT COUNT(*) FROM crew_members x WHERE x.crew_id = c.id) AS members
        FROM crews c

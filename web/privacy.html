@@ -14,7 +14,7 @@
   <p class="draft" id="draft">Draft for the owner's review. Not yet the published policy.</p>
   <h1>Privacy</h1>
   <p class="lede">Vetta is built so that how you drive stays yours. Most of what the app knows never leaves your phone. This page lists everything that does, where it goes, and how to remove it.</p>
-  <p class="meta">Last updated 30 October 2026</p>
+  <p class="meta">Last updated 2 November 2026</p>
 
   <h2>On your phone only</h2>
   <ul>
@@ -51,8 +51,13 @@
   <h2>Shared routes</h2>
   <p>When you share a planned route, its shape (without the first 400 m) and name go to the friends and crews you pick, for 30 days or until you delete it. Never a recorded drive.</p>
 
+  <h2>Road links</h2>
+  <p>Send the road (on a drive's page in the Log) makes a link to the road you drove: a few points along it, about a metre apart at best, and its name when a road named it. Never the drive itself: not its first or last 800 m (usually home and work), its date or time, speeds, Score, or who drove it. The road is written into the link, so nothing is stored on our server to make it, and on the website it sits after the # of the address, which browsers don't send to any server. Whoever opens it sees the road as a route; routing it asks the route server named below, as any route does.</p>
+
   <h2>Hazard reports</h2>
   <p>When you report a hazard (pothole, gravel, police…), its kind, the spot where you were and the direction you were travelling are shown to other members nearby until it expires (30 minutes to 7 days by kind). They never see who reported it. "Still there?" answers are counted the same way.</p>
+  <h2>Hazards, meets and crews near you</h2>
+  <p>To show reported hazards while you drive, meets near you and crews near you, the app asks our server about the area you're in: a square about 11 km across (a tenth of a degree), never your position. It works out which are nearest on the phone. Nothing is asked from inside a privacy zone, nor in the first km of a drive. The server keeps no record of what was asked, and its request logs don't keep the address of a request.</p>
 
   <h2>App health counts (switch in Garage → Settings → Your data)</h2>
   <p>Once a day the app sends yesterday's totals of a few events, such as routes found or failed, road uploads that failed and how long the phone mount took to set, so problems get fixed. No account, phone, position or time of day is in them, and no session is sent with them. Totals are kept 90 days. Turn it off and nothing is counted or sent.</p>
@@ -73,7 +78,7 @@
     <li><b>Road names and features</b>: Overpass (OpenStreetMap).</li>
     <li><b>Car lookup</b>: NHTSA's vehicle database (US Department of Transportation), only when you look a car up in the Garage. It receives the VIN or the make and year you typed.</li>
     <li><b>Weather</b>: Open-Meteo, for the forecast along a route you plan. It receives six points along the route.</li>
-    <li><b>Our server</b> runs on Cloudflare, which processes requests to it.</li>
+    <li><b>Our server</b> runs on Cloudflare, which processes requests to it. Cloudflare's per-request logs are turned off for it, so the address and questions of a request aren't kept.</li>
   </ul>
   <p>Vetta has no advertising, no tracking across apps or websites, and sells no data.</p>
 

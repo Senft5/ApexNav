@@ -20,6 +20,14 @@ describe("public and private crews", () => {
     expect(Object.keys(near[0]).sort()).toEqual(["about", "area_name", "id", "km", "members", "name"]);   // no owner, no members, no exact point
   });
 
+  it("VI-1: discovery reads only the 0.1-degree cell it is asked from", async () => {
+    const [a, b] = [await makeUser("alice"), await makeUser("bob")];
+    await make(a, { name: "Ridge Runners", visibility: "public", area: { name: "Robbinsville", lat: 35.3254, lon: -83.8071 } });
+    const fine = await discover(b, 35.4123, -83.9456), cell = await discover(b, 35.4, -83.9);
+    expect(fine).toEqual(cell);                                                   // same cell, same answer, same km
+    expect(fine.map((c) => c.name)).toEqual(["Ridge Runners"]);
+  });
+
   it("the area is stored rounded to about 11 km, never the exact point", async () => {
     const a = await makeUser("alice");
     const id = await make(a, { name: "Ridge Runners", visibility: "public", area: { name: "Robbinsville", lat: 35.3254, lon: -83.8071 } });

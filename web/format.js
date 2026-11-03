@@ -39,27 +39,38 @@
     return m ? m[1] + clock12(Number(m[2]), Number(m[3])) : name;
   }
   // Dynamic Type: iOS sizes `-apple-system-body` from the phone's text size setting (17 px at the default, Large).
-  // Reading pages (sheets, Log, Stages) zoom by that ratio. Never smaller than designed, and capped at 1.6 so the
-  // largest accessibility sizes still fit a phone; the cockpit keeps its fixed at-a-glance sizes.
-  /** 17 -> 1, 23 -> 1.35, 53 -> 1.6; smaller or unknown -> 1. Steps of 0.05. */
-  function typeScale(bodyPx) {
+  // Reading pages (sheets, the Log, Stages, and since panel round 2 IN-1 the plan sheet, the route card, the drive's page
+  // in the Log and the end card) zoom by that ratio. Never smaller than designed; capped at 2.0 (WCAG 1.4.4's 200 %) where
+  // the page scrolls, and at 1.6 (`--type-scale-fit`) where it must fit one screen (the end card's keys). The cockpit keeps
+  // its fixed at-a-glance sizes.
+  /** 17 -> 1, 23 -> 1.35, 34 -> 2, 53 -> 2; smaller or unknown -> 1. Steps of 0.05. `max` is the cap. */
+  function typeScale(bodyPx, max = 2) {
     if (!(bodyPx > 0)) return 1;
-    return Math.round(Math.max(1, Math.min(1.6, bodyPx / 17)) * 20) / 20;
+    return Math.round(Math.max(1, Math.min(max, bodyPx / 17)) * 20) / 20;
   }
-  /** Sets --type-scale on the page from the phone's text size; outside iOS WebKit it stays 1. */
+  /** What the page gets for a text size: the two scales, and `size` for layouts that change shape ('large' from 1.4: the
+   *  route card's stats and dials go two a row; 'up' above 1: truncated rows wrap instead; '' at 1). */
+  function typeScales(bodyPx) {
+    const scale = typeScale(bodyPx), fit = typeScale(bodyPx, 1.6);
+    return { scale, fit, size: scale >= 1.4 ? 'large' : scale > 1 ? 'up' : '' };
+  }
+  /** Sets --type-scale, --type-scale-fit and html[data-type-size] from the phone's text size; outside iOS WebKit they stay 1. */
   function applyTypeScale(doc) {
-    let scale = 1;
+    let px = 0;
     try {
       if (doc.defaultView.CSS && doc.defaultView.CSS.supports('font', '-apple-system-body')) {
         const probe = doc.createElement('span');
         probe.style.cssText = 'font: -apple-system-body; position: absolute; visibility: hidden';
         doc.body.appendChild(probe);
-        scale = typeScale(parseFloat(doc.defaultView.getComputedStyle(probe).fontSize));
+        px = parseFloat(doc.defaultView.getComputedStyle(probe).fontSize);
         probe.remove();
       }
-    } catch (_) { scale = 1; }
-    doc.documentElement.style.setProperty('--type-scale', String(scale));
-    return scale;
+    } catch (_) { px = 0; }
+    const t = typeScales(px), root = doc.documentElement;
+    root.style.setProperty('--type-scale', String(t.scale));
+    root.style.setProperty('--type-scale-fit', String(t.fit));
+    if (t.size) root.setAttribute('data-type-size', t.size); else root.removeAttribute('data-type-size');
+    return t.scale;
   }
   /** Text people typed, with its emoji taken out (docs/design/REVIEW.md "Not doing": no emoji anywhere, chat included). */
   function noEmoji(s) {
@@ -67,6 +78,47 @@
     return String(s == null ? '' : s).replace(/[\p{Extended_Pictographic}\u{FE0F}\u{200D}\u{1F3FB}-\u{1F3FF}\u{E0020}-\u{E007F}]/gu, (c) => (c.codePointAt(0) < 0x2190 ? c : ''))
       .replace(/ {2,}/g, ' ').trim();
   }
-  const api = { clock12, dateTime, driveName, typeScale, applyTypeScale, noEmoji };
+  // ---- a drive's facts: one set of numbers everywhere (panel round 2, RA-3) -------------------------------------------
+  // The end card, the drive page, the Log row, Your week, the year line, the share card and the deck all read a drive's
+  // distance, time and corners through these, so one drive never shows two numbers (recording 7: the end card said
+  // 3 corners and the Log row 2; the year said 1 mi over a week of 1.3 mi). web/vocabulary.js defines the words.
+  const MI = 1609.344;
+  const finite = (v) => typeof v === 'number' && Number.isFinite(v);
+  /** A distance: one decimal under 10 ("1.3 mi"), whole from 10 ("71 mi"), in the chosen units; "--" when unknown. */
+  function distance(m) {
+    if (!finite(m)) return '--';
+    const U = root.ApexUnits;
+    if (U) return U.long(m, 1, true);
+    const v = m / MI;
+    return `${v >= 10 ? Math.round(v) : v.toFixed(1)} mi`;
+  }
+  /** A drive's time in minutes ("2 min", "1 h 5 min"); null when unknown. */
+  function minutes(secs) {
+    if (!finite(secs) || secs < 0) return null;
+    const m = Math.round(secs / 60);
+    return m >= 60 ? `${Math.floor(m / 60)} h ${m % 60} min` : `${m} min`;
+  }
+  /** "3 corners", "1 corner", "0 corners"; null when unknown. */
+  const cornerCount = (n) => (finite(n) && n >= 0 ? `${n} corner${n === 1 ? '' : 's'}` : null);
+  /**
+   * A drive's facts from whichever shape the app holds it in: a Log drive (dist[] or km, corners[]), a summary (len_m,
+   * secs, corners[]), the end card's (len_m, secs, corners as a count). Corners are every corner the drive found for its
+   * car (recording.js cornersOf), never only the clean ones the Score counted (ds.corners). Unknown stays null.
+   */
+  function driveFacts(d) {
+    if (!d) return { len_m: null, secs: null, corners: null };
+    const len = finite(d.len_m) ? d.len_m : Array.isArray(d.dist) && d.dist.length && finite(d.dist[d.dist.length - 1]) ? d.dist[d.dist.length - 1]
+      : finite(d.km) ? d.km * 1000 : null;
+    const secs = finite(d.secs) ? d.secs : finite(d.duration_s) ? d.duration_s : null;
+    const corners = Array.isArray(d.corners) ? d.corners.length : finite(d.corners) ? d.corners : null;
+    return { len_m: len, secs, corners };
+  }
+  /** "1.3 mi · 2 min · 3 corners": the parts asked for ('distance', 'time', 'corners'), each only when known. */
+  function factsLine(d, parts = ['distance', 'time', 'corners']) {
+    const f = driveFacts(d);
+    const out = { distance: finite(f.len_m) ? distance(f.len_m) : null, time: minutes(f.secs), corners: cornerCount(f.corners) };
+    return parts.map((p) => out[p]).filter(Boolean).join(' · ');
+  }
+  const api = { clock12, dateTime, driveName, typeScale, typeScales, applyTypeScale, noEmoji, distance, minutes, cornerCount, driveFacts, factsLine };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexFormat = api;
 })(typeof window !== 'undefined' ? window : globalThis);

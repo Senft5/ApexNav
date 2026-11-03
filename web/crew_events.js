@@ -563,8 +563,12 @@
       const loadMeets = () => {
         const at = (page.here && page.here()) || (page.mapCentre && page.mapCentre());
         if (!at) return;
-        apiCall('GET', `/api/events/near?lat=${at.lat.toFixed(3)}&lon=${at.lon.toFixed(3)}`).then(jsonOf).then((rows) => {
-          const others = Array.isArray(rows) ? rows.filter((e) => !e.member) : [];
+        // VI-1: asked by the 0.1-degree cell, never from a privacy zone; each meet's distance is measured here, from `at`
+        const Z = root.ApexPrivacyZones;
+        if (!Z || (page.mayLookUp && !page.mayLookUp(at))) { meets.replaceChildren(); return; }
+        apiCall('GET', `/api/events/near?${Z.cellQuery(at.lat, at.lon)}`).then(jsonOf).then((rows) => {
+          const others = Z.nearFirst(Array.isArray(rows) ? rows.filter((e) => !e.member) : [], at.lat, at.lon, 80, 'meet_lat', 'meet_lon')
+            .map((e) => ({ ...e, km: Math.round(e.m / 1000) }));
           meets.replaceChildren(...(others.length ? [el('h3', { textContent: 'Meets near you' }), ...others.map((e) => meetCard(e, redo))] : []));
         }).catch(() => meets.replaceChildren());
       };

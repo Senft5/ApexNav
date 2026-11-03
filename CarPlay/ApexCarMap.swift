@@ -44,11 +44,11 @@ struct ApexCarPalette {
         ApexCarPalette(["bg": "#F2EBDD", "water": "#CFD8D3", "waterLine": "#7F9A9A", "land": "#EFE7D8", "wood": "#E3DCC5", "road": "#FFFFFF",
                         "roadMinor": "#FFFFFF", "casing": "#1C1A17", "label": "#1C1A17", "halo": "#F2EBDD", "boundary": "#8C8373",
                         "shadow": "#A08F6E", "highlight": "#FFFFFF", "accentShade": "#B59E78",
-                        "route": "#C8102E", "plate": "#EDE4D3", "plateInk": "#1C1A17", "accent": "#C8102E"])!,
+                        "route": "#1C1A17", "plate": "#EDE4D3", "plateInk": "#1C1A17", "accent": "#C8102E"])!,
         ApexCarPalette(["bg": "#1B1712", "water": "#10161A", "waterLine": "#26343A", "land": "#1D1914", "wood": "#1F1C15", "road": "#36312A",
                         "roadMinor": "#2B2721", "casing": "#A99F8C", "label": "#A89E8C", "halo": "#1B1712", "boundary": "#332F28",
                         "shadow": "#080706", "highlight": "#28231C", "accentShade": "#14120E",
-                        "route": "#E65252", "plate": "#151310", "plateInk": "#EDE4D3", "accent": "#E65252"])!
+                        "route": "#EDE4D3", "plate": "#151310", "plateInk": "#EDE4D3", "accent": "#E65252"])!
     )
 }
 
@@ -59,7 +59,11 @@ struct ApexCarPlateData: Equatable {
 }
 
 /// The sight-line speed under the car's arrow (web/carplay.js sightMessage).
-struct ApexCarSight: Equatable { let text: String, unit: String, short: Bool }
+struct ApexCarSight: Equatable {
+    let text: String, unit: String, short: Bool
+    /// Panel round 2 (TH-2; web/carplay.js sightTag): OPEN draws nothing on the car's map; the phone's Sight cell says Open.
+    var drawn: Bool { !(text == "OPEN" && !short) }
+}
 
 @MainActor
 final class ApexNativeCarMap: UIView {
@@ -256,8 +260,9 @@ final class ApexNativeCarMap: UIView {
     func setHazards(_ list: [ApexCarPlateData]) { hazards = Array(list.prefix(40)); placePlates() }
 
     func setSight(_ s: ApexCarSight?) {
-        guard s != sight else { return }
-        sight = s
+        let drawn = s.flatMap { $0.drawn ? $0 : nil }                    // OPEN: no plate (TH-2)
+        guard drawn != sight else { return }
+        sight = drawn
         drawSight()
     }
 
@@ -453,7 +458,7 @@ final class ApexNativeCarMap: UIView {
     }
     private func paintPlatesAndCredit() {
         plates.forEach(paint)
-        puck.paint(panel: palette.plate, ink: palette.plateInk, accent: palette.accent)
+        puck.paint(panel: palette.plate, ink: palette.plateInk, accent: palette.plateInk)   // panel round 2: a position, in ink
         sightTag.palette = (palette.plate, palette.plateInk)
         drawSight()
         credit.backgroundColor = palette.bg
@@ -581,17 +586,20 @@ final class ApexCarPuckView: UIView {
     }
 }
 
-/// The sight-line speed under the arrow (web/carmap.js drawSight): an eye, the number and its unit; signal red when the car
-/// is going faster than it; hidden when unknown. U-119: OPEN is the eye alone, half the plate's height and dimmed (at full
-/// size it was the loudest thing on the car's screen, REVIEW5 free-drive car/007).
+/// The sight-line speed under the arrow (web/carmap.js drawSight, web/carplay.js sightTag). Panel round 2 (TH-2, IN-3): the
+/// eye, "SIGHT" and the number with no unit, on the hazard plates' dark ground with rounded ends, so in a glance it is never
+/// a limit sign (it was a white box with "20 MPH" under the car, where Apple Maps draws the limit). Faster than it: the
+/// signal red, the eye barred ("eye.slash") and "SLOW": two channels, never hue alone. OPEN draws nothing (ApexCarSight.drawn,
+/// filtered in setSight); hidden when unknown. The cluster never gets one (ApexCarMapViewController.showSight).
 final class ApexCarSightView: UIView {
     private let label = ApexCarPlateLabel()
-    var palette: (plate: UIColor, ink: UIColor) = (.white, .black)
+    var palette: (plate: UIColor, ink: UIColor) = (.white, .black)   // the theme's, from the look; the plate itself is always dark
     private var value: ApexCarSight?
     override init(frame: CGRect) {
         super.init(frame: frame)
-        label.inset = UIEdgeInsets(top: 2, left: 7, bottom: 1, right: 7)
-        label.layer.borderWidth = 2
+        label.inset = UIEdgeInsets(top: 2, left: 7, bottom: 1, right: 9)
+        label.layer.borderWidth = 1.5
+        label.layer.masksToBounds = true
         addSubview(label)
         isUserInteractionEnabled = false
     }
@@ -600,25 +608,21 @@ final class ApexCarSightView: UIView {
         value = s
         guard let s else { return }
         let red = UIColor(red: 0xC8 / 255, green: 0x10 / 255, blue: 0x2E / 255, alpha: 1)
-        let ink = s.short ? UIColor.white : palette.ink
-        let open = s.text == "OPEN" && !s.short
-        label.backgroundColor = s.short ? red : palette.plate
+        let bone = UIColor(red: 0xED / 255, green: 0xE4 / 255, blue: 0xD3 / 255, alpha: 1)
+        let ink = s.short ? UIColor.white : bone
+        label.backgroundColor = s.short ? red : UIColor(white: 0.067, alpha: 1)
         label.layer.borderColor = ink.cgColor
-        label.layer.borderWidth = open ? 1.5 : 2
-        label.inset = open ? UIEdgeInsets(top: 2, left: 4, bottom: 2, right: 4) : UIEdgeInsets(top: 2, left: 7, bottom: 1, right: 7)
-        alpha = open ? 0.8 : 1
         let t = NSMutableAttributedString()
-        if let eye = UIImage(systemName: "eye", withConfiguration: UIImage.SymbolConfiguration(pointSize: open ? 9 : 13, weight: .bold))?.withTintColor(ink, renderingMode: .alwaysOriginal) {
+        if let eye = UIImage(systemName: s.short ? "eye.slash" : "eye", withConfiguration: UIImage.SymbolConfiguration(pointSize: 13, weight: .bold))?.withTintColor(ink, renderingMode: .alwaysOriginal) {
             t.append(NSAttributedString(attachment: NSTextAttachment(image: eye)))
-            if !open { t.append(NSAttributedString(string: " ")) }
+            t.append(NSAttributedString(string: " "))
         }
-        if !open {
-            t.append(NSAttributedString(string: s.text, attributes: [.foregroundColor: ink, .font: UIFont.systemFont(ofSize: 19, weight: .bold, width: .condensed)]))
-            if !s.unit.isEmpty { t.append(NSAttributedString(string: s.unit, attributes: [.foregroundColor: ink, .font: UIFont.systemFont(ofSize: 11, weight: .bold, width: .condensed), .kern: 0.4])) }
-        }
+        t.append(NSAttributedString(string: s.short ? "SLOW " : "SIGHT ", attributes: [.foregroundColor: ink, .font: UIFont.systemFont(ofSize: 9, weight: .bold), .kern: 0.7]))
+        t.append(NSAttributedString(string: s.text, attributes: [.foregroundColor: ink, .font: UIFont.systemFont(ofSize: 19, weight: .bold, width: .condensed)]))
         label.attributedText = t
         label.sizeToFit()
         bounds = CGRect(origin: .zero, size: label.bounds.size)
         label.frame = bounds
+        label.layer.cornerRadius = bounds.height / 2
     }
 }

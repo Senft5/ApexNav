@@ -20,13 +20,14 @@
       fonts: FONT, cluster: 'dials', notes: 'roadbook', gauge: 'printed',
       renderers: { dial: 'printed', meter: 'gball', strip: 'roadbook' },   // the theme contract's three renderers (theme_contract.js)
       day: {
-        stage: '#F2EBDD', ink: '#1C1A17', dim: '#6A6255', route: '#C8102E', routeCasing: '#F2EBDD',
+        // panel round 2 (IN-3, PR-2): the route is drawn in ink; the one red pen marks only what needs acting on (signal)
+        stage: '#F2EBDD', ink: '#1C1A17', dim: '#6A6255', route: '#1C1A17', routeCasing: '#F2EBDD',
         panel: '#EDE4D3', panelInk: '#1C1A17', panelDim: '#6A6255', rule: '#1C1A17', accent: '#C8102E',
         signal: '#C8102E', amber: '#8A5810', calm: '#1C1A17',
-        face: '#F6F0E4', faceInk: '#1C1A17', faceDim: '#736A5A', hair: '#CFC4AE', gain: '#2E6B3F'
+        face: '#F6F0E4', faceInk: '#1C1A17', faceDim: '#665E51', hair: '#CFC4AE', gain: '#2E6B3F'   // faceDim: 5.1:1 on the paper (contrast.md had 4.22)
       },
       night: {
-        stage: '#1A1814', ink: '#EDE4D3', dim: '#9A9080', route: '#E65252', routeCasing: '#1A1814',
+        stage: '#1A1814', ink: '#EDE4D3', dim: '#9A9080', route: '#EDE4D3', routeCasing: '#1A1814',
         panel: '#151310', panelInk: '#EDE4D3', panelDim: '#8C8373', rule: '#EDE4D3', accent: '#E65252',
         signal: '#E65252', amber: '#D9A24A', calm: '#EDE4D3',
         face: '#1A1814', faceInk: '#EDE4D3', faceDim: '#968C7B', hair: '#2E2A23', gain: '#6FBF7F'
@@ -49,13 +50,13 @@
       day: {
         stage: '#0B0E0D', ink: '#7DF5DE', dim: '#5FB3A5', route: '#FFB347', routeCasing: '#0B0E0D',
         panel: '#0A0C0B', panelInk: '#7DF5DE', panelDim: '#5FB3A5', rule: '#2A5A52', accent: '#FFB347',
-        signal: '#FF8A4D', amber: '#FFB347', calm: '#7DF5DE',
+        signal: '#FF4D63', amber: '#FFB347', calm: '#7DF5DE',   // panel round 2: act now is red, apart from the route's amber
         face: '#0A0C0B', faceInk: '#7DF5DE', faceDim: '#5FB3A5', hair: '#16302B', gain: '#7DF5DE'
       },
       night: {
         stage: '#080A09', ink: '#6FE3CD', dim: '#55A396', route: '#F5A63C', routeCasing: '#080A09',
         panel: '#070908', panelInk: '#6FE3CD', panelDim: '#55A396', rule: '#24504A', accent: '#F5A63C',
-        signal: '#FF8A4D', amber: '#F5A63C', calm: '#6FE3CD',
+        signal: '#F2475E', amber: '#F5A63C', calm: '#6FE3CD',
         face: '#070908', faceInk: '#6FE3CD', faceDim: '#55A396', hair: '#132925', gain: '#6FE3CD'
       },
       map: {
@@ -67,19 +68,19 @@
     // glow on the needles and the speed, a white Limit sign exactly as on the road. The energy is the glow against the
     // metal; the layout is still three things. Its needle overshoots a touch and settles, like a real one.
     billet: {
-      id: 'billet', label: 'Billet', tag: 'C', blurb: 'Machined metal, red glow.', pro: true,
-      about: 'Machined aluminium, knurled bezels and black gauge faces with red glow. Quiet, precise, all business.',
+      id: 'billet', label: 'Billet', tag: 'C', blurb: 'Machined metal, backlit gauges.', pro: true,
+      about: 'Machined aluminium, knurled bezels and backlit black gauge faces; red only when it means slow down. Quiet, precise, all business.',
       voice: { id: 'hale', name: 'Hale', who: 'Low, even, zero drama. A test driver reading a card.' },
       fonts: FONT, cluster: 'dials', notes: 'roadbook', gauge: 'printed', finish: 'metal',
       renderers: { dial: 'bezel', meter: 'bezelg', strip: 'roadbook' },
       day: {
-        stage: '#1C1D1F', ink: '#ECE6DA', dim: '#A39E93', route: '#FF4A3D', routeCasing: '#1C1D1F',
+        stage: '#1C1D1F', ink: '#ECE6DA', dim: '#A39E93', route: '#ECE6DA', routeCasing: '#1C1D1F',   // panel round 2: red is the warning's alone
         panel: '#1C1D1F', panelInk: '#ECE6DA', panelDim: '#A39E93', rule: '#55575C', accent: '#FF5A4C',
         signal: '#FF5A4C', amber: '#E8A33A', calm: '#ECE6DA',
         face: '#0D0D0E', faceInk: '#ECE6DA', faceDim: '#9A958B', hair: '#2C2D30', gain: '#8FD18F'
       },
       night: {
-        stage: '#151618', ink: '#E2DCD0', dim: '#9A958B', route: '#FF4A3D', routeCasing: '#151618',
+        stage: '#151618', ink: '#E2DCD0', dim: '#9A958B', route: '#E2DCD0', routeCasing: '#151618',
         panel: '#151618', panelInk: '#E2DCD0', panelDim: '#9A958B', rule: '#4A4C51', accent: '#FF5A4C',
         signal: '#FF5A4C', amber: '#E0A040', calm: '#E2DCD0',
         face: '#0A0A0B', faceInk: '#E2DCD0', faceDim: '#96918A', hair: '#26272A', gain: '#8FD18F'
