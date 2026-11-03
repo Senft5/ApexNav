@@ -940,6 +940,29 @@
     .nav-rows { display: grid; border-top: 1px solid var(--hair, var(--panel-dim)); }
     .sheet .body { overflow-y: auto; padding: 14px 16px 24px; display: grid; gap: 20px; }
     .sheet .body { zoom: var(--type-scale, 1); }   /* the phone's text size (format.js applyTypeScale) */
+    /* IN-1 (panel round 2): the pages that carry the drive scale too. The plan sheet and the route card (each section of
+       #planBody, so the scroller itself keeps its size) go to 2x; the end card to 1.6x (--type-scale-fit), its overlay
+       scrolling upright as it does on its side. From 1.4x the route card's stats and dials go two a row. */
+    #planBody > section:not(.plan-search-section) { zoom: var(--type-scale, 1); }
+    /* the plan sheet is controls set to fit a row: its words and keys go to 1.6x (the loop dial is an instrument and keeps its size) */
+    .plan-search-section > :not(.plan-loop):not(.find-bar), .plan-loop > .ctl-label { zoom: var(--type-scale-fit, 1); }
+    html[data-type-size] .ctl-label { flex-wrap: wrap; row-gap: 2px; }
+    #planBody, .sheet .body, .garage-pop > section, .theme-cards { grid-template-columns: minmax(0, 1fr); }   /* one wide child wraps; a sheet never grows past the screen */
+    #endCard .end-card { zoom: var(--type-scale-fit, 1); }
+    #endCard.overlay { overflow-y: auto; overscroll-behavior: contain; }
+    html[data-type-size="large"] .rc-stats, html[data-type-size="large"] .rc-dials { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 10px; }
+    html[data-type-size="large"] .rc-stats > div:nth-child(odd) { border-left: 0; padding-left: 0; }
+    html[data-type-size="large"] .end-acts { grid-template-columns: minmax(0, 1fr); }
+    html[data-type-size] .end-links { flex-wrap: wrap; }
+    /* rows that cut their end off with an ellipsis wrap instead once the text is larger */
+    html[data-type-size] .tc-head { flex-wrap: wrap; }
+    html[data-type-size] .switch > button { white-space: normal; text-overflow: clip; line-height: 1.15; padding: 4px; }
+    html[data-type-size] :is(.place small, .place span, .friend-head b, .friend-head small, .crew-tile-head b, .your-road b, .your-road small, .stop-row span) { white-space: normal; overflow: visible; text-overflow: clip; max-width: none; }
+    /* GR-2: a floor on the same pages. Prose and captions at least 17 px (the numerals' small-caps labels keep their size
+       and grow with the scale); every key at least 44 pt each way. */
+    #planBody :is(.rc-facts .fact, .route-meta, p.note, .plan-status, .ctl-label small, .rc-tile span, .linkbtn, .place b, .place small, .place span, .plan-more > summary),
+    .home-by .hb-label, #endCard :is(.end-meta, .end-line, .linkbtn, p:not(.end-kicker)) { font-size: 17px; }
+    #planBody :is(.stamps > button, .switch > button, .detents > button, .linkbtn, .ink-btn, .chip), #endCard :is(.linkbtn, .ink-btn) { min-height: 44px; min-width: 44px; }
     .sheet h3, .plan h3, .side-pop h3 { font-size: 18px; font-weight: 700; font-family: var(--font-num); border-top: 1px solid var(--hair, var(--panel-dim)); padding-top: 12px; margin-bottom: 8px; }
     .sheet p.note.err, .plan p.note.err { color: var(--accent); }
     /* The sheet header already draws a rule: the first heading under it doesn't draw a second. */

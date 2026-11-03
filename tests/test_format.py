@@ -16,7 +16,8 @@ console.log(JSON.stringify({
   dateTime: ['2026-11-01T08:02', '2026-10-31T00:15:09', '2026-10-26T17:03', '2025-12-24T09:00', '2026-10-26', '', 'nonsense', null]
     .map((s) => F.dateTime(s, new Date(2026, 10, 1, 9, 30), 'en-GB')),
   dateTimeMapped: ['2026-10-26'].map(F.dateTime).length,
-  scale: [17, 19, 23, 53, 14, 0, NaN, undefined].map(F.typeScale),
+  scale: [17, 19, 23, 34, 53, 14, 0, NaN, undefined].map((x) => F.typeScale(x)),
+  scales: [17, 21, 23, 53].map(F.typeScales),
   names: ['Drive 10/26/2026 17:03', 'Drive 10/26/2026 09:41', 'Dry Ridge', 'Drive 10/26/2026 5:03 PM', 'web_20261027_080000', 'web_20261027_1703', 'my web_20261027_080000'].map(F.driveName),
   plain: ['Same plan \u{1F697}\u{1F4A8} meet 6:15', 'Fog \u{2601}\u{FE0F} gone by 7', '\u{1F44D}\u{1F3FD}', 'no emoji here', null, 'Sticker \u00A9 2026, Bilstein\u00AE B6, GR86\u2122'].map(F.noEmoji),
 }));
@@ -39,8 +40,11 @@ def test_type_scale_follows_phone_text_size():
     root = Path(__file__).resolve().parents[1]
     p = subprocess.run([NODE, "-e", SCRIPT], cwd=root, capture_output=True, text=True, encoding="utf-8", timeout=30)
     assert p.returncode == 0, p.stderr
-    # default Large = 1; xxxLarge-ish 23 px = 1.35; accessibility sizes capped; smaller or unknown never shrinks
-    assert json.loads(p.stdout)["scale"] == [1, 1.1, 1.35, 1.6, 1, 1, 1, 1]
+    # default Large = 1; xxxLarge-ish 23 px = 1.35; accessibility sizes capped at 2 (IN-1, WCAG 1.4.4); smaller or unknown never shrinks
+    r = json.loads(p.stdout)
+    assert r["scale"] == [1, 1.1, 1.35, 2, 2, 1, 1, 1, 1]
+    # the end card fits one screen: its own cap is 1.6; the route card changes shape from 1.4
+    assert [(s["scale"], s["fit"], s["size"]) for s in r["scales"]] == [(1, 1, ""), (1.25, 1.25, "up"), (1.35, 1.35, "up"), (2, 1.6, "large")]
 
 
 def test_chat_and_replies_render_emoji_as_text():

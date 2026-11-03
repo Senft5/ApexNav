@@ -61,6 +61,15 @@
     /* The phone's text size (format.js applyTypeScale) on the text blocks; charts and the stage strip measure their
        own width and stay unzoomed, so they still fit and track the finger. */
     #tab-history > :not(#trendPanel):not(#steadyPanel), #tab-segments > .bar-top, #segList, #segDetail table, #tab-segments .more > summary, #contribPanel { zoom: var(--type-scale, 1); }
+    /* IN-1 (panel round 2): the drive's page too: its title, the score and coaching line, the keys, the corner list, tags
+       and the panels' words; the map, lanes and charts (.dv-grid) and the dashcam keep their measured size. */
+    #tab-drive > div:first-child, #tab-drive > div:has(#dvTitle), #dvRoot > .dv-head, #dvActs, #dvRoot > .dv-list, #dvTagsPanel, #dvRecce, #dvVote, #dvFlyby, #dvRoad > h2 { zoom: var(--type-scale, 1); }
+    /* GR-2: a floor on the drive's page: prose and captions at least 17 px, every key at least 44 px each way */
+    #tab-drive :is(.note, .dv-meta, .dv-plain, .linkbtn, a.back, .dv-call, .dv-tip) { font-size: 17px; }
+    #tab-drive :is(.linkbtn, .stamps > button, .switch > button, button.btn, .dv-z) { min-height: 44px; min-width: 44px; }
+    #tab-drive #dvTagNew { height: 44px; }
+    html[data-type-size] .dv-head .bars { grid-template-columns: repeat(2, minmax(0, 1fr)); min-width: 0; }
+    html[data-type-size] .dv-corners { grid-template-columns: minmax(0, 1fr); }
     main { max-width: 1180px; margin: 0 auto; padding: calc(14px + var(--sa-top, env(safe-area-inset-top, 0px))) calc(16px + var(--sa-right, env(safe-area-inset-right, 0px))) calc(80px + var(--sa-bottom, env(safe-area-inset-bottom, 0px))) calc(16px + var(--sa-left, env(safe-area-inset-left, 0px))); display: grid; gap: 18px; }
     /* grid columns never grow past the screen for one wide child (a trace, the Score bars): the child scrolls or shrinks */
     main, .stack-8, .stack-12 { grid-template-columns: minmax(0, 1fr); }
