@@ -131,7 +131,7 @@
   const PART_KINDS = ['face', 'ring', 'pod', 'disc', 'box', 'text', 'scale', 'marks', 'digital', 'bank', 'lamp', 'mid'];
   const READS = ['speed', 'speedAlt', 'latG', 'brakeG', 'bank', 'rpm', 'fuel', 'temp', 'torque', 'volts', 'mpg'];   // instruments.js CAR_READS
   const PART_NUM = ['cx', 'cy', 'r', 'w', 'h', 'x', 'y', 'rx', 'a0', 'a1', 'min', 'max', 'major', 'minor', 'label', 'labelR', 'labelSize', 'labelDiv',
-    'majorLen', 'minorLen', 'majorW', 'minorW', 'arc', 'redW', 'pegs', 'peg0', 'rest', 'lines', 'fit'];
+    'majorLen', 'minorLen', 'majorW', 'minorW', 'arc', 'redW', 'pegs', 'peg0', 'rest', 'lines', 'fit', 'labelMin', 'labelMax'];
   const n = (v, lo = -1000, hi = 1000) => (typeof v === 'number' && Number.isFinite(v) && v >= lo && v <= hi ? v : null);
   const nums = (o, keys) => { const out = {}; if (o && typeof o === 'object') for (const k of keys) { const x = n(o[k]); if (x != null) out[k] = x; } return out; };
   const pair = (o) => (o && HEX.test(o.day || '') && HEX.test(o.night || '') ? { day: o.day, night: o.night } : null);

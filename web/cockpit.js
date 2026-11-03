@@ -5355,19 +5355,24 @@
     // HE-3 (panel round 2): the card draws a real strip head in the driver's words (vocabulary.js sampleStrip: plainCall or
     // the rally call through the strip's own lockup), with its distance, never a hard-coded "LEFT 4 · TIGHTENS" over 42 MPH
     const vocabDeps = () => ({ plain: window.ApexPlainNotes, units: ApexUnits, paceNoteText: Core.paceNoteText, lockup: Inst.lockup, voiceLines: window.ApexVoiceLines });
+    const cardMode = () => (document.documentElement.dataset.mode === 'night' ? 'night' : 'day');
     function fillPreview(box, t) {
       const c = t.day, st = window.ApexVocabulary && ApexVocabulary.sampleStrip(state.noteWords, vocabDeps());
       box._words = state.noteWords;
       if (t.car && t.car.dial && t.car.meter) {
         // a car's own theme: its card is the car's cluster, parked (needles at rest: no reading is shown), and the car from
-        // above in its paint
+        // above in its paint, drawn in the mode the page is in (orange-lit black faces at night, as the car)
+        const m = cardMode(), cm = t[m];
+        box._mode = m;
         box.classList.add('tp-car');
-        for (const [k, v] of [['--car-needle', t.car.needle && t.car.needle.day], ['--car-ring', t.car.ring && t.car.ring.day], ['--car-disc', t.car.disc && t.car.disc.day],
-          ['--car-lamp', t.car.lamp && t.car.lamp.day], ['--font-dial', t.fonts.dial]]) if (v) box.style.setProperty(k, v);
+        for (const [k, v] of Object.entries(cm)) box.style.setProperty(`--${k.replace(/[A-Z]/g, (x) => '-' + x.toLowerCase())}`, v);
+        for (const [k, v] of [['--car-needle', t.car.needle && t.car.needle[m]], ['--car-ring', t.car.ring && t.car.ring[m]], ['--car-disc', t.car.disc && t.car.disc[m]],
+          ['--car-lamp', t.car.lamp && t.car.lamp[m]], ['--font-dial', t.fonts.dial]]) if (v) box.style.setProperty(k, v);
+        box.dataset.mode = m;
         if (t.car.finish) box.dataset.finish = t.car.finish;
         box.replaceChildren();
         for (const slot of ['dial', 'meter']) { const g = el('div', { className: 'tp-g' }); box.append(g); Inst.carGauge(g, t.car[slot], slot)({}); }
-        const sil = el('span', { className: 'tp-silhouette' }); sil.innerHTML = Themes.carSVG(t, c.panelInk, 96, 40, { rotate: true }); box.append(sil);
+        const sil = el('span', { className: 'tp-silhouette' }); sil.innerHTML = Themes.carSVG(t, cm.panelInk, 96, 40, { rotate: true }); box.append(sil);
         return;
       }
       if (!st) { box.innerHTML = ''; return; }
@@ -5412,7 +5417,7 @@
       }
       for (const { t, card, preview, key, inUseTag, ok, quote, line } of themeCards.values()) {
         const allowed = ok(), inUse = state.theme === t.id && !themeTrial, l = line();
-        if (preview._words !== state.noteWords) fillPreview(preview, t);   // the words changed: the strip head follows
+        if (preview._words !== state.noteWords || (t.car && preview._mode !== cardMode())) fillPreview(preview, t);   // the words changed: the strip head follows
         const q = t.voice ? `${t.voice.who}${l ? ` "${l.text}"` : ''}` : '';
         if (quote.data !== q) quote.data = q;
         card.classList.toggle('in-use', state.theme === t.id);
@@ -5654,7 +5659,7 @@
       savePrefs();
       render(true);
     }));
-    document.querySelectorAll('#nightSwitch [data-night]').forEach(b => b.addEventListener('click', () => { state.nightMode = b.dataset.night; applyTheme(); }));
+    document.querySelectorAll('#nightSwitch [data-night]').forEach(b => b.addEventListener('click', () => { state.nightMode = b.dataset.night; applyTheme(); renderThemePicker(); }));   // a car's card follows the mode
     // SO-1 (panel round 2): Notes and Voice have one home, Layers (a drive reaches it); the Garage's link opens it
     $('coNotesLink').addEventListener('click', () => { showView(null); if (!$('swEdge').classList.contains('open')) $('swTab').click(); });
     // U-82: the Notes detent (Layers): a stop is chosen, never cycled into by a stray tap

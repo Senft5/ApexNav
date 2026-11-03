@@ -38,11 +38,12 @@
             "min": 0,
             "mph": { "max": 160, "major": 20, "minor": 10, "label": 20 },
             "kmh": { "max": 260, "major": 20, "minor": 10, "label": 40 },
-            "labelR": 69,
+            "labelR": 65,
             "majorLen": 12,
             "minorLen": 6,
             "majorW": 3,
             "minorW": 1.4,
+            "rest": -6,
             "needle": { "len": 84, "tail": 16, "w": 5, "hub": 11, "style": "taper" }
           },
           {
@@ -50,15 +51,16 @@
             "reads": "speedAlt",
             "cx": 100,
             "cy": 100,
-            "r": 50,
+            "r": 40,
             "a0": -135,
             "min": 0,
-            "kmh": { "max": 260, "major": 20, "minor": 20, "label": 40, "a1": 137.6 },
-            "mph": { "max": 160, "major": 20, "minor": 10, "label": 40, "a1": 132.4 },
+            "labelMin": 40,
+            "kmh": { "max": 260, "major": 20, "minor": 20, "label": 40, "labelMax": 200, "a1": 137.6 },
+            "mph": { "max": 160, "major": 20, "minor": 10, "label": 40, "labelMax": 120, "a1": 132.4 },
             "a1": 138,
-            "labelR": 38,
+            "labelR": 26,
             "small": true,
-            "majorLen": 4,
+            "majorLen": 3,
             "minorLen": 2.5,
             "majorW": 1.2,
             "minorW": 0.8,
@@ -77,11 +79,12 @@
           },
           {
             "k": "text",
-            "x": 100,
+            "x": 108,
             "y": 125,
-            "t": "{unit}"
+            "t": "{unit}",
+            "cls": "tiny"
           },
-          { "k": "digital", "x": 100, "y": 189, "fit": 78 }
+          { "k": "digital", "x": 100, "y": 189, "fit": 72 }
         ]
       },
       "meter": {
@@ -214,33 +217,34 @@
             "cx": 100,
             "cy": 100,
             "r": 88,
-            "a0": -140,
-            "a1": 70,
+            "a0": -128,
+            "a1": 82,
             "min": 0,
             "max": 9,
             "major": 1,
             "minor": 0.2,
             "label": 1,
-            "labelR": 70,
+            "labelR": 66,
             "labelSize": 17,
             "red": [7.5, 9],
             "redW": 7,
-            "majorLen": 12,
+            "majorLen": 10,
             "minorLen": 6,
             "majorW": 3,
             "minorW": 1.2,
-            "needle": { "len": 84, "tail": 14, "w": 3.6, "hub": 12 }
+            "needle": { "len": 46, "tail": 12, "w": 3.6, "hub": 12 }
           },
-          { "k": "text", "x": 110, "y": 80, "t": "x1000r/min", "cls": "tiny" },
-          { "k": "lamp", "x": 72, "y": 74, "r": 6 },
+          { "k": "text", "x": 100, "y": 64, "t": "x1000r/min", "cls": "tiny" },
+          { "k": "lamp", "x": 64, "y": 84, "r": 6 },
           { "k": "mid", "x": 146, "y": 119 },
           {
             "k": "text",
-            "x": 100,
-            "y": 125,
-            "t": "{unit}"
+            "x": 102,
+            "y": 124,
+            "t": "{unit}",
+            "cls": "tiny"
           },
-          { "k": "digital", "x": 100, "y": 186, "fit": 78 }
+          { "k": "digital", "x": 102, "y": 186, "fit": 70 }
         ]
       },
       "meter": {
@@ -265,8 +269,8 @@
             "majorW": 3,
             "minorW": 1.4,
             "ends": [
-              { "v": -0.8, "t": "L", "r": 44 },
-              { "v": 0.8, "t": "R", "r": 44 }
+              { "v": -0.8, "t": "L", "r": 40 },
+              { "v": 0.8, "t": "R", "r": 40 }
             ],
             "needle": { "len": 56, "tail": 10, "w": 3.2, "hub": 7 }
           },
@@ -287,9 +291,10 @@
             "majorW": 3,
             "minorW": 1.4,
             "ends": [
-              { "v": 0, "t": "0", "r": 44 },
-              { "v": 0.8, "t": ".8", "r": 44 }
+              { "v": 0, "t": "0", "r": 40 },
+              { "v": 0.8, "t": ".8", "r": 40 }
             ],
+            "rest": -0.1,
             "needle": { "len": 56, "tail": 10, "w": 3.2, "hub": 7 }
           },
           { "k": "text", "x": 114, "y": 94, "t": "TURN", "anchor": "start" },

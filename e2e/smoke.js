@@ -58,6 +58,50 @@ const flows = [];
 const scoredCard = (page, timeout = 20000) => page.waitForFunction(() => { const s = document.getElementById('endScore'); return s && !s.hasAttribute('aria-busy'); }, null, { timeout });
 const flow = (name, fn, ctxOpts = {}) => flows.push({ name, fn, ctxOpts });
 function check(cond, msg) { if (!cond) throw new Error(msg); }
+// A car's own cluster (instruments.js carGauge): nothing printed on it overlaps. In each gauge's own units, every word and
+// numeral (its inked glyphs, measured), every tick, the hubs and the lamp, and each needle lying at rest (a needle that reads
+// moves over the face, as a real one does). Returns the clashes as "gauge: a / b".
+const GAUGE_CLASH = (root) => `(() => {
+  const out = [], cv = document.createElement('canvas').getContext('2d');
+  const inBox = (b, x, y) => x > b.x0 + 0.5 && x < b.x1 - 0.5 && y > b.y0 + 0.5 && y < b.y1 - 0.5;
+  const seg = (x1, y1, x2, y2, n = 24) => Array.from({ length: n + 1 }, (_, i) => [x1 + (x2 - x1) * i / n, y1 + (y2 - y1) * i / n]);
+  [...document.querySelectorAll('${root} svg.car-gauge')].forEach((s, si) => {
+    const name = (s.closest('.tp-g') ? 'card ' : '') + s.getAttribute('class').split(' ').pop() + si;
+    const texts = [], ticks = [], rounds = [], rests = [];
+    for (const t of s.querySelectorAll('text')) {
+      const cs = getComputedStyle(t);
+      if (!t.getClientRects().length || cs.display === 'none') continue;
+      cv.font = cs.fontWeight + ' ' + parseFloat(cs.fontSize) + 'px ' + cs.fontFamily; cv.letterSpacing = cs.letterSpacing === 'normal' ? '0px' : cs.letterSpacing;
+      const spans = t.querySelectorAll('tspan').length ? [...t.querySelectorAll('tspan')] : [t];
+      let y = parseFloat(t.getAttribute('y'));
+      for (const l of spans) {
+        if (l !== t) y += parseFloat(l.getAttribute('dy') || 0);
+        const txt = l.textContent; if (!txt.trim()) continue;
+        const m = cv.measureText(txt), tl = l === t && t.getAttribute('textLength'), w = tl ? Math.min(m.width, parseFloat(tl)) : m.width;
+        const x = parseFloat(l.getAttribute('x') || t.getAttribute('x')), a = cs.textAnchor, x0 = a === 'middle' ? x - w / 2 : a === 'end' ? x - w : x;
+        texts.push({ k: txt.trim(), x0, x1: x0 + w, y0: y - m.actualBoundingBoxAscent, y1: y + m.actualBoundingBoxDescent });
+      }
+    }
+    for (const l of s.querySelectorAll('.car-scale line')) ticks.push(['x1', 'y1', 'x2', 'y2'].map((k) => parseFloat(l.getAttribute(k))));
+    for (const c of s.querySelectorAll('.car-hub, .car-lamp')) rounds.push({ k: c.getAttribute('class'), x: +c.getAttribute('cx'), y: +c.getAttribute('cy'), r: +c.getAttribute('r') });
+    for (const g of s.querySelectorAll('.car-needle')) {
+      if (g.style.opacity !== '0.25') continue;
+      const m = /rotate\\(([-\\d.]+) ([-\\d.]+) ([-\\d.]+)\\)/.exec(g.getAttribute('transform') || ''); if (!m) continue;
+      const [a, cx, cy] = m.slice(1).map(Number), b = g.firstChild.getBBox(), r = a * Math.PI / 180;
+      const rot = (x, y) => [cx + (x - cx) * Math.cos(r) - (y - cy) * Math.sin(r), cy + (x - cx) * Math.sin(r) + (y - cy) * Math.cos(r)];
+      rests.push({ pts: seg(...rot(cx, b.y + b.height), ...rot(cx, b.y), 40).filter(([x, y]) => Math.hypot(x - cx, y - cy) > 14) });
+    }
+    for (let i = 0; i < texts.length; i++) {
+      const A = texts[i];
+      for (let j = i + 1; j < texts.length; j++) { const B = texts[j]; if (Math.min(A.x1, B.x1) - Math.max(A.x0, B.x0) > 0.5 && Math.min(A.y1, B.y1) - Math.max(A.y0, B.y0) > 0.5) out.push(name + ': ' + A.k + ' / ' + B.k); }
+      if (ticks.some((t) => seg(...t, 8).some(([x, y]) => inBox(A, x, y)))) out.push(name + ': ' + A.k + ' / a tick');
+      for (const c of rounds) { const nx = Math.max(A.x0, Math.min(c.x, A.x1)), ny = Math.max(A.y0, Math.min(c.y, A.y1)); if (Math.hypot(nx - c.x, ny - c.y) < c.r - 0.5) out.push(name + ': ' + A.k + ' / ' + c.k); }
+      if (rests.some((n) => n.pts.some(([x, y]) => inBox(A, x, y)))) out.push(name + ': ' + A.k + ' / a needle at rest');
+    }
+    for (const c of rounds) if (/lamp/.test(c.k) && rests.some((n) => n.pts.some(([x, y]) => Math.hypot(x - c.x, y - c.y) < c.r))) out.push(name + ': the lamp / a needle at rest');
+  });
+  return out;
+})()`;
 // REVIEW5 §2: a setting lives behind the Garage's one gear; open its sheet as a driver does (the Garage open): the gear, then its row
 async function openSetting(page, key) {
   await page.click('#garageGear');
@@ -3771,6 +3815,8 @@ flow('theme contract on its side: the strip has words, one height, codes in the 
             limits: [...document.querySelectorAll('#cluster *')].filter((e) => e.childNodes.length === 1 && e.firstChild.nodeType === 3 && /^LIMIT \d/i.test(e.textContent)).length }; }, LONG);
         const bs = await page.evaluate(BOXES), o = overlaps(bs);
         check(!o.length, `${m} ${w}x${h}: nothing on the binnacle overprints: ` + o.join(', '));
+        const clash = await page.evaluate(GAUGE_CLASH('#cluster'));   // a car's own gauges: none of their print overlaps
+        check(!clash.length, `${m} ${w}x${h}: nothing on the car's gauges overlaps: ` + clash.join(' | '));
         check(r.road.whole, `${m} ${w}x${h}: the Road line whole: ` + JSON.stringify(r.road));
         check(r.limits === 0, `${m}: the limit is printed once, on the sign (U-129)`);
         check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${m} ${w}x${h}: no sideways scroll`);
@@ -3796,6 +3842,20 @@ flow('private themes: a granted account sees the Tiburon and the FR-S, uses each
   // each card is that car's cluster, parked, with the car from above in its paint
   const tp = await page.evaluate(() => [...document.querySelectorAll('#themeCards .theme-preview.tp-car')].map((b) => ({ g: b.querySelectorAll('svg.car-gauge').length, car: !!b.querySelector('.tp-silhouette polygon') })));
   check(tp.length === 2 && tp.every((x) => x.g === 2 && x.car), 'the two cards are the cars\' clusters with their outlines: ' + JSON.stringify(tp));
+  // nothing on a card overlaps: the gauges' print, and the car in its own row clear of the dials
+  const cardClash = await page.evaluate(GAUGE_CLASH('#themeCards'));
+  check(!cardClash.length, 'the cards\' gauges print clear: ' + cardClash.join(' | '));
+  const silClear = await page.evaluate(() => [...document.querySelectorAll('#themeCards .tp-car')].map((b) => { const s = b.querySelector('.tp-silhouette svg').getBoundingClientRect();
+    return [...b.querySelectorAll('.tp-g svg')].every((g) => { const r = g.getBoundingClientRect(); return s.top >= r.bottom - 0.5 || s.bottom <= r.top + 0.5 || s.left >= r.right - 0.5 || s.right <= r.left + 0.5; }); }));
+  check(silClear.length === 2 && silClear.every(Boolean), 'the car has its own room on each card: ' + JSON.stringify(silClear));
+  // the card draws the car in the mode the page is in: orange-lit black faces at night for the Tiburon
+  const cardFace = () => page.evaluate(() => { const b = document.querySelector('#themeCards .tp-car'); return { mode: b.dataset.mode, face: b.style.getPropertyValue('--face').toUpperCase() }; });
+  check(JSON.stringify(await cardFace()) === JSON.stringify({ mode: 'day', face: PRIVATE.tiburon.day.face.toUpperCase() }), 'by day, the day face: ' + JSON.stringify(await cardFace()));
+  await page.evaluate(() => document.querySelector('#nightSwitch [data-night="on"]').click());
+  check(JSON.stringify(await cardFace()) === JSON.stringify({ mode: 'night', face: PRIVATE.tiburon.night.face.toUpperCase() }), 'at night, the night face: ' + JSON.stringify(await cardFace()));
+  const nightClash = await page.evaluate(GAUGE_CLASH('#themeCards'));
+  check(!nightClash.length, 'the cards\' gauges print clear at night: ' + nightClash.join(' | '));
+  await page.evaluate(() => document.querySelector('#nightSwitch [data-night="auto"]').click());
   for (const [id, label, part] of [['tiburon', 'Tiburon', '#cluster .dial-g svg.car-meter .car-pod'], ['frs', 'FR-S', '#cluster .dial-speed svg.car-dial .car-red']]) {
     await page.evaluate((l) => document.querySelector(`#themeCards [aria-label="Use ${l}"]`).click(), label);
     await page.waitForFunction((t) => document.documentElement.dataset.theme === t, id);
@@ -3812,7 +3872,7 @@ flow('private themes: a granted account sees the Tiburon and the FR-S, uses each
   await page.waitForTimeout(300);
   const tach = await page.evaluate(() => { const n = document.querySelector('#cluster .car-dial .car-rpm + .car-needle') || document.querySelectorAll('#cluster .car-dial .car-needle')[0];
     return { op: n.style.opacity, tf: n.getAttribute('transform'), digits: document.querySelector('#cluster .car-dial .dial-digital').textContent }; });
-  check(tach.op === '0.25' && /^rotate\(-140\.00 /.test(tach.tf) && /^\d+$/.test(tach.digits), 'the rev counter rests, the speed is in digits: ' + JSON.stringify(tach));
+  check(tach.op === '0.25' && /^rotate\(-128\.00 /.test(tach.tf) && /^\d+$/.test(tach.digits), 'the rev counter rests, the speed is in digits: ' + JSON.stringify(tach));
   // any voice pack with a car theme: the pick wins over the theme's suggestion and stays when the theme changes
   const pickPack = (p) => page.evaluate((x) => document.querySelector(`#packSwitch [data-pack="${x}"]`).click(), p);
   await page.waitForFunction(() => window.apexDebug.state.voiceId === 'kit', null, { timeout: 10000 });   // the FR-S suggests Kit
@@ -3854,6 +3914,8 @@ flow('private themes: a granted account sees the Tiburon and the FR-S, uses each
     check(r.bg === 'rgb(17, 17, 17)' && r.edge === 'rgb(255, 122, 26)' && r.ink === 'rgb(255, 255, 255)', `${m}: the same hazard plate ` + JSON.stringify(r));
     check(r.speed >= 40 && r.call >= 21 && !r.small.length && r.bankPx >= 13, `${m}: speed ${r.speed}, call ${r.call}, bank ${r.bankPx}, small ` + JSON.stringify(r.small));
     check(/^BANK /.test(r.bank || ''), `${m}: Bank is read out, -- until measured: ` + r.bank);
+    const clash = await page.evaluate(GAUGE_CLASH('#cluster'));
+    check(!clash.length, `${m}: nothing on the car's gauges overlaps: ` + clash.join(' | '));
     if (night) {                                                     // U-36: the night numeral, 46 px, in the car's own dial too
       const px = await page.evaluate(() => { const d = document.querySelector('.dial-speed .dial-digital'); return Math.round(parseFloat(getComputedStyle(d).fontSize) * d.getScreenCTM().a); });
       check(px >= 46, `${m}: a 46 px numeral at night: ${px}`);

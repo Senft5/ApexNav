@@ -691,7 +691,8 @@
       svg('line', { x1, y1, x2, y2, stroke: 'var(--face-ink)', 'stroke-width': major ? (p.majorW || 2.4) : (p.minorW || 1) }, g);
     }
     if (p.label) {
-      for (let v = p.min; v <= p.max + 1e-9; v += p.label) {
+      const top = p.labelMax != null ? p.labelMax : p.max;           // labelMin/labelMax: a numeral the print around it would cover is left off
+      for (let v = p.labelMin != null ? p.labelMin : p.min; v <= top + 1e-9; v += p.label) {
         const [tx, ty] = at(p.cx, p.cy, p.labelR || p.r - 22, a(v));
         const t = svg('text', { x: tx.toFixed(1), y: (ty + (p.labelSize || 15) * 0.34).toFixed(1), 'text-anchor': 'middle', class: `${p.small ? 'dial-tiny' : 'dial-num car-num'}${ty > 130 && p.reads === 'speed' ? ' low' : ''}` }, g);
         if (p.labelSize) t.style.fontSize = `${p.labelSize}px`;
@@ -716,7 +717,9 @@
       if (p.invert && v != null) v = -v;
       if (spring && v != null) v = spring(v, typeof performance !== 'undefined' ? performance.now() : Date.now());
       const known = v != null && Number.isFinite(v), rest = p.rest != null ? p.rest : (p.min <= 0 && p.max >= 0 ? 0 : p.min);
-      setA(ng, 'transform', `rotate(${(a(known ? v : rest)).toFixed(2)} ${p.cx} ${p.cy})`);
+      // at rest a needle lies on its stop, which may sit just under the scale's start, clear of its first numeral, as a real one
+      const restA = p.a0 + (p.a1 - p.a0) * (rest - p.min) / span;
+      setA(ng, 'transform', `rotate(${(known ? a(v) : restA).toFixed(2)} ${p.cx} ${p.cy})`);
       setS(ng, 'opacity', known ? 1 : 0.25);                         // not measured: at rest, dim
       // panel round 2 (PR-2): a reading is never the alarm red, except the speed needle when you are over the corner's pace
       if (p.reads === 'speed') setA(np, 'fill', known && d.paceMph != null && d.speedMph > d.paceMph + 1 ? 'var(--signal)' : 'var(--car-needle, var(--face-ink))');
