@@ -2504,26 +2504,29 @@
       return to;
     }
     function lockOnDestination(t) {
-      const to = destMarker ? destMarker.getLngLat() : null;
-      if (!to) return;
-      holdFollow();
-      // the map left above the sheet: above the open card (U-70) when that leaves a strip to see the route in, else above
-      // the bar (on its side, or the desk's column, the card covers the map: the fit is for when it goes down)
+      fitPlannedRoute(t, true);
+    }
+    // DA-2 (panel round 2; round 1's D-5): the chosen route stays whole on screen. It used to fly to the destination at street
+    // zoom (planning/phone/004: 300 m of red line by a school), and that flight left its padding (the card's height) on the
+    // map; MapLibre adds the map's padding to a fit's, so the fit when the card went down had no room and gave up
+    // (planning/phone/006: the car at the top edge, the route off the screen). Now every fit clears the padding first and
+    // frames the whole route and the car: above the open card when it leaves a strip to see the route in (U-70), else above
+    // the bar (on its side, or the desk's column, the card covers the map: the fit is for when it goes down).
+    // The app's own move: follow pauses without the recenter key, which a drag of the map brings up (U-71, U-122).
+    function routeBottom(aboveCard) {
       const sv = viewInsets(), panel = $('planPanel'), mapH = (map.getContainer().clientHeight - sv.t - sv.b) || window.innerHeight;   // F-02: the map you can see, not its full-bleed box
       const desk = matchMedia('(min-width: 1100px) and (min-height: 600px)').matches;
-      const overCard = panel.classList.contains('open') && !desk && mapH - panel.offsetHeight >= 120;
-      const bottom = sv.b + (overCard ? panel.offsetHeight + 16 : ($('planBar').offsetHeight || 60) + 24);
-      if (String(t.id || '').startsWith('loop_')) {
-        let w = 180, e = -180, so = 90, n = -90;
-        for (let i = 0; i < t.lat.length; i += 10) { w = Math.min(w, t.lon[i]); e = Math.max(e, t.lon[i]); so = Math.min(so, t.lat[i]); n = Math.max(n, t.lat[i]); }
-        map.fitBounds([[w, so], [e, n]], { padding: { top: sv.t + 60, left: sv.l + 40, right: sv.r + 60, bottom }, pitch: 0, bearing: 0, duration: 1200 });
-      } else {
-        map.flyTo({ center: [to.lng, to.lat], zoom: 15.5, pitch: 0, bearing: 0, duration: 1400, padding: { top: sv.t, left: sv.l, right: sv.r, bottom } });
-      }
+      const overCard = aboveCard && panel.classList.contains('open') && !desk && mapH - panel.offsetHeight >= 120;
+      return sv.b + (overCard ? panel.offsetHeight + 16 : ($('planBar').offsetHeight || 60) + 24);
     }
-    // U-122: the card goes down and the chosen route stays on screen: the route and the car fitted together above the bar.
-    // The app's own move: follow pauses without the recenter key, which a drag of the map brings up (U-71).
-    function fitPlannedRoute(t = plannedRoute) {
+    // [[w, s], [e, n]] fitted into the map the chrome leaves, `bottom` px kept clear: the map's own padding cleared first
+    function fitInView(bounds, bottom, duration = 800) {
+      const sv = viewInsets();
+      map.stop();
+      map.jumpTo({ padding: { top: 0, bottom: 0, left: 0, right: 0 } });
+      map.fitBounds(bounds, { padding: { top: sv.t + 60, left: sv.l + 40, right: sv.r + 60, bottom }, pitch: 0, bearing: 0, duration, maxZoom: 16 });
+    }
+    function fitPlannedRoute(t = plannedRoute, aboveCard = false) {
       if (!t || !Array.isArray(t.lat) || t.lat.length < 2 || state.mode === 'live') return;
       let w = 180, e = -180, so = 90, n = -90;
       const add = (la, lo) => { if (!Number.isFinite(la) || !Number.isFinite(lo)) return; w = Math.min(w, lo); e = Math.max(e, lo); so = Math.min(so, la); n = Math.max(n, la); };
@@ -2533,8 +2536,7 @@
       if (vehicle) add(vehicle.lat, vehicle.lon);
       if (!(e >= w && n >= so)) return;
       holdFollow();
-      const sv = viewInsets(), bottom = sv.b + ($('planBar').offsetHeight || 60) + 24;
-      map.fitBounds([[w, so], [e, n]], { padding: { top: sv.t + 60, left: sv.l + 40, right: sv.r + 60, bottom }, pitch: 0, bearing: 0, duration: 900, maxZoom: 16 });
+      fitInView([[w, so], [e, n]], routeBottom(aboveCard));
     }
     // Plan fields: empty = the phone's position (locate()), "lat, lon" = that point, anything else =
     // the first Nominatim match. Errors carry the toast text.
@@ -3428,10 +3430,12 @@
       const panel = $('planPanel');
       measurePlanBar();
       const closing = !open && panel.classList.contains('open');
+      const opening = open && !panel.classList.contains('open');
       panel.classList.toggle('open', open);
       $('app').classList.toggle('plan-open', open);
       // U-122: the chosen route stays on screen; not when the card went down for a sheet or a drive (the camera keeps still
       // under a sheet, F-02), which is settled by the next frame
+      if (opening && panel.classList.contains('routed') && !booting) requestAnimationFrame(() => { if (panel.classList.contains('open') && state.mode !== 'live') fitPlannedRoute(plannedRoute, true); });   // DA-2
       if (closing && panel.classList.contains('routed')) requestAnimationFrame(() => { let driving = false; try { driving = driveActive; } catch (_) {} if (!panel.classList.contains('open') && !$('app').classList.contains('sheet-open') && !driving) fitPlannedRoute(); });
       $('destInput').setAttribute('aria-expanded', String(open));
       if (open) { refreshSavedDrives(); if (!panel.classList.contains('routed')) renderPlaces(); $('planBody').scrollTop = 0; closeEdge(); }
@@ -4928,13 +4932,90 @@
       if (was !== key) paintDeck();
     }
     const ROAD_GLYPH = '<svg viewBox="0 0 40 40" aria-hidden="true"><path d="M12 37 C12 26 28 26 28 18 C28 10 16 10 16 3"/><circle cx="12" cy="37" r="2.4"/></svg>';
-    function deckRow(title, why, key, label, onTap) {
-      const b = document.createElement('button'), span = document.createElement('span'), t = document.createElement('b'), w = document.createElement('small'), k = document.createElement('em');
-      b.type = 'button'; b.className = 'loop-suggest your-road'; b.innerHTML = ROAD_GLYPH;
-      t.textContent = title; w.textContent = why; k.textContent = key; span.append(t, w); b.append(span, k);
-      b.setAttribute('aria-label', label); b.addEventListener('click', onTap);
-      return b;
+    // DA-1 / KE-2 (panel round 2): a row is two keys. Its body (the road's own shape, its name and reason) draws the road on
+    // the map, fitted with you in view, and a second tap clears it; its key routes it, as the whole row did. A row with no
+    // road to draw (the loop) is one action either way. `road`: { key, get: async () => ({ lat, lon }) | null } or null.
+    function deckRow(title, why, key, label, onTap, road) {
+      const row = document.createElement('div'), body = document.createElement('button'), go = document.createElement('button');
+      const glyph = document.createElement('span'), span = document.createElement('span'), t = document.createElement('b'), w = document.createElement('small'), k = document.createElement('em');
+      row.className = 'loop-suggest your-road split'; body.type = go.type = 'button'; body.className = 'ls-show'; go.className = 'ls-go';
+      glyph.className = 'ls-glyph'; glyph.innerHTML = ROAD_GLYPH;
+      t.textContent = title; w.textContent = why; k.textContent = key; span.append(t, w); body.append(glyph, span); go.append(k); row.append(body, go);
+      go.setAttribute('aria-label', label); go.addEventListener('click', () => { clearDeckRoad(); onTap(); });
+      if (road) { body.dataset.road = road.key; body.setAttribute('aria-label', `${title}: ${why}. Show it on the map.`); deckShow(body, glyph, road); }
+      else { body.setAttribute('aria-label', label); body.addEventListener('click', onTap); }
+      return row;
     }
+    // ---- DA-1: the deck's roads drawn: each row's glyph is its road's shape (route_thumb.js), and its line on the map ----
+    const LOOP_GLYPH = $('loopSuggestGlyph').innerHTML;              // the loop's own glyph, back when the suggestion has no road
+    const deckShapes = new Map();                                      // key -> { lat, lon } (at most 300 points), or null
+    const deckShape = async (road) => {
+      if (deckShapes.has(road.key)) return deckShapes.get(road.key);
+      let g = null;
+      try { g = await road.get(); } catch (_) { g = null; }
+      if (g && Array.isArray(g.lat) && g.lat.length >= 2) {
+        const step = Math.max(1, Math.floor(g.lat.length / 300)), lat = [], lon = [];
+        for (let i = 0; i < g.lat.length; i += step) if (Number.isFinite(g.lat[i]) && Number.isFinite(g.lon[i])) { lat.push(g.lat[i]); lon.push(g.lon[i]); }
+        g = lat.length >= 2 ? { lat, lon } : null;
+      } else g = null;
+      deckShapes.set(road.key, g);
+      return g;
+    };
+    function shapeGlyph(g) {
+      const svg = window.ApexRouteThumb && g ? ApexRouteThumb.svg(g.lat, g.lon, { w: 40, h: 40, pad: 5, width: 2.4, line: 'currentColor', hi: 'currentColor', label: 'The road' }) : null;
+      return svg ? svg.replace('<svg ', '<svg class="road-shape" aria-hidden="true" ') : null;
+    }
+    let deckRoadKey = null;
+    function deckShow(body, glyph, road) {
+      body.setAttribute('aria-pressed', String(deckRoadKey === road.key));
+      deckShape(road).then((g) => { const svg = shapeGlyph(g); if (svg && glyph.isConnected) glyph.innerHTML = svg; });   // the road's real shape, once known
+      body.addEventListener('click', async (e) => {
+        e.stopPropagation();                                           // the road, not the row's key
+        if (deckRoadKey === road.key) { clearDeckRoad(); return; }
+        const g = await deckShape(road);
+        if (!g) { toast('That road’s line isn’t on this phone.'); return; }
+        drawDeckRoad(road.key, g);
+      });
+    }
+    function drawDeckRoad(key, g) {
+      if (!mapReady) return;
+      const coords = g.lat.map((la, i) => [g.lon[i], la]);
+      const data = { type: 'FeatureCollection', features: [{ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: coords } },
+        { type: 'Feature', properties: { start: true }, geometry: { type: 'Point', coordinates: coords[0] } }] };
+      if (map.getSource('apex-deckroad-src')) map.getSource('apex-deckroad-src').setData(data);
+      else {
+        map.addSource('apex-deckroad-src', { type: 'geojson', data });
+        map.addLayer({ id: 'apex-deckroad', type: 'line', source: 'apex-deckroad-src', filter: ['==', ['geometry-type'], 'LineString'],
+          layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-width': ['interpolate', ['linear'], ['zoom'], 10, 3, 16, 6], 'line-dasharray': [1.6, 1.2] } });
+        map.addLayer({ id: 'apex-deckroad-start', type: 'circle', source: 'apex-deckroad-src', filter: ['==', ['geometry-type'], 'Point'], paint: { 'circle-radius': 6, 'circle-stroke-width': 2 } });
+      }
+      map.setPaintProperty('apex-deckroad', 'line-color', look.colors.route);
+      map.setPaintProperty('apex-deckroad-start', 'circle-color', look.colors.route); map.setPaintProperty('apex-deckroad-start', 'circle-stroke-color', look.colors.routeCasing);
+      for (const id of ['apex-deckroad', 'apex-deckroad-start']) map.setLayoutProperty(id, 'visibility', 'visible');
+      deckRoadKey = key;
+      document.querySelectorAll('.loop-suggest .ls-show[aria-pressed]').forEach((b) => b.setAttribute('aria-pressed', 'false'));
+      const shown = [...document.querySelectorAll('.loop-suggest .ls-show[aria-pressed]')].find((b) => b.dataset.road === key);
+      if (shown) shown.setAttribute('aria-pressed', 'true');
+      // the whole road and you, in the map the deck leaves
+      let w = 180, e = -180, so = 90, n = -90;
+      const add = (la, lo) => { w = Math.min(w, lo); e = Math.max(e, lo); so = Math.min(so, la); n = Math.max(n, la); };
+      g.lat.forEach((la, i) => add(la, g.lon[i]));
+      if (state.lastPosition) add(state.lastPosition.lat, state.lastPosition.lon);
+      pauseFollow();
+      const top = $('planPanel').getBoundingClientRect().top, mr = map.getContainer().getBoundingClientRect();
+      fitInView([[w, so], [e, n]], Math.max(24, mr.bottom - top + 16));
+    }
+    function clearDeckRoad() {
+      if (deckRoadKey == null) return;
+      deckRoadKey = null;
+      document.querySelectorAll('.loop-suggest .ls-show[aria-pressed]').forEach((b) => b.setAttribute('aria-pressed', 'false'));
+      if (mapReady && map.getLayer('apex-deckroad')) for (const id of ['apex-deckroad', 'apex-deckroad-start']) map.setLayoutProperty(id, 'visibility', 'none');
+    }
+    // the deck goes (a route, the plan sheet, a drive): its road goes with it
+    new MutationObserver(() => { const a = $('app'); if (deckRoadKey != null && (!a.classList.contains('idle') || a.classList.contains('routed') || a.classList.contains('plan-open'))) clearDeckRoad(); })
+      .observe($('app'), { attributes: true, attributeFilter: ['class'] });
+    // where each row's road comes from: your drive on it (the Log's own track), or the stage the suggestion found in the tiles
+    const driveRoad = (id) => ({ key: 'drive:' + id, get: async () => (await ApexAnalysis.job('memory', { track: id })).track });
     function paintDeck() {
       if (!YR) return;
       untriedNow();
@@ -4947,26 +5028,52 @@
           return deckRow(title, 'On the twistiest roads nearby', 'Plan', `${title}, on the twistiest roads nearby. Plan it.`, () => { if (!loopBusy) $('findLoopBtn').click(); });
         }
         const r = row.r, why = YR.roadLine(r, deckLong);
-        return deckRow(r.name, why, 'Drive', `${r.name}: ${why}. Drive it again.`, () => driveAgain(r.id, r.name));
+        return deckRow(r.name, why, 'Drive', `${r.name}: ${why}. Drive it again.`, () => driveAgain(r.id, r.name), driveRoad(r.id));
       });
       $('yourRoads').replaceChildren(...rows);
       scheduleNudge();
     }
     // The suggested loop on the deck: the length you last picked on the loop dial; tapping it builds that loop. With a
     // suggestion (above) this row is the suggestion, its reason under it.
+    // DA-1: the suggestion's road, when it has one to draw: the stage found in the tiles, or your best road's drive
+    function suggestRoad(s) {
+      if (s && s.kind === 'untried' && deckState.untried && deckState.untried.pick) { const st = deckState.untried.pick.s; return { key: 'stage:' + s.name, get: async () => st }; }
+      if (s && s.kind === 'best' && s.id) return driveRoad(s.id);
+      return null;
+    }
     function paintLoopSuggest() {
-      const s = deckState.sugg;
+      const s = deckState.sugg, road = suggestRoad(s), body = $('loopSuggestShow'), glyph = $('loopSuggestGlyph');
+      body.dataset.road = road ? road.key : '';
+      if (road) {
+        body.setAttribute('aria-pressed', String(deckRoadKey === road.key));
+        if (glyph.dataset.road !== road.key) { glyph.dataset.road = road.key; deckShape(road).then((g) => { const svg = shapeGlyph(g); if (svg && glyph.dataset.road === road.key) glyph.innerHTML = svg; }); }
+      } else {
+        body.removeAttribute('aria-pressed');
+        if (glyph.dataset.road) { glyph.dataset.road = ''; glyph.innerHTML = LOOP_GLYPH; }
+      }
       if (s) {
         $('loopSuggestTitle').textContent = s.title; $('loopSuggestWhy').textContent = s.reason; $('loopSuggestKey').textContent = s.kind === 'crew' ? 'Go' : 'Drive';
-        $('loopSuggest').setAttribute('aria-label', `${s.title}. ${s.reason}. ${s.kind === 'crew' ? 'Directions to the meeting point.' : 'Route it.'}`);
+        const label = `${s.title}. ${s.reason}. ${s.kind === 'crew' ? 'Directions to the meeting point.' : 'Route it.'}`;
+        $('loopSuggestGo').setAttribute('aria-label', label); body.setAttribute('aria-label', road ? `${s.title}. ${s.reason}. Show it on the map.` : label);
         return;
       }
       const b = document.querySelector('#loopDetents button[aria-pressed="true"]');
       $('loopSuggestTitle').textContent = `Loop from here · ${b ? b.textContent : '45 mi'}`;
       $('loopSuggestWhy').textContent = 'On the twistiest roads nearby'; $('loopSuggestKey').textContent = 'Plan';
-      $('loopSuggest').setAttribute('aria-label', 'Plan a loop from here');
+      $('loopSuggestGo').setAttribute('aria-label', 'Plan a loop from here'); body.setAttribute('aria-label', 'Plan a loop from here');
     }
+    // the suggestion's body: its road on the map when it has one, else what its key does
+    $('loopSuggestShow').addEventListener('click', async (e) => {
+      const road = suggestRoad(deckState.sugg);
+      if (!road) return;                                               // bubbles to the row: the key's action
+      e.stopPropagation();
+      if (deckRoadKey === road.key) { clearDeckRoad(); return; }
+      const g = await deckShape(road);
+      if (!g) { toast('That road’s line isn’t on this phone.'); return; }
+      drawDeckRoad(road.key, g);
+    });
     $('loopSuggest').addEventListener('click', () => {
+      clearDeckRoad();
       const s = deckState.sugg;
       if (s && s.kind === 'crew') { if (Number.isFinite(s.lat) && Number.isFinite(s.lon)) routeToPlace({ label: (deckState.crew && deckState.crew.label) || s.name, lat: s.lat, lon: s.lon }); return; }
       if (s && s.kind === 'best') { driveAgain(s.id, s.name); return; }
@@ -5043,6 +5150,29 @@
                            request: { from: null, to: { lat: end.lat, lon: end.lon }, via: pts.slice(1, -1).map(q => ({ lat: q.lat, lon: q.lon, shaping: !!q.shaping })) } });
         await buildRoute(null, 'again', label, t);
       } catch (_) { toast('Couldn\'t route that drive. Check signal and try again.'); }
+      finally { loopBusy = false; ui.done(); }
+    }
+    // DA-4 / RA-4 (panel round 2): a road someone sent (road_link.js): its line, its name, nothing of the drive. It opens as a
+    // route card: from here through the road when the phone knows where it is, else the road alone.
+    async function openRoadLink(token) {
+      const road = window.ApexRoadLink ? ApexRoadLink.decode(token) : null;
+      if (!road) { toast('That road link is incomplete. Ask for it again.'); return; }
+      if (loopBusy || optionBusy || state.mode === 'live') { toast('Open the road link again when the drive is over.'); return; }
+      loopBusy = true;
+      const ui = planBusy();
+      try {
+        ui.step('Routing…');
+        const label = road.name || 'A road you were sent', from = await locate().catch(() => null);
+        const along = road.pts.map((p, k) => ({ lat: p.lat, lon: p.lon, shaping: k > 0 && k < road.pts.length - 1 }));
+        const pts = from ? [{ lat: from.lat, lon: from.lon }, ...along] : along;
+        const [r] = await valhallaRoutes(pts);
+        if (state.mode === 'live') return;
+        const end = pts[pts.length - 1], t = await trackFromPolyline(r.coords, 'road', label);
+        if (state.mode === 'live') return;
+        Object.assign(t, { fun: funOf(t, r.turns), timeS: r.timeS, timeMarks: timeMarksOf(t, r), steps: stepsOf(t, r), unavoided: FunRoute.unavoided(avoid, r),
+                           request: { from: from ? null : { lat: pts[0].lat, lon: pts[0].lon }, to: { lat: end.lat, lon: end.lon }, via: pts.slice(1, -1).map(q => ({ lat: q.lat, lon: q.lon, shaping: !!q.shaping })) } });
+        await buildRoute(null, 'road', label, t);
+      } catch (_) { toast('Couldn\'t route that road. Check signal and try again.'); }
       finally { loopBusy = false; ui.done(); }
     }
     // The reminder (R-1): one local notification, off until you turn it on (Garage > Reminder), at most once a week, the
@@ -6367,7 +6497,7 @@
       let secs = null;
       try { const T = Core.elapsedS(d.speed_mps), s = T[T.length - 1]; secs = Number.isFinite(s) ? s : null; } catch (_) { secs = null; }
       const c = { id: d.id, name: d.name, ended: d.ended, len_m: Array.isArray(d.dist) && d.dist.length ? d.dist[d.dist.length - 1] : null, secs,
-                  lat: d.lat, lon: d.lon, corners: null, ds: null, record: d,
+                  lat: d.lat, lon: d.lon, elev: d.elev, dist: d.dist, corners: null, ds: null, record: d,
                   feel: window.ApexRoadFeel ? ApexRoadFeel.summary({ dist: d.dist, camber: d.camber, rough: d.rough }) : null };
       endCardOpen(c);
       (async () => {
@@ -6398,10 +6528,41 @@
       const kept = runs.filter((r) => r.length >= END_STRAY_N);
       return kept.length ? kept : runs.filter((r) => r.length >= 2).sort((a, b) => b.length - a.length).slice(0, 1);
     }
+    // KE-1 (panel round 2): the card's map was blank in both recordings (r7 guided-drive/phone/286, tabs/phone/015) though
+    // the code drew the trail. The trail is a map layer, and the map draws it only once it has fetched and parsed the tiles
+    // of the place it flies to; a 900 ms flight across zooms asked for every zoom on the way while the analysis worker was
+    // scoring the drive, so on a phone the card's first seconds were an empty map. Now the fit is a jump (the final view's
+    // tiles only), and the road's portrait (road_portrait.js) is drawn over the map at once, exactly where the fit puts the
+    // trail; it steps back when the map has drawn it (its 'idle'). With no map at all (offline, no WebGL) it stays.
+    let endPortraitRun = 0;
+    function paintEndPortrait(runs, d, box, mr, band) {
+      const el = $('endPortrait'), run = ++endPortraitRun;
+      if (!el || !window.ApexRoadPortrait) return run;
+      el.classList.remove('drawn');
+      Object.assign(el.style, { left: `${mr.left}px`, top: `${mr.top}px`, width: `${box.w}px`, height: `${box.h}px` });
+      const road = ApexRoadPortrait.svg(runs, box, { line: look.colors.accent, casing: look.colors.routeCasing }) || '';
+      const climb = band ? ApexRoadPortrait.profile(d.elev, d.dist, box.w - box.left - box.right, band, { ink: look.colors.ink }) : null;
+      el.innerHTML = road + (climb ? `<div class="rp-band" style="left:${box.left}px;right:${box.right}px;bottom:${box.bottom - band - 8}px;height:${band}px">${climb}</div>` : '');
+      el.hidden = !road;
+      return run;
+    }
     function showEndTrail(d) {
-      if (!mapReady || !Array.isArray(d.lat) || !Array.isArray(d.lon) || d.lat.length < 2) return;
+      if (!Array.isArray(d.lat) || !Array.isArray(d.lon) || d.lat.length < 2) return;
       const runs = endTrailRuns(d.lat, d.lon);
       if (!runs.length) return;
+      // the part of the map the card leaves: from under the island to the card's top edge (on its side the card is beside it)
+      const sheet = $('endCard').querySelector('.card-sheet'), mr = map.getContainer().getBoundingClientRect();
+      endTrailTop = sheet ? sheet.getBoundingClientRect().top : 0;
+      const wide = matchMedia('(orientation: landscape) and (max-height: 540px)').matches;
+      const top = Math.max(32, (parseFloat(safeInsets().top) || 0) - mr.top + 24);
+      let bottom = wide || !sheet ? 24 : Math.max(24, Math.min(mr.height - top - 100, mr.bottom - sheet.getBoundingClientRect().top + 24));
+      // the climbs, a band 36 px tall under the road, when the recording measured its height and there is room for both
+      const band = !wide && Array.isArray(d.elev) && mr.height - top - bottom > 220 && d.elev.some(Number.isFinite) ? 36 : 0;
+      if (band) bottom += band + 8;
+      const sv = viewInsets(), box = { w: mr.width, h: mr.height, top, bottom, left: sv.l + 32, right: sv.r + 32, maxZoom: 16 };
+      const run = paintEndPortrait(runs, d, box, mr, band);
+      endTrailOn = true;
+      if (!mapReady) return;
       let w = 180, e = -180, so = 90, n = -90;
       for (const r of runs) for (const [lo, la] of r) { w = Math.min(w, lo); e = Math.max(e, lo); so = Math.min(so, la); n = Math.max(n, la); }
       const data = { type: 'FeatureCollection', features: runs.map((coordinates) => ({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates } })) };
@@ -6415,25 +6576,22 @@
       map.setPaintProperty('apex-endtrail-casing', 'line-color', look.colors.routeCasing);
       map.setPaintProperty('apex-endtrail', 'line-color', look.colors.accent);
       map.setLayoutProperty('apex-endtrail-casing', 'visibility', 'visible'); map.setLayoutProperty('apex-endtrail', 'visibility', 'visible');
-      endTrailOn = true; pauseFollow();
-      // the part of the map the card leaves: from under the island to the card's top edge (on its side the card is beside it)
-      const sheet = $('endCard').querySelector('.card-sheet'), mr = map.getContainer().getBoundingClientRect();
-      endTrailTop = sheet ? sheet.getBoundingClientRect().top : 0;
-      const wide = matchMedia('(orientation: landscape) and (max-height: 540px)').matches;
-      const top = Math.max(32, (parseFloat(safeInsets().top) || 0) - mr.top + 24);
-      const bottom = wide || !sheet ? 24 : Math.max(24, Math.min(mr.height - top - 100, mr.bottom - sheet.getBoundingClientRect().top + 24));
+      pauseFollow();
       // U-88 (check): the follow camera leaves the map's own padding on (up to a third of its height, so the arrow sits low).
       // MapLibre adds that to the fit's padding, which left no room on a phone above the card, so the fit gave up and the
       // map stayed the follow camera's last frame. The fit owns the whole map: stop any glide and clear it first.
       map.stop();
       map.jumpTo({ padding: { top: 0, bottom: 0, left: 0, right: 0 } });
-      const sv = viewInsets();
-      map.fitBounds([[w, so], [e, n]], { padding: { top, left: sv.l + 32, right: sv.r + 32, bottom }, pitch: 0, bearing: 0, duration: 900, maxZoom: 16 });
+      map.fitBounds([[w, so], [e, n]], { padding: { top, left: box.left, right: box.right, bottom }, pitch: 0, bearing: 0, duration: 0, maxZoom: 16 });
+      // the map has drawn the trail (and the place under it): the portrait's line steps back; the climbs stay
+      map.once('idle', () => { if (run === endPortraitRun && endTrailOn) $('endPortrait').classList.add('drawn'); });
     }
     let endTrailOn = false, endTrailTop = 0;
     function hideEndTrail() {
       if (!endTrailOn) return;
-      endTrailOn = false;
+      endTrailOn = false; endPortraitRun++;
+      const pe = $('endPortrait'); if (pe) { pe.hidden = true; pe.replaceChildren(); pe.classList.remove('drawn'); }
+      if (!mapReady || !map.getLayer('apex-endtrail')) { resumeFollow(); return; }
       map.setLayoutProperty('apex-endtrail-casing', 'visibility', 'none'); map.setLayoutProperty('apex-endtrail', 'visibility', 'none');
       resumeFollow();
     }
@@ -6538,11 +6696,11 @@
     // What the end card can say before the drive is parsed (F-04): its name, the distance and time its own rows give (as
     // the Log will count them), and its trail. No corner count and no score until they are measured.
     function endCardFacts(rec, job, extra) {
-      const rows = rec.rows, n = rows.length, lat = new Array(n), lon = new Array(n), v = new Array(n);
-      for (let i = 0; i < n; i++) { const r = rows[i]; lat[i] = r.lat; lon[i] = r.lon; v[i] = Number.isFinite(r.speed_mps) ? r.speed_mps : NaN; }
+      const rows = rec.rows, n = rows.length, lat = new Array(n), lon = new Array(n), v = new Array(n), elev = new Array(n), dist = new Array(n);
+      for (let i = 0; i < n; i++) { const r = rows[i]; lat[i] = r.lat; lon[i] = r.lon; elev[i] = Number.isFinite(r.elevation_m) ? r.elevation_m : null; dist[i] = r.distance_m; v[i] = Number.isFinite(r.speed_mps) ? r.speed_mps : NaN; }
       let secs = null;
       try { const T = Core.elapsedS(v), s = T[T.length - 1]; secs = Number.isFinite(s) ? s : null; } catch (_) { secs = null; }
-      return { id: job.id, name: job.meta.name, ended: extra.ended, len_m: n ? rows[n - 1].distance_m : null, secs, lat, lon, corners: null, ds: null };
+      return { id: job.id, name: job.meta.name, ended: extra.ended, len_m: n ? rows[n - 1].distance_m : null, secs, lat, lon, elev, dist, corners: null, ds: null };
     }
 
     // In-car mode (web/in_car.js, IDEAS C-07 / C-08): big targets and no keyboard while the car moves. A tap on a text field
@@ -6805,6 +6963,7 @@
         if (ok(p.add)) sessionStorage.setItem('apex.add', p.add.toLowerCase());
       } catch (_) {}
       if (ok(p.convoy)) needSocial().then(() => { if (convoy && convoy.takeInvite) convoy.takeInvite(p.convoy); });
+      if (ok(p.road)) { closeSheet(); openRoadLink(p.road); return; }   // DA-4: a road someone sent, as a route card
       // apexnav://open?go=drive (a Shortcuts automation, IDEAS C-05); go=report and go=end from Siri (IDEAS V-07), during a drive only
       if (p.go) {
         if (p.go === 'drive') { closeSheet(); driveFromLink(); }
@@ -7076,10 +7235,19 @@
       if (params.get('book') === '1' || params.get('view') === 'route' || params.get('view') === 'drives') openPlan(true);
       if (VIEW_TITLES[params.get('view')] || PEOPLE_SIDES[params.get('view')] || params.get('view') === 'setup') openSheet(params.get('view'));
       if (params.get('go') === 'drive') driveFromLink();
+      roadFromLocation(location.search);                               // DA-4: ?road= (the app), #road= (the website)
       if (params.get('again')) driveAgain(params.get('again'));      // panel D-1: Drive it again from a Log page opened on its own   // the app opened from apexnav://open?go=drive (IDEAS C-05)
       recoverKept().catch((e) => console.error('recover drives', e));   // Round 3: a drive never ended goes to the Log
     }
     bootDrives();
+    // DA-4: a road link the page was opened with, then dropped from the address (a reload doesn't plan it again)
+    function roadFromLocation(search) {
+      const road = window.ApexRoadLink ? ApexRoadLink.fromLocation(search, location.hash) : null;
+      if (!road) return;
+      if (/road=/.test(location.hash)) try { history.replaceState(history.state, '', location.pathname + location.search); } catch (_) {}
+      openRoadLink(road);
+    }
+    window.addEventListener('hashchange', () => roadFromLocation(''));   // a second road link into an open page
     // F-15: the Log's frame loads while the map is idle after launch (not in a drive or a hidden page: then its first open loads it)
     setTimeout(() => idle(prewarmLog), 5000);
     // F-03: the social modules once the launch is over; a link that needs them, or People, asks for them at once
