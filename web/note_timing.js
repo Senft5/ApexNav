@@ -117,6 +117,7 @@
     for (const c of corners || []) {
       const d = c.m - cursorM;
       if (d < -5) continue;
+      if (d > Math.max(SLEEP_MIN_M, 4 * MAX_M, 2 * MAX_M + v * QUIET_MIN_S)) break;   // past any corner's sleep window
       const w = wakeWindowM({ vMps: v, apexMps: c.apexMps, text: c.text, reactionS });
       if (wakes(c, v) && d <= Math.max(SLEEP_MIN_M, 2 * w, w + v * QUIET_MIN_S)) return c;
       if (d <= leadM({ vMps: v, apexMps: c.apexMps, text: c.text, reactionS })) return c;
